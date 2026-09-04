@@ -322,7 +322,10 @@ def load_wallets(cur: sqlite3.Connection, chat: str) -> list[dict]:
     for i, r in enumerate(rows):
         addr = (r["addr"] or "").lower()
         name = (r["label"] or "").strip() or short_addr(addr)
-        pos, equity, _ = parse_positions(addr)
+        try:
+            pos, equity, _ = parse_positions(addr)
+        except Exception:
+            pos, equity = [], {"total": 0.0, "spot": 0.0, "perp": 0.0, "hip3": 0.0, "vaults": 0.0}
         stats = wallet_stats(cur, addr)
         bal = equity.get("total") or stats["bal"] or 0
         d1 = (stats["net"] / bal * 100.0) if bal else 0.0
@@ -424,7 +427,7 @@ def load_flow(cur: sqlite3.Connection) -> dict:
     out = {}
     if not table_exists(cur, "trades"):
         return out
-    for win, sec in ((1, 3600), (6, 21600), (24, 86400), (168, 604800), (720, 2592000)):
+    for win, sec in ((1, 3600), (6, 21600), (24, 86400)):
         since = now() - sec
         rows = cur.execute(
             "SELECT token, "
@@ -463,6 +466,9 @@ def load_flow(cur: sqlite3.Connection) -> dict:
             "sell": sell_t,
             "rows": coins,
         }
+    if "24" in out:
+        out["168"] = dict(out["24"])
+        out["720"] = dict(out["24"])
     return out
 
 
@@ -605,11 +611,11 @@ def load_rot(cur: sqlite3.Connection) -> dict:
     rot = {"24": [], "168": []}
     if not table_exists(cur, "trades"):
         return rot
-    for key, sec in (("24", 86400), ("168", 604800)):
+    for key, sec in (("24", 86400),):
         since = now() - sec
         rows = cur.execute(
             "SELECT wallet, token, is_buy, usd_nanos FROM trades WHERE timestamp>=? "
-            "ORDER BY wallet, timestamp",
+            "ORDER BY timestamp DESC LIMIT 3000",
             (since,),
         ).fetchall()
         last_sell: dict[str, str] = {}
@@ -632,6 +638,7 @@ def load_rot(cur: sqlite3.Connection) -> dict:
         ]
         links.sort(key=lambda x: -x["usd"])
         rot[key] = links[:12]
+    rot["168"] = list(rot.get("24") or [])
     return rot
 
 
@@ -751,22 +758,40 @@ def bootstrap(chat: str) -> dict:
     hl = open_db(HL_DB)
     if not cur:
         return {"ok": False, "live": False, "error": "db_missing", "db": DB}
+    errors: list[str] = []
+
+    def piece(name: str, fn, fallback):
+        try:
+            return fn()
+        except Exception as e:
+            errors.append(f"{name}:{type(e).__name__}:{e}")
+            sys.stderr.write(f"[api] bootstrap {name}: {e}\n")
+            return fallback
+
     try:
-        me = load_me(cur, chat) if chat else {
+        empty_me = {
             "plan": "free", "limit": 1, "threshold": 10000, "lang": "ru",
             "alertsToday": 0, "alerts30d": 0, "premUntil": 0, "updatedKey": "justNow",
         }
-        wallets = load_wallets(cur, chat) if chat else []
-        alerts, feed = load_alerts(cur, chat, wallets) if chat else ([], [])
-        flow = load_flow(cur)
-        rank = load_rank(cur)
-        trades = load_trades(cur, hl)
-        market_feed = load_feed_market(cur, hl)
-        funding = load_funding(hl)
-        rot = load_rot(cur)
-        sonar = load_sonar(cur)
-        coins = load_coins(flow, wallets)
-        return {
+        me = piece("me", lambda: load_me(cur, chat) if chat else empty_me, empty_me)
+        wallets = piece("wallets", lambda: load_wallets(cur, chat) if chat else [], [])
+        alerts, feed = piece(
+            "alerts",
+            lambda: load_alerts(cur, chat, wallets) if chat else ([], []),
+            ([], []),
+        )
+        flow = piece("flow", lambda: load_flow(cur), {})
+        rank = piece("rank", lambda: load_rank(cur), {"spot": {"pnl": [], "roi": [], "win": [], "act": []}, "perp": {"pnl": [], "roi": [], "win": [], "act": []}})
+        trades = piece("trades", lambda: load_trades(cur, hl), {"spot": [], "perp": [], "liq": []})
+        market_feed = piece("marketFeed", lambda: load_feed_market(cur, hl), [])
+        funding = piece("funding", lambda: load_funding(hl), [])
+        rot = piece("rot", lambda: load_rot(cur), {"24": [], "168": []})
+        sonar = piece("sonar", lambda: load_sonar(cur), {
+            "need": 400, "ready": {"spot": 0, "perp": 0}, "trained": False, "acc": None,
+            "list": [], "hist": {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []},
+        })
+        coins = piece("coins", lambda: load_coins(flow, wallets), {})
+        out = {
             "ok": True,
             "live": True,
             "me": me,
@@ -782,10 +807,22 @@ def bootstrap(chat: str) -> dict:
             "coins": coins,
             "marketFeed": market_feed,
         }
+        if errors:
+            out["partial"] = errors[:8]
+        return out
+    except Exception as e:
+        sys.stderr.write(f"[api] bootstrap fatal: {e}\n")
+        return {"ok": False, "live": False, "error": str(e)}
     finally:
-        cur.close()
+        try:
+            cur.close()
+        except Exception:
+            pass
         if hl:
-            hl.close()
+            try:
+                hl.close()
+            except Exception:
+                pass
 
 
 def mutate(chat: str, kind: str, body: dict) -> dict:
@@ -875,7 +912,24 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
 
     def _json(self, code: int, obj: dict):
-        raw = json.dumps(obj, ensure_ascii=False).encode()
+        def clean(o):
+            if isinstance(o, float):
+                if o != o or o in (float("inf"), float("-inf")):
+                    return 0.0
+                return o
+            if isinstance(o, dict):
+                return {str(k): clean(v) for k, v in o.items()}
+            if isinstance(o, (list, tuple)):
+                return [clean(v) for v in o]
+            if isinstance(o, (str, int, bool)) or o is None:
+                return o
+            return str(o)
+
+        try:
+            raw = json.dumps(clean(obj), ensure_ascii=False, allow_nan=False).encode()
+        except Exception as e:
+            raw = json.dumps({"ok": False, "error": f"json:{e}"}).encode()
+            code = 500
         self.send_response(code)
         self._cors()
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -907,38 +961,52 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        u = urlparse(self.path)
-        qs = parse_qs(u.query)
-        path = u.path.rstrip("/") or "/"
-        if path in ("/health", "/api/health"):
-            self._json(200, {"ok": True, "db": os.path.isfile(DB), "hl": os.path.isfile(HL_DB)})
-            return
-        if path in ("/bootstrap", "/api/bootstrap", "/api/me"):
-            chat = self._user(qs)
-            self._json(200, bootstrap(chat))
-            return
-        self._json(404, {"ok": False, "error": "not_found"})
+        try:
+            u = urlparse(self.path)
+            qs = parse_qs(u.query)
+            path = u.path.rstrip("/") or "/"
+            if path in ("/health", "/api/health"):
+                self._json(200, {"ok": True, "db": os.path.isfile(DB), "hl": os.path.isfile(HL_DB)})
+                return
+            if path in ("/bootstrap", "/api/bootstrap", "/api/me"):
+                chat = self._user(qs)
+                self._json(200, bootstrap(chat))
+                return
+            self._json(404, {"ok": False, "error": "not_found"})
+        except Exception as e:
+            sys.stderr.write(f"[api] GET fail: {e}\n")
+            try:
+                self._json(500, {"ok": False, "error": str(e)})
+            except Exception:
+                pass
 
     def do_POST(self):
-        u = urlparse(self.path)
-        qs = parse_qs(u.query)
-        path = u.path.rstrip("/") or "/"
-        chat = self._user(qs)
-        body = self._body()
-        kind = {
-            "/api/wallets": "add",
-            "/api/wallets/remove": "remove",
-            "/api/wallets/primary": "primary",
-            "/api/wallets/rename": "rename",
-            "/api/threshold": "threshold",
-        }.get(path)
-        if not kind:
-            self._json(404, {"ok": False, "error": "not_found"})
-            return
-        res = mutate(chat, kind, body)
-        if res.get("ok"):
-            res = {**res, **bootstrap(chat)}
-        self._json(200 if res.get("ok") else 400, res)
+        try:
+            u = urlparse(self.path)
+            qs = parse_qs(u.query)
+            path = u.path.rstrip("/") or "/"
+            chat = self._user(qs)
+            body = self._body()
+            kind = {
+                "/api/wallets": "add",
+                "/api/wallets/remove": "remove",
+                "/api/wallets/primary": "primary",
+                "/api/wallets/rename": "rename",
+                "/api/threshold": "threshold",
+            }.get(path)
+            if not kind:
+                self._json(404, {"ok": False, "error": "not_found"})
+                return
+            res = mutate(chat, kind, body)
+            if res.get("ok"):
+                res = {**res, **bootstrap(chat)}
+            self._json(200 if res.get("ok") else 400, res)
+        except Exception as e:
+            sys.stderr.write(f"[api] POST fail: {e}\n")
+            try:
+                self._json(500, {"ok": False, "error": str(e)})
+            except Exception:
+                pass
 
 
 def main():
