@@ -32,6 +32,50 @@ _hl_cache: dict[str, tuple[float, dict]] = {}
 _pub_lock = threading.Lock()
 _pub: dict = {"t": 0.0, "data": None}
 PUB_TTL = 30.0
+_addr_by_sym: dict[str, str] = {}
+_px_hist: dict[str, tuple[float, list]] = {}
+_hl_candles: dict[str, tuple[float, list]] = {}
+
+GECKO_IMG = {
+    "BTC": "https://coin-images.coingecko.com/coins/images/1/small/bitcoin.png",
+    "ETH": "https://coin-images.coingecko.com/coins/images/279/small/ethereum.png",
+    "SOL": "https://coin-images.coingecko.com/coins/images/4128/small/solana.png",
+    "BNB": "https://coin-images.coingecko.com/coins/images/825/small/bnb-icon2_2x.png",
+    "PEPE": "https://coin-images.coingecko.com/coins/images/29850/small/pepe-token.jpeg",
+    "CAKE": "https://coin-images.coingecko.com/coins/images/12632/small/pancakeswap-cake-logo_%281%29.png",
+    "ARB": "https://coin-images.coingecko.com/coins/images/16547/small/arb.jpg",
+    "FLOKI": "https://coin-images.coingecko.com/coins/images/16746/small/PNG_image.png",
+    "HYPE": "https://coin-images.coingecko.com/coins/images/50882/small/hyperliquid.jpg",
+    "ENA": "https://coin-images.coingecko.com/coins/images/36530/small/ethena.png",
+    "PUMP": "https://coin-images.coingecko.com/coins/images/67164/small/pump.jpg",
+    "DOGE": "https://coin-images.coingecko.com/coins/images/5/small/dogecoin.png",
+    "USDT": "https://coin-images.coingecko.com/coins/images/325/small/Tether.png",
+    "USDC": "https://coin-images.coingecko.com/coins/images/6319/small/usdc.png",
+    "DAI": "https://coin-images.coingecko.com/coins/images/9956/small/Badge_Dai.png",
+}
+
+HL_COIN = {
+    "PEPE": "kPEPE",
+    "FLOKI": "kFLOKI",
+    "SHIB": "kSHIB",
+    "BONK": "kBONK",
+    "NVDA": "xyz:NVDA",
+    "INTC": "xyz:INTC",
+    "GOOGL": "xyz:GOOGL",
+    "GOOG": "xyz:GOOGL",
+}
+
+
+def coin_icon(sym: str) -> str:
+    key = (sym or "").upper()
+    if key in GECKO_IMG:
+        return GECKO_IMG[key]
+    alias = HL_COIN.get(key, key)
+    if alias:
+        return f"https://app.hyperliquid.xyz/coins/{alias}.svg"
+    slug = key.lower()
+    return f"/coins/{slug}.png" if slug else ""
+
 
 
 def now() -> int:
@@ -263,6 +307,177 @@ def spark(net: float) -> list[int]:
     return [max(8, min(92, base + step * i + (i % 3))) for i in range(12)]
 
 
+def _down(vals: list[float], n: int) -> list[float]:
+    if not vals:
+        return []
+    if len(vals) <= n:
+        return vals
+    last = n - 1
+    return [vals[int(round(i * (len(vals) - 1) / last))] for i in range(n)]
+
+
+def _chg_at(pts: list[tuple[int, float]], hours: int) -> float:
+    if len(pts) < 2:
+        return 0.0
+    last_t, last_p = pts[-1]
+    if last_p <= 0:
+        return 0.0
+    want = last_t - hours * 3600
+    prev = pts[0][1]
+    for t, p in pts:
+        if t <= want:
+            prev = p
+        else:
+            break
+    if prev <= 0:
+        return 0.0
+    return round(100.0 * (last_p - prev) / prev, 2)
+
+
+def _ensure_addr_map(cur: sqlite3.Connection) -> None:
+    if _addr_by_sym or not table_exists(cur, "token_cache"):
+        return
+    try:
+        rows = cur.execute("SELECT address, symbol FROM token_cache").fetchall()
+    except sqlite3.Error:
+        return
+    for r in rows:
+        s = str(r["symbol"] or "").upper().strip()
+        a = str(r["address"] or "").lower()
+        if s and s != "UNKNOWN" and a.startswith("0x") and len(a) >= 40:
+            _addr_by_sym.setdefault(s, a)
+
+
+def addr_of_sym(cur: sqlite3.Connection, sym: str, token: str = "") -> str:
+    tok = (token or "").lower()
+    if tok.startswith("0x") and len(tok) >= 40:
+        return tok
+    _ensure_addr_map(cur)
+    return _addr_by_sym.get((sym or "").upper(), "")
+
+
+def hist_spot(cur: sqlite3.Connection, addr: str) -> list[tuple[int, float]]:
+    if not addr or not table_exists(cur, "token_price_history"):
+        return []
+    hit = _px_hist.get(addr)
+    if hit and time.monotonic() - hit[0] < 30:
+        return hit[1]
+    since = now() - 30 * 86400
+    try:
+        rows = cur.execute(
+            "SELECT ts, price_nanos FROM token_price_history "
+            "WHERE address=? AND ts>=? AND price_nanos>0 ORDER BY ts",
+            (addr, since),
+        ).fetchall()
+    except sqlite3.Error:
+        rows = []
+    pts = [(int(r["ts"]), usd(r["price_nanos"])) for r in rows if r["price_nanos"]]
+    pts = [(t, p) for t, p in pts if p > 0]
+    _px_hist[addr] = (time.monotonic(), pts)
+    return pts
+
+
+def hl_mids() -> dict[str, float]:
+    hit = _hl_cache.get("_mids")
+    if hit and time.monotonic() - hit[0] < 20:
+        return hit[1]
+    raw = hl_post({"type": "allMids"}, timeout=3.0) or {}
+    out: dict[str, float] = {}
+    if isinstance(raw, dict):
+        for k, v in raw.items():
+            try:
+                out[str(k).upper()] = float(v)
+            except (TypeError, ValueError):
+                pass
+    _hl_cache["_mids"] = (time.monotonic(), out)
+    return out
+
+
+def hist_perp(coin: str) -> list[tuple[int, float]]:
+    key = (coin or "").upper()
+    if not key:
+        return []
+    alias = HL_COIN.get(key, key)
+    hit = _hl_candles.get(alias)
+    if hit and time.monotonic() - hit[0] < 90:
+        return hit[1]
+    start = int((time.time() - 30 * 86400) * 1000)
+    raw = hl_post(
+        {
+            "type": "candleSnapshot",
+            "req": {"coin": alias, "interval": "1h", "startTime": start, "endTime": int(time.time() * 1000)},
+        },
+        timeout=3.0,
+    )
+    pts: list[tuple[int, float]] = []
+    if isinstance(raw, list):
+        for c in raw:
+            if not isinstance(c, dict):
+                continue
+            try:
+                px = float(c.get("c") or 0)
+                ts = int(c.get("t") or 0)
+            except (TypeError, ValueError):
+                continue
+            if px <= 0:
+                continue
+            if ts > 10_000_000_000:
+                ts //= 1000
+            pts.append((ts, px))
+    pts.sort()
+    _hl_candles[alias] = (time.monotonic(), pts)
+    return pts
+
+
+def _slices(pts: list[tuple[int, float]]) -> dict:
+    if not pts:
+        return {}
+    tnow = pts[-1][0]
+    def window(hours, n):
+        cut = tnow - hours * 3600
+        vals = [p for t, p in pts if t >= cut]
+        if len(vals) < 2:
+            vals = [p for _, p in pts[-max(2, n):]]
+        return _down(vals, n)
+    last = pts[-1][1]
+    chg = _chg_at(pts, 24)
+    return {
+        "price": last,
+        "chg": chg,
+        "hists": {
+            "1h": window(12, 12),
+            "24h": window(24, 24),
+            "7d": window(168, 28),
+            "30d": window(720, 30),
+        },
+        "spark": window(24, 12),
+        "c1": _chg_at(pts, 1),
+        "c6": _chg_at(pts, 6),
+        "c24": chg,
+    }
+
+
+def price_pack(cur: sqlite3.Connection, hl: sqlite3.Connection | None, sym: str, token: str = "", http: bool = False) -> dict:
+    addr = addr_of_sym(cur, sym, token)
+    pts = hist_spot(cur, addr) if addr else []
+    if len(pts) < 3 and http and not addr:
+        extra = hist_perp(sym)
+        if len(extra) > len(pts):
+            pts = extra
+    sl = _slices(pts)
+    if not sl:
+        mids = hl_mids()
+        px = mids.get((sym or "").upper(), 0.0)
+        if px > 0:
+            sl = {"price": px, "chg": 0.0, "hists": {}, "spark": [], "c1": 0, "c6": 0, "c24": 0}
+    if not sl:
+        return {}
+    sl["addr"] = addr
+    sl["icon"] = coin_icon(sym)
+    sl["real"] = True
+    return sl
+
+
 def parse_alert(msg: str, ts: int, name: str = "") -> dict:
     text = re.sub(r"<[^>]+>", " ", msg or "")
     text = re.sub(r"\s+", " ", text).strip()
@@ -486,6 +701,7 @@ def load_flow(cur: sqlite3.Connection) -> dict:
             coins.append(
                 {
                     "sym": sym,
+                    "token": r["token"],
                     "net": b - s,
                     "buy": b,
                     "sell": s,
@@ -516,6 +732,17 @@ def load_flow(cur: sqlite3.Connection) -> dict:
             r["c1"] = round(c.get("1") or 0, 1)
             r["c6"] = round(c.get("6") or 0, 1)
             r["c24"] = round(c.get("24") or 0, 1)
+            pack = price_pack(cur, None, r["sym"], r.get("token") or "", http=False)
+            if not pack:
+                continue
+            if pack.get("addr"):
+                r["addr"] = pack["addr"]
+            if pack.get("spark"):
+                r["sp"] = pack["spark"]
+            if pack.get("c1") or pack.get("c24"):
+                r["c1"] = pack.get("c1") or r["c1"]
+                r["c6"] = pack.get("c6") or r["c6"]
+                r["c24"] = pack.get("c24") or r["c24"]
     return by_win
 
 
@@ -1239,33 +1466,85 @@ def load_sonar(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) ->
     return sonar
 
 
-def load_coins(flow: dict, wallets: list) -> dict:
+def load_coins(cur: sqlite3.Connection, hl: sqlite3.Connection | None, flow: dict, wallets: list) -> dict:
     coins = {}
-    rows = ((flow.get("24") or {}).get("rows") or []) + ((flow.get("6") or {}).get("rows") or [])
+    rows = []
+    for k in ("1", "6", "24", "168", "720"):
+        rows.extend((flow.get(k) or {}).get("rows") or [])
     who_by = {}
-    for w in wallets:
+    extra_sym = []
+    for w in wallets or []:
         for p in w.get("pos") or []:
             who_by.setdefault(p["sym"], []).append({"w": w["name"], "v": p["size"], "t": "сейчас"})
+            extra_sym.append({"sym": p["sym"], "net": 0, "buy": 0, "sell": 0, "w": 0, "token": "", "c24": 0, "sp": []})
     seen = set()
-    for r in rows:
-        sym = r["sym"]
-        if sym in seen:
+    need_http: list[str] = []
+    ordered = rows + extra_sym
+    for r in ordered:
+        sym = r.get("sym") or ""
+        if not sym or sym in seen:
             continue
         seen.add(sym)
+        pack = price_pack(cur, hl, sym, r.get("token") or r.get("addr") or "", http=False)
+        if not pack.get("hists"):
+            need_http.append(sym)
+        hist24 = (pack.get("hists") or {}).get("24h") or pack.get("spark") or r.get("sp") or spark(r.get("net") or 0)
         coins[sym] = {
-            "price": 0,
-            "chg": r.get("c24") or 0,
+            "price": pack.get("price") or 0,
+            "chg": pack.get("chg") if pack else (r.get("c24") or 0),
             "entry": 0,
-            "hist": r.get("sp") or spark(r["net"]),
-            "net": r["net"],
-            "buy": r["buy"],
-            "sell": r["sell"],
-            "w": r["w"],
+            "hist": hist24,
+            "hists": pack.get("hists") or {},
+            "real": bool(pack.get("real")),
+            "addr": pack.get("addr") or r.get("addr") or "",
+            "icon": pack.get("icon") or coin_icon(sym),
+            "spark": pack.get("spark") or hist24,
+            "c1": pack.get("c1") or 0,
+            "c6": pack.get("c6") or 0,
+            "c24": pack.get("c24") or pack.get("chg") or (r.get("c24") or 0),
+            "net": r.get("net") or 0,
+            "buy": r.get("buy") or 0,
+            "sell": r.get("sell") or 0,
+            "w": r.get("w") or 0,
             "mcap": "—",
             "liq": "—",
             "who": who_by.get(sym, []),
-            "cons": {"top": min(24, r["w"]), "of": max(r["w"], 24), "first": "—", "also": []},
+            "cons": {"top": min(24, int(r.get("w") or 0)), "of": max(int(r.get("w") or 0), 24), "first": "—", "also": []},
         }
+    if hl is not None and need_http:
+        lock = threading.Lock()
+
+        def pull(sym: str):
+            pts = hist_perp(sym)
+            if len(pts) < 3:
+                return
+            sl = _slices(pts)
+            if not sl:
+                return
+            with lock:
+                c = coins.get(sym)
+                if not c:
+                    return
+                c["price"] = sl["price"]
+                c["chg"] = sl["chg"]
+                c["hist"] = (sl.get("hists") or {}).get("24h") or sl.get("spark") or c["hist"]
+                c["hists"] = sl.get("hists") or {}
+                c["real"] = True
+                c["icon"] = c.get("icon") or coin_icon(sym)
+
+        th = []
+        for sym in need_http[:12]:
+            t = threading.Thread(target=pull, args=(sym,), daemon=True)
+            t.start()
+            th.append(t)
+        for t in th:
+            t.join(timeout=4.5)
+    mids = hl_mids()
+    for sym, c in coins.items():
+        if not c.get("price"):
+            px = mids.get(sym.upper())
+            if px:
+                c["price"] = px
     return coins
 
 
@@ -1293,7 +1572,7 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
     market_feed = take("feed", lambda: load_feed_market(cur, hl), market_feed, True)
     funding = take("funding", lambda: load_funding(hl), funding)
     rot = take("rot", lambda: load_rot(cur), rot)
-    coins = take("coins", lambda: load_coins(flow, []), {})
+    coins = take("coins", lambda: load_coins(cur, hl, flow, []), {})
     return {
         "flow": flow,
         "rank": rank,
@@ -1451,7 +1730,7 @@ def bootstrap(chat: str) -> dict:
         funding = pub.get("funding") or []
         rot = pub.get("rot") or {"24": [], "168": []}
         sonar = pub.get("sonar") or empty_sonar
-        coins = piece("coins", lambda: load_coins(flow, wallets), pub.get("coins") or {})
+        coins = piece("coins", lambda: load_coins(cur, hl, flow, wallets), pub.get("coins") or {})
         out = {
             "ok": True,
             "live": True,
@@ -1634,6 +1913,44 @@ class Handler(BaseHTTPRequestHandler):
             if path in ("/bootstrap", "/api/bootstrap", "/api/me"):
                 chat = self._user(qs)
                 self._json(200, bootstrap(chat))
+                return
+            if path in ("/quotes", "/api/quotes"):
+                cur = open_db(DB)
+                hl = open_db(HL_DB)
+                if not cur:
+                    self._json(200, {})
+                    return
+                try:
+                    pub = get_public(cur, hl) or {}
+                    coins = pub.get("coins") or {}
+                    out = {}
+                    for sym, c in coins.items():
+                        if not isinstance(c, dict):
+                            continue
+                        out[sym] = {
+                            "price": c.get("price") or 0,
+                            "chg": c.get("chg") or 0,
+                            "c1": c.get("c1") or 0,
+                            "c6": c.get("c6") or 0,
+                            "c24": c.get("chg") or 0,
+                            "hist": c.get("hist") or [],
+                            "hists": c.get("hists") or {},
+                            "ohlc": c.get("ohlc") or {},
+                            "spark": c.get("spark") or c.get("hist") or [],
+                            "icon": c.get("icon") or "",
+                            "real": True,
+                        }
+                    self._json(200, out)
+                finally:
+                    try:
+                        cur.close()
+                    except Exception:
+                        pass
+                    if hl:
+                        try:
+                            hl.close()
+                        except Exception:
+                            pass
                 return
             self._json(404, {"ok": False, "error": "not_found"})
         except Exception as e:
