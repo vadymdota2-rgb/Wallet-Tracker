@@ -40,7 +40,7 @@ _NOISE = {"C", "T", "X", "USD", "USDT", "USDC", "BSC", "HL", "USD1", "WETH", "WB
 _hl_cache: dict[str, tuple[float, dict]] = {}
 _pub_lock = threading.Lock()
 _pub: dict = {"t": 0.0, "data": None}
-PUB_TTL = 8.0
+PUB_TTL = 300.0
 _addr_by_sym: dict[str, str] = {}
 _px_hist: dict[str, tuple[float, list]] = {}
 _hl_candles: dict[str, tuple[float, list]] = {}
@@ -678,7 +678,9 @@ def price_pack(cur: sqlite3.Connection, hl: sqlite3.Connection | None, sym: str,
     sl = _slices(pts)
     mids = hl_mids()
     mid = mids.get(key, 0.0)
-    tv_px, tv_chg = tv_quote(key)
+    tv_px = tv_chg = 0.0
+    if http:
+        tv_px, tv_chg = tv_quote(key)
     if _px_ok(key, tv_px):
         if sl:
             sl["price"] = tv_px
@@ -1714,7 +1716,6 @@ def load_coins(cur: sqlite3.Connection, hl: sqlite3.Connection | None, flow: dic
             if ent > 0 and sz > 0:
                 entry_w.setdefault(sym, []).append((ent, sz))
     seen = set()
-    need_http: list[str] = []
     ordered = rows + extra_sym
     for r in ordered:
         sym = r.get("sym") or ""
@@ -1724,10 +1725,8 @@ def load_coins(cur: sqlite3.Connection, hl: sqlite3.Connection | None, flow: dic
             continue
         seen.add(sym)
         r24 = flow24.get(sym) or r
-        pack = price_pack(cur, hl, sym, r24.get("token") or r.get("token") or r.get("addr") or "", http=True)
-        if not pack.get("hists") or not _px_ok(sym, pack.get("price") or 0):
-            need_http.append(sym)
-        hist24 = trim_series((pack.get("hists") or {}).get("24h") or pack.get("spark") or r.get("sp") or spark(r24.get("net") or 0), 24)
+        pack = price_pack(cur, hl, sym, r24.get("token") or r.get("token") or r.get("addr") or "", http=False)
+        hist24 = trim_series(pack.get("spark") or r.get("sp") or spark(r24.get("net") or 0), 24)
         ww = int(r24.get("w") or r.get("w") or 0)
         wsum = 0.0
         wtot = 0.0
@@ -1756,38 +1755,6 @@ def load_coins(cur: sqlite3.Connection, hl: sqlite3.Connection | None, flow: dic
             "who": (who_by.get(sym) or [])[:5],
             "cons": {"top": min(24, ww), "of": max(ww, 24), "first": "—", "also": []},
         }
-    if need_http:
-        lock = threading.Lock()
-
-        def pull(sym: str):
-            pts = hist_perp(sym)
-            if len(pts) < 3:
-                return
-            sl = _sparkify(_slices(pts), sym)
-            if not sl:
-                return
-            with lock:
-                c = coins.get(sym)
-                if not c:
-                    return
-                if _px_ok(sym, sl.get("price") or 0):
-                    c["price"] = sl["price"]
-                c["chg"] = sl["chg"]
-                c["hist"] = trim_series((sl.get("hists") or {}).get("24h") or sl.get("spark") or c["hist"], 24)
-                c["spark"] = trim_series(sl.get("spark") or c.get("spark"), 16)
-                c["c1"] = sl.get("c1") or c.get("c1") or 0
-                c["c6"] = sl.get("c6") or c.get("c6") or 0
-                c["c24"] = sl.get("c24") or c.get("c24") or 0
-                c["real"] = True
-                c["icon"] = c.get("icon") or coin_icon(sym)
-
-        th = []
-        for sym in need_http[:24]:
-            t = threading.Thread(target=pull, args=(sym,), daemon=True)
-            t.start()
-            th.append(t)
-        for t in th:
-            t.join(timeout=6.0)
     mids = hl_mids()
     for sym, c in coins.items():
         mid = mids.get(sym.upper())
