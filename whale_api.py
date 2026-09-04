@@ -307,6 +307,62 @@ def spark(net: float) -> list[int]:
     return [max(8, min(92, base + step * i + (i % 3))) for i in range(12)]
 
 
+PX_FLOOR = {
+    "BTC": 5_000.0,
+    "ETH": 200.0,
+    "SOL": 10.0,
+    "BNB": 100.0,
+    "XRP": 0.2,
+    "HYPE": 1.0,
+}
+
+
+def _px_ok(sym: str, px: float) -> bool:
+    try:
+        v = float(px or 0)
+    except (TypeError, ValueError):
+        return False
+    if v <= 0:
+        return False
+    floor = PX_FLOOR.get((sym or "").upper())
+    if floor is None:
+        return True
+    return v >= floor
+
+
+def _looks_spark(vals: list) -> bool:
+    if not vals or len(vals) < 2:
+        return False
+    try:
+        xs = [float(v) for v in vals]
+    except (TypeError, ValueError):
+        return False
+    return min(xs) >= 0 and max(xs) <= 130
+
+
+def _as_spark(vals: list, last: float) -> list[float]:
+    if not vals:
+        return []
+    try:
+        px = float(last or 0) or float(vals[-1] or 0)
+    except (TypeError, ValueError):
+        return []
+    if px <= 0:
+        return []
+    if _looks_spark(vals) and px > 200:
+        return [max(0.0, min(130.0, float(v))) for v in vals]
+    out: list[float] = []
+    for v in vals:
+        try:
+            p = float(v)
+        except (TypeError, ValueError):
+            continue
+        if p <= 0:
+            continue
+        out.append(round(max(0.0, min(140.0, (p / px - 0.9) * 220.0)), 3))
+    return out
+
+
 def _down(vals: list[float], n: int) -> list[float]:
     if not vals:
         return []
@@ -457,21 +513,53 @@ def _slices(pts: list[tuple[int, float]]) -> dict:
     }
 
 
+def _sparkify(sl: dict, sym: str) -> dict:
+    px = float(sl.get("price") or 0)
+    if px <= 0:
+        return sl
+    hists = sl.get("hists") or {}
+    out_h = {}
+    for k, vals in hists.items():
+        if not vals:
+            out_h[k] = []
+        elif _looks_spark(vals) and _px_ok(sym, px):
+            out_h[k] = [float(v) for v in vals]
+        else:
+            out_h[k] = _as_spark(vals, px)
+    sl["hists"] = out_h
+    sp = sl.get("spark") or []
+    if sp and not (_looks_spark(sp) and _px_ok(sym, px)):
+        sl["spark"] = _as_spark(sp, px)
+    return sl
+
+
 def price_pack(cur: sqlite3.Connection, hl: sqlite3.Connection | None, sym: str, token: str = "", http: bool = False) -> dict:
+    key = (sym or "").upper()
     addr = addr_of_sym(cur, sym, token)
     pts = hist_spot(cur, addr) if addr else []
-    if len(pts) < 3 and http and not addr:
+    last = pts[-1][1] if pts else 0.0
+    want_perp = (
+        http
+        or key in PX_FLOOR
+        or len(pts) < 3
+        or not _px_ok(key, last)
+        or _looks_spark([p for _, p in pts])
+    )
+    if want_perp:
         extra = hist_perp(sym)
-        if len(extra) > len(pts):
+        if extra and (not _px_ok(key, last) or len(extra) >= max(3, len(pts))):
             pts = extra
     sl = _slices(pts)
-    if not sl:
-        mids = hl_mids()
-        px = mids.get((sym or "").upper(), 0.0)
-        if px > 0:
-            sl = {"price": px, "chg": 0.0, "hists": {}, "spark": [], "c1": 0, "c6": 0, "c24": 0}
+    mids = hl_mids()
+    mid = mids.get(key, 0.0)
+    if mid > 0 and (not sl or not _px_ok(key, sl.get("price") or 0)):
+        if sl:
+            sl["price"] = mid
+        else:
+            sl = {"price": mid, "chg": 0.0, "hists": {}, "spark": [], "c1": 0, "c6": 0, "c24": 0}
     if not sl:
         return {}
+    sl = _sparkify(sl, key)
     sl["addr"] = addr
     sl["icon"] = coin_icon(sym)
     sl["real"] = True
@@ -1468,15 +1556,27 @@ def load_sonar(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) ->
 
 def load_coins(cur: sqlite3.Connection, hl: sqlite3.Connection | None, flow: dict, wallets: list) -> dict:
     coins = {}
+    flow24 = {(r.get("sym") or ""): r for r in ((flow.get("24") or {}).get("rows") or []) if r.get("sym")}
     rows = []
-    for k in ("1", "6", "24", "168", "720"):
+    for k in ("24", "6", "1", "168", "720"):
         rows.extend((flow.get(k) or {}).get("rows") or [])
-    who_by = {}
+    who_by: dict[str, list] = {}
     extra_sym = []
+    entry_w: dict[str, list[tuple[float, float]]] = {}
     for w in wallets or []:
         for p in w.get("pos") or []:
-            who_by.setdefault(p["sym"], []).append({"w": w["name"], "v": p["size"], "t": "сейчас"})
-            extra_sym.append({"sym": p["sym"], "net": 0, "buy": 0, "sell": 0, "w": 0, "token": "", "c24": 0, "sp": []})
+            sym = p.get("sym") or ""
+            if not sym:
+                continue
+            who_by.setdefault(sym, []).append({"w": w.get("name") or "", "v": p.get("size") or 0, "t": "сейчас"})
+            extra_sym.append({"sym": sym, "net": 0, "buy": 0, "sell": 0, "w": 0, "token": "", "c24": 0, "sp": []})
+            try:
+                ent = float(p.get("entry") or 0)
+                sz = abs(float(p.get("size") or 0))
+            except (TypeError, ValueError):
+                continue
+            if ent > 0 and sz > 0:
+                entry_w.setdefault(sym, []).append((ent, sz))
     seen = set()
     need_http: list[str] = []
     ordered = rows + extra_sym
@@ -1485,14 +1585,22 @@ def load_coins(cur: sqlite3.Connection, hl: sqlite3.Connection | None, flow: dic
         if not sym or sym in seen:
             continue
         seen.add(sym)
-        pack = price_pack(cur, hl, sym, r.get("token") or r.get("addr") or "", http=False)
-        if not pack.get("hists"):
+        r24 = flow24.get(sym) or r
+        pack = price_pack(cur, hl, sym, r24.get("token") or r.get("token") or r.get("addr") or "", http=True)
+        if not pack.get("hists") or not _px_ok(sym, pack.get("price") or 0):
             need_http.append(sym)
-        hist24 = (pack.get("hists") or {}).get("24h") or pack.get("spark") or r.get("sp") or spark(r.get("net") or 0)
+        hist24 = (pack.get("hists") or {}).get("24h") or pack.get("spark") or r.get("sp") or spark(r24.get("net") or 0)
+        ww = int(r24.get("w") or r.get("w") or 0)
+        wsum = 0.0
+        wtot = 0.0
+        for ent, sz in entry_w.get(sym) or []:
+            wsum += ent * sz
+            wtot += sz
+        entry = (wsum / wtot) if wtot else 0.0
         coins[sym] = {
             "price": pack.get("price") or 0,
-            "chg": pack.get("chg") if pack else (r.get("c24") or 0),
-            "entry": 0,
+            "chg": pack.get("chg") if pack else (r24.get("c24") or 0),
+            "entry": entry,
             "hist": hist24,
             "hists": pack.get("hists") or {},
             "real": bool(pack.get("real")),
@@ -1501,50 +1609,56 @@ def load_coins(cur: sqlite3.Connection, hl: sqlite3.Connection | None, flow: dic
             "spark": pack.get("spark") or hist24,
             "c1": pack.get("c1") or 0,
             "c6": pack.get("c6") or 0,
-            "c24": pack.get("c24") or pack.get("chg") or (r.get("c24") or 0),
-            "net": r.get("net") or 0,
-            "buy": r.get("buy") or 0,
-            "sell": r.get("sell") or 0,
-            "w": r.get("w") or 0,
+            "c24": pack.get("c24") or pack.get("chg") or (r24.get("c24") or 0),
+            "net": r24.get("net") or 0,
+            "buy": r24.get("buy") or 0,
+            "sell": r24.get("sell") or 0,
+            "w": ww,
             "mcap": "—",
             "liq": "—",
             "who": who_by.get(sym, []),
-            "cons": {"top": min(24, int(r.get("w") or 0)), "of": max(int(r.get("w") or 0), 24), "first": "—", "also": []},
+            "cons": {"top": min(24, ww), "of": max(ww, 24), "first": "—", "also": []},
         }
-    if hl is not None and need_http:
+    if need_http:
         lock = threading.Lock()
 
         def pull(sym: str):
             pts = hist_perp(sym)
             if len(pts) < 3:
                 return
-            sl = _slices(pts)
+            sl = _sparkify(_slices(pts), sym)
             if not sl:
                 return
             with lock:
                 c = coins.get(sym)
                 if not c:
                     return
-                c["price"] = sl["price"]
+                if _px_ok(sym, sl.get("price") or 0):
+                    c["price"] = sl["price"]
                 c["chg"] = sl["chg"]
                 c["hist"] = (sl.get("hists") or {}).get("24h") or sl.get("spark") or c["hist"]
                 c["hists"] = sl.get("hists") or {}
+                c["spark"] = sl.get("spark") or c.get("spark")
+                c["c1"] = sl.get("c1") or c.get("c1") or 0
+                c["c6"] = sl.get("c6") or c.get("c6") or 0
+                c["c24"] = sl.get("c24") or c.get("c24") or 0
                 c["real"] = True
                 c["icon"] = c.get("icon") or coin_icon(sym)
 
         th = []
-        for sym in need_http[:12]:
+        for sym in need_http[:24]:
             t = threading.Thread(target=pull, args=(sym,), daemon=True)
             t.start()
             th.append(t)
         for t in th:
-            t.join(timeout=4.5)
+            t.join(timeout=6.0)
     mids = hl_mids()
     for sym, c in coins.items():
-        if not c.get("price"):
-            px = mids.get(sym.upper())
-            if px:
-                c["price"] = px
+        mid = mids.get(sym.upper())
+        if mid and (not _px_ok(sym, c.get("price") or 0)):
+            c["price"] = mid
+        elif mid and not c.get("price"):
+            c["price"] = mid
     return coins
 
 
