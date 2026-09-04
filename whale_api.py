@@ -28,6 +28,15 @@ HL_INFO = "https://api.hyperliquid.xyz/info"
 NANOS = 1_000_000_000.0
 ADDR_RE = re.compile(r"^0x[a-fA-F0-9]{40}$")
 COIN_RE = re.compile(r"\b([A-Z]{2,12})\b")
+_SYM_OK = re.compile(r"^[A-Z][A-Z0-9]{1,10}$")
+MAJORS = {
+    "BTC", "ETH", "SOL", "BNB", "HYPE", "PEPE", "CAKE", "ARB", "FLOKI", "DOGE",
+    "WIF", "BONK", "ENA", "LINK", "AVAX", "SUI", "APT", "OP", "UNI", "AAVE",
+    "NEAR", "ATOM", "INJ", "SEI", "TIA", "WLD", "ONDO", "JUP", "SHIB", "LTC",
+    "FIL", "PUMP", "XRP", "TRX", "ADA", "DOT", "MATIC", "POL", "TON", "TRUMP",
+    "KPEPE", "KFLOKI", "KBONK", "KSHIB", "NVDA", "GOOGL", "INTC",
+}
+_NOISE = {"C", "T", "X", "USD", "USDT", "USDC", "BSC", "HL", "USD1", "WETH", "WBTC"}
 _hl_cache: dict[str, tuple[float, dict]] = {}
 _pub_lock = threading.Lock()
 _pub: dict = {"t": 0.0, "data": None}
@@ -106,6 +115,41 @@ def coin_icon(sym: str) -> str:
     if k in TV_STOCK_LOGO:
         return f"https://s3-symbol-logo.tradingview.com/{TV_STOCK_LOGO[k]}.svg"
     return f"https://s3-symbol-logo.tradingview.com/crypto/XTVC{k}.svg"
+
+
+def sym_ok(sym: str) -> bool:
+    s = (sym or "").upper()
+    if not s or any(ord(ch) > 127 for ch in s):
+        return False
+    if s in MAJORS:
+        return True
+    if s in _NOISE or s.isdigit() or not _SYM_OK.fullmatch(s):
+        return False
+    return len(s) >= 3
+
+
+def flow_keep(row: dict) -> bool:
+    s = (row.get("sym") or "").upper()
+    if not sym_ok(s):
+        return False
+    if s in MAJORS:
+        return True
+    try:
+        w = int(row.get("w") or 0)
+        vol = abs(float(row.get("buy") or 0)) + abs(float(row.get("sell") or 0))
+    except (TypeError, ValueError):
+        return False
+    return w >= 4 and vol >= 20000
+
+
+def trim_series(vals, n: int = 24) -> list:
+    if not isinstance(vals, list):
+        return []
+    if len(vals) <= n:
+        return vals
+    step = len(vals) / n
+    return [vals[int(i * step)] for i in range(n)]
+
 
 
 def tv_quote(sym: str) -> tuple[float, float]:
@@ -891,7 +935,9 @@ def load_flow(cur: sqlite3.Connection) -> dict:
                     "sp": spark(b - s),
                 }
             )
-        coins = coins[:20]
+        coins = [c for c in coins if flow_keep(c)]
+        coins.sort(key=lambda c: (0 if (c.get("sym") or "").upper() in MAJORS else 1, -abs(c.get("net") or 0)))
+        coins = coins[:12]
         by_win[key] = {
             "net": buy_t - sell_t,
             "coins": len(coins),
@@ -1674,12 +1720,14 @@ def load_coins(cur: sqlite3.Connection, hl: sqlite3.Connection | None, flow: dic
         sym = r.get("sym") or ""
         if not sym or sym in seen:
             continue
+        if not sym_ok(sym):
+            continue
         seen.add(sym)
         r24 = flow24.get(sym) or r
         pack = price_pack(cur, hl, sym, r24.get("token") or r.get("token") or r.get("addr") or "", http=True)
         if not pack.get("hists") or not _px_ok(sym, pack.get("price") or 0):
             need_http.append(sym)
-        hist24 = (pack.get("hists") or {}).get("24h") or pack.get("spark") or r.get("sp") or spark(r24.get("net") or 0)
+        hist24 = trim_series((pack.get("hists") or {}).get("24h") or pack.get("spark") or r.get("sp") or spark(r24.get("net") or 0), 24)
         ww = int(r24.get("w") or r.get("w") or 0)
         wsum = 0.0
         wtot = 0.0
@@ -1692,11 +1740,10 @@ def load_coins(cur: sqlite3.Connection, hl: sqlite3.Connection | None, flow: dic
             "chg": pack.get("chg") if pack else (r24.get("c24") or 0),
             "entry": entry,
             "hist": hist24,
-            "hists": pack.get("hists") or {},
             "real": bool(pack.get("real")),
             "addr": pack.get("addr") or r.get("addr") or "",
             "icon": pack.get("icon") or coin_icon(sym),
-            "spark": pack.get("spark") or hist24,
+            "spark": trim_series(pack.get("spark") or hist24, 16),
             "c1": pack.get("c1") or 0,
             "c6": pack.get("c6") or 0,
             "c24": pack.get("c24") or pack.get("chg") or (r24.get("c24") or 0),
@@ -1706,7 +1753,7 @@ def load_coins(cur: sqlite3.Connection, hl: sqlite3.Connection | None, flow: dic
             "w": ww,
             "mcap": "—",
             "liq": "—",
-            "who": who_by.get(sym, []),
+            "who": (who_by.get(sym) or [])[:5],
             "cons": {"top": min(24, ww), "of": max(ww, 24), "first": "—", "also": []},
         }
     if need_http:
@@ -1726,9 +1773,8 @@ def load_coins(cur: sqlite3.Connection, hl: sqlite3.Connection | None, flow: dic
                 if _px_ok(sym, sl.get("price") or 0):
                     c["price"] = sl["price"]
                 c["chg"] = sl["chg"]
-                c["hist"] = (sl.get("hists") or {}).get("24h") or sl.get("spark") or c["hist"]
-                c["hists"] = sl.get("hists") or {}
-                c["spark"] = sl.get("spark") or c.get("spark")
+                c["hist"] = trim_series((sl.get("hists") or {}).get("24h") or sl.get("spark") or c["hist"], 24)
+                c["spark"] = trim_series(sl.get("spark") or c.get("spark"), 16)
                 c["c1"] = sl.get("c1") or c.get("c1") or 0
                 c["c6"] = sl.get("c6") or c.get("c6") or 0
                 c["c24"] = sl.get("c24") or c.get("c24") or 0
@@ -1935,6 +1981,20 @@ def bootstrap(chat: str) -> dict:
         rot = pub.get("rot") or {"24": [], "168": []}
         sonar = pub.get("sonar") or empty_sonar
         coins = piece("coins", lambda: load_coins(cur, hl, flow, wallets), pub.get("coins") or {})
+        if isinstance(coins, dict):
+            slim = {}
+            for k, v in coins.items():
+                if not sym_ok(k):
+                    continue
+                if isinstance(v, dict):
+                    v = dict(v)
+                    v.pop("hists", None)
+                    v["hist"] = trim_series(v.get("hist") or [], 24)
+                    v["spark"] = trim_series(v.get("spark") or [], 16)
+                slim[k] = v
+                if len(slim) >= 24:
+                    break
+            coins = slim
         out = {
             "ok": True,
             "live": True,
