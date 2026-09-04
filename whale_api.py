@@ -66,10 +66,78 @@ HL_COIN = {
 }
 
 
+DS_IMG = {
+    "ETH": "https://dd.dexscreener.com/ds-data/tokens/ethereum/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2.png?size=lg",
+    "SOL": "https://dd.dexscreener.com/ds-data/tokens/solana/So11111111111111111111111111111111111111112.png?size=lg",
+    "PEPE": "https://dd.dexscreener.com/ds-data/tokens/ethereum/0x6982508145454ce325ddbe47a25d4ec3d2311933.png?size=lg",
+    "HYPE": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/0x9B530b0Ac8817f4B6C29cFf236df85ed33ecE660.png?size=lg",
+    "BONK": "https://dd.dexscreener.com/ds-data/tokens/solana/DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263.png?size=lg",
+    "FLOKI": "https://dd.dexscreener.com/ds-data/tokens/ethereum/0xcf0c122c6b73ff809c693db761e7baebe62b6a2e.png?size=lg",
+    "ENA": "https://dd.dexscreener.com/ds-data/tokens/ethereum/0x57e114b691db790c35207b2e685d4a43181e6061.png?size=lg",
+    "kPEPE": "https://dd.dexscreener.com/ds-data/tokens/ethereum/0x6982508145454ce325ddbe47a25d4ec3d2311933.png?size=lg",
+    "kFLOKI": "https://dd.dexscreener.com/ds-data/tokens/ethereum/0xcf0c122c6b73ff809c693db761e7baebe62b6a2e.png?size=lg",
+    "kBONK": "https://dd.dexscreener.com/ds-data/tokens/solana/DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263.png?size=lg",
+}
+_ds_lock = threading.Lock()
+_ds_mem: dict[str, str] = dict(DS_IMG)
+
+
+def _http_json(url: str, timeout: float = 2.5):
+    req = urllib.request.Request(url, headers={"User-Agent": "WhaleScanner/1.0", "Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8", "replace"))
+
+
+def ds_icon(sym: str) -> str:
+    """DexScreener logo. Cached. Exact-symbol pair with imageUrl or ds-data PNG."""
+    key = (sym or "").upper()
+    if not key:
+        return ""
+    with _ds_lock:
+        hit = _ds_mem.get(key)
+    if hit:
+        return hit
+    url = ""
+    with _ds_lock:
+        left = int(_ds_mem.get("__budget__", 8))
+        if left <= 0:
+            url = GECKO_IMG.get(key) or ""
+            _ds_mem[key] = url
+            return url
+        _ds_mem["__budget__"] = left - 1
+    try:
+        data = _http_json(f"https://api.dexscreener.com/latest/dex/search?q={quote(key)}")
+        prefer = ("hyperevm", "hyperliquid", "solana", "bsc", "ethereum", "base", "arbitrum")
+        ranked = []
+        for p in data.get("pairs") or []:
+            bt = p.get("baseToken") or {}
+            if (bt.get("symbol") or "").upper() != key:
+                continue
+            img = ((p.get("info") or {}).get("imageUrl") or "").strip()
+            chain = (p.get("chainId") or "").lower()
+            addr = (bt.get("address") or "").strip()
+            liq = float(((p.get("liquidity") or {}).get("usd") or 0) or 0)
+            if not img and chain and addr:
+                img = f"https://dd.dexscreener.com/ds-data/tokens/{chain}/{addr}.png?size=lg"
+            if img:
+                ranked.append((prefer.index(chain) if chain in prefer else 80, -liq, img))
+        ranked.sort()
+        if ranked:
+            url = ranked[0][2]
+    except Exception:
+        url = ""
+    if not url:
+        url = GECKO_IMG.get(key) or ""
+    with _ds_lock:
+        _ds_mem[key] = url
+    return url
+
+
 def coin_icon(sym: str) -> str:
     key = (sym or "").upper()
-    if key in GECKO_IMG:
-        return GECKO_IMG[key]
+    url = ds_icon(key)
+    if url:
+        return url
     alias = HL_COIN.get(key, key)
     if alias:
         return f"https://app.hyperliquid.xyz/coins/{alias}.svg"
