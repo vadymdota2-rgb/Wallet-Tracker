@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import math
 import os
 import re
 import sqlite3
@@ -229,12 +230,31 @@ def symbol_of(cur: sqlite3.Connection, token: str) -> str:
                 "SELECT symbol FROM token_cache WHERE lower(address)=?", (token.lower(),)
             ).fetchone()
             if row and row[0]:
-                _sym_cache[token] = str(row[0]).upper()
-                return _sym_cache[token]
-        _sym_cache[token] = token[:6].upper()
-        return _sym_cache[token]
-    _sym_cache[token] = token.upper()[:12] or "?"
+                s = str(row[0]).upper().strip()
+                if s and s != "UNKNOWN":
+                    _sym_cache[token] = s
+                    return s
+        _sym_cache[token] = ""
+        return ""
+    _sym_cache[token] = (token.upper()[:12] or "")
     return _sym_cache[token]
+
+
+def ts_sec(ts) -> int:
+    try:
+        v = int(ts or 0)
+    except (TypeError, ValueError):
+        return 0
+    if v > 10_000_000_000:
+        return v // 1000
+    return v
+
+
+MAX_SPOT_USD_NANOS = 10_000_000_000_000_000
+HL_MIN_CLOSED = 5
+HL_MAX_CLOSED_30D = 200
+DIR_OPEN_LONG, DIR_OPEN_SHORT = 1, 2
+DIR_LIQ_LONG, DIR_LIQ_SHORT, DIR_LIQ_OTHER = 6, 7, 8
 
 
 def spark(net: float) -> list[int]:
@@ -430,64 +450,73 @@ def load_flow(cur: sqlite3.Connection) -> dict:
     out = {}
     if not table_exists(cur, "trades"):
         return out
-    raw = cur.execute(
-        "SELECT token, is_buy, usd_nanos, wallet, timestamp FROM trades "
-        "ORDER BY rowid DESC LIMIT 2500"
-    ).fetchall()
-    tnow = now()
+    ign = table_exists(cur, "ignored_wallets")
     windows = (("1", 3600), ("6", 21600), ("24", 86400), ("168", 604800), ("720", 2592000))
-
-    def bucket_of(rows):
-        agg: dict[str, list] = {}
-        for r in rows:
-            tok = r["token"] or ""
-            slot = agg.setdefault(tok, [0.0, 0.0, set()])
-            v = usd(r["usd_nanos"])
-            if r["is_buy"]:
-                slot[0] += v
-            else:
-                slot[1] += v
-            if r["wallet"]:
-                slot[2].add(r["wallet"])
+    tnow = now()
+    ban = (
+        "AND NOT EXISTS (SELECT 1 FROM ignored_wallets iw "
+        "WHERE iw.wallet = t.wallet AND iw.permanent = 1) "
+        if ign
+        else ""
+    )
+    sql = (
+        "SELECT t.token, "
+        "SUM(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE 0 END) buy, "
+        "SUM(CASE WHEN t.is_buy=0 THEN t.usd_nanos ELSE 0 END) sell, "
+        "COUNT(DISTINCT t.wallet) w "
+        "FROM trades t "
+        "WHERE t.timestamp >= ? AND t.usd_nanos > 0 AND t.usd_nanos <= ? "
+        f"{ban}"
+        "GROUP BY t.token "
+        "ORDER BY ABS(SUM(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE -t.usd_nanos END)) DESC "
+        "LIMIT 80"
+    )
+    by_win = {}
+    for key, sec in windows:
+        rows = cur.execute(sql, (tnow - sec, MAX_SPOT_USD_NANOS)).fetchall()
         coins = []
         buy_t = sell_t = 0.0
-        for tok, (b, s, ws) in agg.items():
+        for r in rows:
+            sym = symbol_of(cur, r["token"])
+            if not sym:
+                continue
+            b, s = usd(r["buy"]), usd(r["sell"])
             buy_t += b
             sell_t += s
-            net = b - s
             coins.append(
                 {
-                    "sym": symbol_of(cur, tok),
-                    "net": net,
+                    "sym": sym,
+                    "net": b - s,
                     "buy": b,
                     "sell": s,
-                    "w": len(ws),
+                    "w": int(r["w"] or 0),
                     "top": min(0.95, (b / (b + s)) if (b + s) else 0.5),
                     "c1": 0,
                     "c6": 0,
                     "c24": 0,
-                    "sp": spark(net),
+                    "sp": spark(b - s),
                 }
             )
-        coins.sort(key=lambda c: -abs(c["net"]))
         coins = coins[:20]
-        return {
+        by_win[key] = {
             "net": buy_t - sell_t,
             "coins": len(coins),
             "buy": buy_t,
             "sell": sell_t,
             "rows": coins,
         }
-
-    last = None
-    for key, sec in windows:
-        since = tnow - sec
-        part = [r for r in raw if int(r["timestamp"] or 0) >= since]
-        if len(part) < 12:
-            part = list(raw)
-        last = bucket_of(part)
-        out[key] = last
-    return out
+    chg = {}
+    for key in ("1", "6", "24"):
+        for r in by_win.get(key, {}).get("rows") or []:
+            tot = r["buy"] + r["sell"]
+            chg.setdefault(r["sym"], {})[key] = (100.0 * r["net"] / tot) if tot else 0.0
+    for bkt in by_win.values():
+        for r in bkt["rows"]:
+            c = chg.get(r["sym"]) or {}
+            r["c1"] = round(c.get("1") or 0, 1)
+            r["c6"] = round(c.get("6") or 0, 1)
+            r["c24"] = round(c.get("24") or 0, 1)
+    return by_win
 
 
 def _map_rank(arr, days: int, n: int = 100) -> list:
@@ -511,51 +540,135 @@ def _map_rank(arr, days: int, n: int = 100) -> list:
     return mapped
 
 
-def load_rank(cur: sqlite3.Connection) -> dict:
+def _read_rank_key(cur, key: str, days: int) -> list:
+    row = cur.execute("SELECT payload FROM ranking_cache WHERE cache_key=?", (key,)).fetchone()
+    if not row or not row[0]:
+        return []
+    raw = row[0]
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8", "ignore")
+    try:
+        arr = json.loads(raw) if isinstance(raw, str) and raw.lstrip().startswith("[") else []
+    except json.JSONDecodeError:
+        return []
+    return _map_rank(arr, days, 100)
+
+
+def load_perp_rank(hl: sqlite3.Connection | None, days: int = 30) -> dict:
     empty = {"pnl": [], "roi": [], "win": [], "act": []}
-    rank: dict = {"spot": {k: [] for k in empty}, "perp": {k: [] for k in empty}}
-    if not table_exists(cur, "ranking_cache"):
-        return rank
+    if not hl or not table_exists(hl, "hl_fills"):
+        return empty
+    since_ms = (now() - days * 86400) * 1000
+    max_tr = max(HL_MIN_CLOSED, (HL_MAX_CLOSED_30D * days + 29) // 30)
+    cset = cols(hl, "hl_fills")
+    if "closed_pnl_nanos" not in cset:
+        return empty
+    fee = "COALESCE(fee_nanos,0)" if "fee_nanos" in cset else "0"
+    lev = "leverage" if "leverage" in cset else "0"
+    ban = (
+        "AND NOT EXISTS (SELECT 1 FROM hl_banned b WHERE b.wallet = f.wallet)"
+        if table_exists(hl, "hl_banned")
+        else ""
+    )
+    close_f = "AND (f.closed_pnl_nanos != 0"
+    if "flat" in cset:
+        close_f += " OR f.flat = 1"
+    if "dir_code" in cset:
+        close_f += " OR f.dir_code >= 5"
+    close_f += ")"
+    sql = (
+        f"SELECT f.wallet, "
+        f"SUM(f.closed_pnl_nanos) pnl, SUM({fee}) fees, COUNT(*) trades, "
+        f"SUM(CASE WHEN f.closed_pnl_nanos > 0 THEN 1 ELSE 0 END) wins, "
+        f"AVG(CASE WHEN {lev} > 0 THEN {lev} END) lev "
+        f"FROM hl_fills f WHERE f.ts >= ? {close_f} {ban} "
+        f"GROUP BY f.wallet HAVING COUNT(*) >= ? AND COUNT(*) <= ? "
+        f"ORDER BY (SUM(f.closed_pnl_nanos) - SUM({fee})) DESC LIMIT 100"
+    )
+    try:
+        rows = hl.execute(sql, (since_ms, HL_MIN_CLOSED, max_tr)).fetchall()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] perp rank: {e}\n")
+        return empty
+    mapped = []
+    for r in rows:
+        pnl = usd(r["pnl"]) - usd(r["fees"])
+        tr = int(r["trades"] or 0)
+        wins = int(r["wins"] or 0)
+        lev_v = float(r["lev"] or 0)
+        mapped.append(
+            {
+                "a": r["wallet"] or "",
+                "pnl": pnl,
+                "roi": round((100.0 * pnl / max(abs(pnl) * 0.4, 1.0)), 1) if pnl else 0,
+                "win": int(round(100.0 * wins / tr)) if tr else 0,
+                "tr": tr,
+                "dd": 0,
+                "days": days,
+                "lev": int(round(lev_v)) if lev_v else None,
+            }
+        )
+    return {
+        "pnl": list(mapped),
+        "roi": sorted(mapped, key=lambda x: -x["roi"]),
+        "win": sorted(mapped, key=lambda x: -x["win"]),
+        "act": sorted(mapped, key=lambda x: -x["tr"]),
+    }
+
+
+def load_rank(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) -> dict:
+    empty = {"pnl": [], "roi": [], "win": [], "act": []}
+    rank = {"spot": {k: [] for k in empty}, "perp": {k: [] for k in empty}, "wins": {}}
     kind_map = {"pnl": "pnl", "roi": "roi", "winrate": "win", "active": "act"}
-    for kind, key in kind_map.items():
-        row = cur.execute(
-            "SELECT payload FROM ranking_cache WHERE cache_key=?",
-            (f"global_{kind}_30",),
-        ).fetchone()
-        if not row or not row[0]:
-            continue
-        raw = row[0]
-        if isinstance(raw, bytes):
-            raw = raw.decode("utf-8", "ignore")
-        if len(raw) > 1_200_000:
-            raw = raw[:1_200_000]
-            cut = raw.rfind("}")
-            if cut > 0:
-                raw = raw[: cut + 1]
-        try:
-            arr = json.loads(raw) if isinstance(raw, str) and raw.lstrip().startswith("[") else []
-        except json.JSONDecodeError:
-            continue
-        rank["spot"][key] = _map_rank(arr, 30, 100)
-    if not rank["spot"]["roi"]:
-        rank["spot"]["roi"] = list(rank["spot"]["pnl"])
-    if not rank["spot"]["act"]:
-        rank["spot"]["act"] = list(rank["spot"]["pnl"])
-    rank["perp"] = {k: list(v) for k, v in rank["spot"].items()}
+    has_cache = table_exists(cur, "ranking_cache")
+    for days in (30, 90, 180, 365):
+        spot = {k: [] for k in empty}
+        if has_cache:
+            for kind, key in kind_map.items():
+                rows = _read_rank_key(cur, f"global_{kind}_{days}", days)
+                if not rows and days == 30:
+                    rows = _read_rank_key(cur, f"global_{kind}", 30)
+                spot[key] = rows
+            if not spot["roi"]:
+                spot["roi"] = list(spot["pnl"])
+            if not spot["act"]:
+                spot["act"] = list(spot["pnl"])
+        perp = load_perp_rank(hl, days) if days == 30 else {k: [] for k in empty}
+        rank["wins"][str(days)] = {"spot": spot, "perp": perp}
+        if days == 30:
+            rank["spot"] = spot
+            rank["perp"] = perp
     return rank
 
 
 def load_trades(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict:
     spot, perp, liq = [], [], []
+    since = now() - 86400
+    ign = table_exists(cur, "ignored_wallets")
     if table_exists(cur, "trades"):
+        ban = (
+            "AND NOT EXISTS (SELECT 1 FROM ignored_wallets iw "
+            "WHERE iw.wallet = t.wallet AND iw.permanent = 1) "
+            if ign
+            else ""
+        )
         rows = cur.execute(
-            "SELECT wallet, token, is_buy, usd_nanos, timestamp FROM trades "
-            "ORDER BY rowid DESC LIMIT 40"
+            "SELECT t.wallet, t.token, t.is_buy, t.usd_nanos, t.timestamp "
+            "FROM trades t "
+            "WHERE t.timestamp >= ? AND t.usd_nanos > 0 AND t.usd_nanos <= ? "
+            f"{ban}"
+            "GROUP BY t.wallet "
+            "HAVING t.usd_nanos = MAX(t.usd_nanos) "
+            "ORDER BY t.usd_nanos DESC LIMIT 30",
+            (since, MAX_SPOT_USD_NANOS),
         ).fetchall()
         for r in rows:
+            sym = symbol_of(cur, r["token"])
+            if not sym:
+                continue
             spot.append(
                 {
-                    "sym": symbol_of(cur, r["token"]),
+                    "sym": sym,
                     "v": usd(r["usd_nanos"]),
                     "side": "покупка" if r["is_buy"] else "продажа",
                     "w": short_addr(r["wallet"] or ""),
@@ -563,69 +676,137 @@ def load_trades(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict:
                 }
             )
     if hl and table_exists(hl, "hl_fills"):
-        rows = hl.execute(
-            "SELECT wallet, coin, dir, side, notional_nanos, ts, dir_code FROM hl_fills "
-            "ORDER BY rowid DESC LIMIT 40"
-        ).fetchall()
-        for r in rows:
-            side = (r["dir"] or r["side"] or "").lower()
-            row = {
-                "sym": str(r["coin"] or "?").upper(),
-                "v": usd(r["notional_nanos"]),
-                "side": r["dir"] or r["side"] or "",
-                "w": short_addr(r["wallet"] or ""),
-                "t": ago(r["ts"]),
-            }
-            if int(r["dir_code"] or 0) >= 5 or "liq" in side:
-                liq.append(row)
-            else:
-                perp.append(row)
+        since_ms = since * 1000
+        ban = (
+            "AND wallet NOT IN (SELECT wallet FROM hl_banned) "
+            if table_exists(hl, "hl_banned")
+            else ""
+        )
+        cset = cols(hl, "hl_fills")
+        dirc = "dir_code" if "dir_code" in cset else "0"
+        lev = "leverage" if "leverage" in cset else "0"
+        q = (
+            f"SELECT wallet, coin, dir, notional_nanos, {lev} lev, {dirc} dirc, ts "
+            f"FROM hl_fills WHERE ts >= ? AND notional_nanos > 0 {ban} "
+            f"AND {dirc} IN (1,2) "
+            f"GROUP BY wallet HAVING notional_nanos = MAX(notional_nanos) "
+            f"ORDER BY notional_nanos DESC LIMIT 30"
+        )
+        try:
+            for r in hl.execute(q, (since_ms,)):
+                code = int(r["dirc"] or 0)
+                lv = int(r["lev"] or 0)
+                side = f"{'лонг' if code == DIR_OPEN_LONG else 'шорт'} {lv}×" if lv else ("лонг" if code == 1 else "шорт")
+                perp.append(
+                    {
+                        "sym": str(r["coin"] or "?").upper(),
+                        "v": usd(r["notional_nanos"]),
+                        "side": side,
+                        "w": short_addr(r["wallet"] or ""),
+                        "t": ago(ts_sec(r["ts"])),
+                    }
+                )
+        except sqlite3.Error as e:
+            sys.stderr.write(f"[api] perp trades: {e}\n")
+        q2 = (
+            f"SELECT wallet, coin, dir, notional_nanos, {dirc} dirc, ts "
+            f"FROM hl_fills WHERE ts >= ? AND notional_nanos > 0 {ban} "
+            f"AND {dirc} IN (6,7,8) "
+            f"GROUP BY wallet HAVING notional_nanos = MAX(notional_nanos) "
+            f"ORDER BY notional_nanos DESC LIMIT 30"
+        )
+        try:
+            for r in hl.execute(q2, (since_ms,)):
+                code = int(r["dirc"] or 0)
+                side = "вынесло шорт" if code == DIR_LIQ_SHORT else "вынесло лонг"
+                liq.append(
+                    {
+                        "sym": str(r["coin"] or "?").upper(),
+                        "v": usd(r["notional_nanos"]),
+                        "side": side,
+                        "w": short_addr(r["wallet"] or ""),
+                        "t": ago(ts_sec(r["ts"])),
+                    }
+                )
+        except sqlite3.Error as e:
+            sys.stderr.write(f"[api] liq trades: {e}\n")
     return {"spot": spot[:20], "perp": perp[:20], "liq": liq[:20]}
 
 
 def load_feed_market(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> list:
     items = []
+    ign = table_exists(cur, "ignored_wallets")
     if table_exists(cur, "trades"):
+        ban = (
+            "AND NOT EXISTS (SELECT 1 FROM ignored_wallets iw "
+            "WHERE iw.wallet = t.wallet AND iw.permanent = 1) "
+            if ign
+            else ""
+        )
         for r in cur.execute(
-            "SELECT wallet, token, is_buy, usd_nanos, timestamp FROM trades "
-            "ORDER BY rowid DESC LIMIT 20"
+            "SELECT t.wallet, t.token, t.is_buy, t.usd_nanos, t.timestamp FROM trades t "
+            f"WHERE t.usd_nanos > 0 AND t.usd_nanos <= ? {ban} "
+            "ORDER BY t.timestamp DESC LIMIT 20",
+            (MAX_SPOT_USD_NANOS,),
         ):
+            sym = symbol_of(cur, r["token"])
+            if not sym:
+                continue
             items.append(
                 {
                     "t": ago(r["timestamp"]),
-                    "sym": symbol_of(cur, r["token"]),
+                    "sym": sym,
                     "w": short_addr(r["wallet"] or ""),
                     "act": "купил" if r["is_buy"] else "продал",
                     "v": usd(r["usd_nanos"]),
                     "up": bool(r["is_buy"]),
+                    "_ts": int(r["timestamp"] or 0),
                 }
             )
     if hl and table_exists(hl, "hl_fills"):
+        ban = (
+            "AND wallet NOT IN (SELECT wallet FROM hl_banned) "
+            if table_exists(hl, "hl_banned")
+            else ""
+        )
+        cset = cols(hl, "hl_fills")
+        dirc = "dir_code" if "dir_code" in cset else "0"
         for r in hl.execute(
-            "SELECT wallet, coin, dir, notional_nanos, ts FROM hl_fills ORDER BY rowid DESC LIMIT 20"
+            f"SELECT wallet, coin, dir, notional_nanos, ts, {dirc} dirc FROM hl_fills "
+            f"WHERE notional_nanos > 0 {ban} ORDER BY ts DESC LIMIT 20"
         ):
+            code = int(r["dirc"] or 0)
+            up = code in (DIR_OPEN_LONG, 4, DIR_LIQ_SHORT)
             items.append(
                 {
-                    "t": ago(r["ts"]),
+                    "t": ago(ts_sec(r["ts"])),
                     "sym": str(r["coin"] or "?").upper(),
                     "w": short_addr(r["wallet"] or ""),
                     "act": r["dir"] or "сделка",
                     "v": usd(r["notional_nanos"]),
-                    "up": "buy" in (r["dir"] or "").lower() or "long" in (r["dir"] or "").lower(),
+                    "up": up,
+                    "_ts": ts_sec(r["ts"]),
                 }
             )
-    items.sort(key=lambda x: x["t"])
+    items.sort(key=lambda x: -x.get("_ts", 0))
+    for it in items:
+        it.pop("_ts", None)
     return items[:24]
 
 
 def load_funding(hl: sqlite3.Connection | None) -> list:
     if not hl or not table_exists(hl, "hl_funding_rate"):
         return []
-    rows = hl.execute(
-        "SELECT coin, rate_nanos, oi_nanos FROM hl_funding_rate "
-        "WHERE hour_ts=(SELECT MAX(hour_ts) FROM hl_funding_rate) "
-        "ORDER BY ABS(rate_nanos) DESC LIMIT 12"
-    ).fetchall()
+    cset = cols(hl, "hl_funding_rate")
+    oi_sel = "oi_nanos" if "oi_nanos" in cset else "0"
+    try:
+        rows = hl.execute(
+            f"SELECT coin, rate_nanos, {oi_sel} oi FROM hl_funding_rate "
+            "WHERE hour_ts=(SELECT MAX(hour_ts) FROM hl_funding_rate) "
+            "ORDER BY ABS(rate_nanos) DESC LIMIT 15"
+        ).fetchall()
+    except sqlite3.Error:
+        return []
     out = []
     for r in rows:
         rate = usd(r["rate_nanos"])
@@ -634,7 +815,7 @@ def load_funding(hl: sqlite3.Connection | None) -> list:
                 "sym": str(r["coin"] or "?").upper(),
                 "rate": rate * 100,
                 "apr": rate * 24 * 365 * 100,
-                "oi": usd(r["oi_nanos"]),
+                "oi": usd(r["oi"]),
                 "side": "лонги платят" if rate >= 0 else "шорты платят",
             }
         )
@@ -645,16 +826,27 @@ def load_rot(cur: sqlite3.Connection) -> dict:
     rot = {"24": [], "168": []}
     if not table_exists(cur, "trades"):
         return rot
-    for key, _sec in (("24", 86400),):
+    ign = table_exists(cur, "ignored_wallets")
+    ban = (
+        "AND NOT EXISTS (SELECT 1 FROM ignored_wallets iw "
+        "WHERE iw.wallet = t.wallet AND iw.permanent = 1) "
+        if ign
+        else ""
+    )
+    for key, sec in (("24", 86400), ("168", 604800)):
         rows = cur.execute(
-            "SELECT wallet, token, is_buy, usd_nanos FROM trades "
-            "ORDER BY rowid DESC LIMIT 1500"
+            "SELECT t.wallet, t.token, t.is_buy, t.usd_nanos FROM trades t "
+            f"WHERE t.timestamp >= ? AND t.usd_nanos > 0 AND t.usd_nanos <= ? {ban} "
+            "ORDER BY t.wallet, t.timestamp",
+            (now() - sec, MAX_SPOT_USD_NANOS),
         ).fetchall()
         last_sell: dict[str, str] = {}
         agg: dict[tuple[str, str], list] = {}
         for r in rows:
             w = (r["wallet"] or "").lower()
             tok = symbol_of(cur, r["token"])
+            if not tok:
+                continue
             if r["is_buy"]:
                 src = last_sell.get(w)
                 if src and src != tok:
@@ -670,55 +862,380 @@ def load_rot(cur: sqlite3.Connection) -> dict:
         ]
         links.sort(key=lambda x: -x["usd"])
         rot[key] = links[:12]
-    rot["168"] = list(rot.get("24") or [])
     return rot
 
 
-def load_sonar(cur: sqlite3.Connection) -> dict:
+def _count_ready(cur: sqlite3.Connection, perp: bool) -> int:
+    try:
+        row = cur.execute(
+            "SELECT COUNT(*) n FROM ai_events e "
+            "WHERE filled_at>0 AND price_then>0 AND price_24h>0 "
+            "AND window_days=24 AND venue=? AND buy_nanos!=sell_nanos "
+            "AND ABS(price_24h-price_then)*50>=price_then "
+            "AND NOT EXISTS ("
+            "  SELECT 1 FROM ai_events e2 WHERE e2.token=e.token AND e2.venue=e.venue "
+            "  AND e2.window_days=24 AND e2.filled_at>0 AND e2.price_then>0 AND e2.price_24h>0 "
+            "  AND e2.ts/86400=e.ts/86400 AND e2.id<e.id)",
+            (1 if perp else 0,),
+        ).fetchone()
+        return int(row["n"] if row else 0)
+    except sqlite3.Error:
+        return 0
+
+
+def _ai_trained(cur: sqlite3.Connection, perp: bool) -> tuple[bool, float | None]:
+    if not table_exists(cur, "ai_weights"):
+        return False, None
+    n_key, acc_key = (300, 302) if perp else (100, 102)
+    w0, w1 = (500, 511) if perp else (400, 411)
+    try:
+        n = cur.execute("SELECT v FROM ai_weights WHERE k=?", (n_key,)).fetchone()
+        acc = cur.execute("SELECT v FROM ai_weights WHERE k=?", (acc_key,)).fetchone()
+        got = cur.execute(
+            "SELECT COUNT(*) c FROM ai_weights WHERE k>=? AND k<?", (w0, w1)
+        ).fetchone()
+        ns = float(n["v"]) if n else 0
+        trained = bool(got and got["c"] >= 11 and ns >= 400)
+        a = float(acc["v"]) if acc and trained else None
+        return trained, a
+    except sqlite3.Error:
+        return False, None
+
+
+def _plan(px: float, conf: float, is_long: bool, is_perp: bool) -> dict:
+    if px <= 0:
+        px = 0.0
+    stop_pct = 0.025
+    stop_pct = max(0.015, min(0.15, stop_pct))
+    stop = px * (1.0 - stop_pct) if is_long else px * (1.0 + stop_pct)
+    t1 = px * (1.0 + stop_pct * 1.5) if is_long else px * (1.0 - stop_pct * 1.5)
+    t2 = px * (1.0 + stop_pct * 3.0) if is_long else px * (1.0 - stop_pct * 3.0)
+    confidence = max(0.0, min(1.0, (conf / 100.0 - 0.5) * 2.5))
+    cap = 0.15 if is_perp else 0.06
+    risk_budget = min(cap, 0.02 + 0.13 * confidence * 0.25)
+    lev = risk_budget / stop_pct if stop_pct else 1
+    lev = max(1, min(10, int(lev + 0.5)))
+    return {
+        "entry": px,
+        "lo": px * 0.995,
+        "hi": px * 1.005,
+        "stop": stop,
+        "stopPct": round(stop_pct * 100, 1),
+        "t1": t1,
+        "t2": t2,
+        "risk": round(stop_pct * 100, 1),
+        "lev": lev if is_perp else 1,
+    }
+
+
+def _heuristic(wallets: int, one_share: float, usd_vol: float, net: float, perp: bool) -> float:
+    if wallets < 3 or one_share > 0.70 or usd_vol <= 0:
+        return 0.0
+    direction = net / usd_vol
+    scaled = usd_vol / 10.0 if perp else usd_vol
+    return direction * math.log1p(wallets) * (1.0 - one_share) * math.log1p(max(scaled, 0.0))
+
+
+def _conf_from_score(score: float, trained: bool) -> int:
+    a = abs(score)
+    if trained:
+        v = int(min(99, max(1, 50 + a * 8)))
+    else:
+        v = 40 + int(min(40.0, a * 5.0))
+        v = max(35, min(80, v))
+    return v
+
+
+def _why(net: float, wallets: int, top_share: float, liq: float) -> list:
+    out = []
+    if net >= 0:
+        out.append("flow")
+        if wallets >= 8:
+            out.append("volume")
+        if top_share > 0.15:
+            out.append("top100")
+        if wallets >= 6:
+            out.append("breadth")
+    else:
+        out.append("top100-out")
+        if liq:
+            out.append("liq-skew")
+    return out or ["flow"]
+
+
+def _take_sides(rows: list, n: int = 5) -> list:
+    buys = [r for r in rows if (r.get("score") or 0) > 0]
+    sells = [r for r in rows if (r.get("score") or 0) < 0]
+    buys.sort(key=lambda x: -abs(x.get("score") or 0))
+    sells.sort(key=lambda x: -abs(x.get("score") or 0))
+    return buys[:n] + sells[:n]
+
+
+def _price_of(cur, hl, key: str, perp: bool) -> float:
+    try:
+        if perp and hl:
+            if table_exists(hl, "hl_mids"):
+                row = hl.execute("SELECT px FROM hl_mids WHERE coin=?", (key,)).fetchone()
+                if row and row[0]:
+                    return float(row[0])
+            if table_exists(hl, "hl_marks"):
+                cset = cols(hl, "hl_marks")
+                col = "px" if "px" in cset else ("mark" if "mark" in cset else "")
+                if col:
+                    row = hl.execute(f"SELECT {col} FROM hl_marks WHERE coin=?", (key,)).fetchone()
+                    if row and row[0]:
+                        return float(row[0])
+            return 0.0
+        if table_exists(cur, "token_prices"):
+            cset = cols(cur, "token_prices")
+            col = "price_nanos" if "price_nanos" in cset else ("price" if "price" in cset else "")
+            if col:
+                row = cur.execute(
+                    f"SELECT {col} FROM token_prices WHERE lower(address)=?", (key.lower(),)
+                ).fetchone()
+                if row and row[0]:
+                    v = float(row[0])
+                    return usd(v) if col == "price_nanos" or v > 1e6 else v
+        if table_exists(cur, "token_cache"):
+            cset = cols(cur, "token_cache")
+            for col in ("price_nanos", "usd_price", "price"):
+                if col not in cset:
+                    continue
+                row = cur.execute(
+                    f"SELECT {col} FROM token_cache WHERE lower(address)=?", (key.lower(),)
+                ).fetchone()
+                if row and row[0]:
+                    v = float(row[0])
+                    return usd(v) if "nanos" in col or v > 1e9 else v
+    except (sqlite3.Error, TypeError, ValueError):
+        return 0.0
+    return 0.0
+
+
+def _slot_put(bucket: dict, key: str, buy: float, sell: float, wallet: str, liq: float = 0.0):
+    if buy <= 0 and sell <= 0 and liq <= 0:
+        return
+    slot = bucket.setdefault(key, [0.0, 0.0, set(), {}, 0.0, 0.0])
+    slot[0] += buy
+    slot[1] += sell
+    vol = buy + sell
+    if wallet and vol > 0:
+        slot[2].add(wallet)
+        slot[3][wallet] = slot[3].get(wallet, 0.0) + vol
+    slot[4] += vol
+    slot[5] += liq
+
+
+def _signals_from_slots(slots: dict, hours: int, trained: bool, perp: bool, cur, hl) -> list:
+    raw = []
+    for key, (b, s, ws, per, tot, liq) in slots.items():
+        wallets = len(ws)
+        one = max(per.values()) / tot if tot and per else 0.0
+        net = b - s
+        sc = _heuristic(wallets, one, tot, net, perp)
+        if sc == 0:
+            continue
+        if perp:
+            sym = str(key or "").upper()
+        else:
+            sym = symbol_of(cur, key)
+        if not sym:
+            continue
+        conf = _conf_from_score(sc, trained)
+        side = "buy" if net >= 0 else "sell"
+        px = _price_of(cur, hl, key, perp)
+        plan = _plan(px, conf, side == "buy", perp)
+        raw.append(
+            {
+                "sym": sym,
+                "side": side,
+                "conf": conf,
+                "net": net,
+                "w": wallets,
+                **plan,
+                "why": _why(net, wallets, 0, liq),
+                "winH": hours,
+                "venue": "perp" if perp else "spot",
+                "score": sc,
+            }
+        )
+    out = _take_sides(raw, 5)
+    for s in out:
+        s.pop("score", None)
+    return out
+
+
+def _spot_windows(cur: sqlite3.Connection) -> dict[int, dict]:
+    wins: dict[int, dict] = {1: {}, 6: {}, 24: {}}
+    if not table_exists(cur, "trades"):
+        return wins
+    tnow = now()
+    t1, t6, t24 = tnow - 3600, tnow - 21600, tnow - 86400
+    ign = table_exists(cur, "ignored_wallets")
+    ban = (
+        "AND NOT EXISTS (SELECT 1 FROM ignored_wallets iw "
+        "WHERE iw.wallet = t.wallet AND iw.permanent = 1) "
+        if ign
+        else ""
+    )
+    try:
+        rows = cur.execute(
+            "SELECT t.token, lower(t.wallet) w, "
+            "SUM(CASE WHEN t.timestamp>=? AND t.is_buy=1 THEN t.usd_nanos ELSE 0 END) b1, "
+            "SUM(CASE WHEN t.timestamp>=? AND t.is_buy=0 THEN t.usd_nanos ELSE 0 END) s1, "
+            "SUM(CASE WHEN t.timestamp>=? AND t.is_buy=1 THEN t.usd_nanos ELSE 0 END) b6, "
+            "SUM(CASE WHEN t.timestamp>=? AND t.is_buy=0 THEN t.usd_nanos ELSE 0 END) s6, "
+            "SUM(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE 0 END) b24, "
+            "SUM(CASE WHEN t.is_buy=0 THEN t.usd_nanos ELSE 0 END) s24 "
+            "FROM trades t "
+            "WHERE t.timestamp>=? AND t.usd_nanos>0 AND t.usd_nanos<=? "
+            f"{ban}"
+            "GROUP BY t.token, lower(t.wallet)",
+            (t1, t1, t6, t6, t24, MAX_SPOT_USD_NANOS),
+        ).fetchall()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] sonar spot: {e}\n")
+        return wins
+    for r in rows:
+        tok = r["token"] or ""
+        w = r["w"] or ""
+        if not tok:
+            continue
+        _slot_put(wins[1], tok, usd(r["b1"]), usd(r["s1"]), w)
+        _slot_put(wins[6], tok, usd(r["b6"]), usd(r["s6"]), w)
+        _slot_put(wins[24], tok, usd(r["b24"]), usd(r["s24"]), w)
+    return wins
+
+
+def _perp_windows(hl: sqlite3.Connection | None) -> dict[int, dict]:
+    wins: dict[int, dict] = {1: {}, 6: {}, 24: {}}
+    if not hl or not table_exists(hl, "hl_fills"):
+        return wins
+    tnow = now()
+    t1, t6, t24 = (tnow - 3600) * 1000, (tnow - 21600) * 1000, (tnow - 86400) * 1000
+    ban = (
+        "AND lower(wallet) NOT IN (SELECT lower(wallet) FROM hl_banned) "
+        if table_exists(hl, "hl_banned")
+        else ""
+    )
+    cset = cols(hl, "hl_fills")
+    dirc = "dir_code" if "dir_code" in cset else "0"
+    try:
+        rows = hl.execute(
+            f"SELECT coin, lower(wallet) w, {dirc} dirc, "
+            "SUM(CASE WHEN ts>=? THEN notional_nanos ELSE 0 END) v1, "
+            "SUM(CASE WHEN ts>=? THEN notional_nanos ELSE 0 END) v6, "
+            "SUM(notional_nanos) v24 "
+            "FROM hl_fills "
+            f"WHERE ts>=? AND notional_nanos>0 AND {dirc} IN (1,2,6,7,8) {ban}"
+            f"GROUP BY coin, lower(wallet), {dirc}",
+            (t1, t6, t24),
+        ).fetchall()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] sonar perp: {e}\n")
+        return wins
+    for r in rows:
+        coin = str(r["coin"] or "").upper()
+        w = r["w"] or ""
+        if not coin:
+            continue
+        code = int(r["dirc"] or 0)
+        for hours, col in ((1, "v1"), (6, "v6"), (24, "v24")):
+            v = usd(r[col])
+            if v <= 0:
+                continue
+            if code in (DIR_LIQ_LONG, DIR_LIQ_SHORT, DIR_LIQ_OTHER):
+                _slot_put(wins[hours], coin, 0.0, 0.0, w, v)
+            elif code == DIR_OPEN_LONG:
+                _slot_put(wins[hours], coin, v, 0.0, w)
+            else:
+                _slot_put(wins[hours], coin, 0.0, v, w)
+    return wins
+
+
+def load_sonar(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) -> dict:
     sonar = {
         "need": 400,
         "ready": {"spot": 0, "perp": 0},
         "trained": False,
+        "trainedSpot": False,
+        "trainedPerp": False,
         "acc": None,
+        "accSpot": None,
+        "accPerp": None,
         "list": [],
         "hist": {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []},
     }
-    if not table_exists(cur, "ai_events"):
-        return sonar
-    rows = cur.execute(
-        "SELECT name, token, venue, buy_nanos, sell_nanos, wallets, score, price_then, window_days "
-        "FROM ai_events ORDER BY rowid DESC LIMIT 12"
-    ).fetchall()
-    sonar["ready"]["spot"] = len(rows)
-    sonar["trained"] = False
-    for r in rows:
-        buy, sell = usd(r["buy_nanos"]), usd(r["sell_nanos"])
-        net = buy - sell
-        px = usd(r["price_then"])
-        side = "buy" if net >= 0 else "sell"
-        sym = (r["name"] or symbol_of(cur, r["token"]) or "?").upper()
-        stop_pct = 2.5
-        sonar["list"].append(
-            {
-                "sym": sym,
-                "side": side,
-                "conf": max(40, min(95, int(abs(float(r["score"] or 0)) * 10 + 50))),
-                "net": net,
-                "w": int(r["wallets"] or 0),
-                "entry": px,
-                "lo": px * 0.995,
-                "hi": px * 1.005,
-                "stop": px * (0.985 if side == "buy" else 1.015),
-                "stopPct": stop_pct,
-                "t1": px * (1.022 if side == "buy" else 0.978),
-                "t2": px * (1.045 if side == "buy" else 0.955),
-                "risk": 4.5,
-                "lev": 1 if r["venue"] == 0 else 3,
-                "why": ["flow", "top100"] if net >= 0 else ["top100-out"],
-                "winH": int(r["window_days"] or 24),
-                "venue": "perp" if r["venue"] else "spot",
-            }
-        )
+    if table_exists(cur, "ai_events"):
+        sonar["ready"]["spot"] = _count_ready(cur, False)
+        sonar["ready"]["perp"] = _count_ready(cur, True)
+    ts, accs = _ai_trained(cur, False)
+    tp, accp = _ai_trained(cur, True)
+    sonar["trainedSpot"] = ts
+    sonar["trainedPerp"] = tp
+    sonar["trained"] = ts
+    sonar["accSpot"] = round(accs * 100) if accs else None
+    sonar["accPerp"] = round(accp * 100) if accp else None
+    sonar["acc"] = sonar["accSpot"]
+
+    signals = []
+    spot_w = _spot_windows(cur)
+    perp_w = _perp_windows(hl)
+    for hours in (1, 6, 24):
+        signals.extend(_signals_from_slots(spot_w.get(hours) or {}, hours, ts, False, cur, hl))
+        signals.extend(_signals_from_slots(perp_w.get(hours) or {}, hours, tp, True, cur, hl))
+    sonar["list"] = signals
+
+    items = []
+    if table_exists(cur, "ai_events"):
+        try:
+            hist_rows = cur.execute(
+                "SELECT name, venue, buy_nanos, sell_nanos, price_then, price_24h, ts "
+                "FROM ai_events WHERE window_days=24 AND filled_at>0 "
+                "AND price_then>0 AND price_24h>0 ORDER BY ts DESC LIMIT 40"
+            ).fetchall()
+        except sqlite3.Error:
+            hist_rows = []
+        tp_n = sl_n = 0
+        signed = []
+        for r in hist_rows:
+            buy, sell = usd(r["buy_nanos"]), usd(r["sell_nanos"])
+            then, later = usd(r["price_then"]), usd(r["price_24h"])
+            if buy == sell or then <= 0:
+                continue
+            was_long = buy > sell
+            ret = 100.0 * (later - then) / then
+            win = ret > 0 if was_long else ret < 0
+            moved = ret if was_long else -ret
+            plan = 1 if moved >= 3.75 else (-1 if moved <= -2.5 else 0)
+            if plan == 1:
+                tp_n += 1
+            elif plan == -1:
+                sl_n += 1
+            signed.append(moved)
+            items.append(
+                {
+                    "sym": (r["name"] or "?").upper(),
+                    "long": was_long,
+                    "ret": round(ret, 1),
+                    "t": ago(int(r["ts"] or 0)),
+                    "win": win,
+                    "venue": "perp" if int(r["venue"] or 0) else "spot",
+                }
+            )
+        of = len(items)
+        won = sum(1 for i in items if i["win"])
+        sonar["hist"] = {
+            "hit": int(round(100.0 * won / of)) if of else 0,
+            "of": of,
+            "won": won,
+            "tp": tp_n,
+            "sl": sl_n,
+            "missed": max(0, of - won),
+            "broken": sl_n,
+            "avg": round(sum(signed) / len(signed), 1) if signed else 0,
+            "items": items,
+        }
     return sonar
 
 
@@ -769,13 +1286,13 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
             sys.stderr.write(f"[api] cache {name}: {e}\n")
             return fallback
 
-    rank = take("rank", lambda: load_rank(cur), rank, True)
+    rank = take("rank", lambda: load_rank(cur, hl), rank, True)
     flow = take("flow", lambda: load_flow(cur), flow, True)
+    sonar = take("sonar", lambda: load_sonar(cur, hl), sonar, True)
     trades = take("trades", lambda: load_trades(cur, hl), trades, True)
     market_feed = take("feed", lambda: load_feed_market(cur, hl), market_feed, True)
     funding = take("funding", lambda: load_funding(hl), funding)
     rot = take("rot", lambda: load_rot(cur), rot)
-    sonar = take("sonar", lambda: load_sonar(cur), sonar)
     coins = take("coins", lambda: load_coins(flow, []), {})
     return {
         "flow": flow,
@@ -921,7 +1438,9 @@ def bootstrap(chat: str) -> dict:
         )
         empty_rank = {"spot": {"pnl": [], "roi": [], "win": [], "act": []}, "perp": {"pnl": [], "roi": [], "win": [], "act": []}}
         empty_sonar = {
-            "need": 400, "ready": {"spot": 0, "perp": 0}, "trained": False, "acc": None,
+            "need": 400, "ready": {"spot": 0, "perp": 0},
+            "trained": False, "trainedSpot": False, "trainedPerp": False,
+            "acc": None, "accSpot": None, "accPerp": None,
             "list": [], "hist": {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []},
         }
         pub = piece("pub", lambda: get_public(cur, hl), {}) or {}
