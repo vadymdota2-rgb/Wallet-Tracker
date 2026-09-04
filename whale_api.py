@@ -759,8 +759,8 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
         "list": [], "hist": {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []},
     }
 
-    def take(name, fn, fallback):
-        if time.monotonic() - t0 > 4.0:
+    def take(name, fn, fallback, must=False):
+        if not must and time.monotonic() - t0 > 8.0:
             sys.stderr.write(f"[api] cache skip {name}\n")
             return fallback
         try:
@@ -769,10 +769,10 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
             sys.stderr.write(f"[api] cache {name}: {e}\n")
             return fallback
 
-    flow = take("flow", lambda: load_flow(cur), flow)
-    rank = take("rank", lambda: load_rank(cur), rank)
-    trades = take("trades", lambda: load_trades(cur, hl), trades)
-    market_feed = take("feed", lambda: load_feed_market(cur, hl), market_feed)
+    rank = take("rank", lambda: load_rank(cur), rank, True)
+    flow = take("flow", lambda: load_flow(cur), flow, True)
+    trades = take("trades", lambda: load_trades(cur, hl), trades, True)
+    market_feed = take("feed", lambda: load_feed_market(cur, hl), market_feed, True)
     funding = take("funding", lambda: load_funding(hl), funding)
     rot = take("rot", lambda: load_rot(cur), rot)
     sonar = take("sonar", lambda: load_sonar(cur), sonar)
