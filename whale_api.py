@@ -51,11 +51,21 @@ def open_db(path: str, write: bool = False) -> sqlite3.Connection | None:
     return con
 
 
+_table_ok: dict[str, bool] = {}
+_sym_cache: dict[str, str] = {}
+_building = False
+
+
 def table_exists(con: sqlite3.Connection, name: str) -> bool:
+    hit = _table_ok.get(name)
+    if hit is not None:
+        return hit
     row = con.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
     ).fetchone()
-    return bool(row)
+    ok = bool(row)
+    _table_ok[name] = ok
+    return ok
 
 
 def cols(con: sqlite3.Connection, table: str) -> set[str]:
@@ -210,15 +220,21 @@ def parse_positions(addr: str) -> tuple[list, dict, float]:
 
 def symbol_of(cur: sqlite3.Connection, token: str) -> str:
     token = token or ""
+    hit = _sym_cache.get(token)
+    if hit is not None:
+        return hit
     if token.startswith("0x") and len(token) >= 8:
         if table_exists(cur, "token_cache"):
             row = cur.execute(
                 "SELECT symbol FROM token_cache WHERE lower(address)=?", (token.lower(),)
             ).fetchone()
             if row and row[0]:
-                return str(row[0]).upper()
-        return token[:6].upper()
-    return token.upper()[:12] or "?"
+                _sym_cache[token] = str(row[0]).upper()
+                return _sym_cache[token]
+        _sym_cache[token] = token[:6].upper()
+        return _sym_cache[token]
+    _sym_cache[token] = token.upper()[:12] or "?"
+    return _sym_cache[token]
 
 
 def spark(net: float) -> list[int]:
@@ -361,14 +377,14 @@ def load_wallets(cur: sqlite3.Connection, chat: str) -> list[dict]:
 
 def wallet_stats(cur: sqlite3.Connection, addr: str) -> dict:
     out = {"score": 50, "bal": 0, "tr": 0, "win": 0, "pf": 1, "net": 0, "dd": 0, "spot": "—", "perp": "—", "d1": 0}
-    since = now() - 86400
     if table_exists(cur, "trades"):
         row = cur.execute(
             "SELECT COUNT(*) c, "
             "SUM(CASE WHEN is_buy=1 THEN usd_nanos ELSE 0 END) buy, "
             "SUM(CASE WHEN is_buy=0 THEN usd_nanos ELSE 0 END) sell "
-            "FROM trades WHERE lower(wallet)=? AND timestamp>=?",
-            (addr, since),
+            "FROM (SELECT is_buy, usd_nanos FROM trades WHERE wallet=? "
+            "ORDER BY rowid DESC LIMIT 300)",
+            (addr,),
         ).fetchone()
         buy, sell = usd(row["buy"] if row else 0), usd(row["sell"] if row else 0)
         out["d1"] = 0.0
@@ -420,7 +436,7 @@ def load_flow(cur: sqlite3.Connection) -> dict:
         "SUM(CASE WHEN is_buy=0 THEN usd_nanos ELSE 0 END) sell, "
         "COUNT(DISTINCT wallet) w "
         "FROM (SELECT token, is_buy, usd_nanos, wallet FROM trades "
-        "      ORDER BY timestamp DESC LIMIT 2500) "
+        "      ORDER BY rowid DESC LIMIT 2500) "
         "GROUP BY token "
         "ORDER BY ABS(SUM(CASE WHEN is_buy=1 THEN usd_nanos ELSE -usd_nanos END)) DESC LIMIT 20"
     ).fetchall()
@@ -513,7 +529,7 @@ def load_trades(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict:
     if table_exists(cur, "trades"):
         rows = cur.execute(
             "SELECT wallet, token, is_buy, usd_nanos, timestamp FROM trades "
-            "ORDER BY timestamp DESC LIMIT 40"
+            "ORDER BY rowid DESC LIMIT 40"
         ).fetchall()
         for r in rows:
             spot.append(
@@ -528,7 +544,7 @@ def load_trades(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict:
     if hl and table_exists(hl, "hl_fills"):
         rows = hl.execute(
             "SELECT wallet, coin, dir, side, notional_nanos, ts, dir_code FROM hl_fills "
-            "ORDER BY ts DESC LIMIT 40"
+            "ORDER BY rowid DESC LIMIT 40"
         ).fetchall()
         for r in rows:
             side = (r["dir"] or r["side"] or "").lower()
@@ -551,7 +567,7 @@ def load_feed_market(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> 
     if table_exists(cur, "trades"):
         for r in cur.execute(
             "SELECT wallet, token, is_buy, usd_nanos, timestamp FROM trades "
-            "ORDER BY timestamp DESC LIMIT 20"
+            "ORDER BY rowid DESC LIMIT 20"
         ):
             items.append(
                 {
@@ -565,7 +581,7 @@ def load_feed_market(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> 
             )
     if hl and table_exists(hl, "hl_fills"):
         for r in hl.execute(
-            "SELECT wallet, coin, dir, notional_nanos, ts FROM hl_fills ORDER BY ts DESC LIMIT 20"
+            "SELECT wallet, coin, dir, notional_nanos, ts FROM hl_fills ORDER BY rowid DESC LIMIT 20"
         ):
             items.append(
                 {
@@ -608,12 +624,10 @@ def load_rot(cur: sqlite3.Connection) -> dict:
     rot = {"24": [], "168": []}
     if not table_exists(cur, "trades"):
         return rot
-    for key, sec in (("24", 86400),):
-        since = now() - sec
+    for key, _sec in (("24", 86400),):
         rows = cur.execute(
-            "SELECT wallet, token, is_buy, usd_nanos FROM trades WHERE timestamp>=? "
-            "ORDER BY timestamp DESC LIMIT 3000",
-            (since,),
+            "SELECT wallet, token, is_buy, usd_nanos FROM trades "
+            "ORDER BY rowid DESC LIMIT 1500"
         ).fetchall()
         last_sell: dict[str, str] = {}
         agg: dict[tuple[str, str], list] = {}
@@ -652,7 +666,7 @@ def load_sonar(cur: sqlite3.Connection) -> dict:
         return sonar
     rows = cur.execute(
         "SELECT name, token, venue, buy_nanos, sell_nanos, wallets, score, price_then, window_days "
-        "FROM ai_events ORDER BY ts DESC LIMIT 12"
+        "FROM ai_events ORDER BY rowid DESC LIMIT 12"
     ).fetchall()
     sonar["ready"]["spot"] = len(rows)
     sonar["trained"] = False
@@ -718,14 +732,30 @@ def load_coins(flow: dict, wallets: list) -> dict:
 
 
 def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict:
-    flow = load_flow(cur)
-    rank = load_rank(cur)
-    trades = load_trades(cur, hl)
-    market_feed = load_feed_market(cur, hl)
-    funding = load_funding(hl)
-    rot = load_rot(cur)
-    sonar = load_sonar(cur)
-    coins = load_coins(flow, [])
+    t0 = time.monotonic()
+    flow, rank, trades, market_feed, funding, rot, sonar = {}, {}, {"spot": [], "perp": [], "liq": []}, [], [], {"24": [], "168": []}, {
+        "need": 400, "ready": {"spot": 0, "perp": 0}, "trained": False, "acc": None,
+        "list": [], "hist": {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []},
+    }
+
+    def take(name, fn, fallback):
+        if time.monotonic() - t0 > 4.0:
+            sys.stderr.write(f"[api] cache skip {name}\n")
+            return fallback
+        try:
+            return fn()
+        except Exception as e:
+            sys.stderr.write(f"[api] cache {name}: {e}\n")
+            return fallback
+
+    flow = take("flow", lambda: load_flow(cur), flow)
+    rank = take("rank", lambda: load_rank(cur), rank)
+    trades = take("trades", lambda: load_trades(cur, hl), trades)
+    market_feed = take("feed", lambda: load_feed_market(cur, hl), market_feed)
+    funding = take("funding", lambda: load_funding(hl), funding)
+    rot = take("rot", lambda: load_rot(cur), rot)
+    sonar = take("sonar", lambda: load_sonar(cur), sonar)
+    coins = take("coins", lambda: load_coins(flow, []), {})
     return {
         "flow": flow,
         "rank": rank,
@@ -740,24 +770,54 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
 
 
 def get_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict:
+    global _building
     with _pub_lock:
         data, ts = _pub["data"], _pub["t"]
+        building = _building
     if data is not None and (time.monotonic() - ts) < PUB_TTL:
         return data
     if data is not None:
-        threading.Thread(target=_bg_refresh, daemon=True).start()
+        if not building:
+            threading.Thread(target=_bg_refresh, daemon=True).start()
         return data
-    data = build_public(cur, hl)
+    started = False
     with _pub_lock:
-        _pub["data"] = data
-        _pub["t"] = time.monotonic()
-    return data
+        if not _building:
+            _building = True
+            started = True
+    if not started:
+        t_end = time.monotonic() + 1.2
+        while time.monotonic() < t_end:
+            time.sleep(0.05)
+            with _pub_lock:
+                if _pub["data"] is not None:
+                    return _pub["data"]
+        return {}
+    try:
+        data = build_public(cur, hl)
+        with _pub_lock:
+            _pub["data"] = data
+            _pub["t"] = time.monotonic()
+        return data
+    except Exception as e:
+        sys.stderr.write(f"[api] build_public: {e}\n")
+        return {}
+    finally:
+        with _pub_lock:
+            _building = False
 
 
 def _bg_refresh() -> None:
+    global _building
+    with _pub_lock:
+        if _building:
+            return
+        _building = True
     cur = open_db(DB)
     hl = open_db(HL_DB)
     if not cur:
+        with _pub_lock:
+            _building = False
         return
     try:
         data = build_public(cur, hl)
@@ -768,6 +828,8 @@ def _bg_refresh() -> None:
     except Exception as e:
         sys.stderr.write(f"[api] cache refresh: {e}\n")
     finally:
+        with _pub_lock:
+            _building = False
         try:
             cur.close()
         except Exception:
