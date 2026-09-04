@@ -427,86 +427,96 @@ def load_flow(cur: sqlite3.Connection) -> dict:
     out = {}
     if not table_exists(cur, "trades"):
         return out
-    for win, sec in ((1, 3600), (6, 21600), (24, 86400)):
-        since = now() - sec
-        rows = cur.execute(
-            "SELECT token, "
-            "SUM(CASE WHEN is_buy=1 THEN usd_nanos ELSE 0 END) buy, "
-            "SUM(CASE WHEN is_buy=0 THEN usd_nanos ELSE 0 END) sell, "
-            "COUNT(DISTINCT wallet) w "
-            "FROM trades WHERE timestamp>=? GROUP BY token "
-            "ORDER BY ABS(SUM(CASE WHEN is_buy=1 THEN usd_nanos ELSE -usd_nanos END)) DESC LIMIT 40",
-            (since,),
-        ).fetchall()
-        coins = []
-        buy_t = sell_t = 0.0
-        for r in rows:
-            b, s = usd(r["buy"]), usd(r["sell"])
-            buy_t += b
-            sell_t += s
-            net = b - s
-            coins.append(
-                {
-                    "sym": symbol_of(cur, r["token"]),
-                    "net": net,
-                    "buy": b,
-                    "sell": s,
-                    "w": int(r["w"] or 0),
-                    "top": min(0.95, (b / (b + s)) if (b + s) else 0.5),
-                    "c1": 0,
-                    "c6": 0,
-                    "c24": 0,
-                    "sp": spark(net),
-                }
-            )
-        out[str(win)] = {
-            "net": buy_t - sell_t,
-            "coins": len(coins),
-            "buy": buy_t,
-            "sell": sell_t,
-            "rows": coins,
-        }
-    if "24" in out:
-        out["168"] = dict(out["24"])
-        out["720"] = dict(out["24"])
+    rows = cur.execute(
+        "SELECT token, "
+        "SUM(CASE WHEN is_buy=1 THEN usd_nanos ELSE 0 END) buy, "
+        "SUM(CASE WHEN is_buy=0 THEN usd_nanos ELSE 0 END) sell, "
+        "COUNT(DISTINCT wallet) w "
+        "FROM (SELECT token, is_buy, usd_nanos, wallet FROM trades "
+        "      ORDER BY timestamp DESC LIMIT 2500) "
+        "GROUP BY token "
+        "ORDER BY ABS(SUM(CASE WHEN is_buy=1 THEN usd_nanos ELSE -usd_nanos END)) DESC LIMIT 20"
+    ).fetchall()
+    coins = []
+    buy_t = sell_t = 0.0
+    for r in rows:
+        b, s = usd(r["buy"]), usd(r["sell"])
+        buy_t += b
+        sell_t += s
+        net = b - s
+        coins.append(
+            {
+                "sym": symbol_of(cur, r["token"]),
+                "net": net,
+                "buy": b,
+                "sell": s,
+                "w": int(r["w"] or 0),
+                "top": min(0.95, (b / (b + s)) if (b + s) else 0.5),
+                "c1": 0,
+                "c6": 0,
+                "c24": 0,
+                "sp": spark(net),
+            }
+        )
+    bucket = {
+        "net": buy_t - sell_t,
+        "coins": len(coins),
+        "buy": buy_t,
+        "sell": sell_t,
+        "rows": coins,
+    }
+    for win in ("1", "6", "24", "168", "720"):
+        out[win] = bucket
     return out
 
 
 def load_rank(cur: sqlite3.Connection) -> dict:
-    rank: dict = {"spot": {"pnl": [], "roi": [], "win": [], "act": []}, "perp": {"pnl": [], "roi": [], "win": [], "act": []}}
+    empty = {"pnl": [], "roi": [], "win": [], "act": []}
+    rank: dict = {"spot": {k: [] for k in empty}, "perp": {k: [] for k in empty}}
     if not table_exists(cur, "ranking_cache"):
         return rank
-    kind_map = {"pnl": "pnl", "roi": "roi", "winrate": "win", "active": "act"}
-    for days in (30, 90, 180, 365):
-        for kind, key in kind_map.items():
-            row = cur.execute(
-                "SELECT payload FROM ranking_cache WHERE cache_key=?",
-                (f"global_{kind}_{days}",),
-            ).fetchone()
-            if not row or not row[0]:
+    kind_map = {"pnl": "pnl", "winrate": "win"}
+    for kind, key in kind_map.items():
+        row = cur.execute(
+            "SELECT payload FROM ranking_cache WHERE cache_key=?",
+            (f"global_{kind}_30",),
+        ).fetchone()
+        if not row or not row[0]:
+            continue
+        raw = row[0]
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8", "ignore")
+        if len(raw) > 800_000:
+            raw = raw[:800_000]
+            cut = raw.rfind("}")
+            if cut > 0:
+                raw = raw[: cut + 1]
+                if not raw.endswith("]"):
+                    raw = raw[: raw.rfind("}")] + "}]"
+        try:
+            arr = json.loads(raw) if raw.startswith("[") else []
+        except json.JSONDecodeError:
+            continue
+        mapped = []
+        for e in arr[:40]:
+            if not isinstance(e, dict):
                 continue
-            try:
-                arr = json.loads(row[0])
-            except json.JSONDecodeError:
-                continue
-            mapped = []
-            for e in arr[:100]:
-                hold_s = int(e.get("h") or 0)
-                mapped.append(
-                    {
-                        "a": e.get("w") or "",
-                        "pnl": usd(e.get("p")),
-                        "roi": float(e.get("r") or 0),
-                        "win": float(e.get("wr") or 0),
-                        "tr": int(e.get("t") or 0),
-                        "dd": 0,
-                        "days": days,
-                        "hold": f"{max(1, hold_s // 3600)}ч" if hold_s else None,
-                    }
-                )
-            if days == 30:
-                rank["spot"][key] = mapped
-    # perp ranking lives in hl fills if ranking_cache has no venue split
+            hold_s = int(e.get("h") or 0)
+            mapped.append(
+                {
+                    "a": e.get("w") or "",
+                    "pnl": usd(e.get("p")),
+                    "roi": float(e.get("r") or 0),
+                    "win": float(e.get("wr") or 0),
+                    "tr": int(e.get("t") or 0),
+                    "dd": 0,
+                    "days": 30,
+                    "hold": f"{max(1, hold_s // 3600)}ч" if hold_s else None,
+                }
+            )
+        rank["spot"][key] = mapped
+    rank["spot"]["roi"] = list(rank["spot"]["pnl"])
+    rank["spot"]["act"] = list(rank["spot"]["pnl"])
     rank["perp"] = {k: list(v) for k, v in rank["spot"].items()}
     return rank
 
@@ -653,17 +663,12 @@ def load_sonar(cur: sqlite3.Connection) -> dict:
     }
     if not table_exists(cur, "ai_events"):
         return sonar
-    for venue, key in ((0, "spot"), (1, "perp")):
-        n = cur.execute(
-            "SELECT COUNT(*) FROM ai_events WHERE venue=? AND filled_at>0", (venue,)
-        ).fetchone()[0]
-        sonar["ready"][key] = int(n or 0)
-    sonar["trained"] = sonar["ready"]["spot"] >= 400
     rows = cur.execute(
         "SELECT name, token, venue, buy_nanos, sell_nanos, wallets, score, price_then, window_days "
-        "FROM ai_events WHERE hour_slot=(SELECT MAX(hour_slot) FROM ai_events) "
-        "ORDER BY score DESC LIMIT 24"
+        "FROM ai_events ORDER BY ts DESC LIMIT 12"
     ).fetchall()
+    sonar["ready"]["spot"] = len(rows)
+    sonar["trained"] = False
     for r in rows:
         buy, sell = usd(r["buy_nanos"]), usd(r["sell_nanos"])
         net = buy - sell
@@ -692,34 +697,6 @@ def load_sonar(cur: sqlite3.Connection) -> dict:
                 "venue": "perp" if r["venue"] else "spot",
             }
         )
-    hist_rows = cur.execute(
-        "SELECT name, token, venue, buy_nanos, sell_nanos, price_then, price_24h, ts "
-        "FROM ai_events WHERE filled_at>0 AND price_then>0 AND price_24h>0 "
-        "ORDER BY ts DESC LIMIT 12"
-    ).fetchall()
-    won = 0
-    items = []
-    for r in hist_rows:
-        long = usd(r["buy_nanos"]) >= usd(r["sell_nanos"])
-        p0, p1 = usd(r["price_then"]), usd(r["price_24h"])
-        ret = ((p1 - p0) / p0 * 100.0) if p0 else 0
-        if not long:
-            ret = -ret
-        win = ret > 0
-        won += int(win)
-        items.append(
-            {
-                "sym": (r["name"] or symbol_of(cur, r["token"])).upper(),
-                "long": long,
-                "ret": ret,
-                "t": ago(r["ts"]),
-                "win": win,
-            }
-        )
-    sonar["hist"]["items"] = items
-    sonar["hist"]["of"] = len(items)
-    sonar["hist"]["won"] = won
-    sonar["hist"]["hit"] = int(100 * won / len(items)) if items else 0
     return sonar
 
 
@@ -759,8 +736,12 @@ def bootstrap(chat: str) -> dict:
     if not cur:
         return {"ok": False, "live": False, "error": "db_missing", "db": DB}
     errors: list[str] = []
+    t0 = time.monotonic()
 
     def piece(name: str, fn, fallback):
+        if time.monotonic() - t0 > 5.5:
+            errors.append(f"{name}:skip")
+            return fallback
         try:
             return fn()
         except Exception as e:
@@ -774,6 +755,9 @@ def bootstrap(chat: str) -> dict:
             "alertsToday": 0, "alerts30d": 0, "premUntil": 0, "updatedKey": "justNow",
         }
         me = piece("me", lambda: load_me(cur, chat) if chat else empty_me, empty_me)
+        if isinstance(me, dict):
+            me = dict(me)
+            me.pop("lang", None)
         wallets = piece("wallets", lambda: load_wallets(cur, chat) if chat else [], [])
         alerts, feed = piece(
             "alerts",
