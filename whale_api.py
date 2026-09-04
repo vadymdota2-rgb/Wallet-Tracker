@@ -66,83 +66,97 @@ HL_COIN = {
 }
 
 
-DS_IMG = {
-    "ETH": "https://dd.dexscreener.com/ds-data/tokens/ethereum/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2.png?size=lg",
-    "SOL": "https://dd.dexscreener.com/ds-data/tokens/solana/So11111111111111111111111111111111111111112.png?size=lg",
-    "PEPE": "https://dd.dexscreener.com/ds-data/tokens/ethereum/0x6982508145454ce325ddbe47a25d4ec3d2311933.png?size=lg",
-    "HYPE": "https://dd.dexscreener.com/ds-data/tokens/hyperevm/0x9B530b0Ac8817f4B6C29cFf236df85ed33ecE660.png?size=lg",
-    "BONK": "https://dd.dexscreener.com/ds-data/tokens/solana/DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263.png?size=lg",
-    "FLOKI": "https://dd.dexscreener.com/ds-data/tokens/ethereum/0xcf0c122c6b73ff809c693db761e7baebe62b6a2e.png?size=lg",
-    "ENA": "https://dd.dexscreener.com/ds-data/tokens/ethereum/0x57e114b691db790c35207b2e685d4a43181e6061.png?size=lg",
-    "kPEPE": "https://dd.dexscreener.com/ds-data/tokens/ethereum/0x6982508145454ce325ddbe47a25d4ec3d2311933.png?size=lg",
-    "kFLOKI": "https://dd.dexscreener.com/ds-data/tokens/ethereum/0xcf0c122c6b73ff809c693db761e7baebe62b6a2e.png?size=lg",
-    "kBONK": "https://dd.dexscreener.com/ds-data/tokens/solana/DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263.png?size=lg",
+TV_STOCK_LOGO = {
+    "NVDA": "nvidia",
+    "INTC": "intel",
+    "GOOGL": "alphabet",
+    "GOOG": "alphabet",
 }
-_ds_lock = threading.Lock()
-_ds_mem: dict[str, str] = dict(DS_IMG)
+_tv_lock = threading.Lock()
+_tv_q: dict = {"t": 0.0, "d": {}}
 
 
-def _http_json(url: str, timeout: float = 2.5):
-    req = urllib.request.Request(url, headers={"User-Agent": "WhaleScanner/1.0", "Accept": "application/json"})
+def _http_json(url: str, timeout: float = 2.5, data=None):
+    headers = {
+        "User-Agent": "WhaleScanner/1.0",
+        "Accept": "application/json",
+        "Origin": "https://www.tradingview.com",
+        "Referer": "https://www.tradingview.com/",
+    }
+    body = None
+    if data is not None:
+        body = json.dumps(data).encode()
+        headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(url, data=body, headers=headers)
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return json.loads(resp.read().decode("utf-8", "replace"))
 
 
-def ds_icon(sym: str) -> str:
-    """DexScreener logo. Cached. Exact-symbol pair with imageUrl or ds-data PNG."""
-    key = (sym or "").upper()
-    if not key:
-        return ""
-    with _ds_lock:
-        hit = _ds_mem.get(key)
-    if hit:
-        return hit
-    url = ""
-    with _ds_lock:
-        left = int(_ds_mem.get("__budget__", 8))
-        if left <= 0:
-            url = GECKO_IMG.get(key) or ""
-            _ds_mem[key] = url
-            return url
-        _ds_mem["__budget__"] = left - 1
-    try:
-        data = _http_json(f"https://api.dexscreener.com/latest/dex/search?q={quote(key)}")
-        prefer = ("hyperevm", "hyperliquid", "solana", "bsc", "ethereum", "base", "arbitrum")
-        ranked = []
-        for p in data.get("pairs") or []:
-            bt = p.get("baseToken") or {}
-            if (bt.get("symbol") or "").upper() != key:
-                continue
-            img = ((p.get("info") or {}).get("imageUrl") or "").strip()
-            chain = (p.get("chainId") or "").lower()
-            addr = (bt.get("address") or "").strip()
-            liq = float(((p.get("liquidity") or {}).get("usd") or 0) or 0)
-            if not img and chain and addr:
-                img = f"https://dd.dexscreener.com/ds-data/tokens/{chain}/{addr}.png?size=lg"
-            if img:
-                ranked.append((prefer.index(chain) if chain in prefer else 80, -liq, img))
-        ranked.sort()
-        if ranked:
-            url = ranked[0][2]
-    except Exception:
-        url = ""
-    if not url:
-        url = GECKO_IMG.get(key) or ""
-    with _ds_lock:
-        _ds_mem[key] = url
-    return url
+def tv_logo_key(sym: str) -> str:
+    k = (sym or "").upper()
+    if k.startswith("K") and k[1:] in {"PEPE", "FLOKI", "SHIB", "BONK"}:
+        return k[1:]
+    return k
 
 
 def coin_icon(sym: str) -> str:
-    key = (sym or "").upper()
-    url = ds_icon(key)
-    if url:
-        return url
-    alias = HL_COIN.get(key, key)
-    if alias:
-        return f"https://app.hyperliquid.xyz/coins/{alias}.svg"
-    slug = key.lower()
-    return f"/coins/{slug}.png" if slug else ""
+    k = tv_logo_key(sym)
+    if not k:
+        return ""
+    if k in TV_STOCK_LOGO:
+        return f"https://s3-symbol-logo.tradingview.com/{TV_STOCK_LOGO[k]}.svg"
+    return f"https://s3-symbol-logo.tradingview.com/crypto/XTVC{k}.svg"
+
+
+def tv_quote(sym: str) -> tuple[float, float]:
+    """TradingView scanner: (close, change%). Cached 20s."""
+    k = tv_logo_key(sym)
+    if not k:
+        return 0.0, 0.0
+    nowt = time.time()
+    with _tv_lock:
+        hit = _tv_q["d"].get(k)
+        if hit and nowt - _tv_q["t"] < 20:
+            return hit
+    tickers = [
+        f"BINANCE:{k}USDT",
+        f"KUCOIN:{k}USDT",
+        f"MEXC:{k}USDT",
+        f"BYBIT:{k}USDT.P",
+        f"BINANCE:{k}USDT.P",
+        f"NASDAQ:{k}",
+    ]
+    px = chg = 0.0
+    try:
+        data = _http_json(
+            "https://scanner.tradingview.com/crypto/scan",
+            timeout=3.0,
+            data={"symbols": {"tickers": tickers, "query": {"types": []}}, "columns": ["close", "change"]},
+        )
+        for row in data.get("data") or []:
+            vals = row.get("d") or []
+            if len(vals) >= 2 and float(vals[0] or 0) > 0:
+                px, chg = float(vals[0]), float(vals[1] or 0)
+                break
+        if px <= 0:
+            data = _http_json(
+                "https://scanner.tradingview.com/america/scan",
+                timeout=3.0,
+                data={"symbols": {"tickers": [f"NASDAQ:{k}", f"NYSE:{k}"], "query": {"types": []}}, "columns": ["close", "change"]},
+            )
+            for row in data.get("data") or []:
+                vals = row.get("d") or []
+                if len(vals) >= 2 and float(vals[0] or 0) > 0:
+                    px, chg = float(vals[0]), float(vals[1] or 0)
+                    break
+    except Exception:
+        px = chg = 0.0
+    with _tv_lock:
+        if nowt - _tv_q["t"] >= 20:
+            _tv_q["d"] = {}
+            _tv_q["t"] = nowt
+        _tv_q["d"][k] = (px, chg)
+    return px, chg
 
 
 
@@ -620,7 +634,15 @@ def price_pack(cur: sqlite3.Connection, hl: sqlite3.Connection | None, sym: str,
     sl = _slices(pts)
     mids = hl_mids()
     mid = mids.get(key, 0.0)
-    if mid > 0 and (not sl or not _px_ok(key, sl.get("price") or 0)):
+    tv_px, tv_chg = tv_quote(key)
+    if _px_ok(key, tv_px):
+        if sl:
+            sl["price"] = tv_px
+            sl["chg"] = tv_chg
+            sl["c24"] = tv_chg
+        else:
+            sl = {"price": tv_px, "chg": tv_chg, "hists": {}, "spark": [], "c1": 0, "c6": 0, "c24": tv_chg}
+    elif mid > 0 and (not sl or not _px_ok(key, sl.get("price") or 0)):
         if sl:
             sl["price"] = mid
         else:
