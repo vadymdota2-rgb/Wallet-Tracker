@@ -10,6 +10,7 @@ import os
 import re
 import sqlite3
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -27,6 +28,9 @@ NANOS = 1_000_000_000.0
 ADDR_RE = re.compile(r"^0x[a-fA-F0-9]{40}$")
 COIN_RE = re.compile(r"\b([A-Z]{2,12})\b")
 _hl_cache: dict[str, tuple[float, dict]] = {}
+_pub_lock = threading.Lock()
+_pub: dict = {"t": 0.0, "data": None}
+PUB_TTL = 30.0
 
 
 def now() -> int:
@@ -370,23 +374,6 @@ def wallet_stats(cur: sqlite3.Connection, addr: str) -> dict:
         out["d1"] = 0.0
         out["tr"] = int(row["c"] or 0) if row else 0
         out["net"] = buy - sell
-    if table_exists(cur, "ranking_cache"):
-        payload = cur.execute(
-            "SELECT payload FROM ranking_cache WHERE cache_key=?", ("global_pnl_30",)
-        ).fetchone()
-        if payload and payload[0]:
-            try:
-                arr = json.loads(payload[0])
-                for i, e in enumerate(arr[:100]):
-                    if str(e.get("w") or "").lower() == addr:
-                        out["spot"] = f"#{i + 1}"
-                        out["net"] = usd(e.get("p"))
-                        out["win"] = float(e.get("wr") or 0)
-                        out["tr"] = int(e.get("t") or out["tr"])
-                        out["score"] = max(8, min(99, int(out["win"] * 0.6 + min(40, abs(out["net"]) / 200000))))
-                        break
-            except json.JSONDecodeError:
-                pass
     return out
 
 
@@ -730,6 +717,91 @@ def load_coins(flow: dict, wallets: list) -> dict:
     return coins
 
 
+def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict:
+    flow = load_flow(cur)
+    rank = load_rank(cur)
+    trades = load_trades(cur, hl)
+    market_feed = load_feed_market(cur, hl)
+    funding = load_funding(hl)
+    rot = load_rot(cur)
+    sonar = load_sonar(cur)
+    coins = load_coins(flow, [])
+    return {
+        "flow": flow,
+        "rank": rank,
+        "trades": trades,
+        "marketFeed": market_feed,
+        "funding": funding,
+        "rot": rot,
+        "sonar": sonar,
+        "coins": coins,
+        "cachedAt": now(),
+    }
+
+
+def get_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict:
+    with _pub_lock:
+        data, ts = _pub["data"], _pub["t"]
+    if data is not None and (time.monotonic() - ts) < PUB_TTL:
+        return data
+    if data is not None:
+        threading.Thread(target=_bg_refresh, daemon=True).start()
+        return data
+    data = build_public(cur, hl)
+    with _pub_lock:
+        _pub["data"] = data
+        _pub["t"] = time.monotonic()
+    return data
+
+
+def _bg_refresh() -> None:
+    cur = open_db(DB)
+    hl = open_db(HL_DB)
+    if not cur:
+        return
+    try:
+        data = build_public(cur, hl)
+        with _pub_lock:
+            _pub["data"] = data
+            _pub["t"] = time.monotonic()
+        sys.stderr.write("[api] public cache refreshed\n")
+    except Exception as e:
+        sys.stderr.write(f"[api] cache refresh: {e}\n")
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        if hl:
+            try:
+                hl.close()
+            except Exception:
+                pass
+
+
+def warmup() -> None:
+    time.sleep(0.3)
+    cur = open_db(DB)
+    hl = open_db(HL_DB)
+    if not cur:
+        return
+    try:
+        get_public(cur, hl)
+        sys.stderr.write("[api] public cache ready\n")
+    except Exception as e:
+        sys.stderr.write(f"[api] warmup: {e}\n")
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        if hl:
+            try:
+                hl.close()
+            except Exception:
+                pass
+
+
 def bootstrap(chat: str) -> dict:
     cur = open_db(DB)
     hl = open_db(HL_DB)
@@ -764,17 +836,20 @@ def bootstrap(chat: str) -> dict:
             lambda: load_alerts(cur, chat, wallets) if chat else ([], []),
             ([], []),
         )
-        flow = piece("flow", lambda: load_flow(cur), {})
-        rank = piece("rank", lambda: load_rank(cur), {"spot": {"pnl": [], "roi": [], "win": [], "act": []}, "perp": {"pnl": [], "roi": [], "win": [], "act": []}})
-        trades = piece("trades", lambda: load_trades(cur, hl), {"spot": [], "perp": [], "liq": []})
-        market_feed = piece("marketFeed", lambda: load_feed_market(cur, hl), [])
-        funding = piece("funding", lambda: load_funding(hl), [])
-        rot = piece("rot", lambda: load_rot(cur), {"24": [], "168": []})
-        sonar = piece("sonar", lambda: load_sonar(cur), {
+        empty_rank = {"spot": {"pnl": [], "roi": [], "win": [], "act": []}, "perp": {"pnl": [], "roi": [], "win": [], "act": []}}
+        empty_sonar = {
             "need": 400, "ready": {"spot": 0, "perp": 0}, "trained": False, "acc": None,
             "list": [], "hist": {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []},
-        })
-        coins = piece("coins", lambda: load_coins(flow, wallets), {})
+        }
+        pub = piece("pub", lambda: get_public(cur, hl), {}) or {}
+        flow = pub.get("flow") or {}
+        rank = pub.get("rank") or empty_rank
+        trades = pub.get("trades") or {"spot": [], "perp": [], "liq": []}
+        market_feed = pub.get("marketFeed") or []
+        funding = pub.get("funding") or []
+        rot = pub.get("rot") or {"24": [], "168": []}
+        sonar = pub.get("sonar") or empty_sonar
+        coins = piece("coins", lambda: load_coins(flow, wallets), pub.get("coins") or {})
         out = {
             "ok": True,
             "live": True,
@@ -793,6 +868,8 @@ def bootstrap(chat: str) -> dict:
         }
         if errors:
             out["partial"] = errors[:8]
+        if pub.get("cachedAt"):
+            out["cachedAt"] = pub["cachedAt"]
         return out
     except Exception as e:
         sys.stderr.write(f"[api] bootstrap fatal: {e}\n")
@@ -995,6 +1072,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def main():
     print(f"[api] db={DB} hl={HL_DB} listen={HOST}:{PORT}", flush=True)
+    threading.Thread(target=warmup, daemon=True).start()
     httpd = ThreadingHTTPServer((HOST, PORT), Handler)
     httpd.serve_forever()
 
