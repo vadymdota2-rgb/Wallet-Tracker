@@ -430,47 +430,85 @@ def load_flow(cur: sqlite3.Connection) -> dict:
     out = {}
     if not table_exists(cur, "trades"):
         return out
-    rows = cur.execute(
-        "SELECT token, "
-        "SUM(CASE WHEN is_buy=1 THEN usd_nanos ELSE 0 END) buy, "
-        "SUM(CASE WHEN is_buy=0 THEN usd_nanos ELSE 0 END) sell, "
-        "COUNT(DISTINCT wallet) w "
-        "FROM (SELECT token, is_buy, usd_nanos, wallet FROM trades "
-        "      ORDER BY rowid DESC LIMIT 2500) "
-        "GROUP BY token "
-        "ORDER BY ABS(SUM(CASE WHEN is_buy=1 THEN usd_nanos ELSE -usd_nanos END)) DESC LIMIT 20"
+    raw = cur.execute(
+        "SELECT token, is_buy, usd_nanos, wallet, timestamp FROM trades "
+        "ORDER BY rowid DESC LIMIT 2500"
     ).fetchall()
-    coins = []
-    buy_t = sell_t = 0.0
-    for r in rows:
-        b, s = usd(r["buy"]), usd(r["sell"])
-        buy_t += b
-        sell_t += s
-        net = b - s
-        coins.append(
+    tnow = now()
+    windows = (("1", 3600), ("6", 21600), ("24", 86400), ("168", 604800), ("720", 2592000))
+
+    def bucket_of(rows):
+        agg: dict[str, list] = {}
+        for r in rows:
+            tok = r["token"] or ""
+            slot = agg.setdefault(tok, [0.0, 0.0, set()])
+            v = usd(r["usd_nanos"])
+            if r["is_buy"]:
+                slot[0] += v
+            else:
+                slot[1] += v
+            if r["wallet"]:
+                slot[2].add(r["wallet"])
+        coins = []
+        buy_t = sell_t = 0.0
+        for tok, (b, s, ws) in agg.items():
+            buy_t += b
+            sell_t += s
+            net = b - s
+            coins.append(
+                {
+                    "sym": symbol_of(cur, tok),
+                    "net": net,
+                    "buy": b,
+                    "sell": s,
+                    "w": len(ws),
+                    "top": min(0.95, (b / (b + s)) if (b + s) else 0.5),
+                    "c1": 0,
+                    "c6": 0,
+                    "c24": 0,
+                    "sp": spark(net),
+                }
+            )
+        coins.sort(key=lambda c: -abs(c["net"]))
+        coins = coins[:20]
+        return {
+            "net": buy_t - sell_t,
+            "coins": len(coins),
+            "buy": buy_t,
+            "sell": sell_t,
+            "rows": coins,
+        }
+
+    last = None
+    for key, sec in windows:
+        since = tnow - sec
+        part = [r for r in raw if int(r["timestamp"] or 0) >= since]
+        if len(part) < 12:
+            part = list(raw)
+        last = bucket_of(part)
+        out[key] = last
+    return out
+
+
+def _map_rank(arr, days: int, n: int = 100) -> list:
+    mapped = []
+    for e in arr[:n]:
+        if not isinstance(e, dict):
+            continue
+        hold_s = int(e.get("h") or 0)
+        mapped.append(
             {
-                "sym": symbol_of(cur, r["token"]),
-                "net": net,
-                "buy": b,
-                "sell": s,
-                "w": int(r["w"] or 0),
-                "top": min(0.95, (b / (b + s)) if (b + s) else 0.5),
-                "c1": 0,
-                "c6": 0,
-                "c24": 0,
-                "sp": spark(net),
+                "a": e.get("w") or "",
+                "pnl": usd(e.get("p")),
+                "roi": float(e.get("r") or 0),
+                "win": float(e.get("wr") or 0),
+                "tr": int(e.get("t") or 0),
+                "dd": 0,
+                "days": days,
+                "hold": f"{max(1, hold_s // 3600)}ч" if hold_s else None,
             }
         )
-    bucket = {
-        "net": buy_t - sell_t,
-        "coins": len(coins),
-        "buy": buy_t,
-        "sell": sell_t,
-        "rows": coins,
-    }
-    for win in ("1", "6", "24", "168", "720"):
-        out[win] = bucket
-    return out
+    return mapped
 
 
 def load_rank(cur: sqlite3.Connection) -> dict:
@@ -478,7 +516,7 @@ def load_rank(cur: sqlite3.Connection) -> dict:
     rank: dict = {"spot": {k: [] for k in empty}, "perp": {k: [] for k in empty}}
     if not table_exists(cur, "ranking_cache"):
         return rank
-    kind_map = {"pnl": "pnl", "winrate": "win"}
+    kind_map = {"pnl": "pnl", "roi": "roi", "winrate": "win", "active": "act"}
     for kind, key in kind_map.items():
         row = cur.execute(
             "SELECT payload FROM ranking_cache WHERE cache_key=?",
@@ -489,37 +527,20 @@ def load_rank(cur: sqlite3.Connection) -> dict:
         raw = row[0]
         if isinstance(raw, bytes):
             raw = raw.decode("utf-8", "ignore")
-        if len(raw) > 800_000:
-            raw = raw[:800_000]
+        if len(raw) > 1_200_000:
+            raw = raw[:1_200_000]
             cut = raw.rfind("}")
             if cut > 0:
                 raw = raw[: cut + 1]
-                if not raw.endswith("]"):
-                    raw = raw[: raw.rfind("}")] + "}]"
         try:
-            arr = json.loads(raw) if raw.startswith("[") else []
+            arr = json.loads(raw) if isinstance(raw, str) and raw.lstrip().startswith("[") else []
         except json.JSONDecodeError:
             continue
-        mapped = []
-        for e in arr[:40]:
-            if not isinstance(e, dict):
-                continue
-            hold_s = int(e.get("h") or 0)
-            mapped.append(
-                {
-                    "a": e.get("w") or "",
-                    "pnl": usd(e.get("p")),
-                    "roi": float(e.get("r") or 0),
-                    "win": float(e.get("wr") or 0),
-                    "tr": int(e.get("t") or 0),
-                    "dd": 0,
-                    "days": 30,
-                    "hold": f"{max(1, hold_s // 3600)}ч" if hold_s else None,
-                }
-            )
-        rank["spot"][key] = mapped
-    rank["spot"]["roi"] = list(rank["spot"]["pnl"])
-    rank["spot"]["act"] = list(rank["spot"]["pnl"])
+        rank["spot"][key] = _map_rank(arr, 30, 100)
+    if not rank["spot"]["roi"]:
+        rank["spot"]["roi"] = list(rank["spot"]["pnl"])
+    if not rank["spot"]["act"]:
+        rank["spot"]["act"] = list(rank["spot"]["pnl"])
     rank["perp"] = {k: list(v) for k, v in rank["spot"].items()}
     return rank
 
