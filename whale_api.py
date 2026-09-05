@@ -20,8 +20,28 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 HOST = os.environ.get("WHALE_API_HOST", "0.0.0.0")
 PORT = int(os.environ.get("WHALE_API_PORT", "8090"))
-DB = os.environ.get("WHALE_DB", os.path.abspath("whale_bot.db"))
-HL_DB = os.environ.get("WHALE_HL_DB", os.path.abspath("hyperliquid.db"))
+WS_DIR = os.environ.get("WHALE_SCANNER_DIR") or (
+    "/home/vadymdota2/WhaleScanner"
+    if os.path.isdir("/home/vadymdota2/WhaleScanner")
+    else os.path.abspath(os.path.expanduser("~/WhaleScanner"))
+)
+if not os.path.isdir(WS_DIR):
+    WS_DIR = os.path.abspath(".")
+
+
+def _db_path(env_key: str, name: str) -> str:
+    env = os.environ.get(env_key)
+    if env and os.path.isfile(env):
+        return os.path.abspath(env)
+    for folder in (WS_DIR, os.path.abspath("."), os.path.expanduser("~/WhaleScanner")):
+        p = os.path.join(folder, name)
+        if os.path.isfile(p):
+            return os.path.abspath(p)
+    return os.path.abspath(os.path.join(WS_DIR, name))
+
+
+DB = _db_path("WHALE_DB", "whale_bot.db")
+HL_DB = _db_path("WHALE_HL_DB", "hyperliquid.db")
 BOT_TOKEN = os.environ.get("WHALE_TG_TOKEN", "")
 HL_INFO = "https://api.hyperliquid.xyz/info"
 
@@ -2027,7 +2047,14 @@ class Handler(BaseHTTPRequestHandler):
             qs = parse_qs(u.query)
             path = u.path.rstrip("/") or "/"
             if path in ("/health", "/api/health"):
-                self._json(200, {"ok": True, "db": os.path.isfile(DB), "hl": os.path.isfile(HL_DB)})
+                self._json(200, {
+                    "ok": True,
+                    "db": os.path.isfile(DB),
+                    "hl": os.path.isfile(HL_DB),
+                    "db_path": DB,
+                    "hl_path": HL_DB,
+                    "ws": WS_DIR,
+                })
                 return
             if path in ("/bootstrap", "/api/bootstrap", "/api/me"):
                 chat = self._user(qs)
@@ -2144,7 +2171,11 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    print(f"[api] db={DB} hl={HL_DB} listen={HOST}:{PORT}", flush=True)
+    print(
+        f"[api] ws={WS_DIR} db={DB} db_ok={os.path.isfile(DB)} "
+        f"hl={HL_DB} hl_ok={os.path.isfile(HL_DB)} listen={HOST}:{PORT}",
+        flush=True,
+    )
     threading.Thread(target=warmup, daemon=True).start()
     httpd = ThreadingHTTPServer((HOST, PORT), Handler)
     httpd.serve_forever()

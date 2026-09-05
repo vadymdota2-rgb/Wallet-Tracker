@@ -1,0 +1,17 @@
+[Unit]
+Description=Whale Tracker Mini App API
+After=network.target whalescanner.service
+
+[Service]
+Type=simple
+User=vadymdota2
+WorkingDirectory=/home/vadymdota2/WhaleScanner
+Environment=WHALE_API_PORT=8090
+Environment=WHALE_DB=/home/vadymdota2/WhaleScanner/whale_bot.db
+Environment=WHALE_HL_DB=/home/vadymdota2/WhaleScanner/hyperliquid.db
+ExecStart=/usr/bin/python3 /home/vadymdota2/WhaleScanner/whale_api.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
