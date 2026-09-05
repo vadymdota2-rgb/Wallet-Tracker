@@ -67,14 +67,15 @@ HL_COIN = {
 
 
 def coin_icon(sym: str) -> str:
-    key = (sym or "").upper()
-    if key in GECKO_IMG:
-        return GECKO_IMG[key]
-    alias = HL_COIN.get(key, key)
-    if alias:
-        return f"https://app.hyperliquid.xyz/coins/{alias}.svg"
-    slug = key.lower()
-    return f"/coins/{slug}.png" if slug else ""
+    key = (sym or "").upper().replace(" ", "")
+    if key.startswith("K") and key[1:] in ("PEPE", "FLOKI", "SHIB", "BONK"):
+        key = key[1:]
+    stocks = {"NVDA": "nvidia", "INTC": "intel", "GOOGL": "alphabet", "GOOG": "alphabet"}
+    if key in stocks:
+        return f"https://s3-symbol-logo.tradingview.com/{stocks[key]}.svg"
+    if key:
+        return f"https://s3-symbol-logo.tradingview.com/crypto/XTVC{key}--big.svg"
+    return ""
 
 
 
