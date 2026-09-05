@@ -7,9 +7,19 @@ Type=simple
 User=vadymdota2
 WorkingDirectory=/home/vadymdota2/WhaleScanner
 Environment=WHALE_API_PORT=8090
+# Слушаем только петлю: наружу — через nginx, который ставит заголовок подписи.
+Environment=WHALE_API_HOST=127.0.0.1
+# Токен нужен для проверки подписи Telegram. Без него служба не поднимется.
+# Держим в отдельном файле с правами 600, а не в юните.
+EnvironmentFile=/etc/whale-api.env
 Environment=WHALE_DB=/home/vadymdota2/WhaleScanner/whale_bot.db
 Environment=WHALE_HL_DB=/home/vadymdota2/WhaleScanner/hyperliquid.db
 ExecStart=/usr/bin/python3 /home/vadymdota2/WhaleScanner/whale_api.py
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/vadymdota2/WhaleScanner
 Restart=always
 RestartSec=3
 
