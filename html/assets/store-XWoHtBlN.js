@@ -1,1 +1,1 @@
-import{n as e}from"./routes-FixF1.js";export{e as useApp};
+import{n as e}from"./routes-FixG1.js";export{e as useApp};
