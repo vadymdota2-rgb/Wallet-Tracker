@@ -18,7 +18,8 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
-HOST = os.environ.get("WHALE_API_HOST", "0.0.0.0")
+# Наружу — только через nginx. 0.0.0.0 открывал API мимо всех заголовков.
+HOST = os.environ.get("WHALE_API_HOST", "127.0.0.1")
 PORT = int(os.environ.get("WHALE_API_PORT", "8090"))
 WS_DIR = os.environ.get("WHALE_SCANNER_DIR") or (
     "/home/vadymdota2/WhaleScanner"
@@ -43,6 +44,13 @@ def _db_path(env_key: str, name: str) -> str:
 DB = _db_path("WHALE_DB", "whale_bot.db")
 HL_DB = _db_path("WHALE_HL_DB", "hyperliquid.db")
 BOT_TOKEN = os.environ.get("WHALE_TG_TOKEN", "")
+# Без токена проверить подпись невозможно, а работать без проверки нельзя:
+# лучше не подняться, чем молча пускать всех.
+if not BOT_TOKEN:
+    raise SystemExit("WHALE_TG_TOKEN не задан — проверка подписи невозможна")
+
+# Сколько живёт подпись Telegram. Сутки — рекомендация Telegram.
+INIT_TTL = int(os.environ.get("WHALE_INIT_TTL", "86400"))
 HL_INFO = "https://api.hyperliquid.xyz/info"
 
 NANOS = 1_000_000_000.0
@@ -173,12 +181,23 @@ def verify_init_data(raw: str) -> dict | None:
         k, v = chunk.split("=", 1)
         parts[k] = unquote(v)
     got = parts.pop("hash", "")
-    if BOT_TOKEN and got:
-        check = "\n".join(f"{k}={parts[k]}" for k in sorted(parts))
-        secret = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
-        expect = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(expect, got):
-            return None
+    # Подпись обязательна. Раньше при пустом BOT_TOKEN проверка целиком
+    # пропускалась, и функция возвращала любой id, который прислали.
+    if not got:
+        return None
+    check = "\n".join(f"{k}={parts[k]}" for k in sorted(parts))
+    secret = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
+    expect = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expect, got):
+        return None
+
+    # Срок жизни: перехваченная строка не должна работать вечно.
+    try:
+        auth_at = int(parts.get("auth_date") or 0)
+    except ValueError:
+        return None
+    if auth_at <= 0 or abs(time.time() - auth_at) > INIT_TTL:
+        return None
     user_raw = parts.get("user") or ""
     try:
         user = json.loads(user_raw) if user_raw else {}
@@ -2020,11 +2039,12 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(raw)
 
     def _user(self, qs: dict) -> str:
+        # Личность берётся ТОЛЬКО из проверенной подписи.
+        # Раньше при неудачной проверке брался ?tg=<id> из адреса —
+        # это позволяло любому читать и менять чужие кошельки.
         init = self.headers.get("X-Telegram-Init-Data") or qs.get("init", [""])[0]
         parsed = verify_init_data(init)
-        if parsed:
-            return parsed["id"]
-        return (qs.get("tg") or [""])[0].strip()
+        return parsed["id"] if parsed else ""
 
     def _body(self) -> dict:
         n = int(self.headers.get("Content-Length") or 0)
