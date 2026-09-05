@@ -28,19 +28,10 @@ HL_INFO = "https://api.hyperliquid.xyz/info"
 NANOS = 1_000_000_000.0
 ADDR_RE = re.compile(r"^0x[a-fA-F0-9]{40}$")
 COIN_RE = re.compile(r"\b([A-Z]{2,12})\b")
-_SYM_OK = re.compile(r"^[A-Z][A-Z0-9]{1,10}$")
-MAJORS = {
-    "BTC", "ETH", "SOL", "BNB", "HYPE", "PEPE", "CAKE", "ARB", "FLOKI", "DOGE",
-    "WIF", "BONK", "ENA", "LINK", "AVAX", "SUI", "APT", "OP", "UNI", "AAVE",
-    "NEAR", "ATOM", "INJ", "SEI", "TIA", "WLD", "ONDO", "JUP", "SHIB", "LTC",
-    "FIL", "PUMP", "XRP", "TRX", "ADA", "DOT", "MATIC", "POL", "TON", "TRUMP",
-    "KPEPE", "KFLOKI", "KBONK", "KSHIB", "NVDA", "GOOGL", "INTC",
-}
-_NOISE = {"C", "T", "X", "USD", "USDT", "USDC", "BSC", "HL", "USD1", "WETH", "WBTC"}
 _hl_cache: dict[str, tuple[float, dict]] = {}
 _pub_lock = threading.Lock()
 _pub: dict = {"t": 0.0, "data": None}
-PUB_TTL = 300.0
+PUB_TTL = 30.0
 _addr_by_sym: dict[str, str] = {}
 _px_hist: dict[str, tuple[float, list]] = {}
 _hl_candles: dict[str, tuple[float, list]] = {}
@@ -75,122 +66,15 @@ HL_COIN = {
 }
 
 
-TV_STOCK_LOGO = {
-    "NVDA": "nvidia",
-    "INTC": "intel",
-    "GOOGL": "alphabet",
-    "GOOG": "alphabet",
-}
-_tv_lock = threading.Lock()
-_tv_q: dict = {"t": 0.0, "d": {}}
-
-
-def _http_json(url: str, timeout: float = 2.5, data=None):
-    headers = {
-        "User-Agent": "WhaleScanner/1.0",
-        "Accept": "application/json",
-        "Origin": "https://www.tradingview.com",
-        "Referer": "https://www.tradingview.com/",
-    }
-    body = None
-    if data is not None:
-        body = json.dumps(data).encode()
-        headers["Content-Type"] = "application/json"
-    req = urllib.request.Request(url, data=body, headers=headers)
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode("utf-8", "replace"))
-
-
-def tv_logo_key(sym: str) -> str:
-    k = (sym or "").upper()
-    if k.startswith("K") and k[1:] in {"PEPE", "FLOKI", "SHIB", "BONK"}:
-        return k[1:]
-    return k
-
-
 def coin_icon(sym: str) -> str:
-    k = tv_logo_key(sym)
-    if not k:
-        return ""
-    if k in TV_STOCK_LOGO:
-        return f"https://s3-symbol-logo.tradingview.com/{TV_STOCK_LOGO[k]}.svg"
-    return f"https://s3-symbol-logo.tradingview.com/crypto/XTVC{k}.svg"
-
-
-def sym_ok(sym: str) -> bool:
-    s = (sym or "").upper()
-    if not s or any(ord(ch) > 127 for ch in s):
-        return False
-    if s in MAJORS:
-        return True
-    if s in _NOISE or s.isdigit() or not _SYM_OK.fullmatch(s):
-        return False
-    return len(s) >= 3
-
-
-def flow_keep(row: dict) -> bool:
-    return sym_ok(row.get("sym") or "")
-
-
-def trim_series(vals, n: int = 24) -> list:
-    if not isinstance(vals, list):
-        return []
-    if len(vals) <= n:
-        return vals
-    step = len(vals) / n
-    return [vals[int(i * step)] for i in range(n)]
-
-
-
-def tv_quote(sym: str) -> tuple[float, float]:
-    """TradingView scanner: (close, change%). Cached 20s."""
-    k = tv_logo_key(sym)
-    if not k:
-        return 0.0, 0.0
-    nowt = time.time()
-    with _tv_lock:
-        hit = _tv_q["d"].get(k)
-        if hit and nowt - _tv_q["t"] < 20:
-            return hit
-    tickers = [
-        f"BINANCE:{k}USDT",
-        f"KUCOIN:{k}USDT",
-        f"MEXC:{k}USDT",
-        f"BYBIT:{k}USDT.P",
-        f"BINANCE:{k}USDT.P",
-        f"NASDAQ:{k}",
-    ]
-    px = chg = 0.0
-    try:
-        data = _http_json(
-            "https://scanner.tradingview.com/crypto/scan",
-            timeout=3.0,
-            data={"symbols": {"tickers": tickers, "query": {"types": []}}, "columns": ["close", "change"]},
-        )
-        for row in data.get("data") or []:
-            vals = row.get("d") or []
-            if len(vals) >= 2 and float(vals[0] or 0) > 0:
-                px, chg = float(vals[0]), float(vals[1] or 0)
-                break
-        if px <= 0:
-            data = _http_json(
-                "https://scanner.tradingview.com/america/scan",
-                timeout=3.0,
-                data={"symbols": {"tickers": [f"NASDAQ:{k}", f"NYSE:{k}"], "query": {"types": []}}, "columns": ["close", "change"]},
-            )
-            for row in data.get("data") or []:
-                vals = row.get("d") or []
-                if len(vals) >= 2 and float(vals[0] or 0) > 0:
-                    px, chg = float(vals[0]), float(vals[1] or 0)
-                    break
-    except Exception:
-        px = chg = 0.0
-    with _tv_lock:
-        if nowt - _tv_q["t"] >= 20:
-            _tv_q["d"] = {}
-            _tv_q["t"] = nowt
-        _tv_q["d"][k] = (px, chg)
-    return px, chg
+    key = (sym or "").upper()
+    if key in GECKO_IMG:
+        return GECKO_IMG[key]
+    alias = HL_COIN.get(key, key)
+    if alias:
+        return f"https://app.hyperliquid.xyz/coins/{alias}.svg"
+    slug = key.lower()
+    return f"/coins/{slug}.png" if slug else ""
 
 
 
@@ -668,17 +552,7 @@ def price_pack(cur: sqlite3.Connection, hl: sqlite3.Connection | None, sym: str,
     sl = _slices(pts)
     mids = hl_mids()
     mid = mids.get(key, 0.0)
-    tv_px = tv_chg = 0.0
-    if http:
-        tv_px, tv_chg = tv_quote(key)
-    if _px_ok(key, tv_px):
-        if sl:
-            sl["price"] = tv_px
-            sl["chg"] = tv_chg
-            sl["c24"] = tv_chg
-        else:
-            sl = {"price": tv_px, "chg": tv_chg, "hists": {}, "spark": [], "c1": 0, "c6": 0, "c24": tv_chg}
-    elif mid > 0 and (not sl or not _px_ok(key, sl.get("price") or 0)):
+    if mid > 0 and (not sl or not _px_ok(key, sl.get("price") or 0)):
         if sl:
             sl["price"] = mid
         else:
@@ -927,9 +801,7 @@ def load_flow(cur: sqlite3.Connection) -> dict:
                     "sp": spark(b - s),
                 }
             )
-        coins = [c for c in coins if flow_keep(c)]
-        coins.sort(key=lambda c: (0 if (c.get("sym") or "").upper() in MAJORS else 1, -abs(c.get("net") or 0)))
-        coins = coins[:40]
+        coins = coins[:20]
         by_win[key] = {
             "net": buy_t - sell_t,
             "coins": len(coins),
@@ -1706,17 +1578,18 @@ def load_coins(cur: sqlite3.Connection, hl: sqlite3.Connection | None, flow: dic
             if ent > 0 and sz > 0:
                 entry_w.setdefault(sym, []).append((ent, sz))
     seen = set()
+    need_http: list[str] = []
     ordered = rows + extra_sym
     for r in ordered:
         sym = r.get("sym") or ""
         if not sym or sym in seen:
             continue
-        if not sym_ok(sym):
-            continue
         seen.add(sym)
         r24 = flow24.get(sym) or r
-        pack = price_pack(cur, hl, sym, r24.get("token") or r.get("token") or r.get("addr") or "", http=False)
-        hist24 = trim_series(pack.get("spark") or r.get("sp") or spark(r24.get("net") or 0), 24)
+        pack = price_pack(cur, hl, sym, r24.get("token") or r.get("token") or r.get("addr") or "", http=True)
+        if not pack.get("hists") or not _px_ok(sym, pack.get("price") or 0):
+            need_http.append(sym)
+        hist24 = (pack.get("hists") or {}).get("24h") or pack.get("spark") or r.get("sp") or spark(r24.get("net") or 0)
         ww = int(r24.get("w") or r.get("w") or 0)
         wsum = 0.0
         wtot = 0.0
@@ -1729,10 +1602,11 @@ def load_coins(cur: sqlite3.Connection, hl: sqlite3.Connection | None, flow: dic
             "chg": pack.get("chg") if pack else (r24.get("c24") or 0),
             "entry": entry,
             "hist": hist24,
+            "hists": pack.get("hists") or {},
             "real": bool(pack.get("real")),
             "addr": pack.get("addr") or r.get("addr") or "",
             "icon": pack.get("icon") or coin_icon(sym),
-            "spark": trim_series(pack.get("spark") or hist24, 16),
+            "spark": pack.get("spark") or hist24,
             "c1": pack.get("c1") or 0,
             "c6": pack.get("c6") or 0,
             "c24": pack.get("c24") or pack.get("chg") or (r24.get("c24") or 0),
@@ -1742,9 +1616,42 @@ def load_coins(cur: sqlite3.Connection, hl: sqlite3.Connection | None, flow: dic
             "w": ww,
             "mcap": "—",
             "liq": "—",
-            "who": (who_by.get(sym) or [])[:5],
+            "who": who_by.get(sym, []),
             "cons": {"top": min(24, ww), "of": max(ww, 24), "first": "—", "also": []},
         }
+    if need_http:
+        lock = threading.Lock()
+
+        def pull(sym: str):
+            pts = hist_perp(sym)
+            if len(pts) < 3:
+                return
+            sl = _sparkify(_slices(pts), sym)
+            if not sl:
+                return
+            with lock:
+                c = coins.get(sym)
+                if not c:
+                    return
+                if _px_ok(sym, sl.get("price") or 0):
+                    c["price"] = sl["price"]
+                c["chg"] = sl["chg"]
+                c["hist"] = (sl.get("hists") or {}).get("24h") or sl.get("spark") or c["hist"]
+                c["hists"] = sl.get("hists") or {}
+                c["spark"] = sl.get("spark") or c.get("spark")
+                c["c1"] = sl.get("c1") or c.get("c1") or 0
+                c["c6"] = sl.get("c6") or c.get("c6") or 0
+                c["c24"] = sl.get("c24") or c.get("c24") or 0
+                c["real"] = True
+                c["icon"] = c.get("icon") or coin_icon(sym)
+
+        th = []
+        for sym in need_http[:24]:
+            t = threading.Thread(target=pull, args=(sym,), daemon=True)
+            t.start()
+            th.append(t)
+        for t in th:
+            t.join(timeout=6.0)
     mids = hl_mids()
     for sym, c in coins.items():
         mid = mids.get(sym.upper())
@@ -1810,7 +1717,7 @@ def get_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict:
             _building = True
             started = True
     if not started:
-        t_end = time.monotonic() + 1.2
+        t_end = time.monotonic() + 12.0
         while time.monotonic() < t_end:
             time.sleep(0.05)
             with _pub_lock:
@@ -1896,8 +1803,8 @@ def bootstrap(chat: str) -> dict:
     errors: list[str] = []
     t0 = time.monotonic()
 
-    def piece(name: str, fn, fallback):
-        if time.monotonic() - t0 > 5.5:
+    def piece(name: str, fn, fallback, must: bool = False):
+        if not must and time.monotonic() - t0 > 18.0:
             errors.append(f"{name}:skip")
             return fallback
         try:
@@ -1912,6 +1819,14 @@ def bootstrap(chat: str) -> dict:
             "plan": "free", "limit": 1, "threshold": 10000, "lang": "ru",
             "alertsToday": 0, "alerts30d": 0, "premUntil": 0, "updatedKey": "justNow",
         }
+        empty_rank = {"spot": {"pnl": [], "roi": [], "win": [], "act": []}, "perp": {"pnl": [], "roi": [], "win": [], "act": []}}
+        empty_sonar = {
+            "need": 400, "ready": {"spot": 0, "perp": 0},
+            "trained": False, "trainedSpot": False, "trainedPerp": False,
+            "acc": None, "accSpot": None, "accPerp": None,
+            "list": [], "hist": {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []},
+        }
+        pub = piece("pub", lambda: get_public(cur, hl), {}, True) or {}
         me = piece("me", lambda: load_me(cur, chat) if chat else empty_me, empty_me)
         if isinstance(me, dict):
             me = dict(me)
@@ -1922,36 +1837,18 @@ def bootstrap(chat: str) -> dict:
             lambda: load_alerts(cur, chat, wallets) if chat else ([], []),
             ([], []),
         )
-        empty_rank = {"spot": {"pnl": [], "roi": [], "win": [], "act": []}, "perp": {"pnl": [], "roi": [], "win": [], "act": []}}
-        empty_sonar = {
-            "need": 400, "ready": {"spot": 0, "perp": 0},
-            "trained": False, "trainedSpot": False, "trainedPerp": False,
-            "acc": None, "accSpot": None, "accPerp": None,
-            "list": [], "hist": {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []},
-        }
-        pub = piece("pub", lambda: get_public(cur, hl), {}) or {}
         flow = pub.get("flow") or {}
-        rank = pub.get("rank") or empty_rank
+        rank_raw = pub.get("rank") or empty_rank
+        rank = {
+            "spot": (rank_raw.get("spot") if isinstance(rank_raw, dict) else None) or empty_rank["spot"],
+            "perp": (rank_raw.get("perp") if isinstance(rank_raw, dict) else None) or empty_rank["perp"],
+        }
         trades = pub.get("trades") or {"spot": [], "perp": [], "liq": []}
         market_feed = pub.get("marketFeed") or []
         funding = pub.get("funding") or []
         rot = pub.get("rot") or {"24": [], "168": []}
         sonar = pub.get("sonar") or empty_sonar
         coins = piece("coins", lambda: load_coins(cur, hl, flow, wallets), pub.get("coins") or {})
-        if isinstance(coins, dict):
-            slim = {}
-            for k, v in coins.items():
-                if not sym_ok(k):
-                    continue
-                if isinstance(v, dict):
-                    v = dict(v)
-                    v.pop("hists", None)
-                    v["hist"] = trim_series(v.get("hist") or [], 24)
-                    v["spark"] = trim_series(v.get("spark") or [], 16)
-                slim[k] = v
-                if len(slim) >= 80:
-                    break
-            coins = slim
         out = {
             "ok": True,
             "live": True,
@@ -2134,6 +2031,41 @@ class Handler(BaseHTTPRequestHandler):
             if path in ("/bootstrap", "/api/bootstrap", "/api/me"):
                 chat = self._user(qs)
                 self._json(200, bootstrap(chat))
+                return
+            if path in ("/market", "/api/market"):
+                cur = open_db(DB)
+                hl = open_db(HL_DB)
+                if not cur:
+                    self._json(200, {"ok": False, "live": False})
+                    return
+                try:
+                    pub = get_public(cur, hl) or {}
+                    rank_raw = pub.get("rank") or {}
+                    self._json(200, {
+                        "ok": True,
+                        "live": True,
+                        "flow": pub.get("flow") or {},
+                        "rank": {
+                            "spot": rank_raw.get("spot") or {"pnl": [], "roi": [], "win": [], "act": []},
+                            "perp": rank_raw.get("perp") or {"pnl": [], "roi": [], "win": [], "act": []},
+                        },
+                        "trades": pub.get("trades") or {"spot": [], "perp": [], "liq": []},
+                        "marketFeed": pub.get("marketFeed") or [],
+                        "funding": pub.get("funding") or [],
+                        "rot": pub.get("rot") or {"24": [], "168": []},
+                        "sonar": pub.get("sonar") or {},
+                        "coins": pub.get("coins") or {},
+                    })
+                finally:
+                    try:
+                        cur.close()
+                    except Exception:
+                        pass
+                    if hl:
+                        try:
+                            hl.close()
+                        except Exception:
+                            pass
                 return
             if path in ("/quotes", "/api/quotes"):
                 cur = open_db(DB)
