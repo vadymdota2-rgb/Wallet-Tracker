@@ -972,7 +972,7 @@ def load_flow(cur: sqlite3.Connection) -> dict:
     return by_win
 
 
-def _map_rank(arr, days: int, n: int = 100) -> list:
+def _map_rank(arr, days: int, n: int = 12) -> list:
     mapped = []
     for e in arr[:n]:
         if not isinstance(e, dict):
@@ -1942,6 +1942,14 @@ def bootstrap(chat: str) -> dict:
         pub = piece("pub", lambda: get_public(cur, hl), {}) or {}
         flow = pub.get("flow") or {}
         rank = pub.get("rank") or empty_rank
+        if isinstance(rank, dict):
+            cap = {}
+            for venue, block in rank.items():
+                if isinstance(block, dict):
+                    cap[venue] = {k: (v[:12] if isinstance(v, list) else v) for k, v in block.items()}
+                else:
+                    cap[venue] = block
+            rank = cap
         trades = pub.get("trades") or {"spot": [], "perp": [], "liq": []}
         market_feed = pub.get("marketFeed") or []
         funding = pub.get("funding") or []
