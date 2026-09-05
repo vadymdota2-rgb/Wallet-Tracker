@@ -6,20 +6,42 @@ After=network.target whalescanner.service
 Type=simple
 User=vadymdota2
 WorkingDirectory=/home/vadymdota2/WhaleScanner
+
 Environment=WHALE_API_PORT=8090
-# Слушаем только петлю: наружу — через nginx, который ставит заголовок подписи.
-Environment=WHALE_API_HOST=127.0.0.1
-# Токен нужен для проверки подписи Telegram. Без него служба не поднимется.
-# Держим в отдельном файле с правами 600, а не в юните.
-EnvironmentFile=/etc/whale-api.env
+# Cloud Run ходит на этот порт снаружи, поэтому петля тут не подходит.
+# Защищает не адрес, а WHALE_API_KEY: без заголовка API отвечает 403.
+Environment=WHALE_API_HOST=0.0.0.0
+
+# Адрес мини-аппа. Только он получает CORS-заголовки; раньше стояла
+# звёздочка, и любой сайт мог дёргать API из браузера пользователя.
+Environment=WHALE_API_ORIGIN=https://wallet-tracker-git-606699497037.europe-west1.run.app
+
+# Срок годности подписи Telegram, секунды.
+Environment=WHALE_API_INITDATA_TTL=86400
+# Потолок запросов с одного адреса в минуту.
+Environment=WHALE_API_RPM=120
+
 Environment=WHALE_DB=/home/vadymdota2/WhaleScanner/whale_bot.db
 Environment=WHALE_HL_DB=/home/vadymdota2/WhaleScanner/hyperliquid.db
+
+# WHALE_TG_TOKEN и WHALE_API_KEY лежат здесь, а не в юните: у файла права
+# 600, а `systemctl cat` показывает юнит любому. Без токена служба не
+# стартует — проверять подпись было бы нечем.
+EnvironmentFile=/etc/whale-api.env
+
 ExecStart=/usr/bin/python3 /home/vadymdota2/WhaleScanner/whale_api.py
+
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
 ReadWritePaths=/home/vadymdota2/WhaleScanner
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryMax=768M
+
 Restart=always
 RestartSec=3
 
