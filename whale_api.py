@@ -18,7 +18,8 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
 
-# Наружу — только через nginx. 0.0.0.0 открывал API мимо всех заголовков.
+# Петля по умолчанию: наружу API выходит только через nginx. Раньше здесь
+# было 0.0.0.0, и обе базы бота слушали любой IP.
 HOST = os.environ.get("WHALE_API_HOST", "127.0.0.1")
 PORT = int(os.environ.get("WHALE_API_PORT", "8090"))
 WS_DIR = os.environ.get("WHALE_SCANNER_DIR") or (
@@ -44,14 +45,30 @@ def _db_path(env_key: str, name: str) -> str:
 DB = _db_path("WHALE_DB", "whale_bot.db")
 HL_DB = _db_path("WHALE_HL_DB", "hyperliquid.db")
 BOT_TOKEN = os.environ.get("WHALE_TG_TOKEN", "")
-# Без токена проверить подпись невозможно, а работать без проверки нельзя:
-# лучше не подняться, чем молча пускать всех.
-if not BOT_TOKEN:
-    raise SystemExit("WHALE_TG_TOKEN не задан — проверка подписи невозможна")
-
-# Сколько живёт подпись Telegram. Сутки — рекомендация Telegram.
-INIT_TTL = int(os.environ.get("WHALE_INIT_TTL", "86400"))
 HL_INFO = "https://api.hyperliquid.xyz/info"
+
+# Кому разрешено обращаться из браузера. Пустой список = заголовок не
+# отдаётся вовсе. Звёздочка означала бы, что любой сайт может дёргать API
+# из вкладки жертвы её же правами.
+ALLOWED_ORIGINS = {
+    o.strip().rstrip("/")
+    for o in os.environ.get("WHALE_API_ORIGIN", "").split(",")
+    if o.strip()
+}
+# Срок годности подписи Telegram. Без него однажды перехваченная initData
+# работала бы вечно.
+INIT_DATA_TTL = int(os.environ.get("WHALE_API_INITDATA_TTL", "86400"))
+# Те же числа, что в premium.cpp и alert_settings.cpp. Раньше API их не знал
+# и пускал мимо лимитов.
+FREE_MAX_WALLETS = 1
+PREMIUM_MAX_WALLETS = 50
+MIN_THRESHOLD_USD = 50.0
+MAX_THRESHOLD_USD = 1_000_000_000.0
+# Потолок запросов с одного адреса: перебор chat_id упирается в него.
+RATE_LIMIT_RPM = int(os.environ.get("WHALE_API_RPM", "120"))
+# Общий секрет с nginx. Порт 8090 виден Cloud Run, а значит и всем прочим;
+# ключ делает прямое обращение в обход прокси бесполезным.
+API_KEY = os.environ.get("WHALE_API_KEY", "")
 
 NANOS = 1_000_000_000.0
 ADDR_RE = re.compile(r"^0x[a-fA-F0-9]{40}$")
@@ -130,6 +147,15 @@ _sym_cache: dict[str, str] = {}
 _building = False
 
 
+def cap_cache(d: dict, limit: int) -> None:
+    """Словари-кэши росли без предела. Переполнился — выкидываем половину
+    самых старых по порядку вставки."""
+    if len(d) <= limit:
+        return
+    for k in list(d.keys())[: len(d) - limit // 2]:
+        d.pop(k, None)
+
+
 def table_exists(con: sqlite3.Connection, name: str) -> bool:
     hit = _table_ok.get(name)
     if hit is not None:
@@ -172,7 +198,12 @@ def short_addr(a: str) -> str:
 
 
 def verify_init_data(raw: str) -> dict | None:
-    if not raw:
+    """Разбирает initData Telegram и возвращает пользователя ТОЛЬКО при
+    сошедшейся подписи. Любая неудача — None, вызывающий обязан считать
+    запрос анонимным."""
+    # Проверять подпись нечем — значит доверять нечему. Раньше при пустом
+    # токене данные принимались как есть.
+    if not raw or not BOT_TOKEN:
         return None
     parts = {}
     for chunk in raw.split("&"):
@@ -181,8 +212,9 @@ def verify_init_data(raw: str) -> dict | None:
         k, v = chunk.split("=", 1)
         parts[k] = unquote(v)
     got = parts.pop("hash", "")
-    # Подпись обязательна. Раньше при пустом BOT_TOKEN проверка целиком
-    # пропускалась, и функция возвращала любой id, который прислали.
+    # hash обязателен. Раньше условие было `if BOT_TOKEN and got`, поэтому
+    # запрос БЕЗ hash проверку целиком пропускал: достаточно было прислать
+    # user={"id":...} и любой чужой аккаунт открывался.
     if not got:
         return None
     check = "\n".join(f"{k}={parts[k]}" for k in sorted(parts))
@@ -190,23 +222,82 @@ def verify_init_data(raw: str) -> dict | None:
     expect = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(expect, got):
         return None
-
-    # Срок жизни: перехваченная строка не должна работать вечно.
+    # Срок годности. Telegram кладёт время выдачи в auth_date; без проверки
+    # однажды утёкшая строка оставалась бы ключом навсегда.
     try:
-        auth_at = int(parts.get("auth_date") or 0)
+        auth_date = int(parts.get("auth_date") or 0)
     except ValueError:
         return None
-    if auth_at <= 0 or abs(time.time() - auth_at) > INIT_TTL:
+    if auth_date <= 0:
+        return None
+    age = now() - auth_date
+    # Небольшой запас назад: часы клиента могут немного убежать вперёд.
+    if age > INIT_DATA_TTL or age < -300:
         return None
     user_raw = parts.get("user") or ""
     try:
         user = json.loads(user_raw) if user_raw else {}
     except json.JSONDecodeError:
-        user = {}
+        return None
     uid = user.get("id")
-    if uid is None:
+    # id обязан быть целым числом: строкой сюда можно было бы протащить
+    # что угодно, а он идёт прямо в chat_id.
+    if not isinstance(uid, int) or uid <= 0:
         return None
     return {"id": str(uid), "lang": user.get("language_code") or "ru"}
+
+
+class RateLimiter:
+    """Скользящее окно на минуту по ключу. Держим в памяти: процесс один."""
+
+    def __init__(self, rpm: int):
+        self.rpm = max(1, rpm)
+        self.hits: dict[str, list[float]] = {}
+        self.lock = threading.Lock()
+
+    def allow(self, key: str) -> bool:
+        t = time.monotonic()
+        with self.lock:
+            # Заодно подметаем чужие протухшие записи, иначе словарь растёт
+            # ровно на столько адресов, сколько к нам стучалось.
+            if len(self.hits) > 4096:
+                for k in [k for k, v in self.hits.items() if not v or t - v[-1] > 60.0]:
+                    self.hits.pop(k, None)
+            seq = [x for x in self.hits.get(key, ()) if t - x < 60.0]
+            if len(seq) >= self.rpm:
+                self.hits[key] = seq
+                return False
+            seq.append(t)
+            self.hits[key] = seq
+            return True
+
+
+_limiter = RateLimiter(RATE_LIMIT_RPM)
+
+
+def wallet_banned(con: sqlite3.Connection, addr: str) -> bool:
+    """Тот же критерий, что в isPermanentlyBanned() бота."""
+    if not table_exists(con, "ignored_wallets"):
+        return False
+    row = con.execute(
+        "SELECT 1 FROM ignored_wallets WHERE wallet=? AND permanent=1", (addr.lower(),)
+    ).fetchone()
+    return row is not None
+
+
+def wallet_limit(con: sqlite3.Connection, chat: str) -> int:
+    """Лимит кошельков по подписке — как в premium.cpp."""
+    if not table_exists(con, "users"):
+        return FREE_MAX_WALLETS
+    cset = cols(con, "users")
+    if "is_premium" not in cset:
+        return FREE_MAX_WALLETS
+    row = con.execute(
+        "SELECT is_premium, premium_expire FROM users WHERE chat_id=?", (chat,)
+    ).fetchone()
+    if row and row["is_premium"] and int(row["premium_expire"] or 0) > now():
+        return PREMIUM_MAX_WALLETS
+    return FREE_MAX_WALLETS
 
 
 def hl_post(payload: dict, timeout: float = 6.0):
@@ -232,6 +323,7 @@ def hl_state(addr: str) -> dict:
     spot = hl_post({"type": "spotClearinghouseState", "user": addr}) or {}
     out = {"perp": perp, "spot": spot}
     _hl_cache[key] = (time.monotonic(), out)
+    cap_cache(_hl_cache, 4096)
     return out
 
 
@@ -321,6 +413,7 @@ def symbol_of(cur: sqlite3.Connection, token: str) -> str:
         _sym_cache[token] = ""
         return ""
     _sym_cache[token] = (token.upper()[:12] or "")
+    cap_cache(_sym_cache, 8192)
     return _sym_cache[token]
 
 
@@ -1936,9 +2029,20 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
                     (chat, "ru", 100000000000, now()))
         if kind == "add":
             addr = (body.get("addr") or "").strip().lower()
-            name = (body.get("name") or "").strip() or short_addr(addr)
+            name = (body.get("name") or "").strip()[:64] or short_addr(addr)
             if not ADDR_RE.match(addr):
                 return {"ok": False, "error": "bad_addr"}
+            # Бан кошелька в боте действует для всех, значит и здесь.
+            # Раньше через мини-апп забаненного кита можно было вернуть.
+            if wallet_banned(con, addr):
+                return {"ok": False, "error": "banned"}
+            n = con.execute("SELECT COUNT(*) FROM user_whales WHERE user_id=?", (chat,)).fetchone()[0]
+            # Лимит подписки. Раньше он только СООБЩАЛСЯ фронту в load_me,
+            # а на запись не проверялся — бесплатный аккаунт добавлял сколько
+            # угодно кошельков в обход премиума.
+            lim = wallet_limit(con, chat)
+            if n >= lim:
+                return {"ok": False, "error": "limit", "limit": lim}
             con.execute("INSERT OR IGNORE INTO whale_addresses(address) VALUES(?)", (addr,))
             wid = con.execute("SELECT id FROM whale_addresses WHERE address=?", (addr,)).fetchone()[0]
             exists = con.execute(
@@ -1946,7 +2050,6 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
             ).fetchone()
             if exists:
                 return {"ok": False, "error": "dup"}
-            n = con.execute("SELECT COUNT(*) FROM user_whales WHERE user_id=?", (chat,)).fetchone()[0]
             first = n == 0
             con.execute(
                 "INSERT INTO user_whales(user_id,whale_id,label,created_at,is_primary) VALUES(?,?,?,?,?)",
@@ -1970,7 +2073,7 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
             )
         elif kind == "rename":
             addr = (body.get("addr") or "").strip().lower()
-            name = (body.get("name") or "").strip()
+            name = (body.get("name") or "").strip()[:64]
             row = con.execute("SELECT id FROM whale_addresses WHERE address=?", (addr,)).fetchone()
             if not row or not name:
                 return {"ok": False, "error": "missing"}
@@ -1979,9 +2082,18 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
                 (name, chat, row[0]),
             )
         elif kind == "threshold":
-            usd_v = float(body.get("usd") or 0)
-            if usd_v < 50:
+            try:
+                usd_v = float(body.get("usd") or 0)
+            except (TypeError, ValueError):
+                return {"ok": False, "error": "bad_value"}
+            # NaN и бесконечность проходили сравнение `< 50` и падали уже
+            # на int(); заодно ставим верхнюю границу бота ($1B).
+            if not math.isfinite(usd_v):
+                return {"ok": False, "error": "bad_value"}
+            if usd_v < MIN_THRESHOLD_USD:
                 return {"ok": False, "error": "min"}
+            if usd_v > MAX_THRESHOLD_USD:
+                return {"ok": False, "error": "max"}
             con.execute(
                 "UPDATE users SET threshold_nanos=? WHERE chat_id=?",
                 (int(usd_v * NANOS), chat),
@@ -2007,9 +2119,15 @@ class Handler(BaseHTTPRequestHandler):
         sys.stderr.write("[api] " + (fmt % args) + "\n")
 
     def _cors(self):
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Telegram-Init-Data")
-        self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+        # Только известные адреса. Раньше стояла звёздочка, и любая страница
+        # в интернете могла читать и менять данные из браузера жертвы.
+        origin = (self.headers.get("Origin") or "").rstrip("/")
+        if origin and origin in ALLOWED_ORIGINS:
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Telegram-Init-Data")
+            self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+            self.send_header("Access-Control-Max-Age", "600")
 
     def _json(self, code: int, obj: dict):
         def clean(o):
@@ -2039,12 +2157,22 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(raw)
 
     def _user(self, qs: dict) -> str:
-        # Личность берётся ТОЛЬКО из проверенной подписи.
-        # Раньше при неудачной проверке брался ?tg=<id> из адреса —
-        # это позволяло любому читать и менять чужие кошельки.
+        """Возвращает chat_id только по сошедшейся подписи, иначе пустую
+        строку. Прежний хвост `return qs["tg"]` пускал в чужой аккаунт по
+        одному номеру в адресе запроса."""
         init = self.headers.get("X-Telegram-Init-Data") or qs.get("init", [""])[0]
         parsed = verify_init_data(init)
         return parsed["id"] if parsed else ""
+
+    def _keyed(self) -> bool:
+        if not API_KEY:
+            return True
+        return hmac.compare_digest(self.headers.get("X-Api-Key") or "", API_KEY)
+
+    def _peer(self) -> str:
+        # За nginx реальный адрес приходит заголовком; своему прокси верим.
+        fwd = (self.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+        return fwd or self.client_address[0]
 
     def _body(self) -> dict:
         n = int(self.headers.get("Content-Length") or 0)
@@ -2066,14 +2194,20 @@ class Handler(BaseHTTPRequestHandler):
             u = urlparse(self.path)
             qs = parse_qs(u.query)
             path = u.path.rstrip("/") or "/"
+            if path not in ("/health", "/api/health"):
+                if not self._keyed():
+                    self._json(403, {"ok": False, "error": "forbidden"})
+                    return
+                if not _limiter.allow(self._peer()):
+                    self._json(429, {"ok": False, "error": "rate_limit"})
+                    return
             if path in ("/health", "/api/health"):
+                # Абсолютные пути к базам отсюда убраны: проверка живости не
+                # обязана рассказывать наружу устройство файловой системы.
                 self._json(200, {
                     "ok": True,
                     "db": os.path.isfile(DB),
                     "hl": os.path.isfile(HL_DB),
-                    "db_path": DB,
-                    "hl_path": HL_DB,
-                    "ws": WS_DIR,
                 })
                 return
             if path in ("/bootstrap", "/api/bootstrap", "/api/me"):
@@ -2166,8 +2300,21 @@ class Handler(BaseHTTPRequestHandler):
             u = urlparse(self.path)
             qs = parse_qs(u.query)
             path = u.path.rstrip("/") or "/"
+            if not self._keyed():
+                self._body()
+                self._json(403, {"ok": False, "error": "forbidden"})
+                return
+            if not _limiter.allow(self._peer()):
+                self._body()
+                self._json(429, {"ok": False, "error": "rate_limit"})
+                return
             chat = self._user(qs)
+            # Тело читаем всегда: иначе непрочитанные байты остаются в сокете
+            # и портят следующий запрос на том же keep-alive соединении.
             body = self._body()
+            if not chat:
+                self._json(401, {"ok": False, "error": "unauthorized"})
+                return
             kind = {
                 "/api/wallets": "add",
                 "/api/wallets/remove": "remove",
@@ -2191,9 +2338,20 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    # Без токена подпись не проверяется, а значит любой запрос анонимен и
+    # мини-апп бесполезен. Раньше служба в этом случае тихо поднималась и
+    # пускала всех.
+    if not BOT_TOKEN:
+        sys.stderr.write("[api] WHALE_TG_TOKEN не задан — запуск отменён\n")
+        raise SystemExit(1)
+    if not API_KEY:
+        sys.stderr.write("[api] WHALE_API_KEY не задан: порт принимает запросы в обход nginx\n")
+    if not ALLOWED_ORIGINS:
+        sys.stderr.write("[api] WHALE_API_ORIGIN пуст: обращения из браузера напрямую будут отклонены\n")
     print(
         f"[api] ws={WS_DIR} db={DB} db_ok={os.path.isfile(DB)} "
-        f"hl={HL_DB} hl_ok={os.path.isfile(HL_DB)} listen={HOST}:{PORT}",
+        f"hl={HL_DB} hl_ok={os.path.isfile(HL_DB)} listen={HOST}:{PORT} "
+        f"origins={len(ALLOWED_ORIGINS)} rpm={RATE_LIMIT_RPM} key={'yes' if API_KEY else 'no'}",
         flush=True,
     )
     threading.Thread(target=warmup, daemon=True).start()
