@@ -1,5 +1,5 @@
-const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/store-XWoHtBlN.js","assets/routes-FixQ1.js","assets/index-FixQ1.js","assets/live-FixQ1.js"])))=>i.map(i=>d[i]);
-import{t as e}from"./index-FixQ1.js";import{t}from"./live-FixQ1.js";
+const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/store-XWoHtBlN.js","assets/routes-FixR1.js","assets/index-FixR1.js","assets/live-FixR1.js"])))=>i.map(i=>d[i]);
+import{t as e}from"./index-FixR1.js";import{t}from"./live-FixR1.js";
 function n(){try{return window.Telegram?.WebApp?.initData||``}catch{return``}}
 function r(){try{let e=(window.Telegram?.WebApp)?.initDataUnsafe?.user?.id;return e?String(e):``}catch{return``}}
 async function i(e,t){
