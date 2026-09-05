@@ -129,17 +129,7 @@ def sym_ok(sym: str) -> bool:
 
 
 def flow_keep(row: dict) -> bool:
-    s = (row.get("sym") or "").upper()
-    if not sym_ok(s):
-        return False
-    if s in MAJORS:
-        return True
-    try:
-        w = int(row.get("w") or 0)
-        vol = abs(float(row.get("buy") or 0)) + abs(float(row.get("sell") or 0))
-    except (TypeError, ValueError):
-        return False
-    return w >= 4 and vol >= 20000
+    return sym_ok(row.get("sym") or "")
 
 
 def trim_series(vals, n: int = 24) -> list:
@@ -939,7 +929,7 @@ def load_flow(cur: sqlite3.Connection) -> dict:
             )
         coins = [c for c in coins if flow_keep(c)]
         coins.sort(key=lambda c: (0 if (c.get("sym") or "").upper() in MAJORS else 1, -abs(c.get("net") or 0)))
-        coins = coins[:12]
+        coins = coins[:40]
         by_win[key] = {
             "net": buy_t - sell_t,
             "coins": len(coins),
@@ -972,7 +962,7 @@ def load_flow(cur: sqlite3.Connection) -> dict:
     return by_win
 
 
-def _map_rank(arr, days: int, n: int = 12) -> list:
+def _map_rank(arr, days: int, n: int = 100) -> list:
     mapped = []
     for e in arr[:n]:
         if not isinstance(e, dict):
@@ -1942,14 +1932,6 @@ def bootstrap(chat: str) -> dict:
         pub = piece("pub", lambda: get_public(cur, hl), {}) or {}
         flow = pub.get("flow") or {}
         rank = pub.get("rank") or empty_rank
-        if isinstance(rank, dict):
-            cap = {}
-            for venue, block in rank.items():
-                if isinstance(block, dict):
-                    cap[venue] = {k: (v[:12] if isinstance(v, list) else v) for k, v in block.items()}
-                else:
-                    cap[venue] = block
-            rank = cap
         trades = pub.get("trades") or {"spot": [], "perp": [], "liq": []}
         market_feed = pub.get("marketFeed") or []
         funding = pub.get("funding") or []
@@ -1967,7 +1949,7 @@ def bootstrap(chat: str) -> dict:
                     v["hist"] = trim_series(v.get("hist") or [], 24)
                     v["spark"] = trim_series(v.get("spark") or [], 16)
                 slim[k] = v
-                if len(slim) >= 24:
+                if len(slim) >= 80:
                     break
             coins = slim
         out = {
