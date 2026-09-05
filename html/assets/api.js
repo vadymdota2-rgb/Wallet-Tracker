@@ -1,4 +1,4 @@
-const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/store-XWoHtBlN.js","assets/routes.js","assets/app.js","assets/live.js"])))=>i.map(i=>d[i]);
+const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/store.js","assets/routes.js","assets/app.js","assets/live.js"])))=>i.map(i=>d[i]);
 import{t as e}from"./app.js";import{t}from"./live.js";
 function n(){try{return window.Telegram?.WebApp?.initData||``}catch{return``}}
 function r(){try{let e=(window.Telegram?.WebApp)?.initDataUnsafe?.user?.id;return e?String(e):``}catch{return``}}
@@ -22,7 +22,7 @@ async function a(){
   n.me=boot&&boot.me||n.me;
   n.live=!0;n.ok=!0;
   if(!hasFlow(n)&&(!n.wallets||!n.wallets.length))return!1;
-  let{useApp:app}=await e(async()=>{let{useApp:e}=await import(`./store-XWoHtBlN.js`);return{useApp:e}},__vite__mapDeps([0,1,2,3]));
+  let{useApp:app}=await e(async()=>{let{useApp:e}=await import(`./store.js`);return{useApp:e}},__vite__mapDeps([0,1,2,3]));
   t(n,w=>{let me=n.me,cur=app.getState(),wallets=Array.isArray(w)&&w.length?w:cur.wallets;app.setState({wallets,plan:me&&me.plan===`premium`?`premium`:cur.plan,threshold:Number(me&&me.threshold)||cur.threshold,premUntil:Number(me&&me.premUntil)||cur.premUntil,lang:me&&me.lang||cur.lang,syncedAt:Date.now()})});
   try{document.documentElement.classList.add(`hydrated-live`)}catch{}
   return hasFlow(n)||n.wallets.length>0
