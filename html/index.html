@@ -4,8 +4,6 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <meta name="theme-color" content="#01030A"/>
-<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0"/>
-<meta http-equiv="Pragma" content="no-cache"/>
 <title>Wallet Tracker</title>
 <link rel="stylesheet" href="/assets/styles-QImLFP2t.css"/>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -14,6 +12,12 @@
 <div id="root">
 <div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:#7FD8FF;font:700 18px sans-serif;letter-spacing:.4em">WALLET TRACKER</div>
 </div>
-<script type="module">import("/assets/app.js?v="+Date.now())</script>
+<!--
+  Раньше здесь было import("/assets/app.js?v="+Date.now()): каждый запуск
+  тянул 400 КБ заново, а его собственные импорты (routes.js, live.js) шли
+  без метки и оседали в кэше на год. Свежесть теперь обеспечивает nginx
+  через ETag, поэтому адрес обычный.
+-->
+<script type="module" src="/assets/app.js"></script>
 </body>
 </html>
