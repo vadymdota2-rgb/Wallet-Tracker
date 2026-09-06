@@ -111,16 +111,74 @@ HL_COIN = {
 }
 
 
-def coin_icon(sym: str) -> str:
+# --- EIP-55 checksum: PancakeSwap и TrustWallet отдают логотипы только по
+# --- адресу в смешанном регистре; в token_cache адреса в нижнем.
+_KEC_RC=[0x0000000000000001,0x0000000000008082,0x800000000000808A,0x8000000080008000,
+0x000000000000808B,0x0000000080000001,0x8000000080008081,0x8000000000008009,
+0x000000000000008A,0x0000000000000088,0x0000000080008009,0x000000008000000A,
+0x000000008000808B,0x800000000000008B,0x8000000000008089,0x8000000000008003,
+0x8000000000008002,0x8000000000000080,0x000000000000800A,0x800000008000000A,
+0x8000000080008081,0x8000000000008080,0x0000000080000001,0x8000000080008008]
+_KEC_R=[[0,36,3,41,18],[1,44,10,45,2],[62,6,43,15,61],[28,55,25,21,56],[27,20,39,8,14]]
+M=(1<<64)-1
+def _rol(x,n): return ((x<<n)|(x>>(64-n)))&M
+def _keccak_f(A):
+    for rnd in range(24):
+        C=[A[x][0]^A[x][1]^A[x][2]^A[x][3]^A[x][4] for x in range(5)]
+        D=[C[(x-1)%5]^_rol(C[(x+1)%5],1) for x in range(5)]
+        for x in range(5):
+            for y in range(5): A[x][y]^=D[x]
+        B=[[0]*5 for _ in range(5)]
+        for x in range(5):
+            for y in range(5): B[y][(2*x+3*y)%5]=_rol(A[x][y],_KEC_R[x][y])
+        for x in range(5):
+            for y in range(5): A[x][y]=B[x][y]^((~B[(x+1)%5][y])&B[(x+2)%5][y])&M
+        A[0][0]^=_KEC_RC[rnd]
+    return A
+def keccak256(data: bytes) -> bytes:
+    rate=136
+    A=[[0]*5 for _ in range(5)]
+    pad=data+b'\x01'+b'\x00'*((-len(data)-1)%rate)
+    pad=bytearray(pad); pad[-1]^=0x80
+    for off in range(0,len(pad),rate):
+        blk=pad[off:off+rate]
+        for i in range(rate//8):
+            x,y=(i%5),(i//5)
+            A[x][y]^=int.from_bytes(blk[i*8:i*8+8],'little')
+        _keccak_f(A)
+    out=b''
+    for i in range(4):
+        x,y=(i%5),(i//5)
+        out+=A[x][y].to_bytes(8,'little')
+    return out[:32]
+def to_checksum(addr: str) -> str:
+    a=(addr or '').lower().replace('0x','')
+    if len(a)!=40: return addr or ''
+    h=keccak256(a.encode()).hex()
+    return '0x'+''.join(c.upper() if c.isalpha() and int(h[i],16)>=8 else c for i,c in enumerate(a))
+
+
+def coin_icon(sym: str, addr: str = "") -> list[str]:
+    """Список кандидатов по убыванию доверия. Площадку определяет адрес:
+    он есть только у спотовых токенов BSC, у перпов Hyperliquid его нет.
+    TradingView убран: он ищет по тикеру, а тикеры не уникальны — под PUMP
+    и HYPE там лежали чужие проекты, и картинка грузилась успешно, из-за
+    чего до правильной очередь не доходила."""
     key = (sym or "").upper().replace(" ", "")
-    if key.startswith("K") and key[1:] in ("PEPE", "FLOKI", "SHIB", "BONK"):
-        key = key[1:]
-    stocks = {"NVDA": "nvidia", "INTC": "intel", "GOOGL": "alphabet", "GOOG": "alphabet"}
-    if key in stocks:
-        return f"https://s3-symbol-logo.tradingview.com/{stocks[key]}.svg"
-    if key:
-        return f"https://s3-symbol-logo.tradingview.com/crypto/XTVC{key}--big.svg"
-    return ""
+    out: list[str] = []
+    a = (addr or "").lower()
+    if a.startswith("0x") and len(a) == 42:
+        sumaddr = to_checksum(a)
+        out.append(f"/pcslogo/{sumaddr}.png")
+        out.append(f"/twlogo/{sumaddr}/logo.png")
+        return out
+    if not key:
+        return out
+    alias = HL_COIN.get(key, key)
+    out.append(f"/hllogo/{alias}.svg")
+    if alias != key:
+        out.append(f"/hllogo/{key}.svg")
+    return out
 
 
 
@@ -694,7 +752,7 @@ def price_pack(cur: sqlite3.Connection, hl: sqlite3.Connection | None, sym: str,
         return {}
     sl = _sparkify(sl, key)
     sl["addr"] = addr
-    sl["icon"] = coin_icon(sym)
+    sl["icon"] = coin_icon(sym, addr)
     sl["real"] = True
     return sl
 
@@ -1738,7 +1796,7 @@ def load_coins(cur: sqlite3.Connection, hl: sqlite3.Connection | None, flow: dic
             "hists": pack.get("hists") or {},
             "real": bool(pack.get("real")),
             "addr": pack.get("addr") or r.get("addr") or "",
-            "icon": pack.get("icon") or coin_icon(sym),
+            "icon": pack.get("icon") or coin_icon(sym, pack.get("addr") or r.get("addr") or ""),
             "spark": pack.get("spark") or hist24,
             "c1": pack.get("c1") or 0,
             "c6": pack.get("c6") or 0,
