@@ -17,6 +17,9 @@ DB = os.environ.get("WHALE_DB", os.path.expanduser("~/WhaleScanner/whale_bot.db"
 OUT = os.environ.get("LOGO_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "coins"))
 MANIFEST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "coins_manifest.json")
 UA = {"User-Agent": "Mozilla/5.0 (WhaleScanner logo fetcher)"}
+# Глубина и потолок выборки: столько же, сколько видит интерфейс.
+DAYS = int(os.environ.get("LOGO_DAYS", "30"))
+LIMIT = int(os.environ.get("LOGO_LIMIT", "400"))
 HL_INFO = "https://api.hyperliquid.xyz/info"
 
 # --- keccak-256 и EIP-55: оба источника отдают только смешанный регистр ---
@@ -91,18 +94,34 @@ def save(path: str, data: bytes) -> None:
 
 
 def bsc_tokens() -> list[tuple[str, str]]:
+    """Только те токены, которые реально доходят до экрана.
+
+    В token_cache лежит всё, что бот когда-либо видел в блокчейне — тысячи
+    записей. Интерфейс же строится по таблице trades, и самое длинное окно
+    там 30 дней, а список режется по обороту. Берём то же самое, иначе
+    качали бы часами ради значков, которых никто не увидит.
+    """
     if not os.path.isfile(DB):
         print(f"нет базы {DB}", file=sys.stderr)
         return []
     con = sqlite3.connect(DB)
     con.row_factory = sqlite3.Row
+    since = int(time.time()) - DAYS * 86400
     try:
         rows = con.execute(
-            "SELECT DISTINCT symbol, address FROM token_cache "
-            "WHERE symbol NOT IN ('UNKNOWN','') AND address LIKE '0x%'"
+            "SELECT tc.symbol AS symbol, t.token AS address, "
+            "       SUM(t.usd_nanos) AS vol "
+            "FROM trades t JOIN token_cache tc "
+            "  ON lower(tc.address) = lower(t.token) "
+            "WHERE t.timestamp >= ? AND t.usd_nanos > 0 "
+            "  AND tc.symbol NOT IN ('UNKNOWN','') AND t.token LIKE '0x%' "
+            "GROUP BY lower(t.token) "
+            "ORDER BY vol DESC "
+            "LIMIT ?",
+            (since, LIMIT),
         ).fetchall()
     except sqlite3.Error as e:
-        print("не читается token_cache:", e, file=sys.stderr)
+        print("не читается trades/token_cache:", e, file=sys.stderr)
         return []
     finally:
         con.close()
@@ -131,7 +150,7 @@ def main() -> int:
     manifest = {"bsc": [], "hl": [], "built": int(time.time())}
 
     toks = bsc_tokens()
-    print(f"спот BSC: {len(toks)} токенов")
+    print(f"спот BSC: {len(toks)} токенов (обороты за {DAYS} дн., потолок {LIMIT})")
     ok = skip = 0
     for i, (sym, low) in enumerate(toks, 1):
         s = to_checksum(low)
