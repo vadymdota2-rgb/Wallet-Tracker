@@ -146,6 +146,29 @@ def hl_coins() -> list[str]:
         return []
 
 
+def write_manifest() -> dict:
+    """Собираем список по тому, что реально лежит на диске: прерванный
+    прогон тогда всё равно оставляет рабочий манифест."""
+    man = {"bsc": [], "hl": [], "built": int(time.time())}
+    bsc_dir = os.path.join(OUT, "bsc")
+    if os.path.isdir(bsc_dir):
+        for f in os.listdir(bsc_dir):
+            if f.endswith(".png") and os.path.getsize(os.path.join(bsc_dir, f)) > 200:
+                man["bsc"].append(f[:-4])
+    hl_dir = os.path.join(OUT, "hl")
+    if os.path.isdir(hl_dir):
+        for f in os.listdir(hl_dir):
+            if f.endswith(".svg") and os.path.getsize(os.path.join(hl_dir, f)) > 200:
+                # обратно из имени файла в имя монеты: xyz_NVDA -> xyz:NVDA
+                name = f[:-4]
+                man["hl"].append(name.replace("_", ":") if name.startswith("xyz_") else name)
+    man["bsc"].sort()
+    man["hl"].sort()
+    with open(MANIFEST, "w", encoding="utf-8") as f:
+        json.dump(man, f, ensure_ascii=False, indent=1)
+    return man
+
+
 def main() -> int:
     manifest = {"bsc": [], "hl": [], "built": int(time.time())}
 
@@ -171,6 +194,8 @@ def main() -> int:
             print(f"  {i}/{len(toks)} — скачано {ok}, уже было {skip}")
         time.sleep(0.05)
     print(f"спот: скачано {ok}, пропущено (уже есть) {skip}, без логотипа {len(toks)-ok-skip}")
+    m = write_manifest()
+    print(f"манифест обновлён после спота: {len(m['bsc'])} записей")
 
     coins = hl_coins()
     print(f"перпы Hyperliquid: {len(coins)} монет")
@@ -194,8 +219,7 @@ def main() -> int:
         time.sleep(0.05)
     print(f"перпы: скачано {ok}, пропущено {skip}, без логотипа {len(coins)-ok-skip}")
 
-    with open(MANIFEST, "w", encoding="utf-8") as f:
-        json.dump(manifest, f, ensure_ascii=False, indent=1)
+    manifest = write_manifest()
     total = sum(os.path.getsize(os.path.join(d, x))
                 for d, _, fs in os.walk(OUT) for x in fs)
     print(f"\nманифест: {MANIFEST} ({len(manifest['bsc'])} спот + {len(manifest['hl'])} перп)")
