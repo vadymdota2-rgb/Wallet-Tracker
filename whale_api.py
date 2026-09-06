@@ -158,23 +158,59 @@ def to_checksum(addr: str) -> str:
     return '0x'+''.join(c.upper() if c.isalpha() and int(h[i],16)>=8 else c for i,c in enumerate(a))
 
 
+# Логотипы, скачанные fetch_logos.py и уехавшие в образ Cloud Run.
+# Манифест нужен, чтобы не предлагать фронту локальный адрес того, чего
+# на диске нет: иначе каждый такой значок стоил бы лишнего запроса и 404.
+LOGO_MANIFEST = os.environ.get(
+    "WHALE_LOGO_MANIFEST",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "coins_manifest.json"),
+)
+_logo_local: dict[str, set[str]] = {"bsc": set(), "hl": set()}
+_logo_mtime = 0.0
+
+
+def _load_logo_manifest() -> None:
+    global _logo_mtime
+    try:
+        m = os.path.getmtime(LOGO_MANIFEST)
+    except OSError:
+        return
+    if m == _logo_mtime:
+        return
+    try:
+        with open(LOGO_MANIFEST, encoding="utf-8") as f:
+            raw = json.load(f)
+        _logo_local["bsc"] = {str(x) for x in (raw.get("bsc") or [])}
+        _logo_local["hl"] = {str(x) for x in (raw.get("hl") or [])}
+        _logo_mtime = m
+    except (OSError, ValueError):
+        pass
+
+
 def coin_icon(sym: str, addr: str = "") -> list[str]:
     """Список кандидатов по убыванию доверия. Площадку определяет адрес:
     он есть только у спотовых токенов BSC, у перпов Hyperliquid его нет.
     TradingView убран: он ищет по тикеру, а тикеры не уникальны — под PUMP
     и HYPE там лежали чужие проекты, и картинка грузилась успешно, из-за
     чего до правильной очередь не доходила."""
+    _load_logo_manifest()
     key = (sym or "").upper().replace(" ", "")
     out: list[str] = []
     a = (addr or "").lower()
     if a.startswith("0x") and len(a) == 42:
         sumaddr = to_checksum(a)
+        if sumaddr in _logo_local["bsc"]:
+            out.append(f"/coins/bsc/{sumaddr}.png")
         out.append(f"/pcslogo/{sumaddr}.png")
         out.append(f"/twlogo/{sumaddr}/logo.png")
         return out
     if not key:
         return out
     alias = HL_COIN.get(key, key)
+    for name in (alias, key) if alias != key else (alias,):
+        if name in _logo_local["hl"]:
+            safe = name.replace(":", "_").replace("/", "_")
+            out.append(f"/coins/hl/{safe}.svg")
     out.append(f"/hllogo/{alias}.svg")
     if alias != key:
         out.append(f"/hllogo/{key}.svg")
