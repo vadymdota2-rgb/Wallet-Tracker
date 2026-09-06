@@ -107,6 +107,29 @@ def bsc_tokens() -> list[tuple[str, str]]:
     con = sqlite3.connect(DB)
     con.row_factory = sqlite3.Row
     since = int(time.time()) - DAYS * 86400
+    # Когда ограничений нет, соединять с trades незачем: без индекса по
+    # timestamp это перебор всей таблицы сделок и запрос просто виснет.
+    if DAYS >= 3650 or LIMIT >= 100000:
+        print("берём весь token_cache без обращения к trades", flush=True)
+        try:
+            rows = con.execute(
+                "SELECT symbol, address FROM token_cache "
+                "WHERE symbol NOT IN ('UNKNOWN','') AND address LIKE '0x%'"
+            ).fetchall()
+        except sqlite3.Error as e:
+            print("не читается token_cache:", e, file=sys.stderr)
+            rows = []
+        finally:
+            con.close()
+        out = []
+        seen = set()
+        for r in rows:
+            a = str(r["address"] or "").lower()
+            if len(a) == 42 and a not in seen:
+                seen.add(a)
+                out.append((str(r["symbol"]), a))
+        return out
+    print(f"выбираю токены по оборотам за {DAYS} дн. …", flush=True)
     try:
         rows = con.execute(
             "SELECT tc.symbol AS symbol, t.token AS address, "
