@@ -11,16 +11,10 @@ import { useLive } from "../store/live";
 import { t } from "../i18n/t";
 import { num, pct, px, signed, usd } from "../lib/format";
 import { ago } from "../lib/relative";
-import { fetchCandles, type Candle, type Timeframe } from "../lib/klines";
+import { fetchCandles, TF_LABEL, TIMEFRAMES, type Candle, type Timeframe } from "../lib/klines";
 import { CoinIcon, normalizeSym } from "../components/CoinIcon";
 import { Area, BuySellBar, Candles } from "../components/Chart";
 import { Card, Empty, Row, SectionTitle, Segmented, Skeleton, Tiles } from "../components/ui";
-
-const TFS: { id: Timeframe; key: Parameters<typeof t>[1] }[] = [
-  { id: "1h", key: "ui_tf_1h" },
-  { id: "1d", key: "ui_tf_1d" },
-  { id: "1w", key: "ui_tf_1w" },
-];
 
 export function CoinScreen({ arg }: ScreenProps) {
   const lang = useApp((s) => s.lang);
@@ -64,12 +58,12 @@ export function CoinScreen({ arg }: ScreenProps) {
         <Segmented<Timeframe>
           value={tf}
           onChange={setTf}
-          options={TFS.map((x) => ({ id: x.id, label: t(lang, x.key) }))}
+          options={TIMEFRAMES.map((id) => ({ id, label: t(lang, TF_LABEL[id]) }))}
         />
         {candles === null ? (
           <Skeleton rows={4} />
         ) : candles.length >= 3 ? (
-          <Candles candles={candles} />
+          <Candles candles={candles} format={px} />
         ) : coin?.hist?.length ? (
           <Area points={coin.hist} height={140} />
         ) : (

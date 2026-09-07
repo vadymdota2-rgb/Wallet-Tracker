@@ -281,10 +281,12 @@
   font-weight: 600;
   font-size: 14px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
+/* Многоточие ставит само имя: если резать всю строку целиком, длинное имя
+   съедало метку «основной». */
+.row-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-badge {
+  flex: 0 0 auto;
   font-style: normal;
   font-size: 10px;
   font-weight: 600;
@@ -565,3 +567,9 @@
 /* Подписи цен на графике */
 .chart .ax { fill: var(--dim); font: 500 9px var(--font-sans); font-variant-numeric: tabular-nums; }
 .chart .ax.now { fill: #fff; font-weight: 700; }
+.chart .ax.entry { fill: var(--warn); font-weight: 700; }
+/* Подложка под подписи внутри поля графика — иначе текст тонет в свечах. */
+.chart .ax-bg { fill: rgb(5 10 22 / 0.82); }
+.chart .ax.pos { font-weight: 700; font-size: 10px; }
+.chart .ax.pos.up { fill: var(--up); }
+.chart .ax.pos.dn { fill: var(--dn); }

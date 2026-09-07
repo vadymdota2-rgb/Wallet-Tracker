@@ -11,17 +11,11 @@ import { useApp } from "../store/app";
 import { useLive, walletByAddr } from "../store/live";
 import { t } from "../i18n/t";
 import { lev as levFmt, num, pct, px, signed, usd } from "../lib/format";
-import { fetchCandles, type Candle, type Timeframe } from "../lib/klines";
+import { fetchCandles, TF_LABEL, TIMEFRAMES, type Candle, type Timeframe } from "../lib/klines";
 import { CoinIcon } from "../components/CoinIcon";
 import { Candles } from "../components/Chart";
 import { Hero } from "../components/Hero";
 import { Card, Empty, Segmented, Skeleton, Tiles } from "../components/ui";
-
-const TFS: { id: Timeframe; key: Parameters<typeof t>[1] }[] = [
-  { id: "1h", key: "ui_tf_1h" },
-  { id: "1d", key: "ui_tf_1d" },
-  { id: "1w", key: "ui_tf_1w" },
-];
 
 export function PositionScreen({ arg, arg2 }: ScreenProps) {
   const lang = useApp((s) => s.lang);
@@ -75,12 +69,19 @@ export function PositionScreen({ arg, arg2 }: ScreenProps) {
         <Segmented<Timeframe>
           value={tf}
           onChange={setTf}
-          options={TFS.map((x) => ({ id: x.id, label: t(lang, x.key) }))}
+          options={TIMEFRAMES.map((id) => ({ id, label: t(lang, TF_LABEL[id]) }))}
         />
         {candles === null ? (
           <Skeleton rows={3} />
         ) : candles.length >= 3 ? (
-          <Candles candles={candles} format={px} />
+          <Candles
+            candles={candles}
+            format={px}
+            entry={p.entry}
+            entryLabel={t(lang, "hl_entry_price")}
+            note={`${pct(p.pct)} · ${signed(p.pnl)}`}
+            noteTone={p.pnl >= 0 ? "up" : "dn"}
+          />
         ) : (
           <Empty text={t(lang, "fund_loading")} />
         )}

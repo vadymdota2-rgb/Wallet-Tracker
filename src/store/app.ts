@@ -7,6 +7,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { LangCode } from "../i18n/types";
 import type { RankKind, Venue } from "../lib/types";
+import type { Timeframe } from "../lib/klines";
 
 export type Tab = "wallets" | "top" | "analytics" | "sonar" | "more";
 
@@ -50,7 +51,7 @@ interface AppState {
 
   sonarVenue: Venue;
   sonarWin: number;
-  chartTf: "1h" | "1d" | "1w";
+  chartTf: Timeframe;
 
   setLang(lang: LangCode, pinned?: boolean): void;
   goTab(tab: Tab): void;
@@ -67,7 +68,7 @@ interface AppState {
   setRankWin(w: RankWin): void;
   setSonarVenue(v: Venue): void;
   setSonarWin(h: number): void;
-  setChartTf(tf: "1h" | "1d" | "1w"): void;
+  setChartTf(tf: Timeframe): void;
 }
 
 export const useApp = create<AppState>()(

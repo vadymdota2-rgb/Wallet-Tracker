@@ -69,7 +69,7 @@ export function Row({
       {icon ? <span className="row-ico">{icon}</span> : null}
       <span className="row-main">
         <span className="row-title">
-          {title}
+          <span className="row-name">{title}</span>
           {badge ? <em className="row-badge">{badge}</em> : null}
         </span>
         {sub ? <small className="row-sub">{sub}</small> : null}

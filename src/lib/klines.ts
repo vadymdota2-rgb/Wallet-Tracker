@@ -8,6 +8,8 @@
  * интерполяции между ценой входа и текущей: по виду обычный график, по сути
  * ничего.
  */
+import type { DictKey } from "../i18n/types";
+
 export interface Candle {
   t: number;
   o: number;
@@ -16,12 +18,22 @@ export interface Candle {
   c: number;
 }
 
-export type Timeframe = "1h" | "1d" | "1w";
+export type Timeframe = "15m" | "1h" | "4h" | "1d" | "1w" | "1M";
 
+export const TIMEFRAMES: Timeframe[] = ["15m", "1h", "4h", "1d", "1w", "1M"];
+
+/**
+ * Имя таймфрейма — это ширина окна, а не размер свечи: «1d» показывает сутки
+ * пятнадцатиминутками. Размер свечи подобран так, чтобы на экран влезало от
+ * полутора до двух сотен штук — дальше они сливаются в кашу.
+ */
 const SHAPE: Record<Timeframe, { binance: string; bybit: string; kucoin: string; limit: number }> = {
+  "15m": { binance: "1m", bybit: "1", kucoin: "1min", limit: 15 },
   "1h": { binance: "1m", bybit: "1", kucoin: "1min", limit: 60 },
+  "4h": { binance: "5m", bybit: "5", kucoin: "5min", limit: 48 },
   "1d": { binance: "15m", bybit: "15", kucoin: "15min", limit: 96 },
   "1w": { binance: "1h", bybit: "60", kucoin: "1hour", limit: 168 },
+  "1M": { binance: "4h", bybit: "240", kucoin: "4hour", limit: 180 },
 };
 
 const n = (v: unknown): number => {
@@ -115,3 +127,13 @@ export async function fetchCandles(
   }
   return [];
 }
+
+/** Подписи таймфреймов. Здесь же, чтобы список кнопок был один на все экраны. */
+export const TF_LABEL: Record<Timeframe, DictKey> = {
+  "15m": "ui_tf_15m",
+  "1h": "ui_tf_1h",
+  "4h": "ui_tf_4h",
+  "1d": "ui_tf_1d",
+  "1w": "ui_tf_1w",
+  "1M": "ui_tf_1mo",
+};

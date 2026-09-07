@@ -76,15 +76,31 @@ export function Area({
  * Свечи с ценовой шкалой справа: тело — открытие и закрытие, ус — минимум и
  * максимум. Последняя цена вынесена пунктиром и подписана — по ней читают
  * позицию, а не по общему виду графика.
+ *
+ * `entry` рисует цену входа отдельной линией, `note` подписывает линию
+ * текущей цены слева — там выводим ROI и прибыль позиции. Вход входит в
+ * масштаб, но только пока он рядом со свечами: вход вдвое ниже минимума
+ * сплющил бы весь график в полоску, поэтому такую линию просто не рисуем.
  */
 export function Candles({
   candles,
   height = 190,
   format = (v: number) => String(v),
+  entry = 0,
+  entryLabel,
+  note,
+  noteTone,
 }: {
   candles: Candle[];
   height?: number;
   format?: (v: number) => string;
+  /** Цена входа в позицию. 0 — не рисуем. */
+  entry?: number;
+  /** Короткая подпись у линии входа, например «Вход». */
+  entryLabel?: string;
+  /** Подпись у линии текущей цены: ROI и PnL. */
+  note?: string;
+  noteTone?: "up" | "dn";
 }) {
   if (candles.length < 2) return null;
 
@@ -94,6 +110,11 @@ export function Candles({
   const pad = 10;
   const vals: number[] = [];
   for (const c of candles) vals.push(c.h, c.l);
+  const [rawLo, rawHi] = extent(vals);
+  // Вход растягивает шкалу, только если он не дальше размаха свечей от них.
+  const reach = (rawHi - rawLo) * 1.5;
+  const showEntry = entry > 0 && entry > rawLo - reach && entry < rawHi + reach;
+  if (showEntry) vals.push(entry);
   const [lo, hi] = extent(vals);
   const span = hi - lo;
   const y = (v: number) => pad + (1 - (v - lo) / span) * (height - pad * 2);
@@ -103,13 +124,19 @@ export function Candles({
   const last = candles[candles.length - 1];
   const lastPx = last ? last.c : 0;
   const rows = [hi, lo + span * 0.5, lo];
+  // Подпись сетки прячем, если рядом уже стоит плашка входа или текущей цены:
+  // иначе две цены наезжают друг на друга и не читается ни одна.
+  const busy = [showEntry ? y(entry) : NaN, lastPx > 0 ? y(lastPx) : NaN];
+  const free = (v: number) => !busy.some((b) => Number.isFinite(b) && Math.abs(b - y(v)) < 11);
 
   return (
     <svg className="chart candles" viewBox={`0 0 ${W} ${height}`} role="img">
       {rows.map((v, i) => (
         <g key={i}>
           <line x1="0" x2={plot} y1={y(v)} y2={y(v)} stroke="var(--line)" strokeWidth="1" />
-          <text className="ax" x={W - 4} y={y(v) + 3} textAnchor="end">{format(v)}</text>
+          {free(v) ? (
+            <text className="ax" x={W - 4} y={y(v) + 3} textAnchor="end">{format(v)}</text>
+          ) : null}
         </g>
       ))}
 
@@ -126,12 +153,37 @@ export function Candles({
         );
       })}
 
+      {showEntry ? (
+        <g>
+          <line x1="0" x2={plot} y1={y(entry)} y2={y(entry)} stroke="var(--warn)"
+                strokeWidth="1" strokeDasharray="2 3" opacity="0.9" />
+          <circle cx={plot - 2} cy={y(entry)} r="2.6" fill="var(--warn)" />
+          <rect x={plot + 2} y={y(entry) - 8} width={axis - 6} height="16" rx="3"
+                fill="var(--warn)" opacity="0.22" />
+          <text className="ax entry" x={W - 5} y={y(entry) + 3} textAnchor="end">{format(entry)}</text>
+          {entryLabel ? (
+            <>
+              <rect className="ax-bg" x="2" y={y(entry) - 14} width={entryLabel.length * 5.6 + 6} height="12" rx="2" />
+              <text className="ax entry" x="5" y={y(entry) - 5}>{entryLabel}</text>
+            </>
+          ) : null}
+        </g>
+      ) : null}
+
       {lastPx > 0 ? (
         <g>
           <line x1="0" x2={plot} y1={y(lastPx)} y2={y(lastPx)} stroke="var(--glow)"
                 strokeWidth="1" strokeDasharray="4 4" opacity="0.75" />
           <rect x={plot + 2} y={y(lastPx) - 8} width={axis - 6} height="16" rx="3" fill="var(--blue)" />
           <text className="ax now" x={W - 5} y={y(lastPx) + 3} textAnchor="end">{format(lastPx)}</text>
+          {note ? (
+            <>
+              <rect className="ax-bg" x="2" y={y(lastPx) - 14} width={note.length * 5.6 + 6} height="12" rx="2" />
+              <text className={noteTone ? `ax pos ${noteTone}` : "ax pos"} x="5" y={y(lastPx) - 5}>
+                {note}
+              </text>
+            </>
+          ) : null}
         </g>
       ) : null}
     </svg>
