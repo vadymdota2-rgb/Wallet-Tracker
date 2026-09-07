@@ -5,11 +5,12 @@ import { useLive, walletByAddr } from "../store/live";
 import { boardKey, venueName, walletRank } from "../lib/rank";
 import { bare, t } from "../i18n/t";
 import { lev as levFmt, num, pct, px, shortAddr, signed, usd } from "../lib/format";
+import { holdHours } from "../lib/labels";
 import { removeWallet, setPrimary } from "../lib/api";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
 import { CoinIcon } from "../components/CoinIcon";
-import { Action, Card, Empty, Row, SectionTitle, Tiles, VenueMark } from "../components/ui";
+import { Action, AddrBar, Card, Empty, Row, SectionTitle, Tiles, VenueMark } from "../components/ui";
 
 export function WalletScreen({ arg }: ScreenProps) {
   const lang = useApp((s) => s.lang);
@@ -36,10 +37,29 @@ export function WalletScreen({ arg }: ScreenProps) {
   const spot = place.spot ? `🏆 ${place.spot.place}` : "—";
   const perp = place.perp ? `🏆 ${place.perp.place}` : "—";
   // За что именно место — по прибыли, доходности, винрейту или активности.
-  const board = place.best ? bare(t(lang, boardKey(place.best.kind))) : t(lang, "wl_not_ranked");
+  // Доски кошелька — всегда за 30 дней; окно подписано, чтобы «+$412K» не
+  // читалось как прибыль за всё время.
+  const board = place.best
+    ? `${bare(t(lang, boardKey(place.best.kind)))} · 30 ${t(lang, "rk_days")}`
+    : t(lang, "wl_not_ranked");
+  // Строка доски, по которой кошелёк туда попал: место само по себе ничего
+  // не говорит, а прибыль, доходность и винрейт за окно — говорят.
+  const top = place.best?.row;
+  const hold = top ? holdHours(top.hold) : null;
 
   return (
     <Frame title={w.name} sub={shortAddr(w.addr)}>
+      <Card>
+        <AddrBar
+          addr={w.addr}
+          label={bare(t(lang, "ton_step_address"))}
+          copy={t(lang, "ui_copy")}
+          onDone={(ok) =>
+            ok ? toast(t(lang, "ui_copied")) : toast(t(lang, "ui_copy_failed"), "err")
+          }
+        />
+      </Card>
+
       <Card>
         <SectionTitle note={board}>{t(lang, "rk_in_top")}</SectionTitle>
         <Tiles
@@ -56,6 +76,25 @@ export function WalletScreen({ arg }: ScreenProps) {
             },
           ]}
         />
+        {top ? (
+          <>
+            <p className={`big ${top.pnl >= 0 ? "up" : "dn"}`}>{signed(top.pnl)}</p>
+            <Tiles
+              items={[
+                { label: t(lang, "hl_rk_roi_account"), value: pct(top.roi, 1) },
+                { label: t(lang, "ws_winrate"), value: `${num(top.win)}%` },
+                { label: t(lang, "rk_trades"), value: num(top.tr) },
+                {
+                  label: t(lang, "rk_avg_hold"),
+                  value: hold === null ? "—" : `${hold}${t(lang, "unit_hour")}`,
+                },
+              ]}
+            />
+            {top.lev ? (
+              <Tiles items={[{ label: t(lang, "hl_rk_leverage"), value: `${top.lev}×` }]} />
+            ) : null}
+          </>
+        ) : null}
       </Card>
 
       <Card>
@@ -87,8 +126,14 @@ export function WalletScreen({ arg }: ScreenProps) {
               badge={p.long ? t(lang, "hl_side_long") : t(lang, "hl_side_short")}
               sub={
                 <>
-                  {levFmt(p.lev)} · {p.isolated ? t(lang, "hl_isolated") : t(lang, "hl_cross")} ·{" "}
-                  {t(lang, "hl_entry_price")} {px(p.entry)}
+                  {levFmt(p.lev)} · {p.isolated ? t(lang, "hl_isolated") : t(lang, "hl_cross")}
+                </>
+              }
+              // Вход и текущая цена не влезали в одну строку с плечом и
+              // обрезались на «Вх…». Вторая строка вмещает обе цены целиком.
+              sub2={
+                <>
+                  {t(lang, "hl_entry_price")} {px(p.entry)} → {px(p.now)}
                 </>
               }
               value={signed(p.pnl)}

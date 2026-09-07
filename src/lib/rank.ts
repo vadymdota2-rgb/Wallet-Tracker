@@ -10,13 +10,15 @@
  * в первой мало — по споту она покрывает 100 адресов, а все четыре вместе
  * 152. Берём лучшее место среди досок и помним, какая его дала.
  */
-import type { Rank, RankKind, RankTable, Venue, Wallet } from "./types";
+import type { Rank, RankKind, RankTable, Trader, Venue, Wallet } from "./types";
 
 const BOARDS: RankKind[] = ["pnl", "roi", "win", "act"];
 
 export interface VenuePlace {
   place: number;
   kind: RankKind;
+  /** Сама строка доски: прибыль, доходность, винрейт, сделки за окно. */
+  row: Trader;
 }
 
 /** Лучшее место адреса среди четырёх досок площадки. */
@@ -29,7 +31,8 @@ function bestIn(table: RankTable | undefined, addr: string): VenuePlace | null {
     if (!rows?.length) continue;
     const i = rows.findIndex((r) => (r.a || "").toLowerCase() === key);
     if (i < 0) continue;
-    if (!best || i + 1 < best.place) best = { place: i + 1, kind };
+    const row = rows[i];
+    if (row && (!best || i + 1 < best.place)) best = { place: i + 1, kind, row };
   }
   return best;
 }

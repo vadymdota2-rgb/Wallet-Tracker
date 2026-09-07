@@ -46,6 +46,7 @@ export function Row({
   icon,
   title,
   sub,
+  sub2,
   mid,
   value,
   valueSub,
@@ -56,6 +57,8 @@ export function Row({
   icon?: ReactNode;
   title: ReactNode;
   sub?: ReactNode;
+  /** Вторая строка пояснения: то, что не влезает в первую и обрезается. */
+  sub2?: ReactNode;
   /** Метка между текстом и правым краем — например место в рейтинге. */
   mid?: ReactNode;
   value?: ReactNode;
@@ -73,6 +76,7 @@ export function Row({
           {badge ? <em className="row-badge">{badge}</em> : null}
         </span>
         {sub ? <small className="row-sub">{sub}</small> : null}
+        {sub2 ? <small className="row-sub">{sub2}</small> : null}
       </span>
       {mid !== undefined ? <span className="row-mid">{mid}</span> : null}
       {value !== undefined ? (
@@ -225,6 +229,62 @@ export function Skeleton({ rows = 3 }: { rows?: number }) {
       {Array.from({ length: rows }, (_, i) => (
         <span key={i} />
       ))}
+    </div>
+  );
+}
+
+/**
+ * Полный адрес кошелька с кнопкой «копировать». Сокращённый вид годится для
+ * списка, но чтобы открыть кошелёк в обозревателе, нужны все 42 символа.
+ *
+ * `navigator.clipboard` в Telegram доступен не всегда, поэтому при отказе
+ * пробуем старый способ через скрытое поле и говорим правду, если не вышло.
+ */
+export function AddrBar({
+  addr,
+  label,
+  copy,
+  onDone,
+}: {
+  addr: string;
+  label: ReactNode;
+  copy: string;
+  onDone: (ok: boolean) => void;
+}) {
+  const put = async () => {
+    haptic("light");
+    try {
+      await navigator.clipboard.writeText(addr);
+      onDone(true);
+      return;
+    } catch {
+      // Ниже — запасной путь.
+    }
+    try {
+      const el = document.createElement("textarea");
+      el.value = addr;
+      el.setAttribute("readonly", "");
+      el.style.position = "fixed";
+      el.style.opacity = "0";
+      document.body.appendChild(el);
+      el.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(el);
+      onDone(ok);
+    } catch {
+      onDone(false);
+    }
+  };
+
+  return (
+    <div className="addr">
+      <div className="addr-main">
+        <small>{label}</small>
+        <code>{addr}</code>
+      </div>
+      <button type="button" className="addr-copy" onClick={() => void put()} aria-label={copy}>
+        ⧉ {copy}
+      </button>
     </div>
   );
 }
