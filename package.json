@@ -7,8 +7,7 @@
     "dev": "vite",
     "typecheck": "tsc -p .",
     "clean": "node tools/clean-build.mjs",
-    "prebuild": "npm run clean",
-    "build": "tsc -p . && vite build",
+    "build": "tsc -p . && npm run clean && vite build",
     "preview": "vite preview",
     "i18n": "python3 tools/sync-i18n.py ../WhaleScanner"
   },
