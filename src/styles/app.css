@@ -316,6 +316,16 @@
   font-variant-numeric: tabular-nums;
 }
 .mark.cup { color: var(--warn); }
+/* Значок площадки: display задан явно — в сбросе img объявлен блочным
+   и уводил бы значок на отдельную строку. */
+.venue {
+  display: inline-block;
+  vertical-align: -2px;
+  margin-inline-end: 4px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
 /* Подпись площадки у кубка: BSC или Hyperliquid. */
 .venue-name {
   font-style: normal;

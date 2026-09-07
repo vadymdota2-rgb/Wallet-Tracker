@@ -9,7 +9,7 @@ import { removeWallet, setPrimary } from "../lib/api";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
 import { CoinIcon } from "../components/CoinIcon";
-import { Action, Card, Empty, Row, SectionTitle, Tiles } from "../components/ui";
+import { Action, Card, Empty, Row, SectionTitle, Tiles, VenueMark } from "../components/ui";
 
 export function WalletScreen({ arg }: ScreenProps) {
   const lang = useApp((s) => s.lang);
@@ -45,12 +45,12 @@ export function WalletScreen({ arg }: ScreenProps) {
         <Tiles
           items={[
             {
-              label: `${t(lang, "wl_spot_rank")} · ${venueName("spot")}`,
+              label: <><VenueMark venue="spot" size={13} />{t(lang, "wl_spot_rank")} · {venueName("spot")}</>,
               value: spot,
               tone: place.spot === null ? "dim" : undefined,
             },
             {
-              label: `${t(lang, "wl_perp_rank")} · ${venueName("perp")}`,
+              label: <><VenueMark venue="perp" size={13} />{t(lang, "wl_perp_rank")} · {venueName("perp")}</>,
               value: perp,
               tone: place.perp === null ? "dim" : undefined,
             },

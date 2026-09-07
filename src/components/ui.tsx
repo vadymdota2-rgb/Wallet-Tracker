@@ -176,6 +176,25 @@ export function Segmented<T extends string>({
   );
 }
 
+/**
+ * Значок площадки: BNB для спота на BSC, HYPE для фьючерсов Hyperliquid.
+ * Файлы едут вместе с образом, наружу запросов нет.
+ */
+export function VenueMark({ venue, size = 15 }: { venue: "spot" | "perp"; size?: number }) {
+  return (
+    <img
+      className="venue"
+      src={`/coins/hl/${venue === "spot" ? "BNB" : "HYPE"}.svg`}
+      alt=""
+      width={size}
+      height={size}
+      loading="lazy"
+      decoding="async"
+      aria-hidden="true"
+    />
+  );
+}
+
 export function Empty({ text, hint }: { text: ReactNode; hint?: ReactNode }) {
   return (
     <div className="empty">

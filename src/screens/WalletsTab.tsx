@@ -10,7 +10,7 @@ import { venueName, walletRank } from "../lib/rank";
 import { setThreshold } from "../lib/api";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
-import { Action, Card, Chips, Empty, Row, SectionTitle, Tiles } from "../components/ui";
+import { Action, Card, Chips, Empty, Row, SectionTitle, Tiles, VenueMark } from "../components/ui";
 
 const PRESETS = [100, 500, 1000, 5000, 10000, 50000];
 
@@ -77,8 +77,9 @@ export function WalletsTab() {
                 mid={
                   place.best ? (
                     <span className="mark cup">
-                      🏆 {place.best.place}
+                      <VenueMark venue={place.best.venue} />
                       <em className="venue-name">{venueName(place.best.venue)}</em>
+                      🏆 {place.best.place}
                     </span>
                   ) : undefined
                 }
