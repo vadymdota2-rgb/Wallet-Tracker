@@ -35,7 +35,7 @@ button {
 }
 
 input {
-  background: rgb(11 22 40 / 0.34);
+  background: rgb(11 22 40 / 0.29);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   padding: 11px 13px;

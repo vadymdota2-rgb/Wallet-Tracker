@@ -217,7 +217,7 @@
   padding: 8px 14px;
   border-radius: var(--r-md);
   border: 1px solid var(--line-2);
-  background: rgb(11 22 40 / 0.32);
+  background: rgb(11 22 40 / 0.27);
   color: var(--dim);
   font-size: 13px;
   font-weight: 600;
@@ -234,7 +234,7 @@
 .card {
   position: relative;
   z-index: 1;
-  background: linear-gradient(180deg, rgb(7 14 30 / 0.40), rgb(3 7 18 / 0.46));
+  background: linear-gradient(180deg, rgb(7 14 30 / 0.35), rgb(3 7 18 / 0.41));
   backdrop-filter: blur(3px);
   border: 1px solid rgb(27 61 104 / 0.55);
   border-radius: var(--r-xl);
@@ -266,7 +266,7 @@
   padding: 11px 12px;
   border: 1px solid transparent;
   border-radius: var(--r-md);
-  background: rgb(11 22 40 / 0.28);
+  background: rgb(11 22 40 / 0.23);
   text-align: start;
 }
 .row.tap { transition: opacity 0.15s var(--ease); }
@@ -364,7 +364,7 @@
 .tiles.c3 { grid-template-columns: repeat(3, 1fr); }
 .tiles.c4 { grid-template-columns: repeat(4, 1fr); }
 .tile {
-  background: rgb(11 22 40 / 0.30);
+  background: rgb(11 22 40 / 0.25);
   border: 1px solid rgb(16 36 63 / 0.8);
   border-radius: var(--r-md);
   padding: 11px 12px;
@@ -435,7 +435,7 @@
   display: flex;
   gap: 4px;
   padding: 3px;
-  background: rgb(11 22 40 / 0.34);
+  background: rgb(11 22 40 / 0.29);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   overflow-x: auto;
