@@ -15,7 +15,7 @@ interface Node {
   r: number;
 }
 
-const COUNT = 26;
+const COUNT = 34;
 const LINK = 132;
 const GRID = 46;
 
@@ -58,7 +58,7 @@ export function Background() {
       ctx.clearRect(0, 0, w, h);
 
       // Сетка — самый дальний слой.
-      ctx.strokeStyle = "rgba(30,155,255,0.045)";
+      ctx.strokeStyle = "rgba(30,155,255,0.085)";
       ctx.lineWidth = 1;
       ctx.beginPath();
       for (let x = 0; x <= w; x += GRID) {
@@ -82,7 +82,7 @@ export function Background() {
           const dy = a.y - b.y;
           const d = Math.hypot(dx, dy);
           if (d > LINK) continue;
-          ctx.strokeStyle = `rgba(127,216,255,${(1 - d / LINK) * 0.16})`;
+          ctx.strokeStyle = `rgba(127,216,255,${(1 - d / LINK) * 0.26})`;
           ctx.beginPath();
           ctx.moveTo(a.x, a.y);
           ctx.lineTo(b.x, b.y);
@@ -92,7 +92,7 @@ export function Background() {
 
       // Сами узлы: квадраты покрупнее и точки помельче.
       for (const n of nodes) {
-        ctx.fillStyle = "rgba(127,216,255,0.30)";
+        ctx.fillStyle = "rgba(127,216,255,0.45)";
         if (n.r > 2) ctx.strokeRect(n.x - n.r, n.y - n.r, n.r * 2, n.r * 2);
         else {
           ctx.beginPath();

@@ -25,7 +25,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  background: linear-gradient(180deg, rgb(1 3 10 / 0.94), rgb(1 3 10 / 0.72));
+  background: linear-gradient(180deg, rgb(1 3 10 / 0.88), rgb(1 3 10 / 0.55));
   backdrop-filter: blur(12px);
 }
 
@@ -169,8 +169,8 @@
   padding-bottom: env(safe-area-inset-bottom);
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  background: rgb(1 3 10 / 0.94);
-  backdrop-filter: blur(14px);
+  background: rgb(1 3 10 / 0.82);
+  backdrop-filter: blur(16px);
   border-top: 1px solid var(--line);
 }
 .tabs button {
@@ -217,7 +217,7 @@
   padding: 8px 14px;
   border-radius: var(--r-md);
   border: 1px solid var(--line-2);
-  background: rgb(11 22 40 / 0.6);
+  background: rgb(11 22 40 / 0.32);
   color: var(--dim);
   font-size: 13px;
   font-weight: 600;
@@ -234,11 +234,12 @@
 .card {
   position: relative;
   z-index: 1;
-  background: linear-gradient(180deg, rgb(7 14 30 / 0.82), rgb(3 7 18 / 0.82));
-  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgb(7 14 30 / 0.40), rgb(3 7 18 / 0.46));
+  backdrop-filter: blur(3px);
+  border: 1px solid rgb(27 61 104 / 0.55);
   border-radius: var(--r-xl);
   padding: 15px;
-  box-shadow: var(--shadow-soft);
+  box-shadow: 0 8px 26px rgb(0 0 0 / 0.28);
   display: grid;
   gap: 11px;
 }
@@ -265,7 +266,7 @@
   padding: 11px 12px;
   border: 1px solid transparent;
   border-radius: var(--r-md);
-  background: rgb(11 22 40 / 0.5);
+  background: rgb(11 22 40 / 0.28);
   text-align: start;
 }
 .row.tap { transition: opacity 0.15s var(--ease); }
@@ -344,8 +345,8 @@
 .tiles.c3 { grid-template-columns: repeat(3, 1fr); }
 .tiles.c4 { grid-template-columns: repeat(4, 1fr); }
 .tile {
-  background: rgb(11 22 40 / 0.55);
-  border: 1px solid var(--line);
+  background: rgb(11 22 40 / 0.30);
+  border: 1px solid rgb(16 36 63 / 0.8);
   border-radius: var(--r-md);
   padding: 11px 12px;
   display: grid;
@@ -390,7 +391,7 @@
   display: flex;
   gap: 4px;
   padding: 3px;
-  background: var(--panel-2);
+  background: rgb(11 22 40 / 0.34);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   overflow-x: auto;
