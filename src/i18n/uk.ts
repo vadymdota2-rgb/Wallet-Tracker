@@ -351,6 +351,7 @@ export const uk: Dict = {
   ui_rotation: "Ротація",
   ui_save: "Зберегти",
   ui_saved: "Збережено",
+  ui_set_main: "Зробити основним",
   ui_sync_failed: "Не вдалося оновити",
   ui_tf_15m: "15х",
   ui_tf_1d: "1Д",

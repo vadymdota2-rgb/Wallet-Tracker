@@ -351,6 +351,7 @@ export const hi: Dict = {
   ui_rotation: "रोटेशन",
   ui_save: "सेव करें",
   ui_saved: "सेव हो गया",
+  ui_set_main: "मुख्य बनाएँ",
   ui_sync_failed: "रिफ़्रेश नहीं हो सका",
   ui_tf_15m: "15मि",
   ui_tf_1d: "1दि",

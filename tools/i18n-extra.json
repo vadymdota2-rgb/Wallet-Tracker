@@ -592,5 +592,23 @@
   "ko": "복사하지 못했습니다",
   "zh": "复制失败",
   "ja": "コピーできませんでした"
+ },
+ "ui_set_main": {
+  "en": "Make main",
+  "ru": "Сделать основным",
+  "uk": "Зробити основним",
+  "es": "Hacer principal",
+  "pt": "Tornar principal",
+  "fr": "Définir comme principal",
+  "de": "Als Haupt festlegen",
+  "tr": "Ana cüzdan yap",
+  "pl": "Ustaw jako główny",
+  "ar": "تعيين كمحفظة رئيسية",
+  "hi": "मुख्य बनाएँ",
+  "id": "Jadikan utama",
+  "vi": "Đặt làm chính",
+  "ko": "기본으로 설정",
+  "zh": "设为主钱包",
+  "ja": "メインに設定"
  }
 }

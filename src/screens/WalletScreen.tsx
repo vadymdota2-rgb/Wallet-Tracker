@@ -160,7 +160,7 @@ export function WalletScreen({ arg }: ScreenProps) {
                 } else toast(t(lang, "generic_error_retry"), "err");
               }}
             >
-              {t(lang, "wl_main_wallet")}
+              {t(lang, "ui_set_main")}
             </Action>
           ) : null}
           <Action kind="ghost" onClick={() => open("rename", w.addr)}>

@@ -351,6 +351,7 @@ export const ar: Dict = {
   ui_rotation: "التدوير",
   ui_save: "حفظ",
   ui_saved: "تم الحفظ",
+  ui_set_main: "تعيين كمحفظة رئيسية",
   ui_sync_failed: "تعذّر التحديث",
   ui_tf_15m: "15د",
   ui_tf_1d: "1ي",

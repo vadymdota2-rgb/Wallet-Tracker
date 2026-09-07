@@ -351,6 +351,7 @@ export const tr: Dict = {
   ui_rotation: "Rotasyon",
   ui_save: "Kaydet",
   ui_saved: "Kaydedildi",
+  ui_set_main: "Ana cüzdan yap",
   ui_sync_failed: "Yenilenemedi",
   ui_tf_15m: "15D",
   ui_tf_1d: "1G",

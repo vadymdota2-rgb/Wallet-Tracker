@@ -351,6 +351,7 @@ export const ru: Dict = {
   ui_rotation: "Ротация",
   ui_save: "Сохранить",
   ui_saved: "Сохранено",
+  ui_set_main: "Сделать основным",
   ui_sync_failed: "Не удалось обновить",
   ui_tf_15m: "15м",
   ui_tf_1d: "1Д",

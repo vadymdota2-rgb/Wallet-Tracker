@@ -351,6 +351,7 @@ export const en = {
   ui_rotation: "Rotation",
   ui_save: "Save",
   ui_saved: "Saved",
+  ui_set_main: "Make main",
   ui_sync_failed: "Could not refresh",
   ui_tf_15m: "15m",
   ui_tf_1d: "1D",

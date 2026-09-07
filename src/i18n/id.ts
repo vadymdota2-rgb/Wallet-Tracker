@@ -351,6 +351,7 @@ export const id: Dict = {
   ui_rotation: "Rotasi",
   ui_save: "Simpan",
   ui_saved: "Tersimpan",
+  ui_set_main: "Jadikan utama",
   ui_sync_failed: "Gagal menyegarkan",
   ui_tf_15m: "15m",
   ui_tf_1d: "1H",

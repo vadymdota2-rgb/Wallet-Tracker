@@ -351,6 +351,7 @@ export const zh: Dict = {
   ui_rotation: "轮动",
   ui_save: "保存",
   ui_saved: "已保存",
+  ui_set_main: "设为主钱包",
   ui_sync_failed: "刷新失败",
   ui_tf_15m: "15分",
   ui_tf_1d: "1天",

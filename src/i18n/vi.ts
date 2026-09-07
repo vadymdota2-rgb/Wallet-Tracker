@@ -351,6 +351,7 @@ export const vi: Dict = {
   ui_rotation: "Luân chuyển",
   ui_save: "Lưu",
   ui_saved: "Đã lưu",
+  ui_set_main: "Đặt làm chính",
   ui_sync_failed: "Không thể làm mới",
   ui_tf_15m: "15p",
   ui_tf_1d: "1N",

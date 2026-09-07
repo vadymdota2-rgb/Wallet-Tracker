@@ -351,6 +351,7 @@ export const ja: Dict = {
   ui_rotation: "ローテーション",
   ui_save: "保存",
   ui_saved: "保存しました",
+  ui_set_main: "メインに設定",
   ui_sync_failed: "更新できませんでした",
   ui_tf_15m: "15分",
   ui_tf_1d: "1日",

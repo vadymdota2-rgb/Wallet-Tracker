@@ -351,6 +351,7 @@ export const es: Dict = {
   ui_rotation: "Rotación",
   ui_save: "Guardar",
   ui_saved: "Guardado",
+  ui_set_main: "Hacer principal",
   ui_sync_failed: "No se pudo actualizar",
   ui_tf_15m: "15m",
   ui_tf_1d: "1D",

@@ -351,6 +351,7 @@ export const ko: Dict = {
   ui_rotation: "로테이션",
   ui_save: "저장",
   ui_saved: "저장됨",
+  ui_set_main: "기본으로 설정",
   ui_sync_failed: "새로고침하지 못했습니다",
   ui_tf_15m: "15분",
   ui_tf_1d: "1일",
