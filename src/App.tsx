@@ -5,7 +5,7 @@
  * сонар и всё остальное. Человек, пришедший из чата, находит те же пункты и
  * те же слова — словари взяты из бота.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useApp } from "./store/app";
 import { useLive } from "./store/live";
 import { t, bare } from "./i18n/t";
@@ -15,6 +15,7 @@ import { bootTelegram, haptic, telegramLang, webApp } from "./lib/telegram";
 import { startSync, syncNow } from "./lib/sync";
 import { Toaster, toast } from "./components/Toast";
 import { Background } from "./components/Background";
+import { WalletGlyph } from "./components/ui";
 import { SCREENS } from "./screens/registry";
 import { WalletsTab } from "./screens/WalletsTab";
 import { TopTab } from "./screens/TopTab";
@@ -26,8 +27,8 @@ import type { ScreenName, Tab } from "./store/app";
 
 declare const __BUILD__: string;
 
-const TABS: { id: Tab; key: DictKey; glyph: string }[] = [
-  { id: "wallets", key: "menu_my_wallets", glyph: "💼" },
+const TABS: { id: Tab; key: DictKey; glyph: ReactNode }[] = [
+  { id: "wallets", key: "menu_my_wallets", glyph: <WalletGlyph /> },
   { id: "top", key: "menu_top_traders", glyph: "🏆" },
   { id: "analytics", key: "menu_big_trades", glyph: "📊" },
   { id: "sonar", key: "ai_title", glyph: "📡" },

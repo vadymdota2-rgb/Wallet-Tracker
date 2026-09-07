@@ -288,3 +288,35 @@ export function AddrBar({
     </div>
   );
 }
+
+/**
+ * Значок «Мои кошельки» в нижнем меню. Рисуем сам, а не эмодзи: 💼 у каждой
+ * системы своё — на одном телефоне коричневый портфель, на другом синий, —
+ * и в один ряд с остальными вкладками он не встаёт.
+ *
+ * Всё в currentColor, так что значок сам гаснет и загорается вместе с
+ * подписью вкладки, без отдельных состояний.
+ */
+export function WalletGlyph({ size = 21 }: { size?: number }) {
+  return (
+    <svg
+      className="glyph"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {/* Ремешок: отогнутый край, из-за него кошелёк не читается коробкой. */}
+      <path d="M6.2 7V5.5a1.6 1.6 0 0 1 2-1.55l8.1 2.15" opacity="0.75" />
+      <path d="M3 9.5A2.5 2.5 0 0 1 5.5 7h13A2.5 2.5 0 0 1 21 9.5v8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5Z" />
+      {/* Кармашек застёжки с монетой — он и отличает кошелёк от сумки. */}
+      <path d="M21 11.3h-3.1a2.2 2.2 0 0 0 0 4.4H21" fill="currentColor" fillOpacity="0.16" />
+      <circle cx="17.9" cy="13.5" r="1.05" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
