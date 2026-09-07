@@ -75,10 +75,10 @@ export function WalletsTab() {
                 badge={w.primary ? bare(t(lang, "wl_main_wallet")) : paused ? t(lang, "wl_paused") : undefined}
                 sub={shortAddr(w.addr)}
                 mid={
-                  place.best !== null && place.bestVenue ? (
+                  place.best ? (
                     <span className="mark cup">
-                      <VenueMark venue={place.bestVenue} />
-                      🏆 {place.best}
+                      <VenueMark venue={place.best.venue} />
+                      🏆 {place.best.place}
                     </span>
                   ) : undefined
                 }

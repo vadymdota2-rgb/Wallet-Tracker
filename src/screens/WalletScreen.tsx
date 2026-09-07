@@ -2,8 +2,8 @@
 import { Frame, type ScreenProps } from "./Screen";
 import { useApp, isPaused } from "../store/app";
 import { useLive, walletByAddr } from "../store/live";
-import { walletRank } from "../lib/rank";
-import { t } from "../i18n/t";
+import { boardKey, walletRank } from "../lib/rank";
+import { bare, t } from "../i18n/t";
 import { lev as levFmt, num, pct, px, shortAddr, signed, usd } from "../lib/format";
 import { removeWallet, setPrimary } from "../lib/api";
 import { syncNow } from "../lib/sync";
@@ -33,16 +33,15 @@ export function WalletScreen({ arg }: ScreenProps) {
   const place = walletRank(rank, w.addr);
   // Длинное «не в рейтинге» в плитку не влезает — там прочерк, а словами
   // это сказано примечанием к разделу.
-  const spot = place.spot === null ? <>—</> : <><VenueMark venue="spot" /> 🏆 {place.spot}</>;
-  const perp = place.perp === null ? <>—</> : <><VenueMark venue="perp" /> 🏆 {place.perp}</>;
-  const ranked = place.spot !== null || place.perp !== null;
+  const spot = place.spot ? <><VenueMark venue="spot" /> 🏆 {place.spot.place}</> : <>—</>;
+  const perp = place.perp ? <><VenueMark venue="perp" /> 🏆 {place.perp.place}</> : <>—</>;
+  // За что именно место — по прибыли, доходности, винрейту или активности.
+  const board = place.best ? bare(t(lang, boardKey(place.best.kind))) : t(lang, "wl_not_ranked");
 
   return (
     <Frame title={w.name} sub={shortAddr(w.addr)}>
       <Card>
-        <SectionTitle note={ranked ? `30${t(lang, "unit_day")}` : t(lang, "wl_not_ranked")}>
-          {t(lang, "rk_in_top")}
-        </SectionTitle>
+        <SectionTitle note={board}>{t(lang, "rk_in_top")}</SectionTitle>
         <Tiles
           items={[
             { label: t(lang, "wl_spot_rank"), value: spot, tone: place.spot === null ? "dim" : undefined },
