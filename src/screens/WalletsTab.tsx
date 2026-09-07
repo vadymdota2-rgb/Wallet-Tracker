@@ -10,7 +10,7 @@ import { walletRank } from "../lib/rank";
 import { setThreshold } from "../lib/api";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
-import { Action, Card, Chips, Empty, Row, SectionTitle, Tiles } from "../components/ui";
+import { Action, Card, Chips, Empty, Row, SectionTitle, Tiles, VenueMark } from "../components/ui";
 
 const PRESETS = [100, 500, 1000, 5000, 10000, 50000];
 
@@ -74,7 +74,14 @@ export function WalletsTab() {
                 title={w.name}
                 badge={w.primary ? bare(t(lang, "wl_main_wallet")) : paused ? t(lang, "wl_paused") : undefined}
                 sub={shortAddr(w.addr)}
-                mid={place.best !== null ? <span className="mark cup">🏆 {place.best}</span> : undefined}
+                mid={
+                  place.best !== null && place.bestVenue ? (
+                    <span className="mark cup">
+                      <VenueMark venue={place.bestVenue} />
+                      🏆 {place.best}
+                    </span>
+                  ) : undefined
+                }
                 value={w.pos.length ? <span className="mark">👁 {w.pos.length}</span> : ""}
                 onClick={() => open("wallet", w.addr)}
               />

@@ -22,11 +22,22 @@ export interface Place {
   perp: number | null;
   /** Лучшее из двух — им подписывают строку списка. */
   best: number | null;
+  /** Площадка этого лучшего места: по ней рисуется логотип рядом с кубком. */
+  bestVenue: "spot" | "perp" | null;
 }
 
 export function walletRank(rank: Rank, addr: string): Place {
   const spot = placeIn(rank.spot, addr);
   const perp = placeIn(rank.perp, addr);
-  const found = [spot, perp].filter((v): v is number => v !== null);
-  return { spot, perp, best: found.length ? Math.min(...found) : null };
+  if (spot === null && perp === null) {
+    return { spot, perp, best: null, bestVenue: null };
+  }
+  // Меньше — выше. Если адрес есть только в одном рейтинге, берётся он.
+  const spotWins = perp === null || (spot !== null && spot <= perp);
+  return {
+    spot,
+    perp,
+    best: spotWins ? spot : perp,
+    bestVenue: spotWins ? "spot" : "perp",
+  };
 }

@@ -9,7 +9,7 @@ import { removeWallet, setPrimary } from "../lib/api";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
 import { CoinIcon } from "../components/CoinIcon";
-import { Action, Card, Empty, Row, SectionTitle, Tiles } from "../components/ui";
+import { Action, Card, Empty, Row, SectionTitle, Tiles, VenueMark } from "../components/ui";
 
 export function WalletScreen({ arg }: ScreenProps) {
   const lang = useApp((s) => s.lang);
@@ -33,8 +33,8 @@ export function WalletScreen({ arg }: ScreenProps) {
   const place = walletRank(rank, w.addr);
   // Длинное «не в рейтинге» в плитку не влезает — там прочерк, а словами
   // это сказано примечанием к разделу.
-  const spot = place.spot === null ? "—" : `🏆 ${place.spot}`;
-  const perp = place.perp === null ? "—" : `🏆 ${place.perp}`;
+  const spot = place.spot === null ? <>—</> : <><VenueMark venue="spot" /> 🏆 {place.spot}</>;
+  const perp = place.perp === null ? <>—</> : <><VenueMark venue="perp" /> 🏆 {place.perp}</>;
   const ranked = place.spot !== null || place.perp !== null;
 
   return (

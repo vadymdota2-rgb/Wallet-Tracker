@@ -316,6 +316,8 @@
   font-variant-numeric: tabular-nums;
 }
 .mark.cup { color: var(--warn); }
+/* Значок площадки у кубка: круглый, чтобы совпадал с логотипами монет. */
+.venue { border-radius: 50%; flex: 0 0 auto; }
 .row-val .q { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
 .row-val small { color: var(--dim-2); font-size: 11px; }
 
