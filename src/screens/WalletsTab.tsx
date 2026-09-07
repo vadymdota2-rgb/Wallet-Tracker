@@ -9,19 +9,17 @@ import { num, shortAddr, usd } from "../lib/format";
 import { walletRank } from "../lib/rank";
 import { setThreshold } from "../lib/api";
 import { syncNow } from "../lib/sync";
-import { BuySellBar } from "../components/Chart";
 import { toast } from "../components/Toast";
-import { Action, Card, Chips, Empty, Row, SectionTitle } from "../components/ui";
+import { Action, Card, Chips, Empty, Row, SectionTitle, Tiles } from "../components/ui";
 
 const PRESETS = [100, 500, 1000, 5000, 10000, 50000];
 
 export function WalletsTab() {
   const lang = useApp((s) => s.lang);
   const open = useApp((s) => s.open);
-  const { me, wallets, flow, rank } = useLive();
+  const { me, wallets, rank } = useLive();
 
   const limit = walletLimit(me.plan);
-  const day = flow["24"];
 
   const applyThreshold = async (value: number) => {
     const res = await setThreshold(value);
@@ -34,15 +32,15 @@ export function WalletsTab() {
   return (
     <>
       <Card>
-        {day ? (
-          <>
-            <BuySellBar buy={day.buy} sell={day.sell} />
-            <div className="legend">
-              <span className="up">{usd(day.buy)} {t(lang, "flow_bought")}</span>
-              <span className="dn">{usd(day.sell)} {t(lang, "flow_sold")}</span>
-            </div>
-          </>
-        ) : null}
+        <Tiles
+          items={[
+            {
+              label: bare(t(lang, "menu_my_wallets")),
+              value: <>{num(wallets.length)} <em className="of">/ {limit}</em></>,
+            },
+            { label: bare(t(lang, "menu_alert_threshold")), value: usd(me.threshold) },
+          ]}
+        />
 
         <Chips
           value={PRESETS.includes(Math.round(me.threshold)) ? Math.round(me.threshold) : -1}
