@@ -1,0 +1,91 @@
+/**
+ * Запросы к whale_api.py через nginx.
+ *
+ * Подпись Telegram уходит заголовком `X-Telegram-Init-Data`. Подстановки
+ * `?tg=<id>` здесь нет и быть не должно: сервер её больше не принимает, а
+ * когда принимал — по одному номеру в адресе открывался чужой аккаунт.
+ */
+import { initData } from "./telegram";
+import type { Bootstrap, Coins, MutationResult, Trades } from "./types";
+
+const TIMEOUT_MS = 15000;
+
+/** Код последнего ответа: 0 — сети не было. Нужен опросу, чтобы не долбиться. */
+export let lastStatus = 0;
+
+interface Opts {
+  method?: string;
+  body?: unknown;
+  /** Запрос без подписи — для публичных данных. */
+  anon?: boolean;
+  signal?: AbortSignal;
+}
+
+async function call<T>(path: string, opts: Opts = {}): Promise<T | null> {
+  const headers = new Headers();
+  if (!opts.anon) {
+    const auth = initData();
+    if (auth) headers.set("X-Telegram-Init-Data", auth);
+  }
+  if (opts.body !== undefined) headers.set("Content-Type", "application/json");
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  const onAbort = () => ctrl.abort();
+  opts.signal?.addEventListener("abort", onAbort);
+  try {
+    const res = await fetch(path, {
+      method: opts.method ?? "GET",
+      headers,
+      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+      signal: ctrl.signal,
+    });
+    lastStatus = res.status;
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    lastStatus = 0;
+    return null;
+  } finally {
+    clearTimeout(timer);
+    opts.signal?.removeEventListener("abort", onAbort);
+  }
+}
+
+/** Полная выгрузка: личное и общее одним запросом. */
+export function fetchBootstrap(signal?: AbortSignal): Promise<Bootstrap | null> {
+  return call<Bootstrap>("/api/bootstrap", { signal });
+}
+
+/** Только общее — когда подписи нет. */
+export function fetchMarket(signal?: AbortSignal): Promise<Bootstrap | null> {
+  return call<Bootstrap>("/api/market", { anon: true, signal });
+}
+
+export function fetchQuotes(signal?: AbortSignal): Promise<Coins | null> {
+  return call<Coins>("/api/quotes", { anon: true, signal });
+}
+
+/** Крупнейшие сделки за окно. Окна те же, что в боте: 1h, 24h, 7d, 30d. */
+export function fetchBig(win: string, signal?: AbortSignal): Promise<Trades | null> {
+  return call<Trades>(`/api/big?win=${encodeURIComponent(win)}`, { signal });
+}
+
+export const addWallet = (addr: string, name: string) =>
+  call<MutationResult>("/api/wallets", { method: "POST", body: { addr, name } });
+
+export const removeWallet = (addr: string) =>
+  call<MutationResult>("/api/wallets/remove", { method: "POST", body: { addr } });
+
+export const setPrimary = (addr: string) =>
+  call<MutationResult>("/api/wallets/primary", { method: "POST", body: { addr } });
+
+export const renameWallet = (addr: string, name: string) =>
+  call<MutationResult>("/api/wallets/rename", { method: "POST", body: { addr, name } });
+
+export const setThreshold = (usd: number) =>
+  call<MutationResult>("/api/threshold", { method: "POST", body: { usd } });
+
+/** Язык хранится в той же строке users, что читает бот: выбор общий. */
+export const setLangRemote = (lang: string) =>
+  call<MutationResult>("/api/lang", { method: "POST", body: { lang } });

@@ -72,6 +72,12 @@ API_KEY = os.environ.get("WHALE_API_KEY", "")
 
 NANOS = 1_000_000_000.0
 ADDR_RE = re.compile(r"^0x[a-fA-F0-9]{40}$")
+# Те же шестнадцать языков, что в ru.h бота. Мини-апп и чат пишут выбор в
+# одну строку users, поэтому список обязан совпадать.
+LANG_CODES = {
+    "en", "ru", "es", "pt", "fr", "tr", "ar", "pl",
+    "de", "uk", "hi", "id", "vi", "ko", "zh", "ja",
+}
 COIN_RE = re.compile(r"\b([A-Z]{2,12})\b")
 _hl_cache: dict[str, tuple[float, dict]] = {}
 _pub_lock = threading.Lock()
@@ -80,25 +86,12 @@ PUB_TTL = 30.0
 _addr_by_sym: dict[str, str] = {}
 _px_hist: dict[str, tuple[float, list]] = {}
 _hl_candles: dict[str, tuple[float, list]] = {}
-
-GECKO_IMG = {
-    "BTC": "https://coin-images.coingecko.com/coins/images/1/small/bitcoin.png",
-    "ETH": "https://coin-images.coingecko.com/coins/images/279/small/ethereum.png",
-    "SOL": "https://coin-images.coingecko.com/coins/images/4128/small/solana.png",
-    "BNB": "https://coin-images.coingecko.com/coins/images/825/small/bnb-icon2_2x.png",
-    "PEPE": "https://coin-images.coingecko.com/coins/images/29850/small/pepe-token.jpeg",
-    "CAKE": "https://coin-images.coingecko.com/coins/images/12632/small/pancakeswap-cake-logo_%281%29.png",
-    "ARB": "https://coin-images.coingecko.com/coins/images/16547/small/arb.jpg",
-    "FLOKI": "https://coin-images.coingecko.com/coins/images/16746/small/PNG_image.png",
-    "HYPE": "https://coin-images.coingecko.com/coins/images/50882/small/hyperliquid.jpg",
-    "ENA": "https://coin-images.coingecko.com/coins/images/36530/small/ethena.png",
-    "PUMP": "https://coin-images.coingecko.com/coins/images/67164/small/pump.jpg",
-    "DOGE": "https://coin-images.coingecko.com/coins/images/5/small/dogecoin.png",
-    "USDT": "https://coin-images.coingecko.com/coins/images/325/small/Tether.png",
-    "USDC": "https://coin-images.coingecko.com/coins/images/6319/small/usdc.png",
-    "DAI": "https://coin-images.coingecko.com/coins/images/9956/small/Badge_Dai.png",
-}
-
+# Крупнейшие сделки считаются по запросу: четыре окна в общий кэш не лезут,
+# а ходят по ним редко. Тридцати секунд хватает, чтобы не долбить базу.
+_big_cache: dict[str, tuple[float, dict]] = {}
+_big_lock = threading.Lock()
+BIG_TTL = 30.0
+BIG_WINDOWS = {"1h": 1, "24h": 24, "7d": 168, "30d": 720}
 HL_COIN = {
     "PEPE": "kPEPE",
     "FLOKI": "kFLOKI",
@@ -1142,7 +1135,10 @@ def load_perp_rank(hl: sqlite3.Connection | None, days: int = 30) -> dict:
             {
                 "a": r["wallet"] or "",
                 "pnl": pnl,
-                "roi": round((100.0 * pnl / max(abs(pnl) * 0.4, 1.0)), 1) if pnl else 0,
+                # Доходности здесь взяться неоткуда: в hl_fills нет размера
+                # депозита. Прежняя формула 100*pnl/max(|pnl|*0.4,1) давала
+                # ровно ±250 почти всем, и по ней строился «Топ ROI».
+                "roi": None,
                 "win": int(round(100.0 * wins / tr)) if tr else 0,
                 "tr": tr,
                 "dd": 0,
@@ -1152,7 +1148,9 @@ def load_perp_rank(hl: sqlite3.Connection | None, days: int = 30) -> dict:
         )
     return {
         "pnl": list(mapped),
-        "roi": sorted(mapped, key=lambda x: -x["roi"]),
+        # Пустой список честнее выдуманного порядка: экран покажет
+        # «данных нет», а не мнимый рейтинг.
+        "roi": [],
         "win": sorted(mapped, key=lambda x: -x["win"]),
         "act": sorted(mapped, key=lambda x: -x["tr"]),
     }
@@ -1183,9 +1181,11 @@ def load_rank(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) -> 
     return rank
 
 
-def load_trades(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict:
+def load_trades(cur: sqlite3.Connection, hl: sqlite3.Connection | None, hours: int = 24) -> dict:
+    """Крупнейшие сделки за окно. Окна те же, что в big_trades.cpp бота:
+    час, сутки, неделя, месяц."""
     spot, perp, liq = [], [], []
-    since = now() - 86400
+    since = now() - max(1, int(hours)) * 3600
     ign = table_exists(cur, "ignored_wallets")
     if table_exists(cur, "trades"):
         ban = (
@@ -1273,6 +1273,38 @@ def load_trades(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict:
         except sqlite3.Error as e:
             sys.stderr.write(f"[api] liq trades: {e}\n")
     return {"spot": spot[:20], "perp": perp[:20], "liq": liq[:20]}
+
+
+def big_trades(win: str, hours: int) -> dict:
+    """Крупнейшие сделки за окно, со своим коротким кэшем."""
+    with _big_lock:
+        hit = _big_cache.get(win)
+        if hit and time.monotonic() - hit[0] < BIG_TTL:
+            return hit[1]
+    cur = open_db(DB)
+    hl = open_db(HL_DB)
+    if not cur:
+        return {"spot": [], "perp": [], "liq": [], "win": win}
+    try:
+        data = load_trades(cur, hl, hours)
+        data["win"] = win
+    except Exception as e:
+        sys.stderr.write(f"[api] big {win}: {e}\n")
+        data = {"spot": [], "perp": [], "liq": [], "win": win}
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+        if hl:
+            try:
+                hl.close()
+            except Exception:
+                pass
+    with _big_lock:
+        _big_cache[win] = (time.monotonic(), data)
+        cap_cache(_big_cache, 16)
+    return data
 
 
 def load_feed_market(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> list:
@@ -2026,7 +2058,8 @@ def bootstrap(chat: str) -> dict:
     cur = open_db(DB)
     hl = open_db(HL_DB)
     if not cur:
-        return {"ok": False, "live": False, "error": "db_missing", "db": DB}
+        # Абсолютный путь наружу не уходит: /health от него уже избавили.
+        return {"ok": False, "live": False, "error": "db_missing"}
     errors: list[str] = []
     t0 = time.monotonic()
 
@@ -2175,6 +2208,11 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
                 "UPDATE user_whales SET label=? WHERE user_id=? AND whale_id=?",
                 (name, chat, row[0]),
             )
+        elif kind == "lang":
+            code = str(body.get("lang") or "").strip().lower()
+            if code not in LANG_CODES:
+                return {"ok": False, "error": "bad_lang"}
+            con.execute("UPDATE users SET language=? WHERE chat_id=?", (code, chat))
         elif kind == "threshold":
             try:
                 usd_v = float(body.get("usd") or 0)
@@ -2264,9 +2302,15 @@ class Handler(BaseHTTPRequestHandler):
         return hmac.compare_digest(self.headers.get("X-Api-Key") or "", API_KEY)
 
     def _peer(self) -> str:
-        # За nginx реальный адрес приходит заголовком; своему прокси верим.
-        fwd = (self.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
-        return fwd or self.client_address[0]
+        """Адрес для счётчика запросов.
+
+        nginx собирает X-Forwarded-For как `$proxy_add_x_forwarded_for`, то
+        есть ДОПИСЫВАЕТ реальный адрес в конец. Первый элемент прислал сам
+        клиент — раньше брали именно его, и лимит снимался подстановкой
+        заголовка. Верить можно только последнему.
+        """
+        parts = [p.strip() for p in (self.headers.get("X-Forwarded-For") or "").split(",") if p.strip()]
+        return parts[-1] if parts else self.client_address[0]
 
     def _body(self) -> dict:
         n = int(self.headers.get("Content-Length") or 0)
@@ -2343,6 +2387,14 @@ class Handler(BaseHTTPRequestHandler):
                         except Exception:
                             pass
                 return
+            if path in ("/big", "/api/big"):
+                win = (qs.get("win", ["24h"])[0] or "24h").lower()
+                hours = BIG_WINDOWS.get(win)
+                if hours is None:
+                    self._json(400, {"ok": False, "error": "bad_window"})
+                    return
+                self._json(200, big_trades(win, hours))
+                return
             if path in ("/quotes", "/api/quotes"):
                 cur = open_db(DB)
                 hl = open_db(HL_DB)
@@ -2415,6 +2467,7 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/wallets/primary": "primary",
                 "/api/wallets/rename": "rename",
                 "/api/threshold": "threshold",
+                "/api/lang": "lang",
             }.get(path)
             if not kind:
                 self._json(404, {"ok": False, "error": "not_found"})

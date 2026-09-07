@@ -1,0 +1,34 @@
+/* Палитра и типографика. Цвета — те же, что были у приложения. */
+:root {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+  --bg: #01030a;
+  --bg-soft: #050a16;
+  --panel: #070e1e;
+  --panel-2: #0b1628;
+  --line: #10243f;
+  --line-2: #1b3d68;
+
+  --ink: #eaf5ff;
+  --dim: #7c97bc;
+  --dim-2: #4d6789;
+
+  --blue: #1e9bff;
+  --glow: #7fd8ff;
+  --up: #3ddc97;
+  --dn: #ff5c77;
+  --warn: #ffc24d;
+
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+
+  --shadow: 0 0 12px rgb(30 155 255 / 0.35);
+  --shadow-soft: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 8px 24px rgb(0 0 0 / 0.4);
+
+  --tab-h: 62px;
+  --hdr-h: 52px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
