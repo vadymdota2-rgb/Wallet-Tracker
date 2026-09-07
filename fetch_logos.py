@@ -78,6 +78,24 @@ def to_checksum(addr: str) -> str:
                           for i, c in enumerate(a))
 
 
+def is_image(data: bytes, kind: str) -> bool:
+    """Картинка ли это на самом деле, а не страница с ошибкой."""
+    if not data or len(data) < 200:
+        return False
+    if kind == "png":
+        return data[:8] == b"\x89PNG\r\n\x1a\n"
+    head = data[:400].lstrip().lower()
+    return head.startswith(b"<svg") or (head.startswith(b"<?xml") and b"<svg" in data[:2000].lower())
+
+
+def file_is_image(path: str, kind: str) -> bool:
+    try:
+        with open(path, "rb") as f:
+            return is_image(f.read(2048), kind)
+    except OSError:
+        return False
+
+
 class Source:
     """Один источник картинок со своей статистикой и паузой при 429.
 
@@ -91,7 +109,7 @@ class Source:
         self.ok = self.missing = self.errors = self.throttled = 0
         self.cool_until = 0.0
 
-    def fetch(self, url: str, tries: int = 3) -> bytes | None:
+    def fetch(self, url: str, kind: str, tries: int = 3) -> bytes | None:
         for attempt in range(tries):
             wait = self.cool_until - time.monotonic()
             if wait > 0:
@@ -100,8 +118,11 @@ class Source:
                 req = urllib.request.Request(url, headers=UA)
                 with urllib.request.urlopen(req, timeout=15) as r:
                     data = r.read()
-                # ответ меньше 200 байт картинкой не бывает — это заглушка
-                if len(data) > 200:
+                # Проверять размер мало. У Hyperliquid на несуществующий
+                # логотип приходит 200 OK со страницей приложения — она
+                # больше 200 байт и раньше сохранялась как .svg. Так на
+                # диск легли 729 HTML-файлов из 952.
+                if is_image(data, kind):
                     self.ok += 1
                     return data
                 self.missing += 1
@@ -181,12 +202,12 @@ def write_manifest() -> dict:
     d = os.path.join(OUT, "bsc")
     if os.path.isdir(d):
         man["bsc"] = sorted(f[:-4] for f in os.listdir(d)
-                            if f.endswith(".png") and os.path.getsize(os.path.join(d, f)) > 200)
+                            if f.endswith(".png") and file_is_image(os.path.join(d, f), "png"))
     d = os.path.join(OUT, "hl")
     if os.path.isdir(d):
         names = []
         for f in os.listdir(d):
-            if f.endswith(".svg") and os.path.getsize(os.path.join(d, f)) > 200:
+            if f.endswith(".svg") and file_is_image(os.path.join(d, f), "svg"):
                 n = f[:-4]
                 names.append(n.replace("_", ":") if n.startswith("xyz_") else n)
         man["hl"] = sorted(names)
@@ -204,13 +225,13 @@ def main() -> int:
     for i, (_sym, low) in enumerate(toks, 1):
         s = to_checksum(low)
         dest = os.path.join(OUT, "bsc", f"{s}.png")
-        if os.path.isfile(dest) and os.path.getsize(dest) > 200:
+        if file_is_image(dest, "png"):
             skip += 1
             continue
-        data = pcs.fetch(f"https://tokens.pancakeswap.finance/images/{s}.png")
+        data = pcs.fetch(f"https://tokens.pancakeswap.finance/images/{s}.png", "png")
         if data is None:
             data = tw.fetch("https://raw.githubusercontent.com/trustwallet/assets/master/"
-                            f"blockchains/smartchain/assets/{s}/logo.png")
+                            f"blockchains/smartchain/assets/{s}/logo.png", "png")
         if data is not None:
             save(dest, data)
             got += 1
@@ -229,12 +250,12 @@ def main() -> int:
     for i, c in enumerate(coins, 1):
         safe = c.replace(":", "_").replace("/", "_")
         dest = os.path.join(OUT, "hl", f"{safe}.svg")
-        if os.path.isfile(dest) and os.path.getsize(dest) > 200:
+        if file_is_image(dest, "svg"):
             skip += 1
             continue
         # двоеточие в xyz:NVDA оставляем: именно с ним адрес и работает
         data = hl.fetch("https://app.hyperliquid.xyz/coins/"
-                        + urllib.parse.quote(c, safe=":") + ".svg")
+                        + urllib.parse.quote(c, safe=":") + ".svg", "svg")
         if data is not None:
             save(dest, data)
             got += 1
