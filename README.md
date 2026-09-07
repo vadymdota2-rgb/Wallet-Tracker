@@ -117,8 +117,13 @@ python3 fetch_logos.py
 | `API_KEY` | общий секрет с API; пусто — порт API открыт всем |
 
 У `whale_api.py` свои переменные — см. `whale-api.service`. Обязательны
-`WHALE_TG_TOKEN` (без него служба не поднимется: проверять подпись нечем)
-и `WHALE_API_ORIGIN`.
+`WHALE_TG_TOKEN` (без него служба не поднимется: проверять подпись нечем),
+`WHALE_API_ORIGIN` (адрес мини-аппа, иначе браузер получит отказ по CORS) и
+`WHALE_API_KEY` — тот же, что `API_KEY` у контейнера.
+
+nginx и API стоят на разных машинах, между ними интернет. Поэтому
+`WHALE_API_HOST=0.0.0.0`, а порт 8090 закрывают `WHALE_API_KEY` и firewall:
+открой его только адресам Cloud Run.
 
 **`API_UPSTREAM` задавай по HTTPS.** По HTTP через интернет уедут открытым
 текстом и `X-Telegram-Init-Data`, и `X-Api-Key`.
