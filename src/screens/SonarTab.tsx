@@ -9,7 +9,7 @@
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import { t } from "../i18n/t";
-import { num, px, signed } from "../lib/format";
+import { num, px } from "../lib/format";
 import { whyKey } from "../lib/labels";
 import { CoinIcon } from "../components/CoinIcon";
 import { Card, Empty, Row, SectionTitle, Segmented } from "../components/ui";
@@ -106,9 +106,4 @@ export function SonarTab() {
       </Card>
     </>
   );
-}
-
-/** Средний ход по завершённым сигналам — для экрана истории. */
-export function avgMove(avg: number): string {
-  return signed(avg);
 }

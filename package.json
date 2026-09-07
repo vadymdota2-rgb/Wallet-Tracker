@@ -6,8 +6,11 @@
   "scripts": {
     "dev": "vite",
     "typecheck": "tsc -p .",
+    "clean": "node tools/clean-build.mjs",
+    "prebuild": "npm run clean",
     "build": "tsc -p . && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "i18n": "python3 tools/sync-i18n.py ../WhaleScanner"
   },
   "dependencies": {
     "react": "^19.2.0",
