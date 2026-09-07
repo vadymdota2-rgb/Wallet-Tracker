@@ -10,7 +10,7 @@
  * в первой мало — по споту она покрывает 100 адресов, а все четыре вместе
  * 152. Берём лучшее место среди досок и помним, какая его дала.
  */
-import type { Rank, RankKind, RankTable, Venue } from "./types";
+import type { Rank, RankKind, RankTable, Venue, Wallet } from "./types";
 
 const BOARDS: RankKind[] = ["pnl", "roi", "win", "act"];
 
@@ -62,4 +62,21 @@ export function boardKey(kind: RankKind): "rk_btn_top_pnl" | "rk_btn_top_roi" | 
 /** Название площадки для подписи к месту. Бренды не переводятся. */
 export function venueName(venue: Venue): string {
   return venue === "spot" ? "BSC" : "Hyperliquid";
+}
+
+/**
+ * Площадка кошелька по его собственной работе, а не по рейтингу.
+ *
+ * В топ-100 попадает меньшинство, и у остальных площадку было видно
+ * неоткуда. Но она выводится из данных: позиции и счёт на Hyperliquid,
+ * сделки и спотовый остаток на BSC. Работает на обеих — берём ту, где
+ * денег больше.
+ */
+export function walletVenue(w: Wallet): Venue | null {
+  const perp = w.pos.length > 0 || (w.equity?.perp ?? 0) > 0;
+  const spot = w.trades > 0 || (w.equity?.spot ?? 0) > 0;
+  if (perp && spot) return (w.equity?.perp ?? 0) >= (w.equity?.spot ?? 0) ? "perp" : "spot";
+  if (perp) return "perp";
+  if (spot) return "spot";
+  return null;
 }

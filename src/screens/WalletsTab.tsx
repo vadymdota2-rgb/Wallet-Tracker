@@ -6,7 +6,7 @@ import { useApp, isPaused, walletLimit } from "../store/app";
 import { useLive } from "../store/live";
 import { bare, t } from "../i18n/t";
 import { num, shortAddr, usd } from "../lib/format";
-import { venueName, walletRank } from "../lib/rank";
+import { venueName, walletRank, walletVenue } from "../lib/rank";
 import { setThreshold } from "../lib/api";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
@@ -68,6 +68,9 @@ export function WalletsTab() {
           wallets.map((w) => {
             const paused = isPaused(me.plan, w.primary);
             const place = walletRank(rank, w.addr);
+            // Есть место — показываем площадку рейтинга и кубок. Нет —
+            // хотя бы площадку, на которой кошелёк работает.
+            const venue = place.best?.venue ?? walletVenue(w);
             return (
               <Row
                 key={w.addr}
@@ -75,11 +78,11 @@ export function WalletsTab() {
                 badge={w.primary ? bare(t(lang, "wl_main_wallet")) : paused ? t(lang, "wl_paused") : undefined}
                 sub={shortAddr(w.addr)}
                 mid={
-                  place.best ? (
+                  venue ? (
                     <span className="mark cup">
-                      <VenueMark venue={place.best.venue} />
-                      <em className="venue-name">{venueName(place.best.venue)}</em>
-                      🏆 {place.best.place}
+                      <VenueMark venue={venue} />
+                      <em className="venue-name">{venueName(venue)}</em>
+                      {place.best ? <> 🏆 {place.best.place}</> : null}
                     </span>
                   ) : undefined
                 }
