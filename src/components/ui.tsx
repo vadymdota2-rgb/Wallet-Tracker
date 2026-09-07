@@ -46,6 +46,7 @@ export function Row({
   icon,
   title,
   sub,
+  mid,
   value,
   valueSub,
   tone,
@@ -55,6 +56,8 @@ export function Row({
   icon?: ReactNode;
   title: ReactNode;
   sub?: ReactNode;
+  /** Метка между текстом и правым краем — например место в рейтинге. */
+  mid?: ReactNode;
   value?: ReactNode;
   valueSub?: ReactNode;
   tone?: "up" | "dn";
@@ -71,6 +74,7 @@ export function Row({
         </span>
         {sub ? <small className="row-sub">{sub}</small> : null}
       </span>
+      {mid !== undefined ? <span className="row-mid">{mid}</span> : null}
       {value !== undefined ? (
         <span className="row-val">
           <b className={tone ? `q ${tone}` : "q"}>{value}</b>

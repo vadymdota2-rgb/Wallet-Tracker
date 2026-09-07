@@ -300,7 +300,21 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.row-val { flex: 0 0 auto; display: grid; justify-items: end; gap: 1px; }
+/* Метка между текстом и правым краем: кубок стоит на отлёте от глаза,
+   а не липнет к нему. */
+.row-mid { flex: 0 0 auto; margin-inline-end: 14px; }
+.row-val { flex: 0 0 auto; display: grid; justify-items: end; gap: 1px; min-width: 34px; }
+
+.mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+.mark.cup { color: var(--warn); }
 .row-val .q { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
 .row-val small { color: var(--dim-2); font-size: 11px; }
 
