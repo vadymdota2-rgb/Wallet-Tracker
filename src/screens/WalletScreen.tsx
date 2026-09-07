@@ -2,14 +2,14 @@
 import { Frame, type ScreenProps } from "./Screen";
 import { useApp, isPaused } from "../store/app";
 import { useLive, walletByAddr } from "../store/live";
-import { boardKey, walletRank } from "../lib/rank";
+import { boardKey, venueName, walletRank } from "../lib/rank";
 import { bare, t } from "../i18n/t";
 import { lev as levFmt, num, pct, px, shortAddr, signed, usd } from "../lib/format";
 import { removeWallet, setPrimary } from "../lib/api";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
 import { CoinIcon } from "../components/CoinIcon";
-import { Action, Card, Empty, Row, SectionTitle, Tiles, VenueMark } from "../components/ui";
+import { Action, Card, Empty, Row, SectionTitle, Tiles } from "../components/ui";
 
 export function WalletScreen({ arg }: ScreenProps) {
   const lang = useApp((s) => s.lang);
@@ -33,8 +33,8 @@ export function WalletScreen({ arg }: ScreenProps) {
   const place = walletRank(rank, w.addr);
   // Длинное «не в рейтинге» в плитку не влезает — там прочерк, а словами
   // это сказано примечанием к разделу.
-  const spot = place.spot ? <><VenueMark venue="spot" /> 🏆 {place.spot.place}</> : <>—</>;
-  const perp = place.perp ? <><VenueMark venue="perp" /> 🏆 {place.perp.place}</> : <>—</>;
+  const spot = place.spot ? `🏆 ${place.spot.place}` : "—";
+  const perp = place.perp ? `🏆 ${place.perp.place}` : "—";
   // За что именно место — по прибыли, доходности, винрейту или активности.
   const board = place.best ? bare(t(lang, boardKey(place.best.kind))) : t(lang, "wl_not_ranked");
 
@@ -44,8 +44,16 @@ export function WalletScreen({ arg }: ScreenProps) {
         <SectionTitle note={board}>{t(lang, "rk_in_top")}</SectionTitle>
         <Tiles
           items={[
-            { label: t(lang, "wl_spot_rank"), value: spot, tone: place.spot === null ? "dim" : undefined },
-            { label: t(lang, "wl_perp_rank"), value: perp, tone: place.perp === null ? "dim" : undefined },
+            {
+              label: `${t(lang, "wl_spot_rank")} · ${venueName("spot")}`,
+              value: spot,
+              tone: place.spot === null ? "dim" : undefined,
+            },
+            {
+              label: `${t(lang, "wl_perp_rank")} · ${venueName("perp")}`,
+              value: perp,
+              tone: place.perp === null ? "dim" : undefined,
+            },
           ]}
         />
       </Card>

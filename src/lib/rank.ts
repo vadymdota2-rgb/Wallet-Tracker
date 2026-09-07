@@ -58,3 +58,8 @@ export function boardKey(kind: RankKind): "rk_btn_top_pnl" | "rk_btn_top_roi" | 
   if (kind === "act") return "rk_btn_most_active";
   return "rk_btn_top_pnl";
 }
+
+/** Название площадки для подписи к месту. Бренды не переводятся. */
+export function venueName(venue: Venue): string {
+  return venue === "spot" ? "BSC" : "Hyperliquid";
+}
