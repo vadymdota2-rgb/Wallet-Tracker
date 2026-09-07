@@ -45,7 +45,7 @@ const _={account_desc:"您跟踪的钱包及其当前持仓。",account_title:"�
 
 您获得：Hyperliquid 合约排名、提醒与仓位，最多 50 个钱包，完整 Top 100，优先提醒。
 
-每账户一次。`,ui_buy_pressure:"买盘占比",ui_chart:"图表",ui_chg24:"24 小时涨跌",ui_free_slots:"剩余名额",ui_loading:"加载中",ui_locked:"高级版可用",ui_more:"更多",ui_no_signals:"该时间窗内没有信号",ui_nothing:"暂时没有内容",ui_offline:"无法连接服务器",ui_open_bot:"打开机器人",ui_pay_in_bot:"付款在机器人聊天中完成 — 小程序无法开具账单。",ui_portfolio:"投资组合",ui_pulse:"巨鲸脉搏 · 24 小时",ui_retry:"重试",ui_rot_hint:"资金从哪个币流出、又流入哪个币",ui_rotation:"轮动",ui_save:"保存",ui_saved:"已保存",ui_sync_failed:"刷新失败",ui_tf_1d:"1天",ui_tf_1h:"1小时",ui_tf_1w:"1周",ui_to_liq:"距强平",ui_updated:"已更新",ui_wallet_count:"个钱包",unit_day:"天",unit_hour:"时",unit_min:"分",unit_sec:"秒",unknown_command:"🤔 请使用下方菜单。",wallet_bot_banned:`🤖 这是交易机器人：每天数百笔交易，不在排行榜内。追踪没有意义。
+每账户一次。`,ui_buy_pressure:"买盘占比",ui_chart:"图表",ui_chg24:"24 小时涨跌",ui_free_slots:"剩余名额",ui_hip3:"股票",ui_loading:"加载中",ui_locked:"高级版可用",ui_more:"更多",ui_no_signals:"该时间窗内没有信号",ui_nothing:"暂时没有内容",ui_offline:"无法连接服务器",ui_open_bot:"打开机器人",ui_pay_in_bot:"付款在机器人聊天中完成 — 小程序无法开具账单。",ui_portfolio:"投资组合",ui_pulse:"巨鲸脉搏 · 24 小时",ui_retry:"重试",ui_rot_hint:"资金从哪个币流出、又流入哪个币",ui_rotation:"轮动",ui_save:"保存",ui_saved:"已保存",ui_sync_failed:"刷新失败",ui_tf_1d:"1天",ui_tf_1h:"1小时",ui_tf_1w:"1周",ui_to_liq:"距强平",ui_updated:"已更新",ui_wallet_count:"个钱包",unit_day:"天",unit_hour:"时",unit_min:"分",unit_sec:"秒",unknown_command:"🤔 请使用下方菜单。",wallet_bot_banned:`🤖 这是交易机器人：每天数百笔交易，不在排行榜内。追踪没有意义。
 
 请输入其他地址或点击取消。`,wallet_bot_removed:"🤖 该钱包已从你的列表中移除 — 这是交易机器人。每天数百笔交易且不在排行榜内，追踪没有意义。",wallet_limit_50_short:"⚠️ 钱包上限（50）",wc_free_note:"你也可以自己添加任意钱包：在 💼 我的钱包 中发送地址。",wc_how:`被追踪的钱包一旦买入、卖出或开仓，你会在约 4 秒后收到提醒。
 

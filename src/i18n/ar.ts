@@ -332,6 +332,7 @@ export const ar: Dict = {
   ui_chart: "الرسم البياني",
   ui_chg24: "تغير 24 ساعة",
   ui_free_slots: "أماكن متبقية",
+  ui_hip3: "الأسهم",
   ui_loading: "جارٍ التحميل",
   ui_locked: "متاح مع بريميوم",
   ui_more: "المزيد",

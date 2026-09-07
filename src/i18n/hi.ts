@@ -332,6 +332,7 @@ export const hi: Dict = {
   ui_chart: "चार्ट",
   ui_chg24: "24घं बदलाव",
   ui_free_slots: "जगह बची",
+  ui_hip3: "शेयर",
   ui_loading: "लोड हो रहा है",
   ui_locked: "प्रीमियम के साथ उपलब्ध",
   ui_more: "और",

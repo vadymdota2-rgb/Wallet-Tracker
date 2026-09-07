@@ -332,6 +332,7 @@ export const ja: Dict = {
   ui_chart: "チャート",
   ui_chg24: "24時間変動",
   ui_free_slots: "残り枠",
+  ui_hip3: "株式",
   ui_loading: "読み込み中",
   ui_locked: "プレミアムで利用可能",
   ui_more: "その他",

@@ -332,6 +332,7 @@ export const vi: Dict = {
   ui_chart: "Biểu đồ",
   ui_chg24: "Thay đổi 24 giờ",
   ui_free_slots: "chỗ còn lại",
+  ui_hip3: "Cổ phiếu",
   ui_loading: "Đang tải",
   ui_locked: "Có với Premium",
   ui_more: "Thêm",

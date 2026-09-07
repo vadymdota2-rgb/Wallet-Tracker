@@ -332,6 +332,7 @@ export const id: Dict = {
   ui_chart: "Grafik",
   ui_chg24: "Perubahan 24 j",
   ui_free_slots: "slot tersisa",
+  ui_hip3: "Saham",
   ui_loading: "Memuat",
   ui_locked: "Tersedia dengan Premium",
   ui_more: "Lainnya",

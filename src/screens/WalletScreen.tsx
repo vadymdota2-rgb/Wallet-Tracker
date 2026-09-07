@@ -52,11 +52,13 @@ export function WalletScreen({ arg }: ScreenProps) {
       </Card>
 
       <Card>
+        {/* Депозит складывается из трёх частей: спот, перпы и акции (HIP-3). */}
+        <SectionTitle note={usd(w.bal)}>{t(lang, "hl_account")}</SectionTitle>
         <Tiles
           items={[
-            { label: t(lang, "hl_account"), value: usd(w.bal) },
             { label: t(lang, "ai_spot"), value: usd(eq.spot) },
             { label: t(lang, "ai_perp"), value: usd(eq.perp) },
+            { label: t(lang, "ui_hip3"), value: usd(eq.hip3), tone: eq.hip3 ? undefined : "dim" },
             { label: t(lang, "rk_trades"), value: num(w.trades) },
           ]}
         />

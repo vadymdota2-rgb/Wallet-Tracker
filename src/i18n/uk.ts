@@ -332,6 +332,7 @@ export const uk: Dict = {
   ui_chart: "Графік",
   ui_chg24: "Зміна за 24г",
   ui_free_slots: "місць лишилось",
+  ui_hip3: "Акції",
   ui_loading: "Завантаження",
   ui_locked: "Доступно з Преміумом",
   ui_more: "Ще",

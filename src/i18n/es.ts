@@ -332,6 +332,7 @@ export const es: Dict = {
   ui_chart: "Gráfico",
   ui_chg24: "Cambio 24 h",
   ui_free_slots: "espacios libres",
+  ui_hip3: "Acciones",
   ui_loading: "Cargando",
   ui_locked: "Disponible con Premium",
   ui_more: "Más",

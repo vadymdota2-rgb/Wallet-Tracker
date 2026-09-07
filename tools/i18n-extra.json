@@ -466,5 +466,23 @@
   "ko": "청산까지",
   "zh": "距强平",
   "ja": "清算まで"
+ },
+ "ui_hip3": {
+  "en": "Stocks",
+  "ru": "Акции",
+  "uk": "Акції",
+  "es": "Acciones",
+  "pt": "Ações",
+  "fr": "Actions",
+  "de": "Aktien",
+  "tr": "Hisseler",
+  "pl": "Akcje",
+  "ar": "الأسهم",
+  "hi": "शेयर",
+  "id": "Saham",
+  "vi": "Cổ phiếu",
+  "ko": "주식",
+  "zh": "股票",
+  "ja": "株式"
  }
 }

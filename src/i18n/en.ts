@@ -332,6 +332,7 @@ export const en = {
   ui_chart: "Chart",
   ui_chg24: "24h change",
   ui_free_slots: "slots left",
+  ui_hip3: "Stocks",
   ui_loading: "Loading",
   ui_locked: "Available with Premium",
   ui_more: "More",

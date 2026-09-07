@@ -91,8 +91,6 @@ export function PositionScreen({ arg, arg2 }: ScreenProps) {
             { label: t(lang, "hl_mark_price"), value: px(p.now) },
             { label: t(lang, "hl_position_size"), value: usd(p.size) },
             { label: t(lang, "hl_collateral"), value: usd(p.margin) },
-            { label: t(lang, "hl_pnl"), value: signed(p.pnl), tone: p.pnl >= 0 ? "up" : "dn" },
-            { label: t(lang, "fund_title"), value: p.funding ? signed(p.funding) : "$0" },
           ]}
         />
       </Card>

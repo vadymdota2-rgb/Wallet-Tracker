@@ -332,6 +332,7 @@ export const tr: Dict = {
   ui_chart: "Grafik",
   ui_chg24: "24s değişim",
   ui_free_slots: "boş yer",
+  ui_hip3: "Hisseler",
   ui_loading: "Yükleniyor",
   ui_locked: "Premium ile kullanılabilir",
   ui_more: "Daha fazla",

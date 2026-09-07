@@ -53,6 +53,14 @@ export function WalletsTab() {
         <SectionTitle note={`${num(wallets.length)} / ${limit}`}>
           {bare(t(lang, "menu_my_wallets"))}
         </SectionTitle>
+        <div className="stack-actions">
+          <Action onClick={() => open("addWallet")} disabled={wallets.length >= limit}>
+            {t(lang, "menu_add_wallet")}
+          </Action>
+          {wallets.length >= limit && me.plan !== "premium" ? (
+            <small className="hint warn">{t(lang, "pr_limit_free")}</small>
+          ) : null}
+        </div>
 
         {wallets.length === 0 ? (
           <Empty text={t(lang, "mw_no_wallets")} hint={t(lang, "mw_tap_add")} />
@@ -74,14 +82,6 @@ export function WalletsTab() {
           })
         )}
 
-        <div className="stack-actions">
-          <Action onClick={() => open("addWallet")} disabled={wallets.length >= limit}>
-            {t(lang, "menu_add_wallet")}
-          </Action>
-          {wallets.length >= limit && me.plan !== "premium" ? (
-            <small className="hint warn">{t(lang, "pr_limit_free")}</small>
-          ) : null}
-        </div>
       </Card>
     </>
   );

@@ -332,6 +332,7 @@ export const zh: Dict = {
   ui_chart: "图表",
   ui_chg24: "24 小时涨跌",
   ui_free_slots: "剩余名额",
+  ui_hip3: "股票",
   ui_loading: "加载中",
   ui_locked: "高级版可用",
   ui_more: "更多",

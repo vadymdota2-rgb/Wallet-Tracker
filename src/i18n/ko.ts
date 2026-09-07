@@ -332,6 +332,7 @@ export const ko: Dict = {
   ui_chart: "차트",
   ui_chg24: "24시간 변동",
   ui_free_slots: "남은 자리",
+  ui_hip3: "주식",
   ui_loading: "불러오는 중",
   ui_locked: "프리미엄에서 이용 가능",
   ui_more: "더 보기",
