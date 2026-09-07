@@ -1,0 +1,42 @@
+/**
+ * Выверенные вручную адреса логотипов крупных монет — последнее звено
+ * цепочки, когда ни файл из образа, ни источник по площадке не ответили.
+ * Путь идёт через nginx (`/cglogo/`), наружу браузер не ходит.
+ */
+export const CG_FALLBACK: Record<string, string> = {
+  BTC: "/cglogo/coins/images/1/small/bitcoin.png",
+  ETH: "/cglogo/coins/images/279/small/ethereum.png",
+  SOL: "/cglogo/coins/images/4128/small/solana.png",
+  BNB: "/cglogo/coins/images/825/small/bnb-icon2_2x.png",
+  XRP: "/cglogo/coins/images/44/small/xrp-symbol-white-128.png",
+  DOGE: "/cglogo/coins/images/5/small/dogecoin.png",
+  PEPE: "/cglogo/coins/images/29850/small/pepe-token.jpeg",
+  HYPE: "/cglogo/coins/images/50882/small/hyperliquid.jpg",
+  LINK: "/cglogo/coins/images/877/small/chainlink-new-logo.png",
+  AVAX: "/cglogo/coins/images/12559/small/Avalanche_Circle_RedWhite_Trans.png",
+  SUI: "/cglogo/coins/images/26375/small/sui-ocean-square.png",
+  ARB: "/cglogo/coins/images/16547/small/arb.jpg",
+  ENA: "/cglogo/coins/images/36530/small/ethena.png",
+  WIF: "/cglogo/coins/images/33566/small/dogwifhat.jpg",
+  BONK: "/cglogo/coins/images/28600/small/bonk.jpg",
+  SHIB: "/cglogo/coins/images/11939/small/shiba.png",
+  FLOKI: "/cglogo/coins/images/16746/small/PNG_image.png",
+  AAVE: "/cglogo/coins/images/12645/small/aave-token-round.png",
+  UNI: "/cglogo/coins/images/12504/small/uni.jpg",
+  OP: "/cglogo/coins/images/25244/small/Optimism.png",
+  NEAR: "/cglogo/coins/images/10365/small/near.jpg",
+  APT: "/cglogo/coins/images/26455/small/aptos_round.png",
+  LTC: "/cglogo/coins/images/2/small/litecoin.png",
+  ATOM: "/cglogo/coins/images/1481/small/cosmos_hub.png",
+  INJ: "/cglogo/coins/images/13469/small/injective.png",
+  SEI: "/cglogo/coins/images/28205/small/Sei_Logo_-_Transparent.png",
+  WLD: "/cglogo/coins/images/31069/small/worldcoin.jpeg",
+  ONDO: "/cglogo/coins/images/26580/small/ONDO.png",
+  JUP: "/cglogo/coins/images/34188/small/jup.png",
+  CAKE: "/cglogo/coins/images/12632/small/pancakeswap-cake-logo_%281%29.png",
+  TRUMP: "/cglogo/coins/images/53746/small/trump.png",
+  TAO: "/cglogo/coins/images/28452/small/ARUsPeNQ_400x400.jpeg",
+  TON: "/cglogo/coins/images/17980/small/photo_2024-09-10_17.09.00.jpeg",
+  USDT: "/cglogo/coins/images/325/small/Tether.png",
+  USDC: "/cglogo/coins/images/6319/small/usdc.png",
+};

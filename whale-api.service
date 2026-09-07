@@ -7,7 +7,9 @@ Type=simple
 User=vadymdota2
 WorkingDirectory=/home/vadymdota2/WalletTracker
 Environment=WHALE_API_PORT=8090
-Environment=WHALE_API_HOST=0.0.0.0
+# Слушаем петлю: наружу API выходит только через nginx. Значение 0.0.0.0
+# здесь отменяло защиту, заданную в самом whale_api.py.
+Environment=WHALE_API_HOST=127.0.0.1
 Environment=WHALE_API_ORIGIN=https://wallet-tracker-git-606699497037.europe-west1.run.app
 Environment=WHALE_API_INITDATA_TTL=86400
 Environment=WHALE_API_RPM=120
