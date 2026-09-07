@@ -2,6 +2,7 @@
 import { Frame, type ScreenProps } from "./Screen";
 import { useApp, isPaused } from "../store/app";
 import { useLive, walletByAddr } from "../store/live";
+import { walletRank } from "../lib/rank";
 import { t } from "../i18n/t";
 import { lev as levFmt, num, pct, px, shortAddr, signed, usd } from "../lib/format";
 import { removeWallet, setPrimary } from "../lib/api";
@@ -15,6 +16,7 @@ export function WalletScreen({ arg }: ScreenProps) {
   const open = useApp((s) => s.open);
   const back = useApp((s) => s.back);
   const wallets = useLive((s) => s.wallets);
+  const rank = useLive((s) => s.rank);
   const plan = useLive((s) => s.me.plan);
 
   const w = walletByAddr(wallets, arg);
@@ -28,9 +30,27 @@ export function WalletScreen({ arg }: ScreenProps) {
 
   const paused = isPaused(plan, w.primary);
   const eq = w.equity;
+  const place = walletRank(rank, w.addr);
+  // Длинное «не в рейтинге» в плитку не влезает — там прочерк, а словами
+  // это сказано примечанием к разделу.
+  const spot = place.spot === null ? "—" : `🏆 ${place.spot}`;
+  const perp = place.perp === null ? "—" : `🏆 ${place.perp}`;
+  const ranked = place.spot !== null || place.perp !== null;
 
   return (
     <Frame title={w.name} sub={shortAddr(w.addr)}>
+      <Card>
+        <SectionTitle note={ranked ? `30${t(lang, "unit_day")}` : t(lang, "wl_not_ranked")}>
+          {t(lang, "rk_in_top")}
+        </SectionTitle>
+        <Tiles
+          items={[
+            { label: t(lang, "wl_spot_rank"), value: spot, tone: place.spot === null ? "dim" : undefined },
+            { label: t(lang, "wl_perp_rank"), value: perp, tone: place.perp === null ? "dim" : undefined },
+          ]}
+        />
+      </Card>
+
       <Card>
         <Tiles
           items={[

@@ -1,20 +1,18 @@
 /**
- * «Мои кошельки» — то же, что кнопка 👤 в боте: крупная сумма за сутки,
- * перевес покупок, порог алертов и список кошельков.
+ * «Мои кошельки» — крупная сумма за сутки, перевес покупок, порог алертов
+ * и список кошельков с местом в рейтинге.
  */
 import { useApp, isPaused, walletLimit } from "../store/app";
 import { useLive } from "../store/live";
 import { bare, t } from "../i18n/t";
 import { num, pct, shortAddr, signed, usd } from "../lib/format";
-import { ago } from "../lib/relative";
+import { walletRank } from "../lib/rank";
 import { setThreshold } from "../lib/api";
 import { syncNow } from "../lib/sync";
-import { tradeKind, tradeKindKey, isUpKind } from "../lib/labels";
-import { CoinIcon } from "../components/CoinIcon";
 import { BuySellBar } from "../components/Chart";
 import { Hero } from "../components/Hero";
 import { toast } from "../components/Toast";
-import { Action, Card, Chips, Empty, Row, SectionTitle, Tiles } from "../components/ui";
+import { Action, Card, Chips, Empty, Row, SectionTitle } from "../components/ui";
 
 const PRESETS = [100, 500, 1000, 5000, 10000, 50000];
 
@@ -31,7 +29,7 @@ function dayPct(d1: number, bal: number): number | null {
 export function WalletsTab() {
   const lang = useApp((s) => s.lang);
   const open = useApp((s) => s.open);
-  const { me, wallets, alerts, flow } = useLive();
+  const { me, wallets, flow, rank } = useLive();
 
   const limit = walletLimit(me.plan);
   const day = flow["24"];
@@ -52,12 +50,7 @@ export function WalletsTab() {
         <Hero
           value={signed(mine)}
           tone={mine >= 0 ? "up" : "dn"}
-          note={
-            <>
-              {bare(t(lang, "menu_my_wallets"))} · {t(lang, "big_win_24h")} · {usd(watched)}{" "}
-              {t(lang, "hl_in_position")}
-            </>
-          }
+          note={<>{t(lang, "big_win_24h")} · {usd(watched)}</>}
         />
         {day ? (
           <>
@@ -69,25 +62,17 @@ export function WalletsTab() {
           </>
         ) : null}
 
-        <Tiles
-          items={[
-            { label: bare(t(lang, "menu_my_wallets")), value: <>{num(wallets.length)} <em className="of">/ {limit}</em></> },
-            { label: bare(t(lang, "menu_alert_threshold")), value: usd(me.threshold) },
-          ]}
-        />
-
         <Chips
           value={PRESETS.includes(Math.round(me.threshold)) ? Math.round(me.threshold) : -1}
-          options={[
-            ...PRESETS.map((p) => ({ id: p, label: usd(p) })),
-            { id: -1, label: "…" },
-          ]}
+          options={[...PRESETS.map((p) => ({ id: p, label: usd(p) })), { id: -1, label: "…" }]}
           onChange={(v) => (v === -1 ? open("threshold") : void applyThreshold(v))}
         />
       </Card>
 
       <Card>
-        <SectionTitle note={t(lang, "big_win_24h")}>{bare(t(lang, "menu_my_wallets"))}</SectionTitle>
+        <SectionTitle note={`${num(wallets.length)} / ${limit}`}>
+          {bare(t(lang, "menu_my_wallets"))}
+        </SectionTitle>
 
         {wallets.length === 0 ? (
           <Empty text={t(lang, "mw_no_wallets")} hint={t(lang, "mw_tap_add")} />
@@ -95,6 +80,11 @@ export function WalletsTab() {
           wallets.map((w) => {
             const paused = isPaused(me.plan, w.primary);
             const d = dayPct(w.d1, w.bal);
+            const place = walletRank(rank, w.addr);
+            const marks = [
+              place.best !== null ? `🏆 ${place.best}` : null,
+              w.pos.length ? `👁 ${w.pos.length}` : null,
+            ].filter(Boolean).join("  ");
             return (
               <Row
                 key={w.addr}
@@ -108,7 +98,7 @@ export function WalletsTab() {
                 }
                 value={d === null ? "—" : pct(d)}
                 tone={d === null ? undefined : d >= 0 ? "up" : "dn"}
-                valueSub={w.pos.length ? `👁 ${w.pos.length}` : undefined}
+                valueSub={marks || undefined}
                 onClick={() => open("wallet", w.addr)}
               />
             );
@@ -123,31 +113,6 @@ export function WalletsTab() {
             <small className="hint warn">{t(lang, "pr_limit_free")}</small>
           ) : null}
         </div>
-      </Card>
-
-      <Card>
-        <SectionTitle note={`${num(me.alerts30d)} / 30${t(lang, "unit_day")}`}>
-          {bare(t(lang, "menu_alert_threshold"))}
-        </SectionTitle>
-        {alerts.length ? (
-          alerts.slice(0, 12).map((a, i) => {
-            const kind = tradeKind(a.side);
-            return (
-              <Row
-                key={i}
-                icon={<CoinIcon sym={a.sym} size={30} />}
-                title={a.sym}
-                sub={`${a.name} · ${ago(a.t)}`}
-                value={usd(a.notional)}
-                tone={isUpKind(kind) ? "up" : "dn"}
-                valueSub={t(lang, tradeKindKey(kind))}
-                onClick={() => open("coin", a.sym)}
-              />
-            );
-          })
-        ) : (
-          <Empty text={t(lang, "ui_nothing")} />
-        )}
       </Card>
     </>
   );
