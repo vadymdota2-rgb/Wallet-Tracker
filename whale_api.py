@@ -83,6 +83,12 @@ _hl_cache: dict[str, tuple[float, dict]] = {}
 _pub_lock = threading.Lock()
 _pub: dict = {"t": 0.0, "data": None}
 PUB_TTL = 30.0
+# Сколько секунд отводится на сборку общего кэша. Восьми не хватало:
+# rank, flow, sonar, trades и feed съедали их целиком, и coins, funding и
+# rot не выполнялись НИ РАЗУ — мини-апп оставался без цен и фандинга.
+# Ограничение имело смысл, пока ответа ждал пользователь; сейчас сборка
+# идёт в фоне, а запросам отдаётся прошлый кэш, так что спешить некуда.
+BUILD_BUDGET = float(os.environ.get("WHALE_API_BUILD_BUDGET", "25"))
 _addr_by_sym: dict[str, str] = {}
 _px_hist: dict[str, tuple[float, list]] = {}
 _hl_candles: dict[str, tuple[float, list]] = {}
@@ -1929,14 +1935,17 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
     }
 
     def take(name, fn, fallback, must=False):
-        if not must and time.monotonic() - t0 > 8.0:
-            sys.stderr.write(f"[api] cache skip {name}\n")
+        if not must and time.monotonic() - t0 > BUILD_BUDGET:
+            sys.stderr.write(f"[api] cache skip {name} (бюджет {BUILD_BUDGET:.0f}с исчерпан)\n")
             return fallback
+        started = time.monotonic()
         try:
             return fn()
         except Exception as e:
             sys.stderr.write(f"[api] cache {name}: {e}\n")
             return fallback
+        finally:
+            sys.stderr.write(f"[api] cache {name}: {time.monotonic() - started:.1f}с\n")
 
     rank = take("rank", lambda: load_rank(cur, hl), rank, True)
     flow = take("flow", lambda: load_flow(cur), flow, True)
@@ -1956,6 +1965,7 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
         "sonar": sonar,
         "coins": coins,
         "cachedAt": now(),
+        "buildSec": round(time.monotonic() - t0, 1),
     }
 
 
