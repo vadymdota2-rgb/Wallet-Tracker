@@ -1,9 +1,9 @@
 /**
- * Оболочка: шапка, вкладки, стек экранов.
+ * Оболочка: шапка, выдвижное меню, вкладки, стек экранов.
  *
- * Вкладки повторяют главное меню бота: кошельки, топ трейдеров, аналитика,
- * сонар и всё остальное. Человек, пришедший из чата, находит те же разделы
- * и те же слова — словари взяты из бота.
+ * Разделы повторяют главное меню бота: кошельки, топ трейдеров, аналитика,
+ * сонар и всё остальное. Человек, пришедший из чата, находит те же пункты и
+ * те же слова — словари взяты из бота.
  */
 import { useEffect, useState } from "react";
 import { useApp } from "./store/app";
@@ -14,22 +14,50 @@ import { setLocale } from "./lib/format";
 import { bootTelegram, haptic, telegramLang, webApp } from "./lib/telegram";
 import { startSync, syncNow } from "./lib/sync";
 import { Toaster, toast } from "./components/Toast";
+import { Background } from "./components/Background";
 import { SCREENS } from "./screens/registry";
 import { WalletsTab } from "./screens/WalletsTab";
 import { TopTab } from "./screens/TopTab";
 import { AnalyticsTab } from "./screens/AnalyticsTab";
 import { SonarTab } from "./screens/SonarTab";
 import { MoreTab } from "./screens/MoreTab";
-import type { Tab } from "./store/app";
+import type { DictKey } from "./i18n/types";
+import type { ScreenName, Tab } from "./store/app";
 
 declare const __BUILD__: string;
 
-const TABS: { id: Tab; key: Parameters<typeof t>[1]; glyph: string }[] = [
+const TABS: { id: Tab; key: DictKey; glyph: string }[] = [
   { id: "wallets", key: "menu_my_wallets", glyph: "💼" },
   { id: "top", key: "menu_top_traders", glyph: "🏆" },
   { id: "analytics", key: "menu_big_trades", glyph: "📊" },
   { id: "sonar", key: "ai_title", glyph: "📡" },
   { id: "more", key: "ui_more", glyph: "⋯" },
+];
+
+/** Заголовок шапки — по активной вкладке или по открытому экрану. */
+const SCREEN_TITLE: Record<ScreenName, DictKey> = {
+  wallet: "account_title",
+  position: "hl_open_positions",
+  positions: "menu_positions",
+  coin: "flow_title",
+  trader: "hl_venue_title",
+  signal: "ai_title",
+  addWallet: "add_wallet_title",
+  rename: "rename_title",
+  threshold: "threshold_title",
+  lang: "lang_title",
+  premium: "menu_premium",
+  help: "help_title",
+  history: "ai_hist_title",
+  model: "ai_st_title",
+};
+
+const MENU: { name: ScreenName; key: DictKey; glyph: string }[] = [
+  { name: "positions", key: "menu_positions", glyph: "📈" },
+  { name: "threshold", key: "menu_alert_threshold", glyph: "💰" },
+  { name: "premium", key: "menu_premium", glyph: "⭐" },
+  { name: "lang", key: "menu_languages", glyph: "🌐" },
+  { name: "help", key: "menu_help", glyph: "❓" },
 ];
 
 function TabBody({ tab }: { tab: Tab }) {
@@ -55,13 +83,16 @@ export default function App() {
   const goTab = useApp((s) => s.goTab);
   const stack = useApp((s) => s.stack);
   const back = useApp((s) => s.back);
+  const open = useApp((s) => s.open);
 
   const status = useLive((s) => s.status);
+  const [menuOpen, setMenu] = useState(false);
+  const [i18nReady, setReady] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   // Язык: выбор человека главнее подсказки Telegram. Прошлая версия при
   // отсутствии явного выбора принудительно ставила английский и выбор
   // языка в боте игнорировала.
-  const [i18nReady, setReady] = useState(false);
   useEffect(() => {
     const guess = langPinned ? null : normalizeLang(telegramLang());
     const want = guess && guess !== lang ? guess : lang;
@@ -107,33 +138,34 @@ export default function App() {
 
   const top = stack[stack.length - 1];
   const Screen = top ? SCREENS[top.name] : null;
+  const titleKey: DictKey = top
+    ? SCREEN_TITLE[top.name]
+    : (TABS.find((x) => x.id === tab)?.key ?? "menu_title");
+
+  const refresh = async () => {
+    if (busy) return;
+    setBusy(true);
+    haptic("light");
+    const ok = await syncNow();
+    if (!ok) toast(t(lang, "ui_sync_failed"), "err");
+    setBusy(false);
+  };
 
   return (
     <div className="app">
+      <Background />
+
       <header className="hdr">
-        <button
-          type="button"
-          className="brand"
-          onClick={() => {
-            haptic("light");
-            goTab("wallets");
-          }}
-        >
-          <span className="brand-mark" aria-hidden="true" />
-          <span>Wallet Tracker</span>
+        <button type="button" className="burger" onClick={() => { haptic("select"); setMenu(true); }}
+                aria-label={t(lang, "ui_more")}>
+          <span /><span /><span />
         </button>
-        <button
-          type="button"
-          className={`sync ${status}`}
-          onClick={async () => {
-            haptic("light");
-            const ok = await syncNow();
-            if (!ok) toast(t(lang, "ui_sync_failed"), "err");
-          }}
-          aria-label={t(lang, "ui_updated")}
-        >
-          <span className="dot" />
-        </button>
+        <h1 className="hdr-ttl">
+          <span className="hdr-mark" aria-hidden="true">◱</span>
+          {bare(t(lang, titleKey))}
+        </h1>
+        <button type="button" className={`refresh ${status}${busy ? " spin" : ""}`}
+                onClick={refresh} aria-label={t(lang, "ui_updated")}>↻</button>
       </header>
 
       {status === "offline" ? <p className="banner">{t(lang, "ui_offline")}</p> : null}
@@ -148,25 +180,33 @@ export default function App() {
         </div>
       ) : null}
 
+      {menuOpen ? (
+        <div className="drawer-wrap" onClick={() => setMenu(false)}>
+          <nav className="drawer" onClick={(e) => e.stopPropagation()} aria-label={t(lang, "menu_title")}>
+            <p className="drawer-ttl">{bare(t(lang, "menu_title"))}</p>
+            {MENU.map((m) => (
+              <button key={m.name} type="button" className="drawer-row"
+                      onClick={() => { haptic("select"); setMenu(false); open(m.name); }}>
+                <span aria-hidden="true">{m.glyph}</span>
+                {bare(t(lang, m.key))}
+              </button>
+            ))}
+            <p className="drawer-build">{__BUILD__}</p>
+          </nav>
+        </div>
+      ) : null}
+
       <nav className="tabs" aria-label="sections">
         {TABS.map((it) => (
-          <button
-            key={it.id}
-            type="button"
-            className={it.id === tab ? "on" : undefined}
-            aria-current={it.id === tab}
-            onClick={() => {
-              haptic("select");
-              goTab(it.id);
-            }}
-          >
+          <button key={it.id} type="button" className={it.id === tab ? "on" : undefined}
+                  aria-current={it.id === tab}
+                  onClick={() => { haptic("select"); goTab(it.id); }}>
             <span aria-hidden="true">{it.glyph}</span>
             <small>{bare(t(lang, it.key))}</small>
           </button>
         ))}
       </nav>
 
-      <p className="build" aria-hidden="true">{__BUILD__}</p>
       <Toaster />
     </div>
   );

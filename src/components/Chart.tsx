@@ -72,44 +72,68 @@ export function Area({
   );
 }
 
-/** Свечи. Тело — открытие/закрытие, ус — минимум/максимум. */
-export function Candles({ candles, height = 168 }: { candles: Candle[]; height?: number }) {
+/**
+ * Свечи с ценовой шкалой справа: тело — открытие и закрытие, ус — минимум и
+ * максимум. Последняя цена вынесена пунктиром и подписана — по ней читают
+ * позицию, а не по общему виду графика.
+ */
+export function Candles({
+  candles,
+  height = 190,
+  format = (v: number) => String(v),
+}: {
+  candles: Candle[];
+  height?: number;
+  format?: (v: number) => string;
+}) {
   if (candles.length < 2) return null;
 
-  const pad = 8;
+  // Место под подписи цен справа — иначе они лягут поверх свечей.
+  const axis = 62;
+  const plot = W - axis;
+  const pad = 10;
   const vals: number[] = [];
   for (const c of candles) vals.push(c.h, c.l);
   const [lo, hi] = extent(vals);
   const span = hi - lo;
   const y = (v: number) => pad + (1 - (v - lo) / span) * (height - pad * 2);
 
-  const slot = W / candles.length;
-  const body = Math.max(1.2, Math.min(slot * 0.62, 9));
-
-  // Линии сетки по четвертям — чтобы глаз цеплялся за уровни.
-  const grid = [0.25, 0.5, 0.75].map((f) => pad + f * (height - pad * 2));
+  const slot = plot / candles.length;
+  const body = Math.max(1.2, Math.min(slot * 0.64, 9));
+  const last = candles[candles.length - 1];
+  const lastPx = last ? last.c : 0;
+  const rows = [hi, lo + span * 0.5, lo];
 
   return (
-    <svg className="chart candles" viewBox={`0 0 ${W} ${height}`} preserveAspectRatio="none" role="img">
-      {grid.map((gy, i) => (
-        <line key={i} x1="0" x2={W} y1={gy} y2={gy} stroke="var(--line)" strokeWidth="1"
-              vectorEffect="non-scaling-stroke" />
+    <svg className="chart candles" viewBox={`0 0 ${W} ${height}`} role="img">
+      {rows.map((v, i) => (
+        <g key={i}>
+          <line x1="0" x2={plot} y1={y(v)} y2={y(v)} stroke="var(--line)" strokeWidth="1" />
+          <text className="ax" x={W - 4} y={y(v) + 3} textAnchor="end">{format(v)}</text>
+        </g>
       ))}
+
       {candles.map((c, i) => {
         const cx = i * slot + slot / 2;
-        const rising = c.c >= c.o;
-        const color = rising ? "var(--up)" : "var(--dn)";
+        const color = c.c >= c.o ? "var(--up)" : "var(--dn)";
         const top = y(Math.max(c.o, c.c));
         const bottom = y(Math.min(c.o, c.c));
         return (
           <g key={c.t || i}>
-            <line x1={cx} x2={cx} y1={y(c.h)} y2={y(c.l)} stroke={color} strokeWidth="1"
-                  vectorEffect="non-scaling-stroke" opacity="0.8" />
-            <rect x={cx - body / 2} y={top} width={body} height={Math.max(1, bottom - top)}
-                  fill={color} rx="0.5" />
+            <line x1={cx} x2={cx} y1={y(c.h)} y2={y(c.l)} stroke={color} strokeWidth="1" opacity="0.85" />
+            <rect x={cx - body / 2} y={top} width={body} height={Math.max(1, bottom - top)} fill={color} />
           </g>
         );
       })}
+
+      {lastPx > 0 ? (
+        <g>
+          <line x1="0" x2={plot} y1={y(lastPx)} y2={y(lastPx)} stroke="var(--glow)"
+                strokeWidth="1" strokeDasharray="4 4" opacity="0.75" />
+          <rect x={plot + 2} y={y(lastPx) - 8} width={axis - 6} height="16" rx="3" fill="var(--blue)" />
+          <text className="ax now" x={W - 5} y={y(lastPx) + 3} textAnchor="end">{format(lastPx)}</text>
+        </g>
+      ) : null}
     </svg>
   );
 }

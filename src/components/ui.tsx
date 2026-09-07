@@ -11,6 +11,37 @@ export function SectionTitle({ children, note }: { children: ReactNode; note?: R
   );
 }
 
+/** Ряд чипов с прокруткой: пресеты порога, окна, площадки. */
+export function Chips<T extends string | number>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: { id: T; label: ReactNode }[];
+  onChange: (id: T) => void;
+}) {
+  return (
+    <div className="chips">
+      {options.map((o) => (
+        <button
+          key={String(o.id)}
+          type="button"
+          className={o.id === value ? "chip on" : "chip"}
+          aria-pressed={o.id === value}
+          onClick={() => {
+            if (o.id === value) return;
+            haptic("select");
+            onChange(o.id);
+          }}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function Row({
   icon,
   title,
