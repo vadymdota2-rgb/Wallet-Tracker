@@ -1,5 +1,27 @@
+# Зависимости и кэши сборки
 node_modules/
-logos.log
+.vite/
+dist/
+
+# Секреты — ни один файл с ними в репозиторий не попадает
+.env
+.env.*
+
+# Мусор инструментов
 __pycache__/
+*.py[cod]
+npm-debug.log*
+yarn-error.log*
+logos.log
+
+# Архивы: исходники живут файлами, а не тарболами
 *.tar.gz
+*.zip
+
+# Редакторы и файловые менеджеры
 .DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~

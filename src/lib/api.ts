@@ -6,7 +6,7 @@
  * когда принимал — по одному номеру в адресе открывался чужой аккаунт.
  */
 import { initData } from "./telegram";
-import type { Bootstrap, Coins, MutationResult, Trades } from "./types";
+import type { Bootstrap, MutationResult, Trades } from "./types";
 
 const TIMEOUT_MS = 15000;
 
@@ -60,10 +60,6 @@ export function fetchBootstrap(signal?: AbortSignal): Promise<Bootstrap | null> 
 /** Только общее — когда подписи нет. */
 export function fetchMarket(signal?: AbortSignal): Promise<Bootstrap | null> {
   return call<Bootstrap>("/api/market", { anon: true, signal });
-}
-
-export function fetchQuotes(signal?: AbortSignal): Promise<Coins | null> {
-  return call<Coins>("/api/quotes", { anon: true, signal });
 }
 
 /** Крупнейшие сделки за окно. Окна те же, что в боте: 1h, 24h, 7d, 30d. */

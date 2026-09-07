@@ -31,9 +31,3 @@ export function ago(raw: string | undefined | null): string {
   const sec = parseAgo(raw);
   return sec === null ? String(raw || "") : since(sec);
 }
-
-/** Unix-секунды → «5 минут назад». */
-export function agoTs(ts: number | undefined | null): string {
-  if (!ts || !Number.isFinite(ts)) return "";
-  return since(Date.now() / 1000 - ts);
-}
