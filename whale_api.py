@@ -80,6 +80,10 @@ LANG_CODES = {
 }
 COIN_RE = re.compile(r"\b([A-Z]{2,12})\b")
 _hl_cache: dict[str, tuple[float, dict]] = {}
+# Цены спотовых токенов Hyperliquid: один запрос на всех, живёт пять минут.
+_spot_px: dict = {"t": 0.0, "map": {}}
+_spot_px_lock = threading.Lock()
+SPOT_PX_TTL = 300.0
 _pub_lock = threading.Lock()
 _pub: dict = {"t": 0.0, "data": None}
 PUB_TTL = 30.0
@@ -407,6 +411,53 @@ def hl_post(payload: dict, timeout: float = 6.0):
         return None
 
 
+def spot_prices() -> dict[int, float]:
+    """
+    Индекс спотового токена Hyperliquid → цена в долларах.
+
+    Нужна, потому что в spotClearinghouseState поле `total` — это КОЛИЧЕСТВО
+    токенов, а не их стоимость. Складывать эти числа как доллары нельзя:
+    кошелёк с 2 271 MAX (по $0,0000003) и 100 HREKT показывал «баланс»
+    в тысячи долларов, а на живых кошельках счёт шёл на миллиарды.
+
+    Берём только пары к USDC — цена в них и есть цена в долларах. Сам USDC
+    считаем за единицу. Не ответил сервер — возвращаем пустую карту, и
+    вызывающий не подставляет вместо цен количества.
+    """
+    now = time.monotonic()
+    with _spot_px_lock:
+        if _spot_px["map"] and now - _spot_px["t"] < SPOT_PX_TTL:
+            return _spot_px["map"]
+    raw = hl_post({"type": "spotMetaAndAssetCtxs"})
+    if not isinstance(raw, list) or len(raw) < 2:
+        return _spot_px["map"] if _spot_px["map"] else {}
+    meta, ctxs = raw[0] or {}, raw[1] or []
+    mid = {}
+    for c in ctxs:
+        if not isinstance(c, dict):
+            continue
+        try:
+            v = float(c.get("midPx") or c.get("markPx") or 0)
+        except (TypeError, ValueError):
+            continue
+        if v > 0:
+            mid[c.get("coin")] = v
+    out: dict[int, float] = {}
+    for u in meta.get("universe") or []:
+        pair = u.get("tokens") or []
+        if len(pair) != 2 or pair[1] != 0:  # котировка не в USDC — не наша
+            continue
+        px = mid.get(u.get("name"))
+        if px:
+            out[pair[0]] = px
+    out[0] = 1.0  # USDC
+    if out:
+        with _spot_px_lock:
+            _spot_px["t"] = now
+            _spot_px["map"] = out
+    return out
+
+
 def hl_state(addr: str) -> dict:
     key = addr.lower()
     hit = _hl_cache.get(key)
@@ -432,11 +483,17 @@ def parse_positions(addr: str) -> tuple[list, dict, float]:
         "hip3": 0.0,
         "vaults": 0.0,
     }
+    # Количество токенов умножаем на цену. Нет цены — пропускаем позицию:
+    # прошлая версия складывала сами количества, и спот выходил в миллиарды.
+    px_map = spot_prices()
     for b in spot.get("balances") or []:
         try:
-            equity["spot"] += float(b.get("total") or 0)
+            qty = float(b.get("total") or 0)
         except (TypeError, ValueError):
-            pass
+            continue
+        px = px_map.get(b.get("token"))
+        if qty > 0 and px:
+            equity["spot"] += qty * px
     equity["total"] = equity["spot"] + equity["perp"]
     pos = []
     for ap in perp.get("assetPositions") or []:

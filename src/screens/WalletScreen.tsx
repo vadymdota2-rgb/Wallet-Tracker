@@ -30,7 +30,6 @@ export function WalletScreen({ arg }: ScreenProps) {
   }
 
   const paused = isPaused(plan, w.primary);
-  const eq = w.equity;
   const place = walletRank(rank, w.addr);
   // Длинное «не в рейтинге» в плитку не влезает — там прочерк, а словами
   // это сказано примечанием к разделу.
@@ -98,16 +97,13 @@ export function WalletScreen({ arg }: ScreenProps) {
       </Card>
 
       <Card>
-        {/* Депозит складывается из трёх частей: спот, перпы и акции (HIP-3). */}
-        <SectionTitle note={usd(w.bal)}>{t(lang, "hl_account")}</SectionTitle>
-        <Tiles
-          items={[
-            { label: t(lang, "ai_spot"), value: usd(eq.spot) },
-            { label: t(lang, "ai_perp"), value: usd(eq.perp) },
-            { label: t(lang, "ui_hip3"), value: usd(eq.hip3), tone: eq.hip3 ? undefined : "dim" },
-            { label: t(lang, "rk_trades"), value: num(w.trades) },
-          ]}
-        />
+        {/* Как в боте: одна цифра, общий баланс счёта. Разбивку по споту,
+            перпам и акциям убрали — спот приходил количеством токенов, и
+            сумма выходила фантастической. */}
+        <SectionTitle note={`${bare(t(lang, "rk_trades"))} · ${num(w.trades)}`}>
+          {t(lang, "hl_account")}
+        </SectionTitle>
+        <p className="big">{usd(w.bal)}</p>
         {paused ? <p className="note warn">{t(lang, "mw_free_notice1")}</p> : null}
       </Card>
 
