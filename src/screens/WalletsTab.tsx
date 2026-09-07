@@ -2,13 +2,13 @@
  * «Мои кошельки» — крупная сумма за сутки, перевес покупок, порог алертов
  * и список кошельков с местом в рейтинге.
  */
+import { useRef } from "react";
 import { useApp, isPaused, walletLimit } from "../store/app";
 import { useLive } from "../store/live";
 import { bare, t } from "../i18n/t";
 import { num, shortAddr, usd } from "../lib/format";
-import { venueName, walletRank, walletVenue } from "../lib/rank";
+import { placeAt, rowVenue, venueName, walletRank } from "../lib/rank";
 import { setThreshold } from "../lib/api";
-import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
 import { Action, Card, Chips, Empty, Row, SectionTitle, Tiles, VenueMark } from "../components/ui";
 
@@ -21,12 +21,30 @@ export function WalletsTab() {
 
   const limit = walletLimit(me.plan);
 
+  // Порог меняем на месте и только потом сохраняем. Раньше чип ждал ответа
+  // сервера, а следом полной выгрузки — секунды на нажатие, за которые
+  // экран не подавал признаков жизни. Сервер значение не правит, а лишь
+  // принимает или отвергает, так что показывать его сразу — не обман.
+  const seq = useRef(0);
+  const base = useRef(0);
+
   const applyThreshold = async (value: number) => {
+    const live = useLive.getState();
+    if (Math.round(live.me.threshold) === value) return;
+    // Откат — к последнему подтверждённому, а не к тому, что мы сами
+    // нарисовали предыдущим нажатием.
+    if (seq.current === 0) base.current = live.me.threshold;
+    const my = ++seq.current;
+    live.patchMe({ threshold: value });
+
     const res = await setThreshold(value);
-    if (res?.ok) {
-      toast(t(lang, "threshold_updated"));
-      void syncNow();
-    } else toast(t(lang, "threshold_save_failed"), "err");
+    if (my !== seq.current) return; // перебито более поздним нажатием
+    seq.current = 0;
+    if (res?.ok) toast(t(lang, "threshold_updated"));
+    else {
+      live.patchMe({ threshold: base.current });
+      toast(t(lang, "threshold_save_failed"), "err");
+    }
   };
 
   return (
@@ -68,9 +86,8 @@ export function WalletsTab() {
           wallets.map((w) => {
             const paused = isPaused(me.plan, w.primary);
             const place = walletRank(rank, w.addr);
-            // Есть место — показываем площадку рейтинга и кубок. Нет —
-            // хотя бы площадку, на которой кошелёк работает.
-            const venue = place.best?.venue ?? walletVenue(w);
+            const venue = rowVenue(w, place);
+            const at = venue ? placeAt(place, venue) : null;
             return (
               <Row
                 key={w.addr}
@@ -82,7 +99,7 @@ export function WalletsTab() {
                     <span className="mark cup">
                       <VenueMark venue={venue} />
                       <em className="venue-name">{venueName(venue)}</em>
-                      {place.best ? <> 🏆 {place.best.place}</> : null}
+                      {at ? <> 🏆 {at.place}</> : null}
                     </span>
                   ) : undefined
                 }

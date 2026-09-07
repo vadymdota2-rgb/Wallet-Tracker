@@ -73,10 +73,32 @@ export function venueName(venue: Venue): string {
  * денег больше.
  */
 export function walletVenue(w: Wallet): Venue | null {
-  const perp = w.pos.length > 0 || (w.equity?.perp ?? 0) > 0;
+  // Открытая позиция бывает только на Hyperliquid. Это факт, а не перевес
+  // по деньгам, поэтому он решает до всякого сравнения остатков: иначе
+  // кошелёк с глазиком подписывался BSC, где позиций не бывает вовсе.
+  if (w.pos.length > 0) return "perp";
+  const perp = (w.equity?.perp ?? 0) > 0;
   const spot = w.trades > 0 || (w.equity?.spot ?? 0) > 0;
   if (perp && spot) return (w.equity?.perp ?? 0) >= (w.equity?.spot ?? 0) ? "perp" : "spot";
   if (perp) return "perp";
   if (spot) return "spot";
   return null;
+}
+
+/**
+ * Площадка для строки списка. Порядок по силе признака: открытая позиция —
+ * факт, место в топе площадки — почти факт, остатки и сделки — догадка.
+ */
+export function rowVenue(w: Wallet, place: Place): Venue | null {
+  if (w.pos.length > 0) return "perp";
+  return place.best?.venue ?? walletVenue(w);
+}
+
+/**
+ * Место на той площадке, значок которой стоит рядом. Место с чужой доски
+ * рядом с логотипом Hyperliquid — это два разных факта, слепленных в один,
+ * поэтому если на своей доске кошелька нет, кубок не рисуем вовсе.
+ */
+export function placeAt(place: Place, venue: Venue): VenuePlace | null {
+  return venue === "spot" ? place.spot : place.perp;
 }

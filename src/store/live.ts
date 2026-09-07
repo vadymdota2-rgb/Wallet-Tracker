@@ -60,6 +60,7 @@ interface LiveState {
   apply(data: Bootstrap): void;
   setStatus(s: Status): void;
   patchWallets(w: Wallet[]): void;
+  patchMe(p: Partial<Me>): void;
 }
 
 export const useLive = create<LiveState>((set) => ({
@@ -102,6 +103,9 @@ export const useLive = create<LiveState>((set) => ({
 
   setStatus: (status) => set({ status }),
   patchWallets: (wallets) => set({ wallets }),
+  // Правка своей же настройки без похода на сервер: экран отвечает сразу,
+  // а не через полную выгрузку в четверть мегабайта.
+  patchMe: (p) => set((prev) => ({ me: { ...prev.me, ...p } })),
 }));
 
 /** Кошелёк по адресу — экраны открываются по нему, а не по индексу. */

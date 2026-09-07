@@ -12,7 +12,6 @@ import { useLive } from "../store/live";
 import { t } from "../i18n/t";
 import { usd, usdFull } from "../lib/format";
 import { setThreshold } from "../lib/api";
-import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
 import { Action, Card, Row, SectionTitle } from "../components/ui";
 
@@ -24,6 +23,7 @@ export function ThresholdScreen() {
   const lang = useApp((s) => s.lang);
   const back = useApp((s) => s.back);
   const current = useLive((s) => s.me.threshold);
+  const patchMe = useLive((s) => s.patchMe);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -33,9 +33,11 @@ export function ThresholdScreen() {
     try {
       const res = await setThreshold(value);
       if (res?.ok) {
+        // Сервер хранит ровно то, что мы прислали, — полная выгрузка ради
+        // одного числа заставляла список ждать несколько секунд.
+        patchMe({ threshold: value });
         toast(t(lang, "threshold_updated"));
         back();
-        void syncNow();
       } else if (res?.error === "min") toast(t(lang, "err_threshold_too_small"), "err");
       else if (res?.error === "max") toast(t(lang, "err_threshold_too_large"), "err");
       else toast(t(lang, "threshold_save_failed"), "err");
