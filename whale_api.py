@@ -1132,7 +1132,9 @@ def _map_rank(arr, days: int, n: int = 100) -> list:
                 "tr": int(e.get("t") or 0),
                 "dd": 0,
                 "days": days,
-                "hold": f"{max(1, hold_s // 3600)}ч" if hold_s else None,
+                # Секунды, а не «9ч»: бот пишет «21д 15ч» и «8ч 30м», а строка
+                # с русской буквой ещё и не переводилась.
+                "hold": hold_s or None,
             }
         )
     return mapped
@@ -1150,6 +1152,67 @@ def _read_rank_key(cur, key: str, days: int) -> list:
     except json.JSONDecodeError:
         return []
     return _map_rank(arr, days, 100)
+
+
+def perp_margin(hl: sqlite3.Connection, wallets: list[str], since_ms: int) -> dict[str, float]:
+    """
+    Сумма маржи по закрытым сделкам — знаменатель «ROI за сделку».
+
+    Повторяет обход из hyperliquid_ui.cpp: филы идут по паре кошелёк-монета,
+    внутри серии берётся наибольшая маржа (или notional/плечо, если маржа не
+    записана), а на закрытии серия добавляется к сумме. Дозаливки одного и
+    того же ордера отдельной сделкой не считаются — иначе одна позиция,
+    закрытая тремя филами, утроила бы знаменатель.
+
+    Считаем только для кошельков, попавших в выдачу: их не больше сотни, а
+    сделок у каждого не больше двухсот за месяц.
+    """
+    if not wallets:
+        return {}
+    cset = cols(hl, "hl_fills")
+    if "margin_nanos" not in cset and "leverage" not in cset:
+        return {}
+    marg = "COALESCE(margin_nanos,0)" if "margin_nanos" in cset else "0"
+    lev = "COALESCE(leverage,0)" if "leverage" in cset else "0"
+    ntl = "COALESCE(notional_nanos,0)" if "notional_nanos" in cset else "0"
+    flat = "COALESCE(flat,0)" if "flat" in cset else "0"
+    code = "COALESCE(dir_code,0)" if "dir_code" in cset else "0"
+    oid = "COALESCE(oid,0)" if "oid" in cset else "0"
+    coin = "COALESCE(coin,'')" if "coin" in cset else "''"
+    out: dict[str, float] = {}
+    marks = ",".join("?" * len(wallets))
+    sql = (
+        f"SELECT wallet, {coin} c, {marg} m, {lev} lv, {ntl} n, "
+        f"{flat} fl, {code} dc, {oid} od, tid "
+        f"FROM hl_fills WHERE ts >= ? AND wallet IN ({marks}) "
+        f"ORDER BY wallet, c, ts, tid"
+    )
+    try:
+        rows = hl.execute(sql, (since_ms, *wallets)).fetchall()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] perp margin: {e}\n")
+        return {}
+    key = None
+    ser = 0
+    close_oid = 0
+    for r in rows:
+        k = (r["wallet"], r["c"])
+        if k != key:
+            key, ser, close_oid = k, 0, 0
+        m = int(r["m"] or 0)
+        if m <= 0 and int(r["lv"] or 0) > 0 and int(r["n"] or 0) > 0:
+            m = int(r["n"]) // int(r["lv"])
+        if m > ser:
+            ser = m
+        if int(r["fl"] or 0) != 1 and int(r["dc"] or 0) < 5:
+            continue
+        ident = int(r["od"] or 0) or int(r["tid"] or 0)
+        if not (ident and ident == close_oid):
+            if ser > 0:
+                out[r["wallet"]] = out.get(r["wallet"], 0.0) + usd(ser)
+            close_oid = ident
+        ser = 0
+    return out
 
 
 def load_perp_rank(hl: sqlite3.Connection | None, days: int = 30) -> dict:
@@ -1189,19 +1252,20 @@ def load_perp_rank(hl: sqlite3.Connection | None, days: int = 30) -> dict:
         sys.stderr.write(f"[api] perp rank: {e}\n")
         return empty
     mapped = []
+    # Знаменатель ROI — вложенная маржа, как в боте. Формулы
+    # 100*pnl/max(|pnl|*0.4,1) здесь когда-то давала ровно ±250 почти всем.
+    margins = perp_margin(hl, [r["wallet"] for r in rows if r["wallet"]], since_ms)
     for r in rows:
         pnl = usd(r["pnl"]) - usd(r["fees"])
         tr = int(r["trades"] or 0)
         wins = int(r["wins"] or 0)
         lev_v = float(r["lev"] or 0)
+        marg = margins.get(r["wallet"] or "", 0.0)
         mapped.append(
             {
                 "a": r["wallet"] or "",
                 "pnl": pnl,
-                # Доходности здесь взяться неоткуда: в hl_fills нет размера
-                # депозита. Прежняя формула 100*pnl/max(|pnl|*0.4,1) давала
-                # ровно ±250 почти всем, и по ней строился «Топ ROI».
-                "roi": None,
+                "roi": (100.0 * pnl / marg) if marg > 0 else None,
                 "win": int(round(100.0 * wins / tr)) if tr else 0,
                 "tr": tr,
                 "dd": 0,
@@ -1219,8 +1283,29 @@ def load_perp_rank(hl: sqlite3.Connection | None, days: int = 30) -> dict:
     }
 
 
+def rank_presence(cur: sqlite3.Connection) -> dict[str, dict[str, int]]:
+    """Сколько дней кошелёк держится в топе — по площадкам. Одним запросом
+    на всех: бот спрашивает по одному кошельку, нам так нельзя."""
+    out: dict[str, dict[str, int]] = {"spot": {}, "perp": {}}
+    if not table_exists(cur, "rank_presence"):
+        return out
+    try:
+        rows = cur.execute(
+            "SELECT venue, wallet, COUNT(*) n FROM rank_presence GROUP BY venue, wallet"
+        ).fetchall()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] rank_presence: {e}\n")
+        return out
+    for r in rows:
+        v = str(r["venue"] or "")
+        if v in out and r["wallet"]:
+            out[v][str(r["wallet"]).lower()] = int(r["n"] or 0)
+    return out
+
+
 def load_rank(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) -> dict:
     empty = {"pnl": [], "roi": [], "win": [], "act": []}
+    seen = rank_presence(cur)
     rank = {"spot": {k: [] for k in empty}, "perp": {k: [] for k in empty}, "wins": {}}
     kind_map = {"pnl": "pnl", "roi": "roi", "winrate": "win", "active": "act"}
     has_cache = table_exists(cur, "ranking_cache")
@@ -1237,6 +1322,10 @@ def load_rank(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) -> 
             if not spot["act"]:
                 spot["act"] = list(spot["pnl"])
         perp = load_perp_rank(hl, days) if days == 30 else {k: [] for k in empty}
+        for venue, table in (("spot", spot), ("perp", perp)):
+            for board in table.values():
+                for row in board:
+                    row["top"] = seen[venue].get(str(row.get("a") or "").lower()) or None
         rank["wins"][str(days)] = {"spot": spot, "perp": perp}
         if days == 30:
             rank["spot"] = spot

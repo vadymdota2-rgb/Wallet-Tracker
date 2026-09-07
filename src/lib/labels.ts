@@ -6,7 +6,8 @@
  * Здесь строка сводится к типу, а перевод берётся из словаря бота: те же
  * слова, что человек уже видел в чате.
  */
-import type { DictKey } from "../i18n/types";
+import type { DictKey, LangCode } from "../i18n/types";
+import { t } from "../i18n/t";
 
 export type TradeKind =
   | "buy" | "sell"
@@ -66,12 +67,23 @@ export function fundingSideKey(rate: number): DictKey {
   return rate >= 0 ? "fund_longs_pay" : "fund_shorts_pay";
 }
 
-/** «7ч» из рейтинга → часы числом. */
-export function holdHours(raw: string | undefined | null): number | null {
-  const m = String(raw || "").match(/(\d+)/);
-  if (!m || m[1] === undefined) return null;
-  const n = Number(m[1]);
-  return Number.isFinite(n) ? n : null;
+/**
+ * Средний срок удержания. Формат как в боте (formatHoldTime): «21д 15ч»,
+ * «8ч 30м», «12м». Прошлая версия огрубляла всё до часов, и трёхнедельная
+ * позиция и восьмичасовая выглядели одинаково невнятно.
+ */
+export function holdTime(sec: number | null | undefined, lang: LangCode): string | null {
+  const n = Math.floor(Number(sec) || 0);
+  if (!(n > 0)) return null;
+  const D = t(lang, "unit_day"), H = t(lang, "unit_hour"),
+        M = t(lang, "unit_min"), S = t(lang, "unit_sec");
+  const d = Math.floor(n / 86400);
+  const h = Math.floor((n % 86400) / 3600);
+  const m = Math.floor((n % 3600) / 60);
+  if (d > 0) return h > 0 ? `${d}${D} ${h}${H}` : `${d}${D}`;
+  if (h > 0) return m > 0 ? `${h}${H} ${m}${M}` : `${h}${H}`;
+  if (m > 0) return `${m}${M}`;
+  return `${n}${S}`;
 }
 
 /** Ключи причин сигнала приходят готовыми: "flow" → ai_why_flow. */

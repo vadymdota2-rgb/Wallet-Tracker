@@ -99,9 +99,11 @@ export interface Trader {
   tr: number;
   dd: number;
   days: number;
-  /** Средний срок удержания, строка сервера вида "7ч". */
-  hold?: ServerText | null;
+  /** Средний срок удержания в секундах. */
+  hold?: number | null;
   lev?: number | null;
+  /** Сколько дней кошелёк держится в топе площадки. */
+  top?: number | null;
 }
 
 export type RankKind = "pnl" | "roi" | "win" | "act";

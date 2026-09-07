@@ -4,7 +4,7 @@ import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import { t } from "../i18n/t";
 import { num, pct, shortAddr, signed } from "../lib/format";
-import { holdHours } from "../lib/labels";
+import { holdTime } from "../lib/labels";
 import { addWallet } from "../lib/api";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
@@ -37,7 +37,7 @@ export function TraderScreen({ arg, arg2 }: ScreenProps) {
     );
   }
 
-  const hold = holdHours(row.hold);
+  const hold = holdTime(row.hold, lang);
 
   return (
     <Frame
@@ -49,18 +49,20 @@ export function TraderScreen({ arg, arg2 }: ScreenProps) {
         <p className={`big ${row.pnl >= 0 ? "up" : "dn"}`}>{signed(row.pnl)}</p>
         <Tiles
           items={[
-            { label: t(lang, "hl_rk_roi_account"), value: pct(row.roi, 1) },
+            { label: t(lang, "rk_roi_per_trade"), value: pct(row.roi, 1) },
             { label: t(lang, "ws_winrate"), value: `${num(row.win)}%` },
             { label: t(lang, "rk_trades"), value: num(row.tr) },
-            {
-              label: t(lang, "rk_avg_hold"),
-              value: hold === null ? "—" : `${hold}${t(lang, "unit_hour")}`,
-            },
+            venue === "perp"
+              ? { label: t(lang, "hl_rk_leverage"), value: row.lev ? `${row.lev}×` : "—" }
+              : { label: t(lang, "rk_avg_hold"), value: hold ?? "—" },
+            ...(row.top
+              ? [{
+                  label: t(lang, "rk_in_top"),
+                  value: `${num(row.top)} ${t(lang, "rk_days")}`,
+                }]
+              : []),
           ]}
         />
-        {row.lev ? (
-          <Tiles items={[{ label: t(lang, "hl_rk_leverage"), value: `${row.lev}×` }]} cols={2} />
-        ) : null}
       </Card>
 
       <Card>

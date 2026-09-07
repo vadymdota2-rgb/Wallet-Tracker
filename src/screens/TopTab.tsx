@@ -11,7 +11,7 @@ import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import { t } from "../i18n/t";
 import { num, pct, shortAddr, signed } from "../lib/format";
-import { holdHours } from "../lib/labels";
+import { holdTime } from "../lib/labels";
 import { Card, Empty, Row, SectionTitle, Segmented } from "../components/ui";
 import type { RankKind, RankTable, Trader, Venue } from "../lib/types";
 import type { RankWin } from "../store/app";
@@ -92,7 +92,7 @@ export function TopTab() {
           />
         ) : (
           rows.map((r, i) => {
-            const hold = holdHours(r.hold);
+            const hold = holdTime(r.hold, lang);
             return (
               <Row
                 key={`${r.a}-${i}`}
@@ -102,7 +102,7 @@ export function TopTab() {
                   <>
                     {num(r.tr)} {t(lang, "rk_trades")}
                     {r.win ? ` · ${num(r.win)}% ${t(lang, "ws_winrate")}` : ""}
-                    {hold ? ` · ${hold}${t(lang, "unit_hour")}` : ""}
+                    {hold ? ` · ${hold}` : ""}
                     {r.lev ? ` · ${r.lev}×` : ""}
                   </>
                 }

@@ -5,7 +5,7 @@ import { useLive, walletByAddr } from "../store/live";
 import { boardKey, venueName, walletRank } from "../lib/rank";
 import { bare, t } from "../i18n/t";
 import { lev as levFmt, num, pct, px, shortAddr, signed, usd } from "../lib/format";
-import { holdHours } from "../lib/labels";
+import { holdTime } from "../lib/labels";
 import { removeWallet, setPrimary } from "../lib/api";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
@@ -44,7 +44,7 @@ export function WalletScreen({ arg }: ScreenProps) {
   // Строка доски, по которой кошелёк туда попал: место само по себе ничего
   // не говорит, а прибыль, доходность и винрейт за окно — говорят.
   const top = place.best?.row;
-  const hold = top ? holdHours(top.hold) : null;
+  const hold = holdTime(top?.hold, lang);
 
   return (
     <Frame title={w.name} sub={shortAddr(w.addr)}>
@@ -80,18 +80,24 @@ export function WalletScreen({ arg }: ScreenProps) {
             <p className={`big ${top.pnl >= 0 ? "up" : "dn"}`}>{signed(top.pnl)}</p>
             <Tiles
               items={[
-                { label: t(lang, "hl_rk_roi_account"), value: pct(top.roi, 1) },
+                // Набор полей как в боте: у фьючерсов среднее плечо и нет
+                // срока удержания, у спота наоборот. Показывать пустую
+                // плитку с прочерком там, где показателя не бывает, — врать
+                // о том, что данные потерялись.
+                { label: t(lang, "rk_roi_per_trade"), value: pct(top.roi, 1) },
                 { label: t(lang, "ws_winrate"), value: `${num(top.win)}%` },
                 { label: t(lang, "rk_trades"), value: num(top.tr) },
-                {
-                  label: t(lang, "rk_avg_hold"),
-                  value: hold === null ? "—" : `${hold}${t(lang, "unit_hour")}`,
-                },
+                place.best?.venue === "perp"
+                  ? { label: t(lang, "hl_rk_leverage"), value: top.lev ? `${top.lev}×` : "—" }
+                  : { label: t(lang, "rk_avg_hold"), value: hold ?? "—" },
+                ...(top.top
+                  ? [{
+                      label: bare(t(lang, "rk_in_top")),
+                      value: `${num(top.top)} ${t(lang, "rk_days")}`,
+                    }]
+                  : []),
               ]}
             />
-            {top.lev ? (
-              <Tiles items={[{ label: t(lang, "hl_rk_leverage"), value: `${top.lev}×` }]} />
-            ) : null}
           </>
         ) : null}
       </Card>
