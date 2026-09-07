@@ -18,6 +18,29 @@ export default defineConfig({
     ),
   },
   resolve: { alias: { "@": resolve(__dirname, "src") } },
+  /**
+   * `npm run dev` отдаёт только статику: API, свечи и логотипы живут за
+   * nginx. Проксируем их на уже выкаченный адрес, чтобы для локальной
+   * работы не поднимать ни nginx, ни базы бота.
+   *
+   * Подписи Telegram в браузере нет, поэтому приложение само переходит на
+   * публичный /api/market: кошельки и порог видны не будут, рынок и графики
+   * будут. Свой адрес — переменной WT_PROXY.
+   */
+  server: {
+    port: 5173,
+    proxy: Object.fromEntries(
+      ["/api", "/quotes", "/klines", "/klines-vision", "/klines-bybit", "/klines-kucoin",
+       "/coins", "/hllogo", "/cglogo", "/pcslogo", "/twlogo"].map((path) => [
+        path,
+        {
+          target: process.env.WT_PROXY ?? "https://wallet-tracker-git-606699497037.europe-west1.run.app",
+          changeOrigin: true,
+          secure: true,
+        },
+      ]),
+    ),
+  },
   build: {
     outDir: "html",
     // В html/ лежит coins/ — 1547 логотипов. Сборка их не трогает.
