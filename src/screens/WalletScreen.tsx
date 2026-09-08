@@ -185,7 +185,7 @@ export function WalletScreen({ arg }: ScreenProps) {
           {w.holds.map((h, i) => (
             <Row
               key={h.token}
-              icon={<CoinIcon sym={h.sym} size={30} />}
+              icon={<CoinIcon sym={h.sym} icon={h.icon} size={30} />}
               title={h.sym}
               sub={`${t(lang, "ui_invested")} ${usd(h.cost)}`}
               sub2={`${t(lang, "hl_entry_price")} ${px(h.entry)} → ${px(h.price)}`}

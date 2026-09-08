@@ -701,6 +701,27 @@ def addr_of_sym(cur: sqlite3.Connection, sym: str, token: str = "") -> str:
     return _addr_by_sym.get((sym or "").upper(), "")
 
 
+def token_series(cur: sqlite3.Connection, addr: str, days: int = 90) -> list[list]:
+    """
+    Почасовые цены токена за три месяца — из той же таблицы, что кормит
+    карточку монеты. Бот пишет по точке в час и держит их девяносто дней,
+    так что из них собираются настоящие свечи: четырёхчасовые, дневные,
+    недельные. Часовых свечей отсюда не бывает — точка в час это одна цена,
+    у такой «свечи» нет ни тела, ни теней.
+    """
+    if not addr or not table_exists(cur, "token_price_history"):
+        return []
+    try:
+        rows = cur.execute(
+            "SELECT ts, price_nanos FROM token_price_history "
+            "WHERE address=? AND ts>=? AND price_nanos>0 ORDER BY ts",
+            (addr, now() - days * 86400),
+        ).fetchall()
+    except sqlite3.Error:
+        return []
+    return [[int(r["ts"]), usd(r["price_nanos"])] for r in rows if r["price_nanos"]]
+
+
 def hist_spot(cur: sqlite3.Connection, addr: str) -> list[tuple[int, float]]:
     if not addr or not table_exists(cur, "token_price_history"):
         return []
@@ -990,52 +1011,100 @@ def spot_open(cur: sqlite3.Connection, addr: str, dust: float = 1.0) -> list[dic
     for tok, h in held.items():
         if h["qty"] <= 0 or h["cost"] <= 0:
             continue
-        px_raw = last_trade_px(cur, tok)          # доллары за атом
-        if px_raw <= 0:
-            continue
-        cost = usd(h["cost"])
-        value = h["qty"] * px_raw
-        if value < dust and cost < dust:
-            continue
         pts = hist_spot(cur, tok)
         price = pts[-1][1] if pts else 0.0
-        # 10^n: во сколько раз привычная цена больше цены за атом.
-        scale = 10 ** round(math.log10(price / px_raw)) if price > 0 and px_raw > 0 else 0
-        entry_raw = h["cost"] / h["qty"] / NANOS
+        if price <= 0:
+            continue
+        dec = token_decimals(cur, tok)
+        if dec:
+            scale = 10 ** dec
+        else:
+            # Знаков в базе нет — восстанавливаем по данным: во сколько раз
+            # привычная цена больше цены за атом. Их целое число, поэтому
+            # округляем до степени десяти; это снимает и разницу во времени
+            # замеров, и шум медианы.
+            px_atom = token_px_atom(cur, tok)
+            if px_atom <= 0:
+                continue
+            scale = 10 ** round(math.log10(price / px_atom))
+        if not 1 <= scale <= 10 ** 30:
+            continue
+        qty = h["qty"] / scale                    # штуки, а не атомы
+        if qty <= 0:
+            continue
+        cost = usd(h["cost"])
+        value = qty * price
+        if value < dust and cost < dust:
+            continue
+        pct = (value - cost) / cost * 100.0 if cost else 0.0
+        # Заслон от мусора в базе: рост в сто раз бывает, в сто тысяч — нет.
+        # Лучше не показать строку, чем написать «+222 000 000 000 000 %».
+        if not -100.0 <= pct <= 100_000.0:
+            sys.stderr.write(f"[api] spot {tok[:12]}: странная доходность {pct:.0f}%, пропуск\n")
+            continue
         out.append({
             "token": tok,
             "sym": symbol_of(cur, tok) or short_addr(tok),
+            "icon": coin_icon(symbol_of(cur, tok), tok),
             "cost": cost,
             "value": value,
             "pnl": value - cost,
-            "pct": (value - cost) / cost * 100.0 if cost else 0.0,
-            "entry": entry_raw * scale if scale else 0.0,
-            "price": price if price > 0 else px_raw * scale,
+            "pct": pct,
+            "entry": cost / qty,
+            "price": price,
             "buys": h["buys"],
             "since": h["first"],
-            "hist": [p for _, p in pts][-60:],
         })
     out.sort(key=lambda x: -x["value"])
     return out[:20]
 
 
-def last_trade_px(cur: sqlite3.Connection, token: str) -> float:
-    """Цена токена за один атом по самой свежей сделке — чьей угодно."""
+def token_decimals(cur: sqlite3.Connection, token: str) -> int:
+    """Знаки после запятой из token_cache — их туда пишет бот при разборе
+    токена. Есть настоящее значение — незачем его угадывать."""
+    if not table_exists(cur, "token_cache"):
+        return 0
+    if "decimals" not in cols(cur, "token_cache"):
+        return 0
     try:
         r = cur.execute(
-            "SELECT usd_nanos, token_amount FROM trades WHERE token=? AND usd_nanos>0 "
-            "ORDER BY timestamp DESC, id DESC LIMIT 1",
-            (token,),
+            "SELECT decimals FROM token_cache WHERE lower(address)=?", (token.lower(),)
         ).fetchone()
     except sqlite3.Error:
-        return 0.0
-    if not r:
-        return 0.0
+        return 0
+    d = int((r["decimals"] if r else 0) or 0)
+    return d if 0 < d <= 30 else 0
+
+
+def token_px_atom(cur: sqlite3.Connection, token: str, n: int = 25) -> float:
+    """
+    Цена токена за один атом — медиана по последним сделкам.
+
+    По одной последней сделке считать нельзя: одна строка с крошечным
+    количеством задирала цену на девять порядков, и покупка на $923
+    показывалась как два триллиона долларов прибыли. Медиана двух десятков
+    сделок к такой строке равнодушна.
+    """
     try:
-        amt = int(str(r["token_amount"] or "0").strip())
-    except (TypeError, ValueError):
+        rows = cur.execute(
+            "SELECT usd_nanos, token_amount FROM trades WHERE token=? AND usd_nanos>0 "
+            "ORDER BY timestamp DESC, id DESC LIMIT ?",
+            (token, n),
+        ).fetchall()
+    except sqlite3.Error:
         return 0.0
-    return usd(r["usd_nanos"]) / amt if amt > 0 else 0.0
+    px = []
+    for r in rows:
+        try:
+            amt = int(str(r["token_amount"] or "0").strip())
+        except (TypeError, ValueError):
+            continue
+        if amt > 0:
+            px.append(usd(r["usd_nanos"]) / amt)
+    if not px:
+        return 0.0
+    px.sort()
+    return px[len(px) // 2]
 
 
 def wallet_live(cur: sqlite3.Connection, chat: str, addr: str) -> dict:
@@ -2708,6 +2777,23 @@ class Handler(BaseHTTPRequestHandler):
                             hl.close()
                         except Exception:
                             pass
+                return
+            if path in ("/token", "/api/token"):
+                cur = open_db(DB)
+                if not cur:
+                    self._json(200, {"ok": False, "error": "db"})
+                    return
+                try:
+                    a = (qs.get("addr", [""])[0] or "").strip().lower()
+                    if not re.fullmatch(r"0x[0-9a-f]{40}", a):
+                        self._json(400, {"ok": False, "error": "bad_addr"})
+                        return
+                    self._json(200, {"ok": True, "addr": a, "hist": token_series(cur, a)})
+                finally:
+                    try:
+                        cur.close()
+                    except Exception:
+                        pass
                 return
             if path in ("/wallet", "/api/wallet"):
                 chat = self._user(qs)

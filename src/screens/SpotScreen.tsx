@@ -5,19 +5,23 @@
  * количество и стоимость, продажа списывает их пропорционально. Осталось
  * количество — значит токен на руках, и это ровно то, о чём приходил алерт.
  *
- * График — из истории цен токена, той же, что под карточкой монеты. Свечей с
- * биржи здесь нет и быть не может: такие токены на биржах не торгуются.
+ * Свечи собираются из почасовых цен токена: биржевых свечей тут быть не
+ * может, такие токены на биржах не торгуются. Устройство экрана то же, что
+ * у позиции Hyperliquid: цена входа отдельной линией, у текущей цены —
+ * доходность и прибыль.
  */
+import { useEffect, useState } from "react";
 import { Frame, type ScreenProps } from "./Screen";
 import { useApp } from "../store/app";
 import { useLive, walletByAddr } from "../store/live";
 import { t } from "../i18n/t";
 import { num, pct, px, signed, since, usd } from "../lib/format";
-
+import { candlesFrom, TF_LABEL, SPOT_TFS, type SpotTf } from "../lib/klines";
+import { fetchTokenHist } from "../lib/api";
 import { CoinIcon } from "../components/CoinIcon";
-import { Area } from "../components/Chart";
+import { Candles } from "../components/Chart";
 import { Hero } from "../components/Hero";
-import { Card, Empty, Tiles } from "../components/ui";
+import { Card, Empty, Segmented, Skeleton, Tiles } from "../components/ui";
 
 export function SpotScreen({ arg, arg2 }: ScreenProps) {
   const lang = useApp((s) => s.lang);
@@ -26,6 +30,20 @@ export function SpotScreen({ arg, arg2 }: ScreenProps) {
   const w = walletByAddr(wallets, arg);
   const idx = Number(arg2 ?? -1);
   const h = w && Number.isInteger(idx) ? w.holds?.[idx] : undefined;
+  const token = h?.token ?? "";
+
+  const [tf, setTf] = useState<SpotTf>("1d");
+  const [hist, setHist] = useState<[number, number][] | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    const ctrl = new AbortController();
+    setHist(null);
+    void fetchTokenHist(token, ctrl.signal).then((d) => {
+      if (!ctrl.signal.aborted) setHist(d?.ok ? d.hist ?? [] : []);
+    });
+    return () => ctrl.abort();
+  }, [token]);
 
   if (!w || !h) {
     return (
@@ -35,20 +53,38 @@ export function SpotScreen({ arg, arg2 }: ScreenProps) {
     );
   }
 
+  const candles = hist ? candlesFrom(hist, tf) : null;
+
   return (
     <Frame title={h.sym} sub={w.name}>
       <Card>
         <Hero
-          icon={<CoinIcon sym={h.sym} size={44} />}
+          icon={<CoinIcon sym={h.sym} icon={h.icon} size={44} />}
           value={signed(h.pnl)}
           tone={h.pnl >= 0 ? "up" : "dn"}
           note={<>{pct(h.pct)} · {usd(h.value)}</>}
         />
-        {h.hist.length >= 2 ? (
-          <Area points={h.hist} height={150} up={h.pnl >= 0} />
+
+        <Segmented<SpotTf>
+          value={tf}
+          onChange={setTf}
+          options={SPOT_TFS.map((id) => ({ id, label: t(lang, TF_LABEL[id]) }))}
+        />
+        {candles === null ? (
+          <Skeleton rows={3} />
+        ) : candles.length >= 3 ? (
+          <Candles
+            candles={candles}
+            format={px}
+            entry={h.entry}
+            entryLabel={t(lang, "hl_entry_price")}
+            note={`${pct(h.pct)} · ${signed(h.pnl)}`}
+            noteTone={h.pnl >= 0 ? "up" : "dn"}
+          />
         ) : (
           <Empty text={t(lang, "fund_loading")} />
         )}
+
         <Tiles
           items={[
             { label: t(lang, "hl_entry_price"), value: px(h.entry) },

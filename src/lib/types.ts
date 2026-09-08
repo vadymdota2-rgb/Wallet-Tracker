@@ -100,6 +100,8 @@ export type Flow = Record<string, FlowWindow | undefined>;
 export interface SpotHold {
   token: string;
   sym: string;
+  /** Кандидаты логотипа от сервера — по адресу токена, а не по тикеру. */
+  icon?: string[];
   /** Сколько вложено в то, что осталось на руках. */
   cost: number;
   value: number;
@@ -110,7 +112,13 @@ export interface SpotHold {
   buys: number;
   /** Секунды эпохи: первая покупка того, что ещё держит. */
   since: number;
-  hist: number[];
+}
+
+/** Ответ /api/token: почасовые цены токена, пары [секунды, цена]. */
+export interface TokenHist {
+  ok: boolean;
+  addr?: string;
+  hist?: [number, number][];
 }
 
 /** Ответ /api/wallet: позиции и остаток одного кошелька. */

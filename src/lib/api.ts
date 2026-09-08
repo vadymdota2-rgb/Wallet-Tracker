@@ -6,7 +6,7 @@
  * когда принимал — по одному номеру в адресе открывался чужой аккаунт.
  */
 import { initData } from "./telegram";
-import type { Bootstrap, MutationResult, Trades, WalletLive } from "./types";
+import type { Bootstrap, MutationResult, TokenHist, Trades, WalletLive } from "./types";
 
 const TIMEOUT_MS = 15000;
 
@@ -69,6 +69,11 @@ export function fetchMarket(signal?: AbortSignal): Promise<Bootstrap | null> {
  */
 export function fetchWallet(addr: string, signal?: AbortSignal): Promise<WalletLive | null> {
   return call<WalletLive>(`/api/wallet?addr=${encodeURIComponent(addr)}`, { signal });
+}
+
+/** Почасовые цены BSC-токена за три месяца — из них строятся свечи. */
+export function fetchTokenHist(addr: string, signal?: AbortSignal): Promise<TokenHist | null> {
+  return call<TokenHist>(`/api/token?addr=${encodeURIComponent(addr)}`, { signal });
 }
 
 /** Крупнейшие сделки за окно. Окна те же, что в боте: 1h, 24h, 7d, 30d. */

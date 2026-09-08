@@ -34,7 +34,18 @@ export function normalizeSym(sym: string): string {
     : up;
 }
 
-export function CoinIcon({ sym, size = 32 }: { sym: string; size?: number }) {
+export function CoinIcon({
+  sym,
+  size = 32,
+  icon,
+}: {
+  sym: string;
+  size?: number;
+  /** Готовый список от сервера: локальный файл, PancakeSwap, Trust Wallet.
+   *  Нужен там, где монеты нет в общей выдаче — например у покупок на BSC:
+   *  без адреса токена искать было негде, и оставалась буква в кружке. */
+  icon?: string[];
+}) {
   const [step, setStep] = useState(0);
   const coins = useLive((s) => s.coins);
 
@@ -43,6 +54,7 @@ export function CoinIcon({ sym, size = 32 }: { sym: string; size?: number }) {
   const alias = HL_ALIAS[key] ?? key;
 
   const urls: string[] = [];
+  if (icon?.length) urls.push(...icon.filter(Boolean));
   const fromServer = coin?.icon;
   if (Array.isArray(fromServer)) urls.push(...fromServer.filter(Boolean));
   else if (typeof fromServer === "string" && fromServer.startsWith("/")) urls.push(fromServer);
@@ -59,7 +71,7 @@ export function CoinIcon({ sym, size = 32 }: { sym: string; size?: number }) {
   if (cg) urls.push(cg);
 
   // Сменили монету — перебор начинается заново.
-  useEffect(() => setStep(0), [key]);
+  useEffect(() => setStep(0), [key, icon?.[0]]);
 
   const src = urls[step];
   const letter = key.slice(0, 1) || "?";

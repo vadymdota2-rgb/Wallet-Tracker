@@ -142,3 +142,32 @@ export const TF_LABEL: Record<Timeframe, DictKey> = {
   "1w": "ui_tf_1w",
   "1M": "ui_tf_1mo",
 };
+
+/** Таймфреймы, которые можно собрать из почасовых цен BSC-токена. */
+export type SpotTf = "4h" | "1d" | "1w";
+export const SPOT_TFS: SpotTf[] = ["4h", "1d", "1w"];
+const SPOT_STEP: Record<SpotTf, number> = { "4h": 4 * 3600, "1d": 86400, "1w": 7 * 86400 };
+
+/**
+ * Свечи из ряда наблюдений цены. Бот пишет цену токена раз в час; внутри
+ * корзины открытие — первая точка, закрытие — последняя, тени — минимум и
+ * максимум. Часовых свечей отсюда не собрать: точка в час это одна цена, у
+ * такой свечи нет ни тела, ни теней, и рисовать её значило бы выдавать
+ * замер за торги.
+ */
+export function candlesFrom(points: [number, number][], tf: SpotTf, max = 120): Candle[] {
+  const step = SPOT_STEP[tf];
+  const by = new Map<number, Candle>();
+  for (const [ts, px] of points) {
+    if (!(px > 0) || !(ts > 0)) continue;
+    const slot = Math.floor(ts / step) * step;
+    const c = by.get(slot);
+    if (!c) by.set(slot, { t: slot * 1000, o: px, h: px, l: px, c: px });
+    else {
+      c.c = px;
+      if (px > c.h) c.h = px;
+      if (px < c.l) c.l = px;
+    }
+  }
+  return [...by.values()].sort((a, b) => a.t - b.t).slice(-max);
+}
