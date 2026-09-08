@@ -46,9 +46,9 @@ export function TraderScreen({ arg, arg2 }: ScreenProps) {
     >
       <Card>
         <SectionTitle note={`${t(lang, "rk_in_top")} ${idx + 1}`}>{t(lang, "hl_venue_title")}</SectionTitle>
-        <p className={`big ${row.pnl >= 0 ? "up" : "dn"}`}>{signed(row.pnl)}</p>
         <Tiles
           items={[
+            { label: "PnL", value: signed(row.pnl), tone: row.pnl >= 0 ? "up" : "dn" },
             { label: t(lang, "rk_roi_per_trade"), value: pct(row.roi, 1) },
             { label: t(lang, "ws_winrate"), value: `${num(row.win)}%` },
             { label: t(lang, "rk_trades"), value: num(row.tr) },
