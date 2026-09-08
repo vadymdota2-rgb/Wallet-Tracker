@@ -62,7 +62,7 @@ export function ThresholdScreen() {
 
   return (
     <Frame
-      title={<><ThresholdGlyph size={24} /> {bare(t(lang, "threshold_title"))}</>}
+      title={<><ThresholdGlyph size={28} /> {bare(t(lang, "threshold_title"))}</>}
       sub={t(lang, "threshold_desc")}
     >
       <Card>

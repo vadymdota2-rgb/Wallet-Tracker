@@ -330,7 +330,7 @@ export function WalletGlyph({ size = 21 }: { size?: number }) {
  * системная эмодзи то плоская чёрточка, то цветной глаз с ресницами, и с
  * цифрой рядом она не выравнивается.
  */
-export function EyeGlyph({ size = 22 }: { size?: number }) {
+export function EyeGlyph({ size = 26 }: { size?: number }) {
   return (
     <svg
       className="glyph"
@@ -356,7 +356,7 @@ export function EyeGlyph({ size = 22 }: { size?: number }) {
  * «сумма». Монету с чертой снизу пробовал — на семнадцати пикселях черта
  * сливается с монетой в кляксу.
  */
-export function ThresholdGlyph({ size = 25 }: { size?: number }) {
+export function ThresholdGlyph({ size = 29 }: { size?: number }) {
   return (
     <svg
       className="glyph"
