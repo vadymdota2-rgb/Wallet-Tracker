@@ -1,5 +1,5 @@
 /** Мелкие кирпичики интерфейса: строка списка, плитки, кнопка, заголовок. */
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { haptic } from "../lib/telegram";
 
 export function SectionTitle({ children, note }: { children: ReactNode; note?: ReactNode }) {
@@ -394,5 +394,48 @@ export function PlusGlyph({ size = 19 }: { size?: number }) {
       <circle cx="12" cy="12" r="8.6" />
       <path d="M12 8.2v7.6M8.2 12h7.6" />
     </svg>
+  );
+}
+
+/** Лампочка подсказки. Янтарная — в сером абзаце она и должна цеплять глаз. */
+export function HintGlyph({ size = 16 }: { size?: number }) {
+  return (
+    <svg
+      className="glyph hint-mark"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 3.2a6.3 6.3 0 0 0-3.6 11.5c.5.35.8.92.8 1.53v.37h5.6v-.37c0-.61.3-1.18.8-1.53A6.3 6.3 0 0 0 12 3.2Z" />
+      <path d="M9.9 19h4.2" opacity="0.85" />
+      <path d="M10.7 21.2h2.6" opacity="0.6" />
+    </svg>
+  );
+}
+
+/**
+ * Абзац из текста бота: эмодзи, для которых нарисован свой значок, меняются
+ * на него по дороге. Строки приходят из словаря целиком, вырезать значок из
+ * середины предложения иначе нечем.
+ */
+const INLINE: Record<string, () => ReactNode> = {
+  "\u{1F4A1}": () => <HintGlyph />,
+};
+const INLINE_RE = new RegExp(`(${Object.keys(INLINE).join("|")})`, "u");
+
+export function BotText({ text, className = "note" }: { text: string; className?: string }) {
+  return (
+    <p className={className}>
+      {text.split(INLINE_RE).map((part, i) => {
+        const make = INLINE[part];
+        return make ? <Fragment key={i}>{make()}</Fragment> : part;
+      })}
+    </p>
   );
 }

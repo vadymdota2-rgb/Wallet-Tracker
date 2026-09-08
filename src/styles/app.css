@@ -190,6 +190,8 @@
    Выравниваем по середине, а не сдвигом от базовой линии: сдвиг задаётся в
    долях кегля, и значок в полтора кегля высотой торчал над строкой. */
 .glyph { display: inline-block; vertical-align: middle; flex: 0 0 auto; }
+/* Подсказка внутри серого абзаца: значок янтарный, как был жёлтый эмодзи. */
+.hint-mark { color: var(--warn); }
 .tabs button small { font-size: 10px; line-height: 1.1; text-align: center; }
 .tabs button.on { color: var(--glow); }
 .tabs button.on span { filter: drop-shadow(0 0 6px rgb(127 216 255 / 0.6)); }

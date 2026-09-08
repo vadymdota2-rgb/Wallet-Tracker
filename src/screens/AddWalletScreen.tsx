@@ -11,7 +11,7 @@ import { bare, split, t } from "../i18n/t";
 import { addWallet } from "../lib/api";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
-import { Action, Card, PlusGlyph, SectionTitle } from "../components/ui";
+import { Action, BotText, Card, PlusGlyph, SectionTitle } from "../components/ui";
 
 const ADDR = /^0x[a-fA-F0-9]{40}$/;
 const NAME_MAX = 32;
@@ -64,7 +64,7 @@ export function AddWalletScreen() {
       sub={`${wallets.length} / ${limit}`}
     >
       <Card>
-        {intro[1] ? <p className="note">{intro[1]}</p> : null}
+        {intro[1] ? <BotText text={intro[1]} /> : null}
         <SectionTitle>{t(lang, "add_wallet_address_label")}</SectionTitle>
         <input
           className="find mono"
