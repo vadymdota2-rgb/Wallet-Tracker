@@ -376,3 +376,23 @@ export function ThresholdGlyph({ size = 25 }: { size?: number }) {
     </svg>
   );
 }
+
+/** Плюс в круге — «добавить». Круг роднит его с монетой порога и глазом. */
+export function PlusGlyph({ size = 19 }: { size?: number }) {
+  return (
+    <svg
+      className="glyph"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="8.6" />
+      <path d="M12 8.2v7.6M8.2 12h7.6" />
+    </svg>
+  );
+}

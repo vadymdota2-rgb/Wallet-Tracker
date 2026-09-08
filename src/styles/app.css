@@ -212,16 +212,17 @@
 .legend { display: flex; justify-content: space-between; font-size: 12px; }
 
 /* Чипы ----------------------------------------------------------------- */
+/* Пресеты порога переносятся на вторую строку, а не уезжают за край:
+   прокрутку вбок на телефоне не видно, и $50K с «…» просто терялись. */
 .chips {
   display: flex;
+  flex-wrap: wrap;
   gap: 7px;
-  overflow-x: auto;
-  scrollbar-width: none;
   padding-bottom: 2px;
 }
-.chips::-webkit-scrollbar { display: none; }
 .chip {
-  flex: 0 0 auto;
+  flex: 1 0 auto;
+  text-align: center;
   padding: 8px 14px;
   border-radius: var(--r-md);
   border: 1px solid var(--line-2);
@@ -385,6 +386,10 @@
 
 /* Кнопки --------------------------------------------------------------- */
 .action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
   width: 100%;
   padding: 12px 14px;
   border-radius: var(--r-md);

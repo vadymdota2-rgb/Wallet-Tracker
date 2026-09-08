@@ -10,7 +10,7 @@ import { num, shortAddr, usd } from "../lib/format";
 import { placeAt, rowVenue, venueName, walletRank } from "../lib/rank";
 import { setThreshold } from "../lib/api";
 import { toast } from "../components/Toast";
-import { Action, Card, Chips, Empty, EyeGlyph, Row, SectionTitle, Tiles, VenueMark } from "../components/ui";
+import { Action, Card, Chips, Empty, EyeGlyph, PlusGlyph, Row, SectionTitle, Tiles, VenueMark } from "../components/ui";
 
 const PRESETS = [100, 500, 1000, 5000, 10000, 50000];
 
@@ -73,7 +73,7 @@ export function WalletsTab() {
         </SectionTitle>
         <div className="stack-actions">
           <Action onClick={() => open("addWallet")} disabled={wallets.length >= limit}>
-            {t(lang, "menu_add_wallet")}
+            <PlusGlyph /> {bare(t(lang, "menu_add_wallet"))}
           </Action>
           {wallets.length >= limit && me.plan !== "premium" ? (
             <small className="hint warn">{t(lang, "pr_limit_free")}</small>
