@@ -23,17 +23,20 @@ export type Timeframe = "15m" | "1h" | "4h" | "1d" | "1w" | "1M";
 export const TIMEFRAMES: Timeframe[] = ["15m", "1h", "4h", "1d", "1w", "1M"];
 
 /**
- * Имя таймфрейма — это ширина окна, а не размер свечи: «1d» показывает сутки
- * пятнадцатиминутками. Размер свечи подобран так, чтобы на экран влезало от
- * полутора до двух сотен штук — дальше они сливаются в кашу.
+ * Имя таймфрейма — размер одной свечи, как на биржах. Раньше им обозначалась
+ * ширина окна: «1M» рисовал месяц четырёхчасовыми свечами, и рядом с
+ * терминалом это выглядело подменой — тот же график там назывался 4H.
+ *
+ * Свечей берём около сотни: столько влезает, не сливаясь в кашу.
+ * У KuCoin месячных свечей нет вовсе — на этом таймфрейме к нему не идём.
  */
 const SHAPE: Record<Timeframe, { binance: string; bybit: string; kucoin: string; limit: number }> = {
-  "15m": { binance: "1m", bybit: "1", kucoin: "1min", limit: 15 },
-  "1h": { binance: "1m", bybit: "1", kucoin: "1min", limit: 60 },
-  "4h": { binance: "5m", bybit: "5", kucoin: "5min", limit: 48 },
-  "1d": { binance: "15m", bybit: "15", kucoin: "15min", limit: 96 },
-  "1w": { binance: "1h", bybit: "60", kucoin: "1hour", limit: 168 },
-  "1M": { binance: "4h", bybit: "240", kucoin: "4hour", limit: 180 },
+  "15m": { binance: "15m", bybit: "15", kucoin: "15min", limit: 96 },
+  "1h": { binance: "1h", bybit: "60", kucoin: "1hour", limit: 120 },
+  "4h": { binance: "4h", bybit: "240", kucoin: "4hour", limit: 120 },
+  "1d": { binance: "1d", bybit: "D", kucoin: "1day", limit: 120 },
+  "1w": { binance: "1w", bybit: "W", kucoin: "1week", limit: 104 },
+  "1M": { binance: "1M", bybit: "M", kucoin: "", limit: 60 },
 };
 
 const n = (v: unknown): number => {
@@ -117,8 +120,10 @@ export async function fetchCandles(
     [`/klines?symbol=${usdt}&interval=${shape.binance}&limit=${shape.limit}`, fromBinance],
     [`/klines-vision?symbol=${usdt}&interval=${shape.binance}&limit=${shape.limit}`, fromBinance],
     [`/klines-bybit?category=spot&symbol=${usdt}&interval=${shape.bybit}&limit=${shape.limit}`, fromBybit],
-    [`/klines-kucoin?symbol=${base}-USDT&type=${shape.kucoin}`, fromKucoin],
   ];
+  if (shape.kucoin) {
+    sources.push([`/klines-kucoin?symbol=${base}-USDT&type=${shape.kucoin}`, fromKucoin]);
+  }
 
   for (const [url, parse] of sources) {
     const candles = parse(await grab(url, signal));
