@@ -151,7 +151,7 @@
 }
 /* Эмодзи в этом ряду догоняют по размеру рисованный значок порога, иначе
    монета вдвое крупнее соседей и ряд валится набок. */
-.drawer-row > span:first-child { font-size: 29px; line-height: 1; }
+.drawer-row > span:first-child { font-size: 25px; line-height: 1; }
 .drawer-row:active { background: var(--panel-2); }
 .drawer-build {
   margin-top: auto;

@@ -9,7 +9,7 @@ import { useState } from "react";
 import { Frame } from "./Screen";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
-import { bare, t } from "../i18n/t";
+import { bare, split, t } from "../i18n/t";
 import { usd, usdFull } from "../lib/format";
 import { setThreshold } from "../lib/api";
 import { toast } from "../components/Toast";
@@ -26,6 +26,8 @@ export function ThresholdScreen() {
   const patchMe = useLive((s) => s.patchMe);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const custom = split(t(lang, "threshold_custom_title"));
 
   const apply = async (value: number) => {
     if (busy) return;
@@ -62,7 +64,7 @@ export function ThresholdScreen() {
 
   return (
     <Frame
-      title={<><ThresholdGlyph size={28} /> {bare(t(lang, "threshold_title"))}</>}
+      title={<><ThresholdGlyph size={24} /> {bare(t(lang, "threshold_title"))}</>}
       sub={t(lang, "threshold_desc")}
     >
       <Card>
@@ -78,7 +80,13 @@ export function ThresholdScreen() {
       </Card>
 
       <Card>
-        <SectionTitle>{t(lang, "threshold_custom_title")}</SectionTitle>
+        {/* В боте это одно сообщение: заголовок, пустая строка, пояснение.
+            Разводим по местам — капитель с разрядкой на целый абзац
+            нечитаема, а мешок денег заменён тем же значком, что в шапке. */}
+        <SectionTitle>
+          <ThresholdGlyph size={16} /> {bare(custom[0])}
+        </SectionTitle>
+        {custom[1] ? <p className="note">{custom[1]}</p> : null}
         <input
           className="find"
           value={draft}

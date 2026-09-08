@@ -28,3 +28,15 @@ export function icon(s: string): string {
   const m = s.match(/^[\p{Extended_Pictographic}️‍]+/u);
   return m ? m[0].trim() : "";
 }
+
+/**
+ * Первая строка длинного текста бота и всё остальное отдельно. В чате это
+ * одно сообщение: заголовок, пустая строка, пояснение. На экране заголовок
+ * набран капителью с разрядкой, и абзац пояснения, загнанный в неё целиком,
+ * читать невозможно.
+ */
+export function split(s: string): [string, string] {
+  const i = s.indexOf("\n");
+  if (i < 0) return [s.trim(), ""];
+  return [s.slice(0, i).trim(), s.slice(i + 1).trim()];
+}
