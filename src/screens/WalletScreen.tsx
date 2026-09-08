@@ -1,4 +1,11 @@
-/** Карточка кошелька: остаток, открытые позиции, действия. */
+/**
+ * Карточка кошелька: остаток, открытые позиции, действия.
+ *
+ * Позиции и остаток спрашиваем здесь и только здесь. В общей выдаче их нет:
+ * ходить в Hyperliquid за каждым кошельком при каждом открытии приложения
+ * незачем — смотрят их, когда откроют сам кошелёк.
+ */
+import { useEffect } from "react";
 import { Frame, type ScreenProps } from "./Screen";
 import { useApp, isPaused } from "../store/app";
 import { useLive, walletByAddr } from "../store/live";
@@ -6,7 +13,7 @@ import { boardKey, venueName, walletRank } from "../lib/rank";
 import { bare, t } from "../i18n/t";
 import { lev as levFmt, num, pct, px, shortAddr, signed, usd } from "../lib/format";
 import { holdTime } from "../lib/labels";
-import { removeWallet, setPrimary } from "../lib/api";
+import { fetchWallet, removeWallet, setPrimary } from "../lib/api";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
 import { CoinIcon } from "../components/CoinIcon";
@@ -20,7 +27,25 @@ export function WalletScreen({ arg }: ScreenProps) {
   const rank = useLive((s) => s.rank);
   const plan = useLive((s) => s.me.plan);
 
+  const patchWallet = useLive((s) => s.patchWallet);
   const w = walletByAddr(wallets, arg);
+  const addr = w?.addr ?? "";
+
+  useEffect(() => {
+    if (!addr) return;
+    const ctrl = new AbortController();
+    void fetchWallet(addr, ctrl.signal).then((d) => {
+      if (ctrl.signal.aborted || !d?.ok) return;
+      patchWallet(addr, {
+        pos: d.pos ?? [],
+        equity: d.equity,
+        bal: d.bal ?? 0,
+        d1: d.d1 ?? 0,
+      });
+    });
+    return () => ctrl.abort();
+  }, [addr, patchWallet]);
+
   if (!w) {
     return (
       <Frame title={t(lang, "err_wallet_not_found")}>

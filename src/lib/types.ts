@@ -53,6 +53,8 @@ export interface Wallet {
   perp: string;
   d1: number;
   equity: Equity;
+  /** Торгует ли кошелёк на Hyperliquid — по базе сделок, без похода в сеть. */
+  hlActive?: boolean;
   pos: Position[];
 }
 
@@ -90,6 +92,17 @@ export interface FlowWindow {
 
 /** Ключи окна: часы. Сервер отдаёт "1" | "6" | "24" | "168" | "720". */
 export type Flow = Record<string, FlowWindow | undefined>;
+
+/** Ответ /api/wallet: позиции и остаток одного кошелька. */
+export interface WalletLive {
+  ok: boolean;
+  addr?: string;
+  pos?: Position[];
+  equity?: Equity;
+  bal?: number;
+  d1?: number;
+  error?: string;
+}
 
 export interface Trader {
   a: string;

@@ -461,33 +461,6 @@ def spot_prices() -> dict[int, float]:
     return out
 
 
-def hl_warm(addrs: list[str], workers: int = 8) -> None:
-    """
-    Прогреть кэш Hyperliquid сразу по всем кошелькам.
-
-    Раньше load_wallets ходил за позициями в цикле: два запроса на кошелёк,
-    по 400 мс каждый. На семнадцати кошельках это тридцать четыре запроса
-    подряд — тринадцать секунд, которые пользователь ждал с пустым экраном.
-    Восемь потоков сокращают их до пары секунд, а дальше цикл разбирает уже
-    готовый кэш.
-    """
-    todo = []
-    seen = set()
-    now_m = time.monotonic()
-    for a in addrs:
-        key = (a or "").lower()
-        if not key or key in seen:
-            continue
-        seen.add(key)
-        hit = _hl_cache.get(key)
-        if not hit or now_m - hit[0] >= HL_TTL:
-            todo.append(key)
-    if len(todo) < 2:
-        return
-    with ThreadPoolExecutor(max_workers=min(workers, len(todo))) as ex:
-        list(ex.map(hl_state, todo))
-
-
 def hl_state(addr: str) -> dict:
     key = addr.lower()
     hit = _hl_cache.get(key)
@@ -961,7 +934,47 @@ def load_me(cur: sqlite3.Connection, chat: str) -> dict:
     }
 
 
-def load_wallets(cur: sqlite3.Connection, chat: str) -> list[dict]:
+ZERO_EQUITY = {"total": 0.0, "spot": 0.0, "perp": 0.0, "hip3": 0.0, "vaults": 0.0}
+
+
+def wallet_live(cur: sqlite3.Connection, chat: str, addr: str) -> dict:
+    """
+    Позиции и остаток одного кошелька — живьём из Hyperliquid.
+
+    Отдаём только свой: адрес сверяется со списком пользователя, иначе по
+    чужому адресу можно было бы смотреть чей угодно счёт.
+    """
+    key = (addr or "").strip().lower()
+    if not re.fullmatch(r"0x[0-9a-f]{40}", key):
+        return {"ok": False, "error": "bad_addr"}
+    if not table_exists(cur, "user_whales"):
+        return {"ok": False, "error": "not_found"}
+    own = cur.execute(
+        "SELECT 1 FROM user_whales uw JOIN whale_addresses wa ON wa.id=uw.whale_id "
+        "WHERE uw.user_id=? AND lower(wa.address)=?",
+        (chat, key),
+    ).fetchone()
+    if not own:
+        return {"ok": False, "error": "not_found"}
+    try:
+        pos, equity, _ = parse_positions(key)
+    except Exception as e:
+        sys.stderr.write(f"[api] wallet {key[:10]}: {e}\n")
+        return {"ok": False, "error": "upstream"}
+    stats = wallet_stats(cur, key)
+    bal = equity.get("total") or stats["bal"] or 0
+    return {
+        "ok": True,
+        "addr": key,
+        "pos": pos,
+        "equity": equity,
+        "bal": bal,
+        "d1": (stats["net"] / bal * 100.0) if bal else 0.0,
+    }
+
+
+def load_wallets(cur: sqlite3.Connection, chat: str,
+                 hl: sqlite3.Connection | None = None) -> list[dict]:
     if not table_exists(cur, "user_whales"):
         return []
     uw_cols = cols(cur, "user_whales")
@@ -977,17 +990,33 @@ def load_wallets(cur: sqlite3.Connection, chat: str) -> list[dict]:
         "WHERE uw.user_id=? ORDER BY uw.created_at ASC",
         (chat,),
     ).fetchall()
-    hl_warm([r["addr"] for r in rows])
+    # Кто из них торгует на Hyperliquid — видно по базе сделок, без сети.
+    # Раньше площадку выдавали открытые позиции; теперь их в списке нет, и
+    # без этого признака кошелёк с перпами подписывался бы BSC.
+    on_hl: set[str] = set()
+    addrs = [(r["addr"] or "").lower() for r in rows if r["addr"]]
+    if hl and addrs and table_exists(hl, "hl_fills"):
+        try:
+            marks = ",".join("?" * len(addrs))
+            for row in hl.execute(
+                f"SELECT DISTINCT lower(wallet) w FROM hl_fills WHERE lower(wallet) IN ({marks})",
+                addrs,
+            ).fetchall():
+                on_hl.add(row["w"])
+        except sqlite3.Error as e:
+            sys.stderr.write(f"[api] hl wallets: {e}\n")
+
+    # В Hyperliquid за позициями отсюда не ходим. Список кошельков читают
+    # при каждом открытии приложения, а два запроса на кошелёк по 400 мс
+    # складывались в секунды ожидания — ради цифры, которую смотрят, только
+    # когда откроют сам кошелёк. Позиции и остаток отдаёт /api/wallet.
     wallets = []
     for i, r in enumerate(rows):
         addr = (r["addr"] or "").lower()
         name = (r["label"] or "").strip() or short_addr(addr)
-        try:
-            pos, equity, _ = parse_positions(addr)
-        except Exception:
-            pos, equity = [], {"total": 0.0, "spot": 0.0, "perp": 0.0, "hip3": 0.0, "vaults": 0.0}
+        pos, equity = [], dict(ZERO_EQUITY)
         stats = wallet_stats(cur, addr)
-        bal = equity.get("total") or stats["bal"] or 0
+        bal = stats["bal"] or 0
         d1 = (stats["net"] / bal * 100.0) if bal else 0.0
         wallets.append(
             {
@@ -1007,6 +1036,7 @@ def load_wallets(cur: sqlite3.Connection, chat: str) -> list[dict]:
                 "perp": stats["perp"],
                 "d1": d1,
                 "equity": equity,
+                "hlActive": addr in on_hl,
                 "pos": pos,
             }
         )
@@ -2281,7 +2311,7 @@ def bootstrap(chat: str) -> dict:
         if isinstance(me, dict):
             me = dict(me)
             me.pop("lang", None)
-        wallets = piece("wallets", lambda: load_wallets(cur, chat) if chat else [], [])
+        wallets = piece("wallets", lambda: load_wallets(cur, chat, hl) if chat else [], [])
         alerts, feed = piece(
             "alerts",
             lambda: load_alerts(cur, chat, wallets) if chat else ([], []),
@@ -2576,6 +2606,23 @@ class Handler(BaseHTTPRequestHandler):
                             hl.close()
                         except Exception:
                             pass
+                return
+            if path in ("/wallet", "/api/wallet"):
+                chat = self._user(qs)
+                if not chat:
+                    self._json(403, {"ok": False, "error": "forbidden"})
+                    return
+                cur = open_db(DB)
+                if not cur:
+                    self._json(200, {"ok": False, "error": "db"})
+                    return
+                try:
+                    self._json(200, wallet_live(cur, chat, (qs.get("addr", [""])[0] or "")))
+                finally:
+                    try:
+                        cur.close()
+                    except Exception:
+                        pass
                 return
             if path in ("/big", "/api/big"):
                 win = (qs.get("win", ["24h"])[0] or "24h").lower()

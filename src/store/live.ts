@@ -59,6 +59,8 @@ interface LiveState {
   coins: Coins;
 
   apply(data: Bootstrap): void;
+  /** Позиции и остаток одного кошелька, пришедшие отдельным запросом. */
+  patchWallet(addr: string, live: Partial<Wallet>): void;
   setStatus(s: Status): void;
   patchWallets(w: Wallet[]): void;
   patchMe(p: Partial<Me>): void;
@@ -120,6 +122,17 @@ const boards = (r: Rank | undefined): boolean =>
   Boolean(r) && (["spot", "perp"] as const).some((v) =>
     (["pnl", "roi", "win", "act"] as const).some((k) => (r as Rank)[v]?.[k]?.length));
 
+/** Перенести живые куски (позиции, остаток) со старого списка на новый. */
+function keepLive(next: Wallet[], prev: Wallet[]): Wallet[] {
+  if (!prev.length) return next;
+  const was = new Map(prev.map((w) => [w.addr.toLowerCase(), w]));
+  return next.map((w) => {
+    const old = was.get(w.addr.toLowerCase());
+    if (!old || (!old.pos.length && !(old.equity?.total ?? 0))) return w;
+    return { ...w, pos: old.pos, equity: old.equity, bal: old.bal || w.bal, d1: old.d1 ?? w.d1 };
+  });
+}
+
 const snap = readSnap();
 
 export const useLive = create<LiveState>((set, get) => ({
@@ -147,7 +160,9 @@ export const useLive = create<LiveState>((set, get) => ({
       partial: Array.isArray(d.partial) ? d.partial : [],
       // Личное — как пришло: ноль кошельков это ноль кошельков.
       me: d.me ? { ...EMPTY_ME, ...d.me } : prev.me,
-      wallets: Array.isArray(d.wallets) ? d.wallets : prev.wallets,
+      // Позиции и остаток приходят отдельным запросом по одному кошельку;
+      // общий опрос их не знает и не должен обнулять уже показанное.
+      wallets: Array.isArray(d.wallets) ? keepLive(d.wallets, prev.wallets) : prev.wallets,
       alerts: Array.isArray(d.alerts) ? d.alerts : prev.alerts,
       feed: Array.isArray(d.feed) ? d.feed : prev.feed,
       // Общее — только если сервер успел его собрать.
@@ -160,6 +175,14 @@ export const useLive = create<LiveState>((set, get) => ({
       funding: some(d.funding) ? d.funding! : prev.funding,
       rot: some(d.rot) ? d.rot! : prev.rot,
       coins: some(d.coins) ? d.coins! : prev.coins,
+    }));
+    writeSnap(get());
+  },
+
+  patchWallet: (addr, live) => {
+    const key = addr.toLowerCase();
+    set((prev) => ({
+      wallets: prev.wallets.map((w) => (w.addr.toLowerCase() === key ? { ...w, ...live } : w)),
     }));
     writeSnap(get());
   },
