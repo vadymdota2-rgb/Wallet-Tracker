@@ -958,7 +958,7 @@ def load_me(cur: sqlite3.Connection, chat: str) -> dict:
 ZERO_EQUITY = {"total": 0.0, "spot": 0.0, "perp": 0.0, "hip3": 0.0, "vaults": 0.0}
 
 
-def spot_open(cur: sqlite3.Connection, addr: str, dust: float = 1.0) -> list[dict]:
+def spot_open(cur: sqlite3.Connection, addr: str, dust: float = 50.0) -> list[dict]:
     """
     Покупки на BSC, ещё не проданные полностью.
 
@@ -1034,7 +1034,9 @@ def spot_open(cur: sqlite3.Connection, addr: str, dust: float = 1.0) -> list[dic
             continue
         cost = usd(h["cost"])
         value = qty * price
-        if value < dust and cost < dust:
+        # Смотрим на остаток, а не на вложенное: хвост в пару долларов от
+        # распроданной позиции держат не нарочно, и списку он только мешает.
+        if value < dust:
             continue
         pct = (value - cost) / cost * 100.0 if cost else 0.0
         # Заслон от мусора в базе: рост в сто раз бывает, в сто тысяч — нет.
