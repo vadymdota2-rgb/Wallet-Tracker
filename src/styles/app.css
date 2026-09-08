@@ -321,6 +321,9 @@
 /* Метка между текстом и правым краем: кубок стоит на отлёте от глаза,
    а не липнет к нему. */
 .row-mid { flex: 0 0 auto; margin-inline-end: 14px; }
+/* Глазок-подсказка стоит теснее кубка: отбивка в четырнадцать пикселей
+   нужна месту в рейтинге, а здесь она съедала строку с ценой входа. */
+.row-mid .tap-hint { display: inline-flex; margin-inline-end: -9px; color: var(--dim-2); }
 .row-val { flex: 0 0 auto; display: grid; justify-items: end; gap: 1px; min-width: 34px; }
 
 .mark {

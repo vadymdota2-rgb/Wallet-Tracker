@@ -17,7 +17,7 @@ import { fetchWallet, removeWallet, setPrimary } from "../lib/api";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
 import { CoinIcon } from "../components/CoinIcon";
-import { Action, AddrBar, Card, Empty, Row, SectionTitle, Tiles, VenueMark } from "../components/ui";
+import { Action, AddrBar, Card, Empty, EyeGlyph, Row, SectionTitle, Tiles, VenueMark } from "../components/ui";
 
 export function WalletScreen({ arg }: ScreenProps) {
   const lang = useApp((s) => s.lang);
@@ -166,6 +166,10 @@ export function WalletScreen({ arg }: ScreenProps) {
                   {t(lang, "hl_entry_price")} {px(p.entry)} → {px(p.now)}
                 </>
               }
+              // Глазок перед прибылью: строка открывается, и это должно быть
+              // видно. Справа он не встанет — там прибыль, ради которой сюда
+              // и смотрят.
+              mid={<span className="tap-hint"><EyeGlyph size={18} /></span>}
               value={signed(p.pnl)}
               tone={p.pnl >= 0 ? "up" : "dn"}
               valueSub={pct(p.pct)}

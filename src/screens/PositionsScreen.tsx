@@ -5,7 +5,7 @@ import { useLive } from "../store/live";
 import { t } from "../i18n/t";
 import { lev as levFmt, pct, px, signed } from "../lib/format";
 import { CoinIcon } from "../components/CoinIcon";
-import { Card, Empty, Row, SectionTitle } from "../components/ui";
+import { Card, Empty, EyeGlyph, Row, SectionTitle } from "../components/ui";
 
 export function PositionsScreen() {
   const lang = useApp((s) => s.lang);
@@ -29,6 +29,7 @@ export function PositionsScreen() {
                 title={p.sym}
                 badge={p.long ? t(lang, "hl_side_long") : t(lang, "hl_side_short")}
                 sub={`${w.name} · ${levFmt(p.lev)} · ${t(lang, "hl_entry_price")} ${px(p.entry)}`}
+                mid={<span className="tap-hint"><EyeGlyph size={18} /></span>}
                 value={signed(p.pnl)}
                 tone={p.pnl >= 0 ? "up" : "dn"}
                 valueSub={pct(p.pct)}
