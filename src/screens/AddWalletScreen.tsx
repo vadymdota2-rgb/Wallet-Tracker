@@ -7,11 +7,11 @@ import { useState } from "react";
 import { Frame } from "./Screen";
 import { useApp, walletLimit } from "../store/app";
 import { useLive } from "../store/live";
-import { t } from "../i18n/t";
+import { bare, split, t } from "../i18n/t";
 import { addWallet } from "../lib/api";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
-import { Action, Card, SectionTitle } from "../components/ui";
+import { Action, Card, PlusGlyph, SectionTitle } from "../components/ui";
 
 const ADDR = /^0x[a-fA-F0-9]{40}$/;
 const NAME_MAX = 32;
@@ -28,6 +28,10 @@ export function AddWalletScreen() {
 
   const limit = walletLimit(me.plan);
   const full = wallets.length >= limit;
+  // В боте это одно сообщение: строка заголовка, а под ней объяснение —
+  // какой адрес слать и где взять чужой. Мини-апп загонял всё в заголовок
+  // экрана, где длинный текст обрезался многоточием, и пояснение пропадало.
+  const intro = split(t(lang, "add_wallet_title"));
 
   const submit = async () => {
     const a = addr.trim();
@@ -55,8 +59,12 @@ export function AddWalletScreen() {
   };
 
   return (
-    <Frame title={t(lang, "add_wallet_title")} sub={`${wallets.length} / ${limit}`}>
+    <Frame
+      title={<><PlusGlyph size={16} /> {bare(intro[0])}</>}
+      sub={`${wallets.length} / ${limit}`}
+    >
       <Card>
+        {intro[1] ? <p className="note">{intro[1]}</p> : null}
         <SectionTitle>{t(lang, "add_wallet_address_label")}</SectionTitle>
         <input
           className="find mono"
@@ -78,7 +86,7 @@ export function AddWalletScreen() {
         />
         <div className="stack-actions">
           <Action onClick={submit} disabled={busy || full || !addr.trim()}>
-            {t(lang, "menu_add_wallet")}
+            <PlusGlyph /> {bare(t(lang, "menu_add_wallet"))}
           </Action>
           {full ? (
             <>
