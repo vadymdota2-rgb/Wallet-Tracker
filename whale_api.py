@@ -937,6 +937,107 @@ def load_me(cur: sqlite3.Connection, chat: str) -> dict:
 ZERO_EQUITY = {"total": 0.0, "spot": 0.0, "perp": 0.0, "hip3": 0.0, "vaults": 0.0}
 
 
+def spot_open(cur: sqlite3.Connection, addr: str, dust: float = 1.0) -> list[dict]:
+    """
+    Покупки на BSC, ещё не проданные полностью.
+
+    Учёт тот же, что в ranking.cpp: покупка добавляет количество и стоимость,
+    продажа списывает их пропорционально. Осталось количество — значит токен
+    у кошелька на руках, и это ровно то, о чём приходил алерт.
+
+    Количество в базе лежит в атомах токена, а сколько у него знаков после
+    запятой — не записано. Поэтому цены считаем на атом и переводим в
+    привычные множителем 10^n: показатель берётся из отношения цены в
+    истории к цене последней сделки и округляется до целой степени десяти —
+    знаков после запятой не бывает дробное число, и округление снимает
+    разницу между моментами замера.
+    """
+    if not table_exists(cur, "trades"):
+        return []
+    try:
+        rows = cur.execute(
+            "SELECT token, is_buy, usd_nanos, token_amount, timestamp FROM trades "
+            "WHERE wallet=? ORDER BY token, timestamp, id",
+            (addr,),
+        ).fetchall()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] spot_open: {e}\n")
+        return []
+
+    held: dict[str, dict] = {}
+    for r in rows:
+        tok = r["token"] or ""
+        try:
+            amt = int(str(r["token_amount"] or "0").strip())
+        except (TypeError, ValueError):
+            continue
+        if amt <= 0 or not tok:
+            continue
+        usd_n = int(r["usd_nanos"] or 0)
+        h = held.setdefault(tok, {"qty": 0, "cost": 0, "first": 0, "last": 0, "buys": 0})
+        if r["is_buy"]:
+            h["qty"] += amt
+            h["cost"] += usd_n
+            h["buys"] += 1
+            h["first"] = h["first"] or int(r["timestamp"] or 0)
+            h["last"] = int(r["timestamp"] or 0)
+        elif h["qty"] > 0:
+            take = min(amt, h["qty"])
+            h["cost"] -= h["cost"] * take // h["qty"]
+            h["qty"] -= take
+
+    out = []
+    for tok, h in held.items():
+        if h["qty"] <= 0 or h["cost"] <= 0:
+            continue
+        px_raw = last_trade_px(cur, tok)          # доллары за атом
+        if px_raw <= 0:
+            continue
+        cost = usd(h["cost"])
+        value = h["qty"] * px_raw
+        if value < dust and cost < dust:
+            continue
+        pts = hist_spot(cur, tok)
+        price = pts[-1][1] if pts else 0.0
+        # 10^n: во сколько раз привычная цена больше цены за атом.
+        scale = 10 ** round(math.log10(price / px_raw)) if price > 0 and px_raw > 0 else 0
+        entry_raw = h["cost"] / h["qty"] / NANOS
+        out.append({
+            "token": tok,
+            "sym": symbol_of(cur, tok) or short_addr(tok),
+            "cost": cost,
+            "value": value,
+            "pnl": value - cost,
+            "pct": (value - cost) / cost * 100.0 if cost else 0.0,
+            "entry": entry_raw * scale if scale else 0.0,
+            "price": price if price > 0 else px_raw * scale,
+            "buys": h["buys"],
+            "since": h["first"],
+            "hist": [p for _, p in pts][-60:],
+        })
+    out.sort(key=lambda x: -x["value"])
+    return out[:20]
+
+
+def last_trade_px(cur: sqlite3.Connection, token: str) -> float:
+    """Цена токена за один атом по самой свежей сделке — чьей угодно."""
+    try:
+        r = cur.execute(
+            "SELECT usd_nanos, token_amount FROM trades WHERE token=? AND usd_nanos>0 "
+            "ORDER BY timestamp DESC, id DESC LIMIT 1",
+            (token,),
+        ).fetchone()
+    except sqlite3.Error:
+        return 0.0
+    if not r:
+        return 0.0
+    try:
+        amt = int(str(r["token_amount"] or "0").strip())
+    except (TypeError, ValueError):
+        return 0.0
+    return usd(r["usd_nanos"]) / amt if amt > 0 else 0.0
+
+
 def wallet_live(cur: sqlite3.Connection, chat: str, addr: str) -> dict:
     """
     Позиции и остаток одного кошелька — живьём из Hyperliquid.
@@ -967,6 +1068,7 @@ def wallet_live(cur: sqlite3.Connection, chat: str, addr: str) -> dict:
         "ok": True,
         "addr": key,
         "pos": pos,
+        "holds": spot_open(cur, key),
         "equity": equity,
         "bal": bal,
         "d1": (stats["net"] / bal * 100.0) if bal else 0.0,

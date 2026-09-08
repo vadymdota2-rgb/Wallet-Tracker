@@ -55,6 +55,9 @@ export interface Wallet {
   equity: Equity;
   /** Торгует ли кошелёк на Hyperliquid — по базе сделок, без похода в сеть. */
   hlActive?: boolean;
+  /** Покупки на BSC, ещё не проданные. Приходят вместе с позициями.
+   *  Не `spot` — так уже названо место кошелька в спотовом рейтинге. */
+  holds?: SpotHold[];
   pos: Position[];
 }
 
@@ -93,11 +96,29 @@ export interface FlowWindow {
 /** Ключи окна: часы. Сервер отдаёт "1" | "6" | "24" | "168" | "720". */
 export type Flow = Record<string, FlowWindow | undefined>;
 
+/** Покупка на BSC, ещё не проданная полностью. */
+export interface SpotHold {
+  token: string;
+  sym: string;
+  /** Сколько вложено в то, что осталось на руках. */
+  cost: number;
+  value: number;
+  pnl: number;
+  pct: number;
+  entry: number;
+  price: number;
+  buys: number;
+  /** Секунды эпохи: первая покупка того, что ещё держит. */
+  since: number;
+  hist: number[];
+}
+
 /** Ответ /api/wallet: позиции и остаток одного кошелька. */
 export interface WalletLive {
   ok: boolean;
   addr?: string;
   pos?: Position[];
+  holds?: SpotHold[];
   equity?: Equity;
   bal?: number;
   d1?: number;

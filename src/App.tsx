@@ -51,6 +51,7 @@ const SCREEN_TITLE: Record<ScreenName, DictKey> = {
   help: "help_title",
   history: "ai_hist_title",
   model: "ai_st_title",
+  spot: "ui_spot_open",
 };
 
 const MENU: { name: ScreenName; key: DictKey; glyph: ReactNode }[] = [

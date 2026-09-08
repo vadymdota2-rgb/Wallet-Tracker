@@ -128,8 +128,15 @@ function keepLive(next: Wallet[], prev: Wallet[]): Wallet[] {
   const was = new Map(prev.map((w) => [w.addr.toLowerCase(), w]));
   return next.map((w) => {
     const old = was.get(w.addr.toLowerCase());
-    if (!old || (!old.pos.length && !(old.equity?.total ?? 0))) return w;
-    return { ...w, pos: old.pos, equity: old.equity, bal: old.bal || w.bal, d1: old.d1 ?? w.d1 };
+    if (!old || (!old.pos.length && !old.holds?.length && !(old.equity?.total ?? 0))) return w;
+    return {
+      ...w,
+      pos: old.pos,
+      holds: old.holds,
+      equity: old.equity,
+      bal: old.bal || w.bal,
+      d1: old.d1 ?? w.d1,
+    };
   });
 }
 

@@ -38,6 +38,7 @@ export function WalletScreen({ arg }: ScreenProps) {
       if (ctrl.signal.aborted || !d?.ok) return;
       patchWallet(addr, {
         pos: d.pos ?? [],
+        holds: d.holds ?? [],
         equity: d.equity,
         bal: d.bal ?? 0,
         d1: d.d1 ?? 0,
@@ -177,6 +178,26 @@ export function WalletScreen({ arg }: ScreenProps) {
           ))
         )}
       </Card>
+
+      {w.holds?.length ? (
+        <Card>
+          <SectionTitle note={String(w.holds.length)}>{t(lang, "ui_spot_open")}</SectionTitle>
+          {w.holds.map((h, i) => (
+            <Row
+              key={h.token}
+              icon={<CoinIcon sym={h.sym} size={30} />}
+              title={h.sym}
+              sub={`${t(lang, "ui_invested")} ${usd(h.cost)}`}
+              sub2={`${t(lang, "hl_entry_price")} ${px(h.entry)} → ${px(h.price)}`}
+              value={signed(h.pnl)}
+              tone={h.pnl >= 0 ? "up" : "dn"}
+              valueSub={pct(h.pct)}
+              after={<EyeGlyph size={18} />}
+              onClick={() => open("spot", w.addr, String(i))}
+            />
+          ))}
+        </Card>
+      ) : null}
 
       <Card>
         <div className="stack-actions">
