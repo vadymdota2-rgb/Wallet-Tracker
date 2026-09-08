@@ -50,6 +50,7 @@ export function Row({
   mid,
   value,
   valueSub,
+  after,
   tone,
   badge,
   onClick,
@@ -63,6 +64,8 @@ export function Row({
   mid?: ReactNode;
   value?: ReactNode;
   valueSub?: ReactNode;
+  /** Самый край строки, за числами — например глазок «сюда можно нажать». */
+  after?: ReactNode;
   tone?: "up" | "dn";
   badge?: ReactNode;
   onClick?: () => void;
@@ -85,6 +88,7 @@ export function Row({
           {valueSub ? <small>{valueSub}</small> : null}
         </span>
       ) : null}
+      {after !== undefined ? <span className="row-after">{after}</span> : null}
     </>
   );
   if (!onClick) return <div className="row">{inner}</div>;

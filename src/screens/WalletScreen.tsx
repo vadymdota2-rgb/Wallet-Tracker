@@ -166,13 +166,12 @@ export function WalletScreen({ arg }: ScreenProps) {
                   {t(lang, "hl_entry_price")} {px(p.entry)} → {px(p.now)}
                 </>
               }
-              // Глазок перед прибылью: строка открывается, и это должно быть
-              // видно. Справа он не встанет — там прибыль, ради которой сюда
-              // и смотрят.
-              mid={<span className="tap-hint"><EyeGlyph size={18} /></span>}
               value={signed(p.pnl)}
               tone={p.pnl >= 0 ? "up" : "dn"}
               valueSub={pct(p.pct)}
+              // Глазок на самом краю, как в списке кошельков: он говорит, что
+              // строку можно открыть, и место у него всегда одно.
+              after={<EyeGlyph size={18} />}
               onClick={() => open("position", w.addr, String(i))}
             />
           ))
