@@ -426,16 +426,18 @@ export function HintGlyph({ size = 16 }: { size?: number }) {
  */
 const INLINE: Record<string, () => ReactNode> = {
   "\u{1F4A1}": () => <HintGlyph />,
+  "\u2795": () => <PlusGlyph size={15} />,
 };
 const INLINE_RE = new RegExp(`(${Object.keys(INLINE).join("|")})`, "u");
 
+/** Строка бота со своими значками вместо эмодзи — куском, без обёртки. */
+export function botNodes(text: string): ReactNode[] {
+  return text.split(INLINE_RE).map((part, i) => {
+    const make = INLINE[part];
+    return make ? <Fragment key={i}>{make()}</Fragment> : part;
+  });
+}
+
 export function BotText({ text, className = "note" }: { text: string; className?: string }) {
-  return (
-    <p className={className}>
-      {text.split(INLINE_RE).map((part, i) => {
-        const make = INLINE[part];
-        return make ? <Fragment key={i}>{make()}</Fragment> : part;
-      })}
-    </p>
-  );
+  return <p className={className}>{botNodes(text)}</p>;
 }

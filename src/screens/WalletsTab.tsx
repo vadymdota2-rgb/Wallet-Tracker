@@ -10,7 +10,7 @@ import { num, shortAddr, usd } from "../lib/format";
 import { placeAt, rowVenue, venueName, walletRank } from "../lib/rank";
 import { setThreshold } from "../lib/api";
 import { toast } from "../components/Toast";
-import { Action, Card, Chips, Empty, EyeGlyph, PlusGlyph, Row, SectionTitle, Tiles, VenueMark } from "../components/ui";
+import { Action, botNodes, Card, Chips, Empty, EyeGlyph, PlusGlyph, Row, SectionTitle, Tiles, VenueMark } from "../components/ui";
 
 const PRESETS = [100, 500, 1000, 5000, 10000, 50000];
 
@@ -81,7 +81,7 @@ export function WalletsTab() {
         </div>
 
         {wallets.length === 0 ? (
-          <Empty text={t(lang, "mw_no_wallets")} hint={t(lang, "mw_tap_add")} />
+          <Empty text={t(lang, "mw_no_wallets")} hint={botNodes(t(lang, "mw_tap_add"))} />
         ) : (
           wallets.map((w) => {
             const paused = isPaused(me.plan, w.primary);

@@ -2,13 +2,13 @@
 import { Frame, type ScreenProps } from "./Screen";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
-import { t } from "../i18n/t";
+import { bare, t } from "../i18n/t";
 import { num, pct, shortAddr, signed } from "../lib/format";
 import { holdTime } from "../lib/labels";
 import { addWallet } from "../lib/api";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
-import { Action, Card, Empty, SectionTitle, Tiles } from "../components/ui";
+import { Action, Card, Empty, PlusGlyph, SectionTitle, Tiles } from "../components/ui";
 import type { RankKind, RankTable, Venue } from "../lib/types";
 import type { RankWin } from "../store/app";
 
@@ -84,7 +84,13 @@ export function TraderScreen({ arg, arg2 }: ScreenProps) {
               }
             }}
           >
-            {tracked ? t(lang, "wc_tracked_btn") : t(lang, "rk_track")}
+            {tracked ? (
+              t(lang, "wc_tracked_btn")
+            ) : (
+              <>
+                <PlusGlyph /> {bare(t(lang, "rk_track"))}
+              </>
+            )}
           </Action>
         </div>
       </Card>
