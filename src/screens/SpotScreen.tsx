@@ -85,11 +85,13 @@ export function SpotScreen({ arg, arg2 }: ScreenProps) {
           <Empty text={t(lang, "fund_loading")} />
         )}
 
+        {h.partial ? <p className="note warn">{t(lang, "ui_partial_note")}</p> : null}
+
         <Tiles
           items={[
-            { label: t(lang, "hl_entry_price"), value: px(h.entry) },
+            { label: t(lang, "hl_entry_price"), value: `${h.partial ? "≈ " : ""}${px(h.entry)}` },
             { label: t(lang, "hl_mark_price"), value: px(h.price) },
-            { label: t(lang, "ui_invested"), value: usd(h.cost) },
+            { label: t(lang, "ui_invested"), value: `${h.partial ? "≈ " : ""}${usd(h.cost)}` },
             { label: t(lang, "ui_worth_now"), value: usd(h.value) },
             { label: t(lang, "ui_buys"), value: num(h.buys) },
             { label: t(lang, "ui_held_since"), value: h.since ? since(Date.now() / 1000 - h.since) : "—" },

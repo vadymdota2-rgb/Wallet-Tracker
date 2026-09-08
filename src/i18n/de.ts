@@ -346,6 +346,8 @@ export const de: Dict = {
   ui_nothing: "Noch nichts da",
   ui_offline: "Keine Verbindung zum Server",
   ui_open_bot: "Bot öffnen",
+  ui_partial_note: "Ein Teil der Käufe liegt vor dem Beginn der Beobachtung dieser Wallet: Einstiegspreis und investierte Summe sind zu niedrig.",
+  ui_partial_tag: "unvollständig",
   ui_pay_in_bot: "Die Zahlung läuft im Bot-Chat — die Mini-App kann keine Rechnungen ausstellen.",
   ui_portfolio: "Portfolio",
   ui_pulse: "Wal-Puls · 24 Std.",

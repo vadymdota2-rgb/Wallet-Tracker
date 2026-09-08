@@ -110,6 +110,8 @@ export interface SpotHold {
   entry: number;
   price: number;
   buys: number;
+  /** Продано больше, чем мы видели купленным: часть истории до наблюдения. */
+  partial?: boolean;
   /** Секунды эпохи: первая покупка того, что ещё держит. */
   since: number;
 }

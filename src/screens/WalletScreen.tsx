@@ -187,8 +187,11 @@ export function WalletScreen({ arg }: ScreenProps) {
               key={h.token}
               icon={<CoinIcon sym={h.sym} icon={h.icon} size={30} />}
               title={h.sym}
-              sub={`${t(lang, "ui_invested")} ${usd(h.cost)}`}
-              sub2={`${t(lang, "hl_entry_price")} ${px(h.entry)} → ${px(h.price)}`}
+              // Метка неполной истории: цена входа и вложенное занижены, и
+              // это видно сразу, а не после вопроса «почему так».
+              badge={h.partial ? t(lang, "ui_partial_tag") : undefined}
+              sub={`${t(lang, "ui_invested")} ${h.partial ? "≈ " : ""}${usd(h.cost)}`}
+              sub2={`${t(lang, "hl_entry_price")} ${h.partial ? "≈ " : ""}${px(h.entry)} → ${px(h.price)}`}
               value={signed(h.pnl)}
               tone={h.pnl >= 0 ? "up" : "dn"}
               valueSub={pct(h.pct)}

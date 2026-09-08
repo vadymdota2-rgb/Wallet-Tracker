@@ -700,5 +700,41 @@
   "ko": "보유 시작",
   "zh": "持有自",
   "ja": "保有開始"
+ },
+ "ui_partial_tag": {
+  "en": "partial",
+  "ru": "неполная",
+  "uk": "неповна",
+  "es": "parcial",
+  "pt": "parcial",
+  "fr": "partiel",
+  "de": "unvollständig",
+  "tr": "eksik",
+  "pl": "niepełna",
+  "ar": "ناقصة",
+  "hi": "अधूरा",
+  "id": "sebagian",
+  "vi": "thiếu",
+  "ko": "불완전",
+  "zh": "不完整",
+  "ja": "不完全"
+ },
+ "ui_partial_note": {
+  "en": "Some buys happened before this wallet came under watch, so the entry price and the invested amount are understated.",
+  "ru": "Часть покупок сделана до того, как кошелёк попал под наблюдение: цена входа и вложенная сумма занижены.",
+  "uk": "Частина купівель зроблена до того, як гаманець потрапив під спостереження: ціна входу та вкладена сума занижені.",
+  "es": "Parte de las compras ocurrió antes de que esta cartera entrara en seguimiento: el precio de entrada y lo invertido están subestimados.",
+  "pt": "Parte das compras ocorreu antes de esta carteira entrar em acompanhamento: o preço de entrada e o valor investido estão subestimados.",
+  "fr": "Une partie des achats a eu lieu avant le suivi de ce portefeuille : le prix d'entrée et le montant investi sont sous-estimés.",
+  "de": "Ein Teil der Käufe liegt vor dem Beginn der Beobachtung dieser Wallet: Einstiegspreis und investierte Summe sind zu niedrig.",
+  "tr": "Alımların bir kısmı bu cüzdan izlemeye alınmadan önce yapıldı: giriş fiyatı ve yatırılan tutar olduğundan düşük.",
+  "pl": "Część zakupów nastąpiła zanim ten portfel trafił pod obserwację: cena wejścia i zainwestowana kwota są zaniżone.",
+  "ar": "جرى جزء من عمليات الشراء قبل أن تدخل هذه المحفظة تحت المراقبة: سعر الدخول والمبلغ المستثمر أقل من الحقيقة.",
+  "hi": "कुछ खरीद इस वॉलेट के निगरानी में आने से पहले हुई थीं: एंट्री कीमत और निवेश की रकम कम दिख रही है।",
+  "id": "Sebagian pembelian terjadi sebelum dompet ini mulai dipantau: harga masuk dan jumlah investasi lebih rendah dari sebenarnya.",
+  "vi": "Một phần giao dịch mua diễn ra trước khi ví này được theo dõi: giá vào lệnh và số tiền đã đầu tư đang thấp hơn thực tế.",
+  "ko": "일부 매수는 이 지갑이 관찰 대상이 되기 전에 이루어졌습니다. 진입 가격과 투자 금액이 실제보다 낮게 표시됩니다.",
+  "zh": "部分买入发生在该钱包纳入跟踪之前，因此入场价和投入金额被低估。",
+  "ja": "一部の買いはこのウォレットが監視対象になる前のものです。参入価格と投入額は実際より低く表示されます。"
  }
 }

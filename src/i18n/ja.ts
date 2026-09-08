@@ -346,6 +346,8 @@ export const ja: Dict = {
   ui_nothing: "まだ何もありません",
   ui_offline: "サーバーに接続できません",
   ui_open_bot: "ボットを開く",
+  ui_partial_note: "一部の買いはこのウォレットが監視対象になる前のものです。参入価格と投入額は実際より低く表示されます。",
+  ui_partial_tag: "不完全",
   ui_pay_in_bot: "支払いはボットのチャットで行います。ミニアプリでは請求書を発行できません。",
   ui_portfolio: "ポートフォリオ",
   ui_pulse: "クジラの脈 · 24時間",

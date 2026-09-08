@@ -346,6 +346,8 @@ export const vi: Dict = {
   ui_nothing: "Chưa có gì",
   ui_offline: "Không kết nối được máy chủ",
   ui_open_bot: "Mở bot",
+  ui_partial_note: "Một phần giao dịch mua diễn ra trước khi ví này được theo dõi: giá vào lệnh và số tiền đã đầu tư đang thấp hơn thực tế.",
+  ui_partial_tag: "thiếu",
   ui_pay_in_bot: "Thanh toán diễn ra trong chat với bot — mini app không thể tạo hoá đơn.",
   ui_portfolio: "Danh mục",
   ui_pulse: "Nhịp cá voi · 24 giờ",

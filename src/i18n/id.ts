@@ -346,6 +346,8 @@ export const id: Dict = {
   ui_nothing: "Belum ada apa-apa",
   ui_offline: "Tidak ada koneksi ke server",
   ui_open_bot: "Buka bot",
+  ui_partial_note: "Sebagian pembelian terjadi sebelum dompet ini mulai dipantau: harga masuk dan jumlah investasi lebih rendah dari sebenarnya.",
+  ui_partial_tag: "sebagian",
   ui_pay_in_bot: "Pembayaran dilakukan di obrolan bot — mini app tidak bisa menerbitkan tagihan.",
   ui_portfolio: "Portofolio",
   ui_pulse: "Denyut paus · 24 j",

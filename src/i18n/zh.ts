@@ -346,6 +346,8 @@ export const zh: Dict = {
   ui_nothing: "暂时没有内容",
   ui_offline: "无法连接服务器",
   ui_open_bot: "打开机器人",
+  ui_partial_note: "部分买入发生在该钱包纳入跟踪之前，因此入场价和投入金额被低估。",
+  ui_partial_tag: "不完整",
   ui_pay_in_bot: "付款在机器人聊天中完成 — 小程序无法开具账单。",
   ui_portfolio: "投资组合",
   ui_pulse: "巨鲸脉搏 · 24 小时",

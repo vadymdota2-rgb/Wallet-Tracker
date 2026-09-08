@@ -346,6 +346,8 @@ export const pl: Dict = {
   ui_nothing: "Na razie pusto",
   ui_offline: "Brak połączenia z serwerem",
   ui_open_bot: "Otwórz bota",
+  ui_partial_note: "Część zakupów nastąpiła zanim ten portfel trafił pod obserwację: cena wejścia i zainwestowana kwota są zaniżone.",
+  ui_partial_tag: "niepełna",
   ui_pay_in_bot: "Płatność odbywa się w czacie z botem — mini aplikacja nie wystawia faktur.",
   ui_portfolio: "Portfel",
   ui_pulse: "Puls wielorybów · 24 h",

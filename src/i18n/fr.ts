@@ -346,6 +346,8 @@ export const fr: Dict = {
   ui_nothing: "Rien pour l'instant",
   ui_offline: "Pas de connexion au serveur",
   ui_open_bot: "Ouvrir le bot",
+  ui_partial_note: "Une partie des achats a eu lieu avant le suivi de ce portefeuille : le prix d'entrée et le montant investi sont sous-estimés.",
+  ui_partial_tag: "partiel",
   ui_pay_in_bot: "Le paiement se fait dans le chat du bot : la mini-app ne peut pas émettre de factures.",
   ui_portfolio: "Portefeuille",
   ui_pulse: "Pouls des baleines · 24 h",

@@ -346,6 +346,8 @@ export const tr: Dict = {
   ui_nothing: "Henüz bir şey yok",
   ui_offline: "Sunucuya bağlanılamıyor",
   ui_open_bot: "Botu aç",
+  ui_partial_note: "Alımların bir kısmı bu cüzdan izlemeye alınmadan önce yapıldı: giriş fiyatı ve yatırılan tutar olduğundan düşük.",
+  ui_partial_tag: "eksik",
   ui_pay_in_bot: "Ödeme bot sohbetinde yapılır — mini uygulama fatura oluşturamaz.",
   ui_portfolio: "Portföy",
   ui_pulse: "Balina nabzı · 24s",

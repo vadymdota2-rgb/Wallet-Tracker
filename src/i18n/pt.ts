@@ -346,6 +346,8 @@ export const pt: Dict = {
   ui_nothing: "Ainda não há nada",
   ui_offline: "Sem conexão com o servidor",
   ui_open_bot: "Abrir o bot",
+  ui_partial_note: "Parte das compras ocorreu antes de esta carteira entrar em acompanhamento: o preço de entrada e o valor investido estão subestimados.",
+  ui_partial_tag: "parcial",
   ui_pay_in_bot: "O pagamento acontece no chat do bot — o mini app não emite faturas.",
   ui_portfolio: "Carteira",
   ui_pulse: "Pulso das baleias · 24 h",

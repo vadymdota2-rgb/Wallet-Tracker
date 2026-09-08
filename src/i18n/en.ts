@@ -346,6 +346,8 @@ export const en = {
   ui_nothing: "Nothing here yet",
   ui_offline: "No connection to the server",
   ui_open_bot: "Open the bot",
+  ui_partial_note: "Some buys happened before this wallet came under watch, so the entry price and the invested amount are understated.",
+  ui_partial_tag: "partial",
   ui_pay_in_bot: "Payment happens in the bot chat — the mini app cannot issue invoices.",
   ui_portfolio: "Portfolio",
   ui_pulse: "Whale pulse · 24h",

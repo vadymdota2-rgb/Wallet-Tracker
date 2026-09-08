@@ -346,6 +346,8 @@ export const ko: Dict = {
   ui_nothing: "아직 아무것도 없습니다",
   ui_offline: "서버에 연결할 수 없습니다",
   ui_open_bot: "봇 열기",
+  ui_partial_note: "일부 매수는 이 지갑이 관찰 대상이 되기 전에 이루어졌습니다. 진입 가격과 투자 금액이 실제보다 낮게 표시됩니다.",
+  ui_partial_tag: "불완전",
   ui_pay_in_bot: "결제는 봇 채팅에서 진행됩니다 — 미니앱은 인보이스를 발행할 수 없습니다.",
   ui_portfolio: "포트폴리오",
   ui_pulse: "고래 맥박 · 24시간",

@@ -995,17 +995,26 @@ def spot_open(cur: sqlite3.Connection, addr: str, dust: float = 50.0) -> list[di
         if amt <= 0 or not tok:
             continue
         usd_n = int(r["usd_nanos"] or 0)
-        h = held.setdefault(tok, {"qty": 0, "cost": 0, "first": 0, "last": 0, "buys": 0})
+        h = held.setdefault(
+            tok, {"qty": 0, "cost": 0, "first": 0, "last": 0, "buys": 0, "partial": False}
+        )
         if r["is_buy"]:
             h["qty"] += amt
             h["cost"] += usd_n
             h["buys"] += 1
             h["first"] = h["first"] or int(r["timestamp"] or 0)
             h["last"] = int(r["timestamp"] or 0)
-        elif h["qty"] > 0:
+        else:
+            # Продали больше, чем мы видели купленным, — значит часть монет
+            # пришла раньше, чем кошелёк попал под наблюдение. Сделки живут
+            # год, и до этого о кошельке мы не знали ничего. Дописать чужое
+            # прошлое неоткуда, но сам факт виден, и о нём надо сказать.
+            if amt > h["qty"]:
+                h["partial"] = True
             take = min(amt, h["qty"])
-            h["cost"] -= h["cost"] * take // h["qty"]
-            h["qty"] -= take
+            if take > 0:
+                h["cost"] -= h["cost"] * take // h["qty"]
+                h["qty"] -= take
 
     out = []
     for tok, h in held.items():
@@ -1055,6 +1064,7 @@ def spot_open(cur: sqlite3.Connection, addr: str, dust: float = 50.0) -> list[di
             "entry": cost / qty,
             "price": price,
             "buys": h["buys"],
+            "partial": h["partial"],
             "since": h["first"],
         })
     out.sort(key=lambda x: -x["value"])
