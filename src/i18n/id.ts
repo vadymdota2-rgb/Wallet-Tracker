@@ -336,7 +336,7 @@ export const id: Dict = {
   ui_copy: "Salin",
   ui_copy_failed: "Gagal menyalin",
   ui_free_slots: "slot tersisa",
-  ui_held_since: "Dipegang sejak",
+  ui_held_since: "Lama dipegang",
   ui_hip3: "Saham",
   ui_invested: "Diinvestasikan",
   ui_loading: "Memuat",

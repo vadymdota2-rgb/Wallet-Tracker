@@ -336,7 +336,7 @@ export const pl: Dict = {
   ui_copy: "Kopiuj",
   ui_copy_failed: "Nie udało się skopiować",
   ui_free_slots: "wolnych miejsc",
-  ui_held_since: "Trzyma od",
+  ui_held_since: "Czas trzymania",
   ui_hip3: "Akcje",
   ui_invested: "Zainwestowano",
   ui_loading: "Ładowanie",

@@ -15,7 +15,8 @@ import { Frame, type ScreenProps } from "./Screen";
 import { useApp } from "../store/app";
 import { useLive, walletByAddr } from "../store/live";
 import { t } from "../i18n/t";
-import { num, pct, px, signed, since, usd } from "../lib/format";
+import { num, pct, px, signed, usd } from "../lib/format";
+import { holdTime } from "../lib/labels";
 import { candlesFrom, TF_LABEL, SPOT_TFS, type SpotTf } from "../lib/klines";
 import { fetchTokenHist } from "../lib/api";
 import { CoinIcon } from "../components/CoinIcon";
@@ -94,7 +95,12 @@ export function SpotScreen({ arg, arg2 }: ScreenProps) {
             { label: t(lang, "ui_invested"), value: `${h.partial ? "≈ " : ""}${usd(h.cost)}` },
             { label: t(lang, "ui_worth_now"), value: usd(h.value) },
             { label: t(lang, "ui_buys"), value: num(h.buys) },
-            { label: t(lang, "ui_held_since"), value: h.since ? since(Date.now() / 1000 - h.since) : "—" },
+            // Длительность, а не календарная фраза: «в прошлом месяце» и
+            // «позавчера» и не точны, и в плитку не влезают.
+            {
+              label: t(lang, "ui_held_since"),
+              value: h.since ? holdTime(Date.now() / 1000 - h.since, lang) ?? "—" : "—",
+            },
           ]}
         />
       </Card>

@@ -336,7 +336,7 @@ export const ko: Dict = {
   ui_copy: "복사",
   ui_copy_failed: "복사하지 못했습니다",
   ui_free_slots: "남은 자리",
-  ui_held_since: "보유 시작",
+  ui_held_since: "보유 기간",
   ui_hip3: "주식",
   ui_invested: "투입 금액",
   ui_loading: "불러오는 중",

@@ -336,7 +336,7 @@ export const ja: Dict = {
   ui_copy: "コピー",
   ui_copy_failed: "コピーできませんでした",
   ui_free_slots: "残り枠",
-  ui_held_since: "保有開始",
+  ui_held_since: "保有期間",
   ui_hip3: "株式",
   ui_invested: "投入額",
   ui_loading: "読み込み中",

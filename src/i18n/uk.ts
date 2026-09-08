@@ -336,7 +336,7 @@ export const uk: Dict = {
   ui_copy: "Копіювати",
   ui_copy_failed: "Не вдалося скопіювати",
   ui_free_slots: "місць лишилось",
-  ui_held_since: "Тримає з",
+  ui_held_since: "Тримає",
   ui_hip3: "Акції",
   ui_invested: "Вкладено",
   ui_loading: "Завантаження",

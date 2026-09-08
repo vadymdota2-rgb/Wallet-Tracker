@@ -336,7 +336,7 @@ export const vi: Dict = {
   ui_copy: "Sao chép",
   ui_copy_failed: "Không sao chép được",
   ui_free_slots: "chỗ còn lại",
-  ui_held_since: "Giữ từ",
+  ui_held_since: "Thời gian giữ",
   ui_hip3: "Cổ phiếu",
   ui_invested: "Đã đầu tư",
   ui_loading: "Đang tải",

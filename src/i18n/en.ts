@@ -336,7 +336,7 @@ export const en = {
   ui_copy: "Copy",
   ui_copy_failed: "Could not copy",
   ui_free_slots: "slots left",
-  ui_held_since: "Holding since",
+  ui_held_since: "Held for",
   ui_hip3: "Stocks",
   ui_invested: "Invested",
   ui_loading: "Loading",

@@ -336,7 +336,7 @@ export const tr: Dict = {
   ui_copy: "Kopyala",
   ui_copy_failed: "Kopyalanamadı",
   ui_free_slots: "boş yer",
-  ui_held_since: "Elde tutuyor",
+  ui_held_since: "Tutma süresi",
   ui_hip3: "Hisseler",
   ui_invested: "Yatırılan",
   ui_loading: "Yükleniyor",

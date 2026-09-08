@@ -336,7 +336,7 @@ export const zh: Dict = {
   ui_copy: "复制",
   ui_copy_failed: "复制失败",
   ui_free_slots: "剩余名额",
-  ui_held_since: "持有自",
+  ui_held_since: "持有时长",
   ui_hip3: "股票",
   ui_invested: "投入",
   ui_loading: "加载中",

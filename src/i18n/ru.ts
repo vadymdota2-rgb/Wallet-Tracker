@@ -336,7 +336,7 @@ export const ru: Dict = {
   ui_copy: "Копировать",
   ui_copy_failed: "Не удалось скопировать",
   ui_free_slots: "мест осталось",
-  ui_held_since: "Держит с",
+  ui_held_since: "Держит",
   ui_hip3: "Акции",
   ui_invested: "Вложено",
   ui_loading: "Загрузка",

@@ -336,7 +336,7 @@ export const ar: Dict = {
   ui_copy: "نسخ",
   ui_copy_failed: "تعذّر النسخ",
   ui_free_slots: "أماكن متبقية",
-  ui_held_since: "يحتفظ منذ",
+  ui_held_since: "مدة الاحتفاظ",
   ui_hip3: "الأسهم",
   ui_invested: "المستثمر",
   ui_loading: "جارٍ التحميل",
