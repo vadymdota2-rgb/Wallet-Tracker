@@ -7,7 +7,7 @@ import { useApp, isPaused, walletLimit } from "../store/app";
 import { useLive } from "../store/live";
 import { bare, t } from "../i18n/t";
 import { num, shortAddr, usd } from "../lib/format";
-import { placeAt, rowVenue, venueName, walletRank } from "../lib/rank";
+import { boardShort, placeAt, rowVenue, venueName, walletRank } from "../lib/rank";
 import { setThreshold } from "../lib/api";
 import { toast } from "../components/Toast";
 import { Action, botNodes, Card, Chips, Empty, EyeGlyph, PlusGlyph, Row, SectionTitle, Tiles, VenueMark } from "../components/ui";
@@ -94,12 +94,23 @@ export function WalletsTab() {
                 title={w.name}
                 badge={w.primary ? bare(t(lang, "wl_main_wallet")) : paused ? t(lang, "wl_paused") : undefined}
                 sub={shortAddr(w.addr)}
-                mid={
+                // Площадка — третьей строкой под адресом. В середине она
+                // вместе с местом не помещалась: имя резалось до «Silent …»,
+                // а адрес до «0xb2b2……».
+                sub2={
                   venue ? (
-                    <span className="mark cup">
+                    <span className="venue-line">
                       <VenueMark venue={venue} />
                       <em className="venue-name">{venueName(venue)}</em>
-                      {at ? <> 🏆 {at.place}</> : null}
+                    </span>
+                  ) : undefined
+                }
+                // У кубка — доска, по которой место лучшее: PnL, ROI, WIN
+                // или ACT. Из четырёх показываем ту одну, где кошелёк выше.
+                mid={
+                  at ? (
+                    <span className="mark cup">
+                      <em className="board">{boardShort(at.kind)}</em> 🏆 {at.place}
                     </span>
                   ) : undefined
                 }

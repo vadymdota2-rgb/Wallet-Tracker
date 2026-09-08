@@ -54,6 +54,18 @@ export function walletRank(rank: Rank, addr: string): Place {
   return { spot, perp, best };
 }
 
+/**
+ * Короткое имя доски для строки списка: PnL, ROI, WIN, ACT. Не переводится —
+ * это те же обозначения, что стоят в самих досках, и в строке рядом с местом
+ * им нужно две-три буквы, а не «Топ по винрейту».
+ */
+export function boardShort(kind: RankKind): string {
+  if (kind === "roi") return "ROI";
+  if (kind === "win") return "WIN";
+  if (kind === "act") return "ACT";
+  return "PnL";
+}
+
 /** Ключ словаря для названия доски — чтобы было видно, за что место. */
 export function boardKey(kind: RankKind): "rk_btn_top_pnl" | "rk_btn_top_roi" | "rk_btn_top_winrate" | "rk_btn_most_active" {
   if (kind === "roi") return "rk_btn_top_roi";
