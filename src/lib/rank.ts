@@ -80,42 +80,19 @@ export function venueName(venue: Venue): string {
 }
 
 /**
- * Площадка кошелька по его собственной работе, а не по рейтингу.
+ * Площадка кошелька — по его сделкам в базе, и только по ним.
  *
- * В топ-100 попадает меньшинство, и у остальных площадку было видно
- * неоткуда. Но она выводится из данных: позиции и счёт на Hyperliquid,
- * сделки и спотовый остаток на BSC. Работает на обеих — берём ту, где
- * денег больше.
+ * Была хоть одна сделка на Hyperliquid — значит Hyperliquid, была хоть одна
+ * на BSC — значит BSC. Ни рейтинг, ни остатки на счёте больше не участвуют:
+ * рейтинг говорил о доске, а не о том, где кошелёк торгует, и кошелёк,
+ * попавший в спотовый топ, подписывался BSC при живых перпах.
+ *
+ * Торгует на обеих — пишем Hyperliquid: позиции бывают только там, и на них
+ * человек и смотрит, открывая кошелёк.
  */
-export function walletVenue(w: Wallet): Venue | null {
-  // Открытая позиция бывает только на Hyperliquid. Это факт, а не перевес
-  // по деньгам, поэтому он решает до всякого сравнения остатков: иначе
-  // кошелёк с глазиком подписывался BSC, где позиций не бывает вовсе.
-  // Позиции в списке есть не всегда — их приносит отдельный запрос при
-  // входе в кошелёк, — поэтому рядом стоит признак из базы сделок.
+export function rowVenue(w: Wallet): Venue | null {
   if (w.pos.length > 0 || w.hlActive) return "perp";
-  const perp = (w.equity?.perp ?? 0) > 0;
-  const spot = w.trades > 0 || (w.equity?.spot ?? 0) > 0;
-  if (perp && spot) return (w.equity?.perp ?? 0) >= (w.equity?.spot ?? 0) ? "perp" : "spot";
-  if (perp) return "perp";
-  if (spot) return "spot";
+  if (w.trades > 0) return "spot";
   return null;
 }
 
-/**
- * Площадка для строки списка. Порядок по силе признака: открытая позиция —
- * факт, место в топе площадки — почти факт, остатки и сделки — догадка.
- */
-export function rowVenue(w: Wallet, place: Place): Venue | null {
-  if (w.pos.length > 0 || w.hlActive) return "perp";
-  return place.best?.venue ?? walletVenue(w);
-}
-
-/**
- * Место на той площадке, значок которой стоит рядом. Место с чужой доски
- * рядом с логотипом Hyperliquid — это два разных факта, слепленных в один,
- * поэтому если на своей доске кошелька нет, кубок не рисуем вовсе.
- */
-export function placeAt(place: Place, venue: Venue): VenuePlace | null {
-  return venue === "spot" ? place.spot : place.perp;
-}

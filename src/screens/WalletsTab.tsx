@@ -7,7 +7,7 @@ import { useApp, isPaused, walletLimit } from "../store/app";
 import { useLive } from "../store/live";
 import { bare, t } from "../i18n/t";
 import { num, shortAddr, usd } from "../lib/format";
-import { boardShort, placeAt, rowVenue, venueName, walletRank } from "../lib/rank";
+import { boardShort, rowVenue, venueName, walletRank } from "../lib/rank";
 import { setThreshold } from "../lib/api";
 import { toast } from "../components/Toast";
 import { Action, botNodes, Card, Chips, Empty, EyeGlyph, PlusGlyph, Row, SectionTitle, Tiles, VenueMark } from "../components/ui";
@@ -86,8 +86,11 @@ export function WalletsTab() {
           wallets.map((w) => {
             const paused = isPaused(me.plan, w.primary);
             const place = walletRank(rank, w.addr);
-            const venue = rowVenue(w, place);
-            const at = venue ? placeAt(place, venue) : null;
+            const venue = rowVenue(w);
+            // Лучшее место кошелька вообще, а не по площадке значка:
+            // площадка теперь берётся из сделок и с доской не связана, и
+            // привязка к ней прятала кубок у половины списка.
+            const at = place.best;
             return (
               <Row
                 key={w.addr}
@@ -114,13 +117,11 @@ export function WalletsTab() {
                     </span>
                   ) : undefined
                 }
-                value={
-                  w.pos.length ? (
-                    <span className="mark"><EyeGlyph /> {w.pos.length}</span>
-                  ) : (
-                    ""
-                  )
-                }
+                // Глазок стоит у каждого кошелька, даже когда позиций нет:
+                // он не столько считает их, сколько говорит, что строку
+                // можно открыть. Числа тут больше нет — позиции приходят
+                // отдельным запросом уже внутри кошелька.
+                value={<EyeGlyph />}
                 onClick={() => open("wallet", w.addr)}
               />
             );
