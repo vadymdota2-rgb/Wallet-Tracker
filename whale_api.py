@@ -13,6 +13,7 @@ import sqlite3
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -80,6 +81,8 @@ LANG_CODES = {
 }
 COIN_RE = re.compile(r"\b([A-Z]{2,12})\b")
 _hl_cache: dict[str, tuple[float, dict]] = {}
+_hl_lock = threading.Lock()
+HL_TTL = 20.0
 # Цены спотовых токенов Hyperliquid: один запрос на всех, живёт пять минут.
 _spot_px: dict = {"t": 0.0, "map": {}}
 _spot_px_lock = threading.Lock()
@@ -458,16 +461,46 @@ def spot_prices() -> dict[int, float]:
     return out
 
 
+def hl_warm(addrs: list[str], workers: int = 8) -> None:
+    """
+    Прогреть кэш Hyperliquid сразу по всем кошелькам.
+
+    Раньше load_wallets ходил за позициями в цикле: два запроса на кошелёк,
+    по 400 мс каждый. На семнадцати кошельках это тридцать четыре запроса
+    подряд — тринадцать секунд, которые пользователь ждал с пустым экраном.
+    Восемь потоков сокращают их до пары секунд, а дальше цикл разбирает уже
+    готовый кэш.
+    """
+    todo = []
+    seen = set()
+    now_m = time.monotonic()
+    for a in addrs:
+        key = (a or "").lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        hit = _hl_cache.get(key)
+        if not hit or now_m - hit[0] >= HL_TTL:
+            todo.append(key)
+    if len(todo) < 2:
+        return
+    with ThreadPoolExecutor(max_workers=min(workers, len(todo))) as ex:
+        list(ex.map(hl_state, todo))
+
+
 def hl_state(addr: str) -> dict:
     key = addr.lower()
     hit = _hl_cache.get(key)
-    if hit and time.monotonic() - hit[0] < 20:
+    if hit and time.monotonic() - hit[0] < HL_TTL:
         return hit[1]
     perp = hl_post({"type": "clearinghouseState", "user": addr}) or {}
     spot = hl_post({"type": "spotClearinghouseState", "user": addr}) or {}
     out = {"perp": perp, "spot": spot}
-    _hl_cache[key] = (time.monotonic(), out)
-    cap_cache(_hl_cache, 4096)
+    # Прогрев идёт из нескольких потоков: словарь чистим под замком, иначе
+    # обход на удаление спотыкается о чужую вставку.
+    with _hl_lock:
+        _hl_cache[key] = (time.monotonic(), out)
+        cap_cache(_hl_cache, 4096)
     return out
 
 
@@ -944,6 +977,7 @@ def load_wallets(cur: sqlite3.Connection, chat: str) -> list[dict]:
         "WHERE uw.user_id=? ORDER BY uw.created_at ASC",
         (chat,),
     ).fetchall()
+    hl_warm([r["addr"] for r in rows])
     wallets = []
     for i, r in enumerate(rows):
         addr = (r["addr"] or "").lower()

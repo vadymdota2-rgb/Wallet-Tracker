@@ -8,6 +8,7 @@ import { create } from "zustand";
 import type {
   AlertRow, Bootstrap, Coins, FeedRow, Flow, Funding, Me, Rank, Rot, Sonar, Trades, Wallet,
 } from "../lib/types";
+import { tgUserId } from "../lib/telegram";
 
 export type Status = "boot" | "ready" | "stale" | "offline" | "anon";
 
@@ -63,43 +64,105 @@ interface LiveState {
   patchMe(p: Partial<Me>): void;
 }
 
-export const useLive = create<LiveState>((set) => ({
-  status: "boot",
-  syncedAt: 0,
+/**
+ * Снимок последней выдачи в localStorage.
+ *
+ * Без него каждый вход начинался с пустого экрана и ждал сервер. Теперь
+ * прошлые данные рисуются сразу, а свежие подменяют их через секунду-две.
+ * Снимок помечен номером пользователя: на общем телефоне чужой не подойдёт.
+ */
+const SNAP = "wt-snapshot-v1";
+const SNAP_TTL = 24 * 3600_000;
+
+type Snapshot = Pick<
+  LiveState,
+  "syncedAt" | "me" | "wallets" | "alerts" | "feed" | "marketFeed" | "flow"
+  | "rank" | "sonar" | "trades" | "funding" | "rot" | "coins"
+> & { uid: string };
+
+function readSnap(): Snapshot | null {
+  try {
+    const raw = localStorage.getItem(SNAP);
+    if (!raw) return null;
+    const d = JSON.parse(raw) as Snapshot;
+    if (!d || typeof d !== "object") return null;
+    if (d.uid !== tgUserId()) return null;
+    if (!(d.syncedAt > 0) || Date.now() - d.syncedAt > SNAP_TTL) return null;
+    return d;
+  } catch {
+    return null;
+  }
+}
+
+function writeSnap(s: LiveState): void {
+  try {
+    const snap: Snapshot = {
+      uid: tgUserId(),
+      syncedAt: s.syncedAt,
+      me: s.me, wallets: s.wallets, alerts: s.alerts, feed: s.feed,
+      marketFeed: s.marketFeed, flow: s.flow, rank: s.rank, sonar: s.sonar,
+      trades: s.trades, funding: s.funding, rot: s.rot, coins: s.coins,
+    };
+    localStorage.setItem(SNAP, JSON.stringify(snap));
+  } catch {
+    // Переполнилось или хранилище закрыто — снимок не обязателен.
+  }
+}
+
+/** Общие куски приходят из кэша сервера: пустой — значит ещё не собран, а
+ *  не «данных нет». Затирать ими прошлые нельзя, иначе экран, который уже
+ *  всё показал, вдруг пустеет. Личные куски наоборот: пустой список
+ *  кошельков — это правда, что кошельков нет. */
+const some = (v: unknown): boolean =>
+  Array.isArray(v) ? v.length > 0 : Boolean(v) && Object.keys(v as object).length > 0;
+
+const boards = (r: Rank | undefined): boolean =>
+  Boolean(r) && (["spot", "perp"] as const).some((v) =>
+    (["pnl", "roi", "win", "act"] as const).some((k) => (r as Rank)[v]?.[k]?.length));
+
+const snap = readSnap();
+
+export const useLive = create<LiveState>((set, get) => ({
+  status: snap ? "stale" : "boot",
+  syncedAt: snap?.syncedAt ?? 0,
   partial: [],
 
-  me: EMPTY_ME,
-  wallets: [],
-  alerts: [],
-  feed: [],
-  marketFeed: [],
-  flow: {},
-  rank: EMPTY_RANK,
-  sonar: EMPTY_SONAR,
-  trades: { spot: [], perp: [], liq: [] },
-  funding: [],
-  rot: {},
-  coins: {},
+  me: snap?.me ?? EMPTY_ME,
+  wallets: snap?.wallets ?? [],
+  alerts: snap?.alerts ?? [],
+  feed: snap?.feed ?? [],
+  marketFeed: snap?.marketFeed ?? [],
+  flow: snap?.flow ?? {},
+  rank: snap?.rank ?? EMPTY_RANK,
+  sonar: snap?.sonar ?? EMPTY_SONAR,
+  trades: snap?.trades ?? { spot: [], perp: [], liq: [] },
+  funding: snap?.funding ?? [],
+  rot: snap?.rot ?? {},
+  coins: snap?.coins ?? {},
 
-  apply: (d) =>
+  apply: (d) => {
     set((prev) => ({
       status: d.me ? "ready" : "anon",
       syncedAt: Date.now(),
       partial: Array.isArray(d.partial) ? d.partial : [],
+      // Личное — как пришло: ноль кошельков это ноль кошельков.
       me: d.me ? { ...EMPTY_ME, ...d.me } : prev.me,
       wallets: Array.isArray(d.wallets) ? d.wallets : prev.wallets,
       alerts: Array.isArray(d.alerts) ? d.alerts : prev.alerts,
       feed: Array.isArray(d.feed) ? d.feed : prev.feed,
-      marketFeed: Array.isArray(d.marketFeed) ? d.marketFeed : prev.marketFeed,
-      flow: d.flow ?? prev.flow,
-      rank: d.rank ?? prev.rank,
-      sonar: d.sonar ?? prev.sonar,
-      trades: d.trades ?? prev.trades,
-      funding: Array.isArray(d.funding) ? d.funding : prev.funding,
-      rot: d.rot ?? prev.rot,
-      // Котировки объёмные: пустой словарь прежние не затирает.
-      coins: d.coins && Object.keys(d.coins).length ? d.coins : prev.coins,
-    })),
+      // Общее — только если сервер успел его собрать.
+      marketFeed: some(d.marketFeed) ? d.marketFeed! : prev.marketFeed,
+      flow: some(d.flow) ? d.flow! : prev.flow,
+      rank: boards(d.rank) ? d.rank! : prev.rank,
+      sonar: d.sonar?.list?.length || d.sonar?.trained ? d.sonar : prev.sonar,
+      trades: some(d.trades?.spot) || some(d.trades?.perp) || some(d.trades?.liq)
+        ? d.trades! : prev.trades,
+      funding: some(d.funding) ? d.funding! : prev.funding,
+      rot: some(d.rot) ? d.rot! : prev.rot,
+      coins: some(d.coins) ? d.coins! : prev.coins,
+    }));
+    writeSnap(get());
+  },
 
   setStatus: (status) => set({ status }),
   patchWallets: (wallets) => set({ wallets }),

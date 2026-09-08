@@ -45,8 +45,34 @@ export function webApp(): WebApp | null {
   }
 }
 
+/**
+ * Дождаться моста Telegram. Скрипт грузится с telegram.org отдельно от нас и
+ * иногда приходит с задержкой; ждать его вечно нельзя — экран тогда стоит
+ * пустым, — но и стартовать без него жалко: без подписи сервер отдаст только
+ * общие данные. Две секунды: обычно хватает с запасом, а если нет, работаем
+ * без подписи и подхватим её следующим опросом.
+ */
+export function waitForTelegram(ms = 2000): Promise<void> {
+  if (webApp()) return Promise.resolve();
+  return new Promise((done) => {
+    const started = Date.now();
+    const tick = () => {
+      if (webApp() || Date.now() - started >= ms) return done();
+      setTimeout(tick, 50);
+    };
+    tick();
+  });
+}
+
 export function initData(): string {
   return webApp()?.initData ?? "";
+}
+
+/** Номер пользователя Telegram. Нужен, чтобы снимок с чужого аккаунта не
+ *  подхватился, если приложение открыли под другим. */
+export function tgUserId(): string {
+  const id = webApp()?.initDataUnsafe?.user?.id;
+  return id ? String(id) : "";
 }
 
 /** Язык из Telegram — подсказка, а не приказ: выбор пользователя главнее. */

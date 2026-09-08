@@ -11,7 +11,7 @@ import { useLive } from "./store/live";
 import { t, bare } from "./i18n/t";
 import { ensureLang, isRtl, normalizeLang } from "./i18n";
 import { setLocale } from "./lib/format";
-import { bootTelegram, haptic, telegramLang, webApp } from "./lib/telegram";
+import { bootTelegram, haptic, telegramLang, waitForTelegram, webApp } from "./lib/telegram";
 import { startSync, syncNow } from "./lib/sync";
 import { Toaster, toast } from "./components/Toast";
 import { Background } from "./components/Background";
@@ -120,8 +120,28 @@ export default function App() {
   }, [lang]);
 
   useEffect(() => {
-    bootTelegram();
-    return startSync();
+    // Мост Telegram грузится параллельно и может опоздать. Экран уже
+    // отрисован (данные — из сохранённого снимка), поэтому просто ждём
+    // подписи, а не отрисовки: опрос без неё вернул бы только общее.
+    let stop: (() => void) | null = null;
+    let dead = false;
+    void waitForTelegram().then(() => {
+      if (dead) return;
+      bootTelegram();
+      stop = startSync();
+      // Мост не успел за две секунды — опрос ушёл без подписи и вернул
+      // только общее. Ждём его дальше и, как появится, спрашиваем заново:
+      // иначе личные данные ждали бы следующего опроса, а это три минуты.
+      if (!webApp()) {
+        void waitForTelegram(15000).then(() => {
+          if (!dead && webApp()) void syncNow();
+        });
+      }
+    });
+    return () => {
+      dead = true;
+      stop?.();
+    };
   }, []);
 
   // Аппаратная кнопка «назад» Telegram ведёт по стеку экранов.

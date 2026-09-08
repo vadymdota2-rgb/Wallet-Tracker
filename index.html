@@ -7,8 +7,16 @@
 <title>Wallet Tracker</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"/>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<!-- Шрифт и мост Telegram грузятся, не задерживая отрисовку. Раньше оба
+     стояли в голове обычными тегами: пока Google Fonts и telegram.org не
+     ответят, экран пуст, а ответить они могут и через десять секунд. Теперь
+     таблица стилей приезжает как печатная и включается по загрузке, а мост
+     помечен async; приложение его ждёт само и не дольше двух секунд. -->
+<link rel="stylesheet" media="print" onload="this.media='all'"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"/>
+<noscript><link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"/></noscript>
+<script async src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
 <div id="root"><div class="boot">WALLET TRACKER</div></div>
