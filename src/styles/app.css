@@ -182,9 +182,10 @@
   transition: color 0.2s var(--ease);
 }
 .tabs button span { font-size: 17px; line-height: 1; }
-/* Рисованный значок вкладки: блочный, иначе строчный svg тащит за собой
-   отступ под базовую линию и стоит на пару пикселей ниже эмодзи-соседей. */
-.tabs button .glyph { display: block; }
+/* Рисованный значок. inline-block, а не block: во flex-рядах (вкладки,
+   метки) разницы нет, а внутри строки текста блочный svg рвал бы строку.
+   Сдвиг по базовой линии — иначе значок висит выше букв. */
+.glyph { display: inline-block; vertical-align: -0.16em; flex: 0 0 auto; }
 .tabs button small { font-size: 10px; line-height: 1.1; text-align: center; }
 .tabs button.on { color: var(--glow); }
 .tabs button.on span { filter: drop-shadow(0 0 6px rgb(127 216 255 / 0.6)); }

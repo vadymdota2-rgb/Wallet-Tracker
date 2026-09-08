@@ -15,7 +15,7 @@ import { bootTelegram, haptic, telegramLang, webApp } from "./lib/telegram";
 import { startSync, syncNow } from "./lib/sync";
 import { Toaster, toast } from "./components/Toast";
 import { Background } from "./components/Background";
-import { WalletGlyph } from "./components/ui";
+import { ThresholdGlyph, WalletGlyph } from "./components/ui";
 import { SCREENS } from "./screens/registry";
 import { WalletsTab } from "./screens/WalletsTab";
 import { TopTab } from "./screens/TopTab";
@@ -53,9 +53,9 @@ const SCREEN_TITLE: Record<ScreenName, DictKey> = {
   model: "ai_st_title",
 };
 
-const MENU: { name: ScreenName; key: DictKey; glyph: string }[] = [
+const MENU: { name: ScreenName; key: DictKey; glyph: ReactNode }[] = [
   { name: "positions", key: "menu_positions", glyph: "📈" },
-  { name: "threshold", key: "menu_alert_threshold", glyph: "💰" },
+  { name: "threshold", key: "menu_alert_threshold", glyph: <ThresholdGlyph /> },
   { name: "premium", key: "menu_premium", glyph: "⭐" },
   { name: "lang", key: "menu_languages", glyph: "🌐" },
   { name: "help", key: "menu_help", glyph: "❓" },

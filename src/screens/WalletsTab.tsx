@@ -10,7 +10,7 @@ import { num, shortAddr, usd } from "../lib/format";
 import { placeAt, rowVenue, venueName, walletRank } from "../lib/rank";
 import { setThreshold } from "../lib/api";
 import { toast } from "../components/Toast";
-import { Action, Card, Chips, Empty, Row, SectionTitle, Tiles, VenueMark } from "../components/ui";
+import { Action, Card, Chips, Empty, EyeGlyph, Row, SectionTitle, Tiles, VenueMark } from "../components/ui";
 
 const PRESETS = [100, 500, 1000, 5000, 10000, 50000];
 
@@ -103,7 +103,13 @@ export function WalletsTab() {
                     </span>
                   ) : undefined
                 }
-                value={w.pos.length ? <span className="mark">👁 {w.pos.length}</span> : ""}
+                value={
+                  w.pos.length ? (
+                    <span className="mark"><EyeGlyph /> {w.pos.length}</span>
+                  ) : (
+                    ""
+                  )
+                }
                 onClick={() => open("wallet", w.addr)}
               />
             );

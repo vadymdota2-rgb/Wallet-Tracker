@@ -324,3 +324,55 @@ export function WalletGlyph({ size = 21 }: { size?: number }) {
     </svg>
   );
 }
+
+/**
+ * Глаз — сколько открытых позиций у кошелька. Своя отрисовка вместо 👁:
+ * системная эмодзи то плоская чёрточка, то цветной глаз с ресницами, и с
+ * цифрой рядом она не выравнивается.
+ */
+export function EyeGlyph({ size = 15 }: { size?: number }) {
+  return (
+    <svg
+      className="glyph"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z" />
+      <circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+/**
+ * Порог алертов — монета с долларом. Мешок денег 💰 заменён на неё, а не на
+ * колокол: слово «алертов» в подписи уже есть, значку остаётся сказать
+ * «сумма». Монету с чертой снизу пробовал — на семнадцати пикселях черта
+ * сливается с монетой в кляксу.
+ */
+export function ThresholdGlyph({ size = 17 }: { size?: number }) {
+  return (
+    <svg
+      className="glyph"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="8.6" />
+      <path d="M14.4 9.1c-.5-.9-1.4-1.4-2.6-1.4-1.5 0-2.6.8-2.6 2s1 1.7 2.6 2.1c1.7.4 2.9.9 2.9 2.2s-1.2 2.2-2.9 2.2c-1.3 0-2.3-.5-2.8-1.5" />
+      <path d="M12 6.2v11.6" opacity="0.75" />
+    </svg>
+  );
+}

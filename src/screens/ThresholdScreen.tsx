@@ -9,11 +9,11 @@ import { useState } from "react";
 import { Frame } from "./Screen";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
-import { t } from "../i18n/t";
+import { bare, t } from "../i18n/t";
 import { usd, usdFull } from "../lib/format";
 import { setThreshold } from "../lib/api";
 import { toast } from "../components/Toast";
-import { Action, Card, Row, SectionTitle } from "../components/ui";
+import { Action, Card, Row, SectionTitle, ThresholdGlyph } from "../components/ui";
 
 const PRESETS = [100, 500, 1000, 5000, 10000, 50000];
 const MIN = 50;
@@ -61,7 +61,10 @@ export function ThresholdScreen() {
   };
 
   return (
-    <Frame title={t(lang, "threshold_title")} sub={t(lang, "threshold_desc")}>
+    <Frame
+      title={<><ThresholdGlyph size={16} /> {bare(t(lang, "threshold_title"))}</>}
+      sub={t(lang, "threshold_desc")}
+    >
       <Card>
         <SectionTitle note={usdFull(current)}>{t(lang, "threshold_current")}</SectionTitle>
         {PRESETS.map((p) => (
