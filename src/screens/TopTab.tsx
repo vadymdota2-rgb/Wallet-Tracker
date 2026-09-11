@@ -26,6 +26,18 @@ const KINDS: { id: RankKind; key: Parameters<typeof t>[1] }[] = [
   { id: "act", key: "rk_btn_most_active" },
 ];
 
+/**
+ * У спота доски ROI нет. Доходность считается от вложенного, а вложенное по
+ * BSC собирается из цен DEX на момент покупки — половина монет куплена давно
+ * и по ценам, которых уже не достать. Абсолютный PnL при этом остаётся
+ * верным: он складывается из тех же сделок, но без деления на кривой
+ * знаменатель. У фьючерсов иначе — там ROI считается от маржи, которую биржа
+ * сообщает точно, поэтому доска остаётся.
+ */
+function kindsFor(venue: Venue): typeof KINDS {
+  return venue === "spot" ? KINDS.filter((k) => k.id !== "roi") : KINDS;
+}
+
 const WINDOWS: RankWin[] = ["30", "90", "180", "365"];
 
 function pick(rank: ReturnType<typeof useLive.getState>["rank"], venue: Venue, win: RankWin): RankTable | null {
@@ -40,7 +52,7 @@ export function TopTab() {
   const lang = useApp((s) => s.lang);
   const open = useApp((s) => s.open);
   const venue = useApp((s) => s.rankVenue);
-  const kind = useApp((s) => s.rankKind);
+  const rawKind = useApp((s) => s.rankKind);
   const win = useApp((s) => s.rankWin);
   const setVenue = useApp((s) => s.setRankVenue);
   const setKind = useApp((s) => s.setRankKind);
@@ -48,6 +60,11 @@ export function TopTab() {
 
   const rank = useLive((s) => s.rank);
   const plan = useLive((s) => s.me.plan);
+
+  const kinds = kindsFor(venue);
+  // Пользователь мог стоять на ROI и переключиться на спот: доски там нет,
+  // показываем прибыль, а не пустой экран.
+  const kind = kinds.some((k) => k.id === rawKind) ? rawKind : "pnl";
 
   const table = pick(rank, venue, win);
   const cap = plan === "premium" ? PREMIUM_ROWS : FREE_ROWS;
@@ -75,7 +92,7 @@ export function TopTab() {
         <Segmented<RankKind>
           value={kind}
           onChange={setKind}
-          options={KINDS.map((k) => ({ id: k.id, label: t(lang, k.key) }))}
+          options={kinds.map((k) => ({ id: k.id, label: t(lang, k.key) }))}
         />
         <Segmented<RankWin>
           value={win}

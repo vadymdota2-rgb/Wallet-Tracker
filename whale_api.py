@@ -1565,12 +1565,16 @@ def load_rank(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) -> 
         spot = {k: [] for k in empty}
         if has_cache:
             for kind, key in kind_map.items():
+                # ROI по споту недостоверен: знаменатель (вложенное) собирается
+                # из цен DEX на момент покупки, а часть монет куплена годы назад
+                # и по ценам, которые уже не восстановить. Доски ROI для BSC
+                # больше нет — ни в боте, ни здесь. Остаётся абсолютный PnL.
+                if key == "roi":
+                    continue
                 rows = _read_rank_key(cur, f"global_{kind}_{days}", days)
                 if not rows and days == 30:
                     rows = _read_rank_key(cur, f"global_{kind}", 30)
                 spot[key] = rows
-            if not spot["roi"]:
-                spot["roi"] = list(spot["pnl"])
             if not spot["act"]:
                 spot["act"] = list(spot["pnl"])
         perp = load_perp_rank(hl, days) if days == 30 else {k: [] for k in empty}

@@ -49,7 +49,13 @@ export function TraderScreen({ arg, arg2 }: ScreenProps) {
         <Tiles
           items={[
             { label: "PnL", value: signed(row.pnl), tone: row.pnl >= 0 ? "up" : "dn" },
-            { label: t(lang, "rk_roi_per_trade"), value: pct(row.roi, 1) },
+            // ROI показываем только по фьючерсам: там знаменатель — маржа,
+            // её биржа отдаёт точно. По споту вложенное восстанавливается из
+            // цен DEX на момент покупки и для старых монет недостоверно,
+            // поэтому доходность по BSC не показывает ни бот, ни приложение.
+            ...(venue === "perp"
+              ? [{ label: t(lang, "rk_roi_per_trade"), value: pct(row.roi, 1) }]
+              : []),
             { label: t(lang, "ws_winrate"), value: `${num(row.win)}%` },
             { label: t(lang, "rk_trades"), value: num(row.tr) },
             venue === "perp"

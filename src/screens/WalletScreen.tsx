@@ -113,7 +113,11 @@ export function WalletScreen({ arg }: ScreenProps) {
                 // срока удержания, у спота наоборот. Показывать пустую
                 // плитку с прочерком там, где показателя не бывает, — врать
                 // о том, что данные потерялись.
-                { label: t(lang, "rk_roi_per_trade"), value: pct(top.roi, 1) },
+                // ROI — только по фьючерсам: см. TraderScreen. По BSC
+                // знаменатель недостоверен, показываем абсолютный PnL.
+                ...(place.best?.venue === "perp"
+                  ? [{ label: t(lang, "rk_roi_per_trade"), value: pct(top.roi, 1) }]
+                  : []),
                 { label: t(lang, "ws_winrate"), value: `${num(top.win)}%` },
                 { label: t(lang, "rk_trades"), value: num(top.tr) },
                 place.best?.venue === "perp"
