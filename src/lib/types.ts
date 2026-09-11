@@ -153,20 +153,27 @@ export interface Trader {
 export type RankKind = "pnl" | "roi" | "win" | "act";
 export type RankTable = Record<RankKind, Trader[]>;
 
-/** Одна сделка из истории кошелька. */
+/** Одна завершённая сделка из истории кошелька. */
 export interface Deal {
   /** Тикер монеты. */
   sym: string;
-  /** Объём в долларах. */
+  /** Кандидаты логотипа, по убыванию доверия. */
+  icon?: string[];
+  /** Объём закрытия в долларах. */
   v: number;
-  /** Спот: покупка или продажа. */
-  buy?: boolean;
-  /** Фьючерсы: лонг или шорт. */
-  long?: boolean;
+  /** Цена входа. Нет знаков после запятой у токена — нет и цены. */
+  buy?: number | null;
+  /** Цена выхода. */
+  sell?: number | null;
+  /** Результат в долларах. */
+  pnl: number;
+  /** Фьючерсы: доходность от маржи. У спота знаменатель недостоверен. */
+  roi?: number | null;
+  /** Фьючерсы: закрывали лонг. `null` — переворот, сторона неизвестна. */
+  long?: boolean | null;
   /** Фьючерсы: позицию вынесло по ликвидации. */
   liq?: boolean;
   lev?: number | null;
-  pnl?: number | null;
   /** Секунды. */
   ts: number;
 }

@@ -601,6 +601,11 @@ MIN_TRADE_USD_NANOS = 50_000_000_000
 HL_MIN_CLOSED = 5
 HL_MAX_CLOSED_30D = 200
 DIR_OPEN_LONG, DIR_OPEN_SHORT = 1, 2
+# Коды направления те же, что проставляет бот в hyperliquid_core.cpp.
+# Переворот (5) закрывает одну сторону и тут же открывает другую, а какую
+# именно — из кода не видно: «Long > Short» и «Short > Long» оба пишутся
+# пятёркой.
+DIR_CLOSE_LONG, DIR_CLOSE_SHORT, DIR_FLIP = 3, 4, 5
 DIR_LIQ_LONG, DIR_LIQ_SHORT, DIR_LIQ_OTHER = 6, 7, 8
 
 
@@ -1608,12 +1613,15 @@ def load_rank(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) -> 
 
 def wallet_deals(cur: sqlite3.Connection, hl: sqlite3.Connection | None,
                  addr: str, venue: str, n: int = 10) -> list[dict]:
-    """Последние сделки одного кошелька из рейтинга.
+    """Последние завершённые сделки одного кошелька из рейтинга.
+
+    Завершённые, а не отдельные переводы: покупка сама по себе ничего не
+    говорит о трейдере, смысл появляется, когда видно за сколько взял, за
+    сколько отдал и что осталось в кармане.
 
     Ничего нового наружу это не открывает: доска и так публикует прибыль и
     число сделок каждого кошелька, а лента крупных сделок — их адреса,
-    монеты и суммы. Здесь те же публичные транзакции, только собранные по
-    одному адресу.
+    монеты и суммы.
 
     Сторона сделки уходит флагом, а не словом: в ленте крупных сделок стоит
     захардкоженное русское «покупка», и повторять эту ошибку в новом месте
@@ -1623,58 +1631,170 @@ def wallet_deals(cur: sqlite3.Connection, hl: sqlite3.Connection | None,
     if not ADDR_RE.match(key):
         return []
     n = max(1, min(int(n or 10), 50))
-    out: list[dict] = []
 
     if venue == "perp":
-        if not hl or not table_exists(hl, "hl_fills"):
-            return []
-        cset = cols(hl, "hl_fills")
-        dirc = "dir_code" if "dir_code" in cset else "0"
-        lev = "leverage" if "leverage" in cset else "0"
-        pnl = "closed_pnl_nanos" if "closed_pnl_nanos" in cset else "0"
-        try:
-            rows = hl.execute(
-                f"SELECT coin, notional_nanos, {dirc} dirc, {lev} lev, {pnl} pnl, ts "
-                f"FROM hl_fills WHERE lower(wallet)=? AND notional_nanos > 0 "
-                f"ORDER BY ts DESC LIMIT ?",
-                (key, n),
-            ).fetchall()
-        except sqlite3.Error as e:
-            sys.stderr.write(f"[api] deals perp {key[:10]}: {e}\n")
-            return []
-        for r in rows:
-            code = int(r["dirc"] or 0)
-            lv = int(r["lev"] or 0)
-            out.append({
-                "sym": str(r["coin"] or "?").upper(),
-                "v": usd(r["notional_nanos"]),
-                # Ликвидацию не выдаём за обычную сделку: у неё своя метка.
-                "liq": code in (DIR_LIQ_LONG, DIR_LIQ_SHORT, DIR_LIQ_OTHER),
-                "long": code in (DIR_OPEN_LONG, DIR_LIQ_SHORT),
-                "lev": lv or None,
-                "pnl": usd(r["pnl"]) or None,
-                "ts": ts_sec(r["ts"]),
-            })
-        return out
+        return _perp_deals(hl, key, n)
+    return _spot_deals(cur, key, n)
 
-    if not table_exists(cur, "trades"):
+
+def _perp_deals(hl: sqlite3.Connection | None, key: str, n: int) -> list[dict]:
+    """Закрытия позиций на Hyperliquid.
+
+    Закрытие — это фил с ненулевым closed_pnl: биржа сама считает результат
+    и кладёт его в филл. Цену входа она не хранит, но из результата её видно
+    точно: у лонга прибыль это (выход − вход) × объём, у шорта наоборот,
+    значит вход = выход ∓ прибыль/объём.
+
+    ROI берём от маржи, как «ROI за сделку» в боте: это те деньги, которыми
+    трейдер рисковал. Маржа не записана — считаем от номинала и плеча.
+    """
+    if not hl or not table_exists(hl, "hl_fills"):
         return []
-    rows = cur.execute(
-        "SELECT token, is_buy, usd_nanos, timestamp FROM trades "
-        # Те же границы, что у рейтинга: сделки с выдуманными decimals не
-        # должны всплыть в истории после того, как их убрали из доски.
-        "WHERE wallet=? AND usd_nanos BETWEEN ? AND ? "
-        "ORDER BY timestamp DESC, id DESC LIMIT ?",
-        (key, MIN_TRADE_USD_NANOS, MAX_SPOT_USD_NANOS, n),
-    ).fetchall()
+    cset = cols(hl, "hl_fills")
+    if "closed_pnl_nanos" not in cset:
+        return []
+    dirc = "dir_code" if "dir_code" in cset else "0"
+    lev = "leverage" if "leverage" in cset else "0"
+    marg = "margin_nanos" if "margin_nanos" in cset else "0"
+    try:
+        rows = hl.execute(
+            f"SELECT coin, px, sz, notional_nanos, closed_pnl_nanos pnl, "
+            f"{dirc} dirc, {lev} lev, {marg} marg, ts "
+            f"FROM hl_fills WHERE lower(wallet)=? AND closed_pnl_nanos != 0 "
+            f"ORDER BY ts DESC LIMIT ?",
+            (key, n),
+        ).fetchall()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] deals perp {key[:10]}: {e}\n")
+        return []
+
+    out: list[dict] = []
     for r in rows:
+        code = int(r["dirc"] or 0)
+        liq = code in (DIR_LIQ_LONG, DIR_LIQ_SHORT, DIR_LIQ_OTHER)
+        long_side = code in (DIR_CLOSE_LONG, DIR_LIQ_LONG)
+        known_side = code in (DIR_CLOSE_LONG, DIR_CLOSE_SHORT, DIR_LIQ_LONG, DIR_LIQ_SHORT)
+        pnl = usd(r["pnl"])
+        exit_px = _f(r["px"])
+        size = _f(r["sz"])
+        entry_px = None
+        # У переворота сторона неизвестна, а от неё зависит знак: посчитать
+        # вход, не зная, что закрывали, значит получить цену наугад.
+        if known_side and exit_px > 0 and size > 0:
+            entry_px = exit_px - pnl / size if long_side else exit_px + pnl / size
+            if entry_px <= 0:
+                entry_px = None
+        lv = int(r["lev"] or 0)
+        margin = usd(r["marg"])
+        if margin <= 0 and lv > 0:
+            margin = usd(r["notional_nanos"]) / lv
+        sym = str(r["coin"] or "?").upper()
         out.append({
-            "sym": symbol_of(cur, r["token"]) or short_addr(r["token"] or ""),
-            "v": usd(r["usd_nanos"]),
-            "buy": bool(r["is_buy"]),
-            "ts": int(r["timestamp"] or 0),
+            "sym": sym,
+            "icon": coin_icon(sym),
+            "v": usd(r["notional_nanos"]),
+            "long": long_side if known_side else None,
+            "liq": liq,
+            "lev": lv or None,
+            "buy": entry_px,
+            "sell": exit_px or None,
+            "pnl": pnl,
+            "roi": (100.0 * pnl / margin) if margin > 0 else None,
+            "ts": ts_sec(r["ts"]),
         })
     return out
+
+
+def _spot_deals(cur: sqlite3.Connection, key: str, n: int) -> list[dict]:
+    """Продажи на BSC со средней ценой покупки.
+
+    Учёт тот же, что в ranking.cpp и в spot_open: покупка добавляет
+    количество и стоимость, продажа списывает их пропорционально. Поэтому
+    пройти нужно всю историю кошелька, а не последние десять строк — без
+    покупок не из чего считать цену входа.
+
+    Количество лежит в атомах. Для прибыли это неважно — она считается в
+    долларах, — а для цены нужны знаки после запятой. Нет их в token_cache —
+    показываем сделку без цен, но с результатом: врать про цену хуже, чем
+    её не показать.
+
+    ROI по споту не отдаём. Знаменатель — вложенное — восстанавливается из
+    цен DEX на момент покупки и для старых монет недостоверен; ровно по этой
+    причине доску ROI по BSC сняли и в боте, и в приложении.
+    """
+    if not table_exists(cur, "trades"):
+        return []
+    try:
+        rows = cur.execute(
+            "SELECT token, is_buy, usd_nanos, token_amount, timestamp FROM trades "
+            # Те же границы, что у рейтинга: сделки с выдуманными decimals не
+            # должны всплыть в истории после того, как их убрали из доски.
+            "WHERE wallet=? AND usd_nanos BETWEEN ? AND ? "
+            "ORDER BY token ASC, timestamp ASC, id ASC",
+            (key, MIN_TRADE_USD_NANOS, MAX_SPOT_USD_NANOS),
+        ).fetchall()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] deals spot {key[:10]}: {e}\n")
+        return []
+
+    held: dict[str, dict] = {}
+    closed: list[dict] = []
+    for r in rows:
+        tok = (r["token"] or "").lower()
+        try:
+            amt = int(r["token_amount"] or 0)
+        except (TypeError, ValueError):
+            continue
+        if amt <= 0:
+            continue
+        usd_n = int(r["usd_nanos"] or 0)
+        h = held.setdefault(tok, {"qty": 0, "cost": 0})
+        if r["is_buy"]:
+            h["qty"] += amt
+            h["cost"] += usd_n
+            continue
+        if h["qty"] <= 0:
+            # Продажа без покупки в нашей истории: цену входа брать неоткуда,
+            # а выдумывать её — то же самое, что выдумывать прибыль.
+            continue
+        take = min(amt, h["qty"])
+        cost = h["cost"] * take // h["qty"]
+        proceeds = usd_n * take // amt
+        h["cost"] -= cost
+        h["qty"] -= take
+        closed.append({
+            "tok": tok,
+            "take": take,
+            "cost": usd(cost),
+            "proceeds": usd(proceeds),
+            "ts": int(r["timestamp"] or 0),
+        })
+
+    closed.sort(key=lambda d: d["ts"], reverse=True)
+    out: list[dict] = []
+    for d in closed[:n]:
+        dec = token_decimals(cur, d["tok"])
+        qty = d["take"] / (10 ** dec) if dec else 0.0
+        sym = symbol_of(cur, d["tok"]) or short_addr(d["tok"])
+        out.append({
+            "sym": sym,
+            # Логотип ищется по адресу контракта, а не по тикеру: тикеры не
+            # уникальны, и под чужим PEPE подставилась бы чужая картинка.
+            "icon": coin_icon(sym, d["tok"]),
+            "v": d["proceeds"],
+            "buy": (d["cost"] / qty) if qty > 0 else None,
+            "sell": (d["proceeds"] / qty) if qty > 0 else None,
+            "pnl": d["proceeds"] - d["cost"],
+            "ts": d["ts"],
+        })
+    return out
+
+
+def _f(v) -> float:
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def load_trades(cur: sqlite3.Connection, hl: sqlite3.Connection | None, hours: int = 24) -> dict:
