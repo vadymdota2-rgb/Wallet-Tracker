@@ -445,8 +445,51 @@
   gap: 2px;
   min-width: 0;
 }
+/* Плотный вариант — для карточки рейтинга: там плиток шесть, и обычные
+   съедали бы по полтора экрана на каждого трейдера. */
+.tiles.sm { gap: 6px; }
+.tiles.sm .tile { padding: 7px 9px; }
+.tiles.sm .tile small { font-size: 10px; }
+.tiles.sm .tile b { font-size: 14px; }
+
 .tile small { color: var(--dim-2); font-size: 11px; letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tile b { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Карточка трейдера в рейтинге ------------------------------------------ */
+.lb-hd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+.lb-addr {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Кнопка подписки. Зона нажатия 36×36 — палец не обязан попадать в
+   двадцатипиксельный значок. */
+.lb-act {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: rgb(11 22 40 / 0.25);
+  transition: color 0.18s var(--ease), border-color 0.18s var(--ease), background 0.18s var(--ease);
+}
+.lb-act.on { color: var(--glow); }
+.lb-act.on:active { background: rgb(127 216 255 / 0.14); border-color: rgb(127 216 255 / 0.45); }
+/* Отписка окрашена в тревожный, но не кричит: это обратимое действие, а не
+   удаление данных. */
+.lb-act.off { color: var(--warn); border-color: rgb(245 196 81 / 0.35); }
+.lb-act.off:active { background: rgb(245 196 81 / 0.14); }
 
 /* Кнопки --------------------------------------------------------------- */
 .action {

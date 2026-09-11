@@ -112,10 +112,20 @@ export interface Tile {
   tone?: "up" | "dn" | "dim";
 }
 
-export function Tiles({ items, cols = 2 }: { items: Tile[]; cols?: 2 | 3 | 4 }) {
+export function Tiles({
+  items,
+  cols = 2,
+  size,
+}: {
+  items: Tile[];
+  cols?: 2 | 3 | 4;
+  /** «sm» — мельче и плотнее: в карточке рейтинга плиток шесть, и обычные
+      съедали бы полтора экрана на каждого трейдера. */
+  size?: "sm";
+}) {
   if (!items.length) return null;
   return (
-    <div className={`tiles c${cols}`}>
+    <div className={`tiles c${cols}${size === "sm" ? " sm" : ""}`}>
       {items.map((it, i) => (
         <div className="tile" key={i}>
           <small>{it.label}</small>
@@ -382,6 +392,26 @@ export function ThresholdGlyph({ size = 25 }: { size?: number }) {
 }
 
 /** Плюс в круге — «добавить». Круг роднит его с монетой порога и глазом. */
+/** Пара к PlusGlyph: тот же кружок и та же линия, только без вертикали. */
+export function MinusGlyph({ size = 19 }: { size?: number }) {
+  return (
+    <svg
+      className="glyph"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="8.6" />
+      <path d="M8.2 12h7.6" />
+    </svg>
+  );
+}
+
 export function PlusGlyph({ size = 19 }: { size?: number }) {
   return (
     <svg

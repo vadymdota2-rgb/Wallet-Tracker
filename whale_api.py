@@ -67,13 +67,7 @@ PREMIUM_MAX_WALLETS = 50
 # PREMIUM_TOP_TRADERS в premium.cpp: приложение и чат обязаны показывать
 # одинаково глубоко, иначе премиум значит разное в двух местах.
 RANK_FREE_DEPTH = 30
-RANK_MAX_DEPTH = 1000
-# Сколько доски уходит в общую выгрузку при запуске. Остальное — по
-# требованию, через /api/rank.
-RANK_BOOTSTRAP_ROWS = 100
-RANK_PAGE_MAX = 200
-RANK_KINDS = {"pnl", "roi", "winrate", "active"}
-RANK_WINDOWS = (30, 90, 180, 365)
+RANK_MAX_DEPTH = 100
 MIN_THRESHOLD_USD = 50.0
 MAX_THRESHOLD_USD = 1_000_000_000.0
 # Потолок запросов с одного адреса: перебор chat_id упирается в него.
@@ -1422,23 +1416,9 @@ def _rank_payload(cur, key: str) -> list:
     return arr if isinstance(arr, list) else []
 
 
-def rank_page(cur, kind: str, days: int, offset: int, limit: int) -> dict:
-    """Страница спотовой доски глубже первой сотни.
-
-    В общую выгрузку кладётся только начало доски: тысяча строк на каждую
-    доску и каждое окно — это мегабайты на каждый запуск приложения, а
-    смотрят так глубоко единицы. Остальное подтягивается отсюда по мере
-    прокрутки.
-    """
-    arr = _rank_payload(cur, f"global_{kind}_{days}")
-    if not arr and days == 30:
-        arr = _rank_payload(cur, f"global_{kind}")
-    return {"rows": _map_rank(arr, days, limit, offset), "total": len(arr)}
-
-
 def _read_rank_key(cur, key: str, days: int) -> list:
-    """Начало доски для общей выгрузки. Разбор — общий с rank_page()."""
-    return _map_rank(_rank_payload(cur, key), days, RANK_BOOTSTRAP_ROWS)
+    """Доска целиком — сто мест, как в боте."""
+    return _map_rank(_rank_payload(cur, key), days, RANK_MAX_DEPTH)
 
 
 def perp_margin(hl: sqlite3.Connection, wallets: list[str], since_ms: int) -> dict[str, float]:
@@ -2861,55 +2841,6 @@ class Handler(BaseHTTPRequestHandler):
                             hl.close()
                         except Exception:
                             pass
-                return
-            if path in ("/rank", "/api/rank"):
-                # Глубина доски платная, как и в боте: без подписки отдаём
-                # ровно столько же, сколько уже лежит в общей выгрузке.
-                chat = self._user(qs)
-                kind = (qs.get("kind", ["pnl"])[0] or "pnl").strip().lower()
-                # Доска спотовая, а ROI по споту снят: знаменатель по BSC
-                # недостоверен. Отдавать её страницами значило бы вернуть
-                # через API то, что убрано из бота и из приложения.
-                if kind not in RANK_KINDS or kind == "roi":
-                    self._json(400, {"ok": False, "error": "bad_kind"})
-                    return
-                try:
-                    days = int(qs.get("win", ["30"])[0])
-                    offset = int(qs.get("offset", ["0"])[0])
-                    limit = int(qs.get("limit", ["100"])[0])
-                except (TypeError, ValueError):
-                    self._json(400, {"ok": False, "error": "bad_value"})
-                    return
-                if days not in RANK_WINDOWS:
-                    self._json(400, {"ok": False, "error": "bad_win"})
-                    return
-                offset = max(0, min(offset, RANK_MAX_DEPTH))
-                limit = max(1, min(limit, RANK_PAGE_MAX))
-                cur = open_db(DB)
-                if not cur:
-                    self._json(200, {"ok": False, "error": "db"})
-                    return
-                try:
-                    depth = RANK_MAX_DEPTH if is_premium(cur, chat) else RANK_FREE_DEPTH
-                    if offset >= depth:
-                        self._json(200, {"ok": True, "rows": [], "total": depth, "locked": True})
-                        return
-                    limit = min(limit, depth - offset)
-                    page = rank_page(cur, kind, days, offset, limit)
-                    self._json(200, {
-                        "ok": True,
-                        "rows": page["rows"],
-                        # Сколько всего доступно этому пользователю, а не
-                        # сколько строк в кэше: иначе «показать ещё» звало бы
-                        # за тем, что всё равно не отдадут.
-                        "total": min(page["total"], depth),
-                        "locked": page["total"] > depth,
-                    })
-                finally:
-                    try:
-                        cur.close()
-                    except Exception:
-                        pass
                 return
             if path in ("/token", "/api/token"):
                 cur = open_db(DB)

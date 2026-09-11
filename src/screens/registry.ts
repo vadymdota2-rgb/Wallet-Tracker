@@ -7,7 +7,6 @@ import { PositionScreen } from "./PositionScreen";
 import { PositionsScreen } from "./PositionsScreen";
 import { SpotScreen } from "./SpotScreen";
 import { CoinScreen } from "./CoinScreen";
-import { TraderScreen } from "./TraderScreen";
 import { SignalScreen } from "./SignalScreen";
 import { AddWalletScreen } from "./AddWalletScreen";
 import { RenameScreen } from "./RenameScreen";
@@ -25,7 +24,6 @@ export const SCREENS: Record<ScreenName, ComponentType<ScreenProps>> = {
   positions: PositionsScreen,
   spot: SpotScreen,
   coin: CoinScreen,
-  trader: TraderScreen,
   signal: SignalScreen,
   addWallet: AddWalletScreen,
   rename: RenameScreen,

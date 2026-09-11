@@ -7,35 +7,29 @@
  * зависимости от выбранного окна, за окнами никуда не ходила, и люди
  * решали, за кем следовать, по несуществующим числам.
  *
- * Спотовая доска — на тысячу мест. Первая сотня приходит с общей выгрузкой
- * и рисуется сразу, остальное догружается кнопкой: держать тысячу строк на
- * каждую доску и каждое окно в стартовом ответе — это мегабайты при каждом
- * запуске ради страниц, куда заходят единицы.
+ * Каждый трейдер — карточка со всеми цифрами доски, а не строка, за
+ * которой надо проваливаться. Набор полей тот же, что бот пишет в своей
+ * карточке: у спота срок удержания и нет доходности, у фьючерсов среднее
+ * плечо и ROI от маржи.
  */
-import { useEffect, useRef, useState } from "react";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
-import { t } from "../i18n/t";
+import { t, bare } from "../i18n/t";
 import { num, pct, shortAddr, signed } from "../lib/format";
+import { holdTime } from "../lib/labels";
 import { venueName } from "../lib/rank";
-import { fetchRankPage } from "../lib/api";
-import { Action, Card, Empty, Row, SectionTitle, Segmented } from "../components/ui";
+import { removeWallet } from "../lib/api";
+import { syncNow } from "../lib/sync";
+import { toast } from "../components/Toast";
+import { haptic } from "../lib/telegram";
+import {
+  Card, Empty, MinusGlyph, PlusGlyph, SectionTitle, Segmented, Tiles,
+} from "../components/ui";
 import type { RankKind, RankTable, Trader, Venue } from "../lib/types";
 import type { RankWin } from "../store/app";
 
 const FREE_ROWS = 30;
-/** Столько приходит с общей выгрузкой — дальше идёт догрузка. */
-const BOOTSTRAP_ROWS = 100;
-const PAGE = 100;
-const MAX_ROWS = 1000;
-
-/** Ключ доски на сервере: там они названы как в боте. */
-const SERVER_KIND: Record<RankKind, string> = {
-  pnl: "pnl",
-  roi: "roi",
-  win: "winrate",
-  act: "active",
-};
+const PREMIUM_ROWS = 100;
 
 const KINDS: RankKind[] = ["pnl", "roi", "win", "act"];
 
@@ -73,26 +67,18 @@ export function TopTab() {
 
   const rank = useLive((s) => s.rank);
   const plan = useLive((s) => s.me.plan);
+  const wallets = useLive((s) => s.wallets);
 
   const kinds = kindsFor(venue);
   // Пользователь мог стоять на ROI и переключиться на спот: доски там нет,
   // показываем прибыль, а не пустой экран.
   const kind = kinds.includes(rawKind) ? rawKind : "pnl";
 
-  /* Догруженные страницы. Ключ — доска целиком: сменил площадку, вид или
-     окно — и это уже другой список, склеивать их нельзя. */
-  const board = `${venue}:${kind}:${win}`;
-  const [extra, setExtra] = useState<Trader[]>([]);
-  const [total, setTotal] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const shownBoard = useRef(board);
+  const table = pick(rank, venue, win);
+  const cap = plan === "premium" ? PREMIUM_ROWS : FREE_ROWS;
+  const rows: Trader[] = (table?.[kind] ?? []).slice(0, cap);
 
-  useEffect(() => {
-    // Доска сменилась — прошлые страницы к ней отношения не имеют.
-    shownBoard.current = board;
-    setExtra([]);
-    setTotal(0);
-  }, [board]);
+  const tracked = new Set(wallets.map((w) => w.addr.toLowerCase()));
 
   const label = (k: RankKind): string => {
     if (k === "win") return t(lang, "ws_winrate");
@@ -100,39 +86,13 @@ export function TopTab() {
     return k === "roi" ? "ROI" : "PnL";
   };
 
-  const base = table(rank, venue, win, kind);
-  const cap = plan === "premium" ? MAX_ROWS : FREE_ROWS;
-  const rows: Trader[] = [...base, ...extra].slice(0, cap);
-
-  /* Кнопка нужна только там, где есть что грузить: страницы лежат в кэше
-     спотовой доски, у фьючерсов рейтинг считается на лету. */
-  const pageable = venue === "spot" && plan === "premium";
-  const more = pageable && rows.length >= BOOTSTRAP_ROWS && (total === 0 || rows.length < total);
-
-  const loadMore = async () => {
-    if (busy) return;
-    setBusy(true);
-    const forBoard = board;
-    try {
-      const res = await fetchRankPage(SERVER_KIND[kind], win, rows.length, PAGE);
-      // Пока грузили, пользователь мог переключить доску — чужие строки
-      // дописывать в неё нельзя.
-      if (shownBoard.current !== forBoard || !res?.ok || !res.rows?.length) {
-        if (shownBoard.current === forBoard) setTotal(rows.length);
-        return;
-      }
-      setExtra((prev) => [...prev, ...(res.rows ?? [])]);
-      setTotal(res.total ?? 0);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const value = (r: Trader): string => {
-    if (kind === "roi") return pct(r.roi, 1);
-    if (kind === "win") return `${num(r.win)}%`;
-    if (kind === "act") return num(r.tr);
-    return signed(r.pnl);
+  const unfollow = async (addr: string) => {
+    haptic("light");
+    const res = await removeWallet(addr);
+    if (res?.ok) {
+      toast(t(lang, "toast_wallet_removed"));
+      void syncNow();
+    } else toast(t(lang, "generic_error_retry"), "err");
   };
 
   return (
@@ -162,67 +122,68 @@ export function TopTab() {
         />
       </Card>
 
-      <Card>
-        {/* Шапка повторяет выбор — площадку и доску, — а справа стоит
-            глубина: «100 / 1000» сразу говорит, что список длиннее
-            показанного. Слово «Место» в шапке читалось как «место 100». */}
-        <SectionTitle note={rows.length ? `${num(rows.length)}${total > rows.length ? ` / ${num(total)}` : ""}` : undefined}>
-          {`${venueName(venue)} · ${label(kind)}`}
-        </SectionTitle>
-        {rows.length === 0 ? (
+      {rows.length === 0 ? (
+        <Card>
           <Empty
-            text={base.length === 0 && pick(rank, venue, win) ? t(lang, "rk_no_completed_trades") : t(lang, "hl_rk_empty")}
+            text={table ? t(lang, "rk_no_completed_trades") : t(lang, "hl_rk_empty")}
             hint={t(lang, "rk_generating")}
           />
-        ) : (
-          rows.map((r, i) => {
-            const place = i + 1;
-            return (
-              <Row
-                key={`${r.a}-${i}`}
-                icon={
-                  <span className={place <= 3 ? `rank-n m${place}` : "rank-n"}>
-                    {place}
-                  </span>
-                }
-                title={shortAddr(r.a)}
-                /* Два факта, а не четыре. На 360 пикселях подпись из
-                   четырёх обрывалась многоточием у восьмидесяти строк из
-                   ста, и обрывалось как раз последнее — то, ради чего его и
-                   добавляли. Срок удержания и плечо остались в карточке
-                   трейдера, куда строка и ведёт. */
-                sub={
-                  <>
-                    {num(r.tr)} {t(lang, "rk_trades")}
-                    {r.win ? ` · ${num(r.win)}%` : ""}
-                  </>
-                }
-                value={value(r)}
-                tone={kind === "pnl" ? (r.pnl >= 0 ? "up" : "dn") : undefined}
-                onClick={() => open("trader", r.a, `${venue}:${win}:${kind}:${i}`)}
+        </Card>
+      ) : (
+        rows.map((r, i) => {
+          const place = i + 1;
+          const hold = holdTime(r.hold, lang);
+          const on = tracked.has((r.a || "").toLowerCase());
+          return (
+            <Card key={`${r.a}-${i}`}>
+              <div className="lb-hd">
+                <span className={place <= 3 ? `rank-n m${place}` : "rank-n"}>{place}</span>
+                <span className="lb-addr mono">{shortAddr(r.a)}</span>
+                {/* Подписка прямо из рейтинга: плюс спрашивает имя на
+                    отдельном экране, где уже есть все проверки — лимит
+                    плана, забаненные киты, повтор. Подписан — на том же
+                    месте отписка. */}
+                <button
+                  type="button"
+                  className={on ? "lb-act off" : "lb-act on"}
+                  aria-label={bare(t(lang, on ? "remove_yes" : "menu_add_wallet"))}
+                  onClick={() => {
+                    if (on) return void unfollow(r.a);
+                    haptic("select");
+                    open("addWallet", r.a);
+                  }}
+                >
+                  {on ? <MinusGlyph size={20} /> : <PlusGlyph size={20} />}
+                </button>
+              </div>
+              <Tiles
+                cols={3}
+                size="sm"
+                items={[
+                  { label: "PnL", value: signed(r.pnl), tone: r.pnl >= 0 ? "up" : "dn" },
+                  ...(venue === "perp"
+                    ? [{ label: t(lang, "rk_roi_per_trade"), value: pct(r.roi, 1) }]
+                    : []),
+                  { label: t(lang, "ws_winrate"), value: `${num(r.win)}%` },
+                  { label: t(lang, "rk_trades"), value: num(r.tr) },
+                  venue === "perp"
+                    ? { label: t(lang, "hl_rk_leverage"), value: r.lev ? `${r.lev}×` : "—" }
+                    : { label: t(lang, "rk_avg_hold"), value: hold ?? "—" },
+                  ...(r.top
+                    ? [{ label: bare(t(lang, "rk_in_top")), value: `${num(r.top)} ${t(lang, "rk_days")}` }]
+                    : []),
+                ]}
               />
-            );
-          })
-        )}
-        {more ? (
-          <Action kind="ghost" disabled={busy} onClick={loadMore}>
-            {t(lang, "ui_show_more")}
-          </Action>
-        ) : null}
-        {plan !== "premium" && rows.length >= FREE_ROWS ? (
+            </Card>
+          );
+        })
+      )}
+
+      {plan !== "premium" && rows.length >= FREE_ROWS ? (
+        <Card>
           <p className="note warn">{t(lang, "rk_unlock_top100")}</p>
-        ) : null}
-      </Card>
+        </Card>
+      ) : null}
     </>
   );
-}
-
-/** Строки выбранной доски из общей выгрузки. */
-function table(
-  rank: ReturnType<typeof useLive.getState>["rank"],
-  venue: Venue,
-  win: RankWin,
-  kind: RankKind,
-): Trader[] {
-  return pick(rank, venue, win)?.[kind] ?? [];
 }

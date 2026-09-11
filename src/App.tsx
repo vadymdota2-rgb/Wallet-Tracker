@@ -41,7 +41,6 @@ const SCREEN_TITLE: Record<ScreenName, DictKey> = {
   position: "hl_open_positions",
   positions: "menu_positions",
   coin: "flow_title",
-  trader: "hl_venue_title",
   signal: "ai_title",
   addWallet: "add_wallet_title",
   rename: "rename_title",
