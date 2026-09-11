@@ -52,6 +52,7 @@ const SCREEN_TITLE: Record<ScreenName, DictKey> = {
   history: "ai_hist_title",
   model: "ai_st_title",
   spot: "ui_spot_open",
+  legal: "legal_privacy_title",
 };
 
 const MENU: { name: ScreenName; key: DictKey; glyph: ReactNode }[] = [

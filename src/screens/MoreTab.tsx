@@ -57,6 +57,12 @@ export function MoreTab() {
           sub={t(lang, "help_support")}
           onClick={() => open("help")}
         />
+        <Row
+          icon={<span aria-hidden="true">🔒</span>}
+          title={t(lang, "legal_btn_privacy")}
+          sub={t(lang, "legal_btn_terms")}
+          onClick={() => open("legal")}
+        />
       </Card>
     </>
   );

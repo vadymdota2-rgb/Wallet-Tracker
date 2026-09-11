@@ -2620,6 +2620,30 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
                 "UPDATE user_whales SET label=? WHERE user_id=? AND whale_id=?",
                 (name, chat, row[0]),
             )
+        elif kind == "forget":
+            # Право на забвение: то же удаление, что по /forgetme в боте.
+            # Списки таблиц обязаны совпадать — иначе удалить «всё» можно
+            # будет только из одного из двух интерфейсов.
+            for sql in (
+                "DELETE FROM user_whales WHERE user_id=?",
+                "DELETE FROM deliveries WHERE chat_id=?",
+                "DELETE FROM trial_granted WHERE chat_id=?",
+                "DELETE FROM premium_payments WHERE chat_id=?",
+                "DELETE FROM ton_invoices WHERE chat_id=?",
+                "DELETE FROM ai_access WHERE chat_id=?",
+                "DELETE FROM users WHERE chat_id=?",
+            ):
+                try:
+                    con.execute(sql, (chat,))
+                except sqlite3.Error:
+                    # Таблицы может не быть на старой базе — это не повод
+                    # оборвать удаление остального.
+                    pass
+            # Адреса, за которыми больше никто не следит, держать незачем.
+            con.execute(
+                "DELETE FROM whale_addresses WHERE NOT EXISTS "
+                "(SELECT 1 FROM user_whales uw WHERE uw.whale_id = whale_addresses.id)"
+            )
         elif kind == "lang":
             code = str(body.get("lang") or "").strip().lower()
             if code not in LANG_CODES:
@@ -2914,12 +2938,16 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/wallets/rename": "rename",
                 "/api/threshold": "threshold",
                 "/api/lang": "lang",
+                "/api/forget": "forget",
             }.get(path)
             if not kind:
                 self._json(404, {"ok": False, "error": "not_found"})
                 return
             res = mutate(chat, kind, body)
-            if res.get("ok"):
+            # После удаления bootstrap не зовём: он завёл бы пользователя
+            # заново той же строкой INSERT OR IGNORE, и «удалено» оказалось
+            # бы неправдой.
+            if res.get("ok") and kind != "forget":
                 res = {**res, **bootstrap(chat)}
             self._json(200 if res.get("ok") else 400, res)
         except Exception as e:

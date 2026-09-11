@@ -96,6 +96,13 @@ export const renameWallet = (addr: string, name: string) =>
 export const setThreshold = (usd: number) =>
   call<MutationResult>("/api/threshold", { method: "POST", body: { usd } });
 
+/**
+ * Право на забвение. Сервер удаляет те же таблицы, что команда /forgetme в
+ * боте, и намеренно не возвращает свежую выгрузку: после удаления
+ * возвращать нечего.
+ */
+export const forgetMe = () => call<MutationResult>("/api/forget", { method: "POST", body: {} });
+
 /** Язык хранится в той же строке users, что читает бот: выбор общий. */
 export const setLangRemote = (lang: string) =>
   call<MutationResult>("/api/lang", { method: "POST", body: { lang } });

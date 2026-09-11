@@ -14,7 +14,8 @@ export type Tab = "wallets" | "top" | "analytics" | "sonar" | "more";
 export type ScreenName =
   | "wallet" | "position" | "coin" | "trader" | "signal"
   | "addWallet" | "threshold" | "lang" | "premium" | "help"
-  | "positions" | "history" | "model" | "rename" | "spot";
+  | "positions" | "history" | "model" | "rename" | "spot"
+  | "legal";
 
 export interface Screen {
   name: ScreenName;
