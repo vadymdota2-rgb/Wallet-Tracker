@@ -351,6 +351,7 @@ export const ru: Dict = {
   ui_held_since: "Держит",
   ui_hip3: "Акции",
   ui_invested: "Вложено",
+  ui_legal: "Документы",
   ui_loading: "Загрузка",
   ui_locked: "Доступно с Премиумом",
   ui_more: "Ещё",

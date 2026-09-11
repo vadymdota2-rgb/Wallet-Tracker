@@ -351,6 +351,7 @@ export const pl: Dict = {
   ui_held_since: "Czas trzymania",
   ui_hip3: "Akcje",
   ui_invested: "Zainwestowano",
+  ui_legal: "Dokumenty",
   ui_loading: "Ładowanie",
   ui_locked: "Dostępne z Premium",
   ui_more: "Więcej",

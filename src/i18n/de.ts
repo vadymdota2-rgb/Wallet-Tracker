@@ -351,6 +351,7 @@ export const de: Dict = {
   ui_held_since: "Haltedauer",
   ui_hip3: "Aktien",
   ui_invested: "Investiert",
+  ui_legal: "Dokumente",
   ui_loading: "Wird geladen",
   ui_locked: "Mit Premium verfügbar",
   ui_more: "Mehr",

@@ -60,10 +60,9 @@ export function LegalScreen() {
   }
 
   return (
-    <Frame title={t(lang, "legal_privacy_title")}>
-      {/* Заголовок экрана прямо над карточкой говорит то же самое —
-          второй раз подряд он лишний. */}
+    <Frame title={t(lang, "ui_legal")}>
       <Card>
+        <SectionTitle>{bare(t(lang, "legal_privacy_title"))}</SectionTitle>
         <p className="note">{t(lang, "legal_privacy_body")}</p>
       </Card>
 

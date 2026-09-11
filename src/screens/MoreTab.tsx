@@ -1,7 +1,7 @@
 /** «Ещё»: премиум, язык, порог, помощь — остаток главного меню бота. */
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
-import { t } from "../i18n/t";
+import { bare, t } from "../i18n/t";
 import { LANGS } from "../i18n";
 import { num, usd } from "../lib/format";
 import { Card, Row, SectionTitle } from "../components/ui";
@@ -59,8 +59,8 @@ export function MoreTab() {
         />
         <Row
           icon={<span aria-hidden="true">🔒</span>}
-          title={t(lang, "legal_btn_privacy")}
-          sub={t(lang, "legal_btn_terms")}
+          title={t(lang, "ui_legal")}
+          sub={`${bare(t(lang, "legal_btn_privacy"))} · ${bare(t(lang, "legal_btn_terms"))}`}
           onClick={() => open("legal")}
         />
       </Card>

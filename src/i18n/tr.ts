@@ -351,6 +351,7 @@ export const tr: Dict = {
   ui_held_since: "Tutma süresi",
   ui_hip3: "Hisseler",
   ui_invested: "Yatırılan",
+  ui_legal: "Belgeler",
   ui_loading: "Yükleniyor",
   ui_locked: "Premium ile kullanılabilir",
   ui_more: "Daha fazla",

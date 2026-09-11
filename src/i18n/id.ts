@@ -351,6 +351,7 @@ export const id: Dict = {
   ui_held_since: "Lama dipegang",
   ui_hip3: "Saham",
   ui_invested: "Diinvestasikan",
+  ui_legal: "Dokumen",
   ui_loading: "Memuat",
   ui_locked: "Tersedia dengan Premium",
   ui_more: "Lainnya",

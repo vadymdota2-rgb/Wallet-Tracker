@@ -351,6 +351,7 @@ export const hi: Dict = {
   ui_held_since: "कब से",
   ui_hip3: "शेयर",
   ui_invested: "निवेशित",
+  ui_legal: "दस्तावेज़",
   ui_loading: "लोड हो रहा है",
   ui_locked: "प्रीमियम के साथ उपलब्ध",
   ui_more: "और",

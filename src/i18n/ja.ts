@@ -351,6 +351,7 @@ export const ja: Dict = {
   ui_held_since: "保有期間",
   ui_hip3: "株式",
   ui_invested: "投入額",
+  ui_legal: "規約とポリシー",
   ui_loading: "読み込み中",
   ui_locked: "プレミアムで利用可能",
   ui_more: "その他",

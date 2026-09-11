@@ -351,6 +351,7 @@ export const fr: Dict = {
   ui_held_since: "Durée de détention",
   ui_hip3: "Actions",
   ui_invested: "Investi",
+  ui_legal: "Documents",
   ui_loading: "Chargement",
   ui_locked: "Disponible avec Premium",
   ui_more: "Plus",

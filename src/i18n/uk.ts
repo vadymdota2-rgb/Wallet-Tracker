@@ -351,6 +351,7 @@ export const uk: Dict = {
   ui_held_since: "Тримає",
   ui_hip3: "Акції",
   ui_invested: "Вкладено",
+  ui_legal: "Документи",
   ui_loading: "Завантаження",
   ui_locked: "Доступно з Преміумом",
   ui_more: "Ще",

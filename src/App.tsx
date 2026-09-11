@@ -52,7 +52,7 @@ const SCREEN_TITLE: Record<ScreenName, DictKey> = {
   history: "ai_hist_title",
   model: "ai_st_title",
   spot: "ui_spot_open",
-  legal: "legal_privacy_title",
+  legal: "ui_legal",
 };
 
 const MENU: { name: ScreenName; key: DictKey; glyph: ReactNode }[] = [
@@ -230,16 +230,12 @@ export default function App() {
             </button>
           ))}
         </nav>
-        {/* Политика и условия — с любого экрана, а не только из «Ещё».
-            Требование к сервису с подпиской: документы должны быть под
-            рукой, а не находиться поиском по разделам. */}
+        {/* Документы — с любого экрана, а не только из «Ещё». Кнопка одна:
+            политика и условия лежат на одном экране, и две подписи, ведущие
+            в одно и то же место, обещают выбор, которого нет. */}
         <div className="legal-bar">
           <button type="button" onClick={() => { haptic("select"); open("legal"); }}>
-            {bare(t(lang, "legal_btn_privacy"))}
-          </button>
-          <i aria-hidden="true">·</i>
-          <button type="button" onClick={() => { haptic("select"); open("legal"); }}>
-            {bare(t(lang, "legal_btn_terms"))}
+            {t(lang, "ui_legal")}
           </button>
         </div>
       </div>

@@ -351,6 +351,7 @@ export const zh: Dict = {
   ui_held_since: "持有时长",
   ui_hip3: "股票",
   ui_invested: "投入",
+  ui_legal: "条款与政策",
   ui_loading: "加载中",
   ui_locked: "高级版可用",
   ui_more: "更多",

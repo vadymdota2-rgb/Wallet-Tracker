@@ -351,6 +351,7 @@ export const en = {
   ui_held_since: "Held for",
   ui_hip3: "Stocks",
   ui_invested: "Invested",
+  ui_legal: "Documents",
   ui_loading: "Loading",
   ui_locked: "Available with Premium",
   ui_more: "More",

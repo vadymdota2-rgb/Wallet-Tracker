@@ -351,6 +351,7 @@ export const ar: Dict = {
   ui_held_since: "مدة الاحتفاظ",
   ui_hip3: "الأسهم",
   ui_invested: "المستثمر",
+  ui_legal: "المستندات",
   ui_loading: "جارٍ التحميل",
   ui_locked: "متاح مع بريميوم",
   ui_more: "المزيد",

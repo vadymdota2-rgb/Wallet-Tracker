@@ -351,6 +351,7 @@ export const ko: Dict = {
   ui_held_since: "보유 기간",
   ui_hip3: "주식",
   ui_invested: "투입 금액",
+  ui_legal: "약관 및 정책",
   ui_loading: "불러오는 중",
   ui_locked: "프리미엄에서 이용 가능",
   ui_more: "더 보기",
