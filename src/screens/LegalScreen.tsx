@@ -10,6 +10,12 @@
  * слишком легко нажимается, а вернуть оплаченный премиум будет нечем.
  */
 import { useState } from "react";
+/*
+ * Шапки карточек взяты от кнопок, а не от полных названий документов:
+ * «ПОЛИТИКА КОНФИДЕНЦИАЛЬНОСТИ» вразрядку и заглавными занимает карточку
+ * целиком и на узком телефоне вылезает за неё. Экран называется
+ * «Документы», так что полное имя в шапке ничего не добавляет.
+ */
 import { Frame } from "./Screen";
 import { useApp } from "../store/app";
 import { bare, t } from "../i18n/t";
@@ -62,17 +68,17 @@ export function LegalScreen() {
   return (
     <Frame title={t(lang, "ui_legal")}>
       <Card>
-        <SectionTitle>{bare(t(lang, "legal_privacy_title"))}</SectionTitle>
+        <SectionTitle>{bare(t(lang, "legal_btn_privacy"))}</SectionTitle>
         <p className="note">{t(lang, "legal_privacy_body")}</p>
       </Card>
 
       <Card>
-        <SectionTitle>{bare(t(lang, "legal_terms_title"))}</SectionTitle>
+        <SectionTitle>{bare(t(lang, "legal_btn_terms"))}</SectionTitle>
         <p className="note">{t(lang, "legal_terms_body")}</p>
       </Card>
 
       <Card>
-        <SectionTitle>{bare(t(lang, "legal_forget_title"))}</SectionTitle>
+        <SectionTitle>{bare(t(lang, "legal_btn_forget"))}</SectionTitle>
         <p className="note dim">{t(lang, "legal_forget_warn")}</p>
         {confirm ? (
           <>

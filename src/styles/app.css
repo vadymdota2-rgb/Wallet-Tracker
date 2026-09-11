@@ -292,6 +292,11 @@
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--glow);
+  /* Разрядка в 0.16em делает заглавное слово заметно шире обычного, и
+     длинное слово без пробелов (в русском и немецком такие есть) вылезало
+     за карточку: переносить его было негде. Разрешаем разрыв внутри слова —
+     некрасивый перенос лучше текста поверх рамки. */
+  overflow-wrap: anywhere;
 }
 .sect-note { color: var(--dim-2); font-size: 12px; text-align: end; flex: 0 1 auto; max-width: 52%; }
 
