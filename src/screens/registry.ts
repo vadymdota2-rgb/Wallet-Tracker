@@ -15,6 +15,7 @@ import { LangScreen } from "./LangScreen";
 import { PremiumScreen } from "./PremiumScreen";
 import { HelpScreen } from "./HelpScreen";
 import { HistoryScreen } from "./HistoryScreen";
+import { DealsScreen } from "./DealsScreen";
 import { ModelScreen } from "./ModelScreen";
 import { LegalScreen } from "./LegalScreen";
 
@@ -32,6 +33,7 @@ export const SCREENS: Record<ScreenName, ComponentType<ScreenProps>> = {
   premium: PremiumScreen,
   help: HelpScreen,
   history: HistoryScreen,
+  deals: DealsScreen,
   model: ModelScreen,
   legal: LegalScreen,
 };

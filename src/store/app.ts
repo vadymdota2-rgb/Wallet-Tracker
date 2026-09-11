@@ -12,7 +12,7 @@ import type { Timeframe } from "../lib/klines";
 export type Tab = "wallets" | "top" | "analytics" | "sonar" | "more";
 
 export type ScreenName =
-  | "wallet" | "position" | "coin" | "signal"
+  | "wallet" | "position" | "coin" | "signal" | "deals"
   | "addWallet" | "threshold" | "lang" | "premium" | "help"
   | "positions" | "history" | "model" | "rename" | "spot"
   | "legal";

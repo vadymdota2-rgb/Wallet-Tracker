@@ -6,7 +6,7 @@
  * когда принимал — по одному номеру в адресе открывался чужой аккаунт.
  */
 import { initData } from "./telegram";
-import type { Bootstrap, MutationResult, TokenHist, Trader, Trades, WalletLive } from "./types";
+import type { Bootstrap, Deal, MutationResult, TokenHist, Trades, WalletLive } from "./types";
 
 const TIMEOUT_MS = 15000;
 
@@ -97,34 +97,15 @@ export const setThreshold = (usd: number) =>
   call<MutationResult>("/api/threshold", { method: "POST", body: { usd } });
 
 /**
- * Страница доски трейдеров глубже первой сотни.
+ * Последние сделки кошелька из рейтинга.
  *
- * В общей выгрузке лежит только начало доски: тысяча строк на каждую доску
- * и каждое окно — это мегабайты при каждом запуске, а так глубоко смотрят
- * единицы. Остальное подтягивается отсюда по мере прокрутки.
- *
- * Доска спотовая: у фьючерсов рейтинг считается на лету и кэша страниц для
- * него нет.
+ * Отдельным запросом, а не в общей выгрузке: история нужна тем, кто её
+ * открыл, а тянуть по десять сделок на каждого из ста трейдеров при каждом
+ * запуске — это сто запросов к базе ради экрана, куда заходят изредка.
  */
-export interface RankPage {
-  ok?: boolean;
-  rows?: Trader[];
-  /** Сколько строк доступно этому пользователю с учётом подписки. */
-  total?: number;
-  /** Дальше есть строки, но их закрывает подписка. */
-  locked?: boolean;
-}
-
-export const fetchRankPage = (
-  kind: string,
-  win: string,
-  offset: number,
-  limit: number,
-  signal?: AbortSignal,
-) =>
-  call<RankPage>(
-    `/api/rank?kind=${encodeURIComponent(kind)}&win=${encodeURIComponent(win)}` +
-      `&offset=${offset}&limit=${limit}`,
+export const fetchDeals = (addr: string, venue: string, signal?: AbortSignal) =>
+  call<{ ok?: boolean; deals?: Deal[] }>(
+    `/api/deals?addr=${encodeURIComponent(addr)}&venue=${encodeURIComponent(venue)}&n=10`,
     { signal },
   );
 

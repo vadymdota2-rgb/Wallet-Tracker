@@ -484,6 +484,9 @@
   background: rgb(11 22 40 / 0.25);
   transition: color 0.18s var(--ease), border-color 0.18s var(--ease), background 0.18s var(--ease);
 }
+/* Кнопка без модификатора — нейтральная, как история: она ничего не меняет. */
+.lb-act { color: var(--dim); }
+.lb-act:active { background: rgb(127 216 255 / 0.10); }
 .lb-act.on { color: var(--glow); }
 .lb-act.on:active { background: rgb(127 216 255 / 0.14); border-color: rgb(127 216 255 / 0.45); }
 /* Отписка окрашена в тревожный, но не кричит: это обратимое действие, а не

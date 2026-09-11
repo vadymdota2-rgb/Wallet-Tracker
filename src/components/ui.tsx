@@ -392,6 +392,26 @@ export function ThresholdGlyph({ size = 25 }: { size?: number }) {
 }
 
 /** Плюс в круге — «добавить». Круг роднит его с монетой порога и глазом. */
+/** История сделок: строки списка с точками-маркерами. */
+export function DealsGlyph({ size = 19 }: { size?: number }) {
+  return (
+    <svg
+      className="glyph"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <path d="M5 7h1M5 12h1M5 17h1" />
+      <path d="M9.5 7H19M9.5 12h6.5M9.5 17h8" />
+    </svg>
+  );
+}
+
 /** Пара к PlusGlyph: тот же кружок и та же линия, только без вертикали. */
 export function MinusGlyph({ size = 19 }: { size?: number }) {
   return (

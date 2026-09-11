@@ -596,6 +596,8 @@ def ts_sec(ts) -> int:
 
 
 MAX_SPOT_USD_NANOS = 10_000_000_000_000_000
+# Нижняя граница — та же, что в saveTrade бота: $50.
+MIN_TRADE_USD_NANOS = 50_000_000_000
 HL_MIN_CLOSED = 5
 HL_MAX_CLOSED_30D = 200
 DIR_OPEN_LONG, DIR_OPEN_SHORT = 1, 2
@@ -1602,6 +1604,77 @@ def load_rank(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) -> 
             rank["spot"] = spot
             rank["perp"] = perp
     return rank
+
+
+def wallet_deals(cur: sqlite3.Connection, hl: sqlite3.Connection | None,
+                 addr: str, venue: str, n: int = 10) -> list[dict]:
+    """Последние сделки одного кошелька из рейтинга.
+
+    Ничего нового наружу это не открывает: доска и так публикует прибыль и
+    число сделок каждого кошелька, а лента крупных сделок — их адреса,
+    монеты и суммы. Здесь те же публичные транзакции, только собранные по
+    одному адресу.
+
+    Сторона сделки уходит флагом, а не словом: в ленте крупных сделок стоит
+    захардкоженное русское «покупка», и повторять эту ошибку в новом месте
+    незачем — подписи есть в словаре на всех шестнадцати языках.
+    """
+    key = (addr or "").strip().lower()
+    if not ADDR_RE.match(key):
+        return []
+    n = max(1, min(int(n or 10), 50))
+    out: list[dict] = []
+
+    if venue == "perp":
+        if not hl or not table_exists(hl, "hl_fills"):
+            return []
+        cset = cols(hl, "hl_fills")
+        dirc = "dir_code" if "dir_code" in cset else "0"
+        lev = "leverage" if "leverage" in cset else "0"
+        pnl = "closed_pnl_nanos" if "closed_pnl_nanos" in cset else "0"
+        try:
+            rows = hl.execute(
+                f"SELECT coin, notional_nanos, {dirc} dirc, {lev} lev, {pnl} pnl, ts "
+                f"FROM hl_fills WHERE lower(wallet)=? AND notional_nanos > 0 "
+                f"ORDER BY ts DESC LIMIT ?",
+                (key, n),
+            ).fetchall()
+        except sqlite3.Error as e:
+            sys.stderr.write(f"[api] deals perp {key[:10]}: {e}\n")
+            return []
+        for r in rows:
+            code = int(r["dirc"] or 0)
+            lv = int(r["lev"] or 0)
+            out.append({
+                "sym": str(r["coin"] or "?").upper(),
+                "v": usd(r["notional_nanos"]),
+                # Ликвидацию не выдаём за обычную сделку: у неё своя метка.
+                "liq": code in (DIR_LIQ_LONG, DIR_LIQ_SHORT, DIR_LIQ_OTHER),
+                "long": code in (DIR_OPEN_LONG, DIR_LIQ_SHORT),
+                "lev": lv or None,
+                "pnl": usd(r["pnl"]) or None,
+                "ts": ts_sec(r["ts"]),
+            })
+        return out
+
+    if not table_exists(cur, "trades"):
+        return []
+    rows = cur.execute(
+        "SELECT token, is_buy, usd_nanos, timestamp FROM trades "
+        # Те же границы, что у рейтинга: сделки с выдуманными decimals не
+        # должны всплыть в истории после того, как их убрали из доски.
+        "WHERE wallet=? AND usd_nanos BETWEEN ? AND ? "
+        "ORDER BY timestamp DESC, id DESC LIMIT ?",
+        (key, MIN_TRADE_USD_NANOS, MAX_SPOT_USD_NANOS, n),
+    ).fetchall()
+    for r in rows:
+        out.append({
+            "sym": symbol_of(cur, r["token"]) or short_addr(r["token"] or ""),
+            "v": usd(r["usd_nanos"]),
+            "buy": bool(r["is_buy"]),
+            "ts": int(r["timestamp"] or 0),
+        })
+    return out
 
 
 def load_trades(cur: sqlite3.Connection, hl: sqlite3.Connection | None, hours: int = 24) -> dict:
@@ -2841,6 +2914,36 @@ class Handler(BaseHTTPRequestHandler):
                             hl.close()
                         except Exception:
                             pass
+                return
+            if path in ("/deals", "/api/deals"):
+                a = (qs.get("addr", [""])[0] or "").strip().lower()
+                if not ADDR_RE.match(a):
+                    self._json(400, {"ok": False, "error": "bad_addr"})
+                    return
+                venue = "perp" if qs.get("venue", ["spot"])[0] == "perp" else "spot"
+                try:
+                    n = int(qs.get("n", ["10"])[0])
+                except (TypeError, ValueError):
+                    n = 10
+                cur = open_db(DB)
+                if not cur:
+                    self._json(200, {"ok": False, "error": "db"})
+                    return
+                hl = open_db(HL_DB) if venue == "perp" else None
+                try:
+                    self._json(200, {
+                        "ok": True,
+                        "addr": a,
+                        "venue": venue,
+                        "deals": wallet_deals(cur, hl, a, venue, n),
+                    })
+                finally:
+                    for c in (cur, hl):
+                        if c:
+                            try:
+                                c.close()
+                            except Exception:
+                                pass
                 return
             if path in ("/token", "/api/token"):
                 cur = open_db(DB)

@@ -23,7 +23,7 @@ import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
 import { haptic } from "../lib/telegram";
 import {
-  Card, Empty, MinusGlyph, PlusGlyph, SectionTitle, Segmented, Tiles,
+  Card, DealsGlyph, Empty, MinusGlyph, PlusGlyph, SectionTitle, Segmented, Tiles,
 } from "../components/ui";
 import type { RankKind, RankTable, Trader, Venue } from "../lib/types";
 import type { RankWin } from "../store/app";
@@ -143,6 +143,19 @@ export function TopTab() {
                     отдельном экране, где уже есть все проверки — лимит
                     плана, забаненные киты, повтор. Подписан — на том же
                     месте отписка. */}
+                {/* История идёт первой: посмотреть, чем человек торгует,
+                    логично до того, как на него подписываться. */}
+                <button
+                  type="button"
+                  className="lb-act"
+                  aria-label={t(lang, "ui_deals")}
+                  onClick={() => {
+                    haptic("select");
+                    open("deals", r.a, venue);
+                  }}
+                >
+                  <DealsGlyph size={20} />
+                </button>
                 <button
                   type="button"
                   className={on ? "lb-act off" : "lb-act on"}

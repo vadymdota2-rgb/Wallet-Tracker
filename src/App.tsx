@@ -49,6 +49,7 @@ const SCREEN_TITLE: Record<ScreenName, DictKey> = {
   premium: "menu_premium",
   help: "help_title",
   history: "ai_hist_title",
+  deals: "ui_deals",
   model: "ai_st_title",
   spot: "ui_spot_open",
   legal: "ui_legal",

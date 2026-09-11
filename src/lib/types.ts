@@ -152,6 +152,24 @@ export interface Trader {
 
 export type RankKind = "pnl" | "roi" | "win" | "act";
 export type RankTable = Record<RankKind, Trader[]>;
+
+/** Одна сделка из истории кошелька. */
+export interface Deal {
+  /** Тикер монеты. */
+  sym: string;
+  /** Объём в долларах. */
+  v: number;
+  /** Спот: покупка или продажа. */
+  buy?: boolean;
+  /** Фьючерсы: лонг или шорт. */
+  long?: boolean;
+  /** Фьючерсы: позицию вынесло по ликвидации. */
+  liq?: boolean;
+  lev?: number | null;
+  pnl?: number | null;
+  /** Секунды. */
+  ts: number;
+}
 export interface Rank {
   spot: RankTable;
   perp: RankTable;
