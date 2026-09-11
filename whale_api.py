@@ -238,10 +238,20 @@ def now() -> int:
     return int(time.time())
 
 
+class _Con(sqlite3.Connection):
+    """Соединение, помнящее свой файл.
+
+    Нужно кэшу table_exists: баз две, и без файла в ключе ответ про одну
+    молча подставляется для другой.
+    """
+    path: str = ""
+
+
 def open_db(path: str, write: bool = False) -> sqlite3.Connection | None:
     if not path or not os.path.isfile(path):
         return None
-    con = sqlite3.connect(path, timeout=8, check_same_thread=False)
+    con = sqlite3.connect(path, timeout=8, check_same_thread=False, factory=_Con)
+    con.path = path
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA busy_timeout=8000")
     if not write:
@@ -252,7 +262,7 @@ def open_db(path: str, write: bool = False) -> sqlite3.Connection | None:
     return con
 
 
-_table_ok: dict[str, bool] = {}
+_table_ok: dict[tuple[str, str], bool] = {}
 _sym_cache: dict[str, str] = {}
 _building = False
 
@@ -267,14 +277,23 @@ def cap_cache(d: dict, limit: int) -> None:
 
 
 def table_exists(con: sqlite3.Connection, name: str) -> bool:
-    hit = _table_ok.get(name)
+    """Есть ли таблица — с кэшем на каждую базу отдельно.
+
+    Раньше ключом было одно имя таблицы. Баз две: в whale_bot.db нет
+    hl_fills, в hyperliquid.db нет trades. Кто спросил первым, тот и записал
+    ответ на всех: один вопрос про чужую таблицу навсегда выключал целую
+    ветку в другой базе, и она молча возвращала пустоту — без ошибки, без
+    записи в журнал.
+    """
+    key = (getattr(con, "path", ""), name)
+    hit = _table_ok.get(key)
     if hit is not None:
         return hit
     row = con.execute(
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
     ).fetchone()
     ok = bool(row)
-    _table_ok[name] = ok
+    _table_ok[key] = ok
     return ok
 
 
@@ -1656,11 +1675,24 @@ def _perp_deals(hl: sqlite3.Connection | None, key: str, n: int) -> list[dict]:
     dirc = "dir_code" if "dir_code" in cset else "0"
     lev = "leverage" if "leverage" in cset else "0"
     marg = "margin_nanos" if "margin_nanos" in cset else "0"
+
+    # Что считать закрытием — ровно то же, что считает доска в
+    # load_perp_rank. Одного лишь ненулевого closed_pnl мало: бот помечает
+    # закрытия ещё и флагом flat, а переворот позиции — кодом направления от
+    # пятёрки. По узкому условию история оказывалась пустой у кошельков, у
+    # которых доска показывает десятки сделок, и получалось, что рейтинг
+    # считает одно, а история — другое.
+    close_f = "AND (closed_pnl_nanos != 0"
+    if "flat" in cset:
+        close_f += " OR flat = 1"
+    if "dir_code" in cset:
+        close_f += " OR dir_code >= 5"
+    close_f += ")"
     try:
         rows = hl.execute(
             f"SELECT coin, px, sz, notional_nanos, closed_pnl_nanos pnl, "
             f"{dirc} dirc, {lev} lev, {marg} marg, ts "
-            f"FROM hl_fills WHERE lower(wallet)=? AND closed_pnl_nanos != 0 "
+            f"FROM hl_fills WHERE lower(wallet)=? {close_f} "
             f"ORDER BY ts DESC LIMIT ?",
             (key, n),
         ).fetchall()
@@ -1680,7 +1712,11 @@ def _perp_deals(hl: sqlite3.Connection | None, key: str, n: int) -> list[dict]:
         entry_px = None
         # У переворота сторона неизвестна, а от неё зависит знак: посчитать
         # вход, не зная, что закрывали, значит получить цену наугад.
-        if known_side and exit_px > 0 and size > 0:
+        #
+        # Нулевой результат тоже не годится: вход вышел бы равен выходу, а
+        # это ничего не сообщает — и вдобавок ноль в базе значит не только
+        # «в ноль», но и «биржа результата не прислала».
+        if known_side and pnl != 0 and exit_px > 0 and size > 0:
             entry_px = exit_px - pnl / size if long_side else exit_px + pnl / size
             if entry_px <= 0:
                 entry_px = None
