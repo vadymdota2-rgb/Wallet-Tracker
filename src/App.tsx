@@ -219,16 +219,30 @@ export default function App() {
         </div>
       ) : null}
 
-      <nav className="tabs" aria-label="sections">
-        {TABS.map((it) => (
-          <button key={it.id} type="button" className={it.id === tab ? "on" : undefined}
-                  aria-current={it.id === tab}
-                  onClick={() => { haptic("select"); goTab(it.id); }}>
-            <span aria-hidden="true">{it.glyph}</span>
-            <small>{bare(t(lang, it.key))}</small>
+      <div className="dock">
+        <nav className="tabs" aria-label="sections">
+          {TABS.map((it) => (
+            <button key={it.id} type="button" className={it.id === tab ? "on" : undefined}
+                    aria-current={it.id === tab}
+                    onClick={() => { haptic("select"); goTab(it.id); }}>
+              <span aria-hidden="true">{it.glyph}</span>
+              <small>{bare(t(lang, it.key))}</small>
+            </button>
+          ))}
+        </nav>
+        {/* Политика и условия — с любого экрана, а не только из «Ещё».
+            Требование к сервису с подпиской: документы должны быть под
+            рукой, а не находиться поиском по разделам. */}
+        <div className="legal-bar">
+          <button type="button" onClick={() => { haptic("select"); open("legal"); }}>
+            {bare(t(lang, "legal_btn_privacy"))}
           </button>
-        ))}
-      </nav>
+          <i aria-hidden="true">·</i>
+          <button type="button" onClick={() => { haptic("select"); open("legal"); }}>
+            {bare(t(lang, "legal_btn_terms"))}
+          </button>
+        </div>
+      </div>
 
       <Toaster />
     </div>

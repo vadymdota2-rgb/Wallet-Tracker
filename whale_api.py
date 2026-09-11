@@ -2564,8 +2564,12 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
     if not con:
         return {"ok": False, "error": "db_missing"}
     try:
-        con.execute("INSERT OR IGNORE INTO users(chat_id, language, threshold_nanos, created_at) VALUES(?,?,?,?)",
-                    (chat, "ru", 100000000000, now()))
+        # Удаление — единственная операция, которой пользователь не нужен:
+        # заводить строку, чтобы через три команды её стереть, незачем, а при
+        # обрыве между вставкой и удалением остался бы пустой профиль.
+        if kind != "forget":
+            con.execute("INSERT OR IGNORE INTO users(chat_id, language, threshold_nanos, created_at) VALUES(?,?,?,?)",
+                        (chat, "ru", 100000000000, now()))
         if kind == "add":
             addr = (body.get("addr") or "").strip().lower()
             name = (body.get("name") or "").strip()[:64] or short_addr(addr)

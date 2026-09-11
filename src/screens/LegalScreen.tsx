@@ -14,6 +14,7 @@ import { Frame } from "./Screen";
 import { useApp } from "../store/app";
 import { bare, t } from "../i18n/t";
 import { forgetMe } from "../lib/api";
+import { dropSnapshot } from "../store/live";
 import { toast } from "../components/Toast";
 import { Action, Card, SectionTitle } from "../components/ui";
 
@@ -30,6 +31,9 @@ export function LegalScreen() {
     try {
       const res = await forgetMe();
       if (res?.ok) {
+        // На сервере пусто — копия на устройстве тоже не должна пережить
+        // удаление, иначе следующий вход нарисует кошельки из снимка.
+        dropSnapshot();
         setDone(true);
         toast(t(lang, "legal_forget_done"));
       } else {

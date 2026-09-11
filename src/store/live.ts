@@ -96,6 +96,22 @@ function readSnap(): Snapshot | null {
   }
 }
 
+/**
+ * Стереть снимок с устройства.
+ *
+ * Данные на сервере удалены, а в localStorage лежит копия: кошельки, порог,
+ * рейтинги. Экран говорит «всё удалено» — значит и на телефоне не должно
+ * остаться ничего, иначе при следующем входе снимок нарисует кошельки,
+ * которых больше нет.
+ */
+export function dropSnapshot(): void {
+  try {
+    localStorage.removeItem(SNAP);
+  } catch {
+    // Хранилище закрыто — стирать нечего.
+  }
+}
+
 function writeSnap(s: LiveState): void {
   try {
     const snap: Snapshot = {
