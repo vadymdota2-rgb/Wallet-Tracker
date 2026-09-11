@@ -198,7 +198,8 @@ def coin_icon(sym: str, addr: str = "") -> list[str]:
     он есть только у спотовых токенов BSC, у перпов Hyperliquid его нет.
     TradingView убран: он ищет по тикеру, а тикеры не уникальны — под PUMP
     и HYPE там лежали чужие проекты, и картинка грузилась успешно, из-за
-    чего до правильной очередь не доходила."""
+    чего до правильной очередь не доходила. Источники по адресу контракта
+    такой подмены не допускают: адрес уникален."""
     _load_logo_manifest()
     key = (sym or "").upper().replace(" ", "")
     out: list[str] = []
@@ -209,6 +210,10 @@ def coin_icon(sym: str, addr: str = "") -> list[str]:
             out.append(f"/coins/bsc/{sumaddr}.png")
         out.append(f"/pcslogo/{sumaddr}.png")
         out.append(f"/twlogo/{sumaddr}/logo.png")
+        # DexScreener добирает то, чего нет у первых двух: на живой выдаче
+        # это одиннадцать токенов из двадцати девяти безымянных. Адрес ему
+        # нужен в нижнем регистре, в отличие от соседей.
+        out.append(f"/dslogo/{a}.png")
         return out
     if not key:
         return out
