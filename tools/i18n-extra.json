@@ -754,5 +754,23 @@
     "ko": "약관 및 정책",
     "zh": "条款与政策",
     "ja": "規約とポリシー"
+  },
+  "ui_show_more": {
+    "en": "Show more",
+    "ru": "Показать ещё",
+    "uk": "Показати ще",
+    "es": "Mostrar más",
+    "pt": "Mostrar mais",
+    "fr": "Afficher plus",
+    "de": "Mehr anzeigen",
+    "tr": "Daha fazla göster",
+    "pl": "Pokaż więcej",
+    "ar": "عرض المزيد",
+    "hi": "और दिखाएँ",
+    "id": "Tampilkan lagi",
+    "vi": "Xem thêm",
+    "ko": "더 보기",
+    "zh": "显示更多",
+    "ja": "もっと見る"
   }
 }

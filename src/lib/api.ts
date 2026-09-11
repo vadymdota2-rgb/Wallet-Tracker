@@ -6,7 +6,7 @@
  * когда принимал — по одному номеру в адресе открывался чужой аккаунт.
  */
 import { initData } from "./telegram";
-import type { Bootstrap, MutationResult, TokenHist, Trades, WalletLive } from "./types";
+import type { Bootstrap, MutationResult, TokenHist, Trader, Trades, WalletLive } from "./types";
 
 const TIMEOUT_MS = 15000;
 
@@ -95,6 +95,38 @@ export const renameWallet = (addr: string, name: string) =>
 
 export const setThreshold = (usd: number) =>
   call<MutationResult>("/api/threshold", { method: "POST", body: { usd } });
+
+/**
+ * Страница доски трейдеров глубже первой сотни.
+ *
+ * В общей выгрузке лежит только начало доски: тысяча строк на каждую доску
+ * и каждое окно — это мегабайты при каждом запуске, а так глубоко смотрят
+ * единицы. Остальное подтягивается отсюда по мере прокрутки.
+ *
+ * Доска спотовая: у фьючерсов рейтинг считается на лету и кэша страниц для
+ * него нет.
+ */
+export interface RankPage {
+  ok?: boolean;
+  rows?: Trader[];
+  /** Сколько строк доступно этому пользователю с учётом подписки. */
+  total?: number;
+  /** Дальше есть строки, но их закрывает подписка. */
+  locked?: boolean;
+}
+
+export const fetchRankPage = (
+  kind: string,
+  win: string,
+  offset: number,
+  limit: number,
+  signal?: AbortSignal,
+) =>
+  call<RankPage>(
+    `/api/rank?kind=${encodeURIComponent(kind)}&win=${encodeURIComponent(win)}` +
+      `&offset=${offset}&limit=${limit}`,
+    { signal },
+  );
 
 /**
  * Право на забвение. Сервер удаляет те же таблицы, что команда /forgetme в

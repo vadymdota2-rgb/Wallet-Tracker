@@ -351,7 +351,16 @@
 .row-mid { flex: 0 0 auto; margin-inline-end: 14px; }
 /* Край строки за числами: глазок-подсказка. */
 .row-after { flex: 0 0 auto; display: inline-flex; margin-inline-start: 10px; color: var(--dim-2); }
-.row-val { flex: 0 0 auto; display: grid; justify-items: end; gap: 1px; min-width: 34px; }
+/* Моноширинные цифры: в столбце сумм «$2,99M» и «$412K» иначе стоят
+   вразнобой и колонка выглядит рваной. */
+.row-val {
+  flex: 0 0 auto;
+  display: grid;
+  justify-items: end;
+  gap: 1px;
+  min-width: 34px;
+  font-variant-numeric: tabular-nums;
+}
 
 .mark {
   display: inline-flex;
@@ -399,8 +408,12 @@
 .mono { font-family: var(--font-mono); font-size: 13px; }
 
 .rank-n {
-  width: 24px;
+  /* Доска на тысячу мест: место «1000» шире, чем «1», и фиксированные 24px
+     его обрезали. Ширина плавающая от 24px, цифры моноширинные — тогда
+     столбец мест остаётся ровным, а не пляшет от строки к строке. */
+  min-width: 24px;
   height: 24px;
+  padding: 0 5px;
   display: grid;
   place-items: center;
   border-radius: 8px;
@@ -408,8 +421,14 @@
   border: 1px solid var(--line);
   font-size: 11px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
   color: var(--dim);
 }
+/* Первые три места — призовые, как кубки в боте. Цвет несёт смысл сам, без
+   эмодзи: медаль в строке списка сбивала бы высоту. */
+.rank-n.m1 { color: #f5c451; border-color: rgb(245 196 81 / 0.45); background: rgb(245 196 81 / 0.12); }
+.rank-n.m2 { color: #cdd7e4; border-color: rgb(205 215 228 / 0.40); background: rgb(205 215 228 / 0.10); }
+.rank-n.m3 { color: #d79a6a; border-color: rgb(215 154 106 / 0.42); background: rgb(215 154 106 / 0.11); }
 .wl-ico { font-size: 16px; }
 
 /* Плитки --------------------------------------------------------------- */

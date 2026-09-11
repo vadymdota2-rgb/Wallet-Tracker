@@ -63,6 +63,17 @@ INIT_DATA_TTL = int(os.environ.get("WHALE_API_INITDATA_TTL", "86400"))
 # и пускал мимо лимитов.
 FREE_MAX_WALLETS = 1
 PREMIUM_MAX_WALLETS = 50
+# Глубина доски трейдеров. Те же числа, что FREE_TOP_TRADERS и
+# PREMIUM_TOP_TRADERS в premium.cpp: приложение и чат обязаны показывать
+# одинаково глубоко, иначе премиум значит разное в двух местах.
+RANK_FREE_DEPTH = 30
+RANK_MAX_DEPTH = 1000
+# Сколько доски уходит в общую выгрузку при запуске. Остальное — по
+# требованию, через /api/rank.
+RANK_BOOTSTRAP_ROWS = 100
+RANK_PAGE_MAX = 200
+RANK_KINDS = {"pnl", "roi", "winrate", "active"}
+RANK_WINDOWS = (30, 90, 180, 365)
 MIN_THRESHOLD_USD = 50.0
 MAX_THRESHOLD_USD = 1_000_000_000.0
 # Потолок запросов с одного адреса: перебор chat_id упирается в него.
@@ -390,19 +401,21 @@ def wallet_banned(con: sqlite3.Connection, addr: str) -> bool:
     return row is not None
 
 
-def wallet_limit(con: sqlite3.Connection, chat: str) -> int:
-    """Лимит кошельков по подписке — как в premium.cpp."""
-    if not table_exists(con, "users"):
-        return FREE_MAX_WALLETS
-    cset = cols(con, "users")
-    if "is_premium" not in cset:
-        return FREE_MAX_WALLETS
+def is_premium(con: sqlite3.Connection, chat: str) -> bool:
+    """Действует ли подписка — та же проверка, что isPremium() в premium.cpp."""
+    if not chat or not table_exists(con, "users"):
+        return False
+    if "is_premium" not in cols(con, "users"):
+        return False
     row = con.execute(
         "SELECT is_premium, premium_expire FROM users WHERE chat_id=?", (chat,)
     ).fetchone()
-    if row and row["is_premium"] and int(row["premium_expire"] or 0) > now():
-        return PREMIUM_MAX_WALLETS
-    return FREE_MAX_WALLETS
+    return bool(row and row["is_premium"] and int(row["premium_expire"] or 0) > now())
+
+
+def wallet_limit(con: sqlite3.Connection, chat: str) -> int:
+    """Лимит кошельков по подписке — как в premium.cpp."""
+    return PREMIUM_MAX_WALLETS if is_premium(con, chat) else FREE_MAX_WALLETS
 
 
 def hl_post(payload: dict, timeout: float = 6.0):
@@ -1369,9 +1382,9 @@ def load_flow(cur: sqlite3.Connection) -> dict:
     return by_win
 
 
-def _map_rank(arr, days: int, n: int = 100) -> list:
+def _map_rank(arr, days: int, n: int = 100, offset: int = 0) -> list:
     mapped = []
-    for e in arr[:n]:
+    for e in arr[offset:offset + n]:
         if not isinstance(e, dict):
             continue
         hold_s = int(e.get("h") or 0)
@@ -1392,18 +1405,40 @@ def _map_rank(arr, days: int, n: int = 100) -> list:
     return mapped
 
 
-def _read_rank_key(cur, key: str, days: int) -> list:
+def _rank_payload(cur, key: str) -> list:
+    """Сырой разобранный массив доски из кэша бота."""
     row = cur.execute("SELECT payload FROM ranking_cache WHERE cache_key=?", (key,)).fetchone()
     if not row or not row[0]:
         return []
     raw = row[0]
     if isinstance(raw, bytes):
         raw = raw.decode("utf-8", "ignore")
+    if not (isinstance(raw, str) and raw.lstrip().startswith("[")):
+        return []
     try:
-        arr = json.loads(raw) if isinstance(raw, str) and raw.lstrip().startswith("[") else []
+        arr = json.loads(raw)
     except json.JSONDecodeError:
         return []
-    return _map_rank(arr, days, 100)
+    return arr if isinstance(arr, list) else []
+
+
+def rank_page(cur, kind: str, days: int, offset: int, limit: int) -> dict:
+    """Страница спотовой доски глубже первой сотни.
+
+    В общую выгрузку кладётся только начало доски: тысяча строк на каждую
+    доску и каждое окно — это мегабайты на каждый запуск приложения, а
+    смотрят так глубоко единицы. Остальное подтягивается отсюда по мере
+    прокрутки.
+    """
+    arr = _rank_payload(cur, f"global_{kind}_{days}")
+    if not arr and days == 30:
+        arr = _rank_payload(cur, f"global_{kind}")
+    return {"rows": _map_rank(arr, days, limit, offset), "total": len(arr)}
+
+
+def _read_rank_key(cur, key: str, days: int) -> list:
+    """Начало доски для общей выгрузки. Разбор — общий с rank_page()."""
+    return _map_rank(_rank_payload(cur, key), days, RANK_BOOTSTRAP_ROWS)
 
 
 def perp_margin(hl: sqlite3.Connection, wallets: list[str], since_ms: int) -> dict[str, float]:
@@ -2826,6 +2861,55 @@ class Handler(BaseHTTPRequestHandler):
                             hl.close()
                         except Exception:
                             pass
+                return
+            if path in ("/rank", "/api/rank"):
+                # Глубина доски платная, как и в боте: без подписки отдаём
+                # ровно столько же, сколько уже лежит в общей выгрузке.
+                chat = self._user(qs)
+                kind = (qs.get("kind", ["pnl"])[0] or "pnl").strip().lower()
+                # Доска спотовая, а ROI по споту снят: знаменатель по BSC
+                # недостоверен. Отдавать её страницами значило бы вернуть
+                # через API то, что убрано из бота и из приложения.
+                if kind not in RANK_KINDS or kind == "roi":
+                    self._json(400, {"ok": False, "error": "bad_kind"})
+                    return
+                try:
+                    days = int(qs.get("win", ["30"])[0])
+                    offset = int(qs.get("offset", ["0"])[0])
+                    limit = int(qs.get("limit", ["100"])[0])
+                except (TypeError, ValueError):
+                    self._json(400, {"ok": False, "error": "bad_value"})
+                    return
+                if days not in RANK_WINDOWS:
+                    self._json(400, {"ok": False, "error": "bad_win"})
+                    return
+                offset = max(0, min(offset, RANK_MAX_DEPTH))
+                limit = max(1, min(limit, RANK_PAGE_MAX))
+                cur = open_db(DB)
+                if not cur:
+                    self._json(200, {"ok": False, "error": "db"})
+                    return
+                try:
+                    depth = RANK_MAX_DEPTH if is_premium(cur, chat) else RANK_FREE_DEPTH
+                    if offset >= depth:
+                        self._json(200, {"ok": True, "rows": [], "total": depth, "locked": True})
+                        return
+                    limit = min(limit, depth - offset)
+                    page = rank_page(cur, kind, days, offset, limit)
+                    self._json(200, {
+                        "ok": True,
+                        "rows": page["rows"],
+                        # Сколько всего доступно этому пользователю, а не
+                        # сколько строк в кэше: иначе «показать ещё» звало бы
+                        # за тем, что всё равно не отдадут.
+                        "total": min(page["total"], depth),
+                        "locked": page["total"] > depth,
+                    })
+                finally:
+                    try:
+                        cur.close()
+                    except Exception:
+                        pass
                 return
             if path in ("/token", "/api/token"):
                 cur = open_db(DB)
