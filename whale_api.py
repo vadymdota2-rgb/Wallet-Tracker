@@ -620,8 +620,6 @@ def ts_sec(ts) -> int:
 MAX_SPOT_USD_NANOS = 10_000_000_000_000_000
 # Сколько монет уходит в общую выгрузку. Остальные достаются поиском.
 FLOW_ROWS = 40
-# Сколько строк вообще поднимаем из базы под выгрузку.
-FLOW_SCAN = 200
 # Нижняя граница — та же, что в saveTrade бота: $50.
 MIN_TRADE_USD_NANOS = 50_000_000_000
 HL_MIN_CLOSED = 5
@@ -1380,151 +1378,132 @@ def load_alerts(cur: sqlite3.Connection, chat: str, wallets: list) -> tuple[list
 
 
 def load_flow(cur: sqlite3.Connection) -> dict:
-    out = {}
-    if not table_exists(cur, "trades"):
-        return out
-    ign = table_exists(cur, "ignored_wallets")
     windows = (("1", 3600), ("6", 21600), ("24", 86400), ("168", 604800), ("720", 2592000))
     tnow = now()
-    ban = (
-        "AND NOT EXISTS (SELECT 1 FROM ignored_wallets iw "
-        "WHERE iw.wallet = t.wallet AND iw.permanent = 1) "
-        if ign
-        else ""
-    )
-    sql = (
-        "SELECT t.token, "
-        "SUM(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE 0 END) buy, "
-        "SUM(CASE WHEN t.is_buy=0 THEN t.usd_nanos ELSE 0 END) sell, "
-        "COUNT(DISTINCT t.wallet) w "
-        "FROM trades t "
-        # Те же границы, что у рейтинга и у истории сделок: иначе линия,
-        # посчитанная с отсевом пыли, не сходилась бы с числом рядом.
-        "WHERE t.timestamp >= ? AND t.usd_nanos BETWEEN ? AND ? "
-        f"{ban}{flow_named(cur)}"
-        "GROUP BY t.token "
-        "ORDER BY ABS(SUM(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE -t.usd_nanos END)) DESC "
-    )
     by_win = {}
     for key, sec in windows:
-        rows = cur.execute(sql + "LIMIT ?",
-                           (tnow - sec, MIN_TRADE_USD_NANOS, MAX_SPOT_USD_NANOS, FLOW_SCAN)).fetchall()
-        coins = []
-        buy_t = sell_t = 0.0
-        for r in rows:
-            sym = symbol_of(cur, r["token"])
-            if not sym:
-                continue
-            b, s = usd(r["buy"]), usd(r["sell"])
-            buy_t += b
-            sell_t += s
-            coins.append(
-                {
-                    "sym": sym,
-                    "token": r["token"],
-                    "net": b - s,
-                    "buy": b,
-                    "sell": s,
-                    "w": int(r["w"] or 0),
-                    "top": min(0.95, (b / (b + s)) if (b + s) else 0.5),
-                    "c1": 0,
-                    "c6": 0,
-                    "c24": 0,
-                    "sp": [],
-                }
-            )
-        coins = coins[:FLOW_ROWS]
-        flow_finish(cur, coins, tnow - sec, sec)
+        coins = flow_scan(cur, tnow - sec)
+        buy_t = sum(c["buy"] for c in coins)
+        sell_t = sum(c["sell"] for c in coins)
+        shown = coins[:FLOW_ROWS]
+        flow_finish(cur, shown, tnow - sec, sec)
         by_win[key] = {
             "net": buy_t - sell_t,
-            # Сколько монет в окне вообще, а не сколько влезло в ответ.
-            "coins": flow_total(cur, tnow - sec),
+            # Число монет окна целиком, а не длина показанного куска.
+            "coins": len(coins),
             "buy": buy_t,
             "sell": sell_t,
-            "rows": coins,
+            "rows": shown,
         }
-    chg = {}
-    for key in ("1", "6", "24"):
-        for r in by_win.get(key, {}).get("rows") or []:
-            tot = r["buy"] + r["sell"]
-            chg.setdefault(r["sym"], {})[key] = (100.0 * r["net"] / tot) if tot else 0.0
-    for bkt in by_win.values():
-        for r in bkt["rows"]:
-            c = chg.get(r["sym"]) or {}
-            r["c1"] = round(c.get("1") or 0, 1)
-            r["c6"] = round(c.get("6") or 0, 1)
-            r["c24"] = round(c.get("24") or 0, 1)
-            pack = price_pack(cur, None, r["sym"], r.get("token") or "", http=False)
-            if not pack:
-                continue
-            if pack.get("addr"):
-                r["addr"] = pack["addr"]
-            # pack["spark"] — история ЦЕНЫ. В потоке денег ей не место:
-            # линия рядом с числом обязана показывать то же самое, что число.
-            if pack.get("c1") or pack.get("c24"):
-                r["c1"] = pack.get("c1") or r["c1"]
-                r["c6"] = pack.get("c6") or r["c6"]
-                r["c24"] = pack.get("c24") or r["c24"]
+    # Здесь стоял проход по всем показанным строкам с price_pack ради полей
+    # c1, c6 и c24 — изменения цены за час, шесть часов и сутки. Их не читает
+    # ни один экран: карточка монеты берёт эти числа из своего справочника
+    # coins, а не из строки потока. А стоил проход дорого — двести вызовов,
+    # каждый с выборкой истории цены, восемьдесят секунд на боевой базе. И
+    # это на каждую перестройку тридцатисекундного кэша.
+    #
+    # Адрес контракта в строке уже есть: его кладёт flow_scan.
     return by_win
 
 
 FLOW_WINDOWS = {"1": 3600, "6": 21600, "24": 86400, "168": 604800, "720": 2592000}
 
 
-def flow_named(cur: sqlite3.Connection) -> str:
-    """Условие «у токена есть тикер».
+_SYM_MAP: dict[str, str] = {}
+_SYM_MAP_AT = 0.0
 
-    Нужно прямо в запросе, а не после него. Отсев без тикера в Python
-    означал, что страница из сорока строк приезжала короче сорока, а
-    следующее смещение считалось по числу показанных — и часть монет
-    перепрыгивалась, часть приходила дважды.
+
+def symbol_map(cur: sqlite3.Connection) -> dict[str, str]:
+    """Все тикеры разом — вместо похода в базу на каждую строку.
+
+    Отбор «у токена есть тикер» раньше стоял прямо в запросе, через EXISTS с
+    lower() по обе стороны. lower() убивает индекс token_cache: на боевой
+    базе один такой запрос занимал 109 секунд вместо 0,24, а выполнялся он
+    по разу на каждое из пяти окон плюс столько же на подсчёт. Перестройка
+    кэша не заканчивалась никогда, и приложение теряло сервер.
+
+    Альтернатива — спрашивать тикер построчно, как symbol_of, — не лучше:
+    двенадцать тысяч отдельных SELECT'ов это девять секунд. Один обход
+    таблицы отдаёт тот же ответ за миллисекунды.
     """
-    if not table_exists(cur, "token_cache"):
-        return ""
-    return (
-        "AND EXISTS (SELECT 1 FROM token_cache tc WHERE lower(tc.address)=lower(t.token) "
-        "AND TRIM(COALESCE(tc.symbol,'')) <> '' AND UPPER(TRIM(tc.symbol)) <> 'UNKNOWN') "
-    )
+    global _SYM_MAP, _SYM_MAP_AT
+    if _SYM_MAP and time.time() - _SYM_MAP_AT < 60:
+        return _SYM_MAP
+    out: dict[str, str] = {}
+    if table_exists(cur, "token_cache"):
+        try:
+            for a, sym in cur.execute("SELECT address, symbol FROM token_cache"):
+                s = str(sym or "").upper().strip()
+                if a and s and s != "UNKNOWN":
+                    out[str(a).lower()] = s
+        except sqlite3.Error as e:
+            sys.stderr.write(f"[api] symbol map: {e}\n")
+            return _SYM_MAP
+    _SYM_MAP, _SYM_MAP_AT = out, time.time()
+    return out
 
 
-def flow_total(cur: sqlite3.Connection, since: int, tokens: list[str] | None = None) -> int:
-    """Сколько монет в окне всего — а не сколько поместилось в ответ.
+def flow_scan(cur: sqlite3.Connection, since: int, tokens: list[str] | None = None) -> list[dict]:
+    """Все монеты окна с их потоком, по убыванию модуля потока.
 
-    Считать по длине выданного списка нельзя: он обрезан. На экране стояло
-    «40 монет», хотя сороковая была лишь последней из показанных, а кнопка
-    «показать ещё» исправно подгружала сорок первую.
+    Без ограничения строк: отсюда берётся и число монет в шапке, и любая
+    страница списка. Считать по обрезанному списку нельзя — на экране стояло
+    «40 монет» при сорок первой, доступной по кнопке.
 
-    Условия те же, что у списка, включая наличие тикера в token_cache: без
-    него строка всё равно не попадёт в выдачу, и считать её значило бы
-    обещать монеты, до которых не долистать.
+    Строки без тикера отсеиваются здесь же, по общему справочнику. Раз и
+    список, и счётчик, и страницы строятся из одного массива, смещение не
+    может разъехаться с тем, что человек видит.
     """
     if not table_exists(cur, "trades"):
-        return 0
+        return []
     ban = (
         "AND NOT EXISTS (SELECT 1 FROM ignored_wallets iw "
         "WHERE iw.wallet = t.wallet AND iw.permanent = 1) "
         if table_exists(cur, "ignored_wallets")
         else ""
     )
-    named = flow_named(cur)
     where_tok, args = "", [since, MIN_TRADE_USD_NANOS, MAX_SPOT_USD_NANOS]
     if tokens is not None:
         if not tokens:
-            return 0
+            return []
         where_tok = f"AND t.token IN ({','.join('?' * len(tokens))}) "
         args += tokens
     try:
-        row = cur.execute(
-            "SELECT COUNT(*) FROM (SELECT t.token FROM trades t "
+        rows = cur.execute(
+            "SELECT t.token, "
+            "SUM(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE 0 END) buy, "
+            "SUM(CASE WHEN t.is_buy=0 THEN t.usd_nanos ELSE 0 END) sell, "
+            "COUNT(DISTINCT t.wallet) w "
+            "FROM trades t "
             "WHERE t.timestamp >= ? AND t.usd_nanos BETWEEN ? AND ? "
-            f"{ban}{named}{where_tok}"
-            "GROUP BY t.token)",
+            f"{ban}{where_tok}"
+            "GROUP BY t.token "
+            "ORDER BY ABS(SUM(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE -t.usd_nanos END)) DESC",
             args,
-        ).fetchone()
+        ).fetchall()
     except sqlite3.Error as e:
-        sys.stderr.write(f"[api] flow total: {e}\n")
-        return 0
-    return int(row[0] or 0) if row else 0
+        sys.stderr.write(f"[api] flow scan: {e}\n")
+        return []
+
+    syms = symbol_map(cur)
+    out: list[dict] = []
+    for r in rows:
+        tok = (r["token"] or "")
+        sym = syms.get(tok.lower())
+        if not sym:
+            continue
+        b, sl = usd(r["buy"]), usd(r["sell"])
+        out.append({
+            "sym": sym,
+            "token": tok,
+            "addr": tok,
+            "net": b - sl,
+            "buy": b,
+            "sell": sl,
+            "w": int(r["w"] or 0),
+            "sp": [],
+        })
+    return out
 
 
 def flow_finish(cur: sqlite3.Connection, rows: list[dict], since: int, sec: int) -> list[dict]:
@@ -1552,90 +1531,29 @@ def flow_finish(cur: sqlite3.Connection, rows: list[dict], since: int, sec: int)
 
 def flow_search(cur: sqlite3.Connection, win: str, q: str, limit: int = 40,
                 offset: int = 0) -> dict:
-    """Поток денег по всем монетам окна, а не только по попавшим в выгрузку.
+    """Страница потока: по всем монетам окна или по совпадению тикера.
 
-    В выгрузку кладётся сорок строк: держать там все монеты за тридцать дней
-    — это тысячи записей с рядами при каждом запуске. Но искать человек
-    хочет среди всех, поэтому поиск идёт в базу.
-
-    Фильтр по тикеру, а тикер лежит в token_cache: сначала находим адреса,
-    потом считаем поток только по ним. Обратный порядок — посчитать всё и
-    отфильтровать — заставлял бы суммировать месяц сделок ради одной монеты.
+    Фильтр по тикеру сводится к списку адресов заранее: считать поток по
+    всей базе, чтобы потом оставить одну монету, значит суммировать месяц
+    сделок впустую.
     """
     sec = FLOW_WINDOWS.get(win)
-    if not sec or not table_exists(cur, "trades"):
+    if not sec:
         return {"rows": [], "total": 0}
     since = now() - sec
     limit = max(1, min(int(limit or 40), 100))
-    offset = max(0, min(int(offset or 0), 2000))
+    offset = max(0, min(int(offset or 0), 5000))
 
     needle = (q or "").strip().upper()
     tokens: list[str] | None = None
     if needle:
-        if not table_exists(cur, "token_cache"):
-            return {"rows": [], "total": 0}
-        try:
-            tokens = [
-                r["address"] for r in cur.execute(
-                    "SELECT address FROM token_cache WHERE upper(symbol) LIKE ? LIMIT 400",
-                    (f"%{needle}%",),
-                ).fetchall()
-            ]
-        except sqlite3.Error as e:
-            sys.stderr.write(f"[api] flow search: {e}\n")
-            return {"rows": [], "total": 0}
+        tokens = [a for a, sym in symbol_map(cur).items() if needle in sym][:400]
         if not tokens:
             return {"rows": [], "total": 0}
 
-    ban = (
-        "AND NOT EXISTS (SELECT 1 FROM ignored_wallets iw "
-        "WHERE iw.wallet = t.wallet AND iw.permanent = 1) "
-        if table_exists(cur, "ignored_wallets")
-        else ""
-    )
-    where_tok = ""
-    args: list = [since, MIN_TRADE_USD_NANOS, MAX_SPOT_USD_NANOS]
-    if tokens is not None:
-        where_tok = f"AND t.token IN ({','.join('?' * len(tokens))}) "
-        args += tokens
-    try:
-        rows = cur.execute(
-            "SELECT t.token, "
-            "SUM(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE 0 END) buy, "
-            "SUM(CASE WHEN t.is_buy=0 THEN t.usd_nanos ELSE 0 END) sell, "
-            "COUNT(DISTINCT t.wallet) w "
-            "FROM trades t "
-            "WHERE t.timestamp >= ? AND t.usd_nanos BETWEEN ? AND ? "
-            f"{ban}{flow_named(cur)}{where_tok}"
-            "GROUP BY t.token "
-            "ORDER BY ABS(SUM(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE -t.usd_nanos END)) DESC "
-            "LIMIT ? OFFSET ?",
-            (*args, limit, offset),
-        ).fetchall()
-    except sqlite3.Error as e:
-        sys.stderr.write(f"[api] flow search: {e}\n")
-        return {"rows": [], "total": 0}
-
-    out = []
-    for r in rows:
-        sym = symbol_of(cur, r["token"])
-        if not sym:
-            continue
-        b, sl = usd(r["buy"]), usd(r["sell"])
-        out.append({
-            "sym": sym,
-            "token": r["token"],
-            "addr": r["token"],
-            "net": b - sl,
-            "buy": b,
-            "sell": sl,
-            "w": int(r["w"] or 0),
-            "sp": [],
-        })
-    return {
-        "rows": flow_finish(cur, out, since, sec),
-        "total": flow_total(cur, since, tokens),
-    }
+    allrows = flow_scan(cur, since, tokens)
+    page = allrows[offset:offset + limit]
+    return {"rows": flow_finish(cur, page, since, sec), "total": len(allrows)}
 
 
 def _map_rank(arr, days: int, n: int = 100, offset: int = 0) -> list:
@@ -2304,9 +2222,13 @@ def load_rot(cur: sqlite3.Connection) -> dict:
         ).fetchall()
         last_sell: dict[str, str] = {}
         agg: dict[tuple[str, str], list] = {}
+        # Тикер из общего справочника, а не отдельным запросом на строку: за
+        # неделю строк сотни тысяч, и поход в базу на каждую превращал сбор
+        # ротации в десять секунд на каждой перестройке кэша.
+        syms = symbol_map(cur)
         for r in rows:
             w = (r["wallet"] or "").lower()
-            tok = symbol_of(cur, r["token"])
+            tok = syms.get((r["token"] or "").lower())
             if not tok:
                 continue
             if r["is_buy"]:
