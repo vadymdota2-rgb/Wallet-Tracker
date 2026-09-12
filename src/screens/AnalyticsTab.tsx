@@ -250,6 +250,7 @@ function FlowBody() {
 
   const query = raw.trim();
   const [found, setFound] = useState<FlowRow[] | null>(null);
+  const [qTotal, setQTotal] = useState(0);
   const [extra, setExtra] = useState<FlowRow[]>([]);
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -270,6 +271,7 @@ function FlowBody() {
       void fetchFlow(win, query, 0, ctrl.signal).then((r) => {
         if (ctrl.signal.aborted) return;
         setFound(r?.ok ? r.rows ?? [] : []);
+        setQTotal(r?.total ?? 0);
         setBusy(false);
       });
     }, 250);
@@ -282,6 +284,12 @@ function FlowBody() {
   const bucket = flow[win];
   const base: FlowRow[] = query ? found ?? [] : bucket?.rows ?? [];
   const rows: FlowRow[] = [...base, ...extra];
+  /* Сколько монет в окне всего. Раньше здесь стояла длина показанного
+     списка, и на экране было «40 монет» при сорока первой, доступной по
+     кнопке.
+     Когда догрузка выдохлась, показываем только число строк: обещать
+     монеты, до которых уже не долистать, хуже, чем недосказать. */
+  const total = done ? rows.length : Math.max(rows.length, (query ? qTotal : bucket?.coins) ?? 0);
 
   /** Следующая страница монет окна: в выгрузке лежит только начало списка. */
   const loadMore = async () => {
@@ -292,6 +300,7 @@ function FlowBody() {
       const got = r?.ok ? r.rows ?? [] : [];
       if (!got.length) setDone(true);
       else setExtra((prev) => [...prev, ...got]);
+      if (query) setQTotal(r?.total ?? qTotal);
     } finally {
       setBusy(false);
     }
@@ -311,7 +320,8 @@ function FlowBody() {
         <p className="flow-sum">
           <span className={bucket.net >= 0 ? "up" : "dn"}>{signed(bucket.net)}</span>
           <small>
-            {num(bucket.coins)} {t(lang, "flow_coins")}
+            {rows.length < total ? `${num(rows.length)} / ` : ""}
+            {num(total)} {t(lang, "flow_coins")}
           </small>
         </p>
       ) : null}
@@ -351,7 +361,7 @@ function FlowBody() {
           </span>
         </button>
       ))}
-      {!done ? (
+      {!done && rows.length < total ? (
         <Action kind="ghost" disabled={busy} onClick={loadMore}>
           {t(lang, "ui_show_more")}
         </Action>

@@ -1401,7 +1401,7 @@ def load_flow(cur: sqlite3.Connection) -> dict:
         # Те же границы, что у рейтинга и у истории сделок: иначе линия,
         # посчитанная с отсевом пыли, не сходилась бы с числом рядом.
         "WHERE t.timestamp >= ? AND t.usd_nanos BETWEEN ? AND ? "
-        f"{ban}"
+        f"{ban}{flow_named(cur)}"
         "GROUP BY t.token "
         "ORDER BY ABS(SUM(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE -t.usd_nanos END)) DESC "
     )
@@ -1437,7 +1437,8 @@ def load_flow(cur: sqlite3.Connection) -> dict:
         flow_finish(cur, coins, tnow - sec, sec)
         by_win[key] = {
             "net": buy_t - sell_t,
-            "coins": len(coins),
+            # Сколько монет в окне вообще, а не сколько влезло в ответ.
+            "coins": flow_total(cur, tnow - sec),
             "buy": buy_t,
             "sell": sell_t,
             "rows": coins,
@@ -1468,6 +1469,62 @@ def load_flow(cur: sqlite3.Connection) -> dict:
 
 
 FLOW_WINDOWS = {"1": 3600, "6": 21600, "24": 86400, "168": 604800, "720": 2592000}
+
+
+def flow_named(cur: sqlite3.Connection) -> str:
+    """Условие «у токена есть тикер».
+
+    Нужно прямо в запросе, а не после него. Отсев без тикера в Python
+    означал, что страница из сорока строк приезжала короче сорока, а
+    следующее смещение считалось по числу показанных — и часть монет
+    перепрыгивалась, часть приходила дважды.
+    """
+    if not table_exists(cur, "token_cache"):
+        return ""
+    return (
+        "AND EXISTS (SELECT 1 FROM token_cache tc WHERE lower(tc.address)=lower(t.token) "
+        "AND TRIM(COALESCE(tc.symbol,'')) <> '' AND UPPER(TRIM(tc.symbol)) <> 'UNKNOWN') "
+    )
+
+
+def flow_total(cur: sqlite3.Connection, since: int, tokens: list[str] | None = None) -> int:
+    """Сколько монет в окне всего — а не сколько поместилось в ответ.
+
+    Считать по длине выданного списка нельзя: он обрезан. На экране стояло
+    «40 монет», хотя сороковая была лишь последней из показанных, а кнопка
+    «показать ещё» исправно подгружала сорок первую.
+
+    Условия те же, что у списка, включая наличие тикера в token_cache: без
+    него строка всё равно не попадёт в выдачу, и считать её значило бы
+    обещать монеты, до которых не долистать.
+    """
+    if not table_exists(cur, "trades"):
+        return 0
+    ban = (
+        "AND NOT EXISTS (SELECT 1 FROM ignored_wallets iw "
+        "WHERE iw.wallet = t.wallet AND iw.permanent = 1) "
+        if table_exists(cur, "ignored_wallets")
+        else ""
+    )
+    named = flow_named(cur)
+    where_tok, args = "", [since, MIN_TRADE_USD_NANOS, MAX_SPOT_USD_NANOS]
+    if tokens is not None:
+        if not tokens:
+            return 0
+        where_tok = f"AND t.token IN ({','.join('?' * len(tokens))}) "
+        args += tokens
+    try:
+        row = cur.execute(
+            "SELECT COUNT(*) FROM (SELECT t.token FROM trades t "
+            "WHERE t.timestamp >= ? AND t.usd_nanos BETWEEN ? AND ? "
+            f"{ban}{named}{where_tok}"
+            "GROUP BY t.token)",
+            args,
+        ).fetchone()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] flow total: {e}\n")
+        return 0
+    return int(row[0] or 0) if row else 0
 
 
 def flow_finish(cur: sqlite3.Connection, rows: list[dict], since: int, sec: int) -> list[dict]:
@@ -1549,7 +1606,7 @@ def flow_search(cur: sqlite3.Connection, win: str, q: str, limit: int = 40,
             "COUNT(DISTINCT t.wallet) w "
             "FROM trades t "
             "WHERE t.timestamp >= ? AND t.usd_nanos BETWEEN ? AND ? "
-            f"{ban}{where_tok}"
+            f"{ban}{flow_named(cur)}{where_tok}"
             "GROUP BY t.token "
             "ORDER BY ABS(SUM(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE -t.usd_nanos END)) DESC "
             "LIMIT ? OFFSET ?",
@@ -1575,7 +1632,10 @@ def flow_search(cur: sqlite3.Connection, win: str, q: str, limit: int = 40,
             "w": int(r["w"] or 0),
             "sp": [],
         })
-    return {"rows": flow_finish(cur, out, since, sec), "total": len(out)}
+    return {
+        "rows": flow_finish(cur, out, since, sec),
+        "total": flow_total(cur, since, tokens),
+    }
 
 
 def _map_rank(arr, days: int, n: int = 100, offset: int = 0) -> list:
