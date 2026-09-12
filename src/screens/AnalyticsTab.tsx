@@ -9,12 +9,13 @@ import { useLive } from "../store/live";
 import { t } from "../i18n/t";
 import type { DictKey } from "../i18n";
 import { venueName } from "../lib/rank";
+import { haptic } from "../lib/telegram";
 import { num, pct, signed, usd } from "../lib/format";
 import { ago } from "../lib/relative";
 import { fundingSideKey, isUpKind, levFromSide, tradeKind, tradeKindKey } from "../lib/labels";
 import { CoinIcon } from "../components/CoinIcon";
 import { BuySellBar, FlowSpark } from "../components/Chart";
-import { Action, Card, Empty, Locked, Row, SectionTitle, Segmented, Skeleton } from "../components/ui";
+import { Card, Empty, Locked, Row, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import { fetchBig, fetchFlow } from "../lib/api";
 import type { BigView, BigWin, FlowWin } from "../store/app";
 import type { FlowRow, TradeRow, Trades } from "../lib/types";
@@ -233,13 +234,19 @@ export function AnalyticsTab() {
   );
 }
 
+/** Сколько монет на странице. То же число, что сервер кладёт в выгрузку. */
+const FLOW_PAGE = 40;
+
 /**
  * Поток денег по монетам.
  *
- * Список из выгрузки — сорок монет с наибольшим потоком. Как только человек
- * начинает искать, запрос уходит на сервер: искать среди сорока, когда в
- * базе тысячи, значит не найти. Задержка в четверть секунды — чтобы не
- * слать запрос на каждую букву.
+ * Страницами, а не бесконечной лентой. У ленты не видно, сколько осталось, и
+ * вернуться к началу можно только прокруткой; со страницами номер и общее
+ * число видны сразу, а первая страница приходит с общей выгрузкой и рисуется
+ * мгновенно.
+ *
+ * Поиск идёт в базу: искать среди сорока строк выгрузки, когда в базе тысячи,
+ * значит не найти. Запрос уходит через четверть секунды после последней буквы.
  */
 function FlowBody() {
   const lang = useApp((s) => s.lang);
@@ -249,67 +256,56 @@ function FlowBody() {
   const flow = useLive((s) => s.flow);
 
   const query = raw.trim();
-  const [found, setFound] = useState<FlowRow[] | null>(null);
-  const [qTotal, setQTotal] = useState(0);
-  const [extra, setExtra] = useState<FlowRow[]>([]);
-  const [done, setDone] = useState(false);
+  const [page, setPage] = useState(1);
+  const [rows, setRows] = useState<FlowRow[] | null>(null);
+  const [qTotal, setQTotal] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const bucket = flow[win];
+  /* Общее число монет окна приходит с выгрузкой — поэтому счётчик виден
+     сразу, ещё до того, как человек куда-то нажал. */
+  const total = (query ? qTotal : bucket?.coins) ?? 0;
+  const pages = Math.max(1, Math.ceil(total / FLOW_PAGE));
+
+  // Сменились окно или запрос — это другой список, и начинается он заново.
+  useEffect(() => setPage(1), [win, query]);
+
   useEffect(() => {
-    // Сменилось окно или запрос — прежние страницы к этому списку не имеют
-    // отношения.
-    setExtra([]);
-    setDone(false);
-    if (!query) {
-      setFound(null);
+    /* Первая страница без поиска уже лежит в выгрузке: за ней на сервер
+       ходить незачем, она и так на экране мгновенно. */
+    if (!query && page === 1) {
+      setRows(null);
       setBusy(false);
       return;
     }
     const ctrl = new AbortController();
     setBusy(true);
     const timer = setTimeout(() => {
-      void fetchFlow(win, query, 0, ctrl.signal).then((r) => {
+      void fetchFlow(win, query, (page - 1) * FLOW_PAGE, ctrl.signal).then((r) => {
         if (ctrl.signal.aborted) return;
-        setFound(r?.ok ? r.rows ?? [] : []);
-        setQTotal(r?.total ?? 0);
+        setRows(r?.ok ? r.rows ?? [] : []);
+        if (query) setQTotal(r?.total ?? 0);
         setBusy(false);
       });
-    }, 250);
+    }, query ? 250 : 0);
     return () => {
       clearTimeout(timer);
       ctrl.abort();
     };
-  }, [query, win]);
+  }, [win, query, page]);
 
-  const bucket = flow[win];
-  const base: FlowRow[] = query ? found ?? [] : bucket?.rows ?? [];
-  const rows: FlowRow[] = [...base, ...extra];
-  /* Сколько монет в окне всего. Раньше здесь стояла длина показанного
-     списка, и на экране было «40 монет» при сорока первой, доступной по
-     кнопке.
-     Когда догрузка выдохлась, показываем только число строк: обещать
-     монеты, до которых уже не долистать, хуже, чем недосказать. */
-  const total = done ? rows.length : Math.max(rows.length, (query ? qTotal : bucket?.coins) ?? 0);
+  const shown: FlowRow[] = !query && page === 1 ? bucket?.rows ?? [] : rows ?? [];
 
-  /** Следующая страница монет окна: в выгрузке лежит только начало списка. */
-  const loadMore = async () => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      const r = await fetchFlow(win, query, rows.length);
-      const got = r?.ok ? r.rows ?? [] : [];
-      if (!got.length) setDone(true);
-      else setExtra((prev) => [...prev, ...got]);
-      if (query) setQTotal(r?.total ?? qTotal);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  if (query && busy && found === null) return <Skeleton rows={3} />;
-  if (!rows.length) {
+  if (busy && !shown.length) return <Skeleton rows={3} />;
+  if (!shown.length) {
     return <Empty text={query ? t(lang, "flow_search_none") : t(lang, "flow_empty")} />;
   }
+
+  const go = (to: number) => {
+    if (to < 1 || to > pages || to === page || busy) return;
+    haptic("select");
+    setPage(to);
+  };
 
   return (
     <>
@@ -320,16 +316,16 @@ function FlowBody() {
         <p className="flow-sum">
           <span className={bucket.net >= 0 ? "up" : "dn"}>{signed(bucket.net)}</span>
           <small>
-            {rows.length < total ? `${num(rows.length)} / ` : ""}
             {num(total)} {t(lang, "flow_coins")}
           </small>
         </p>
       ) : null}
-      {rows.map((r) => (
+
+      {shown.map((r) => (
         <button
           type="button"
           className="nf"
-          key={r.sym}
+          key={r.token || r.sym}
           /* Адрес контракта уезжает вторым: по нему экран монеты достаёт
              историю цены. По тикеру её не найти — тикеры не уникальны. */
           onClick={() => open("coin", r.sym, r.addr || r.token)}
@@ -361,14 +357,20 @@ function FlowBody() {
           </span>
         </button>
       ))}
-      {!done && rows.length < total ? (
-        <Action kind="ghost" disabled={busy} onClick={loadMore}>
-          {t(lang, "ui_show_more")}
-        </Action>
+
+      {pages > 1 ? (
+        <nav className="pager" aria-label={t(lang, "flow_coins")}>
+          <button type="button" disabled={page <= 1 || busy} onClick={() => go(page - 1)}
+                  aria-label={t(lang, "back_button")}>←</button>
+          <span>{num(page)} / {num(pages)}</span>
+          <button type="button" disabled={page >= pages || busy} onClick={() => go(page + 1)}
+                  aria-label={t(lang, "ui_show_more")}>→</button>
+        </nav>
       ) : null}
     </>
   );
 }
+
 
 function RotBody() {
   const lang = useApp((s) => s.lang);

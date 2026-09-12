@@ -455,6 +455,32 @@
 .tile small { color: var(--dim-2); font-size: 11px; letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tile b { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Страницы списка ------------------------------------------------------- */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.pager span { min-width: 64px; text-align: center; font-size: 13px; font-weight: 700; color: var(--dim); }
+.pager button {
+  width: 40px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: rgb(11 22 40 / 0.25);
+  color: var(--glow);
+  font-size: 16px;
+  transition: background 0.18s var(--ease), opacity 0.18s var(--ease);
+}
+.pager button:active:not(:disabled) { background: rgb(127 216 255 / 0.14); }
+/* Край списка виден по кнопке, а не по тому, что нажатие ничего не делает. */
+.pager button:disabled { opacity: 0.32; color: var(--dim-2); }
+
 /* Строка NetFlow -------------------------------------------------------- */
 .nf {
   display: flex;
