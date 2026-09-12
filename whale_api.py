@@ -109,7 +109,10 @@ _hl_candles: dict[str, tuple[float, list]] = {}
 _big_cache: dict[str, tuple[float, dict]] = {}
 _big_lock = threading.Lock()
 BIG_TTL = 30.0
-BIG_WINDOWS = {"1h": 1, "24h": 24, "7d": 168, "30d": 720}
+# Те же окна, что у бота в big_trades.cpp. Между часом и сутками без шести
+# часов слишком большой прыжок: за час по монете бывает две сделки, а за
+# сутки всё уже размазано.
+BIG_WINDOWS = {"1h": 1, "6h": 6, "24h": 24, "7d": 168, "30d": 720}
 HL_COIN = {
     "PEPE": "kPEPE",
     "FLOKI": "kFLOKI",

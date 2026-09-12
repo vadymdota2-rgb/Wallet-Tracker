@@ -27,8 +27,11 @@ const FLOW_WINS: { id: FlowWin; key: Parameters<typeof t>[1] }[] = [
   { id: "720", key: "big_win_30d" },
 ];
 
+/* Тот же ряд, что у бота и что у потока: час, шесть часов, сутки, неделя,
+   месяц. Между часом и сутками без шести часов слишком большой прыжок. */
 const BIG_WINS: { id: BigWin; key: Parameters<typeof t>[1] }[] = [
   { id: "1h", key: "big_win_1h" },
+  { id: "6h", key: "ai_w6h" },
   { id: "24h", key: "big_win_24h" },
   { id: "7d", key: "big_win_7d" },
   { id: "30d", key: "big_win_30d" },

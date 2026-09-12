@@ -26,7 +26,7 @@ export interface Screen {
 }
 
 /** Окна крупных сделок — те же, что в боте. */
-export type BigWin = "1h" | "24h" | "7d" | "30d";
+export type BigWin = "1h" | "6h" | "24h" | "7d" | "30d";
 /** Разделы аналитики — те же кнопки, что в меню бота. */
 export type BigView = "flow" | "spot" | "perp" | "liq" | "fund" | "rot";
 /** Окна потока: часы. */
