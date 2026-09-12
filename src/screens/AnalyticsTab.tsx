@@ -295,7 +295,14 @@ function FlowBody() {
         </p>
       ) : null}
       {rows.map((r) => (
-        <button type="button" className="nf" key={r.sym} onClick={() => open("coin", r.sym)}>
+        <button
+          type="button"
+          className="nf"
+          key={r.sym}
+          /* Адрес контракта уезжает вторым: по нему экран монеты достаёт
+             историю цены. По тикеру её не найти — тикеры не уникальны. */
+          onClick={() => open("coin", r.sym, r.addr || r.token)}
+        >
           <CoinIcon sym={r.sym} icon={r.icon} size={32} />
           <span className="nf-main">
             <span className="nf-ttl">{r.sym}</span>

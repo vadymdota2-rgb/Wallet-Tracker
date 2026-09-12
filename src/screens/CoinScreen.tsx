@@ -1,8 +1,14 @@
 /**
  * Монета: свечи, цена, поток по кошелькам.
  *
- * Свечи тянутся с бирж через nginx. Не ответил никто — график не рисуется
- * и экран честно об этом говорит. Выдуманной истории здесь нет.
+ * Источников свечей два, и нужны оба. Мажоры берутся с бирж через nginx —
+ * там настоящие OHLC. Но в потоке китов почти всё это токены BSC, которых
+ * на биржах нет вовсе: по ним экран показывал пустоту и «загружается»,
+ * хотя история цены лежит в базе бота. Её и собираем в свечи, как на
+ * экране спотовых остатков.
+ *
+ * Что не изменилось: выдуманной истории здесь по-прежнему нет. Не ответил
+ * никто и адреса нет — график не рисуется, и экран говорит об этом словами.
  */
 import { useEffect, useState } from "react";
 import { Frame, type ScreenProps } from "./Screen";
@@ -11,12 +17,16 @@ import { useLive } from "../store/live";
 import { t } from "../i18n/t";
 import { num, pct, px, signed, usd } from "../lib/format";
 import { ago } from "../lib/relative";
-import { fetchCandles, TF_LABEL, TIMEFRAMES, type Candle, type Timeframe } from "../lib/klines";
+import {
+  candlesFrom, fetchCandles, SPOT_TFS, TF_LABEL, TIMEFRAMES,
+  type Candle, type SpotTf, type Timeframe,
+} from "../lib/klines";
+import { fetchTokenHist } from "../lib/api";
 import { CoinIcon, normalizeSym } from "../components/CoinIcon";
 import { Area, BuySellBar, Candles } from "../components/Chart";
 import { Card, Empty, Row, SectionTitle, Segmented, Skeleton, Tiles } from "../components/ui";
 
-export function CoinScreen({ arg }: ScreenProps) {
+export function CoinScreen({ arg, arg2 }: ScreenProps) {
   const lang = useApp((s) => s.lang);
   const tf = useApp((s) => s.chartTf);
   const setTf = useApp((s) => s.setChartTf);
@@ -27,7 +37,16 @@ export function CoinScreen({ arg }: ScreenProps) {
   const key = normalizeSym(sym);
   const coin = coins[sym] ?? coins[key];
 
+  const row = (flow["24"]?.rows ?? []).find((r) => r.sym === sym || r.sym === key);
+  /* Адрес контракта: его передаёт строка, из которой пришли, а если пришли
+     не оттуда — берём из общей выгрузки. Без адреса истории цены не
+     достать: тикеры не уникальны, искать по ним нельзя. */
+  const addr = String(arg2 || coin?.addr || row?.addr || row?.token || "");
+  const hasAddr = /^0x[0-9a-fA-F]{40}$/.test(addr);
+
+  const [spotTf, setSpotTf] = useState<SpotTf>("1d");
   const [candles, setCandles] = useState<Candle[] | null>(null);
+  const [hist, setHist] = useState<[number, number][] | null>(null);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -38,8 +57,28 @@ export function CoinScreen({ arg }: ScreenProps) {
     return () => ctrl.abort();
   }, [sym, tf]);
 
-  const row = (flow["24"]?.rows ?? []).find((r) => r.sym === sym || r.sym === key);
+  /* Оба источника запрашиваются сразу, а не по цепочке: ждать отказа биржи,
+     чтобы только потом пойти в базу, значит показывать скелет дважды. */
+  useEffect(() => {
+    if (!hasAddr) {
+      setHist([]);
+      return;
+    }
+    const ctrl = new AbortController();
+    setHist(null);
+    void fetchTokenHist(addr, ctrl.signal).then((d) => {
+      if (!ctrl.signal.aborted) setHist(d?.ok ? d.hist ?? [] : []);
+    });
+    return () => ctrl.abort();
+  }, [addr, hasAddr]);
+
   const chg = coin?.c24 ?? coin?.chg ?? 0;
+
+  const exch = candles && candles.length >= 3 ? candles : null;
+  const dex = hist?.length ? candlesFrom(hist, spotTf) : null;
+  // Биржевые свечи точнее: там настоящие OHLC, а не почасовые замеры.
+  const dexShown = !exch && !!dex && dex.length >= 3;
+  const waiting = candles === null || (!exch && hasAddr && hist === null);
 
   return (
     <Frame
@@ -55,15 +94,29 @@ export function CoinScreen({ arg }: ScreenProps) {
         <SectionTitle note={t(lang, "ui_chg24")}>
           <span className={chg >= 0 ? "up" : "dn"}>{pct(chg)}</span>
         </SectionTitle>
-        <Segmented<Timeframe>
-          value={tf}
-          onChange={setTf}
-          options={TIMEFRAMES.map((id) => ({ id, label: t(lang, TF_LABEL[id]) }))}
-        />
-        {candles === null ? (
+        {/* Набор таймфреймов зависит от источника: у биржи своя сетка, у
+            истории из базы замеры почасовые, и минутных свечей из них не
+            собрать. Показывать биржевую сетку над графиком из базы значило
+            бы обещать точность, которой там нет. */}
+        {dexShown ? (
+          <Segmented<SpotTf>
+            value={spotTf}
+            onChange={setSpotTf}
+            options={SPOT_TFS.map((id) => ({ id, label: t(lang, TF_LABEL[id]) }))}
+          />
+        ) : (
+          <Segmented<Timeframe>
+            value={tf}
+            onChange={setTf}
+            options={TIMEFRAMES.map((id) => ({ id, label: t(lang, TF_LABEL[id]) }))}
+          />
+        )}
+        {waiting ? (
           <Skeleton rows={4} />
-        ) : candles.length >= 3 ? (
-          <Candles candles={candles} format={px} />
+        ) : exch ? (
+          <Candles candles={exch} format={px} />
+        ) : dexShown ? (
+          <Candles candles={dex!} format={px} />
         ) : coin?.hist?.length ? (
           <Area points={coin.hist} height={140} />
         ) : (
@@ -81,7 +134,8 @@ export function CoinScreen({ arg }: ScreenProps) {
 
       {row ? (
         <Card>
-          <SectionTitle>{t(lang, "flow_title")}</SectionTitle>
+          {/* То же имя, что у раздела, откуда сюда приходят. */}
+          <SectionTitle>NetFlow</SectionTitle>
           <p className="flow-sum">
             <span className={row.net >= 0 ? "up" : "dn"}>{signed(row.net)}</span>
             <small>
