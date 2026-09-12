@@ -74,7 +74,11 @@ export function CoinIcon({
   useEffect(() => setStep(0), [key, icon?.[0]]);
 
   const src = urls[step];
-  const letter = key.slice(0, 1) || "?";
+  /* Буква берётся из исходного тикера, а не из нормализованного: тот
+     оставляет только латиницу и цифры, поэтому у китайских и японских имён
+     вроде «幻想» не оставалось ничего и в кружке стоял вопросительный знак.
+     Первый знак имени — всегда лучше, чем «?». */
+  const letter = [...String(sym || "").trim()][0] || key.slice(0, 1) || "?";
 
   return (
     <span className="ci" style={{ width: size, height: size, fontSize: size * 0.42 }} aria-hidden="true">

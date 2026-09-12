@@ -636,6 +636,9 @@ DIR_LIQ_LONG, DIR_LIQ_SHORT, DIR_LIQ_OTHER = 6, 7, 8
 
 
 FLOW_BUCKETS = 12
+# Меньше трёх сделок — линию не рисуем: через две точки проходит только
+# ступенька, а знак и так написан рядом цифрой.
+FLOW_MIN_TRADES = 3
 
 
 def flow_series(cur: sqlite3.Connection, tokens: list[str], since: int,
@@ -645,39 +648,46 @@ def flow_series(cur: sqlite3.Connection, tokens: list[str], since: int,
     Именно накопленный, а не поокошный: линия тогда заканчивается ровно там,
     где стоит итоговое число, и её направление уже не может ему противоречить.
 
-    Раньше здесь стояла выдуманная зигзагообразная линия от знака итога, а
-    поверх неё сервис цен подставлял историю ЦЕНЫ монеты. Рядом с числом
-    «приток денег» рисовался график цены: у монеты, которую киты набирали на
-    падении, число было зелёным, а кривая красной — и это выглядело ошибкой,
-    хотя оба значения были верны. Две разные величины в одной строке.
+    Корзины считаются от первой сделки токена, а не от начала окна. Иначе у
+    монеты, по которой за месяц прошло три сделки за один день, одиннадцать
+    корзин из двенадцати были нулевыми, и все такие линии выглядели
+    одинаково: полка, ступенька, полка.
+
+    Меньше трёх сделок — линии нет вовсе. Через две точки можно провести
+    только ступеньку, и она ничего не сообщает, кроме знака, который и так
+    написан рядом цифрой.
     """
     if not tokens:
         return {}
-    step = max(1, sec // buckets)
     marks = ",".join("?" * len(tokens))
     try:
         rows = cur.execute(
-            f"SELECT t.token, "
-            f"MIN(CAST((t.timestamp - ?) / ? AS INTEGER), ?) b, "
-            f"SUM(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE -t.usd_nanos END) net "
+            f"SELECT t.token, t.timestamp ts, "
+            f"CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE -t.usd_nanos END net "
             f"FROM trades t WHERE t.timestamp >= ? AND t.usd_nanos BETWEEN ? AND ? "
-            f"AND t.token IN ({marks}) GROUP BY t.token, b",
-            (since, step, buckets - 1, since, MIN_TRADE_USD_NANOS, MAX_SPOT_USD_NANOS, *tokens),
+            f"AND t.token IN ({marks}) ORDER BY t.token, t.timestamp",
+            (since, MIN_TRADE_USD_NANOS, MAX_SPOT_USD_NANOS, *tokens),
         ).fetchall()
     except sqlite3.Error as e:
         sys.stderr.write(f"[api] flow series: {e}\n")
         return {}
 
-    per: dict[str, list[float]] = {}
+    per: dict[str, list[tuple[int, float]]] = {}
     for r in rows:
-        tok = r["token"] or ""
-        arr = per.setdefault(tok, [0.0] * buckets)
-        i = int(r["b"] or 0)
-        if 0 <= i < buckets:
-            arr[i] += usd(r["net"])
+        per.setdefault(r["token"] or "", []).append((int(r["ts"] or 0), usd(r["net"])))
 
     out: dict[str, list[float]] = {}
-    for tok, arr in per.items():
+    end = now()
+    for tok, pts in per.items():
+        if len(pts) < FLOW_MIN_TRADES:
+            continue
+        start = pts[0][0]
+        width = max(1, end - start)
+        step = max(1, width // buckets)
+        arr = [0.0] * buckets
+        for ts, v in pts:
+            i = min(buckets - 1, max(0, (ts - start) // step))
+            arr[i] += v
         acc, run = [], 0.0
         for v in arr:
             run += v
@@ -1423,12 +1433,8 @@ def load_flow(cur: sqlite3.Connection) -> dict:
                     "sp": [],
                 }
             )
-        # Сорок вместо двадцати: список и так прокручивается, а обрезка на
-        # двадцати прятала монеты, которые люди искали.
         coins = coins[:FLOW_ROWS]
-        series = flow_series(cur, [c["token"] for c in coins], tnow - sec, sec)
-        for c in coins:
-            c["sp"] = series.get(c["token"]) or []
+        flow_finish(cur, coins, tnow - sec, sec)
         by_win[key] = {
             "net": buy_t - sell_t,
             "coins": len(coins),
@@ -1464,7 +1470,31 @@ def load_flow(cur: sqlite3.Connection) -> dict:
 FLOW_WINDOWS = {"1": 3600, "6": 21600, "24": 86400, "168": 604800, "720": 2592000}
 
 
-def flow_search(cur: sqlite3.Connection, win: str, q: str, limit: int = 40) -> dict:
+def flow_finish(cur: sqlite3.Connection, rows: list[dict], since: int, sec: int) -> list[dict]:
+    """Логотипы, линии и различение одинаковых тикеров.
+
+    Под одним тикером на BSC живут разные контракты — копии популярных имён
+    делаются в два клика. Сгруппировано по адресу, поэтому в списке честно
+    оказываются две строки «幻想», и выглядит это как дубликат. Раз имена
+    совпадают, к повторам дописываем хвост адреса: он у контрактов
+    единственное, что действительно различается.
+    """
+    seen: dict[str, int] = {}
+    for r in rows:
+        seen[r["sym"]] = seen.get(r["sym"], 0) + 1
+    for r in rows:
+        tok = r.get("token") or ""
+        r["icon"] = coin_icon(r["sym"], tok)
+        if seen.get(r["sym"], 0) > 1 and len(tok) >= 42:
+            r["tag"] = tok[-4:]
+    series = flow_series(cur, [r.get("token") or "" for r in rows], since, sec)
+    for r in rows:
+        r["sp"] = series.get(r.get("token") or "") or []
+    return rows
+
+
+def flow_search(cur: sqlite3.Connection, win: str, q: str, limit: int = 40,
+                offset: int = 0) -> dict:
     """Поток денег по всем монетам окна, а не только по попавшим в выгрузку.
 
     В выгрузку кладётся сорок строк: держать там все монеты за тридцать дней
@@ -1480,6 +1510,7 @@ def flow_search(cur: sqlite3.Connection, win: str, q: str, limit: int = 40) -> d
         return {"rows": [], "total": 0}
     since = now() - sec
     limit = max(1, min(int(limit or 40), 100))
+    offset = max(0, min(int(offset or 0), 2000))
 
     needle = (q or "").strip().upper()
     tokens: list[str] | None = None
@@ -1521,8 +1552,8 @@ def flow_search(cur: sqlite3.Connection, win: str, q: str, limit: int = 40) -> d
             f"{ban}{where_tok}"
             "GROUP BY t.token "
             "ORDER BY ABS(SUM(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE -t.usd_nanos END)) DESC "
-            "LIMIT ?",
-            (*args, limit),
+            "LIMIT ? OFFSET ?",
+            (*args, limit, offset),
         ).fetchall()
     except sqlite3.Error as e:
         sys.stderr.write(f"[api] flow search: {e}\n")
@@ -1538,17 +1569,13 @@ def flow_search(cur: sqlite3.Connection, win: str, q: str, limit: int = 40) -> d
             "sym": sym,
             "token": r["token"],
             "addr": r["token"],
-            "icon": coin_icon(sym, r["token"]),
             "net": b - sl,
             "buy": b,
             "sell": sl,
             "w": int(r["w"] or 0),
             "sp": [],
         })
-    series = flow_series(cur, [c["token"] for c in out], since, sec)
-    for c in out:
-        c["sp"] = series.get(c["token"]) or []
-    return {"rows": out, "total": len(out)}
+    return {"rows": flow_finish(cur, out, since, sec), "total": len(out)}
 
 
 def _map_rank(arr, days: int, n: int = 100, offset: int = 0) -> list:
@@ -3229,12 +3256,16 @@ class Handler(BaseHTTPRequestHandler):
                     self._json(400, {"ok": False, "error": "bad_win"})
                     return
                 q = (qs.get("q", [""])[0] or "")[:32]
+                try:
+                    offset = int(qs.get("offset", ["0"])[0])
+                except (TypeError, ValueError):
+                    offset = 0
                 cur = open_db(DB)
                 if not cur:
                     self._json(200, {"ok": False, "error": "db"})
                     return
                 try:
-                    res = flow_search(cur, win, q)
+                    res = flow_search(cur, win, q, offset=offset)
                     self._json(200, {"ok": True, **res})
                 finally:
                     try:

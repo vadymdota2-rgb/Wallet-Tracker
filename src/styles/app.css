@@ -472,11 +472,25 @@
 .nf:active { border-color: rgb(127 216 255 / 0.35); background: rgb(11 22 40 / 0.42); }
 .nf-main { flex: 1 1 auto; min-width: 0; display: grid; gap: 4px; }
 .nf-ttl {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
   font-size: 15px;
   font-weight: 700;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+.nf-ttl > :first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Хвост адреса: тихо, моноширинно и явно не часть имени монеты. */
+.nf-tag {
+  flex: 0 0 auto;
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--dim-2);
+  padding: 1px 4px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
 }
 /* Подпись переносится, а не обрезается: на 360 пикселях «8 кошельков ·
    $86,6K · $21,5K» в строку не влезает, а обрывается там как раз сумма

@@ -14,7 +14,7 @@ import { ago } from "../lib/relative";
 import { fundingSideKey, isUpKind, levFromSide, tradeKind, tradeKindKey } from "../lib/labels";
 import { CoinIcon } from "../components/CoinIcon";
 import { BuySellBar, FlowSpark } from "../components/Chart";
-import { Card, Empty, Locked, Row, SectionTitle, Segmented, Skeleton } from "../components/ui";
+import { Action, Card, Empty, Locked, Row, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import { fetchBig, fetchFlow } from "../lib/api";
 import type { BigView, BigWin, FlowWin } from "../store/app";
 import type { FlowRow, TradeRow, Trades } from "../lib/types";
@@ -250,9 +250,15 @@ function FlowBody() {
 
   const query = raw.trim();
   const [found, setFound] = useState<FlowRow[] | null>(null);
+  const [extra, setExtra] = useState<FlowRow[]>([]);
+  const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    // Сменилось окно или запрос — прежние страницы к этому списку не имеют
+    // отношения.
+    setExtra([]);
+    setDone(false);
     if (!query) {
       setFound(null);
       setBusy(false);
@@ -261,7 +267,7 @@ function FlowBody() {
     const ctrl = new AbortController();
     setBusy(true);
     const timer = setTimeout(() => {
-      void fetchFlow(win, query, ctrl.signal).then((r) => {
+      void fetchFlow(win, query, 0, ctrl.signal).then((r) => {
         if (ctrl.signal.aborted) return;
         setFound(r?.ok ? r.rows ?? [] : []);
         setBusy(false);
@@ -274,7 +280,22 @@ function FlowBody() {
   }, [query, win]);
 
   const bucket = flow[win];
-  const rows: FlowRow[] = query ? found ?? [] : bucket?.rows ?? [];
+  const base: FlowRow[] = query ? found ?? [] : bucket?.rows ?? [];
+  const rows: FlowRow[] = [...base, ...extra];
+
+  /** Следующая страница монет окна: в выгрузке лежит только начало списка. */
+  const loadMore = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const r = await fetchFlow(win, query, rows.length);
+      const got = r?.ok ? r.rows ?? [] : [];
+      if (!got.length) setDone(true);
+      else setExtra((prev) => [...prev, ...got]);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   if (query && busy && found === null) return <Skeleton rows={3} />;
   if (!rows.length) {
@@ -305,7 +326,15 @@ function FlowBody() {
         >
           <CoinIcon sym={r.sym} icon={r.icon} size={32} />
           <span className="nf-main">
-            <span className="nf-ttl">{r.sym}</span>
+            <span className="nf-ttl">
+              {/* Имя отдельным элементом: во flex-строке обрезать многоточием
+                  можно только элемент, голый текст под правило не попадает. */}
+              <span>{r.sym}</span>
+              {/* Под одним тикером на BSC живут разные контракты: копии
+                  популярных имён делаются в два клика. Хвост адреса — то
+                  единственное, чем они честно различаются. */}
+              {r.tag ? <em className="nf-tag">{r.tag}</em> : null}
+            </span>
             <span className="nf-sub">
               {num(r.w)} {t(lang, "flow_wallets")} · <span className="up">{usd(r.buy)}</span>
               {" · "}
@@ -322,6 +351,11 @@ function FlowBody() {
           </span>
         </button>
       ))}
+      {!done ? (
+        <Action kind="ghost" disabled={busy} onClick={loadMore}>
+          {t(lang, "ui_show_more")}
+        </Action>
+      ) : null}
     </>
   );
 }

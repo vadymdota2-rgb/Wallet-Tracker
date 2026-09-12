@@ -74,8 +74,10 @@ export interface FlowCoin {
   sym: string;
   token?: string;
   addr?: string;
-  /** Кандидаты логотипа — приходят у строк поиска. */
+  /** Кандидаты логотипа. */
   icon?: string[];
+  /** Хвост адреса — дописывается, когда тикер в списке не один. */
+  tag?: string;
   net: number;
   buy: number;
   sell: number;
