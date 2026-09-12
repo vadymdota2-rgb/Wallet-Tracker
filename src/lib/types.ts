@@ -74,6 +74,8 @@ export interface FlowCoin {
   sym: string;
   token?: string;
   addr?: string;
+  /** Кандидаты логотипа — приходят у строк поиска. */
+  icon?: string[];
   net: number;
   buy: number;
   sell: number;
@@ -92,6 +94,12 @@ export interface FlowWindow {
   sell: number;
   rows: FlowCoin[];
 }
+
+/**
+ * Строка поиска по потоку. Те же поля, что у FlowCoin, но без показателей,
+ * которые считаются только для выгрузки.
+ */
+export type FlowRow = Omit<FlowCoin, "top" | "c1" | "c6" | "c24">;
 
 /** Ключи окна: часы. Сервер отдаёт "1" | "6" | "24" | "168" | "720". */
 export type Flow = Record<string, FlowWindow | undefined>;

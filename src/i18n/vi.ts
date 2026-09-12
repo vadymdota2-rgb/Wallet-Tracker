@@ -376,6 +376,8 @@ export const vi: Dict = {
   ui_show_more: "Xem thêm",
   ui_spot_open: "Mua trên BSC, vẫn đang giữ",
   ui_sync_failed: "Không thể làm mới",
+  ui_tab_funding: "Funding",
+  ui_tab_liq: "Thanh lý",
   ui_tf_15m: "15p",
   ui_tf_1d: "1N",
   ui_tf_1h: "1G",

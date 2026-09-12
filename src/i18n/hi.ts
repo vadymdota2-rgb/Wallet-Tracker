@@ -376,6 +376,8 @@ export const hi: Dict = {
   ui_show_more: "और दिखाएँ",
   ui_spot_open: "BSC खरीद, अब भी होल्ड",
   ui_sync_failed: "रिफ़्रेश नहीं हो सका",
+  ui_tab_funding: "फंडिंग",
+  ui_tab_liq: "परिसमापन",
   ui_tf_15m: "15मि",
   ui_tf_1d: "1दि",
   ui_tf_1h: "1घं",

@@ -826,5 +826,41 @@
     "ko": "청산",
     "zh": "强平",
     "ja": "清算"
+  },
+  "ui_tab_liq": {
+    "en": "Liquidations",
+    "ru": "Ликвидации",
+    "uk": "Ліквідації",
+    "es": "Liquidaciones",
+    "pt": "Liquidações",
+    "fr": "Liquidations",
+    "de": "Liquidationen",
+    "tr": "Tasfiyeler",
+    "pl": "Likwidacje",
+    "ar": "التصفيات",
+    "hi": "परिसमापन",
+    "id": "Likuidasi",
+    "vi": "Thanh lý",
+    "ko": "청산",
+    "zh": "强平",
+    "ja": "清算"
+  },
+  "ui_tab_funding": {
+    "en": "Funding",
+    "ru": "Фандинг",
+    "uk": "Фандинг",
+    "es": "Funding",
+    "pt": "Funding",
+    "fr": "Funding",
+    "de": "Funding",
+    "tr": "Funding",
+    "pl": "Funding",
+    "ar": "التمويل",
+    "hi": "फंडिंग",
+    "id": "Funding",
+    "vi": "Funding",
+    "ko": "펀딩",
+    "zh": "资金费",
+    "ja": "ファンディング"
   }
 }

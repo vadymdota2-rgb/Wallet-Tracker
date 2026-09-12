@@ -211,6 +211,58 @@ export function Spark({ values, width = 56, height = 20 }: { values: number[]; w
 }
 
 /**
+ * Линия накопленного потока денег.
+ *
+ * Отличается от Spark двумя вещами, и обе важны. Цвет берётся от конечного
+ * значения, а не от «последняя точка выше первой»: рядом стоит итоговая
+ * сумма, и линия обязана согласовываться именно с ней. И рисуется нулевая
+ * ось — без неё не видно, ушёл ли поток в минус или просто замедлился.
+ */
+export function FlowSpark({
+  values,
+  width = 64,
+  height = 26,
+}: {
+  values: number[];
+  width?: number;
+  height?: number;
+}) {
+  const gid = useId();
+  const vals = (values || []).filter((v) => Number.isFinite(v));
+  if (vals.length < 2) return <span className="spark-gap" style={{ width, height }} />;
+
+  const last = vals[vals.length - 1] ?? 0;
+  const up = last >= 0;
+  // Ноль всегда внутри поля: иначе ось уезжала бы за край и линия
+  // «полностью в плюсе» выглядела бы так же, как «полностью в минусе».
+  const hi = Math.max(0, ...vals);
+  const lo = Math.min(0, ...vals);
+  const span = hi - lo || 1;
+  const pad = 2;
+  const y = (v: number) => pad + (1 - (v - lo) / span) * (height - pad * 2);
+  const stepX = width / (vals.length - 1);
+  const pts = vals.map((v, i) => `${(i * stepX).toFixed(1)},${y(v).toFixed(1)}`);
+  const zero = y(0);
+
+  return (
+    <svg className="spark" width={width} height={height} viewBox={`0 0 ${width} ${height}`}
+         role="img" aria-hidden="true">
+      <defs>
+        <linearGradient id={gid} x1="0" y1={up ? 0 : height} x2="0" y2={up ? height : 0}
+                        gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor={up ? "var(--up)" : "var(--dn)"} stopOpacity="0.30" />
+          <stop offset="1" stopColor={up ? "var(--up)" : "var(--dn)"} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={`M0,${zero.toFixed(1)}H${width}`} stroke="var(--line)" strokeWidth="1" fill="none" />
+      <path d={`M${pts.join("L")}L${width},${zero.toFixed(1)}L0,${zero.toFixed(1)}Z`} fill={`url(#${gid})`} />
+      <path d={`M${pts.join("L")}`} fill="none" strokeWidth="1.6"
+            stroke={up ? "var(--up)" : "var(--dn)"} strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/**
  * Полоса покупок против продаж. Ноль сделок — полосы нет вовсе, а не деления
  * на ноль: прошлая версия в этом месте показывала NaN и пропадала.
  */

@@ -376,6 +376,8 @@ export const zh: Dict = {
   ui_show_more: "显示更多",
   ui_spot_open: "BSC 买入，仍在持有",
   ui_sync_failed: "刷新失败",
+  ui_tab_funding: "资金费",
+  ui_tab_liq: "强平",
   ui_tf_15m: "15分",
   ui_tf_1d: "1天",
   ui_tf_1h: "1小时",

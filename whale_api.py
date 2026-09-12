@@ -615,6 +615,10 @@ def ts_sec(ts) -> int:
 
 
 MAX_SPOT_USD_NANOS = 10_000_000_000_000_000
+# Сколько монет уходит в общую выгрузку. Остальные достаются поиском.
+FLOW_ROWS = 40
+# Сколько строк вообще поднимаем из базы под выгрузку.
+FLOW_SCAN = 200
 # Нижняя граница — та же, что в saveTrade бота: $50.
 MIN_TRADE_USD_NANOS = 50_000_000_000
 HL_MIN_CLOSED = 5
@@ -628,10 +632,55 @@ DIR_CLOSE_LONG, DIR_CLOSE_SHORT, DIR_FLIP = 3, 4, 5
 DIR_LIQ_LONG, DIR_LIQ_SHORT, DIR_LIQ_OTHER = 6, 7, 8
 
 
-def spark(net: float) -> list[int]:
-    base = 50
-    step = 3 if net >= 0 else -3
-    return [max(8, min(92, base + step * i + (i % 3))) for i in range(12)]
+FLOW_BUCKETS = 12
+
+
+def flow_series(cur: sqlite3.Connection, tokens: list[str], since: int,
+                sec: int, buckets: int = FLOW_BUCKETS) -> dict[str, list[float]]:
+    """Накопленный поток денег по каждому токену внутри окна.
+
+    Именно накопленный, а не поокошный: линия тогда заканчивается ровно там,
+    где стоит итоговое число, и её направление уже не может ему противоречить.
+
+    Раньше здесь стояла выдуманная зигзагообразная линия от знака итога, а
+    поверх неё сервис цен подставлял историю ЦЕНЫ монеты. Рядом с числом
+    «приток денег» рисовался график цены: у монеты, которую киты набирали на
+    падении, число было зелёным, а кривая красной — и это выглядело ошибкой,
+    хотя оба значения были верны. Две разные величины в одной строке.
+    """
+    if not tokens:
+        return {}
+    step = max(1, sec // buckets)
+    marks = ",".join("?" * len(tokens))
+    try:
+        rows = cur.execute(
+            f"SELECT t.token, "
+            f"MIN(CAST((t.timestamp - ?) / ? AS INTEGER), ?) b, "
+            f"SUM(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE -t.usd_nanos END) net "
+            f"FROM trades t WHERE t.timestamp >= ? AND t.usd_nanos BETWEEN ? AND ? "
+            f"AND t.token IN ({marks}) GROUP BY t.token, b",
+            (since, step, buckets - 1, since, MIN_TRADE_USD_NANOS, MAX_SPOT_USD_NANOS, *tokens),
+        ).fetchall()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] flow series: {e}\n")
+        return {}
+
+    per: dict[str, list[float]] = {}
+    for r in rows:
+        tok = r["token"] or ""
+        arr = per.setdefault(tok, [0.0] * buckets)
+        i = int(r["b"] or 0)
+        if 0 <= i < buckets:
+            arr[i] += usd(r["net"])
+
+    out: dict[str, list[float]] = {}
+    for tok, arr in per.items():
+        acc, run = [], 0.0
+        for v in arr:
+            run += v
+            acc.append(round(run, 2))
+        out[tok] = acc
+    return out
 
 
 PX_FLOOR = {
@@ -1336,15 +1385,17 @@ def load_flow(cur: sqlite3.Connection) -> dict:
         "SUM(CASE WHEN t.is_buy=0 THEN t.usd_nanos ELSE 0 END) sell, "
         "COUNT(DISTINCT t.wallet) w "
         "FROM trades t "
-        "WHERE t.timestamp >= ? AND t.usd_nanos > 0 AND t.usd_nanos <= ? "
+        # Те же границы, что у рейтинга и у истории сделок: иначе линия,
+        # посчитанная с отсевом пыли, не сходилась бы с числом рядом.
+        "WHERE t.timestamp >= ? AND t.usd_nanos BETWEEN ? AND ? "
         f"{ban}"
         "GROUP BY t.token "
         "ORDER BY ABS(SUM(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE -t.usd_nanos END)) DESC "
-        "LIMIT 80"
     )
     by_win = {}
     for key, sec in windows:
-        rows = cur.execute(sql, (tnow - sec, MAX_SPOT_USD_NANOS)).fetchall()
+        rows = cur.execute(sql + "LIMIT ?",
+                           (tnow - sec, MIN_TRADE_USD_NANOS, MAX_SPOT_USD_NANOS, FLOW_SCAN)).fetchall()
         coins = []
         buy_t = sell_t = 0.0
         for r in rows:
@@ -1366,10 +1417,15 @@ def load_flow(cur: sqlite3.Connection) -> dict:
                     "c1": 0,
                     "c6": 0,
                     "c24": 0,
-                    "sp": spark(b - s),
+                    "sp": [],
                 }
             )
-        coins = coins[:20]
+        # Сорок вместо двадцати: список и так прокручивается, а обрезка на
+        # двадцати прятала монеты, которые люди искали.
+        coins = coins[:FLOW_ROWS]
+        series = flow_series(cur, [c["token"] for c in coins], tnow - sec, sec)
+        for c in coins:
+            c["sp"] = series.get(c["token"]) or []
         by_win[key] = {
             "net": buy_t - sell_t,
             "coins": len(coins),
@@ -1393,13 +1449,103 @@ def load_flow(cur: sqlite3.Connection) -> dict:
                 continue
             if pack.get("addr"):
                 r["addr"] = pack["addr"]
-            if pack.get("spark"):
-                r["sp"] = pack["spark"]
+            # pack["spark"] — история ЦЕНЫ. В потоке денег ей не место:
+            # линия рядом с числом обязана показывать то же самое, что число.
             if pack.get("c1") or pack.get("c24"):
                 r["c1"] = pack.get("c1") or r["c1"]
                 r["c6"] = pack.get("c6") or r["c6"]
                 r["c24"] = pack.get("c24") or r["c24"]
     return by_win
+
+
+FLOW_WINDOWS = {"1": 3600, "6": 21600, "24": 86400, "168": 604800, "720": 2592000}
+
+
+def flow_search(cur: sqlite3.Connection, win: str, q: str, limit: int = 40) -> dict:
+    """Поток денег по всем монетам окна, а не только по попавшим в выгрузку.
+
+    В выгрузку кладётся сорок строк: держать там все монеты за тридцать дней
+    — это тысячи записей с рядами при каждом запуске. Но искать человек
+    хочет среди всех, поэтому поиск идёт в базу.
+
+    Фильтр по тикеру, а тикер лежит в token_cache: сначала находим адреса,
+    потом считаем поток только по ним. Обратный порядок — посчитать всё и
+    отфильтровать — заставлял бы суммировать месяц сделок ради одной монеты.
+    """
+    sec = FLOW_WINDOWS.get(win)
+    if not sec or not table_exists(cur, "trades"):
+        return {"rows": [], "total": 0}
+    since = now() - sec
+    limit = max(1, min(int(limit or 40), 100))
+
+    needle = (q or "").strip().upper()
+    tokens: list[str] | None = None
+    if needle:
+        if not table_exists(cur, "token_cache"):
+            return {"rows": [], "total": 0}
+        try:
+            tokens = [
+                r["address"] for r in cur.execute(
+                    "SELECT address FROM token_cache WHERE upper(symbol) LIKE ? LIMIT 400",
+                    (f"%{needle}%",),
+                ).fetchall()
+            ]
+        except sqlite3.Error as e:
+            sys.stderr.write(f"[api] flow search: {e}\n")
+            return {"rows": [], "total": 0}
+        if not tokens:
+            return {"rows": [], "total": 0}
+
+    ban = (
+        "AND NOT EXISTS (SELECT 1 FROM ignored_wallets iw "
+        "WHERE iw.wallet = t.wallet AND iw.permanent = 1) "
+        if table_exists(cur, "ignored_wallets")
+        else ""
+    )
+    where_tok = ""
+    args: list = [since, MIN_TRADE_USD_NANOS, MAX_SPOT_USD_NANOS]
+    if tokens is not None:
+        where_tok = f"AND t.token IN ({','.join('?' * len(tokens))}) "
+        args += tokens
+    try:
+        rows = cur.execute(
+            "SELECT t.token, "
+            "SUM(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE 0 END) buy, "
+            "SUM(CASE WHEN t.is_buy=0 THEN t.usd_nanos ELSE 0 END) sell, "
+            "COUNT(DISTINCT t.wallet) w "
+            "FROM trades t "
+            "WHERE t.timestamp >= ? AND t.usd_nanos BETWEEN ? AND ? "
+            f"{ban}{where_tok}"
+            "GROUP BY t.token "
+            "ORDER BY ABS(SUM(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE -t.usd_nanos END)) DESC "
+            "LIMIT ?",
+            (*args, limit),
+        ).fetchall()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] flow search: {e}\n")
+        return {"rows": [], "total": 0}
+
+    out = []
+    for r in rows:
+        sym = symbol_of(cur, r["token"])
+        if not sym:
+            continue
+        b, sl = usd(r["buy"]), usd(r["sell"])
+        out.append({
+            "sym": sym,
+            "token": r["token"],
+            "addr": r["token"],
+            "icon": coin_icon(sym, r["token"]),
+            "net": b - sl,
+            "buy": b,
+            "sell": sl,
+            "w": int(r["w"] or 0),
+            "sp": [],
+        })
+    series = flow_series(cur, [c["token"] for c in out], since, sec)
+    for c in out:
+        c["sp"] = series.get(c["token"]) or []
+    return {"rows": out, "total": len(out)}
 
 
 def _map_rank(arr, days: int, n: int = 100, offset: int = 0) -> list:
@@ -2500,7 +2646,10 @@ def load_coins(cur: sqlite3.Connection, hl: sqlite3.Connection | None, flow: dic
         pack = price_pack(cur, hl, sym, r24.get("token") or r.get("token") or r.get("addr") or "", http=True)
         if not pack.get("hists") or not _px_ok(sym, pack.get("price") or 0):
             need_http.append(sym)
-        hist24 = (pack.get("hists") or {}).get("24h") or pack.get("spark") or r.get("sp") or spark(r24.get("net") or 0)
+        # Последним звеном стоял генератор выдуманной линии от знака потока.
+        # Его больше нет: нет точек — нет графика, экран скажет об этом
+        # словами. Рисовать зигзаг, похожий на данные, хуже, чем не рисовать.
+        hist24 = (pack.get("hists") or {}).get("24h") or pack.get("spark") or r.get("sp") or []
         ww = int(r24.get("w") or r.get("w") or 0)
         wsum = 0.0
         wtot = 0.0
@@ -3070,6 +3219,25 @@ class Handler(BaseHTTPRequestHandler):
                             hl.close()
                         except Exception:
                             pass
+                return
+            if path in ("/flow", "/api/flow"):
+                win = (qs.get("win", ["24"])[0] or "24").strip()
+                if win not in FLOW_WINDOWS:
+                    self._json(400, {"ok": False, "error": "bad_win"})
+                    return
+                q = (qs.get("q", [""])[0] or "")[:32]
+                cur = open_db(DB)
+                if not cur:
+                    self._json(200, {"ok": False, "error": "db"})
+                    return
+                try:
+                    res = flow_search(cur, win, q)
+                    self._json(200, {"ok": True, **res})
+                finally:
+                    try:
+                        cur.close()
+                    except Exception:
+                        pass
                 return
             if path in ("/deals", "/api/deals"):
                 a = (qs.get("addr", [""])[0] or "").strip().lower()

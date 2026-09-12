@@ -376,6 +376,8 @@ export const ja: Dict = {
   ui_show_more: "もっと見る",
   ui_spot_open: "BSCの買い、保有中",
   ui_sync_failed: "更新できませんでした",
+  ui_tab_funding: "ファンディング",
+  ui_tab_liq: "清算",
   ui_tf_15m: "15分",
   ui_tf_1d: "1日",
   ui_tf_1h: "1時間",

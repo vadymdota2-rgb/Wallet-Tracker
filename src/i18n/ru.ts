@@ -376,6 +376,8 @@ export const ru: Dict = {
   ui_show_more: "Показать ещё",
   ui_spot_open: "Покупки на BSC, ещё не проданы",
   ui_sync_failed: "Не удалось обновить",
+  ui_tab_funding: "Фандинг",
+  ui_tab_liq: "Ликвидации",
   ui_tf_15m: "15м",
   ui_tf_1d: "1Д",
   ui_tf_1h: "1Ч",

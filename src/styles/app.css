@@ -455,6 +455,49 @@
 .tile small { color: var(--dim-2); font-size: 11px; letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tile b { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* Строка NetFlow -------------------------------------------------------- */
+.nf {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: rgb(11 22 40 / 0.23);
+  border: 1px solid transparent;
+  text-align: start;
+  transition: border-color 0.18s var(--ease), background 0.18s var(--ease);
+}
+.nf + .nf { margin-top: 7px; }
+.nf:active { border-color: rgb(127 216 255 / 0.35); background: rgb(11 22 40 / 0.42); }
+.nf-main { flex: 1 1 auto; min-width: 0; display: grid; gap: 4px; }
+.nf-ttl {
+  font-size: 15px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Подпись переносится, а не обрезается: на 360 пикселях «8 кошельков ·
+   $86,6K · $21,5K» в строку не влезает, а обрывается там как раз сумма
+   продаж — половина смысла. */
+.nf-sub {
+  font-size: 11.5px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+}
+/* Число и линия в столбик: линия показывает путь, число — итог, и стоять им
+   надо одно под другим, а не в строку, где число уезжает за край. */
+.nf-val {
+  flex: 0 0 auto;
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.nf-val b { font-size: 15px; font-weight: 700; }
+
 /* Строка завершённой сделки --------------------------------------------- */
 .deal {
   display: flex;

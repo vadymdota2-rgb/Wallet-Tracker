@@ -376,6 +376,8 @@ export const tr: Dict = {
   ui_show_more: "Daha fazla göster",
   ui_spot_open: "BSC alımları, hâlâ elde",
   ui_sync_failed: "Yenilenemedi",
+  ui_tab_funding: "Funding",
+  ui_tab_liq: "Tasfiyeler",
   ui_tf_15m: "15D",
   ui_tf_1d: "1G",
   ui_tf_1h: "1S",

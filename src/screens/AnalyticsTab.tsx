@@ -7,15 +7,17 @@ import { useEffect, useState } from "react";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import { t } from "../i18n/t";
+import type { DictKey } from "../i18n";
+import { venueName } from "../lib/rank";
 import { num, pct, signed, usd } from "../lib/format";
 import { ago } from "../lib/relative";
 import { fundingSideKey, isUpKind, levFromSide, tradeKind, tradeKindKey } from "../lib/labels";
 import { CoinIcon } from "../components/CoinIcon";
-import { Spark } from "../components/Chart";
+import { BuySellBar, FlowSpark } from "../components/Chart";
 import { Card, Empty, Locked, Row, SectionTitle, Segmented, Skeleton } from "../components/ui";
-import { fetchBig } from "../lib/api";
+import { fetchBig, fetchFlow } from "../lib/api";
 import type { BigView, BigWin, FlowWin } from "../store/app";
-import type { TradeRow, Trades } from "../lib/types";
+import type { FlowRow, TradeRow, Trades } from "../lib/types";
 
 const FLOW_WINS: { id: FlowWin; key: Parameters<typeof t>[1] }[] = [
   { id: "1", key: "ai_w1h" },
@@ -32,13 +34,21 @@ const BIG_WINS: { id: BigWin; key: Parameters<typeof t>[1] }[] = [
   { id: "30d", key: "big_win_30d" },
 ];
 
-const VIEWS: { id: BigView; key: Parameters<typeof t>[1] }[] = [
-  { id: "flow", key: "flow_btn" },
-  { id: "spot", key: "big_btn_spot" },
-  { id: "perp", key: "big_btn_perp" },
-  { id: "liq", key: "big_btn_liq" },
-  { id: "fund", key: "fund_btn" },
-  { id: "rot", key: "ui_rotation" },
+/**
+ * Подписи разделов — короткие.
+ *
+ * Полные («🟡 Крупнейшие покупки / продажи», «💢 Перекос фандинга») в ряд не
+ * помещались: шесть таких уезжали за край, а прокрутку внутри полосы никто
+ * не ищет. Подсказка над рядом и так говорит «выберите площадку», поэтому у
+ * спота и фьючерсов стоят их имена, а не пересказ содержимого.
+ */
+const VIEWS: { id: BigView; label: (t: (k: DictKey) => string) => string }[] = [
+  { id: "flow", label: () => "NetFlow" },
+  { id: "spot", label: () => venueName("spot") },
+  { id: "perp", label: () => venueName("perp") },
+  { id: "liq", label: (tr) => tr("ui_tab_liq") },
+  { id: "fund", label: (tr) => tr("ui_tab_funding") },
+  { id: "rot", label: (tr) => tr("ui_rotation") },
 ];
 
 function TradeList({ rows, empty }: { rows: TradeRow[]; empty: string }) {
@@ -129,7 +139,7 @@ export function AnalyticsTab() {
         <Segmented<BigView>
           value={view}
           onChange={setView}
-          options={VIEWS.map((v) => ({ id: v.id, label: t(lang, v.key) }))}
+          options={VIEWS.map((v) => ({ id: v.id, label: v.label((k) => t(lang, k)) }))}
         />
         {showWindows ? (
           <Segmented<BigWin>
@@ -142,7 +152,10 @@ export function AnalyticsTab() {
 
       {view === "flow" ? (
         <Card>
-          <SectionTitle note={t(lang, "flow_hint")}>{t(lang, "flow_title")}</SectionTitle>
+          {/* NetFlow — термин, он одинаков во всех языках, как PnL и ROI.
+              Прежнее «Что покупают киты» описывало только половину: при
+              оттоке киты как раз продают. */}
+          <SectionTitle note={t(lang, "flow_hint")}>NetFlow</SectionTitle>
           <Segmented<FlowWin>
             value={flowWin}
             onChange={setFlowWin}
@@ -217,44 +230,87 @@ export function AnalyticsTab() {
   );
 }
 
+/**
+ * Поток денег по монетам.
+ *
+ * Список из выгрузки — сорок монет с наибольшим потоком. Как только человек
+ * начинает искать, запрос уходит на сервер: искать среди сорока, когда в
+ * базе тысячи, значит не найти. Задержка в четверть секунды — чтобы не
+ * слать запрос на каждую букву.
+ */
 function FlowBody() {
   const lang = useApp((s) => s.lang);
   const open = useApp((s) => s.open);
   const win = useApp((s) => s.flowWin);
-  const query = useApp((s) => s.flowQuery).trim().toUpperCase();
+  const raw = useApp((s) => s.flowQuery);
   const flow = useLive((s) => s.flow);
 
-  const bucket = flow[win];
-  if (!bucket) return <Empty text={t(lang, "flow_empty")} />;
+  const query = raw.trim();
+  const [found, setFound] = useState<FlowRow[] | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const rows = query ? bucket.rows.filter((r) => r.sym.toUpperCase().includes(query)) : bucket.rows;
+  useEffect(() => {
+    if (!query) {
+      setFound(null);
+      setBusy(false);
+      return;
+    }
+    const ctrl = new AbortController();
+    setBusy(true);
+    const timer = setTimeout(() => {
+      void fetchFlow(win, query, ctrl.signal).then((r) => {
+        if (ctrl.signal.aborted) return;
+        setFound(r?.ok ? r.rows ?? [] : []);
+        setBusy(false);
+      });
+    }, 250);
+    return () => {
+      clearTimeout(timer);
+      ctrl.abort();
+    };
+  }, [query, win]);
+
+  const bucket = flow[win];
+  const rows: FlowRow[] = query ? found ?? [] : bucket?.rows ?? [];
+
+  if (query && busy && found === null) return <Skeleton rows={3} />;
   if (!rows.length) {
     return <Empty text={query ? t(lang, "flow_search_none") : t(lang, "flow_empty")} />;
   }
 
   return (
     <>
-      <p className="flow-sum">
-        <span className={bucket.net >= 0 ? "up" : "dn"}>{signed(bucket.net)}</span>
-        <small>
-          {num(bucket.coins)} {t(lang, "flow_coins")}
-        </small>
-      </p>
+      {/* Итог по окну — только для полного списка. При поиске он относился бы
+          ко всему окну, а на экране стояли бы две монеты: число и список
+          спорили бы друг с другом. */}
+      {!query && bucket ? (
+        <p className="flow-sum">
+          <span className={bucket.net >= 0 ? "up" : "dn"}>{signed(bucket.net)}</span>
+          <small>
+            {num(bucket.coins)} {t(lang, "flow_coins")}
+          </small>
+        </p>
+      ) : null}
       {rows.map((r) => (
-        <Row
-          key={r.sym}
-          icon={<CoinIcon sym={r.sym} size={30} />}
-          title={r.sym}
-          sub={
-            <>
-              {num(r.w)} {t(lang, "flow_wallets")} · <span className="up">{usd(r.buy)}</span> ·{" "}
+        <button type="button" className="nf" key={r.sym} onClick={() => open("coin", r.sym)}>
+          <CoinIcon sym={r.sym} icon={r.icon} size={32} />
+          <span className="nf-main">
+            <span className="nf-ttl">{r.sym}</span>
+            <span className="nf-sub">
+              {num(r.w)} {t(lang, "flow_wallets")} · <span className="up">{usd(r.buy)}</span>
+              {" · "}
               <span className="dn">{usd(r.sell)}</span>
-            </>
-          }
-          value={<><Spark values={r.sp} /> {signed(r.net)}</>}
-          tone={r.net >= 0 ? "up" : "dn"}
-          onClick={() => open("coin", r.sym)}
-        />
+            </span>
+            {/* Доля покупок в обороте: число говорит «сколько», полоса —
+                «насколько односторонне». Приток в $1K при обороте $1K и при
+                обороте $1M — разные новости. */}
+            <BuySellBar buy={r.buy} sell={r.sell} />
+          </span>
+          <span className="nf-val">
+            <FlowSpark values={r.sp} />
+            <b className={r.net >= 0 ? "up" : "dn"}>{signed(r.net)}</b>
+          </span>
+        </button>
       ))}
     </>
   );

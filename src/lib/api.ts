@@ -6,7 +6,7 @@
  * когда принимал — по одному номеру в адресе открывался чужой аккаунт.
  */
 import { initData } from "./telegram";
-import type { Bootstrap, Deal, MutationResult, TokenHist, Trades, WalletLive } from "./types";
+import type { Bootstrap, Deal, FlowRow, MutationResult, TokenHist, Trades, WalletLive } from "./types";
 
 const TIMEOUT_MS = 15000;
 
@@ -95,6 +95,19 @@ export const renameWallet = (addr: string, name: string) =>
 
 export const setThreshold = (usd: number) =>
   call<MutationResult>("/api/threshold", { method: "POST", body: { usd } });
+
+/**
+ * Поток денег по всем монетам окна, а не только по попавшим в выгрузку.
+ *
+ * В выгрузке лежат сорок монет: держать там все за тридцать дней — это
+ * тысячи записей с рядами при каждом запуске. Искать человек хочет среди
+ * всех, поэтому поиск уходит на сервер.
+ */
+export const fetchFlow = (win: string, q: string, signal?: AbortSignal) =>
+  call<{ ok?: boolean; rows?: FlowRow[]; total?: number }>(
+    `/api/flow?win=${encodeURIComponent(win)}&q=${encodeURIComponent(q)}`,
+    { signal },
+  );
 
 /**
  * Последние сделки кошелька из рейтинга.

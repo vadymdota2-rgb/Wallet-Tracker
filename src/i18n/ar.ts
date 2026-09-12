@@ -376,6 +376,8 @@ export const ar: Dict = {
   ui_show_more: "عرض المزيد",
   ui_spot_open: "مشتريات BSC، ما زالت محتفظًا بها",
   ui_sync_failed: "تعذّر التحديث",
+  ui_tab_funding: "التمويل",
+  ui_tab_liq: "التصفيات",
   ui_tf_15m: "15د",
   ui_tf_1d: "1ي",
   ui_tf_1h: "1س",
