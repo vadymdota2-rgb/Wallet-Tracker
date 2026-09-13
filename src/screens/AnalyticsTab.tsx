@@ -16,7 +16,8 @@ import { fundingSideKey, isUpKind, levFromSide, tradeKind, tradeKindKey } from "
 import { CoinIcon } from "../components/CoinIcon";
 import { BuySellBar, FlowSpark, TrendChart } from "../components/Chart";
 import {
-  Card, Empty, Locked, Row, SectionTitle, Segmented, Skeleton, TileNav, VenueMark,
+  Card, Empty, Locked, NetFlowGlyph, Row, SectionTitle, Segmented, Skeleton, TileNav,
+  VenueMark,
 } from "../components/ui";
 import { fetchBig, fetchFlow } from "../lib/api";
 import type { BigView, BigWin, FlowWin } from "../store/app";
@@ -59,7 +60,7 @@ const BIG_WINS: { id: BigWin; key: Parameters<typeof t>[1] }[] = [
    разделов площадок это не картинка по смыслу, а их собственные логотипы —
    по ним площадка узнаётся раньше, чем прочитано название. */
 const VIEWS: { id: BigView; ic: ReactNode; label: (t: (k: DictKey) => string) => string }[] = [
-  { id: "flow", ic: "🌊", label: () => "NetFlow" },
+  { id: "flow", ic: <NetFlowGlyph size={22} />, label: () => "NetFlow" },
   { id: "spot", ic: <VenueMark venue="spot" size={20} />, label: () => venueName("spot") },
   { id: "perp", ic: <VenueMark venue="perp" size={20} />, label: () => venueName("perp") },
   { id: "liq", ic: "💥", label: (tr) => tr("ui_tab_liq") },

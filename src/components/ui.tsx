@@ -248,6 +248,41 @@ export function TileNav<T extends string>({
   );
 }
 
+/**
+ * Знак NetFlow.
+ *
+ * Не значок «поток» вообще, а картинка самого раздела: линия накопленного
+ * потока переходит через ось нуля — снизу красным, сверху зелёным, — и
+ * заканчивается стрелкой. То же самое человек видит внутри, в тренде рынка,
+ * поэтому знак и раздел узнаются друг по другу.
+ *
+ * Пары встречных стрелок (↑↓) и кольца из стрелок сознательно нет: первая
+ * означает перевод, второе — ротацию, и оба уже заняты соседними плитками.
+ *
+ * Ось рисуется currentColor, а не своим цветом: на выбранной плитке фон
+ * синий, и постоянный серо-синий на нём пропадал. Кривая цвета не меняет —
+ * красное и зелёное здесь значат то же, что во всём приложении.
+ */
+export function NetFlowGlyph({ size = 22 }: { size?: number }) {
+  return (
+    <svg
+      className="glyph nf-mark"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M1.6 12.5h20.8" stroke="currentColor" strokeWidth="1.5" opacity="0.5" />
+      <path d="M2.2 20C5.6 20 6 12.5 9.4 12.5" stroke="var(--dn)" strokeWidth="2.8" />
+      <path d="M9.4 12.5c4 0 3.4-7 9.6-8.4" stroke="var(--up)" strokeWidth="2.8" />
+      <path d="M14.4 3.1h5.2v5.2" stroke="var(--up)" strokeWidth="2.8" />
+    </svg>
+  );
+}
+
 export function VenueMark({ venue, size = 15 }: { venue: "spot" | "perp"; size?: number }) {
   return (
     <img
