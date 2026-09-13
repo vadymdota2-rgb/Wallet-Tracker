@@ -168,6 +168,7 @@ export function AnalyticsTab() {
               Прежнее «Что покупают киты» описывало только половину: при
               оттоке киты как раз продают. */}
           <SectionTitle note={t(lang, "flow_hint")}>NetFlow</SectionTitle>
+          <FlowTrend />
           <Segmented<FlowWin>
             value={flowWin}
             onChange={setFlowWin}
@@ -250,6 +251,53 @@ export function AnalyticsTab() {
   );
 }
 
+/**
+ * Сводка по всему окну: куда движется рынок целиком.
+ *
+ * Стоит первой, до выбора окна и фильтра, потому что отвечает на вопрос,
+ * который возникает раньше всех остальных: покупают сейчас или продают.
+ * Списку монет она не подчиняется — ни фильтр, ни поиск её не меняют, иначе
+ * на пустом фильтре пропала бы и причина, по которой он пуст.
+ */
+function FlowTrend() {
+  const lang = useApp((s) => s.lang);
+  const win = useApp((s) => s.flowWin);
+  const bucket = useLive((s) => s.flow)[win];
+  if (!bucket) return null;
+
+  return (
+    <div className="trend">
+      <p className="trend-ttl">
+        <span>
+          {t(lang, "flow_trend")} ·{" "}
+          {t(lang, FLOW_WINS.find((w) => w.id === win)?.key ?? "big_win_24h")}
+        </span>
+        <span>
+          {num(bucket.coins)} {t(lang, "flow_coins")}
+        </span>
+      </p>
+      <p className="trend-top">
+        <b className={bucket.net >= 0 ? "up" : "dn"}>{signed(bucket.net)}</b>
+        <small>
+          <span className="up">{usd(bucket.buy)}</span>
+          {" · "}
+          <span className="dn">{usd(bucket.sell)}</span>
+        </small>
+      </p>
+      <TrendChart values={bucket.tr ?? []} />
+      {/* Ширина рынка: общий итог может держаться на одной крупной монете,
+          пока продают почти всё остальное. Счёт монет — единственное, что
+          эту разницу показывает. */}
+      <BuySellBar buy={bucket.up ?? 0} sell={bucket.dn ?? 0} />
+      <p className="trend-br">
+        <span className="up">{num(bucket.up ?? 0)} {t(lang, "flow_in_coins")}</span>
+        <span className="dn">{num(bucket.dn ?? 0)} {t(lang, "flow_out_coins")}</span>
+      </p>
+    </div>
+  );
+}
+
+
 /** Сколько монет на странице. То же число, что сервер кладёт в выгрузку. */
 const FLOW_PAGE = 40;
 
@@ -320,53 +368,13 @@ function FlowBody() {
     setPage(to);
   };
 
-  /* Тренд рынка стоит над списком и не зависит ни от фильтра, ни от поиска:
-     это сводка по всему окну. Убирать его вместе со списком нельзя — тогда
-     на пустом фильтре исчезала бы и причина, по которой фильтр пуст. */
-  const head = !query && bucket ? (
-    <div className="trend">
-      <p className="trend-ttl">{t(lang, "flow_trend")}</p>
-      <p className="trend-top">
-        <b className={bucket.net >= 0 ? "up" : "dn"}>{signed(bucket.net)}</b>
-        <small>
-          {num(bucket.coins)} {t(lang, "flow_coins")}
-        </small>
-      </p>
-      <TrendChart values={bucket.tr ?? []} />
-      <p className="trend-ax">
-        <span>{t(lang, FLOW_WINS.find((w) => w.id === win)?.key ?? "big_win_24h")}</span>
-        <span>{t(lang, "flow_now")}</span>
-      </p>
-      {/* Ширина рынка: общий итог может держаться на одной крупной монете,
-          пока продают почти всё остальное. Счёт монет — единственное, что
-          эту разницу показывает. */}
-      <p className="trend-br">
-        <span className="up">{num(bucket.up ?? 0)} {t(lang, "flow_in_coins")}</span>
-        <span className="dn">{num(bucket.dn ?? 0)} {t(lang, "flow_out_coins")}</span>
-      </p>
-      <BuySellBar buy={bucket.up ?? 0} sell={bucket.dn ?? 0} />
-      <p className="trend-sum">
-        <span className="up">{usd(bucket.buy)}</span> {t(lang, "flow_total_buys")}
-        {" · "}
-        <span className="dn">{usd(bucket.sell)}</span> {t(lang, "flow_total_sells")}
-      </p>
-    </div>
-  ) : null;
-
-  if (busy && !shown.length) return <>{head}<Skeleton rows={3} /></>;
+  if (busy && !shown.length) return <Skeleton rows={3} />;
   if (!shown.length) {
-    return (
-      <>
-        {head}
-        <Empty text={query || side !== "all" ? t(lang, "flow_search_none") : t(lang, "flow_empty")} />
-      </>
-    );
+    return <Empty text={query || side !== "all" ? t(lang, "flow_search_none") : t(lang, "flow_empty")} />;
   }
 
   return (
     <>
-      {head}
-
       {shown.map((r) => (
         <button
           type="button"
