@@ -266,6 +266,64 @@ export function FlowSpark({
  * Полоса покупок против продаж. Ноль сделок — полосы нет вовсе, а не деления
  * на ноль: прошлая версия в этом месте показывала NaN и пропадала.
  */
+/**
+ * Линия рынка целиком: накопленный поток по всем монетам окна.
+ *
+ * Не спарклайн — у неё есть ось нуля, подпись краёв и точка на конце, потому
+ * что читают её как самостоятельный график, а не как значок рядом с числом.
+ *
+ * Координаты фиксированные, ширина тянется: масштабируется равномерно, и
+ * толщина линии не расползается на широком экране.
+ */
+export function TrendChart({ values }: { values: number[] }) {
+  const gid = useId();
+  const vals = (values || []).filter((v) => Number.isFinite(v));
+  if (vals.length < 2) return <div className="trend-gap" />;
+
+  const W = 320;
+  const H = 86;
+  const last = vals[vals.length - 1] ?? 0;
+  const up = last >= 0;
+  // Ноль внутри поля всегда: иначе «весь месяц в плюсе» рисовалось бы тем же
+  // самым, что «весь месяц в минусе», только другим цветом.
+  const hi = Math.max(0, ...vals);
+  const lo = Math.min(0, ...vals);
+  const span = hi - lo || 1;
+  const pad = 6;
+  const y = (v: number) => pad + (1 - (v - lo) / span) * (H - pad * 2);
+  // Линия не доходит до правого края на радиус точки: иначе её половина
+  // оказывалась бы за пределами поля и «сейчас» выглядело бы обрубленным.
+  const R = 3.5;
+  const right = W - R;
+  const stepX = right / (vals.length - 1);
+  const pts = vals.map((v, i) => `${(i * stepX).toFixed(1)},${y(v).toFixed(1)}`);
+  const zero = y(0);
+  const line = `M${pts.join("L")}`;
+  const tone = up ? "var(--up)" : "var(--dn)";
+
+  return (
+    <svg className="trend-svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+         role="img" aria-hidden="true">
+      <defs>
+        <linearGradient id={gid} x1="0" y1={up ? 0 : H} x2="0" y2={up ? H : 0}
+                        gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor={tone} stopOpacity="0.26" />
+          <stop offset="1" stopColor={tone} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={`${line}L${right},${zero.toFixed(1)}L0,${zero.toFixed(1)}Z`} fill={`url(#${gid})`} />
+      <path d={`M0,${zero.toFixed(1)}H${W}`} stroke="var(--line-2)" strokeWidth="1"
+            strokeDasharray="3 4" fill="none" vectorEffect="non-scaling-stroke" />
+      <path d={line} fill="none" stroke={tone} strokeWidth="2"
+            strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      {/* Точка на конце: край линии — это «сейчас», и взгляд должен попадать
+          в него сразу, не проходя всю линию глазами. */}
+      <circle cx={right} cy={y(last)} r={R} fill={tone} />
+    </svg>
+  );
+}
+
+
 export function BuySellBar({ buy, sell }: { buy: number; sell: number }) {
   const total = (Number(buy) || 0) + (Number(sell) || 0);
   if (!(total > 0)) return null;

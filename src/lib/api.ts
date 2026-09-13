@@ -103,9 +103,16 @@ export const setThreshold = (usd: number) =>
  * тысячи записей с рядами при каждом запуске. Искать человек хочет среди
  * всех, поэтому поиск уходит на сервер.
  */
-export const fetchFlow = (win: string, q: string, offset = 0, signal?: AbortSignal) =>
+export const fetchFlow = (
+  win: string,
+  q: string,
+  offset = 0,
+  side = "all",
+  signal?: AbortSignal,
+) =>
   call<{ ok?: boolean; rows?: FlowRow[]; total?: number }>(
-    `/api/flow?win=${encodeURIComponent(win)}&q=${encodeURIComponent(q)}&offset=${offset}`,
+    `/api/flow?win=${encodeURIComponent(win)}&q=${encodeURIComponent(q)}` +
+      `&offset=${offset}&side=${encodeURIComponent(side)}`,
     { signal },
   );
 

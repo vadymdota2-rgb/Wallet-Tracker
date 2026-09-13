@@ -737,9 +737,46 @@
 .pulse > b { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
 .pulse-legend { display: flex; justify-content: space-between; font-size: 12px; }
 
-.flow-sum { display: flex; align-items: baseline; justify-content: space-between; }
-.flow-sum span { font-size: 20px; font-weight: 700; }
-.flow-sum small { color: var(--dim-2); font-size: 12px; }
+/* Тренд рынка: сводка по всему окну над списком монет ------------------- */
+.trend {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 12px;
+  padding: 11px 12px 12px;
+  border-radius: var(--r-md);
+  background: rgb(11 22 40 / 0.3);
+  border: 1px solid var(--line);
+}
+.trend-ttl {
+  color: var(--dim-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.trend-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.trend-top b { font-size: 24px; font-weight: 800; letter-spacing: -0.01em; }
+.trend-top small { flex: 0 0 auto; color: var(--dim-2); font-size: 12px; }
+/* Высота задана здесь, а не в разметке: ширина тянется по карточке, и только
+   фиксированная высота удерживает пропорции от скачков между экранами. */
+.trend-svg { display: block; width: 100%; height: 86px; }
+.trend-gap { height: 86px; }
+.trend-ax {
+  display: flex;
+  justify-content: space-between;
+  color: var(--dim-2);
+  font-size: 11px;
+}
+.trend-br {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.trend-sum { color: var(--dim-2); font-size: 12px; text-align: center; }
+.trend-sum span { font-weight: 600; }
 
 /* Пустые состояния и заглушки ------------------------------------------ */
 .empty { display: grid; gap: 6px; justify-items: center; padding: 22px 10px; text-align: center; }

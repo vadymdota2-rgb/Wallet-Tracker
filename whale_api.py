@@ -1401,6 +1401,14 @@ def load_flow(cur: sqlite3.Connection) -> dict:
             "coins": len(coins),
             "buy": buy_t,
             "sell": sell_t,
+            # Сколько монет в притоке и сколько в оттоке. Одна крупная монета
+            # способна увести общий итог в плюс, когда продают почти всё
+            # остальное; счёт монет — единственное, что это показывает. Он же
+            # служит счётчиком для отфильтрованного списка, поэтому число над
+            # списком видно до первого запроса.
+            "up": sum(1 for c in coins if c["net"] > 0),
+            "dn": sum(1 for c in coins if c["net"] < 0),
+            "tr": market_trend(cur, tnow - sec, sec),
             "rows": shown,
         }
     # Здесь стоял проход по всем показанным строкам с price_pack ради полей
@@ -1448,6 +1456,59 @@ def symbol_map(cur: sqlite3.Connection) -> dict[str, str]:
             sys.stderr.write(f"[api] symbol map: {e}\n")
             return _SYM_MAP
     _SYM_MAP, _SYM_MAP_AT = out, time.time()
+    return out
+
+
+TREND_BUCKETS = 24
+
+
+def market_trend(cur: sqlite3.Connection, since: int, sec: int,
+                 buckets: int = TREND_BUCKETS) -> list[float]:
+    """Накопленный поток по всему окну — одной линией на весь рынок.
+
+    Считается по тем же монетам, что стоят в списке: только с известным
+    тикером. Иначе конец линии не сошёлся бы с числом над ней, а это ровно та
+    ошибка, из-за которой линия монеты когда-то противоречила своему итогу.
+
+    Поэтому группируем по паре «монета и корзина», а не по одной корзине:
+    отсев по тикеру возможен только когда монета в строке есть.
+    """
+    if not table_exists(cur, "trades") or sec <= 0:
+        return []
+    ban = (
+        "AND NOT EXISTS (SELECT 1 FROM ignored_wallets iw "
+        "WHERE iw.wallet = t.wallet AND iw.permanent = 1) "
+        if table_exists(cur, "ignored_wallets")
+        else ""
+    )
+    step = max(1, sec // buckets)
+    try:
+        rows = cur.execute(
+            "SELECT t.token, (t.timestamp - ?) / ? b, "
+            "SUM(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE -t.usd_nanos END) net "
+            "FROM trades t "
+            "WHERE t.timestamp >= ? AND t.usd_nanos BETWEEN ? AND ? "
+            f"{ban}"
+            "GROUP BY t.token, b",
+            (since, step, since, MIN_TRADE_USD_NANOS, MAX_SPOT_USD_NANOS),
+        ).fetchall()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] market trend: {e}\n")
+        return []
+
+    syms = symbol_map(cur)
+    arr = [0.0] * buckets
+    for r in rows:
+        if not syms.get((r["token"] or "").lower()):
+            continue
+        i = min(buckets - 1, max(0, int(r["b"] or 0)))
+        arr[i] += usd(r["net"])
+    # Первая точка — ноль: отсчёт начинается с пустого баланса, и тогда высота
+    # линии в любой момент читается как «столько денег пришло с начала окна».
+    out, run = [0.0], 0.0
+    for v in arr:
+        run += v
+        out.append(round(run, 2))
     return out
 
 
@@ -1538,12 +1599,17 @@ def flow_finish(cur: sqlite3.Connection, rows: list[dict], since: int, sec: int)
 
 
 def flow_search(cur: sqlite3.Connection, win: str, q: str, limit: int = 40,
-                offset: int = 0) -> dict:
+                offset: int = 0, side: str = "all") -> dict:
     """Страница потока: по всем монетам окна или по совпадению тикера.
 
     Фильтр по тикеру сводится к списку адресов заранее: считать поток по
     всей базе, чтобы потом оставить одну монету, значит суммировать месяц
     сделок впустую.
+
+    Знак потока отбирается уже на готовом списке: он посчитан, и второй
+    проход по базе ради сравнения с нулём ничего не ускорит. Порядок
+    сохраняется — список и так идёт по убыванию модуля, то есть внутри
+    притока сверху самый крупный приток, внутри оттока — самый крупный отток.
     """
     sec = FLOW_WINDOWS.get(win)
     if not sec:
@@ -1560,6 +1626,10 @@ def flow_search(cur: sqlite3.Connection, win: str, q: str, limit: int = 40,
             return {"rows": [], "total": 0}
 
     allrows = flow_scan(cur, since, tokens)
+    if side == "in":
+        allrows = [r for r in allrows if r["net"] > 0]
+    elif side == "out":
+        allrows = [r for r in allrows if r["net"] < 0]
     page = allrows[offset:offset + limit]
     return {"rows": flow_finish(cur, page, since, sec), "total": len(allrows)}
 
@@ -3246,6 +3316,9 @@ class Handler(BaseHTTPRequestHandler):
                     self._json(400, {"ok": False, "error": "bad_win"})
                     return
                 q = (qs.get("q", [""])[0] or "")[:32]
+                side = (qs.get("side", ["all"])[0] or "all").strip()
+                if side not in ("all", "in", "out"):
+                    side = "all"
                 try:
                     offset = int(qs.get("offset", ["0"])[0])
                 except (TypeError, ValueError):
@@ -3255,7 +3328,7 @@ class Handler(BaseHTTPRequestHandler):
                     self._json(200, {"ok": False, "error": "db"})
                     return
                 try:
-                    res = flow_search(cur, win, q, offset=offset)
+                    res = flow_search(cur, win, q, offset=offset, side=side)
                     self._json(200, {"ok": True, **res})
                 finally:
                     try:

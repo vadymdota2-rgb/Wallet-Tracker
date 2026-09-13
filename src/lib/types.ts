@@ -94,8 +94,16 @@ export interface FlowWindow {
   coins: number;
   buy: number;
   sell: number;
+  /** Сколько монет окна в притоке и сколько в оттоке. */
+  up: number;
+  dn: number;
+  /** Накопленный поток по всему рынку за окно — линия тренда. */
+  tr: number[];
   rows: FlowCoin[];
 }
+
+/** Какие монеты показывать: все, только приток или только отток. */
+export type FlowSide = "all" | "in" | "out";
 
 /**
  * Строка поиска по потоку. Те же поля, что у FlowCoin, но без показателей,

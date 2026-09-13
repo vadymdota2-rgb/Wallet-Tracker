@@ -14,11 +14,17 @@ import { num, pct, signed, usd } from "../lib/format";
 import { ago } from "../lib/relative";
 import { fundingSideKey, isUpKind, levFromSide, tradeKind, tradeKindKey } from "../lib/labels";
 import { CoinIcon } from "../components/CoinIcon";
-import { BuySellBar, FlowSpark } from "../components/Chart";
+import { BuySellBar, FlowSpark, TrendChart } from "../components/Chart";
 import { Card, Empty, Locked, Row, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import { fetchBig, fetchFlow } from "../lib/api";
 import type { BigView, BigWin, FlowWin } from "../store/app";
-import type { FlowRow, TradeRow, Trades } from "../lib/types";
+import type { FlowRow, FlowSide, TradeRow, Trades } from "../lib/types";
+
+const FLOW_SIDES: { id: FlowSide; key: Parameters<typeof t>[1] }[] = [
+  { id: "all", key: "flow_side_all" },
+  { id: "in", key: "flow_side_in" },
+  { id: "out", key: "flow_side_out" },
+];
 
 const FLOW_WINS: { id: FlowWin; key: Parameters<typeof t>[1] }[] = [
   { id: "1", key: "ai_w1h" },
@@ -114,6 +120,8 @@ export function AnalyticsTab() {
   const setView = useApp((s) => s.setBigView);
   const flowWin = useApp((s) => s.flowWin);
   const setFlowWin = useApp((s) => s.setFlowWin);
+  const flowSide = useApp((s) => s.flowSide);
+  const setFlowSide = useApp((s) => s.setFlowSide);
   const query = useApp((s) => s.flowQuery);
   const setQuery = useApp((s) => s.setFlowQuery);
   const bigWin = useApp((s) => s.bigWin);
@@ -164,6 +172,14 @@ export function AnalyticsTab() {
             value={flowWin}
             onChange={setFlowWin}
             options={FLOW_WINS.map((w) => ({ id: w.id, label: t(lang, w.key) }))}
+          />
+          {/* Знак потока отдельной строкой от окна: это два независимых
+              вопроса — «за какой срок» и «кого показывать». Одним рядом они
+              бы выглядели как один выбор из восьми. */}
+          <Segmented<FlowSide>
+            value={flowSide}
+            onChange={setFlowSide}
+            options={FLOW_SIDES.map((v) => ({ id: v.id, label: t(lang, v.key) }))}
           />
           <input
             className="find"
@@ -252,6 +268,7 @@ function FlowBody() {
   const lang = useApp((s) => s.lang);
   const open = useApp((s) => s.open);
   const win = useApp((s) => s.flowWin);
+  const side = useApp((s) => s.flowSide);
   const raw = useApp((s) => s.flowQuery);
   const flow = useLive((s) => s.flow);
 
@@ -262,18 +279,19 @@ function FlowBody() {
   const [busy, setBusy] = useState(false);
 
   const bucket = flow[win];
-  /* Общее число монет окна приходит с выгрузкой — поэтому счётчик виден
-     сразу, ещё до того, как человек куда-то нажал. */
-  const total = (query ? qTotal : bucket?.coins) ?? 0;
+  /* Первая страница без поиска и без фильтра уже лежит в выгрузке. */
+  const local = !query && side === "all" && page === 1;
+  /* Сколько монет под фильтром — тоже из выгрузки: счётчик и число страниц
+     видны сразу, ещё до того, как ответит сервер. */
+  const sideTotal = side === "in" ? bucket?.up : side === "out" ? bucket?.dn : bucket?.coins;
+  const total = (query ? qTotal : sideTotal) ?? 0;
   const pages = Math.max(1, Math.ceil(total / FLOW_PAGE));
 
-  // Сменились окно или запрос — это другой список, и начинается он заново.
-  useEffect(() => setPage(1), [win, query]);
+  // Сменились окно, фильтр или запрос — это другой список, и он с начала.
+  useEffect(() => setPage(1), [win, side, query]);
 
   useEffect(() => {
-    /* Первая страница без поиска уже лежит в выгрузке: за ней на сервер
-       ходить незачем, она и так на экране мгновенно. */
-    if (!query && page === 1) {
+    if (!query && side === "all" && page === 1) {
       setRows(null);
       setBusy(false);
       return;
@@ -281,7 +299,7 @@ function FlowBody() {
     const ctrl = new AbortController();
     setBusy(true);
     const timer = setTimeout(() => {
-      void fetchFlow(win, query, (page - 1) * FLOW_PAGE, ctrl.signal).then((r) => {
+      void fetchFlow(win, query, (page - 1) * FLOW_PAGE, side, ctrl.signal).then((r) => {
         if (ctrl.signal.aborted) return;
         setRows(r?.ok ? r.rows ?? [] : []);
         if (query) setQTotal(r?.total ?? 0);
@@ -292,14 +310,9 @@ function FlowBody() {
       clearTimeout(timer);
       ctrl.abort();
     };
-  }, [win, query, page]);
+  }, [win, side, query, page]);
 
-  const shown: FlowRow[] = !query && page === 1 ? bucket?.rows ?? [] : rows ?? [];
-
-  if (busy && !shown.length) return <Skeleton rows={3} />;
-  if (!shown.length) {
-    return <Empty text={query ? t(lang, "flow_search_none") : t(lang, "flow_empty")} />;
-  }
+  const shown: FlowRow[] = local ? bucket?.rows ?? [] : rows ?? [];
 
   const go = (to: number) => {
     if (to < 1 || to > pages || to === page || busy) return;
@@ -307,19 +320,52 @@ function FlowBody() {
     setPage(to);
   };
 
+  /* Тренд рынка стоит над списком и не зависит ни от фильтра, ни от поиска:
+     это сводка по всему окну. Убирать его вместе со списком нельзя — тогда
+     на пустом фильтре исчезала бы и причина, по которой фильтр пуст. */
+  const head = !query && bucket ? (
+    <div className="trend">
+      <p className="trend-ttl">{t(lang, "flow_trend")}</p>
+      <p className="trend-top">
+        <b className={bucket.net >= 0 ? "up" : "dn"}>{signed(bucket.net)}</b>
+        <small>
+          {num(bucket.coins)} {t(lang, "flow_coins")}
+        </small>
+      </p>
+      <TrendChart values={bucket.tr ?? []} />
+      <p className="trend-ax">
+        <span>{t(lang, FLOW_WINS.find((w) => w.id === win)?.key ?? "big_win_24h")}</span>
+        <span>{t(lang, "flow_now")}</span>
+      </p>
+      {/* Ширина рынка: общий итог может держаться на одной крупной монете,
+          пока продают почти всё остальное. Счёт монет — единственное, что
+          эту разницу показывает. */}
+      <p className="trend-br">
+        <span className="up">{num(bucket.up ?? 0)} {t(lang, "flow_in_coins")}</span>
+        <span className="dn">{num(bucket.dn ?? 0)} {t(lang, "flow_out_coins")}</span>
+      </p>
+      <BuySellBar buy={bucket.up ?? 0} sell={bucket.dn ?? 0} />
+      <p className="trend-sum">
+        <span className="up">{usd(bucket.buy)}</span> {t(lang, "flow_total_buys")}
+        {" · "}
+        <span className="dn">{usd(bucket.sell)}</span> {t(lang, "flow_total_sells")}
+      </p>
+    </div>
+  ) : null;
+
+  if (busy && !shown.length) return <>{head}<Skeleton rows={3} /></>;
+  if (!shown.length) {
+    return (
+      <>
+        {head}
+        <Empty text={query || side !== "all" ? t(lang, "flow_search_none") : t(lang, "flow_empty")} />
+      </>
+    );
+  }
+
   return (
     <>
-      {/* Итог по окну — только для полного списка. При поиске он относился бы
-          ко всему окну, а на экране стояли бы две монеты: число и список
-          спорили бы друг с другом. */}
-      {!query && bucket ? (
-        <p className="flow-sum">
-          <span className={bucket.net >= 0 ? "up" : "dn"}>{signed(bucket.net)}</span>
-          <small>
-            {num(total)} {t(lang, "flow_coins")}
-          </small>
-        </p>
-      ) : null}
+      {head}
 
       {shown.map((r) => (
         <button

@@ -6,7 +6,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { LangCode } from "../i18n/types";
-import type { RankKind, Venue } from "../lib/types";
+import type { FlowSide, RankKind, Venue } from "../lib/types";
 import type { Timeframe } from "../lib/klines";
 
 export type Tab = "wallets" | "top" | "analytics" | "sonar" | "more";
@@ -44,6 +44,7 @@ interface AppState {
   bigView: BigView;
   bigWin: BigWin;
   flowWin: FlowWin;
+  flowSide: FlowSide;
   flowQuery: string;
 
   rankVenue: Venue;
@@ -63,6 +64,7 @@ interface AppState {
   setBigView(v: BigView): void;
   setBigWin(w: BigWin): void;
   setFlowWin(w: FlowWin): void;
+  setFlowSide(s: FlowSide): void;
   setFlowQuery(q: string): void;
   setRankVenue(v: Venue): void;
   setRankKind(k: RankKind): void;
@@ -83,6 +85,7 @@ export const useApp = create<AppState>()(
       bigView: "flow",
       bigWin: "24h",
       flowWin: "24",
+      flowSide: "all",
       flowQuery: "",
 
       rankVenue: "spot",
@@ -102,6 +105,7 @@ export const useApp = create<AppState>()(
       setBigView: (bigView) => set({ bigView }),
       setBigWin: (bigWin) => set({ bigWin }),
       setFlowWin: (flowWin) => set({ flowWin }),
+      setFlowSide: (flowSide) => set({ flowSide }),
       setFlowQuery: (flowQuery) => set({ flowQuery }),
       setRankVenue: (rankVenue) => set({ rankVenue }),
       setRankKind: (rankKind) => set({ rankKind }),
@@ -120,6 +124,7 @@ export const useApp = create<AppState>()(
         bigView: s.bigView,
         bigWin: s.bigWin,
         flowWin: s.flowWin,
+        flowSide: s.flowSide,
         rankVenue: s.rankVenue,
         rankKind: s.rankKind,
         rankWin: s.rankWin,
