@@ -249,6 +249,68 @@ export function TileNav<T extends string>({
 }
 
 /**
+ * Значок «Аналитика» в нижнем меню. Две свечи — самая короткая запись того,
+ * что в разделе лежит: цена, объём и что с ними стало.
+ *
+ * Не столбики с линией тренда: линия со стрелкой уже занята знаком NetFlow,
+ * а два значка со стрелкой вверх в одном приложении читаются как одно и то
+ * же. Не столбики в рамке: скруглённый прямоугольник в нижнем меню уже есть
+ * — это «Мои кошельки», — и рядом они слипаются в одну форму.
+ */
+export function AnalyticsGlyph({ size = 21 }: { size?: number }) {
+  return (
+    <svg
+      className="glyph"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M7.4 3.6v3.1M7.4 16.3v3.9M16.6 4.4v4.4M16.6 17.6v2.6" />
+      <rect x="4.7" y="6.7" width="5.4" height="9.6" rx="1.5" />
+      <rect x="13.9" y="8.8" width="5.4" height="8.8" rx="1.5" />
+    </svg>
+  );
+}
+
+/**
+ * Значок «Топ трейдеров» — медаль на ленте.
+ *
+ * Круг с лентами — единственная не прямоугольная форма в нижнем меню, и на
+ * двадцати одном пикселе она узнаётся раньше всех соседей. Пьедестал точнее
+ * по смыслу, но три его ступеньки со звездой на этом размере сливаются в
+ * пятно; кубок — тот же 🏆, только нарисованный, ради чего менять не стоило.
+ */
+export function TopGlyph({ size = 21 }: { size?: number }) {
+  return (
+    <svg
+      className="glyph"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M7.4 2.6 10.4 8M16.6 2.6 13.6 8" />
+      <circle cx="12" cy="14.6" r="6.6" />
+      <path
+        d="m12 10.6 1.24 2.5 2.76.4-2 1.95.47 2.75L12 16.9l-2.47 1.3.47-2.75-2-1.95 2.76-.4z"
+        strokeWidth="1.4"
+      />
+    </svg>
+  );
+}
+
+/**
  * Знак NetFlow.
  *
  * Не значок «поток» вообще, а картинка самого раздела: линия накопленного
