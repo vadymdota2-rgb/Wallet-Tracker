@@ -108,7 +108,11 @@ _hl_candles: dict[str, tuple[float, list]] = {}
 # а ходят по ним редко. Тридцати секунд хватает, чтобы не долбить базу.
 _big_cache: dict[str, tuple[float, dict]] = {}
 _big_lock = threading.Lock()
-BIG_TTL = 30.0
+# Дольше, чем пауза refresher: тот переписывает все окна по часам, и между
+# его кругами запись не должна протухать — иначе первое нажатие на «7д»
+# после паузы опять уходило бы в базу.
+BIG_TTL = 150.0
+_big_busy: set[str] = set()
 # Те же окна, что у бота в big_trades.cpp. Между часом и сутками без шести
 # часов слишком большой прыжок: за час по монете бывает две сделки, а за
 # сутки всё уже размазано.
@@ -640,6 +644,12 @@ FLOW_BUCKETS = 12
 FLOW_DENSE = 3
 
 
+# Линии монет: ключ — длина окна и адрес. Страницу листают туда-сюда, и
+# пересчитывать одни и те же сорок линий на каждый шаг незачем.
+_FLOW_SP: dict[tuple[int, str], tuple[float, list[float]]] = {}
+_flow_sp_lock = threading.Lock()
+
+
 def flow_series(cur: sqlite3.Connection, tokens: list[str], since: int,
                 sec: int, buckets: int = FLOW_BUCKETS) -> dict[str, list[float]]:
     """Накопленный поток денег по каждому токену внутри окна.
@@ -663,6 +673,18 @@ def flow_series(cur: sqlite3.Connection, tokens: list[str], since: int,
     """
     if not tokens:
         return {}
+
+    out: dict[str, list[float]] = {}
+    fresh = time.monotonic()
+    with _flow_sp_lock:
+        for tok in tokens:
+            hit = _FLOW_SP.get((sec, tok))
+            if hit and fresh - hit[0] < FLOW_ROWS_TTL:
+                out[tok] = hit[1]
+    tokens = [t for t in tokens if t not in out]
+    if not tokens:
+        return out
+
     marks = ",".join("?" * len(tokens))
     try:
         rows = cur.execute(
@@ -674,13 +696,12 @@ def flow_series(cur: sqlite3.Connection, tokens: list[str], since: int,
         ).fetchall()
     except sqlite3.Error as e:
         sys.stderr.write(f"[api] flow series: {e}\n")
-        return {}
+        return out
 
     per: dict[str, list[tuple[int, float]]] = {}
     for r in rows:
         per.setdefault(r["token"] or "", []).append((int(r["ts"] or 0), usd(r["net"])))
 
-    out: dict[str, list[float]] = {}
     end = now()
     for tok, pts in per.items():
         if not pts:
@@ -699,6 +720,11 @@ def flow_series(cur: sqlite3.Connection, tokens: list[str], since: int,
             run += v
             acc.append(round(run, 2))
         out[tok] = acc
+    with _flow_sp_lock:
+        stamp = time.monotonic()
+        for tok in tokens:
+            _FLOW_SP[(sec, tok)] = (stamp, out.get(tok) or [])
+        cap_cache(_FLOW_SP, 8192)
     return out
 
 
@@ -1391,9 +1417,14 @@ def load_flow(cur: sqlite3.Connection) -> dict:
     by_win = {}
     for key, sec in windows:
         coins = flow_scan(cur, tnow - sec)
+        # Тот же список пригодится страницам и фильтрам — незачем считать его
+        # там заново.
+        flow_rows_put(key, coins)
         buy_t = sum(c["buy"] for c in coins)
         sell_t = sum(c["sell"] for c in coins)
-        shown = coins[:FLOW_ROWS]
+        # Копии: строки показанной страницы обрастают логотипом, хвостом
+        # адреса и линией, а в кэше должен лежать чистый результат обхода.
+        shown = [dict(c) for c in coins[:FLOW_ROWS]]
         flow_finish(cur, shown, tnow - sec, sec)
         by_win[key] = {
             "net": buy_t - sell_t,
@@ -1512,6 +1543,70 @@ def market_trend(cur: sqlite3.Connection, since: int, sec: int,
     return out
 
 
+# Полный список монет каждого окна — тот самый, из которого собираются и
+# счётчик, и любая страница. Держим его в памяти: обход месяца сделок занимает
+# на боевой базе 1,4 секунды, а делался он заново на каждое нажатие «вперёд» и
+# на каждую смену фильтра. Заполняется при перестройке общего кэша, то есть
+# даром: load_flow этот список и так считает.
+_FLOW_ROWS: dict[str, tuple[float, list[dict]]] = {}
+_flow_rows_lock = threading.Lock()
+_flow_busy: set[str] = set()
+FLOW_ROWS_TTL = 90.0
+
+
+def flow_rows_cached(cur: sqlite3.Connection, win: str) -> list[dict]:
+    """Список монет окна из памяти.
+
+    Устаревший список отдаётся сразу, а пересчёт уходит в фоновый поток.
+    Срок жизни здесь — повод обновиться, а не повод заставить ждать: мерил,
+    перестройка общего кэша на боевой базе идёт дольше этого срока, и запись
+    успевала протухнуть между кругами. Тогда очередной страницей человек
+    оплачивал обход месяца сделок — полторы секунды вместо двадцати
+    миллисекунд.
+
+    Синхронно считаем только когда в памяти нет вообще ничего: первый запрос
+    после запуска, если планового обновления ещё не было.
+    """
+    sec = FLOW_WINDOWS.get(win)
+    if not sec:
+        return []
+    with _flow_rows_lock:
+        hit = _FLOW_ROWS.get(win)
+        if hit:
+            if time.monotonic() - hit[0] >= FLOW_ROWS_TTL and win not in _flow_busy:
+                _flow_busy.add(win)
+                threading.Thread(target=_flow_rows_rebuild, args=(win, sec),
+                                 daemon=True).start()
+            return hit[1]
+    rows = flow_scan(cur, now() - sec)
+    flow_rows_put(win, rows)
+    return rows
+
+
+def _flow_rows_rebuild(win: str, sec: int) -> None:
+    """Пересчёт списка окна в стороне от запроса, со своим соединением."""
+    con = None
+    try:
+        con = open_db(DB)
+        if con:
+            flow_rows_put(win, flow_scan(con, now() - sec))
+    except Exception as e:
+        sys.stderr.write(f"[api] flow rows {win}: {e}\n")
+    finally:
+        if con:
+            try:
+                con.close()
+            except Exception:
+                pass
+        with _flow_rows_lock:
+            _flow_busy.discard(win)
+
+
+def flow_rows_put(win: str, rows: list[dict]) -> None:
+    with _flow_rows_lock:
+        _FLOW_ROWS[win] = (time.monotonic(), rows)
+
+
 def flow_scan(cur: sqlite3.Connection, since: int, tokens: list[str] | None = None) -> list[dict]:
     """Все монеты окна с их потоком, по убыванию модуля потока.
 
@@ -1618,19 +1713,22 @@ def flow_search(cur: sqlite3.Connection, win: str, q: str, limit: int = 40,
     limit = max(1, min(int(limit or 40), 100))
     offset = max(0, min(int(offset or 0), 5000))
 
-    needle = (q or "").strip().upper()
-    tokens: list[str] | None = None
-    if needle:
-        tokens = [a for a, sym in symbol_map(cur).items() if needle in sym][:400]
-        if not tokens:
-            return {"rows": [], "total": 0}
+    allrows = flow_rows_cached(cur, win)
 
-    allrows = flow_scan(cur, since, tokens)
+    # Поиск и фильтр по знаку — на готовом списке. Раньше поиск уходил в базу
+    # отдельным обходом, хотя искать нужно среди тех же самых монет, которые
+    # уже посчитаны и лежат в памяти.
+    needle = (q or "").strip().upper()
+    if needle:
+        allrows = [r for r in allrows if needle in (r["sym"] or "").upper()]
     if side == "in":
         allrows = [r for r in allrows if r["net"] > 0]
     elif side == "out":
         allrows = [r for r in allrows if r["net"] < 0]
-    page = allrows[offset:offset + limit]
+
+    # Копия страницы: flow_finish дописывает строкам логотип, хвост адреса и
+    # линию, а строки эти общие — они лежат в кэше и раздаются всем.
+    page = [dict(r) for r in allrows[offset:offset + limit]]
     return {"rows": flow_finish(cur, page, since, sec), "total": len(allrows)}
 
 
@@ -2159,12 +2257,33 @@ def load_trades(cur: sqlite3.Connection, hl: sqlite3.Connection | None, hours: i
     return {"spot": spot[:20], "perp": perp[:20], "liq": liq[:20]}
 
 
-def big_trades(win: str, hours: int) -> dict:
-    """Крупнейшие сделки за окно, со своим коротким кэшем."""
-    with _big_lock:
-        hit = _big_cache.get(win)
-        if hit and time.monotonic() - hit[0] < BIG_TTL:
-            return hit[1]
+def _big_rebuild(win: str, hours: int) -> None:
+    """Обновление окна крупных сделок в стороне от запроса."""
+    try:
+        big_trades(win, hours, force=True)
+    except Exception as e:
+        sys.stderr.write(f"[api] big rebuild {win}: {e}\n")
+    finally:
+        with _big_lock:
+            _big_busy.discard(win)
+
+
+def big_trades(win: str, hours: int, force: bool = False) -> dict:
+    """Крупнейшие сделки за окно, со своим кэшем.
+
+    force — для планового обновления: запись перезаписывается, не дожидаясь,
+    пока протухнет. Так все пять окон всегда готовы, и человек, который
+    впервые за день нажал «30д», не ждёт обхода месяца сделок.
+    """
+    if not force:
+        with _big_lock:
+            hit = _big_cache.get(win)
+            if hit:
+                if time.monotonic() - hit[0] >= BIG_TTL and win not in _big_busy:
+                    _big_busy.add(win)
+                    threading.Thread(target=_big_rebuild, args=(win, hours),
+                                     daemon=True).start()
+                return hit[1]
     cur = open_db(DB)
     hl = open_db(HL_DB)
     if not cur:
@@ -2893,37 +3012,24 @@ def get_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict:
 
 
 def _bg_refresh() -> None:
-    global _building
-    with _pub_lock:
-        if _building:
-            return
-        _building = True
+    """Перестройка по требованию: кто-то пришёл за данными, а они протухли.
+
+    Обычно до этого не доходит — кэш обновляет refresher по часам. Остаётся
+    на случай, когда тот ещё не успел сделать первый круг.
+    """
     cur = open_db(DB)
     hl = open_db(HL_DB)
     if not cur:
-        with _pub_lock:
-            _building = False
         return
     try:
-        data = build_public(cur, hl)
-        with _pub_lock:
-            _pub["data"] = data
-            _pub["t"] = time.monotonic()
-        sys.stderr.write("[api] public cache refreshed\n")
-    except Exception as e:
-        sys.stderr.write(f"[api] cache refresh: {e}\n")
+        build_public_into_cache(cur, hl)
     finally:
-        with _pub_lock:
-            _building = False
-        try:
-            cur.close()
-        except Exception:
-            pass
-        if hl:
-            try:
-                hl.close()
-            except Exception:
-                pass
+        for c in (cur, hl):
+            if c:
+                try:
+                    c.close()
+                except Exception:
+                    pass
 
 
 def warmup() -> None:
@@ -2947,6 +3053,192 @@ def warmup() -> None:
                 hl.close()
             except Exception:
                 pass
+
+
+# История сделок кошелька и история цены монеты. Обе открываются нажатием на
+# карточку, обе одинаковы для всех, кто их открыл, и обе за минуту не
+# меняются настолько, чтобы ради этого идти в базу каждому.
+_DEALS: dict[tuple[str, str, int], tuple[float, list]] = {}
+# Живой кошелёк: срок короче общего, потому что человек смотрит собственный
+# счёт и ждёт от него сегодняшних чисел, а не минутной давности.
+_WALLET: dict[tuple[str, str], tuple[float, dict]] = {}
+WALLET_TTL = 20.0
+_TOKEN_HIST: dict[str, tuple[float, list]] = {}
+_small_lock = threading.Lock()
+SMALL_TTL = 60.0
+
+
+def cached_small(store: dict, key, ttl: float, build):
+    """Значение из словаря-кэша, либо построенное и положенное туда.
+
+    Считается вне замка: под замком держится только словарь. Иначе один
+    медленный запрос к базе останавливал бы всех, кто в это время читает
+    совсем другие ключи.
+    """
+    with _small_lock:
+        hit = store.get(key)
+        if hit and time.monotonic() - hit[0] < ttl:
+            return hit[1]
+    val = build()
+    with _small_lock:
+        store[key] = (time.monotonic(), val)
+        cap_cache(store, 2048)
+    return val
+
+
+_COINS: dict[str, tuple[float, dict]] = {}
+
+
+def coins_cached(cur: sqlite3.Connection, hl: sqlite3.Connection | None,
+                 flow: dict, wallets: list) -> dict:
+    """Справочник монет — общий, но с оглядкой на кошельки смотрящего.
+
+    load_coins дописывает к монетам открытые позиции владельца, поэтому в
+    общую выгрузку он целиком не уходит. Зато у двух запусков одного и того
+    же человека набор позиций один и тот же, а у большинства он и вовсе
+    пустой — и тогда ответ общий на всех. Ключ — отпечаток позиций, так что
+    сменилась позиция, сменился и ключ.
+    """
+    mark = [
+        [w.get("name") or "",
+         sorted((p.get("sym") or "", round(float(p.get("size") or 0)))
+                for p in (w.get("pos") or []))]
+        for w in (wallets or [])
+    ]
+    key = hashlib.sha1(
+        json.dumps(mark, sort_keys=True, ensure_ascii=False).encode()
+    ).hexdigest()
+    return cached_small(_COINS, key, SMALL_TTL,
+                        lambda: load_coins(cur, hl, flow, wallets))
+
+
+# Личная выгрузка целиком: она у каждого своя, но у одного человека за
+# двадцать секунд не меняется ничем, кроме его же действий, — а те кэш и
+# сбрасывают. Без этого каждое нажатие «обновить» заново собирало профиль,
+# кошельки, алерты и справочник монет.
+_BOOT: dict[str, tuple[float, dict]] = {}
+_boot_lock = threading.Lock()
+_boot_busy: set[str] = set()
+BOOT_TTL = 30.0
+
+
+def bootstrap_cached(chat: str) -> dict:
+    """Выгрузка из памяти; устаревшая отдаётся сразу, пересборка идёт в фоне.
+
+    Пересобирать прямо в запросе оказалось нельзя. Мерил под нагрузкой:
+    сборка упирается в справочник монет, а тот ходит в сеть за ценами, и на
+    ответ уходило в среднем 3,6 секунды, в худшем случае 38. Человек, нажавший
+    «обновить», всё это время смотрел на пустой экран — притом что данные у
+    сервера уже были, просто чуть постарше.
+
+    Ждать приходится ровно один раз: при самом первом запуске, когда в памяти
+    нет ничего.
+    """
+    key = chat or ""
+    with _boot_lock:
+        hit = _BOOT.get(key)
+        if hit:
+            if time.monotonic() - hit[0] >= BOOT_TTL and key not in _boot_busy:
+                _boot_busy.add(key)
+                threading.Thread(target=_boot_rebuild, args=(key,), daemon=True).start()
+            return hit[1]
+    return _boot_build(key)
+
+
+def _boot_build(key: str) -> dict:
+    data = bootstrap(key)
+    # Неудачную сборку не запоминаем: иначе временный сбой базы залипал бы на
+    # экране до конца срока жизни записи.
+    if data.get("ok"):
+        with _boot_lock:
+            _BOOT[key] = (time.monotonic(), data)
+            cap_cache(_BOOT, 4096)
+    return data
+
+
+def _boot_rebuild(key: str) -> None:
+    try:
+        _boot_build(key)
+    except Exception as e:
+        sys.stderr.write(f"[api] boot rebuild: {e}\n")
+    finally:
+        with _boot_lock:
+            _boot_busy.discard(key)
+
+
+def boot_drop(chat: str) -> None:
+    """Человек что-то изменил — его записи больше не годятся.
+
+    Вместе с выгрузкой уходит и живой кошелёк: после удаления адрес перестал
+    быть своим, и ответ по нему из памяти был бы неправдой. Справочник монет
+    сбрасывать не нужно — он и так помнится по отпечатку позиций, а тот
+    меняется вместе с ними.
+    """
+    key = chat or ""
+    with _boot_lock:
+        _BOOT.pop(key, None)
+    with _small_lock:
+        for k in [k for k in _WALLET if k[0] == key]:
+            _WALLET.pop(k, None)
+
+
+def refresher() -> None:
+    """Держит общий кэш тёплым, не дожидаясь запроса.
+
+    Раньше кэш перестраивался только тогда, когда кто-то за ним пришёл и
+    обнаружил, что тот протух. Первый после затишья получал прошлые данные, а
+    свежие доставались следующему. Теперь перестройка идёт сама по себе, и
+    нажавший «обновить» забирает готовое.
+
+    Пауза не меньше срока жизни кэша и не меньше четырёх длительностей
+    последней перестройки: на медленной машине сборка не должна идти
+    непрерывно, занимая базу собой.
+    """
+    while True:
+        try:
+            cur = open_db(DB)
+            hl = open_db(HL_DB)
+            if not cur:
+                time.sleep(PUB_TTL)
+                continue
+            t0 = time.monotonic()
+            try:
+                build_public_into_cache(cur, hl)
+                # Окна крупных сделок — отдельным кэшем и отдельным запросом
+                # к базе, в общую выгрузку они не входят.
+                for bwin, bhours in BIG_WINDOWS.items():
+                    big_trades(bwin, bhours, force=True)
+            finally:
+                for c in (cur, hl):
+                    if c:
+                        try:
+                            c.close()
+                        except Exception:
+                            pass
+            took = time.monotonic() - t0
+        except Exception as e:
+            sys.stderr.write(f"[api] refresher: {e}\n")
+            took = 0.0
+        time.sleep(max(PUB_TTL, took * 4))
+
+
+def build_public_into_cache(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> None:
+    """Перестройка общего кэша под флагом занятости — как в _bg_refresh."""
+    global _building
+    with _pub_lock:
+        if _building:
+            return
+        _building = True
+    try:
+        data = build_public(cur, hl)
+        with _pub_lock:
+            _pub["data"] = data
+            _pub["t"] = time.monotonic()
+    except Exception as e:
+        sys.stderr.write(f"[api] refresh: {e}\n")
+    finally:
+        with _pub_lock:
+            _building = False
 
 
 def bootstrap(chat: str) -> dict:
@@ -3003,7 +3295,7 @@ def bootstrap(chat: str) -> dict:
         funding = pub.get("funding") or []
         rot = pub.get("rot") or {"24": [], "168": []}
         sonar = pub.get("sonar") or empty_sonar
-        coins = piece("coins", lambda: load_coins(cur, hl, flow, wallets), pub.get("coins") or {})
+        coins = piece("coins", lambda: coins_cached(cur, hl, flow, wallets), pub.get("coins") or {})
         out = {
             "ok": True,
             "live": True,
@@ -3273,7 +3565,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path in ("/bootstrap", "/api/bootstrap", "/api/me"):
                 chat = self._user(qs)
-                self._json(200, bootstrap(chat))
+                self._json(200, bootstrap_cached(chat))
                 return
             if path in ("/market", "/api/market"):
                 cur = open_db(DB)
@@ -3352,12 +3644,11 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 hl = open_db(HL_DB) if venue == "perp" else None
                 try:
-                    self._json(200, {
-                        "ok": True,
-                        "addr": a,
-                        "venue": venue,
-                        "deals": wallet_deals(cur, hl, a, venue, n),
-                    })
+                    deals = cached_small(
+                        _DEALS, (a, venue, n), SMALL_TTL,
+                        lambda: wallet_deals(cur, hl, a, venue, n),
+                    )
+                    self._json(200, {"ok": True, "addr": a, "venue": venue, "deals": deals})
                 finally:
                     for c in (cur, hl):
                         if c:
@@ -3376,7 +3667,9 @@ class Handler(BaseHTTPRequestHandler):
                     if not re.fullmatch(r"0x[0-9a-f]{40}", a):
                         self._json(400, {"ok": False, "error": "bad_addr"})
                         return
-                    self._json(200, {"ok": True, "addr": a, "hist": token_series(cur, a)})
+                    hist = cached_small(_TOKEN_HIST, a, SMALL_TTL,
+                                        lambda: token_series(cur, a))
+                    self._json(200, {"ok": True, "addr": a, "hist": hist})
                 finally:
                     try:
                         cur.close()
@@ -3393,7 +3686,11 @@ class Handler(BaseHTTPRequestHandler):
                     self._json(200, {"ok": False, "error": "db"})
                     return
                 try:
-                    self._json(200, wallet_live(cur, chat, (qs.get("addr", [""])[0] or "")))
+                    w_addr = (qs.get("addr", [""])[0] or "")
+                    self._json(200, cached_small(
+                        _WALLET, (chat, w_addr.strip().lower()), WALLET_TTL,
+                        lambda: wallet_live(cur, chat, w_addr),
+                    ))
                 finally:
                     try:
                         cur.close()
@@ -3487,11 +3784,16 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(404, {"ok": False, "error": "not_found"})
                 return
             res = mutate(chat, kind, body)
+            # Данные человека изменились — старая выгрузка больше не годится,
+            # и следующий ответ должен собираться заново, а не из памяти.
+            boot_drop(chat)
             # После удаления bootstrap не зовём: он завёл бы пользователя
             # заново той же строкой INSERT OR IGNORE, и «удалено» оказалось
             # бы неправдой.
             if res.get("ok") and kind != "forget":
-                res = {**res, **bootstrap(chat)}
+                # Через кэш, а не мимо: сборка всё равно нужна, и пусть
+                # следующее «обновить» заберёт её готовой, а не повторит.
+                res = {**res, **bootstrap_cached(chat)}
             self._json(200 if res.get("ok") else 400, res)
         except Exception as e:
             sys.stderr.write(f"[api] POST fail: {e}\n")
@@ -3519,6 +3821,7 @@ def main():
         flush=True,
     )
     threading.Thread(target=warmup, daemon=True).start()
+    threading.Thread(target=refresher, daemon=True).start()
     httpd = ThreadingHTTPServer((HOST, PORT), Handler)
     httpd.serve_forever()
 
