@@ -348,6 +348,7 @@ export const id: Dict = {
   track_now_tracked: "✅ Dompet",
   track_now_tracked_suffix: "sekarang dilacak.",
   trial_granted: "🎁 7 hari Premium — gratis\n\nAnda mendapat: futures Hyperliquid dengan peringkat, alert, dan posisi, hingga 50 dompet, Top 100 penuh, dan alert prioritas.\n\nSekali per akun.",
+  ui_analytics_hint: "Pasar lewat dompet yang dilacak: arus uang, transaksi besar, likuidasi, dan funding.",
   ui_buy_pressure: "Tekanan beli",
   ui_buys: "Pembelian",
   ui_chart: "Grafik",

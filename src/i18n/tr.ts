@@ -348,6 +348,7 @@ export const tr: Dict = {
   track_now_tracked: "✅ Cüzdan",
   track_now_tracked_suffix: "artık takip ediliyor.",
   trial_granted: "🎁 7 gün Premium — hediye\n\nArtık sende: sıralama, uyarılar ve açık pozisyonlarıyla Hyperliquid vadeli işlemler, 50 cüzdana kadar takip, Top 100'ün tamamı ve öncelikli uyarılar.\n\nHesap başına bir kez verilir.",
+  ui_analytics_hint: "Takip edilen cüzdanların gözünden piyasa: para akışları, büyük işlemler, likidasyonlar ve fonlama.",
   ui_buy_pressure: "Alım baskısı",
   ui_buys: "Alım",
   ui_chart: "Grafik",

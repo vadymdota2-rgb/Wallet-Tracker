@@ -348,6 +348,7 @@ export const ja: Dict = {
   track_now_tracked: "✅ ウォレット",
   track_now_tracked_suffix: "を追跡中です。",
   trial_granted: "🎁 プレミアム7日 — プレゼント\n\nHyperliquid先物のランキング・アラート・建玉、最大50ウォレット、Top 100全文、優先アラートが使えます。\n\nアカウントにつき1回。",
+  ui_analytics_hint: "追跡中のウォレットから見る市場：資金の流れ、大口取引、清算、ファンディング。",
   ui_buy_pressure: "買い優勢",
   ui_buys: "買い回数",
   ui_chart: "チャート",

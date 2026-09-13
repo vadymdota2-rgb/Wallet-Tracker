@@ -348,6 +348,7 @@ export const de: Dict = {
   track_now_tracked: "✅ Wallet",
   track_now_tracked_suffix: "wird jetzt beobachtet.",
   trial_granted: "🎁 7 Tage Premium — geschenkt\n\nDu hast: Hyperliquid-Futures mit Ranking, Alerts und Positionen, bis zu 50 Wallets, volles Top 100 und priorisierte Alerts.\n\nEinmal pro Konto.",
+  ui_analytics_hint: "Der Markt aus Sicht der verfolgten Wallets: Geldflüsse, große Trades, Liquidationen und Funding.",
   ui_buy_pressure: "Kaufdruck",
   ui_buys: "Käufe",
   ui_chart: "Chart",

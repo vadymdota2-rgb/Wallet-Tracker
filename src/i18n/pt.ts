@@ -348,6 +348,7 @@ export const pt: Dict = {
   track_now_tracked: "✅ A carteira",
   track_now_tracked_suffix: "já está sendo monitorada.",
   trial_granted: "🎁 7 dias de Premium — por nossa conta\n\nVocê já tem: futuros da Hyperliquid com ranking, alertas e posições abertas, até 50 carteiras, o Top 100 completo e alertas prioritários.\n\nConcedido uma única vez por conta.",
+  ui_analytics_hint: "O mercado pelos olhos das carteiras monitoradas: fluxos de dinheiro, grandes negociações, liquidações e funding.",
   ui_buy_pressure: "Pressão compradora",
   ui_buys: "Compras",
   ui_chart: "Gráfico",

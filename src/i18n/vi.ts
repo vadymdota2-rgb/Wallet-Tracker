@@ -348,6 +348,7 @@ export const vi: Dict = {
   track_now_tracked: "✅ Ví",
   track_now_tracked_suffix: "đang được theo dõi.",
   trial_granted: "🎁 7 ngày Premium — miễn phí\n\nBạn có: futures Hyperliquid với xếp hạng, cảnh báo, vị thế, tới 50 ví, Top 100 đầy đủ và cảnh báo ưu tiên.\n\nMột lần mỗi tài khoản.",
+  ui_analytics_hint: "Thị trường qua các ví được theo dõi: dòng tiền, giao dịch lớn, thanh lý và funding.",
   ui_buy_pressure: "Áp lực mua",
   ui_buys: "Lượt mua",
   ui_chart: "Biểu đồ",

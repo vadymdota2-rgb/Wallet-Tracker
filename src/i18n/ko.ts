@@ -348,6 +348,7 @@ export const ko: Dict = {
   track_now_tracked: "✅ 지갑",
   track_now_tracked_suffix: "이(가) 추적됩니다.",
   trial_granted: "🎁 7일 프리미엄 — 증정\n\nHyperliquid 선물 순위·알림·포지션, 지갑 최대 50개, Top 100 전체, 우선 알림이 제공됩니다.\n\n계정당 1회.",
+  ui_analytics_hint: "추적 중인 지갑으로 본 시장: 자금 흐름, 대형 거래, 청산, 펀딩.",
   ui_buy_pressure: "매수 우위",
   ui_buys: "매수 횟수",
   ui_chart: "차트",

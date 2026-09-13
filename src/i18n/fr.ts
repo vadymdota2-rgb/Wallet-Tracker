@@ -348,6 +348,7 @@ export const fr: Dict = {
   track_now_tracked: "✅ Le portefeuille",
   track_now_tracked_suffix: "est désormais suivi.",
   trial_granted: "🎁 7 jours de Premium offerts\n\nVous avez désormais : les futures Hyperliquid avec classement, alertes et positions ouvertes, jusqu'à 50 portefeuilles, le Top 100 complet et les alertes prioritaires.\n\nOffert une seule fois par compte.",
+  ui_analytics_hint: "Le marché vu par les portefeuilles suivis : flux d'argent, grosses transactions, liquidations et funding.",
   ui_buy_pressure: "Pression acheteuse",
   ui_buys: "Achats",
   ui_chart: "Graphique",

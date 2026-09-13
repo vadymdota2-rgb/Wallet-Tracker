@@ -348,6 +348,7 @@ export const pl: Dict = {
   track_now_tracked: "✅ Portfel",
   track_now_tracked_suffix: "jest teraz śledzony.",
   trial_granted: "🎁 7 dni Premium — w prezencie\n\nMasz: futures Hyperliquid z rankingiem, alertami i pozycjami, do 50 portfeli, pełny Top 100 i priorytetowe alerty.\n\nRaz na konto.",
+  ui_analytics_hint: "Rynek oczami śledzonych portfeli: przepływy pieniędzy, duże transakcje, likwidacje i funding.",
   ui_buy_pressure: "Przewaga kupna",
   ui_buys: "Zakupów",
   ui_chart: "Wykres",

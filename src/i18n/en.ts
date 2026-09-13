@@ -348,6 +348,7 @@ export const en = {
   track_now_tracked: "✅ Wallet",
   track_now_tracked_suffix: "is now being tracked.",
   trial_granted: "🎁 7 days of Premium — on us\n\nYou now have: Hyperliquid futures with ranking, alerts and open positions, up to 50 wallets, the full Top 100 and priority alerts.\n\nGiven once per account.",
+  ui_analytics_hint: "The market through tracked wallets: money flows, big trades, liquidations and funding.",
   ui_buy_pressure: "Buy pressure",
   ui_buys: "Buys",
   ui_chart: "Chart",

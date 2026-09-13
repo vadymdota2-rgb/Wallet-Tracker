@@ -143,6 +143,24 @@
     "zh": "该时段全部币种的累计净流入",
     "ja": "期間内の全銘柄の累計ネットフロー"
   },
+  "ui_analytics_hint": {
+    "en": "The market through tracked wallets: money flows, big trades, liquidations and funding.",
+    "ru": "Рынок глазами отслеживаемых кошельков: потоки денег, крупные сделки, ликвидации и фандинг.",
+    "uk": "Ринок очима відстежуваних гаманців: потоки грошей, великі угоди, ліквідації та фандинг.",
+    "es": "El mercado visto por las carteras rastreadas: flujos de dinero, grandes operaciones, liquidaciones y funding.",
+    "pt": "O mercado pelos olhos das carteiras monitoradas: fluxos de dinheiro, grandes negociações, liquidações e funding.",
+    "fr": "Le marché vu par les portefeuilles suivis : flux d'argent, grosses transactions, liquidations et funding.",
+    "de": "Der Markt aus Sicht der verfolgten Wallets: Geldflüsse, große Trades, Liquidationen und Funding.",
+    "tr": "Takip edilen cüzdanların gözünden piyasa: para akışları, büyük işlemler, likidasyonlar ve fonlama.",
+    "pl": "Rynek oczami śledzonych portfeli: przepływy pieniędzy, duże transakcje, likwidacje i funding.",
+    "ar": "السوق بعيون المحافظ المتابَعة: تدفقات الأموال والصفقات الكبيرة والتصفيات والتمويل.",
+    "hi": "ट्रैक किए गए वॉलेट की नज़र से बाज़ार: पैसे का प्रवाह, बड़े ट्रेड, लिक्विडेशन और फंडिंग।",
+    "id": "Pasar lewat dompet yang dilacak: arus uang, transaksi besar, likuidasi, dan funding.",
+    "vi": "Thị trường qua các ví được theo dõi: dòng tiền, giao dịch lớn, thanh lý và funding.",
+    "ko": "추적 중인 지갑으로 본 시장: 자금 흐름, 대형 거래, 청산, 펀딩.",
+    "zh": "从被追踪钱包看市场：资金流向、大额交易、爆仓与资金费率。",
+    "ja": "追跡中のウォレットから見る市場：資金の流れ、大口取引、清算、ファンディング。"
+  },
   "ui_buy_pressure": {
     "en": "Buy pressure",
     "ru": "Перевес покупок",

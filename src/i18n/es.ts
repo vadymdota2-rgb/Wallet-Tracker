@@ -348,6 +348,7 @@ export const es: Dict = {
   track_now_tracked: "✅ La billetera",
   track_now_tracked_suffix: "ya se está siguiendo.",
   trial_granted: "🎁 7 días de Premium — de regalo\n\nYa tienes: futuros de Hyperliquid con ranking, alertas y posiciones abiertas, hasta 50 billeteras, el Top 100 completo y alertas prioritarias.\n\nSe entrega una sola vez por cuenta.",
+  ui_analytics_hint: "El mercado visto por las carteras rastreadas: flujos de dinero, grandes operaciones, liquidaciones y funding.",
   ui_buy_pressure: "Presión compradora",
   ui_buys: "Compras",
   ui_chart: "Gráfico",

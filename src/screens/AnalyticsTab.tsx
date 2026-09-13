@@ -52,13 +52,15 @@ const BIG_WINS: { id: BigWin; key: Parameters<typeof t>[1] }[] = [
  * не ищет. Подсказка над рядом и так говорит «выберите площадку», поэтому у
  * спота и фьючерсов стоят их имена, а не пересказ содержимого.
  */
-const VIEWS: { id: BigView; label: (t: (k: DictKey) => string) => string }[] = [
-  { id: "flow", label: () => "NetFlow" },
-  { id: "spot", label: () => venueName("spot") },
-  { id: "perp", label: () => venueName("perp") },
-  { id: "liq", label: (tr) => tr("ui_tab_liq") },
-  { id: "fund", label: (tr) => tr("ui_tab_funding") },
-  { id: "rot", label: (tr) => tr("ui_rotation") },
+/* Значок у каждого раздела свой: на шести одинаковых плитках глаз ищет
+   нужную по тексту заново каждый раз, а по картинке попадает сразу. */
+const VIEWS: { id: BigView; ic: string; label: (t: (k: DictKey) => string) => string }[] = [
+  { id: "flow", ic: "🌊", label: () => "NetFlow" },
+  { id: "spot", ic: "🛒", label: () => venueName("spot") },
+  { id: "perp", ic: "📈", label: () => venueName("perp") },
+  { id: "liq", ic: "💥", label: (tr) => tr("ui_tab_liq") },
+  { id: "fund", ic: "⚖️", label: (tr) => tr("ui_tab_funding") },
+  { id: "rot", ic: "🔄", label: (tr) => tr("ui_rotation") },
 ];
 
 function TradeList({ rows, empty }: { rows: TradeRow[]; empty: string }) {
@@ -147,12 +149,31 @@ export function AnalyticsTab() {
     <>
       <Card>
         <SectionTitle>{t(lang, "big_title")}</SectionTitle>
-        <p className="note dim">{t(lang, "big_menu_hint")}</p>
-        <Segmented<BigView>
-          value={view}
-          onChange={setView}
-          options={VIEWS.map((v) => ({ id: v.id, label: v.label((k) => t(lang, k)) }))}
-        />
+        {/* Подпись общая для всех разделов: прежняя обещала только крупные
+            сделки, а под ней жили ещё и потоки, фандинг и ротация. */}
+        <p className="note dim">{t(lang, "ui_analytics_hint")}</p>
+        {/* Сеткой, а не лентой: шесть разделов в один ряд не помещались, и
+            последний приходилось доставать прокруткой, о которой ничто не
+            сообщало — «Ликвидации» просто обрывались на краю. */}
+        <nav className="views" role="tablist" aria-label={t(lang, "big_title")}>
+          {VIEWS.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              role="tab"
+              aria-selected={v.id === view}
+              className={v.id === view ? "on" : undefined}
+              onClick={() => {
+                if (v.id === view) return;
+                haptic("select");
+                setView(v.id);
+              }}
+            >
+              <span aria-hidden="true">{v.ic}</span>
+              <span>{v.label((k) => t(lang, k))}</span>
+            </button>
+          ))}
+        </nav>
         {showWindows ? (
           <Segmented<BigWin>
             value={bigWin}
