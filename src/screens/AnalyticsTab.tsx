@@ -3,7 +3,7 @@
  * крупнейшие покупки, крупнейшие позиции, ликвидации, перекос фандинга.
  * Ротация — то, чего в чате показать было неудобно, а на экране видно.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import { t } from "../i18n/t";
@@ -15,7 +15,9 @@ import { ago } from "../lib/relative";
 import { fundingSideKey, isUpKind, levFromSide, tradeKind, tradeKindKey } from "../lib/labels";
 import { CoinIcon } from "../components/CoinIcon";
 import { BuySellBar, FlowSpark, TrendChart } from "../components/Chart";
-import { Card, Empty, Locked, Row, SectionTitle, Segmented, Skeleton } from "../components/ui";
+import {
+  Card, Empty, Locked, Row, SectionTitle, Segmented, Skeleton, TileNav, VenueMark,
+} from "../components/ui";
 import { fetchBig, fetchFlow } from "../lib/api";
 import type { BigView, BigWin, FlowWin } from "../store/app";
 import type { FlowRow, FlowSide, TradeRow, Trades } from "../lib/types";
@@ -53,11 +55,13 @@ const BIG_WINS: { id: BigWin; key: Parameters<typeof t>[1] }[] = [
  * спота и фьючерсов стоят их имена, а не пересказ содержимого.
  */
 /* Значок у каждого раздела свой: на шести одинаковых плитках глаз ищет
-   нужную по тексту заново каждый раз, а по картинке попадает сразу. */
-const VIEWS: { id: BigView; ic: string; label: (t: (k: DictKey) => string) => string }[] = [
+   нужную по тексту заново каждый раз, а по картинке попадает сразу. У
+   разделов площадок это не картинка по смыслу, а их собственные логотипы —
+   по ним площадка узнаётся раньше, чем прочитано название. */
+const VIEWS: { id: BigView; ic: ReactNode; label: (t: (k: DictKey) => string) => string }[] = [
   { id: "flow", ic: "🌊", label: () => "NetFlow" },
-  { id: "spot", ic: "🛒", label: () => venueName("spot") },
-  { id: "perp", ic: "📈", label: () => venueName("perp") },
+  { id: "spot", ic: <VenueMark venue="spot" size={20} />, label: () => venueName("spot") },
+  { id: "perp", ic: <VenueMark venue="perp" size={20} />, label: () => venueName("perp") },
   { id: "liq", ic: "💥", label: (tr) => tr("ui_tab_liq") },
   { id: "fund", ic: "⚖️", label: (tr) => tr("ui_tab_funding") },
   { id: "rot", ic: "🔄", label: (tr) => tr("ui_rotation") },
@@ -155,25 +159,16 @@ export function AnalyticsTab() {
         {/* Сеткой, а не лентой: шесть разделов в один ряд не помещались, и
             последний приходилось доставать прокруткой, о которой ничто не
             сообщало — «Ликвидации» просто обрывались на краю. */}
-        <nav className="views" role="tablist" aria-label={t(lang, "big_title")}>
-          {VIEWS.map((v) => (
-            <button
-              key={v.id}
-              type="button"
-              role="tab"
-              aria-selected={v.id === view}
-              className={v.id === view ? "on" : undefined}
-              onClick={() => {
-                if (v.id === view) return;
-                haptic("select");
-                setView(v.id);
-              }}
-            >
-              <span aria-hidden="true">{v.ic}</span>
-              <span>{v.label((k) => t(lang, k))}</span>
-            </button>
-          ))}
-        </nav>
+        <TileNav<BigView>
+          value={view}
+          onChange={setView}
+          label={t(lang, "big_title")}
+          options={VIEWS.map((v) => ({
+            id: v.id,
+            ic: v.ic,
+            label: v.label((k) => t(lang, k)),
+          }))}
+        />
         {showWindows ? (
           <Segmented<BigWin>
             value={bigWin}

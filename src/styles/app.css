@@ -700,7 +700,7 @@
 .seg button.on { background: var(--blue); color: #fff; box-shadow: var(--shadow); }
 
 /* Разделы аналитики: шесть плиток в две строки, все на виду ------------- */
-.views { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+.views { display: grid; grid-template-columns: repeat(var(--cols, 3), 1fr); gap: 7px; }
 .views button {
   display: grid;
   gap: 4px;
@@ -722,7 +722,16 @@
   transition: background 0.18s var(--ease), color 0.18s var(--ease),
               border-color 0.18s var(--ease);
 }
-.views button span:first-child { font-size: 17px; line-height: 1; }
+/* Значок — либо эмодзи, либо логотип площадки. Фиксированная коробка держит
+   подписи на одной высоте: у картинки и у эмодзи базовая линия разная. */
+.views .v-ic {
+  display: grid;
+  place-items: center;
+  height: 22px;
+  font-size: 17px;
+  line-height: 1;
+}
+.views .v-ic img { display: block; }
 .views button.on {
   background: var(--blue);
   border-color: var(--blue);

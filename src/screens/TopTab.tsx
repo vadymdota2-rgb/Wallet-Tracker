@@ -23,7 +23,8 @@ import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
 import { haptic } from "../lib/telegram";
 import {
-  Card, DealsGlyph, Empty, MinusGlyph, PlusGlyph, SectionTitle, Segmented, Tiles,
+  Card, DealsGlyph, Empty, MinusGlyph, PlusGlyph, SectionTitle, Segmented, TileNav,
+  Tiles, VenueMark,
 } from "../components/ui";
 import type { RankKind, RankTable, Trader, Venue } from "../lib/types";
 import type { RankWin } from "../store/app";
@@ -99,15 +100,26 @@ export function TopTab() {
     <>
       <Card>
         <SectionTitle note={t(lang, "hl_venue")}>{t(lang, "hl_venue_title")}</SectionTitle>
-        {/* Подписи короткие: полные («BSC — Спот», «Топ по винрейту») не
-            помещались в ряд и уезжали за край, а прокрутку внутри полосы
-            переключателей никто не ищет. */}
-        <Segmented<Venue>
+        {/* Площадка выбирается плитками с логотипами — теми же, что в
+            аналитике: по знаку биржа узнаётся раньше, чем прочитано её имя.
+            В плитке помещается и что там торгуют: раньше подпись приходилось
+            резать до «BSC», потому что «BSC — Спот» уезжало за край. */}
+        <TileNav<Venue>
           value={venue}
           onChange={setVenue}
+          cols={2}
+          label={t(lang, "hl_venue")}
           options={[
-            { id: "spot", label: venueName("spot") },
-            { id: "perp", label: venueName("perp") },
+            {
+              id: "spot",
+              ic: <VenueMark venue="spot" size={22} />,
+              label: `${venueName("spot")} · ${t(lang, "ai_spot")}`,
+            },
+            {
+              id: "perp",
+              ic: <VenueMark venue="perp" size={22} />,
+              label: `${venueName("perp")} · ${t(lang, "wl_perp_rank")}`,
+            },
           ]}
         />
         <Segmented<RankKind>

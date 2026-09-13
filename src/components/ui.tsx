@@ -1,5 +1,5 @@
 /** Мелкие кирпичики интерфейса: строка списка, плитки, кнопка, заголовок. */
-import { Fragment, type ReactNode } from "react";
+import { Fragment, type CSSProperties, type ReactNode } from "react";
 import { haptic } from "../lib/telegram";
 
 export function SectionTitle({ children, note }: { children: ReactNode; note?: ReactNode }) {
@@ -198,6 +198,56 @@ export function Segmented<T extends string>({
  * Значок площадки: BNB для спота на BSC, HYPE для фьючерсов Hyperliquid.
  * Файлы едут вместе с образом, наружу запросов нет.
  */
+/**
+ * Выбор раздела плитками, а не лентой.
+ *
+ * Полоса переключателей годится, пока вариантов три-четыре: дальше они не
+ * помещаются в строку, и последние приходится доставать прокруткой, о
+ * которой ничто не сообщает — подпись просто обрывается на краю. Плитки
+ * показывают все варианты сразу и оставляют место значку, по которому глаз
+ * находит нужный раздел быстрее, чем по тексту.
+ */
+export function TileNav<T extends string>({
+  value,
+  options,
+  onChange,
+  cols = 3,
+  label,
+}: {
+  value: T;
+  options: { id: T; ic: ReactNode; label: ReactNode }[];
+  onChange: (id: T) => void;
+  cols?: number;
+  label?: string;
+}) {
+  return (
+    <nav
+      className="views"
+      role="tablist"
+      aria-label={label}
+      style={{ "--cols": cols } as CSSProperties}
+    >
+      {options.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          role="tab"
+          aria-selected={o.id === value}
+          className={o.id === value ? "on" : undefined}
+          onClick={() => {
+            if (o.id === value) return;
+            haptic("select");
+            onChange(o.id);
+          }}
+        >
+          <span className="v-ic" aria-hidden="true">{o.ic}</span>
+          <span>{o.label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
 export function VenueMark({ venue, size = 15 }: { venue: "spot" | "perp"; size?: number }) {
   return (
     <img
