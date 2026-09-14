@@ -387,6 +387,8 @@ export const zh: Dict = {
   ui_sync_failed: "刷新失败",
   ui_tab_funding: "资金费",
   ui_tab_liq: "强平",
+  ui_tab_orders: "大额订单",
+  ui_tab_positions: "大额持仓",
   ui_tf_15m: "15分",
   ui_tf_1d: "1天",
   ui_tf_1h: "1小时",

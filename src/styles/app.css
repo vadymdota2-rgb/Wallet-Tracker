@@ -743,7 +743,18 @@
   font-size: 17px;
   line-height: 1;
 }
-.views .v-ic img { display: block; }
+/* Значок площадки — в углу плитки, а не поверх знака раздела: наложенный, он
+   закрывал часть знака и спорил с ним за внимание, особенно на эмодзи. В
+   углу он читается как пометка «откуда данные», чем и является. */
+.views button { position: relative; }
+.views .venue {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 13px;
+  height: 13px;
+  opacity: 0.85;
+}
 .views button.on {
   background: var(--blue);
   border-color: var(--blue);

@@ -215,7 +215,8 @@ export function TileNav<T extends string>({
   label,
 }: {
   value: T;
-  options: { id: T; ic: ReactNode; label: ReactNode }[];
+  /** venue — значок площадки уголком: знак говорит «что», значок «где». */
+  options: { id: T; ic: ReactNode; venue?: "spot" | "perp"; label: ReactNode }[];
   onChange: (id: T) => void;
   cols?: number;
   label?: string;
@@ -240,6 +241,7 @@ export function TileNav<T extends string>({
             onChange(o.id);
           }}
         >
+          {o.venue ? <VenueMark venue={o.venue} size={13} /> : null}
           <span className="v-ic" aria-hidden="true">{o.ic}</span>
           <span>{o.label}</span>
         </button>
@@ -306,6 +308,47 @@ export function TopGlyph({ size = 21 }: { size?: number }) {
         d="m12 10.6 1.24 2.5 2.76.4-2 1.95.47 2.75L12 16.9l-2.47 1.3.47-2.75-2-1.95 2.76-.4z"
         strokeWidth="1.4"
       />
+    </svg>
+  );
+}
+
+/**
+ * Знак «Крупные ордера» — разовые сделки на BSC.
+ *
+ * Два столбика разной высоты: крупная покупка и продажа поменьше. Раздел про
+ * отдельные сделки, а не про накопленный итог, поэтому здесь столбики, а не
+ * линия, как у NetFlow, — эти два раздела стоят рядом и различаться должны с
+ * одного взгляда.
+ */
+export function OrdersGlyph({ size = 22 }: { size?: number }) {
+  return (
+    <svg className="glyph" viewBox="0 0 24 24" width={size} height={size} fill="none"
+         aria-hidden="true">
+      <path d="M2.4 20.4h19.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"
+            opacity="0.5" />
+      <rect x="4.6" y="4.2" width="6.2" height="14.6" rx="2.2" fill="var(--up)" />
+      <rect x="13.2" y="10.6" width="6.2" height="8.2" rx="2.2" fill="var(--dn)" />
+    </svg>
+  );
+}
+
+/**
+ * Знак «Крупные позиции» — открытые позиции на Hyperliquid.
+ *
+ * Стрелка вверх и стрелка вниз: лонг и шорт. Рядом со столбиками ордеров
+ * стрелки не спутать, а по отдельности каждая говорит своё направление.
+ *
+ * Горизонтальные встречные стрелки не годятся: так рисуют перевод, и ровно
+ * такая пара стоит на соседней плитке «Ротация».
+ */
+export function PositionsGlyph({ size = 22 }: { size?: number }) {
+  return (
+    <svg className="glyph" viewBox="0 0 24 24" width={size} height={size} fill="none"
+         strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M7.6 20.4V5.2" stroke="var(--up)" strokeWidth="3" />
+      <path d="M4 8.6 7.6 4.6l3.6 4" stroke="var(--up)" strokeWidth="3" />
+      <path d="M16.4 3.6v12.2" stroke="var(--dn)" strokeWidth="3" />
+      <path d="M12.8 12.4l3.6 4 3.6-4" stroke="var(--dn)" strokeWidth="3" />
     </svg>
   );
 }

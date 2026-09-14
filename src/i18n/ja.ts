@@ -387,6 +387,8 @@ export const ja: Dict = {
   ui_sync_failed: "更新できませんでした",
   ui_tab_funding: "ファンディング",
   ui_tab_liq: "清算",
+  ui_tab_orders: "大口注文",
+  ui_tab_positions: "大口ポジション",
   ui_tf_15m: "15分",
   ui_tf_1d: "1日",
   ui_tf_1h: "1時間",

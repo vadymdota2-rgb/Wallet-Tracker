@@ -387,6 +387,8 @@ export const ar: Dict = {
   ui_sync_failed: "تعذّر التحديث",
   ui_tab_funding: "التمويل",
   ui_tab_liq: "التصفيات",
+  ui_tab_orders: "أوامر كبيرة",
+  ui_tab_positions: "مراكز كبيرة",
   ui_tf_15m: "15د",
   ui_tf_1d: "1ي",
   ui_tf_1h: "1س",

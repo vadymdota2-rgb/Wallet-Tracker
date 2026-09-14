@@ -387,6 +387,8 @@ export const pl: Dict = {
   ui_sync_failed: "Nie udało się odświeżyć",
   ui_tab_funding: "Funding",
   ui_tab_liq: "Likwidacje",
+  ui_tab_orders: "Duże zlecenia",
+  ui_tab_positions: "Duże pozycje",
   ui_tf_15m: "15M",
   ui_tf_1d: "1D",
   ui_tf_1h: "1G",

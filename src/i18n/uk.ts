@@ -387,6 +387,8 @@ export const uk: Dict = {
   ui_sync_failed: "Не вдалося оновити",
   ui_tab_funding: "Фандинг",
   ui_tab_liq: "Ліквідації",
+  ui_tab_orders: "Великі ордери",
+  ui_tab_positions: "Великі позиції",
   ui_tf_15m: "15х",
   ui_tf_1d: "1Д",
   ui_tf_1h: "1Г",

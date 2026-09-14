@@ -387,6 +387,8 @@ export const ru: Dict = {
   ui_sync_failed: "Не удалось обновить",
   ui_tab_funding: "Фандинг",
   ui_tab_liq: "Ликвидации",
+  ui_tab_orders: "Крупные ордера",
+  ui_tab_positions: "Крупные позиции",
   ui_tf_15m: "15м",
   ui_tf_1d: "1Д",
   ui_tf_1h: "1Ч",

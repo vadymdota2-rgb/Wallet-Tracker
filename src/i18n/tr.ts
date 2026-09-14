@@ -387,6 +387,8 @@ export const tr: Dict = {
   ui_sync_failed: "Yenilenemedi",
   ui_tab_funding: "Funding",
   ui_tab_liq: "Tasfiyeler",
+  ui_tab_orders: "Büyük emirler",
+  ui_tab_positions: "Büyük pozisyonlar",
   ui_tf_15m: "15D",
   ui_tf_1d: "1G",
   ui_tf_1h: "1S",

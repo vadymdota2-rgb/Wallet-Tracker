@@ -387,6 +387,8 @@ export const ko: Dict = {
   ui_sync_failed: "새로고침하지 못했습니다",
   ui_tab_funding: "펀딩",
   ui_tab_liq: "청산",
+  ui_tab_orders: "대형 주문",
+  ui_tab_positions: "대형 포지션",
   ui_tf_15m: "15분",
   ui_tf_1d: "1일",
   ui_tf_1h: "1시간",

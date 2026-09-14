@@ -387,6 +387,8 @@ export const en = {
   ui_sync_failed: "Could not refresh",
   ui_tab_funding: "Funding",
   ui_tab_liq: "Liquidations",
+  ui_tab_orders: "Big orders",
+  ui_tab_positions: "Big positions",
   ui_tf_15m: "15m",
   ui_tf_1d: "1D",
   ui_tf_1h: "1H",

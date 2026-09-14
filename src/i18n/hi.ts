@@ -387,6 +387,8 @@ export const hi: Dict = {
   ui_sync_failed: "रिफ़्रेश नहीं हो सका",
   ui_tab_funding: "फंडिंग",
   ui_tab_liq: "परिसमापन",
+  ui_tab_orders: "बड़े ऑर्डर",
+  ui_tab_positions: "बड़ी पोज़िशन",
   ui_tf_15m: "15मि",
   ui_tf_1d: "1दि",
   ui_tf_1h: "1घं",

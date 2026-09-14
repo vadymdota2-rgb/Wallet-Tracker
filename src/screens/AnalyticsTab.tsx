@@ -8,7 +8,6 @@ import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import { t } from "../i18n/t";
 import type { DictKey } from "../i18n";
-import { venueName } from "../lib/rank";
 import { haptic } from "../lib/telegram";
 import { num, pct, signed, usd } from "../lib/format";
 import { ago } from "../lib/relative";
@@ -16,8 +15,8 @@ import { fundingSideKey, isUpKind, levFromSide, tradeKind, tradeKindKey } from "
 import { CoinIcon } from "../components/CoinIcon";
 import { BuySellBar, FlowSpark, TrendChart } from "../components/Chart";
 import {
-  Card, Empty, Locked, NetFlowGlyph, Row, SectionTitle, Segmented, Skeleton, TileNav,
-  VenueMark,
+  Card, Empty, Locked, NetFlowGlyph, OrdersGlyph, PositionsGlyph, Row, SectionTitle,
+  Segmented, Skeleton, TileNav,
 } from "../components/ui";
 import { fetchBig, fetchFlow } from "../lib/api";
 import type { BigView, BigWin, FlowWin } from "../store/app";
@@ -48,24 +47,27 @@ const BIG_WINS: { id: BigWin; key: Parameters<typeof t>[1] }[] = [
 ];
 
 /**
- * Подписи разделов — короткие.
+ * Разделы аналитики: название говорит «что», значок площадки уголком — «где».
  *
- * Полные («🟡 Крупнейшие покупки / продажи», «💢 Перекос фандинга») в ряд не
- * помещались: шесть таких уезжали за край, а прокрутку внутри полосы никто
- * не ищет. Подсказка над рядом и так говорит «выберите площадку», поэтому у
- * спота и фьючерсов стоят их имена, а не пересказ содержимого.
+ * Раньше плитки назывались вперемешку: «NetFlow» — по смыслу, «BSC» и
+ * «Hyperliquid» — по площадке. Выходило, что NetFlow будто бы не с BSC, хотя
+ * он ровно оттуда же, откуда и соседняя плитка; а «BSC» ничего не говорила
+ * про то, что внутри крупные разовые сделки. Теперь по смыслу названы все
+ * шесть, а площадка вынесена в значок — она у половины разделов одна и та же
+ * и названием быть не может.
  */
-/* Значок у каждого раздела свой: на шести одинаковых плитках глаз ищет
-   нужную по тексту заново каждый раз, а по картинке попадает сразу. У
-   разделов площадок это не картинка по смыслу, а их собственные логотипы —
-   по ним площадка узнаётся раньше, чем прочитано название. */
-const VIEWS: { id: BigView; ic: ReactNode; label: (t: (k: DictKey) => string) => string }[] = [
-  { id: "flow", ic: <NetFlowGlyph size={22} />, label: () => "NetFlow" },
-  { id: "spot", ic: <VenueMark venue="spot" size={20} />, label: () => venueName("spot") },
-  { id: "perp", ic: <VenueMark venue="perp" size={20} />, label: () => venueName("perp") },
-  { id: "liq", ic: "💥", label: (tr) => tr("ui_tab_liq") },
-  { id: "fund", ic: "⚖️", label: (tr) => tr("ui_tab_funding") },
-  { id: "rot", ic: "🔄", label: (tr) => tr("ui_rotation") },
+const VIEWS: {
+  id: BigView;
+  ic: ReactNode;
+  venue: "spot" | "perp";
+  label: (t: (k: DictKey) => string) => string;
+}[] = [
+  { id: "flow", ic: <NetFlowGlyph size={22} />, venue: "spot", label: () => "NetFlow" },
+  { id: "spot", ic: <OrdersGlyph size={22} />, venue: "spot", label: (tr) => tr("ui_tab_orders") },
+  { id: "perp", ic: <PositionsGlyph size={22} />, venue: "perp", label: (tr) => tr("ui_tab_positions") },
+  { id: "liq", ic: "💥", venue: "perp", label: (tr) => tr("ui_tab_liq") },
+  { id: "fund", ic: "⚖️", venue: "perp", label: (tr) => tr("ui_tab_funding") },
+  { id: "rot", ic: "🔄", venue: "spot", label: (tr) => tr("ui_rotation") },
 ];
 
 function TradeList({ rows, empty }: { rows: TradeRow[]; empty: string }) {
@@ -167,6 +169,7 @@ export function AnalyticsTab() {
           options={VIEWS.map((v) => ({
             id: v.id,
             ic: v.ic,
+            venue: v.venue,
             label: v.label((k) => t(lang, k)),
           }))}
         />

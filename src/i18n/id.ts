@@ -387,6 +387,8 @@ export const id: Dict = {
   ui_sync_failed: "Gagal menyegarkan",
   ui_tab_funding: "Funding",
   ui_tab_liq: "Likuidasi",
+  ui_tab_orders: "Order besar",
+  ui_tab_positions: "Posisi besar",
   ui_tf_15m: "15m",
   ui_tf_1d: "1H",
   ui_tf_1h: "1J",
