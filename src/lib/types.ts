@@ -114,6 +114,28 @@ export type FlowRow = Omit<FlowCoin, "top" | "c1" | "c6" | "c24">;
 /** Ключи окна: часы. Сервер отдаёт "1" | "6" | "24" | "168" | "720". */
 export type Flow = Record<string, FlowWindow | undefined>;
 
+/** Монета в разделе «Лонг / Шорт»: сколько денег зашло в каждую сторону. */
+export interface LsRow {
+  sym: string;
+  long: number;
+  short: number;
+  net: number;
+  /** Доля денег в лонге, в процентах. */
+  pct: number;
+  w: number;
+}
+
+export interface LsWindow {
+  long: number;
+  short: number;
+  net: number;
+  pct: number;
+  coins: number;
+  rows: LsRow[];
+}
+
+export type Ls = Record<string, LsWindow | undefined>;
+
 /** Покупка на BSC, ещё не проданная полностью. */
 export interface SpotHold {
   token: string;
@@ -342,6 +364,7 @@ export interface Bootstrap {
   feed?: FeedRow[];
   alerts?: AlertRow[];
   flow?: Flow;
+  ls?: Ls;
   rank?: Rank;
   sonar?: Sonar;
   trades?: Trades;

@@ -6,7 +6,7 @@
  */
 import { create } from "zustand";
 import type {
-  AlertRow, Bootstrap, Coins, FeedRow, Flow, Funding, Me, Rank, Rot, Sonar, Trades, Wallet,
+  AlertRow, Bootstrap, Coins, FeedRow, Flow, Funding, Ls, Me, Rank, Rot, Sonar, Trades, Wallet,
 } from "../lib/types";
 import { tgUserId } from "../lib/telegram";
 
@@ -51,6 +51,7 @@ interface LiveState {
   feed: FeedRow[];
   marketFeed: FeedRow[];
   flow: Flow;
+  ls: Ls;
   rank: Rank;
   sonar: Sonar;
   trades: Trades;
@@ -78,7 +79,7 @@ const SNAP_TTL = 24 * 3600_000;
 
 type Snapshot = Pick<
   LiveState,
-  "syncedAt" | "me" | "wallets" | "alerts" | "feed" | "marketFeed" | "flow"
+  "syncedAt" | "me" | "wallets" | "alerts" | "feed" | "marketFeed" | "flow" | "ls"
   | "rank" | "sonar" | "trades" | "funding" | "rot" | "coins"
 > & { uid: string };
 
@@ -118,7 +119,7 @@ function writeSnap(s: LiveState): void {
       uid: tgUserId(),
       syncedAt: s.syncedAt,
       me: s.me, wallets: s.wallets, alerts: s.alerts, feed: s.feed,
-      marketFeed: s.marketFeed, flow: s.flow, rank: s.rank, sonar: s.sonar,
+      marketFeed: s.marketFeed, flow: s.flow, ls: s.ls, rank: s.rank, sonar: s.sonar,
       trades: s.trades, funding: s.funding, rot: s.rot, coins: s.coins,
     };
     localStorage.setItem(SNAP, JSON.stringify(snap));
@@ -169,6 +170,7 @@ export const useLive = create<LiveState>((set, get) => ({
   feed: snap?.feed ?? [],
   marketFeed: snap?.marketFeed ?? [],
   flow: snap?.flow ?? {},
+  ls: snap?.ls ?? {},
   rank: snap?.rank ?? EMPTY_RANK,
   sonar: snap?.sonar ?? EMPTY_SONAR,
   trades: snap?.trades ?? { spot: [], perp: [], liq: [] },
@@ -191,6 +193,7 @@ export const useLive = create<LiveState>((set, get) => ({
       // Общее — только если сервер успел его собрать.
       marketFeed: some(d.marketFeed) ? d.marketFeed! : prev.marketFeed,
       flow: some(d.flow) ? d.flow! : prev.flow,
+      ls: some(d.ls) ? d.ls! : prev.ls,
       rank: boards(d.rank) ? d.rank! : prev.rank,
       sonar: d.sonar?.list?.length || d.sonar?.trained ? d.sonar : prev.sonar,
       trades: some(d.trades?.spot) || some(d.trades?.perp) || some(d.trades?.liq)

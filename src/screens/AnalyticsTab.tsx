@@ -22,9 +22,9 @@ import {
   Card, CopyGlyph, Empty, Locked, MinusGlyph, NetFlowGlyph, OrdersGlyph, PlusGlyph,
   PositionsGlyph, Row, SectionTitle, Segmented, Skeleton, TileNav,
 } from "../components/ui";
-import { fetchBig, fetchFlow } from "../lib/api";
+import { fetchBig, fetchFlow, fetchLs } from "../lib/api";
 import type { BigSide, BigView, BigWin, FlowWin } from "../store/app";
-import type { FlowRow, FlowSide, TradeRow, Trades } from "../lib/types";
+import type { FlowRow, FlowSide, LsRow, TradeRow, Trades } from "../lib/types";
 
 /* Покупки и продажи — двумя кнопками, а не одним списком вперемешку. В общем
    списке крупная продажа и крупная покупка стоят рядом и спорят: доска
@@ -33,6 +33,15 @@ import type { FlowRow, FlowSide, TradeRow, Trades } from "../lib/types";
 const BIG_SIDES: { id: BigSide; key: Parameters<typeof t>[1] }[] = [
   { id: "buy", key: "ui_side_buys" },
   { id: "sell", key: "ui_side_sells" },
+];
+
+/* Те же три кнопки, что у потока, но про перевес: монета лонговая, если
+   больше половины денег зашло на рост. Состояние общее с потоком — человек
+   один раз выбирает, что смотреть, и это держится в обоих разделах. */
+const LS_SIDES: { id: FlowSide; key: Parameters<typeof t>[1] }[] = [
+  { id: "all", key: "flow_side_all" },
+  { id: "in", key: "ls_side_long" },
+  { id: "out", key: "ls_side_short" },
 ];
 
 const FLOW_SIDES: { id: FlowSide; key: Parameters<typeof t>[1] }[] = [
@@ -77,10 +86,10 @@ const VIEWS: {
 }[] = [
   { id: "flow", ic: <NetFlowGlyph size={22} />, venue: "spot", label: () => "NetFlow" },
   { id: "spot", ic: <OrdersGlyph size={22} />, venue: "spot", label: (tr) => tr("ui_tab_orders") },
-  { id: "perp", ic: <PositionsGlyph size={22} />, venue: "perp", label: (tr) => tr("ui_tab_positions") },
-  { id: "liq", ic: "💥", venue: "perp", label: (tr) => tr("ui_tab_liq") },
-  { id: "fund", ic: "⚖️", venue: "perp", label: (tr) => tr("ui_tab_funding") },
   { id: "rot", ic: "🔄", venue: "spot", label: (tr) => tr("ui_rotation") },
+  { id: "ls", ic: <PositionsGlyph size={22} />, venue: "perp", label: (tr) => tr("ui_tab_ls") },
+  { id: "perp", ic: "🐋", venue: "perp", label: (tr) => tr("ui_tab_positions") },
+  { id: "fund", ic: "⚖️", venue: "perp", label: (tr) => tr("ui_tab_funding") },
 ];
 
 /**
@@ -176,8 +185,13 @@ export function AnalyticsTab() {
   const lang = useApp((s) => s.lang);
   const open = useApp((s) => s.open);
   const goTab = useApp((s) => s.goTab);
-  const view = useApp((s) => s.bigView);
+  const saved = useApp((s) => s.bigView);
   const setView = useApp((s) => s.setBigView);
+  /* У кого-то в браузере сохранён раздел, плитки которого больше нет —
+     ликвидации. Оставить как есть нельзя: карточка показалась бы, а ни одна
+     плитка не подсветилась, и это выглядело бы поломкой. Возвращаем к
+     первому разделу. */
+  const view = VIEWS.some((v) => v.id === saved) ? saved : "flow";
   const flowWin = useApp((s) => s.flowWin);
   const setFlowWin = useApp((s) => s.setFlowWin);
   const flowSide = useApp((s) => s.flowSide);
@@ -275,6 +289,32 @@ export function AnalyticsTab() {
             aria-label={t(lang, "flow_search_btn")}
           />
           <FlowBody />
+        </Card>
+      ) : null}
+
+      {view === "ls" ? (
+        <Card>
+          <SectionTitle note={t(lang, "ls_hint")}>{t(lang, "ui_tab_ls")}</SectionTitle>
+          <LsHead />
+          <Segmented<FlowWin>
+            value={flowWin}
+            onChange={setFlowWin}
+            options={FLOW_WINS.map((w) => ({ id: w.id, label: t(lang, w.key) }))}
+          />
+          <Segmented<FlowSide>
+            value={flowSide}
+            onChange={setFlowSide}
+            options={LS_SIDES.map((v) => ({ id: v.id, label: t(lang, v.key) }))}
+          />
+          <input
+            className="find"
+            value={query}
+            placeholder={t(lang, "flow_search_prompt")}
+            onChange={(e) => setQuery(e.target.value)}
+            inputMode="search"
+            aria-label={t(lang, "flow_search_btn")}
+          />
+          <LsBody />
         </Card>
       ) : null}
 
@@ -536,6 +576,144 @@ function FlowBody() {
           </button>
         ) : null}
         </div>
+      ))}
+
+      {pages > 1 ? (
+        <nav className="pager" aria-label={t(lang, "flow_coins")}>
+          <button type="button" disabled={page <= 1 || busy} onClick={() => go(page - 1)}
+                  aria-label={t(lang, "back_button")}>←</button>
+          <span>{num(page)} / {num(pages)}</span>
+          <button type="button" disabled={page >= pages || busy} onClick={() => go(page + 1)}
+                  aria-label={t(lang, "ui_show_more")}>→</button>
+        </nav>
+      ) : null}
+    </>
+  );
+}
+
+
+/**
+ * Сводка по всему рынку: сколько денег зашло в лонг против шорта за окно.
+ *
+ * Стоит первой, как тренд у потока, и по той же причине: вопрос «рынок
+ * ставит на рост или на падение» возникает раньше вопроса про отдельную
+ * монету. Фильтру и поиску не подчиняется — она про всё окно.
+ */
+function LsHead() {
+  const lang = useApp((s) => s.lang);
+  const win = useApp((s) => s.flowWin);
+  const b = useLive((s) => s.ls)[win];
+  if (!b || b.long + b.short <= 0) return null;
+  const up = b.pct >= 50;
+  return (
+    <div className="trend">
+      <p className="trend-ttl">
+        <span>
+          {t(lang, "ls_title")} ·{" "}
+          {t(lang, FLOW_WINS.find((w) => w.id === win)?.key ?? "big_win_24h")}
+        </span>
+        <span>
+          {num(b.coins)} {t(lang, "flow_coins")}
+        </span>
+      </p>
+      <p className="trend-top">
+        <b className={up ? "up" : "dn"}>{pct(b.pct, 1, false)}</b>
+        <small>
+          <span className="up">{usd(b.long)}</span>
+          {" · "}
+          <span className="dn">{usd(b.short)}</span>
+        </small>
+      </p>
+      <BuySellBar buy={b.long} sell={b.short} />
+      <p className="trend-br">
+        <span className="up">{t(lang, "ls_side_long")}</span>
+        <span className="dn">{t(lang, "ls_side_short")}</span>
+      </p>
+    </div>
+  );
+}
+
+/** Монеты раздела «Лонг / Шорт» — страницами, как у потока. */
+function LsBody() {
+  const lang = useApp((s) => s.lang);
+  const open = useApp((s) => s.open);
+  const win = useApp((s) => s.flowWin);
+  const side = useApp((s) => s.flowSide);
+  const raw = useApp((s) => s.flowQuery);
+  const bucket = useLive((s) => s.ls)[win];
+
+  const query = raw.trim();
+  const [page, setPage] = useState(1);
+  const [rows, setRows] = useState<LsRow[] | null>(null);
+  const [qTotal, setQTotal] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const local = !query && side === "all" && page === 1;
+  const total = (query || side !== "all" ? qTotal : bucket?.coins) ?? 0;
+  const pages = Math.max(1, Math.ceil(total / FLOW_PAGE));
+
+  useEffect(() => setPage(1), [win, side, query]);
+
+  useEffect(() => {
+    if (!query && side === "all" && page === 1) {
+      setRows(null);
+      setBusy(false);
+      return;
+    }
+    const ctrl = new AbortController();
+    setBusy(true);
+    const timer = setTimeout(() => {
+      void fetchLs(win, query, (page - 1) * FLOW_PAGE, side, ctrl.signal).then((r) => {
+        if (ctrl.signal.aborted) return;
+        setRows(r?.ok ? r.rows ?? [] : []);
+        setQTotal(r?.total ?? 0);
+        setBusy(false);
+      });
+    }, query ? 250 : 0);
+    return () => {
+      clearTimeout(timer);
+      ctrl.abort();
+    };
+  }, [win, side, query, page]);
+
+  const shown: LsRow[] = local ? bucket?.rows ?? [] : rows ?? [];
+
+  const go = (to: number) => {
+    if (to < 1 || to > pages || to === page || busy) return;
+    haptic("select");
+    setPage(to);
+  };
+
+  if (busy && !shown.length) return <Skeleton rows={3} />;
+  if (!shown.length) {
+    return <Empty text={query || side !== "all" ? t(lang, "flow_search_none") : t(lang, "flow_empty")} />;
+  }
+
+  return (
+    <>
+      {shown.map((r) => (
+        <button type="button" className="nf" key={r.sym} onClick={() => open("coin", r.sym)}>
+          <span className="nf-hit">
+            <CoinIcon sym={r.sym} size={32} />
+            <span className="nf-main">
+              <span className="nf-ttl"><span>{r.sym}</span></span>
+              <span className="nf-sub">
+                <i>{num(r.w)} {t(lang, "flow_wallets")}</i>
+                <i className="nf-money">
+                  <span className="up">{usd(r.long)}</span>
+                  <span className="dn">{usd(r.short)}</span>
+                </i>
+              </span>
+              {/* Полоса и число об одном: число говорит «насколько», полоса
+                  показывает это же глазу, не заставляя сравнивать цифры. */}
+              <BuySellBar buy={r.long} sell={r.short} />
+            </span>
+            <span className="nf-val">
+              <b className={r.pct >= 50 ? "up" : "dn"}>{pct(r.pct, 0, false)}</b>
+              <small className="dim">{t(lang, "ls_in_long")}</small>
+            </span>
+          </span>
+        </button>
       ))}
 
       {pages > 1 ? (

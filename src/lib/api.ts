@@ -6,7 +6,9 @@
  * когда принимал — по одному номеру в адресе открывался чужой аккаунт.
  */
 import { initData } from "./telegram";
-import type { Bootstrap, Deal, FlowRow, MutationResult, TokenHist, Trades, WalletLive } from "./types";
+import type {
+  Bootstrap, Deal, FlowRow, LsRow, MutationResult, TokenHist, Trades, WalletLive,
+} from "./types";
 
 const TIMEOUT_MS = 15000;
 
@@ -112,6 +114,20 @@ export const fetchFlow = (
 ) =>
   call<{ ok?: boolean; rows?: FlowRow[]; total?: number }>(
     `/api/flow?win=${encodeURIComponent(win)}&q=${encodeURIComponent(q)}` +
+      `&offset=${offset}&side=${encodeURIComponent(side)}`,
+    { signal },
+  );
+
+/** Страница раздела «Лонг / Шорт». Те же правила, что у потока. */
+export const fetchLs = (
+  win: string,
+  q: string,
+  offset = 0,
+  side = "all",
+  signal?: AbortSignal,
+) =>
+  call<{ ok?: boolean; rows?: LsRow[]; total?: number }>(
+    `/api/ls?win=${encodeURIComponent(win)}&q=${encodeURIComponent(q)}` +
       `&offset=${offset}&side=${encodeURIComponent(side)}`,
     { signal },
   );

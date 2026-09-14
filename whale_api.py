@@ -1411,6 +1411,150 @@ def load_alerts(cur: sqlite3.Connection, chat: str, wallets: list) -> tuple[list
     return alerts, feed
 
 
+# Лонг/шорт: во что заходят деньги на Hyperliquid.
+#
+# Считается по открытиям позиций, а не по всем сделкам. Закрытие лонга — это
+# не ставка вниз, а снятие ставки вверх; смешав их, получили бы число, у
+# которого нет смысла. «Сколько денег зашло в лонг и сколько в шорт» —
+# вопрос про открытия, на него и отвечаем.
+#
+# Переворот позиции (dir_code 5) не участвует: и «лонг больше шорта», и
+# «шорт больше лонга» пишутся одной пятёркой, направление из неё не достать.
+_LS_ROWS: dict[str, tuple[float, list[dict]]] = {}
+_ls_lock = threading.Lock()
+_ls_busy: set[str] = set()
+
+
+def ls_scan(hl: sqlite3.Connection | None, since: int) -> list[dict]:
+    """Все монеты окна: сколько денег зашло в лонг и сколько в шорт."""
+    if not hl or not table_exists(hl, "hl_fills"):
+        return []
+    cset = cols(hl, "hl_fills")
+    if "dir_code" not in cset:
+        return []
+    ban = (
+        "AND wallet NOT IN (SELECT wallet FROM hl_banned) "
+        if table_exists(hl, "hl_banned")
+        else ""
+    )
+    try:
+        rows = hl.execute(
+            "SELECT coin, "
+            "SUM(CASE WHEN dir_code=1 THEN notional_nanos ELSE 0 END) lng, "
+            "SUM(CASE WHEN dir_code=2 THEN notional_nanos ELSE 0 END) shrt, "
+            "COUNT(DISTINCT wallet) w "
+            "FROM hl_fills "
+            "WHERE ts >= ? AND notional_nanos > 0 AND dir_code IN (1,2) "
+            f"{ban}"
+            "GROUP BY coin",
+            (since * 1000,),
+        ).fetchall()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] ls scan: {e}\n")
+        return []
+
+    out: list[dict] = []
+    for r in rows:
+        lng, shrt = usd(r["lng"]), usd(r["shrt"])
+        total = lng + shrt
+        if total <= 0:
+            continue
+        out.append({
+            "sym": str(r["coin"] or "?").upper(),
+            "long": lng,
+            "short": shrt,
+            "net": lng - shrt,
+            # Доля денег в лонге, в процентах. Читается без деления в уме:
+            # 70 — семь десятых денег ставят на рост.
+            "pct": round(lng / total * 100, 1),
+            "w": int(r["w"] or 0),
+        })
+    # По обороту, а не по перекосу: монета с миллионом в лонге интереснее той,
+    # где сто долларов и все в лонг.
+    out.sort(key=lambda r: -(r["long"] + r["short"]))
+    return out
+
+
+def ls_rows_cached(hl: sqlite3.Connection | None, win: str) -> list[dict]:
+    """Список монет окна из памяти, с фоновым обновлением — как у потока."""
+    sec = FLOW_WINDOWS.get(win)
+    if not sec:
+        return []
+    with _ls_lock:
+        hit = _LS_ROWS.get(win)
+        if hit:
+            if time.monotonic() - hit[0] >= FLOW_ROWS_TTL and win not in _ls_busy:
+                _ls_busy.add(win)
+                threading.Thread(target=_ls_rebuild, args=(win, sec), daemon=True).start()
+            return hit[1]
+    rows = ls_scan(hl, now() - sec)
+    ls_rows_put(win, rows)
+    return rows
+
+
+def ls_rows_put(win: str, rows: list[dict]) -> None:
+    with _ls_lock:
+        _LS_ROWS[win] = (time.monotonic(), rows)
+
+
+def _ls_rebuild(win: str, sec: int) -> None:
+    con = None
+    try:
+        con = open_db(HL_DB)
+        if con:
+            ls_rows_put(win, ls_scan(con, now() - sec))
+    except Exception as e:
+        sys.stderr.write(f"[api] ls rows {win}: {e}\n")
+    finally:
+        if con:
+            try:
+                con.close()
+            except Exception:
+                pass
+        with _ls_lock:
+            _ls_busy.discard(win)
+
+
+def load_ls(hl: sqlite3.Connection | None) -> dict:
+    """Лонг/шорт по окнам — в общую выгрузку, как и поток."""
+    tnow = now()
+    by_win = {}
+    for key, sec in FLOW_WINDOWS.items():
+        coins = ls_scan(hl, tnow - sec)
+        ls_rows_put(key, coins)
+        lng = sum(c["long"] for c in coins)
+        shrt = sum(c["short"] for c in coins)
+        by_win[key] = {
+            "long": lng,
+            "short": shrt,
+            "net": lng - shrt,
+            "pct": round(lng / (lng + shrt) * 100, 1) if lng + shrt > 0 else 0.0,
+            "coins": len(coins),
+            "rows": [dict(c) for c in coins[:FLOW_ROWS]],
+        }
+    return by_win
+
+
+def ls_search(hl: sqlite3.Connection | None, win: str, q: str, limit: int = 40,
+              offset: int = 0, side: str = "all") -> dict:
+    """Страница лонг/шорта: те же поиск, фильтр и смещение, что у потока."""
+    if win not in FLOW_WINDOWS:
+        return {"rows": [], "total": 0}
+    limit = max(1, min(int(limit or 40), 100))
+    offset = max(0, min(int(offset or 0), 5000))
+    allrows = ls_rows_cached(hl, win)
+    needle = (q or "").strip().upper()
+    if needle:
+        allrows = [r for r in allrows if needle in (r["sym"] or "")]
+    # «Лонг» и «шорт» здесь — перевес, а не знак: монета попадает в лонговые,
+    # если больше половины денег зашло на рост.
+    if side == "in":
+        allrows = [r for r in allrows if r["pct"] >= 50]
+    elif side == "out":
+        allrows = [r for r in allrows if r["pct"] < 50]
+    return {"rows": [dict(r) for r in allrows[offset:offset + limit]], "total": len(allrows)}
+
+
 def load_flow(cur: sqlite3.Connection) -> dict:
     windows = (("1", 3600), ("6", 21600), ("24", 86400), ("168", 604800), ("720", 2592000))
     tnow = now()
@@ -2998,6 +3142,7 @@ def load_coins(cur: sqlite3.Connection, hl: sqlite3.Connection | None, flow: dic
 
 def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict:
     t0 = time.monotonic()
+    ls: dict = {}
     flow, rank, trades, market_feed, funding, rot, sonar = {}, {}, {"spot": [], "perp": [], "liq": []}, [], [], {"24": [], "168": []}, {
         "need": 400, "ready": {"spot": 0, "perp": 0}, "trained": False, "acc": None,
         "list": [], "hist": {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []},
@@ -3023,9 +3168,11 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
     market_feed = take("feed", lambda: load_feed_market(cur, hl), market_feed, True)
     funding = take("funding", lambda: load_funding(hl), funding)
     rot = take("rot", lambda: load_rot(cur), rot)
+    ls = take("ls", lambda: load_ls(hl), {})
     coins = take("coins", lambda: load_coins(cur, hl, flow, []), {})
     return {
         "flow": flow,
+        "ls": ls,
         "rank": rank,
         "trades": trades,
         "marketFeed": market_feed,
@@ -3350,6 +3497,7 @@ def bootstrap(chat: str) -> dict:
             ([], []),
         )
         flow = pub.get("flow") or {}
+        ls = pub.get("ls") or {}
         rank_raw = pub.get("rank") or empty_rank
         rank = {
             "spot": (rank_raw.get("spot") if isinstance(rank_raw, dict) else None) or empty_rank["spot"],
@@ -3369,6 +3517,7 @@ def bootstrap(chat: str) -> dict:
             "feed": feed,
             "alerts": alerts,
             "flow": flow,
+            "ls": ls,
             "rank": rank,
             "sonar": sonar,
             "trades": trades,
@@ -3645,6 +3794,7 @@ class Handler(BaseHTTPRequestHandler):
                         "ok": True,
                         "live": True,
                         "flow": pub.get("flow") or {},
+                        "ls": pub.get("ls") or {},
                         "rank": {
                             "spot": rank_raw.get("spot") or {"pnl": [], "roi": [], "win": [], "act": []},
                             "perp": rank_raw.get("perp") or {"pnl": [], "roi": [], "win": [], "act": []},
@@ -3692,6 +3842,29 @@ class Handler(BaseHTTPRequestHandler):
                         cur.close()
                     except Exception:
                         pass
+                return
+            if path in ("/ls", "/api/ls"):
+                win = (qs.get("win", ["24"])[0] or "24").strip()
+                if win not in FLOW_WINDOWS:
+                    self._json(400, {"ok": False, "error": "bad_win"})
+                    return
+                q = (qs.get("q", [""])[0] or "")[:32]
+                side = (qs.get("side", ["all"])[0] or "all").strip()
+                if side not in ("all", "in", "out"):
+                    side = "all"
+                try:
+                    offset = int(qs.get("offset", ["0"])[0])
+                except (TypeError, ValueError):
+                    offset = 0
+                hl = open_db(HL_DB)
+                try:
+                    self._json(200, {"ok": True, **ls_search(hl, win, q, offset=offset, side=side)})
+                finally:
+                    if hl:
+                        try:
+                            hl.close()
+                        except Exception:
+                            pass
                 return
             if path in ("/deals", "/api/deals"):
                 a = (qs.get("addr", [""])[0] or "").strip().lower()
