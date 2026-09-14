@@ -103,7 +103,12 @@ export function TopTab() {
         {/* Площадка выбирается плитками с логотипами — теми же, что в
             аналитике: по знаку биржа узнаётся раньше, чем прочитано её имя.
             В плитке помещается и что там торгуют: раньше подпись приходилось
-            резать до «BSC», потому что «BSC — Спот» уезжало за край. */}
+            резать до «BSC», потому что «BSC — Спот» уезжало за край.
+
+            Здесь логотип — главное, а не пометка: плиток всего две, и обе
+            про площадку. Поэтому он в середине и крупный, а не уголком, как
+            в аналитике, где уголок говорит «откуда данные» при своём знаке
+            раздела. */}
         <TileNav<Venue>
           value={venue}
           onChange={setVenue}
@@ -112,12 +117,12 @@ export function TopTab() {
           options={[
             {
               id: "spot",
-              ic: <VenueMark venue="spot" size={22} />,
+              ic: <VenueMark venue="spot" size={30} />,
               label: `${venueName("spot")} · ${t(lang, "ai_spot")}`,
             },
             {
               id: "perp",
-              ic: <VenueMark venue="perp" size={22} />,
+              ic: <VenueMark venue="perp" size={30} />,
               label: `${venueName("perp")} · ${t(lang, "wl_perp_rank")}`,
             },
           ]}

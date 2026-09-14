@@ -266,7 +266,15 @@ export function TileNav<T extends string>({
             onChange(o.id);
           }}
         >
-          {o.venue ? <VenueMark venue={o.venue} size={13} /> : null}
+          {/* Уголок в своей обёртке: правило раскладки должно цеплять
+              именно его. Пока оно ловило любой значок площадки, логотип в
+              середине плитки — там, где он главный, — тоже уезжал в угол и
+              сжимался до тринадцати пикселей. */}
+          {o.venue ? (
+            <span className="v-tag" aria-hidden="true">
+              <VenueMark venue={o.venue} size={13} />
+            </span>
+          ) : null}
           <span className="v-ic" aria-hidden="true">{o.ic}</span>
           <span>{o.label}</span>
         </button>
