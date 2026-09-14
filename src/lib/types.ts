@@ -248,7 +248,7 @@ export interface TradeRow {
 export interface Trades {
   spot: TradeRow[];
   perp: TradeRow[];
-  liq: TradeRow[];
+
 }
 
 export interface FeedRow {

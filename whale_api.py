@@ -2371,7 +2371,7 @@ BIG_ROWS = 100
 def load_trades(cur: sqlite3.Connection, hl: sqlite3.Connection | None, hours: int = 24) -> dict:
     """Крупнейшие сделки за окно. Окна те же, что в big_trades.cpp бота:
     час, сутки, неделя, месяц."""
-    spot, perp, liq = [], [], []
+    spot, perp = [], []
     since = now() - max(1, int(hours)) * 3600
     ign = table_exists(cur, "ignored_wallets")
     if table_exists(cur, "trades"):
@@ -2469,34 +2469,11 @@ def load_trades(cur: sqlite3.Connection, hl: sqlite3.Connection | None, hours: i
                 )
         except sqlite3.Error as e:
             sys.stderr.write(f"[api] perp trades: {e}\n")
-        q2 = (
-            f"SELECT wallet, coin, dir, notional_nanos, {dirc} dirc, ts "
-            f"FROM hl_fills WHERE ts >= ? AND notional_nanos > 0 {ban} "
-            f"AND {dirc} IN (6,7,8) "
-            f"GROUP BY wallet HAVING notional_nanos = MAX(notional_nanos) "
-            f"ORDER BY notional_nanos DESC LIMIT 30"
-        )
-        try:
-            for r in hl.execute(q2, (since_ms,)):
-                code = int(r["dirc"] or 0)
-                side = "вынесло шорт" if code == DIR_LIQ_SHORT else "вынесло лонг"
-                liq.append(
-                    {
-                        "sym": str(r["coin"] or "?").upper(),
-                        "v": usd(r["notional_nanos"]),
-                        "side": side,
-                        "w": short_addr(r["wallet"] or ""),
-                        "wa": (r["wallet"] or "").lower(),
-                        "t": ago(ts_sec(r["ts"])),
-                    }
-                )
-        except sqlite3.Error as e:
-            sys.stderr.write(f"[api] liq trades: {e}\n")
     # Спот режется по сотне на сторону — ровно столько и выбрано запросами.
     # Двадцатка здесь стояла с тех пор, когда доска была одна и без кнопок:
     # теперь у покупок и продаж свои списки, и обрезать их общим счётом
     # значило бы выкинуть одну из сторон целиком.
-    return {"spot": spot[:BIG_ROWS * 2], "perp": perp[:20], "liq": liq[:20]}
+    return {"spot": spot[:BIG_ROWS * 2], "perp": perp[:20]}
 
 
 def _big_rebuild(win: str, hours: int) -> None:
@@ -2529,13 +2506,13 @@ def big_trades(win: str, hours: int, force: bool = False) -> dict:
     cur = open_db(DB)
     hl = open_db(HL_DB)
     if not cur:
-        return {"spot": [], "perp": [], "liq": [], "win": win}
+        return {"spot": [], "perp": [], "win": win}
     try:
         data = load_trades(cur, hl, hours)
         data["win"] = win
     except Exception as e:
         sys.stderr.write(f"[api] big {win}: {e}\n")
-        data = {"spot": [], "perp": [], "liq": [], "win": win}
+        data = {"spot": [], "perp": [], "win": win}
     finally:
         try:
             cur.close()
@@ -3176,7 +3153,7 @@ def load_coins(cur: sqlite3.Connection, hl: sqlite3.Connection | None, flow: dic
 def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict:
     t0 = time.monotonic()
     ls: dict = {}
-    flow, rank, trades, market_feed, funding, rot, sonar = {}, {}, {"spot": [], "perp": [], "liq": []}, [], [], {"24": [], "168": []}, {
+    flow, rank, trades, market_feed, funding, rot, sonar = {}, {}, {"spot": [], "perp": []}, [], [], {"24": [], "168": []}, {
         "need": 400, "ready": {"spot": 0, "perp": 0}, "trained": False, "acc": None,
         "list": [], "hist": {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []},
     }
@@ -3536,7 +3513,7 @@ def bootstrap(chat: str) -> dict:
             "spot": (rank_raw.get("spot") if isinstance(rank_raw, dict) else None) or empty_rank["spot"],
             "perp": (rank_raw.get("perp") if isinstance(rank_raw, dict) else None) or empty_rank["perp"],
         }
-        trades = pub.get("trades") or {"spot": [], "perp": [], "liq": []}
+        trades = pub.get("trades") or {"spot": [], "perp": []}
         market_feed = pub.get("marketFeed") or []
         funding = pub.get("funding") or []
         rot = pub.get("rot") or {"24": [], "168": []}
@@ -3832,7 +3809,7 @@ class Handler(BaseHTTPRequestHandler):
                             "spot": rank_raw.get("spot") or {"pnl": [], "roi": [], "win": [], "act": []},
                             "perp": rank_raw.get("perp") or {"pnl": [], "roi": [], "win": [], "act": []},
                         },
-                        "trades": pub.get("trades") or {"spot": [], "perp": [], "liq": []},
+                        "trades": pub.get("trades") or {"spot": [], "perp": []},
                         "marketFeed": pub.get("marketFeed") or [],
                         "funding": pub.get("funding") or [],
                         "rot": pub.get("rot") or {"24": [], "168": []},

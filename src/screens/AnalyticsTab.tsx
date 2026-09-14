@@ -365,14 +365,6 @@ export function AnalyticsTab() {
         </Card>
       ) : null}
 
-      {view === "liq" ? (
-        <Card>
-          <SectionTitle>{t(lang, "big_liq_title")}</SectionTitle>
-          {winPicker}
-          {big.loading ? <Skeleton rows={3} /> : <TradeList rows={big.data.liq} empty={t(lang, "big_empty")} />}
-        </Card>
-      ) : null}
-
       {view === "fund" ? (
         <Card>
           <SectionTitle note={t(lang, "fund_hint")}>{t(lang, "fund_title")}</SectionTitle>

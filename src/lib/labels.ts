@@ -12,13 +12,10 @@ import { t } from "../i18n/t";
 export type TradeKind =
   | "buy" | "sell"
   | "long" | "short"
-  | "liqLong" | "liqShort"
   | "closeLong" | "closeShort"
   | "unknown";
 
 const RULES: [RegExp, TradeKind][] = [
-  [/вынесло\s+лонг|liq.*long/i, "liqLong"],
-  [/вынесло\s+шорт|liq.*short/i, "liqShort"],
   [/закрыл\s+лонг|closed?\s+long/i, "closeLong"],
   [/закрыл\s+шорт|closed?\s+short/i, "closeShort"],
   [/лонг|long/i, "long"],
@@ -38,8 +35,6 @@ const KIND_KEY: Record<TradeKind, DictKey> = {
   sell: "alert_sell",
   long: "hl_side_long",
   short: "hl_side_short",
-  liqLong: "hl_liq_long",
-  liqShort: "hl_liq_short",
   closeLong: "hl_close_long",
   closeShort: "hl_close_short",
   unknown: "hl_trade",
@@ -51,7 +46,7 @@ export function tradeKindKey(kind: TradeKind): DictKey {
 
 /** Растёт ли позиция по этой подписи — для цвета строки. */
 export function isUpKind(kind: TradeKind): boolean {
-  return kind === "buy" || kind === "long" || kind === "liqShort";
+  return kind === "buy" || kind === "long";
 }
 
 /** Плечо из строки вида «лонг 5×» — сервер кладёт его прямо в текст. */

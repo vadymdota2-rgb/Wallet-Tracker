@@ -173,7 +173,7 @@ export const useLive = create<LiveState>((set, get) => ({
   ls: snap?.ls ?? {},
   rank: snap?.rank ?? EMPTY_RANK,
   sonar: snap?.sonar ?? EMPTY_SONAR,
-  trades: snap?.trades ?? { spot: [], perp: [], liq: [] },
+  trades: snap?.trades ?? { spot: [], perp: [] },
   funding: snap?.funding ?? [],
   rot: snap?.rot ?? {},
   coins: snap?.coins ?? {},
@@ -196,8 +196,7 @@ export const useLive = create<LiveState>((set, get) => ({
       ls: some(d.ls) ? d.ls! : prev.ls,
       rank: boards(d.rank) ? d.rank! : prev.rank,
       sonar: d.sonar?.list?.length || d.sonar?.trained ? d.sonar : prev.sonar,
-      trades: some(d.trades?.spot) || some(d.trades?.perp) || some(d.trades?.liq)
-        ? d.trades! : prev.trades,
+      trades: some(d.trades?.spot) || some(d.trades?.perp) ? d.trades! : prev.trades,
       funding: some(d.funding) ? d.funding! : prev.funding,
       rot: some(d.rot) ? d.rot! : prev.rot,
       coins: some(d.coins) ? d.coins! : prev.coins,
