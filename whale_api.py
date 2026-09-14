@@ -229,17 +229,30 @@ def coin_icon(sym: str, addr: str = "") -> list[str]:
         return out
     if not key:
         return out
-    # Полное имя инструмента HIP-3 — «xyz:SP500». Биржа раздаёт значки только
-    # по нему: на «SP500.svg» она отвечает страницей приложения, причём с
-    # кодом 200, так что это даже не похоже на ошибку.
-    alias = HL_COIN.get(key) or hl_markets().get(key) or key
+    # Полное имя инструмента HIP-3 — «xyz:SP500», строчными. Биржа раздаёт
+    # значки только по нему: и на «SP500.svg», и на «XYZ:SP500.svg» она
+    # отвечает страницей приложения, причём с кодом 200 — на ошибку не похоже,
+    # перебор шёл дальше и заканчивался буквой.
+    #
+    # Ищем по короткому имени: в базе оно встречается и с приставкой, и без, а
+    # ключи карты короткие.
+    bare = key.split(":")[-1]
+    if ":" in key:
+        # Приставка уже есть — значит площадка известна, и подменять её картой
+        # нельзя: «ANTH» торгуется и на io, и на para, а значки у них разные.
+        # Биржа пишет площадку строчными, тикер прописными.
+        head, _, tail = key.partition(":")
+        alias = f"{head.lower()}:{tail}"
+    else:
+        alias = HL_COIN.get(key) or hl_markets().get(key) or key
     for name in (alias, key) if alias != key else (alias,):
         if name in _logo_local["hl"]:
             safe = name.replace(":", "_").replace("/", "_")
             out.append(f"/coins/hl/{safe}.svg")
     out.append(f"/hllogo/{alias}.svg")
-    if alias != key:
-        out.append(f"/hllogo/{key}.svg")
+    for name in (key, bare):
+        if name != alias:
+            out.append(f"/hllogo/{name}.svg")
     return out
 
 
@@ -1440,6 +1453,9 @@ _ls_busy: set[str] = set()
 # обязательно: на HIP-3 торгуют и биткоином — «hyna:BTC», — и без него BTC
 # уехал бы в акции.
 _HL_FULL: dict[str, str] = {}
+# Все полные имена, прописными: одна и та же бумага бывает на нескольких
+# площадках — «io:ANTH» и «para:ANTH», — и отбору в SQL нужны они все.
+_HL_NAMES: set[str] = set()
 _hl_mkt_lock = threading.Lock()
 _hl_mkt_at = 0.0
 _hl_mkt_busy = False
@@ -1464,8 +1480,14 @@ def hl_markets() -> dict[str, str]:
         return _HL_FULL
 
 
+def hl_names() -> set[str]:
+    """Полные имена инструментов HIP-3, прописными."""
+    hl_markets()
+    return _HL_NAMES
+
+
 def _hl_markets_load() -> None:
-    global _HL_FULL, _hl_mkt_at, _hl_mkt_busy
+    global _HL_FULL, _HL_NAMES, _hl_mkt_at, _hl_mkt_busy
     try:
         main = {
             str(c.get("name") or "").upper()
@@ -1477,6 +1499,7 @@ def _hl_markets_load() -> None:
             if isinstance(d, dict) and d.get("name")
         ]
         out: dict[str, str] = {}
+        names: set[str] = set()
         for dex in dexes:
             uni = (hl_post({"type": "meta", "dex": dex}) or {}).get("universe") or []
             for c in uni:
@@ -1485,11 +1508,13 @@ def _hl_markets_load() -> None:
                 if not bare or bare in main:
                     continue
                 out.setdefault(bare, full)
+                names.add(full.upper())
         # Пустой ответ не затирает прошлую карту: сеть отвалилась — работаем
         # по той, что есть, это лучше, чем внезапно считать всё криптой.
         if out:
             with _hl_mkt_lock:
                 _HL_FULL = out
+                _HL_NAMES = names
                 _hl_mkt_at = time.monotonic()
             sys.stderr.write(f"[api] рынки HIP-3: {len(out)} инструментов\n")
     except Exception as e:
@@ -1517,9 +1542,20 @@ def coin_class(coin: str) -> str:
     тикеров металлов. Оно ловит меньше, зато не требует сети.
     """
     c = (coin or "").upper()
-    if ":" in c or c in METAL_SYMS:
+    # Имя приходит по-разному: у одних площадок с приставкой — «XYZ:CL», — у
+    # других коротким. Смотрим в карту по короткому: в ней ключи такие.
+    bare = c.split(":")[-1]
+    # Металлы остаются металлами даже когда торгуются обычным перпом на
+    # основной площадке: PAXG и XAUT это золото, а не монета сама по себе.
+    if bare in METAL_SYMS:
         return "rwa"
-    return "rwa" if c.split(":")[-1] in hl_markets() else "crypto"
+    mkt = hl_markets()
+    if mkt:
+        # Приставка сама по себе ничего не решает: на HIP-3 торгуют и
+        # биткоином, «HYNA:BTC», а он крипта. В карте таких имён нет —
+        # они отсеяны по основной площадке, — поэтому ответ верный.
+        return "rwa" if bare in mkt else "crypto"
+    return "rwa" if ":" in c or c in METAL_SYMS else "crypto"
 
 
 def ls_scan(hl: sqlite3.Connection | None, since: int) -> list[dict]:
@@ -2536,7 +2572,12 @@ def load_trades(cur: sqlite3.Connection, hl: sqlite3.Connection | None, hours: i
         #
         # Не загрузилась карта рынков — берём одним запросом, как раньше:
         # лучше общий список, чем пустой.
-        rwa = sorted(hl_markets())
+        # В базе имя лежит и коротким, и с приставкой — «CL» и «XYZ:CL», — а
+        # сравнение идёт по верхнему регистру. Кладём в список обе формы,
+        # иначе отбор не находил ничего и раздел «Акции и металлы» доставался
+        # из общей сотни остатками.
+        mkt = hl_markets()
+        rwa = sorted(set(mkt) | hl_names())
         packs: list[tuple[str, list]] = []
         if rwa:
             marks = ",".join("?" * len(rwa))
