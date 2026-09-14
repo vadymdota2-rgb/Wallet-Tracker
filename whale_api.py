@@ -229,7 +229,10 @@ def coin_icon(sym: str, addr: str = "") -> list[str]:
         return out
     if not key:
         return out
-    alias = HL_COIN.get(key, key)
+    # Полное имя инструмента HIP-3 — «xyz:SP500». Биржа раздаёт значки только
+    # по нему: на «SP500.svg» она отвечает страницей приложения, причём с
+    # кодом 200, так что это даже не похоже на ошибку.
+    alias = HL_COIN.get(key) or hl_markets().get(key) or key
     for name in (alias, key) if alias != key else (alias,):
         if name in _logo_local["hl"]:
             safe = name.replace(":", "_").replace("/", "_")
@@ -1425,6 +1428,77 @@ _ls_lock = threading.Lock()
 _ls_busy: set[str] = set()
 
 
+# Карта рынков Hyperliquid: что крипта, а что акции, индексы и металлы.
+#
+# Взять её из имени нельзя. Биржа зовёт такие инструменты «xyz:SP500», но в
+# сделки они приходят коротким именем — «SP500», «CL», «XYZ100», — и по нему
+# они неотличимы от монеты. Из-за этого раздел «Акции и металлы» показывал
+# ноль строк, а нефть с индексом S&P лежали среди крипты.
+#
+# Поэтому спрашиваем саму биржу: список площадок HIP-3 и состав каждой. Имена
+# оттуда, которых нет на основной площадке, и есть «не крипта». Вычитание
+# обязательно: на HIP-3 торгуют и биткоином — «hyna:BTC», — и без него BTC
+# уехал бы в акции.
+_HL_FULL: dict[str, str] = {}
+_hl_mkt_lock = threading.Lock()
+_hl_mkt_at = 0.0
+_hl_mkt_busy = False
+HL_MARKETS_TTL = 6 * 3600.0
+
+
+def hl_markets() -> dict[str, str]:
+    """Короткое имя инструмента HIP-3 → полное, с приставкой площадки.
+
+    Отдаёт то, что есть сейчас, и при устаревании обновляется в стороне:
+    одиннадцать запросов к бирже не должны задерживать ни сборку кэша, ни
+    тем более чей-то экран.
+    """
+    global _hl_mkt_busy
+    with _hl_mkt_lock:
+        fresh = time.monotonic() - _hl_mkt_at < HL_MARKETS_TTL
+        if _HL_FULL and fresh:
+            return _HL_FULL
+        if not _hl_mkt_busy:
+            _hl_mkt_busy = True
+            threading.Thread(target=_hl_markets_load, daemon=True).start()
+        return _HL_FULL
+
+
+def _hl_markets_load() -> None:
+    global _HL_FULL, _hl_mkt_at, _hl_mkt_busy
+    try:
+        main = {
+            str(c.get("name") or "").upper()
+            for c in ((hl_post({"type": "meta"}) or {}).get("universe") or [])
+        }
+        dexes = [
+            str(d.get("name") or "")
+            for d in (hl_post({"type": "perpDexs"}) or [])
+            if isinstance(d, dict) and d.get("name")
+        ]
+        out: dict[str, str] = {}
+        for dex in dexes:
+            uni = (hl_post({"type": "meta", "dex": dex}) or {}).get("universe") or []
+            for c in uni:
+                full = str(c.get("name") or "")
+                bare = full.split(":")[-1].upper()
+                if not bare or bare in main:
+                    continue
+                out.setdefault(bare, full)
+        # Пустой ответ не затирает прошлую карту: сеть отвалилась — работаем
+        # по той, что есть, это лучше, чем внезапно считать всё криптой.
+        if out:
+            with _hl_mkt_lock:
+                _HL_FULL = out
+                _hl_mkt_at = time.monotonic()
+            sys.stderr.write(f"[api] рынки HIP-3: {len(out)} инструментов\n")
+    except Exception as e:
+        sys.stderr.write(f"[api] hl markets: {e}\n")
+    finally:
+        with _hl_mkt_lock:
+            _hl_mkt_busy = False
+
+
 # Токенизированные металлы торгуются и обычным перпом, без двоеточия в имени.
 # Держим список отдельно, чтобы они не оседали в крипте: XAU — золото, XAG —
 # серебро, XPT — платина, XPD — палладий; остальное это их обёртки.
@@ -1436,14 +1510,16 @@ METAL_SYMS = {
 
 
 def coin_class(coin: str) -> str:
-    """Крипта или «не крипта» — акции и металлы.
+    """Крипта или «не крипта» — акции, индексы, металлы, сырьё.
 
-    Акции и товары Hyperliquid живут на отдельных рынках HIP-3, и бот узнаёт
-    их ровно так же: по двоеточию в имени, «xyz:NVDA». Обычный перп двоеточия
-    не носит.
+    Главный признак — состав площадок HIP-3, взятый у самой биржи. Пока карта
+    не загрузилась, работает запасное правило: двоеточие в имени и список
+    тикеров металлов. Оно ловит меньше, зато не требует сети.
     """
     c = (coin or "").upper()
-    return "rwa" if ":" in c or c in METAL_SYMS else "crypto"
+    if ":" in c or c in METAL_SYMS:
+        return "rwa"
+    return "rwa" if c.split(":")[-1] in hl_markets() else "crypto"
 
 
 def ls_scan(hl: sqlite3.Connection | None, since: int) -> list[dict]:
@@ -1483,6 +1559,9 @@ def ls_scan(hl: sqlite3.Connection | None, since: int) -> list[dict]:
         sym = str(r["coin"] or "?").upper()
         out.append({
             "sym": sym,
+            # Значок собирает сервер: только он знает, под каким полным именем
+            # инструмент лежит у биржи.
+            "icon": coin_icon(sym),
             "cls": coin_class(sym),
             "long": lng,
             "short": shrt,
@@ -2450,35 +2529,57 @@ def load_trades(cur: sqlite3.Connection, hl: sqlite3.Connection | None, hours: i
         cset = cols(hl, "hl_fills")
         dirc = "dir_code" if "dir_code" in cset else "0"
         lev = "leverage" if "leverage" in cset else "0"
-        q = (
-            f"SELECT wallet, coin, dir, notional_nanos, {lev} lev, {dirc} dirc, ts "
-            f"FROM hl_fills WHERE ts >= ? AND notional_nanos > 0 {ban} "
-            f"AND {dirc} IN (1,2) "
-            f"GROUP BY wallet HAVING notional_nanos = MAX(notional_nanos) "
-            f"ORDER BY notional_nanos DESC LIMIT 30"
-        )
-        try:
-            for r in hl.execute(q, (since_ms,)):
-                code = int(r["dirc"] or 0)
-                lv = int(r["lev"] or 0)
-                side = f"{'лонг' if code == DIR_OPEN_LONG else 'шорт'} {lv}×" if lv else ("лонг" if code == 1 else "шорт")
-                perp.append(
-                    {
-                        "sym": str(r["coin"] or "?").upper(),
-                        "v": usd(r["notional_nanos"]),
-                        "side": side,
-                        "w": short_addr(r["wallet"] or ""),
-                        "wa": (r["wallet"] or "").lower(),
-                        "t": ago(ts_sec(r["ts"])),
-                    }
-                )
-        except sqlite3.Error as e:
-            sys.stderr.write(f"[api] perp trades: {e}\n")
-    # Спот режется по сотне на сторону — ровно столько и выбрано запросами.
-    # Двадцатка здесь стояла с тех пор, когда доска была одна и без кнопок:
-    # теперь у покупок и продаж свои списки, и обрезать их общим счётом
-    # значило бы выкинуть одну из сторон целиком.
-    return {"spot": spot[:BIG_ROWS * 2], "perp": perp[:20]}
+        # Крипта и «не крипта» выбираются порознь, по сотне каждых. Одним
+        # запросом с общим пределом акции с металлами не показать: их обороты
+        # на порядок меньше, и в сотне крупнейших позиций не окажется ни
+        # одной — ровно поэтому раздел и показывал ноль строк.
+        #
+        # Не загрузилась карта рынков — берём одним запросом, как раньше:
+        # лучше общий список, чем пустой.
+        rwa = sorted(hl_markets())
+        packs: list[tuple[str, list]] = []
+        if rwa:
+            marks = ",".join("?" * len(rwa))
+            packs.append((f"AND upper(coin) IN ({marks}) ", rwa))
+            packs.append((f"AND upper(coin) NOT IN ({marks}) ", rwa))
+        else:
+            packs.append(("", []))
+        for extra, args in packs:
+            q = (
+                f"SELECT wallet, coin, dir, notional_nanos, {lev} lev, {dirc} dirc, ts "
+                f"FROM hl_fills WHERE ts >= ? AND notional_nanos > 0 {ban} "
+                f"AND {dirc} IN (1,2) {extra}"
+                f"GROUP BY wallet HAVING notional_nanos = MAX(notional_nanos) "
+                f"ORDER BY notional_nanos DESC LIMIT ?"
+            )
+            try:
+                for r in hl.execute(q, (since_ms, *args, BIG_ROWS)):
+                    code = int(r["dirc"] or 0)
+                    lv = int(r["lev"] or 0)
+                    side = f"{'лонг' if code == DIR_OPEN_LONG else 'шорт'} {lv}×" if lv else ("лонг" if code == 1 else "шорт")
+                    psym = str(r["coin"] or "?").upper()
+                    perp.append(
+                        {
+                            "sym": psym,
+                            "icon": coin_icon(psym),
+                            # Класс считает сервер: карта площадок есть только
+                            # у него, а по короткому имени «SP500» приложение
+                            # отличить индекс от монеты не может.
+                            "cls": coin_class(psym),
+                            "v": usd(r["notional_nanos"]),
+                            "side": side,
+                            "w": short_addr(r["wallet"] or ""),
+                            "wa": (r["wallet"] or "").lower(),
+                            "t": ago(ts_sec(r["ts"])),
+                        }
+                    )
+            except sqlite3.Error as e:
+                sys.stderr.write(f"[api] perp trades: {e}\n")
+        perp.sort(key=lambda x: -x["v"])
+    # И спот, и перп режутся по сотне на каждую сторону выбора: у спота это
+    # покупки и продажи, у перпа крипта и акции с металлами. Общий предел
+    # выкинул бы одну из сторон целиком — у спота реже, у перпа всегда.
+    return {"spot": spot[:BIG_ROWS * 2], "perp": perp[:BIG_ROWS * 2]}
 
 
 def _big_rebuild(win: str, hours: int) -> None:
@@ -3261,6 +3362,11 @@ def _bg_refresh() -> None:
 
 def warmup() -> None:
     time.sleep(0.3)
+    # Карта площадок нужна до первой сборки кэша: без неё акции и индексы
+    # уедут в крипту, а значки запросятся по короткому имени — и то и другое
+    # продержится до следующего обновления. Одиннадцать запросов к бирже
+    # занимают пару секунд и идут в стороне от чьего-либо экрана.
+    _hl_markets_load()
     cur = open_db(DB)
     hl = open_db(HL_DB)
     if not cur:

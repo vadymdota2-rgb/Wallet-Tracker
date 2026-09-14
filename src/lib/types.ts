@@ -121,6 +121,8 @@ export type CoinClass = "crypto" | "rwa";
 export interface LsRow {
   sym: string;
   cls?: CoinClass;
+  /** Кандидаты логотипа от сервера — по полному имени инструмента. */
+  icon?: string[];
   long: number;
   short: number;
   net: number;
@@ -242,6 +244,10 @@ export interface TradeRow {
   buy?: boolean;
   /** Полный адрес кошелька: по сокращённому `w` подписаться нельзя. */
   wa?: string;
+  /** Крипта или акции с металлами — считает сервер, у него карта площадок. */
+  cls?: CoinClass;
+  /** Кандидаты логотипа от сервера: он знает полное имя инструмента. */
+  icon?: string[];
   w: string;
   t: ServerText;
 }

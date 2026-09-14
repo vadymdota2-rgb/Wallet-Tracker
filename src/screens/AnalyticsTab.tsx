@@ -138,7 +138,7 @@ function TradeList({ rows, empty }: { rows: TradeRow[]; empty: string }) {
         return (
           <Row
             key={`${r.sym}-${i}`}
-            icon={<CoinIcon sym={r.sym} size={30} />}
+            icon={<CoinIcon sym={r.sym} icon={r.icon} size={30} />}
             /* Значок ищется по полному имени — «xyz:AAPL», иначе его не
                найти; а в подписи приставка рынка лишняя. */
             title={showSym(r.sym)}
@@ -236,10 +236,10 @@ export function AnalyticsTab() {
      смотрящего, и «покупка» в ней есть не на всех. Старые ответы поля не
      знают — для них остаётся разбор, иначе доска опустеет до перезапуска
      сервера. */
-  /* Класс инструмента сервер кладёт только в «Лонг / Шорт»; здесь строки
-     приходят лентой сделок, поэтому считаем по имени — по тому же правилу,
-     что и сервер: двоеточие в имени значит рынок HIP-3. */
-  const perpRows = big.data.perp.filter((r) => coinClass(r.sym) === lsCls);
+  /* Класс считает сервер: у него карта площадок Hyperliquid, а по короткому
+     имени «SP500» приложение индекс от монеты не отличит. Для строк из старых
+     ответов остаётся запасное правило по имени. */
+  const perpRows = big.data.perp.filter((r) => (r.cls ?? coinClass(r.sym)) === lsCls);
   const spotRows = big.data.spot.filter((r) =>
     r.buy === undefined ? (tradeKind(r.side) === "buy") === (bigSide === "buy") : r.buy === (bigSide === "buy"),
   );
@@ -729,7 +729,7 @@ function LsBody() {
       {shown.map((r) => (
         <button type="button" className="nf" key={r.sym} onClick={() => open("coin", r.sym)}>
           <span className="nf-hit">
-            <CoinIcon sym={r.sym} size={32} />
+            <CoinIcon sym={r.sym} icon={r.icon} size={32} />
             <span className="nf-main">
               <span className="nf-ttl"><span>{showSym(r.sym)}</span></span>
               <span className="nf-sub">
