@@ -359,7 +359,7 @@ export const ja: Dict = {
   ui_chart: "チャート",
   ui_chg24: "24時間変動",
   ui_cls_crypto: "暗号資産",
-  ui_cls_rwa: "株式・ゴールド",
+  ui_cls_rwa: "株式・メタル",
   ui_copied: "アドレスをコピーしました",
   ui_copy: "コピー",
   ui_copy_failed: "コピーできませんでした",

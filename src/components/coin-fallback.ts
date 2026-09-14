@@ -4,6 +4,11 @@
  * Путь идёт через nginx (`/cglogo/`), наружу браузер не ходит.
  */
 export const CG_FALLBACK: Record<string, string> = {
+  /* Металлы. Hyperliquid раздаёт значок только для PAXG — он и лежит в
+     образе; у остальных на его месте отдаётся страница приложения, и в
+     кружке оставалась буква. Подставлять сюда значок PAXG нельзя: это другой
+     токен другого выпуска, и выдавать один за другой хуже, чем буква. */
+  XAUT: "/cglogo/coins/images/10481/small/logo.png",
   BTC: "/cglogo/coins/images/1/small/bitcoin.png",
   ETH: "/cglogo/coins/images/279/small/ethereum.png",
   SOL: "/cglogo/coins/images/4128/small/solana.png",

@@ -359,7 +359,7 @@ export const de: Dict = {
   ui_chart: "Chart",
   ui_chg24: "Änderung 24 Std.",
   ui_cls_crypto: "Krypto",
-  ui_cls_rwa: "Aktien & Gold",
+  ui_cls_rwa: "Aktien & Metalle",
   ui_copied: "Adresse kopiert",
   ui_copy: "Kopieren",
   ui_copy_failed: "Kopieren fehlgeschlagen",

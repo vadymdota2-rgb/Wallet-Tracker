@@ -359,7 +359,7 @@ export const ko: Dict = {
   ui_chart: "차트",
   ui_chg24: "24시간 변동",
   ui_cls_crypto: "크립토",
-  ui_cls_rwa: "주식·금",
+  ui_cls_rwa: "주식·금속",
   ui_copied: "주소가 복사되었습니다",
   ui_copy: "복사",
   ui_copy_failed: "복사하지 못했습니다",

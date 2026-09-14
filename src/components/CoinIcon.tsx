@@ -66,6 +66,16 @@ export function CoinIcon({
     const safe = alias.replace(/:/g, "_");
     urls.push(`/coins/hl/${safe}.svg`, `/hllogo/${alias}.svg`);
     if (alias !== key) urls.push(`/hllogo/${key}.svg`);
+    /* Акции и металлы приходят как «xyz:AAPL» — с именем рынка HIP-3 впереди
+       и строчными буквами. Hyperliquid раздаёт их значки по точному имени, а
+       выше оно приведено к верхнему регистру, и «XYZ:AAPL.svg» отдавал не
+       картинку, а страницу приложения — с кодом 200, так что даже на ошибку
+       это не походило: перебор шёл дальше и заканчивался буквой.
+       Поэтому пробуем имя как есть, а следом — тикер без приставки. */
+    const raw = String(sym || "").trim();
+    if (raw && raw !== alias) urls.push(`/hllogo/${raw}.svg`);
+    const bare = raw.slice(raw.lastIndexOf(":") + 1);
+    if (bare && bare !== raw) urls.push(`/coins/hl/${bare.toUpperCase()}.svg`);
   }
   const cg = CG_FALLBACK[key];
   if (cg) urls.push(cg);
@@ -78,7 +88,9 @@ export function CoinIcon({
      оставляет только латиницу и цифры, поэтому у китайских и японских имён
      вроде «幻想» не оставалось ничего и в кружке стоял вопросительный знак.
      Первый знак имени — всегда лучше, чем «?». */
-  const letter = [...String(sym || "").trim()][0] || key.slice(0, 1) || "?";
+  const plain = String(sym || "").trim();
+  const letter =
+    [...plain.slice(plain.lastIndexOf(":") + 1)][0] || [...plain][0] || key.slice(0, 1) || "?";
 
   return (
     <span className="ci" style={{ width: size, height: size, fontSize: size * 0.42 }} aria-hidden="true">

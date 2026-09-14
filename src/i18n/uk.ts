@@ -359,7 +359,7 @@ export const uk: Dict = {
   ui_chart: "Графік",
   ui_chg24: "Зміна за 24г",
   ui_cls_crypto: "Крипта",
-  ui_cls_rwa: "Акції та золото",
+  ui_cls_rwa: "Акції та метали",
   ui_copied: "Адресу скопійовано",
   ui_copy: "Копіювати",
   ui_copy_failed: "Не вдалося скопіювати",

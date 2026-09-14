@@ -113,3 +113,22 @@ export function showSym(sym: string | undefined | null): string {
   const i = s.lastIndexOf(":");
   return i >= 0 ? s.slice(i + 1) : s;
 }
+
+/**
+ * Крипта или «не крипта» — акции и металлы.
+ *
+ * То же правило, что на сервере: акции и товары Hyperliquid живут на
+ * отдельных рынках HIP-3 и носят в имени двоеточие — «xyz:NVDA». Обычный перп
+ * двоеточия не носит. Плюс список тикеров токенизированных металлов: они
+ * торгуются обычными перпами и иначе осели бы в крипте.
+ */
+const METAL_SYMS = new Set([
+  "XAU", "PAXG", "XAUT", "KAU", "GOLD",
+  "XAG", "KAG", "SILVER",
+  "XPT", "XPD",
+]);
+
+export function coinClass(sym: string | undefined | null): "crypto" | "rwa" {
+  const s = String(sym || "").toUpperCase();
+  return s.includes(":") || METAL_SYMS.has(s) ? "rwa" : "crypto";
+}

@@ -1425,20 +1425,25 @@ _ls_lock = threading.Lock()
 _ls_busy: set[str] = set()
 
 
-# Токенизированное золото торгуется и обычным перпом, без двоеточия в имени.
-# Держим список отдельно, чтобы оно не оседало в крипте.
-GOLD_SYMS = {"PAXG", "XAUT", "XAU", "GOLD", "KAU"}
+# Токенизированные металлы торгуются и обычным перпом, без двоеточия в имени.
+# Держим список отдельно, чтобы они не оседали в крипте: XAU — золото, XAG —
+# серебро, XPT — платина, XPD — палладий; остальное это их обёртки.
+METAL_SYMS = {
+    "XAU", "PAXG", "XAUT", "KAU", "GOLD",
+    "XAG", "KAG", "SILVER",
+    "XPT", "XPD",
+}
 
 
 def coin_class(coin: str) -> str:
-    """Крипта или «не крипта» — акции и золото.
+    """Крипта или «не крипта» — акции и металлы.
 
     Акции и товары Hyperliquid живут на отдельных рынках HIP-3, и бот узнаёт
     их ровно так же: по двоеточию в имени, «xyz:NVDA». Обычный перп двоеточия
     не носит.
     """
     c = (coin or "").upper()
-    return "rwa" if ":" in c or c in GOLD_SYMS else "crypto"
+    return "rwa" if ":" in c or c in METAL_SYMS else "crypto"
 
 
 def ls_scan(hl: sqlite3.Connection | None, since: int) -> list[dict]:

@@ -1,7 +1,7 @@
 /**
- * «Аналитика» — кнопка 📊 бота со всеми её разделами: поток китов,
- * крупнейшие покупки, крупнейшие позиции, ликвидации, перекос фандинга.
- * Ротация — то, чего в чате показать было неудобно, а на экране видно.
+ * «Аналитика» — кнопка 📊 бота со всеми её разделами: поток денег, крупнейшие
+ * сделки и позиции, перекос фандинга, лонг против шорта. Ротация — то, чего в
+ * чате показать было неудобно, а на экране видно.
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { useApp } from "../store/app";
@@ -16,13 +16,13 @@ import { copyText } from "../lib/copy";
 import { num, pct, signed, usd } from "../lib/format";
 import { ago } from "../lib/relative";
 import {
-  fundingSideKey, isUpKind, levFromSide, showSym, tradeKind, tradeKindKey,
+  coinClass, fundingSideKey, isUpKind, levFromSide, showSym, tradeKind, tradeKindKey,
 } from "../lib/labels";
 import { CoinIcon } from "../components/CoinIcon";
 import { BuySellBar, FlowSpark, TrendChart } from "../components/Chart";
 import {
   Card, CopyGlyph, Empty, Locked, MinusGlyph, NetFlowGlyph, OrdersGlyph, PlusGlyph,
-  PositionsGlyph, Row, SectionTitle, Segmented, Skeleton, TileNav,
+  PositionsGlyph, Row, SectionTitle, Segmented, Skeleton, StackGlyph, TileNav,
 } from "../components/ui";
 import { fetchBig, fetchFlow, fetchLs } from "../lib/api";
 import type { BigSide, BigView, BigWin, FlowWin } from "../store/app";
@@ -37,7 +37,7 @@ const BIG_SIDES: { id: BigSide; key: Parameters<typeof t>[1] }[] = [
   { id: "sell", key: "ui_side_sells" },
 ];
 
-/* Акции и золото — не крипта ни по размеру, ни по настроению: в один список
+/* Акции и металлы — не крипта ни по размеру, ни по настроению: в один список
    их мешать нельзя, иначе пара миллионов в NVDA теряется среди сотен
    миллионов в биткоине, а общий процент не говорит ни о том, ни о другом. */
 const LS_CLASSES: { id: CoinClass; key: Parameters<typeof t>[1] }[] = [
@@ -98,7 +98,7 @@ const VIEWS: {
   { id: "spot", ic: <OrdersGlyph size={22} />, venue: "spot", label: (tr) => tr("ui_tab_orders") },
   { id: "rot", ic: "🔄", venue: "spot", label: (tr) => tr("ui_rotation") },
   { id: "ls", ic: <PositionsGlyph size={22} />, venue: "perp", label: (tr) => tr("ui_tab_ls") },
-  { id: "perp", ic: "🐋", venue: "perp", label: (tr) => tr("ui_tab_positions") },
+  { id: "perp", ic: <StackGlyph size={22} />, venue: "perp", label: (tr) => tr("ui_tab_positions") },
   { id: "fund", ic: "⚖️", venue: "perp", label: (tr) => tr("ui_tab_funding") },
 ];
 
@@ -139,7 +139,9 @@ function TradeList({ rows, empty }: { rows: TradeRow[]; empty: string }) {
           <Row
             key={`${r.sym}-${i}`}
             icon={<CoinIcon sym={r.sym} size={30} />}
-            title={r.sym}
+            /* Значок ищется по полному имени — «xyz:AAPL», иначе его не
+               найти; а в подписи приставка рынка лишняя. */
+            title={showSym(r.sym)}
             sub={`${r.w} · ${ago(r.t)}`}
             value={usd(r.v)}
             tone={isUpKind(kind) ? "up" : "dn"}
@@ -188,7 +190,7 @@ function useBigTrades(win: BigWin) {
   }, [win]);
 
   if (win === "24h") return { data: cached, loading: false };
-  return { data: rows ?? { spot: [], perp: [], liq: [] }, loading: rows === null };
+  return { data: rows ?? { spot: [], perp: [] }, loading: rows === null };
 }
 
 export function AnalyticsTab() {
@@ -234,6 +236,10 @@ export function AnalyticsTab() {
      смотрящего, и «покупка» в ней есть не на всех. Старые ответы поля не
      знают — для них остаётся разбор, иначе доска опустеет до перезапуска
      сервера. */
+  /* Класс инструмента сервер кладёт только в «Лонг / Шорт»; здесь строки
+     приходят лентой сделок, поэтому считаем по имени — по тому же правилу,
+     что и сервер: двоеточие в имени значит рынок HIP-3. */
+  const perpRows = big.data.perp.filter((r) => coinClass(r.sym) === lsCls);
   const spotRows = big.data.spot.filter((r) =>
     r.buy === undefined ? (tradeKind(r.side) === "buy") === (bigSide === "buy") : r.buy === (bigSide === "buy"),
   );
@@ -357,10 +363,20 @@ export function AnalyticsTab() {
 
       {view === "perp" ? (
         <Card>
-          <SectionTitle>{t(lang, "big_perp_title")}</SectionTitle>
+          <SectionTitle note={`${t(lang, lsCls === "rwa" ? "ui_cls_rwa" : "ui_cls_crypto")} · ${num(perpRows.length)}`}>
+            {t(lang, "big_perp_title")}
+          </SectionTitle>
+          {/* Тот же раздельник, что в «Лонг / Шорт», и та же выбранная
+              кнопка: акции с металлами и крипта — разные рынки, а не разные
+              разделы, и переключать их дважды человек не должен. */}
+          <Segmented<CoinClass>
+            value={lsCls}
+            onChange={setLsCls}
+            options={LS_CLASSES.map((v) => ({ id: v.id, label: t(lang, v.key) }))}
+          />
           {winPicker}
           {!premium ? locked : big.loading ? <Skeleton rows={3} /> : (
-            <TradeList rows={big.data.perp} empty={t(lang, "big_empty")} />
+            <TradeList rows={perpRows} empty={t(lang, "big_empty")} />
           )}
         </Card>
       ) : null}
