@@ -54,6 +54,12 @@ const LS_SIDES: { id: FlowSide; key: Parameters<typeof t>[1] }[] = [
   { id: "out", key: "ls_side_short" },
 ];
 
+/* Те же две кнопки, что у ордеров, только на перпах сторона зовётся иначе. */
+const PERP_SIDES: { id: BigSide; key: Parameters<typeof t>[1] }[] = [
+  { id: "buy", key: "ls_side_long" },
+  { id: "sell", key: "ls_side_short" },
+];
+
 const FLOW_SIDES: { id: FlowSide; key: Parameters<typeof t>[1] }[] = [
   { id: "all", key: "flow_side_all" },
   { id: "in", key: "flow_side_in" },
@@ -238,8 +244,17 @@ export function AnalyticsTab() {
      сервера. */
   /* Класс считает сервер: у него карта площадок Hyperliquid, а по короткому
      имени «SP500» приложение индекс от монеты не отличит. Для строк из старых
-     ответов остаётся запасное правило по имени. */
-  const perpRows = big.data.perp.filter((r) => (r.cls ?? coinClass(r.sym)) === lsCls);
+     ответов остаётся запасное правило по имени.
+
+     Направление — второй отбор, по той же кнопке, что покупки и продажи на
+     споте: вопрос один и тот же, «кто ставит на рост», просто на разных
+     площадках он называется по-разному. */
+  const wantLong = bigSide === "buy";
+  const perpRows = big.data.perp.filter(
+    (r) =>
+      (r.cls ?? coinClass(r.sym)) === lsCls &&
+      (r.long === undefined ? tradeKind(r.side) === "long" : r.long) === wantLong,
+  );
   const spotRows = big.data.spot.filter((r) =>
     r.buy === undefined ? (tradeKind(r.side) === "buy") === (bigSide === "buy") : r.buy === (bigSide === "buy"),
   );
@@ -363,7 +378,7 @@ export function AnalyticsTab() {
 
       {view === "perp" ? (
         <Card>
-          <SectionTitle note={`${t(lang, lsCls === "rwa" ? "ui_cls_rwa" : "ui_cls_crypto")} · ${num(perpRows.length)}`}>
+          <SectionTitle note={`${t(lang, wantLong ? "ls_side_long" : "ls_side_short")} · ${num(perpRows.length)}`}>
             {t(lang, "big_perp_title")}
           </SectionTitle>
           {/* Тот же раздельник, что в «Лонг / Шорт», и та же выбранная
@@ -373,6 +388,13 @@ export function AnalyticsTab() {
             value={lsCls}
             onChange={setLsCls}
             options={LS_CLASSES.map((v) => ({ id: v.id, label: t(lang, v.key) }))}
+          />
+          {/* Лонги и шорты — та же кнопка, что покупки и продажи на споте:
+              человек один раз выбирает, чью сторону смотрит. */}
+          <Segmented<BigSide>
+            value={bigSide}
+            onChange={setBigSide}
+            options={PERP_SIDES.map((v) => ({ id: v.id, label: t(lang, v.key) }))}
           />
           {winPicker}
           {!premium ? locked : big.loading ? <Skeleton rows={3} /> : (

@@ -2585,16 +2585,25 @@ def load_trades(cur: sqlite3.Connection, hl: sqlite3.Connection | None, hours: i
             packs.append((f"AND upper(coin) NOT IN ({marks}) ", rwa))
         else:
             packs.append(("", []))
+        # Лонги и шорты тоже порознь. Причина та же, что у покупок с продажами
+        # на споте: в окне, где рынок стоит в шорт, сотня крупнейших позиций
+        # окажется сплошь шортами, и вкладка лонгов будет почти пустой.
+        #
+        # Нет колонки направления — деления нет: одним запросом, как раньше.
+        dirs = [(DIR_OPEN_LONG, True), (DIR_OPEN_SHORT, False)] if dirc != "0" else [(0, None)]
         for extra, args in packs:
+          for want, is_long in dirs:
+            one = f"AND {dirc} = ? " if is_long is not None else f"AND {dirc} IN (1,2) "
+            dir_args = [want] if is_long is not None else []
             q = (
                 f"SELECT wallet, coin, dir, notional_nanos, {lev} lev, {dirc} dirc, ts "
                 f"FROM hl_fills WHERE ts >= ? AND notional_nanos > 0 {ban} "
-                f"AND {dirc} IN (1,2) {extra}"
+                f"{one}{extra}"
                 f"GROUP BY wallet HAVING notional_nanos = MAX(notional_nanos) "
                 f"ORDER BY notional_nanos DESC LIMIT ?"
             )
             try:
-                for r in hl.execute(q, (since_ms, *args, BIG_ROWS)):
+                for r in hl.execute(q, (since_ms, *dir_args, *args, BIG_ROWS)):
                     code = int(r["dirc"] or 0)
                     lv = int(r["lev"] or 0)
                     side = f"{'лонг' if code == DIR_OPEN_LONG else 'шорт'} {lv}×" if lv else ("лонг" if code == 1 else "шорт")
@@ -2607,6 +2616,9 @@ def load_trades(cur: sqlite3.Connection, hl: sqlite3.Connection | None, hours: i
                             # у него, а по короткому имени «SP500» приложение
                             # отличить индекс от монеты не может.
                             "cls": coin_class(psym),
+                            # Направление отдельным полем: подпись «лонг 5×»
+                            # переводится, и разбирать её приложению нельзя.
+                            "long": code == DIR_OPEN_LONG,
                             "v": usd(r["notional_nanos"]),
                             "side": side,
                             "w": short_addr(r["wallet"] or ""),
@@ -2617,10 +2629,10 @@ def load_trades(cur: sqlite3.Connection, hl: sqlite3.Connection | None, hours: i
             except sqlite3.Error as e:
                 sys.stderr.write(f"[api] perp trades: {e}\n")
         perp.sort(key=lambda x: -x["v"])
-    # И спот, и перп режутся по сотне на каждую сторону выбора: у спота это
-    # покупки и продажи, у перпа крипта и акции с металлами. Общий предел
-    # выкинул бы одну из сторон целиком — у спота реже, у перпа всегда.
-    return {"spot": spot[:BIG_ROWS * 2], "perp": perp[:BIG_ROWS * 2]}
+    # По сотне на каждое сочетание: у спота это покупка и продажа, у перпа
+    # площадка (крипта или акции с металлами) и направление. Общий предел
+    # выкинул бы одну из сторон целиком.
+    return {"spot": spot[:BIG_ROWS * 2], "perp": perp[:BIG_ROWS * 4]}
 
 
 def _big_rebuild(win: str, hours: int) -> None:
