@@ -1,6 +1,7 @@
 /** Мелкие кирпичики интерфейса: строка списка, плитки, кнопка, заголовок. */
 import { Fragment, type CSSProperties, type ReactNode } from "react";
 import { haptic } from "../lib/telegram";
+import { copyText } from "../lib/copy";
 
 export function SectionTitle({ children, note }: { children: ReactNode; note?: ReactNode }) {
   return (
@@ -53,6 +54,7 @@ export function Row({
   after,
   tone,
   badge,
+  action,
   onClick,
 }: {
   icon?: ReactNode;
@@ -66,6 +68,10 @@ export function Row({
   valueSub?: ReactNode;
   /** Самый край строки, за числами — например глазок «сюда можно нажать». */
   after?: ReactNode;
+  /** Своя кнопка у края строки. Кнопку нельзя вложить в кнопку, поэтому со
+   *  своим действием строка перестаёт быть кнопкой целиком: нажимаемой
+   *  становится её основная часть, а действие встаёт рядом. */
+  action?: ReactNode;
   tone?: "up" | "dn";
   badge?: ReactNode;
   onClick?: () => void;
@@ -91,7 +97,26 @@ export function Row({
       {after !== undefined ? <span className="row-after">{after}</span> : null}
     </>
   );
-  if (!onClick) return <div className="row">{inner}</div>;
+  if (!onClick) {
+    return <div className="row">{inner}{action ? <span className="row-act">{action}</span> : null}</div>;
+  }
+  if (action) {
+    return (
+      <div className="row">
+        <button
+          type="button"
+          className="row-hit"
+          onClick={() => {
+            haptic("select");
+            onClick();
+          }}
+        >
+          {inner}
+        </button>
+        <span className="row-act">{action}</span>
+      </div>
+    );
+  }
   return (
     <button
       type="button"
@@ -457,27 +482,7 @@ export function AddrBar({
 }) {
   const put = async () => {
     haptic("light");
-    try {
-      await navigator.clipboard.writeText(addr);
-      onDone(true);
-      return;
-    } catch {
-      // Ниже — запасной путь.
-    }
-    try {
-      const el = document.createElement("textarea");
-      el.value = addr;
-      el.setAttribute("readonly", "");
-      el.style.position = "fixed";
-      el.style.opacity = "0";
-      document.body.appendChild(el);
-      el.select();
-      const ok = document.execCommand("copy");
-      document.body.removeChild(el);
-      onDone(ok);
-    } catch {
-      onDone(false);
-    }
+    onDone(await copyText(addr));
   };
 
   return (
@@ -603,6 +608,18 @@ export function DealsGlyph({ size = 19 }: { size?: number }) {
 }
 
 /** Пара к PlusGlyph: тот же кружок и та же линия, только без вертикали. */
+/** Две страницы одна за другой — знак «скопировать». */
+export function CopyGlyph({ size = 17 }: { size?: number }) {
+  return (
+    <svg className="glyph" viewBox="0 0 24 24" width={size} height={size} fill="none"
+         stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+         aria-hidden="true">
+      <rect x="8.6" y="8.6" width="12" height="12" rx="3" />
+      <path d="M15.4 4.4H6.4a2.6 2.6 0 0 0-2.6 2.6v9" />
+    </svg>
+  );
+}
+
 export function MinusGlyph({ size = 19 }: { size?: number }) {
   return (
     <svg

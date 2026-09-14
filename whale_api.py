@@ -2251,6 +2251,10 @@ def load_trades(cur: sqlite3.Connection, hl: sqlite3.Connection | None, hours: i
                         # угадывать разбором текста, а слово ещё и переводится.
                         "buy": bool(want_buy),
                         "w": short_addr(r["wallet"] or ""),
+                        # Полный адрес — чтобы подписаться прямо из ленты. В
+                        # сокращённом виде «0x9702b7…d193» кошелёк не найти:
+                        # подписка требует всех сорока двух знаков.
+                        "wa": (r["wallet"] or "").lower(),
                         "t": ago(r["timestamp"]),
                     }
                 )
@@ -2282,6 +2286,7 @@ def load_trades(cur: sqlite3.Connection, hl: sqlite3.Connection | None, hours: i
                         "v": usd(r["notional_nanos"]),
                         "side": side,
                         "w": short_addr(r["wallet"] or ""),
+                        "wa": (r["wallet"] or "").lower(),
                         "t": ago(ts_sec(r["ts"])),
                     }
                 )
@@ -2304,6 +2309,7 @@ def load_trades(cur: sqlite3.Connection, hl: sqlite3.Connection | None, hours: i
                         "v": usd(r["notional_nanos"]),
                         "side": side,
                         "w": short_addr(r["wallet"] or ""),
+                        "wa": (r["wallet"] or "").lower(),
                         "t": ago(ts_sec(r["ts"])),
                     }
                 )

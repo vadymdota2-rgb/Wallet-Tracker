@@ -350,6 +350,20 @@
    а не липнет к нему. */
 .row-mid { flex: 0 0 auto; margin-inline-end: 14px; }
 /* Край строки за числами: глазок-подсказка. */
+/* Строка со своей кнопкой: нажимаемая часть и действие — соседи, а не
+   вложенные друг в друга кнопки. Внутренняя часть повторяет раскладку самой
+   строки, чтобы вид не отличался от обычной. */
+.row-hit {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  text-align: start;
+  transition: opacity 0.15s var(--ease);
+}
+.row-hit:active { opacity: 0.6; }
+.row-act { flex: 0 0 auto; display: inline-flex; margin-inline-start: 10px; }
 .row-after { flex: 0 0 auto; display: inline-flex; margin-inline-start: 10px; color: var(--dim-2); }
 /* Моноширинные цифры: в столбце сумм «$2,99M» и «$412K» иначе стоят
    вразнобой и колонка выглядит рваной. */
@@ -496,6 +510,29 @@
 }
 .nf + .nf { margin-top: 7px; }
 .nf:active { border-color: rgb(127 216 255 / 0.35); background: rgb(11 22 40 / 0.42); }
+/* Нажимаемая часть строки: раскладку держит она, а кнопка копии стоит
+   соседом — вложить кнопку в кнопку нельзя. */
+.nf-hit {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  text-align: start;
+}
+.nf-copy {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin-inline-start: 4px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  color: var(--dim-2);
+  transition: color 0.15s var(--ease), border-color 0.15s var(--ease);
+}
+.nf-copy:active { color: var(--glow); border-color: rgb(127 216 255 / 0.4); }
 .nf-main { flex: 1 1 auto; min-width: 0; display: grid; gap: 4px; }
 .nf-ttl {
   display: flex;

@@ -6,17 +6,21 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
-import { t } from "../i18n/t";
+import { t, bare } from "../i18n/t";
 import type { DictKey } from "../i18n";
 import { haptic } from "../lib/telegram";
+import { toast } from "../components/Toast";
+import { removeWallet } from "../lib/api";
+import { syncNow } from "../lib/sync";
+import { copyText } from "../lib/copy";
 import { num, pct, signed, usd } from "../lib/format";
 import { ago } from "../lib/relative";
 import { fundingSideKey, isUpKind, levFromSide, tradeKind, tradeKindKey } from "../lib/labels";
 import { CoinIcon } from "../components/CoinIcon";
 import { BuySellBar, FlowSpark, TrendChart } from "../components/Chart";
 import {
-  Card, Empty, Locked, NetFlowGlyph, OrdersGlyph, PositionsGlyph, Row, SectionTitle,
-  Segmented, Skeleton, TileNav,
+  Card, CopyGlyph, Empty, Locked, MinusGlyph, NetFlowGlyph, OrdersGlyph, PlusGlyph,
+  PositionsGlyph, Row, SectionTitle, Segmented, Skeleton, TileNav,
 } from "../components/ui";
 import { fetchBig, fetchFlow } from "../lib/api";
 import type { BigSide, BigView, BigWin, FlowWin } from "../store/app";
@@ -79,15 +83,39 @@ const VIEWS: {
   { id: "rot", ic: "🔄", venue: "spot", label: (tr) => tr("ui_rotation") },
 ];
 
+/**
+ * Лента крупных сделок. У каждой — кнопка подписки на её кошелёк.
+ *
+ * Плюс спрашивает имя на отдельном экране, где уже стоят все проверки: лимит
+ * плана, забаненные киты, повтор. Подписан — на том же месте отписка, чтобы
+ * не искать этот кошелёк потом в другом разделе.
+ *
+ * Кнопки нет у строк из старых ответов сервера: там приходил только
+ * сокращённый адрес, а подписаться по «0x9702b7…d193» нельзя.
+ */
 function TradeList({ rows, empty }: { rows: TradeRow[]; empty: string }) {
   const lang = useApp((s) => s.lang);
   const open = useApp((s) => s.open);
+  const wallets = useLive((s) => s.wallets);
+  const tracked = new Set(wallets.map((w) => w.addr.toLowerCase()));
+
+  const unfollow = async (addr: string) => {
+    haptic("light");
+    const res = await removeWallet(addr);
+    if (res?.ok) {
+      toast(t(lang, "toast_wallet_removed"));
+      void syncNow();
+    } else toast(t(lang, "generic_error_retry"), "err");
+  };
+
   if (!rows.length) return <Empty text={empty} />;
   return (
     <>
       {rows.map((r, i) => {
         const kind = tradeKind(r.side);
         const lev = levFromSide(r.side);
+        const addr = (r.wa || "").toLowerCase();
+        const on = tracked.has(addr);
         return (
           <Row
             key={`${r.sym}-${i}`}
@@ -97,6 +125,20 @@ function TradeList({ rows, empty }: { rows: TradeRow[]; empty: string }) {
             value={usd(r.v)}
             tone={isUpKind(kind) ? "up" : "dn"}
             valueSub={`${t(lang, tradeKindKey(kind))}${lev ? ` ${lev}×` : ""}`}
+            action={addr ? (
+              <button
+                type="button"
+                className={on ? "lb-act off" : "lb-act on"}
+                aria-label={bare(t(lang, on ? "remove_yes" : "menu_add_wallet"))}
+                onClick={() => {
+                  if (on) return void unfollow(addr);
+                  haptic("select");
+                  open("addWallet", addr);
+                }}
+              >
+                {on ? <MinusGlyph size={19} /> : <PlusGlyph size={19} />}
+              </button>
+            ) : undefined}
             onClick={() => open("coin", r.sym)}
           />
         );
@@ -150,7 +192,18 @@ export function AnalyticsTab() {
   const { funding, me } = useLive();
   const premium = me.plan === "premium";
   const big = useBigTrades(bigWin);
-  const showWindows = view === "spot" || view === "perp" || view === "liq";
+  /* Окно стоит внутри своего раздела, а не в общей шапке: в шапке оно
+     висело над плитками и выглядело настройкой всей аналитики, хотя
+     половина разделов его не знает. Теперь оно там, где действует, — и
+     ниже кнопок стороны: сперва выбирают, что смотреть, потом за какой
+     срок. */
+  const winPicker = (
+    <Segmented<BigWin>
+      value={bigWin}
+      onChange={setBigWin}
+      options={BIG_WINS.map((w) => ({ id: w.id, label: t(lang, w.key) }))}
+    />
+  );
   /* Сторона приходит отдельным полем. Разбирать подпись нельзя: она на языке
      смотрящего, и «покупка» в ней есть не на всех. Старые ответы поля не
      знают — для них остаётся разбор, иначе доска опустеет до перезапуска
@@ -191,13 +244,6 @@ export function AnalyticsTab() {
             label: v.label((k) => t(lang, k)),
           }))}
         />
-        {showWindows ? (
-          <Segmented<BigWin>
-            value={bigWin}
-            onChange={setBigWin}
-            options={BIG_WINS.map((w) => ({ id: w.id, label: t(lang, w.key) }))}
-          />
-        ) : null}
       </Card>
 
       {view === "flow" ? (
@@ -245,6 +291,7 @@ export function AnalyticsTab() {
             onChange={setBigSide}
             options={BIG_SIDES.map((v) => ({ id: v.id, label: t(lang, v.key) }))}
           />
+          {winPicker}
           {big.loading ? <Skeleton rows={3} /> : <TradeList rows={spotRows} empty={t(lang, "big_empty")} />}
         </Card>
       ) : null}
@@ -252,6 +299,7 @@ export function AnalyticsTab() {
       {view === "perp" ? (
         <Card>
           <SectionTitle>{t(lang, "big_perp_title")}</SectionTitle>
+          {winPicker}
           {!premium ? locked : big.loading ? <Skeleton rows={3} /> : (
             <TradeList rows={big.data.perp} empty={t(lang, "big_empty")} />
           )}
@@ -261,6 +309,7 @@ export function AnalyticsTab() {
       {view === "liq" ? (
         <Card>
           <SectionTitle>{t(lang, "big_liq_title")}</SectionTitle>
+          {winPicker}
           {big.loading ? <Skeleton rows={3} /> : <TradeList rows={big.data.liq} empty={t(lang, "big_empty")} />}
         </Card>
       ) : null}
@@ -424,10 +473,13 @@ function FlowBody() {
   return (
     <>
       {shown.map((r) => (
+        /* Строка перестала быть кнопкой целиком: рядом появилась своя — копия
+           адреса, — а кнопку в кнопку вложить нельзя. Нажимаемой осталась вся
+           строка, кроме уголка с копией. */
+        <div className="nf" key={r.token || r.sym}>
         <button
           type="button"
-          className="nf"
-          key={r.token || r.sym}
+          className="nf-hit"
           /* Адрес контракта уезжает вторым: по нему экран монеты достаёт
              историю цены. По тикеру её не найти — тикеры не уникальны. */
           onClick={() => open("coin", r.sym, r.addr || r.token)}
@@ -466,6 +518,24 @@ function FlowBody() {
             <b className={r.net >= 0 ? "up" : "dn"}>{signed(r.net)}</b>
           </span>
         </button>
+        {/* Адрес контракта целиком — по нему монету находят в обозревателе и
+            на бирже. Показывать все сорок два знака в строке негде, поэтому
+            кнопка: нажал — адрес в буфере. */}
+        {r.addr || r.token ? (
+          <button
+            type="button"
+            className="nf-copy"
+            aria-label={t(lang, "ui_copy")}
+            onClick={async () => {
+              haptic("light");
+              const ok = await copyText(r.addr || r.token || "");
+              toast(t(lang, ok ? "ui_copied" : "ui_copy_failed"), ok ? undefined : "err");
+            }}
+          >
+            <CopyGlyph size={16} />
+          </button>
+        ) : null}
+        </div>
       ))}
 
       {pages > 1 ? (

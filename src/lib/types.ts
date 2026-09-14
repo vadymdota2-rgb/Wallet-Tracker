@@ -208,6 +208,8 @@ export interface TradeRow {
   side: ServerText;
   /** Покупка или продажа — у спота. Слово из `side` переводится, а флаг нет. */
   buy?: boolean;
+  /** Полный адрес кошелька: по сокращённому `w` подписаться нельзя. */
+  wa?: string;
   w: string;
   t: ServerText;
 }
