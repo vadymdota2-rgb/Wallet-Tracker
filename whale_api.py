@@ -1679,14 +1679,38 @@ def flow_finish(cur: sqlite3.Connection, rows: list[dict], since: int, sec: int)
     совпадают, к повторам дописываем хвост адреса: он у контрактов
     единственное, что действительно различается.
     """
-    seen: dict[str, int] = {}
     for r in rows:
-        seen[r["sym"]] = seen.get(r["sym"], 0) + 1
+        r["icon"] = coin_icon(r["sym"], r.get("token") or "")
+
+    groups: dict[str, list[dict]] = {}
     for r in rows:
-        tok = r.get("token") or ""
-        r["icon"] = coin_icon(r["sym"], tok)
-        if seen.get(r["sym"], 0) > 1 and len(tok) >= 42:
-            r["tag"] = tok[-4:]
+        groups.setdefault(r["sym"], []).append(r)
+    for grp in groups.values():
+        if len(grp) < 2:
+            continue
+        toks = [(r.get("token") or "") for r in grp]
+        if any(len(t) < 42 for t in toks):
+            continue
+        # Ставим адрес контракта — в сокращённом виде, но узнаваемом: «0x» и
+        # многоточие говорят, что это адрес, а не случайные буквы.
+        #
+        # Раньше здесь стоял голый хвост в четыре знака, и две разные копии
+        # 4STOCK получили одинаковое «ffff»: метка не сделала ровно того,
+        # ради чего существует. Хвосты как раз совпадают чаще всего — их
+        # подбирают нарочно, чтобы адрес красиво заканчивался.
+        #
+        # Поэтому длина начала подбирается: берём столько знаков, сколько
+        # нужно, чтобы контракты в этой группе различались. Совпадут и
+        # начало, и конец — покажем адрес целиком, лишь бы не выдать два
+        # разных контракта за один.
+        for k in (4, 6, 8, 12, 16):
+            short = [f"{t[:2 + k]}…{t[-4:]}" for t in toks]
+            if len(set(short)) == len(short):
+                break
+        else:
+            short = toks
+        for r, tag in zip(grp, short):
+            r["tag"] = tag
     series = flow_series(cur, [r.get("token") or "" for r in rows], since, sec)
     for r in rows:
         r["sp"] = series.get(r.get("token") or "") or []
