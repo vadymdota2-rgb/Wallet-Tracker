@@ -2187,6 +2187,10 @@ def _f(v) -> float:
         return 0.0
 
 
+# Сколько крупнейших сделок отдаём на каждую сторону в каждом окне.
+BIG_ROWS = 100
+
+
 def load_trades(cur: sqlite3.Connection, hl: sqlite3.Connection | None, hours: int = 24) -> dict:
     """Крупнейшие сделки за окно. Окна те же, что в big_trades.cpp бота:
     час, сутки, неделя, месяц."""
@@ -2200,29 +2204,56 @@ def load_trades(cur: sqlite3.Connection, hl: sqlite3.Connection | None, hours: i
             if ign
             else ""
         )
-        rows = cur.execute(
-            "SELECT t.wallet, t.token, t.is_buy, t.usd_nanos, t.timestamp "
-            "FROM trades t "
-            "WHERE t.timestamp >= ? AND t.usd_nanos > 0 AND t.usd_nanos <= ? "
-            f"{ban}"
-            "GROUP BY t.wallet "
-            "HAVING t.usd_nanos = MAX(t.usd_nanos) "
-            "ORDER BY t.usd_nanos DESC LIMIT 30",
-            (since, MAX_SPOT_USD_NANOS),
-        ).fetchall()
-        for r in rows:
-            sym = symbol_of(cur, r["token"])
-            if not sym:
-                continue
-            spot.append(
-                {
-                    "sym": sym,
-                    "v": usd(r["usd_nanos"]),
-                    "side": "покупка" if r["is_buy"] else "продажа",
-                    "w": short_addr(r["wallet"] or ""),
-                    "t": ago(r["timestamp"]),
-                }
-            )
+        # Покупки и продажи выбираются порознь, по сотне каждых. Одним
+        # запросом с общим пределом так не выйдет: в окне, где продают почти
+        # всё, сотня крупнейших сделок оказалась бы сплошь продажами, и
+        # кнопка «Покупки» вела бы на три строки.
+        #
+        # По одной сделке на кошелёк и на сторону: иначе один кит с десятком
+        # заходов занимал бы всю доску собой. Раньше сторона в группировке не
+        # участвовала, и у кошелька, который в этом окне и покупал, и
+        # продавал, одна из сделок пропадала вовсе.
+        syms = symbol_map(cur)
+        for want_buy in (1, 0):
+            # MAX стоит в выборке, а не в HAVING: только в этой форме SQLite
+            # обещает, что остальные поля строки — монета и время — возьмутся
+            # именно из той сделки, где достигнут максимум. Прежняя запись
+            # давала тот же ответ, но опиралась на поведение, которого никто
+            # не обещал.
+            #
+            # Берём с запасом: у части адресов нет тикера, такие строки
+            # отсеиваются уже здесь, и без запаса вместо сотни доходило
+            # девяносто с небольшим.
+            rows = cur.execute(
+                "SELECT t.wallet, t.token, MAX(t.usd_nanos) v, t.timestamp "
+                "FROM trades t "
+                "WHERE t.timestamp >= ? AND t.usd_nanos > 0 AND t.usd_nanos <= ? "
+                "AND t.is_buy = ? "
+                f"{ban}"
+                "GROUP BY t.wallet "
+                "ORDER BY v DESC LIMIT ?",
+                (since, MAX_SPOT_USD_NANOS, want_buy, BIG_ROWS * 2),
+            ).fetchall()
+            taken = 0
+            for r in rows:
+                if taken >= BIG_ROWS:
+                    break
+                sym = syms.get((r["token"] or "").lower())
+                if not sym:
+                    continue
+                taken += 1
+                spot.append(
+                    {
+                        "sym": sym,
+                        "v": usd(r["v"]),
+                        "side": "покупка" if want_buy else "продажа",
+                        # Сторона отдельным полем: по слову её приходилось
+                        # угадывать разбором текста, а слово ещё и переводится.
+                        "buy": bool(want_buy),
+                        "w": short_addr(r["wallet"] or ""),
+                        "t": ago(r["timestamp"]),
+                    }
+                )
     if hl and table_exists(hl, "hl_fills"):
         since_ms = since * 1000
         ban = (
@@ -2278,7 +2309,11 @@ def load_trades(cur: sqlite3.Connection, hl: sqlite3.Connection | None, hours: i
                 )
         except sqlite3.Error as e:
             sys.stderr.write(f"[api] liq trades: {e}\n")
-    return {"spot": spot[:20], "perp": perp[:20], "liq": liq[:20]}
+    # Спот режется по сотне на сторону — ровно столько и выбрано запросами.
+    # Двадцатка здесь стояла с тех пор, когда доска была одна и без кнопок:
+    # теперь у покупок и продаж свои списки, и обрезать их общим счётом
+    # значило бы выкинуть одну из сторон целиком.
+    return {"spot": spot[:BIG_ROWS * 2], "perp": perp[:20], "liq": liq[:20]}
 
 
 def _big_rebuild(win: str, hours: int) -> None:

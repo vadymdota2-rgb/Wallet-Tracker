@@ -383,6 +383,8 @@ export const id: Dict = {
   ui_saved: "Tersimpan",
   ui_set_main: "Jadikan utama",
   ui_show_more: "Tampilkan lagi",
+  ui_side_buys: "Pembelian",
+  ui_side_sells: "Penjualan",
   ui_spot_open: "Pembelian BSC, masih dipegang",
   ui_sync_failed: "Gagal menyegarkan",
   ui_tab_funding: "Funding",

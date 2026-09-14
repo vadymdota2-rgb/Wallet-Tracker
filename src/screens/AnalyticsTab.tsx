@@ -19,8 +19,17 @@ import {
   Segmented, Skeleton, TileNav,
 } from "../components/ui";
 import { fetchBig, fetchFlow } from "../lib/api";
-import type { BigView, BigWin, FlowWin } from "../store/app";
+import type { BigSide, BigView, BigWin, FlowWin } from "../store/app";
 import type { FlowRow, FlowSide, TradeRow, Trades } from "../lib/types";
+
+/* Покупки и продажи — двумя кнопками, а не одним списком вперемешку. В общем
+   списке крупная продажа и крупная покупка стоят рядом и спорят: доска
+   отвечает то на «кто заходит», то на «кто выходит», а человек выбирает
+   что-то одно. */
+const BIG_SIDES: { id: BigSide; key: Parameters<typeof t>[1] }[] = [
+  { id: "buy", key: "ui_side_buys" },
+  { id: "sell", key: "ui_side_sells" },
+];
 
 const FLOW_SIDES: { id: FlowSide; key: Parameters<typeof t>[1] }[] = [
   { id: "all", key: "flow_side_all" },
@@ -135,11 +144,20 @@ export function AnalyticsTab() {
   const setQuery = useApp((s) => s.setFlowQuery);
   const bigWin = useApp((s) => s.bigWin);
   const setBigWin = useApp((s) => s.setBigWin);
+  const bigSide = useApp((s) => s.bigSide);
+  const setBigSide = useApp((s) => s.setBigSide);
 
   const { funding, me } = useLive();
   const premium = me.plan === "premium";
   const big = useBigTrades(bigWin);
   const showWindows = view === "spot" || view === "perp" || view === "liq";
+  /* Сторона приходит отдельным полем. Разбирать подпись нельзя: она на языке
+     смотрящего, и «покупка» в ней есть не на всех. Старые ответы поля не
+     знают — для них остаётся разбор, иначе доска опустеет до перезапуска
+     сервера. */
+  const spotRows = big.data.spot.filter((r) =>
+    r.buy === undefined ? (tradeKind(r.side) === "buy") === (bigSide === "buy") : r.buy === (bigSide === "buy"),
+  );
 
   const locked = (
     <Locked
@@ -216,8 +234,18 @@ export function AnalyticsTab() {
 
       {view === "spot" ? (
         <Card>
-          <SectionTitle>{t(lang, "big_spot_title")}</SectionTitle>
-          {big.loading ? <Skeleton rows={3} /> : <TradeList rows={big.data.spot} empty={t(lang, "big_empty")} />}
+          {/* Заголовок тот же, что на плитке. Прежний «Крупнейшие покупки /
+              продажи» перечислял обе стороны, а на экране теперь одна: он и
+              противоречил кнопкам, и занимал две строки. */}
+          <SectionTitle note={`${t(lang, bigSide === "buy" ? "ui_side_buys" : "ui_side_sells")} · ${num(spotRows.length)}`}>
+            {t(lang, "ui_tab_orders")}
+          </SectionTitle>
+          <Segmented<BigSide>
+            value={bigSide}
+            onChange={setBigSide}
+            options={BIG_SIDES.map((v) => ({ id: v.id, label: t(lang, v.key) }))}
+          />
+          {big.loading ? <Skeleton rows={3} /> : <TradeList rows={spotRows} empty={t(lang, "big_empty")} />}
         </Card>
       ) : null}
 

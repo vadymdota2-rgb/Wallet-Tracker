@@ -383,6 +383,8 @@ export const ja: Dict = {
   ui_saved: "保存しました",
   ui_set_main: "メインに設定",
   ui_show_more: "もっと見る",
+  ui_side_buys: "買い",
+  ui_side_sells: "売り",
   ui_spot_open: "BSCの買い、保有中",
   ui_sync_failed: "更新できませんでした",
   ui_tab_funding: "ファンディング",

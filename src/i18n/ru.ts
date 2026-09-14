@@ -383,6 +383,8 @@ export const ru: Dict = {
   ui_saved: "Сохранено",
   ui_set_main: "Сделать основным",
   ui_show_more: "Показать ещё",
+  ui_side_buys: "Покупки",
+  ui_side_sells: "Продажи",
   ui_spot_open: "Покупки на BSC, ещё не проданы",
   ui_sync_failed: "Не удалось обновить",
   ui_tab_funding: "Фандинг",

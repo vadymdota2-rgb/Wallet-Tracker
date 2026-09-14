@@ -383,6 +383,8 @@ export const uk: Dict = {
   ui_saved: "Збережено",
   ui_set_main: "Зробити основним",
   ui_show_more: "Показати ще",
+  ui_side_buys: "Купівлі",
+  ui_side_sells: "Продажі",
   ui_spot_open: "Купівлі на BSC, ще не продані",
   ui_sync_failed: "Не вдалося оновити",
   ui_tab_funding: "Фандинг",

@@ -383,6 +383,8 @@ export const vi: Dict = {
   ui_saved: "Đã lưu",
   ui_set_main: "Đặt làm chính",
   ui_show_more: "Xem thêm",
+  ui_side_buys: "Mua",
+  ui_side_sells: "Bán",
   ui_spot_open: "Mua trên BSC, vẫn đang giữ",
   ui_sync_failed: "Không thể làm mới",
   ui_tab_funding: "Funding",

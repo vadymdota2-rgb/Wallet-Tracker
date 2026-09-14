@@ -206,6 +206,8 @@ export interface TradeRow {
   sym: string;
   v: number;
   side: ServerText;
+  /** Покупка или продажа — у спота. Слово из `side` переводится, а флаг нет. */
+  buy?: boolean;
   w: string;
   t: ServerText;
 }

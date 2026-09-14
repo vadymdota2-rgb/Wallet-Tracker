@@ -383,6 +383,8 @@ export const es: Dict = {
   ui_saved: "Guardado",
   ui_set_main: "Hacer principal",
   ui_show_more: "Mostrar más",
+  ui_side_buys: "Compras",
+  ui_side_sells: "Ventas",
   ui_spot_open: "Compras en BSC, aún en cartera",
   ui_sync_failed: "No se pudo actualizar",
   ui_tab_funding: "Funding",

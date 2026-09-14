@@ -383,6 +383,8 @@ export const ko: Dict = {
   ui_saved: "저장됨",
   ui_set_main: "기본으로 설정",
   ui_show_more: "더 보기",
+  ui_side_buys: "매수",
+  ui_side_sells: "매도",
   ui_spot_open: "BSC 매수, 아직 보유 중",
   ui_sync_failed: "새로고침하지 못했습니다",
   ui_tab_funding: "펀딩",

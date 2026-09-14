@@ -383,6 +383,8 @@ export const hi: Dict = {
   ui_saved: "सेव हो गया",
   ui_set_main: "मुख्य बनाएँ",
   ui_show_more: "और दिखाएँ",
+  ui_side_buys: "खरीद",
+  ui_side_sells: "बिक्री",
   ui_spot_open: "BSC खरीद, अब भी होल्ड",
   ui_sync_failed: "रिफ़्रेश नहीं हो सका",
   ui_tab_funding: "फंडिंग",

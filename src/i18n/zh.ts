@@ -383,6 +383,8 @@ export const zh: Dict = {
   ui_saved: "已保存",
   ui_set_main: "设为主钱包",
   ui_show_more: "显示更多",
+  ui_side_buys: "买入",
+  ui_side_sells: "卖出",
   ui_spot_open: "BSC 买入，仍在持有",
   ui_sync_failed: "刷新失败",
   ui_tab_funding: "资金费",

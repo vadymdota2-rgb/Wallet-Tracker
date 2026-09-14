@@ -383,6 +383,8 @@ export const en = {
   ui_saved: "Saved",
   ui_set_main: "Make main",
   ui_show_more: "Show more",
+  ui_side_buys: "Buys",
+  ui_side_sells: "Sells",
   ui_spot_open: "BSC buys, still held",
   ui_sync_failed: "Could not refresh",
   ui_tab_funding: "Funding",

@@ -383,6 +383,8 @@ export const ar: Dict = {
   ui_saved: "تم الحفظ",
   ui_set_main: "تعيين كمحفظة رئيسية",
   ui_show_more: "عرض المزيد",
+  ui_side_buys: "مشتريات",
+  ui_side_sells: "مبيعات",
   ui_spot_open: "مشتريات BSC، ما زالت محتفظًا بها",
   ui_sync_failed: "تعذّر التحديث",
   ui_tab_funding: "التمويل",

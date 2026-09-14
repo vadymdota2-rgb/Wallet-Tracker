@@ -27,6 +27,8 @@ export interface Screen {
 
 /** Окна крупных сделок — те же, что в боте. */
 export type BigWin = "1h" | "6h" | "24h" | "7d" | "30d";
+/** Сторона доски крупных ордеров. */
+export type BigSide = "buy" | "sell";
 /** Разделы аналитики — те же кнопки, что в меню бота. */
 export type BigView = "flow" | "spot" | "perp" | "liq" | "fund" | "rot";
 /** Окна потока: часы. */
@@ -43,6 +45,7 @@ interface AppState {
 
   bigView: BigView;
   bigWin: BigWin;
+  bigSide: BigSide;
   flowWin: FlowWin;
   flowSide: FlowSide;
   flowQuery: string;
@@ -64,6 +67,7 @@ interface AppState {
   setBigView(v: BigView): void;
   setBigWin(w: BigWin): void;
   setFlowWin(w: FlowWin): void;
+  setBigSide(s: BigSide): void;
   setFlowSide(s: FlowSide): void;
   setFlowQuery(q: string): void;
   setRankVenue(v: Venue): void;
@@ -84,6 +88,7 @@ export const useApp = create<AppState>()(
 
       bigView: "flow",
       bigWin: "24h",
+      bigSide: "buy",
       flowWin: "24",
       flowSide: "all",
       flowQuery: "",
@@ -105,6 +110,7 @@ export const useApp = create<AppState>()(
       setBigView: (bigView) => set({ bigView }),
       setBigWin: (bigWin) => set({ bigWin }),
       setFlowWin: (flowWin) => set({ flowWin }),
+      setBigSide: (bigSide) => set({ bigSide }),
       setFlowSide: (flowSide) => set({ flowSide }),
       setFlowQuery: (flowQuery) => set({ flowQuery }),
       setRankVenue: (rankVenue) => set({ rankVenue }),
@@ -123,6 +129,7 @@ export const useApp = create<AppState>()(
         tab: s.tab,
         bigView: s.bigView,
         bigWin: s.bigWin,
+        bigSide: s.bigSide,
         flowWin: s.flowWin,
         flowSide: s.flowSide,
         rankVenue: s.rankVenue,
