@@ -179,6 +179,24 @@
     "zh": "做多",
     "ja": "ロング"
   },
+  "ls_in_short": {
+    "en": "in short",
+    "ru": "в шорте",
+    "uk": "у шорті",
+    "es": "en corto",
+    "pt": "em short",
+    "fr": "en short",
+    "de": "im Short",
+    "tr": "short'ta",
+    "pl": "w shorcie",
+    "ar": "في البيع",
+    "hi": "शॉर्ट में",
+    "id": "di short",
+    "vi": "đang short",
+    "ko": "숏",
+    "zh": "做空",
+    "ja": "ショート"
+  },
   "ls_side_long": {
     "en": "Longs",
     "ru": "Лонги",
@@ -376,6 +394,24 @@
     "ko": "주소가 복사되었습니다",
     "zh": "地址已复制",
     "ja": "アドレスをコピーしました"
+  },
+  "ui_copied_name": {
+    "en": "Name copied",
+    "ru": "Имя скопировано",
+    "uk": "Ім'я скопійовано",
+    "es": "Nombre copiado",
+    "pt": "Nome copiado",
+    "fr": "Nom copié",
+    "de": "Name kopiert",
+    "tr": "Ad kopyalandı",
+    "pl": "Nazwa skopiowana",
+    "ar": "تم نسخ الاسم",
+    "hi": "नाम कॉपी हुआ",
+    "id": "Nama disalin",
+    "vi": "Đã sao chép tên",
+    "ko": "이름 복사됨",
+    "zh": "名称已复制",
+    "ja": "名称をコピーしました"
   },
   "ui_copy": {
     "en": "Copy",

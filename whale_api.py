@@ -1534,6 +1534,21 @@ METAL_SYMS = {
 }
 
 
+def hl_full_name(sym: str) -> str:
+    """Имя инструмента так, как его пишет биржа: «xyz:SP500».
+
+    Контракта у перпов нет — это не токен, а рынок, — и единственное, что тут
+    можно скопировать и куда-то вставить, это его полное имя.
+    """
+    key = (sym or "").upper().replace(" ", "")
+    if not key:
+        return ""
+    if ":" in key:
+        head, _, tail = key.partition(":")
+        return f"{head.lower()}:{tail}"
+    return HL_COIN.get(key) or hl_markets().get(key) or key
+
+
 def coin_class(coin: str) -> str:
     """Крипта или «не крипта» — акции, индексы, металлы, сырьё.
 
@@ -1595,6 +1610,9 @@ def ls_scan(hl: sqlite3.Connection | None, since: int) -> list[dict]:
         sym = str(r["coin"] or "?").upper()
         out.append({
             "sym": sym,
+            # Полное имя — то, что можно скопировать. Считает сервер: у него
+            # карта площадок, а в базе имя лежит вперемешку, с приставкой и без.
+            "full": hl_full_name(sym),
             # Значок собирает сервер: только он знает, под каким полным именем
             # инструмент лежит у биржи.
             "icon": coin_icon(sym),

@@ -123,6 +123,8 @@ export interface LsRow {
   cls?: CoinClass;
   /** Кандидаты логотипа от сервера — по полному имени инструмента. */
   icon?: string[];
+  /** Имя инструмента так, как его пишет биржа: «xyz:SP500». Копируется. */
+  full?: string;
   long: number;
   short: number;
   net: number;

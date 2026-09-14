@@ -652,6 +652,7 @@ function LsHead() {
   const lang = useApp((s) => s.lang);
   const win = useApp((s) => s.flowWin);
   const cls = useApp((s) => s.lsCls);
+  const side = useApp((s) => s.flowSide);
   const all = useLive((s) => s.ls)[win];
   /* Итог того класса, что выбран, а не рынка целиком: иначе на «Акциях и
      золоте» стояла бы цифра, посчитанная в основном по биткоину. Старые
@@ -660,6 +661,13 @@ function LsHead() {
   const b = (cls === "rwa" ? all?.rwa : all?.crypto) ?? all;
   if (!b || b.long + b.short <= 0) return null;
   const up = b.pct >= 50;
+  /* Смотришь шорты — и число должно быть про шорты. Прежде и там, и там
+     стояла доля лонга: под кнопкой «Шорты» это читалось как «11% в шорте»,
+     хотя означало ровно обратное.
+
+     Цвет при этом остаётся про монету, а не про показанное число: красный —
+     значит по ней ставят вниз, каким бы боком мы на неё ни смотрели. */
+  const short = side === "out";
   return (
     <div className="trend">
       <p className="trend-ttl">
@@ -672,7 +680,7 @@ function LsHead() {
         </span>
       </p>
       <p className="trend-top">
-        <b className={up ? "up" : "dn"}>{pct(b.pct, 1, false)}</b>
+        <b className={up ? "up" : "dn"}>{pct(short ? 100 - b.pct : b.pct, 1, false)}</b>
         <small>
           <span className="up">{usd(b.long)}</span>
           {" · "}
@@ -734,6 +742,10 @@ function LsBody() {
   }, [win, side, cls, query, page]);
 
   const shown: LsRow[] = local ? bucket?.rows ?? [] : rows ?? [];
+  /* Выбраны шорты — и доля должна быть про шорты. Прежде под обеими кнопками
+     стояла доля лонга, и «11% в лонге» под кнопкой «Шорты» читалось как «11%
+     в шорте», то есть ровно наоборот. */
+  const short = side === "out";
 
   const go = (to: number) => {
     if (to < 1 || to > pages || to === page || busy) return;
@@ -748,12 +760,20 @@ function LsBody() {
 
   return (
     <>
-      {shown.map((r) => (
-        <button type="button" className="nf" key={r.sym} onClick={() => open("coin", r.sym)}>
-          <span className="nf-hit">
+      {shown.map((r) => {
+        const full = r.full || r.sym;
+        return (
+        <div className="nf" key={r.sym}>
+          <button type="button" className="nf-hit" onClick={() => open("coin", r.sym)}>
             <CoinIcon sym={r.sym} icon={r.icon} size={32} />
             <span className="nf-main">
-              <span className="nf-ttl"><span>{showSym(r.sym)}</span></span>
+              <span className="nf-ttl">
+                <span>{showSym(r.sym)}</span>
+                {/* Полное имя показываем, только когда оно не равно короткому:
+                    у «BTC» приписывать нечего, а «xyz:SP500» говорит, на какой
+                    площадке этот индекс торгуется. */}
+                {full !== showSym(r.sym) ? <em className="nf-tag">{full}</em> : null}
+              </span>
               <span className="nf-sub">
                 <i>{num(r.w)} {t(lang, "flow_wallets")}</i>
                 <i className="nf-money">
@@ -766,12 +786,32 @@ function LsBody() {
               <BuySellBar buy={r.long} sell={r.short} />
             </span>
             <span className="nf-val">
-              <b className={r.pct >= 50 ? "up" : "dn"}>{pct(r.pct, 0, false)}</b>
-              <small className="dim">{t(lang, "ls_in_long")}</small>
+              {/* Цвет про монету, а не про показанное число: красный значит
+                  «ставят вниз», под какой бы кнопкой мы ни смотрели. */}
+              <b className={r.pct >= 50 ? "up" : "dn"}>
+                {pct(short ? 100 - r.pct : r.pct, 0, false)}
+              </b>
+              <small className="dim">{t(lang, short ? "ls_in_short" : "ls_in_long")}</small>
             </span>
-          </span>
-        </button>
-      ))}
+          </button>
+          {/* Контракта у перпов нет — это рынок, а не токен. Копируется его
+              имя на бирже: по нему инструмент и находят. И сообщение своё:
+              «Адрес скопирован» тут было бы неправдой. */}
+          <button
+            type="button"
+            className="nf-copy"
+            aria-label={t(lang, "ui_copy")}
+            onClick={async () => {
+              haptic("light");
+              const ok = await copyText(full);
+              toast(t(lang, ok ? "ui_copied_name" : "ui_copy_failed"), ok ? undefined : "err");
+            }}
+          >
+            <CopyGlyph size={16} />
+          </button>
+        </div>
+        );
+      })}
 
       {pages > 1 ? (
         <nav className="pager" aria-label={t(lang, "flow_coins")}>
