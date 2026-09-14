@@ -358,6 +358,8 @@ export const tr: Dict = {
   ui_buys: "Alım",
   ui_chart: "Grafik",
   ui_chg24: "24s değişim",
+  ui_cls_crypto: "Kripto",
+  ui_cls_rwa: "Hisse ve altın",
   ui_copied: "Adres kopyalandı",
   ui_copy: "Kopyala",
   ui_copy_failed: "Kopyalanamadı",

@@ -104,3 +104,17 @@ const WHY: Record<string, DictKey> = {
 export function whyKey(raw: string): DictKey | null {
   return WHY[raw] ?? null;
 }
+
+/**
+ * Имя инструмента для показа: без служебного префикса площадки.
+ *
+ * Акции и золото приходят с Hyperliquid как «xyz:AAPL» — «xyz» здесь имя
+ * рынка HIP-3, а не часть тикера, и человеку оно ничего не говорит. Для
+ * запросов и логотипов имя остаётся полным: по нему сервер ищет сделки, а
+ * приложение — картинку.
+ */
+export function showSym(sym: string | undefined | null): string {
+  const s = String(sym || "");
+  const i = s.lastIndexOf(":");
+  return i >= 0 ? s.slice(i + 1) : s;
+}

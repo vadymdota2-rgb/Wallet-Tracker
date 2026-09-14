@@ -358,6 +358,8 @@ export const vi: Dict = {
   ui_buys: "Lượt mua",
   ui_chart: "Biểu đồ",
   ui_chg24: "Thay đổi 24 giờ",
+  ui_cls_crypto: "Crypto",
+  ui_cls_rwa: "Cổ phiếu & vàng",
   ui_copied: "Đã sao chép địa chỉ",
   ui_copy: "Sao chép",
   ui_copy_failed: "Không sao chép được",

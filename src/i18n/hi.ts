@@ -358,6 +358,8 @@ export const hi: Dict = {
   ui_buys: "खरीद",
   ui_chart: "चार्ट",
   ui_chg24: "24घं बदलाव",
+  ui_cls_crypto: "क्रिप्टो",
+  ui_cls_rwa: "शेयर और सोना",
   ui_copied: "पता कॉपी हो गया",
   ui_copy: "कॉपी करें",
   ui_copy_failed: "कॉपी नहीं हो सका",

@@ -15,7 +15,9 @@ import { syncNow } from "../lib/sync";
 import { copyText } from "../lib/copy";
 import { num, pct, signed, usd } from "../lib/format";
 import { ago } from "../lib/relative";
-import { fundingSideKey, isUpKind, levFromSide, tradeKind, tradeKindKey } from "../lib/labels";
+import {
+  fundingSideKey, isUpKind, levFromSide, showSym, tradeKind, tradeKindKey,
+} from "../lib/labels";
 import { CoinIcon } from "../components/CoinIcon";
 import { BuySellBar, FlowSpark, TrendChart } from "../components/Chart";
 import {
@@ -24,7 +26,7 @@ import {
 } from "../components/ui";
 import { fetchBig, fetchFlow, fetchLs } from "../lib/api";
 import type { BigSide, BigView, BigWin, FlowWin } from "../store/app";
-import type { FlowRow, FlowSide, LsRow, TradeRow, Trades } from "../lib/types";
+import type { CoinClass, FlowRow, FlowSide, LsRow, TradeRow, Trades } from "../lib/types";
 
 /* Покупки и продажи — двумя кнопками, а не одним списком вперемешку. В общем
    списке крупная продажа и крупная покупка стоят рядом и спорят: доска
@@ -33,6 +35,14 @@ import type { FlowRow, FlowSide, LsRow, TradeRow, Trades } from "../lib/types";
 const BIG_SIDES: { id: BigSide; key: Parameters<typeof t>[1] }[] = [
   { id: "buy", key: "ui_side_buys" },
   { id: "sell", key: "ui_side_sells" },
+];
+
+/* Акции и золото — не крипта ни по размеру, ни по настроению: в один список
+   их мешать нельзя, иначе пара миллионов в NVDA теряется среди сотен
+   миллионов в биткоине, а общий процент не говорит ни о том, ни о другом. */
+const LS_CLASSES: { id: CoinClass; key: Parameters<typeof t>[1] }[] = [
+  { id: "crypto", key: "ui_cls_crypto" },
+  { id: "rwa", key: "ui_cls_rwa" },
 ];
 
 /* Те же три кнопки, что у потока, но про перевес: монета лонговая, если
@@ -202,6 +212,8 @@ export function AnalyticsTab() {
   const setBigWin = useApp((s) => s.setBigWin);
   const bigSide = useApp((s) => s.bigSide);
   const setBigSide = useApp((s) => s.setBigSide);
+  const lsCls = useApp((s) => s.lsCls);
+  const setLsCls = useApp((s) => s.setLsCls);
 
   const { funding, me } = useLive();
   const premium = me.plan === "premium";
@@ -295,6 +307,13 @@ export function AnalyticsTab() {
       {view === "ls" ? (
         <Card>
           <SectionTitle note={t(lang, "ls_hint")}>{t(lang, "ui_tab_ls")}</SectionTitle>
+          {/* Класс инструментов стоит первым: это самый крупный выбор, всё
+              остальное — окно, перевес, поиск — уточняет уже его. */}
+          <Segmented<CoinClass>
+            value={lsCls}
+            onChange={setLsCls}
+            options={LS_CLASSES.map((v) => ({ id: v.id, label: t(lang, v.key) }))}
+          />
           <LsHead />
           <Segmented<FlowWin>
             value={flowWin}
@@ -602,7 +621,13 @@ function FlowBody() {
 function LsHead() {
   const lang = useApp((s) => s.lang);
   const win = useApp((s) => s.flowWin);
-  const b = useLive((s) => s.ls)[win];
+  const cls = useApp((s) => s.lsCls);
+  const all = useLive((s) => s.ls)[win];
+  /* Итог того класса, что выбран, а не рынка целиком: иначе на «Акциях и
+     золоте» стояла бы цифра, посчитанная в основном по биткоину. Старые
+     ответы разбивки не знают — для них берём общий итог, он хотя бы не
+     врёт про сумму. */
+  const b = (cls === "rwa" ? all?.rwa : all?.crypto) ?? all;
   if (!b || b.long + b.short <= 0) return null;
   const up = b.pct >= 50;
   return (
@@ -639,8 +664,10 @@ function LsBody() {
   const open = useApp((s) => s.open);
   const win = useApp((s) => s.flowWin);
   const side = useApp((s) => s.flowSide);
+  const cls = useApp((s) => s.lsCls);
   const raw = useApp((s) => s.flowQuery);
-  const bucket = useLive((s) => s.ls)[win];
+  const all = useLive((s) => s.ls)[win];
+  const bucket = (cls === "rwa" ? all?.rwa : all?.crypto) ?? all;
 
   const query = raw.trim();
   const [page, setPage] = useState(1);
@@ -652,7 +679,7 @@ function LsBody() {
   const total = (query || side !== "all" ? qTotal : bucket?.coins) ?? 0;
   const pages = Math.max(1, Math.ceil(total / FLOW_PAGE));
 
-  useEffect(() => setPage(1), [win, side, query]);
+  useEffect(() => setPage(1), [win, side, cls, query]);
 
   useEffect(() => {
     if (!query && side === "all" && page === 1) {
@@ -663,7 +690,7 @@ function LsBody() {
     const ctrl = new AbortController();
     setBusy(true);
     const timer = setTimeout(() => {
-      void fetchLs(win, query, (page - 1) * FLOW_PAGE, side, ctrl.signal).then((r) => {
+      void fetchLs(win, query, (page - 1) * FLOW_PAGE, side, cls, ctrl.signal).then((r) => {
         if (ctrl.signal.aborted) return;
         setRows(r?.ok ? r.rows ?? [] : []);
         setQTotal(r?.total ?? 0);
@@ -674,7 +701,7 @@ function LsBody() {
       clearTimeout(timer);
       ctrl.abort();
     };
-  }, [win, side, query, page]);
+  }, [win, side, cls, query, page]);
 
   const shown: LsRow[] = local ? bucket?.rows ?? [] : rows ?? [];
 
@@ -696,7 +723,7 @@ function LsBody() {
           <span className="nf-hit">
             <CoinIcon sym={r.sym} size={32} />
             <span className="nf-main">
-              <span className="nf-ttl"><span>{r.sym}</span></span>
+              <span className="nf-ttl"><span>{showSym(r.sym)}</span></span>
               <span className="nf-sub">
                 <i>{num(r.w)} {t(lang, "flow_wallets")}</i>
                 <i className="nf-money">

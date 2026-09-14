@@ -358,6 +358,8 @@ export const ru: Dict = {
   ui_buys: "Покупок",
   ui_chart: "График",
   ui_chg24: "Изменение за 24ч",
+  ui_cls_crypto: "Крипта",
+  ui_cls_rwa: "Акции и золото",
   ui_copied: "Адрес скопирован",
   ui_copy: "Копировать",
   ui_copy_failed: "Не удалось скопировать",

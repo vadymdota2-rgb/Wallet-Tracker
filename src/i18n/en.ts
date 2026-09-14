@@ -358,6 +358,8 @@ export const en = {
   ui_buys: "Buys",
   ui_chart: "Chart",
   ui_chg24: "24h change",
+  ui_cls_crypto: "Crypto",
+  ui_cls_rwa: "Stocks & gold",
   ui_copied: "Address copied",
   ui_copy: "Copy",
   ui_copy_failed: "Could not copy",

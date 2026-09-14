@@ -6,7 +6,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { LangCode } from "../i18n/types";
-import type { FlowSide, RankKind, Venue } from "../lib/types";
+import type { CoinClass, FlowSide, RankKind, Venue } from "../lib/types";
 import type { Timeframe } from "../lib/klines";
 
 export type Tab = "wallets" | "top" | "analytics" | "sonar" | "more";
@@ -49,6 +49,7 @@ interface AppState {
   bigView: BigView;
   bigWin: BigWin;
   bigSide: BigSide;
+  lsCls: CoinClass;
   flowWin: FlowWin;
   flowSide: FlowSide;
   flowQuery: string;
@@ -71,6 +72,7 @@ interface AppState {
   setBigWin(w: BigWin): void;
   setFlowWin(w: FlowWin): void;
   setBigSide(s: BigSide): void;
+  setLsCls(c: CoinClass): void;
   setFlowSide(s: FlowSide): void;
   setFlowQuery(q: string): void;
   setRankVenue(v: Venue): void;
@@ -92,6 +94,7 @@ export const useApp = create<AppState>()(
       bigView: "flow",
       bigWin: "24h",
       bigSide: "buy",
+      lsCls: "crypto",
       flowWin: "24",
       flowSide: "all",
       flowQuery: "",
@@ -114,6 +117,7 @@ export const useApp = create<AppState>()(
       setBigWin: (bigWin) => set({ bigWin }),
       setFlowWin: (flowWin) => set({ flowWin }),
       setBigSide: (bigSide) => set({ bigSide }),
+      setLsCls: (lsCls) => set({ lsCls }),
       setFlowSide: (flowSide) => set({ flowSide }),
       setFlowQuery: (flowQuery) => set({ flowQuery }),
       setRankVenue: (rankVenue) => set({ rankVenue }),
@@ -133,6 +137,7 @@ export const useApp = create<AppState>()(
         bigView: s.bigView,
         bigWin: s.bigWin,
         bigSide: s.bigSide,
+        lsCls: s.lsCls,
         flowWin: s.flowWin,
         flowSide: s.flowSide,
         rankVenue: s.rankVenue,

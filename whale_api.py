@@ -1425,6 +1425,22 @@ _ls_lock = threading.Lock()
 _ls_busy: set[str] = set()
 
 
+# Токенизированное золото торгуется и обычным перпом, без двоеточия в имени.
+# Держим список отдельно, чтобы оно не оседало в крипте.
+GOLD_SYMS = {"PAXG", "XAUT", "XAU", "GOLD", "KAU"}
+
+
+def coin_class(coin: str) -> str:
+    """Крипта или «не крипта» — акции и золото.
+
+    Акции и товары Hyperliquid живут на отдельных рынках HIP-3, и бот узнаёт
+    их ровно так же: по двоеточию в имени, «xyz:NVDA». Обычный перп двоеточия
+    не носит.
+    """
+    c = (coin or "").upper()
+    return "rwa" if ":" in c or c in GOLD_SYMS else "crypto"
+
+
 def ls_scan(hl: sqlite3.Connection | None, since: int) -> list[dict]:
     """Все монеты окна: сколько денег зашло в лонг и сколько в шорт."""
     if not hl or not table_exists(hl, "hl_fills"):
@@ -1459,8 +1475,10 @@ def ls_scan(hl: sqlite3.Connection | None, since: int) -> list[dict]:
         total = lng + shrt
         if total <= 0:
             continue
+        sym = str(r["coin"] or "?").upper()
         out.append({
-            "sym": str(r["coin"] or "?").upper(),
+            "sym": sym,
+            "cls": coin_class(sym),
             "long": lng,
             "short": shrt,
             "net": lng - shrt,
@@ -1522,27 +1540,42 @@ def load_ls(hl: sqlite3.Connection | None) -> dict:
     for key, sec in FLOW_WINDOWS.items():
         coins = ls_scan(hl, tnow - sec)
         ls_rows_put(key, coins)
-        lng = sum(c["long"] for c in coins)
-        shrt = sum(c["short"] for c in coins)
+        def totals(rows: list[dict]) -> dict:
+            lng = sum(c["long"] for c in rows)
+            shrt = sum(c["short"] for c in rows)
+            return {
+                "long": lng,
+                "short": shrt,
+                "net": lng - shrt,
+                "pct": round(lng / (lng + shrt) * 100, 1) if lng + shrt > 0 else 0.0,
+                "coins": len(rows),
+            }
+
+        # Итоги считаются отдельно для крипты и для акций с золотом: у них
+        # разные размеры и разные настроения, и общая цифра, где сотня
+        # миллионов биткоина смешана с парой миллионов в акциях, не говорит
+        # ни о том, ни о другом.
+        crypto = [c for c in coins if c["cls"] == "crypto"]
+        rwa = [c for c in coins if c["cls"] == "rwa"]
         by_win[key] = {
-            "long": lng,
-            "short": shrt,
-            "net": lng - shrt,
-            "pct": round(lng / (lng + shrt) * 100, 1) if lng + shrt > 0 else 0.0,
-            "coins": len(coins),
+            **totals(coins),
+            "crypto": {**totals(crypto), "rows": [dict(c) for c in crypto[:FLOW_ROWS]]},
+            "rwa": {**totals(rwa), "rows": [dict(c) for c in rwa[:FLOW_ROWS]]},
             "rows": [dict(c) for c in coins[:FLOW_ROWS]],
         }
     return by_win
 
 
 def ls_search(hl: sqlite3.Connection | None, win: str, q: str, limit: int = 40,
-              offset: int = 0, side: str = "all") -> dict:
+              offset: int = 0, side: str = "all", cls: str = "crypto") -> dict:
     """Страница лонг/шорта: те же поиск, фильтр и смещение, что у потока."""
     if win not in FLOW_WINDOWS:
         return {"rows": [], "total": 0}
     limit = max(1, min(int(limit or 40), 100))
     offset = max(0, min(int(offset or 0), 5000))
     allrows = ls_rows_cached(hl, win)
+    if cls in ("crypto", "rwa"):
+        allrows = [r for r in allrows if r["cls"] == cls]
     needle = (q or "").strip().upper()
     if needle:
         allrows = [r for r in allrows if needle in (r["sym"] or "")]
@@ -3852,13 +3885,17 @@ class Handler(BaseHTTPRequestHandler):
                 side = (qs.get("side", ["all"])[0] or "all").strip()
                 if side not in ("all", "in", "out"):
                     side = "all"
+                cls = (qs.get("cls", ["crypto"])[0] or "crypto").strip()
+                if cls not in ("crypto", "rwa", "all"):
+                    cls = "crypto"
                 try:
                     offset = int(qs.get("offset", ["0"])[0])
                 except (TypeError, ValueError):
                     offset = 0
                 hl = open_db(HL_DB)
                 try:
-                    self._json(200, {"ok": True, **ls_search(hl, win, q, offset=offset, side=side)})
+                    self._json(200, {"ok": True,
+                                     **ls_search(hl, win, q, offset=offset, side=side, cls=cls)})
                 finally:
                     if hl:
                         try:

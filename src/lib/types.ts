@@ -115,8 +115,12 @@ export type FlowRow = Omit<FlowCoin, "top" | "c1" | "c6" | "c24">;
 export type Flow = Record<string, FlowWindow | undefined>;
 
 /** Монета в разделе «Лонг / Шорт»: сколько денег зашло в каждую сторону. */
+/** Крипта или «не крипта» — акции и золото с рынков HIP-3. */
+export type CoinClass = "crypto" | "rwa";
+
 export interface LsRow {
   sym: string;
+  cls?: CoinClass;
   long: number;
   short: number;
   net: number;
@@ -125,13 +129,19 @@ export interface LsRow {
   w: number;
 }
 
-export interface LsWindow {
+export interface LsTotals {
   long: number;
   short: number;
   net: number;
   pct: number;
   coins: number;
   rows: LsRow[];
+}
+
+/** Итог по окну целиком плюс отдельно по каждому классу инструментов. */
+export interface LsWindow extends LsTotals {
+  crypto?: LsTotals;
+  rwa?: LsTotals;
 }
 
 export type Ls = Record<string, LsWindow | undefined>;

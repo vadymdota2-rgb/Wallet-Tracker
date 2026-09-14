@@ -124,11 +124,12 @@ export const fetchLs = (
   q: string,
   offset = 0,
   side = "all",
+  cls = "crypto",
   signal?: AbortSignal,
 ) =>
   call<{ ok?: boolean; rows?: LsRow[]; total?: number }>(
     `/api/ls?win=${encodeURIComponent(win)}&q=${encodeURIComponent(q)}` +
-      `&offset=${offset}&side=${encodeURIComponent(side)}`,
+      `&offset=${offset}&side=${encodeURIComponent(side)}&cls=${encodeURIComponent(cls)}`,
     { signal },
   );
 

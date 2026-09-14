@@ -358,6 +358,8 @@ export const ar: Dict = {
   ui_buys: "عمليات شراء",
   ui_chart: "الرسم البياني",
   ui_chg24: "تغير 24 ساعة",
+  ui_cls_crypto: "عملات رقمية",
+  ui_cls_rwa: "أسهم وذهب",
   ui_copied: "تم نسخ العنوان",
   ui_copy: "نسخ",
   ui_copy_failed: "تعذّر النسخ",

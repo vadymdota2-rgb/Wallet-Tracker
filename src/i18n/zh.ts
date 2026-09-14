@@ -358,6 +358,8 @@ export const zh: Dict = {
   ui_buys: "买入次数",
   ui_chart: "图表",
   ui_chg24: "24 小时涨跌",
+  ui_cls_crypto: "加密货币",
+  ui_cls_rwa: "股票与黄金",
   ui_copied: "地址已复制",
   ui_copy: "复制",
   ui_copy_failed: "复制失败",

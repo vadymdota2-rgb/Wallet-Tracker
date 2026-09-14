@@ -358,6 +358,8 @@ export const id: Dict = {
   ui_buys: "Pembelian",
   ui_chart: "Grafik",
   ui_chg24: "Perubahan 24 j",
+  ui_cls_crypto: "Kripto",
+  ui_cls_rwa: "Saham & emas",
   ui_copied: "Alamat disalin",
   ui_copy: "Salin",
   ui_copy_failed: "Gagal menyalin",
