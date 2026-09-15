@@ -7,7 +7,7 @@
  */
 import { initData } from "./telegram";
 import type {
-  Bootstrap, Deal, FlowRow, LsRow, MutationResult, TokenHist, Trades, WalletLive,
+  Bootstrap, Deal, FlowRow, LsRow, MutationResult, RotSide, TokenHist, Trades, WalletLive,
 } from "./types";
 
 const TIMEOUT_MS = 15000;
@@ -130,6 +130,16 @@ export const fetchLs = (
   call<{ ok?: boolean; rows?: LsRow[]; total?: number }>(
     `/api/ls?win=${encodeURIComponent(win)}&q=${encodeURIComponent(q)}` +
       `&offset=${offset}&side=${encodeURIComponent(side)}&cls=${encodeURIComponent(cls)}`,
+    { signal },
+  );
+
+/**
+ * Страница столбцов ротации. Первая приходит с общей выгрузкой, остальные —
+ * отсюда: монет в окне сотни, и возить их все каждому запуску незачем.
+ */
+export const fetchRot = (win: string, offset = 0, limit = 15, signal?: AbortSignal) =>
+  call<{ ok?: boolean; src?: RotSide[]; dst?: RotSide[]; msrc?: number; mdst?: number }>(
+    `/api/rot?win=${encodeURIComponent(win)}&offset=${offset}&limit=${limit}`,
     { signal },
   );
 

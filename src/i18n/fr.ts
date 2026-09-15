@@ -391,7 +391,7 @@ export const fr: Dict = {
   ui_portfolio: "Portefeuille",
   ui_pulse: "Pouls des baleines · 24 h",
   ui_retry: "Réessayer",
-  ui_rot_hint: "De quelle pièce l'argent est sorti et dans laquelle il est entré",
+  ui_rot_hint: "De quelles pièces l'argent sort et dans lesquelles il entre",
   ui_rotation: "Rotation",
   ui_save: "Enregistrer",
   ui_saved: "Enregistré",

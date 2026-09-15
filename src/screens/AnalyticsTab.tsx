@@ -24,9 +24,11 @@ import {
   Card, CopyGlyph, Empty, Locked, MinusGlyph, NetFlowGlyph, OrdersGlyph, PlusGlyph,
   PositionsGlyph, RotationGlyph, Row, SectionTitle, Segmented, Skeleton, StackGlyph, TileNav,
 } from "../components/ui";
-import { fetchBig, fetchFlow, fetchLs } from "../lib/api";
+import { fetchBig, fetchFlow, fetchLs, fetchRot } from "../lib/api";
 import type { BigSide, BigView, BigWin, FlowWin } from "../store/app";
-import type { CoinClass, FlowRow, FlowSide, LsRow, RotSum, TradeRow, Trades } from "../lib/types";
+import type {
+  CoinClass, FlowRow, FlowSide, LsRow, RotSide, RotSum, TradeRow, Trades,
+} from "../lib/types";
 
 /* Покупки и продажи — двумя кнопками, а не одним списком вперемешку. В общем
    списке крупная продажа и крупная покупка стоят рядом и спорят: доска
@@ -431,17 +433,21 @@ export function AnalyticsTab() {
       {view === "rot" ? (
         <Card>
           <SectionTitle note={t(lang, "ui_rot_hint")}>{t(lang, "ui_rotation")}</SectionTitle>
-          {/* Пустое окно — без сводки: «$0 переложено, 0 пар» и два пустых
-              столбца выглядят как поломка, хотя это просто тихий час. */}
-          {rotSum && rotSum.pairs > 0 ? <RotSummary sum={rotSum} win={flowWin} /> : null}
-          {/* Окно общее с потоком: оба раздела про одни и те же деньги на
-              одной площадке, и выбирать срок дважды человек не должен. */}
+          {/* Окно перед таблицей, а не под ней: сперва выбирают срок, потом
+              смотрят, что за него вышло. Сам выбор общий с потоком — оба
+              раздела про одни и те же деньги на одной площадке. */}
           <Segmented<FlowWin>
             value={flowWin}
             onChange={setFlowWin}
             options={FLOW_WINS.map((w) => ({ id: w.id, label: t(lang, w.key) }))}
           />
-          <RotBody />
+          {/* Пустое окно — без таблицы: «$0 переложено, 0 пар» и два пустых
+              столбца выглядят как поломка, хотя это просто тихий час. */}
+          {rotSum && rotSum.pairs > 0 ? (
+            <RotBody sum={rotSum} win={flowWin} />
+          ) : (
+            <Empty text={t(lang, "flow_empty")} />
+          )}
         </Card>
       ) : null}
     </>
@@ -838,38 +844,90 @@ function LsBody() {
 }
 
 
-/** Сколько пар на странице. Столько же, сколько строк у потока на экран. */
-const ROT_PAGE = 20;
-
-/** Доля пары в обороте окна. Меньше десятой процента — порогом. */
-function share(usdVal: number, total: number): string {
-  const v = (usdVal / (total || 1)) * 100;
-  return v > 0 && v < 0.1 ? `<${pct(0.1, 1, false)}` : pct(v, 1, false);
-}
+/** Монет в столбце на странице. */
+const ROT_PAGE = 15;
 
 /**
- * Сводка окна: сколько денег сменило монету и по каким монетам это видно.
+ * Ротация: из каких монет деньги уходят и в какие приходят.
  *
- * Список пар отвечает на «кто с кем», но не на «много это или мало» и не на
- * «откуда вообще уходят». Итог и два столбца отвечают, причём по всем парам
- * окна, а не по тем шестидесяти, что доехали: сложить доехавшие значило бы
- * выдать часть за целое, поэтому суммы считает сервер.
+ * Пара считается так: кошелёк что-то продал, а следующей покупкой взял
+ * другую монету — значит, деньги переложили. Пары складываются по монетам и
+ * показываются двумя столбцами: слева те, из которых выходили, справа те, в
+ * которые заходили.
+ *
+ * Списка самих пар («BEM → KII», сумма) под таблицей больше нет: он говорил
+ * то же самое, только дробно — одна монета расходилась по нему десятком
+ * строк, и сколько из неё вышло всего, по списку было не сложить.
+ *
+ * Столбцы рядом, а не один за другим: «откуда» и «куда» сравнивают друг с
+ * другом, и разнесённые по вертикали они этого не позволяют.
+ *
+ * Страницами: монет в окне бывают сотни. Первая страница приходит с общей
+ * выгрузкой и рисуется сразу, остальные достаются запросом — возить сотни
+ * строк каждому запуску ради страницы, до которой дойдёт один из двадцати,
+ * незачем.
  */
-function RotSummary({ sum, win }: { sum: RotSum; win: FlowWin }) {
+function RotBody({ sum, win }: { sum: RotSum; win: FlowWin }) {
   const lang = useApp((s) => s.lang);
   const open = useApp((s) => s.open);
+  const [page, setPage] = useState(1);
+  const [more, setMore] = useState<{ src: RotSide[]; dst: RotSide[] } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  // Сменилось окно — это другая таблица, и она с начала.
+  useEffect(() => {
+    setPage(1);
+    setMore(null);
+  }, [win]);
+
+  useEffect(() => {
+    if (page === 1) {
+      setMore(null);
+      setBusy(false);
+      return;
+    }
+    const ctrl = new AbortController();
+    setBusy(true);
+    void fetchRot(win, (page - 1) * ROT_PAGE, ROT_PAGE, ctrl.signal).then((r) => {
+      if (ctrl.signal.aborted) return;
+      setMore(r?.ok ? { src: r.src ?? [], dst: r.dst ?? [] } : { src: [], dst: [] });
+      setBusy(false);
+    });
+    return () => ctrl.abort();
+  }, [win, page]);
+
   const winKey = FLOW_WINS.find((w) => w.id === win)?.key ?? "big_win_24h";
+  /* Сколько всего листается, знает сервер: в выгрузку уехала одна страница, и
+     по ней числа страниц не узнать. */
+  const deep = Math.max(sum.msrc ?? sum.src.length, sum.mdst ?? sum.dst.length);
+  const pages = Math.max(1, Math.ceil(deep / ROT_PAGE));
+  const at = Math.min(page, pages);
+
+  const go = (to: number) => {
+    if (to < 1 || to > pages || to === at || busy) return;
+    haptic("select");
+    setPage(to);
+  };
 
   const col = (side: "src" | "dst") => {
-    const rows = (side === "src" ? sum.src : sum.dst) ?? [];
+    const all = (side === "src" ? sum.src : sum.dst) ?? [];
+    const total = (side === "src" ? sum.msrc : sum.mdst) || all.length;
     /* Полоса меряется от первой монеты столбца, а не от итога окна: доли от
-       итога у всех мелкие, и столбик из одинаковых обрубков не сравнить. */
-    const top = rows[0]?.usd || 1;
+       итога у всех мелкие, и столбик из одинаковых обрубков не сравнить.
+       Мера общая для всех страниц — она берётся с первой, которая всегда под
+       рукой; иначе на второй странице полосы начали бы расти заново и монета
+       помельче выглядела бы крупнее прежних. */
+    const top = all[0]?.usd || 1;
+    const rows = at === 1 ? all.slice(0, ROT_PAGE) : (side === "src" ? more?.src : more?.dst) ?? [];
     return (
       <div className="rot-col">
         <p className={`rot-col-ttl ${side === "src" ? "dn" : "up"}`}>
-          {t(lang, side === "src" ? "rot_from" : "rot_to")}
+          <span>{t(lang, side === "src" ? "rot_from" : "rot_to")}</span>
+          {/* Сколько монет в столбце: столько же, сколько можно пролистать —
+              иначе подпись обещала бы монеты, до которых не добраться. */}
+          <i>{num(total)}</i>
         </p>
+        {busy && !rows.length ? <Skeleton rows={4} /> : null}
         {rows.map((x) => (
           <button
             key={x.sym}
@@ -889,108 +947,28 @@ function RotSummary({ sum, win }: { sum: RotSum; win: FlowWin }) {
   };
 
   return (
-    <div className="trend rot-sum">
-      <p className="trend-ttl">
-        <span>{t(lang, "ui_rotation")} · {t(lang, winKey)}</span>
-        <span>{num(sum.pairs)} {t(lang, "rot_pairs")}</span>
-      </p>
-      <p className="trend-top">
-        <b>{usd(sum.usd)}</b>
-        <small>
-          {t(lang, "rot_moved")} · {num(sum.w)} {t(lang, "flow_wallets")}
-        </small>
-      </p>
-      {/* Два столбца рядом, а не один за другим: «откуда» и «куда» сравнивают
-          друг с другом, и разнесённые по вертикали они этого не позволяют. */}
-      <div className="rot-cols">
-        {col("src")}
-        {col("dst")}
-      </div>
-    </div>
-  );
-}
-
-/**
- * Ротация: из какой монеты деньги вышли и в какую зашли.
- *
- * Пара — это продажа и следующая за ней покупка другой монеты одним и тем же
- * кошельком. Окно то же, что у потока: раздел отвечает на тот же вопрос «за
- * какой срок», и держать для него отдельный выбор значило бы спрашивать
- * дважды об одном.
- *
- * Страницами: шестьдесят пар одной лентой — это экран, который не кончается,
- * а по номеру страницы видно, сколько осталось. Страницы листаются на месте,
- * потому что все пары окна уже пришли с общей выгрузкой.
- */
-function RotBody() {
-  const lang = useApp((s) => s.lang);
-  const open = useApp((s) => s.open);
-  const win = useApp((s) => s.flowWin);
-  const links = useLive((s) => s.rot)[win] ?? [];
-  const sum = useLive((s) => s.rotSum)[win];
-  const [page, setPage] = useState(1);
-
-  // Сменилось окно — это другой список, и он с начала.
-  useEffect(() => setPage(1), [win]);
-
-  if (!links.length) return <Empty text={t(lang, "flow_empty")} />;
-
-  /* Доля считается от итога окна, полоса — от самой крупной пары: доля
-     говорит, сколько это в масштабе рынка, полоса — насколько пара крупнее
-     соседней по списку. Одним числом обе вещи не сказать. */
-  const total = sum?.usd || links.reduce((a, l) => a + l.usd, 0);
-  const top = links[0]?.usd || 1;
-  const pages = Math.max(1, Math.ceil(links.length / ROT_PAGE));
-  const shown = links.slice((page - 1) * ROT_PAGE, page * ROT_PAGE);
-
-  const go = (to: number) => {
-    if (to < 1 || to > pages || to === page) return;
-    haptic("select");
-    setPage(to);
-  };
-
-  return (
     <>
-      {shown.map((l, i) => (
-        <div className="rot" key={`${l.from}-${l.to}-${i}`}>
-          <div className="rot-hd">
-            {/* Монеты — две отдельные кнопки: у пары нет одного «своего»
-                экрана, а спрашивают то про ту, из которой вышли, то про ту,
-                в которую зашли. */}
-            <button type="button" className="rot-side"
-                    onClick={() => { haptic("select"); open("coin", l.from); }}>
-              <CoinIcon sym={l.from} size={24} />
-              <span>{showSym(l.from)}</span>
-            </button>
-            <i className="rot-arw" aria-hidden="true">→</i>
-            <button type="button" className="rot-side"
-                    onClick={() => { haptic("select"); open("coin", l.to); }}>
-              <CoinIcon sym={l.to} size={24} />
-              <span>{showSym(l.to)}</span>
-            </button>
-            <b className="rot-val">{usd(l.usd)}</b>
-          </div>
-          <span className="rot-bar">
-            <span style={{ width: `${Math.max(3, (l.usd / top) * 100)}%` }} />
-          </span>
-          <p className="rot-ft">
-            <span>{num(l.w)} {t(lang, "flow_wallets")}</span>
-            {/* Без знака: доля не прирост, и «+1,6%» обещало бы сравнение с
-                чем-то прошлым, которого здесь нет. А слишком мелкую долю
-                показываем порогом: «0,0%» читается как «ноль», хотя за ней
-                стоят настоящие деньги — просто рядом с месячным оборотом
-                они не видны. */}
-            <span>{share(l.usd, total)} {t(lang, "rot_share")}</span>
-          </p>
+      <div className="trend rot-sum">
+        <p className="trend-ttl">
+          <span>{t(lang, "ui_rotation")} · {t(lang, winKey)}</span>
+          <span>{num(sum.pairs)} {t(lang, "rot_pairs")}</span>
+        </p>
+        <p className="trend-top">
+          <b>{usd(sum.usd)}</b>
+          <small>{t(lang, "rot_moved")} · {num(sum.w)} {t(lang, "flow_wallets")}</small>
+        </p>
+        <div className="rot-cols">
+          {col("src")}
+          {col("dst")}
         </div>
-      ))}
+      </div>
 
       {pages > 1 ? (
         <nav className="pager" aria-label={t(lang, "ui_rotation")}>
-          <button type="button" disabled={page <= 1} onClick={() => go(page - 1)}
+          <button type="button" disabled={at <= 1 || busy} onClick={() => go(at - 1)}
                   aria-label={t(lang, "back_button")}>←</button>
-          <span>{num(page)} / {num(pages)}</span>
-          <button type="button" disabled={page >= pages} onClick={() => go(page + 1)}
+          <span>{num(at)} / {num(pages)}</span>
+          <button type="button" disabled={at >= pages || busy} onClick={() => go(at + 1)}
                   aria-label={t(lang, "ui_show_more")}>→</button>
         </nav>
       ) : null}

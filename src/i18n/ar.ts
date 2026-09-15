@@ -391,7 +391,7 @@ export const ar: Dict = {
   ui_portfolio: "المحفظة",
   ui_pulse: "نبض الحيتان · 24 ساعة",
   ui_retry: "أعد المحاولة",
-  ui_rot_hint: "من أي عملة خرجت الأموال وإلى أيها دخلت",
+  ui_rot_hint: "من أي عملات تخرج الأموال وإلى أيها تدخل",
   ui_rotation: "التدوير",
   ui_save: "حفظ",
   ui_saved: "تم الحفظ",

@@ -391,7 +391,7 @@ export const tr: Dict = {
   ui_portfolio: "Portföy",
   ui_pulse: "Balina nabzı · 24s",
   ui_retry: "Tekrar dene",
-  ui_rot_hint: "Paranın hangi coinden çıkıp hangisine girdiği",
+  ui_rot_hint: "Paranın hangi coinlerden çıkıp hangilerine girdiği",
   ui_rotation: "Rotasyon",
   ui_save: "Kaydet",
   ui_saved: "Kaydedildi",

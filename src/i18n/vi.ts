@@ -391,7 +391,7 @@ export const vi: Dict = {
   ui_portfolio: "Danh mục",
   ui_pulse: "Nhịp cá voi · 24 giờ",
   ui_retry: "Thử lại",
-  ui_rot_hint: "Tiền rời khỏi đồng nào và vào đồng nào",
+  ui_rot_hint: "Tiền rời khỏi những đồng nào và vào những đồng nào",
   ui_rotation: "Luân chuyển",
   ui_save: "Lưu",
   ui_saved: "Đã lưu",

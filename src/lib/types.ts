@@ -278,29 +278,21 @@ export interface Funding {
   side: ServerText;
 }
 
-export interface RotLink {
-  from: string;
-  to: string;
-  usd: number;
-  w: number;
-}
-export type Rot = Record<string, RotLink[] | undefined>;
-
-/** Монета в столбце «откуда» или «куда» сводки ротации. */
+/** Монета в столбце «откуда» или «куда»: сколько из неё вышло или в неё зашло. */
 export interface RotSide {
   sym: string;
   usd: number;
 }
 
 /**
- * Сводка окна ротации. Считается сервером по всем парам, а не по тем, что
- * доехали: в выгрузке лежат только верхние, и сложить по ним итог значило бы
- * назвать частью целое.
+ * Ротация за окно. Суммы считает сервер по всем парам «продал одно — купил
+ * другое», а не по тем монетам, что доехали: в выгрузке лежат верхние
+ * шестьдесят, и сложить по ним итог значило бы назвать частью целое.
  */
 export interface RotSum {
   /** Сколько всего переложено из монеты в монету. */
   usd: number;
-  /** Сколько всего пар — включая те, что не поместились в выгрузку. */
+  /** Сколько всего переходов монета → монета. */
   pairs: number;
   /** Сколько кошельков так делали. */
   w: number;
@@ -308,6 +300,12 @@ export interface RotSum {
   src: RotSide[];
   /** В какие приходили. */
   dst: RotSide[];
+  /**
+   * Сколько монет в столбце. Это же число — подпись в заголовке и число
+   * страниц: сколько написано, столько и листается.
+   */
+  msrc?: number;
+  mdst?: number;
 }
 export type RotSums = Record<string, RotSum | undefined>;
 
@@ -414,7 +412,6 @@ export interface Bootstrap {
   sonar?: Sonar;
   trades?: Trades;
   funding?: Funding[];
-  rot?: Rot;
   rotSum?: RotSums;
   coins?: Coins;
   marketFeed?: FeedRow[];

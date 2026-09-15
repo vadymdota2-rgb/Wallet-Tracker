@@ -391,7 +391,7 @@ export const de: Dict = {
   ui_portfolio: "Portfolio",
   ui_pulse: "Wal-Puls · 24 Std.",
   ui_retry: "Erneut versuchen",
-  ui_rot_hint: "Aus welcher Münze das Geld floss und in welche",
+  ui_rot_hint: "Aus welchen Münzen das Geld fließt und in welche",
   ui_rotation: "Rotation",
   ui_save: "Speichern",
   ui_saved: "Gespeichert",

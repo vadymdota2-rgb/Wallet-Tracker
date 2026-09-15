@@ -391,7 +391,7 @@ export const en = {
   ui_portfolio: "Portfolio",
   ui_pulse: "Whale pulse · 24h",
   ui_retry: "Try again",
-  ui_rot_hint: "Which coin the money left and which one it went into",
+  ui_rot_hint: "Which coins the money leaves and which ones it goes into",
   ui_rotation: "Rotation",
   ui_save: "Save",
   ui_saved: "Saved",

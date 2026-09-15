@@ -391,7 +391,7 @@ export const id: Dict = {
   ui_portfolio: "Portofolio",
   ui_pulse: "Denyut paus · 24 j",
   ui_retry: "Coba lagi",
-  ui_rot_hint: "Dari koin mana dana keluar dan ke mana masuk",
+  ui_rot_hint: "Dari koin mana dana keluar dan ke koin mana masuk",
   ui_rotation: "Rotasi",
   ui_save: "Simpan",
   ui_saved: "Tersimpan",

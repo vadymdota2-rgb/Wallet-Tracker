@@ -391,7 +391,7 @@ export const zh: Dict = {
   ui_portfolio: "投资组合",
   ui_pulse: "巨鲸脉搏 · 24 小时",
   ui_retry: "重试",
-  ui_rot_hint: "资金从哪个币流出、又流入哪个币",
+  ui_rot_hint: "资金从哪些币流出、又流入哪些币",
   ui_rotation: "轮动",
   ui_save: "保存",
   ui_saved: "已保存",

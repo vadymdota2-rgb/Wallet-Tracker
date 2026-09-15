@@ -391,7 +391,7 @@ export const uk: Dict = {
   ui_portfolio: "Портфель",
   ui_pulse: "Пульс китів · 24г",
   ui_retry: "Повторити",
-  ui_rot_hint: "З якої монети гроші вийшли і в яку зайшли",
+  ui_rot_hint: "З яких монет гроші виходять і в які заходять",
   ui_rotation: "Ротація",
   ui_save: "Зберегти",
   ui_saved: "Збережено",

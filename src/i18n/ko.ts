@@ -391,7 +391,7 @@ export const ko: Dict = {
   ui_portfolio: "포트폴리오",
   ui_pulse: "고래 맥박 · 24시간",
   ui_retry: "다시 시도",
-  ui_rot_hint: "자금이 빠져나간 코인과 들어간 코인",
+  ui_rot_hint: "자금이 빠져나가는 코인과 들어가는 코인",
   ui_rotation: "로테이션",
   ui_save: "저장",
   ui_saved: "저장됨",

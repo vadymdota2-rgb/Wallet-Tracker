@@ -391,7 +391,7 @@ export const ja: Dict = {
   ui_portfolio: "ポートフォリオ",
   ui_pulse: "クジラの脈 · 24時間",
   ui_retry: "再試行",
-  ui_rot_hint: "資金がどの銘柄から出てどれに入ったか",
+  ui_rot_hint: "資金がどの銘柄から出てどれに入るか",
   ui_rotation: "ローテーション",
   ui_save: "保存",
   ui_saved: "保存しました",

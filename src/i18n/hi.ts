@@ -391,7 +391,7 @@ export const hi: Dict = {
   ui_portfolio: "पोर्टफ़ोलियो",
   ui_pulse: "व्हेल पल्स · 24घं",
   ui_retry: "फिर कोशिश करें",
-  ui_rot_hint: "पैसा किस सिक्के से निकला और किसमें गया",
+  ui_rot_hint: "पैसा किन सिक्कों से निकलता है और किनमें जाता है",
   ui_rotation: "रोटेशन",
   ui_save: "सेव करें",
   ui_saved: "सेव हो गया",

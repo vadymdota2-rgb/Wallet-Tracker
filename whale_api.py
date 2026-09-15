@@ -2799,15 +2799,28 @@ def load_funding(hl: sqlite3.Connection | None) -> list:
 # «за какой срок», и два разных набора окон в соседних разделах человек
 # читал бы как разные сроки под одинаковыми подписями.
 ROT_WINDOWS = FLOW_WINDOWS
-# Пар в выгрузке на окно. Двенадцати не хватало: на неделе крупных переходов
-# заметно больше, и список обрывался ровно там, где начиналось интересное.
-ROT_ROWS = 60
-# Монет в столбцах «откуда» и «куда» сводки.
-ROT_SIDES = 5
+# Монет в каждом столбце общей выгрузки — ровно одна страница. Пятёрки
+# хватало на витрину, но не на ответ: за месяц монет, из которых выходят,
+# сотни. Возить их все каждому запуску незачем — остальные страницы
+# достаются по запросу, как страницы потока.
+ROT_COINS = 15
+# Сколько монет держим для листания. Дальше идут монеты на сотню-другую
+# долларов: это уже не ротация, а пыль, и листать до неё никто не станет.
+ROT_KEEP = 400
+
+# Полные столбцы окна, из которых нарезаются страницы. Пересобираются вместе
+# с общим кэшем и подменяются целиком: читающий поток видит либо прошлый
+# набор, либо новый, но не половину нового.
+_ROT_ALL: dict[str, dict[str, list]] = {}
 
 
 def empty_rot() -> dict:
-    return {"links": {k: [] for k in ROT_WINDOWS}, "sum": {k: None for k in ROT_WINDOWS}}
+    return {k: None for k in ROT_WINDOWS}
+
+
+def rot_page(rows: list, offset: int, limit: int) -> list[dict]:
+    """Страница столбца: пары (тикер, сумма) — в то, что понимает приложение."""
+    return [{"sym": s, "usd": u} for s, u in rows[max(0, offset):max(0, offset) + limit]]
 
 
 def load_rot(cur: sqlite3.Connection) -> dict:
@@ -2824,12 +2837,21 @@ def load_rot(cur: sqlite3.Connection) -> dict:
     сразу раскладывается по всем окнам, куда она попадает. Обходится это
     одним сравнением на окно, а самый длинный запрос — тот же, что и был.
 
-    Возвращает и списки пар, и сводку по окну: сколько всего переложено,
-    сколько пар и из каких монет деньги уходили и в какие приходили. Сводку
-    нельзя сложить на стороне приложения — там лежат только верхние пары, а
-    итог считается по всем.
+    Отдаётся не список пар, а свод по монетам: из каких деньги уходили и в
+    какие приходили, со своими суммами. Пары нужны, чтобы это посчитать, но
+    показывать их отдельным списком незачем — он говорит то же самое, только
+    дробно: одна и та же монета расходится по нему десятком строк, и
+    насколько из неё вышли всего, по списку не сложить.
+
+    Суммы столбцов считаются по всем парам окна, а не по тем, что доехали до
+    приложения: там лежат только верхние монеты, и сложить их значило бы
+    выдать часть за целое.
     """
+    global _ROT_ALL
     out = empty_rot()
+    # Новый набор собирается отдельно и подменяет прежний одним присваиванием
+    # в самом конце: до тех пор страницы листаются по прошлому.
+    page: dict[str, dict[str, list]] = {}
     if not table_exists(cur, "trades"):
         return out
     ign = table_exists(cur, "ignored_wallets")
@@ -2880,35 +2902,37 @@ def load_rot(cur: sqlite3.Connection) -> dict:
 
     for key in ROT_WINDOWS:
         a = agg[key]
-        links = [
-            {"from": s, "to": d, "usd": v[0], "w": len(v[1])}
-            for (s, d), v in a.items()
-            if v[0] > 0
-        ]
-        links.sort(key=lambda x: -x["usd"])
         src_sum: dict[str, float] = {}
         dst_sum: dict[str, float] = {}
         seen: set[str] = set()
         total = 0.0
+        pairs = 0
         for (s, d), v in a.items():
             if v[0] <= 0:
                 continue
+            pairs += 1
             total += v[0]
             src_sum[s] = src_sum.get(s, 0.0) + v[0]
             dst_sum[d] = dst_sum.get(d, 0.0) + v[0]
             seen |= v[1]
-        top = lambda m: [  # noqa: E731
-            {"sym": k, "usd": x}
-            for k, x in sorted(m.items(), key=lambda kv: -kv[1])[:ROT_SIDES]
-        ]
-        out["links"][key] = links[:ROT_ROWS]
-        out["sum"][key] = {
+        keep = lambda m: sorted(m.items(), key=lambda kv: -kv[1])[:ROT_KEEP]  # noqa: E731
+        full_src, full_dst = keep(src_sum), keep(dst_sum)
+        page[key] = {"src": full_src, "dst": full_dst}
+        out[key] = {
             "usd": total,
-            "pairs": len(links),
+            "pairs": pairs,
             "w": len(seen),
-            "src": top(src_sum),
-            "dst": top(dst_sum),
+            "src": rot_page(full_src, 0, ROT_COINS),
+            "dst": rot_page(full_dst, 0, ROT_COINS),
+            # Сколько монет в столбце. Это число — и подпись в заголовке, и
+            # число страниц: сколько написано, столько и можно пролистать.
+            # Поэтому считается по тому, что оставлено для листания, а не по
+            # всем найденным: обещать монету, до которой не долистать, хуже,
+            # чем не назвать хвост, в котором лежат сотни долларов.
+            "msrc": len(full_src),
+            "mdst": len(full_dst),
         }
+    _ROT_ALL = page
     return out
 
 
@@ -3435,10 +3459,10 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
         "trades": trades,
         "marketFeed": market_feed,
         "funding": funding,
-        "rot": rot.get("links") or {},
-        # Сводка отдельным ключом, а не внутри rot: там окна, и чужой ключ
-        # посреди них пришлось бы обходить в каждом месте, где окна перебирают.
-        "rotSum": rot.get("sum") or {},
+        # Ключ rot больше не отдаётся: там лежал список пар, которого в
+        # приложении нет. Старая сборка, открытая в этот момент, увидит на
+        # месте ротации «данных нет» и исправится сама при следующем запуске.
+        "rotSum": rot or {},
         "sonar": sonar,
         "coins": coins,
         "cachedAt": now(),
@@ -3772,7 +3796,6 @@ def bootstrap(chat: str) -> dict:
         trades = pub.get("trades") or {"spot": [], "perp": []}
         market_feed = pub.get("marketFeed") or []
         funding = pub.get("funding") or []
-        rot = pub.get("rot") or {}
         rot_sum = pub.get("rotSum") or {}
         sonar = pub.get("sonar") or empty_sonar
         coins = piece("coins", lambda: coins_cached(cur, hl, flow, wallets), pub.get("coins") or {})
@@ -3789,7 +3812,6 @@ def bootstrap(chat: str) -> dict:
             "sonar": sonar,
             "trades": trades,
             "funding": funding,
-            "rot": rot,
             "rotSum": rot_sum,
             "coins": coins,
             "marketFeed": market_feed,
@@ -4070,7 +4092,6 @@ class Handler(BaseHTTPRequestHandler):
                         "trades": pub.get("trades") or {"spot": [], "perp": []},
                         "marketFeed": pub.get("marketFeed") or [],
                         "funding": pub.get("funding") or [],
-                        "rot": pub.get("rot") or {},
                         "rotSum": pub.get("rotSum") or {},
                         "sonar": pub.get("sonar") or {},
                         "coins": pub.get("coins") or {},
@@ -4111,6 +4132,34 @@ class Handler(BaseHTTPRequestHandler):
                         cur.close()
                     except Exception:
                         pass
+                return
+            if path in ("/rot", "/api/rot"):
+                win = (qs.get("win", ["24"])[0] or "24").strip()
+                if win not in ROT_WINDOWS:
+                    self._json(400, {"ok": False, "error": "bad_win"})
+                    return
+                try:
+                    offset = int(qs.get("offset", ["0"])[0])
+                except (TypeError, ValueError):
+                    offset = 0
+                try:
+                    limit = int(qs.get("limit", [str(ROT_COINS)])[0])
+                except (TypeError, ValueError):
+                    limit = ROT_COINS
+                limit = max(1, min(60, limit))
+                # Из готовых столбцов, а не из базы: они пересобираются вместе
+                # с общим кэшем, и листание страниц не должно его дублировать.
+                cols = _ROT_ALL.get(win) or {}
+                src = cols.get("src") or []
+                dst = cols.get("dst") or []
+                self._json(200, {
+                    "ok": True,
+                    "win": win,
+                    "src": rot_page(src, offset, limit),
+                    "dst": rot_page(dst, offset, limit),
+                    "msrc": len(src),
+                    "mdst": len(dst),
+                })
                 return
             if path in ("/ls", "/api/ls"):
                 win = (qs.get("win", ["24"])[0] or "24").strip()

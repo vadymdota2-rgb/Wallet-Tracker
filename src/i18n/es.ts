@@ -391,7 +391,7 @@ export const es: Dict = {
   ui_portfolio: "Cartera",
   ui_pulse: "Pulso de ballenas · 24 h",
   ui_retry: "Reintentar",
-  ui_rot_hint: "De qué moneda salió el dinero y a cuál entró",
+  ui_rot_hint: "De qué monedas sale el dinero y a cuáles entra",
   ui_rotation: "Rotación",
   ui_save: "Guardar",
   ui_saved: "Guardado",
