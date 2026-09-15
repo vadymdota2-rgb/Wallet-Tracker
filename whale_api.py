@@ -2795,10 +2795,43 @@ def load_funding(hl: sqlite3.Connection | None) -> list:
     return out
 
 
+# Окна ротации — те же пять, что у потока: раздел отвечает на тот же вопрос
+# «за какой срок», и два разных набора окон в соседних разделах человек
+# читал бы как разные сроки под одинаковыми подписями.
+ROT_WINDOWS = FLOW_WINDOWS
+# Пар в выгрузке на окно. Двенадцати не хватало: на неделе крупных переходов
+# заметно больше, и список обрывался ровно там, где начиналось интересное.
+ROT_ROWS = 60
+# Монет в столбцах «откуда» и «куда» сводки.
+ROT_SIDES = 5
+
+
+def empty_rot() -> dict:
+    return {"links": {k: [] for k in ROT_WINDOWS}, "sum": {k: None for k in ROT_WINDOWS}}
+
+
 def load_rot(cur: sqlite3.Connection) -> dict:
-    rot = {"24": [], "168": []}
+    """Переходы денег из монеты в монету по всем окнам за один обход базы.
+
+    Пара считается так: кошелёк что-то продал, а следующей покупкой взял
+    другую монету — значит, деньги переложили. В окно пара попадает, только
+    если в него попали обе половины; продажа трёхдневной давности ничего не
+    говорит о том, что происходило за последний час.
+
+    Окна раньше считались отдельными запросами — сутки и неделя. Пять
+    отдельных запросов стоили бы пяти сортировок сотен тысяч строк, а нужен
+    ровно один: строки идут по кошельку и времени, и каждая найденная пара
+    сразу раскладывается по всем окнам, куда она попадает. Обходится это
+    одним сравнением на окно, а самый длинный запрос — тот же, что и был.
+
+    Возвращает и списки пар, и сводку по окну: сколько всего переложено,
+    сколько пар и из каких монет деньги уходили и в какие приходили. Сводку
+    нельзя сложить на стороне приложения — там лежат только верхние пары, а
+    итог считается по всем.
+    """
+    out = empty_rot()
     if not table_exists(cur, "trades"):
-        return rot
+        return out
     ign = table_exists(cur, "ignored_wallets")
     ban = (
         "AND NOT EXISTS (SELECT 1 FROM ignored_wallets iw "
@@ -2806,40 +2839,77 @@ def load_rot(cur: sqlite3.Connection) -> dict:
         if ign
         else ""
     )
-    for key, sec in (("24", 86400), ("168", 604800)):
-        rows = cur.execute(
-            "SELECT t.wallet, t.token, t.is_buy, t.usd_nanos FROM trades t "
-            f"WHERE t.timestamp >= ? AND t.usd_nanos > 0 AND t.usd_nanos <= ? {ban} "
-            "ORDER BY t.wallet, t.timestamp",
-            (now() - sec, MAX_SPOT_USD_NANOS),
-        ).fetchall()
-        last_sell: dict[str, str] = {}
-        agg: dict[tuple[str, str], list] = {}
-        # Тикер из общего справочника, а не отдельным запросом на строку: за
-        # неделю строк сотни тысяч, и поход в базу на каждую превращал сбор
-        # ротации в десять секунд на каждой перестройке кэша.
-        syms = symbol_map(cur)
-        for r in rows:
-            w = (r["wallet"] or "").lower()
-            tok = syms.get((r["token"] or "").lower())
-            if not tok:
-                continue
-            if r["is_buy"]:
-                src = last_sell.get(w)
-                if src and src != tok:
-                    slot = agg.setdefault((src, tok), [0.0, set()])
-                    slot[0] += usd(r["usd_nanos"])
+    stamp = now()
+    # От самого длинного окна к короткому: длинное включает в себя все
+    # остальные, поэтому обходим строки один раз.
+    cuts = sorted(((k, stamp - sec) for k, sec in ROT_WINDOWS.items()), key=lambda x: x[1])
+    agg: dict[str, dict[tuple[str, str], list]] = {k: {} for k in ROT_WINDOWS}
+    # Тикер из общего справочника, а не отдельным запросом на строку: за
+    # неделю строк сотни тысяч, и поход в базу на каждую превращал сбор
+    # ротации в десять секунд на каждой перестройке кэша.
+    syms = symbol_map(cur)
+    last_sell: dict[str, tuple[str, int]] = {}
+    # Курсор читаем на ходу, без fetchall: за месяц это полмиллиона строк, и
+    # держать их все в памяти незачем — каждая нужна ровно один раз.
+    rows = cur.execute(
+        "SELECT t.wallet, t.token, t.is_buy, t.usd_nanos, t.timestamp FROM trades t "
+        f"WHERE t.timestamp >= ? AND t.usd_nanos > 0 AND t.usd_nanos <= ? {ban} "
+        "ORDER BY t.wallet, t.timestamp",
+        (cuts[0][1], MAX_SPOT_USD_NANOS),
+    )
+    for r in rows:
+        w = (r["wallet"] or "").lower()
+        tok = syms.get((r["token"] or "").lower())
+        if not tok:
+            continue
+        if r["is_buy"]:
+            prev = last_sell.get(w)
+            if prev and prev[0] != tok:
+                src, sold_at = prev
+                val = usd(r["usd_nanos"])
+                # Строки кошелька идут по времени, поэтому покупка не раньше
+                # своей продажи: хватает проверить попадание продажи.
+                for key, cut in cuts:
+                    if sold_at < cut:
+                        continue
+                    slot = agg[key].setdefault((src, tok), [0.0, set()])
+                    slot[0] += val
                     slot[1].add(w)
-            else:
-                last_sell[w] = tok
+        else:
+            last_sell[w] = (tok, r["timestamp"])
+
+    for key in ROT_WINDOWS:
+        a = agg[key]
         links = [
-            {"from": a, "to": b, "usd": v[0], "w": len(v[1])}
-            for (a, b), v in agg.items()
+            {"from": s, "to": d, "usd": v[0], "w": len(v[1])}
+            for (s, d), v in a.items()
             if v[0] > 0
         ]
         links.sort(key=lambda x: -x["usd"])
-        rot[key] = links[:12]
-    return rot
+        src_sum: dict[str, float] = {}
+        dst_sum: dict[str, float] = {}
+        seen: set[str] = set()
+        total = 0.0
+        for (s, d), v in a.items():
+            if v[0] <= 0:
+                continue
+            total += v[0]
+            src_sum[s] = src_sum.get(s, 0.0) + v[0]
+            dst_sum[d] = dst_sum.get(d, 0.0) + v[0]
+            seen |= v[1]
+        top = lambda m: [  # noqa: E731
+            {"sym": k, "usd": x}
+            for k, x in sorted(m.items(), key=lambda kv: -kv[1])[:ROT_SIDES]
+        ]
+        out["links"][key] = links[:ROT_ROWS]
+        out["sum"][key] = {
+            "usd": total,
+            "pairs": len(links),
+            "w": len(seen),
+            "src": top(src_sum),
+            "dst": top(dst_sum),
+        }
+    return out
 
 
 def _count_ready(cur: sqlite3.Connection, perp: bool) -> int:
@@ -3330,7 +3400,8 @@ def load_coins(cur: sqlite3.Connection, hl: sqlite3.Connection | None, flow: dic
 def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict:
     t0 = time.monotonic()
     ls: dict = {}
-    flow, rank, trades, market_feed, funding, rot, sonar = {}, {}, {"spot": [], "perp": []}, [], [], {"24": [], "168": []}, {
+    rot = empty_rot()
+    flow, rank, trades, market_feed, funding, sonar = {}, {}, {"spot": [], "perp": []}, [], [], {
         "need": 400, "ready": {"spot": 0, "perp": 0}, "trained": False, "acc": None,
         "list": [], "hist": {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []},
     }
@@ -3364,7 +3435,10 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
         "trades": trades,
         "marketFeed": market_feed,
         "funding": funding,
-        "rot": rot,
+        "rot": rot.get("links") or {},
+        # Сводка отдельным ключом, а не внутри rot: там окна, и чужой ключ
+        # посреди них пришлось бы обходить в каждом месте, где окна перебирают.
+        "rotSum": rot.get("sum") or {},
         "sonar": sonar,
         "coins": coins,
         "cachedAt": now(),
@@ -3698,7 +3772,8 @@ def bootstrap(chat: str) -> dict:
         trades = pub.get("trades") or {"spot": [], "perp": []}
         market_feed = pub.get("marketFeed") or []
         funding = pub.get("funding") or []
-        rot = pub.get("rot") or {"24": [], "168": []}
+        rot = pub.get("rot") or {}
+        rot_sum = pub.get("rotSum") or {}
         sonar = pub.get("sonar") or empty_sonar
         coins = piece("coins", lambda: coins_cached(cur, hl, flow, wallets), pub.get("coins") or {})
         out = {
@@ -3715,6 +3790,7 @@ def bootstrap(chat: str) -> dict:
             "trades": trades,
             "funding": funding,
             "rot": rot,
+            "rotSum": rot_sum,
             "coins": coins,
             "marketFeed": market_feed,
         }
@@ -3994,7 +4070,8 @@ class Handler(BaseHTTPRequestHandler):
                         "trades": pub.get("trades") or {"spot": [], "perp": []},
                         "marketFeed": pub.get("marketFeed") or [],
                         "funding": pub.get("funding") or [],
-                        "rot": pub.get("rot") or {"24": [], "168": []},
+                        "rot": pub.get("rot") or {},
+                        "rotSum": pub.get("rotSum") or {},
                         "sonar": pub.get("sonar") or {},
                         "coins": pub.get("coins") or {},
                     })

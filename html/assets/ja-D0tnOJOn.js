@@ -33,7 +33,7 @@ const _={account_desc:"追跡中のウォレットと現在の保有状況です
 
 更新ですべて戻ります: ウォレット50個、先物、完全なTop-100。`,remove_confirm_notice:"このウォレットのアラートは届かなくなります。",remove_confirm_title:"🗑️ ウォレットを削除しますか？",remove_yes:"🗑️ はい、削除",rename_current_name:"現在の名前：",rename_enter_new:"新しい名前を入力：",rename_new_name:"新しい名前：",rename_success:"✅ 名前を変更しました",rename_title:"✏️ ウォレット名の変更",rk_avg_hold:"平均保有",rk_btn_most_active:"🔄 最も活発",rk_btn_top_pnl:"💵 Top PnL",rk_btn_top_roi:"📈 Top ROI",rk_btn_top_winrate:"🎯 Top勝率",rk_choose_ranking:"ランキングを選択：",rk_days:"日",rk_generating:`⏳ ランキングを生成中です。
 
-1分後に再試行してください。`,rk_in_top:"ランクイン",rk_no_completed_trades:"直近30日に完了した取引はまだありません。",rk_roi_per_trade:"取引あたりROI",rk_top_traders_30d:"トップトレーダー（30日）",rk_track:"➕ 追跡",rk_trades:"取引",rk_unlock_top100:"🔒 プレミアムでTop 100を解除。",threshold_choose:"プリセットを選ぶか、金額を直接入力：",threshold_current:"現在の閾値：",threshold_custom_btn:"✏️ 金額を指定",threshold_custom_title:`💰 カスタム閾値
+1分後に再試行してください。`,rk_in_top:"ランクイン",rk_no_completed_trades:"直近30日に完了した取引はまだありません。",rk_roi_per_trade:"取引あたりROI",rk_top_traders_30d:"トップトレーダー（30日）",rk_track:"➕ 追跡",rk_trades:"取引",rk_unlock_top100:"🔒 プレミアムでTop 100を解除。",rot_from:"どこから",rot_moved:"銘柄間で移動",rot_pairs:"組",rot_share:"全体の",rot_to:"どこへ",threshold_choose:"プリセットを選ぶか、金額を直接入力：",threshold_current:"現在の閾値：",threshold_custom_btn:"✏️ 金額を指定",threshold_custom_title:`💰 カスタム閾値
 
 USDの最低アラート額を入力 — $50から（例：7500または7500.50）：`,threshold_desc:"この金額以上の取引のみアラートします。",threshold_retry_hint:"有効な金額を入力（例：7500または7500.50）するかキャンセルを押してください。",threshold_save_failed:"❌ 閾値を保存できませんでした。再試行してください。",threshold_title:"💰 アラート閾値",threshold_unchanged:"ℹ️ 現在の閾値はすでに",threshold_updated:`✅ アラート閾値を更新しました
 

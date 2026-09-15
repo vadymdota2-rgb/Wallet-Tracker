@@ -22,11 +22,11 @@ import { CoinIcon } from "../components/CoinIcon";
 import { BuySellBar, FlowSpark, TrendChart } from "../components/Chart";
 import {
   Card, CopyGlyph, Empty, Locked, MinusGlyph, NetFlowGlyph, OrdersGlyph, PlusGlyph,
-  PositionsGlyph, Row, SectionTitle, Segmented, Skeleton, StackGlyph, TileNav,
+  PositionsGlyph, RotationGlyph, Row, SectionTitle, Segmented, Skeleton, StackGlyph, TileNav,
 } from "../components/ui";
 import { fetchBig, fetchFlow, fetchLs } from "../lib/api";
 import type { BigSide, BigView, BigWin, FlowWin } from "../store/app";
-import type { CoinClass, FlowRow, FlowSide, LsRow, TradeRow, Trades } from "../lib/types";
+import type { CoinClass, FlowRow, FlowSide, LsRow, RotSum, TradeRow, Trades } from "../lib/types";
 
 /* Покупки и продажи — двумя кнопками, а не одним списком вперемешку. В общем
    списке крупная продажа и крупная покупка стоят рядом и спорят: доска
@@ -102,7 +102,7 @@ const VIEWS: {
 }[] = [
   { id: "flow", ic: <NetFlowGlyph size={22} />, venue: "spot", label: () => "NetFlow" },
   { id: "spot", ic: <OrdersGlyph size={22} />, venue: "spot", label: (tr) => tr("ui_tab_orders") },
-  { id: "rot", ic: "🔄", venue: "spot", label: (tr) => tr("ui_rotation") },
+  { id: "rot", ic: <RotationGlyph size={22} />, venue: "spot", label: (tr) => tr("ui_rotation") },
   { id: "ls", ic: <PositionsGlyph size={22} />, venue: "perp", label: (tr) => tr("ui_tab_ls") },
   { id: "perp", ic: <StackGlyph size={22} />, venue: "perp", label: (tr) => tr("ui_tab_positions") },
   { id: "fund", ic: "⚖️", venue: "perp", label: (tr) => tr("ui_tab_funding") },
@@ -224,6 +224,7 @@ export function AnalyticsTab() {
   const setLsCls = useApp((s) => s.setLsCls);
 
   const { funding, me } = useLive();
+  const rotSum = useLive((s) => s.rotSum)[flowWin];
   const premium = me.plan === "premium";
   const big = useBigTrades(bigWin);
   /* Окно стоит внутри своего раздела, а не в общей шапке: в шапке оно
@@ -430,6 +431,16 @@ export function AnalyticsTab() {
       {view === "rot" ? (
         <Card>
           <SectionTitle note={t(lang, "ui_rot_hint")}>{t(lang, "ui_rotation")}</SectionTitle>
+          {/* Пустое окно — без сводки: «$0 переложено, 0 пар» и два пустых
+              столбца выглядят как поломка, хотя это просто тихий час. */}
+          {rotSum && rotSum.pairs > 0 ? <RotSummary sum={rotSum} win={flowWin} /> : null}
+          {/* Окно общее с потоком: оба раздела про одни и те же деньги на
+              одной площадке, и выбирать срок дважды человек не должен. */}
+          <Segmented<FlowWin>
+            value={flowWin}
+            onChange={setFlowWin}
+            options={FLOW_WINS.map((w) => ({ id: w.id, label: t(lang, w.key) }))}
+          />
           <RotBody />
         </Card>
       ) : null}
@@ -827,28 +838,162 @@ function LsBody() {
 }
 
 
+/** Сколько пар на странице. Столько же, сколько строк у потока на экран. */
+const ROT_PAGE = 20;
+
+/** Доля пары в обороте окна. Меньше десятой процента — порогом. */
+function share(usdVal: number, total: number): string {
+  const v = (usdVal / (total || 1)) * 100;
+  return v > 0 && v < 0.1 ? `<${pct(0.1, 1, false)}` : pct(v, 1, false);
+}
+
+/**
+ * Сводка окна: сколько денег сменило монету и по каким монетам это видно.
+ *
+ * Список пар отвечает на «кто с кем», но не на «много это или мало» и не на
+ * «откуда вообще уходят». Итог и два столбца отвечают, причём по всем парам
+ * окна, а не по тем шестидесяти, что доехали: сложить доехавшие значило бы
+ * выдать часть за целое, поэтому суммы считает сервер.
+ */
+function RotSummary({ sum, win }: { sum: RotSum; win: FlowWin }) {
+  const lang = useApp((s) => s.lang);
+  const open = useApp((s) => s.open);
+  const winKey = FLOW_WINS.find((w) => w.id === win)?.key ?? "big_win_24h";
+
+  const col = (side: "src" | "dst") => {
+    const rows = (side === "src" ? sum.src : sum.dst) ?? [];
+    /* Полоса меряется от первой монеты столбца, а не от итога окна: доли от
+       итога у всех мелкие, и столбик из одинаковых обрубков не сравнить. */
+    const top = rows[0]?.usd || 1;
+    return (
+      <div className="rot-col">
+        <p className={`rot-col-ttl ${side === "src" ? "dn" : "up"}`}>
+          {t(lang, side === "src" ? "rot_from" : "rot_to")}
+        </p>
+        {rows.map((x) => (
+          <button
+            key={x.sym}
+            type="button"
+            className="rot-line"
+            onClick={() => { haptic("select"); open("coin", x.sym); }}
+          >
+            <span className={`rot-line-fill ${side === "src" ? "dn" : "up"}`}
+                  style={{ width: `${Math.max(6, (x.usd / top) * 100)}%` }} />
+            <CoinIcon sym={x.sym} size={16} />
+            <span className="rot-line-nm">{showSym(x.sym)}</span>
+            <i>{usd(x.usd)}</i>
+          </button>
+        ))}
+      </div>
+    );
+  };
+
+  return (
+    <div className="trend rot-sum">
+      <p className="trend-ttl">
+        <span>{t(lang, "ui_rotation")} · {t(lang, winKey)}</span>
+        <span>{num(sum.pairs)} {t(lang, "rot_pairs")}</span>
+      </p>
+      <p className="trend-top">
+        <b>{usd(sum.usd)}</b>
+        <small>
+          {t(lang, "rot_moved")} · {num(sum.w)} {t(lang, "flow_wallets")}
+        </small>
+      </p>
+      {/* Два столбца рядом, а не один за другим: «откуда» и «куда» сравнивают
+          друг с другом, и разнесённые по вертикали они этого не позволяют. */}
+      <div className="rot-cols">
+        {col("src")}
+        {col("dst")}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Ротация: из какой монеты деньги вышли и в какую зашли.
+ *
+ * Пара — это продажа и следующая за ней покупка другой монеты одним и тем же
+ * кошельком. Окно то же, что у потока: раздел отвечает на тот же вопрос «за
+ * какой срок», и держать для него отдельный выбор значило бы спрашивать
+ * дважды об одном.
+ *
+ * Страницами: шестьдесят пар одной лентой — это экран, который не кончается,
+ * а по номеру страницы видно, сколько осталось. Страницы листаются на месте,
+ * потому что все пары окна уже пришли с общей выгрузкой.
+ */
 function RotBody() {
   const lang = useApp((s) => s.lang);
-  const rot = useLive((s) => s.rot);
+  const open = useApp((s) => s.open);
   const win = useApp((s) => s.flowWin);
-  const key = win === "168" || win === "720" ? "168" : "24";
-  const links = rot[key] ?? [];
+  const links = useLive((s) => s.rot)[win] ?? [];
+  const sum = useLive((s) => s.rotSum)[win];
+  const [page, setPage] = useState(1);
+
+  // Сменилось окно — это другой список, и он с начала.
+  useEffect(() => setPage(1), [win]);
+
   if (!links.length) return <Empty text={t(lang, "flow_empty")} />;
+
+  /* Доля считается от итога окна, полоса — от самой крупной пары: доля
+     говорит, сколько это в масштабе рынка, полоса — насколько пара крупнее
+     соседней по списку. Одним числом обе вещи не сказать. */
+  const total = sum?.usd || links.reduce((a, l) => a + l.usd, 0);
+  const top = links[0]?.usd || 1;
+  const pages = Math.max(1, Math.ceil(links.length / ROT_PAGE));
+  const shown = links.slice((page - 1) * ROT_PAGE, page * ROT_PAGE);
+
+  const go = (to: number) => {
+    if (to < 1 || to > pages || to === page) return;
+    haptic("select");
+    setPage(to);
+  };
+
   return (
     <>
-      {links.map((l, i) => (
-        <Row
-          key={`${l.from}-${l.to}-${i}`}
-          icon={<CoinIcon sym={l.to} size={30} />}
-          title={
-            <>
-              {l.from} <span className="arrow">→</span> {l.to}
-            </>
-          }
-          sub={`${num(l.w)} ${t(lang, "flow_wallets")}`}
-          value={usd(l.usd)}
-        />
+      {shown.map((l, i) => (
+        <div className="rot" key={`${l.from}-${l.to}-${i}`}>
+          <div className="rot-hd">
+            {/* Монеты — две отдельные кнопки: у пары нет одного «своего»
+                экрана, а спрашивают то про ту, из которой вышли, то про ту,
+                в которую зашли. */}
+            <button type="button" className="rot-side"
+                    onClick={() => { haptic("select"); open("coin", l.from); }}>
+              <CoinIcon sym={l.from} size={24} />
+              <span>{showSym(l.from)}</span>
+            </button>
+            <i className="rot-arw" aria-hidden="true">→</i>
+            <button type="button" className="rot-side"
+                    onClick={() => { haptic("select"); open("coin", l.to); }}>
+              <CoinIcon sym={l.to} size={24} />
+              <span>{showSym(l.to)}</span>
+            </button>
+            <b className="rot-val">{usd(l.usd)}</b>
+          </div>
+          <span className="rot-bar">
+            <span style={{ width: `${Math.max(3, (l.usd / top) * 100)}%` }} />
+          </span>
+          <p className="rot-ft">
+            <span>{num(l.w)} {t(lang, "flow_wallets")}</span>
+            {/* Без знака: доля не прирост, и «+1,6%» обещало бы сравнение с
+                чем-то прошлым, которого здесь нет. А слишком мелкую долю
+                показываем порогом: «0,0%» читается как «ноль», хотя за ней
+                стоят настоящие деньги — просто рядом с месячным оборотом
+                они не видны. */}
+            <span>{share(l.usd, total)} {t(lang, "rot_share")}</span>
+          </p>
+        </div>
       ))}
+
+      {pages > 1 ? (
+        <nav className="pager" aria-label={t(lang, "ui_rotation")}>
+          <button type="button" disabled={page <= 1} onClick={() => go(page - 1)}
+                  aria-label={t(lang, "back_button")}>←</button>
+          <span>{num(page)} / {num(pages)}</span>
+          <button type="button" disabled={page >= pages} onClick={() => go(page + 1)}
+                  aria-label={t(lang, "ui_show_more")}>→</button>
+        </nav>
+      ) : null}
     </>
   );
 }

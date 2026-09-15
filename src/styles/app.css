@@ -906,6 +906,108 @@
   font-weight: 600;
 }
 
+/* Ротация ------------------------------------------------------------- */
+/* Сводка стоит на той же рамке, что у тренда потока: это одно и то же по
+   смыслу место — итог окна перед списком, — и выглядеть оно должно одинаково. */
+.rot-sum { gap: 8px; }
+/* Подпись рядом с итогом длиннее, чем у тренда потока («переложено · 895
+   кошельков» против двух сумм), и на узком телефоне в строку с числом не
+   помещается: пусть переносится, а не вылезает за карточку. */
+.rot-sum .trend-top { flex-wrap: wrap; }
+.rot-sum .trend-top small { flex: 1 1 auto; min-width: 0; text-align: end; }
+.rot-cols { display: flex; gap: 8px; }
+.rot-col { flex: 1 1 0; min-width: 0; display: grid; gap: 4px; align-content: start; }
+.rot-col-ttl {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+/* Строка столбца: полоса лежит подложкой под содержимым, а не отдельным
+   элементом сбоку. Полоса сбоку отняла бы у имени монеты половину и без того
+   узкого столбца, а подложкой она меряет ту же ширину, что и текст. */
+.rot-line {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: var(--r-sm);
+  background: rgb(11 22 40 / 0.4);
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--ink);
+  text-align: start;
+}
+.rot-line-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+}
+.rot-line-fill.up { background: rgb(61 220 151 / 0.22); }
+.rot-line-fill.dn { background: rgb(255 92 119 / 0.22); }
+.rot-line > :not(.rot-line-fill) { position: relative; }
+.rot-line img, .rot-line .coin { flex: 0 0 auto; }
+.rot-line-nm {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rot-line i { flex: 0 0 auto; font-style: normal; color: var(--dim); font-size: 10px; }
+
+.rot {
+  display: grid;
+  gap: 6px;
+  padding: 9px 10px;
+  border-radius: var(--r-md);
+  background: rgb(11 22 40 / 0.23);
+  border: 1px solid transparent;
+}
+.rot + .rot { margin-top: 2px; }
+.rot-hd { display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* Монета-кнопка ужимается, сумма — нет: сумму обрезать нельзя, она и есть
+   ответ строки, а длинное имя монеты договаривает значок рядом. */
+.rot-side {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  transition: color 0.2s var(--ease);
+}
+.rot-side span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rot-side:active { color: var(--glow); }
+.rot-arw { flex: 0 0 auto; color: var(--dim-2); font-style: normal; font-size: 13px; }
+.rot-val { flex: 0 0 auto; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.rot-bar { display: block; height: 5px; border-radius: 3px; background: rgb(27 61 104 / 0.45); overflow: hidden; }
+.rot-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  /* От красного к зелёному по ходу движения: слева монета, из которой вышли,
+     справа — в которую зашли, и полоса повторяет ту же дорогу. */
+  background: linear-gradient(90deg, rgb(255 92 119 / 0.75), var(--up));
+}
+.rot-ft {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--dim-2);
+  font-size: 11px;
+}
+
 /* Пустые состояния и заглушки ------------------------------------------ */
 .empty { display: grid; gap: 6px; justify-items: center; padding: 22px 10px; text-align: center; }
 .empty-mark {

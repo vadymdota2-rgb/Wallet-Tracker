@@ -286,6 +286,31 @@ export interface RotLink {
 }
 export type Rot = Record<string, RotLink[] | undefined>;
 
+/** Монета в столбце «откуда» или «куда» сводки ротации. */
+export interface RotSide {
+  sym: string;
+  usd: number;
+}
+
+/**
+ * Сводка окна ротации. Считается сервером по всем парам, а не по тем, что
+ * доехали: в выгрузке лежат только верхние, и сложить по ним итог значило бы
+ * назвать частью целое.
+ */
+export interface RotSum {
+  /** Сколько всего переложено из монеты в монету. */
+  usd: number;
+  /** Сколько всего пар — включая те, что не поместились в выгрузку. */
+  pairs: number;
+  /** Сколько кошельков так делали. */
+  w: number;
+  /** Из каких монет деньги уходили. */
+  src: RotSide[];
+  /** В какие приходили. */
+  dst: RotSide[];
+}
+export type RotSums = Record<string, RotSum | undefined>;
+
 export interface Signal {
   sym: string;
   side: Side;
@@ -390,6 +415,7 @@ export interface Bootstrap {
   trades?: Trades;
   funding?: Funding[];
   rot?: Rot;
+  rotSum?: RotSums;
   coins?: Coins;
   marketFeed?: FeedRow[];
   /** Список кусков, которые сервер не успел собрать. */

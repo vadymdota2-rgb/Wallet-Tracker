@@ -33,7 +33,7 @@ const _={account_desc:"您跟踪的钱包及其当前持仓。",account_title:"�
 
 续费恢复全部：50 个钱包、合约和完整 Top-100。`,remove_confirm_notice:"您将不再收到该钱包的提醒。",remove_confirm_title:"🗑️ 删除钱包？",remove_yes:"🗑️ 是，删除",rename_current_name:"当前名称：",rename_enter_new:"请输入新名称：",rename_new_name:"新名称：",rename_success:"✅ 已重命名",rename_title:"✏️ 重命名钱包",rk_avg_hold:"平均持仓",rk_btn_most_active:"🔄 最活跃",rk_btn_top_pnl:"💵 Top 盈亏",rk_btn_top_roi:"📈 Top ROI",rk_btn_top_winrate:"🎯 Top 胜率",rk_choose_ranking:"选择排名：",rk_days:"天",rk_generating:`⏳ 正在生成排名。
 
-请一分钟后再试。`,rk_in_top:"在榜",rk_no_completed_trades:"近 30 天尚无已完成交易。",rk_roi_per_trade:"每笔 ROI",rk_top_traders_30d:"顶级交易者（30天）",rk_track:"➕ 跟踪",rk_trades:"交易",rk_unlock_top100:"🔒 开通高级版解锁 Top 100。",threshold_choose:"选择预设或输入自定义金额：",threshold_current:"当前阈值：",threshold_custom_btn:"✏️ 自定义金额",threshold_custom_title:`💰 自定义阈值
+请一分钟后再试。`,rk_in_top:"在榜",rk_no_completed_trades:"近 30 天尚无已完成交易。",rk_roi_per_trade:"每笔 ROI",rk_top_traders_30d:"顶级交易者（30天）",rk_track:"➕ 跟踪",rk_trades:"交易",rk_unlock_top100:"🔒 开通高级版解锁 Top 100。",rot_from:"从哪里",rot_moved:"在币种间转移",rot_pairs:"对",rot_share:"占总量",rot_to:"到哪里",threshold_choose:"选择预设或输入自定义金额：",threshold_current:"当前阈值：",threshold_custom_btn:"✏️ 自定义金额",threshold_custom_title:`💰 自定义阈值
 
 输入最低提醒金额（美元）— 从 $50 起（如 7500 或 7500.50）：`,threshold_desc:"仅当交易达到或超过此金额时才会提醒您。",threshold_retry_hint:"请输入有效金额（如 7500 或 7500.50）或点取消。",threshold_save_failed:"❌ 无法保存阈值。请重试。",threshold_title:"💰 提醒阈值",threshold_unchanged:"ℹ️ 当前阈值已是",threshold_updated:`✅ 提醒阈值已更新
 

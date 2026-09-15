@@ -442,6 +442,32 @@ export function NetFlowGlyph({ size = 22 }: { size?: number }) {
   );
 }
 
+/**
+ * Знак «Ротация» — деньги переложили из одной монеты в другую.
+ *
+ * Две монеты и дуга между ними: левая пустая — из неё вышли, правая залитая
+ * — в неё зашли. Кольцо из двух стрелок, которым ротацию обычно рисуют,
+ * здесь читалось бы как «обновить»: ровно такой значок стоит в шапке справа
+ * и означает совсем другое.
+ *
+ * Дуга поверху, а не прямая стрелка между монетами: на двадцати двух
+ * пикселях прямая упиралась бы в кружки и сливалась с ними, а поднятая дуга
+ * видна целиком и сразу говорит про перенос.
+ */
+export function RotationGlyph({ size = 22 }: { size?: number }) {
+  return (
+    <svg className="glyph" viewBox="0 0 24 24" width={size} height={size} fill="none"
+         strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M5.4 13.4C5.4 5.6 18.6 5.6 18.6 13" stroke="currentColor" strokeWidth="2"
+            opacity="0.75" />
+      <path d="M16.2 10.6 18.6 13.4 21 10.6" stroke="currentColor" strokeWidth="2"
+            opacity="0.75" />
+      <circle cx="5.4" cy="17" r="3.2" stroke="var(--dn)" strokeWidth="2.3" />
+      <circle cx="18.6" cy="17" r="4" fill="var(--up)" />
+    </svg>
+  );
+}
+
 export function VenueMark({ venue, size = 15 }: { venue: "spot" | "perp"; size?: number }) {
   return (
     <img

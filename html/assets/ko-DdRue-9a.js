@@ -33,7 +33,7 @@ const _={account_desc:"추적 중인 지갑과 현재 보유 자산입니다.",a
 
 갱신하면 모두 복구됩니다: 지갑 50개, 선물, 전체 Top-100.`,remove_confirm_notice:"이 지갑 알림을 더 이상 받지 않습니다.",remove_confirm_title:"🗑️ 지갑을 삭제할까요?",remove_yes:"🗑️ 예, 삭제",rename_current_name:"현재 이름:",rename_enter_new:"새 이름을 입력하세요:",rename_new_name:"새 이름:",rename_success:"✅ 이름이 변경되었습니다",rename_title:"✏️ 지갑 이름 변경",rk_avg_hold:"평균 홀드",rk_btn_most_active:"🔄 가장 활발",rk_btn_top_pnl:"💵 Top PnL",rk_btn_top_roi:"📈 Top ROI",rk_btn_top_winrate:"🎯 Top 승률",rk_choose_ranking:"순위를 선택하세요:",rk_days:"일",rk_generating:`⏳ 순위를 생성 중입니다.
 
-1분 후 다시 시도하세요.`,rk_in_top:"상위권",rk_no_completed_trades:"최근 30일 청산 거래가 아직 없습니다.",rk_roi_per_trade:"거래당 ROI",rk_top_traders_30d:"탑 트레이더 (30일)",rk_track:"➕ 추적",rk_trades:"거래",rk_unlock_top100:"🔒 프리미엄으로 Top 100 잠금 해제.",threshold_choose:"프리셋을 고르거나 직접 금액을 입력하세요:",threshold_current:"현재 기준:",threshold_custom_btn:"✏️ 직접 입력",threshold_custom_title:`💰 직접 기준
+1분 후 다시 시도하세요.`,rk_in_top:"상위권",rk_no_completed_trades:"최근 30일 청산 거래가 아직 없습니다.",rk_roi_per_trade:"거래당 ROI",rk_top_traders_30d:"탑 트레이더 (30일)",rk_track:"➕ 추적",rk_trades:"거래",rk_unlock_top100:"🔒 프리미엄으로 Top 100 잠금 해제.",rot_from:"어디서",rot_moved:"코인 간 이동",rot_pairs:"쌍",rot_share:"전체 대비",rot_to:"어디로",threshold_choose:"프리셋을 고르거나 직접 금액을 입력하세요:",threshold_current:"현재 기준:",threshold_custom_btn:"✏️ 직접 입력",threshold_custom_title:`💰 직접 기준
 
 USD 최소 알림 금액을 입력하세요 — $50부터 (예: 7500 또는 7500.50):`,threshold_desc:"이 금액 이상 거래에 대해서만 알림을 받습니다.",threshold_retry_hint:"올바른 금액을 입력하세요 (예: 7500 또는 7500.50) 또는 취소를 누르세요.",threshold_save_failed:"❌ 기준을 저장하지 못했습니다. 다시 시도하세요.",threshold_title:"💰 알림 기준",threshold_unchanged:"ℹ️ 현재 기준이 이미",threshold_updated:`✅ 알림 기준이 업데이트되었습니다
 
