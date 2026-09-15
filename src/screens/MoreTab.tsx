@@ -60,7 +60,7 @@ export function MoreTab() {
         <Row
           icon={<span aria-hidden="true">🔒</span>}
           title={t(lang, "ui_legal")}
-          sub={`${bare(t(lang, "legal_btn_privacy"))} · ${bare(t(lang, "legal_btn_terms"))}`}
+          sub={`${bare(t(lang, "legal_btn_privacy"))} · ${bare(t(lang, "legal_terms_title"))}`}
           onClick={() => open("legal")}
         />
       </Card>

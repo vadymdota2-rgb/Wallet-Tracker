@@ -9,14 +9,15 @@
  * Удаление требует подтверждения: кнопка «удалить» рядом с текстом политики
  * слишком легко нажимается, а вернуть оплаченный премиум будет нечем.
  */
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 /*
- * Шапки карточек взяты от кнопок, а не от полных названий документов:
- * «ПОЛИТИКА КОНФИДЕНЦИАЛЬНОСТИ» вразрядку и заглавными занимает карточку
- * целиком и на узком телефоне вылезает за неё. Экран называется
- * «Документы», так что полное имя в шапке ничего не добавляет.
+ * Шапки карточек — ровно те же слова, что на кнопках в нижней полоске,
+ * которые сюда и приводят: человек нажал «Конфиденциальность» и должен
+ * увидеть «Конфиденциальность», иначе непонятно, туда ли он попал.
+ * Полное «ПОЛИТИКА КОНФИДЕНЦИАЛЬНОСТИ» вразрядку и заглавными занимает на
+ * узком телефоне две строки, поэтому у политики имя короткое.
  */
-import { Frame } from "./Screen";
+import { Frame, type ScreenProps } from "./Screen";
 import { useApp } from "../store/app";
 import { bare, t } from "../i18n/t";
 import { forgetMe } from "../lib/api";
@@ -24,7 +25,36 @@ import { dropSnapshot } from "../store/live";
 import { toast } from "../components/Toast";
 import { Action, Card, SectionTitle } from "../components/ui";
 
-export function LegalScreen() {
+/**
+ * Куда пришли: из нижней полоски открывают не «документы вообще», а
+ * конкретный документ, и экран должен начинаться с него.
+ */
+type Part = "privacy" | "terms";
+
+/**
+ * Прокрутка к разделу. Считаем от самого контейнера (.sheet), а не через
+ * scrollIntoView: шапка экрана липкая и накрыла бы собой первые строки —
+ * её высоту надо вычесть, а она зависит от безопасной зоны телефона.
+ */
+function useJumpTo(part: Part | null, ref: { current: HTMLElement | null }) {
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!part || !el) return;
+    const box = el.closest(".sheet") as HTMLElement | null;
+    if (!box) return;
+    const head = box.querySelector(".screen-hd") as HTMLElement | null;
+    const top = el.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
+    box.scrollTop = Math.max(0, top - (head?.offsetHeight ?? 0) - 8);
+    // Один раз при открытии: дальше человек листает сам.
+  }, [part, ref]);
+}
+
+export function LegalScreen({ arg }: ScreenProps) {
+  const part: Part | null = arg === "privacy" || arg === "terms" ? arg : null;
+  const privacy = useRef<HTMLElement>(null);
+  const terms = useRef<HTMLElement>(null);
+  useJumpTo(part, part === "terms" ? terms : privacy);
+
   const lang = useApp((s) => s.lang);
   const reset = useApp((s) => s.reset);
   const [confirm, setConfirm] = useState(false);
@@ -67,13 +97,13 @@ export function LegalScreen() {
 
   return (
     <Frame title={t(lang, "ui_legal")}>
-      <Card>
+      <Card ref={privacy} lit={part === "privacy"}>
         <SectionTitle>{bare(t(lang, "legal_btn_privacy"))}</SectionTitle>
         <p className="note">{t(lang, "legal_privacy_body")}</p>
       </Card>
 
-      <Card>
-        <SectionTitle>{bare(t(lang, "legal_btn_terms"))}</SectionTitle>
+      <Card ref={terms} lit={part === "terms"}>
+        <SectionTitle>{bare(t(lang, "legal_terms_title"))}</SectionTitle>
         <p className="note">{t(lang, "legal_terms_body")}</p>
       </Card>
 

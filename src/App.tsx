@@ -230,12 +230,18 @@ export default function App() {
             </button>
           ))}
         </nav>
-        {/* Документы — с любого экрана, а не только из «Ещё». Кнопка одна:
-            политика и условия лежат на одном экране, и две подписи, ведущие
-            в одно и то же место, обещают выбор, которого нет. */}
+        {/* Документы — с любого экрана, а не только из «Ещё». Кнопки две, по
+            одной на документ: «Документы» одним словом не говорят, что внутри,
+            а магазины приложений и сами люди спрашивают именно политику или
+            именно условия. Экран общий, но каждая кнопка открывает его сразу
+            на своём разделе — иначе выбор был бы обещанием без разницы. */}
         <div className="legal-bar">
-          <button type="button" onClick={() => { haptic("select"); open("legal"); }}>
-            {t(lang, "ui_legal")}
+          <button type="button" onClick={() => { haptic("select"); open("legal", "privacy"); }}>
+            {bare(t(lang, "legal_btn_privacy"))}
+          </button>
+          <i aria-hidden="true">·</i>
+          <button type="button" onClick={() => { haptic("select"); open("legal", "terms"); }}>
+            {bare(t(lang, "legal_terms_title"))}
           </button>
         </div>
       </div>

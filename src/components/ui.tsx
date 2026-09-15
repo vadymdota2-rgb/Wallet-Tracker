@@ -1,5 +1,5 @@
 /** Мелкие кирпичики интерфейса: строка списка, плитки, кнопка, заголовок. */
-import { Fragment, type CSSProperties, type ReactNode } from "react";
+import { Fragment, type CSSProperties, type ReactNode, type Ref } from "react";
 import { haptic } from "../lib/telegram";
 import { copyText } from "../lib/copy";
 
@@ -477,8 +477,28 @@ export function Locked({ text, cta, onCta }: { text: ReactNode; cta: ReactNode; 
   );
 }
 
-export function Card({ children, pad = true }: { children: ReactNode; pad?: boolean }) {
-  return <section className={pad ? "card" : "card flush"}>{children}</section>;
+/**
+ * Карточка. ref нужен экранам, которые открываются сразу на нужном разделе:
+ * прокрутить к карточке можно только зная, где она оказалась после вёрстки.
+ * В React 19 ref — обычное свойство, forwardRef не нужен.
+ */
+export function Card({
+  children,
+  pad = true,
+  lit = false,
+  ref,
+}: {
+  children: ReactNode;
+  pad?: boolean;
+  /** Подсветить при появлении — «вы приехали сюда». Гаснет сама. */
+  lit?: boolean;
+  ref?: Ref<HTMLElement>;
+}) {
+  return (
+    <section ref={ref} className={`card${pad ? "" : " flush"}${lit ? " lit" : ""}`}>
+      {children}
+    </section>
+  );
 }
 
 export function Skeleton({ rows = 3 }: { rows?: number }) {
