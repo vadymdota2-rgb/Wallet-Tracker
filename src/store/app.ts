@@ -58,6 +58,8 @@ interface AppState {
   sonarVenue: Venue;
   sonarWin: number;
   chartTf: Timeframe;
+  /** Сумма в калькуляторе фандинга. Одна на все монеты: вводят её однажды. */
+  fundAmount: number;
 
   setLang(lang: LangCode, pinned?: boolean): void;
   goTab(tab: Tab): void;
@@ -78,6 +80,7 @@ interface AppState {
   setSonarVenue(v: Venue): void;
   setSonarWin(h: number): void;
   setChartTf(tf: Timeframe): void;
+  setFundAmount(v: number): void;
 }
 
 export const useApp = create<AppState>()(
@@ -103,6 +106,7 @@ export const useApp = create<AppState>()(
       sonarVenue: "spot",
       sonarWin: 24,
       chartTf: "1d",
+      fundAmount: 1000,
 
       setLang: (lang, pinned = true) => set({ lang, langPinned: pinned || get().langPinned }),
       goTab: (tab) => set({ tab, stack: [] }),
@@ -123,6 +127,7 @@ export const useApp = create<AppState>()(
       setSonarVenue: (sonarVenue) => set({ sonarVenue }),
       setSonarWin: (sonarWin) => set({ sonarWin }),
       setChartTf: (chartTf) => set({ chartTf }),
+      setFundAmount: (fundAmount) => set({ fundAmount: Math.max(0, fundAmount) }),
     }),
     {
       name: "wt-miniapp-v7",
@@ -143,6 +148,7 @@ export const useApp = create<AppState>()(
         sonarVenue: s.sonarVenue,
         sonarWin: s.sonarWin,
         chartTf: s.chartTf,
+        fundAmount: s.fundAmount,
       }),
     },
   ),

@@ -22,9 +22,9 @@ import {
 import { CoinIcon } from "../components/CoinIcon";
 import { BuySellBar, FlowSpark, TrendChart } from "../components/Chart";
 import {
-  AllVenuesGlyph, Card, CopyGlyph, Empty, FundingGlyph, Locked, MinusGlyph, NetFlowGlyph,
-  OrdersGlyph, PlusGlyph, PositionsGlyph, RotationGlyph, Row, SectionTitle, Segmented, Skeleton,
-  StackGlyph, TileNav,
+  AllVenuesGlyph, Card, Chips, CopyGlyph, Empty, FundingGlyph, Locked, MinusGlyph,
+  NetFlowGlyph, OrdersGlyph, PlusGlyph, PositionsGlyph, RotationGlyph, Row, SectionTitle,
+  Segmented, Skeleton, StackGlyph, TileNav,
 } from "../components/ui";
 import { fetchBig, fetchFlow, fetchLs, fetchRot } from "../lib/api";
 import type { BigSide, BigView, BigWin, FlowWin } from "../store/app";
@@ -865,12 +865,72 @@ function everyLabel(lang: LangCode, per: number): string {
 const payRate = (v: number) => pct(Math.abs(v), Math.abs(v) < 0.1 ? 4 : 2, false);
 
 /**
+ * Частота коротко: «/4 ч». Деньги за выплату длиннее ставки, и со словами
+ * («$18,72 каждые 4 ч») хвост уезжал под правый столбец. Рядом с суммой за
+ * сутки строкой ниже косая черта читается однозначно.
+ */
+const everyShort = (lang: LangCode, per: number) =>
+  `/${Math.round(24 / (per || 1))}${t(lang, "unit_hour")}`;
+
+/**
  * Суточная ставка. Сервер прошлой версии присылал годовые — пока он не
  * перезапущен, суточные выводятся из них делением: строка с прочерком вместо
  * числа выглядела бы как сломанный раздел, хотя данные пришли.
  */
 const dayRate = (f: FundRow) =>
   typeof f.day === "number" ? f.day : (f.apr ?? 0) / 365;
+
+/** Быстрые суммы: столько, сколько обычно и заводят. */
+const CALC_STEPS = [100, 1000, 10_000, 100_000];
+
+/**
+ * Размер позиции для всего списка.
+ *
+ * Поле одно на все монеты, а не своё у каждой: сумма у человека одна, а
+ * сравнить он хочет, что она принесёт на разных монетах. Своя кнопка у
+ * каждой строки заставляла бы вводить её заново и, главное, отнимала у
+ * строки ширину — на узком экране от подписи оставались обрывки.
+ *
+ * Введённое остаётся после перезапуска: вводят один раз.
+ */
+function FundCalcBar() {
+  const lang = useApp((s) => s.lang);
+  const amount = useApp((s) => s.fundAmount);
+  const setAmount = useApp((s) => s.setFundAmount);
+  const [text, setText] = useState(amount ? String(amount) : "");
+
+  return (
+    <div className="calc">
+      <label className="calc-in">
+        <span>{t(lang, "calc_amount")}</span>
+        <input
+          value={text}
+          onChange={(e) => {
+            /* Пробелы и запятые — то, как сумму пишут руками; цифры из них
+               достаём сами, иначе поле выглядит сломанным. */
+            const raw = e.target.value.replace(/[^\d.,\s]/g, "");
+            setText(raw);
+            setAmount(Number(raw.replace(/\s/g, "").replace(",", ".")) || 0);
+          }}
+          inputMode="decimal"
+          placeholder="1000"
+          aria-label={t(lang, "calc_amount")}
+        />
+      </label>
+      <Chips<number>
+        value={amount}
+        options={CALC_STEPS.map((v) => ({ id: v, label: usd(v) }))}
+        onChange={(v) => {
+          setAmount(v);
+          setText(String(v));
+        }}
+      />
+      {/* Оговорка одна на список: цена за это время тоже ходит, и её движение
+          может перекрыть любую ставку. Обещать заработок нельзя. */}
+      <p className="calc-note">{t(lang, "calc_note")}</p>
+    </div>
+  );
+}
 
 /**
  * Фандинг: где сейчас перекос и на какую сторону.
@@ -892,6 +952,7 @@ function FundBody() {
   const open = useApp((s) => s.open);
   const fund = useLive((s) => s.fund);
   const [ex, setEx] = useState("all");
+  const amount = useApp((s) => s.fundAmount);
 
   const have = FUND_VENUES.filter((v) => (fund[v.id] ?? []).length > 0);
   const rows = fund[ex] ?? [];
@@ -924,6 +985,7 @@ function FundBody() {
           })),
         ]}
       />
+      <FundCalcBar />
       {rows.length === 0 ? (
         <Empty text={t(lang, "fund_empty")} hint={t(lang, "fund_loading")} />
       ) : (
@@ -940,23 +1002,42 @@ function FundBody() {
             badge={venueName(f.ex)}
             /* Кто кому платит и откуда взялся суточный процент: ставка за
                выплату и то, как часто её платят. */
+            /* Введена сумма — на месте ставки за выплату стоят деньги за ту
+               же выплату: это она и есть, только в долларах, и держать рядом
+               оба числа значит занимать строку дважды одним и тем же. */
             sub={
               /* Разделители — промежутки, а не точки в тексте: подпись здесь
                  переносится, и точка оставалась висеть в конце обрывка.
-                 Ставка с частотой — одним куском: перенос между «4» и «ч»
+                 Число с частотой — одним куском: перенос между «4» и «ч»
                  рвал именно то, ради чего эта подпись и стоит. */
               <span className="fund-sub">
                 <i>{t(lang, fundingSideKey(f.rate))}</i>
-                <i className="nb">{payRate(f.rate)} {everyLabel(lang, f.per)}</i>
+                <i className={amount > 0 ? "nb calc-pay" : "nb"}>
+                  {amount > 0
+                    ? `${usd((amount * Math.abs(f.rate)) / 100)}${everyShort(lang, f.per)}`
+                    : `${payRate(f.rate)} ${everyLabel(lang, f.per)}`}
+                </i>
               </span>
             }
             /* Ликвидность второй строкой, а не в одну с первой: вместе они
                обрывались на многоточии ровно там, где стояла сумма. Биржа
                отдаёт что-то одно — открытый интерес или оборот. */
             sub2={
-              f.oi > 0
-                ? `${t(lang, "fund_oi")} ${usd(f.oi)}`
-                : `${t(lang, "fund_vol")} ${usd(f.vol)}`
+              <span className="fund-sub">
+                {/* Суточные деньги — тоже слева, а не под процентом справа:
+                    правый столбец от них разъезжался, и подписи слева
+                    оставалось меньше ста пикселей. */}
+                {amount > 0 ? (
+                  <i className="nb calc-pay">
+                    {usd((amount * Math.abs(dayRate(f))) / 100)} {t(lang, "fund_daily")}
+                  </i>
+                ) : null}
+                <i className="nb">
+                  {f.oi > 0
+                    ? `${t(lang, "fund_oi")} ${usd(f.oi)}`
+                    : `${t(lang, "fund_vol")} ${usd(f.vol)}`}
+                </i>
+              </span>
             }
             value={pct(dayRate(f), 2)}
             tone={dayRate(f) >= 0 ? "up" : "dn"}

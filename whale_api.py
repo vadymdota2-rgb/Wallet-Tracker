@@ -2821,9 +2821,22 @@ def fund_sym(raw: str) -> str:
     Множители в имени (1000PEPE, 1MBABYDOGE) снимаются: ставка от размера
     лота не зависит, а значок и название монеты находятся только по чистому
     тикеру.
+
+    Обёртки BingX на акции и индексы приходят как NCSKSOXX2USD — под этим
+    именем ни человек, ни справочник значков ничего не найдут. Разворачиваем
+    так же, как это делает бот: снимаем приставку и хвост, остаётся SOXX.
     """
     s = str(raw or "").upper().strip()
     s = s.split("-")[0].split("_")[0]
+    if s.startswith("NCSK") and len(s) > 8:
+        inner = s[4:]
+        # Хвост — «2» и валюта расчёта: 2USD у американских бумаг, 2JPY у
+        # японских. Снимаем любую, иначе часть имён так и осталась бы
+        # нечитаемой.
+        if len(inner) > 4 and inner[-4] == "2" and inner[-3:].isalpha():
+            inner = inner[:-4]
+        if inner and len(inner) <= 12:
+            return inner
     for quote in ("USDT", "USDC", "USD"):
         if s.endswith(quote) and len(s) > len(quote):
             s = s[: -len(quote)]

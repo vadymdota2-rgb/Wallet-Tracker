@@ -504,6 +504,30 @@ export function AllVenuesGlyph({ size = 26 }: { size?: number }) {
   );
 }
 
+/**
+ * Знак «посчитать» — экранчик со столбиком клавиш.
+ *
+ * Не «=» и не «%»: равенство стоит в любой формуле и ни на что не указывает,
+ * а процент в разделе про проценты сливается с самими числами.
+ */
+export function CalcGlyph({ size = 16 }: { size?: number }) {
+  return (
+    <svg className="glyph" viewBox="0 0 24 24" width={size} height={size} fill="none"
+         aria-hidden="true">
+      <rect x="4.2" y="2.6" width="15.6" height="18.8" rx="3.2" stroke="currentColor"
+            strokeWidth="2" />
+      <rect x="7.4" y="5.8" width="9.2" height="3.6" rx="1.4" fill="currentColor"
+            opacity="0.65" />
+      <circle cx="8.6" cy="13.6" r="1.35" fill="currentColor" />
+      <circle cx="12" cy="13.6" r="1.35" fill="currentColor" />
+      <circle cx="15.4" cy="13.6" r="1.35" fill="currentColor" />
+      <circle cx="8.6" cy="17.6" r="1.35" fill="currentColor" />
+      <circle cx="12" cy="17.6" r="1.35" fill="currentColor" />
+      <circle cx="15.4" cy="17.6" r="1.35" fill="var(--up)" />
+    </svg>
+  );
+}
+
 export function VenueMark({ venue, size = 15 }: { venue: "spot" | "perp"; size?: number }) {
   return (
     <img
