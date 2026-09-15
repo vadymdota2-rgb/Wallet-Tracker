@@ -2848,8 +2848,19 @@ def fund_sym(raw: str) -> str:
     return s
 
 
+def fund_next(ts: float) -> int:
+    """Время следующей выплаты, если оно похоже на правду.
+
+    Биржи иногда отдают ноль или прошлогоднюю метку — показывать по ней
+    обратный отсчёт хуже, чем не показывать ничего: часы, идущие в минус,
+    выглядят как поломка.
+    """
+    n = int(ts or 0)
+    return n if now() - 60 <= n <= now() + 2 * 86400 else 0
+
+
 def fund_row(sym: str, rate: float, per: float, oi: float, vol: float, ex: str,
-             known: bool = True) -> dict | None:
+             known: bool = True, nxt: float = 0) -> dict | None:
     """Строка фандинга, если она проходит отбор.
 
     rate — доля за одну выплату (0,0001 = 0,01%), per — выплат в сутки.
@@ -2869,6 +2880,8 @@ def fund_row(sym: str, rate: float, per: float, oi: float, vol: float, ex: str,
         "per": per,
         "oi": oi,
         "vol": vol,
+        # Когда биржа спишет следующую выплату, в секундах эпохи.
+        "next": fund_next(nxt),
     }
 
 
@@ -2889,11 +2902,14 @@ def fund_hl(hl: sqlite3.Connection | None) -> list:
         ).fetchall()
     except sqlite3.Error:
         return []
+    # Hyperliquid списывает фандинг в начале каждого часа — своего времени
+    # выплаты у монеты нет, оно общее и считается от часов.
+    nxt = (now() // 3600 + 1) * 3600
     out = []
     for r in rows:
         # Ставка Hyperliquid — часовая, поэтому выплат в сутки двадцать четыре.
         row = fund_row(str(r["coin"] or "").upper(), usd(r["rate_nanos"]), 24.0,
-                       usd(r["oi"]), usd(r["vol"]), "hl", known)
+                       usd(r["oi"]), usd(r["vol"]), "hl", known, nxt)
         if row:
             out.append(row)
     return out
@@ -2917,7 +2933,8 @@ def fund_bingx() -> list:
         raw = str(it.get("symbol") or "")
         hours = _fnum(it.get("fundingIntervalHours")) or 8.0
         row = fund_row(fund_sym(raw), _fnum(it.get("lastFundingRate")), 24.0 / hours,
-                       0.0, vols.get(raw, 0.0), "bingx")
+                       0.0, vols.get(raw, 0.0), "bingx",
+                       nxt=_fnum(it.get("nextFundingTime")) / 1000.0)
         if row:
             out.append(row)
     return out
@@ -2949,7 +2966,8 @@ def fund_binance() -> list:
             continue
         raw = str(it.get("symbol") or "")
         row = fund_row(fund_sym(raw), _fnum(it.get("lastFundingRate")),
-                       24.0 / steps.get(raw, 8.0), 0.0, vols.get(raw, 0.0), "binance")
+                       24.0 / steps.get(raw, 8.0), 0.0, vols.get(raw, 0.0), "binance",
+                       nxt=_fnum(it.get("nextFundingTime")) / 1000.0)
         if row:
             out.append(row)
     return out
@@ -2972,7 +2990,8 @@ def fund_gate() -> list:
         mark = _fnum(it.get("mark_price"))
         oi = _fnum(it.get("position_size")) * _fnum(it.get("quanto_multiplier")) * mark
         row = fund_row(fund_sym(it.get("name")), _fnum(it.get("funding_rate")),
-                       86400.0 / step, oi, 0.0, "gate")
+                       86400.0 / step, oi, 0.0, "gate",
+                       nxt=_fnum(it.get("funding_next_apply")))
         if row:
             out.append(row)
     return out

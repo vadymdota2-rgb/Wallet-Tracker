@@ -956,6 +956,9 @@
 /* Деньги за выплату в подписи строки — ярче соседних чисел: их и искали,
    вводя сумму. */
 .calc-pay { color: var(--ink); font-weight: 600; }
+/* Обратный отсчёт — моноширинными цифрами: без них строка дёргается каждую
+   секунду, потому что «1» уже остальных. */
+.fund-left { font-variant-numeric: tabular-nums; color: var(--dim-2); }
 .fund-sub i { font-style: normal; }
 /* Кусок подписи, который переносить нельзя. */
 .nb { font-style: normal; white-space: nowrap; }

@@ -305,6 +305,24 @@
     "vi": "mỗi giờ",
     "zh": "每小时"
   },
+  "fund_in": {
+    "ar": "خلال {t}",
+    "de": "in {t}",
+    "en": "in {t}",
+    "es": "en {t}",
+    "fr": "dans {t}",
+    "hi": "{t} में",
+    "id": "dalam {t}",
+    "ja": "{t}後",
+    "ko": "{t} 후",
+    "pl": "za {t}",
+    "pt": "em {t}",
+    "ru": "через {t}",
+    "tr": "{t} sonra",
+    "uk": "через {t}",
+    "vi": "sau {t}",
+    "zh": "{t}后"
+  },
   "ls_hint": {
     "en": "Share of money opening longs against shorts",
     "ru": "Доля денег, заходящих в лонг против шорта",

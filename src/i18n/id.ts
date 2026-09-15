@@ -167,6 +167,7 @@ export const id: Dict = {
   fund_every: "tiap {h} jam",
   fund_hint: "Di mana satu sisi paling banyak membayar sisi lain sekarang",
   fund_hourly: "tiap jam",
+  fund_in: "dalam {t}",
   fund_loading: "Memuat data, buka lagi beberapa detik.",
   fund_longs_pay: "long membayar",
   fund_min_ago: "mnt lalu",

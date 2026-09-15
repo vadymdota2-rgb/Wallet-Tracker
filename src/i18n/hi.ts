@@ -167,6 +167,7 @@ export const hi: Dict = {
   fund_every: "हर {h} घंटे",
   fund_hint: "अभी कहाँ एक पक्ष दूसरे को सबसे ज़्यादा दे रहा है",
   fund_hourly: "हर घंटे",
+  fund_in: "{t} में",
   fund_loading: "डेटा लोड हो रहा है, कुछ सेकंड बाद खोलें।",
   fund_longs_pay: "लॉन्ग भुगतान कर रहे",
   fund_min_ago: "मिनट पहले",

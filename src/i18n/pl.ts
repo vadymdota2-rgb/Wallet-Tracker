@@ -167,6 +167,7 @@ export const pl: Dict = {
   fund_every: "co {h} godz.",
   fund_hint: "Gdzie jedna strona płaci drugiej najwięcej teraz",
   fund_hourly: "co godzinę",
+  fund_in: "za {t}",
   fund_loading: "Ładowanie danych, otwórz za kilka sekund.",
   fund_longs_pay: "longi płacą",
   fund_min_ago: "min",

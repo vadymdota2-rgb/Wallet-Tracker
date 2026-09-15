@@ -14,6 +14,7 @@ import { toast } from "../components/Toast";
 import { removeWallet } from "../lib/api";
 import { syncNow } from "../lib/sync";
 import { copyText } from "../lib/copy";
+import { useNow } from "../lib/tick";
 import { num, pct, signed, usd } from "../lib/format";
 import { ago } from "../lib/relative";
 import {
@@ -865,6 +866,33 @@ function everyLabel(lang: LangCode, per: number): string {
 const payRate = (v: number) => pct(Math.abs(v), Math.abs(v) < 0.1 ? 4 : 2, false);
 
 /**
+ * Сколько осталось до выплаты. До часа — минуты с секундами, дальше часы с
+ * минутами: секунды на третьем часу никому не нужны, а в последние минуты
+ * именно они и нужны.
+ */
+function leftTime(lang: LangCode, sec: number): string {
+  if (sec <= 0) return t(lang, "flow_now");
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const ss = sec % 60;
+  const body = h > 0
+    ? `${h}${t(lang, "unit_hour")} ${String(m).padStart(2, "0")}${t(lang, "unit_min")}`
+    : `${m}:${String(ss).padStart(2, "0")}`;
+  return t(lang, "fund_in").replace("{t}", body);
+}
+
+/**
+ * Часы до следующей выплаты. Своим маленьким компонентом, а не строкой в
+ * подписи: раз в секунду перерисовывается только он, а не сорок строк со
+ * значками монет.
+ */
+function FundCountdown({ at }: { at: number }) {
+  const lang = useApp((s) => s.lang);
+  const now = useNow();
+  return <i className="nb fund-left">{leftTime(lang, at - now)}</i>;
+}
+
+/**
  * Частота коротко: «/4 ч». Деньги за выплату длиннее ставки, и со словами
  * («$18,72 каждые 4 ч») хвост уезжал под правый столбец. Рядом с суммой за
  * сутки строкой ниже косая черта читается однозначно.
@@ -1037,6 +1065,11 @@ function FundBody() {
                     ? `${t(lang, "fund_oi")} ${usd(f.oi)}`
                     : `${t(lang, "fund_vol")} ${usd(f.vol)}`}
                 </i>
+                {/* Когда спишут следующую: до неё ставка ещё может уйти в
+                    другую сторону, и через минуту заплатят не то, что тут
+                    написано. Без этого числа строка про «в сутки» обещает
+                    больше, чем знает. */}
+                {f.next ? <FundCountdown at={f.next} /> : null}
               </span>
             }
             value={pct(dayRate(f), 2)}

@@ -167,6 +167,7 @@ export const vi: Dict = {
   fund_every: "mỗi {h} giờ",
   fund_hint: "Nơi một bên trả cho bên kia nhiều nhất lúc này",
   fund_hourly: "mỗi giờ",
+  fund_in: "sau {t}",
   fund_loading: "Đang tải dữ liệu, mở lại sau vài giây.",
   fund_longs_pay: "long trả phí",
   fund_min_ago: "phút trước",

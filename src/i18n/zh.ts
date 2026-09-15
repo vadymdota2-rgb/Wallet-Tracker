@@ -167,6 +167,7 @@ export const zh: Dict = {
   fund_every: "每 {h} 小时",
   fund_hint: "当前一方向另一方支付最多的地方",
   fund_hourly: "每小时",
+  fund_in: "{t}后",
   fund_loading: "正在加载数据，请稍后再打开。",
   fund_longs_pay: "多头支付",
   fund_min_ago: "分钟前",

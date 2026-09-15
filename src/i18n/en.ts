@@ -167,6 +167,7 @@ export const en = {
   fund_every: "every {h}h",
   fund_hint: "Where one side pays the other the most right now",
   fund_hourly: "every hour",
+  fund_in: "in {t}",
   fund_loading: "Loading data, open in a few seconds.",
   fund_longs_pay: "longs pay",
   fund_min_ago: "min ago",

@@ -167,6 +167,7 @@ export const ja: Dict = {
   fund_every: "{h}時間ごと",
   fund_hint: "今、一方が他方に最も多く支払っている場所",
   fund_hourly: "1時間ごと",
+  fund_in: "{t}後",
   fund_loading: "データを読み込み中です。数秒後に開いてください。",
   fund_longs_pay: "ロングが支払い",
   fund_min_ago: "分前",

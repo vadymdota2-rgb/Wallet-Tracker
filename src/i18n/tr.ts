@@ -167,6 +167,7 @@ export const tr: Dict = {
   fund_every: "her {h} saatte",
   fund_hint: "Şu an bir tarafın diğerine en çok ödediği yerler",
   fund_hourly: "her saat",
+  fund_in: "{t} sonra",
   fund_loading: "Veriler yükleniyor, birkaç saniye sonra aç.",
   fund_longs_pay: "longlar ödüyor",
   fund_min_ago: "dk",

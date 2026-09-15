@@ -167,6 +167,7 @@ export const ar: Dict = {
   fund_every: "كل {h} ساعات",
   fund_hint: "أين يدفع طرف للآخر أكثر الآن",
   fund_hourly: "كل ساعة",
+  fund_in: "خلال {t}",
   fund_loading: "يتم تحميل البيانات، افتح بعد ثوانٍ.",
   fund_longs_pay: "الشراء يدفع",
   fund_min_ago: "د",

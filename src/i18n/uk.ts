@@ -167,6 +167,7 @@ export const uk: Dict = {
   fund_every: "кожні {h} год",
   fund_hint: "Де одна сторона платить іншій найбільше просто зараз",
   fund_hourly: "щогодини",
+  fund_in: "через {t}",
   fund_loading: "Дані завантажуються, відкрийте за кілька секунд.",
   fund_longs_pay: "лонги платять",
   fund_min_ago: "хв тому",

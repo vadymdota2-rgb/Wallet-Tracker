@@ -167,6 +167,7 @@ export const pt: Dict = {
   fund_every: "a cada {h} h",
   fund_hint: "Onde um lado paga mais ao outro agora",
   fund_hourly: "a cada hora",
+  fund_in: "em {t}",
   fund_loading: "Carregando dados, abra em alguns segundos.",
   fund_longs_pay: "longs pagam",
   fund_min_ago: "min",

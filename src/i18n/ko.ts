@@ -167,6 +167,7 @@ export const ko: Dict = {
   fund_every: "{h}시간마다",
   fund_hint: "지금 한쪽이 반대쪽에 가장 많이 지불하는 곳",
   fund_hourly: "매시간",
+  fund_in: "{t} 후",
   fund_loading: "데이터를 불러오는 중입니다. 잠시 후 다시 열어주세요.",
   fund_longs_pay: "롱이 지불",
   fund_min_ago: "분 전",
