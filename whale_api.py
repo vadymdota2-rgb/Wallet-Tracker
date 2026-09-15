@@ -2770,9 +2770,13 @@ def load_feed_market(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> 
 # ——— Фандинг ————————————————————————————————————————————————————————————
 #
 # Ставка сама по себе ничего не говорит: Hyperliquid платит каждый час,
-# остальные — раз в восемь, и «-0,08%» у первого и «-0,08%» у второго
-# отличаются в восемь раз. Поэтому всё приводится к годовым: и сравнивать, и
+# остальные — раз в четыре или восемь, и «-0,08%» у первого и у второго
+# отличаются в разы. Поэтому всё приводится к суточным: и сравнивать, и
 # сортировать можно только их.
+#
+# Именно к суточным, а не к годовым: в годовых те же числа превращаются в
+# «-1971%», и это не преувеличение, а бессмыслица — ставка держится часы, а
+# не год, и годовой пересчёт обещает то, чего никогда не случится.
 #
 # Строк на биржу. Сорок — это две страницы самых перекошенных монет; дальше
 # идут ставки в сотые доли процента годовых, за которыми никто не ходит.
@@ -2847,7 +2851,8 @@ def fund_row(sym: str, rate: float, per: float, oi: float, vol: float, ex: str,
         "sym": sym,
         "ex": ex,
         "rate": rate * 100,
-        "apr": rate * per * 365 * 100,
+        # Суточная ставка — то, чем биржи сравнимы между собой.
+        "day": rate * per * 100,
         "per": per,
         "oi": oi,
         "vol": vol,
@@ -2960,37 +2965,53 @@ def fund_gate() -> list:
     return out
 
 
-def fund_venue(ex: str, hl: sqlite3.Connection | None) -> list:
-    """Строки одной биржи — из кэша, либо с биржи.
+FUND_FETCH = {"bingx": fund_bingx, "binance": fund_binance, "gate": fund_gate}
+
+
+def fund_pull(ex: str) -> None:
+    """Сходить на биржу и положить её ставки в кэш.
 
     Биржа, до которой не достучались, просто не появляется в приложении:
     пустая вкладка с её именем выглядела бы как поломка у нас, хотя отказали
-    там. Прошлый ответ при этом не затирается — ставки живут часами.
+    там. Прошлый ответ при этом не затирается — ставки живут часами, и вчерашний
+    перекос ближе к правде, чем пустота.
     """
+    fn = FUND_FETCH.get(ex)
+    if not fn:
+        return
+    try:
+        rows = fn()
+    except Exception as e:
+        sys.stderr.write(f"[api] фандинг {ex}: {e}\n")
+        return
+    if not rows:
+        sys.stderr.write(f"[api] фандинг {ex}: пусто, оставляем прошлый ответ\n")
+        return
+    with _fund_lock:
+        _FUND[ex] = (time.monotonic(), rows)
+
+
+def fund_refresher() -> None:
+    """Опрос бирж своим потоком, а не внутри сборки общего кэша.
+
+    У сборки есть бюджет в двадцать пять секунд, и пять из них, потраченные
+    на три чужих сервера, отнимались бы у того, что считается после, — у
+    ротации и справочника монет. Здесь же ожидание никому не мешает: ставки
+    меняются раз в час-восемь, и десятиминутный круг их не упускает.
+    """
+    while True:
+        for ex in FUND_FETCH:
+            fund_pull(ex)
+        time.sleep(FUND_TTL)
+
+
+def fund_venue(ex: str, hl: sqlite3.Connection | None) -> list:
+    """Строки одной биржи. Hyperliquid — из своей базы, прочие — из кэша."""
     if ex == "hl":
         return fund_hl(hl)
     with _fund_lock:
         hit = _FUND.get(ex)
-        if hit and time.monotonic() - hit[0] < FUND_TTL:
-            return hit[1]
-    fn = {"bingx": fund_bingx, "binance": fund_binance, "gate": fund_gate}.get(ex)
-    rows = []
-    if fn:
-        try:
-            rows = fn()
-        except Exception as e:
-            sys.stderr.write(f"[api] фандинг {ex}: {e}\n")
-            rows = []
-    if not rows:
-        with _fund_lock:
-            hit = _FUND.get(ex)
-        if hit and hit[1]:
-            sys.stderr.write(f"[api] фандинг {ex}: пусто, оставляем прошлый ответ\n")
-            return hit[1]
-        return []
-    with _fund_lock:
-        _FUND[ex] = (time.monotonic(), rows)
-    return rows
+    return hit[1] if hit else []
 
 
 def load_funding(hl: sqlite3.Connection | None) -> dict:
@@ -3006,12 +3027,12 @@ def load_funding(hl: sqlite3.Connection | None) -> dict:
         rows = fund_venue(ex, hl)
         if not rows:
             continue
-        rows.sort(key=lambda r: -abs(r["apr"]))
+        rows.sort(key=lambda r: -abs(r["day"]))
         out[ex] = rows[:FUND_ROWS]
         every.extend(rows)
     if not every:
         return {}
-    every.sort(key=lambda r: -abs(r["apr"]))
+    every.sort(key=lambda r: -abs(r["day"]))
     out["all"] = every[:FUND_ROWS]
     return out
 
@@ -3760,6 +3781,9 @@ def warmup() -> None:
     # продержится до следующего обновления. Одиннадцать запросов к бирже
     # занимают пару секунд и идут в стороне от чьего-либо экрана.
     _hl_markets_load()
+    # Ставки бирж — своим потоком: первый круг успевает до первой сборки, а
+    # дальше он обновляет их сам и в бюджет сборки не лезет.
+    threading.Thread(target=fund_refresher, daemon=True, name="funding").start()
     cur = open_db(DB)
     hl = open_db(HL_DB)
     if not cur:

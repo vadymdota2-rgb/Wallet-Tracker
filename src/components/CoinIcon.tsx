@@ -13,6 +13,7 @@
 import { useEffect, useState } from "react";
 import { useLive } from "../store/live";
 import { CG_FALLBACK } from "./coin-fallback";
+import { CG_LOGOS } from "./coin-logos";
 
 /** Имена монет Hyperliquid, отличные от тикера. */
 const HL_ALIAS: Record<string, string> = {
@@ -77,8 +78,19 @@ export function CoinIcon({
     const bare = raw.slice(raw.lastIndexOf(":") + 1);
     if (bare && bare !== raw) urls.push(`/coins/hl/${bare.toUpperCase()}.svg`);
   }
-  const cg = CG_FALLBACK[key];
+  /* Выверенный вручную адрес идёт первым, собранный по капитализации —
+     следом: у выверенного известно, какой именно выпуск монеты имеется в
+     виду, у собранного это просто самый крупный тикер. */
+  const cg = CG_FALLBACK[key] ?? CG_LOGOS[key];
   if (cg) urls.push(cg);
+  /* Монеты вроде 1000PEPE и kBONK на разных биржах зовутся по-разному, а
+     логотип у них один. Множитель уже снят сервером, но строки из старых
+     ответов и с других досок приходят как есть. */
+  const bare = key.replace(/^(1000000|100000|10000|1000|1M|1K)/, "");
+  if (bare !== key) {
+    const alt = CG_FALLBACK[bare] ?? CG_LOGOS[bare];
+    if (alt) urls.push(alt);
+  }
 
   // Сменили монету — перебор начинается заново.
   useEffect(() => setStep(0), [key, icon?.[0]]);

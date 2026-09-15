@@ -8,6 +8,7 @@ import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import { t, bare } from "../i18n/t";
 import type { DictKey } from "../i18n";
+import type { LangCode } from "../i18n/types";
 import { haptic } from "../lib/telegram";
 import { toast } from "../components/Toast";
 import { removeWallet } from "../lib/api";
@@ -840,14 +841,28 @@ function LsBody() {
  * Binance. Рисовать чужие логотипы по памяти хуже, чем честная буква в
  * кружке, которую CoinIcon и поставит.
  */
-const FUND_VENUES: { id: string; name: string; sym: string }[] = [
-  { id: "hl", name: "Hyperliquid", sym: "HYPE" },
-  { id: "bingx", name: "BingX", sym: "BX" },
-  { id: "binance", name: "Binance", sym: "BNB" },
-  { id: "gate", name: "Gate", sym: "GT" },
+const FUND_VENUES: { id: string; name: string; logo: string }[] = [
+  { id: "hl", name: "Hyperliquid", logo: "/cglogo/markets/images/1571/small/PFP.png" },
+  { id: "bingx", name: "BingX", logo: "/cglogo/markets/images/812/small/YtFwQwJr_400x400.jpg" },
+  { id: "binance", name: "Binance", logo: "/cglogo/markets/images/52/small/binance.jpg" },
+  { id: "gate", name: "Gate", logo: "/cglogo/markets/images/60/small/Frame_1.png" },
 ];
 
 const venueName = (ex: string) => FUND_VENUES.find((v) => v.id === ex)?.name ?? ex;
+
+/**
+ * Как часто биржа платит. Отдельной подписью для часа: «каждые 1 ч» — это не
+ * по-русски, а раз в час платит Hyperliquid, то есть половина списка.
+ */
+function everyLabel(lang: LangCode, per: number): string {
+  const hours = Math.round(24 / (per || 1));
+  return hours <= 1
+    ? t(lang, "fund_hourly")
+    : t(lang, "fund_every").replace("{h}", String(hours));
+}
+
+/** Ставка за выплату: у часовых она сотые доли процента, у восьмичасовых — целые. */
+const payRate = (v: number) => pct(Math.abs(v), Math.abs(v) < 0.1 ? 4 : 2, false);
 
 /**
  * Фандинг: где сейчас перекос и на какую сторону.
@@ -857,10 +872,12 @@ const venueName = (ex: string) => FUND_VENUES.find((v) => v.id === ex)?.name ?? 
  * внутри раздела, первой строкой: «Все» — общая доска перекосов, дальше по
  * биржам.
  *
- * Сравнивать ставки между биржами можно только в годовых: Hyperliquid платит
- * каждый час, остальные — раз в восемь, и одна и та же цифра означает у них
- * разное. Поэтому и сортировка на сервере, и главное число в строке — по
- * годовым, а ставка за выплату стоит рядом мелким.
+ * Сравнивать ставки между биржами можно только приведя их к одному сроку:
+ * Hyperliquid платит каждый час, остальные — раз в четыре или восемь, и одна
+ * и та же цифра означает у них разное. Срок этот — сутки: в годовых те же
+ * ставки дают «-1971%», а это не перекос, а бессмыслица — ставка держится
+ * часы, а не год. Поэтому главное число строки — процент в сутки, а ставка
+ * за выплату и её частота стоят подписью: по ним видно, откуда он взялся.
  */
 function FundBody() {
   const lang = useApp((s) => s.lang);
@@ -892,7 +909,9 @@ function FundBody() {
           },
           ...have.map((v) => ({
             id: v.id,
-            ic: <CoinIcon sym={v.sym} size={26} />,
+            /* Логотип биржи идёт через тот же кружок, что и монеты: если
+               картинка не дойдёт, на её месте останется буква, а не пустота. */
+            ic: <CoinIcon sym={v.name} icon={[v.logo]} size={26} />,
             label: v.name,
           })),
         ]}
@@ -900,7 +919,10 @@ function FundBody() {
       {rows.length === 0 ? (
         <Empty text={t(lang, "fund_empty")} hint={t(lang, "fund_loading")} />
       ) : (
-        rows.map((f) => (
+        /* Подписи здесь переносятся, а не обрезаются многоточием, как в
+           остальных списках: в них стоит объяснение числа — сколько платят и
+           как часто, — и обрубок «0,0749% каж…» не объясняет ничего. */
+        <div className="fund-rows">{rows.map((f) => (
           <Row
             key={`${f.ex}-${f.sym}`}
             icon={<CoinIcon sym={f.sym} size={30} />}
@@ -908,7 +930,18 @@ function FundBody() {
             /* Биржа — меткой у названия: на общей доске одна монета стоит
                несколькими строками, и различает их только она. */
             badge={venueName(f.ex)}
-            sub={t(lang, fundingSideKey(f.rate))}
+            /* Кто кому платит и откуда взялся суточный процент: ставка за
+               выплату и то, как часто её платят. */
+            sub={
+              /* Разделители — промежутки, а не точки в тексте: подпись здесь
+                 переносится, и точка оставалась висеть в конце обрывка.
+                 Ставка с частотой — одним куском: перенос между «4» и «ч»
+                 рвал именно то, ради чего эта подпись и стоит. */
+              <span className="fund-sub">
+                <i>{t(lang, fundingSideKey(f.rate))}</i>
+                <i className="nb">{payRate(f.rate)} {everyLabel(lang, f.per)}</i>
+              </span>
+            }
             /* Ликвидность второй строкой, а не в одну с первой: вместе они
                обрывались на многоточии ровно там, где стояла сумма. Биржа
                отдаёт что-то одно — открытый интерес или оборот. */
@@ -917,16 +950,12 @@ function FundBody() {
                 ? `${t(lang, "fund_oi")} ${usd(f.oi)}`
                 : `${t(lang, "fund_vol")} ${usd(f.vol)}`
             }
-            value={pct(f.apr, 1)}
-            tone={f.apr >= 0 ? "up" : "dn"}
-            /* Главное число — годовые: только ими и можно сравнивать биржи.
-               Мелким — сама ставка и как часто её платят: без частоты
-               «0,08%» у Hyperliquid и у Gate читаются как одно и то же, хотя
-               первая платится каждый час, а вторая раз в четыре. */
-            valueSub={`${pct(Math.abs(f.rate), 4, false)}/${num(24 / (f.per || 1))}${t(lang, "unit_hour")}`}
+            value={pct(f.day, 2)}
+            tone={f.day >= 0 ? "up" : "dn"}
+            valueSub={t(lang, "fund_daily")}
             onClick={() => open("coin", f.sym)}
           />
-        ))
+        ))}</div>
       )}
     </>
   );
