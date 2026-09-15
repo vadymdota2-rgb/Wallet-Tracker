@@ -6,7 +6,7 @@
  */
 import { create } from "zustand";
 import type {
-  AlertRow, Bootstrap, Coins, FeedRow, Flow, Funding, Ls, Me, Rank, RotSums, Sonar, Trades,
+  AlertRow, Bootstrap, Coins, FeedRow, Flow, Fund, Ls, Me, Rank, RotSums, Sonar, Trades,
   Wallet,
 } from "../lib/types";
 import { tgUserId } from "../lib/telegram";
@@ -56,7 +56,7 @@ interface LiveState {
   rank: Rank;
   sonar: Sonar;
   trades: Trades;
-  funding: Funding[];
+  fund: Fund;
   rotSum: RotSums;
   coins: Coins;
 
@@ -81,7 +81,7 @@ const SNAP_TTL = 24 * 3600_000;
 type Snapshot = Pick<
   LiveState,
   "syncedAt" | "me" | "wallets" | "alerts" | "feed" | "marketFeed" | "flow" | "ls"
-  | "rank" | "sonar" | "trades" | "funding" | "rotSum" | "coins"
+  | "rank" | "sonar" | "trades" | "fund" | "rotSum" | "coins"
 > & { uid: string };
 
 function readSnap(): Snapshot | null {
@@ -121,7 +121,7 @@ function writeSnap(s: LiveState): void {
       syncedAt: s.syncedAt,
       me: s.me, wallets: s.wallets, alerts: s.alerts, feed: s.feed,
       marketFeed: s.marketFeed, flow: s.flow, ls: s.ls, rank: s.rank, sonar: s.sonar,
-      trades: s.trades, funding: s.funding, rotSum: s.rotSum, coins: s.coins,
+      trades: s.trades, fund: s.fund, rotSum: s.rotSum, coins: s.coins,
     };
     localStorage.setItem(SNAP, JSON.stringify(snap));
   } catch {
@@ -175,7 +175,7 @@ export const useLive = create<LiveState>((set, get) => ({
   rank: snap?.rank ?? EMPTY_RANK,
   sonar: snap?.sonar ?? EMPTY_SONAR,
   trades: snap?.trades ?? { spot: [], perp: [] },
-  funding: snap?.funding ?? [],
+  fund: snap?.fund ?? {},
   rotSum: snap?.rotSum ?? {},
   coins: snap?.coins ?? {},
 
@@ -198,7 +198,7 @@ export const useLive = create<LiveState>((set, get) => ({
       rank: boards(d.rank) ? d.rank! : prev.rank,
       sonar: d.sonar?.list?.length || d.sonar?.trained ? d.sonar : prev.sonar,
       trades: some(d.trades?.spot) || some(d.trades?.perp) ? d.trades! : prev.trades,
-      funding: some(d.funding) ? d.funding! : prev.funding,
+      fund: some(d.fund) ? d.fund! : prev.fund,
       rotSum: some(d.rotSum) ? d.rotSum! : prev.rotSum,
       coins: some(d.coins) ? d.coins! : prev.coins,
     }));

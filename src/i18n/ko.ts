@@ -154,6 +154,7 @@ export const ko: Dict = {
   flow_trend_hint: "해당 기간 모든 코인의 누적 순유입",
   flow_wallets: "지갑",
   free_plan_1_wallet: "⚠️ 무료 플랜: 지갑 1개만. 프리미엄 — 메뉴에서 ⭐ 프리미엄.",
+  fund_all: "전체 거래소",
   fund_apr: "연 환산:",
   fund_btn: "💢 펀딩 쏠림",
   fund_empty: "현재 강한 이상은 없습니다.",

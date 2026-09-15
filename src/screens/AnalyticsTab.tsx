@@ -21,8 +21,9 @@ import {
 import { CoinIcon } from "../components/CoinIcon";
 import { BuySellBar, FlowSpark, TrendChart } from "../components/Chart";
 import {
-  Card, CopyGlyph, Empty, Locked, MinusGlyph, NetFlowGlyph, OrdersGlyph, PlusGlyph,
-  PositionsGlyph, RotationGlyph, Row, SectionTitle, Segmented, Skeleton, StackGlyph, TileNav,
+  AllVenuesGlyph, Card, CopyGlyph, Empty, FundingGlyph, Locked, MinusGlyph, NetFlowGlyph,
+  OrdersGlyph, PlusGlyph, PositionsGlyph, RotationGlyph, Row, SectionTitle, Segmented, Skeleton,
+  StackGlyph, TileNav,
 } from "../components/ui";
 import { fetchBig, fetchFlow, fetchLs, fetchRot } from "../lib/api";
 import type { BigSide, BigView, BigWin, FlowWin } from "../store/app";
@@ -99,7 +100,7 @@ const BIG_WINS: { id: BigWin; key: Parameters<typeof t>[1] }[] = [
 const VIEWS: {
   id: BigView;
   ic: ReactNode;
-  venue: "spot" | "perp";
+  venue?: "spot" | "perp";
   label: (t: (k: DictKey) => string) => string;
 }[] = [
   { id: "flow", ic: <NetFlowGlyph size={22} />, venue: "spot", label: () => "NetFlow" },
@@ -107,7 +108,9 @@ const VIEWS: {
   { id: "rot", ic: <RotationGlyph size={22} />, venue: "spot", label: (tr) => tr("ui_rotation") },
   { id: "ls", ic: <PositionsGlyph size={22} />, venue: "perp", label: (tr) => tr("ui_tab_ls") },
   { id: "perp", ic: <StackGlyph size={22} />, venue: "perp", label: (tr) => tr("ui_tab_positions") },
-  { id: "fund", ic: "⚖️", venue: "perp", label: (tr) => tr("ui_tab_funding") },
+  /* Уголка площадки у фандинга нет: он теперь с нескольких бирж, и значок
+     одной из них обещал бы, что остальных тут нет. */
+  { id: "fund", ic: <FundingGlyph size={22} />, label: (tr) => tr("ui_tab_funding") },
 ];
 
 /**
@@ -225,7 +228,7 @@ export function AnalyticsTab() {
   const lsCls = useApp((s) => s.lsCls);
   const setLsCls = useApp((s) => s.setLsCls);
 
-  const { funding, me } = useLive();
+  const { me } = useLive();
   const rotSum = useLive((s) => s.rotSum)[flowWin];
   const premium = me.plan === "premium";
   const big = useBigTrades(bigWin);
@@ -409,24 +412,7 @@ export function AnalyticsTab() {
       {view === "fund" ? (
         <Card>
           <SectionTitle note={t(lang, "fund_hint")}>{t(lang, "fund_title")}</SectionTitle>
-          {!premium ? (
-            locked
-          ) : funding.length === 0 ? (
-            <Empty text={t(lang, "fund_empty")} hint={t(lang, "fund_loading")} />
-          ) : (
-            funding.map((f) => (
-              <Row
-                key={f.sym}
-                icon={<CoinIcon sym={f.sym} size={30} />}
-                title={f.sym}
-                sub={`${t(lang, fundingSideKey(f.rate))} · ${t(lang, "fund_oi")} ${usd(f.oi)}`}
-                value={pct(f.rate, 4)}
-                tone={f.rate >= 0 ? "up" : "dn"}
-                valueSub={`${t(lang, "fund_apr")} ${pct(f.apr, 1)}`}
-                onClick={() => open("coin", f.sym)}
-              />
-            ))
-          )}
+          {!premium ? locked : <FundBody />}
         </Card>
       ) : null}
 
@@ -843,6 +829,108 @@ function LsBody() {
   );
 }
 
+
+/**
+ * Биржи фандинга. Порядок и названия — здесь, а не на сервере: сервер
+ * отдаёт только те доски, которые собрались, и приложение показывает кнопки
+ * ровно для них. Биржа, до которой сервер не достучался, не появляется —
+ * пустая вкладка с её именем выглядела бы как поломка у нас.
+ *
+ * Значок — монета самой биржи там, где она есть: HYPE у Hyperliquid, BNB у
+ * Binance. Рисовать чужие логотипы по памяти хуже, чем честная буква в
+ * кружке, которую CoinIcon и поставит.
+ */
+const FUND_VENUES: { id: string; name: string; sym: string }[] = [
+  { id: "hl", name: "Hyperliquid", sym: "HYPE" },
+  { id: "bingx", name: "BingX", sym: "BX" },
+  { id: "binance", name: "Binance", sym: "BNB" },
+  { id: "gate", name: "Gate", sym: "GT" },
+];
+
+const venueName = (ex: string) => FUND_VENUES.find((v) => v.id === ex)?.name ?? ex;
+
+/**
+ * Фандинг: где сейчас перекос и на какую сторону.
+ *
+ * Раздел был про одну биржу — Hyperliquid, — и её значок стоял уголком
+ * плитки. Бирж теперь несколько, поэтому уголка нет, а выбор площадки стоит
+ * внутри раздела, первой строкой: «Все» — общая доска перекосов, дальше по
+ * биржам.
+ *
+ * Сравнивать ставки между биржами можно только в годовых: Hyperliquid платит
+ * каждый час, остальные — раз в восемь, и одна и та же цифра означает у них
+ * разное. Поэтому и сортировка на сервере, и главное число в строке — по
+ * годовым, а ставка за выплату стоит рядом мелким.
+ */
+function FundBody() {
+  const lang = useApp((s) => s.lang);
+  const open = useApp((s) => s.open);
+  const fund = useLive((s) => s.fund);
+  const [ex, setEx] = useState("all");
+
+  const have = FUND_VENUES.filter((v) => (fund[v.id] ?? []).length > 0);
+  const rows = fund[ex] ?? [];
+
+  if (!have.length) {
+    return <Empty text={t(lang, "fund_empty")} hint={t(lang, "fund_loading")} />;
+  }
+
+  return (
+    <>
+      {/* Кнопка «Все» первой: вопрос «где сейчас самый перекос» возникает
+          раньше, чем «что на такой-то бирже». */}
+      <TileNav<string>
+        value={ex}
+        onChange={setEx}
+        cols={have.length + 1 > 3 ? 3 : 2}
+        label={t(lang, "fund_title")}
+        options={[
+          {
+            id: "all",
+            ic: <AllVenuesGlyph size={26} />,
+            label: t(lang, "fund_all"),
+          },
+          ...have.map((v) => ({
+            id: v.id,
+            ic: <CoinIcon sym={v.sym} size={26} />,
+            label: v.name,
+          })),
+        ]}
+      />
+      {rows.length === 0 ? (
+        <Empty text={t(lang, "fund_empty")} hint={t(lang, "fund_loading")} />
+      ) : (
+        rows.map((f) => (
+          <Row
+            key={`${f.ex}-${f.sym}`}
+            icon={<CoinIcon sym={f.sym} size={30} />}
+            title={showSym(f.sym)}
+            /* Биржа — меткой у названия: на общей доске одна монета стоит
+               несколькими строками, и различает их только она. */
+            badge={venueName(f.ex)}
+            sub={t(lang, fundingSideKey(f.rate))}
+            /* Ликвидность второй строкой, а не в одну с первой: вместе они
+               обрывались на многоточии ровно там, где стояла сумма. Биржа
+               отдаёт что-то одно — открытый интерес или оборот. */
+            sub2={
+              f.oi > 0
+                ? `${t(lang, "fund_oi")} ${usd(f.oi)}`
+                : `${t(lang, "fund_vol")} ${usd(f.vol)}`
+            }
+            value={pct(f.apr, 1)}
+            tone={f.apr >= 0 ? "up" : "dn"}
+            /* Главное число — годовые: только ими и можно сравнивать биржи.
+               Мелким — сама ставка и как часто её платят: без частоты
+               «0,08%» у Hyperliquid и у Gate читаются как одно и то же, хотя
+               первая платится каждый час, а вторая раз в четыре. */
+            valueSub={`${pct(Math.abs(f.rate), 4, false)}/${num(24 / (f.per || 1))}${t(lang, "unit_hour")}`}
+            onClick={() => open("coin", f.sym)}
+          />
+        ))
+      )}
+    </>
+  );
+}
 
 /** Монет в столбце на странице. */
 const ROT_PAGE = 15;

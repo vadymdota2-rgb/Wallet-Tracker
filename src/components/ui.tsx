@@ -468,6 +468,42 @@ export function RotationGlyph({ size = 22 }: { size?: number }) {
   );
 }
 
+/**
+ * Знак «Фандинг» — перекошенные весы.
+ *
+ * Фандинг это плата одной стороны другой, и весь смысл раздела в том, на
+ * какую сторону перекос: коромысло наклонено, тяжёлая чаша внизу зелёная,
+ * лёгкая вверху красная. Ровные весы (⚖️, что стояли раньше) говорят прямо
+ * противоположное — «поровну», то есть ровно то, чего в этом разделе не
+ * ищут.
+ */
+export function FundingGlyph({ size = 22 }: { size?: number }) {
+  return (
+    <svg className="glyph" viewBox="0 0 24 24" width={size} height={size} fill="none"
+         strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 13.6 8.6 20.5h6.8z" fill="currentColor" opacity="0.45" />
+      <path d="M7 11.6 17.4 15.8" stroke="currentColor" strokeWidth="2.2" />
+      <circle cx="4.7" cy="10.7" r="2.5" stroke="var(--dn)" strokeWidth="2.2" />
+      <circle cx="19.4" cy="16.5" r="3.2" fill="var(--up)" />
+    </svg>
+  );
+}
+
+/**
+ * Знак «все биржи»: три метки, сложенные стопкой. Отдельный от значка
+ * раздела — тот говорит «фандинг», этот «отовсюду сразу».
+ */
+export function AllVenuesGlyph({ size = 26 }: { size?: number }) {
+  return (
+    <svg className="glyph" viewBox="0 0 24 24" width={size} height={size} fill="none"
+         aria-hidden="true">
+      <circle cx="8.4" cy="8.4" r="4.6" fill="var(--up)" opacity="0.9" />
+      <circle cx="15.6" cy="8.4" r="4.6" fill="var(--dn)" opacity="0.8" />
+      <circle cx="12" cy="15.4" r="4.6" fill="currentColor" opacity="0.55" />
+    </svg>
+  );
+}
+
 export function VenueMark({ venue, size = 15 }: { venue: "spot" | "perp"; size?: number }) {
   return (
     <img

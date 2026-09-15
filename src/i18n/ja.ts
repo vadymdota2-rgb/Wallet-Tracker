@@ -154,6 +154,7 @@ export const ja: Dict = {
   flow_trend_hint: "期間内の全銘柄の累計ネットフロー",
   flow_wallets: "ウォレット",
   free_plan_1_wallet: "⚠️ 無料プラン：ウォレット1件のみ。プレミアム — メニューの⭐プレミアム。",
+  fund_all: "全取引所",
   fund_apr: "年率:",
   fund_btn: "💢 ファンディング偏り",
   fund_empty: "現在、強い異常はありません。",

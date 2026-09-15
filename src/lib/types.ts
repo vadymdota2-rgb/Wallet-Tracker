@@ -270,13 +270,25 @@ export interface FeedRow {
   up: boolean;
 }
 
-export interface Funding {
+/** Строка фандинга: монета на конкретной бирже. */
+export interface FundRow {
   sym: string;
+  /** Биржа: hl, bingx, binance, gate. */
+  ex: string;
+  /** Ставка за одну выплату, в процентах. */
   rate: number;
+  /** Она же в годовых — единственное, чем биржи можно сравнивать. */
   apr: number;
+  /** Выплат в сутки: у Hyperliquid 24, у остальных обычно 3. */
+  per: number;
+  /** Открытый интерес в долларах, если биржа его отдаёт. */
   oi: number;
-  side: ServerText;
+  /** Суточный оборот в долларах, если биржа отдаёт его вместо интереса. */
+  vol: number;
 }
+
+/** Доски фандинга по биржам плюс общая под ключом all. */
+export type Fund = Record<string, FundRow[] | undefined>;
 
 /** Монета в столбце «откуда» или «куда»: сколько из неё вышло или в неё зашло. */
 export interface RotSide {
@@ -411,7 +423,7 @@ export interface Bootstrap {
   rank?: Rank;
   sonar?: Sonar;
   trades?: Trades;
-  funding?: Funding[];
+  fund?: Fund;
   rotSum?: RotSums;
   coins?: Coins;
   marketFeed?: FeedRow[];

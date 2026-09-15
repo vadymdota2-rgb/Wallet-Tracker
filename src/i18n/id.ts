@@ -154,6 +154,7 @@ export const id: Dict = {
   flow_trend_hint: "Arus bersih kumulatif seluruh koin pada periode ini",
   flow_wallets: "dompet",
   free_plan_1_wallet: "⚠️ Paket gratis: hanya 1 dompet. Premium — ketuk ⭐ Premium di menu.",
+  fund_all: "Semua bursa",
   fund_apr: "per tahun:",
   fund_btn: "💢 Ketimpangan funding",
   fund_empty: "Belum ada anomali kuat.",

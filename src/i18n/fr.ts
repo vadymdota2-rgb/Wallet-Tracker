@@ -154,6 +154,7 @@ export const fr: Dict = {
   flow_trend_hint: "Flux net cumulé sur toutes les pièces de la période",
   flow_wallets: "portefeuilles",
   free_plan_1_wallet: "⚠️ L'offre gratuite permet de suivre un seul portefeuille. Passez à Premium — appuyez sur ⭐ Premium dans le menu.",
+  fund_all: "Toutes les plateformes",
   fund_apr: "par an :",
   fund_btn: "💢 Déséquilibre du funding",
   fund_empty: "Aucune anomalie forte pour le moment.",

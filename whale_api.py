@@ -2767,31 +2767,252 @@ def load_feed_market(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> 
     return items[:24]
 
 
-def load_funding(hl: sqlite3.Connection | None) -> list:
+# ——— Фандинг ————————————————————————————————————————————————————————————
+#
+# Ставка сама по себе ничего не говорит: Hyperliquid платит каждый час,
+# остальные — раз в восемь, и «-0,08%» у первого и «-0,08%» у второго
+# отличаются в восемь раз. Поэтому всё приводится к годовым: и сравнивать, и
+# сортировать можно только их.
+#
+# Строк на биржу. Сорок — это две страницы самых перекошенных монет; дальше
+# идут ставки в сотые доли процента годовых, за которыми никто не ходит.
+FUND_ROWS = 40
+# Пороги ликвидности. Без них в вершине списка стояли монеты, которых нет:
+# у мёртвого контракта ставка гуляет как угодно, потому что её некому
+# сбивать, и «перекос» там означает лишь, что торгов нет.
+FUND_MIN_VOL = 1_000_000.0
+FUND_MIN_OI = 250_000.0
+# Ставка больше пяти процентов за выплату — это не перекос, а сбой на той
+# стороне: биржи такие значения ограничивают своими же лимитами.
+FUND_MAX_RATE = 0.05
+FUND_TTL = 600.0
+
+# Биржи, с которых берём ставки. Порядок — тот же, что в приложении.
+FUND_VENUES = ("hl", "bingx", "binance", "gate")
+_FUND: dict[str, tuple[float, list]] = {}
+_fund_lock = threading.Lock()
+
+
+def get_json(url: str, timeout: float = 10.0):
+    """GET с разбором JSON. Ошибка сети — это None, а не исключение."""
+    req = urllib.request.Request(url, headers={"User-Agent": "wallet-tracker/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read().decode())
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError, OSError):
+        return None
+
+
+def _fnum(v) -> float:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return 0.0
+    return f if f == f and abs(f) != float("inf") else 0.0
+
+
+def fund_sym(raw: str) -> str:
+    """Тикер биржи → тикер монеты: BTC-USDT, BTC_USDT, BTCUSDT → BTC.
+
+    Множители в имени (1000PEPE, 1MBABYDOGE) снимаются: ставка от размера
+    лота не зависит, а значок и название монеты находятся только по чистому
+    тикеру.
+    """
+    s = str(raw or "").upper().strip()
+    s = s.split("-")[0].split("_")[0]
+    for quote in ("USDT", "USDC", "USD"):
+        if s.endswith(quote) and len(s) > len(quote):
+            s = s[: -len(quote)]
+            break
+    for mul in ("1000000", "100000", "10000", "1000", "1M", "1K"):
+        if s.startswith(mul) and len(s) > len(mul):
+            s = s[len(mul):]
+            break
+    return s
+
+
+def fund_row(sym: str, rate: float, per: float, oi: float, vol: float, ex: str,
+             known: bool = True) -> dict | None:
+    """Строка фандинга, если она проходит отбор.
+
+    rate — доля за одну выплату (0,0001 = 0,01%), per — выплат в сутки.
+    known говорит, знаем ли мы ликвидность вообще: если биржа не отдаёт ни
+    интереса, ни оборота, отбрасывать по ним нельзя — так отсеялись бы все.
+    """
+    if not sym or not (abs(rate) > 0) or abs(rate) > FUND_MAX_RATE or per <= 0:
+        return None
+    if known and vol < FUND_MIN_VOL and oi < FUND_MIN_OI:
+        return None
+    return {
+        "sym": sym,
+        "ex": ex,
+        "rate": rate * 100,
+        "apr": rate * per * 365 * 100,
+        "per": per,
+        "oi": oi,
+        "vol": vol,
+    }
+
+
+def fund_hl(hl: sqlite3.Connection | None) -> list:
+    """Hyperliquid — из своей же базы: её наполняет бот, ходить некуда."""
     if not hl or not table_exists(hl, "hl_funding_rate"):
         return []
     cset = cols(hl, "hl_funding_rate")
     oi_sel = "oi_nanos" if "oi_nanos" in cset else "0"
+    vol_sel = "day_vlm_nanos" if "day_vlm_nanos" in cset else "0"
+    # Старая база без этих столбцов ликвидности не знает — тогда и отбирать по
+    # ней нельзя, иначе Hyperliquid исчезнет из раздела целиком.
+    known = oi_sel != "0" or vol_sel != "0"
     try:
         rows = hl.execute(
-            f"SELECT coin, rate_nanos, {oi_sel} oi FROM hl_funding_rate "
-            "WHERE hour_ts=(SELECT MAX(hour_ts) FROM hl_funding_rate) "
-            "ORDER BY ABS(rate_nanos) DESC LIMIT 15"
+            f"SELECT coin, rate_nanos, {oi_sel} oi, {vol_sel} vol FROM hl_funding_rate "
+            "WHERE hour_ts=(SELECT MAX(hour_ts) FROM hl_funding_rate)"
         ).fetchall()
     except sqlite3.Error:
         return []
     out = []
     for r in rows:
-        rate = usd(r["rate_nanos"])
-        out.append(
-            {
-                "sym": str(r["coin"] or "?").upper(),
-                "rate": rate * 100,
-                "apr": rate * 24 * 365 * 100,
-                "oi": usd(r["oi"]),
-                "side": "лонги платят" if rate >= 0 else "шорты платят",
-            }
-        )
+        # Ставка Hyperliquid — часовая, поэтому выплат в сутки двадцать четыре.
+        row = fund_row(str(r["coin"] or "").upper(), usd(r["rate_nanos"]), 24.0,
+                       usd(r["oi"]), usd(r["vol"]), "hl", known)
+        if row:
+            out.append(row)
+    return out
+
+
+def fund_bingx() -> list:
+    """BingX: ставки одним запросом, оборот — вторым."""
+    prem = get_json("https://open-api.bingx.com/openApi/swap/v2/quote/premiumIndex")
+    data = (prem or {}).get("data")
+    if not isinstance(data, list):
+        return []
+    tick = get_json("https://open-api.bingx.com/openApi/swap/v2/quote/ticker")
+    vols: dict[str, float] = {}
+    for it in ((tick or {}).get("data") or []):
+        if isinstance(it, dict):
+            vols[str(it.get("symbol") or "")] = _fnum(it.get("quoteVolume"))
+    out = []
+    for it in data:
+        if not isinstance(it, dict):
+            continue
+        raw = str(it.get("symbol") or "")
+        hours = _fnum(it.get("fundingIntervalHours")) or 8.0
+        row = fund_row(fund_sym(raw), _fnum(it.get("lastFundingRate")), 24.0 / hours,
+                       0.0, vols.get(raw, 0.0), "bingx")
+        if row:
+            out.append(row)
+    return out
+
+
+def fund_binance() -> list:
+    """Binance: ставки и обороты двумя запросами.
+
+    Шаг выплат в premiumIndex не приходит: у большинства пар он восемь часов,
+    у остальных его отдаёт fundingInfo — оттуда и берём исключения.
+    """
+    prem = get_json("https://fapi.binance.com/fapi/v1/premiumIndex")
+    if not isinstance(prem, list):
+        return []
+    tick = get_json("https://fapi.binance.com/fapi/v1/ticker/24hr")
+    vols: dict[str, float] = {}
+    for it in (tick if isinstance(tick, list) else []):
+        if isinstance(it, dict):
+            vols[str(it.get("symbol") or "")] = _fnum(it.get("quoteVolume"))
+    steps: dict[str, float] = {}
+    for it in (get_json("https://fapi.binance.com/fapi/v1/fundingInfo") or []):
+        if isinstance(it, dict):
+            h = _fnum(it.get("fundingIntervalHours"))
+            if h > 0:
+                steps[str(it.get("symbol") or "")] = h
+    out = []
+    for it in prem:
+        if not isinstance(it, dict):
+            continue
+        raw = str(it.get("symbol") or "")
+        row = fund_row(fund_sym(raw), _fnum(it.get("lastFundingRate")),
+                       24.0 / steps.get(raw, 8.0), 0.0, vols.get(raw, 0.0), "binance")
+        if row:
+            out.append(row)
+    return out
+
+
+def fund_gate() -> list:
+    """Gate: ставка, шаг и открытый интерес приходят одним списком контрактов.
+
+    Открытый интерес там в контрактах, а не в долларах: умножаем на размер
+    контракта и цену — иначе порог ликвидности сравнивал бы штуки с долларами.
+    """
+    data = get_json("https://api.gateio.ws/api/v4/futures/usdt/contracts")
+    if not isinstance(data, list):
+        return []
+    out = []
+    for it in data:
+        if not isinstance(it, dict) or it.get("in_delisting"):
+            continue
+        step = _fnum(it.get("funding_interval")) or 28800.0
+        mark = _fnum(it.get("mark_price"))
+        oi = _fnum(it.get("position_size")) * _fnum(it.get("quanto_multiplier")) * mark
+        row = fund_row(fund_sym(it.get("name")), _fnum(it.get("funding_rate")),
+                       86400.0 / step, oi, 0.0, "gate")
+        if row:
+            out.append(row)
+    return out
+
+
+def fund_venue(ex: str, hl: sqlite3.Connection | None) -> list:
+    """Строки одной биржи — из кэша, либо с биржи.
+
+    Биржа, до которой не достучались, просто не появляется в приложении:
+    пустая вкладка с её именем выглядела бы как поломка у нас, хотя отказали
+    там. Прошлый ответ при этом не затирается — ставки живут часами.
+    """
+    if ex == "hl":
+        return fund_hl(hl)
+    with _fund_lock:
+        hit = _FUND.get(ex)
+        if hit and time.monotonic() - hit[0] < FUND_TTL:
+            return hit[1]
+    fn = {"bingx": fund_bingx, "binance": fund_binance, "gate": fund_gate}.get(ex)
+    rows = []
+    if fn:
+        try:
+            rows = fn()
+        except Exception as e:
+            sys.stderr.write(f"[api] фандинг {ex}: {e}\n")
+            rows = []
+    if not rows:
+        with _fund_lock:
+            hit = _FUND.get(ex)
+        if hit and hit[1]:
+            sys.stderr.write(f"[api] фандинг {ex}: пусто, оставляем прошлый ответ\n")
+            return hit[1]
+        return []
+    with _fund_lock:
+        _FUND[ex] = (time.monotonic(), rows)
+    return rows
+
+
+def load_funding(hl: sqlite3.Connection | None) -> dict:
+    """Фандинг по биржам плюс общая доска перекосов.
+
+    Общая доска — не сумма и не среднее: одна и та же монета на двух биржах
+    стоит двумя строками, потому что перекос у них разный, и вопрос «где
+    сейчас платят» — это вопрос про конкретную биржу.
+    """
+    out: dict[str, list] = {}
+    every: list = []
+    for ex in FUND_VENUES:
+        rows = fund_venue(ex, hl)
+        if not rows:
+            continue
+        rows.sort(key=lambda r: -abs(r["apr"]))
+        out[ex] = rows[:FUND_ROWS]
+        every.extend(rows)
+    if not every:
+        return {}
+    every.sort(key=lambda r: -abs(r["apr"]))
+    out["all"] = every[:FUND_ROWS]
     return out
 
 
@@ -3425,7 +3646,7 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
     t0 = time.monotonic()
     ls: dict = {}
     rot = empty_rot()
-    flow, rank, trades, market_feed, funding, sonar = {}, {}, {"spot": [], "perp": []}, [], [], {
+    flow, rank, trades, market_feed, funding, sonar = {}, {}, {"spot": [], "perp": []}, [], {}, {
         "need": 400, "ready": {"spot": 0, "perp": 0}, "trained": False, "acc": None,
         "list": [], "hist": {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []},
     }
@@ -3458,7 +3679,10 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
         "rank": rank,
         "trades": trades,
         "marketFeed": market_feed,
-        "funding": funding,
+        # Ключ funding сменился на fund: под прежним лежал один список с
+        # Hyperliquid, а теперь это доски по биржам. Старая сборка, открытая в
+        # этот момент, увидит пустой фандинг, а не строки не с той биржи.
+        "fund": funding,
         # Ключ rot больше не отдаётся: там лежал список пар, которого в
         # приложении нет. Старая сборка, открытая в этот момент, увидит на
         # месте ротации «данных нет» и исправится сама при следующем запуске.
@@ -3795,7 +4019,7 @@ def bootstrap(chat: str) -> dict:
         }
         trades = pub.get("trades") or {"spot": [], "perp": []}
         market_feed = pub.get("marketFeed") or []
-        funding = pub.get("funding") or []
+        funding = pub.get("fund") or {}
         rot_sum = pub.get("rotSum") or {}
         sonar = pub.get("sonar") or empty_sonar
         coins = piece("coins", lambda: coins_cached(cur, hl, flow, wallets), pub.get("coins") or {})
@@ -3811,7 +4035,7 @@ def bootstrap(chat: str) -> dict:
             "rank": rank,
             "sonar": sonar,
             "trades": trades,
-            "funding": funding,
+            "fund": funding,
             "rotSum": rot_sum,
             "coins": coins,
             "marketFeed": market_feed,
@@ -4091,7 +4315,7 @@ class Handler(BaseHTTPRequestHandler):
                         },
                         "trades": pub.get("trades") or {"spot": [], "perp": []},
                         "marketFeed": pub.get("marketFeed") or [],
-                        "funding": pub.get("funding") or [],
+                        "fund": pub.get("fund") or {},
                         "rotSum": pub.get("rotSum") or {},
                         "sonar": pub.get("sonar") or {},
                         "coins": pub.get("coins") or {},

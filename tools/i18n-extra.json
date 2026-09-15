@@ -143,6 +143,24 @@
     "zh": "该时段全部币种的累计净流入",
     "ja": "期間内の全銘柄の累計ネットフロー"
   },
+  "fund_all": {
+    "ar": "كل المنصات",
+    "de": "Alle Börsen",
+    "en": "All venues",
+    "es": "Todos los exchanges",
+    "fr": "Toutes les plateformes",
+    "hi": "सभी एक्सचेंज",
+    "id": "Semua bursa",
+    "ja": "全取引所",
+    "ko": "전체 거래소",
+    "pl": "Wszystkie giełdy",
+    "pt": "Todas as corretoras",
+    "ru": "Все биржи",
+    "tr": "Tüm borsalar",
+    "uk": "Усі біржі",
+    "vi": "Tất cả sàn",
+    "zh": "全部交易所"
+  },
   "ls_hint": {
     "en": "Share of money opening longs against shorts",
     "ru": "Доля денег, заходящих в лонг против шорта",
