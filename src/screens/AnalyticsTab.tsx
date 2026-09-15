@@ -29,7 +29,7 @@ import {
 import { fetchBig, fetchFlow, fetchLs, fetchRot } from "../lib/api";
 import type { BigSide, BigView, BigWin, FlowWin } from "../store/app";
 import type {
-  CoinClass, FlowRow, FlowSide, LsRow, RotSide, RotSum, TradeRow, Trades,
+  CoinClass, FlowRow, FlowSide, FundRow, LsRow, RotSide, RotSum, TradeRow, Trades,
 } from "../lib/types";
 
 /* Покупки и продажи — двумя кнопками, а не одним списком вперемешку. В общем
@@ -865,6 +865,14 @@ function everyLabel(lang: LangCode, per: number): string {
 const payRate = (v: number) => pct(Math.abs(v), Math.abs(v) < 0.1 ? 4 : 2, false);
 
 /**
+ * Суточная ставка. Сервер прошлой версии присылал годовые — пока он не
+ * перезапущен, суточные выводятся из них делением: строка с прочерком вместо
+ * числа выглядела бы как сломанный раздел, хотя данные пришли.
+ */
+const dayRate = (f: FundRow) =>
+  typeof f.day === "number" ? f.day : (f.apr ?? 0) / 365;
+
+/**
  * Фандинг: где сейчас перекос и на какую сторону.
  *
  * Раздел был про одну биржу — Hyperliquid, — и её значок стоял уголком
@@ -950,8 +958,8 @@ function FundBody() {
                 ? `${t(lang, "fund_oi")} ${usd(f.oi)}`
                 : `${t(lang, "fund_vol")} ${usd(f.vol)}`
             }
-            value={pct(f.day, 2)}
-            tone={f.day >= 0 ? "up" : "dn"}
+            value={pct(dayRate(f), 2)}
+            tone={dayRate(f) >= 0 ? "up" : "dn"}
             valueSub={t(lang, "fund_daily")}
             onClick={() => open("coin", f.sym)}
           />
