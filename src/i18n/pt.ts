@@ -159,7 +159,6 @@ export const pt: Dict = {
   flow_trend_hint: "Fluxo líquido acumulado de todas as moedas do período",
   flow_wallets: "carteiras",
   free_plan_1_wallet: "⚠️ O plano gratuito permite monitorar apenas 1 carteira. Assine o Premium — toque em ⭐ Premium no menu.",
-  fund_all: "Todas as corretoras",
   fund_apr: "ao ano:",
   fund_btn: "💢 Desvio de funding",
   fund_daily: "por dia",

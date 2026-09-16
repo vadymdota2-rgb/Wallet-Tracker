@@ -291,8 +291,10 @@ export interface FundRow {
   next?: number;
 }
 
-/** Доски фандинга по биржам плюс общая под ключом all. */
+/** Первые страницы досок фандинга по биржам. */
 export type Fund = Record<string, FundRow[] | undefined>;
+/** Сколько перекосов на каждой бирже всего — по ним считаются страницы. */
+export type FundN = Record<string, number | undefined>;
 
 /** Монета в столбце «откуда» или «куда»: сколько из неё вышло или в неё зашло. */
 export interface RotSide {
@@ -428,6 +430,7 @@ export interface Bootstrap {
   sonar?: Sonar;
   trades?: Trades;
   fund?: Fund;
+  fundN?: FundN;
   rotSum?: RotSums;
   coins?: Coins;
   marketFeed?: FeedRow[];

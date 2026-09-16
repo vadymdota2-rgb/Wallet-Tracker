@@ -159,7 +159,6 @@ export const hi: Dict = {
   flow_trend_hint: "अवधि की सभी कॉइन का संचयी शुद्ध प्रवाह",
   flow_wallets: "वॉलेट",
   free_plan_1_wallet: "⚠️ फ़्री प्लान: केवल 1 वॉलेट। प्रीमियम — मेनू में ⭐ प्रीमियम दबाएँ।",
-  fund_all: "सभी एक्सचेंज",
   fund_apr: "प्रति वर्ष:",
   fund_btn: "💢 फंडिंग असंतुलन",
   fund_daily: "प्रति दिन",

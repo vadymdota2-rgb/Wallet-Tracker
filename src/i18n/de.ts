@@ -159,7 +159,6 @@ export const de: Dict = {
   flow_trend_hint: "Kumulierter Nettofluss über alle Coins des Zeitraums",
   flow_wallets: "Wallets",
   free_plan_1_wallet: "⚠️ Free-Plan: nur 1 Wallet. Premium — tippe ⭐ Premium im Menü.",
-  fund_all: "Alle Börsen",
   fund_apr: "pro Jahr:",
   fund_btn: "💢 Funding-Schieflage",
   fund_daily: "pro Tag",

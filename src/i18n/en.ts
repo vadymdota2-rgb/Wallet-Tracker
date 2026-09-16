@@ -159,7 +159,6 @@ export const en = {
   flow_trend_hint: "Cumulative net flow across every coin in the window",
   flow_wallets: "wallets",
   free_plan_1_wallet: "⚠️ Free plan allows tracking only 1 wallet. Upgrade to Premium — tap ⭐ Premium in the menu.",
-  fund_all: "All venues",
   fund_apr: "per year:",
   fund_btn: "💢 Funding skew",
   fund_daily: "per day",

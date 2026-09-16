@@ -159,7 +159,6 @@ export const tr: Dict = {
   flow_trend_hint: "Dönemdeki tüm coinlerin birikimli net akışı",
   flow_wallets: "cüzdan",
   free_plan_1_wallet: "⚠️ Ücretsiz plan yalnızca 1 cüzdan takibine izin verir. Premium'a geç — menüden ⭐ Premium'a dokun.",
-  fund_all: "Tüm borsalar",
   fund_apr: "yıllık:",
   fund_btn: "💢 Fonlama dengesizliği",
   fund_daily: "günlük",

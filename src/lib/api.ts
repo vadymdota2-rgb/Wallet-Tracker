@@ -7,7 +7,8 @@
  */
 import { initData } from "./telegram";
 import type {
-  Bootstrap, Deal, FlowRow, LsRow, MutationResult, RotSide, TokenHist, Trades, WalletLive,
+  Bootstrap, Deal, FlowRow, FundRow, LsRow, MutationResult, RotSide, TokenHist, Trades,
+  WalletLive,
 } from "./types";
 
 const TIMEOUT_MS = 15000;
@@ -130,6 +131,16 @@ export const fetchLs = (
   call<{ ok?: boolean; rows?: LsRow[]; total?: number }>(
     `/api/ls?win=${encodeURIComponent(win)}&q=${encodeURIComponent(q)}` +
       `&offset=${offset}&side=${encodeURIComponent(side)}&cls=${encodeURIComponent(cls)}`,
+    { signal },
+  );
+
+/**
+ * Страница доски фандинга. Первая приходит с общей выгрузкой, остальные —
+ * отсюда: перекосов на крупной бирже под тысячу.
+ */
+export const fetchFund = (ex: string, offset = 0, limit = 20, signal?: AbortSignal) =>
+  call<{ ok?: boolean; ex?: string; rows?: FundRow[]; total?: number }>(
+    `/api/fund?ex=${encodeURIComponent(ex)}&offset=${offset}&limit=${limit}`,
     { signal },
   );
 

@@ -159,7 +159,6 @@ export const zh: Dict = {
   flow_trend_hint: "该时段全部币种的累计净流入",
   flow_wallets: "钱包",
   free_plan_1_wallet: "⚠️ 免费版仅 1 个钱包。高级版 — 菜单中点 ⭐ 高级版。",
-  fund_all: "全部交易所",
   fund_apr: "年化：",
   fund_btn: "💢 资金费失衡",
   fund_daily: "每天",

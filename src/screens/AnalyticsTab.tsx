@@ -23,11 +23,11 @@ import {
 import { CoinIcon } from "../components/CoinIcon";
 import { BuySellBar, FlowSpark, TrendChart } from "../components/Chart";
 import {
-  AllVenuesGlyph, Card, Chips, CopyGlyph, Empty, FundingGlyph, Locked, MinusGlyph,
-  NetFlowGlyph, OrdersGlyph, PlusGlyph, PositionsGlyph, RotationGlyph, Row, SectionTitle,
-  Segmented, Skeleton, StackGlyph, TileNav,
+  Card, Chips, CopyGlyph, Empty, FundingGlyph, Locked, MinusGlyph, NetFlowGlyph, OrdersGlyph,
+  PlusGlyph, PositionsGlyph, RotationGlyph, Row, SectionTitle, Segmented, Skeleton, StackGlyph,
+  TileNav,
 } from "../components/ui";
-import { fetchBig, fetchFlow, fetchLs, fetchRot } from "../lib/api";
+import { fetchBig, fetchFlow, fetchFund, fetchLs, fetchRot } from "../lib/api";
 import type { BigSide, BigView, BigWin, FlowWin } from "../store/app";
 import type {
   CoinClass, FlowRow, FlowSide, FundRow, LsRow, RotSide, RotSum, TradeRow, Trades,
@@ -844,9 +844,13 @@ function LsBody() {
  */
 const FUND_VENUES: { id: string; name: string; logo: string }[] = [
   { id: "hl", name: "Hyperliquid", logo: "/cglogo/markets/images/1571/small/PFP.png" },
-  { id: "bingx", name: "BingX", logo: "/cglogo/markets/images/812/small/YtFwQwJr_400x400.jpg" },
   { id: "binance", name: "Binance", logo: "/cglogo/markets/images/52/small/binance.jpg" },
+  { id: "bybit", name: "Bybit", logo: "/cglogo/markets/images/698/small/bybit_spot.png" },
+  { id: "okx", name: "OKX", logo: "/cglogo/markets/images/96/small/WeChat_Image_20220117220452.png" },
+  { id: "bingx", name: "BingX", logo: "/cglogo/markets/images/812/small/YtFwQwJr_400x400.jpg" },
   { id: "gate", name: "Gate", logo: "/cglogo/markets/images/60/small/Frame_1.png" },
+  { id: "kraken", name: "Kraken", logo: "/cglogo/markets/images/29/small/kraken.jpg" },
+  { id: "coinbase", name: "Coinbase", logo: "/cglogo/markets/images/23/small/Coinbase_Coin_Primary.png" },
 ];
 
 const venueName = (ex: string) => FUND_VENUES.find((v) => v.id === ex)?.name ?? ex;
@@ -908,6 +912,9 @@ const everyShort = (lang: LangCode, per: number) =>
 const dayRate = (f: FundRow) =>
   typeof f.day === "number" ? f.day : (f.apr ?? 0) / 365;
 
+/** Строк на странице доски. Столько же сервер кладёт в общую выгрузку. */
+const FUND_PAGE = 20;
+
 /** Быстрые суммы: столько, сколько обычно и заводят. */
 const CALC_STEPS = [100, 1000, 10_000, 100_000];
 
@@ -965,8 +972,12 @@ function FundCalcBar() {
  *
  * Раздел был про одну биржу — Hyperliquid, — и её значок стоял уголком
  * плитки. Бирж теперь несколько, поэтому уголка нет, а выбор площадки стоит
- * внутри раздела, первой строкой: «Все» — общая доска перекосов, дальше по
- * биржам.
+ * внутри раздела первой строкой. Биржи выбирают по одной: общая доска со
+ * всех сразу оказалась перечнем повторов — одна монета стояла в ней по разу
+ * на биржу, и биржа была единственным, чем строки различались.
+ *
+ * Перекосы показываются все, а не верхние сорок: список листается
+ * страницами, первая приходит с общей выгрузкой, остальные — запросом.
  *
  * Сравнивать ставки между биржами можно только приведя их к одному сроку:
  * Hyperliquid платит каждый час, остальные — раз в четыре или восемь, и одна
@@ -979,11 +990,51 @@ function FundBody() {
   const lang = useApp((s) => s.lang);
   const open = useApp((s) => s.open);
   const fund = useLive((s) => s.fund);
-  const [ex, setEx] = useState("all");
+  const counts = useLive((s) => s.fundN);
   const amount = useApp((s) => s.fundAmount);
 
   const have = FUND_VENUES.filter((v) => (fund[v.id] ?? []).length > 0);
-  const rows = fund[ex] ?? [];
+  /* Биржа не выбрана или её доска опустела — берём первую, что есть: пустой
+     раздел с выбранной биржей выглядит поломкой, хотя выбор просто устарел. */
+  const [want, setEx] = useState("");
+  const ex = have.some((v) => v.id === want) ? want : (have[0]?.id ?? "");
+  const [page, setPage] = useState(1);
+  const [more, setMore] = useState<FundRow[] | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  // Сменилась биржа — это другая доска, и она с начала.
+  useEffect(() => {
+    setPage(1);
+    setMore(null);
+  }, [ex]);
+
+  useEffect(() => {
+    if (!ex || page === 1) {
+      setMore(null);
+      setBusy(false);
+      return;
+    }
+    const ctrl = new AbortController();
+    setBusy(true);
+    void fetchFund(ex, (page - 1) * FUND_PAGE, FUND_PAGE, ctrl.signal).then((r) => {
+      if (ctrl.signal.aborted) return;
+      setMore(r?.ok ? r.rows ?? [] : []);
+      setBusy(false);
+    });
+    return () => ctrl.abort();
+  }, [ex, page]);
+
+  const first = fund[ex] ?? [];
+  const total = counts[ex] ?? first.length;
+  const pages = Math.max(1, Math.ceil(total / FUND_PAGE));
+  const at = Math.min(page, pages);
+  const rows = at === 1 ? first : more ?? [];
+
+  const go = (to: number) => {
+    if (to < 1 || to > pages || to === at || busy) return;
+    haptic("select");
+    setPage(to);
+  };
 
   if (!have.length) {
     return <Empty text={t(lang, "fund_empty")} hint={t(lang, "fund_loading")} />;
@@ -991,30 +1042,22 @@ function FundBody() {
 
   return (
     <>
-      {/* Кнопка «Все» первой: вопрос «где сейчас самый перекос» возникает
-          раньше, чем «что на такой-то бирже». */}
       <TileNav<string>
         value={ex}
         onChange={setEx}
-        cols={have.length + 1 > 3 ? 3 : 2}
+        cols={3}
         label={t(lang, "fund_title")}
-        options={[
-          {
-            id: "all",
-            ic: <AllVenuesGlyph size={26} />,
-            label: t(lang, "fund_all"),
-          },
-          ...have.map((v) => ({
-            id: v.id,
-            /* Логотип биржи идёт через тот же кружок, что и монеты: если
-               картинка не дойдёт, на её месте останется буква, а не пустота. */
-            ic: <CoinIcon sym={v.name} icon={[v.logo]} size={26} />,
-            label: v.name,
-          })),
-        ]}
+        options={have.map((v) => ({
+          id: v.id,
+          /* Логотип биржи идёт через тот же кружок, что и монеты: если
+             картинка не дойдёт, на её месте останется буква, а не пустота. */
+          ic: <CoinIcon sym={v.name} icon={[v.logo]} size={26} />,
+          label: v.name,
+        }))}
       />
       <FundCalcBar />
-      {rows.length === 0 ? (
+      {busy && !rows.length ? <Skeleton rows={4} /> : null}
+      {!busy && rows.length === 0 ? (
         <Empty text={t(lang, "fund_empty")} hint={t(lang, "fund_loading")} />
       ) : (
         /* Подписи здесь переносятся, а не обрезаются многоточием, как в
@@ -1079,6 +1122,16 @@ function FundBody() {
           />
         ))}</div>
       )}
+
+      {pages > 1 ? (
+        <nav className="pager" aria-label={t(lang, "fund_title")}>
+          <button type="button" disabled={at <= 1 || busy} onClick={() => go(at - 1)}
+                  aria-label={t(lang, "back_button")}>←</button>
+          <span>{num(at)} / {num(pages)}</span>
+          <button type="button" disabled={at >= pages || busy} onClick={() => go(at + 1)}
+                  aria-label={t(lang, "ui_show_more")}>→</button>
+        </nav>
+      ) : null}
     </>
   );
 }

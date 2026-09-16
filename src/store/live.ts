@@ -6,7 +6,7 @@
  */
 import { create } from "zustand";
 import type {
-  AlertRow, Bootstrap, Coins, FeedRow, Flow, Fund, Ls, Me, Rank, RotSums, Sonar, Trades,
+  AlertRow, Bootstrap, Coins, FeedRow, Flow, Fund, FundN, Ls, Me, Rank, RotSums, Sonar, Trades,
   Wallet,
 } from "../lib/types";
 import { tgUserId } from "../lib/telegram";
@@ -57,6 +57,7 @@ interface LiveState {
   sonar: Sonar;
   trades: Trades;
   fund: Fund;
+  fundN: FundN;
   rotSum: RotSums;
   coins: Coins;
 
@@ -81,7 +82,7 @@ const SNAP_TTL = 24 * 3600_000;
 type Snapshot = Pick<
   LiveState,
   "syncedAt" | "me" | "wallets" | "alerts" | "feed" | "marketFeed" | "flow" | "ls"
-  | "rank" | "sonar" | "trades" | "fund" | "rotSum" | "coins"
+  | "rank" | "sonar" | "trades" | "fund" | "fundN" | "rotSum" | "coins"
 > & { uid: string };
 
 function readSnap(): Snapshot | null {
@@ -121,7 +122,7 @@ function writeSnap(s: LiveState): void {
       syncedAt: s.syncedAt,
       me: s.me, wallets: s.wallets, alerts: s.alerts, feed: s.feed,
       marketFeed: s.marketFeed, flow: s.flow, ls: s.ls, rank: s.rank, sonar: s.sonar,
-      trades: s.trades, fund: s.fund, rotSum: s.rotSum, coins: s.coins,
+      trades: s.trades, fund: s.fund, fundN: s.fundN, rotSum: s.rotSum, coins: s.coins,
     };
     localStorage.setItem(SNAP, JSON.stringify(snap));
   } catch {
@@ -176,6 +177,7 @@ export const useLive = create<LiveState>((set, get) => ({
   sonar: snap?.sonar ?? EMPTY_SONAR,
   trades: snap?.trades ?? { spot: [], perp: [] },
   fund: snap?.fund ?? {},
+  fundN: snap?.fundN ?? {},
   rotSum: snap?.rotSum ?? {},
   coins: snap?.coins ?? {},
 
@@ -199,6 +201,7 @@ export const useLive = create<LiveState>((set, get) => ({
       sonar: d.sonar?.list?.length || d.sonar?.trained ? d.sonar : prev.sonar,
       trades: some(d.trades?.spot) || some(d.trades?.perp) ? d.trades! : prev.trades,
       fund: some(d.fund) ? d.fund! : prev.fund,
+      fundN: some(d.fundN) ? d.fundN! : prev.fundN,
       rotSum: some(d.rotSum) ? d.rotSum! : prev.rotSum,
       coins: some(d.coins) ? d.coins! : prev.coins,
     }));

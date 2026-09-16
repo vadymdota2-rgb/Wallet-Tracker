@@ -159,7 +159,6 @@ export const es: Dict = {
   flow_trend_hint: "Flujo neto acumulado de todas las monedas del periodo",
   flow_wallets: "carteras",
   free_plan_1_wallet: "⚠️ El plan gratuito permite seguir solo 1 billetera. Pasa a Premium — pulsa ⭐ Premium en el menú.",
-  fund_all: "Todos los exchanges",
   fund_apr: "al año:",
   fund_btn: "💢 Sesgo de funding",
   fund_daily: "al día",

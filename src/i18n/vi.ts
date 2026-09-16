@@ -159,7 +159,6 @@ export const vi: Dict = {
   flow_trend_hint: "Dòng tiền ròng tích lũy của mọi đồng trong khung thời gian",
   flow_wallets: "ví",
   free_plan_1_wallet: "⚠️ Gói miễn phí: chỉ 1 ví. Premium — nhấn ⭐ Premium trong menu.",
-  fund_all: "Tất cả sàn",
   fund_apr: "mỗi năm:",
   fund_btn: "💢 Lệch funding",
   fund_daily: "mỗi ngày",

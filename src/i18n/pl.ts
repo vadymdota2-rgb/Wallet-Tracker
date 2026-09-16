@@ -159,7 +159,6 @@ export const pl: Dict = {
   flow_trend_hint: "Skumulowany przepływ netto wszystkich monet w oknie",
   flow_wallets: "portfeli",
   free_plan_1_wallet: "⚠️ Plan darmowy: tylko 1 portfel. Premium — naciśnij ⭐ Premium w menu.",
-  fund_all: "Wszystkie giełdy",
   fund_apr: "rocznie:",
   fund_btn: "💢 Skos fundingu",
   fund_daily: "dziennie",
