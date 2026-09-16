@@ -932,6 +932,12 @@
   border: 1px solid var(--line-2);
   background: rgb(11 22 40 / 0.45);
 }
+/* Сумма и плечо рядом: это один вопрос — «с чем зашёл», — и разносить его
+   по двум строкам значит спрашивать дважды. Плечу хватает узкой колонки:
+   там три знака от силы. */
+.calc-row { display: flex; gap: 8px; align-items: end; }
+.calc-row .calc-in { flex: 1 1 auto; min-width: 0; }
+.calc-row .calc-lev { flex: 0 0 84px; }
 .calc-in { display: grid; gap: 5px; }
 .calc-in span {
   font-size: 10px;
@@ -953,6 +959,8 @@
 }
 .calc-in input:focus { outline: none; border-color: var(--blue); }
 .calc-note { color: var(--dim-2); font-size: 11px; }
+.calc-size { color: var(--dim); font-size: 12px; }
+.calc-size b { color: var(--ink); font-size: 14px; font-variant-numeric: tabular-nums; }
 /* Деньги за выплату в подписи строки — ярче соседних чисел: их и искали,
    вводя сумму. */
 .calc-pay { color: var(--ink); font-weight: 600; }

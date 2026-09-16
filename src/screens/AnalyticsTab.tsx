@@ -917,41 +917,69 @@ const FUND_PAGE = 20;
 
 /** Быстрые суммы: столько, сколько обычно и заводят. */
 const CALC_STEPS = [100, 1000, 10_000, 100_000];
+/** Быстрые плечи: единица — это «без плеча», дальше привычные ступени. */
+const CALC_LEVS = [1, 3, 5, 10, 25];
 
 /**
- * Размер позиции для всего списка.
+ * Сколько своих денег и с каким плечом — для всего списка сразу.
  *
- * Поле одно на все монеты, а не своё у каждой: сумма у человека одна, а
+ * Фандинг платят с объёма позиции, а не со своих денег: вошёл сотней на
+ * пятом плече — платишь и получаешь как за пятьсот. Поэтому полей два, а
+ * под ними стоит объём, от которого и считаются деньги в строках.
+ *
+ * Поля одни на все монеты, а не свои у каждой: сумма у человека одна, а
  * сравнить он хочет, что она принесёт на разных монетах. Своя кнопка у
  * каждой строки заставляла бы вводить её заново и, главное, отнимала у
  * строки ширину — на узком экране от подписи оставались обрывки.
  *
- * Введённое остаётся после перезапуска: вводят один раз.
+ * Пустое поле — это пустые строки: пока человек не назвал сумму, в списке
+ * стоят проценты. Подставлять свою значило бы показать ему чужой счёт.
  */
 function FundCalcBar() {
   const lang = useApp((s) => s.lang);
   const amount = useApp((s) => s.fundAmount);
   const setAmount = useApp((s) => s.setFundAmount);
+  const lev = useApp((s) => s.fundLev);
+  const setLev = useApp((s) => s.setFundLev);
   const [text, setText] = useState(amount ? String(amount) : "");
+  const [levText, setLevText] = useState(lev > 1 ? String(lev) : "");
+
+  /* Пробелы и запятые — то, как числа пишут руками; цифры из них достаём
+     сами, иначе поле выглядит сломанным. */
+  const parse = (v: string) => Number(v.replace(/\s/g, "").replace(",", ".")) || 0;
 
   return (
     <div className="calc">
-      <label className="calc-in">
-        <span>{t(lang, "calc_amount")}</span>
-        <input
-          value={text}
-          onChange={(e) => {
-            /* Пробелы и запятые — то, как сумму пишут руками; цифры из них
-               достаём сами, иначе поле выглядит сломанным. */
-            const raw = e.target.value.replace(/[^\d.,\s]/g, "");
-            setText(raw);
-            setAmount(Number(raw.replace(/\s/g, "").replace(",", ".")) || 0);
-          }}
-          inputMode="decimal"
-          placeholder="1000"
-          aria-label={t(lang, "calc_amount")}
-        />
-      </label>
+      <div className="calc-row">
+        <label className="calc-in">
+          <span>{t(lang, "calc_amount")}</span>
+          <input
+            value={text}
+            onChange={(e) => {
+              const raw = e.target.value.replace(/[^\d.,\s]/g, "");
+              setText(raw);
+              setAmount(parse(raw));
+            }}
+            inputMode="decimal"
+            placeholder="100"
+            aria-label={t(lang, "calc_amount")}
+          />
+        </label>
+        <label className="calc-in calc-lev">
+          <span>{t(lang, "calc_lev")}</span>
+          <input
+            value={levText}
+            onChange={(e) => {
+              const raw = e.target.value.replace(/[^\d]/g, "").slice(0, 3);
+              setLevText(raw);
+              setLev(Number(raw) || 1);
+            }}
+            inputMode="numeric"
+            placeholder="1"
+            aria-label={t(lang, "calc_lev")}
+          />
+        </label>
+      </div>
       <Chips<number>
         value={amount}
         options={CALC_STEPS.map((v) => ({ id: v, label: usd(v) }))}
@@ -960,6 +988,21 @@ function FundCalcBar() {
           setText(String(v));
         }}
       />
+      <Chips<number>
+        value={lev}
+        options={CALC_LEVS.map((v) => ({ id: v, label: `${v}×` }))}
+        onChange={(v) => {
+          setLev(v);
+          setLevText(v > 1 ? String(v) : "");
+        }}
+      />
+      {/* Объём позиции — то число, с которого биржа берёт фандинг. Без него
+          «сто долларов на пятом плече» и деньги в строках не сходятся. */}
+      {amount > 0 ? (
+        <p className="calc-size">
+          {t(lang, "calc_size")} <b>{usd(amount * lev)}</b>
+        </p>
+      ) : null}
       {/* Оговорка одна на список: цена за это время тоже ходит, и её движение
           может перекрыть любую ставку. Обещать заработок нельзя. */}
       <p className="calc-note">{t(lang, "calc_note")}</p>
@@ -991,7 +1034,9 @@ function FundBody() {
   const open = useApp((s) => s.open);
   const fund = useLive((s) => s.fund);
   const counts = useLive((s) => s.fundN);
-  const amount = useApp((s) => s.fundAmount);
+  /* Деньги в строках считаются с объёма позиции: биржа берёт фандинг с него,
+     а не с того, что человек внёс своего. */
+  const amount = useApp((s) => s.fundAmount) * useApp((s) => s.fundLev);
 
   const have = FUND_VENUES.filter((v) => (fund[v.id] ?? []).length > 0);
   /* Биржа не выбрана или её доска опустела — берём первую, что есть: пустой

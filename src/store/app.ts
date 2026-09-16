@@ -58,8 +58,10 @@ interface AppState {
   sonarVenue: Venue;
   sonarWin: number;
   chartTf: Timeframe;
-  /** Сумма в калькуляторе фандинга. Одна на все монеты: вводят её однажды. */
+  /** Свои деньги в калькуляторе фандинга. Ноль — поле пустое, счёта нет. */
   fundAmount: number;
+  /** Плечо: фандинг берут с объёма позиции, а он во столько раз больше. */
+  fundLev: number;
 
   setLang(lang: LangCode, pinned?: boolean): void;
   goTab(tab: Tab): void;
@@ -81,6 +83,7 @@ interface AppState {
   setSonarWin(h: number): void;
   setChartTf(tf: Timeframe): void;
   setFundAmount(v: number): void;
+  setFundLev(v: number): void;
 }
 
 export const useApp = create<AppState>()(
@@ -106,7 +109,8 @@ export const useApp = create<AppState>()(
       sonarVenue: "spot",
       sonarWin: 24,
       chartTf: "1d",
-      fundAmount: 1000,
+      fundAmount: 0,
+      fundLev: 1,
 
       setLang: (lang, pinned = true) => set({ lang, langPinned: pinned || get().langPinned }),
       goTab: (tab) => set({ tab, stack: [] }),
@@ -128,9 +132,19 @@ export const useApp = create<AppState>()(
       setSonarWin: (sonarWin) => set({ sonarWin }),
       setChartTf: (chartTf) => set({ chartTf }),
       setFundAmount: (fundAmount) => set({ fundAmount: Math.max(0, fundAmount) }),
+      /* Сто двадцать пять — предел самых щедрых бирж; выше плеча не бывает, а
+         опечатка в поле не должна рисовать миллионные доходы. */
+      setFundLev: (fundLev) => set({ fundLev: Math.min(125, Math.max(1, fundLev || 1)) }),
     }),
     {
       name: "wt-miniapp-v7",
+      /* Поле суммы раньше приходило заполненным тысячей, и у всех, кто уже
+         открывал приложение, она осталась в памяти. Считать за человека
+         сумму, которой он не вводил, нельзя: переход на первую версию
+         стирает её и оставляет поле пустым. */
+      version: 1,
+      migrate: (prev, from) =>
+        from < 1 ? { ...(prev as object), fundAmount: 0, fundLev: 1 } : prev,
       // Стек экранов не сохраняем: запуск всегда начинается с вкладки.
       partialize: (s) => ({
         lang: s.lang,
@@ -149,6 +163,7 @@ export const useApp = create<AppState>()(
         sonarWin: s.sonarWin,
         chartTf: s.chartTf,
         fundAmount: s.fundAmount,
+        fundLev: s.fundLev,
       }),
     },
   ),
