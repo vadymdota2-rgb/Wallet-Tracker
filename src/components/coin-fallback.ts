@@ -9,6 +9,34 @@ export const CG_FALLBACK: Record<string, string> = {
      кружке оставалась буква. Подставлять сюда значок PAXG нельзя: это другой
      токен другого выпуска, и выдавать один за другой хуже, чем буква. */
   XAUT: "/cglogo/coins/images/10481/small/logo.png",
+  /* А вот собственные рисунки товарных рынков у Hyperliquid есть — золото,
+     серебро, платина и нефть. Биржевые коды (XAU, XAG, XPT) и словесные
+     названия ведут на них же: это один и тот же товар. */
+  GOLD: "/hllogo/xyz:GOLD.svg",
+  XAU: "/hllogo/xyz:GOLD.svg",
+  SILVER: "/hllogo/xyz:SILVER.svg",
+  XAG: "/hllogo/xyz:SILVER.svg",
+  PLATINUM: "/hllogo/xyz:PLATINUM.svg",
+  XPT: "/hllogo/xyz:PLATINUM.svg",
+  OIL: "/hllogo/flx:OIL.svg",
+  WTI: "/hllogo/flx:OIL.svg",
+  USOIL: "/hllogo/km:USOIL.svg",
+  USTECH: "/hllogo/km:USTECH.svg",
+  /* Азиатские компании и частные: биржевого кода у них либо нет, либо он не
+     тот, по которому их знают, — зато Hyperliquid нарисовал их для своих
+     рынков HIP-3. Тикер здесь тот, под которым инструмент торгуется у OKX,
+     Gate и Coinbase, а рисунок — от одноимённого рынка Hyperliquid. */
+  SAMSUNG: "/hllogo/xyz:SMSN.svg",
+  SKHYNIX: "/hllogo/xyz:SKHX.svg",
+  SOFTBANK: "/hllogo/xyz:SOFTBANK.svg",
+  KIOXIA: "/hllogo/xyz:KIOXIA.svg",
+  CXMT: "/hllogo/xyz:CXMT.svg",
+  ZHIPU: "/hllogo/xyz:ZHIPU.svg",
+  DRAM: "/hllogo/xyz:DRAM.svg",
+  UNITREE: "/hllogo/para:UNITREE.svg",
+  OPENAI: "/hllogo/vntl:OPENAI.svg",
+  ANTH: "/hllogo/io:ANTH.svg",
+  OAI: "/hllogo/io:OAI.svg",
   BTC: "/cglogo/coins/images/1/small/bitcoin.png",
   ETH: "/cglogo/coins/images/279/small/ethereum.png",
   SOL: "/cglogo/coins/images/4128/small/solana.png",
@@ -42,6 +70,7 @@ export const CG_FALLBACK: Record<string, string> = {
   TRUMP: "/cglogo/coins/images/53746/small/trump.png",
   TAO: "/cglogo/coins/images/28452/small/ARUsPeNQ_400x400.jpeg",
   TON: "/cglogo/coins/images/17980/small/photo_2024-09-10_17.09.00.jpeg",
+  STORJ: "/cglogo/coins/images/949/small/storj.png",
   USDT: "/cglogo/coins/images/325/small/Tether.png",
   USDC: "/cglogo/coins/images/6319/small/usdc.png",
 };

@@ -2942,22 +2942,85 @@ def fund_bingx() -> list:
     return out
 
 
+CG_DERIV = {"binance": "binance_futures", "bybit": "bybit"}
+# У бесплатного ключа CoinGecko счёт запросов месячный, а ставки там всё
+# равно восьмичасовые: обновлять их чаще, чем раз в двадцать минут, незачем.
+FUND_CG_TTL = 1200.0
+_FUND_CG: dict[str, tuple[float, list]] = {}
+
+
+def fund_cg(ex: str) -> list:
+    """Запасной источник ставок — доска деривативов CoinGecko.
+
+    Binance и Bybit отвечают на облачные адреса отказом по региону (451 и
+    403), и с наших машин их собственный API недоступен. Тогда берём ставки
+    у CoinGecko: там те же пары, открытый интерес и оборот в долларах.
+
+    Чего там нет — шага выплат и времени следующей. У обеих бирж шаг по
+    умолчанию восемь часов, отсчёт ведём до ближайшей границы 00/08/16 UTC.
+    Для пар с другим шагом (у Binance такие есть) это приблизительно —
+    точные значения приходят, только когда доступен API самой биржи.
+    """
+    slug = CG_DERIV.get(ex)
+    if not slug:
+        return []
+    was = _FUND_CG.get(ex)
+    if was and time.monotonic() - was[0] < FUND_CG_TTL:
+        return list(was[1])
+    data = get_json("https://api.coingecko.com/api/v3/derivatives/exchanges/"
+                    f"{slug}?include_tickers=unexpired", timeout=25.0)
+    rows_in = (data or {}).get("tickers")
+    if not isinstance(rows_in, list):
+        return []
+    nxt = (int(time.time()) // 28800 + 1) * 28800
+    out = []
+    for it in rows_in:
+        if not isinstance(it, dict) or it.get("contract_type") != "perpetual":
+            continue
+        # funding_rate у CoinGecko — проценты за выплату, у нас доля.
+        vol = (it.get("converted_volume") or {}).get("usd")
+        row = fund_row(fund_sym(str(it.get("symbol") or "")),
+                       _fnum(it.get("funding_rate")) / 100.0, 3.0,
+                       _fnum(it.get("open_interest_usd")), _fnum(vol),
+                       ex, nxt=nxt)
+        if row:
+            out.append(row)
+    if out:
+        _FUND_CG[ex] = (time.monotonic(), out)
+        sys.stderr.write(f"[api] фандинг {ex}: биржа недоступна, взяли CoinGecko ({len(out)})\n")
+    return out
+
+
+# Тот же API Binance отдаёт и основной домен фьючерсов, и домен сайта.
+# Первый отказывает облачным адресам по региону (451), второй — не всегда,
+# и лишний домен в списке дешевле, чем приблизительные ставки с CoinGecko.
+BINANCE_HOSTS = ("https://fapi.binance.com", "https://www.binance.com")
+
+
 def fund_binance() -> list:
     """Binance: ставки и обороты двумя запросами.
 
     Шаг выплат в premiumIndex не приходит: у большинства пар он восемь часов,
     у остальных его отдаёт fundingInfo — оттуда и берём исключения.
+
+    Если не ответил ни один домен, остаётся CoinGecko: там те же пары, но без
+    шага выплат и времени следующей.
     """
-    prem = get_json("https://fapi.binance.com/fapi/v1/premiumIndex")
-    if not isinstance(prem, list):
-        return []
-    tick = get_json("https://fapi.binance.com/fapi/v1/ticker/24hr")
+    host, prem = "", None
+    for h in BINANCE_HOSTS:
+        prem = get_json(f"{h}/fapi/v1/premiumIndex")
+        if isinstance(prem, list) and prem:
+            host = h
+            break
+    if not host:
+        return fund_cg("binance")
+    tick = get_json(f"{host}/fapi/v1/ticker/24hr")
     vols: dict[str, float] = {}
     for it in (tick if isinstance(tick, list) else []):
         if isinstance(it, dict):
             vols[str(it.get("symbol") or "")] = _fnum(it.get("quoteVolume"))
     steps: dict[str, float] = {}
-    for it in (get_json("https://fapi.binance.com/fapi/v1/fundingInfo") or []):
+    for it in (get_json(f"{host}/fapi/v1/fundingInfo") or []):
         if isinstance(it, dict):
             h = _fnum(it.get("fundingIntervalHours"))
             if h > 0:
@@ -3043,7 +3106,7 @@ def fund_bybit() -> list:
     tick = get_json("https://api.bybit.com/v5/market/tickers?category=linear")
     rows_in = (((tick or {}).get("result") or {}).get("list")) or []
     if not rows_in:
-        return []
+        return fund_cg("bybit")
     steps: dict[str, float] = {}
     info = get_json("https://api.bybit.com/v5/market/instruments-info?category=linear&limit=1000")
     for it in ((((info or {}).get("result") or {}).get("list")) or []):
