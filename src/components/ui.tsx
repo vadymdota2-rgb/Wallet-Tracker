@@ -1,5 +1,5 @@
 /** Мелкие кирпичики интерфейса: строка списка, плитки, кнопка, заголовок. */
-import { Fragment, useEffect, useRef, type CSSProperties, type ReactNode, type Ref } from "react";
+import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode, type Ref } from "react";
 import { haptic } from "../lib/telegram";
 import { copyText } from "../lib/copy";
 
@@ -291,9 +291,14 @@ export function TileNav<T extends string>({
  * Лента держит высоту одного ряда при любом числе площадок, а разница в
  * размере сразу говорит, какая выбрана и что соседние доступны сдвигом.
  *
- * Выбор идёт за прокруткой: докрутил — выбрал. Поэтому изменение приходит не
- * на каждый пиксель, а когда лента остановилась: иначе, пока палец ведёт от
- * Binance к Bybit, приложение успело бы сходить за двумя лишними досками.
+ * Лента кольцевая: список повторён несколько раз, и когда прокрутка уходит
+ * из средней копии, положение молча переносится в неё же — карточки в копиях
+ * одинаковые, поэтому перенос не виден, а край, в который лента упиралась,
+ * исчезает. Крутить можно в обе стороны сколько угодно.
+ *
+ * Выбор идёт за прокруткой: докрутил — выбрал. Приходит он не на каждый
+ * пиксель, а когда лента остановилась: иначе, пока палец ведёт от Binance к
+ * Bybit, приложение успело бы сходить за двумя лишними досками.
  */
 export function VenueReel<T extends string>({
   value,
@@ -312,7 +317,18 @@ export function VenueReel<T extends string>({
      там, и повторный доводчик дёргал бы её под пальцем. */
   const scrolled = useRef(false);
   const first = useRef(true);
+  const n = options.length;
   const at = Math.max(0, options.findIndex((o) => o.id === value));
+  /* Подсвечена одна карточка, а не все копии выбранной площадки: на коротком
+     списке две копии попадают на экран разом, и синей горела бы ещё и та,
+     что стоит с краю. Держим ту, что сейчас в середине. */
+  const [live, setLive] = useState(-1);
+
+  /* Копий тем больше, чем короче список: одного сильного маха должно не
+     хватать, чтобы долететь до края ленты, — там перенос ещё не случился. */
+  const reps = n < 2 ? 1 : n >= 8 ? 3 : n >= 4 ? 5 : 9;
+  const mid = Math.floor(reps / 2) * n;
+  const cards = Array.from({ length: reps * n }, (_, i) => i);
 
   /* Считаем по видимым прямоугольникам, а не по scrollLeft с offsetLeft: в
      арабской раскладке лента идёт справа налево, начало прокрутки там ноль, а
@@ -322,15 +338,31 @@ export function VenueReel<T extends string>({
     const el = box.current;
     const card = el?.children[i] as HTMLElement | undefined;
     if (!el || !card) return 0;
-    const box0 = el.getBoundingClientRect();
     const own = card.getBoundingClientRect();
-    return own.left + own.width / 2 - (box0.left + box0.width / 2);
+    const all = el.getBoundingClientRect();
+    return own.left + own.width / 2 - (all.left + all.width / 2);
   };
 
-  const center = (i: number, smooth: boolean) => {
-    const by = shift(i);
+  const move = (by: number, smooth: boolean) => {
     if (!box.current || Math.abs(by) < 1) return;
     box.current.scrollBy({ left: by, behavior: smooth ? "smooth" : "auto" });
+  };
+
+  /* Ближайшая копия нужной площадки, а не та, что в средней копии: щелчок по
+     соседней карточке должен сдвигать ленту на шаг, а не прокручивать её
+     через весь список к другому её экземпляру. */
+  const nearest = (want: number) => {
+    let best = mid + want;
+    let near = Infinity;
+    for (let r = 0; r < reps; r++) {
+      const i = r * n + want;
+      const d = Math.abs(shift(i));
+      if (d < near) {
+        near = d;
+        best = i;
+      }
+    }
+    return best;
   };
 
   useEffect(() => {
@@ -338,29 +370,42 @@ export function VenueReel<T extends string>({
       scrolled.current = false;
       return;
     }
-    center(at, !first.current);
-    first.current = false;
+    if (!n) return;
     // Ширины плиток известны только после первой отрисовки: на холодном
-    // запуске этот вызов случается раньше, чем лента получила размеры.
-  }, [at, options.length]);
+    // запуске центрировать раньше нечего.
+    const to = first.current ? mid + at : nearest(at);
+    move(shift(to), !first.current);
+    setLive(to);
+    first.current = false;
+  }, [at, n, reps]);
 
   const settle = () => {
     const el = box.current;
-    if (!el) return;
-    let best = at;
+    if (!el || !n) return;
+    let best = 0;
     let near = Infinity;
-    options.forEach((_, i) => {
+    cards.forEach((_, i) => {
       const d = Math.abs(shift(i));
       if (d < near) {
         near = d;
         best = i;
       }
     });
-    const pick = options[best];
-    if (!pick || pick.id === value) return;
-    scrolled.current = true;
-    haptic("select");
-    onChange(pick.id);
+    const pick = options[best % n];
+    if (pick && pick.id !== value) {
+      scrolled.current = true;
+      haptic("select");
+      onChange(pick.id);
+    }
+    /* Вышли из средней копии — молча возвращаемся в неё. Карточка под тем же
+       номером выглядит точно так же, поэтому подмены не видно, а запас хода в
+       обе стороны снова полный. */
+    if (reps > 1 && (best < mid || best >= mid + n)) {
+      move(shift(mid + (best % n)), false);
+      setLive(mid + (best % n));
+      return;
+    }
+    setLive(best);
   };
 
   return (
@@ -374,26 +419,34 @@ export function VenueReel<T extends string>({
         idle.current = setTimeout(settle, 120);
       }}
     >
-      {options.map((o) => (
-        <button
-          key={o.id}
-          type="button"
-          role="tab"
-          aria-selected={o.id === value}
-          className={o.id === value ? "on" : undefined}
-          onClick={() => {
-            if (o.id === value) {
-              center(options.indexOf(o), true);
-              return;
-            }
-            haptic("select");
-            onChange(o.id);
-          }}
-        >
-          <span className="v-ic" aria-hidden="true">{o.ic}</span>
-          <span>{o.label}</span>
-        </button>
-      ))}
+      {cards.map((i) => {
+        const o = options[i % n]!;
+        /* Читалке экрана показываем один список, а не все копии: кнопки в
+           них те же самые, и объявлять площадку по три раза незачем. */
+        const copy = i < mid || i >= mid + n;
+        return (
+          <button
+            key={i}
+            type="button"
+            role={copy ? undefined : "tab"}
+            aria-hidden={copy || undefined}
+            tabIndex={copy ? -1 : undefined}
+            aria-selected={copy ? undefined : o.id === value}
+            className={i === live || (live < 0 && o.id === value && !copy) ? "on" : undefined}
+            onClick={() => {
+              move(shift(i), true);
+              setLive(i);
+              if (o.id === value) return;
+              scrolled.current = true;
+              haptic("select");
+              onChange(o.id);
+            }}
+          >
+            <span className="v-ic" aria-hidden="true">{o.ic}</span>
+            <span>{o.label}</span>
+          </button>
+        );
+      })}
     </nav>
   );
 }
