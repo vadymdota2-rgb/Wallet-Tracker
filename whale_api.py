@@ -2817,6 +2817,13 @@ def _fnum(v) -> float:
     return f if f == f and abs(f) != float("inf") else 0.0
 
 
+# Обёртки BingX на чужие рынки: акции, товары, индексы и валютные пары.
+# Внутри имени — настоящий инструмент, снаружи — четыре буквы и валюта
+# расчёта. Перечислены поимённо: «NC» с двумя буквами встречается и у монет
+# (NCASH), и правило по маске съело бы их.
+FUND_WRAP = ("NCSK", "NCCO", "NCSI", "NCFX")
+
+
 def fund_sym(raw: str) -> str:
     """Тикер биржи → тикер монеты: BTC-USDT, BTC_USDT, BTCUSDT → BTC.
 
@@ -2830,13 +2837,24 @@ def fund_sym(raw: str) -> str:
     """
     s = str(raw or "").upper().strip()
     s = s.split("-")[0].split("_")[0]
-    if s.startswith("NCSK") and len(s) > 8:
-        inner = s[4:]
+    if s[:4] in FUND_WRAP and len(s) > 8:
+        kind, inner, cur = s[2:4], s[4:], ""
         # Хвост — «2» и валюта расчёта: 2USD у американских бумаг, 2JPY у
         # японских. Снимаем любую, иначе часть имён так и осталась бы
         # нечитаемой.
         if len(inner) > 4 and inner[-4] == "2" and inner[-3:].isalpha():
-            inner = inner[:-4]
+            cur, inner = inner[-3:], inner[:-4]
+        else:
+            # Часть обёрток идёт без «2»: NCSKSITMUSDT — это SITM, а не
+            # SITMUSDT. Валюту расчёта снимаем и в этом случае.
+            for quote in ("USDT", "USDC", "USD"):
+                if inner.endswith(quote) and len(inner) > len(quote):
+                    inner = inner[: -len(quote)]
+                    break
+        # У валютных пар вторая валюта — половина смысла: NCFXEUR2JPY это
+        # EURJPY, а не EUR. У остальных обёрток это лишь валюта расчёта.
+        if kind == "FX" and cur:
+            inner += cur
         if inner and len(inner) <= 12:
             return inner
     for quote in ("USDT", "USDC", "USD"):
@@ -2971,6 +2989,9 @@ def fund_cg(ex: str) -> list:
                     f"{slug}?include_tickers=unexpired", timeout=25.0)
     rows_in = (data or {}).get("tickers")
     if not isinstance(rows_in, list):
+        # Чаще всего это лимит запросов бесплатного ключа. Доска при этом не
+        # обнуляется: fund_pull оставляет прошлый ответ до следующего круга.
+        sys.stderr.write(f"[api] фандинг {ex}: CoinGecko не ответил\n")
         return []
     nxt = (int(time.time()) // 28800 + 1) * 28800
     out = []

@@ -35,6 +35,8 @@ export const CG_FALLBACK: Record<string, string> = {
   DRAM: "/hllogo/xyz:DRAM.svg",
   UNITREE: "/hllogo/para:UNITREE.svg",
   OPENAI: "/hllogo/vntl:OPENAI.svg",
+  ANTHROPIC: "/hllogo/vntl:ANTHROPIC.svg",
+  MINIMAX: "/hllogo/xyz:MINIMAX.svg",
   ANTH: "/hllogo/io:ANTH.svg",
   OAI: "/hllogo/io:OAI.svg",
   BTC: "/cglogo/coins/images/1/small/bitcoin.png",
@@ -71,6 +73,13 @@ export const CG_FALLBACK: Record<string, string> = {
   TAO: "/cglogo/coins/images/28452/small/ARUsPeNQ_400x400.jpeg",
   TON: "/cglogo/coins/images/17980/small/photo_2024-09-10_17.09.00.jpeg",
   STORJ: "/cglogo/coins/images/949/small/storj.png",
+  /* Монеты, чей тикер совпадает с биржевым кодом. Без своего адреса они
+     доходили бы до последнего звена цепочки и получали логотип чужой
+     компании: HEI — это Heima, а не HEICO, BTR — Bitlayer, а не Better
+     Home, WEN — мемкоин, а не Wendy's. */
+  HEI: "/cglogo/coins/images/54379/small/heima.png",
+  BTR: "/cglogo/coins/images/55177/small/App_Logo.png",
+  WEN: "/cglogo/coins/images/34856/small/wen-logo-new.jpg",
   USDT: "/cglogo/coins/images/325/small/Tether.png",
   USDC: "/cglogo/coins/images/6319/small/usdc.png",
 };
