@@ -26,6 +26,7 @@ import {
   Card, Chips, CopyGlyph, Empty, FundingGlyph, Locked, MinusGlyph, NetFlowGlyph, OrdersGlyph,
   PlusGlyph, PositionsGlyph, RotationGlyph, Row, SectionTitle, Segmented, Skeleton, StackGlyph,
   TileNav,
+  VenueReel,
 } from "../components/ui";
 import { fetchBig, fetchFlow, fetchFund, fetchLs, fetchRot } from "../lib/api";
 import type { BigSide, BigView, BigWin, FlowWin } from "../store/app";
@@ -847,10 +848,14 @@ const FUND_VENUES: { id: string; name: string; logo: string }[] = [
   { id: "binance", name: "Binance", logo: "/cglogo/markets/images/52/small/binance.jpg" },
   { id: "bybit", name: "Bybit", logo: "/cglogo/markets/images/698/small/bybit_spot.png" },
   { id: "okx", name: "OKX", logo: "/cglogo/markets/images/96/small/WeChat_Image_20220117220452.png" },
+  { id: "bitget", name: "Bitget", logo: "/cglogo/markets/images/540/small/2023-07-25_21.47.43.jpg" },
   { id: "bingx", name: "BingX", logo: "/cglogo/markets/images/812/small/YtFwQwJr_400x400.jpg" },
   { id: "gate", name: "Gate", logo: "/cglogo/markets/images/60/small/Frame_1.png" },
+  { id: "mexc", name: "MEXC", logo: "/cglogo/markets/images/409/small/164286be-32a5-4b58-978c-d072eea00eb9.jpeg" },
+  { id: "kucoin", name: "KuCoin", logo: "/cglogo/markets/images/61/small/kucoin.png" },
   { id: "kraken", name: "Kraken", logo: "/cglogo/markets/images/29/small/kraken.jpg" },
   { id: "coinbase", name: "Coinbase", logo: "/cglogo/markets/images/23/small/Coinbase_Coin_Primary.png" },
+  { id: "aster", name: "Aster", logo: "/cglogo/markets/images/22084/small/aster-profile-200.png" },
 ];
 
 const venueName = (ex: string) => FUND_VENUES.find((v) => v.id === ex)?.name ?? ex;
@@ -1087,16 +1092,15 @@ function FundBody() {
 
   return (
     <>
-      <TileNav<string>
+      <VenueReel<string>
         value={ex}
         onChange={setEx}
-        cols={3}
         label={t(lang, "fund_title")}
         options={have.map((v) => ({
           id: v.id,
           /* Логотип биржи идёт через тот же кружок, что и монеты: если
              картинка не дойдёт, на её месте останется буква, а не пустота. */
-          ic: <CoinIcon sym={v.name} icon={[v.logo]} size={26} />,
+          ic: <CoinIcon sym={v.name} icon={[v.logo]} size={28} />,
           label: v.name,
         }))}
       />

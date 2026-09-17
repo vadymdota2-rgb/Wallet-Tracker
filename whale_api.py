@@ -2790,7 +2790,8 @@ FUND_MAX_RATE = 0.05
 FUND_TTL = 600.0
 
 # Биржи, с которых берём ставки. Порядок — тот же, что в приложении.
-FUND_VENUES = ("hl", "bingx", "binance", "bybit", "okx", "gate", "kraken", "coinbase")
+FUND_VENUES = ("hl", "binance", "bybit", "okx", "bitget", "bingx",
+               "gate", "mexc", "kucoin", "kraken", "coinbase", "aster")
 # Строк на биржу в общей выгрузке — ровно одна страница. Остальные доски
 # достаются по запросу: перекосов на крупной бирже под тысячу, и возить их
 # все каждому запуску незачем.
@@ -3233,8 +3234,174 @@ def fund_coinbase() -> list:
     return out
 
 
+def fund_bitget() -> list:
+    """Bitget: ставки и шаг выплат одним запросом, ликвидность — вторым.
+
+    Шаг приходит прямо в часах, а время следующей выплаты — отдельным полем:
+    гадать, как у бирж без этих полей, не приходится. Открытый интерес там в
+    монетах, поэтому переводим его ценой.
+    """
+    data = get_json("https://api.bitget.com/api/v2/mix/market/"
+                    "current-fund-rate?productType=USDT-FUTURES", timeout=20.0)
+    rows_in = (data or {}).get("data")
+    if not isinstance(rows_in, list):
+        return []
+    tick = get_json("https://api.bitget.com/api/v2/mix/market/"
+                    "tickers?productType=USDT-FUTURES", timeout=20.0)
+    liq: dict[str, tuple[float, float]] = {}
+    for it in ((tick or {}).get("data") or []):
+        if isinstance(it, dict):
+            mark = _fnum(it.get("markPrice")) or _fnum(it.get("lastPr"))
+            liq[str(it.get("symbol") or "")] = (_fnum(it.get("holdingAmount")) * mark,
+                                                _fnum(it.get("usdtVolume")))
+    out = []
+    for it in rows_in:
+        if not isinstance(it, dict):
+            continue
+        raw = str(it.get("symbol") or "")
+        step = _fnum(it.get("fundingRateInterval"))
+        oi, vol = liq.get(raw, (0.0, 0.0))
+        row = fund_row(fund_sym(raw), _fnum(it.get("fundingRate")),
+                       24.0 / step if 0.9 <= step <= 24.5 else 3.0, oi, vol, "bitget",
+                       nxt=_fnum(it.get("nextUpdate")) / 1000.0)
+        if row:
+            out.append(row)
+    return out
+
+
+MEXC_SIZE_TTL = 21600.0
+_MEXC_SIZE: tuple[float, dict[str, float]] = (0.0, {})
+
+
+def mexc_sizes() -> dict[str, float]:
+    """Размер контракта по каждой паре MEXC.
+
+    Без него открытый интерес остаётся в контрактах и сравнивать его с
+    долларовым порогом нельзя. Выгрузка на два мегабайта и меняется редко —
+    держим её шесть часов, а не тянем каждый круг.
+    """
+    global _MEXC_SIZE
+    was = _MEXC_SIZE
+    if was[1] and time.monotonic() - was[0] < MEXC_SIZE_TTL:
+        return was[1]
+    data = get_json("https://api.mexc.com/api/v1/contract/detail", timeout=30.0)
+    out: dict[str, float] = {}
+    for it in ((data or {}).get("data") or []):
+        if isinstance(it, dict):
+            size = _fnum(it.get("contractSize"))
+            if size > 0:
+                out[str(it.get("symbol") or "")] = size
+    if not out:
+        return was[1]
+    _MEXC_SIZE = (time.monotonic(), out)
+    return out
+
+
+def fund_mexc() -> list:
+    """MEXC: ставка с шагом одним запросом, ликвидность — вторым.
+
+    Домен фьючерсов (contract.mexc.com) отказывает облачным адресам, тот же
+    API отдаёт api.mexc.com — по нему и ходим. Открытый интерес приходит в
+    контрактах: переводим его размером контракта и ценой.
+    """
+    data = get_json("https://api.mexc.com/api/v1/contract/funding_rate", timeout=25.0)
+    rows_in = (data or {}).get("data")
+    if not isinstance(rows_in, list):
+        return []
+    tick = get_json("https://api.mexc.com/api/v1/contract/ticker", timeout=25.0)
+    sizes = mexc_sizes()
+    liq: dict[str, tuple[float, float]] = {}
+    for it in ((tick or {}).get("data") or []):
+        if isinstance(it, dict):
+            raw = str(it.get("symbol") or "")
+            price = _fnum(it.get("fairPrice")) or _fnum(it.get("lastPrice"))
+            liq[raw] = (_fnum(it.get("holdVol")) * sizes.get(raw, 0.0) * price,
+                        _fnum(it.get("amount24")))
+    out = []
+    for it in rows_in:
+        if not isinstance(it, dict):
+            continue
+        raw = str(it.get("symbol") or "")
+        # collectCycle — шаг выплат в часах.
+        step = _fnum(it.get("collectCycle"))
+        oi, vol = liq.get(raw, (0.0, 0.0))
+        row = fund_row(fund_sym(raw), _fnum(it.get("fundingRate")),
+                       24.0 / step if 0.9 <= step <= 24.5 else 3.0,
+                       oi, vol, "mexc",
+                       nxt=_fnum(it.get("nextSettleTime")) / 1000.0)
+        if row:
+            out.append(row)
+    return out
+
+
+def fund_kucoin() -> list:
+    """KuCoin Futures: ставка, шаг, интерес и оборот — одним запросом.
+
+    Имена там свои: биткойн зовётся XBT, а к контракту добавлена M. Берём
+    базовую валюту из ответа, а не разбираем имя — так надёжнее.
+    """
+    data = get_json("https://api-futures.kucoin.com/api/v1/contracts/active", timeout=20.0)
+    rows_in = (data or {}).get("data")
+    if not isinstance(rows_in, list):
+        return []
+    out = []
+    for it in rows_in:
+        if not isinstance(it, dict) or it.get("status") != "Open" or it.get("expireDate"):
+            continue
+        if str(it.get("settleCurrency") or "").upper() != "USDT":
+            continue
+        base = str(it.get("baseCurrency") or "").upper()
+        if base == "XBT":
+            base = "BTC"
+        mark = _fnum(it.get("markPrice"))
+        # Шаг выплат приходит в миллисекундах.
+        step = _fnum(it.get("currentFundingRateGranularity")
+                     or it.get("fundingRateGranularity")) / 3.6e6
+        row = fund_row(fund_sym(base), _fnum(it.get("fundingFeeRate")),
+                       24.0 / step if 0.9 <= step <= 24.5 else 3.0,
+                       _fnum(it.get("openInterest")) * _fnum(it.get("multiplier")) * mark,
+                       _fnum(it.get("turnoverOf24h")), "kucoin",
+                       nxt=_fnum(it.get("nextFundingRateDateTime")) / 1000.0)
+        if row:
+            out.append(row)
+    return out
+
+
+def fund_aster() -> list:
+    """Aster: порядок тот же, что у Binance, — её API построен по образцу."""
+    prem = get_json("https://fapi.asterdex.com/fapi/v1/premiumIndex", timeout=20.0)
+    if not isinstance(prem, list):
+        return []
+    tick = get_json("https://fapi.asterdex.com/fapi/v1/ticker/24hr", timeout=20.0)
+    vols: dict[str, float] = {}
+    for it in (tick if isinstance(tick, list) else []):
+        if isinstance(it, dict):
+            vols[str(it.get("symbol") or "")] = _fnum(it.get("quoteVolume"))
+    steps: dict[str, float] = {}
+    for it in (get_json("https://fapi.asterdex.com/fapi/v1/fundingInfo", timeout=20.0) or []):
+        if isinstance(it, dict):
+            h = _fnum(it.get("fundingIntervalHours"))
+            if h > 0:
+                steps[str(it.get("symbol") or "")] = h
+    out = []
+    for it in prem:
+        if not isinstance(it, dict):
+            continue
+        raw = str(it.get("symbol") or "")
+        row = fund_row(fund_sym(raw), _fnum(it.get("lastFundingRate")),
+                       24.0 / steps.get(raw, 8.0), 0.0, vols.get(raw, 0.0), "aster",
+                       nxt=_fnum(it.get("nextFundingTime")) / 1000.0)
+        if row:
+            out.append(row)
+    return out
+
+
 FUND_FETCH = {
     "bingx": fund_bingx,
+    "bitget": fund_bitget,
+    "mexc": fund_mexc,
+    "kucoin": fund_kucoin,
+    "aster": fund_aster,
     "binance": fund_binance,
     "bybit": fund_bybit,
     "okx": fund_okx,

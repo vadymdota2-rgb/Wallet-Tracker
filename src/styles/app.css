@@ -835,6 +835,64 @@
   .views button { font-size: 10.5px; padding-inline: 2px; }
 }
 
+/* Лента площадок. Выбранная — в середине и в полный размер, соседние мельче
+   и приглушены: разница в размере говорит «эта выбрана, рядом есть другие»
+   без единого слова подписи. Полоса прокрутки убрана, а края притушены
+   маской — она и намекает, что лента продолжается за краем экрана. */
+.reel {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  /* Крайние площадки тоже должны доезжать до середины. */
+  padding: 8px calc(50% - 48px) 10px;
+  mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+}
+.reel::-webkit-scrollbar { display: none; }
+.reel button {
+  flex: 0 0 96px;
+  scroll-snap-align: center;
+  display: grid;
+  gap: 5px;
+  justify-items: center;
+  align-content: center;
+  min-height: 76px;
+  padding: 9px 6px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: rgb(11 22 40 / 0.29);
+  color: var(--dim);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: center;
+  overflow-wrap: anywhere;
+  transform: scale(0.84);
+  opacity: 0.55;
+  transition: transform 0.2s var(--ease), opacity 0.2s var(--ease),
+              background 0.18s var(--ease), color 0.18s var(--ease),
+              border-color 0.18s var(--ease);
+}
+.reel button.on {
+  transform: scale(1);
+  opacity: 1;
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+  box-shadow: var(--shadow);
+}
+.reel .v-ic { display: grid; place-items: center; min-height: 26px; line-height: 1; }
+/* Движение выключено у тех, кто просил его выключить: лента остаётся
+   листаемой, просто без плавного доводчика и без роста плитки. */
+@media (prefers-reduced-motion: reduce) {
+  .reel { scroll-behavior: auto; }
+  .reel button { transition: none; transform: none; }
+  .reel button.on { transform: none; }
+}
+
 .find { margin: 2px 0; }
 
 /* Логотип монеты ------------------------------------------------------- */

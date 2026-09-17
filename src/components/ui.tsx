@@ -1,5 +1,5 @@
 /** Мелкие кирпичики интерфейса: строка списка, плитки, кнопка, заголовок. */
-import { Fragment, type CSSProperties, type ReactNode, type Ref } from "react";
+import { Fragment, useEffect, useRef, type CSSProperties, type ReactNode, type Ref } from "react";
 import { haptic } from "../lib/telegram";
 import { copyText } from "../lib/copy";
 
@@ -275,6 +275,121 @@ export function TileNav<T extends string>({
               <VenueMark venue={o.venue} size={13} />
             </span>
           ) : null}
+          <span className="v-ic" aria-hidden="true">{o.ic}</span>
+          <span>{o.label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+/**
+ * Лента площадок: выбранная в середине и крупнее, соседние по краям мельче.
+ *
+ * Плитками это работало, пока бирж было восемь: дальше сетка занимала
+ * пол-экрана, и список строк, ради которого раздел и открывают, уезжал вниз.
+ * Лента держит высоту одного ряда при любом числе площадок, а разница в
+ * размере сразу говорит, какая выбрана и что соседние доступны сдвигом.
+ *
+ * Выбор идёт за прокруткой: докрутил — выбрал. Поэтому изменение приходит не
+ * на каждый пиксель, а когда лента остановилась: иначе, пока палец ведёт от
+ * Binance к Bybit, приложение успело бы сходить за двумя лишними досками.
+ */
+export function VenueReel<T extends string>({
+  value,
+  options,
+  onChange,
+  label,
+}: {
+  value: T;
+  options: { id: T; ic: ReactNode; label: ReactNode }[];
+  onChange: (id: T) => void;
+  label?: string;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const idle = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* Прокрутка сама выбрала площадку — подводить ленту к ней не надо: она уже
+     там, и повторный доводчик дёргал бы её под пальцем. */
+  const scrolled = useRef(false);
+  const first = useRef(true);
+  const at = Math.max(0, options.findIndex((o) => o.id === value));
+
+  /* Считаем по видимым прямоугольникам, а не по scrollLeft с offsetLeft: в
+     арабской раскладке лента идёт справа налево, начало прокрутки там ноль, а
+     дальше уходит в минус — арифметика по числам ползла, и лента выбирала не
+     ту площадку. Сдвиг относительно середины одинаков в обе стороны. */
+  const shift = (i: number) => {
+    const el = box.current;
+    const card = el?.children[i] as HTMLElement | undefined;
+    if (!el || !card) return 0;
+    const box0 = el.getBoundingClientRect();
+    const own = card.getBoundingClientRect();
+    return own.left + own.width / 2 - (box0.left + box0.width / 2);
+  };
+
+  const center = (i: number, smooth: boolean) => {
+    const by = shift(i);
+    if (!box.current || Math.abs(by) < 1) return;
+    box.current.scrollBy({ left: by, behavior: smooth ? "smooth" : "auto" });
+  };
+
+  useEffect(() => {
+    if (scrolled.current) {
+      scrolled.current = false;
+      return;
+    }
+    center(at, !first.current);
+    first.current = false;
+    // Ширины плиток известны только после первой отрисовки: на холодном
+    // запуске этот вызов случается раньше, чем лента получила размеры.
+  }, [at, options.length]);
+
+  const settle = () => {
+    const el = box.current;
+    if (!el) return;
+    let best = at;
+    let near = Infinity;
+    options.forEach((_, i) => {
+      const d = Math.abs(shift(i));
+      if (d < near) {
+        near = d;
+        best = i;
+      }
+    });
+    const pick = options[best];
+    if (!pick || pick.id === value) return;
+    scrolled.current = true;
+    haptic("select");
+    onChange(pick.id);
+  };
+
+  return (
+    <nav
+      className="reel"
+      role="tablist"
+      aria-label={label}
+      ref={box}
+      onScroll={() => {
+        if (idle.current) clearTimeout(idle.current);
+        idle.current = setTimeout(settle, 120);
+      }}
+    >
+      {options.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          role="tab"
+          aria-selected={o.id === value}
+          className={o.id === value ? "on" : undefined}
+          onClick={() => {
+            if (o.id === value) {
+              center(options.indexOf(o), true);
+              return;
+            }
+            haptic("select");
+            onChange(o.id);
+          }}
+        >
           <span className="v-ic" aria-hidden="true">{o.ic}</span>
           <span>{o.label}</span>
         </button>
