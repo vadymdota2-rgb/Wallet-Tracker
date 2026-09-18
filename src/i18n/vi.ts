@@ -293,7 +293,6 @@ export const vi: Dict = {
   op_cancelled: "❌ Đã hủy thao tác.",
   pay_address: "Địa chỉ người nhận",
   pay_amount: "Số tiền",
-  pay_bot_note: "Bạn cũng có thể mua Premium trong chat với bot.",
   pay_cancelled: "Đã hủy thanh toán",
   pay_failed: "Thanh toán không thành công",
   pay_hour: "Hóa đơn có hiệu lực trong một giờ",

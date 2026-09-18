@@ -293,7 +293,6 @@ export const zh: Dict = {
   op_cancelled: "❌ 操作已取消。",
   pay_address: "收款地址",
   pay_amount: "金额",
-  pay_bot_note: "同样的高级版也可以在机器人聊天中购买。",
   pay_cancelled: "支付已取消",
   pay_failed: "支付未完成",
   pay_hour: "该账单一小时内有效",

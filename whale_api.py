@@ -77,8 +77,12 @@ PREMIUM_PAYLOAD = "premium_30_days"
 # Цена в USDT. Отдельным числом, а не пересчётом звёзд: курс звезды плавает,
 # а ценник в долларах человек видит заранее и без сюрпризов.
 PREMIUM_USDT = float(os.environ.get("WHALE_PREMIUM_USDT", "3.99"))
-# Кошелёк, на который приходит USDT. Тот же, что у бота для TON.
-TON_WALLET = os.environ.get("TON_WALLET_ADDRESS", "")
+# Кошелёк, на который приходят деньги. Тот же самый и тем же способом, что в
+# tonWallet() из premium.cpp: переменная окружения, а если её нет — адрес по
+# умолчанию. Требовать переменную только здесь нельзя: у бота и у API разные
+# службы, и приложение осталось бы без кнопки оплаты на ровном месте.
+TON_WALLET = (os.environ.get("TON_WALLET_ADDRESS", "").strip()
+              or "UQDAiNYvy2KUIwjEcgD1ZxPVw-CPwdk4WbBQwpVsQQ5jsO6o")
 # USD₮ в сети TON: мастер-контракт и шесть знаков после запятой.
 USDT_MASTER = "0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE"
 USDT_MASTER_UI = "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs"

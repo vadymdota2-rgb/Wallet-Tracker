@@ -293,7 +293,6 @@ export const ko: Dict = {
   op_cancelled: "❌ 작업이 취소되었습니다.",
   pay_address: "받는 주소",
   pay_amount: "금액",
-  pay_bot_note: "같은 프리미엄을 봇 채팅에서도 구매할 수 있습니다.",
   pay_cancelled: "결제가 취소되었습니다",
   pay_failed: "결제가 완료되지 않았습니다",
   pay_hour: "결제 요청은 1시간 동안 유효합니다",

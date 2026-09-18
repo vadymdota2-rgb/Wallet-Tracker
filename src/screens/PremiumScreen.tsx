@@ -16,13 +16,12 @@ import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import { t } from "../i18n/t";
 import { num } from "../lib/format";
-import { haptic, webApp } from "../lib/telegram";
+import { haptic } from "../lib/telegram";
 import { copyText } from "../lib/copy";
 import { toast } from "../components/Toast";
-import { buyStars, payUsdt, usdtInvoice, type PayEnd, type UsdtInvoice } from "../lib/pay";
+import { buyStars, payUsdt, usdtInvoice, warmWallet, type PayEnd, type UsdtInvoice } from "../lib/pay";
 import { Action, Card, Row, SectionTitle } from "../components/ui";
 
-const BOT = "https://t.me/WalletTrackerOfficial";
 
 type Step = "" | "wallet" | "sign" | "wait";
 
@@ -41,6 +40,11 @@ export function PremiumScreen() {
   const [inv, setInv] = useState<UsdtInvoice | null>(null);
   const alive = useRef(true);
   useEffect(() => () => void (alive.current = false), []);
+  // Кошельки грузятся заранее: нажатие должно открывать кошелёк сразу, а не
+  // ждать, пока к телефону приедет библиотека.
+  useEffect(() => {
+    if (pay.ton) warmWallet();
+  }, [pay.ton]);
 
   const perks: Parameters<typeof t>[1][] = [
     "help_premium_1",
@@ -154,21 +158,6 @@ export function PremiumScreen() {
         </Card>
       ) : null}
 
-      <Card>
-        <p className="note dim">{t(lang, "pay_bot_note")}</p>
-        <div className="stack-actions">
-          <Action
-            kind="ghost"
-            onClick={() => {
-              const w = webApp();
-              if (w?.openTelegramLink) w.openTelegramLink(BOT);
-              else window.open(BOT, "_blank", "noopener");
-            }}
-          >
-            {t(lang, "ui_open_bot")}
-          </Action>
-        </div>
-      </Card>
     </Frame>
   );
 }

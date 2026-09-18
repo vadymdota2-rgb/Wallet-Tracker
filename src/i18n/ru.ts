@@ -293,7 +293,6 @@ export const ru: Dict = {
   op_cancelled: "❌ Операция отменена.",
   pay_address: "Адрес получателя",
   pay_amount: "Сумма",
-  pay_bot_note: "Тот же премиум можно купить в чате с ботом.",
   pay_cancelled: "Оплата отменена",
   pay_failed: "Оплата не прошла",
   pay_hour: "Счёт действует час",

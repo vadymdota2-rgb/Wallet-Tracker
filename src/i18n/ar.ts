@@ -293,7 +293,6 @@ export const ar: Dict = {
   op_cancelled: "❌ تم إلغاء العملية.",
   pay_address: "عنوان المستلم",
   pay_amount: "المبلغ",
-  pay_bot_note: "يمكن شراء البريميوم نفسه من محادثة البوت.",
   pay_cancelled: "تم إلغاء الدفع",
   pay_failed: "لم تتم عملية الدفع",
   pay_hour: "الفاتورة صالحة لمدة ساعة",

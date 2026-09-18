@@ -293,7 +293,6 @@ export const uk: Dict = {
   op_cancelled: "❌ Операцію скасовано.",
   pay_address: "Адреса отримувача",
   pay_amount: "Сума",
-  pay_bot_note: "Той самий преміум можна купити в чаті з ботом.",
   pay_cancelled: "Оплату скасовано",
   pay_failed: "Оплата не пройшла",
   pay_hour: "Рахунок дійсний годину",

@@ -86,6 +86,12 @@ async function wallet(): Promise<Ui> {
   return ui;
 }
 
+/** Тянем библиотеку кошельков заранее, пока человек читает, что даёт
+ *  подписка: иначе первое нажатие ждёт сто тридцать килобайт. */
+export function warmWallet(): void {
+  void wallet().catch(() => {});
+}
+
 /** Ждём, пока кошелёк подключится: окно выбора закрывается раньше связи. */
 function waitWallet(u: Ui, ms: number): Promise<string> {
   if (u.account?.address) return Promise.resolve(u.account.address);

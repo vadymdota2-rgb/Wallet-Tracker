@@ -293,7 +293,6 @@ export const id: Dict = {
   op_cancelled: "❌ Operasi dibatalkan.",
   pay_address: "Alamat penerima",
   pay_amount: "Jumlah",
-  pay_bot_note: "Premium yang sama bisa dibeli di chat bot.",
   pay_cancelled: "Pembayaran dibatalkan",
   pay_failed: "Pembayaran tidak berhasil",
   pay_hour: "Tagihan berlaku satu jam",

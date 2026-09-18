@@ -293,7 +293,6 @@ export const tr: Dict = {
   op_cancelled: "❌ İşlem iptal edildi.",
   pay_address: "Alıcı adresi",
   pay_amount: "Tutar",
-  pay_bot_note: "Aynı Premium bot sohbetinden de alınabilir.",
   pay_cancelled: "Ödeme iptal edildi",
   pay_failed: "Ödeme tamamlanmadı",
   pay_hour: "Fatura bir saat geçerlidir",

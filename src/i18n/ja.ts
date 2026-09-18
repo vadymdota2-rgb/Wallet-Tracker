@@ -293,7 +293,6 @@ export const ja: Dict = {
   op_cancelled: "❌ 操作をキャンセルしました。",
   pay_address: "送金先アドレス",
   pay_amount: "金額",
-  pay_bot_note: "同じプレミアムはボットのチャットでも購入できます。",
   pay_cancelled: "支払いはキャンセルされました",
   pay_failed: "支払いが完了しませんでした",
   pay_hour: "この請求は1時間有効です",

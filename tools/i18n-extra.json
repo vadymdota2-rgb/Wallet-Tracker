@@ -485,24 +485,6 @@
     "ar": "المبلغ",
     "pl": "Kwota"
   },
-  "pay_bot_note": {
-    "en": "The same Premium can be bought in the bot chat.",
-    "ru": "Тот же премиум можно купить в чате с ботом.",
-    "uk": "Той самий преміум можна купити в чаті з ботом.",
-    "vi": "Bạn cũng có thể mua Premium trong chat với bot.",
-    "ko": "같은 프리미엄을 봇 채팅에서도 구매할 수 있습니다.",
-    "zh": "同样的高级版也可以在机器人聊天中购买。",
-    "ja": "同じプレミアムはボットのチャットでも購入できます。",
-    "es": "El mismo Premium se puede comprar en el chat del bot.",
-    "pt": "O mesmo Premium pode ser comprado no chat do bot.",
-    "fr": "Le même Premium s’achète aussi dans le chat du bot.",
-    "de": "Dasselbe Premium gibt es auch im Bot-Chat.",
-    "tr": "Aynı Premium bot sohbetinden de alınabilir.",
-    "hi": "यही प्रीमियम बॉट चैट में भी खरीदा जा सकता है।",
-    "id": "Premium yang sama bisa dibeli di chat bot.",
-    "ar": "يمكن شراء البريميوم نفسه من محادثة البوت.",
-    "pl": "Ten sam premium można kupić w czacie z botem."
-  },
   "pay_cancelled": {
     "en": "Payment cancelled",
     "ru": "Оплата отменена",

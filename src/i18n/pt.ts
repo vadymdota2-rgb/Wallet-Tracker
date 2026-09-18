@@ -293,7 +293,6 @@ export const pt: Dict = {
   op_cancelled: "❌ Operação cancelada.",
   pay_address: "Endereço do destinatário",
   pay_amount: "Valor",
-  pay_bot_note: "O mesmo Premium pode ser comprado no chat do bot.",
   pay_cancelled: "Pagamento cancelado",
   pay_failed: "O pagamento não foi concluído",
   pay_hour: "A cobrança vale por uma hora",

@@ -293,7 +293,6 @@ export const en = {
   op_cancelled: "❌ Operation cancelled.",
   pay_address: "Recipient address",
   pay_amount: "Amount",
-  pay_bot_note: "The same Premium can be bought in the bot chat.",
   pay_cancelled: "Payment cancelled",
   pay_failed: "Payment did not go through",
   pay_hour: "The invoice is valid for an hour",

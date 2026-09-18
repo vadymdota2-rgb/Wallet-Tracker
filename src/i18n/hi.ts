@@ -293,7 +293,6 @@ export const hi: Dict = {
   op_cancelled: "❌ कार्रवाई रद्द।",
   pay_address: "प्राप्तकर्ता का पता",
   pay_amount: "राशि",
-  pay_bot_note: "यही प्रीमियम बॉट चैट में भी खरीदा जा सकता है।",
   pay_cancelled: "भुगतान रद्द किया गया",
   pay_failed: "भुगतान पूरा नहीं हुआ",
   pay_hour: "यह इनवॉइस एक घंटे तक मान्य है",
