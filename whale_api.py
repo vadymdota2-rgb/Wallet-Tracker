@@ -2248,11 +2248,14 @@ def load_perp_rank(hl: sqlite3.Connection | None, days: int = 30) -> dict:
         wins = int(r["wins"] or 0)
         lev_v = float(r["lev"] or 0)
         marg = margins.get(r["wallet"] or "", 0.0)
+        # Сотня долларов маржи — порог здравого смысла: на меньшей одна
+        # удачная сделка даёт тысячи процентов, и доска превращается в
+        # витрину случайностей.
         mapped.append(
             {
                 "a": r["wallet"] or "",
                 "pnl": pnl,
-                "roi": (100.0 * pnl / marg) if marg > 0 else None,
+                "roi": (100.0 * pnl / marg) if marg >= 100.0 else None,
                 "win": int(round(100.0 * wins / tr)) if tr else 0,
                 "tr": tr,
                 "dd": 0,
@@ -2262,9 +2265,14 @@ def load_perp_rank(hl: sqlite3.Connection | None, days: int = 30) -> dict:
         )
     return {
         "pnl": list(mapped),
-        # Пустой список честнее выдуманного порядка: экран покажет
-        # «данных нет», а не мнимый рейтинг.
-        "roi": [],
+        # Доска ROI была пуста, пока знаменателя не существовало: делить
+        # прибыль оказалось не на что, и вместо рейтинга получался выдуманный
+        # порядок. Теперь маржа считается обходом филов, и доска собирается из
+        # тех строк, где её удалось посчитать. Кошельки без маржи не
+        # обнуляются, а не попадают на доску вовсе: ноль там означал бы
+        # «торговал без прибыли», а это неправда — про них просто нечего
+        # сказать.
+        "roi": sorted((r for r in mapped if r["roi"] is not None), key=lambda x: -x["roi"]),
         "win": sorted(mapped, key=lambda x: -x["win"]),
         "act": sorted(mapped, key=lambda x: -x["tr"]),
     }
