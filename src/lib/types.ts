@@ -417,6 +417,15 @@ export interface AlertRow {
   notional: number;
 }
 
+/** Чем и почём продаётся подписка — числа приходят с сервера. */
+export interface PayInfo {
+  stars: number;
+  usdt: number;
+  /** Настроен ли кошелёк: без него кнопку USDT показывать нечестно. */
+  ton: boolean;
+  days: number;
+}
+
 export interface Bootstrap {
   ok: boolean;
   live: boolean;
@@ -434,6 +443,7 @@ export interface Bootstrap {
   rotSum?: RotSums;
   coins?: Coins;
   marketFeed?: FeedRow[];
+  pay?: PayInfo;
   /** Список кусков, которые сервер не успел собрать. */
   partial?: string[];
   cachedAt?: number;

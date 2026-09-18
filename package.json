@@ -12,11 +12,13 @@
     "i18n": "python3 tools/sync-i18n.py ../WhaleScanner"
   },
   "dependencies": {
+    "@tonconnect/ui": "^3.0.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@ton/core": "^0.63.1",
     "@types/node": "^26.4.1",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

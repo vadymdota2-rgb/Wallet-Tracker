@@ -7,7 +7,7 @@
 import { create } from "zustand";
 import type {
   AlertRow, Bootstrap, Coins, FeedRow, Flow, Fund, FundN, Ls, Me, Rank, RotSums, Sonar, Trades,
-  Wallet,
+  Wallet, PayInfo,
 } from "../lib/types";
 import { tgUserId } from "../lib/telegram";
 
@@ -60,6 +60,8 @@ interface LiveState {
   fundN: FundN;
   rotSum: RotSums;
   coins: Coins;
+  /** Цены подписки и доступные способы оплаты — приходят с сервера. */
+  pay: PayInfo;
 
   apply(data: Bootstrap): void;
   /** Позиции и остаток одного кошелька, пришедшие отдельным запросом. */
@@ -77,12 +79,16 @@ interface LiveState {
  * Снимок помечен номером пользователя: на общем телефоне чужой не подойдёт.
  */
 const SNAP = "wt-snapshot-v1";
+/* Пока сервер не ответил, показываем цены прошлого запуска, а их нет —
+   значит и кнопок оплаты нет: выдумывать ценник нельзя. */
+const EMPTY_PAY: PayInfo = { stars: 0, usdt: 0, ton: false, days: 30 };
+
 const SNAP_TTL = 24 * 3600_000;
 
 type Snapshot = Pick<
   LiveState,
   "syncedAt" | "me" | "wallets" | "alerts" | "feed" | "marketFeed" | "flow" | "ls"
-  | "rank" | "sonar" | "trades" | "fund" | "fundN" | "rotSum" | "coins"
+  | "rank" | "sonar" | "trades" | "fund" | "fundN" | "rotSum" | "coins" | "pay"
 > & { uid: string };
 
 function readSnap(): Snapshot | null {
@@ -123,6 +129,7 @@ function writeSnap(s: LiveState): void {
       me: s.me, wallets: s.wallets, alerts: s.alerts, feed: s.feed,
       marketFeed: s.marketFeed, flow: s.flow, ls: s.ls, rank: s.rank, sonar: s.sonar,
       trades: s.trades, fund: s.fund, fundN: s.fundN, rotSum: s.rotSum, coins: s.coins,
+      pay: s.pay,
     };
     localStorage.setItem(SNAP, JSON.stringify(snap));
   } catch {
@@ -180,6 +187,7 @@ export const useLive = create<LiveState>((set, get) => ({
   fundN: snap?.fundN ?? {},
   rotSum: snap?.rotSum ?? {},
   coins: snap?.coins ?? {},
+  pay: snap?.pay ?? EMPTY_PAY,
 
   apply: (d) => {
     set((prev) => ({
@@ -204,6 +212,7 @@ export const useLive = create<LiveState>((set, get) => ({
       fundN: some(d.fundN) ? d.fundN! : prev.fundN,
       rotSum: some(d.rotSum) ? d.rotSum! : prev.rotSum,
       coins: some(d.coins) ? d.coins! : prev.coins,
+      pay: d.pay ?? prev.pay,
     }));
     writeSnap(get());
   },

@@ -29,6 +29,11 @@ export interface WebApp {
   setBackgroundColor?(color: string): void;
   HapticFeedback?: HapticFeedback;
   BackButton?: BackButton;
+  /** Окно оплаты звёздами. Ответ — «paid», «cancelled», «failed» или
+   *  «pending»: платёж принят, но ещё идёт. */
+  openInvoice?(url: string, cb: (status: string) => void): void;
+  openTelegramLink?(url: string): void;
+  openLink?(url: string, opts?: { try_instant_view?: boolean }): void;
 }
 
 declare global {

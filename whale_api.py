@@ -9,6 +9,7 @@ import json
 import math
 import os
 import re
+import secrets
 import sqlite3
 import sys
 import threading
@@ -68,6 +69,26 @@ PREMIUM_MAX_WALLETS = 50
 # одинаково глубоко, иначе премиум значит разное в двух местах.
 RANK_FREE_DEPTH = 30
 RANK_MAX_DEPTH = 100
+# Цена и срок — те же, что в premium.cpp: бот и приложение обязаны продавать
+# одно и то же, иначе «премиум» значит разное в двух местах.
+PREMIUM_DAYS = 30
+PREMIUM_STARS = 250
+PREMIUM_PAYLOAD = "premium_30_days"
+# Цена в USDT. Отдельным числом, а не пересчётом звёзд: курс звезды плавает,
+# а ценник в долларах человек видит заранее и без сюрпризов.
+PREMIUM_USDT = float(os.environ.get("WHALE_PREMIUM_USDT", "3.99"))
+# Кошелёк, на который приходит USDT. Тот же, что у бота для TON.
+TON_WALLET = os.environ.get("TON_WALLET_ADDRESS", "")
+# USD₮ в сети TON: мастер-контракт и шесть знаков после запятой.
+USDT_MASTER = "0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE"
+USDT_MASTER_UI = "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs"
+USDT_DECIMALS = 6
+# Счёт живёт час — столько же, сколько у бота. Оплату по нему принимаем
+# сутки: человек, заплативший с опозданием, не должен терять деньги.
+PAY_TTL = 3600
+PAY_GRACE = 86400
+TONCENTER = "https://toncenter.com/api/v3/"
+TONCENTER_KEY = os.environ.get("TONCENTER_API_KEY", "")
 MIN_THRESHOLD_USD = 50.0
 MAX_THRESHOLD_USD = 1_000_000_000.0
 # Потолок запросов с одного адреса: перебор chat_id упирается в него.
@@ -3396,6 +3417,228 @@ def fund_aster() -> list:
     return out
 
 
+# --- Оплата премиума из приложения ------------------------------------------
+#
+# Своей выдачи подписки здесь нет намеренно: она уже написана в premium.cpp и
+# должна остаться в одном месте. Бот проверяет оплату, продлевает срок и
+# пишет платёж в историю — что для звёзд, что для USD₮.
+#
+# Звёзды: счёт создаёт этот API (createInvoiceLink), подтверждение Telegram
+# шлёт боту — он и выдаёт подписку, как при покупке из чата.
+#
+# USD₮: счёт кладётся в таблицу ton_invoices бота с пометкой kind='usdt', а
+# приход денег видит его же опрос (pollUsdtPayments) и выдаёт подписку.
+
+
+def tg_api(method: str, data: dict, timeout: float = 15.0):
+    """Вызов Bot API. Ошибка сети или отказ Telegram — это None."""
+    if not BOT_TOKEN:
+        return None
+    body = json.dumps(data).encode()
+    req = urllib.request.Request(
+        f"https://api.telegram.org/bot{BOT_TOKEN}/{method}",
+        data=body, headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            out = json.loads(r.read().decode())
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError, OSError) as e:
+        sys.stderr.write(f"[api] {method}: {e}\n")
+        return None
+    if not isinstance(out, dict) or not out.get("ok"):
+        sys.stderr.write(f"[api] {method}: {str(out)[:200]}\n")
+        return None
+    return out.get("result")
+
+
+def usdt_ready(con: sqlite3.Connection | None) -> bool:
+    """Готов ли бот принимать USD₮.
+
+    Признак — столбец kind в его таблице счетов: он появляется вместе с
+    опросом переводов USD₮. Пока бот старый, кнопку показывать нельзя: счёт
+    выставился бы, деньги ушли, а подписку выдать было бы некому.
+    """
+    if not TON_WALLET or not con or not table_exists(con, "ton_invoices"):
+        return False
+    return "kind" in cols(con, "ton_invoices")
+
+
+def pay_memo() -> str:
+    """Памятка к переводу. Буквы без похожих друг на друга: человек иногда
+    перебивает её руками, и «0» с «O» в этот момент стоят денег."""
+    abc = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
+    return "WT-" + "".join(secrets.choice(abc) for _ in range(5))
+
+
+# Названия счёта на языке человека. Их всего два, и тащить ради них весь
+# словарь приложения незачем — но и по-английски человеку, который выбрал
+# русский, счёт показывать не дело.
+PAY_TEXT = {
+    "title": {
+        "en": "Wallet Tracker Premium", "ru": "Wallet Tracker Премиум",
+        "uk": "Wallet Tracker Преміум", "es": "Wallet Tracker Premium",
+        "pt": "Wallet Tracker Premium", "de": "Wallet Tracker Premium",
+        "fr": "Wallet Tracker Premium", "tr": "Wallet Tracker Premium",
+        "pl": "Wallet Tracker Premium", "id": "Wallet Tracker Premium",
+        "vi": "Wallet Tracker Premium", "ja": "Wallet Tracker プレミアム",
+        "ko": "Wallet Tracker 프리미엄", "zh": "Wallet Tracker 高级版",
+        "hi": "Wallet Tracker प्रीमियम", "ar": "Wallet Tracker بريميوم",
+    },
+    "desc": {
+        "en": "30 days: 50 wallets, Hyperliquid futures, full Top-100",
+        "ru": "30 дней: 50 кошельков, фьючерсы Hyperliquid, полный Топ-100",
+        "uk": "30 днів: 50 гаманців, ф’ючерси Hyperliquid, повний Топ-100",
+        "es": "30 días: 50 carteras, futuros de Hyperliquid, Top-100 completo",
+        "pt": "30 dias: 50 carteiras, futuros da Hyperliquid, Top-100 completo",
+        "de": "30 Tage: 50 Wallets, Hyperliquid-Futures, komplette Top-100",
+        "fr": "30 jours : 50 portefeuilles, futures Hyperliquid, Top-100 complet",
+        "tr": "30 gün: 50 cüzdan, Hyperliquid vadeli işlemler, tam Top-100",
+        "pl": "30 dni: 50 portfeli, kontrakty Hyperliquid, pełny Top-100",
+        "id": "30 hari: 50 dompet, futures Hyperliquid, Top-100 penuh",
+        "vi": "30 ngày: 50 ví, futures Hyperliquid, Top-100 đầy đủ",
+        "ja": "30日間：ウォレット50個、Hyperliquid先物、トップ100すべて",
+        "ko": "30일: 지갑 50개, Hyperliquid 선물, 전체 Top-100",
+        "zh": "30 天：50 个钱包、Hyperliquid 合约、完整前 100",
+        "hi": "30 दिन: 50 वॉलेट, Hyperliquid फ्यूचर्स, पूरा टॉप-100",
+        "ar": "30 يومًا: 50 محفظة، عقود Hyperliquid، أفضل 100 كاملة",
+    },
+}
+
+
+def t_pay(lang: str, key: str) -> str:
+    box = PAY_TEXT[key]
+    return box.get((lang or "en").lower(), box["en"])
+
+
+def pay_stars(chat: str, lang: str) -> dict:
+    """Ссылка на счёт в звёздах.
+
+    Полезная нагрузка и сумма — ровно те, что ждёт бот: он проверяет их у
+    себя и с чужим счётом подписку не выдаст.
+    """
+    link = tg_api("createInvoiceLink", {
+        "title": t_pay(lang, "title"),
+        "description": t_pay(lang, "desc"),
+        "payload": PREMIUM_PAYLOAD,
+        # Для звёзд поставщик не нужен, и поле обязано быть пустым.
+        "provider_token": "",
+        "currency": "XTR",
+        "prices": [{"label": t_pay(lang, "title"), "amount": PREMIUM_STARS}],
+    })
+    if not isinstance(link, str) or not link:
+        return {"ok": False, "error": "invoice_failed"}
+    return {"ok": True, "link": link, "stars": PREMIUM_STARS, "days": PREMIUM_DAYS}
+
+
+def pay_usdt(chat: str) -> dict:
+    """Счёт на USD₮: памятка, сумма и кошелёк.
+
+    Строка кладётся в таблицу счетов бота — ту же, что он завёл для TON, с
+    пометкой вида. Проверять оплату и выдавать подписку будет он.
+
+    Пока счёт жив, повторный запрос отдаёт тот же: два счёта на одного
+    человека означали бы, что один перевод закрывает не тот из них.
+    """
+    con = open_db(DB, write=True)
+    if not con:
+        return {"ok": False, "error": "db_missing"}
+    try:
+        if not usdt_ready(con):
+            return {"ok": False, "error": "ton_off"}
+        units = int(round(PREMIUM_USDT * (10 ** USDT_DECIMALS)))
+        row = con.execute(
+            "SELECT memo, nano_amount, created_at FROM ton_invoices "
+            "WHERE chat_id=? AND status='active' AND kind='usdt' AND created_at>? "
+            "ORDER BY created_at DESC LIMIT 1",
+            (chat, now() - PAY_TTL)).fetchone()
+        if row:
+            memo, units, made = row["memo"], int(row["nano_amount"]), int(row["created_at"])
+        else:
+            memo, made = pay_memo(), now()
+            con.execute(
+                "INSERT INTO ton_invoices(memo, chat_id, nano_amount, status, created_at, kind) "
+                "VALUES(?,?,?,'active',?,'usdt')", (memo, chat, units, made))
+            con.commit()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] счёт USD₮: {e}\n")
+        return {"ok": False, "error": "db_error"}
+    finally:
+        con.close()
+    return {
+        "ok": True,
+        "memo": memo,
+        "units": units,
+        "amount": units / (10 ** USDT_DECIMALS),
+        "wallet": TON_WALLET,
+        "jetton": USDT_MASTER_UI,
+        "decimals": USDT_DECIMALS,
+        "until": made + PAY_TTL,
+        "days": PREMIUM_DAYS,
+    }
+
+
+def pay_jetton(owner: str) -> dict:
+    """Адрес кошелька USD₮ у плательщика.
+
+    Перевод жетона отправляется не получателю, а собственному жетонному
+    кошельку отправителя — он и рассылает дальше. Адрес считает сеть, и
+    спрашиваем её мы, а не приложение: ходить наружу из браузера незачем.
+    """
+    own = (owner or "").strip()
+    # Кошелёк отдаёт сырой вид (`0:…`), сервер — человеческий: годятся оба.
+    if not (re.fullmatch(r"[A-Za-z0-9_-]{48}", own) or re.fullmatch(r"-?\d+:[0-9a-fA-F]{64}", own)):
+        return {"ok": False, "error": "bad_owner"}
+    url = (f"{TONCENTER}jetton/wallets?owner_address={urllib.parse.quote(own)}"
+           f"&jetton_address={USDT_MASTER_UI}&limit=1")
+    if TONCENTER_KEY:
+        url += f"&api_key={TONCENTER_KEY}"
+    data = get_json(url, timeout=20.0)
+    rows = (data or {}).get("jetton_wallets")
+    if not isinstance(rows, list) or not rows:
+        # Кошелька USD₮ нет — значит этих денег у человека тоже нет.
+        return {"ok": False, "error": "no_usdt"}
+    book = (data or {}).get("address_book") or {}
+    raw = str(rows[0].get("address") or "")
+    nice = (book.get(raw) or {}).get("user_friendly") or raw
+    return {"ok": True, "address": nice}
+
+
+def pay_check(chat: str) -> dict:
+    """Что со счётом и с подпиской.
+
+    Оплату находит бот своим опросом раз в двадцать секунд — здесь только
+    смотрим, что он уже записал.
+    """
+    con = open_db(DB)
+    if not con:
+        return {"ok": False, "error": "db_missing"}
+    try:
+        status, until = "none", 0
+        if table_exists(con, "ton_invoices") and "kind" in cols(con, "ton_invoices"):
+            row = con.execute(
+                "SELECT status, created_at FROM ton_invoices "
+                "WHERE chat_id=? AND kind='usdt' ORDER BY created_at DESC LIMIT 1",
+                (chat,)).fetchone()
+            if row:
+                status = row["status"]
+                until = int(row["created_at"]) + PAY_TTL
+                if status == "active" and until < now():
+                    status = "expired"
+        prem = is_premium(con, chat)
+        row = con.execute(
+            "SELECT premium_expire FROM users WHERE chat_id=?", (chat,)).fetchone() if prem else None
+        return {
+            "ok": True,
+            "status": status,
+            "plan": "premium" if prem else "free",
+            "premUntil": int(row["premium_expire"]) * 1000 if row else 0,
+            "until": until,
+        }
+    except sqlite3.Error as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        con.close()
+
+
 FUND_FETCH = {
     "bingx": fund_bingx,
     "bitget": fund_bitget,
@@ -4489,6 +4732,15 @@ def bootstrap(chat: str) -> dict:
             "rotSum": rot_sum,
             "coins": coins,
             "marketFeed": market_feed,
+            # Чем и почём торгуем подписку. Цены живут на сервере: менять их
+            # пересборкой приложения — значит держать два источника правды, а
+            # кнопку «оплатить в USDT» без кошелька показывать нечестно.
+            "pay": {
+                "stars": PREMIUM_STARS,
+                "usdt": PREMIUM_USDT,
+                "ton": usdt_ready(cur),
+                "days": PREMIUM_DAYS,
+            },
         }
         if errors:
             out["partial"] = errors[:8]
@@ -5026,6 +5278,22 @@ class Handler(BaseHTTPRequestHandler):
             body = self._body()
             if not chat:
                 self._json(401, {"ok": False, "error": "unauthorized"})
+                return
+            if path in ("/api/pay/stars", "/api/pay/usdt", "/api/pay/check", "/api/pay/jetton"):
+                lang = (body.get("lang") or "en")[:5]
+                if path == "/api/pay/stars":
+                    res = pay_stars(chat, lang)
+                elif path == "/api/pay/usdt":
+                    res = pay_usdt(chat)
+                elif path == "/api/pay/jetton":
+                    res = pay_jetton(str(body.get("owner") or ""))
+                else:
+                    res = pay_check(chat)
+                    if res.get("plan") == "premium":
+                        # Подписка только что включилась — старая выгрузка
+                        # человека показывала бы замок ещё полминуты.
+                        boot_drop(chat)
+                self._json(200 if res.get("ok") else 400, res)
                 return
             kind = {
                 "/api/wallets": "add",
