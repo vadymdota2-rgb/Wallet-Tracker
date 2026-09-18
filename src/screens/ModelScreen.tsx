@@ -12,7 +12,7 @@ import { Card, Row, SectionTitle, Tiles } from "../components/ui";
 
 export function ModelScreen() {
   const lang = useApp((s) => s.lang);
-  const sonar = useLive((s) => s.sonar);
+  const cortex = useLive((s) => s.cortex);
 
   return (
     <Frame title={t(lang, "ai_st_title")}>
@@ -23,8 +23,8 @@ export function ModelScreen() {
         <SectionTitle note={t(lang, "ai_st_samples")}>{t(lang, "ai_st_ready")}</SectionTitle>
         <Tiles
           items={[
-            { label: t(lang, "ai_spot"), value: `${num(sonar.ready.spot)} / ${num(sonar.need)}` },
-            { label: t(lang, "ai_perp"), value: `${num(sonar.ready.perp)} / ${num(sonar.need)}` },
+            { label: t(lang, "ai_spot"), value: `${num(cortex.ready.spot)} / ${num(cortex.need)}` },
+            { label: t(lang, "ai_perp"), value: `${num(cortex.ready.perp)} / ${num(cortex.need)}` },
           ]}
         />
       </Card>
@@ -32,13 +32,13 @@ export function ModelScreen() {
         <SectionTitle>{t(lang, "ai_st_acc")}</SectionTitle>
         <Row
           title={t(lang, "ai_spot")}
-          sub={sonar.trainedSpot ? t(lang, "ai_mode_model") : t(lang, "ai_st_untrained")}
-          value={sonar.accSpot === null ? "—" : `${sonar.accSpot}%`}
+          sub={cortex.trainedSpot ? t(lang, "ai_mode_model") : t(lang, "ai_st_untrained")}
+          value={cortex.accSpot === null ? "—" : `${cortex.accSpot}%`}
         />
         <Row
           title={t(lang, "ai_perp")}
-          sub={sonar.trainedPerp ? t(lang, "ai_mode_model") : t(lang, "ai_st_untrained")}
-          value={sonar.accPerp === null ? "—" : `${sonar.accPerp}%`}
+          sub={cortex.trainedPerp ? t(lang, "ai_mode_model") : t(lang, "ai_st_untrained")}
+          value={cortex.accPerp === null ? "—" : `${cortex.accPerp}%`}
         />
       </Card>
     </Frame>

@@ -12,14 +12,14 @@ import type { Venue } from "../lib/types";
 export function SignalScreen({ arg }: ScreenProps) {
   const lang = useApp((s) => s.lang);
   const open = useApp((s) => s.open);
-  const sonar = useLive((s) => s.sonar);
+  const cortex = useLive((s) => s.cortex);
 
   const [venueRaw, winRaw, idxRaw] = String(arg || "").split(":");
   const venue = (venueRaw === "perp" ? "perp" : "spot") as Venue;
   const win = Number(winRaw);
   const idx = Number(idxRaw);
 
-  const list = sonar.list.filter((s) => s.venue === venue && s.winH === win);
+  const list = cortex.list.filter((s) => s.venue === venue && s.winH === win);
   const s = list[idx];
 
   if (!s) {

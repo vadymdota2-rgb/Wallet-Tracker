@@ -20,7 +20,7 @@ import { SCREENS } from "./screens/registry";
 import { WalletsTab } from "./screens/WalletsTab";
 import { TopTab } from "./screens/TopTab";
 import { AnalyticsTab } from "./screens/AnalyticsTab";
-import { SonarTab } from "./screens/SonarTab";
+import { CortexTab } from "./screens/CortexTab";
 import { MoreTab } from "./screens/MoreTab";
 import type { DictKey } from "./i18n/types";
 import type { ScreenName, Tab } from "./store/app";
@@ -31,7 +31,7 @@ const TABS: { id: Tab; key: DictKey; glyph: ReactNode }[] = [
   { id: "wallets", key: "menu_my_wallets", glyph: <WalletGlyph /> },
   { id: "top", key: "menu_top_traders", glyph: <TopGlyph /> },
   { id: "analytics", key: "menu_big_trades", glyph: <AnalyticsGlyph /> },
-  { id: "sonar", key: "ai_title", glyph: "📡" },
+  { id: "cortex", key: "ai_title", glyph: "📡" },
   { id: "more", key: "ui_more", glyph: "⋯" },
 ];
 
@@ -71,8 +71,8 @@ function TabBody({ tab }: { tab: Tab }) {
       return <TopTab />;
     case "analytics":
       return <AnalyticsTab />;
-    case "sonar":
-      return <SonarTab />;
+    case "cortex":
+      return <CortexTab />;
     case "more":
       return <MoreTab />;
   }

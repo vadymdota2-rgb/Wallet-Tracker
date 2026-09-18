@@ -4473,6 +4473,11 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
         # приложении нет. Старая сборка, открытая в этот момент, увидит на
         # месте ротации «данных нет» и исправится сама при следующем запуске.
         "rotSum": rot or {},
+        # Sonar переименован в Cortex. Ключ отдаётся под обоими именами:
+        # приложение обновляется само, а API на машине перезапускают
+        # руками — сборка, открытая между этими двумя событиями, должна
+        # читать хоть что-то. Старое имя убрать, когда обновятся все.
+        "cortex": sonar,
         "sonar": sonar,
         "coins": coins,
         "cachedAt": now(),
@@ -4823,6 +4828,8 @@ def bootstrap(chat: str) -> dict:
             "flow": flow,
             "ls": ls,
             "rank": rank,
+            # Оба имени, как выше.
+            "cortex": sonar,
             "sonar": sonar,
             "trades": trades,
             "fund": funding,
@@ -5121,6 +5128,7 @@ class Handler(BaseHTTPRequestHandler):
                         "fund": pub.get("fund") or {},
                         "fundN": pub.get("fundN") or {},
                         "rotSum": pub.get("rotSum") or {},
+                        "cortex": pub.get("sonar") or {},
                         "sonar": pub.get("sonar") or {},
                         "coins": pub.get("coins") or {},
                     })

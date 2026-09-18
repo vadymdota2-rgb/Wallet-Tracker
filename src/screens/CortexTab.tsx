@@ -21,21 +21,21 @@ const WINDOWS: { id: string; key: Parameters<typeof t>[1] }[] = [
   { id: "24", key: "ai_w24" },
 ];
 
-export function SonarTab() {
+export function CortexTab() {
   const lang = useApp((s) => s.lang);
   const open = useApp((s) => s.open);
-  const venue = useApp((s) => s.sonarVenue);
-  const setVenue = useApp((s) => s.setSonarVenue);
-  const win = useApp((s) => s.sonarWin);
-  const setWin = useApp((s) => s.setSonarWin);
+  const venue = useApp((s) => s.cortexVenue);
+  const setVenue = useApp((s) => s.setCortexVenue);
+  const win = useApp((s) => s.cortexWin);
+  const setWin = useApp((s) => s.setCortexWin);
 
-  const sonar = useLive((s) => s.sonar);
+  const cortex = useLive((s) => s.cortex);
 
-  const trained = venue === "perp" ? sonar.trainedPerp : sonar.trainedSpot;
-  const acc = venue === "perp" ? sonar.accPerp : sonar.accSpot;
-  const ready = venue === "perp" ? sonar.ready.perp : sonar.ready.spot;
+  const trained = venue === "perp" ? cortex.trainedPerp : cortex.trainedSpot;
+  const acc = venue === "perp" ? cortex.accPerp : cortex.accSpot;
+  const ready = venue === "perp" ? cortex.ready.perp : cortex.ready.spot;
 
-  const list = sonar.list.filter((s) => s.venue === venue && s.winH === win);
+  const list = cortex.list.filter((s) => s.venue === venue && s.winH === win);
 
   return (
     <>
@@ -58,7 +58,7 @@ export function SonarTab() {
         />
         <Row
           title={trained ? t(lang, "ai_mode_model") : t(lang, "ai_mode_formula")}
-          sub={`${t(lang, "ai_st_ready")} ${num(ready)} / ${num(sonar.need)}`}
+          sub={`${t(lang, "ai_st_ready")} ${num(ready)} / ${num(cortex.need)}`}
           value={acc === null ? "—" : `${acc}%`}
           valueSub={t(lang, "ai_acc")}
           onClick={() => open("model")}
@@ -98,8 +98,8 @@ export function SonarTab() {
       <Card>
         <Row
           title={t(lang, "ai_hist_btn")}
-          sub={`${t(lang, "ai_hist_rate")} ${sonar.hist.of ? `${sonar.hist.hit}%` : "—"}`}
-          value={sonar.hist.of ? num(sonar.hist.of) : "—"}
+          sub={`${t(lang, "ai_hist_rate")} ${cortex.hist.of ? `${cortex.hist.hit}%` : "—"}`}
+          value={cortex.hist.of ? num(cortex.hist.of) : "—"}
           onClick={() => open("history")}
         />
         <p className="note dim">{t(lang, "ai_trade_hint")}</p>

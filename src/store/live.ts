@@ -6,7 +6,7 @@
  */
 import { create } from "zustand";
 import type {
-  AlertRow, Bootstrap, Coins, FeedRow, Flow, Fund, FundN, Ls, Me, Rank, RotSums, Sonar, Trades,
+  AlertRow, Bootstrap, Coins, FeedRow, Flow, Fund, FundN, Ls, Me, Rank, RotSums, Cortex, Trades,
   Wallet, PayInfo,
 } from "../lib/types";
 import { tgUserId } from "../lib/telegram";
@@ -18,7 +18,7 @@ const EMPTY_RANK: Rank = {
   perp: { pnl: [], roi: [], win: [], act: [] },
 };
 
-const EMPTY_SONAR: Sonar = {
+const EMPTY_CORTEX: Cortex = {
   need: 400,
   ready: { spot: 0, perp: 0 },
   trained: false,
@@ -54,7 +54,7 @@ interface LiveState {
   flow: Flow;
   ls: Ls;
   rank: Rank;
-  sonar: Sonar;
+  cortex: Cortex;
   trades: Trades;
   fund: Fund;
   fundN: FundN;
@@ -88,7 +88,7 @@ const SNAP_TTL = 24 * 3600_000;
 type Snapshot = Pick<
   LiveState,
   "syncedAt" | "me" | "wallets" | "alerts" | "feed" | "marketFeed" | "flow" | "ls"
-  | "rank" | "sonar" | "trades" | "fund" | "fundN" | "rotSum" | "coins" | "pay"
+  | "rank" | "cortex" | "trades" | "fund" | "fundN" | "rotSum" | "coins" | "pay"
 > & { uid: string };
 
 function readSnap(): Snapshot | null {
@@ -127,7 +127,7 @@ function writeSnap(s: LiveState): void {
       uid: tgUserId(),
       syncedAt: s.syncedAt,
       me: s.me, wallets: s.wallets, alerts: s.alerts, feed: s.feed,
-      marketFeed: s.marketFeed, flow: s.flow, ls: s.ls, rank: s.rank, sonar: s.sonar,
+      marketFeed: s.marketFeed, flow: s.flow, ls: s.ls, rank: s.rank, cortex: s.cortex,
       trades: s.trades, fund: s.fund, fundN: s.fundN, rotSum: s.rotSum, coins: s.coins,
       pay: s.pay,
     };
@@ -181,7 +181,7 @@ export const useLive = create<LiveState>((set, get) => ({
   flow: snap?.flow ?? {},
   ls: snap?.ls ?? {},
   rank: snap?.rank ?? EMPTY_RANK,
-  sonar: snap?.sonar ?? EMPTY_SONAR,
+  cortex: snap?.cortex ?? EMPTY_CORTEX,
   trades: snap?.trades ?? { spot: [], perp: [] },
   fund: snap?.fund ?? {},
   fundN: snap?.fundN ?? {},
@@ -206,7 +206,8 @@ export const useLive = create<LiveState>((set, get) => ({
       flow: some(d.flow) ? d.flow! : prev.flow,
       ls: some(d.ls) ? d.ls! : prev.ls,
       rank: boards(d.rank) ? d.rank! : prev.rank,
-      sonar: d.sonar?.list?.length || d.sonar?.trained ? d.sonar : prev.sonar,
+      // `sonar` — прежнее имя поля, см. Bootstrap в types.ts.
+      cortex: ((c) => (c?.list?.length || c?.trained ? c : prev.cortex))(d.cortex ?? d.sonar),
       trades: some(d.trades?.spot) || some(d.trades?.perp) ? d.trades! : prev.trades,
       fund: some(d.fund) ? d.fund! : prev.fund,
       fundN: some(d.fundN) ? d.fundN! : prev.fundN,

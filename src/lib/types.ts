@@ -357,7 +357,7 @@ export interface HistItem {
   venue: Venue;
 }
 
-export interface Sonar {
+export interface Cortex {
   need: number;
   ready: { spot: number; perp: number };
   trained: boolean;
@@ -436,7 +436,11 @@ export interface Bootstrap {
   flow?: Flow;
   ls?: Ls;
   rank?: Rank;
-  sonar?: Sonar;
+  cortex?: Cortex;
+  /** Прежнее имя того же поля. Приложение обновляется само, а whale_api на
+   *  машине перезапускают руками: пока этого не сделали, свежая сборка
+   *  читает старый ключ и вкладка не пустеет. Убрать после перезапуска. */
+  sonar?: Cortex;
   trades?: Trades;
   fund?: Fund;
   fundN?: FundN;

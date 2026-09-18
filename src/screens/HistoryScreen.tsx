@@ -13,7 +13,7 @@ import { Card, Empty, Row, SectionTitle, Tiles } from "../components/ui";
 
 export function HistoryScreen() {
   const lang = useApp((s) => s.lang);
-  const hist = useLive((s) => s.sonar.hist);
+  const hist = useLive((s) => s.cortex.hist);
 
   if (!hist.of) {
     return (
