@@ -2143,22 +2143,75 @@ def _read_rank_key(cur, key: str, days: int) -> list:
     return _map_rank(_rank_payload(cur, key), days, RANK_MAX_DEPTH)
 
 
+def perp_closed_usd(px, sz, side, start_pos, notional_nanos) -> float:
+    """Сколько долларов номинала закрыла строка филов.
+
+    Закрыто не больше, чем стояло в позиции: у переворота (лонг в шорт)
+    половина объёма открывает новую, и закрытой она не была. Долив в ту же
+    сторону не закрывает ничего — ноль. Размера позиции или стороны нет —
+    считаем по всему филу: строка сюда попадает как закрывающая.
+    """
+    try:
+        price = float(px or 0)
+        size = float(sz or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    if size <= 0:
+        return 0.0
+    if start_pos is None or side not in ("A", "B"):
+        shut = size
+    else:
+        had = int(start_pos) / NANOS
+        buy = side == "B"
+        if had > 0 and not buy:
+            shut = min(size, had)
+        elif had < 0 and buy:
+            shut = min(size, -had)
+        else:
+            shut = 0.0
+    if shut <= 0:
+        return 0.0
+    if price > 0:
+        return shut * price
+    return usd(notional_nanos) * (shut / size)
+
+
+def perp_close_sql(cset: set, alias: str = "") -> str:
+    """Условие «строка что-то закрыла» — одно на числитель и знаменатель.
+
+    Пока условий было два, доска врала: прибыль считалась по каждому
+    закрытию, а маржа — только по строкам `flat=1` или `dir_code>=5`, то есть
+    по полным закрытиям, переворотам и ликвидациям. Частичное закрытие у бота
+    получает код 3 или 4 (`dirCode()` в hyperliquid_internal.h) и флага
+    `flat` не имеет: прибыль с него шла в числитель, а маржа в знаменатель не
+    попадала. Кто выходит из позиции частями, получал доходность в разы
+    выше настоящей — у 0x767a…ace выходило 31660% вместо 188%.
+    """
+    a = f"{alias}." if alias else ""
+    parts = [f"{a}closed_pnl_nanos != 0"] if "closed_pnl_nanos" in cset else []
+    if "flat" in cset:
+        parts.append(f"{a}flat = 1")
+    if "dir_code" in cset:
+        # 3 и 4 — закрытие лонга и шорта (в том числе частичное), 5 —
+        # переворот, 6..8 — ликвидации.
+        parts.append(f"{a}dir_code >= 3")
+    return "(%s)" % " OR ".join(parts) if parts else "1"
+
+
 def perp_margin(hl: sqlite3.Connection, wallets: list[str] | None, since_ms: int) -> dict[str, float]:
     """Маржа, которой человек рисковал в закрытых сделках, — знаменатель ROI.
 
-    Считаем по самим закрытиям: сколько номинала сделка закрыла, делённое на
+    Считаем по самим закрытиям: сколько номинала строка закрыла, делённое на
     плечо. Закрытый номинал — это размер фила по его цене, но не больше, чем
     было в позиции: у переворота (лонг в шорт) половина объёма открывает
-    новую, и считать её закрытой нельзя.
+    новую, и считать её закрытой нельзя. Строки, которые позицию только
+    наращивают, в знаменатель не идут вовсе.
 
     Прежний способ брал наибольшую маржу среди филов серии, а маржа бралась
     из снимка позиции. Снимок есть не у каждого фила, и открытия у нас вообще
     могут отсутствовать — кошелёк попал в наблюдение позже, — тогда как
-    прибыль приходит с закрытий и в расчёт попадает целиком. Знаменатель
-    оказывался меньше настоящего, и доходность взлетала: у кошелька
-    0x767a…ace выходило 1185% вместо 188%, проверено по филам самой биржи.
-    Размер позиции биржа сообщает в каждом филе, поэтому новый счёт не
-    зависит от того, что мы успели собрать.
+    прибыль приходит с закрытий и в расчёт попадает целиком. Размер позиции
+    биржа сообщает в каждом филе, поэтому новый счёт от собранного не зависит.
 
     wallets=None — посчитать всем, кто торговал в окне: доска ROI обязана
     быть глобальной, а не «ROI среди самой прибыльной сотни».
@@ -2171,20 +2224,19 @@ def perp_margin(hl: sqlite3.Connection, wallets: list[str] | None, since_ms: int
     marg = "COALESCE(margin_nanos,0)" if "margin_nanos" in cset else "0"
     lev = "COALESCE(leverage,0)" if "leverage" in cset else "0"
     ntl = "COALESCE(notional_nanos,0)" if "notional_nanos" in cset else "0"
-    flat = "COALESCE(flat,0)" if "flat" in cset else "0"
-    code = "COALESCE(dir_code,0)" if "dir_code" in cset else "0"
-    start = "COALESCE(start_pos_nanos,0)" if "start_pos_nanos" in cset else "0"
+    start = "start_pos_nanos" if "start_pos_nanos" in cset else "NULL"
     px = "COALESCE(px,'0')" if "px" in cset else "'0'"
     sz = "COALESCE(sz,'0')" if "sz" in cset else "'0'"
+    side = "COALESCE(side,'')" if "side" in cset else "''"
     out: dict[str, float] = {}
-    where = "ts >= ?"
+    where = "ts >= ? AND " + perp_close_sql(cset)
     args: tuple = (since_ms,)
     if wallets is not None:
         where += " AND wallet IN (%s)" % ",".join("?" * len(wallets))
         args = (since_ms, *wallets)
     sql = (
-        f"SELECT wallet, {marg} m, {lev} lv, {ntl} n, {flat} fl, {code} dc, "
-        f"{start} sp, {px} px, {sz} sz "
+        f"SELECT wallet, {marg} m, {lev} lv, {ntl} n, "
+        f"{start} sp, {px} px, {sz} sz, {side} sd "
         f"FROM hl_fills WHERE {where}"
     )
     try:
@@ -2202,23 +2254,16 @@ def perp_margin(hl: sqlite3.Connection, wallets: list[str] | None, since_ms: int
             lev_sum[w] = lev_sum.get(w, 0.0) + lv
             lev_n[w] = lev_n.get(w, 0) + 1
     for r in rows:
-        if int(r["fl"] or 0) != 1 and int(r["dc"] or 0) < 5:
-            continue
         w = r["wallet"]
-        try:
-            price = float(r["px"] or 0)
-            size = float(r["sz"] or 0)
-        except (TypeError, ValueError):
-            price = size = 0.0
-        had = abs(int(r["sp"] or 0)) / NANOS
-        # Закрыто не больше, чем стояло в позиции; нет размера позиции —
-        # считаем по всему филу, это его собственный номинал.
-        shut = min(size, had) if had > 0 else size
-        ntl_usd = shut * price if shut > 0 and price > 0 else usd(r["n"])
+        ntl_usd = perp_closed_usd(r["px"], r["sz"], r["sd"], r["sp"], r["n"])
+        if ntl_usd <= 0:
+            # Строка ничего не закрыла — доливка в ту же сторону. Снимок
+            # маржи брать тем более нельзя: он про всю позицию целиком.
+            continue
         lv = int(r["lv"] or 0)
         if lv <= 0 and lev_n.get(w):
             lv = max(1, int(round(lev_sum[w] / lev_n[w])))
-        if lv > 0 and ntl_usd > 0:
+        if lv > 0:
             out[w] = out.get(w, 0.0) + ntl_usd / lv
         elif int(r["m"] or 0) > 0:
             # Плеча нет вовсе — остаётся снимок маржи позиции.
@@ -2242,12 +2287,9 @@ def load_perp_rank(hl: sqlite3.Connection | None, days: int = 30) -> dict:
         if table_exists(hl, "hl_banned")
         else ""
     )
-    close_f = "AND (f.closed_pnl_nanos != 0"
-    if "flat" in cset:
-        close_f += " OR f.flat = 1"
-    if "dir_code" in cset:
-        close_f += " OR f.dir_code >= 5"
-    close_f += ")"
+    # То же условие, что у знаменателя: две разные формулы уже разошлись
+    # однажды и завысили доходность в разы.
+    close_f = "AND " + perp_close_sql(cset, "f")
     # Без LIMIT и без сортировки по прибыли: доски строятся каждая по своему
     # признаку, и отбирать кандидатов прибылью значило бы показывать «лучший
     # винрейт среди самых прибыльных», а не лучший винрейт вообще. Перебор
@@ -2423,21 +2465,18 @@ def _perp_deals(hl: sqlite3.Connection | None, key: str, n: int) -> list[dict]:
     marg = "margin_nanos" if "margin_nanos" in cset else "0"
 
     # Что считать закрытием — ровно то же, что считает доска в
-    # load_perp_rank. Одного лишь ненулевого closed_pnl мало: бот помечает
-    # закрытия ещё и флагом flat, а переворот позиции — кодом направления от
-    # пятёрки. По узкому условию история оказывалась пустой у кошельков, у
-    # которых доска показывает десятки сделок, и получалось, что рейтинг
-    # считает одно, а история — другое.
-    close_f = "AND (closed_pnl_nanos != 0"
-    if "flat" in cset:
-        close_f += " OR flat = 1"
-    if "dir_code" in cset:
-        close_f += " OR dir_code >= 5"
-    close_f += ")"
+    # load_perp_rank: одно условие на всех, `perp_close_sql`. Одного лишь
+    # ненулевого closed_pnl мало: бот помечает закрытия ещё и флагом flat, а
+    # направление кодом от тройки. По узкому условию история оказывалась
+    # пустой у кошельков, у которых доска показывает десятки сделок, и
+    # получалось, что рейтинг считает одно, а история — другое.
+    close_f = "AND " + perp_close_sql(cset)
+    sp = "start_pos_nanos" if "start_pos_nanos" in cset else "NULL"
+    side = "COALESCE(side,'')" if "side" in cset else "''"
     try:
         rows = hl.execute(
             f"SELECT coin, px, sz, notional_nanos, closed_pnl_nanos pnl, "
-            f"{dirc} dirc, {lev} lev, {marg} marg, ts "
+            f"{dirc} dirc, {lev} lev, {marg} marg, {sp} sp, {side} sd, ts "
             f"FROM hl_fills WHERE lower(wallet)=? {close_f} "
             f"ORDER BY ts DESC LIMIT ?",
             (key, n),
@@ -2467,9 +2506,12 @@ def _perp_deals(hl: sqlite3.Connection | None, key: str, n: int) -> list[dict]:
             if entry_px <= 0:
                 entry_px = None
         lv = int(r["lev"] or 0)
-        margin = usd(r["marg"])
-        if margin <= 0 and lv > 0:
-            margin = usd(r["notional_nanos"]) / lv
+        # Знаменатель тот же, что на доске: маржа закрытой части, а не всей
+        # позиции. Снимок `margin_nanos` — про позицию целиком, и у
+        # частичного закрытия он занижал доходность сделки во столько раз,
+        # какую долю позиции закрыли.
+        closed = perp_closed_usd(r["px"], r["sz"], r["sd"], r["sp"], r["notional_nanos"])
+        margin = closed / lv if lv > 0 and closed > 0 else usd(r["marg"])
         sym = str(r["coin"] or "?").upper()
         out.append({
             "sym": sym,
