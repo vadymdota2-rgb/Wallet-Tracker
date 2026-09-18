@@ -4837,10 +4837,13 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
             # Право на забвение: то же удаление, что по /forgetme в боте.
             # Списки таблиц обязаны совпадать — иначе удалить «всё» можно
             # будет только из одного из двух интерфейсов.
+            # trial_granted в списке нет намеренно, ровно как в forgetUser()
+            # бота: строка «неделя уже выдавалась» — единственное, что
+            # переживает удаление. Иначе данные стирались бы ради нового
+            # бесплатного премиума, и так по кругу.
             for sql in (
                 "DELETE FROM user_whales WHERE user_id=?",
                 "DELETE FROM deliveries WHERE chat_id=?",
-                "DELETE FROM trial_granted WHERE chat_id=?",
                 "DELETE FROM premium_payments WHERE chat_id=?",
                 "DELETE FROM ton_invoices WHERE chat_id=?",
                 "DELETE FROM ai_access WHERE chat_id=?",
