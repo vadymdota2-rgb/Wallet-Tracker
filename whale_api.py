@@ -2106,7 +2106,9 @@ def _map_rank(arr, days: int, n: int = 100, offset: int = 0) -> list:
             {
                 "a": e.get("w") or "",
                 "pnl": usd(e.get("p")),
-                "roi": float(e.get("r") or 0),
+                # Поля roi здесь нет намеренно: доски ROI по споту не
+                # существует, и число, которое никому не показывают, лучше не
+                # возить — однажды его покажут.
                 "win": float(e.get("wr") or 0),
                 "tr": int(e.get("t") or 0),
                 "dd": 0,
@@ -2141,7 +2143,7 @@ def _read_rank_key(cur, key: str, days: int) -> list:
     return _map_rank(_rank_payload(cur, key), days, RANK_MAX_DEPTH)
 
 
-def perp_margin(hl: sqlite3.Connection, wallets: list[str], since_ms: int) -> dict[str, float]:
+def perp_margin(hl: sqlite3.Connection, wallets: list[str] | None, since_ms: int) -> dict[str, float]:
     """
     Сумма маржи по закрытым сделкам — знаменатель «ROI за сделку».
 
@@ -2154,7 +2156,9 @@ def perp_margin(hl: sqlite3.Connection, wallets: list[str], since_ms: int) -> di
     Считаем только для кошельков, попавших в выдачу: их не больше сотни, а
     сделок у каждого не больше двухсот за месяц.
     """
-    if not wallets:
+    # wallets=None — посчитать всем, кто торговал в окне: доска ROI обязана
+    # быть глобальной, а не «ROI среди самой прибыльной сотни».
+    if wallets is not None and not wallets:
         return {}
     cset = cols(hl, "hl_fills")
     if "margin_nanos" not in cset and "leverage" not in cset:
@@ -2167,15 +2171,19 @@ def perp_margin(hl: sqlite3.Connection, wallets: list[str], since_ms: int) -> di
     oid = "COALESCE(oid,0)" if "oid" in cset else "0"
     coin = "COALESCE(coin,'')" if "coin" in cset else "''"
     out: dict[str, float] = {}
-    marks = ",".join("?" * len(wallets))
+    where = "ts >= ?"
+    args: tuple = (since_ms,)
+    if wallets is not None:
+        where += " AND wallet IN (%s)" % ",".join("?" * len(wallets))
+        args = (since_ms, *wallets)
     sql = (
         f"SELECT wallet, {coin} c, {marg} m, {lev} lv, {ntl} n, "
         f"{flat} fl, {code} dc, {oid} od, tid "
-        f"FROM hl_fills WHERE ts >= ? AND wallet IN ({marks}) "
+        f"FROM hl_fills WHERE {where} "
         f"ORDER BY wallet, c, ts, tid"
     )
     try:
-        rows = hl.execute(sql, (since_ms, *wallets)).fetchall()
+        rows = hl.execute(sql, args).fetchall()
     except sqlite3.Error as e:
         sys.stderr.write(f"[api] perp margin: {e}\n")
         return {}
@@ -2224,14 +2232,18 @@ def load_perp_rank(hl: sqlite3.Connection | None, days: int = 30) -> dict:
     if "dir_code" in cset:
         close_f += " OR f.dir_code >= 5"
     close_f += ")"
+    # Без LIMIT и без сортировки по прибыли: доски строятся каждая по своему
+    # признаку, и отбирать кандидатов прибылью значило бы показывать «лучший
+    # винрейт среди самых прибыльных», а не лучший винрейт вообще. Перебор
+    # всё равно идёт по всем строкам окна — отсечение сотней экономило только
+    # передачу результата.
     sql = (
         f"SELECT f.wallet, "
         f"SUM(f.closed_pnl_nanos) pnl, SUM({fee}) fees, COUNT(*) trades, "
         f"SUM(CASE WHEN f.closed_pnl_nanos > 0 THEN 1 ELSE 0 END) wins, "
         f"AVG(CASE WHEN {lev} > 0 THEN {lev} END) lev "
         f"FROM hl_fills f WHERE f.ts >= ? {close_f} {ban} "
-        f"GROUP BY f.wallet HAVING COUNT(*) >= ? AND COUNT(*) <= ? "
-        f"ORDER BY (SUM(f.closed_pnl_nanos) - SUM({fee})) DESC LIMIT 100"
+        f"GROUP BY f.wallet HAVING COUNT(*) >= ? AND COUNT(*) <= ?"
     )
     try:
         rows = hl.execute(sql, (since_ms, HL_MIN_CLOSED, max_tr)).fetchall()
@@ -2239,9 +2251,12 @@ def load_perp_rank(hl: sqlite3.Connection | None, days: int = 30) -> dict:
         sys.stderr.write(f"[api] perp rank: {e}\n")
         return empty
     mapped = []
-    # Знаменатель ROI — вложенная маржа, как в боте. Формулы
+    # Знаменатель ROI — вложенная маржа, как в боте. Формула
     # 100*pnl/max(|pnl|*0.4,1) здесь когда-то давала ровно ±250 почти всем.
-    margins = perp_margin(hl, [r["wallet"] for r in rows if r["wallet"]], since_ms)
+    # Считаем всем, кто торговал в окне: на базе в четверть миллиона филов
+    # обход занимает меньше секунды, а доска от этого становится настоящей.
+    t0 = time.monotonic()
+    margins = perp_margin(hl, None, since_ms)
     for r in rows:
         pnl = usd(r["pnl"]) - usd(r["fees"])
         tr = int(r["trades"] or 0)
@@ -2263,8 +2278,16 @@ def load_perp_rank(hl: sqlite3.Connection | None, days: int = 30) -> dict:
                 "lev": int(round(lev_v)) if lev_v else None,
             }
         )
+    sys.stderr.write(
+        f"[api] перпы: {len(rows)} кошельков, маржа у {len(margins)}, "
+        f"{time.monotonic() - t0:.1f}с\n")
+
+    def top(rows_in, key):
+        return sorted(rows_in, key=key)[:RANK_MAX_DEPTH]
+
     return {
-        "pnl": list(mapped),
+        # Каждая доска — своя сотня, отобранная по своему признаку.
+        "pnl": top(mapped, lambda x: -x["pnl"]),
         # Доска ROI была пуста, пока знаменателя не существовало: делить
         # прибыль оказалось не на что, и вместо рейтинга получался выдуманный
         # порядок. Теперь маржа считается обходом филов, и доска собирается из
@@ -2272,9 +2295,12 @@ def load_perp_rank(hl: sqlite3.Connection | None, days: int = 30) -> dict:
         # обнуляются, а не попадают на доску вовсе: ноль там означал бы
         # «торговал без прибыли», а это неправда — про них просто нечего
         # сказать.
-        "roi": sorted((r for r in mapped if r["roi"] is not None), key=lambda x: -x["roi"]),
-        "win": sorted(mapped, key=lambda x: -x["win"]),
-        "act": sorted(mapped, key=lambda x: -x["tr"]),
+        "roi": top([r for r in mapped if r["roi"] is not None], lambda x: -x["roi"]),
+        # При равном проценте выше тот, кто сделал больше сделок: сто
+        # процентов на пяти сделках — это удача, а не мастерство. Тот же
+        # порядок, что у спотовых досок бота.
+        "win": top(mapped, lambda x: (-x["win"], -x["tr"])),
+        "act": top(mapped, lambda x: (-x["tr"], -x["pnl"])),
     }
 
 
@@ -2308,10 +2334,12 @@ def load_rank(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) -> 
         spot = {k: [] for k in empty}
         if has_cache:
             for kind, key in kind_map.items():
-                # ROI по споту недостоверен: знаменатель (вложенное) собирается
-                # из цен DEX на момент покупки, а часть монет куплена годы назад
-                # и по ценам, которые уже не восстановить. Доски ROI для BSC
-                # больше нет — ни в боте, ни здесь. Остаётся абсолютный PnL.
+                # ROI по споту не отдаём вовсе: знаменатель собирается из цен
+                # DEX на момент покупки, часть монет куплена по ценам, которых
+                # уже не восстановить, а порог отсечения у бота — десять
+                # долларов оборота. Доски ROI для BSC нет ни в боте, ни здесь;
+                # остаётся абсолютный PnL, который считается из тех же сделок,
+                # но ни на что не делится.
                 if key == "roi":
                     continue
                 rows = _read_rank_key(cur, f"global_{kind}_{days}", days)
