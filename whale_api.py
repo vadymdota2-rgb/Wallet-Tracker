@@ -2144,32 +2144,38 @@ def _read_rank_key(cur, key: str, days: int) -> list:
 
 
 def perp_margin(hl: sqlite3.Connection, wallets: list[str] | None, since_ms: int) -> dict[str, float]:
-    """
-    Сумма маржи по закрытым сделкам — знаменатель «ROI за сделку».
+    """Маржа, которой человек рисковал в закрытых сделках, — знаменатель ROI.
 
-    Повторяет обход из hyperliquid_ui.cpp: филы идут по паре кошелёк-монета,
-    внутри серии берётся наибольшая маржа (или notional/плечо, если маржа не
-    записана), а на закрытии серия добавляется к сумме. Дозаливки одного и
-    того же ордера отдельной сделкой не считаются — иначе одна позиция,
-    закрытая тремя филами, утроила бы знаменатель.
+    Считаем по самим закрытиям: сколько номинала сделка закрыла, делённое на
+    плечо. Закрытый номинал — это размер фила по его цене, но не больше, чем
+    было в позиции: у переворота (лонг в шорт) половина объёма открывает
+    новую, и считать её закрытой нельзя.
 
-    Считаем только для кошельков, попавших в выдачу: их не больше сотни, а
-    сделок у каждого не больше двухсот за месяц.
+    Прежний способ брал наибольшую маржу среди филов серии, а маржа бралась
+    из снимка позиции. Снимок есть не у каждого фила, и открытия у нас вообще
+    могут отсутствовать — кошелёк попал в наблюдение позже, — тогда как
+    прибыль приходит с закрытий и в расчёт попадает целиком. Знаменатель
+    оказывался меньше настоящего, и доходность взлетала: у кошелька
+    0x767a…ace выходило 1185% вместо 188%, проверено по филам самой биржи.
+    Размер позиции биржа сообщает в каждом филе, поэтому новый счёт не
+    зависит от того, что мы успели собрать.
+
+    wallets=None — посчитать всем, кто торговал в окне: доска ROI обязана
+    быть глобальной, а не «ROI среди самой прибыльной сотни».
     """
-    # wallets=None — посчитать всем, кто торговал в окне: доска ROI обязана
-    # быть глобальной, а не «ROI среди самой прибыльной сотни».
     if wallets is not None and not wallets:
         return {}
     cset = cols(hl, "hl_fills")
-    if "margin_nanos" not in cset and "leverage" not in cset:
+    if "leverage" not in cset and "margin_nanos" not in cset:
         return {}
     marg = "COALESCE(margin_nanos,0)" if "margin_nanos" in cset else "0"
     lev = "COALESCE(leverage,0)" if "leverage" in cset else "0"
     ntl = "COALESCE(notional_nanos,0)" if "notional_nanos" in cset else "0"
     flat = "COALESCE(flat,0)" if "flat" in cset else "0"
     code = "COALESCE(dir_code,0)" if "dir_code" in cset else "0"
-    oid = "COALESCE(oid,0)" if "oid" in cset else "0"
-    coin = "COALESCE(coin,'')" if "coin" in cset else "''"
+    start = "COALESCE(start_pos_nanos,0)" if "start_pos_nanos" in cset else "0"
+    px = "COALESCE(px,'0')" if "px" in cset else "'0'"
+    sz = "COALESCE(sz,'0')" if "sz" in cset else "'0'"
     out: dict[str, float] = {}
     where = "ts >= ?"
     args: tuple = (since_ms,)
@@ -2177,36 +2183,46 @@ def perp_margin(hl: sqlite3.Connection, wallets: list[str] | None, since_ms: int
         where += " AND wallet IN (%s)" % ",".join("?" * len(wallets))
         args = (since_ms, *wallets)
     sql = (
-        f"SELECT wallet, {coin} c, {marg} m, {lev} lv, {ntl} n, "
-        f"{flat} fl, {code} dc, {oid} od, tid "
-        f"FROM hl_fills WHERE {where} "
-        f"ORDER BY wallet, c, ts, tid"
+        f"SELECT wallet, {marg} m, {lev} lv, {ntl} n, {flat} fl, {code} dc, "
+        f"{start} sp, {px} px, {sz} sz "
+        f"FROM hl_fills WHERE {where}"
     )
     try:
         rows = hl.execute(sql, args).fetchall()
     except sqlite3.Error as e:
         sys.stderr.write(f"[api] perp margin: {e}\n")
         return {}
-    key = None
-    ser = 0
-    close_oid = 0
+    # Среднее плечо кошелька — на случай филов, где его не записали.
+    lev_sum: dict[str, float] = {}
+    lev_n: dict[str, int] = {}
     for r in rows:
-        k = (r["wallet"], r["c"])
-        if k != key:
-            key, ser, close_oid = k, 0, 0
-        m = int(r["m"] or 0)
-        if m <= 0 and int(r["lv"] or 0) > 0 and int(r["n"] or 0) > 0:
-            m = int(r["n"]) // int(r["lv"])
-        if m > ser:
-            ser = m
+        lv = int(r["lv"] or 0)
+        if lv > 0:
+            w = r["wallet"]
+            lev_sum[w] = lev_sum.get(w, 0.0) + lv
+            lev_n[w] = lev_n.get(w, 0) + 1
+    for r in rows:
         if int(r["fl"] or 0) != 1 and int(r["dc"] or 0) < 5:
             continue
-        ident = int(r["od"] or 0) or int(r["tid"] or 0)
-        if not (ident and ident == close_oid):
-            if ser > 0:
-                out[r["wallet"]] = out.get(r["wallet"], 0.0) + usd(ser)
-            close_oid = ident
-        ser = 0
+        w = r["wallet"]
+        try:
+            price = float(r["px"] or 0)
+            size = float(r["sz"] or 0)
+        except (TypeError, ValueError):
+            price = size = 0.0
+        had = abs(int(r["sp"] or 0)) / NANOS
+        # Закрыто не больше, чем стояло в позиции; нет размера позиции —
+        # считаем по всему филу, это его собственный номинал.
+        shut = min(size, had) if had > 0 else size
+        ntl_usd = shut * price if shut > 0 and price > 0 else usd(r["n"])
+        lv = int(r["lv"] or 0)
+        if lv <= 0 and lev_n.get(w):
+            lv = max(1, int(round(lev_sum[w] / lev_n[w])))
+        if lv > 0 and ntl_usd > 0:
+            out[w] = out.get(w, 0.0) + ntl_usd / lv
+        elif int(r["m"] or 0) > 0:
+            # Плеча нет вовсе — остаётся снимок маржи позиции.
+            out[w] = out.get(w, 0.0) + usd(r["m"])
     return out
 
 
