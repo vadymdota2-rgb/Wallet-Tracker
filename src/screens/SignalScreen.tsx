@@ -3,8 +3,8 @@ import { Frame, type ScreenProps } from "./Screen";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import { t } from "../i18n/t";
-import { num, pct, px } from "../lib/format";
-import { whyKey } from "../lib/labels";
+import { num, pct, px, signed } from "../lib/format";
+import { whyKey, whySplit } from "../lib/labels";
 import { CoinIcon } from "../components/CoinIcon";
 import { Card, Empty, Row, SectionTitle, Tiles } from "../components/ui";
 import type { Venue } from "../lib/types";
@@ -14,12 +14,11 @@ export function SignalScreen({ arg }: ScreenProps) {
   const open = useApp((s) => s.open);
   const cortex = useLive((s) => s.cortex);
 
-  const [venueRaw, winRaw, idxRaw] = String(arg || "").split(":");
+  const [venueRaw, idxRaw] = String(arg || "").split(":");
   const venue = (venueRaw === "perp" ? "perp" : "spot") as Venue;
-  const win = Number(winRaw);
   const idx = Number(idxRaw);
 
-  const list = cortex.list.filter((s) => s.venue === venue && s.winH === win);
+  const list = cortex.list.filter((s) => s.venue === venue);
   const s = list[idx];
 
   if (!s) {
@@ -42,7 +41,7 @@ export function SignalScreen({ arg }: ScreenProps) {
       }
       sub={`${long ? t(lang, "ai_long") : t(lang, "ai_short")} · ${
         venue === "perp" ? t(lang, "ai_perp") : t(lang, "ai_spot")
-      } · ${s.winH}${t(lang, "unit_hour")}`}
+      } · ${t(lang, "ai_horizon")} · ${t(lang, s.model ? "ai_mode_model" : "ai_mode_formula")}`}
     >
       <Card>
         <SectionTitle note={t(lang, "ai_conf")}>
@@ -58,20 +57,31 @@ export function SignalScreen({ arg }: ScreenProps) {
         />
         <Tiles
           items={[
-            { label: t(lang, "ai_risk"), value: pct(s.risk, 1, false) },
+            { label: t(lang, "ai_risk"), value: pct(s.stopPct, 1, false) },
             { label: t(lang, "hl_leverage"), value: venue === "perp" ? `${s.lev}×` : "1×" },
             { label: t(lang, "flow_wallets"), value: num(s.w) },
-            { label: t(lang, "ai_market"), value: `${px(s.lo)}–${px(s.hi)}` },
+            { label: t(lang, "ai_why_flow"), value: signed(s.net),
+              tone: s.net >= 0 ? "up" : "dn" },
           ]}
         />
       </Card>
 
       <Card>
         <SectionTitle>{t(lang, "ai_why")}</SectionTitle>
-        {s.why.map((w, i) => {
-          const k = whyKey(w);
-          return <Row key={i} title={k ? t(lang, k) : w} />;
-        })}
+        {s.why.length === 0 ? (
+          <p className="note dim">{t(lang, "ai_st_untrained")}</p>
+        ) : (
+          s.why.map((w, i) => {
+            const { up, name } = whySplit(w);
+            const k = whyKey(name);
+            /* Знак — за сигнал признак или против него. Показывать только
+               доводы «за» значило бы рисовать модель умнее, чем она есть. */
+            return (
+              <Row key={i} title={k ? t(lang, k) : name} value={up ? "+" : "−"}
+                   tone={up ? "up" : "dn"} />
+            );
+          })
+        )}
         <p className="note dim">{t(lang, "ai_trade_hint")}</p>
       </Card>
 

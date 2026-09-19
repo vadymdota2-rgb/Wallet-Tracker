@@ -330,21 +330,20 @@ export type RotSums = Record<string, RotSum | undefined>;
 export interface Signal {
   sym: string;
   side: Side;
+  /** Вероятность модели в процентах, а не выдумка по величине потока. */
   conf: number;
+  /** true — считала модель, false — осталась формула: на экране это разные слова. */
+  model: boolean;
   net: number;
   w: number;
   entry: number;
-  lo: number;
-  hi: number;
   stop: number;
   stopPct: number;
   t1: number;
   t2: number;
-  risk: number;
   lev: number;
-  /** Уже ключи, не текст: "flow" | "volume" | "top100" | ... */
+  /** Вклад признаков в эту оценку: "+flow", "-vol 24h". Знак — к стороне сигнала. */
   why: string[];
-  winH: number;
   venue: Venue;
 }
 
@@ -373,6 +372,8 @@ export interface CortexModel {
   wf: number;
   /** Доля роста в тесте: с ней видно, что «точность 60%» может быть угадыванием. */
   up: number;
+  /** Признаки, на которые модель опирается чаще прочих, и их доля в процентах. */
+  top: { k: string; v: number }[];
 }
 
 export interface Cortex {

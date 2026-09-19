@@ -56,7 +56,6 @@ interface AppState {
   rankWin: RankWin;
 
   cortexVenue: Venue;
-  cortexWin: number;
   chartTf: Timeframe;
   /** Свои деньги в калькуляторе фандинга. Ноль — поле пустое, счёта нет. */
   fundAmount: number;
@@ -80,7 +79,6 @@ interface AppState {
   setRankKind(k: RankKind): void;
   setRankWin(w: RankWin): void;
   setCortexVenue(v: Venue): void;
-  setCortexWin(h: number): void;
   setChartTf(tf: Timeframe): void;
   setFundAmount(v: number): void;
   setFundLev(v: number): void;
@@ -107,7 +105,6 @@ export const useApp = create<AppState>()(
       rankWin: "30",
 
       cortexVenue: "spot",
-      cortexWin: 24,
       chartTf: "1d",
       fundAmount: 0,
       fundLev: 1,
@@ -129,7 +126,6 @@ export const useApp = create<AppState>()(
       setRankKind: (rankKind) => set({ rankKind }),
       setRankWin: (rankWin) => set({ rankWin }),
       setCortexVenue: (cortexVenue) => set({ cortexVenue }),
-      setCortexWin: (cortexWin) => set({ cortexWin }),
       setChartTf: (chartTf) => set({ chartTf }),
       setFundAmount: (fundAmount) => set({ fundAmount: Math.max(0, fundAmount) }),
       /* Сто двадцать пять — предел самых щедрых бирж; выше плеча не бывает, а
@@ -142,11 +138,11 @@ export const useApp = create<AppState>()(
          открывал приложение, она осталась в памяти. Считать за человека
          сумму, которой он не вводил, нельзя: переход на первую версию
          стирает её и оставляет поле пустым. */
-      /* Вторая версия — переименование Sonar в Cortex. Сохранённые поля
-         звались sonarVenue, sonarWin, а вкладка — "sonar": без переноса
-         человек открыл бы приложение с выбором, сброшенным в умолчания, и
-         на чужой вкладке. */
-      version: 2,
+      /* Вторая версия — переименование Sonar в Cortex: поля звались
+         sonarVenue и sonarWin, вкладка — "sonar", и без переноса человек
+         открыл бы приложение на чужой вкладке. Третья убрала окно потока:
+         модель работает только на суточном. */
+      version: 3,
       migrate: (prev, from) => {
         let s = prev as Record<string, unknown>;
         if (from < 1) s = { ...s, fundAmount: 0, fundLev: 1 };
@@ -154,10 +150,17 @@ export const useApp = create<AppState>()(
           const { sonarVenue, sonarWin, ...rest } = s as {
             sonarVenue?: Venue; sonarWin?: number; [k: string]: unknown;
           };
+          void sonarWin;   // окно снято третьей версией, переносить нечего
           s = { ...rest };
           if (sonarVenue !== undefined) s.cortexVenue = sonarVenue;
-          if (sonarWin !== undefined) s.cortexWin = sonarWin;
           if (s.tab === "sonar") s.tab = "cortex";
+        }
+        if (from < 3) {
+          // Окна 1ч/6ч сняты: модель их никогда не видела, и сохранённый
+          // выбор больше ни на что не влияет.
+          const { cortexWin, ...rest } = s as { cortexWin?: number; [k: string]: unknown };
+          void cortexWin;
+          s = rest;
         }
         return s;
       },
@@ -176,7 +179,6 @@ export const useApp = create<AppState>()(
         rankKind: s.rankKind,
         rankWin: s.rankWin,
         cortexVenue: s.cortexVenue,
-        cortexWin: s.cortexWin,
         chartTf: s.chartTf,
         fundAmount: s.fundAmount,
         fundLev: s.fundLev,

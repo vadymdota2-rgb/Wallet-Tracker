@@ -21,7 +21,7 @@ export const pl: Dict = {
   ai_entry: "📍 Wejście",
   ai_expire: "⏳ Ważne",
   ai_expired: "⌛ Wygasło",
-  ai_hint: "Ocena przepływu na śledzonych portfelach.\nPatrzy, kto kupuje i jak szeroko: wolumen, liczba portfeli, koncentracja, przyspieszenie, obecność top-100, funding, reżim rynku.\n\nTo filtr, nie prognoza. Poziomy z zmienności, ryzyko to część depozytu, nie rozkaz.",
+  ai_hint: "Ocena przepływu na śledzonych portfelach.\nPatrzy, kto kupuje i jak szeroko, i dokłada rynek: zmienność i jej skoki, trend, RSI, funding, otwarte pozycje, likwidacje, reżim bitcoina.\n\nTo filtr, nie prognoza. Poziomy z zmienności, ryzyko to część depozytu, nie rozkaz.",
   ai_hist_avg: "Średni ruch:",
   ai_hist_btn: "📜 Historia",
   ai_hist_empty: "Brak zamkniętych sygnałów.",

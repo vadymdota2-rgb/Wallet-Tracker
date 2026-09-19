@@ -21,7 +21,7 @@ export const tr: Dict = {
   ai_entry: "📍 Giriş",
   ai_expire: "⏳ Geçerli",
   ai_expired: "⌛ Süresi doldu",
-  ai_hint: "İzlenen cüzdanlarda akış skoru.\nKimin ne kadar geniş aldığına bakar: hacim, cüzdan sayısı, yoğunlaşma, ivme, top-100 varlığı, funding, piyasa rejimi.\n\nBu bir filtre, tahmin değil. Seviyeler volatiliteden gelir, risk mevduatın bir payıdır, emir değil.",
+  ai_hint: "Takip edilen cüzdanlardaki akış puanlaması.\nKimin ne kadar geniş aldığına bakar ve piyasayı ekler: oynaklık ve sıçramaları, trend, RSI, fonlama, açık pozisyon, likidasyonlar, Bitcoin rejimi.\n\nBu bir filtre, tahmin değil. Seviyeler oynaklıktan gelir, risk mevduatın bir parçasıdır, emir değil.",
   ai_hist_avg: "Ortalama hareket:",
   ai_hist_btn: "📜 Geçmiş",
   ai_hist_empty: "Henüz kapanmış sinyal yok.",

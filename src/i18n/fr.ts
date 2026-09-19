@@ -21,7 +21,7 @@ export const fr: Dict = {
   ai_entry: "📍 Entrée",
   ai_expire: "⏳ Valide",
   ai_expired: "⌛ Expiré",
-  ai_hint: "Score de flux sur les portefeuilles suivis.\nRegarde qui achète et avec quelle ampleur : volume, nombre de portefeuilles, concentration, accélération, présence du top-100, funding, régime de marché.\n\nUn filtre, pas une prévision. Les niveaux viennent de la volatilité, le risque est une part du dépôt, pas un ordre.",
+  ai_hint: "Évaluation du flux sur les portefeuilles suivis.\nRegarde qui achète et avec quelle ampleur, et ajoute le marché : volatilité et ses pics, tendance, RSI, funding, intérêt ouvert, liquidations, régime du bitcoin.\n\nUn filtre, pas une prévision. Les niveaux viennent de la volatilité, le risque est une part du dépôt, pas un ordre.",
   ai_hist_avg: "Mouvement moyen :",
   ai_hist_btn: "📜 Historique",
   ai_hist_empty: "Pas encore de signaux clos.",

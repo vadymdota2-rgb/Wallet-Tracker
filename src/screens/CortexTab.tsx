@@ -1,47 +1,38 @@
 /**
- * «Сонар» — кнопка 📡 бота (ai.cpp). Сигналы по потоку среди отслеживаемых
- * кошельков: площадка, окно, сторона — те же переключатели, что в чате.
+ * Cortex: сигналы по потоку среди отслеживаемых кошельков.
  *
- * Отбор идёт по полям, которые прислал сервер. Прошлая версия фильтровала
- * список по вшитым тикерам (BTC, SOL, CAKE, HYPE) в зависимости от окна —
- * это был не отбор по данным, а имитация.
+ * Всё, что на экране, посчитал бот: уверенность — вероятность роста от
+ * модели, причины — вклад признаков именно в эту оценку. Приложение только
+ * показывает. Прежняя версия считала то же самое второй раз в whale_api.py
+ * своей формулой, и число «уверенности» не значило ничего.
+ *
+ * Переключателя окон 1ч/6ч/24ч больше нет. Модель обучена на суточном окне
+ * потока и суточном горизонте; на часовом окне у неё не было ни одного
+ * примера, и показывать её оценку там значило бы выдавать угадывание за счёт.
  */
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import { t } from "../i18n/t";
-import { num, px } from "../lib/format";
-import { whyKey } from "../lib/labels";
+import { num } from "../lib/format";
+import { whyKey, whySplit } from "../lib/labels";
 import { CoinIcon } from "../components/CoinIcon";
 import { Card, Empty, Row, SectionTitle, Segmented } from "../components/ui";
 import type { Venue } from "../lib/types";
-
-const WINDOWS: { id: string; key: Parameters<typeof t>[1] }[] = [
-  { id: "1", key: "ai_w1h" },
-  { id: "6", key: "ai_w6h" },
-  { id: "24", key: "ai_w24" },
-];
 
 export function CortexTab() {
   const lang = useApp((s) => s.lang);
   const open = useApp((s) => s.open);
   const venue = useApp((s) => s.cortexVenue);
   const setVenue = useApp((s) => s.setCortexVenue);
-  const win = useApp((s) => s.cortexWin);
-  const setWin = useApp((s) => s.setCortexWin);
 
   const cortex = useLive((s) => s.cortex);
-
-  const trained = venue === "perp" ? cortex.trainedPerp : cortex.trainedSpot;
-  const acc = venue === "perp" ? cortex.accPerp : cortex.accSpot;
-  const ready = venue === "perp" ? cortex.ready.perp : cortex.ready.spot;
-
-  const list = cortex.list.filter((s) => s.venue === venue && s.winH === win);
+  const model = venue === "perp" ? cortex.model?.perp : cortex.model?.spot;
+  const list = cortex.list.filter((s) => s.venue === venue);
 
   return (
     <>
       <Card>
         <SectionTitle note={t(lang, "ai_horizon")}>{t(lang, "ai_title")}</SectionTitle>
-        {/* Полный текст — на экране модели: здесь он занимал пол-экрана. */}
         <p className="note">{t(lang, "ai_hint").split("\n\n")[0]}</p>
         <Segmented<Venue>
           value={venue}
@@ -51,15 +42,14 @@ export function CortexTab() {
             { id: "perp", label: t(lang, "ai_perp") },
           ]}
         />
-        <Segmented<string>
-          value={String(win)}
-          onChange={(v) => setWin(Number(v))}
-          options={WINDOWS.map((w) => ({ id: w.id, label: t(lang, w.key) }))}
-        />
         <Row
-          title={trained ? t(lang, "ai_mode_model") : t(lang, "ai_mode_formula")}
-          sub={`${t(lang, "ai_st_ready")} ${num(ready)} / ${num(cortex.need)}`}
-          value={acc === null ? "—" : `${acc}%`}
+          title={model ? t(lang, "ai_mode_model") : t(lang, "ai_mode_formula")}
+          sub={
+            model
+              ? `AUC ${model.auc.toFixed(3)}`
+              : `${t(lang, "ai_st_ready")} ${num(venue === "perp" ? cortex.ready.perp : cortex.ready.spot)} / ${num(cortex.need)}`
+          }
+          value={model ? `${model.acc}%` : "—"}
           valueSub={t(lang, "ai_acc")}
           onClick={() => open("model")}
         />
@@ -71,25 +61,27 @@ export function CortexTab() {
         ) : (
           list.map((s, i) => (
             <Row
-              key={`${s.sym}-${s.winH}-${i}`}
+              key={`${s.venue}-${s.sym}-${i}`}
               icon={<CoinIcon sym={s.sym} size={32} />}
               title={s.sym}
               badge={s.side === "buy" ? t(lang, "ai_long") : t(lang, "ai_short")}
+              /* В строке — только главная причина оценки. Цена, число
+                 кошельков и остальные доводы на карточке: по-русски
+                 «12 кошельков · чистый поток» не влезает и в 390 точек, а
+                 обрывок слова хуже, чем его отсутствие. */
               sub={
-                <>
-                  {px(s.entry)} · {num(s.w)} {t(lang, "flow_wallets")} ·{" "}
-                  {s.why
-                    .map((w) => {
-                      const k = whyKey(w);
-                      return k ? t(lang, k) : w;
-                    })
-                    .join(", ")}
-                </>
+                s.why.length
+                  ? (() => {
+                      const { name } = whySplit(s.why[0] ?? "");
+                      const k = whyKey(name);
+                      return k ? t(lang, k) : name;
+                    })()
+                  : `${num(s.w)} ${t(lang, "flow_wallets")}`
               }
               value={`${s.conf}%`}
               tone={s.side === "buy" ? "up" : "dn"}
               valueSub={t(lang, "ai_conf")}
-              onClick={() => open("signal", `${s.venue}:${s.winH}:${i}`)}
+              onClick={() => open("signal", `${s.venue}:${i}`)}
             />
           ))
         )}

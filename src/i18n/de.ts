@@ -21,7 +21,7 @@ export const de: Dict = {
   ai_entry: "📍 Einstieg",
   ai_expire: "⏳ Gültig",
   ai_expired: "⌛ Abgelaufen",
-  ai_hint: "Flow-Scoring über verfolgte Wallets.\nSchaut, wer kauft und wie breit: Volumen, Anzahl Wallets, Konzentration, Beschleunigung, Top-100-Präsenz, Funding, Marktregime.\n\nEin Filter, keine Prognose. Levels aus der Volatilität, Risiko ist ein Anteil der Einlage, kein Befehl.",
+  ai_hint: "Flussbewertung über die verfolgten Wallets.\nSchaut, wer kauft und wie breit, und nimmt den Markt dazu: Volatilität und ihre Sprünge, Trend, RSI, Funding, Open Interest, Liquidationen, Bitcoin-Regime.\n\nEin Filter, keine Prognose. Die Niveaus kommen aus der Volatilität, das Risiko ist ein Teil der Einlage, kein Befehl.",
   ai_hist_avg: "Ø Bewegung:",
   ai_hist_btn: "📜 Verlauf",
   ai_hist_empty: "Noch keine beendeten Signale.",

@@ -3990,255 +3990,49 @@ def _ai_trained(cur: sqlite3.Connection, perp: bool) -> tuple[bool, float | None
         return False, None
 
 
-def _plan(px: float, conf: float, is_long: bool, is_perp: bool) -> dict:
-    if px <= 0:
-        px = 0.0
-    stop_pct = 0.025
-    stop_pct = max(0.015, min(0.15, stop_pct))
-    stop = px * (1.0 - stop_pct) if is_long else px * (1.0 + stop_pct)
-    t1 = px * (1.0 + stop_pct * 1.5) if is_long else px * (1.0 - stop_pct * 1.5)
-    t2 = px * (1.0 + stop_pct * 3.0) if is_long else px * (1.0 - stop_pct * 3.0)
-    confidence = max(0.0, min(1.0, (conf / 100.0 - 0.5) * 2.5))
-    cap = 0.15 if is_perp else 0.06
-    risk_budget = min(cap, 0.02 + 0.13 * confidence * 0.25)
-    lev = risk_budget / stop_pct if stop_pct else 1
-    lev = max(1, min(10, int(lev + 0.5)))
-    return {
-        "entry": px,
-        "lo": px * 0.995,
-        "hi": px * 1.005,
-        "stop": stop,
-        "stopPct": round(stop_pct * 100, 1),
-        "t1": t1,
-        "t2": t2,
-        "risk": round(stop_pct * 100, 1),
-        "lev": lev if is_perp else 1,
-    }
+def _signals(cur: sqlite3.Connection) -> list:
+    """Сигналы, посчитанные ботом.
 
-
-def _heuristic(wallets: int, one_share: float, usd_vol: float, net: float, perp: bool) -> float:
-    if wallets < 3 or one_share > 0.70 or usd_vol <= 0:
-        return 0.0
-    direction = net / usd_vol
-    scaled = usd_vol / 10.0 if perp else usd_vol
-    return direction * math.log1p(wallets) * (1.0 - one_share) * math.log1p(max(scaled, 0.0))
-
-
-def _conf_from_score(score: float, trained: bool) -> int:
-    a = abs(score)
-    if trained:
-        v = int(min(99, max(1, 50 + a * 8)))
-    else:
-        v = 40 + int(min(40.0, a * 5.0))
-        v = max(35, min(80, v))
-    return v
-
-
-def _why(net: float, wallets: int, top_share: float, liq: float) -> list:
-    out = []
-    if net >= 0:
-        out.append("flow")
-        if wallets >= 8:
-            out.append("volume")
-        if top_share > 0.15:
-            out.append("top100")
-        if wallets >= 6:
-            out.append("breadth")
-    else:
-        out.append("top100-out")
-        if liq:
-            out.append("liq-skew")
-    return out or ["flow"]
-
-
-def _take_sides(rows: list, n: int = 5) -> list:
-    buys = [r for r in rows if (r.get("score") or 0) > 0]
-    sells = [r for r in rows if (r.get("score") or 0) < 0]
-    buys.sort(key=lambda x: -abs(x.get("score") or 0))
-    sells.sort(key=lambda x: -abs(x.get("score") or 0))
-    return buys[:n] + sells[:n]
-
-
-def _price_of(cur, hl, key: str, perp: bool) -> float:
-    try:
-        if perp and hl:
-            if table_exists(hl, "hl_mids"):
-                row = hl.execute("SELECT px FROM hl_mids WHERE coin=?", (key,)).fetchone()
-                if row and row[0]:
-                    return float(row[0])
-            if table_exists(hl, "hl_marks"):
-                cset = cols(hl, "hl_marks")
-                col = "px" if "px" in cset else ("mark" if "mark" in cset else "")
-                if col:
-                    row = hl.execute(f"SELECT {col} FROM hl_marks WHERE coin=?", (key,)).fetchone()
-                    if row and row[0]:
-                        return float(row[0])
-            return 0.0
-        if table_exists(cur, "token_prices"):
-            cset = cols(cur, "token_prices")
-            col = "price_nanos" if "price_nanos" in cset else ("price" if "price" in cset else "")
-            if col:
-                row = cur.execute(
-                    f"SELECT {col} FROM token_prices WHERE lower(address)=?", (key.lower(),)
-                ).fetchone()
-                if row and row[0]:
-                    v = float(row[0])
-                    return usd(v) if col == "price_nanos" or v > 1e6 else v
-        if table_exists(cur, "token_cache"):
-            cset = cols(cur, "token_cache")
-            for col in ("price_nanos", "usd_price", "price"):
-                if col not in cset:
-                    continue
-                row = cur.execute(
-                    f"SELECT {col} FROM token_cache WHERE lower(address)=?", (key.lower(),)
-                ).fetchone()
-                if row and row[0]:
-                    v = float(row[0])
-                    return usd(v) if "nanos" in col or v > 1e9 else v
-    except (sqlite3.Error, TypeError, ValueError):
-        return 0.0
-    return 0.0
-
-
-def _slot_put(bucket: dict, key: str, buy: float, sell: float, wallet: str, liq: float = 0.0):
-    if buy <= 0 and sell <= 0 and liq <= 0:
-        return
-    slot = bucket.setdefault(key, [0.0, 0.0, set(), {}, 0.0, 0.0])
-    slot[0] += buy
-    slot[1] += sell
-    vol = buy + sell
-    if wallet and vol > 0:
-        slot[2].add(wallet)
-        slot[3][wallet] = slot[3].get(wallet, 0.0) + vol
-    slot[4] += vol
-    slot[5] += liq
-
-
-def _signals_from_slots(slots: dict, hours: int, trained: bool, perp: bool, cur, hl) -> list:
-    raw = []
-    for key, (b, s, ws, per, tot, liq) in slots.items():
-        wallets = len(ws)
-        one = max(per.values()) / tot if tot and per else 0.0
-        net = b - s
-        sc = _heuristic(wallets, one, tot, net, perp)
-        if sc == 0:
-            continue
-        if perp:
-            sym = str(key or "").upper()
-        else:
-            sym = symbol_of(cur, key)
-        if not sym:
-            continue
-        conf = _conf_from_score(sc, trained)
-        side = "buy" if net >= 0 else "sell"
-        px = _price_of(cur, hl, key, perp)
-        plan = _plan(px, conf, side == "buy", perp)
-        raw.append(
-            {
-                "sym": sym,
-                "side": side,
-                "conf": conf,
-                "net": net,
-                "w": wallets,
-                **plan,
-                "why": _why(net, wallets, 0, liq),
-                "winH": hours,
-                "venue": "perp" if perp else "spot",
-                "score": sc,
-            }
-        )
-    out = _take_sides(raw, 5)
-    for s in out:
-        s.pop("score", None)
-    return out
-
-
-def _spot_windows(cur: sqlite3.Connection) -> dict[int, dict]:
-    wins: dict[int, dict] = {1: {}, 6: {}, 24: {}}
-    if not table_exists(cur, "trades"):
-        return wins
-    tnow = now()
-    t1, t6, t24 = tnow - 3600, tnow - 21600, tnow - 86400
-    ign = table_exists(cur, "ignored_wallets")
-    ban = (
-        "AND NOT EXISTS (SELECT 1 FROM ignored_wallets iw "
-        "WHERE iw.wallet = t.wallet AND iw.permanent = 1) "
-        if ign
-        else ""
-    )
+    Раньше их считал этот файл: уверенность выходила как «50 + модуль потока
+    × 8», причины были вшитым списком правил, а обученная модель жила в боте
+    и до приложения не доходила вовсе — на экране стояло 99%, которых никто
+    не считал. Повторять здесь тридцать пять признаков и лес деревьев нельзя:
+    две реализации разойдутся, и заметить это будет не по чему. Поэтому счёт
+    один, в oracle.cpp, а здесь выдача.
+    """
+    if not table_exists(cur, "ai_signals"):
+        return []
     try:
         rows = cur.execute(
-            "SELECT t.token, lower(t.wallet) w, "
-            "SUM(CASE WHEN t.timestamp>=? AND t.is_buy=1 THEN t.usd_nanos ELSE 0 END) b1, "
-            "SUM(CASE WHEN t.timestamp>=? AND t.is_buy=0 THEN t.usd_nanos ELSE 0 END) s1, "
-            "SUM(CASE WHEN t.timestamp>=? AND t.is_buy=1 THEN t.usd_nanos ELSE 0 END) b6, "
-            "SUM(CASE WHEN t.timestamp>=? AND t.is_buy=0 THEN t.usd_nanos ELSE 0 END) s6, "
-            "SUM(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE 0 END) b24, "
-            "SUM(CASE WHEN t.is_buy=0 THEN t.usd_nanos ELSE 0 END) s24 "
-            "FROM trades t "
-            "WHERE t.timestamp>=? AND t.usd_nanos>0 AND t.usd_nanos<=? "
-            f"{ban}"
-            "GROUP BY t.token, lower(t.wallet)",
-            (t1, t1, t6, t6, t24, MAX_SPOT_USD_NANOS),
+            "SELECT venue,sym,side,conf,modelled,net_nanos,wallets,entry,stop,take1,take2,"
+            "risk_pct,lev,why FROM ai_signals ORDER BY venue, side DESC, conf DESC"
         ).fetchall()
     except sqlite3.Error as e:
-        sys.stderr.write(f"[api] sonar spot: {e}\n")
-        return wins
+        sys.stderr.write(f"[api] сигналы: {e}\n")
+        return []
+    out = []
     for r in rows:
-        tok = r["token"] or ""
-        w = r["w"] or ""
-        if not tok:
+        entry = float(r["entry"] or 0)
+        if entry <= 0:
             continue
-        _slot_put(wins[1], tok, usd(r["b1"]), usd(r["s1"]), w)
-        _slot_put(wins[6], tok, usd(r["b6"]), usd(r["s6"]), w)
-        _slot_put(wins[24], tok, usd(r["b24"]), usd(r["s24"]), w)
-    return wins
-
-
-def _perp_windows(hl: sqlite3.Connection | None) -> dict[int, dict]:
-    wins: dict[int, dict] = {1: {}, 6: {}, 24: {}}
-    if not hl or not table_exists(hl, "hl_fills"):
-        return wins
-    tnow = now()
-    t1, t6, t24 = (tnow - 3600) * 1000, (tnow - 21600) * 1000, (tnow - 86400) * 1000
-    ban = (
-        "AND lower(wallet) NOT IN (SELECT lower(wallet) FROM hl_banned) "
-        if table_exists(hl, "hl_banned")
-        else ""
-    )
-    cset = cols(hl, "hl_fills")
-    dirc = "dir_code" if "dir_code" in cset else "0"
-    try:
-        rows = hl.execute(
-            f"SELECT coin, lower(wallet) w, {dirc} dirc, "
-            "SUM(CASE WHEN ts>=? THEN notional_nanos ELSE 0 END) v1, "
-            "SUM(CASE WHEN ts>=? THEN notional_nanos ELSE 0 END) v6, "
-            "SUM(notional_nanos) v24 "
-            "FROM hl_fills "
-            f"WHERE ts>=? AND notional_nanos>0 AND {dirc} IN (1,2,6,7,8) {ban}"
-            f"GROUP BY coin, lower(wallet), {dirc}",
-            (t1, t6, t24),
-        ).fetchall()
-    except sqlite3.Error as e:
-        sys.stderr.write(f"[api] sonar perp: {e}\n")
-        return wins
-    for r in rows:
-        coin = str(r["coin"] or "").upper()
-        w = r["w"] or ""
-        if not coin:
-            continue
-        code = int(r["dirc"] or 0)
-        for hours, col in ((1, "v1"), (6, "v6"), (24, "v24")):
-            v = usd(r[col])
-            if v <= 0:
-                continue
-            if code in (DIR_LIQ_LONG, DIR_LIQ_SHORT, DIR_LIQ_OTHER):
-                _slot_put(wins[hours], coin, 0.0, 0.0, w, v)
-            elif code == DIR_OPEN_LONG:
-                _slot_put(wins[hours], coin, v, 0.0, w)
-            else:
-                _slot_put(wins[hours], coin, 0.0, v, w)
-    return wins
+        out.append({
+            "sym": str(r["sym"] or "").upper(),
+            "side": "buy" if int(r["side"] or 0) else "sell",
+            "conf": int(r["conf"] or 0),
+            # Считала модель или осталась формула — на экране это разные слова.
+            "model": bool(int(r["modelled"] or 0)),
+            "net": usd(r["net_nanos"]),
+            "w": int(r["wallets"] or 0),
+            "entry": entry,
+            "stop": float(r["stop"] or 0),
+            "stopPct": round(float(r["risk_pct"] or 0), 2),
+            "t1": float(r["take1"] or 0),
+            "t2": float(r["take2"] or 0),
+            "lev": int(r["lev"] or 1),
+            "why": [w for w in str(r["why"] or "").split(",") if w],
+            "venue": "perp" if int(r["venue"] or 0) else "spot",
+        })
+    return out
 
 
 def _oracle_model(cur: sqlite3.Connection, perp: bool) -> dict | None:
@@ -4281,6 +4075,7 @@ def _oracle_model(cur: sqlite3.Connection, perp: bool) -> dict | None:
         "brier": round(float(row["brier"] or 0), 3),
         "wf": round(float(row["wf_auc"] or 0), 3),
         "up": round(100.0 * float(row["base_rate"] or 0)),
+        "top": top,
     }
 
 
@@ -4312,13 +4107,7 @@ def load_sonar(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) ->
     sonar["accPerp"] = op["acc"] if op else (round(accp * 100) if accp else None)
     sonar["acc"] = sonar["accSpot"]
 
-    signals = []
-    spot_w = _spot_windows(cur)
-    perp_w = _perp_windows(hl)
-    for hours in (1, 6, 24):
-        signals.extend(_signals_from_slots(spot_w.get(hours) or {}, hours, ts, False, cur, hl))
-        signals.extend(_signals_from_slots(perp_w.get(hours) or {}, hours, tp, True, cur, hl))
-    sonar["list"] = signals
+    sonar["list"] = _signals(cur)
 
     items = []
     if table_exists(cur, "ai_events"):

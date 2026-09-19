@@ -21,7 +21,7 @@ export const pt: Dict = {
   ai_entry: "📍 Entrada",
   ai_expire: "⏳ Válido",
   ai_expired: "⌛ Expirado",
-  ai_hint: "Pontuação de fluxo nas carteiras monitoradas.\nObserva quem compra e com que amplitude: volume, número de carteiras, concentração, aceleração, presença do top-100, funding, regime de mercado.\n\nÉ um filtro, não uma previsão. Os níveis vêm da volatilidade, o risco é uma fração do depósito, não uma ordem.",
+  ai_hint: "Pontuação de fluxo nas carteiras acompanhadas.\nOlha quem compra e com que amplitude, e acrescenta o mercado: volatilidade e seus picos, tendência, RSI, funding, contratos em aberto, liquidações, regime do Bitcoin.\n\nÉ um filtro, não uma previsão. Os níveis vêm da volatilidade, o risco é parte do depósito, não uma ordem.",
   ai_hist_avg: "Movimento médio:",
   ai_hist_btn: "📜 Histórico",
   ai_hist_empty: "Ainda sem sinais fechados.",

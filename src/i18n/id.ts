@@ -21,7 +21,7 @@ export const id: Dict = {
   ai_entry: "📍 Masuk",
   ai_expire: "⏳ Berlaku",
   ai_expired: "⌛ Kedaluwarsa",
-  ai_hint: "Skoring aliran pada dompet yang dilacak.\nMelihat siapa yang membeli dan seberapa luas: volume, jumlah dompet, konsentrasi, akselerasi, kehadiran top-100, funding, rezim pasar.\n\nIni filter, bukan ramalan. Level dari volatilitas, risiko adalah bagian deposit, bukan perintah.",
+  ai_hint: "Skoring aliran pada dompet yang dilacak.\nMelihat siapa yang membeli dan seberapa luas, lalu menambahkan pasar: volatilitas dan lonjakannya, tren, RSI, funding, open interest, likuidasi, rezim Bitcoin.\n\nIni filter, bukan ramalan. Level berasal dari volatilitas, risiko adalah bagian dari deposit, bukan perintah.",
   ai_hist_avg: "Rata-rata gerak:",
   ai_hist_btn: "📜 Riwayat",
   ai_hist_empty: "Belum ada sinyal selesai.",

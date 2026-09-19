@@ -21,7 +21,7 @@ export const vi: Dict = {
   ai_entry: "📍 Vào lệnh",
   ai_expire: "⏳ Hiệu lực",
   ai_expired: "⌛ Hết hạn",
-  ai_hint: "Chấm điểm dòng tiền trên các ví theo dõi.\nXem ai đang mua và rộng đến đâu: khối lượng, số ví, mức tập trung, gia tốc, sự hiện diện của top-100, funding, chế độ thị trường.\n\nĐây là bộ lọc, không phải dự báo. Mức giá từ biến động, rủi ro là phần của tài khoản, không phải mệnh lệnh.",
+  ai_hint: "Chấm điểm dòng tiền trên các ví được theo dõi.\nXem ai đang mua và rộng đến đâu, rồi thêm thị trường: biến động và các cú nhảy, xu hướng, RSI, funding, hợp đồng mở, thanh lý, trạng thái Bitcoin.\n\nĐây là bộ lọc, không phải dự báo. Các mức đến từ biến động, rủi ro là một phần tiền gửi, không phải mệnh lệnh.",
   ai_hist_avg: "Biến động TB:",
   ai_hist_btn: "📜 Lịch sử",
   ai_hist_empty: "Chưa có tín hiệu hoàn tất.",

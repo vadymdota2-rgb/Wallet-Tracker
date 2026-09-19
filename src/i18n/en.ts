@@ -21,7 +21,7 @@ export const en = {
   ai_entry: "📍 Entry",
   ai_expire: "⏳ Valid",
   ai_expired: "⌛ Expired",
-  ai_hint: "Flow scoring across tracked wallets.\nLooks at who is buying and how broadly: volume, wallet count, concentration, acceleration, top-100 presence, funding, market regime.\n\nA filter, not a forecast. Levels come from volatility, risk is a share of the deposit, not an order.",
+  ai_hint: "Flow scoring across tracked wallets.\nLooks at who is buying and how broadly, and adds the market: volatility and its spikes, trend, RSI, funding, open interest, liquidations, Bitcoin regime.\n\nA filter, not a forecast. Levels come from volatility, risk is a share of the deposit, not an order.",
   ai_hist_avg: "Average move:",
   ai_hist_btn: "📜 Signal history",
   ai_hist_empty: "No completed signals yet.",

@@ -81,20 +81,33 @@ export function holdTime(sec: number | null | undefined, lang: LangCode): string
   return `${n}${S}`;
 }
 
-/** Ключи причин сигнала приходят готовыми: "flow" → ai_why_flow. */
+/**
+ * Причина сигнала приходит как вклад признака: "+flow", "-vol 24h". Знак
+ * говорит, за сигнал признак или против, имя — какой именно. Часть имён
+ * переводится, остальные остаются как есть: «RSI», «ATR» и «funding»
+ * читаются одинаково на всех языках, и перевод сделал бы их хуже.
+ */
 const WHY: Record<string, DictKey> = {
   flow: "ai_why_flow",
   volume: "ai_why_vol",
   top100: "ai_why_top",
-  "top100-out": "ai_why_topdir",
-  breadth: "ai_why_breadth",
-  "liq-skew": "ai_why_liqskew",
-  share: "ai_why_share",
-  oi: "ai_why_oi",
-  rsi: "ai_why_rsi",
-  lev: "ai_why_lev",
-  liq: "ai_why_liq",
+  "top dir": "ai_why_topdir",
+  wallets: "ai_why_breadth",
+  "liq skew": "ai_why_liqskew",
+  spread: "ai_why_share",
+  "OI 1h": "ai_why_oi",
+  "OI 24h": "ai_why_oi",
+  RSI: "ai_why_rsi",
+  leverage: "ai_why_lev",
+  liquidity: "ai_why_liq",
 };
+
+/** Разбор причины: знак отдельно, имя отдельно. */
+export function whySplit(raw: string): { up: boolean; name: string } {
+  const s = String(raw || "");
+  const up = !s.startsWith("-");
+  return { up, name: s.replace(/^[+-]/, "") };
+}
 
 export function whyKey(raw: string): DictKey | null {
   return WHY[raw] ?? null;
