@@ -27,6 +27,10 @@ export interface Screen {
 
 /** Окна крупных сделок — те же, что в боте. */
 export type BigWin = "1h" | "6h" | "24h" | "7d" | "30d";
+
+/** Сторона сигнала на вкладке Cortex: спот и перпы лежат в одном списке. */
+export type CortexSide = "long" | "short";
+
 /** Сторона доски крупных ордеров. */
 export type BigSide = "buy" | "sell";
 /** Разделы аналитики — те же кнопки, что в меню бота. */
@@ -46,6 +50,7 @@ interface AppState {
   bigView: BigView;
   bigWin: BigWin;
   bigSide: BigSide;
+  cortexSide: CortexSide;
   lsCls: CoinClass;
   flowWin: FlowWin;
   flowSide: FlowSide;
@@ -55,7 +60,6 @@ interface AppState {
   rankKind: RankKind;
   rankWin: RankWin;
 
-  cortexVenue: Venue;
   chartTf: Timeframe;
   /** Свои деньги в калькуляторе фандинга. Ноль — поле пустое, счёта нет. */
   fundAmount: number;
@@ -72,13 +76,13 @@ interface AppState {
   setBigWin(w: BigWin): void;
   setFlowWin(w: FlowWin): void;
   setBigSide(s: BigSide): void;
+  setCortexSide(s: CortexSide): void;
   setLsCls(c: CoinClass): void;
   setFlowSide(s: FlowSide): void;
   setFlowQuery(q: string): void;
   setRankVenue(v: Venue): void;
   setRankKind(k: RankKind): void;
   setRankWin(w: RankWin): void;
-  setCortexVenue(v: Venue): void;
   setChartTf(tf: Timeframe): void;
   setFundAmount(v: number): void;
   setFundLev(v: number): void;
@@ -95,6 +99,7 @@ export const useApp = create<AppState>()(
       bigView: "flow",
       bigWin: "24h",
       bigSide: "buy",
+      cortexSide: "long",
       lsCls: "crypto",
       flowWin: "24",
       flowSide: "all",
@@ -104,7 +109,6 @@ export const useApp = create<AppState>()(
       rankKind: "pnl",
       rankWin: "30",
 
-      cortexVenue: "spot",
       chartTf: "1d",
       fundAmount: 0,
       fundLev: 1,
@@ -119,13 +123,13 @@ export const useApp = create<AppState>()(
       setBigWin: (bigWin) => set({ bigWin }),
       setFlowWin: (flowWin) => set({ flowWin }),
       setBigSide: (bigSide) => set({ bigSide }),
+      setCortexSide: (cortexSide) => set({ cortexSide }),
       setLsCls: (lsCls) => set({ lsCls }),
       setFlowSide: (flowSide) => set({ flowSide }),
       setFlowQuery: (flowQuery) => set({ flowQuery }),
       setRankVenue: (rankVenue) => set({ rankVenue }),
       setRankKind: (rankKind) => set({ rankKind }),
       setRankWin: (rankWin) => set({ rankWin }),
-      setCortexVenue: (cortexVenue) => set({ cortexVenue }),
       setChartTf: (chartTf) => set({ chartTf }),
       setFundAmount: (fundAmount) => set({ fundAmount: Math.max(0, fundAmount) }),
       /* Сто двадцать пять — предел самых щедрых бирж; выше плеча не бывает, а
@@ -141,8 +145,10 @@ export const useApp = create<AppState>()(
       /* Вторая версия — переименование Sonar в Cortex: поля звались
          sonarVenue и sonarWin, вкладка — "sonar", и без переноса человек
          открыл бы приложение на чужой вкладке. Третья убрала окно потока:
-         модель работает только на суточном. */
-      version: 3,
+         модель работает только на суточном. Четвёртая сняла деление по
+         площадке: вкладки теперь лонг и шорт, а спот и перпы лежат в них
+         вместе. */
+      version: 4,
       migrate: (prev, from) => {
         let s = prev as Record<string, unknown>;
         if (from < 1) s = { ...s, fundAmount: 0, fundLev: 1 };
@@ -162,6 +168,14 @@ export const useApp = create<AppState>()(
           void cortexWin;
           s = rest;
         }
+        if (from < 4) {
+          /* Деление по площадке сменилось делением по стороне: спот и перпы
+             лежат в одном списке, а вкладки — лонг и шорт. Перенести нечего:
+             сохранённый «спот» не значит ни «лонг», ни «шорт». */
+          const { cortexVenue, ...rest } = s as { cortexVenue?: string; [k: string]: unknown };
+          void cortexVenue;
+          s = { ...rest, cortexSide: "long" };
+        }
         return s;
       },
       // Стек экранов не сохраняем: запуск всегда начинается с вкладки.
@@ -172,13 +186,13 @@ export const useApp = create<AppState>()(
         bigView: s.bigView,
         bigWin: s.bigWin,
         bigSide: s.bigSide,
+        cortexSide: s.cortexSide,
         lsCls: s.lsCls,
         flowWin: s.flowWin,
         flowSide: s.flowSide,
         rankVenue: s.rankVenue,
         rankKind: s.rankKind,
         rankWin: s.rankWin,
-        cortexVenue: s.cortexVenue,
         chartTf: s.chartTf,
         fundAmount: s.fundAmount,
         fundLev: s.fundLev,

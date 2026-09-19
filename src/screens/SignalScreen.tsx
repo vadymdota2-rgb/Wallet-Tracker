@@ -21,6 +21,7 @@ import { useLive } from "../store/live";
 import { t } from "../i18n/t";
 import { num, pct, px, signed } from "../lib/format";
 import { sideKey, whyKey } from "../lib/labels";
+import { cortexList } from "../lib/cortex";
 import { fetchTokenHist } from "../lib/api";
 import {
   candlesFrom, fetchCandles, TF_LABEL,
@@ -32,6 +33,7 @@ import {
   Card, Diverging, Empty, Meter, SectionTitle, Segmented, Skeleton, Tiles,
 } from "../components/ui";
 import type { LangCode } from "../i18n/types";
+import type { CortexSide } from "../store/app";
 import type { Venue } from "../lib/types";
 
 /* Сетка таймфреймов карточки: четыре кнопки влезают в 320 точек, шесть —
@@ -49,12 +51,15 @@ export function SignalScreen({ arg }: ScreenProps) {
   const lang = useApp((s) => s.lang);
   const cortex = useLive((s) => s.cortex);
 
-  const [venueRaw, idxRaw] = String(arg || "").split(":");
-  const venue = (venueRaw === "perp" ? "perp" : "spot") as Venue;
+  /* Карточку открывает номер в списке вкладки, а список делит сторона, а не
+     площадка. Порядок берётся той же функцией, что рисует список: разойдись
+     они — человек нажал бы на одну монету, а открылась бы другая. */
+  const [sideRaw, idxRaw] = String(arg || "").split(":");
+  const side: CortexSide = sideRaw === "short" ? "short" : "long";
   const idx = Number(idxRaw);
 
-  const list = cortex.list.filter((s) => s.venue === venue);
-  const s = list[idx];
+  const s = cortexList(cortex.list, side)[idx];
+  const venue = (s?.venue ?? "spot") as Venue;
 
   const sym = s?.sym ?? "";
   const addr = String(s?.addr || "");
