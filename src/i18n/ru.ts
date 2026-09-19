@@ -15,7 +15,7 @@ export const ru: Dict = {
   ai_acc: "точность модели",
   ai_auc_hint: "0.50 — как монетка, 1.00 — идеально",
   ai_avoid: "Избегать",
-  ai_btn: "📡 Cortex",
+  ai_btn: "🧠 Cortex",
   ai_buy: "Покупка",
   ai_collecting: "собираем результаты",
   ai_conf: "Уверенность",

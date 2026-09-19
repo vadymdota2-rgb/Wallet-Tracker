@@ -8,7 +8,7 @@ Wyślij adres portfela, który chcesz śledzić — format 0x..., 42 znaki.
 
 💡 Nie wiesz, który dodać?
 Zakładka 🏆 Top traderzy rankinguje najbardziej zyskowne portfele z 30 dni — wybierz dowolny i śledź jednym kliknięciem.
-Albo wklej adres z explorera lub serwisu analitycznego.`,add_wallet_tracking_enabled:"Śledzenie włączone.",ai_acc:"dokładność modelu",ai_auc_hint:"0,50 to rzut monetą, 1,00 to ideał",ai_avoid:"Unikaj",ai_btn:"📡 Cortex",ai_buy:"Kupno",ai_collecting:"zbieramy wyniki",ai_conf:"Pewność",ai_empty:"Za mało niezależnych portfeli w tym oknie.",ai_entry:"📍 Wejście",ai_expire:"⏳ Ważne",ai_expired:"⌛ Wygasło",ai_hint:`Cortex to wyrocznia: wytrenowany model, który ocenia szansę, że cena pójdzie za portfelami, które śledzisz. Gdy wiele niezależnych portfeli idzie w tę samą stronę, podaje liczbę.
+Albo wklej adres z explorera lub serwisu analitycznego.`,add_wallet_tracking_enabled:"Śledzenie włączone.",ai_acc:"dokładność modelu",ai_auc_hint:"0,50 to rzut monetą, 1,00 to ideał",ai_avoid:"Unikaj",ai_btn:"🧠 Cortex",ai_buy:"Kupno",ai_collecting:"zbieramy wyniki",ai_conf:"Pewność",ai_empty:"Za mało niezależnych portfeli w tym oknie.",ai_entry:"📍 Wejście",ai_expire:"⏳ Ważne",ai_expired:"⌛ Wygasło",ai_hint:`Cortex to wyrocznia: wytrenowany model, który ocenia szansę, że cena pójdzie za portfelami, które śledzisz. Gdy wiele niezależnych portfeli idzie w tę samą stronę, podaje liczbę.
 
 Patrzy nie tylko na przepływ: 41 cech — wolumeny i liczba portfeli, zwroty z godziny, sześciu godzin i doby, zmienność i jej skoki, ATR, RSI, trend, MACD, funding, otwarte pozycje, likwidacje, dźwignia, płynność, reżim Bitcoina i szerokość rynku.
 

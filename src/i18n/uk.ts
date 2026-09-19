@@ -15,7 +15,7 @@ export const uk: Dict = {
   ai_acc: "точність моделі",
   ai_auc_hint: "0.50 — як монетка, 1.00 — ідеально",
   ai_avoid: "Уникати",
-  ai_btn: "📡 Cortex",
+  ai_btn: "🧠 Cortex",
   ai_buy: "Купівля",
   ai_collecting: "збираємо результати",
   ai_conf: "Упевненість",

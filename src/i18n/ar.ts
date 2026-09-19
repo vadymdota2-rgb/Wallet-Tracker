@@ -15,7 +15,7 @@ export const ar: Dict = {
   ai_acc: "دقة النموذج",
   ai_auc_hint: "0.50 حظ، و1.00 مثالي",
   ai_avoid: "تجنب",
-  ai_btn: "📡 Cortex",
+  ai_btn: "🧠 Cortex",
   ai_buy: "شراء",
   ai_collecting: "نجمع النتائج",
   ai_conf: "الثقة",

@@ -15,7 +15,7 @@ export const vi: Dict = {
   ai_acc: "độ chính xác",
   ai_auc_hint: "0,50 là tung đồng xu, 1,00 là hoàn hảo",
   ai_avoid: "Tránh",
-  ai_btn: "📡 Cortex",
+  ai_btn: "🧠 Cortex",
   ai_buy: "Mua",
   ai_collecting: "đang thu thập kết quả",
   ai_conf: "Độ tin",

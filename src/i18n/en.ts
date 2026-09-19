@@ -15,7 +15,7 @@ export const en = {
   ai_acc: "model accuracy",
   ai_auc_hint: "0.50 is a coin flip, 1.00 is perfect",
   ai_avoid: "Avoid",
-  ai_btn: "📡 Cortex",
+  ai_btn: "🧠 Cortex",
   ai_buy: "Buy",
   ai_collecting: "collecting results",
   ai_conf: "Confidence",

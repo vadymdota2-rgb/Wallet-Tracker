@@ -15,7 +15,7 @@ export const ko: Dict = {
   ai_acc: "모델 정확도",
   ai_auc_hint: "0.50은 동전 던지기, 1.00은 완벽",
   ai_avoid: "회피",
-  ai_btn: "📡 Cortex",
+  ai_btn: "🧠 Cortex",
   ai_buy: "매수",
   ai_collecting: "결과를 모으는 중",
   ai_conf: "신뢰도",

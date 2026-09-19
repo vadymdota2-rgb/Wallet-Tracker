@@ -8,7 +8,7 @@ Takip etmek istediğin cüzdanın adresini gönder — 0x... biçiminde, 42 kara
 
 💡 Hangi cüzdanı ekleyeceğini bilmiyor musun?
 Aşağıdaki 🏆 En iyi trader'lar sekmesi son 30 günün en kârlı cüzdanlarını sıralar: herhangi birini seç ve tek dokunuşla takibe al.
-Ya da bir blok gezgininden veya analiz servisinden bir adres yapıştır.`,add_wallet_tracking_enabled:"Takip açıldı.",ai_acc:"model doğruluğu",ai_auc_hint:"0.50 yazı tura, 1.00 kusursuz",ai_avoid:"Kaçın",ai_btn:"📡 Cortex",ai_buy:"Alım",ai_collecting:"sonuçlar toplanıyor",ai_conf:"Güven",ai_empty:"Bu dönemde yeterli bağımsız cüzdan yok.",ai_entry:"📍 Giriş",ai_expire:"⏳ Geçerli",ai_expired:"⌛ Süresi doldu",ai_hint:`Cortex bir kâhin: takip ettiğin cüzdanların gittiği yöne fiyatın da gitme şansını tahmin eden, eğitilmiş bir model. Çok sayıda bağımsız cüzdan aynı yöne gittiğinde buna bir sayı verir.
+Ya da bir blok gezgininden veya analiz servisinden bir adres yapıştır.`,add_wallet_tracking_enabled:"Takip açıldı.",ai_acc:"model doğruluğu",ai_auc_hint:"0.50 yazı tura, 1.00 kusursuz",ai_avoid:"Kaçın",ai_btn:"🧠 Cortex",ai_buy:"Alım",ai_collecting:"sonuçlar toplanıyor",ai_conf:"Güven",ai_empty:"Bu dönemde yeterli bağımsız cüzdan yok.",ai_entry:"📍 Giriş",ai_expire:"⏳ Geçerli",ai_expired:"⌛ Süresi doldu",ai_hint:`Cortex bir kâhin: takip ettiğin cüzdanların gittiği yöne fiyatın da gitme şansını tahmin eden, eğitilmiş bir model. Çok sayıda bağımsız cüzdan aynı yöne gittiğinde buna bir sayı verir.
 
 Sadece akışa bakmaz: 41 gösterge — hacimler ve cüzdan sayısı, bir saatlik, altı saatlik ve günlük getiriler, oynaklık ve sıçramaları, ATR, RSI, trend, MACD, fonlama, açık pozisyon, likidasyonlar, kaldıraç, likidite, Bitcoin rejimi ve piyasa genişliği.
 

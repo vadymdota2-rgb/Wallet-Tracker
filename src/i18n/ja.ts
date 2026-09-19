@@ -15,7 +15,7 @@ export const ja: Dict = {
   ai_acc: "モデル精度",
   ai_auc_hint: "0.50はコイン投げ、1.00は完璧",
   ai_avoid: "回避",
-  ai_btn: "📡 Cortex",
+  ai_btn: "🧠 Cortex",
   ai_buy: "買い",
   ai_collecting: "結果を集めています",
   ai_conf: "確信度",

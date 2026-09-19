@@ -8,7 +8,7 @@ const _={account_desc:"您跟踪的钱包及其当前持仓。",account_title:"�
 
 💡 不确定添加谁？
 🏆 顶级交易者 按近 30 天收益排名 — 选一个一键跟踪。
-或从浏览器/分析服务粘贴地址。`,add_wallet_tracking_enabled:"已开启跟踪。",ai_acc:"模型准确率",ai_auc_hint:"0.50 等于抛硬币，1.00 是完美",ai_avoid:"回避",ai_btn:"📡 Cortex",ai_buy:"买入",ai_collecting:"正在收集结果",ai_conf:"把握",ai_empty:"该时段独立钱包不足。",ai_entry:"📍 入场",ai_expire:"⏳ 有效",ai_expired:"⌛ 已过期",ai_hint:`Cortex 是一个神谕：一个训练过的模型，估计价格跟随你关注的钱包的概率。当许多独立钱包朝同一方向移动时，它给出一个数字。
+或从浏览器/分析服务粘贴地址。`,add_wallet_tracking_enabled:"已开启跟踪。",ai_acc:"模型准确率",ai_auc_hint:"0.50 等于抛硬币，1.00 是完美",ai_avoid:"回避",ai_btn:"🧠 Cortex",ai_buy:"买入",ai_collecting:"正在收集结果",ai_conf:"把握",ai_empty:"该时段独立钱包不足。",ai_entry:"📍 入场",ai_expire:"⏳ 有效",ai_expired:"⌛ 已过期",ai_hint:`Cortex 是一个神谕：一个训练过的模型，估计价格跟随你关注的钱包的概率。当许多独立钱包朝同一方向移动时，它给出一个数字。
 
 它看的不只是资金流：41 个特征 — 成交量与钱包数、1 小时/6 小时/一天的涨跌、波动率及其骤升、ATR、RSI、趋势、MACD、资金费率、未平仓量、爆仓、杠杆、流动性、比特币的状态和市场广度。
 

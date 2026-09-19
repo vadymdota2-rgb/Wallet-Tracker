@@ -1462,3 +1462,9 @@
   .brain-live { transform: scale(1.04); }
   .brain-fire { display: none; }
 }
+
+/* Значок Cortex — картинка, а не линия, поэтому сам по себе не гаснет вместе
+   с цветом текста. Приглушаем прозрачностью, а на активной вкладке возвращаем
+   полную яркость: свечение ей добавит общее правило .tabs button.on span. */
+.glyph-brain { display: block; opacity: 0.55; transition: opacity 0.15s var(--ease); }
+.tabs button.on .glyph-brain { opacity: 1; }

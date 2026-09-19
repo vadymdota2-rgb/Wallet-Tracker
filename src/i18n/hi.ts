@@ -15,7 +15,7 @@ export const hi: Dict = {
   ai_acc: "मॉडल सटीकता",
   ai_auc_hint: "0.50 सिक्का, 1.00 सटीक",
   ai_avoid: "बचें",
-  ai_btn: "📡 Cortex",
+  ai_btn: "🧠 Cortex",
   ai_buy: "खरीद",
   ai_collecting: "परिणाम जुटा रहे हैं",
   ai_conf: "विश्वास",

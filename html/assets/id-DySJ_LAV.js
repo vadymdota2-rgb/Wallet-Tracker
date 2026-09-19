@@ -8,7 +8,7 @@ Kirim alamat dompet yang ingin dilacak — format 0x..., 42 karakter.
 
 💡 Tidak yakin yang mana?
 Tab 🏆 Trader teratas merangking dompet paling profit 30 hari terakhir — pilih dan lacak sekali ketuk.
-Atau tempel alamat dari explorer / analitik.`,add_wallet_tracking_enabled:"Pelacakan aktif.",ai_acc:"akurasi model",ai_auc_hint:"0,50 seperti lempar koin, 1,00 sempurna",ai_avoid:"Hindari",ai_btn:"📡 Cortex",ai_buy:"Beli",ai_collecting:"mengumpulkan hasil",ai_conf:"Keyakinan",ai_empty:"Dompet independen tidak cukup di periode ini.",ai_entry:"📍 Masuk",ai_expire:"⏳ Berlaku",ai_expired:"⌛ Kedaluwarsa",ai_hint:`Cortex adalah orakel: model terlatih yang memperkirakan peluang harga mengikuti dompet yang Anda pantau. Ketika banyak dompet independen bergerak ke arah yang sama, ia memberi angka.
+Atau tempel alamat dari explorer / analitik.`,add_wallet_tracking_enabled:"Pelacakan aktif.",ai_acc:"akurasi model",ai_auc_hint:"0,50 seperti lempar koin, 1,00 sempurna",ai_avoid:"Hindari",ai_btn:"🧠 Cortex",ai_buy:"Beli",ai_collecting:"mengumpulkan hasil",ai_conf:"Keyakinan",ai_empty:"Dompet independen tidak cukup di periode ini.",ai_entry:"📍 Masuk",ai_expire:"⏳ Berlaku",ai_expired:"⌛ Kedaluwarsa",ai_hint:`Cortex adalah orakel: model terlatih yang memperkirakan peluang harga mengikuti dompet yang Anda pantau. Ketika banyak dompet independen bergerak ke arah yang sama, ia memberi angka.
 
 Ia tidak hanya melihat arus: 41 indikator — volume dan jumlah dompet, imbal hasil satu jam, enam jam dan sehari, volatilitas dan lonjakannya, ATR, RSI, tren, MACD, funding, open interest, likuidasi, leverage, likuiditas, rezim Bitcoin dan lebar pasar.
 

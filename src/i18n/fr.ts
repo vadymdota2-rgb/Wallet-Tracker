@@ -15,7 +15,7 @@ export const fr: Dict = {
   ai_acc: "précision du modèle",
   ai_auc_hint: "0,50 c'est le hasard, 1,00 c'est parfait",
   ai_avoid: "Éviter",
-  ai_btn: "📡 Cortex",
+  ai_btn: "🧠 Cortex",
   ai_buy: "Achat",
   ai_collecting: "collecte des résultats",
   ai_conf: "Confiance",

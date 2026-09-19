@@ -15,7 +15,7 @@ export const de: Dict = {
   ai_acc: "Modellgenauigkeit",
   ai_auc_hint: "0,50 ist Münzwurf, 1,00 ist perfekt",
   ai_avoid: "Meiden",
-  ai_btn: "📡 Cortex",
+  ai_btn: "🧠 Cortex",
   ai_buy: "Kauf",
   ai_collecting: "sammle Ergebnisse",
   ai_conf: "Konfidenz",

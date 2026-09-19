@@ -15,7 +15,7 @@ import { bootTelegram, haptic, telegramLang, waitForTelegram, webApp } from "./l
 import { startSync, syncNow } from "./lib/sync";
 import { Toaster, toast } from "./components/Toast";
 import { Background } from "./components/Background";
-import { AnalyticsGlyph, ThresholdGlyph, TopGlyph, WalletGlyph } from "./components/ui";
+import { AnalyticsGlyph, CortexGlyph, ThresholdGlyph, TopGlyph, WalletGlyph } from "./components/ui";
 import { SCREENS } from "./screens/registry";
 import { WalletsTab } from "./screens/WalletsTab";
 import { TopTab } from "./screens/TopTab";
@@ -31,7 +31,7 @@ const TABS: { id: Tab; key: DictKey; glyph: ReactNode }[] = [
   { id: "wallets", key: "menu_my_wallets", glyph: <WalletGlyph /> },
   { id: "top", key: "menu_top_traders", glyph: <TopGlyph /> },
   { id: "analytics", key: "menu_big_trades", glyph: <AnalyticsGlyph /> },
-  { id: "cortex", key: "ai_title", glyph: "📡" },
+  { id: "cortex", key: "ai_title", glyph: <CortexGlyph /> },
   { id: "more", key: "ui_more", glyph: "⋯" },
 ];
 

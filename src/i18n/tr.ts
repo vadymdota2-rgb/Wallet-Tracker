@@ -15,7 +15,7 @@ export const tr: Dict = {
   ai_acc: "model doğruluğu",
   ai_auc_hint: "0.50 yazı tura, 1.00 kusursuz",
   ai_avoid: "Kaçın",
-  ai_btn: "📡 Cortex",
+  ai_btn: "🧠 Cortex",
   ai_buy: "Alım",
   ai_collecting: "sonuçlar toplanıyor",
   ai_conf: "Güven",

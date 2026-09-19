@@ -15,7 +15,7 @@ export const zh: Dict = {
   ai_acc: "模型准确率",
   ai_auc_hint: "0.50 等于抛硬币，1.00 是完美",
   ai_avoid: "回避",
-  ai_btn: "📡 Cortex",
+  ai_btn: "🧠 Cortex",
   ai_buy: "买入",
   ai_collecting: "正在收集结果",
   ai_conf: "把握",

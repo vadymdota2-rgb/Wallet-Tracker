@@ -8,7 +8,7 @@ Gửi địa chỉ ví muốn theo dõi — định dạng 0x..., 42 ký tự.
 
 💡 Chưa biết thêm ví nào?
 Tab 🏆 Top trader xếp hạng ví lãi nhất 30 ngày — chọn và theo dõi một chạm.
-Hoặc dán địa chỉ từ explorer / phân tích.`,add_wallet_tracking_enabled:"Đã bật theo dõi.",ai_acc:"độ chính xác",ai_auc_hint:"0,50 là tung đồng xu, 1,00 là hoàn hảo",ai_avoid:"Tránh",ai_btn:"📡 Cortex",ai_buy:"Mua",ai_collecting:"đang thu thập kết quả",ai_conf:"Độ tin",ai_empty:"Không đủ ví độc lập trong khoảng này.",ai_entry:"📍 Vào lệnh",ai_expire:"⏳ Hiệu lực",ai_expired:"⌛ Hết hạn",ai_hint:`Cortex là một nhà tiên tri: mô hình đã huấn luyện, ước lượng khả năng giá đi theo các ví bạn theo dõi. Khi nhiều ví độc lập cùng đi một hướng, nó quy ra con số.
+Hoặc dán địa chỉ từ explorer / phân tích.`,add_wallet_tracking_enabled:"Đã bật theo dõi.",ai_acc:"độ chính xác",ai_auc_hint:"0,50 là tung đồng xu, 1,00 là hoàn hảo",ai_avoid:"Tránh",ai_btn:"🧠 Cortex",ai_buy:"Mua",ai_collecting:"đang thu thập kết quả",ai_conf:"Độ tin",ai_empty:"Không đủ ví độc lập trong khoảng này.",ai_entry:"📍 Vào lệnh",ai_expire:"⏳ Hiệu lực",ai_expired:"⌛ Hết hạn",ai_hint:`Cortex là một nhà tiên tri: mô hình đã huấn luyện, ước lượng khả năng giá đi theo các ví bạn theo dõi. Khi nhiều ví độc lập cùng đi một hướng, nó quy ra con số.
 
 Nó không chỉ nhìn dòng tiền: 41 chỉ báo — khối lượng và số ví, lợi suất một giờ, sáu giờ và một ngày, biến động và các cú nhảy, ATR, RSI, xu hướng, MACD, funding, open interest, thanh lý, đòn bẩy, thanh khoản, trạng thái Bitcoin và độ rộng thị trường.
 

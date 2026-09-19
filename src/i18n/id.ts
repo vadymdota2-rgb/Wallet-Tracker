@@ -15,7 +15,7 @@ export const id: Dict = {
   ai_acc: "akurasi model",
   ai_auc_hint: "0,50 seperti lempar koin, 1,00 sempurna",
   ai_avoid: "Hindari",
-  ai_btn: "📡 Cortex",
+  ai_btn: "🧠 Cortex",
   ai_buy: "Beli",
   ai_collecting: "mengumpulkan hasil",
   ai_conf: "Keyakinan",

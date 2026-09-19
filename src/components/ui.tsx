@@ -2,6 +2,7 @@
 import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode, type Ref } from "react";
 import { haptic } from "../lib/telegram";
 import { copyText } from "../lib/copy";
+import brainIcon from "../assets/brain-icon.png";
 
 export function SectionTitle({ children, note }: { children: ReactNode; note?: ReactNode }) {
   return (
@@ -573,6 +574,30 @@ export function VenueReel<T extends string>({
  * же. Не столбики в рамке: скруглённый прямоугольник в нижнем меню уже есть
  * — это «Мои кошельки», — и рядом они слипаются в одну форму.
  */
+/**
+ * Значок Cortex — тот же мозг, что наверху вкладки, только маленький.
+ *
+ * Не нарисованный заново, а вырезанный из самой картинки: границы взяты с её
+ * карты яркости, фон снят прозрачностью по светлоте — у картинки он почти
+ * чёрный, у мозга светящиеся жилки. Иначе в доке рядом с линейными значками
+ * висел бы чёрный квадрат.
+ *
+ * Он чуть крупнее соседей: у тех контур в полторы точки, здесь тонкие жилки,
+ * и на двадцати одной точке они бледнеют до тени.
+ */
+export function CortexGlyph({ size = 26 }: { size?: number }) {
+  return (
+    <img
+      className="glyph glyph-brain"
+      src={brainIcon}
+      alt=""
+      width={size}
+      height={size}
+      aria-hidden="true"
+    />
+  );
+}
+
 export function AnalyticsGlyph({ size = 21 }: { size?: number }) {
   return (
     <svg
