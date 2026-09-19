@@ -3951,6 +3951,7 @@ ORACLE_FEATURES = (
     "funding", "funding z", "OI 1h", "OI 24h", "OI/vlm",
     "vlm 24h", "liq skew", "liq/OI", "leverage", "liquidity",
     "BTC 24h", "BTC vol", "breadth", "hour", "hour 2",
+    "MACD", "MACD sig", "MACD hist",
 )
 
 def _count_ready(cur: sqlite3.Connection, perp: bool) -> int:
@@ -4017,10 +4018,15 @@ def _signals(cur: sqlite3.Connection) -> list:
     """
     if not table_exists(cur, "ai_signals"):
         return []
+    # Столбцы появились позже: у базы, которую ещё не трогал новый бот, их нет.
+    cset = cols(cur, "ai_signals")
+    share = "risk_share" if "risk_share" in cset else "0"
+    hz = "horizon" if "horizon" in cset else "86400"
     try:
         rows = cur.execute(
-            "SELECT venue,sym,side,conf,modelled,net_nanos,wallets,entry,stop,take1,take2,"
-            "risk_pct,lev,why FROM ai_signals ORDER BY venue, side DESC, conf DESC"
+            f"SELECT venue,sym,side,conf,modelled,net_nanos,wallets,entry,stop,take1,take2,"
+            f"risk_pct,lev,why,{share} share,{hz} horizon FROM ai_signals "
+            "ORDER BY venue, side DESC, conf DESC"
         ).fetchall()
     except sqlite3.Error as e:
         sys.stderr.write(f"[api] сигналы: {e}\n")
@@ -4044,6 +4050,10 @@ def _signals(cur: sqlite3.Connection) -> list:
             "t1": float(r["take1"] or 0),
             "t2": float(r["take2"] or 0),
             "lev": int(r["lev"] or 1),
+            # Доля депозита под риском и горизонт — решения модели, а не
+            # настройки приложения.
+            "share": round(float(r["share"] or 0), 2),
+            "h": int(r["horizon"] or 86400),
             # «flow:412» — имя признака и его вклад в сотых долях процента
             # вероятности. Отдаём процентными пунктами: приложению нужна
             # длина полосы, а не сырые базисные пункты.
@@ -4064,7 +4074,7 @@ def _oracle_try(cur: sqlite3.Connection, perp: bool) -> dict | None:
     try:
         row = cur.execute(
             "SELECT at,samples,auc,logloss,base_logloss,wf_auc,accepted FROM ai_model_try "
-            "WHERE venue=? AND horizon=86400",
+            "WHERE venue=? ORDER BY auc DESC LIMIT 1",
             (1 if perp else 0,),
         ).fetchone()
     except sqlite3.Error:
@@ -4098,8 +4108,8 @@ def _oracle_model(cur: sqlite3.Connection, perp: bool) -> dict | None:
     try:
         row = cur.execute(
             "SELECT created_at,samples,test_n,trees,auc,logloss,acc,brier,"
-            f"base_logloss,base_rate,wf_auc,gain,{lvl} levels FROM ai_models "
-            "WHERE venue=? AND horizon=86400",
+            f"base_logloss,base_rate,wf_auc,gain,{lvl} levels,horizon FROM ai_models "
+            "WHERE venue=? ORDER BY auc DESC LIMIT 1",
             (1 if perp else 0,),
         ).fetchone()
     except sqlite3.Error:
@@ -4128,6 +4138,7 @@ def _oracle_model(cur: sqlite3.Connection, perp: bool) -> dict | None:
         # Уровни от модели или по формуле от волатильности — на экране это
         # разные вещи, и человек вправе знать, что именно он видит.
         "levels": bool(int(row["levels"] or 0)),
+        "h": int(row["horizon"] or 86400),
         "top": top,
     }
 

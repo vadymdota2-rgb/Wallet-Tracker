@@ -342,6 +342,10 @@ export interface Signal {
   t1: number;
   t2: number;
   lev: number;
+  /** Доля депозита под риском, в процентах: решение модели, не настройка. */
+  share: number;
+  /** Горизонт, который модель выбрала для этого сигнала, в секундах. */
+  h: number;
   /** Вклад признаков в эту оценку: имя и сдвиг вероятности в процентных
    *  пунктах, знаком в сторону сигнала. */
   why: { k: string; v: number }[];
@@ -379,6 +383,8 @@ export interface CortexModel {
   top: { k: string; v: number }[];
   /** Стоп и цели назвала модель, а не формула от волатильности. */
   levels?: boolean;
+  /** Горизонт этой модели в секундах. */
+  h?: number;
 }
 
 export interface CortexTry {

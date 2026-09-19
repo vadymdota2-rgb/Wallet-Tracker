@@ -77,7 +77,7 @@ export function CortexTab() {
   return (
     <>
       <Card>
-        <SectionTitle note={t(lang, "ai_horizon")}>{t(lang, "ai_title")}</SectionTitle>
+        <SectionTitle>{t(lang, "ai_title")}</SectionTitle>
         <p className="note">{t(lang, "ai_hint").split("\n\n")[0]}</p>
         <Segmented<Venue>
           value={venue}

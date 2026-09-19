@@ -19,7 +19,14 @@ import { num, pct, px, signed } from "../lib/format";
 import { whyKey } from "../lib/labels";
 import { CoinIcon } from "../components/CoinIcon";
 import { Card, Diverging, Empty, Meter, Row, SectionTitle, Tiles } from "../components/ui";
+import type { LangCode } from "../i18n/types";
 import type { Venue } from "../lib/types";
+
+/** Горизонт словами: модель выбирает его сама, и он у каждого сигнала свой. */
+function hours(lang: LangCode, sec: number): string {
+  const h = Math.max(1, Math.round((sec || 86400) / 3600));
+  return t(lang, "ai_hours", { n: h });
+}
 
 export function SignalScreen({ arg }: ScreenProps) {
   const lang = useApp((s) => s.lang);
@@ -64,7 +71,7 @@ export function SignalScreen({ arg }: ScreenProps) {
         <div className="hero">
           <div className="hero-main">
             <div className={`hero-val ${long ? "up" : "dn"}`}>{pUp}%</div>
-            <div className="hero-note">{t(lang, "ai_p_up")}</div>
+            <div className="hero-note">{t(lang, "ai_p_up", { h: hours(lang, s.h) })}</div>
           </div>
         </div>
         <Meter
@@ -94,7 +101,9 @@ export function SignalScreen({ arg }: ScreenProps) {
         <Tiles
           size="sm"
           items={[
-            { label: t(lang, "ai_risk"), value: pct(s.stopPct, 1, false) },
+            /* Риск — это доля депозита, которой человек рискует, а не
+               расстояние до стопа: расстояние видно на полосах выше. */
+            { label: t(lang, "ai_risk"), value: pct(s.share || s.stopPct, 1, false) },
             { label: t(lang, "hl_leverage"), value: venue === "perp" ? `${s.lev}×` : "1×" },
             { label: t(lang, "flow_wallets"), value: num(s.w) },
             /* Сырой поток за сутки — не то же, что вклад признака «поток» в
