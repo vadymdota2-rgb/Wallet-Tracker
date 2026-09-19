@@ -41,6 +41,8 @@ export const pl: Dict = {
   ai_like_coin: "na razie nie lepiej niż rzut monetą",
   ai_long: "Long",
   ai_loss_hint: "mniej znaczy lepiej; obok to samo bez modelu",
+  ai_lv_formula: "Poziomy ze zmienności",
+  ai_lv_model: "Poziomy z modelu",
   ai_market: "Wejście po rynku",
   ai_mode_formula: "Wzór · model jeszcze się uczy",
   ai_mode_model: "Model",

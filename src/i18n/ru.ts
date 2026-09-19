@@ -41,6 +41,8 @@ export const ru: Dict = {
   ai_like_coin: "пока не лучше монетки",
   ai_long: "Лонг",
   ai_loss_hint: "меньше — лучше; рядом то же без модели",
+  ai_lv_formula: "Уровни по волатильности",
+  ai_lv_model: "Уровни от модели",
   ai_market: "Вход по рынку",
   ai_mode_formula: "Формула · модель ещё учится",
   ai_mode_model: "Модель",

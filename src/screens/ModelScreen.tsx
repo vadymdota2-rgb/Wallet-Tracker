@@ -94,6 +94,11 @@ function Venue({ m, attempt, name, ready, need }: {
            value={m.logloss.toFixed(3)} tone={m.logloss < m.base ? "up" : "dn"} />
       <Row title={title(t(lang, "ai_st_wf"))} sub={t(lang, "ai_wf_hint")}
            value={m.wf.toFixed(3)} tone={m.wf >= 0.52 ? "up" : "dn"} />
+      {/* Стоп и цели у модели свои, только когда она доказала, что угадывает
+          ход лучше среднего. Иначе их считает формула от волатильности, и об
+          этом честнее сказать. */}
+      <Row title={t(lang, m.levels ? "ai_lv_model" : "ai_lv_formula")}
+           value={m.levels ? "✓" : "—"} tone={m.levels ? "up" : undefined} />
       {m.top?.length ? (
         <>
           <SectionTitle>{title(t(lang, "ai_st_top"))}</SectionTitle>

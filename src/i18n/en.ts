@@ -41,6 +41,8 @@ export const en = {
   ai_like_coin: "no better than a coin flip yet",
   ai_long: "Long",
   ai_loss_hint: "lower is better; next to it, the same without the model",
+  ai_lv_formula: "Levels from volatility",
+  ai_lv_model: "Levels from the model",
   ai_market: "Market entry",
   ai_mode_formula: "Formula · model still learning",
   ai_mode_model: "Model",

@@ -41,6 +41,8 @@ export const ar: Dict = {
   ai_like_coin: "ليس أفضل من الحظ بعد",
   ai_long: "شراء",
   ai_loss_hint: "الأقل أفضل، وبجانبه نفس الرقم بلا نموذج",
+  ai_lv_formula: "المستويات من التقلب",
+  ai_lv_model: "المستويات من النموذج",
   ai_market: "دخول بسعر السوق",
   ai_mode_formula: "صيغة · النموذج ما زال يتعلم",
   ai_mode_model: "النموذج",

@@ -41,6 +41,8 @@ export const ko: Dict = {
   ai_like_coin: "아직 동전 던지기보다 낫지 않음",
   ai_long: "롱",
   ai_loss_hint: "작을수록 좋음, 옆은 모델 없이 같은 값",
+  ai_lv_formula: "가격대는 변동성 기준",
+  ai_lv_model: "모델이 정한 가격대",
   ai_market: "시장가 진입",
   ai_mode_formula: "공식 · 모델 학습 중",
   ai_mode_model: "모델",

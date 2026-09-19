@@ -41,6 +41,8 @@ export const pt: Dict = {
   ai_like_coin: "por enquanto não melhor que o acaso",
   ai_long: "Long",
   ai_loss_hint: "menos é melhor; ao lado, o mesmo sem o modelo",
+  ai_lv_formula: "Níveis pela volatilidade",
+  ai_lv_model: "Níveis do modelo",
   ai_market: "Entrada a mercado",
   ai_mode_formula: "Fórmula · o modelo ainda aprende",
   ai_mode_model: "Modelo",

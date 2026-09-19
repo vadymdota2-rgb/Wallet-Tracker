@@ -41,6 +41,8 @@ export const tr: Dict = {
   ai_like_coin: "şimdilik yazı turadan iyi değil",
   ai_long: "Long",
   ai_loss_hint: "az olması iyidir; yanında modelsiz hali",
+  ai_lv_formula: "Seviyeler oynaklıktan",
+  ai_lv_model: "Seviyeler modelden",
   ai_market: "Piyasa girişi",
   ai_mode_formula: "Formül · model hâlâ öğreniyor",
   ai_mode_model: "Model",

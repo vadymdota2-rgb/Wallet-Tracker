@@ -41,6 +41,8 @@ export const vi: Dict = {
   ai_like_coin: "chưa hơn tung đồng xu",
   ai_long: "Long",
   ai_loss_hint: "càng nhỏ càng tốt; bên cạnh là cùng số khi không có mô hình",
+  ai_lv_formula: "Các mức theo biến động",
+  ai_lv_model: "Các mức từ mô hình",
   ai_market: "Vào theo thị trường",
   ai_mode_formula: "Công thức · mô hình vẫn học",
   ai_mode_model: "Mô hình",

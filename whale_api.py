@@ -4092,10 +4092,13 @@ def _oracle_model(cur: sqlite3.Connection, perp: bool) -> dict | None:
     """
     if not table_exists(cur, "ai_models"):
         return None
+    # Столбец levels появился позже: у базы, которую ещё не трогал новый бот,
+    # его нет, и запрос в лоб уронил бы весь экран состояния.
+    lvl = "levels" if "levels" in cols(cur, "ai_models") else "0"
     try:
         row = cur.execute(
             "SELECT created_at,samples,test_n,trees,auc,logloss,acc,brier,"
-            "base_logloss,base_rate,wf_auc,gain FROM ai_models "
+            f"base_logloss,base_rate,wf_auc,gain,{lvl} levels FROM ai_models "
             "WHERE venue=? AND horizon=86400",
             (1 if perp else 0,),
         ).fetchone()
@@ -4122,6 +4125,9 @@ def _oracle_model(cur: sqlite3.Connection, perp: bool) -> dict | None:
         "brier": round(float(row["brier"] or 0), 3),
         "wf": round(float(row["wf_auc"] or 0), 3),
         "up": round(100.0 * float(row["base_rate"] or 0)),
+        # Уровни от модели или по формуле от волатильности — на экране это
+        # разные вещи, и человек вправе знать, что именно он видит.
+        "levels": bool(int(row["levels"] or 0)),
         "top": top,
     }
 

@@ -41,6 +41,8 @@ export const zh: Dict = {
   ai_like_coin: "目前不比抛硬币更准",
   ai_long: "做多",
   ai_loss_hint: "越小越好，旁边是没有模型时的同一数字",
+  ai_lv_formula: "价位来自波动率",
+  ai_lv_model: "价位由模型给出",
   ai_market: "市价入场",
   ai_mode_formula: "公式 · 模型仍在学习",
   ai_mode_model: "模型",

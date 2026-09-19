@@ -41,6 +41,8 @@ export const ja: Dict = {
   ai_like_coin: "まだコイン投げと変わりません",
   ai_long: "ロング",
   ai_loss_hint: "小さいほど良い。隣はモデルなしの同じ数字",
+  ai_lv_formula: "価格帯はボラティリティから",
+  ai_lv_model: "価格帯はモデルが決定",
   ai_market: "成行で入る",
   ai_mode_formula: "式 · モデルは学習中",
   ai_mode_model: "モデル",

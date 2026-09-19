@@ -41,6 +41,8 @@ export const fr: Dict = {
   ai_like_coin: "pas encore mieux que le hasard",
   ai_long: "Long",
   ai_loss_hint: "moins c'est mieux ; à côté, la même chose sans le modèle",
+  ai_lv_formula: "Niveaux selon la volatilité",
+  ai_lv_model: "Niveaux du modèle",
   ai_market: "Entrée au marché",
   ai_mode_formula: "Formule · le modèle apprend encore",
   ai_mode_model: "Modèle",

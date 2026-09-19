@@ -41,6 +41,8 @@ export const id: Dict = {
   ai_like_coin: "belum lebih baik dari lempar koin",
   ai_long: "Long",
   ai_loss_hint: "makin kecil makin baik; di sebelahnya angka tanpa model",
+  ai_lv_formula: "Level dari volatilitas",
+  ai_lv_model: "Level dari model",
   ai_market: "Masuk pasar",
   ai_mode_formula: "Rumus · model masih belajar",
   ai_mode_model: "Model",

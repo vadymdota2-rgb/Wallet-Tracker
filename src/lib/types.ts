@@ -377,6 +377,8 @@ export interface CortexModel {
   up: number;
   /** Признаки, на которые модель опирается чаще прочих, и их доля в процентах. */
   top: { k: string; v: number }[];
+  /** Стоп и цели назвала модель, а не формула от волатильности. */
+  levels?: boolean;
 }
 
 export interface CortexTry {

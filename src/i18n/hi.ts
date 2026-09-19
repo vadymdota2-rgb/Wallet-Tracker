@@ -41,6 +41,8 @@ export const hi: Dict = {
   ai_like_coin: "अभी सिक्के से बेहतर नहीं",
   ai_long: "लॉन्ग",
   ai_loss_hint: "कम बेहतर है; बगल में वही बिना मॉडल",
+  ai_lv_formula: "स्तर अस्थिरता से",
+  ai_lv_model: "स्तर मॉडल से",
   ai_market: "बाज़ार प्रवेश",
   ai_mode_formula: "सूत्र · मॉडल अभी सीख रहा है",
   ai_mode_model: "मॉडल",
