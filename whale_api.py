@@ -11,6 +11,7 @@ import os
 import re
 import secrets
 import sqlite3
+import struct
 import sys
 import threading
 import time
@@ -3940,6 +3941,18 @@ def load_rot(cur: sqlite3.Connection) -> dict:
     return out
 
 
+ORACLE_FEATURES = (
+    # Порядок обязан совпадать с FEAT_NAME в oracle.cpp: важности приходят
+    # массивом без имён, и сдвиг на единицу подписал бы чужие колонки.
+    "flow", "volume", "wallets", "spread", "accel",
+    "trades", "ticket", "top100", "top dir", "both",
+    "ret 1h", "ret 6h", "ret 24h", "vol 24h", "vol jump",
+    "to high", "from low", "RSI", "trend", "ATR",
+    "funding", "funding z", "OI 1h", "OI 24h", "OI/vlm",
+    "vlm 24h", "liq skew", "liq/OI", "leverage", "liquidity",
+    "BTC 24h", "BTC vol", "breadth", "hour", "hour 2",
+)
+
 def _count_ready(cur: sqlite3.Connection, perp: bool) -> int:
     try:
         row = cur.execute(
@@ -4228,6 +4241,49 @@ def _perp_windows(hl: sqlite3.Connection | None) -> dict[int, dict]:
     return wins
 
 
+def _oracle_model(cur: sqlite3.Connection, perp: bool) -> dict | None:
+    """Состояние обученного оракула: то, что бот записал в ai_models.
+
+    Точность сама по себе ничего не говорит — при шестидесяти процентах роста
+    в выборке «всегда вверх» даёт те же шестьдесят. Поэтому рядом всегда идут
+    AUC, потери и потери постоянного прогноза: по ним видно, есть ли в модели
+    хоть что-то сверх угадывания частоты.
+    """
+    if not table_exists(cur, "ai_models"):
+        return None
+    try:
+        row = cur.execute(
+            "SELECT created_at,samples,test_n,trees,auc,logloss,acc,brier,"
+            "base_logloss,base_rate,wf_auc,gain FROM ai_models "
+            "WHERE venue=? AND horizon=86400",
+            (1 if perp else 0,),
+        ).fetchone()
+    except sqlite3.Error:
+        return None
+    if not row or not row["trees"]:
+        return None
+    top = []
+    raw = row["gain"]
+    if isinstance(raw, (bytes, bytearray)) and len(raw) == 8 * len(ORACLE_FEATURES):
+        vals = struct.unpack(f"<{len(ORACLE_FEATURES)}d", raw)
+        total = sum(vals) or 1.0
+        pairs = sorted(zip(ORACLE_FEATURES, vals), key=lambda x: -x[1])[:5]
+        top = [{"k": n, "v": round(100.0 * v / total, 1)} for n, v in pairs if v > 0]
+    return {
+        "at": int(row["created_at"] or 0),
+        "samples": int(row["samples"] or 0),
+        "test": int(row["test_n"] or 0),
+        "trees": int(row["trees"] or 0),
+        "auc": round(float(row["auc"] or 0), 3),
+        "logloss": round(float(row["logloss"] or 0), 3),
+        "base": round(float(row["base_logloss"] or 0), 3),
+        "acc": round(100.0 * float(row["acc"] or 0)),
+        "brier": round(float(row["brier"] or 0), 3),
+        "wf": round(float(row["wf_auc"] or 0), 3),
+        "up": round(100.0 * float(row["base_rate"] or 0)),
+    }
+
+
 def load_sonar(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) -> dict:
     sonar = {
         "need": 400,
@@ -4246,11 +4302,14 @@ def load_sonar(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) ->
         sonar["ready"]["perp"] = _count_ready(cur, True)
     ts, accs = _ai_trained(cur, False)
     tp, accp = _ai_trained(cur, True)
-    sonar["trainedSpot"] = ts
-    sonar["trainedPerp"] = tp
-    sonar["trained"] = ts
-    sonar["accSpot"] = round(accs * 100) if accs else None
-    sonar["accPerp"] = round(accp * 100) if accp else None
+    # Оракул старше линейной модели: если он обучен, на экране его числа.
+    os_, op = _oracle_model(cur, False), _oracle_model(cur, True)
+    sonar["model"] = {"spot": os_, "perp": op}
+    sonar["trainedSpot"] = bool(os_) or ts
+    sonar["trainedPerp"] = bool(op) or tp
+    sonar["trained"] = sonar["trainedSpot"]
+    sonar["accSpot"] = os_["acc"] if os_ else (round(accs * 100) if accs else None)
+    sonar["accPerp"] = op["acc"] if op else (round(accp * 100) if accp else None)
     sonar["acc"] = sonar["accSpot"]
 
     signals = []
@@ -4791,6 +4850,7 @@ def bootstrap(chat: str) -> dict:
             "need": 400, "ready": {"spot": 0, "perp": 0},
             "trained": False, "trainedSpot": False, "trainedPerp": False,
             "acc": None, "accSpot": None, "accPerp": None,
+            "model": {"spot": None, "perp": None},
             "list": [], "hist": {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []},
         }
         pub = piece("pub", lambda: get_public(cur, hl), {}, True) or {}

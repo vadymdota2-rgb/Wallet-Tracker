@@ -357,6 +357,24 @@ export interface HistItem {
   venue: Venue;
 }
 
+/** Обученная модель: то, что показывает экран состояния. */
+export interface CortexModel {
+  at: number;
+  samples: number;
+  test: number;
+  trees: number;
+  auc: number;
+  logloss: number;
+  /** Потери постоянного прогноза: без них logloss ни о чём не говорит. */
+  base: number;
+  acc: number;
+  brier: number;
+  /** Средний AUC скользящей проверки — устойчивость, а не разовая удача. */
+  wf: number;
+  /** Доля роста в тесте: с ней видно, что «точность 60%» может быть угадыванием. */
+  up: number;
+}
+
 export interface Cortex {
   need: number;
   ready: { spot: number; perp: number };
@@ -366,6 +384,7 @@ export interface Cortex {
   acc: number | null;
   accSpot: number | null;
   accPerp: number | null;
+  model?: { spot: CortexModel | null; perp: CortexModel | null };
   list: Signal[];
   hist: {
     hit: number;
