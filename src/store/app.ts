@@ -141,8 +141,14 @@ export const useApp = create<AppState>()(
       /* Вторая версия — переименование Sonar в Cortex: поля звались
          sonarVenue и sonarWin, вкладка — "sonar", и без переноса человек
          открыл бы приложение на чужой вкладке. Третья убрала окно потока:
-         модель работает только на суточном. */
-      version: 3,
+         модель работает только на суточном.
+
+         Четвёртой версии больше нет: в ней вкладки делились на лонг и шорт,
+         а спот с перпами лежали вместе, и от этого отказались. Но у тех, кто
+         успел её открыть, в памяти осталось поле стороны и не осталось поля
+         площадки — без пятой версии список у них оказался бы пустым: фильтр
+         сравнивал бы площадку сигнала с «ничем». */
+      version: 5,
       migrate: (prev, from) => {
         let s = prev as Record<string, unknown>;
         if (from < 1) s = { ...s, fundAmount: 0, fundLev: 1 };
@@ -161,6 +167,14 @@ export const useApp = create<AppState>()(
           const { cortexWin, ...rest } = s as { cortexWin?: number; [k: string]: unknown };
           void cortexWin;
           s = rest;
+        }
+        if (from < 5) {
+          /* Возврат к делению по площадке: у побывавших на четвёртой версии
+             лежит сторона и нет площадки, а без неё список пуст. */
+          const { cortexSide, ...rest } = s as { cortexSide?: string; [k: string]: unknown };
+          void cortexSide;
+          s = rest;
+          if (s.cortexVenue !== "spot" && s.cortexVenue !== "perp") s.cortexVenue = "spot";
         }
         return s;
       },
