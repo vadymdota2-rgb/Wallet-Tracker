@@ -4148,13 +4148,29 @@ def _oracle_model(cur: sqlite3.Connection, perp: bool) -> dict | None:
 
 
 def _signals_at(cur: sqlite3.Connection) -> int | None:
-    if not table_exists(cur, "ai_signals"):
+    """Когда бот в последний раз считал сигналы.
+
+    Не «когда выдал»: пустая таблица не отличает «бот ни разу не считал» от
+    «посчитал и ничего не прошло отбор», а на экране это совсем разные вещи.
+    Поэтому у бота есть отдельная отметка расчёта, и она тут главнее: сами
+    сигналы могли и не появиться.
+    """
+    at = None
+    if table_exists(cur, "ai_signals"):
+        try:
+            row = cur.execute("SELECT MAX(made_at) m FROM ai_signals").fetchone()
+            at = int(row["m"]) if row and row["m"] else None
+        except sqlite3.Error:
+            at = None
+    if at:
+        return at
+    if not table_exists(cur, "ai_weights"):
         return None
     try:
-        row = cur.execute("SELECT MAX(made_at) m FROM ai_signals").fetchone()
+        row = cur.execute("SELECT v FROM ai_weights WHERE k=900").fetchone()
     except sqlite3.Error:
         return None
-    return int(row["m"]) if row and row["m"] else None
+    return int(row["v"]) if row and row["v"] else None
 
 
 def _signal_history(cur: sqlite3.Connection) -> dict:
