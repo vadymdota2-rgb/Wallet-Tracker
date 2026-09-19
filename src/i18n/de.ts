@@ -23,7 +23,7 @@ export const de: Dict = {
   ai_entry: "📍 Einstieg",
   ai_expire: "⏳ Gültig",
   ai_expired: "⌛ Abgelaufen",
-  ai_hint: "Wir zeigen, was die Wallets kaufen und verkaufen, denen Sie folgen. Gehen viele unabhängige Wallets in dieselbe Richtung, schätzt das Modell die Chance, dass der Preis binnen 24 Stunden folgt.\n\nDas Modell schaut auch auf den Markt: Volatilität und ihre Sprünge, Trend, RSI, Funding, Open Interest, Liquidationen, Bitcoin-Regime.\n\nEin Filter, keine Prognose. Die Niveaus kommen aus der Volatilität, das Risiko ist ein Teil der Einlage, kein Befehl.",
+  ai_hint: "Cortex ist ein Orakel: ein trainiertes Modell, das die Chance schätzt, dass der Preis den Wallets folgt, denen Sie folgen. Ziehen viele unabhängige Wallets in dieselbe Richtung, beziffert es das.\n\nEs schaut nicht nur auf den Fluss: 38 Merkmale — Volumen und Wallet-Zahl, Renditen über eine Stunde, sechs Stunden und einen Tag, Volatilität und ihre Ausschläge, ATR, RSI, Trend, MACD, Funding, Open Interest, Liquidationen, Hebel, Liquidität, das Bitcoin-Regime und die Marktbreite.\n\nDas Modell entscheidet selbst: den Horizont — sechs Stunden oder einen Tag, Stop und Ziele und den Anteil des Depots, den man riskieren sollte.\n\nSolange es auf ungesehenen Daten keinen Münzwurf schlägt, wird es nicht angenommen: dann rechnet die Formel, und der Modellstatus sagt das. Nachrichten, Listings und Hacks sieht es nicht. Flow-Scoring, keine Anlageberatung.",
   ai_hist_avg: "Ø Bewegung:",
   ai_hist_btn: "📜 Verlauf",
   ai_hist_empty: "Noch keine beendeten Signale.",

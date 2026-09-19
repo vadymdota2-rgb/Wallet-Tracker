@@ -23,7 +23,7 @@ export const tr: Dict = {
   ai_entry: "📍 Giriş",
   ai_expire: "⏳ Geçerli",
   ai_expired: "⌛ Süresi doldu",
-  ai_hint: "Takip ettiğiniz cüzdanların ne alıp sattığını gösteriyoruz. Birçok bağımsız cüzdan aynı yöne gittiğinde model, fiyatın 24 saat içinde onları izleme şansını tahmin eder.\n\nModel piyasaya da bakar: oynaklık ve sıçramaları, trend, RSI, fonlama, açık pozisyon, likidasyonlar, Bitcoin rejimi.\n\nBu bir filtre, tahmin değil. Seviyeler oynaklıktan gelir, risk mevduatın bir parçasıdır, emir değil.",
+  ai_hint: "Cortex bir kâhin: takip ettiğin cüzdanların gittiği yöne fiyatın da gitme şansını tahmin eden, eğitilmiş bir model. Çok sayıda bağımsız cüzdan aynı yöne gittiğinde buna bir sayı verir.\n\nSadece akışa bakmaz: 38 gösterge — hacimler ve cüzdan sayısı, bir saatlik, altı saatlik ve günlük getiriler, oynaklık ve sıçramaları, ATR, RSI, trend, MACD, fonlama, açık pozisyon, likidasyonlar, kaldıraç, likidite, Bitcoin rejimi ve piyasa genişliği.\n\nModel kendi karar verir: ufuk — altı saat ya da bir gün, stop ve hedefler, ve riske değer mevduat payı.\n\nHiç görmediği veride yazı turayı yenene kadar kabul edilmez: o zaman formül çalışır, model ekranı da bunu yazar. Haberleri, listelemeleri ve saldırıları görmez. Akış skorlaması, yatırım tavsiyesi değil.",
   ai_hist_avg: "Ortalama hareket:",
   ai_hist_btn: "📜 Geçmiş",
   ai_hist_empty: "Henüz kapanmış sinyal yok.",

@@ -23,7 +23,7 @@ export const pt: Dict = {
   ai_entry: "📍 Entrada",
   ai_expire: "⏳ Válido",
   ai_expired: "⌛ Expirado",
-  ai_hint: "Mostramos o que as carteiras que segue compram e vendem. Quando muitas carteiras independentes vão na mesma direção, o modelo estima a hipótese de o preço as seguir em 24 horas.\n\nO modelo olha também para o mercado: volatilidade e os seus picos, tendência, RSI, funding, contratos em aberto, liquidações, regime do Bitcoin.\n\nÉ um filtro, não uma previsão. Os níveis vêm da volatilidade, o risco é parte do depósito, não uma ordem.",
+  ai_hint: "Cortex é um oráculo: um modelo treinado que estima a chance de o preço seguir as carteiras que você acompanha. Quando muitas carteiras independentes vão para o mesmo lado, ele põe um número nisso.\n\nNão olha só para o fluxo: 38 indicadores — volumes e número de carteiras, retornos de uma hora, seis horas e um dia, volatilidade e seus picos, ATR, RSI, tendência, MACD, financiamento, contratos em aberto, liquidações, alavancagem, liquidez, o regime do Bitcoin e a amplitude do mercado.\n\nO modelo decide sozinho: o horizonte — seis horas ou um dia, o stop e os alvos, e a parte do depósito que vale arriscar.\n\nEnquanto não vencer a sorte em dados que nunca viu, não é aceito: aí trabalha a fórmula, e a tela do modelo diz isso. Ele não vê notícias, listagens nem invasões. Pontuação de fluxo, não é recomendação de investimento.",
   ai_hist_avg: "Movimento médio:",
   ai_hist_btn: "📜 Histórico",
   ai_hist_empty: "Ainda sem sinais fechados.",

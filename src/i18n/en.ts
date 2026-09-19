@@ -23,7 +23,7 @@ export const en = {
   ai_entry: "📍 Entry",
   ai_expire: "⏳ Valid",
   ai_expired: "⌛ Expired",
-  ai_hint: "We show what the wallets you follow are buying and selling. When many independent wallets move the same way, the model estimates the chance that the price follows within 24 hours.\n\nThe model also looks at the market: volatility and its spikes, trend, RSI, funding, open interest, liquidations, Bitcoin regime.\n\nA filter, not a forecast. Levels come from volatility, risk is a share of the deposit, not an order.",
+  ai_hint: "Cortex is an oracle: a trained model that estimates the chance the price follows the wallets you track. When many independent wallets move the same way, it puts a number on it.\n\nIt looks at 38 signals, not just the flow: volumes and wallet counts, returns over an hour, six hours and a day, volatility and its spikes, ATR, RSI, trend, MACD, funding, open interest, liquidations, leverage, liquidity, the Bitcoin regime and market breadth.\n\nThe model decides for itself: the horizon — six hours or a day, the stop and the targets, and the share of the deposit worth risking.\n\nUntil it beats a coin flip on data it has never seen, it is not accepted: the formula works instead, and the model screen says so. It does not see news, listings or hacks. Flow scoring, not investment advice.",
   ai_hist_avg: "Average move:",
   ai_hist_btn: "📜 Signal history",
   ai_hist_empty: "No completed signals yet.",

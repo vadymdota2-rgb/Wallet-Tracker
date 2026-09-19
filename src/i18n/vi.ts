@@ -23,7 +23,7 @@ export const vi: Dict = {
   ai_entry: "📍 Vào lệnh",
   ai_expire: "⏳ Hiệu lực",
   ai_expired: "⌛ Hết hạn",
-  ai_hint: "Chúng tôi cho thấy các ví bạn theo dõi đang mua và bán gì. Khi nhiều ví độc lập cùng đi một hướng, mô hình ước lượng khả năng giá đi theo trong 24 giờ.\n\nMô hình cũng nhìn thị trường: biến động và các cú nhảy, xu hướng, RSI, funding, hợp đồng mở, thanh lý, trạng thái Bitcoin.\n\nĐây là bộ lọc, không phải dự báo. Các mức đến từ biến động, rủi ro là một phần tiền gửi, không phải mệnh lệnh.",
+  ai_hint: "Cortex là một nhà tiên tri: mô hình đã huấn luyện, ước lượng khả năng giá đi theo các ví bạn theo dõi. Khi nhiều ví độc lập cùng đi một hướng, nó quy ra con số.\n\nNó không chỉ nhìn dòng tiền: 38 chỉ báo — khối lượng và số ví, lợi suất một giờ, sáu giờ và một ngày, biến động và các cú nhảy, ATR, RSI, xu hướng, MACD, funding, open interest, thanh lý, đòn bẩy, thanh khoản, trạng thái Bitcoin và độ rộng thị trường.\n\nMô hình tự quyết: khung thời gian — sáu giờ hay một ngày, cắt lỗ và mục tiêu, và phần vốn đáng mạo hiểm.\n\nChừng nào chưa thắng được trò tung đồng xu trên dữ liệu chưa từng thấy, nó chưa được chấp nhận: khi đó công thức làm việc, và màn hình mô hình nói rõ điều đó. Nó không thấy tin tức, niêm yết hay vụ hack. Chấm điểm dòng tiền, không phải lời khuyên đầu tư.",
   ai_hist_avg: "Biến động TB:",
   ai_hist_btn: "📜 Lịch sử",
   ai_hist_empty: "Chưa có tín hiệu hoàn tất.",

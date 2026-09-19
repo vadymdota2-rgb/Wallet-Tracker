@@ -23,7 +23,7 @@ export const id: Dict = {
   ai_entry: "📍 Masuk",
   ai_expire: "⏳ Berlaku",
   ai_expired: "⌛ Kedaluwarsa",
-  ai_hint: "Kami menampilkan apa yang dibeli dan dijual dompet yang Anda pantau. Ketika banyak dompet independen bergerak searah, model menaksir peluang harga mengikuti dalam 24 jam.\n\nModel juga melihat pasar: volatilitas dan lonjakannya, tren, RSI, funding, open interest, likuidasi, rezim Bitcoin.\n\nIni filter, bukan ramalan. Level berasal dari volatilitas, risiko adalah bagian dari deposit, bukan perintah.",
+  ai_hint: "Cortex adalah orakel: model terlatih yang memperkirakan peluang harga mengikuti dompet yang Anda pantau. Ketika banyak dompet independen bergerak ke arah yang sama, ia memberi angka.\n\nIa tidak hanya melihat arus: 38 indikator — volume dan jumlah dompet, imbal hasil satu jam, enam jam dan sehari, volatilitas dan lonjakannya, ATR, RSI, tren, MACD, funding, open interest, likuidasi, leverage, likuiditas, rezim Bitcoin dan lebar pasar.\n\nModel memutuskan sendiri: horizon — enam jam atau sehari, stop dan target, serta porsi deposit yang layak dipertaruhkan.\n\nSelama belum mengalahkan lempar koin pada data yang belum pernah dilihatnya, ia tidak diterima: rumus yang bekerja, dan layar model menyatakannya. Ia tidak melihat berita, listing, atau peretasan. Penilaian arus, bukan nasihat investasi.",
   ai_hist_avg: "Rata-rata gerak:",
   ai_hist_btn: "📜 Riwayat",
   ai_hist_empty: "Belum ada sinyal selesai.",
