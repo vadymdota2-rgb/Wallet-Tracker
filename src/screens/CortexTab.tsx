@@ -16,9 +16,10 @@ import { useLive } from "../store/live";
 import { t, title } from "../i18n/t";
 import { num } from "../lib/format";
 import { sideKey, whyKey } from "../lib/labels";
+import { venueName } from "../lib/rank";
 import { Brain } from "../components/Brain";
 import { CoinIcon } from "../components/CoinIcon";
-import { Card, Empty, Meter, Row, SectionTitle, Segmented } from "../components/ui";
+import { Card, Empty, Meter, Row, SectionTitle, Segmented, VenueMark } from "../components/ui";
 import type { Signal, Venue } from "../lib/types";
 
 /** Порог приёмки модели: ниже него бот её в бой не пускает. */
@@ -89,13 +90,21 @@ export function CortexTab() {
             оракул смотрит. */}
         <Brain lang={lang} top={model?.top} />
         <p className="note">{t(lang, "ai_hint").split("\n\n")[0]}</p>
+        {/* Площадки названы своими именами и помечены своими логотипами:
+            «спот» и «перпы» — это про вид сделки, а человек выбирает здесь
+            биржу. Спот у нас один — токены BSC, перпы — Hyperliquid. */}
         <Segmented<Venue>
           value={venue}
           onChange={setVenue}
-          options={[
-            { id: "spot", label: t(lang, "ai_spot") },
-            { id: "perp", label: t(lang, "ai_perp") },
-          ]}
+          options={(["spot", "perp"] as const).map((v) => ({
+            id: v,
+            label: (
+              <span className="seg-venue">
+                <VenueMark venue={v} size={16} />
+                {venueName(v)}
+              </span>
+            ),
+          }))}
         />
         {/* Состояние модели: обучена — её качество, нет — сколько исходов
             набралось из нужных. И то и другое — значение против предела. */}

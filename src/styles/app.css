@@ -1374,18 +1374,6 @@
   position: absolute; inset: 0; width: 100%; height: 100%;
   mix-blend-mode: screen; pointer-events: none;
 }
-/* Пятно импульса. До своего выхода оно невидимо: иначе стояло бы в углу
-   картинки светящейся точкой, а потом выскакивало посреди мозга. */
-.brain-spark {
-  opacity: 0;
-  animation-name: spark; animation-timing-function: linear;
-  animation-iteration-count: infinite;
-}
-@keyframes spark {
-  0%, 100% { opacity: 0; }
-  10%, 85% { opacity: var(--op, 1); }
-}
-
 /* Вспышка в узле: короткая, с длинной паузой — синапс, а не гирлянда. */
 .brain-node {
   transform-box: fill-box; transform-origin: center;
@@ -1472,3 +1460,7 @@
 /* Список доводов формулы: не диаграмма, потому что величины у формулы нет. */
 .why-list { margin: 6px 0 0; padding-inline-start: 18px; }
 .why-list li { font-size: 13px; color: var(--ink-2); line-height: 1.5; }
+
+/* Площадка в переключателе: логотип и имя в одну строку. */
+.seg-venue { display: inline-flex; align-items: center; gap: 6px; }
+.seg-venue .venue { flex: 0 0 auto; border-radius: 50%; }

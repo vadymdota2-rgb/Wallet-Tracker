@@ -14,6 +14,7 @@ import { Frame } from "./Screen";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import { t, title } from "../i18n/t";
+import { venueName } from "../lib/rank";
 import { num } from "../lib/format";
 import { Bars, Card, Meter, Row, SectionTitle, Tiles } from "../components/ui";
 import type { CortexModel, CortexTry } from "../lib/types";
@@ -120,9 +121,9 @@ export function ModelScreen() {
       <Card>
         <p className="note">{t(lang, "ai_hint")}</p>
       </Card>
-      <Venue m={cortex.model?.spot} attempt={cortex.try?.spot} name={t(lang, "ai_spot")}
+      <Venue m={cortex.model?.spot} attempt={cortex.try?.spot} name={venueName("spot")}
              ready={cortex.ready.spot} need={cortex.need} />
-      <Venue m={cortex.model?.perp} attempt={cortex.try?.perp} name={t(lang, "ai_perp")}
+      <Venue m={cortex.model?.perp} attempt={cortex.try?.perp} name={venueName("perp")}
              ready={cortex.ready.perp} need={cortex.need} />
     </Frame>
   );

@@ -21,7 +21,7 @@
  *
  * При `prefers-reduced-motion` не движется ничего.
  */
-import { useEffect, useId, useState, type CSSProperties } from "react";
+import { useEffect, useId, useState } from "react";
 import { t } from "../i18n/t";
 import { whyKey } from "../lib/labels";
 import type { LangCode } from "../i18n/types";
@@ -144,26 +144,27 @@ export function Brain({ lang, top }: {
                 подсвечивает то, что под ним. */}
             {WIRES.map(([, dur, begin], i) =>
               TAIL.map(([r, op, lag], k) => (
-                /* Прозрачность живёт своим кругом той же длины и с той же
-                   задержкой, что и движение. Без неё пятно до своего выхода
-                   стоит в начале координат — светящейся точкой в углу
-                   картинки, — а потом выскакивает посреди мозга. Теперь оно
-                   разгорается в начале пути и гаснет в конце. */
+                /* Прозрачность анимируется рядом с движением и теми же
+                   часами svg, а не стилем. Стилевые часы идут от разбора
+                   страницы, а часы svg — от её загрузки, и расходятся они
+                   ровно на это время: пятно успевало проявиться раньше, чем
+                   тронулось с места, и его видели светящейся точкой в углу
+                   картинки. Проверка ловила это одним провалом на пять
+                   прогонов — по одной этой причине. */
                 <circle
                   key={`${i}-${k}`}
                   className="brain-spark"
                   r={r}
+                  opacity={0}
                   fill={`url(#${uid}${i % 3 ? "b" : "v"})`}
-                  style={{
-                    "--op": op,
-                    animationDuration: `${dur}s`,
-                    animationDelay: `${begin + lag}s`,
-                  } as CSSProperties}
                 >
                   <animateMotion dur={`${dur}s`} begin={`${begin + lag}s`}
                                  repeatCount="indefinite">
                     <mpath href={`#${uid}w${i}`} />
                   </animateMotion>
+                  <animate attributeName="opacity" dur={`${dur}s`}
+                           begin={`${begin + lag}s`} repeatCount="indefinite"
+                           values={`0;${op};${op};0`} keyTimes="0;0.1;0.85;1" />
                 </circle>
               )),
             )}

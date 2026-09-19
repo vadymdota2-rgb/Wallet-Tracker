@@ -21,6 +21,7 @@ import { useLive } from "../store/live";
 import { t } from "../i18n/t";
 import { num, pct, px, signed } from "../lib/format";
 import { sideKey, whyKey } from "../lib/labels";
+import { venueName } from "../lib/rank";
 import { fetchTokenHist } from "../lib/api";
 import {
   candlesFrom, fetchCandles, TF_LABEL,
@@ -140,9 +141,10 @@ export function SignalScreen({ arg }: ScreenProps) {
           {s.sym}
         </span>
       }
-      sub={`${t(lang, sideKey(venue, long))} · ${
-        venue === "perp" ? t(lang, "ai_perp") : t(lang, "ai_spot")
-      } · ${t(lang, s.model ? "ai_mode_model" : "ai_mode_formula")}`}
+      /* Площадка своим именем: «спот» — это про вид сделки, а тут важно,
+         где монета торгуется. */
+      sub={`${t(lang, sideKey(venue, long))} · ${venueName(venue)} · ${
+        t(lang, s.model ? "ai_mode_model" : "ai_mode_formula")}`}
     >
       <Card>
         <div className="hero">
