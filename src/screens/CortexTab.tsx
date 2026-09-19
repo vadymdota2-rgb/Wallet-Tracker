@@ -40,7 +40,10 @@ function SignalRow({ s, onOpen, lang }: {
           <i className={`sig-side ${long ? "up" : "dn"}`}>
             {long ? t(lang, "ai_long") : t(lang, "ai_short")}
           </i>
-          <em className={`sig-conf ${long ? "up" : "dn"}`}>{s.conf}%</em>
+          <em className={`sig-conf ${long ? "up" : "dn"}`}>
+            {s.conf}%
+            <i>{t(lang, "ai_p_short")}</i>
+          </em>
         </span>
         <span className="sig-meter">
           <Meter value={s.conf / 100} mark={0.5} tone={long ? "up" : "dn"} />
@@ -48,6 +51,9 @@ function SignalRow({ s, onOpen, lang }: {
         {/* Только главная причина: «много кошельков · 19 кошельков» и
             повторяется, и не влезает в 320 точек. Число кошельков — на
             карточке, вместе с остальными доводами. */}
+        {/* В строке причины — только причина: «шанс роста» стоит подписью у
+            самого числа, а вместе они не влезают ни во французский, ни в
+            английский на 320 точках. */}
         <span className="sig-sub">
           {reason || `${num(s.w)} ${t(lang, "flow_wallets")}`}
         </span>
@@ -84,27 +90,24 @@ export function CortexTab() {
         {/* Состояние модели: обучена — её качество, нет — сколько исходов
             набралось из нужных. И то и другое — значение против предела. */}
         <button type="button" className="ora" onClick={() => open("model")}>
-          <span className="ora-hd">
-            <b>{model ? t(lang, "ai_mode_model")
-                      : (attempt ? t(lang, "ai_not_passed") : t(lang, "ai_mode_formula"))}</b>
-            <em>{model ? `AUC ${model.auc.toFixed(3)}`
-                       : (attempt ? `AUC ${attempt.auc.toFixed(3)}`
-                                  : `${num(ready)} / ${num(cortex.need)}`)}</em>
-          </span>
+          {/* На главном экране — словами. AUC и потери никому ни о чём не
+              говорят; кому надо, тот откроет состояние модели. Заголовок и
+              пояснение стоят в столбик: рядом они не влезают ни на один
+              телефон. */}
+          <b className="ora-ttl">
+            {model ? t(lang, "ai_model_ok")
+                   : (attempt ? t(lang, "ai_not_passed") : t(lang, "ai_collecting"))}
+          </b>
           {model ? (
             <Meter
-              value={model.auc}
-              from={0.45}
-              to={0.75}
+              value={model.acc / 100}
               mark={0.5}
               markLabel={t(lang, "ai_st_coin")}
-              tone={model.auc >= AUC_GATE ? "up" : "flat"}
-              note={`${title(t(lang, "ai_st_acc"))} ${model.acc}% · ${num(model.samples)} ${t(lang, "ai_st_samples")}`}
+              tone="up"
+              label={t(lang, "ai_hits_of", { n: model.acc })}
+              note={`${num(model.samples)} ${t(lang, "ai_st_samples")}`}
             />
           ) : attempt ? (
-            /* Данных хватает, но модель не прошла порог: показываем, насколько
-               не дотянула. «Модель ещё учится» при 2468 готовых исходах не
-               объясняло ничего. */
             <Meter
               value={attempt.auc}
               from={0.45}
@@ -112,11 +115,13 @@ export function CortexTab() {
               mark={AUC_GATE}
               markLabel={t(lang, "ai_st_gate")}
               tone="flat"
+              label={t(lang, "ai_like_coin")}
               note={`${num(attempt.samples)} ${t(lang, "ai_st_samples")}`}
             />
           ) : (
             <Meter value={ready} from={0} to={cortex.need} tone="flat"
-                   note={title(t(lang, "ai_st_ready"))} />
+                   label={title(t(lang, "ai_st_ready"))}
+                   note={`${num(ready)} / ${num(cortex.need)}`} />
           )}
         </button>
       </Card>
@@ -139,10 +144,20 @@ export function CortexTab() {
       </Card>
 
       <Card>
+        {/* Не «Угадано: 58%» и голое «26» рядом: по цели и по стопу — это
+            то, что человек хочет знать о прошлых сигналах. */}
         <Row
           title={t(lang, "ai_hist_btn")}
-          sub={`${t(lang, "ai_hist_rate")} ${cortex.hist.of ? `${cortex.hist.hit}%` : "—"}`}
-          value={cortex.hist.of ? num(cortex.hist.of) : "—"}
+          sub={
+            cortex.hist.of
+              /* Значками, а не словами: «tại mục tiêu 11 · tại cắt lỗ 8» не
+                 влезает в 320 точек, а 🎯 и 🛑 понятны без перевода и стоят
+                 в самой истории. */
+              ? `🎯 ${num(cortex.hist.tp)} · 🛑 ${num(cortex.hist.sl)}`
+              : t(lang, "ai_hist_empty")
+          }
+          value={cortex.hist.of ? `${cortex.hist.hit}%` : "—"}
+          valueSub={cortex.hist.of ? title(t(lang, "ai_hist_rate")) : undefined}
           onClick={() => open("history")}
         />
         <p className="note dim">{t(lang, "ai_trade_hint")}</p>

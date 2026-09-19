@@ -42,13 +42,16 @@ export function HistoryScreen() {
       <Card>
         {/* Попадания — доля от решённых, и знаменатель написан рядом, иначе
             «42%» читается как доля от всех выданных. */}
+        {/* Заголовок словами: «Угадано 58% · 11 / 19» человек читает как
+            ребус, «11 из 19 сигналов дошли до цели» — как предложение. */}
+        <p className="hist-head">{t(lang, "ai_hist_head", { a: hist.tp, b: decided })}</p>
+        <p className="note dim">{t(lang, "ai_hist_rest")}</p>
         <Meter
           value={decided ? hist.tp / decided : 0}
           mark={0.5}
           markLabel={t(lang, "ai_st_coin")}
           tone={hist.hit >= 50 ? "up" : "dn"}
-          label={title(t(lang, "ai_hist_rate"))}
-          note={`${hist.hit}% · ${num(hist.tp)} / ${num(decided)}`}
+          note={`${hist.hit}%`}
         />
         <Tiles
           cols={3}

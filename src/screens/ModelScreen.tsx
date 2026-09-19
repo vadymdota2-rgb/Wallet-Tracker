@@ -43,12 +43,12 @@ function Venue({ m, attempt, name, ready, need }: {
             <Meter value={attempt.auc} from={0.45} to={0.75} mark={AUC_GATE}
                    markLabel={t(lang, "ai_st_gate")} tone="flat"
                    label="AUC" note={attempt.auc.toFixed(3)} />
+            <p className="note dim">{t(lang, "ai_auc_hint")}</p>
             <Row title={title(t(lang, "ai_st_loss"))}
-                 sub={`${t(lang, "ai_st_base")} ${attempt.base.toFixed(3)}`}
+                 sub={`${t(lang, "ai_st_base")} ${attempt.base.toFixed(3)} · ${t(lang, "ai_loss_hint")}`}
                  value={attempt.logloss.toFixed(3)}
                  tone={attempt.logloss < attempt.base ? "up" : "dn"} />
-            <Row title={title(t(lang, "ai_st_wf"))}
-                 sub={`${num(attempt.samples)} ${t(lang, "ai_st_samples")}`}
+            <Row title={title(t(lang, "ai_st_wf"))} sub={t(lang, "ai_wf_hint")}
                  value={attempt.wf.toFixed(3)} tone={attempt.wf >= 0.52 ? "up" : "dn"} />
           </>
         ) : (
@@ -74,11 +74,14 @@ function Venue({ m, attempt, name, ready, need }: {
         label="AUC"
         note={m.auc.toFixed(3)}
       />
+      {/* Каждое число объяснено строкой под ним: без этого экран читает
+          только тот, кто и так знает, что такое AUC. */}
+      <p className="note dim">{t(lang, "ai_auc_hint")}</p>
       <Tiles
         cols={3}
         size="sm"
         items={[
-          { label: title(t(lang, "ai_st_acc")), value: `${m.acc}%` },
+          { label: title(t(lang, "ai_st_acc")), value: `${m.acc}%`, tone: "up" },
           { label: t(lang, "ai_st_samples"), value: num(m.samples) },
           { label: t(lang, "ai_st_trees"), value: num(m.trees) },
         ]}
@@ -87,10 +90,9 @@ function Venue({ m, attempt, name, ready, need }: {
           незачем: полоса из одного значения не говорит больше самого
           значения. Рядом с потерями всегда стоит база. */}
       <Row title={title(t(lang, "ai_st_loss"))}
-           sub={`${t(lang, "ai_st_base")} ${m.base.toFixed(3)}`}
+           sub={`${t(lang, "ai_st_base")} ${m.base.toFixed(3)} · ${t(lang, "ai_loss_hint")}`}
            value={m.logloss.toFixed(3)} tone={m.logloss < m.base ? "up" : "dn"} />
-      <Row title={title(t(lang, "ai_st_wf"))}
-           sub={`${num(m.test)} ${t(lang, "ai_st_samples")}`}
+      <Row title={title(t(lang, "ai_st_wf"))} sub={t(lang, "ai_wf_hint")}
            value={m.wf.toFixed(3)} tone={m.wf >= 0.52 ? "up" : "dn"} />
       {m.top?.length ? (
         <>

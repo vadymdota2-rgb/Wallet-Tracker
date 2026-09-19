@@ -53,12 +53,22 @@ def read_en_ru(bot_dir: str) -> tuple[dict, dict]:
     start = src.index("const std::unordered_map<std::string, Entry>& table()")
     body = src[start: src.index("\n}", src.index("{", start))]
     en, ru = {}, {}
-    for m in re.finditer(r'\{"([a-z0-9_]+)",\s*\{((?:[^{}]|\\.)*?)\}\}', body, re.S):
-        pair = re.findall(r'((?:"(?:[^"\\]|\\.)*"\s*)+)', m.group(2))
-        if len(pair) < 2:
-            continue
-        en[m.group(1)] = literals(pair[0])
-        ru[m.group(1)] = literals(pair[1])
+    # Значение ищется как пара групп строковых литералов, а не «всё между
+    # скобками». Прежний разбор запрещал фигурные скобки внутри значения, и
+    # ключ с подстановкой — «угадывает {n} раз из 100» — молча не попадал в
+    # словарь: в приложении на его месте оставалось имя ключа.
+    lit = r'(?:"(?:[^"\\]|\\.)*"\s*)+'
+    pat = r'\{"([a-z0-9_]+)",\s*\{\s*(' + lit + r'),\s*(' + lit + r')\}\s*\}'
+    for m in re.finditer(pat, body, re.S):
+        en[m.group(1)] = literals(m.group(2))
+        ru[m.group(1)] = literals(m.group(3))
+    # Молчаливая потеря ключа — худшее, что может сделать этот скрипт:
+    # на экране появится «ai_hits_of», и заметит это только пользователь.
+    declared = {mm.group(1) for mm in re.finditer(r'\{"([a-z0-9_]+)",\s*\{', body)}
+    lost = sorted(declared - set(en))
+    if lost:
+        print("ru.cpp: не разобраны ключи: " + ", ".join(lost), file=sys.stderr)
+        raise SystemExit(1)
     return en, ru
 
 
