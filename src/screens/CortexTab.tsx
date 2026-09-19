@@ -16,6 +16,7 @@ import { useLive } from "../store/live";
 import { t, title } from "../i18n/t";
 import { num } from "../lib/format";
 import { sideKey, whyKey } from "../lib/labels";
+import { Brain } from "../components/Brain";
 import { CoinIcon } from "../components/CoinIcon";
 import { Card, Empty, Meter, Row, SectionTitle, Segmented } from "../components/ui";
 import type { Signal, Venue } from "../lib/types";
@@ -81,6 +82,12 @@ export function CortexTab() {
     <>
       <Card>
         <SectionTitle>{t(lang, "ai_title")}</SectionTitle>
+        {/* Вокруг картинки мелькают признаки, на которых обучена модель, —
+            те же имена, что в ai_models, и в порядке их важности, когда она
+            обучена. Это единственная картинка в приложении, которая ничего
+            не считает; всё, что она показывает, — список того, на что
+            оракул смотрит. */}
+        <Brain lang={lang} top={model?.top} />
         <p className="note">{t(lang, "ai_hint").split("\n\n")[0]}</p>
         <Segmented<Venue>
           value={venue}
