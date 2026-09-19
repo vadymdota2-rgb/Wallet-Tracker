@@ -3952,6 +3952,9 @@ ORACLE_FEATURES = (
     "vlm 24h", "liq skew", "liq/OI", "leverage", "liquidity",
     "BTC 24h", "BTC vol", "breadth", "hour", "hour 2",
     "MACD", "MACD sig", "MACD hist",
+    # Событие: возраст монеты в рядах (он же — давность листинга), всплеск
+    # объёма против собственной недели и сила удара за последние часы.
+    "age", "vlm z", "shock",
 )
 
 def _count_ready(cur: sqlite3.Connection, perp: bool) -> int:

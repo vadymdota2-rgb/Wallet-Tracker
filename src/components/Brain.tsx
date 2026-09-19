@@ -35,6 +35,7 @@ export const ORACLE_FEATURES = [
   "OI 1h", "OI 24h", "OI/vlm", "vlm 24h", "liq skew", "liq/OI", "leverage",
   "liquidity", "BTC 24h", "BTC vol", "breadth", "hour", "hour 2",
   "MACD", "MACD sig", "MACD hist",
+  "age", "vlm z", "shock",
 ] as const;
 
 /* Пять мест вокруг картинки. Больше — и подписи начинают налезать друг на

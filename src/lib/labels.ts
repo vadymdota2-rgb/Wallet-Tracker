@@ -100,6 +100,10 @@ const WHY: Record<string, DictKey> = {
   RSI: "ai_why_rsi",
   leverage: "ai_why_lev",
   liquidity: "ai_why_liq",
+  // След события в рядах: листинг, всплеск объёма и резкий ход.
+  age: "ai_why_age",
+  "vlm z": "ai_why_volz",
+  shock: "ai_why_shock",
 };
 
 export function whyKey(raw: string): DictKey | null {
