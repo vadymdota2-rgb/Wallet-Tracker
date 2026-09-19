@@ -18,6 +18,7 @@ import { useLive } from "../store/live";
 import { t, title } from "../i18n/t";
 import { num, pct } from "../lib/format";
 import { ago } from "../lib/relative";
+import { sideKey } from "../lib/labels";
 import { CoinIcon } from "../components/CoinIcon";
 import { Card, Empty, Meter, Row, Tiles } from "../components/ui";
 
@@ -78,7 +79,7 @@ export function HistoryScreen() {
               key={i}
               icon={<CoinIcon sym={it.sym} size={30} />}
               title={it.sym}
-              badge={it.long ? t(lang, "ai_long") : t(lang, "ai_short")}
+              badge={t(lang, sideKey(it.venue, it.long))}
               /* Только значок и время: словами исход подписан в плитках
                  выше, а в строке «🎯 по цели · 5 ч назад» не влезает и в
                  320 точек. */

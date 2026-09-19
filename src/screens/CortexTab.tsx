@@ -15,7 +15,7 @@ import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import { t, title } from "../i18n/t";
 import { num } from "../lib/format";
-import { whyKey } from "../lib/labels";
+import { sideKey, whyKey } from "../lib/labels";
 import { CoinIcon } from "../components/CoinIcon";
 import { Card, Empty, Meter, Row, SectionTitle, Segmented } from "../components/ui";
 import type { Signal, Venue } from "../lib/types";
@@ -38,7 +38,7 @@ function SignalRow({ s, onOpen, lang }: {
         <span className="sig-top">
           <b className="sig-sym">{s.sym}</b>
           <i className={`sig-side ${long ? "up" : "dn"}`}>
-            {long ? t(lang, "ai_long") : t(lang, "ai_short")}
+            {t(lang, sideKey(s.venue, long))}
           </i>
           <em className={`sig-conf ${long ? "up" : "dn"}`}>
             {s.conf}%

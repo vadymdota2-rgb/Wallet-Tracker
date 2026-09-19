@@ -82,6 +82,27 @@ export function Area({
  * масштаб, но только пока он рядом со свечами: вход вдвое ниже минимума
  * сплющил бы весь график в полоску, поэтому такую линию просто не рисуем.
  */
+/**
+ * Уровень плана на графике: цена, её смысл и подпись.
+ *
+ * Цвет здесь означает состояние — стоп это потеря, цель это прибыль, — а не
+ * принадлежность к ряду. Поэтому у каждой линии всегда есть подпись со
+ * значком: по одному цвету различать их нельзя, и не всем это доступно.
+ */
+export interface PlanLevel {
+  v: number;
+  tone: "up" | "dn" | "warn";
+  /** Короткая подпись слева, например «🛑 Стоп». */
+  label: string;
+}
+
+/** Полоса между двумя ценами: риск от входа до стопа, прибыль до цели. */
+export interface PlanZone {
+  from: number;
+  to: number;
+  tone: "up" | "dn";
+}
+
 export function Candles({
   candles,
   height = 190,
@@ -90,6 +111,8 @@ export function Candles({
   entryLabel,
   note,
   noteTone,
+  levels,
+  zones,
 }: {
   candles: Candle[];
   height?: number;
@@ -101,6 +124,11 @@ export function Candles({
   /** Подпись у линии текущей цены: ROI и PnL. */
   note?: string;
   noteTone?: "up" | "dn";
+  /** Уровни плана: вход, стоп, цели. Входят в масштаб целиком — план,
+   *  наполовину уехавший за край, не план. */
+  levels?: PlanLevel[];
+  /** Полосы риска и прибыли. Рисуются под свечами, без обводки. */
+  zones?: PlanZone[];
 }) {
   if (candles.length < 2) return null;
 
@@ -115,6 +143,11 @@ export function Candles({
   const reach = (rawHi - rawLo) * 1.5;
   const showEntry = entry > 0 && entry > rawLo - reach && entry < rawHi + reach;
   if (showEntry) vals.push(entry);
+  /* Уровни плана входят в масштаб без всяких условий. Свечи от этого могут
+     сжаться — и это правда о плане: цель, до которой цена за всё показанное
+     время близко не подходила, должна выглядеть далёкой. */
+  const plan = (levels ?? []).filter((l) => Number.isFinite(l.v) && l.v > 0);
+  for (const l of plan) vals.push(l.v);
   const [lo, hi] = extent(vals);
   const span = hi - lo;
   const y = (v: number) => pad + (1 - (v - lo) / span) * (height - pad * 2);
@@ -126,11 +159,47 @@ export function Candles({
   const rows = [hi, lo + span * 0.5, lo];
   // Подпись сетки прячем, если рядом уже стоит плашка входа или текущей цены:
   // иначе две цены наезжают друг на друга и не читается ни одна.
-  const busy = [showEntry ? y(entry) : NaN, lastPx > 0 ? y(lastPx) : NaN];
+  const busy = [showEntry ? y(entry) : NaN, lastPx > 0 ? y(lastPx) : NaN,
+                ...plan.map((l) => y(l.v))];
   const free = (v: number) => !busy.some((b) => Number.isFinite(b) && Math.abs(b - y(v)) < 11);
+
+  /* Подписи ставятся по важности, а не по месту на экране, и каждая
+     следующая пропускается, если налезает на уже поставленную: две цены друг
+     на друге не читаются ни одна.
+     Порядок — тот, в котором уровни пришли: вход, стоп, цели. Прежде подписи
+     ставились сверху вниз и первой выбывала нижняя — то есть стоп у лонга,
+     самое важное число на карточке, — а плашка текущей цены оставалась.
+     Текущая цена теперь уступает плану: карточка про план. */
+  const taken: number[] = [];
+  const place = (v: number): boolean => {
+    const at = y(v);
+    if (taken.some((b) => Math.abs(b - at) < 11)) return false;
+    taken.push(at);
+    return true;
+  };
+  const labelled = new Set<number>();
+  plan.forEach((l, i) => { if (place(l.v)) labelled.add(i); });
+  const nowText = lastPx > 0 && place(lastPx);
+  // Рисуем сверху вниз, чтобы линии не прыгали при пересортировке.
+  const shown = plan
+    .map((l, i) => ({ ...l, text: labelled.has(i) }))
+    .sort((a, b) => y(a.v) - y(b.v));
 
   return (
     <svg className="chart candles" viewBox={`0 0 ${W} ${height}`} role="img">
+      {/* Риск и прибыль полосами: их высоты и есть то самое отношение, ради
+          которого сделку берут. Заливка бледная и без обводки — это фон
+          свечей, а не ещё один ряд данных. */}
+      {(zones ?? []).map((z, i) => {
+        const a = y(z.from);
+        const b = y(z.to);
+        if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+        return (
+          <rect key={`z${i}`} x="0" width={plot} y={Math.min(a, b)}
+                height={Math.max(1, Math.abs(b - a))}
+                fill={z.tone === "up" ? "var(--up)" : "var(--dn)"} opacity="0.07" />
+        );
+      })}
       {rows.map((v, i) => (
         <g key={i}>
           <line x1="0" x2={plot} y1={y(v)} y2={y(v)} stroke="var(--line)" strokeWidth="1" />
@@ -149,6 +218,35 @@ export function Candles({
           <g key={c.t || i}>
             <line x1={cx} x2={cx} y1={y(c.h)} y2={y(c.l)} stroke={color} strokeWidth="1" opacity="0.85" />
             <rect x={cx - body / 2} y={top} width={body} height={Math.max(1, bottom - top)} fill={color} />
+          </g>
+        );
+      })}
+
+      {shown.map((l, i) => {
+        const at = y(l.v);
+        const color = l.tone === "up" ? "var(--up)" : l.tone === "dn" ? "var(--dn)" : "var(--warn)";
+        return (
+          <g key={`l${i}`}>
+            <line x1="0" x2={plot} y1={at} y2={at} stroke={color} strokeWidth="1"
+                  strokeDasharray="3 3" opacity="0.9" />
+            <circle cx={plot - 2} cy={at} r="2.6" fill={color} />
+            {l.text ? (
+              <>
+                <rect x={plot + 2} y={at - 8} width={axis - 6} height="16" rx="3"
+                      fill={color} opacity="0.2" />
+                <text className="ax lvl" x={W - 5} y={at + 3} textAnchor="end" fill={color}>
+                  {format(l.v)}
+                </text>
+                {/* Подпись уходит под линию, если над ней не осталось места:
+                    у верхнего уровня она иначе наполовину вылезает за край
+                    поля и читается половиной букв. */}
+                <rect className="ax-bg" x="2" y={at < 16 ? at + 3 : at - 14}
+                      width={l.label.length * 5.6 + 8} height="12" rx="2" />
+                <text className="ax lvl" x="5" y={at < 16 ? at + 12 : at - 5} fill={color}>
+                  {l.label}
+                </text>
+              </>
+            ) : null}
           </g>
         );
       })}
@@ -174,8 +272,15 @@ export function Candles({
         <g>
           <line x1="0" x2={plot} y1={y(lastPx)} y2={y(lastPx)} stroke="var(--glow)"
                 strokeWidth="1" strokeDasharray="4 4" opacity="0.75" />
-          <rect x={plot + 2} y={y(lastPx) - 8} width={axis - 6} height="16" rx="3" fill="var(--blue)" />
-          <text className="ax now" x={W - 5} y={y(lastPx) + 3} textAnchor="end">{format(lastPx)}</text>
+          {nowText ? (
+            <>
+              <rect x={plot + 2} y={y(lastPx) - 8} width={axis - 6} height="16" rx="3"
+                    fill="var(--blue)" />
+              <text className="ax now" x={W - 5} y={y(lastPx) + 3} textAnchor="end">
+                {format(lastPx)}
+              </text>
+            </>
+          ) : null}
           {note ? (
             <>
               <rect className="ax-bg" x="2" y={y(lastPx) - 14} width={note.length * 5.6 + 6} height="12" rx="2" />

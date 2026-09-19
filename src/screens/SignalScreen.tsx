@@ -1,26 +1,43 @@
 /**
  * Карточка сигнала.
  *
- * Сверху — то, что модель вообще сказала: вероятность роста за сутки, полосой
- * с отметкой на 50%. Расстояние от отметки и есть весь смысл числа.
+ * Сверху — то, что модель вообще сказала: вероятность роста за выбранный ею
+ * горизонт, полосой с отметкой на 50%. Расстояние от отметки и есть весь
+ * смысл числа.
  *
- * Ниже — уровни, и рядом с ценой всегда расстояние в процентах: «стоп
- * $21 494» ничего не говорит, «−2.5%» говорит всё.
+ * Ниже — график, и на нём весь план сразу: вход, стоп и обе цели линиями,
+ * риск и прибыль полосами. Четыре цены в плитках не говорят, далеко ли цель
+ * от того, где цена ходила последние сутки; график говорит это первым
+ * взглядом. Числа под ним остаются: график — не замена значениям.
  *
  * В конце — вклад признаков в эту оценку, полосами в обе стороны от нуля.
  * Доводы против показываются наравне с доводами за: прятать их значило бы
  * рисовать модель увереннее, чем она есть.
  */
+import { useEffect, useState } from "react";
 import { Frame, type ScreenProps } from "./Screen";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import { t } from "../i18n/t";
 import { num, pct, px, signed } from "../lib/format";
-import { whyKey } from "../lib/labels";
+import { sideKey, whyKey } from "../lib/labels";
+import { fetchTokenHist } from "../lib/api";
+import {
+  candlesFrom, fetchCandles, TF_LABEL,
+  type Candle, type SpotTf, type Timeframe,
+} from "../lib/klines";
 import { CoinIcon } from "../components/CoinIcon";
-import { Card, Diverging, Empty, Meter, Row, SectionTitle, Tiles } from "../components/ui";
+import { Candles, type PlanLevel, type PlanZone } from "../components/Chart";
+import {
+  Card, Diverging, Empty, Meter, Row, SectionTitle, Segmented, Skeleton, Tiles,
+} from "../components/ui";
 import type { LangCode } from "../i18n/types";
 import type { Venue } from "../lib/types";
+
+/* Сетка таймфреймов карточки: четыре кнопки влезают в 320 точек, шесть —
+   нет, последняя уезжала за край. */
+const PLAN_TFS: Timeframe[] = ["15m", "1h", "4h", "1d"];
+const PLAN_SPOT_TFS: SpotTf[] = ["1h", "4h", "1d"];
 
 /** Горизонт словами: модель выбирает его сама, и он у каждого сигнала свой. */
 function hours(lang: LangCode, sec: number): string {
@@ -40,6 +57,44 @@ export function SignalScreen({ arg }: ScreenProps) {
   const list = cortex.list.filter((s) => s.venue === venue);
   const s = list[idx];
 
+  const sym = s?.sym ?? "";
+  const addr = String(s?.addr || "");
+  const hasAddr = /^0x[0-9a-fA-F]{40}$/.test(addr);
+
+  /* Таймфрейм тут свой, а не общий с экраном монеты, и начинается с часа.
+     План живёт часами: на дневных свечах цель в четыре процента сливается с
+     телом одной свечи, и смотреть на неё незачем. Недель и месяцев в наборе
+     нет по той же причине. */
+  const [tf, setTf] = useState<Timeframe>("1h");
+  const [spotTf, setSpotTf] = useState<SpotTf>("1h");
+  const [candles, setCandles] = useState<Candle[] | null>(null);
+  const [hist, setHist] = useState<[number, number][] | null>(null);
+
+  /* Оба источника спрашиваются сразу, а не по цепочке: ждать отказа биржи,
+     чтобы только потом пойти в базу, значит показывать скелет дважды. */
+  useEffect(() => {
+    if (!sym) return;
+    const ctrl = new AbortController();
+    setCandles(null);
+    void fetchCandles(sym, tf, ctrl.signal).then((c) => {
+      if (!ctrl.signal.aborted) setCandles(c);
+    });
+    return () => ctrl.abort();
+  }, [sym, tf]);
+
+  useEffect(() => {
+    if (!hasAddr) {
+      setHist([]);
+      return;
+    }
+    const ctrl = new AbortController();
+    setHist(null);
+    void fetchTokenHist(addr, ctrl.signal).then((d) => {
+      if (!ctrl.signal.aborted) setHist(d?.ok ? d.hist ?? [] : []);
+    });
+    return () => ctrl.abort();
+  }, [addr, hasAddr]);
+
   if (!s) {
     return (
       <Frame title={t(lang, "ai_title")}>
@@ -55,6 +110,26 @@ export function SignalScreen({ arg }: ScreenProps) {
   const pUp = long ? s.conf : 100 - s.conf;
   const away = (v: number) => (s.entry > 0 ? ((v - s.entry) / s.entry) * 100 : 0);
 
+  /* Уровни плана: значок в подписи, а не только цвет. Зелёный с красным
+     различим не для всех глаз, и «🛑» с «🎯» говорят то же самое. */
+  const levels: PlanLevel[] = [
+    { v: s.entry, tone: "warn", label: t(lang, "ai_entry") },
+    { v: s.stop, tone: "dn", label: t(lang, "ai_stop") },
+    { v: s.t1, tone: "up", label: `${t(lang, "ai_take_one")} 1` },
+    { v: s.t2, tone: "up", label: `${t(lang, "ai_take_one")} 2` },
+  ].filter((l) => l.v > 0) as PlanLevel[];
+  /* Полосы риска и прибыли: их высоты и есть то отношение, ради которого
+     сделку берут. Считаются от входа, а не от текущей цены. */
+  const zones: PlanZone[] = [];
+  if (s.entry > 0 && s.stop > 0) zones.push({ from: s.entry, to: s.stop, tone: "dn" });
+  if (s.entry > 0 && s.t2 > 0) zones.push({ from: s.entry, to: s.t2, tone: "up" });
+
+  const exch = candles && candles.length >= 3 ? candles : null;
+  const dex = hist?.length ? candlesFrom(hist, spotTf) : null;
+  // Биржевые свечи точнее: там настоящие OHLC, а не почасовые замеры.
+  const dexShown = !exch && !!dex && dex.length >= 3;
+  const waiting = candles === null || (!exch && hasAddr && hist === null);
+
   return (
     <Frame
       title={
@@ -63,7 +138,7 @@ export function SignalScreen({ arg }: ScreenProps) {
           {s.sym}
         </span>
       }
-      sub={`${long ? t(lang, "ai_long") : t(lang, "ai_short")} · ${
+      sub={`${t(lang, sideKey(venue, long))} · ${
         venue === "perp" ? t(lang, "ai_perp") : t(lang, "ai_spot")
       } · ${t(lang, s.model ? "ai_mode_model" : "ai_mode_formula")}`}
     >
@@ -80,6 +155,40 @@ export function SignalScreen({ arg }: ScreenProps) {
           markLabel={t(lang, "ai_st_coin")}
           tone={pUp >= 50 ? "up" : "dn"}
         />
+      </Card>
+
+      <Card>
+        <SectionTitle>{t(lang, "ai_plan")}</SectionTitle>
+        {/* Сетка таймфреймов зависит от источника: у биржи своя, у истории из
+            базы замеры почасовые, и минутных свечей из них не собрать. */}
+        {dexShown ? (
+          <Segmented<SpotTf>
+            value={spotTf}
+            onChange={setSpotTf}
+            options={PLAN_SPOT_TFS.map((id) => ({ id, label: t(lang, TF_LABEL[id]) }))}
+          />
+        ) : (
+          <Segmented<Timeframe>
+            value={tf}
+            onChange={setTf}
+            options={PLAN_TFS.map((id) => ({ id, label: t(lang, TF_LABEL[id]) }))}
+          />
+        )}
+        {waiting ? (
+          <Skeleton rows={4} />
+        ) : exch || dexShown ? (
+          <Candles
+            candles={(exch ?? dex) as Candle[]}
+            height={210}
+            format={px}
+            levels={levels}
+            zones={zones}
+          />
+        ) : (
+          /* Ничего не досочиняем: нет котировок — так и написано. Уровни
+             стоят числами ниже, и от отсутствия графика они не пропадают. */
+          <Empty text={t(lang, "ui_no_quotes")} />
+        )}
       </Card>
 
       <Card>

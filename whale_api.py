@@ -4025,7 +4025,7 @@ def _signals(cur: sqlite3.Connection) -> list:
     try:
         rows = cur.execute(
             f"SELECT venue,sym,side,conf,modelled,net_nanos,wallets,entry,stop,take1,take2,"
-            f"risk_pct,lev,why,{share} share,{hz} horizon FROM ai_signals "
+            f"risk_pct,lev,why,token,{share} share,{hz} horizon FROM ai_signals "
             "ORDER BY venue, side DESC, conf DESC"
         ).fetchall()
     except sqlite3.Error as e:
@@ -4059,6 +4059,10 @@ def _signals(cur: sqlite3.Connection) -> list:
             # длина полосы, а не сырые базисные пункты.
             "why": _why_parts(r["why"]),
             "venue": "perp" if int(r["venue"] or 0) else "spot",
+            # Адрес контракта у спотового сигнала: без него не достать
+            # историю цены токена — тикеры не уникальны, искать по ним
+            # нельзя. У перпов здесь имя монеты, и оно не адрес.
+            "addr": str(r["token"] or ""),
         })
     return out
 

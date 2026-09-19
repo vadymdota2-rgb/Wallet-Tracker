@@ -1182,12 +1182,21 @@
 
 .of { font-style: normal; color: var(--dim-2); font-size: 13px; font-weight: 500; }
 
-/* Подписи цен на графике */
+/* Подписи цен на графике.
+
+   Поле графика всегда слева направо, даже в арабском: цена — число, и в
+   правом письме подписи уезжали за край, а от плашек оставался один знак
+   доллара. Направление письма переворачивает раскладку внутри svg вместе
+   со страницей, поэтому его здесь фиксируем. */
+.chart { direction: ltr; }
 .chart .ax { fill: var(--dim); font: 500 9px var(--font-sans); font-variant-numeric: tabular-nums; }
 .chart .ax.now { fill: #fff; font-weight: 700; }
 .chart .ax.entry { fill: var(--warn); font-weight: 700; }
 /* Подложка под подписи внутри поля графика — иначе текст тонет в свечах. */
 .chart .ax-bg { fill: rgb(5 10 22 / 0.82); }
+/* Подписи уровней плана: цвет приходит атрибутом от самой линии — стоп,
+   вход и цели означают разное, и подпись обязана говорить то же, что линия. */
+.chart .ax.lvl { font-weight: 700; }
 .chart .ax.pos { font-weight: 700; font-size: 10px; }
 .chart .ax.pos.up { fill: var(--up); }
 .chart .ax.pos.dn { fill: var(--dn); }

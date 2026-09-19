@@ -1,4 +1,22 @@
 {
+  "ai_plan": {
+    "ar": "خطة الصفقة",
+    "de": "Handelsplan",
+    "en": "Trade plan",
+    "es": "Plan de operación",
+    "fr": "Plan de trade",
+    "hi": "ट्रेड योजना",
+    "id": "Rencana trading",
+    "ja": "トレード計画",
+    "ko": "매매 계획",
+    "pl": "Plan transakcji",
+    "pt": "Plano da operação",
+    "ru": "План сделки",
+    "tr": "İşlem planı",
+    "uk": "План угоди",
+    "vi": "Kế hoạch giao dịch",
+    "zh": "交易计划"
+  },
   "calc_amount": {
     "ar": "أموالك",
     "de": "Dein Einsatz",
@@ -1222,6 +1240,24 @@
     "ko": "더 보기",
     "zh": "更多",
     "ja": "その他"
+  },
+  "ui_no_quotes": {
+    "ar": "لا توجد أسعار لهذا الرمز — المستويات بالأرقام أدناه",
+    "de": "Keine Kurse für dieses Ticker — Levels stehen unten als Zahlen",
+    "en": "No price history for this ticker — the levels are listed below",
+    "es": "Sin cotizaciones para este ticker: los niveles están abajo en cifras",
+    "fr": "Pas de cotations pour ce ticker — les niveaux sont chiffrés ci-dessous",
+    "hi": "इस टिकर के भाव नहीं मिले — स्तर नीचे संख्या में हैं",
+    "id": "Tidak ada data harga untuk ticker ini — level ada di bawah",
+    "ja": "この銘柄の価格データがありません。水準は下に数値で表示しています",
+    "ko": "이 종목의 시세가 없습니다 — 가격대는 아래 숫자로",
+    "pl": "Brak notowań dla tego tickera — poziomy są niżej liczbami",
+    "pt": "Sem cotações para este ticker — os níveis estão abaixo em números",
+    "ru": "Котировок по этому тикеру нет — уровни ниже числами",
+    "tr": "Bu sembol için fiyat verisi yok — seviyeler aşağıda sayıyla",
+    "uk": "Котирувань за цим тикером немає — рівні нижче числами",
+    "vi": "Không có dữ liệu giá cho mã này — các mức ở dưới dạng số",
+    "zh": "该代币没有行情数据，价位见下方数字"
   },
   "ui_no_signals": {
     "en": "No signals in this window",

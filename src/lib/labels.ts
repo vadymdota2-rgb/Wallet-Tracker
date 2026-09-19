@@ -138,3 +138,16 @@ export function coinClass(sym: string | undefined | null): "crypto" | "rwa" {
   const s = String(sym || "").toUpperCase();
   return s.includes(":") || METAL_SYMS.has(s) ? "rwa" : "crypto";
 }
+
+/**
+ * Сторона сделки словами площадки.
+ *
+ * На перпах позицию открывают в лонг или в шорт, на споте монету покупают или
+ * продают — шортить её негде. Бот в чате так и пишет, а в приложении на обеих
+ * площадках стояло «Лонг / Шорт»: на споте это обещало сделку, которой там
+ * не бывает.
+ */
+export function sideKey(venue: "perp" | "spot", long: boolean): DictKey {
+  if (venue === "perp") return long ? "ai_long" : "ai_short";
+  return long ? "ai_buy" : "ai_sell";
+}
