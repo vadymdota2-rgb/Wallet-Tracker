@@ -1342,9 +1342,13 @@
 
 /* --------------------------------------------------------------- мозг ---
 
-   Анимация оракула и подписи признаков вокруг неё. Картинка — 16:9, и место
-   под неё резервируется соотношением сторон: иначе при загрузке карточка
-   подпрыгивает, утаскивая за собой всё, что ниже.                        */
+   Присланный файл — одиночный кадр с расширением .gif: в нём одна картинка
+   и ни одного кадра анимации. Поэтому движение делается здесь, вокруг него,
+   и только теми свойствами, которые браузер считает на видеокарте
+   (transform и opacity): дёргаться на телефоне это не должно.
+
+   Всё медленное намеренно. Быстрое мелькание рядом со списком сигналов
+   перетягивает взгляд на себя, а смотреть человек пришёл на сигналы.      */
 .brain {
   position: relative;
   aspect-ratio: 16 / 9;
@@ -1352,14 +1356,47 @@
   border-radius: var(--r-md);
   overflow: hidden;
   background: #01030a;
+  isolation: isolate;
 }
 .brain-img {
   display: block; width: 100%; height: 100%; object-fit: cover;
+  /* Медленный наплыв: сорок секунд туда, сорок обратно. Масштаб не
+     опускается ниже 1.04 — иначе из-под картинки покажется край. */
+  animation: brain-drift 40s ease-in-out infinite alternate;
+  will-change: transform;
 }
-/* Подписи лежат поверх тёмных краёв картинки. Тень под текстом — чтобы
-   слово читалось и там, где под ним оказалась яркая жилка. */
+@keyframes brain-drift {
+  from { transform: scale(1.04) translate3d(-1.1%, 0.7%, 0); }
+  to   { transform: scale(1.12) translate3d(1.1%, -0.9%, 0); }
+}
+/* Дыхание: свечение в середине то разгорается, то гаснет. */
+.brain::after {
+  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: radial-gradient(58% 54% at 50% 48%,
+              rgb(127 216 255 / 0.20), rgb(127 216 255 / 0) 70%);
+  animation: brain-pulse 11s ease-in-out infinite;
+}
+@keyframes brain-pulse {
+  0%, 100% { opacity: 0.3; }
+  50%      { opacity: 1; }
+}
+/* Луч, медленно проходящий поперёк: оракул смотрит. */
+.brain::before {
+  content: ""; position: absolute; inset: -25% -45%; z-index: 1; pointer-events: none;
+  background: linear-gradient(104deg,
+              rgb(160 230 255 / 0) 42%, rgb(160 230 255 / 0.10) 50%,
+              rgb(160 230 255 / 0) 58%);
+  animation: brain-scan 17s linear infinite;
+}
+@keyframes brain-scan {
+  from { transform: translate3d(-55%, 0, 0); }
+  to   { transform: translate3d(55%, 0, 0); }
+}
+
+/* Подписи лежат поверх свечения и луча. Тень под текстом — чтобы слово
+   читалось и там, где под ним оказалась яркая жилка. */
 .brain-tag {
-  position: absolute;
+  position: absolute; z-index: 2;
   font-size: 10px; font-weight: 600; letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--glow);
@@ -1367,7 +1404,9 @@
   /* Длинные имена переносятся, а не обрезаются: «открытый интерес» на 320
      точках не влезает в строку, а обрезанное слово не читается вовсе. */
   max-width: 46%; line-height: 1.3;
-  animation: tag 1.4s var(--ease) both;
+  /* Семь секунд на подпись: полторы на проявление, четыре на чтение,
+     полторы на угасание. Места сменяются по очереди, а не разом. */
+  animation: tag 7s ease-in-out both;
 }
 /* Каждое место — свой угол картинки. Проценты, а не пиксели: карточка
    растягивается от 320 до планшета, и подписи обязаны ехать вместе с ней. */
@@ -1376,16 +1415,17 @@
 .brain-tag.s2 { left: 7%;  bottom: 22%; }
 .brain-tag.s3 { right: 6%; bottom: 14%; text-align: end; }
 .brain-tag.s4 { left: 50%; top: 6%; transform: translateX(-50%); }
-.brain-tag.s4.still { transform: translateX(-50%); }
 @keyframes tag {
-  0%   { opacity: 0; filter: blur(2px); }
-  18%  { opacity: 1; filter: blur(0); }
-  72%  { opacity: 1; filter: blur(0); }
-  100% { opacity: 0; filter: blur(2px); }
+  0%   { opacity: 0; filter: blur(3px); }
+  20%  { opacity: 1; filter: blur(0); }
+  80%  { opacity: 1; filter: blur(0); }
+  100% { opacity: 0; filter: blur(3px); }
 }
-/* Мигающий текст читать тяжело: при просьбе убрать движение подписи просто
-   стоят. Картинка движется сама, и остановить её нечем. */
+/* Мигающий текст читать тяжело, а движущаяся картинка не всем безопасна:
+   по просьбе системы не движется ничего. */
 .brain-tag.still { animation: none; opacity: 0.85; }
 @media (prefers-reduced-motion: reduce) {
   .brain-tag { animation: none; opacity: 0.85; }
+  .brain-img, .brain::before, .brain::after { animation: none; }
+  .brain-img { transform: scale(1.04); }
 }
