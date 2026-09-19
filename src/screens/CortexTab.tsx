@@ -64,6 +64,7 @@ export function CortexTab() {
 
   const cortex = useLive((s) => s.cortex);
   const model = venue === "perp" ? cortex.model?.perp : cortex.model?.spot;
+  const attempt = model ? null : (venue === "perp" ? cortex.try?.perp : cortex.try?.spot);
   const ready = venue === "perp" ? cortex.ready.perp : cortex.ready.spot;
   const list = cortex.list.filter((s) => s.venue === venue);
 
@@ -84,8 +85,11 @@ export function CortexTab() {
             набралось из нужных. И то и другое — значение против предела. */}
         <button type="button" className="ora" onClick={() => open("model")}>
           <span className="ora-hd">
-            <b>{model ? t(lang, "ai_mode_model") : t(lang, "ai_mode_formula")}</b>
-            <em>{model ? `AUC ${model.auc.toFixed(3)}` : `${num(ready)} / ${num(cortex.need)}`}</em>
+            <b>{model ? t(lang, "ai_mode_model")
+                      : (attempt ? t(lang, "ai_not_passed") : t(lang, "ai_mode_formula"))}</b>
+            <em>{model ? `AUC ${model.auc.toFixed(3)}`
+                       : (attempt ? `AUC ${attempt.auc.toFixed(3)}`
+                                  : `${num(ready)} / ${num(cortex.need)}`)}</em>
           </span>
           {model ? (
             <Meter
@@ -97,6 +101,19 @@ export function CortexTab() {
               tone={model.auc >= AUC_GATE ? "up" : "flat"}
               note={`${title(t(lang, "ai_st_acc"))} ${model.acc}% · ${num(model.samples)} ${t(lang, "ai_st_samples")}`}
             />
+          ) : attempt ? (
+            /* Данных хватает, но модель не прошла порог: показываем, насколько
+               не дотянула. «Модель ещё учится» при 2468 готовых исходах не
+               объясняло ничего. */
+            <Meter
+              value={attempt.auc}
+              from={0.45}
+              to={0.75}
+              mark={AUC_GATE}
+              markLabel={t(lang, "ai_st_gate")}
+              tone="flat"
+              note={`${num(attempt.samples)} ${t(lang, "ai_st_samples")}`}
+            />
           ) : (
             <Meter value={ready} from={0} to={cortex.need} tone="flat"
                    note={title(t(lang, "ai_st_ready"))} />
@@ -106,7 +123,13 @@ export function CortexTab() {
 
       <Card>
         {list.length === 0 ? (
-          <Empty text={t(lang, "ui_no_signals")} hint={t(lang, "ai_empty")} />
+          /* Две разные пустоты: бот ни разу не присылал сигналов — и бот
+             посчитал, но ничего не прошло отбор. Раньше в обоих случаях
+             стояло «в этом окне мало кошельков», причём окон уже нет. */
+          <Empty
+            text={cortex.at ? t(lang, "ai_none_now") : t(lang, "ai_wait_bot")}
+            hint={cortex.at ? t(lang, "ai_empty") : undefined}
+          />
         ) : (
           list.map((s, i) => (
             <SignalRow key={`${s.venue}-${s.sym}-${i}`} s={s} lang={lang}

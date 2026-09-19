@@ -4053,6 +4053,35 @@ def _signals(cur: sqlite3.Connection) -> list:
     return out
 
 
+def _oracle_try(cur: sqlite3.Connection, perp: bool) -> dict | None:
+    """Последняя попытка обучения, принятая или нет.
+
+    «Модель ещё не обучена» при 2468 готовых исходах не объясняет ничего:
+    непонятно, ждать ли данных или модель раз за разом не проходит порог.
+    """
+    if not table_exists(cur, "ai_model_try"):
+        return None
+    try:
+        row = cur.execute(
+            "SELECT at,samples,auc,logloss,base_logloss,wf_auc,accepted FROM ai_model_try "
+            "WHERE venue=? AND horizon=86400",
+            (1 if perp else 0,),
+        ).fetchone()
+    except sqlite3.Error:
+        return None
+    if not row:
+        return None
+    return {
+        "at": int(row["at"] or 0),
+        "samples": int(row["samples"] or 0),
+        "auc": round(float(row["auc"] or 0), 3),
+        "logloss": round(float(row["logloss"] or 0), 3),
+        "base": round(float(row["base_logloss"] or 0), 3),
+        "wf": round(float(row["wf_auc"] or 0), 3),
+        "ok": bool(int(row["accepted"] or 0)),
+    }
+
+
 def _oracle_model(cur: sqlite3.Connection, perp: bool) -> dict | None:
     """Состояние обученного оракула: то, что бот записал в ai_models.
 
@@ -4097,6 +4126,74 @@ def _oracle_model(cur: sqlite3.Connection, perp: bool) -> dict | None:
     }
 
 
+def _signals_at(cur: sqlite3.Connection) -> int | None:
+    if not table_exists(cur, "ai_signals"):
+        return None
+    try:
+        row = cur.execute("SELECT MAX(made_at) m FROM ai_signals").fetchone()
+    except sqlite3.Error:
+        return None
+    return int(row["m"]) if row and row["m"] else None
+
+
+def _signal_history(cur: sqlite3.Connection) -> dict:
+    """История выданных сигналов: что показали и чем это кончилось.
+
+    Раньше здесь считались строки журнала обучения — монеты, которые сигналами
+    никогда не были, — а «угадано» означало «поток угадал направление». На
+    экране это стояло рядом с подписями «планов закрыто», «по цели», «по
+    стопу», которых в тех данных не было вовсе. Теперь считается только то,
+    что человеку показали: дошла цена до цели, свалилась на стоп или не
+    случилось ни того ни другого за сутки.
+    """
+    empty = {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0,
+             "broken": 0, "avg": 0, "items": []}
+    if not table_exists(cur, "ai_signal_log"):
+        return empty
+    try:
+        rows = cur.execute(
+            "SELECT sym,venue,side,conf,made_at,closed_at,outcome,ret_bp,entry,exit_px "
+            "FROM ai_signal_log WHERE closed_at>0 ORDER BY closed_at DESC LIMIT 40"
+        ).fetchall()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] история сигналов: {e}\n")
+        return empty
+    items, tp, sl, rets = [], 0, 0, []
+    for r in rows:
+        out = int(r["outcome"] or 0)
+        ret = float(r["ret_bp"] or 0) / 100.0
+        if out > 0:
+            tp += 1
+        elif out < 0:
+            sl += 1
+        rets.append(ret)
+        items.append({
+            "sym": str(r["sym"] or "?").upper(),
+            "long": bool(int(r["side"] or 0)),
+            # Доход считается в сторону сигнала: у шорта падение цены — плюс.
+            "ret": round(ret, 1),
+            "t": ago(int(r["closed_at"] or 0)),
+            "win": out > 0,
+            "outcome": out,
+            "venue": "perp" if int(r["venue"] or 0) else "spot",
+        })
+    of = len(items)
+    decided = tp + sl
+    return {
+        # Доля попаданий считается только среди решённых: сигнал, который за
+        # сутки не дошёл ни до цели, ни до стопа, не был ни угадан, ни нет.
+        "hit": int(round(100.0 * tp / decided)) if decided else 0,
+        "of": of,
+        "won": tp,
+        "tp": tp,
+        "sl": sl,
+        "missed": of - decided,
+        "broken": sl,
+        "avg": round(sum(rets) / len(rets), 1) if rets else 0,
+        "items": items,
+    }
+
+
 def load_sonar(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) -> dict:
     sonar = {
         "need": 400,
@@ -4107,6 +4204,7 @@ def load_sonar(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) ->
         "acc": None,
         "accSpot": None,
         "accPerp": None,
+        "at": None,
         "list": [],
         "hist": {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []},
     }
@@ -4117,6 +4215,7 @@ def load_sonar(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) ->
     tp, accp = _ai_trained(cur, True)
     # Оракул старше линейной модели: если он обучен, на экране его числа.
     os_, op = _oracle_model(cur, False), _oracle_model(cur, True)
+    sonar["try"] = {"spot": _oracle_try(cur, False), "perp": _oracle_try(cur, True)}
     sonar["model"] = {"spot": os_, "perp": op}
     sonar["trainedSpot"] = bool(os_) or ts
     sonar["trainedPerp"] = bool(op) or tp
@@ -4126,57 +4225,12 @@ def load_sonar(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) ->
     sonar["acc"] = sonar["accSpot"]
 
     sonar["list"] = _signals(cur)
+    # Когда бот в последний раз считал сигналы. Пусто — значит не считал ни
+    # разу: пустой список тогда означает не «нечего показать», а «нечему
+    # взяться», и на экране это разные слова.
+    sonar["at"] = _signals_at(cur)
 
-    items = []
-    if table_exists(cur, "ai_events"):
-        try:
-            hist_rows = cur.execute(
-                "SELECT name, venue, buy_nanos, sell_nanos, price_then, price_24h, ts "
-                "FROM ai_events WHERE window_days=24 AND filled_at>0 "
-                "AND price_then>0 AND price_24h>0 ORDER BY ts DESC LIMIT 40"
-            ).fetchall()
-        except sqlite3.Error:
-            hist_rows = []
-        tp_n = sl_n = 0
-        signed = []
-        for r in hist_rows:
-            buy, sell = usd(r["buy_nanos"]), usd(r["sell_nanos"])
-            then, later = usd(r["price_then"]), usd(r["price_24h"])
-            if buy == sell or then <= 0:
-                continue
-            was_long = buy > sell
-            ret = 100.0 * (later - then) / then
-            win = ret > 0 if was_long else ret < 0
-            moved = ret if was_long else -ret
-            plan = 1 if moved >= 3.75 else (-1 if moved <= -2.5 else 0)
-            if plan == 1:
-                tp_n += 1
-            elif plan == -1:
-                sl_n += 1
-            signed.append(moved)
-            items.append(
-                {
-                    "sym": (r["name"] or "?").upper(),
-                    "long": was_long,
-                    "ret": round(ret, 1),
-                    "t": ago(int(r["ts"] or 0)),
-                    "win": win,
-                    "venue": "perp" if int(r["venue"] or 0) else "spot",
-                }
-            )
-        of = len(items)
-        won = sum(1 for i in items if i["win"])
-        sonar["hist"] = {
-            "hit": int(round(100.0 * won / of)) if of else 0,
-            "of": of,
-            "won": won,
-            "tp": tp_n,
-            "sl": sl_n,
-            "missed": max(0, of - won),
-            "broken": sl_n,
-            "avg": round(sum(signed) / len(signed), 1) if signed else 0,
-            "items": items,
-        }
+    sonar["hist"] = _signal_history(cur)
     return sonar
 
 
@@ -4658,6 +4712,7 @@ def bootstrap(chat: str) -> dict:
             "trained": False, "trainedSpot": False, "trainedPerp": False,
             "acc": None, "accSpot": None, "accPerp": None,
             "model": {"spot": None, "perp": None},
+            "try": {"spot": None, "perp": None}, "at": None,
             "list": [], "hist": {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []},
         }
         pub = piece("pub", lambda: get_public(cur, hl), {}, True) or {}

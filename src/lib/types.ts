@@ -349,6 +349,8 @@ export interface Signal {
 }
 
 export interface HistItem {
+  /** 1 — дошло до цели, −1 — стоп, 0 — за сутки ни то ни другое. */
+  outcome?: number;
   sym: string;
   long: boolean;
   ret: number;
@@ -377,6 +379,16 @@ export interface CortexModel {
   top: { k: string; v: number }[];
 }
 
+export interface CortexTry {
+  at: number;
+  samples: number;
+  auc: number;
+  logloss: number;
+  base: number;
+  wf: number;
+  ok: boolean;
+}
+
 export interface Cortex {
   need: number;
   ready: { spot: number; perp: number };
@@ -387,6 +399,10 @@ export interface Cortex {
   accSpot: number | null;
   accPerp: number | null;
   model?: { spot: CortexModel | null; perp: CortexModel | null };
+  /** Последняя попытка обучения — принятая или нет. */
+  try?: { spot: CortexTry | null; perp: CortexTry | null };
+  /** Когда бот в последний раз считал сигналы. null — не считал ни разу. */
+  at?: number | null;
   list: Signal[];
   hist: {
     hit: number;

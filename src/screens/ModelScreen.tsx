@@ -16,24 +16,45 @@ import { useLive } from "../store/live";
 import { t, title } from "../i18n/t";
 import { num } from "../lib/format";
 import { Bars, Card, Meter, Row, SectionTitle, Tiles } from "../components/ui";
-import type { CortexModel } from "../lib/types";
+import type { CortexModel, CortexTry } from "../lib/types";
 
 /** Порог приёмки: ниже него бот модель в бой не пускает. */
 const AUC_GATE = 0.55;
 
-function Venue({ m, name, ready, need }: {
+function Venue({ m, attempt, name, ready, need }: {
   m: CortexModel | null | undefined;
+  attempt: CortexTry | null | undefined;
   name: string;
   ready: number;
   need: number;
 }) {
   const lang = useApp((s) => s.lang);
   if (!m) {
+    /* Модели нет по двум разным причинам: исходов ещё мало или модель не
+       прошла порог. Во втором случае показываем, насколько не дотянула, —
+       иначе «не обучена» при полном счётчике не объясняет ничего. */
     return (
       <Card>
-        <SectionTitle note={t(lang, "ai_st_untrained")}>{name}</SectionTitle>
-        <Meter value={ready} from={0} to={need} tone="flat"
-               label={title(t(lang, "ai_st_ready"))} note={`${num(ready)} / ${num(need)}`} />
+        <SectionTitle note={attempt ? t(lang, "ai_not_passed") : t(lang, "ai_st_untrained")}>
+          {name}
+        </SectionTitle>
+        {attempt ? (
+          <>
+            <Meter value={attempt.auc} from={0.45} to={0.75} mark={AUC_GATE}
+                   markLabel={t(lang, "ai_st_gate")} tone="flat"
+                   label="AUC" note={attempt.auc.toFixed(3)} />
+            <Row title={title(t(lang, "ai_st_loss"))}
+                 sub={`${t(lang, "ai_st_base")} ${attempt.base.toFixed(3)}`}
+                 value={attempt.logloss.toFixed(3)}
+                 tone={attempt.logloss < attempt.base ? "up" : "dn"} />
+            <Row title={title(t(lang, "ai_st_wf"))}
+                 sub={`${num(attempt.samples)} ${t(lang, "ai_st_samples")}`}
+                 value={attempt.wf.toFixed(3)} tone={attempt.wf >= 0.52 ? "up" : "dn"} />
+          </>
+        ) : (
+          <Meter value={ready} from={0} to={need} tone="flat"
+                 label={title(t(lang, "ai_st_ready"))} note={`${num(ready)} / ${num(need)}`} />
+        )}
       </Card>
     );
   }
@@ -92,9 +113,9 @@ export function ModelScreen() {
       <Card>
         <p className="note">{t(lang, "ai_hint")}</p>
       </Card>
-      <Venue m={cortex.model?.spot} name={t(lang, "ai_spot")}
+      <Venue m={cortex.model?.spot} attempt={cortex.try?.spot} name={t(lang, "ai_spot")}
              ready={cortex.ready.spot} need={cortex.need} />
-      <Venue m={cortex.model?.perp} name={t(lang, "ai_perp")}
+      <Venue m={cortex.model?.perp} attempt={cortex.try?.perp} name={t(lang, "ai_perp")}
              ready={cortex.ready.perp} need={cortex.need} />
     </Frame>
   );
