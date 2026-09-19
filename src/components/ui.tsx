@@ -161,6 +161,119 @@ export function Tiles({
   );
 }
 
+/**
+ * Шкала: одно значение против предела.
+ *
+ * Не круговой индикатор и не пирог из двух долей — обычная полоса с
+ * подписанной отметкой. Отметка здесь главное: «вероятность 61%» само по себе
+ * ничего не значит, значит только расстояние от 50%, где монетка. То же с
+ * AUC: 0.61 читается, только когда видно, где 0.5.
+ */
+export function Meter({
+  value,
+  from = 0,
+  to = 1,
+  mark,
+  markLabel,
+  tone = "up",
+  label,
+  note,
+}: {
+  value: number;
+  from?: number;
+  to?: number;
+  /** Отметка «ничего не значит»: монетка, порог приёмки, нужный минимум. */
+  mark?: number;
+  markLabel?: string;
+  tone?: "up" | "dn" | "flat";
+  label?: ReactNode;
+  note?: ReactNode;
+}) {
+  const span = to - from || 1;
+  const at = Math.max(0, Math.min(1, (value - from) / span));
+  const markAt = mark === undefined ? null : Math.max(0, Math.min(1, (mark - from) / span));
+  return (
+    <div className="meter">
+      {label || note ? (
+        <div className="meter-hd">
+          <span>{label}</span>
+          <span className="meter-note">{note}</span>
+        </div>
+      ) : null}
+      <div className="meter-track">
+        <i className={`meter-fill ${tone}`} style={{ width: `${at * 100}%` }} />
+        {markAt === null ? null : (
+          <i className="meter-mark" style={{ left: `${markAt * 100}%` }} aria-hidden="true" />
+        )}
+      </div>
+      {markLabel && markAt !== null ? (
+        <div className="meter-scale">
+          <span style={{ left: `${markAt * 100}%` }}>{markLabel}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export interface BarItem {
+  name: string;
+  /** −1…1 для расходящихся полос, 0…1 для обычных. */
+  value: number;
+  label: string;
+}
+
+/**
+ * Полосы в обе стороны от нуля: довод за сигнал вправо, против — влево.
+ *
+ * Цвет здесь не единственный признак: сторона и знак в подписи говорят то же
+ * самое. Зелёный с красным различимы не для всех глаз, и полагаться на один
+ * цвет нельзя.
+ */
+export function Diverging({ items }: { items: BarItem[] }) {
+  if (!items.length) return null;
+  const max = Math.max(...items.map((i) => Math.abs(i.value)), 1e-6);
+  return (
+    <div className="bars diverge">
+      {items.map((it) => {
+        const w = (Math.abs(it.value) / max) * 50;
+        const up = it.value >= 0;
+        return (
+          <div className="bar-row" key={it.name}>
+            <span className="bar-name">{it.name}</span>
+            <span className="bar-plot">
+              <i className="bar-zero" aria-hidden="true" />
+              <i
+                className={`bar-fill ${up ? "up" : "dn"}`}
+                style={up ? { left: "50%", width: `${w}%` } : { right: "50%", width: `${w}%` }}
+              />
+            </span>
+            <span className={`bar-val ${up ? "up" : "dn"}`}>{it.label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Полосы одной величины: один цвет на все, длина и есть значение. */
+export function Bars({ items }: { items: BarItem[] }) {
+  if (!items.length) return null;
+  const max = Math.max(...items.map((i) => i.value), 1e-6);
+  return (
+    <div className="bars">
+      {items.map((it) => (
+        <div className="bar-row" key={it.name}>
+          <span className="bar-name">{it.name}</span>
+          <span className="bar-plot">
+            <i className="bar-fill" style={{ left: 0, width: `${(it.value / max) * 100}%` }} />
+          </span>
+          <span className="bar-val">{it.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function Action({
   children,
   onClick,

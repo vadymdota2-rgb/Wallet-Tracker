@@ -23,6 +23,15 @@ export function bare(s: string): string {
   return s.replace(/^[\p{Extended_Pictographic}←-⇿⬀-⯿️‍\s]+/u, "").trim() || s;
 }
 
+/**
+ * Строки бота сделаны для строки чата: «Точность:», «Главные признаки:». В
+ * заголовке раздела двоеточие висит в воздухе, поэтому снимаем его — вместе
+ * с ведущим значком.
+ */
+export function title(s: string): string {
+  return bare(s).replace(/[:：]\s*$/u, "").trim() || bare(s);
+}
+
 /** Ведущий эмодзи строки — когда наоборот нужен только значок. */
 export function icon(s: string): string {
   const m = s.match(/^[\p{Extended_Pictographic}️‍]+/u);

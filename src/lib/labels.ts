@@ -82,8 +82,8 @@ export function holdTime(sec: number | null | undefined, lang: LangCode): string
 }
 
 /**
- * Причина сигнала приходит как вклад признака: "+flow", "-vol 24h". Знак
- * говорит, за сигнал признак или против, имя — какой именно. Часть имён
+ * Причина сигнала приходит как вклад признака: имя и сдвиг вероятности.
+ * Часть имён
  * переводится, остальные остаются как есть: «RSI», «ATR» и «funding»
  * читаются одинаково на всех языках, и перевод сделал бы их хуже.
  */
@@ -101,13 +101,6 @@ const WHY: Record<string, DictKey> = {
   leverage: "ai_why_lev",
   liquidity: "ai_why_liq",
 };
-
-/** Разбор причины: знак отдельно, имя отдельно. */
-export function whySplit(raw: string): { up: boolean; name: string } {
-  const s = String(raw || "");
-  const up = !s.startsWith("-");
-  return { up, name: s.replace(/^[+-]/, "") };
-}
 
 export function whyKey(raw: string): DictKey | null {
   return WHY[raw] ?? null;

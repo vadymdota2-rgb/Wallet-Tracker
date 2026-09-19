@@ -342,8 +342,9 @@ export interface Signal {
   t1: number;
   t2: number;
   lev: number;
-  /** Вклад признаков в эту оценку: "+flow", "-vol 24h". Знак — к стороне сигнала. */
-  why: string[];
+  /** Вклад признаков в эту оценку: имя и сдвиг вероятности в процентных
+   *  пунктах, знаком в сторону сигнала. */
+  why: { k: string; v: number }[];
   venue: Venue;
 }
 

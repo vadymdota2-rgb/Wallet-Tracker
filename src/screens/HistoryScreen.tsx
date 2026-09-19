@@ -50,6 +50,9 @@ export function HistoryScreen() {
             tone={it.win ? "up" : "dn"}
           />
         ))}
+        {/* Показанная доля попаданий — прошлое, а не обещание. Экран с
+            процентом без этой строчки читается как гарантия. */}
+        <p className="note dim">{t(lang, "ai_trade_hint")}</p>
       </Card>
     </Frame>
   );

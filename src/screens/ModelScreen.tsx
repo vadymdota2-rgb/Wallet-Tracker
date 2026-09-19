@@ -2,26 +2,28 @@
  * Состояние модели.
  *
  * Одной «точности» мало: при 54% роста в выборке прогноз «всегда вверх» даёт
- * те же 54%. Поэтому рядом всегда стоят AUC — упорядочивает ли модель события
- * лучше монетки, — потери против потерь постоянного прогноза и скользящая
- * проверка: среднее по четырём отрезкам времени, чтобы одна удачная неделя не
- * выдавала себя за умение. Числа с теста, которого модель при обучении не
- * видела.
+ * те же 54%. Поэтому AUC показан на шкале, где отмечены и монетка, и порог,
+ * ниже которого модель в бой не пускают, а потери стоят рядом с потерями
+ * постоянного прогноза — без этой пары число 0.66 не значит ничего.
  *
- * Пока модели нет, показываем не пустоту, а сколько исходов набралось: это
- * единственное, что в такой момент можно сказать честно.
+ * Все числа — с теста, которого модель при обучении не видела. Пока модели
+ * нет, показываем не пустоту, а сколько исходов набралось: это единственное,
+ * что в такой момент можно сказать честно.
  */
 import { Frame } from "./Screen";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
-import { t } from "../i18n/t";
+import { t, title } from "../i18n/t";
 import { num } from "../lib/format";
-import { Card, Empty, Row, SectionTitle, Tiles } from "../components/ui";
+import { Bars, Card, Meter, Row, SectionTitle, Tiles } from "../components/ui";
 import type { CortexModel } from "../lib/types";
 
-function Venue({ m, title, ready, need }: {
+/** Порог приёмки: ниже него бот модель в бой не пускает. */
+const AUC_GATE = 0.55;
+
+function Venue({ m, name, ready, need }: {
   m: CortexModel | null | undefined;
-  title: string;
+  name: string;
   ready: number;
   need: number;
 }) {
@@ -29,39 +31,53 @@ function Venue({ m, title, ready, need }: {
   if (!m) {
     return (
       <Card>
-        <SectionTitle>{title}</SectionTitle>
-        <Row title={t(lang, "ai_st_untrained")}
-             sub={t(lang, "ai_st_ready")} value={`${num(ready)} / ${num(need)}`} />
+        <SectionTitle note={t(lang, "ai_st_untrained")}>{name}</SectionTitle>
+        <Meter value={ready} from={0} to={need} tone="flat"
+               label={title(t(lang, "ai_st_ready"))} note={`${num(ready)} / ${num(need)}`} />
       </Card>
     );
   }
   const hours = m.at ? Math.max(0, Math.round((Date.now() / 1000 - m.at) / 3600)) : 0;
   return (
     <Card>
-      <SectionTitle note={`${num(m.trees)} ${t(lang, "ai_st_trees")}`}>{title}</SectionTitle>
+      <SectionTitle note={hours > 0 ? `${hours} ${t(lang, "ai_hist_hours")}` : undefined}>
+        {name}
+      </SectionTitle>
+      <Meter
+        value={m.auc}
+        from={0.45}
+        to={0.75}
+        mark={0.5}
+        markLabel={t(lang, "ai_st_coin")}
+        tone={m.auc >= AUC_GATE ? "up" : "flat"}
+        label="AUC"
+        note={m.auc.toFixed(3)}
+      />
       <Tiles
         cols={3}
         size="sm"
         items={[
-          { label: "AUC", value: m.auc.toFixed(3) },
-          { label: t(lang, "ai_acc"), value: `${m.acc}%` },
+          { label: title(t(lang, "ai_st_acc")), value: `${m.acc}%` },
           { label: t(lang, "ai_st_samples"), value: num(m.samples) },
+          { label: t(lang, "ai_st_trees"), value: num(m.trees) },
         ]}
       />
-      <Row title={t(lang, "ai_st_loss")} sub={`${t(lang, "ai_st_base")} ${m.base.toFixed(3)}`}
+      {/* Потери и скользящая проверка — два числа, и рисовать из них график
+          незачем: полоса из одного значения не говорит больше самого
+          значения. Рядом с потерями всегда стоит база. */}
+      <Row title={title(t(lang, "ai_st_loss"))}
+           sub={`${t(lang, "ai_st_base")} ${m.base.toFixed(3)}`}
            value={m.logloss.toFixed(3)} tone={m.logloss < m.base ? "up" : "dn"} />
-      <Row title={t(lang, "ai_st_wf")} sub={`${num(m.test)} ${t(lang, "ai_st_samples")}`}
-           value={m.wf.toFixed(3)} />
+      <Row title={title(t(lang, "ai_st_wf"))}
+           sub={`${num(m.test)} ${t(lang, "ai_st_samples")}`}
+           value={m.wf.toFixed(3)} tone={m.wf >= 0.52 ? "up" : "dn"} />
       {m.top?.length ? (
         <>
-          <SectionTitle>{t(lang, "ai_st_top")}</SectionTitle>
-          {m.top.slice(0, 5).map((f) => (
-            <Row key={f.k} title={f.k} value={`${f.v}%`} />
-          ))}
+          <SectionTitle>{title(t(lang, "ai_st_top"))}</SectionTitle>
+          <Bars items={m.top.slice(0, 5).map((f) => ({
+            name: f.k, value: f.v, label: `${f.v}%`,
+          }))} />
         </>
-      ) : null}
-      {hours > 0 ? (
-        <p className="note dim">{`${hours} ${t(lang, "ai_hist_hours")}`}</p>
       ) : null}
     </Card>
   );
@@ -76,13 +92,10 @@ export function ModelScreen() {
       <Card>
         <p className="note">{t(lang, "ai_hint")}</p>
       </Card>
-      <Venue m={cortex.model?.spot} title={t(lang, "ai_spot")}
+      <Venue m={cortex.model?.spot} name={t(lang, "ai_spot")}
              ready={cortex.ready.spot} need={cortex.need} />
-      <Venue m={cortex.model?.perp} title={t(lang, "ai_perp")}
+      <Venue m={cortex.model?.perp} name={t(lang, "ai_perp")}
              ready={cortex.ready.perp} need={cortex.need} />
-      {!cortex.model?.spot && !cortex.model?.perp ? (
-        <Card><Empty text={t(lang, "ai_mode_formula")} /></Card>
-      ) : null}
     </Frame>
   );
 }

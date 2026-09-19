@@ -3990,6 +3990,21 @@ def _ai_trained(cur: sqlite3.Connection, perp: bool) -> tuple[bool, float | None
         return False, None
 
 
+def _why_parts(raw) -> list:
+    """Разбор причин: «имя:вклад» через запятую."""
+    out = []
+    for part in str(raw or "").split(","):
+        name, _, val = part.rpartition(":")
+        if not name:
+            continue
+        try:
+            bp = int(val)
+        except ValueError:
+            continue
+        out.append({"k": name, "v": round(bp / 100.0, 2)})
+    return out
+
+
 def _signals(cur: sqlite3.Connection) -> list:
     """Сигналы, посчитанные ботом.
 
@@ -4029,7 +4044,10 @@ def _signals(cur: sqlite3.Connection) -> list:
             "t1": float(r["take1"] or 0),
             "t2": float(r["take2"] or 0),
             "lev": int(r["lev"] or 1),
-            "why": [w for w in str(r["why"] or "").split(",") if w],
+            # «flow:412» — имя признака и его вклад в сотых долях процента
+            # вероятности. Отдаём процентными пунктами: приложению нужна
+            # длина полосы, а не сырые базисные пункты.
+            "why": _why_parts(r["why"]),
             "venue": "perp" if int(r["venue"] or 0) else "spot",
         })
     return out
