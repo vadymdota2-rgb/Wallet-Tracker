@@ -104,10 +104,13 @@ export function SignalScreen({ arg }: ScreenProps) {
   }
 
   const long = s.side === "buy";
-  /* Вероятность роста: у продажи на экране стоит уверенность в падении, а
-     шкала всегда про рост — иначе отметка «монетка» поедет вместе со
-     стороной, и сравнивать два сигнала станет нельзя. */
-  const pUp = long ? s.conf : 100 - s.conf;
+  /* Показывается уверенность модели в том, что она советует: у покупки это
+     шанс роста, у продажи — шанс падения. Так же и в списке.
+     Прежде здесь всегда стоял шанс роста, и у продажи с уверенностью 67%
+     карточка показывала 33% — число, о котором никто не спрашивал, а список
+     на том же сигнале показывал 67%. Отметка «монетка» стоит на половине в
+     обоих случаях, так что сравнивать сигналы это не мешает. */
+  const conf = s.conf;
   const away = (v: number) => (s.entry > 0 ? ((v - s.entry) / s.entry) * 100 : 0);
 
   /* Уровни плана: значок в подписи, а не только цвет. Зелёный с красным
@@ -145,15 +148,17 @@ export function SignalScreen({ arg }: ScreenProps) {
       <Card>
         <div className="hero">
           <div className="hero-main">
-            <div className={`hero-val ${long ? "up" : "dn"}`}>{pUp}%</div>
-            <div className="hero-note">{t(lang, "ai_p_up", { h: hours(lang, s.h) })}</div>
+            <div className={`hero-val ${long ? "up" : "dn"}`}>{conf}%</div>
+            <div className="hero-note">
+              {t(lang, long ? "ai_p_up" : "ai_p_dn", { h: hours(lang, s.h) })}
+            </div>
           </div>
         </div>
         <Meter
-          value={pUp / 100}
+          value={conf / 100}
           mark={0.5}
           markLabel={t(lang, "ai_st_coin")}
-          tone={pUp >= 50 ? "up" : "dn"}
+          tone={long ? "up" : "dn"}
         />
       </Card>
 

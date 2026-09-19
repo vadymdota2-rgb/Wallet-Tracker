@@ -40,9 +40,12 @@ function SignalRow({ s, onOpen, lang }: {
           <i className={`sig-side ${long ? "up" : "dn"}`}>
             {t(lang, sideKey(s.venue, long))}
           </i>
+          {/* Число и подпись обязаны говорить одно. Раньше под «Продажей»
+              стояло «67% шанс роста»: показывалась уверенность модели в
+              падении, а подписана она была ростом. */}
           <em className={`sig-conf ${long ? "up" : "dn"}`}>
             {s.conf}%
-            <i>{t(lang, "ai_p_short")}</i>
+            <i>{t(lang, long ? "ai_p_short" : "ai_p_short_dn")}</i>
           </em>
         </span>
         <span className="sig-meter">

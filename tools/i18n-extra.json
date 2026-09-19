@@ -1,4 +1,22 @@
 {
+  "ai_hist_open": {
+    "ar": "{n} إشارة قيد المتابعة — أول نتيجة بعد {h}",
+    "de": "{n} Signale laufen — erstes Ergebnis in {h}",
+    "en": "{n} signals running — first result in {h}",
+    "es": "{n} señales en curso: primer resultado en {h}",
+    "fr": "{n} signaux en cours — premier résultat dans {h}",
+    "hi": "{n} सिग्नल चल रहे हैं — पहला नतीजा {h} में",
+    "id": "{n} sinyal berjalan — hasil pertama dalam {h}",
+    "ja": "進行中のシグナル{n}件 — 最初の結果は{h}後",
+    "ko": "진행 중인 신호 {n}개 — 첫 결과는 {h} 후",
+    "pl": "{n} sygnałów w toku — pierwszy wynik za {h}",
+    "pt": "{n} sinais em curso — primeiro resultado em {h}",
+    "ru": "{n} сигналов в работе — первый итог через {h}",
+    "tr": "{n} sinyal sürüyor — ilk sonuç {h} sonra",
+    "uk": "{n} сигналів у роботі — перший підсумок через {h}",
+    "vi": "{n} tín hiệu đang chạy — kết quả đầu tiên sau {h}",
+    "zh": "{n} 个信号进行中 — 首个结果还需 {h}"
+  },
   "ai_plan": {
     "ar": "خطة الصفقة",
     "de": "Handelsplan",

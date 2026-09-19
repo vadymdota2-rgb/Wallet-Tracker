@@ -27,10 +27,21 @@ export function HistoryScreen() {
   const hist = useLive((s) => s.cortex.hist);
 
   if (!hist.of) {
+    /* «Завершённых сигналов пока нет» само по себе не отличает «бот только
+       что перезапустился» от «что-то сломалось». Если сигналы в работе есть,
+       говорим сколько их и через сколько придёт первый итог: горизонт свой у
+       каждого, и раньше него итога взяться неоткуда. */
+    const open = hist.open ?? 0;
+    const soon = Math.max(1, Math.round((hist.next ?? 0) / 3600));
     return (
       <Frame title={t(lang, "ai_hist_title")}>
         <Card>
-          <Empty text={t(lang, "ai_hist_empty")} />
+          <Empty
+            text={t(lang, "ai_hist_empty")}
+            hint={open > 0
+              ? t(lang, "ai_hist_open", { n: open, h: t(lang, "ai_hours", { n: soon }) })
+              : undefined}
+          />
         </Card>
       </Frame>
     );

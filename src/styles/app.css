@@ -1287,6 +1287,10 @@
 .sig-main { flex: 1 1 auto; min-width: 0; display: grid; gap: 7px; }
 .sig-top { display: flex; align-items: baseline; gap: 8px; }
 .sig-sym {
+  /* Тикер уступает место последним: это главное слово строки. Он занимает
+     свою естественную ширину, но не больше сорока процентов строки — длинные
+     имена вроде «xyz:NVDA» иначе не оставили бы места ни на что. */
+  flex: 0 0 auto; max-width: 40%;
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 17px; font-weight: 700; letter-spacing: 0.01em;
 }
@@ -1300,7 +1304,10 @@
 /* Число уверенности — крупное и с пропорциональными цифрами: это главное,
    что человек читает в строке. */
 .sig-conf {
-  margin-inline-start: auto; flex: 0 0 auto; font-style: normal;
+  /* Уступает при нехватке места: подпись «Chance auf Rückgang» длиннее, чем
+     «Chance auf Anstieg», и неразрывной колонкой она распирала карточку — на
+     320 точках страница становилась шире экрана и весь список съезжал. */
+  margin-inline-start: auto; flex: 1 1 auto; min-width: 0; font-style: normal;
   font-size: 19px; font-weight: 700;
 }
 .sig-conf.up { color: var(--up); }
@@ -1327,6 +1334,8 @@
 /* Число уверенности с подписью под ним: «55%» и мелким «шанс роста». */
 .sig-conf { display: grid; justify-items: end; gap: 1px; line-height: 1.1; }
 .sig-conf i {
+  /* Переносится, а не обрезается и не распирает строку: два слова в две
+     строки читаются, обрезанное слово — нет. */
   font-style: normal; font-size: 10px; font-weight: 500; color: var(--dim);
-  white-space: nowrap;
+  text-align: end; overflow-wrap: anywhere;
 }

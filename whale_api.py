@@ -4168,7 +4168,7 @@ def _signal_history(cur: sqlite3.Connection) -> dict:
     случилось ни того ни другого за сутки.
     """
     empty = {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0,
-             "broken": 0, "avg": 0, "items": []}
+             "broken": 0, "avg": 0, "items": [], "open": 0, "next": 0}
     if not table_exists(cur, "ai_signal_log"):
         return empty
     try:
@@ -4200,7 +4200,22 @@ def _signal_history(cur: sqlite3.Connection) -> dict:
         })
     of = len(items)
     decided = tp + sl
+    # Сколько сигналов ещё в работе и через сколько закроется ближайший.
+    # «Завершённых сигналов пока нет» само по себе не отличает «бот только что
+    # перезапустился» от «что-то сломалось»: первый итог приходит не раньше,
+    # чем пройдёт горизонт самого раннего сигнала.
+    opened, soon = 0, 0
+    try:
+        row = cur.execute(
+            "SELECT COUNT(*) n, MIN(made_at+horizon) t FROM ai_signal_log WHERE closed_at=0"
+        ).fetchone()
+        opened = int(row["n"] or 0)
+        soon = max(0, int(row["t"] or 0) - int(time.time())) if row["t"] else 0
+    except sqlite3.Error:
+        pass
     return {
+        "open": opened,
+        "next": soon,
         # Доля попаданий считается только среди решённых: сигнал, который за
         # сутки не дошёл ни до цели, ни до стопа, не был ни угадан, ни нет.
         "hit": int(round(100.0 * tp / decided)) if decided else 0,

@@ -425,6 +425,10 @@ export interface Cortex {
     broken: number;
     avg: number;
     items: HistItem[];
+  /** Сигналов в работе: горизонт ещё не прошёл, итога пока нет. */
+  open?: number;
+  /** Секунд до закрытия ближайшего из них. */
+  next?: number;
   };
 }
 
