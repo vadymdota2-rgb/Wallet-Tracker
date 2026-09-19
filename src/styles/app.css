@@ -363,6 +363,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Пояснение, которое и есть содержание строки: переносится целиком. */
+.row-sub.wrap { overflow: visible; white-space: normal; text-overflow: clip; }
 /* Метка между текстом и правым краем: кубок стоит на отлёте от глаза,
    а не липнет к нему. */
 .row-mid { flex: 0 0 auto; margin-inline-end: 14px; }
@@ -1459,7 +1461,47 @@
 
 /* Список доводов формулы: не диаграмма, потому что величины у формулы нет. */
 .why-list { margin: 6px 0 0; padding-inline-start: 18px; }
-.why-list li { font-size: 13px; color: var(--ink-2); line-height: 1.5; }
+.why-list li { font-size: 13px; color: var(--ink); line-height: 1.5; }
+
+/* Условия приёмки модели: знак, условие, пояснение под ним. Знак стоит в
+   своей колонке, а не в потоке текста, — иначе вторая строка условия уезжает
+   под галочку и список перестаёт читаться столбиком. Пояснение переносится:
+   обрезанное многоточием, оно ничего не поясняет. */
+.gates { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 10px; }
+.gates li { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.gates li > i {
+  flex: 0 0 auto;
+  width: 16px;
+  font-style: normal;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: center;
+}
+.gates li.ok > i { color: var(--up); }
+.gates li.no > i { color: var(--dn); }
+/* Условие, которое ещё не проверяли: не провал и не победа. */
+.gates li.wait > i { color: var(--dim); }
+.gates li.wait b { color: var(--dim); }
+.gates li > span { min-width: 0; }
+.gates li b {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--ink);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.gates li em {
+  display: block;
+  margin-top: 2px;
+  font-style: normal;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--dim);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 
 /* Площадка в переключателе: логотип и имя в одну строку. */
 .seg-venue { display: inline-flex; align-items: center; gap: 6px; }

@@ -56,6 +56,7 @@ export function Row({
   tone,
   badge,
   action,
+  wrap,
   onClick,
 }: {
   icon?: ReactNode;
@@ -75,6 +76,11 @@ export function Row({
   action?: ReactNode;
   tone?: "up" | "dn";
   badge?: ReactNode;
+  /** Пояснению разрешено переноситься. По умолчанию оно в одну строку и
+   *  обрезается многоточием — строки списка обязаны быть одной высоты. Но
+   *  там, где пояснение и есть содержание строки, «Завершённых сигналов
+   *  пока…» не говорит ничего, и перенос честнее ровного края. */
+  wrap?: boolean;
   onClick?: () => void;
 }) {
   const inner = (
@@ -85,8 +91,8 @@ export function Row({
           <span className="row-name">{title}</span>
           {badge ? <em className="row-badge">{badge}</em> : null}
         </span>
-        {sub ? <small className="row-sub">{sub}</small> : null}
-        {sub2 ? <small className="row-sub">{sub2}</small> : null}
+        {sub ? <small className={wrap ? "row-sub wrap" : "row-sub"}>{sub}</small> : null}
+        {sub2 ? <small className={wrap ? "row-sub wrap" : "row-sub"}>{sub2}</small> : null}
       </span>
       {mid !== undefined ? <span className="row-mid">{mid}</span> : null}
       {value !== undefined ? (
