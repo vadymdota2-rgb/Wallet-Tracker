@@ -221,6 +221,8 @@ export interface BarItem {
   /** −1…1 для расходящихся полос, 0…1 для обычных. */
   value: number;
   label: string;
+  /** Цвет по смыслу, а не по знаку: нужен там, где минус — это хорошо. */
+  tone?: "up" | "dn";
 }
 
 /**
@@ -230,6 +232,16 @@ export interface BarItem {
  * самое. Зелёный с красным различимы не для всех глаз, и полагаться на один
  * цвет нельзя.
  */
+/**
+ * Полосы в обе стороны от нуля.
+ *
+ * Сторона полосы — это знак величины, и менять её нельзя: она показывает,
+ * куда идёт число. А вот цвет по умолчанию идёт за знаком, и это верно не
+ * всегда: у сигнала на продажу цель стоит ниже входа, стоп выше, и по знаку
+ * выходило, что цель красная, а стоп зелёный — ровно наоборот смыслу.
+ * Поэтому `tone` можно задать явно: тогда сторону читают по полосе, а
+ * «хорошо или плохо» — по цвету.
+ */
 export function Diverging({ items }: { items: BarItem[] }) {
   if (!items.length) return null;
   const max = Math.max(...items.map((i) => Math.abs(i.value)), 1e-6);
@@ -237,18 +249,19 @@ export function Diverging({ items }: { items: BarItem[] }) {
     <div className="bars diverge">
       {items.map((it) => {
         const w = (Math.abs(it.value) / max) * 50;
-        const up = it.value >= 0;
+        const right = it.value >= 0;
+        const tone = it.tone ?? (right ? "up" : "dn");
         return (
           <div className="bar-row" key={it.name}>
             <span className="bar-name">{it.name}</span>
             <span className="bar-plot">
               <i className="bar-zero" aria-hidden="true" />
               <i
-                className={`bar-fill ${up ? "up" : "dn"}`}
-                style={up ? { left: "50%", width: `${w}%` } : { right: "50%", width: `${w}%` }}
+                className={`bar-fill ${tone}`}
+                style={right ? { left: "50%", width: `${w}%` } : { right: "50%", width: `${w}%` }}
               />
             </span>
-            <span className={`bar-val ${up ? "up" : "dn"}`}>{it.label}</span>
+            <span className={`bar-val ${tone}`}>{it.label}</span>
           </div>
         );
       })}

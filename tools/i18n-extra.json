@@ -35,6 +35,24 @@
     "vi": "Kế hoạch giao dịch",
     "zh": "交易计划"
   },
+  "ai_why_formula": {
+    "ar": "ما الذي تطابق في الصيغة",
+    "de": "Was die Formel gefunden hat",
+    "en": "What the formula matched",
+    "es": "Lo que encontró la fórmula",
+    "fr": "Ce que la formule a retenu",
+    "hi": "फ़ॉर्मूले में क्या मिला",
+    "id": "Yang cocok menurut rumus",
+    "ja": "式が拾った条件",
+    "ko": "공식이 맞춘 조건",
+    "pl": "Co dopasowała formuła",
+    "pt": "O que a fórmula encontrou",
+    "ru": "Что совпало по формуле",
+    "tr": "Formülün bulduğu",
+    "uk": "Що збіглося за формулою",
+    "vi": "Điều công thức khớp được",
+    "zh": "公式匹配到的条件"
+  },
   "calc_amount": {
     "ar": "أموالك",
     "de": "Dein Einsatz",

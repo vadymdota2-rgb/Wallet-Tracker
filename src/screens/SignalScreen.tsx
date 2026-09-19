@@ -29,7 +29,7 @@ import {
 import { CoinIcon } from "../components/CoinIcon";
 import { Candles, type PlanLevel, type PlanZone } from "../components/Chart";
 import {
-  Card, Diverging, Empty, Meter, Row, SectionTitle, Segmented, Skeleton, Tiles,
+  Card, Diverging, Empty, Meter, SectionTitle, Segmented, Skeleton, Tiles,
 } from "../components/ui";
 import type { LangCode } from "../i18n/types";
 import type { Venue } from "../lib/types";
@@ -47,7 +47,6 @@ function hours(lang: LangCode, sec: number): string {
 
 export function SignalScreen({ arg }: ScreenProps) {
   const lang = useApp((s) => s.lang);
-  const open = useApp((s) => s.open);
   const cortex = useLive((s) => s.cortex);
 
   const [venueRaw, idxRaw] = String(arg || "").split(":");
@@ -205,11 +204,17 @@ export function SignalScreen({ arg }: ScreenProps) {
             { label: `${t(lang, "ai_take_one")} 2`, value: px(s.t2), tone: "up" },
           ]}
         />
+        {/* Полоса показывает, куда от входа идёт цена, а цвет — чем это
+            кончится. У продажи цель ниже входа, стоп выше, и по одному знаку
+            выходило, что цель красная, а стоп зелёный — ровно наоборот. */}
         <Diverging
           items={[
-            { name: t(lang, "ai_stop"), value: away(s.stop), label: pct(away(s.stop), 1) },
-            { name: `${t(lang, "ai_take_one")} 1`, value: away(s.t1), label: pct(away(s.t1), 1) },
-            { name: `${t(lang, "ai_take_one")} 2`, value: away(s.t2), label: pct(away(s.t2), 1) },
+            { name: t(lang, "ai_stop"), value: away(s.stop),
+              label: pct(away(s.stop), 1), tone: "dn" },
+            { name: `${t(lang, "ai_take_one")} 1`, value: away(s.t1),
+              label: pct(away(s.t1), 1), tone: "up" },
+            { name: `${t(lang, "ai_take_one")} 2`, value: away(s.t2),
+              label: pct(away(s.t2), 1), tone: "up" },
           ]}
         />
         <Tiles
@@ -232,7 +237,9 @@ export function SignalScreen({ arg }: ScreenProps) {
         <SectionTitle>{t(lang, "ai_why")}</SectionTitle>
         {s.why.length === 0 ? (
           <p className="note dim">{t(lang, "ai_st_untrained")}</p>
-        ) : (
+        ) : s.model ? (
+          /* У обученной модели вклад признака — сдвиг вероятности в
+             процентных пунктах, его можно поставить на полосу. */
           <Diverging
             items={s.why.map((w) => {
               const k = whyKey(w.k);
@@ -243,12 +250,23 @@ export function SignalScreen({ arg }: ScreenProps) {
               };
             })}
           />
+        ) : (
+          /* У формулы такого числа не существует, и рисовать её условия теми
+             же полосами значило бы выдавать одно за другое. Поэтому список:
+             что именно совпало. Раньше здесь стояло одно «ещё не обучена —
+             формула» — правда про модель и ничего про сигнал. */
+          <>
+            <p className="note">{t(lang, "ai_why_formula")}</p>
+            <ul className="why-list">
+              {s.why.map((w, i) => {
+                const k = whyKey(w.k);
+                return <li key={i}>{k ? t(lang, k) : w.k}</li>;
+              })}
+            </ul>
+            <p className="note dim">{t(lang, "ai_st_untrained")}</p>
+          </>
         )}
         <p className="note dim">{t(lang, "ai_trade_hint")}</p>
-      </Card>
-
-      <Card>
-        <Row title={t(lang, "flow_title")} onClick={() => open("coin", s.sym)} value="→" />
       </Card>
     </Frame>
   );

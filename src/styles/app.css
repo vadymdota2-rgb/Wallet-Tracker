@@ -1468,3 +1468,7 @@
    полную яркость: свечение ей добавит общее правило .tabs button.on span. */
 .glyph-brain { display: block; opacity: 0.55; transition: opacity 0.15s var(--ease); }
 .tabs button.on .glyph-brain { opacity: 1; }
+
+/* Список доводов формулы: не диаграмма, потому что величины у формулы нет. */
+.why-list { margin: 6px 0 0; padding-inline-start: 18px; }
+.why-list li { font-size: 13px; color: var(--ink-2); line-height: 1.5; }
