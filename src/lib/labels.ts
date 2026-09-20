@@ -130,6 +130,13 @@ const WHY: Record<string, DictKey> = {
   breadth: "ai_ft_breadth",
   hour: "ai_ft_hour",
   "hour 2": "ai_ft_hour",
+  // Разметка ряда на колена: уровни Фибоначчи и то в волнах, что считается.
+  "fib back": "ai_ft_fibback",
+  "fib level": "ai_ft_fiblevel",
+  "fib ext": "ai_ft_fibext",
+  "wave run": "ai_ft_waverun",
+  "wave with": "ai_ft_wavewith",
+  "wave grow": "ai_ft_wavegrow",
 };
 
 export function whyKey(raw: string): DictKey | null {

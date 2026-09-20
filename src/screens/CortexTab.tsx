@@ -93,6 +93,7 @@ export function CortexTab() {
   const model = venue === "perp" ? cortex.model?.perp : cortex.model?.spot;
   const attempt = model ? null : (venue === "perp" ? cortex.try?.perp : cortex.try?.spot);
   const ready = venue === "perp" ? cortex.ready.perp : cortex.ready.spot;
+  const hist = cortex.hist[venue];
   const list = cortex.list.filter((s) => s.venue === venue);
 
   return (
@@ -184,7 +185,11 @@ export function CortexTab() {
 
       <Card>
         {/* Не «Угадано: 58%» и голое «26» рядом: по цели и по стопу — это
-            то, что человек хочет знать о прошлых сигналах. */}
+            то, что человек хочет знать о прошлых сигналах.
+
+            История — выбранной площадки, а не обеих сразу. Токены BSC и
+            перпы Hyperliquid — разные рынки, и общая доля попаданий по ним
+            не значит ничего: одна тянет вторую, а какая — не видно. */}
         <Row
           title={t(lang, "ai_hist_btn")}
           /* «Завершённых сигналов пока нет» — это и есть вся строка, и в
@@ -192,15 +197,15 @@ export function CortexTab() {
              не говорит ничего, поэтому переносится. */
           wrap
           sub={
-            cortex.hist.of
+            hist.of
               /* Значками, а не словами: «tại mục tiêu 11 · tại cắt lỗ 8» не
                  влезает в 320 точек, а 🎯 и 🛑 понятны без перевода и стоят
                  в самой истории. */
-              ? `🎯 ${num(cortex.hist.tp)} · 🛑 ${num(cortex.hist.sl)}`
+              ? `🎯 ${num(hist.tp)} · 🛑 ${num(hist.sl)}`
               : t(lang, "ai_hist_empty")
           }
-          value={cortex.hist.of ? `${cortex.hist.hit}%` : "—"}
-          valueSub={cortex.hist.of ? title(t(lang, "ai_hist_rate")) : undefined}
+          value={hist.of ? `${hist.hit}%` : "—"}
+          valueSub={hist.of ? title(t(lang, "ai_hist_rate")) : undefined}
           onClick={() => open("history")}
         />
         <p className="note dim">{t(lang, "ai_trade_hint")}</p>

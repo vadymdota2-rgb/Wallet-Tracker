@@ -3955,6 +3955,10 @@ ORACLE_FEATURES = (
     # Событие: возраст монеты в рядах (он же — давность листинга), всплеск
     # объёма против собственной недели и сила удара за последние часы.
     "age", "vlm z", "shock",
+    # Разметка ряда на колена: глубина отката, близость к уровню Фибоначчи,
+    # длина текущего хода против предыдущего, сколько колен подряд рынок
+    # идёт в одну сторону, идёт ли нынешнее заодно с ними и длиннее ли оно.
+    "fib back", "fib level", "fib ext", "wave run", "wave with", "wave grow",
 )
 
 # Горизонты — те же числа, что в oracle.cpp (ORACLE_H6, ORACLE_H24). Держать
@@ -4319,16 +4323,22 @@ def _signals_at(cur: sqlite3.Connection) -> int | None:
     return int(row["v"]) if row and row["v"] else None
 
 
-def _signal_history(cur: sqlite3.Connection) -> dict:
-    """История выданных сигналов: что показали и чем это кончилось.
+def _signal_history(cur: sqlite3.Connection, perp: bool) -> dict:
+    """История выданных сигналов одной площадки: что показали и чем кончилось.
 
     Раньше здесь считались строки журнала обучения — монеты, которые сигналами
     никогда не были, — а «угадано» означало «поток угадал направление». На
     экране это стояло рядом с подписями «планов закрыто», «по цели», «по
     стопу», которых в тех данных не было вовсе. Теперь считается только то,
     что человеку показали: дошла цена до цели, свалилась на стоп или не
-    случилось ни того ни другого за сутки.
+    случилось ни того ни другого за горизонт.
+
+    Площадки считаются врозь. Токены BSC и перпы Hyperliquid — разные рынки с
+    разной ликвидностью и разными стопами, и общая доля попаданий по ним не
+    значит ничего: одна площадка тянет вторую, а какая именно — не видно.
+    Модели у них тоже свои, и судить каждую надо по её же сигналам.
     """
+    venue = 1 if perp else 0
     empty = {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0,
              "broken": 0, "avg": 0, "items": [], "open": 0, "next": 0}
     if not table_exists(cur, "ai_signal_log"):
@@ -4336,7 +4346,8 @@ def _signal_history(cur: sqlite3.Connection) -> dict:
     try:
         rows = cur.execute(
             "SELECT sym,venue,side,conf,made_at,closed_at,outcome,ret_bp,entry,exit_px "
-            "FROM ai_signal_log WHERE closed_at>0 ORDER BY closed_at DESC LIMIT 40"
+            "FROM ai_signal_log WHERE closed_at>0 AND venue=? "
+            "ORDER BY closed_at DESC LIMIT 40", (venue,)
         ).fetchall()
     except sqlite3.Error as e:
         sys.stderr.write(f"[api] история сигналов: {e}\n")
@@ -4368,7 +4379,8 @@ def _signal_history(cur: sqlite3.Connection) -> dict:
             "SELECT COUNT(*) n, "
             "SUM(CASE WHEN outcome>0 THEN 1 ELSE 0 END) tp, "
             "SUM(CASE WHEN outcome<0 THEN 1 ELSE 0 END) sl, "
-            "AVG(ret_bp) avg FROM ai_signal_log WHERE closed_at>0"
+            "AVG(ret_bp) avg FROM ai_signal_log WHERE closed_at>0 AND venue=?",
+            (venue,)
         ).fetchone()
         if agg:
             of = int(agg["n"] or 0)
@@ -4385,7 +4397,8 @@ def _signal_history(cur: sqlite3.Connection) -> dict:
     opened, soon = 0, 0
     try:
         row = cur.execute(
-            "SELECT COUNT(*) n, MIN(made_at+horizon) t FROM ai_signal_log WHERE closed_at=0"
+            "SELECT COUNT(*) n, MIN(made_at+horizon) t FROM ai_signal_log "
+            "WHERE closed_at=0 AND venue=?", (venue,)
         ).fetchone()
         opened = int(row["n"] or 0)
         soon = max(0, int(row["t"] or 0) - int(time.time())) if row["t"] else 0
@@ -4432,7 +4445,7 @@ def load_sonar(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) ->
         "accPerp": None,
         "at": None,
         "list": [],
-        "hist": {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []},
+        "hist": {v: {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []} for v in ("spot", "perp")},
     }
     # Разбор по горизонтам — для экрана состояния: там у каждой модели своя
     # карточка. Сводные поля ниже остаются для вкладки, где строка одна.
@@ -4458,7 +4471,8 @@ def load_sonar(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) ->
     # взяться», и на экране это разные слова.
     sonar["at"] = _signals_at(cur)
 
-    sonar["hist"] = _signal_history(cur)
+    sonar["hist"] = {"spot": _signal_history(cur, False),
+                     "perp": _signal_history(cur, True)}
     return sonar
 
 
@@ -4580,7 +4594,7 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
     flow, rank, trades, market_feed, funding, sonar = {}, {}, {"spot": [], "perp": []}, [], {}, {
         "need": 1200, "confirms": 2, "ready": {"spot": 0, "perp": 0}, "trained": False, "acc": None,
         "hz": {"spot": [], "perp": []},
-        "list": [], "hist": {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []},
+        "list": [], "hist": {v: {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []} for v in ("spot", "perp")},
     }
 
     def take(name, fn, fallback, must=False):
@@ -4943,7 +4957,7 @@ def bootstrap(chat: str) -> dict:
             "model": {"spot": None, "perp": None},
             "try": {"spot": None, "perp": None}, "at": None,
             "hz": {"spot": [], "perp": []},
-            "list": [], "hist": {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []},
+            "list": [], "hist": {v: {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []} for v in ("spot", "perp")},
         }
         pub = piece("pub", lambda: get_public(cur, hl), {}, True) or {}
         me = piece("me", lambda: load_me(cur, chat) if chat else empty_me, empty_me)

@@ -34,7 +34,12 @@ const EMPTY_CORTEX: Cortex = {
   accSpot: null,
   accPerp: null,
   list: [],
-  hist: { hit: 0, of: 0, won: 0, tp: 0, sl: 0, missed: 0, broken: 0, avg: 0, items: [] },
+  /* История своя у каждой площадки: общая доля попаданий по двум рынкам
+     сразу не значит ничего. */
+  hist: {
+    spot: { hit: 0, of: 0, won: 0, tp: 0, sl: 0, missed: 0, broken: 0, avg: 0, items: [] },
+    perp: { hit: 0, of: 0, won: 0, tp: 0, sl: 0, missed: 0, broken: 0, avg: 0, items: [] },
+  },
 };
 
 /**
@@ -47,7 +52,21 @@ const EMPTY_CORTEX: Cortex = {
  */
 function cortexOf(c: unknown): Cortex | null {
   if (!c || typeof c !== "object") return null;
-  return typeof (c as Cortex).need === "number" ? (c as Cortex) : null;
+  const got = c as Cortex;
+  if (typeof got.need !== "number") return null;
+  /* История стала своей у каждой площадки, а API живёт на своей машине и
+     перезапускается отдельно — приложение успевает обновиться раньше него.
+     Старый ответ несёт один общий блок, и без этой проверки `hist[venue]`
+     был бы undefined: вкладка Cortex падала бы целиком до перезапуска
+     сервера.
+
+     Общий блок не раскладывается обратно по площадкам — в нём сложены обе,
+     и записать его в спот значит приписать одному рынку чужие сделки.
+     Поэтому до перезапуска история пустая: «пока нет» честнее неверного
+     числа, и держится это ровно до следующего ответа сервера. */
+  const h = got.hist as Partial<Cortex["hist"]> | undefined;
+  if (!h || !h.spot || !h.perp) return { ...got, hist: EMPTY_CORTEX.hist };
+  return got;
 }
 
 const EMPTY_ME: Me = {

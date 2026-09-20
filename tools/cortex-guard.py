@@ -45,6 +45,8 @@ labels = read(f"{APP}/src/lib/labels.ts")
 live = read(f"{APP}/src/store/live.ts")
 sig = read(f"{APP}/src/screens/SignalScreen.tsx")
 model = read(f"{APP}/src/screens/ModelScreen.tsx")
+cortex = read(f"{APP}/src/screens/CortexTab.tsx")
+histscr = read(f"{APP}/src/screens/HistoryScreen.tsx")
 
 
 def body(src, sign):
@@ -157,6 +159,25 @@ say("итоги истории — отдельным запросом без LI
     "COUNT(*) n, " in hist and "SUM(CASE WHEN outcome>0" in hist)
 say("сорок — это длина списка, а не выборка для итогов",
     hist.count("LIMIT 40") == 1 and "len(items)" not in hist)
+# --- история считается по площадкам врозь ----------------------------------
+# Токены BSC и перпы Hyperliquid — разные рынки с разной ликвидностью и
+# разными стопами. Общая доля попаданий по ним не значит ничего: одна
+# площадка тянет вторую, а какая именно — не видно.
+say("история берёт только свою площадку",
+    hist.count("venue=?") == 3 and "def _signal_history(cur: sqlite3.Connection, perp: bool)" in api,
+    str(hist.count("venue=?")))
+say("API отдаёт историю обеих площадок врозь",
+    '"hist"] = {"spot": _signal_history(cur, False),' in api)
+say("запасные пути API отдают ту же пару",
+    api.count('for v in ("spot", "perp")') >= 3, str(api.count('for v in ("spot", "perp")')))
+say("хранилище знает историю по площадкам", "spot: { hit: 0" in live)
+say("вкладка берёт историю выбранной площадки", "cortex.hist[venue]" in cortex)
+say("экран истории берёт её же", "cortex.hist[venue]" in histscr)
+say("на экране истории есть переключатель площадок", "setCortexVenue" in histscr)
+# Сервер живёт на своей машине и перезапускается отдельно: приложение
+# успевает обновиться раньше. Старый общий блок не должен ронять вкладку.
+say("старый ответ сервера не роняет вкладку",
+    "!h.spot || !h.perp" in live and "hist: EMPTY_CORTEX.hist" in live)
 
 # --- блок Cortex не отбрасывается пустым -----------------------------------
 say("пустой блок берётся целиком",
@@ -348,6 +369,30 @@ say("обрезанный окном ряд даёт «не знаю»",
     "(edge > 0 && first <= edge + 2 * 3600) ? 0 : first" in seen)
 say("ряды знают свой час первой встречи", "long long seen = 0;" in oracle)
 say("край в рядах больше не хранится", "fresh.edge" not in oracle and "m.edge" not in oracle)
+
+# --- колена, волны и уровни Фибоначчи ---------------------------------------
+# Разметка считается только по барам не позже события: уровень, посчитанный
+# по будущему максимуму, был бы не признаком, а ответом.
+sw = body(oracle, "void swingsOf(")
+say("разметка идёт по барам не позже события",
+    "for (int k = from; k <= i; k++)" in sw and "i - hours + 1" in sw)
+wv = body(oracle, "void wavesOf(")
+say("волны считаются от разметки, а не от цены наугад", "swingsOf(s, i, 336, thr, sw)" in wv)
+say("порог разворота берётся от волатильности монеты",
+    "clampd(3.0 * atrOver(s, i, 24), 0.015, 0.12)" in wv)
+say("уровни Фибоначчи названы числами, а не порогом",
+    "{0.382, 0.5, 0.618}" in wv)
+say("признаки волн не заглядывают вперёд",
+    "s.bars[static_cast<size_t>(i)].c" in wv and "i + 1" not in wv)
+say("шесть признаков встали на свои места",
+    "for (int k = 0; k < 6; k++) f[41 + k] = w[static_cast<size_t>(k)];" in oracle)
+say("признаков стало сорок семь", "ORACLE_NF = 47" in read(f"{BOT}/oracle.h"))
+# Старая модель училась на сорока одном признаке и считает не то. Строку
+# надо удалить, а не просто забыть: API читает ai_models напрямую.
+say("нечитаемая модель снимается с боя, а не забывается",
+    "revokeModel(v != 0, horizon);" in body(oracle, "void loadModels("))
+say("число признаков записано в самой модели",
+    "nf != static_cast<uint32_t>(ORACLE_NF)) return false;" in oracle)
 
 # --- часы переобучения ------------------------------------------------------
 tick = body(oracle, "void oracleTick(")

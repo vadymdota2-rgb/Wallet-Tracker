@@ -11,6 +11,12 @@
  * Доля попаданий считается только среди решённых: сигнал, который за сутки не
  * дошёл ни до цели, ни до стопа, не был ни угадан, ни нет, и в знаменателе
  * ему делать нечего.
+ *
+ * Площадки — врозь, и переключатель тот же, что на вкладке. Токены BSC и
+ * перпы Hyperliquid — разные рынки с разной ликвидностью и разными стопами;
+ * общая доля попаданий по ним не значит ничего, потому что не видно, какая
+ * из площадок тянет вторую. Модели у них тоже свои, и судить каждую надо по
+ * её же сигналам.
  */
 import { Frame } from "./Screen";
 import { useApp } from "../store/app";
@@ -19,12 +25,36 @@ import { t, title } from "../i18n/t";
 import { num, pct } from "../lib/format";
 import { ago } from "../lib/relative";
 import { sideKey } from "../lib/labels";
+import { venueName } from "../lib/rank";
 import { CoinIcon } from "../components/CoinIcon";
-import { Card, Empty, Meter, Row, Tiles } from "../components/ui";
+import { Card, Empty, Meter, Row, Segmented, Tiles, VenueMark } from "../components/ui";
+import type { Venue } from "../lib/types";
 
 export function HistoryScreen() {
   const lang = useApp((s) => s.lang);
-  const hist = useLive((s) => s.cortex.hist);
+  /* Площадка — та же, что выбрана на вкладке: человек пришёл сюда с неё, и
+     увидеть здесь другую он не ждёт. */
+  const venue = useApp((s) => s.cortexVenue);
+  const setVenue = useApp((s) => s.setCortexVenue);
+  const hist = useLive((s) => s.cortex.hist[venue]);
+
+  /* Переключатель стоит и в пустом случае: «сигналов пока нет» — про эту
+     площадку, а не про обе, и уйти со второй некуда, если его не показать. */
+  const picker = (
+    <Segmented<Venue>
+      value={venue}
+      onChange={setVenue}
+      options={(["spot", "perp"] as const).map((v) => ({
+        id: v,
+        label: (
+          <span className="seg-venue">
+            <VenueMark venue={v} size={16} />
+            {venueName(v)}
+          </span>
+        ),
+      }))}
+    />
+  );
 
   if (!hist.of) {
     /* «Завершённых сигналов пока нет» само по себе не отличает «бот только
@@ -36,6 +66,7 @@ export function HistoryScreen() {
     return (
       <Frame title={t(lang, "ai_hist_title")}>
         <Card>
+          {picker}
           <Empty
             text={t(lang, "ai_hist_empty")}
             hint={open > 0
@@ -52,6 +83,7 @@ export function HistoryScreen() {
   return (
     <Frame title={t(lang, "ai_hist_title")} sub={`${num(hist.of)}`}>
       <Card>
+        {picker}
         {/* Попадания — доля от решённых, и знаменатель написан рядом, иначе
             «42%» читается как доля от всех выданных. */}
         {/* Заголовок словами: «Угадано 58% · 11 / 19» человек читает как

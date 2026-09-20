@@ -456,21 +456,31 @@ export interface Cortex {
   /** Когда бот в последний раз считал сигналы. null — не считал ни разу. */
   at?: number | null;
   list: Signal[];
-  hist: {
-    hit: number;
-    of: number;
-    won: number;
-    tp: number;
-    sl: number;
-    missed: number;
-    broken: number;
-    avg: number;
-    items: HistItem[];
+  /**
+   * История сигналов — своя у каждой площадки.
+   *
+   * Токены BSC и перпы Hyperliquid — разные рынки с разной ликвидностью и
+   * разными стопами, и общая доля попаданий по ним не значит ничего: одна
+   * площадка тянет вторую, а какая именно — не видно. Модели у них тоже
+   * свои, и судить каждую надо по её же сигналам.
+   */
+  hist: { spot: CortexHist; perp: CortexHist };
+}
+
+export interface CortexHist {
+  hit: number;
+  of: number;
+  won: number;
+  tp: number;
+  sl: number;
+  missed: number;
+  broken: number;
+  avg: number;
+  items: HistItem[];
   /** Сигналов в работе: горизонт ещё не прошёл, итога пока нет. */
   open?: number;
   /** Секунд до закрытия ближайшего из них. */
   next?: number;
-  };
 }
 
 export interface CoinHolder {
