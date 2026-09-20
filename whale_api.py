@@ -4171,8 +4171,12 @@ def _oracle_try(cur: sqlite3.Connection, perp: bool, horizon: int | None = None)
     where = "venue=?" + (" AND horizon=?" if horizon else "")
     args = (1 if perp else 0,) + ((horizon,) if horizon else ())
     try:
+        tset = cols(cur, "ai_model_try")
+        wmin = "wf_min" if "wf_min" in tset else "0"
+        wfol = "wf_folds" if "wf_folds" in tset else "0"
         row = cur.execute(
-            "SELECT at,samples,auc,logloss,base_logloss,wf_auc,accepted,horizon "
+            "SELECT at,samples,auc,logloss,base_logloss,wf_auc,accepted,horizon,"
+            f"{wmin} wf_min,{wfol} wf_folds "
             f"FROM ai_model_try WHERE {where} ORDER BY auc DESC LIMIT 1",
             args,
         ).fetchone()
@@ -4188,6 +4192,10 @@ def _oracle_try(cur: sqlite3.Connection, perp: bool, horizon: int | None = None)
         "logloss": round(float(row["logloss"] or 0), 3),
         "base": round(float(row["base_logloss"] or 0), 3),
         "wf": round(float(row["wf_auc"] or 0), 3),
+        # Худшая складка и их число: по ним видно, что среднее не вытащила
+        # одна удачная. Приёмка смотрит именно сюда.
+        "wfMin": round(float(row["wf_min"] or 0), 3),
+        "folds": int(row["wf_folds"] or 0),
         "ok": bool(int(row["accepted"] or 0)),
     }
 
@@ -4204,13 +4212,17 @@ def _oracle_model(cur: sqlite3.Connection, perp: bool, horizon: int | None = Non
         return None
     # Столбец levels появился позже: у базы, которую ещё не трогал новый бот,
     # его нет, и запрос в лоб уронил бы весь экран состояния.
-    lvl = "levels" if "levels" in cols(cur, "ai_models") else "0"
+    mset = cols(cur, "ai_models")
+    lvl = "levels" if "levels" in mset else "0"
+    wmin = "wf_min" if "wf_min" in mset else "0"
+    wfol = "wf_folds" if "wf_folds" in mset else "0"
     where = "venue=?" + (" AND horizon=?" if horizon else "")
     args = (1 if perp else 0,) + ((horizon,) if horizon else ())
     try:
         row = cur.execute(
             "SELECT created_at,samples,test_n,trees,auc,logloss,acc,brier,"
-            f"base_logloss,base_rate,wf_auc,gain,{lvl} levels,horizon FROM ai_models "
+            f"base_logloss,base_rate,wf_auc,gain,{lvl} levels,horizon,"
+            f"{wmin} wf_min,{wfol} wf_folds FROM ai_models "
             f"WHERE {where} ORDER BY auc DESC LIMIT 1",
             args,
         ).fetchone()
@@ -4236,6 +4248,8 @@ def _oracle_model(cur: sqlite3.Connection, perp: bool, horizon: int | None = Non
         "acc": round(100.0 * float(row["acc"] or 0)),
         "brier": round(float(row["brier"] or 0), 3),
         "wf": round(float(row["wf_auc"] or 0), 3),
+        "wfMin": round(float(row["wf_min"] or 0), 3),
+        "folds": int(row["wf_folds"] or 0),
         "up": round(100.0 * float(row["base_rate"] or 0)),
         # Уровни от модели или по формуле от волатильности — на экране это
         # разные вещи, и человек вправе знать, что именно он видит.
@@ -4379,13 +4393,16 @@ def _signal_history(cur: sqlite3.Connection) -> dict:
 
 def load_sonar(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) -> dict:
     sonar = {
-        # Сколько готовых исходов нужно, чтобы модель могла быть принята.
-        # Обучение начинается с 400, но приёмка требует ещё и скользящей
-        # проверки, а та считается только от 600: выборку режут на куски,
-        # учатся на прошлом и смотрят на следующем, и на меньшей выборке
-        # кусков просто не из чего нарезать. Показывать 400 значило бы
-        # наполнить полосу до края и оставить человека ждать неизвестно чего.
-        "need": 600,
+        # Сколько готовых исходов нужно, чтобы модель могла быть принята —
+        # то же число, что ORACLE_MIN_ACCEPT в oracle.h.
+        #
+        # Обучение начинается с 400, скользящая проверка считается с 600, но
+        # принимать модель по такой выборке нельзя: тестовый кусок это 15% от
+        # неё, на шестистах примерах в нём восемьдесят строк, и погрешность
+        # AUC там ±0.13. Измеренное на восьмидесяти число 0.55 неотличимо ни
+        # от 0.42, ни от 0.68. При 1200 складки скользящей проверки получают
+        # по полтораста строк каждая — уже не горстка.
+        "need": 1200,
         "ready": {"spot": 0, "perp": 0},
         "trained": False,
         "trainedSpot": False,
@@ -4541,7 +4558,7 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
     ls: dict = {}
     rot = empty_rot()
     flow, rank, trades, market_feed, funding, sonar = {}, {}, {"spot": [], "perp": []}, [], {}, {
-        "need": 600, "ready": {"spot": 0, "perp": 0}, "trained": False, "acc": None,
+        "need": 1200, "ready": {"spot": 0, "perp": 0}, "trained": False, "acc": None,
         "hz": {"spot": [], "perp": []},
         "list": [], "hist": {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []},
     }
@@ -4900,7 +4917,7 @@ def bootstrap(chat: str) -> dict:
         }
         empty_rank = {"spot": {"pnl": [], "roi": [], "win": [], "act": []}, "perp": {"pnl": [], "roi": [], "win": [], "act": []}}
         empty_sonar = {
-            "need": 600, "ready": {"spot": 0, "perp": 0},
+            "need": 1200, "ready": {"spot": 0, "perp": 0},
             "trained": False, "trainedSpot": False, "trainedPerp": False,
             "acc": None, "accSpot": None, "accPerp": None,
             "model": {"spot": None, "perp": None},

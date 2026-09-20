@@ -50,6 +50,7 @@ export const id: Dict = {
   ai_gate_loss: "Kerugian {v} — harus di bawah {need}",
   ai_gate_title: "Syarat agar diterima",
   ai_gate_wf: "Uji bergulir {v} — butuh {need} ke atas",
+  ai_gate_wf_min: "rentang terlemah {v} — butuh {need} ke atas",
   ai_gate_wf_none: "Uji bergulir belum dihitung: {n} dari {need} contoh",
   ai_hint: "Cortex adalah orakel: model terlatih yang memperkirakan peluang harga mengikuti dompet yang Anda pantau. Ketika banyak dompet independen bergerak ke arah yang sama, ia memberi angka.\n\nIa tidak hanya melihat arus: 41 indikator — volume dan jumlah dompet, imbal hasil satu jam, enam jam dan sehari, volatilitas dan lonjakannya, ATR, RSI, tren, MACD, funding, open interest, likuidasi, leverage, likuiditas, rezim Bitcoin dan lebar pasar.\n\nPeristiwa ia baca dari datanya sendiri: sejak kapan koin terdaftar, seberapa jauh volume keluar dari pekannya sendiri, dan seberapa keras harga terguncang beberapa jam terakhir. Listing, peretasan, atau berita datang sebagai jejak di angka — dan dari jejak itu ia bisa belajar. Teks beritanya ia tidak baca: dalam riwayatnya tidak ada, jadi di sana tidak ada yang bisa dipelajari.\n\nModel memutuskan sendiri: horizon — enam jam atau sehari, stop dan target, serta porsi deposit yang layak dipertaruhkan.\n\nSelama belum mengalahkan lempar koin pada data yang belum pernah dilihatnya, ia tidak diterima: rumus yang bekerja, dan layar model menyatakannya. Ini perkiraan, bukan nasihat investasi.",
   ai_hist_avg: "Rata-rata gerak:",

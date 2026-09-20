@@ -96,15 +96,28 @@ say("чат пропускает отвергнутое моделью",
     "if (!writeTrade(one, shown, r, lang, trainedHere, wantLong, live)) continue;" in ai)
 say("список пропускает план, которого нет", "if (!k.plan.valid) continue;" in ai)
 
+# --- приёмка опирается на скользящую проверку, а не на один кусок ----------
+head = read(f"{BOT}/oracle.h")
+say("порог примеров для приёмки объявлен в боте",
+    "ORACLE_MIN_ACCEPT = 1200" in head and "ORACLE_WF_FOLDS = 4" in head)
+rule = ai_rule = oracle[oracle.index("const bool enough ="):oracle.index("saveTry(perp, horizon")]
+say("приёмка требует объёма, всех складок и каждой выше монетки",
+    all(c in rule for c in ("ORACLE_MIN_ACCEPT", "wf.folds >= ORACLE_WF_FOLDS",
+                            "wf.mean >= 0.52", "wf.worst >= 0.50")), rule)
+say("скользящая проверка отдаёт худшую складку",
+    "struct WalkResult" in oracle and "r.worst = worst;" in oracle)
+say("худшая складка доходит до экрана",
+    '"wfMin"' in api and "wfMin={attempt.wfMin}" in model)
+say("экран заворачивает по худшей складке",
+    "const WF_WORST_GATE = 0.5" in model and "wfMin >= WF_WORST_GATE" in model)
+
 # --- пороги приёмки живут одним числом -----------------------------------
-say("бот принимает по 0.55 / база / 0.52",
-    "sc.auc < 0.55 || sc.logloss >= sc.baseLogloss" not in oracle and
-    "sc.auc < 0.55 || sc.logloss >= sc.baseLoss || wf < 0.52" in oracle)
 for name, src in (("API", api), ("хранилище приложения", live)):
-    say(f"{name}: порога 400 не осталось",
-        not re.search(r'"?need"?:\s*400', src), "")
-say("API: порог 600 везде", len(re.findall(r'"need":\s*600', api)) >= 3,
-    str(len(re.findall(r'"need":\s*600', api))))
+    say(f"{name}: прежних порогов не осталось",
+        not re.search(r'"?need"?:\s*(400|600)\b', src), "")
+say("API: порог приёмки везде один и тот же, как в боте",
+    set(re.findall(r'"need":\s*(\d+)', api)) == {"1200"},
+    str(set(re.findall(r'"need":\s*(\d+)', api))))
 say("экран состояния берёт пороги как в боте",
     "const AUC_GATE = 0.55" in model and "const WF_GATE = 0.52" in model)
 

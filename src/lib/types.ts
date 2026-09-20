@@ -389,6 +389,10 @@ export interface CortexModel {
   brier: number;
   /** Средний AUC скользящей проверки — устойчивость, а не разовая удача. */
   wf: number;
+  /** Худшая складка: среднее скрывает «одна вытащила остальные». */
+  wfMin?: number;
+  /** Сколько складок отработало. */
+  folds?: number;
   /** Доля роста в тесте: с ней видно, что «точность 60%» может быть угадыванием. */
   up: number;
   /** Признаки, на которые модель опирается чаще прочих, и их доля в процентах. */
@@ -406,6 +410,8 @@ export interface CortexTry {
   logloss: number;
   base: number;
   wf: number;
+  wfMin?: number;
+  folds?: number;
   ok: boolean;
   /** Горизонт этой попытки в секундах. */
   h?: number;

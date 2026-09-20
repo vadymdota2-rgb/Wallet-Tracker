@@ -50,6 +50,7 @@ export const vi: Dict = {
   ai_gate_loss: "Mất mát {v} — phải dưới {need}",
   ai_gate_title: "Điều kiện để được chấp nhận",
   ai_gate_wf: "Kiểm tra trượt {v} — cần từ {need}",
+  ai_gate_wf_min: "đoạn yếu nhất {v} — cần {need} trở lên",
   ai_gate_wf_none: "Chưa tính được kiểm tra trượt: {n} trên {need} mẫu",
   ai_hint: "Cortex là một nhà tiên tri: mô hình đã huấn luyện, ước lượng khả năng giá đi theo các ví bạn theo dõi. Khi nhiều ví độc lập cùng đi một hướng, nó quy ra con số.\n\nNó không chỉ nhìn dòng tiền: 41 chỉ báo — khối lượng và số ví, lợi suất một giờ, sáu giờ và một ngày, biến động và các cú nhảy, ATR, RSI, xu hướng, MACD, funding, open interest, thanh lý, đòn bẩy, thanh khoản, trạng thái Bitcoin và độ rộng thị trường.\n\nSự kiện thì nó đọc từ chính dữ liệu của mình: đồng coin lên sàn bao lâu rồi, khối lượng vọt ra khỏi tuần của chính nó bao nhiêu, và giá bị giật mạnh thế nào trong vài giờ qua. Niêm yết, vụ hack hay một tin tức đều để lại dấu trong các con số — và từ dấu đó nó học được. Còn nội dung tin thì nó không đọc: trong lịch sử của nó không có, nên ở đó cũng chẳng có gì để học.\n\nMô hình tự quyết: khung thời gian — sáu giờ hay một ngày, cắt lỗ và mục tiêu, và phần vốn đáng mạo hiểm.\n\nChừng nào chưa thắng được trò tung đồng xu trên dữ liệu chưa từng thấy, nó chưa được chấp nhận: khi đó công thức làm việc, và màn hình mô hình nói rõ điều đó. Đây là một ước lượng, không phải lời khuyên đầu tư.",
   ai_hist_avg: "Biến động TB:",

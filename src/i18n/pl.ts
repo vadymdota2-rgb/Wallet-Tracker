@@ -50,6 +50,7 @@ export const pl: Dict = {
   ai_gate_loss: "Strata {v} — musi być poniżej {need}",
   ai_gate_title: "Warunki przyjęcia",
   ai_gate_wf: "Kontrola krocząca {v} — potrzeba {need} lub więcej",
+  ai_gate_wf_min: "najsłabszy odcinek {v} — potrzeba {need} lub więcej",
   ai_gate_wf_none: "Kontrola krocząca jeszcze nieliczona: {n} z {need} przykładów",
   ai_hint: "Cortex to wyrocznia: wytrenowany model, który ocenia szansę, że cena pójdzie za portfelami, które śledzisz. Gdy wiele niezależnych portfeli idzie w tę samą stronę, podaje liczbę.\n\nPatrzy nie tylko na przepływ: 41 cech — wolumeny i liczba portfeli, zwroty z godziny, sześciu godzin i doby, zmienność i jej skoki, ATR, RSI, trend, MACD, funding, otwarte pozycje, likwidacje, dźwignia, płynność, reżim Bitcoina i szerokość rynku.\n\nZdarzenia czyta z własnych danych: jak dawno moneta trafiła na giełdę, jak bardzo wolumen wyłamał się z własnego tygodnia i jak mocno szarpnęło ceną w ostatnich godzinach. Listing, włamanie albo newsy przychodzą jako ślad w liczbach — i z tego śladu potrafi się uczyć. Samego tekstu newsów nie czyta: w jego historii ich nie ma, więc nie ma się tam czego uczyć.\n\nModel decyduje sam: horyzont — sześć godzin albo doba, stop i cele oraz część depozytu, którą warto zaryzykować.\n\nDopóki nie pokona rzutu monetą na danych, których nie widział, nie jest przyjmowany: wtedy liczy formuła, a ekran modelu tak pisze. To ocena, a nie porada inwestycyjna.",
   ai_hist_avg: "Średni ruch:",

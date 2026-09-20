@@ -40,8 +40,10 @@ import type { CortexHz, CortexModel, CortexTry, Venue as VenueId } from "../lib/
 
 /** Порог приёмки: ниже него бот модель в бой не пускает. */
 const AUC_GATE = 0.55;
-/** Порог скользящей проверки: те же ворота, но на нескольких отрезках. */
+/** Порог скользящей проверки по среднему. */
 const WF_GATE = 0.52;
+/** И по худшей складке: одна удачная не должна вытаскивать остальные. */
+const WF_WORST_GATE = 0.5;
 
 /** Горизонты бота — те же числа, что ORACLE_H6 и ORACLE_H24 в oracle.cpp. */
 const HZ = [21600, 86400];
@@ -67,12 +69,14 @@ function hzWords(lang: LangCode, sec: number): string {
  * скользящей проверке не хватило примеров, и крест рядом с ней говорил бы
  * неправду. У такого условия знак нейтральный и цвет тусклый.
  */
-function Gates({ lang, auc, logloss, base, wf, samples, need }: {
+function Gates({ lang, auc, logloss, base, wf, wfMin, samples, need }: {
   lang: LangCode;
   auc: number;
   logloss: number;
   base: number;
   wf: number;
+  /** Худшая складка скользящей проверки. */
+  wfMin?: number;
   samples: number;
   need: number;
 }) {
@@ -99,9 +103,17 @@ function Gates({ lang, auc, logloss, base, wf, samples, need }: {
           hint: t(lang, "ai_wf_hint"),
         }
       : {
-          state: wf >= WF_GATE ? "ok" : "no",
+          /* Проходит, только если и среднее, и худшая складка выше своих
+             порогов: среднее одно скрывает случай «одна вытащила». */
+          state: wf >= WF_GATE && (wfMin === undefined || wfMin >= WF_WORST_GATE)
+            ? "ok" : "no",
           text: t(lang, "ai_gate_wf", { v: wf.toFixed(3), need: WF_GATE.toFixed(2) }),
-          hint: t(lang, "ai_wf_hint"),
+          /* Вместо общих слов — само число худшей складки, когда оно есть:
+             по нему и видно, на чём проверка споткнулась. */
+          hint: wfMin === undefined
+            ? t(lang, "ai_wf_hint")
+            : t(lang, "ai_gate_wf_min", { v: wfMin.toFixed(3),
+                                          need: WF_WORST_GATE.toFixed(2) }),
         },
   ];
   const MARK = { ok: "✓", no: "✗", wait: "…" } as const;
@@ -157,7 +169,7 @@ function Venue({ m, attempt, name, ready, need }: {
                    markLabel={t(lang, "ai_st_gate")} tone="flat"
                    label="AUC" note={attempt.auc.toFixed(3)} />
             <Gates lang={lang} auc={attempt.auc} logloss={attempt.logloss}
-                   base={attempt.base} wf={attempt.wf}
+                   base={attempt.base} wf={attempt.wf} wfMin={attempt.wfMin}
                    samples={attempt.samples} need={need} />
             {/* Чем занят бот, пока условия не выполнены: сигналы не
                 пропадают, их считает формула от волатильности. */}
@@ -200,7 +212,7 @@ function Venue({ m, attempt, name, ready, need }: {
           полоса из одного значения не говорит больше самого значения, а вот
           «столько получилось, столько нужно» говорит. */}
       <Gates lang={lang} auc={m.auc} logloss={m.logloss} base={m.base}
-             wf={m.wf} samples={m.samples} need={need} />
+             wf={m.wf} wfMin={m.wfMin} samples={m.samples} need={need} />
       {/* Стоп и цели у модели свои, только когда она доказала, что угадывает
           ход лучше среднего. Иначе их считает формула от волатильности, и об
           этом честнее сказать. */}
