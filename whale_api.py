@@ -3957,30 +3957,28 @@ ORACLE_FEATURES = (
     "age", "vlm z", "shock",
 )
 
-# Горизонты и порог «движение, а не шум» — те же числа, что в oracle.cpp
-# (ORACLE_H6, ORACLE_H24, ORACLE_MIN_MOVE). Держать их здесь приходится:
-# питон не позовёт C++. Зато они стоят одним местом и с именами, а не числом
-# 50 внутри SQL, как было раньше, — и видно, что менять, если бот изменится.
+# Горизонты — те же числа, что в oracle.cpp (ORACLE_H6, ORACLE_H24). Держать
+# их здесь приходится: питон не позовёт C++. Зато они стоят одним местом и с
+# именами, а не числом внутри SQL, как было раньше, — и видно, что менять,
+# если бот изменится.
 ORACLE_H6 = 6 * 3600
 ORACLE_H24 = 86400
 ORACLE_HZ = (ORACLE_H6, ORACLE_H24)
-ORACLE_MIN_MOVE = 0.02
-
-
-def _min_move(horizon: int) -> float:
-    """Порог хода для горизонта — повторяет oracleMinMove из oracle.cpp."""
-    k = math.sqrt(horizon / ORACLE_H24)
-    return ORACLE_MIN_MOVE * min(1.0, max(0.25, k))
 
 
 def _count_ready(cur: sqlite3.Connection, perp: bool, horizon: int = ORACLE_H24) -> int:
     """Сколько размеченных исходов набралось на этом горизонте.
 
     Условия обязаны совпадать с loadSamples в oracle.cpp: один пример на
-    монету в окно длиной с горизонт, ход не меньше порога этого горизонта.
-    Раньше здесь стояло своё — порог числом 50 прямо в SQL, лишнее
-    `buy_nanos!=sell_nanos` и только суточный горизонт, — и полоса на экране
-    считала не то, чего ждёт обучение.
+    монету в окно длиной с горизонт. Раньше здесь стояло своё — порог хода
+    числом 50 прямо в SQL, лишнее `buy_nanos!=sell_nanos` и только суточный
+    горизонт, — и полоса на экране считала не то, чего ждёт обучение.
+
+    Порога хода здесь нет намеренно. Бот тихие исходы больше не выбрасывает:
+    они остаются с весом в четверть, потому что «цена никуда не пошла» — это
+    тоже ответ, и выбрасывать его значит учить модель на одних только
+    сильных ходах. Появись порог здесь снова — счётчик показывал бы меньше,
+    чем ждёт обучение, и полоса упиралась бы в предел, которого нет.
 
     Шаг прореживания равен горизонту, а не суткам: журнал пишется каждый час,
     и соседние часы по одной монете почти одинаковы, а окна их исходов
@@ -3997,12 +3995,11 @@ def _count_ready(cur: sqlite3.Connection, perp: bool, horizon: int = ORACLE_H24)
             f"SELECT COUNT(*) n FROM ai_events e "
             f"WHERE e.{filled}>0 AND e.price_then>0 AND e.{px}>0 "
             f"AND e.window_days=24 AND e.venue=? "
-            f"AND ABS(e.{px}-e.price_then)>=e.price_then*? "
             f"AND NOT EXISTS ("
             f"  SELECT 1 FROM ai_events e2 WHERE e2.token=e.token AND e2.venue=e.venue "
             f"  AND e2.window_days=24 AND e2.{filled}>0 AND e2.price_then>0 AND e2.{px}>0 "
             f"  AND e2.ts/{int(horizon)}=e.ts/{int(horizon)} AND e2.id<e.id)",
-            (1 if perp else 0, _min_move(horizon)),
+            (1 if perp else 0,),
         ).fetchone()
         return int(row["n"] if row else 0)
     except sqlite3.Error:
@@ -4189,9 +4186,10 @@ def _oracle_try(cur: sqlite3.Connection, perp: bool, horizon: int | None = None)
         tset = cols(cur, "ai_model_try")
         wmin = "wf_min" if "wf_min" in tset else "0"
         wfol = "wf_folds" if "wf_folds" in tset else "0"
+        wpas = "passes" if "passes" in tset else "0"
         row = cur.execute(
             "SELECT at,samples,auc,logloss,base_logloss,wf_auc,accepted,horizon,"
-            f"{wmin} wf_min,{wfol} wf_folds "
+            f"{wmin} wf_min,{wfol} wf_folds,{wpas} passes "
             f"FROM ai_model_try WHERE {where} ORDER BY auc DESC LIMIT 1",
             args,
         ).fetchone()
@@ -4211,6 +4209,10 @@ def _oracle_try(cur: sqlite3.Connection, perp: bool, horizon: int | None = None)
         # одна удачная. Приёмка смотрит именно сюда.
         "wfMin": round(float(row["wf_min"] or 0), 3),
         "folds": int(row["wf_folds"] or 0),
+        # Сколько раз подряд проверка сошлась. Одного раза мало: бот пробует
+        # обучиться каждый день, и рано или поздно порог берётся случайно.
+        # В бой модель идёт, подтвердившись на новых данных.
+        "passes": int(row["passes"] or 0),
         "ok": bool(int(row["accepted"] or 0)),
     }
 
@@ -4418,6 +4420,9 @@ def load_sonar(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) ->
         # от 0.42, ни от 0.68. При 1200 складки скользящей проверки получают
         # по полтораста строк каждая — уже не горстка.
         "need": 1200,
+        # Столько раз подряд проверка должна сойтись — ORACLE_CONFIRMS у бота.
+        # Одна удачная попытка ничего не значит: бот пробует каждый день.
+        "confirms": 2,
         "ready": {"spot": 0, "perp": 0},
         "trained": False,
         "trainedSpot": False,
@@ -4573,7 +4578,7 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
     ls: dict = {}
     rot = empty_rot()
     flow, rank, trades, market_feed, funding, sonar = {}, {}, {"spot": [], "perp": []}, [], {}, {
-        "need": 1200, "ready": {"spot": 0, "perp": 0}, "trained": False, "acc": None,
+        "need": 1200, "confirms": 2, "ready": {"spot": 0, "perp": 0}, "trained": False, "acc": None,
         "hz": {"spot": [], "perp": []},
         "list": [], "hist": {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []},
     }
@@ -4932,7 +4937,7 @@ def bootstrap(chat: str) -> dict:
         }
         empty_rank = {"spot": {"pnl": [], "roi": [], "win": [], "act": []}, "perp": {"pnl": [], "roi": [], "win": [], "act": []}}
         empty_sonar = {
-            "need": 1200, "ready": {"spot": 0, "perp": 0},
+            "need": 1200, "confirms": 2, "ready": {"spot": 0, "perp": 0},
             "trained": False, "trainedSpot": False, "trainedPerp": False,
             "acc": None, "accSpot": None, "accPerp": None,
             "model": {"spot": None, "perp": None},

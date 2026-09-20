@@ -11,11 +11,17 @@
  * на разных отрезках времени. Аббревиатура ничего не объясняет тому, кто её
  * не знает, а тому, кто знает, — и так видно, что это за шкала.
  *
- * Главное на экране — три условия приёмки, словами и с галочкой у каждого.
+ * Главное на экране — условия приёмки, словами и с галочкой у каждого.
  * Раньше тут стояли те же числа порознь: AUC на шкале, потери рядом с базой,
  * скользящая проверка отдельной строкой, — и человек видел три числа, но не
  * видел, какое из них не пустило модель в бой. Теперь у каждого условия
  * написано, сколько получилось и сколько нужно, а под ним — зачем оно.
+ *
+ * Условий четыре, и четвёртое не про качество: сколько раз проверка сошлась
+ * подряд. Бот пробует обучиться каждый день, и порог рано или поздно
+ * берётся случайно; поэтому сошедшуюся проверку повторяют на данных, каких
+ * в тот раз ещё не было. Числа в этой строке нет смысла подписывать
+ * порогом: «1 из 2» и есть всё, что о ней можно сказать.
  *
  * Скользящая проверка, которую ещё не считали, стоит не нулём: ноль читается
  * как измеренная неудача, а на деле примеров просто не хватило на несколько
@@ -68,14 +74,15 @@ function hzWords(lang: LangCode, sec: number): string {
 }
 
 /**
- * Три условия приёмки словами. Знак рядом с каждым — не только цвет: зелёный
+ * Условия приёмки словами. Знак рядом с каждым — не только цвет: зелёный
  * с красным различим не для всех глаз, а «✓» и «✗» читаются всегда.
  *
  * Знаков три, а не два. Условие, которое ещё не проверяли, — не провал:
  * скользящей проверке не хватило примеров, и крест рядом с ней говорил бы
  * неправду. У такого условия знак нейтральный и цвет тусклый.
  */
-function Gates({ lang, auc, logloss, base, wf, wfMin, folds, samples, need }: {
+function Gates({ lang, auc, logloss, base, wf, wfMin, folds, samples, need,
+                passes, confirms }: {
   lang: LangCode;
   auc: number;
   logloss: number;
@@ -87,6 +94,10 @@ function Gates({ lang, auc, logloss, base, wf, wfMin, folds, samples, need }: {
   folds?: number;
   samples: number;
   need: number;
+  /** Сколько проверок подряд сошлось. */
+  passes?: number;
+  /** Сколько их нужно, чтобы модель пошла в бой. */
+  confirms: number;
 }) {
   /* Проверка режет выборку на отрезки и на каждом учит заново; пока примеров
      мало, она не считается вовсе и бот возвращает ноль. Ноль читается как
@@ -125,6 +136,18 @@ function Gates({ lang, auc, logloss, base, wf, wfMin, folds, samples, need }: {
             : t(lang, "ai_gate_wf_min", { v: wfMin.toFixed(3),
                                           need: WF_WORST_GATE.toFixed(2) }),
         },
+    /* Четвёртое условие — не про качество, а про случайность. Бот пробует
+       обучиться каждый день; проверь достаточно раз, и порог однажды
+       возьмётся сам собой. Поэтому сошедшуюся проверку повторяют на данных,
+       которых в тот раз ещё не было, и в бой модель идёт со второй подряд.
+       Знак здесь никогда не крест: «сошлось один раз из двух» — это не
+       провал, а незаконченный счёт. */
+    {
+      state: (passes ?? 0) >= confirms ? "ok" : "wait",
+      text: t(lang, "ai_gate_pass", { n: num(Math.min(passes ?? 0, confirms)),
+                                      need: num(confirms) }),
+      hint: t(lang, "ai_pass_hint"),
+    },
   ];
   const MARK = { ok: "✓", no: "✗", wait: "…" } as const;
   return (
@@ -147,12 +170,14 @@ function Gates({ lang, auc, logloss, base, wf, wfMin, folds, samples, need }: {
   );
 }
 
-function Venue({ m, attempt, name, ready, need }: {
+function Venue({ m, attempt, name, ready, need, confirms }: {
   m: CortexModel | null | undefined;
   attempt: CortexTry | null | undefined;
   name: string;
   ready: number;
   need: number;
+  /** Сколько сошедшихся проверок подряд нужно для приёмки. */
+  confirms: number;
 }) {
   const lang = useApp((s) => s.lang);
   /* Имена признаков переводятся здесь так же, как на карточке сигнала и
@@ -180,7 +205,8 @@ function Venue({ m, attempt, name, ready, need }: {
                    label={t(lang, "ai_st_quality")} note={attempt.auc.toFixed(3)} />
             <Gates lang={lang} auc={attempt.auc} logloss={attempt.logloss}
                    base={attempt.base} wf={attempt.wf} wfMin={attempt.wfMin}
-                   folds={attempt.folds} samples={attempt.samples} need={need} />
+                   folds={attempt.folds} samples={attempt.samples} need={need}
+                   passes={attempt.passes} confirms={confirms} />
             {/* Чем занят бот, пока условия не выполнены: сигналы не
                 пропадают, их считает формула от волатильности. */}
             <p className="note dim">{t(lang, "ai_gate_else")}</p>
@@ -220,13 +246,17 @@ function Venue({ m, attempt, name, ready, need }: {
           { label: t(lang, "ai_st_samples"), value: num(m.samples) },
         ]}
       />
-      {/* Те же три условия и у принятой модели: список показывает, чем она их
+      {/* Те же условия и у принятой модели: список показывает, чем она их
           прошла. Рисовать из потерь и скользящей проверки полосы незачем —
           полоса из одного значения не говорит больше самого значения, а вот
           «столько получилось, столько нужно» говорит. */}
+      {/* Принятая модель подтвердилась по определению: в ai_models она
+          попадает только со второй сошедшейся проверки подряд. Отдельного
+          поля для этого в строке модели нет, и выдумывать его незачем. */}
       <Gates lang={lang} auc={m.auc} logloss={m.logloss} base={m.base}
              wf={m.wf} wfMin={m.wfMin} folds={m.folds}
-             samples={m.samples} need={need} />
+             samples={m.samples} need={need}
+             passes={confirms} confirms={confirms} />
       {/* Стоп и цели у модели свои, только когда она доказала, что угадывает
           ход лучше среднего. Иначе их считает формула от волатильности, и об
           этом честнее сказать. */}
@@ -278,6 +308,7 @@ export function ModelScreen() {
             name={`${venueName(v)} · ${hzWords(lang, r.h)}`}
             ready={r.ready}
             need={cortex.need}
+            confirms={cortex.confirms}
           />
         )),
       )}

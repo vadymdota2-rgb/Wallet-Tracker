@@ -24,6 +24,8 @@ const EMPTY_CORTEX: Cortex = {
      сотнях и показывало полную полосу под необученной моделью до первого
      ответа сервера. */
   need: 1200,
+  /* И столько раз подряд проверка должна сойтись — ORACLE_CONFIRMS у бота. */
+  confirms: 2,
   ready: { spot: 0, perp: 0 },
   trained: false,
   trainedSpot: false,

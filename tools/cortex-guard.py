@@ -126,7 +126,13 @@ cnt = code_only(pybody(api, "def _count_ready("))
 say("счётчик не прячет порог числом в SQL", "*50>=" not in cnt and "*50 >=" not in cnt)
 say("счётчик знает про оба горизонта", "price_6h" in cnt and "price_24h" in cnt)
 say("счётчик не добавляет своих условий", "buy_nanos" not in cnt)
-say("порог хода берётся из общей функции", "_min_move(horizon)" in cnt)
+# Тихие исходы бот больше не выбрасывает — даёт им вес в четверть. Порог
+# хода в счётчике означал бы, что экран считает меньше, чем ждёт обучение.
+say("счётчик не режет выборку порогом хода",
+    "_min_move" not in cnt and "price_then*?" not in cnt)
+say("бот тихие исходы взвешивает, а не выбрасывает",
+    "clampd(std::fabs(ret) / minMove, 0.25, 3.0)" in oracle and
+    "if (std::fabs(ret) < minMove) continue;" not in oracle)
 # Шаг прореживания — горизонт, а не сутки, и одинаковый в боте и в счётчике.
 # Разойдись они, полоса на экране считала бы не то, чего ждёт обучение.
 say("счётчик прореживает шагом в горизонт",
@@ -136,10 +142,7 @@ say("бот прореживает тем же шагом",
 say("суток в шаге прореживания не осталось",
     "ts/86400=e.ts/86400" not in oracle and "ts/86400=e.ts/86400" not in api)
 say("видно, где сужается воронка",
-    "непересекающихся" in oracle and "ход меньше порога у" in oracle)
-say("порог хода повторяет oracleMinMove",
-    "ORACLE_MIN_MOVE = 0.02" in api and "math.sqrt(horizon / ORACLE_H24)" in api and
-    "ORACLE_MIN_MOVE = 0.02" in oracle.replace("constexpr double ", ""))
+    "непересекающихся" in oracle and "тихих (вес четверть)" in oracle)
 
 # --- горизонты не сливаются в один ---------------------------------------
 say("модель читается по горизонту", "def _oracle_model(cur: sqlite3.Connection, perp: bool, horizon" in api)
@@ -280,6 +283,63 @@ say("стоп и цель закрывают сигнал сразу",
     "std::min(now, o.made + o.horizon)" in close_fn)
 say("пустой ход закрывается только по горизонту",
     "w.done = expired;" in body(ai, "Walked walkOutcome("))
+
+# --- защита от подгонки многократными попытками -----------------------------
+# Бот пробует обучиться каждый день. Порог, взятый один раз из шестнадцати
+# попыток, не значит ничего: при 16 попытках в сутки случайное «AUC ≥ 0.55»
+# выпадает с вероятностью под семь десятых. Отсюда три правила: выборка между
+# попытками должна заметно подрасти, проверка — сойтись дважды подряд, а
+# развалившаяся модель — сняться с боя, а не дожить до следующей удачи.
+tv = body(oracle, "void trainVenue(")
+say("выборка между попытками обязана подрасти",
+    "ORACLE_GROWTH_NUM" in tv and "ORACLE_GROWTH_DEN" in tv)
+say("приёмка требует подтверждения на новых данных",
+    "passes >= ORACLE_CONFIRMS" in tv and "passed ? last.passes + 1 : 0" in tv)
+say("проваленная проверка снимает модель с боя",
+    "revokeModel" in tv and "oracleReadyUnlocked" in tv)
+say("снятие чистит и таблицу, и живую копию",
+    'DELETE FROM ai_models' in body(oracle, "void revokeModel(") and
+    "g_live" in body(oracle, "void revokeModel("))
+say("число подтверждений хранится между попытками",
+    "passes INTEGER NOT NULL DEFAULT 0" in oracle and
+    "ALTER TABLE ai_model_try ADD COLUMN passes" in oracle)
+say("API отдаёт счёт подтверждений", '"passes": int(row["passes"] or 0),' in api)
+say("API называет, сколько их нужно", set(re.findall(r'"confirms":\s*(\d+)', api)) == {"2"},
+    str(set(re.findall(r'"confirms":\s*(\d+)', api))))
+say("экран показывает условие подтверждения",
+    '"ai_gate_pass"' in model and '(passes ?? 0) >= confirms ? "ok" : "wait"' in model)
+say("хранилище знает порог подтверждений без сервера", "confirms: 2," in live)
+
+# --- карантин на границах отрезков ------------------------------------------
+# Исход события длится горизонт. Событие из конца обучающего куска своим
+# исходом заходит в проверочный: модель учится на том, что ей же потом
+# показывают как незнакомое. Поэтому на каждой границе выбрасывается
+# горизонт примеров — и на общем разрезе, и внутри скользящей проверки.
+say("карантин считается от горизонта",
+    "const long long edge = after.front().ts - horizon;" in body(oracle, "void embargo("))
+say("карантин стоит на складках скользящей проверки",
+    "embargo(tr, va, horizon)" in body(oracle, "WalkResult walkForward(") and
+    "embargo(va, te, horizon)" in body(oracle, "WalkResult walkForward("))
+
+# --- возраст монеты не зависит от окна хранения -----------------------------
+# Возраст считался от начала ряда, а начало съезжает вместе с окном в 95
+# суток: у одного и того же события значение сегодня выходило не то, каким
+# было вчера, и обученное расходилось с применённым. Теперь час первой
+# встречи записан в базу один раз и оттуда же и читается.
+age = body(oracle, "double ageOf(")
+say("возраст считается от записанного часа первой встречи",
+    "s.seen <= 0) return 1.0;" in age and "- s.seen)" in age, age)
+say("возраст больше не смотрит на начало ряда", "s.bars.front().ts" not in age, age)
+say("час первой встречи хранится", "CREATE TABLE IF NOT EXISTS ai_coin_seen" in oracle)
+seen = body(oracle, "void fillFirstSeen(")
+say("записанное не переписывается",
+    "INSERT OR IGNORE INTO ai_coin_seen" in seen and "UPDATE ai_coin_seen" not in oracle)
+say("уже известное берётся из базы, а не из ряда",
+    "if (it != known.end()) { kv.second.seen = it->second; continue; }" in seen)
+say("обрезанный окном ряд даёт «не знаю»",
+    "(edge > 0 && first <= edge + 2 * 3600) ? 0 : first" in seen)
+say("ряды знают свой час первой встречи", "long long seen = 0;" in oracle)
+say("край в рядах больше не хранится", "fresh.edge" not in oracle and "m.edge" not in oracle)
 
 # --- часы переобучения ------------------------------------------------------
 tick = body(oracle, "void oracleTick(")

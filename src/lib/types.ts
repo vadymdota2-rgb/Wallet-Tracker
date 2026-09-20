@@ -412,6 +412,8 @@ export interface CortexTry {
   wf: number;
   wfMin?: number;
   folds?: number;
+  /** Сколько проверок подряд сошлось. В бой модель идёт со второй. */
+  passes?: number;
   ok: boolean;
   /** Горизонт этой попытки в секундах. */
   h?: number;
@@ -437,6 +439,8 @@ export interface CortexHz {
 
 export interface Cortex {
   need: number;
+  /** Сколько проверок подряд должно сойтись, прежде чем модель пойдёт в бой. */
+  confirms: number;
   ready: { spot: number; perp: number };
   trained: boolean;
   trainedSpot: boolean;
