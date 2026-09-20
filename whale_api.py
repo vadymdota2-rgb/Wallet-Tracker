@@ -4191,9 +4191,11 @@ def _oracle_try(cur: sqlite3.Connection, perp: bool, horizon: int | None = None)
         wmin = "wf_min" if "wf_min" in tset else "0"
         wfol = "wf_folds" if "wf_folds" in tset else "0"
         wpas = "passes" if "passes" in tset else "0"
+        wece = "ece" if "ece" in tset else "0"
+        wflo = "ece_floor" if "ece_floor" in tset else "0"
         row = cur.execute(
             "SELECT at,samples,auc,logloss,base_logloss,wf_auc,accepted,horizon,"
-            f"{wmin} wf_min,{wfol} wf_folds,{wpas} passes "
+            f"{wmin} wf_min,{wfol} wf_folds,{wpas} passes,{wece} ece,{wflo} ece_floor "
             f"FROM ai_model_try WHERE {where} ORDER BY auc DESC LIMIT 1",
             args,
         ).fetchone()
@@ -4217,6 +4219,11 @@ def _oracle_try(cur: sqlite3.Connection, perp: bool, horizon: int | None = None)
         # обучиться каждый день, и рано или поздно порог берётся случайно.
         # В бой модель идёт, подтвердившись на новых данных.
         "passes": int(row["passes"] or 0),
+        # Насколько обещанное разошлось со сбывшимся и сколько дала бы сама
+        # случайность. Голое первое число ни о чём не говорит: на полутора
+        # сотнях строк и идеальная модель даст заметную величину.
+        "ece": round(float(row["ece"] or 0), 3),
+        "eceFloor": round(float(row["ece_floor"] or 0), 3),
         "ok": bool(int(row["accepted"] or 0)),
     }
 
@@ -4237,13 +4244,15 @@ def _oracle_model(cur: sqlite3.Connection, perp: bool, horizon: int | None = Non
     lvl = "levels" if "levels" in mset else "0"
     wmin = "wf_min" if "wf_min" in mset else "0"
     wfol = "wf_folds" if "wf_folds" in mset else "0"
+    mece = "ece" if "ece" in mset else "0"
+    mflo = "ece_floor" if "ece_floor" in mset else "0"
     where = "venue=?" + (" AND horizon=?" if horizon else "")
     args = (1 if perp else 0,) + ((horizon,) if horizon else ())
     try:
         row = cur.execute(
             "SELECT created_at,samples,test_n,trees,auc,logloss,acc,brier,"
             f"base_logloss,base_rate,wf_auc,gain,{lvl} levels,horizon,"
-            f"{wmin} wf_min,{wfol} wf_folds FROM ai_models "
+            f"{wmin} wf_min,{wfol} wf_folds,{mece} ece,{mflo} ece_floor FROM ai_models "
             f"WHERE {where} ORDER BY auc DESC LIMIT 1",
             args,
         ).fetchone()
@@ -4270,6 +4279,8 @@ def _oracle_model(cur: sqlite3.Connection, perp: bool, horizon: int | None = Non
         "brier": round(float(row["brier"] or 0), 3),
         "wf": round(float(row["wf_auc"] or 0), 3),
         "wfMin": round(float(row["wf_min"] or 0), 3),
+        "ece": round(float(row["ece"] or 0), 3),
+        "eceFloor": round(float(row["ece_floor"] or 0), 3),
         "folds": int(row["wf_folds"] or 0),
         "up": round(100.0 * float(row["base_rate"] or 0)),
         # Уровни от модели или по формуле от волатильности — на экране это
@@ -4323,6 +4334,50 @@ def _signals_at(cur: sqlite3.Connection) -> int | None:
     return int(row["v"]) if row and row["v"] else None
 
 
+def _reliability(cur: sqlite3.Connection, venue: int) -> list:
+    """Совпадает ли обещанное со сбывшимся, по корзинам уверенности.
+
+    Модель говорит человеку число: «61% шанс роста». Общая доля попаданий
+    этого не проверяет — она складывает шестидесятипроцентные сигналы с
+    восьмидесятипроцентными и говорит одно среднее. А проверять надо иначе:
+    когда он сказал шестьдесят, сбылось ли шестьдесят.
+
+    Считается только по решённым сигналам — дошедшим до цели или до стопа.
+    Тот, что за горизонт не дошёл никуда, не был ни угадан, ни нет, и в
+    знаменателе ему делать нечего.
+
+    Число в корзине отдаётся рядом: на пяти сигналах «сбылось 80%» не значит
+    ничего, и человек должен это видеть.
+    """
+    if not table_exists(cur, "ai_signal_log"):
+        return []
+    edges = [(50, 60), (60, 70), (70, 80), (80, 101)]
+    out = []
+    try:
+        rows = cur.execute(
+            "SELECT conf, outcome FROM ai_signal_log "
+            "WHERE closed_at>0 AND venue=? AND outcome!=0", (venue,)
+        ).fetchall()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] сверка обещанного: {e}\n")
+        return []
+    for lo, hi in edges:
+        got = [r for r in rows if lo <= int(r["conf"] or 0) < hi]
+        if not got:
+            continue
+        won = sum(1 for r in got if int(r["outcome"] or 0) > 0)
+        out.append({
+            "from": lo,
+            "to": min(hi, 100),
+            # Обещано — среднее по корзине, а не её середина: в корзине
+            # 60–70 сигналы могут лежать все у нижнего края.
+            "said": round(sum(int(r["conf"] or 0) for r in got) / len(got)),
+            "got": int(round(100.0 * won / len(got))),
+            "n": len(got),
+        })
+    return out
+
+
 def _signal_history(cur: sqlite3.Connection, perp: bool) -> dict:
     """История выданных сигналов одной площадки: что показали и чем кончилось.
 
@@ -4340,7 +4395,7 @@ def _signal_history(cur: sqlite3.Connection, perp: bool) -> dict:
     """
     venue = 1 if perp else 0
     empty = {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0,
-             "broken": 0, "avg": 0, "items": [], "open": 0, "next": 0}
+             "broken": 0, "avg": 0, "items": [], "open": 0, "next": 0, "rel": []}
     if not table_exists(cur, "ai_signal_log"):
         return empty
     try:
@@ -4418,6 +4473,7 @@ def _signal_history(cur: sqlite3.Connection, perp: bool) -> dict:
         "broken": sl,
         "avg": round(avg, 1),
         "items": items,
+        "rel": _reliability(cur, venue),
     }
 
 
@@ -4445,7 +4501,7 @@ def load_sonar(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) ->
         "accPerp": None,
         "at": None,
         "list": [],
-        "hist": {v: {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []} for v in ("spot", "perp")},
+        "hist": {v: {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": [], "rel": []} for v in ("spot", "perp")},
     }
     # Разбор по горизонтам — для экрана состояния: там у каждой модели своя
     # карточка. Сводные поля ниже остаются для вкладки, где строка одна.
@@ -4594,7 +4650,7 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
     flow, rank, trades, market_feed, funding, sonar = {}, {}, {"spot": [], "perp": []}, [], {}, {
         "need": 1200, "confirms": 2, "ready": {"spot": 0, "perp": 0}, "trained": False, "acc": None,
         "hz": {"spot": [], "perp": []},
-        "list": [], "hist": {v: {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []} for v in ("spot", "perp")},
+        "list": [], "hist": {v: {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": [], "rel": []} for v in ("spot", "perp")},
     }
 
     def take(name, fn, fallback, must=False):
@@ -4957,7 +5013,7 @@ def bootstrap(chat: str) -> dict:
             "model": {"spot": None, "perp": None},
             "try": {"spot": None, "perp": None}, "at": None,
             "hz": {"spot": [], "perp": []},
-            "list": [], "hist": {v: {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []} for v in ("spot", "perp")},
+            "list": [], "hist": {v: {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": [], "rel": []} for v in ("spot", "perp")},
         }
         pub = piece("pub", lambda: get_public(cur, hl), {}, True) or {}
         me = piece("me", lambda: load_me(cur, chat) if chat else empty_me, empty_me)

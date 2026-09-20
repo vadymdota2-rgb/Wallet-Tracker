@@ -88,7 +88,10 @@ export function Row({
       {icon ? <span className="row-ico">{icon}</span> : null}
       <span className="row-main">
         <span className="row-title">
-          <span className="row-name">{title}</span>
+          {/* С wrap имя переносится, а не обрезается многоточием. Для имени
+              кошелька огрызок терпим, для тикера монеты — нет: «BANAN…» не
+              отличить от соседа, а узнать монету по огрызку нельзя. */}
+          <span className={wrap ? "row-name wrap" : "row-name"}>{title}</span>
           {badge ? <em className="row-badge">{badge}</em> : null}
         </span>
         {sub ? <small className={wrap ? "row-sub wrap" : "row-sub"}>{sub}</small> : null}

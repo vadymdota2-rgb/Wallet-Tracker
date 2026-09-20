@@ -523,6 +523,45 @@ say("уверенность и горизонт берутся из одного
     "k.conf = std::min(99, std::max(1, static_cast<int>(p * 100.0 + 0.5)));" in ai)
 say("модель обязана согласиться со стороной потока", "if (p < 0.5) continue;" in ai)
 
+# --- обещанное обязано совпадать со сбывшимся -------------------------------
+# AUC говорит только про порядок: модель может безошибочно ранжировать и при
+# этом называть 90% там, где сбывается 55%. Человеку показывают именно число.
+say("мера калибровки объявлена", "void calibrationOf(" in oracle)
+say("рядом с ней считается шумовой пол",
+    "floor += w * std::sqrt(std::max(mp * (1.0 - mp), 0.01)" in oracle)
+# Сравнивать ECE с наперёд заданным числом бессмысленно: на полутора сотнях
+# строк идеальная модель даст заметную ошибку сама по себе.
+say("ворота сравнивают ошибку с шумовым полом, а не с числом",
+    "sc.ece <= ORACLE_ECE_K * sc.eceFloor" in oracle and
+    "constexpr double ORACLE_ECE_K" in read(f"{BOT}/oracle.h"))
+say("калибровка входит в условие приёмки", "&& calibrated;" in oracle)
+say("ошибка и пол хранятся между попытками",
+    "ALTER TABLE ai_model_try ADD COLUMN ece " in oracle and
+    "ALTER TABLE ai_models ADD COLUMN ece " in oracle)
+say("API отдаёт и ошибку, и пол",
+    '"ece": round(float(row["ece"] or 0), 3)' in api and
+    '"eceFloor": round(float(row["ece_floor"] or 0), 3)' in api)
+say("экран показывает отношение, а не сырую ошибку",
+    "const ratio = known ? ece! / eceFloor! : 0;" in model and
+    '"ai_gate_cal"' in model)
+
+# --- сверка обещанного со сбывшимся на экране -------------------------------
+# Общая доля попаданий складывает шестидесятипроцентные сигналы с
+# восьмидесятипроцентными и говорит одно среднее, за которым не видно, врёт
+# число или нет.
+say("сверка считается по корзинам уверенности", "def _reliability(" in api)
+say("в знаменатель идут только решённые сигналы", 'AND outcome!=0"' in api)
+say("корзина отдаёт и обещанное, и число сигналов",
+    '"said": round(' in api and '"n": len(got),' in api)
+say("экран истории показывает сверку",
+    '"ai_rel_title"' in histscr and "hist.rel?.length" in histscr)
+say("и предупреждает, когда сигналов мало",
+    '"ai_rel_few"' in histscr and "b.n < 10" in histscr)
+# Тикер монеты обрезать нечем: по огрызку её не узнать.
+say("тикер в истории переносится, а не теряет букву",
+    ".row-name.wrap" in read(f"{APP}/src/styles/app.css") and
+    'wrap ? "row-name wrap" : "row-name"' in read(f"{APP}/src/components/ui.tsx"))
+
 # --- часы переобучения ------------------------------------------------------
 tick = body(oracle, "void oracleTick(")
 say("часы переобучения переводятся только после проверки рядов",

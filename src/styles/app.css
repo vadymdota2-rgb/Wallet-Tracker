@@ -351,6 +351,10 @@
 /* Многоточие ставит само имя: если резать всю строку целиком, длинное имя
    съедало метку «основной». */
 .row-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Тикер монеты обрезать нечем: по огрызку её не узнать. Шестибуквенный
+   символ в 320 точек не влезал в строку истории и терял последнюю букву. */
+.row-name.wrap { overflow: visible; text-overflow: clip; white-space: normal;
+                 overflow-wrap: anywhere; }
 .row-badge {
   flex: 0 0 auto;
   font-style: normal;

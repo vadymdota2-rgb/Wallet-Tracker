@@ -27,7 +27,7 @@ import { ago } from "../lib/relative";
 import { sideKey } from "../lib/labels";
 import { venueName } from "../lib/rank";
 import { CoinIcon } from "../components/CoinIcon";
-import { Card, Empty, Meter, Row, Segmented, Tiles, VenueMark } from "../components/ui";
+import { Card, Empty, Meter, Row, SectionTitle, Segmented, Tiles, VenueMark } from "../components/ui";
 import type { Venue } from "../lib/types";
 
 export function HistoryScreen() {
@@ -110,6 +110,37 @@ export function HistoryScreen() {
              sub={`${title(t(lang, "ai_hist_plans"))} ${num(hist.of)}`}
              value={pct(hist.avg)} tone={hist.avg >= 0 ? "up" : "dn"} />
       </Card>
+      {/* Обещано и сбылось.
+       *
+       * Общая доля попаданий не проверяет главного: модель говорит человеку
+       * число, и проверять надо, сбывается ли именно оно. Шестидесятипро-
+       * центные сигналы, сложенные с восьмидесятипроцентными, дают одно
+       * среднее, за которым не видно, врёт число или нет.
+       *
+       * Число сигналов в корзине стоит рядом намеренно: «сбылось 80%» на
+       * пяти сигналах не значит ничего, и человек должен это видеть сам, а
+       * не верить на слово. */}
+      {hist.rel?.length ? (
+        <Card>
+          <SectionTitle>{title(t(lang, "ai_rel_title"))}</SectionTitle>
+          {hist.rel.map((b) => {
+            const few = b.n < 10;
+            return (
+              <Row
+                key={`${b.from}-${b.to}`}
+                title={`${b.from}–${b.to}%`}
+                sub={`${t(lang, "ai_rel_said")} ${b.said}% · ${num(b.n)}`}
+                value={`${b.got}%`}
+                valueSub={title(t(lang, "ai_rel_got"))}
+                tone={few ? undefined : b.got >= b.said ? "up" : "dn"}
+              />
+            );
+          })}
+          {hist.rel.some((b) => b.n < 10) ? (
+            <p className="note dim">{t(lang, "ai_rel_few")}</p>
+          ) : null}
+        </Card>
+      ) : null}
       <Card>
         {hist.items.map((it, i) => {
           /* Значок исхода: цель, стоп или «мимо». Один только процент не
@@ -122,6 +153,9 @@ export function HistoryScreen() {
               key={i}
               icon={<CoinIcon sym={it.sym} size={30} />}
               title={it.sym}
+              /* Тикер переносится, а не теряет последнюю букву: по «BANAN…»
+                 монету не узнать. */
+              wrap
               badge={t(lang, sideKey(it.venue, it.long))}
               /* Только значок и время: словами исход подписан в плитках
                  выше, а в строке «🎯 по цели · 5 ч назад» не влезает и в

@@ -56,6 +56,8 @@ const AUC_GATE = 0.55;
 const WF_GATE = 0.52;
 /** И по худшей складке: одна удачная не должна вытаскивать остальные. */
 const WF_WORST_GATE = 0.5;
+/** Во сколько раз обещанное может разойтись со сбывшимся сверх случайности. */
+const ECE_K = 2;
 
 /** Горизонты бота — те же числа, что ORACLE_H6 и ORACLE_H24 в oracle.cpp. */
 const HZ = [21600, 86400];
@@ -82,7 +84,7 @@ function hzWords(lang: LangCode, sec: number): string {
  * неправду. У такого условия знак нейтральный и цвет тусклый.
  */
 function Gates({ lang, auc, logloss, base, wf, wfMin, folds, samples, need,
-                passes, confirms }: {
+                passes, confirms, ece, eceFloor }: {
   lang: LangCode;
   auc: number;
   logloss: number;
@@ -98,6 +100,10 @@ function Gates({ lang, auc, logloss, base, wf, wfMin, folds, samples, need,
   passes?: number;
   /** Сколько их нужно, чтобы модель пошла в бой. */
   confirms: number;
+  /** Насколько обещанное разошлось со сбывшимся. */
+  ece?: number;
+  /** И сколько дала бы одна случайность при таких же корзинах. */
+  eceFloor?: number;
 }) {
   /* Проверка режет выборку на отрезки и на каждом учит заново; пока примеров
      мало, она не считается вовсе и бот возвращает ноль. Ноль читается как
@@ -148,6 +154,25 @@ function Gates({ lang, auc, logloss, base, wf, wfMin, folds, samples, need,
                                       need: num(confirms) }),
       hint: t(lang, "ai_pass_hint"),
     },
+    /* Пятое условие — про само число, а не про порядок. Модель может
+       безошибочно расставить монеты по очереди и при этом называть 90% там,
+       где сбывается 55%: очередь верная, число врёт. А человеку показывают
+       именно число.
+
+       Предел не задан заранее: на полутора сотнях строк даже идеальная
+       модель разойдётся со сбывшимся просто от случайности. Поэтому
+       показывается отношение к этой случайности, а не сырая ошибка. */
+    ((): Gate => {
+      const known = ece !== undefined && eceFloor !== undefined && eceFloor > 0;
+      const ratio = known ? ece! / eceFloor! : 0;
+      return {
+        state: !known ? "wait" : ratio <= ECE_K ? "ok" : "no",
+        text: t(lang, "ai_gate_cal", {
+          v: known ? ratio.toFixed(1) : "—", need: ECE_K.toFixed(1),
+        }),
+        hint: t(lang, "ai_cal_hint"),
+      };
+    })(),
   ];
   const MARK = { ok: "✓", no: "✗", wait: "…" } as const;
   return (
@@ -206,7 +231,8 @@ function Venue({ m, attempt, name, ready, need, confirms }: {
             <Gates lang={lang} auc={attempt.auc} logloss={attempt.logloss}
                    base={attempt.base} wf={attempt.wf} wfMin={attempt.wfMin}
                    folds={attempt.folds} samples={attempt.samples} need={need}
-                   passes={attempt.passes} confirms={confirms} />
+                   passes={attempt.passes} confirms={confirms}
+                   ece={attempt.ece} eceFloor={attempt.eceFloor} />
             {/* Чем занят бот, пока условия не выполнены: сигналы не
                 пропадают, их считает формула от волатильности. */}
             <p className="note dim">{t(lang, "ai_gate_else")}</p>
@@ -256,7 +282,8 @@ function Venue({ m, attempt, name, ready, need, confirms }: {
       <Gates lang={lang} auc={m.auc} logloss={m.logloss} base={m.base}
              wf={m.wf} wfMin={m.wfMin} folds={m.folds}
              samples={m.samples} need={need}
-             passes={confirms} confirms={confirms} />
+             passes={confirms} confirms={confirms}
+             ece={m.ece} eceFloor={m.eceFloor} />
       {/* Стоп и цели у модели свои, только когда она доказала, что угадывает
           ход лучше среднего. Иначе их считает формула от волатильности, и об
           этом честнее сказать. */}
