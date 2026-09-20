@@ -618,6 +618,24 @@ say("спот при этом не трогается",
 say("перестройка идёт до заливки",
     ai.index("migrateFlowRule();") < ai.index("std::map<std::string, std::map<long long, DayAgg>> spot;"))
 
+# --- неизвестное изменение цены не выдаётся за ноль -------------------------
+# У монеты может не быть истории вовсе: биржа не ответила, монета только
+# появилась. Ноль на экране читается как «цена не двигалась» — утверждение, а
+# не незнание, и рядом с графиком на восемь процентов это видно сразу.
+coin_scr = read(f"{APP}/src/screens/CoinScreen.tsx")
+say("запасная ветка отдаёт неизвестное, а не ноль",
+    '"c1": None, "c6": None, "c24": None' in api and
+    '"chg": 0.0, "hists": {}, "spark": [], "c1": 0' not in api)
+say("`or 0` не превращает неизвестное в ноль",
+    'pack.get("c1") or 0' not in api and 'sl.get("c1") or c.get("c1") or 0' not in api)
+say("тип монеты допускает неизвестное",
+    "c1: number | null;" in read(f"{APP}/src/lib/types.ts"))
+say("экран монеты рисует прочерк",
+    'v === null || v === undefined ? "—" : pct(v)' in coin_scr and
+    "coin?.c1 ?? 0" not in coin_scr)
+say("прочерк не красится ни в плюс, ни в минус",
+    'v === null || v === undefined ? undefined : v >= 0 ? "up" : "dn"' in coin_scr)
+
 # --- часы переобучения ------------------------------------------------------
 tick = body(oracle, "void oracleTick(")
 say("часы переобучения переводятся только после проверки рядов",

@@ -1040,7 +1040,12 @@ def price_pack(cur: sqlite3.Connection, hl: sqlite3.Connection | None, sym: str,
         if sl:
             sl["price"] = mid
         else:
-            sl = {"price": mid, "chg": 0.0, "hists": {}, "spark": [], "c1": 0, "c6": 0, "c24": 0}
+            # Истории нет — живая цена есть, а изменения неизвестны. Ноль
+            # здесь был бы враньём: на экране он читается как «цена не
+            # двигалась», и рядом с графиком, где за сутки восемь процентов,
+            # это видно сразу. None доедет до приложения как прочерк.
+            sl = {"price": mid, "chg": None, "hists": {}, "spark": [],
+                  "c1": None, "c6": None, "c24": None}
     if not sl:
         return {}
     sl = _sparkify(sl, key)
@@ -4618,9 +4623,14 @@ def load_coins(cur: sqlite3.Connection, hl: sqlite3.Connection | None, flow: dic
             "addr": pack.get("addr") or r.get("addr") or "",
             "icon": pack.get("icon") or coin_icon(sym, pack.get("addr") or r.get("addr") or ""),
             "spark": pack.get("spark") or hist24,
-            "c1": pack.get("c1") or 0,
-            "c6": pack.get("c6") or 0,
-            "c24": pack.get("c24") or pack.get("chg") or (r24.get("c24") or 0),
+            # `or 0` тут превращало «неизвестно» в «ноль процентов»: любое
+            # ложное значение, включая None, становилось уверенным нулём.
+            # Неизвестное обязано доехать неизвестным.
+            "c1": pack.get("c1"),
+            "c6": pack.get("c6"),
+            "c24": (pack.get("c24") if pack.get("c24") is not None
+                    else pack.get("chg") if pack.get("chg") is not None
+                    else (r24.get("c24") or 0)),
             "net": r24.get("net") or 0,
             "buy": r24.get("buy") or 0,
             "sell": r24.get("sell") or 0,
@@ -4650,9 +4660,9 @@ def load_coins(cur: sqlite3.Connection, hl: sqlite3.Connection | None, flow: dic
                 c["hist"] = (sl.get("hists") or {}).get("24h") or sl.get("spark") or c["hist"]
                 c["hists"] = sl.get("hists") or {}
                 c["spark"] = sl.get("spark") or c.get("spark")
-                c["c1"] = sl.get("c1") or c.get("c1") or 0
-                c["c6"] = sl.get("c6") or c.get("c6") or 0
-                c["c24"] = sl.get("c24") or c.get("c24") or 0
+                for fld in ("c1", "c6", "c24"):
+                    v = sl.get(fld)
+                    c[fld] = v if v is not None else c.get(fld)
                 c["real"] = True
                 c["icon"] = c.get("icon") or coin_icon(sym)
 

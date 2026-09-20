@@ -72,7 +72,14 @@ export function CoinScreen({ arg, arg2 }: ScreenProps) {
     return () => ctrl.abort();
   }, [addr, hasAddr]);
 
-  const chg = coin?.c24 ?? coin?.chg ?? 0;
+  /* Изменение цены: null или undefined — «неизвестно», и это не ноль.
+     Истории у монеты может не быть вовсе, и «0,0%» рядом с графиком, где за
+     сутки восемь процентов, — прямая неправда. Прочерк честнее. */
+  const chg = coin?.c24 ?? coin?.chg ?? null;
+  const shift = (v: number | null | undefined) =>
+    v === null || v === undefined ? "—" : pct(v);
+  const shiftTone = (v: number | null | undefined) =>
+    v === null || v === undefined ? undefined : v >= 0 ? "up" : "dn";
 
   const exch = candles && candles.length >= 3 ? candles : null;
   const dex = hist?.length ? candlesFrom(hist, spotTf) : null;
@@ -92,7 +99,7 @@ export function CoinScreen({ arg, arg2 }: ScreenProps) {
     >
       <Card>
         <SectionTitle note={t(lang, "ui_chg24")}>
-          <span className={chg >= 0 ? "up" : "dn"}>{pct(chg)}</span>
+          <span className={shiftTone(chg)}>{shift(chg)}</span>
         </SectionTitle>
         {/* Набор таймфреймов зависит от источника: у биржи своя сетка, у
             истории из базы замеры почасовые, и минутных свечей из них не
@@ -124,9 +131,9 @@ export function CoinScreen({ arg, arg2 }: ScreenProps) {
         )}
         <Tiles
           items={[
-            { label: t(lang, "ai_w1h"), value: pct(coin?.c1 ?? 0), tone: (coin?.c1 ?? 0) >= 0 ? "up" : "dn" },
-            { label: t(lang, "ai_w6h"), value: pct(coin?.c6 ?? 0), tone: (coin?.c6 ?? 0) >= 0 ? "up" : "dn" },
-            { label: t(lang, "ai_w24"), value: pct(chg), tone: chg >= 0 ? "up" : "dn" },
+            { label: t(lang, "ai_w1h"), value: shift(coin?.c1), tone: shiftTone(coin?.c1) },
+            { label: t(lang, "ai_w6h"), value: shift(coin?.c6), tone: shiftTone(coin?.c6) },
+            { label: t(lang, "ai_w24"), value: shift(chg), tone: shiftTone(chg) },
           ]}
           cols={3}
         />

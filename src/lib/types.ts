@@ -513,7 +513,11 @@ export interface CoinHolder {
 
 export interface Coin {
   price: number;
-  chg: number;
+  /* Изменения цены: null — «неизвестно», а не «ноль процентов». Истории у
+     монеты может не быть вовсе — биржа не ответила, монета только
+     появилась, — и ноль на экране читался бы как «цена не двигалась».
+     Рядом с графиком, где за сутки восемь процентов, это видно сразу. */
+  chg: number | null;
   entry: number;
   hist: number[];
   hists: Record<string, number[] | undefined>;
@@ -522,9 +526,9 @@ export interface Coin {
   /** Список кандидатов на логотип по убыванию доверия. */
   icon: string[] | string;
   spark: number[];
-  c1: number;
-  c6: number;
-  c24: number;
+  c1: number | null;
+  c6: number | null;
+  c24: number | null;
   net: number;
   buy: number;
   sell: number;
