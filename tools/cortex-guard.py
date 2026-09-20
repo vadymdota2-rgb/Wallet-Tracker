@@ -441,6 +441,61 @@ say("признак обученности и точность — свои у �
 say("десятка сигналов берётся на площадку, а не общая",
     "SHOW_PER_VENUE" in ai and "(k.r.perp ? perpK : spotK)" in ai)
 
+# --- разбор сигнала не оставляет мертвецов ----------------------------------
+# Токен перестали опрашивать — цен за нужные часы нет, и сигнал не закрывался
+# никогда. Накопившись, такие строки съедали всё окно разбора (двести за
+# проход), и живые сигналы переставали закрываться вовсе.
+walk = body(ai, "Walked walkOutcome(")
+say("пустой разбор закрывается по горизонту",
+    "w.done = expired;" in walk and "w.outcome = 0;" in walk)
+close_fn2 = body(ai, "void closeSignalLog(")
+say("нулевой вход не пропускается молча",
+    "if (o.entry <= 0) {" in close_fn2 and "if (!expired) continue;" in close_fn2)
+say("выходом без цен считается вход",
+    "const double exitPx = v.exitPx > 0 ? v.exitPx : o.entry;" in close_fn2)
+say("прежнего отсева по нулевой цене не осталось",
+    "if (!w.done || w.exitPx <= 0) continue;" not in ai)
+
+# --- стоп и цель закрывают сигнал сразу -------------------------------------
+# Разбор идёт раз в минуту, но судил по часовым барам: пока час не записан,
+# касание стопа не видно, и закрытие опаздывало на час.
+say("живая цена берётся по монете, а не по строке списка",
+    "long long livePriceById(bool perp, const std::string& id)" in ai and
+    "livePriceById(o.venue == 1, o.token)" in ai)
+say("кэш живой цены общий с публикацией",
+    "long long livePriceOf(const Row& r) { return livePriceById(r.perp, r.id); }" in ai)
+say("стоп проверяется раньше цели и в живой проверке",
+    ai.index("(live <= o.stop) : (live >= o.stop)") < ai.index("(live >= o.take) : (live <= o.take)"))
+# У истёкшего сигнала сегодняшняя цена — уже после его срока: засчитывать по
+# ней значило бы приписать ему чужое движение.
+say("живая проверка не трогает истёкшие сигналы", "!v.done && !expired" in ai)
+say("число живых запросов за проход ограничено", "AI_LIVE_CHECK_N" in ai)
+say("окно живых проверок едет по кругу, чтобы хвост не голодал",
+    "static size_t liveFrom = 0;" in ai and "liveFrom += AI_LIVE_CHECK_N;" in ai)
+
+# --- у спота свои верх и низ часа -------------------------------------------
+# Цена писалась раз в час одной точкой, хотя опрашивалась по многу раз. По
+# одной точке не видно, что цена задевала стоп и вернулась: сигнал считался
+# «никуда не пошёл», и история выходила лучше правды.
+say("час спота хранит верх и низ",
+    "hi_nanos INTEGER NOT NULL DEFAULT 0" in read(f"{BOT}/main.cpp") and
+    "ADD COLUMN hi_nanos" in read(f"{BOT}/main.cpp"))
+tp_cpp = read(f"{BOT}/token_prices.cpp")
+say("верх и низ копятся за час, а не переписываются",
+    "ON CONFLICT(address,ts) DO UPDATE SET" in tp_cpp and
+    "hi_nanos=MAX(" in tp_cpp and "lo_nanos=MIN(" in tp_cpp)
+say("первая цена часа остаётся нетронутой",
+    "price_nanos=" not in tp_cpp.split("DO UPDATE SET")[1].split(")) return;")[0])
+say("разбор спота берёт верх и низ из базы",
+    "SELECT ts, price_nanos, hi_nanos, lo_nanos FROM token_price_history " in ai)
+# Ряды оракула при этом трогать нельзя: признаки считаются по price_nanos и
+# при обучении, и в бою. Подмени его — обученное перестанет отвечать
+# применённому, причём только на свежей половине журнала.
+say("ряды оракула по-прежнему по одной цене часа",
+    "SELECT h.address,h.ts,h.price_nanos FROM token_price_history h " in oracle)
+say("итоги истории по площадке опираются на индекс",
+    "idx_signal_log_done ON ai_signal_log(venue, closed_at)" in ai)
+
 # --- часы переобучения ------------------------------------------------------
 tick = body(oracle, "void oracleTick(")
 say("часы переобучения переводятся только после проверки рядов",
