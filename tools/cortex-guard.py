@@ -496,6 +496,33 @@ say("ряды оракула по-прежнему по одной цене ча
 say("итоги истории по площадке опираются на индекс",
     "idx_signal_log_done ON ai_signal_log(venue, closed_at)" in ai)
 
+# --- честность оценки: то, что отличает оракул от самообмана ----------------
+# Эти пять вещей нельзя «починить» в сторону послабления, не разрушив смысл
+# всех остальных чисел на экране.
+say("калибровка сидит на проверочной части, а не на тестовой",
+    "fitPlatt(zv, yv, out.forest.calA, out.forest.calB);" in oracle and
+    "for (size_t i = 0; i < va.size(); i++) zv[i] = out.forest.raw(va[i].f.data());" in oracle)
+say("срединные значения признаков берутся с обучающей части",
+    "for (const Sample& s : tr) col.push_back(s.f[static_cast<size_t>(f)]);" in oracle)
+# Постоянный прогноз считается по доле роста самого теста — это наименьшие
+# возможные потери для константы, то есть планка строже обычной. Замена её на
+# долю обучения сделала бы приёмку легче.
+say("базовый прогноз считается по доле роста теста",
+    "std::vector<double> flat(xs.size(), clampd(r.rate, 1e-6, 1 - 1e-6));" in oracle and
+    "r.baseLoss = loglossOf(flat, y);" in oracle)
+# Без усреднения рангов на связках константный прогноз давал бы AUC 1 или 0.
+say("AUC считает средние ранги на связках",
+    "const double r = (static_cast<double>(i) + static_cast<double>(j)) / 2.0 + 1.0;" in oracle)
+say("уровни оценены на отложенном тесте, а база — среднее обучения",
+    "for (const Sample& x : tr) { mUp += x.up; mDn += x.dn; }" in oracle and
+    "for (const Sample& x : te) {" in oracle)
+say("в бой попадает только принятая модель",
+    oracle.index("if (!accepted) {") < oracle.index("saveModel(perp, model, st, fit.gain);"))
+say("уверенность и горизонт берутся из одного взгляда модели",
+    "cand.horizon = view.horizon;" in ai and
+    "k.conf = std::min(99, std::max(1, static_cast<int>(p * 100.0 + 0.5)));" in ai)
+say("модель обязана согласиться со стороной потока", "if (p < 0.5) continue;" in ai)
+
 # --- часы переобучения ------------------------------------------------------
 tick = body(oracle, "void oracleTick(")
 say("часы переобучения переводятся только после проверки рядов",
