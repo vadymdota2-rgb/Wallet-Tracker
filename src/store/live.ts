@@ -19,7 +19,10 @@ const EMPTY_RANK: Rank = {
 };
 
 const EMPTY_CORTEX: Cortex = {
-  need: 400,
+  /* Столько исходов нужно для приёмки — то же число, что отдаёт API. Здесь
+     оно стояло четырёхсотым и показывало полную полосу под необученной
+     моделью до первого ответа сервера. */
+  need: 600,
   ready: { spot: 0, perp: 0 },
   trained: false,
   trainedSpot: false,
@@ -30,6 +33,19 @@ const EMPTY_CORTEX: Cortex = {
   list: [],
   hist: { hit: 0, of: 0, won: 0, tp: 0, sl: 0, missed: 0, broken: 0, avg: 0, items: [] },
 };
+
+/**
+ * Блок Cortex из ответа — или ничего, если сервер его не собрал.
+ *
+ * Отличаем «не пришёл» от «пришёл пустым»: пустой — это законное состояние
+ * (бот посчитал, ничего не прошло отбор), и показывать вместо него прошлый
+ * ответ значит врать. Признак настоящего блока — поле need: оно есть всегда,
+ * даже когда нет ни сигналов, ни модели.
+ */
+function cortexOf(c: unknown): Cortex | null {
+  if (!c || typeof c !== "object") return null;
+  return typeof (c as Cortex).need === "number" ? (c as Cortex) : null;
+}
 
 const EMPTY_ME: Me = {
   plan: "free",
@@ -206,8 +222,16 @@ export const useLive = create<LiveState>((set, get) => ({
       flow: some(d.flow) ? d.flow! : prev.flow,
       ls: some(d.ls) ? d.ls! : prev.ls,
       rank: boards(d.rank) ? d.rank! : prev.rank,
-      // `sonar` — прежнее имя поля, см. Bootstrap в types.ts.
-      cortex: ((c) => (c?.list?.length || c?.trained ? c : prev.cortex))(d.cortex ?? d.sonar),
+      /* `sonar` — прежнее имя поля, см. Bootstrap в types.ts.
+
+         Берём всё, что пришло целым блоком. Прежде условие было «есть
+         сигналы или обучена модель», и в тихий час без сигналов и без
+         принятой модели — то есть ровно тогда, когда человек смотрит на
+         экран состояния, — блок отбрасывался целиком. Вместе с ним
+         замирали счётчик исходов, время последнего расчёта, попытки
+         обучения и история: приложение показывало вчерашнее состояние и
+         ничем это не выдавало. */
+      cortex: cortexOf(d.cortex ?? d.sonar) ?? prev.cortex,
       trades: some(d.trades?.spot) || some(d.trades?.perp) ? d.trades! : prev.trades,
       fund: some(d.fund) ? d.fund! : prev.fund,
       fundN: some(d.fundN) ? d.fundN! : prev.fundN,

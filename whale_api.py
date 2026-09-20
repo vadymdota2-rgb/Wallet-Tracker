@@ -3957,18 +3957,47 @@ ORACLE_FEATURES = (
     "age", "vlm z", "shock",
 )
 
-def _count_ready(cur: sqlite3.Connection, perp: bool) -> int:
+# Горизонты и порог «движение, а не шум» — те же числа, что в oracle.cpp
+# (ORACLE_H6, ORACLE_H24, ORACLE_MIN_MOVE). Держать их здесь приходится:
+# питон не позовёт C++. Зато они стоят одним местом и с именами, а не числом
+# 50 внутри SQL, как было раньше, — и видно, что менять, если бот изменится.
+ORACLE_H6 = 6 * 3600
+ORACLE_H24 = 86400
+ORACLE_HZ = (ORACLE_H6, ORACLE_H24)
+ORACLE_MIN_MOVE = 0.02
+
+
+def _min_move(horizon: int) -> float:
+    """Порог хода для горизонта — повторяет oracleMinMove из oracle.cpp."""
+    k = math.sqrt(horizon / ORACLE_H24)
+    return ORACLE_MIN_MOVE * min(1.0, max(0.25, k))
+
+
+def _count_ready(cur: sqlite3.Connection, perp: bool, horizon: int = ORACLE_H24) -> int:
+    """Сколько размеченных исходов набралось на этом горизонте.
+
+    Условия обязаны совпадать с loadSamples в oracle.cpp: один пример на
+    монету в день, ход не меньше порога этого горизонта. Раньше здесь стояло
+    своё — порог числом 50 прямо в SQL, лишнее `buy_nanos!=sell_nanos` и
+    только суточный горизонт, — и полоса на экране считала не то, чего ждёт
+    обучение. Шестичасовой модели она не показывала вовсе.
+    """
+    px = "price_6h" if horizon == ORACLE_H6 else "price_24h"
+    filled = "filled_6h" if horizon == ORACLE_H6 else "filled_at"
+    cset = cols(cur, "ai_events")
+    if px not in cset or filled not in cset:
+        return 0
     try:
         row = cur.execute(
-            "SELECT COUNT(*) n FROM ai_events e "
-            "WHERE filled_at>0 AND price_then>0 AND price_24h>0 "
-            "AND window_days=24 AND venue=? AND buy_nanos!=sell_nanos "
-            "AND ABS(price_24h-price_then)*50>=price_then "
-            "AND NOT EXISTS ("
-            "  SELECT 1 FROM ai_events e2 WHERE e2.token=e.token AND e2.venue=e.venue "
-            "  AND e2.window_days=24 AND e2.filled_at>0 AND e2.price_then>0 AND e2.price_24h>0 "
-            "  AND e2.ts/86400=e.ts/86400 AND e2.id<e.id)",
-            (1 if perp else 0,),
+            f"SELECT COUNT(*) n FROM ai_events e "
+            f"WHERE e.{filled}>0 AND e.price_then>0 AND e.{px}>0 "
+            f"AND e.window_days=24 AND e.venue=? "
+            f"AND ABS(e.{px}-e.price_then)>=e.price_then*? "
+            f"AND NOT EXISTS ("
+            f"  SELECT 1 FROM ai_events e2 WHERE e2.token=e.token AND e2.venue=e.venue "
+            f"  AND e2.window_days=24 AND e2.{filled}>0 AND e2.price_then>0 AND e2.{px}>0 "
+            f"  AND e2.ts/86400=e.ts/86400 AND e2.id<e.id)",
+            (1 if perp else 0, _min_move(horizon)),
         ).fetchone()
         return int(row["n"] if row else 0)
     except sqlite3.Error:
@@ -4070,25 +4099,32 @@ def _signals(cur: sqlite3.Connection) -> list:
     return out
 
 
-def _oracle_try(cur: sqlite3.Connection, perp: bool) -> dict | None:
+def _oracle_try(cur: sqlite3.Connection, perp: bool, horizon: int | None = None) -> dict | None:
     """Последняя попытка обучения, принятая или нет.
 
     «Модель ещё не обучена» при 2468 готовых исходах не объясняет ничего:
     непонятно, ждать ли данных или модель раз за разом не проходит порог.
+
+    Горизонт: у площадки их два, и строка в таблице своя у каждого. Без
+    фильтра сюда попадала та, у которой AUC выше, а вторая не показывалась
+    вовсе — в том числе провалившаяся рядом с принятой.
     """
     if not table_exists(cur, "ai_model_try"):
         return None
+    where = "venue=?" + (" AND horizon=?" if horizon else "")
+    args = (1 if perp else 0,) + ((horizon,) if horizon else ())
     try:
         row = cur.execute(
-            "SELECT at,samples,auc,logloss,base_logloss,wf_auc,accepted FROM ai_model_try "
-            "WHERE venue=? ORDER BY auc DESC LIMIT 1",
-            (1 if perp else 0,),
+            "SELECT at,samples,auc,logloss,base_logloss,wf_auc,accepted,horizon "
+            f"FROM ai_model_try WHERE {where} ORDER BY auc DESC LIMIT 1",
+            args,
         ).fetchone()
     except sqlite3.Error:
         return None
     if not row:
         return None
     return {
+        "h": int(row["horizon"] or ORACLE_H24),
         "at": int(row["at"] or 0),
         "samples": int(row["samples"] or 0),
         "auc": round(float(row["auc"] or 0), 3),
@@ -4099,7 +4135,7 @@ def _oracle_try(cur: sqlite3.Connection, perp: bool) -> dict | None:
     }
 
 
-def _oracle_model(cur: sqlite3.Connection, perp: bool) -> dict | None:
+def _oracle_model(cur: sqlite3.Connection, perp: bool, horizon: int | None = None) -> dict | None:
     """Состояние обученного оракула: то, что бот записал в ai_models.
 
     Точность сама по себе ничего не говорит — при шестидесяти процентах роста
@@ -4112,12 +4148,14 @@ def _oracle_model(cur: sqlite3.Connection, perp: bool) -> dict | None:
     # Столбец levels появился позже: у базы, которую ещё не трогал новый бот,
     # его нет, и запрос в лоб уронил бы весь экран состояния.
     lvl = "levels" if "levels" in cols(cur, "ai_models") else "0"
+    where = "venue=?" + (" AND horizon=?" if horizon else "")
+    args = (1 if perp else 0,) + ((horizon,) if horizon else ())
     try:
         row = cur.execute(
             "SELECT created_at,samples,test_n,trees,auc,logloss,acc,brier,"
             f"base_logloss,base_rate,wf_auc,gain,{lvl} levels,horizon FROM ai_models "
-            "WHERE venue=? ORDER BY auc DESC LIMIT 1",
-            (1 if perp else 0,),
+            f"WHERE {where} ORDER BY auc DESC LIMIT 1",
+            args,
         ).fetchone()
     except sqlite3.Error:
         return None
@@ -4148,6 +4186,23 @@ def _oracle_model(cur: sqlite3.Connection, perp: bool) -> dict | None:
         "h": int(row["horizon"] or 86400),
         "top": top,
     }
+
+
+def _oracle_rows(cur: sqlite3.Connection, perp: bool) -> list:
+    """Площадка по горизонтам: у каждого своя модель, своя попытка, свой счёт.
+
+    Экран состояния показывал одну карточку на площадку — ту, у которой AUC
+    выше. Вторая модель не показывалась вообще: принятая шестичасовая
+    закрывала собой проваленную суточную, и человек читал «модель принята»,
+    не зная, что половина сигналов всё равно идёт от формулы.
+    """
+    has_events = table_exists(cur, "ai_events")
+    return [{
+        "h": h,
+        "ready": _count_ready(cur, perp, h) if has_events else 0,
+        "model": _oracle_model(cur, perp, h),
+        "try": _oracle_try(cur, perp, h),
+    } for h in ORACLE_HZ]
 
 
 def _signals_at(cur: sqlite3.Connection) -> int | None:
@@ -4198,15 +4253,10 @@ def _signal_history(cur: sqlite3.Connection) -> dict:
     except sqlite3.Error as e:
         sys.stderr.write(f"[api] история сигналов: {e}\n")
         return empty
-    items, tp, sl, rets = [], 0, 0, []
+    items = []
     for r in rows:
         out = int(r["outcome"] or 0)
         ret = float(r["ret_bp"] or 0) / 100.0
-        if out > 0:
-            tp += 1
-        elif out < 0:
-            sl += 1
-        rets.append(ret)
         items.append({
             "sym": str(r["sym"] or "?").upper(),
             "long": bool(int(r["side"] or 0)),
@@ -4217,7 +4267,28 @@ def _signal_history(cur: sqlite3.Connection) -> dict:
             "outcome": out,
             "venue": "perp" if int(r["venue"] or 0) else "spot",
         })
-    of = len(items)
+    # Список — последние сорок, итоги — по всему журналу.
+    #
+    # Раньше и то и другое считалось по одной выборке с LIMIT 40: «угадано
+    # 58%», «11 из 19», «планов 26» были про последние сорок сигналов, а
+    # подписаны как весь послужной список. Сорок строк — это про длину
+    # списка на экране, и к доле попаданий отношения не имеет.
+    of = tp = sl = 0
+    avg = 0.0
+    try:
+        agg = cur.execute(
+            "SELECT COUNT(*) n, "
+            "SUM(CASE WHEN outcome>0 THEN 1 ELSE 0 END) tp, "
+            "SUM(CASE WHEN outcome<0 THEN 1 ELSE 0 END) sl, "
+            "AVG(ret_bp) avg FROM ai_signal_log WHERE closed_at>0"
+        ).fetchone()
+        if agg:
+            of = int(agg["n"] or 0)
+            tp = int(agg["tp"] or 0)
+            sl = int(agg["sl"] or 0)
+            avg = float(agg["avg"] or 0) / 100.0
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] итоги истории: {e}\n")
     decided = tp + sl
     # Сколько сигналов ещё в работе и через сколько закроется ближайший.
     # «Завершённых сигналов пока нет» само по себе не отличает «бот только что
@@ -4244,7 +4315,7 @@ def _signal_history(cur: sqlite3.Connection) -> dict:
         "sl": sl,
         "missed": of - decided,
         "broken": sl,
-        "avg": round(sum(rets) / len(rets), 1) if rets else 0,
+        "avg": round(avg, 1),
         "items": items,
     }
 
@@ -4253,10 +4324,10 @@ def load_sonar(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) ->
     sonar = {
         # Сколько готовых исходов нужно, чтобы модель могла быть принята.
         # Обучение начинается с 400, но приёмка требует ещё и скользящей
-        # проверки, а та считается только от 600: четыре раза учимся на
-        # прошлом и смотрим на следующем куске, и на меньшей выборке кусков
-        # просто не из чего нарезать. Показывать 400 значило бы наполнить
-        # полосу до края и оставить человека ждать неизвестно чего.
+        # проверки, а та считается только от 600: выборку режут на куски,
+        # учатся на прошлом и смотрят на следующем, и на меньшей выборке
+        # кусков просто не из чего нарезать. Показывать 400 значило бы
+        # наполнить полосу до края и оставить человека ждать неизвестно чего.
         "need": 600,
         "ready": {"spot": 0, "perp": 0},
         "trained": False,
@@ -4269,9 +4340,11 @@ def load_sonar(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) ->
         "list": [],
         "hist": {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []},
     }
-    if table_exists(cur, "ai_events"):
-        sonar["ready"]["spot"] = _count_ready(cur, False)
-        sonar["ready"]["perp"] = _count_ready(cur, True)
+    # Разбор по горизонтам — для экрана состояния: там у каждой модели своя
+    # карточка. Сводные поля ниже остаются для вкладки, где строка одна.
+    sonar["hz"] = {"spot": _oracle_rows(cur, False), "perp": _oracle_rows(cur, True)}
+    for v in ("spot", "perp"):
+        sonar["ready"][v] = max((r["ready"] for r in sonar["hz"][v]), default=0)
     ts, accs = _ai_trained(cur, False)
     tp, accp = _ai_trained(cur, True)
     # Оракул старше линейной модели: если он обучен, на экране его числа.
@@ -4411,7 +4484,8 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
     ls: dict = {}
     rot = empty_rot()
     flow, rank, trades, market_feed, funding, sonar = {}, {}, {"spot": [], "perp": []}, [], {}, {
-        "need": 400, "ready": {"spot": 0, "perp": 0}, "trained": False, "acc": None,
+        "need": 600, "ready": {"spot": 0, "perp": 0}, "trained": False, "acc": None,
+        "hz": {"spot": [], "perp": []},
         "list": [], "hist": {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []},
     }
 
@@ -4769,11 +4843,12 @@ def bootstrap(chat: str) -> dict:
         }
         empty_rank = {"spot": {"pnl": [], "roi": [], "win": [], "act": []}, "perp": {"pnl": [], "roi": [], "win": [], "act": []}}
         empty_sonar = {
-            "need": 400, "ready": {"spot": 0, "perp": 0},
+            "need": 600, "ready": {"spot": 0, "perp": 0},
             "trained": False, "trainedSpot": False, "trainedPerp": False,
             "acc": None, "accSpot": None, "accPerp": None,
             "model": {"spot": None, "perp": None},
             "try": {"spot": None, "perp": None}, "at": None,
+            "hz": {"spot": [], "perp": []},
             "list": [], "hist": {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": []},
         }
         pub = piece("pub", lambda: get_public(cur, hl), {}, True) or {}

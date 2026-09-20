@@ -16,6 +16,13 @@
  * отрезков. В этом случае строка так и говорит — и показывает, сколько
  * примеров есть из нужных.
  *
+ * Карточка — на каждый горизонт каждой площадки, а не на площадку. Моделей
+ * у площадки две: шестичасовая и суточная, и живут они врозь — своя выборка,
+ * свой порог хода, своя приёмка. Пока карточка была одна, показывалась та, у
+ * которой AUC выше: принятая шестичасовая закрывала собой проваленную
+ * суточную, и человек читал «модель принята», не зная, что половина сигналов
+ * всё равно считается формулой.
+ *
  * Все числа — с теста, которого модель при обучении не видела. Пока модели
  * нет, показываем не пустоту, а сколько исходов набралось: это единственное,
  * что в такой момент можно сказать честно.
@@ -25,15 +32,32 @@ import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import { t, title } from "../i18n/t";
 import { venueName } from "../lib/rank";
+import { whyKey } from "../lib/labels";
 import { num } from "../lib/format";
 import { Bars, Card, Meter, Row, SectionTitle, Tiles } from "../components/ui";
 import type { LangCode } from "../i18n/types";
-import type { CortexModel, CortexTry } from "../lib/types";
+import type { CortexHz, CortexModel, CortexTry, Venue as VenueId } from "../lib/types";
 
 /** Порог приёмки: ниже него бот модель в бой не пускает. */
 const AUC_GATE = 0.55;
 /** Порог скользящей проверки: те же ворота, но на нескольких отрезках. */
 const WF_GATE = 0.52;
+
+/** Горизонты бота — те же числа, что ORACLE_H6 и ORACLE_H24 в oracle.cpp. */
+const HZ = [21600, 86400];
+
+/**
+ * Горизонт словами: в шестнадцати языках единица стоит по-разному.
+ *
+ * Пробел внутри неразрывный. В заголовке рядом с именем площадки перенос
+ * приходится как раз на него, и «HYPERLIQUID · 6» с одинокой «ч» на
+ * следующей строке читается как обрывок. Рвать заголовок можно, но по
+ * разделителю, а не посреди числа с единицей.
+ */
+function hzWords(lang: LangCode, sec: number): string {
+  return t(lang, "ai_hours", { n: Math.max(1, Math.round(sec / 3600)) })
+    .replace(/\s+/g, "\u00A0");
+}
 
 /**
  * Три условия приёмки словами. Знак рядом с каждым — не только цвет: зелёный
@@ -109,6 +133,14 @@ function Venue({ m, attempt, name, ready, need }: {
   need: number;
 }) {
   const lang = useApp((s) => s.lang);
+  /* Имена признаков переводятся здесь так же, как на карточке сигнала и
+     вокруг мозга. Прежде сюда шло сырое `f.k`, и в русском интерфейсе под
+     заголовком «Главные признаки» стояло «flow / vol 24h / RSI» — те же
+     слова, что рядом на вкладке переведены. */
+  const featName = (k: string) => {
+    const key = whyKey(k);
+    return key ? t(lang, key) : k;
+  };
   if (!m) {
     /* Модели нет по двум разным причинам: исходов ещё мало или модель не
        прошла порог. Во втором случае показываем, какое именно условие не
@@ -178,7 +210,7 @@ function Venue({ m, attempt, name, ready, need }: {
         <>
           <SectionTitle>{title(t(lang, "ai_st_top"))}</SectionTitle>
           <Bars items={m.top.slice(0, 5).map((f) => ({
-            name: f.k, value: f.v, label: `${f.v}%`,
+            name: featName(f.k), value: f.v, label: `${f.v}%`,
           }))} />
         </>
       ) : null}
@@ -190,15 +222,39 @@ export function ModelScreen() {
   const lang = useApp((s) => s.lang);
   const cortex = useLive((s) => s.cortex);
 
+  /* Разбор по горизонтам приходит с сервера. Если сервер старый и его нет,
+     собираем те же две карточки из сводных полей: одна модель на площадку,
+     горизонт берём из неё самой. Пустого экрана в этом случае быть не
+     должно — он и так про то, чего ещё нет. */
+  const rows = (v: VenueId): CortexHz[] => {
+    const hz = cortex.hz?.[v];
+    if (hz?.length) return [...hz].sort((a, b) => a.h - b.h);
+    const m = v === "perp" ? cortex.model?.perp : cortex.model?.spot;
+    const at = v === "perp" ? cortex.try?.perp : cortex.try?.spot;
+    const ready = v === "perp" ? cortex.ready.perp : cortex.ready.spot;
+    const h = m?.h ?? at?.h ?? HZ[HZ.length - 1]!;
+    return [{ h, ready, model: m ?? null, try: at ?? null }];
+  };
+
   return (
     <Frame title={t(lang, "ai_st_title")}>
       <Card>
         <p className="note">{t(lang, "ai_hint")}</p>
       </Card>
-      <Venue m={cortex.model?.spot} attempt={cortex.try?.spot} name={venueName("spot")}
-             ready={cortex.ready.spot} need={cortex.need} />
-      <Venue m={cortex.model?.perp} attempt={cortex.try?.perp} name={venueName("perp")}
-             ready={cortex.ready.perp} need={cortex.need} />
+      {(["spot", "perp"] as const).flatMap((v) =>
+        rows(v).map((r) => (
+          <Venue
+            key={`${v}-${r.h}`}
+            m={r.model}
+            attempt={r.try}
+            /* Площадка и горизонт в одном заголовке: без горизонта две
+               карточки одной площадки не отличить друг от друга. */
+            name={`${venueName(v)} · ${hzWords(lang, r.h)}`}
+            ready={r.ready}
+            need={cortex.need}
+          />
+        )),
+      )}
     </Frame>
   );
 }

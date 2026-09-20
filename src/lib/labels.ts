@@ -83,9 +83,12 @@ export function holdTime(sec: number | null | undefined, lang: LangCode): string
 
 /**
  * Причина сигнала приходит как вклад признака: имя и сдвиг вероятности.
- * Часть имён
- * переводится, остальные остаются как есть: «RSI», «ATR» и «funding»
- * читаются одинаково на всех языках, и перевод сделал бы их хуже.
+ *
+ * Имена приходят с сервера по-английски и переводятся здесь — все, кроме
+ * тех, что читаются одинаково на любом языке: RSI, ATR, MACD. Прежде
+ * переведено было пятнадцать имён из сорока одного, и вокруг мозга на
+ * японском и арабском крутились «to high», «vol jump» и «breadth» — слова,
+ * которые там не читает никто.
  */
 const WHY: Record<string, DictKey> = {
   flow: "ai_why_flow",
@@ -104,6 +107,29 @@ const WHY: Record<string, DictKey> = {
   age: "ai_why_age",
   "vlm z": "ai_why_volz",
   shock: "ai_why_shock",
+  // Остальное, что оракул считает по рынку и по потоку.
+  accel: "ai_ft_accel",
+  trades: "ai_ft_trades",
+  ticket: "ai_ft_ticket",
+  both: "ai_ft_both",
+  "ret 1h": "ai_ft_ret1",
+  "ret 6h": "ai_ft_ret6",
+  "ret 24h": "ai_ft_ret24",
+  "vol 24h": "ai_ft_vol24",
+  "vol jump": "ai_ft_voljump",
+  "to high": "ai_ft_tohigh",
+  "from low": "ai_ft_fromlow",
+  trend: "ai_ft_trend",
+  funding: "ai_ft_fund",
+  "funding z": "ai_ft_fundz",
+  "OI/vlm": "ai_ft_oivlm",
+  "vlm 24h": "ai_ft_vlm24",
+  "liq/OI": "ai_ft_liqoi",
+  "BTC 24h": "ai_ft_btc24",
+  "BTC vol": "ai_ft_btcvol",
+  breadth: "ai_ft_breadth",
+  hour: "ai_ft_hour",
+  "hour 2": "ai_ft_hour",
 };
 
 export function whyKey(raw: string): DictKey | null {
