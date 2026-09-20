@@ -1600,25 +1600,55 @@ def coin_class(coin: str) -> str:
 
 
 def ls_scan(hl: sqlite3.Connection | None, since: int) -> list[dict]:
-    """Все монеты окна: сколько денег зашло в лонг и сколько в шорт."""
+    """Все монеты окна: сколько денег двинуло цену вверх и сколько вниз.
+
+    Считается всё движение, а не одни открытия: закрытие позиции — такая же
+    сделка на рынке, как и открытие, и ликвидация тоже. Раньше сюда шли
+    только открытия, и карточка показывала «96% в лонге» в час, когда киты
+    лонги как раз распродавали.
+    """
     if not hl or not table_exists(hl, "hl_fills"):
         return []
     cset = cols(hl, "hl_fills")
     if "dir_code" not in cset:
         return []
+    # Переворот позиции в dir_code потерял направление: и «Long > Short», и
+    # «Short > Long» записаны одной пятёркой. Исходный текст лежит рядом, в
+    # колонке dir, и по нему направление восстанавливается. Нет колонки —
+    # перевороты просто не считаем, как было раньше.
+    has_dir = "dir" in cset
+    flip_up = " OR (dir_code=5 AND dir LIKE '%Short > Long%')" if has_dir else ""
+    flip_dn = " OR (dir_code=5 AND dir LIKE '%Long > Short%')" if has_dir else ""
+    flip_any = (" OR (dir_code=5 AND (dir LIKE '%Short > Long%' "
+                "OR dir LIKE '%Long > Short%'))") if has_dir else ""
     ban = (
         "AND wallet NOT IN (SELECT wallet FROM hl_banned) "
         if table_exists(hl, "hl_banned")
         else ""
     )
     try:
+        # Вверх тянут не только открытые лонги: закрытый шорт — это выкуп,
+        # то есть та же покупка, а вынесенный по ликвидации шорт — выкуп
+        # принудительный. Вниз — открытый шорт, закрытый лонг и вынесенный
+        # лонг. Считать одни открытия значило не видеть распродажи вовсе:
+        # кит мог сливать лонг на миллион, а карточка показывала «в лонге»,
+        # потому что кто-то рядом открыл лонг на тысячу.
+        #
+        #   1 открыл лонг   4 закрыл шорт   7 вынесло шорт   → вверх
+        #   2 открыл шорт   3 закрыл лонг   6 вынесло лонг   → вниз
+        #
+        # Код 8 — ликвидация, у которой сторона неизвестна: её не считаем
+        # ни туда, ни сюда, приписывать наугад хуже, чем пропустить.
         rows = hl.execute(
             "SELECT coin, "
-            "SUM(CASE WHEN dir_code=1 THEN notional_nanos ELSE 0 END) lng, "
-            "SUM(CASE WHEN dir_code=2 THEN notional_nanos ELSE 0 END) shrt, "
+            f"SUM(CASE WHEN dir_code IN (1,4,7){flip_up} "
+            "     THEN notional_nanos ELSE 0 END) lng, "
+            f"SUM(CASE WHEN dir_code IN (2,3,6){flip_dn} "
+            "     THEN notional_nanos ELSE 0 END) shrt, "
             "COUNT(DISTINCT wallet) w "
             "FROM hl_fills "
-            "WHERE ts >= ? AND notional_nanos > 0 AND dir_code IN (1,2) "
+            "WHERE ts >= ? AND notional_nanos > 0 "
+            f"AND (dir_code IN (1,2,3,4,6,7){flip_any}) "
             f"{ban}"
             "GROUP BY coin",
             (since * 1000,),
