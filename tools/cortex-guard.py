@@ -585,6 +585,39 @@ say("ликвидация без стороны не приписывается 
 say("подпись обещает то, что считается",
     "Всё движение денег" in read(f"{APP}/src/i18n/ru.ts"))
 
+# --- поток китов по перпам виден целиком ------------------------------------
+# Признаки потока строились из одних открытий позиций: кит, сливающий лонг на
+# миллион, был для модели невидим. А `flow` — признак номер ноль, тот самый,
+# что обычно стоит первым по важности.
+hdr = read(f"{BOT}/hyperliquid_internal.h")
+say("правило направления одно и лежит рядом с кодами", "inline int dirPush(" in hdr)
+say("закрытия считаются наравне с открытиями",
+    "case DIR_CLOSE_SHORT: return 1;" in hdr and "case DIR_CLOSE_LONG:  return -1;" in hdr)
+say("направление переворота берётся из текста",
+    'dir.find("short > long")' in hdr.split("inline int dirPush(")[1] and
+    'dir.find("long > short")' in hdr.split("inline int dirPush(")[1])
+# Ликвидации — принуждение, а не решение кита; у них свои признаки.
+say("ликвидации в поток не подмешиваются",
+    "default: return 0;" in hdr.split("inline int dirPush(")[1])
+say("живой счёт спрашивает все коды",
+    "WHERE ts>=? AND ts<=? AND dir_code IN (1,2,3,4,5,6,7,8)" in ai)
+say("заливка журнала спрашивает те же",
+    "WHERE ts>=? AND dir_code IN (1,2,3,4,5,6,7,8)" in ai)
+say("оба места зовут общее правило", ai.count("dirPush(dir, safeColumnText(s,") == 2)
+say("прежнего «не открыл лонг — значит продажа» не осталось",
+    "dir == DIR_OPEN_LONG" not in ai)
+say("лента крупных сделок видит и закрытия",
+    "dir_code IN (1,2,3,4,5)" in read(f"{BOT}/big_trades.cpp"))
+# Строки журнала по старому правилу оставить нельзя: признак означал бы на
+# разных концах выборки разное — та же беда, что была с возрастом монеты.
+say("журнал перпов перестраивается один раз",
+    "void migrateFlowRule()" in ai and "FLOW_RULE_KEY" in ai and
+    "DELETE FROM ai_events WHERE venue=1" in ai)
+say("спот при этом не трогается",
+    "venue=0" not in body(ai, "void migrateFlowRule("))
+say("перестройка идёт до заливки",
+    ai.index("migrateFlowRule();") < ai.index("std::map<std::string, std::map<long long, DayAgg>> spot;"))
+
 # --- часы переобучения ------------------------------------------------------
 tick = body(oracle, "void oracleTick(")
 say("часы переобучения переводятся только после проверки рядов",
