@@ -3977,10 +3977,15 @@ def _count_ready(cur: sqlite3.Connection, perp: bool, horizon: int = ORACLE_H24)
     """Сколько размеченных исходов набралось на этом горизонте.
 
     Условия обязаны совпадать с loadSamples в oracle.cpp: один пример на
-    монету в день, ход не меньше порога этого горизонта. Раньше здесь стояло
-    своё — порог числом 50 прямо в SQL, лишнее `buy_nanos!=sell_nanos` и
-    только суточный горизонт, — и полоса на экране считала не то, чего ждёт
-    обучение. Шестичасовой модели она не показывала вовсе.
+    монету в окно длиной с горизонт, ход не меньше порога этого горизонта.
+    Раньше здесь стояло своё — порог числом 50 прямо в SQL, лишнее
+    `buy_nanos!=sell_nanos` и только суточный горизонт, — и полоса на экране
+    считала не то, чего ждёт обучение.
+
+    Шаг прореживания равен горизонту, а не суткам: журнал пишется каждый час,
+    и соседние часы по одной монете почти одинаковы, а окна их исходов
+    перекрываются. Непересекающихся шестичасовых окон в сутках четыре, и
+    обучение берёт все четыре — счётчик обязан считать так же.
     """
     px = "price_6h" if horizon == ORACLE_H6 else "price_24h"
     filled = "filled_6h" if horizon == ORACLE_H6 else "filled_at"
@@ -3996,7 +4001,7 @@ def _count_ready(cur: sqlite3.Connection, perp: bool, horizon: int = ORACLE_H24)
             f"AND NOT EXISTS ("
             f"  SELECT 1 FROM ai_events e2 WHERE e2.token=e.token AND e2.venue=e.venue "
             f"  AND e2.window_days=24 AND e2.{filled}>0 AND e2.price_then>0 AND e2.{px}>0 "
-            f"  AND e2.ts/86400=e.ts/86400 AND e2.id<e.id)",
+            f"  AND e2.ts/{int(horizon)}=e.ts/{int(horizon)} AND e2.id<e.id)",
             (1 if perp else 0, _min_move(horizon)),
         ).fetchone()
         return int(row["n"] if row else 0)

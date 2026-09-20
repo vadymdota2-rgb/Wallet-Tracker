@@ -127,6 +127,16 @@ say("счётчик не прячет порог числом в SQL", "*50>=" n
 say("счётчик знает про оба горизонта", "price_6h" in cnt and "price_24h" in cnt)
 say("счётчик не добавляет своих условий", "buy_nanos" not in cnt)
 say("порог хода берётся из общей функции", "_min_move(horizon)" in cnt)
+# Шаг прореживания — горизонт, а не сутки, и одинаковый в боте и в счётчике.
+# Разойдись они, полоса на экране считала бы не то, чего ждёт обучение.
+say("счётчик прореживает шагом в горизонт",
+    "e2.ts/{int(horizon)}=e.ts/{int(horizon)}" in cnt, cnt)
+say("бот прореживает тем же шагом",
+    'e2.ts/" + std::to_string(horizon)' in oracle and '"=e.ts/" + std::to_string(horizon)' in oracle)
+say("суток в шаге прореживания не осталось",
+    "ts/86400=e.ts/86400" not in oracle and "ts/86400=e.ts/86400" not in api)
+say("видно, где сужается воронка",
+    "непересекающихся" in oracle and "ход меньше порога у" in oracle)
 say("порог хода повторяет oracleMinMove",
     "ORACLE_MIN_MOVE = 0.02" in api and "math.sqrt(horizon / ORACLE_H24)" in api and
     "ORACLE_MIN_MOVE = 0.02" in oracle.replace("constexpr double ", ""))
