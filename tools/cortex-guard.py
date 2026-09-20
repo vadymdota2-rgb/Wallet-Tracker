@@ -424,6 +424,23 @@ say("анимация крутит весь список, а не только �
     "...ORACLE_FEATURES.filter((f) => !(top ?? []).some((x) => x.k === f))" in
     read(f"{APP}/src/components/Brain.tsx"))
 
+# --- площадки не портят друг друга ------------------------------------------
+# Спот и перпы — разные рынки. Если модель одной разваливается, вторая не
+# должна этого заметить: ни выборкой, ни моделью, ни местом на экране.
+say("выборка для обучения фильтрует площадку", "AND e.venue=? " in oracle)
+say("прореживание не смешивает площадки", "e2.venue=e.venue" in oracle)
+say("обучение зовётся на каждую площадку отдельно",
+    "trainVenue(false, *m, h);" in oracle and "trainVenue(true, *m, h);" in oracle)
+say("живая модель лежит в своём слоте", "g_live[perp ? 1 : 0][hIndex(horizon)]" in oracle)
+say("снятие модели бьёт по одной площадке",
+    "DELETE FROM ai_models WHERE venue=? AND horizon=?" in oracle)
+say("в бою спрашивается модель своей площадки",
+    "const int slot = in.perp ? 1 : 0;" in oracle and "g_live[slot][hi].have" in oracle)
+say("признак обученности и точность — свои у каждой",
+    "trained = r.perp ? g_trainedPerp : g_trainedSpot;" in ai)
+say("десятка сигналов берётся на площадку, а не общая",
+    "SHOW_PER_VENUE" in ai and "(k.r.perp ? perpK : spotK)" in ai)
+
 # --- часы переобучения ------------------------------------------------------
 tick = body(oracle, "void oracleTick(")
 say("часы переобучения переводятся только после проверки рядов",
