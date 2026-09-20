@@ -182,6 +182,29 @@ say("список показывает возраст и доход",
 say("карточка показывает возраст и доход",
     "ai_since_signal" in sig and "since(Math.max(0, Date.now() / 1000 - s.at))" in sig)
 
+# --- учится на всём, показывает лучшее ---------------------------------------
+pub = body(ai, "void publishSignals(")
+say("в список идут десять лучших на площадку",
+    "SHOW_PER_VENUE = 10" in pub and "(k.r.perp ? perpK : spotK)" in pub and
+    "a.conf > b.conf" in pub)
+say("отсечка стоит до журнала выданного",
+    pub.index("SHOW_PER_VENUE") < pub.index("logSignals(asOf, rows);"))
+say("отсечка живёт только в публикации", ai.count("SHOW_PER_VENUE") == 3)
+say("сбор обучающих исходов идёт мимо неё",
+    "SHOW_PER_VENUE" not in body(ai, "void snapshotHour(") and
+    "SHOW_PER_VENUE" not in body(ai, "void insertLabeled("))
+
+# --- разметка задним числом --------------------------------------------------
+say("есть поиск цены на момент в прошлом", "long long priceAtOf(" in ai)
+say("просроченный исход берётся из рядов, а не обнуляется",
+    "px6 = stale6 ? priceAtOf(perp, p.token, p.ts + AI_HORIZON_6H)" in ai and
+    "px24 = stale24 ? priceAtOf(perp, p.token, p.ts + AI_HORIZON_24H)" in ai)
+rep = body(ai, "void repairOutcomes(")
+say("ремонт журнала одноразовый и с курсором",
+    "static bool done = false;" in rep and "CURSOR_KEY = 901" in rep and
+    "WHERE id>? AND price_then>0 ORDER BY id LIMIT ?" in rep)
+say("ремонт зовётся из общего тика", "    repairOutcomes();" in ai)
+
 # --- порядок списка и открытие карточки -------------------------------------
 say("список идёт по свежести", '"ORDER BY at DESC, conf DESC"' in api)
 say("карточка открывается по монете, а не по номеру",
