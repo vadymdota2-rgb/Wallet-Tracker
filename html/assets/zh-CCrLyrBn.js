@@ -10,9 +10,11 @@ const _={account_desc:"您跟踪的钱包及其当前持仓。",account_title:"�
 🏆 顶级交易者 按近 30 天收益排名 — 选一个一键跟踪。
 或从浏览器/分析服务粘贴地址。`,add_wallet_tracking_enabled:"已开启跟踪。",ai_acc:"模型准确率",ai_auc_hint:"0.50 等于抛硬币，1.00 等于毫无差错",ai_avoid:"回避",ai_btn:"🧠 Cortex",ai_buy:"买入",ai_collecting:"正在收集结果",ai_conf:"把握",ai_contract:"合约",ai_empty:"该时段独立钱包不足。",ai_entry:"📍 入场",ai_expire:"⏳ 有效",ai_expired:"⌛ 已过期",ai_ft_accel:"资金流加速",ai_ft_both:"两个市场都有",ai_ft_breadth:"市场广度",ai_ft_btc24:"一天的比特币",ai_ft_btcvol:"比特币波动率",ai_ft_fibback:"回调的深度",ai_ft_fibext:"当前这段走势的长度",ai_ft_fiblevel:"接近斐波那契位",ai_ft_fromlow:"距周内低点",ai_ft_fund:"资金费率",ai_ft_fundz:"资金费率对比自身一周",ai_ft_hour:"一天中的小时",ai_ft_liqoi:"爆仓与持仓量之比",ai_ft_oivlm:"持仓量与成交额之比",ai_ft_ret1:"一小时涨跌",ai_ft_ret24:"一天涨跌",ai_ft_ret6:"六小时涨跌",ai_ft_ticket:"平均单笔规模",ai_ft_tohigh:"距周内高点",ai_ft_trades:"成交笔数",ai_ft_trend:"相对均线的趋势",ai_ft_vlm24:"一天成交额",ai_ft_vol24:"一天波动率",ai_ft_voljump:"波动率跳升",ai_ft_wavegrow:"这一浪比上一浪长",ai_ft_waverun:"同向连续了几浪",ai_ft_wavewith:"顺浪还是逆浪",ai_gate_auc:"区分上涨与下跌：{v} — 需要 {need} 以上",ai_gate_else:"在所有条件齐备之前，信号由公式算出。",ai_gate_loss:"估计误差：{v} — 需低于 {need}",ai_gate_pass:"在新数据上确认 {need} 次中的 {n} 次",ai_gate_title:"启用还需要什么",ai_gate_wf:"在不同时期都站得住：{v} — 需要 {need} 以上",ai_gate_wf_min:"最弱的一段 {v} — 需要 {need} 以上",ai_gate_wf_none:"跨时期检验：满 {need} 个结果后开始，现在 {n} 个",ai_hint:`Cortex 是一个神谕：一个训练过的模型，估计价格跟随你关注的钱包的概率。当许多独立钱包朝同一方向移动时，它给出一个数字。
 
-它看的不只是资金流：41 个特征 — 成交量与钱包数、1 小时/6 小时/一天的涨跌、波动率及其骤升、ATR、RSI、趋势、MACD、资金费率、未平仓量、爆仓、杠杆、流动性、比特币的状态和市场广度。
+它看的不只是资金流：47 个特征 — 成交量与钱包数、1 小时/6 小时/一天的涨跌、波动率及其骤升、ATR、RSI、趋势、MACD、资金费率、未平仓量、爆仓、杠杆、流动性、比特币的状态和市场广度。
 
 事件它从自己的数据里读：这枚币上币多久了、成交量比自己一周的常态高出多少、最近几小时价格被震得多厉害。上币、被黑、消息，都会在数字里留下痕迹 — 这个痕迹它学得会。新闻的文字它不读：它的历史里没有，那里也就没有可学的。
+
+走势的形状它自己划分：把行情切成一段一段，数的是这些段的长度 — 回调有多深、是否落在斐波那契位上，新的一段是否比上一段长，同一方向连着走了几段。像分析师那样数浪，机器做不到：两个人画出来就不一样。它数的是那张图里属于算术的那部分。
 
 模型自己决定：周期是六小时还是一天、止损与目标，以及值得冒险的仓位占比。
 
