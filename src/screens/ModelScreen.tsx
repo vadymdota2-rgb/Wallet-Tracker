@@ -2,8 +2,14 @@
  * Состояние модели.
  *
  * Одной «точности» мало: при 54% роста в выборке прогноз «всегда вверх» даёт
- * те же 54%. Поэтому AUC показан на шкале, где отмечены и монетка, и порог,
- * ниже которого модель в бой не пускают.
+ * те же 54%. Поэтому качество показано на шкале, где отмечены и монетка, и
+ * порог, ниже которого модель в бой не пускают.
+ *
+ * Экран публичный, и слов вроде «AUC», «потери» и «скользящая проверка» на
+ * нём нет. Числа остались — они честные, — но подписаны тем, что значат:
+ * отличает ли рост от падения, велика ли ошибка её оценок, держится ли она
+ * на разных отрезках времени. Аббревиатура ничего не объясняет тому, кто её
+ * не знает, а тому, кто знает, — и так видно, что это за шкала.
  *
  * Главное на экране — три условия приёмки, словами и с галочкой у каждого.
  * Раньше тут стояли те же числа порознь: AUC на шкале, потери рядом с базой,
@@ -167,7 +173,7 @@ function Venue({ m, attempt, name, ready, need }: {
           <>
             <Meter value={attempt.auc} from={0.45} to={0.75} mark={AUC_GATE}
                    markLabel={t(lang, "ai_st_gate")} tone="flat"
-                   label="AUC" note={attempt.auc.toFixed(3)} />
+                   label={t(lang, "ai_st_quality")} note={attempt.auc.toFixed(3)} />
             <Gates lang={lang} auc={attempt.auc} logloss={attempt.logloss}
                    base={attempt.base} wf={attempt.wf} wfMin={attempt.wfMin}
                    samples={attempt.samples} need={need} />
@@ -195,16 +201,19 @@ function Venue({ m, attempt, name, ready, need }: {
         mark={0.5}
         markLabel={t(lang, "ai_st_coin")}
         tone={m.auc >= AUC_GATE ? "up" : "flat"}
-        label="AUC"
+        label={t(lang, "ai_st_quality")}
         note={m.auc.toFixed(3)}
       />
+      {/* Сколько в модели деревьев — не дело читающего: это про её устройство,
+          а не про то, стоит ли ей верить. Осталось то, что человек может
+          соотнести с собой: как часто угадывает и на скольких примерах
+          училась. */}
       <Tiles
-        cols={3}
+        cols={2}
         size="sm"
         items={[
           { label: title(t(lang, "ai_st_acc")), value: `${m.acc}%`, tone: "up" },
           { label: t(lang, "ai_st_samples"), value: num(m.samples) },
-          { label: t(lang, "ai_st_trees"), value: num(m.trees) },
         ]}
       />
       {/* Те же три условия и у принятой модели: список показывает, чем она их
