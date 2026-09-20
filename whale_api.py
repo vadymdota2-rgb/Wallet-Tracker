@@ -4088,7 +4088,12 @@ def _signals(cur: sqlite3.Connection) -> list:
         f"{logged('horizon', hz)} horizon, {logged('risk_share', share)} share, "
         f"{logged('lev', 's.lev')} lev, {why_col} why "
         f"FROM ai_signals s {join}"
-        "ORDER BY s.venue, s.side DESC, conf DESC"
+        # Сверху свежие. Прежде список шёл по уверенности, и рядом с сигналом
+        # четвертьчасовой давности стоял вчерашний — по числу они соседи, а
+        # по делу разные вещи: у одного план ещё в силе, у другого прошло
+        # полгоризонта. Возраст и есть первое, что о сигнале нужно знать.
+        # Уверенность осталась вторым ключом — для выданных в одну секунду.
+        "ORDER BY at DESC, conf DESC"
     )
     try:
         rows = cur.execute(sql).fetchall()

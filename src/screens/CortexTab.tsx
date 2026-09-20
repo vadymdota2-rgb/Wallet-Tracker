@@ -171,9 +171,13 @@ export function CortexTab() {
             hint={cortex.at ? t(lang, "ai_empty") : undefined}
           />
         ) : (
-          list.map((s, i) => (
-            <SignalRow key={`${s.venue}-${s.sym}-${i}`} s={s} lang={lang}
-                       onOpen={() => open("signal", `${s.venue}:${i}`)} />
+          list.map((s) => (
+            /* Открываем по имени монеты и стороне, а не по месту в списке.
+               Список идёт по свежести, и новый сигнал каждые пять минут
+               встаёт наверх, сдвигая всех на единицу. По номеру человек,
+               открывший ZEC, через минуту смотрел бы уже на HYPE. */
+            <SignalRow key={`${s.venue}-${s.side}-${s.sym}`} s={s} lang={lang}
+                       onOpen={() => open("signal", s.venue, `${s.side}|${s.sym}`)} />
           ))
         )}
       </Card>

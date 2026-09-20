@@ -182,6 +182,12 @@ say("список показывает возраст и доход",
 say("карточка показывает возраст и доход",
     "ai_since_signal" in sig and "since(Math.max(0, Date.now() / 1000 - s.at))" in sig)
 
+# --- порядок списка и открытие карточки -------------------------------------
+say("список идёт по свежести", '"ORDER BY at DESC, conf DESC"' in api)
+say("карточка открывается по монете, а не по номеру",
+    'open("signal", s.venue, `${s.side}|${s.sym}`)' in read(f"{APP}/src/screens/CortexTab.tsx") and
+    "list.find((x) => x.sym === want" in sig)
+
 # --- свечи и закрытие сигнала ----------------------------------------------
 say("биржевые свечи — только для перпов",
     'const wantExch = venue === "perp";' in sig and

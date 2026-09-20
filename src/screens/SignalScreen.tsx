@@ -49,16 +49,21 @@ function hours(lang: LangCode, sec: number): string {
   return t(lang, "ai_hours", { n: h });
 }
 
-export function SignalScreen({ arg }: ScreenProps) {
+export function SignalScreen({ arg, arg2 }: ScreenProps) {
   const lang = useApp((s) => s.lang);
   const cortex = useLive((s) => s.cortex);
 
-  const [venueRaw, idxRaw] = String(arg || "").split(":");
-  const venue = (venueRaw === "perp" ? "perp" : "spot") as Venue;
-  const idx = Number(idxRaw);
+  /* Монета и сторона, а не номер в списке: список идёт по свежести и
+     пересобирается каждые пять минут, а имя монеты у сигнала своё.
+     Разделитель — вертикальная черта: двоеточие в именах встречается,
+     рынки HIP-3 зовутся «xyz:NVDA». */
+  const venue = (arg === "perp" ? "perp" : "spot") as Venue;
+  const cut = String(arg2 || "").indexOf("|");
+  const side = cut < 0 ? "" : String(arg2).slice(0, cut);
+  const want = cut < 0 ? String(arg2 || "") : String(arg2).slice(cut + 1);
 
   const list = cortex.list.filter((s) => s.venue === venue);
-  const s = list[idx];
+  const s = list.find((x) => x.sym === want && (!side || x.side === side));
 
   const sym = s?.sym ?? "";
   const addr = String(s?.addr || "");
