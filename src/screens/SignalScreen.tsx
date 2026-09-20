@@ -19,7 +19,7 @@ import { Frame, type ScreenProps } from "./Screen";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import { t } from "../i18n/t";
-import { num, pct, px, signed } from "../lib/format";
+import { num, pct, px, signed, since } from "../lib/format";
 import { sideKey, whyKey } from "../lib/labels";
 import { venueName } from "../lib/rank";
 import { fetchTokenHist } from "../lib/api";
@@ -156,6 +156,13 @@ export function SignalScreen({ arg }: ScreenProps) {
         t(lang, s.model ? "ai_mode_model" : "ai_mode_formula")}`}
     >
       <Card>
+        {/* Слева — что оракул думает, справа — что из этого вышло.
+
+            Два числа рядом отвечают на разные вопросы, и оба нужны сразу:
+            «шанс роста 61%» — прогноз на горизонт вперёд, «+2.3% с момента
+            сигнала» — то, что уже случилось. Доход считается в сторону
+            сигнала: у продажи падение цены — плюс, и у лонга с шортом он
+            читается одинаково. */}
         <div className="hero">
           <div className="hero-main">
             <div className={`hero-val ${long ? "up" : "dn"}`}>{conf}%</div>
@@ -163,6 +170,12 @@ export function SignalScreen({ arg }: ScreenProps) {
               {t(lang, long ? "ai_p_up" : "ai_p_dn", { h: hours(lang, s.h) })}
             </div>
           </div>
+          {s.roi === undefined ? null : (
+            <div className="hero-side">
+              <div className={`hero-val sm ${s.roi >= 0 ? "up" : "dn"}`}>{pct(s.roi)}</div>
+              <div className="hero-note">{t(lang, "ai_since_signal")}</div>
+            </div>
+          )}
         </div>
         <Meter
           value={conf / 100}
@@ -170,6 +183,14 @@ export function SignalScreen({ arg }: ScreenProps) {
           markLabel={t(lang, "ai_st_coin")}
           tone={long ? "up" : "dn"}
         />
+        {/* Возраст сигнала: от появления, а не от пересчёта. Бот пересчитывает
+            список каждые пять минут, и по времени пересчёта любой сигнал
+            выглядел бы только что выданным. */}
+        {s.at ? (
+          <p className="note dim">
+            {since(Math.max(0, Date.now() / 1000 - s.at))}
+          </p>
+        ) : null}
       </Card>
 
       <Card>
@@ -207,6 +228,9 @@ export function SignalScreen({ arg }: ScreenProps) {
       </Card>
 
       <Card>
+        {/* Вход — тот, что был назван при выдаче, а не сегодняшняя цена:
+            по нему считается и доход выше, и исход в истории. Цена сейчас
+            стоит рядом, иначе непонятно, откуда взялся доход. */}
         <Tiles
           items={[
             { label: t(lang, "ai_entry"), value: px(s.entry) },
@@ -215,6 +239,16 @@ export function SignalScreen({ arg }: ScreenProps) {
             { label: `${t(lang, "ai_take_one")} 2`, value: px(s.t2), tone: "up" },
           ]}
         />
+        {s.now ? (
+          <Tiles
+            size="sm"
+            items={[{ label: t(lang, "ai_price_now"), value: px(s.now),
+                      tone: s.roi !== undefined && s.roi >= 0 ? "up" : "dn" },
+                    { label: t(lang, "ai_since_signal"),
+                      value: s.roi === undefined ? "—" : pct(s.roi),
+                      tone: s.roi !== undefined && s.roi >= 0 ? "up" : "dn" }]}
+          />
+        ) : null}
         {/* Полоса показывает, куда от входа идёт цена, а цвет — чем это
             кончится. У продажи цель ниже входа, стоп выше, и по одному знаку
             выходило, что цель красная, а стоп зелёный — ровно наоборот. */}

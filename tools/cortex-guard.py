@@ -159,6 +159,29 @@ say("списки признаков совпадают в трёх слоях",
     names == api_names == app_names,
     f"{len(names)}/{len(api_names)}/{len(app_names)}")
 
+# --- сигнал показывается таким, каким вышел --------------------------------
+log_fn = body(ai, "void logSignals(")
+say("журнал хранит весь план",
+    all(k in log_fn for k in ("risk_share,lev,why", "p.riskShare", "p.leverage", "k.why")))
+say("миграции журнала дописаны",
+    all(f"ALTER TABLE ai_signal_log ADD COLUMN {c}" in ai
+        for c in ("risk_share", "lev", "why")))
+sig_fn = code_only(pybody(api, "def _signals("))
+say("план приходит из журнала, а не из публикации",
+    "LEFT JOIN ai_signal_log g" in sig_fn and "g.closed_at=0" in sig_fn)
+say("возраст — от появления сигнала",
+    "COALESCE(g.made_at, s.made_at)" in sig_fn and '"at": int(r["at"]' in sig_fn)
+say("доход считается в сторону сигнала",
+    "if not long_:" in sig_fn and "roi = -roi" in sig_fn)
+say("доход считается от показанного входа",
+    "(live_px - entry) / entry" in sig_fn)
+say("расстояние до стопа — от показанной пары",
+    "abs(stop - entry) / entry" in sig_fn and 'r["risk_pct"]' not in sig_fn)
+say("список показывает возраст и доход",
+    'className="sig-foot"' in read(f"{APP}/src/screens/CortexTab.tsx"))
+say("карточка показывает возраст и доход",
+    "ai_since_signal" in sig and "since(Math.max(0, Date.now() / 1000 - s.at))" in sig)
+
 # --- часы переобучения ------------------------------------------------------
 tick = body(oracle, "void oracleTick(")
 say("часы переобучения переводятся только после проверки рядов",

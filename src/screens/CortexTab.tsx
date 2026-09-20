@@ -14,7 +14,7 @@
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import { t, title } from "../i18n/t";
-import { num } from "../lib/format";
+import { num, pct, since } from "../lib/format";
 import { sideKey, whyKey } from "../lib/labels";
 import { venueName } from "../lib/rank";
 import { Brain } from "../components/Brain";
@@ -62,6 +62,22 @@ function SignalRow({ s, onOpen, lang }: {
         <span className="sig-sub">
           {reason || `${num(s.w)} ${t(lang, "flow_wallets")}`}
         </span>
+        {/* Возраст и доход — строкой ниже, по краям.
+
+            Своей строкой, а не рядом с причиной: вместе они не влезают в
+            320 точек ни на одном языке, а обрезанная причина не причина.
+            Возраст берётся от появления сигнала, а не от пересчёта: пересчёт
+            идёт каждые пять минут, и по нему всё выглядело бы свежим.
+            Доход считается в сторону сигнала, поэтому у шорта падение цены —
+            плюс, и цвет у обоих читается одинаково. */}
+        {s.at || s.roi !== undefined ? (
+          <span className="sig-foot">
+            <i>{s.at ? since(Math.max(0, Date.now() / 1000 - s.at)) : ""}</i>
+            {s.roi === undefined ? null : (
+              <b className={s.roi >= 0 ? "up" : "dn"}>{pct(s.roi)}</b>
+            )}
+          </span>
+        ) : null}
       </span>
     </button>
   );

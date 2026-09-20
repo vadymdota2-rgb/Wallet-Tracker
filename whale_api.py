@@ -4047,19 +4047,51 @@ def _signals(cur: sqlite3.Connection) -> list:
     не считал. Повторять здесь тридцать пять признаков и лес деревьев нельзя:
     две реализации разойдутся, и заметить это будет не по чему. Поэтому счёт
     один, в oracle.cpp, а здесь выдача.
+
+    План берётся из журнала, а не из ai_signals. В ai_signals он каждые пять
+    минут пересчитывается от свежей цены: вход там равен цене прямо сейчас,
+    и стоп с целями переезжают вместе с ней. Человек, открывший карточку в
+    десять, и он же в десять ноль пять видели разные сделки, а исход потом
+    считался по уровням журнала — по тем, которых он мог и не видеть.
+    Поэтому уровни, горизонт, плечо и доля депозита приходят из открытой
+    строки журнала: сигнал показывается таким, каким вышел.
+
+    Живого в нём двое: возраст — от той же строки журнала, по ней и видно,
+    сколько сигнал висит, — и доход с момента выдачи. Доход считается как
+    раз из расхождения двух входов: журнального, записанного один раз, и
+    текущего из ai_signals, который и есть сегодняшняя цена. Второго
+    источника цен для этого не нужно, и разойтись им негде.
     """
     if not table_exists(cur, "ai_signals"):
         return []
     # Столбцы появились позже: у базы, которую ещё не трогал новый бот, их нет.
     cset = cols(cur, "ai_signals")
-    share = "risk_share" if "risk_share" in cset else "0"
-    hz = "horizon" if "horizon" in cset else "86400"
+    share = "s.risk_share" if "risk_share" in cset else "0"
+    hz = "s.horizon" if "horizon" in cset else "86400"
+    # Журнал мог и не успеть обрасти столбцами плана: тогда берём из ai_signals.
+    lset = cols(cur, "ai_signal_log") if table_exists(cur, "ai_signal_log") else set()
+    def logged(name: str, fallback: str) -> str:
+        """Поле из журнала, если оно там есть; иначе — из свежей публикации."""
+        return f"COALESCE(g.{name}, {fallback})" if name in lset else fallback
+    join = ("LEFT JOIN ai_signal_log g ON g.venue=s.venue AND g.token=s.token "
+            "AND g.side=s.side AND g.closed_at=0 ") if lset else ""
+    at = "COALESCE(g.made_at, s.made_at)" if lset else "s.made_at"
+    # Доводы пустой строкой — это «в журнале их нет», а не «доводов нет».
+    why_col = "COALESCE(NULLIF(g.why, ''), s.why)" if "why" in lset else "s.why"
+    sql = (
+        f"SELECT s.venue venue, s.sym sym, s.side side, s.net_nanos net_nanos, "
+        f"s.wallets wallets, s.token token, s.entry live_px, "
+        f"{at} at, {logged('conf', 's.conf')} conf, "
+        f"{logged('modelled', 's.modelled')} modelled, "
+        f"{logged('entry', 's.entry')} entry, {logged('stop', 's.stop')} stop, "
+        f"{logged('take1', 's.take1')} take1, {logged('take2', 's.take2')} take2, "
+        f"{logged('horizon', hz)} horizon, {logged('risk_share', share)} share, "
+        f"{logged('lev', 's.lev')} lev, {why_col} why "
+        f"FROM ai_signals s {join}"
+        "ORDER BY s.venue, s.side DESC, conf DESC"
+    )
     try:
-        rows = cur.execute(
-            f"SELECT venue,sym,side,conf,modelled,net_nanos,wallets,entry,stop,take1,take2,"
-            f"risk_pct,lev,why,token,{share} share,{hz} horizon FROM ai_signals "
-            "ORDER BY venue, side DESC, conf DESC"
-        ).fetchall()
+        rows = cur.execute(sql).fetchall()
     except sqlite3.Error as e:
         sys.stderr.write(f"[api] сигналы: {e}\n")
         return []
@@ -4068,6 +4100,18 @@ def _signals(cur: sqlite3.Connection) -> list:
         entry = float(r["entry"] or 0)
         if entry <= 0:
             continue
+        live_px = float(r["live_px"] or 0)
+        long_ = bool(int(r["side"] or 0))
+        # Доход с момента выдачи, в сторону сигнала: у шорта падение — плюс.
+        roi = 0.0
+        if live_px > 0:
+            roi = (live_px - entry) / entry * 100.0
+            if not long_:
+                roi = -roi
+        stop = float(r["stop"] or 0)
+        # Расстояние до стопа считается по показанной паре, а не берётся из
+        # свежей публикации: там оно от другого входа.
+        stop_pct = abs(stop - entry) / entry * 100.0 if stop > 0 else 0.0
         out.append({
             "sym": str(r["sym"] or "").upper(),
             "side": "buy" if int(r["side"] or 0) else "sell",
@@ -4077,11 +4121,19 @@ def _signals(cur: sqlite3.Connection) -> list:
             "net": usd(r["net_nanos"]),
             "w": int(r["wallets"] or 0),
             "entry": entry,
-            "stop": float(r["stop"] or 0),
-            "stopPct": round(float(r["risk_pct"] or 0), 2),
+            "stop": stop,
+            "stopPct": round(stop_pct, 2),
             "t1": float(r["take1"] or 0),
             "t2": float(r["take2"] or 0),
             "lev": int(r["lev"] or 1),
+            # Когда сигнал появился и как он с тех пор идёт. Возраст — из
+            # журнала: в самой публикации время всегда «только что», её
+            # переписывают каждые пять минут.
+            "at": int(r["at"] or 0),
+            "roi": round(roi, 2),
+            # Цена прямо сейчас — от неё и считается доход. Отдаём, чтобы на
+            # карточке было видно, откуда он взялся.
+            "now": live_px,
             # Доля депозита под риском и горизонт — решения модели, а не
             # настройки приложения.
             "share": round(float(r["share"] or 0), 2),

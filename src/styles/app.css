@@ -245,6 +245,12 @@
 .hero-val.up { color: var(--up); text-shadow: 0 0 24px rgb(61 220 151 / 0.3); }
 .hero-val.dn { color: var(--dn); text-shadow: 0 0 24px rgb(255 92 119 / 0.3); }
 .hero-note { color: var(--dim); font-size: 12px; }
+/* Второе число героя — доход с момента сигнала. Правее и мельче: прогноз
+   слева главнее, а это про то, что уже случилось. На 320 точках два числа
+   в 38 пунктов рядом не стоят. */
+.hero-side { margin-inline-start: auto; min-width: 0; display: grid; gap: 2px; justify-items: end; }
+.hero-side .hero-note { text-align: end; overflow-wrap: anywhere; }
+.hero-val.sm { font-size: 26px; letter-spacing: -0.02em; }
 
 .legend { display: flex; justify-content: space-between; font-size: 12px; }
 
@@ -485,7 +491,14 @@
 .tiles.sm .tile small { font-size: 10px; }
 .tiles.sm .tile b { font-size: 14px; }
 
-.tile small { color: var(--dim-2); font-size: 11px; letter-spacing: .02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Подпись плитки переносится, а не обрезается. «Qué compran las ballenas» и
+   «волатильність за добу» в 320 точек в одну строку не влезают, а обрезанные
+   не говорят, что за число под ними стоит. Высота плиток в ряду
+   выравнивается сеткой, так что вторая строка ничего не ломает. */
+.tile small {
+  color: var(--dim-2); font-size: 11px; letter-spacing: .02em;
+  white-space: normal; overflow-wrap: anywhere; line-height: 1.25;
+}
 .tile b { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Страницы списка ------------------------------------------------------- */
@@ -1244,9 +1257,12 @@
   display: grid; grid-template-columns: minmax(0, 1fr) 96px auto;
   align-items: center; gap: 10px;
 }
+/* Имя признака переносится: переведённые имена длиннее английских —
+   «vol 24h» против «волатильність за добу», — и в 320 точек в строку не
+   встают. Обрезанное имя не объясняет, за что монету выбрали. */
 .bar-name {
-  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: 13px; color: var(--ink);
+  min-width: 0; white-space: normal; overflow-wrap: anywhere;
+  font-size: 13px; line-height: 1.25; color: var(--ink);
 }
 .bar-plot {
   position: relative; height: 8px; border-radius: 4px; background: var(--panel-2);
@@ -1319,6 +1335,20 @@
   font-size: 12px; color: var(--dim);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+/* Возраст сигнала и его доход: по краям одной строки. Возраст слева, потому
+   что читается первым — «актуально ли это ещё»; доход справа, где в списках
+   и стоят числа. */
+.sig-foot {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  font-size: 11px;
+}
+.sig-foot i {
+  font-style: normal; color: var(--dim-2);
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sig-foot b { flex: 0 0 auto; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sig-foot b.up { color: var(--up); }
+.sig-foot b.dn { color: var(--dn); }
 
 .ora {
   display: grid; gap: 8px; width: 100%; padding: 12px; border: 0;
