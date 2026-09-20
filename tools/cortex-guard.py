@@ -182,6 +182,22 @@ say("список показывает возраст и доход",
 say("карточка показывает возраст и доход",
     "ai_since_signal" in sig and "since(Math.max(0, Date.now() / 1000 - s.at))" in sig)
 
+# --- свечи и закрытие сигнала ----------------------------------------------
+say("биржевые свечи — только для перпов",
+    'const wantExch = venue === "perp";' in sig and
+    "if (!sym || !wantExch)" in sig)
+say("у спота источник — история своего контракта",
+    "fetchTokenHist(addr" in sig)
+say("контракт показан на карточке спота", 'className="row tap sig-addr"' in sig)
+close_fn = body(ai, "void closeSignalLog(")
+say("на разбор идут все открытые сигналы",
+    "WHERE closed_at=0 LIMIT 200" in close_fn and "made_at+horizon<=" not in close_fn)
+say("стоп и цель закрывают сигнал сразу",
+    "const bool expired = o.made + o.horizon <= now;" in close_fn and
+    "std::min(now, o.made + o.horizon)" in close_fn)
+say("пустой ход закрывается только по горизонту",
+    "w.done = expired;" in body(ai, "Walked walkOutcome("))
+
 # --- часы переобучения ------------------------------------------------------
 tick = body(oracle, "void oracleTick(")
 say("часы переобучения переводятся только после проверки рядов",

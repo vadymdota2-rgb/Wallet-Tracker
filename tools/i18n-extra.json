@@ -1,4 +1,22 @@
 {
+  "ai_contract": {
+    "ar": "العقد",
+    "de": "Vertrag",
+    "en": "contract",
+    "es": "contrato",
+    "fr": "contrat",
+    "hi": "कॉन्ट्रैक्ट",
+    "id": "kontrak",
+    "ja": "コントラクト",
+    "ko": "컨트랙트",
+    "pl": "kontrakt",
+    "pt": "contrato",
+    "ru": "контракт",
+    "tr": "sözleşme",
+    "uk": "контракт",
+    "vi": "hợp đồng",
+    "zh": "合约"
+  },
   "ai_ft_accel": {
     "ar": "تسارع التدفق",
     "de": "Fluss-Beschleunigung",

@@ -19,6 +19,7 @@ export const ar: Dict = {
   ai_buy: "شراء",
   ai_collecting: "نجمع النتائج",
   ai_conf: "الثقة",
+  ai_contract: "العقد",
   ai_empty: "لا توجد محافظ مستقلة كافية لهذه الفترة.",
   ai_entry: "📍 الدخول",
   ai_expire: "⏳ صالح",

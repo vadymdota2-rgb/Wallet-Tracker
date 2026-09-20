@@ -19,6 +19,7 @@ export const pl: Dict = {
   ai_buy: "Kupno",
   ai_collecting: "zbieramy wyniki",
   ai_conf: "Pewność",
+  ai_contract: "kontrakt",
   ai_empty: "Za mało niezależnych portfeli w tym oknie.",
   ai_entry: "📍 Wejście",
   ai_expire: "⏳ Ważne",

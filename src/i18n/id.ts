@@ -19,6 +19,7 @@ export const id: Dict = {
   ai_buy: "Beli",
   ai_collecting: "mengumpulkan hasil",
   ai_conf: "Keyakinan",
+  ai_contract: "kontrak",
   ai_empty: "Dompet independen tidak cukup di periode ini.",
   ai_entry: "📍 Masuk",
   ai_expire: "⏳ Berlaku",

@@ -390,6 +390,12 @@
 .row-hit:active { opacity: 0.6; }
 .row-act { flex: 0 0 auto; display: inline-flex; margin-inline-start: 10px; }
 .row-after { flex: 0 0 auto; display: inline-flex; margin-inline-start: 10px; color: var(--dim-2); }
+/* Контракт монеты на карточке сигнала: адрес моноширинным, слово «копировать»
+   у края. Адрес — единственное, чем монета опознаётся однозначно, поэтому он
+   и стоит строкой, а не прячется за значком. */
+.sig-addr { margin-block-start: 8px; }
+.sig-addr .row-sub { font-size: 12px; letter-spacing: 0.02em; }
+.sig-addr .row-after { font-size: 11px; }
 /* Моноширинные цифры: в столбце сумм «$2,99M» и «$412K» иначе стоят
    вразнобой и колонка выглядит рваной. */
 .row-val {

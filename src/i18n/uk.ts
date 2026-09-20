@@ -19,6 +19,7 @@ export const uk: Dict = {
   ai_buy: "Купівля",
   ai_collecting: "збираємо результати",
   ai_conf: "Упевненість",
+  ai_contract: "контракт",
   ai_empty: "У цьому вікні замало незалежних гаманців.",
   ai_entry: "📍 Вхід",
   ai_expire: "⏳ Діє",

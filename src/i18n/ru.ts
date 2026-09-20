@@ -19,6 +19,7 @@ export const ru: Dict = {
   ai_buy: "Покупка",
   ai_collecting: "собираем результаты",
   ai_conf: "Уверенность",
+  ai_contract: "контракт",
   ai_empty: "В этом окне мало независимых кошельков.",
   ai_entry: "📍 Вход",
   ai_expire: "⏳ Действует",

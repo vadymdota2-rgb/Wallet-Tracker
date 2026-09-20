@@ -19,6 +19,7 @@ export const ja: Dict = {
   ai_buy: "買い",
   ai_collecting: "結果を集めています",
   ai_conf: "確信度",
+  ai_contract: "コントラクト",
   ai_empty: "この期間は独立ウォレットが足りません。",
   ai_entry: "📍 エントリー",
   ai_expire: "⏳ 有効",

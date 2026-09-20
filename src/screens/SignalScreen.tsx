@@ -19,7 +19,10 @@ import { Frame, type ScreenProps } from "./Screen";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import { t } from "../i18n/t";
-import { num, pct, px, signed, since } from "../lib/format";
+import { num, pct, px, shortAddr, signed, since } from "../lib/format";
+import { copyText } from "../lib/copy";
+import { haptic } from "../lib/telegram";
+import { toast } from "../components/Toast";
 import { sideKey, whyKey } from "../lib/labels";
 import { venueName } from "../lib/rank";
 import { fetchTokenHist } from "../lib/api";
@@ -70,17 +73,31 @@ export function SignalScreen({ arg }: ScreenProps) {
   const [candles, setCandles] = useState<Candle[] | null>(null);
   const [hist, setHist] = useState<[number, number][] | null>(null);
 
-  /* Оба источника спрашиваются сразу, а не по цепочке: ждать отказа биржи,
-     чтобы только потом пойти в базу, значит показывать скелет дважды. */
+  /* Биржевые свечи — только для перпов.
+   *
+   * Биржа ищет по тикеру: «COOKIEUSDT». На перпах это и есть инструмент,
+   * тикер там уникален. А на BSC тикер не значит ничего: токен с именем
+   * COOKIE заводит кто угодно, и их там несколько. Карточка спотового
+   * сигнала рисовала свечи чужой монеты под своими уровнями — на экране
+   * выходил график около цента, а вход со стопом жались в самом низу, у
+   * трёх сотых цента. Сходиться там было нечему: это две разные монеты.
+   *
+   * У спота источник один — история цен самого контракта, та же, из которой
+   * бот взял вход. График от неё беднее: почасовые замеры вместо настоящих
+   * OHLC. Зато это та монета, про которую сигнал. */
+  const wantExch = venue === "perp";
   useEffect(() => {
-    if (!sym) return;
+    if (!sym || !wantExch) {
+      setCandles([]);
+      return;
+    }
     const ctrl = new AbortController();
     setCandles(null);
     void fetchCandles(sym, tf, ctrl.signal).then((c) => {
       if (!ctrl.signal.aborted) setCandles(c);
     });
     return () => ctrl.abort();
-  }, [sym, tf]);
+  }, [sym, tf, wantExch]);
 
   useEffect(() => {
     if (!hasAddr) {
@@ -138,7 +155,8 @@ export function SignalScreen({ arg }: ScreenProps) {
 
   const exch = candles && candles.length >= 3 ? candles : null;
   const dex = hist?.length ? candlesFrom(hist, spotTf) : null;
-  // Биржевые свечи точнее: там настоящие OHLC, а не почасовые замеры.
+  /* У перпов биржевые свечи точнее: там настоящие OHLC, а не почасовые
+     замеры. У спота их просто нет — см. выше, тикер там не опознаёт монету. */
   const dexShown = !exch && !!dex && dex.length >= 3;
   const waiting = candles === null || (!exch && hasAddr && hist === null);
 
@@ -239,6 +257,34 @@ export function SignalScreen({ arg }: ScreenProps) {
             { label: `${t(lang, "ai_take_one")} 2`, value: px(s.t2), tone: "up" },
           ]}
         />
+        {/* Контракт монеты — для спотового сигнала.
+
+            Тикер монету не определяет. На BSC их заводит кто угодно, и одно
+            и то же слово носят разные токены: «COOKIE» в этом списке — токен
+            за три сотых цента, а «COOKIE» на бирже — другой, за цент. Человек
+            сверил одно с другим и увидел расхождение в триста раз. Цена у нас
+            своя, от своего контракта, и она верна; неверно было умолчать,
+            какой именно это контракт. Адрес рядом, и его можно скопировать —
+            по нему монета опознаётся однозначно. */}
+        {hasAddr ? (
+          <button
+            type="button"
+            className="row tap sig-addr"
+            onClick={async () => {
+              haptic("light");
+              const ok = await copyText(addr);
+              toast(t(lang, ok ? "ui_copied" : "ui_copy_failed"), ok ? undefined : "err");
+            }}
+          >
+            <span className="row-main">
+              <span className="row-title">
+                <span className="row-name">{t(lang, "ai_contract")}</span>
+              </span>
+              <small className="row-sub mono">{shortAddr(addr)}</small>
+            </span>
+            <span className="row-after">{t(lang, "ui_copy")}</span>
+          </button>
+        ) : null}
         {s.now ? (
           <Tiles
             size="sm"

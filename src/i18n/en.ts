@@ -19,6 +19,7 @@ export const en = {
   ai_buy: "Buy",
   ai_collecting: "collecting results",
   ai_conf: "Confidence",
+  ai_contract: "contract",
   ai_empty: "Not enough independent wallets in this window.",
   ai_entry: "📍 Entry",
   ai_expire: "⏳ Valid",

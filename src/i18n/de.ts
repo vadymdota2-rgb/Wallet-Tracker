@@ -19,6 +19,7 @@ export const de: Dict = {
   ai_buy: "Kauf",
   ai_collecting: "sammle Ergebnisse",
   ai_conf: "Konfidenz",
+  ai_contract: "Vertrag",
   ai_empty: "Zu wenige unabhängige Wallets in diesem Zeitraum.",
   ai_entry: "📍 Einstieg",
   ai_expire: "⏳ Gültig",

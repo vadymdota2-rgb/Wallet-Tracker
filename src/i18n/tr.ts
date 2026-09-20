@@ -19,6 +19,7 @@ export const tr: Dict = {
   ai_buy: "Alım",
   ai_collecting: "sonuçlar toplanıyor",
   ai_conf: "Güven",
+  ai_contract: "sözleşme",
   ai_empty: "Bu dönemde yeterli bağımsız cüzdan yok.",
   ai_entry: "📍 Giriş",
   ai_expire: "⏳ Geçerli",

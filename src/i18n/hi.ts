@@ -19,6 +19,7 @@ export const hi: Dict = {
   ai_buy: "खरीद",
   ai_collecting: "परिणाम जुटा रहे हैं",
   ai_conf: "विश्वास",
+  ai_contract: "कॉन्ट्रैक्ट",
   ai_empty: "इस अवधि में पर्याप्त स्वतंत्र वॉलेट नहीं.",
   ai_entry: "📍 प्रवेश",
   ai_expire: "⏳ मान्य",

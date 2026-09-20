@@ -19,6 +19,7 @@ export const vi: Dict = {
   ai_buy: "Mua",
   ai_collecting: "đang thu thập kết quả",
   ai_conf: "Độ tin",
+  ai_contract: "hợp đồng",
   ai_empty: "Không đủ ví độc lập trong khoảng này.",
   ai_entry: "📍 Vào lệnh",
   ai_expire: "⏳ Hiệu lực",

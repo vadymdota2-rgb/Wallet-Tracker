@@ -19,6 +19,7 @@ export const ko: Dict = {
   ai_buy: "매수",
   ai_collecting: "결과를 모으는 중",
   ai_conf: "신뢰도",
+  ai_contract: "컨트랙트",
   ai_empty: "이 구간에 독립 지갑이 충분하지 않습니다.",
   ai_entry: "📍 진입",
   ai_expire: "⏳ 유효",

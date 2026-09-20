@@ -19,6 +19,7 @@ export const zh: Dict = {
   ai_buy: "买入",
   ai_collecting: "正在收集结果",
   ai_conf: "把握",
+  ai_contract: "合约",
   ai_empty: "该时段独立钱包不足。",
   ai_entry: "📍 入场",
   ai_expire: "⏳ 有效",
