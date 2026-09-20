@@ -4078,6 +4078,16 @@ def _signals(cur: sqlite3.Connection) -> list:
     def logged(name: str, fallback: str) -> str:
         """Поле из журнала, если оно там есть; иначе — из свежей публикации."""
         return f"COALESCE(g.{name}, {fallback})" if name in lset else fallback
+
+    # COALESCE тут не спасает: столбцы добавлены с NOT NULL DEFAULT, и у
+    # строки, заведённой до миграции, лежит не NULL, а ноль и единица. Пустое
+    # значение от настоящего отличает доля депозита: любой построенный план
+    # ставит её больше нуля, обоими путями. Ноль в ней — признак того, что
+    # строка старше миграции, и тогда план добираем из свежей публикации.
+    fresh = "g.risk_share > 0" if "risk_share" in lset else "0"
+    def logged_plan(name: str, fallback: str) -> str:
+        return (f"CASE WHEN {fresh} THEN g.{name} ELSE {fallback} END"
+                if name in lset else fallback)
     join = ("LEFT JOIN ai_signal_log g ON g.venue=s.venue AND g.token=s.token "
             "AND g.side=s.side AND g.closed_at=0 ") if lset else ""
     at = "COALESCE(g.made_at, s.made_at)" if lset else "s.made_at"
@@ -4090,8 +4100,8 @@ def _signals(cur: sqlite3.Connection) -> list:
         f"{logged('modelled', 's.modelled')} modelled, "
         f"{logged('entry', 's.entry')} entry, {logged('stop', 's.stop')} stop, "
         f"{logged('take1', 's.take1')} take1, {logged('take2', 's.take2')} take2, "
-        f"{logged('horizon', hz)} horizon, {logged('risk_share', share)} share, "
-        f"{logged('lev', 's.lev')} lev, {why_col} why "
+        f"{logged('horizon', hz)} horizon, {logged_plan('risk_share', share)} share, "
+        f"{logged_plan('lev', 's.lev')} lev, {why_col} why "
         f"FROM ai_signals s {join}"
         # Сверху свежие. Прежде список шёл по уверенности, и рядом с сигналом
         # четвертьчасовой давности стоял вчерашний — по числу они соседи, а

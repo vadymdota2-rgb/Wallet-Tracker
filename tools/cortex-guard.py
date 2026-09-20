@@ -160,6 +160,24 @@ say("пустой блок берётся целиком",
     "cortexOf(d.cortex ?? d.sonar) ?? prev.cortex" in live and
     "c?.list?.length || c?.trained" not in live)
 
+# --- тяжёлое не держит базу и не перебирает журнал ---------------------------
+ls_body = oracle[oracle.index("std::vector<Sample> loadSamples("):oracle.index("\nstruct Scored")]
+say("признаки считаются после того, как замок отпущен",
+    ls_body.index("// замок базы отпущен") < ls_body.index("featuresOf(m, in, ts, sm.f);"))
+say("отбор примеров опирается на индекс по монете",
+    "idx_ai_events_coin ON ai_events(token, venue, ts)" in ai)
+
+# --- чат и экран говорят одними словами --------------------------------------
+say("на экране состояния нет аббревиатур",
+    not re.search(r'label="AUC"|"AUC"', model) and "ai_st_quality" in model)
+# Чат — такой же публичный экран: ни «AUC», ни числа деревьев там быть не
+# должно. Ищем по всему исходнику сообщений, а не по одной функции.
+say("в сообщении бота аббревиатур нет",
+    '"AUC' not in ai and 'ai_st_trees' not in ai,
+    "AUC" if '"AUC' in ai else "ai_st_trees")
+say("имена признаков в чате переводятся",
+    "featureLabel(os.top[k].first, lang)" in ai)
+
 # --- имена признаков ---------------------------------------------------------
 KEEP = {"RSI", "ATR", "MACD", "MACD sig", "MACD hist"}
 names = re.findall(r'"([^"]*)"',
@@ -170,6 +188,16 @@ mapped = set(re.findall(r'^\s*"?([A-Za-z0-9 /]+?)"?:\s*"ai_',
                                   labels, re.S).group(1), re.M))
 miss = [n for n in names if n not in mapped and n not in KEEP]
 say("каждое имя признака переведено или оставлено намеренно", not miss, ", ".join(miss))
+# Та же таблица есть в боте — для сообщения в чате. Разойдись они, одни и те
+# же признаки назывались бы в чате и на экране по-разному.
+bot_map = dict(re.findall(r'^\s*\{"([^"]+)",\s*"(ai_[a-z0-9_]+)"\},$',
+                          re.search(r'const std::pair<const char\*, const char\*> FEATURE_KEY\[\] = \{(.*?)\n\};',
+                                    ai, re.S).group(1), re.M))
+app_map = dict(re.findall(r'^\s*"?([A-Za-z0-9 /]+?)"?:\s*"(ai_[a-z0-9_]+)"',
+                          re.search(r'const WHY: Record<string, DictKey> = \{(.*?)\n\};',
+                                    labels, re.S).group(1), re.M))
+say("таблицы имён в боте и в приложении совпадают", bot_map == app_map,
+    str(set(bot_map.items()) ^ set(app_map.items())))
 say("экран состояния переводит имена признаков",
     "name: featName(f.k)" in model and "name: f.k," not in model)
 
@@ -223,9 +251,12 @@ say("просроченный исход берётся из рядов, а не
     "px6 = stale6 ? priceAtOf(perp, p.token, p.ts + AI_HORIZON_6H)" in ai and
     "px24 = stale24 ? priceAtOf(perp, p.token, p.ts + AI_HORIZON_24H)" in ai)
 rep = body(ai, "void repairOutcomes(")
-say("ремонт журнала одноразовый и с курсором",
-    "static bool done = false;" in rep and "CURSOR_KEY = 901" in rep and
-    "WHERE id>? AND price_then>0 ORDER BY id LIMIT ?" in rep)
+# Ремонт идёт по кругу, а не один раз: дыра может появиться и позади курсора,
+# если бот простоял час. Дойдя до конца, курсор сбрасывается в ноль.
+say("ремонт журнала с курсором и по кругу",
+    "static bool done" not in rep and "CURSOR_KEY = 901" in rep and
+    "WHERE id>? AND price_then>0 ORDER BY id LIMIT ?" in rep and
+    "VALUES(?,0)" in rep)
 say("ремонт зовётся из общего тика", "    repairOutcomes();" in ai)
 
 # --- порядок списка и открытие карточки -------------------------------------

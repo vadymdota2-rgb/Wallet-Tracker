@@ -593,24 +593,6 @@
     "vi": "kể từ tín hiệu",
     "zh": "自信号发出以来"
   },
-  "ai_st_quality": {
-    "ar": "جودة النموذج",
-    "de": "Qualität des Modells",
-    "en": "Model quality",
-    "es": "Calidad del modelo",
-    "fr": "Qualité du modèle",
-    "hi": "मॉडल की गुणवत्ता",
-    "id": "Kualitas model",
-    "ja": "モデルの精度",
-    "ko": "모델 품질",
-    "pl": "Jakość modelu",
-    "pt": "Qualidade do modelo",
-    "ru": "Качество модели",
-    "tr": "Modelin kalitesi",
-    "uk": "Якість моделі",
-    "vi": "Chất lượng mô hình",
-    "zh": "模型质量"
-  },
   "ai_why_formula": {
     "ar": "ما الذي تطابق في الصيغة",
     "de": "Was die Formel gefunden hat",

@@ -75,7 +75,7 @@ function hzWords(lang: LangCode, sec: number): string {
  * скользящей проверке не хватило примеров, и крест рядом с ней говорил бы
  * неправду. У такого условия знак нейтральный и цвет тусклый.
  */
-function Gates({ lang, auc, logloss, base, wf, wfMin, samples, need }: {
+function Gates({ lang, auc, logloss, base, wf, wfMin, folds, samples, need }: {
   lang: LangCode;
   auc: number;
   logloss: number;
@@ -83,13 +83,17 @@ function Gates({ lang, auc, logloss, base, wf, wfMin, samples, need }: {
   wf: number;
   /** Худшая складка скользящей проверки. */
   wfMin?: number;
+  /** Сколько отрезков отработало. Ноль — проверки не было. */
+  folds?: number;
   samples: number;
   need: number;
 }) {
-  /* Скользящая проверка требует вдвое больше примеров, чем первое обучение:
-     выборку режут на отрезки, и на каждом учат заново. Пока их не набралось,
-     бот возвращает ноль — но это «не считали», а не «вышло ноль». */
-  const wfNone = samples < need;
+  /* Проверка режет выборку на отрезки и на каждом учит заново; пока примеров
+     мало, она не считается вовсе и бот возвращает ноль. Ноль читается как
+     измеренная неудача, поэтому такой случай показывается словами.
+     Смотрим и на число отрезков: примеров может хватать, а проверка всё
+     равно не отработать — тогда ноль тем более не измерение. */
+  const wfNone = samples < need || folds === 0;
   type Gate = { state: "ok" | "no" | "wait"; text: string; hint: string };
   const items: Gate[] = [
     {
@@ -176,7 +180,7 @@ function Venue({ m, attempt, name, ready, need }: {
                    label={t(lang, "ai_st_quality")} note={attempt.auc.toFixed(3)} />
             <Gates lang={lang} auc={attempt.auc} logloss={attempt.logloss}
                    base={attempt.base} wf={attempt.wf} wfMin={attempt.wfMin}
-                   samples={attempt.samples} need={need} />
+                   folds={attempt.folds} samples={attempt.samples} need={need} />
             {/* Чем занят бот, пока условия не выполнены: сигналы не
                 пропадают, их считает формула от волатильности. */}
             <p className="note dim">{t(lang, "ai_gate_else")}</p>
@@ -221,7 +225,8 @@ function Venue({ m, attempt, name, ready, need }: {
           полоса из одного значения не говорит больше самого значения, а вот
           «столько получилось, столько нужно» говорит. */}
       <Gates lang={lang} auc={m.auc} logloss={m.logloss} base={m.base}
-             wf={m.wf} wfMin={m.wfMin} samples={m.samples} need={need} />
+             wf={m.wf} wfMin={m.wfMin} folds={m.folds}
+             samples={m.samples} need={need} />
       {/* Стоп и цели у модели свои, только когда она доказала, что угадывает
           ход лучше среднего. Иначе их считает формула от волатильности, и об
           этом честнее сказать. */}
