@@ -339,6 +339,9 @@
 .row.tap:active { opacity: 0.6; border-color: var(--line-2); }
 
 .row-ico { flex: 0 0 auto; display: grid; place-items: center; font-size: 17px; }
+/* Значки пунктов премиума — разной ширины (⚡ уже 🔵): без общей ширины
+   текст пунктов стоял бы неровно. */
+.perk-ic { display: inline-block; width: 24px; text-align: center; }
 .row-main { flex: 1 1 auto; min-width: 0; display: grid; gap: 1px; }
 .row-title {
   display: flex;

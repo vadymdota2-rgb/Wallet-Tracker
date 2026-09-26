@@ -674,5 +674,33 @@ say("бот пишет процент только у модели",
 say("пометка формулы есть в словарях бота",
     '"ai_formula_note"' in read(f"{BOT}/ru.cpp") and '"ai_formula_note"' in read(f"{BOT}/translations.cpp"))
 
+# --- замки подписки стоят на сервере, а не только на экране -----------------
+# Раньше сервер отдавал бесплатному все сто мест доски, перпы Hyperliquid,
+# фандинг и позиции кошельков, а приложение их просто не рисовало — и то не
+# везде: рейтинг перпов и позиции были видны. Бот всё это закрывает.
+say("срез по подписке есть", "def for_plan(data: dict, prem: bool) -> dict:" in api)
+fp = pybody(api, "def for_plan(")
+say("срез: 30 мест спота, пустые перпы, без фандинга и позиций",
+    "v[:RANK_FREE_DEPTH]" in fp and '"perp": {k: []' in fp and '"pos": []' in fp
+    and 'out[k] = {}' in fp and '"trades"' in fp)
+say("срез не трогает Cortex", "cortex" not in code_only(fp).lower() and "sonar" not in fp)
+say("выгрузка срезается по своему же плану", "for_plan(boot, plan_of(boot))" in api)
+say("выгрузка без подписи — как бесплатная", "}, False))" in api)
+say("крупные сделки срезаются", "for_plan(big_trades(win, hours), chat_premium(self._user(qs)))" in api)
+say("фандинг и сделки перпов — отказ без подписки",
+    api.count('self._json(403, {"ok": False, "error": "premium"})') == 2)
+say("живой кошелёк срезается", "), is_premium(cur, chat)))" in api)
+top = read(f"{APP}/src/screens/TopTab.tsx")
+say("рейтинг перпов за замком", 'venue === "perp" && plan !== "premium"' in top and "<PremiumLock fromTab />" in top)
+say("позиции за замком, а не «позиций нет»",
+    "<PremiumLock />" in read(f"{APP}/src/screens/PositionsScreen.tsx")
+    and "<PremiumLock />" in read(f"{APP}/src/screens/PositionScreen.tsx")
+    and "<PremiumLock />" in read(f"{APP}/src/screens/WalletScreen.tsx"))
+prem_scr = read(f"{APP}/src/screens/PremiumScreen.tsx")
+say("цена на экране премиума — один раз, на кнопке",
+    'title={t(lang, "pay_stars_btn")} value=' not in prem_scr and 'title={t(lang, "pay_usdt_btn")} value=' not in prem_scr)
+say("оплата выше описания", prem_scr.index('className="stack-actions"') < prem_scr.index('"pr_includes"'))
+say("Cortex назван бесплатным", '"pr_free_cortex_d"' in prem_scr)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

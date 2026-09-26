@@ -46,11 +46,23 @@ export function PremiumScreen() {
     if (pay.ton) warmWallet();
   }, [pay.ton]);
 
-  const perks: Parameters<typeof t>[1][] = [
-    "help_premium_1",
-    "help_premium_2",
-    "help_premium_3",
-    "help_premium_4",
+  type Key = Parameters<typeof t>[1];
+  /* Что даёт подписка — подробно, с пояснением к каждому пункту. Прежний
+     список из четырёх строк обрезался на полуслове («Hyperliquid futures:
+     ranking, alerts and…»), и за что платить, было не понять. Порядок и
+     содержание — ровно то, что закрывают бот и сервер. */
+  const perks: { ic: string; title: Key; text: Key }[] = [
+    { ic: "🔵", title: "pr_perk_hl_t", text: "pr_perk_hl_d" },
+    { ic: "👛", title: "pr_perk_wallets_t", text: "pr_perk_wallets_d" },
+    { ic: "🔔", title: "pr_perk_alerts_t", text: "pr_perk_alerts_d" },
+    { ic: "🏆", title: "pr_perk_top_t", text: "pr_perk_top_d" },
+    { ic: "⚡", title: "pr_perk_prio_t", text: "pr_perk_prio_d" },
+  ];
+  // Что остаётся без подписки: платить за Cortex не нужно, и это сказано прямо.
+  const free: { ic: string; title: Key; text: Key }[] = [
+    { ic: "🧠", title: "ai_title", text: "pr_free_cortex_d" },
+    { ic: "📊", title: "pr_free_market_t", text: "pr_free_market_d" },
+    { ic: "💼", title: "pr_free_wallet_t", text: "pr_free_wallet_d" },
   ];
 
   /* Конец любой оплаты выглядит одинаково: сообщение и снятая занятость.
@@ -106,18 +118,12 @@ export function PremiumScreen() {
       title={active ? t(lang, "pr_active_title") : t(lang, "pr_title")}
       sub={active ? `${t(lang, "pr_days_left")} ${num(days)}` : t(lang, "pr_unlock")}
     >
+      {/* Оплата — первой: цена и срок видны сразу, а цена написана один раз,
+          на самой кнопке. Прежде она стояла дважды — строкой и кнопкой. */}
       <Card>
-        <SectionTitle>{t(lang, "pr_includes")}</SectionTitle>
-        {perks.map((k) => (
-          <Row key={k} title={t(lang, k)} />
-        ))}
-      </Card>
-
-      <Card>
-        <SectionTitle note={t(lang, "pr_subscription_label")}>{t(lang, "pr_price_label")}</SectionTitle>
-        <Row title={t(lang, "pay_stars_btn")} value={`${num(pay.stars)} ⭐`} />
-        {pay.ton ? <Row title={t(lang, "pay_usdt_btn")} value={`${pay.usdt} USDT`} /> : null}
-        {pay.ton ? <p className="note dim">{t(lang, "pay_note")}</p> : null}
+        <SectionTitle note={t(lang, "pr_subscription_label")}>
+          {t(lang, active ? "pr_extend_title" : "pr_pay_title")}
+        </SectionTitle>
         <div className="stack-actions">
           <Action onClick={onStars} disabled={busy !== "" || !pay.stars}>
             {busy === "stars"
@@ -132,6 +138,8 @@ export function PremiumScreen() {
             </Action>
           ) : null}
         </div>
+        {pay.ton ? <p className="note dim">{t(lang, "pay_note")}</p> : null}
+        {active ? <p className="note dim">{t(lang, "pr_extend_note")}</p> : null}
       </Card>
 
       {inv ? (
@@ -158,6 +166,31 @@ export function PremiumScreen() {
         </Card>
       ) : null}
 
+      <Card>
+        <SectionTitle>{t(lang, "pr_includes")}</SectionTitle>
+        {perks.map((p) => (
+          <Row
+            key={p.title}
+            wrap
+            icon={<span className="perk-ic" aria-hidden="true">{p.ic}</span>}
+            title={t(lang, p.title)}
+            sub={t(lang, p.text)}
+          />
+        ))}
+      </Card>
+
+      <Card>
+        <SectionTitle>{t(lang, "pr_free_title")}</SectionTitle>
+        {free.map((p) => (
+          <Row
+            key={p.title}
+            wrap
+            icon={<span className="perk-ic" aria-hidden="true">{p.ic}</span>}
+            title={t(lang, p.title)}
+            sub={t(lang, p.text)}
+          />
+        ))}
+      </Card>
     </Frame>
   );
 }

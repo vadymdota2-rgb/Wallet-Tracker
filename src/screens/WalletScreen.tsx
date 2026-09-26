@@ -18,6 +18,7 @@ import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
 import { CoinIcon } from "../components/CoinIcon";
 import { Action, AddrBar, Card, Empty, EyeGlyph, Row, SectionTitle, Tiles, VenueMark } from "../components/ui";
+import { PremiumLock } from "../components/PremiumLock";
 
 export function WalletScreen({ arg }: ScreenProps) {
   const lang = useApp((s) => s.lang);
@@ -60,7 +61,9 @@ export function WalletScreen({ arg }: ScreenProps) {
   // Длинное «не в рейтинге» в плитку не влезает — там прочерк, а словами
   // это сказано примечанием к разделу.
   const spot = place.spot ? `🏆 ${place.spot.place}` : "—";
-  const perp = place.perp ? `🏆 ${place.perp.place}` : "—";
+  // Доска перпов бесплатному не приходит вовсе: прочерк читался бы как «не
+  // в рейтинге», а это неизвестно — поэтому замок.
+  const perp = plan !== "premium" ? "🔒" : place.perp ? `🏆 ${place.perp.place}` : "—";
   // За что именно место — по прибыли, доходности, винрейту или активности.
   // Доски кошелька — всегда за 30 дней; окно подписано, чтобы «+$412K» не
   // читалось как прибыль за всё время.
@@ -147,10 +150,12 @@ export function WalletScreen({ arg }: ScreenProps) {
       </Card>
 
       <Card>
-        <SectionTitle note={w.pos.length ? `${w.pos.length}` : undefined}>
+        <SectionTitle note={plan === "premium" && w.pos.length ? `${w.pos.length}` : undefined}>
           {t(lang, "hl_open_positions")}
         </SectionTitle>
-        {w.pos.length === 0 ? (
+        {plan !== "premium" ? (
+          <PremiumLock />
+        ) : w.pos.length === 0 ? (
           <Empty text={t(lang, "hl_no_open_positions")} />
         ) : (
           w.pos.map((p, i) => (

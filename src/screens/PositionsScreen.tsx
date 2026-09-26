@@ -6,18 +6,24 @@ import { t } from "../i18n/t";
 import { lev as levFmt, pct, px, signed } from "../lib/format";
 import { CoinIcon } from "../components/CoinIcon";
 import { Card, Empty, EyeGlyph, Row, SectionTitle } from "../components/ui";
+import { PremiumLock, usePremium } from "../components/PremiumLock";
 
 export function PositionsScreen() {
   const lang = useApp((s) => s.lang);
   const open = useApp((s) => s.open);
   const wallets = useLive((s) => s.wallets);
+  const premium = usePremium();
 
   const rows = wallets.flatMap((w) => w.pos.map((p, i) => ({ w, p, i })));
 
   return (
     <Frame title={t(lang, "hl_open_positions")} sub={t(lang, "hl_positions_choose")}>
       <Card>
-        {rows.length === 0 ? (
+        {/* Позиции Hyperliquid — за подпиской, как в боте: бесплатному сервер
+            их не отдаёт, и «открытых позиций нет» было бы неправдой. */}
+        {!premium ? (
+          <PremiumLock />
+        ) : rows.length === 0 ? (
           <Empty text={t(lang, "hl_no_open_positions")} />
         ) : (
           <>

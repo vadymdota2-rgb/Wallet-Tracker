@@ -21,6 +21,7 @@ import { venueName } from "../lib/rank";
 import { removeWallet } from "../lib/api";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
+import { PremiumLock } from "../components/PremiumLock";
 import { haptic } from "../lib/telegram";
 import {
   Card, DealsGlyph, Empty, MinusGlyph, PlusGlyph, SectionTitle, Segmented, TileNav,
@@ -126,7 +127,7 @@ export function TopTab() {
             {
               id: "perp",
               ic: <VenueMark venue="perp" size={30} />,
-              label: `${venueName("perp")} · ${t(lang, "wl_perp_rank")}`,
+              label: `${venueName("perp")} · ${t(lang, "wl_perp_rank")}${plan === "premium" ? "" : " 🔒"}`,
             },
           ]}
         />
@@ -142,7 +143,11 @@ export function TopTab() {
         />
       </Card>
 
-      {rows.length === 0 ? (
+      {venue === "perp" && plan !== "premium" ? (
+        <Card>
+          <PremiumLock fromTab />
+        </Card>
+      ) : rows.length === 0 ? (
         <Card>
           <Empty
             text={table ? t(lang, "rk_no_completed_trades") : t(lang, "hl_rk_empty")}
@@ -212,7 +217,7 @@ export function TopTab() {
         })
       )}
 
-      {plan !== "premium" && rows.length >= FREE_ROWS ? (
+      {plan !== "premium" && venue === "spot" && rows.length >= FREE_ROWS ? (
         <Card>
           <p className="note warn">{t(lang, "rk_unlock_top100")}</p>
         </Card>

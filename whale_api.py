@@ -475,6 +475,66 @@ def is_premium(con: sqlite3.Connection, chat: str) -> bool:
     return bool(row and row["is_premium"] and int(row["premium_expire"] or 0) > now())
 
 
+def chat_premium(chat: str) -> bool:
+    """is_premium() для обработчика, у которого своей базы под рукой нет."""
+    if not chat:
+        return False
+    con = open_db(DB)
+    if not con:
+        return False
+    try:
+        return is_premium(con, chat)
+    except sqlite3.Error:
+        return False
+    finally:
+        con.close()
+
+
+def for_plan(data: dict, prem: bool) -> dict:
+    """Срезает из ответа то, что закрыто подпиской, — как это делает бот.
+
+    Раньше замки стояли только в приложении: сервер отдавал бесплатному
+    пользователю все сто мест доски, перпы Hyperliquid, фандинг и позиции
+    кошельков, а приложение их просто не рисовало — и то не везде. Что закрыто,
+    то не должно уходить с сервера вовсе. Выгрузка при этом не копируется
+    глубоко: общий кэш остаётся целым для подписчиков.
+
+    Cortex не срезается: он пока бесплатный.
+    """
+    if prem or not isinstance(data, dict):
+        return data
+    out = dict(data)
+    rank = out.get("rank")
+    if isinstance(rank, dict):
+        spot = rank.get("spot") if isinstance(rank.get("spot"), dict) else {}
+        perp = rank.get("perp") if isinstance(rank.get("perp"), dict) else {}
+        out["rank"] = {
+            "spot": {k: v[:RANK_FREE_DEPTH] if isinstance(v, list) else v for k, v in spot.items()},
+            "perp": {k: [] for k in (perp or {"pnl": 0, "roi": 0, "win": 0, "act": 0})},
+        }
+    if isinstance(out.get("trades"), dict):
+        out["trades"] = {**out["trades"], "perp": []}
+    if isinstance(out.get("perp"), list):
+        out["perp"] = []
+    for k in ("fund", "fundN"):
+        if k in out:
+            out[k] = {}
+    if isinstance(out.get("marketFeed"), list):
+        out["marketFeed"] = [r for r in out["marketFeed"]
+                             if not (isinstance(r, dict) and r.get("venue") == "perp")]
+    if isinstance(out.get("wallets"), list):
+        out["wallets"] = [{**w, "pos": []} if isinstance(w, dict) else w for w in out["wallets"]]
+    if isinstance(out.get("pos"), list):
+        out["pos"] = []
+    return out
+
+
+def plan_of(boot: dict) -> bool:
+    """Подписка по самой выгрузке: замки и строка «Премиум» не разойдутся."""
+    me = boot.get("me") if isinstance(boot, dict) else None
+    return isinstance(me, dict) and me.get("plan") == "premium"
+
+
 def wallet_limit(con: sqlite3.Connection, chat: str) -> int:
     """Лимит кошельков по подписке — как в premium.cpp."""
     return PREMIUM_MAX_WALLETS if is_premium(con, chat) else FREE_MAX_WALLETS
@@ -2889,6 +2949,7 @@ def load_feed_market(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> 
                     "v": usd(r["usd_nanos"]),
                     "up": bool(r["is_buy"]),
                     "_ts": int(r["timestamp"] or 0),
+                    "venue": "spot",
                 }
             )
     if hl and table_exists(hl, "hl_fills"):
@@ -2914,6 +2975,7 @@ def load_feed_market(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> 
                     "v": usd(r["notional_nanos"]),
                     "up": up,
                     "_ts": ts_sec(r["ts"]),
+                    "venue": "perp",
                 }
             )
     items.sort(key=lambda x: -x.get("_ts", 0))
@@ -5400,7 +5462,8 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path in ("/bootstrap", "/api/bootstrap", "/api/me"):
                 chat = self._user(qs)
-                self._json(200, bootstrap_cached(chat))
+                boot = bootstrap_cached(chat)
+                self._json(200, for_plan(boot, plan_of(boot)))
                 return
             if path in ("/market", "/api/market"):
                 cur = open_db(DB)
@@ -5411,7 +5474,8 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     pub = get_public(cur, hl) or {}
                     rank_raw = pub.get("rank") or {}
-                    self._json(200, {
+                    # Без подписи человек неизвестен — значит, бесплатный.
+                    self._json(200, for_plan({
                         "ok": True,
                         "live": True,
                         "flow": pub.get("flow") or {},
@@ -5428,7 +5492,7 @@ class Handler(BaseHTTPRequestHandler):
                         "cortex": pub.get("sonar") or {},
                         "sonar": pub.get("sonar") or {},
                         "coins": pub.get("coins") or {},
-                    })
+                    }, False))
                 finally:
                     try:
                         cur.close()
@@ -5480,6 +5544,9 @@ class Handler(BaseHTTPRequestHandler):
                 except (TypeError, ValueError):
                     limit = FUND_PAGE
                 limit = max(1, min(50, limit))
+                if not chat_premium(self._user(qs)):
+                    self._json(403, {"ok": False, "error": "premium"})
+                    return
                 # Из готовых досок, а не с биржи: они обновляются своим
                 # потоком, и листание страниц не должно ходить наружу.
                 rows = _FUND_ALL.get(ex) or []
@@ -5548,6 +5615,9 @@ class Handler(BaseHTTPRequestHandler):
                     self._json(400, {"ok": False, "error": "bad_addr"})
                     return
                 venue = "perp" if qs.get("venue", ["spot"])[0] == "perp" else "spot"
+                if venue == "perp" and not chat_premium(self._user(qs)):
+                    self._json(403, {"ok": False, "error": "premium"})
+                    return
                 try:
                     n = int(qs.get("n", ["10"])[0])
                 except (TypeError, ValueError):
@@ -5601,10 +5671,10 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 try:
                     w_addr = (qs.get("addr", [""])[0] or "")
-                    self._json(200, cached_small(
+                    self._json(200, for_plan(cached_small(
                         _WALLET, (chat, w_addr.strip().lower()), WALLET_TTL,
                         lambda: wallet_live(cur, chat, w_addr),
-                    ))
+                    ), is_premium(cur, chat)))
                 finally:
                     try:
                         cur.close()
@@ -5617,7 +5687,7 @@ class Handler(BaseHTTPRequestHandler):
                 if hours is None:
                     self._json(400, {"ok": False, "error": "bad_window"})
                     return
-                self._json(200, big_trades(win, hours))
+                self._json(200, for_plan(big_trades(win, hours), chat_premium(self._user(qs))))
                 return
             if path in ("/quotes", "/api/quotes"):
                 cur = open_db(DB)
