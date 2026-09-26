@@ -45,14 +45,25 @@ function SignalRow({ s, onOpen, lang }: {
           {/* Число и подпись обязаны говорить одно. Раньше под «Продажей»
               стояло «67% шанс роста»: показывалась уверенность модели в
               падении, а подписана она была ростом. */}
-          <em className={`sig-conf ${long ? "up" : "dn"}`}>
-            {s.conf}%
-            <i>{t(lang, long ? "ai_p_short" : "ai_p_short_dn")}</i>
-          </em>
+          {/* У формулы процента нет. Её «уверенность» — это оценка,
+              втиснутая в проценты (40 + счёт×5, зажато в 35…80), а не
+              вероятность; подпись «57% шанс роста» обещала то, чего формула
+              не считает. Сверка обещанного со сбывшимся поймала это сразу:
+              обещал 57%, сбылось 31%. */}
+          {s.model ? (
+            <em className={`sig-conf ${long ? "up" : "dn"}`}>
+              {s.conf}%
+              <i>{t(lang, long ? "ai_p_short" : "ai_p_short_dn")}</i>
+            </em>
+          ) : (
+            <em className="sig-conf sig-formula">{t(lang, "ai_formula")}</em>
+          )}
         </span>
-        <span className="sig-meter">
-          <Meter value={s.conf / 100} mark={0.5} tone={long ? "up" : "dn"} />
-        </span>
+        {s.model ? (
+          <span className="sig-meter">
+            <Meter value={s.conf / 100} mark={0.5} tone={long ? "up" : "dn"} />
+          </span>
+        ) : null}
         {/* Только главная причина: «много кошельков · 19 кошельков» и
             повторяется, и не влезает в 320 точек. Число кошельков — на
             карточке, вместе с остальными доводами. */}

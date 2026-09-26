@@ -164,7 +164,7 @@ say("сорок — это длина списка, а не выборка дл�
 # разными стопами. Общая доля попаданий по ним не значит ничего: одна
 # площадка тянет вторую, а какая именно — не видно.
 say("история берёт только свою площадку",
-    hist.count("venue=?") == 3 and "def _signal_history(cur: sqlite3.Connection, perp: bool)" in api,
+    hist.count("venue=?") == 4 and "def _signal_history(cur: sqlite3.Connection, perp: bool)" in api,
     str(hist.count("venue=?")))
 say("API отдаёт историю обеих площадок врозь",
     '"hist"] = {"spot": _signal_history(cur, False),' in api)
@@ -550,7 +550,7 @@ say("экран показывает отношение, а не сырую ош
 # восьмидесятипроцентными и говорит одно среднее, за которым не видно, врёт
 # число или нет.
 say("сверка считается по корзинам уверенности", "def _reliability(" in api)
-say("в знаменатель идут только решённые сигналы", 'AND outcome!=0"' in api)
+say("в знаменатель идут только решённые сигналы", 'AND outcome!=0{only_model}"' in api)
 say("корзина отдаёт и обещанное, и число сигналов",
     '"said": round(' in api and '"n": len(got),' in api)
 say("экран истории показывает сверку",
@@ -652,6 +652,27 @@ say("на сотнях процентов десятые не нужны", "Math
 tick = body(oracle, "void oracleTick(")
 say("часы переобучения переводятся только после проверки рядов",
     tick.index("if (!m || m->builtAt == 0) return;") < tick.index("lastTrain = now;"))
+
+# --- формула не выдаёт себя за прогноз ---------------------------------------
+# Уверенность формулы — эвристика 35–80, а не вероятность: «57% шанс роста»
+# при попадании 31% читалось как провал оракула. Процент рисуется только у
+# сигналов модели, а оракул судится только по своим сигналам.
+rel = pybody(api, "def _reliability(")
+say("надёжность считается только по сигналам модели",
+    'only_model = " AND modelled=1"' in rel and "{only_model}" in rel)
+hist_api = pybody(api, "def _signal_history(")
+say("история делится на модель и формулу",
+    "GROUP BY modelled" in hist_api and '"model": by_src.get("model")' in hist_api
+    and '"formula": by_src.get("formula")' in hist_api)
+say("вкладка не рисует процент формулы",
+    'sig-conf sig-formula' in cortex and cortex.index("{s.model ? (") < cortex.index("{s.conf}%"))
+say("экран сигнала без шкалы у формулы",
+    '"ai_formula_note"' in sig and '"ai_formula_hint"' in sig)
+say("история показывает источник", '"ai_src_title"' in histscr and "hist.formula" in histscr)
+say("бот пишет процент только у модели",
+    'if (ch.modelled) t << tr(lang, "ai_conf")' in ai and 'tr(lang, "ai_formula_note")' in ai)
+say("пометка формулы есть в словарях бота",
+    '"ai_formula_note"' in read(f"{BOT}/ru.cpp") and '"ai_formula_note"' in read(f"{BOT}/translations.cpp"))
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

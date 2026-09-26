@@ -373,6 +373,8 @@ export interface HistItem {
   t: ServerText;
   win: boolean;
   venue: Venue;
+  /** Сигнал сделала модель, а не формула. */
+  model?: boolean;
 }
 
 /** Обученная модель: то, что показывает экран состояния. */
@@ -487,6 +489,15 @@ export interface RelBucket {
   n: number;
 }
 
+/** Итоги одного источника сигналов — модели или формулы. */
+export interface SrcStats {
+  of: number;
+  tp: number;
+  sl: number;
+  hit: number;
+  avg: number;
+}
+
 export interface CortexHist {
   hit: number;
   of: number;
@@ -499,6 +510,9 @@ export interface CortexHist {
   items: HistItem[];
   /** Сверка обещанного со сбывшимся по корзинам уверенности. */
   rel?: RelBucket[];
+  /** Итоги модели и формулы врозь: оракул судят только по его сигналам. */
+  model?: SrcStats | null;
+  formula?: SrcStats | null;
   /** Сигналов в работе: горизонт ещё не прошёл, итога пока нет. */
   open?: number;
   /** Секунд до закрытия ближайшего из них. */

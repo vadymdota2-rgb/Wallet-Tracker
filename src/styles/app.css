@@ -1569,3 +1569,12 @@
 /* Площадка в переключателе: логотип и имя в одну строку. */
 .seg-venue { display: inline-flex; align-items: center; gap: 6px; }
 .seg-venue .venue { flex: 0 0 auto; border-radius: 50%; }
+
+/* Метка формулы вместо процента: без цвета стороны, чтобы не читалась как
+   число за или против. Это не прогноз, и выглядеть прогнозом она не должна. */
+.sig-conf.sig-formula {
+  color: var(--dim-2); font-weight: 600; font-size: 11px;
+  letter-spacing: .04em; text-transform: uppercase;
+}
+/* Шапка сигнала формулы: слова вместо процента, без цвета стороны. */
+.hero-val.hero-formula { color: var(--dim-2); font-size: 17px; line-height: 1.25; }

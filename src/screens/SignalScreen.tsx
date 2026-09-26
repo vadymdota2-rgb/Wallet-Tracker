@@ -187,11 +187,23 @@ export function SignalScreen({ arg, arg2 }: ScreenProps) {
             сигнала: у продажи падение цены — плюс, и у лонга с шортом он
             читается одинаково. */}
         <div className="hero">
+          {/* У формулы вероятности нет — и крупного процента тоже. Её число
+              было оценкой, втиснутой в проценты, и «57% шанс роста» крупным
+              шрифтом обещало то, чего формула не считает. */}
           <div className="hero-main">
-            <div className={`hero-val ${long ? "up" : "dn"}`}>{conf}%</div>
-            <div className="hero-note">
-              {t(lang, long ? "ai_p_up" : "ai_p_dn", { h: hours(lang, s.h) })}
-            </div>
+            {s.model ? (
+              <>
+                <div className={`hero-val ${long ? "up" : "dn"}`}>{conf}%</div>
+                <div className="hero-note">
+                  {t(lang, long ? "ai_p_up" : "ai_p_dn", { h: hours(lang, s.h) })}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="hero-val sm hero-formula">{t(lang, "ai_formula_note")}</div>
+                <div className="hero-note">{hours(lang, s.h)}</div>
+              </>
+            )}
           </div>
           {s.roi === undefined ? null : (
             <div className="hero-side">
@@ -200,12 +212,18 @@ export function SignalScreen({ arg, arg2 }: ScreenProps) {
             </div>
           )}
         </div>
-        <Meter
-          value={conf / 100}
-          mark={0.5}
-          markLabel={t(lang, "ai_st_coin")}
-          tone={long ? "up" : "dn"}
-        />
+        {s.model ? (
+          <Meter
+            value={conf / 100}
+            mark={0.5}
+            markLabel={t(lang, "ai_st_coin")}
+            tone={long ? "up" : "dn"}
+          />
+        ) : (
+          /* Вместо полосы — объяснение, почему её нет. Пустое место на месте
+             вероятности читалось бы как «не загрузилось». */
+          <p className="note dim">{t(lang, "ai_formula_hint")}</p>
+        )}
         {/* Возраст сигнала: от появления, а не от пересчёта. Бот пересчитывает
             список каждые пять минут, и по времени пересчёта любой сигнал
             выглядел бы только что выданным. */}

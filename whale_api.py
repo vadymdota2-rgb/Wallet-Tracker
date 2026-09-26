@@ -4389,9 +4389,16 @@ def _reliability(cur: sqlite3.Connection, venue: int) -> list:
     edges = [(50, 60), (60, 70), (70, 80), (80, 101)]
     out = []
     try:
+        # Только сигналы модели. У формулы «уверенность» — это оценка,
+        # втиснутая в проценты (40 + счёт×5, зажато в 35…80), а не
+        # вероятность: сверять её со сбывшимся значит ловить формулу на
+        # числе, которое никогда не было обещанием. Блок и поймал её сразу —
+        # «обещал 57%, сбылось 31%», — только судил не того.
+        mset = cols(cur, "ai_signal_log")
+        only_model = " AND modelled=1" if "modelled" in mset else " AND 0"
         rows = cur.execute(
             "SELECT conf, outcome FROM ai_signal_log "
-            "WHERE closed_at>0 AND venue=? AND outcome!=0", (venue,)
+            f"WHERE closed_at>0 AND venue=? AND outcome!=0{only_model}", (venue,)
         ).fetchall()
     except sqlite3.Error as e:
         sys.stderr.write(f"[api] сверка обещанного: {e}\n")
@@ -4435,7 +4442,8 @@ def _signal_history(cur: sqlite3.Connection, perp: bool) -> dict:
         return empty
     try:
         rows = cur.execute(
-            "SELECT sym,venue,side,conf,made_at,closed_at,outcome,ret_bp,entry,exit_px "
+            "SELECT sym,venue,side,conf,made_at,closed_at,outcome,ret_bp,entry,exit_px,"
+            + ("modelled " if "modelled" in cols(cur, "ai_signal_log") else "0 modelled ") +
             "FROM ai_signal_log WHERE closed_at>0 AND venue=? "
             "ORDER BY closed_at DESC LIMIT 40", (venue,)
         ).fetchall()
@@ -4455,6 +4463,7 @@ def _signal_history(cur: sqlite3.Connection, perp: bool) -> dict:
             "win": out > 0,
             "outcome": out,
             "venue": "perp" if int(r["venue"] or 0) else "spot",
+            "model": bool(int(r["modelled"] or 0)),
         })
     # Список — последние сорок, итоги — по всему журналу.
     #
@@ -4480,6 +4489,29 @@ def _signal_history(cur: sqlite3.Connection, perp: bool) -> dict:
     except sqlite3.Error as e:
         sys.stderr.write(f"[api] итоги истории: {e}\n")
     decided = tp + sl
+    # Итоги модели и формулы врозь. Оракул судят по его сигналам: формула с
+    # нулевым преимуществом, сложенная с ним в одну строку, топила бы его
+    # долю, а он — поднимал бы её. Ни то, ни другое не про оракул.
+    by_src = {}
+    try:
+        mset = cols(cur, "ai_signal_log")
+        if "modelled" in mset:
+            for r in cur.execute(
+                "SELECT modelled m, COUNT(*) n, "
+                "SUM(CASE WHEN outcome>0 THEN 1 ELSE 0 END) tp, "
+                "SUM(CASE WHEN outcome<0 THEN 1 ELSE 0 END) sl, "
+                "AVG(ret_bp) avg FROM ai_signal_log "
+                "WHERE closed_at>0 AND venue=? GROUP BY modelled", (venue,)
+            ).fetchall():
+                k = "model" if int(r["m"] or 0) else "formula"
+                t_, s_ = int(r["tp"] or 0), int(r["sl"] or 0)
+                by_src[k] = {
+                    "of": int(r["n"] or 0), "tp": t_, "sl": s_,
+                    "hit": int(round(100.0 * t_ / (t_ + s_))) if t_ + s_ else 0,
+                    "avg": round(float(r["avg"] or 0) / 100.0, 1),
+                }
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] история по источнику: {e}\n")
     # Сколько сигналов ещё в работе и через сколько закроется ближайший.
     # «Завершённых сигналов пока нет» само по себе не отличает «бот только что
     # перезапустился» от «что-то сломалось»: первый итог приходит не раньше,
@@ -4509,6 +4541,9 @@ def _signal_history(cur: sqlite3.Connection, perp: bool) -> dict:
         "avg": round(avg, 1),
         "items": items,
         "rel": _reliability(cur, venue),
+        # Итоги модели и формулы врозь; нет ключа — таких сигналов не было.
+        "model": by_src.get("model"),
+        "formula": by_src.get("formula"),
     }
 
 

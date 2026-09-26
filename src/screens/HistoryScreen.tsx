@@ -110,6 +110,36 @@ export function HistoryScreen() {
              sub={`${title(t(lang, "ai_hist_plans"))} ${num(hist.of)}`}
              value={pct(hist.avg)} tone={hist.avg >= 0 ? "up" : "dn"} />
       </Card>
+      {/* Кто сделал сигналы: модель и формула врозь.
+       *
+       * Оракул судят по его сигналам. Формула с нулевым преимуществом,
+       * сложенная с ним в одну строку, топила бы его долю, а он — поднимал
+       * бы её, и общая цифра не говорила бы ни о том, ни о другом. Пока
+       * модель не прошла проверку, её строки нет вовсе, и так и написано. */}
+      {hist.model || hist.formula ? (
+        <Card>
+          <SectionTitle>{title(t(lang, "ai_src_title"))}</SectionTitle>
+          {hist.model ? (
+            <Row
+              title={t(lang, "ai_src_model")}
+              sub={`🎯 ${num(hist.model.tp)} · 🛑 ${num(hist.model.sl)} · ${pct(hist.model.avg)}`}
+              value={`${hist.model.hit}%`}
+              tone={hist.model.hit >= 50 ? "up" : "dn"}
+              wrap
+            />
+          ) : (
+            <p className="note dim">{t(lang, "ai_src_none")}</p>
+          )}
+          {hist.formula ? (
+            <Row
+              title={t(lang, "ai_src_formula")}
+              sub={`🎯 ${num(hist.formula.tp)} · 🛑 ${num(hist.formula.sl)} · ${pct(hist.formula.avg)}`}
+              value={`${hist.formula.hit}%`}
+              wrap
+            />
+          ) : null}
+        </Card>
+      ) : null}
       {/* Обещано и сбылось.
        *
        * Общая доля попаданий не проверяет главного: модель говорит человеку
@@ -160,7 +190,9 @@ export function HistoryScreen() {
               /* Только значок и время: словами исход подписан в плитках
                  выше, а в строке «🎯 по цели · 5 ч назад» не влезает и в
                  320 точек. */
-              sub={`${mark} ${ago(it.t)}`}
+              /* Формула помечена: её сигнал не был прогнозом, и в общем
+                 списке это должно быть видно у каждой строки. */
+              sub={`${mark} ${ago(it.t)}${it.model === false ? ` · ${t(lang, "ai_formula")}` : ""}`}
               value={pct(it.ret)}
               tone={it.ret >= 0 ? "up" : "dn"}
             />
