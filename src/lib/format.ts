@@ -38,10 +38,20 @@ export function usdFull(v: unknown): string {
   return `$${nf({ maximumFractionDigits: 2 }).format(v)}`;
 }
 
+/**
+ * Процент: число знаков зависит от масштаба — как и у цены.
+ *
+ * Десятая доля важна, пока число маленькое: −1,1% и −1,6% — разные вещи. На
+ * сотнях она не значит ничего, а место занимает: «+157,4%» не влезало в
+ * плитку и обрезалось до «+157 …», по которому не отличить сто пятьдесят
+ * семь процентов от ста пятидесяти семи тысяч. Обрезанное число хуже
+ * округлённого.
+ */
 export function pct(v: unknown, digits = 1, sign = true): string {
   if (!isNum(v)) return "—";
   const s = sign && v > 0 ? "+" : "";
-  return `${s}${nf({ minimumFractionDigits: digits, maximumFractionDigits: digits }).format(v)}%`;
+  const d = Math.abs(v) >= 100 ? 0 : digits;
+  return `${s}${nf({ minimumFractionDigits: d, maximumFractionDigits: d }).format(v)}%`;
 }
 
 /**

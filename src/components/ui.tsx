@@ -147,6 +147,15 @@ export interface Tile {
   tone?: "up" | "dn" | "dim";
 }
 
+/** Насколько мельчить значение, чтобы оно влезло в самую узкую плитку. */
+function tileFit(v: unknown): string {
+  const n = String(v ?? "").length;
+  if (n >= 8) return "l3";
+  if (n >= 7) return "l2";
+  if (n >= 5) return "l1";
+  return "";
+}
+
 export function Tiles({
   items,
   cols = 2,
@@ -164,7 +173,14 @@ export function Tiles({
       {items.map((it, i) => (
         <div className="tile" key={i}>
           <small>{it.label}</small>
-          <b className={it.tone ? it.tone : undefined}>{it.value}</b>
+          {/* Длинное значение мельчает, а не обрезается. Число, потерявшее
+              хвост, читать нельзя: «+157 …» — это и сто пятьдесят семь
+              процентов, и сто пятьдесят семь тысяч. Длину считаем по
+              строке, а не меряем: так значение не прыгает между отрисовками
+              и не зависит от шрифта, который ещё не встал. */}
+          <b className={[it.tone, tileFit(it.value)].filter(Boolean).join(" ") || undefined}>
+            {it.value}
+          </b>
         </div>
       ))}
     </div>

@@ -510,6 +510,25 @@
   white-space: normal; overflow-wrap: anywhere; line-height: 1.25;
 }
 .tile b { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Длинное значение мельчает, чтобы не потерять хвост: обрезанное число не
+   читается вовсе, а уменьшенное — читается. Ступени подобраны по самой
+   узкой плитке — три в ряд на 320 точках, — и проверяются замером, а не на
+   глаз: «+12 480%» должен влезать туда же, где «0,0%». */
+.tile b.l1 { font-size: 15px; letter-spacing: -0.01em; }
+.tile b.l2 { font-size: 13px; letter-spacing: -0.02em; }
+.tile b.l3 { font-size: 11px; letter-spacing: -0.02em; }
+/* И полей по бокам поменьше, когда плиток три: каждый пиксель там — знак. */
+.tiles.c3 .tile { padding-left: 8px; padding-right: 8px; }
+
+/* Сумма потока: число и число кошельков стояли вплотную, и «-$5,76M» с
+   «4 кошельков» слипались в «5,76M4» — вместо суммы получалась каша. У
+   класса не было ни одной строки стилей вовсе. */
+.flow-sum {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; margin: 0 0 8px;
+}
+.flow-sum span { font-size: 21px; font-weight: 800; letter-spacing: -0.01em; }
+.flow-sum small { flex: 0 0 auto; color: var(--dim-2); font-size: 11px; }
 
 /* Страницы списка ------------------------------------------------------- */
 .pager {
