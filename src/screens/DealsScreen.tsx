@@ -15,7 +15,7 @@ import type { ScreenProps } from "./Screen";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
 import { pct, px, shortAddr, signed, since, usd } from "../lib/format";
-import { fetchDeals } from "../lib/api";
+import { fetchDeals, peekDeals } from "../lib/api";
 import { CoinIcon } from "../components/CoinIcon";
 import { Card, Empty } from "../components/ui";
 import type { Deal } from "../lib/types";
@@ -25,7 +25,11 @@ export function DealsScreen({ arg, arg2 }: ScreenProps) {
   const addr = arg ?? "";
   const venue = arg2 === "perp" ? "perp" : "spot";
 
-  const [deals, setDeals] = useState<Deal[] | null>(null);
+  // Первые трейдеры доски подтянуты при запуске — их сделки видны сразу.
+  const [deals, setDeals] = useState<Deal[] | null>(() => {
+    const hit = addr ? peekDeals(addr, venue) : undefined;
+    return hit?.ok ? hit.deals ?? [] : null;
+  });
 
   useEffect(() => {
     if (!addr) return;

@@ -14,6 +14,7 @@ import { bare, t } from "../i18n/t";
 import { lev as levFmt, num, pct, px, shortAddr, signed, usd } from "../lib/format";
 import { holdTime } from "../lib/labels";
 import { fetchWallet, removeWallet, setPrimary } from "../lib/api";
+import { applyWalletLive } from "../lib/prefetch";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
 import { CoinIcon } from "../components/CoinIcon";
@@ -28,25 +29,19 @@ export function WalletScreen({ arg }: ScreenProps) {
   const rank = useLive((s) => s.rank);
   const plan = useLive((s) => s.me.plan);
 
-  const patchWallet = useLive((s) => s.patchWallet);
   const w = walletByAddr(wallets, arg);
   const addr = w?.addr ?? "";
 
   useEffect(() => {
     if (!addr) return;
     const ctrl = new AbortController();
+    // Живые данные обычно уже в хранилище — их принесла подгрузка при
+    // запуске; здесь только освежаем, если они старше минуты.
     void fetchWallet(addr, ctrl.signal).then((d) => {
-      if (ctrl.signal.aborted || !d?.ok) return;
-      patchWallet(addr, {
-        pos: d.pos ?? [],
-        holds: d.holds ?? [],
-        equity: d.equity,
-        bal: d.bal ?? 0,
-        d1: d.d1 ?? 0,
-      });
+      if (!ctrl.signal.aborted) applyWalletLive(addr, d);
     });
     return () => ctrl.abort();
-  }, [addr, patchWallet]);
+  }, [addr]);
 
   if (!w) {
     return (

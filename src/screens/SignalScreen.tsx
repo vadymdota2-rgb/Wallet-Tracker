@@ -25,9 +25,9 @@ import { haptic } from "../lib/telegram";
 import { toast } from "../components/Toast";
 import { sideKey, whyKey } from "../lib/labels";
 import { venueName } from "../lib/rank";
-import { fetchTokenHist } from "../lib/api";
+import { fetchTokenHist, peekTokenHist } from "../lib/api";
 import {
-  candlesFrom, fetchCandles, TF_LABEL,
+  candlesFrom, fetchCandles, peekCandles, TF_LABEL,
   type Candle, type SpotTf, type Timeframe,
 } from "../lib/klines";
 import { CoinIcon } from "../components/CoinIcon";
@@ -75,8 +75,11 @@ export function SignalScreen({ arg, arg2 }: ScreenProps) {
      нет по той же причине. */
   const [tf, setTf] = useState<Timeframe>("1h");
   const [spotTf, setSpotTf] = useState<SpotTf>("1h");
-  const [candles, setCandles] = useState<Candle[] | null>(null);
-  const [hist, setHist] = useState<[number, number][] | null>(null);
+  /* Свечи и история, подтянутые при запуске, — сразу, без скелета. */
+  const [candles, setCandles] = useState<Candle[] | null>(() =>
+    sym && venue === "perp" ? peekCandles(sym, "1h") ?? null : null);
+  const [hist, setHist] = useState<[number, number][] | null>(() =>
+    hasAddr ? peekTokenHist(addr)?.hist ?? null : null);
 
   /* Биржевые свечи — только для перпов.
    *
@@ -96,6 +99,11 @@ export function SignalScreen({ arg, arg2 }: ScreenProps) {
       setCandles([]);
       return;
     }
+    const hit = peekCandles(sym, tf);
+    if (hit) {
+      setCandles(hit);
+      return;
+    }
     const ctrl = new AbortController();
     setCandles(null);
     void fetchCandles(sym, tf, ctrl.signal).then((c) => {
@@ -107,6 +115,11 @@ export function SignalScreen({ arg, arg2 }: ScreenProps) {
   useEffect(() => {
     if (!hasAddr) {
       setHist([]);
+      return;
+    }
+    const hit = peekTokenHist(addr);
+    if (hit?.ok) {
+      setHist(hit.hist ?? []);
       return;
     }
     const ctrl = new AbortController();

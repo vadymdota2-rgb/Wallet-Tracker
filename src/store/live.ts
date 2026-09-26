@@ -4,6 +4,7 @@
  * сливала ответы, отчего сбой авторизации выглядел как норма — экран
  * показывал публичные данные, будто всё в порядке.
  */
+import { forgetAll } from "../lib/memo";
 import { create } from "zustand";
 import type {
   AlertRow, Bootstrap, Coins, FeedRow, Flow, Fund, FundN, Ls, Me, Rank, RotSums, Cortex, Trades,
@@ -228,6 +229,11 @@ export const useLive = create<LiveState>((set, get) => ({
   pay: snap?.pay ?? EMPTY_PAY,
 
   apply: (d) => {
+    /* Сменился план — ответы в памяти собраны под прежний: у бесплатного в
+       них нет перпов, у истёкшего — лишние. Забываем, подгрузка соберёт
+       заново. */
+    const was = get().me.plan;
+    if (d.me?.plan && was !== d.me.plan) forgetAll();
     set((prev) => ({
       status: d.me ? "ready" : "anon",
       syncedAt: Date.now(),

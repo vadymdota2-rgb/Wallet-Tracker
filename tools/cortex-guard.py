@@ -716,5 +716,18 @@ say("состояние модели — из Cortex, а не из «Ещё»",
     'open("model")' not in more and 'open("model")' in cortex)
 say("порог алертов — своим значком, без задвоенного эмодзи",
     "<ThresholdGlyph size={22} />" in more and 'bare(t(lang, "menu_alert_threshold"))' in more)
+# --- при запуске подгружается всё ------------------------------------------
+pre = read(f"{APP}/src/lib/prefetch.ts")
+sync = read(f"{APP}/src/lib/sync.ts")
+say("подгрузка запускается после выгрузки", "setTimeout(() => void prefetchAll(), 400);" in sync)
+say("подгрузка берёт кошельки, окна, фильтры, сигналы, сделки, монеты",
+    all(x in pre for x in ("fetchWallet(w.addr)", "BIG_WINS", 'fetchFlow(app.flowWin, "", 0, side)',
+                           "fetchCandles(s.sym", "fetchTokenHist(s.addr", "fetchDeals(r.a, venue)", "holdJobs()")))
+say("закрытое подпиской не запрашивается", "if (premium) {" in pre and "fetchLs(" in pre.split("if (premium) {")[1][:200])
+say("запросы в очереди, не лавиной", "const PARALLEL = 4;" in pre)
+apits = read(f"{APP}/src/lib/api.ts")
+say("чтения идут через память", apits.count("cachedGet<") >= 7 and "remember<T | null>(path, ttl" in apits)
+say("смена плана стирает память", "forgetAll()" in live)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

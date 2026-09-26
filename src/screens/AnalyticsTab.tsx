@@ -28,7 +28,7 @@ import {
   TileNav,
   VenueReel,
 } from "../components/ui";
-import { fetchBig, fetchFlow, fetchFund, fetchLs, fetchRot } from "../lib/api";
+import { fetchBig, fetchFlow, fetchFund, fetchLs, fetchRot, peekBig, peekFlow, peekLs } from "../lib/api";
 import type { BigSide, BigView, BigWin, FlowWin } from "../store/app";
 import type {
   CoinClass, FlowRow, FlowSide, FundRow, LsRow, RotSide, RotSum, TradeRow, Trades,
@@ -190,11 +190,17 @@ function TradeList({ rows, empty }: { rows: TradeRow[]; empty: string }) {
  */
 function useBigTrades(win: BigWin) {
   const cached = useLive((s) => s.trades);
-  const [rows, setRows] = useState<Trades | null>(null);
+  // Окно уже подтянуто при запуске — берём сразу, без скелета.
+  const [rows, setRows] = useState<Trades | null>(() => (win === "24h" ? null : peekBig(win) ?? null));
 
   useEffect(() => {
     if (win === "24h") {
       setRows(null);
+      return;
+    }
+    const hit = peekBig(win);
+    if (hit) {
+      setRows(hit);
       return;
     }
     const ctrl = new AbortController();
@@ -529,8 +535,8 @@ function FlowBody() {
 
   const query = raw.trim();
   const [page, setPage] = useState(1);
-  const [rows, setRows] = useState<FlowRow[] | null>(null);
-  const [qTotal, setQTotal] = useState<number | null>(null);
+  const [rows, setRows] = useState<FlowRow[] | null>(() => peekFlow(win, query, 0, side)?.rows ?? null);
+  const [qTotal, setQTotal] = useState<number | null>(() => peekFlow(win, query, 0, side)?.total ?? null);
   const [busy, setBusy] = useState(false);
 
   const bucket = flow[win];
@@ -548,6 +554,13 @@ function FlowBody() {
   useEffect(() => {
     if (!query && side === "all" && page === 1) {
       setRows(null);
+      setBusy(false);
+      return;
+    }
+    const hit = peekFlow(win, query, (page - 1) * FLOW_PAGE, side);
+    if (hit) {
+      setRows(hit.ok ? hit.rows ?? [] : []);
+      if (query) setQTotal(hit.total ?? 0);
       setBusy(false);
       return;
     }
@@ -730,8 +743,8 @@ function LsBody() {
 
   const query = raw.trim();
   const [page, setPage] = useState(1);
-  const [rows, setRows] = useState<LsRow[] | null>(null);
-  const [qTotal, setQTotal] = useState<number | null>(null);
+  const [rows, setRows] = useState<LsRow[] | null>(() => peekLs(win, query, 0, side, cls)?.rows ?? null);
+  const [qTotal, setQTotal] = useState<number | null>(() => peekLs(win, query, 0, side, cls)?.total ?? null);
   const [busy, setBusy] = useState(false);
 
   const local = !query && side === "all" && page === 1;
@@ -743,6 +756,13 @@ function LsBody() {
   useEffect(() => {
     if (!query && side === "all" && page === 1) {
       setRows(null);
+      setBusy(false);
+      return;
+    }
+    const hit = peekLs(win, query, (page - 1) * FLOW_PAGE, side, cls);
+    if (hit) {
+      setRows(hit.ok ? hit.rows ?? [] : []);
+      setQTotal(hit.total ?? 0);
       setBusy(false);
       return;
     }

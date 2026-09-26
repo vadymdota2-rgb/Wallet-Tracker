@@ -9,6 +9,7 @@
 import { fetchBootstrap, fetchMarket, lastStatus } from "./api";
 import { initData } from "./telegram";
 import { useLive } from "../store/live";
+import { prefetchAll } from "./prefetch";
 
 const OK_DELAY = 180_000;
 const MIN_DELAY = 8_000;
@@ -28,6 +29,10 @@ async function pull(): Promise<boolean> {
   }
   live.apply(data);
   if (!signed) live.setStatus("anon");
+  /* Главный экран уже нарисован из выгрузки — теперь в фоне подтягиваем всё,
+     что раньше грузилось только по нажатию. Чуть позже, чтобы не спорить с
+     первой отрисовкой за сеть. */
+  setTimeout(() => void prefetchAll(), 400);
   return true;
 }
 

@@ -18,10 +18,10 @@ import { t } from "../i18n/t";
 import { num, pct, px, signed, usd } from "../lib/format";
 import { ago } from "../lib/relative";
 import {
-  candlesFrom, fetchCandles, SPOT_TFS, TF_LABEL, TIMEFRAMES,
+  candlesFrom, fetchCandles, peekCandles, SPOT_TFS, TF_LABEL, TIMEFRAMES,
   type Candle, type SpotTf, type Timeframe,
 } from "../lib/klines";
-import { fetchTokenHist } from "../lib/api";
+import { fetchTokenHist, peekTokenHist } from "../lib/api";
 import { CoinIcon, normalizeSym } from "../components/CoinIcon";
 import { Area, BuySellBar, Candles } from "../components/Chart";
 import { Card, Empty, Row, SectionTitle, Segmented, Skeleton, Tiles } from "../components/ui";
@@ -45,10 +45,16 @@ export function CoinScreen({ arg, arg2 }: ScreenProps) {
   const hasAddr = /^0x[0-9a-fA-F]{40}$/.test(addr);
 
   const [spotTf, setSpotTf] = useState<SpotTf>("1d");
-  const [candles, setCandles] = useState<Candle[] | null>(null);
-  const [hist, setHist] = useState<[number, number][] | null>(null);
+  const [candles, setCandles] = useState<Candle[] | null>(() => peekCandles(sym, tf) ?? null);
+  const [hist, setHist] = useState<[number, number][] | null>(() =>
+    hasAddr ? peekTokenHist(addr)?.hist ?? null : null);
 
   useEffect(() => {
+    const hit = peekCandles(sym, tf);
+    if (hit) {
+      setCandles(hit);
+      return;
+    }
     const ctrl = new AbortController();
     setCandles(null);
     void fetchCandles(sym, tf, ctrl.signal).then((c) => {
@@ -62,6 +68,11 @@ export function CoinScreen({ arg, arg2 }: ScreenProps) {
   useEffect(() => {
     if (!hasAddr) {
       setHist([]);
+      return;
+    }
+    const hit = peekTokenHist(addr);
+    if (hit?.ok) {
+      setHist(hit.hist ?? []);
       return;
     }
     const ctrl = new AbortController();

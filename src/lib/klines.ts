@@ -8,6 +8,7 @@
  * интерполяции между ценой входа и текущей: по виду обычный график, по сути
  * ничего.
  */
+import { peek, remember } from "./memo";
 import type { DictKey } from "../i18n/types";
 
 export interface Candle {
@@ -106,7 +107,21 @@ function pair(sym: string): string {
   return s.replace(/[^A-Z0-9]/g, "");
 }
 
-export async function fetchCandles(
+const CANDLE_TTL = 2 * 60_000;
+const candleKey = (sym: string, tf: Timeframe) => `candles:${pair(sym)}:${tf}`;
+
+/** Свечи из памяти — если подгрузка при запуске их уже принесла. */
+export const peekCandles = (sym: string, tf: Timeframe) => peek<Candle[]>(candleKey(sym, tf), CANDLE_TTL);
+
+/**
+ * Свечи монеты. Из памяти, если свежие; одинаковые запросы не дублируются.
+ * Отмена экрана загрузку не рвёт: ответ пригодится следующему открытию.
+ */
+export function fetchCandles(sym: string, tf: Timeframe, _signal?: AbortSignal): Promise<Candle[]> {
+  return remember(candleKey(sym, tf), CANDLE_TTL, () => loadCandles(sym, tf), (c) => c.length >= 3);
+}
+
+async function loadCandles(
   sym: string,
   tf: Timeframe,
   signal?: AbortSignal,

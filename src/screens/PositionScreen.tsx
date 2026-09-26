@@ -11,7 +11,7 @@ import { useApp } from "../store/app";
 import { useLive, walletByAddr } from "../store/live";
 import { t } from "../i18n/t";
 import { lev as levFmt, num, pct, px, signed, usd } from "../lib/format";
-import { fetchCandles, TF_LABEL, TIMEFRAMES, type Candle, type Timeframe } from "../lib/klines";
+import { fetchCandles, peekCandles, TF_LABEL, TIMEFRAMES, type Candle, type Timeframe } from "../lib/klines";
 import { CoinIcon } from "../components/CoinIcon";
 import { Candles } from "../components/Chart";
 import { Hero } from "../components/Hero";
@@ -30,9 +30,14 @@ export function PositionScreen({ arg, arg2 }: ScreenProps) {
   const p = w && Number.isInteger(idx) ? w.pos[idx] : undefined;
   const sym = p?.sym ?? "";
 
-  const [candles, setCandles] = useState<Candle[] | null>(null);
+  const [candles, setCandles] = useState<Candle[] | null>(() => (sym ? peekCandles(sym, tf) ?? null : null));
   useEffect(() => {
     if (!sym) return;
+    const hit = peekCandles(sym, tf);
+    if (hit) {
+      setCandles(hit);
+      return;
+    }
     const ctrl = new AbortController();
     setCandles(null);
     void fetchCandles(sym, tf, ctrl.signal).then((c) => {

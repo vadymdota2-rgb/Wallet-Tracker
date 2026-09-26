@@ -18,7 +18,7 @@ import { t } from "../i18n/t";
 import { num, pct, px, signed, usd } from "../lib/format";
 import { holdTime } from "../lib/labels";
 import { candlesFrom, TF_LABEL, SPOT_TFS, type SpotTf } from "../lib/klines";
-import { fetchTokenHist } from "../lib/api";
+import { fetchTokenHist, peekTokenHist } from "../lib/api";
 import { CoinIcon } from "../components/CoinIcon";
 import { Candles } from "../components/Chart";
 import { Hero } from "../components/Hero";
@@ -34,10 +34,16 @@ export function SpotScreen({ arg, arg2 }: ScreenProps) {
   const token = h?.token ?? "";
 
   const [tf, setTf] = useState<SpotTf>("1d");
-  const [hist, setHist] = useState<[number, number][] | null>(null);
+  const [hist, setHist] = useState<[number, number][] | null>(() =>
+    token ? peekTokenHist(token)?.hist ?? null : null);
 
   useEffect(() => {
     if (!token) return;
+    const hit = peekTokenHist(token);
+    if (hit?.ok) {
+      setHist(hit.hist ?? []);
+      return;
+    }
     const ctrl = new AbortController();
     setHist(null);
     void fetchTokenHist(token, ctrl.signal).then((d) => {

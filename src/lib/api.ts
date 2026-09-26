@@ -6,6 +6,7 @@
  * когда принимал — по одному номеру в адресе открывался чужой аккаунт.
  */
 import { initData } from "./telegram";
+import { peek, remember } from "./memo";
 import type {
   Bootstrap, Deal, FlowRow, FundRow, LsRow, MutationResult, RotSide, TokenHist, Trades,
   WalletLive,
@@ -55,6 +56,24 @@ async function call<T>(path: string, opts: Opts = {}): Promise<T | null> {
   }
 }
 
+/** Ответ годен для памяти: пришёл и не отказ. */
+const good = (v: unknown): boolean =>
+  v !== null && typeof v === "object" && (v as { ok?: boolean }).ok !== false;
+
+/** Сколько живут ответы в памяти. Живые позиции — минуту, остальное дольше:
+ *  сервер и сам пересчитывает их не чаще. */
+const TTL = {
+  wallet: 60_000,
+  token: 10 * 60_000,
+  board: 3 * 60_000,
+  deals: 5 * 60_000,
+};
+
+/** GET из памяти: один путь — один ответ, и экран, и подгрузка ждут его же. */
+function cachedGet<T>(path: string, ttl: number): Promise<T | null> {
+  return remember<T | null>(path, ttl, () => call<T>(path), good);
+}
+
 /** Полная выгрузка: личное и общее одним запросом. */
 export function fetchBootstrap(signal?: AbortSignal): Promise<Bootstrap | null> {
   return call<Bootstrap>("/api/bootstrap", { signal });
@@ -67,22 +86,27 @@ export function fetchMarket(signal?: AbortSignal): Promise<Bootstrap | null> {
 
 /**
  * Позиции и остаток одного кошелька — живьём из Hyperliquid. Отдельно от
- * общей выдачи: ходить туда за каждым кошельком при каждом открытии
- * приложения незачем, смотрят их, только когда откроют сам кошелёк.
+ * общей выдачи: она собирается для всех разом, а это — по одному кошельку.
+ * При запуске подгрузка проходит по всем кошелькам человека заранее.
  */
-export function fetchWallet(addr: string, signal?: AbortSignal): Promise<WalletLive | null> {
-  return call<WalletLive>(`/api/wallet?addr=${encodeURIComponent(addr)}`, { signal });
+const walletPath = (addr: string) => `/api/wallet?addr=${encodeURIComponent(addr)}`;
+export function fetchWallet(addr: string, _signal?: AbortSignal): Promise<WalletLive | null> {
+  return cachedGet<WalletLive>(walletPath(addr), TTL.wallet);
 }
 
 /** Почасовые цены BSC-токена за три месяца — из них строятся свечи. */
-export function fetchTokenHist(addr: string, signal?: AbortSignal): Promise<TokenHist | null> {
-  return call<TokenHist>(`/api/token?addr=${encodeURIComponent(addr)}`, { signal });
+const tokenPath = (addr: string) => `/api/token?addr=${encodeURIComponent(addr.toLowerCase())}`;
+export function fetchTokenHist(addr: string, _signal?: AbortSignal): Promise<TokenHist | null> {
+  return cachedGet<TokenHist>(tokenPath(addr), TTL.token);
 }
+export const peekTokenHist = (addr: string) => peek<TokenHist | null>(tokenPath(addr), TTL.token);
 
 /** Крупнейшие сделки за окно. Окна те же, что в боте: 1h, 24h, 7d, 30d. */
-export function fetchBig(win: string, signal?: AbortSignal): Promise<Trades | null> {
-  return call<Trades>(`/api/big?win=${encodeURIComponent(win)}`, { signal });
+const bigPath = (win: string) => `/api/big?win=${encodeURIComponent(win)}`;
+export function fetchBig(win: string, _signal?: AbortSignal): Promise<Trades | null> {
+  return cachedGet<Trades>(bigPath(win), TTL.board);
 }
+export const peekBig = (win: string) => peek<Trades | null>(bigPath(win), TTL.board);
 
 export const addWallet = (addr: string, name: string) =>
   call<MutationResult>("/api/wallets", { method: "POST", body: { addr, name } });
@@ -106,52 +130,53 @@ export const setThreshold = (usd: number) =>
  * тысячи записей с рядами при каждом запуске. Искать человек хочет среди
  * всех, поэтому поиск уходит на сервер.
  */
+const flowPath = (win: string, q: string, offset: number, side: string) =>
+  `/api/flow?win=${encodeURIComponent(win)}&q=${encodeURIComponent(q)}` +
+  `&offset=${offset}&side=${encodeURIComponent(side)}`;
+type Page<R> = { ok?: boolean; rows?: R[]; total?: number };
 export const fetchFlow = (
   win: string,
   q: string,
   offset = 0,
   side = "all",
-  signal?: AbortSignal,
-) =>
-  call<{ ok?: boolean; rows?: FlowRow[]; total?: number }>(
-    `/api/flow?win=${encodeURIComponent(win)}&q=${encodeURIComponent(q)}` +
-      `&offset=${offset}&side=${encodeURIComponent(side)}`,
-    { signal },
-  );
+  _signal?: AbortSignal,
+) => cachedGet<Page<FlowRow>>(flowPath(win, q, offset, side), TTL.board);
+export const peekFlow = (win: string, q: string, offset = 0, side = "all") =>
+  peek<Page<FlowRow> | null>(flowPath(win, q, offset, side), TTL.board);
 
 /** Страница раздела «Лонг / Шорт». Те же правила, что у потока. */
+const lsPath = (win: string, q: string, offset: number, side: string, cls: string) =>
+  `/api/ls?win=${encodeURIComponent(win)}&q=${encodeURIComponent(q)}` +
+  `&offset=${offset}&side=${encodeURIComponent(side)}&cls=${encodeURIComponent(cls)}`;
 export const fetchLs = (
   win: string,
   q: string,
   offset = 0,
   side = "all",
   cls = "crypto",
-  signal?: AbortSignal,
-) =>
-  call<{ ok?: boolean; rows?: LsRow[]; total?: number }>(
-    `/api/ls?win=${encodeURIComponent(win)}&q=${encodeURIComponent(q)}` +
-      `&offset=${offset}&side=${encodeURIComponent(side)}&cls=${encodeURIComponent(cls)}`,
-    { signal },
-  );
+  _signal?: AbortSignal,
+) => cachedGet<Page<LsRow>>(lsPath(win, q, offset, side, cls), TTL.board);
+export const peekLs = (win: string, q: string, offset = 0, side = "all", cls = "crypto") =>
+  peek<Page<LsRow> | null>(lsPath(win, q, offset, side, cls), TTL.board);
 
 /**
  * Страница доски фандинга. Первая приходит с общей выгрузкой, остальные —
  * отсюда: перекосов на крупной бирже под тысячу.
  */
-export const fetchFund = (ex: string, offset = 0, limit = 20, signal?: AbortSignal) =>
-  call<{ ok?: boolean; ex?: string; rows?: FundRow[]; total?: number }>(
+export const fetchFund = (ex: string, offset = 0, limit = 20, _signal?: AbortSignal) =>
+  cachedGet<{ ok?: boolean; ex?: string; rows?: FundRow[]; total?: number }>(
     `/api/fund?ex=${encodeURIComponent(ex)}&offset=${offset}&limit=${limit}`,
-    { signal },
+    TTL.board,
   );
 
 /**
  * Страница столбцов ротации. Первая приходит с общей выгрузкой, остальные —
  * отсюда: монет в окне сотни, и возить их все каждому запуску незачем.
  */
-export const fetchRot = (win: string, offset = 0, limit = 15, signal?: AbortSignal) =>
-  call<{ ok?: boolean; src?: RotSide[]; dst?: RotSide[]; msrc?: number; mdst?: number }>(
+export const fetchRot = (win: string, offset = 0, limit = 15, _signal?: AbortSignal) =>
+  cachedGet<{ ok?: boolean; src?: RotSide[]; dst?: RotSide[]; msrc?: number; mdst?: number }>(
     `/api/rot?win=${encodeURIComponent(win)}&offset=${offset}&limit=${limit}`,
-    { signal },
+    TTL.board,
   );
 
 /**
@@ -161,11 +186,12 @@ export const fetchRot = (win: string, offset = 0, limit = 15, signal?: AbortSign
  * открыл, а тянуть по десять сделок на каждого из ста трейдеров при каждом
  * запуске — это сто запросов к базе ради экрана, куда заходят изредка.
  */
-export const fetchDeals = (addr: string, venue: string, signal?: AbortSignal) =>
-  call<{ ok?: boolean; deals?: Deal[] }>(
-    `/api/deals?addr=${encodeURIComponent(addr)}&venue=${encodeURIComponent(venue)}&n=10`,
-    { signal },
-  );
+const dealsPath = (addr: string, venue: string) =>
+  `/api/deals?addr=${encodeURIComponent(addr.toLowerCase())}&venue=${encodeURIComponent(venue)}&n=10`;
+export const fetchDeals = (addr: string, venue: string, _signal?: AbortSignal) =>
+  cachedGet<{ ok?: boolean; deals?: Deal[] }>(dealsPath(addr, venue), TTL.deals);
+export const peekDeals = (addr: string, venue: string) =>
+  peek<{ ok?: boolean; deals?: Deal[] } | null>(dealsPath(addr, venue), TTL.deals);
 
 /**
  * Право на забвение. Сервер удаляет те же таблицы, что команда /forgetme в
