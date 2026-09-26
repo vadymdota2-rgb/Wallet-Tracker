@@ -393,7 +393,8 @@ export function TileNav<T extends string>({
 }: {
   value: T;
   /** venue — значок площадки уголком: знак говорит «что», значок «где». */
-  options: { id: T; ic: ReactNode; venue?: "spot" | "perp"; label: ReactNode }[];
+  /** lock — раздел за подпиской: замочек уголком, напротив значка площадки. */
+  options: { id: T; ic: ReactNode; venue?: "spot" | "perp"; lock?: boolean; label: ReactNode }[];
   onChange: (id: T) => void;
   cols?: number;
   label?: string;
@@ -427,6 +428,7 @@ export function TileNav<T extends string>({
               <VenueMark venue={o.venue} size={13} />
             </span>
           ) : null}
+          {o.lock ? <span className="v-lock" aria-label="Premium">🔒</span> : null}
           <span className="v-ic" aria-hidden="true">{o.ic}</span>
           <span>{o.label}</span>
         </button>

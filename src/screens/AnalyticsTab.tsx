@@ -104,16 +104,18 @@ const VIEWS: {
   id: BigView;
   ic: ReactNode;
   venue?: "spot" | "perp";
+  /** За подпиской — как в боте: всё, что про фьючерсы. */
+  prem?: boolean;
   label: (t: (k: DictKey) => string) => string;
 }[] = [
   { id: "flow", ic: <NetFlowGlyph size={22} />, venue: "spot", label: () => "NetFlow" },
   { id: "spot", ic: <OrdersGlyph size={22} />, venue: "spot", label: (tr) => tr("ui_tab_orders") },
   { id: "rot", ic: <RotationGlyph size={22} />, venue: "spot", label: (tr) => tr("ui_rotation") },
-  { id: "ls", ic: <PositionsGlyph size={22} />, venue: "perp", label: (tr) => tr("ui_tab_ls") },
-  { id: "perp", ic: <StackGlyph size={22} />, venue: "perp", label: (tr) => tr("ui_tab_positions") },
+  { id: "ls", ic: <PositionsGlyph size={22} />, venue: "perp", prem: true, label: (tr) => tr("ui_tab_ls") },
+  { id: "perp", ic: <StackGlyph size={22} />, venue: "perp", prem: true, label: (tr) => tr("ui_tab_positions") },
   /* Уголка площадки у фандинга нет: он теперь с нескольких бирж, и значок
      одной из них обещал бы, что остальных тут нет. */
-  { id: "fund", ic: <FundingGlyph size={22} />, label: (tr) => tr("ui_tab_funding") },
+  { id: "fund", ic: <FundingGlyph size={22} />, prem: true, label: (tr) => tr("ui_tab_funding") },
 ];
 
 /**
@@ -297,6 +299,7 @@ export function AnalyticsTab() {
             id: v.id,
             ic: v.ic,
             venue: v.venue,
+            lock: Boolean(v.prem) && !premium,
             label: v.label((k) => t(lang, k)),
           }))}
         />
@@ -337,33 +340,39 @@ export function AnalyticsTab() {
       {view === "ls" ? (
         <Card>
           <SectionTitle note={t(lang, "ls_hint")}>{t(lang, "ui_tab_ls")}</SectionTitle>
-          {/* Класс инструментов стоит первым: это самый крупный выбор, всё
-              остальное — окно, перевес, поиск — уточняет уже его. */}
-          <Segmented<CoinClass>
-            value={lsCls}
-            onChange={setLsCls}
-            options={LS_CLASSES.map((v) => ({ id: v.id, label: t(lang, v.key) }))}
-          />
-          <LsHead />
-          <Segmented<FlowWin>
-            value={flowWin}
-            onChange={setFlowWin}
-            options={FLOW_WINS.map((w) => ({ id: w.id, label: t(lang, w.key) }))}
-          />
-          <Segmented<FlowSide>
-            value={flowSide}
-            onChange={setFlowSide}
-            options={LS_SIDES.map((v) => ({ id: v.id, label: t(lang, v.key) }))}
-          />
-          <input
-            className="find"
-            value={query}
-            placeholder={t(lang, "flow_search_prompt")}
-            onChange={(e) => setQuery(e.target.value)}
-            inputMode="search"
-            aria-label={t(lang, "flow_search_btn")}
-          />
-          <LsBody />
+          {/* Лонги и шорты — фьючерсы Hyperliquid, а они за подпиской, как
+              крупные позиции и фандинг: бесплатному сервер их не отдаёт. */}
+          {!premium ? locked : (
+            <>
+              {/* Класс инструментов стоит первым: это самый крупный выбор, всё
+                  остальное — окно, перевес, поиск — уточняет уже его. */}
+              <Segmented<CoinClass>
+                value={lsCls}
+                onChange={setLsCls}
+                options={LS_CLASSES.map((v) => ({ id: v.id, label: t(lang, v.key) }))}
+              />
+              <LsHead />
+              <Segmented<FlowWin>
+                value={flowWin}
+                onChange={setFlowWin}
+                options={FLOW_WINS.map((w) => ({ id: w.id, label: t(lang, w.key) }))}
+              />
+              <Segmented<FlowSide>
+                value={flowSide}
+                onChange={setFlowSide}
+                options={LS_SIDES.map((v) => ({ id: v.id, label: t(lang, v.key) }))}
+              />
+              <input
+                className="find"
+                value={query}
+                placeholder={t(lang, "flow_search_prompt")}
+                onChange={(e) => setQuery(e.target.value)}
+                inputMode="search"
+                aria-label={t(lang, "flow_search_btn")}
+              />
+              <LsBody />
+            </>
+          )}
         </Card>
       ) : null}
 
@@ -387,27 +396,33 @@ export function AnalyticsTab() {
 
       {view === "perp" ? (
         <Card>
-          <SectionTitle note={`${t(lang, wantLong ? "ls_side_long" : "ls_side_short")} · ${num(perpRows.length)}`}>
+          {/* Бесплатному — без счётчика и без кнопок: «Лонги · 0» над замком
+              читалось как «лонгов нет», а переключатели ничего не меняли. */}
+          <SectionTitle note={premium ? `${t(lang, wantLong ? "ls_side_long" : "ls_side_short")} · ${num(perpRows.length)}` : undefined}>
             {t(lang, "big_perp_title")}
           </SectionTitle>
-          {/* Тот же раздельник, что в «Лонг / Шорт», и та же выбранная
-              кнопка: акции с металлами и крипта — разные рынки, а не разные
-              разделы, и переключать их дважды человек не должен. */}
-          <Segmented<CoinClass>
-            value={lsCls}
-            onChange={setLsCls}
-            options={LS_CLASSES.map((v) => ({ id: v.id, label: t(lang, v.key) }))}
-          />
-          {/* Лонги и шорты — та же кнопка, что покупки и продажи на споте:
-              человек один раз выбирает, чью сторону смотрит. */}
-          <Segmented<BigSide>
-            value={bigSide}
-            onChange={setBigSide}
-            options={PERP_SIDES.map((v) => ({ id: v.id, label: t(lang, v.key) }))}
-          />
-          {winPicker}
-          {!premium ? locked : big.loading ? <Skeleton rows={3} /> : (
-            <TradeList rows={perpRows} empty={t(lang, "big_empty")} />
+          {!premium ? locked : (
+            <>
+              {/* Тот же раздельник, что в «Лонг / Шорт», и та же выбранная
+                  кнопка: акции с металлами и крипта — разные рынки, а не разные
+                  разделы, и переключать их дважды человек не должен. */}
+              <Segmented<CoinClass>
+                value={lsCls}
+                onChange={setLsCls}
+                options={LS_CLASSES.map((v) => ({ id: v.id, label: t(lang, v.key) }))}
+              />
+              {/* Лонги и шорты — та же кнопка, что покупки и продажи на споте:
+                  человек один раз выбирает, чью сторону смотрит. */}
+              <Segmented<BigSide>
+                value={bigSide}
+                onChange={setBigSide}
+                options={PERP_SIDES.map((v) => ({ id: v.id, label: t(lang, v.key) }))}
+              />
+              {winPicker}
+              {big.loading ? <Skeleton rows={3} /> : (
+                <TradeList rows={perpRows} empty={t(lang, "big_empty")} />
+              )}
+            </>
           )}
         </Card>
       ) : null}

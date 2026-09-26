@@ -127,7 +127,8 @@ export function TopTab() {
             {
               id: "perp",
               ic: <VenueMark venue="perp" size={30} />,
-              label: `${venueName("perp")} · ${t(lang, "wl_perp_rank")}${plan === "premium" ? "" : " 🔒"}`,
+              label: `${venueName("perp")} · ${t(lang, "wl_perp_rank")}`,
+              lock: plan !== "premium",
             },
           ]}
         />

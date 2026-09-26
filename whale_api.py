@@ -499,7 +499,9 @@ def for_plan(data: dict, prem: bool) -> dict:
     то не должно уходить с сервера вовсе. Выгрузка при этом не копируется
     глубоко: общий кэш остаётся целым для подписчиков.
 
-    Cortex не срезается: он пока бесплатный.
+    Закрыто всё, что про фьючерсы Hyperliquid: доска перпов, крупные позиции,
+    лонги и шорты, фандинг, позиции кошельков. Cortex не срезается: он пока
+    бесплатный.
     """
     if prem or not isinstance(data, dict):
         return data
@@ -516,7 +518,8 @@ def for_plan(data: dict, prem: bool) -> dict:
         out["trades"] = {**out["trades"], "perp": []}
     if isinstance(out.get("perp"), list):
         out["perp"] = []
-    for k in ("fund", "fundN"):
+    # Лонги и шорты — тоже Hyperliquid.
+    for k in ("fund", "fundN", "ls"):
         if k in out:
             out[k] = {}
     if isinstance(out.get("marketFeed"), list):
@@ -5594,6 +5597,9 @@ class Handler(BaseHTTPRequestHandler):
                 cls = (qs.get("cls", ["crypto"])[0] or "crypto").strip()
                 if cls not in ("crypto", "rwa", "all"):
                     cls = "crypto"
+                if not chat_premium(self._user(qs)):
+                    self._json(403, {"ok": False, "error": "premium"})
+                    return
                 try:
                     offset = int(qs.get("offset", ["0"])[0])
                 except (TypeError, ValueError):

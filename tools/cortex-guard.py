@@ -688,7 +688,7 @@ say("выгрузка срезается по своему же плану", "fo
 say("выгрузка без подписи — как бесплатная", "}, False))" in api)
 say("крупные сделки срезаются", "for_plan(big_trades(win, hours), chat_premium(self._user(qs)))" in api)
 say("фандинг и сделки перпов — отказ без подписки",
-    api.count('self._json(403, {"ok": False, "error": "premium"})') == 2)
+    api.count('self._json(403, {"ok": False, "error": "premium"})') >= 2)
 say("живой кошелёк срезается", "), is_premium(cur, chat)))" in api)
 top = read(f"{APP}/src/screens/TopTab.tsx")
 say("рейтинг перпов за замком", 'venue === "perp" && plan !== "premium"' in top and "<PremiumLock fromTab />" in top)
@@ -696,6 +696,12 @@ say("позиции за замком, а не «позиций нет»",
     "<PremiumLock />" in read(f"{APP}/src/screens/PositionsScreen.tsx")
     and "<PremiumLock />" in read(f"{APP}/src/screens/PositionScreen.tsx")
     and "<PremiumLock />" in read(f"{APP}/src/screens/WalletScreen.tsx"))
+ana = read(f"{APP}/src/screens/AnalyticsTab.tsx")
+say("лонг/шорт, крупные позиции и фандинг — за подпиской",
+    ana.count("prem: true") == 3 and "lock: Boolean(v.prem) && !premium" in ana)
+say("лонг/шорт закрыт и на экране, и на сервере",
+    ana.count("{!premium ? locked : (") >= 2 and '"fund", "fundN", "ls"' in fp
+    and api.count('self._json(403, {"ok": False, "error": "premium"})') == 3)
 prem_scr = read(f"{APP}/src/screens/PremiumScreen.tsx")
 say("цена на экране премиума — один раз, на кнопке",
     'title={t(lang, "pay_stars_btn")} value=' not in prem_scr and 'title={t(lang, "pay_usdt_btn")} value=' not in prem_scr)
