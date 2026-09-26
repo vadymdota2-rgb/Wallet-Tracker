@@ -712,6 +712,8 @@ more = read(f"{APP}/src/screens/MoreTab.tsx")
 say("открытые позиции — только в кошельке",
     'open("positions")' not in more and '"menu_positions"' not in read(f"{APP}/src/App.tsx")
     and not os.path.exists(f"{APP}/src/screens/PositionsScreen.tsx"))
+say("состояние модели — из Cortex, а не из «Ещё»",
+    'open("model")' not in more and 'open("model")' in cortex)
 say("порог алертов — своим значком, без задвоенного эмодзи",
     "<ThresholdGlyph size={22} />" in more and 'bare(t(lang, "menu_alert_threshold"))' in more)
 print("ПРОВАЛОВ:", bad)

@@ -3,7 +3,8 @@
  *
  * «Открытых позиций» здесь нет: позиции кошелька смотрят в самом кошельке
  * («Мои кошельки» → кошелёк), и отдельная строка вела в тот же список второй
- * дорогой. Значок уже стоит слева, поэтому из подписи он снимается — иначе
+ * дорогой. «Модели» тоже нет: её состояние открывается из вкладки Cortex, где
+ * оно и нужно. Значок уже стоит слева, поэтому из подписи он снимается — иначе
  * каждый пункт начинался с двух одинаковых картинок подряд.
  */
 import { useApp } from "../store/app";
@@ -45,12 +46,6 @@ export function MoreTab() {
           sub={t(lang, "lang_current")}
           value={langName ? `${langName.flag} ${langName.name}` : lang}
           onClick={() => open("lang")}
-        />
-        <Row
-          icon={<span aria-hidden="true">🧠</span>}
-          title={bare(t(lang, "ai_st_btn"))}
-          sub={t(lang, "ai_st_title")}
-          onClick={() => open("model")}
         />
         <Row
           icon={<span aria-hidden="true">❓</span>}
