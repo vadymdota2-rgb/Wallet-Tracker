@@ -339,6 +339,9 @@
 .row.tap:active { opacity: 0.6; border-color: var(--line-2); }
 
 .row-ico { flex: 0 0 auto; display: grid; place-items: center; font-size: 17px; }
+/* Нарисованный значок в строке меню — той же ширины, что соседние эмодзи, и
+   того же голубого, что значки нижнего меню. */
+.row-glyph { display: grid; place-items: center; width: 22px; color: var(--glow); }
 /* Значки пунктов премиума — разной ширины (⚡ уже 🔵): без общей ширины
    текст пунктов стоял бы неровно. */
 .perk-ic {

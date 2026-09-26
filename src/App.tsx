@@ -39,7 +39,6 @@ const TABS: { id: Tab; key: DictKey; glyph: ReactNode }[] = [
 const SCREEN_TITLE: Record<ScreenName, DictKey> = {
   wallet: "account_title",
   position: "hl_open_positions",
-  positions: "menu_positions",
   coin: "flow_title",
   signal: "ai_title",
   addWallet: "add_wallet_title",
@@ -56,7 +55,6 @@ const SCREEN_TITLE: Record<ScreenName, DictKey> = {
 };
 
 const MENU: { name: ScreenName; key: DictKey; glyph: ReactNode }[] = [
-  { name: "positions", key: "menu_positions", glyph: "📈" },
   { name: "threshold", key: "menu_alert_threshold", glyph: <ThresholdGlyph /> },
   { name: "premium", key: "menu_premium", glyph: "⭐" },
   { name: "lang", key: "menu_languages", glyph: "🌐" },

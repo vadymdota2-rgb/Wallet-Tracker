@@ -1,4 +1,5 @@
-/** Помощь — тот же текст, что бот показывает по кнопке ❓. */
+/** Помощь — тот же текст, что бот показывает по кнопке ❓. Без пункта
+ *  «Открытые позиции»: в приложении они внутри кошелька, отдельного меню нет. */
 import { Frame } from "./Screen";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
@@ -8,7 +9,6 @@ const MENU: Parameters<typeof t>[1][] = [
   "help_menu_add",
   "help_menu_mywallets",
   "help_menu_top",
-  "help_menu_positions",
   "help_menu_threshold",
   "help_menu_premium",
   "help_menu_languages",

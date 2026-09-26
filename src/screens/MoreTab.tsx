@@ -1,10 +1,17 @@
-/** «Ещё»: премиум, язык, порог, помощь — остаток главного меню бота. */
+/**
+ * «Ещё»: премиум, язык, порог, помощь — остаток главного меню бота.
+ *
+ * «Открытых позиций» здесь нет: позиции кошелька смотрят в самом кошельке
+ * («Мои кошельки» → кошелёк), и отдельная строка вела в тот же список второй
+ * дорогой. Значок уже стоит слева, поэтому из подписи он снимается — иначе
+ * каждый пункт начинался с двух одинаковых картинок подряд.
+ */
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import { bare, t } from "../i18n/t";
 import { LANGS } from "../i18n";
 import { num, usd } from "../lib/format";
-import { Card, Row, SectionTitle } from "../components/ui";
+import { Card, Row, SectionTitle, ThresholdGlyph } from "../components/ui";
 
 export function MoreTab() {
   const lang = useApp((s) => s.lang);
@@ -20,40 +27,34 @@ export function MoreTab() {
         <SectionTitle>{t(lang, "menu_title")}</SectionTitle>
         <Row
           icon={<span aria-hidden="true">⭐</span>}
-          title={t(lang, "menu_premium")}
+          title={bare(t(lang, "menu_premium"))}
           sub={me.plan === "premium" ? `${t(lang, "pr_days_left")} ${num(days)}` : t(lang, "pr_unlock")}
           value={me.plan === "premium" ? "✓" : "🔒"}
           onClick={() => open("premium")}
         />
         <Row
-          icon={<span aria-hidden="true">💰</span>}
-          title={t(lang, "menu_alert_threshold")}
+          icon={<span className="row-glyph"><ThresholdGlyph size={22} /></span>}
+          title={bare(t(lang, "menu_alert_threshold"))}
           sub={t(lang, "threshold_desc")}
           value={usd(me.threshold)}
           onClick={() => open("threshold")}
         />
         <Row
-          icon={<span aria-hidden="true">📈</span>}
-          title={t(lang, "menu_positions")}
-          sub={t(lang, "hl_positions_choose")}
-          onClick={() => open("positions")}
-        />
-        <Row
           icon={<span aria-hidden="true">🌐</span>}
-          title={t(lang, "menu_languages")}
+          title={bare(t(lang, "menu_languages"))}
           sub={t(lang, "lang_current")}
           value={langName ? `${langName.flag} ${langName.name}` : lang}
           onClick={() => open("lang")}
         />
         <Row
           icon={<span aria-hidden="true">🧠</span>}
-          title={t(lang, "ai_st_btn")}
+          title={bare(t(lang, "ai_st_btn"))}
           sub={t(lang, "ai_st_title")}
           onClick={() => open("model")}
         />
         <Row
           icon={<span aria-hidden="true">❓</span>}
-          title={t(lang, "menu_help")}
+          title={bare(t(lang, "menu_help"))}
           sub={t(lang, "help_support")}
           onClick={() => open("help")}
         />

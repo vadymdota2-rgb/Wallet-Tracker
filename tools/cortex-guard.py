@@ -693,8 +693,7 @@ say("живой кошелёк срезается", "), is_premium(cur, chat)))"
 top = read(f"{APP}/src/screens/TopTab.tsx")
 say("рейтинг перпов за замком", 'venue === "perp" && plan !== "premium"' in top and "<PremiumLock fromTab />" in top)
 say("позиции за замком, а не «позиций нет»",
-    "<PremiumLock />" in read(f"{APP}/src/screens/PositionsScreen.tsx")
-    and "<PremiumLock />" in read(f"{APP}/src/screens/PositionScreen.tsx")
+    "<PremiumLock />" in read(f"{APP}/src/screens/PositionScreen.tsx")
     and "<PremiumLock />" in read(f"{APP}/src/screens/WalletScreen.tsx"))
 ana = read(f"{APP}/src/screens/AnalyticsTab.tsx")
 say("лонг/шорт, крупные позиции и фандинг — за подпиской",
@@ -708,5 +707,12 @@ say("цена на экране премиума — один раз, на кн�
 say("оплата выше описания", prem_scr.index('className="stack-actions"') < prem_scr.index('"pr_includes"'))
 say("Cortex назван бесплатным", '"pr_free_cortex_d"' in prem_scr)
 
+# --- «Ещё» без второй дороги к позициям -------------------------------------
+more = read(f"{APP}/src/screens/MoreTab.tsx")
+say("открытые позиции — только в кошельке",
+    'open("positions")' not in more and '"menu_positions"' not in read(f"{APP}/src/App.tsx")
+    and not os.path.exists(f"{APP}/src/screens/PositionsScreen.tsx"))
+say("порог алертов — своим значком, без задвоенного эмодзи",
+    "<ThresholdGlyph size={22} />" in more and 'bare(t(lang, "menu_alert_threshold"))' in more)
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
