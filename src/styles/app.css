@@ -341,7 +341,18 @@
 .row-ico { flex: 0 0 auto; display: grid; place-items: center; font-size: 17px; }
 /* Значки пунктов премиума — разной ширины (⚡ уже 🔵): без общей ширины
    текст пунктов стоял бы неровно. */
-.perk-ic { display: inline-block; width: 24px; text-align: center; }
+.perk-ic {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  color: var(--glow);
+}
+/* Светится так же, как выбранная вкладка нижнего меню: это те же значки. */
+.perk-ic > .glyph { filter: drop-shadow(0 0 6px rgb(127 216 255 / 0.45)); }
+.perk-ic > .glyph-brain { opacity: 1; }
+.perk-ic .perk-tag { position: absolute; right: -4px; bottom: -2px; line-height: 0; }
 .row-main { flex: 1 1 auto; min-width: 0; display: grid; gap: 1px; }
 .row-title {
   display: flex;

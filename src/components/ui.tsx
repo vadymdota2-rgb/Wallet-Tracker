@@ -1028,6 +1028,51 @@ export function ThresholdGlyph({ size = 25 }: { size?: number }) {
   );
 }
 
+/**
+ * Колокол — уведомления. Тем же контуром в полторы точки, что значки нижнего
+ * меню: системный 🔔 рядом с ними был бы жёлтым пятном другого рисунка.
+ */
+export function BellGlyph({ size = 22 }: { size?: number }) {
+  return (
+    <svg
+      className="glyph"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M6.2 16.6V11a5.8 5.8 0 0 1 11.6 0v5.6l1.6 1.9H4.6z" />
+      <path d="M10 20.6a2.2 2.2 0 0 0 4 0" />
+      <path d="M12 3.2v1.9" />
+    </svg>
+  );
+}
+
+/** Молния — «быстрее остальных». Тот же контур, что у соседних значков. */
+export function BoltGlyph({ size = 22 }: { size?: number }) {
+  return (
+    <svg
+      className="glyph"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M13.4 2.8 5.6 13.4h5.6l-1 7.8 8.2-11h-5.8z" />
+    </svg>
+  );
+}
+
 /** Плюс в круге — «добавить». Круг роднит его с монетой порога и глазом. */
 /** История сделок: строки списка с точками-маркерами. */
 export function DealsGlyph({ size = 19 }: { size?: number }) {

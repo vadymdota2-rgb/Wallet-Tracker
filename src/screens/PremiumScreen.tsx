@@ -10,7 +10,7 @@
  * Connect, тоже должен уметь заплатить — адрес, сумма и памятка для этого и
  * лежат на виду.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Frame } from "./Screen";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
@@ -20,10 +20,29 @@ import { haptic } from "../lib/telegram";
 import { copyText } from "../lib/copy";
 import { toast } from "../components/Toast";
 import { buyStars, payUsdt, usdtInvoice, warmWallet, type PayEnd, type UsdtInvoice } from "../lib/pay";
-import { Action, Card, Row, SectionTitle } from "../components/ui";
+import {
+  Action,
+  AnalyticsGlyph,
+  BellGlyph,
+  BoltGlyph,
+  Card,
+  CortexGlyph,
+  Row,
+  SectionTitle,
+  TopGlyph,
+  VenueMark,
+  WalletGlyph,
+} from "../components/ui";
 
 
 type Step = "" | "wallet" | "sign" | "wait";
+type Perk = {
+  ic: ReactNode;
+  /** Площадка уголком — как на плитках аналитики. */
+  venue?: "spot" | "perp";
+  title: Parameters<typeof t>[1];
+  text: Parameters<typeof t>[1];
+};
 
 export function PremiumScreen() {
   const lang = useApp((s) => s.lang);
@@ -46,24 +65,38 @@ export function PremiumScreen() {
     if (pay.ton) warmWallet();
   }, [pay.ton]);
 
-  type Key = Parameters<typeof t>[1];
   /* Что даёт подписка — подробно, с пояснением к каждому пункту. Прежний
      список из четырёх строк обрезался на полуслове («Hyperliquid futures:
      ranking, alerts and…»), и за что платить, было не понять. Порядок и
-     содержание — ровно то, что закрывают бот и сервер. */
-  const perks: { ic: string; title: Key; text: Key }[] = [
-    { ic: "🔵", title: "pr_perk_hl_t", text: "pr_perk_hl_d" },
-    { ic: "👛", title: "pr_perk_wallets_t", text: "pr_perk_wallets_d" },
-    { ic: "🔔", title: "pr_perk_alerts_t", text: "pr_perk_alerts_d" },
-    { ic: "🏆", title: "pr_perk_top_t", text: "pr_perk_top_d" },
-    { ic: "⚡", title: "pr_perk_prio_t", text: "pr_perk_prio_d" },
+     содержание — ровно то, что закрывают бот и сервер.
+
+     Значки — те же, что в самом приложении: мозг, кошелёк, медаль и
+     аналитика из нижнего меню, логотипы площадок — как на плитках. Уголком —
+     площадка, к которой пункт относится. Системные эмодзи рядом с ними
+     рисовались бы другим стилем и не совпадали с тем, куда пункт ведёт. */
+  const perks: Perk[] = [
+    { ic: <VenueMark venue="perp" size={26} />, title: "pr_perk_hl_t", text: "pr_perk_hl_d" },
+    { ic: <WalletGlyph size={24} />, title: "pr_perk_wallets_t", text: "pr_perk_wallets_d" },
+    { ic: <BellGlyph size={24} />, venue: "perp", title: "pr_perk_alerts_t", text: "pr_perk_alerts_d" },
+    { ic: <TopGlyph size={24} />, venue: "spot", title: "pr_perk_top_t", text: "pr_perk_top_d" },
+    { ic: <BoltGlyph size={24} />, title: "pr_perk_prio_t", text: "pr_perk_prio_d" },
   ];
   // Что остаётся без подписки: платить за Cortex не нужно, и это сказано прямо.
-  const free: { ic: string; title: Key; text: Key }[] = [
-    { ic: "🧠", title: "ai_title", text: "pr_free_cortex_d" },
-    { ic: "📊", title: "pr_free_market_t", text: "pr_free_market_d" },
-    { ic: "💼", title: "pr_free_wallet_t", text: "pr_free_wallet_d" },
+  const free: Perk[] = [
+    { ic: <CortexGlyph size={30} />, title: "ai_title", text: "pr_free_cortex_d" },
+    { ic: <AnalyticsGlyph size={24} />, venue: "spot", title: "pr_free_market_t", text: "pr_free_market_d" },
+    { ic: <WalletGlyph size={24} />, venue: "spot", title: "pr_free_wallet_t", text: "pr_free_wallet_d" },
   ];
+  const perkIcon = (p: Perk) => (
+    <span className="perk-ic" aria-hidden="true">
+      {p.ic}
+      {p.venue ? (
+        <span className="perk-tag">
+          <VenueMark venue={p.venue} size={12} />
+        </span>
+      ) : null}
+    </span>
+  );
 
   /* Конец любой оплаты выглядит одинаково: сообщение и снятая занятость.
      Состояние экрана после ухода в кошелёк может уже никого не интересовать —
@@ -172,7 +205,7 @@ export function PremiumScreen() {
           <Row
             key={p.title}
             wrap
-            icon={<span className="perk-ic" aria-hidden="true">{p.ic}</span>}
+            icon={perkIcon(p)}
             title={t(lang, p.title)}
             sub={t(lang, p.text)}
           />
@@ -185,7 +218,7 @@ export function PremiumScreen() {
           <Row
             key={p.title}
             wrap
-            icon={<span className="perk-ic" aria-hidden="true">{p.ic}</span>}
+            icon={perkIcon(p)}
             title={t(lang, p.title)}
             sub={t(lang, p.text)}
           />
