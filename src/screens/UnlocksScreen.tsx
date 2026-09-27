@@ -92,6 +92,41 @@ export function UnlocksScreen() {
     return out;
   }, [items, q, filter, nowSec]);
 
+  /* Сводка сверху — по всему календарю, без поиска и фильтра: сколько
+     выходит за неделю и за месяц и какой разлок давит сильнее всех. */
+  const sum = useMemo(() => {
+    const today = Math.floor(nowSec / 86400) * 86400;
+    const win = (days: number) => {
+      let usdSum = 0;
+      let n = 0;
+      for (const e of items ?? []) {
+        if (e.ts < today || e.ts >= today + days * 86400) continue;
+        n += 1;
+        usdSum += e.usd ?? 0;
+      }
+      return { usd: usdSum, n };
+    };
+    let top: UnlockEvent | null = null;
+    for (const e of items ?? []) {
+      if (e.ts < today || e.ts >= today + 30 * 86400) continue;
+      if (!top || (e.pct ?? 0) > (top.pct ?? 0)) top = e;
+    }
+    return { w: win(7), m: win(30), top };
+  }, [items, nowSec]);
+
+  /* По монете целиком — для раскрытой строки: сколько выйдет за год от
+     этого дня и докуда тянется её график. */
+  const coinAhead = (e: UnlockEvent) => {
+    let year = 0;
+    let end = e.ts;
+    for (const x of items ?? []) {
+      if (x.sym !== e.sym || x.ts < e.ts) continue;
+      if (x.ts < e.ts + 365 * 86400) year += x.tokens;
+      end = Math.max(end, x.ts);
+    }
+    return { year, end };
+  };
+
   const chart = (sym: string) => {
     haptic("select");
     setTvSym(sym);
@@ -120,6 +155,38 @@ export function UnlocksScreen() {
           ]}
         />
       </div>
+
+      {items?.length ? (
+        <div className="unl-sum">
+          <div className="unl-sum-t">
+            <small>{t(lang, "unl_7d")}</small>
+            <b>{usd(sum.w.usd)}</b>
+            <small>{t(lang, "unl_count", { n: sum.w.n })}</small>
+          </div>
+          <div className="unl-sum-t">
+            <small>{t(lang, "unl_30d")}</small>
+            <b>{usd(sum.m.usd)}</b>
+            <small>{t(lang, "unl_count", { n: sum.m.n })}</small>
+          </div>
+          {sum.top && sum.top.pct !== null ? (
+            <button
+              type="button"
+              className={`unl-sum-top p-${level(sum.top)}`}
+              onClick={() => {
+                haptic("select");
+                setQuery(sum.top!.sym);
+              }}
+            >
+              <small>{t(lang, "unl_top")}</small>
+              <span>
+                <CoinIcon sym={sum.top.sym} size={18} />
+                <b>{sum.top.sym}</b> · {day(sum.top.ts, nowSec)} ·{" "}
+                <em>{t(lang, "unl_of_circ", { p: pct(sum.top.pct, 1, false) })}</em>
+              </span>
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       {items === null ? (
         failed ? <Empty text={t(lang, "generic_error_retry")} /> : <p className="note dim">{t(lang, "ui_loading")}</p>
@@ -177,6 +244,28 @@ export function UnlocksScreen() {
                             <dd>{px(e.price)}</dd>
                           </>
                         ) : null}
+                        {e.circ ? (
+                          <>
+                            <dt>{t(lang, "unl_circ")}</dt>
+                            <dd>
+                              {qty(e.circ)} {e.sym}
+                            </dd>
+                          </>
+                        ) : null}
+                        {(() => {
+                          const a = coinAhead(e);
+                          return (
+                            <>
+                              <dt>{t(lang, "unl_12m")}</dt>
+                              <dd>
+                                {qty(a.year)} {e.sym}
+                                {e.circ ? ` · ${pct((a.year / e.circ) * 100, 1, false)}` : ""}
+                              </dd>
+                              <dt>{t(lang, "unl_end")}</dt>
+                              <dd>{day(a.end, nowSec)}</dd>
+                            </>
+                          );
+                        })()}
                         {(Object.entries(e.who) as [UnlockWho, number][])
                           .sort((a, b) => b[1] - a[1])
                           .map(([who, n]) => (
