@@ -4472,10 +4472,16 @@ def load_rot(cur: sqlite3.Connection) -> dict:
     last_sell: dict[str, tuple[str, int]] = {}
     # Курсор читаем на ходу, без fetchall: за месяц это полмиллиона строк, и
     # держать их все в памяти незачем — каждая нужна ровно один раз.
+    #
+    # Порядок — по времени, а не «кошелёк, время»: последняя продажа хранится
+    # на каждый кошелёк отдельно, и общего хода времени для этого хватает.
+    # Зато это просмотр отрезка индекса по времени без сортировки выборки —
+    # с сортировкой месяц сделок разбирался дольше, чем сборке кэша отведено
+    # всего, и ротация на проде не доживала до ответа.
     rows = cur.execute(
         "SELECT t.wallet, t.token, t.is_buy, t.usd_nanos, t.timestamp FROM trades t "
         f"WHERE t.timestamp >= ? AND t.usd_nanos > 0 AND t.usd_nanos <= ? {ban} "
-        "ORDER BY t.wallet, t.timestamp",
+        "ORDER BY t.timestamp, t.id",
         (cuts[0][1], MAX_SPOT_USD_NANOS),
     )
     for r in rows:
@@ -4533,6 +4539,56 @@ def load_rot(cur: sqlite3.Connection) -> dict:
         }
     _ROT_ALL = page
     return out
+
+
+# Ротация считается своим потоком, как ставки бирж, а не внутри сборки кэша.
+#
+# Внутри сборки она стояла почти последней, с бюджетом в двадцать пять секунд
+# на всё, и на проде до неё не доходила очередь: каждая сборка начиналась с
+# пустой ротации и такой же её отдавала — «за это окно данных пока нет» во
+# всех пяти окнах. Здесь её ничто не торопит, а сборка берёт готовое.
+ROT_TTL = 180.0
+_ROT_SUM: dict = {}
+_rot_lock = threading.Lock()
+
+
+def rot_latest() -> dict:
+    """Последний посчитанный свод; до первого круга — пустые окна."""
+    with _rot_lock:
+        return _ROT_SUM or empty_rot()
+
+
+def rot_refresh_once() -> float:
+    """Один пересчёт; сколько он занял. Неудача оставляет прошлый свод."""
+    global _ROT_SUM
+    t0 = time.monotonic()
+    cur = open_db(DB)
+    if not cur:
+        return 0.0
+    try:
+        data = load_rot(cur)
+        if any(data.values()):
+            with _rot_lock:
+                _ROT_SUM = data
+        took = time.monotonic() - t0
+        sys.stderr.write(f"[api] ротация: {took:.1f}с, пар за сутки "
+                         f"{(data.get('24') or {}).get('pairs', 0)}\n")
+        return took
+    except Exception as e:
+        sys.stderr.write(f"[api] ротация: {e}\n")
+        return time.monotonic() - t0
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+
+
+def rot_refresher() -> None:
+    while True:
+        took = rot_refresh_once()
+        # Долгий пересчёт — реже: база не должна быть занята им постоянно.
+        time.sleep(max(ROT_TTL, took * 4))
 
 
 ORACLE_FEATURES = (
@@ -5306,7 +5362,8 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
     trades = take("trades", lambda: load_trades(cur, hl), trades, True)
     market_feed = take("feed", lambda: load_feed_market(cur, hl), market_feed, True)
     funding = take("funding", lambda: load_funding(hl), funding)
-    rot = take("rot", lambda: load_rot(cur), rot)
+    # Ротацию считает свой поток (rot_refresher) — здесь только готовое.
+    rot = rot_latest()
     ls = take("ls", lambda: load_ls(hl), {})
     coins = take("coins", lambda: load_coins(cur, hl, flow, []), {})
     return {
@@ -5407,6 +5464,7 @@ def warmup() -> None:
     # Ставки бирж — своим потоком: первый круг успевает до первой сборки, а
     # дальше он обновляет их сам и в бюджет сборки не лезет.
     threading.Thread(target=fund_refresher, daemon=True, name="funding").start()
+    threading.Thread(target=rot_refresher, daemon=True, name="rotation").start()
     cur = open_db(DB)
     hl = open_db(HL_DB)
     if not cur:

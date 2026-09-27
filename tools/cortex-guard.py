@@ -847,5 +847,15 @@ say("экран разлоков: поиск по тикеру и названи
     "e.sym.toLowerCase().includes(q) || e.name.toLowerCase().includes(q)" in unl_scr and 'filter === "big"' in unl_scr)
 say("маршрут /api/unlocks есть", 'if path in ("/unlocks", "/api/unlocks"):' in api)
 
+# --- ротация: своим потоком, не в бюджете сборки кэша ----------------------
+_bp = pybody(api, "def build_public(")
+say("ротация не считается внутри сборки кэша — берётся готовой",
+    "load_rot(" not in _bp and "rot = rot_latest()" in _bp)
+say("поток ротации запускается при старте и не затирает свод пустым",
+    'threading.Thread(target=rot_refresher, daemon=True, name="rotation").start()' in api
+    and "if any(data.values()):" in pybody(api, "def rot_refresh_once("))
+say("ротация идёт по индексу времени, без сортировки выборки",
+    '"ORDER BY t.timestamp, t.id"' in pybody(api, "def load_rot("))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
