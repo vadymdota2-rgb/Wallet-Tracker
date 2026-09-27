@@ -185,7 +185,10 @@ export default function App() {
           <span className="hdr-mark" aria-hidden="true">◱</span>
           {bare(t(lang, titleKey))}
         </h1>
-        <button type="button" className={`refresh ${status}${busy ? " spin" : ""}`}
+        {/* Состояние — с приставкой: голое «boot» совпадало с классом заставки
+            (.boot { position: fixed; inset: 0 }), и до первой выгрузки кнопка
+            выпадала из шапки в левый верхний угол, поверх меню. */}
+        <button type="button" className={`refresh st-${status}${busy ? " spin" : ""}`}
                 onClick={refresh} aria-label={t(lang, "ui_updated")}>↻</button>
       </header>
 

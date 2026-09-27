@@ -81,9 +81,9 @@
   color: var(--dim);
   transition: color 0.2s var(--ease);
 }
-.refresh.ready { color: var(--glow); }
-.refresh.stale, .refresh.anon { color: var(--warn); }
-.refresh.offline { color: var(--dn); }
+.refresh.st-ready { color: var(--glow); }
+.refresh.st-stale, .refresh.st-anon { color: var(--warn); }
+.refresh.st-offline { color: var(--dn); }
 .refresh.spin { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 

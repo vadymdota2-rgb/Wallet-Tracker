@@ -729,5 +729,11 @@ apits = read(f"{APP}/src/lib/api.ts")
 say("чтения идут через память", apits.count("cachedGet<") >= 7 and "remember<T | null>(path, ttl" in apits)
 say("смена плана стирает память", "forgetAll()" in live)
 
+# --- кнопка обновления не выпадает из шапки ---------------------------------
+# Голое состояние «boot» совпадало с классом заставки .boot (position: fixed),
+# и до первой выгрузки кнопка уезжала в левый верхний угол поверх меню.
+appx = read(f"{APP}/src/App.tsx")
+say("состояние кнопки обновления — с приставкой", "refresh st-${status}" in appx and "refresh ${status}" not in appx)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
