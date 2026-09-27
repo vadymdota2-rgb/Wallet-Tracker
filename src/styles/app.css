@@ -1893,6 +1893,7 @@
 .unl-id { flex: 1 1 auto; min-width: 0; display: grid; gap: 1px; }
 .unl-id b { color: var(--ink); font-size: 14.5px; }
 .unl-id small { color: var(--dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.unl-est { color: var(--warn); font-style: normal; }
 .unl-amt { flex: 0 0 auto; display: grid; gap: 1px; text-align: end; }
 .unl-amt b { color: var(--ink); font-size: 14.5px; font-variant-numeric: tabular-nums; }
 .unl-amt small { color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums; }

@@ -6,8 +6,10 @@
  * цену, цвет полоски слева — тоже она. Тап по строке раскрывает, кому идут
  * монеты, откуда условия и кнопку графика этой монеты.
  *
- * Расписания ведёт сервер по документации проектов (UNLOCK_BOOK в
- * whale_api.py) — платные сервисы с календарями тут не участвуют.
+ * Всё считает наш сервер (UNLOCK_BOOK в whale_api.py): расписания — по
+ * документации проектов, оборот — от опорного значения плюс наши же
+ * разлоки, цена — Hyperliquid. Чужих календарей и справочников тут нет.
+ * Оценочные объёмы помечены «≈» и словом «оценка».
  */
 import { useEffect, useMemo, useState } from "react";
 import { Frame } from "./Screen";
@@ -149,10 +151,14 @@ export function UnlocksScreen() {
                       <b>{e.sym}</b>
                       <small>
                         {e.name} · {t(lang, e.kind === "cliff" ? "unl_cliff" : "unl_monthly")}
+                        {e.est ? <em className="unl-est"> · {t(lang, "unl_est")}</em> : null}
                       </small>
                     </span>
                     <span className="unl-amt">
-                      <b>{e.usd !== null ? usd(e.usd) : qty(e.tokens)}</b>
+                      <b>
+                        {e.est ? "≈" : ""}
+                        {e.usd !== null ? usd(e.usd) : qty(e.tokens)}
+                      </b>
                       <small>
                         {e.pct !== null ? t(lang, "unl_of_circ", { p: pct(e.pct, 2, false) }) : qty(e.tokens)}
                       </small>

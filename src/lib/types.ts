@@ -646,6 +646,10 @@ export interface UnlockEvent {
   who: Partial<Record<UnlockWho, number>>;
   /** Документация проекта с условиями вестинга. */
   src: string;
+  /** Объём — оценка по открытым сводкам, а не условие из документов. */
+  est?: boolean;
+  /** Монеты в обороте накануне разлока, по расчёту сервера. */
+  circ?: number | null;
   price: number | null;
   usd: number | null;
   /** Доля от монет в обороте, %. */

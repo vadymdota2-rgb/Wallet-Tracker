@@ -832,14 +832,17 @@ say("введённый тикер открывается, даже если е�
 # --- разлоки: свои расписания, только будущее, ближайшие первыми -----------
 unl_scr = read(f"{APP}/src/screens/UnlocksScreen.tsx")
 say("разлоки считаются по своей книге расписаний, у каждой монеты — источник",
-    "UNLOCK_BOOK: list[dict] = [" in api and api.count('"src": "https://') >= 10
-    and "defillama" not in pybody(api, "def _unlocks_build(").lower())
+    "UNLOCK_BOOK: list[dict] = [" in api and api.count('"src": "https://') >= 19)
+say("оценочные объёмы помечены в приложении", '"est": bool(coin.get("est"))' in api and "unl_est" in unl_scr)
 _ub = pybody(api, "def unlock_events(")
 say("прошедшие разлоки не отдаются, ближайшие первыми",
-    "if ts < day0:" in _ub and 'sorted(by.values(), key=lambda e: (e["ts"], e["sym"]))' in _ub
-    and 'if e["ts"] >= day0' in pybody(api, "def unlocks("))
-say("давление — доля от монет в обороте (CoinGecko)",
-    "circulating_supply" in pybody(api, "def _unlocks_build(") and 'e["pct"]' in pybody(api, "def _unlocks_build("))
+    "if ts >= day0:" in _ub and 'sorted(out, key=lambda e: (e["ts"], e["sym"]))' in _ub
+    and "unlock_events(time.time())" in pybody(api, "def unlocks("))
+_uu = pybody(api, "def unlocks(")
+say("разлоки ни от кого не зависят: оборот — наш расчёт, цена — Hyperliquid",
+    "coingecko" not in (_ub + _uu).lower() and "get_json" not in _uu and "mids = hl_mids()" in _uu
+    and '"circ": ("' in api and 'ev["circ"] = round(circ)' in _ub)
+say("давление — доля от оборота на день разлока", 'e["tokens"] / circ * 100' in _uu)
 say("экран разлоков: поиск по тикеру и названию, фильтр крупных",
     "e.sym.toLowerCase().includes(q) || e.name.toLowerCase().includes(q)" in unl_scr and 'filter === "big"' in unl_scr)
 say("маршрут /api/unlocks есть", 'if path in ("/unlocks", "/api/unlocks"):' in api)

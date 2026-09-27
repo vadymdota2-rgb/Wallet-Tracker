@@ -1868,85 +1868,160 @@ def symbols() -> list[dict]:
 
 # Разлоки монет: когда на рынок выходят токены команды, инвесторов и фондов.
 #
-# Платные сервисы (DefiLlama, CryptoRank, Tokenomist) продают это по подписке,
-# поэтому расписания ведём сами. Каждая запись — условия вестинга из
-# документации проекта (ссылка лежит рядом, она же видна в приложении);
-# даты и объёмы движок выводит из этих условий, а не хранит списком. Когда
-# проект меняет условия, правится одна строка здесь.
+# Всё считаем сами, ни от кого не завися. Платные календари (DefiLlama,
+# CryptoRank, Tokenomist) и справочники вроде CoinGecko здесь не участвуют:
+#
+#   * расписание — условия вестинга из документации проекта (ссылка лежит
+#     рядом, она же видна в приложении); даты и объёмы движок выводит из
+#     этих условий, а не хранит списком;
+#   * монеты в обороте — тоже наш расчёт: опорное значение на известную
+#     дату («circ») плюс все наши же разлоки после неё. Поэтому доля считается
+#     от оборота на момент разлока, а не на сегодня: помесячная выдача MON в
+#     декабре меряется оборотом уже после ноябрьской годовщины;
+#   * цена — средняя Hyperliquid, откуда приложение и так берёт все цены.
 #
 # «m» — ежемесячная выдача: день месяца, первый и последний месяц, сколько
 # и кому. «o» — разовая выдача: дата, сколько и кому. Время — полночь UTC:
-# точный час проекты почти никогда не публикуют.
+# точный час проекты почти никогда не публикуют. Когда проект меняет
+# условия, правится одна строка здесь.
+#
+# «est» — объёмы оценочные: проект не публикует точной помесячной раскладки
+# и цифры сведены по открытым сводкам; в приложении такие помечены.
 #
 # Кому: team — команда и ранние участники, investors — инвесторы,
 # treasury — казна компании, community — сообщество и экосистема,
 # foundation — фонд, mixed — несколько групп сразу без раскладки.
 UNLOCK_BOOK: list[dict] = [
-    {"s": "ENA", "cg": "ethena", "n": "Ethena",
+    {"s": "ENA", "n": "Ethena",
      "src": "https://docs.ethena.fi/overview/ena/tokenomics",
+     "est": True,
      # Инвесторы: остаток помесячного графика выдаётся одним разом
      # (решение фонда в августе 2026). Объём — оценка по прежнему графику.
+     "circ": ("2026-09-27", 10_095_312_500),
      "plan": [("o", "2026-10-05", 1_410_000_000, "investors"),
               # Команда: 30% от 15 млрд, 25% через год, остальное 36 месяцев.
               ("m", 2, "2025-05", "2028-04", 93_750_000, "team")]},
-    {"s": "2Z", "cg": "doublezero", "n": "DoubleZero",
+    {"s": "2Z", "n": "DoubleZero",
      "src": "https://doublezero.xyz/tokenomics",
+     "circ": ("2026-09-27", 3_469_487_454),
      "plan": [("o", "2026-10-02", 1_655_000_000, "mixed")]},
-    {"s": "APT", "cg": "aptos", "n": "Aptos",
+    {"s": "APT", "n": "Aptos",
      "src": "https://aptosfoundation.org/currents/aptos-tokenomics-overview",
      # Последняя выдача инвесторам и команде по четырёхлетнему графику.
+     "circ": ("2026-09-27", 870_857_391),
      "plan": [("o", "2026-10-12", 3_960_000, "team"),
               ("o", "2026-10-12", 2_440_000, "investors"),
               ("o", "2026-10-12", 3_210_000, "community"),
               ("o", "2026-10-12", 1_700_000, "foundation")]},
-    {"s": "ARB", "cg": "arbitrum", "n": "Arbitrum",
+    {"s": "ARB", "n": "Arbitrum",
      "src": "https://docs.arbitrum.foundation/token-supply",
      # Команда 26,94% и инвесторы 17,53% от 10 млрд: четверть через год,
      # остальное равными долями 36 месяцев.
+     "circ": ("2026-09-27", 6_785_574_605),
      "plan": [("m", 16, "2024-04", "2027-03", 56_125_000, "team"),
               ("m", 16, "2024-04", "2027-03", 36_520_000, "investors")]},
-    {"s": "STRK", "cg": "starknet", "n": "Starknet",
+    {"s": "STRK", "n": "Starknet",
      "src": "https://docs.starknet.io/learn/protocol/strk",
+     "circ": ("2026-09-27", 7_350_605_580),
      "plan": [("m", 15, "2025-04", "2027-03", 64_000_000, "team"),
               ("m", 15, "2025-04", "2027-03", 63_000_000, "investors")]},
-    {"s": "ZK", "cg": "zksync", "n": "ZKsync",
+    {"s": "ZK", "n": "ZKsync",
      "src": "https://docs.zknation.io/zk-token/zk-token",
      # Инвесторы 19,78% и команда 13,55% от 21 млрд: 3,6% в июне 2025,
      # остальное 36 месяцев до июня 2028.
+     "circ": ("2026-09-27", 10_816_539_153),
      "plan": [("m", 17, "2025-07", "2028-06", 102_940_000, "investors"),
               ("m", 17, "2025-07", "2028-06", 70_500_000, "team")]},
-    {"s": "EIGEN", "cg": "eigenlayer", "n": "EigenCloud",
+    {"s": "EIGEN", "n": "EigenCloud",
      "src": "https://docs.eigenfoundation.org/eigen-token/key-info",
      # Инвесторы 29,5% и ранние участники 25,5% начального выпуска:
      # по 4% в месяц после годовой блокировки.
+     "circ": ("2026-09-27", 927_642_651),
      "plan": [("m", 1, "2025-11", "2027-09", 19_750_000, "investors"),
               ("m", 1, "2025-11", "2027-09", 17_070_000, "team")]},
-    {"s": "MON", "cg": "monad", "n": "Monad",
+    {"s": "MON", "n": "Monad",
      "src": "https://cryptoticker.io/en/monad-mon-unlock-lock-up-expiry/",
+     "est": True,
      # Годовщина основной сети: команда получает 10,7 млрд сразу, инвесторы
      # и казна — 12/48 своей доли; дальше всё помесячно до ноября 2029.
+     "circ": ("2026-09-27", 11_825_165_000),
      "plan": [("o", "2026-11-24", 10_700_000_000, "team"),
               ("o", "2026-11-24", 4_920_750_000, "investors"),
               ("o", "2026-11-24", 988_250_000, "treasury"),
               ("m", 24, "2026-12", "2029-11", 452_470_000, "team"),
               ("m", 24, "2026-12", "2029-11", 410_060_000, "investors"),
               ("m", 24, "2026-12", "2029-11", 82_350_000, "treasury")]},
-    {"s": "ONDO", "cg": "ondo-finance", "n": "Ondo",
+    {"s": "ONDO", "n": "Ondo",
      "src": "https://docs.ondo.foundation/ondo-token",
+     "circ": ("2026-09-27", 4_869_330_647),
      "plan": [("o", "2027-01-18", 1_940_000_000, "mixed"),
               ("o", "2028-01-18", 1_940_000_000, "mixed")]},
-    {"s": "PYTH", "cg": "pyth-network", "n": "Pyth Network",
+    {"s": "PYTH", "n": "Pyth Network",
      "src": "https://www.pyth.network/blog/understanding-the-pyth-tokenomics",
      # 85% выпуска заперто и выходит четырьмя равными частями через 6, 18,
      # 30 и 42 месяца после запуска (20 ноября 2023).
+     "circ": ("2026-09-27", 7_874_959_375),
      "plan": [("o", "2027-05-20", 2_125_000_000, "mixed")]},
+    {"s": "HYPE", "n": "Hyperliquid",
+     "src": "https://cryptoticker.io/en/hyperliquid-hype-unlock-dilution/",
+     # Ключевые участники: 238 млн после годовой блокировки, 24 равные
+     # выдачи 6-го числа. Забирают на деле малую долю — это право, не продажа.
+     "circ": ("2026-09-27", 222_445_714),
+     "plan": [("m", 6, "2026-01", "2027-12", 9_920_000, "team")]},
+    {"s": "SEI", "n": "Sei",
+     "src": "https://www.sei.io/",
+     # Команда: 20% от 10 млрд, помесячно 15-го до августа 2027.
+     "circ": ("2026-09-27", 6_733_333_333),
+     "plan": [("m", 15, "2024-09", "2027-08", 55_560_000, "team")]},
+    {"s": "ZRO", "n": "LayerZero",
+     "src": "https://cryptoticker.io/en/layerzero-zro-unlock-monthly-dilution/",
+     # Стратегические партнёры 32,2% и команда 25,5%: год блокировки, потом
+     # помесячно 20-го до мая 2027.
+     "circ": ("2026-09-27", 353_313_325),
+     "plan": [("m", 20, "2025-07", "2027-05", 14_350_000, "investors"),
+              ("m", 20, "2025-07", "2027-05", 11_360_000, "team")]},
+    {"s": "JTO", "n": "Jito",
+     "src": "https://www.jito.network/",
+     # Команда 24,5% и инвесторы 16,2%: последние выдачи 7-го, до ноября 2026.
+     "circ": ("2026-09-27", 525_958_473),
+     "plan": [("m", 7, "2025-01", "2026-11", 6_810_000, "team"),
+              ("m", 7, "2025-01", "2026-11", 4_500_000, "investors")]},
+    {"s": "PUMP", "n": "Pump.fun",
+     "src": "https://cryptobriefing.com/pump-fun-pump-token-unlock-pressure/",
+     # Команда 20% и инвесторы 13% от триллиона: четверть в июле 2026,
+     # остальное 36 месяцев 12-го числа.
+     "circ": ("2026-09-27", 465_964_405_618),
+     "plan": [("m", 12, "2026-08", "2029-07", 4_166_670_000, "team"),
+              ("m", 12, "2026-08", "2029-07", 2_708_330_000, "investors")]},
+    {"s": "BERA", "n": "Berachain",
+     "src": "https://docs.berachain.com/general/tokens/bera",
+     "est": True,
+     # Помесячно 6-го: инвесторы, команда, сообщество и экосистема. Конец —
+     # по двухлетнему графику после годовщины запуска (февраль 2028).
+     "circ": ("2026-09-27", 335_324_207),
+     "plan": [("m", 6, "2026-03", "2028-01", 5_950_000, "investors"),
+              ("m", 6, "2026-03", "2028-01", 2_920_000, "team"),
+              ("m", 6, "2026-03", "2028-01", 4_390_000, "community")]},
+    {"s": "SUI", "n": "Sui",
+     "src": "https://blog.sui.io/sui-tokenomics/",
+     "est": True,
+     # Объём у Sui меняется от месяца к месяцу; до конца 2026 — около
+     # 64 млн 1-го числа, дальше проект помесячной раскладки не публикует.
+     "circ": ("2026-09-27", 4_096_537_146),
+     "plan": [("m", 1, "2026-10", "2026-12", 64_200_000, "mixed")]},
+    {"s": "OP", "n": "Optimism",
+     "src": "https://community.optimism.io/op-token/op-token-overview",
+     "est": True,
+     "circ": ("2026-09-27", 2_299_624_975),
+     "plan": [("m", 30, "2026-05", "2027-04", 31_340_000, "mixed")]},
+    {"s": "TIA", "n": "Celestia",
+     "src": "https://docs.celestia.org/learn/TIA/staking-governance-supply/",
+     "est": True,
+     # Линейная выдача, здесь сложена по месяцам — в последний день месяца.
+     "circ": ("2026-09-27", 973_802_843),
+     "plan": [("m", 31, "2025-11", "2027-09", 17_340_000, "mixed")]},
 ]
 UNLOCK_WHO = ("team", "investors", "treasury", "community", "foundation", "mixed")
-UNLOCK_TTL = 3600.0
-_UNL: dict = {}
-_unl_at = 0.0
-_unl_busy = False
-_unl_lock = threading.Lock()
 
 
 def _day_ts(y: int, m: int, d: int) -> int:
@@ -1956,98 +2031,85 @@ def _day_ts(y: int, m: int, d: int) -> int:
     return calendar.timegm((y, m, d, 0, 0, 0))
 
 
-def unlock_events(now: float, book: list[dict] | None = None) -> list[dict]:
-    """Будущие разлоки по книге, ближайшие первыми. Выдачи одной монеты
-    в один день складываются в одно событие с раскладкой по получателям."""
-    day0 = int(now // 86400 * 86400)
-    by: dict[tuple[str, int], dict] = {}
-    for coin in book if book is not None else UNLOCK_BOOK:
-        for step in coin["plan"]:
-            if step[0] == "o":
-                y, m, d = (int(x) for x in step[1].split("-"))
-                dates = [(_day_ts(y, m, d), "cliff")]
-                amt, who = step[2], step[3]
-            else:
-                day, first, last, amt, who = step[1:]
-                y, m = (int(x) for x in first.split("-"))
-                ly, lm = (int(x) for x in last.split("-"))
-                dates = []
-                while (y, m) <= (ly, lm):
-                    dates.append((_day_ts(y, m, day), "monthly"))
-                    y, m = (y + 1, 1) if m == 12 else (y, m + 1)
-            for ts, kind in dates:
-                if ts < day0:
-                    continue
-                ev = by.setdefault((coin["s"], ts), {
-                    "sym": coin["s"], "name": coin["n"], "ts": ts, "tokens": 0.0,
-                    "kind": kind, "who": {}, "src": coin["src"], "cg": coin["cg"],
-                })
-                ev["tokens"] += amt
-                ev["who"][who] = ev["who"].get(who, 0.0) + amt
-                # Разовая выдача в день регулярной — всё равно обвал предложения.
-                if kind == "cliff":
-                    ev["kind"] = "cliff"
-    return sorted(by.values(), key=lambda e: (e["ts"], e["sym"]))
+def _date_ts(s: str) -> int:
+    y, m, d = (int(x) for x in s.split("-"))
+    return _day_ts(y, m, d)
 
 
-def _unlocks_build() -> dict:
-    now = time.time()
-    events = unlock_events(now)
-    ids = sorted({e["cg"] for e in events})
-    mk: dict[str, dict] = {}
-    rows = get_json("https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids="
-                    + ",".join(ids), timeout=15.0) if ids else []
-    for r in rows if isinstance(rows, list) else []:
-        if isinstance(r, dict) and r.get("id"):
-            mk[r["id"]] = r
+def _plan_steps(coin: dict) -> list[tuple[int, str, float, str]]:
+    """Все выдачи монеты по её условиям: (день, вид, сколько, кому)."""
     out = []
-    for e in events:
-        m = mk.get(e.pop("cg")) or {}
-        price = _fnum(m.get("current_price"))
-        circ = _fnum(m.get("circulating_supply"))
+    for step in coin["plan"]:
+        if step[0] == "o":
+            out.append((_date_ts(step[1]), "cliff", step[2], step[3]))
+            continue
+        day, first, last, amt, who = step[1:]
+        y, m = (int(x) for x in first.split("-"))
+        ly, lm = (int(x) for x in last.split("-"))
+        while (y, m) <= (ly, lm):
+            out.append((_day_ts(y, m, day), "monthly", amt, who))
+            y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+    return out
+
+
+def unlock_events(now: float, book: list[dict] | None = None) -> list[dict]:
+    """Будущие разлоки по книге, ближайшие первыми.
+
+    Выдачи одной монеты в один день складываются в одно событие с раскладкой
+    по получателям. У события есть «circ» — монеты в обороте накануне
+    разлока по нашему же расчёту: опорное значение плюс всё, что книга
+    выдала после опорной даты и до этого дня.
+    """
+    day0 = int(now // 86400 * 86400)
+    out: list[dict] = []
+    for coin in book if book is not None else UNLOCK_BOOK:
+        by: dict[int, dict] = {}
+        for ts, kind, amt, who in _plan_steps(coin):
+            ev = by.setdefault(ts, {
+                "sym": coin["s"], "name": coin["n"], "ts": ts, "tokens": 0.0,
+                "kind": kind, "who": {}, "src": coin["src"],
+                # Часть цифр — оценка по сводкам, а не условие из документов
+                # проекта: приложение так и подписывает.
+                "est": bool(coin.get("est")),
+            })
+            ev["tokens"] += amt
+            ev["who"][who] = ev["who"].get(who, 0.0) + amt
+            # Разовая выдача в день регулярной — всё равно обвал предложения.
+            if kind == "cliff":
+                ev["kind"] = "cliff"
+        anchor = coin.get("circ")
+        base_ts = _date_ts(anchor[0]) if anchor else 0
+        circ = float(anchor[1]) if anchor else 0.0
+        for ts in sorted(by):
+            ev = by[ts]
+            ev["circ"] = round(circ) if anchor else None
+            if anchor and ts > base_ts:
+                circ += ev["tokens"]
+            if ts >= day0:
+                out.append(ev)
+    return sorted(out, key=lambda e: (e["ts"], e["sym"]))
+
+
+def unlocks() -> dict:
+    """Календарь разлоков с ценой и долей от оборота.
+
+    Считается на каждый запрос — это сотня событий из десятка строк книги;
+    цена — из кэша средних Hyperliquid. Не ответил Hyperliquid — список
+    всё равно отдаётся, с количеством монет и долей оборота, без долларов.
+    """
+    mids = hl_mids()
+    items = []
+    for e in unlock_events(time.time()):
+        price = mids.get(e["sym"], 0.0)
+        circ = e["circ"]
         e["price"] = price or None
         e["usd"] = round(e["tokens"] * price) if price else None
         # Давление на цену — доля от того, что уже в обороте: 1% от оборота
         # у монеты с тонкой ликвидностью весит больше, чем круглая сумма.
         e["pct"] = round(e["tokens"] / circ * 100, 2) if circ else None
-        e["mcap"] = _fnum(m.get("market_cap")) or None
-        out.append(e)
-    return {"ok": True, "at": int(now), "priced": bool(mk), "items": out}
-
-
-def _unlocks_refresh() -> None:
-    global _UNL, _unl_at, _unl_busy
-    try:
-        data = _unlocks_build()
-        # Без цен список всё равно полезен, но цены прошлого раза лучше:
-        # CoinGecko бесплатно отвечает не всегда.
-        if data["priced"] or not _UNL:
-            with _unl_lock:
-                _UNL = data
-                _unl_at = time.monotonic()
-    except Exception as e:
-        sys.stderr.write(f"[api] unlocks: {e}\n")
-    finally:
-        with _unl_lock:
-            _unl_busy = False
-
-
-def unlocks() -> dict:
-    """Календарь разлоков: первый вызов собирает его сразу, дальше
-    устаревший обновляется в фоне. Прошедшие за час события отсекаются
-    при каждом ответе."""
-    global _unl_busy
-    with _unl_lock:
-        have = bool(_UNL)
-    if not have:
-        _unlocks_refresh()
-    with _unl_lock:
-        if time.monotonic() - _unl_at >= UNLOCK_TTL and not _unl_busy:
-            _unl_busy = True
-            threading.Thread(target=_unlocks_refresh, daemon=True).start()
-        data = _UNL
-    day0 = int(time.time() // 86400 * 86400)
-    return {**data, "items": [e for e in data.get("items", []) if e["ts"] >= day0]}
+        e["mcap"] = round(circ * price) if circ and price else None
+        items.append(e)
+    return {"ok": True, "at": int(time.time()), "priced": bool(mids), "items": items}
 
 
 # Токенизированные металлы торгуются и обычным перпом, без двоеточия в имени.
