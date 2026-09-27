@@ -805,5 +805,14 @@ say("API выдаёт неделю при первом открытии, одн�
 say("помощь не обещает неделю за /start", all("/start" not in ts_dict(lg).get("hp_a4", "")
     for lg in ("en","ru","es","pt","fr","tr","ar","pl","de","uk","hi","id","vi","ko","zh","ja")))
 
+# --- боковое меню: только график TradingView --------------------------------
+_m0 = appx.index("= [", appx.index("const MENU:"))
+menu = appx[_m0:appx.index("];", _m0)]
+say("в боковом меню один пункт — график", menu.count("name:") == 1 and 'name: "chart"' in menu)
+tv = read(f"{APP}/src/lib/tradingview.ts")
+say("график — окно TradingView с поиском и сменой монеты",
+    "s.tradingview.com/widgetembed/" in tv and 'symboledit: "1"' in tv and 'allow_symbol_change: "1"' in tv)
+say("монета графика запоминается", "tvSym: s.tvSym" in read(f"{APP}/src/store/app.ts"))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

@@ -14,16 +14,19 @@ export function Frame({
   sub,
   children,
   actions,
+  full = false,
 }: {
   title: ReactNode;
   sub?: ReactNode;
   children: ReactNode;
   actions?: ReactNode;
+  /** Содержимое во всю оставшуюся высоту, без отступов — для графика. */
+  full?: boolean;
 }) {
   const lang = useApp((s) => s.lang);
   const back = useApp((s) => s.back);
   return (
-    <div className="screen">
+    <div className={full ? "screen full" : "screen"}>
       <div className="screen-hd">
         <button
           type="button"

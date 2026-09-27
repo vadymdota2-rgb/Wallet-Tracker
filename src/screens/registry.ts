@@ -18,6 +18,7 @@ import { DealsScreen } from "./DealsScreen";
 import { ModelScreen } from "./ModelScreen";
 import { LegalScreen } from "./LegalScreen";
 import { AlertsScreen } from "./AlertsScreen";
+import { ChartScreen } from "./ChartScreen";
 
 export const SCREENS: Record<ScreenName, ComponentType<ScreenProps>> = {
   wallet: WalletScreen,
@@ -36,4 +37,5 @@ export const SCREENS: Record<ScreenName, ComponentType<ScreenProps>> = {
   model: ModelScreen,
   legal: LegalScreen,
   alerts: AlertsScreen,
+  chart: ChartScreen,
 };

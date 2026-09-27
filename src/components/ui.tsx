@@ -1058,6 +1058,30 @@ export function BellGlyph({ size = 22 }: { size?: number }) {
   );
 }
 
+/** Свечной график — пункт «График» бокового меню. Две свечи и линия цены
+ *  тем же контуром, что значки нижнего меню. */
+export function ChartGlyph({ size = 25 }: { size?: number }) {
+  return (
+    <svg
+      className="glyph"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3.5 20.5h17" opacity="0.55" />
+      <path d="M7.5 5v2.4M7.5 14.6V17M16.5 3.5v3M16.5 13.5v3" />
+      <rect x="5.3" y="7.4" width="4.4" height="7.2" rx="1.2" />
+      <rect x="14.3" y="6.5" width="4.4" height="7" rx="1.2" fill="currentColor" stroke="none" opacity="0.85" />
+    </svg>
+  );
+}
+
 /** Молния — «быстрее остальных». Тот же контур, что у соседних значков. */
 export function BoltGlyph({ size = 22 }: { size?: number }) {
   return (

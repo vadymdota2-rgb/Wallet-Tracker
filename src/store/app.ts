@@ -14,7 +14,7 @@ export type Tab = "wallets" | "top" | "analytics" | "cortex" | "more";
 export type ScreenName =
   | "wallet" | "position" | "coin" | "signal" | "deals"
   | "addWallet" | "threshold" | "lang" | "premium" | "help"
-  | "history" | "alerts" | "model" | "rename" | "spot"
+  | "history" | "alerts" | "chart" | "model" | "rename" | "spot"
   | "legal";
 
 export interface Screen {
@@ -57,6 +57,8 @@ interface AppState {
 
   cortexVenue: Venue;
   chartTf: Timeframe;
+  /** Монета полноэкранного графика TradingView — последняя открытая. */
+  tvSym: string;
   /** Свои деньги в калькуляторе фандинга. Ноль — поле пустое, счёта нет. */
   fundAmount: number;
   /** Плечо: фандинг берут с объёма позиции, а он во столько раз больше. */
@@ -80,6 +82,7 @@ interface AppState {
   setRankWin(w: RankWin): void;
   setCortexVenue(v: Venue): void;
   setChartTf(tf: Timeframe): void;
+  setTvSym(sym: string): void;
   setFundAmount(v: number): void;
   setFundLev(v: number): void;
 }
@@ -106,6 +109,7 @@ export const useApp = create<AppState>()(
 
       cortexVenue: "spot",
       chartTf: "1d",
+      tvSym: "BTC",
       fundAmount: 0,
       fundLev: 1,
 
@@ -127,6 +131,7 @@ export const useApp = create<AppState>()(
       setRankWin: (rankWin) => set({ rankWin }),
       setCortexVenue: (cortexVenue) => set({ cortexVenue }),
       setChartTf: (chartTf) => set({ chartTf }),
+      setTvSym: (tvSym) => set({ tvSym }),
       setFundAmount: (fundAmount) => set({ fundAmount: Math.max(0, fundAmount) }),
       /* Сто двадцать пять — предел самых щедрых бирж; выше плеча не бывает, а
          опечатка в поле не должна рисовать миллионные доходы. */
@@ -194,6 +199,7 @@ export const useApp = create<AppState>()(
         rankWin: s.rankWin,
         cortexVenue: s.cortexVenue,
         chartTf: s.chartTf,
+        tvSym: s.tvSym,
         fundAmount: s.fundAmount,
         fundLev: s.fundLev,
       }),
