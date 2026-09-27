@@ -819,5 +819,14 @@ say("атрибуция TradingView — как в их коде, не убран
     and 'copy.className = "tradingview-widget-copyright"' in chart_scr)
 say("монета графика запоминается", "tvSym: s.tvSym" in read(f"{APP}/src/store/app.ts"))
 
+# --- поиск монеты на графике — по всем биржам, не только по своим ----------
+say("справочник монет: Binance, Bybit, Hyperliquid и HIP-3",
+    "def _symbols_build(" in api and "api.bybit.com/v5/market/instruments-info" in api
+    and 'hl_post({"type": "meta"}' in pybody(api, "def _symbols_build(") and '"c": "rwa"' in api)
+say("металлы и индексы HIP-3 — на свои символы TradingView, а не на акции-двойники",
+    'GOLD: "TVC:GOLD"' in tv and 'SP500: "SP:SPX"' in tv)
+say("введённый тикер открывается, даже если его нет в справочнике",
+    "results[0]?.s !== typed" in chart_scr and 'onClick={() => pick(typed)}' in chart_scr)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

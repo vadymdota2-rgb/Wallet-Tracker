@@ -221,6 +221,7 @@ export const tr: Dict = {
   cancel_button: "❌ İptal",
   chart_flow: "NetFlow liderleri",
   chart_hint: "Her coin, borsa ve zaman dilimi doğrudan grafikte de seçilebilir: arama sol üst köşede, zaman dilimleri yanında.",
+  chart_in_app: "Uygulamadan",
   chart_mine: "Cüzdanlarınızda",
   chart_open: "Aç",
   chart_pick: "Coin seç",

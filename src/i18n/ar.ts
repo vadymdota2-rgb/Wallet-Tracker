@@ -221,6 +221,7 @@ export const ar: Dict = {
   cancel_button: "❌ إلغاء",
   chart_flow: "الأعلى في NetFlow",
   chart_hint: "يمكن اختيار أي عملة ومنصة وإطار زمني من الرسم نفسه أيضًا: البحث في الزاوية العلوية، والأطر الزمنية بجانبه.",
+  chart_in_app: "من التطبيق",
   chart_mine: "في محافظك",
   chart_open: "فتح",
   chart_pick: "اختر عملة",

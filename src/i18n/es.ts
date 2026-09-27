@@ -221,6 +221,7 @@ export const es: Dict = {
   cancel_button: "❌ Cancelar",
   chart_flow: "Top de NetFlow",
   chart_hint: "Cualquier moneda, exchange y temporalidad también se elige en el propio gráfico: la búsqueda está arriba a la izquierda y las temporalidades al lado.",
+  chart_in_app: "Desde la app",
   chart_mine: "En tus billeteras",
   chart_open: "Abrir",
   chart_pick: "Elegir moneda",

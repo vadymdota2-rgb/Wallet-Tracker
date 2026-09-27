@@ -221,6 +221,7 @@ export const id: Dict = {
   cancel_button: "❌ Batal",
   chart_flow: "Teratas NetFlow",
   chart_hint: "Koin, bursa, dan timeframe apa pun juga bisa dipilih langsung di grafik: pencarian ada di kiri atas, timeframe di sebelahnya.",
+  chart_in_app: "Dari aplikasi",
   chart_mine: "Di dompet Anda",
   chart_open: "Buka",
   chart_pick: "Pilih koin",

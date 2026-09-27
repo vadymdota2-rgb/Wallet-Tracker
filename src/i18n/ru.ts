@@ -221,6 +221,7 @@ export const ru: Dict = {
   cancel_button: "❌ Отмена",
   chart_flow: "Лидеры NetFlow",
   chart_hint: "Любую монету, биржу и таймфрейм можно выбрать и прямо на графике: поиск — в левом верхнем углу, таймфреймы — рядом.",
+  chart_in_app: "Из приложения",
   chart_mine: "В ваших кошельках",
   chart_open: "Открыть",
   chart_pick: "Выбор монеты",

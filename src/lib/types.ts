@@ -558,6 +558,18 @@ export interface Coin {
 
 export type Coins = Record<string, Coin | undefined>;
 
+/** Монета из справочника для поиска на графике. */
+export interface SymbolRow {
+  /** Тикер, как его ищут: BTC, DOT, NVDA. */
+  s: string;
+  /** Где торгуется: binance, bybit, hl. */
+  v: string[];
+  /** Что открывать, если не тикер: xyz:NVDA для акций HIP-3. */
+  t?: string;
+  /** rwa — акции, индексы, металлы. */
+  c?: string;
+}
+
 export interface AlertRow {
   t: ServerText;
   sym: string;

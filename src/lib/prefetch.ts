@@ -16,7 +16,7 @@
  * Закрытое подпиской не запрашивается: сервер его бесплатному всё равно не
  * отдаст, а лишние отказы — лишняя нагрузка.
  */
-import { fetchBig, fetchDeals, fetchFlow, fetchLs, fetchTokenHist, fetchWallet } from "./api";
+import { fetchBig, fetchDeals, fetchFlow, fetchLs, fetchSymbols, fetchTokenHist, fetchWallet } from "./api";
 import { fetchCandles } from "./klines";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
@@ -95,7 +95,10 @@ function plan(): (() => Promise<unknown>)[] {
   const board = live.rank[venue]?.[app.rankKind] ?? live.rank[venue]?.pnl ?? [];
   for (const r of board.slice(0, TOP_DEALS)) jobs.push(() => fetchDeals(r.a, venue));
 
-  // 7. История цены монет из потока — открывают их из списка.
+  // 7. Справочник монет для поиска на графике.
+  jobs.push(() => fetchSymbols());
+
+  // 8. История цены монет из потока — открывают их из списка.
   for (const r of (live.flow[app.flowWin]?.rows ?? []).slice(0, FLOW_COINS)) {
     const a = r.addr || r.token;
     if (isAddr(a)) jobs.push(() => fetchTokenHist(a));

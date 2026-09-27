@@ -221,6 +221,7 @@ export const hi: Dict = {
   cancel_button: "❌ रद्द करें",
   chart_flow: "NetFlow में सबसे आगे",
   chart_hint: "कोई भी कॉइन, एक्सचेंज और टाइमफ़्रेम सीधे चार्ट पर भी चुना जा सकता है: खोज ऊपर बाएँ कोने में है, टाइमफ़्रेम उसके पास।",
+  chart_in_app: "ऐप से",
   chart_mine: "आपके वॉलेट में",
   chart_open: "खोलें",
   chart_pick: "कॉइन चुनें",

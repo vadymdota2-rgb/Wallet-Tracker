@@ -1313,6 +1313,24 @@
     "vi": "Mọi coin, sàn và khung thời gian cũng có thể chọn ngay trên biểu đồ: ô tìm kiếm ở góc trên bên trái, khung thời gian ngay cạnh.",
     "zh": "任何代币、交易所和周期也可以直接在图表上选择：搜索在左上角，周期在旁边。"
   },
+  "chart_in_app": {
+    "ar": "من التطبيق",
+    "de": "Aus der App",
+    "en": "From the app",
+    "es": "Desde la app",
+    "fr": "Depuis l'app",
+    "hi": "ऐप से",
+    "id": "Dari aplikasi",
+    "ja": "アプリから",
+    "ko": "앱에서",
+    "pl": "Z aplikacji",
+    "pt": "Do app",
+    "ru": "Из приложения",
+    "tr": "Uygulamadan",
+    "uk": "Із застосунку",
+    "vi": "Từ ứng dụng",
+    "zh": "来自应用"
+  },
   "chart_mine": {
     "ar": "في محافظك",
     "de": "In deinen Wallets",

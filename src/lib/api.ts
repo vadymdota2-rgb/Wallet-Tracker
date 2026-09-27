@@ -8,7 +8,7 @@
 import { initData } from "./telegram";
 import { peek, remember } from "./memo";
 import type {
-  Bootstrap, Deal, FlowRow, FundRow, LsRow, MutationResult, RotSide, TokenHist, Trades,
+  Bootstrap, Deal, FlowRow, FundRow, LsRow, MutationResult, RotSide, SymbolRow, TokenHist, Trades,
   WalletLive,
 } from "./types";
 
@@ -208,6 +208,14 @@ export const markAlertsSeen = (upto: number) =>
 /** Куда слать алерты: в Telegram и сюда (true) или только сюда (false). */
 export const setAlertMode = (tg: boolean) =>
   call<MutationResult>("/api/alerts/mode", { method: "POST", body: { tg } });
+
+/** Справочник монет для поиска на графике: всё, что торгуется на Binance,
+ *  Bybit и Hyperliquid. Меняется редко — держим шесть часов. */
+const SYMBOLS_TTL = 6 * 3600_000;
+export const fetchSymbols = () =>
+  cachedGet<{ ok?: boolean; items?: SymbolRow[] }>("/api/symbols", SYMBOLS_TTL);
+export const peekSymbols = () =>
+  peek<{ ok?: boolean; items?: SymbolRow[] } | null>("/api/symbols", SYMBOLS_TTL);
 
 /** Язык хранится в той же строке users, что читает бот: выбор общий. */
 export const setLangRemote = (lang: string) =>

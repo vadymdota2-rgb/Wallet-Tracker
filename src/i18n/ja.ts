@@ -221,6 +221,7 @@ export const ja: Dict = {
   cancel_button: "❌ キャンセル",
   chart_flow: "NetFlow 上位",
   chart_hint: "どのコイン・取引所・時間足もチャート上で直接選べます：検索は左上、時間足はその隣です。",
+  chart_in_app: "アプリから",
   chart_mine: "あなたのウォレット",
   chart_open: "開く",
   chart_pick: "コインを選ぶ",

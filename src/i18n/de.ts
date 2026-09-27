@@ -221,6 +221,7 @@ export const de: Dict = {
   cancel_button: "❌ Abbrechen",
   chart_flow: "Top NetFlow",
   chart_hint: "Jeden Coin, jede Börse und jeden Zeitrahmen kannst du auch direkt im Chart wählen: Die Suche ist oben links, die Zeitrahmen daneben.",
+  chart_in_app: "Aus der App",
   chart_mine: "In deinen Wallets",
   chart_open: "Öffnen",
   chart_pick: "Coin wählen",

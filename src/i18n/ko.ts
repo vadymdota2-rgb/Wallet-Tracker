@@ -221,6 +221,7 @@ export const ko: Dict = {
   cancel_button: "❌ 취소",
   chart_flow: "NetFlow 상위",
   chart_hint: "어떤 코인·거래소·시간 단위든 차트에서 바로 고를 수도 있습니다: 검색은 왼쪽 위, 시간 단위는 그 옆에 있습니다.",
+  chart_in_app: "앱에서",
   chart_mine: "내 지갑",
   chart_open: "열기",
   chart_pick: "코인 선택",

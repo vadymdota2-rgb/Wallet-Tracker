@@ -15,9 +15,31 @@ import { useLive } from "../store/live";
 import { t } from "../i18n/t";
 import { haptic } from "../lib/telegram";
 import { TV_EMBED_SRC, tvConfig, tvSymbol } from "../lib/tradingview";
+import { fetchSymbols, peekSymbols } from "../lib/api";
+import type { SymbolRow } from "../lib/types";
 import { CoinIcon } from "../components/CoinIcon";
 
 const POPULAR = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "TON", "HYPE", "SUI", "PEPE", "LINK", "AVAX"];
+const VENUE_NAME: Record<string, string> = { binance: "Binance", bybit: "Bybit", hl: "Hyperliquid" };
+const MAX_RESULTS = 40;
+
+/** Совпадения по тикеру: точное, потом с начала, потом внутри. Порядок внутри
+ *  группы — как в справочнике: там впереди то, что торгуется на большем
+ *  числе бирж. */
+function search(rows: SymbolRow[], q: string): SymbolRow[] {
+  const exact: SymbolRow[] = [];
+  const starts: SymbolRow[] = [];
+  const inside: SymbolRow[] = [];
+  for (const r of rows) {
+    if (r.s === q) exact.push(r);
+    else if (r.s.startsWith(q)) starts.push(r);
+    else if (r.s.includes(q)) inside.push(r);
+  }
+  return [...exact, ...starts, ...inside].slice(0, MAX_RESULTS);
+}
+
+/** Что показать в шапке: xyz:NVDA — это NVDA. */
+const label = (sym: string) => sym.split(":").pop() || sym;
 
 /** Без повторов, в исходном порядке, прописными — «btc» и «BTC» одна монета. */
 function uniq(list: (string | undefined)[], limit: number): string[] {
@@ -42,6 +64,19 @@ export function ChartScreen({ arg }: ScreenProps) {
   const [sym, setSym] = useState(() => (arg ? arg.toUpperCase() : saved || "BTC"));
   const [picking, setPicking] = useState(false);
   const [query, setQuery] = useState("");
+  /* Справочник всех монет — для поиска. Подгружается при запуске вместе с
+     остальным, а если ещё не пришёл — при открытии выбора. */
+  const [dir, setDir] = useState<SymbolRow[] | null>(() => peekSymbols()?.items ?? null);
+  useEffect(() => {
+    if (!picking || dir) return;
+    let alive = true;
+    void fetchSymbols().then((r) => {
+      if (alive && r?.ok) setDir(r.items ?? []);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [picking, dir]);
 
   const groups = useMemo(
     () =>
@@ -64,7 +99,14 @@ export function ChartScreen({ arg }: ScreenProps) {
     setQuery("");
   };
 
-  const typed = query.trim().toUpperCase();
+  const typed = query.trim().toUpperCase().replace(/\s+/g, "");
+  /* Монеты, которые приложение знает, а биржевой справочник нет (токены BSC
+     из кошельков и потока), — тоже в поиске. */
+  const known = useMemo<SymbolRow[]>(() => {
+    const seen = new Set((dir ?? []).map((r) => r.s));
+    return groups.flatMap((g) => g.list).filter((s) => !seen.has(s)).map((s) => ({ s, v: [] }));
+  }, [dir, groups]);
+  const results = typed ? search([...(dir ?? []), ...known], typed) : [];
   const tv = tvSymbol(sym);
 
   /* Официальный код виджета: контейнер, место под окно, строка атрибуции и
@@ -113,8 +155,8 @@ export function ChartScreen({ arg }: ScreenProps) {
             setPicking(!picking);
           }}
         >
-          <CoinIcon sym={sym} size={20} />
-          <b className="chart-sym">{sym}</b>
+          <CoinIcon sym={label(sym)} size={20} />
+          <b className="chart-sym">{label(sym)}</b>
           <span className="chart-caret" aria-hidden="true" />
         </button>
       }
@@ -142,14 +184,40 @@ export function ChartScreen({ arg }: ScreenProps) {
               {t(lang, "chart_open")}
             </button>
           </form>
-          {groups.map((g) => {
-            const list = typed ? g.list.filter((s) => s.includes(typed)) : g.list;
-            if (!list.length) return null;
-            return (
+          {typed ? (
+            <div className="chart-results">
+              {/* Нашлась ровно такая монета — она первой строкой, с биржами.
+                  Нет — введённое всё равно можно открыть: TradingView может
+                  знать то, чего нет в нашем справочнике. */}
+              {results[0]?.s !== typed ? (
+                <button type="button" className="chart-res typed" onClick={() => pick(typed)}>
+                  <CoinIcon sym={typed} size={26} />
+                  <span className="chart-res-main">
+                    <b>{t(lang, "chart_open")} «{typed}»</b>
+                  </span>
+                </button>
+              ) : null}
+              {results.map((r) => (
+                <button key={r.t ?? r.s} type="button" className="chart-res" onClick={() => pick(r.t ?? r.s)}>
+                  <CoinIcon sym={r.s} size={26} />
+                  <span className="chart-res-main">
+                    <b>{r.s}</b>
+                    <small>
+                      {[r.c === "rwa" ? t(lang, "ui_cls_rwa") : "", ...r.v.map((v) => VENUE_NAME[v] ?? v)]
+                        .filter(Boolean)
+                        .join(" · ") || t(lang, "chart_in_app")}
+                    </small>
+                  </span>
+                </button>
+              ))}
+              {!dir ? <p className="note dim">{t(lang, "ui_loading")}</p> : null}
+            </div>
+          ) : (
+            groups.map((g) => (
               <section key={g.key} className="chart-group">
                 <h3>{t(lang, g.key)}</h3>
                 <div className="chart-chips">
-                  {list.map((s) => (
+                  {g.list.map((s) => (
                     <button key={s} type="button" className={s === sym ? "on" : undefined} onClick={() => pick(s)}>
                       <CoinIcon sym={s} size={18} />
                       {s}
@@ -157,8 +225,8 @@ export function ChartScreen({ arg }: ScreenProps) {
                   ))}
                 </div>
               </section>
-            );
-          })}
+            ))
+          )}
           <p className="note dim">{t(lang, "chart_hint")}</p>
         </div>
       ) : null}

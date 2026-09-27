@@ -221,6 +221,7 @@ export const en = {
   cancel_button: "❌ Cancel",
   chart_flow: "Top NetFlow",
   chart_hint: "Any coin, exchange and timeframe can also be picked right on the chart: search is in the top-left corner, timeframes next to it.",
+  chart_in_app: "From the app",
   chart_mine: "In your wallets",
   chart_open: "Open",
   chart_pick: "Choose a coin",

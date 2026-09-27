@@ -221,6 +221,7 @@ export const vi: Dict = {
   cancel_button: "❌ Hủy",
   chart_flow: "Dẫn đầu NetFlow",
   chart_hint: "Mọi coin, sàn và khung thời gian cũng có thể chọn ngay trên biểu đồ: ô tìm kiếm ở góc trên bên trái, khung thời gian ngay cạnh.",
+  chart_in_app: "Từ ứng dụng",
   chart_mine: "Trong ví của bạn",
   chart_open: "Mở",
   chart_pick: "Chọn coin",

@@ -1838,3 +1838,20 @@
   font-weight: 600;
 }
 .chart-chips button.on { border-color: var(--glow); background: rgb(31 142 255 / 0.2); }
+/* Результаты поиска монеты: строки, а не чипы — у каждой видно, где она
+   торгуется, и с одинаковыми тикерами не перепутать. */
+.chart-results { display: grid; gap: 6px; }
+.chart-res {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 11px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: rgb(11 22 40 / 0.35);
+  text-align: start;
+}
+.chart-res.typed { border-color: rgb(127 216 255 / 0.45); }
+.chart-res-main { flex: 1 1 auto; min-width: 0; display: grid; gap: 1px; }
+.chart-res-main b { color: var(--ink); font-size: 14px; overflow-wrap: anywhere; }
+.chart-res-main small { color: var(--dim); font-size: 12px; overflow-wrap: anywhere; }

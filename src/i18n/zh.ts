@@ -221,6 +221,7 @@ export const zh: Dict = {
   cancel_button: "❌ 取消",
   chart_flow: "NetFlow 前列",
   chart_hint: "任何代币、交易所和周期也可以直接在图表上选择：搜索在左上角，周期在旁边。",
+  chart_in_app: "来自应用",
   chart_mine: "你的钱包中",
   chart_open: "打开",
   chart_pick: "选择代币",

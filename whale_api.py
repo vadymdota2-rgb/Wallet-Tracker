@@ -1778,6 +1778,94 @@ def _hl_markets_load() -> None:
             _hl_mkt_busy = False
 
 
+# Справочник монет для поиска на экране графика.
+#
+# Поиск раньше шёл только по монетам, которые уже есть в приложении (кошельки,
+# сигналы, NetFlow), и «DOT» не находился вовсе — казалось, что такой монеты
+# нет. Теперь это всё, что торгуется парой к USDT на Binance и Bybit, плюс
+# перпы Hyperliquid, включая акции, индексы и металлы площадок HIP-3. Каждая
+# запись знает, где монета торгуется, — это видно в результатах поиска.
+#
+# Собирается в стороне и живёт шесть часов: листинги меняются редко, а три
+# биржи на каждый запрос — это медленно и невежливо к ним.
+SYMS_TTL = 6 * 3600.0
+_SYMS: list[dict] = []
+_syms_at = 0.0
+_syms_busy = False
+_syms_lock = threading.Lock()
+
+
+def _symbols_build() -> list[dict]:
+    venues: dict[str, set[str]] = {}
+    extra: dict[str, dict] = {}
+
+    def add(sym: str, venue: str) -> None:
+        s = re.sub(r"[^A-Z0-9]", "", str(sym or "").upper())
+        if 1 <= len(s) <= 20:
+            venues.setdefault(s, set()).add(venue)
+
+    for url in ("https://api.binance.com/api/v3/exchangeInfo?permissions=SPOT",
+                "https://data-api.binance.vision/api/v3/exchangeInfo?permissions=SPOT"):
+        bn = get_json(url, timeout=25.0)
+        rows = (bn or {}).get("symbols") if isinstance(bn, dict) else None
+        if rows:
+            for x in rows:
+                if x.get("quoteAsset") == "USDT" and x.get("status") == "TRADING":
+                    add(x.get("baseAsset"), "binance")
+            break
+    bb = get_json("https://api.bybit.com/v5/market/instruments-info?category=spot&limit=1000", timeout=25.0)
+    for x in (((bb or {}).get("result") or {}).get("list") or []) if isinstance(bb, dict) else []:
+        if x.get("quoteCoin") == "USDT" and x.get("status") == "Trading":
+            add(x.get("baseCoin"), "bybit")
+    for c in ((hl_post({"type": "meta"}, timeout=15.0) or {}).get("universe") or []):
+        if isinstance(c, dict) and not c.get("isDelisted"):
+            add(c.get("name"), "hl")
+    # Акции, индексы и металлы HIP-3: открывать их надо полным именем
+    # (xyz:NVDA), иначе график искал бы монету NVDA к доллару.
+    hl_markets()
+    with _hl_mkt_lock:
+        hip3 = dict(_HL_FULL)
+    for bare, full in hip3.items():
+        b = re.sub(r"[^A-Z0-9]", "", bare.upper())
+        if b and b not in venues:
+            extra[b] = {"s": b, "v": ["hl"], "t": full, "c": "rwa"}
+    out = [{"s": k, "v": sorted(v)} for k, v in venues.items()]
+    out.extend(extra.values())
+    # Сначала то, что торгуется на большем числе бирж: у тикера-двойника
+    # мелкой монеты в поиске меньше шансов обогнать настоящую.
+    out.sort(key=lambda r: (-len(r["v"]), r["s"]))
+    return out
+
+
+def _symbols_refresh() -> None:
+    global _SYMS, _syms_at, _syms_busy
+    try:
+        rows = _symbols_build()
+        # Пустой ответ не затирает прошлый справочник: биржи не ответили —
+        # ищем по вчерашнему, это лучше, чем ничего не находить.
+        if rows:
+            with _syms_lock:
+                _SYMS = rows
+                _syms_at = time.monotonic()
+            sys.stderr.write(f"[api] справочник монет: {len(rows)}\n")
+    except Exception as e:
+        sys.stderr.write(f"[api] symbols: {e}\n")
+    finally:
+        with _syms_lock:
+            _syms_busy = False
+
+
+def symbols() -> list[dict]:
+    """Справочник как есть; устаревший обновляется в фоне."""
+    global _syms_busy
+    with _syms_lock:
+        stale = not _SYMS or time.monotonic() - _syms_at >= SYMS_TTL
+        if stale and not _syms_busy:
+            _syms_busy = True
+            threading.Thread(target=_symbols_refresh, daemon=True).start()
+        return _SYMS
+
+
 # Токенизированные металлы торгуются и обычным перпом, без двоеточия в имени.
 # Держим список отдельно, чтобы они не оседали в крипте: XAU — золото, XAG —
 # серебро, XPT — платина, XPD — палладий; остальное это их обёртки.
@@ -5080,6 +5168,7 @@ def warmup() -> None:
     try:
         get_public(cur, hl)
         sys.stderr.write("[api] public cache ready\n")
+        symbols()
     except Exception as e:
         sys.stderr.write(f"[api] warmup: {e}\n")
     finally:
@@ -5908,6 +5997,10 @@ class Handler(BaseHTTPRequestHandler):
                         cur.close()
                     except Exception:
                         pass
+                return
+            if path in ("/symbols", "/api/symbols"):
+                rows = symbols()
+                self._json(200, {"ok": bool(rows), "items": rows})
                 return
             if path in ("/big", "/api/big"):
                 win = (qs.get("win", ["24h"])[0] or "24h").lower()

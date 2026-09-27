@@ -17,6 +17,16 @@ const TV_EXCHANGES = new Set([
   "CAPITALCOM", "FX", "SP", "CME", "COMEX", "NYMEX", "INDEX",
 ]);
 
+/* Площадки HIP-3 торгуют металлами, нефтью и индексами под короткими именами.
+   На TradingView те же буквы — чужие бумаги: GOLD там акция Barrick Gold, а
+   не золото. Поэтому ходовые — сразу на их символы TradingView. */
+const HIP3_TV: Record<string, string> = {
+  GOLD: "TVC:GOLD", SILVER: "TVC:SILVER", PLATINUM: "TVC:PLATINUM", PALLADIUM: "TVC:PALLADIUM",
+  COPPER: "COMEX:HG1!", CL: "TVC:USOIL", WTI: "TVC:USOIL", BRENTOIL: "TVC:UKOIL", NATGAS: "NYMEX:NG1!",
+  SP500: "SP:SPX", SPX: "SP:SPX", XYZ100: "NASDAQ:NDX", NDX: "NASDAQ:NDX", DJI: "TVC:DJI",
+  JPN225: "TVC:NI225", DXY: "TVC:DXY", VIX: "TVC:VIX",
+};
+
 /**
  * Тикер из приложения → символ TradingView.
  *
@@ -33,7 +43,8 @@ export function tvSymbol(raw: string): string {
     const pre = s.slice(0, colon);
     if (TV_EXCHANGES.has(pre)) return s;
     // Площадка HIP-3 (xyz:, flx:, …) — это акции, индексы и металлы.
-    return s.slice(colon + 1).replace(/[^A-Z0-9.!]/g, "") || "BTCUSDT";
+    const bare = s.slice(colon + 1).replace(/[^A-Z0-9.!]/g, "");
+    return HIP3_TV[bare] ?? (bare || "BTCUSDT");
   }
   if (/^K(PEPE|SHIB|BONK|FLOKI|DOGS|NEIRO)$/.test(s)) s = s.slice(1);
   s = s.replace(/[^A-Z0-9.]/g, "");

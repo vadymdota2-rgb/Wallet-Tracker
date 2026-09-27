@@ -221,6 +221,7 @@ export const pl: Dict = {
   cancel_button: "❌ Anuluj",
   chart_flow: "Top NetFlow",
   chart_hint: "Dowolną monetę, giełdę i interwał można wybrać też bezpośrednio na wykresie: wyszukiwarka jest w lewym górnym rogu, interwały obok.",
+  chart_in_app: "Z aplikacji",
   chart_mine: "W twoich portfelach",
   chart_open: "Otwórz",
   chart_pick: "Wybierz monetę",

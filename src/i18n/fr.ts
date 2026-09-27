@@ -221,6 +221,7 @@ export const fr: Dict = {
   cancel_button: "❌ Annuler",
   chart_flow: "Top NetFlow",
   chart_hint: "Toute crypto, plateforme et unité de temps se choisit aussi directement sur le graphique : la recherche est en haut à gauche, les unités de temps juste à côté.",
+  chart_in_app: "Depuis l'app",
   chart_mine: "Dans vos portefeuilles",
   chart_open: "Ouvrir",
   chart_pick: "Choisir une crypto",
