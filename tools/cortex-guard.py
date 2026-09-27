@@ -847,6 +847,10 @@ say("цена монеты без Hyperliquid — со спота, с кэшем
 say("давление — доля от оборота на день разлока", 'e["tokens"] / circ * 100' in _uu)
 say("экран разлоков: поиск по тикеру и названию, фильтр крупных",
     "e.sym.toLowerCase().includes(q) || e.name.toLowerCase().includes(q)" in unl_scr and 'filter === "big"' in unl_scr)
+_logos = read(f"{APP}/src/components/coin-logos.ts") + read(f"{APP}/src/components/coin-fallback.ts")
+_no_icon = [c for c in re.findall(r'\{"s": "([A-Z0-9]+)", "n": ', api)
+            if not os.path.exists(f"{APP}/html/coins/hl/{c}.svg") and f'"{c}": "/' not in _logos and f"  {c}: \"/" not in _logos]
+say("у каждой монеты календаря разлоков есть иконка", not _no_icon, str(_no_icon))
 say("маршрут /api/unlocks есть", 'if path in ("/unlocks", "/api/unlocks"):' in api)
 
 # --- ротация: своим потоком, не в бюджете сборки кэша ----------------------

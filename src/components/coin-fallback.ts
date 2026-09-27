@@ -82,4 +82,7 @@ export const CG_FALLBACK: Record<string, string> = {
   WEN: "/cglogo/coins/images/34856/small/wen-logo-new.jpg",
   USDT: "/cglogo/coins/images/325/small/Tether.png",
   USDC: "/cglogo/coins/images/6319/small/usdc.png",
+  /* Из календаря разлоков: на Hyperliquid MYX нет, и в общем справочнике
+     логотипов его тоже не оказалось — оставалась буква в кружке. */
+  MYX: "/cglogo/coins/images/55506/small/myx.jpg",
 };
