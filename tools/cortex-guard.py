@@ -735,5 +735,19 @@ say("смена плана стирает память", "forgetAll()" in live)
 appx = read(f"{APP}/src/App.tsx")
 say("состояние кнопки обновления — с приставкой", "refresh st-${status}" in appx and "refresh ${status}" not in appx)
 
+# --- сервисный аккаунт бота — подписка навсегда и в API ---------------------
+# Бот считает его премиумом без срока и без лимита кошельков (isPremium в
+# premium.cpp). API этого не знал, и приложение ставило его кошельки на паузу.
+main_cpp = read(f"{BOT}/main.cpp")
+svc = re.search(r'SERVICE_CHAT_ID = "(\d+)"', main_cpp)
+say("номер сервисного аккаунта в API совпадает с ботом",
+    bool(svc) and f'"WHALE_SERVICE_CHAT", "{svc.group(1)}"' in api)
+say("сервисный — премиум и без лимита",
+    "if is_service(chat):\n        return True" in api and "return SERVICE_MAX_WALLETS" in api
+    and '"service": service,' in api)
+say("приложение не ставит сервисному паузу и лимит",
+    "walletLimit(me.plan, me.service)" in read(f"{APP}/src/screens/WalletsTab.tsx")
+    and "if (service) return Infinity;" in read(f"{APP}/src/store/app.ts"))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

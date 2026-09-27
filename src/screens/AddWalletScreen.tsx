@@ -30,7 +30,7 @@ export function AddWalletScreen({ arg }: ScreenProps) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const limit = walletLimit(me.plan);
+  const limit = walletLimit(me.plan, me.service);
   const full = wallets.length >= limit;
   // В боте это одно сообщение: строка заголовка, а под ней объяснение —
   // какой адрес слать и где взять чужой. Мини-апп загонял всё в заголовок

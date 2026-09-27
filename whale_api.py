@@ -65,6 +65,13 @@ INIT_DATA_TTL = int(os.environ.get("WHALE_API_INITDATA_TTL", "86400"))
 # и пускал мимо лимитов.
 FREE_MAX_WALLETS = 1
 PREMIUM_MAX_WALLETS = 50
+# Сервисный аккаунт бота — тот, что держит базу кошельков. Бот (main.cpp,
+# SERVICE_CHAT_ID; isPremium в premium.cpp) считает его подпиской навсегда и
+# без лимита кошельков. API этого не знал: для него это был бесплатный
+# аккаунт, и приложение ставило на паузу все его кошельки, кроме основного,
+# а сервер срезал ему Hyperliquid. Номер тот же, что в боте.
+SERVICE_CHAT_ID = os.environ.get("WHALE_SERVICE_CHAT", "7479880531").strip()
+SERVICE_MAX_WALLETS = 1_000_000
 # Глубина доски трейдеров. Те же числа, что FREE_TOP_TRADERS и
 # PREMIUM_TOP_TRADERS в premium.cpp: приложение и чат обязаны показывать
 # одинаково глубоко, иначе премиум значит разное в двух местах.
@@ -463,8 +470,15 @@ def wallet_banned(con: sqlite3.Connection, addr: str) -> bool:
     return row is not None
 
 
+def is_service(chat: str) -> bool:
+    """Сервисный аккаунт бота: подписка навсегда, лимита кошельков нет."""
+    return bool(SERVICE_CHAT_ID) and str(chat or "") == SERVICE_CHAT_ID
+
+
 def is_premium(con: sqlite3.Connection, chat: str) -> bool:
     """Действует ли подписка — та же проверка, что isPremium() в premium.cpp."""
+    if is_service(chat):
+        return True
     if not chat or not table_exists(con, "users"):
         return False
     if "is_premium" not in cols(con, "users"):
@@ -540,6 +554,8 @@ def plan_of(boot: dict) -> bool:
 
 def wallet_limit(con: sqlite3.Connection, chat: str) -> int:
     """Лимит кошельков по подписке — как в premium.cpp."""
+    if is_service(chat):
+        return SERVICE_MAX_WALLETS
     return PREMIUM_MAX_WALLETS if is_premium(con, chat) else FREE_MAX_WALLETS
 
 
@@ -1173,6 +1189,10 @@ def load_me(cur: sqlite3.Connection, chat: str) -> dict:
             if "is_premium" in cset and row["is_premium"] and int(row["premium_expire"] or 0) > now():
                 plan = "premium"
                 prem_until = int(row["premium_expire"]) * 1000
+    service = is_service(chat)
+    if service:
+        # Бессрочно: срока нет, и «осталось дней: 0» было бы неправдой.
+        plan, prem_until = "premium", 0
     alerts_today = alerts_30 = 0
     if table_exists(cur, "deliveries") and table_exists(cur, "alerts"):
         alerts_today = cur.execute(
@@ -1187,7 +1207,8 @@ def load_me(cur: sqlite3.Connection, chat: str) -> dict:
         ).fetchone()[0]
     return {
         "plan": plan,
-        "limit": 50 if plan == "premium" else 1,
+        "limit": SERVICE_MAX_WALLETS if service else (50 if plan == "premium" else 1),
+        "service": service,
         "threshold": thr,
         "lang": lang,
         "alertsToday": int(alerts_today or 0),

@@ -29,7 +29,9 @@ export function MoreTab() {
         <Row
           icon={<span aria-hidden="true">⭐</span>}
           title={bare(t(lang, "menu_premium"))}
-          sub={me.plan === "premium" ? `${t(lang, "pr_days_left")} ${num(days)}` : t(lang, "pr_unlock")}
+          sub={me.plan === "premium"
+            ? `${t(lang, "pr_days_left")} ${me.service ? "∞" : num(days)}`
+            : t(lang, "pr_unlock")}
           value={me.plan === "premium" ? "✓" : "🔒"}
           onClick={() => open("premium")}
         />

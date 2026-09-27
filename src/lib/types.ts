@@ -68,6 +68,8 @@ export interface Me {
   alertsToday: number;
   alerts30d: number;
   premUntil: number;
+  /** Сервисный аккаунт бота: подписка навсегда, лимита кошельков нет. */
+  service?: boolean;
 }
 
 export interface FlowCoin {

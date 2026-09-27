@@ -19,7 +19,7 @@ export function WalletsTab() {
   const open = useApp((s) => s.open);
   const { me, wallets, rank } = useLive();
 
-  const limit = walletLimit(me.plan);
+  const limit = walletLimit(me.plan, me.service);
 
   // Порог меняем на месте и только потом сохраняем. Раньше чип ждал ответа
   // сервера, а следом полной выгрузки — секунды на нажатие, за которые

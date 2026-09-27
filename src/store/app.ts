@@ -201,8 +201,10 @@ export const useApp = create<AppState>()(
   ),
 );
 
-/** Лимит кошельков по плану — те же числа, что в premium.cpp бота. */
-export function walletLimit(plan: string): number {
+/** Лимит кошельков по плану — те же числа, что в premium.cpp бота. У
+ *  сервисного аккаунта лимита нет: он держит базу кошельков. */
+export function walletLimit(plan: string, service = false): number {
+  if (service) return Infinity;
   return plan === "premium" ? 50 : 1;
 }
 

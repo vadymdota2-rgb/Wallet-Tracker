@@ -149,31 +149,40 @@ export function PremiumScreen() {
   return (
     <Frame
       title={active ? t(lang, "pr_active_title") : t(lang, "pr_title")}
-      sub={active ? `${t(lang, "pr_days_left")} ${num(days)}` : t(lang, "pr_unlock")}
+      sub={active ? `${t(lang, "pr_days_left")} ${me.service ? "∞" : num(days)}` : t(lang, "pr_unlock")}
     >
+      {/* Сервисному аккаунту платить не за что: подписка у него бессрочная,
+          как в боте. Вместо оплаты — одна строка, почему. */}
+      {me.service ? (
+        <Card>
+          <p className="note">{t(lang, "pr_service_account")}</p>
+        </Card>
+      ) : null}
       {/* Оплата — первой: цена и срок видны сразу, а цена написана один раз,
           на самой кнопке. Прежде она стояла дважды — строкой и кнопкой. */}
-      <Card>
-        <SectionTitle note={t(lang, "pr_subscription_label")}>
-          {t(lang, active ? "pr_extend_title" : "pr_pay_title")}
-        </SectionTitle>
-        <div className="stack-actions">
-          <Action onClick={onStars} disabled={busy !== "" || !pay.stars}>
-            {busy === "stars"
-              ? t(lang, "pay_wait_step")
-              : `${t(lang, "pay_stars_btn")} · ${num(pay.stars)} ⭐`}
-          </Action>
-          {pay.ton ? (
-            <Action kind="ghost" onClick={onUsdt} disabled={busy !== ""}>
-              {busy === "usdt"
-                ? t(lang, step === "sign" ? "pay_sign_step" : step === "wait" ? "pay_wait_step" : "pay_wallet_step")
-                : `${t(lang, "pay_usdt_btn")} · ${pay.usdt} USDT`}
+      {me.service ? null : (
+        <Card>
+          <SectionTitle note={t(lang, "pr_subscription_label")}>
+            {t(lang, active ? "pr_extend_title" : "pr_pay_title")}
+          </SectionTitle>
+          <div className="stack-actions">
+            <Action onClick={onStars} disabled={busy !== "" || !pay.stars}>
+              {busy === "stars"
+                ? t(lang, "pay_wait_step")
+                : `${t(lang, "pay_stars_btn")} · ${num(pay.stars)} ⭐`}
             </Action>
-          ) : null}
-        </div>
-        {pay.ton ? <p className="note dim">{t(lang, "pay_note")}</p> : null}
-        {active ? <p className="note dim">{t(lang, "pr_extend_note")}</p> : null}
-      </Card>
+            {pay.ton ? (
+              <Action kind="ghost" onClick={onUsdt} disabled={busy !== ""}>
+                {busy === "usdt"
+                  ? t(lang, step === "sign" ? "pay_sign_step" : step === "wait" ? "pay_wait_step" : "pay_wallet_step")
+                  : `${t(lang, "pay_usdt_btn")} · ${pay.usdt} USDT`}
+              </Action>
+            ) : null}
+          </div>
+          {pay.ton ? <p className="note dim">{t(lang, "pay_note")}</p> : null}
+          {active ? <p className="note dim">{t(lang, "pr_extend_note")}</p> : null}
+        </Card>
+      )}
 
       {inv ? (
         <Card>
