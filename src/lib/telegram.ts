@@ -58,7 +58,7 @@ export function webApp(): WebApp | null {
  * без подписи и подхватим её следующим опросом.
  */
 export function waitForTelegram(ms = 2000): Promise<void> {
-  if (webApp()) return Promise.resolve();
+  if (webApp() || LAUNCH) return Promise.resolve();
   return new Promise((done) => {
     const started = Date.now();
     const tick = () => {
@@ -69,15 +69,49 @@ export function waitForTelegram(ms = 2000): Promise<void> {
   });
 }
 
+/**
+ * Подпись запуска прямо из адреса. Telegram кладёт её в `#tgWebAppData=…`
+ * ещё до загрузки своего скрипта, а скрипт с telegram.org бывает медленным.
+ * Раньше приложение ждало скрипт две секунды и, не дождавшись, уходило за
+ * данными без подписи: сервер отдавал только общее, снимок прошлого запуска
+ * не подходил (номера пользователя ещё нет), и личное появлялось, лишь когда
+ * человек сам жал «обновить». Читается один раз при загрузке — до того, как
+ * кто-нибудь успеет переписать адрес. Запасной источник — то, что скрипт
+ * Telegram сохраняет в sessionStorage при перезагрузке страницы.
+ */
+const LAUNCH: string = (() => {
+  try {
+    const fromHash = new URLSearchParams(window.location.hash.slice(1)).get("tgWebAppData");
+    if (fromHash) return fromHash;
+  } catch {
+    // адреса нет — обычный браузер
+  }
+  try {
+    const saved = JSON.parse(sessionStorage.getItem("__telegram__initParams") || "{}") as { tgWebAppData?: string };
+    return saved.tgWebAppData || "";
+  } catch {
+    return "";
+  }
+})();
+
+const LAUNCH_USER: string = (() => {
+  try {
+    const u = JSON.parse(new URLSearchParams(LAUNCH).get("user") || "{}") as { id?: number };
+    return u.id ? String(u.id) : "";
+  } catch {
+    return "";
+  }
+})();
+
 export function initData(): string {
-  return webApp()?.initData ?? "";
+  return webApp()?.initData || LAUNCH;
 }
 
 /** Номер пользователя Telegram. Нужен, чтобы снимок с чужого аккаунта не
  *  подхватился, если приложение открыли под другим. */
 export function tgUserId(): string {
   const id = webApp()?.initDataUnsafe?.user?.id;
-  return id ? String(id) : "";
+  return id ? String(id) : LAUNCH_USER;
 }
 
 /** Язык из Telegram — подсказка, а не приказ: выбор пользователя главнее. */

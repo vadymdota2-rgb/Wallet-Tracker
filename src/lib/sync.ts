@@ -12,8 +12,17 @@ import { useLive } from "../store/live";
 import { prefetchAll } from "./prefetch";
 
 const OK_DELAY = 180_000;
-const MIN_DELAY = 8_000;
+/* Первый повтор после сбоя — быстро: при запуске сбой обычно разовый
+   (сервер только что перезапущен, сеть телефона просыпается), и ждать
+   восемь-шестнадцать секунд значило заставлять человека жать «обновить». */
+const MIN_DELAY = 3_000;
 const MAX_DELAY = 60_000;
+/* Сервер отдал быструю выгрузку — справочник монет из памяти, полный
+   дособирается. Переспрашиваем через пару секунд, а не через три минуты. */
+const SOON_DELAY = 2_500;
+
+let soon = false;
+let fails = 0;
 
 let timer: ReturnType<typeof setTimeout> | null = null;
 let delay = MIN_DELAY;
@@ -29,6 +38,7 @@ async function pull(): Promise<boolean> {
   }
   live.apply(data);
   if (!signed) live.setStatus("anon");
+  soon = Array.isArray(data.partial) && data.partial.includes("coins:later");
   /* Главный экран уже нарисован из выгрузки — теперь в фоне подтягиваем всё,
      что раньше грузилось только по нажатию. Чуть позже, чтобы не спорить с
      первой отрисовкой за сеть. */
@@ -41,9 +51,16 @@ async function tick(): Promise<void> {
   running = true;
   try {
     const ok = await pull();
-    if (ok) delay = OK_DELAY;
-    else if (lastStatus === 401 || lastStatus === 403) delay = MAX_DELAY;
-    else delay = Math.min(MAX_DELAY, Math.max(MIN_DELAY, delay * 2));
+    if (ok) {
+      fails = 0;
+      delay = soon ? SOON_DELAY : OK_DELAY;
+    } else if (lastStatus === 401 || lastStatus === 403) delay = MAX_DELAY;
+    else {
+      // Серия сбоев считается сама по себе: прежде удвоение шло от трёх минут
+      // удачного опроса, и первый же сбой откладывал повтор на минуту.
+      delay = Math.min(MAX_DELAY, MIN_DELAY * 2 ** fails);
+      fails++;
+    }
   } finally {
     running = false;
   }
@@ -54,7 +71,8 @@ async function tick(): Promise<void> {
 export async function syncNow(): Promise<boolean> {
   if (timer) clearTimeout(timer);
   const ok = await pull();
-  delay = ok ? OK_DELAY : Math.min(MAX_DELAY, Math.max(MIN_DELAY, delay));
+  if (ok) fails = 0;
+  delay = ok ? (soon ? SOON_DELAY : OK_DELAY) : MIN_DELAY;
   timer = setTimeout(() => void tick(), delay);
   return ok;
 }

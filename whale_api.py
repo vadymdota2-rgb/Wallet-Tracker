@@ -4989,6 +4989,29 @@ def cached_small(store: dict, key, ttl: float, build):
 _COINS: dict[str, tuple[float, dict]] = {}
 
 
+def _coins_key(wallets: list) -> str:
+    mark = [
+        [w.get("name") or "",
+         sorted((p.get("sym") or "", round(float(p.get("size") or 0)))
+                for p in (w.get("pos") or []))]
+        for w in (wallets or [])
+    ]
+    return hashlib.sha1(
+        json.dumps(mark, sort_keys=True, ensure_ascii=False).encode()
+    ).hexdigest()
+
+
+def coins_known(wallets: list) -> dict | None:
+    """Справочник монет из памяти любой давности — без похода в сеть.
+
+    Для быстрой выгрузки: лучше вчерашняя цена монеты на первом экране, чем
+    двадцать пять секунд пустоты, пока справочник заново опрашивает биржи.
+    """
+    with _small_lock:
+        hit = _COINS.get(_coins_key(wallets))
+    return hit[1] if hit else None
+
+
 def coins_cached(cur: sqlite3.Connection, hl: sqlite3.Connection | None,
                  flow: dict, wallets: list) -> dict:
     """Справочник монет — общий, но с оглядкой на кошельки смотрящего.
@@ -4999,15 +5022,7 @@ def coins_cached(cur: sqlite3.Connection, hl: sqlite3.Connection | None,
     пустой — и тогда ответ общий на всех. Ключ — отпечаток позиций, так что
     сменилась позиция, сменился и ключ.
     """
-    mark = [
-        [w.get("name") or "",
-         sorted((p.get("sym") or "", round(float(p.get("size") or 0)))
-                for p in (w.get("pos") or []))]
-        for w in (wallets or [])
-    ]
-    key = hashlib.sha1(
-        json.dumps(mark, sort_keys=True, ensure_ascii=False).encode()
-    ).hexdigest()
+    key = _coins_key(wallets)
     return cached_small(_COINS, key, SMALL_TTL,
                         lambda: load_coins(cur, hl, flow, wallets))
 
@@ -5042,16 +5057,27 @@ def bootstrap_cached(chat: str) -> dict:
                 _boot_busy.add(key)
                 threading.Thread(target=_boot_rebuild, args=(key,), daemon=True).start()
             return hit[1]
-    return _boot_build(key)
+    # В памяти ничего: первый заход после перезапуска службы или после
+    # изменения кошельков. Полная сборка ждёт справочник монет, а тот ходит
+    # в сеть — на боевом сервере это занимало до двадцати пяти секунд, дольше,
+    # чем приложение ждёт ответа, и человек видел старое, пока не нажмёт
+    # «обновить». Теперь сразу отдаём быструю, а полную собираем в фоне.
+    data = _boot_build(key, fast=True)
+    with _boot_lock:
+        if key not in _boot_busy:
+            _boot_busy.add(key)
+            threading.Thread(target=_boot_rebuild, args=(key,), daemon=True).start()
+    return data
 
 
-def _boot_build(key: str) -> dict:
-    data = bootstrap(key)
+def _boot_build(key: str, fast: bool = False) -> dict:
+    data = bootstrap(key, fast)
     # Неудачную сборку не запоминаем: иначе временный сбой базы залипал бы на
-    # экране до конца срока жизни записи.
+    # экране до конца срока жизни записи. Быструю кладём уже устаревшей:
+    # следующий же запрос возьмёт её и попросит полную.
     if data.get("ok"):
         with _boot_lock:
-            _BOOT[key] = (time.monotonic(), data)
+            _BOOT[key] = (time.monotonic() - (BOOT_TTL if fast else 0), data)
             cap_cache(_BOOT, 4096)
     return data
 
@@ -5141,7 +5167,9 @@ def build_public_into_cache(cur: sqlite3.Connection, hl: sqlite3.Connection | No
             _building = False
 
 
-def bootstrap(chat: str) -> dict:
+def bootstrap(chat: str, fast: bool = False) -> dict:
+    """Выгрузка человека. `fast` — без похода в сеть за ценами монет: справочник
+    берётся из памяти (или общий), а свежий дособирается следом в фоне."""
     cur = open_db(DB)
     hl = open_db(HL_DB)
     if not cur:
@@ -5200,7 +5228,13 @@ def bootstrap(chat: str) -> dict:
         fund_n = pub.get("fundN") or {}
         rot_sum = pub.get("rotSum") or {}
         sonar = pub.get("sonar") or empty_sonar
-        coins = piece("coins", lambda: coins_cached(cur, hl, flow, wallets), pub.get("coins") or {})
+        if fast:
+            coins = coins_known(wallets) or pub.get("coins") or {}
+            # Приложение по этой метке переспросит через пару секунд, а не
+            # через три минуты: полная выгрузка к тому времени будет готова.
+            errors.append("coins:later")
+        else:
+            coins = piece("coins", lambda: coins_cached(cur, hl, flow, wallets), pub.get("coins") or {})
         out = {
             "ok": True,
             "live": True,

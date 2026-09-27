@@ -11,7 +11,7 @@ import { useLive } from "./store/live";
 import { t, bare } from "./i18n/t";
 import { ensureLang, isRtl, normalizeLang } from "./i18n";
 import { setLocale } from "./lib/format";
-import { bootTelegram, haptic, telegramLang, waitForTelegram, webApp } from "./lib/telegram";
+import { bootTelegram, haptic, initData, telegramLang, waitForTelegram, webApp } from "./lib/telegram";
 import { startSync, syncNow } from "./lib/sync";
 import { Toaster, toast } from "./components/Toast";
 import { Background } from "./components/Background";
@@ -128,14 +128,23 @@ export default function App() {
     void waitForTelegram().then(() => {
       if (dead) return;
       bootTelegram();
+      const signed = Boolean(initData());
       stop = startSync();
-      // Мост не успел за две секунды — опрос ушёл без подписи и вернул
-      // только общее. Ждём его дальше и, как появится, спрашиваем заново:
-      // иначе личные данные ждали бы следующего опроса, а это три минуты.
+      // Подпись обычно уже есть — из адреса запуска. Мост Telegram может
+      // прийти позже: тогда разворачиваем окно, когда он придёт, а если
+      // подписи не было вовсе — сразу спрашиваем заново, уже с ней.
       if (!webApp()) {
-        void waitForTelegram(15000).then(() => {
-          if (!dead && webApp()) void syncNow();
-        });
+        const started = Date.now();
+        const poll = () => {
+          if (dead) return;
+          if (webApp()) {
+            bootTelegram();
+            if (!signed && initData()) void syncNow();
+            return;
+          }
+          if (Date.now() - started < 30000) setTimeout(poll, 100);
+        };
+        poll();
       }
     });
     return () => {

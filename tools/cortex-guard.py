@@ -749,5 +749,16 @@ say("приложение не ставит сервисному паузу и �
     "walletLimit(me.plan, me.service)" in read(f"{APP}/src/screens/WalletsTab.tsx")
     and "if (service) return Infinity;" in read(f"{APP}/src/store/app.ts"))
 
+# --- данные приходят сами, без «обновить» ------------------------------------
+tg = read(f"{APP}/src/lib/telegram.ts")
+say("подпись берётся из адреса запуска, не ждёт скрипт Telegram",
+    'get("tgWebAppData")' in tg and "webApp()?.initData || LAUNCH" in tg and "if (webApp() || LAUNCH)" in tg)
+say("первый заход на сервере — быстрая выгрузка, полная в фоне",
+    "data = _boot_build(key, fast=True)" in api and 'errors.append("coins:later")' in api)
+say("приложение переспрашивает за быстрой выгрузкой через секунды",
+    'data.partial.includes("coins:later")' in sync and "SOON_DELAY" in sync)
+say("повтор после сбоя — через секунды, серия считается отдельно",
+    "const MIN_DELAY = 3_000;" in sync and "MIN_DELAY * 2 ** fails" in sync)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
