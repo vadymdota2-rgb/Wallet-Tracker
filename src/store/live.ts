@@ -84,6 +84,9 @@ interface LiveState {
   syncedAt: number;
   /** Куски, которые сервер не успел собрать. Показываем честно. */
   partial: string[];
+  /** Дней премиума в подарок — показать один раз; 0 — нечего. */
+  gift: number;
+  dropGift(): void;
 
   me: Me;
   wallets: Wallet[];
@@ -211,6 +214,8 @@ export const useLive = create<LiveState>((set, get) => ({
   status: snap ? "stale" : "boot",
   syncedAt: snap?.syncedAt ?? 0,
   partial: [],
+  gift: 0,
+  dropGift: () => set({ gift: 0 }),
 
   me: snap?.me ?? EMPTY_ME,
   wallets: snap?.wallets ?? [],
@@ -238,6 +243,7 @@ export const useLive = create<LiveState>((set, get) => ({
       status: d.me ? "ready" : "anon",
       syncedAt: Date.now(),
       partial: Array.isArray(d.partial) ? d.partial : [],
+      gift: d.gift?.days && d.gift.days > 0 ? d.gift.days : prev.gift,
       // Личное — как пришло: ноль кошельков это ноль кошельков.
       me: d.me ? { ...EMPTY_ME, ...d.me } : prev.me,
       // Позиции и остаток приходят отдельным запросом по одному кошельку;

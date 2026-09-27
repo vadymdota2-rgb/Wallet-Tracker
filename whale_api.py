@@ -553,6 +553,74 @@ def plan_of(boot: dict) -> bool:
     return isinstance(me, dict) and me.get("plan") == "premium"
 
 
+# Бесплатная неделя премиума — при первом открытии мини-аппа. Раньше её
+# выдавал бот по /start, и кто открывал только приложение, не получал ничего,
+# а кто писал боту и в приложение не заходил — получал неделю впустую.
+# Отметка «уже выдавалась» — та же таблица trial_granted, что вёл бот: второй
+# раз неделю не дадут ни тем, кто получил её в боте, ни после удаления данных.
+TRIAL_DAYS = 7
+
+
+def grant_trial(chat: str, lang: str = "") -> bool:
+    """Выдать неделю, если человеку её ещё не давали. True — выдали сейчас.
+
+    Всё одной транзакцией: отметка и продление либо вместе, либо никак. Два
+    одновременных первых запроса не выдадут неделю дважды — INSERT OR IGNORE
+    в trial_granted пропустит только один. Продление — как grantPremiumDays в
+    premium.cpp: к действующей подписке дни прибавляются, а не заменяют её."""
+    if not chat or is_service(chat):
+        return False
+    con = open_db(DB, write=True)
+    if not con:
+        return False
+    try:
+        if not (table_exists(con, "trial_granted") and table_exists(con, "users")):
+            return False
+        ucols = cols(con, "users")
+        if not {"is_premium", "premium_expire"} <= ucols:
+            return False
+        con.isolation_level = None
+        con.execute("BEGIN IMMEDIATE")
+        try:
+            t = now()
+            if con.execute("INSERT OR IGNORE INTO trial_granted(chat_id, granted_at) VALUES(?,?)",
+                           (chat, t)).rowcount != 1:
+                con.execute("ROLLBACK")
+                return False
+            code = (lang or "").strip().lower()[:2]
+            con.execute("INSERT OR IGNORE INTO users(chat_id, language, threshold_nanos, created_at) VALUES(?,?,?,?)",
+                        (chat, code if code in LANG_CODES else "en", 100000000000, t))
+            has_start = "premium_start" in ucols
+            row = con.execute(
+                "SELECT is_premium, premium_expire" + (", premium_start" if has_start else "") +
+                " FROM users WHERE chat_id=?", (chat,)).fetchone()
+            expire = int(row["premium_expire"] or 0)
+            active = bool(row["is_premium"]) and expire > t
+            new_expire = (expire if active else t) + TRIAL_DAYS * 86400
+            if has_start:
+                start = int(row["premium_start"] or 0)
+                new_start = start if active and start > 0 else t
+                con.execute("UPDATE users SET is_premium=1, premium_start=?, premium_expire=? WHERE chat_id=?",
+                            (new_start, new_expire, chat))
+            else:
+                con.execute("UPDATE users SET is_premium=1, premium_expire=? WHERE chat_id=?",
+                            (new_expire, chat))
+            con.execute("COMMIT")
+            sys.stderr.write(f"[api] trial: {TRIAL_DAYS} days for {chat}\n")
+            return True
+        except sqlite3.Error:
+            try:
+                con.execute("ROLLBACK")
+            except sqlite3.Error:
+                pass
+            raise
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] trial {chat}: {e}\n")
+        return False
+    finally:
+        con.close()
+
+
 def wallet_limit(con: sqlite3.Connection, chat: str) -> int:
     """Лимит кошельков по подписке — как в premium.cpp."""
     if is_service(chat):
@@ -5608,9 +5676,19 @@ class Handler(BaseHTTPRequestHandler):
                 })
                 return
             if path in ("/bootstrap", "/api/bootstrap", "/api/me"):
-                chat = self._user(qs)
+                init = self.headers.get("X-Telegram-Init-Data") or qs.get("init", [""])[0]
+                who = verify_init_data(init)
+                chat = who["id"] if who else ""
+                # Первое открытие приложения — неделя премиума в подарок.
+                # Выгрузка в памяти собрана ещё без неё, поэтому её сбрасываем.
+                gift = grant_trial(chat, who.get("lang", "")) if who else False
+                if gift:
+                    boot_drop(chat)
                 boot = bootstrap_cached(chat)
-                self._json(200, for_plan(boot, plan_of(boot)))
+                boot = for_plan(boot, plan_of(boot))
+                if gift:
+                    boot = {**boot, "gift": {"days": TRIAL_DAYS}}
+                self._json(200, boot)
                 return
             if path in ("/market", "/api/market"):
                 cur = open_db(DB)

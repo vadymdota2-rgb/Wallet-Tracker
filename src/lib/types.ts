@@ -607,6 +607,8 @@ export interface Bootstrap {
   pay?: PayInfo;
   /** Список кусков, которые сервер не успел собрать. */
   partial?: string[];
+  /** Первое открытие приложения — неделя премиума в подарок. */
+  gift?: { days: number };
   cachedAt?: number;
   error?: string;
 }

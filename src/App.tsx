@@ -8,6 +8,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useApp } from "./store/app";
 import { useLive } from "./store/live";
+import { Gift } from "./components/Gift";
 import { t, bare } from "./i18n/t";
 import { ensureLang, isRtl, normalizeLang } from "./i18n";
 import { setLocale } from "./lib/format";
@@ -208,6 +209,8 @@ export default function App() {
       <main className="body">
         <TabBody tab={tab} />
       </main>
+
+      <Gift />
 
       {Screen ? (
         <div className="sheet" role="dialog" aria-modal="true">

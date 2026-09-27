@@ -797,5 +797,13 @@ say("помощь называет вкладки и кнопки как при�
 say("помощь — руководство, а не обрезанные строки меню",
     "help_menu_add" not in read(f"{APP}/src/screens/HelpScreen.tsx") and '"hp_faq_title"' in read(f"{APP}/src/screens/HelpScreen.tsx"))
 
+# --- неделя премиума — только при первом открытии приложения --------------
+say("бот по /start неделю не выдаёт", "TRIAL_DAYS" not in main_cpp and "grantPremiumDays(cid" not in main_cpp)
+say("API выдаёт неделю при первом открытии, одной транзакцией",
+    "gift = grant_trial(chat" in api and 'INSERT OR IGNORE INTO trial_granted(chat_id, granted_at)' in api
+    and 'con.execute("BEGIN IMMEDIATE")' in pybody(api, "def grant_trial("))
+say("помощь не обещает неделю за /start", all("/start" not in ts_dict(lg).get("hp_a4", "")
+    for lg in ("en","ru","es","pt","fr","tr","ar","pl","de","uk","hi","id","vi","ko","zh","ja")))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
