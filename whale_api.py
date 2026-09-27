@@ -1878,7 +1878,8 @@ def symbols() -> list[dict]:
 #     дату («circ») плюс все наши же разлоки после неё. Поэтому доля считается
 #     от оборота на момент разлока, а не на сегодня: помесячная выдача MON в
 #     декабре меряется оборотом уже после ноябрьской годовщины;
-#   * цена — средняя Hyperliquid, откуда приложение и так берёт все цены.
+#   * цена — средняя Hyperliquid, откуда приложение и так берёт все цены;
+#     монету, которой там нет, — последней сделкой на споте крупной биржи.
 #
 # «m» — ежемесячная выдача: день месяца, первый и последний месяц, сколько
 # и кому. «o» — разовая выдача: дата, сколько и кому. Время — полночь UTC:
@@ -1899,8 +1900,10 @@ UNLOCK_BOOK: list[dict] = [
      # (решение фонда в августе 2026). Объём — оценка по прежнему графику.
      "circ": ("2026-09-27", 10_095_312_500),
      "plan": [("o", "2026-10-05", 1_410_000_000, "investors"),
-              # Команда: 30% от 15 млрд, 25% через год, остальное 36 месяцев.
-              ("m", 2, "2025-05", "2028-04", 93_750_000, "team")]},
+              # Помесячно 2-го — 40,63 млн через фонд (так идёт выдача в 2026-м;
+              # по документам это доля участников, 25% через год и 36 месяцев).
+              # Дальше весны 2027 раскладку фонд не публиковал.
+              ("m", 2, "2025-05", "2027-03", 40_630_000, "foundation")]},
     {"s": "2Z", "n": "DoubleZero",
      "src": "https://doublezero.xyz/tokenomics",
      "circ": ("2026-09-27", 3_469_487_454),
@@ -1978,8 +1981,8 @@ UNLOCK_BOOK: list[dict] = [
      # Стратегические партнёры 32,2% и команда 25,5%: год блокировки, потом
      # помесячно 20-го до мая 2027.
      "circ": ("2026-09-27", 353_313_325),
-     "plan": [("m", 20, "2025-07", "2027-05", 14_350_000, "investors"),
-              ("m", 20, "2025-07", "2027-05", 11_360_000, "team")]},
+     "plan": [("m", 20, "2025-07", "2027-05", 14_000_000, "investors"),
+              ("m", 20, "2025-07", "2027-05", 11_080_000, "team")]},
     {"s": "JTO", "n": "Jito",
      "src": "https://www.jito.network/",
      # Команда 24,5% и инвесторы 16,2%: последние выдачи 7-го, до ноября 2026.
@@ -2020,6 +2023,36 @@ UNLOCK_BOOK: list[dict] = [
      # Линейная выдача, здесь сложена по месяцам — в последний день месяца.
      "circ": ("2026-09-27", 973_802_843),
      "plan": [("m", 31, "2025-11", "2027-09", 17_340_000, "mixed")]},
+    {"s": "XPL", "n": "Plasma",
+     "src": "https://www.plasma.org/docs/get-started/xpl/tokenomics",
+     # Команда и инвесторы по 25% от 10 млрд: треть 25.09.2026, остальное
+     # 24 месяца; экосистема 3,2 млрд — 36 месяцев. Всё — до 25.09.2028.
+     "circ": ("2026-09-27", 4_533_333_333),
+     "plan": [("m", 25, "2026-10", "2028-09", 69_444_444, "team"),
+              ("m", 25, "2026-10", "2028-09", 69_444_444, "investors"),
+              ("m", 25, "2025-10", "2028-09", 88_888_889, "community")]},
+    {"s": "CRO", "n": "Cronos",
+     "src": "https://crypto.com/en/market-updates/crypto-market-pulse-weekly-10-03-2025",
+     # Стратегический резерв: 70 млрд, возвращённые голосованием в 2025-м,
+     # выходят равными долями 60 месяцев, 17-го числа.
+     "circ": ("2026-09-27", 49_746_917_935),
+     "plan": [("m", 17, "2025-04", "2030-03", 1_166_666_667, "treasury")]},
+    {"s": "WLD", "n": "World",
+     "src": "https://world.org/blog/foundational-topics/tokenomics-milestone-wld-unlock-rate-to-decrease-by-43-in-july",
+     "est": True,
+     # Выдача ежедневная: с 24.07.2026 — 1,3 млн в день инвесторам и команде
+     # TFH и 1,6 млн сообществу. Здесь сложена по месяцам на 1-е число;
+     # следующее снижение ставки проект пока не объявлял — считаем на год.
+     "circ": ("2026-09-27", 3_716_605_842),
+     "plan": [("m", 1, "2026-10", "2027-07", 39_540_000, "investors"),
+              ("m", 1, "2026-10", "2027-07", 48_670_000, "community")]},
+    {"s": "ASTER", "n": "Aster",
+     "src": "https://www.kucoin.com/news/flash/aster-extends-team-token-unlock-period-for-400m-aster-until-september-2027",
+     "est": True,
+     # Команда: 400 млн заперты до 17.09.2027, дальше по 10 млн в месяц.
+     # Экосистема с 2026-го выходит только наградами за стейкинг.
+     "circ": ("2026-09-27", 2_710_487_455),
+     "plan": [("m", 17, "2027-09", "2030-12", 10_000_000, "team")]},
 ]
 UNLOCK_WHO = ("team", "investors", "treasury", "community", "foundation", "mixed")
 
@@ -2090,6 +2123,35 @@ def unlock_events(now: float, book: list[dict] | None = None) -> list[dict]:
     return sorted(out, key=lambda e: (e["ts"], e["sym"]))
 
 
+# Цена монеты, которой нет на Hyperliquid (CRO), — последняя сделка на
+# споте: Bybit, потом OKX, потом KuCoin, кто первым ответит. Минута в памяти,
+# и неудача тоже: монеты без спота не должны каждый раз ждать трёх бирж.
+SPOT_PX_TTL_S = 60.0
+_spot_px_cache: dict[str, tuple[float, float]] = {}
+
+
+def spot_px(sym: str) -> float:
+    s = re.sub(r"[^A-Z0-9]", "", (sym or "").upper())
+    if not s:
+        return 0.0
+    hit = _spot_px_cache.get(s)
+    if hit and time.monotonic() - hit[0] < SPOT_PX_TTL_S:
+        return hit[1]
+    px = 0.0
+    bb = get_json(f"https://api.bybit.com/v5/market/tickers?category=spot&symbol={s}USDT", timeout=5.0)
+    for x in (((bb or {}).get("result") or {}).get("list") or []) if isinstance(bb, dict) else []:
+        px = _fnum(x.get("lastPrice"))
+    if not px:
+        ok = get_json(f"https://www.okx.com/api/v5/market/ticker?instId={s}-USDT", timeout=5.0)
+        for x in ((ok or {}).get("data") or []) if isinstance(ok, dict) else []:
+            px = _fnum(x.get("last"))
+    if not px:
+        kc = get_json(f"https://api.kucoin.com/api/v1/market/orderbook/level1?symbol={s}-USDT", timeout=5.0)
+        px = _fnum(((kc or {}).get("data") or {}).get("price")) if isinstance(kc, dict) else 0.0
+    _spot_px_cache[s] = (time.monotonic(), px)
+    return px
+
+
 def unlocks() -> dict:
     """Календарь разлоков с ценой и долей от оборота.
 
@@ -2100,7 +2162,7 @@ def unlocks() -> dict:
     mids = hl_mids()
     items = []
     for e in unlock_events(time.time()):
-        price = mids.get(e["sym"], 0.0)
+        price = mids.get(e["sym"], 0.0) or spot_px(e["sym"])
         circ = e["circ"]
         e["price"] = price or None
         e["usd"] = round(e["tokens"] * price) if price else None

@@ -832,7 +832,7 @@ say("введённый тикер открывается, даже если е�
 # --- разлоки: свои расписания, только будущее, ближайшие первыми -----------
 unl_scr = read(f"{APP}/src/screens/UnlocksScreen.tsx")
 say("разлоки считаются по своей книге расписаний, у каждой монеты — источник",
-    "UNLOCK_BOOK: list[dict] = [" in api and api.count('"src": "https://') >= 19)
+    "UNLOCK_BOOK: list[dict] = [" in api and api.count('"src": "https://') >= 23)
 say("оценочные объёмы помечены в приложении", '"est": bool(coin.get("est"))' in api and "unl_est" in unl_scr)
 _ub = pybody(api, "def unlock_events(")
 say("прошедшие разлоки не отдаются, ближайшие первыми",
@@ -842,6 +842,8 @@ _uu = pybody(api, "def unlocks(")
 say("разлоки ни от кого не зависят: оборот — наш расчёт, цена — Hyperliquid",
     "coingecko" not in (_ub + _uu).lower() and "get_json" not in _uu and "mids = hl_mids()" in _uu
     and '"circ": ("' in api and 'ev["circ"] = round(circ)' in _ub)
+say("цена монеты без Hyperliquid — со спота, с кэшем и неудач тоже",
+    'mids.get(e["sym"], 0.0) or spot_px(e["sym"])' in _uu and "_spot_px_cache[s] = (time.monotonic(), px)" in api)
 say("давление — доля от оборота на день разлока", 'e["tokens"] / circ * 100' in _uu)
 say("экран разлоков: поиск по тикеру и названию, фильтр крупных",
     "e.sym.toLowerCase().includes(q) || e.name.toLowerCase().includes(q)" in unl_scr and 'filter === "big"' in unl_scr)
