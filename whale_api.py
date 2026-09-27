@@ -2053,6 +2053,53 @@ UNLOCK_BOOK: list[dict] = [
      # Экосистема с 2026-го выходит только наградами за стейкинг.
      "circ": ("2026-09-27", 2_710_487_455),
      "plan": [("m", 17, "2027-09", "2030-12", 10_000_000, "team")]},
+    {"s": "LIT", "n": "Lighter",
+     "src": "https://insights.unlocks.app/lighter-lit-tokenomics-robinhood-hype-a-real-burn-and-the-december-2026-cliff-2/",
+     "est": True,
+     # Команда 26% и инвесторы 24% от миллиарда: год блокировки до
+     # 27.12.2026, потом три года равномерно (~3,2 млн в неделю). Здесь
+     # сложено по месяцам на 27-е.
+     "circ": ("2026-09-27", 250_000_000),
+     "plan": [("m", 27, "2027-01", "2029-12", 7_222_222, "team"),
+              ("m", 27, "2027-01", "2029-12", 6_666_667, "investors")]},
+    {"s": "MOVE", "n": "Movement",
+     "src": "https://www.movementnetwork.xyz/article/movement-foundation-move-token",
+     "est": True,
+     # Ранние инвесторы 22,5% и участники 17,5%: помесячно 9-го.
+     "circ": ("2026-09-27", 4_495_833_333),
+     "plan": [("m", 9, "2026-01", "2027-12", 92_580_000, "investors"),
+              ("m", 9, "2026-01", "2027-12", 72_000_000, "team")]},
+    {"s": "PENGU", "n": "Pudgy Penguins",
+     "src": "https://www.coindesk.com/markets/2026/04/27/pudgy-penguins-rally-coincides-with-token-unlock-as-analyst-flags-exit-liquidity-risk",
+     "est": True,
+     "circ": ("2026-09-27", 62_860_396_090),
+     "plan": [("m", 17, "2026-01", "2027-12", 723_000_000, "mixed")]},
+    {"s": "KAITO", "n": "Kaito",
+     "src": "https://cryptodaily.co.uk/2026/07/kaito-unlock-core-contributors-july-20",
+     "est": True,
+     "circ": ("2026-09-27", 241_388_889),
+     "plan": [("m", 20, "2026-01", "2027-12", 6_940_000, "team"),
+              ("m", 20, "2026-01", "2027-12", 10_860_000, "mixed")]},
+    {"s": "TRUMP", "n": "Official Trump",
+     "src": "https://tokenomist.ai/official-trump",
+     "est": True,
+     # Доли создателей и CIC Digital выходят до 18.12.2027; остаток после
+     # августа 2026 (~279 млн) разложен поровну на оставшиеся месяцы.
+     "circ": ("2026-09-27", 281_867_936),
+     "plan": [("m", 18, "2026-09", "2027-12", 17_440_000, "team")]},
+    {"s": "MANTA", "n": "Manta Network",
+     "src": "https://www.coingabbar.com/en/crypto-blogs-details/crypto-token-unlocks-august-2026-full-breakdown",
+     "est": True,
+     "circ": ("2026-09-27", 482_016_891),
+     "plan": [("m", 18, "2026-01", "2027-01", 3_490_000, "investors"),
+              ("m", 18, "2026-01", "2027-01", 3_370_000, "community"),
+              ("m", 18, "2026-01", "2027-01", 6_940_000, "mixed")]},
+    {"s": "MYX", "n": "MYX Finance",
+     "src": "https://www.coingabbar.com/en/crypto-blogs-details/crypto-token-unlocks-august-2026-full-breakdown",
+     "est": True,
+     "circ": ("2026-09-27", 235_212_849),
+     "plan": [("m", 6, "2026-01", "2027-04", 8_330_000, "team"),
+              ("m", 6, "2026-01", "2027-04", 7_290_000, "investors")]},
 ]
 UNLOCK_WHO = ("team", "investors", "treasury", "community", "foundation", "mixed")
 
@@ -2123,8 +2170,8 @@ def unlock_events(now: float, book: list[dict] | None = None) -> list[dict]:
     return sorted(out, key=lambda e: (e["ts"], e["sym"]))
 
 
-# Цена монеты, которой нет на Hyperliquid (CRO), — последняя сделка на
-# споте: Bybit, потом OKX, потом KuCoin, кто первым ответит. Минута в памяти,
+# Цена монеты, которой нет на Hyperliquid (CRO, MYX), — последняя сделка на
+# споте: Bybit, потом OKX, KuCoin и Gate, кто первым ответит. Минута в памяти,
 # и неудача тоже: монеты без спота не должны каждый раз ждать трёх бирж.
 SPOT_PX_TTL_S = 60.0
 _spot_px_cache: dict[str, tuple[float, float]] = {}
@@ -2148,6 +2195,10 @@ def spot_px(sym: str) -> float:
     if not px:
         kc = get_json(f"https://api.kucoin.com/api/v1/market/orderbook/level1?symbol={s}-USDT", timeout=5.0)
         px = _fnum(((kc or {}).get("data") or {}).get("price")) if isinstance(kc, dict) else 0.0
+    if not px:
+        gt = get_json(f"https://api.gateio.ws/api/v4/spot/tickers?currency_pair={s}_USDT", timeout=5.0)
+        for x in gt if isinstance(gt, list) else []:
+            px = _fnum(x.get("last"))
     _spot_px_cache[s] = (time.monotonic(), px)
     return px
 
