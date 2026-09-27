@@ -200,6 +200,15 @@ export const peekDeals = (addr: string, venue: string) =>
  */
 export const forgetMe = () => call<MutationResult>("/api/forget", { method: "POST", body: {} });
 
+/** История открыта — счётчик новых обнуляется. `upto` — время последнего
+ *  показанного алерта: пришедший позже останется непрочитанным. */
+export const markAlertsSeen = (upto: number) =>
+  call<MutationResult>("/api/alerts/seen", { method: "POST", body: { upto } });
+
+/** Куда слать алерты: в Telegram и сюда (true) или только сюда (false). */
+export const setAlertMode = (tg: boolean) =>
+  call<MutationResult>("/api/alerts/mode", { method: "POST", body: { tg } });
+
 /** Язык хранится в той же строке users, что читает бот: выбор общий. */
 export const setLangRemote = (lang: string) =>
   call<MutationResult>("/api/lang", { method: "POST", body: { lang } });

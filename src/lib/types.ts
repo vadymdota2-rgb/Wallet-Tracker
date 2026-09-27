@@ -70,6 +70,10 @@ export interface Me {
   premUntil: number;
   /** Сервисный аккаунт бота: подписка навсегда, лимита кошельков нет. */
   service?: boolean;
+  /** Алерты приходят и в Telegram (true) или только в приложение (false). */
+  alertTg?: boolean;
+  /** Алертов с последнего открытия истории. */
+  unread?: number;
 }
 
 export interface FlowCoin {
@@ -560,6 +564,14 @@ export interface AlertRow {
   name: string;
   side: string;
   notional: number;
+  /** Номер доставки — ключ строки. */
+  id?: number;
+  /** Когда пришёл, мс. */
+  ts?: number;
+  /** Текст алерта как в чате, без разметки. */
+  text?: string;
+  /** Уходил ли в Telegram: false — «только в приложении». */
+  tg?: boolean;
 }
 
 /** Чем и почём продаётся подписка — числа приходят с сервера. */

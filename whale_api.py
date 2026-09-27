@@ -4,6 +4,7 @@ Stdlib only. Run from WhaleScanner working directory on the VPS."""
 from __future__ import annotations
 
 import hashlib
+import html
 import hmac
 import json
 import math
@@ -1134,6 +1135,66 @@ def price_pack(cur: sqlite3.Connection, hl: sqlite3.Connection | None, sym: str,
     return sl
 
 
+ALERT_KEEP_SEC = 2 * 86400
+ALERT_HISTORY_MAX = 200
+
+
+def alert_text(msg: str) -> str:
+    """Текст алерта как он пришёл бы в чат, без разметки Telegram.
+
+    Строки сохраняются: алерт бота — это несколько строк (кто, что, сколько,
+    ссылка), и сплющенный в одну он не читается.
+    """
+    t = re.sub(r"<br\s*/?>", "\n", msg or "", flags=re.I)
+    t = re.sub(r"<[^>]+>", "", t)
+    t = html.unescape(t)
+    lines = [re.sub(r"[ \t]+", " ", ln).strip() for ln in t.split("\n")]
+    out: list[str] = []
+    for ln in lines:
+        if ln or (out and out[-1]):
+            out.append(ln)
+    return "\n".join(out).strip()
+
+
+def alert_prefs(con: sqlite3.Connection, chat: str) -> tuple[bool, int]:
+    """Куда слать алерты и когда человек последний раз открыл историю.
+
+    Колонки заводит бот; если он ещё старый — по умолчанию «в Telegram» и
+    «ничего не видел»."""
+    cset = cols(con, "users") if table_exists(con, "users") else set()
+    if "alert_tg" not in cset:
+        return True, 0
+    row = con.execute(
+        "SELECT alert_tg, alerts_seen_at FROM users WHERE chat_id=?", (chat,)
+    ).fetchone()
+    if not row:
+        return True, 0
+    return bool(int(row["alert_tg"] if row["alert_tg"] is not None else 1)), int(row["alerts_seen_at"] or 0)
+
+
+def ensure_alert_cols(con: sqlite3.Connection) -> None:
+    """Те же колонки, что заводит бот (main.cpp): API может обновиться раньше."""
+    cset = cols(con, "users")
+    for name, ddl in (("alert_tg", "INTEGER NOT NULL DEFAULT 1"),
+                      ("alerts_seen_at", "INTEGER NOT NULL DEFAULT 0")):
+        if name not in cset:
+            try:
+                con.execute(f"ALTER TABLE users ADD COLUMN {name} {ddl}")
+            except sqlite3.OperationalError:
+                pass  # бот успел первым
+
+
+def unread_alerts(con: sqlite3.Connection, chat: str, seen_at: int) -> int:
+    if not (table_exists(con, "alerts") and table_exists(con, "deliveries")):
+        return 0
+    row = con.execute(
+        "SELECT COUNT(*) FROM alerts a JOIN deliveries d ON d.alert_id=a.id "
+        "WHERE d.chat_id=? AND a.created_at>? AND a.created_at>=?",
+        (chat, seen_at, now() - ALERT_KEEP_SEC),
+    ).fetchone()
+    return int(row[0] or 0)
+
+
 def parse_alert(msg: str, ts: int, name: str = "") -> dict:
     text = re.sub(r"<[^>]+>", " ", msg or "")
     text = re.sub(r"\s+", " ", text).strip()
@@ -1189,6 +1250,8 @@ def load_me(cur: sqlite3.Connection, chat: str) -> dict:
             if "is_premium" in cset and row["is_premium"] and int(row["premium_expire"] or 0) > now():
                 plan = "premium"
                 prem_until = int(row["premium_expire"]) * 1000
+    alert_tg, seen_at = alert_prefs(cur, chat)
+    unread = unread_alerts(cur, chat, seen_at)
     service = is_service(chat)
     if service:
         # Бессрочно: срока нет, и «осталось дней: 0» было бы неправдой.
@@ -1209,6 +1272,8 @@ def load_me(cur: sqlite3.Connection, chat: str) -> dict:
         "plan": plan,
         "limit": SERVICE_MAX_WALLETS if service else (50 if plan == "premium" else 1),
         "service": service,
+        "alertTg": alert_tg,
+        "unread": unread,
         "threshold": thr,
         "lang": lang,
         "alertsToday": int(alerts_today or 0),
@@ -1514,15 +1579,21 @@ def load_alerts(cur: sqlite3.Connection, chat: str, wallets: list) -> tuple[list
     alerts, feed = [], []
     if not (table_exists(cur, "alerts") and table_exists(cur, "deliveries")):
         return alerts, feed
+    # История — сколько бот её хранит: доставки чистятся через двое суток.
     rows = cur.execute(
-        "SELECT a.message, a.created_at FROM alerts a "
+        "SELECT d.id, d.status, a.message, a.created_at FROM alerts a "
         "JOIN deliveries d ON d.alert_id=a.id "
         "WHERE d.chat_id=? AND a.created_at>=? "
-        "ORDER BY a.created_at DESC LIMIT 40",
-        (chat, now() - 2 * 86400),
+        "ORDER BY a.created_at DESC, d.id DESC LIMIT ?",
+        (chat, now() - ALERT_KEEP_SEC, ALERT_HISTORY_MAX),
     ).fetchall()
     for r in rows:
         parsed = parse_alert(r["message"], r["created_at"], "")
+        parsed["id"] = int(r["id"])
+        parsed["ts"] = int(r["created_at"] or 0) * 1000
+        parsed["text"] = alert_text(r["message"])
+        # 6 — «только в приложении»: в чат не отправлялся и не отправится.
+        parsed["tg"] = int(r["status"] or 0) != 6
         alerts.append(parsed)
         feed.append(
             {
@@ -5193,6 +5264,7 @@ def bootstrap(chat: str, fast: bool = False) -> dict:
         empty_me = {
             "plan": "free", "limit": 1, "threshold": 10000, "lang": "ru",
             "alertsToday": 0, "alerts30d": 0, "premUntil": 0, "updatedKey": "justNow",
+            "alertTg": True, "unread": 0,
         }
         empty_rank = {"spot": {"pnl": [], "roi": [], "win": [], "act": []}, "perp": {"pnl": [], "roi": [], "win": [], "act": []}}
         empty_sonar = {
@@ -5378,6 +5450,23 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
                 "DELETE FROM whale_addresses WHERE NOT EXISTS "
                 "(SELECT 1 FROM user_whales uw WHERE uw.whale_id = whale_addresses.id)"
             )
+        elif kind == "alerts_seen":
+            # Открыл историю — счётчик обнуляется. Время — последнего алерта,
+            # который человек мог увидеть, а не «сейчас»: иначе алерт, пришедший
+            # между выгрузкой и нажатием, считался бы прочитанным, не показавшись.
+            ensure_alert_cols(con)
+            try:
+                upto = int(body.get("upto") or 0) // 1000
+            except (TypeError, ValueError):
+                upto = 0
+            upto = min(upto, now()) if upto > 0 else now()
+            con.execute("UPDATE users SET alerts_seen_at=MAX(alerts_seen_at, ?) WHERE chat_id=?", (upto, chat))
+        elif kind == "alerts_mode":
+            tg = body.get("tg")
+            if not isinstance(tg, bool):
+                return {"ok": False, "error": "bad_value"}
+            ensure_alert_cols(con)
+            con.execute("UPDATE users SET alert_tg=? WHERE chat_id=?", (1 if tg else 0, chat))
         elif kind == "lang":
             code = str(body.get("lang") or "").strip().lower()
             if code not in LANG_CODES:
@@ -5839,6 +5928,8 @@ class Handler(BaseHTTPRequestHandler):
                 "/api/wallets/rename": "rename",
                 "/api/threshold": "threshold",
                 "/api/lang": "lang",
+                "/api/alerts/seen": "alerts_seen",
+                "/api/alerts/mode": "alerts_mode",
                 "/api/forget": "forget",
             }.get(path)
             if not kind:

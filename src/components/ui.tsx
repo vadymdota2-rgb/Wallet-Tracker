@@ -344,13 +344,18 @@ export function Segmented<T extends string>({
   value,
   options,
   onChange,
+  wrap = false,
 }: {
   value: T;
   options: { id: T; label: ReactNode }[];
   onChange: (id: T) => void;
+  /** Кнопки поровну и с переносом, без ленты. Для длинных подписей вроде
+   *  «Только в приложении»: в ленте вторая кнопка уезжала за край и читалась
+   *  обрывком, а что её можно докрутить, ничто не говорило. */
+  wrap?: boolean;
 }) {
   return (
-    <div className="seg" role="tablist">
+    <div className={wrap ? "seg wrap" : "seg"} role="tablist">
       {options.map((o) => (
         <button
           key={o.id}

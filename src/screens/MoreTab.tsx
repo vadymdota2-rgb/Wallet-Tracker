@@ -12,7 +12,7 @@ import { useLive } from "../store/live";
 import { bare, t } from "../i18n/t";
 import { LANGS } from "../i18n";
 import { num, usd } from "../lib/format";
-import { Card, Row, SectionTitle, ThresholdGlyph } from "../components/ui";
+import { BellGlyph, Card, Row, SectionTitle, ThresholdGlyph } from "../components/ui";
 
 export function MoreTab() {
   const lang = useApp((s) => s.lang);
@@ -20,12 +20,22 @@ export function MoreTab() {
   const me = useLive((s) => s.me);
 
   const langName = LANGS.find((l) => l.id === lang);
+  const unread = me.unread ?? 0;
   const days = me.premUntil ? Math.max(0, Math.ceil((me.premUntil - Date.now()) / 86400000)) : 0;
 
   return (
     <>
       <Card>
         <SectionTitle>{t(lang, "menu_title")}</SectionTitle>
+        {/* История алертов — первой: сюда заглядывают чаще всего, а со
+            «только в приложении» это единственное место, где алерты видны. */}
+        <Row
+          icon={<span className="row-glyph"><BellGlyph size={22} /></span>}
+          title={t(lang, "alerts_title")}
+          sub={unread > 0 ? `${num(unread)} ${t(lang, "alerts_new")}` : t(lang, "alerts_sub")}
+          value={unread > 0 ? <span className="count-badge">{unread > 99 ? "99+" : unread}</span> : undefined}
+          onClick={() => open("alerts")}
+        />
         <Row
           icon={<span aria-hidden="true">⭐</span>}
           title={bare(t(lang, "menu_premium"))}

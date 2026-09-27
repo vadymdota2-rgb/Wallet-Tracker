@@ -832,6 +832,8 @@
   transition: background 0.18s var(--ease), color 0.18s var(--ease);
 }
 .seg button.on { background: var(--blue); color: #fff; box-shadow: var(--shadow); }
+.seg.wrap { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); overflow: visible; }
+.seg.wrap button { white-space: normal; overflow-wrap: anywhere; line-height: 1.2; }
 
 /* Разделы аналитики: шесть плиток в две строки, все на виду ------------- */
 /* minmax(0, 1fr), а не просто 1fr: у колонки по умолчанию нижняя граница —
@@ -1604,3 +1606,66 @@
 }
 /* Шапка сигнала формулы: слова вместо процента, без цвета стороны. */
 .hero-val.hero-formula { color: var(--dim-2); font-size: 17px; line-height: 1.25; }
+
+/* История алертов --------------------------------------------------------- */
+/* Счётчик новых — красная таблетка: на строке меню и на вкладке «Ещё». */
+.count-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 11px;
+  background: var(--dn);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+.tabs button { position: relative; }
+.tab-badge {
+  position: absolute;
+  top: 3px;
+  left: calc(50% + 6px);
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--dn);
+  color: #fff;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--bg, #01030a);
+}
+[dir="rtl"] .tab-badge { left: auto; right: calc(50% + 6px); }
+.alert-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.alert-row {
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: rgb(11 22 40 / 0.29);
+  border: 1px solid var(--line);
+}
+/* Пришедшие с прошлого открытия — с голубым краем: счётчик уже обнулился,
+   а видно, какие именно были новыми. */
+.alert-row.fresh { border-color: rgb(127 216 255 / 0.45); }
+.alert-hd { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.alert-t { color: var(--dim); font-size: 12px; }
+.alert-tag {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--dim);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 1px 6px;
+}
+.alert-text {
+  margin: 0;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}

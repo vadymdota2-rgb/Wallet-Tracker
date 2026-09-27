@@ -760,5 +760,21 @@ say("приложение переспрашивает за быстрой вы�
 say("повтор после сбоя — через секунды, серия считается отдельно",
     "const MIN_DELAY = 3_000;" in sync and "MIN_DELAY * 2 ** fails" in sync)
 
+# --- история алертов и «только в приложении» ---------------------------------
+mq = read(f"{BOT}/message_queue.cpp")
+say("бот: «только в приложении» пишет в историю, но не в очередь Telegram",
+    "appOnly.count(c) ? DELIVERY_APP_ONLY : 0" in mq and "constexpr int DELIVERY_APP_ONLY = 6;" in mq
+    and "if (!appOnly.count(c)) batchSize++;" in mq)
+say("бот: очередь Telegram берёт только ждущие отправки",
+    "WHERE d.status IN (0,3) AND d.next_retry_at<=?" in mq)
+say("бот: такие доставки чистятся со всеми", main_cpp.count("status IN (1,2,4,6)") == 2)
+say("бот и API заводят одни и те же колонки",
+    all(f"{n} {d}" in main_cpp and f'("{n}", "{d}")' in api
+        for n, d in (("alert_tg", "INTEGER NOT NULL DEFAULT 1"), ("alerts_seen_at", "INTEGER NOT NULL DEFAULT 0"))))
+say("API: прочитано — по последнему показанному, не назад",
+    "MAX(alerts_seen_at, ?)" in api and "upto = min(upto, now())" in api)
+say("«Ещё» начинается с истории алертов",
+    more.index('open("alerts")') < more.index('open("premium")'))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

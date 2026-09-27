@@ -48,6 +48,7 @@ const SCREEN_TITLE: Record<ScreenName, DictKey> = {
   premium: "menu_premium",
   help: "help_title",
   history: "ai_hist_title",
+  alerts: "alerts_title",
   deals: "ui_deals",
   model: "ai_st_title",
   spot: "ui_spot_open",
@@ -81,6 +82,7 @@ export default function App() {
   const langPinned = useApp((s) => s.langPinned);
   const setLang = useApp((s) => s.setLang);
   const tab = useApp((s) => s.tab);
+  const unread = useLive((s) => s.me.unread ?? 0);
   const goTab = useApp((s) => s.goTab);
   const stack = useApp((s) => s.stack);
   const back = useApp((s) => s.back);
@@ -236,6 +238,13 @@ export default function App() {
                     aria-current={it.id === tab}
                     onClick={() => { haptic("select"); goTab(it.id); }}>
               <span aria-hidden="true">{it.glyph}</span>
+              {/* Новые алерты — на вкладке «Ещё», где лежит их история: при
+                  «только в приложении» это единственный знак, что что-то пришло. */}
+              {it.id === "more" && unread > 0 ? (
+                <i className="tab-badge" aria-label={`${unread} ${t(lang, "alerts_new")}`}>
+                  {unread > 99 ? "99+" : unread}
+                </i>
+              ) : null}
               <small>{bare(t(lang, it.key))}</small>
             </button>
           ))}
