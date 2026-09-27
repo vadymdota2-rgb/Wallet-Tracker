@@ -16,7 +16,7 @@
  * Закрытое подпиской не запрашивается: сервер его бесплатному всё равно не
  * отдаст, а лишние отказы — лишняя нагрузка.
  */
-import { fetchBig, fetchDeals, fetchFlow, fetchLs, fetchSymbols, fetchTokenHist, fetchWallet } from "./api";
+import { fetchBig, fetchDeals, fetchFlow, fetchLs, fetchSymbols, fetchTokenHist, fetchUnlocks, fetchWallet } from "./api";
 import { fetchCandles } from "./klines";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
@@ -97,6 +97,9 @@ function plan(): (() => Promise<unknown>)[] {
 
   // 7. Справочник монет для поиска на графике.
   jobs.push(() => fetchSymbols());
+
+  // 7б. Календарь разлоков — второй пункт бокового меню.
+  jobs.push(() => fetchUnlocks());
 
   // 8. История цены монет из потока — открывают их из списка.
   for (const r of (live.flow[app.flowWin]?.rows ?? []).slice(0, FLOW_COINS)) {

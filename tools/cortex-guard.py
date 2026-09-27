@@ -805,10 +805,11 @@ say("API выдаёт неделю при первом открытии, одн�
 say("помощь не обещает неделю за /start", all("/start" not in ts_dict(lg).get("hp_a4", "")
     for lg in ("en","ru","es","pt","fr","tr","ar","pl","de","uk","hi","id","vi","ko","zh","ja")))
 
-# --- боковое меню: только график TradingView --------------------------------
+# --- боковое меню: график TradingView и разлоки -----------------------------
 _m0 = appx.index("= [", appx.index("const MENU:"))
 menu = appx[_m0:appx.index("];", _m0)]
-say("в боковом меню один пункт — график", menu.count("name:") == 1 and 'name: "chart"' in menu)
+say("в боковом меню два пункта: график, затем разлоки",
+    menu.count("name:") == 2 and menu.index('name: "chart"') < menu.index('name: "unlocks"'))
 tv = read(f"{APP}/src/lib/tradingview.ts")
 chart_scr = read(f"{APP}/src/screens/ChartScreen.tsx")
 say("график — официальный код виджета TradingView со сменой монеты",
@@ -827,6 +828,21 @@ say("металлы и индексы HIP-3 — на свои символы Tra
     'GOLD: "TVC:GOLD"' in tv and 'SP500: "SP:SPX"' in tv)
 say("введённый тикер открывается, даже если его нет в справочнике",
     "results[0]?.s !== typed" in chart_scr and 'onClick={() => pick(typed)}' in chart_scr)
+
+# --- разлоки: свои расписания, только будущее, ближайшие первыми -----------
+unl_scr = read(f"{APP}/src/screens/UnlocksScreen.tsx")
+say("разлоки считаются по своей книге расписаний, у каждой монеты — источник",
+    "UNLOCK_BOOK: list[dict] = [" in api and api.count('"src": "https://') >= 10
+    and "defillama" not in pybody(api, "def _unlocks_build(").lower())
+_ub = pybody(api, "def unlock_events(")
+say("прошедшие разлоки не отдаются, ближайшие первыми",
+    "if ts < day0:" in _ub and 'sorted(by.values(), key=lambda e: (e["ts"], e["sym"]))' in _ub
+    and 'if e["ts"] >= day0' in pybody(api, "def unlocks("))
+say("давление — доля от монет в обороте (CoinGecko)",
+    "circulating_supply" in pybody(api, "def _unlocks_build(") and 'e["pct"]' in pybody(api, "def _unlocks_build("))
+say("экран разлоков: поиск по тикеру и названию, фильтр крупных",
+    "e.sym.toLowerCase().includes(q) || e.name.toLowerCase().includes(q)" in unl_scr and 'filter === "big"' in unl_scr)
+say("маршрут /api/unlocks есть", 'if path in ("/unlocks", "/api/unlocks"):' in api)
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

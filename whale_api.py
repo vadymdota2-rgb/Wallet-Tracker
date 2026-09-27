@@ -1866,6 +1866,190 @@ def symbols() -> list[dict]:
         return _SYMS
 
 
+# Разлоки монет: когда на рынок выходят токены команды, инвесторов и фондов.
+#
+# Платные сервисы (DefiLlama, CryptoRank, Tokenomist) продают это по подписке,
+# поэтому расписания ведём сами. Каждая запись — условия вестинга из
+# документации проекта (ссылка лежит рядом, она же видна в приложении);
+# даты и объёмы движок выводит из этих условий, а не хранит списком. Когда
+# проект меняет условия, правится одна строка здесь.
+#
+# «m» — ежемесячная выдача: день месяца, первый и последний месяц, сколько
+# и кому. «o» — разовая выдача: дата, сколько и кому. Время — полночь UTC:
+# точный час проекты почти никогда не публикуют.
+#
+# Кому: team — команда и ранние участники, investors — инвесторы,
+# treasury — казна компании, community — сообщество и экосистема,
+# foundation — фонд, mixed — несколько групп сразу без раскладки.
+UNLOCK_BOOK: list[dict] = [
+    {"s": "ENA", "cg": "ethena", "n": "Ethena",
+     "src": "https://docs.ethena.fi/overview/ena/tokenomics",
+     # Инвесторы: остаток помесячного графика выдаётся одним разом
+     # (решение фонда в августе 2026). Объём — оценка по прежнему графику.
+     "plan": [("o", "2026-10-05", 1_410_000_000, "investors"),
+              # Команда: 30% от 15 млрд, 25% через год, остальное 36 месяцев.
+              ("m", 2, "2025-05", "2028-04", 93_750_000, "team")]},
+    {"s": "2Z", "cg": "doublezero", "n": "DoubleZero",
+     "src": "https://doublezero.xyz/tokenomics",
+     "plan": [("o", "2026-10-02", 1_655_000_000, "mixed")]},
+    {"s": "APT", "cg": "aptos", "n": "Aptos",
+     "src": "https://aptosfoundation.org/currents/aptos-tokenomics-overview",
+     # Последняя выдача инвесторам и команде по четырёхлетнему графику.
+     "plan": [("o", "2026-10-12", 3_960_000, "team"),
+              ("o", "2026-10-12", 2_440_000, "investors"),
+              ("o", "2026-10-12", 3_210_000, "community"),
+              ("o", "2026-10-12", 1_700_000, "foundation")]},
+    {"s": "ARB", "cg": "arbitrum", "n": "Arbitrum",
+     "src": "https://docs.arbitrum.foundation/token-supply",
+     # Команда 26,94% и инвесторы 17,53% от 10 млрд: четверть через год,
+     # остальное равными долями 36 месяцев.
+     "plan": [("m", 16, "2024-04", "2027-03", 56_125_000, "team"),
+              ("m", 16, "2024-04", "2027-03", 36_520_000, "investors")]},
+    {"s": "STRK", "cg": "starknet", "n": "Starknet",
+     "src": "https://docs.starknet.io/learn/protocol/strk",
+     "plan": [("m", 15, "2025-04", "2027-03", 64_000_000, "team"),
+              ("m", 15, "2025-04", "2027-03", 63_000_000, "investors")]},
+    {"s": "ZK", "cg": "zksync", "n": "ZKsync",
+     "src": "https://docs.zknation.io/zk-token/zk-token",
+     # Инвесторы 19,78% и команда 13,55% от 21 млрд: 3,6% в июне 2025,
+     # остальное 36 месяцев до июня 2028.
+     "plan": [("m", 17, "2025-07", "2028-06", 102_940_000, "investors"),
+              ("m", 17, "2025-07", "2028-06", 70_500_000, "team")]},
+    {"s": "EIGEN", "cg": "eigenlayer", "n": "EigenCloud",
+     "src": "https://docs.eigenfoundation.org/eigen-token/key-info",
+     # Инвесторы 29,5% и ранние участники 25,5% начального выпуска:
+     # по 4% в месяц после годовой блокировки.
+     "plan": [("m", 1, "2025-11", "2027-09", 19_750_000, "investors"),
+              ("m", 1, "2025-11", "2027-09", 17_070_000, "team")]},
+    {"s": "MON", "cg": "monad", "n": "Monad",
+     "src": "https://cryptoticker.io/en/monad-mon-unlock-lock-up-expiry/",
+     # Годовщина основной сети: команда получает 10,7 млрд сразу, инвесторы
+     # и казна — 12/48 своей доли; дальше всё помесячно до ноября 2029.
+     "plan": [("o", "2026-11-24", 10_700_000_000, "team"),
+              ("o", "2026-11-24", 4_920_750_000, "investors"),
+              ("o", "2026-11-24", 988_250_000, "treasury"),
+              ("m", 24, "2026-12", "2029-11", 452_470_000, "team"),
+              ("m", 24, "2026-12", "2029-11", 410_060_000, "investors"),
+              ("m", 24, "2026-12", "2029-11", 82_350_000, "treasury")]},
+    {"s": "ONDO", "cg": "ondo-finance", "n": "Ondo",
+     "src": "https://docs.ondo.foundation/ondo-token",
+     "plan": [("o", "2027-01-18", 1_940_000_000, "mixed"),
+              ("o", "2028-01-18", 1_940_000_000, "mixed")]},
+    {"s": "PYTH", "cg": "pyth-network", "n": "Pyth Network",
+     "src": "https://www.pyth.network/blog/understanding-the-pyth-tokenomics",
+     # 85% выпуска заперто и выходит четырьмя равными частями через 6, 18,
+     # 30 и 42 месяца после запуска (20 ноября 2023).
+     "plan": [("o", "2027-05-20", 2_125_000_000, "mixed")]},
+]
+UNLOCK_WHO = ("team", "investors", "treasury", "community", "foundation", "mixed")
+UNLOCK_TTL = 3600.0
+_UNL: dict = {}
+_unl_at = 0.0
+_unl_busy = False
+_unl_lock = threading.Lock()
+
+
+def _day_ts(y: int, m: int, d: int) -> int:
+    """Полночь UTC; 31-е в коротком месяце становится последним днём."""
+    import calendar
+    d = min(d, calendar.monthrange(y, m)[1])
+    return calendar.timegm((y, m, d, 0, 0, 0))
+
+
+def unlock_events(now: float, book: list[dict] | None = None) -> list[dict]:
+    """Будущие разлоки по книге, ближайшие первыми. Выдачи одной монеты
+    в один день складываются в одно событие с раскладкой по получателям."""
+    day0 = int(now // 86400 * 86400)
+    by: dict[tuple[str, int], dict] = {}
+    for coin in book if book is not None else UNLOCK_BOOK:
+        for step in coin["plan"]:
+            if step[0] == "o":
+                y, m, d = (int(x) for x in step[1].split("-"))
+                dates = [(_day_ts(y, m, d), "cliff")]
+                amt, who = step[2], step[3]
+            else:
+                day, first, last, amt, who = step[1:]
+                y, m = (int(x) for x in first.split("-"))
+                ly, lm = (int(x) for x in last.split("-"))
+                dates = []
+                while (y, m) <= (ly, lm):
+                    dates.append((_day_ts(y, m, day), "monthly"))
+                    y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+            for ts, kind in dates:
+                if ts < day0:
+                    continue
+                ev = by.setdefault((coin["s"], ts), {
+                    "sym": coin["s"], "name": coin["n"], "ts": ts, "tokens": 0.0,
+                    "kind": kind, "who": {}, "src": coin["src"], "cg": coin["cg"],
+                })
+                ev["tokens"] += amt
+                ev["who"][who] = ev["who"].get(who, 0.0) + amt
+                # Разовая выдача в день регулярной — всё равно обвал предложения.
+                if kind == "cliff":
+                    ev["kind"] = "cliff"
+    return sorted(by.values(), key=lambda e: (e["ts"], e["sym"]))
+
+
+def _unlocks_build() -> dict:
+    now = time.time()
+    events = unlock_events(now)
+    ids = sorted({e["cg"] for e in events})
+    mk: dict[str, dict] = {}
+    rows = get_json("https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids="
+                    + ",".join(ids), timeout=15.0) if ids else []
+    for r in rows if isinstance(rows, list) else []:
+        if isinstance(r, dict) and r.get("id"):
+            mk[r["id"]] = r
+    out = []
+    for e in events:
+        m = mk.get(e.pop("cg")) or {}
+        price = _fnum(m.get("current_price"))
+        circ = _fnum(m.get("circulating_supply"))
+        e["price"] = price or None
+        e["usd"] = round(e["tokens"] * price) if price else None
+        # Давление на цену — доля от того, что уже в обороте: 1% от оборота
+        # у монеты с тонкой ликвидностью весит больше, чем круглая сумма.
+        e["pct"] = round(e["tokens"] / circ * 100, 2) if circ else None
+        e["mcap"] = _fnum(m.get("market_cap")) or None
+        out.append(e)
+    return {"ok": True, "at": int(now), "priced": bool(mk), "items": out}
+
+
+def _unlocks_refresh() -> None:
+    global _UNL, _unl_at, _unl_busy
+    try:
+        data = _unlocks_build()
+        # Без цен список всё равно полезен, но цены прошлого раза лучше:
+        # CoinGecko бесплатно отвечает не всегда.
+        if data["priced"] or not _UNL:
+            with _unl_lock:
+                _UNL = data
+                _unl_at = time.monotonic()
+    except Exception as e:
+        sys.stderr.write(f"[api] unlocks: {e}\n")
+    finally:
+        with _unl_lock:
+            _unl_busy = False
+
+
+def unlocks() -> dict:
+    """Календарь разлоков: первый вызов собирает его сразу, дальше
+    устаревший обновляется в фоне. Прошедшие за час события отсекаются
+    при каждом ответе."""
+    global _unl_busy
+    with _unl_lock:
+        have = bool(_UNL)
+    if not have:
+        _unlocks_refresh()
+    with _unl_lock:
+        if time.monotonic() - _unl_at >= UNLOCK_TTL and not _unl_busy:
+            _unl_busy = True
+            threading.Thread(target=_unlocks_refresh, daemon=True).start()
+        data = _UNL
+    day0 = int(time.time() // 86400 * 86400)
+    return {**data, "items": [e for e in data.get("items", []) if e["ts"] >= day0]}
+
+
 # Токенизированные металлы торгуются и обычным перпом, без двоеточия в имени.
 # Держим список отдельно, чтобы они не оседали в крипте: XAU — золото, XAG —
 # серебро, XPT — платина, XPD — палладий; остальное это их обёртки.
@@ -5997,6 +6181,9 @@ class Handler(BaseHTTPRequestHandler):
                         cur.close()
                     except Exception:
                         pass
+                return
+            if path in ("/unlocks", "/api/unlocks"):
+                self._json(200, unlocks())
                 return
             if path in ("/symbols", "/api/symbols"):
                 rows = symbols()

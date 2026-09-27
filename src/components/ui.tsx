@@ -1082,6 +1082,30 @@ export function ChartGlyph({ size = 25 }: { size?: number }) {
   );
 }
 
+/** Открытый замок над календарём — разлоки монет. Тот же контур, что у
+ *  соседних значков меню. */
+export function UnlockGlyph({ size = 25 }: { size?: number }) {
+  return (
+    <svg
+      className="glyph"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M8 10.5V7.2a4 4 0 0 1 7.6-1.7" />
+      <rect x="4.5" y="10.5" width="15" height="10" rx="2.2" />
+      <path d="M12 14.2v2.6" />
+      <circle cx="12" cy="14" r="0.9" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 /** Молния — «быстрее остальных». Тот же контур, что у соседних значков. */
 export function BoltGlyph({ size = 22 }: { size?: number }) {
   return (

@@ -1855,3 +1855,70 @@
 .chart-res-main { flex: 1 1 auto; min-width: 0; display: grid; gap: 1px; }
 .chart-res-main b { color: var(--ink); font-size: 14px; overflow-wrap: anywhere; }
 .chart-res-main small { color: var(--dim); font-size: 12px; overflow-wrap: anywhere; }
+
+/* Разлоки: поиск и фильтр сверху, дальше дни. Полоска слева у строки —
+   давление на цену по доле от оборота: красная ≥5%, жёлтая ≥1%. */
+.unl-tools { display: grid; gap: 8px; margin-bottom: 12px; }
+.unl-day { margin-bottom: 14px; }
+.unl-day h3 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 7px;
+  color: var(--glow);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.unl-day h3 small { color: var(--dim); font-size: 11.5px; letter-spacing: 0; text-transform: none; }
+.unl-row {
+  margin-bottom: 6px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  border-inline-start: 3px solid var(--line);
+  background: rgb(11 22 40 / 0.35);
+}
+.unl-row.p-mid { border-inline-start-color: var(--warn); }
+.unl-row.p-hi { border-inline-start-color: var(--dn); background: rgb(255 92 119 / 0.07); }
+.unl-row.open { border-color: rgb(127 216 255 / 0.35); }
+.unl-main {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 10px 11px;
+  text-align: start;
+}
+.unl-id { flex: 1 1 auto; min-width: 0; display: grid; gap: 1px; }
+.unl-id b { color: var(--ink); font-size: 14.5px; }
+.unl-id small { color: var(--dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.unl-amt { flex: 0 0 auto; display: grid; gap: 1px; text-align: end; }
+.unl-amt b { color: var(--ink); font-size: 14.5px; font-variant-numeric: tabular-nums; }
+.unl-amt small { color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums; }
+.unl-row.p-mid .unl-amt small { color: var(--warn); }
+.unl-row.p-hi .unl-amt small { color: var(--dn); font-weight: 600; }
+.unl-more { padding: 0 11px 11px; }
+.unl-more dl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px 12px;
+  margin: 0 0 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+.unl-more dt { color: var(--dim); }
+.unl-more dd { margin: 0; color: var(--ink); text-align: end; font-variant-numeric: tabular-nums; }
+.unl-act { display: flex; flex-wrap: wrap; gap: 8px; }
+.unl-btn {
+  flex: 1 1 140px;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: var(--r-md);
+  background: var(--blue);
+  color: #fff;
+  font-weight: 700;
+  font-size: 13.5px;
+}
+.unl-btn.ghost { background: transparent; border: 1px solid var(--line); color: var(--glow); }

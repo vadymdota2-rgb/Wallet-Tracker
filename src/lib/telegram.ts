@@ -159,3 +159,18 @@ export function openTg(url: string): void {
   }
   window.open(url, "_blank", "noopener");
 }
+
+/** Внешняя ссылка (документация проекта): внутри Telegram — его браузером,
+ *  приложение остаётся открытым; в обычном браузере — новой вкладкой. */
+export function openExternal(url: string): void {
+  const w = webApp();
+  try {
+    if (w?.openLink) {
+      w.openLink(url);
+      return;
+    }
+  } catch {
+    // старый клиент — откроем как обычную ссылку
+  }
+  window.open(url, "_blank", "noopener");
+}

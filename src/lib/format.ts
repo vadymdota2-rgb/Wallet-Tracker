@@ -122,3 +122,38 @@ export function since(seconds: number): string {
     return `${Math.abs(value)}${unit[0]}`;
   }
 }
+
+/** Количество монет коротко: 1.41B, 93.75M, 36.8K. */
+export function qty(v: unknown): string {
+  if (!isNum(v)) return "—";
+  const a = Math.abs(v);
+  if (a >= 1e9) return `${nf({ maximumFractionDigits: 2 }).format(v / 1e9)}B`;
+  if (a >= 1e6) return `${nf({ maximumFractionDigits: 2 }).format(v / 1e6)}M`;
+  if (a >= 1e3) return `${nf({ maximumFractionDigits: 1 }).format(v / 1e3)}K`;
+  return nf({ maximumFractionDigits: 0 }).format(v);
+}
+
+/** День календаря на языке интерфейса: «пн, 5 окт.»; год — если не текущий. */
+export function day(tsSec: number, nowSec: number): string {
+  const d = new Date(tsSec * 1000);
+  const opts: Intl.DateTimeFormatOptions = { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" };
+  if (d.getUTCFullYear() !== new Date(nowSec * 1000).getUTCFullYear()) opts.year = "numeric";
+  try {
+    return new Intl.DateTimeFormat(locale, opts).format(d);
+  } catch {
+    return d.toISOString().slice(0, 10);
+  }
+}
+
+/** Сколько осталось до дня: «сегодня», «завтра», «через 12 дн.». Считается
+ *  по календарным дням UTC — разлоки назначены на дату, а не на час. */
+export function untilDay(tsSec: number, nowSec: number): string {
+  const days = Math.round((Math.floor(tsSec / 86400) * 86400 - Math.floor(nowSec / 86400) * 86400) / 86400);
+  try {
+    const rtf = new Intl.RelativeTimeFormat(locale, { numeric: "auto", style: "short" });
+    if (days >= 60) return rtf.format(Math.round(days / 30.4), "month");
+    return rtf.format(days, "day");
+  } catch {
+    return `${days}d`;
+  }
+}

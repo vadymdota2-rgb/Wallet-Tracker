@@ -630,3 +630,25 @@ export interface MutationResult {
   error?: string;
   limit?: number;
 }
+
+/** Кому выходят монеты разлока. */
+export type UnlockWho = "team" | "investors" | "treasury" | "community" | "foundation" | "mixed";
+
+/** Один день разлока монеты: все выдачи этого дня вместе. */
+export interface UnlockEvent {
+  sym: string;
+  name: string;
+  /** Полночь UTC дня разлока, в секундах. */
+  ts: number;
+  tokens: number;
+  /** cliff — разовая крупная выдача, monthly — очередная из помесячных. */
+  kind: "cliff" | "monthly";
+  who: Partial<Record<UnlockWho, number>>;
+  /** Документация проекта с условиями вестинга. */
+  src: string;
+  price: number | null;
+  usd: number | null;
+  /** Доля от монет в обороте, %. */
+  pct: number | null;
+  mcap: number | null;
+}

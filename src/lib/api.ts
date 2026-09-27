@@ -8,7 +8,7 @@
 import { initData } from "./telegram";
 import { peek, remember } from "./memo";
 import type {
-  Bootstrap, Deal, FlowRow, FundRow, LsRow, MutationResult, RotSide, SymbolRow, TokenHist, Trades,
+  Bootstrap, Deal, FlowRow, FundRow, LsRow, MutationResult, RotSide, SymbolRow, TokenHist, Trades, UnlockEvent,
   WalletLive,
 } from "./types";
 
@@ -216,6 +216,13 @@ export const fetchSymbols = () =>
   cachedGet<{ ok?: boolean; items?: SymbolRow[] }>("/api/symbols", SYMBOLS_TTL);
 export const peekSymbols = () =>
   peek<{ ok?: boolean; items?: SymbolRow[] } | null>("/api/symbols", SYMBOLS_TTL);
+
+/** Календарь разлоков: сервер пересчитывает цены раз в час. */
+const UNLOCKS_TTL = 30 * 60_000;
+export const fetchUnlocks = () =>
+  cachedGet<{ ok?: boolean; items?: UnlockEvent[] }>("/api/unlocks", UNLOCKS_TTL);
+export const peekUnlocks = () =>
+  peek<{ ok?: boolean; items?: UnlockEvent[] } | null>("/api/unlocks", UNLOCKS_TTL);
 
 /** Язык хранится в той же строке users, что читает бот: выбор общий. */
 export const setLangRemote = (lang: string) =>
