@@ -8,13 +8,13 @@
  *
  * Последняя открытая монета запоминается: вернулся в меню — график тот же.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Frame, type ScreenProps } from "./Screen";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import { t } from "../i18n/t";
 import { haptic } from "../lib/telegram";
-import { tvSymbol, tvUrl } from "../lib/tradingview";
+import { TV_EMBED_SRC, tvConfig, tvSymbol } from "../lib/tradingview";
 import { CoinIcon } from "../components/CoinIcon";
 
 const POPULAR = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "TON", "HYPE", "SUI", "PEPE", "LINK", "AVAX"];
@@ -65,7 +65,39 @@ export function ChartScreen({ arg }: ScreenProps) {
   };
 
   const typed = query.trim().toUpperCase();
-  const src = tvUrl(tvSymbol(sym), lang);
+  const tv = tvSymbol(sym);
+
+  /* Официальный код виджета: контейнер, место под окно, строка атрибуции и
+     скрипт с настройками внутри — ровно как в их конструкторе. Скрипт читает
+     настройки из себя (document.currentScript), поэтому он вставляется, а не
+     импортируется. При смене монеты или языка контейнер собирается заново:
+     виджет не умеет менять символ снаружи. */
+  const host = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const box = host.current;
+    if (!box) return;
+    box.replaceChildren();
+    const widget = document.createElement("div");
+    widget.className = "tradingview-widget-container__widget";
+    const copy = document.createElement("div");
+    copy.className = "tradingview-widget-copyright";
+    const a = document.createElement("a");
+    a.href = "https://www.tradingview.com/";
+    a.rel = "noopener nofollow";
+    a.target = "_blank";
+    const span = document.createElement("span");
+    span.className = "blue-text";
+    span.textContent = "Track all markets on TradingView";
+    a.appendChild(span);
+    copy.appendChild(a);
+    const script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src = TV_EMBED_SRC;
+    script.async = true;
+    script.innerHTML = JSON.stringify(tvConfig(tv, lang));
+    box.append(widget, copy, script);
+    return () => box.replaceChildren();
+  }, [tv, lang]);
 
   return (
     <Frame
@@ -130,16 +162,7 @@ export function ChartScreen({ arg }: ScreenProps) {
           <p className="note dim">{t(lang, "chart_hint")}</p>
         </div>
       ) : null}
-      {/* key — чтобы при смене монеты окно создавалось заново, а не
-          переходило по адресу внутри себя: так не копится история. */}
-      <iframe
-        key={src}
-        className="chart-frame"
-        src={src}
-        title={`TradingView · ${sym}`}
-        allow="fullscreen; clipboard-write"
-        referrerPolicy="no-referrer-when-downgrade"
-      />
+      <div ref={host} className="tradingview-widget-container chart-frame" data-symbol={tv} />
     </Frame>
   );
 }

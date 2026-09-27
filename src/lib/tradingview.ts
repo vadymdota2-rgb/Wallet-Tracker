@@ -1,10 +1,12 @@
 /**
  * График TradingView: символ и адрес встраиваемого окна.
  *
- * Встраиваем их готовое окно (widgetembed), а не библиотеку: в нём уже есть
- * все таймфреймы, индикаторы, рисование и собственный поиск по любым
- * инструментам, а скриптов со стороннего сервера в наше приложение не
- * пускаем — окно живёт в своём iframe.
+ * Встраиваем их официальным кодом виджета «Advanced Chart», как его выдаёт
+ * конструктор на tradingview.com/widget: их скрипт сам создаёт окно графика и
+ * строку атрибуции «Track all markets on TradingView». Их правила требуют,
+ * чтобы атрибуция оставалась такой, какой задумана, и была видна всегда, —
+ * поэтому ни окно, ни строку мы не собираем сами. В окне уже есть все
+ * таймфреймы, индикаторы, рисование и поиск по любым инструментам.
  */
 import type { LangCode as Lang } from "../i18n";
 
@@ -45,23 +47,28 @@ const TV_LOCALE: Record<Lang, string> = {
   de: "de_DE", uk: "uk", hi: "in", id: "id", vi: "vi", ko: "kr", zh: "zh_CN", ja: "ja",
 };
 
-export function tvUrl(symbol: string, lang: Lang): string {
-  const q = new URLSearchParams({
+/** Официальный скрипт виджета «Advanced Chart» — тот, что выдаёт их
+ *  конструктор виджетов. Он сам создаёт окно графика и оформляет строку
+ *  атрибуции TradingView (13px, как требуют их правила). */
+export const TV_EMBED_SRC = "https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js";
+
+/** Настройки виджета — те же поля, что в их конструкторе. */
+export function tvConfig(symbol: string, lang: Lang): Record<string, unknown> {
+  return {
+    autosize: true,
     symbol,
     interval: "60",
+    timezone: "Etc/UTC",
     theme: "dark",
     style: "1",
     locale: TV_LOCALE[lang] ?? "en",
-    timezone: "Etc/UTC",
-    toolbarbg: "01030A",
+    backgroundColor: "#01030A",
     // Поиск монет и смена таймфрейма — прямо в окне графика.
-    symboledit: "1",
-    allow_symbol_change: "1",
-    withdateranges: "1",
-    hidesidetoolbar: "0",
-    saveimage: "0",
-    hideideas: "1",
-    studies: "[]",
-  });
-  return `https://s.tradingview.com/widgetembed/?${q.toString()}`;
+    allow_symbol_change: true,
+    withdateranges: true,
+    hide_side_toolbar: false,
+    save_image: false,
+    calendar: false,
+    support_host: "https://www.tradingview.com",
+  };
 }

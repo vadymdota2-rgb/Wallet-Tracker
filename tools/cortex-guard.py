@@ -810,8 +810,13 @@ _m0 = appx.index("= [", appx.index("const MENU:"))
 menu = appx[_m0:appx.index("];", _m0)]
 say("в боковом меню один пункт — график", menu.count("name:") == 1 and 'name: "chart"' in menu)
 tv = read(f"{APP}/src/lib/tradingview.ts")
-say("график — окно TradingView с поиском и сменой монеты",
-    "s.tradingview.com/widgetembed/" in tv and 'symboledit: "1"' in tv and 'allow_symbol_change: "1"' in tv)
+chart_scr = read(f"{APP}/src/screens/ChartScreen.tsx")
+say("график — официальный код виджета TradingView со сменой монеты",
+    "external-embedding/embed-widget-advanced-chart.js" in tv and "allow_symbol_change: true" in tv
+    and "widgetembed" not in tv + chart_scr)
+say("атрибуция TradingView — как в их коде, не убрана",
+    'span.textContent = "Track all markets on TradingView"' in chart_scr and 'a.href = "https://www.tradingview.com/"' in chart_scr
+    and 'copy.className = "tradingview-widget-copyright"' in chart_scr)
 say("монета графика запоминается", "tvSym: s.tvSym" in read(f"{APP}/src/store/app.ts"))
 
 print("ПРОВАЛОВ:", bad)
