@@ -1669,3 +1669,69 @@
   white-space: pre-line;
   overflow-wrap: anywhere;
 }
+
+/* Помощь ------------------------------------------------------------------ */
+.help-h { margin: 0 0 6px; font-size: 17px; font-weight: 700; color: var(--ink); }
+.help-p { margin: 0; color: var(--dim); font-size: 13.5px; line-height: 1.55; }
+.help-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.help-steps li { display: flex; gap: 12px; align-items: flex-start; }
+/* Номер шага — кружком: порядок тут и есть смысл, и глаз его ловит первым. */
+.help-n {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--glow);
+  border: 1px solid rgb(127 216 255 / 0.45);
+}
+.help-steps b { display: block; color: var(--ink); font-size: 14px; margin-bottom: 2px; }
+.help-steps p { margin: 0; color: var(--dim); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.folds { display: grid; gap: 8px; }
+.fold {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: rgb(11 22 40 / 0.29);
+}
+.fold[open] { border-color: rgb(127 216 255 / 0.3); }
+.fold summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 12px;
+  cursor: pointer;
+}
+.fold summary::-webkit-details-marker { display: none; }
+.fold-ic { flex: 0 0 auto; width: 28px; display: grid; place-items: center; color: var(--glow); }
+.fold-ic .glyph-brain { opacity: 1; }
+.fold-dots { font-size: 20px; line-height: 1; }
+.fold-main { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; }
+.fold-main b { color: var(--ink); font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.fold-main small { color: var(--dim); font-size: 12px; overflow-wrap: anywhere; }
+/* Стрелка — поворотом: вниз у свёрнутого, вверх у раскрытого. */
+.fold-chev {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--dim);
+  border-bottom: 2px solid var(--dim);
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 0.18s var(--ease);
+}
+.fold[open] .fold-chev { transform: rotate(-135deg) translateY(-2px); }
+.fold-body {
+  margin: 0;
+  padding: 0 12px 12px 51px;
+  color: var(--dim);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.fold.faq .fold-body { padding-left: 12px; }
+[dir="rtl"] .fold-body { padding: 0 51px 12px 12px; }
+[dir="rtl"] .fold.faq .fold-body { padding-right: 12px; }

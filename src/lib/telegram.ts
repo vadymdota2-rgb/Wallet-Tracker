@@ -144,3 +144,18 @@ export function bootTelegram(): void {
     /* старый клиент — не беда */
   }
 }
+
+/** Открыть t.me-ссылку: внутри Telegram — его же окном, без выхода из
+ *  приложения; в обычном браузере — новой вкладкой. */
+export function openTg(url: string): void {
+  const w = webApp();
+  try {
+    if (w?.openTelegramLink) {
+      w.openTelegramLink(url);
+      return;
+    }
+  } catch {
+    // старый клиент — откроем как обычную ссылку
+  }
+  window.open(url, "_blank", "noopener");
+}

@@ -15,7 +15,7 @@
 тот же расчёт. Проверить это можно только по исходникам обоих, и потому путь
 к боту — обязательный аргумент, как у sync-i18n.py.
 """
-import os, re, sys
+import json, os, re, sys
 
 APP = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BOT = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.path.join(
@@ -775,6 +775,27 @@ say("API: прочитано — по последнему показанном�
     "MAX(alerts_seen_at, ?)" in api and "upto = min(upto, now())" in api)
 say("«Ещё» начинается с истории алертов",
     more.index('open("alerts")') < more.index('open("premium")'))
+
+# --- помощь называет вкладки так же, как приложение ------------------------
+# Тексты помощи собраны с подстановкой названий из словаря каждого языка. Если
+# вкладку переименуют, а помощь нет — инструкция начнёт говорить о разделах,
+# которых человек не найдёт.
+def ts_dict(lang):
+    src = read(f"{APP}/src/i18n/{lang}.ts")
+    return {m.group(1): json.loads(m.group(2)) for m in re.finditer(r'^\s+(\w+): (".*"),?$', src, re.M)}
+def bare_label(v):
+    return re.sub(r"^[\U0001F000-\U0001FFFF\u2190-\u21FF\u2600-\u27BF\u2B00-\u2BFF\uFE0F\u200D\s]+", "", v).strip() or v
+help_ok = []
+for lg in ("en","ru","es","pt","fr","tr","ar","pl","de","uk","hi","id","vi","ko","zh","ja"):
+    d = ts_dict(lg)
+    ok = (d.get("hp_g_wallets_t") == bare_label(d["menu_my_wallets"]) and d.get("hp_g_top_t") == bare_label(d["menu_top_traders"])
+          and d.get("hp_g_an_t") == bare_label(d["menu_big_trades"]) and d.get("hp_g_more_t") == bare_label(d["ui_more"])
+          and bare_label(d["menu_add_wallet"]) in d.get("hp_s1_d", "") and bare_label(d["alerts_title"]) in d.get("hp_s3_d", ""))
+    if not ok:
+        help_ok.append(lg)
+say("помощь называет вкладки и кнопки как приложение, на всех языках", not help_ok, str(help_ok))
+say("помощь — руководство, а не обрезанные строки меню",
+    "help_menu_add" not in read(f"{APP}/src/screens/HelpScreen.tsx") and '"hp_faq_title"' in read(f"{APP}/src/screens/HelpScreen.tsx"))
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
