@@ -68,6 +68,10 @@ function plan(): (() => Promise<unknown>)[] {
   const premium = live.me.plan === "premium";
   const jobs: (() => Promise<unknown>)[] = [];
 
+  // 0. Календарь разлоков — самым первым: сервер отдаёт его из памяти
+  // мгновенно, а в конце очереди экран ждал десятки чужих запросов.
+  jobs.push(() => fetchUnlocks());
+
   // 1. Кошельки — первыми: их открывают чаще всего.
   for (const w of live.wallets) {
     jobs.push(() => fetchWallet(w.addr).then((d) => applyWalletLive(w.addr, d)));
@@ -97,9 +101,6 @@ function plan(): (() => Promise<unknown>)[] {
 
   // 7. Справочник монет для поиска на графике.
   jobs.push(() => fetchSymbols());
-
-  // 7б. Календарь разлоков — второй пункт бокового меню.
-  jobs.push(() => fetchUnlocks());
 
   // 8. История цены монет из потока — открывают их из списка.
   for (const r of (live.flow[app.flowWin]?.rows ?? []).slice(0, FLOW_COINS)) {

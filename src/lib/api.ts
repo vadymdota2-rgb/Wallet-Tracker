@@ -219,8 +219,36 @@ export const peekSymbols = () =>
 
 /** Календарь разлоков: сервер пересчитывает цены раз в час. */
 const UNLOCKS_TTL = 30 * 60_000;
+/* Последний календарь лежит и на устройстве: память ответов живёт до
+   закрытия приложения, и после каждого запуска экран ждал сеть с пустым
+   списком. Разлоки расписаны на месяцы вперёд — вчерашний список годится,
+   чтобы открыться сразу, а свежий тем временем догружается. */
+const UNLOCKS_SAVED = "wt-unlocks-v1";
+const UNLOCKS_SAVED_MAX_AGE = 7 * 24 * 3600_000;
+
+export function savedUnlocks(): UnlockEvent[] | null {
+  try {
+    const raw = localStorage.getItem(UNLOCKS_SAVED);
+    if (!raw) return null;
+    const v = JSON.parse(raw) as { at?: number; items?: UnlockEvent[] };
+    if (!v?.at || !Array.isArray(v.items) || Date.now() - v.at > UNLOCKS_SAVED_MAX_AGE) return null;
+    return v.items;
+  } catch {
+    return null;
+  }
+}
+
 export const fetchUnlocks = () =>
-  cachedGet<{ ok?: boolean; items?: UnlockEvent[] }>("/api/unlocks", UNLOCKS_TTL);
+  cachedGet<{ ok?: boolean; items?: UnlockEvent[] }>("/api/unlocks", UNLOCKS_TTL).then((r) => {
+    if (r?.ok && r.items?.length) {
+      try {
+        localStorage.setItem(UNLOCKS_SAVED, JSON.stringify({ at: Date.now(), items: r.items }));
+      } catch {
+        // место кончилось или хранилище закрыто — просто без запаса
+      }
+    }
+    return r;
+  });
 export const peekUnlocks = () =>
   peek<{ ok?: boolean; items?: UnlockEvent[] } | null>("/api/unlocks", UNLOCKS_TTL);
 

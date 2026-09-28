@@ -2335,9 +2335,9 @@ def unlock_events(now: float, book: list[dict] | None = None) -> list[dict]:
 
 
 # Цена монеты, которой нет на Hyperliquid (CRO, MYX, RIVER), — последняя сделка на
-# споте: Bybit, потом OKX, KuCoin, Gate, Bitget и MEXC — кто первым ответит. Минута в памяти,
+# споте: Bybit, потом OKX, KuCoin, Gate, Bitget и MEXC — кто первым ответит. Пять минут в памяти,
 # и неудача тоже: монеты без спота не должны каждый раз ждать трёх бирж.
-SPOT_PX_TTL_S = 60.0
+SPOT_PX_TTL_S = 300.0
 _spot_px_cache: dict[str, tuple[float, float]] = {}
 
 
@@ -2374,17 +2374,26 @@ def spot_px(sym: str) -> float:
     return px
 
 
-def unlocks() -> dict:
-    """Календарь разлоков с ценой и долей от оборота.
+def _unlocks_build() -> dict:
+    """Календарь разлоков с ценой и долей от оборота — сборка целиком.
 
-    Считается на каждый запрос — это сотня событий из десятка строк книги;
-    цена — из кэша средних Hyperliquid. Не ответил Hyperliquid — список
-    всё равно отдаётся, с количеством монет и долей оборота, без долларов.
+    Не ответил Hyperliquid — список всё равно отдаётся, с количеством монет
+    и долей оборота, без долларов. Цены монет, которых на Hyperliquid нет,
+    спрашиваются у бирж все сразу, а не по одной: по одной это было по
+    секунде-две на монету, и первый после паузы запрос ждал их все.
     """
+    now = time.time()
+    events = unlock_events(now)
     mids = hl_mids()
+    need = sorted({e["sym"] for e in events if not mids.get(e["sym"])})
+    spot: dict[str, float] = {}
+    if need:
+        with ThreadPoolExecutor(max_workers=min(8, len(need))) as pool:
+            for sym, px in zip(need, pool.map(spot_px, need)):
+                spot[sym] = px
     items = []
-    for e in unlock_events(time.time()):
-        price = mids.get(e["sym"], 0.0) or spot_px(e["sym"])
+    for e in events:
+        price = mids.get(e["sym"], 0.0) or spot.get(e["sym"], 0.0)
         circ = e["circ"]
         e["price"] = price or None
         e["usd"] = round(e["tokens"] * price) if price else None
@@ -2393,7 +2402,53 @@ def unlocks() -> dict:
         e["pct"] = round(e["tokens"] / circ * 100, 2) if circ else None
         e["mcap"] = round(circ * price) if circ and price else None
         items.append(e)
-    return {"ok": True, "at": int(time.time()), "priced": bool(mids), "items": items}
+    return {"ok": True, "at": int(now), "priced": bool(mids), "items": items}
+
+
+# Готовый календарь в памяти. Раньше он собирался на каждый запрос, и экран
+# открывался секунды: цены с Hyperliquid живут двадцать секунд, биржевые —
+# минуту, и первый запрос после них ждал сеть. Теперь запрос отдаёт готовое
+# сразу, а свежее собирается в стороне раз в минуту.
+UNLOCKS_TTL_S = 60.0
+_UNL_READY: dict = {}
+_unl_ready_at = 0.0
+_unl_building = False
+_unl_ready_lock = threading.Lock()
+
+
+def _unlocks_refresh() -> None:
+    global _UNL_READY, _unl_ready_at, _unl_building
+    try:
+        data = _unlocks_build()
+        with _unl_ready_lock:
+            # Без цен свежая сборка хуже прошлой с ценами — оставляем прошлую.
+            if data["priced"] or not _UNL_READY:
+                _UNL_READY = data
+            _unl_ready_at = time.monotonic()
+    except Exception as e:
+        sys.stderr.write(f"[api] unlocks: {e}\n")
+    finally:
+        with _unl_ready_lock:
+            _unl_building = False
+
+
+def unlocks() -> dict:
+    """Календарь из памяти; устаревший обновляется в фоне. Прошедшие дни
+    отсекаются на каждом ответе — сборка могла случиться до полуночи."""
+    global _unl_building
+    with _unl_ready_lock:
+        have = bool(_UNL_READY)
+        if not have:
+            _unl_building = True
+    if not have:
+        _unlocks_refresh()
+    with _unl_ready_lock:
+        if time.monotonic() - _unl_ready_at >= UNLOCKS_TTL_S and not _unl_building:
+            _unl_building = True
+            threading.Thread(target=_unlocks_refresh, daemon=True, name="unlocks").start()
+        data = _UNL_READY
+    day0 = int(time.time() // 86400 * 86400)
+    return {**data, "items": [e for e in data.get("items", []) if e["ts"] >= day0]}
 
 
 # Токенизированные металлы торгуются и обычным перпом, без двоеточия в имени.
@@ -5757,6 +5812,8 @@ def warmup() -> None:
         get_public(cur, hl)
         sys.stderr.write("[api] public cache ready\n")
         symbols()
+        # Календарь разлоков — сразу, чтобы первый открывший экран не ждал.
+        unlocks()
     except Exception as e:
         sys.stderr.write(f"[api] warmup: {e}\n")
     finally:

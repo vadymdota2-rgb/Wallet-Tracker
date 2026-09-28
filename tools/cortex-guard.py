@@ -873,6 +873,12 @@ for _c in _wm.UNLOCK_BOOK:
         _emit_bad.append(_c["s"])
 say("у каждой монеты разлоков решено про эмиссию (строка или причина)", not _emit_bad, str(_emit_bad))
 say("эмиссия бессрочна — тянется вперёд сама", "if last is None:" in pybody(api, "def _plan_steps("))
+say("календарь отдаётся из памяти, собирается в фоне и при старте",
+    "_UNL_READY" in pybody(api, "def unlocks(") and "threading.Thread(target=_unlocks_refresh" in pybody(api, "def unlocks(")
+    and "        unlocks()\n" in api and "ThreadPoolExecutor" in pybody(api, "def _unlocks_build("))
+say("экран разлоков открывается сразу: запас на устройстве и отрисовка порциями",
+    "savedUnlocks()" in unl_scr and "new IntersectionObserver" in unl_scr
+    and "jobs.push(() => fetchUnlocks());" in read(f"{APP}/src/lib/prefetch.ts").split("// 1. Кошельки")[0])
 say("маршрут /api/unlocks есть", 'if path in ("/unlocks", "/api/unlocks"):' in api)
 
 # --- ротация: своим потоком, не в бюджете сборки кэша ----------------------

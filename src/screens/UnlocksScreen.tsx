@@ -11,14 +11,14 @@
  * разлоки, цена — Hyperliquid. Чужих календарей и справочников тут нет.
  * Оценочные объёмы помечены «≈» и словом «оценка».
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Frame } from "./Screen";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
 import type { DictKey } from "../i18n/types";
 import { day, pct, px, qty, untilDay, usd } from "../lib/format";
 import { haptic, openExternal } from "../lib/telegram";
-import { fetchUnlocks, peekUnlocks } from "../lib/api";
+import { fetchUnlocks, peekUnlocks, savedUnlocks } from "../lib/api";
 import type { UnlockEvent, UnlockWho } from "../lib/types";
 import { CoinIcon } from "../components/CoinIcon";
 import { Empty, Segmented } from "../components/ui";
@@ -30,6 +30,8 @@ type Kind = "all" | "unlock" | "emit";
 /** Порог «заметного» давления, % оборота — он же фильтр «Крупные». */
 const BIG = 1;
 const HIGH = 5;
+/** Строк в первой порции — пара экранов телефона. */
+const STEP = 60;
 
 const WHO_KEY: Record<UnlockWho, DictKey> = {
   team: "unl_who_team",
@@ -91,7 +93,9 @@ export function UnlocksScreen() {
   const setTvSym = useApp((s) => s.setTvSym);
   const nowSec = useNow();
 
-  const [items, setItems] = useState<UnlockEvent[] | null>(() => peekUnlocks()?.items ?? null);
+  /* Сразу — из памяти этого запуска или из прошлого (сохранён на
+     устройстве); свежий ответ заменит его, как только придёт. */
+  const [items, setItems] = useState<UnlockEvent[] | null>(() => peekUnlocks()?.items ?? savedUnlocks());
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let alive = true;
@@ -129,6 +133,37 @@ export function UnlocksScreen() {
     for (const d of out) d.list.sort((a, b) => (b.pct ?? 0) - (a.pct ?? 0) || (b.usd ?? 0) - (a.usd ?? 0));
     return out;
   }, [items, q, kind, bigOnly, nowSec]);
+
+  /* Рисуем порциями. Всех строк почти тысяча, и разом с иконками они
+     рисовались на телефоне секунду-две — экран открывался пустым. Первая
+     порция — пара экранов, дальше дорисовывается, когда прокрутка подходит
+     к концу. Сменили поиск или вид — снова с первой порции. */
+  const [limit, setLimit] = useState(STEP);
+  useEffect(() => setLimit(STEP), [q, kind, bigOnly]);
+  const shown = useMemo(() => {
+    const out: typeof days = [];
+    let n = 0;
+    for (const d of days) {
+      if (n >= limit) break;
+      const list = d.list.slice(0, limit - n);
+      n += list.length;
+      out.push({ ts: d.ts, list });
+    }
+    return { days: out, more: n < days.reduce((a, d) => a + d.list.length, 0) };
+  }, [days, limit]);
+  const tail = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = tail.current;
+    if (!el || !shown.more || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      (ents) => {
+        if (ents.some((x) => x.isIntersecting)) setLimit((l) => l + STEP * 2);
+      },
+      { rootMargin: "600px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [shown.more, limit]);
 
   /* Сводка сверху — по всему календарю, без поиска и фильтра: сколько
      выходит за неделю и за месяц и какой разлок давит сильнее всех. */
@@ -254,7 +289,7 @@ export function UnlocksScreen() {
       ) : days.length === 0 ? (
         <Empty text={t(lang, q ? "unl_empty" : "unl_none")} />
       ) : (
-        days.map((d) => (
+        shown.days.map((d) => (
           <section key={d.ts} className="unl-day">
             <h3>
               <span>{day(d.ts, nowSec)}</span>
@@ -363,6 +398,7 @@ export function UnlocksScreen() {
           </section>
         ))
       )}
+      {shown.more ? <div ref={tail} className="unl-tail" aria-hidden="true" /> : null}
 
       <p className="note dim">{t(lang, "unl_note")}</p>
     </Frame>

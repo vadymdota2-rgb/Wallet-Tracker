@@ -1978,3 +1978,4 @@
 .unl-big-box { width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid var(--dim); }
 .unl-big.on { color: var(--ink); border-color: var(--glow); }
 .unl-big.on .unl-big-box { background: var(--blue); border-color: var(--blue); box-shadow: inset 0 0 0 2px var(--bg); }
+.unl-tail { height: 1px; }
