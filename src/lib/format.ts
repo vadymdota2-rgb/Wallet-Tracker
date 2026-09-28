@@ -133,6 +133,41 @@ export function qty(v: unknown): string {
   return nf({ maximumFractionDigits: 0 }).format(v);
 }
 
+/** Количество с разрядом словом на языке интерфейса: «548,36 млн»,
+ *  «2,82 млрд». Буквы M и B в карточках путали: «548M» читалось больше,
+ *  чем «2,82B», хотя это в пять раз меньше. */
+export function qtyWord(v: unknown): string {
+  if (!isNum(v)) return "—";
+  if (Math.abs(v) < 1e4) return nf({ maximumFractionDigits: 0 }).format(v);
+  try {
+    return new Intl.NumberFormat(locale, {
+      notation: "compact",
+      compactDisplay: "short",
+      maximumFractionDigits: 2,
+    }).format(v);
+  } catch {
+    return qty(v);
+  }
+}
+
+/** Сумма в долларах с разрядом словом: «74,38 млн $», «2,35 млрд $». */
+export function usdWord(v: unknown): string {
+  if (!isNum(v)) return "—";
+  if (Math.abs(v) < 1e4) return usd(v);
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: "USD",
+      notation: "compact",
+      compactDisplay: "short",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(v);
+  } catch {
+    return usd(v);
+  }
+}
+
 /** День календаря на языке интерфейса: «пн, 5 окт.»; год — если не текущий. */
 export function day(tsSec: number, nowSec: number): string {
   const d = new Date(tsSec * 1000);

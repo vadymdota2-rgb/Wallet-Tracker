@@ -16,7 +16,7 @@ import { Frame } from "./Screen";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
 import type { DictKey } from "../i18n/types";
-import { day, pct, px, qty, untilDay, usd } from "../lib/format";
+import { day, pct, px, qtyWord as qty, untilDay, usdWord as usd } from "../lib/format";
 import { haptic, openExternal } from "../lib/telegram";
 import { fetchUnlocks, peekUnlocks, savedUnlocks } from "../lib/api";
 import type { UnlockEvent, UnlockNoEmit, UnlockSkip, UnlockWho, UnlocksReply } from "../lib/types";
@@ -412,6 +412,9 @@ export function UnlocksScreen() {
                                   : st === null
                                     ? t(lang, "unl_stake_none")
                                     : `${qty(st.n)} ${e.sym}${share ? ` · ${share}` : ""}`}
+                                {st && st.of === "supply" ? (
+                                  <small className="unl-note">{t(lang, "unl_stake_supply_note")}</small>
+                                ) : null}
                               </dd>
                             </>
                           );
@@ -423,7 +426,9 @@ export function UnlocksScreen() {
                               <dt>{t(lang, "unl_12m")}</dt>
                               <dd>
                                 {qty(a.year)} {e.sym}
-                                {e.circ ? ` · ${pct((a.year / e.circ) * 100, 1, false)}` : ""}
+                                {e.circ
+                                  ? ` · ${t(lang, "unl_of_circ", { p: pct((a.year / e.circ) * 100, 1, false) })}`
+                                  : ""}
                               </dd>
                               <dt>{t(lang, "unl_end")}</dt>
                               <dd>{day(a.end, nowSec)}</dd>
