@@ -671,4 +671,15 @@ export interface UnlocksReply {
   items?: UnlockEvent[];
   none?: Record<string, UnlockSkip>;
   noEmit?: Record<string, UnlockNoEmit>;
+  /** В стейкинге: монет, % оборота, дата снимка; null — стейкинга у монеты
+   *  нет. Монеты нет в словаре — данных нет. */
+  stake?: Record<string, UnlockStake | null>;
+}
+
+export interface UnlockStake {
+  n: number;
+  p: number | null;
+  at: string;
+  /** От чего доля: оборота или всего выпуска. */
+  of?: "circ" | "supply";
 }

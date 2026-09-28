@@ -862,6 +862,12 @@ import datetime as _dt
 _stale = [f"{c}:{d}" for c, d in re.findall(r'\{"s": "([A-Z0-9]+)", "n": [^\n]*\n(?:[^\n]*\n)*?\s+"circ": \("(\d{4}-\d{2}-\d{2})"', api)
           if (_dt.date.today() - _dt.date.fromisoformat(d)).days > 120]
 say("опорный оборот монет разлоков не старше 120 дней", not _stale, str(_stale))
+# Застейканное меняется так же — снимок старше четырёх месяцев пора сверить.
+_st_old = [f"{c}:{d}" for c, d in re.findall(r'\{"s": "([A-Z0-9]+)", "n": [^\n]*\n(?:[^\n]*\n)*?\s+"staked": \("(\d{4}-\d{2}-\d{2})"', api)
+           if (_dt.date.today() - _dt.date.fromisoformat(d)).days > 120]
+say("снимок застейканного у монет разлоков не старше 120 дней", not _st_old, str(_st_old))
+say("экран разлоков показывает застейканное, «нет стейкинга» и «нет данных» раздельно",
+    '"stake": unlock_stakes()' in api and 'st === undefined' in unl_scr and 't(lang, "unl_stake_none")' in unl_scr)
 # Эмиссия давит на цену так же, как разлок: у каждой монеты книги она либо
 # записана строкой «emission», либо монета названа в NO_EMISSION с причиной.
 import importlib.util as _iu

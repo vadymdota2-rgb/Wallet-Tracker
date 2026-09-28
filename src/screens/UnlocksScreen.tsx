@@ -111,6 +111,7 @@ export function UnlocksScreen() {
   const items = reply?.items ?? null;
   const none = reply?.none ?? {};
   const noEmit = reply?.noEmit ?? {};
+  const stake = reply?.stake ?? {};
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let alive = true;
@@ -394,6 +395,27 @@ export function UnlocksScreen() {
                             </dd>
                           </>
                         ) : null}
+                        {(() => {
+                          /* Застейканное на рынок быстро не выйдет: рядом с
+                             разлоком это вторая половина картины давления. */
+                          const st = stake[e.sym];
+                          const share =
+                            st && st.p !== null
+                              ? t(lang, st.of === "supply" ? "unl_of_supply" : "unl_of_circ", { p: pct(st.p, 1, false) })
+                              : "";
+                          return (
+                            <>
+                              <dt>{t(lang, "unl_staked")}</dt>
+                              <dd>
+                                {st === undefined
+                                  ? t(lang, "unl_stake_unknown")
+                                  : st === null
+                                    ? t(lang, "unl_stake_none")
+                                    : `${qty(st.n)} ${e.sym}${share ? ` · ${share}` : ""}`}
+                              </dd>
+                            </>
+                          );
+                        })()}
                         {(() => {
                           const a = coinAhead(e);
                           return (
