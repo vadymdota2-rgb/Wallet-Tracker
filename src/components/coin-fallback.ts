@@ -103,4 +103,6 @@ export const LOGO_OVERRIDE: Record<string, string> = {
   /* Vaulta (бывший EOS) — тикер «A»; без своего значка цепочка доходила
      до логотипа акции Agilent с тем же кодом. */
   A: "/cglogo/coins/images/55616/small/Vaulta_CEX_Icon_Circle_-_cmc.png",
+  /* Humanity Protocol — тикер «H», в справочниках его перебивают тезки. */
+  H: "/cglogo/coins/images/66811/small/H_tokenLogo_original.png",
 };
