@@ -837,13 +837,14 @@ say("оценочные объёмы помечены в приложении", 
 _ub = pybody(api, "def unlock_events(")
 say("прошедшие разлоки не отдаются, ближайшие первыми",
     "if ts >= day0:" in _ub and 'sorted(out, key=lambda e: (e["ts"], e["sym"]))' in _ub
-    and "unlock_events(time.time())" in pybody(api, "def unlocks("))
-_uu = pybody(api, "def unlocks(")
+    and "events = unlock_events(now)" in pybody(api, "def _unlocks_build(")
+    and "if e[\"ts\"] >= day0" in pybody(api, "def unlocks("))
+_uu = pybody(api, "def _unlocks_build(")
 say("разлоки ни от кого не зависят: оборот — наш расчёт, цена — Hyperliquid",
     "coingecko" not in (_ub + _uu).lower() and "get_json" not in _uu and "mids = hl_mids()" in _uu
     and '"circ": ("' in api and 'ev["circ"] = round(circ)' in _ub)
 say("цена монеты без Hyperliquid — со спота, с кэшем и неудач тоже",
-    'mids.get(e["sym"], 0.0) or spot_px(e["sym"])' in _uu and "_spot_px_cache[s] = (time.monotonic(), px)" in api)
+    'mids.get(e["sym"], 0.0) or spot.get(e["sym"], 0.0)' in _uu and "pool.map(spot_px, need)" in _uu and "_spot_px_cache[s] = (time.monotonic(), px)" in api)
 say("давление — доля от оборота на день разлока", 'e["tokens"] / circ * 100' in _uu)
 say("экран разлоков: поиск по тикеру и названию, фильтр крупных",
     "e.sym.toLowerCase().includes(q) || e.name.toLowerCase().includes(q)" in unl_scr and "if (bigOnly &&" in unl_scr)
