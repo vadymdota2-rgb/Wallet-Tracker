@@ -100,4 +100,7 @@ export const LOGO_OVERRIDE: Record<string, string> = {
   /* У однобуквенного тикера файл в образе — чужой значок «M», а в общем
      справочнике его нет вовсе. */
   M: "/cglogo/coins/images/53247/small/square-bg-transparent.png",
+  /* Vaulta (бывший EOS) — тикер «A»; без своего значка цепочка доходила
+     до логотипа акции Agilent с тем же кодом. */
+  A: "/cglogo/coins/images/55616/small/Vaulta_CEX_Icon_Circle_-_cmc.png",
 };
