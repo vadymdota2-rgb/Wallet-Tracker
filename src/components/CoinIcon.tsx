@@ -12,7 +12,7 @@
  */
 import { useEffect, useState } from "react";
 import { useLive } from "../store/live";
-import { CG_FALLBACK } from "./coin-fallback";
+import { CG_FALLBACK, LOGO_OVERRIDE } from "./coin-fallback";
 import { CG_LOGOS } from "./coin-logos";
 
 /** Имена монет Hyperliquid, отличные от тикера. */
@@ -63,8 +63,18 @@ export function CoinIcon({
   const urls: string[] = [];
   if (icon?.length) urls.push(...icon.filter(Boolean));
   const fromServer = coin?.icon;
-  if (Array.isArray(fromServer)) urls.push(...fromServer.filter(Boolean));
-  else if (typeof fromServer === "string" && fromServer.startsWith("/")) urls.push(fromServer);
+  const serverList = Array.isArray(fromServer)
+    ? fromServer.filter(Boolean)
+    : typeof fromServer === "string" && fromServer.startsWith("/")
+      ? [fromServer]
+      : [];
+  /* Выверенный значок — раньше файла из образа, но не для токена BSC: там
+     значок по адресу контракта, и одноимённая монета другой сети его
+     подменять не должна. */
+  const byAddr = [...urls, ...serverList].some((u) => u.startsWith("/coins/bsc/") || u.startsWith("/pcslogo/"));
+  const override = LOGO_OVERRIDE[normalizeSym(sym)];
+  if (override && !byAddr) urls.push(override);
+  urls.push(...serverList);
 
   // Запасной путь на случай старого ответа API. Проверки «только если нет
   // адреса» здесь нет намеренно: у ZEC адрес есть — существует одноимённый

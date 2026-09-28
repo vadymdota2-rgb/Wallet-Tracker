@@ -2181,6 +2181,29 @@ UNLOCK_BOOK: list[dict] = [
      "plan": [("m", 9, "2026-10", "2028-05", 13_300_000, "investors"),
               ("m", 9, "2026-10", "2029-03", 4_433_333, "team"),
               ("m", 9, "2025-10", "2029-03", 6_809_524, "community")]},
+    {"s": "SOL", "n": "Solana",
+     "src": "https://247wallst.com/investing/cryptocurrency/2026/09/26/solana-doubles-its-disinflation-implications-for-sol-supply/",
+     "est": True,
+     # Разлоков нет — давит эмиссия стейкинга. В сентябре 2026 — 3,63% в
+     # год от ~635 млн (~23 млн SOL); с августа 2026 ставка снижается на 30%
+     # в год, пол 1,5% — в первой половине 2029-го.
+     "circ": ("2026-09-27", 587_781_945),
+     "plan": [("m", 1, "2026-10", "2027-08", 1_920_000, "emission"),
+              ("m", 1, "2027-09", "2028-08", 1_390_000, "emission"),
+              ("m", 1, "2028-09", "2029-05", 990_000, "emission"),
+              ("m", 1, "2029-06", None, 850_000, "emission")]},
+    {"s": "ETH", "n": "Ethereum",
+     "src": "https://ethereum.org/roadmap/merge/issuance/",
+     "est": True,
+     # Награды валидаторам ~2 800 ETH в день (~1 млн в год). Сжигание комиссий
+     # в 2026-м мало, прирост предложения около 0,8% в год.
+     "circ": ("2026-09-27", 122_087_473),
+     "plan": [("m", 1, "2026-10", None, 85_000, "emission")]},
+    {"s": "NEAR", "n": "NEAR Protocol",
+     "src": "https://cryptorank.io/news/feed/de98d-near-protocol-near-slashes-inflation-to-2-5-after-successful-halving-upgrade",
+     # С 30.10.2025 инфляция 2,5% в год — около 32 млн NEAR.
+     "circ": ("2026-09-27", 1_307_529_810),
+     "plan": [("m", 1, "2026-10", None, 2_670_000, "emission")]},
     {"s": "DOT", "n": "Polkadot",
      "src": "https://phemex.com/blogs/polkadot-halving-tokenomics-explained",
      # Разлоков у Polkadot нет — давит эмиссия. С 14.03.2026 выпуск ~56,88 млн
