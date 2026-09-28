@@ -4842,22 +4842,22 @@
     "zh": "暂无即将到来的解锁"
   },
   "unl_note": {
-    "ar": "التواريخ والكميات من شروط الاستحقاق في وثائق المشاريع، والوقت بتوقيت UTC. ما لا تنشره المشاريع بدقة مُعلَّم بـ «≈» و«تقدير». الفتح ليس بيعًا: الحاملون يستلمون العملات ويقررون بأنفسهم. الضغط على السعر يُقاس بنسبة من العملات المتداولة يوم الفتح: الأحمر ‎≥5%، والأصفر ‎≥1%.",
-    "de": "Daten und Mengen folgen den Vesting-Bedingungen aus der Dokumentation der Projekte, Zeiten in UTC. Was ein Projekt nicht genau veröffentlicht, ist mit „≈“ und „Schätzung“ markiert. Ein Unlock ist kein Verkauf: Die Empfänger bekommen die Coins und entscheiden selbst. Der Preisdruck ist der Anteil am Umlauf am Tag des Unlocks: rot ≥5 %, gelb ≥1 %.",
-    "en": "Dates and amounts follow the vesting terms in each project's documentation; times are UTC. Where a project doesn't publish exact figures, the amount is marked “≈” and “estimate”. An unlock is not a sale: holders receive the coins and decide for themselves. Price pressure is the share of circulating supply on the unlock day: red ≥5%, yellow ≥1%.",
-    "es": "Las fechas y cantidades siguen las condiciones de vesting de la documentación de cada proyecto; horas en UTC. Lo que un proyecto no publica con exactitud va marcado con «≈» y «estimación». Un desbloqueo no es una venta: los tenedores reciben las monedas y deciden ellos. La presión sobre el precio es la parte del circulante el día del desbloqueo: rojo ≥5%, amarillo ≥1%.",
-    "fr": "Dates et montants suivent les conditions de vesting de la documentation des projets ; heures en UTC. Ce qu'un projet ne publie pas précisément est marqué « ≈ » et « estimation ». Un déblocage n'est pas une vente : les détenteurs reçoivent les jetons et décident eux-mêmes. La pression sur le prix est la part de la circulation le jour du déblocage : rouge ≥5 %, jaune ≥1 %.",
-    "hi": "तारीखें और मात्रा प्रोजेक्ट के दस्तावेज़ों की वेस्टिंग शर्तों से हैं, समय UTC में। जो प्रोजेक्ट सटीक नहीं बताते, वे «≈» और «अनुमान» से चिह्नित हैं। अनलॉक बिक्री नहीं है: धारक कॉइन पाते हैं और खुद तय करते हैं। कीमत पर दबाव अनलॉक के दिन सर्कुलेटिंग सप्लाई का हिस्सा है: लाल ≥5%, पीला ≥1%।",
-    "id": "Tanggal dan jumlah mengikuti syarat vesting di dokumentasi proyek; waktu dalam UTC. Yang tidak dipublikasikan persis oleh proyek ditandai «≈» dan «perkiraan». Unlock bukan penjualan: pemegang menerima koin dan memutuskan sendiri. Tekanan harga adalah porsi suplai beredar pada hari unlock: merah ≥5%, kuning ≥1%.",
-    "ja": "日付と数量は各プロジェクト資料のベスティング条件に基づき、時刻はUTCです。正確な数字が公開されていないものは「≈」と「推定」で示します。アンロックは売却ではありません。受け取った保有者が判断します。価格への圧力はアンロック日の流通量に対する割合です：赤は5%以上、黄は1%以上。",
-    "ko": "날짜와 수량은 각 프로젝트 문서의 베스팅 조건을 따르며 시간은 UTC입니다. 프로젝트가 정확히 공개하지 않은 수치는 «≈»와 «추정»으로 표시합니다. 언락은 매도가 아닙니다. 받은 보유자가 스스로 결정합니다. 가격 압력은 언락 당일 유통량 대비 비율입니다: 빨강 5% 이상, 노랑 1% 이상.",
-    "pl": "Daty i ilości wynikają z warunków vestingu w dokumentacji projektów, czas w UTC. To, czego projekt nie publikuje dokładnie, oznaczono „≈” i „szacunek”. Odblokowanie to nie sprzedaż: posiadacze otrzymują monety i sami decydują. Presja na cenę to udział w obiegu w dniu odblokowania: czerwony ≥5%, żółty ≥1%.",
-    "pt": "Datas e quantidades seguem as condições de vesting da documentação de cada projeto; horários em UTC. O que o projeto não publica com exatidão está marcado com «≈» e «estimativa». Desbloqueio não é venda: os detentores recebem as moedas e decidem por si. A pressão no preço é a fatia do circulante no dia do desbloqueio: vermelho ≥5%, amarelo ≥1%.",
-    "ru": "Даты и объёмы — по условиям вестинга из документации проектов, время по UTC. Где проект точных цифр не публикует, объём помечен «≈» и словом «оценка». Разлок — не продажа: монеты получают, а продавать ли — решают держатели. Давление на цену — доля от монет в обороте на день разлока: красный — от 5%, жёлтый — от 1%.",
-    "tr": "Tarihler ve miktarlar projelerin belgelerindeki vesting koşullarına göredir; saatler UTC. Projenin kesin yayımlamadığı rakamlar «≈» ve «tahmin» ile işaretlidir. Kilit açılımı satış değildir: sahipler coinleri alır ve kendileri karar verir. Fiyat baskısı, açılım günündeki dolaşım arzının payıdır: kırmızı ≥%5, sarı ≥%1.",
-    "uk": "Дати й обсяги — за умовами вестингу з документації проєктів, час за UTC. Де проєкт точних цифр не публікує, обсяг позначено «≈» і словом «оцінка». Розлок — не продаж: монети отримують, а продавати чи ні — вирішують власники. Тиск на ціну — частка від монет в обігу на день розлоку: червоний — від 5%, жовтий — від 1%.",
-    "vi": "Ngày và số lượng theo điều khoản vesting trong tài liệu của dự án; giờ theo UTC. Con số dự án không công bố chính xác được đánh dấu «≈» và «ước tính». Mở khóa không phải là bán: người nhận có coin và tự quyết định. Áp lực giá là tỷ lệ so với lượng lưu hành vào ngày mở khóa: đỏ ≥5%, vàng ≥1%.",
-    "zh": "日期和数量依据各项目文档中的归属条款，时间为 UTC。项目未公布准确数字的，标有「≈」和「估算」。解锁不等于抛售：持有人拿到代币后自行决定。价格压力是解锁当天占流通量的比例：红色 ≥5%，黄色 ≥1%。"
+    "ar": "التواريخ والكميات من شروط الاستحقاق في وثائق المشاريع، والوقت بتوقيت UTC. ما لا تنشره المشاريع بدقة مُعلَّم بـ «≈» و«تقدير». الفتح ليس بيعًا: الحاملون يستلمون العملات ويقررون بأنفسهم. الضغط على السعر يُقاس بنسبة من العملات المتداولة يوم الفتح: الأحمر ‎≥5%، والأصفر ‎≥1%. الإصدار — عملات جديدة تصدرها الشبكة (مكافآت التخزين والكتل)، مجمّعة شهريًا.",
+    "de": "Daten und Mengen folgen den Vesting-Bedingungen aus der Dokumentation der Projekte, Zeiten in UTC. Was ein Projekt nicht genau veröffentlicht, ist mit „≈“ und „Schätzung“ markiert. Ein Unlock ist kein Verkauf: Die Empfänger bekommen die Coins und entscheiden selbst. Der Preisdruck ist der Anteil am Umlauf am Tag des Unlocks: rot ≥5 %, gelb ≥1 %. Emission sind neue Coins des Netzwerks (Staking- und Blockbelohnungen), monatlich zusammengefasst.",
+    "en": "Dates and amounts follow the vesting terms in each project's documentation; times are UTC. Where a project doesn't publish exact figures, the amount is marked “≈” and “estimate”. An unlock is not a sale: holders receive the coins and decide for themselves. Price pressure is the share of circulating supply on the unlock day: red ≥5%, yellow ≥1%. Issuance means new coins minted by the network (staking and block rewards), summed per month.",
+    "es": "Las fechas y cantidades siguen las condiciones de vesting de la documentación de cada proyecto; horas en UTC. Lo que un proyecto no publica con exactitud va marcado con «≈» y «estimación». Un desbloqueo no es una venta: los tenedores reciben las monedas y deciden ellos. La presión sobre el precio es la parte del circulante el día del desbloqueo: rojo ≥5%, amarillo ≥1%. La emisión son monedas nuevas de la red (recompensas de staking y de bloques), sumadas por mes.",
+    "fr": "Dates et montants suivent les conditions de vesting de la documentation des projets ; heures en UTC. Ce qu'un projet ne publie pas précisément est marqué « ≈ » et « estimation ». Un déblocage n'est pas une vente : les détenteurs reçoivent les jetons et décident eux-mêmes. La pression sur le prix est la part de la circulation le jour du déblocage : rouge ≥5 %, jaune ≥1 %. L'émission, ce sont les nouveaux jetons du réseau (récompenses de staking et de blocs), cumulés par mois.",
+    "hi": "तारीखें और मात्रा प्रोजेक्ट के दस्तावेज़ों की वेस्टिंग शर्तों से हैं, समय UTC में। जो प्रोजेक्ट सटीक नहीं बताते, वे «≈» और «अनुमान» से चिह्नित हैं। अनलॉक बिक्री नहीं है: धारक कॉइन पाते हैं और खुद तय करते हैं। कीमत पर दबाव अनलॉक के दिन सर्कुलेटिंग सप्लाई का हिस्सा है: लाल ≥5%, पीला ≥1%। इश्यू — नेटवर्क के नए कॉइन (स्टेकिंग और ब्लॉक रिवॉर्ड), महीने के हिसाब से जोड़े गए।",
+    "id": "Tanggal dan jumlah mengikuti syarat vesting di dokumentasi proyek; waktu dalam UTC. Yang tidak dipublikasikan persis oleh proyek ditandai «≈» dan «perkiraan». Unlock bukan penjualan: pemegang menerima koin dan memutuskan sendiri. Tekanan harga adalah porsi suplai beredar pada hari unlock: merah ≥5%, kuning ≥1%. Emisi adalah koin baru dari jaringan (hadiah staking dan blok), dijumlahkan per bulan.",
+    "ja": "日付と数量は各プロジェクト資料のベスティング条件に基づき、時刻はUTCです。正確な数字が公開されていないものは「≈」と「推定」で示します。アンロックは売却ではありません。受け取った保有者が判断します。価格への圧力はアンロック日の流通量に対する割合です：赤は5%以上、黄は1%以上。 発行はネットワークが新たに生む通貨（ステーキング・ブロック報酬）で、月ごとに合算しています。",
+    "ko": "날짜와 수량은 각 프로젝트 문서의 베스팅 조건을 따르며 시간은 UTC입니다. 프로젝트가 정확히 공개하지 않은 수치는 «≈»와 «추정»으로 표시합니다. 언락은 매도가 아닙니다. 받은 보유자가 스스로 결정합니다. 가격 압력은 언락 당일 유통량 대비 비율입니다: 빨강 5% 이상, 노랑 1% 이상. 발행은 네트워크가 새로 만드는 코인(스테이킹·블록 보상)이며 월별로 합산했습니다.",
+    "pl": "Daty i ilości wynikają z warunków vestingu w dokumentacji projektów, czas w UTC. To, czego projekt nie publikuje dokładnie, oznaczono „≈” i „szacunek”. Odblokowanie to nie sprzedaż: posiadacze otrzymują monety i sami decydują. Presja na cenę to udział w obiegu w dniu odblokowania: czerwony ≥5%, żółty ≥1%. Emisja to nowe monety sieci (nagrody za staking i bloki), zsumowane miesięcznie.",
+    "pt": "Datas e quantidades seguem as condições de vesting da documentação de cada projeto; horários em UTC. O que o projeto não publica com exatidão está marcado com «≈» e «estimativa». Desbloqueio não é venda: os detentores recebem as moedas e decidem por si. A pressão no preço é a fatia do circulante no dia do desbloqueio: vermelho ≥5%, amarelo ≥1%. A emissão são moedas novas da rede (recompensas de staking e de blocos), somadas por mês.",
+    "ru": "Даты и объёмы — по условиям вестинга из документации проектов, время по UTC. Где проект точных цифр не публикует, объём помечен «≈» и словом «оценка». Разлок — не продажа: монеты получают, а продавать ли — решают держатели. Давление на цену — доля от монет в обороте на день разлока: красный — от 5%, жёлтый — от 1%. Эмиссия — новые монеты сети (награды стейкинга и блоков), сложена по месяцам.",
+    "tr": "Tarihler ve miktarlar projelerin belgelerindeki vesting koşullarına göredir; saatler UTC. Projenin kesin yayımlamadığı rakamlar «≈» ve «tahmin» ile işaretlidir. Kilit açılımı satış değildir: sahipler coinleri alır ve kendileri karar verir. Fiyat baskısı, açılım günündeki dolaşım arzının payıdır: kırmızı ≥%5, sarı ≥%1. İhraç, ağın yeni coinleridir (staking ve blok ödülleri), aylık toplanmıştır.",
+    "uk": "Дати й обсяги — за умовами вестингу з документації проєктів, час за UTC. Де проєкт точних цифр не публікує, обсяг позначено «≈» і словом «оцінка». Розлок — не продаж: монети отримують, а продавати чи ні — вирішують власники. Тиск на ціну — частка від монет в обігу на день розлоку: червоний — від 5%, жовтий — від 1%. Емісія — нові монети мережі (винагороди стейкінгу та блоків), складена по місяцях.",
+    "vi": "Ngày và số lượng theo điều khoản vesting trong tài liệu của dự án; giờ theo UTC. Con số dự án không công bố chính xác được đánh dấu «≈» và «ước tính». Mở khóa không phải là bán: người nhận có coin và tự quyết định. Áp lực giá là tỷ lệ so với lượng lưu hành vào ngày mở khóa: đỏ ≥5%, vàng ≥1%. Phát hành là coin mới do mạng tạo ra (thưởng staking và khối), cộng theo tháng.",
+    "zh": "日期和数量依据各项目文档中的归属条款，时间为 UTC。项目未公布准确数字的，标有「≈」和「估算」。解锁不等于抛售：持有人拿到代币后自行决定。价格压力是解锁当天占流通量的比例：红色 ≥5%，黄色 ≥1%。 增发是网络新产生的代币（质押与出块奖励），按月汇总。"
   },
   "unl_est": {
     "ar": "تقدير",
@@ -5020,5 +5020,23 @@
     "uk": "Емісія: стейкінг і скарбниця",
     "vi": "Phát hành mới: staking và ngân quỹ",
     "zh": "新增发行：质押与国库"
+  },
+  "unl_emit": {
+    "ar": "إصدار",
+    "de": "Emission",
+    "en": "Issuance",
+    "es": "Emisión",
+    "fr": "Émission",
+    "hi": "इश्यू",
+    "id": "Emisi",
+    "ja": "発行",
+    "ko": "발행",
+    "pl": "Emisja",
+    "pt": "Emissão",
+    "ru": "Эмиссия",
+    "tr": "İhraç",
+    "uk": "Емісія",
+    "vi": "Phát hành",
+    "zh": "增发"
   }
 }

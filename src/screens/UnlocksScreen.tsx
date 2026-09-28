@@ -45,6 +45,12 @@ function level(e: UnlockEvent): "hi" | "mid" | "lo" {
   return p >= HIGH ? "hi" : p >= BIG ? "mid" : "lo";
 }
 
+/** Строка целиком из эмиссии — новых монет сети, а не разлока. */
+function onlyEmission(e: UnlockEvent): boolean {
+  const who = Object.keys(e.who);
+  return who.length === 1 && who[0] === "emission";
+}
+
 /** Поиск по тикеру и названию: «arb», «Arbitrum», «star». */
 function matches(e: UnlockEvent, q: string): boolean {
   if (!q) return true;
@@ -218,7 +224,8 @@ export function UnlocksScreen() {
                     <span className="unl-id">
                       <b>{e.sym}</b>
                       <small>
-                        {e.name} · {t(lang, e.kind === "cliff" ? "unl_cliff" : "unl_monthly")}
+                        {e.name} ·{" "}
+                        {t(lang, onlyEmission(e) ? "unl_emit" : e.kind === "cliff" ? "unl_cliff" : "unl_monthly")}
                         {e.est ? <em className="unl-est"> · {t(lang, "unl_est")}</em> : null}
                       </small>
                     </span>

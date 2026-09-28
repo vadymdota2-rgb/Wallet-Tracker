@@ -857,6 +857,19 @@ import datetime as _dt
 _stale = [f"{c}:{d}" for c, d in re.findall(r'\{"s": "([A-Z0-9]+)", "n": [^\n]*\n(?:[^\n]*\n)*?\s+"circ": \("(\d{4}-\d{2}-\d{2})"', api)
           if (_dt.date.today() - _dt.date.fromisoformat(d)).days > 120]
 say("опорный оборот монет разлоков не старше 120 дней", not _stale, str(_stale))
+# Эмиссия давит на цену так же, как разлок: у каждой монеты книги она либо
+# записана строкой «emission», либо монета названа в NO_EMISSION с причиной.
+import importlib.util as _iu
+_sp = _iu.spec_from_file_location("_wapi_emit", f"{APP}/whale_api.py")
+_wm = _iu.module_from_spec(_sp); _sp.loader.exec_module(_wm)
+_emit_bad = []
+for _c in _wm.UNLOCK_BOOK:
+    _has = any("emission" in st for st in _c["plan"])
+    _no = _c["s"] in _wm.NO_EMISSION
+    if _has == _no:
+        _emit_bad.append(_c["s"])
+say("у каждой монеты разлоков решено про эмиссию (строка или причина)", not _emit_bad, str(_emit_bad))
+say("эмиссия бессрочна — тянется вперёд сама", "if last is None:" in pybody(api, "def _plan_steps("))
 say("маршрут /api/unlocks есть", 'if path in ("/unlocks", "/api/unlocks"):' in api)
 
 # --- ротация: своим потоком, не в бюджете сборки кэша ----------------------
