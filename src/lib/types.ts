@@ -656,3 +656,18 @@ export interface UnlockEvent {
   pct: number | null;
   mcap: number | null;
 }
+
+/** Почему монеты нет в календаре: done — выдавать нечего, burn — сжигание
+ *  перекрывает выпуск, undated — выдачи без дат, nodata — надёжного графика нет. */
+export type UnlockSkip = "done" | "burn" | "undated" | "nodata";
+/** Почему у монеты календаря нет эмиссии: fixed — выпуск создан сразу,
+ *  notyet — предусмотрена, но не запущена. */
+export type UnlockNoEmit = "fixed" | "notyet";
+
+/** Ответ /api/unlocks целиком. */
+export interface UnlocksReply {
+  ok?: boolean;
+  items?: UnlockEvent[];
+  none?: Record<string, UnlockSkip>;
+  noEmit?: Record<string, UnlockNoEmit>;
+}

@@ -19,7 +19,7 @@ import type { DictKey } from "../i18n/types";
 import { day, pct, px, qty, untilDay, usd } from "../lib/format";
 import { haptic, openExternal } from "../lib/telegram";
 import { fetchUnlocks, peekUnlocks, savedUnlocks } from "../lib/api";
-import type { UnlockEvent, UnlockWho } from "../lib/types";
+import type { UnlockEvent, UnlockNoEmit, UnlockSkip, UnlockWho, UnlocksReply } from "../lib/types";
 import { CoinIcon } from "../components/CoinIcon";
 import { Empty, Segmented } from "../components/ui";
 import { useNow } from "../lib/tick";
@@ -30,6 +30,17 @@ type Kind = "all" | "unlock" | "emit";
 /** Порог «заметного» давления, % оборота — он же фильтр «Крупные». */
 const BIG = 1;
 const HIGH = 5;
+const SKIP_KEY: Record<UnlockSkip, DictKey> = {
+  done: "unl_r_done",
+  burn: "unl_r_burn",
+  undated: "unl_r_undated",
+  nodata: "unl_r_nodata",
+};
+const NOEMIT_KEY: Record<UnlockNoEmit, DictKey> = {
+  fixed: "unl_ne_fixed",
+  notyet: "unl_ne_notyet",
+};
+
 /** Строк в первой порции — пара экранов телефона. */
 const STEP = 60;
 
@@ -95,13 +106,16 @@ export function UnlocksScreen() {
 
   /* Сразу — из памяти этого запуска или из прошлого (сохранён на
      устройстве); свежий ответ заменит его, как только придёт. */
-  const [items, setItems] = useState<UnlockEvent[] | null>(() => peekUnlocks()?.items ?? savedUnlocks());
+  const [reply, setReply] = useState<UnlocksReply | null>(() => peekUnlocks() ?? savedUnlocks());
+  const items = reply?.items ?? null;
+  const none = reply?.none ?? {};
+  const noEmit = reply?.noEmit ?? {};
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let alive = true;
     void fetchUnlocks().then((r) => {
       if (!alive) return;
-      if (r?.ok) setItems(r.items ?? []);
+      if (r?.ok) setReply({ ...r, items: r.items ?? [] });
       else if (!items) setFailed(true);
     });
     return () => {
@@ -116,6 +130,17 @@ export function UnlocksScreen() {
   const [openKey, setOpenKey] = useState<string | null>(null);
 
   const q = query.trim().toLowerCase();
+  /* Проверенные монеты вне календаря, подходящие под поиск: про них экран
+     говорит прямо — разлоков и эмиссии нет или данных нет, — а не молчит. */
+  const statusHits = useMemo(() => {
+    const u = q.toUpperCase().replace(/\s+/g, "");
+    if (!u) return [] as [string, UnlockSkip][];
+    const all = Object.entries(none) as [string, UnlockSkip][];
+    const exact = all.filter(([s]) => s === u);
+    const starts = all.filter(([s]) => s !== u && s.startsWith(u));
+    return [...exact, ...starts].slice(0, 8);
+  }, [q, none]);
+  const [showChecked, setShowChecked] = useState(false);
   const days = useMemo(() => {
     const today = Math.floor(nowSec / 86400) * 86400;
     const out: { ts: number; list: UnlockEvent[] }[] = [];
@@ -284,10 +309,23 @@ export function UnlocksScreen() {
         </div>
       ) : null}
 
+      {statusHits.map(([sym, why]) => (
+        <div key={sym} className={`unl-status s-${why}`}>
+          <CoinIcon sym={sym} size={30} />
+          <span className="unl-st">
+            <b className="unl-st-sym">{sym}</b>
+            <em>{t(lang, why === "done" || why === "burn" ? "unl_st_none_t" : "unl_st_nodata_t")}</em>
+            <small>{t(lang, SKIP_KEY[why])}</small>
+          </span>
+        </div>
+      ))}
+
       {items === null ? (
         failed ? <Empty text={t(lang, "generic_error_retry")} /> : <p className="note dim">{t(lang, "ui_loading")}</p>
       ) : days.length === 0 ? (
-        <Empty text={t(lang, q ? "unl_empty" : "unl_none")} />
+        statusHits.length ? null : (
+          <Empty text={q ? t(lang, "unl_unknown", { q: query.trim().toUpperCase() }) : t(lang, "unl_none")} />
+        )
       ) : (
         shown.days.map((d) => (
           <section key={d.ts} className="unl-day">
@@ -369,6 +407,15 @@ export function UnlocksScreen() {
                             </>
                           );
                         })()}
+                        {(() => {
+                          const why = noEmit[e.sym];
+                          return why ? (
+                            <>
+                              <dt>{t(lang, "unl_emit")}</dt>
+                              <dd>{t(lang, NOEMIT_KEY[why])}</dd>
+                            </>
+                          ) : null;
+                        })()}
                         {(Object.entries(e.who) as [UnlockWho, number][])
                           .sort((a, b) => b[1] - a[1])
                           .map(([who, n]) => (
@@ -399,6 +446,46 @@ export function UnlocksScreen() {
         ))
       )}
       {shown.more ? <div ref={tail} className="unl-tail" aria-hidden="true" /> : null}
+
+      {/* Все проверенные монеты вне календаря — чтобы было видно, что их не
+          забыли, а проверили. По группам причин; тап — поиск по монете. */}
+      {!shown.more && !q && Object.keys(none).length ? (
+        <section className="unl-checked">
+          <button
+            type="button"
+            className="unl-checked-hd"
+            aria-expanded={showChecked}
+            onClick={() => {
+              haptic("light");
+              setShowChecked(!showChecked);
+            }}
+          >
+            {t(lang, "unl_checked", { n: Object.keys(none).length })}
+            <span className="chart-caret" aria-hidden="true" />
+          </button>
+          {showChecked
+            ? (["done", "burn", "undated", "nodata"] as UnlockSkip[]).map((why) => {
+                const list = Object.keys(none)
+                  .filter((s) => none[s] === why)
+                  .sort();
+                if (!list.length) return null;
+                return (
+                  <div key={why} className="unl-checked-g">
+                    <p>{t(lang, SKIP_KEY[why])}</p>
+                    <div className="chart-chips">
+                      {list.map((s) => (
+                        <button key={s} type="button" onClick={() => setQuery(s)}>
+                          <CoinIcon sym={s} size={18} />
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })
+            : null}
+        </section>
+      ) : null}
 
       <p className="note dim">{t(lang, "unl_note")}</p>
     </Frame>

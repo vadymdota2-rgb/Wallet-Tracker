@@ -832,7 +832,7 @@ say("введённый тикер открывается, даже если е�
 # --- разлоки: свои расписания, только будущее, ближайшие первыми -----------
 unl_scr = read(f"{APP}/src/screens/UnlocksScreen.tsx")
 say("разлоки считаются по своей книге расписаний, у каждой монеты — источник",
-    "UNLOCK_BOOK: list[dict] = [" in api and api.count('"src": "https://') >= 67)
+    "UNLOCK_BOOK: list[dict] = [" in api and api.count('"src": "https://') >= 69)
 say("оценочные объёмы помечены в приложении", '"est": bool(coin.get("est"))' in api and "unl_est" in unl_scr)
 _ub = pybody(api, "def unlock_events(")
 say("прошедшие разлоки не отдаются, ближайшие первыми",
@@ -880,6 +880,12 @@ say("календарь отдаётся из памяти, собирается
 say("экран разлоков открывается сразу: запас на устройстве и отрисовка порциями",
     "savedUnlocks()" in unl_scr and "new IntersectionObserver" in unl_scr
     and "jobs.push(() => fetchUnlocks());" in read(f"{APP}/src/lib/prefetch.ts").split("// 1. Кошельки")[0])
+_book_syms = {c["s"] for c in _wm.UNLOCK_BOOK}
+say("монета не бывает и в календаре, и в списке отсеянных",
+    not (_book_syms & set(_wm.UNLOCK_SKIPPED)), str(_book_syms & set(_wm.UNLOCK_SKIPPED)))
+say("у каждой отсеянной монеты — код причины из известных",
+    all(v[0] in ("done", "burn", "undated", "nodata") for v in _wm.UNLOCK_SKIPPED.values())
+    and all(v[0] in ("fixed", "notyet") for v in _wm.NO_EMISSION.values()))
 say("маршрут /api/unlocks есть", 'if path in ("/unlocks", "/api/unlocks"):' in api)
 
 # --- ротация: своим потоком, не в бюджете сборки кэша ----------------------

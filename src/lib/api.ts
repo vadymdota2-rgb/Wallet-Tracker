@@ -8,7 +8,7 @@
 import { initData } from "./telegram";
 import { peek, remember } from "./memo";
 import type {
-  Bootstrap, Deal, FlowRow, FundRow, LsRow, MutationResult, RotSide, SymbolRow, TokenHist, Trades, UnlockEvent,
+  Bootstrap, Deal, FlowRow, FundRow, LsRow, MutationResult, RotSide, SymbolRow, TokenHist, Trades, UnlocksReply,
   WalletLive,
 } from "./types";
 
@@ -226,31 +226,33 @@ const UNLOCKS_TTL = 30 * 60_000;
 const UNLOCKS_SAVED = "wt-unlocks-v1";
 const UNLOCKS_SAVED_MAX_AGE = 7 * 24 * 3600_000;
 
-export function savedUnlocks(): UnlockEvent[] | null {
+export function savedUnlocks(): UnlocksReply | null {
   try {
     const raw = localStorage.getItem(UNLOCKS_SAVED);
     if (!raw) return null;
-    const v = JSON.parse(raw) as { at?: number; items?: UnlockEvent[] };
+    const v = JSON.parse(raw) as UnlocksReply & { at?: number };
     if (!v?.at || !Array.isArray(v.items) || Date.now() - v.at > UNLOCKS_SAVED_MAX_AGE) return null;
-    return v.items;
+    return v;
   } catch {
     return null;
   }
 }
 
 export const fetchUnlocks = () =>
-  cachedGet<{ ok?: boolean; items?: UnlockEvent[] }>("/api/unlocks", UNLOCKS_TTL).then((r) => {
+  cachedGet<UnlocksReply>("/api/unlocks", UNLOCKS_TTL).then((r) => {
     if (r?.ok && r.items?.length) {
       try {
-        localStorage.setItem(UNLOCKS_SAVED, JSON.stringify({ at: Date.now(), items: r.items }));
+        localStorage.setItem(
+          UNLOCKS_SAVED,
+          JSON.stringify({ at: Date.now(), items: r.items, none: r.none, noEmit: r.noEmit }),
+        );
       } catch {
         // место кончилось или хранилище закрыто — просто без запаса
       }
     }
     return r;
   });
-export const peekUnlocks = () =>
-  peek<{ ok?: boolean; items?: UnlockEvent[] } | null>("/api/unlocks", UNLOCKS_TTL);
+export const peekUnlocks = () => peek<UnlocksReply | null>("/api/unlocks", UNLOCKS_TTL);
 
 /** Язык хранится в той же строке users, что читает бот: выбор общий. */
 export const setLangRemote = (lang: string) =>
