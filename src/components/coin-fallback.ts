@@ -97,4 +97,7 @@ export const CG_FALLBACK: Record<string, string> = {
  */
 export const LOGO_OVERRIDE: Record<string, string> = {
   PUMP: "/cglogo/coins/images/67164/small/pump.jpg",
+  /* У однобуквенного тикера файл в образе — чужой значок «M», а в общем
+     справочнике его нет вовсе. */
+  M: "/cglogo/coins/images/53247/small/square-bg-transparent.png",
 };

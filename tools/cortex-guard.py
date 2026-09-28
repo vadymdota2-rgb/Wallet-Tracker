@@ -832,7 +832,7 @@ say("введённый тикер открывается, даже если е�
 # --- разлоки: свои расписания, только будущее, ближайшие первыми -----------
 unl_scr = read(f"{APP}/src/screens/UnlocksScreen.tsx")
 say("разлоки считаются по своей книге расписаний, у каждой монеты — источник",
-    "UNLOCK_BOOK: list[dict] = [" in api and api.count('"src": "https://') >= 69)
+    "UNLOCK_BOOK: list[dict] = [" in api and api.count('"src": "https://') >= 79)
 say("оценочные объёмы помечены в приложении", '"est": bool(coin.get("est"))' in api and "unl_est" in unl_scr)
 _ub = pybody(api, "def unlock_events(")
 say("прошедшие разлоки не отдаются, ближайшие первыми",
@@ -853,7 +853,8 @@ say("разлок и эмиссия различимы: метки, отдель
     and "function part(e: UnlockEvent, kind: Kind)" in unl_scr and "(emitMonth * days) / 30.44" in unl_scr)
 _logos = read(f"{APP}/src/components/coin-logos.ts") + read(f"{APP}/src/components/coin-fallback.ts")
 _no_icon = [c for c in re.findall(r'\{"s": "([A-Z0-9]+)", "n": ', api)
-            if not os.path.exists(f"{APP}/html/coins/hl/{c}.svg") and f'"{c}": "/' not in _logos and f"  {c}: \"/" not in _logos]
+            if not os.path.exists(f"{APP}/html/coins/hl/{c}.svg") and f'"{c}": "/' not in _logos and f"  {c}: \"/" not in _logos
+            or c in ("M",) and "  M: \"/cglogo" not in _logos]
 say("у каждой монеты календаря разлоков есть иконка", not _no_icon, str(_no_icon))
 # Опорный оборот со временем уходит: стейкинг, сжигание, выдачи вне книги.
 # Старше четырёх месяцев — пора сверить и обновить строку «circ».
