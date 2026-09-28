@@ -648,6 +648,7 @@ export const es: Dict = {
   unl_tokens: "Monedas",
   unl_top: "El de más presión en 30 días",
   unl_who_community: "Comunidad y ecosistema",
+  unl_who_emission: "Nueva emisión: staking y tesorería",
   unl_who_foundation: "Fundación",
   unl_who_investors: "Inversores",
   unl_who_mixed: "Varios grupos",

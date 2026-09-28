@@ -5002,5 +5002,23 @@
     "uk": "Графік до",
     "vi": "Lịch đến",
     "zh": "计划截至"
+  },
+  "unl_who_emission": {
+    "ar": "إصدار جديد: التخزين والخزينة",
+    "de": "Neuemission: Staking und Treasury",
+    "en": "New issuance: staking & treasury",
+    "es": "Nueva emisión: staking y tesorería",
+    "fr": "Émission : staking et trésorerie",
+    "hi": "नया इश्यू: स्टेकिंग और ट्रेज़री",
+    "id": "Emisi baru: staking & kas",
+    "ja": "新規発行：ステーキングとトレジャリー",
+    "ko": "신규 발행: 스테이킹·트레저리",
+    "pl": "Nowa emisja: staking i skarbiec",
+    "pt": "Nova emissão: staking e tesouraria",
+    "ru": "Эмиссия: стейкинг и казна",
+    "tr": "Yeni ihraç: staking ve hazine",
+    "uk": "Емісія: стейкінг і скарбниця",
+    "vi": "Phát hành mới: staking và ngân quỹ",
+    "zh": "新增发行：质押与国库"
   }
 }

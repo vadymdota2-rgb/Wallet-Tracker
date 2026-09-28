@@ -648,6 +648,7 @@ export const de: Dict = {
   unl_tokens: "Anzahl Coins",
   unl_top: "Stärkster Druck in 30 Tagen",
   unl_who_community: "Community und Ökosystem",
+  unl_who_emission: "Neuemission: Staking und Treasury",
   unl_who_foundation: "Stiftung",
   unl_who_investors: "Investoren",
   unl_who_mixed: "Mehrere Gruppen",

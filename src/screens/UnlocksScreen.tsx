@@ -37,6 +37,7 @@ const WHO_KEY: Record<UnlockWho, DictKey> = {
   community: "unl_who_community",
   foundation: "unl_who_foundation",
   mixed: "unl_who_mixed",
+  emission: "unl_who_emission",
 };
 
 function level(e: UnlockEvent): "hi" | "mid" | "lo" {

@@ -648,6 +648,7 @@ export const hi: Dict = {
   unl_tokens: "टोकन",
   unl_top: "30 दिनों में सबसे भारी",
   unl_who_community: "कम्युनिटी और इकोसिस्टम",
+  unl_who_emission: "नया इश्यू: स्टेकिंग और ट्रेज़री",
   unl_who_foundation: "फाउंडेशन",
   unl_who_investors: "निवेशक",
   unl_who_mixed: "कई समूह",

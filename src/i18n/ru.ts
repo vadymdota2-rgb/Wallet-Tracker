@@ -648,6 +648,7 @@ export const ru: Dict = {
   unl_tokens: "Монет",
   unl_top: "Сильнее всего давит за 30 дней",
   unl_who_community: "Сообщество и экосистема",
+  unl_who_emission: "Эмиссия: стейкинг и казна",
   unl_who_foundation: "Фонд",
   unl_who_investors: "Инвесторы",
   unl_who_mixed: "Несколько групп",

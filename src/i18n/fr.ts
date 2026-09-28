@@ -648,6 +648,7 @@ export const fr: Dict = {
   unl_tokens: "Jetons",
   unl_top: "Le plus lourd sur 30 jours",
   unl_who_community: "Communauté et écosystème",
+  unl_who_emission: "Émission : staking et trésorerie",
   unl_who_foundation: "Fondation",
   unl_who_investors: "Investisseurs",
   unl_who_mixed: "Plusieurs groupes",

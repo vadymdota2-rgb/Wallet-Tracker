@@ -648,6 +648,7 @@ export const zh: Dict = {
   unl_tokens: "数量",
   unl_top: "30天内压力最大",
   unl_who_community: "社区与生态",
+  unl_who_emission: "新增发行：质押与国库",
   unl_who_foundation: "基金会",
   unl_who_investors: "投资人",
   unl_who_mixed: "多个群体",

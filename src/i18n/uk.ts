@@ -648,6 +648,7 @@ export const uk: Dict = {
   unl_tokens: "Монет",
   unl_top: "Найбільше тисне за 30 днів",
   unl_who_community: "Спільнота та екосистема",
+  unl_who_emission: "Емісія: стейкінг і скарбниця",
   unl_who_foundation: "Фонд",
   unl_who_investors: "Інвестори",
   unl_who_mixed: "Кілька груп",

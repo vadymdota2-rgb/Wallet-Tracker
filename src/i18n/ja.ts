@@ -648,6 +648,7 @@ export const ja: Dict = {
   unl_tokens: "数量",
   unl_top: "30日以内で最も重い",
   unl_who_community: "コミュニティ・エコシステム",
+  unl_who_emission: "新規発行：ステーキングとトレジャリー",
   unl_who_foundation: "財団",
   unl_who_investors: "投資家",
   unl_who_mixed: "複数の対象",

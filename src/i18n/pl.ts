@@ -648,6 +648,7 @@ export const pl: Dict = {
   unl_tokens: "Liczba monet",
   unl_top: "Najcięższe w ciągu 30 dni",
   unl_who_community: "Społeczność i ekosystem",
+  unl_who_emission: "Nowa emisja: staking i skarbiec",
   unl_who_foundation: "Fundacja",
   unl_who_investors: "Inwestorzy",
   unl_who_mixed: "Kilka grup",

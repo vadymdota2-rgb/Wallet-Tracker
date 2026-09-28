@@ -632,7 +632,7 @@ export interface MutationResult {
 }
 
 /** Кому выходят монеты разлока. */
-export type UnlockWho = "team" | "investors" | "treasury" | "community" | "foundation" | "mixed";
+export type UnlockWho = "team" | "investors" | "treasury" | "community" | "foundation" | "mixed" | "emission";
 
 /** Один день разлока монеты: все выдачи этого дня вместе. */
 export interface UnlockEvent {

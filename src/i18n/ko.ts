@@ -648,6 +648,7 @@ export const ko: Dict = {
   unl_tokens: "수량",
   unl_top: "30일 내 가장 큰 압력",
   unl_who_community: "커뮤니티·생태계",
+  unl_who_emission: "신규 발행: 스테이킹·트레저리",
   unl_who_foundation: "재단",
   unl_who_investors: "투자자",
   unl_who_mixed: "여러 그룹",

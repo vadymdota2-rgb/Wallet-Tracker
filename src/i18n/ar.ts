@@ -648,6 +648,7 @@ export const ar: Dict = {
   unl_tokens: "عدد العملات",
   unl_top: "الأشد ضغطًا خلال 30 يومًا",
   unl_who_community: "المجتمع والنظام البيئي",
+  unl_who_emission: "إصدار جديد: التخزين والخزينة",
   unl_who_foundation: "المؤسسة",
   unl_who_investors: "المستثمرون",
   unl_who_mixed: "عدة جهات",

@@ -648,6 +648,7 @@ export const vi: Dict = {
   unl_tokens: "Số coin",
   unl_top: "Áp lực lớn nhất trong 30 ngày",
   unl_who_community: "Cộng đồng & hệ sinh thái",
+  unl_who_emission: "Phát hành mới: staking và ngân quỹ",
   unl_who_foundation: "Quỹ",
   unl_who_investors: "Nhà đầu tư",
   unl_who_mixed: "Nhiều nhóm",

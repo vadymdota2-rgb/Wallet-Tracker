@@ -648,6 +648,7 @@ export const en = {
   unl_tokens: "Tokens",
   unl_top: "Heaviest in the next 30 days",
   unl_who_community: "Community & ecosystem",
+  unl_who_emission: "New issuance: staking & treasury",
   unl_who_foundation: "Foundation",
   unl_who_investors: "Investors",
   unl_who_mixed: "Several groups",

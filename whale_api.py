@@ -2121,8 +2121,51 @@ UNLOCK_BOOK: list[dict] = [
               ("m", 8, "2027-01", "2029-12", 520_833_333, "team"),
               ("m", 8, "2027-01", "2029-12", 520_833_333, "investors"),
               ("m", 8, "2026-01", "2029-12", 888_800_000, "community")]},
+    {"s": "BEAT", "n": "Audiera",
+     "src": "https://docs.audiera.fi/protocol-design/system-architecture/economic-flow/editor",
+     # Миллиард, запуск 1.11.2025, выдачи 1-го числа. Сообщество 40% и фонд
+     # 14% — 48 месяцев; советники 13,07% и команда 8% — год блокировки и
+     # 36 месяцев; второй аирдроп 2% — после года четырьмя долями.
+     "circ": ("2026-09-27", 341_766_666),
+     "plan": [("m", 1, "2025-12", "2029-11", 8_333_333, "community"),
+              ("m", 1, "2025-12", "2029-11", 2_916_667, "foundation"),
+              ("m", 1, "2026-11", "2029-10", 3_630_556, "investors"),
+              ("m", 1, "2026-11", "2029-10", 2_222_222, "team"),
+              ("m", 1, "2026-11", "2027-02", 5_000_000, "community")]},
+    {"s": "RIVER", "n": "River",
+     "src": "https://www.bittime.com/en/blog/apa-itu-river-crypto",
+     "est": True,
+     # Сто миллионов, запуск 22.09.2025, выдачи раз в полгода — 22 марта и
+     # 22 сентября. Команда 15% и советники 3%: год блокировки, потом 30
+     # месяцев полугодовыми долями; фонд 10% — по миллиону раз в полгода.
+     # График инвесторов (15%, 24 месяца) проект по долям не раскрывает.
+     "circ": ("2026-09-27", 19_600_000),
+     # Советники идут вместе с командой: 2,5 млн + 0,5 млн за раз.
+     "plan": [("o", d, 3_000_000, "team") for d in (
+                  "2027-03-22", "2027-09-22", "2028-03-22", "2028-09-22", "2029-03-22")]
+             + [("o", d, 1_000_000, "foundation") for d in (
+                  "2027-03-22", "2027-09-22", "2028-03-22", "2028-09-22",
+                  "2029-03-22", "2029-09-22", "2030-03-22", "2030-09-22")]},
+    {"s": "AVNT", "n": "Veranta (Avantis)",
+     "src": "https://bingx.com/en/learn/article/what-is-avantis-avnt-rwa-and-how-does-it-work",
+     "est": True,
+     # Запуск 09.09.2025, выдачи 9-го. Инвесторы 266 млн — год блокировки,
+     # потом 20 месяцев; команда 133 млн — год, потом 30 месяцев; награды
+     # 286 млн — 42 месяца с запуска.
+     "circ": ("2026-09-27", 354_800_647),
+     "plan": [("m", 9, "2026-10", "2028-05", 13_300_000, "investors"),
+              ("m", 9, "2026-10", "2029-03", 4_433_333, "team"),
+              ("m", 9, "2025-10", "2029-03", 6_809_524, "community")]},
+    {"s": "DOT", "n": "Polkadot",
+     "src": "https://phemex.com/blogs/polkadot-halving-tokenomics-explained",
+     # Разлоков у Polkadot нет — давит эмиссия. С 14.03.2026 выпуск ~56,88 млн
+     # DOT в год (стейкинг и казна), здесь сложен по месяцам на 1-е число;
+     # 14.03.2028 он снижается на 13,14%.
+     "circ": ("2026-09-27", 1_704_879_082),
+     "plan": [("m", 1, "2026-10", "2028-03", 4_740_000, "emission"),
+              ("m", 1, "2028-04", "2030-03", 4_117_000, "emission")]},
 ]
-UNLOCK_WHO = ("team", "investors", "treasury", "community", "foundation", "mixed")
+UNLOCK_WHO = ("team", "investors", "treasury", "community", "foundation", "mixed", "emission")
 
 
 def _day_ts(y: int, m: int, d: int) -> int:
@@ -2191,8 +2234,8 @@ def unlock_events(now: float, book: list[dict] | None = None) -> list[dict]:
     return sorted(out, key=lambda e: (e["ts"], e["sym"]))
 
 
-# Цена монеты, которой нет на Hyperliquid (CRO, MYX), — последняя сделка на
-# споте: Bybit, потом OKX, KuCoin и Gate, кто первым ответит. Минута в памяти,
+# Цена монеты, которой нет на Hyperliquid (CRO, MYX, RIVER), — последняя сделка на
+# споте: Bybit, потом OKX, KuCoin, Gate, Bitget и MEXC — кто первым ответит. Минута в памяти,
 # и неудача тоже: монеты без спота не должны каждый раз ждать трёх бирж.
 SPOT_PX_TTL_S = 60.0
 _spot_px_cache: dict[str, tuple[float, float]] = {}
@@ -2220,6 +2263,13 @@ def spot_px(sym: str) -> float:
         gt = get_json(f"https://api.gateio.ws/api/v4/spot/tickers?currency_pair={s}_USDT", timeout=5.0)
         for x in gt if isinstance(gt, list) else []:
             px = _fnum(x.get("last"))
+    if not px:
+        bg = get_json(f"https://api.bitget.com/api/v2/spot/market/tickers?symbol={s}USDT", timeout=5.0)
+        for x in ((bg or {}).get("data") or []) if isinstance(bg, dict) else []:
+            px = _fnum(x.get("lastPr"))
+    if not px:
+        mx = get_json(f"https://api.mexc.com/api/v3/ticker/price?symbol={s}USDT", timeout=5.0)
+        px = _fnum((mx or {}).get("price")) if isinstance(mx, dict) else 0.0
     _spot_px_cache[s] = (time.monotonic(), px)
     return px
 

@@ -648,6 +648,7 @@ export const id: Dict = {
   unl_tokens: "Jumlah koin",
   unl_top: "Tekanan terberat dalam 30 hari",
   unl_who_community: "Komunitas & ekosistem",
+  unl_who_emission: "Emisi baru: staking & kas",
   unl_who_foundation: "Yayasan",
   unl_who_investors: "Investor",
   unl_who_mixed: "Beberapa kelompok",

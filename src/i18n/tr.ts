@@ -648,6 +648,7 @@ export const tr: Dict = {
   unl_tokens: "Coin adedi",
   unl_top: "30 gün içinde en ağırı",
   unl_who_community: "Topluluk ve ekosistem",
+  unl_who_emission: "Yeni ihraç: staking ve hazine",
   unl_who_foundation: "Vakıf",
   unl_who_investors: "Yatırımcılar",
   unl_who_mixed: "Birden çok grup",
