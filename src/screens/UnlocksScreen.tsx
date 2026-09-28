@@ -35,6 +35,7 @@ const SKIP_KEY: Record<UnlockSkip, DictKey> = {
   burn: "unl_r_burn",
   undated: "unl_r_undated",
   nodata: "unl_r_nodata",
+  pegged: "unl_r_pegged",
 };
 const NOEMIT_KEY: Record<UnlockNoEmit, DictKey> = {
   fixed: "unl_ne_fixed",
@@ -314,7 +315,7 @@ export function UnlocksScreen() {
           <CoinIcon sym={sym} size={30} />
           <span className="unl-st">
             <b className="unl-st-sym">{sym}</b>
-            <em>{t(lang, why === "done" || why === "burn" ? "unl_st_none_t" : "unl_st_nodata_t")}</em>
+            <em>{t(lang, why === "undated" || why === "nodata" ? "unl_st_nodata_t" : "unl_st_none_t")}</em>
             <small>{t(lang, SKIP_KEY[why])}</small>
           </span>
         </div>
@@ -464,7 +465,7 @@ export function UnlocksScreen() {
             <span className="chart-caret" aria-hidden="true" />
           </button>
           {showChecked
-            ? (["done", "burn", "undated", "nodata"] as UnlockSkip[]).map((why) => {
+            ? (["done", "burn", "pegged", "undated", "nodata"] as UnlockSkip[]).map((why) => {
                 const list = Object.keys(none)
                   .filter((s) => none[s] === why)
                   .sort();

@@ -658,8 +658,9 @@ export interface UnlockEvent {
 }
 
 /** Почему монеты нет в календаре: done — выдавать нечего, burn — сжигание
- *  перекрывает выпуск, undated — выдачи без дат, nodata — надёжного графика нет. */
-export type UnlockSkip = "done" | "burn" | "undated" | "nodata";
+ *  перекрывает выпуск, undated — выдачи без дат, nodata — надёжного графика нет,
+ *  pegged — стейблкоин или токенизированный актив, выпуск под спрос. */
+export type UnlockSkip = "done" | "burn" | "undated" | "nodata" | "pegged";
 /** Почему у монеты календаря нет эмиссии: fixed — выпуск создан сразу,
  *  notyet — предусмотрена, но не запущена. */
 export type UnlockNoEmit = "fixed" | "notyet";

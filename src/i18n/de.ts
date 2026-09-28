@@ -648,6 +648,7 @@ export const de: Dict = {
   unl_r_burn: "Es gibt Emission, aber das Verbrennen überwiegt.",
   unl_r_done: "Das gesamte Angebot ist schon im Umlauf — es gibt nichts freizugeben.",
   unl_r_nodata: "In offenen Quellen gibt es keinen verlässlichen Freigabeplan.",
+  unl_r_pegged: "Stablecoin, Fonds oder tokenisierter Vermögenswert — wird nach Nachfrage ausgegeben, ohne Unlocks und Emission.",
   unl_r_undated: "Freigaben gibt es, aber ohne Termine und Mengen — nach Entscheid des Unternehmens oder der DAO.",
   unl_search: "Coin oder Projekt",
   unl_split: "Unlocks {a} · Emission {b}",

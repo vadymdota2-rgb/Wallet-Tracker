@@ -648,6 +648,7 @@ export const zh: Dict = {
   unl_r_burn: "有增发，但销毁量更大。",
   unl_r_done: "全部供应已在流通，没有待释放的代币。",
   unl_r_nodata: "公开资料中没有可靠的释放计划。",
+  unl_r_pegged: "稳定币、基金或代币化资产——按需发行，没有解锁和增发。",
   unl_r_undated: "会有释放，但没有日期和数量，由公司或 DAO 决定。",
   unl_search: "代币或项目",
   unl_split: "解锁 {a} · 增发 {b}",

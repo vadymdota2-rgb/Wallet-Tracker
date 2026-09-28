@@ -648,6 +648,7 @@ export const en = {
   unl_r_burn: "There is issuance, but burning outweighs it.",
   unl_r_done: "The whole supply is already circulating — there is nothing left to release.",
   unl_r_nodata: "No reliable release schedule in open sources.",
+  unl_r_pegged: "A stablecoin, fund or tokenised asset — minted on demand, with no unlocks or issuance.",
   unl_r_undated: "Releases happen, but without dates or amounts — at the company's or DAO's discretion.",
   unl_search: "Coin or project",
   unl_split: "Unlocks {a} · issuance {b}",

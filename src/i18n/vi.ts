@@ -648,6 +648,7 @@ export const vi: Dict = {
   unl_r_burn: "Có phát hành, nhưng lượng đốt còn lớn hơn.",
   unl_r_done: "Toàn bộ nguồn cung đã lưu hành — không còn gì để mở.",
   unl_r_nodata: "Không có lịch mở khóa đáng tin trong nguồn mở.",
+  unl_r_pegged: "Stablecoin, quỹ hoặc tài sản mã hóa — phát hành theo nhu cầu, không có mở khóa và phát hành định kỳ.",
   unl_r_undated: "Có đợt mở nhưng không có ngày và số lượng — theo quyết định của công ty hoặc DAO.",
   unl_search: "Coin hoặc dự án",
   unl_split: "Mở khóa {a} · phát hành {b}",

@@ -648,6 +648,7 @@ export const id: Dict = {
   unl_r_burn: "Ada emisi, tetapi pembakaran melebihinya.",
   unl_r_done: "Seluruh suplai sudah beredar — tidak ada yang tersisa untuk dilepas.",
   unl_r_nodata: "Tidak ada jadwal pelepasan andal di sumber terbuka.",
+  unl_r_pegged: "Stablecoin, dana, atau aset tertokenisasi — diterbitkan sesuai permintaan, tanpa unlock dan emisi.",
   unl_r_undated: "Ada pelepasan, tetapi tanpa tanggal dan jumlah — atas keputusan perusahaan atau DAO.",
   unl_search: "Koin atau proyek",
   unl_split: "Unlock {a} · emisi {b}",

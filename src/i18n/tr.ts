@@ -648,6 +648,7 @@ export const tr: Dict = {
   unl_r_burn: "İhraç var ama yakım onu aşıyor.",
   unl_r_done: "Arzın tamamı zaten dolaşımda — serbest bırakılacak bir şey yok.",
   unl_r_nodata: "Açık kaynaklarda güvenilir bir takvim yok.",
+  unl_r_pegged: "Stablecoin, fon veya tokenleştirilmiş varlık — talebe göre çıkarılır, kilit açılımı ve ihraç yok.",
   unl_r_undated: "Serbest bırakmalar oluyor ama tarih ve miktar yok — şirketin veya DAO'nun kararıyla.",
   unl_search: "Coin veya proje",
   unl_split: "Açılım {a} · ihraç {b}",

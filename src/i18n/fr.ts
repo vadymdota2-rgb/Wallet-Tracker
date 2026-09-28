@@ -648,6 +648,7 @@ export const fr: Dict = {
   unl_r_burn: "Il y a une émission, mais le brûlage la dépasse.",
   unl_r_done: "Toute l'offre circule déjà : il n'y a plus rien à libérer.",
   unl_r_nodata: "Pas de calendrier de libération fiable dans les sources ouvertes.",
+  unl_r_pegged: "Stablecoin, fonds ou actif tokenisé — émis selon la demande, sans déblocage ni émission.",
   unl_r_undated: "Des libérations ont lieu, mais sans dates ni montants — selon la société ou la DAO.",
   unl_search: "Crypto ou projet",
   unl_split: "Déblocages {a} · émission {b}",

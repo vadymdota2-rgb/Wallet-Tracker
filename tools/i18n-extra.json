@@ -5272,5 +5272,23 @@
     "uk": "Перевірені, у календарі немає: {n}",
     "vi": "Đã kiểm tra, không có trong lịch: {n}",
     "zh": "已核查，不在日历中：{n}"
+  },
+  "unl_r_pegged": {
+    "ar": "عملة مستقرة أو صندوق أو أصل مرمّز — يُصدر حسب الطلب، بلا فتح ولا إصدار.",
+    "de": "Stablecoin, Fonds oder tokenisierter Vermögenswert — wird nach Nachfrage ausgegeben, ohne Unlocks und Emission.",
+    "en": "A stablecoin, fund or tokenised asset — minted on demand, with no unlocks or issuance.",
+    "es": "Stablecoin, fondo o activo tokenizado: se emite según la demanda, sin desbloqueos ni emisión.",
+    "fr": "Stablecoin, fonds ou actif tokenisé — émis selon la demande, sans déblocage ni émission.",
+    "hi": "स्टेबलकॉइन, फ़ंड या टोकनाइज़्ड एसेट — माँग पर जारी, बिना अनलॉक और इश्यू के।",
+    "id": "Stablecoin, dana, atau aset tertokenisasi — diterbitkan sesuai permintaan, tanpa unlock dan emisi.",
+    "ja": "ステーブルコイン・ファンド・トークン化資産で、需要に応じて発行され、アンロックも発行計画もありません。",
+    "ko": "스테이블코인·펀드·토큰화 자산으로, 수요에 따라 발행되며 언락도 발행 일정도 없습니다.",
+    "pl": "Stablecoin, fundusz lub tokenizowane aktywo — emitowane na żądanie, bez odblokowań i emisji.",
+    "pt": "Stablecoin, fundo ou ativo tokenizado — emitido conforme a demanda, sem desbloqueios nem emissão.",
+    "ru": "Стейблкоин, фонд или токенизированный актив — выпускается под спрос, разлоков и эмиссии нет.",
+    "tr": "Stablecoin, fon veya tokenleştirilmiş varlık — talebe göre çıkarılır, kilit açılımı ve ihraç yok.",
+    "uk": "Стейблкоїн, фонд або токенізований актив — випускається під попит, розлоків і емісії немає.",
+    "vi": "Stablecoin, quỹ hoặc tài sản mã hóa — phát hành theo nhu cầu, không có mở khóa và phát hành định kỳ.",
+    "zh": "稳定币、基金或代币化资产——按需发行，没有解锁和增发。"
   }
 }
