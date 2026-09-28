@@ -832,7 +832,7 @@ say("введённый тикер открывается, даже если е�
 # --- разлоки: свои расписания, только будущее, ближайшие первыми -----------
 unl_scr = read(f"{APP}/src/screens/UnlocksScreen.tsx")
 say("разлоки считаются по своей книге расписаний, у каждой монеты — источник",
-    "UNLOCK_BOOK: list[dict] = [" in api and api.count('"src": "https://') >= 120)
+    "UNLOCK_BOOK: list[dict] = [" in api and api.count('"src": "https://') >= 130)
 say("оценочные объёмы помечены в приложении", '"est": bool(coin.get("est"))' in api and "unl_est" in unl_scr)
 _ub = pybody(api, "def unlock_events(")
 say("прошедшие разлоки не отдаются, ближайшие первыми",
