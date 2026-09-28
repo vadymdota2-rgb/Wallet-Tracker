@@ -105,4 +105,6 @@ export const LOGO_OVERRIDE: Record<string, string> = {
   A: "/cglogo/coins/images/55616/small/Vaulta_CEX_Icon_Circle_-_cmc.png",
   /* Humanity Protocol — тикер «H», в справочниках его перебивают тезки. */
   H: "/cglogo/coins/images/66811/small/H_tokenLogo_original.png",
+  /* Quack AI — тикер «Q». */
+  Q: "/cglogo/coins/images/68793/small/quack_ai.png",
 };
