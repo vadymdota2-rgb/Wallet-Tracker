@@ -846,7 +846,10 @@ say("цена монеты без Hyperliquid — со спота, с кэшем
     'mids.get(e["sym"], 0.0) or spot_px(e["sym"])' in _uu and "_spot_px_cache[s] = (time.monotonic(), px)" in api)
 say("давление — доля от оборота на день разлока", 'e["tokens"] / circ * 100' in _uu)
 say("экран разлоков: поиск по тикеру и названию, фильтр крупных",
-    "e.sym.toLowerCase().includes(q) || e.name.toLowerCase().includes(q)" in unl_scr and 'filter === "big"' in unl_scr)
+    "e.sym.toLowerCase().includes(q) || e.name.toLowerCase().includes(q)" in unl_scr and "if (bigOnly &&" in unl_scr)
+say("разлок и эмиссия различимы: метки, отдельный вид, раздельная сводка",
+    'className="unl-tag u"' in unl_scr and 'className="unl-tag e"' in unl_scr
+    and "function part(e: UnlockEvent, kind: Kind)" in unl_scr and "(emitMonth * days) / 30.44" in unl_scr)
 _logos = read(f"{APP}/src/components/coin-logos.ts") + read(f"{APP}/src/components/coin-fallback.ts")
 _no_icon = [c for c in re.findall(r'\{"s": "([A-Z0-9]+)", "n": ', api)
             if not os.path.exists(f"{APP}/html/coins/hl/{c}.svg") and f'"{c}": "/' not in _logos and f"  {c}: \"/" not in _logos]

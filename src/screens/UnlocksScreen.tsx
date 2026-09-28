@@ -24,7 +24,8 @@ import { CoinIcon } from "../components/CoinIcon";
 import { Empty, Segmented } from "../components/ui";
 import { useNow } from "../lib/tick";
 
-type Filter = "all" | "big";
+/** Что показывать: всё, только разлоки или только эмиссию. */
+type Kind = "all" | "unlock" | "emit";
 
 /** Порог «заметного» давления, % оборота — он же фильтр «Крупные». */
 const BIG = 1;
@@ -45,11 +46,38 @@ function level(e: UnlockEvent): "hi" | "mid" | "lo" {
   return p >= HIGH ? "hi" : p >= BIG ? "mid" : "lo";
 }
 
-/** Строка целиком из эмиссии — новых монет сети, а не разлока. */
-function onlyEmission(e: UnlockEvent): boolean {
-  const who = Object.keys(e.who);
-  return who.length === 1 && who[0] === "emission";
+/**
+ * Часть дня монеты: только разлок, только эмиссия или всё вместе.
+ *
+ * В один день у монеты бывает и то и другое (у EIGEN 1-го числа выходят
+ * доли инвесторов и команды и тут же новые монеты стейкинга). Когда выбран
+ * один вид, сумма, доллары и доля оборота пересчитываются по нему — иначе
+ * «разлок» показывал бы и эмиссию внутри себя.
+ */
+function part(e: UnlockEvent, kind: Kind): UnlockEvent | null {
+  if (kind === "all") return e;
+  const who: UnlockEvent["who"] = {};
+  let tokens = 0;
+  for (const [k, v] of Object.entries(e.who) as [UnlockWho, number][]) {
+    if ((k === "emission") !== (kind === "emit")) continue;
+    who[k] = v;
+    tokens += v;
+  }
+  if (tokens <= 0) return null;
+  if (tokens === e.tokens) return e;
+  const share = tokens / e.tokens;
+  return {
+    ...e,
+    who,
+    tokens,
+    usd: e.usd !== null ? Math.round(e.usd * share) : null,
+    pct: e.pct !== null ? Math.round(e.pct * share * 100) / 100 : null,
+    kind: kind === "emit" ? "monthly" : e.kind,
+  };
 }
+
+const hasEmission = (e: UnlockEvent) => (e.who.emission ?? 0) > 0;
+const hasUnlock = (e: UnlockEvent) => Object.keys(e.who).some((k) => k !== "emission");
 
 /** Поиск по тикеру и названию: «arb», «Arbitrum», «star». */
 function matches(e: UnlockEvent, q: string): boolean {
@@ -79,17 +107,20 @@ export function UnlocksScreen() {
   }, []);
 
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
+  const [kind, setKind] = useState<Kind>("all");
+  const [bigOnly, setBigOnly] = useState(false);
   const [openKey, setOpenKey] = useState<string | null>(null);
 
   const q = query.trim().toLowerCase();
   const days = useMemo(() => {
     const today = Math.floor(nowSec / 86400) * 86400;
     const out: { ts: number; list: UnlockEvent[] }[] = [];
-    for (const e of items ?? []) {
+    for (const raw of items ?? []) {
       // Сервер отдаёт только будущее, но экран может висеть открытым сутки.
-      if (e.ts < today || !matches(e, q)) continue;
-      if (filter === "big" && e.kind !== "cliff" && (e.pct ?? 0) < BIG) continue;
+      if (raw.ts < today || !matches(raw, q)) continue;
+      const e = part(raw, kind);
+      if (!e) continue;
+      if (bigOnly && e.kind !== "cliff" && (e.pct ?? 0) < BIG) continue;
       const last = out[out.length - 1];
       if (last && last.ts === e.ts) last.list.push(e);
       else out.push({ ts: e.ts, list: [e] });
@@ -97,21 +128,31 @@ export function UnlocksScreen() {
     // Внутри дня — сначала то, что давит сильнее.
     for (const d of out) d.list.sort((a, b) => (b.pct ?? 0) - (a.pct ?? 0) || (b.usd ?? 0) - (a.usd ?? 0));
     return out;
-  }, [items, q, filter, nowSec]);
+  }, [items, q, kind, bigOnly, nowSec]);
 
   /* Сводка сверху — по всему календарю, без поиска и фильтра: сколько
      выходит за неделю и за месяц и какой разлок давит сильнее всех. */
   const sum = useMemo(() => {
     const today = Math.floor(nowSec / 86400) * 86400;
+    /* Доллары окна — отдельно разлоки и эмиссия: одно без другого
+       читалось как «разлоков на столько-то», хотя там была и эмиссия. */
+    /* Эмиссия идёт каждый день, а в календаре сложена в одну строку на
+       месяц. В окно берём её долю по дням: иначе в неделю, где есть 1-е
+       число, попадал целый месяц эмиссии SOL и ETH, и неделя выглядела
+       тяжелее месяца. */
+    let emitMonth = 0;
+    for (const e of items ?? []) {
+      if (e.ts < today || e.ts >= today + 31 * 86400) continue;
+      emitMonth += part(e, "emit")?.usd ?? 0;
+    }
     const win = (days: number) => {
-      let usdSum = 0;
-      let n = 0;
+      let unl = 0;
       for (const e of items ?? []) {
         if (e.ts < today || e.ts >= today + days * 86400) continue;
-        n += 1;
-        usdSum += e.usd ?? 0;
+        unl += part(e, "unlock")?.usd ?? 0;
       }
-      return { usd: usdSum, n };
+      const emit = (emitMonth * days) / 30.44;
+      return { usd: unl + emit, unl, emit };
     };
     let top: UnlockEvent | null = null;
     for (const e of items ?? []) {
@@ -152,15 +193,28 @@ export function UnlocksScreen() {
           inputMode="search"
           aria-label={t(lang, "unl_search")}
         />
-        <Segmented<Filter>
+        <Segmented<Kind>
           wrap
-          value={filter}
-          onChange={setFilter}
+          value={kind}
+          onChange={setKind}
           options={[
             { id: "all", label: t(lang, "unl_all") },
-            { id: "big", label: t(lang, "unl_big") },
+            { id: "unlock", label: t(lang, "unl_type_unlock") },
+            { id: "emit", label: t(lang, "unl_emit") },
           ]}
         />
+        <button
+          type="button"
+          className={bigOnly ? "unl-big on" : "unl-big"}
+          aria-pressed={bigOnly}
+          onClick={() => {
+            haptic("select");
+            setBigOnly(!bigOnly);
+          }}
+        >
+          <span className="unl-big-box" aria-hidden="true" />
+          {t(lang, "unl_big")}
+        </button>
       </div>
 
       {items?.length ? (
@@ -168,12 +222,12 @@ export function UnlocksScreen() {
           <div className="unl-sum-t">
             <small>{t(lang, "unl_7d")}</small>
             <b>{usd(sum.w.usd)}</b>
-            <small>{t(lang, "unl_count", { n: sum.w.n })}</small>
+            <small>{t(lang, "unl_split", { a: usd(sum.w.unl), b: usd(sum.w.emit) })}</small>
           </div>
           <div className="unl-sum-t">
             <small>{t(lang, "unl_30d")}</small>
             <b>{usd(sum.m.usd)}</b>
-            <small>{t(lang, "unl_count", { n: sum.m.n })}</small>
+            <small>{t(lang, "unl_split", { a: usd(sum.m.unl), b: usd(sum.m.emit) })}</small>
           </div>
           {sum.top && sum.top.pct !== null ? (
             <button
@@ -222,10 +276,16 @@ export function UnlocksScreen() {
                   >
                     <CoinIcon sym={e.sym} size={30} />
                     <span className="unl-id">
-                      <b>{e.sym}</b>
+                      <span className="unl-sym">
+                        <b>{e.sym}</b>
+                        {/* Что это: разлок (цвет команды и инвесторов) или
+                            эмиссия (новые монеты сети); бывает и то и другое. */}
+                        {hasUnlock(e) ? <i className="unl-tag u">{t(lang, "unl_tag_unlock")}</i> : null}
+                        {hasEmission(e) ? <i className="unl-tag e">{t(lang, "unl_emit")}</i> : null}
+                      </span>
                       <small>
-                        {e.name} ·{" "}
-                        {t(lang, onlyEmission(e) ? "unl_emit" : e.kind === "cliff" ? "unl_cliff" : "unl_monthly")}
+                        {e.name}
+                        {hasUnlock(e) ? ` · ${t(lang, e.kind === "cliff" ? "unl_cliff" : "unl_monthly")}` : ""}
                         {e.est ? <em className="unl-est"> · {t(lang, "unl_est")}</em> : null}
                       </small>
                     </span>
