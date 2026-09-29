@@ -4549,14 +4549,19 @@ def spot_volumes(ref_px: dict[str, float]) -> dict[str, float]:
     """Суточный объём по монетам книги. Биржа засчитывается, только если её
     цена в пределах 15% от нашей: у тезок (PRL — Pearl и Perle) чужой объём
     иначе попал бы в чужую монету."""
-    global _VOL_RAW
-    with _vol_lock:
-        at, raw = _VOL_RAW
-        if time.time() - at > VOL_TTL_S or not raw:
-            fresh = _spot_tickers()
-            if fresh:
-                _VOL_RAW = (time.time(), fresh)
-                raw = fresh
+    at, raw = _VOL_RAW
+    if time.time() - at > VOL_TTL_S and _vol_lock.acquire(blocking=False):
+        # Семь бирж — это секунды двадцать; календарь их не ждёт: объёмы
+        # догружаются в стороне и появятся со следующей сборкой.
+        def pull() -> None:
+            global _VOL_RAW
+            try:
+                fresh = _spot_tickers()
+                if fresh:
+                    _VOL_RAW = (time.time(), fresh)
+            finally:
+                _vol_lock.release()
+        threading.Thread(target=pull, daemon=True, name="volumes").start()
     out = {}
     for sym, ref in ref_px.items():
         if not ref:
