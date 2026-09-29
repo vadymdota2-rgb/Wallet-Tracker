@@ -3,6 +3,7 @@
 Stdlib only. Run from WhaleScanner working directory on the VPS."""
 from __future__ import annotations
 
+import base64
 import hashlib
 import html
 import hmac
@@ -4551,7 +4552,56 @@ def _supply_fetchers() -> dict:
                 return _fnum(m["subsets"][0]["value"][1])
         return 0.0
 
+    def ckb():
+        req = urllib.request.Request("https://mainnet-api.explorer.nervos.org/api/v1/market_data/total_supply",
+                                     headers={"Accept": "application/vnd.api+json",
+                                              "Content-Type": "application/vnd.api+json",
+                                              "User-Agent": "wallet-tracker/1.0"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return _fnum(json.loads(r.read().decode()))
+
+    def mina():
+        r = _rpc("https://api.minascan.io/node/mainnet/v1/graphql",
+                 {"query": "{ bestChain(maxLength:1){ protocolState{ consensusState{ totalCurrency } } } }"}) or {}
+        chain = (r.get("data") or {}).get("bestChain") or [{}]
+        return _fnum(((chain[0].get("protocolState") or {}).get("consensusState") or {}).get("totalCurrency")) / 1e9
+
+    def flow():
+        # FlowToken.totalSupply скриптом Cadence через REST узла Flow.
+        src = b"import FlowToken from 0x1654653399040a61\naccess(all) fun main(): UFix64 { return FlowToken.totalSupply }"
+        r = _rpc("https://rest-mainnet.onflow.org/v1/scripts", {"script": base64.b64encode(src).decode(), "arguments": []})
+        return _fnum(json.loads(base64.b64decode(r)).get("value")) if isinstance(r, str) else 0.0
+
+    def vtho():
+        # Энергия VeChain — встроенный контракт «Energy», totalSupply().
+        r = _rpc("https://mainnet.vechain.org/accounts/*",
+                 {"clauses": [{"to": "0x0000000000000000000000000000456e65726779", "value": "0x0", "data": "0x18160ddd"}]})
+        return int(r[0]["data"], 16) / 1e18 if isinstance(r, list) and r and not r[0].get("reverted") else 0.0
+
+    def grt():
+        # GRT выпускается на Arbitrum: на L1 — всё, минус запертое в мосту,
+        # плюс всё на L2 (мостовое и новое).
+        l1 = _eth_call("eth", "0xc944E90C64B2c07662A292be6244BDf05Cda44a7", "0x18160ddd") / 1e18
+        esc = _erc20_bal("eth", "0xc944E90C64B2c07662A292be6244BDf05Cda44a7", "0x36aFF7001294dAE4C2Ed4fDEFC478a00De77F090")
+        l2 = _eth_call("arb", "0x9623063377AD1B27544C965cCd7342f7EA7e88C7", "0x18160ddd") / 1e18
+        return l1 - esc + l2 if l1 and esc and l2 else 0.0
+
+    def cryptoid(coin):
+        return lambda: _fnum(get_json(f"https://chainz.cryptoid.info/{coin}/api.dws?q=totalcoins", 20))
+
     return {
+        "DASH": cryptoid("dash"), "DGB": cryptoid("dgb"), "CKB": ckb, "MINA": mina, "FLOW": flow,
+        "VTHO": vtho, "GRT": grt,
+        "AERO": lambda: _eth_call("base", "0x940181a94A35A4569E4529A3CDfB74e38FD98631", "0x18160ddd") / 1e18,
+        "FLR": lambda: _fnum((get_json("https://flare-explorer.flare.network/api?module=stats&action=coinsupply", 20)
+                              or {}).get("result")),
+        "QUBIC": lambda: _fnum(((get_json("https://rpc.qubic.org/v1/latest-stats", 20) or {}).get("data") or {})
+                               .get("circulatingSupply")),
+        "QRL": lambda: _fnum((get_json("https://explorer.theqrl.org/api/emission", 20) or {}).get("emission")),
+        "ZANO": lambda: _fnum(((get_json("https://explorer.zano.org/api/get_info/4294967295", 20) or {})
+                               .get("result") or {}).get("total_coins")) / 1e12,
+        "ASTR": issuance("https://astar.api.onfinality.io/public", 1e18),
+        "CTC": issuance("https://mainnet3.creditcoin.network", 1e18),
         "ETH": eth, "SOL": sol, "ADA": ada, "AVAX": avax, "ICP": icp,
         "TRX": lambda: _fnum((get_json("https://apilist.tronscanapi.com/api/funds", 20) or {}).get("totalTurnOver")),
         "FIL": lambda: _fnum((get_json("https://filfox.info/api/v1/overview", 20) or {}).get("totalSupply")) / 1e18,
