@@ -480,5 +480,12 @@ say("карта ликвидаций: отдаётся из памяти сра�
     and "wait(futures, timeout=LIQ_BUDGET)" in api and 'sorted(ex.get(k, ()))' in api
     and "savedLiqMap(sym, range)" in _lq and "callTwice<LiqMapReply>" in read(f"{APP}/src/lib/api.ts"))
 
+_ngx = read(f"{APP}/nginx.conf")
+say("Binance и Bybit — через nginx в Европе, если отсюда закрыты; ретранслятор только с ключом",
+    'location /xr/binance-f/' in _ngx and 'location /xr/bybit/' in _ngx
+    and _ngx.count('if ($http_x_api_key != "__API_KEY__") { return 403; }') == 2
+    and _ngx.count('if ($http_x_api_key = "") { return 403; }') == 2
+    and "def _geo_refused(" in api and '"https://fapi.binance.com/": "/xr/binance-f/"' in api)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

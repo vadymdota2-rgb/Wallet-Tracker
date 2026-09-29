@@ -6761,14 +6761,51 @@ _FUND: dict[str, tuple[float, list]] = {}
 _fund_lock = threading.Lock()
 
 
-def get_json(url: str, timeout: float = 10.0):
-    """GET с разбором JSON. Ошибка сети — это None, а не исключение."""
-    req = urllib.request.Request(url, headers={"User-Agent": "wallet-tracker/1.0"})
+# Binance и Bybit закрывают фьючерсные API для части стран — в том числе для
+# той, где стоит эта машина. nginx же живёт в Cloud Run в Европе, и оттуда
+# они отвечают. Поэтому запрос к ним, который отсюда не прошёл, повторяется
+# через nginx (/xr/…), подписанный тем же ключом, что nginx ставит нам. Раз
+# биржа отказала напрямую, следующие полчаса к ней сразу идём через nginx.
+RELAY = (os.environ.get("WHALE_RELAY") or next(
+    (o.strip() for o in os.environ.get("WHALE_API_ORIGIN", "").split(",") if o.strip().startswith("https://")), "")).rstrip("/")
+RELAY_HOSTS = {
+    "https://fapi.binance.com/": "/xr/binance-f/",
+    "https://api.bybit.com/": "/xr/bybit/",
+}
+_relay_first: dict[str, float] = {}
+
+
+def _geo_refused(got) -> bool:
+    """Отказ по стране, пришедший телом ответа, а не кодом HTTP."""
+    if not isinstance(got, dict):
+        return False
+    msg = str(got.get("msg") or got.get("retMsg") or "").lower()
+    return any(w in msg for w in ("restricted", "country", "region", "location"))
+
+
+def _get_json_raw(url: str, timeout: float, headers: dict | None = None):
+    req = urllib.request.Request(url, headers={"User-Agent": "wallet-tracker/1.0", **(headers or {})})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.loads(r.read().decode())
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError, OSError):
         return None
+
+
+def get_json(url: str, timeout: float = 10.0):
+    """GET с разбором JSON. Ошибка сети — это None, а не исключение."""
+    host = next((h for h in RELAY_HOSTS if url.startswith(h)), "")
+    if not host or not RELAY or not API_KEY:
+        return _get_json_raw(url, timeout)
+    via = RELAY + RELAY_HOSTS[host] + url[len(host):]
+    if time.monotonic() < _relay_first.get(host, 0.0):
+        got = _get_json_raw(via, timeout, {"X-Api-Key": API_KEY})
+        return got if got is not None else _get_json_raw(url, timeout)
+    got = _get_json_raw(url, timeout)
+    if got is not None and not _geo_refused(got):
+        return got
+    _relay_first[host] = time.monotonic() + 1800
+    return _get_json_raw(via, timeout, {"X-Api-Key": API_KEY})
 
 
 def _fnum(v) -> float:
