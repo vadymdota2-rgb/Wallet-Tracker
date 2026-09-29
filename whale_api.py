@@ -8540,6 +8540,85 @@ def _liq_model(rows: list) -> list:
     return open_
 
 
+def _liq_candles(rows: list, n: int = 48) -> list:
+    """Свечи окна для графика цены на карте: ≤n штук, [откр, макс, мин, закр].
+
+    Свечи бирж склеиваются по несколько, открытие — закрытие предыдущей: у
+    источников модели открытия нет, а на графике разрыв в долю процента не
+    виден."""
+    k = max(1, -(-len(rows) // n))
+    out, prev = [], rows[0][3]
+    for i in range(0, len(rows), k):
+        part = rows[i:i + k]
+        hi, lo, c = max(r[1] for r in part), min(r[2] for r in part), part[-1][3]
+        out.append([round(x, 10) for x in (prev, max(hi, prev, c), min(lo, prev, c), c)])
+        prev = c
+    return out
+
+
+# Монеты, по которым строится карта: бессрочные фьючерсы к USDT на Binance,
+# OKX и Gate, по обороту за сутки. Список раз в час, из открытых тикеров.
+LIQ_COINS_TTL = 3600.0
+LIQ_COINS_MIN_VOL = 50_000
+_liq_coins_cache: dict = {}
+
+
+def _liq_sym(raw: str) -> str:
+    """«1000PEPE» → «PEPE»: у Binance дробные монеты идут тысячами."""
+    s = re.sub(r"^(1000000|100000|10000|1000)(?=[A-Z])", "", raw.upper())
+    return s if re.fullmatch(r"[A-Z0-9]{2,12}", s) else ""
+
+
+def liq_coins() -> dict:
+    with _liq_lock:
+        hit = _liq_coins_cache.get("all")
+        if hit and time.monotonic() - hit[0] < LIQ_COINS_TTL:
+            return hit[1]
+    vol: dict[str, float] = {}
+    ex: dict[str, set] = {}
+
+    def add(raw: str, v: float, name: str) -> None:
+        sym = _liq_sym(raw)
+        if not sym or v <= 0:
+            return
+        vol[sym] = vol.get(sym, 0.0) + v
+        ex.setdefault(sym, set()).add(name)
+
+    def binance() -> None:
+        for r in get_json("https://fapi.binance.com/fapi/v1/ticker/24hr", 20) or []:
+            s = str(r.get("symbol") or "")
+            if s.endswith("USDT"):
+                add(s[:-4], _fnum(r.get("quoteVolume")), "Binance")
+
+    def okx() -> None:
+        for r in (get_json("https://www.okx.com/api/v5/market/tickers?instType=SWAP", 20) or {}).get("data") or []:
+            inst = str(r.get("instId") or "")
+            if inst.endswith("-USDT-SWAP"):
+                add(inst.split("-")[0], _fnum(r.get("volCcy24h")) * _fnum(r.get("last")), "OKX")
+
+    def gate() -> None:
+        for r in get_json("https://api.gateio.ws/api/v4/futures/usdt/tickers", 20) or []:
+            c = str(r.get("contract") or "")
+            if c.endswith("_USDT"):
+                add(c[:-5], _fnum(r.get("volume_24h_quote")), "Gate")
+
+    def safe(fn) -> None:
+        try:
+            fn()
+        except Exception:  # noqa: BLE001 — биржа недоступна: список без неё
+            pass
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        list(pool.map(safe, (binance, okx, gate)))
+    coins = sorted(({"s": k, "v": round(v), "ex": sorted(ex[k])} for k, v in vol.items() if v >= LIQ_COINS_MIN_VOL),
+                   key=lambda c: -c["v"])
+    res = {"ok": bool(coins), "coins": coins, "at": now()}
+    if coins:
+        with _liq_lock:
+            _liq_coins_cache["all"] = (time.monotonic(), res)
+    return res
+
+
 def liq_map(sym: str, rng: str) -> dict:
     sym = re.sub(r"[^A-Z0-9]", "", (sym or "").upper())[:12]
     if not sym or rng not in LIQ_RANGES:
@@ -8606,7 +8685,7 @@ def liq_map(sym: str, rng: str) -> dict:
            "ex": sorted(got), "levs": list(LIQ_LEVS), "buckets": buckets,
            "cum": {k: {"L": cum("L", k), "S": cum("S", k)} for k in (2, 5, 10)},
            "path": [round(x, 10) for x in path], "oi": round(sum(r[-1][4] for r in got.values())),
-           "at": now()}
+           "ohlc": _liq_candles(main), "at": now()}
     with _liq_lock:
         _liq_cache[key] = (time.monotonic(), res)
         cap_cache(_liq_cache, 60)
@@ -9558,6 +9637,9 @@ class Handler(BaseHTTPRequestHandler):
                         cur.close()
                     except Exception:
                         pass
+                return
+            if path in ("/liqcoins", "/api/liqcoins"):
+                self._json(200, liq_coins())
                 return
             if path in ("/liqmap", "/api/liqmap"):
                 self._json(200, liq_map(qs.get("sym", ["BTC"])[0], (qs.get("range", ["1d"])[0] or "1d")))

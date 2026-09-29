@@ -645,5 +645,21 @@ export interface LiqMapReply {
   path?: number[];
   /** Открытый интерес всех ответивших бирж, $. */
   oi?: number;
+  /** Свечи окна для графика цены на карте: [откр, макс, мин, закр]. */
+  ohlc?: [number, number, number, number][];
+  at: number;
+}
+
+/** Монета, по которой строится карта ликвидаций. */
+export interface LiqCoin {
+  s: string;
+  /** Оборот фьючерсов за сутки, $. */
+  v: number;
+  ex: string[];
+}
+
+export interface LiqCoinsReply {
+  ok: boolean;
+  coins: LiqCoin[];
   at: number;
 }

@@ -451,5 +451,9 @@ say("карта ликвидаций: плечо — своим оттенком
     "LEV_C" in _lq and "LEV_HOT" in _lq and 'filter={hot ? "url(#lq-glow)"' in _lq and "function cumOf(" in _lq and "CX0 + ((cum[i]" in _lq
     and "function nearest(" in _lq and '"path": [round(x, 10) for x in path]' in api)
 
+say("карта ликвидаций: свечи цены на той же оси и список всех монет с фьючерсами",
+    "def liq_coins(" in api and '"/api/liqcoins"' in api and '"ohlc": _liq_candles(main)' in api
+    and "function Candles(" in _lq and "function CoinPicker(" in _lq and "fetchLiqCoins" in _lq)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

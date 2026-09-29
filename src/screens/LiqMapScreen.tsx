@@ -20,6 +20,10 @@
  * средние в полный цвет, крупные скопления (от половины самого большого) —
  * в ярком варианте того же оттенка и с подсветкой. Глаз сразу находит их.
  *
+ * Слева от уровней — свечи цены за то же окно на той же ценовой оси: видно,
+ * откуда цена пришла и где открывались позиции, чьи ликвидации справа. Это
+ * две панели с общей осью цены, а не две оси на одном поле.
+ *
  * Накопленное «до этой цены» — другой масштаб. Второй осью поверх полос оно
  * превратило бы карту в ребус, поэтому у него своя узкая колонка справа с той
  * же ценовой осью.
@@ -29,10 +33,10 @@ import { useApp, type LiqRange } from "../store/app";
 import { t } from "../i18n/t";
 import { num, pct, px, since, usd } from "../lib/format";
 import { haptic } from "../lib/telegram";
-import { fetchLiqMap, peekLiqMap } from "../lib/api";
+import { fetchLiqCoins, fetchLiqMap, peekLiqCoins, peekLiqMap } from "../lib/api";
 import { CoinIcon } from "../components/CoinIcon";
 import { Card, Chips, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
-import type { LiqMapReply } from "../lib/types";
+import type { LiqCoin, LiqMapReply } from "../lib/types";
 import { Frame } from "./Screen";
 
 type Lang = Parameters<typeof t>[0];
@@ -49,12 +53,31 @@ const SPANS: Span[] = ["5", "10", "15"];
 const TICK: Record<Span, number> = { "5": 1, "10": 2, "15": 3 };
 
 const W = 360;
-const AXIS = 60;
-const CUMW = 52;
-const GAP = 6;
+const AXIS = 58;
+const CUMW = 38;
+const GAP = 5;
 const PLOT = W - AXIS - CUMW - GAP * 2;
+/** Панель свечей слева, полосы уровней — от BX0 до PLOT. */
+const CAND = 96;
+const BX0 = CAND + GAP;
+const BW = PLOT - BX0;
 const CX0 = PLOT + GAP;
 const CX1 = CX0 + CUMW;
+
+const SUB = "₀₁₂₃₄₅₆₇₈₉";
+/**
+ * Цена для оси: «$0,00000441» не влезает в шестьдесят точек и наезжает на
+ * соседнюю колонку. Нули после запятой сворачиваются в индекс — «$0,0₅441»,
+ * как пишут на биржах; значащих цифр остаётся четыре.
+ */
+function pxAxis(v: number): string {
+  /* От тысячи копейки на оси не нужны: «$4 159,59» не влезал в ярлык цены. */
+  const s = px(Math.abs(v) >= 1000 ? Math.round(v) : v);
+  const m = s.match(/^(-?\$0[.,])(0{3,})(\d+)/);
+  if (!m) return s;
+  const z = String(m[2]!.length).split("").map((d) => SUB[Number(d)]).join("");
+  return `${m[1]}0${z}${m[3]!.slice(0, 4)}`;
+}
 
 interface ViewRow {
   lo: number;
@@ -171,20 +194,53 @@ function Spark({ path, up }: { path: number[]; up: boolean }) {
   );
 }
 
-function Chart({ r, lang, span, sel, onSel, on }: {
+/**
+ * Свечи окна на той же оси цены, что и уровни. Что выходит за окно карты,
+ * обрезается по краю — цена за месяц бывает дальше ±5%.
+ */
+function Candles({ r, yOf, H }: { r: LiqMapReply; yOf: (p: number) => number; H: number }) {
+  const list = r.ohlc ?? [];
+  if (list.length < 2) return null;
+  const cw = (CAND - 6) / list.length;
+  const bw = Math.max(1, cw * 0.64);
+  const cy = (p: number) => Math.max(0, Math.min(H, yOf(p)));
+  return (
+    <g className="lq-candles">
+      <clipPath id="lq-cclip"><rect x={0} y={0} width={CAND} height={H} /></clipPath>
+      <g clipPath="url(#lq-cclip)">
+        {list.map(([o, h, l, c], i) => {
+          const x = 2 + i * cw + cw / 2;
+          const up = c >= o;
+          const y1 = cy(Math.max(o, c));
+          const y2 = cy(Math.min(o, c));
+          return (
+            <g key={i} className={up ? "up" : "dn"}>
+              <line x1={x} x2={x} y1={cy(h)} y2={cy(l)} />
+              <rect x={x - bw / 2} y={y1} width={bw} height={Math.max(0.8, y2 - y1)} />
+            </g>
+          );
+        })}
+      </g>
+      <circle cx={2 + (list.length - 0.5) * cw} cy={yOf(r.px)} r={2.6} className="lq-cp-now" />
+    </g>
+  );
+}
+
+function Chart({ r, lang, span, sel, onSel, on, win }: {
   r: LiqMapReply;
   lang: Lang;
   span: Span;
   sel: number | null;
   onSel: (i: number | null) => void;
   on: boolean[];
+  win: string;
 }) {
   const spanN = Number(span);
   const { rows, rowH } = useMemo(() => rowsOf(r, spanN), [r, spanN]);
   const H = rows.length * rowH;
   /* Самая длинная полоса короче поля на подпись: сумма всегда стоит снаружи. */
   const top = Math.max(1, ...rows.map((w) => sumOn(side(w, r.px), on)));
-  const max = top * (PLOT / (PLOT - 46));
+  const max = top * (BW / (BW - 42));
   const cum = useMemo(() => cumOf(rows, r.px, on), [rows, r.px, on]);
   const cmax = Math.max(1, ...cum);
   const yOf = (price: number) => ((r.px * (1 + spanN / 100) - price) / (r.px * spanN * 2 / 100)) * H;
@@ -234,8 +290,10 @@ function Chart({ r, lang, span, sel, onSel, on }: {
       aria-label={t(lang, "lq_title")}
       onPointerDown={(e) => pick(e.clientY, e.currentTarget)}
     >
-      <rect x={0} y={0} width={CX1} height={yNow} className="lq-zone up" />
-      <rect x={0} y={yNow} width={CX1} height={H - yNow} className="lq-zone dn" />
+      <rect x={BX0} y={0} width={CX1 - BX0} height={yNow} className="lq-zone up" />
+      <rect x={BX0} y={yNow} width={CX1 - BX0} height={H - yNow} className="lq-zone dn" />
+      <rect x={0} y={0} width={CAND} height={H} className="lq-cpanel" />
+      <line x1={BX0 - GAP / 2} x2={BX0 - GAP / 2} y1={0} y2={H} className="lq-sep" />
       <line x1={CX0 - GAP / 2} x2={CX0 - GAP / 2} y1={0} y2={H} className="lq-sep" />
 
       {ticks.map((p) => {
@@ -243,7 +301,7 @@ function Chart({ r, lang, span, sel, onSel, on }: {
         return (
           <g key={p}>
             <line x1={0} x2={CX1} y1={y} y2={y} className="lq-grid" />
-            <text x={W - 2} y={Math.max(9, y - 1)} className="lq-tick" textAnchor="end">{px(r.px * (1 + p / 100))}</text>
+            <text x={W - 2} y={Math.max(9, y - 1)} className="lq-tick" textAnchor="end">{pxAxis(r.px * (1 + p / 100))}</text>
             <text x={W - 2} y={Math.min(H - 2, y + 10)} className={`lq-tick-p ${p > 0 ? "up" : "dn"}`} textAnchor="end">
               {p > 0 ? "+" : "−"}{Math.abs(p)}%
             </text>
@@ -252,6 +310,9 @@ function Chart({ r, lang, span, sel, onSel, on }: {
       })}
 
       {sel !== null ? <rect x={0} y={sel * rowH} width={CX1} height={rowH} className="lq-hl" /> : null}
+
+      <Candles r={r} yOf={yOf} H={H} />
+      <text x={4} y={11} className="lq-cp-t">{t(lang, "lq_price_w", { w: win })}</text>
 
       <defs>
         <filter id="lq-glow" x="-10%" y="-150%" width="120%" height="400%">
@@ -272,13 +333,13 @@ function Chart({ r, lang, span, sel, onSel, on }: {
           const alpha = hot ? 1 : 0.3 + 0.62 * Math.pow(k / HOT, 0.8);
           const y = i * rowH + 0.75;
           const h = Math.max(2, rowH - 1.5);
-          let x = 0;
+          let x = BX0;
           return (
             <g key={i} fillOpacity={alpha} filter={hot ? "url(#lq-glow)" : undefined}
               className={sel !== null && sel !== i ? "lq-row dim" : "lq-row"}>
               {parts.map((v, j) => {
                 if (v <= 0 || !on[j]) return null;
-                const wdt = (v / max) * PLOT;
+                const wdt = (v / max) * BW;
                 const el = (
                   <rect key={j} x={x} y={y} width={Math.max(1, wdt - (wdt > 3 ? 1.2 : 0))} height={h}
                     rx={Math.min(1.5, h / 2)} fill={pal[j]} />
@@ -295,7 +356,7 @@ function Chart({ r, lang, span, sel, onSel, on }: {
         const w = rows[i];
         if (!w) return null;
         const v = sumOn(side(w, r.px), on);
-        const end = (v / max) * PLOT;
+        const end = BX0 + (v / max) * BW;
         return (
           <text key={`l${i}`} x={end + 4} y={i * rowH + rowH / 2 + 3.5} className="lq-val">
             {usd(v)}
@@ -308,17 +369,125 @@ function Chart({ r, lang, span, sel, onSel, on }: {
 
       <line x1={0} x2={W - AXIS} y1={yNow} y2={yNow} className="lq-now" />
       <rect x={W - AXIS + 1} y={yNow - 11} width={AXIS - 1} height={22} rx={6} className="lq-now-box" />
-      <text x={W - AXIS / 2 + 0.5} y={yNow + 4} textAnchor="middle" className="lq-now-t">{px(r.px)}</text>
+      <text x={W - AXIS / 2 + 0.5} y={yNow + 4} textAnchor="middle" className="lq-now-t">{pxAxis(r.px)}</text>
 
       {selRow ? (
         <g className="lq-cross">
           <line x1={0} x2={W - AXIS} y1={selY} y2={selY} />
           <circle cx={CX0 + ((cum[sel ?? 0] ?? 0) / cmax) * CUMW} cy={selY} r={3.5} />
           <rect x={W - AXIS + 1} y={selY - 11} width={AXIS - 1} height={22} rx={6} />
-          <text x={W - AXIS / 2 + 0.5} y={selY + 4} textAnchor="middle">{px(selRow.mid)}</text>
+          <text x={W - AXIS / 2 + 0.5} y={selY + 4} textAnchor="middle">{pxAxis(selRow.mid)}</text>
         </g>
       ) : null}
     </svg>
+  );
+}
+
+/** Сколько строк списка монет рисовать за раз: значки грузятся картинками. */
+const PAGE = 60;
+
+/**
+ * Выбор монеты: популярные — чипами, остальные — поиском и полным списком.
+ * Список — все бессрочные фьючерсы к USDT на Binance, OKX и Gate, по
+ * обороту за сутки; пока он грузится, есть десяток крупных монет.
+ */
+function CoinPicker({ lang, sym, onPick }: { lang: Lang; sym: string; onPick: (s: string) => void }) {
+  const [list, setList] = useState<LiqCoin[]>(() => peekLiqCoins()?.coins ?? []);
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [shown, setShown] = useState(PAGE);
+
+  useEffect(() => {
+    let alive = true;
+    void fetchLiqCoins().then((r) => {
+      if (alive && r?.ok && r.coins.length) setList(r.coins);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const chips = list.length ? list.slice(0, 12).map((c) => c.s) : COINS;
+  const q = query.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const found = useMemo(() => {
+    if (!q) return list;
+    const head = list.filter((c) => c.s.startsWith(q));
+    const rest = list.filter((c) => !c.s.startsWith(q) && c.s.includes(q));
+    return [...head, ...rest];
+  }, [list, q]);
+  const showList = open || q.length > 0;
+
+  const pick = (s: string) => {
+    haptic("select");
+    onPick(s);
+    setQuery("");
+    setOpen(false);
+    setShown(PAGE);
+  };
+
+  return (
+    <div className="lq-pick">
+      <Chips
+        value={sym}
+        options={[...(chips.includes(sym) ? [] : [{ id: sym, label: sym }]), ...chips.map((c) => ({ id: c, label: c }))]}
+        onChange={(c) => c && pick(c)}
+      />
+      <form
+        className="lq-find"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const first = found[0];
+          if (first) pick(first.s);
+          else if (q) pick(q);
+        }}
+      >
+        <input
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setShown(PAGE); }}
+          placeholder={t(lang, "lq_search")}
+          autoCapitalize="characters"
+          spellCheck={false}
+          maxLength={12}
+          enterKeyHint="search"
+        />
+        <button
+          type="button"
+          className={open ? "on" : ""}
+          aria-expanded={showList}
+          onClick={() => { haptic("select"); setOpen(!showList); setQuery(""); setShown(PAGE); }}
+        >
+          {showList ? t(lang, "lq_hide_all") : t(lang, "lq_all", { n: list.length || "…" })}
+        </button>
+      </form>
+      {showList ? (
+        <div className="lq-list" role="listbox">
+          {found.length ? (
+            <>
+              {found.slice(0, shown).map((c, i) => (
+                <button key={c.s} type="button" role="option" aria-selected={c.s === sym}
+                  className={c.s === sym ? "lq-li on" : "lq-li"} onClick={() => pick(c.s)}>
+                  <span className="lq-li-n">{list.indexOf(c) + 1 || i + 1}</span>
+                  <CoinIcon sym={c.s} size={24} />
+                  <b>{c.s}</b>
+                  <small>{c.ex.join(" · ")}</small>
+                  <em>{usd(c.v)}</em>
+                </button>
+              ))}
+              {found.length > shown ? (
+                <button type="button" className="lq-more" onClick={() => setShown(shown + PAGE)}>
+                  {t(lang, "lq_more", { n: found.length - shown })}
+                </button>
+              ) : null}
+            </>
+          ) : (
+            <p className="lq-none">
+              {t(lang, "lq_nothing")}{" "}
+              {q ? <button type="button" onClick={() => pick(q)}>{t(lang, "lq_try", { s: q })}</button> : null}
+            </p>
+          )}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -331,7 +500,6 @@ export function LiqMapScreen() {
   const [sym, setSym] = useState(saved || "BTC");
   const [range, setRange] = useState<LiqRange>(savedRange || "1d");
   const [span, setSpan] = useState<Span>("10");
-  const [query, setQuery] = useState("");
   const [sel, setSel] = useState<number | null>(null);
   const [on, setOn] = useState<boolean[]>([true, true, true, true]);
   const [reply, setReply] = useState<LiqMapReply | null>(() => peekLiqMap(sym, range) ?? null);
@@ -355,6 +523,20 @@ export function LiqMapScreen() {
     };
   }, [sym, range, setLiq]);
 
+  /* Окно карты подбирается под ход цены: свечи должны занимать высоту, а
+     не жаться полоской у линии цены. Раз на монету и период — дальше решает
+     человек. */
+  const autoKey = useRef("");
+  useEffect(() => {
+    if (!reply?.ok) return;
+    const key = `${reply.sym}-${reply.range}`;
+    if (autoKey.current === key) return;
+    autoKey.current = key;
+    const d = Math.max(0, ...(reply.ohlc ?? []).flatMap(([, h, l]) => [h, l]).map((p) => Math.abs(p / reply.px - 1) * 100));
+    setSpan(SPANS.find((s) => d < Number(s) * 0.92) ?? "15");
+    setSel(null);
+  }, [reply]);
+
   const spanN = Number(span);
   const view = useMemo(() => (reply?.ok ? rowsOf(reply, spanN) : { rows: [], rowH: 1 }), [reply, spanN]);
   const row = sel !== null ? view.rows[sel] : undefined;
@@ -371,13 +553,6 @@ export function LiqMapScreen() {
   }, [reply]);
   const topMax = Math.max(1, ...top.up.map((b) => b.v), ...top.dn.map((b) => b.v));
 
-  const pickSym = () => {
-    const s = query.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
-    if (!s) return;
-    haptic("select");
-    setSym(s);
-    setQuery("");
-  };
 
   /** Показать цену на карте: если она за краем, окно расширяется. */
   const focus = (p: number) => {
@@ -483,22 +658,7 @@ export function LiqMapScreen() {
     <Frame title={t(lang, "lq_title")}>
       <p className="lq-lead">{t(lang, "lq_sub")}</p>
 
-      <Chips
-        value={sym}
-        options={[...(COINS.includes(sym) ? [] : [{ id: sym, label: sym }]), ...COINS.map((c) => ({ id: c, label: c }))]}
-        onChange={(c) => c && setSym(c)}
-      />
-      <form className="lq-find" onSubmit={(e) => { e.preventDefault(); pickSym(); }}>
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={t(lang, "lq_search")}
-          autoCapitalize="characters"
-          spellCheck={false}
-          maxLength={12}
-        />
-        <button type="submit" disabled={!query.trim()}>{t(lang, "lq_show")}</button>
-      </form>
+      <CoinPicker lang={lang} sym={sym} onPick={setSym} />
       <div className="lq-ctl">
         <Segmented<LiqRange>
           value={range}
@@ -528,13 +688,13 @@ export function LiqMapScreen() {
               options={SPANS.map((s) => ({ id: s, label: `±${s}%` }))}
             />
             <div className="lq-zone-h up">
-              <span style={{ maxWidth: `calc(${(CX0 / W) * 100}% - 8px)` }}>▲ {t(lang, "lq_zone_up")}</span>
-              <small style={{ left: `${(CX0 / W) * 100}%`, width: `${(CUMW / W) * 100}%` }}>
+              <span style={{ maxWidth: `calc(${(CX0 / W) * 100}% - 12px)` }}>▲ {t(lang, "lq_zone_up")}</span>
+              <small style={{ right: `${(AXIS / W) * 100}%` }}>
                 {t(lang, "lq_cum_axis")}
               </small>
             </div>
             <div className="lq-plot" ref={plotRef}>
-              <Chart r={reply} lang={lang} span={span} sel={sel} onSel={setSel} on={on} />
+              <Chart r={reply} lang={lang} span={span} sel={sel} onSel={setSel} on={on} win={winLabel} />
               {row ? (
                 <div
                   className={`lq-pop ${rowUp ? "up" : "dn"}${tipBelow ? " below" : ""}`}
@@ -629,6 +789,7 @@ export function LiqMapScreen() {
               <li>{t(lang, "lq_how_3")}</li>
               <li>{t(lang, "lq_how_4")}</li>
               <li>{t(lang, "lq_how_5")}</li>
+              <li>{t(lang, "lq_how_6")}</li>
             </ul>
           </details>
 

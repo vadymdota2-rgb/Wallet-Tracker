@@ -8,7 +8,8 @@
 import { initData } from "./telegram";
 import { peek, remember } from "./memo";
 import type {
-  Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply, FundRow, LsRow, MutationResult,
+  Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
+  LiqCoinsReply, FundRow, LsRow, MutationResult,
   RotSide, SymbolRow, TokenHist, Trades, UnlocksReply, WalletLive,
 } from "./types";
 
@@ -281,3 +282,6 @@ const liqPath = (sym: string, range: string) =>
   `/api/liqmap?sym=${encodeURIComponent(sym)}&range=${encodeURIComponent(range)}`;
 export const fetchLiqMap = (sym: string, range: string) => cachedGet<LiqMapReply>(liqPath(sym, range), 5 * 60_000);
 export const peekLiqMap = (sym: string, range: string) => peek<LiqMapReply | null>(liqPath(sym, range), 5 * 60_000);
+/** Все монеты с фьючерсами на Binance, OKX и Gate — список раз в час. */
+export const fetchLiqCoins = () => cachedGet<LiqCoinsReply>("/api/liqcoins", 60 * 60_000);
+export const peekLiqCoins = () => peek<LiqCoinsReply | null>("/api/liqcoins", 60 * 60_000);
