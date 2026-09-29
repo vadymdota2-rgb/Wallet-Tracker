@@ -641,6 +641,8 @@ export const ko: Dict = {
   unl_count: "언락: {n}건",
   unl_curve_title: "앞으로의 유통량",
   unl_emit: "발행",
+  unl_emit_fact: "{d}일간 온체인 실측",
+  unl_emit_net_down: "온체인 공급 감소: 월 {n} — 소각이 발행보다 많음",
   unl_empty: "캘린더에 이 코인의 언락이 없습니다",
   unl_end: "마지막 해제",
   unl_end_open: "발행은 종료 기한 없음",

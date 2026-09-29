@@ -641,6 +641,8 @@ export const tr: Dict = {
   unl_count: "Kilit açılımı: {n}",
   unl_curve_title: "Gelecekteki dolaşım",
   unl_emit: "İhraç",
+  unl_emit_fact: "{d} günde zincirde ölçüldü",
+  unl_emit_net_down: "zincirde arz azalıyor: ayda {n} — yakım ihraçtan fazla",
   unl_empty: "Takvimde bu coin için kilit açılımı yok",
   unl_end: "Son serbest bırakma",
   unl_end_open: "ihraç süresiz",

@@ -6208,5 +6208,41 @@
     "uk": "Як змінювалась ціна за тиждень після минулих розлоків цієї монети: ціна напередодні проти ціни через 7 днів. «Зазвичай» — медіана, а не середнє, щоб рідкі злети не спотворювали картину. «Проти BTC» — наскільки монета поводилась гірше чи краще за весь ринок.",
     "vi": "Giá thay đổi thế nào trong tuần sau các đợt mở khóa trước: giá hôm trước so với sau 7 ngày. «Thường» là trung vị chứ không phải trung bình, để vài cú tăng hiếm không làm lệch. «So với BTC» cho thấy coin tệ hơn hay tốt hơn cả thị trường bao nhiêu.",
     "zh": "该币过往解锁后一周价格如何变化：前一天价格对比7天后价格。«通常»是中位数而非平均数，避免偶发暴涨失真。«相对 BTC»表示比整个市场差或好多少。"
+  },
+  "unl_emit_fact": {
+    "ar": "مقاس على الشبكة خلال {d} أيام",
+    "de": "on-chain gemessen über {d} Tage",
+    "en": "measured on-chain over {d} days",
+    "es": "medido en la red durante {d} días",
+    "fr": "mesuré on-chain sur {d} jours",
+    "hi": "{d} दिनों में ऑन-चेन मापा गया",
+    "id": "diukur on-chain selama {d} hari",
+    "ja": "{d}日間のオンチェーン実測",
+    "ko": "{d}일간 온체인 실측",
+    "pl": "zmierzone w sieci przez {d} dni",
+    "pt": "medido na rede em {d} dias",
+    "ru": "по факту сети за {d} дн.",
+    "tr": "{d} günde zincirde ölçüldü",
+    "uk": "за фактом мережі за {d} дн.",
+    "vi": "đo trên chuỗi trong {d} ngày",
+    "zh": "链上实测 {d} 天"
+  },
+  "unl_emit_net_down": {
+    "ar": "على الشبكة يتقلص المعروض: {n} شهريًا — الحرق يفوق الإصدار",
+    "de": "on-chain schrumpft das Angebot: {n} pro Monat — Verbrennung übersteigt Emission",
+    "en": "on-chain the supply shrinks: {n} a month — burning exceeds issuance",
+    "es": "en la red la oferta baja: {n} al mes — la quema supera la emisión",
+    "fr": "on-chain l'offre diminue : {n} par mois — la destruction dépasse l'émission",
+    "hi": "ऑन-चेन आपूर्ति घट रही है: हर महीने {n} — बर्न इश्यूअंस से ज़्यादा",
+    "id": "on-chain pasokan menyusut: {n} per bulan — pembakaran melebihi emisi",
+    "ja": "オンチェーンでは供給が減少：月{n} — バーンが発行を上回る",
+    "ko": "온체인 공급 감소: 월 {n} — 소각이 발행보다 많음",
+    "pl": "w sieci podaż maleje: {n} miesięcznie — spalanie przewyższa emisję",
+    "pt": "na rede a oferta cai: {n} por mês — a queima supera a emissão",
+    "ru": "по факту сети монет становится меньше: {n} в месяц — сжигание больше выпуска",
+    "tr": "zincirde arz azalıyor: ayda {n} — yakım ihraçtan fazla",
+    "uk": "за фактом мережі монет стає менше: {n} на місяць — спалювання більше за випуск",
+    "vi": "trên chuỗi nguồn cung giảm: {n} mỗi tháng — đốt nhiều hơn phát hành",
+    "zh": "链上供应在减少：每月 {n} — 销毁多于增发"
   }
 }

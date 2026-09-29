@@ -641,6 +641,8 @@ export const pt: Dict = {
   unl_count: "Desbloqueios: {n}",
   unl_curve_title: "Circulante previsto",
   unl_emit: "Emissão",
+  unl_emit_fact: "medido na rede em {d} dias",
+  unl_emit_net_down: "na rede a oferta cai: {n} por mês — a queima supera a emissão",
   unl_empty: "Não há desbloqueios desta moeda no calendário",
   unl_end: "Última liberação",
   unl_end_open: "emissão sem data de fim",

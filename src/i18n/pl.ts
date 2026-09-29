@@ -641,6 +641,8 @@ export const pl: Dict = {
   unl_count: "Odblokowań: {n}",
   unl_curve_title: "Przyszły obieg",
   unl_emit: "Emisja",
+  unl_emit_fact: "zmierzone w sieci przez {d} dni",
+  unl_emit_net_down: "w sieci podaż maleje: {n} miesięcznie — spalanie przewyższa emisję",
   unl_empty: "Brak odblokowań tej monety w kalendarzu",
   unl_end: "Ostatnie odblokowanie",
   unl_end_open: "emisja bez końca",

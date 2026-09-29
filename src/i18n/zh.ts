@@ -641,6 +641,8 @@ export const zh: Dict = {
   unl_count: "解锁：{n} 次",
   unl_curve_title: "未来流通量",
   unl_emit: "增发",
+  unl_emit_fact: "链上实测 {d} 天",
+  unl_emit_net_down: "链上供应在减少：每月 {n} — 销毁多于增发",
   unl_empty: "日历中没有该代币的解锁",
   unl_end: "最后一次释放",
   unl_end_open: "增发无截止",

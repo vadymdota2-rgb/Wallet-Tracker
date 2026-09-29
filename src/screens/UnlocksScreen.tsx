@@ -115,6 +115,7 @@ export function UnlocksScreen() {
   const supplyRef = reply?.supply ?? {};
   const vols = reply?.vol ?? {};
   const reacts = reply?.react ?? {};
+  const measuredAll = reply?.measured ?? {};
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let alive = true;
@@ -375,6 +376,7 @@ export function UnlocksScreen() {
                       ref0={supplyRef[e.sym]}
                       vol={vols[e.sym]}
                       react={reacts[e.sym]}
+                      fact={measuredAll[e.sym]}
                       onChart={() => chart(e.sym)}
                     />
                   ) : null}
@@ -471,6 +473,7 @@ function CoinMore({
   ref0,
   vol,
   react,
+  fact,
   onChart,
 }: {
   e: UnlockEvent;
@@ -482,6 +485,7 @@ function CoinMore({
   ref0: { t: number; m: number } | undefined;
   vol: number | undefined;
   react: { n: number; med: number; down: number; btc: number | null } | undefined;
+  fact: { d: number; r: number } | undefined;
   onChart: () => void;
 }) {
   /* Какое объяснение раскрыто: «место:термин» — один термин встречается и
@@ -770,7 +774,11 @@ function CoinMore({
               {t(lang, "unl_apy_val", { p: `+${pct((emitYr / now) * 100, 1, false)}` })}
               <small className="unl-note">
                 {qty(emitYr)} {sym}
+                {fact && fact.r > 0 ? ` · ${t(lang, "unl_emit_fact", { d: String(fact.d) })}` : ""}
               </small>
+              {fact && fact.r <= 0 ? (
+                <small className="unl-note">{t(lang, "unl_emit_net_down", { n: `${qty(fact.r)} ${sym}` })}</small>
+              ) : null}
             </>
           ) : (
             t(lang, "unl_stake_unknown")

@@ -837,7 +837,7 @@ say("оценочные объёмы помечены в приложении", 
 _ub = pybody(api, "def unlock_events(")
 say("прошедшие разлоки не отдаются, ближайшие первыми",
     "if ts >= day0:" in _ub and 'sorted(out, key=lambda e: (e["ts"], e["sym"]))' in _ub
-    and "events = unlock_events(now)" in pybody(api, "def _unlocks_build(")
+    and "events = unlock_events(now, book)" in pybody(api, "def _unlocks_build(")
     and "if e[\"ts\"] >= day0" in pybody(api, "def unlocks("))
 _uu = pybody(api, "def _unlocks_build(")
 say("разлоки ни от кого не зависят: оборот — наш расчёт, цена — Hyperliquid",
@@ -878,6 +878,9 @@ say("снимок застейканного у монет разлоков не
 _apy_old = [f"{c}:{d}" for c, d in re.findall(r'\{"s": "([A-Z0-9]+)", "n": [^\n]*\n(?:[^\n]*\n)*?\s+"apy": \("(\d{4}-\d{2}-\d{2})"', api)
             if (_dt.date.today() - _dt.date.fromisoformat(d)).days > 120]
 say("снимок доходности стейкинга не старше 120 дней", not _apy_old, str(_apy_old))
+say("эмиссия без срока меряется по сети: выпуск пишется раз в сутки, через 7 дней факт заменяет оценку",
+    "def _book_measured(" in api and '"measured": measured' in api and "SUPPLY_MIN_DAYS = 7" in api
+    and "_supply_record(" in pybody(api, "def stake_live_refresh(") and 't(lang, "unl_emit_fact"' in unl_scr)
 say("карточка монеты начинается с вывода о давлении и объясняет термины",
     'className={`unl-verdict v${lvl}`}' in unl_scr and '"unl_q_pressure"' in unl_scr and 'className="unl-q"' in unl_scr)
 say("разлок меряется днями всех торгов: объём с семи бирж, тезки отсеяны по цене",

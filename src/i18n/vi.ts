@@ -641,6 +641,8 @@ export const vi: Dict = {
   unl_count: "Số đợt: {n}",
   unl_curve_title: "Lượng lưu hành sắp tới",
   unl_emit: "Phát hành",
+  unl_emit_fact: "đo trên chuỗi trong {d} ngày",
+  unl_emit_net_down: "trên chuỗi nguồn cung giảm: {n} mỗi tháng — đốt nhiều hơn phát hành",
   unl_empty: "Không có đợt mở khóa nào của coin này trong lịch",
   unl_end: "Lần mở khóa cuối",
   unl_end_open: "phát hành không thời hạn",

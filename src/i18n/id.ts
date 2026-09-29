@@ -641,6 +641,8 @@ export const id: Dict = {
   unl_count: "Unlock: {n}",
   unl_curve_title: "Peredaran ke depan",
   unl_emit: "Emisi",
+  unl_emit_fact: "diukur on-chain selama {d} hari",
+  unl_emit_net_down: "on-chain pasokan menyusut: {n} per bulan — pembakaran melebihi emisi",
   unl_empty: "Tidak ada unlock untuk koin ini di kalender",
   unl_end: "Rilis terakhir",
   unl_end_open: "emisi tanpa akhir",

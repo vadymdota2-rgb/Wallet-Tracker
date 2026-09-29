@@ -641,6 +641,8 @@ export const en = {
   unl_count: "Unlocks: {n}",
   unl_curve_title: "Circulating supply ahead",
   unl_emit: "Issuance",
+  unl_emit_fact: "measured on-chain over {d} days",
+  unl_emit_net_down: "on-chain the supply shrinks: {n} a month — burning exceeds issuance",
   unl_empty: "No unlocks for this coin in the calendar",
   unl_end: "Last release",
   unl_end_open: "issuance with no end date",

@@ -641,6 +641,8 @@ export const de: Dict = {
   unl_count: "Unlocks: {n}",
   unl_curve_title: "Umlauf in Zukunft",
   unl_emit: "Emission",
+  unl_emit_fact: "on-chain gemessen über {d} Tage",
+  unl_emit_net_down: "on-chain schrumpft das Angebot: {n} pro Monat — Verbrennung übersteigt Emission",
   unl_empty: "Für diesen Coin steht nichts im Kalender",
   unl_end: "Letzte Freigabe",
   unl_end_open: "Emission ohne Ende",

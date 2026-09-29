@@ -682,6 +682,9 @@ export interface UnlocksReply {
   /** Прошлые разлоки: n — сколько, med — медиана изменения цены за неделю, %,
    *  down — сколько раз падала, btc — медиана против BTC, %. */
   react?: Record<string, { n: number; med: number; down: number; btc: number | null }>;
+  /** Эмиссия по факту сети: d — дней измерения, r — прирост в месяц
+   *  (отрицательный — сжигание больше выпуска). */
+  measured?: Record<string, { d: number; r: number }>;
 }
 
 export interface UnlockStake {

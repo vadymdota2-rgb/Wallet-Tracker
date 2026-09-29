@@ -4498,6 +4498,147 @@ def _stake_fetchers() -> dict:
     return out
 
 
+# --- Фактическая эмиссия ---------------------------------------------------
+# У сетей с бессрочной эмиссией её размер в книге — оценка по документам.
+# Сервер раз в сутки записывает общий выпуск прямо из сети и, накопив неделю
+# наблюдений, подставляет в календарь фактический прирост за месяц. У ETH это
+# чистый выпуск с учётом сжигания — ровно то, что давит на рынок.
+SUPPLY_MIN_DAYS = 7
+SUPPLY_KEEP_DAYS = 60
+
+
+def _supply_fetchers() -> dict:
+    """Тикер → функция, возвращающая весь выпуск монеты сейчас."""
+    def eth():
+        r = get_json("https://ultrasound.money/api/v2/fees/supply-parts", 20) or {}
+        return (_fnum(r.get("beaconBalancesSum")) / 1e9 + _fnum(r.get("executionBalancesSum")) / 1e18
+                - _fnum(r.get("beaconDepositsSum")) / 1e9)
+
+    def sol():
+        r = (_rpc("https://api.mainnet-beta.solana.com",
+                  {"jsonrpc": "2.0", "id": 1, "method": "getSupply",
+                   "params": [{"excludeNonCirculatingAccountsList": True}]}) or {}).get("result") or {}
+        return _fnum((r.get("value") or {}).get("total")) / 1e9
+
+    def ada():
+        tip = get_json("https://api.koios.rest/api/v1/tip", 20) or []
+        if not tip:
+            return 0.0
+        t = get_json(f"https://api.koios.rest/api/v1/totals?_epoch_no={tip[0]['epoch_no']}", 20) or []
+        return _fnum(t[0].get("supply")) / 1e6 if t else 0.0
+
+    def avax():
+        r = (_rpc("https://api.avax.network/ext/bc/P",
+                  {"jsonrpc": "2.0", "id": 1, "method": "platform.getCurrentSupply", "params": {}}) or {})
+        return _fnum((r.get("result") or {}).get("supply")) / 1e9
+
+    def issuance(url, dec):
+        def f():
+            return int.from_bytes(_substrate(url, "c2261276cc9d1f8598ea4b6a74b15c2f57c875e4cff74148e4628f264b974c80"),
+                                  "little") / dec
+        return f
+
+    def bank(host, denom, dec):
+        def f():
+            r = get_json(f"https://{host}-rest.publicnode.com/cosmos/bank/v1beta1/supply/by_denom?denom={denom}", 20) or {}
+            return _fnum((r.get("amount") or {}).get("amount")) / dec
+        return f
+
+    def icp():
+        r = get_json("https://ic-api.internetcomputer.org/api/v3/governance-metrics", 20) or {}
+        for m in r.get("metrics") or []:
+            if m.get("name") == "governance_total_supply_icp":
+                return _fnum(m["subsets"][0]["value"][1])
+        return 0.0
+
+    return {
+        "ETH": eth, "SOL": sol, "ADA": ada, "AVAX": avax, "ICP": icp,
+        "TRX": lambda: _fnum((get_json("https://apilist.tronscanapi.com/api/funds", 20) or {}).get("totalTurnOver")),
+        "FIL": lambda: _fnum((get_json("https://filfox.info/api/v1/overview", 20) or {}).get("totalSupply")) / 1e18,
+        "XTZ": lambda: _fnum((get_json("https://api.tzkt.io/v1/statistics/current", 20) or {}).get("totalSupply")) / 1e6,
+        "EGLD": lambda: _fnum((get_json("https://api.multiversx.com/economics", 20) or {}).get("totalSupply")),
+        "TFUEL": lambda: _fnum((get_json("https://explorer-api.thetatoken.org/api/supply/tfuel", 20) or {}).get("total_supply")),
+        "DOT": issuance("https://polkadot-asset-hub-rpc.polkadot.io", 1e10),
+        "KSM": issuance("https://kusama-asset-hub-rpc.polkadot.io", 1e12),
+        "TAO": lambda: int.from_bytes(_substrate("https://entrypoint-finney.opentensor.ai",
+                                                 "658faa385070e074c85bf6b568cf055557c875e4cff74148e4628f264b974c80"),
+                                      "little") / 1e9,
+        "ATOM": bank("cosmos", "uatom", 1e6), "AKT": bank("akash", "uakt", 1e6),
+        "TIA": bank("celestia", "utia", 1e6), "CRO": bank("cronos-pos", "basecro", 1e8),
+        "LPT": lambda: _eth_call("arb", "0x289ba1701C2F088cf0faf8B3705246331cB8A839", "0x18160ddd") / 1e18,
+    }
+
+
+def _supply_record(today: str) -> None:
+    """Записать выпуск за сегодня: одна точка в сутки, 60 суток истории."""
+    with _stake_live_lock:
+        hist = _STAKE_LIVE.setdefault("_sup", {})
+    for sym, fn in _supply_fetchers().items():
+        try:
+            v = fn()
+        except Exception:  # noqa: BLE001 — одна сеть не должна ронять остальные
+            continue
+        if not v or v <= 0:
+            continue
+        with _stake_live_lock:
+            rows = [r for r in hist.get(sym, []) if r[0] != today]
+            # Скачок больше 5% за сутки — сбой источника, а не эмиссия.
+            if rows and abs(v / rows[-1][1] - 1) > 0.05:
+                continue
+            rows.append([today, round(v, 4)])
+            hist[sym] = rows[-SUPPLY_KEEP_DAYS:]
+
+
+def measured_emission() -> dict[str, tuple[float, int]]:
+    """Тикер → (прирост выпуска в месяц, за сколько дней измерено), от недели
+    наблюдений. Отрицательный прирост — сжигание больше выпуска."""
+    out = {}
+    with _stake_live_lock:
+        hist = dict(_STAKE_LIVE.get("_sup", {}))
+    for sym, rows in hist.items():
+        if len(rows) < 2:
+            continue
+        d0 = time.mktime(time.strptime(rows[0][0], "%Y-%m-%d"))
+        d1 = time.mktime(time.strptime(rows[-1][0], "%Y-%m-%d"))
+        days = round((d1 - d0) / 86400)
+        if days >= SUPPLY_MIN_DAYS:
+            out[sym] = ((rows[-1][1] - rows[0][1]) / days * 30.44, days)
+    return out
+
+
+def _book_measured() -> tuple[list[dict], dict[str, dict]]:
+    """Книга с фактической эмиссией вместо оценки: у бессрочных строк
+    «emission» сумма — прирост, измеренный по сети. Если сжигание больше
+    выпуска (прирост отрицательный), в календаре остаётся выдача наградой —
+    она и есть давление продаж, — а факт уходит в ответ отдельно, и
+    приложение пишет, что монет на деле становится меньше.
+    Возвращает книгу и {тикер: {d: дней, r: прирост в месяц}}."""
+    meas = measured_emission()
+    if not meas:
+        return UNLOCK_BOOK, {}
+    book, used = [], {}
+    for c in UNLOCK_BOOK:
+        m = meas.get(c["s"])
+        steps = c["plan"] if isinstance(c["plan"], list) else []
+        open_emit = [st for st in steps if st[0] == "m" and st[3] is None
+                     and (st[-2] if st[-1] == "est" else st[-1]) == "emission"]
+        if not m or not open_emit:
+            book.append(c)
+            continue
+        rate, days = m
+        used[c["s"]] = {"d": days, "r": round(rate)}
+        if rate <= 0:
+            book.append(c)
+            continue
+        plan = [("m", st[1], st[2], None, round(rate), "emission") if st in open_emit else st for st in steps]
+        c2 = dict(c, plan=plan)
+        # Оценкой монета остаётся, только если оценено что-то кроме эмиссии.
+        if all((st[-2] if st[-1] == "est" else st[-1]) == "emission" for st in steps):
+            c2.pop("est", None)
+        book.append(c2)
+    return book, used
+
+
 def _stake_live_load() -> None:
     try:
         with open(STAKE_LIVE_FILE, encoding="utf-8") as f:
@@ -4516,6 +4657,7 @@ def stake_live_refresh() -> int:
     book = {c["s"]: c for c in UNLOCK_BOOK}
     today = time.strftime("%Y-%m-%d", time.gmtime())
     done = 0
+    _supply_record(today)
     for sym, fn in _stake_fetchers().items():
         coin = book.get(sym)
         snap = coin.get("staked") if coin else None
@@ -4769,7 +4911,8 @@ def _unlocks_build() -> dict:
     секунде-две на монету, и первый после паузы запрос ждал их все.
     """
     now = time.time()
-    events = unlock_events(now)
+    book, measured = _book_measured()
+    events = unlock_events(now, book)
     mids = hl_mids()
     # Тезки: у Pearl тикер PRL, а биржи под PRL торгуют Perle. Чужую цену
     # не показываем — такие монеты идут без долларов.
@@ -4804,7 +4947,10 @@ def _unlocks_build() -> dict:
             # Суточный объём торгов, $: разлок в днях торгов считает приложение.
             "vol": spot_volumes({e["sym"]: e["price"] or 0.0 for e in items}),
             # Как цена встречала прошлые разлоки: за неделю, в среднем.
-            "react": _REACT}
+            "react": _REACT,
+            # Эмиссия по факту сети: тикер → {d: дней измерения, r: прирост
+            # выпуска в месяц, отрицательный — сжигание больше}.
+            "measured": measured}
 
 
 # Готовый календарь в памяти. Раньше он собирался на каждый запрос, и экран

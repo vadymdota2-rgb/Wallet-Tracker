@@ -641,6 +641,8 @@ export const ja: Dict = {
   unl_count: "アンロック: {n}件",
   unl_curve_title: "今後の流通量",
   unl_emit: "発行",
+  unl_emit_fact: "{d}日間のオンチェーン実測",
+  unl_emit_net_down: "オンチェーンでは供給が減少：月{n} — バーンが発行を上回る",
   unl_empty: "この銘柄のアンロックはカレンダーにありません",
   unl_end: "最後の放出",
   unl_end_open: "発行は終了期限なし",
