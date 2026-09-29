@@ -650,6 +650,8 @@ export const zh: Dict = {
   unl_fdv_x: "市值的 {x} 倍",
   unl_mcap: "市值",
   unl_monthly: "每月",
+  unl_more_hide: "简要",
+  unl_more_show: "更多详情",
   unl_ne_fixed: "无 — 全部供应一次性创建",
   unl_ne_notyet: "已规划，但尚未启动",
   unl_none: "暂无即将到来的解锁",

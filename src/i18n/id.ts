@@ -650,6 +650,8 @@ export const id: Dict = {
   unl_fdv_x: "{x}× kapitalisasi",
   unl_mcap: "Kapitalisasi pasar",
   unl_monthly: "Bulanan",
+  unl_more_hide: "Ringkas",
+  unl_more_show: "Detail lainnya",
   unl_ne_fixed: "tidak ada — seluruh suplai dibuat sekaligus",
   unl_ne_notyet: "direncanakan, tetapi belum aktif",
   unl_none: "Tidak ada unlock mendatang",

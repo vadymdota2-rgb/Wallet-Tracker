@@ -650,6 +650,8 @@ export const fr: Dict = {
   unl_fdv_x: "{x}× la capitalisation",
   unl_mcap: "Capitalisation",
   unl_monthly: "Mensuel",
+  unl_more_hide: "En bref",
+  unl_more_show: "Plus de détails",
   unl_ne_fixed: "aucune — toute l'offre a été créée d'un coup",
   unl_ne_notyet: "prévue, mais pas encore lancée",
   unl_none: "Aucun déblocage à venir",

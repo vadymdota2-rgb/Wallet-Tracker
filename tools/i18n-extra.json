@@ -6082,5 +6082,41 @@
     "uk": "Скільки днів ринку потрібно, щоб купити всі монети, що виходять, за нинішнього обсягу торгів на всіх біржах. Більше дня — ринку важко перетравити їх без падіння ціни.",
     "vi": "Thị trường cần bao nhiêu ngày để hấp thụ số coin mở khóa với khối lượng hiện tại trên mọi sàn. Hơn một ngày thì khó hấp thụ mà không giảm giá.",
     "zh": "按当前全部交易所成交额，市场需要几天才能消化释放的币。超过一天就很难在价格不跌的情况下消化。"
+  },
+  "unl_more_show": {
+    "ar": "تفاصيل أكثر",
+    "de": "Mehr Details",
+    "en": "More details",
+    "es": "Más detalles",
+    "fr": "Plus de détails",
+    "hi": "और विवरण",
+    "id": "Detail lainnya",
+    "ja": "詳しく見る",
+    "ko": "자세히 보기",
+    "pl": "Więcej szczegółów",
+    "pt": "Mais detalhes",
+    "ru": "Подробнее",
+    "tr": "Daha fazla ayrıntı",
+    "uk": "Докладніше",
+    "vi": "Chi tiết hơn",
+    "zh": "更多详情"
+  },
+  "unl_more_hide": {
+    "ar": "باختصار",
+    "de": "Kurz",
+    "en": "Brief",
+    "es": "Resumen",
+    "fr": "En bref",
+    "hi": "संक्षेप में",
+    "id": "Ringkas",
+    "ja": "簡潔に",
+    "ko": "간단히",
+    "pl": "Krótko",
+    "pt": "Resumo",
+    "ru": "Коротко",
+    "tr": "Kısaca",
+    "uk": "Коротко",
+    "vi": "Ngắn gọn",
+    "zh": "简要"
   }
 }

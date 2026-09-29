@@ -450,6 +450,7 @@ const RING: { key: Slice; color: string }[] = [
   { key: "nosched", color: "#34455f" },
 ];
 const YEAR = 365 * 86400;
+const DETAIL_KEY = "wt-unl-detail";
 const MONTH = 30.44 * 86400;
 
 /** «в 2,7 раза»: одна цифра после запятой, без лишнего нуля. */
@@ -482,6 +483,26 @@ function CoinMore({
   /* Какое объяснение раскрыто: «место:термин» — один термин встречается и
      в выводе, и в строке, раскрываться он должен там, где нажали. */
   const [help, setHelp] = useState<string | null>(null);
+  /* Коротко или подробно: новичку хватает вывода, круга и трёх цифр,
+     остальное — по кнопке. Выбор помнится на устройстве для всех монет. */
+  const [full, setFull] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(DETAIL_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleFull = () => {
+    haptic("light");
+    setFull((v) => {
+      try {
+        localStorage.setItem(DETAIL_KEY, v ? "0" : "1");
+      } catch {
+        // хранилище закрыто — выбор живёт до закрытия карточки
+      }
+      return !v;
+    });
+  };
   const sym = e.sym;
   const mine = useMemo(() => items.filter((x) => x.sym === sym).sort((x, y) => x.ts - y.ts), [items, sym]);
   const first = mine[0];
@@ -550,6 +571,13 @@ function CoinMore({
     </>
   );
   const dayKind: DictKey = hasUnlock(e) ? "unl_q_unlock" : "unl_q_emit";
+  const dayNote = [
+    e.usd !== null ? usd(e.usd) : "",
+    e.pct !== null ? t(lang, "unl_of_circ", { p: pct(e.pct, 2, false) }) : "",
+    days(e) >= 0.05 ? t(lang, "unl_vol_days", { d: times(days(e)) }) : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <div className="unl-more">
@@ -593,21 +621,33 @@ function CoinMore({
       </div>
 
       <SupplyRing lang={lang} sym={sym} now={now} locked={locked} nosched={nosched} stake={stake} known={!!ref0?.t || !!noEmit} />
+      {!full ? (
+        <dl className="unl-brief">
+          <Row label={t(lang, "unl_tokens")} q={dayKind}>
+            {qty(e.tokens)} {sym}
+            <small className="unl-note">{dayNote}</small>
+          </Row>
+          {price !== null && now ? <Row label={t(lang, "unl_mcap")}>{usd(now * price)}</Row> : null}
+          <Row label={t(lang, "unl_12m")}>
+            {qty(yearFromDay)} {sym}
+            {e.circ ? (
+              <small className="unl-note">{t(lang, "unl_of_circ", { p: pct((yearFromDay / e.circ) * 100, 1, false) })}</small>
+            ) : null}
+          </Row>
+        </dl>
+      ) : null}
+      <button type="button" className="unl-more-tg" aria-expanded={full} onClick={toggleFull}>
+        {t(lang, full ? "unl_more_hide" : "unl_more_show")} <span aria-hidden="true">{full ? "▴" : "▾"}</span>
+      </button>
+      {full ? (
+        <>
       <SupplyCurve lang={lang} sym={sym} now={now} mine={mine} nowSec={nowSec} />
 
       <h4 className="unl-sec">{t(lang, "unl_sec_day")}</h4>
       <dl>
         <Row label={t(lang, "unl_tokens")} q={dayKind}>
           {qty(e.tokens)} {sym}
-          <small className="unl-note">
-            {[
-              e.usd !== null ? usd(e.usd) : "",
-              e.pct !== null ? t(lang, "unl_of_circ", { p: pct(e.pct, 2, false) }) : "",
-              days(e) >= 0.05 ? t(lang, "unl_vol_days", { d: times(days(e)) }) : "",
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </small>
+          <small className="unl-note">{dayNote}</small>
         </Row>
         {(Object.entries(e.who) as [UnlockWho, number][])
           .sort((x, y) => y[1] - x[1])
@@ -706,6 +746,9 @@ function CoinMore({
           )}
         </Row>
       </dl>
+
+        </>
+      ) : null}
 
       <div className="unl-act">
         <button type="button" className="unl-btn" onClick={onChart}>

@@ -650,6 +650,8 @@ export const ru: Dict = {
   unl_fdv_x: "в {x} раза больше капитализации",
   unl_mcap: "Капитализация",
   unl_monthly: "Ежемесячный",
+  unl_more_hide: "Коротко",
+  unl_more_show: "Подробнее",
   unl_ne_fixed: "нет — весь выпуск создан сразу",
   unl_ne_notyet: "предусмотрена, но ещё не запущена",
   unl_none: "Ближайших разлоков нет",

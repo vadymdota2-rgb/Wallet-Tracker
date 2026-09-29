@@ -650,6 +650,8 @@ export const ko: Dict = {
   unl_fdv_x: "시가총액의 {x}배",
   unl_mcap: "시가총액",
   unl_monthly: "월간",
+  unl_more_hide: "간단히",
+  unl_more_show: "자세히 보기",
   unl_ne_fixed: "없음 — 전체 공급이 한 번에 발행됨",
   unl_ne_notyet: "예정되어 있지만 아직 시작 전",
   unl_none: "예정된 언락이 없습니다",

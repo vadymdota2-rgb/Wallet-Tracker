@@ -650,6 +650,8 @@ export const tr: Dict = {
   unl_fdv_x: "piyasa değerinin {x} katı",
   unl_mcap: "Piyasa değeri",
   unl_monthly: "Aylık",
+  unl_more_hide: "Kısaca",
+  unl_more_show: "Daha fazla ayrıntı",
   unl_ne_fixed: "yok — arzın tamamı tek seferde oluşturuldu",
   unl_ne_notyet: "planlandı ama henüz başlamadı",
   unl_none: "Yaklaşan kilit açılımı yok",

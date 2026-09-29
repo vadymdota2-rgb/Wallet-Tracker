@@ -650,6 +650,8 @@ export const ja: Dict = {
   unl_fdv_x: "時価総額の{x}倍",
   unl_mcap: "時価総額",
   unl_monthly: "毎月",
+  unl_more_hide: "簡潔に",
+  unl_more_show: "詳しく見る",
   unl_ne_fixed: "なし — 供給は最初に一括で発行",
   unl_ne_notyet: "予定されているが、まだ始まっていない",
   unl_none: "今後のアンロックはありません",

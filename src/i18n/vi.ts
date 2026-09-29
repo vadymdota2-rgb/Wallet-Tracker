@@ -650,6 +650,8 @@ export const vi: Dict = {
   unl_fdv_x: "gấp {x} lần vốn hóa",
   unl_mcap: "Vốn hóa",
   unl_monthly: "Hàng tháng",
+  unl_more_hide: "Ngắn gọn",
+  unl_more_show: "Chi tiết hơn",
   unl_ne_fixed: "không có — toàn bộ nguồn cung tạo một lần",
   unl_ne_notyet: "đã dự kiến nhưng chưa bật",
   unl_none: "Không có đợt mở khóa sắp tới",

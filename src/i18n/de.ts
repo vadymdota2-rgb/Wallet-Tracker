@@ -650,6 +650,8 @@ export const de: Dict = {
   unl_fdv_x: "das {x}-Fache der Marktkapitalisierung",
   unl_mcap: "Marktkapitalisierung",
   unl_monthly: "Monatlich",
+  unl_more_hide: "Kurz",
+  unl_more_show: "Mehr Details",
   unl_ne_fixed: "keine — das gesamte Angebot wurde auf einmal erzeugt",
   unl_ne_notyet: "vorgesehen, aber noch nicht gestartet",
   unl_none: "Keine anstehenden Unlocks",

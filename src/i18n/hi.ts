@@ -650,6 +650,8 @@ export const hi: Dict = {
   unl_fdv_x: "मार्केट कैप का {x} गुना",
   unl_mcap: "मार्केट कैप",
   unl_monthly: "मासिक",
+  unl_more_hide: "संक्षेप में",
+  unl_more_show: "और विवरण",
   unl_ne_fixed: "नहीं — पूरी सप्लाई एक बार में बनी",
   unl_ne_notyet: "तय है, पर अभी शुरू नहीं हुआ",
   unl_none: "कोई आगामी अनलॉक नहीं",

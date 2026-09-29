@@ -650,6 +650,8 @@ export const en = {
   unl_fdv_x: "{x}× the market cap",
   unl_mcap: "Market cap",
   unl_monthly: "Monthly",
+  unl_more_hide: "Brief",
+  unl_more_show: "More details",
   unl_ne_fixed: "none — the whole supply was created at once",
   unl_ne_notyet: "planned, but not switched on yet",
   unl_none: "No upcoming unlocks",

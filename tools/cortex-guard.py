@@ -879,6 +879,8 @@ say("карточка монеты начинается с вывода о да�
     'className={`unl-verdict v${lvl}`}' in unl_scr and '"unl_q_pressure"' in unl_scr and 'className="unl-q"' in unl_scr)
 say("разлок меряется днями всех торгов: объём с семи бирж, тезки отсеяны по цене",
     '"vol": spot_volumes(' in api and "abs(px / ref - 1) <= 0.15" in api and 't(lang, "unl_v_liq"' in unl_scr)
+say("карточка коротко по умолчанию, подробно — по кнопке, выбор помнится",
+    'className="unl-more-tg"' in unl_scr and 'localStorage.setItem(DETAIL_KEY' in unl_scr and 'className="unl-brief"' in unl_scr)
 say("кривая оборота на три года и полная оценка (FDV) в карточке",
     "function SupplyCurve(" in unl_scr and 't(lang, "unl_fdv")' in unl_scr and '"supply": {k: {"t": v[0], "m": v[1]}' in api)
 say("карточка монеты рисует круг выпуска: на рынке, в стейкинге, кому ещё выйдет",

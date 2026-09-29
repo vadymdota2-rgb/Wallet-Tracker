@@ -650,6 +650,8 @@ export const ar: Dict = {
   unl_fdv_x: "‎{x} ضعف القيمة السوقية",
   unl_mcap: "القيمة السوقية",
   unl_monthly: "شهري",
+  unl_more_hide: "باختصار",
+  unl_more_show: "تفاصيل أكثر",
   unl_ne_fixed: "لا يوجد — كل المعروض أُنشئ دفعة واحدة",
   unl_ne_notyet: "مقرر، لكنه لم يبدأ بعد",
   unl_none: "لا يوجد فتح قادم",
