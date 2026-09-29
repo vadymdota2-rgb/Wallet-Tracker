@@ -4208,6 +4208,254 @@ def spot_px(sym: str) -> float:
     return px
 
 
+# --- Живые снимки стейкинга -------------------------------------------------
+# Снимки в книге («staked», «apy») ставятся руками и стареют. Где сеть
+# отдаёт это открыто, сервер сам перечитывает цифру раз в 12 часов и
+# держит её в файле рядом с базой бота: после перезапуска ничего не теряется.
+# Чужих агрегаторов тут нет — только сами блокчейны и их обозреватели.
+STAKE_LIVE_TTL_S = 12 * 3600
+STAKE_LIVE_FILE = os.path.join(os.path.dirname(DB), "unlocks_live.json")
+_STAKE_LIVE: dict[str, dict] = {}
+_stake_live_lock = threading.Lock()
+
+
+def _rpc(url: str, body: dict, timeout: float = 20.0):
+    """POST JSON → JSON. Ошибка сети — None."""
+    req = urllib.request.Request(url, data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json",
+                                          "User-Agent": "wallet-tracker/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read().decode())
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError, OSError):
+        return None
+
+
+_EVM_RPC = {"eth": "https://ethereum-rpc.publicnode.com", "base": "https://base-rpc.publicnode.com",
+            "arb": "https://arbitrum-one-rpc.publicnode.com", "sonic": "https://rpc.soniclabs.com"}
+
+
+def _eth_call(chain: str, to: str, data: str) -> float:
+    r = _rpc(_EVM_RPC[chain], {"jsonrpc": "2.0", "id": 1, "method": "eth_call",
+                                 "params": [{"to": to, "data": data}, "latest"]})
+    try:
+        return int(r["result"], 16) if r and r.get("result") not in (None, "0x") else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _erc20_bal(chain: str, token: str, holder: str, dec: int = 18) -> float:
+    return _eth_call(chain, token, "0x70a08231" + holder[2:].lower().rjust(64, "0")) / 10 ** dec
+
+
+def _cosmos(base: str, denom: str, dec: float) -> tuple[float, float | None]:
+    """Застейкано и доходность Cosmos-сети: инфляция × (1 − налог в казну) ÷
+    доля в стейкинге."""
+    pool = get_json(base + "/cosmos/staking/v1beta1/pool", 20) or {}
+    bonded = _fnum((pool.get("pool") or {}).get("bonded_tokens"))
+    sup = _fnum(((get_json(f"{base}/cosmos/bank/v1beta1/supply/by_denom?denom={denom}", 20) or {})
+                 .get("amount") or {}).get("amount"))
+    infl = get_json(base + "/cosmos/mint/v1beta1/inflation", 20)
+    tax = ((get_json(base + "/cosmos/distribution/v1beta1/params", 20) or {}).get("params") or {})
+    apy = None
+    if infl and "inflation" in infl and bonded and sup:
+        apy = _fnum(infl["inflation"]) * (1 - _fnum(tax.get("community_tax"))) / (bonded / sup) * 100
+    return bonded / dec, apy
+
+
+def _stake_fetchers() -> dict:
+    """Тикер → функция, возвращающая (застейкано, доходность % или None)."""
+    def sol():
+        r = (_rpc("https://api.mainnet-beta.solana.com",
+                  {"jsonrpc": "2.0", "id": 1, "method": "getVoteAccounts"}) or {}).get("result") or {}
+        return sum(int(v["activatedStake"]) for v in (r.get("current") or []) + (r.get("delinquent") or [])) / 1e9, None
+
+    def near():
+        r = (_rpc("https://rpc.mainnet.near.org",
+                  {"jsonrpc": "2.0", "id": 1, "method": "validators", "params": [None]}) or {}).get("result") or {}
+        return sum(int(v["stake"]) for v in r.get("current_validators") or []) / 1e24, None
+
+    def apt():
+        r = get_json("https://api.mainnet.aptoslabs.com/v1/accounts/0x1/resource/0x1::stake::ValidatorSet", 20) or {}
+        return _fnum((r.get("data") or {}).get("total_voting_power")) / 1e8, None
+
+    def sui():
+        r = _rpc("https://graphql.mainnet.sui.io/graphql",
+                 {"query": "{ epoch { validatorSet { contents { json } } } }"}) or {}
+        j = ((((r.get("data") or {}).get("epoch") or {}).get("validatorSet") or {}).get("contents") or {}).get("json") or {}
+        return _fnum(j.get("total_stake")) / 1e9, None
+
+    def egld():
+        r = get_json("https://api.multiversx.com/economics", 20) or {}
+        return _fnum(r.get("staked")), (_fnum(r.get("apr")) * 100 or None)
+
+    def stx():
+        r = get_json("https://api.hiro.so/v2/pox", 20) or {}
+        return _fnum((r.get("current_cycle") or {}).get("stacked_ustx")) / 1e6, None
+
+    def icp():
+        r = get_json("https://ic-api.internetcomputer.org/api/v3/governance-metrics", 20) or {}
+        for m in r.get("metrics") or []:
+            if m.get("name") == "governance_total_staked_e8s":
+                return _fnum(m["subsets"][0]["value"][1]) / 1e8, None
+        return 0.0, None
+
+    def xtz():
+        r = get_json("https://api.tzkt.io/v1/statistics/current", 20) or {}
+        return (_fnum(r.get("totalOwnStaked")) + _fnum(r.get("totalExternalStaked"))) / 1e6, None
+
+    def hype():
+        r = _rpc(HL_INFO, {"type": "validatorSummaries"})
+        return sum(_fnum(v.get("stake")) for v in r or []) / 1e8, None
+
+    def ada():
+        tip = get_json("https://api.koios.rest/api/v1/tip", 20) or []
+        if not tip:
+            return 0.0, None
+        ep = get_json(f"https://api.koios.rest/api/v1/epoch_info?_epoch_no={tip[0]['epoch_no']}", 20) or []
+        return (_fnum(ep[0].get("active_stake")) / 1e6 if ep else 0.0), None
+
+    def pchain(url):
+        def f():
+            r = _rpc(url, {"jsonrpc": "2.0", "id": 1, "method": "platform.getTotalStake",
+                           "params": {"subnetID": "11111111111111111111111111111111LpoYY"}}) or {}
+            return _fnum((r.get("result") or {}).get("stake")) / 1e9, None
+        return f
+
+    def dcr():
+        r = get_json("https://dcrdata.decred.org/api/block/best", 20) or {}
+        return _fnum((r.get("ticket_pool") or {}).get("value")), None
+
+    def fil():
+        r = get_json("https://filfox.info/api/v1/overview", 20) or {}
+        return _fnum(r.get("totalPledgeCollateral")) / 1e18, None
+
+    def ton():
+        r = get_json("https://elections.toncenter.com/getValidationCycles?limit=1", 20) or []
+        c = r[0] if r else {}
+        return _fnum((c.get("cycle_info") or {}).get("total_stake", c.get("total_stake"))) / 1e9, None
+
+    def rose():
+        r = get_json("https://nexus.oasis.io/v1/consensus/validators?limit=1", 20) or {}
+        return _fnum((r.get("stats") or {}).get("total_staked_balance")) / 1e9, None
+
+    def ckb():
+        req = urllib.request.Request("https://mainnet-api.explorer.nervos.org/api/v1/contracts/nervos_dao",
+                                     headers={"Accept": "application/vnd.api+json",
+                                              "Content-Type": "application/vnd.api+json",
+                                              "User-Agent": "wallet-tracker/1.0"})
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                a = json.loads(r.read().decode())["data"]["attributes"]
+            return _fnum(a.get("total_deposit")) / 1e8, (_fnum(a.get("estimated_apc")) or None)
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError, OSError, KeyError, TypeError):
+            return 0.0, None
+
+    def cfx():
+        r = get_json("https://api.confluxscan.org/statistics/supply", 20) or {}
+        return _fnum((r.get("data") or {}).get("totalStaking")) / 1e18, None
+
+    def qtum():
+        r = get_json("https://qtum.info/api/info", 20) or {}
+        return _fnum(r.get("netStakeWeight")) / 1e8, None
+
+    def theta():
+        r = get_json("https://explorer-api.thetatoken.org/api/stake/totalAmount?type=tfuel", 20) or {}
+        return _fnum((r.get("body") or {}).get("totalAmount")) / 1e18, None
+
+    def vaulta():
+        r = _rpc("https://eos.greymass.com/v1/chain/get_table_rows",
+                 {"code": "eosio", "scope": "eosio", "table": "rexpool", "json": True}) or {}
+        rows = r.get("rows") or []
+        return (_fnum(str(rows[0].get("total_lendable", "0")).split()[0]) if rows else 0.0), None
+
+    def erc(chain, token, *holders, dec=18):
+        return lambda: (sum(_erc20_bal(chain, token, h, dec) for h in holders), None)
+
+    out = {
+        "SOL": sol, "NEAR": near, "APT": apt, "SUI": sui, "EGLD": egld, "STX": stx, "ICP": icp,
+        "XTZ": xtz, "HYPE": hype, "ADA": ada, "DCR": dcr, "FIL": fil, "GRAM": ton, "ROSE": rose,
+        "CKB": ckb, "CFX": cfx, "QTUM": qtum, "TFUEL": theta, "A": vaulta,
+        "AVAX": pchain("https://api.avax.network/ext/bc/P"),
+        "FLR": pchain("https://flare-api.flare.network/ext/bc/P"),
+        "S": lambda: (_eth_call("sonic", "0xFC00FACE00000000000000000000000000000000", "0x8b0e9f3f") / 1e18, None),
+        "LPT": lambda: (_eth_call("arb", "0x35Bcf3c30594191d53231E4FF333E8A770453e40", "0x5c50c356") / 1e18, None),
+        "KAITO": lambda: (_eth_call("base", "0x548d3b444da39686d1a6f1544781d154e7cd1ef7", "0x01e1d114") / 1e18, None),
+        "ENA": erc("eth", "0x57e114B691Db790C35207b2e685D4A43181e6061", "0x8bE3460A480c80728a8C4D7a5D5303c85ba7B3b9"),
+        "CRV": erc("eth", "0xD533a949740bb3306d119CC777fa900bA034cd52", "0x5f3b5DfEb7B28CDbD7FAba78963EE202a494e2A2"),
+        "PENDLE": erc("eth", "0x808507121B80c02388fAd14726482e061B8da827", "0x4f30A9D41B80ecC5B94306AB4364951AE3170210"),
+        "EIGEN": erc("eth", "0x83E9115d334D248Ce39a6f36144aEaB5b3456e75", "0xaCB55C530Acdb2849e6d4f36992Cd8c9D50ED8F7"),
+        "SAFE": erc("eth", "0x5aFE3855358E112B5647B952709E6165e1c1eEEe", "0x0a7CB434f96f65972D46A5c1A64a9654dC9959b2"),
+        "LINK": erc("eth", "0x514910771AF9Ca656af840dff83E8264EcF986CA",
+                    "0xBc10f2E862ED4502144c7d632a3459F49DFCDB5e", "0xA1d76A7cA72128541E9FCAcafBdA3a92EF94fDc5"),
+        "AERO": erc("base", "0x940181a94A35A4569E4529A3CDfB74e38FD98631", "0xeBf418Fe2512e7E6bd9b87a8F0f294aCDC67e6B4"),
+        "GRT": lambda: (_erc20_bal("eth", "0xc944E90C64B2c07662A292be6244BDf05Cda44a7", "0xF55041E37E12cD407ad00CE2910B8269B01263b9")
+                        + _erc20_bal("arb", "0x9623063377AD1B27544C965cCd7342f7EA7e88C7", "0x00669A4CF01450B64E8A2A20E9b1FCB71E61eF03"), None),
+    }
+    for sym, (host, denom, dec) in {"ATOM": ("cosmos", "uatom", 1e6), "TIA": ("celestia", "utia", 1e6),
+                                    "SEI": ("sei", "usei", 1e6), "AKT": ("akash", "uakt", 1e6),
+                                    "AXL": ("axelar", "uaxl", 1e6), "CRO": ("cronos-pos", "basecro", 1e8)}.items():
+        out[sym] = (lambda h=host, d=denom, k=dec: _cosmos(f"https://{h}-rest.publicnode.com", d, k))
+    return out
+
+
+def _stake_live_load() -> None:
+    try:
+        with open(STAKE_LIVE_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            with _stake_live_lock:
+                _STAKE_LIVE.update(data)
+    except (OSError, ValueError):
+        pass
+
+
+def stake_live_refresh() -> int:
+    """Один проход по сетям. Цифра принимается, только если она не дальше
+    чем втрое от записанной в книге: сбой обозревателя не должен показать
+    ноль или триллион. Возвращает, сколько монет обновлено."""
+    book = {c["s"]: c for c in UNLOCK_BOOK}
+    today = time.strftime("%Y-%m-%d", time.gmtime())
+    done = 0
+    for sym, fn in _stake_fetchers().items():
+        coin = book.get(sym)
+        snap = coin.get("staked") if coin else None
+        if not snap:
+            continue
+        try:
+            n, apy = fn()
+        except Exception:  # noqa: BLE001 — одна сеть не должна ронять остальные
+            continue
+        if not n or not (snap[1] / 3 <= n <= snap[1] * 3):
+            continue
+        row = {"at": today, "n": round(n)}
+        if apy is not None and 0 <= apy < 200:
+            row["y"] = round(apy, 2)
+        with _stake_live_lock:
+            _STAKE_LIVE[sym] = row
+        done += 1
+    try:
+        tmp = STAKE_LIVE_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            with _stake_live_lock:
+                json.dump(_STAKE_LIVE, f)
+        os.replace(tmp, STAKE_LIVE_FILE)
+    except OSError:
+        pass
+    return done
+
+
+def stake_live_refresher() -> None:
+    _stake_live_load()
+    while True:
+        try:
+            n = stake_live_refresh()
+            sys.stderr.write(f"[api] staking snapshots refreshed: {n}\n")
+        except Exception as e:  # noqa: BLE001
+            sys.stderr.write(f"[api] staking refresh failed: {e}\n")
+        time.sleep(STAKE_LIVE_TTL_S)
+
+
 def unlock_stakes() -> dict:
     """Сколько монет в стейкинге у монет книги: {тикер: {n, p, at} | None}.
 
@@ -4225,6 +4473,9 @@ def unlock_stakes() -> dict:
             out[c["s"]] = None
             continue
         at, n = st[0], st[1]
+        live = _STAKE_LIVE.get(c["s"])
+        if live and live.get("at", "") > at:
+            at, n = live["at"], live["n"]
         # Третье число — база доли вместо оборота: у APT, SUI, HYPE в
         # стейкинге и ещё запертые доли, у AERO оборот считают без veAERO.
         base = st[2] if len(st) > 2 else (c["circ"][1] if c.get("circ") else 0)
@@ -4235,6 +4486,8 @@ def unlock_stakes() -> dict:
         # ли доля стейкера на деле.
         if c.get("apy"):
             row["y"] = c["apy"][1]
+        if live and "y" in live and live.get("at", "") > (c.get("apy") or ("",))[0]:
+            row["y"] = live["y"]
         out[c["s"]] = row
     return out
 
@@ -7681,6 +7934,7 @@ def warmup() -> None:
     # дальше он обновляет их сам и в бюджет сборки не лезет.
     threading.Thread(target=fund_refresher, daemon=True, name="funding").start()
     threading.Thread(target=rot_refresher, daemon=True, name="rotation").start()
+    threading.Thread(target=stake_live_refresher, daemon=True, name="staking").start()
     cur = open_db(DB)
     hl = open_db(HL_DB)
     if not cur:

@@ -863,8 +863,14 @@ _stale = [f"{c}:{d}" for c, d in re.findall(r'\{"s": "([A-Z0-9]+)", "n": [^\n]*\
           if (_dt.date.today() - _dt.date.fromisoformat(d)).days > 120]
 say("опорный оборот монет разлоков не старше 120 дней", not _stale, str(_stale))
 # Застейканное меняется так же — снимок старше четырёх месяцев пора сверить.
+# У монет, чей стейкинг сервер перечитывает сам (_stake_fetchers), снимок в
+# книге — лишь запасной: ему можно стареть.
+_fx = api[api.find("def _stake_fetchers"):api.find("def _stake_live_load")]
+_live_syms = set(re.findall(r'"([A-Z0-9]+)": ', _fx))
 _st_old = [f"{c}:{d}" for c, d in re.findall(r'\{"s": "([A-Z0-9]+)", "n": [^\n]*\n(?:[^\n]*\n)*?\s+"staked": \("(\d{4}-\d{2}-\d{2})"', api)
-           if (_dt.date.today() - _dt.date.fromisoformat(d)).days > 120]
+           if c not in _live_syms and (_dt.date.today() - _dt.date.fromisoformat(d)).days > 120]
+say("стейкинг перечитывается из сетей сам, раз в 12 часов, с защитой от сбоев",
+    'target=stake_live_refresher' in api and "snap[1] / 3 <= n <= snap[1] * 3" in api and len(_live_syms) >= 30)
 say("снимок застейканного у монет разлоков не старше 120 дней", not _st_old, str(_st_old))
 _apy_old = [f"{c}:{d}" for c, d in re.findall(r'\{"s": "([A-Z0-9]+)", "n": [^\n]*\n(?:[^\n]*\n)*?\s+"apy": \("(\d{4}-\d{2}-\d{2})"', api)
             if (_dt.date.today() - _dt.date.fromisoformat(d)).days > 120]
