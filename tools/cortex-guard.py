@@ -869,6 +869,9 @@ _fx = api[api.find("def _stake_fetchers"):api.find("def _stake_live_load")]
 _live_syms = set(re.findall(r'"([A-Z0-9]+)": ', _fx))
 _st_old = [f"{c}:{d}" for c, d in re.findall(r'\{"s": "([A-Z0-9]+)", "n": [^\n]*\n(?:[^\n]*\n)*?\s+"staked": \("(\d{4}-\d{2}-\d{2})"', api)
            if c not in _live_syms and (_dt.date.today() - _dt.date.fromisoformat(d)).days > 120]
+_sup_at = re.search(r'UNLOCK_SUPPLY_AT = "(\d{4}-\d{2}-\d{2})"', api)
+say("справочник выпуска (полный круг, FDV) сверен не позже 120 дней назад — tools/sync-supply.py",
+    bool(_sup_at) and (_dt.date.today() - _dt.date.fromisoformat(_sup_at.group(1))).days <= 120)
 say("стейкинг перечитывается из сетей сам, раз в 12 часов, с защитой от сбоев",
     'target=stake_live_refresher' in api and "snap[1] / 3 <= n <= snap[1] * 3" in api and len(_live_syms) >= 30)
 say("снимок застейканного у монет разлоков не старше 120 дней", not _st_old, str(_st_old))

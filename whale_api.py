@@ -3510,8 +3510,11 @@ UNLOCK_BOOK: list[dict] = [
 # есть доли без графика — казна, резервы, пулы наград; у сетей с эмиссией
 # остаток до потолка — будущий выпуск, а не запертое, и «всего» там нет.
 # Потолок нужен для полной оценки (FDV). 0 — неизвестно или не нужно.
+# Ручные поправки: потолок DOT 2,1 млрд (референдум 2025), 21 млн у подсетей
+# Bittensor — tools/sync-supply.py их не затирает.
+# Когда справочник сверяли в последний раз: tools/sync-supply.py --write.
+UNLOCK_SUPPLY_AT = "2026-09-29"
 UNLOCK_SUPPLY: dict[str, tuple[int, int]] = {
-    "DOT": (0, 2_100_000_000),  # потолок с референдума 2025 года
     "ENA": (15_000_000_000, 0),
     "2Z": (0, 10_000_000_000),
     "APT": (0, 2_100_000_000),
@@ -3525,7 +3528,7 @@ UNLOCK_SUPPLY: dict[str, tuple[int, int]] = {
     "SEI": (10_000_000_000, 0),
     "ZRO": (1_000_000_000, 1_000_000_000),
     "JTO": (999_999_768, 0),
-    "PUMP": (831_054_872_549, 1_000_000_000_000),
+    "PUMP": (831_048_929_114, 1_000_000_000_000),
     "SUI": (10_000_000_000, 10_000_000_000),
     "OP": (4_294_967_296, 4_294_967_296),
     "CRO": (0, 100_000_000_000),
@@ -3543,6 +3546,7 @@ UNLOCK_SUPPLY: dict[str, tuple[int, int]] = {
     "BEAT": (0, 1_000_000_000),
     "RIVER": (100_000_000, 100_000_000),
     "AVNT": (1_000_000_000, 1_000_000_000),
+    "DOT": (0, 2_100_000_000),
     "BTC": (0, 21_000_000),
     "XRP": (99_985_622_230, 100_000_000_000),
     "ZEC": (0, 21_000_000),
@@ -3563,7 +3567,7 @@ UNLOCK_SUPPLY: dict[str, tuple[int, int]] = {
     "DASH": (0, 18_900_000),
     "XEC": (0, 21_000_000_000_000),
     "RAIN": (1_142_408_526_966, 1_150_000_000_000),
-    "M": (5_419_496_656, 10_000_000_000),
+    "M": (5_419_512_076, 10_000_000_000),
     "BTW": (10_000_000_000, 10_000_000_000),
     "MORPHO": (1_000_000_000, 1_000_000_000),
     "AKE": (100_000_000_000, 100_000_000_000),
@@ -3577,7 +3581,7 @@ UNLOCK_SUPPLY: dict[str, tuple[int, int]] = {
     "KMNO": (10_000_000_000, 10_000_000_000),
     "AKT": (0, 388_539_008),
     "XCN": (0, 68_892_071_757),
-    "CARDS": (1_977_215_994, 2_000_000_000),
+    "CARDS": (1_999_705_634, 2_000_000_000),
     "A": (2_100_000_000, 2_100_000_000),
     "ULTIMA": (0, 100_000),
     "EGLD": (0, 31_415_926),
@@ -3608,17 +3612,19 @@ UNLOCK_SUPPLY: dict[str, tuple[int, int]] = {
     "RED": (0, 1_000_000_000),
     "ZETA": (0, 2_100_000_000),
     "SPK": (10_000_000_000, 10_000_000_000),
+    "GAS": (0, 100_000_000),
     "DGB": (0, 21_000_000_000),
     "ASTR": (0, 10_000_000_000),
     "ROSE": (10_000_000_000, 10_000_000_000),
     "W": (10_000_000_000, 10_000_000_000),
-    "LINEA": (71_593_816_498, 72_009_990_000),
+    "LINEA": (72_009_990_000, 72_009_990_000),
     "GPS": (0, 10_000_000_000),
     "ALLO": (0, 1_000_000_000),
-    "NXPC": (994_552_574, 1_000_000_000),
+    "ESP": (0, 3_590_000_000),
+    "NXPC": (1_000_000_000, 1_000_000_000),
     "CHIP": (10_000_000_000, 10_000_000_000),
     "US": (10_000_000_000, 10_000_000_000),
-    "YZY": (999_999_391, 1_000_000_000),
+    "YZY": (999_999_989, 1_000_000_000),
     "ADI": (999_999_999, 999_999_999),
     "RE": (1_000_000_000, 1_000_000_000),
     "BLUR": (0, 3_000_000_000),
@@ -3633,7 +3639,7 @@ UNLOCK_SUPPLY: dict[str, tuple[int, int]] = {
     "HUMA": (10_000_000_000, 10_000_000_000),
     "ACU": (1_030_549_198, 0),
     "RAVE": (0, 1_000_000_000),
-    "IO": (797_846_488, 800_000_000),
+    "IO": (799_999_953, 800_000_000),
     "QUBIC": (0, 200_000_000_000_000),
     "DUSK": (0, 1_000_000_000),
     "PHA": (0, 1_000_000_000),
@@ -4264,6 +4270,56 @@ def _cosmos(base: str, denom: str, dec: float) -> tuple[float, float | None]:
     return bonded / dec, apy
 
 
+_X64 = (1 << 64) - 1
+
+
+def _xxh64(data: bytes, seed: int = 0) -> int:
+    """xxHash64 — им Substrate (Polkadot, Kusama, Bittensor) хэширует ключи
+    хранилища. Короткие ключи, поэтому без ветки для длинных данных."""
+    p1, p2, p3, p4, p5 = (11400714785074694791, 14029467366897019727, 1609587929392839161,
+                          9650029242287828579, 2870177450012600261)
+    rol = lambda x, r: ((x << r) | (x >> (64 - r))) & _X64  # noqa: E731
+    n, i = len(data), 0
+    assert n < 32
+    h = (seed + p5 + n) & _X64
+    while i + 8 <= n:
+        k = (rol((int.from_bytes(data[i:i + 8], "little") * p2) & _X64, 31) * p1) & _X64
+        h ^= k
+        h = (rol(h, 27) * p1 + p4) & _X64
+        i += 8
+    if i + 4 <= n:
+        h ^= (int.from_bytes(data[i:i + 4], "little") * p1) & _X64
+        h = (rol(h, 23) * p2 + p3) & _X64
+        i += 4
+    while i < n:
+        h ^= (data[i] * p5) & _X64
+        h = (rol(h, 11) * p1) & _X64
+        i += 1
+    h ^= h >> 33
+    h = (h * p2) & _X64
+    h ^= h >> 29
+    h = (h * p3) & _X64
+    return h ^ (h >> 32)
+
+
+def _substrate(url: str, key: str) -> bytes:
+    r = _rpc(url, {"jsonrpc": "2.0", "id": 1, "method": "state_getStorage", "params": ["0x" + key]}) or {}
+    v = r.get("result")
+    return bytes.fromhex(v[2:]) if isinstance(v, str) and v.startswith("0x") else b""
+
+
+def _era_total_stake(url: str, dec: float) -> float:
+    """Staking.ErasTotalStake(ActiveEra) — весь стейк текущей эры. Стейкинг
+    Polkadot и Kusama живёт на Asset Hub с переезда 2025 года."""
+    era = _substrate(url, "5f3e4907f716ac89b6347d15ececedca487df464e44a534ba6b0cbb32407b587")
+    if len(era) < 4:
+        return 0.0
+    e = era[:4]
+    key = ("5f3e4907f716ac89b6347d15ececedcaa141c4fe67c2d11f4a10c6aca7a79a04"
+           + _xxh64(e).to_bytes(8, "little").hex() + e.hex())
+    return int.from_bytes(_substrate(url, key), "little") / dec
+
+
 def _stake_fetchers() -> dict:
     """Тикер → функция, возвращающая (застейкано, доходность % или None)."""
     def sol():
@@ -4373,7 +4429,49 @@ def _stake_fetchers() -> dict:
     def erc(chain, token, *holders, dec=18):
         return lambda: (sum(_erc20_bal(chain, token, h, dec) for h in holders), None)
 
+    def eth():
+        r = get_json("https://ultrasound.money/api/v2/fees/supply-parts", 20) or {}
+        return _fnum(r.get("beaconBalancesSum")) / 1e9, None
+
+    def iota():
+        r = (_rpc("https://api.mainnet.iota.cafe",
+                  {"jsonrpc": "2.0", "id": 1, "method": "iotax_getLatestIotaSystemState", "params": []}) or {})
+        return _fnum((r.get("result") or {}).get("totalStake")) / 1e9, None
+
+    def xdc():
+        r = _rpc("https://erpc.xinfin.network", {"jsonrpc": "2.0", "id": 1, "method": "eth_getBalance",
+                                                  "params": ["0x0000000000000000000000000000000000000088", "latest"]}) or {}
+        try:
+            return int(r.get("result") or "0x0", 16) / 1e18, None
+        except ValueError:
+            return 0.0, None
+
+    def trx():
+        r = _rpc("https://api.trongrid.io/wallet/listwitnesses", {}) or {}
+        return sum(_fnum(w.get("voteCount")) for w in r.get("witnesses") or []), None
+
+    def tao():
+        v = _substrate("https://entrypoint-finney.opentensor.ai",
+                       "658faa385070e074c85bf6b568cf05554f85a3603259384a5fa5494b7d7fdb8c")
+        return int.from_bytes(v, "little") / 1e9, None
+
+    def strk():
+        r = _rpc("https://starknet-rpc.publicnode.com", {
+            "jsonrpc": "2.0", "id": 1, "method": "starknet_call",
+            "params": [{"contract_address": "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+                        "entry_point_selector": "0x2e4263afad30923c891518314c3c95dbe830a16874e8abc5777a9a20b54c76e",
+                        "calldata": ["0x00ca1702e64c81d9a07b86bd2c540188d92a2c73cf5cc0e508d949015e7e84a7"]}, "latest"]}) or {}
+        res = r.get("result") or []
+        try:
+            return (int(res[0], 16) + (int(res[1], 16) << 128)) / 1e18, None
+        except (IndexError, ValueError, TypeError):
+            return 0.0, None
+
     out = {
+        "ETH": eth, "IOTA": iota, "XDC": xdc, "TRX": trx, "TAO": tao, "STRK": strk,
+        "DOT": lambda: (_era_total_stake("https://polkadot-asset-hub-rpc.polkadot.io", 1e10), None),
+        "KSM": lambda: (_era_total_stake("https://kusama-asset-hub-rpc.polkadot.io", 1e12), None),
+        "VVV": lambda: (_eth_call("base", "0x321b7ff75154472B18EDb199033fF4D116F340Ff", "0x18160ddd") / 1e18, None),
         "SOL": sol, "NEAR": near, "APT": apt, "SUI": sui, "EGLD": egld, "STX": stx, "ICP": icp,
         "XTZ": xtz, "HYPE": hype, "ADA": ada, "DCR": dcr, "FIL": fil, "GRAM": ton, "ROSE": rose,
         "CKB": ckb, "CFX": cfx, "QTUM": qtum, "TFUEL": theta, "A": vaulta,
