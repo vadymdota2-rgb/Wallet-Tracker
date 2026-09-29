@@ -650,6 +650,7 @@ export const ja: Dict = {
   unl_fdv: "完全希薄化評価額 (FDV)",
   unl_fdv_nocap: "供給上限なし",
   unl_fdv_x: "時価総額の{x}倍",
+  unl_flow_fact: "ペースは{d}日間のオンチェーン実測",
   unl_mcap: "時価総額",
   unl_monthly: "毎月",
   unl_more_hide: "簡潔に",

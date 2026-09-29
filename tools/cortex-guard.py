@@ -881,6 +881,9 @@ say("снимок доходности стейкинга не старше 120 
 say("эмиссия без срока меряется по сети: выпуск пишется раз в сутки, через 7 дней факт заменяет оценку",
     "def _book_measured(" in api and '"measured": measured' in api and "SUPPLY_MIN_DAYS = 7" in api
     and "_supply_record(" in pybody(api, "def stake_live_refresh(") and 't(lang, "unl_emit_fact"' in unl_scr)
+say("выдача XRP из депо Ripple меряется по истории леджера за полгода, а не угадывается",
+    "def _xrp_escrow(" in api and '"XRP": "treasury"' in api and "_rate_record(" in pybody(api, "def stake_live_refresh(")
+    and 't(lang, "unl_flow_fact"' in unl_scr)
 say("карточка монеты начинается с вывода о давлении и объясняет термины",
     'className={`unl-verdict v${lvl}`}' in unl_scr and '"unl_q_pressure"' in unl_scr and 'className="unl-q"' in unl_scr)
 say("разлок меряется днями всех торгов: объём с семи бирж, тезки отсеяны по цене",

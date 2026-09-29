@@ -650,6 +650,7 @@ export const vi: Dict = {
   unl_fdv: "Định giá pha loãng (FDV)",
   unl_fdv_nocap: "không có giới hạn cung",
   unl_fdv_x: "gấp {x} lần vốn hóa",
+  unl_flow_fact: "tốc độ đo trên chuỗi trong {d} ngày",
   unl_mcap: "Vốn hóa",
   unl_monthly: "Hàng tháng",
   unl_more_hide: "Ngắn gọn",

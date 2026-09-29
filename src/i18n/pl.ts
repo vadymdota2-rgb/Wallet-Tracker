@@ -650,6 +650,7 @@ export const pl: Dict = {
   unl_fdv: "Pełna wycena (FDV)",
   unl_fdv_nocap: "brak limitu podaży",
   unl_fdv_x: "{x}× kapitalizacja",
+  unl_flow_fact: "tempo zmierzone w sieci przez {d} dni",
   unl_mcap: "Kapitalizacja",
   unl_monthly: "Miesięczne",
   unl_more_hide: "Krótko",

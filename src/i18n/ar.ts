@@ -650,6 +650,7 @@ export const ar: Dict = {
   unl_fdv: "القيمة المخففة بالكامل (FDV)",
   unl_fdv_nocap: "لا يوجد حد أقصى للإصدار",
   unl_fdv_x: "‎{x} ضعف القيمة السوقية",
+  unl_flow_fact: "الوتيرة مقاسة على الشبكة خلال {d} يومًا",
   unl_mcap: "القيمة السوقية",
   unl_monthly: "شهري",
   unl_more_hide: "باختصار",

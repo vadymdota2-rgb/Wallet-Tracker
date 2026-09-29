@@ -650,6 +650,7 @@ export const zh: Dict = {
   unl_fdv: "完全稀释估值 (FDV)",
   unl_fdv_nocap: "无供应上限",
   unl_fdv_x: "市值的 {x} 倍",
+  unl_flow_fact: "节奏为链上实测 {d} 天",
   unl_mcap: "市值",
   unl_monthly: "每月",
   unl_more_hide: "简要",

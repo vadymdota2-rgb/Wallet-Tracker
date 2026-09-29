@@ -650,6 +650,7 @@ export const ru: Dict = {
   unl_fdv: "Полная оценка (FDV)",
   unl_fdv_nocap: "потолка выпуска нет",
   unl_fdv_x: "в {x} раза больше капитализации",
+  unl_flow_fact: "темп — по факту сети за {d} дн.",
   unl_mcap: "Капитализация",
   unl_monthly: "Ежемесячный",
   unl_more_hide: "Коротко",

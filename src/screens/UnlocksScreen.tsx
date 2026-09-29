@@ -743,6 +743,10 @@ function CoinMore({
           {e.circ ? (
             <small className="unl-note">{t(lang, "unl_of_circ", { p: pct((yearFromDay / e.circ) * 100, 1, false) })}</small>
           ) : null}
+          {/* Выдача не эмиссией (у XRP — из депо Ripple), измеренная по сети. */}
+          {fact && fact.r > 0 && !(emitYr > 0) ? (
+            <small className="unl-note">{t(lang, "unl_flow_fact", { d: String(fact.d) })}</small>
+          ) : null}
         </Row>
         {react ? (
           <Row label={t(lang, "unl_react")} q="unl_q_react">

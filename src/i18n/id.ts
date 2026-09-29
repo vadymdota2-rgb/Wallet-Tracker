@@ -650,6 +650,7 @@ export const id: Dict = {
   unl_fdv: "Nilai terdilusi penuh (FDV)",
   unl_fdv_nocap: "tanpa batas pasokan",
   unl_fdv_x: "{x}× kapitalisasi",
+  unl_flow_fact: "laju diukur on-chain selama {d} hari",
   unl_mcap: "Kapitalisasi pasar",
   unl_monthly: "Bulanan",
   unl_more_hide: "Ringkas",

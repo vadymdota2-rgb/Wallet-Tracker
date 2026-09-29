@@ -650,6 +650,7 @@ export const es: Dict = {
   unl_fdv: "Valoración totalmente diluida (FDV)",
   unl_fdv_nocap: "sin límite de emisión",
   unl_fdv_x: "{x}× la capitalización",
+  unl_flow_fact: "ritmo medido en la red durante {d} días",
   unl_mcap: "Capitalización",
   unl_monthly: "Mensual",
   unl_more_hide: "Resumen",

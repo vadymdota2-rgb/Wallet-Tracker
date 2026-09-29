@@ -650,6 +650,7 @@ export const tr: Dict = {
   unl_fdv: "Tam seyreltilmiş değer (FDV)",
   unl_fdv_nocap: "arz tavanı yok",
   unl_fdv_x: "piyasa değerinin {x} katı",
+  unl_flow_fact: "hız {d} günde zincirde ölçüldü",
   unl_mcap: "Piyasa değeri",
   unl_monthly: "Aylık",
   unl_more_hide: "Kısaca",

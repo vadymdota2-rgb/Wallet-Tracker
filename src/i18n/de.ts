@@ -650,6 +650,7 @@ export const de: Dict = {
   unl_fdv: "Voll verwässerter Wert (FDV)",
   unl_fdv_nocap: "keine Obergrenze",
   unl_fdv_x: "das {x}-Fache der Marktkapitalisierung",
+  unl_flow_fact: "Tempo on-chain gemessen über {d} Tage",
   unl_mcap: "Marktkapitalisierung",
   unl_monthly: "Monatlich",
   unl_more_hide: "Kurz",

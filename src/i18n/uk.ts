@@ -650,6 +650,7 @@ export const uk: Dict = {
   unl_fdv: "Повна оцінка (FDV)",
   unl_fdv_nocap: "стелі випуску немає",
   unl_fdv_x: "в {x} раза більше за капіталізацію",
+  unl_flow_fact: "темп — за фактом мережі за {d} дн.",
   unl_mcap: "Капіталізація",
   unl_monthly: "Щомісячний",
   unl_more_hide: "Коротко",

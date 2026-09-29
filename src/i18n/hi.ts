@@ -650,6 +650,7 @@ export const hi: Dict = {
   unl_fdv: "पूर्ण डाइल्यूटेड मूल्य (FDV)",
   unl_fdv_nocap: "आपूर्ति की कोई सीमा नहीं",
   unl_fdv_x: "मार्केट कैप का {x} गुना",
+  unl_flow_fact: "गति {d} दिनों में ऑन-चेन मापी गई",
   unl_mcap: "मार्केट कैप",
   unl_monthly: "मासिक",
   unl_more_hide: "संक्षेप में",

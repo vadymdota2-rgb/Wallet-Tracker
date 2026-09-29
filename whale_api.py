@@ -4569,6 +4569,113 @@ def _supply_fetchers() -> dict:
     }
 
 
+# Счета Ripple (метка «Ripple N» в обозревателе XRPScan): на них лежат
+# условные депонирования (escrow) XRP. Каждое 1-е число депо на 1 млрд
+# открывается, часть Ripple тут же запирает обратно — на рынок уходит разница.
+# Ripple перекладывает депо между этими счетами, поэтому смотрим все.
+XRP_ESCROW_OWNERS = (
+    "r9UUEXn3cx2seufBkDa8F86usfjWM6HiYp", "rB3WNZc45gxzW31zxfXdkx8HusAhoqscPn",
+    "rDdXiA3M4mYTQ4cFpWkVXfc2UaAXCFWeCK", "rKDvgGUsNPZxsgmoemfrgXPS2Not4co2op",
+    "rKwJaGmB5Hz24Qs2iyCaTdUuL1WsEXUWy5", "rN8pqRwLYuuvY7pUHurybPC8P6rLqVsu6o",
+    "rNASJdZjY9dToHnNURi3HAUku3duPwbtD1", "rU9qmGM4Y6WWDhiNzkwVKBwwatcoE7YL1T",
+    "rfWPPQBYqYmoFMdVnjzXCagJbz5uajSBXL", "rh2EsAe2xVE71ZBjx7oEL2zpD4zmSs3sY9",
+    "rBg2FuZT91C52Nny68houguJ4vt5x1o91m", "rhEwsCWDCVxDiKxGJAKM6VuXC8EFtJP5gQ",
+    "rncKvRcdDq9hVJpdLdTcKoxsS3NSkXsvfM", "rp6aTJmW3nq1aKt3Jmuz4DPRxksT5PBjpH",
+    "rsjFB8mPWqiZgPUaVh8XYqdfa59PE2d5LG", "rw2hzLZgiQ9q62KCuaTWuFHWfiX7JWg3wY",
+    "rDqGA2GfveHypDguQ1KXrJzYymFZmKxEsF", "rGKHDyj4L6pc7DzRB6LWCR4YfZfzXj2Bdh",
+    "rHGfmgv54kpc3QCZGRXEQKUhLPndbasbQr", "rMhkqz3DeU7GUUJKGZofusbrTwZe6bDyb1",
+    "rMQ98K56yXJbDGv49ZSmW51sLn94Xe1mu1", "r4LxkCUXYTCUgwquN3BnsUxFacoVLjGFyF",
+    "r4MoybfgCHDoUByYyMejimaX6a8CEtWtav", "r93oSNBKuFjuKt8GxhF8VYaGzzwsNDPaX5",
+    "rDbWJ9C7uExThZYAwV8m6LsZ5YSX3sa6US", "rLAdBWnD6qufUTByWJXyBtC4hR3GSXaEbn",
+    "rfakn148pevQPbpn38Hnn1mk7WxfdHdfAf", "rhyp1uMC9Xyj3Px8amUH3xVv6tbjYJkojs",
+    "rDahLhHJaowRYn4hRkS9S2YpAeiTR8mjBF", "rEi8BzmV1mMZ9pN1nUd111mmX3zuZuvw8W",
+    "rGtASNaiZMC2Xvjg2bR6b816TUz1gHgbZk", "rKveEyR1SrkWbJX214xcfH43ZsoGMb3PEv",
+    "rNz6HfHBA3nReSbVPwM6YE39MQoeS5SqLU", "rNuF65SoNFRgi7KomddPeSpLhdB2Y7RnsN",
+    "rGo1CzUcLiVBEQSqcf32pz5nEm38jTbhtk", "rU3hoiEM3uQb7ihCZiLJpk6Hm2UDYNiXSq",
+    "rNKpohy2aF3ZJg27QLAhQHT5muoXYNrzSu", "rN6mwh6XAtwNH53sFLWySfMsqPcW1mzEnb",
+    "rJAMeVrUyezc5TVrzwq7HUM4VzW4xUYZzR", "rE5Ekd2hTy62WNbCfpsN9DEC4bd8utr5Cx",
+    "rpynXLU7rAHtdKmdwgiVqLSfz9xwDvK4hy", "rBZz5VCEXpYzvhN8jWCC2Sb2QVDzsM5WKs",
+    "rffYK32pnicbmUvodKsLxTyQFJyEb23gaZ", "rBzM1P5zH3cssjqKqUT6uuxLWQAZkGmrrY",
+    "r3F5NsyiGwVYs2Rs3cCcrVw4t5wZP2ZxRr", "rjWXZ8rKLz7B3w4nueAA12h9JmRDbHuuW",
+    "rpQhAu8n7WwwNPFeqXPDVZyNx8ShAQrYZU", "r9NpyVfLfUG8hatuCCHKzosyDtKnBdsEN3",
+    "rP61PT2XWpvD5dJRHj6naiZcUYpJDhTfpq", "r8TR1AeB1RDQFabM6i8UoFsRF5basqoHJ",
+    "rB8ZssQ2DH7txEtJqyEA2ujKL1tkn6Cfue", "rDGgTp2TYfoTJ93AA5LTv8XhGvwC6ZTELG",
+    "rfCrdBHBtJJaYd7MshSd5Ehs1A4c21gzj", "rhbWRsNE4v4neB5KvscrwCvcETv7c1vDJf",
+    "rHowF3PqzyuaEVHzDmB9EqLJB8iJp5hWLa", "rhtufNsYfrozs4GvSq4HMYcR9y3dg8FWdC",
+    "rhzCneCQznmXnPAh2CvCyNsDHeXr9K1rJ6", "rhzVLsX7yA57th3SS4cTYpPtVGADYaq9hb",
+    "rJKuhw1toKvKjzHZCdHMkuUtGk1TdCxSBX", "rKL9wcwfcGft86TJhpWUzhNsjTa6fdHdrQ",
+    "rLckToYxU7BpqAmFfoGgtoHZhF9NjvsK2D", "rMND5vHirAL1AUCDfqvGtBkgnEgVeB4X7h",
+    "rN6dUmErSSHKAbevj96eJLuXSij7bW2Wmc", "rNBHWTdsxsg5SL86zb9DnCrEG2ZwGjjQ5r",
+    "rNdTucQTbPSCM8zrmBYF98kvwQsNYG4RBi", "rNkXGevtbUNK1hz1dYE7Xen2pVq4ufkP4S",
+    "rNRQcC1iDhSMachKVqVouNBM3bh6YtUsf3", "rP3YT2cmSznWXsieW8TLwknPPSxwwExXPx",
+    "rPcmJZVwSa9NYn4ypyGjTtvLWnvySsRmVF", "rpQVujdWMw2odm8gQHiyGM7qrbkyQmf1sZ",
+    "rUBvr8E4mBv5eTha45bB1f1uAwjGguBXSx", "rw73hpdbB5RgSGUFVx5jzZpahZKxrYkaMF",
+    "rW7S8ZWyjkFic35o34khdSCv8d3LgJyYj", "rJqiMb94hyz41SBTNr2AyPNW8AzELa8nE",
+    "r3kmLJN5D28dHuH8vZNUZpMC43pEHpaocV", "rGSxFjoqmWz54PycrgQBQ5dB6e7TUpMxzq",
+    "rP5xpZ5KzPih69fLhG3NYvZEDfLmSEViUk", "rMY6Wm2RWQLN4d3Jjz15MKP74GJWVQE2pb",
+    "rHH2gS6XikKoEt9i1xAxEBvXLHKFr7oLn8", "re3LGjhrCvthtWWwrfKbVJjXN9PYDeQDJ",
+    "rLW75SfEdnGVsa3fTFkSaDTzXuFapwNYtf", "r9oLueGJ78wpDtx5R5Xtfx5P2fjFppcCuS",
+    "rkPA5RwLVPnJgpcsrzYvHwx1HVfDb6zD3", "rBUDHw8us7ePyr1Qd1iFFRRZ58TkUUzWGD",
+)
+RATE_WINDOW_DAYS = 180
+
+
+def _xrp_escrow(ledger) -> float:
+    """Сколько XRP заперто в депо Ripple на данном леджере."""
+    total = 0
+    for acc in XRP_ESCROW_OWNERS:
+        marker = None
+        for _ in range(20):
+            p = {"account": acc, "type": "escrow", "limit": 400, "ledger_index": ledger}
+            if marker:
+                p["marker"] = marker
+            r = (_rpc("https://xrplcluster.com", {"method": "account_objects", "params": [p]}) or {}).get("result") or {}
+            if r.get("error") == "actNotFound":  # счёта тогда ещё не было или он закрыт
+                break
+            if r.get("status") != "success":
+                raise ValueError(f"xrpl {acc}: {r.get('error')}")
+            total += sum(int(o["Amount"]) for o in r.get("account_objects", [])
+                         if o.get("LedgerEntryType") == "Escrow" and o.get("Account") == acc)
+            marker = r.get("marker")
+            if not marker:
+                break
+    return total / 1e6
+
+
+def _rate_fetchers() -> dict:
+    """Тикер → функция, дающая (прирост оборота в месяц, за сколько дней)
+    прямо по истории сети — без недели ожидания, как у _supply_fetchers."""
+
+    def xrp():
+        r = (_rpc("https://xrplcluster.com", {"method": "ledger", "params": [{"ledger_index": "validated"}]}) or {})
+        cur = int(r["result"]["ledger"]["ledger_index"])
+        # Леджер закрывается раз в 3,9 с: так находим леджер полгода назад.
+        back = cur - int(RATE_WINDOW_DAYS * 86400 / 3.9)
+        return (_xrp_escrow(back) - _xrp_escrow(cur)) / RATE_WINDOW_DAYS * 30.44, RATE_WINDOW_DAYS
+
+    return {"XRP": xrp}
+
+
+# Какой строкой книги считается измеренный прирост: у сетей — «emission»,
+# у XRP — выдача из депо Ripple («treasury»).
+MEASURE_KIND = {"XRP": "treasury"}
+
+
+def _rate_record(today: str) -> None:
+    """Пересчитать прирост по истории сети (раз в сутки)."""
+    with _stake_live_lock:
+        rates = _STAKE_LIVE.setdefault("_rate", {})
+    for sym, fn in _rate_fetchers().items():
+        if (rates.get(sym) or [None, None, ""])[2] == today:
+            continue
+        try:
+            rate, days = fn()
+        except Exception:  # noqa: BLE001 — одна сеть не должна ронять остальные
+            continue
+        with _stake_live_lock:
+            rates[sym] = [round(rate), days, today]
+
+
 def _supply_record(today: str) -> None:
     """Записать выпуск за сегодня: одна точка в сутки, 60 суток истории."""
     with _stake_live_lock:
@@ -4603,26 +4710,40 @@ def measured_emission() -> dict[str, tuple[float, int]]:
         days = round((d1 - d0) / 86400)
         if days >= SUPPLY_MIN_DAYS:
             out[sym] = ((rows[-1][1] - rows[0][1]) / days * 30.44, days)
+    with _stake_live_lock:
+        rates = dict(_STAKE_LIVE.get("_rate", {}))
+    for sym, (rate, days, _at) in rates.items():
+        out[sym] = (rate, days)
     return out
 
 
-def _book_measured() -> tuple[list[dict], dict[str, dict]]:
-    """Книга с фактической эмиссией вместо оценки: у бессрочных строк
-    «emission» сумма — прирост, измеренный по сети. Если сжигание больше
-    выпуска (прирост отрицательный), в календаре остаётся выдача наградой —
-    она и есть давление продаж, — а факт уходит в ответ отдельно, и
-    приложение пишет, что монет на деле становится меньше.
+def _book_measured(now: float | None = None) -> tuple[list[dict], dict[str, dict]]:
+    """Книга с фактом вместо оценки. Строка, что идёт сейчас (у сетей —
+    «emission», у XRP — выдача из депо), получает прирост, измеренный по
+    сети; следующие строки того же рода — прежнее снижение по правилам
+    протокола, но от измеренного уровня (тот же множитель). Если сжигание
+    больше выпуска (прирост отрицательный), в календаре остаётся выдача
+    наградой — она и есть давление продаж, — а факт уходит в ответ отдельно,
+    и приложение пишет, что монет на деле становится меньше.
     Возвращает книгу и {тикер: {d: дней, r: прирост в месяц}}."""
     meas = measured_emission()
     if not meas:
         return UNLOCK_BOOK, {}
+    ym = time.strftime("%Y-%m", time.gmtime(now or time.time()))
+
+    def kind(st):
+        return st[-2] if st[-1] == "est" else st[-1]
+
     book, used = [], {}
     for c in UNLOCK_BOOK:
         m = meas.get(c["s"])
+        want = MEASURE_KIND.get(c["s"], "emission")
         steps = c["plan"] if isinstance(c["plan"], list) else []
-        open_emit = [st for st in steps if st[0] == "m" and st[3] is None
-                     and (st[-2] if st[-1] == "est" else st[-1]) == "emission"]
-        if not m or not open_emit:
+        runs = [st for st in steps if st[0] == "m" and kind(st) == want]
+        # Строка, что идёт сейчас: начата и не кончилась; до начала — ближайшая.
+        cur = next((st for st in runs if st[2] <= ym and (st[3] is None or st[3] >= ym)), None) \
+            or next((st for st in sorted(runs, key=lambda st: st[2]) if st[2] > ym), None)
+        if not m or not cur or not cur[4]:
             book.append(c)
             continue
         rate, days = m
@@ -4630,10 +4751,12 @@ def _book_measured() -> tuple[list[dict], dict[str, dict]]:
         if rate <= 0:
             book.append(c)
             continue
-        plan = [("m", st[1], st[2], None, round(rate), "emission") if st in open_emit else st for st in steps]
+        k = rate / cur[4]
+        plan = [("m", st[1], st[2], st[3], round(st[4] * k), want) if st in runs and st[2] >= cur[2] else st
+                for st in steps]
         c2 = dict(c, plan=plan)
-        # Оценкой монета остаётся, только если оценено что-то кроме эмиссии.
-        if all((st[-2] if st[-1] == "est" else st[-1]) == "emission" for st in steps):
+        # Оценкой монета остаётся, только если оценено что-то ещё.
+        if all(st in runs for st in steps):
             c2.pop("est", None)
         book.append(c2)
     return book, used
@@ -4658,6 +4781,7 @@ def stake_live_refresh() -> int:
     today = time.strftime("%Y-%m-%d", time.gmtime())
     done = 0
     _supply_record(today)
+    _rate_record(today)
     for sym, fn in _stake_fetchers().items():
         coin = book.get(sym)
         snap = coin.get("staked") if coin else None

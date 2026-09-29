@@ -6244,5 +6244,23 @@
     "uk": "за фактом мережі монет стає менше: {n} на місяць — спалювання більше за випуск",
     "vi": "trên chuỗi nguồn cung giảm: {n} mỗi tháng — đốt nhiều hơn phát hành",
     "zh": "链上供应在减少：每月 {n} — 销毁多于增发"
+  },
+  "unl_flow_fact": {
+    "ar": "الوتيرة مقاسة على الشبكة خلال {d} يومًا",
+    "de": "Tempo on-chain gemessen über {d} Tage",
+    "en": "pace measured on-chain over {d} days",
+    "es": "ritmo medido en la red durante {d} días",
+    "fr": "rythme mesuré on-chain sur {d} jours",
+    "hi": "गति {d} दिनों में ऑन-चेन मापी गई",
+    "id": "laju diukur on-chain selama {d} hari",
+    "ja": "ペースは{d}日間のオンチェーン実測",
+    "ko": "속도: {d}일간 온체인 실측",
+    "pl": "tempo zmierzone w sieci przez {d} dni",
+    "pt": "ritmo medido na rede em {d} dias",
+    "ru": "темп — по факту сети за {d} дн.",
+    "tr": "hız {d} günde zincirde ölçüldü",
+    "uk": "темп — за фактом мережі за {d} дн.",
+    "vi": "tốc độ đo trên chuỗi trong {d} ngày",
+    "zh": "节奏为链上实测 {d} 天"
   }
 }

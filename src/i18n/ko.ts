@@ -650,6 +650,7 @@ export const ko: Dict = {
   unl_fdv: "완전희석가치 (FDV)",
   unl_fdv_nocap: "공급 상한 없음",
   unl_fdv_x: "시가총액의 {x}배",
+  unl_flow_fact: "속도: {d}일간 온체인 실측",
   unl_mcap: "시가총액",
   unl_monthly: "월간",
   unl_more_hide: "간단히",

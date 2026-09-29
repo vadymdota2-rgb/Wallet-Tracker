@@ -650,6 +650,7 @@ export const en = {
   unl_fdv: "Fully diluted value (FDV)",
   unl_fdv_nocap: "no supply cap",
   unl_fdv_x: "{x}× the market cap",
+  unl_flow_fact: "pace measured on-chain over {d} days",
   unl_mcap: "Market cap",
   unl_monthly: "Monthly",
   unl_more_hide: "Brief",
