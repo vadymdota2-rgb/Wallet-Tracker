@@ -465,10 +465,13 @@ say("карта ликвидаций: уровень виден, пока пал
     and 'window.addEventListener("touchend", anyEnd)' in _lq and '"mousemove"' not in _lq
     and 'e.pointerType === "mouse"' in _lq)
 
-say("карта ликвидаций: семь бирж, своя история интереса Hyperliquid, чужие цены отсеяны",
-    all(f'("{n}", _liq_' in api for n in ("Binance", "OKX", "Bybit", "Gate", "HTX", "Hyperliquid", "dYdX"))
+say("карта ликвидаций: шесть бирж с историей и десять со своей записью интереса, чужие цены отсеяны",
+    all(f'("{n}", _liq_' in api for n in ("Binance", "OKX", "Bybit", "Gate", "HTX", "dYdX"))
+    and all(f'("{n}", _snap_' in api for n in ("Hyperliquid", "Bitget", "MEXC", "KuCoin", "Kraken",
+                                               "Phemex", "WOO X", "WhiteBIT", "Bitfinex", "Deribit"))
     and "def liq_oi_refresher(" in api and "target=liq_oi_refresher" in api
-    and "abs(r[-1][3] / mid - 1) > 0.03" in api)
+    and "abs(r[-1][3] / mid - 1) > 0.03" in api and "abs(sn[-1][2] / px - 1) > 0.03" in api
+    and "DROP TABLE hl_oi" in api)
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

@@ -8580,44 +8580,200 @@ def _liq_dydx(sym: str, period: str, n: int) -> list | None:
     return sorted(out) or None
 
 
-# Hyperliquid истории открытого интереса не публикует — только то, что есть
-# сейчас. Поэтому сервер пишет её сам: раз в 15 минут снимок по всем монетам
-# в свою маленькую базу, месяц назад и не дальше. Карта берёт эти снимки к
-# свечам Hyperliquid; пока истории меньше восьми точек, биржа просто не
-# участвует.
+# Истории открытого интереса многие биржи не публикуют — только то, что
+# есть сейчас, зато по всем монетам одним запросом. Для них сервер пишет
+# историю сам: раз в 15 минут снимок в свою маленькую базу. Свежие двое
+# суток — каждые 15 минут, до недели — раз в час, дальше до месяца — раз в
+# четыре часа: ровно тот шаг, с которым карта их и читает. Пока у монеты на
+# бирже меньше восьми точек, биржа в её карте просто не участвует.
 LIQ_OI_DB = os.environ.get("LIQ_OI_DB") or os.path.join(os.path.dirname(DB) or ".", "liq_oi.db")
 LIQ_OI_EVERY = 900
-LIQ_OI_KEEP = 32 * 86400
+LIQ_OI_MIN = 50_000
 
 
 def _liq_oi_con() -> sqlite3.Connection:
     con = sqlite3.connect(LIQ_OI_DB, timeout=8, check_same_thread=False)
-    con.execute("CREATE TABLE IF NOT EXISTS hl_oi (coin TEXT NOT NULL, t INTEGER NOT NULL, oi REAL NOT NULL, "
-                "PRIMARY KEY (coin, t)) WITHOUT ROWID")
+    con.execute("CREATE TABLE IF NOT EXISTS oi_snap (ex TEXT NOT NULL, coin TEXT NOT NULL, t INTEGER NOT NULL, "
+                "oi REAL NOT NULL, px REAL NOT NULL, PRIMARY KEY (coin, ex, t)) WITHOUT ROWID")
+    # Первая версия писала только Hyperliquid, в свою таблицу, — переносим.
+    if con.execute("SELECT 1 FROM sqlite_master WHERE name='hl_oi'").fetchone():
+        con.execute("INSERT OR IGNORE INTO oi_snap SELECT 'Hyperliquid', coin, t, oi, 0 FROM hl_oi")
+        con.execute("DROP TABLE hl_oi")
+        con.commit()
     return con
 
 
-def liq_oi_sample() -> int:
+def _snap_sym(raw: str) -> str:
+    """Тикер биржи → наш. «1000PEPE» не приводим: цена у него в тысячу раз
+    больше, и снимок лёг бы на чужую ось."""
+    s = str(raw or "").upper()
+    s = "BTC" if s == "XBT" else s
+    return s if re.fullmatch(r"[A-Z][A-Z0-9]{1,11}", s) else ""
+
+
+def _snap_hl() -> dict:
     got = hl_post({"type": "metaAndAssetCtxs"}, 15)
-    if not isinstance(got, list) or len(got) < 2:
-        return 0
-    t = now() // LIQ_OI_EVERY * LIQ_OI_EVERY
-    rows = []
-    for m, c in zip(got[0].get("universe") or [], got[1] or []):
-        name = str(m.get("name") or "")
-        if m.get("isDelisted") or not re.fullmatch(r"[A-Z0-9]{2,12}", name):
+    out = {}
+    if isinstance(got, list) and len(got) == 2:
+        for m, c in zip(got[0].get("universe") or [], got[1] or []):
+            name = str(m.get("name") or "")
+            px = _fnum(c.get("markPx"))
+            if not m.get("isDelisted") and re.fullmatch(r"[A-Z0-9]{2,12}", name):
+                out[name] = (_fnum(c.get("openInterest")) * px, px)
+    return out
+
+
+def _snap_bitget() -> dict:
+    out = {}
+    for r in (get_json("https://api.bitget.com/api/v2/mix/market/tickers?productType=usdt-futures", 20) or {}).get("data") or []:
+        s = str(r.get("symbol") or "")
+        px = _fnum(r.get("markPrice")) or _fnum(r.get("lastPr"))
+        if s.endswith("USDT") and (sym := _snap_sym(s[:-4])):
+            out[sym] = (_fnum(r.get("holdingAmount")) * px, px)
+    return out
+
+
+_mexc_size: dict = {"at": 0.0, "map": {}}
+
+
+def _snap_mexc() -> dict:
+    # Размер контракта меняется редко, а справочник весит два мегабайта —
+    # берём его раз в шесть часов и держим прошлый, если биржа не ответила.
+    if not _mexc_size["map"] or time.monotonic() - _mexc_size["at"] > 6 * 3600:
+        got = {d.get("symbol"): _fnum(d.get("contractSize"))
+               for d in (get_json("https://contract.mexc.com/api/v1/contract/detail", 30) or {}).get("data") or []}
+        if got:
+            _mexc_size.update(at=time.monotonic(), map=got)
+    size = _mexc_size["map"]
+    out = {}
+    for r in (get_json("https://contract.mexc.com/api/v1/contract/ticker", 20) or {}).get("data") or []:
+        s = str(r.get("symbol") or "")
+        px = _fnum(r.get("fairPrice")) or _fnum(r.get("lastPrice"))
+        if s.endswith("_USDT") and (sym := _snap_sym(s[:-5])) and size.get(s):
+            out[sym] = (_fnum(r.get("holdVol")) * size[s] * px, px)
+    return out
+
+
+def _snap_kucoin() -> dict:
+    out = {}
+    for r in (get_json("https://api-futures.kucoin.com/api/v1/contracts/active", 25) or {}).get("data") or []:
+        if not str(r.get("symbol") or "").endswith("USDTM") or r.get("isInverse") or r.get("status") != "Open":
             continue
-        oi = _fnum(c.get("openInterest")) * _fnum(c.get("markPx"))
-        if oi > 0:
-            rows.append((name, t, oi))
+        px = _fnum(r.get("markPrice"))
+        if sym := _snap_sym(r.get("baseCurrency")):
+            out[sym] = (_fnum(r.get("openInterest")) * _fnum(r.get("multiplier")) * px, px)
+    return out
+
+
+def _snap_kraken() -> dict:
+    out = {}
+    for r in (get_json("https://futures.kraken.com/derivatives/api/v3/tickers", 20) or {}).get("tickers") or []:
+        pair = str(r.get("pair") or "")
+        if not str(r.get("symbol") or "").startswith("PF_") or not pair.endswith(":USD"):
+            continue
+        px = _fnum(r.get("markPrice"))
+        if sym := _snap_sym(pair[:-4]):
+            out[sym] = (_fnum(r.get("openInterest")) * px, px)
+    return out
+
+
+def _snap_phemex() -> dict:
+    out = {}
+    for r in (get_json("https://api.phemex.com/md/v3/ticker/24hr/all", 20) or {}).get("result") or []:
+        s = str(r.get("symbol") or "")
+        px = _fnum(r.get("markRp"))
+        if s.endswith("USDT") and (sym := _snap_sym(s[:-4])):
+            out[sym] = (_fnum(r.get("openInterestRv")) * px, px)
+    return out
+
+
+def _snap_woo() -> dict:
+    out = {}
+    for r in (get_json("https://api.woox.io/v1/public/futures", 20) or {}).get("rows") or []:
+        s = str(r.get("symbol") or "")
+        px = _fnum(r.get("mark_price"))
+        if s.startswith("PERP_") and s.endswith("_USDT") and (sym := _snap_sym(s[5:-5])):
+            out[sym] = (_fnum(r.get("open_interest")) * px, px)
+    return out
+
+
+def _snap_whitebit() -> dict:
+    out = {}
+    for r in (get_json("https://whitebit.com/api/v4/public/futures", 20) or {}).get("result") or []:
+        if r.get("product_type") != "Perpetual" or r.get("money_currency") != "USDT":
+            continue
+        px = _fnum(r.get("last_price"))
+        if sym := _snap_sym(r.get("stock_currency")):
+            out[sym] = (_fnum(r.get("open_interest")) * px, px)
+    return out
+
+
+def _snap_bitfinex() -> dict:
+    out = {}
+    for r in get_json("https://api-pub.bitfinex.com/v2/status/deriv?keys=ALL", 20) or []:
+        key = str(r[0]) if isinstance(r, list) and len(r) > 18 else ""
+        if key.startswith("t") and key.endswith("F0:USTF0"):
+            px = _fnum(r[15]) or _fnum(r[3])
+            if sym := _snap_sym(key[1:-8]):
+                out[sym] = (_fnum(r[18]) * px, px)
+    return out
+
+
+def _snap_deribit() -> dict:
+    out: dict = {}
+    base = "https://www.deribit.com/api/v2/public/get_book_summary_by_currency?kind=future&currency="
+    for cur in ("BTC", "ETH", "USDC"):
+        for r in (get_json(base + cur, 20) or {}).get("result") or []:
+            name = str(r.get("instrument_name") or "")
+            if not name.endswith("-PERPETUAL"):
+                continue
+            px = _fnum(r.get("mark_price"))
+            head = name[:-len("-PERPETUAL")]
+            # Обратные BTC-/ETH-PERPETUAL считают интерес в долларах, линейные
+            # к USDC — в монетах.
+            if "_" in head:
+                sym, oi = _snap_sym(head.split("_")[0]), _fnum(r.get("open_interest")) * px
+            else:
+                sym, oi = _snap_sym(head), _fnum(r.get("open_interest"))
+            if sym:
+                prev = out.get(sym, (0.0, px))
+                out[sym] = (prev[0] + oi, px)
+    return out
+
+
+LIQ_SNAPS = (("Hyperliquid", _snap_hl), ("Bitget", _snap_bitget), ("MEXC", _snap_mexc), ("KuCoin", _snap_kucoin),
+             ("Kraken", _snap_kraken), ("Phemex", _snap_phemex), ("WOO X", _snap_woo), ("WhiteBIT", _snap_whitebit),
+             ("Bitfinex", _snap_bitfinex), ("Deribit", _snap_deribit))
+
+
+def liq_oi_sample() -> dict:
+    t = now() // LIQ_OI_EVERY * LIQ_OI_EVERY
+    rows: list = []
+    counts: dict = {}
+
+    def one(src) -> None:
+        name, fn = src
+        try:
+            got = fn()
+        except Exception:  # noqa: BLE001 — биржа не ответила: снимок без неё
+            got = {}
+        part = [(name, sym, t, oi, px) for sym, (oi, px) in got.items() if oi >= LIQ_OI_MIN and px > 0]
+        counts[name] = len(part)
+        rows.extend(part)
+
+    with ThreadPoolExecutor(max_workers=len(LIQ_SNAPS)) as pool:
+        list(pool.map(one, LIQ_SNAPS))
     con = _liq_oi_con()
     try:
-        con.executemany("INSERT OR REPLACE INTO hl_oi VALUES (?,?,?)", rows)
-        con.execute("DELETE FROM hl_oi WHERE t < ?", (t - LIQ_OI_KEEP,))
+        con.executemany("INSERT OR REPLACE INTO oi_snap VALUES (?,?,?,?,?)", rows)
+        # Прореживание: чем старше, тем реже — под шаг свечей карты.
+        con.execute("DELETE FROM oi_snap WHERE t < ? AND t % 3600 != 0", (t - 2 * 86400,))
+        con.execute("DELETE FROM oi_snap WHERE t < ? AND t % 14400 != 0", (t - 8 * 86400,))
+        con.execute("DELETE FROM oi_snap WHERE t < ?", (t - 32 * 86400,))
         con.commit()
     finally:
         con.close()
-    return len(rows)
+    return counts
 
 
 def liq_oi_refresher() -> None:
@@ -8629,35 +8785,51 @@ def liq_oi_refresher() -> None:
         time.sleep(LIQ_OI_EVERY - now() % LIQ_OI_EVERY + 5)
 
 
-def _liq_hl(sym: str, period: str, n: int) -> list | None:
+def _liq_hl_candles(sym: str, period: str, n: int) -> list | None:
+    """Свечи Hyperliquid — опора для монет, которых нет на биржах с историей."""
     sec = _LIQ_SEC[period]
-    con = _liq_oi_con()
-    try:
-        snaps = con.execute("SELECT t, oi FROM hl_oi WHERE coin=? AND t >= ? ORDER BY t",
-                            (sym, now() - sec * (n + 1))).fetchall()
-    finally:
-        con.close()
-    if len(snaps) < 8:
-        return None
     end = now() * 1000
     kl = hl_post({"type": "candleSnapshot", "req": {"coin": sym, "interval": period,
                                                     "startTime": end - sec * n * 1000, "endTime": end}}, 15)
-    if not isinstance(kl, list) or not kl:
+    if not isinstance(kl, list) or len(kl) < 8:
         return None
-    # К свече — последний снимок до её конца: он и есть интерес на закрытии.
-    out, j = [], 0
-    for k in kl:
-        t = int(k["t"]) // 1000
-        while j + 1 < len(snaps) and snaps[j + 1][0] <= t + sec:
-            j += 1
-        if snaps[j][0] > t + sec or snaps[j][0] < t - sec:
+    return [(int(k["t"]) // 1000, _fnum(k.get("h")), _fnum(k.get("l")), _fnum(k.get("c")), 0.0, 0.5) for k in kl]
+
+
+def _liq_sampled(sym: str, period: str, n: int, ref: list, px: float) -> dict:
+    """Ряды бирж со своей историей: снимок интереса к каждой свече опоры.
+
+    Цены у всех бирж на одной монете почти одни и те же, поэтому свечи берём
+    у опорной биржи, а от снимков — только интерес. Биржу, чья цена в
+    снимке дальше 3% от опорной, не берём: под тем же тикером у неё другая
+    монета."""
+    sec = _LIQ_SEC[period]
+    con = _liq_oi_con()
+    try:
+        snaps = con.execute("SELECT ex, t, oi, px FROM oi_snap WHERE coin=? AND t >= ? ORDER BY ex, t",
+                            (sym, now() - sec * (n + 2))).fetchall()
+    finally:
+        con.close()
+    by: dict = {}
+    for ex, t, oi, spx in snaps:
+        by.setdefault(ex, []).append((t, oi, spx))
+    out = {}
+    for ex, sn in by.items():
+        if len(sn) < 8 or (sn[-1][2] > 0 and px > 0 and abs(sn[-1][2] / px - 1) > 0.03):
             continue
-        out.append((t, _fnum(k.get("h")), _fnum(k.get("l")), _fnum(k.get("c")), snaps[j][1], 0.5))
-    return out or None
+        rows, j = [], 0
+        for t, h, lo, c, _oi, _bs in ref:
+            while j + 1 < len(sn) and sn[j + 1][0] <= t + sec:
+                j += 1
+            if t - sec <= sn[j][0] <= t + sec:
+                rows.append((t, h, lo, c, sn[j][1], 0.5))
+        if len(rows) >= 8:
+            out[ex] = rows
+    return out
 
 
 LIQ_SOURCES = (("Binance", _liq_binance), ("OKX", _liq_okx), ("Bybit", _liq_bybit), ("Gate", _liq_gate),
-               ("HTX", _liq_htx), ("Hyperliquid", _liq_hl), ("dYdX", _liq_dydx))
+               ("HTX", _liq_htx), ("dYdX", _liq_dydx))
 
 
 def _liq_model(rows: list) -> list:
@@ -8698,7 +8870,8 @@ def _liq_candles(rows: list, n: int = 48) -> list:
 
 
 # Монеты, по которым строится карта: бессрочные фьючерсы на Binance, OKX,
-# Bybit, Gate, HTX, Hyperliquid и dYdX, по обороту за сутки. Список раз в час, из открытых тикеров.
+# Bybit, Gate, HTX, dYdX и Hyperliquid, по обороту за сутки; метки бирж со
+# своей историей интереса — по мере того, как она копится. Список раз в час, из открытых тикеров.
 LIQ_COINS_TTL = 3600.0
 LIQ_COINS_MIN_VOL = 50_000
 _liq_coins_cache: dict = {}
@@ -8770,24 +8943,30 @@ def liq_coins() -> dict:
                 add(str(k)[:-4], _fnum(m.get("volume24H")), "dYdX")
 
     def hyper() -> None:
-        # Только монеты, по которым уже есть своя история интереса: без неё
-        # карта Hyperliquid не построит, и метка биржи обещала бы лишнее.
-        con = _liq_oi_con()
-        try:
-            have = {r[0] for r in con.execute(
-                "SELECT coin FROM hl_oi GROUP BY coin HAVING COUNT(*) >= 8")}
-        finally:
-            con.close()
+        # Оборот Hyperliquid — для монет, которых нет больше нигде: карту им
+        # строит своя история интереса и свечи Hyperliquid.
         got = hl_post({"type": "metaAndAssetCtxs"}, 15)
         if not isinstance(got, list) or len(got) < 2:
             return
         for m, c in zip(got[0].get("universe") or [], got[1] or []):
             name = str(m.get("name") or "")
-            if name in have and not m.get("isDelisted"):
-                add(name, _fnum(c.get("dayNtlVlm")), "Hyperliquid")
+            if not m.get("isDelisted") and re.fullmatch(r"[A-Z0-9]{2,12}", name):
+                vol[name] = vol.get(name, 0.0) + _fnum(c.get("dayNtlVlm"))
 
     with ThreadPoolExecutor(max_workers=7) as pool:
         list(pool.map(safe, (binance, okx, bybit, gate, htx, hyper, dydx)))
+    # Биржи со своей историей — меткой у монеты, когда точек уже хватает.
+    try:
+        con = _liq_oi_con()
+        try:
+            for coin, name in con.execute("SELECT coin, ex FROM oi_snap WHERE t >= ? GROUP BY coin, ex "
+                                          "HAVING COUNT(*) >= 8", (now() - 3 * 86400,)):
+                if coin in vol:
+                    ex.setdefault(coin, set()).add(name)
+        finally:
+            con.close()
+    except sqlite3.Error:
+        pass
     coins = sorted(({"s": k, "v": round(v), "ex": sorted(ex[k])} for k, v in vol.items() if v >= LIQ_COINS_MIN_VOL),
                    key=lambda c: -c["v"])
     res = {"ok": bool(coins), "coins": coins, "at": now()}
@@ -8827,13 +9006,17 @@ def liq_map(sym: str, rng: str) -> dict:
         mid = sorted(r[-1][3] for r in got.values())[len(got) // 2]
         for name in [k for k, r in got.items() if mid <= 0 or abs(r[-1][3] / mid - 1) > 0.03]:
             got.pop(name)
+    # Опора — биржа с наибольшим интересом; нет ни одной — свечи Hyperliquid.
+    ref = max(got.values(), key=lambda r: r[-1][4]) if got else _liq_hl_candles(sym, period, n)
+    if ref:
+        got.update(_liq_sampled(sym, period, n, ref, ref[-1][3]))
     if not got:
         res = {"ok": False, "error": "no_data", "sym": sym}
         with _liq_lock:
             _liq_cache[key] = (time.monotonic(), res)
         return res
-    # Цена сейчас — закрытие последней свечи у той биржи, где оборот больше.
-    px = max(got.values(), key=lambda r: r[-1][4])[-1][3]
+    # Цена сейчас — закрытие последней свечи опорной биржи.
+    px = ref[-1][3]
     lo_px, step = px * (1 - LIQ_SPAN), px * LIQ_SPAN * 2 / LIQ_BUCKETS
     long_b = [[0.0] * 4 for _ in range(LIQ_BUCKETS)]
     short_b = [[0.0] * 4 for _ in range(LIQ_BUCKETS)]
@@ -8861,7 +9044,7 @@ def liq_map(sym: str, rng: str) -> dict:
 
     # Путь цены за окно — у той же биржи, по ≤60 точкам: в шапке видно,
     # откуда цена пришла к нынешним уровням. Открытый интерес — сумма бирж.
-    main = max(got.values(), key=lambda r: r[-1][4])
+    main = ref
     stride = max(1, len(main) // 60)
     path = [r[3] for r in main[::stride]]
     if path[-1] != main[-1][3]:
