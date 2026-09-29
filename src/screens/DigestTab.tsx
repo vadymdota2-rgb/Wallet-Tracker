@@ -23,6 +23,7 @@ import {
   commentDigest,
   fetchDigest,
   fetchDigestComments,
+  translateComment,
   likeDigest,
   peekDigest,
   uncommentDigest,
@@ -48,6 +49,7 @@ import type {
   DigestCoin,
   DigestItem,
   DigestLocked,
+  DigestLs,
   DigestReply,
 } from "../lib/types";
 
@@ -176,6 +178,20 @@ function CoinRow({
   );
 }
 
+/** Лонг/шорт по группам. В выпусках до разделения — один общий список, его
+ *  показываем как есть, без придуманной группы «акций». */
+function lsGroups(v: DigestItem["ls"]): [string, DigestLs | undefined][] {
+  if (!v || isLocked(v)) return [["crypto", undefined], ["rwa", undefined]];
+  if ("crypto" in v) return [["crypto", v.crypto], ["rwa", v.rwa]];
+  return [["crypto", v]];
+}
+
+function perpGroups(v: DigestItem["perp"]): [string, DigestCoin[]][] {
+  if (!v || isLocked(v)) return [["crypto", []], ["rwa", []]];
+  if (Array.isArray(v)) return [["crypto", v]];
+  return [["crypto", v.crypto ?? []], ["rwa", v.rwa ?? []]];
+}
+
 function Sections({ it, lang, premium }: { it: DigestItem; lang: Lang; premium: boolean }) {
   const open = useApp((s) => s.open);
   const toPremium = () => open("premium");
@@ -265,36 +281,50 @@ function Sections({ it, lang, premium }: { it: DigestItem; lang: Lang; premium: 
       <Sec icon={<PositionsGlyph size={20} />} title={t(lang, "ui_tab_ls")}>
         {isLocked(it.ls) || (!premium && it.ls === undefined) ? (
           <LockedSec lang={lang} onPremium={toPremium} />
-        ) : it.ls && (it.ls.long.length || it.ls.short.length) ? (
-          <>
-            {it.ls.long.length ? <Sub>{t(lang, "dg_ls_long")}</Sub> : null}
-            {it.ls.long.map((c) => (
-              <CoinRow key={`l${c.sym}`} c={c} value={usd(c.net, true)} tone="up"
-                sub={c.pct !== undefined ? t(lang, "dg_long_share", { p: pct(c.pct, 0, false) }) : undefined}
-                onOpen={chart(c.sym)} />
-            ))}
-            {it.ls.short.length ? <Sub>{t(lang, "dg_ls_short")}</Sub> : null}
-            {it.ls.short.map((c) => (
-              <CoinRow key={`h${c.sym}`} c={c} value={usd(c.net, true)} tone="dn"
-                sub={c.pct !== undefined ? t(lang, "dg_long_share", { p: pct(c.pct, 0, false) }) : undefined}
-                onOpen={chart(c.sym)} />
-            ))}
-          </>
         ) : (
-          <Quiet lang={lang} />
+          lsGroups(it.ls).map(([cls, g]) => (
+            <div key={cls} className="dg-grp">
+              <p className="dg-grp-t">{t(lang, cls === "rwa" ? "ui_cls_rwa" : "ui_cls_crypto")}</p>
+              {g && (g.long.length || g.short.length) ? (
+                <>
+                  {g.long.length ? <Sub>{t(lang, "dg_ls_long")}</Sub> : null}
+                  {g.long.map((c) => (
+                    <CoinRow key={`l${c.sym}`} c={c} value={usd(c.net, true)} tone="up"
+                      sub={c.pct !== undefined ? t(lang, "dg_long_share", { p: pct(c.pct, 0, false) }) : undefined}
+                      onOpen={chart(c.sym)} />
+                  ))}
+                  {g.short.length ? <Sub>{t(lang, "dg_ls_short")}</Sub> : null}
+                  {g.short.map((c) => (
+                    <CoinRow key={`h${c.sym}`} c={c} value={usd(c.net, true)} tone="dn"
+                      sub={c.pct !== undefined ? t(lang, "dg_long_share", { p: pct(c.pct, 0, false) }) : undefined}
+                      onOpen={chart(c.sym)} />
+                  ))}
+                </>
+              ) : (
+                <Quiet lang={lang} />
+              )}
+            </div>
+          ))
         )}
       </Sec>
 
       <Sec icon={<StackGlyph size={20} />} title={t(lang, "ui_tab_positions")}>
         {isLocked(it.perp) ? (
           <LockedSec lang={lang} onPremium={toPremium} />
-        ) : it.perp?.length ? (
-          it.perp.map((c, i) => (
-            <CoinRow key={`p${i}`} c={c} value={usd(c.v)} tone={c.long ? "up" : "dn"}
-              sub={t(lang, c.long ? "dg_long" : "dg_short")} onOpen={chart(c.sym)} />
-          ))
         ) : (
-          <Quiet lang={lang} />
+          perpGroups(it.perp).map(([cls, g]) => (
+            <div key={cls} className="dg-grp">
+              <p className="dg-grp-t">{t(lang, cls === "rwa" ? "ui_cls_rwa" : "ui_cls_crypto")}</p>
+              {g.length ? (
+                g.map((c, i) => (
+                  <CoinRow key={`p${cls}${i}`} c={c} value={usd(c.v)} tone={c.long ? "up" : "dn"}
+                    sub={t(lang, c.long ? "dg_long" : "dg_short")} onOpen={chart(c.sym)} />
+                ))
+              ) : (
+                <Quiet lang={lang} />
+              )}
+            </div>
+          ))
         )}
       </Sec>
 
@@ -341,6 +371,76 @@ function Sections({ it, lang, premium }: { it: DigestItem; lang: Lang; premium: 
   );
 }
 
+const ANON_KEY = "wt-dg-anon";
+
+function readAnon(): boolean {
+  try {
+    return localStorage.getItem(ANON_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Комментарий. Чужой можно перевести на язык приложения: перевод делает
+ * сервер один раз на язык и помнит. Если комментарий уже на этом языке,
+ * кнопка честно это говорит и больше не предлагает перевод.
+ */
+function CommentItem({ c, lang, mod, now, onRemove }: {
+  c: DigestComment;
+  lang: Lang;
+  mod: boolean;
+  now: number;
+  onRemove: (c: DigestComment, mute?: boolean) => void;
+}) {
+  const [tr, setTr] = useState<{ text?: string; same?: boolean; fail?: boolean } | null>(null);
+  const [showTr, setShowTr] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const translate = async () => {
+    if (tr?.text) {
+      setShowTr(!showTr);
+      return;
+    }
+    setBusy(true);
+    const r = await translateComment(c.id, lang);
+    setBusy(false);
+    if (r?.ok && r.same) setTr({ same: true });
+    else if (r?.ok && r.text) {
+      setTr({ text: r.text });
+      setShowTr(true);
+    } else setTr({ fail: true });
+  };
+
+  return (
+    <li className={c.mine ? "mine" : ""}>
+      <div className="dg-com-head">
+        <b className={c.anon ? "anon" : ""}>{c.anon ? t(lang, "dg_anon") : c.name}</b>
+        <time>{now - c.at < 86400 ? clock(lang, c.at) : dateWord(lang, c.at)}</time>
+      </div>
+      <p>{showTr && tr?.text ? tr.text : c.text}</p>
+      <div className="dg-com-acts">
+        {!c.mine ? (
+          tr?.same ? (
+            <span className="dg-com-note">{t(lang, "dg_same_lang")}</span>
+          ) : (
+            <button type="button" className="dg-tr" disabled={busy} onClick={() => void translate()}>
+              {busy ? "…" : showTr ? t(lang, "dg_original") : t(lang, "dg_translate")}
+            </button>
+          )
+        ) : null}
+        {tr?.fail ? <span className="dg-com-note">{t(lang, "dg_tr_fail")}</span> : null}
+        {c.mine || mod ? (
+          <button type="button" onClick={() => onRemove(c)}>{t(lang, "dg_delete")}</button>
+        ) : null}
+        {mod && !c.mine ? (
+          <button type="button" onClick={() => onRemove(c, true)}>{t(lang, "dg_mute")}</button>
+        ) : null}
+      </div>
+    </li>
+  );
+}
+
 function Comments({ it, lang, mod, muted, onCount }: {
   it: DigestItem;
   lang: Lang;
@@ -353,6 +453,18 @@ function Comments({ it, lang, mod, muted, onCount }: {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [anon, setAnon] = useState(readAnon);
+
+  const toggleAnon = () => {
+    haptic("select");
+    const next = !anon;
+    setAnon(next);
+    try {
+      localStorage.setItem(ANON_KEY, next ? "1" : "0");
+    } catch {
+      // выбор просто не запомнится
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -381,7 +493,7 @@ function Comments({ it, lang, mod, muted, onCount }: {
     if (!body || busy) return;
     setBusy(true);
     setErr("");
-    const r = await commentDigest(it.id, body);
+    const r = await commentDigest(it.id, body, anon);
     setBusy(false);
     if (r?.ok && r.item) {
       haptic("success");
@@ -419,21 +531,8 @@ function Comments({ it, lang, mod, muted, onCount }: {
           ) : null}
           <ul className="dg-com-list">
             {items.map((c) => (
-              <li key={c.id} className={c.mine ? "mine" : ""}>
-                <div className="dg-com-head">
-                  <b>{c.name}</b>
-                  <time>{now - c.at < 86400 ? clock(lang, c.at) : dateWord(lang, c.at)}</time>
-                </div>
-                <p>{c.text}</p>
-                {c.mine || mod ? (
-                  <div className="dg-com-acts">
-                    <button type="button" onClick={() => void remove(c)}>{t(lang, "dg_delete")}</button>
-                    {mod && !c.mine ? (
-                      <button type="button" onClick={() => void remove(c, true)}>{t(lang, "dg_mute")}</button>
-                    ) : null}
-                  </div>
-                ) : null}
-              </li>
+              <CommentItem key={c.id} c={c} lang={lang} mod={mod} now={now}
+                onRemove={(x, mute) => void remove(x, mute)} />
             ))}
           </ul>
         </>
@@ -452,6 +551,14 @@ function Comments({ it, lang, mod, muted, onCount }: {
               if (err) setErr("");
             }}
           />
+          <button type="button" role="switch" aria-checked={anon}
+            className={`dg-anon${anon ? " on" : ""}`} onClick={toggleAnon}>
+            <span className="dg-anon-sw" aria-hidden="true"><i /></span>
+            <span className="dg-anon-t">
+              <b>{t(lang, "dg_anon_toggle")}</b>
+              <small>{t(lang, anon ? "dg_anon_on" : "dg_anon_off")}</small>
+            </span>
+          </button>
           <div className="dg-form-foot">
             <small>{err ? <span className="dg-err">{err}</span> : t(lang, "dg_rules")}</small>
             <Action onClick={() => void send()} disabled={busy || !text.trim()}>
@@ -510,7 +617,14 @@ function DigestCard({ it, lang, premium, mod, muted, fresh }: {
           <b>{dateWord(lang, it.to)}</b>
         </span>
         <small>{t(lang, "dg_window", { t: clock(lang, it.to) })}</small>
-        <span className="dg-chev" aria-hidden="true">{shown ? "▴" : "▾"}</span>
+        {/* Большая круглая кнопка с треугольником: мелкий «▾» у края никто не
+            принимал за «открыть» — выпуск казался пустым. */}
+        <span className={`dg-chev${shown ? " up" : ""}`} aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22">
+            <path d="M5 9l7 7 7-7" fill="none" stroke="currentColor" strokeWidth="2.4"
+              strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
       </button>
       {shown ? <Sections it={it} lang={lang} premium={premium} /> : null}
       <div className="dg-foot">

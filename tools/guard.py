@@ -413,12 +413,21 @@ say("дайджест: ссылки, частота и суточный лими
 say("дайджест: удалить чужой комментарий может только владелец",
     'row["chat_id"] != chat and not mod' in api)
 _dg_tables = ("digest_likes", "digest_comments", "digest_mute")
+_dg_all = ("digests", "digest_likes", "digest_comments", "digest_mute", "digest_tr")
 say("удаление данных стирает лайки и комментарии и в боте, и в приложении",
     all(f"DELETE FROM {t} WHERE chat_id=?" in _dg_main and f"DELETE FROM {t} WHERE chat_id=?" in api
         for t in _dg_tables))
 say("таблицы дайджеста одинаковые у бота и API",
     all(f"CREATE TABLE IF NOT EXISTS {t}" in _dg_main and f"CREATE TABLE IF NOT EXISTS {t}" in api
-        for t in ("digests",) + _dg_tables))
+        for t in _dg_all))
+say("удаление данных стирает и переводы комментариев — в боте и в приложении",
+    "DELETE FROM digest_tr WHERE comment_id IN (SELECT id FROM digest_comments WHERE chat_id=?)" in _dg_main
+    and "DELETE FROM digest_tr WHERE comment_id IN (SELECT id FROM digest_comments WHERE chat_id=?)" in api)
+say("дайджест: акции и металлы отдельно от крипты в лонг/шорте и позициях",
+    'for c in ("crypto", "rwa")' in api and '"crypto", "rwa")}' in api and "lsGroups(" in _dg_tab and "perpGroups(" in _dg_tab)
+say("анонимный комментарий уходит без имени, перевод — кнопкой, тикеры не переводятся",
+    'name = "" if anon else _dg_name(user)' in api and '"name": "" if r["anon"] else r["name"]' in api
+    and "translateComment(c.id, lang)" in _dg_tab and "_TICKER_RE.sub(" in api)
 say("отказ в комментарии приходит с причиной, а не кодом ошибки",
     "res = digest_act(self._user_full(qs), dg, body)\n                self._json(200, res)" in api
     and "actError(lang, r)" in _dg_tab)

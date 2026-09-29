@@ -8,7 +8,7 @@
 import { initData } from "./telegram";
 import { peek, remember } from "./memo";
 import type {
-  Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, FlowRow, FundRow, LsRow, MutationResult,
+  Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, FundRow, LsRow, MutationResult,
   RotSide, SymbolRow, TokenHist, Trades, UnlocksReply, WalletLive,
 } from "./types";
 
@@ -268,7 +268,9 @@ export const fetchDigestComments = (id: number, before = 0) =>
   call<DigestCommentsReply>(`/api/digest/comments?id=${id}${before ? `&before=${before}` : ""}`);
 export const likeDigest = (id: number) =>
   call<DigestActReply>("/api/digest/like", { method: "POST", body: { id } });
-export const commentDigest = (id: number, text: string) =>
-  call<DigestActReply>("/api/digest/comment", { method: "POST", body: { id, text } });
+export const commentDigest = (id: number, text: string, anon: boolean) =>
+  call<DigestActReply>("/api/digest/comment", { method: "POST", body: { id, text, anon } });
+export const translateComment = (cid: number, lang: string) =>
+  call<DigestTranslation>(`/api/digest/translate?cid=${cid}&lang=${encodeURIComponent(lang)}`);
 export const uncommentDigest = (cid: number, mute = false) =>
   call<DigestActReply>("/api/digest/uncomment", { method: "POST", body: { cid, mute } });

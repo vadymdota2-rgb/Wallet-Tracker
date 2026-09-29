@@ -1834,7 +1834,20 @@
   padding: 1px 8px;
 }
 .dg-head small { grid-area: win; color: var(--dim); font-size: 12px; }
-.dg-chev { grid-area: chev; color: var(--dim); font-size: 14px; }
+.dg-chev {
+  grid-area: chev;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgb(58 130 214 / 0.6);
+  background: rgb(22 52 92 / 0.45);
+  color: var(--glow);
+  transition: transform 0.2s var(--ease);
+}
+.dg-chev.up { transform: rotate(180deg); }
+.dg-head:active .dg-chev { opacity: 0.7; }
 
 .dg-sec { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid rgb(27 61 104 / 0.45); }
 .dg-sec-head { display: flex; align-items: center; gap: 8px; }
@@ -1943,3 +1956,53 @@
 .dg-form-foot small { flex: 1 1 auto; min-width: 0; color: var(--dim); font-size: 11px; line-height: 1.35; }
 .dg-form-foot .action { flex: 0 0 auto; width: auto; min-width: 0; padding-inline: 18px; }
 .dg-err { color: var(--dn); }
+
+.dg-grp { display: grid; gap: 6px; }
+.dg-grp + .dg-grp { margin-top: 6px; }
+.dg-grp-t {
+  margin: 2px 2px 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  opacity: 0.85;
+}
+.dg-com-head b.anon { color: var(--dim); font-style: italic; }
+.dg-com-acts { flex-wrap: wrap; align-items: baseline; }
+.dg-com-acts .dg-tr { color: var(--glow); text-decoration: none; font-weight: 600; }
+.dg-com-acts .dg-tr:disabled { opacity: 0.6; }
+.dg-com-note { color: var(--dim); font-size: 12px; }
+.dg-anon {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+  background: rgb(11 22 40 / 0.23);
+  text-align: start;
+}
+.dg-anon-sw {
+  flex: 0 0 auto;
+  position: relative;
+  width: 40px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgb(27 61 104 / 0.7);
+  transition: background 0.2s var(--ease);
+}
+.dg-anon-sw i {
+  position: absolute;
+  top: 3px;
+  inset-inline-start: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--ink);
+  transition: transform 0.2s var(--ease);
+}
+.dg-anon.on .dg-anon-sw { background: var(--glow); }
+.dg-anon.on .dg-anon-sw i { transform: translateX(16px); }
+[dir="rtl"] .dg-anon.on .dg-anon-sw i { transform: translateX(-16px); }
+.dg-anon-t { display: grid; gap: 1px; min-width: 0; }
+.dg-anon-t b { font-size: 13px; }
+.dg-anon-t small { color: var(--dim); font-size: 11px; }

@@ -21,6 +21,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
@@ -8465,7 +8466,15 @@ CREATE TABLE IF NOT EXISTS digest_comments (
     chat_id TEXT NOT NULL,
     name TEXT NOT NULL,
     text TEXT NOT NULL,
-    at INTEGER NOT NULL
+    at INTEGER NOT NULL,
+    anon INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS digest_tr (
+    comment_id INTEGER NOT NULL,
+    lang TEXT NOT NULL,
+    text TEXT NOT NULL,
+    src TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (comment_id, lang)
 );
 CREATE TABLE IF NOT EXISTS digest_mute (
     chat_id TEXT PRIMARY KEY,
@@ -8481,6 +8490,11 @@ def _digest_con() -> sqlite3.Connection | None:
     con = open_db(DB, write=True)
     if con:
         con.executescript(DIGEST_SCHEMA)
+        # Столбец анонимности появился позже таблицы: у базы, где она уже
+        # заведена, CREATE IF NOT EXISTS его не добавит.
+        if "anon" not in cols(con, "digest_comments"):
+            con.execute("ALTER TABLE digest_comments ADD COLUMN anon INTEGER NOT NULL DEFAULT 0")
+            con.commit()
     return con
 
 
@@ -8511,9 +8525,14 @@ def digest_build(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
     body["flow"] = flow
 
     big = big_trades("24h", 24) or {}
-    for venue, keys in (("spot", ("v", "buy", "wa", "cls")), ("perp", ("v", "long", "wa", "cls"))):
-        rows = sorted(big.get(venue) or [], key=lambda r: -(r.get("v") or 0))[:DIGEST_TOP]
-        body[venue] = [_dg_coin(r, *keys) for r in rows]
+    rows = sorted(big.get("spot") or [], key=lambda r: -(r.get("v") or 0))[:DIGEST_TOP]
+    body["spot"] = [_dg_coin(r, "v", "buy", "wa", "cls") for r in rows]
+    # Перпы делятся на крипту и «не крипту» — акции и металлы рынков HIP-3.
+    # Общим списком их всегда вытесняла крипта: у неё суммы на порядок больше,
+    # и на экране акций с золотом не было вовсе, хотя сделки по ним шли.
+    perp = sorted(big.get("perp") or [], key=lambda r: -(r.get("v") or 0))
+    body["perp"] = {c: [_dg_coin(r, "v", "long", "wa", "cls") for r in perp
+                        if (r.get("cls") or "crypto") == c][:DIGEST_TOP] for c in ("crypto", "rwa")}
 
     rs = (rot_latest() or {}).get("24") or {}
     cols = _ROT_ALL.get("24") or {}
@@ -8524,10 +8543,13 @@ def digest_build(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
     }
 
     lsr = [dict(r) for r in ls_rows_cached(hl, "24")] if hl else []
-    body["ls"] = {
-        "long": [_dg_coin(r, "net", "pct", "cls") for r in sorted((r for r in lsr if r["net"] > 0), key=lambda r: -r["net"])[:DIGEST_TOP]],
-        "short": [_dg_coin(r, "net", "pct", "cls") for r in sorted((r for r in lsr if r["net"] < 0), key=lambda r: r["net"])[:DIGEST_TOP]],
-    }
+    body["ls"] = {}
+    for c in ("crypto", "rwa"):
+        part = [r for r in lsr if (r.get("cls") or "crypto") == c]
+        body["ls"][c] = {
+            "long": [_dg_coin(r, "net", "pct", "cls") for r in sorted((r for r in part if r["net"] > 0), key=lambda r: -r["net"])[:DIGEST_TOP]],
+            "short": [_dg_coin(r, "net", "pct", "cls") for r in sorted((r for r in part if r["net"] < 0), key=lambda r: r["net"])[:DIGEST_TOP]],
+        }
 
     # Фандинг — суточная ставка по всем биржам. Монеты без интереса и оборота
     # отсеяны: там любая ставка — случайность одной сделки.
@@ -8617,6 +8639,8 @@ def digest_make() -> bool:
             old = [r[0] for r in con.execute(
                 "SELECT id FROM digests ORDER BY day DESC LIMIT -1 OFFSET ?", (DIGEST_KEEP,))]
             for did in old:
+                con.execute("DELETE FROM digest_tr WHERE comment_id IN "
+                            "(SELECT id FROM digest_comments WHERE digest_id=?)", (did,))
                 con.execute("DELETE FROM digest_likes WHERE digest_id=?", (did,))
                 con.execute("DELETE FROM digest_comments WHERE digest_id=?", (did,))
                 con.execute("DELETE FROM digests WHERE id=?", (did,))
@@ -8674,16 +8698,91 @@ def digest_comments(chat: str, did: int, before: int = 0) -> dict:
     if not con:
         return {"ok": False, "error": "db"}
     try:
-        q = ("SELECT id, chat_id, name, text, at FROM digest_comments WHERE digest_id=? "
+        q = ("SELECT id, chat_id, name, text, at, anon FROM digest_comments WHERE digest_id=? "
              + ("AND id<? " if before > 0 else "") + "ORDER BY id DESC LIMIT ?")
         args = (did, before, DIGEST_COMMENTS_PAGE + 1) if before > 0 else (did, DIGEST_COMMENTS_PAGE + 1)
         rows = con.execute(q, args).fetchall()
         more = len(rows) > DIGEST_COMMENTS_PAGE
         rows = rows[:DIGEST_COMMENTS_PAGE]
         return {"ok": True, "more": more, "items": [
-            {"id": r["id"], "name": r["name"], "text": r["text"], "at": r["at"],
-             "mine": bool(chat) and r["chat_id"] == chat}
+            # Анонимный — без имени для всех, включая владельца: имя не
+            # уходит с сервера вовсе. chat_id остаётся в базе — без него не
+            # удалить свой комментарий и не посчитать лимиты.
+            {"id": r["id"], "name": "" if r["anon"] else r["name"], "anon": bool(r["anon"]),
+             "text": r["text"], "at": r["at"], "mine": bool(chat) and r["chat_id"] == chat}
             for r in reversed(rows)]}
+    finally:
+        con.close()
+
+
+# Перевод комментария на язык читателя. Сначала Google Translate (открытый
+# адрес без ключа — лучше держит тикеры и сленг), при отказе — MyMemory.
+# Перевод пишется в базу: каждый комментарий переводится на каждый язык один
+# раз, сколько бы людей ни нажало «Перевести».
+DIGEST_TR_LANGS = {"en", "ru", "uk", "vi", "ko", "zh", "ja", "es", "pt", "fr", "de", "tr", "hi", "id", "ar", "pl"}
+
+
+def _tr_google(text: str, lang: str) -> tuple[str, str] | None:
+    tl = "zh-CN" if lang == "zh" else lang
+    url = ("https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&dt=t&tl="
+           + tl + "&q=" + urllib.parse.quote(text))
+    r = get_json(url, 10)
+    if not isinstance(r, list) or not r or not isinstance(r[0], list):
+        return None
+    out = "".join(part[0] for part in r[0] if isinstance(part, list) and part and isinstance(part[0], str))
+    src = r[2] if len(r) > 2 and isinstance(r[2], str) else ""
+    return (out, src.split("-")[0]) if out else None
+
+
+_TICKER_RE = re.compile(r"(?<![$\w])([A-Z][A-Z0-9]{1,9})(?!\w)")
+
+
+def _tr_mymemory(text: str, lang: str) -> tuple[str, str] | None:
+    """MyMemory переводит тикеры как слова («CAKE» → «ТОРТ»). Тикер со знаком
+    доллара он не трогает, поэтому на время перевода знак дописывается, а
+    потом снимается. Текст уже на языке читателя MyMemory переводить
+    отказывается — это и есть ответ «тот же язык»."""
+    added = set(_TICKER_RE.findall(text))
+    guarded = _TICKER_RE.sub(r"$\1", text)
+    tl = "zh-CN" if lang == "zh" else lang
+    url = ("https://api.mymemory.translated.net/get?langpair=autodetect|" + tl
+           + "&q=" + urllib.parse.quote(guarded))
+    r = get_json(url, 10) or {}
+    if "DISTINCT LANGUAGES" in str(r.get("responseDetails") or ""):
+        return text, lang
+    d = r.get("responseData") or {}
+    out = d.get("translatedText")
+    if str(r.get("responseStatus")) != "200" or not isinstance(out, str) or not out:
+        return None
+    out = html.unescape(out)
+    for tk in added:
+        out = re.sub(r"\$" + re.escape(tk) + r"(?!\w)", tk, out, flags=re.I)
+    return out, str(d.get("detectedLanguage") or "").split("-")[0]
+
+
+def digest_translate(cid: int, lang: str) -> dict:
+    """{ok, text, src, same} — same: комментарий уже на языке читателя."""
+    if lang not in DIGEST_TR_LANGS:
+        return {"ok": False, "error": "bad_lang"}
+    con = _digest_con()
+    if not con:
+        return {"ok": False, "error": "db"}
+    try:
+        hit = con.execute("SELECT text, src FROM digest_tr WHERE comment_id=? AND lang=?", (cid, lang)).fetchone()
+        if hit:
+            return {"ok": True, "text": hit["text"], "src": hit["src"], "same": hit["src"] == lang}
+        row = con.execute("SELECT text FROM digest_comments WHERE id=?", (cid,)).fetchone()
+        if not row:
+            return {"ok": False, "error": "not_found"}
+        got = _tr_google(row["text"], lang) or _tr_mymemory(row["text"], lang)
+        if not got:
+            return {"ok": False, "error": "unavailable"}
+        text, src = got
+        with _digest_lock:
+            con.execute("INSERT OR REPLACE INTO digest_tr(comment_id, lang, text, src) VALUES(?,?,?,?)",
+                        (cid, lang, text, src))
+            con.commit()
+        return {"ok": True, "text": text, "src": src, "same": src == lang}
     finally:
         con.close()
 
@@ -8746,11 +8845,14 @@ def digest_act(user: dict, kind: str, body: dict) -> dict:
                                     (chat, t - 86400)).fetchone()[0]
                 if day_n >= DIGEST_COMMENT_DAY:
                     return {"ok": False, "error": "day_limit", "max": DIGEST_COMMENT_DAY}
+                anon = bool(body.get("anon"))
+                # Анонимно — имя не пишется даже в базу.
+                name = "" if anon else _dg_name(user)
                 cid = con.execute(
-                    "INSERT INTO digest_comments(digest_id, chat_id, name, text, at) VALUES(?,?,?,?,?)",
-                    (did, chat, _dg_name(user), text, t)).lastrowid
+                    "INSERT INTO digest_comments(digest_id, chat_id, name, text, at, anon) VALUES(?,?,?,?,?,?)",
+                    (did, chat, name, text, t, int(anon))).lastrowid
                 con.commit()
-                return {"ok": True, "item": {"id": cid, "name": _dg_name(user), "text": text, "at": t, "mine": True}}
+                return {"ok": True, "item": {"id": cid, "name": name, "anon": anon, "text": text, "at": t, "mine": True}}
             if kind == "uncomment":
                 cid = int(body.get("cid") or 0)
                 row = con.execute("SELECT chat_id FROM digest_comments WHERE id=?", (cid,)).fetchone()
@@ -8759,6 +8861,7 @@ def digest_act(user: dict, kind: str, body: dict) -> dict:
                 mod = chat == OWNER_CHAT_ID
                 if row["chat_id"] != chat and not mod:
                     return {"ok": False, "error": "forbidden"}
+                con.execute("DELETE FROM digest_tr WHERE comment_id=?", (cid,))
                 con.execute("DELETE FROM digest_comments WHERE id=?", (cid,))
                 # Владелец может заодно закрыть автору комментарии — за спам,
                 # скам и оскорбления, как сказано в условиях.
@@ -8852,6 +8955,7 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
                 "DELETE FROM premium_payments WHERE chat_id=?",
                 "DELETE FROM ton_invoices WHERE chat_id=?",
                 "DELETE FROM digest_likes WHERE chat_id=?",
+                "DELETE FROM digest_tr WHERE comment_id IN (SELECT id FROM digest_comments WHERE chat_id=?)",
                 "DELETE FROM digest_comments WHERE chat_id=?",
                 "DELETE FROM digest_mute WHERE chat_id=?",
                 "DELETE FROM users WHERE chat_id=?",
@@ -9264,6 +9368,19 @@ class Handler(BaseHTTPRequestHandler):
             if path in ("/digest", "/api/digest"):
                 chat = self._user(qs)
                 self._json(200, digest_list(chat, chat_premium(chat)))
+                return
+            if path in ("/digest/translate", "/api/digest/translate"):
+                try:
+                    cid = int(qs.get("cid", ["0"])[0])
+                except (TypeError, ValueError):
+                    cid = 0
+                lang = (qs.get("lang", [""])[0] or "")[:5]
+                # Перевод ходит во внешний сервис — только для подписанных
+                # запросов, чтобы им нельзя было пользоваться со стороны.
+                if not self._user(qs):
+                    self._json(401, {"ok": False, "error": "unauthorized"})
+                    return
+                self._json(200, digest_translate(cid, lang))
                 return
             if path in ("/digest/comments", "/api/digest/comments"):
                 try:

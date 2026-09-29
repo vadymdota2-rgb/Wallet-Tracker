@@ -522,6 +522,11 @@ export interface DigestCoin {
   pct?: number;
 }
 
+export interface DigestLs {
+  long: DigestCoin[];
+  short: DigestCoin[];
+}
+
 export interface DigestFund {
   sym: string;
   ex: string;
@@ -555,8 +560,9 @@ export interface DigestItem {
   flow?: { net?: number; buy?: number; sell?: number; up?: number; dn?: number; in: DigestCoin[]; out: DigestCoin[] };
   spot?: DigestCoin[];
   rot?: { usd?: number; pairs?: number; w?: number; src: RotSide[]; dst: RotSide[] };
-  ls?: { long: DigestCoin[]; short: DigestCoin[] } | DigestLocked;
-  perp?: DigestCoin[] | DigestLocked;
+  /** Выпуски до разделения — один список; новые — крипта и акции с металлами. */
+  ls?: DigestLs | { crypto: DigestLs; rwa: DigestLs } | DigestLocked;
+  perp?: DigestCoin[] | { crypto: DigestCoin[]; rwa: DigestCoin[] } | DigestLocked;
   fund?: { hi: DigestFund[]; lo: DigestFund[] } | DigestLocked;
   unl?: DigestUnlock[];
   likes: number;
@@ -576,7 +582,9 @@ export interface DigestReply {
 
 export interface DigestComment {
   id: number;
+  /** Пусто у анонимного: имя не уходит с сервера. */
   name: string;
+  anon?: boolean;
   text: string;
   at: number;
   mine: boolean;
@@ -597,4 +605,13 @@ export interface DigestActReply {
   item?: DigestComment;
   wait?: number;
   max?: number;
+}
+
+/** Перевод комментария: same — он уже на языке читателя. */
+export interface DigestTranslation {
+  ok: boolean;
+  text?: string;
+  src?: string;
+  same?: boolean;
+  error?: string;
 }
