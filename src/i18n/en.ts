@@ -362,6 +362,7 @@ export const en = {
   lq_search: "Find a coin, e.g. PEPE",
   lq_shorts: "Shorts",
   lq_src: "Model based on open interest from {ex}. This is an estimate: exchanges don't publish real liquidation prices.",
+  lq_stale: "Couldn't refresh — showing the saved map ({t}).",
   lq_sub: "Where leveraged positions get wiped out if the price moves up or down.",
   lq_tip_cum: "Wiped out on the way here:",
   lq_title: "Liquidation map",

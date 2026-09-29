@@ -362,6 +362,7 @@ export const tr: Dict = {
   lq_search: "Coin ara, ör. PEPE",
   lq_shorts: "Short'lar",
   lq_src: "{ex} açık pozisyon verisine dayalı model. Bu bir tahmindir: borsalar gerçek likidasyon fiyatlarını yayımlamaz.",
+  lq_stale: "Güncellenemedi — kayıtlı harita gösteriliyor ({t}).",
   lq_sub: "Fiyat yükselir ya da düşerse kaldıraçlı pozisyonların nerede tasfiye olacağı.",
   lq_tip_cum: "Bu fiyata kadar silinecek:",
   lq_title: "Likidasyon haritası",

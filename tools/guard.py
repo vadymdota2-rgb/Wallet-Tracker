@@ -475,5 +475,10 @@ say("карта ликвидаций: шесть бирж с историей и
     and "abs(r[-1][3] / mid - 1) > 0.03" in api and "abs(sn[-1][2] / px - 1) > 0.03" in api
     and "DROP TABLE hl_oi" in api)
 
+say("карта ликвидаций: отдаётся из памяти сразу, старая — с пересчётом в фоне, тёплые монеты заранее",
+    "def _liq_build_bg(" in api and "def liq_warm_refresher(" in api and "target=liq_warm_refresher" in api
+    and "wait(futures, timeout=LIQ_BUDGET)" in api and 'sorted(ex.get(k, ()))' in api
+    and "savedLiqMap(sym, range)" in _lq and "callTwice<LiqMapReply>" in read(f"{APP}/src/lib/api.ts"))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

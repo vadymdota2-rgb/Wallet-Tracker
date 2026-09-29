@@ -362,6 +362,7 @@ export const pt: Dict = {
   lq_search: "Buscar moeda, ex.: PEPE",
   lq_shorts: "Shorts",
   lq_src: "Modelo baseado no open interest de {ex}. É uma estimativa: as corretoras não publicam os preços reais de liquidação.",
+  lq_stale: "Não foi possível atualizar — mostrando o mapa salvo ({t}).",
   lq_sub: "Onde posições alavancadas são liquidadas se o preço subir ou cair.",
   lq_tip_cum: "Seria liquidado até este preço:",
   lq_title: "Mapa de liquidações",

@@ -362,6 +362,7 @@ export const de: Dict = {
   lq_search: "Coin suchen, z. B. PEPE",
   lq_shorts: "Shorts",
   lq_src: "Modell auf Basis des Open Interest von {ex}. Eine Schätzung: Börsen veröffentlichen keine echten Liquidationspreise.",
+  lq_stale: "Aktualisierung fehlgeschlagen — gespeicherte Karte ({t}).",
   lq_sub: "Wo gehebelte Positionen liquidiert werden, wenn der Kurs steigt oder fällt.",
   lq_tip_cum: "Bis zu diesem Preis liquidiert:",
   lq_title: "Liquidationskarte",

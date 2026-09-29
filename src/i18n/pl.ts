@@ -362,6 +362,7 @@ export const pl: Dict = {
   lq_search: "Szukaj monety, np. PEPE",
   lq_shorts: "Shorty",
   lq_src: "Model na podstawie otwartych pozycji z {ex}. To szacunek: giełdy nie publikują prawdziwych cen likwidacji.",
+  lq_stale: "Nie udało się odświeżyć — pokazano zapisaną mapę ({t}).",
   lq_sub: "Gdzie zostaną zlikwidowane pozycje z dźwignią, jeśli cena pójdzie w górę lub w dół.",
   lq_tip_cum: "Zlikwidowane do tej ceny:",
   lq_title: "Mapa likwidacji",

@@ -24,6 +24,8 @@ interface Opts {
   /** Запрос без подписи — для публичных данных. */
   anon?: boolean;
   signal?: AbortSignal;
+  /** Своё время ожидания — для тяжёлых ответов, которые сервер считает. */
+  timeout?: number;
 }
 
 async function call<T>(path: string, opts: Opts = {}): Promise<T | null> {
@@ -35,7 +37,7 @@ async function call<T>(path: string, opts: Opts = {}): Promise<T | null> {
   if (opts.body !== undefined) headers.set("Content-Type", "application/json");
 
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), opts.timeout ?? TIMEOUT_MS);
   const onAbort = () => ctrl.abort();
   opts.signal?.addEventListener("abort", onAbort);
   try {
@@ -280,8 +282,70 @@ export const uncommentDigest = (cid: number, mute = false) =>
    незачем. */
 const liqPath = (sym: string, range: string) =>
   `/api/liqmap?sym=${encodeURIComponent(sym)}&range=${encodeURIComponent(range)}`;
-export const fetchLiqMap = (sym: string, range: string) => cachedGet<LiqMapReply>(liqPath(sym, range), 5 * 60_000);
-export const peekLiqMap = (sym: string, range: string) => peek<LiqMapReply | null>(liqPath(sym, range), 5 * 60_000);
-/** Все монеты с фьючерсами на Binance, OKX и Gate — список раз в час. */
-export const fetchLiqCoins = () => cachedGet<LiqCoinsReply>("/api/liqcoins", 60 * 60_000);
-export const peekLiqCoins = () => peek<LiqCoinsReply | null>("/api/liqcoins", 60 * 60_000);
+/* Карта и список монет лежат и на устройстве: открыть экран нужно сразу, с
+   прошлой картой, а свежая догружается поверх. Сервер собирает карту с
+   десятков бирж, и первый расчёт бывает дольше обычных пятнадцати секунд —
+   поэтому ждём до тридцати и один раз повторяем. */
+const LIQ_TTL = 5 * 60_000;
+const LIQ_SAVED = "wt-liqmap-v1";
+const LIQ_SAVED_KEEP = 10;
+const LIQ_SAVED_MAX_AGE = 3 * 24 * 3600_000;
+const LIQ_COINS_SAVED = "wt-liqcoins-v1";
+
+type Saved<T> = { at: number; v: T };
+
+function readSaved<T>(key: string): Record<string, Saved<T>> {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as Record<string, Saved<T>>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeSaved<T>(key: string, all: Record<string, Saved<T>>): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(all));
+  } catch {
+    // место кончилось или хранилище закрыто — просто без запаса
+  }
+}
+
+async function callTwice<T>(path: string): Promise<T | null> {
+  const first = await call<T>(path, { timeout: 30_000 });
+  if (good(first)) return first;
+  return call<T>(path, { timeout: 30_000 });
+}
+
+/** Последняя карта этой монеты и окна с устройства — любой свежести до трёх суток. */
+export function savedLiqMap(sym: string, range: string): { at: number; v: LiqMapReply } | null {
+  const hit = readSaved<LiqMapReply>(LIQ_SAVED)[`${sym}|${range}`];
+  return hit && Date.now() - hit.at < LIQ_SAVED_MAX_AGE && hit.v?.ok ? hit : null;
+}
+
+export const fetchLiqMap = (sym: string, range: string) =>
+  remember<LiqMapReply | null>(liqPath(sym, range), LIQ_TTL, () => callTwice<LiqMapReply>(liqPath(sym, range)), good)
+    .then((r) => {
+      if (r?.ok) {
+        const all = readSaved<LiqMapReply>(LIQ_SAVED);
+        all[`${sym}|${range}`] = { at: Date.now(), v: r };
+        const keys = Object.keys(all).sort((a, b) => (all[b]?.at ?? 0) - (all[a]?.at ?? 0));
+        for (const k of keys.slice(LIQ_SAVED_KEEP)) delete all[k];
+        writeSaved(LIQ_SAVED, all);
+      }
+      return r;
+    });
+export const peekLiqMap = (sym: string, range: string) => peek<LiqMapReply | null>(liqPath(sym, range), LIQ_TTL);
+
+/** Все монеты с фьючерсами — список раз в час; последний лежит на устройстве. */
+export function savedLiqCoins(): LiqCoinsReply | null {
+  const hit = readSaved<LiqCoinsReply>(LIQ_COINS_SAVED).all;
+  return hit && Date.now() - hit.at < 7 * 24 * 3600_000 && hit.v?.coins?.length ? hit.v : null;
+}
+export const fetchLiqCoins = () =>
+  remember<LiqCoinsReply | null>("/api/liqcoins", 60 * 60_000, () => callTwice<LiqCoinsReply>("/api/liqcoins"), good)
+    .then((r) => {
+      if (r?.ok && r.coins.length) writeSaved(LIQ_COINS_SAVED, { all: { at: Date.now(), v: r } });
+      return r;
+    });
+export const peekLiqCoins = () => peek<LiqCoinsReply | null>("/api/liqcoins", 60 * 60_000) ?? savedLiqCoins();

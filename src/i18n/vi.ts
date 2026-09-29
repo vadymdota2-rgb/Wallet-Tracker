@@ -362,6 +362,7 @@ export const vi: Dict = {
   lq_search: "Tìm coin, ví dụ PEPE",
   lq_shorts: "Short",
   lq_src: "Mô hình theo open interest của {ex}. Đây là ước tính: các sàn không công bố giá thanh lý thật.",
+  lq_stale: "Không cập nhật được — đang hiển thị bản đồ đã lưu ({t}).",
   lq_sub: "Nơi các vị thế đòn bẩy bị thanh lý nếu giá tăng hoặc giảm.",
   lq_tip_cum: "Bị quét trên đường tới giá này:",
   lq_title: "Bản đồ thanh lý",

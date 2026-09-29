@@ -362,6 +362,7 @@ export const zh: Dict = {
   lq_search: "搜索币种，如 PEPE",
   lq_shorts: "空头",
   lq_src: "基于 {ex} 未平仓量的模型。这是估算：交易所不公布真实清算价格。",
+  lq_stale: "刷新失败 — 显示已保存的地图（{t}）。",
   lq_sub: "价格上涨或下跌时，杠杆仓位会在哪里被清算。",
   lq_tip_cum: "到达此价格途中清算：",
   lq_title: "清算地图",

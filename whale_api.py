@@ -19,7 +19,7 @@ import struct
 import sys
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -8079,6 +8079,7 @@ def warmup() -> None:
     threading.Thread(target=reactions_refresher, daemon=True, name="reactions").start()
     threading.Thread(target=digest_refresher, daemon=True, name="digest").start()
     threading.Thread(target=liq_oi_refresher, daemon=True, name="liq-oi").start()
+    threading.Thread(target=liq_warm_refresher, daemon=True, name="liq-warm").start()
     cur = open_db(DB)
     hl = open_db(HL_DB)
     if not cur:
@@ -9058,6 +9059,26 @@ def liq_coins() -> dict:
         hit = _liq_coins_cache.get("all")
         if hit and time.monotonic() - hit[0] < LIQ_COINS_TTL:
             return hit[1]
+        # Устаревший список отдаём сразу, новый собирается в фоне.
+        if hit and "coins" not in _liq_busy:
+            _liq_busy.add("coins")
+            threading.Thread(target=_liq_coins_bg, daemon=True).start()
+    if hit:
+        return hit[1]
+    return _liq_coins_build()
+
+
+def _liq_coins_bg() -> None:
+    try:
+        _liq_coins_build()
+    except Exception as e:  # noqa: BLE001
+        print(f"liq coins: {e}", file=sys.stderr)
+    finally:
+        with _liq_lock:
+            _liq_busy.discard("coins")
+
+
+def _liq_coins_build() -> dict:
     vol: dict[str, float] = {}
     ex: dict[str, set] = {}
 
@@ -9122,6 +9143,7 @@ def liq_coins() -> dict:
             name = str(m.get("name") or "")
             if not m.get("isDelisted") and re.fullmatch(r"[A-Z0-9]{2,12}", name):
                 vol[name] = vol.get(name, 0.0) + _fnum(c.get("dayNtlVlm"))
+                ex.setdefault(name, set())
 
     with ThreadPoolExecutor(max_workers=7) as pool:
         list(pool.map(safe, (binance, okx, bybit, gate, htx, hyper, dydx)))
@@ -9137,13 +9159,28 @@ def liq_coins() -> dict:
             con.close()
     except sqlite3.Error:
         pass
-    coins = sorted(({"s": k, "v": round(v), "ex": sorted(ex[k])} for k, v in vol.items() if v >= LIQ_COINS_MIN_VOL),
+    for k in ex:
+        if not ex[k]:
+            ex[k].add("Hyperliquid")  # монета есть только там
+    coins = sorted(({"s": k, "v": round(v), "ex": sorted(ex.get(k, ()))} for k, v in vol.items() if v >= LIQ_COINS_MIN_VOL),
                    key=lambda c: -c["v"])
     res = {"ok": bool(coins), "coins": coins, "at": now()}
     if coins:
         with _liq_lock:
             _liq_coins_cache["all"] = (time.monotonic(), res)
     return res
+
+
+# Карту человек ждать не должен. Свежая (до пяти минут) отдаётся из памяти;
+# постарше, но не старше шести часов, — тоже сразу, а пересчёт уходит в фон и
+# следующему достанется новая. Считается с нуля только то, чего в памяти нет
+# вовсе, — и то не дольше LIQ_BUDGET: биржа, что не ответила за это время,
+# в этот раз просто не участвует. Популярные монеты фоновый поток держит
+# тёплыми заранее.
+LIQ_STALE = 6 * 3600.0
+LIQ_BUDGET = 12.0
+LIQ_WARM_EVERY = 240
+_liq_busy: set = set()
 
 
 def liq_map(sym: str, rng: str) -> dict:
@@ -9153,10 +9190,53 @@ def liq_map(sym: str, rng: str) -> dict:
     key = (sym, rng)
     with _liq_lock:
         hit = _liq_cache.get(key)
-        if hit and time.monotonic() - hit[0] < LIQ_TTL:
+        age = time.monotonic() - hit[0] if hit else None
+        if hit and age < LIQ_TTL:
             return hit[1]
+        stale = hit and hit[1].get("ok") and age < LIQ_STALE
+        if stale and key not in _liq_busy:
+            _liq_busy.add(key)
+            threading.Thread(target=_liq_build_bg, args=(sym, rng), daemon=True).start()
+    if stale:
+        return hit[1]
+    return _liq_build(sym, rng)
+
+
+def _liq_build_bg(sym: str, rng: str) -> None:
+    try:
+        _liq_build(sym, rng)
+    except Exception as e:  # noqa: BLE001 — фоновый пересчёт не должен падать громко
+        print(f"liq map {sym} {rng}: {e}", file=sys.stderr)
+    finally:
+        with _liq_lock:
+            _liq_busy.discard((sym, rng))
+
+
+def liq_warm_refresher() -> None:
+    """Держит тёплыми карты самых торгуемых монет по всем трём окнам."""
+    time.sleep(20)
+    while True:
+        try:
+            listed = [c["s"] for c in (liq_coins().get("coins") or [])[:10]]
+        except Exception:  # noqa: BLE001
+            listed = []
+        for sym in listed or ["BTC", "ETH", "SOL", "XRP", "DOGE", "BNB", "HYPE", "SUI"]:
+            for rng in LIQ_RANGES:
+                with _liq_lock:
+                    hit = _liq_cache.get((sym, rng))
+                if hit and time.monotonic() - hit[0] < LIQ_TTL - 60:
+                    continue
+                try:
+                    _liq_build(sym, rng)
+                except Exception as e:  # noqa: BLE001
+                    print(f"liq warm {sym} {rng}: {e}", file=sys.stderr)
+        time.sleep(LIQ_WARM_EVERY)
+
+
+def _liq_build(sym: str, rng: str) -> dict:
+    key = (sym, rng)
     period, n = LIQ_RANGES[rng]
-    got: dict[str, list] = {}
+    found: dict[str, list] = {}
 
     def one(src):
         name, fn = src
@@ -9165,10 +9245,13 @@ def liq_map(sym: str, rng: str) -> dict:
         except Exception:  # noqa: BLE001 — биржа недоступна: карта без неё
             rows = None
         if rows and len(rows) >= 8:
-            got[name] = rows
+            found[name] = rows
 
-    with ThreadPoolExecutor(max_workers=len(LIQ_SOURCES)) as pool:
-        list(pool.map(one, LIQ_SOURCES))
+    pool = ThreadPoolExecutor(max_workers=len(LIQ_SOURCES))
+    futures = [pool.submit(one, src) for src in LIQ_SOURCES]
+    wait(futures, timeout=LIQ_BUDGET)
+    pool.shutdown(wait=False, cancel_futures=True)
+    got = dict(found)
     # Под одним тикером у разных бирж бывают разные монеты — и цены у них
     # расходятся в разы. Биржу, чья цена дальше 3% от средней по остальным,
     # не берём: её уровни легли бы на чужую ось.
@@ -9179,7 +9262,10 @@ def liq_map(sym: str, rng: str) -> dict:
     # Опора — биржа с наибольшим интересом; нет ни одной — свечи Hyperliquid.
     ref = max(got.values(), key=lambda r: r[-1][4]) if got else _liq_hl_candles(sym, period, n)
     if ref:
-        got.update(_liq_sampled(sym, period, n, ref, ref[-1][3]))
+        try:
+            got.update(_liq_sampled(sym, period, n, ref, ref[-1][3]))
+        except (sqlite3.Error, OSError) as e:  # своя база недоступна — карта по биржам с историей
+            print(f"liq sampled: {e}", file=sys.stderr)
     if not got:
         res = {"ok": False, "error": "no_data", "sym": sym}
         with _liq_lock:
@@ -9226,7 +9312,7 @@ def liq_map(sym: str, rng: str) -> dict:
            "ohlc": _liq_candles(main), "at": now()}
     with _liq_lock:
         _liq_cache[key] = (time.monotonic(), res)
-        cap_cache(_liq_cache, 60)
+        cap_cache(_liq_cache, 150)
     return res
 
 

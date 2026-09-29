@@ -33,7 +33,7 @@ import { useApp, type LiqRange } from "../store/app";
 import { t } from "../i18n/t";
 import { num, pct, px, since, usd } from "../lib/format";
 import { haptic } from "../lib/telegram";
-import { fetchLiqCoins, fetchLiqMap, peekLiqCoins, peekLiqMap } from "../lib/api";
+import { fetchLiqCoins, fetchLiqMap, peekLiqCoins, peekLiqMap, savedLiqMap } from "../lib/api";
 import { CoinIcon } from "../components/CoinIcon";
 import { Card, Chips, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import type { LiqCoin, LiqMapReply } from "../lib/types";
@@ -595,26 +595,47 @@ export function LiqMapScreen() {
   const [span, setSpan] = useState<Span>("10");
   const [sel, setSel] = useState<number | null>(null);
   const [on, setOn] = useState<boolean[]>([true, true, true, true]);
-  const [reply, setReply] = useState<LiqMapReply | null>(() => peekLiqMap(sym, range) ?? null);
+  const [reply, setReply] = useState<LiqMapReply | null>(
+    () => peekLiqMap(sym, range) ?? savedLiqMap(sym, range)?.v ?? null,
+  );
   const [busy, setBusy] = useState(false);
+  /* Когда показана карта с устройства, а свежая не пришла, — её время. */
+  const [staleAt, setStaleAt] = useState<number | null>(null);
+  const [retry, setRetry] = useState(0);
   const plotRef = useRef<HTMLDivElement>(null);
 
+  /* Сразу — то, что есть: из памяти или с устройства (прошлая карта этой
+     монеты и окна). Свежая догружается поверх, и экран не пустеет. Не
+     пришла — остаётся прежняя с пометкой, когда она снята. */
   useEffect(() => {
     let alive = true;
     setSel(null);
     const cached = peekLiqMap(sym, range);
-    setReply(cached ?? null);
+    const saved = cached ? null : savedLiqMap(sym, range);
+    setReply(cached ?? saved?.v ?? null);
     setBusy(!cached);
+    setStaleAt(null);
     void fetchLiqMap(sym, range).then((r) => {
       if (!alive) return;
       setBusy(false);
-      setReply(r ?? { ok: false, error: "net" } as LiqMapReply);
+      if (r?.ok || r?.error === "no_data") {
+        setReply(r);
+      } else if (saved) {
+        setStaleAt(saved.at);
+      } else {
+        setReply(r ?? ({ ok: false, error: "net" } as LiqMapReply));
+      }
     });
     setLiq(sym, range);
     return () => {
       alive = false;
     };
-  }, [sym, range, setLiq]);
+  }, [sym, range, setLiq, retry]);
+
+  const again = () => {
+    haptic("select");
+    setRetry((n) => n + 1);
+  };
 
   /* Окно карты подбирается под ход цены: свечи должны занимать высоту, а
      не жаться полоской у линии цены. Раз на монету и период — дальше решает
@@ -764,11 +785,21 @@ export function LiqMapScreen() {
         />
       </div>
 
+      {staleAt ? (
+        <p className="lq-stale">
+          {t(lang, "lq_stale", { t: since((Date.now() - staleAt) / 1000) })}{" "}
+          <button type="button" onClick={again}>{t(lang, "ui_retry")}</button>
+        </p>
+      ) : null}
+
       {!reply ? (
         <Card><Skeleton rows={10} /></Card>
       ) : !reply.ok ? (
         <Empty
           text={reply.error === "no_data" ? t(lang, "lq_no_data", { s: sym }) : t(lang, "lq_err")}
+          hint={reply.error === "no_data" ? undefined : (
+            <button type="button" className="lq-retry" onClick={again}>{t(lang, "ui_retry")}</button>
+          )}
         />
       ) : (
         <>

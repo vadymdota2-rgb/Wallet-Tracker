@@ -6982,5 +6982,23 @@
     "uk": "Ліворуч — графік ціни за обраний період на тій самій шкалі: видно, звідки прийшла ціна і де відкривалися позиції, чиї ліквідації праворуч.",
     "vi": "Bên trái là biểu đồ giá trong kỳ đã chọn trên cùng thang: thấy giá đến từ đâu và các vị thế sau những mức này được mở ở đâu.",
     "zh": "左侧是同一刻度下所选周期的价格图：可以看到价格从哪里来，右侧清算对应的仓位在哪里开仓。"
+  },
+  "lq_stale": {
+    "ar": "تعذّر التحديث — تُعرض الخريطة المحفوظة ({t}).",
+    "de": "Aktualisierung fehlgeschlagen — gespeicherte Karte ({t}).",
+    "en": "Couldn't refresh — showing the saved map ({t}).",
+    "es": "No se pudo actualizar: se muestra el mapa guardado ({t}).",
+    "fr": "Mise à jour impossible — carte enregistrée affichée ({t}).",
+    "hi": "अपडेट नहीं हो सका — सहेजा गया मैप दिख रहा है ({t})।",
+    "id": "Gagal memperbarui — menampilkan peta tersimpan ({t}).",
+    "ja": "更新できませんでした — 保存済みのマップを表示しています（{t}）。",
+    "ko": "새로 고치지 못했습니다 — 저장된 지도를 표시합니다 ({t}).",
+    "pl": "Nie udało się odświeżyć — pokazano zapisaną mapę ({t}).",
+    "pt": "Não foi possível atualizar — mostrando o mapa salvo ({t}).",
+    "ru": "Не удалось обновить — показана сохранённая карта ({t}).",
+    "tr": "Güncellenemedi — kayıtlı harita gösteriliyor ({t}).",
+    "uk": "Не вдалося оновити — показано збережену карту ({t}).",
+    "vi": "Không cập nhật được — đang hiển thị bản đồ đã lưu ({t}).",
+    "zh": "刷新失败 — 显示已保存的地图（{t}）。"
   }
 }

@@ -362,6 +362,7 @@ export const id: Dict = {
   lq_search: "Cari koin, mis. PEPE",
   lq_shorts: "Short",
   lq_src: "Model berdasarkan open interest {ex}. Ini perkiraan: bursa tidak memublikasikan harga likuidasi sebenarnya.",
+  lq_stale: "Gagal memperbarui — menampilkan peta tersimpan ({t}).",
   lq_sub: "Di mana posisi leverage terlikuidasi jika harga naik atau turun.",
   lq_tip_cum: "Tersapu sampai harga ini:",
   lq_title: "Peta likuidasi",

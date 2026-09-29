@@ -362,6 +362,7 @@ export const fr: Dict = {
   lq_search: "Chercher une crypto, ex. PEPE",
   lq_shorts: "Shorts",
   lq_src: "Modèle fondé sur l'intérêt ouvert de {ex}. C'est une estimation : les plateformes ne publient pas les vrais prix de liquidation.",
+  lq_stale: "Mise à jour impossible — carte enregistrée affichée ({t}).",
   lq_sub: "Où les positions à effet de levier sont liquidées si le prix monte ou baisse.",
   lq_tip_cum: "Liquidé jusqu'à ce prix :",
   lq_title: "Carte des liquidations",

@@ -362,6 +362,7 @@ export const es: Dict = {
   lq_search: "Buscar moneda, p. ej. PEPE",
   lq_shorts: "Cortos",
   lq_src: "Modelo basado en el interés abierto de {ex}. Es una estimación: los exchanges no publican los precios reales de liquidación.",
+  lq_stale: "No se pudo actualizar: se muestra el mapa guardado ({t}).",
   lq_sub: "Dónde se liquidan las posiciones apalancadas si el precio sube o baja.",
   lq_tip_cum: "Se liquidaría hasta este precio:",
   lq_title: "Mapa de liquidaciones",
