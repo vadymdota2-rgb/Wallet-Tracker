@@ -19,7 +19,7 @@ import type { DictKey } from "../i18n/types";
 import { day, pct, px, qtyWord as qty, untilDay, usdWord as usd } from "../lib/format";
 import { haptic, openExternal } from "../lib/telegram";
 import { fetchUnlocks, peekUnlocks, savedUnlocks } from "../lib/api";
-import type { UnlockEvent, UnlockNoEmit, UnlockSkip, UnlockWho, UnlocksReply } from "../lib/types";
+import type { UnlockEvent, UnlockNoEmit, UnlockSkip, UnlockStake, UnlockWho, UnlocksReply } from "../lib/types";
 import { CoinIcon } from "../components/CoinIcon";
 import { Empty, Segmented } from "../components/ui";
 import { useNow } from "../lib/tick";
@@ -251,6 +251,24 @@ export function UnlocksScreen() {
     return first?.circ ? (sum / first.circ) * 100 : null;
   };
 
+  /* Из чего состоит выпуск монеты: сколько уже на рынке и сколько ещё
+     выйдет по графику, по группам. Всё — из того же календаря. */
+  const supplyOf = (sym: string) => {
+    let first: UnlockEvent | null = null;
+    const locked: Partial<Record<UnlockWho, number>> = {};
+    let emit = 0;
+    for (const x of items ?? []) {
+      if (x.sym !== sym) continue;
+      if (!first || x.ts < first.ts) first = x;
+      for (const [k, v] of Object.entries(x.who) as [UnlockWho, number][]) {
+        if (k === "emission") {
+          if (x.ts < nowSec + 365 * 86400) emit += v;
+        } else locked[k] = (locked[k] ?? 0) + v;
+      }
+    }
+    return { now: first?.circ ?? 0, locked, emit };
+  };
+
   const chart = (sym: string) => {
     haptic("select");
     setTvSym(sym);
@@ -390,6 +408,7 @@ export function UnlocksScreen() {
                   </button>
                   {expanded ? (
                     <div className="unl-more">
+                      <SupplyRing lang={lang} sym={e.sym} supply={supplyOf(e.sym)} stake={stake[e.sym]} />
                       <dl>
                         <dt>{t(lang, "unl_tokens")}</dt>
                         <dd>
@@ -553,6 +572,113 @@ export function UnlocksScreen() {
 
       <p className="note dim">{t(lang, "unl_note")}</p>
     </Frame>
+  );
+}
+
+/* Цвет закреплён за группой, а не за местом в списке: у всех монет
+   команда оранжевая, инвесторы малиновые. Порядок по кругу — порядок
+   палитры, соседние цвета различимы и при дальтонизме (проверено
+   валидатором на фоне карточки). «Свободно в обороте» — нейтральный. */
+const RING: { key: "free" | "staked" | Exclude<UnlockWho, "emission">; color: string }[] = [
+  { key: "free", color: "#5d6f8a" },
+  { key: "staked", color: "#3987e5" },
+  { key: "team", color: "#d95926" },
+  { key: "community", color: "#199e70" },
+  { key: "treasury", color: "#c98500" },
+  { key: "investors", color: "#d55181" },
+  { key: "foundation", color: "#9085e9" },
+  { key: "mixed", color: "#e66767" },
+];
+
+function SupplyRing({
+  lang,
+  sym,
+  supply,
+  stake,
+}: {
+  lang: ReturnType<typeof useApp.getState>["lang"];
+  sym: string;
+  supply: { now: number; locked: Partial<Record<UnlockWho, number>>; emit: number };
+  stake: UnlockStake | null | undefined;
+}) {
+  const { now, locked, emit } = supply;
+  if (!now) return null;
+  /* Застейканное — часть оборота, если считано от оборота; доля «от
+     выпуска» включает и запертое, его в круг не вписать. */
+  const staked = stake && stake.of !== "supply" && stake.n < now ? stake.n : 0;
+  const parts = RING.map(({ key, color }) => ({
+    key,
+    color,
+    n: key === "free" ? now - staked : key === "staked" ? staked : (locked[key] ?? 0),
+  })).filter((x) => x.n > 0);
+  const total = parts.reduce((a, x) => a + x.n, 0);
+  const R = 42;
+  const C = 2 * Math.PI * R;
+  const GAP = parts.length > 1 ? 2 : 0;
+  let at = 0;
+  const label = (k: (typeof RING)[number]["key"]) =>
+    t(lang, k === "free" ? "unl_pie_free" : k === "staked" ? "unl_staked" : WHO_KEY[k]);
+  const row = (x: (typeof parts)[number]) => (
+    <li key={x.key}>
+      <i style={{ background: x.color }} />
+      <span>{label(x.key)}</span>
+      <b>{pct((x.n / total) * 100, 1, false)}</b>
+      <small>{qty(x.n)}</small>
+    </li>
+  );
+  const nowParts = parts.filter((x) => x.key === "free" || x.key === "staked");
+  const laterParts = parts.filter((x) => x.key !== "free" && x.key !== "staked");
+  return (
+    <div className="unl-ring">
+      <div className="unl-ring-row">
+        <svg viewBox="0 0 112 112" width="112" height="112" role="img" aria-label={`${sym}: ${qty(total)}`}>
+          <circle cx="56" cy="56" r={R} fill="none" stroke="var(--line)" strokeWidth="14" />
+          {parts.map((x) => {
+            const len = (x.n / total) * C;
+            const seg = (
+              <circle
+                key={x.key}
+                cx="56"
+                cy="56"
+                r={R}
+                fill="none"
+                stroke={x.color}
+                strokeWidth="14"
+                strokeDasharray={`${Math.max(len - GAP, 0.8)} ${C}`}
+                strokeDashoffset={-at}
+                transform="rotate(-90 56 56)"
+              >
+                <title>{`${label(x.key)}: ${qty(x.n)} ${sym} · ${pct((x.n / total) * 100, 1, false)}`}</title>
+              </circle>
+            );
+            at += len;
+            return seg;
+          })}
+          <text x="56" y="54" textAnchor="middle" className="unl-ring-big">
+            {qty(total)}
+          </text>
+          <text x="56" y="69" textAnchor="middle" className="unl-ring-small">
+            {t(lang, "unl_pie_total")}
+          </text>
+        </svg>
+        <div className="unl-ring-legend">
+          <h4>{t(lang, "unl_pie_now")}</h4>
+          <ul>{nowParts.map(row)}</ul>
+          {laterParts.length ? (
+            <>
+              <h4>{t(lang, "unl_pie_later")}</h4>
+              <ul>{laterParts.map(row)}</ul>
+            </>
+          ) : null}
+        </div>
+      </div>
+      {emit > 0 ? (
+        <p className="unl-ring-note">
+          {t(lang, "unl_pie_emit", { n: `${qty(emit)} ${sym}`, p: pct((emit / now) * 100, 1, false) })}
+        </p>
+      ) : null}
+      {laterParts.length ? <p className="unl-ring-note">{t(lang, "unl_pie_note")}</p> : null}
+    </div>
   );
 }
 

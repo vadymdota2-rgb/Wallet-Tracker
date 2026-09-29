@@ -869,6 +869,8 @@ say("снимок застейканного у монет разлоков не
 _apy_old = [f"{c}:{d}" for c, d in re.findall(r'\{"s": "([A-Z0-9]+)", "n": [^\n]*\n(?:[^\n]*\n)*?\s+"apy": \("(\d{4}-\d{2}-\d{2})"', api)
             if (_dt.date.today() - _dt.date.fromisoformat(d)).days > 120]
 say("снимок доходности стейкинга не старше 120 дней", not _apy_old, str(_apy_old))
+say("карточка монеты рисует круг выпуска: на рынке, в стейкинге, кому ещё выйдет",
+    "function SupplyRing(" in unl_scr and "<SupplyRing " in unl_scr and 't(lang, "unl_pie_note")' in unl_scr)
 say("доходность стейкинга сравнивается с ростом выпуска", 'row["y"] = c["apy"][1]' in api and "st.y - em" in unl_scr)
 say("экран разлоков показывает застейканное, «нет стейкинга» и «нет данных» раздельно",
     '"stake": unlock_stakes()' in api and 'st === undefined' in unl_scr and 't(lang, "unl_stake_none")' in unl_scr)
