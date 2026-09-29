@@ -495,3 +495,27 @@
 491	RAVE	ravedao
 492	HUMA	huma-finance
 494	VVS	vvs-finance
+# Граница 500: CoinGecko 29.09.2026 отсюда недоступен, места 493 и 495–500 точно
+# не известны — взята вся полоса вокруг (CoinPaprika, 45–58 млн, без обёрнутых
+# и застейканных токенов, которых нет и в рейтинге CoinGecko). Место — «500+».
+500+	FREN PET	fren-pet-fren-pet
+500+	REP	rep-augur
+500+	KUB	kub-bitkub-coin
+500+	AURORA	aurora-aurora
+500+	BDCA	bdca-bitdca
+500+	ARK	ark-ark
+500+	RON	ron-ronin-token
+500+	XNO	xno-nano
+500+	MEGA	mega-megaeth
+500+	MOG	mog-mog-coin
+500+	NEET	neet1-not-in-employment-education-or-training
+500+	PEOPLE	people-constitutiondao
+500+	JETT	jett-jett-crypto
+500+	WIN	win-winklink
+500+	MOODENG	moodeng-moo-deng-moodengsolcom
+500+	CSPR	cspr-casper-network
+500+	TROLL	troll-troll2
+500+	MASK	mask-mask-network
+500+	PROVE	prove-succinct
+500+	MOCA	moca-moca
+500+	FOLKS	folks-folks-finance
