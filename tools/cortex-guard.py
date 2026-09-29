@@ -930,6 +930,11 @@ say("у каждой отсеянной монеты — код причины �
 _rank = [ln.split("\t")[1] for ln in read(f"{APP}/tools/unlock-rank.tsv").splitlines() if ln[:1].isdigit()]
 _lost = [s for s in _rank if s not in _book_syms and s not in _wm.UNLOCK_SKIPPED]
 say(f"каждая монета рейтинга ({len(_rank)}) в календаре или с причиной", len(_rank) >= 300 and not _lost, str(_lost[:20]))
+_rank_at = re.search(r"CoinGecko, (\d{2})\.(\d{2})\.(\d{4})", read(f"{APP}/tools/unlock-rank.tsv"))
+say("рейтинг первых 500 не старше 60 дней — tools/sync-rank.py --write на сервере",
+    bool(_rank_at) and (_dt.date.today() - _dt.date(int(_rank_at.group(3)), int(_rank_at.group(2)),
+                                                               int(_rank_at.group(1)))).days <= 60
+    and os.path.exists(f"{APP}/tools/sync-rank.py"))
 say("маршрут /api/unlocks есть", 'if path in ("/unlocks", "/api/unlocks"):' in api)
 
 # --- ротация: своим потоком, не в бюджете сборки кэша ----------------------
