@@ -8741,9 +8741,146 @@ def _snap_deribit() -> dict:
     return out
 
 
+def _snap_coinex() -> dict:
+    out = {}
+    for r in (get_json("https://api.coinex.com/v2/futures/ticker", 20) or {}).get("data") or []:
+        m = str(r.get("market") or "")
+        px = _fnum(r.get("mark_price"))
+        if m.endswith("USDT") and (sym := _snap_sym(m[:-4])):
+            out[sym] = (_fnum(r.get("open_interest_volume")) * px, px)
+    return out
+
+
+def _snap_cbintl() -> dict:
+    # Цены в справочнике Coinbase International нет — интерес в монетах,
+    # в доллары его переводит liq_oi_sample по ценам других бирж.
+    out = {}
+    for r in get_json("https://api.international.coinbase.com/api/v1/instruments", 20) or []:
+        if isinstance(r, dict) and r.get("type") == "PERP" and r.get("trading_state") == "TRADING":
+            if sym := _snap_sym(r.get("base_asset_name")):
+                out[sym] = (_fnum(r.get("open_interest")), 0.0, True)
+    return out
+
+
+def _snap_cryptocom() -> dict:
+    out = {}
+    got = (get_json("https://api.crypto.com/exchange/v1/public/get-tickers", 20) or {}).get("result") or {}
+    for r in got.get("data") or []:
+        i = str(r.get("i") or "")
+        px = _fnum(r.get("a"))
+        if i.endswith("USD-PERP") and (sym := _snap_sym(i[:-8])):
+            out[sym] = (_fnum(r.get("oi")) * px, px)
+    return out
+
+
+def _snap_paradex() -> dict:
+    out = {}
+    for r in (get_json("https://api.prod.paradex.trade/v1/markets/summary?market=ALL", 30) or {}).get("results") or []:
+        m = str(r.get("symbol") or "")
+        px = _fnum(r.get("mark_price"))
+        if m.endswith("-USD-PERP") and (sym := _snap_sym(m[:-9])):
+            out[sym] = (_fnum(r.get("open_interest")) * px, px)
+    return out
+
+
+def _snap_lighter() -> dict:
+    out = {}
+    for r in (get_json("https://mainnet.zklighter.elliot.ai/api/v1/orderBookDetails", 25) or {}).get("order_book_details") or []:
+        px = _fnum(r.get("mark_price")) or _fnum(r.get("last_trade_price"))
+        if r.get("market_type") == "perp" and r.get("status") == "active" and (sym := _snap_sym(r.get("symbol"))):
+            out[sym] = (_fnum(r.get("open_interest")) * px, px)
+    return out
+
+
+def _snap_backpack() -> dict:
+    marks = {r.get("symbol"): _fnum(r.get("markPrice"))
+             for r in get_json("https://api.backpack.exchange/api/v1/markPrices", 20) or [] if isinstance(r, dict)}
+    out = {}
+    for r in get_json("https://api.backpack.exchange/api/v1/openInterest", 20) or []:
+        m = str(r.get("symbol") or "") if isinstance(r, dict) else ""
+        px = marks.get(m, 0.0)
+        if m.endswith("_USDC_PERP") and px > 0 and (sym := _snap_sym(m[:-10])):
+            out[sym] = (_fnum(r.get("openInterest")) * px, px)
+    return out
+
+
+def _snap_orderly() -> dict:
+    out = {}
+    for r in ((get_json("https://api.orderly.org/v1/public/futures", 20) or {}).get("data") or {}).get("rows") or []:
+        m = str(r.get("symbol") or "")
+        px = _fnum(r.get("mark_price"))
+        if m.startswith("PERP_") and m.endswith("_USDC") and (sym := _snap_sym(m[5:-5])):
+            out[sym] = (_fnum(r.get("open_interest")) * px, px)
+    return out
+
+
+def _snap_gmx() -> dict:
+    """GMX: интерес лонгов и шортов в долларах с точностью 1e30; у одной
+    монеты бывает несколько пулов — складываем."""
+    out: dict = {}
+    for r in (get_json("https://arbitrum-api.gmxinfra.io/markets/info", 25) or {}).get("markets") or []:
+        name = str(r.get("name") or "")
+        if not r.get("isListed") or "/USD" not in name:
+            continue
+        sym = _snap_sym(name.split("/")[0])
+        oi = (_fnum(r.get("openInterestLong")) + _fnum(r.get("openInterestShort"))) / 1e30
+        if sym and oi > 0:
+            out[sym] = (out.get(sym, (0.0,))[0] + oi, 0.0)
+    return out
+
+
+def _snap_top(tick_url: str, key: str, n: int, one) -> dict:
+    """Биржи, что отдают интерес только по одной монете: берём n самых
+    торгуемых — дальше интерес мал, а запросов было бы сотни."""
+    ticks = get_json(tick_url, 20)
+    rows = ticks if isinstance(ticks, list) else (ticks or {}).get("data") or []
+    rows = [r for r in rows if isinstance(r, dict)]
+    rows.sort(key=lambda r: -_fnum(r.get(key)))
+    out: dict = {}
+
+    def take(r) -> None:
+        try:
+            got = one(r)
+        except Exception:  # noqa: BLE001 — одна монета не ответила
+            got = None
+        if got:
+            out[got[0]] = got[1]
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        list(pool.map(take, rows[:n]))
+    return out
+
+
+def _snap_aster() -> dict:
+    def one(r):
+        s = str(r.get("symbol") or "")
+        sym = _snap_sym(s[:-4]) if s.endswith("USDT") else ""
+        px = _fnum(r.get("lastPrice"))
+        if not sym or px <= 0:
+            return None
+        oi = _fnum((get_json(f"https://fapi.asterdex.com/fapi/v1/openInterest?symbol={s}", 10) or {}).get("openInterest"))
+        return sym, (oi * px, px)
+    return _snap_top("https://fapi.asterdex.com/fapi/v1/ticker/24hr", "quoteVolume", 60, one)
+
+
+def _snap_bingx() -> dict:
+    def one(r):
+        s = str(r.get("symbol") or "")
+        sym = _snap_sym(s[:-5]) if s.endswith("-USDT") else ""
+        px = _fnum(r.get("lastPrice"))
+        if not sym or px <= 0:
+            return None
+        got = (get_json(f"https://open-api.bingx.com/openApi/swap/v2/quote/openInterest?symbol={s}", 10) or {}).get("data") or {}
+        return sym, (_fnum(got.get("openInterest")), px)
+    return _snap_top("https://open-api.bingx.com/openApi/swap/v2/quote/ticker", "quoteVolume", 60, one)
+
+
 LIQ_SNAPS = (("Hyperliquid", _snap_hl), ("Bitget", _snap_bitget), ("MEXC", _snap_mexc), ("KuCoin", _snap_kucoin),
              ("Kraken", _snap_kraken), ("Phemex", _snap_phemex), ("WOO X", _snap_woo), ("WhiteBIT", _snap_whitebit),
-             ("Bitfinex", _snap_bitfinex), ("Deribit", _snap_deribit))
+             ("Bitfinex", _snap_bitfinex), ("Deribit", _snap_deribit), ("CoinEx", _snap_coinex),
+             ("Coinbase Intl", _snap_cbintl), ("Crypto.com", _snap_cryptocom), ("Paradex", _snap_paradex),
+             ("Lighter", _snap_lighter), ("Backpack", _snap_backpack), ("Orderly", _snap_orderly),
+             ("GMX", _snap_gmx), ("Aster", _snap_aster), ("BingX", _snap_bingx))
 
 
 def liq_oi_sample() -> dict:
@@ -8751,18 +8888,37 @@ def liq_oi_sample() -> dict:
     rows: list = []
     counts: dict = {}
 
+    raw: dict = {}
+
     def one(src) -> None:
         name, fn = src
         try:
-            got = fn()
+            raw[name] = fn() or {}
         except Exception:  # noqa: BLE001 — биржа не ответила: снимок без неё
-            got = {}
-        part = [(name, sym, t, oi, px) for sym, (oi, px) in got.items() if oi >= LIQ_OI_MIN and px > 0]
-        counts[name] = len(part)
-        rows.extend(part)
+            raw[name] = {}
 
     with ThreadPoolExecutor(max_workers=len(LIQ_SNAPS)) as pool:
         list(pool.map(one, LIQ_SNAPS))
+    # Цена монеты по всем биржам снимка — для тех, кто её не отдаёт: GMX даёт
+    # интерес уже в долларах, Coinbase International — в монетах.
+    pxs: dict = {}
+    for got in raw.values():
+        for sym, v in got.items():
+            if v[1] > 0:
+                pxs.setdefault(sym, []).append(v[1])
+    mid = {k: sorted(v)[len(v) // 2] for k, v in pxs.items()}
+    for name, got in raw.items():
+        part = []
+        for sym, v in got.items():
+            oi, px = v[0], v[1]
+            if px <= 0:
+                px = mid.get(sym, 0.0)
+                if len(v) > 2 and v[2]:
+                    oi *= px
+            if oi >= LIQ_OI_MIN and px > 0:
+                part.append((name, sym, t, oi, px))
+        counts[name] = len(part)
+        rows.extend(part)
     con = _liq_oi_con()
     try:
         con.executemany("INSERT OR REPLACE INTO oi_snap VALUES (?,?,?,?,?)", rows)
