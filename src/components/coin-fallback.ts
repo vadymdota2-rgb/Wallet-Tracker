@@ -107,4 +107,6 @@ export const LOGO_OVERRIDE: Record<string, string> = {
   H: "/cglogo/coins/images/66811/small/H_tokenLogo_original.png",
   /* Quack AI — тикер «Q». */
   Q: "/cglogo/coins/images/68793/small/quack_ai.png",
+  /* Rhea Finance — в общем справочнике тикер занят другой монетой. */
+  RHEA: "/cglogo/coins/images/67682/small/RHEA_Logo.png",
 };
