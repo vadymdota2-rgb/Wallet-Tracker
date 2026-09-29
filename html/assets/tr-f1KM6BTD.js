@@ -22,7 +22,7 @@ Her işlemde kaldıracı, teminatı ve likidasyon fiyatını, borsadan gelen ger
 • Rotasyon: paranın hangi coinlerden çıkıp hangilerine girdiği.
 • Long / Short: büyük Hyperliquid yatırımcılarının hangi yönde pozisyon açtığı. Premium.
 • Büyük pozisyonlar: Hyperliquid vadelide en büyük işlemler. Premium.
-• Funding: borsalara göre fonlama oranları. Premium.`,hp_g_an_s:"Büyük cüzdanlar parayı nereye taşıyor",hp_g_an_t:"Analiz",hp_g_dg_d:`• Her gün UTC gece yarısı yeni bir sayı, Analiz'in her sekmesinden son 24 saatin en büyük olaylarını toplar: NetFlow, büyük emirler, rotasyon, long/short, büyük pozisyonlar ve fonlama.
+• Funding: borsalara göre fonlama oranları. Premium.`,hp_g_an_s:"Büyük cüzdanlar parayı nereye taşıyor",hp_g_an_t:"Analiz",hp_g_dg_d:`• Her gün Londra saatiyle 12:00'de yeni bir sayı, Analiz'in her sekmesinden son 24 saatin en büyük olaylarını toplar: NetFlow, büyük emirler, rotasyon, long/short, büyük pozisyonlar ve fonlama.
 • Ayrıca önümüzdeki yedi günün kilit açılışları, arz payı en büyük olanlar önce.
 • Son 30 sayı saklanır; eski bir sayıyı açmak için dokun.
 • Vadeli işlem bölümleri, sekmeleri gibi Premium'dadır.

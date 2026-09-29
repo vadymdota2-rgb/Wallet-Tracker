@@ -4,6 +4,7 @@ Stdlib only. Run from WhaleScanner working directory on the VPS."""
 from __future__ import annotations
 
 import base64
+import calendar
 import hashlib
 import html
 import hmac
@@ -8418,13 +8419,13 @@ def bootstrap(chat: str, fast: bool = False) -> dict:
 
 
 # --- Дайджест ------------------------------------------------------------
-# Раз в сутки, в полночь UTC, сервер собирает выпуск: самое крупное из каждой
+# Раз в сутки, в 12:00 по Лондону, сервер собирает выпуск: самое крупное из каждой
 # вкладки аналитики за прошедшие 24 часа и ближайшие разлоки. Хранятся
 # последние тридцать; под каждым — лайки и комментарии.
 #
 # Выпуск пишется один раз и больше не пересчитывается: это снимок того, что
 # было на экранах в тот момент, а не живая выборка. Если сервер лежал в
-# полночь, выпуск собирается при запуске — с честными границами окна.
+# полдень, выпуск собирается при запуске — с честными границами окна.
 #
 # Таблицы заводит бот (он хозяин базы и стирает лайки с комментариями по
 # /forgetme); здесь те же CREATE — на случай, если API поднялся первым.
@@ -8557,9 +8558,37 @@ def digest_build(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
     return body
 
 
+DIGEST_HOUR_LONDON = 12
+
+
+def _uk_summer(ts: int) -> bool:
+    """Летнее время Лондона (BST, UTC+1): с 01:00 UTC последнего воскресенья
+    марта до 01:00 UTC последнего воскресенья октября. Правило британское и
+    не менялось с 1996 года; своя формула вместо базы часовых поясов — чтобы
+    выпуск не зависел от того, стоит ли на машине tzdata."""
+    y = time.gmtime(ts).tm_year
+
+    def last_sunday(month: int) -> int:
+        # Последний день месяца, откатываемся до воскресенья (tm_wday: пн=0).
+        nxt = calendar.timegm((y + (month == 12), month % 12 + 1, 1, 0, 0, 0))
+        last = nxt - 86400
+        return last - ((time.gmtime(last).tm_wday + 1) % 7) * 86400
+
+    return last_sunday(3) + 3600 <= ts < last_sunday(10) + 3600
+
+
+def london_now(ts: int | None = None) -> time.struct_time:
+    ts = int(ts if ts is not None else time.time())
+    return time.gmtime(ts + (3600 if _uk_summer(ts) else 0))
+
+
 def digest_make() -> bool:
-    """Выпуск за сегодня (по UTC), если его ещё нет. True — выпуск собран."""
-    day = time.strftime("%Y-%m-%d", time.gmtime())
+    """Выпуск за сегодня (по Лондону), если его ещё нет и в Лондоне уже
+    полдень. True — выпуск собран."""
+    ln = london_now()
+    if ln.tm_hour < DIGEST_HOUR_LONDON:
+        return False
+    day = time.strftime("%Y-%m-%d", ln)
     con = _digest_con()
     if not con:
         return False

@@ -22,7 +22,7 @@ Bạn nhận đòn bẩy, ký quỹ, giá thanh lý mỗi lệnh, PnL đã chố
 • Luân chuyển — tiền rời khỏi coin nào và chảy vào coin nào.
 • Long / Short — các trader lớn trên Hyperliquid đang mở vị thế theo hướng nào. Premium.
 • Vị thế lớn — các giao dịch hợp đồng tương lai lớn nhất trên Hyperliquid. Premium.
-• Funding — funding rate trên các sàn. Premium.`,hp_g_an_s:"Ví lớn đang chuyển tiền đi đâu",hp_g_an_t:"Phân tích",hp_g_dg_d:`• Mỗi ngày lúc nửa đêm UTC, bản tin mới gom những sự kiện lớn nhất trong 24 giờ từ mỗi tab Phân tích: NetFlow, lệnh lớn, luân chuyển, long/short, vị thế lớn và funding.
+• Funding — funding rate trên các sàn. Premium.`,hp_g_an_s:"Ví lớn đang chuyển tiền đi đâu",hp_g_an_t:"Phân tích",hp_g_dg_d:`• Mỗi ngày lúc 12:00 giờ London, bản tin mới gom những sự kiện lớn nhất trong 24 giờ từ mỗi tab Phân tích: NetFlow, lệnh lớn, luân chuyển, long/short, vị thế lớn và funding.
 • Kèm các đợt mở khoá trong bảy ngày tới, lớn nhất theo tỷ lệ lưu hành ở trên cùng.
 • Giữ 30 bản tin gần nhất; chạm vào bản cũ để mở.
 • Phần hợp đồng tương lai thuộc Premium, giống như các tab của chúng.

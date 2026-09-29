@@ -22,7 +22,7 @@ Obtienes el apalancamiento, la garantía y el precio de liquidación de cada ope
 • Rotación: de qué monedas sale el dinero y a cuáles entra.
 • Largo / Corto: hacia qué lado abren posiciones los grandes traders de Hyperliquid. Premium.
 • Posiciones grandes: las mayores operaciones de futuros en Hyperliquid. Premium.
-• Funding: tasas de financiación por exchange. Premium.`,hp_g_an_s:"Hacia dónde mueven el dinero las billeteras grandes",hp_g_an_t:"Analítica",hp_g_dg_d:`• Cada día a medianoche UTC, un nuevo número reúne lo más grande de las últimas 24 horas de cada pestaña de Analítica: NetFlow, órdenes grandes, rotación, largo/corto, posiciones grandes y financiación.
+• Funding: tasas de financiación por exchange. Premium.`,hp_g_an_s:"Hacia dónde mueven el dinero las billeteras grandes",hp_g_an_t:"Analítica",hp_g_dg_d:`• Cada día a las 12:00, hora de Londres, un nuevo número reúne lo más grande de las últimas 24 horas de cada pestaña de Analítica: NetFlow, órdenes grandes, rotación, largo/corto, posiciones grandes y financiación.
 • Además, los desbloqueos de los próximos siete días, los mayores por porcentaje de la oferta primero.
 • Se guardan los últimos 30 números; toca uno anterior para abrirlo.
 • Las secciones de futuros son parte de Premium, como sus pestañas.

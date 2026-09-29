@@ -22,7 +22,7 @@ Vous obtenez l'effet de levier, la marge et le prix de liquidation de chaque op�
 • Rotation : quelles cryptos l'argent quitte et dans lesquelles il entre.
 • Long / Short : de quel côté les gros traders Hyperliquid ouvrent leurs positions. Premium.
 • Grosses positions : les plus grosses transactions sur les futures Hyperliquid. Premium.
-• Funding : taux de financement par plateforme. Premium.`,hp_g_an_s:"Où les gros portefeuilles déplacent l'argent",hp_g_an_t:"Analyse",hp_g_dg_d:`• Chaque jour à minuit UTC, une nouvelle édition rassemble le plus important des dernières 24 heures dans chaque onglet Analyse : NetFlow, gros ordres, rotation, long/short, grosses positions et funding.
+• Funding : taux de financement par plateforme. Premium.`,hp_g_an_s:"Où les gros portefeuilles déplacent l'argent",hp_g_an_t:"Analyse",hp_g_dg_d:`• Chaque jour à 12h00, heure de Londres, une nouvelle édition rassemble le plus important des dernières 24 heures dans chaque onglet Analyse : NetFlow, gros ordres, rotation, long/short, grosses positions et funding.
 • Plus les déblocages des sept prochains jours, les plus gros en part de l'offre d'abord.
 • Les 30 dernières éditions sont conservées ; touchez une ancienne pour l'ouvrir.
 • Les sections sur les contrats à terme font partie de Premium, comme leurs onglets.

@@ -404,7 +404,8 @@ say("вкладка «Дайджест» стоит на месте Cortex",
     '{ id: "digest", key: "dg_title", glyph: <DigestGlyph /> }' in _dg_app and "<DigestTab />" in _dg_app)
 say("дайджест: выпуск раз в сутки, тридцать последних, поток запущен",
     "DIGEST_KEEP = 30" in api and 'target=digest_refresher' in api
-    and "SELECT 1 FROM digests WHERE day=?" in api)
+    and "SELECT 1 FROM digests WHERE day=?" in api
+    and "DIGEST_HOUR_LONDON = 12" in api and "ln.tm_hour < DIGEST_HOUR_LONDON" in api)
 say("дайджест: фьючерсы бесплатному не уходят с сервера",
     'DIGEST_PREMIUM = ("ls", "perp", "fund")' in api and 'body[k] = {"locked": True}' in api)
 say("дайджест: ссылки, частота и суточный лимит комментариев проверяются на сервере",

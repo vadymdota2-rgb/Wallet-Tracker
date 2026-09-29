@@ -22,7 +22,7 @@ Anda mendapat leverage, jaminan, dan harga likuidasi tiap trade, PnL terealisasi
 • Rotasi — dari koin mana uang keluar dan ke mana masuk.
 • Long / Short — ke arah mana trader besar Hyperliquid membuka posisi. Premium.
 • Posisi besar — transaksi futures terbesar di Hyperliquid. Premium.
-• Funding — funding rate di berbagai bursa. Premium.`,hp_g_an_s:"Ke mana dompet besar memindahkan uang",hp_g_an_t:"Analitik",hp_g_dg_d:`• Setiap hari tengah malam UTC, edisi baru mengumpulkan peristiwa terbesar 24 jam terakhir dari setiap tab Analitik: NetFlow, order besar, rotasi, long/short, posisi besar, dan funding.
+• Funding — funding rate di berbagai bursa. Premium.`,hp_g_an_s:"Ke mana dompet besar memindahkan uang",hp_g_an_t:"Analitik",hp_g_dg_d:`• Setiap hari pukul 12.00 waktu London, edisi baru mengumpulkan peristiwa terbesar 24 jam terakhir dari setiap tab Analitik: NetFlow, order besar, rotasi, long/short, posisi besar, dan funding.
 • Ditambah pembukaan token tujuh hari ke depan, porsi suplai terbesar lebih dulu.
 • 30 edisi terakhir disimpan; ketuk edisi lama untuk membukanya.
 • Bagian futures termasuk Premium, sama seperti tabnya.

@@ -22,7 +22,7 @@ Você recebe a alavancagem, a margem e o preço de liquidação de cada operaç�
 • Rotação: de quais moedas o dinheiro sai e em quais entra.
 • Long / Short: para que lado os grandes traders da Hyperliquid abrem posições. Premium.
 • Posições grandes: as maiores operações de futuros na Hyperliquid. Premium.
-• Funding: taxas de financiamento por corretora. Premium.`,hp_g_an_s:"Para onde as grandes carteiras levam o dinheiro",hp_g_an_t:"Análise",hp_g_dg_d:`• Todos os dias à meia-noite UTC, uma nova edição reúne o maior das últimas 24 horas de cada aba de Análise: NetFlow, ordens grandes, rotação, long/short, posições grandes e funding.
+• Funding: taxas de financiamento por corretora. Premium.`,hp_g_an_s:"Para onde as grandes carteiras levam o dinheiro",hp_g_an_t:"Análise",hp_g_dg_d:`• Todos os dias às 12:00, horário de Londres, uma nova edição reúne o maior das últimas 24 horas de cada aba de Análise: NetFlow, ordens grandes, rotação, long/short, posições grandes e funding.
 • Mais os desbloqueios dos próximos sete dias, os maiores pela fatia da oferta primeiro.
 • Ficam as últimas 30 edições; toque numa anterior para abri-la.
 • As seções de futuros fazem parte do Premium, como as suas abas.

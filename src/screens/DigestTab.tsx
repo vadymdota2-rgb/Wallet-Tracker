@@ -3,7 +3,7 @@
  * ближайшие разлоки. Сверху свежий выпуск целиком, ниже — прошлые (всего
  * тридцать), свёрнутыми: открывается тот, что нужен.
  *
- * Всё, что в выпуске, посчитал сервер в полночь UTC и больше не трогает:
+ * Всё, что в выпуске, посчитал сервер в 12:00 по Лондону и больше не трогает:
  * это снимок того, что было на экранах, а не живая выборка. Поэтому ни одна
  * строка не пишет «5 мин назад» — только размер события и окно выпуска.
  *
@@ -59,7 +59,7 @@ const isLocked = (v: unknown): v is DigestLocked =>
   typeof v === "object" && v !== null && (v as DigestLocked).locked === true;
 
 /** Время по часам телефона на языке приложения: «03:00». Выпуск выходит в
- *  полночь UTC; «12:00 AM» по-английски читается хуже, чем «00:00». */
+ *  12:00 по Лондону; «2:00 PM» читается хуже, чем «14:00». */
 function clock(lang: Lang, tsSec: number): string {
   try {
     return new Intl.DateTimeFormat(lang, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
@@ -78,9 +78,26 @@ function dateWord(lang: Lang, tsSec: number): string {
   }
 }
 
-/** Ближайшая полночь UTC — когда выйдет следующий выпуск. */
+/** Летнее время Лондона: с 01:00 UTC последнего воскресенья марта до 01:00
+ *  UTC последнего воскресенья октября — то же правило, что у сервера. */
+function ukSummer(tsSec: number): boolean {
+  const y = new Date(tsSec * 1000).getUTCFullYear();
+  const lastSunday = (month: number) => {
+    const last = Date.UTC(y, month + 1, 0) / 1000; // последний день месяца
+    return last - new Date(last * 1000).getUTCDay() * 86400;
+  };
+  return tsSec >= lastSunday(2) + 3600 && tsSec < lastSunday(9) + 3600;
+}
+
+/** Ближайшие 12:00 по Лондону — когда выйдет следующий выпуск. */
 function nextIssue(nowSec: number): number {
-  return Math.floor(nowSec / 86400) * 86400 + 86400;
+  const day0 = Math.floor(nowSec / 86400) * 86400;
+  for (let d = 0; d < 3; d++) {
+    const noonUtc = day0 + d * 86400 + 12 * 3600;
+    const at = noonUtc - (ukSummer(noonUtc) ? 3600 : 0);
+    if (at > nowSec) return at;
+  }
+  return day0 + 86400 + 12 * 3600;
 }
 
 /** Что сервер ответил отказом — словами. */

@@ -22,7 +22,7 @@ Dostajesz dźwignię, depozyt i cenę likwidacji przy każdej transakcji, zreali
 • Rotacja — z których monet pieniądze wychodzą, a do których wchodzą.
 • Long / Short — w którą stronę duzi traderzy Hyperliquid otwierają pozycje. Premium.
 • Duże pozycje — największe transakcje na futures Hyperliquid. Premium.
-• Funding — stawki finansowania na giełdach. Premium.`,hp_g_an_s:"Dokąd duże portfele przenoszą pieniądze",hp_g_an_t:"Analityka",hp_g_dg_d:`• Codziennie o północy UTC nowe wydanie zbiera największe wydarzenia ostatnich 24 godzin z każdej zakładki Analityki: NetFlow, duże zlecenia, rotację, long/short, duże pozycje i funding.
+• Funding — stawki finansowania na giełdach. Premium.`,hp_g_an_s:"Dokąd duże portfele przenoszą pieniądze",hp_g_an_t:"Analityka",hp_g_dg_d:`• Codziennie o 12:00 czasu londyńskiego nowe wydanie zbiera największe wydarzenia ostatnich 24 godzin z każdej zakładki Analityki: NetFlow, duże zlecenia, rotację, long/short, duże pozycje i funding.
 • Do tego odblokowania na najbliższe siedem dni, największe udziałem w podaży najpierw.
 • Przechowywanych jest 30 ostatnich wydań; stuknij starsze, by je otworzyć.
 • Sekcje o kontraktach są w Premium, tak jak ich zakładki.

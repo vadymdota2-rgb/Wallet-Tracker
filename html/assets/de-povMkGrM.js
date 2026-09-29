@@ -22,7 +22,7 @@ Du erhältst Hebel, Margin und Liquidationspreis bei jedem Trade, realisierten P
 • Rotation – aus welchen Coins Geld abfließt und in welche es fließt.
 • Long / Short – in welche Richtung große Hyperliquid-Trader Positionen eröffnen. Premium.
 • Große Positionen – die größten Trades bei Hyperliquid-Futures. Premium.
-• Funding – Funding-Raten der Börsen. Premium.`,hp_g_an_s:"Wohin große Wallets Geld bewegen",hp_g_an_t:"Analyse",hp_g_dg_d:`• Jeden Tag um Mitternacht UTC fasst eine neue Ausgabe das Größte der letzten 24 Stunden aus jedem Analyse-Tab zusammen: NetFlow, große Orders, Rotation, Long/Short, große Positionen und Funding.
+• Funding – Funding-Raten der Börsen. Premium.`,hp_g_an_s:"Wohin große Wallets Geld bewegen",hp_g_an_t:"Analyse",hp_g_dg_d:`• Jeden Tag um 12:00 Uhr Londoner Zeit fasst eine neue Ausgabe das Größte der letzten 24 Stunden aus jedem Analyse-Tab zusammen: NetFlow, große Orders, Rotation, Long/Short, große Positionen und Funding.
 • Dazu die Unlocks der nächsten sieben Tage, die größten nach Anteil am Umlauf zuerst.
 • Die letzten 30 Ausgaben bleiben erhalten; tippe auf eine frühere, um sie zu öffnen.
 • Futures-Abschnitte gehören zu Premium, wie ihre Tabs.
