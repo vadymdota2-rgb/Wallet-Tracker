@@ -18,6 +18,7 @@ import { AlertsScreen } from "./AlertsScreen";
 import { ChartScreen } from "./ChartScreen";
 import { UnlocksScreen } from "./UnlocksScreen";
 import { LiqMapScreen } from "./LiqMapScreen";
+import { FundingScreen } from "./FundingScreen";
 
 export const SCREENS: Record<ScreenName, ComponentType<ScreenProps>> = {
   wallet: WalletScreen,
@@ -36,4 +37,5 @@ export const SCREENS: Record<ScreenName, ComponentType<ScreenProps>> = {
   chart: ChartScreen,
   unlocks: UnlocksScreen,
   liqmap: LiqMapScreen,
+  funding: FundingScreen,
 };

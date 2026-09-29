@@ -1,5 +1,8 @@
 /**
- * «Ещё»: премиум, язык, порог, помощь — остаток главного меню бота.
+ * «Ещё»: алерты, премиум, язык, помощь — остаток главного меню бота.
+ *
+ * Порога алертов здесь нет: его ставят в «Моих кошельках», прямо над списком
+ * кошельков, к которым он относится, — вторая дорога сюда была лишней.
  *
  * «Открытых позиций» здесь нет: позиции кошелька смотрят в самом кошельке
  * («Мои кошельки» → кошелёк), и отдельная строка вела в тот же список второй
@@ -10,8 +13,8 @@ import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import { bare, t } from "../i18n/t";
 import { LANGS } from "../i18n";
-import { num, usd } from "../lib/format";
-import { BellGlyph, Card, Row, SectionTitle, ThresholdGlyph } from "../components/ui";
+import { num } from "../lib/format";
+import { BellGlyph, Card, Row, SectionTitle } from "../components/ui";
 
 export function MoreTab() {
   const lang = useApp((s) => s.lang);
@@ -43,13 +46,6 @@ export function MoreTab() {
             : t(lang, "pr_unlock")}
           value={me.plan === "premium" ? "✓" : "🔒"}
           onClick={() => open("premium")}
-        />
-        <Row
-          icon={<span className="row-glyph"><ThresholdGlyph size={22} /></span>}
-          title={bare(t(lang, "menu_alert_threshold"))}
-          sub={t(lang, "threshold_desc")}
-          value={usd(me.threshold)}
-          onClick={() => open("threshold")}
         />
         <Row
           icon={<span aria-hidden="true">🌐</span>}

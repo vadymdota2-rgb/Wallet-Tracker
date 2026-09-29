@@ -8078,6 +8078,7 @@ def warmup() -> None:
     threading.Thread(target=stake_live_refresher, daemon=True, name="staking").start()
     threading.Thread(target=reactions_refresher, daemon=True, name="reactions").start()
     threading.Thread(target=digest_refresher, daemon=True, name="digest").start()
+    threading.Thread(target=liq_oi_refresher, daemon=True, name="liq-oi").start()
     cur = open_db(DB)
     hl = open_db(HL_DB)
     if not cur:
@@ -8516,7 +8517,147 @@ def _liq_gate(sym: str, period: str, n: int) -> list | None:
     return sorted(out)
 
 
-LIQ_SOURCES = (("Binance", _liq_binance), ("OKX", _liq_okx), ("Gate", _liq_gate))
+_LIQ_SEC = {"15m": 900, "1h": 3600, "4h": 14400}
+
+
+def _liq_bybit(sym: str, period: str, n: int) -> list | None:
+    s = f"{sym}USDT"
+    oi_iv = {"15m": "15min", "1h": "1h", "4h": "4h"}[period]
+    kl_iv = {"15m": "15", "1h": "60", "4h": "240"}[period]
+    base = "https://api.bybit.com/v5/market"
+    oi = (get_json(f"{base}/open-interest?category=linear&symbol={s}&intervalTime={oi_iv}&limit={min(n, 200)}", 15) or {}).get("result", {}).get("list") or []
+    kl = (get_json(f"{base}/kline?category=linear&symbol={s}&interval={kl_iv}&limit={min(n, 1000)}", 15) or {}).get("result", {}).get("list") or []
+    rt = (get_json(f"{base}/account-ratio?category=linear&symbol={s}&period={oi_iv}&limit={min(n, 500)}", 15) or {}).get("result", {}).get("list") or []
+    if not oi or not kl:
+        return None
+    kmap = {int(k[0]) // 1000: k for k in kl}
+    # Доли агрессивных покупок Bybit не отдаёт — берём долю счетов в лонге.
+    rmap = {int(r["timestamp"]) // 1000: _fnum(r.get("buyRatio")) for r in rt}
+    out = []
+    for r in oi:
+        t = int(r["timestamp"]) // 1000
+        k = kmap.get(t)
+        if not k:
+            continue
+        c = float(k[4])
+        out.append((t, float(k[2]), float(k[3]), c, _fnum(r.get("openInterest")) * c, rmap.get(t) or 0.5))
+    return sorted(out)
+
+
+def _liq_htx(sym: str, period: str, n: int) -> list | None:
+    c = f"{sym}-USDT"
+    per = {"15m": "15min", "1h": "60min", "4h": "4hour"}[period]
+    oi = ((get_json(f"https://api.hbdm.com/linear-swap-api/v1/swap_his_open_interest?contract_code={c}&period={per}&amount_type=2&size={min(n, 200)}", 15) or {}).get("data") or {}).get("tick") or []
+    kl = (get_json(f"https://api.hbdm.com/linear-swap-ex/market/history/kline?contract_code={c}&period={per}&size={min(n, 2000)}", 15) or {}).get("data") or []
+    rt = ((get_json(f"https://api.hbdm.com/linear-swap-api/v1/swap_elite_position_ratio?contract_code={c}&period={per}", 15) or {}).get("data") or {}).get("list") or []
+    if not oi or not kl:
+        return None
+    kmap = {int(k["id"]): k for k in kl}
+    rmap = {int(r["ts"]) // 1000: _fnum(r.get("buy_ratio")) for r in rt}
+    out = []
+    for r in oi:
+        t = int(r["ts"]) // 1000
+        k = kmap.get(t)
+        if not k:
+            continue
+        out.append((t, float(k["high"]), float(k["low"]), float(k["close"]), _fnum(r.get("value")), rmap.get(t) or 0.5))
+    return sorted(out)
+
+
+def _liq_dydx(sym: str, period: str, n: int) -> list | None:
+    """dYdX — децентрализованная биржа: открытый интерес лежит прямо в свече."""
+    res = {"15m": "15MINS", "1h": "1HOUR", "4h": "4HOURS"}[period]
+    r = get_json(f"https://indexer.dydx.trade/v4/candles/perpetualMarkets/{sym}-USD?resolution={res}&limit={min(n, 200)}", 15) or {}
+    out = []
+    for k in r.get("candles") or []:
+        try:
+            t = calendar.timegm(time.strptime(k["startedAt"][:19], "%Y-%m-%dT%H:%M:%S"))
+        except (KeyError, ValueError, TypeError):
+            continue
+        o = _fnum(k.get("open"))
+        out.append((t, _fnum(k.get("high")), _fnum(k.get("low")), _fnum(k.get("close")),
+                    _fnum(k.get("startingOpenInterest")) * o, 0.5))
+    return sorted(out) or None
+
+
+# Hyperliquid истории открытого интереса не публикует — только то, что есть
+# сейчас. Поэтому сервер пишет её сам: раз в 15 минут снимок по всем монетам
+# в свою маленькую базу, месяц назад и не дальше. Карта берёт эти снимки к
+# свечам Hyperliquid; пока истории меньше восьми точек, биржа просто не
+# участвует.
+LIQ_OI_DB = os.environ.get("LIQ_OI_DB") or os.path.join(os.path.dirname(DB) or ".", "liq_oi.db")
+LIQ_OI_EVERY = 900
+LIQ_OI_KEEP = 32 * 86400
+
+
+def _liq_oi_con() -> sqlite3.Connection:
+    con = sqlite3.connect(LIQ_OI_DB, timeout=8, check_same_thread=False)
+    con.execute("CREATE TABLE IF NOT EXISTS hl_oi (coin TEXT NOT NULL, t INTEGER NOT NULL, oi REAL NOT NULL, "
+                "PRIMARY KEY (coin, t)) WITHOUT ROWID")
+    return con
+
+
+def liq_oi_sample() -> int:
+    got = hl_post({"type": "metaAndAssetCtxs"}, 15)
+    if not isinstance(got, list) or len(got) < 2:
+        return 0
+    t = now() // LIQ_OI_EVERY * LIQ_OI_EVERY
+    rows = []
+    for m, c in zip(got[0].get("universe") or [], got[1] or []):
+        name = str(m.get("name") or "")
+        if m.get("isDelisted") or not re.fullmatch(r"[A-Z0-9]{2,12}", name):
+            continue
+        oi = _fnum(c.get("openInterest")) * _fnum(c.get("markPx"))
+        if oi > 0:
+            rows.append((name, t, oi))
+    con = _liq_oi_con()
+    try:
+        con.executemany("INSERT OR REPLACE INTO hl_oi VALUES (?,?,?)", rows)
+        con.execute("DELETE FROM hl_oi WHERE t < ?", (t - LIQ_OI_KEEP,))
+        con.commit()
+    finally:
+        con.close()
+    return len(rows)
+
+
+def liq_oi_refresher() -> None:
+    while True:
+        try:
+            liq_oi_sample()
+        except Exception as e:  # noqa: BLE001 — сбой одного снимка не рвёт ряд
+            print(f"liq oi: {e}", file=sys.stderr)
+        time.sleep(LIQ_OI_EVERY - now() % LIQ_OI_EVERY + 5)
+
+
+def _liq_hl(sym: str, period: str, n: int) -> list | None:
+    sec = _LIQ_SEC[period]
+    con = _liq_oi_con()
+    try:
+        snaps = con.execute("SELECT t, oi FROM hl_oi WHERE coin=? AND t >= ? ORDER BY t",
+                            (sym, now() - sec * (n + 1))).fetchall()
+    finally:
+        con.close()
+    if len(snaps) < 8:
+        return None
+    end = now() * 1000
+    kl = hl_post({"type": "candleSnapshot", "req": {"coin": sym, "interval": period,
+                                                    "startTime": end - sec * n * 1000, "endTime": end}}, 15)
+    if not isinstance(kl, list) or not kl:
+        return None
+    # К свече — последний снимок до её конца: он и есть интерес на закрытии.
+    out, j = [], 0
+    for k in kl:
+        t = int(k["t"]) // 1000
+        while j + 1 < len(snaps) and snaps[j + 1][0] <= t + sec:
+            j += 1
+        if snaps[j][0] > t + sec or snaps[j][0] < t - sec:
+            continue
+        out.append((t, _fnum(k.get("h")), _fnum(k.get("l")), _fnum(k.get("c")), snaps[j][1], 0.5))
+    return out or None
+
+
+LIQ_SOURCES = (("Binance", _liq_binance), ("OKX", _liq_okx), ("Bybit", _liq_bybit), ("Gate", _liq_gate),
+               ("HTX", _liq_htx), ("Hyperliquid", _liq_hl), ("dYdX", _liq_dydx))
 
 
 def _liq_model(rows: list) -> list:
@@ -8556,8 +8697,8 @@ def _liq_candles(rows: list, n: int = 48) -> list:
     return out
 
 
-# Монеты, по которым строится карта: бессрочные фьючерсы к USDT на Binance,
-# OKX и Gate, по обороту за сутки. Список раз в час, из открытых тикеров.
+# Монеты, по которым строится карта: бессрочные фьючерсы на Binance, OKX,
+# Bybit, Gate, HTX, Hyperliquid и dYdX, по обороту за сутки. Список раз в час, из открытых тикеров.
 LIQ_COINS_TTL = 3600.0
 LIQ_COINS_MIN_VOL = 50_000
 _liq_coins_cache: dict = {}
@@ -8608,8 +8749,45 @@ def liq_coins() -> dict:
         except Exception:  # noqa: BLE001 — биржа недоступна: список без неё
             pass
 
-    with ThreadPoolExecutor(max_workers=3) as pool:
-        list(pool.map(safe, (binance, okx, gate)))
+    def bybit() -> None:
+        r = get_json("https://api.bybit.com/v5/market/tickers?category=linear", 20) or {}
+        for t in (r.get("result") or {}).get("list") or []:
+            s = str(t.get("symbol") or "")
+            if s.endswith("USDT"):
+                add(s[:-4], _fnum(t.get("turnover24h")), "Bybit")
+
+    def htx() -> None:
+        r = get_json("https://api.hbdm.com/linear-swap-ex/market/detail/batch_merged?business_type=swap", 20) or {}
+        for t in r.get("ticks") or []:
+            c = str(t.get("contract_code") or "")
+            if c.endswith("-USDT"):
+                add(c[:-5], _fnum(t.get("trade_turnover")), "HTX")
+
+    def dydx() -> None:
+        r = get_json("https://indexer.dydx.trade/v4/perpetualMarkets?limit=1000", 20) or {}
+        for k, m in (r.get("markets") or {}).items():
+            if str(k).endswith("-USD") and m.get("status") == "ACTIVE":
+                add(str(k)[:-4], _fnum(m.get("volume24H")), "dYdX")
+
+    def hyper() -> None:
+        # Только монеты, по которым уже есть своя история интереса: без неё
+        # карта Hyperliquid не построит, и метка биржи обещала бы лишнее.
+        con = _liq_oi_con()
+        try:
+            have = {r[0] for r in con.execute(
+                "SELECT coin FROM hl_oi GROUP BY coin HAVING COUNT(*) >= 8")}
+        finally:
+            con.close()
+        got = hl_post({"type": "metaAndAssetCtxs"}, 15)
+        if not isinstance(got, list) or len(got) < 2:
+            return
+        for m, c in zip(got[0].get("universe") or [], got[1] or []):
+            name = str(m.get("name") or "")
+            if name in have and not m.get("isDelisted"):
+                add(name, _fnum(c.get("dayNtlVlm")), "Hyperliquid")
+
+    with ThreadPoolExecutor(max_workers=7) as pool:
+        list(pool.map(safe, (binance, okx, bybit, gate, htx, hyper, dydx)))
     coins = sorted(({"s": k, "v": round(v), "ex": sorted(ex[k])} for k, v in vol.items() if v >= LIQ_COINS_MIN_VOL),
                    key=lambda c: -c["v"])
     res = {"ok": bool(coins), "coins": coins, "at": now()}
@@ -8640,8 +8818,15 @@ def liq_map(sym: str, rng: str) -> dict:
         if rows and len(rows) >= 8:
             got[name] = rows
 
-    with ThreadPoolExecutor(max_workers=3) as pool:
+    with ThreadPoolExecutor(max_workers=len(LIQ_SOURCES)) as pool:
         list(pool.map(one, LIQ_SOURCES))
+    # Под одним тикером у разных бирж бывают разные монеты — и цены у них
+    # расходятся в разы. Биржу, чья цена дальше 3% от средней по остальным,
+    # не берём: её уровни легли бы на чужую ось.
+    if len(got) > 1:
+        mid = sorted(r[-1][3] for r in got.values())[len(got) // 2]
+        for name in [k for k, r in got.items() if mid <= 0 or abs(r[-1][3] / mid - 1) > 0.03]:
+            got.pop(name)
     if not got:
         res = {"ok": False, "error": "no_data", "sym": sym}
         with _liq_lock:

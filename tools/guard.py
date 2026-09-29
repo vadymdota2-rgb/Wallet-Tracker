@@ -136,8 +136,10 @@ say("позиции за замком, а не «позиций нет»",
     "<PremiumLock />" in read(f"{APP}/src/screens/PositionScreen.tsx")
     and "<PremiumLock />" in read(f"{APP}/src/screens/WalletScreen.tsx"))
 ana = read(f"{APP}/src/screens/AnalyticsTab.tsx")
-say("лонг/шорт, крупные позиции и фандинг — за подпиской",
-    ana.count("prem: true") == 3 and "lock: Boolean(v.prem) && !premium" in ana)
+_fscr = read(f"{APP}/src/screens/FundingScreen.tsx")
+say("лонг/шорт и крупные позиции — за подпиской, фандинг — тоже, уже в боковом меню",
+    ana.count("prem: true") == 2 and "lock: Boolean(v.prem) && !premium" in ana
+    and 'id: "fund"' not in ana and "premium ? (\n          <FundBody />" in _fscr)
 say("лонг/шорт закрыт и на экране, и на сервере",
     ana.count("{!premium ? locked : (") >= 2 and '"fund", "fundN", "ls"' in fp
     and api.count('self._json(403, {"ok": False, "error": "premium"})') == 3)
@@ -165,8 +167,9 @@ more = read(f"{APP}/src/screens/MoreTab.tsx")
 say("открытые позиции — только в кошельке",
     'open("positions")' not in more and '"menu_positions"' not in read(f"{APP}/src/App.tsx")
     and not os.path.exists(f"{APP}/src/screens/PositionsScreen.tsx"))
-say("порог алертов — своим значком, без задвоенного эмодзи",
-    "<ThresholdGlyph size={22} />" in more and 'bare(t(lang, "menu_alert_threshold"))' in more)
+say("порога алертов во «Ещё» нет — он в «Моих кошельках»",
+    'open("threshold")' not in more and "menu_alert_threshold" not in more
+    and 'open("threshold")' in read(f"{APP}/src/screens/WalletsTab.tsx"))
 
 # --- кнопка обновления не выпадает из шапки ---------------------------------
 # Голое состояние «boot» совпадало с классом заставки .boot (position: fixed),
@@ -247,9 +250,10 @@ say("помощь не обещает неделю за /start", all("/start" no
 # --- боковое меню: график TradingView и разлоки -----------------------------
 _m0 = appx.index("= [", appx.index("const MENU:"))
 menu = appx[_m0:appx.index("];", _m0)]
-say("в боковом меню три пункта: график, разлоки, карта ликвидаций",
-    menu.count("name:") == 3
-    and menu.index('name: "chart"') < menu.index('name: "unlocks"') < menu.index('name: "liqmap"'))
+say("в боковом меню четыре пункта: график, разлоки, карта ликвидаций, фандинг",
+    menu.count("name:") == 4
+    and menu.index('name: "chart"') < menu.index('name: "unlocks"') < menu.index('name: "liqmap"')
+    < menu.index('name: "funding"'))
 tv = read(f"{APP}/src/lib/tradingview.ts")
 chart_scr = read(f"{APP}/src/screens/ChartScreen.tsx")
 say("график — официальный код виджета TradingView со сменой монеты",
@@ -460,6 +464,11 @@ say("карта ликвидаций: уровень виден, пока пал
     and '{ passive: false }' in _lq and 'aria-label="×"' not in _lq
     and 'window.addEventListener("touchend", anyEnd)' in _lq and '"mousemove"' not in _lq
     and 'e.pointerType === "mouse"' in _lq)
+
+say("карта ликвидаций: семь бирж, своя история интереса Hyperliquid, чужие цены отсеяны",
+    all(f'("{n}", _liq_' in api for n in ("Binance", "OKX", "Bybit", "Gate", "HTX", "Hyperliquid", "dYdX"))
+    and "def liq_oi_refresher(" in api and "target=liq_oi_refresher" in api
+    and "abs(r[-1][3] / mid - 1) > 0.03" in api)
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

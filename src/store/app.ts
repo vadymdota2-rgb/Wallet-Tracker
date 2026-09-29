@@ -16,7 +16,7 @@ export type LiqRange = "1d" | "7d" | "30d";
 export type ScreenName =
   | "wallet" | "position" | "coin" | "deals"
   | "addWallet" | "threshold" | "lang" | "premium" | "help"
-  | "alerts" | "chart" | "unlocks" | "liqmap" | "rename" | "spot"
+  | "alerts" | "chart" | "unlocks" | "liqmap" | "funding" | "rename" | "spot"
   | "legal";
 
 export interface Screen {
@@ -32,7 +32,7 @@ export type BigWin = "1h" | "6h" | "24h" | "7d" | "30d";
 /** Сторона доски крупных ордеров. */
 export type BigSide = "buy" | "sell";
 /** Разделы аналитики — те же кнопки, что в меню бота. */
-export type BigView = "flow" | "spot" | "perp" | "fund" | "rot" | "ls";
+export type BigView = "flow" | "spot" | "perp" | "rot" | "ls";
 /** Окна потока: часы. */
 export type FlowWin = "1" | "6" | "24" | "168" | "720";
 /** Окна рейтинга: дни. */
