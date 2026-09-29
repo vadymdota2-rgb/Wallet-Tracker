@@ -16,7 +16,7 @@ import { bootTelegram, haptic, initData, telegramLang, waitForTelegram, webApp }
 import { startSync, syncNow } from "./lib/sync";
 import { Toaster, toast } from "./components/Toast";
 import { Background } from "./components/Background";
-import { AnalyticsGlyph, ChartGlyph, DigestGlyph, UnlockGlyph, TopGlyph, WalletGlyph } from "./components/ui";
+import { AnalyticsGlyph, ChartGlyph, DigestGlyph, LiqGlyph, UnlockGlyph, TopGlyph, WalletGlyph } from "./components/ui";
 import { SCREENS } from "./screens/registry";
 import { WalletsTab } from "./screens/WalletsTab";
 import { TopTab } from "./screens/TopTab";
@@ -50,6 +50,7 @@ const SCREEN_TITLE: Record<ScreenName, DictKey> = {
   alerts: "alerts_title",
   chart: "chart_title",
   unlocks: "unl_title",
+  liqmap: "lq_title",
   deals: "ui_deals",
   spot: "ui_spot_open",
   legal: "ui_legal",
@@ -61,6 +62,7 @@ const SCREEN_TITLE: Record<ScreenName, DictKey> = {
 const MENU: { name: ScreenName; key: DictKey; glyph: ReactNode }[] = [
   { name: "chart", key: "chart_title", glyph: <ChartGlyph /> },
   { name: "unlocks", key: "unl_title", glyph: <UnlockGlyph /> },
+  { name: "liqmap", key: "lq_title", glyph: <LiqGlyph /> },
 ];
 
 function TabBody({ tab }: { tab: Tab }) {

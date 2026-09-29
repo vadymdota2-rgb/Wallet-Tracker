@@ -615,3 +615,31 @@ export interface DigestTranslation {
   same?: boolean;
   error?: string;
 }
+
+/* --- Карта ликвидаций ---------------------------------------------------- */
+
+/** Уровень карты: цена середины корзины и оценка ликвидаций по плечам, $. */
+export interface LiqBucket {
+  p: number;
+  /** Лонги — по плечам в порядке LiqMapReply.levs. */
+  L: number[];
+  S: number[];
+}
+
+export interface LiqMapReply {
+  ok: boolean;
+  error?: string;
+  sym: string;
+  range: string;
+  /** Цена сейчас — закрытие последней свечи. */
+  px: number;
+  step: number;
+  lo: number;
+  /** Биржи, что ответили: модель складывает их. */
+  ex: string[];
+  levs: number[];
+  buckets: LiqBucket[];
+  /** Накоплено от цены до ±2 / ±5 / ±10 %. */
+  cum: Record<string, { L: number; S: number }>;
+  at: number;
+}

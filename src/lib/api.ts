@@ -8,7 +8,7 @@
 import { initData } from "./telegram";
 import { peek, remember } from "./memo";
 import type {
-  Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, FundRow, LsRow, MutationResult,
+  Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply, FundRow, LsRow, MutationResult,
   RotSide, SymbolRow, TokenHist, Trades, UnlocksReply, WalletLive,
 } from "./types";
 
@@ -274,3 +274,10 @@ export const translateComment = (cid: number, lang: string) =>
   call<DigestTranslation>(`/api/digest/translate?cid=${cid}&lang=${encodeURIComponent(lang)}`);
 export const uncommentDigest = (cid: number, mute = false) =>
   call<DigestActReply>("/api/digest/uncomment", { method: "POST", body: { cid, mute } });
+
+/* Карта ликвидаций: сервер пересчитывает раз в пять минут — чаще спрашивать
+   незачем. */
+const liqPath = (sym: string, range: string) =>
+  `/api/liqmap?sym=${encodeURIComponent(sym)}&range=${encodeURIComponent(range)}`;
+export const fetchLiqMap = (sym: string, range: string) => cachedGet<LiqMapReply>(liqPath(sym, range), 5 * 60_000);
+export const peekLiqMap = (sym: string, range: string) => peek<LiqMapReply | null>(liqPath(sym, range), 5 * 60_000);

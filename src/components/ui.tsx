@@ -1107,6 +1107,30 @@ export function UnlockGlyph({ size = 25 }: { size?: number }) {
   );
 }
 
+/**
+ * Значок карты ликвидаций: полосы разной длины по уровням цены и пунктир
+ * текущей цены между ними — так выглядит сама карта.
+ */
+export function LiqGlyph({ size = 25 }: { size?: number }) {
+  return (
+    <svg
+      className="glyph"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 4.5h9M4 8h14M4 16h12M4 19.5h7" />
+      <path d="M3 12h18" strokeDasharray="2 2.4" />
+    </svg>
+  );
+}
+
 /** Молния — «быстрее остальных». Тот же контур, что у соседних значков. */
 export function BoltGlyph({ size = 22 }: { size?: number }) {
   return (

@@ -8419,6 +8419,191 @@ def bootstrap(chat: str, fast: bool = False) -> dict:
                 pass
 
 
+# --- Карта ликвидаций ----------------------------------------------------
+# Оценка, где лежат ликвидации открытых позиций, — та же модель, что у
+# Coinglass: за свечу открытый интерес вырос — на её цене открылись позиции;
+# лонги и шорты делятся по доле агрессивных покупок; объём раскладывается по
+# плечам, и у каждого плеча своя цена ликвидации. Интерес упал — позиции
+# закрываются пропорционально. Уровень, который цена уже прошла, снят: там
+# ликвидация случилась. Суммируются все биржи, что ответили, — Binance, OKX и
+# Gate, открытые API без ключей. Это модель, а не список чужих позиций:
+# настоящих цен ликвидации биржи не публикуют.
+LIQ_RANGES = {"1d": ("15m", 96), "7d": ("1h", 168), "30d": ("4h", 180)}
+LIQ_LEVS = (10, 25, 50, 100)
+LIQ_LEV_W = (0.3, 0.3, 0.25, 0.15)
+LIQ_MMR = 0.005
+LIQ_SPAN = 0.15      # окно карты: ±15% от цены
+LIQ_BUCKETS = 120    # по 0,25%
+LIQ_TTL = 300.0
+_liq_cache: dict = {}
+_liq_lock = threading.Lock()
+
+
+def _liq_binance(sym: str, period: str, n: int) -> list | None:
+    s = f"{sym}USDT"
+    oi = get_json(f"https://fapi.binance.com/futures/data/openInterestHist?symbol={s}&period={period}&limit={min(n, 500)}", 15)
+    kl = get_json(f"https://fapi.binance.com/fapi/v1/klines?symbol={s}&interval={period}&limit={min(n, 500)}", 15)
+    tk = get_json(f"https://fapi.binance.com/futures/data/takerlongshortRatio?symbol={s}&period={period}&limit={min(n, 500)}", 15)
+    if not isinstance(oi, list) or not isinstance(kl, list) or not oi or not kl:
+        return None
+    kmap = {int(k[0]) // 1000: k for k in kl}
+    tmap = {int(r["timestamp"]) // 1000: _fnum(r.get("buySellRatio")) for r in (tk if isinstance(tk, list) else [])}
+    out = []
+    for r in oi:
+        t = int(r["timestamp"]) // 1000
+        k = kmap.get(t)
+        if not k:
+            continue
+        ratio = tmap.get(t) or 1.0
+        out.append((t, float(k[2]), float(k[3]), float(k[4]), _fnum(r.get("sumOpenInterestValue")), ratio / (1 + ratio)))
+    return out
+
+
+def _liq_okx(sym: str, period: str, n: int) -> list | None:
+    inst = f"{sym}-USDT-SWAP"
+    per = {"15m": "15m", "1h": "1H", "4h": "4H"}[period]
+
+    def pages(url: str, key: str) -> list:
+        rows, cursor = [], ""
+        while len(rows) < n:
+            r = get_json(url + (f"&{key}={cursor}" if cursor else ""), 15) or {}
+            data = r.get("data") or []
+            if not data:
+                break
+            rows += data
+            cursor = data[-1][0]
+            if len(data) < 100:
+                break
+        return rows
+
+    oi = pages(f"https://www.okx.com/api/v5/rubik/stat/contracts/open-interest-history?instId={inst}&period={per}&limit=100", "end")
+    kl = pages(f"https://www.okx.com/api/v5/market/history-candles?instId={inst}&bar={per}&limit=100", "after")
+    tk = pages(f"https://www.okx.com/api/v5/rubik/stat/taker-volume-contract?instId={inst}&period={per}&limit=100", "end")
+    if not oi or not kl:
+        return None
+    kmap = {int(k[0]) // 1000: k for k in kl}
+    tmap = {}
+    for r in tk:
+        sell, buy = _fnum(r[1]), _fnum(r[2])
+        if sell + buy > 0:
+            tmap[int(r[0]) // 1000] = buy / (sell + buy)
+    out = []
+    for r in oi:
+        t = int(r[0]) // 1000
+        k = kmap.get(t)
+        if not k:
+            continue
+        out.append((t, float(k[2]), float(k[3]), float(k[4]), _fnum(r[3]), tmap.get(t, 0.5)))
+    return sorted(out)
+
+
+def _liq_gate(sym: str, period: str, n: int) -> list | None:
+    c = f"{sym}_USDT"
+    st = get_json(f"https://api.gateio.ws/api/v4/futures/usdt/contract_stats?contract={c}&interval={period}&limit={min(n, 200)}", 15)
+    kl = get_json(f"https://api.gateio.ws/api/v4/futures/usdt/candlesticks?contract={c}&interval={period}&limit={min(n, 200)}", 15)
+    if not isinstance(st, list) or not isinstance(kl, list) or not st or not kl:
+        return None
+    kmap = {int(k["t"]): k for k in kl}
+    out = []
+    for r in st:
+        t = int(r.get("time") or 0)
+        k = kmap.get(t)
+        if not k:
+            continue
+        lt, stk = _fnum(r.get("long_taker_size")), _fnum(r.get("short_taker_size"))
+        out.append((t, float(k["h"]), float(k["l"]), float(k["c"]), _fnum(r.get("open_interest_usd")),
+                    lt / (lt + stk) if lt + stk > 0 else 0.5))
+    return sorted(out)
+
+
+LIQ_SOURCES = (("Binance", _liq_binance), ("OKX", _liq_okx), ("Gate", _liq_gate))
+
+
+def _liq_model(rows: list) -> list:
+    """Открытые позиции окна: (цена ликвидации, лонг?, № плеча, $)."""
+    open_: list[list] = []
+    for i in range(1, len(rows)):
+        t, h, lo, c, oi, bs = rows[i]
+        # Сначала — ликвидации свечой: цена прошла уровень, позиции нет.
+        open_ = [e for e in open_ if (e[0] < lo if e[1] else e[0] > h)]
+        d = oi - rows[i - 1][4]
+        if d < 0:
+            total = sum(e[3] for e in open_)
+            k = max(0.0, 1 + d / total) if total > 0 else 0.0
+            for e in open_:
+                e[3] *= k
+        elif d > 0:
+            p = (h + lo + c) / 3
+            for j, (lev, w) in enumerate(zip(LIQ_LEVS, LIQ_LEV_W)):
+                open_.append([p * (1 - 1 / lev + LIQ_MMR), True, j, d * bs * w])
+                open_.append([p * (1 + 1 / lev - LIQ_MMR), False, j, d * (1 - bs) * w])
+    return open_
+
+
+def liq_map(sym: str, rng: str) -> dict:
+    sym = re.sub(r"[^A-Z0-9]", "", (sym or "").upper())[:12]
+    if not sym or rng not in LIQ_RANGES:
+        return {"ok": False, "error": "bad_args"}
+    key = (sym, rng)
+    with _liq_lock:
+        hit = _liq_cache.get(key)
+        if hit and time.monotonic() - hit[0] < LIQ_TTL:
+            return hit[1]
+    period, n = LIQ_RANGES[rng]
+    got: dict[str, list] = {}
+
+    def one(src):
+        name, fn = src
+        try:
+            rows = fn(sym, period, n)
+        except Exception:  # noqa: BLE001 — биржа недоступна: карта без неё
+            rows = None
+        if rows and len(rows) >= 8:
+            got[name] = rows
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        list(pool.map(one, LIQ_SOURCES))
+    if not got:
+        res = {"ok": False, "error": "no_data", "sym": sym}
+        with _liq_lock:
+            _liq_cache[key] = (time.monotonic(), res)
+        return res
+    # Цена сейчас — закрытие последней свечи у той биржи, где оборот больше.
+    px = max(got.values(), key=lambda r: r[-1][4])[-1][3]
+    lo_px, step = px * (1 - LIQ_SPAN), px * LIQ_SPAN * 2 / LIQ_BUCKETS
+    long_b = [[0.0] * 4 for _ in range(LIQ_BUCKETS)]
+    short_b = [[0.0] * 4 for _ in range(LIQ_BUCKETS)]
+    for rows in got.values():
+        for price, is_long, j, amt in _liq_model(rows):
+            if amt <= 0:
+                continue
+            # Позиции, уже бывшие бы ликвидированными текущей ценой, не в счёт.
+            if (is_long and price >= px) or (not is_long and price <= px):
+                continue
+            b = int((price - lo_px) / step)
+            if 0 <= b < LIQ_BUCKETS:
+                (long_b if is_long else short_b)[b][j] += amt
+    buckets = []
+    for b in range(LIQ_BUCKETS):
+        L, S = long_b[b], short_b[b]
+        if sum(L) + sum(S) >= 1:
+            buckets.append({"p": round(lo_px + step * (b + 0.5), 8),
+                            "L": [round(x) for x in L], "S": [round(x) for x in S]})
+
+    def cum(side: str, pct: float) -> float:
+        edge = px * (1 - pct / 100) if side == "L" else px * (1 + pct / 100)
+        return round(sum(sum(r[side]) for r in buckets
+                         if (side == "L" and edge <= r["p"] < px) or (side == "S" and px < r["p"] <= edge)))
+
+    res = {"ok": True, "sym": sym, "range": rng, "px": px, "step": step, "lo": lo_px,
+           "ex": sorted(got), "levs": list(LIQ_LEVS), "buckets": buckets,
+           "cum": {k: {"L": cum("L", k), "S": cum("S", k)} for k in (2, 5, 10)}, "at": now()}
+    with _liq_lock:
+        _liq_cache[key] = (time.monotonic(), res)
+        cap_cache(_liq_cache, 60)
+    return res
+
+
 # --- Дайджест ------------------------------------------------------------
 # Раз в сутки, в 12:00 по Лондону, сервер собирает выпуск: самое крупное из каждой
 # вкладки аналитики за прошедшие 24 часа и ближайшие разлоки. Хранятся
@@ -9364,6 +9549,9 @@ class Handler(BaseHTTPRequestHandler):
                         cur.close()
                     except Exception:
                         pass
+                return
+            if path in ("/liqmap", "/api/liqmap"):
+                self._json(200, liq_map(qs.get("sym", ["BTC"])[0], (qs.get("range", ["1d"])[0] or "1d")))
                 return
             if path in ("/digest", "/api/digest"):
                 chat = self._user(qs)

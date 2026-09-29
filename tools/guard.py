@@ -247,8 +247,9 @@ say("помощь не обещает неделю за /start", all("/start" no
 # --- боковое меню: график TradingView и разлоки -----------------------------
 _m0 = appx.index("= [", appx.index("const MENU:"))
 menu = appx[_m0:appx.index("];", _m0)]
-say("в боковом меню два пункта: график, затем разлоки",
-    menu.count("name:") == 2 and menu.index('name: "chart"') < menu.index('name: "unlocks"'))
+say("в боковом меню три пункта: график, разлоки, карта ликвидаций",
+    menu.count("name:") == 3
+    and menu.index('name: "chart"') < menu.index('name: "unlocks"') < menu.index('name: "liqmap"'))
 tv = read(f"{APP}/src/lib/tradingview.ts")
 chart_scr = read(f"{APP}/src/screens/ChartScreen.tsx")
 say("график — официальный код виджета TradingView со сменой монеты",
@@ -431,6 +432,19 @@ say("анонимный комментарий уходит без имени, �
 say("отказ в комментарии приходит с причиной, а не кодом ошибки",
     "res = digest_act(self._user_full(qs), dg, body)\n                self._json(200, res)" in api
     and "actError(lang, r)" in _dg_tab)
+
+# --- Старт на дайджесте и карта ликвидаций --------------------------------
+_store = read(f"{APP}/src/store/app.ts")
+_appx = read(f"{APP}/src/App.tsx")
+say("приложение всегда открывается на «Дайджесте»",
+    'tab: "digest",' in _store and "delete s.tab;" in _store
+    and "tab: s.tab" not in _store)
+say("«Карта ликвидаций» в меню сразу под «Токеномикой»",
+    '{ name: "unlocks", key: "unl_title", glyph: <UnlockGlyph /> },\n  { name: "liqmap", key: "lq_title", glyph: <LiqGlyph /> },' in _appx
+    and "liqmap: LiqMapScreen" in read(f"{APP}/src/screens/registry.ts"))
+say("карта ликвидаций считается на сервере из открытых данных бирж, без ключей",
+    "def liq_map(" in api and '"/api/liqmap"' in api and "LIQ_SOURCES" in api
+    and "apikey" not in pybody(api, "def liq_map(").lower())
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
