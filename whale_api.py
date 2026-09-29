@@ -1973,6 +1973,7 @@ UNLOCK_BOOK: list[dict] = [
      # Последняя выдача инвесторам и команде по четырёхлетнему графику.
      "circ": ("2026-09-27", 870_857_391),
      "staked": ("2026-09-28", 772_851_164, 1_209_379_181),  # stake::ValidatorSet, доля — от выпуска
+     "apy": ("2026-09-29", 2.6),  # StakingRewards
      "plan": [("o", "2026-10-12", 3_960_000, "team"),
               ("o", "2026-10-12", 2_440_000, "investors"),
               ("o", "2026-10-12", 3_210_000, "community"),
@@ -1992,6 +1993,7 @@ UNLOCK_BOOK: list[dict] = [
      "src": "https://docs.starknet.io/learn/protocol/strk",
      "circ": ("2026-09-27", 7_350_605_580),
      "staked": ("2026-09-28", 1_590_000_000),  # StakingRewards
+     "apy": ("2026-09-29", 7.52),  # StakingRewards
      "plan": [("m", 15, "2025-04", "2027-03", 64_000_000, "team"),
               ("m", 15, "2025-04", "2027-03", 63_000_000, "investors"),
               # Эмиссия стейкинга: 1,6% × √(доля в стейкинге) от 10 млрд —
@@ -2021,6 +2023,7 @@ UNLOCK_BOOK: list[dict] = [
      # и казна — 12/48 своей доли; дальше всё помесячно до ноября 2029.
      "circ": ("2026-09-27", 11_825_165_000),
      "staked": ("2026-09-28", 15_480_000_000, 100_682_925_000),  # StakingRewards, доля — от выпуска
+     "apy": ("2026-09-29", 12.13),  # StakingRewards
      "plan": [("o", "2026-11-24", 10_700_000_000, "team"),
               ("o", "2026-11-24", 4_920_750_000, "investors"),
               ("o", "2026-11-24", 988_250_000, "treasury"),
@@ -2048,12 +2051,14 @@ UNLOCK_BOOK: list[dict] = [
      # выдачи 6-го числа. Забирают на деле малую долю — это право, не продажа.
      "circ": ("2026-09-27", 222_445_714),
      "staked": ("2026-09-28", 440_931_752, 955_307_079),  # валидаторы Hyperliquid, доля — от выпуска
+     "apy": ("2026-09-29", 2.23),  # StakingRewards
      "plan": [("m", 6, "2026-01", "2027-12", 9_920_000, "team")]},
     {"s": "SEI", "n": "Sei",
      "src": "https://www.sei.io/",
      # Команда: 20% от 10 млрд, помесячно 15-го до августа 2027.
      "circ": ("2026-09-27", 6_733_333_333),
      "staked": ("2026-09-28", 4_124_710_393),  # staking/pool
+     "apy": ("2026-09-29", 3.98),  # StakingRewards
      "plan": [("m", 15, "2024-09", "2027-08", 55_560_000, "team")]},
     {"s": "ZRO", "n": "LayerZero",
      "src": "https://cryptoticker.io/en/layerzero-zro-unlock-monthly-dilution/",
@@ -2097,6 +2102,7 @@ UNLOCK_BOOK: list[dict] = [
      # 64 млн 1-го числа, дальше проект помесячной раскладки не публикует.
      "circ": ("2026-09-27", 4_096_537_146),
      "staked": ("2026-09-28", 7_016_957_602, 10_000_000_000),  # набор валидаторов, доля — от выпуска
+     "apy": ("2026-09-29", 1.49),  # StakingRewards
      "plan": [("m", 1, "2026-10", "2026-12", 64_200_000, "mixed")]},
     {"s": "OP", "n": "Optimism",
      "src": "https://community.optimism.io/op-token/op-token-overview",
@@ -2110,6 +2116,7 @@ UNLOCK_BOOK: list[dict] = [
      # Линейная выдача, здесь сложена по месяцам — в последний день месяца.
      "circ": ("2026-09-27", 973_802_843),
      "staked": ("2026-09-28", 473_849_697),  # staking/pool
+     "apy": ("2026-09-29", 5.53),  # StakingRewards
      "plan": [("m", 31, "2025-11", "2027-09", 17_340_000, "mixed"),
               # Эмиссия стейкинга: ~2,5% годовых, около 55 млн TIA в год; ставка
               # снижается на 6,7% в год до 1,5%.
@@ -2130,6 +2137,7 @@ UNLOCK_BOOK: list[dict] = [
      # выходят равными долями 60 месяцев, 17-го числа.
      "circ": ("2026-09-27", 49_746_917_935),
      "staked": ("2026-09-28", 14_473_775_421),  # Cronos POS, staking/pool
+     "apy": ("2026-09-29", 4.3),  # инфляция 0,74% × (1 − 15%) ÷ 14,6% в стейкинге
      "plan": [("m", 17, "2025-04", "2030-03", 1_166_666_667, "treasury")]},
     {"s": "WLD", "n": "World",
      "src": "https://world.org/blog/foundational-topics/tokenomics-milestone-wld-unlock-rate-to-decrease-by-43-in-july",
@@ -2264,6 +2272,7 @@ UNLOCK_BOOK: list[dict] = [
      # в год, пол 1,5% — в первой половине 2029-го.
      "circ": ("2026-09-27", 587_781_945),
      "staked": ("2026-09-28", 440_549_807),  # голоса валидаторов, getVoteAccounts
+     "apy": ("2026-09-29", 5.02),  # StakingRewards
      "plan": [("m", 1, "2026-10", "2027-08", 1_920_000, "emission"),
               ("m", 1, "2027-09", "2028-08", 1_390_000, "emission"),
               ("m", 1, "2028-09", "2029-05", 990_000, "emission"),
@@ -2275,12 +2284,14 @@ UNLOCK_BOOK: list[dict] = [
      # в 2026-м мало, прирост предложения около 0,8% в год.
      "circ": ("2026-09-27", 122_087_473),
      "staked": ("2026-09-28", 43_450_000),  # StakingRewards, 35,6% выпуска
+     "apy": ("2026-09-29", 2.55),  # StakingRewards
      "plan": [("m", 1, "2026-10", None, 85_000, "emission")]},
     {"s": "NEAR", "n": "NEAR Protocol",
      "src": "https://cryptorank.io/news/feed/de98d-near-protocol-near-slashes-inflation-to-2-5-after-successful-halving-upgrade",
      # С 30.10.2025 инфляция 2,5% в год — около 32 млн NEAR.
      "circ": ("2026-09-27", 1_307_529_810),
      "staked": ("2026-09-28", 540_266_594),  # RPC validators
+     "apy": ("2026-09-29", 5.45),  # StakingRewards
      "plan": [("m", 1, "2026-10", None, 2_670_000, "emission")]},
     {"s": "DOT", "n": "Polkadot",
      "src": "https://phemex.com/blogs/polkadot-halving-tokenomics-explained",
@@ -2289,6 +2300,7 @@ UNLOCK_BOOK: list[dict] = [
      # 14.03.2028 он снижается на 13,14%.
      "circ": ("2026-09-27", 1_704_879_082),
      "staked": ("2026-09-28", 907_680_000),  # StakingRewards
+     "apy": ("2026-09-29", 2.76),  # StakingRewards
      "plan": [("m", 1, "2026-10", "2028-03", 4_740_000, "emission"),
               ("m", 1, "2028-04", None, 4_117_000, "emission")]},
     # --- По капитализации сверху вниз (сентябрь 2026) ---------------------
@@ -2315,6 +2327,7 @@ UNLOCK_BOOK: list[dict] = [
      # 2026-м — 70–87 млн за квартал. Берём чистый, ~26 млн в месяц.
      "circ": ("2026-09-27", 94_972_937_401),
      "staked": ("2026-09-28", 44_070_000_000),  # StakingRewards
+     "apy": ("2026-09-29", 3.24),  # StakingRewards
      "plan": [("m", 1, "2026-10", None, 26_000_000, "emission")]},
     {"s": "ZEC", "n": "Zcash",
      "src": "https://z.cash/learn/what-is-the-zcash-halving/",
@@ -2337,6 +2350,7 @@ UNLOCK_BOOK: list[dict] = [
      # LINK (часть — сразу на биржу). Точный день в квартале плавает.
      "circ": ("2026-09-27", 748_099_970),
      "staked": ("2026-09-28", 42_525_191),  # пулы стейкинга v0.2
+     "apy": ("2026-09-29", 4.76),  # StakingRewards
      "plan": [("o", d, 19_000_000, "treasury") for d in (
                   "2026-10-01", "2027-01-01", "2027-04-01", "2027-07-01", "2027-10-01",
                   "2028-01-01", "2028-04-01", "2028-07-01", "2028-10-01")]},
@@ -2353,6 +2367,7 @@ UNLOCK_BOOK: list[dict] = [
      # оборота, стейкерам и в казну.
      "circ": ("2026-09-27", 37_535_193_928),
      "staked": ("2026-09-28", 21_320_779_780),  # активный стейк эпохи 658
+     "apy": ("2026-09-29", 2.1),  # StakingRewards
      "plan": [("m", 1, "2026-10", None, 62_000_000, "emission")]},
     {"s": "BCH", "n": "Bitcoin Cash",
      "src": "https://en.wikipedia.org/wiki/Bitcoin_Cash",
@@ -2377,6 +2392,7 @@ UNLOCK_BOOK: list[dict] = [
      # застейканные — около 15 млн AVAX в год. Комиссии сжигаются.
      "circ": ("2026-09-27", 469_753_866),
      "staked": ("2026-09-28", 203_719_053),  # platform.getTotalStake
+     "apy": ("2026-09-29", 5.6),  # StakingRewards
      "plan": [("m", 1, "2026-10", None, 1_250_000, "emission")]},
     {"s": "GRAM", "n": "Toncoin",
      "src": "https://www.dextools.io/tutorials/ton-tokenomics-toncoin-supply-distribution-inflation-guide-2026",
@@ -2394,6 +2410,7 @@ UNLOCK_BOOK: list[dict] = [
      # халвинг — при выпуске 15,75 млн, при нынешнем темпе к концу 2029-го.
      "circ": ("2026-09-27", 11_339_645),
      "staked": ("2026-09-28", 7_450_000),  # StakingRewards
+     "apy": ("2026-09-29", 4.47),  # StakingRewards
      "plan": [("m", 1, "2026-10", None, 109_500, "emission")]},
     {"s": "ICP", "n": "Internet Computer",
      "src": "https://internetcomputer.org/whitepapers/mission70.pdf",
@@ -2414,10 +2431,12 @@ UNLOCK_BOOK: list[dict] = [
     {"s": "ATOM", "n": "Cosmos Hub",
      "src": "https://github.com/gavinly/CosmosParametersWiki/blob/master/Mint.md",
      "est": True,
-     # Инфляция плавает 7–10% в год по доле в стейкинге — около 8,5%.
+     # Инфляция плавает 7–10% в год по доле в стейкинге; по сети 29.09.2026
+     # (mint/inflation) — 10% от 532 млн, ~4,44 млн ATOM в месяц.
      "circ": ("2026-09-27", 533_071_893),
      "staked": ("2026-09-28", 337_000_338),  # staking/pool
-     "plan": [("m", 1, "2026-10", None, 3_780_000, "emission")]},
+     "apy": ("2026-09-29", 15.49),  # инфляция 10% × (1 − 2% в казну) ÷ 63,3% в стейкинге
+     "plan": [("m", 1, "2026-10", None, 4_437_000, "emission")]},
     {"s": "ETC", "n": "Ethereum Classic",
      "src": "https://coinpaper.com/15757/ethereum-classic-halving-dates",
      # С 22.07.2026 (блок 25 млн) — 1,6384 ETC за блок, ~6 600 блоков в сутки.
@@ -2479,6 +2498,7 @@ UNLOCK_BOOK: list[dict] = [
      # в 2028-м — 250.
      "circ": ("2026-09-27", 1_870_091_031),
      "staked": ("2026-09-28", 448_329_576),  # стекинг PoX, цикл 144
+     "apy": ("2026-09-29", 6.58),  # StakingRewards
      "plan": [("m", 1, "2026-10", "2028-04", 2_190_000, "emission"),
               ("m", 1, "2028-05", None, 1_095_000, "emission")]},
     {"s": "BSV", "n": "Bitcoin SV",
@@ -2494,6 +2514,7 @@ UNLOCK_BOOK: list[dict] = [
      # Выпуск индексаторам и делегатам ~3% в год от ~11,6 млрд.
      "circ": ("2026-09-27", 10_941_320_353),
      "staked": ("2026-09-28", 2_101_612_693),  # контракты стейкинга в Ethereum и Arbitrum
+     "apy": ("2026-09-29", 14.47),  # StakingRewards
      "plan": [("m", 1, "2026-10", None, 29_000_000, "emission")]},
     {"s": "DASH", "n": "Dash",
      "src": "https://www.dash.org/news/dashs-yearly-emission/",
@@ -2583,6 +2604,7 @@ UNLOCK_BOOK: list[dict] = [
      # основателей — 3% от 15 млрд в год.
      "circ": ("2026-09-27", 19_946_688_440),
      "staked": ("2026-09-28", 3_130_878_898),  # мастерноды, xdcscan
+     "apy": ("2026-09-29", 7.3),  # StakingRewards
      "plan": [("m", 1, "2026-10", None, 16_200_000, "emission"),
               ("m", 1, "2026-10", "2029-09", 37_500_000, "team")]},
     {"s": "BDX", "n": "Beldex",
@@ -2647,6 +2669,7 @@ UNLOCK_BOOK: list[dict] = [
      # 767 тыс. IOTA каждую эпоху (сутки) стейкерам — ~280 млн в год.
      "circ": ("2026-09-27", 4_657_854_073),
      "staked": ("2026-09-28", 2_390_000_000),  # StakingRewards
+     "apy": ("2026-09-29", 11.73),  # StakingRewards
      "plan": [("m", 1, "2026-10", None, 23_330_000, "emission")]},
     {"s": "SHFL", "n": "Shuffle",
      "src": "https://shfl.shuffle.com/shfl-airdrop-3",
@@ -2678,6 +2701,7 @@ UNLOCK_BOOK: list[dict] = [
      # Инфляция стейкинга ~8–9% в год (потолок Proposal 283).
      "circ": ("2026-09-27", 298_280_768),
      "staked": ("2026-09-28", 90_124_854),  # staking/pool
+     "apy": ("2026-09-29", 3.97),  # инфляция 4% × (1 − 70% в казну) ÷ 30,2% в стейкинге
      "plan": [("m", 1, "2026-10", None, 2_200_000, "emission")]},
     {"s": "MINA", "n": "Mina Protocol",
      "src": "https://minaprotocol.com/blog/mina-token-distribution-and-supply",
@@ -2685,6 +2709,7 @@ UNLOCK_BOOK: list[dict] = [
      # 720 MINA за блок; инфляция дошла до постоянных ~7% в год.
      "circ": ("2026-09-27", 1_293_631_019),
      "staked": ("2026-09-28", 1_200_000_000),  # делегировано
+     "apy": ("2026-09-29", 6.96),  # StakingRewards
      "plan": [("m", 1, "2026-10", None, 7_550_000, "emission")]},
     {"s": "XCN", "n": "Onyxcoin",
      "src": "https://tokenomist.ai/chain-2/unlock-events",
@@ -2733,6 +2758,7 @@ UNLOCK_BOOK: list[dict] = [
      # 10% комиссий сжигается.
      "circ": ("2026-09-27", 30_841_917),
      "staked": ("2026-09-28", 14_333_447),  # api.multiversx.com/economics
+     "apy": ("2026-09-29", 8.82),  # api.multiversx.com/economics
      "plan": [("m", 1, "2026-10", None, 243_000, "emission")]},
     {"s": "SKR", "n": "Seeker",
      "src": "https://app.tokenomics.com/tokenomics/seeker-solana-mobile/unlocks",
@@ -2765,6 +2791,7 @@ UNLOCK_BOOK: list[dict] = [
      # с 28.08 по 27.09.2026, +8,06 млн за 90 дней — около 2,9% в год.
      "circ": ("2026-09-27", 1_117_284_169),
      "staked": ("2026-09-28", 336_525_804),  # TzKT: свой и внешний стейк
+     "apy": ("2026-09-29", 7.69),  # StakingRewards
      "plan": [("m", 1, "2026-10", None, 2_650_000, "emission")]},
     {"s": "DCR", "n": "Decred",
      "src": "https://dcrdata.decred.org/api/supply",
@@ -2773,6 +2800,7 @@ UNLOCK_BOOK: list[dict] = [
      # 1,4% меньше. Создано 17 624 044 из 21 млн.
      "circ": ("2026-09-28", 17_624_044),
      "staked": ("2026-09-28", 11_337_132),  # пул билетов
+     "apy": ("2026-09-29", 4.2),  # 89% выпуска ~477 тыс. в год ÷ 11,3 млн в билетах
      "plan": _decaying("2026-10", 36, 44_700, 0.9859)},
     {"s": "PRL", "n": "Pearl",
      "src": "https://hashrateindex.com/blog/pearl-prl-ai-compute-cryptocurrency/",
@@ -2913,6 +2941,7 @@ UNLOCK_BOOK: list[dict] = [
      # в месяц; следующий халвинг — декабрь 2029.
      "circ": ("2026-09-28", 106_116_787),
      "staked": ("2026-09-28", 20_521_031),  # вес стейкинга qtum.info
+     "apy": ("2026-09-29", 1.2),  # весь выпуск ~246 тыс. в год ÷ 20,5 млн в стейкинге
      "plan": [("m", 1, "2026-10", "2029-11", 20_540, "emission"),
               ("m", 1, "2029-12", None, 10_270, "emission")]},
     {"s": "SN51", "n": "Celium (Bittensor SN51)",
@@ -3033,6 +3062,7 @@ UNLOCK_BOOK: list[dict] = [
      # казне до января 2028; награды валидаторам — из готовой доли.
      "circ": ("2026-09-28", 1_607_083_333),
      "staked": ("2026-09-28", 399_288_187),  # staking/pool
+     "apy": ("2026-09-29", 10.39),  # StakingRewards
      "plan": [("m", 2, "2026-10", "2027-01", 13_125_000, "team"),
               ("m", 2, "2026-10", "2027-01", 9_333_333, "investors"),
               ("m", 2, "2026-10", "2027-07", 2_625_000, "community"),
@@ -3053,6 +3083,7 @@ UNLOCK_BOOK: list[dict] = [
      # mint/annual_provisions = 0, выпуск стоит на 1,2557 млрд.
      "circ": ("2026-09-28", 1_245_232_247),
      "staked": ("2026-09-28", 298_734_126),  # staking/pool
+     "apy": ("2026-09-29", 0.0),  # инфляция сети 0 — платят только комиссии
      "plan": [("m", 1, "2026-10", "2026-12", 3_541_958, "team")]},
     {"s": "GAS", "n": "Neo GAS",
      "src": "https://neo.org/blog/details/4336?language=en",
@@ -3074,6 +3105,7 @@ UNLOCK_BOOK: list[dict] = [
      # предложено.
      "circ": ("2026-09-28", 18_901_962),
      "staked": ("2026-09-28", 8_760_000),  # StakingRewards
+     "apy": ("2026-09-29", 15.38),  # StakingRewards
      "plan": [("m", 1, "2026-10", None, 157_500, "emission")]},
     {"s": "DGB", "n": "DigiByte",
      "src": "https://github.com/DigiByte-Core/digibyte/wiki/Technical-Specifications",
@@ -3090,6 +3122,7 @@ UNLOCK_BOOK: list[dict] = [
      # около 25% в год, ~1 млн LPT в месяц.
      "circ": ("2026-09-28", 49_688_955),
      "staked": ("2026-09-28", 29_664_650),  # getTotalBonded
+     "apy": ("2026-09-29", 42.93),  # StakingRewards
      "plan": [("m", 1, "2026-10", None, 1_000_000, "emission")]},
     {"s": "TFUEL", "n": "Theta Fuel",
      "src": "https://coinmarketcap.com/cmc-ai/theta-fuel/price-prediction/",
@@ -3123,6 +3156,7 @@ UNLOCK_BOOK: list[dict] = [
      # не входит.
      "circ": ("2026-09-28", 49_604_341_407),
      "staked": ("2026-09-28", 8_119_502_271),  # вклады NervosDAO
+     "apy": ("2026-09-29", 2.0),  # NervosDAO, estimated_apc
      "plan": [("m", 1, "2026-10", "2027-10", 175_000_000, "emission"),
               ("m", 1, "2027-11", None, 87_500_000, "emission")]},
     {"s": "ROSE", "n": "Oasis",
@@ -3758,8 +3792,14 @@ def unlock_stakes() -> dict:
         # Третье число — база доли вместо оборота: у APT, SUI, HYPE в
         # стейкинге и ещё запертые доли, у AERO оборот считают без veAERO.
         base = st[2] if len(st) > 2 else (c["circ"][1] if c.get("circ") else 0)
-        out[c["s"]] = {"n": round(n), "p": round(n / base * 100, 1) if base else None, "at": at,
-                       "of": "supply" if len(st) > 2 else "circ"}
+        row = {"n": round(n), "p": round(n / base * 100, 1) if base else None, "at": at,
+               "of": "supply" if len(st) > 2 else "circ"}
+        # Доходность стейкинга, % в год (снимок «apy»): сколько платят тем,
+        # кто застейкал. Рядом приложение ставит рост выпуска — видно, растёт
+        # ли доля стейкера на деле.
+        if c.get("apy"):
+            row["y"] = c["apy"][1]
+        out[c["s"]] = row
     return out
 
 

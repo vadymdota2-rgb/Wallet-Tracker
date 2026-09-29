@@ -237,6 +237,20 @@ export function UnlocksScreen() {
     return { year, end };
   };
 
+  /* Сколько новых монет сеть выпустит за год от сегодня, в % оборота: с
+     этим сравнивается доходность стейкинга. Доход 2,8% при выпуске 3,3%
+     значит, что доля стейкера в сети на деле уменьшается. */
+  const emitYear = (sym: string): number | null => {
+    let first: UnlockEvent | null = null;
+    let sum = 0;
+    for (const x of items ?? []) {
+      if (x.sym !== sym) continue;
+      if (!first || x.ts < first.ts) first = x;
+      if (x.ts < nowSec + 365 * 86400) sum += x.who.emission ?? 0;
+    }
+    return first?.circ ? (sum / first.circ) * 100 : null;
+  };
+
   const chart = (sym: string) => {
     haptic("select");
     setTvSym(sym);
@@ -416,6 +430,28 @@ export function UnlocksScreen() {
                                   <small className="unl-note">{t(lang, "unl_stake_supply_note")}</small>
                                 ) : null}
                               </dd>
+                              {st ? (
+                                <>
+                                  <dt>{t(lang, "unl_apy")}</dt>
+                                  <dd>
+                                    {st.y === undefined
+                                      ? t(lang, "unl_stake_unknown")
+                                      : t(lang, "unl_apy_val", { p: pct(st.y, 2, false) })}
+                                    {(() => {
+                                      if (st.y === undefined) return null;
+                                      if (noEmit[e.sym])
+                                        return <small className="unl-note">{t(lang, "unl_apy_nodil")}</small>;
+                                      const em = emitYear(e.sym);
+                                      if (!em) return null;
+                                      return (
+                                        <small className="unl-note">
+                                          {t(lang, "unl_apy_net", { e: pct(em, 1, false), r: pct(st.y - em, 1, true) })}
+                                        </small>
+                                      );
+                                    })()}
+                                  </dd>
+                                </>
+                              ) : null}
                             </>
                           );
                         })()}

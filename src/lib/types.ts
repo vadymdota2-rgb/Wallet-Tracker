@@ -682,4 +682,6 @@ export interface UnlockStake {
   at: string;
   /** От чего доля: оборота или всего выпуска. */
   of?: "circ" | "supply";
+  /** Доходность стейкинга, % в год; нет поля — неизвестна. */
+  y?: number;
 }
