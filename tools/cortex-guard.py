@@ -877,6 +877,8 @@ _apy_old = [f"{c}:{d}" for c, d in re.findall(r'\{"s": "([A-Z0-9]+)", "n": [^\n]
 say("снимок доходности стейкинга не старше 120 дней", not _apy_old, str(_apy_old))
 say("карточка монеты начинается с вывода о давлении и объясняет термины",
     'className={`unl-verdict v${lvl}`}' in unl_scr and '"unl_q_pressure"' in unl_scr and 'className="unl-q"' in unl_scr)
+say("разлок меряется днями всех торгов: объём с семи бирж, тезки отсеяны по цене",
+    '"vol": spot_volumes(' in api and "abs(px / ref - 1) <= 0.15" in api and 't(lang, "unl_v_liq"' in unl_scr)
 say("кривая оборота на три года и полная оценка (FDV) в карточке",
     "function SupplyCurve(" in unl_scr and 't(lang, "unl_fdv")' in unl_scr and '"supply": {k: {"t": v[0], "m": v[1]}' in api)
 say("карточка монеты рисует круг выпуска: на рынке, в стейкинге, кому ещё выйдет",

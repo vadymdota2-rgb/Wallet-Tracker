@@ -4492,6 +4492,80 @@ def unlock_stakes() -> dict:
     return out
 
 
+# --- Объём торгов --------------------------------------------------------------
+# Разлок в долях оборота не говорит, переварит ли его рынок: 1% оборота у
+# ликвидной монеты — пустяк, у неликвидной — обвал. Мерило — сколько дней
+# всех торгов монетой занимает выходящая сумма. Объём — сумма спотовых
+# торгов к доллару на семи биржах, по одному запросу на биржу за всё сразу.
+VOL_TTL_S = 3600
+_VOL_RAW: tuple[float, dict] = (0.0, {})
+_vol_lock = threading.Lock()
+
+
+def _spot_tickers() -> dict[str, list[tuple[float, float]]]:
+    """Монета → [(цена, объём за сутки в $)] по биржам, пары к USDT/USDC."""
+    out: dict[str, list[tuple[float, float]]] = {}
+
+    def add(base: str, last, vol) -> None:
+        px, v = _fnum(last), _fnum(vol)
+        if base and px > 0 and v > 0:
+            out.setdefault(base.upper(), []).append((px, v))
+
+    def split(sym: str, sep: str = "") -> tuple[str, bool]:
+        for q in ("USDT", "USDC"):
+            tail = sep + q
+            if sym.endswith(tail):
+                return sym[: -len(tail)], True
+        return "", False
+
+    for url, rows, pick in (
+        ("https://data-api.binance.vision/api/v3/ticker/24hr", lambda j: j if isinstance(j, list) else [],
+         lambda x: (split(x.get("symbol", "")), x.get("lastPrice"), x.get("quoteVolume"))),
+        ("https://api.bybit.com/v5/market/tickers?category=spot", lambda j: ((j or {}).get("result") or {}).get("list") or [],
+         lambda x: (split(x.get("symbol", "")), x.get("lastPrice"), x.get("turnover24h"))),
+        ("https://www.okx.com/api/v5/market/tickers?instType=SPOT", lambda j: (j or {}).get("data") or [],
+         lambda x: (split(x.get("instId", ""), "-"), x.get("last"), x.get("volCcy24h"))),
+        ("https://api.gateio.ws/api/v4/spot/tickers", lambda j: j if isinstance(j, list) else [],
+         lambda x: (split(x.get("currency_pair", ""), "_"), x.get("last"), x.get("quote_volume"))),
+        ("https://api.bitget.com/api/v2/spot/market/tickers", lambda j: (j or {}).get("data") or [],
+         lambda x: (split(x.get("symbol", "")), x.get("lastPr"), x.get("quoteVolume"))),
+        ("https://api.kucoin.com/api/v1/market/allTickers", lambda j: ((j or {}).get("data") or {}).get("ticker") or [],
+         lambda x: (split(x.get("symbol", ""), "-"), x.get("last"), x.get("volValue"))),
+        ("https://api.mexc.com/api/v3/ticker/24hr", lambda j: j if isinstance(j, list) else [],
+         lambda x: (split(x.get("symbol", "")), x.get("lastPrice"), x.get("quoteVolume"))),
+    ):
+        j = get_json(url, 25)
+        for x in rows(j) if j is not None else []:
+            if not isinstance(x, dict):
+                continue
+            (base, ok), last, vol = pick(x)
+            if ok:
+                add(base, last, vol)
+    return out
+
+
+def spot_volumes(ref_px: dict[str, float]) -> dict[str, float]:
+    """Суточный объём по монетам книги. Биржа засчитывается, только если её
+    цена в пределах 15% от нашей: у тезок (PRL — Pearl и Perle) чужой объём
+    иначе попал бы в чужую монету."""
+    global _VOL_RAW
+    with _vol_lock:
+        at, raw = _VOL_RAW
+        if time.time() - at > VOL_TTL_S or not raw:
+            fresh = _spot_tickers()
+            if fresh:
+                _VOL_RAW = (time.time(), fresh)
+                raw = fresh
+    out = {}
+    for sym, ref in ref_px.items():
+        if not ref:
+            continue
+        v = sum(vol for px, vol in raw.get(sym, []) if abs(px / ref - 1) <= 0.15)
+        if v > 0:
+            out[sym] = round(v)
+    return out
+
+
 def _unlocks_build() -> dict:
     """Календарь разлоков с ценой и долей от оборота — сборка целиком.
 
@@ -4532,7 +4606,9 @@ def _unlocks_build() -> dict:
             "stake": unlock_stakes(),
             # Выпуск: всего создано (где есть доли без графика) и потолок —
             # для полного круга и полной оценки (FDV).
-            "supply": {k: {"t": v[0], "m": v[1]} for k, v in UNLOCK_SUPPLY.items()}}
+            "supply": {k: {"t": v[0], "m": v[1]} for k, v in UNLOCK_SUPPLY.items()},
+            # Суточный объём торгов, $: разлок в днях торгов считает приложение.
+            "vol": spot_volumes({e["sym"]: e["price"] or 0.0 for e in items})}
 
 
 # Готовый календарь в памяти. Раньше он собирался на каждый запрос, и экран

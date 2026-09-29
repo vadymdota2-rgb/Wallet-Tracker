@@ -677,6 +677,8 @@ export interface UnlocksReply {
   /** Выпуск монеты: t — всего создано (0 — нет долей без графика),
    *  m — потолок (0 — нет или неизвестен). */
   supply?: Record<string, { t: number; m: number }>;
+  /** Суточный объём спотовых торгов по всем биржам, $. */
+  vol?: Record<string, number>;
 }
 
 export interface UnlockStake {

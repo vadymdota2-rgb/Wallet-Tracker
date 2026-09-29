@@ -113,6 +113,7 @@ export function UnlocksScreen() {
   const noEmit = reply?.noEmit ?? {};
   const stake = reply?.stake ?? {};
   const supplyRef = reply?.supply ?? {};
+  const vols = reply?.vol ?? {};
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let alive = true;
@@ -371,6 +372,7 @@ export function UnlocksScreen() {
                       stake={stake[e.sym]}
                       noEmit={noEmit[e.sym]}
                       ref0={supplyRef[e.sym]}
+                      vol={vols[e.sym]}
                       onChart={() => chart(e.sym)}
                     />
                   ) : null}
@@ -464,6 +466,7 @@ function CoinMore({
   stake,
   noEmit,
   ref0,
+  vol,
   onChart,
 }: {
   e: UnlockEvent;
@@ -473,9 +476,12 @@ function CoinMore({
   stake: UnlockStake | null | undefined;
   noEmit: UnlockNoEmit | undefined;
   ref0: { t: number; m: number } | undefined;
+  vol: number | undefined;
   onChart: () => void;
 }) {
-  const [help, setHelp] = useState<DictKey | null>(null);
+  /* Какое объяснение раскрыто: «место:термин» — один термин встречается и
+     в выводе, и в строке, раскрываться он должен там, где нажали. */
+  const [help, setHelp] = useState<string | null>(null);
   const sym = e.sym;
   const mine = useMemo(() => items.filter((x) => x.sym === sym).sort((x, y) => x.ts - y.ts), [items, sym]);
   const first = mine[0];
@@ -504,7 +510,14 @@ function CoinMore({
 
   /* Вывод: сколько монет прибавится за год к нынешнему обороту. */
   const yearPct = now ? (yearAll / now) * 100 : 0;
-  const lvl = yearAll <= 0 || yearPct < 3 ? 1 : yearPct < 10 ? 2 : yearPct < 30 ? 3 : 4;
+  /* Второе мерило — ликвидность: ближайший разлок за 30 дней в днях всех
+     торгов монетой. Сутки торгов и больше поднимают вывод до «высокого»,
+     пять суток — до «очень высокого», даже если по обороту немного. */
+  const days = (x: UnlockEvent) => (vol && x.usd ? x.usd / vol : 0);
+  const nextUnlock = mine.find((x) => x.ts >= nowSec - 86400 && x.ts < nowSec + 30 * 86400 && hasUnlock(x));
+  const nextDays = nextUnlock ? days(part(nextUnlock, "unlock") ?? nextUnlock) : 0;
+  const bySupply = yearAll <= 0 || yearPct < 3 ? 1 : yearPct < 10 ? 2 : yearPct < 30 ? 3 : 4;
+  const lvl = Math.max(bySupply, nextDays >= 5 ? 4 : nextDays >= 1 ? 3 : 1);
   const lvlKey: DictKey = lvl === 1 ? "unl_v_low" : lvl === 2 ? "unl_v_mid" : lvl === 3 ? "unl_v_high" : "unl_v_max";
   const verdict =
     yearAll <= 0
@@ -524,16 +537,16 @@ function CoinMore({
           <button
             type="button"
             className="unl-q"
-            aria-expanded={help === q}
+            aria-expanded={help === `r:${q}`}
             aria-label="?"
-            onClick={() => setHelp(help === q ? null : q)}
+            onClick={() => setHelp(help === `r:${q}` ? null : `r:${q}`)}
           >
             ?
           </button>
         ) : null}
       </dt>
       <dd>{children}</dd>
-      {q && help === q ? <dd className="unl-help">{t(lang, q)}</dd> : null}
+      {q && help === `r:${q}` ? <dd className="unl-help">{t(lang, q)}</dd> : null}
     </>
   );
   const dayKind: DictKey = hasUnlock(e) ? "unl_q_unlock" : "unl_q_emit";
@@ -553,15 +566,30 @@ function CoinMore({
           <button
             type="button"
             className="unl-q"
-            aria-expanded={help === "unl_q_pressure"}
+            aria-expanded={help === "v:pressure"}
             aria-label="?"
-            onClick={() => setHelp(help === "unl_q_pressure" ? null : "unl_q_pressure")}
+            onClick={() => setHelp(help === "v:pressure" ? null : "v:pressure")}
           >
             ?
           </button>
         </div>
         <p>{verdict}</p>
-        {help === "unl_q_pressure" ? <p className="unl-help">{t(lang, "unl_q_pressure")}</p> : null}
+        {nextUnlock && nextDays >= 0.1 ? (
+          <p>
+            {t(lang, "unl_v_liq", { date: day(nextUnlock.ts, nowSec), d: times(nextDays) })}
+            <button
+              type="button"
+              className="unl-q"
+              aria-expanded={help === "v:vol"}
+              aria-label="?"
+              onClick={() => setHelp(help === "v:vol" ? null : "v:vol")}
+            >
+              ?
+            </button>
+          </p>
+        ) : null}
+        {help === "v:vol" ? <p className="unl-help">{t(lang, "unl_q_vol")}</p> : null}
+        {help === "v:pressure" ? <p className="unl-help">{t(lang, "unl_q_pressure")}</p> : null}
       </div>
 
       <SupplyRing lang={lang} sym={sym} now={now} locked={locked} nosched={nosched} stake={stake} known={!!ref0?.t || !!noEmit} />
@@ -572,7 +600,11 @@ function CoinMore({
         <Row label={t(lang, "unl_tokens")} q={dayKind}>
           {qty(e.tokens)} {sym}
           <small className="unl-note">
-            {[e.usd !== null ? usd(e.usd) : "", e.pct !== null ? t(lang, "unl_of_circ", { p: pct(e.pct, 2, false) }) : ""]
+            {[
+              e.usd !== null ? usd(e.usd) : "",
+              e.pct !== null ? t(lang, "unl_of_circ", { p: pct(e.pct, 2, false) }) : "",
+              days(e) >= 0.05 ? t(lang, "unl_vol_days", { d: times(days(e)) }) : "",
+            ]
               .filter(Boolean)
               .join(" · ")}
           </small>
@@ -591,6 +623,11 @@ function CoinMore({
           {qty(now)} {sym}
         </Row>
         {price !== null && now ? <Row label={t(lang, "unl_mcap")}>{usd(now * price)}</Row> : null}
+        {vol ? (
+          <Row label={t(lang, "unl_vol")} q="unl_q_vol">
+            {usd(vol)}
+          </Row>
+        ) : null}
         {price !== null ? (
           <Row label={t(lang, "unl_fdv")} q="unl_q_fdv">
             {capAmount ? (
