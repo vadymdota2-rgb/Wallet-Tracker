@@ -679,6 +679,9 @@ export interface UnlocksReply {
   supply?: Record<string, { t: number; m: number }>;
   /** Суточный объём спотовых торгов по всем биржам, $. */
   vol?: Record<string, number>;
+  /** Прошлые разлоки: n — сколько, med — медиана изменения цены за неделю, %,
+   *  down — сколько раз падала, btc — медиана против BTC, %. */
+  react?: Record<string, { n: number; med: number; down: number; btc: number | null }>;
 }
 
 export interface UnlockStake {

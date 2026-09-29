@@ -12,6 +12,7 @@ import os
 import re
 import secrets
 import sqlite3
+import statistics
 import struct
 import sys
 import threading
@@ -4566,6 +4567,96 @@ def spot_volumes(ref_px: dict[str, float]) -> dict[str, float]:
     return out
 
 
+# --- Как цена встречала прошлые разлоки -------------------------------------
+# По прошлым выдачам той же книги (последние два года, от 0,3% оборота):
+# цена накануне против цены через неделю, и то же самое против BTC — чтобы
+# отделить разлок от общего движения рынка. Свечи — дневные, Binance, при
+# неудаче Gate. Пересчёт раз в сутки своим потоком.
+REACT_TTL_S = 24 * 3600
+REACT_MIN_SHARE = 0.003
+_REACT: dict[str, dict] = {}
+
+
+def _daily_closes(sym: str) -> dict[int, float]:
+    """День (полночь UTC, сек) → цена закрытия."""
+    out: dict[int, float] = {}
+    j = get_json(f"https://data-api.binance.vision/api/v3/klines?symbol={sym}USDT&interval=1d&limit=1000", 20)
+    if isinstance(j, list) and j:
+        for k in j:
+            out[int(k[0]) // 1000] = _fnum(k[4])
+        return out
+    j = get_json(f"https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair={sym}_USDT&interval=1d&limit=1000", 20)
+    if isinstance(j, list):
+        for k in j:
+            out[int(_fnum(k[0]))] = _fnum(k[2])
+    return out
+
+
+def _past_unlocks(coin: dict, now: float) -> list[int]:
+    """Дни прошлых разлоков монеты за два года, от 0,3% оборота."""
+    days: dict[int, float] = {}
+    for ts, _kind, amt, who, _est in _plan_steps(coin, now):
+        if who == "emission" or ts >= now - 8 * 86400 or ts < now - 2 * 365 * 86400:
+            continue
+        days[ts] = days.get(ts, 0.0) + amt
+    circ = coin["circ"][1] or 1
+    return sorted(ts for ts, a in days.items() if a / circ >= REACT_MIN_SHARE)
+
+
+def unlock_reactions(now: float | None = None) -> dict[str, dict]:
+    now = now or time.time()
+    btc = _daily_closes("BTC")
+    mids = hl_mids()
+    out: dict[str, dict] = {}
+    nopx = {c["s"] for c in UNLOCK_BOOK if c.get("nopx")}
+    for coin in UNLOCK_BOOK:
+        sym = coin["s"]
+        if sym in nopx:
+            continue
+        days = _past_unlocks(coin, now)[-12:]
+        if len(days) < 2:
+            continue
+        closes = _daily_closes(sym)
+        if not closes:
+            continue
+        # Та ли это монета: последняя свеча рядом с нашей ценой.
+        ref = mids.get(sym) or spot_px(sym)
+        last = closes[max(closes)]
+        if ref and last and abs(last / ref - 1) > 0.25:
+            continue
+        moves, vs_btc = [], []
+        for d in days:
+            p0, p7 = closes.get(d - 86400), closes.get(d + 7 * 86400)
+            if not p0 or not p7:
+                continue
+            r = p7 / p0 - 1
+            moves.append(r)
+            b0, b7 = btc.get(d - 86400), btc.get(d + 7 * 86400)
+            if b0 and b7:
+                vs_btc.append(r - (b7 / b0 - 1))
+        # Медиана, а не среднее: пара взлётов на новостях не должна
+        # выдавать себя за обычную реакцию на разлок.
+        if len(moves) >= 3:
+            out[sym] = {"n": len(moves), "med": round(statistics.median(moves) * 100, 1),
+                        "down": sum(1 for r in moves if r < 0),
+                        "btc": round(statistics.median(vs_btc) * 100, 1) if vs_btc else None}
+    return out
+
+
+def reactions_refresher() -> None:
+    global _REACT
+    time.sleep(20)
+    while True:
+        try:
+            fresh = unlock_reactions()
+            if fresh:
+                _REACT = fresh
+            sys.stderr.write(f"[api] unlock reactions: {len(fresh)} coins\n")
+        except Exception as e:  # noqa: BLE001
+            sys.stderr.write(f"[api] unlock reactions failed: {e}\n")
+        time.sleep(REACT_TTL_S)
+
+
 def _unlocks_build() -> dict:
     """Календарь разлоков с ценой и долей от оборота — сборка целиком.
 
@@ -4608,7 +4699,9 @@ def _unlocks_build() -> dict:
             # для полного круга и полной оценки (FDV).
             "supply": {k: {"t": v[0], "m": v[1]} for k, v in UNLOCK_SUPPLY.items()},
             # Суточный объём торгов, $: разлок в днях торгов считает приложение.
-            "vol": spot_volumes({e["sym"]: e["price"] or 0.0 for e in items})}
+            "vol": spot_volumes({e["sym"]: e["price"] or 0.0 for e in items}),
+            # Как цена встречала прошлые разлоки: за неделю, в среднем.
+            "react": _REACT}
 
 
 # Готовый календарь в памяти. Раньше он собирался на каждый запрос, и экран
@@ -8011,6 +8104,7 @@ def warmup() -> None:
     threading.Thread(target=fund_refresher, daemon=True, name="funding").start()
     threading.Thread(target=rot_refresher, daemon=True, name="rotation").start()
     threading.Thread(target=stake_live_refresher, daemon=True, name="staking").start()
+    threading.Thread(target=reactions_refresher, daemon=True, name="reactions").start()
     cur = open_db(DB)
     hl = open_db(HL_DB)
     if not cur:

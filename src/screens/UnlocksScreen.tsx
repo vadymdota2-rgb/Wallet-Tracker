@@ -114,6 +114,7 @@ export function UnlocksScreen() {
   const stake = reply?.stake ?? {};
   const supplyRef = reply?.supply ?? {};
   const vols = reply?.vol ?? {};
+  const reacts = reply?.react ?? {};
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let alive = true;
@@ -373,6 +374,7 @@ export function UnlocksScreen() {
                       noEmit={noEmit[e.sym]}
                       ref0={supplyRef[e.sym]}
                       vol={vols[e.sym]}
+                      react={reacts[e.sym]}
                       onChart={() => chart(e.sym)}
                     />
                   ) : null}
@@ -468,6 +470,7 @@ function CoinMore({
   noEmit,
   ref0,
   vol,
+  react,
   onChart,
 }: {
   e: UnlockEvent;
@@ -478,6 +481,7 @@ function CoinMore({
   noEmit: UnlockNoEmit | undefined;
   ref0: { t: number; m: number } | undefined;
   vol: number | undefined;
+  react: { n: number; med: number; down: number; btc: number | null } | undefined;
   onChart: () => void;
 }) {
   /* Какое объяснение раскрыто: «место:термин» — один термин встречается и
@@ -616,6 +620,21 @@ function CoinMore({
             </button>
           </p>
         ) : null}
+        {react ? (
+          <p>
+            {t(lang, "unl_v_react", { n: String(react.n), p: pct(react.med, 1, true) })}
+            <button
+              type="button"
+              className="unl-q"
+              aria-expanded={help === "v:react"}
+              aria-label="?"
+              onClick={() => setHelp(help === "v:react" ? null : "v:react")}
+            >
+              ?
+            </button>
+          </p>
+        ) : null}
+        {help === "v:react" ? <p className="unl-help">{t(lang, "unl_q_react")}</p> : null}
         {help === "v:vol" ? <p className="unl-help">{t(lang, "unl_q_vol")}</p> : null}
         {help === "v:pressure" ? <p className="unl-help">{t(lang, "unl_q_pressure")}</p> : null}
       </div>
@@ -721,6 +740,18 @@ function CoinMore({
             <small className="unl-note">{t(lang, "unl_of_circ", { p: pct((yearFromDay / e.circ) * 100, 1, false) })}</small>
           ) : null}
         </Row>
+        {react ? (
+          <Row label={t(lang, "unl_react")} q="unl_q_react">
+            {t(lang, "unl_react_val", { p: pct(react.med, 1, true) })}
+            <small className="unl-note">
+              {t(lang, "unl_react_more", {
+                k: String(react.down),
+                n: String(react.n),
+                b: react.btc !== null ? pct(react.btc, 1, true) : "—",
+              })}
+            </small>
+          </Row>
+        ) : null}
         <Row label={t(lang, "unl_end")}>
           {/* Бессрочная эмиссия расписана на три года вперёд — её «последний»
               день лишь край горизонта, а не конец выпуска. */}
