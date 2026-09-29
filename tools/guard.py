@@ -447,8 +447,8 @@ say("карта ликвидаций считается на сервере из
     and "apikey" not in pybody(api, "def liq_map(").lower())
 
 _lq = read(f"{APP}/src/screens/LiqMapScreen.tsx")
-say("карта ликвидаций: сторона — цветом и местом, плечо — светлотой, накопленное — своей колонкой",
-    "SHORT_C" in _lq and "LONG_C" in _lq and "function cumOf(" in _lq and "CX0 + ((cum[i]" in _lq
+say("карта ликвидаций: плечо — своим оттенком, крупные скопления — ярче и с подсветкой, накопленное — своей колонкой",
+    "LEV_C" in _lq and "LEV_HOT" in _lq and 'filter={hot ? "url(#lq-glow)"' in _lq and "function cumOf(" in _lq and "CX0 + ((cum[i]" in _lq
     and "function nearest(" in _lq and '"path": [round(x, 10) for x in path]' in api)
 
 print("ПРОВАЛОВ:", bad)

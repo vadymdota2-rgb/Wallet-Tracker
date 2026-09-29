@@ -2117,8 +2117,8 @@
 .lq-plot { position: relative; scroll-margin: 80px; }
 /* График рисуется слева направо при любом языке: цена — ось, а не текст. */
 .lq-svg { display: block; direction: ltr; touch-action: pan-y; user-select: none; -webkit-user-select: none; cursor: crosshair; }
-.lq-zone.up { fill: rgb(61 220 151 / 0.035); }
-.lq-zone.dn { fill: rgb(255 92 119 / 0.035); }
+.lq-zone.up { fill: rgb(61 220 151 / 0.055); }
+.lq-zone.dn { fill: rgb(255 92 119 / 0.055); }
 .lq-sep { stroke: rgb(58 130 214 / 0.2); stroke-width: 1; }
 .lq-grid { stroke: rgb(58 130 214 / 0.13); stroke-width: 1; }
 .lq-tick { fill: var(--ink); opacity: 0.8; font-size: 9.5px; font-variant-numeric: tabular-nums; }
@@ -2127,7 +2127,7 @@
 .lq-tick-p.dn { fill: var(--dn); }
 .lq-hl { fill: rgb(127 216 255 / 0.1); }
 .lq-row { transition: opacity 0.2s; }
-.lq-row.dim { opacity: 0.55; }
+.lq-row.dim { opacity: 0.35; }
 .lq-bars { transform-box: fill-box; transform-origin: 0 50%; animation: lq-grow 0.6s var(--ease) both; }
 @keyframes lq-grow { from { transform: scaleX(0); opacity: 0.3; } }
 .lq-val {
@@ -2204,11 +2204,15 @@
   font-variant-numeric: tabular-nums;
   transition: opacity 0.15s;
 }
-.lq-lev i { margin-inline-end: 0; }
-.lq-lev i + i { margin-inline-end: 5px; border-radius: 0 2px 2px 0; }
-.lq-lev i:first-child { border-radius: 2px 0 0 2px; }
+.lq-lev i { width: 11px; height: 11px; border-radius: 3px; margin-inline-end: 5px; }
 .lq-lev.off { opacity: 0.35; text-decoration: line-through; }
-.lq-hint { margin: 8px 0 0; color: var(--dim-2); font-size: 11.5px; }
+.lq-hint { margin: 8px 0 0; color: var(--dim-2); font-size: 11.5px; line-height: 1.45; }
+/* Ключ «насыщенность = размер»: три полоски от бледной к яркой. */
+.lq-hot-k { display: inline-flex; gap: 2px; margin-inline-end: 6px; vertical-align: -1px; direction: ltr; }
+.lq-hot-k i { width: 12px; height: 8px; border-radius: 2px; background: #8f6cf0; }
+.lq-hot-k i:nth-child(1) { opacity: 0.3; }
+.lq-hot-k i:nth-child(2) { opacity: 0.7; }
+.lq-hot-k i:nth-child(3) { background: #b89cff; box-shadow: 0 0 6px #b89cff; }
 
 /* Итоги рядом с ценой: лонги влево, шорты вправо, один масштаб. */
 .lq-div-h { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; margin-bottom: 8px; direction: ltr; }

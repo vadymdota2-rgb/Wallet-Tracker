@@ -12,10 +12,13 @@
  * которые по касанию показываются на карте.
  *
  * Цена идёт по вертикали — телефон держат стоя, и уровни читаются сверху
- * вниз, как стакан: шорты над текущей ценой, лонги под ней. Сторону говорит и
- * место, и цвет: зелёные сгорят при росте, красные — при падении, как везде в
- * приложении. Плечо — порядок, а не категория, поэтому оно не радуга, а
- * светлота внутри цвета стороны: чем светлее, тем выше плечо.
+ * вниз, как стакан: шорты над текущей ценой, лонги под ней. Сторону говорит
+ * место, подпись и лёгкая заливка зоны: зелёная сверху, красная снизу.
+ *
+ * Цвет полосы — плечо, у каждого свой оттенок (палитра проверена на тёмном
+ * фоне и при дальтонизме). Насыщенность — размер: мелкие уровни приглушены,
+ * средние в полный цвет, крупные скопления (от половины самого большого) —
+ * в ярком варианте того же оттенка и с подсветкой. Глаз сразу находит их.
  *
  * Накопленное «до этой цены» — другой масштаб. Второй осью поверх полос оно
  * превратило бы карту в ребус, поэтому у него своя узкая колонка справа с той
@@ -34,9 +37,12 @@ import { Frame } from "./Screen";
 
 type Lang = Parameters<typeof t>[0];
 
-/** Светлота по плечу: 10× темнее, 100× светлее. Контраст к фону ≥ 3:1. */
-const SHORT_C = ["#1f8f66", "#2cb982", "#5fe3ab", "#b4f5d6"];
-const LONG_C = ["#b23a55", "#e04c68", "#ff7d92", "#ffbdc7"];
+/** Плечи 10× / 25× / 50× / 100×: голубой, фиолетовый, янтарный, розовый. */
+const LEV_C = ["#1a9fc9", "#8f6cf0", "#c98500", "#e8589c"];
+/** Тот же оттенок ярче — для крупных скоплений. */
+const LEV_HOT = ["#46d2ff", "#b89cff", "#ffb31f", "#ff7fc0"];
+/** Доля от самого большого уровня, с которой скопление считается крупным. */
+const HOT = 0.5;
 const COINS = ["BTC", "ETH", "SOL", "XRP", "DOGE", "BNB", "HYPE", "SUI", "ADA", "LINK"];
 type Span = "5" | "10" | "15";
 const SPANS: Span[] = ["5", "10", "15"];
@@ -177,7 +183,8 @@ function Chart({ r, lang, span, sel, onSel, on }: {
   const { rows, rowH } = useMemo(() => rowsOf(r, spanN), [r, spanN]);
   const H = rows.length * rowH;
   /* Самая длинная полоса короче поля на подпись: сумма всегда стоит снаружи. */
-  const max = Math.max(1, ...rows.map((w) => sumOn(side(w, r.px), on))) * (PLOT / (PLOT - 46));
+  const top = Math.max(1, ...rows.map((w) => sumOn(side(w, r.px), on)));
+  const max = top * (PLOT / (PLOT - 46));
   const cum = useMemo(() => cumOf(rows, r.px, on), [rows, r.px, on]);
   const cmax = Math.max(1, ...cum);
   const yOf = (price: number) => ((r.px * (1 + spanN / 100) - price) / (r.px * spanN * 2 / 100)) * H;
@@ -246,16 +253,29 @@ function Chart({ r, lang, span, sel, onSel, on }: {
 
       {sel !== null ? <rect x={0} y={sel * rowH} width={CX1} height={rowH} className="lq-hl" /> : null}
 
+      <defs>
+        <filter id="lq-glow" x="-10%" y="-150%" width="120%" height="400%">
+          <feGaussianBlur stdDeviation="2.4" result="b" />
+          <feMerge>
+            <feMergeNode in="b" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
       <g key={`${r.sym}-${r.range}-${span}`} className="lq-bars">
         {rows.map((w, i) => {
-          const up = w.mid > r.px;
           const parts = side(w, r.px);
-          const pal = up ? SHORT_C : LONG_C;
+          const k = sumOn(parts, on) / top;
+          const hot = k >= HOT;
+          const pal = hot ? LEV_HOT : LEV_C;
+          /* Мелкое — бледнее, крупное — насыщеннее. */
+          const alpha = hot ? 1 : 0.3 + 0.62 * Math.pow(k / HOT, 0.8);
           const y = i * rowH + 0.75;
           const h = Math.max(2, rowH - 1.5);
           let x = 0;
           return (
-            <g key={i} className={sel !== null && sel !== i ? "lq-row dim" : "lq-row"}>
+            <g key={i} fillOpacity={alpha} filter={hot ? "url(#lq-glow)" : undefined}
+              className={sel !== null && sel !== i ? "lq-row dim" : "lq-row"}>
               {parts.map((v, j) => {
                 if (v <= 0 || !on[j]) return null;
                 const wdt = (v / max) * PLOT;
@@ -530,7 +550,7 @@ export function LiqMapScreen() {
                   <div className="lq-pop-levs">
                     {side(row, reply.px).map((v, j) => (
                       <span key={j} className={on[j] ? "" : "off"}>
-                        <i style={{ background: (rowUp ? SHORT_C : LONG_C)[j] }} />
+                        <i style={{ background: LEV_C[j] }} />
                         {levs[j]}× <b>{v > 0 ? usd(v) : "—"}</b>
                       </span>
                     ))}
@@ -547,13 +567,15 @@ export function LiqMapScreen() {
               {levs.map((l, j) => (
                 <button key={l} type="button" aria-pressed={on[j]} className={on[j] ? "lq-lev" : "lq-lev off"}
                   onClick={() => toggle(j)}>
-                  <i style={{ background: SHORT_C[j] }} />
-                  <i style={{ background: LONG_C[j] }} />
+                  <i style={{ background: LEV_C[j] }} />
                   {l}×
                 </button>
               ))}
             </div>
-            <p className="lq-hint">{row ? t(lang, "lq_lev_tap") : t(lang, "lq_hint")}</p>
+            <p className="lq-hint">
+              <span className="lq-hot-k" aria-hidden="true"><i /><i /><i /></span>
+              {t(lang, "lq_hot")} {row ? t(lang, "lq_lev_tap") : t(lang, "lq_hint")}
+            </p>
           </Card>
 
           <SectionTitle>{t(lang, "lq_cum_title")}</SectionTitle>
