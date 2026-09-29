@@ -2357,6 +2357,10 @@ UNLOCK_BOOK: list[dict] = [
      "est": True,
      # Раз в квартал Chainlink выводит из некотирующихся адресов ~19–21 млн
      # LINK (часть — сразу на биржу). Точный день в квартале плавает.
+          # Запас по сети (29.09.2026): ~250,9 млн в девяти кошельках Chainlink
+     # (семь по 30 млн, 22 и 18,9 млн) — они не менялись полтора года;
+     # квартальные выдачи шли из других, уже пустых кошельков. Графика
+     # проект не публикует — ~19 млн в квартал остаётся оценкой.
      "circ": ("2026-09-27", 748_099_970),
      "staked": ("2026-09-28", 42_525_191),  # пулы стейкинга v0.2
      "apy": ("2026-09-29", 4.76),  # StakingRewards
@@ -4526,6 +4530,14 @@ SUPPLY_MIN_DAYS = 7
 SUPPLY_KEEP_DAYS = 60
 
 
+_SUBTENSOR = "658faa385070e074c85bf6b568cf0555"  # twox128("SubtensorModule"); дальше twox128 элемента хранилища
+# Счета долей RAY из документов Raydium: резерв майнинга, партнёрства и
+# экосистема, команда, ликвидность, сообщество и сид, советники.
+RAY_RESERVES = ("fArUAncZwVbMimiWv5cPUfFsapdLd8QMXZE4VXqFagR", "DmKR61BQk5zJTNCK9rrt8fM8HrDH6DSdE3Rt7sXKoAKb",
+                "HoVhs7NAzcAaavr2tc2aaTynJ6kwhdfC2B2Z7EthKpeo", "85WdjCsxksAoCo6NNZSU4rocjUHsJwXrzpHJScg8oVNZ",
+                "HuBBhoS81jyHTKMbhz8B3iYa8HSNShnRwXRzPzmFFuFr", "5unqG9sYX995czHCtHkkJvd2EaTE58jdvmjfz1nVvo5x")
+
+
 def _supply_fetchers() -> dict:
     """Тикер → функция, возвращающая весь выпуск монеты сейчас."""
     def eth():
@@ -4604,10 +4616,50 @@ def _supply_fetchers() -> dict:
         l2 = _eth_call("arb", "0x9623063377AD1B27544C965cCd7342f7EA7e88C7", "0x18160ddd") / 1e18
         return l1 - esc + l2 if l1 and esc and l2 else 0.0
 
+    def subnet(netuid):
+        # Весь alpha подсети Bittensor: у участников (SubnetAlphaOut) и в пуле
+        # (SubnetAlphaIn). Обмен перекладывает alpha между ними, сумму растит
+        # только эмиссия.
+        def f():
+            n = netuid.to_bytes(2, "little").hex()
+            out = _substrate("https://entrypoint-finney.opentensor.ai", _SUBTENSOR + "7837978cc6746112a2c9e680a18cfcb9" + n)
+            pool = _substrate("https://entrypoint-finney.opentensor.ai", _SUBTENSOR + "2ce12f7007574647d692ac7edf8b7a53" + n)
+            return (int.from_bytes(out, "little") + int.from_bytes(pool, "little")) / 1e9 if out and pool else 0.0
+        return f
+
+    def vaulta():
+        # Выпуск A зафиксирован (2,1 млрд); награды платятся из резерва на
+        # счёте eosio — выданное = 2,1 млрд минус остаток резерва.
+        r = _rpc("https://eos.greymass.com/v1/chain/get_currency_balance",
+                 {"code": "core.vaulta", "account": "eosio", "symbol": "A"})
+        a = _fnum(r[0].split()[0]) if isinstance(r, list) and r else 0.0
+        r = _rpc("https://eos.greymass.com/v1/chain/get_currency_balance",
+                 {"code": "eosio.token", "account": "eosio", "symbol": "EOS"})
+        e = _fnum(r[0].split()[0]) if isinstance(r, list) and r else 0.0
+        return 2_100_000_000 - a - e if a + e > 0 else 0.0
+
+    def ray():
+        # Счета долей из документов Raydium; выдано = весь выпуск минус остатки.
+        def bal(acc):
+            r = (_rpc("https://api.mainnet-beta.solana.com",
+                      {"jsonrpc": "2.0", "id": 1, "method": "getTokenAccountBalance", "params": [acc]}) or {})
+            v = ((r.get("result") or {}).get("value") or {}).get("uiAmount")
+            if v is None:
+                raise ValueError(acc)
+            return float(v)
+        sup = (_rpc("https://api.mainnet-beta.solana.com",
+                    {"jsonrpc": "2.0", "id": 1, "method": "getTokenSupply",
+                     "params": ["4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R"]}) or {})
+        total = _fnum((((sup.get("result") or {}).get("value")) or {}).get("uiAmount"))
+        return total - sum(bal(a) for a in RAY_RESERVES) if total else 0.0
+
     def cryptoid(coin):
         return lambda: _fnum(get_json(f"https://chainz.cryptoid.info/{coin}/api.dws?q=totalcoins", 20))
 
     return {
+        "SN51": subnet(51), "SN64": subnet(64), "SN120": subnet(120), "SN44": subnet(44), "SN53": subnet(53),
+        "DUSK": lambda: _fnum(get_json("https://supply.dusk.network/", 20)),
+        "A": vaulta, "RAY": ray,
         "DASH": cryptoid("dash"), "DGB": cryptoid("dgb"), "CKB": ckb, "MINA": mina, "FLOW": flow,
         "VTHO": vtho, "GRT": grt,
         "AERO": lambda: _eth_call("base", "0x940181a94A35A4569E4529A3CDfB74e38FD98631", "0x18160ddd") / 1e18,
@@ -4726,7 +4778,7 @@ def _rate_fetchers() -> dict:
 
 # Какой строкой книги считается измеренный прирост: у сетей — «emission»,
 # у XRP — выдача из депо Ripple («treasury»).
-MEASURE_KIND = {"XRP": "treasury"}
+MEASURE_KIND = {"XRP": "treasury", "A": "community", "RAY": "community"}
 
 
 def _rate_record(today: str) -> None:
