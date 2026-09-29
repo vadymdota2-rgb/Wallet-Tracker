@@ -8829,6 +8829,19 @@ def _snap_gmx() -> dict:
     return out
 
 
+def _snap_bitstamp() -> dict:
+    """Bitstamp — биржа Robinhood: фьючерсы Robinhood идут через неё, а своих
+    открытых данных по ним у Robinhood нет."""
+    out = {}
+    for r in get_json("https://www.bitstamp.net/api/v2/ticker/", 20) or []:
+        pair = str(r.get("pair") or "") if isinstance(r, dict) else ""
+        if r and r.get("market_type") == "PERPETUAL" and pair.endswith("/USD-PERP"):
+            px = _fnum(r.get("mark_price")) or _fnum(r.get("last"))
+            if sym := _snap_sym(pair[:-9]):
+                out[sym] = (_fnum(r.get("open_interest")) * px, px)
+    return out
+
+
 def _snap_top(tick_url: str, key: str, n: int, one) -> dict:
     """Биржи, что отдают интерес только по одной монете: берём n самых
     торгуемых — дальше интерес мал, а запросов было бы сотни."""
@@ -8880,7 +8893,8 @@ LIQ_SNAPS = (("Hyperliquid", _snap_hl), ("Bitget", _snap_bitget), ("MEXC", _snap
              ("Bitfinex", _snap_bitfinex), ("Deribit", _snap_deribit), ("CoinEx", _snap_coinex),
              ("Coinbase Intl", _snap_cbintl), ("Crypto.com", _snap_cryptocom), ("Paradex", _snap_paradex),
              ("Lighter", _snap_lighter), ("Backpack", _snap_backpack), ("Orderly", _snap_orderly),
-             ("GMX", _snap_gmx), ("Aster", _snap_aster), ("BingX", _snap_bingx))
+             ("GMX", _snap_gmx), ("Aster", _snap_aster), ("BingX", _snap_bingx),
+             ("Bitstamp", _snap_bitstamp))
 
 
 def liq_oi_sample() -> dict:
