@@ -882,7 +882,7 @@ say("разлок меряется днями всех торгов: объём 
 say("карточка коротко по умолчанию, подробно — по кнопке, выбор помнится",
     'className="unl-more-tg"' in unl_scr and 'localStorage.setItem(DETAIL_KEY' in unl_scr and 'className="unl-brief"' in unl_scr)
 say("кривая оборота на три года и полная оценка (FDV) в карточке",
-    "function SupplyCurve(" in unl_scr and 't(lang, "unl_fdv")' in unl_scr and '"supply": {k: {"t": v[0], "m": v[1]}' in api)
+    "function SupplyCurve(" in unl_scr and "const LAYERS:" in unl_scr and 'className="unl-curve-legend"' in unl_scr and 't(lang, "unl_fdv")' in unl_scr and '"supply": {k: {"t": v[0], "m": v[1]}' in api)
 say("карточка монеты рисует круг выпуска: на рынке, в стейкинге, кому ещё выйдет",
     "function SupplyRing(" in unl_scr and "<SupplyRing " in unl_scr and 't(lang, "unl_pie_note")' in unl_scr)
 say("доходность стейкинга сравнивается с ростом выпуска", 'row["y"] = c["apy"][1]' in api and "stake.y - (emitYr / now) * 100" in unl_scr)

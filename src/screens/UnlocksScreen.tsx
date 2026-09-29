@@ -867,9 +867,22 @@ function SupplyRing({
   );
 }
 
-/** Кривая оборота на три года: сколько монет будет на рынке по месяцам,
- *  с учётом разлоков и эмиссии. Ступеньки — крупные разлоки (от 5% оборота),
- *  они отмечены точками. Палец по графику — дата и оборот в этот месяц. */
+/** Слои кривой снизу вверх — порядок палитры (соседние различимы, в том
+ *  числе красный и зелёный), тот же цвет у группы, что и в круге. */
+const LAYERS: { key: UnlockWho; color: string }[] = [
+  { key: "team", color: "#d95926" },
+  { key: "community", color: "#199e70" },
+  { key: "treasury", color: "#c98500" },
+  { key: "investors", color: "#d55181" },
+  { key: "foundation", color: "#9085e9" },
+  { key: "mixed", color: "#e66767" },
+  { key: "emission", color: "#008300" },
+];
+
+/** Кривая оборота на три года слоями: снизу — то, что на рынке сейчас,
+ *  сверху — кто и сколько добавит (команда, инвесторы, эмиссия…).
+ *  Точки — крупные разлоки (от 5% оборота). Палец по графику — дата,
+ *  оборот и вклад каждой группы к этому месяцу. */
 function SupplyCurve({
   lang,
   sym,
@@ -885,38 +898,49 @@ function SupplyCurve({
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const N = 36;
-  const pts = useMemo(() => {
-    const out: number[] = [];
+  /* По месяцам: сколько добавила каждая группа к этому месяцу. */
+  const cum = useMemo(() => {
+    const out: Partial<Record<UnlockWho, number>>[] = [];
     for (let m = 0; m <= N; m++) {
       const until = nowSec + m * MONTH;
-      let acc = now;
-      for (const ev of mine) if (ev.ts <= until) acc += ev.tokens;
-      out.push(acc);
+      const row: Partial<Record<UnlockWho, number>> = {};
+      for (const ev of mine) {
+        if (ev.ts > until) break;
+        for (const [k, v] of Object.entries(ev.who) as [UnlockWho, number][]) row[k] = (row[k] ?? 0) + v;
+      }
+      out.push(row);
     }
     return out;
-  }, [mine, now, nowSec]);
-  const at = (m: number) => pts[m] ?? now;
-  if (!now || at(N) <= now * 1.001) return null;
+  }, [mine, nowSec]);
+  const layers = LAYERS.filter((l) => (cum[N]?.[l.key] ?? 0) > 0);
+  const totalAt = (m: number) => now + layers.reduce((a, l) => a + (cum[m]?.[l.key] ?? 0), 0);
+  if (!now || !layers.length || totalAt(N) <= now * 1.001) return null;
   const W = 320;
-  const H = 120;
-  const top = 14;
+  const H = 128;
+  const top = 12;
   const bottom = 18;
-  const max = at(N) * 1.04;
+  const max = totalAt(N) * 1.04;
   const x = (m: number) => (m / N) * W;
   const y = (v: number) => top + (1 - v / max) * (H - top - bottom);
-  const line = pts.map((v, m) => `${m ? "L" : "M"}${x(m).toFixed(1)},${y(v).toFixed(1)}`).join("");
-  const area = `${line}L${W},${H - bottom}L0,${H - bottom}Z`;
+  /* Полоса слоя: верхняя кромка вперёд, нижняя назад. */
+  const band = (lo: (m: number) => number, hi: (m: number) => number) => {
+    let d = "";
+    for (let m = 0; m <= N; m++) d += `${m ? "L" : "M"}${x(m).toFixed(1)},${y(hi(m)).toFixed(1)}`;
+    for (let m = N; m >= 0; m--) d += `L${x(m).toFixed(1)},${y(lo(m)).toFixed(1)}`;
+    return `${d}Z`;
+  };
+  const below = (i: number) => (m: number) =>
+    now + layers.slice(0, i).reduce((a, l) => a + (cum[m]?.[l.key] ?? 0), 0);
   const big = mine.filter((ev) => ev.ts <= nowSec + N * MONTH && ev.kind === "cliff" && (ev.pct ?? 0) >= 5);
-  const yearTicks = [12, 24, 36];
   const dateAt = (m: number) => new Date((nowSec + m * MONTH) * 1000);
-  const yearOf = (m: number) => dateAt(m).getUTCFullYear();
   const pick = (ev: React.PointerEvent<SVGSVGElement>) => {
     const r = ev.currentTarget.getBoundingClientRect();
     const m = Math.round(((ev.clientX - r.left) / r.width) * N);
     setHover(Math.max(0, Math.min(N, m)));
   };
   const h = hover ?? N;
-  const hv = at(h);
+  const hv = totalAt(h);
+  const label = (k: UnlockWho) => t(lang, k === "emission" ? "unl_emit" : WHO_KEY[k]);
   return (
     <div className="unl-curve">
       <div className="unl-curve-hd">
@@ -930,35 +954,42 @@ function SupplyCurve({
         viewBox={`0 0 ${W} ${H}`}
         width="100%"
         role="img"
-        aria-label={`${t(lang, "unl_curve_title")}: ${qty(now)} → ${qty(at(N))} ${sym}`}
+        aria-label={`${t(lang, "unl_curve_title")}: ${qty(now)} → ${qty(totalAt(N))} ${sym}`}
         onPointerDown={pick}
         onPointerMove={pick}
         onPointerLeave={() => setHover(null)}
       >
-        <defs>
-          <linearGradient id={`uc-${sym}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="#3987e5" stopOpacity="0.35" />
-            <stop offset="1" stopColor="#3987e5" stopOpacity="0.02" />
-          </linearGradient>
-        </defs>
-        <line x1="0" x2={W} y1={y(now)} y2={y(now)} className="unl-curve-base" />
-        {yearTicks.map((m) => (
+        <path d={band(() => 0, () => now)} fill="#5d6f8a" fillOpacity="0.55" />
+        {layers.map((l, i) => (
+          <path key={l.key} d={band(below(i), below(i + 1))} fill={l.color} stroke="var(--panel)" strokeWidth="0.75" />
+        ))}
+        {[12, 24, 36].map((m) => (
           <g key={m}>
             <line x1={x(m)} x2={x(m)} y1={top} y2={H - bottom} className="unl-curve-grid" />
             <text x={m === N ? x(m) - 2 : x(m)} y={H - 4} textAnchor={m === N ? "end" : "middle"} className="unl-curve-tick">
-              {yearOf(m)}
+              {dateAt(m).getUTCFullYear()}
             </text>
           </g>
         ))}
-        <path d={area} fill={`url(#uc-${sym})`} />
-        <path d={line} fill="none" stroke="#3987e5" strokeWidth="2" strokeLinejoin="round" />
+        <line x1="0" x2={W} y1={y(now)} y2={y(now)} className="unl-curve-base" />
         {big.map((ev) => {
           const m = Math.min(N, Math.max(0, (ev.ts - nowSec) / MONTH));
-          const v = at(Math.min(N, Math.ceil(m)));
-          return <circle key={ev.ts} cx={x(m)} cy={y(v)} r="4" className="unl-curve-dot" />;
+          return <circle key={ev.ts} cx={x(m)} cy={y(totalAt(Math.min(N, Math.ceil(m))))} r="4" className="unl-curve-dot" />;
         })}
         {hover !== null ? <line x1={x(h)} x2={x(h)} y1={top} y2={H - bottom} className="unl-curve-cross" /> : null}
       </svg>
+      <ul className="unl-curve-legend">
+        <li>
+          <i style={{ background: "#5d6f8a" }} />
+          {t(lang, "unl_pie_now")} <b>{qty(now)}</b>
+        </li>
+        {layers.map((l) => (
+          <li key={l.key}>
+            <i style={{ background: l.color }} />
+            {label(l.key)} <b>+{qty(cum[h]?.[l.key] ?? 0)}</b>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
