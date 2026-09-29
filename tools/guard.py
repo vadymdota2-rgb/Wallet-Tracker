@@ -457,7 +457,9 @@ say("карта ликвидаций: свечи цены на той же ос�
 
 say("карта ликвидаций: уровень виден, пока палец на карте, и гаснет, когда его убрали",
     'el.addEventListener("touchend", end)' in _lq and 'el.addEventListener("touchcancel", end)' in _lq
-    and '{ passive: false }' in _lq and 'aria-label="×"' not in _lq)
+    and '{ passive: false }' in _lq and 'aria-label="×"' not in _lq
+    and 'window.addEventListener("touchend", anyEnd)' in _lq and '"mousemove"' not in _lq
+    and 'e.pointerType === "mouse"' in _lq)
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

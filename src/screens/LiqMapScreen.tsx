@@ -335,21 +335,38 @@ function Chart({ r, lang, span, sel, onSel, on, win }: {
       held = false;
       hide();
     };
-    const mouse = (e: MouseEvent) => show(e.clientY);
+    /* Только настоящая мышь. После касания Android шлёт вдогонку
+       «мышиные» события в ту же точку, и слушатель mousemove показывал
+       уровень снова — уже без пальца, и тот не гас. */
+    const mouse = (e: PointerEvent) => {
+      if (e.pointerType === "mouse") show(e.clientY);
+    };
+    const leave = (e: PointerEvent) => {
+      if (e.pointerType === "mouse") hide();
+    };
     el.addEventListener("touchstart", start, { passive: true });
     el.addEventListener("touchmove", move, { passive: false });
     el.addEventListener("touchend", end);
     el.addEventListener("touchcancel", end);
-    el.addEventListener("mousemove", mouse);
-    el.addEventListener("mouseleave", hide);
+    /* Палец отпустили — гасим в любом случае, даже если событие ушло не
+       карте: элемент под пальцем мог смениться при перерисовке. */
+    const anyEnd = () => {
+      if (live.current.cur !== -1) end();
+    };
+    window.addEventListener("touchend", anyEnd);
+    window.addEventListener("touchcancel", anyEnd);
+    el.addEventListener("pointermove", mouse);
+    el.addEventListener("pointerleave", leave);
     return () => {
       window.clearTimeout(timer);
       el.removeEventListener("touchstart", start);
       el.removeEventListener("touchmove", move);
       el.removeEventListener("touchend", end);
       el.removeEventListener("touchcancel", end);
-      el.removeEventListener("mousemove", mouse);
-      el.removeEventListener("mouseleave", hide);
+      window.removeEventListener("touchend", anyEnd);
+      window.removeEventListener("touchcancel", anyEnd);
+      el.removeEventListener("pointermove", mouse);
+      el.removeEventListener("pointerleave", leave);
     };
   }, []);
 
