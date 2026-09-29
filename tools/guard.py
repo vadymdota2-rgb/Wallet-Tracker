@@ -455,5 +455,9 @@ say("карта ликвидаций: свечи цены на той же ос�
     "def liq_coins(" in api and '"/api/liqcoins"' in api and '"ohlc": _liq_candles(main)' in api
     and "function Candles(" in _lq and "function CoinPicker(" in _lq and "fetchLiqCoins" in _lq)
 
+say("карта ликвидаций: уровень виден, пока палец на карте, и гаснет, когда его убрали",
+    'el.addEventListener("touchend", end)' in _lq and 'el.addEventListener("touchcancel", end)' in _lq
+    and '{ passive: false }' in _lq and 'aria-label="×"' not in _lq)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

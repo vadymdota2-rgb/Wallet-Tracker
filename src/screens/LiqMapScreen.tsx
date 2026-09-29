@@ -270,13 +270,88 @@ function Chart({ r, lang, span, sel, onSel, on, win }: {
     return pts.join(" ");
   };
 
-  const pick = (clientY: number, el: SVGSVGElement) => {
-    const box = el.getBoundingClientRect();
-    const y = ((clientY - box.top) / box.height) * H;
-    const i = Math.max(0, Math.min(rows.length - 1, Math.floor(y / rowH)));
-    haptic("select");
-    onSel(i === sel ? null : i);
-  };
+  /*
+   * Уровень показывается, пока палец на карте, и прячется, как только его
+   * убрали. Палец можно вести вверх-вниз — подсказка идёт за ним. Чтобы
+   * карта не мешала листать экран, ведение включается после короткого
+   * удержания: быстрый мазок остаётся прокруткой страницы, и подсказка
+   * тогда гаснет. Мышью — наведение, как на обычном графике.
+   */
+  const svgRef = useRef<SVGSVGElement>(null);
+  const live = useRef({ rows: rows.length, rowH, H, cur: -1 });
+  live.current.rows = rows.length;
+  live.current.rowH = rowH;
+  live.current.H = H;
+  const onSelRef = useRef(onSel);
+  onSelRef.current = onSel;
+
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const at = (clientY: number) => {
+      const { rows: n, rowH: rh, H: h } = live.current;
+      const box = el.getBoundingClientRect();
+      const y = ((clientY - box.top) / box.height) * h;
+      return Math.max(0, Math.min(n - 1, Math.floor(y / rh)));
+    };
+    const show = (clientY: number) => {
+      const i = at(clientY);
+      if (i === live.current.cur) return;
+      live.current.cur = i;
+      haptic("select");
+      onSelRef.current(i);
+    };
+    const hide = () => {
+      live.current.cur = -1;
+      onSelRef.current(null);
+    };
+    let x0 = 0;
+    let y0 = 0;
+    let held = false;
+    let timer = 0;
+    const start = (e: TouchEvent) => {
+      const tt = e.touches[0];
+      if (!tt || e.touches.length > 1) return;
+      x0 = tt.clientX;
+      y0 = tt.clientY;
+      held = false;
+      show(tt.clientY);
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => { held = true; }, 160);
+    };
+    const move = (e: TouchEvent) => {
+      const tt = e.touches[0];
+      if (!tt) return;
+      if (held) {
+        e.preventDefault();
+        show(tt.clientY);
+      } else if (Math.abs(tt.clientY - y0) > 8 || Math.abs(tt.clientX - x0) > 8) {
+        window.clearTimeout(timer);
+        hide();
+      }
+    };
+    const end = () => {
+      window.clearTimeout(timer);
+      held = false;
+      hide();
+    };
+    const mouse = (e: MouseEvent) => show(e.clientY);
+    el.addEventListener("touchstart", start, { passive: true });
+    el.addEventListener("touchmove", move, { passive: false });
+    el.addEventListener("touchend", end);
+    el.addEventListener("touchcancel", end);
+    el.addEventListener("mousemove", mouse);
+    el.addEventListener("mouseleave", hide);
+    return () => {
+      window.clearTimeout(timer);
+      el.removeEventListener("touchstart", start);
+      el.removeEventListener("touchmove", move);
+      el.removeEventListener("touchend", end);
+      el.removeEventListener("touchcancel", end);
+      el.removeEventListener("mousemove", mouse);
+      el.removeEventListener("mouseleave", hide);
+    };
+  }, []);
 
   const selRow = sel !== null ? rows[sel] : undefined;
   const selY = sel !== null ? sel * rowH + rowH / 2 : 0;
@@ -288,7 +363,8 @@ function Chart({ r, lang, span, sel, onSel, on, win }: {
       width="100%"
       role="img"
       aria-label={t(lang, "lq_title")}
-      onPointerDown={(e) => pick(e.clientY, e.currentTarget)}
+      ref={svgRef}
+      onContextMenu={(e) => e.preventDefault()}
     >
       <rect x={BX0} y={0} width={CX1 - BX0} height={yNow} className="lq-zone up" />
       <rect x={BX0} y={yNow} width={CX1 - BX0} height={H - yNow} className="lq-zone dn" />
@@ -704,7 +780,6 @@ export function LiqMapScreen() {
                   <div className="lq-pop-h">
                     <b>{px(row.mid)}</b>
                     <span>{pct(((row.mid - reply.px) / reply.px) * 100, 2, true)}</span>
-                    <button type="button" aria-label="×" onClick={() => setSel(null)}>×</button>
                   </div>
                   <em>{rowUp ? "▲" : "▼"} {t(lang, rowUp ? "lq_shorts" : "lq_longs")}</em>
                   <div className="lq-pop-levs">
@@ -734,7 +809,7 @@ export function LiqMapScreen() {
             </div>
             <p className="lq-hint">
               <span className="lq-hot-k" aria-hidden="true"><i /><i /><i /></span>
-              {t(lang, "lq_hot")} {row ? t(lang, "lq_lev_tap") : t(lang, "lq_hint")}
+              {t(lang, "lq_hot")} {t(lang, "lq_hint")}
             </p>
           </Card>
 

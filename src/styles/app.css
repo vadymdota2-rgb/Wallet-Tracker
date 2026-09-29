@@ -2148,7 +2148,7 @@
 }
 .lq-plot { position: relative; scroll-margin: 80px; }
 /* График рисуется слева направо при любом языке: цена — ось, а не текст. */
-.lq-svg { display: block; direction: ltr; touch-action: pan-y; user-select: none; -webkit-user-select: none; cursor: crosshair; }
+.lq-svg { display: block; direction: ltr; touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: crosshair; }
 .lq-zone.up { fill: rgb(61 220 151 / 0.055); }
 .lq-zone.dn { fill: rgb(255 92 119 / 0.055); }
 .lq-sep { stroke: rgb(58 130 214 / 0.2); stroke-width: 1; }
@@ -2204,6 +2204,7 @@
 /* Подсказка у пальца: над строкой, у верхнего края — под ней. */
 .lq-pop {
   position: absolute;
+  pointer-events: none;
   inset-inline-end: 4px;
   width: min(250px, 70%);
   transform: translateY(calc(-100% - 12px));
