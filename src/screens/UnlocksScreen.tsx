@@ -11,7 +11,7 @@
  * разлоки, цена — Hyperliquid. Чужих календарей и справочников тут нет.
  * Оценочные объёмы помечены «≈» и словом «оценка».
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Frame } from "./Screen";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
@@ -112,6 +112,7 @@ export function UnlocksScreen() {
   const none = reply?.none ?? {};
   const noEmit = reply?.noEmit ?? {};
   const stake = reply?.stake ?? {};
+  const supplyRef = reply?.supply ?? {};
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let alive = true;
@@ -223,51 +224,6 @@ export function UnlocksScreen() {
     }
     return { w: win(7), m: win(30), top };
   }, [items, nowSec]);
-
-  /* По монете целиком — для раскрытой строки: сколько выйдет за год от
-     этого дня и докуда тянется её график. */
-  const coinAhead = (e: UnlockEvent) => {
-    let year = 0;
-    let end = e.ts;
-    for (const x of items ?? []) {
-      if (x.sym !== e.sym || x.ts < e.ts) continue;
-      if (x.ts < e.ts + 365 * 86400) year += x.tokens;
-      end = Math.max(end, x.ts);
-    }
-    return { year, end };
-  };
-
-  /* Сколько новых монет сеть выпустит за год от сегодня, в % оборота: с
-     этим сравнивается доходность стейкинга. Доход 2,8% при выпуске 3,3%
-     значит, что доля стейкера в сети на деле уменьшается. */
-  const emitYear = (sym: string): number | null => {
-    let first: UnlockEvent | null = null;
-    let sum = 0;
-    for (const x of items ?? []) {
-      if (x.sym !== sym) continue;
-      if (!first || x.ts < first.ts) first = x;
-      if (x.ts < nowSec + 365 * 86400) sum += x.who.emission ?? 0;
-    }
-    return first?.circ ? (sum / first.circ) * 100 : null;
-  };
-
-  /* Из чего состоит выпуск монеты: сколько уже на рынке и сколько ещё
-     выйдет по графику, по группам. Всё — из того же календаря. */
-  const supplyOf = (sym: string) => {
-    let first: UnlockEvent | null = null;
-    const locked: Partial<Record<UnlockWho, number>> = {};
-    let emit = 0;
-    for (const x of items ?? []) {
-      if (x.sym !== sym) continue;
-      if (!first || x.ts < first.ts) first = x;
-      for (const [k, v] of Object.entries(x.who) as [UnlockWho, number][]) {
-        if (k === "emission") {
-          if (x.ts < nowSec + 365 * 86400) emit += v;
-        } else locked[k] = (locked[k] ?? 0) + v;
-      }
-    }
-    return { now: first?.circ ?? 0, locked, emit };
-  };
 
   const chart = (sym: string) => {
     haptic("select");
@@ -407,120 +363,16 @@ export function UnlocksScreen() {
                     </span>
                   </button>
                   {expanded ? (
-                    <div className="unl-more">
-                      <SupplyRing lang={lang} sym={e.sym} supply={supplyOf(e.sym)} stake={stake[e.sym]} />
-                      <dl>
-                        <dt>{t(lang, "unl_tokens")}</dt>
-                        <dd>
-                          {qty(e.tokens)} {e.sym}
-                        </dd>
-                        {e.price !== null ? (
-                          <>
-                            <dt>{t(lang, "unl_price")}</dt>
-                            <dd>{px(e.price)}</dd>
-                          </>
-                        ) : null}
-                        {e.circ ? (
-                          <>
-                            <dt>{t(lang, "unl_circ")}</dt>
-                            <dd>
-                              {qty(e.circ)} {e.sym}
-                            </dd>
-                          </>
-                        ) : null}
-                        {(() => {
-                          /* Застейканное на рынок быстро не выйдет: рядом с
-                             разлоком это вторая половина картины давления. */
-                          const st = stake[e.sym];
-                          const share =
-                            st && st.p !== null
-                              ? t(lang, st.of === "supply" ? "unl_of_supply" : "unl_of_circ", { p: pct(st.p, 1, false) })
-                              : "";
-                          return (
-                            <>
-                              <dt>{t(lang, "unl_staked")}</dt>
-                              <dd>
-                                {st === undefined
-                                  ? t(lang, "unl_stake_unknown")
-                                  : st === null
-                                    ? t(lang, "unl_stake_none")
-                                    : `${qty(st.n)} ${e.sym}${share ? ` · ${share}` : ""}`}
-                                {st && st.of === "supply" ? (
-                                  <small className="unl-note">{t(lang, "unl_stake_supply_note")}</small>
-                                ) : null}
-                              </dd>
-                              {st ? (
-                                <>
-                                  <dt>{t(lang, "unl_apy")}</dt>
-                                  <dd>
-                                    {st.y === undefined
-                                      ? t(lang, "unl_stake_unknown")
-                                      : t(lang, "unl_apy_val", { p: pct(st.y, 2, false) })}
-                                    {(() => {
-                                      if (st.y === undefined) return null;
-                                      if (noEmit[e.sym])
-                                        return <small className="unl-note">{t(lang, "unl_apy_nodil")}</small>;
-                                      const em = emitYear(e.sym);
-                                      if (!em) return null;
-                                      return (
-                                        <small className="unl-note">
-                                          {t(lang, "unl_apy_net", { e: pct(em, 1, false), r: pct(st.y - em, 1, true) })}
-                                        </small>
-                                      );
-                                    })()}
-                                  </dd>
-                                </>
-                              ) : null}
-                            </>
-                          );
-                        })()}
-                        {(() => {
-                          const a = coinAhead(e);
-                          return (
-                            <>
-                              <dt>{t(lang, "unl_12m")}</dt>
-                              <dd>
-                                {qty(a.year)} {e.sym}
-                                {e.circ
-                                  ? ` · ${t(lang, "unl_of_circ", { p: pct((a.year / e.circ) * 100, 1, false) })}`
-                                  : ""}
-                              </dd>
-                              <dt>{t(lang, "unl_end")}</dt>
-                              <dd>{day(a.end, nowSec)}</dd>
-                            </>
-                          );
-                        })()}
-                        {(() => {
-                          const why = noEmit[e.sym];
-                          return why ? (
-                            <>
-                              <dt>{t(lang, "unl_emit")}</dt>
-                              <dd>{t(lang, NOEMIT_KEY[why])}</dd>
-                            </>
-                          ) : null;
-                        })()}
-                        {(Object.entries(e.who) as [UnlockWho, number][])
-                          .sort((a, b) => b[1] - a[1])
-                          .map(([who, n]) => (
-                            <FragmentRow key={who} label={t(lang, WHO_KEY[who] ?? "unl_who_mixed")} value={`${qty(n)} ${e.sym}`} />
-                          ))}
-                      </dl>
-                      <div className="unl-act">
-                        <button type="button" className="unl-btn" onClick={() => chart(e.sym)}>
-                          {t(lang, "unl_chart")}
-                        </button>
-                        <button
-                          type="button"
-                          className="unl-btn ghost"
-                          onClick={() => {
-                            haptic("light");
-                            openExternal(e.src);
-                          }}
-                        >
-                          {t(lang, "unl_src")} ↗
-                        </button>
-                      </div>
-                    </div>
+                    <CoinMore
+                      e={e}
+                      lang={lang}
+                      nowSec={nowSec}
+                      items={items ?? []}
+                      stake={stake[e.sym]}
+                      noEmit={noEmit[e.sym]}
+                      ref0={supplyRef[e.sym]}
+                      onChart={() => chart(e.sym)}
+                    />
                   ) : null}
                 </div>
               );
@@ -575,11 +427,16 @@ export function UnlocksScreen() {
   );
 }
 
+type Lang = ReturnType<typeof useApp.getState>["lang"];
+type Who = Exclude<UnlockWho, "emission">;
+type Slice = "free" | "staked" | Who | "nosched";
+
 /* Цвет закреплён за группой, а не за местом в списке: у всех монет
    команда оранжевая, инвесторы малиновые. Порядок по кругу — порядок
    палитры, соседние цвета различимы и при дальтонизме (проверено
-   валидатором на фоне карточки). «Свободно в обороте» — нейтральный. */
-const RING: { key: "free" | "staked" | Exclude<UnlockWho, "emission">; color: string }[] = [
+   валидатором на фоне карточки). Свободный оборот и запертое без графика —
+   нейтральные: это не группы держателей. */
+const RING: { key: Slice; color: string }[] = [
   { key: "free", color: "#5d6f8a" },
   { key: "staked", color: "#3987e5" },
   { key: "team", color: "#d95926" },
@@ -588,20 +445,269 @@ const RING: { key: "free" | "staked" | Exclude<UnlockWho, "emission">; color: st
   { key: "investors", color: "#d55181" },
   { key: "foundation", color: "#9085e9" },
   { key: "mixed", color: "#e66767" },
+  { key: "nosched", color: "#34455f" },
 ];
+const YEAR = 365 * 86400;
+const MONTH = 30.44 * 86400;
 
+/** «в 2,7 раза»: одна цифра после запятой, без лишнего нуля. */
+const times = (x: number) => pct(x, 1, false).replace("%", "").trim();
+
+/** Раскрытая карточка монеты: вывод, круг выпуска, кривая оборота и
+ *  цифры тремя группами — этот день, сейчас, впереди. У терминов «?»:
+ *  объяснение одной фразой, без которого новичку цифры ничего не скажут. */
+function CoinMore({
+  e,
+  lang,
+  nowSec,
+  items,
+  stake,
+  noEmit,
+  ref0,
+  onChart,
+}: {
+  e: UnlockEvent;
+  lang: Lang;
+  nowSec: number;
+  items: UnlockEvent[];
+  stake: UnlockStake | null | undefined;
+  noEmit: UnlockNoEmit | undefined;
+  ref0: { t: number; m: number } | undefined;
+  onChart: () => void;
+}) {
+  const [help, setHelp] = useState<DictKey | null>(null);
+  const sym = e.sym;
+  const mine = useMemo(() => items.filter((x) => x.sym === sym).sort((x, y) => x.ts - y.ts), [items, sym]);
+  const first = mine[0];
+  const now = first?.circ ?? e.circ ?? 0;
+  const locked: Partial<Record<Who, number>> = {};
+  let emitYr = 0;
+  let yearAll = 0;
+  let yearFromDay = 0;
+  let end = e.ts;
+  for (const x of mine) {
+    for (const [k, v] of Object.entries(x.who) as [UnlockWho, number][]) {
+      if (k === "emission") {
+        if (x.ts < nowSec + YEAR) emitYr += v;
+      } else locked[k] = (locked[k] ?? 0) + v;
+    }
+    if (x.ts < nowSec + YEAR) yearAll += x.tokens;
+    if (x.ts >= e.ts && x.ts < e.ts + YEAR) yearFromDay += x.tokens;
+    end = Math.max(end, x.ts);
+  }
+  const last = mine[mine.length - 1];
+  const openEmit = !noEmit && !!last && (last.who.emission ?? 0) > 0 && last.ts >= nowSec + 33 * MONTH;
+  let lastUnlock = 0;
+  for (const x of mine) if (hasUnlock(x)) lastUnlock = Math.max(lastUnlock, x.ts);
+  const lockedSum = Object.values(locked).reduce((a, v) => a + (v ?? 0), 0);
+  const nosched = ref0?.t ? Math.max(0, ref0.t - now - lockedSum) : 0;
+
+  /* Вывод: сколько монет прибавится за год к нынешнему обороту. */
+  const yearPct = now ? (yearAll / now) * 100 : 0;
+  const lvl = yearAll <= 0 || yearPct < 3 ? 1 : yearPct < 10 ? 2 : yearPct < 30 ? 3 : 4;
+  const lvlKey: DictKey = lvl === 1 ? "unl_v_low" : lvl === 2 ? "unl_v_mid" : lvl === 3 ? "unl_v_high" : "unl_v_max";
+  const verdict =
+    yearAll <= 0
+      ? t(lang, "unl_v_none")
+      : yearPct >= 100
+        ? t(lang, "unl_v_times", { x: times(1 + yearPct / 100) })
+        : t(lang, "unl_v_add", { p: pct(yearPct, 1, false) });
+
+  const price = e.price;
+  const capAmount = ref0?.m || ref0?.t || (noEmit ? now + lockedSum : 0);
+
+  const Row = ({ label, q, children }: { label: string; q?: DictKey; children: React.ReactNode }) => (
+    <>
+      <dt>
+        {label}
+        {q ? (
+          <button
+            type="button"
+            className="unl-q"
+            aria-expanded={help === q}
+            aria-label="?"
+            onClick={() => setHelp(help === q ? null : q)}
+          >
+            ?
+          </button>
+        ) : null}
+      </dt>
+      <dd>{children}</dd>
+      {q && help === q ? <dd className="unl-help">{t(lang, q)}</dd> : null}
+    </>
+  );
+  const dayKind: DictKey = hasUnlock(e) ? "unl_q_unlock" : "unl_q_emit";
+
+  return (
+    <div className="unl-more">
+      <div className={`unl-verdict v${lvl}`}>
+        <div className="unl-verdict-hd">
+          <span className="unl-vbars" aria-hidden="true">
+            {[1, 2, 3, 4].map((i) => (
+              <i key={i} className={i <= lvl ? "on" : ""} />
+            ))}
+          </span>
+          <span>
+            {t(lang, "unl_v_title")}: <b>{t(lang, lvlKey)}</b>
+          </span>
+          <button
+            type="button"
+            className="unl-q"
+            aria-expanded={help === "unl_q_pressure"}
+            aria-label="?"
+            onClick={() => setHelp(help === "unl_q_pressure" ? null : "unl_q_pressure")}
+          >
+            ?
+          </button>
+        </div>
+        <p>{verdict}</p>
+        {help === "unl_q_pressure" ? <p className="unl-help">{t(lang, "unl_q_pressure")}</p> : null}
+      </div>
+
+      <SupplyRing lang={lang} sym={sym} now={now} locked={locked} nosched={nosched} stake={stake} known={!!ref0?.t || !!noEmit} />
+      <SupplyCurve lang={lang} sym={sym} now={now} mine={mine} nowSec={nowSec} />
+
+      <h4 className="unl-sec">{t(lang, "unl_sec_day")}</h4>
+      <dl>
+        <Row label={t(lang, "unl_tokens")} q={dayKind}>
+          {qty(e.tokens)} {sym}
+          <small className="unl-note">
+            {[e.usd !== null ? usd(e.usd) : "", e.pct !== null ? t(lang, "unl_of_circ", { p: pct(e.pct, 2, false) }) : ""]
+              .filter(Boolean)
+              .join(" · ")}
+          </small>
+        </Row>
+        {(Object.entries(e.who) as [UnlockWho, number][])
+          .sort((x, y) => y[1] - x[1])
+          .map(([who, n]) => (
+            <FragmentRow key={who} label={t(lang, WHO_KEY[who] ?? "unl_who_mixed")} value={`${qty(n)} ${sym}`} />
+          ))}
+      </dl>
+
+      <h4 className="unl-sec">{t(lang, "unl_sec_now")}</h4>
+      <dl>
+        {price !== null ? <Row label={t(lang, "unl_price")}>{px(price)}</Row> : null}
+        <Row label={t(lang, "unl_pie_now")} q="unl_q_circ">
+          {qty(now)} {sym}
+        </Row>
+        {price !== null && now ? <Row label={t(lang, "unl_mcap")}>{usd(now * price)}</Row> : null}
+        {price !== null ? (
+          <Row label={t(lang, "unl_fdv")} q="unl_q_fdv">
+            {capAmount ? (
+              <>
+                {usd(capAmount * price)}
+                {now && capAmount > now * 1.02 ? (
+                  <small className="unl-note">{t(lang, "unl_fdv_x", { x: times(capAmount / now) })}</small>
+                ) : null}
+              </>
+            ) : (
+              t(lang, "unl_fdv_nocap")
+            )}
+          </Row>
+        ) : null}
+        <Row label={t(lang, "unl_staked")} q={stake ? "unl_q_stake" : undefined}>
+          {stake === undefined
+            ? t(lang, "unl_stake_unknown")
+            : stake === null
+              ? t(lang, "unl_stake_none")
+              : `${qty(stake.n)} ${sym}${
+                  stake.p !== null
+                    ? ` · ${t(lang, stake.of === "supply" ? "unl_of_supply" : "unl_of_circ", { p: pct(stake.p, 1, false) })}`
+                    : ""
+                }`}
+          {stake && stake.of === "supply" ? <small className="unl-note">{t(lang, "unl_stake_supply_note")}</small> : null}
+          {stake ? (
+            <small className="unl-note">{t(lang, "unl_asof", { d: day(Date.parse(stake.at) / 1000, nowSec) })}</small>
+          ) : null}
+        </Row>
+        {stake ? (
+          <Row label={t(lang, "unl_apy")}>
+            {stake.y === undefined ? t(lang, "unl_stake_unknown") : t(lang, "unl_apy_val", { p: pct(stake.y, 2, false) })}
+            {stake.y !== undefined && noEmit ? <small className="unl-note">{t(lang, "unl_apy_nodil")}</small> : null}
+            {stake.y !== undefined && !noEmit && emitYr > 0 && now ? (
+              <small className="unl-note">
+                {t(lang, "unl_apy_net", {
+                  e: pct((emitYr / now) * 100, 1, false),
+                  r: pct(stake.y - (emitYr / now) * 100, 1, true),
+                })}
+              </small>
+            ) : null}
+          </Row>
+        ) : null}
+      </dl>
+
+      <h4 className="unl-sec">{t(lang, "unl_sec_ahead")}</h4>
+      <dl>
+        <Row label={t(lang, "unl_12m")}>
+          {qty(yearFromDay)} {sym}
+          {e.circ ? (
+            <small className="unl-note">{t(lang, "unl_of_circ", { p: pct((yearFromDay / e.circ) * 100, 1, false) })}</small>
+          ) : null}
+        </Row>
+        <Row label={t(lang, "unl_end")}>
+          {/* Бессрочная эмиссия расписана на три года вперёд — её «последний»
+              день лишь край горизонта, а не конец выпуска. */}
+          {openEmit ? t(lang, "unl_end_open") : day(end, nowSec)}
+          {openEmit && lastUnlock ? (
+            <small className="unl-note">
+              {t(lang, "unl_type_unlock")}: {day(lastUnlock, nowSec)}
+            </small>
+          ) : null}
+        </Row>
+        <Row label={t(lang, "unl_emit")} q="unl_q_emit">
+          {noEmit ? (
+            t(lang, NOEMIT_KEY[noEmit])
+          ) : emitYr > 0 && now ? (
+            <>
+              {t(lang, "unl_apy_val", { p: `+${pct((emitYr / now) * 100, 1, false)}` })}
+              <small className="unl-note">
+                {qty(emitYr)} {sym}
+              </small>
+            </>
+          ) : (
+            t(lang, "unl_stake_unknown")
+          )}
+        </Row>
+      </dl>
+
+      <div className="unl-act">
+        <button type="button" className="unl-btn" onClick={onChart}>
+          {t(lang, "unl_chart")}
+        </button>
+        <button
+          type="button"
+          className="unl-btn ghost"
+          onClick={() => {
+            haptic("light");
+            openExternal(e.src);
+          }}
+        >
+          {t(lang, "unl_src")} ↗
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Круг выпуска: что на рынке сейчас (свободно и в стейкинге), что ещё
+ *  выйдет по графику по группам и что заперто без графика. */
 function SupplyRing({
   lang,
   sym,
-  supply,
+  now,
+  locked,
+  nosched,
   stake,
+  known,
 }: {
-  lang: ReturnType<typeof useApp.getState>["lang"];
+  lang: Lang;
   sym: string;
-  supply: { now: number; locked: Partial<Record<UnlockWho, number>>; emit: number };
+  now: number;
+  locked: Partial<Record<Who, number>>;
+  nosched: number;
   stake: UnlockStake | null | undefined;
+  known: boolean;
 }) {
-  const { now, locked, emit } = supply;
   if (!now) return null;
   /* Застейканное — часть оборота, если считано от оборота; доля «от
      выпуска» включает и запертое, его в круг не вписать. */
@@ -609,15 +715,19 @@ function SupplyRing({
   const parts = RING.map(({ key, color }) => ({
     key,
     color,
-    n: key === "free" ? now - staked : key === "staked" ? staked : (locked[key] ?? 0),
+    n:
+      key === "free" ? now - staked : key === "staked" ? staked : key === "nosched" ? nosched : (locked[key] ?? 0),
   })).filter((x) => x.n > 0);
   const total = parts.reduce((a, x) => a + x.n, 0);
   const R = 42;
   const C = 2 * Math.PI * R;
   const GAP = parts.length > 1 ? 2 : 0;
   let at = 0;
-  const label = (k: (typeof RING)[number]["key"]) =>
-    t(lang, k === "free" ? "unl_pie_free" : k === "staked" ? "unl_staked" : WHO_KEY[k]);
+  const label = (k: Slice) =>
+    t(
+      lang,
+      k === "free" ? "unl_pie_free" : k === "staked" ? "unl_staked" : k === "nosched" ? "unl_pie_nosched" : WHO_KEY[k],
+    );
   const row = (x: (typeof parts)[number]) => (
     <li key={x.key}>
       <i style={{ background: x.color }} />
@@ -672,12 +782,103 @@ function SupplyRing({
           ) : null}
         </div>
       </div>
-      {emit > 0 ? (
-        <p className="unl-ring-note">
-          {t(lang, "unl_pie_emit", { n: `${qty(emit)} ${sym}`, p: pct((emit / now) * 100, 1, false) })}
-        </p>
-      ) : null}
-      {laterParts.length ? <p className="unl-ring-note">{t(lang, "unl_pie_note")}</p> : null}
+      {!known && laterParts.length ? <p className="unl-ring-note">{t(lang, "unl_pie_note")}</p> : null}
+    </div>
+  );
+}
+
+/** Кривая оборота на три года: сколько монет будет на рынке по месяцам,
+ *  с учётом разлоков и эмиссии. Ступеньки — крупные разлоки (от 5% оборота),
+ *  они отмечены точками. Палец по графику — дата и оборот в этот месяц. */
+function SupplyCurve({
+  lang,
+  sym,
+  now,
+  mine,
+  nowSec,
+}: {
+  lang: Lang;
+  sym: string;
+  now: number;
+  mine: UnlockEvent[];
+  nowSec: number;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
+  const N = 36;
+  const pts = useMemo(() => {
+    const out: number[] = [];
+    for (let m = 0; m <= N; m++) {
+      const until = nowSec + m * MONTH;
+      let acc = now;
+      for (const ev of mine) if (ev.ts <= until) acc += ev.tokens;
+      out.push(acc);
+    }
+    return out;
+  }, [mine, now, nowSec]);
+  const at = (m: number) => pts[m] ?? now;
+  if (!now || at(N) <= now * 1.001) return null;
+  const W = 320;
+  const H = 120;
+  const top = 14;
+  const bottom = 18;
+  const max = at(N) * 1.04;
+  const x = (m: number) => (m / N) * W;
+  const y = (v: number) => top + (1 - v / max) * (H - top - bottom);
+  const line = pts.map((v, m) => `${m ? "L" : "M"}${x(m).toFixed(1)},${y(v).toFixed(1)}`).join("");
+  const area = `${line}L${W},${H - bottom}L0,${H - bottom}Z`;
+  const big = mine.filter((ev) => ev.ts <= nowSec + N * MONTH && ev.kind === "cliff" && (ev.pct ?? 0) >= 5);
+  const yearTicks = [12, 24, 36];
+  const dateAt = (m: number) => new Date((nowSec + m * MONTH) * 1000);
+  const yearOf = (m: number) => dateAt(m).getUTCFullYear();
+  const pick = (ev: React.PointerEvent<SVGSVGElement>) => {
+    const r = ev.currentTarget.getBoundingClientRect();
+    const m = Math.round(((ev.clientX - r.left) / r.width) * N);
+    setHover(Math.max(0, Math.min(N, m)));
+  };
+  const h = hover ?? N;
+  const hv = at(h);
+  return (
+    <div className="unl-curve">
+      <div className="unl-curve-hd">
+        <span>{t(lang, "unl_curve_title")}</span>
+        <b>
+          {day(Math.round(dateAt(h).getTime() / 1000), nowSec)}: {qty(hv)} {sym}
+          <em> {pct(((hv - now) / now) * 100, 1, true)}</em>
+        </b>
+      </div>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        width="100%"
+        role="img"
+        aria-label={`${t(lang, "unl_curve_title")}: ${qty(now)} → ${qty(at(N))} ${sym}`}
+        onPointerDown={pick}
+        onPointerMove={pick}
+        onPointerLeave={() => setHover(null)}
+      >
+        <defs>
+          <linearGradient id={`uc-${sym}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#3987e5" stopOpacity="0.35" />
+            <stop offset="1" stopColor="#3987e5" stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        <line x1="0" x2={W} y1={y(now)} y2={y(now)} className="unl-curve-base" />
+        {yearTicks.map((m) => (
+          <g key={m}>
+            <line x1={x(m)} x2={x(m)} y1={top} y2={H - bottom} className="unl-curve-grid" />
+            <text x={m === N ? x(m) - 2 : x(m)} y={H - 4} textAnchor={m === N ? "end" : "middle"} className="unl-curve-tick">
+              {yearOf(m)}
+            </text>
+          </g>
+        ))}
+        <path d={area} fill={`url(#uc-${sym})`} />
+        <path d={line} fill="none" stroke="#3987e5" strokeWidth="2" strokeLinejoin="round" />
+        {big.map((ev) => {
+          const m = Math.min(N, Math.max(0, (ev.ts - nowSec) / MONTH));
+          const v = at(Math.min(N, Math.ceil(m)));
+          return <circle key={ev.ts} cx={x(m)} cy={y(v)} r="4" className="unl-curve-dot" />;
+        })}
+        {hover !== null ? <line x1={x(h)} x2={x(h)} y1={top} y2={H - bottom} className="unl-curve-cross" /> : null}
+      </svg>
     </div>
   );
 }

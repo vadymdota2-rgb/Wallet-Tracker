@@ -869,11 +869,15 @@ say("снимок застейканного у монет разлоков не
 _apy_old = [f"{c}:{d}" for c, d in re.findall(r'\{"s": "([A-Z0-9]+)", "n": [^\n]*\n(?:[^\n]*\n)*?\s+"apy": \("(\d{4}-\d{2}-\d{2})"', api)
             if (_dt.date.today() - _dt.date.fromisoformat(d)).days > 120]
 say("снимок доходности стейкинга не старше 120 дней", not _apy_old, str(_apy_old))
+say("карточка монеты начинается с вывода о давлении и объясняет термины",
+    'className={`unl-verdict v${lvl}`}' in unl_scr and '"unl_q_pressure"' in unl_scr and 'className="unl-q"' in unl_scr)
+say("кривая оборота на три года и полная оценка (FDV) в карточке",
+    "function SupplyCurve(" in unl_scr and 't(lang, "unl_fdv")' in unl_scr and '"supply": {k: {"t": v[0], "m": v[1]}' in api)
 say("карточка монеты рисует круг выпуска: на рынке, в стейкинге, кому ещё выйдет",
     "function SupplyRing(" in unl_scr and "<SupplyRing " in unl_scr and 't(lang, "unl_pie_note")' in unl_scr)
-say("доходность стейкинга сравнивается с ростом выпуска", 'row["y"] = c["apy"][1]' in api and "st.y - em" in unl_scr)
+say("доходность стейкинга сравнивается с ростом выпуска", 'row["y"] = c["apy"][1]' in api and "stake.y - (emitYr / now) * 100" in unl_scr)
 say("экран разлоков показывает застейканное, «нет стейкинга» и «нет данных» раздельно",
-    '"stake": unlock_stakes()' in api and 'st === undefined' in unl_scr and 't(lang, "unl_stake_none")' in unl_scr)
+    '"stake": unlock_stakes()' in api and 'stake === undefined' in unl_scr and 't(lang, "unl_stake_none")' in unl_scr)
 # Эмиссия давит на цену так же, как разлок: у каждой монеты книги она либо
 # записана строкой «emission», либо монета названа в NO_EMISSION с причиной.
 import importlib.util as _iu

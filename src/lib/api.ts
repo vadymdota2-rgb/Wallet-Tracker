@@ -244,7 +244,7 @@ export const fetchUnlocks = () =>
       try {
         localStorage.setItem(
           UNLOCKS_SAVED,
-          JSON.stringify({ at: Date.now(), items: r.items, none: r.none, noEmit: r.noEmit, stake: r.stake }),
+          JSON.stringify({ at: Date.now(), items: r.items, none: r.none, noEmit: r.noEmit, stake: r.stake, supply: r.supply }),
         );
       } catch {
         // место кончилось или хранилище закрыто — просто без запаса

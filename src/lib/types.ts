@@ -674,6 +674,9 @@ export interface UnlocksReply {
   /** В стейкинге: монет, % оборота, дата снимка; null — стейкинга у монеты
    *  нет. Монеты нет в словаре — данных нет. */
   stake?: Record<string, UnlockStake | null>;
+  /** Выпуск монеты: t — всего создано (0 — нет долей без графика),
+   *  m — потолок (0 — нет или неизвестен). */
+  supply?: Record<string, { t: number; m: number }>;
 }
 
 export interface UnlockStake {
