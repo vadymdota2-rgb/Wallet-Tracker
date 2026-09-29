@@ -2034,61 +2034,242 @@
 }
 .lq-find button:disabled { opacity: 0.45; }
 .lq-ctl { display: grid; gap: 8px; margin-bottom: 12px; }
-.lq-head { display: flex; align-items: center; gap: 10px; }
-.lq-head div { display: grid; min-width: 0; }
-.lq-head b { font-size: 17px; }
-.lq-head small { color: var(--dim); font-size: 12px; }
-.lq-busy { margin-inline-start: auto; color: var(--dim); }
-.lq-tip {
-  min-height: 66px;
-  padding: 9px 11px;
+
+/* Шапка: монета, цена, путь цены за окно. */
+.lq-hero { display: flex; align-items: center; gap: 10px; }
+.lq-hero-n { display: grid; min-width: 0; }
+.lq-hero-n b { font-size: 18px; letter-spacing: 0.02em; }
+.lq-hero-n small { color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums; }
+.lq-hero-p { display: grid; justify-items: end; margin-inline-start: auto; }
+.lq-hero-p b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.lq-hero-p small { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.lq-hero-p .up, .lq-bal .up, .lq-div-h .up, .lq-top-c.up > small { color: var(--up); }
+.lq-hero-p .dn, .lq-bal .dn, .lq-div-h .dn, .lq-top-c.dn > small { color: var(--dn); }
+.lq-busy {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--glow);
+  animation: lq-pulse 1s ease-in-out infinite;
+}
+@keyframes lq-pulse { 50% { opacity: 0.25; } }
+.lq-spark { display: block; width: 100%; height: 34px; margin: 10px 0 12px; direction: ltr; }
+.lq-spark-l { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.lq-spark.up .lq-spark-l { stroke: var(--up); }
+.lq-spark.dn .lq-spark-l { stroke: var(--dn); }
+.lq-spark-a { opacity: 0.12; }
+.lq-spark.up .lq-spark-a, .lq-spark.up .lq-spark-d { fill: var(--up); }
+.lq-spark.dn .lq-spark-a, .lq-spark.dn .lq-spark-d { fill: var(--dn); }
+
+/* Ближайшие скопления — две плитки, по касанию уровень на карте. */
+.lq-mag { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.lq-mag-c {
+  display: grid;
+  gap: 3px;
+  justify-items: start;
+  text-align: start;
+  padding: 10px 11px;
   border-radius: var(--r-md);
-  background: rgb(11 22 40 / 0.35);
+  border: 1px solid;
+  min-width: 0;
+  transition: transform 0.15s var(--ease);
+}
+.lq-mag-c:active:not(:disabled) { transform: scale(0.98); }
+.lq-mag-c.up { border-color: rgb(61 220 151 / 0.35); background: linear-gradient(180deg, rgb(61 220 151 / 0.1), rgb(61 220 151 / 0.02)); }
+.lq-mag-c.dn { border-color: rgb(255 92 119 / 0.35); background: linear-gradient(180deg, rgb(255 92 119 / 0.1), rgb(255 92 119 / 0.02)); }
+.lq-mag-c small { font-size: 11px; font-weight: 600; line-height: 1.3; }
+.lq-mag-c.up small, .lq-mag-c.up em { color: var(--up); }
+.lq-mag-c.dn small, .lq-mag-c.dn em { color: var(--dn); }
+.lq-mag-c b { font-size: 18px; font-variant-numeric: tabular-nums; color: var(--ink); }
+.lq-mag-c span { font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.lq-mag-c em { font-style: normal; font-weight: 700; }
+
+/* Баланс сторон в пределах ±5%. */
+.lq-bal { margin-top: 12px; display: grid; gap: 6px; }
+.lq-bal-t { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--ink); line-height: 1.35; }
+.lq-bal-bar { display: flex; gap: 2px; height: 8px; direction: ltr; }
+.lq-bal-bar i { display: block; min-width: 2px; }
+.lq-bal-bar i.dn { background: var(--dn); border-radius: 4px 0 0 4px; }
+.lq-bal-bar i.up { background: var(--up); border-radius: 0 4px 4px 0; }
+.lq-bal-k { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 12px; direction: ltr; }
+.lq-bal-k b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.lq-bal-k span { white-space: nowrap; }
+/* Суммы — отдельный изолированный фрагмент: в арабском «$23.78M» иначе
+   разваливался на «23.78$ … M». */
+.lq-bal-k b, .lq-mag-c b, .lq-pop b, .lq-top-r b, .lq-top-r em, .lq-div-v, .lq-hero-p b, .lq-hero-n small {
+  unicode-bidi: isolate;
+  direction: ltr;
+}
+.lq-bal-t small { display: block; margin-top: 1px; color: var(--dim-2); font-size: 11px; font-weight: 500; }
+
+/* Карта. */
+.lq-zone-h { position: relative; display: flex; align-items: flex-end; line-height: 1.3; font-size: 12px; font-weight: 700; direction: ltr; }
+.lq-zone-h.up { color: var(--up); margin: 12px 0 5px; }
+.lq-zone-h.dn { color: var(--dn); margin: 5px 0 10px; }
+.lq-zone-h small {
+  position: absolute;
+  bottom: 0;
+  text-align: center;
+  color: var(--dim);
+  font-size: 10px;
+  font-weight: 600;
+}
+.lq-plot { position: relative; scroll-margin: 80px; }
+/* График рисуется слева направо при любом языке: цена — ось, а не текст. */
+.lq-svg { display: block; direction: ltr; touch-action: pan-y; user-select: none; -webkit-user-select: none; cursor: crosshair; }
+.lq-zone.up { fill: rgb(61 220 151 / 0.035); }
+.lq-zone.dn { fill: rgb(255 92 119 / 0.035); }
+.lq-sep { stroke: rgb(58 130 214 / 0.2); stroke-width: 1; }
+.lq-grid { stroke: rgb(58 130 214 / 0.13); stroke-width: 1; }
+.lq-tick { fill: var(--ink); opacity: 0.8; font-size: 9.5px; font-variant-numeric: tabular-nums; }
+.lq-tick-p { font-size: 8.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.lq-tick-p.up { fill: var(--up); }
+.lq-tick-p.dn { fill: var(--dn); }
+.lq-hl { fill: rgb(127 216 255 / 0.1); }
+.lq-row { transition: opacity 0.2s; }
+.lq-row.dim { opacity: 0.55; }
+.lq-bars { transform-box: fill-box; transform-origin: 0 50%; animation: lq-grow 0.6s var(--ease) both; }
+@keyframes lq-grow { from { transform: scaleX(0); opacity: 0.3; } }
+.lq-val {
+  fill: var(--ink);
+  font-size: 9.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke;
+  stroke: var(--panel);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.lq-cum-a { stroke-width: 1.5; stroke-linejoin: round; }
+.lq-cum-a.up { fill: rgb(61 220 151 / 0.18); stroke: var(--up); }
+.lq-cum-a.dn { fill: rgb(255 92 119 / 0.18); stroke: var(--dn); }
+.lq-now { stroke: var(--ink); stroke-width: 1.25; stroke-dasharray: 5 4; }
+.lq-now-box { fill: var(--blue); }
+.lq-now-t { fill: #fff; font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.lq-cross line { stroke: var(--glow); stroke-width: 1; }
+.lq-cross circle { fill: var(--glow); stroke: var(--panel); stroke-width: 2; }
+.lq-cross rect { fill: var(--panel-2); stroke: var(--glow); stroke-width: 1; }
+.lq-cross text { fill: var(--glow); font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* Подсказка у пальца: над строкой, у верхнего края — под ней. */
+.lq-pop {
+  position: absolute;
+  inset-inline-end: 4px;
+  width: min(250px, 70%);
+  transform: translateY(calc(-100% - 12px));
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: rgb(8 16 32 / 0.96);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.55);
   display: grid;
   gap: 5px;
-  font-size: 13px;
+  font-size: 12px;
+  z-index: 2;
+  animation: lq-in 0.16s var(--ease);
 }
-.lq-tip p { margin: 0; color: var(--dim); }
-.lq-tip p b { color: var(--ink); }
-.lq-tip-hint { align-self: center; justify-self: center; }
-.lq-tip-h { display: flex; align-items: baseline; gap: 8px; }
-.lq-tip-h b { font-size: 15px; font-variant-numeric: tabular-nums; }
-.lq-tip-h span { color: var(--dim); font-variant-numeric: tabular-nums; }
-.lq-tip-h em { margin-inline-start: auto; font-style: normal; color: var(--glow); font-weight: 600; }
-.lq-tip-levs { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--dim); }
-.lq-tip-levs b { color: var(--ink); font-variant-numeric: tabular-nums; }
-.lq-tip-levs i, .lq-legend i {
+.lq-pop.below { transform: translateY(12px); }
+@keyframes lq-in { from { opacity: 0; } }
+.lq-pop.up { border-top: 2px solid var(--up); }
+.lq-pop.dn { border-top: 2px solid var(--dn); }
+.lq-pop-h { display: flex; align-items: baseline; gap: 8px; }
+.lq-pop-h b { font-size: 16px; font-variant-numeric: tabular-nums; }
+.lq-pop-h span { color: var(--dim); font-variant-numeric: tabular-nums; }
+.lq-pop-h button { margin-inline-start: auto; color: var(--dim); font-size: 18px; line-height: 1; padding: 0 2px; }
+.lq-pop em { font-style: normal; font-weight: 700; font-size: 11.5px; }
+.lq-pop.up em { color: var(--up); }
+.lq-pop.dn em { color: var(--dn); }
+.lq-pop-levs { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 10px; color: var(--dim); }
+.lq-pop-levs span { white-space: nowrap; }
+.lq-pop-levs .off { opacity: 0.4; }
+.lq-pop-levs b, .lq-pop p b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.lq-pop p { margin: 0; color: var(--dim); }
+.lq-pop-levs i, .lq-lev i {
   display: inline-block;
   width: 9px;
   height: 9px;
   border-radius: 2px;
   margin-inline-end: 4px;
-  vertical-align: 0;
 }
-/* График рисуется слева направо при любом языке: цена — ось, а не текст. */
-.lq-svg { display: block; direction: ltr; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
-.lq-grid { stroke: rgb(58 130 214 / 0.16); stroke-width: 1; }
-.lq-tick { fill: var(--dim); font-size: 10px; font-variant-numeric: tabular-nums; }
-.lq-hl { fill: rgb(58 130 214 / 0.16); }
-.lq-now { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 4 3; opacity: 0.75; }
-.lq-now-box { fill: #0b1a33; stroke: rgb(58 130 214 / 0.7); stroke-width: 1; }
-.lq-now-t { fill: var(--ink); font-size: 10.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.lq-side { fill: var(--ink); font-size: 10.5px; font-weight: 700; paint-order: stroke; stroke: var(--panel); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
-.lq-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 12px; color: var(--ink); }
-.lq-legend-t { color: var(--dim); }
-.lq-cum { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
-.lq-cum-c {
+.lq-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--ink); }
+.lq-legend-t { color: var(--dim); margin-inline-end: 2px; }
+.lq-lev {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  transition: opacity 0.15s;
+}
+.lq-lev i { margin-inline-end: 0; }
+.lq-lev i + i { margin-inline-end: 5px; border-radius: 0 2px 2px 0; }
+.lq-lev i:first-child { border-radius: 2px 0 0 2px; }
+.lq-lev.off { opacity: 0.35; text-decoration: line-through; }
+.lq-hint { margin: 8px 0 0; color: var(--dim-2); font-size: 11.5px; }
+
+/* Итоги рядом с ценой: лонги влево, шорты вправо, один масштаб. */
+.lq-div-h { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; margin-bottom: 8px; direction: ltr; }
+.lq-div {
   display: grid;
-  gap: 3px;
+  grid-template-columns: 66px minmax(0, 1fr) 42px minmax(0, 1fr) 66px;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 0;
+  direction: ltr;
+}
+.lq-div > b { text-align: center; color: var(--glow); font-size: 12px; }
+.lq-div-v { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.lq-div-v:first-child { text-align: end; }
+.lq-div-b { display: flex; height: 10px; }
+.lq-div-b.l { justify-content: flex-end; }
+.lq-div-b i { display: block; min-width: 2px; animation: lq-grow 0.6s var(--ease) both; }
+.lq-div-b.l i { background: var(--dn); border-radius: 4px 0 0 4px; transform-origin: 100% 50%; }
+.lq-div-b.r i { background: var(--up); border-radius: 0 4px 4px 0; transform-origin: 0 50%; }
+
+/* Крупнейшие уровни: две колонки, по касанию — на карте. */
+.lq-top { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+.lq-top-c { display: grid; gap: 6px; align-content: start; min-width: 0; }
+.lq-top-c > small { font-size: 11.5px; font-weight: 700; padding: 0 2px; }
+.lq-top-c button {
+  display: grid;
+  gap: 4px;
   padding: 9px 10px;
   border-radius: var(--r-md);
   background: linear-gradient(180deg, rgb(7 14 30 / 0.35), rgb(3 7 18 / 0.41));
   border: 1px solid rgb(27 61 104 / 0.55);
-  font-size: 11px;
-  color: var(--dim);
+  text-align: start;
   min-width: 0;
 }
-.lq-cum-c small { color: var(--glow); font-weight: 700; font-size: 12px; }
-.lq-cum-c b { display: block; color: var(--ink); font-size: 13px; font-variant-numeric: tabular-nums; }
+.lq-top-c button:active { transform: scale(0.98); }
+.lq-top-r { display: flex; justify-content: space-between; gap: 6px; font-variant-numeric: tabular-nums; }
+.lq-top-r b { font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.lq-top-r em { font-style: normal; font-weight: 700; font-size: 12.5px; }
+.lq-top-c.up em { color: var(--up); }
+.lq-top-c.dn em { color: var(--dn); }
+.lq-top-bar { display: block; height: 4px; border-radius: 2px; background: rgb(58 130 214 / 0.12); direction: ltr; }
+.lq-top-bar i { display: block; height: 100%; border-radius: 2px; }
+.lq-top-c.up .lq-top-bar i { background: var(--up); }
+.lq-top-c.dn .lq-top-bar i { background: var(--dn); }
+.lq-top-c button small { color: var(--dim); font-size: 11px; font-variant-numeric: tabular-nums; }
+
+.lq-how {
+  margin: 4px 0 0;
+  padding: 11px 13px;
+  border-radius: var(--r-lg);
+  border: 1px solid rgb(27 61 104 / 0.55);
+  background: rgb(7 14 30 / 0.35);
+}
+.lq-how summary { cursor: pointer; font-weight: 700; font-size: 13.5px; color: var(--glow); list-style: none; display: flex; align-items: center; gap: 8px; }
+.lq-how summary::-webkit-details-marker { display: none; }
+.lq-how summary::after { content: "⌄"; margin-inline-start: auto; font-size: 18px; line-height: 1; transition: transform 0.2s var(--ease); }
+.lq-how[open] summary::after { transform: rotate(180deg); }
+.lq-how ul { margin: 10px 0 2px; padding-inline-start: 18px; display: grid; gap: 7px; color: var(--ink); font-size: 13px; line-height: 1.45; }
+.lq-how li::marker { color: var(--glow); }
 .lq-src { color: var(--dim); font-size: 12px; line-height: 1.45; margin: 12px 2px 4px; }
 .lq-chart { color: var(--glow); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .lq-bars, .lq-div-b i, .lq-pop, .lq-busy { animation: none; }
+}

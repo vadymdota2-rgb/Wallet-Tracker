@@ -641,5 +641,9 @@ export interface LiqMapReply {
   buckets: LiqBucket[];
   /** Накоплено от цены до ±2 / ±5 / ±10 %. */
   cum: Record<string, { L: number; S: number }>;
+  /** Путь цены за окно (≤60 точек), последняя — цена сейчас. */
+  path?: number[];
+  /** Открытый интерес всех ответивших бирж, $. */
+  oi?: number;
   at: number;
 }

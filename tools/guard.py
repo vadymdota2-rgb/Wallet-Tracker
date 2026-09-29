@@ -446,5 +446,10 @@ say("карта ликвидаций считается на сервере из
     "def liq_map(" in api and '"/api/liqmap"' in api and "LIQ_SOURCES" in api
     and "apikey" not in pybody(api, "def liq_map(").lower())
 
+_lq = read(f"{APP}/src/screens/LiqMapScreen.tsx")
+say("карта ликвидаций: сторона — цветом и местом, плечо — светлотой, накопленное — своей колонкой",
+    "SHORT_C" in _lq and "LONG_C" in _lq and "function cumOf(" in _lq and "CX0 + ((cum[i]" in _lq
+    and "function nearest(" in _lq and '"path": [round(x, 10) for x in path]' in api)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

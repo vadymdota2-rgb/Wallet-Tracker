@@ -8595,9 +8595,18 @@ def liq_map(sym: str, rng: str) -> dict:
         return round(sum(sum(r[side]) for r in buckets
                          if (side == "L" and edge <= r["p"] < px) or (side == "S" and px < r["p"] <= edge)))
 
+    # Путь цены за окно — у той же биржи, по ≤60 точкам: в шапке видно,
+    # откуда цена пришла к нынешним уровням. Открытый интерес — сумма бирж.
+    main = max(got.values(), key=lambda r: r[-1][4])
+    stride = max(1, len(main) // 60)
+    path = [r[3] for r in main[::stride]]
+    if path[-1] != main[-1][3]:
+        path.append(main[-1][3])
     res = {"ok": True, "sym": sym, "range": rng, "px": px, "step": step, "lo": lo_px,
            "ex": sorted(got), "levs": list(LIQ_LEVS), "buckets": buckets,
-           "cum": {k: {"L": cum("L", k), "S": cum("S", k)} for k in (2, 5, 10)}, "at": now()}
+           "cum": {k: {"L": cum("L", k), "S": cum("S", k)} for k in (2, 5, 10)},
+           "path": [round(x, 10) for x in path], "oi": round(sum(r[-1][4] for r in got.values())),
+           "at": now()}
     with _liq_lock:
         _liq_cache[key] = (time.monotonic(), res)
         cap_cache(_liq_cache, 60)
