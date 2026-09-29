@@ -4884,6 +4884,11 @@ def stake_live_refresher() -> None:
         try:
             n = stake_live_refresh()
             sys.stderr.write(f"[api] staking snapshots refreshed: {n}\n")
+            with _stake_live_lock:
+                sup = len(_STAKE_LIVE.get("_sup", {}))
+                rates = {k: v[0] for k, v in _STAKE_LIVE.get("_rate", {}).items()}
+            sys.stderr.write(f"[api] supply recorded: {sup} coins, measured: {len(measured_emission())}, "
+                             f"direct rates: {rates}\n")
         except Exception as e:  # noqa: BLE001
             sys.stderr.write(f"[api] staking refresh failed: {e}\n")
         time.sleep(STAKE_LIVE_TTL_S)
