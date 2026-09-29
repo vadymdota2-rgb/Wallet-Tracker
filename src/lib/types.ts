@@ -333,198 +333,6 @@ export interface RotSum {
 }
 export type RotSums = Record<string, RotSum | undefined>;
 
-export interface Signal {
-  sym: string;
-  side: Side;
-  /** Вероятность модели в процентах, а не выдумка по величине потока. */
-  conf: number;
-  /** true — считала модель, false — осталась формула: на экране это разные слова. */
-  model: boolean;
-  net: number;
-  w: number;
-  entry: number;
-  stop: number;
-  stopPct: number;
-  t1: number;
-  t2: number;
-  lev: number;
-  /** Доля депозита под риском, в процентах: решение модели, не настройка. */
-  share: number;
-  /** Горизонт, который модель выбрала для этого сигнала, в секундах. */
-  h: number;
-  /** Адрес контракта у спота: по нему достаётся история цены. У перпа здесь
-   *  имя монеты, и адресом оно не является. */
-  addr?: string;
-  /** Вклад признаков в эту оценку: имя и сдвиг вероятности в процентных
-   *  пунктах, знаком в сторону сигнала. */
-  why: { k: string; v: number }[];
-  venue: Venue;
-  /** Когда сигнал появился, unix-секунды. Не когда его пересчитали: пересчёт
-   *  идёт каждые пять минут, и по нему любой сигнал выглядел бы свежим. */
-  at?: number;
-  /** Доход с момента выдачи в процентах, в сторону сигнала: у шорта падение
-   *  цены — плюс. Считается от входа, который показан, а не от сегодняшней
-   *  цены — иначе он всегда был бы нулём. */
-  roi?: number;
-  /** Цена прямо сейчас: от неё и посчитан доход. */
-  now?: number;
-}
-
-export interface HistItem {
-  /** 1 — дошло до цели, −1 — стоп, 0 — за сутки ни то ни другое. */
-  outcome?: number;
-  sym: string;
-  long: boolean;
-  ret: number;
-  t: ServerText;
-  win: boolean;
-  venue: Venue;
-  /** Сигнал сделала модель, а не формула. */
-  model?: boolean;
-}
-
-/** Обученная модель: то, что показывает экран состояния. */
-export interface CortexModel {
-  at: number;
-  samples: number;
-  test: number;
-  trees: number;
-  auc: number;
-  logloss: number;
-  /** Потери постоянного прогноза: без них logloss ни о чём не говорит. */
-  base: number;
-  acc: number;
-  brier: number;
-  /** Средний AUC скользящей проверки — устойчивость, а не разовая удача. */
-  wf: number;
-  /** Худшая складка: среднее скрывает «одна вытащила остальные». */
-  wfMin?: number;
-  /** Сколько складок отработало. */
-  folds?: number;
-  /** Насколько обещанное разошлось со сбывшимся на тесте. */
-  ece?: number;
-  /** И сколько дала бы одна случайность при таких же корзинах. */
-  eceFloor?: number;
-  /** Доля роста в тесте: с ней видно, что «точность 60%» может быть угадыванием. */
-  up: number;
-  /** Признаки, на которые модель опирается чаще прочих, и их доля в процентах. */
-  top: { k: string; v: number }[];
-  /** Стоп и цели назвала модель, а не формула от волатильности. */
-  levels?: boolean;
-  /** Горизонт этой модели в секундах. */
-  h?: number;
-}
-
-export interface CortexTry {
-  at: number;
-  samples: number;
-  auc: number;
-  logloss: number;
-  base: number;
-  wf: number;
-  wfMin?: number;
-  folds?: number;
-  /** Сколько проверок подряд сошлось. В бой модель идёт со второй. */
-  passes?: number;
-  /** Насколько обещанное разошлось со сбывшимся на тесте. */
-  ece?: number;
-  /** И сколько дала бы одна случайность при таких же корзинах. */
-  eceFloor?: number;
-  ok: boolean;
-  /** Горизонт этой попытки в секундах. */
-  h?: number;
-}
-
-/**
- * Один горизонт одной площадки: модель, последняя попытка и сколько исходов
- * на него набралось.
- *
- * Моделей у площадки две — шестичасовая и суточная, — и живут они врозь.
- * Пока экран показывал одну карточку на площадку, принятая шестичасовая
- * закрывала собой проваленную суточную: человек читал «модель принята», не
- * зная, что половина сигналов всё равно считается формулой.
- */
-export interface CortexHz {
-  /** Горизонт в секундах: 21600 или 86400. */
-  h: number;
-  /** Размеченных исходов на этом горизонте. Порог свой: 1% против 2%. */
-  ready: number;
-  model: CortexModel | null;
-  try: CortexTry | null;
-}
-
-export interface Cortex {
-  need: number;
-  /** Сколько проверок подряд должно сойтись, прежде чем модель пойдёт в бой. */
-  confirms: number;
-  ready: { spot: number; perp: number };
-  trained: boolean;
-  trainedSpot: boolean;
-  trainedPerp: boolean;
-  acc: number | null;
-  accSpot: number | null;
-  accPerp: number | null;
-  model?: { spot: CortexModel | null; perp: CortexModel | null };
-  /** Последняя попытка обучения — принятая или нет. */
-  try?: { spot: CortexTry | null; perp: CortexTry | null };
-  /** Разбор по горизонтам — для экрана состояния. */
-  hz?: { spot: CortexHz[]; perp: CortexHz[] };
-  /** Когда бот в последний раз считал сигналы. null — не считал ни разу. */
-  at?: number | null;
-  list: Signal[];
-  /**
-   * История сигналов — своя у каждой площадки.
-   *
-   * Токены BSC и перпы Hyperliquid — разные рынки с разной ликвидностью и
-   * разными стопами, и общая доля попаданий по ним не значит ничего: одна
-   * площадка тянет вторую, а какая именно — не видно. Модели у них тоже
-   * свои, и судить каждую надо по её же сигналам.
-   */
-  hist: { spot: CortexHist; perp: CortexHist };
-}
-
-/** Одна корзина уверенности: что обещали и что сбылось. */
-export interface RelBucket {
-  from: number;
-  to: number;
-  /** Средняя обещанная вероятность в корзине. */
-  said: number;
-  /** Доля сбывшихся среди решённых. */
-  got: number;
-  /** Сколько сигналов в корзине: на пяти «сбылось 80%» не значит ничего. */
-  n: number;
-}
-
-/** Итоги одного источника сигналов — модели или формулы. */
-export interface SrcStats {
-  of: number;
-  tp: number;
-  sl: number;
-  hit: number;
-  avg: number;
-}
-
-export interface CortexHist {
-  hit: number;
-  of: number;
-  won: number;
-  tp: number;
-  sl: number;
-  missed: number;
-  broken: number;
-  avg: number;
-  items: HistItem[];
-  /** Сверка обещанного со сбывшимся по корзинам уверенности. */
-  rel?: RelBucket[];
-  /** Итоги модели и формулы врозь: оракул судят только по его сигналам. */
-  model?: SrcStats | null;
-  formula?: SrcStats | null;
-  /** Сигналов в работе: горизонт ещё не прошёл, итога пока нет. */
-  open?: number;
-  /** Секунд до закрытия ближайшего из них. */
-  next?: number;
-}
-
 export interface CoinHolder {
   w: string;
   v: number;
@@ -605,11 +413,6 @@ export interface Bootstrap {
   flow?: Flow;
   ls?: Ls;
   rank?: Rank;
-  cortex?: Cortex;
-  /** Прежнее имя того же поля. Приложение обновляется само, а whale_api на
-   *  машине перезапускают руками: пока этого не сделали, свежая сборка
-   *  читает старый ключ и вкладка не пустеет. Убрать после перезапуска. */
-  sonar?: Cortex;
   trades?: Trades;
   fund?: Fund;
   fundN?: FundN;
@@ -695,4 +498,103 @@ export interface UnlockStake {
   of?: "circ" | "supply";
   /** Доходность стейкинга, % в год; нет поля — неизвестна. */
   y?: number;
+}
+
+/* --- Дайджест ------------------------------------------------------------ */
+
+/** Строка раздела дайджеста: монета и числа того раздела, откуда она. */
+export interface DigestCoin {
+  sym: string;
+  icon?: string[];
+  /** Поток или перевес денег, $ — у NetFlow и лонг/шорта. */
+  net?: number;
+  /** Кошельков в потоке. */
+  w?: number;
+  addr?: string;
+  /** Размер сделки или позиции, $. */
+  v?: number;
+  buy?: boolean;
+  long?: boolean;
+  /** Кошелёк сделки. */
+  wa?: string;
+  cls?: CoinClass;
+  /** Доля денег в лонге, %. */
+  pct?: number;
+}
+
+export interface DigestFund {
+  sym: string;
+  ex: string;
+  /** Ставка в сутки, %. */
+  day: number;
+}
+
+export interface DigestUnlock {
+  sym: string;
+  name: string;
+  ts: number;
+  tokens: number;
+  usd: number | null;
+  pct: number | null;
+  kind: "cliff" | "monthly";
+}
+
+/** Раздел про фьючерсы без подписки: сервер отдаёт только отметку. */
+export interface DigestLocked {
+  locked: true;
+}
+
+export interface DigestItem {
+  id: number;
+  /** Дата выпуска по UTC, YYYY-MM-DD. */
+  day: string;
+  at: number;
+  /** Окно выпуска: сутки до `to`, в секундах. */
+  from: number;
+  to: number;
+  flow?: { net?: number; buy?: number; sell?: number; up?: number; dn?: number; in: DigestCoin[]; out: DigestCoin[] };
+  spot?: DigestCoin[];
+  rot?: { usd?: number; pairs?: number; w?: number; src: RotSide[]; dst: RotSide[] };
+  ls?: { long: DigestCoin[]; short: DigestCoin[] } | DigestLocked;
+  perp?: DigestCoin[] | DigestLocked;
+  fund?: { hi: DigestFund[]; lo: DigestFund[] } | DigestLocked;
+  unl?: DigestUnlock[];
+  likes: number;
+  comments: number;
+  liked: boolean;
+}
+
+export interface DigestReply {
+  ok: boolean;
+  items: DigestItem[];
+  /** Автору закрыты комментарии. */
+  muted?: boolean;
+  /** Владелец бота: удаляет любые комментарии. */
+  mod?: boolean;
+  error?: string;
+}
+
+export interface DigestComment {
+  id: number;
+  name: string;
+  text: string;
+  at: number;
+  mine: boolean;
+}
+
+export interface DigestCommentsReply {
+  ok: boolean;
+  items: DigestComment[];
+  more: boolean;
+}
+
+/** Ответ на лайк, комментарий или удаление: отказ приходит с причиной. */
+export interface DigestActReply {
+  ok: boolean;
+  error?: "empty" | "too_long" | "links" | "too_fast" | "day_limit" | "muted" | "not_found" | "forbidden" | "no_user" | "db";
+  liked?: boolean;
+  likes?: number;
+  item?: DigestComment;
+  wait?: number;
+  max?: number;
 }

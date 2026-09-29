@@ -23,7 +23,7 @@ import {
   Action,
   AnalyticsGlyph,
   Card,
-  CortexGlyph,
+  DigestGlyph,
   Row,
   SectionTitle,
   TopGlyph,
@@ -46,7 +46,7 @@ const GUIDE: { ic: ReactNode; title: Key; sub: Key; body: Key }[] = [
   { ic: <WalletGlyph size={22} />, title: "hp_g_wallets_t", sub: "hp_g_wallets_s", body: "hp_g_wallets_d" },
   { ic: <TopGlyph size={22} />, title: "hp_g_top_t", sub: "hp_g_top_s", body: "hp_g_top_d" },
   { ic: <AnalyticsGlyph size={22} />, title: "hp_g_an_t", sub: "hp_g_an_s", body: "hp_g_an_d" },
-  { ic: <CortexGlyph size={26} />, title: "hp_g_cx_t", sub: "hp_g_cx_s", body: "hp_g_cx_d" },
+  { ic: <DigestGlyph size={22} />, title: "hp_g_dg_t", sub: "hp_g_dg_s", body: "hp_g_dg_d" },
   { ic: <span className="fold-dots">⋯</span>, title: "hp_g_more_t", sub: "hp_g_more_s", body: "hp_g_more_d" },
 ];
 
@@ -55,7 +55,6 @@ const FAQ: [Key, Key][] = [
   ["hp_q2", "hp_a2"],
   ["hp_q3", "hp_a3"],
   ["hp_q4", "hp_a4"],
-  ["hp_q5", "hp_a5"],
   ["hp_q6", "hp_a6"],
   ["hp_q7", "hp_a7"],
 ];

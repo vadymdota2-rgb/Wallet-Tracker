@@ -2,7 +2,7 @@
  * График на весь экран — TradingView.
  *
  * Открывается из бокового меню. Любую монету можно выбрать двумя способами:
- * кнопкой монеты в шапке (популярные, ваши кошельки, сигналы Cortex, NetFlow
+ * кнопкой монеты в шапке (популярные, ваши кошельки, NetFlow
  * или любой тикер вручную) или поиском самого TradingView прямо на графике.
  * Таймфреймы, индикаторы и рисование — тоже его, все сразу.
  *
@@ -58,7 +58,6 @@ export function ChartScreen({ arg }: ScreenProps) {
   const saved = useApp((s) => s.tvSym);
   const setSaved = useApp((s) => s.setTvSym);
   const wallets = useLive((s) => s.wallets);
-  const cortex = useLive((s) => s.cortex);
   const flow = useLive((s) => s.flow);
 
   const [sym, setSym] = useState(() => (arg ? arg.toUpperCase() : saved || "BTC"));
@@ -82,11 +81,10 @@ export function ChartScreen({ arg }: ScreenProps) {
     () =>
       [
         { key: "chart_mine" as const, list: uniq(wallets.flatMap((w) => [...w.pos.map((p) => p.sym), ...(w.holds ?? []).map((h) => h.sym)]), 12) },
-        { key: "chart_signals" as const, list: uniq(cortex.list.map((s) => s.sym), 12) },
         { key: "chart_popular" as const, list: POPULAR },
         { key: "chart_flow" as const, list: uniq((flow["24"]?.rows ?? []).map((r) => r.sym), 12) },
       ].filter((g) => g.list.length > 0),
-    [wallets, cortex.list, flow],
+    [wallets, flow],
   );
 
   const pick = (next: string) => {

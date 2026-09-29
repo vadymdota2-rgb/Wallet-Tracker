@@ -82,68 +82,6 @@ export function holdTime(sec: number | null | undefined, lang: LangCode): string
 }
 
 /**
- * Причина сигнала приходит как вклад признака: имя и сдвиг вероятности.
- *
- * Имена приходят с сервера по-английски и переводятся здесь — все, кроме
- * тех, что читаются одинаково на любом языке: RSI, ATR, MACD. Прежде
- * переведено было пятнадцать имён из сорока одного, и вокруг мозга на
- * японском и арабском крутились «to high», «vol jump» и «breadth» — слова,
- * которые там не читает никто.
- */
-const WHY: Record<string, DictKey> = {
-  flow: "ai_why_flow",
-  volume: "ai_why_vol",
-  top100: "ai_why_top",
-  "top dir": "ai_why_topdir",
-  wallets: "ai_why_breadth",
-  "liq skew": "ai_why_liqskew",
-  spread: "ai_why_share",
-  "OI 1h": "ai_why_oi",
-  "OI 24h": "ai_why_oi",
-  RSI: "ai_why_rsi",
-  leverage: "ai_why_lev",
-  liquidity: "ai_why_liq",
-  // След события в рядах: листинг, всплеск объёма и резкий ход.
-  age: "ai_why_age",
-  "vlm z": "ai_why_volz",
-  shock: "ai_why_shock",
-  // Остальное, что оракул считает по рынку и по потоку.
-  accel: "ai_ft_accel",
-  trades: "ai_ft_trades",
-  ticket: "ai_ft_ticket",
-  both: "ai_ft_both",
-  "ret 1h": "ai_ft_ret1",
-  "ret 6h": "ai_ft_ret6",
-  "ret 24h": "ai_ft_ret24",
-  "vol 24h": "ai_ft_vol24",
-  "vol jump": "ai_ft_voljump",
-  "to high": "ai_ft_tohigh",
-  "from low": "ai_ft_fromlow",
-  trend: "ai_ft_trend",
-  funding: "ai_ft_fund",
-  "funding z": "ai_ft_fundz",
-  "OI/vlm": "ai_ft_oivlm",
-  "vlm 24h": "ai_ft_vlm24",
-  "liq/OI": "ai_ft_liqoi",
-  "BTC 24h": "ai_ft_btc24",
-  "BTC vol": "ai_ft_btcvol",
-  breadth: "ai_ft_breadth",
-  hour: "ai_ft_hour",
-  "hour 2": "ai_ft_hour",
-  // Разметка ряда на колена: уровни Фибоначчи и то в волнах, что считается.
-  "fib back": "ai_ft_fibback",
-  "fib level": "ai_ft_fiblevel",
-  "fib ext": "ai_ft_fibext",
-  "wave run": "ai_ft_waverun",
-  "wave with": "ai_ft_wavewith",
-  "wave grow": "ai_ft_wavegrow",
-};
-
-export function whyKey(raw: string): DictKey | null {
-  return WHY[raw] ?? null;
-}
-
-/**
  * Имя инструмента для показа: без служебного префикса площадки.
  *
  * Акции и золото приходят с Hyperliquid как «xyz:AAPL» — «xyz» здесь имя
@@ -174,17 +112,4 @@ const METAL_SYMS = new Set([
 export function coinClass(sym: string | undefined | null): "crypto" | "rwa" {
   const s = String(sym || "").toUpperCase();
   return s.includes(":") || METAL_SYMS.has(s) ? "rwa" : "crypto";
-}
-
-/**
- * Сторона сделки словами площадки.
- *
- * На перпах позицию открывают в лонг или в шорт, на споте монету покупают или
- * продают — шортить её негде. Бот в чате так и пишет, а в приложении на обеих
- * площадках стояло «Лонг / Шорт»: на споте это обещало сделку, которой там
- * не бывает.
- */
-export function sideKey(venue: "perp" | "spot", long: boolean): DictKey {
-  if (venue === "perp") return long ? "ai_long" : "ai_short";
-  return long ? "ai_buy" : "ai_sell";
 }

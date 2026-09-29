@@ -16,12 +16,12 @@ import { bootTelegram, haptic, initData, telegramLang, waitForTelegram, webApp }
 import { startSync, syncNow } from "./lib/sync";
 import { Toaster, toast } from "./components/Toast";
 import { Background } from "./components/Background";
-import { AnalyticsGlyph, ChartGlyph, CortexGlyph, UnlockGlyph, TopGlyph, WalletGlyph } from "./components/ui";
+import { AnalyticsGlyph, ChartGlyph, DigestGlyph, UnlockGlyph, TopGlyph, WalletGlyph } from "./components/ui";
 import { SCREENS } from "./screens/registry";
 import { WalletsTab } from "./screens/WalletsTab";
 import { TopTab } from "./screens/TopTab";
 import { AnalyticsTab } from "./screens/AnalyticsTab";
-import { CortexTab } from "./screens/CortexTab";
+import { DigestTab } from "./screens/DigestTab";
 import { MoreTab } from "./screens/MoreTab";
 import type { DictKey } from "./i18n/types";
 import type { ScreenName, Tab } from "./store/app";
@@ -32,7 +32,7 @@ const TABS: { id: Tab; key: DictKey; glyph: ReactNode }[] = [
   { id: "wallets", key: "menu_my_wallets", glyph: <WalletGlyph /> },
   { id: "top", key: "menu_top_traders", glyph: <TopGlyph /> },
   { id: "analytics", key: "menu_big_trades", glyph: <AnalyticsGlyph /> },
-  { id: "cortex", key: "ai_title", glyph: <CortexGlyph /> },
+  { id: "digest", key: "dg_title", glyph: <DigestGlyph /> },
   { id: "more", key: "ui_more", glyph: "⋯" },
 ];
 
@@ -41,19 +41,16 @@ const SCREEN_TITLE: Record<ScreenName, DictKey> = {
   wallet: "account_title",
   position: "hl_open_positions",
   coin: "flow_title",
-  signal: "ai_title",
   addWallet: "add_wallet_title",
   rename: "rename_title",
   threshold: "threshold_title",
   lang: "lang_title",
   premium: "menu_premium",
   help: "help_title",
-  history: "ai_hist_title",
   alerts: "alerts_title",
   chart: "chart_title",
   unlocks: "unl_title",
   deals: "ui_deals",
-  model: "ai_st_title",
   spot: "ui_spot_open",
   legal: "ui_legal",
 };
@@ -74,8 +71,8 @@ function TabBody({ tab }: { tab: Tab }) {
       return <TopTab />;
     case "analytics":
       return <AnalyticsTab />;
-    case "cortex":
-      return <CortexTab />;
+    case "digest":
+      return <DigestTab />;
     case "more":
       return <MoreTab />;
   }

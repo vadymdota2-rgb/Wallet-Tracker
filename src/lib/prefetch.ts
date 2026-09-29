@@ -4,7 +4,7 @@
  * Человек открывает приложение кнопкой Open в Telegram — и всё, что раньше
  * грузилось только по нажатию, подтягивается сразу в фоне: позиции и остатки
  * всех его кошельков, крупные сделки за все окна, фильтры потока и лонгов с
- * шортами, графики сигналов Cortex, сделки первых трейдеров доски, история
+ * шортами, сделки первых трейдеров доски, история
  * цен монет из потока и из кошельков. Ответы ложатся в память (memo.ts), и
  * экран, открытый потом, берёт готовое без скелета.
  *
@@ -17,7 +17,6 @@
  * отдаст, а лишние отказы — лишняя нагрузка.
  */
 import { fetchBig, fetchDeals, fetchFlow, fetchLs, fetchSymbols, fetchTokenHist, fetchUnlocks, fetchWallet } from "./api";
-import { fetchCandles } from "./klines";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import type { WalletLive } from "./types";
@@ -88,21 +87,15 @@ function plan(): (() => Promise<unknown>)[] {
     for (const side of ["in", "out"]) jobs.push(() => fetchLs(app.flowWin, "", 0, side, app.lsCls));
   }
 
-  // 5. Сигналы Cortex: у перпа — биржевые свечи, у спота — история контракта.
-  for (const s of live.cortex.list) {
-    if (s.venue === "perp") jobs.push(() => fetchCandles(s.sym, "1h"));
-    else if (isAddr(s.addr)) jobs.push(() => fetchTokenHist(s.addr as string));
-  }
-
-  // 6. Сделки первых трейдеров доски, которую человек смотрит.
+  // 5. Сделки первых трейдеров доски, которую человек смотрит.
   const venue = app.rankVenue === "perp" && !premium ? "spot" : app.rankVenue;
   const board = live.rank[venue]?.[app.rankKind] ?? live.rank[venue]?.pnl ?? [];
   for (const r of board.slice(0, TOP_DEALS)) jobs.push(() => fetchDeals(r.a, venue));
 
-  // 7. Справочник монет для поиска на графике.
+  // 6. Справочник монет для поиска на графике.
   jobs.push(() => fetchSymbols());
 
-  // 8. История цены монет из потока — открывают их из списка.
+  // 7. История цены монет из потока — открывают их из списка.
   for (const r of (live.flow[app.flowWin]?.rows ?? []).slice(0, FLOW_COINS)) {
     const a = r.addr || r.token;
     if (isAddr(a)) jobs.push(() => fetchTokenHist(a));

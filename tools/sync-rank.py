@@ -102,7 +102,7 @@ def main() -> int:
         head = [
             f"# Рейтинг по капитализации (CoinGecko, {today}): место, тикер, id — первые {LIMIT}.",
             "# Каждая монета отсюда обязана быть в календаре разлоков или в списке",
-            "# отсеянных с причиной — это проверяет tools/cortex-guard.py.",
+            "# отсеянных с причиной — это проверяет tools/guard.py.",
             "# Обновлять: python3 tools/sync-rank.py --write (раз в месяц, там, где открыт CoinGecko).",
         ]
         with open(TSV + ".tmp", "w", encoding="utf-8") as f:

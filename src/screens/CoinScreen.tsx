@@ -142,9 +142,9 @@ export function CoinScreen({ arg, arg2 }: ScreenProps) {
         )}
         <Tiles
           items={[
-            { label: t(lang, "ai_w1h"), value: shift(coin?.c1), tone: shiftTone(coin?.c1) },
-            { label: t(lang, "ai_w6h"), value: shift(coin?.c6), tone: shiftTone(coin?.c6) },
-            { label: t(lang, "ai_w24"), value: shift(chg), tone: shiftTone(chg) },
+            { label: t(lang, "big_win_1h"), value: shift(coin?.c1), tone: shiftTone(coin?.c1) },
+            { label: t(lang, "win_6h"), value: shift(coin?.c6), tone: shiftTone(coin?.c6) },
+            { label: t(lang, "big_win_24h"), value: shift(chg), tone: shiftTone(chg) },
           ]}
           cols={3}
         />

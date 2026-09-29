@@ -73,8 +73,8 @@ const FLOW_SIDES: { id: FlowSide; key: Parameters<typeof t>[1] }[] = [
 ];
 
 const FLOW_WINS: { id: FlowWin; key: Parameters<typeof t>[1] }[] = [
-  { id: "1", key: "ai_w1h" },
-  { id: "6", key: "ai_w6h" },
+  { id: "1", key: "big_win_1h" },
+  { id: "6", key: "win_6h" },
   { id: "24", key: "big_win_24h" },
   { id: "168", key: "big_win_7d" },
   { id: "720", key: "big_win_30d" },
@@ -84,7 +84,7 @@ const FLOW_WINS: { id: FlowWin; key: Parameters<typeof t>[1] }[] = [
    месяц. Между часом и сутками без шести часов слишком большой прыжок. */
 const BIG_WINS: { id: BigWin; key: Parameters<typeof t>[1] }[] = [
   { id: "1h", key: "big_win_1h" },
-  { id: "6h", key: "ai_w6h" },
+  { id: "6h", key: "win_6h" },
   { id: "24h", key: "big_win_24h" },
   { id: "7d", key: "big_win_7d" },
   { id: "30d", key: "big_win_30d" },

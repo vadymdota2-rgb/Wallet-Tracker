@@ -26,7 +26,7 @@ import {
   BellGlyph,
   BoltGlyph,
   Card,
-  CortexGlyph,
+  DigestGlyph,
   Row,
   SectionTitle,
   TopGlyph,
@@ -81,9 +81,9 @@ export function PremiumScreen() {
     { ic: <TopGlyph size={24} />, venue: "spot", title: "pr_perk_top_t", text: "pr_perk_top_d" },
     { ic: <BoltGlyph size={24} />, title: "pr_perk_prio_t", text: "pr_perk_prio_d" },
   ];
-  // Что остаётся без подписки: платить за Cortex не нужно, и это сказано прямо.
+  // Что остаётся без подписки: дайджест открыт всем, и это сказано прямо.
   const free: Perk[] = [
-    { ic: <CortexGlyph size={30} />, title: "ai_title", text: "pr_free_cortex_d" },
+    { ic: <DigestGlyph size={24} />, title: "dg_title", text: "pr_free_digest_d" },
     { ic: <AnalyticsGlyph size={24} />, venue: "spot", title: "pr_free_market_t", text: "pr_free_market_d" },
     { ic: <WalletGlyph size={24} />, venue: "spot", title: "pr_free_wallet_t", text: "pr_free_wallet_d" },
   ];

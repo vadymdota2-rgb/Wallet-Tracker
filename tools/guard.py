@@ -1,0 +1,426 @@
+#!/usr/bin/env python3
+"""Статический сторож проекта: бот WhaleScanner и мини-апп вместе.
+
+    python3 tools/guard.py ../WhaleScanner
+
+Ловит не опечатки, а возвращение уже исправленных ошибок. Каждая проверка
+стоит на месте настоящей поломки. Половина правил живёт в боте, половина
+здесь, и связаны они не типами, а договорённостями — проверить это можно
+только по исходникам обоих, поэтому путь к боту — аргумент, как у
+sync-i18n.py.
+"""
+import json, os, re, sys
+
+APP = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BOT = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.path.join(
+    os.path.dirname(APP), "WhaleScanner")
+if not os.path.isdir(BOT):
+    sys.exit(f"нет каталога бота: {BOT}\nзовите так: python3 tools/guard.py ../WhaleScanner")
+bad = 0
+
+
+def say(name, cond, extra=""):
+    global bad
+    if cond:
+        print("ok ", name)
+    else:
+        bad += 1
+        print("BAD", name, extra)
+
+
+def read(p):
+    return open(p, encoding="utf-8").read()
+
+
+api = read(f"{APP}/whale_api.py")
+labels = read(f"{APP}/src/lib/labels.ts")
+live = read(f"{APP}/src/store/live.ts")
+
+
+def body(src, sign):
+    """Тело функции C++: от подписи до закрывающей скобки в нулевой колонке."""
+    at = src.index(sign)
+    return src[at:src.index("\n}\n", at)]
+
+
+def code_only(src):
+    """Без пояснений: в них имена старых ошибок названы нарочно.
+
+    Сторож ищет ошибку, а не рассказ о ней. Без этого проверка «в счётчике
+    нет лишнего условия» спотыкалась о комментарий, который объясняет, какое
+    условие оттуда убрали.
+    """
+    src = re.sub(r'"""(?:.|\n)*?"""', "", src)
+    return "\n".join(re.sub(r"#.*$", "", l) for l in src.split("\n"))
+
+
+def pybody(src, sign):
+    """Тело функции на питоне: от def до следующего def в нулевой колонке."""
+    at = src.index(sign)
+    m = re.search(r"\n(?=def |[A-Z_]+ = )", src[at + len(sign):])
+    return src[at:at + len(sign) + (m.start() if m else len(src))]
+
+
+# --- лонг/шорт считает всё движение денег -----------------------------------
+# Считались одни открытия, и карточка показывала «96% в лонге» в час, когда
+# киты лонги как раз распродавали: закрытие позиции — такая же сделка на
+# рынке, как открытие, и ликвидация тоже.
+ls = code_only(pybody(api, "def ls_scan("))
+say("вверх тянут открытый лонг, закрытый шорт и вынесенный шорт",
+    "dir_code IN (1,4,7)" in ls)
+say("вниз — открытый шорт, закрытый лонг и вынесенный лонг",
+    "dir_code IN (2,3,6)" in ls)
+say("одних открытий больше не осталось", "dir_code IN (1,2) " not in ls)
+# Направление переворота в dir_code потеряно: и «Long > Short», и
+# «Short > Long» записаны пятёркой. Исходный текст лежит в колонке dir.
+say("направление переворота берётся из текста",
+    "dir LIKE '%Short > Long%'" in ls and "dir LIKE '%Long > Short%'" in ls)
+say("нет колонки dir — перевороты просто не считаются",
+    'has_dir = "dir" in cset' in ls)
+# Код 8 — ликвидация неизвестной стороны: приписывать её наугад хуже, чем
+# пропустить.
+say("ликвидация без стороны не приписывается никуда",
+    "8" not in ls.split("WHERE ts >= ?")[1].split("GROUP BY")[0])
+say("подпись обещает то, что считается",
+    "Всё движение денег" in read(f"{APP}/src/i18n/ru.ts"))
+
+# --- неизвестное изменение цены не выдаётся за ноль -------------------------
+# У монеты может не быть истории вовсе: биржа не ответила, монета только
+# появилась. Ноль на экране читается как «цена не двигалась» — утверждение, а
+# не незнание, и рядом с графиком на восемь процентов это видно сразу.
+coin_scr = read(f"{APP}/src/screens/CoinScreen.tsx")
+say("запасная ветка отдаёт неизвестное, а не ноль",
+    '"c1": None, "c6": None, "c24": None' in api and
+    '"chg": 0.0, "hists": {}, "spark": [], "c1": 0' not in api)
+say("`or 0` не превращает неизвестное в ноль",
+    'pack.get("c1") or 0' not in api and 'sl.get("c1") or c.get("c1") or 0' not in api)
+say("тип монеты допускает неизвестное",
+    "c1: number | null;" in read(f"{APP}/src/lib/types.ts"))
+say("экран монеты рисует прочерк",
+    'v === null || v === undefined ? "—" : pct(v)' in coin_scr and
+    "coin?.c1 ?? 0" not in coin_scr)
+say("прочерк не красится ни в плюс, ни в минус",
+    'v === null || v === undefined ? undefined : v >= 0 ? "up" : "dn"' in coin_scr)
+
+# --- число не теряет хвост, сумма не слипается ------------------------------
+# «+157 …» по обрезку не отличить от ста пятидесяти семи тысяч, а «-$5,76M» с
+# «4 кошельков» вплотную читались как «5,76M4» — у класса суммы не было ни
+# одной строки стилей.
+css = read(f"{APP}/src/styles/app.css")
+ui = read(f"{APP}/src/components/ui.tsx")
+fmt = read(f"{APP}/src/lib/format.ts")
+say("у суммы потока есть разметка", ".flow-sum {" in css and "justify-content: space-between" in css.split(".flow-sum {")[1][:200])
+say("длинное значение плитки мельчает, а не режется",
+    "function tileFit(" in ui and ".tile b.l3" in css)
+say("на сотнях процентов десятые не нужны", "Math.abs(v) >= 100 ? 0 : digits" in fmt)
+
+# --- замки подписки стоят на сервере, а не только на экране -----------------
+# Раньше сервер отдавал бесплатному все сто мест доски, перпы Hyperliquid,
+# фандинг и позиции кошельков, а приложение их просто не рисовало — и то не
+# везде: рейтинг перпов и позиции были видны. Бот всё это закрывает.
+say("срез по подписке есть", "def for_plan(data: dict, prem: bool) -> dict:" in api)
+fp = pybody(api, "def for_plan(")
+say("срез: 30 мест спота, пустые перпы, без фандинга и позиций",
+    "v[:RANK_FREE_DEPTH]" in fp and '"perp": {k: []' in fp and '"pos": []' in fp
+    and 'out[k] = {}' in fp and '"trades"' in fp)
+say("срез не трогает Cortex", "cortex" not in code_only(fp).lower() and "sonar" not in fp)
+say("выгрузка срезается по своему же плану", "for_plan(boot, plan_of(boot))" in api)
+say("выгрузка без подписи — как бесплатная", "}, False))" in api)
+say("крупные сделки срезаются", "for_plan(big_trades(win, hours), chat_premium(self._user(qs)))" in api)
+say("фандинг и сделки перпов — отказ без подписки",
+    api.count('self._json(403, {"ok": False, "error": "premium"})') >= 2)
+say("живой кошелёк срезается", "), is_premium(cur, chat)))" in api)
+top = read(f"{APP}/src/screens/TopTab.tsx")
+say("рейтинг перпов за замком", 'venue === "perp" && plan !== "premium"' in top and "<PremiumLock fromTab />" in top)
+say("позиции за замком, а не «позиций нет»",
+    "<PremiumLock />" in read(f"{APP}/src/screens/PositionScreen.tsx")
+    and "<PremiumLock />" in read(f"{APP}/src/screens/WalletScreen.tsx"))
+ana = read(f"{APP}/src/screens/AnalyticsTab.tsx")
+say("лонг/шорт, крупные позиции и фандинг — за подпиской",
+    ana.count("prem: true") == 3 and "lock: Boolean(v.prem) && !premium" in ana)
+say("лонг/шорт закрыт и на экране, и на сервере",
+    ana.count("{!premium ? locked : (") >= 2 and '"fund", "fundN", "ls"' in fp
+    and api.count('self._json(403, {"ok": False, "error": "premium"})') == 3)
+prem_scr = read(f"{APP}/src/screens/PremiumScreen.tsx")
+say("цена на экране премиума — один раз, на кнопке",
+    'title={t(lang, "pay_stars_btn")} value=' not in prem_scr and 'title={t(lang, "pay_usdt_btn")} value=' not in prem_scr)
+say("оплата выше описания", prem_scr.index('className="stack-actions"') < prem_scr.index('"pr_includes"'))
+say("дайджест назван бесплатным", '"pr_free_digest_d"' in prem_scr)
+
+# --- при запуске подгружается всё ------------------------------------------
+pre = read(f"{APP}/src/lib/prefetch.ts")
+sync = read(f"{APP}/src/lib/sync.ts")
+say("подгрузка запускается после выгрузки", "setTimeout(() => void prefetchAll(), 400);" in sync)
+say("подгрузка берёт кошельки, окна, фильтры, сделки, монеты",
+    all(x in pre for x in ("fetchWallet(w.addr)", "BIG_WINS", 'fetchFlow(app.flowWin, "", 0, side)',
+                           "fetchDeals(r.a, venue)", "holdJobs()")))
+say("закрытое подпиской не запрашивается", "if (premium) {" in pre and "fetchLs(" in pre.split("if (premium) {")[1][:200])
+say("запросы в очереди, не лавиной", "const PARALLEL = 4;" in pre)
+apits = read(f"{APP}/src/lib/api.ts")
+say("чтения идут через память", apits.count("cachedGet<") >= 7 and "remember<T | null>(path, ttl" in apits)
+say("смена плана стирает память", "forgetAll()" in live)
+
+# --- «Ещё» без второй дороги к позициям -------------------------------------
+more = read(f"{APP}/src/screens/MoreTab.tsx")
+say("открытые позиции — только в кошельке",
+    'open("positions")' not in more and '"menu_positions"' not in read(f"{APP}/src/App.tsx")
+    and not os.path.exists(f"{APP}/src/screens/PositionsScreen.tsx"))
+say("порог алертов — своим значком, без задвоенного эмодзи",
+    "<ThresholdGlyph size={22} />" in more and 'bare(t(lang, "menu_alert_threshold"))' in more)
+
+# --- кнопка обновления не выпадает из шапки ---------------------------------
+# Голое состояние «boot» совпадало с классом заставки .boot (position: fixed),
+# и до первой выгрузки кнопка уезжала в левый верхний угол поверх меню.
+appx = read(f"{APP}/src/App.tsx")
+say("состояние кнопки обновления — с приставкой", "refresh st-${status}" in appx and "refresh ${status}" not in appx)
+
+# --- сервисный аккаунт бота — подписка навсегда и в API ---------------------
+# Бот считает его премиумом без срока и без лимита кошельков (isPremium в
+# premium.cpp). API этого не знал, и приложение ставило его кошельки на паузу.
+main_cpp = read(f"{BOT}/main.cpp")
+svc = re.search(r'SERVICE_CHAT_ID = "(\d+)"', main_cpp)
+say("номер сервисного аккаунта в API совпадает с ботом",
+    bool(svc) and f'"WHALE_SERVICE_CHAT", "{svc.group(1)}"' in api)
+say("сервисный — премиум и без лимита",
+    "if is_service(chat):\n        return True" in api and "return SERVICE_MAX_WALLETS" in api
+    and '"service": service,' in api)
+say("приложение не ставит сервисному паузу и лимит",
+    "walletLimit(me.plan, me.service)" in read(f"{APP}/src/screens/WalletsTab.tsx")
+    and "if (service) return Infinity;" in read(f"{APP}/src/store/app.ts"))
+
+# --- данные приходят сами, без «обновить» ------------------------------------
+tg = read(f"{APP}/src/lib/telegram.ts")
+say("подпись берётся из адреса запуска, не ждёт скрипт Telegram",
+    'get("tgWebAppData")' in tg and "webApp()?.initData || LAUNCH" in tg and "if (webApp() || LAUNCH)" in tg)
+say("первый заход на сервере — быстрая выгрузка, полная в фоне",
+    "data = _boot_build(key, fast=True)" in api and 'errors.append("coins:later")' in api)
+say("приложение переспрашивает за быстрой выгрузкой через секунды",
+    'data.partial.includes("coins:later")' in sync and "SOON_DELAY" in sync)
+say("повтор после сбоя — через секунды, серия считается отдельно",
+    "const MIN_DELAY = 3_000;" in sync and "MIN_DELAY * 2 ** fails" in sync)
+
+# --- история алертов и «только в приложении» ---------------------------------
+mq = read(f"{BOT}/message_queue.cpp")
+say("бот: «только в приложении» пишет в историю, но не в очередь Telegram",
+    "appOnly.count(c) ? DELIVERY_APP_ONLY : 0" in mq and "constexpr int DELIVERY_APP_ONLY = 6;" in mq
+    and "if (!appOnly.count(c)) batchSize++;" in mq)
+say("бот: очередь Telegram берёт только ждущие отправки",
+    "WHERE d.status IN (0,3) AND d.next_retry_at<=?" in mq)
+say("бот: такие доставки чистятся со всеми", main_cpp.count("status IN (1,2,4,6)") == 2)
+say("бот и API заводят одни и те же колонки",
+    all(f"{n} {d}" in main_cpp and f'("{n}", "{d}")' in api
+        for n, d in (("alert_tg", "INTEGER NOT NULL DEFAULT 1"), ("alerts_seen_at", "INTEGER NOT NULL DEFAULT 0"))))
+say("API: прочитано — по последнему показанному, не назад",
+    "MAX(alerts_seen_at, ?)" in api and "upto = min(upto, now())" in api)
+say("«Ещё» начинается с истории алертов",
+    more.index('open("alerts")') < more.index('open("premium")'))
+
+# --- помощь называет вкладки так же, как приложение ------------------------
+# Тексты помощи собраны с подстановкой названий из словаря каждого языка. Если
+# вкладку переименуют, а помощь нет — инструкция начнёт говорить о разделах,
+# которых человек не найдёт.
+def ts_dict(lang):
+    src = read(f"{APP}/src/i18n/{lang}.ts")
+    return {m.group(1): json.loads(m.group(2)) for m in re.finditer(r'^\s+(\w+): (".*"),?$', src, re.M)}
+def bare_label(v):
+    return re.sub(r"^[\U0001F000-\U0001FFFF\u2190-\u21FF\u2600-\u27BF\u2B00-\u2BFF\uFE0F\u200D\s]+", "", v).strip() or v
+help_ok = []
+for lg in ("en","ru","es","pt","fr","tr","ar","pl","de","uk","hi","id","vi","ko","zh","ja"):
+    d = ts_dict(lg)
+    ok = (d.get("hp_g_wallets_t") == bare_label(d["menu_my_wallets"]) and d.get("hp_g_top_t") == bare_label(d["menu_top_traders"])
+          and d.get("hp_g_an_t") == bare_label(d["menu_big_trades"]) and d.get("hp_g_more_t") == bare_label(d["ui_more"])
+          and bare_label(d["menu_add_wallet"]) in d.get("hp_s1_d", "") and bare_label(d["alerts_title"]) in d.get("hp_s3_d", ""))
+    if not ok:
+        help_ok.append(lg)
+say("помощь называет вкладки и кнопки как приложение, на всех языках", not help_ok, str(help_ok))
+say("помощь — руководство, а не обрезанные строки меню",
+    "help_menu_add" not in read(f"{APP}/src/screens/HelpScreen.tsx") and '"hp_faq_title"' in read(f"{APP}/src/screens/HelpScreen.tsx"))
+
+# --- неделя премиума — только при первом открытии приложения --------------
+say("бот по /start неделю не выдаёт", "TRIAL_DAYS" not in main_cpp and "grantPremiumDays(cid" not in main_cpp)
+say("API выдаёт неделю при первом открытии, одной транзакцией",
+    "gift = grant_trial(chat" in api and 'INSERT OR IGNORE INTO trial_granted(chat_id, granted_at)' in api
+    and 'con.execute("BEGIN IMMEDIATE")' in pybody(api, "def grant_trial("))
+say("помощь не обещает неделю за /start", all("/start" not in ts_dict(lg).get("hp_a4", "")
+    for lg in ("en","ru","es","pt","fr","tr","ar","pl","de","uk","hi","id","vi","ko","zh","ja")))
+
+# --- боковое меню: график TradingView и разлоки -----------------------------
+_m0 = appx.index("= [", appx.index("const MENU:"))
+menu = appx[_m0:appx.index("];", _m0)]
+say("в боковом меню два пункта: график, затем разлоки",
+    menu.count("name:") == 2 and menu.index('name: "chart"') < menu.index('name: "unlocks"'))
+tv = read(f"{APP}/src/lib/tradingview.ts")
+chart_scr = read(f"{APP}/src/screens/ChartScreen.tsx")
+say("график — официальный код виджета TradingView со сменой монеты",
+    "external-embedding/embed-widget-advanced-chart.js" in tv and "allow_symbol_change: true" in tv
+    and "widgetembed" not in tv + chart_scr)
+say("атрибуция TradingView — как в их коде, не убрана",
+    'span.textContent = "Track all markets on TradingView"' in chart_scr and 'a.href = "https://www.tradingview.com/"' in chart_scr
+    and 'copy.className = "tradingview-widget-copyright"' in chart_scr)
+say("монета графика запоминается", "tvSym: s.tvSym" in read(f"{APP}/src/store/app.ts"))
+
+# --- поиск монеты на графике — по всем биржам, не только по своим ----------
+say("справочник монет: Binance, Bybit, Hyperliquid и HIP-3",
+    "def _symbols_build(" in api and "api.bybit.com/v5/market/instruments-info" in api
+    and 'hl_post({"type": "meta"}' in pybody(api, "def _symbols_build(") and '"c": "rwa"' in api)
+say("металлы и индексы HIP-3 — на свои символы TradingView, а не на акции-двойники",
+    'GOLD: "TVC:GOLD"' in tv and 'SP500: "SP:SPX"' in tv)
+say("введённый тикер открывается, даже если его нет в справочнике",
+    "results[0]?.s !== typed" in chart_scr and 'onClick={() => pick(typed)}' in chart_scr)
+
+# --- разлоки: свои расписания, только будущее, ближайшие первыми -----------
+unl_scr = read(f"{APP}/src/screens/UnlocksScreen.tsx")
+say("разлоки считаются по своей книге расписаний, у каждой монеты — источник",
+    "UNLOCK_BOOK: list[dict] = [" in api and api.count('"src": "https://') >= 180)
+say("оценочные объёмы помечены в приложении", '"est": bool(coin.get("est"))' in api and "unl_est" in unl_scr)
+_ub = pybody(api, "def unlock_events(")
+say("прошедшие разлоки не отдаются, ближайшие первыми",
+    "if ts >= day0:" in _ub and 'sorted(out, key=lambda e: (e["ts"], e["sym"]))' in _ub
+    and "events = unlock_events(now, book)" in pybody(api, "def _unlocks_build(")
+    and "if e[\"ts\"] >= day0" in pybody(api, "def unlocks("))
+_uu = pybody(api, "def _unlocks_build(")
+say("разлоки ни от кого не зависят: оборот — наш расчёт, цена — Hyperliquid",
+    "coingecko" not in (_ub + _uu).lower() and "get_json" not in _uu and "mids = hl_mids()" in _uu
+    and '"circ": ("' in api and 'ev["circ"] = round(circ)' in _ub)
+say("цена монеты без Hyperliquid — со спота, с кэшем и неудач тоже",
+    'mids.get(e["sym"], 0.0) or spot.get(e["sym"], 0.0)' in _uu and "pool.map(spot_px, need)" in _uu and "_spot_px_cache[s] = (time.monotonic(), px)" in api)
+say("давление — доля от оборота на день разлока", 'e["tokens"] / circ * 100' in _uu)
+say("экран разлоков: поиск по тикеру и названию, фильтр крупных",
+    "e.sym.toLowerCase().includes(q) || e.name.toLowerCase().includes(q)" in unl_scr and "if (bigOnly &&" in unl_scr)
+say("разлок и эмиссия различимы: метки, отдельный вид, раздельная сводка",
+    'className="unl-tag u"' in unl_scr and 'className="unl-tag e"' in unl_scr
+    and "function part(e: UnlockEvent, kind: Kind)" in unl_scr and "(emitMonth * days) / 30.44" in unl_scr)
+_logos = read(f"{APP}/src/components/coin-logos.ts") + read(f"{APP}/src/components/coin-fallback.ts")
+_no_icon = [c for c in re.findall(r'\{"s": "([A-Z0-9]+)", "n": ', api)
+            if not os.path.exists(f"{APP}/html/coins/hl/{c}.svg") and f'"{c}": "/' not in _logos and f"  {c}: \"/" not in _logos
+            or c in ("M", "A") and f"  {c}: \"/cglogo" not in _logos]
+say("у каждой монеты календаря разлоков есть иконка", not _no_icon, str(_no_icon))
+# Опорный оборот со временем уходит: стейкинг, сжигание, выдачи вне книги.
+# Старше четырёх месяцев — пора сверить и обновить строку «circ».
+import datetime as _dt
+_stale = [f"{c}:{d}" for c, d in re.findall(r'\{"s": "([A-Z0-9]+)", "n": [^\n]*\n(?:[^\n]*\n)*?\s+"circ": \("(\d{4}-\d{2}-\d{2})"', api)
+          if (_dt.date.today() - _dt.date.fromisoformat(d)).days > 120]
+say("опорный оборот монет разлоков не старше 120 дней", not _stale, str(_stale))
+# Застейканное меняется так же — снимок старше четырёх месяцев пора сверить.
+# У монет, чей стейкинг сервер перечитывает сам (_stake_fetchers), снимок в
+# книге — лишь запасной: ему можно стареть.
+_fx = api[api.find("def _stake_fetchers"):api.find("def _stake_live_load")]
+_live_syms = set(re.findall(r'"([A-Z0-9]+)": ', _fx))
+_st_old = [f"{c}:{d}" for c, d in re.findall(r'\{"s": "([A-Z0-9]+)", "n": [^\n]*\n(?:[^\n]*\n)*?\s+"staked": \("(\d{4}-\d{2}-\d{2})"', api)
+           if c not in _live_syms and (_dt.date.today() - _dt.date.fromisoformat(d)).days > 120]
+_sup_at = re.search(r'UNLOCK_SUPPLY_AT = "(\d{4}-\d{2}-\d{2})"', api)
+say("справочник выпуска (полный круг, FDV) сверен не позже 120 дней назад — tools/sync-supply.py",
+    bool(_sup_at) and (_dt.date.today() - _dt.date.fromisoformat(_sup_at.group(1))).days <= 120)
+say("стейкинг перечитывается из сетей сам, раз в 12 часов, с защитой от сбоев",
+    'target=stake_live_refresher' in api and "snap[1] / 3 <= n <= snap[1] * 3" in api and len(_live_syms) >= 30)
+say("снимок застейканного у монет разлоков не старше 120 дней", not _st_old, str(_st_old))
+_apy_old = [f"{c}:{d}" for c, d in re.findall(r'\{"s": "([A-Z0-9]+)", "n": [^\n]*\n(?:[^\n]*\n)*?\s+"apy": \("(\d{4}-\d{2}-\d{2})"', api)
+            if (_dt.date.today() - _dt.date.fromisoformat(d)).days > 120]
+say("снимок доходности стейкинга не старше 120 дней", not _apy_old, str(_apy_old))
+say("эмиссия без срока меряется по сети: выпуск пишется раз в сутки, через 7 дней факт заменяет оценку",
+    "def _book_measured(" in api and '"measured": measured' in api and "SUPPLY_MIN_DAYS = 7" in api
+    and "_supply_record(" in pybody(api, "def stake_live_refresh(") and 't(lang, "unl_emit_fact"' in unl_scr)
+say("выдача XRP из депо Ripple меряется по истории леджера за полгода, а не угадывается",
+    "def _xrp_escrow(" in api and '"XRP": "treasury"' in api and "_rate_record(" in pybody(api, "def stake_live_refresh(")
+    and 't(lang, "unl_flow_fact"' in unl_scr)
+say("карточка монеты начинается с вывода о давлении и объясняет термины",
+    'className={`unl-verdict v${lvl}`}' in unl_scr and '"unl_q_pressure"' in unl_scr and 'className="unl-q"' in unl_scr)
+say("разлок меряется днями всех торгов: объём с семи бирж, тезки отсеяны по цене",
+    '"vol": spot_volumes(' in api and "abs(px / ref - 1) <= 0.15" in api and 't(lang, "unl_v_liq"' in unl_scr)
+say("реакция цены на прошлые разлоки: медиана за неделю, против BTC, пересчёт раз в сутки",
+    "def unlock_reactions(" in api and "statistics.median(moves)" in api and 'target=reactions_refresher' in api
+    and 't(lang, "unl_v_react"' in unl_scr)
+say("карточка коротко по умолчанию, подробно — по кнопке, выбор помнится",
+    'className="unl-more-tg"' in unl_scr and 'localStorage.setItem(DETAIL_KEY' in unl_scr and 'className="unl-brief"' in unl_scr)
+say("кривая оборота на три года и полная оценка (FDV) в карточке",
+    "function SupplyCurve(" in unl_scr and "const LAYERS:" in unl_scr and 'className="unl-curve-legend"' in unl_scr and 't(lang, "unl_fdv")' in unl_scr and '"supply": {k: {"t": v[0], "m": v[1]}' in api)
+say("карточка монеты рисует круг выпуска: на рынке, в стейкинге, кому ещё выйдет",
+    "function SupplyRing(" in unl_scr and "<SupplyRing " in unl_scr and 't(lang, "unl_pie_note")' in unl_scr)
+say("доходность стейкинга сравнивается с ростом выпуска", 'row["y"] = c["apy"][1]' in api and "stake.y - (emitYr / now) * 100" in unl_scr)
+say("экран разлоков показывает застейканное, «нет стейкинга» и «нет данных» раздельно",
+    '"stake": unlock_stakes()' in api and 'stake === undefined' in unl_scr and 't(lang, "unl_stake_none")' in unl_scr)
+# Эмиссия давит на цену так же, как разлок: у каждой монеты книги она либо
+# записана строкой «emission», либо монета названа в NO_EMISSION с причиной.
+import importlib.util as _iu
+_sp = _iu.spec_from_file_location("_wapi_emit", f"{APP}/whale_api.py")
+_wm = _iu.module_from_spec(_sp); _sp.loader.exec_module(_wm)
+_emit_bad = []
+for _c in _wm.UNLOCK_BOOK:
+    _has = any("emission" in st for st in _c["plan"])
+    _no = _c["s"] in _wm.NO_EMISSION
+    if _has == _no:
+        _emit_bad.append(_c["s"])
+say("у каждой монеты разлоков решено про эмиссию (строка или причина)", not _emit_bad, str(_emit_bad))
+say("эмиссия бессрочна — тянется вперёд сама", "if last is None:" in pybody(api, "def _plan_steps("))
+say("календарь отдаётся из памяти, собирается в фоне и при старте",
+    "_UNL_READY" in pybody(api, "def unlocks(") and "threading.Thread(target=_unlocks_refresh" in pybody(api, "def unlocks(")
+    and "        unlocks()\n" in api and "ThreadPoolExecutor" in pybody(api, "def _unlocks_build("))
+say("экран разлоков открывается сразу: запас на устройстве и отрисовка порциями",
+    "savedUnlocks()" in unl_scr and "new IntersectionObserver" in unl_scr
+    and "jobs.push(() => fetchUnlocks());" in read(f"{APP}/src/lib/prefetch.ts").split("// 1. Кошельки")[0])
+_book_syms = {c["s"] for c in _wm.UNLOCK_BOOK}
+say("монета не бывает и в календаре, и в списке отсеянных",
+    not (_book_syms & set(_wm.UNLOCK_SKIPPED)), str(_book_syms & set(_wm.UNLOCK_SKIPPED)))
+say("у каждой отсеянной монеты — код причины из известных",
+    all(v[0] in ("done", "burn", "undated", "nodata", "pegged") for v in _wm.UNLOCK_SKIPPED.values())
+    and all(v[0] in ("fixed", "notyet") for v in _wm.NO_EMISSION.values()))
+# Рейтинг по капитализации: ни одна монета из него не пропущена — каждая
+# либо в календаре, либо среди отсеянных с причиной.
+_rank = [ln.split("\t")[1] for ln in read(f"{APP}/tools/unlock-rank.tsv").splitlines() if ln[:1].isdigit()]
+_lost = [s for s in _rank if s not in _book_syms and s not in _wm.UNLOCK_SKIPPED]
+say(f"каждая монета рейтинга ({len(_rank)}) в календаре или с причиной", len(_rank) >= 300 and not _lost, str(_lost[:20]))
+_rank_at = re.search(r"CoinGecko, (\d{2})\.(\d{2})\.(\d{4})", read(f"{APP}/tools/unlock-rank.tsv"))
+say("рейтинг первых 500 не старше 60 дней — tools/sync-rank.py --write на сервере",
+    bool(_rank_at) and (_dt.date.today() - _dt.date(int(_rank_at.group(3)), int(_rank_at.group(2)),
+                                                               int(_rank_at.group(1)))).days <= 60
+    and os.path.exists(f"{APP}/tools/sync-rank.py"))
+say("маршрут /api/unlocks есть", 'if path in ("/unlocks", "/api/unlocks"):' in api)
+
+# --- ротация: своим потоком, не в бюджете сборки кэша ----------------------
+_bp = pybody(api, "def build_public(")
+say("ротация не считается внутри сборки кэша — берётся готовой",
+    "load_rot(" not in _bp and "rot = rot_latest()" in _bp)
+say("поток ротации запускается при старте и не затирает свод пустым",
+    'threading.Thread(target=rot_refresher, daemon=True, name="rotation").start()' in api
+    and "if any(data.values()):" in pybody(api, "def rot_refresh_once("))
+say("ротация идёт по индексу времени, без сортировки выборки",
+    '"ORDER BY t.timestamp, t.id"' in pybody(api, "def load_rot("))
+
+
+# --- Cortex убран, на его месте дайджест ---------------------------------
+# Сигналы и обучаемая модель удалены из обоих проектов; вернуть их кусками
+# (экран, поле хранилища, таблицу бота) нельзя незаметно.
+_gone = [f for f in ("src/screens/CortexTab.tsx", "src/screens/SignalScreen.tsx",
+                     "src/screens/HistoryScreen.tsx", "src/screens/ModelScreen.tsx",
+                     "src/components/Brain.tsx") if os.path.exists(f"{APP}/{f}")]
+_gone += [f for f in ("ai.cpp", "oracle.cpp") if os.path.exists(f"{BOT}/{f}")]
+say("Cortex удалён из приложения и бота", not _gone, str(_gone))
+_dg_main = read(f"{BOT}/main.cpp")
+say("бот стирает таблицы Cortex при запуске",
+    all(f"DROP TABLE IF EXISTS {t};" in _dg_main for t in ("ai_signals", "ai_signal_log", "ai_models", "hl_candles")))
+_dg_tab = read(f"{APP}/src/screens/DigestTab.tsx")
+_dg_app = read(f"{APP}/src/App.tsx")
+say("вкладка «Дайджест» стоит на месте Cortex",
+    '{ id: "digest", key: "dg_title", glyph: <DigestGlyph /> }' in _dg_app and "<DigestTab />" in _dg_app)
+say("дайджест: выпуск раз в сутки, тридцать последних, поток запущен",
+    "DIGEST_KEEP = 30" in api and 'target=digest_refresher' in api
+    and "SELECT 1 FROM digests WHERE day=?" in api)
+say("дайджест: фьючерсы бесплатному не уходят с сервера",
+    'DIGEST_PREMIUM = ("ls", "perp", "fund")' in api and 'body[k] = {"locked": True}' in api)
+say("дайджест: ссылки, частота и суточный лимит комментариев проверяются на сервере",
+    '"error": "links"' in api and '"error": "too_fast"' in api and '"error": "day_limit"' in api)
+say("дайджест: удалить чужой комментарий может только владелец",
+    'row["chat_id"] != chat and not mod' in api)
+_dg_tables = ("digest_likes", "digest_comments", "digest_mute")
+say("удаление данных стирает лайки и комментарии и в боте, и в приложении",
+    all(f"DELETE FROM {t} WHERE chat_id=?" in _dg_main and f"DELETE FROM {t} WHERE chat_id=?" in api
+        for t in _dg_tables))
+say("таблицы дайджеста одинаковые у бота и API",
+    all(f"CREATE TABLE IF NOT EXISTS {t}" in _dg_main and f"CREATE TABLE IF NOT EXISTS {t}" in api
+        for t in ("digests",) + _dg_tables))
+say("отказ в комментарии приходит с причиной, а не кодом ошибки",
+    "res = digest_act(self._user_full(qs), dg, body)\n                self._json(200, res)" in api
+    and "actError(lang, r)" in _dg_tab)
+
+print("ПРОВАЛОВ:", bad)
+sys.exit(1 if bad else 0)

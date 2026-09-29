@@ -2,7 +2,6 @@
 import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode, type Ref } from "react";
 import { haptic } from "../lib/telegram";
 import { copyText } from "../lib/copy";
-import brainIcon from "../assets/brain-icon.png";
 
 export function SectionTitle({ children, note }: { children: ReactNode; note?: ReactNode }) {
   return (
@@ -620,26 +619,28 @@ export function VenueReel<T extends string>({
  * — это «Мои кошельки», — и рядом они слипаются в одну форму.
  */
 /**
- * Значок Cortex — тот же мозг, что наверху вкладки, только маленький.
- *
- * Не нарисованный заново, а вырезанный из самой картинки: границы взяты с её
- * карты яркости, фон снят прозрачностью по светлоте — у картинки он почти
- * чёрный, у мозга светящиеся жилки. Иначе в доке рядом с линейными значками
- * висел бы чёрный квадрат.
- *
- * Он чуть крупнее соседей: у тех контур в полторы точки, здесь тонкие жилки,
- * и на двадцати одной точке они бледнеют до тени.
+ * Значок дайджеста — сложенная газета: лист с загнутым краем, заголовок и
+ * строки. Линейный, как соседи по доку, без заливки: иначе в ряду из
+ * контуров он читался бы кнопкой, а не разделом.
  */
-export function CortexGlyph({ size = 26 }: { size?: number }) {
+export function DigestGlyph({ size = 21 }: { size?: number }) {
   return (
-    <img
-      className="glyph glyph-brain"
-      src={brainIcon}
-      alt=""
+    <svg
+      className="glyph"
+      viewBox="0 0 24 24"
       width={size}
       height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
       aria-hidden="true"
-    />
+    >
+      <path d="M5 4.5h11a1.5 1.5 0 0 1 1.5 1.5v12.5a1.5 1.5 0 0 0 1.5 1.5H6.5A2.5 2.5 0 0 1 4 17.5V5.5a1 1 0 0 1 1-1Z" />
+      <path d="M17.5 9h1.5a1 1 0 0 1 1 1v8.5a1.5 1.5 0 0 1-1.5 1.5" />
+      <path d="M7.5 8h6.5M7.5 11.5h6.5M7.5 15h4" />
+    </svg>
   );
 }
 

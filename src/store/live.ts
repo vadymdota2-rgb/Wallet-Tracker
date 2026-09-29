@@ -7,7 +7,7 @@
 import { forgetAll } from "../lib/memo";
 import { create } from "zustand";
 import type {
-  AlertRow, Bootstrap, Coins, FeedRow, Flow, Fund, FundN, Ls, Me, Rank, RotSums, Cortex, Trades,
+  AlertRow, Bootstrap, Coins, FeedRow, Flow, Fund, FundN, Ls, Me, Rank, RotSums, Trades,
   Wallet, PayInfo,
 } from "../lib/types";
 import { tgUserId } from "../lib/telegram";
@@ -18,57 +18,6 @@ const EMPTY_RANK: Rank = {
   spot: { pnl: [], roi: [], win: [], act: [] },
   perp: { pnl: [], roi: [], win: [], act: [] },
 };
-
-const EMPTY_CORTEX: Cortex = {
-  /* Столько исходов нужно для приёмки — то же число, что отдаёт API и что
-     стоит в ORACLE_MIN_ACCEPT у бота. Здесь оно однажды отстало на четырёх
-     сотнях и показывало полную полосу под необученной моделью до первого
-     ответа сервера. */
-  need: 1200,
-  /* И столько раз подряд проверка должна сойтись — ORACLE_CONFIRMS у бота. */
-  confirms: 2,
-  ready: { spot: 0, perp: 0 },
-  trained: false,
-  trainedSpot: false,
-  trainedPerp: false,
-  acc: null,
-  accSpot: null,
-  accPerp: null,
-  list: [],
-  /* История своя у каждой площадки: общая доля попаданий по двум рынкам
-     сразу не значит ничего. */
-  hist: {
-    spot: { hit: 0, of: 0, won: 0, tp: 0, sl: 0, missed: 0, broken: 0, avg: 0, items: [] },
-    perp: { hit: 0, of: 0, won: 0, tp: 0, sl: 0, missed: 0, broken: 0, avg: 0, items: [] },
-  },
-};
-
-/**
- * Блок Cortex из ответа — или ничего, если сервер его не собрал.
- *
- * Отличаем «не пришёл» от «пришёл пустым»: пустой — это законное состояние
- * (бот посчитал, ничего не прошло отбор), и показывать вместо него прошлый
- * ответ значит врать. Признак настоящего блока — поле need: оно есть всегда,
- * даже когда нет ни сигналов, ни модели.
- */
-function cortexOf(c: unknown): Cortex | null {
-  if (!c || typeof c !== "object") return null;
-  const got = c as Cortex;
-  if (typeof got.need !== "number") return null;
-  /* История стала своей у каждой площадки, а API живёт на своей машине и
-     перезапускается отдельно — приложение успевает обновиться раньше него.
-     Старый ответ несёт один общий блок, и без этой проверки `hist[venue]`
-     был бы undefined: вкладка Cortex падала бы целиком до перезапуска
-     сервера.
-
-     Общий блок не раскладывается обратно по площадкам — в нём сложены обе,
-     и записать его в спот значит приписать одному рынку чужие сделки.
-     Поэтому до перезапуска история пустая: «пока нет» честнее неверного
-     числа, и держится это ровно до следующего ответа сервера. */
-  const h = got.hist as Partial<Cortex["hist"]> | undefined;
-  if (!h || !h.spot || !h.perp) return { ...got, hist: EMPTY_CORTEX.hist };
-  return got;
-}
 
 const EMPTY_ME: Me = {
   plan: "free",
@@ -96,7 +45,6 @@ interface LiveState {
   flow: Flow;
   ls: Ls;
   rank: Rank;
-  cortex: Cortex;
   trades: Trades;
   fund: Fund;
   fundN: FundN;
@@ -130,7 +78,7 @@ const SNAP_TTL = 24 * 3600_000;
 type Snapshot = Pick<
   LiveState,
   "syncedAt" | "me" | "wallets" | "alerts" | "feed" | "marketFeed" | "flow" | "ls"
-  | "rank" | "cortex" | "trades" | "fund" | "fundN" | "rotSum" | "coins" | "pay"
+  | "rank" | "trades" | "fund" | "fundN" | "rotSum" | "coins" | "pay"
 > & { uid: string };
 
 function readSnap(): Snapshot | null {
@@ -169,7 +117,7 @@ function writeSnap(s: LiveState): void {
       uid: tgUserId(),
       syncedAt: s.syncedAt,
       me: s.me, wallets: s.wallets, alerts: s.alerts, feed: s.feed,
-      marketFeed: s.marketFeed, flow: s.flow, ls: s.ls, rank: s.rank, cortex: s.cortex,
+      marketFeed: s.marketFeed, flow: s.flow, ls: s.ls, rank: s.rank,
       trades: s.trades, fund: s.fund, fundN: s.fundN, rotSum: s.rotSum, coins: s.coins,
       pay: s.pay,
     };
@@ -225,7 +173,6 @@ export const useLive = create<LiveState>((set, get) => ({
   flow: snap?.flow ?? {},
   ls: snap?.ls ?? {},
   rank: snap?.rank ?? EMPTY_RANK,
-  cortex: snap?.cortex ?? EMPTY_CORTEX,
   trades: snap?.trades ?? { spot: [], perp: [] },
   fund: snap?.fund ?? {},
   fundN: snap?.fundN ?? {},
@@ -256,16 +203,6 @@ export const useLive = create<LiveState>((set, get) => ({
       flow: some(d.flow) ? d.flow! : prev.flow,
       ls: some(d.ls) ? d.ls! : prev.ls,
       rank: boards(d.rank) ? d.rank! : prev.rank,
-      /* `sonar` — прежнее имя поля, см. Bootstrap в types.ts.
-
-         Берём всё, что пришло целым блоком. Прежде условие было «есть
-         сигналы или обучена модель», и в тихий час без сигналов и без
-         принятой модели — то есть ровно тогда, когда человек смотрит на
-         экран состояния, — блок отбрасывался целиком. Вместе с ним
-         замирали счётчик исходов, время последнего расчёта, попытки
-         обучения и история: приложение показывало вчерашнее состояние и
-         ничем это не выдавало. */
-      cortex: cortexOf(d.cortex ?? d.sonar) ?? prev.cortex,
       trades: some(d.trades?.spot) || some(d.trades?.perp) ? d.trades! : prev.trades,
       fund: some(d.fund) ? d.fund! : prev.fund,
       fundN: some(d.fundN) ? d.fundN! : prev.fundN,

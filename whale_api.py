@@ -132,7 +132,7 @@ _pub_lock = threading.Lock()
 _pub: dict = {"t": 0.0, "data": None}
 PUB_TTL = 30.0
 # Сколько секунд отводится на сборку общего кэша. Восьми не хватало:
-# rank, flow, sonar, trades и feed съедали их целиком, и coins, funding и
+# rank, flow, trades и feed съедали их целиком, и coins, funding и
 # rot не выполнялись НИ РАЗУ — мини-апп оставался без цен и фандинга.
 # Ограничение имело смысл, пока ответа ждал пользователь; сейчас сборка
 # идёт в фоне, а запросам отдаётся прошлый кэш, так что спешить некуда.
@@ -432,7 +432,10 @@ def verify_init_data(raw: str) -> dict | None:
     # что угодно, а он идёт прямо в chat_id.
     if not isinstance(uid, int) or uid <= 0:
         return None
-    return {"id": str(uid), "lang": user.get("language_code") or "ru"}
+    return {"id": str(uid), "lang": user.get("language_code") or "ru",
+            # Имя — только для подписи под комментарием дайджеста.
+            "first": str(user.get("first_name") or ""), "last": str(user.get("last_name") or ""),
+            "username": str(user.get("username") or "")}
 
 
 class RateLimiter:
@@ -517,8 +520,7 @@ def for_plan(data: dict, prem: bool) -> dict:
     глубоко: общий кэш остаётся целым для подписчиков.
 
     Закрыто всё, что про фьючерсы Hyperliquid: доска перпов, крупные позиции,
-    лонги и шорты, фандинг, позиции кошельков. Cortex не срезается: он пока
-    бесплатный.
+    лонги и шорты, фандинг, позиции кошельков.
     """
     if prem or not isinstance(data, dict):
         return data
@@ -3755,7 +3757,7 @@ UNLOCK_WHO = ("team", "investors", "treasury", "community", "foundation", "mixed
 # Эмиссия — новые монеты сети (награды стейкинга, блоков), давит на цену так
 # же, как разлок. У монет выше она записана строкой «emission»; у остальных
 # её нет, и почему — сказано здесь. Новая монета в книге обязана попасть или
-# туда, или сюда: это проверяет tools/cortex-guard.py.
+# туда, или сюда: это проверяет tools/guard.py.
 #
 # Код: fixed — весь выпуск создан сразу (награды из готовых долей),
 # notyet — эмиссия предусмотрена, но ещё не запущена.
@@ -7834,632 +7836,6 @@ def rot_refresher() -> None:
         time.sleep(max(ROT_TTL, took * 4))
 
 
-ORACLE_FEATURES = (
-    # Порядок обязан совпадать с FEAT_NAME в oracle.cpp: важности приходят
-    # массивом без имён, и сдвиг на единицу подписал бы чужие колонки.
-    "flow", "volume", "wallets", "spread", "accel",
-    "trades", "ticket", "top100", "top dir", "both",
-    "ret 1h", "ret 6h", "ret 24h", "vol 24h", "vol jump",
-    "to high", "from low", "RSI", "trend", "ATR",
-    "funding", "funding z", "OI 1h", "OI 24h", "OI/vlm",
-    "vlm 24h", "liq skew", "liq/OI", "leverage", "liquidity",
-    "BTC 24h", "BTC vol", "breadth", "hour", "hour 2",
-    "MACD", "MACD sig", "MACD hist",
-    # Событие: возраст монеты в рядах (он же — давность листинга), всплеск
-    # объёма против собственной недели и сила удара за последние часы.
-    "age", "vlm z", "shock",
-    # Разметка ряда на колена: глубина отката, близость к уровню Фибоначчи,
-    # длина текущего хода против предыдущего, сколько колен подряд рынок
-    # идёт в одну сторону, идёт ли нынешнее заодно с ними и длиннее ли оно.
-    "fib back", "fib level", "fib ext", "wave run", "wave with", "wave grow",
-)
-
-# Горизонты — те же числа, что в oracle.cpp (ORACLE_H6, ORACLE_H24). Держать
-# их здесь приходится: питон не позовёт C++. Зато они стоят одним местом и с
-# именами, а не числом внутри SQL, как было раньше, — и видно, что менять,
-# если бот изменится.
-ORACLE_H6 = 6 * 3600
-ORACLE_H24 = 86400
-ORACLE_HZ = (ORACLE_H6, ORACLE_H24)
-
-
-def _count_ready(cur: sqlite3.Connection, perp: bool, horizon: int = ORACLE_H24) -> int:
-    """Сколько размеченных исходов набралось на этом горизонте.
-
-    Условия обязаны совпадать с loadSamples в oracle.cpp: один пример на
-    монету в окно длиной с горизонт. Раньше здесь стояло своё — порог хода
-    числом 50 прямо в SQL, лишнее `buy_nanos!=sell_nanos` и только суточный
-    горизонт, — и полоса на экране считала не то, чего ждёт обучение.
-
-    Порога хода здесь нет намеренно. Бот тихие исходы больше не выбрасывает:
-    они остаются с весом в четверть, потому что «цена никуда не пошла» — это
-    тоже ответ, и выбрасывать его значит учить модель на одних только
-    сильных ходах. Появись порог здесь снова — счётчик показывал бы меньше,
-    чем ждёт обучение, и полоса упиралась бы в предел, которого нет.
-
-    Шаг прореживания равен горизонту, а не суткам: журнал пишется каждый час,
-    и соседние часы по одной монете почти одинаковы, а окна их исходов
-    перекрываются. Непересекающихся шестичасовых окон в сутках четыре, и
-    обучение берёт все четыре — счётчик обязан считать так же.
-    """
-    px = "price_6h" if horizon == ORACLE_H6 else "price_24h"
-    filled = "filled_6h" if horizon == ORACLE_H6 else "filled_at"
-    cset = cols(cur, "ai_events")
-    if px not in cset or filled not in cset:
-        return 0
-    try:
-        row = cur.execute(
-            f"SELECT COUNT(*) n FROM ai_events e "
-            f"WHERE e.{filled}>0 AND e.price_then>0 AND e.{px}>0 "
-            f"AND e.window_days=24 AND e.venue=? "
-            f"AND NOT EXISTS ("
-            f"  SELECT 1 FROM ai_events e2 WHERE e2.token=e.token AND e2.venue=e.venue "
-            f"  AND e2.window_days=24 AND e2.{filled}>0 AND e2.price_then>0 AND e2.{px}>0 "
-            f"  AND e2.ts/{int(horizon)}=e.ts/{int(horizon)} AND e2.id<e.id)",
-            (1 if perp else 0,),
-        ).fetchone()
-        return int(row["n"] if row else 0)
-    except sqlite3.Error:
-        return 0
-
-
-def _ai_trained(cur: sqlite3.Connection, perp: bool) -> tuple[bool, float | None]:
-    if not table_exists(cur, "ai_weights"):
-        return False, None
-    n_key, acc_key = (300, 302) if perp else (100, 102)
-    w0, w1 = (500, 511) if perp else (400, 411)
-    try:
-        n = cur.execute("SELECT v FROM ai_weights WHERE k=?", (n_key,)).fetchone()
-        acc = cur.execute("SELECT v FROM ai_weights WHERE k=?", (acc_key,)).fetchone()
-        got = cur.execute(
-            "SELECT COUNT(*) c FROM ai_weights WHERE k>=? AND k<?", (w0, w1)
-        ).fetchone()
-        ns = float(n["v"]) if n else 0
-        trained = bool(got and got["c"] >= 11 and ns >= 400)
-        a = float(acc["v"]) if acc and trained else None
-        return trained, a
-    except sqlite3.Error:
-        return False, None
-
-
-def _why_parts(raw) -> list:
-    """Разбор причин: «имя:вклад» через запятую."""
-    out = []
-    for part in str(raw or "").split(","):
-        name, _, val = part.rpartition(":")
-        if not name:
-            continue
-        try:
-            bp = int(val)
-        except ValueError:
-            continue
-        out.append({"k": name, "v": round(bp / 100.0, 2)})
-    return out
-
-
-def _signals(cur: sqlite3.Connection) -> list:
-    """Сигналы, посчитанные ботом.
-
-    Раньше их считал этот файл: уверенность выходила как «50 + модуль потока
-    × 8», причины были вшитым списком правил, а обученная модель жила в боте
-    и до приложения не доходила вовсе — на экране стояло 99%, которых никто
-    не считал. Повторять здесь тридцать пять признаков и лес деревьев нельзя:
-    две реализации разойдутся, и заметить это будет не по чему. Поэтому счёт
-    один, в oracle.cpp, а здесь выдача.
-
-    План берётся из журнала, а не из ai_signals. В ai_signals он каждые пять
-    минут пересчитывается от свежей цены: вход там равен цене прямо сейчас,
-    и стоп с целями переезжают вместе с ней. Человек, открывший карточку в
-    десять, и он же в десять ноль пять видели разные сделки, а исход потом
-    считался по уровням журнала — по тем, которых он мог и не видеть.
-    Поэтому уровни, горизонт, плечо и доля депозита приходят из открытой
-    строки журнала: сигнал показывается таким, каким вышел.
-
-    Живого в нём двое: возраст — от той же строки журнала, по ней и видно,
-    сколько сигнал висит, — и доход с момента выдачи. Доход считается как
-    раз из расхождения двух входов: журнального, записанного один раз, и
-    текущего из ai_signals, который и есть сегодняшняя цена. Второго
-    источника цен для этого не нужно, и разойтись им негде.
-    """
-    if not table_exists(cur, "ai_signals"):
-        return []
-    # Столбцы появились позже: у базы, которую ещё не трогал новый бот, их нет.
-    cset = cols(cur, "ai_signals")
-    share = "s.risk_share" if "risk_share" in cset else "0"
-    hz = "s.horizon" if "horizon" in cset else "86400"
-    # Журнал мог и не успеть обрасти столбцами плана: тогда берём из ai_signals.
-    lset = cols(cur, "ai_signal_log") if table_exists(cur, "ai_signal_log") else set()
-    def logged(name: str, fallback: str) -> str:
-        """Поле из журнала, если оно там есть; иначе — из свежей публикации."""
-        return f"COALESCE(g.{name}, {fallback})" if name in lset else fallback
-
-    # COALESCE тут не спасает: столбцы добавлены с NOT NULL DEFAULT, и у
-    # строки, заведённой до миграции, лежит не NULL, а ноль и единица. Пустое
-    # значение от настоящего отличает доля депозита: любой построенный план
-    # ставит её больше нуля, обоими путями. Ноль в ней — признак того, что
-    # строка старше миграции, и тогда план добираем из свежей публикации.
-    fresh = "g.risk_share > 0" if "risk_share" in lset else "0"
-    def logged_plan(name: str, fallback: str) -> str:
-        return (f"CASE WHEN {fresh} THEN g.{name} ELSE {fallback} END"
-                if name in lset else fallback)
-    join = ("LEFT JOIN ai_signal_log g ON g.venue=s.venue AND g.token=s.token "
-            "AND g.side=s.side AND g.closed_at=0 ") if lset else ""
-    at = "COALESCE(g.made_at, s.made_at)" if lset else "s.made_at"
-    # Доводы пустой строкой — это «в журнале их нет», а не «доводов нет».
-    why_col = "COALESCE(NULLIF(g.why, ''), s.why)" if "why" in lset else "s.why"
-    sql = (
-        f"SELECT s.venue venue, s.sym sym, s.side side, s.net_nanos net_nanos, "
-        f"s.wallets wallets, s.token token, s.entry live_px, "
-        f"{at} at, {logged('conf', 's.conf')} conf, "
-        f"{logged('modelled', 's.modelled')} modelled, "
-        f"{logged('entry', 's.entry')} entry, {logged('stop', 's.stop')} stop, "
-        f"{logged('take1', 's.take1')} take1, {logged('take2', 's.take2')} take2, "
-        f"{logged('horizon', hz)} horizon, {logged_plan('risk_share', share)} share, "
-        f"{logged_plan('lev', 's.lev')} lev, {why_col} why "
-        f"FROM ai_signals s {join}"
-        # Сверху свежие. Прежде список шёл по уверенности, и рядом с сигналом
-        # четвертьчасовой давности стоял вчерашний — по числу они соседи, а
-        # по делу разные вещи: у одного план ещё в силе, у другого прошло
-        # полгоризонта. Возраст и есть первое, что о сигнале нужно знать.
-        # Уверенность осталась вторым ключом — для выданных в одну секунду.
-        "ORDER BY at DESC, conf DESC"
-    )
-    try:
-        rows = cur.execute(sql).fetchall()
-    except sqlite3.Error as e:
-        sys.stderr.write(f"[api] сигналы: {e}\n")
-        return []
-    out = []
-    for r in rows:
-        entry = float(r["entry"] or 0)
-        if entry <= 0:
-            continue
-        live_px = float(r["live_px"] or 0)
-        long_ = bool(int(r["side"] or 0))
-        # Доход с момента выдачи, в сторону сигнала: у шорта падение — плюс.
-        roi = 0.0
-        if live_px > 0:
-            roi = (live_px - entry) / entry * 100.0
-            if not long_:
-                roi = -roi
-        stop = float(r["stop"] or 0)
-        # Расстояние до стопа считается по показанной паре, а не берётся из
-        # свежей публикации: там оно от другого входа.
-        stop_pct = abs(stop - entry) / entry * 100.0 if stop > 0 else 0.0
-        out.append({
-            "sym": str(r["sym"] or "").upper(),
-            "side": "buy" if int(r["side"] or 0) else "sell",
-            "conf": int(r["conf"] or 0),
-            # Считала модель или осталась формула — на экране это разные слова.
-            "model": bool(int(r["modelled"] or 0)),
-            "net": usd(r["net_nanos"]),
-            "w": int(r["wallets"] or 0),
-            "entry": entry,
-            "stop": stop,
-            "stopPct": round(stop_pct, 2),
-            "t1": float(r["take1"] or 0),
-            "t2": float(r["take2"] or 0),
-            "lev": int(r["lev"] or 1),
-            # Когда сигнал появился и как он с тех пор идёт. Возраст — из
-            # журнала: в самой публикации время всегда «только что», её
-            # переписывают каждые пять минут.
-            "at": int(r["at"] or 0),
-            "roi": round(roi, 2),
-            # Цена прямо сейчас — от неё и считается доход. Отдаём, чтобы на
-            # карточке было видно, откуда он взялся.
-            "now": live_px,
-            # Доля депозита под риском и горизонт — решения модели, а не
-            # настройки приложения.
-            "share": round(float(r["share"] or 0), 2),
-            "h": int(r["horizon"] or 86400),
-            # «flow:412» — имя признака и его вклад в сотых долях процента
-            # вероятности. Отдаём процентными пунктами: приложению нужна
-            # длина полосы, а не сырые базисные пункты.
-            "why": _why_parts(r["why"]),
-            "venue": "perp" if int(r["venue"] or 0) else "spot",
-            # Адрес контракта у спотового сигнала: без него не достать
-            # историю цены токена — тикеры не уникальны, искать по ним
-            # нельзя. У перпов здесь имя монеты, и оно не адрес.
-            "addr": str(r["token"] or ""),
-        })
-    return out
-
-
-def _oracle_try(cur: sqlite3.Connection, perp: bool, horizon: int | None = None) -> dict | None:
-    """Последняя попытка обучения, принятая или нет.
-
-    «Модель ещё не обучена» при 2468 готовых исходах не объясняет ничего:
-    непонятно, ждать ли данных или модель раз за разом не проходит порог.
-
-    Горизонт: у площадки их два, и строка в таблице своя у каждого. Без
-    фильтра сюда попадала та, у которой AUC выше, а вторая не показывалась
-    вовсе — в том числе провалившаяся рядом с принятой.
-    """
-    if not table_exists(cur, "ai_model_try"):
-        return None
-    where = "venue=?" + (" AND horizon=?" if horizon else "")
-    args = (1 if perp else 0,) + ((horizon,) if horizon else ())
-    try:
-        tset = cols(cur, "ai_model_try")
-        wmin = "wf_min" if "wf_min" in tset else "0"
-        wfol = "wf_folds" if "wf_folds" in tset else "0"
-        wpas = "passes" if "passes" in tset else "0"
-        wece = "ece" if "ece" in tset else "0"
-        wflo = "ece_floor" if "ece_floor" in tset else "0"
-        row = cur.execute(
-            "SELECT at,samples,auc,logloss,base_logloss,wf_auc,accepted,horizon,"
-            f"{wmin} wf_min,{wfol} wf_folds,{wpas} passes,{wece} ece,{wflo} ece_floor "
-            f"FROM ai_model_try WHERE {where} ORDER BY auc DESC LIMIT 1",
-            args,
-        ).fetchone()
-    except sqlite3.Error:
-        return None
-    if not row:
-        return None
-    return {
-        "h": int(row["horizon"] or ORACLE_H24),
-        "at": int(row["at"] or 0),
-        "samples": int(row["samples"] or 0),
-        "auc": round(float(row["auc"] or 0), 3),
-        "logloss": round(float(row["logloss"] or 0), 3),
-        "base": round(float(row["base_logloss"] or 0), 3),
-        "wf": round(float(row["wf_auc"] or 0), 3),
-        # Худшая складка и их число: по ним видно, что среднее не вытащила
-        # одна удачная. Приёмка смотрит именно сюда.
-        "wfMin": round(float(row["wf_min"] or 0), 3),
-        "folds": int(row["wf_folds"] or 0),
-        # Сколько раз подряд проверка сошлась. Одного раза мало: бот пробует
-        # обучиться каждый день, и рано или поздно порог берётся случайно.
-        # В бой модель идёт, подтвердившись на новых данных.
-        "passes": int(row["passes"] or 0),
-        # Насколько обещанное разошлось со сбывшимся и сколько дала бы сама
-        # случайность. Голое первое число ни о чём не говорит: на полутора
-        # сотнях строк и идеальная модель даст заметную величину.
-        "ece": round(float(row["ece"] or 0), 3),
-        "eceFloor": round(float(row["ece_floor"] or 0), 3),
-        "ok": bool(int(row["accepted"] or 0)),
-    }
-
-
-def _oracle_model(cur: sqlite3.Connection, perp: bool, horizon: int | None = None) -> dict | None:
-    """Состояние обученного оракула: то, что бот записал в ai_models.
-
-    Точность сама по себе ничего не говорит — при шестидесяти процентах роста
-    в выборке «всегда вверх» даёт те же шестьдесят. Поэтому рядом всегда идут
-    AUC, потери и потери постоянного прогноза: по ним видно, есть ли в модели
-    хоть что-то сверх угадывания частоты.
-    """
-    if not table_exists(cur, "ai_models"):
-        return None
-    # Столбец levels появился позже: у базы, которую ещё не трогал новый бот,
-    # его нет, и запрос в лоб уронил бы весь экран состояния.
-    mset = cols(cur, "ai_models")
-    lvl = "levels" if "levels" in mset else "0"
-    wmin = "wf_min" if "wf_min" in mset else "0"
-    wfol = "wf_folds" if "wf_folds" in mset else "0"
-    mece = "ece" if "ece" in mset else "0"
-    mflo = "ece_floor" if "ece_floor" in mset else "0"
-    where = "venue=?" + (" AND horizon=?" if horizon else "")
-    args = (1 if perp else 0,) + ((horizon,) if horizon else ())
-    try:
-        row = cur.execute(
-            "SELECT created_at,samples,test_n,trees,auc,logloss,acc,brier,"
-            f"base_logloss,base_rate,wf_auc,gain,{lvl} levels,horizon,"
-            f"{wmin} wf_min,{wfol} wf_folds,{mece} ece,{mflo} ece_floor FROM ai_models "
-            f"WHERE {where} ORDER BY auc DESC LIMIT 1",
-            args,
-        ).fetchone()
-    except sqlite3.Error:
-        return None
-    if not row or not row["trees"]:
-        return None
-    top = []
-    raw = row["gain"]
-    if isinstance(raw, (bytes, bytearray)) and len(raw) == 8 * len(ORACLE_FEATURES):
-        vals = struct.unpack(f"<{len(ORACLE_FEATURES)}d", raw)
-        total = sum(vals) or 1.0
-        pairs = sorted(zip(ORACLE_FEATURES, vals), key=lambda x: -x[1])[:5]
-        top = [{"k": n, "v": round(100.0 * v / total, 1)} for n, v in pairs if v > 0]
-    return {
-        "at": int(row["created_at"] or 0),
-        "samples": int(row["samples"] or 0),
-        "test": int(row["test_n"] or 0),
-        "trees": int(row["trees"] or 0),
-        "auc": round(float(row["auc"] or 0), 3),
-        "logloss": round(float(row["logloss"] or 0), 3),
-        "base": round(float(row["base_logloss"] or 0), 3),
-        "acc": round(100.0 * float(row["acc"] or 0)),
-        "brier": round(float(row["brier"] or 0), 3),
-        "wf": round(float(row["wf_auc"] or 0), 3),
-        "wfMin": round(float(row["wf_min"] or 0), 3),
-        "ece": round(float(row["ece"] or 0), 3),
-        "eceFloor": round(float(row["ece_floor"] or 0), 3),
-        "folds": int(row["wf_folds"] or 0),
-        "up": round(100.0 * float(row["base_rate"] or 0)),
-        # Уровни от модели или по формуле от волатильности — на экране это
-        # разные вещи, и человек вправе знать, что именно он видит.
-        "levels": bool(int(row["levels"] or 0)),
-        "h": int(row["horizon"] or 86400),
-        "top": top,
-    }
-
-
-def _oracle_rows(cur: sqlite3.Connection, perp: bool) -> list:
-    """Площадка по горизонтам: у каждого своя модель, своя попытка, свой счёт.
-
-    Экран состояния показывал одну карточку на площадку — ту, у которой AUC
-    выше. Вторая модель не показывалась вообще: принятая шестичасовая
-    закрывала собой проваленную суточную, и человек читал «модель принята»,
-    не зная, что половина сигналов всё равно идёт от формулы.
-    """
-    has_events = table_exists(cur, "ai_events")
-    return [{
-        "h": h,
-        "ready": _count_ready(cur, perp, h) if has_events else 0,
-        "model": _oracle_model(cur, perp, h),
-        "try": _oracle_try(cur, perp, h),
-    } for h in ORACLE_HZ]
-
-
-def _signals_at(cur: sqlite3.Connection) -> int | None:
-    """Когда бот в последний раз считал сигналы.
-
-    Не «когда выдал»: пустая таблица не отличает «бот ни разу не считал» от
-    «посчитал и ничего не прошло отбор», а на экране это совсем разные вещи.
-    Поэтому у бота есть отдельная отметка расчёта, и она тут главнее: сами
-    сигналы могли и не появиться.
-    """
-    at = None
-    if table_exists(cur, "ai_signals"):
-        try:
-            row = cur.execute("SELECT MAX(made_at) m FROM ai_signals").fetchone()
-            at = int(row["m"]) if row and row["m"] else None
-        except sqlite3.Error:
-            at = None
-    if at:
-        return at
-    if not table_exists(cur, "ai_weights"):
-        return None
-    try:
-        row = cur.execute("SELECT v FROM ai_weights WHERE k=900").fetchone()
-    except sqlite3.Error:
-        return None
-    return int(row["v"]) if row and row["v"] else None
-
-
-def _reliability(cur: sqlite3.Connection, venue: int) -> list:
-    """Совпадает ли обещанное со сбывшимся, по корзинам уверенности.
-
-    Модель говорит человеку число: «61% шанс роста». Общая доля попаданий
-    этого не проверяет — она складывает шестидесятипроцентные сигналы с
-    восьмидесятипроцентными и говорит одно среднее. А проверять надо иначе:
-    когда он сказал шестьдесят, сбылось ли шестьдесят.
-
-    Считается только по решённым сигналам — дошедшим до цели или до стопа.
-    Тот, что за горизонт не дошёл никуда, не был ни угадан, ни нет, и в
-    знаменателе ему делать нечего.
-
-    Число в корзине отдаётся рядом: на пяти сигналах «сбылось 80%» не значит
-    ничего, и человек должен это видеть.
-    """
-    if not table_exists(cur, "ai_signal_log"):
-        return []
-    edges = [(50, 60), (60, 70), (70, 80), (80, 101)]
-    out = []
-    try:
-        # Только сигналы модели. У формулы «уверенность» — это оценка,
-        # втиснутая в проценты (40 + счёт×5, зажато в 35…80), а не
-        # вероятность: сверять её со сбывшимся значит ловить формулу на
-        # числе, которое никогда не было обещанием. Блок и поймал её сразу —
-        # «обещал 57%, сбылось 31%», — только судил не того.
-        mset = cols(cur, "ai_signal_log")
-        only_model = " AND modelled=1" if "modelled" in mset else " AND 0"
-        rows = cur.execute(
-            "SELECT conf, outcome FROM ai_signal_log "
-            f"WHERE closed_at>0 AND venue=? AND outcome!=0{only_model}", (venue,)
-        ).fetchall()
-    except sqlite3.Error as e:
-        sys.stderr.write(f"[api] сверка обещанного: {e}\n")
-        return []
-    for lo, hi in edges:
-        got = [r for r in rows if lo <= int(r["conf"] or 0) < hi]
-        if not got:
-            continue
-        won = sum(1 for r in got if int(r["outcome"] or 0) > 0)
-        out.append({
-            "from": lo,
-            "to": min(hi, 100),
-            # Обещано — среднее по корзине, а не её середина: в корзине
-            # 60–70 сигналы могут лежать все у нижнего края.
-            "said": round(sum(int(r["conf"] or 0) for r in got) / len(got)),
-            "got": int(round(100.0 * won / len(got))),
-            "n": len(got),
-        })
-    return out
-
-
-def _signal_history(cur: sqlite3.Connection, perp: bool) -> dict:
-    """История выданных сигналов одной площадки: что показали и чем кончилось.
-
-    Раньше здесь считались строки журнала обучения — монеты, которые сигналами
-    никогда не были, — а «угадано» означало «поток угадал направление». На
-    экране это стояло рядом с подписями «планов закрыто», «по цели», «по
-    стопу», которых в тех данных не было вовсе. Теперь считается только то,
-    что человеку показали: дошла цена до цели, свалилась на стоп или не
-    случилось ни того ни другого за горизонт.
-
-    Площадки считаются врозь. Токены BSC и перпы Hyperliquid — разные рынки с
-    разной ликвидностью и разными стопами, и общая доля попаданий по ним не
-    значит ничего: одна площадка тянет вторую, а какая именно — не видно.
-    Модели у них тоже свои, и судить каждую надо по её же сигналам.
-    """
-    venue = 1 if perp else 0
-    empty = {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0,
-             "broken": 0, "avg": 0, "items": [], "open": 0, "next": 0, "rel": []}
-    if not table_exists(cur, "ai_signal_log"):
-        return empty
-    try:
-        rows = cur.execute(
-            "SELECT sym,venue,side,conf,made_at,closed_at,outcome,ret_bp,entry,exit_px,"
-            + ("modelled " if "modelled" in cols(cur, "ai_signal_log") else "0 modelled ") +
-            "FROM ai_signal_log WHERE closed_at>0 AND venue=? "
-            "ORDER BY closed_at DESC LIMIT 40", (venue,)
-        ).fetchall()
-    except sqlite3.Error as e:
-        sys.stderr.write(f"[api] история сигналов: {e}\n")
-        return empty
-    items = []
-    for r in rows:
-        out = int(r["outcome"] or 0)
-        ret = float(r["ret_bp"] or 0) / 100.0
-        items.append({
-            "sym": str(r["sym"] or "?").upper(),
-            "long": bool(int(r["side"] or 0)),
-            # Доход считается в сторону сигнала: у шорта падение цены — плюс.
-            "ret": round(ret, 1),
-            "t": ago(int(r["closed_at"] or 0)),
-            "win": out > 0,
-            "outcome": out,
-            "venue": "perp" if int(r["venue"] or 0) else "spot",
-            "model": bool(int(r["modelled"] or 0)),
-        })
-    # Список — последние сорок, итоги — по всему журналу.
-    #
-    # Раньше и то и другое считалось по одной выборке с LIMIT 40: «угадано
-    # 58%», «11 из 19», «планов 26» были про последние сорок сигналов, а
-    # подписаны как весь послужной список. Сорок строк — это про длину
-    # списка на экране, и к доле попаданий отношения не имеет.
-    of = tp = sl = 0
-    avg = 0.0
-    try:
-        agg = cur.execute(
-            "SELECT COUNT(*) n, "
-            "SUM(CASE WHEN outcome>0 THEN 1 ELSE 0 END) tp, "
-            "SUM(CASE WHEN outcome<0 THEN 1 ELSE 0 END) sl, "
-            "AVG(ret_bp) avg FROM ai_signal_log WHERE closed_at>0 AND venue=?",
-            (venue,)
-        ).fetchone()
-        if agg:
-            of = int(agg["n"] or 0)
-            tp = int(agg["tp"] or 0)
-            sl = int(agg["sl"] or 0)
-            avg = float(agg["avg"] or 0) / 100.0
-    except sqlite3.Error as e:
-        sys.stderr.write(f"[api] итоги истории: {e}\n")
-    decided = tp + sl
-    # Итоги модели и формулы врозь. Оракул судят по его сигналам: формула с
-    # нулевым преимуществом, сложенная с ним в одну строку, топила бы его
-    # долю, а он — поднимал бы её. Ни то, ни другое не про оракул.
-    by_src = {}
-    try:
-        mset = cols(cur, "ai_signal_log")
-        if "modelled" in mset:
-            for r in cur.execute(
-                "SELECT modelled m, COUNT(*) n, "
-                "SUM(CASE WHEN outcome>0 THEN 1 ELSE 0 END) tp, "
-                "SUM(CASE WHEN outcome<0 THEN 1 ELSE 0 END) sl, "
-                "AVG(ret_bp) avg FROM ai_signal_log "
-                "WHERE closed_at>0 AND venue=? GROUP BY modelled", (venue,)
-            ).fetchall():
-                k = "model" if int(r["m"] or 0) else "formula"
-                t_, s_ = int(r["tp"] or 0), int(r["sl"] or 0)
-                by_src[k] = {
-                    "of": int(r["n"] or 0), "tp": t_, "sl": s_,
-                    "hit": int(round(100.0 * t_ / (t_ + s_))) if t_ + s_ else 0,
-                    "avg": round(float(r["avg"] or 0) / 100.0, 1),
-                }
-    except sqlite3.Error as e:
-        sys.stderr.write(f"[api] история по источнику: {e}\n")
-    # Сколько сигналов ещё в работе и через сколько закроется ближайший.
-    # «Завершённых сигналов пока нет» само по себе не отличает «бот только что
-    # перезапустился» от «что-то сломалось»: первый итог приходит не раньше,
-    # чем пройдёт горизонт самого раннего сигнала.
-    opened, soon = 0, 0
-    try:
-        row = cur.execute(
-            "SELECT COUNT(*) n, MIN(made_at+horizon) t FROM ai_signal_log "
-            "WHERE closed_at=0 AND venue=?", (venue,)
-        ).fetchone()
-        opened = int(row["n"] or 0)
-        soon = max(0, int(row["t"] or 0) - int(time.time())) if row["t"] else 0
-    except sqlite3.Error:
-        pass
-    return {
-        "open": opened,
-        "next": soon,
-        # Доля попаданий считается только среди решённых: сигнал, который за
-        # сутки не дошёл ни до цели, ни до стопа, не был ни угадан, ни нет.
-        "hit": int(round(100.0 * tp / decided)) if decided else 0,
-        "of": of,
-        "won": tp,
-        "tp": tp,
-        "sl": sl,
-        "missed": of - decided,
-        "broken": sl,
-        "avg": round(avg, 1),
-        "items": items,
-        "rel": _reliability(cur, venue),
-        # Итоги модели и формулы врозь; нет ключа — таких сигналов не было.
-        "model": by_src.get("model"),
-        "formula": by_src.get("formula"),
-    }
-
-
-def load_sonar(cur: sqlite3.Connection, hl: sqlite3.Connection | None = None) -> dict:
-    sonar = {
-        # Сколько готовых исходов нужно, чтобы модель могла быть принята —
-        # то же число, что ORACLE_MIN_ACCEPT в oracle.h.
-        #
-        # Обучение начинается с 400, скользящая проверка считается с 600, но
-        # принимать модель по такой выборке нельзя: тестовый кусок это 15% от
-        # неё, на шестистах примерах в нём восемьдесят строк, и погрешность
-        # AUC там ±0.13. Измеренное на восьмидесяти число 0.55 неотличимо ни
-        # от 0.42, ни от 0.68. При 1200 складки скользящей проверки получают
-        # по полтораста строк каждая — уже не горстка.
-        "need": 1200,
-        # Столько раз подряд проверка должна сойтись — ORACLE_CONFIRMS у бота.
-        # Одна удачная попытка ничего не значит: бот пробует каждый день.
-        "confirms": 2,
-        "ready": {"spot": 0, "perp": 0},
-        "trained": False,
-        "trainedSpot": False,
-        "trainedPerp": False,
-        "acc": None,
-        "accSpot": None,
-        "accPerp": None,
-        "at": None,
-        "list": [],
-        "hist": {v: {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": [], "rel": []} for v in ("spot", "perp")},
-    }
-    # Разбор по горизонтам — для экрана состояния: там у каждой модели своя
-    # карточка. Сводные поля ниже остаются для вкладки, где строка одна.
-    sonar["hz"] = {"spot": _oracle_rows(cur, False), "perp": _oracle_rows(cur, True)}
-    for v in ("spot", "perp"):
-        sonar["ready"][v] = max((r["ready"] for r in sonar["hz"][v]), default=0)
-    ts, accs = _ai_trained(cur, False)
-    tp, accp = _ai_trained(cur, True)
-    # Оракул старше линейной модели: если он обучен, на экране его числа.
-    os_, op = _oracle_model(cur, False), _oracle_model(cur, True)
-    sonar["try"] = {"spot": _oracle_try(cur, False), "perp": _oracle_try(cur, True)}
-    sonar["model"] = {"spot": os_, "perp": op}
-    sonar["trainedSpot"] = bool(os_) or ts
-    sonar["trainedPerp"] = bool(op) or tp
-    sonar["trained"] = sonar["trainedSpot"]
-    sonar["accSpot"] = os_["acc"] if os_ else (round(accs * 100) if accs else None)
-    sonar["accPerp"] = op["acc"] if op else (round(accp * 100) if accp else None)
-    sonar["acc"] = sonar["accSpot"]
-
-    sonar["list"] = _signals(cur)
-    # Когда бот в последний раз считал сигналы. Пусто — значит не считал ни
-    # разу: пустой список тогда означает не «нечего показать», а «нечему
-    # взяться», и на экране это разные слова.
-    sonar["at"] = _signals_at(cur)
-
-    sonar["hist"] = {"spot": _signal_history(cur, False),
-                     "perp": _signal_history(cur, True)}
-    return sonar
-
-
 def load_coins(cur: sqlite3.Connection, hl: sqlite3.Connection | None, flow: dict, wallets: list) -> dict:
     coins = {}
     flow24 = {(r.get("sym") or ""): r for r in ((flow.get("24") or {}).get("rows") or []) if r.get("sym")}
@@ -8580,11 +7956,7 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
     t0 = time.monotonic()
     ls: dict = {}
     rot = empty_rot()
-    flow, rank, trades, market_feed, funding, sonar = {}, {}, {"spot": [], "perp": []}, [], {}, {
-        "need": 1200, "confirms": 2, "ready": {"spot": 0, "perp": 0}, "trained": False, "acc": None,
-        "hz": {"spot": [], "perp": []},
-        "list": [], "hist": {v: {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": [], "rel": []} for v in ("spot", "perp")},
-    }
+    flow, rank, trades, market_feed, funding = {}, {}, {"spot": [], "perp": []}, [], {}
 
     def take(name, fn, fallback, must=False):
         if not must and time.monotonic() - t0 > BUILD_BUDGET:
@@ -8601,7 +7973,6 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
 
     rank = take("rank", lambda: load_rank(cur, hl), rank, True)
     flow = take("flow", lambda: load_flow(cur), flow, True)
-    sonar = take("sonar", lambda: load_sonar(cur, hl), sonar, True)
     trades = take("trades", lambda: load_trades(cur, hl), trades, True)
     market_feed = take("feed", lambda: load_feed_market(cur, hl), market_feed, True)
     funding = take("funding", lambda: load_funding(hl), funding)
@@ -8626,12 +7997,6 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
         # приложении нет. Старая сборка, открытая в этот момент, увидит на
         # месте ротации «данных нет» и исправится сама при следующем запуске.
         "rotSum": rot or {},
-        # Sonar переименован в Cortex. Ключ отдаётся под обоими именами:
-        # приложение обновляется само, а API на машине перезапускают
-        # руками — сборка, открытая между этими двумя событиями, должна
-        # читать хоть что-то. Старое имя убрать, когда обновятся все.
-        "cortex": sonar,
-        "sonar": sonar,
         "coins": coins,
         "cachedAt": now(),
         "buildSec": round(time.monotonic() - t0, 1),
@@ -8710,6 +8075,7 @@ def warmup() -> None:
     threading.Thread(target=rot_refresher, daemon=True, name="rotation").start()
     threading.Thread(target=stake_live_refresher, daemon=True, name="staking").start()
     threading.Thread(target=reactions_refresher, daemon=True, name="reactions").start()
+    threading.Thread(target=digest_refresher, daemon=True, name="digest").start()
     cur = open_db(DB)
     hl = open_db(HL_DB)
     if not cur:
@@ -8975,15 +8341,6 @@ def bootstrap(chat: str, fast: bool = False) -> dict:
             "alertTg": True, "unread": 0,
         }
         empty_rank = {"spot": {"pnl": [], "roi": [], "win": [], "act": []}, "perp": {"pnl": [], "roi": [], "win": [], "act": []}}
-        empty_sonar = {
-            "need": 1200, "confirms": 2, "ready": {"spot": 0, "perp": 0},
-            "trained": False, "trainedSpot": False, "trainedPerp": False,
-            "acc": None, "accSpot": None, "accPerp": None,
-            "model": {"spot": None, "perp": None},
-            "try": {"spot": None, "perp": None}, "at": None,
-            "hz": {"spot": [], "perp": []},
-            "list": [], "hist": {v: {"hit": 0, "of": 0, "won": 0, "tp": 0, "sl": 0, "missed": 0, "broken": 0, "avg": 0, "items": [], "rel": []} for v in ("spot", "perp")},
-        }
         pub = piece("pub", lambda: get_public(cur, hl), {}, True) or {}
         me = piece("me", lambda: load_me(cur, chat) if chat else empty_me, empty_me)
         if isinstance(me, dict):
@@ -9007,7 +8364,6 @@ def bootstrap(chat: str, fast: bool = False) -> dict:
         funding = pub.get("fund") or {}
         fund_n = pub.get("fundN") or {}
         rot_sum = pub.get("rotSum") or {}
-        sonar = pub.get("sonar") or empty_sonar
         if fast:
             coins = coins_known(wallets) or pub.get("coins") or {}
             # Приложение по этой метке переспросит через пару секунд, а не
@@ -9025,9 +8381,6 @@ def bootstrap(chat: str, fast: bool = False) -> dict:
             "flow": flow,
             "ls": ls,
             "rank": rank,
-            # Оба имени, как выше.
-            "cortex": sonar,
-            "sonar": sonar,
             "trades": trades,
             "fund": funding,
             "fundN": fund_n,
@@ -9062,6 +8415,331 @@ def bootstrap(chat: str, fast: bool = False) -> dict:
                 hl.close()
             except Exception:
                 pass
+
+
+# --- Дайджест ------------------------------------------------------------
+# Раз в сутки, в полночь UTC, сервер собирает выпуск: самое крупное из каждой
+# вкладки аналитики за прошедшие 24 часа и ближайшие разлоки. Хранятся
+# последние тридцать; под каждым — лайки и комментарии.
+#
+# Выпуск пишется один раз и больше не пересчитывается: это снимок того, что
+# было на экранах в тот момент, а не живая выборка. Если сервер лежал в
+# полночь, выпуск собирается при запуске — с честными границами окна.
+#
+# Таблицы заводит бот (он хозяин базы и стирает лайки с комментариями по
+# /forgetme); здесь те же CREATE — на случай, если API поднялся первым.
+DIGEST_KEEP = 30
+DIGEST_TOP = 3
+DIGEST_UNL_TOP = 5
+DIGEST_UNL_DAYS = 7
+DIGEST_COMMENT_MAX = 500
+DIGEST_COMMENT_GAP_S = 20
+DIGEST_COMMENT_DAY = 30
+DIGEST_COMMENTS_PAGE = 30
+# Разделы про фьючерсы Hyperliquid закрыты подпиской, как и сами вкладки:
+# бесплатному они не уходят с сервера вовсе — только отметка, что раздел есть.
+DIGEST_PREMIUM = ("ls", "perp", "fund")
+# Владелец бота — тот же chat_id, что OWNER_CHAT_ID в main.cpp: удаляет любые
+# комментарии и может закрыть автору комментирование.
+OWNER_CHAT_ID = os.environ.get("WHALE_OWNER_CHAT", "546348566").strip()
+_LINK_RE = re.compile(r"(https?://|www\.|t\.me/|telegram\.me/|\b[\w-]+\.(?:com|io|xyz|net|org|me|app|ru)\b)", re.I)
+_digest_lock = threading.Lock()
+
+DIGEST_SCHEMA = """
+CREATE TABLE IF NOT EXISTS digests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    day TEXT NOT NULL UNIQUE,
+    made_at INTEGER NOT NULL,
+    body TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS digest_likes (
+    digest_id INTEGER NOT NULL,
+    chat_id TEXT NOT NULL,
+    at INTEGER NOT NULL,
+    PRIMARY KEY (digest_id, chat_id)
+);
+CREATE TABLE IF NOT EXISTS digest_comments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    digest_id INTEGER NOT NULL,
+    chat_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    text TEXT NOT NULL,
+    at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS digest_mute (
+    chat_id TEXT PRIMARY KEY,
+    at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_digest_comments_d ON digest_comments(digest_id, at);
+CREATE INDEX IF NOT EXISTS idx_digest_comments_c ON digest_comments(chat_id);
+CREATE INDEX IF NOT EXISTS idx_digest_likes_c ON digest_likes(chat_id);
+"""
+
+
+def _digest_con() -> sqlite3.Connection | None:
+    con = open_db(DB, write=True)
+    if con:
+        con.executescript(DIGEST_SCHEMA)
+    return con
+
+
+def _dg_coin(r: dict, *keys: str) -> dict:
+    """Строка раздела: тикер, логотип и только нужные числа — без готовых
+    подписей сервера («5 мин назад»): в выпуске они бы тут же устарели."""
+    out = {"sym": r.get("sym") or ""}
+    if r.get("icon"):
+        out["icon"] = list(r["icon"])[:4]
+    for k in keys:
+        if r.get(k) is not None:
+            out[k] = r[k]
+    return out
+
+
+def digest_build(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict:
+    """Содержимое выпуска за последние сутки. Раздел без данных — пустой,
+    а не выдуманный: приложение так и пишет, что событий не было."""
+    to = now()
+    body: dict = {"from": to - 86400, "to": to}
+
+    pub = get_public(cur, hl) or {}
+    fw = (pub.get("flow") or {}).get("24") or {}
+    flow = {k: fw.get(k) for k in ("net", "buy", "sell", "up", "dn") if fw.get(k) is not None}
+    for side in ("in", "out"):
+        rows = flow_search(cur, "24", "", limit=DIGEST_TOP, side=side).get("rows") or []
+        flow[side] = [_dg_coin(r, "net", "w", "addr") for r in rows]
+    body["flow"] = flow
+
+    big = big_trades("24h", 24) or {}
+    for venue, keys in (("spot", ("v", "buy", "wa", "cls")), ("perp", ("v", "long", "wa", "cls"))):
+        rows = sorted(big.get(venue) or [], key=lambda r: -(r.get("v") or 0))[:DIGEST_TOP]
+        body[venue] = [_dg_coin(r, *keys) for r in rows]
+
+    rs = (rot_latest() or {}).get("24") or {}
+    cols = _ROT_ALL.get("24") or {}
+    body["rot"] = {
+        **{k: rs.get(k) for k in ("usd", "pairs", "w") if rs.get(k) is not None},
+        "src": rot_page(cols.get("src") or [], 0, DIGEST_TOP),
+        "dst": rot_page(cols.get("dst") or [], 0, DIGEST_TOP),
+    }
+
+    lsr = [dict(r) for r in ls_rows_cached(hl, "24")] if hl else []
+    body["ls"] = {
+        "long": [_dg_coin(r, "net", "pct", "cls") for r in sorted((r for r in lsr if r["net"] > 0), key=lambda r: -r["net"])[:DIGEST_TOP]],
+        "short": [_dg_coin(r, "net", "pct", "cls") for r in sorted((r for r in lsr if r["net"] < 0), key=lambda r: r["net"])[:DIGEST_TOP]],
+    }
+
+    # Фандинг — суточная ставка по всем биржам. Монеты без интереса и оборота
+    # отсеяны: там любая ставка — случайность одной сделки.
+    fr = []
+    for ex, rows in list(_FUND_ALL.items()):
+        for r in rows or []:
+            day = r.get("day")
+            if day is None:
+                day = (r.get("rate") or 0) * (r.get("per") or 0)
+            if (r.get("oi") or 0) < 1e6 and (r.get("vol") or 0) < 5e6:
+                continue
+            fr.append({"sym": r.get("sym") or "", "ex": ex, "day": round(day, 4)})
+    fr.sort(key=lambda r: -r["day"])
+    body["fund"] = {"hi": [r for r in fr if r["day"] > 0][:DIGEST_TOP],
+                    "lo": [r for r in reversed(fr) if r["day"] < 0][:DIGEST_TOP]}
+
+    # Разлоки на неделю вперёд — по доле от оборота, без чистой эмиссии:
+    # та течёт каждый день, и событием дня её не назвать.
+    unl = []
+    horizon = to + DIGEST_UNL_DAYS * 86400
+    for e in (unlocks().get("items") or []):
+        who = e.get("who") or {}
+        if e["ts"] > horizon or (who and set(who) == {"emission"}):
+            continue
+        unl.append({k: e.get(k) for k in ("sym", "name", "ts", "tokens", "usd", "pct", "kind")})
+    unl.sort(key=lambda e: (-(e.get("pct") or 0), -(e.get("usd") or 0)))
+    body["unl"] = unl[:DIGEST_UNL_TOP]
+    return body
+
+
+def digest_make() -> bool:
+    """Выпуск за сегодня (по UTC), если его ещё нет. True — выпуск собран."""
+    day = time.strftime("%Y-%m-%d", time.gmtime())
+    con = _digest_con()
+    if not con:
+        return False
+    try:
+        if con.execute("SELECT 1 FROM digests WHERE day=?", (day,)).fetchone():
+            return False
+        # Общий кэш ещё не собран — выпуск вышел бы пустым. Подождём круга.
+        with _pub_lock:
+            if _pub["data"] is None:
+                return False
+        cur = open_db(DB)
+        hl = open_db(HL_DB)
+        try:
+            body = digest_build(cur, hl)
+        finally:
+            for c in (cur, hl):
+                if c:
+                    try:
+                        c.close()
+                    except Exception:
+                        pass
+        with _digest_lock:
+            con.execute("INSERT OR IGNORE INTO digests(day, made_at, body) VALUES(?,?,?)",
+                        (day, now(), json.dumps(body, ensure_ascii=False, separators=(",", ":"))))
+            # Старше тридцати выпусков — вместе с лайками и комментариями.
+            old = [r[0] for r in con.execute(
+                "SELECT id FROM digests ORDER BY day DESC LIMIT -1 OFFSET ?", (DIGEST_KEEP,))]
+            for did in old:
+                con.execute("DELETE FROM digest_likes WHERE digest_id=?", (did,))
+                con.execute("DELETE FROM digest_comments WHERE digest_id=?", (did,))
+                con.execute("DELETE FROM digests WHERE id=?", (did,))
+            con.commit()
+        sys.stderr.write(f"[api] digest {day} made\n")
+        return True
+    finally:
+        con.close()
+
+
+def digest_refresher() -> None:
+    """Раз в минуту: наступили новые сутки — собрать выпуск."""
+    time.sleep(90)  # дать общему кэшу и разлокам собраться после запуска
+    while True:
+        try:
+            digest_make()
+        except Exception as e:  # noqa: BLE001
+            sys.stderr.write(f"[api] digest failed: {e}\n")
+        time.sleep(60)
+
+
+def digest_list(chat: str, premium: bool) -> dict:
+    """Последние выпуски: содержимое, лайки, число комментариев, свой лайк."""
+    con = _digest_con()
+    if not con:
+        return {"ok": False, "error": "db"}
+    try:
+        rows = con.execute(
+            "SELECT d.id, d.day, d.made_at, d.body, "
+            "(SELECT COUNT(*) FROM digest_likes l WHERE l.digest_id=d.id) likes, "
+            "(SELECT COUNT(*) FROM digest_comments c WHERE c.digest_id=d.id) comments, "
+            "EXISTS(SELECT 1 FROM digest_likes l WHERE l.digest_id=d.id AND l.chat_id=?) liked "
+            "FROM digests d ORDER BY d.day DESC LIMIT ?", (chat or "", DIGEST_KEEP)).fetchall()
+        items = []
+        for r in rows:
+            try:
+                body = json.loads(r["body"])
+            except (TypeError, ValueError):
+                continue
+            if not premium:
+                for k in DIGEST_PREMIUM:
+                    if k in body:
+                        body[k] = {"locked": True}
+            items.append({"id": r["id"], "day": r["day"], "at": r["made_at"], **body,
+                          "likes": r["likes"], "comments": r["comments"], "liked": bool(r["liked"])})
+        muted = bool(chat) and bool(con.execute("SELECT 1 FROM digest_mute WHERE chat_id=?", (chat,)).fetchone())
+        return {"ok": True, "items": items, "muted": muted, "mod": bool(chat) and chat == OWNER_CHAT_ID}
+    finally:
+        con.close()
+
+
+def digest_comments(chat: str, did: int, before: int = 0) -> dict:
+    """Комментарии выпуска, новые снизу; страница — до `before` (id)."""
+    con = _digest_con()
+    if not con:
+        return {"ok": False, "error": "db"}
+    try:
+        q = ("SELECT id, chat_id, name, text, at FROM digest_comments WHERE digest_id=? "
+             + ("AND id<? " if before > 0 else "") + "ORDER BY id DESC LIMIT ?")
+        args = (did, before, DIGEST_COMMENTS_PAGE + 1) if before > 0 else (did, DIGEST_COMMENTS_PAGE + 1)
+        rows = con.execute(q, args).fetchall()
+        more = len(rows) > DIGEST_COMMENTS_PAGE
+        rows = rows[:DIGEST_COMMENTS_PAGE]
+        return {"ok": True, "more": more, "items": [
+            {"id": r["id"], "name": r["name"], "text": r["text"], "at": r["at"],
+             "mine": bool(chat) and r["chat_id"] == chat}
+            for r in reversed(rows)]}
+    finally:
+        con.close()
+
+
+def _dg_name(user: dict) -> str:
+    """Имя автора так, как его показывает Telegram. Без управляющих символов
+    и не длиннее сорока: имя — не место для второго комментария."""
+    name = " ".join(x for x in (user.get("first") or "", user.get("last") or "") if x).strip()
+    if not name and user.get("username"):
+        name = "@" + user["username"]
+    name = re.sub(r"[\x00-\x1f\x7f\u200b-\u200f\u202a-\u202e]", "", name)[:40].strip()
+    return name or f"User {str(user.get('id') or '')[-4:]}"
+
+
+def digest_act(user: dict, kind: str, body: dict) -> dict:
+    """Лайк, комментарий, удаление комментария. user — из подписи Telegram."""
+    chat = user.get("id") or ""
+    if not chat:
+        return {"ok": False, "error": "no_user"}
+    con = _digest_con()
+    if not con:
+        return {"ok": False, "error": "db"}
+    try:
+        with _digest_lock:
+            if kind == "like":
+                did = int(body.get("id") or 0)
+                if not con.execute("SELECT 1 FROM digests WHERE id=?", (did,)).fetchone():
+                    return {"ok": False, "error": "not_found"}
+                if con.execute("SELECT 1 FROM digest_likes WHERE digest_id=? AND chat_id=?", (did, chat)).fetchone():
+                    con.execute("DELETE FROM digest_likes WHERE digest_id=? AND chat_id=?", (did, chat))
+                    liked = False
+                else:
+                    con.execute("INSERT INTO digest_likes(digest_id, chat_id, at) VALUES(?,?,?)", (did, chat, now()))
+                    liked = True
+                con.commit()
+                n = con.execute("SELECT COUNT(*) FROM digest_likes WHERE digest_id=?", (did,)).fetchone()[0]
+                return {"ok": True, "liked": liked, "likes": n}
+            if kind == "comment":
+                did = int(body.get("id") or 0)
+                if not con.execute("SELECT 1 FROM digests WHERE id=?", (did,)).fetchone():
+                    return {"ok": False, "error": "not_found"}
+                if con.execute("SELECT 1 FROM digest_mute WHERE chat_id=?", (chat,)).fetchone():
+                    return {"ok": False, "error": "muted"}
+                text = str(body.get("text") or "")
+                text = re.sub(r"[\x00-\x08\x0b-\x1f\x7f\u202a-\u202e]", "", text)
+                text = re.sub(r"\n{3,}", "\n\n", text).strip()
+                if not text:
+                    return {"ok": False, "error": "empty"}
+                if len(text) > DIGEST_COMMENT_MAX:
+                    return {"ok": False, "error": "too_long", "max": DIGEST_COMMENT_MAX}
+                # Ссылки закрыты целиком: под рыночной сводкой они почти всегда
+                # ведут на «сигнальные каналы» и фальшивые раздачи.
+                if _LINK_RE.search(text):
+                    return {"ok": False, "error": "links"}
+                t = now()
+                last = con.execute("SELECT MAX(at) FROM digest_comments WHERE chat_id=?", (chat,)).fetchone()[0] or 0
+                if t - last < DIGEST_COMMENT_GAP_S:
+                    return {"ok": False, "error": "too_fast", "wait": DIGEST_COMMENT_GAP_S - (t - last)}
+                day_n = con.execute("SELECT COUNT(*) FROM digest_comments WHERE chat_id=? AND at>?",
+                                    (chat, t - 86400)).fetchone()[0]
+                if day_n >= DIGEST_COMMENT_DAY:
+                    return {"ok": False, "error": "day_limit", "max": DIGEST_COMMENT_DAY}
+                cid = con.execute(
+                    "INSERT INTO digest_comments(digest_id, chat_id, name, text, at) VALUES(?,?,?,?,?)",
+                    (did, chat, _dg_name(user), text, t)).lastrowid
+                con.commit()
+                return {"ok": True, "item": {"id": cid, "name": _dg_name(user), "text": text, "at": t, "mine": True}}
+            if kind == "uncomment":
+                cid = int(body.get("cid") or 0)
+                row = con.execute("SELECT chat_id FROM digest_comments WHERE id=?", (cid,)).fetchone()
+                if not row:
+                    return {"ok": False, "error": "not_found"}
+                mod = chat == OWNER_CHAT_ID
+                if row["chat_id"] != chat and not mod:
+                    return {"ok": False, "error": "forbidden"}
+                con.execute("DELETE FROM digest_comments WHERE id=?", (cid,))
+                # Владелец может заодно закрыть автору комментарии — за спам,
+                # скам и оскорбления, как сказано в условиях.
+                if mod and body.get("mute") and row["chat_id"] != chat:
+                    con.execute("INSERT OR IGNORE INTO digest_mute(chat_id, at) VALUES(?,?)", (row["chat_id"], now()))
+                con.commit()
+                return {"ok": True}
+        return {"ok": False, "error": "bad_kind"}
+    finally:
+        con.close()
 
 
 def mutate(chat: str, kind: str, body: dict) -> dict:
@@ -9144,7 +8822,9 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
                 "DELETE FROM deliveries WHERE chat_id=?",
                 "DELETE FROM premium_payments WHERE chat_id=?",
                 "DELETE FROM ton_invoices WHERE chat_id=?",
-                "DELETE FROM ai_access WHERE chat_id=?",
+                "DELETE FROM digest_likes WHERE chat_id=?",
+                "DELETE FROM digest_comments WHERE chat_id=?",
+                "DELETE FROM digest_mute WHERE chat_id=?",
                 "DELETE FROM users WHERE chat_id=?",
             ):
                 try:
@@ -9263,6 +8943,11 @@ class Handler(BaseHTTPRequestHandler):
         parsed = verify_init_data(init)
         return parsed["id"] if parsed else ""
 
+    def _user_full(self, qs: dict) -> dict:
+        """Пользователь из подписи целиком: id и имя для комментариев."""
+        init = self.headers.get("X-Telegram-Init-Data") or qs.get("init", [""])[0]
+        return verify_init_data(init) or {}
+
     def _keyed(self) -> bool:
         if not API_KEY:
             return True
@@ -9354,8 +9039,6 @@ class Handler(BaseHTTPRequestHandler):
                         "fund": pub.get("fund") or {},
                         "fundN": pub.get("fundN") or {},
                         "rotSum": pub.get("rotSum") or {},
-                        "cortex": pub.get("sonar") or {},
-                        "sonar": pub.get("sonar") or {},
                         "coins": pub.get("coins") or {},
                     }, False))
                 finally:
@@ -9549,6 +9232,19 @@ class Handler(BaseHTTPRequestHandler):
                     except Exception:
                         pass
                 return
+            if path in ("/digest", "/api/digest"):
+                chat = self._user(qs)
+                self._json(200, digest_list(chat, chat_premium(chat)))
+                return
+            if path in ("/digest/comments", "/api/digest/comments"):
+                try:
+                    did = int(qs.get("id", ["0"])[0])
+                    before = int(qs.get("before", ["0"])[0])
+                except (TypeError, ValueError):
+                    self._json(400, {"ok": False, "error": "bad_id"})
+                    return
+                self._json(200, digest_comments(self._user(qs), did, before))
+                return
             if path in ("/unlocks", "/api/unlocks"):
                 self._json(200, unlocks())
                 return
@@ -9629,6 +9325,14 @@ class Handler(BaseHTTPRequestHandler):
             body = self._body()
             if not chat:
                 self._json(401, {"ok": False, "error": "unauthorized"})
+                return
+            dg = {"/api/digest/like": "like", "/api/digest/comment": "comment",
+                  "/api/digest/uncomment": "uncomment"}.get(path)
+            if dg:
+                # Отказ (часто, ссылка, лимит) — тоже 200: приложению нужна
+                # причина, а на ошибочный код оно видит только «нет ответа».
+                res = digest_act(self._user_full(qs), dg, body)
+                self._json(200, res)
                 return
             if path in ("/api/pay/stars", "/api/pay/usdt", "/api/pay/check", "/api/pay/jetton"):
                 lang = (body.get("lang") or "en")[:5]

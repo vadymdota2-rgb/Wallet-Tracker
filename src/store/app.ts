@@ -9,17 +9,17 @@ import type { LangCode } from "../i18n/types";
 import type { CoinClass, FlowSide, RankKind, Venue } from "../lib/types";
 import type { Timeframe } from "../lib/klines";
 
-export type Tab = "wallets" | "top" | "analytics" | "cortex" | "more";
+export type Tab = "wallets" | "top" | "analytics" | "digest" | "more";
 
 export type ScreenName =
-  | "wallet" | "position" | "coin" | "signal" | "deals"
+  | "wallet" | "position" | "coin" | "deals"
   | "addWallet" | "threshold" | "lang" | "premium" | "help"
-  | "history" | "alerts" | "chart" | "unlocks" | "model" | "rename" | "spot"
+  | "alerts" | "chart" | "unlocks" | "rename" | "spot"
   | "legal";
 
 export interface Screen {
   name: ScreenName;
-  /** Что открыли: адрес кошелька, тикер, индекс сигнала. */
+  /** Что открыли: адрес кошелька, тикер. */
   arg?: string;
   /** Второй ключ — например индекс позиции внутри кошелька. */
   arg2?: string;
@@ -55,7 +55,6 @@ interface AppState {
   rankKind: RankKind;
   rankWin: RankWin;
 
-  cortexVenue: Venue;
   chartTf: Timeframe;
   /** Монета полноэкранного графика TradingView — последняя открытая. */
   tvSym: string;
@@ -80,7 +79,6 @@ interface AppState {
   setRankVenue(v: Venue): void;
   setRankKind(k: RankKind): void;
   setRankWin(w: RankWin): void;
-  setCortexVenue(v: Venue): void;
   setChartTf(tf: Timeframe): void;
   setTvSym(sym: string): void;
   setFundAmount(v: number): void;
@@ -107,7 +105,6 @@ export const useApp = create<AppState>()(
       rankKind: "pnl",
       rankWin: "30",
 
-      cortexVenue: "spot",
       chartTf: "1d",
       tvSym: "BTC",
       fundAmount: 0,
@@ -129,7 +126,6 @@ export const useApp = create<AppState>()(
       setRankVenue: (rankVenue) => set({ rankVenue }),
       setRankKind: (rankKind) => set({ rankKind }),
       setRankWin: (rankWin) => set({ rankWin }),
-      setCortexVenue: (cortexVenue) => set({ cortexVenue }),
       setChartTf: (chartTf) => set({ chartTf }),
       setTvSym: (tvSym) => set({ tvSym }),
       setFundAmount: (fundAmount) => set({ fundAmount: Math.max(0, fundAmount) }),
@@ -143,43 +139,21 @@ export const useApp = create<AppState>()(
          открывал приложение, она осталась в памяти. Считать за человека
          сумму, которой он не вводил, нельзя: переход на первую версию
          стирает её и оставляет поле пустым. */
-      /* Вторая версия — переименование Sonar в Cortex: поля звались
-         sonarVenue и sonarWin, вкладка — "sonar", и без переноса человек
-         открыл бы приложение на чужой вкладке. Третья убрала окно потока:
-         модель работает только на суточном.
-
-         Четвёртой версии больше нет: в ней вкладки делились на лонг и шорт,
-         а спот с перпами лежали вместе, и от этого отказались. Но у тех, кто
-         успел её открыть, в памяти осталось поле стороны и не осталось поля
-         площадки — без пятой версии список у них оказался бы пустым: фильтр
-         сравнивал бы площадку сигнала с «ничем». */
-      version: 5,
+      /* Шестая версия — Cortex убран, на его месте вкладка «Дайджест».
+         Поля Cortex (площадка, окно, сторона) и старого Sonar стираются, а
+         тех, кто закрыл приложение на вкладке сигналов, встречает дайджест. */
+      version: 6,
       migrate: (prev, from) => {
         let s = prev as Record<string, unknown>;
         if (from < 1) s = { ...s, fundAmount: 0, fundLev: 1 };
-        if (from < 2) {
-          const { sonarVenue, sonarWin, ...rest } = s as {
-            sonarVenue?: Venue; sonarWin?: number; [k: string]: unknown;
+        if (from < 6) {
+          const { sonarVenue, sonarWin, cortexVenue, cortexWin, cortexSide, ...rest } = s as {
+            sonarVenue?: unknown; sonarWin?: unknown; cortexVenue?: unknown;
+            cortexWin?: unknown; cortexSide?: unknown; [k: string]: unknown;
           };
-          void sonarWin;   // окно снято третьей версией, переносить нечего
-          s = { ...rest };
-          if (sonarVenue !== undefined) s.cortexVenue = sonarVenue;
-          if (s.tab === "sonar") s.tab = "cortex";
-        }
-        if (from < 3) {
-          // Окна 1ч/6ч сняты: модель их никогда не видела, и сохранённый
-          // выбор больше ни на что не влияет.
-          const { cortexWin, ...rest } = s as { cortexWin?: number; [k: string]: unknown };
-          void cortexWin;
+          void sonarVenue; void sonarWin; void cortexVenue; void cortexWin; void cortexSide;
           s = rest;
-        }
-        if (from < 5) {
-          /* Возврат к делению по площадке: у побывавших на четвёртой версии
-             лежит сторона и нет площадки, а без неё список пуст. */
-          const { cortexSide, ...rest } = s as { cortexSide?: string; [k: string]: unknown };
-          void cortexSide;
-          s = rest;
-          if (s.cortexVenue !== "spot" && s.cortexVenue !== "perp") s.cortexVenue = "spot";
+          if (s.tab === "sonar" || s.tab === "cortex") s.tab = "digest";
         }
         return s;
       },
@@ -197,7 +171,6 @@ export const useApp = create<AppState>()(
         rankVenue: s.rankVenue,
         rankKind: s.rankKind,
         rankWin: s.rankWin,
-        cortexVenue: s.cortexVenue,
         chartTf: s.chartTf,
         tvSym: s.tvSym,
         fundAmount: s.fundAmount,

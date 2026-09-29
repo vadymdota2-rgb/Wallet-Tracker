@@ -245,11 +245,7 @@
 .hero-val.up { color: var(--up); text-shadow: 0 0 24px rgb(61 220 151 / 0.3); }
 .hero-val.dn { color: var(--dn); text-shadow: 0 0 24px rgb(255 92 119 / 0.3); }
 .hero-note { color: var(--dim); font-size: 12px; }
-/* Второе число героя — доход с момента сигнала. Правее и мельче: прогноз
-   слева главнее, а это про то, что уже случилось. На 320 точках два числа
-   в 38 пунктов рядом не стоят. */
-.hero-side { margin-inline-start: auto; min-width: 0; display: grid; gap: 2px; justify-items: end; }
-.hero-side .hero-note { text-align: end; overflow-wrap: anywhere; }
+
 .hero-val.sm { font-size: 26px; letter-spacing: -0.02em; }
 
 .legend { display: flex; justify-content: space-between; font-size: 12px; }
@@ -354,7 +350,7 @@
 }
 /* Светится так же, как выбранная вкладка нижнего меню: это те же значки. */
 .perk-ic > .glyph { filter: drop-shadow(0 0 6px rgb(127 216 255 / 0.45)); }
-.perk-ic > .glyph-brain { opacity: 1; }
+
 .perk-ic .perk-tag { position: absolute; right: -4px; bottom: -2px; line-height: 0; }
 .row-main { flex: 1 1 auto; min-width: 0; display: grid; gap: 1px; }
 .row-title {
@@ -411,12 +407,7 @@
 .row-hit:active { opacity: 0.6; }
 .row-act { flex: 0 0 auto; display: inline-flex; margin-inline-start: 10px; }
 .row-after { flex: 0 0 auto; display: inline-flex; margin-inline-start: 10px; color: var(--dim-2); }
-/* Контракт монеты на карточке сигнала: адрес моноширинным, слово «копировать»
-   у края. Адрес — единственное, чем монета опознаётся однозначно, поэтому он
-   и стоит строкой, а не прячется за значком. */
-.sig-addr { margin-block-start: 8px; }
-.sig-addr .row-sub { font-size: 12px; letter-spacing: 0.02em; }
-.sig-addr .row-after { font-size: 11px; }
+
 /* Моноширинные цифры: в столбце сумм «$2,99M» и «$412K» иначе стоят
    вразнобой и колонка выглядит рваной. */
 .row-val {
@@ -1345,268 +1336,6 @@
   .meter-fill, .bar-fill { transition: none; }
 }
 
-/* ------------------------------------------------------------- оракул ---
-
-   Строка сигнала и полоса состояния модели. Обе — кнопки во всю ширину, и
-   обе читаются в три яруса: что, насколько, почему.                      */
-
-.sig {
-  display: flex; gap: 12px; align-items: flex-start; width: 100%;
-  padding: 12px; border: 0; border-radius: var(--r-md);
-  background: var(--panel-2); color: var(--ink); text-align: start;
-  transition: opacity 0.15s var(--ease);
-}
-.sig + .sig { margin-block-start: 8px; }
-.sig:active { opacity: 0.6; }
-.sig-ico { flex: 0 0 auto; display: grid; place-items: center; }
-.sig-main { flex: 1 1 auto; min-width: 0; display: grid; gap: 7px; }
-.sig-top { display: flex; align-items: baseline; gap: 8px; }
-.sig-sym {
-  /* Тикер уступает место последним: это главное слово строки. Он занимает
-     свою естественную ширину, но не больше сорока процентов строки — длинные
-     имена вроде «xyz:NVDA» иначе не оставили бы места ни на что. */
-  flex: 0 0 auto; max-width: 40%;
-  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: 17px; font-weight: 700; letter-spacing: 0.01em;
-}
-.sig-side {
-  flex: 0 0 auto; font-style: normal; font-size: 11px; font-weight: 600;
-  padding: 2px 7px; border-radius: 999px; background: var(--panel);
-  border: 1px solid var(--line);
-}
-.sig-side.up { color: var(--up); }
-.sig-side.dn { color: var(--dn); }
-/* Число уверенности — крупное и с пропорциональными цифрами: это главное,
-   что человек читает в строке. */
-.sig-conf {
-  /* Уступает при нехватке места: подпись «Chance auf Rückgang» длиннее, чем
-     «Chance auf Anstieg», и неразрывной колонкой она распирала карточку — на
-     320 точках страница становилась шире экрана и весь список съезжал. */
-  margin-inline-start: auto; flex: 1 1 auto; min-width: 0; font-style: normal;
-  font-size: 19px; font-weight: 700;
-}
-.sig-conf.up { color: var(--up); }
-.sig-conf.dn { color: var(--dn); }
-.sig-meter { display: block; }
-.sig-sub {
-  font-size: 12px; color: var(--dim);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-/* Возраст сигнала и его доход: по краям одной строки. Возраст слева, потому
-   что читается первым — «актуально ли это ещё»; доход справа, где в списках
-   и стоят числа. */
-.sig-foot {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
-  font-size: 11px;
-}
-.sig-foot i {
-  font-style: normal; color: var(--dim-2);
-  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.sig-foot b { flex: 0 0 auto; font-weight: 700; font-variant-numeric: tabular-nums; }
-.sig-foot b.up { color: var(--up); }
-.sig-foot b.dn { color: var(--dn); }
-
-.ora {
-  display: grid; gap: 8px; width: 100%; padding: 12px; border: 0;
-  border-radius: var(--r-md); background: var(--panel-2); color: var(--ink);
-  text-align: start; transition: opacity 0.15s var(--ease);
-}
-.ora:active { opacity: 0.6; }
-/* Заголовок и пояснение в столбик: «Модель работает» и «угадывает 61 раз из
-   100» рядом не влезают ни на один телефон и ломались на две строки каждый. */
-.ora-ttl { font-size: 15px; }
-
-/* Заголовок истории: предложение, а не подпись к числу. */
-.hist-head { font-size: 17px; font-weight: 600; line-height: 1.3; }
-
-/* Число уверенности с подписью под ним: «55%» и мелким «шанс роста». */
-.sig-conf { display: grid; justify-items: end; gap: 1px; line-height: 1.1; }
-.sig-conf i {
-  /* Переносится, а не обрезается и не распирает строку: два слова в две
-     строки читаются, обрезанное слово — нет. */
-  font-style: normal; font-size: 10px; font-weight: 500; color: var(--dim);
-  text-align: end; overflow-wrap: anywhere;
-}
-
-/* --------------------------------------------------------------- мозг ---
-
-   Присланный файл — одиночный кадр с расширением .gif: в нём одна картинка
-   и ни одного кадра анимации. Поэтому движение делается здесь, вокруг него,
-   и только теми свойствами, которые браузер считает на видеокарте
-   (transform и opacity): дёргаться на телефоне это не должно.
-
-   Всё медленное намеренно. Быстрое мелькание рядом со списком сигналов
-   перетягивает взгляд на себя, а смотреть человек пришёл на сигналы.      */
-.brain {
-  position: relative;
-  aspect-ratio: 16 / 9;
-  margin-block-end: 10px;
-  border-radius: var(--r-md);
-  overflow: hidden;
-  background: #01030a;
-  isolation: isolate;
-}
-/* Наплыв висит на обёртке, а не на картинке: вместе с ней обязан ехать слой
-   огней, иначе за сорок секунд огни уползут с жилок на пустоту. */
-.brain-live {
-  position: absolute; inset: 0;
-  animation: brain-drift 40s ease-in-out infinite alternate;
-  will-change: transform;
-}
-.brain-img {
-  display: block; width: 100%; height: 100%; object-fit: cover;
-}
-/* Огни синапсов. Своих линий не рисуют: «screen» складывает их свет с тем,
-   что под ними, и загорается настоящая жилка картинки. */
-.brain-fire {
-  position: absolute; inset: 0; width: 100%; height: 100%;
-  mix-blend-mode: screen; pointer-events: none;
-}
-/* Вспышка в узле: короткая, с длинной паузой — синапс, а не гирлянда. */
-.brain-node {
-  transform-box: fill-box; transform-origin: center;
-  animation-name: synapse; animation-timing-function: ease-in-out;
-  animation-iteration-count: infinite; opacity: 0;
-}
-@keyframes synapse {
-  0%, 100% { opacity: 0; transform: scale(0.4); }
-  12%      { opacity: 0.95; transform: scale(1); }
-  40%      { opacity: 0; transform: scale(0.5); }
-}
-@keyframes brain-drift {
-  from { transform: scale(1.04) translate3d(-1.1%, 0.7%, 0); }
-  to   { transform: scale(1.12) translate3d(1.1%, -0.9%, 0); }
-}
-/* Дыхание: свечение в середине то разгорается, то гаснет. */
-.brain::after {
-  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
-  background: radial-gradient(58% 54% at 50% 48%,
-              rgb(127 216 255 / 0.20), rgb(127 216 255 / 0) 70%);
-  animation: brain-pulse 11s ease-in-out infinite;
-}
-@keyframes brain-pulse {
-  0%, 100% { opacity: 0.3; }
-  50%      { opacity: 1; }
-}
-/* Луч, медленно проходящий поперёк: оракул смотрит. */
-.brain::before {
-  content: ""; position: absolute; inset: -25% -45%; z-index: 1; pointer-events: none;
-  background: linear-gradient(104deg,
-              rgb(160 230 255 / 0) 42%, rgb(160 230 255 / 0.10) 50%,
-              rgb(160 230 255 / 0) 58%);
-  animation: brain-scan 17s linear infinite;
-}
-@keyframes brain-scan {
-  from { transform: translate3d(-55%, 0, 0); }
-  to   { transform: translate3d(55%, 0, 0); }
-}
-
-/* Подписи лежат поверх свечения и луча. Тень под текстом — чтобы слово
-   читалось и там, где под ним оказалась яркая жилка. */
-.brain-tag {
-  position: absolute; z-index: 2;
-  font-size: 10px; font-weight: 600; letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--glow);
-  text-shadow: 0 0 6px rgb(1 3 10 / 0.95), 0 0 14px rgb(1 3 10 / 0.8);
-  /* Длинные имена переносятся, а не обрезаются: «открытый интерес» на 320
-     точках не влезает в строку, а обрезанное слово не читается вовсе.
-     Переноса по пробелам мало: немецкое «durchschnittliche Tradegröße» —
-     это одно слово в семнадцать букв, и оно вылезало за картинку целиком.
-     Такое слово рвём где придётся: разорванное читается, ушедшее за край
-     — нет. */
-  max-width: 46%; line-height: 1.3; overflow-wrap: anywhere;
-  /* Семь секунд на подпись: полторы на проявление, четыре на чтение,
-     полторы на угасание. Места сменяются по очереди, а не разом. */
-  animation: tag 7s ease-in-out both;
-}
-/* Каждое место — свой угол картинки. Проценты, а не пиксели: карточка
-   растягивается от 320 до планшета, и подписи обязаны ехать вместе с ней. */
-.brain-tag.s0 { left: 5%;  top: 16%; }
-.brain-tag.s1 { right: 5%; top: 27%; text-align: end; }
-.brain-tag.s2 { left: 7%;  bottom: 22%; }
-.brain-tag.s3 { right: 6%; bottom: 14%; text-align: end; }
-.brain-tag.s4 { left: 50%; top: 6%; transform: translateX(-50%); }
-@keyframes tag {
-  0%   { opacity: 0; filter: blur(3px); }
-  20%  { opacity: 1; filter: blur(0); }
-  80%  { opacity: 1; filter: blur(0); }
-  100% { opacity: 0; filter: blur(3px); }
-}
-/* Мигающий текст читать тяжело, а движущаяся картинка не всем безопасна:
-   по просьбе системы не движется ничего. */
-.brain-tag.still { animation: none; opacity: 0.85; }
-@media (prefers-reduced-motion: reduce) {
-  .brain-tag { animation: none; opacity: 0.85; }
-  .brain-live, .brain::before, .brain::after { animation: none; }
-  .brain-live { transform: scale(1.04); }
-  .brain-fire { display: none; }
-}
-
-/* Значок Cortex — картинка, а не линия, поэтому сам по себе не гаснет вместе
-   с цветом текста. Приглушаем прозрачностью, а на активной вкладке возвращаем
-   полную яркость: свечение ей добавит общее правило .tabs button.on span. */
-.glyph-brain { display: block; opacity: 0.55; transition: opacity 0.15s var(--ease); }
-.tabs button.on .glyph-brain { opacity: 1; }
-
-/* Список доводов формулы: не диаграмма, потому что величины у формулы нет. */
-.why-list { margin: 6px 0 0; padding-inline-start: 18px; }
-.why-list li { font-size: 13px; color: var(--ink); line-height: 1.5; }
-
-/* Условия приёмки модели: знак, условие, пояснение под ним. Знак стоит в
-   своей колонке, а не в потоке текста, — иначе вторая строка условия уезжает
-   под галочку и список перестаёт читаться столбиком. Пояснение переносится:
-   обрезанное многоточием, оно ничего не поясняет. */
-.gates { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 10px; }
-.gates li { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
-.gates li > i {
-  flex: 0 0 auto;
-  width: 16px;
-  font-style: normal;
-  font-size: 13px;
-  line-height: 1.45;
-  text-align: center;
-}
-.gates li.ok > i { color: var(--up); }
-.gates li.no > i { color: var(--dn); }
-/* Условие, которое ещё не проверяли: не провал и не победа. */
-.gates li.wait > i { color: var(--dim); }
-.gates li.wait b { color: var(--dim); }
-.gates li > span { min-width: 0; }
-.gates li b {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.45;
-  color: var(--ink);
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-.gates li em {
-  display: block;
-  margin-top: 2px;
-  font-style: normal;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--dim);
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-/* Площадка в переключателе: логотип и имя в одну строку. */
-.seg-venue { display: inline-flex; align-items: center; gap: 6px; }
-.seg-venue .venue { flex: 0 0 auto; border-radius: 50%; }
-
-/* Метка формулы вместо процента: без цвета стороны, чтобы не читалась как
-   число за или против. Это не прогноз, и выглядеть прогнозом она не должна. */
-.sig-conf.sig-formula {
-  color: var(--dim-2); font-weight: 600; font-size: 11px;
-  letter-spacing: .04em; text-transform: uppercase;
-}
-/* Шапка сигнала формулы: слова вместо процента, без цвета стороны. */
-.hero-val.hero-formula { color: var(--dim-2); font-size: 17px; line-height: 1.25; }
-
 /* История алертов --------------------------------------------------------- */
 /* Счётчик новых — красная таблетка: на строке меню и на вкладке «Ещё». */
 .count-badge {
@@ -1707,7 +1436,7 @@
 }
 .fold summary::-webkit-details-marker { display: none; }
 .fold-ic { flex: 0 0 auto; width: 28px; display: grid; place-items: center; color: var(--glow); }
-.fold-ic .glyph-brain { opacity: 1; }
+
 .fold-dots { font-size: 20px; line-height: 1; }
 .fold-main { flex: 1 1 auto; min-width: 0; display: grid; gap: 2px; }
 .fold-main b { color: var(--ink); font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
@@ -2076,3 +1805,141 @@
 .unl-curve-legend li { display: inline-flex; align-items: center; gap: 4px; }
 .unl-curve-legend i { width: 8px; height: 8px; border-radius: 2px; }
 .unl-curve-legend b { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* Дайджест ------------------------------------------------------------- */
+.dg { display: grid; gap: 12px; }
+.dg-lead { color: var(--dim); font-size: 13px; line-height: 1.45; margin: 0 2px; }
+.dg-card { gap: 12px; }
+.dg-card.fresh { border-color: rgb(58 130 214 / 0.55); }
+.dg-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "date chev" "win chev";
+  align-items: center;
+  gap: 2px 10px;
+  width: 100%;
+  text-align: start;
+}
+.dg-date { grid-area: date; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.dg-date b { font-size: 17px; font-weight: 700; color: var(--ink); }
+.dg-date em {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--glow);
+  border: 1px solid rgb(58 130 214 / 0.55);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+.dg-head small { grid-area: win; color: var(--dim); font-size: 12px; }
+.dg-chev { grid-area: chev; color: var(--dim); font-size: 14px; }
+
+.dg-sec { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid rgb(27 61 104 / 0.45); }
+.dg-sec-head { display: flex; align-items: center; gap: 8px; }
+.dg-sec-ic { display: grid; place-items: center; width: 22px; color: var(--glow); }
+.dg-sec-head h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--glow);
+  overflow-wrap: anywhere;
+}
+.dg-sub { margin: 4px 2px 0; font-size: 12px; color: var(--dim); }
+.dg-sum { margin: 0 2px; font-size: 13px; color: var(--dim); }
+.dg-sum b { font-size: 14px; }
+.dg-note { margin: 0 2px; font-size: 12px; color: var(--dim); }
+.dg-quiet { margin: 2px; font-size: 13px; color: var(--dim); }
+
+.dg-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.dg-pair > div { display: grid; gap: 6px; align-content: start; min-width: 0; }
+.dg-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 7px 9px;
+  border-radius: var(--r-md);
+  background: rgb(11 22 40 / 0.23);
+  border: 1px solid transparent;
+  text-align: start;
+}
+.dg-chip span { color: var(--ink); font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dg-chip em { margin-inline-start: auto; font-style: normal; font-size: 12px; font-variant-numeric: tabular-nums; }
+.dg-chip.up em { color: var(--up); }
+.dg-chip.dn em { color: var(--dn); }
+.dg-chip:active { opacity: 0.6; }
+
+.dg-locked {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: var(--r-md);
+  border: 1px dashed rgb(58 130 214 / 0.45);
+  background: rgb(11 22 40 / 0.23);
+  color: var(--dim);
+  font-size: 13px;
+  text-align: start;
+}
+.dg-locked b { margin-inline-start: auto; color: var(--glow); font-weight: 700; white-space: nowrap; }
+
+.dg-foot { display: flex; gap: 8px; padding-top: 10px; border-top: 1px solid rgb(27 61 104 / 0.45); }
+.dg-like, .dg-talk {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgb(27 61 104 / 0.55);
+  background: rgb(11 22 40 / 0.23);
+  color: var(--ink);
+  font-size: 14px;
+  transition: opacity 0.15s var(--ease);
+}
+.dg-like b, .dg-talk b { font-variant-numeric: tabular-nums; }
+.dg-talk small { color: var(--dim); font-size: 12px; }
+.dg-like.on { border-color: rgb(255 92 122 / 0.6); color: #ff6f8c; }
+.dg-talk.on { border-color: rgb(58 130 214 / 0.6); }
+.dg-like:active, .dg-talk:active { opacity: 0.6; }
+
+.dg-com { display: grid; gap: 10px; }
+.dg-com-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.dg-com-list li {
+  display: grid;
+  gap: 4px;
+  padding: 9px 11px;
+  border-radius: var(--r-md);
+  background: rgb(11 22 40 / 0.3);
+}
+.dg-com-list li.mine { background: rgb(22 52 92 / 0.35); }
+.dg-com-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.dg-com-head b { font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dg-com-head time { margin-inline-start: auto; color: var(--dim); font-size: 11px; white-space: nowrap; }
+.dg-com-list p { margin: 0; font-size: 14px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
+.dg-com-acts { display: flex; gap: 12px; }
+.dg-com-acts button { color: var(--dim); font-size: 12px; text-decoration: underline; text-underline-offset: 2px; }
+.dg-more { justify-self: center; color: var(--glow); font-size: 13px; padding: 4px 8px; }
+.dg-form { display: grid; gap: 8px; }
+.dg-form textarea {
+  width: 100%;
+  min-height: 64px;
+  resize: vertical;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  border: 1px solid rgb(27 61 104 / 0.55);
+  background: rgb(3 7 18 / 0.5);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.dg-form textarea:focus { outline: none; border-color: var(--glow); }
+.dg-form-foot { display: flex; align-items: center; gap: 10px; }
+.dg-form-foot small { flex: 1 1 auto; min-width: 0; color: var(--dim); font-size: 11px; line-height: 1.35; }
+.dg-form-foot .action { flex: 0 0 auto; width: auto; min-width: 0; padding-inline: 18px; }
+.dg-err { color: var(--dn); }

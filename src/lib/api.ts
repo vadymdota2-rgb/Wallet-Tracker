@@ -8,8 +8,8 @@
 import { initData } from "./telegram";
 import { peek, remember } from "./memo";
 import type {
-  Bootstrap, Deal, FlowRow, FundRow, LsRow, MutationResult, RotSide, SymbolRow, TokenHist, Trades, UnlocksReply,
-  WalletLive,
+  Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, FlowRow, FundRow, LsRow, MutationResult,
+  RotSide, SymbolRow, TokenHist, Trades, UnlocksReply, WalletLive,
 } from "./types";
 
 const TIMEOUT_MS = 15000;
@@ -257,3 +257,18 @@ export const peekUnlocks = () => peek<UnlocksReply | null>("/api/unlocks", UNLOC
 /** Язык хранится в той же строке users, что читает бот: выбор общий. */
 export const setLangRemote = (lang: string) =>
   call<MutationResult>("/api/lang", { method: "POST", body: { lang } });
+
+/* Дайджест. Выпуск выходит раз в сутки, поэтому список держится в памяти
+   пять минут; лайки и комментарии экран меняет у себя сразу, не дожидаясь
+   нового списка. */
+const DIGEST_TTL = 5 * 60_000;
+export const fetchDigest = () => cachedGet<DigestReply>("/api/digest", DIGEST_TTL);
+export const peekDigest = () => peek<DigestReply | null>("/api/digest", DIGEST_TTL);
+export const fetchDigestComments = (id: number, before = 0) =>
+  call<DigestCommentsReply>(`/api/digest/comments?id=${id}${before ? `&before=${before}` : ""}`);
+export const likeDigest = (id: number) =>
+  call<DigestActReply>("/api/digest/like", { method: "POST", body: { id } });
+export const commentDigest = (id: number, text: string) =>
+  call<DigestActReply>("/api/digest/comment", { method: "POST", body: { id, text } });
+export const uncommentDigest = (cid: number, mute = false) =>
+  call<DigestActReply>("/api/digest/uncomment", { method: "POST", body: { cid, mute } });
