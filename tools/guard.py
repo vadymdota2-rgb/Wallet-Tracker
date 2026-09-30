@@ -498,5 +498,8 @@ say("карта ликвидаций живая: сервер раз в две �
 say("на колонке «Накоплено» — перевес в процентах и деньги сверху и снизу",
     'className="lq-share up"' in _lq and 'className="lq-share dn"' in _lq and '"lq_share_s"' in _lq)
 
+say("модель ликвидаций: падение интереса закрывает позиции долей от всего интереса биржи",
+    "k = max(0.0, oi / prev)" in api and "k = max(0.0, 1 + d / total)" not in api)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
