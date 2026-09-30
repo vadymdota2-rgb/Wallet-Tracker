@@ -534,5 +534,10 @@ say("фандинг не пропадает: собирается первым, 
     and "function FundWaiting(" in _fs and "if (!have.length) return <FundWaiting />;" in _fs
     and "syncNow()" in _fs and '"fund_fail"' in _fs)
 
+_sy = read(f"{APP}/src/lib/sync.ts")
+say("фандинг после перезапуска: биржи опрашиваются разом, кэш пересобирается сразу, приложение переспрашивает по «fund:later»",
+    "pool.submit(fund_pull, ex)" in api and "wait(futs, timeout=25)" in api and "_fund_ready.set()" in api
+    and 'errors.append("fund:later")' in api and 'data.partial.includes("fund:later")' in _sy)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

@@ -7107,6 +7107,12 @@ def fund_pull(ex: str) -> None:
         _FUND[ex] = (time.monotonic(), rows)
 
 
+# Первый круг опроса бирж пройден. До этого в выгрузке есть только
+# Hyperliquid (он из своей базы), и приложение по метке «fund:later»
+# переспрашивает через пару секунд, а не через три минуты.
+_fund_ready = threading.Event()
+
+
 def fund_refresher() -> None:
     """Опрос бирж своим потоком, а не внутри сборки общего кэша.
 
@@ -7114,11 +7120,45 @@ def fund_refresher() -> None:
     на три чужих сервера, отнимались бы у того, что считается после, — у
     ротации и справочника монет. Здесь же ожидание никому не мешает: ставки
     меняются раз в час-восемь, и десятиминутный круг их не упускает.
+
+    Биржи опрашиваются разом, а не по очереди: одна зависшая больше не держит
+    остальные, и первый круг после перезапуска занимает секунды, а не минуту.
+    После первого круга общий кэш пересобирается сразу — иначе первые три
+    минуты после перезапуска в приложении была бы одна биржа.
     """
-    while True:
-        for ex in FUND_FETCH:
-            fund_pull(ex)
-        time.sleep(FUND_TTL)
+    with ThreadPoolExecutor(max_workers=6, thread_name_prefix="fund") as pool:
+        while True:
+            futs = [pool.submit(fund_pull, ex) for ex in FUND_FETCH]
+            # Зависшая биржа не держит остальных дольше 25 секунд: обычный
+            # опрос занимает одну-три, её ставки придут следующим кругом.
+            wait(futs, timeout=25)
+            if not _fund_ready.is_set():
+                # Идущая сборка могла начаться до ставок — ждём её конца и
+                # собираем свою. Метку снимаем, только когда ставки уже в
+                # кэше: до этого приложение пусть переспрашивает.
+                with _fund_lock:
+                    want = len(_FUND)
+                builds = 0
+                for _ in range(90):
+                    with _pub_lock:
+                        busy = _building
+                        have = len(((_pub["data"] or {}).get("fund")) or {})
+                    if want == 0 or have >= want or builds >= 3:
+                        break
+                    if not busy:
+                        builds += 1
+                        try:
+                            _bg_refresh()
+                        except Exception as e:  # noqa: BLE001
+                            sys.stderr.write(f"[api] фандинг, пересборка: {e}\n")
+                            break
+                        continue
+                    time.sleep(1.0)
+                with _boot_lock:
+                    for k, (_, d) in list(_BOOT.items()):
+                        _BOOT[k] = (0.0, d)
+                _fund_ready.set()
+            time.sleep(FUND_TTL)
 
 
 def fund_bybit() -> list:
@@ -8445,6 +8485,8 @@ def bootstrap(chat: str, fast: bool = False) -> dict:
                 "days": PREMIUM_DAYS,
             },
         }
+        if not _fund_ready.is_set():
+            errors.append("fund:later")
         if errors:
             out["partial"] = errors[:8]
         if pub.get("cachedAt"):

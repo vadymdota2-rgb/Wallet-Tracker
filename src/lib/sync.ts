@@ -38,7 +38,10 @@ async function pull(): Promise<boolean> {
   }
   live.apply(data);
   if (!signed) live.setStatus("anon");
-  soon = Array.isArray(data.partial) && data.partial.includes("coins:later");
+  /* Сервер собрал не всё: справочник монет или первый круг опроса бирж
+     фандинга ещё идут. Переспрашиваем через пару секунд. */
+  soon = Array.isArray(data.partial)
+    && (data.partial.includes("coins:later") || data.partial.includes("fund:later"));
   /* Главный экран уже нарисован из выгрузки — теперь в фоне подтягиваем всё,
      что раньше грузилось только по нажатию. Чуть позже, чтобы не спорить с
      первой отрисовкой за сеть. */
