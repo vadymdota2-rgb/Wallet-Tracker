@@ -9504,7 +9504,12 @@ def _dom_build() -> dict:
     t = DOM_START
     while t < end:
         t2 = min(end, t + 2000 * 86400)
-        for q in _dom_cmc(f"global-metrics/quotes/historical?format=chart&interval=1d&timeStart={t}&timeEnd={t2}").get("quotes") or []:
+        chunk = _dom_cmc(f"global-metrics/quotes/historical?format=chart&interval=1d&timeStart={t}&timeEnd={t2}").get("quotes") or []
+        # Не пришёл кусок — не рисуем вместо него ровную линию на годы:
+        # сборка не удалась, экран держит прошлый ответ.
+        if not chunk and t2 - t > 3 * 86400:
+            return {"ok": False, "error": "partial"}
+        for q in chunk:
             try:
                 tot = float(q["quote"][0]["totalMarketCap"])
                 bd = float(q["btcDominance"])
@@ -9516,6 +9521,9 @@ def _dom_build() -> dict:
     raw = {k: v for k, v in raw.items() if v[0] > 0 and 0 < v[1] < 100}
     if len(raw) < 1000:
         return {"ok": False, "error": "no_data"}
+    ks = sorted(raw)
+    if max(b - a for a, b in zip(ks, ks[1:])) > 7 * 86400:
+        return {"ok": False, "error": "gap"}
 
     cmc_stable = 0.0
     latest = _dom_cmc("global-metrics/quotes/latest")
@@ -9626,6 +9634,9 @@ def _dom_bg() -> None:
             _liq_busy.discard("dom")
 
 
+_dom_first = threading.Lock()
+
+
 def dom_data() -> dict:
     with _liq_lock:
         hit = _dom_cache.get("all")
@@ -9636,7 +9647,12 @@ def dom_data() -> dict:
             threading.Thread(target=_dom_bg, daemon=True).start()
     if hit:
         return hit[1]
-    return _dom_build()
+    # Холодный старт: десяток запросов к CoinMarketCap делает один поток,
+    # остальные ждут его ответа, а не шлют те же запросы параллельно.
+    with _dom_first:
+        with _liq_lock:
+            hit = _dom_cache.get("all")
+        return hit[1] if hit else _dom_build()
 
 
 # --- Дайджест ------------------------------------------------------------

@@ -72,6 +72,17 @@ function toDays(r: DomReply): Day[] {
   });
 }
 
+/** Когда собраны данные — по часам телефона. */
+function stamp(lang: Lang, at: number): string {
+  try {
+    return new Intl.DateTimeFormat(lang, {
+      day: "numeric", month: "long", hour: "2-digit", minute: "2-digit",
+    }).format(new Date(at * 1000));
+  } catch {
+    return new Date(at * 1000).toISOString().slice(0, 16).replace("T", " ");
+  }
+}
+
 const seasonOf = (v: number) => (v >= 75 ? 2 : v <= 25 ? 0 : 1);
 const SEASON = [
   { key: "dm_s_btc", c: C.btc },
@@ -404,17 +415,20 @@ function Top({ top, btc, lang }: { top: [string, string, number][]; btc: number;
   /* Бары — рост относительно биткоина, в логарифме: +5000% не должны
      сплющить остальных. Центр — сам биткоин. */
   const rel = (p: number) => Math.log((1 + p / 100) / (1 + btc / 100));
-  const span = Math.max(0.01, ...coins.map((c) => Math.abs(rel(c[2]))));
+  /* Длина — корень из доли от лучшей: одна монета с +5000% не сжимает
+     остальных в точку, а порядок полос всегда совпадает с порядком чисел. */
+  const span = useMemo(() => Math.max(0.01, ...coins.map((c) => Math.abs(rel(c[2])))), [coins, btc]);
   const shown = all ? coins : coins.slice(0, 10);
   return (
     <Card>
       <p className="dm-top-h">
-        {t(lang, "dm_top_n", { n: iso(num(beat)), m: iso(num(coins.length)) })}
+        {t(lang, "dm_top_n", { n: iso(num(beat)), m: iso(num(coins.length - beat)) })}
         <span> · BTC <bdi dir="ltr">{pct(btc, 1, true)}</bdi></span>
       </p>
       <div className="dm-top">
         {shown.map((c, i) => {
-          const r = rel(c[2]) / span;
+          const x = rel(c[2]) / span;
+          const r = Math.sign(x) * Math.sqrt(Math.abs(x));
           return (
             <div key={c[0] + i} className="dm-top-r">
               <span className="dm-top-rank">{i + 1}</span>
@@ -531,7 +545,9 @@ export function DominanceScreen() {
 
   const flow30 = last ? (() => {
     const p = back(30)!;
-    return { b: (last.btc / p.btc - 1) * 100, a: (last.alt / p.alt - 1) * 100, d: last.bd - p.bd };
+    /* Доля без стейблкоинов: иначе рост стейблов мог дать «доля упала,
+       хотя биткоин был сильнее альтов». */
+    return { b: (last.btc / p.btc - 1) * 100, a: (last.alt / p.alt - 1) * 100, d: last.xd - p.xd };
   })() : null;
 
   const cmp = (lbl: DictKey, p: Day | undefined) => {
@@ -577,6 +593,7 @@ export function DominanceScreen() {
                   );
                 })}
               </div>
+              <p className="fg-date">{stamp(lang, reply.at)}</p>
             </div>
           </Card>
 
@@ -594,6 +611,8 @@ export function DominanceScreen() {
               {cmp("dm_30d", back(30))}
               {cmp("dm_year", back(365))}
             </div>
+            <p className="lq-hint dm-exh">{t(lang, "dm_ex_hint")}</p>
+            <p className="dm-cap-t">{t(lang, "dm_split")}</p>
             <Split d={last} lang={lang} />
           </Card>
 
@@ -624,7 +643,9 @@ export function DominanceScreen() {
                       d: dateStr(lang, from.t, { day: "numeric", month: "long", year: "numeric" }),
                       a: iso(pct(from.xd, 1, false)), b: iso(pct(last.xd, 1, false)),
                     })}{" "}
-                    {t(lang, up ? "dm_say_flip_alt" : "dm_say_flip_btc", { l: iso(pct(lvl, 1, false)) })}
+                    {t(lang, up ? "dm_say_flip_alt" : "dm_say_flip_btc", {
+                      l: `${iso(pct(lvl, 1, false))} (${iso(pp(lang, lvl - last.xd))})`,
+                    })}
                   </p>
                 );
               })() : null}
@@ -693,6 +714,10 @@ export function DominanceScreen() {
                 { id: "all", label: t(lang, "fg_rall") },
               ]}
             />
+            <div className="fg-legend dm-lines">
+              <span><i style={{ background: C.btc }} />{t(lang, "dm_btc")}</span>
+              <span><i style={{ background: C.alt }} />{t(lang, "dm_alts_ex")}</span>
+            </div>
             <div className="fg-plot">
               <MainChart days={view} lang={lang} sel={sel} onSel={setSel} />
               {selDay ? (
@@ -702,15 +727,15 @@ export function DominanceScreen() {
                   <span><i style={{ background: C.alt }} />{t(lang, "dm_alts")} <bdi dir="ltr">{usdWord(selDay.alt)}</bdi></span>
                   {selDay.ed > 0 ? <span><i style={{ background: C.eth }} />ETH <bdi dir="ltr">{pct(selDay.ed, 1, false)}</bdi></span> : null}
                   {selDay.sd >= 0.05 ? <span><i style={{ background: C.st }} />{t(lang, "dm_st")} <bdi dir="ltr">{pct(selDay.sd, 1, false)}</bdi></span> : null}
-                  <em>{t(lang, "dm_ex")} <bdi dir="ltr">{pct(selDay.xd, 1, false)}</bdi></em>
+                  <em>BTC · {t(lang, "dm_ex")} <bdi dir="ltr">{pct(selDay.xd, 1, false)}</bdi></em>
                 </div>
               ) : null}
             </div>
             <div className="fg-legend">
               <span><i style={{ background: C.btc }} />{t(lang, "dm_btc")}</span>
-              <span><i style={{ background: C.alt }} />{t(lang, "dm_alts")}</span>
               <span><i style={{ background: C.eth }} />{t(lang, "dm_eth")}</span>
               <span><i style={{ background: C.st }} />{t(lang, "dm_st")}</span>
+              <span><i style={{ background: C.alt }} />{t(lang, "dm_other")}</span>
             </div>
             <p className="lq-hint">{t(lang, "dm_chart_hint")} {t(lang, "fg_hint")}</p>
           </Card>
