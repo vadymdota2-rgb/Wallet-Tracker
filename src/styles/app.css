@@ -2572,8 +2572,14 @@
 .dm-ch b.up { color: var(--up); }
 .dm-ch b.dn { color: var(--dn); }
 .dm-split { height: 14px; }
-.dm-total { color: var(--dim); }
-.dm-total b { color: var(--ink); }
+.dm-cap { display: grid; justify-items: center; gap: 2px; text-align: center; }
+.dm-cap > small { color: var(--dim); font-size: 12.5px; }
+.dm-cap > b { font-size: 32px; line-height: 1.1; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+.dm-cap-ch { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; margin-top: 6px; font-size: 12px; color: var(--dim); }
+.dm-cap-ch span { white-space: nowrap; }
+.dm-cap-ch em { font-style: normal; font-weight: 700; font-variant-numeric: tabular-nums; }
+.dm-cap-ch em.up { color: var(--up); }
+.dm-cap-ch em.dn { color: var(--dn); }
 .dm-say { display: grid; gap: 8px; }
 .dm-say p { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--ink); }
 .dm-say p + p { padding-top: 8px; border-top: 1px solid rgb(27 61 104 / 0.35); }

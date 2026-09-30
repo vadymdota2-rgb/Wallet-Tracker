@@ -374,10 +374,6 @@ function Split({ d, lang }: { d: Day; lang: Lang }) {
             <b><bdi dir="ltr">{pct((p.v / d.tot) * 100, 1, false)}</bdi><small> · {usdWord(p.v)}</small></b>
           </div>
         ))}
-        <div className="fg-row two dm-total">
-          <span>{t(lang, "dm_total")}</span>
-          <b>{usdWord(d.tot)}</b>
-        </div>
       </div>
     </>
   );
@@ -569,6 +565,21 @@ export function DominanceScreen() {
         ) : <Card><Skeleton rows={8} /></Card>
       ) : !last ? null : (
         <>
+          <Card>
+            <div className="dm-cap">
+              <small>{t(lang, "dm_total")}</small>
+              <b><bdi dir="ltr">{usdWord(last.tot)}</bdi></b>
+              <div className="dm-cap-ch">
+                {([["dm_24h", 1], ["dm_7d", 7], ["dm_30d", 30], ["dm_year", 365]] as const).map(([k, n]) => {
+                  const ch = (last.tot / back(n)!.tot - 1) * 100;
+                  return (
+                    <span key={k}>{t(lang, k)} <em className={ch >= 0 ? "up" : "dn"}><bdi dir="ltr">{pct(ch, 1, true)}</bdi></em></span>
+                  );
+                })}
+              </div>
+            </div>
+          </Card>
+
           <Card>
             <div className="dm-hero">
               <small>{t(lang, "dm_dom")}</small>
