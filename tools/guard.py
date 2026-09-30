@@ -514,5 +514,10 @@ say("страх и жадность: вся история alternative.me с ц�
 say("страх и жадность: сколько подряд держится каждая зона, рекорд, куда уходит дальше, текущая полоса",
     "function streakStats(" in _fg and '"fg_st_now"' in _fg and '"fg_st_next"' in _fg)
 
+_fi = read(f"{APP}/src/screens/FearGreedInsights.tsx")
+say("страх и жадность: «что скрыто в данных» — край не разворот, цена после зон, покупки каждый день, похожие дни, оговорка",
+    all(f"function {f}(" in _fi for f in ("afterEntry", "forward", "dca", "analogs", "divergence"))
+    and '"fi_caveat"' in _fi and "<FearGreedInsights" in _fg)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

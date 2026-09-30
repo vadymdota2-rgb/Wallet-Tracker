@@ -26,6 +26,7 @@ import { fetchFng, peekFng } from "../lib/api";
 import { Card, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import type { FngReply } from "../lib/types";
 import { Frame } from "./Screen";
+import { FearGreedInsights } from "./FearGreedInsights";
 
 type Lang = Parameters<typeof t>[0];
 type Day = [number, number, number];
@@ -529,6 +530,8 @@ export function FearGreedScreen() {
             })}
             <p className="lq-hint">{t(lang, "fg_st_note")}</p>
           </Card>
+
+          <FearGreedInsights lang={lang} days={all} />
 
           <details className="lq-how">
             <summary>{t(lang, "fg_how")}</summary>
