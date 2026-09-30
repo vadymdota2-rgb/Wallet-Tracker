@@ -2530,6 +2530,10 @@
 .fi-dca-bar { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: rgb(58 130 214 / 0.12); direction: ltr; }
 .fi-dca-bar i { display: block; height: 100%; border-radius: 3px; background: var(--glow); }
 .fi-dca-r > small { grid-column: 1 / -1; color: var(--dim); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+/* Крупные числа — всегда слева направо: в арабском «+2%» и «×5.16» иначе
+   переворачивались в «2%+» и «5.16×». */
+.fi-fwd-r > b, .fi-dca-r > b, .fi-tiles b, .fg-cmp-c b, .fg-val, .fg-pop b, .fg-pop em { unicode-bidi: isolate; direction: ltr; }
+[dir="rtl"] .fi-fwd-r > b { text-align: left; }
 .fi-caveat {
   margin: 4px 2px 14px;
   padding: 10px 12px;

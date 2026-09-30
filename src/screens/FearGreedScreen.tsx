@@ -42,6 +42,8 @@ const ZONES = [
 const zoneOf = (v: number) => ZONES.findIndex((z) => v <= z.max);
 const colorOf = (v: number) => ZONES[Math.max(0, zoneOf(v))]?.c ?? "#888";
 const RANGE_KEY = "wt-fg-range";
+/** Число внутри фразы — слева направо и в арабском (см. FearGreedInsights). */
+const iso = (x: string | number) => `\u2066${x}\u2069`;
 
 function dateStr(lang: Lang, ts: number, opts: Intl.DateTimeFormatOptions): string {
   try {
@@ -236,7 +238,7 @@ function Chart({ days, lang, sel, onSel }: {
           <text x={W - 2} y={yIx(v) + 3.5} textAnchor="end" className="fg-tick">{v}</text>
         </g>
       ))}
-      <text x={4} y={P1.y + 11} className="fg-ptl">{t(lang, "fg_price")}{log ? " · log" : ""}</text>
+      <text x={4} y={P1.y + 11} className="fg-ptl">{t(lang, "fg_price")}{log ? ` · ${t(lang, "fg_log")}` : ""}</text>
       <text x={4} y={P2.y + 11} className="fg-ptl">{t(lang, "fg_index")}</text>
 
       {priceRuns.map((r, i) => <polyline key={`p${i}`} points={r.pts} stroke={r.c} className="fg-line" />)}
@@ -452,7 +454,7 @@ export function FearGreedScreen() {
                   {selDay[2] > 0 ? <span>BTC {px(selDay[2])}</span> : null}
                   {selDay[2] > 0 && last && selDay[0] < last[0] ? (() => {
                     const ch = (last[2] / selDay[2] - 1) * 100;
-                    return <em className={ch >= 0 ? "up" : "dn"}>{t(lang, "fg_since_then", { p: pct(ch, 0, true) })}</em>;
+                    return <em className={ch >= 0 ? "up" : "dn"}>{t(lang, "fg_since_then", { p: iso(pct(ch, 0, true)) })}</em>;
                   })() : null}
                 </div>
               ) : null}
@@ -476,8 +478,8 @@ export function FearGreedScreen() {
               {ZONES.map((z, i) => (
                 <div key={z.key} className="fg-row two">
                   <span><i style={{ background: z.c }} />{t(lang, z.key)}</span>
-                  <b>{!stats.total ? "—" : stats.cnt[i]! > 0 && stats.cnt[i]! / stats.total < 0.01 ? "<1%"
-                    : pct((stats.cnt[i]! / stats.total) * 100, 0, false)}
+                  <b><bdi dir="ltr">{!stats.total ? "—" : stats.cnt[i]! > 0 && stats.cnt[i]! / stats.total < 0.01 ? "<1%"
+                    : pct((stats.cnt[i]! / stats.total) * 100, 0, false)}</bdi>
                     <small> · {t(lang, "fg_days", { n: num(stats.cnt[i]) })}</small></b>
                 </div>
               ))}
@@ -504,7 +506,7 @@ export function FearGreedScreen() {
                   {left ? (
                     <small className="fg-left">
                       {t(lang, "fg_st_left", {
-                        n: num(left.n), l: daysStr(cur.len), r: daysStr(left.med), p: pct(left.week * 100, 0, false),
+                        n: iso(num(left.n)), l: daysStr(cur.len), r: daysStr(left.med), p: iso(pct(left.week * 100, 0, false)),
                       })}
                     </small>
                   ) : null}
@@ -532,7 +534,7 @@ export function FearGreedScreen() {
                     {nz ? (
                       <>
                         {" · "}{t(lang, "fg_st_next")} <i style={{ background: nz.c }} />
-                        <em style={{ color: nz.c }}>{t(lang, nz.key)}</em> {pct((st.next[best]! / tot) * 100, 0, false)}
+                        <em style={{ color: nz.c }}>{t(lang, nz.key)}</em> <bdi dir="ltr">{pct((st.next[best]! / tot) * 100, 0, false)}</bdi>
                       </>
                     ) : null}
                   </p>

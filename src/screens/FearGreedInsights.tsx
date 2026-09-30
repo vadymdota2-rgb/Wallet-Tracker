@@ -28,6 +28,10 @@ const ZC = ["#ea3943", "#f5841f", "#f3d42f", "#93d900", "#16c784"];
 const ZK = ["fg_z0", "fg_z1", "fg_z2", "fg_z3", "fg_z4"] as const;
 const zone = (v: number) => (v <= 25 ? 0 : v <= 46 ? 1 : v <= 54 ? 2 : v <= 75 ? 3 : 4);
 
+/** Число внутри фразы — отдельным слева-направо фрагментом: в арабском
+ *  «$163.4K» иначе превращалось в «163.4K$», а «52%» — в «%52». */
+const iso = (x: string | number) => `\u2066${x}\u2069`;
+
 function median(a: number[]): number {
   if (!a.length) return 0;
   const s = [...a].sort((x, y) => x - y);
@@ -183,7 +187,7 @@ export function FearGreedInsights({ lang, days }: { lang: Lang; days: Day[] }) {
 
       {div ? (
         <div className={`fi-div ${div.kind}`}>
-          {t(lang, div.kind === "hi" ? "fi_div_hi" : "fi_div_lo", { n: num(div.n), m: pct(div.med * 100, 1, true) })}
+          {t(lang, div.kind === "hi" ? "fi_div_hi" : "fi_div_lo", { n: iso(num(div.n)), m: iso(pct(div.med * 100, 1, true)) })}
         </div>
       ) : null}
 
@@ -198,7 +202,7 @@ export function FearGreedInsights({ lang, days }: { lang: Lang; days: Day[] }) {
                 <div><b>{t(lang, "fg_days", { n: num(s.days) })}</b><small>{t(lang, whenKey)}</small></div>
                 <div><b>{num(s.n)}</b><small>{t(lang, "fi_t_times")}</small></div>
               </div>
-              {z === 0 ? <p className="fi-note">{t(lang, "fi_ef_safe", { p: pct(s.calm * 100, 0, false) })}</p> : null}
+              {z === 0 ? <p className="fi-note">{t(lang, "fi_ef_safe", { p: iso(pct(s.calm * 100, 0, false)) })}</p> : null}
             </div>
           ),
         )}
@@ -226,7 +230,7 @@ export function FearGreedInsights({ lang, days }: { lang: Lang; days: Day[] }) {
                   style={{ width: `${(Math.abs(f.med) / fwdMax) * 50}%`, [f.med >= 0 ? "left" : "right"]: "50%" }} />
               </div>
               <b className={f.med >= 0 ? "up" : "dn"}>{f.n ? pct(f.med * 100, 0, true) : "—"}</b>
-              <small>{f.n ? t(lang, "fi_up", { p: pct(f.up * 100, 0, false) }) : ""}</small>
+              <small>{f.n ? t(lang, "fi_up", { p: iso(pct(f.up * 100, 0, false)) }) : ""}</small>
             </div>
           ))}
         </div>
@@ -253,7 +257,7 @@ export function FearGreedInsights({ lang, days }: { lang: Lang; days: Day[] }) {
                 <span>{t(lang, p.k)}</span>
                 <b className={x >= 1 ? "up" : "dn"}>×{num(x, 2)}</b>
                 <div className="fi-dca-bar"><i style={{ width: `${(x / bestX) * 100}%` }} /></div>
-                <small>{t(lang, "fi_dca_line", { inv: usd(p.inv), val: usd(p.val) })}</small>
+                <small>{t(lang, "fi_dca_line", { inv: iso(usd(p.inv)), val: iso(usd(p.val)) })}</small>
               </div>
             );
           })}
@@ -268,17 +272,17 @@ export function FearGreedInsights({ lang, days }: { lang: Lang; days: Day[] }) {
           <>
             <p className="fi-text">
               {t(lang, "fi_sim_d", {
-                v: sim.v,
-                c: `${sim.c >= 0 ? "+" : "−"}${Math.abs(sim.c)}`,
+                v: iso(sim.v),
+                c: iso(`${sim.c >= 0 ? "+" : "−"}${Math.abs(sim.c)}`),
                 dir: t(lang, sim.up ? "fi_dir_up" : "fi_dir_dn"),
-                n: num(sim.n),
+                n: iso(num(sim.n)),
               })}
             </p>
             <div className="fi-tiles">
               <div><b className={sim.med30 >= 0 ? "up" : "dn"}>{pct(sim.med30 * 100, 1, true)}</b>
-                <small>{t(lang, "fi_sim_30", { p: pct(sim.up30 * 100, 0, false) })}</small></div>
+                <small>{t(lang, "fi_sim_30", { p: iso(pct(sim.up30 * 100, 0, false)) })}</small></div>
               <div><b className={sim.med90 >= 0 ? "up" : "dn"}>{pct(sim.med90 * 100, 1, true)}</b>
-                <small>{t(lang, "fi_sim_90", { p: pct(sim.up90 * 100, 0, false) })}</small></div>
+                <small>{t(lang, "fi_sim_90", { p: iso(pct(sim.up90 * 100, 0, false)) })}</small></div>
             </div>
           </>
         ) : (
