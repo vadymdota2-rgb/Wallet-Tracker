@@ -45,7 +45,7 @@ const RANGE_KEY = "wt-fg-range";
 /** Число внутри фразы — слева направо и в арабском (см. FearGreedInsights). */
 const iso = (x: string | number) => `\u2066${x}\u2069`;
 
-function dateStr(lang: Lang, ts: number, opts: Intl.DateTimeFormatOptions): string {
+export function dateStr(lang: Lang, ts: number, opts: Intl.DateTimeFormatOptions): string {
   try {
     return new Intl.DateTimeFormat(lang, { timeZone: "UTC", ...opts }).format(new Date(ts * 1000));
   } catch {
@@ -110,7 +110,7 @@ function priceTicks(lo: number, hi: number, log: boolean): number[] {
   return out;
 }
 
-function timeTicks(lang: Lang, a: number, b: number): { t: number; label: string }[] {
+export function timeTicks(lang: Lang, a: number, b: number): { t: number; label: string }[] {
   const span = (b - a) / 86400;
   const out: { t: number; label: string }[] = [];
   const d0 = new Date(a * 1000);

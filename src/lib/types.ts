@@ -658,6 +658,33 @@ export interface FngReply {
   at: number;
 }
 
+/** Индекс альтсезона на день: [значение 0–100, начало суток UTC]. */
+export type AltPoint = [number, number];
+
+/**
+ * Доминация и альтсезон. Дни идут подряд от t0: [капитализация рынка $ млн,
+ * доля BTC %, доля ETH %, стейблкоины $ млн, ETH/BTC (0 — ещё нет)].
+ */
+export interface DomReply {
+  ok: boolean;
+  error?: string;
+  t0: number;
+  rows: [number, number, number, number, number][];
+  alt: {
+    /** [начало суток UTC, индекс] с марта 2024. */
+    pts?: [number, number][];
+    now?: AltPoint | null;
+    d1?: AltPoint | null;
+    d7?: AltPoint | null;
+    d30?: AltPoint | null;
+    hi?: AltPoint | null;
+    lo?: AltPoint | null;
+    /** 100 крупнейших монет без стейблкоинов: [тикер, имя, рост за 90 дней %]. */
+    top?: [string, string, number][];
+  };
+  at: number;
+}
+
 /** Монета, по которой строится карта ликвидаций. */
 export interface LiqCoin {
   s: string;

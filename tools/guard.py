@@ -251,9 +251,9 @@ say("помощь не обещает неделю за /start", all("/start" no
 _m0 = appx.index("= [", appx.index("const MENU:"))
 menu = appx[_m0:appx.index("];", _m0)]
 say("в боковом меню пять пунктов: график, разлоки, карта ликвидаций, фандинг, страх и жадность",
-    menu.count("name:") == 5
+    menu.count("name:") == 6
     and menu.index('name: "chart"') < menu.index('name: "unlocks"') < menu.index('name: "liqmap"')
-    < menu.index('name: "funding"') < menu.index('name: "fng"'))
+    < menu.index('name: "funding"') < menu.index('name: "fng"') < menu.index('name: "dom"'))
 tv = read(f"{APP}/src/lib/tradingview.ts")
 chart_scr = read(f"{APP}/src/screens/ChartScreen.tsx")
 say("график — официальный код виджета TradingView со сменой монеты",
@@ -519,6 +519,13 @@ say("страх и жадность: «что скрыто в данных» —
     all(f"function {f}(" in _fi for f in ("afterEntry", "forward", "dca", "analogs", "divergence"))
     and "const FRESH = 7;" in _fi and "for t in range(start, max(idx) + 1, 86400):" in api
     and '"fi_caveat"' in _fi and "<FearGreedInsights" in _fg)
+
+_dm = read(f"{APP}/src/screens/DominanceScreen.tsx")
+say("доминация и альтсезон: история рынка с 2013, стейблкоины отдельно, индекс альтсезона, волны, ETH/BTC",
+    "def dom_data(" in api and '"/api/dom"' in api and "global-metrics/quotes/historical" in api
+    and "altcoin-season/chart" in api and "stablecoins.llama.fi" in api and "symbol=ETHBTC" in api
+    and "dom_data()  # и доминация" in api and "function waves(" in _dm and "function MainChart(" in _dm
+    and '"dm_say_flip_alt"' in _dm and '"dm_top_note"' in _dm and "glyph: <DomGlyph />" in appx)
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

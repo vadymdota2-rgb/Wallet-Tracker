@@ -9,7 +9,7 @@ import { initData } from "./telegram";
 import { forget, peek, remember } from "./memo";
 import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
-  LiqCoinsReply, FngReply, FundRow, LsRow, MutationResult,
+  LiqCoinsReply, FngReply, DomReply, FundRow, LsRow, MutationResult,
   RotSide, SymbolRow, TokenHist, Trades, UnlocksReply, WalletLive,
 } from "./types";
 
@@ -355,6 +355,20 @@ export const fetchFng = () =>
     return r;
   });
 export const peekFng = () => peek<FngReply | null>("/api/fng", 30 * 60_000) ?? savedFng();
+
+/* Доминация и альтсезон: данные меняются за часы, ответ живёт час и лежит
+   на устройстве, как страх и жадность. */
+const DOM_SAVED = "wt-dom-v1";
+export function savedDom(): DomReply | null {
+  const hit = readSaved<DomReply>(DOM_SAVED).all;
+  return hit && hit.v?.rows?.length ? hit.v : null;
+}
+export const fetchDom = () =>
+  remember<DomReply | null>("/api/dom", 60 * 60_000, () => callTwice<DomReply>("/api/dom"), good).then((r) => {
+    if (r?.ok && r.rows.length) writeSaved(DOM_SAVED, { all: { at: Date.now(), v: r } });
+    return r;
+  });
+export const peekDom = () => peek<DomReply | null>("/api/dom", 60 * 60_000) ?? savedDom();
 
 /** Все монеты с фьючерсами — список раз в час; последний лежит на устройстве. */
 export function savedLiqCoins(): LiqCoinsReply | null {

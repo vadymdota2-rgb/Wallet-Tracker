@@ -16,7 +16,7 @@ import { bootTelegram, haptic, initData, telegramLang, waitForTelegram, webApp }
 import { startSync, syncNow } from "./lib/sync";
 import { Toaster, toast } from "./components/Toast";
 import { Background } from "./components/Background";
-import { AnalyticsGlyph, ChartGlyph, DigestGlyph, FundLineGlyph, GaugeGlyph, LiqGlyph, UnlockGlyph, TopGlyph, WalletGlyph } from "./components/ui";
+import { AnalyticsGlyph, ChartGlyph, DigestGlyph, DomGlyph, FundLineGlyph, GaugeGlyph, LiqGlyph, UnlockGlyph, TopGlyph, WalletGlyph } from "./components/ui";
 import { SCREENS } from "./screens/registry";
 import { WalletsTab } from "./screens/WalletsTab";
 import { TopTab } from "./screens/TopTab";
@@ -53,13 +53,14 @@ const SCREEN_TITLE: Record<ScreenName, DictKey> = {
   liqmap: "lq_title",
   funding: "ui_tab_funding",
   fng: "fg_title",
+  dom: "dm_title",
   deals: "ui_deals",
   spot: "ui_spot_open",
   legal: "ui_legal",
 };
 
-/* Боковое меню — рыночные инструменты: график, разлоки, карта ликвидаций и
-   фандинг. Порог, премиум,
+/* Боковое меню — рыночные инструменты: график, разлоки, карта ликвидаций,
+   фандинг, страх и жадность, доминация с альтсезоном. Порог, премиум,
    язык и помощь живут во вкладке «Ещё»; повторять их здесь значило держать
    две дороги к одному. */
 const MENU: { name: ScreenName; key: DictKey; glyph: ReactNode }[] = [
@@ -68,6 +69,7 @@ const MENU: { name: ScreenName; key: DictKey; glyph: ReactNode }[] = [
   { name: "liqmap", key: "lq_title", glyph: <LiqGlyph /> },
   { name: "funding", key: "ui_tab_funding", glyph: <FundLineGlyph /> },
   { name: "fng", key: "fg_title", glyph: <GaugeGlyph /> },
+  { name: "dom", key: "dm_title", glyph: <DomGlyph /> },
 ];
 
 function TabBody({ tab }: { tab: Tab }) {

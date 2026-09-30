@@ -20,6 +20,7 @@ import { UnlocksScreen } from "./UnlocksScreen";
 import { LiqMapScreen } from "./LiqMapScreen";
 import { FundingScreen } from "./FundingScreen";
 import { FearGreedScreen } from "./FearGreedScreen";
+import { DominanceScreen } from "./DominanceScreen";
 
 export const SCREENS: Record<ScreenName, ComponentType<ScreenProps>> = {
   wallet: WalletScreen,
@@ -40,4 +41,5 @@ export const SCREENS: Record<ScreenName, ComponentType<ScreenProps>> = {
   liqmap: LiqMapScreen,
   funding: FundingScreen,
   fng: FearGreedScreen,
+  dom: DominanceScreen,
 };
