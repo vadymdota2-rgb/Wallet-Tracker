@@ -344,7 +344,7 @@ export const vi: Dict = {
   lq_how: "Cách đọc bản đồ",
   lq_how_1: "Mỗi thanh là số tiền bị thanh lý nếu giá chạm mức đó. Thanh càng dài, càng nhiều.",
   lq_how_2: "Phía trên đường giá là short: bị thanh lý nếu giá tăng. Phía dưới là long: bị thanh lý nếu giá giảm.",
-  lq_how_3: "Màu là đòn bẩy: xanh lam nhạt 10×, tím 25×, vàng 50×, hồng 100×. Thanh nhạt là mức nhỏ; thanh sáng, phát sáng là cụm lớn.",
+  lq_how_3: "Màu là đòn bẩy, như trên Coinglass: tím 10×, xanh lam 25×, vàng 50×, cam 100×. Thanh nhạt là mức nhỏ; thanh sáng, phát sáng là cụm lớn.",
   lq_how_4: "Cột «Cộng dồn» bên phải cho biết tổng số bị thanh lý trên đường từ giá hiện tại đến mức đó.",
   lq_how_5: "Các cụm lớn thường như nam châm: giá bị kéo về phía chúng và thanh lý làm biến động nhanh hơn. Đây là xu hướng, không phải cam kết.",
   lq_how_6: "Bên trái là biểu đồ giá trong kỳ đã chọn trên cùng thang: thấy giá đến từ đâu và các vị thế sau những mức này được mở ở đâu.",

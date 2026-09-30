@@ -344,7 +344,7 @@ export const pl: Dict = {
   lq_how: "Jak czytać mapę",
   lq_how_1: "Każdy pasek to kwota likwidacji, jeśli cena dojdzie do tego poziomu. Im dłuższy, tym więcej.",
   lq_how_2: "Nad linią ceny są shorty: spłoną, jeśli cena wzrośnie. Pod nią longi: spłoną, jeśli spadnie.",
-  lq_how_3: "Kolor to dźwignia: błękitny 10×, fioletowy 25×, bursztynowy 50×, różowy 100×. Blade paski to małe poziomy, jasne i świecące — duże skupiska.",
+  lq_how_3: "Kolor to dźwignia, jak na Coinglass: fioletowy 10×, niebieski 25×, żółty 50×, pomarańczowy 100×. Blade paski to małe poziomy, jasne i świecące — duże skupiska.",
   lq_how_4: "Kolumna «Suma» po prawej pokazuje, ile łącznie spłonie po drodze od obecnej ceny do tego poziomu.",
   lq_how_5: "Duże skupiska często działają jak magnes: cena ciąży ku nim, a likwidacje przyspieszają ruch. To skłonność, nie gwarancja.",
   lq_how_6: "Po lewej wykres ceny z wybranego okresu w tej samej skali: widać, skąd przyszła cena i gdzie otwierano pozycje stojące za tymi likwidacjami.",

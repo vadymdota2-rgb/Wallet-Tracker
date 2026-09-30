@@ -41,10 +41,11 @@ import { Frame } from "./Screen";
 
 type Lang = Parameters<typeof t>[0];
 
-/** Плечи 10× / 25× / 50× / 100×: голубой, фиолетовый, янтарный, розовый. */
-const LEV_C = ["#1a9fc9", "#8f6cf0", "#c98500", "#e8589c"];
+/** Плечи 10× / 25× / 50× / 100× — как на Coinglass: фиолетовый, голубой, жёлтый,
+ * оранжевый. Пары различимы и при дальтонизме (проверено валидатором). */
+const LEV_C = ["#7b61ff", "#38bdf8", "#facc15", "#f97316"];
 /** Тот же оттенок ярче — для крупных скоплений. */
-const LEV_HOT = ["#46d2ff", "#b89cff", "#ffb31f", "#ff7fc0"];
+const LEV_HOT = ["#a594ff", "#7dd3fc", "#fde047", "#fb923c"];
 /** Доля от самого большого уровня, с которой скопление считается крупным. */
 const HOT = 0.5;
 const COINS = ["BTC", "ETH", "SOL", "XRP", "DOGE", "BNB", "HYPE", "SUI", "ADA", "LINK"];
@@ -383,6 +384,7 @@ function Chart({ r, lang, span, sel, onSel, on, win }: {
       ref={svgRef}
       onContextMenu={(e) => e.preventDefault()}
     >
+      <rect x={0} y={0} width={W - AXIS} height={H} className="lq-bg" />
       <rect x={BX0} y={0} width={CX1 - BX0} height={yNow} className="lq-zone up" />
       <rect x={BX0} y={yNow} width={CX1 - BX0} height={H - yNow} className="lq-zone dn" />
       <rect x={0} y={0} width={CAND} height={H} className="lq-cpanel" />
@@ -423,7 +425,7 @@ function Chart({ r, lang, span, sel, onSel, on, win }: {
           const hot = k >= HOT;
           const pal = hot ? LEV_HOT : LEV_C;
           /* Мелкое — бледнее, крупное — насыщеннее. */
-          const alpha = hot ? 1 : 0.3 + 0.62 * Math.pow(k / HOT, 0.8);
+          const alpha = hot ? 1 : 0.45 + 0.5 * Math.pow(k / HOT, 0.8);
           const y = i * rowH + 0.75;
           const h = Math.max(2, rowH - 1.5);
           let x = BX0;

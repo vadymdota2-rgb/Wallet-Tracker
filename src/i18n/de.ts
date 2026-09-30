@@ -344,7 +344,7 @@ export const de: Dict = {
   lq_how: "So liest man die Karte",
   lq_how_1: "Jeder Balken zeigt, wie viel Geld liquidiert wird, wenn der Kurs dieses Level erreicht. Je länger, desto mehr.",
   lq_how_2: "Über der Kurslinie liegen Shorts: Sie werden bei Anstieg liquidiert. Darunter Longs: Sie werden bei Rückgang liquidiert.",
-  lq_how_3: "Die Farbe ist der Hebel: Cyan 10×, Violett 25×, Bernstein 50×, Rosa 100×. Blasse Balken sind kleine Levels, helle leuchtende große Häufungen.",
+  lq_how_3: "Die Farbe ist der Hebel, wie bei Coinglass: Lila 10×, Blau 25×, Gelb 50×, Orange 100×. Blasse Balken sind kleine Levels, helle leuchtende große Häufungen.",
   lq_how_4: "Die Spalte «Summe» rechts zeigt, wie viel auf dem Weg vom aktuellen Kurs bis zu diesem Level insgesamt liquidiert wird.",
   lq_how_5: "Große Häufungen wirken oft wie ein Magnet: Der Kurs strebt dorthin, und die Liquidationen beschleunigen die Bewegung. Eine Tendenz, keine Garantie.",
   lq_how_6: "Links ist der Kursverlauf des gewählten Zeitraums auf derselben Skala: Man sieht, woher der Kurs kam und wo die Positionen hinter diesen Levels eröffnet wurden.",

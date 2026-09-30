@@ -344,7 +344,7 @@ export const fr: Dict = {
   lq_how: "Comment lire la carte",
   lq_how_1: "Chaque barre indique combien d'argent est liquidé si le prix atteint ce niveau. Plus elle est longue, plus c'est gros.",
   lq_how_2: "Au-dessus de la ligne de prix, les shorts : liquidés si le prix monte. En dessous, les longs : liquidés s'il baisse.",
-  lq_how_3: "La couleur indique le levier : cyan 10×, violet 25×, ambre 50×, rose 100×. Les barres pâles sont de petits niveaux ; les vives et lumineuses, de gros amas.",
+  lq_how_3: "La couleur indique le levier, comme sur Coinglass : violet 10×, bleu 25×, jaune 50×, orange 100×. Les barres pâles sont de petits niveaux ; les vives et lumineuses, de gros amas.",
   lq_how_4: "La colonne « Cumul » à droite indique combien est liquidé au total entre le prix actuel et ce niveau.",
   lq_how_5: "Les gros amas agissent souvent comme un aimant : le prix tend vers eux et les liquidations accélèrent le mouvement. C'est une tendance, pas une garantie.",
   lq_how_6: "À gauche, le graphique du prix sur la période choisie, à la même échelle : on voit d'où vient le prix et où ont été ouvertes les positions de ces liquidations.",

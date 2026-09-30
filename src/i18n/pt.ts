@@ -344,7 +344,7 @@ export const pt: Dict = {
   lq_how: "Como ler o mapa",
   lq_how_1: "Cada barra é quanto dinheiro é liquidado se o preço chegar a esse nível. Quanto mais longa, mais.",
   lq_how_2: "Acima da linha de preço ficam os shorts: liquidados se subir. Abaixo, os longs: liquidados se cair.",
-  lq_how_3: "A cor é a alavancagem: azul-claro 10×, violeta 25×, âmbar 50×, rosa 100×. Barras pálidas são níveis pequenos; as brilhantes e luminosas, aglomerados grandes.",
+  lq_how_3: "A cor é a alavancagem, como na Coinglass: roxo 10×, azul 25×, amarelo 50×, laranja 100×. Barras pálidas são níveis pequenos; as brilhantes e luminosas, aglomerados grandes.",
   lq_how_4: "A coluna «Total» à direita mostra quanto é liquidado no total do preço atual até esse nível.",
   lq_how_5: "Aglomerados grandes costumam agir como ímã: o preço tende a ir até eles e as liquidações aceleram o movimento. É uma tendência, não uma garantia.",
   lq_how_6: "À esquerda fica o gráfico do preço do período escolhido na mesma escala: dá para ver de onde veio o preço e onde foram abertas as posições dessas liquidações.",

@@ -487,5 +487,9 @@ say("Binance и Bybit — через nginx в Европе, если отсюд�
     and _ngx.count('if ($http_x_api_key = "") { return 403; }') == 2
     and "def _geo_refused(" in api and '"https://fapi.binance.com/": "/xr/binance-f/"' in api)
 
+say("карта ликвидаций в гамме Coinglass: плечи фиолетовый/голубой/жёлтый/оранжевый, чёрное поле, красная линия цены",
+    'const LEV_C = ["#7b61ff", "#38bdf8", "#facc15", "#f97316"];' in _lq and 'className="lq-bg"' in _lq
+    and ".lq-now { stroke: #f6465d;" in read(f"{APP}/src/styles/app.css"))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

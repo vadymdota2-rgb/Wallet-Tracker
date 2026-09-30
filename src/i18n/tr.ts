@@ -344,7 +344,7 @@ export const tr: Dict = {
   lq_how: "Harita nasıl okunur",
   lq_how_1: "Her çubuk, fiyat o seviyeye gelirse tasfiye olacak parayı gösterir. Çubuk ne kadar uzunsa o kadar çok.",
   lq_how_2: "Fiyat çizgisinin üstünde short'lar var: fiyat yükselirse tasfiye olur. Altında long'lar: düşerse tasfiye olur.",
-  lq_how_3: "Renk kaldıraçtır: camgöbeği 10×, mor 25×, kehribar 50×, pembe 100×. Soluk çubuklar küçük seviyeler, parlak ışıltılı olanlar büyük yoğunluklardır.",
+  lq_how_3: "Renk kaldıraçtır, Coinglass'taki gibi: mor 10×, mavi 25×, sarı 50×, turuncu 100×. Soluk çubuklar küçük seviyeler, parlak ışıltılı olanlar büyük yoğunluklardır.",
   lq_how_4: "Sağdaki «Toplam» sütunu, mevcut fiyattan o seviyeye kadar toplam ne kadar tasfiye olacağını gösterir.",
   lq_how_5: "Büyük yoğunluklar çoğu zaman mıknatıs gibi çalışır: fiyat onlara çekilir, tasfiyeler hareketi hızlandırır. Bu bir eğilim, garanti değil.",
   lq_how_6: "Solda aynı ölçekte seçilen dönemin fiyat grafiği var: fiyatın nereden geldiği ve bu tasfiyelerin pozisyonlarının nerede açıldığı görülür.",

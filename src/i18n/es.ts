@@ -344,7 +344,7 @@ export const es: Dict = {
   lq_how: "Cómo leer el mapa",
   lq_how_1: "Cada barra es cuánto dinero se liquida si el precio llega a ese nivel. Cuanto más larga, más.",
   lq_how_2: "Sobre la línea de precio están los cortos: se liquidan si sube. Debajo, los largos: se liquidan si baja.",
-  lq_how_3: "El color es el apalancamiento: celeste 10×, violeta 25×, ámbar 50×, rosa 100×. Las barras pálidas son niveles pequeños; las brillantes y luminosas, grupos grandes.",
+  lq_how_3: "El color es el apalancamiento, como en Coinglass: morado 10×, azul 25×, amarillo 50×, naranja 100×. Las barras pálidas son niveles pequeños; las brillantes y luminosas, grupos grandes.",
   lq_how_4: "La columna «Total» a la derecha muestra cuánto se liquida en total desde el precio actual hasta ese nivel.",
   lq_how_5: "Los grupos grandes suelen actuar como imán: el precio tiende hacia ellos y las liquidaciones aceleran el movimiento. Es una tendencia, no una garantía.",
   lq_how_6: "A la izquierda está el gráfico del precio del periodo elegido en la misma escala: se ve de dónde vino el precio y dónde se abrieron las posiciones de esas liquidaciones.",

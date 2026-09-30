@@ -2151,16 +2151,18 @@
 .lq-svg { display: block; direction: ltr; touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: crosshair; }
 /* Касание всегда приходит самой карте, а не полосе или подписи внутри. */
 .lq-svg * { pointer-events: none; }
-.lq-zone.up { fill: rgb(61 220 151 / 0.055); }
-.lq-zone.dn { fill: rgb(255 92 119 / 0.055); }
-.lq-sep { stroke: rgb(58 130 214 / 0.2); stroke-width: 1; }
+/* Поле карты — ровный чёрный, как у Coinglass: цветные полосы на нём читаются лучше. */
+.lq-bg { fill: #0b0e11; }
+.lq-zone.up { fill: rgb(14 203 129 / 0.03); }
+.lq-zone.dn { fill: rgb(246 70 93 / 0.03); }
+.lq-sep { stroke: rgb(255 255 255 / 0.08); stroke-width: 1; }
 /* Панель свечей: чуть темнее поля уровней, чтобы читалась как отдельная. */
-.lq-cpanel { fill: rgb(2 6 16 / 0.55); }
-.lq-candles .up line, .lq-candles .up rect { stroke: var(--up); fill: var(--up); }
-.lq-candles .dn line, .lq-candles .dn rect { stroke: var(--dn); fill: var(--dn); }
+.lq-cpanel { fill: #0b0e11; }
+.lq-candles .up line, .lq-candles .up rect { stroke: #0ecb81; fill: #0ecb81; }
+.lq-candles .dn line, .lq-candles .dn rect { stroke: #f6465d; fill: #f6465d; }
 .lq-candles line { stroke-width: 0.8; }
 .lq-candles rect { stroke-width: 0; }
-.lq-cp-now { fill: var(--ink); stroke: var(--blue); stroke-width: 1.5; }
+.lq-cp-now { fill: #fff; stroke: #f6465d; stroke-width: 1.5; }
 .lq-cp-t {
   fill: var(--dim);
   font-size: 9px;
@@ -2171,7 +2173,7 @@
   stroke-linejoin: round;
   pointer-events: none;
 }
-.lq-grid { stroke: rgb(58 130 214 / 0.13); stroke-width: 1; }
+.lq-grid { stroke: rgb(255 255 255 / 0.06); stroke-width: 1; }
 .lq-tick { fill: var(--ink); opacity: 0.8; font-size: 9.5px; font-variant-numeric: tabular-nums; }
 .lq-tick-p { font-size: 8.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .lq-tick-p.up { fill: var(--up); }
@@ -2193,10 +2195,11 @@
   pointer-events: none;
 }
 .lq-cum-a { stroke-width: 1.5; stroke-linejoin: round; }
-.lq-cum-a.up { fill: rgb(61 220 151 / 0.18); stroke: var(--up); }
-.lq-cum-a.dn { fill: rgb(255 92 119 / 0.18); stroke: var(--dn); }
-.lq-now { stroke: var(--ink); stroke-width: 1.25; stroke-dasharray: 5 4; }
-.lq-now-box { fill: var(--blue); }
+.lq-cum-a.up { fill: rgb(14 203 129 / 0.22); stroke: #0ecb81; }
+.lq-cum-a.dn { fill: rgb(246 70 93 / 0.22); stroke: #f6465d; }
+/* Текущая цена — красный пунктир, как у Coinglass. */
+.lq-now { stroke: #f6465d; stroke-width: 1.25; stroke-dasharray: 5 4; }
+.lq-now-box { fill: #f6465d; }
 .lq-now-t { fill: #fff; font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .lq-cross line { stroke: var(--glow); stroke-width: 1; }
 .lq-cross circle { fill: var(--glow); stroke: var(--panel); stroke-width: 2; }
@@ -2261,10 +2264,10 @@
 .lq-hint { margin: 8px 0 0; color: var(--dim-2); font-size: 11.5px; line-height: 1.45; }
 /* Ключ «насыщенность = размер»: три полоски от бледной к яркой. */
 .lq-hot-k { display: inline-flex; gap: 2px; margin-inline-end: 6px; vertical-align: -1px; direction: ltr; }
-.lq-hot-k i { width: 12px; height: 8px; border-radius: 2px; background: #8f6cf0; }
-.lq-hot-k i:nth-child(1) { opacity: 0.3; }
+.lq-hot-k i { width: 12px; height: 8px; border-radius: 2px; background: #7b61ff; }
+.lq-hot-k i:nth-child(1) { opacity: 0.45; }
 .lq-hot-k i:nth-child(2) { opacity: 0.7; }
-.lq-hot-k i:nth-child(3) { background: #b89cff; box-shadow: 0 0 6px #b89cff; }
+.lq-hot-k i:nth-child(3) { background: #a594ff; box-shadow: 0 0 6px #a594ff; }
 
 /* Итоги рядом с ценой: лонги влево, шорты вправо, один масштаб. */
 .lq-div-h { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; margin-bottom: 8px; direction: ltr; }

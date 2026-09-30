@@ -344,7 +344,7 @@ export const id: Dict = {
   lq_how: "Cara membaca peta",
   lq_how_1: "Setiap batang menunjukkan berapa banyak uang yang terlikuidasi jika harga mencapai level itu. Makin panjang, makin besar.",
   lq_how_2: "Di atas garis harga adalah short: terlikuidasi jika harga naik. Di bawahnya long: terlikuidasi jika turun.",
-  lq_how_3: "Warna adalah leverage: biru muda 10×, ungu 25×, kuning 50×, merah muda 100×. Batang pucat adalah level kecil; yang terang bercahaya adalah klaster besar.",
+  lq_how_3: "Warna adalah leverage, seperti di Coinglass: ungu 10×, biru 25×, kuning 50×, oranye 100×. Batang pucat adalah level kecil; yang terang bercahaya adalah klaster besar.",
   lq_how_4: "Kolom «Total» di kanan menunjukkan total yang terlikuidasi dari harga saat ini sampai level itu.",
   lq_how_5: "Klaster besar sering bekerja seperti magnet: harga tertarik ke sana dan likuidasi mempercepat pergerakan. Ini kecenderungan, bukan jaminan.",
   lq_how_6: "Di kiri ada grafik harga periode terpilih dengan skala yang sama: terlihat dari mana harga datang dan di mana posisi di balik likuidasi itu dibuka.",

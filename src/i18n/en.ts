@@ -344,7 +344,7 @@ export const en = {
   lq_how: "How to read the map",
   lq_how_1: "Each bar is how much money gets liquidated if the price reaches that level. The longer the bar, the more.",
   lq_how_2: "Above the price line are shorts: they burn if the price rises. Below it are longs: they burn if it falls.",
-  lq_how_3: "Colour is the leverage: cyan 10×, violet 25×, amber 50×, pink 100×. Faint bars are small levels; bright, glowing ones are big clusters.",
+  lq_how_3: "Colour is the leverage, as on Coinglass: purple 10×, blue 25×, yellow 50×, orange 100×. Faint bars are small levels; bright, glowing ones are big clusters.",
   lq_how_4: "The Total column on the right shows how much burns in all on the way from the current price to that level.",
   lq_how_5: "Big clusters often act like a magnet: price drifts toward them, and the liquidations speed the move up. It's a tendency, not a guarantee.",
   lq_how_6: "On the left is the price chart for the chosen period on the same scale: you can see where the price came from and where the positions behind these levels were opened.",
