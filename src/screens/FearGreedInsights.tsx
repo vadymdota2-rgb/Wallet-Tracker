@@ -35,12 +35,21 @@ function median(a: number[]): number {
   return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
 }
 
-/** После первого дня зоны: куда цена ушла дальше за 90 дней и через сколько. */
+/**
+ * После начала зоны: куда цена ушла дальше за 90 дней и через сколько.
+ * Началом считается первый день зоны после недели без неё: индекс часто
+ * выскакивает из крайнего страха на день и возвращается, и такие «новые
+ * начала» считали бы один и тот же эпизод по нескольку раз.
+ */
+const FRESH = 7;
 function afterEntry(days: Day[], z: number, down: boolean) {
   const moves: number[] = [];
   const when: number[] = [];
-  for (let i = 1; i < days.length - 90; i++) {
-    if (zone(days[i]![1]) !== z || zone(days[i - 1]![1]) === z || !(days[i]![2] > 0)) continue;
+  for (let i = FRESH; i < days.length - 90; i++) {
+    if (zone(days[i]![1]) !== z || !(days[i]![2] > 0)) continue;
+    let fresh = true;
+    for (let k = i - FRESH; k < i; k++) if (zone(days[k]![1]) === z) fresh = false;
+    if (!fresh) continue;
     const w = days.slice(i, i + 91).map((d) => d[2]).filter((p) => p > 0);
     const ext = down ? Math.min(...w) : Math.max(...w);
     moves.push(ext / days[i]![2] - 1);
@@ -161,6 +170,7 @@ export function FearGreedInsights({ lang, days }: { lang: Lang; days: Day[] }) {
       return since(n * 86400);
     }
   };
+  const nowZone = days.length ? zone(days[days.length - 1]![1]) : -1;
   const efAgo = lastOf(0);
   const egAgo = lastOf(4);
   const years: number[] = [];
@@ -192,6 +202,7 @@ export function FearGreedInsights({ lang, days }: { lang: Lang; days: Day[] }) {
             </div>
           ),
         )}
+        <p className="fi-note">{t(lang, "fi_edge_note")}</p>
         <p className="fi-since">
           {t(lang, "fi_since", { a: efAgo < 0 ? "—" : ago(efAgo), b: egAgo < 0 ? "—" : ago(egAgo) })}
         </p>
@@ -207,8 +218,9 @@ export function FearGreedInsights({ lang, days }: { lang: Lang; days: Day[] }) {
         />
         <div className="fi-fwd">
           {fwd.map((f, z) => (
-            <div key={z} className="fi-fwd-r">
-              <span><i style={{ background: ZC[z] }} />{t(lang, ZK[z]!)}</span>
+            <div key={z} className={z === nowZone ? "fi-fwd-r on" : "fi-fwd-r"}>
+              <span><i style={{ background: ZC[z] }} />{t(lang, ZK[z]!)}
+                {z === nowZone ? <em className="fi-nowtag">{t(lang, "fi_now")}</em> : null}</span>
               <div className="fi-bar">
                 <i className={f.med >= 0 ? "up" : "dn"}
                   style={{ width: `${(Math.abs(f.med) / fwdMax) * 50}%`, [f.med >= 0 ? "left" : "right"]: "50%" }} />

@@ -9418,7 +9418,13 @@ def _fng_build() -> dict:
     px = _fng_btc_binance(start * 1000)
     if len(px) < len(idx) * 0.9:
         px.update(_fng_btc_coinbase(start))
-    days = [[t, v, round(px.get(t, 0.0), 2)] for t, v in sorted(idx.items())]
+    # В истории индекса есть редкие пропуски (4 дня в апреле 2018, 2 — в
+    # октябре 2024). Экран считает «неделю назад» и «через 30 дней» по
+    # порядку дней, поэтому пропуск заполняется значением прошлого дня.
+    days = []
+    for t in range(start, max(idx) + 1, 86400):
+        v = idx.get(t, days[-1][1] if days else 50)
+        days.append([t, v, round(px.get(t, days[-1][2] if days else 0.0), 2)])
     res = {"ok": True, "days": days, "at": now()}
     with _liq_lock:
         _fng_cache["all"] = (time.monotonic(), res)

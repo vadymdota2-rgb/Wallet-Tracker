@@ -2408,10 +2408,14 @@
   pointer-events: none;
   animation: lq-in 0.14s var(--ease);
 }
+.fg-pop { max-width: 54%; }
 .fg-pop.left { right: auto; left: 6px; }
 .fg-pop small { color: var(--dim); }
 .fg-pop b { font-size: 15px; font-variant-numeric: tabular-nums; }
 .fg-pop span { color: var(--ink); font-variant-numeric: tabular-nums; }
+.fg-pop em { font-style: normal; font-weight: 700; font-size: 11.5px; }
+.fg-pop em.up { color: var(--up); }
+.fg-pop em.dn { color: var(--dn); }
 .fg-legend { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 10px; font-size: 11.5px; color: var(--ink); }
 .fg-legend i, .fg-row i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-inline-end: 5px; vertical-align: -1px; }
 .fg-dist { display: flex; gap: 2px; height: 12px; direction: ltr; }
@@ -2429,6 +2433,8 @@
   border-top: 1px solid rgb(27 61 104 / 0.35);
 }
 .fg-row-h { border-top: 0; padding-top: 0; }
+.fg-row.two { grid-template-columns: minmax(0, 1fr) auto; }
+.fg-row.two:first-child { border-top: 0; }
 .fg-row-h small { color: var(--dim-2); font-size: 11px; }
 .fg-row > :nth-child(2), .fg-row > :nth-child(3) { text-align: end; font-variant-numeric: tabular-nums; }
 .fg-row b small { color: var(--dim-2); font-weight: 500; font-size: 11px; }
@@ -2438,6 +2444,7 @@
 .fg-avg { margin: 10px 0 0; font-size: 13px; color: var(--dim); }
 .fg-now { margin-bottom: 10px; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid; border-inline-start-width: 4px; background: rgb(3 7 18 / 0.4); }
 .fg-now p { margin: 0; font-size: 14px; font-weight: 600; color: var(--ink); line-height: 1.4; }
+.fg-left { color: var(--ink) !important; }
 .fg-now small { display: block; margin-top: 3px; color: var(--dim); font-size: 12.5px; line-height: 1.4; }
 .fg-st {
   display: grid;
@@ -2505,6 +2512,8 @@
   font-size: 12.5px;
 }
 .fi-fwd-r:first-child { border-top: 0; }
+.fi-fwd-r.on { background: rgb(127 216 255 / 0.07); border-radius: 8px; padding-inline: 6px; margin-inline: -6px; }
+.fi-nowtag { margin-inline-start: 6px; padding: 1px 6px; border-radius: 999px; font-style: normal; font-size: 10px; font-weight: 700; color: #04101f; background: var(--glow); vertical-align: 1px; }
 .fi-fwd-r > span { grid-area: z; }
 .fi-fwd-r > span i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-inline-end: 5px; }
 .fi-fwd-r > b { grid-area: v; text-align: end; font-variant-numeric: tabular-nums; font-size: 14px; }

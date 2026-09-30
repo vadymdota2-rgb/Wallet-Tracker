@@ -509,7 +509,7 @@ say("экраны бокового меню: «Назад» возвращает
 _fg = read(f"{APP}/src/screens/FearGreedScreen.tsx")
 say("страх и жадность: вся история alternative.me с ценой BTC, две панели на одной оси времени",
     "def fng_data(" in api and '"/api/fng"' in api and "api.alternative.me/fng/?limit=0" in api
-    and "function Gauge(" in _fg and "P2 = {" in _fg and "fg_ret_note" in _fg)
+    and "function Gauge(" in _fg and "P2 = {" in _fg and '"fg_st_left"' in _fg and '"fg_since_then"' in _fg)
 
 say("страх и жадность: сколько подряд держится каждая зона, рекорд, куда уходит дальше, текущая полоса",
     "function streakStats(" in _fg and '"fg_st_now"' in _fg and '"fg_st_next"' in _fg)
@@ -517,6 +517,7 @@ say("страх и жадность: сколько подряд держитс�
 _fi = read(f"{APP}/src/screens/FearGreedInsights.tsx")
 say("страх и жадность: «что скрыто в данных» — край не разворот, цена после зон, покупки каждый день, похожие дни, оговорка",
     all(f"function {f}(" in _fi for f in ("afterEntry", "forward", "dca", "analogs", "divergence"))
+    and "const FRESH = 7;" in _fi and "for t in range(start, max(idx) + 1, 86400):" in api
     and '"fi_caveat"' in _fi and "<FearGreedInsights" in _fg)
 
 print("ПРОВАЛОВ:", bad)

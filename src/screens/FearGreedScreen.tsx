@@ -9,9 +9,9 @@
  * две шкалы поверх одного поля: так каждая читается сама по себе, а общее
  * время связывает их. Палец на графике показывает любой день целиком.
  *
- * Внизу — что было в каждой зоне: сколько дней рынок в ней провёл и как в
- * среднем менялась цена за следующие 30 дней. Это история, а не прогноз, и
- * экран так и говорит.
+ * Внизу — сколько дней рынок провёл в каждой зоне, сколько держится каждая
+ * зона и (отдельным блоком) что обычно было после. Это история, а не
+ * прогноз, и экран так и говорит.
  *
  * Цвета зон — привычные по Binance и CoinMarketCap: красный — крайний
  * страх, оранжевый, жёлтый — нейтрально, салатовый, зелёный — крайняя
@@ -346,24 +346,17 @@ export function FearGreedScreen() {
     return { hi, lo };
   }, [all]);
 
-  /* Дни по зонам и что было с ценой через 30 дней после дня в зоне. */
+  /* Дни по зонам. Что было с ценой после — в блоке ниже, по медиане и по
+     всей истории: здесь была вторая, средняя по окну, и цифры спорили. */
   const stats = useMemo(() => {
     const cnt = ZONES.map(() => 0);
-    const ret = ZONES.map(() => ({ s: 0, n: 0 }));
-    const start = all.length - days.length;
-    days.forEach((d, i) => {
+    days.forEach((d) => {
       const z = zoneOf(d[1]);
-      if (z < 0) return;
-      cnt[z]! += 1;
-      const later = all[start + i + 30];
-      if (later && d[2] > 0 && later[2] > 0) {
-        ret[z]!.s += later[2] / d[2] - 1;
-        ret[z]!.n += 1;
-      }
+      if (z >= 0) cnt[z]! += 1;
     });
     const avg = days.length ? days.reduce((s, d) => s + d[1], 0) / days.length : 0;
-    return { cnt, ret, avg, total: days.length };
-  }, [all, days]);
+    return { cnt, avg, total: days.length };
+  }, [days]);
 
   const streaks = useMemo(() => streakStats(days, range !== "all"), [days, range]);
   const streaksAll = useMemo(() => streakStats(all, false), [all]);
@@ -375,6 +368,24 @@ export function FearGreedScreen() {
     while (k > 0 && zoneOf(all[k - 1]![1]) === zi) k -= 1;
     return { zi, len: all.length - k };
   }, [all]);
+  /* Сколько ещё держались прошлые полосы этой зоны, дожившие до нынешней
+     длины: медиана остатка и доля тех, что продлились ещё неделю. */
+  const left = useMemo(() => {
+    if (!cur || cur.zi < 0) return null;
+    const rest: number[] = [];
+    let i = 0;
+    while (i < all.length) {
+      const zi = zoneOf(all[i]![1]);
+      let j = i;
+      while (j + 1 < all.length && zoneOf(all[j + 1]![1]) === zi) j++;
+      const len = j - i + 1;
+      if (j + 1 < all.length && zi === cur.zi && len >= cur.len) rest.push(len - cur.len);
+      i = j + 1;
+    }
+    if (rest.length < 5) return null;
+    rest.sort((a, b) => a - b);
+    return { n: rest.length, med: rest[rest.length >> 1]!, week: rest.filter((r) => r >= 7).length / rest.length };
+  }, [all, cur]);
   const daysStr = (v: number, digits = 0) => t(lang, "fg_days", { n: num(v, digits) });
 
   const selDay = sel !== null ? days[sel] : undefined;
@@ -439,6 +450,10 @@ export function FearGreedScreen() {
                     {selDay[1]} · {t(lang, ZONES[Math.max(0, zoneOf(selDay[1]))]!.key)}
                   </b>
                   {selDay[2] > 0 ? <span>BTC {px(selDay[2])}</span> : null}
+                  {selDay[2] > 0 && last && selDay[0] < last[0] ? (() => {
+                    const ch = (last[2] / selDay[2] - 1) * 100;
+                    return <em className={ch >= 0 ? "up" : "dn"}>{t(lang, "fg_since_then", { p: pct(ch, 0, true) })}</em>;
+                  })() : null}
                 </div>
               ) : null}
             </div>
@@ -458,29 +473,18 @@ export function FearGreedScreen() {
               ) : null)}
             </div>
             <div className="fg-rows">
-              <div className="fg-row fg-row-h">
-                <span />
-                <small>{t(lang, "fg_share")}</small>
-                <small>{t(lang, "fg_ret")}</small>
-              </div>
-              {ZONES.map((z, i) => {
-                const r = stats.ret[i]!;
-                const avg = r.n ? (r.s / r.n) * 100 : null;
-                return (
-                  <div key={z.key} className="fg-row">
-                    <span><i style={{ background: z.c }} />{t(lang, z.key)}</span>
-                    <b>{!stats.total ? "—" : stats.cnt[i]! > 0 && stats.cnt[i]! / stats.total < 0.01 ? "<1%"
-                      : pct((stats.cnt[i]! / stats.total) * 100, 0, false)}
-                      <small> · {t(lang, "fg_days", { n: num(stats.cnt[i]) })}</small></b>
-                    <em className={avg === null ? "" : avg >= 0 ? "up" : "dn"}>{avg === null ? "—" : pct(avg, 1, true)}</em>
-                  </div>
-                );
-              })}
+              {ZONES.map((z, i) => (
+                <div key={z.key} className="fg-row two">
+                  <span><i style={{ background: z.c }} />{t(lang, z.key)}</span>
+                  <b>{!stats.total ? "—" : stats.cnt[i]! > 0 && stats.cnt[i]! / stats.total < 0.01 ? "<1%"
+                    : pct((stats.cnt[i]! / stats.total) * 100, 0, false)}
+                    <small> · {t(lang, "fg_days", { n: num(stats.cnt[i]) })}</small></b>
+                </div>
+              ))}
             </div>
             <p className="fg-avg">
               {t(lang, "fg_avg")} <b style={{ color: colorOf(Math.round(stats.avg)) }}>{num(stats.avg, 0)}</b>
             </p>
-            <p className="lq-hint">{t(lang, "fg_ret_note")}</p>
           </Card>
 
           <SectionTitle>{t(lang, "fg_st_title")}</SectionTitle>
@@ -496,6 +500,13 @@ export function FearGreedScreen() {
                   </p>
                   {sa.n ? (
                     <small>{t(lang, "fg_st_cmp", { a: daysStr(sa.sum / sa.n, 1), m: daysStr(sa.max) })}</small>
+                  ) : null}
+                  {left ? (
+                    <small className="fg-left">
+                      {t(lang, "fg_st_left", {
+                        n: num(left.n), l: daysStr(cur.len), r: daysStr(left.med), p: pct(left.week * 100, 0, false),
+                      })}
+                    </small>
                   ) : null}
                 </div>
               );
