@@ -361,6 +361,8 @@ export const es: Dict = {
   lq_open_chart: "Abrir gráfico",
   lq_price_w: "Precio · {w}",
   lq_search: "Buscar moneda, p. ej. PEPE",
+  lq_share_l: "{p} largos · {v}",
+  lq_share_s: "{p} cortos · {v}",
   lq_shorts: "Cortos",
   lq_src: "Modelo basado en el interés abierto de {ex}. Es una estimación: los exchanges no publican los precios reales de liquidación.",
   lq_stale: "No se pudo actualizar: se muestra el mapa guardado ({t}).",

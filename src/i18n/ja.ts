@@ -361,6 +361,8 @@ export const ja: Dict = {
   lq_open_chart: "チャートを開く",
   lq_price_w: "価格 · {w}",
   lq_search: "コイン検索（例: PEPE）",
+  lq_share_l: "ロング {p} · {v}",
+  lq_share_s: "ショート {p} · {v}",
   lq_shorts: "ショート",
   lq_src: "{ex} の建玉に基づくモデル。推定値です：取引所は実際の清算価格を公開していません。",
   lq_stale: "更新できませんでした — 保存済みのマップを表示しています（{t}）。",

@@ -495,5 +495,8 @@ say("карта ликвидаций живая: сервер раз в две �
     "LIQ_TTL = 120.0" in api and "LIQ_WARM_EVERY = 100" in api
     and "refreshLiqMap(sym, range)" in _lq and "const LIVE_EVERY = 60_000;" in _lq)
 
+say("на колонке «Накоплено» — перевес в процентах и деньги сверху и снизу",
+    'className="lq-share up"' in _lq and 'className="lq-share dn"' in _lq and '"lq_share_s"' in _lq)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

@@ -361,6 +361,8 @@ export const tr: Dict = {
   lq_open_chart: "Grafiği aç",
   lq_price_w: "Fiyat · {w}",
   lq_search: "Coin ara, ör. PEPE",
+  lq_share_l: "{p} long · {v}",
+  lq_share_s: "{p} short · {v}",
   lq_shorts: "Short'lar",
   lq_src: "{ex} açık pozisyon verisine dayalı model. Bu bir tahmindir: borsalar gerçek likidasyon fiyatlarını yayımlamaz.",
   lq_stale: "Güncellenemedi — kayıtlı harita gösteriliyor ({t}).",

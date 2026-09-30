@@ -361,6 +361,8 @@ export const en = {
   lq_open_chart: "Open chart",
   lq_price_w: "Price · {w}",
   lq_search: "Find a coin, e.g. PEPE",
+  lq_share_l: "{p} longs · {v}",
+  lq_share_s: "{p} shorts · {v}",
   lq_shorts: "Shorts",
   lq_src: "Model based on open interest from {ex}. This is an estimate: exchanges don't publish real liquidation prices.",
   lq_stale: "Couldn't refresh — showing the saved map ({t}).",

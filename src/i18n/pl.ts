@@ -361,6 +361,8 @@ export const pl: Dict = {
   lq_open_chart: "Otwórz wykres",
   lq_price_w: "Cena · {w}",
   lq_search: "Szukaj monety, np. PEPE",
+  lq_share_l: "{p} longów · {v}",
+  lq_share_s: "{p} shortów · {v}",
   lq_shorts: "Shorty",
   lq_src: "Model na podstawie otwartych pozycji z {ex}. To szacunek: giełdy nie publikują prawdziwych cen likwidacji.",
   lq_stale: "Nie udało się odświeżyć — pokazano zapisaną mapę ({t}).",

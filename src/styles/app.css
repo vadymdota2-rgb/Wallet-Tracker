@@ -2199,6 +2199,18 @@
 .lq-cum-a { stroke-width: 1.5; stroke-linejoin: round; }
 .lq-cum-a.up { fill: rgb(14 203 129 / 0.22); stroke: #0ecb81; }
 .lq-cum-a.dn { fill: rgb(246 70 93 / 0.22); stroke: #f6465d; }
+.lq-share {
+  font-size: 10.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke;
+  stroke: #0b0e11;
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.lq-share.up { fill: #3ef0a6; }
+.lq-share.dn { fill: #ff7d8e; }
 /* Текущая цена — красный пунктир, как у Coinglass. */
 .lq-now { stroke: #f6465d; stroke-width: 1.25; stroke-dasharray: 5 4; }
 .lq-now-box { fill: #f6465d; }

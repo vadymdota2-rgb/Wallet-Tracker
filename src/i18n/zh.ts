@@ -361,6 +361,8 @@ export const zh: Dict = {
   lq_open_chart: "打开图表",
   lq_price_w: "价格 · {w}",
   lq_search: "搜索币种，如 PEPE",
+  lq_share_l: "多单 {p} · {v}",
+  lq_share_s: "空单 {p} · {v}",
   lq_shorts: "空头",
   lq_src: "基于 {ex} 未平仓量的模型。这是估算：交易所不公布真实清算价格。",
   lq_stale: "刷新失败 — 显示已保存的地图（{t}）。",

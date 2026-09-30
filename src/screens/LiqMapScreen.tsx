@@ -462,6 +462,28 @@ function Chart({ r, lang, span, sel, onSel, on, win }: {
 
       <polygon points={area(true)} className="lq-cum-a up" />
       <polygon points={area(false)} className="lq-cum-a dn" />
+      {/* Перевес — прямо на колонке «Накоплено», вдоль неё: сколько всего
+          сгорит сверху и снизу в видимом окне и какая это доля. */}
+      {(() => {
+        const sTot = cum[0] ?? 0;
+        const lTot = cum[cum.length - 1] ?? 0;
+        const all = sTot + lTot;
+        if (all <= 0) return null;
+        const share = (v: number) => `${Math.round((v / all) * 100)}%`;
+        const x = CX0 + CUMW / 2 + 3.5;
+        const yS = yNow / 2;
+        const yL = yNow + (H - yNow) / 2;
+        return (
+          <>
+            <text x={x} y={yS} transform={`rotate(-90 ${x} ${yS})`} textAnchor="middle" className="lq-share up">
+              {t(lang, "lq_share_s", { p: share(sTot), v: usd(sTot) })}
+            </text>
+            <text x={x} y={yL} transform={`rotate(-90 ${x} ${yL})`} textAnchor="middle" className="lq-share dn">
+              {t(lang, "lq_share_l", { p: share(lTot), v: usd(lTot) })}
+            </text>
+          </>
+        );
+      })()}
 
       <line x1={0} x2={W - AXIS} y1={yNow} y2={yNow} className="lq-now" />
       <rect x={W - AXIS + 1} y={yNow - 11} width={AXIS - 1} height={22} rx={6} className="lq-now-box" />

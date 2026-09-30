@@ -361,6 +361,8 @@ export const id: Dict = {
   lq_open_chart: "Buka grafik",
   lq_price_w: "Harga · {w}",
   lq_search: "Cari koin, mis. PEPE",
+  lq_share_l: "{p} long · {v}",
+  lq_share_s: "{p} short · {v}",
   lq_shorts: "Short",
   lq_src: "Model berdasarkan open interest {ex}. Ini perkiraan: bursa tidak memublikasikan harga likuidasi sebenarnya.",
   lq_stale: "Gagal memperbarui — menampilkan peta tersimpan ({t}).",

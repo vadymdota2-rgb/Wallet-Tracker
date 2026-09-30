@@ -361,6 +361,8 @@ export const ko: Dict = {
   lq_open_chart: "차트 열기",
   lq_price_w: "가격 · {w}",
   lq_search: "코인 검색, 예: PEPE",
+  lq_share_l: "롱 {p} · {v}",
+  lq_share_s: "숏 {p} · {v}",
   lq_shorts: "숏",
   lq_src: "{ex}의 미결제약정 기반 모델입니다. 추정치이며, 거래소는 실제 청산 가격을 공개하지 않습니다.",
   lq_stale: "새로 고치지 못했습니다 — 저장된 지도를 표시합니다 ({t}).",

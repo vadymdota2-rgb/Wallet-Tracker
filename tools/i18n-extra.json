@@ -7018,5 +7018,41 @@
     "uk": "Оновлюється сама · {t}",
     "vi": "Tự cập nhật · {t}",
     "zh": "自动更新 · {t}"
+  },
+  "lq_share_s": {
+    "ar": "{p} بيع · {v}",
+    "de": "{p} Shorts · {v}",
+    "en": "{p} shorts · {v}",
+    "es": "{p} cortos · {v}",
+    "fr": "{p} shorts · {v}",
+    "hi": "{p} शॉर्ट · {v}",
+    "id": "{p} short · {v}",
+    "ja": "ショート {p} · {v}",
+    "ko": "숏 {p} · {v}",
+    "pl": "{p} shortów · {v}",
+    "pt": "{p} shorts · {v}",
+    "ru": "{p} шортов · {v}",
+    "tr": "{p} short · {v}",
+    "uk": "{p} шортів · {v}",
+    "vi": "{p} short · {v}",
+    "zh": "空单 {p} · {v}"
+  },
+  "lq_share_l": {
+    "ar": "{p} شراء · {v}",
+    "de": "{p} Longs · {v}",
+    "en": "{p} longs · {v}",
+    "es": "{p} largos · {v}",
+    "fr": "{p} longs · {v}",
+    "hi": "{p} लॉन्ग · {v}",
+    "id": "{p} long · {v}",
+    "ja": "ロング {p} · {v}",
+    "ko": "롱 {p} · {v}",
+    "pl": "{p} longów · {v}",
+    "pt": "{p} longs · {v}",
+    "ru": "{p} лонгов · {v}",
+    "tr": "{p} long · {v}",
+    "uk": "{p} лонгів · {v}",
+    "vi": "{p} long · {v}",
+    "zh": "多单 {p} · {v}"
   }
 }

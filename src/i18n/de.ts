@@ -361,6 +361,8 @@ export const de: Dict = {
   lq_open_chart: "Chart öffnen",
   lq_price_w: "Kurs · {w}",
   lq_search: "Coin suchen, z. B. PEPE",
+  lq_share_l: "{p} Longs · {v}",
+  lq_share_s: "{p} Shorts · {v}",
   lq_shorts: "Shorts",
   lq_src: "Modell auf Basis des Open Interest von {ex}. Eine Schätzung: Börsen veröffentlichen keine echten Liquidationspreise.",
   lq_stale: "Aktualisierung fehlgeschlagen — gespeicherte Karte ({t}).",

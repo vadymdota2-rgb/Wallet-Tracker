@@ -361,6 +361,8 @@ export const vi: Dict = {
   lq_open_chart: "Mở biểu đồ",
   lq_price_w: "Giá · {w}",
   lq_search: "Tìm coin, ví dụ PEPE",
+  lq_share_l: "{p} long · {v}",
+  lq_share_s: "{p} short · {v}",
   lq_shorts: "Short",
   lq_src: "Mô hình theo open interest của {ex}. Đây là ước tính: các sàn không công bố giá thanh lý thật.",
   lq_stale: "Không cập nhật được — đang hiển thị bản đồ đã lưu ({t}).",

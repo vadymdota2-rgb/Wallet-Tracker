@@ -361,6 +361,8 @@ export const fr: Dict = {
   lq_open_chart: "Ouvrir le graphique",
   lq_price_w: "Prix · {w}",
   lq_search: "Chercher une crypto, ex. PEPE",
+  lq_share_l: "{p} longs · {v}",
+  lq_share_s: "{p} shorts · {v}",
   lq_shorts: "Shorts",
   lq_src: "Modèle fondé sur l'intérêt ouvert de {ex}. C'est une estimation : les plateformes ne publient pas les vrais prix de liquidation.",
   lq_stale: "Mise à jour impossible — carte enregistrée affichée ({t}).",
