@@ -650,6 +650,14 @@ export interface LiqMapReply {
   at: number;
 }
 
+/** Индекс страха и жадности: дни [начало суток UTC, индекс 0–100, закрытие BTC]. */
+export interface FngReply {
+  ok: boolean;
+  error?: string;
+  days: [number, number, number][];
+  at: number;
+}
+
 /** Монета, по которой строится карта ликвидаций. */
 export interface LiqCoin {
   s: string;

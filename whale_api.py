@@ -9259,6 +9259,10 @@ def liq_warm_refresher() -> None:
     time.sleep(20)
     while True:
         try:
+            fng_data()  # заодно — индекс страха и жадности
+        except Exception:  # noqa: BLE001
+            pass
+        try:
             listed = [c["s"] for c in (liq_coins().get("coins") or [])[:10]]
         except Exception:  # noqa: BLE001
             listed = []
@@ -9356,6 +9360,92 @@ def _liq_build(sym: str, rng: str) -> dict:
         _liq_cache[key] = (time.monotonic(), res)
         cap_cache(_liq_cache, 150)
     return res
+
+
+# --- Страх и жадность ---------------------------------------------------
+# Индекс настроения крипторынка alternative.me (0 — паника, 100 — эйфория) за
+# все дни с 1 февраля 2018 и дневное закрытие биткоина в те же дни. Индекс
+# выходит раз в сутки, поэтому ответ живёт полчаса; устаревший отдаётся сразу,
+# а свежий собирается в фоне. Цена — открытые свечи Binance (data-api.binance.
+# vision отвечает из любой страны), запасной путь — Coinbase.
+FNG_TTL = 1800.0
+_fng_cache: dict = {}
+
+
+def _fng_btc_binance(start_ms: int) -> dict:
+    out: dict = {}
+    cur = start_ms
+    for _ in range(12):
+        rows = get_json(f"https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=1000&startTime={cur}", 20)
+        if not isinstance(rows, list) or not rows:
+            break
+        for k in rows:
+            out[int(k[0]) // 1000] = float(k[4])
+        if len(rows) < 1000:
+            break
+        cur = int(rows[-1][0]) + 86_400_000
+    return out
+
+
+def _fng_btc_coinbase(start: int) -> dict:
+    out: dict = {}
+    t = start
+    end = now()
+    while t < end:
+        t2 = min(end, t + 299 * 86400)
+        a = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))
+        b = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t2))
+        rows = get_json(f"https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=86400&start={a}&end={b}", 20)
+        if not isinstance(rows, list):
+            break
+        for k in rows:
+            out[int(k[0])] = float(k[4])
+        t = t2 + 86400
+    return out
+
+
+def _fng_build() -> dict:
+    raw = (get_json("https://api.alternative.me/fng/?limit=0&format=json", 25) or {}).get("data") or []
+    idx = {}
+    for r in raw:
+        try:
+            idx[int(r["timestamp"]) // 86400 * 86400] = int(r["value"])
+        except (KeyError, TypeError, ValueError):
+            continue
+    if not idx:
+        return {"ok": False, "error": "no_data"}
+    start = min(idx)
+    px = _fng_btc_binance(start * 1000)
+    if len(px) < len(idx) * 0.9:
+        px.update(_fng_btc_coinbase(start))
+    days = [[t, v, round(px.get(t, 0.0), 2)] for t, v in sorted(idx.items())]
+    res = {"ok": True, "days": days, "at": now()}
+    with _liq_lock:
+        _fng_cache["all"] = (time.monotonic(), res)
+    return res
+
+
+def _fng_bg() -> None:
+    try:
+        _fng_build()
+    except Exception as e:  # noqa: BLE001
+        print(f"fng: {e}", file=sys.stderr)
+    finally:
+        with _liq_lock:
+            _liq_busy.discard("fng")
+
+
+def fng_data() -> dict:
+    with _liq_lock:
+        hit = _fng_cache.get("all")
+        if hit and time.monotonic() - hit[0] < FNG_TTL:
+            return hit[1]
+        if hit and "fng" not in _liq_busy:
+            _liq_busy.add("fng")
+            threading.Thread(target=_fng_bg, daemon=True).start()
+    if hit:
+        return hit[1]
+    return _fng_build()
 
 
 # --- Дайджест ------------------------------------------------------------
@@ -10303,6 +10393,9 @@ class Handler(BaseHTTPRequestHandler):
                         cur.close()
                     except Exception:
                         pass
+                return
+            if path in ("/fng", "/api/fng"):
+                self._json(200, fng_data())
                 return
             if path in ("/liqcoins", "/api/liqcoins"):
                 self._json(200, liq_coins())

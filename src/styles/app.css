@@ -2355,6 +2355,89 @@
 .lq-retry { margin-top: 6px; font-size: 14px; }
 .lq-src { color: var(--dim); font-size: 12px; line-height: 1.45; margin: 12px 2px 4px; }
 .lq-chart { color: var(--glow); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+/* Страх и жадность ----------------------------------------------------- */
+.fg-hero { display: grid; justify-items: center; gap: 2px; }
+.fg-gauge { width: min(260px, 80%); height: auto; display: block; direction: ltr; }
+.fg-needle { stroke: var(--ink); stroke-width: 3; stroke-linecap: round; }
+.fg-hub { fill: var(--ink); }
+.fg-val { margin-top: -6px; font-size: 40px; line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; }
+.fg-end { fill: var(--dim-2); font-size: 10px; }
+.fg-zone { margin: -2px 0 0; font-size: 18px; font-weight: 800; letter-spacing: 0.01em; }
+.fg-date { margin: 0; color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums; }
+.fg-cmp { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
+.fg-cmp-c {
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  padding: 9px 6px;
+  border-radius: var(--r-md);
+  border: 1px solid rgb(27 61 104 / 0.55);
+  background: rgb(3 7 18 / 0.35);
+  min-width: 0;
+  text-align: center;
+}
+.fg-cmp-c small { color: var(--dim); font-size: 11px; }
+.fg-cmp-c b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.fg-cmp-c span { font-size: 11px; color: var(--ink); opacity: 0.85; }
+.fg-year { display: grid; gap: 4px; margin-top: 12px; font-size: 12.5px; color: var(--dim); }
+.fg-year b { font-size: 14px; font-variant-numeric: tabular-nums; }
+.fg-year small { color: var(--dim-2); }
+.fg-plot { position: relative; margin-top: 12px; }
+.fg-svg { display: block; direction: ltr; touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; cursor: crosshair; }
+.fg-svg * { pointer-events: none; }
+.fg-bg { fill: #0b0e11; }
+.fg-grid { stroke: rgb(255 255 255 / 0.06); stroke-width: 1; }
+.fg-tick { fill: var(--dim); font-size: 9.5px; font-variant-numeric: tabular-nums; }
+.fg-ptl { fill: var(--dim); font-size: 9.5px; font-weight: 700; paint-order: stroke; stroke: #0b0e11; stroke-width: 3px; }
+.fg-line { fill: none; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+.fg-line.thin { stroke-width: 1.2; }
+.fg-cross line { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.7; }
+.fg-cross circle { stroke: #0b0e11; stroke-width: 2; }
+.fg-pop {
+  position: absolute;
+  top: 6px;
+  right: 58px;
+  display: grid;
+  gap: 2px;
+  padding: 8px 11px;
+  border-radius: var(--r-md);
+  background: rgb(8 16 32 / 0.95);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.55);
+  font-size: 12px;
+  pointer-events: none;
+  animation: lq-in 0.14s var(--ease);
+}
+.fg-pop.left { right: auto; left: 6px; }
+.fg-pop small { color: var(--dim); }
+.fg-pop b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.fg-pop span { color: var(--ink); font-variant-numeric: tabular-nums; }
+.fg-legend { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 10px; font-size: 11.5px; color: var(--ink); }
+.fg-legend i, .fg-row i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-inline-end: 5px; vertical-align: -1px; }
+.fg-dist { display: flex; gap: 2px; height: 12px; direction: ltr; }
+.fg-dist i { display: block; min-width: 2px; }
+.fg-dist i:first-child { border-radius: 6px 0 0 6px; }
+.fg-dist i:last-child { border-radius: 0 6px 6px 0; }
+.fg-rows { display: grid; margin-top: 10px; }
+.fg-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.9fr);
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 0;
+  font-size: 13px;
+  border-top: 1px solid rgb(27 61 104 / 0.35);
+}
+.fg-row-h { border-top: 0; padding-top: 0; }
+.fg-row-h small { color: var(--dim-2); font-size: 11px; }
+.fg-row > :nth-child(2), .fg-row > :nth-child(3) { text-align: end; font-variant-numeric: tabular-nums; }
+.fg-row b small { color: var(--dim-2); font-weight: 500; font-size: 11px; }
+.fg-row em { font-style: normal; font-weight: 700; }
+.fg-row em.up { color: var(--up); }
+.fg-row em.dn { color: var(--dn); }
+.fg-avg { margin: 10px 0 0; font-size: 13px; color: var(--dim); }
+.fg-avg b { font-size: 15px; }
+
 @media (prefers-reduced-motion: reduce) {
   .lq-bars, .lq-div-b i, .lq-pop, .lq-busy { animation: none; }
 }

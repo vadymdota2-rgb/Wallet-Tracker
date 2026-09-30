@@ -250,10 +250,10 @@ say("помощь не обещает неделю за /start", all("/start" no
 # --- боковое меню: график TradingView и разлоки -----------------------------
 _m0 = appx.index("= [", appx.index("const MENU:"))
 menu = appx[_m0:appx.index("];", _m0)]
-say("в боковом меню четыре пункта: график, разлоки, карта ликвидаций, фандинг",
-    menu.count("name:") == 4
+say("в боковом меню пять пунктов: график, разлоки, карта ликвидаций, фандинг, страх и жадность",
+    menu.count("name:") == 5
     and menu.index('name: "chart"') < menu.index('name: "unlocks"') < menu.index('name: "liqmap"')
-    < menu.index('name: "funding"'))
+    < menu.index('name: "funding"') < menu.index('name: "fng"'))
 tv = read(f"{APP}/src/lib/tradingview.ts")
 chart_scr = read(f"{APP}/src/screens/ChartScreen.tsx")
 say("график — официальный код виджета TradingView со сменой монеты",
@@ -505,6 +505,11 @@ _store2 = read(f"{APP}/src/store/app.ts")
 say("экраны бокового меню: «Назад» возвращает в меню, значок фандинга одноцветный",
     "openFromMenu(m.name)" in appx and "menuOpen: Boolean(top?.menu)" in _store2
     and "menuOpen: s." not in _store2 and "glyph: <FundLineGlyph />" in appx)
+
+_fg = read(f"{APP}/src/screens/FearGreedScreen.tsx")
+say("страх и жадность: вся история alternative.me с ценой BTC, две панели на одной оси времени",
+    "def fng_data(" in api and '"/api/fng"' in api and "api.alternative.me/fng/?limit=0" in api
+    and "function Gauge(" in _fg and "P2 = {" in _fg and "fg_ret_note" in _fg)
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

@@ -1158,6 +1158,29 @@ export function FundLineGlyph({ size = 25 }: { size?: number }) {
   );
 }
 
+/** Страх и жадность — шкала-полукруг со стрелкой, тем же контуром, что меню. */
+export function GaugeGlyph({ size = 25 }: { size?: number }) {
+  return (
+    <svg
+      className="glyph"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3.5 17a8.5 8.5 0 0 1 17 0" />
+      <path d="M12 17 16.2 10.6" />
+      <circle cx="12" cy="17" r="1.3" fill="currentColor" />
+      <path d="M5.8 11.2 7 12.1M12 8.5v1.4M18.2 11.2 17 12.1" />
+    </svg>
+  );
+}
+
 /** Молния — «быстрее остальных». Тот же контур, что у соседних значков. */
 export function BoltGlyph({ size = 22 }: { size?: number }) {
   return (

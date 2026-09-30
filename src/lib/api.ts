@@ -9,7 +9,7 @@ import { initData } from "./telegram";
 import { forget, peek, remember } from "./memo";
 import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
-  LiqCoinsReply, FundRow, LsRow, MutationResult,
+  LiqCoinsReply, FngReply, FundRow, LsRow, MutationResult,
   RotSide, SymbolRow, TokenHist, Trades, UnlocksReply, WalletLive,
 } from "./types";
 
@@ -341,6 +341,20 @@ export function refreshLiqMap(sym: string, range: string): Promise<LiqMapReply |
   forget(liqPath(sym, range));
   return fetchLiqMap(sym, range);
 }
+
+/* Страх и жадность: индекс выходит раз в сутки. Последний ответ лежит на
+   устройстве — экран открывается сразу, свежий догружается поверх. */
+const FNG_SAVED = "wt-fng-v1";
+export function savedFng(): FngReply | null {
+  const hit = readSaved<FngReply>(FNG_SAVED).all;
+  return hit && hit.v?.days?.length ? hit.v : null;
+}
+export const fetchFng = () =>
+  remember<FngReply | null>("/api/fng", 30 * 60_000, () => callTwice<FngReply>("/api/fng"), good).then((r) => {
+    if (r?.ok && r.days.length) writeSaved(FNG_SAVED, { all: { at: Date.now(), v: r } });
+    return r;
+  });
+export const peekFng = () => peek<FngReply | null>("/api/fng", 30 * 60_000) ?? savedFng();
 
 /** Все монеты с фьючерсами — список раз в час; последний лежит на устройстве. */
 export function savedLiqCoins(): LiqCoinsReply | null {
