@@ -8473,7 +8473,7 @@ LIQ_LEV_W = (0.3, 0.3, 0.25, 0.15)
 LIQ_MMR = 0.005
 LIQ_SPAN = 0.15      # окно карты: ±15% от цены
 LIQ_BUCKETS = 120    # по 0,25%
-LIQ_TTL = 300.0
+LIQ_TTL = 120.0   # карта живая: открытый экран спрашивает раз в минуту
 _liq_cache: dict = {}
 _liq_lock = threading.Lock()
 
@@ -9216,7 +9216,7 @@ def _liq_coins_build() -> dict:
 # тёплыми заранее.
 LIQ_STALE = 6 * 3600.0
 LIQ_BUDGET = 12.0
-LIQ_WARM_EVERY = 240
+LIQ_WARM_EVERY = 100
 _liq_busy: set = set()
 
 

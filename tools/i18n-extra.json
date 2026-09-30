@@ -7000,5 +7000,23 @@
     "uk": "Не вдалося оновити — показано збережену карту ({t}).",
     "vi": "Không cập nhật được — đang hiển thị bản đồ đã lưu ({t}).",
     "zh": "刷新失败 — 显示已保存的地图（{t}）。"
+  },
+  "lq_live": {
+    "ar": "تتحدّث تلقائيًا · {t}",
+    "de": "Aktualisiert sich selbst · {t}",
+    "en": "Live · {t}",
+    "es": "Se actualiza sola · {t}",
+    "fr": "Mise à jour auto · {t}",
+    "hi": "अपने-आप अपडेट · {t}",
+    "id": "Diperbarui otomatis · {t}",
+    "ja": "自動更新 · {t}",
+    "ko": "자동 업데이트 · {t}",
+    "pl": "Odświeża się sama · {t}",
+    "pt": "Atualiza sozinho · {t}",
+    "ru": "Обновляется сама · {t}",
+    "tr": "Kendiliğinden güncellenir · {t}",
+    "uk": "Оновлюється сама · {t}",
+    "vi": "Tự cập nhật · {t}",
+    "zh": "自动更新 · {t}"
   }
 }

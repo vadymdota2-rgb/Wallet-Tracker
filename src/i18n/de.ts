@@ -349,6 +349,7 @@ export const de: Dict = {
   lq_how_5: "Große Häufungen wirken oft wie ein Magnet: Der Kurs strebt dorthin, und die Liquidationen beschleunigen die Bewegung. Eine Tendenz, keine Garantie.",
   lq_how_6: "Links ist der Kursverlauf des gewählten Zeitraums auf derselben Skala: Man sieht, woher der Kurs kam und wo die Positionen hinter diesen Levels eröffnet wurden.",
   lq_lev: "Hebel",
+  lq_live: "Aktualisiert sich selbst · {t}",
   lq_longs: "Longs",
   lq_more: "{n} weitere anzeigen",
   lq_near_dn: "Nächste Häufung darunter",

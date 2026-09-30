@@ -349,6 +349,7 @@ export const pt: Dict = {
   lq_how_5: "Aglomerados grandes costumam agir como ímã: o preço tende a ir até eles e as liquidações aceleram o movimento. É uma tendência, não uma garantia.",
   lq_how_6: "À esquerda fica o gráfico do preço do período escolhido na mesma escala: dá para ver de onde veio o preço e onde foram abertas as posições dessas liquidações.",
   lq_lev: "Alavancagem",
+  lq_live: "Atualiza sozinho · {t}",
   lq_longs: "Longs",
   lq_more: "Mostrar mais {n}",
   lq_near_dn: "Aglomerado mais próximo abaixo",

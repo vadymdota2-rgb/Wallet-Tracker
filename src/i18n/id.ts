@@ -349,6 +349,7 @@ export const id: Dict = {
   lq_how_5: "Klaster besar sering bekerja seperti magnet: harga tertarik ke sana dan likuidasi mempercepat pergerakan. Ini kecenderungan, bukan jaminan.",
   lq_how_6: "Di kiri ada grafik harga periode terpilih dengan skala yang sama: terlihat dari mana harga datang dan di mana posisi di balik likuidasi itu dibuka.",
   lq_lev: "Leverage",
+  lq_live: "Diperbarui otomatis · {t}",
   lq_longs: "Long",
   lq_more: "Tampilkan {n} lagi",
   lq_near_dn: "Klaster terdekat di bawah",

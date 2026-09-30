@@ -6,7 +6,7 @@
  * когда принимал — по одному номеру в адресе открывался чужой аккаунт.
  */
 import { initData } from "./telegram";
-import { peek, remember } from "./memo";
+import { forget, peek, remember } from "./memo";
 import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
   LiqCoinsReply, FundRow, LsRow, MutationResult,
@@ -286,7 +286,7 @@ const liqPath = (sym: string, range: string) =>
    прошлой картой, а свежая догружается поверх. Сервер собирает карту с
    десятков бирж, и первый расчёт бывает дольше обычных пятнадцати секунд —
    поэтому ждём до тридцати и один раз повторяем. */
-const LIQ_TTL = 5 * 60_000;
+const LIQ_TTL = 2 * 60_000;
 const LIQ_SAVED = "wt-liqmap-v1";
 const LIQ_SAVED_KEEP = 10;
 const LIQ_SAVED_MAX_AGE = 3 * 24 * 3600_000;
@@ -336,6 +336,11 @@ export const fetchLiqMap = (sym: string, range: string) =>
       return r;
     });
 export const peekLiqMap = (sym: string, range: string) => peek<LiqMapReply | null>(liqPath(sym, range), LIQ_TTL);
+/** Свежая карта мимо памяти — для самообновления открытого экрана. */
+export function refreshLiqMap(sym: string, range: string): Promise<LiqMapReply | null> {
+  forget(liqPath(sym, range));
+  return fetchLiqMap(sym, range);
+}
 
 /** Все монеты с фьючерсами — список раз в час; последний лежит на устройстве. */
 export function savedLiqCoins(): LiqCoinsReply | null {

@@ -349,6 +349,7 @@ export const en = {
   lq_how_5: "Big clusters often act like a magnet: price drifts toward them, and the liquidations speed the move up. It's a tendency, not a guarantee.",
   lq_how_6: "On the left is the price chart for the chosen period on the same scale: you can see where the price came from and where the positions behind these levels were opened.",
   lq_lev: "Leverage",
+  lq_live: "Live · {t}",
   lq_longs: "Longs",
   lq_more: "Show {n} more",
   lq_near_dn: "Nearest cluster below",

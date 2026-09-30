@@ -52,6 +52,11 @@ export function remember<T>(
   return p;
 }
 
+/** Забыть один ответ — следующий запрос пойдёт на сервер. */
+export function forget(key: string): void {
+  store.delete(key);
+}
+
 /** Забыть всё: сменился план или человек, и прежние ответы уже не про него. */
 export function forgetAll(): void {
   store.clear();

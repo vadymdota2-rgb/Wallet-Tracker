@@ -349,6 +349,7 @@ export const fr: Dict = {
   lq_how_5: "Les gros amas agissent souvent comme un aimant : le prix tend vers eux et les liquidations accélèrent le mouvement. C'est une tendance, pas une garantie.",
   lq_how_6: "À gauche, le graphique du prix sur la période choisie, à la même échelle : on voit d'où vient le prix et où ont été ouvertes les positions de ces liquidations.",
   lq_lev: "Levier",
+  lq_live: "Mise à jour auto · {t}",
   lq_longs: "Longs",
   lq_more: "Afficher {n} de plus",
   lq_near_dn: "Amas le plus proche en dessous",

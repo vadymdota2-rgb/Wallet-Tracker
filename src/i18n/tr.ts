@@ -349,6 +349,7 @@ export const tr: Dict = {
   lq_how_5: "Büyük yoğunluklar çoğu zaman mıknatıs gibi çalışır: fiyat onlara çekilir, tasfiyeler hareketi hızlandırır. Bu bir eğilim, garanti değil.",
   lq_how_6: "Solda aynı ölçekte seçilen dönemin fiyat grafiği var: fiyatın nereden geldiği ve bu tasfiyelerin pozisyonlarının nerede açıldığı görülür.",
   lq_lev: "Kaldıraç",
+  lq_live: "Kendiliğinden güncellenir · {t}",
   lq_longs: "Long'lar",
   lq_more: "{n} tane daha göster",
   lq_near_dn: "Aşağıdaki en yakın yoğunluk",

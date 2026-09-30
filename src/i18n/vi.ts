@@ -349,6 +349,7 @@ export const vi: Dict = {
   lq_how_5: "Các cụm lớn thường như nam châm: giá bị kéo về phía chúng và thanh lý làm biến động nhanh hơn. Đây là xu hướng, không phải cam kết.",
   lq_how_6: "Bên trái là biểu đồ giá trong kỳ đã chọn trên cùng thang: thấy giá đến từ đâu và các vị thế sau những mức này được mở ở đâu.",
   lq_lev: "Đòn bẩy",
+  lq_live: "Tự cập nhật · {t}",
   lq_longs: "Long",
   lq_more: "Xem thêm {n}",
   lq_near_dn: "Cụm gần nhất phía dưới",

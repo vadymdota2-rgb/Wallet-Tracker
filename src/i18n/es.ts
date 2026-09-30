@@ -349,6 +349,7 @@ export const es: Dict = {
   lq_how_5: "Los grupos grandes suelen actuar como imán: el precio tiende hacia ellos y las liquidaciones aceleran el movimiento. Es una tendencia, no una garantía.",
   lq_how_6: "A la izquierda está el gráfico del precio del periodo elegido en la misma escala: se ve de dónde vino el precio y dónde se abrieron las posiciones de esas liquidaciones.",
   lq_lev: "Apalancamiento",
+  lq_live: "Se actualiza sola · {t}",
   lq_longs: "Largos",
   lq_more: "Mostrar {n} más",
   lq_near_dn: "Grupo más cercano abajo",

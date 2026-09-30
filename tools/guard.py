@@ -491,5 +491,9 @@ say("карта ликвидаций в гамме Coinglass: плечи фио�
     'const LEV_C = ["#7b61ff", "#38bdf8", "#facc15", "#f97316"];' in _lq and 'className="lq-bg"' in _lq
     and ".lq-now { stroke: #f6465d;" in read(f"{APP}/src/styles/app.css"))
 
+say("карта ликвидаций живая: сервер раз в две минуты, открытый экран спрашивает раз в минуту",
+    "LIQ_TTL = 120.0" in api and "LIQ_WARM_EVERY = 100" in api
+    and "refreshLiqMap(sym, range)" in _lq and "const LIVE_EVERY = 60_000;" in _lq)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

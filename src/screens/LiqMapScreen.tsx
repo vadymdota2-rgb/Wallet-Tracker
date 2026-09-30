@@ -33,7 +33,8 @@ import { useApp, type LiqRange } from "../store/app";
 import { t } from "../i18n/t";
 import { num, pct, px, since, usd } from "../lib/format";
 import { haptic } from "../lib/telegram";
-import { fetchLiqCoins, fetchLiqMap, peekLiqCoins, peekLiqMap, savedLiqMap } from "../lib/api";
+import { fetchLiqCoins, fetchLiqMap, peekLiqCoins, peekLiqMap, refreshLiqMap, savedLiqMap } from "../lib/api";
+import { useNow } from "../lib/tick";
 import { CoinIcon } from "../components/CoinIcon";
 import { Card, Chips, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import type { LiqCoin, LiqMapReply } from "../lib/types";
@@ -586,6 +587,20 @@ function CoinPicker({ lang, sym, onPick }: { lang: Lang; sym: string; onPick: (s
   );
 }
 
+/** Как часто открытый экран спрашивает свежую карту. */
+const LIVE_EVERY = 60_000;
+
+/** «Обновляется сама · 40 сек назад» — тикает каждую секунду отдельно от карты. */
+function LiveAge({ lang, at }: { lang: Lang; at: number }) {
+  const now = useNow();
+  return (
+    <small className="lq-live">
+      <i aria-hidden="true" />
+      {t(lang, "lq_live", { t: since(Math.max(1, now - at)) })}
+    </small>
+  );
+}
+
 export function LiqMapScreen() {
   const lang = useApp((s) => s.lang);
   const saved = useApp((s) => s.liqSym);
@@ -633,6 +648,24 @@ export function LiqMapScreen() {
       alive = false;
     };
   }, [sym, range, setLiq, retry]);
+
+  /* Пока экран открыт, карта обновляется сама раз в минуту: сервер
+     пересчитывает её каждые две, и уровни, которые цена уже прошла
+     (ликвидированы), и позиции, закрытые за это время, с неё уходят.
+     Выбранный уровень и масштаб при этом не сбрасываются. Скрытое
+     приложение не спрашивает. */
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void refreshLiqMap(sym, range).then((r) => {
+        if (r?.ok) {
+          setReply(r);
+          setStaleAt(null);
+        }
+      });
+    }, LIVE_EVERY);
+    return () => window.clearInterval(id);
+  }, [sym, range]);
 
   const again = () => {
     haptic("select");
@@ -710,6 +743,7 @@ export function LiqMapScreen() {
           <div className="lq-hero-n">
             <b>{reply.sym}</b>
             {reply.oi ? <small>{t(lang, "lq_oi")} {usd(reply.oi)}</small> : null}
+            <LiveAge lang={lang} at={reply.at} />
           </div>
           <div className="lq-hero-p">
             <b>{px(reply.px)}</b>

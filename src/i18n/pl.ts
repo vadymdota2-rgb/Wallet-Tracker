@@ -349,6 +349,7 @@ export const pl: Dict = {
   lq_how_5: "Duże skupiska często działają jak magnes: cena ciąży ku nim, a likwidacje przyspieszają ruch. To skłonność, nie gwarancja.",
   lq_how_6: "Po lewej wykres ceny z wybranego okresu w tej samej skali: widać, skąd przyszła cena i gdzie otwierano pozycje stojące za tymi likwidacjami.",
   lq_lev: "Dźwignia",
+  lq_live: "Odświeża się sama · {t}",
   lq_longs: "Longi",
   lq_more: "Pokaż jeszcze {n}",
   lq_near_dn: "Najbliższe skupisko poniżej",

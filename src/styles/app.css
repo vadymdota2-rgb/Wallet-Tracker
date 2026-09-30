@@ -2071,6 +2071,8 @@
 .lq-hero-n { display: grid; min-width: 0; }
 .lq-hero-n b { font-size: 18px; letter-spacing: 0.02em; }
 .lq-hero-n small { color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums; }
+.lq-live { display: inline-flex; align-items: center; gap: 5px; color: var(--dim-2) !important; font-size: 11px !important; }
+.lq-live i { width: 6px; height: 6px; border-radius: 50%; background: #0ecb81; box-shadow: 0 0 6px #0ecb81; animation: lq-pulse 2s ease-in-out infinite; }
 .lq-hero-p { display: grid; justify-items: end; margin-inline-start: auto; }
 .lq-hero-p b { font-size: 20px; font-variant-numeric: tabular-nums; }
 .lq-hero-p small { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
