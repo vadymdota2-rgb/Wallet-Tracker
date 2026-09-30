@@ -8010,15 +8010,22 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
         finally:
             sys.stderr.write(f"[api] cache {name}: {time.monotonic() - started:.1f}с\n")
 
+    # Необязательные куски при нехватке времени или сбое берут прошлую сборку,
+    # а не пустоту: раньше пропущенный фандинг уходил в приложение пустым, и
+    # раздел писал «нет аномалий», хотя ставки у сервера были.
+    with _pub_lock:
+        was = _pub["data"] or {}
+    # Фандинг — первым: он собирается из памяти (биржи опрашивает свой поток)
+    # и из одной таблицы Hyperliquid, и не должен ждать тяжёлых кусков.
+    funding = take("funding", lambda: load_funding(hl), was.get("fund") or funding)
     rank = take("rank", lambda: load_rank(cur, hl), rank, True)
     flow = take("flow", lambda: load_flow(cur), flow, True)
     trades = take("trades", lambda: load_trades(cur, hl), trades, True)
     market_feed = take("feed", lambda: load_feed_market(cur, hl), market_feed, True)
-    funding = take("funding", lambda: load_funding(hl), funding)
     # Ротацию считает свой поток (rot_refresher) — здесь только готовое.
     rot = rot_latest()
-    ls = take("ls", lambda: load_ls(hl), {})
-    coins = take("coins", lambda: load_coins(cur, hl, flow, []), {})
+    ls = take("ls", lambda: load_ls(hl), was.get("ls") or {})
+    coins = take("coins", lambda: load_coins(cur, hl, flow, []), was.get("coins") or {})
     return {
         "flow": flow,
         "ls": ls,
@@ -9221,7 +9228,12 @@ def _liq_coins_build() -> dict:
 # тёплыми заранее.
 LIQ_STALE = 6 * 3600.0
 LIQ_BUDGET = 12.0
-LIQ_WARM_EVERY = 100
+# Прогрев — раз в пять минут и шесть монет: карта стоит около секунды
+# процессора, и тридцать карт каждые сто секунд отнимали треть ядра у общей
+# сборки — та не укладывалась в бюджет и теряла фандинг. Открытая карта и так
+# отдаётся сразу из памяти и обновляется в фоне.
+LIQ_WARM_EVERY = 300
+LIQ_WARM_COINS = 6
 _liq_busy: set = set()
 
 
@@ -9267,11 +9279,12 @@ def liq_warm_refresher() -> None:
         except Exception:  # noqa: BLE001
             pass
         try:
-            listed = [c["s"] for c in (liq_coins().get("coins") or [])[:10]]
+            listed = [c["s"] for c in (liq_coins().get("coins") or [])[:LIQ_WARM_COINS]]
         except Exception:  # noqa: BLE001
             listed = []
-        for sym in listed or ["BTC", "ETH", "SOL", "XRP", "DOGE", "BNB", "HYPE", "SUI"]:
+        for sym in listed or ["BTC", "ETH", "SOL", "XRP", "HYPE", "DOGE"]:
             for rng in LIQ_RANGES:
+                time.sleep(1.0)  # между картами — дать поработать остальным
                 with _liq_lock:
                     hit = _liq_cache.get((sym, rng))
                 if hit and time.monotonic() - hit[0] < LIQ_TTL - 60:

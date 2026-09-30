@@ -9682,5 +9682,41 @@
     "uk": "Альткоїни без стейблкоїнів",
     "vi": "Altcoin không tính stablecoin",
     "zh": "山寨币(不含稳定币)"
+  },
+  "fund_wait": {
+    "ar": "نجمع معدلات التمويل من المنصات — عادةً بضع ثوانٍ.",
+    "de": "Wir sammeln die Funding-Raten der Börsen — meist dauert das ein paar Sekunden.",
+    "en": "Collecting funding rates from exchanges — usually takes a few seconds.",
+    "es": "Reuniendo las tasas de financiación de los exchanges; suele tardar unos segundos.",
+    "fr": "Nous récupérons les taux de financement des plateformes — quelques secondes en général.",
+    "hi": "एक्सचेंजों से फ़ंडिंग रेट जुटा रहे हैं — आमतौर पर कुछ सेकंड लगते हैं।",
+    "id": "Mengumpulkan funding rate dari bursa — biasanya beberapa detik.",
+    "ja": "取引所からファンディングレートを集めています。通常は数秒です。",
+    "ko": "거래소에서 펀딩비를 모으는 중입니다. 보통 몇 초 걸립니다.",
+    "pl": "Zbieramy stawki fundingu z giełd — zwykle trwa to kilka sekund.",
+    "pt": "Reunindo as taxas de financiamento das corretoras — costuma levar alguns segundos.",
+    "ru": "Собираем ставки фандинга с бирж — обычно это несколько секунд.",
+    "tr": "Borsalardan fonlama oranları toplanıyor — genellikle birkaç saniye sürer.",
+    "uk": "Збираємо ставки фандингу з бірж — зазвичай це кілька секунд.",
+    "vi": "Đang thu thập funding rate từ các sàn — thường mất vài giây.",
+    "zh": "正在从各交易所收集资金费率,通常只需几秒。"
+  },
+  "fund_fail": {
+    "ar": "تعذّر الحصول على معدلات التمويل.",
+    "de": "Funding-Raten konnten nicht geladen werden.",
+    "en": "Couldn't load funding rates.",
+    "es": "No se pudieron cargar las tasas de financiación.",
+    "fr": "Impossible de charger les taux de financement.",
+    "hi": "फ़ंडिंग रेट लोड नहीं हो सके।",
+    "id": "Funding rate gagal dimuat.",
+    "ja": "ファンディングレートを読み込めませんでした。",
+    "ko": "펀딩비를 불러오지 못했습니다.",
+    "pl": "Nie udało się wczytać stawek fundingu.",
+    "pt": "Não foi possível carregar as taxas de financiamento.",
+    "ru": "Не удалось получить ставки фандинга.",
+    "tr": "Fonlama oranları yüklenemedi.",
+    "uk": "Не вдалося отримати ставки фандингу.",
+    "vi": "Không tải được funding rate.",
+    "zh": "无法加载资金费率。"
   }
 }

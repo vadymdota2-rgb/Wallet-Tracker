@@ -2683,3 +2683,5 @@
 .dm-eb b { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .dm-eb span { color: var(--dim); font-size: 12.5px; }
 .dm-hero > b, .dm-ahero b, .dm-eb b, .dm-ch b, .dm-w-v, .dm-top-r > b { unicode-bidi: isolate; direction: ltr; }
+
+.fund-wait { margin: 4px 0 10px; color: var(--dim); font-size: 12.5px; text-align: center; }

@@ -492,7 +492,7 @@ say("карта ликвидаций в гамме Coinglass: плечи фио�
     and ".lq-now { stroke: #f6465d;" in read(f"{APP}/src/styles/app.css"))
 
 say("карта ликвидаций живая: сервер раз в две минуты, открытый экран спрашивает раз в минуту",
-    "LIQ_TTL = 120.0" in api and "LIQ_WARM_EVERY = 100" in api
+    "LIQ_TTL = 120.0" in api and "LIQ_WARM_EVERY = 300" in api and "LIQ_WARM_COINS = 6" in api
     and "refreshLiqMap(sym, range)" in _lq and "const LIVE_EVERY = 60_000;" in _lq)
 
 say("на колонке «Накоплено» — перевес в процентах и деньги сверху и снизу",
@@ -526,6 +526,13 @@ say("доминация и альтсезон: история рынка с 2013
     and "altcoin-season/chart" in api and "stablecoins.llama.fi" in api and "symbol=ETHBTC" in api
     and "dom_data()  # и доминация" in api and "function waves(" in _dm and "function MainChart(" in _dm
     and '"dm_say_flip_alt"' in _dm and '"dm_top_note"' in _dm and "glyph: <DomGlyph />" in appx)
+
+_fs = read(f"{APP}/src/screens/FundingScreen.tsx")
+say("фандинг не пропадает: собирается первым, при сбое — прошлый; пока ставок нет — загрузка с переспросом, а не «нет аномалий»",
+    'funding = take("funding", lambda: load_funding(hl), was.get("fund") or funding)' in api
+    and api.index('funding = take("funding"') < api.index('rank = take("rank"')
+    and "function FundWaiting(" in _fs and "if (!have.length) return <FundWaiting />;" in _fs
+    and "syncNow()" in _fs and '"fund_fail"' in _fs)
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

@@ -17,6 +17,7 @@ import { fundingSideKey, showSym } from "../lib/labels";
 import { CoinIcon } from "../components/CoinIcon";
 import { Card, Chips, Empty, Locked, Row, SectionTitle, Skeleton, VenueReel } from "../components/ui";
 import { fetchFund } from "../lib/api";
+import { syncNow } from "../lib/sync";
 import type { FundRow } from "../lib/types";
 import { Frame } from "./Screen";
 
@@ -229,6 +230,46 @@ function FundCalcBar() {
 }
 
 /**
+ * Ставок ещё нет: сервер только что перезапущен или первая выгрузка ушла
+ * раньше, чем он опросил биржи. Раньше здесь стояло «сейчас нет сильных
+ * аномалий» — неправда, данных просто не было, — а следующий опрос сервера
+ * был через три минуты. Теперь экран сам переспрашивает с растущей паузой,
+ * а через минуту без ответа честно говорит, что не получилось.
+ */
+const WAIT_STEPS = [3_000, 5_000, 8_000, 12_000, 15_000, 20_000];
+
+function FundWaiting() {
+  const lang = useApp((s) => s.lang);
+  const [step, setStep] = useState(0);
+  const failed = step >= WAIT_STEPS.length;
+
+  useEffect(() => {
+    if (failed) return;
+    const id = setTimeout(() => {
+      void syncNow().finally(() => setStep((n) => n + 1));
+    }, WAIT_STEPS[step]);
+    return () => clearTimeout(id);
+  }, [step, failed]);
+
+  if (failed) {
+    return (
+      <Empty
+        text={t(lang, "fund_fail")}
+        hint={
+          <button type="button" className="lq-retry" onClick={() => setStep(0)}>{t(lang, "ui_retry")}</button>
+        }
+      />
+    );
+  }
+  return (
+    <>
+      <p className="fund-wait">{t(lang, "fund_wait")}</p>
+      <Skeleton rows={5} />
+    </>
+  );
+}
+
+/**
  * Фандинг: где сейчас перекос и на какую сторону.
  *
  * Раздел был про одну биржу — Hyperliquid, — и её значок стоял уголком
@@ -264,6 +305,9 @@ function FundBody() {
   const [page, setPage] = useState(1);
   const [more, setMore] = useState<FundRow[] | null>(null);
   const [busy, setBusy] = useState(false);
+  /* Страница не пришла — это сбой сети, а не «нет аномалий». */
+  const [pageErr, setPageErr] = useState(false);
+  const [again, setAgain] = useState(0);
 
   // Сменилась биржа — это другая доска, и она с начала.
   useEffect(() => {
@@ -275,17 +319,20 @@ function FundBody() {
     if (!ex || page === 1) {
       setMore(null);
       setBusy(false);
+      setPageErr(false);
       return;
     }
     const ctrl = new AbortController();
     setBusy(true);
+    setPageErr(false);
     void fetchFund(ex, (page - 1) * FUND_PAGE, FUND_PAGE, ctrl.signal).then((r) => {
       if (ctrl.signal.aborted) return;
       setMore(r?.ok ? r.rows ?? [] : []);
+      setPageErr(!r?.ok);
       setBusy(false);
     });
     return () => ctrl.abort();
-  }, [ex, page]);
+  }, [ex, page, again]);
 
   const first = fund[ex] ?? [];
   const total = counts[ex] ?? first.length;
@@ -299,9 +346,7 @@ function FundBody() {
     setPage(to);
   };
 
-  if (!have.length) {
-    return <Empty text={t(lang, "fund_empty")} hint={t(lang, "fund_loading")} />;
-  }
+  if (!have.length) return <FundWaiting />;
 
   return (
     <>
@@ -320,7 +365,11 @@ function FundBody() {
       <FundCalcBar />
       {busy && !rows.length ? <Skeleton rows={4} /> : null}
       {!busy && rows.length === 0 ? (
-        <Empty text={t(lang, "fund_empty")} hint={t(lang, "fund_loading")} />
+        pageErr ? (
+          <Empty text={t(lang, "fund_fail")} hint={
+            <button type="button" className="lq-retry" onClick={() => setAgain((n) => n + 1)}>{t(lang, "ui_retry")}</button>
+          } />
+        ) : <Empty text={t(lang, "fund_empty")} />
       ) : (
         /* Подписи здесь переносятся, а не обрезаются многоточием, как в
            остальных списках: в них стоит объяснение числа — сколько платят и
