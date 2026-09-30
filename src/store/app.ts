@@ -25,6 +25,8 @@ export interface Screen {
   arg?: string;
   /** Второй ключ — например индекс позиции внутри кошелька. */
   arg2?: string;
+  /** Открыт из бокового меню: «Назад» возвращает в меню, а не на вкладку. */
+  menu?: boolean;
 }
 
 /** Окна крупных сделок — те же, что в боте. */
@@ -44,6 +46,8 @@ interface AppState {
   langPinned: boolean;
   tab: Tab;
   stack: Screen[];
+  /** Боковое меню открыто. Не сохраняется: запуск всегда без меню. */
+  menuOpen: boolean;
 
   bigView: BigView;
   bigWin: BigWin;
@@ -71,6 +75,9 @@ interface AppState {
   setLang(lang: LangCode, pinned?: boolean): void;
   goTab(tab: Tab): void;
   open(name: ScreenName, arg?: string, arg2?: string): void;
+  /** Экран из бокового меню: меню закрывается, а «Назад» его вернёт. */
+  openFromMenu(name: ScreenName): void;
+  setMenu(open: boolean): void;
   back(): void;
   reset(): void;
 
@@ -100,6 +107,7 @@ export const useApp = create<AppState>()(
          запусками (см. partialize), и открытое вчера не решает за сегодня. */
       tab: "digest",
       stack: [],
+      menuOpen: false,
 
       bigView: "flow",
       bigWin: "24h",
@@ -123,7 +131,13 @@ export const useApp = create<AppState>()(
       setLang: (lang, pinned = true) => set({ lang, langPinned: pinned || get().langPinned }),
       goTab: (tab) => set({ tab, stack: [] }),
       open: (name, arg, arg2) => set({ stack: [...get().stack, { name, arg, arg2 }] }),
-      back: () => set({ stack: get().stack.slice(0, -1) }),
+      openFromMenu: (name) => set({ menuOpen: false, stack: [...get().stack, { name, menu: true }] }),
+      setMenu: (menuOpen) => set({ menuOpen }),
+      back: () => {
+        const stack = get().stack;
+        const top = stack[stack.length - 1];
+        set({ stack: stack.slice(0, -1), menuOpen: Boolean(top?.menu) });
+      },
       reset: () => set({ stack: [] }),
 
       setBigView: (bigView) => set({ bigView }),

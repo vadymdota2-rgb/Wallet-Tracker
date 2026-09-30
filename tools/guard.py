@@ -501,5 +501,10 @@ say("на колонке «Накоплено» — перевес в проце
 say("модель ликвидаций: падение интереса закрывает позиции долей от всего интереса биржи",
     "k = max(0.0, oi / prev)" in api and "k = max(0.0, 1 + d / total)" not in api)
 
+_store2 = read(f"{APP}/src/store/app.ts")
+say("экраны бокового меню: «Назад» возвращает в меню, значок фандинга одноцветный",
+    "openFromMenu(m.name)" in appx and "menuOpen: Boolean(top?.menu)" in _store2
+    and "menuOpen: s." not in _store2 and "glyph: <FundLineGlyph />" in appx)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

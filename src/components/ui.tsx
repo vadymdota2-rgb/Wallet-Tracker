@@ -1131,6 +1131,33 @@ export function LiqGlyph({ size = 25 }: { size?: number }) {
   );
 }
 
+/**
+ * Фандинг для бокового меню — одним цветом и тем же контуром, что график,
+ * токеномика и карта ликвидаций: качели, на которых одна сторона платит
+ * другой. Цветной вариант остался у раздела дайджеста.
+ */
+export function FundLineGlyph({ size = 25 }: { size?: number }) {
+  return (
+    <svg
+      className="glyph"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3.5 10 20.5 15" />
+      <path d="M12 12.6 9 19.5h6z" />
+      <circle cx="5.6" cy="7.1" r="1.9" />
+      <circle cx="18.2" cy="10.9" r="2.6" />
+    </svg>
+  );
+}
+
 /** Молния — «быстрее остальных». Тот же контур, что у соседних значков. */
 export function BoltGlyph({ size = 22 }: { size?: number }) {
   return (

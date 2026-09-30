@@ -16,7 +16,7 @@ import { bootTelegram, haptic, initData, telegramLang, waitForTelegram, webApp }
 import { startSync, syncNow } from "./lib/sync";
 import { Toaster, toast } from "./components/Toast";
 import { Background } from "./components/Background";
-import { AnalyticsGlyph, ChartGlyph, DigestGlyph, FundingGlyph, LiqGlyph, UnlockGlyph, TopGlyph, WalletGlyph } from "./components/ui";
+import { AnalyticsGlyph, ChartGlyph, DigestGlyph, FundLineGlyph, LiqGlyph, UnlockGlyph, TopGlyph, WalletGlyph } from "./components/ui";
 import { SCREENS } from "./screens/registry";
 import { WalletsTab } from "./screens/WalletsTab";
 import { TopTab } from "./screens/TopTab";
@@ -65,7 +65,7 @@ const MENU: { name: ScreenName; key: DictKey; glyph: ReactNode }[] = [
   { name: "chart", key: "chart_title", glyph: <ChartGlyph /> },
   { name: "unlocks", key: "unl_title", glyph: <UnlockGlyph /> },
   { name: "liqmap", key: "lq_title", glyph: <LiqGlyph /> },
-  { name: "funding", key: "ui_tab_funding", glyph: <FundingGlyph /> },
+  { name: "funding", key: "ui_tab_funding", glyph: <FundLineGlyph /> },
 ];
 
 function TabBody({ tab }: { tab: Tab }) {
@@ -95,7 +95,9 @@ export default function App() {
   const open = useApp((s) => s.open);
 
   const status = useLive((s) => s.status);
-  const [menuOpen, setMenu] = useState(false);
+  const menuOpen = useApp((s) => s.menuOpen);
+  const setMenu = useApp((s) => s.setMenu);
+  const openFromMenu = useApp((s) => s.openFromMenu);
   const [i18nReady, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -161,16 +163,21 @@ export default function App() {
     };
   }, []);
 
-  // Аппаратная кнопка «назад» Telegram ведёт по стеку экранов.
+  // Аппаратная кнопка «назад» Telegram ведёт по стеку экранов. Экран из
+  // бокового меню возвращает в меню; открытое меню она закрывает — иначе
+  // «назад» при открытом меню закрывал бы всё приложение.
   useEffect(() => {
     const btn = webApp()?.BackButton;
     if (!btn) return;
-    const onBack = () => back();
+    const onBack = () => {
+      if (stack.length) back();
+      else setMenu(false);
+    };
     btn.onClick?.(onBack);
-    if (stack.length) btn.show?.();
+    if (stack.length || menuOpen) btn.show?.();
     else btn.hide?.();
     return () => btn.offClick?.(onBack);
-  }, [stack.length, back]);
+  }, [stack.length, menuOpen, back, setMenu]);
 
   if (!i18nReady) return <div className="boot">WALLET TRACKER</div>;
 
@@ -229,7 +236,7 @@ export default function App() {
             <p className="drawer-ttl">{bare(t(lang, "menu_title"))}</p>
             {MENU.map((m) => (
               <button key={m.name} type="button" className="drawer-row"
-                      onClick={() => { haptic("select"); setMenu(false); open(m.name); }}>
+                      onClick={() => { haptic("select"); openFromMenu(m.name); }}>
                 <span aria-hidden="true">{m.glyph}</span>
                 {bare(t(lang, m.key))}
               </button>
