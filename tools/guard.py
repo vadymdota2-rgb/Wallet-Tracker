@@ -511,5 +511,8 @@ say("страх и жадность: вся история alternative.me с ц�
     "def fng_data(" in api and '"/api/fng"' in api and "api.alternative.me/fng/?limit=0" in api
     and "function Gauge(" in _fg and "P2 = {" in _fg and "fg_ret_note" in _fg)
 
+say("страх и жадность: сколько подряд держится каждая зона, рекорд, куда уходит дальше, текущая полоса",
+    "function streakStats(" in _fg and '"fg_st_now"' in _fg and '"fg_st_next"' in _fg)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

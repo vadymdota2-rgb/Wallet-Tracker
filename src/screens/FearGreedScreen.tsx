@@ -252,6 +252,48 @@ function Chart({ days, lang, sel, onSel }: {
   );
 }
 
+interface Streak {
+  n: number;
+  sum: number;
+  max: number;
+  maxAt: number;
+  next: number[];
+}
+
+/**
+ * Полосы — дни подряд в одной зоне. Для каждой зоны: сколько полос
+ * закончилось, их средняя длина, рекорд (с днём начала) и куда индекс
+ * уходил после. Ещё идущая полоса в среднее не входит — она не закончилась,
+ * но в рекорд попадает. Первая полоса окна тоже не входит, если окно
+ * начинается не с начала истории: её начало обрезано.
+ */
+function streakStats(days: Day[], cutStart: boolean): Streak[] {
+  const out = ZONES.map(() => ({ n: 0, sum: 0, max: 0, maxAt: 0, next: ZONES.map(() => 0) }));
+  let i = 0;
+  while (i < days.length) {
+    const zi = zoneOf(days[i]![1]);
+    let j = i;
+    while (j + 1 < days.length && zoneOf(days[j + 1]![1]) === zi) j++;
+    const len = j - i + 1;
+    const s = out[zi];
+    const after = days[j + 1];
+    if (s && !(cutStart && i === 0)) {
+      if (len > s.max) {
+        s.max = len;
+        s.maxAt = days[i]![0];
+      }
+      if (after) {
+        s.n += 1;
+        s.sum += len;
+        const nz = zoneOf(after[1]);
+        if (nz >= 0) s.next[nz]! += 1;
+      }
+    }
+    i = j + 1;
+  }
+  return out;
+}
+
 export function FearGreedScreen() {
   const lang = useApp((s) => s.lang);
   const [reply, setReply] = useState<FngReply | null>(() => peekFng() ?? null);
@@ -321,6 +363,18 @@ export function FearGreedScreen() {
     const avg = days.length ? days.reduce((s, d) => s + d[1], 0) / days.length : 0;
     return { cnt, ret, avg, total: days.length };
   }, [all, days]);
+
+  const streaks = useMemo(() => streakStats(days, range !== "all"), [days, range]);
+  const streaksAll = useMemo(() => streakStats(all, false), [all]);
+  /* Текущая полоса — по всей истории: сколько дней подряд индекс в той же зоне. */
+  const cur = useMemo(() => {
+    if (!all.length) return null;
+    const zi = zoneOf(all[all.length - 1]![1]);
+    let k = all.length - 1;
+    while (k > 0 && zoneOf(all[k - 1]![1]) === zi) k -= 1;
+    return { zi, len: all.length - k };
+  }, [all]);
+  const daysStr = (v: number, digits = 0) => t(lang, "fg_days", { n: num(v, digits) });
 
   const selDay = sel !== null ? days[sel] : undefined;
   const tipLeft = sel !== null && sel > days.length / 2;
@@ -426,6 +480,54 @@ export function FearGreedScreen() {
               {t(lang, "fg_avg")} <b style={{ color: colorOf(Math.round(stats.avg)) }}>{num(stats.avg, 0)}</b>
             </p>
             <p className="lq-hint">{t(lang, "fg_ret_note")}</p>
+          </Card>
+
+          <SectionTitle>{t(lang, "fg_st_title")}</SectionTitle>
+          <Card>
+            {cur && cur.zi >= 0 ? (() => {
+              const z = ZONES[cur.zi]!;
+              const sa = streaksAll[cur.zi]!;
+              return (
+                <div className="fg-now" style={{ borderColor: z.c }}>
+                  <p>
+                    {t(lang, "fg_st_now", { z: t(lang, z.key), n: num(cur.len) }).split(t(lang, z.key)).flatMap((part, i, arr) =>
+                      i < arr.length - 1 ? [part, <b key={i} style={{ color: z.c }}>{t(lang, z.key)}</b>] : [part])}
+                  </p>
+                  {sa.n ? (
+                    <small>{t(lang, "fg_st_cmp", { a: daysStr(sa.sum / sa.n, 1), m: daysStr(sa.max) })}</small>
+                  ) : null}
+                </div>
+              );
+            })() : null}
+            <div className="fg-st fg-st-h">
+              <span />
+              <small>{t(lang, "fg_st_avg")}</small>
+              <small>{t(lang, "fg_st_max")}</small>
+            </div>
+            {ZONES.map((z, i) => {
+              const st = streaks[i]!;
+              const tot = st.next.reduce((a, b) => a + b, 0);
+              const best = tot ? st.next.indexOf(Math.max(...st.next)) : -1;
+              const nz = best >= 0 ? ZONES[best] : undefined;
+              return (
+                <div key={z.key} className="fg-st">
+                  <span><i style={{ background: z.c }} />{t(lang, z.key)}</span>
+                  <b>{st.n ? daysStr(st.sum / st.n, 1) : "—"}</b>
+                  <b>{st.max ? daysStr(st.max) : "—"}
+                    {st.maxAt ? <small>{dateStr(lang, st.maxAt, { month: "short", year: "numeric" })}</small> : null}</b>
+                  <p>
+                    {t(lang, "fg_times", { n: num(st.n) })}
+                    {nz ? (
+                      <>
+                        {" · "}{t(lang, "fg_st_next")} <i style={{ background: nz.c }} />
+                        <em style={{ color: nz.c }}>{t(lang, nz.key)}</em> {pct((st.next[best]! / tot) * 100, 0, false)}
+                      </>
+                    ) : null}
+                  </p>
+                </div>
+              );
+            })}
+            <p className="lq-hint">{t(lang, "fg_st_note")}</p>
           </Card>
 
           <details className="lq-how">
