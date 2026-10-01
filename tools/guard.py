@@ -563,7 +563,7 @@ say("дайджест: просмотры — каждый человек оди
 
 say("институциональные потоки: накопленный приток, доля и премия фондов, средняя цена покупки держателей, время данных",
     "cum={mode === \"c\" ? cumView : null}" in _ef and '"ef_mshare"' in _ef and '"ef_prem"' in _ef
-    and '"ef_cost"' in _ef and '"ef_held2"' in _ef and '"ef_upd"' in _ef and "coinsRound(" in _ef)
+    and '"ef_cost"' in read(f"{APP}/src/screens/EtfMore.tsx") and '"ef_held2"' in _ef and '"ef_upd"' in _ef and "coinsRound(" in _ef)
 
 _em = read(f"{APP}/src/screens/EtfMore.tsx")
 say("институциональные потоки: позиции CME по CFTC, премия Coinbase, все держатели с поиском и группами, казначейства ETH/SOL/BNB/XRP",
