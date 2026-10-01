@@ -271,6 +271,28 @@ export const fetchDigestComments = (id: number, before = 0) =>
   call<DigestCommentsReply>(`/api/digest/comments?id=${id}${before ? `&before=${before}` : ""}`);
 export const likeDigest = (id: number) =>
   call<DigestActReply>("/api/digest/like", { method: "POST", body: { id } });
+/* Просмотр выпуска: шлётся один раз с телефона — какие уже отмечены, помнит
+   само устройство, а сервер всё равно считает каждого человека один раз. */
+const DG_SEEN = "wt-dg-seen";
+export function viewDigest(id: number): Promise<DigestActReply | null> | null {
+  let seen: number[] = [];
+  try {
+    seen = JSON.parse(localStorage.getItem(DG_SEEN) || "[]");
+  } catch {
+    seen = [];
+  }
+  if (Array.isArray(seen) && seen.includes(id)) return null;
+  return call<DigestActReply>("/api/digest/view", { method: "POST", body: { id } }).then((r) => {
+    if (r?.ok) {
+      try {
+        localStorage.setItem(DG_SEEN, JSON.stringify([id, ...(Array.isArray(seen) ? seen : [])].slice(0, 60)));
+      } catch {
+        // без памяти — отметим ещё раз, сервер не задвоит
+      }
+    }
+    return r;
+  });
+}
 export const commentDigest = (id: number, text: string, anon: boolean) =>
   call<DigestActReply>("/api/digest/comment", { method: "POST", body: { id, text, anon } });
 export const translateComment = (cid: number, lang: string) =>

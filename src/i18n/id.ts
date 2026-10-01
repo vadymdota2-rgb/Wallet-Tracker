@@ -134,6 +134,7 @@ export const id: Dict = {
   dg_translate: "Terjemahkan",
   dg_unl: "Pembukaan berikutnya",
   dg_unl_of: "{p} dari suplai",
+  dg_views: "Dilihat: {n}",
   dg_wallets: "{n} dompet",
   dg_window: "24 jam hingga {t}",
   dm_24h: "24 jam",

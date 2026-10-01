@@ -134,6 +134,7 @@ export const fr: Dict = {
   dg_translate: "Traduire",
   dg_unl: "Prochains déblocages",
   dg_unl_of: "{p} de l'offre",
+  dg_views: "Vues : {n}",
   dg_wallets: "{n} portefeuilles",
   dg_window: "24 heures jusqu'à {t}",
   dm_24h: "24 h",

@@ -134,6 +134,7 @@ export const en = {
   dg_translate: "Translate",
   dg_unl: "Upcoming unlocks",
   dg_unl_of: "{p} of supply",
+  dg_views: "Views: {n}",
   dg_wallets: "{n} wallets",
   dg_window: "24 hours to {t}",
   dm_24h: "24h",

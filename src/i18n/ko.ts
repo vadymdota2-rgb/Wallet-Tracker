@@ -134,6 +134,7 @@ export const ko: Dict = {
   dg_translate: "번역",
   dg_unl: "다가오는 언락",
   dg_unl_of: "유통량의 {p}",
+  dg_views: "조회수: {n}",
   dg_wallets: "지갑 {n}개",
   dg_window: "{t}까지 24시간",
   dm_24h: "24시간",

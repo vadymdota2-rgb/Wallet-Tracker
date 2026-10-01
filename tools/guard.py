@@ -555,5 +555,11 @@ say("внизу меню — отсчёт до халвинга, а не дат�
     "def halving_data(" in api and '"/api/halving"' in api and "mempool.space/api/blocks/tip/height" in api
     and "<HalvingCard />" in appx and "drawer-build" not in appx and "(h.next - h.height) * h.avg - since" in _hv)
 
+_dgt = read(f"{APP}/src/screens/DigestTab.tsx")
+say("дайджест: просмотры — каждый человек один раз, счётчик у каждого выпуска",
+    "CREATE TABLE IF NOT EXISTS digest_views" in api and "INSERT OR IGNORE INTO digest_views" in api
+    and '"/api/digest/view": "view"' in api and "DELETE FROM digest_views WHERE chat_id=?" in api
+    and "viewDigest(it.id)" in _dgt and 'className="dg-views"' in _dgt)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

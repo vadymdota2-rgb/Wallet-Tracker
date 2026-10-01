@@ -134,6 +134,7 @@ export const de: Dict = {
   dg_translate: "Übersetzen",
   dg_unl: "Anstehende Unlocks",
   dg_unl_of: "{p} des Umlaufs",
+  dg_views: "Aufrufe: {n}",
   dg_wallets: "{n} Wallets",
   dg_window: "24 Stunden bis {t}",
   dm_24h: "24 Std.",

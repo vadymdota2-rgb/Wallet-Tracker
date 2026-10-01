@@ -134,6 +134,7 @@ export const ru: Dict = {
   dg_translate: "Перевести",
   dg_unl: "Ближайшие разлоки",
   dg_unl_of: "{p} оборота",
+  dg_views: "Просмотры: {n}",
   dg_wallets: "кошельков: {n}",
   dg_window: "24 часа до {t}",
   dm_24h: "За сутки",

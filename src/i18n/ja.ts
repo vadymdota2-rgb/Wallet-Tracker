@@ -134,6 +134,7 @@ export const ja: Dict = {
   dg_translate: "翻訳",
   dg_unl: "今後のアンロック",
   dg_unl_of: "流通量の {p}",
+  dg_views: "閲覧数: {n}",
   dg_wallets: "{n} ウォレット",
   dg_window: "{t} までの24時間",
   dm_24h: "24時間",

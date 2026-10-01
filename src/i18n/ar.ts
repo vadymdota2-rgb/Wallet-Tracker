@@ -134,6 +134,7 @@ export const ar: Dict = {
   dg_translate: "‏ترجمة",
   dg_unl: "‏فتح الرموز القادم",
   dg_unl_of: "‏{p} من المعروض",
+  dg_views: "المشاهدات: {n}",
   dg_wallets: "‏{n} محفظة",
   dg_window: "‏24 ساعة حتى {t}",
   dm_24h: "خلال يوم",

@@ -10089,6 +10089,12 @@ CREATE TABLE IF NOT EXISTS digest_likes (
     at INTEGER NOT NULL,
     PRIMARY KEY (digest_id, chat_id)
 );
+CREATE TABLE IF NOT EXISTS digest_views (
+    digest_id INTEGER NOT NULL,
+    chat_id TEXT NOT NULL,
+    at INTEGER NOT NULL,
+    PRIMARY KEY (digest_id, chat_id)
+);
 CREATE TABLE IF NOT EXISTS digest_comments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     digest_id INTEGER NOT NULL,
@@ -10112,6 +10118,7 @@ CREATE TABLE IF NOT EXISTS digest_mute (
 CREATE INDEX IF NOT EXISTS idx_digest_comments_d ON digest_comments(digest_id, at);
 CREATE INDEX IF NOT EXISTS idx_digest_comments_c ON digest_comments(chat_id);
 CREATE INDEX IF NOT EXISTS idx_digest_likes_c ON digest_likes(chat_id);
+CREATE INDEX IF NOT EXISTS idx_digest_views_c ON digest_views(chat_id);
 """
 
 
@@ -10271,6 +10278,7 @@ def digest_make() -> bool:
                 con.execute("DELETE FROM digest_tr WHERE comment_id IN "
                             "(SELECT id FROM digest_comments WHERE digest_id=?)", (did,))
                 con.execute("DELETE FROM digest_likes WHERE digest_id=?", (did,))
+                con.execute("DELETE FROM digest_views WHERE digest_id=?", (did,))
                 con.execute("DELETE FROM digest_comments WHERE digest_id=?", (did,))
                 con.execute("DELETE FROM digests WHERE id=?", (did,))
             con.commit()
@@ -10292,7 +10300,7 @@ def digest_refresher() -> None:
 
 
 def digest_list(chat: str, premium: bool) -> dict:
-    """Последние выпуски: содержимое, лайки, число комментариев, свой лайк."""
+    """Последние выпуски: содержимое, лайки, просмотры, число комментариев, свой лайк."""
     con = _digest_con()
     if not con:
         return {"ok": False, "error": "db"}
@@ -10301,6 +10309,7 @@ def digest_list(chat: str, premium: bool) -> dict:
             "SELECT d.id, d.day, d.made_at, d.body, "
             "(SELECT COUNT(*) FROM digest_likes l WHERE l.digest_id=d.id) likes, "
             "(SELECT COUNT(*) FROM digest_comments c WHERE c.digest_id=d.id) comments, "
+            "(SELECT COUNT(*) FROM digest_views v WHERE v.digest_id=d.id) views, "
             "EXISTS(SELECT 1 FROM digest_likes l WHERE l.digest_id=d.id AND l.chat_id=?) liked "
             "FROM digests d ORDER BY d.day DESC LIMIT ?", (chat or "", DIGEST_KEEP)).fetchall()
         items = []
@@ -10314,7 +10323,8 @@ def digest_list(chat: str, premium: bool) -> dict:
                     if k in body:
                         body[k] = {"locked": True}
             items.append({"id": r["id"], "day": r["day"], "at": r["made_at"], **body,
-                          "likes": r["likes"], "comments": r["comments"], "liked": bool(r["liked"])})
+                          "likes": r["likes"], "comments": r["comments"], "views": r["views"],
+                          "liked": bool(r["liked"])})
         muted = bool(chat) and bool(con.execute("SELECT 1 FROM digest_mute WHERE chat_id=?", (chat,)).fetchone())
         return {"ok": True, "items": items, "muted": muted, "mod": bool(chat) and chat == OWNER_CHAT_ID}
     finally:
@@ -10436,6 +10446,16 @@ def digest_act(user: dict, kind: str, body: dict) -> dict:
         return {"ok": False, "error": "db"}
     try:
         with _digest_lock:
+            # Просмотр — человек раскрыл выпуск. Каждый считается один раз:
+            # раскрыл трижды — всё равно один просмотр.
+            if kind == "view":
+                did = int(body.get("id") or 0)
+                if not con.execute("SELECT 1 FROM digests WHERE id=?", (did,)).fetchone():
+                    return {"ok": False, "error": "not_found"}
+                con.execute("INSERT OR IGNORE INTO digest_views(digest_id, chat_id, at) VALUES(?,?,?)", (did, chat, now()))
+                con.commit()
+                n = con.execute("SELECT COUNT(*) FROM digest_views WHERE digest_id=?", (did,)).fetchone()[0]
+                return {"ok": True, "views": n}
             if kind == "like":
                 did = int(body.get("id") or 0)
                 if not con.execute("SELECT 1 FROM digests WHERE id=?", (did,)).fetchone():
@@ -10584,6 +10604,7 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
                 "DELETE FROM premium_payments WHERE chat_id=?",
                 "DELETE FROM ton_invoices WHERE chat_id=?",
                 "DELETE FROM digest_likes WHERE chat_id=?",
+                "DELETE FROM digest_views WHERE chat_id=?",
                 "DELETE FROM digest_tr WHERE comment_id IN (SELECT id FROM digest_comments WHERE chat_id=?)",
                 "DELETE FROM digest_comments WHERE chat_id=?",
                 "DELETE FROM digest_mute WHERE chat_id=?",
@@ -11120,7 +11141,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(401, {"ok": False, "error": "unauthorized"})
                 return
             dg = {"/api/digest/like": "like", "/api/digest/comment": "comment",
-                  "/api/digest/uncomment": "uncomment"}.get(path)
+                  "/api/digest/uncomment": "uncomment", "/api/digest/view": "view"}.get(path)
             if dg:
                 # Отказ (часто, ссылка, лимит) — тоже 200: приложению нужна
                 # причина, а на ошибочный код оно видит только «нет ответа».

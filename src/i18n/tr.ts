@@ -134,6 +134,7 @@ export const tr: Dict = {
   dg_translate: "Çevir",
   dg_unl: "Yaklaşan kilit açılışları",
   dg_unl_of: "arzın {p} kadarı",
+  dg_views: "Görüntülenme: {n}",
   dg_wallets: "{n} cüzdan",
   dg_window: "{t}'e kadar 24 saat",
   dm_24h: "24 sa",

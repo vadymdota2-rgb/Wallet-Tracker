@@ -134,6 +134,7 @@ export const vi: Dict = {
   dg_translate: "Dịch",
   dg_unl: "Mở khoá sắp tới",
   dg_unl_of: "{p} lưu hành",
+  dg_views: "Lượt xem: {n}",
   dg_wallets: "{n} ví",
   dg_window: "24 giờ đến {t}",
   dm_24h: "24 giờ",

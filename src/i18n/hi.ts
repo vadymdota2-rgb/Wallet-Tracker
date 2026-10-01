@@ -134,6 +134,7 @@ export const hi: Dict = {
   dg_translate: "अनुवाद करें",
   dg_unl: "आने वाले अनलॉक",
   dg_unl_of: "आपूर्ति का {p}",
+  dg_views: "व्यूज़: {n}",
   dg_wallets: "{n} वॉलेट",
   dg_window: "{t} तक 24 घंटे",
   dm_24h: "24 घं.",

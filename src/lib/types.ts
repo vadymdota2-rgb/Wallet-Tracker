@@ -567,6 +567,8 @@ export interface DigestItem {
   unl?: DigestUnlock[];
   likes: number;
   comments: number;
+  /** Сколько человек раскрывали выпуск — каждый считается один раз. */
+  views?: number;
   liked: boolean;
 }
 
@@ -602,6 +604,7 @@ export interface DigestActReply {
   error?: "empty" | "too_long" | "links" | "too_fast" | "day_limit" | "muted" | "not_found" | "forbidden" | "no_user" | "db";
   liked?: boolean;
   likes?: number;
+  views?: number;
   item?: DigestComment;
   wait?: number;
   max?: number;

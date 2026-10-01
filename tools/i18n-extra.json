@@ -11104,5 +11104,23 @@
     "uk": "Нагорода за блок",
     "vi": "Phần thưởng khối",
     "zh": "区块奖励"
+  },
+  "dg_views": {
+    "ar": "المشاهدات: {n}",
+    "de": "Aufrufe: {n}",
+    "en": "Views: {n}",
+    "es": "Vistas: {n}",
+    "fr": "Vues : {n}",
+    "hi": "व्यूज़: {n}",
+    "id": "Dilihat: {n}",
+    "ja": "閲覧数: {n}",
+    "ko": "조회수: {n}",
+    "pl": "Wyświetlenia: {n}",
+    "pt": "Visualizações: {n}",
+    "ru": "Просмотры: {n}",
+    "tr": "Görüntülenme: {n}",
+    "uk": "Перегляди: {n}",
+    "vi": "Lượt xem: {n}",
+    "zh": "浏览量:{n}"
   }
 }

@@ -1977,6 +1977,16 @@
 .dg-like.on { border-color: rgb(255 92 122 / 0.6); color: #ff6f8c; }
 .dg-talk.on { border-color: rgb(58 130 214 / 0.6); }
 .dg-like:active, .dg-talk:active { opacity: 0.6; }
+.dg-views {
+  margin-inline-start: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 2px;
+  color: var(--dim);
+  font-size: 13px;
+}
+.dg-views b { font-weight: 600; font-variant-numeric: tabular-nums; }
 
 .dg-com { display: grid; gap: 10px; }
 .dg-com-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }

@@ -17,7 +17,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import { t } from "../i18n/t";
-import { pct, usd } from "../lib/format";
+import { num, pct, usd } from "../lib/format";
 import { haptic } from "../lib/telegram";
 import {
   commentDigest,
@@ -25,6 +25,7 @@ import {
   fetchDigestComments,
   translateComment,
   likeDigest,
+  viewDigest,
   peekDigest,
   uncommentDigest,
 } from "../lib/api";
@@ -585,6 +586,21 @@ function DigestCard({ it, lang, premium, mod, muted, fresh }: {
   const [likes, setLikes] = useState(it.likes);
   const [liked, setLiked] = useState(it.liked);
   const [count, setCount] = useState(it.comments);
+  const [views, setViews] = useState(it.views ?? 0);
+
+  /* Выпуск раскрыт — значит, его видели. Свежий раскрыт сразу. */
+  useEffect(() => {
+    if (!shown) return;
+    const req = viewDigest(it.id);
+    if (!req) return;
+    let alive = true;
+    void req.then((r) => {
+      if (alive && r?.ok && typeof r.views === "number") setViews(r.views);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [shown, it.id]);
 
   const like = async () => {
     haptic("select");
@@ -642,6 +658,15 @@ function DigestCard({ it, lang, premium, mod, muted, fresh }: {
           <b>{count}</b>
           <small>{t(lang, "dg_comments")}</small>
         </button>
+        {/* Просмотры — справа и без рамки: это не кнопка, а счётчик. */}
+        <span className="dg-views" role="img" aria-label={t(lang, "dg_views", { n: views })}>
+          <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+            <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" fill="none"
+              stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+            <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" strokeWidth="1.8" />
+          </svg>
+          <b>{num(views)}</b>
+        </span>
       </div>
       {talk ? (
         <Comments it={it} lang={lang} mod={mod} muted={muted} onCount={(d) => setCount((n) => Math.max(0, n + d))} />

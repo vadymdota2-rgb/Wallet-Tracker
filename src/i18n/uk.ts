@@ -134,6 +134,7 @@ export const uk: Dict = {
   dg_translate: "Перекласти",
   dg_unl: "Найближчі розлоки",
   dg_unl_of: "{p} обігу",
+  dg_views: "Перегляди: {n}",
   dg_wallets: "гаманців: {n}",
   dg_window: "24 години до {t}",
   dm_24h: "За добу",

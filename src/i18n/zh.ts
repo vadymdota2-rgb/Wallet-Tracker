@@ -134,6 +134,7 @@ export const zh: Dict = {
   dg_translate: "翻译",
   dg_unl: "即将解锁",
   dg_unl_of: "流通量的 {p}",
+  dg_views: "浏览量:{n}",
   dg_wallets: "{n} 个钱包",
   dg_window: "截至 {t} 的 24 小时",
   dm_24h: "24小时",
