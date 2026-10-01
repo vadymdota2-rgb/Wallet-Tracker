@@ -40,6 +40,14 @@ const KIND_KEY: Record<TradeKind, DictKey> = {
   unknown: "hl_trade",
 };
 
+/** Адрес биткоина по виду: bech32 (bc1…) или base58 (1…, 3…). Контрольную
+ *  сумму проверяет сервер — по ней же он отличит опечатку. */
+export const BTC_ADDR = /^(bc1[02-9ac-hj-np-z]{6,87}|BC1[02-9AC-HJ-NP-Z]{6,87}|[13][1-9A-HJ-NP-Za-km-z]{25,34})$/;
+const EVM_ADDR = /^0x[a-fA-F0-9]{40}$/;
+/** Кошелёк, который можно отслеживать: 0x или биткоин. */
+export const isWalletAddr = (a: string): boolean => EVM_ADDR.test(a) || BTC_ADDR.test(a);
+export const isBtcAddr = (a: string): boolean => BTC_ADDR.test(a);
+
 export function tradeKindKey(kind: TradeKind): DictKey {
   return KIND_KEY[kind];
 }

@@ -59,6 +59,10 @@ export interface Wallet {
    *  Не `spot` — так уже названо место кошелька в спотовом рейтинге. */
   holds?: SpotHold[];
   pos: Position[];
+  /** Кошелёк биткоина: позиций и сделок BSC у него нет, свой экран. */
+  chain?: "btc";
+  /** Адрес как пишется: `addr` строчными, а base58 без регистра не найти. */
+  btc?: string;
 }
 
 export interface Me {

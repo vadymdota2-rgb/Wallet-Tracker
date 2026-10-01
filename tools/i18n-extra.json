@@ -11790,22 +11790,22 @@
     "zh": "巨鲸"
   },
   "btc_big_tab": {
-    "ar": "مشتريات BTC الكبيرة",
-    "de": "Große BTC-Käufe",
-    "en": "Large BTC buys",
-    "es": "Grandes compras de BTC",
-    "fr": "Gros achats de BTC",
-    "hi": "बड़ी BTC खरीद",
-    "id": "Pembelian BTC besar",
-    "ja": "BTCの大口購入",
-    "ko": "대규모 BTC 매수",
-    "pl": "Duże zakupy BTC",
-    "pt": "Grandes compras de BTC",
-    "ru": "Крупные покупки BTC",
-    "tr": "Büyük BTC alımları",
-    "uk": "Великі покупки BTC",
-    "vi": "Mua BTC lớn",
-    "zh": "BTC 大额买入"
+    "ar": "أوامر كبيرة BTC",
+    "de": "Große Orders BTC",
+    "en": "Big orders BTC",
+    "es": "Órdenes grandes BTC",
+    "fr": "Gros ordres BTC",
+    "hi": "बड़े ऑर्डर BTC",
+    "id": "Order besar BTC",
+    "ja": "大口注文 BTC",
+    "ko": "대형 주문 BTC",
+    "pl": "Duże zlecenia BTC",
+    "pt": "Ordens grandes BTC",
+    "ru": "Крупные ордера BTC",
+    "tr": "Büyük emirler BTC",
+    "uk": "Великі ордери BTC",
+    "vi": "Lệnh lớn BTC",
+    "zh": "大额订单 BTC"
   },
   "btc_big_hint": {
     "ar": "الشراء هو سحب BTC من منصة تداول إلى محفظة خاصة — هكذا تُسحب العملات المشتراة. البيع هو الإيداع في المنصة.",
@@ -11968,24 +11968,6 @@
     "uk": "Сканер працює з {d} — вікно заповнене не повністю.",
     "vi": "Trình quét chạy từ {d} — khoảng thời gian này chưa đầy đủ.",
     "zh": "扫描器自 {d} 起运行——该时间段的数据尚不完整。"
-  },
-  "btc_in_base": {
-    "ar": "في القاعدة",
-    "de": "in der Basis",
-    "en": "in base",
-    "es": "en la base",
-    "fr": "dans la base",
-    "hi": "बेस में",
-    "id": "di basis",
-    "ja": "登録済み",
-    "ko": "베이스에 있음",
-    "pl": "w bazie",
-    "pt": "na base",
-    "ru": "в базе",
-    "tr": "tabanda",
-    "uk": "у базі",
-    "vi": "trong cơ sở",
-    "zh": "已收录"
   },
   "btc_bal": {
     "ar": "الرصيد",
@@ -12167,24 +12149,6 @@
     "vi": "Địa chỉ này thuộc {ex}.",
     "zh": "该地址属于 {ex}。"
   },
-  "btc_base_note": {
-    "ar": "هذه المحفظة في القاعدة: تُسجَّل جميع تحركاتها من 50 دولارًا، وليس تحركات المنصات فقط.",
-    "de": "Dieses Wallet ist in der Basis: Alle Bewegungen ab 50 $ werden erfasst, nicht nur Börsenbewegungen.",
-    "en": "This wallet is in the base: all its moves from $50 are recorded, not only exchange ones.",
-    "es": "Esta billetera está en la base: se registran todos sus movimientos desde 50 $, no solo los de exchanges.",
-    "fr": "Ce portefeuille est dans la base : tous ses mouvements dès 50 $ sont enregistrés, pas seulement ceux avec les plateformes.",
-    "hi": "यह वॉलेट बेस में है: केवल एक्सचेंज वाली नहीं, $50 से ऊपर की सभी गतिविधियाँ दर्ज होती हैं।",
-    "id": "Dompet ini ada di basis: semua pergerakan mulai $50 dicatat, bukan hanya yang ke/dari bursa.",
-    "ja": "このウォレットは登録済みです。取引所との移動だけでなく、50ドル以上のすべての移動を記録します。",
-    "ko": "베이스에 있는 지갑입니다: 거래소 관련뿐 아니라 $50 이상의 모든 이동을 기록합니다.",
-    "pl": "Portfel jest w bazie: zapisywane są wszystkie jego ruchy od 50 $, nie tylko giełdowe.",
-    "pt": "Esta carteira está na base: todos os movimentos a partir de US$ 50 são registados, não só os de corretoras.",
-    "ru": "Кошелёк в базе: пишутся все его движения от $50, а не только биржевые.",
-    "tr": "Bu cüzdan tabanda: yalnızca borsa hareketleri değil, 50 $ üzerindeki tüm hareketleri kaydediliyor.",
-    "uk": "Гаманець у базі: записуються всі його рухи від $50, а не лише біржові.",
-    "vi": "Ví này nằm trong cơ sở: mọi giao dịch từ $50 đều được ghi, không chỉ giao dịch với sàn.",
-    "zh": "该钱包已收录：记录其 50 美元以上的全部动向，而不仅是与交易所之间的。"
-  },
   "btc_explorer": {
     "ar": "فتح في mempool.space",
     "de": "In mempool.space öffnen",
@@ -12274,5 +12238,23 @@
     "uk": "Надіслано",
     "vi": "Đã gửi",
     "zh": "转出"
+  },
+  "btc_followed": {
+    "ar": "أنت تتابع هذه المحفظة: سيرسل البوت تنبيهًا عند كل شراء أو بيع أو تحويل.",
+    "de": "Sie folgen diesem Wallet: Der Bot meldet jeden Kauf, Verkauf und Transfer.",
+    "en": "You follow this wallet: the bot will alert you on every buy, sell or transfer.",
+    "es": "Sigues esta billetera: el bot te avisará de cada compra, venta o transferencia.",
+    "fr": "Vous suivez ce portefeuille : le bot vous alertera à chaque achat, vente ou transfert.",
+    "hi": "आप इस वॉलेट को फ़ॉलो कर रहे हैं: हर खरीद, बिक्री या ट्रांसफ़र पर बॉट अलर्ट भेजेगा।",
+    "id": "Anda mengikuti dompet ini: bot akan memberi tahu setiap beli, jual, atau transfer.",
+    "ja": "このウォレットをフォロー中です。購入・売却・送金のたびにボットが通知します。",
+    "ko": "이 지갑을 팔로우 중입니다: 매수, 매도, 이체마다 봇이 알림을 보냅니다.",
+    "pl": "Obserwujesz ten portfel: bot powiadomi o każdym zakupie, sprzedaży lub przelewie.",
+    "pt": "Você segue esta carteira: o bot avisará de cada compra, venda ou transferência.",
+    "ru": "Вы подписаны: бот пришлёт алерт о каждой покупке, продаже или переводе этого кошелька.",
+    "tr": "Bu cüzdanı takip ediyorsunuz: bot her alım, satım veya transferde uyarı gönderecek.",
+    "uk": "Ви підписані: бот надішле алерт про кожну покупку, продаж чи переказ цього гаманця.",
+    "vi": "Bạn đang theo dõi ví này: bot sẽ báo mỗi lần mua, bán hoặc chuyển.",
+    "zh": "你已关注此钱包：每次买入、卖出或转账，机器人都会提醒你。"
   }
 }

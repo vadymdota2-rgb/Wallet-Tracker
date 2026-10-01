@@ -116,6 +116,78 @@ API_KEY = os.environ.get("WHALE_API_KEY", "")
 
 NANOS = 1_000_000_000.0
 ADDR_RE = re.compile(r"^0x[a-fA-F0-9]{40}$")
+
+_B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+_BECH = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+
+
+def _bech32_ok(a: str) -> bool:
+    gen = (0x3B6A57B2, 0x26508E6D, 0x1EA119FA, 0x3D4233DD, 0x2A1462B3)
+    if not a.startswith("bc1") or not 14 <= len(a) <= 74:
+        return False
+    vals = [3, 3, 0, 2, 3]
+    for ch in a[3:]:
+        i = _BECH.find(ch)
+        if i < 0:
+            return False
+        vals.append(i)
+    chk = 1
+    for v in vals:
+        top = chk >> 25
+        chk = (chk & 0x1FFFFFF) << 5 ^ v
+        for i in range(5):
+            if (top >> i) & 1:
+                chk ^= gen[i]
+    return chk in (1, 0x2BC830A3)
+
+
+def _b58check_ok(a: str) -> bool:
+    if a[:1] not in ("1", "3") or not 26 <= len(a) <= 35 or any(c not in _B58 for c in a):
+        return False
+    n = 0
+    for c in a:
+        n = n * 58 + _B58.index(c)
+    raw = n.to_bytes(25, "big") if n.bit_length() <= 200 else b""
+    if len(raw) != 25:
+        return False
+    return hashlib.sha256(hashlib.sha256(raw[:21]).digest()).digest()[:4] == raw[21:]
+
+
+def btc_addr(raw: str) -> str:
+    """Адрес биткоина как пишется (bc1 — строчными), или пусто.
+
+    Base58 проверяется по контрольной сумме: опечатка в одной букве дала бы
+    чужой, но с виду правильный адрес, и человек ждал бы алертов, которых
+    не будет."""
+    a = (raw or "").strip()
+    if a[:3].lower() == "bc1":
+        if a != a.lower() and a != a.upper():
+            return ""
+        a = a.lower()
+        return a if _bech32_ok(a) else ""
+    return a if _b58check_ok(a) else ""
+
+
+def wallet_key(raw: str) -> tuple[str, str]:
+    """Ключ кошелька в user_whales и его настоящее написание.
+
+    Ключ всегда строчными — так адреса хранит и бот. У base58 регистр значим,
+    поэтому настоящее написание уходит отдельно, в btc_case базы биткоина."""
+    a = (raw or "").strip()
+    if ADDR_RE.match(a):
+        return a.lower(), a.lower()
+    b = btc_addr(a)
+    if b:
+        return b.lower(), b
+    # Строчная форма base58 — так адрес приходит на удаление и переименование.
+    low = a.lower()
+    if low[:1] in ("1", "3") and 26 <= len(low) <= 35 and low.isalnum():
+        return low, low
+    return "", ""
+
+
+def is_btc_key(key: str) -> bool:
+    return bool(key) and not key.startswith("0x")
 # Те же шестнадцать языков, что в ru.h бота. Мини-апп и чат пишут выбор в
 # одну строку users, поэтому список обязан совпадать.
 LANG_CODES = {
@@ -1595,6 +1667,8 @@ def load_wallets(cur: sqlite3.Connection, chat: str,
     # при каждом открытии приложения, а два запроса на кошелёк по 400 мс
     # складывались в секунды ожидания — ради цифры, которую смотрят, только
     # когда откроют сам кошелёк. Позиции и остаток отдаёт /api/wallet.
+    # Кошельки биткоина: настоящее написание адреса — для экрана и ссылок.
+    cases = btc_cases([(r["addr"] or "").lower() for r in rows if is_btc_key((r["addr"] or "").lower())])
     wallets = []
     for i, r in enumerate(rows):
         addr = (r["addr"] or "").lower()
@@ -1623,6 +1697,7 @@ def load_wallets(cur: sqlite3.Connection, chat: str,
                 "equity": equity,
                 "hlActive": addr in on_hl,
                 "pos": pos,
+                **({"chain": "btc", "btc": cases.get(addr, addr)} if is_btc_key(addr) else {}),
             }
         )
     if wallets and not any(w["primary"] for w in wallets):
@@ -9610,6 +9685,41 @@ def _btc_extra(con, wallets: list[str]) -> dict[str, dict]:
     return out
 
 
+def btc_remember_case(addr: str) -> None:
+    """Настоящее написание адреса — в btc.db, рядом с данными сканера."""
+    con = open_db(BTC_DB, write=True)
+    if not con:
+        return
+    try:
+        con.execute("CREATE TABLE IF NOT EXISTS btc_case (lower TEXT PRIMARY KEY, addr TEXT NOT NULL)")
+        con.execute("INSERT OR REPLACE INTO btc_case(lower, addr) VALUES(?,?)", (addr.lower(), addr))
+        con.commit()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] btc case: {e}\n")
+    finally:
+        con.close()
+
+
+def btc_cases(keys: list[str]) -> dict[str, str]:
+    """Строчный ключ → настоящее написание. Чего нет — остаётся ключом."""
+    out = {k: k for k in keys}
+    if not keys:
+        return out
+    con = open_db(BTC_DB)
+    if not con:
+        return out
+    try:
+        if table_exists(con, "btc_case"):
+            marks = ",".join("?" * len(keys))
+            for r in con.execute(f"SELECT lower, addr FROM btc_case WHERE lower IN ({marks})", keys):
+                out[r["lower"]] = r["addr"]
+    except sqlite3.Error:
+        pass
+    finally:
+        con.close()
+    return out
+
+
 def _btc_open():
     con = open_db(BTC_DB)
     if con and not table_exists(con, "btc_moves"):
@@ -10966,10 +11076,13 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
             con.execute("INSERT OR IGNORE INTO users(chat_id, language, threshold_nanos, created_at) VALUES(?,?,?,?)",
                         (chat, "ru", 100000000000, now()))
         if kind == "add":
-            addr = (body.get("addr") or "").strip().lower()
-            name = (body.get("name") or "").strip()[:64] or short_addr(addr)
-            if not ADDR_RE.match(addr):
+            raw = (body.get("addr") or "").strip()
+            addr, shown = wallet_key(raw)
+            # Для добавления строчная форма base58 не годится: настоящее
+            # написание из неё уже не восстановить.
+            if not addr or (is_btc_key(addr) and not btc_addr(raw)):
                 return {"ok": False, "error": "bad_addr"}
+            name = (body.get("name") or "").strip()[:64] or short_addr(shown)
             # Бан кошелька в боте действует для всех, значит и здесь.
             # Раньше через мини-апп забаненного кита можно было вернуть.
             if wallet_banned(con, addr):
@@ -10993,14 +11106,16 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
                 "INSERT INTO user_whales(user_id,whale_id,label,created_at,is_primary) VALUES(?,?,?,?,?)",
                 (chat, wid, name, now(), 1 if first else 0),
             )
+            if is_btc_key(addr):
+                btc_remember_case(shown)
         elif kind == "remove":
-            addr = (body.get("addr") or "").strip().lower()
+            addr = wallet_key(body.get("addr") or "")[0]
             row = con.execute("SELECT id FROM whale_addresses WHERE address=?", (addr,)).fetchone()
             if not row:
                 return {"ok": False, "error": "missing"}
             con.execute("DELETE FROM user_whales WHERE user_id=? AND whale_id=?", (chat, row[0]))
         elif kind == "primary":
-            addr = (body.get("addr") or "").strip().lower()
+            addr = wallet_key(body.get("addr") or "")[0]
             row = con.execute("SELECT id FROM whale_addresses WHERE address=?", (addr,)).fetchone()
             if not row:
                 return {"ok": False, "error": "missing"}
@@ -11010,7 +11125,7 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
                 (chat, row[0]),
             )
         elif kind == "rename":
-            addr = (body.get("addr") or "").strip().lower()
+            addr = wallet_key(body.get("addr") or "")[0]
             name = (body.get("name") or "").strip()[:64]
             row = con.execute("SELECT id FROM whale_addresses WHERE address=?", (addr,)).fetchone()
             if not row or not name:
@@ -11472,6 +11587,10 @@ class Handler(BaseHTTPRequestHandler):
                 # Bech32 пишут и заглавными — в базе адрес строчными.
                 if a[:3].lower() == "bc1":
                     a = a.lower()
+                # Из «Моих кошельков» base58 может прийти строчными — так он
+                # лежит в user_whales; настоящее написание — в btc_case.
+                if not BTC_ADDR_RE.match(a) or a == a.lower():
+                    a = btc_cases([a.lower()]).get(a.lower(), a)
                 if not BTC_ADDR_RE.match(a):
                     self._json(400, {"ok": False, "error": "bad_addr"})
                     return

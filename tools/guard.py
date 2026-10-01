@@ -587,5 +587,15 @@ say("bitcoin: поток бирж в NetFlow, «Крупные покупки BT
     and "<BtcBoard win={win} />" in read(f"{APP}/src/screens/TopTab.tsx")
     and "btcWallet: BtcWalletScreen" in read(f"{APP}/src/screens/registry.ts"))
 
+_mc = read(os.path.join(BOT, "main.cpp"))
+say("bitcoin: подписка на кошелёк и алерты «покупка / продажа / перевод» по бирже на другой стороне",
+    "void dispatchBtcAlert(const BtcAlert& a)" in _mc and "btcSetAlertSink(dispatchBtcAlert);" in _mc
+    and 'tr(lang, a.kind == BtcAlert::BUY ? "alert_from_exchange" : "alert_to_exchange")' in _mc
+    and 'if (addr.rfind("0x", 0) != 0) continue;' in _mc
+    and "std::string cbAddr(const std::string& address)" in read(os.path.join(BOT, "wallet_menu.cpp"))
+    and "def wallet_key(raw: str)" in api and "_b58check_ok" in api
+    and "function FollowBtn(" in _btv and 'valueSub={t(lang, side === "buy" ? "alert_buy" : "alert_sell")}' in _btv
+    and 'open("btcWallet", w.btc ?? w.addr)' in read(f"{APP}/src/screens/WalletsTab.tsx"))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

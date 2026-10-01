@@ -2884,3 +2884,4 @@
 }
 .btc-foot { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 8px 0 0; font-size: 12px; }
 .btc-addr { overflow-wrap: anywhere; font-size: 12.5px; margin: 0 0 10px; color: var(--ink); }
+.btc-follow-on { flex: 1 1 100%; margin: 0; }

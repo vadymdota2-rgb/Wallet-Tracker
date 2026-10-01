@@ -86,7 +86,7 @@ export function WalletsTab() {
           wallets.map((w) => {
             const paused = isPaused(me.plan, w.primary);
             const place = walletRank(rank, w.addr);
-            const venue = rowVenue(w);
+            const venue = w.chain === "btc" ? null : rowVenue(w);
             // Лучшее место кошелька вообще, а не по площадке значка:
             // площадка теперь берётся из сделок и с доской не связана, и
             // привязка к ней прятала кубок у половины списка.
@@ -96,12 +96,17 @@ export function WalletsTab() {
                 key={w.addr}
                 title={w.name}
                 badge={w.primary ? bare(t(lang, "wl_main_wallet")) : paused ? t(lang, "wl_paused") : undefined}
-                sub={shortAddr(w.addr)}
+                sub={shortAddr(w.btc ?? w.addr)}
                 // Площадка — третьей строкой под адресом. В середине она
                 // вместе с местом не помещалась: имя резалось до «Silent …»,
                 // а адрес до «0xb2b2……».
                 sub2={
-                  venue ? (
+                  w.chain === "btc" ? (
+                    <span className="venue-line">
+                      <VenueMark venue="btc" />
+                      <em className="venue-name">Bitcoin</em>
+                    </span>
+                  ) : venue ? (
                     <span className="venue-line">
                       <VenueMark venue={venue} />
                       <em className="venue-name">{venueName(venue)}</em>
@@ -122,7 +127,7 @@ export function WalletsTab() {
                 // можно открыть. Числа тут больше нет — позиции приходят
                 // отдельным запросом уже внутри кошелька.
                 value={<EyeGlyph />}
-                onClick={() => open("wallet", w.addr)}
+                onClick={() => (w.chain === "btc" ? open("btcWallet", w.btc ?? w.addr) : open("wallet", w.addr))}
               />
             );
           })

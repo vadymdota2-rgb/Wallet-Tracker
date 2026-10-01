@@ -1,5 +1,6 @@
 /**
- * Добавление кошелька. Проверки те же, что в боте: адрес 0x + 40 знаков,
+ * Добавление кошелька. Проверки те же, что в боте: адрес 0x + 40 знаков или
+ * адрес биткоина (bc1…, 1…, 3…),
  * имя до 32 символов. Лимит плана проверяет сервер — на бесплатном один
  * кошелёк, на премиуме пятьдесят.
  */
@@ -10,11 +11,11 @@ import { useApp, walletLimit } from "../store/app";
 import { useLive } from "../store/live";
 import { bare, split, t } from "../i18n/t";
 import { addWallet } from "../lib/api";
+import { isWalletAddr } from "../lib/labels";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
 import { Action, AddrBar, BotText, Card, PlusGlyph, SectionTitle } from "../components/ui";
 
-const ADDR = /^0x[a-fA-F0-9]{40}$/;
 const NAME_MAX = 32;
 
 export function AddWalletScreen({ arg }: ScreenProps) {
@@ -25,7 +26,7 @@ export function AddWalletScreen({ arg }: ScreenProps) {
 
   /* Экран открывают и с пустыми руками, и из рейтинга — там адрес уже
      выбран, и спрашивать его второй раз незачем: остаётся только имя. */
-  const preset = arg && ADDR.test(arg.trim()) ? arg.trim() : "";
+  const preset = arg && isWalletAddr(arg.trim()) ? arg.trim() : "";
   const [addr, setAddr] = useState(preset);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -39,7 +40,7 @@ export function AddWalletScreen({ arg }: ScreenProps) {
 
   const submit = async () => {
     const a = addr.trim();
-    if (!ADDR.test(a)) return void toast(t(lang, "add_wallet_invalid"), "err");
+    if (!isWalletAddr(a)) return void toast(t(lang, "add_wallet_invalid"), "err");
     const n = name.trim();
     if (n.length > NAME_MAX) return void toast(t(lang, "err_name_too_long"), "err");
     if (wallets.some((w) => w.addr.toLowerCase() === a.toLowerCase())) {
@@ -88,7 +89,7 @@ export function AddWalletScreen({ arg }: ScreenProps) {
           <input
             className="find mono"
             value={addr}
-            placeholder="0x…"
+            placeholder="0x… / bc1…"
             spellCheck={false}
             autoCapitalize="none"
             onChange={(e) => setAddr(e.target.value)}

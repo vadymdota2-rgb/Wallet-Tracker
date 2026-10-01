@@ -22,13 +22,18 @@ import { t, bare } from "../i18n/t";
 import { num, pct, px, shortAddr, signed, since, usd } from "../lib/format";
 import { useNow } from "../lib/tick";
 import { haptic, openExternal } from "../lib/telegram";
+import { removeWallet } from "../lib/api";
+import { syncNow } from "../lib/sync";
+import { toast } from "../components/Toast";
 import {
   fetchBtcBig, fetchBtcFlow, fetchBtcRank, fetchBtcWallet,
   peekBtcBig, peekBtcFlow, peekBtcRank, peekBtcWallet,
 } from "../lib/api";
 import { BuySellBar, TrendChart } from "../components/Chart";
 import { CoinIcon } from "../components/CoinIcon";
-import { Card, DealsGlyph, Empty, Row, SectionTitle, Segmented, Tiles } from "../components/ui";
+import {
+  Card, DealsGlyph, Empty, MinusGlyph, PlusGlyph, Row, SectionTitle, Segmented, Tiles,
+} from "../components/ui";
 import type { BtcBigReply, BtcFlowReply, BtcRankKind, BtcRankReply, BtcWalletReply } from "../lib/types";
 
 const EXPLORER = "https://mempool.space";
@@ -55,6 +60,39 @@ function Partial({ full, from }: { full: boolean; from: number }) {
   const lang = useApp((s) => s.lang);
   if (full || !from) return null;
   return <p className="note dim btc-part">{t(lang, "btc_partial", { d: stamp(lang, from) })}</p>;
+}
+
+/**
+ * Подписка на кошелёк биткоина — та же кнопка, что у сделок BSC: плюс ведёт
+ * на экран имени со всеми проверками (лимит плана, повтор), подписан — на
+ * том же месте минус. Бот шлёт по нему алерты: покупка, продажа, перевод.
+ */
+function FollowBtn({ addr, size = 19 }: { addr: string; size?: number }) {
+  const lang = useApp((s) => s.lang);
+  const open = useApp((s) => s.open);
+  const wallets = useLive((s) => s.wallets);
+  const on = wallets.some((w) => w.addr.toLowerCase() === addr.toLowerCase());
+  return (
+    <button
+      type="button"
+      className={on ? "lb-act off" : "lb-act on"}
+      aria-label={bare(t(lang, on ? "remove_yes" : "menu_add_wallet"))}
+      onClick={async () => {
+        if (!on) {
+          haptic("select");
+          return open("addWallet", addr);
+        }
+        haptic("light");
+        const res = await removeWallet(addr.toLowerCase());
+        if (res?.ok) {
+          toast(t(lang, "toast_wallet_removed"));
+          void syncNow();
+        } else toast(t(lang, "generic_error_retry"), "err");
+      }}
+    >
+      {on ? <MinusGlyph size={size} /> : <PlusGlyph size={size} />}
+    </button>
+  );
 }
 
 /* ── NetFlow: биткоин на биржах ───────────────────────────────────────── */
@@ -199,17 +237,21 @@ export function BtcBigView({ winPicker, win }: { winPicker: ReactNode; win: BigW
         <Empty text={t(lang, "btc_empty")} />
       ) : (
         data.rows.map((r, i) => (
+          /* Строка как у крупных ордеров BSC: монета, кошелёк и время, сумма
+             и сторона сделки справа, плюс — подписаться. Откуда и куда —
+             стрелкой, она читается на любом языке. */
           <Row
             key={`${r.tx}-${r.a}-${i}`}
             icon={<CoinIcon sym="BTC" size={30} />}
             title={btc(r.btc)}
-            /* Откуда и куда: стрелка читается на любом языке. */
-            sub={side === "buy" ? `${r.ex} → ${shortAddr(r.a)}` : `${shortAddr(r.a)} → ${r.ex}`}
-            sub2={`${since(now - r.t)}${r.base ? ` · ${t(lang, "btc_in_base")}` : ""}${
-              r.bal !== undefined ? ` · ${t(lang, "btc_bal")} ${btc(r.bal)}` : ""}`}
+            sub={`${shortAddr(r.a)} · ${since(now - r.t)}`}
+            /* Вторая строка — биржа: стрелка от неё (вывод) или к ней
+               (завод), и цена сделки. */
+            sub2={`${side === "buy" ? "←" : "→"} ${r.ex} · ${px(r.px)}`}
             value={usd(r.v)}
             tone={side === "buy" ? "up" : "dn"}
-            valueSub={px(r.px)}
+            valueSub={t(lang, side === "buy" ? "alert_buy" : "alert_sell")}
+            action={<FollowBtn addr={r.a} />}
             onClick={() => {
               haptic("select");
               open("btcWallet", r.a);
@@ -277,7 +319,6 @@ export function BtcBoard({ win }: { win: RankWin }) {
               <div className="lb-hd">
                 <span className={place <= 3 ? `rank-n m${place}` : "rank-n"}>{place}</span>
                 <span className="lb-addr mono">{shortAddr(r.a)}</span>
-                {r.base ? <span className="btc-tag">{t(lang, "btc_in_base")}</span> : null}
                 <button
                   type="button"
                   className="lb-act"
@@ -289,6 +330,7 @@ export function BtcBoard({ win }: { win: RankWin }) {
                 >
                   <DealsGlyph size={20} />
                 </button>
+                <FollowBtn addr={r.a} size={20} />
               </div>
               <Tiles
                 cols={3}
@@ -347,7 +389,7 @@ export function BtcWalletScreen({ arg }: ScreenProps) {
       <Card>
         <p className="mono btc-addr">{addr}</p>
         {data?.ex ? <p className="note warn">{t(lang, "btc_is_exchange", { ex: data.ex })}</p> : null}
-        {data?.base ? <p className="note dim">{t(lang, "btc_base_note")}</p> : null}
+
         {b ? (
           <Tiles
             cols={3}
@@ -363,6 +405,7 @@ export function BtcWalletScreen({ arg }: ScreenProps) {
           />
         ) : null}
         <div className="unl-act">
+          <BtcFollowWide addr={addr} />
           <button
             type="button"
             className="unl-btn ghost"
@@ -402,5 +445,26 @@ export function BtcWalletScreen({ arg }: ScreenProps) {
       </Card>
       <p className="note dim">{bare(t(lang, "btc_rank_hint"))}</p>
     </Frame>
+  );
+}
+
+/** Широкая кнопка подписки — на экране кошелька, рядом со ссылкой. */
+function BtcFollowWide({ addr }: { addr: string }) {
+  const lang = useApp((s) => s.lang);
+  const open = useApp((s) => s.open);
+  const wallets = useLive((s) => s.wallets);
+  const on = wallets.some((w) => w.addr.toLowerCase() === addr.toLowerCase());
+  if (on) return <p className="note dim btc-follow-on">{t(lang, "btc_followed")}</p>;
+  return (
+    <button
+      type="button"
+      className="unl-btn"
+      onClick={() => {
+        haptic("select");
+        open("addWallet", addr);
+      }}
+    >
+      {bare(t(lang, "menu_add_wallet"))}
+    </button>
   );
 }

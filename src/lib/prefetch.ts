@@ -76,6 +76,8 @@ function plan(): (() => Promise<unknown>)[] {
 
   // 1. Кошельки — первыми: их открывают чаще всего.
   for (const w of live.wallets) {
+    // У биткоина позиций Hyperliquid нет — его экран берёт данные сам.
+    if (w.chain === "btc") continue;
     jobs.push(() => fetchWallet(w.addr).then((d) => applyWalletLive(w.addr, d)));
   }
 
