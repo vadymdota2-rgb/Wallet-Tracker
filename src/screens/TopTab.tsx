@@ -28,7 +28,8 @@ import {
   Tiles, VenueMark,
 } from "../components/ui";
 import type { RankKind, RankTable, Trader, Venue } from "../lib/types";
-import type { RankWin } from "../store/app";
+import type { RankVenue, RankWin } from "../store/app";
+import { BtcBoard } from "./BtcViews";
 
 const FREE_ROWS = 30;
 const PREMIUM_ROWS = 100;
@@ -74,12 +75,14 @@ export function TopTab() {
   const plan = useLive((s) => s.me.plan);
   const wallets = useLive((s) => s.wallets);
 
-  const kinds = kindsFor(venue);
+  // У Bitcoin своя доска со своими видами; здесь — только BSC и Hyperliquid.
+  const board: Venue = venue === "btc" ? "spot" : venue;
+  const kinds = kindsFor(board);
   // Пользователь мог стоять на ROI и переключиться на спот: доски там нет,
   // показываем прибыль, а не пустой экран.
   const kind = kinds.includes(rawKind) ? rawKind : "pnl";
 
-  const table = pick(rank, venue, win);
+  const table = pick(rank, board, win);
   const cap = plan === "premium" ? PREMIUM_ROWS : FREE_ROWS;
   const rows: Trader[] = (table?.[kind] ?? []).slice(0, cap);
 
@@ -113,10 +116,10 @@ export function TopTab() {
             про площадку. Поэтому он в середине и крупный, а не уголком, как
             в аналитике, где уголок говорит «откуда данные» при своём знаке
             раздела. */}
-        <TileNav<Venue>
+        <TileNav<RankVenue>
           value={venue}
           onChange={setVenue}
-          cols={2}
+          cols={3}
           label={t(lang, "hl_venue")}
           options={[
             {
@@ -130,13 +133,20 @@ export function TopTab() {
               label: `${venueName("perp")} · ${t(lang, "wl_perp_rank")}`,
               lock: plan !== "premium",
             },
+            {
+              id: "btc",
+              ic: <VenueMark venue="btc" size={30} />,
+              label: `Bitcoin · ${t(lang, "btc_whales")}`,
+            },
           ]}
         />
-        <Segmented<RankKind>
-          value={kind}
-          onChange={setKind}
-          options={kinds.map((k) => ({ id: k, label: label(k) }))}
-        />
+        {venue !== "btc" ? (
+          <Segmented<RankKind>
+            value={kind}
+            onChange={setKind}
+            options={kinds.map((k) => ({ id: k, label: label(k) }))}
+          />
+        ) : null}
         <Segmented<RankWin>
           value={win}
           onChange={setWin}
@@ -144,7 +154,9 @@ export function TopTab() {
         />
       </Card>
 
-      {venue === "perp" && plan !== "premium" ? (
+      {venue === "btc" ? (
+        <BtcBoard win={win} />
+      ) : venue === "perp" && plan !== "premium" ? (
         <Card>
           <PremiumLock fromTab />
         </Card>

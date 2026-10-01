@@ -58,6 +58,7 @@ const SCREEN_TITLE: Record<ScreenName, DictKey> = {
   deals: "ui_deals",
   spot: "ui_spot_open",
   legal: "ui_legal",
+  btcWallet: "btc_wallet_title",
 };
 
 /* Боковое меню — рыночные инструменты: график, разлоки, карта ликвидаций,

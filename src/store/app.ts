@@ -17,7 +17,7 @@ export type ScreenName =
   | "wallet" | "position" | "coin" | "deals"
   | "addWallet" | "threshold" | "lang" | "premium" | "help"
   | "alerts" | "chart" | "unlocks" | "liqmap" | "funding" | "fng" | "dom" | "etf" | "rename" | "spot"
-  | "legal";
+  | "legal" | "btcWallet";
 
 export interface Screen {
   name: ScreenName;
@@ -34,7 +34,11 @@ export type BigWin = "1h" | "6h" | "24h" | "7d" | "30d";
 /** Сторона доски крупных ордеров. */
 export type BigSide = "buy" | "sell";
 /** Разделы аналитики — те же кнопки, что в меню бота. */
-export type BigView = "flow" | "spot" | "perp" | "rot" | "ls";
+export type BigView = "flow" | "spot" | "perp" | "rot" | "ls" | "btc";
+/** Площадка рейтинга: BSC, Hyperliquid и Bitcoin. */
+export type RankVenue = Venue | "btc";
+/** Порог крупных движений BTC, в монетах. */
+export type BtcMin = 1 | 10 | 100;
 /** Окна потока: часы. */
 export type FlowWin = "1" | "6" | "24" | "168" | "720";
 /** Окна рейтинга: дни. */
@@ -57,9 +61,12 @@ interface AppState {
   flowSide: FlowSide;
   flowQuery: string;
 
-  rankVenue: Venue;
+  rankVenue: RankVenue;
   rankKind: RankKind;
   rankWin: RankWin;
+  /** Крупные движения BTC: выводы с бирж или заводы, и от скольких монет. */
+  btcSide: BigSide;
+  btcMin: BtcMin;
 
   chartTf: Timeframe;
   /** Монета полноэкранного графика TradingView — последняя открытая. */
@@ -88,7 +95,9 @@ interface AppState {
   setLsCls(c: CoinClass): void;
   setFlowSide(s: FlowSide): void;
   setFlowQuery(q: string): void;
-  setRankVenue(v: Venue): void;
+  setRankVenue(v: RankVenue): void;
+  setBtcSide(s: BigSide): void;
+  setBtcMin(m: BtcMin): void;
   setRankKind(k: RankKind): void;
   setRankWin(w: RankWin): void;
   setChartTf(tf: Timeframe): void;
@@ -120,6 +129,8 @@ export const useApp = create<AppState>()(
       rankVenue: "spot",
       rankKind: "pnl",
       rankWin: "30",
+      btcSide: "buy",
+      btcMin: 1,
 
       chartTf: "1d",
       tvSym: "BTC",
@@ -150,6 +161,8 @@ export const useApp = create<AppState>()(
       setRankVenue: (rankVenue) => set({ rankVenue }),
       setRankKind: (rankKind) => set({ rankKind }),
       setRankWin: (rankWin) => set({ rankWin }),
+      setBtcSide: (btcSide) => set({ btcSide }),
+      setBtcMin: (btcMin) => set({ btcMin }),
       setChartTf: (chartTf) => set({ chartTf }),
       setTvSym: (tvSym) => set({ tvSym }),
       setLiq: (liqSym, liqRange) => set({ liqSym, liqRange }),
@@ -200,6 +213,8 @@ export const useApp = create<AppState>()(
         rankVenue: s.rankVenue,
         rankKind: s.rankKind,
         rankWin: s.rankWin,
+        btcSide: s.btcSide,
+        btcMin: s.btcMin,
         chartTf: s.chartTf,
         tvSym: s.tvSym,
         liqSym: s.liqSym,

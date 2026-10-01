@@ -2856,3 +2856,31 @@
 .ef-hr-id em.up { color: #0ecb81; font-style: normal; }
 .ef-hr-id em.dn { color: #f6465d; font-style: normal; }
 .ef-hero > b, .ef-f-v, .ef-hr-v b { unicode-bidi: isolate; direction: ltr; }
+
+/* Bitcoin: карточка в NetFlow, раздел крупных покупок, доска и кошелёк. */
+.btc-ttl { display: inline-flex; align-items: center; gap: 8px; }
+.btc-ex { display: grid; gap: 6px; margin-top: 12px; }
+.btc-ex-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  align-items: baseline;
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.btc-ex-row b { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btc-ex-row span { text-align: end; overflow-wrap: anywhere; }
+.btc-part { margin-top: 10px; }
+.btc-tag {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--dim);
+  font-size: 11px;
+}
+.btc-foot { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 8px 0 0; font-size: 12px; }
+.btc-addr { overflow-wrap: anywhere; font-size: 12.5px; margin: 0 0 10px; color: var(--ink); }

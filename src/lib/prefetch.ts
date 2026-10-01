@@ -16,7 +16,10 @@
  * Закрытое подпиской не запрашивается: сервер его бесплатному всё равно не
  * отдаст, а лишние отказы — лишняя нагрузка.
  */
-import { fetchBig, fetchDeals, fetchFlow, fetchLs, fetchSymbols, fetchTokenHist, fetchUnlocks, fetchWallet } from "./api";
+import {
+  fetchBig, fetchBtcBig, fetchBtcFlow, fetchBtcRank, fetchDeals, fetchFlow, fetchLs, fetchSymbols, fetchTokenHist,
+  fetchUnlocks, fetchWallet,
+} from "./api";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import type { WalletLive } from "./types";
@@ -88,9 +91,17 @@ function plan(): (() => Promise<unknown>)[] {
   }
 
   // 5. Сделки первых трейдеров доски, которую человек смотрит.
-  const venue = app.rankVenue === "perp" && !premium ? "spot" : app.rankVenue;
-  const board = live.rank[venue]?.[app.rankKind] ?? live.rank[venue]?.pnl ?? [];
-  for (const r of board.slice(0, TOP_DEALS)) jobs.push(() => fetchDeals(r.a, venue));
+  if (app.rankVenue === "btc") {
+    jobs.push(() => fetchBtcRank(app.rankWin));
+  } else {
+    const venue = app.rankVenue === "perp" && !premium ? "spot" : app.rankVenue;
+    const board = live.rank[venue]?.[app.rankKind] ?? live.rank[venue]?.pnl ?? [];
+    for (const r of board.slice(0, TOP_DEALS)) jobs.push(() => fetchDeals(r.a, venue));
+  }
+
+  // 5б. Биткоин: поток для NetFlow и выводы с бирж за выбранное окно.
+  jobs.push(() => fetchBtcFlow());
+  jobs.push(() => fetchBtcBig(app.bigWin, app.btcSide, app.btcMin));
 
   // 6. Справочник монет для поиска на графике.
   jobs.push(() => fetchSymbols());

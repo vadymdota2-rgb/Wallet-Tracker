@@ -754,3 +754,114 @@ export interface LiqCoinsReply {
   coins: LiqCoin[];
   at: number;
 }
+
+/* ── Bitcoin: биржевые потоки, крупные выводы, рейтинг ─────────────────── */
+
+/** Поток BTC через биржи за окно. «Покупка» — вывод с биржи, «продажа» — завод. */
+export interface BtcFlowWin {
+  /** Заведено на биржи, BTC. */
+  in: number;
+  /** Выведено с бирж, BTC. */
+  out: number;
+  /** Чистый вывод: out − in. Плюс — монеты уходят с бирж. */
+  net: number;
+  nin: number;
+  nout: number;
+  ex: { ex: string; in: number; out: number }[];
+  /** Накопленный чистый вывод по окну, 25 точек от нуля. */
+  tr: number[];
+  /** Сканер работает дольше окна — сумма полная. */
+  full: boolean;
+}
+
+export interface BtcFlowReply {
+  ok: boolean;
+  error?: string;
+  price: number;
+  /** С какого момента есть данные. */
+  since: number;
+  height: number;
+  at: number;
+  labels: number;
+  wins: Record<string, BtcFlowWin | undefined>;
+}
+
+/** Что сканер знает о кошельке помимо движений. */
+export interface BtcExtra {
+  /** Остаток на адресе по последней проверке, BTC. */
+  bal?: number;
+  txs?: number;
+  /** В базе сервисного аккаунта. */
+  base?: boolean;
+}
+
+export interface BtcMove extends BtcExtra {
+  tx: string;
+  t: number;
+  a: string;
+  ex: string;
+  btc: number;
+  v: number;
+  px: number;
+}
+
+export interface BtcBigReply {
+  ok: boolean;
+  error?: string;
+  win: string;
+  side: "buy" | "sell";
+  min: number;
+  tot: Record<"buy" | "sell", { n: number; btc: number; v: number }>;
+  full: boolean;
+  since: number;
+  rows: BtcMove[];
+}
+
+export interface BtcTrader extends BtcExtra {
+  a: string;
+  pnl: number;
+  roi: number;
+  /** Доля выводов, купленных дешевле нынешней цены, %. */
+  win: number;
+  tr: number;
+  buys: number;
+  sells: number;
+  /** Накоплено: выведено минус заведено, BTC. */
+  btc: number;
+  bought: number;
+  sold: number;
+  /** Средняя цена покупки. */
+  avg: number;
+  inv: number;
+  /** Биржа, с которой больше всего движений. */
+  ex: string;
+  days: number;
+  first: number;
+  last: number;
+}
+
+export type BtcRankKind = "pnl" | "roi" | "act";
+
+export interface BtcRankReply {
+  ok: boolean;
+  error?: string;
+  days: number;
+  price: number;
+  n: number;
+  full: boolean;
+  since: number;
+  pnl: BtcTrader[];
+  roi: BtcTrader[];
+  act: BtcTrader[];
+}
+
+export interface BtcWalletReply extends BtcExtra {
+  ok: boolean;
+  error?: string;
+  addr: string;
+  price: number;
+  /** Адрес сам принадлежит бирже. */
+  ex: string;
+  book: Omit<BtcTrader, "a"> | null;
+  moves: { tx: string; buy: boolean; btc: number; v: number; px: number; t: number; ex: string }[];
+}

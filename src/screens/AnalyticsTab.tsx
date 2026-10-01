@@ -21,6 +21,7 @@ import {
 } from "../lib/labels";
 import { CoinIcon } from "../components/CoinIcon";
 import { BuySellBar, FlowSpark, TrendChart } from "../components/Chart";
+import { BtcBigView, BtcFlowCard } from "./BtcViews";
 import {
   Card, CopyGlyph, Empty, Locked, MinusGlyph, NetFlowGlyph, OrdersGlyph,
   PlusGlyph, PositionsGlyph, RotationGlyph, Row, SectionTitle, Segmented, Skeleton, StackGlyph,
@@ -101,7 +102,7 @@ const BIG_WINS: { id: BigWin; key: Parameters<typeof t>[1] }[] = [
 const VIEWS: {
   id: BigView;
   ic: ReactNode;
-  venue?: "spot" | "perp";
+  venue?: "spot" | "perp" | "btc";
   /** За подпиской — как в боте: всё, что про фьючерсы. */
   prem?: boolean;
   label: (t: (k: DictKey) => string) => string;
@@ -111,6 +112,9 @@ const VIEWS: {
   { id: "rot", ic: <RotationGlyph size={22} />, venue: "spot", label: (tr) => tr("ui_rotation") },
   { id: "ls", ic: <PositionsGlyph size={22} />, venue: "perp", prem: true, label: (tr) => tr("ui_tab_ls") },
   { id: "perp", ic: <StackGlyph size={22} />, venue: "perp", prem: true, label: (tr) => tr("ui_tab_positions") },
+  /* Биткоин — своя сеть: значок монеты в середине и в уголке, подпись —
+     то, что внутри. Бесплатно, как всё про спот. */
+  { id: "btc", ic: <CoinIcon sym="BTC" size={22} />, venue: "btc", label: (tr) => tr("btc_big_tab") },
 ];
 
 /**
@@ -306,6 +310,12 @@ export function AnalyticsTab() {
         />
       </Card>
 
+      {view === "btc" ? <BtcBigView winPicker={winPicker} win={bigWin} /> : null}
+
+      {/* Биткоин — над потоком монет BSC: тот же вопрос «копят или
+          продают», то же окно, но другая сеть, и списку монет он не
+          подчиняется. */}
+      {view === "flow" ? <BtcFlowCard /> : null}
       {view === "flow" ? (
         <Card>
           {/* NetFlow — термин, он одинаков во всех языках, как PnL и ROI.

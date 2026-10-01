@@ -573,5 +573,19 @@ say("институциональные потоки: позиции CME по CF
     and "export function HoldersAll(" in _em and "export function AltHolders(" in _em
     and "<CmeSection" in _ef and "<HoldersAll" in _ef)
 
+_btv = read(f"{APP}/src/screens/BtcViews.tsx")
+_ws_btc = read(os.path.join(BOT, "btc_chain.cpp"))
+say("bitcoin: сканер блоков бота, база сервисного аккаунта с порогом $50, /statsbtc",
+    ("WATCH_MIN_USD_NANOS = 50LL" in _ws_btc and "CREATE TABLE IF NOT EXISTS btc_watch" in _ws_btc
+                    and "blockchain.info/rawblock/" in _ws_btc and "std::string btcStatsLine()" in _ws_btc
+                    and 'txt=="/statsbtc"' in read(os.path.join(BOT, "main.cpp"))))
+say("bitcoin: поток бирж в NetFlow, «Крупные покупки BTC» в аналитике, третья доска рейтинга, экран кошелька",
+    'path in ("/btc/flow", "/api/btc/flow")' in api and "def _btc_clean(" in api and "w.s < 0.9 * w.b" in api
+    and "export function BtcFlowCard(" in _btv and "export function BtcBigView(" in _btv
+    and "export function BtcBoard(" in _btv and "export function BtcWalletScreen(" in _btv
+    and '{ id: "btc", ic: <CoinIcon sym="BTC"' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
+    and "<BtcBoard win={win} />" in read(f"{APP}/src/screens/TopTab.tsx")
+    and "btcWallet: BtcWalletScreen" in read(f"{APP}/src/screens/registry.ts"))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

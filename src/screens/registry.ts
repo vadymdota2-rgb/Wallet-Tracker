@@ -22,6 +22,7 @@ import { FundingScreen } from "./FundingScreen";
 import { FearGreedScreen } from "./FearGreedScreen";
 import { DominanceScreen } from "./DominanceScreen";
 import { EtfScreen } from "./EtfScreen";
+import { BtcWalletScreen } from "./BtcViews";
 
 export const SCREENS: Record<ScreenName, ComponentType<ScreenProps>> = {
   wallet: WalletScreen,
@@ -44,4 +45,5 @@ export const SCREENS: Record<ScreenName, ComponentType<ScreenProps>> = {
   fng: FearGreedScreen,
   dom: DominanceScreen,
   etf: EtfScreen,
+  btcWallet: BtcWalletScreen,
 };

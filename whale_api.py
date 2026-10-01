@@ -9562,6 +9562,333 @@ def halving_data() -> dict:
         _halving_cache["all"] = (time.monotonic(), res)
     return res
 
+# --- Bitcoin: биржевые потоки, крупные выводы и рейтинг -----------------------
+# Данные пишет сканер бота (WhaleScanner/btc_chain.cpp) в свою базу btc.db:
+# каждый блок биткоина, адреса бирж, выводы и заводы. «Покупка» здесь —
+# вывод монет с биржи на частный адрес, «продажа» — завод на биржу: у
+# биткоина нет свопов, и это единственное, что о сделке видно в цепочке.
+#
+# Адрес, который сканер позже узнал как биржевой, из досок выпадает сам:
+# значит, тот «вывод» был перекладкой биржи между своими кошельками.
+BTC_DB = _db_path("WHALE_BTC_DB", "btc.db")
+BTC_ADDR_RE = re.compile(r"^(bc1[02-9ac-hj-np-z]{6,87}|[13][1-9A-HJ-NP-Za-km-z]{25,34})$")
+BTC_FLOW_WINS = {"1": 3600, "6": 21600, "24": 86400, "168": 604800, "720": 2592000}
+BTC_BIG_MIN = (1, 10, 100)
+BTC_RANK_DAYS = (30, 90, 180, 365)
+BTC_TTL = 60.0
+BTC_ROWS = 100
+# Тысяча транзакций у частного кошелька не бывает: это биржа без разметки,
+# платёжный шлюз или сервис. В доски такие не идут — кроме кошельков базы
+# сервисного аккаунта: их владелец добавил сам.
+BTC_SERVICE_TXS = 1000
+_BTC: dict = {}
+
+
+def _btc_clean(con) -> str:
+    """Условие «кошелёк частный»: не адрес биржи и не сервис."""
+    parts = ["NOT EXISTS (SELECT 1 FROM btc_labels l WHERE l.address = m.wallet)"]
+    if table_exists(con, "btc_addr"):
+        svc = f"EXISTS (SELECT 1 FROM btc_addr s WHERE s.address = m.wallet AND s.txs >= {BTC_SERVICE_TXS})"
+        if table_exists(con, "btc_watch"):
+            svc = f"({svc} AND NOT EXISTS (SELECT 1 FROM btc_watch w WHERE w.address = m.wallet))"
+        parts.append("NOT " + svc)
+    return " AND ".join(parts)
+
+
+def _btc_extra(con, wallets: list[str]) -> dict[str, dict]:
+    """Остаток на адресе (по последней проверке сканера) и «в базе»."""
+    out: dict[str, dict] = {w: {} for w in wallets}
+    if not wallets:
+        return out
+    marks = ",".join("?" * len(wallets))
+    if table_exists(con, "btc_addr"):
+        for r in con.execute(f"SELECT address, bal_sats, txs FROM btc_addr WHERE address IN ({marks})", wallets):
+            out[r["address"]].update(bal=round(int(r["bal_sats"] or 0) / 1e8, 4), txs=int(r["txs"] or 0))
+    if table_exists(con, "btc_watch"):
+        for r in con.execute(f"SELECT address FROM btc_watch WHERE address IN ({marks})", wallets):
+            out[r["address"]]["base"] = True
+    return out
+
+
+def _btc_open():
+    con = open_db(BTC_DB)
+    if con and not table_exists(con, "btc_moves"):
+        con.close()
+        return None
+    return con
+
+
+def _btc_price(con) -> float:
+    """Цена из последнего блока: по ней сканер и считал доллары. Блока нет
+    больше двух часов — открытая цена Coinbase."""
+    try:
+        r = con.execute("SELECT price_nanos, at FROM btc_blocks WHERE price_nanos > 0 "
+                        "ORDER BY height DESC LIMIT 1").fetchone()
+        if r and now() - int(r["at"] or 0) < 7200:
+            return float(r["price_nanos"]) / 1e9
+    except sqlite3.Error:
+        pass
+    j = get_json("https://api.coinbase.com/v2/prices/BTC-USD/spot", 8) or {}
+    try:
+        return float(((j.get("data") or {}).get("amount")) or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _btc_flow_build() -> dict:
+    con = _btc_open()
+    if not con:
+        return {"ok": False, "error": "no_data"}
+    try:
+        t = now()
+        px = _btc_price(con)
+        first = con.execute("SELECT MIN(ts) FROM btc_flow").fetchone()[0]
+        tip = con.execute("SELECT height, ts, at FROM btc_blocks ORDER BY height DESC LIMIT 1").fetchone()
+        labels = con.execute("SELECT COUNT(*) FROM btc_labels").fetchone()[0]
+        wins = {}
+        for key, sec in BTC_FLOW_WINS.items():
+            since = t - sec
+            by_ex = con.execute(
+                "SELECT ex, SUM(in_sats) i, SUM(out_sats) o, SUM(in_n) ni, SUM(out_n) no "
+                "FROM btc_flow WHERE ts >= ? GROUP BY ex", (since,)).fetchall()
+            tin = sum(int(r["i"] or 0) for r in by_ex) / 1e8
+            tout = sum(int(r["o"] or 0) for r in by_ex) / 1e8
+            # Линия накопленного чистого вывода: ноль в начале окна, дальше
+            # «столько ушло с бирж к этому моменту». Как у NetFlow монет.
+            arr = [0.0] * TREND_BUCKETS
+            step = max(1, sec // TREND_BUCKETS)
+            for r in con.execute(
+                    "SELECT (ts - ?) / ? b, SUM(out_sats - in_sats) n FROM btc_flow "
+                    "WHERE ts >= ? GROUP BY b", (since, step, since)):
+                arr[min(TREND_BUCKETS - 1, max(0, int(r["b"] or 0)))] += int(r["n"] or 0) / 1e8
+            tr, run = [0.0], 0.0
+            for v in arr:
+                run += v
+                tr.append(round(run, 4))
+            ex = sorted(
+                ({"ex": r["ex"], "in": round(int(r["i"] or 0) / 1e8, 4), "out": round(int(r["o"] or 0) / 1e8, 4)}
+                 for r in by_ex),
+                key=lambda e: -(e["in"] + e["out"]))
+            wins[key] = {
+                "in": round(tin, 4), "out": round(tout, 4), "net": round(tout - tin, 4),
+                "nin": sum(int(r["ni"] or 0) for r in by_ex), "nout": sum(int(r["no"] or 0) for r in by_ex),
+                "ex": ex[:8], "tr": tr,
+                # Окно длиннее, чем сканер работает, — сумма неполная, и
+                # экран должен это сказать, а не выдать её за месячную.
+                "full": bool(first and first <= since + 600),
+            }
+        return {
+            "ok": True, "price": round(px, 2), "since": int(first or 0),
+            "height": int(tip["height"]) if tip else 0, "at": int(tip["ts"]) if tip else 0,
+            "labels": int(labels or 0), "wins": wins,
+        }
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] btc flow: {e}\n")
+        return {"ok": False, "error": "db"}
+    finally:
+        con.close()
+
+
+def btc_flow() -> dict:
+    return cached_small(_BTC, "flow", BTC_TTL, _btc_flow_build)
+
+
+def _btc_big_build(win: str, side: str, min_btc: int) -> dict:
+    con = _btc_open()
+    if not con:
+        return {"ok": False, "error": "no_data"}
+    try:
+        since = now() - BIG_WINDOWS[win] * 3600
+        kind = 1 if side == "buy" else 2
+        floor = int(min_btc * 1e8)
+        clean = _btc_clean(con)
+        # Только движения с биржей: перевод между частными кошельками базы
+        # покупкой не является. И без транзита: кто за то же окно вернул на
+        # биржи почти всё выведенное (или наоборот), тот гоняет монеты, а не
+        # копит и не продаёт.
+        flows = ("WITH w AS (SELECT wallet, "
+                 "SUM(CASE WHEN kind = 1 THEN sats ELSE 0 END) b, "
+                 "SUM(CASE WHEN kind = 2 THEN sats ELSE 0 END) s "
+                 "FROM btc_moves WHERE ts >= ? AND ex != '' GROUP BY wallet) ")
+        keep = {1: "w.s < 0.9 * w.b", 2: "w.b < 0.9 * w.s"}
+        rows = con.execute(
+            flows + f"SELECT m.txid, m.ts, m.wallet, m.ex, m.sats, m.usd_nanos, m.price_nanos "
+            f"FROM btc_moves m JOIN w ON w.wallet = m.wallet "
+            f"WHERE m.ts >= ? AND m.kind = ? AND m.ex != '' AND m.sats >= ? AND {keep[kind]} AND {clean} "
+            f"ORDER BY m.sats DESC, m.ts DESC LIMIT ?", (since, since, kind, floor, BTC_ROWS)).fetchall()
+        tot = {}
+        for k, name in ((1, "buy"), (2, "sell")):
+            r = con.execute(
+                flows + f"SELECT COUNT(*) n, SUM(m.sats) s, SUM(m.usd_nanos) u "
+                f"FROM btc_moves m JOIN w ON w.wallet = m.wallet "
+                f"WHERE m.ts >= ? AND m.kind = ? AND m.ex != '' AND m.sats >= ? AND {keep[k]} AND {clean}",
+                (since, since, k, floor)).fetchone()
+            tot[name] = {"n": int(r["n"] or 0), "btc": round(int(r["s"] or 0) / 1e8, 4),
+                         "v": round(int(r["u"] or 0) / 1e9, 2)}
+        extra = _btc_extra(con, sorted({r["wallet"] for r in rows}))
+        first = con.execute("SELECT MIN(ts) FROM btc_flow").fetchone()[0]
+        return {
+            "ok": True, "win": win, "side": side, "min": min_btc, "tot": tot,
+            "full": bool(first and first <= since + 600), "since": int(first or 0),
+            "rows": [{"tx": r["txid"], "t": int(r["ts"]), "a": r["wallet"], "ex": r["ex"],
+                      "btc": round(int(r["sats"]) / 1e8, 4), "v": round(int(r["usd_nanos"]) / 1e9, 2),
+                      "px": round(int(r["price_nanos"]) / 1e9, 2), **extra.get(r["wallet"], {})}
+                     for r in rows],
+        }
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] btc big: {e}\n")
+        return {"ok": False, "error": "db"}
+    finally:
+        con.close()
+
+
+def btc_big(win: str, side: str, min_btc: int) -> dict:
+    win = win if win in BIG_WINDOWS else "24h"
+    side = "sell" if side == "sell" else "buy"
+    min_btc = min_btc if min_btc in BTC_BIG_MIN else BTC_BIG_MIN[0]
+    return cached_small(_BTC, ("big", win, side, min_btc), BTC_TTL, lambda: _btc_big_build(win, side, min_btc))
+
+
+def _btc_book(moves, px: float) -> dict | None:
+    """Итог кошелька по его выводам и заводам, по средней цене.
+
+    Вывод с биржи — покупка по цене блока: запас растёт, растёт и вложенное.
+    Завод — продажа: из запаса уходит по средней цене, разница с ценой блока
+    — зафиксированный результат. Заводов больше, чем выводов, — монеты
+    куплены раньше, чем начал смотреть сканер, их цены не знает никто;
+    такой излишек в результат не идёт.
+
+    «В плюсе» — доля выводов, купленных дешевле нынешней цены: у кита,
+    который копит, продаж может не быть вовсе, а вопрос «удачно ли он
+    заходил» остаётся.
+    """
+    held = cost = realized = invested = bought = sold = 0.0
+    buys = sells = good = 0
+    exs: dict[str, float] = {}
+    days = set()
+    first = last = 0
+    for kind, sats, price, ts, ex in moves:
+        q = sats / 1e8
+        p = price / 1e9
+        days.add(ts // 86400)
+        first = first or ts
+        last = ts
+        exs[ex] = exs.get(ex, 0.0) + q
+        if kind == 1:
+            buys += 1
+            bought += q
+            held += q
+            cost += q * p
+            invested += q * p
+            if p and p < px:
+                good += 1
+        else:
+            sells += 1
+            sold += q
+            if held > 0:
+                s = min(q, held)
+                avg = cost / held
+                realized += s * (p - avg)
+                cost -= s * avg
+                held -= s
+    if not buys or not invested:
+        return None
+    pnl = realized + (held * px - cost if px else 0.0)
+    return {
+        # «+ 0.0» убирает минус у нуля: «-0,0%» выглядело убытком.
+        "pnl": round(pnl, 2) + 0.0, "roi": round(pnl / invested * 100, 2) + 0.0,
+        "win": round(good / buys * 100), "tr": buys + sells, "buys": buys, "sells": sells,
+        "btc": round(held, 4), "bought": round(bought, 4), "sold": round(sold, 4),
+        "avg": round(invested / bought, 2) if bought else 0, "inv": round(invested, 2),
+        "ex": max(exs, key=exs.get) if exs else "", "days": len(days), "first": first, "last": last,
+    }
+
+
+def _btc_rank_build(days: int) -> dict:
+    con = _btc_open()
+    if not con:
+        return {"ok": False, "error": "no_data"}
+    try:
+        px = _btc_price(con)
+        since = now() - days * 86400
+        books = []
+        cur_w, moves = None, []
+        rows = con.execute(
+            f"SELECT wallet, kind, sats, price_nanos, ts, ex FROM btc_moves m "
+            f"WHERE ts >= ? AND price_nanos > 0 AND {_btc_clean(con)} ORDER BY wallet, ts, id", (since,))
+        for r in rows:
+            if r["wallet"] != cur_w:
+                if cur_w and moves:
+                    b = _btc_book(moves, px)
+                    if b:
+                        books.append({"a": cur_w, **b})
+                cur_w, moves = r["wallet"], []
+            moves.append((int(r["kind"]), int(r["sats"]), int(r["price_nanos"]), int(r["ts"]), r["ex"] or ""))
+        if cur_w and moves:
+            b = _btc_book(moves, px)
+            if b:
+                books.append({"a": cur_w, **b})
+        first = con.execute("SELECT MIN(ts) FROM btc_flow").fetchone()[0]
+        boards = {
+            "pnl": sorted(books, key=lambda b: (-b["pnl"], -b["btc"]))[:BTC_ROWS],
+            "roi": sorted(books, key=lambda b: (-b["roi"], -b["btc"]))[:BTC_ROWS],
+            "act": sorted(books, key=lambda b: (-b["btc"], -b["pnl"]))[:BTC_ROWS],
+        }
+        extra = _btc_extra(con, sorted({b["a"] for rows in boards.values() for b in rows}))
+        for rows in boards.values():
+            for b in rows:
+                b.update(extra.get(b["a"], {}))
+        return {
+            "ok": True, "days": days, "price": round(px, 2), "n": len(books),
+            "full": bool(first and first <= since + 600), "since": int(first or 0),
+            **boards,
+        }
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] btc rank: {e}\n")
+        return {"ok": False, "error": "db"}
+    finally:
+        con.close()
+
+
+def btc_rank(days: int, prem: bool) -> dict:
+    days = days if days in BTC_RANK_DAYS else 30
+    res = cached_small(_BTC, ("rank", days), 120.0, lambda: _btc_rank_build(days))
+    if prem or not res.get("ok"):
+        return res
+    # Как у спота: бесплатно — первые тридцать мест.
+    return {**res, **{k: res[k][:RANK_FREE_DEPTH] for k in ("pnl", "roi", "act")}}
+
+
+def _btc_wallet_build(addr: str) -> dict:
+    con = _btc_open()
+    if not con:
+        return {"ok": False, "error": "no_data"}
+    try:
+        px = _btc_price(con)
+        lab = con.execute("SELECT ex FROM btc_labels WHERE address = ?", (addr,)).fetchone()
+        rows = con.execute(
+            "SELECT txid, kind, sats, usd_nanos, price_nanos, ts, ex FROM btc_moves "
+            "WHERE wallet = ? ORDER BY ts, id", (addr,)).fetchall()
+        book = _btc_book([(int(r["kind"]), int(r["sats"]), int(r["price_nanos"]), int(r["ts"]), r["ex"] or "")
+                          for r in rows if int(r["price_nanos"] or 0) > 0], px)
+        return {
+            "ok": True, "addr": addr, "price": round(px, 2), "ex": lab["ex"] if lab else "",
+            "book": book, **_btc_extra(con, [addr])[addr],
+            "moves": [{"tx": r["txid"], "buy": int(r["kind"]) == 1, "btc": round(int(r["sats"]) / 1e8, 4),
+                       "v": round(int(r["usd_nanos"]) / 1e9, 2), "px": round(int(r["price_nanos"]) / 1e9, 2),
+                       "t": int(r["ts"]), "ex": r["ex"]} for r in reversed(rows[-50:])],
+        }
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] btc wallet: {e}\n")
+        return {"ok": False, "error": "db"}
+    finally:
+        con.close()
+
+
+def btc_wallet(addr: str) -> dict:
+    return cached_small(_BTC, ("wallet", addr), BTC_TTL, lambda: _btc_wallet_build(addr))
+
+
 # --- Доминация и альтсезон --------------------------------------------------
 # Капитализация всего рынка, доли биткоина и эфира по дням с 29 апреля 2013 —
 # открытый data-api CoinMarketCap (без ключа), куски по 2000 дней. Стейблкоины
@@ -11122,6 +11449,33 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path in ("/halving", "/api/halving"):
                 self._json(200, halving_data())
+                return
+            if path in ("/btc/flow", "/api/btc/flow"):
+                self._json(200, btc_flow())
+                return
+            if path in ("/btc/big", "/api/btc/big"):
+                try:
+                    mn = int(qs.get("min", ["1"])[0])
+                except (TypeError, ValueError):
+                    mn = 1
+                self._json(200, btc_big(qs.get("win", ["24h"])[0], qs.get("side", ["buy"])[0], mn))
+                return
+            if path in ("/btc/rank", "/api/btc/rank"):
+                try:
+                    days = int(qs.get("win", ["30"])[0])
+                except (TypeError, ValueError):
+                    days = 30
+                self._json(200, btc_rank(days, chat_premium(self._user(qs))))
+                return
+            if path in ("/btc/wallet", "/api/btc/wallet"):
+                a = (qs.get("addr", [""])[0] or "").strip()
+                # Bech32 пишут и заглавными — в базе адрес строчными.
+                if a[:3].lower() == "bc1":
+                    a = a.lower()
+                if not BTC_ADDR_RE.match(a):
+                    self._json(400, {"ok": False, "error": "bad_addr"})
+                    return
+                self._json(200, btc_wallet(a))
                 return
             if path in ("/dom", "/api/dom"):
                 self._json(200, dom_data())

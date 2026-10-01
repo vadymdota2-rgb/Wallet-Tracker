@@ -398,7 +398,7 @@ export function TileNav<T extends string>({
   value: T;
   /** venue — значок площадки уголком: знак говорит «что», значок «где». */
   /** lock — раздел за подпиской: замочек уголком, напротив значка площадки. */
-  options: { id: T; ic: ReactNode; venue?: "spot" | "perp"; lock?: boolean; label: ReactNode }[];
+  options: { id: T; ic: ReactNode; venue?: "spot" | "perp" | "btc"; lock?: boolean; label: ReactNode }[];
   onChange: (id: T) => void;
   cols?: number;
   label?: string;
@@ -841,11 +841,11 @@ export function FundingGlyph({ size = 22 }: { size?: number }) {
   );
 }
 
-export function VenueMark({ venue, size = 15 }: { venue: "spot" | "perp"; size?: number }) {
+export function VenueMark({ venue, size = 15 }: { venue: "spot" | "perp" | "btc"; size?: number }) {
   return (
     <img
       className="venue"
-      src={`/coins/hl/${venue === "spot" ? "BNB" : "HYPE"}.svg`}
+      src={`/coins/hl/${venue === "spot" ? "BNB" : venue === "btc" ? "BTC" : "HYPE"}.svg`}
       alt=""
       width={size}
       height={size}

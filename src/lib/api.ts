@@ -11,6 +11,7 @@ import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
   LiqCoinsReply, FngReply, DomReply, EtfReply, HalvingReply, FundRow, LsRow, MutationResult,
   RotSide, SymbolRow, TokenHist, Trades, UnlocksReply, WalletLive,
+  BtcBigReply, BtcFlowReply, BtcRankReply, BtcWalletReply,
 } from "./types";
 
 const TIMEOUT_MS = 15000;
@@ -432,3 +433,33 @@ export const fetchLiqCoins = () =>
       return r;
     });
 export const peekLiqCoins = () => peek<LiqCoinsReply | null>("/api/liqcoins", 60 * 60_000) ?? savedLiqCoins();
+
+/* Bitcoin: сканер бота пишет блок раз в десять минут — ответы живут минуту,
+   рейтинг две. Поток лежит и на устройстве: карточка в NetFlow видна сразу. */
+const BTC_TTL = 60_000;
+const BTC_FLOW_SAVED = "wt-btcflow-v1";
+export function savedBtcFlow(): BtcFlowReply | null {
+  const hit = readSaved<BtcFlowReply>(BTC_FLOW_SAVED).all;
+  return hit && hit.v?.ok && hit.v.wins ? hit.v : null;
+}
+export const fetchBtcFlow = () =>
+  remember<BtcFlowReply | null>("/api/btc/flow", BTC_TTL, () => call<BtcFlowReply>("/api/btc/flow"), good).then((r) => {
+    if (r?.ok && r.wins) writeSaved(BTC_FLOW_SAVED, { all: { at: Date.now(), v: r } });
+    return r;
+  });
+export const peekBtcFlow = () => peek<BtcFlowReply | null>("/api/btc/flow", BTC_TTL) ?? savedBtcFlow();
+
+const btcBigPath = (win: string, side: string, min: number) =>
+  `/api/btc/big?win=${encodeURIComponent(win)}&side=${encodeURIComponent(side)}&min=${min}`;
+export const fetchBtcBig = (win: string, side: string, min: number) =>
+  cachedGet<BtcBigReply>(btcBigPath(win, side, min), BTC_TTL);
+export const peekBtcBig = (win: string, side: string, min: number) =>
+  peek<BtcBigReply | null>(btcBigPath(win, side, min), BTC_TTL);
+
+const btcRankPath = (win: string) => `/api/btc/rank?win=${encodeURIComponent(win)}`;
+export const fetchBtcRank = (win: string) => cachedGet<BtcRankReply>(btcRankPath(win), 2 * BTC_TTL);
+export const peekBtcRank = (win: string) => peek<BtcRankReply | null>(btcRankPath(win), 2 * BTC_TTL);
+
+const btcWalletPath = (addr: string) => `/api/btc/wallet?addr=${encodeURIComponent(addr)}`;
+export const fetchBtcWallet = (addr: string) => cachedGet<BtcWalletReply>(btcWalletPath(addr), BTC_TTL);
+export const peekBtcWallet = (addr: string) => peek<BtcWalletReply | null>(btcWalletPath(addr), BTC_TTL);
