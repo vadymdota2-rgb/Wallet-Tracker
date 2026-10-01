@@ -716,7 +716,17 @@ export interface EtfReply {
     movers?: BtcHolder[];
     /** Компании с эфиром: [имя, тип, ETH]. */
     eth?: [string, string, number][];
+    /** Казначейства в других монетах: eth, sol, bnb, xrp → [имя, тип, монет]. */
+    alts?: Record<string, [string, string, number][]>;
   };
+  /**
+   * Позиции на CME по отчёту CFTC, в монетах, по неделям: [дата, открытый
+   * интерес, управляющие лонг, шорт, хедж-фонды лонг, шорт, дилеры лонг,
+   * шорт, мелкие лонг, шорт].
+   */
+  cme?: Record<string, number[][]>;
+  /** Премия Coinbase к Binance, %: по дням и сейчас. */
+  cbp?: Record<string, { days: [number, number][]; now: number | null }>;
   at: number;
 }
 

@@ -24,6 +24,7 @@ import { fetchEtf, peekEtf } from "../lib/api";
 import { Card, Chips, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import type { BtcHolder, EtfCoin, EtfReply } from "../lib/types";
 import { Frame } from "./Screen";
+import { AltHolders, CbpSection, CmeSection, HoldersAll } from "./EtfMore";
 import { dateStr, timeTicks } from "./FearGreedScreen";
 
 type Lang = Parameters<typeof t>[0];
@@ -396,12 +397,9 @@ function Funds({ c, coin, lang }: { c: EtfCoin; coin: Coin; lang: Lang }) {
 }
 
 function Holders({ h, price, lang }: { h: EtfReply["holders"]; price: number; lang: Lang }) {
-  const [all, setAll] = useState(false);
   const groups = h.groups ?? [];
   const total = groups.reduce((s, g) => s + g[2], 0);
-  const top = h.top ?? [];
   const movers = (h.movers ?? []).filter((m) => Math.abs(m[6]) >= 0.5);
-  const shown = all ? top.slice(0, 80) : top.slice(0, 12);
   const typeName = (r: BtcHolder) => t(lang, GROUPS[r[1]]?.key ?? "ef_g_other");
   if (!groups.length) return null;
   return (
@@ -452,69 +450,6 @@ function Holders({ h, price, lang }: { h: EtfReply["holders"]; price: number; la
         </>
       ) : null}
 
-      <SectionTitle>{t(lang, "ef_t_title")}</SectionTitle>
-      <Card>
-        <div className="ef-hl">
-          {shown.map((r, i) => (
-            <div key={r[0] + i} className="ef-hr">
-              <span className="ef-hr-rank">{i + 1}</span>
-              <span className="ef-hr-id">
-                <b>{r[3] ? `${r[3]} ` : ""}{r[0]}</b>
-                <small>{typeName(r)}{r[4] ? ` · ${r[4]}` : ""}</small>
-                {r[7] > 0 && r[5] > 0 && price > 0 ? (() => {
-                  /* Средняя цена покупки — из раскрытой стоимости запаса: видно,
-                     в плюсе держатель или в минусе при нынешней цене. */
-                  const avg = r[7] / r[5];
-                  const gain = (price / avg - 1) * 100;
-                  return (
-                    <small className="ef-cost">
-                      {t(lang, "ef_cost", { p: iso(px(avg)) })}{" "}
-                      <em className={gain >= 0 ? "up" : "dn"}><bdi dir="ltr">{pct(gain, 0, true)}</bdi></em>
-                    </small>
-                  );
-                })() : null}
-              </span>
-              <span className="ef-hr-v">
-                <b><bdi dir="ltr">{num(r[5])} BTC</bdi></b>
-                {price > 0 ? <small><bdi dir="ltr">{usdWord(r[5] * price)}</bdi></small> : null}
-              </span>
-            </div>
-          ))}
-        </div>
-        {top.length > 12 ? (
-          <button type="button" className="dm-more" onClick={() => setAll((v) => !v)}>
-            {all ? t(lang, "dm_less") : t(lang, "dm_all", { n: num(Math.min(80, top.length)) })}
-          </button>
-        ) : null}
-      </Card>
-    </>
-  );
-}
-
-function EthHolders({ list, price, lang }: { list: [string, string, number][]; price: number; lang: Lang }) {
-  if (!list.length) return null;
-  const total = list.reduce((s, r) => s + r[2], 0);
-  return (
-    <>
-      <SectionTitle>{t(lang, "ef_e_title")}</SectionTitle>
-      <Card>
-        <p className="ef-h-lead">{t(lang, "ef_e_lead", { n: iso(num(list.length)), b: iso(num(total)) })}</p>
-        <div className="ef-hl">
-          {list.slice(0, 15).map((r, i) => (
-            <div key={r[0]} className="ef-hr">
-              <span className="ef-hr-rank">{i + 1}</span>
-              <span className="ef-hr-id">
-                <b>{r[0]}</b>
-                <small>{t(lang, GROUPS[r[1]]?.key ?? "ef_g_other")}</small>
-              </span>
-              <span className="ef-hr-v">
-                <b><bdi dir="ltr">{num(r[2])} ETH</bdi></b>
-                {price > 0 ? <small><bdi dir="ltr">{usdWord(r[2] * price)}</bdi></small> : null}
-              </span>
-            </div>
-          ))}
-        </div>
-      </Card>
     </>
   );
 }
@@ -826,8 +761,18 @@ export function EtfScreen() {
             <p className="lq-hint">{t(lang, "ef_r_note", { d: dateStr(lang, days[0]![0], { day: "numeric", month: "long", year: "numeric" }) })}</p>
           </Card>
 
-          {cur === "btc" ? <Holders h={reply.holders ?? {}} price={btcPx} lang={lang} /> : null}
-          {cur === "eth" ? <EthHolders list={reply.holders?.eth ?? []} price={lastPx} lang={lang} /> : null}
+          {reply.cme?.[cur]?.length ? <CmeSection rows={reply.cme[cur]!} sym={sym} price={lastPx} lang={lang} /> : null}
+          {reply.cbp?.[cur]?.days?.length ? <CbpSection d={reply.cbp[cur]!} sym={sym} lang={lang} /> : null}
+          {cur === "btc" ? (
+            <>
+              <Holders h={reply.holders ?? {}} price={btcPx} lang={lang} />
+              <HoldersAll h={reply.holders ?? {}} price={btcPx} lang={lang} />
+            </>
+          ) : null}
+          {reply.holders?.alts?.[cur]?.length
+            ? <AltHolders list={reply.holders.alts[cur]!} sym={sym} price={lastPx} lang={lang} />
+            : cur === "eth" && reply.holders?.eth?.length
+              ? <AltHolders list={reply.holders.eth} sym={sym} price={lastPx} lang={lang} /> : null}
 
           <details className="lq-how">
             <summary>{t(lang, "fg_how")}</summary>
@@ -837,6 +782,7 @@ export function EtfScreen() {
               <li>{t(lang, "ef_how_3")}</li>
               <li>{t(lang, "ef_how_4")}</li>
               <li>{t(lang, "ef_how_5")}</li>
+              <li>{t(lang, "ef_how_6")}</li>
             </ul>
           </details>
           <p className="lq-src">{t(lang, "ef_src")} {t(lang, "ef_upd", { t: stamp(lang, reply.at) })}</p>

@@ -9910,6 +9910,90 @@ def _etf_coin(cat: str, symbol: str) -> dict | None:
             "best": mval("strongestMonth"), "worst": mval("weakestMonth")}
 
 
+
+# Позиции на CME по отчёту CFTC «Traders in Financial Futures» — раз в неделю,
+# по вторникам, публикуется в пятницу. Открытый API CFTC (Socrata), без ключа.
+# Большой и микро-контракт складываются в монетах: у них разный размер.
+CME_CODES = {
+    "btc": (("133741", 5.0), ("133742", 0.1)),
+    "eth": (("146021", 50.0), ("146022", 0.1)),
+    "sol": (("177741", 500.0), ("177742", 25.0)),
+    "xrp": (("176740", 50000.0), ("176741", 2500.0)),
+}
+CME_FIELDS = ("open_interest_all", "asset_mgr_positions_long", "asset_mgr_positions_short",
+              "lev_money_positions_long", "lev_money_positions_short",
+              "dealer_positions_long_all", "dealer_positions_short_all",
+              "nonrept_positions_long_all", "nonrept_positions_short_all")
+
+
+def _inst_cme() -> dict:
+    codes = [c for pairs in CME_CODES.values() for c, _ in pairs]
+    q = urllib.parse.urlencode({
+        "$select": "cftc_contract_market_code,report_date_as_yyyy_mm_dd," + ",".join(CME_FIELDS),
+        "$where": "cftc_contract_market_code in (" + ",".join(f"'{c}'" for c in codes) + ")",
+        "$order": "report_date_as_yyyy_mm_dd ASC",
+        "$limit": "5000",
+    })
+    rows = get_json("https://publicreporting.cftc.gov/resource/gpe5-46if.json?" + q, 30)
+    if not isinstance(rows, list) or not rows:
+        return {}
+    unit = {c: (coin, u) for coin, pairs in CME_CODES.items() for c, u in pairs}
+    acc: dict = {}
+    for r in rows:
+        try:
+            coin, u = unit[r["cftc_contract_market_code"]]
+            ts = _dom_day(r["report_date_as_yyyy_mm_dd"])
+            vals = [float(r.get(f) or 0) * u for f in CME_FIELDS]
+        except (KeyError, TypeError, ValueError):
+            continue
+        cur = acc.setdefault(coin, {}).setdefault(ts, [0.0] * len(CME_FIELDS))
+        for i, v in enumerate(vals):
+            cur[i] += v
+    out = {}
+    for coin, by in acc.items():
+        out[coin] = [[ts, *[round(v, 1) for v in by[ts]]] for ts in sorted(by)]
+    return out
+
+
+def _coinbase_daily(product: str, start: int) -> dict:
+    out: dict = {}
+    t = start
+    end = now()
+    while t < end:
+        t2 = min(end, t + 299 * 86400)
+        a = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))
+        b = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t2))
+        rows = get_json(f"https://api.exchange.coinbase.com/products/{product}/candles?granularity=86400&start={a}&end={b}", 20)
+        if not isinstance(rows, list):
+            break
+        for k in rows:
+            out[int(k[0])] = float(k[4])
+        t = t2 + 86400
+    return out
+
+
+def _inst_cbp() -> dict:
+    """Премия Coinbase: на сколько процентов биткоин (эфир) на Coinbase дороже,
+    чем на Binance. Coinbase — главная площадка американских фондов и
+    компаний, поэтому плюс читают как спрос из США."""
+    out: dict = {}
+    start = (now() - 400 * 86400) // 86400 * 86400
+    for coin, cb, bn in (("btc", "BTC-USD", "BTCUSDT"), ("eth", "ETH-USD", "ETHUSDT")):
+        c = _coinbase_daily(cb, start)
+        b = _etf_klines(bn, start * 1000)
+        days = [[ts, round((c[ts] / b[ts] - 1) * 100, 4)] for ts in sorted(c) if b.get(ts)]
+        live = None
+        try:
+            tc = float((get_json(f"https://api.exchange.coinbase.com/products/{cb}/ticker", 10) or {}).get("price") or 0)
+            tb = float((get_json(f"https://data-api.binance.vision/api/v3/ticker/price?symbol={bn}", 10) or {}).get("price") or 0)
+            if tc > 0 and tb > 0:
+                live = round((tc / tb - 1) * 100, 4)
+        except (TypeError, ValueError):
+            pass
+        if days:
+            out[coin] = {"days": days[-366:], "now": live}
+    return out
+
 def _devalue(data: list):
     """Разворачивает формат devalue (SvelteKit __data.json) в обычные объекты."""
     def res(i, depth=0):
@@ -9975,16 +10059,22 @@ def _etf_holders() -> dict:
                     tick or "", round(bal, 2), round(d7, 2), round(cost)])
     top.sort(key=lambda r: -r[5])
     movers = sorted([r for r in top if r[6]], key=lambda r: -abs(r[6]))[:20]
-    eth = []
-    alt = (root.get("altcoinHoldings") or {}).get("ethereum") or {}
-    for e in alt.get("entities") or []:
-        try:
-            eth.append([str(e.get("name") or "")[:60].strip(), str(e.get("type") or ""), round(float(e.get("balance") or 0), 2)])
-        except (TypeError, ValueError, AttributeError):
-            continue
-    eth.sort(key=lambda r: -r[2])
+    # Казначейства в других монетах: эфир, Solana, BNB, XRP.
+    alts: dict = {}
+    for slug, sym in (("ethereum", "eth"), ("solana", "sol"), ("bnb", "bnb"), ("xrp", "xrp")):
+        lst = []
+        for e in ((root.get("altcoinHoldings") or {}).get(slug) or {}).get("entities") or []:
+            try:
+                lst.append([str(e.get("name") or "")[:60].strip(), str(e.get("type") or ""), round(float(e.get("balance") or 0), 2)])
+            except (TypeError, ValueError, AttributeError):
+                continue
+        lst.sort(key=lambda r: -r[2])
+        if lst:
+            alts[sym] = lst
+    # Все держатели, а не первые восемьдесят: экран фильтрует их по группам
+    # и ищет по имени.
     return {"groups": sorted([[k, *v] for k, v in groups.items()], key=lambda g: -g[2]),
-            "top": top[:80], "movers": movers, "eth": eth[:30]}
+            "top": top, "movers": movers, "alts": alts, "eth": alts.get("eth", [])[:30]}
 
 
 def _etf_build() -> dict:
@@ -9992,6 +10082,8 @@ def _etf_build() -> dict:
     with ThreadPoolExecutor(max_workers=2) as pool:
         futs = {cat: pool.submit(_etf_coin, cat, sym) for cat, sym in ETF_COINS}
         hold = pool.submit(_etf_holders)
+        cme_f = pool.submit(_inst_cme)
+        cbp_f = pool.submit(_inst_cbp)
         for cat, f in futs.items():
             try:
                 r = f.result(timeout=90)
@@ -10005,6 +10097,13 @@ def _etf_build() -> dict:
         except Exception as e:  # noqa: BLE001
             print(f"etf holders: {e}", file=sys.stderr)
             holders = {}
+        extra: dict = {}
+        for name, f in (("cme", cme_f), ("cbp", cbp_f)):
+            try:
+                extra[name] = f.result(timeout=90) or {}
+            except Exception as e:  # noqa: BLE001
+                print(f"etf {name}: {e}", file=sys.stderr)
+                extra[name] = {}
     if "btc" not in coins:
         return {"ok": False, "error": "no_data"}
     # Монета, которой в этот раз нет, берётся из прошлой сборки, а не
@@ -10016,7 +10115,10 @@ def _etf_build() -> dict:
             coins[cat] = was["coins"][cat]
     if not holders and was.get("holders"):
         holders = was["holders"]
-    res = {"ok": True, "coins": coins, "holders": holders, "at": now()}
+    for name in ("cme", "cbp"):
+        if not extra.get(name) and was.get(name):
+            extra[name] = was[name]
+    res = {"ok": True, "coins": coins, "holders": holders, "cme": extra.get("cme") or {}, "cbp": extra.get("cbp") or {}, "at": now()}
     with _liq_lock:
         _etf_cache["all"] = (time.monotonic(), res)
     return res

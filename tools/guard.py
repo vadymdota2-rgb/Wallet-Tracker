@@ -565,5 +565,13 @@ say("институциональные потоки: накопленный п�
     "cum={mode === \"c\" ? cumView : null}" in _ef and '"ef_mshare"' in _ef and '"ef_prem"' in _ef
     and '"ef_cost"' in _ef and '"ef_held2"' in _ef and '"ef_upd"' in _ef and "coinsRound(" in _ef)
 
+_em = read(f"{APP}/src/screens/EtfMore.tsx")
+say("институциональные потоки: позиции CME по CFTC, премия Coinbase, все держатели с поиском и группами, казначейства ETH/SOL/BNB/XRP",
+    "def _inst_cme(" in api and "publicreporting.cftc.gov" in api and "def _inst_cbp(" in api
+    and '"top": top, "movers": movers, "alts": alts' in api
+    and "export function CmeSection(" in _em and "export function CbpSection(" in _em
+    and "export function HoldersAll(" in _em and "export function AltHolders(" in _em
+    and "<CmeSection" in _ef and "<HoldersAll" in _ef)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
