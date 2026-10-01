@@ -9,7 +9,7 @@ import { initData } from "./telegram";
 import { forget, peek, remember } from "./memo";
 import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
-  LiqCoinsReply, FngReply, DomReply, EtfReply, FundRow, LsRow, MutationResult,
+  LiqCoinsReply, FngReply, DomReply, EtfReply, HalvingReply, FundRow, LsRow, MutationResult,
   RotSide, SymbolRow, TokenHist, Trades, UnlocksReply, WalletLive,
 } from "./types";
 
@@ -383,6 +383,20 @@ export const fetchEtf = () =>
     return r;
   });
 export const peekEtf = () => peek<EtfReply | null>("/api/etf", 60 * 60_000) ?? savedEtf();
+
+/* Халвинг: блок раз в десять минут — ответ живёт пять, последний лежит на
+   устройстве, и отсчёт в меню виден сразу, даже без сети. */
+const HALVING_SAVED = "wt-halving-v1";
+export function savedHalving(): HalvingReply | null {
+  const hit = readSaved<HalvingReply>(HALVING_SAVED).all;
+  return hit && hit.v?.height ? hit.v : null;
+}
+export const fetchHalving = () =>
+  remember<HalvingReply | null>("/api/halving", 5 * 60_000, () => call<HalvingReply>("/api/halving", { timeout: 12_000 }), good).then((r) => {
+    if (r?.ok && r.height) writeSaved(HALVING_SAVED, { all: { at: Date.now(), v: r } });
+    return r;
+  });
+export const peekHalving = () => peek<HalvingReply | null>("/api/halving", 5 * 60_000) ?? savedHalving();
 
 /** Все монеты с фьючерсами — список раз в час; последний лежит на устройстве. */
 export function savedLiqCoins(): LiqCoinsReply | null {

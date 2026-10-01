@@ -9517,6 +9517,51 @@ def fng_data() -> dict:
     return _fng_build()
 
 
+
+# --- Халвинг -----------------------------------------------------------------
+# Высота последнего блока и среднее время блока за текущий период сложности —
+# mempool.space (без ключа); запасной путь — blockstream.info и
+# blockchain.info, тогда среднее берётся за 600 секунд. Халвинг каждые 210 000
+# блоков, следующий — на 1 050 000. Ответ живёт пять минут: блок — раз в
+# десять, а отсчёт до секунд приложение ведёт само.
+HALVING_EVERY = 210_000
+HALVING_TTL = 300.0
+_halving_cache: dict = {}
+
+
+def halving_data() -> dict:
+    with _liq_lock:
+        hit = _halving_cache.get("all")
+        if hit and time.monotonic() - hit[0] < HALVING_TTL:
+            return hit[1]
+    height = 0
+    avg = 600.0
+    for url in ("https://mempool.space/api/blocks/tip/height", "https://blockstream.info/api/blocks/tip/height",
+                "https://blockchain.info/q/getblockcount"):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "wallet-tracker/1.0"})
+            with urllib.request.urlopen(req, timeout=8) as r:
+                height = int(r.read().decode().strip())
+            if height > 800_000:
+                break
+        except (urllib.error.URLError, ValueError, OSError):
+            height = 0
+    if not height:
+        return hit[1] if hit else {"ok": False, "error": "no_data"}
+    adj = get_json("https://mempool.space/api/v1/difficulty-adjustment", 8) or {}
+    try:
+        t = float(adj.get("timeAvg") or 0) / 1000
+        # Разумные пределы: в начале периода среднее бывает по двум блокам.
+        if 420 <= t <= 900:
+            avg = t
+    except (TypeError, ValueError):
+        pass
+    nxt = (height // HALVING_EVERY + 1) * HALVING_EVERY
+    res = {"ok": True, "height": height, "next": nxt, "every": HALVING_EVERY, "avg": round(avg, 1), "at": now()}
+    with _liq_lock:
+        _halving_cache["all"] = (time.monotonic(), res)
+    return res
+
 # --- Доминация и альтсезон --------------------------------------------------
 # Капитализация всего рынка, доли биткоина и эфира по дням с 29 апреля 2013 —
 # открытый data-api CoinMarketCap (без ключа), куски по 2000 дней. Стейблкоины
@@ -10951,6 +10996,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path in ("/fng", "/api/fng"):
                 self._json(200, fng_data())
+                return
+            if path in ("/halving", "/api/halving"):
+                self._json(200, halving_data())
                 return
             if path in ("/dom", "/api/dom"):
                 self._json(200, dom_data())

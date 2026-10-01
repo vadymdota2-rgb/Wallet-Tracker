@@ -550,5 +550,10 @@ say("ETF и крупные игроки: потоки по фондам и дн�
     and "function FlowChart(" in _ef and "function Funds(" in _ef and "function Holders(" in _ef
     and "minedPerDay(" in _ef and "glyph: <EtfGlyph />" in appx)
 
+_hv = read(f"{APP}/src/components/HalvingCard.tsx")
+say("внизу меню — отсчёт до халвинга, а не дата сборки",
+    "def halving_data(" in api and '"/api/halving"' in api and "mempool.space/api/blocks/tip/height" in api
+    and "<HalvingCard />" in appx and "drawer-build" not in appx and "(h.next - h.height) * h.avg - since" in _hv)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

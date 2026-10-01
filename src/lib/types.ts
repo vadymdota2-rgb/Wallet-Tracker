@@ -717,6 +717,17 @@ export interface EtfReply {
   at: number;
 }
 
+/** Высота последнего блока биткоина, блок следующего халвинга и среднее время блока, с. */
+export interface HalvingReply {
+  ok: boolean;
+  error?: string;
+  height: number;
+  next: number;
+  every: number;
+  avg: number;
+  at: number;
+}
+
 /** Монета, по которой строится карта ликвидаций. */
 export interface LiqCoin {
   s: string;

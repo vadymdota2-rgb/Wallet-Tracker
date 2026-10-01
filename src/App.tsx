@@ -9,6 +9,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useApp } from "./store/app";
 import { useLive } from "./store/live";
 import { Gift } from "./components/Gift";
+import { HalvingCard } from "./components/HalvingCard";
 import { t, bare } from "./i18n/t";
 import { ensureLang, isRtl, normalizeLang } from "./i18n";
 import { setLocale } from "./lib/format";
@@ -26,7 +27,6 @@ import { MoreTab } from "./screens/MoreTab";
 import type { DictKey } from "./i18n/types";
 import type { ScreenName, Tab } from "./store/app";
 
-declare const __BUILD__: string;
 
 const TABS: { id: Tab; key: DictKey; glyph: ReactNode }[] = [
   { id: "wallets", key: "menu_my_wallets", glyph: <WalletGlyph /> },
@@ -248,7 +248,9 @@ export default function App() {
                 {bare(t(lang, m.key))}
               </button>
             ))}
-            <p className="drawer-build">{__BUILD__}</p>
+            {/* Внизу меню — отсчёт до халвинга; дата сборки здесь была
+                служебной и человеку ничего не говорила. */}
+            <HalvingCard />
           </nav>
         </div>
       ) : null}
