@@ -1202,6 +1202,28 @@ export function DomGlyph({ size = 25 }: { size?: number }) {
   );
 }
 
+/** Здание с колоннами — фонды и крупные держатели. */
+export function EtfGlyph({ size = 25 }: { size?: number }) {
+  return (
+    <svg
+      className="glyph"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3.5 9 12 4.2 20.5 9z" />
+      <path d="M6 11.5v5.5M10 11.5v5.5M14 11.5v5.5M18 11.5v5.5" />
+      <path d="M3.5 19.8h17" />
+    </svg>
+  );
+}
+
 /** Молния — «быстрее остальных». Тот же контур, что у соседних значков. */
 export function BoltGlyph({ size = 22 }: { size?: number }) {
   return (

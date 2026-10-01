@@ -9321,6 +9321,10 @@ def liq_warm_refresher() -> None:
         except Exception:  # noqa: BLE001
             pass
         try:
+            etf_data()  # и потоки ETF с крупными держателями
+        except Exception:  # noqa: BLE001
+            pass
+        try:
             listed = [c["s"] for c in (liq_coins().get("coins") or [])[:LIQ_WARM_COINS]]
         except Exception:  # noqa: BLE001
             listed = []
@@ -9708,6 +9712,295 @@ def dom_data() -> dict:
         with _liq_lock:
             hit = _dom_cache.get("all")
         return hit[1] if hit else _dom_build()
+
+
+# --- ETF и крупные держатели -----------------------------------------------
+# Приток и отток спотовых ETF по каждому фонду и каждому торговому дню — из
+# открытого data-api CoinMarketCap (без ключа): биткоин с января 2024, эфир с
+# июля 2024, Solana, XRP и HYPE — с их запуска. Страницы по сто дней. Названия
+# фондов, активы и комиссия — их же список фондов. Цена дня — закрытие Binance.
+# Кто ещё держит биткоин — компании, государства, фонды — открытые данные
+# bitcointreasuries.net. Отчёты фондов выходят раз в сутки, поэтому ответ
+# живёт час: устаревший отдаётся сразу, свежий собирается в фоне.
+ETF_TTL = 3600.0
+ETF_COINS = (("btc", "BTCUSDT"), ("eth", "ETHUSDT"), ("sol", "SOLUSDT"), ("xrp", "XRPUSDT"), ("hype", "HYPEUSDT"))
+_etf_cache: dict = {}
+_etf_first = threading.Lock()
+
+
+def _etf_klines(symbol: str, start_ms: int) -> dict:
+    out: dict = {}
+    cur = start_ms
+    for _ in range(6):
+        rows = get_json(f"https://data-api.binance.vision/api/v3/klines?symbol={symbol}&interval=1d&limit=1000&startTime={cur}", 20)
+        if not isinstance(rows, list) or not rows:
+            break
+        for k in rows:
+            out[int(k[0]) // 1000] = float(k[4])
+        if len(rows) < 1000:
+            break
+        cur = int(rows[-1][0]) + 86_400_000
+    return out
+
+
+def _etf_coin(cat: str, symbol: str) -> dict | None:
+    first = _dom_cmc(f"etf/detail/netflow/list?category={cat}&size=100&page=1")
+    try:
+        total = int(first.get("totalCount") or 0)
+    except (TypeError, ValueError):
+        total = 0
+    pts = list(first.get("points") or [])
+    if not pts:
+        return None
+    pages = min(12, (total + 99) // 100)
+    def page(n: int) -> list:
+        # Под нагрузкой CoinMarketCap иногда отдаёт пустую страницу — второй
+        # заход через пару секунд её приносит.
+        for attempt in range(3):
+            got = _dom_cmc(f"etf/detail/netflow/list?category={cat}&size=100&page={n}").get("points") or []
+            if got:
+                return got
+            time.sleep(1.5 * (attempt + 1))
+        return []
+
+    if pages > 1:
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            rest = list(pool.map(page, range(2, pages + 1)))
+        for chunk in rest:
+            # Не пришла страница — не рисуем дыру на месяцы: сборка не удалась.
+            if not chunk:
+                return None
+            pts.extend(chunk)
+
+    unit = "btc" if cat == "btc" else "eth"  # у остальных монет количество лежит в поле eth
+    days: dict = {}
+    for p in pts:
+        try:
+            ts = int(p["date"]) // 1000
+        except (KeyError, TypeError, ValueError):
+            continue
+        funds = {k: v for k, v in p.items() if k not in ("date", "total") and isinstance(v, dict)}
+        if ts == 0:
+            continue
+        # День, по которому фонды ещё не отчитались: всё пусто, а не нули.
+        if not any(v.get("usd") is not None for v in funds.values()):
+            continue
+        tot = p.get("total") or {}
+        # Количество монет — сумма по фондам: в итоговой строке источника в
+        # поле монет у биткоина лежат доллары.
+        coin = sum(float(v.get(unit) or 0) for v in funds.values())
+        days[ts] = (funds, float(tot.get("usd") or 0), coin)
+    if not days:
+        return None
+
+    names = {}
+    if cat in ("btc", "eth"):
+        lst = get_json(f"https://api.coinmarketcap.com/data-api/v3/etf/list?category={cat}&size=60&start=1", 25)
+        for f in (lst or {}).get("data") or []:
+            if isinstance(f, dict) and f.get("ticker"):
+                names[f["ticker"]] = f
+    # Итог «с запуска» — сумма дневных потоков. Готовая строка источника с
+    # итогами врёт: у гонконгского HARVEST там +$8,5 млрд при дневных потоках
+    # на десятки миллионов.
+    sums: dict = {}
+    for funds, _, _ in days.values():
+        for k, v in funds.items():
+            acc = sums.setdefault(k, [0.0, 0.0])
+            acc[0] += float(v.get("usd") or 0)
+            acc[1] += float(v.get(unit) or 0)
+    order = sorted(sums, key=lambda k: -abs(sums[k][0]))
+    funds_out = []
+    for k in order:
+        info = names.get(k) or {}
+        funds_out.append({
+            "t": k, "n": str(info.get("name") or "")[:60],
+            "aum": round(float(info.get("aum") or 0)), "vol": round(float(info.get("volume") or 0)),
+            "prem": info.get("premiumDiscount"), "fee": info.get("netFee"),
+            "cum": round(sums[k][0]), "cumc": round(sums[k][1], 2),
+        })
+
+    t0 = min(days)
+    px = _etf_klines(symbol, t0 * 1000)
+    # На Binance монета могла появиться позже фондов (HYPE) — дни без цены
+    # добираем дневными свечами Hyperliquid.
+    if sum(1 for ts in days if ts in px) < len(days) * 0.9:
+        try:
+            kl = hl_post({"type": "candleSnapshot", "req": {"coin": symbol.replace("USDT", ""), "interval": "1d",
+                                                             "startTime": t0 * 1000, "endTime": now() * 1000}}, 15)
+            for k in kl if isinstance(kl, list) else []:
+                ts = int(k["t"]) // 1000 // 86400 * 86400
+                px.setdefault(ts, float(k["c"]))
+        except (KeyError, TypeError, ValueError):
+            pass
+    rows = []
+    for ts in sorted(days):
+        funds, tot, coin = days[ts]
+        per = []
+        for k in order:
+            v = (funds.get(k) or {}).get("usd")
+            per.append(None if v is None else round(float(v) / 1000))
+        rows.append([ts, round(tot / 1000), round(coin, 2), round(px.get(ts, 0.0), 4), per])
+
+    m = _dom_cmc(f"etf/netflow/metrics?category={cat}&convertId=2781")
+    ratio = _dom_cmc(f"etf/aum/market-cap/ratio?category={cat}&range=all")
+    share = None
+    try:
+        share = float((ratio.get("configs") or [{}])[0].get("value"))
+    except (TypeError, ValueError, IndexError):
+        pass
+    hist = []
+    for q in ratio.get("points") or []:
+        try:
+            hist.append([int(q["timestamp"]), round(float(q["points"][0]), 3)])
+        except (KeyError, TypeError, ValueError, IndexError):
+            continue
+
+    def mval(k: str):
+        try:
+            return [int(m[k]["timestamp"]), float(m[k]["value"])]
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    return {"funds": funds_out, "days": rows, "share": share, "shareHist": hist,
+            "best": mval("strongestMonth"), "worst": mval("weakestMonth")}
+
+
+def _devalue(data: list):
+    """Разворачивает формат devalue (SvelteKit __data.json) в обычные объекты."""
+    def res(i, depth=0):
+        if not isinstance(i, int) or depth > 40:
+            return i
+        if i < 0 or i >= len(data):
+            return None
+        v = data[i]
+        if isinstance(v, dict):
+            return {k: res(x, depth + 1) for k, x in v.items()}
+        if isinstance(v, list):
+            if v and isinstance(v[0], str):
+                if v[0] == "Date":
+                    return v[1] if len(v) > 1 else None
+                if v[0] == "Map":
+                    return {str(res(v[k], depth + 1)): res(v[k + 1], depth + 1) for k in range(1, len(v) - 1, 2)}
+                if v[0] == "Set":
+                    return [res(x, depth + 1) for x in v[1:]]
+                return v
+            return [res(x, depth + 1) for x in v]
+        return v
+    return res(0)
+
+
+def _etf_holders() -> dict:
+    raw = get_json("https://bitcointreasuries.net/__data.json", 30) or {}
+    root = None
+    for node in raw.get("nodes") or []:
+        if isinstance(node, dict) and isinstance(node.get("data"), list) and node["data"]:
+            head = node["data"][0]
+            if isinstance(head, dict) and "entities" in head:
+                root = _devalue(node["data"])
+                break
+    if not isinstance(root, dict):
+        return {}
+    groups: dict = {}
+    top = []
+    for e in root.get("entities") or []:
+        if not isinstance(e, dict):
+            continue
+        h = next((x for x in e.get("holdings") or [] if isinstance(x, dict) and x.get("asset") == "BTC"), None)
+        if not h:
+            continue
+        try:
+            bal = float(h.get("balance") or 0)
+            d7 = float(h.get("balance_change_7d") or 0)
+        except (TypeError, ValueError):
+            continue
+        if bal <= 0 and d7 == 0:
+            continue
+        typ = str(e.get("type") or "OTHER")
+        g = groups.setdefault(typ, [0, 0.0, 0.0])
+        g[0] += 1
+        g[1] += bal
+        g[2] += d7
+        tick = (e.get("ticker") or {}).get("symbol") if isinstance(e.get("ticker"), dict) else None
+        flag = (e.get("country") or {}).get("flag") if isinstance(e.get("country"), dict) else None
+        try:
+            cost = float(e.get("cost_basis") or 0)
+        except (TypeError, ValueError):
+            cost = 0.0
+        top.append([str(e.get("name") or "")[:60].strip(), typ, str(e.get("subtype") or ""), flag or "",
+                    tick or "", round(bal, 2), round(d7, 2), round(cost)])
+    top.sort(key=lambda r: -r[5])
+    movers = sorted([r for r in top if r[6]], key=lambda r: -abs(r[6]))[:20]
+    eth = []
+    alt = (root.get("altcoinHoldings") or {}).get("ethereum") or {}
+    for e in alt.get("entities") or []:
+        try:
+            eth.append([str(e.get("name") or "")[:60].strip(), str(e.get("type") or ""), round(float(e.get("balance") or 0), 2)])
+        except (TypeError, ValueError, AttributeError):
+            continue
+    eth.sort(key=lambda r: -r[2])
+    return {"groups": sorted([[k, *v] for k, v in groups.items()], key=lambda g: -g[2]),
+            "top": top[:80], "movers": movers, "eth": eth[:30]}
+
+
+def _etf_build() -> dict:
+    coins: dict = {}
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futs = {cat: pool.submit(_etf_coin, cat, sym) for cat, sym in ETF_COINS}
+        hold = pool.submit(_etf_holders)
+        for cat, f in futs.items():
+            try:
+                r = f.result(timeout=90)
+            except Exception as e:  # noqa: BLE001
+                print(f"etf {cat}: {e}", file=sys.stderr)
+                r = None
+            if r:
+                coins[cat] = r
+        try:
+            holders = hold.result(timeout=60)
+        except Exception as e:  # noqa: BLE001
+            print(f"etf holders: {e}", file=sys.stderr)
+            holders = {}
+    if "btc" not in coins:
+        return {"ok": False, "error": "no_data"}
+    # Монета, которой в этот раз нет, берётся из прошлой сборки, а не
+    # пропадает с экрана.
+    with _liq_lock:
+        was = (_etf_cache.get("all") or (0, {}))[1]
+    for cat, _ in ETF_COINS:
+        if cat not in coins and cat in (was.get("coins") or {}):
+            coins[cat] = was["coins"][cat]
+    if not holders and was.get("holders"):
+        holders = was["holders"]
+    res = {"ok": True, "coins": coins, "holders": holders, "at": now()}
+    with _liq_lock:
+        _etf_cache["all"] = (time.monotonic(), res)
+    return res
+
+
+def _etf_bg() -> None:
+    try:
+        _etf_build()
+    except Exception as e:  # noqa: BLE001
+        print(f"etf: {e}", file=sys.stderr)
+    finally:
+        with _liq_lock:
+            _liq_busy.discard("etf")
+
+
+def etf_data() -> dict:
+    with _liq_lock:
+        hit = _etf_cache.get("all")
+        if hit and time.monotonic() - hit[0] < ETF_TTL:
+            return hit[1]
+        if hit and "etf" not in _liq_busy:
+            _liq_busy.add("etf")
+            threading.Thread(target=_etf_bg, daemon=True).start()
+    if hit:
+        return hit[1]
+    with _etf_first:
+        with _liq_lock:
+            hit = _etf_cache.get("all")
+        return hit[1] if hit else _etf_build()
 
 
 # --- Дайджест ------------------------------------------------------------
@@ -10661,6 +10954,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path in ("/dom", "/api/dom"):
                 self._json(200, dom_data())
+                return
+            if path in ("/etf", "/api/etf"):
+                self._json(200, etf_data())
                 return
             if path in ("/liqcoins", "/api/liqcoins"):
                 self._json(200, liq_coins())

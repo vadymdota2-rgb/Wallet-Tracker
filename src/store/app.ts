@@ -16,7 +16,7 @@ export type LiqRange = "1d" | "7d" | "30d";
 export type ScreenName =
   | "wallet" | "position" | "coin" | "deals"
   | "addWallet" | "threshold" | "lang" | "premium" | "help"
-  | "alerts" | "chart" | "unlocks" | "liqmap" | "funding" | "fng" | "dom" | "rename" | "spot"
+  | "alerts" | "chart" | "unlocks" | "liqmap" | "funding" | "fng" | "dom" | "etf" | "rename" | "spot"
   | "legal";
 
 export interface Screen {

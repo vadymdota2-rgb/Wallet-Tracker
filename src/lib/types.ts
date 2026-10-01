@@ -685,6 +685,38 @@ export interface DomReply {
   at: number;
 }
 
+/**
+ * Спотовые ETF одной монеты. Дни — торговые, по возрастанию: [начало суток
+ * UTC, поток всех фондов $ тыс., поток в монетах, закрытие цены, потоки
+ * фондов $ тыс. в порядке funds (null — фонд в тот день не отчитался)].
+ */
+export interface EtfCoin {
+  funds: { t: string; n: string; aum: number; vol: number; prem: number | null; fee: number | null; cum: number; cumc: number }[];
+  days: [number, number, number, number, (number | null)[]][];
+  share: number | null;
+  shareHist: [number, number][];
+  best: [number, number] | null;
+  worst: [number, number] | null;
+}
+
+/** Держатель биткоина: [имя, тип, подтип, флаг, тикер, BTC, изменение за 7 дней, цена входа $]. */
+export type BtcHolder = [string, string, string, string, string, number, number, number];
+
+export interface EtfReply {
+  ok: boolean;
+  error?: string;
+  coins: Record<string, EtfCoin>;
+  holders: {
+    /** [тип, сколько держателей, BTC, изменение за 7 дней]. */
+    groups?: [string, number, number, number][];
+    top?: BtcHolder[];
+    movers?: BtcHolder[];
+    /** Компании с эфиром: [имя, тип, ETH]. */
+    eth?: [string, string, number][];
+  };
+  at: number;
+}
+
 /** Монета, по которой строится карта ликвидаций. */
 export interface LiqCoin {
   s: string;

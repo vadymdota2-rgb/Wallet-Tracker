@@ -9,7 +9,7 @@ import { initData } from "./telegram";
 import { forget, peek, remember } from "./memo";
 import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
-  LiqCoinsReply, FngReply, DomReply, FundRow, LsRow, MutationResult,
+  LiqCoinsReply, FngReply, DomReply, EtfReply, FundRow, LsRow, MutationResult,
   RotSide, SymbolRow, TokenHist, Trades, UnlocksReply, WalletLive,
 } from "./types";
 
@@ -369,6 +369,20 @@ export const fetchDom = () =>
     return r;
   });
 export const peekDom = () => peek<DomReply | null>("/api/dom", 60 * 60_000) ?? savedDom();
+
+/* ETF и крупные держатели: отчёты фондов выходят раз в сутки — ответ живёт
+   час и лежит на устройстве. */
+const ETF_SAVED = "wt-etf-v1";
+export function savedEtf(): EtfReply | null {
+  const hit = readSaved<EtfReply>(ETF_SAVED).all;
+  return hit && hit.v?.coins?.btc ? hit.v : null;
+}
+export const fetchEtf = () =>
+  remember<EtfReply | null>("/api/etf", 60 * 60_000, () => callTwice<EtfReply>("/api/etf"), good).then((r) => {
+    if (r?.ok && r.coins?.btc) writeSaved(ETF_SAVED, { all: { at: Date.now(), v: r } });
+    return r;
+  });
+export const peekEtf = () => peek<EtfReply | null>("/api/etf", 60 * 60_000) ?? savedEtf();
 
 /** Все монеты с фьючерсами — список раз в час; последний лежит на устройстве. */
 export function savedLiqCoins(): LiqCoinsReply | null {

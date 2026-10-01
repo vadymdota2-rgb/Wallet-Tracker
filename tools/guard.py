@@ -251,9 +251,9 @@ say("помощь не обещает неделю за /start", all("/start" no
 _m0 = appx.index("= [", appx.index("const MENU:"))
 menu = appx[_m0:appx.index("];", _m0)]
 say("в боковом меню пять пунктов: график, разлоки, карта ликвидаций, фандинг, страх и жадность",
-    menu.count("name:") == 6
+    menu.count("name:") == 7
     and menu.index('name: "chart"') < menu.index('name: "unlocks"') < menu.index('name: "liqmap"')
-    < menu.index('name: "funding"') < menu.index('name: "fng"') < menu.index('name: "dom"'))
+    < menu.index('name: "funding"') < menu.index('name: "fng"') < menu.index('name: "dom"') < menu.index('name: "etf"'))
 tv = read(f"{APP}/src/lib/tradingview.ts")
 chart_scr = read(f"{APP}/src/screens/ChartScreen.tsx")
 say("график — официальный код виджета TradingView со сменой монеты",
@@ -542,6 +542,13 @@ say("фандинг после перезапуска: биржи опрашив
 _un = read(f"{APP}/src/screens/UnlocksScreen.tsx")
 say("токеномика: видно, что монету можно открыть — стрелка в строке и подсказка до первого нажатия",
     '<span className="unl-chev" aria-hidden="true" />' in _un and '"unl_tap_hint"' in _un and "localStorage.setItem(TIP_KEY" in _un)
+
+_ef = read(f"{APP}/src/screens/EtfScreen.tsx")
+say("ETF и крупные игроки: потоки по фондам и дням (BTC, ETH, SOL, XRP, HYPE), спрос против добычи, держатели и кто докупал",
+    "def etf_data(" in api and '"/api/etf"' in api and "etf/detail/netflow/list?category=" in api
+    and "bitcointreasuries.net/__data.json" in api and "etf_data()  # и потоки ETF" in api
+    and "function FlowChart(" in _ef and "function Funds(" in _ef and "function Holders(" in _ef
+    and "minedPerDay(" in _ef and "glyph: <EtfGlyph />" in appx)
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
