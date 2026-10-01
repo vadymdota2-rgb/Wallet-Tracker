@@ -271,7 +271,7 @@ export const de: Dict = {
   ef_streak_out: "Abflüsse {n} Tage in Folge",
   ef_sub: "Wie viel Geld in Börsenfonds fließt und welche Großhalter kaufen oder verkaufen.",
   ef_t_title: "Größte Halter",
-  ef_title: "ETFs & Großanleger",
+  ef_title: "Institutionelle Flüsse",
   err_invalid_address: "❌ Ungültige Wallet-Adresse.",
   err_invalid_number: "❌ Ungültige Zahl.",
   err_invoice_failed: "❌ Rechnung konnte nicht erstellt werden. Bitte später erneut versuchen.",

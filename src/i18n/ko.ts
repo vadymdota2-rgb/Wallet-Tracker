@@ -271,7 +271,7 @@ export const ko: Dict = {
   ef_streak_out: "{n}일 연속 유출",
   ef_sub: "상장지수펀드로 얼마나 돈이 들어오고, 어떤 큰손이 사고파는지.",
   ef_t_title: "최대 보유자",
-  ef_title: "ETF와 큰손",
+  ef_title: "기관 자금 흐름",
   err_invalid_address: "❌ 잘못된 지갑 주소입니다.",
   err_invalid_number: "❌ 잘못된 숫자입니다.",
   err_invoice_failed: "❌ 인보이스를 만들지 못했습니다. 나중에 다시 시도하세요.",

@@ -271,7 +271,7 @@ export const vi: Dict = {
   ef_streak_out: "Dòng ra {n} ngày liên tiếp",
   ef_sub: "Bao nhiêu tiền chảy vào các quỹ ETF và những người nắm giữ lớn nào đang mua hay bán.",
   ef_t_title: "Người nắm giữ lớn nhất",
-  ef_title: "ETF & tay chơi lớn",
+  ef_title: "Dòng tiền tổ chức",
   err_invalid_address: "❌ Địa chỉ ví không hợp lệ.",
   err_invalid_number: "❌ Số không hợp lệ.",
   err_invoice_failed: "❌ Không tạo được hóa đơn. Thử lại sau.",

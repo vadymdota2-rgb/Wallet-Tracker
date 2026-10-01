@@ -271,7 +271,7 @@ export const fr: Dict = {
   ef_streak_out: "Sorties {n} jours d’affilée",
   ef_sub: "Combien d’argent entre dans les fonds cotés et quels gros détenteurs achètent ou vendent.",
   ef_t_title: "Plus gros détenteurs",
-  ef_title: "ETF et gros acteurs",
+  ef_title: "Flux institutionnels",
   err_invalid_address: "❌ Adresse de portefeuille invalide.",
   err_invalid_number: "❌ Nombre invalide.",
   err_invoice_failed: "❌ Impossible de créer la facture. Réessayez plus tard.",

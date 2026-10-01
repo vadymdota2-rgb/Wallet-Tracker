@@ -271,7 +271,7 @@ export const pl: Dict = {
   ef_streak_out: "Odpływy {n} dni z rzędu",
   ef_sub: "Ile pieniędzy wpływa do funduszy giełdowych i którzy duzi posiadacze kupują lub sprzedają.",
   ef_t_title: "Najwięksi posiadacze",
-  ef_title: "ETF i duzi gracze",
+  ef_title: "Przepływy instytucjonalne",
   err_invalid_address: "❌ Nieprawidłowy adres portfela.",
   err_invalid_number: "❌ Nieprawidłowa liczba.",
   err_invoice_failed: "❌ Nie udało się utworzyć faktury. Spróbuj później.",

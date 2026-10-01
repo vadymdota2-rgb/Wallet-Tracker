@@ -271,7 +271,7 @@ export const en = {
   ef_streak_out: "Outflows {n} days in a row",
   ef_sub: "How much money flows into exchange-traded funds and which big holders are buying or selling.",
   ef_t_title: "Biggest holders",
-  ef_title: "ETFs & big players",
+  ef_title: "Institutional Flows",
   err_invalid_address: "❌ Invalid wallet address.",
   err_invalid_number: "❌ Invalid number.",
   err_invoice_failed: "❌ Could not create the invoice. Please try again later.",

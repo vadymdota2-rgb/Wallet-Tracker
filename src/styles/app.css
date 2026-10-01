@@ -151,7 +151,10 @@
 }
 /* Эмодзи в этом ряду догоняют по размеру рисованный значок порога, иначе
    монета вдвое крупнее соседей и ряд валится набок. */
-.drawer-row > span:first-child { font-size: 25px; line-height: 1; }
+.drawer-row > span:first-child { font-size: 25px; line-height: 1; flex: none; }
+/* Длинное название («Институциональные потоки» на узком экране) переносится
+   само, значок при этом не сжимается и стоит в одну линию с остальными. */
+.drawer-row > span + span { line-height: 1.25; }
 .drawer-row:active { background: var(--panel-2); }
 .drawer-build {
   margin-top: auto;
@@ -2714,9 +2717,11 @@
 .fund-wait { margin: 4px 0 10px; color: var(--dim); font-size: 12.5px; text-align: center; }
 
 /* --- ETF и крупные игроки -------------------------------------------------- */
-.ef-hero { display: grid; justify-items: center; gap: 3px; text-align: center; margin-top: 2px; }
+.ef-hero { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 3px; text-align: center; margin-top: 2px; }
 .ef-hero > small { color: var(--dim); font-size: 12.5px; }
-.ef-hero > b { font-size: 34px; line-height: 1.1; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--ink); }
+/* Размер от ширины экрана: «−148.7 مليون US$» на 360 точках в 34px не
+   помещался и растягивал карточку вбок. */
+.ef-hero > b { font-size: clamp(24px, 8.5vw, 34px); line-height: 1.1; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--ink); max-width: 100%; overflow-wrap: break-word; }
 .ef-hero > span { color: var(--dim); font-size: 13px; }
 .ef-hero > em { font-style: normal; font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 99px; margin-top: 4px; }
 .ef-hero .up, .ef-chs .up, .ef-fsum .up, .ef-hr .up, .ef-rec .up, .ef-pop .up { color: #0ecb81; }
@@ -2724,6 +2729,8 @@
 .ef-hero > em.up { background: rgb(14 203 129 / 0.12); }
 .ef-hero > em.dn { background: rgb(246 70 93 / 0.12); }
 .ef-chs { margin: 14px 0 6px; }
+.ef-chs .dm-ch b { white-space: normal; overflow-wrap: normal; text-align: center; font-size: 12.5px; line-height: 1.25; }
+.ef-held { overflow-wrap: break-word; }
 .ef-held { margin: 8px 0 0; color: var(--dim); font-size: 12.5px; line-height: 1.5; text-align: center; }
 .ef-mine-t { margin: 0 0 10px; font-size: 13.5px; font-weight: 700; color: var(--ink); }
 .ef-mine { display: grid; gap: 10px; }

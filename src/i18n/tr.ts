@@ -271,7 +271,7 @@ export const tr: Dict = {
   ef_streak_out: "{n} gün üst üste çıkış",
   ef_sub: "Borsa yatırım fonlarına ne kadar para girdiği ve hangi büyük sahiplerin alıp sattığı.",
   ef_t_title: "En büyük sahipler",
-  ef_title: "ETF'ler ve büyük oyuncular",
+  ef_title: "Kurumsal Akışlar",
   err_invalid_address: "❌ Geçersiz cüzdan adresi.",
   err_invalid_number: "❌ Geçersiz sayı.",
   err_invoice_failed: "❌ Fatura oluşturulamadı. Daha sonra tekrar dene.",

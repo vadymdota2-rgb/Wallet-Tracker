@@ -271,7 +271,7 @@ export const zh: Dict = {
   ef_streak_out: "连续{n}天流出",
   ef_sub: "多少资金流入交易所交易基金,以及哪些大户在买入或卖出。",
   ef_t_title: "最大持有者",
-  ef_title: "ETF与大玩家",
+  ef_title: "机构资金流",
   err_invalid_address: "❌ 钱包地址无效。",
   err_invalid_number: "❌ 数字无效。",
   err_invoice_failed: "❌ 无法创建账单。请稍后再试。",

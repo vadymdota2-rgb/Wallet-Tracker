@@ -271,7 +271,7 @@ export const ja: Dict = {
   ef_streak_out: "{n}日連続の流出",
   ef_sub: "上場投資信託にどれだけ資金が流入しているか、大口保有者の誰が買い、誰が売っているか。",
   ef_t_title: "最大の保有者",
-  ef_title: "ETFと大口プレイヤー",
+  ef_title: "機関投資家フロー",
   err_invalid_address: "❌ 無効なウォレットアドレスです。",
   err_invalid_number: "❌ 無効な数値です。",
   err_invoice_failed: "❌ 請求書を作成できませんでした。後でもう一度お試しください。",

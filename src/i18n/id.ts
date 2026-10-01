@@ -271,7 +271,7 @@ export const id: Dict = {
   ef_streak_out: "Arus keluar {n} hari berturut-turut",
   ef_sub: "Berapa banyak uang masuk ke dana yang diperdagangkan di bursa dan pemegang besar mana yang membeli atau menjual.",
   ef_t_title: "Pemegang terbesar",
-  ef_title: "ETF & pemain besar",
+  ef_title: "Arus Institusional",
   err_invalid_address: "❌ Alamat dompet tidak valid.",
   err_invalid_number: "❌ Angka tidak valid.",
   err_invoice_failed: "❌ Gagal membuat invoice. Coba lagi nanti.",

@@ -1,5 +1,5 @@
 /**
- * ETF и крупные игроки: сколько денег заходит в спотовые биржевые фонды и
+ * Институциональные потоки: сколько денег заходит в спотовые биржевые фонды и
  * кто из крупных держателей покупает или продаёт.
  *
  * Сверху — последний торговый день фондов и суммы за неделю, месяц и с
@@ -81,7 +81,9 @@ function moneyShort(lang: Lang, v: number): string {
       style: "currency", currency: "USD", currencyDisplay: "narrowSymbol", notation: "compact", compactDisplay: "short",
       maximumFractionDigits: 1,
     }).format(Math.abs(v));
-    return `${v > 0 ? "+" : v < 0 ? "−" : ""}${f}`;
+    /* Пробелы обычные, а не неразрывные: в узкой плитке «+59.1 مليار US$»
+       должно переноситься между словами, а не вылезать за край. */
+    return `${v > 0 ? "+" : v < 0 ? "−" : ""}${f.replace(/[\u00a0\u202f]/g, " ")}`;
   } catch {
     return money(v);
   }

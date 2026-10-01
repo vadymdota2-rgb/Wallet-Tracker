@@ -271,7 +271,7 @@ export const es: Dict = {
   ef_streak_out: "Salidas {n} días seguidos",
   ef_sub: "Cuánto dinero entra en los fondos cotizados y qué grandes tenedores compran o venden.",
   ef_t_title: "Mayores tenedores",
-  ef_title: "ETF y grandes jugadores",
+  ef_title: "Flujos institucionales",
   err_invalid_address: "❌ Dirección de billetera no válida.",
   err_invalid_number: "❌ Número no válido.",
   err_invoice_failed: "❌ No se pudo crear la factura. Inténtalo más tarde.",

@@ -271,7 +271,7 @@ export const pt: Dict = {
   ef_streak_out: "Saídas por {n} dias seguidos",
   ef_sub: "Quanto dinheiro entra nos fundos negociados em bolsa e quais grandes detentores estão comprando ou vendendo.",
   ef_t_title: "Maiores detentores",
-  ef_title: "ETFs e grandes players",
+  ef_title: "Fluxos institucionais",
   err_invalid_address: "❌ Endereço de carteira inválido.",
   err_invalid_number: "❌ Número inválido.",
   err_invoice_failed: "❌ Não foi possível gerar a cobrança. Tente mais tarde.",
