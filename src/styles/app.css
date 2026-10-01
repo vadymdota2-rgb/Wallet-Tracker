@@ -2828,4 +2828,9 @@
 .ef-hr-v small { color: var(--dim); font-size: 11px; white-space: nowrap; }
 .ef-hr .ef-hr-id:first-child { grid-column: 1 / 3; }
 .ef-rec small { color: var(--dim-2); font-size: 11px; }
+.ef-cost { color: var(--dim-2) !important; }
+.ef-cost em { font-style: normal; font-weight: 700; }
+.ef-cost .up, .ef-cost em.up { color: #0ecb81; }
+.ef-cost em.dn { color: #f6465d; }
+.ef-hl .ef-hr-id .ef-cost { font-size: 11px; }
 .ef-hero > b, .ef-f-v, .ef-hr-v b { unicode-bidi: isolate; direction: ltr; }

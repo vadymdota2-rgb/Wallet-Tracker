@@ -34,6 +34,7 @@ type Period = "d" | "w" | "m" | "all";
 const COINS: Coin[] = ["btc", "eth", "sol", "xrp", "hype"];
 const SYM: Record<Coin, string> = { btc: "BTC", eth: "ETH", sol: "SOL", xrp: "XRP", hype: "HYPE" };
 const COIN_KEY = "wt-etf-coin";
+const MODE_KEY = "wt-etf-mode";
 const RANGE_KEY = "wt-etf-range";
 const UP = "#0ecb81";
 const DN = "#f6465d";
@@ -86,6 +87,25 @@ function moneyShort(lang: Lang, v: number): string {
     return `${v > 0 ? "+" : v < 0 ? "−" : ""}${f.replace(/[\u00a0\u202f]/g, " ")}`;
   } catch {
     return money(v);
+  }
+}
+
+/** Монеты без лишней точности: «1,31 млн», «903 млн», «48 тыс.». */
+function coinsRound(lang: Lang, v: number): string {
+  try {
+    return new Intl.NumberFormat(lang, { notation: "compact", compactDisplay: "short", maximumFractionDigits: 2 })
+      .format(v).replace(/[\u00a0\u202f]/g, " ");
+  } catch {
+    return num(v);
+  }
+}
+
+/** Когда собраны данные — по часам телефона. */
+function stamp(lang: Lang, at: number): string {
+  try {
+    return new Intl.DateTimeFormat(lang, { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }).format(new Date(at * 1000));
+  } catch {
+    return new Date(at * 1000).toISOString().slice(0, 16).replace("T", " ");
   }
 }
 
@@ -160,8 +180,12 @@ function axisMoney(vK: number): string {
   return `${s}$${f(a / 1e3)}K`;
 }
 
-function FlowChart({ data, lang, sel, onSel }: {
+function FlowChart({ data, cum, zero, lang, sel, onSel }: {
   data: Bucket[];
+  /** Накопленный поток с запуска к концу каждого столбца, $ тыс.; null — режим «по дням». */
+  cum: number[] | null;
+  /** Шкала накопленного от нуля — на всей истории; на коротком окне — по самим значениям. */
+  zero: boolean;
   lang: Lang;
   sel: number | null;
   onSel: (i: number | null) => void;
@@ -181,6 +205,24 @@ function FlowChart({ data, lang, sel, onSel }: {
   const step = niceStep(maxAbs, 2);
   const top = Math.ceil(maxAbs / step) * step;
   const yF = (v: number) => P2.y + P2.h / 2 - (v / top) * (P2.h / 2 - 2);
+  /* «Накоплено»: одна линия от нуля, шкала — от меньшего из нуля и минимума
+     до большего из нуля и максимума. */
+  /* На 90 днях линия на $55–59 млрд при шкале от нуля лежала бы плоско у
+     верхнего края — изменения не видно. Поэтому ноль — только на всей истории. */
+  const rawLo = cum ? Math.min(...cum) : 0;
+  const rawHi = cum ? Math.max(...cum) : 1;
+  const pad = Math.max(1, (rawHi - rawLo) * 0.08);
+  const cLo = zero ? Math.min(0, rawLo) : rawLo - pad;
+  const cHi = zero ? Math.max(0, rawHi) : rawHi + pad;
+  const cStep = niceStep(Math.max(1, cHi - cLo), 3);
+  const cTop = Math.ceil(cHi / cStep) * cStep;
+  const cBot = Math.floor(cLo / cStep) * cStep;
+  const yC = (v: number) => P2.y + 4 + (1 - (v - cBot) / Math.max(1, cTop - cBot)) * (P2.h - 8);
+  const cTicks: number[] = [];
+  if (cum) for (let v = cBot; v <= cTop + 1e-6; v += cStep) cTicks.push(v);
+  const cLine = cum ? cum.map((v, i) => `${xOf(i).toFixed(1)},${yC(v).toFixed(1)}`).join(" ") : "";
+  const cBase = zero ? yC(0) : P2.y + P2.h - 4;
+  const cArea = cum && cum.length ? `${xOf(0).toFixed(1)},${cBase.toFixed(1)} ${cLine} ${xOf(cum.length - 1).toFixed(1)},${cBase.toFixed(1)}` : "";
   const a = data[0]?.a ?? 0;
   const b = data[n - 1]?.b ?? 1;
   const xOfT = (ts: number) => ((ts - a) / Math.max(1, b - a)) * PW;
@@ -242,15 +284,21 @@ function FlowChart({ data, lang, sel, onSel }: {
           <text x={W - 2} y={yPx(v) + 3.5} textAnchor="end" className="fg-tick">{px(v).replace(/[,.]\d+$/, (m) => (v < 10 ? m : ""))}</text>
         </g>
       ))}
-      {[top, 0, -top].map((v) => (
+      {(cum ? cTicks : [top, 0, -top]).map((v) => (
         <g key={v}>
-          <line x1={0} x2={PW} y1={yF(v)} y2={yF(v)} className={v === 0 ? "ef-zero" : "fg-grid"} />
-          <text x={W - 2} y={yF(v) + 3.5} textAnchor="end" className="fg-tick">{v === 0 ? "0" : axisMoney(v)}</text>
+          <line x1={0} x2={PW} y1={cum ? yC(v) : yF(v)} y2={cum ? yC(v) : yF(v)} className={v === 0 ? "ef-zero" : "fg-grid"} />
+          <text x={W - 2} y={(cum ? yC(v) : yF(v)) + 3.5} textAnchor="end" className="fg-tick">{v === 0 ? "0" : axisMoney(v)}</text>
         </g>
       ))}
       <text x={4} y={P1.y + 11} className="fg-ptl">{t(lang, "ef_price")}{log ? ` · ${t(lang, "fg_log")}` : ""}</text>
-      <text x={4} y={P2.y + 11} className="fg-ptl">{t(lang, "ef_flows")}</text>
-      {data.map((x, i) => {
+      <text x={4} y={P2.y + 11} className="fg-ptl">{t(lang, cum ? "ef_cum_chart" : "ef_flows")}</text>
+      {cum ? (
+        <>
+          <polygon points={cArea} fill={UP} opacity={0.12} />
+          <polyline points={cLine} className="fg-line" stroke={UP} />
+        </>
+      ) : null}
+      {cum ? null : data.map((x, i) => {
         const y0 = yF(0);
         const y1 = yF(x.usd);
         const w = Math.max(1, bw - (bw > 4 ? 1.5 : 0.4));
@@ -264,6 +312,7 @@ function FlowChart({ data, lang, sel, onSel }: {
         <g className="fg-cross">
           <line x1={xOf(sel!)} x2={xOf(sel!)} y1={P1.y} y2={P2.y + P2.h} />
           {d.px > 0 ? <circle cx={xOf(sel!)} cy={yPx(d.px)} r={4} fill="#e2e8f0" /> : null}
+          {cum ? <circle cx={xOf(sel!)} cy={yC(cum[sel!] ?? 0)} r={4} fill={UP} /> : null}
         </g>
       ) : null}
     </svg>
@@ -279,6 +328,7 @@ function fundLabel(f: EtfCoin["funds"][number]): string {
 
 function Funds({ c, coin, lang }: { c: EtfCoin; coin: Coin; lang: Lang }) {
   const [period, setPeriod] = useState<Period>("w");
+  const aumAll = c.funds.reduce((s, f) => s + (f.aum || 0), 0);
   const rows = useMemo(() => {
     const days = c.days;
     const last = days[days.length - 1]?.[0] ?? 0;
@@ -329,7 +379,10 @@ function Funds({ c, coin, lang }: { c: EtfCoin; coin: Coin; lang: Lang }) {
               {f.aum > 0 ? (
                 <small className="ef-f-sub">
                   {t(lang, "ef_aum", { v: iso(usdWord(f.aum)) })}
+                  {aumAll > 0 ? ` · ${t(lang, "ef_mshare", { p: iso(pct((f.aum / aumAll) * 100, 1, false)) })}` : ""}
                   {f.fee !== null && f.fee !== undefined ? ` · ${t(lang, "ef_fee", { v: iso(pct(f.fee, 2, false)) })}` : ""}
+                  {typeof f.prem === "number" && Math.abs(f.prem) >= 0.01
+                    ? ` · ${t(lang, f.prem > 0 ? "ef_prem" : "ef_disc", { v: iso(pct(Math.abs(f.prem), 2, false)) })}` : ""}
                 </small>
               ) : null}
             </div>
@@ -408,6 +461,18 @@ function Holders({ h, price, lang }: { h: EtfReply["holders"]; price: number; la
               <span className="ef-hr-id">
                 <b>{r[3] ? `${r[3]} ` : ""}{r[0]}</b>
                 <small>{typeName(r)}{r[4] ? ` · ${r[4]}` : ""}</small>
+                {r[7] > 0 && r[5] > 0 && price > 0 ? (() => {
+                  /* Средняя цена покупки — из раскрытой стоимости запаса: видно,
+                     в плюсе держатель или в минусе при нынешней цене. */
+                  const avg = r[7] / r[5];
+                  const gain = (price / avg - 1) * 100;
+                  return (
+                    <small className="ef-cost">
+                      {t(lang, "ef_cost", { p: iso(px(avg)) })}{" "}
+                      <em className={gain >= 0 ? "up" : "dn"}><bdi dir="ltr">{pct(gain, 0, true)}</bdi></em>
+                    </small>
+                  );
+                })() : null}
               </span>
               <span className="ef-hr-v">
                 <b><bdi dir="ltr">{num(r[5])} BTC</bdi></b>
@@ -478,6 +543,13 @@ export function EtfScreen() {
     }
   });
   const [sel, setSel] = useState<number | null>(null);
+  const [mode, setMode] = useState<"d" | "c">(() => {
+    try {
+      return localStorage.getItem(MODE_KEY) === "c" ? "c" : "d";
+    } catch {
+      return "d";
+    }
+  });
 
   useEffect(() => {
     let alive = true;
@@ -544,7 +616,9 @@ export function EtfScreen() {
     const m30 = win(30);
     const mined = m30.length ? Array.from({ length: 30 }, (_, i) => minedPerDay(end - i * 86400)).reduce((a, b) => a + b, 0) : 0;
     const aum = c.funds.reduce((s, f) => s + f.aum, 0);
+    const cumc = c.funds.reduce((s, f) => s + f.cumc, 0);
     return {
+      cumc,
       d7: sumU(win(7)), d30: sumU(m30), cum, streak, sign,
       c30: sumC(m30), mined, best, worst, runs, aum,
       held: aum > 0 && lastPx > 0 ? aum / lastPx : 0,
@@ -557,6 +631,13 @@ export function EtfScreen() {
     return range === "30" || range === "90" ? daily(src) : weekly(src, c.funds.length);
   }, [c, days, range]);
   const selB = sel !== null ? view[sel] : undefined;
+  /* Накоплено с запуска к концу каждого столбца: от всей истории, а не от
+     начала выбранного окна — иначе на «90 дней» линия начиналась бы с нуля. */
+  const cumView = useMemo(() => {
+    const first = view[0]?.a ?? 0;
+    let acc = days.filter((d) => d[0] < first).reduce((s, d) => s + d[1], 0);
+    return view.map((b) => (acc += b.usd));
+  }, [view, days]);
 
   const pickCoin = (v: Coin) => {
     setCoin(v);
@@ -613,9 +694,18 @@ export function EtfScreen() {
             {stats.aum > 0 ? (
               <p className="ef-held">
                 {t(lang, "ef_held", {
-                  a: iso(usdWord(stats.aum)), c: iso(`${num(stats.held)} ${sym}`),
+                  a: iso(usdWord(stats.aum)), c: iso(`${coinsRound(lang, stats.held)} ${sym}`),
                 })}
                 {c.share ? ` ${t(lang, "ef_share", { p: iso(pct(c.share, 2, false)) })}` : ""}
+              </p>
+            ) : stats.cumc > 0 && lastPx > 0 ? (
+              /* У новых фондов (SOL, XRP, HYPE) активов в данных нет, но и
+                 старых запасов, как у GBTC, нет: накопленные с запуска монеты
+                 и есть то, что у них лежит. */
+              <p className="ef-held">
+                {t(lang, "ef_held2", {
+                  c: iso(`${coinsRound(lang, stats.cumc)} ${sym}`), a: iso(usdWord(stats.cumc * lastPx)),
+                })}
               </p>
             ) : null}
           </Card>
@@ -664,7 +754,7 @@ export function EtfScreen() {
               ]}
             />
             <div className="fg-plot">
-              <FlowChart data={view} lang={lang} sel={sel} onSel={setSel} />
+              <FlowChart data={view} cum={mode === "c" ? cumView : null} zero={range === "all"} lang={lang} sel={sel} onSel={setSel} />
               {selB ? (() => {
                 const tops = c.funds.map((f, i) => ({ t: f.t, v: selB.per[i] ?? 0 }))
                   .filter((x) => Math.abs(x.v) >= 1).sort((x, y) => Math.abs(y.v) - Math.abs(x.v)).slice(0, 3);
@@ -673,6 +763,9 @@ export function EtfScreen() {
                     <small>{selB.a === selB.b ? dayTxt(selB.a)
                       : `${dateStr(lang, selB.a, { day: "numeric", month: "short" })} — ${dateStr(lang, selB.b, { day: "numeric", month: "short", year: "numeric" })}`}</small>
                     <b className={selB.usd >= 0 ? "up" : "dn"}><bdi dir="ltr">{money(selB.usd * 1000)}</bdi></b>
+                    {mode === "c" && cumView[sel!] !== undefined ? (
+                      <span>{t(lang, "ef_cum")} <bdi dir="ltr" className={cumView[sel!]! >= 0 ? "up" : "dn"}>{money(cumView[sel!]! * 1000)}</bdi></span>
+                    ) : null}
                     {selB.px > 0 ? <span>{sym} <bdi dir="ltr">{px(selB.px)}</bdi></span> : null}
                     {tops.map((x) => (
                       <span key={x.t} className="ef-pop-f"><i>{x.t}</i> <bdi dir="ltr" className={x.v >= 0 ? "up" : "dn"}>{money(x.v * 1000)}</bdi></span>
@@ -681,8 +774,17 @@ export function EtfScreen() {
                 );
               })() : null}
             </div>
+            <Chips<"d" | "c">
+              value={mode}
+              onChange={(m) => { haptic("select"); setMode(m); setSel(null); remember(MODE_KEY, m); }}
+              options={[
+                { id: "d", label: t(lang, "ef_mode_d") },
+                { id: "c", label: t(lang, "ef_mode_c") },
+              ]}
+            />
             <p className="lq-hint">
-              {t(lang, range === "30" || range === "90" ? "ef_chart_d" : "ef_chart_w")} {t(lang, "fg_hint")}
+              {mode === "c" ? t(lang, "ef_cum_hint")
+                : t(lang, range === "30" || range === "90" ? "ef_chart_d" : "ef_chart_w")} {t(lang, "fg_hint")}
             </p>
           </Card>
 
@@ -734,9 +836,10 @@ export function EtfScreen() {
               <li>{t(lang, "ef_how_2")}</li>
               <li>{t(lang, "ef_how_3")}</li>
               <li>{t(lang, "ef_how_4")}</li>
+              <li>{t(lang, "ef_how_5")}</li>
             </ul>
           </details>
-          <p className="lq-src">{t(lang, "ef_src")}</p>
+          <p className="lq-src">{t(lang, "ef_src")} {t(lang, "ef_upd", { t: stamp(lang, reply.at) })}</p>
         </>
       )}
     </Frame>

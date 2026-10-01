@@ -561,5 +561,9 @@ say("дайджест: просмотры — каждый человек оди
     and '"/api/digest/view": "view"' in api and "DELETE FROM digest_views WHERE chat_id=?" in api
     and "viewDigest(it.id)" in _dgt and 'className="dg-views"' in _dgt)
 
+say("институциональные потоки: накопленный приток, доля и премия фондов, средняя цена покупки держателей, время данных",
+    "cum={mode === \"c\" ? cumView : null}" in _ef and '"ef_mshare"' in _ef and '"ef_prem"' in _ef
+    and '"ef_cost"' in _ef and '"ef_held2"' in _ef and '"ef_upd"' in _ef and "coinsRound(" in _ef)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
