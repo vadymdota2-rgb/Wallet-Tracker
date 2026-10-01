@@ -800,6 +800,7 @@ export const ko: Dict = {
   unl_staked: "스테이킹 중",
   unl_sub: "언제, 얼마나 새 코인이 시장에 나오는지: 언락과 발행",
   unl_tag_unlock: "언락",
+  unl_tap_hint: "코인을 누르면 언락 압력, 이전 가격 반응, 앞으로 풀릴 물량을 볼 수 있습니다.",
   unl_title: "토크노믹스",
   unl_tokens: "이날 풀리는 물량",
   unl_top: "30일 내 가장 큰 압력",

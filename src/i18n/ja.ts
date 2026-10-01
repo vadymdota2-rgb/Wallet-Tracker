@@ -800,6 +800,7 @@ export const ja: Dict = {
   unl_staked: "ステーキング中",
   unl_sub: "いつ、どれだけ新しいコインが市場に出るか：アンロックと発行",
   unl_tag_unlock: "アンロック",
+  unl_tap_hint: "コインをタップ: アンロックの圧力、過去の価格の反応、今後出てくる量がわかります。",
   unl_title: "トークノミクス",
   unl_tokens: "この日に放出",
   unl_top: "30日以内で最も重い",

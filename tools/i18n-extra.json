@@ -9718,5 +9718,23 @@
     "uk": "Не вдалося отримати ставки фандингу.",
     "vi": "Không tải được funding rate.",
     "zh": "无法加载资金费率。"
+  },
+  "unl_tap_hint": {
+    "ar": "اضغط على أي عملة: مدى ضغط الفتح، وكيف تصرّف السعر في المرات السابقة، وكم من العملات لا يزال قادمًا.",
+    "de": "Tippe auf eine Münze: wie stark der Unlock drückt, wie der Kurs früher reagiert hat und wie viele Coins noch kommen.",
+    "en": "Tap any coin: how hard the unlock weighs, how the price reacted before and how many coins are still to come.",
+    "es": "Toca cualquier moneda: cuánto presiona el desbloqueo, cómo reaccionó el precio antes y cuántas monedas faltan por salir.",
+    "fr": "Touchez une crypto : la pression du déblocage, la réaction du prix les fois précédentes et ce qui reste à venir.",
+    "hi": "किसी भी कॉइन पर टैप करें: अनलॉक कितना दबाव डालेगा, पहले कीमत ने कैसी प्रतिक्रिया दी और कितने कॉइन अभी आने बाकी हैं।",
+    "id": "Ketuk koin mana pun: seberapa besar tekanan unlock, bagaimana harga bereaksi sebelumnya, dan berapa koin yang masih akan keluar.",
+    "ja": "コインをタップ: アンロックの圧力、過去の価格の反応、今後出てくる量がわかります。",
+    "ko": "코인을 누르면 언락 압력, 이전 가격 반응, 앞으로 풀릴 물량을 볼 수 있습니다.",
+    "pl": "Stuknij monetę: jak mocno naciska odblokowanie, jak cena reagowała wcześniej i ile monet jeszcze wyjdzie.",
+    "pt": "Toque em qualquer moeda: quanto o desbloqueio pesa, como o preço reagiu antes e quantas moedas ainda vão sair.",
+    "ru": "Нажмите на любую монету: насколько сильно давит разлок, как цена вела себя на прошлых и сколько монет ещё впереди.",
+    "tr": "Herhangi bir coine dokunun: kilit açılımının baskısı, fiyatın önceki tepkisi ve daha ne kadar coin geleceği.",
+    "uk": "Натисніть на будь-яку монету: наскільки сильно тисне розлок, як ціна поводилася на минулих і скільки монет ще попереду.",
+    "vi": "Chạm vào bất kỳ đồng nào: mức áp lực của đợt mở khóa, giá đã phản ứng ra sao trước đây và còn bao nhiêu coin sắp ra.",
+    "zh": "点击任意币种:查看解锁压力、过往价格反应以及后续还将释放多少。"
   }
 }

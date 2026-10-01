@@ -1614,7 +1614,7 @@
 .unl-main {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 9px;
   width: 100%;
   padding: 10px 11px;
   text-align: start;
@@ -1623,6 +1623,33 @@
 .unl-id b { color: var(--ink); font-size: 14.5px; }
 .unl-id small { color: var(--dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .unl-est { color: var(--warn); font-style: normal; }
+.unl-chev {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin-inline: 0 1px;
+  /* Физическая правая граница, не логическая: стрелка смотрит вниз и в
+     арабской раскладке. */
+  border-right: 2px solid var(--dim);
+  border-bottom: 2px solid var(--dim);
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.2s var(--ease);
+}
+.unl-row.open .unl-main .unl-chev { transform: translateY(2px) rotate(-135deg); border-color: var(--glow); }
+.unl-tip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 10px;
+  padding: 9px 12px;
+  border-radius: var(--r-md);
+  border: 1px dashed rgb(127 216 255 / 0.35);
+  background: rgb(127 216 255 / 0.06);
+  color: var(--ink);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.unl-tip .unl-chev { border-color: var(--glow); }
 .unl-amt { flex: 0 0 auto; display: grid; gap: 1px; text-align: end; }
 .unl-amt b { color: var(--ink); font-size: 14.5px; font-variant-numeric: tabular-nums; }
 .unl-amt small { color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums; }

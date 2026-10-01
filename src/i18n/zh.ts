@@ -800,6 +800,7 @@ export const zh: Dict = {
   unl_staked: "质押中",
   unl_sub: "新币何时、多少进入市场：解锁与增发",
   unl_tag_unlock: "解锁",
+  unl_tap_hint: "点击任意币种:查看解锁压力、过往价格反应以及后续还将释放多少。",
   unl_title: "代币经济",
   unl_tokens: "当天释放",
   unl_top: "30天内压力最大",

@@ -800,6 +800,7 @@ export const en = {
   unl_staked: "Staked",
   unl_sub: "When and how many new coins hit the market: unlocks and issuance",
   unl_tag_unlock: "Unlock",
+  unl_tap_hint: "Tap any coin: how hard the unlock weighs, how the price reacted before and how many coins are still to come.",
   unl_title: "Tokenomics",
   unl_tokens: "Released this day",
   unl_top: "Heaviest in the next 30 days",

@@ -800,6 +800,7 @@ export const id: Dict = {
   unl_staked: "Di-stake",
   unl_sub: "Kapan dan berapa banyak koin baru masuk pasar: unlock dan emisi",
   unl_tag_unlock: "Unlock",
+  unl_tap_hint: "Ketuk koin mana pun: seberapa besar tekanan unlock, bagaimana harga bereaksi sebelumnya, dan berapa koin yang masih akan keluar.",
   unl_title: "Tokenomik",
   unl_tokens: "Dirilis hari ini",
   unl_top: "Tekanan terberat dalam 30 hari",

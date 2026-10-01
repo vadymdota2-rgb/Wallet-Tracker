@@ -800,6 +800,7 @@ export const vi: Dict = {
   unl_staked: "Đang stake",
   unl_sub: "Khi nào và bao nhiêu coin mới ra thị trường: mở khóa và phát hành",
   unl_tag_unlock: "Mở khóa",
+  unl_tap_hint: "Chạm vào bất kỳ đồng nào: mức áp lực của đợt mở khóa, giá đã phản ứng ra sao trước đây và còn bao nhiêu coin sắp ra.",
   unl_title: "Tokenomics",
   unl_tokens: "Mở khóa ngày này",
   unl_top: "Áp lực lớn nhất trong 30 ngày",

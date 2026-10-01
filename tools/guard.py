@@ -539,5 +539,9 @@ say("фандинг после перезапуска: биржи опрашив
     "pool.submit(fund_pull, ex)" in api and "wait(futs, timeout=25)" in api and "_fund_ready.set()" in api
     and 'errors.append("fund:later")' in api and 'data.partial.includes("fund:later")' in _sy)
 
+_un = read(f"{APP}/src/screens/UnlocksScreen.tsx")
+say("токеномика: видно, что монету можно открыть — стрелка в строке и подсказка до первого нажатия",
+    '<span className="unl-chev" aria-hidden="true" />' in _un and '"unl_tap_hint"' in _un and "localStorage.setItem(TIP_KEY" in _un)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

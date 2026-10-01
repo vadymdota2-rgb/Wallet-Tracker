@@ -800,6 +800,7 @@ export const de: Dict = {
   unl_staked: "Gestakt",
   unl_sub: "Wann und wie viele neue Coins auf den Markt kommen: Unlocks und Emission",
   unl_tag_unlock: "Unlock",
+  unl_tap_hint: "Tippe auf eine Münze: wie stark der Unlock drückt, wie der Kurs früher reagiert hat und wie viele Coins noch kommen.",
   unl_title: "Tokenomics",
   unl_tokens: "Wird an diesem Tag frei",
   unl_top: "Stärkster Druck in 30 Tagen",

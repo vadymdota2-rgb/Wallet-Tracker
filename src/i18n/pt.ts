@@ -800,6 +800,7 @@ export const pt: Dict = {
   unl_staked: "Em staking",
   unl_sub: "Quando e quantas moedas novas chegam ao mercado: desbloqueios e emissão",
   unl_tag_unlock: "Desbloqueio",
+  unl_tap_hint: "Toque em qualquer moeda: quanto o desbloqueio pesa, como o preço reagiu antes e quantas moedas ainda vão sair.",
   unl_title: "Tokenomics",
   unl_tokens: "Liberado neste dia",
   unl_top: "O mais pesado em 30 dias",

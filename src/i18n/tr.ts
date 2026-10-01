@@ -800,6 +800,7 @@ export const tr: Dict = {
   unl_staked: "Stake edilen",
   unl_sub: "Piyasaya ne zaman ve ne kadar yeni coin çıkacak: kilit açılımları ve ihraç",
   unl_tag_unlock: "Kilit açılımı",
+  unl_tap_hint: "Herhangi bir coine dokunun: kilit açılımının baskısı, fiyatın önceki tepkisi ve daha ne kadar coin geleceği.",
   unl_title: "Tokenomik",
   unl_tokens: "Bu gün serbest kalacak",
   unl_top: "30 gün içinde en ağırı",

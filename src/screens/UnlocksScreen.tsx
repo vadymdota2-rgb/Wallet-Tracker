@@ -24,6 +24,8 @@ import { CoinIcon } from "../components/CoinIcon";
 import { Empty, Segmented } from "../components/ui";
 import { useNow } from "../lib/tick";
 
+const TIP_KEY = "wt-unl-tip-v1";
+
 /** Что показывать: всё, только разлоки или только эмиссию. */
 type Kind = "all" | "unlock" | "emit";
 
@@ -133,6 +135,15 @@ export function UnlocksScreen() {
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<Kind>("all");
   const [bigOnly, setBigOnly] = useState(false);
+  /* Подсказка «нажмите на монету»: по строке не видно, что под ней
+     подробности, — показываем, пока человек ни разу не открыл ни одну. */
+  const [tip, setTip] = useState(() => {
+    try {
+      return localStorage.getItem(TIP_KEY) !== "1";
+    } catch {
+      return true;
+    }
+  });
   const [openKey, setOpenKey] = useState<string | null>(null);
 
   const q = query.trim().toLowerCase();
@@ -320,7 +331,14 @@ export function UnlocksScreen() {
           <Empty text={q ? t(lang, "unl_unknown", { q: query.trim().toUpperCase() }) : t(lang, "unl_none")} />
         )
       ) : (
-        shown.days.map((d) => (
+        <>
+        {tip ? (
+          <p className="unl-tip">
+            <span className="unl-chev" aria-hidden="true" />
+            {t(lang, "unl_tap_hint")}
+          </p>
+        ) : null}
+        {shown.days.map((d) => (
           <section key={d.ts} className="unl-day">
             <h3>
               <span>{day(d.ts, nowSec)}</span>
@@ -338,6 +356,14 @@ export function UnlocksScreen() {
                     onClick={() => {
                       haptic("light");
                       setOpenKey(expanded ? null : key);
+                      if (tip) {
+                        setTip(false);
+                        try {
+                          localStorage.setItem(TIP_KEY, "1");
+                        } catch {
+                          // без памяти — подсказка вернётся при следующем входе
+                        }
+                      }
                     }}
                   >
                     <CoinIcon sym={e.sym} size={30} />
@@ -364,6 +390,7 @@ export function UnlocksScreen() {
                         {e.pct !== null ? t(lang, "unl_of_circ", { p: pct(e.pct, 2, false) }) : qty(e.tokens)}
                       </small>
                     </span>
+                    <span className="unl-chev" aria-hidden="true" />
                   </button>
                   {expanded ? (
                     <CoinMore
@@ -384,7 +411,8 @@ export function UnlocksScreen() {
               );
             })}
           </section>
-        ))
+        ))}
+        </>
       )}
       {shown.more ? <div ref={tail} className="unl-tail" aria-hidden="true" /> : null}
 
