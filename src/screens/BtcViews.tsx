@@ -97,6 +97,8 @@ function FollowBtn({ addr, size = 19 }: { addr: string; size?: number }) {
 
 /* ── Биткоин на биржах ────────────────────────────────────────────────── */
 
+const EX_OPEN_KEY = "wt-btc-ex-open";
+
 /* Окна ордеров и ключи окон потока на сервере: те же пять сроков. */
 const FLOW_KEY: Record<BigWin, { id: string; label: Parameters<typeof t>[1] }> = {
   "1h": { id: "1", label: "big_win_1h" },
@@ -115,6 +117,21 @@ export function BtcFlowCard({ bigWin }: { bigWin: BigWin }) {
   const lang = useApp((s) => s.lang);
   const win = FLOW_KEY[bigWin].id;
   const [data, setData] = useState<BtcFlowReply | null>(() => peekBtcFlow() ?? null);
+  const [exOpen, setExOpenState] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(EX_OPEN_KEY) !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const setExOpen = (v: boolean) => {
+    setExOpenState(v);
+    try {
+      localStorage.setItem(EX_OPEN_KEY, v ? "1" : "0");
+    } catch {
+      // хранилище закрыто — просто не запомним
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -156,8 +173,24 @@ export function BtcFlowCard({ bigWin }: { bigWin: BigWin }) {
         </p>
       </div>
       {w.ex.length ? (
+        <>
+        {/* Биржи — все, что сканер видел за окно. Список длинный, поэтому
+            сворачивается; выбор помнится на устройстве. */}
+        <button
+          type="button"
+          className="btc-ex-tg"
+          aria-expanded={exOpen}
+          onClick={() => {
+            haptic("select");
+            setExOpen(!exOpen);
+          }}
+        >
+          <span>{t(lang, "btc_ex_list", { n: num(w.ex.length) })}</span>
+          <i className={exOpen ? "on" : undefined} aria-hidden="true">▾</i>
+        </button>
+        {exOpen ? (
         <div className="btc-ex">
-          {w.ex.slice(0, 6).map((e) => {
+          {w.ex.map((e) => {
             const net = e.out - e.in;
             return (
               <div key={e.ex} className="btc-ex-row">
@@ -171,6 +204,8 @@ export function BtcFlowCard({ bigWin }: { bigWin: BigWin }) {
             );
           })}
         </div>
+        ) : null}
+        </>
       ) : (
         <p className="note dim">{t(lang, "btc_empty")}</p>
       )}

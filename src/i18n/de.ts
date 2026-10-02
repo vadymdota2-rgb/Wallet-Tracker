@@ -77,6 +77,7 @@ export const de: Dict = {
   btc_dep: "Eingezahlt",
   btc_dep_to: "Einzahlung auf {ex}",
   btc_empty: "Noch leer – der Scanner liest jeden Bitcoin-Block (etwa alle 10 Minuten) und sammelt Daten.",
+  btc_ex_list: "Börsen: {n}",
   btc_explorer: "In mempool.space öffnen",
   btc_flow_hint: "Plus: Coins verlassen die Börsen (es wird gehalten). Minus: Coins gehen auf Börsen (Verkauf wird vorbereitet).",
   btc_flow_title: "Bitcoin auf Börsen",

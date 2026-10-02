@@ -2862,7 +2862,7 @@
 .btc-ex { display: grid; gap: 6px; margin-top: 12px; }
 .btc-ex-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1.5fr) repeat(3, minmax(0, 1fr));
   gap: 6px;
   align-items: baseline;
   padding: 8px 10px;
@@ -2885,3 +2885,12 @@
 .btc-foot { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 8px 0 0; font-size: 12px; }
 .btc-addr { overflow-wrap: anywhere; font-size: 12.5px; margin: 0 0 10px; color: var(--ink); }
 .btc-follow-on { flex: 1 1 100%; margin: 0; }
+.btc-ex-tg {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; margin-top: 12px; padding: 9px 12px;
+  border-radius: var(--r-md); border: 1px solid var(--line); background: transparent;
+  color: var(--ink); font-weight: 700; font-size: 13px; text-align: start;
+}
+.btc-ex-tg i { font-style: normal; color: var(--dim); transition: transform .2s; transform: rotate(-90deg); }
+.btc-ex-tg i.on { transform: none; }
+.btc-ex-tg + .btc-ex { margin-top: 8px; }

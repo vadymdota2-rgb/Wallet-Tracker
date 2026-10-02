@@ -77,6 +77,7 @@ export const ko: Dict = {
   btc_dep: "입금",
   btc_dep_to: "{ex}로 입금",
   btc_empty: "아직 비어 있습니다 — 스캐너가 비트코인 블록(약 10분마다)을 모두 읽으며 데이터를 모으는 중입니다.",
+  btc_ex_list: "거래소: {n}",
   btc_explorer: "mempool.space에서 열기",
   btc_flow_hint: "플러스: 코인이 거래소를 떠남(보유). 마이너스: 거래소로 들어감(매도 준비).",
   btc_flow_title: "거래소의 비트코인",

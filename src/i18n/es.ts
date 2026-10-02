@@ -77,6 +77,7 @@ export const es: Dict = {
   btc_dep: "Depositado",
   btc_dep_to: "Depósito en {ex}",
   btc_empty: "Aún vacío: el escáner lee cada bloque de Bitcoin (cada ~10 minutos) y está reuniendo datos.",
+  btc_ex_list: "Exchanges: {n}",
   btc_explorer: "Abrir en mempool.space",
   btc_flow_hint: "Positivo: las monedas salen de los exchanges (se acumulan). Negativo: entran a los exchanges (preparan venta).",
   btc_flow_title: "Bitcoin en exchanges",

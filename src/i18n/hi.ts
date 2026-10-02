@@ -77,6 +77,7 @@ export const hi: Dict = {
   btc_dep: "जमा किया गया",
   btc_dep_to: "{ex} पर जमा",
   btc_empty: "अभी खाली — स्कैनर हर Bitcoin ब्लॉक (लगभग हर 10 मिनट) पढ़ता है और डेटा जुटा रहा है।",
+  btc_ex_list: "एक्सचेंज: {n}",
   btc_explorer: "mempool.space में खोलें",
   btc_flow_hint: "प्लस — सिक्के एक्सचेंज से बाहर जा रहे हैं (जमा किए जा रहे हैं), माइनस — एक्सचेंज पर आ रहे हैं (बेचने की तैयारी)।",
   btc_flow_title: "एक्सचेंजों पर Bitcoin",

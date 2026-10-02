@@ -9782,7 +9782,9 @@ def _btc_flow_build() -> dict:
             wins[key] = {
                 "in": round(tin, 4), "out": round(tout, 4), "net": round(tout - tin, 4),
                 "nin": sum(int(r["ni"] or 0) for r in by_ex), "nout": sum(int(r["no"] or 0) for r in by_ex),
-                "ex": ex[:8], "tr": tr,
+                # Все биржи, какие сканер видел за окно: список в приложении
+                # сворачивается, отрезать хвост здесь незачем.
+                "ex": ex, "tr": tr,
                 # Окно длиннее, чем сканер работает, — сумма неполная, и
                 # экран должен это сказать, а не выдать её за месячную.
                 "full": bool(first and first <= since + 600),

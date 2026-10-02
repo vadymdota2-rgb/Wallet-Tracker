@@ -77,6 +77,7 @@ export const ja: Dict = {
   btc_dep: "入金",
   btc_dep_to: "{ex}へ入金",
   btc_empty: "まだデータがありません。スキャナーはビットコインの全ブロック（約10分ごと）を読み、データを集めています。",
+  btc_ex_list: "取引所：{n}",
   btc_explorer: "mempool.spaceで開く",
   btc_flow_hint: "プラス＝取引所からコインが流出（保有・蓄積）。マイナス＝取引所へ流入（売却の準備）。",
   btc_flow_title: "取引所のビットコイン",

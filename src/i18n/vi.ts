@@ -77,6 +77,7 @@ export const vi: Dict = {
   btc_dep: "Đã nạp",
   btc_dep_to: "Nạp lên {ex}",
   btc_empty: "Chưa có gì — trình quét đọc từng khối Bitcoin (khoảng 10 phút một lần) và đang thu thập dữ liệu.",
+  btc_ex_list: "Sàn: {n}",
   btc_explorer: "Mở trên mempool.space",
   btc_flow_hint: "Dương: coin rời sàn (được tích trữ). Âm: coin vào sàn (chuẩn bị bán).",
   btc_flow_title: "Bitcoin trên sàn",

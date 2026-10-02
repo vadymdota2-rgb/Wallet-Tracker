@@ -77,6 +77,7 @@ export const id: Dict = {
   btc_dep: "Disetor",
   btc_dep_to: "Disetor ke {ex}",
   btc_empty: "Masih kosong — pemindai membaca setiap blok Bitcoin (sekitar tiap 10 menit) dan sedang mengumpulkan data.",
+  btc_ex_list: "Bursa: {n}",
   btc_explorer: "Buka di mempool.space",
   btc_flow_hint: "Plus: koin keluar dari bursa (ditimbun). Minus: koin masuk ke bursa (bersiap dijual).",
   btc_flow_title: "Bitcoin di bursa",

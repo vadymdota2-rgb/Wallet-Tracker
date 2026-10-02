@@ -77,6 +77,7 @@ export const en = {
   btc_dep: "Deposited",
   btc_dep_to: "Deposited to {ex}",
   btc_empty: "Nothing yet — the scanner reads every Bitcoin block (about every 10 minutes) and is collecting data.",
+  btc_ex_list: "Exchanges: {n}",
   btc_explorer: "Open in mempool.space",
   btc_flow_hint: "Plus: coins leave exchanges (people hold). Minus: coins go to exchanges (getting ready to sell).",
   btc_flow_title: "Bitcoin on exchanges",

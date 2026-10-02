@@ -77,6 +77,7 @@ export const tr: Dict = {
   btc_dep: "Yatırılan",
   btc_dep_to: "{ex} borsasına yatırma",
   btc_empty: "Henüz boş — tarayıcı her Bitcoin bloğunu (yaklaşık 10 dakikada bir) okuyor ve veri topluyor.",
+  btc_ex_list: "Borsalar: {n}",
   btc_explorer: "mempool.space'te aç",
   btc_flow_hint: "Artı: coinler borsalardan çıkıyor (biriktiriliyor). Eksi: borsalara giriyor (satışa hazırlanılıyor).",
   btc_flow_title: "Borsalarda Bitcoin",

@@ -77,6 +77,7 @@ export const zh: Dict = {
   btc_dep: "充入",
   btc_dep_to: "充值到 {ex}",
   btc_empty: "暂无数据——扫描器会读取每个比特币区块（约每 10 分钟一个），正在积累数据。",
+  btc_ex_list: "交易所：{n}",
   btc_explorer: "在 mempool.space 中打开",
   btc_flow_hint: "正值：币流出交易所（囤币）；负值：币流入交易所（准备卖出）。",
   btc_flow_title: "交易所比特币",

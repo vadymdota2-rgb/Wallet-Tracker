@@ -12256,5 +12256,23 @@
     "uk": "Ви підписані: бот надішле алерт про кожну покупку, продаж чи переказ цього гаманця.",
     "vi": "Bạn đang theo dõi ví này: bot sẽ báo mỗi lần mua, bán hoặc chuyển.",
     "zh": "你已关注此钱包：每次买入、卖出或转账，机器人都会提醒你。"
+  },
+  "btc_ex_list": {
+    "ar": "المنصات: {n}",
+    "de": "Börsen: {n}",
+    "en": "Exchanges: {n}",
+    "es": "Exchanges: {n}",
+    "fr": "Plateformes : {n}",
+    "hi": "एक्सचेंज: {n}",
+    "id": "Bursa: {n}",
+    "ja": "取引所：{n}",
+    "ko": "거래소: {n}",
+    "pl": "Giełdy: {n}",
+    "pt": "Corretoras: {n}",
+    "ru": "Биржи: {n}",
+    "tr": "Borsalar: {n}",
+    "uk": "Біржі: {n}",
+    "vi": "Sàn: {n}",
+    "zh": "交易所：{n}"
   }
 }
