@@ -553,7 +553,54 @@ export interface DigestLocked {
   locked: true;
 }
 
+/** Строка крупного движения биткоина в выпуске. */
+export interface DigestBtcRow {
+  a: string;
+  ex: string;
+  btc: number;
+  v: number;
+  n?: number;
+}
+
+/** Сигнал табло: из какой вкладки, куда указывает и число, на котором стоит. */
+export interface DigestSignal {
+  k: "fng" | "etf" | "btcx" | "whales" | "cbp";
+  d: -1 | 0 | 1;
+  v: number;
+}
+
 export interface DigestItem {
+  /** 2 — выпуск со сводкой, рынком, институционалами, биткоином и лидерами. */
+  v?: number;
+  sig?: DigestSignal[];
+  mkt?: {
+    fng?: { v: number; d1: number; d7: number };
+    btc?: { px: number; ch: number };
+    eth?: { px: number; ch: number };
+    cap?: { v: number; ch: number };
+    dom?: { btc: number; d1: number; eth: number };
+    alt?: { v: number; d1: number };
+  };
+  inst?: {
+    etf: { c: string; day: number; v: number; n: number }[];
+    top?: { t: string; v: number }[];
+    bot?: { t: string; v: number }[];
+    cbp?: number;
+  };
+  btc?: {
+    in?: number;
+    out?: number;
+    net?: number;
+    full?: boolean;
+    ex?: { ex: string; net: number }[];
+    buy?: DigestBtcRow[];
+    sell?: DigestBtcRow[];
+  };
+  lead?: {
+    spot?: { a: string; pnl: number; win: number; tr: number };
+    btc?: { a: string; pnl: number; btc: number; roi: number };
+  };
+  halv?: { left: number; eta: number; next: number };
   id: number;
   /** Дата выпуска по UTC, YYYY-MM-DD. */
   day: string;

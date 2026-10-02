@@ -611,5 +611,12 @@ say("bitcoin: перестройка цепочки откатывает бло�
     and "UPDATE btc_labels SET at=? WHERE address=? AND how != 'seed'" in _ws_btc and "void reloadWatch()" in _ws_btc
     and "AND price_nanos > 0 AND m.ex != ''" in api and 'r["price_nanos"] or 0) > 0 and r["ex"]' in api)
 
+_dgm = read(f"{APP}/src/screens/DigestMore.tsx")
+say("дайджест v2: сводка сигналов, рынок, институционалы, bitcoin, лидеры, халвинг; старые выпуски как были",
+    "def _dg_signals(body: dict)" in api and 'body: dict = {"v": 2' in api and 'body["halv"] = {' in api
+    and "export function Summary(" in _dgm and "export function Institutions(" in _dgm
+    and "export function BitcoinSec(" in _dgm and "export function HalvingLine(" in _dgm
+    and "const v2 = (it.v ?? 1) >= 2;" in read(f"{APP}/src/screens/DigestTab.tsx"))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

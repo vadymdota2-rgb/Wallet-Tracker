@@ -2899,3 +2899,70 @@
 .btc-sum { margin: 2px 0 8px; }
 .btc-via .btc-ex-row { grid-template-columns: minmax(0, 1.3fr) auto minmax(0, .8fr) minmax(0, 1fr); }
 .btc-via .btc-ex-row span { white-space: nowrap; overflow-wrap: normal; }
+
+/* Дайджест v2: части выпуска, сводка дня, рынок, институционалы, биткоин. */
+.dg-part {
+  margin: 14px 2px 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: 0.01em;
+}
+.dg-part:first-child { margin-top: 4px; }
+.dg-sec-link { width: 100%; background: transparent; border: 0; padding: 0; text-align: start; color: inherit; }
+.dg-sec-go { margin-inline-start: auto; color: var(--dim); font-size: 18px; line-height: 1; }
+[dir="rtl"] .dg-sec-go { transform: scaleX(-1); }
+.dg-sum-box {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: rgb(11 22 40 / 0.35);
+}
+.dg-verdict { margin: 0; font-size: 15px; font-weight: 800; line-height: 1.35; }
+.dg-verdict.up { color: var(--up); }
+.dg-verdict.dn { color: var(--dn); }
+.dg-verdict.mix { color: var(--ink); }
+.dg-sig { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.dg-sig li {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+}
+.dg-sig-d { font-size: 11px; text-align: center; }
+.dg-sig-d.up { color: var(--up); }
+.dg-sig-d.dn { color: var(--dn); }
+.dg-sig-d.flat { color: var(--dim); }
+.dg-sig-k { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dg-sig b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dg-sig b.up { color: var(--up); }
+.dg-sig b.dn { color: var(--dn); }
+.dg-cells { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.dg-cell {
+  display: grid;
+  gap: 2px;
+  padding: 8px 9px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  min-width: 0;
+}
+.dg-cell small { color: var(--dim); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dg-cell b { font-size: 14px; color: var(--ink); font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dg-cell em { font-style: normal; font-size: 11.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dg-cell em.up { color: var(--up); }
+.dg-cell em.dn { color: var(--dn); }
+.dg-line { margin: 0 2px; font-size: 13px; color: var(--dim); line-height: 1.5; }
+.dg-line b { color: var(--ink); }
+.dg-line .up { color: var(--up); }
+.dg-line .dn { color: var(--dn); }
+.dg-medal { display: grid; place-items: center; width: 28px; height: 28px; font-size: 18px; }
+@media (max-width: 360px) {
+  .dg-cells { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+/* Подпись ячейки переносится: «Страх и жадность» в одну строку на 390 точек
+   обрезалась до «Страх и жад…». */
+.dg-cell small { white-space: normal; line-height: 1.25; min-height: 2.5em; display: flex; align-items: flex-end; }
+.dg-cell small { font-size: 10.5px; letter-spacing: -0.01em; hyphens: auto; }

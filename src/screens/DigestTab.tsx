@@ -31,6 +31,9 @@ import {
 } from "../lib/api";
 import { CoinIcon } from "../components/CoinIcon";
 import {
+  BitcoinSec, HalvingLine, Institutions, Leaders, Market, Part, Quiet, Sec, Sub, Summary,
+} from "./DigestMore";
+import {
   Action,
   Empty,
   FundingGlyph,
@@ -122,22 +125,6 @@ function actError(lang: Lang, r: DigestActReply | null): string {
   }
 }
 
-/** Раздел выпуска: значок вкладки, её имя и содержимое. */
-function Sec({ icon, title, children }: { icon: ReactNode; title: ReactNode; children: ReactNode }) {
-  return (
-    <div className="dg-sec">
-      <div className="dg-sec-head">
-        <span className="dg-sec-ic" aria-hidden="true">{icon}</span>
-        <h3>{title}</h3>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function Quiet({ lang }: { lang: Lang }) {
-  return <p className="dg-quiet">{t(lang, "dg_quiet")}</p>;
-}
 
 function LockedSec({ lang, onPremium }: { lang: Lang; onPremium: () => void }) {
   return (
@@ -149,10 +136,6 @@ function LockedSec({ lang, onPremium }: { lang: Lang; onPremium: () => void }) {
   );
 }
 
-/** Подпись над короткими списками внутри раздела: «Приток», «Отток». */
-function Sub({ children }: { children: ReactNode }) {
-  return <p className="dg-sub">{children}</p>;
-}
 
 function CoinRow({
   c,
@@ -203,8 +186,22 @@ function Sections({ it, lang, premium }: { it: DigestItem; lang: Lang; premium: 
   const rot = it.rot;
   const unl = it.unl ?? [];
 
+  /* Новые выпуски (v2) идут частями — от общей картины к деталям. У старых
+     этих частей нет: они показываются как были, без пустых заголовков. */
+  const v2 = (it.v ?? 1) >= 2;
   return (
     <>
+      {v2 ? (
+        <>
+          <Part>{t(lang, "dg_p_sum")}</Part>
+          <Summary it={it} lang={lang} />
+          <Part>{t(lang, "dg_p_mkt")}</Part>
+          <Market it={it} lang={lang} />
+          <Institutions it={it} lang={lang} />
+          <BitcoinSec it={it} lang={lang} />
+          <Part>{t(lang, "dg_p_whales")}</Part>
+        </>
+      ) : null}
       <Sec icon={<NetFlowGlyph size={20} />} title="NetFlow">
         {flow && (flow.in.length || flow.out.length) ? (
           <>
@@ -279,6 +276,7 @@ function Sections({ it, lang, premium }: { it: DigestItem; lang: Lang; premium: 
         )}
       </Sec>
 
+      {v2 ? <Part>{t(lang, "dg_p_deriv")}</Part> : null}
       <Sec icon={<PositionsGlyph size={20} />} title={t(lang, "ui_tab_ls")}>
         {isLocked(it.ls) || (!premium && it.ls === undefined) ? (
           <LockedSec lang={lang} onPremium={toPremium} />
@@ -351,6 +349,13 @@ function Sections({ it, lang, premium }: { it: DigestItem; lang: Lang; premium: 
         )}
       </Sec>
 
+      {v2 ? (
+        <>
+          <Part>{t(lang, "dg_p_lead")}</Part>
+          <Leaders it={it} lang={lang} />
+          <Part>{t(lang, "dg_p_cal")}</Part>
+        </>
+      ) : null}
       <Sec icon={<UnlockGlyph size={20} />} title={t(lang, "dg_unl")}>
         {unl.length ? (
           unl.map((e) => (
@@ -367,6 +372,7 @@ function Sections({ it, lang, premium }: { it: DigestItem; lang: Lang; premium: 
         ) : (
           <Quiet lang={lang} />
         )}
+        <HalvingLine it={it} lang={lang} />
       </Sec>
     </>
   );

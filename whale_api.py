@@ -10742,11 +10742,149 @@ def _dg_coin(r: dict, *keys: str) -> dict:
     return out
 
 
+def _dg_px(product: str) -> dict | None:
+    """Цена и изменение за 24 часа — открытая статистика Coinbase."""
+    j = get_json(f"https://api.exchange.coinbase.com/products/{product}/stats", 8) or {}
+    try:
+        last, opn = float(j["last"]), float(j["open"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if last <= 0 or opn <= 0:
+        return None
+    return {"px": round(last, 2), "ch": round((last / opn - 1) * 100, 2)}
+
+
+def _dg_safe(name: str, fn):
+    """Раздел, который не собрался (источник молчит), выпуск не роняет: его
+    просто нет, а остальное выходит."""
+    try:
+        return fn()
+    except Exception as e:  # noqa: BLE001
+        sys.stderr.write(f"[api] digest {name}: {e}\n")
+        return None
+
+
+def _dg_market() -> dict:
+    """Рынок целиком: настроение, две главные монеты, капитализация,
+    доминация и альтсезон — то, с чего читают любой обзор."""
+    out: dict = {}
+    days = (fng_data() or {}).get("days") or []
+    if len(days) >= 8:
+        v = int(days[-1][1])
+        out["fng"] = {"v": v, "d1": v - int(days[-2][1]), "d7": v - int(days[-8][1])}
+    for sym, product in (("btc", "BTC-USD"), ("eth", "ETH-USD")):
+        px = _dg_px(product)
+        if px:
+            out[sym] = px
+    dom = dom_data() or {}
+    rows = dom.get("rows") or []
+    if len(rows) >= 2:
+        cap, btc_d, eth_d = rows[-1][0], rows[-1][1], rows[-1][2]
+        cap0, btc0 = rows[-2][0], rows[-2][1]
+        if cap and cap0:
+            out["cap"] = {"v": round(cap * 1e6), "ch": round((cap / cap0 - 1) * 100, 2)}
+        if btc_d:
+            out["dom"] = {"btc": round(btc_d, 2), "d1": round(btc_d - btc0, 2), "eth": round(eth_d, 2)}
+    alt = (dom.get("alt") or {})
+    if alt.get("now"):
+        a0 = (alt.get("d1") or alt["now"])[0]
+        out["alt"] = {"v": int(alt["now"][0]), "d1": int(alt["now"][0]) - int(a0)}
+    return out
+
+
+def _dg_inst() -> dict:
+    """Институционалы: чистый поток спотовых ETF по монетам за последний
+    отчётный день, кто из фондов купил и продал больше всех, и премия
+    Coinbase — спрос американских покупателей прямо сейчас."""
+    etf = etf_data() or {}
+    coins = etf.get("coins") or {}
+    out: dict = {"etf": []}
+    for c in ("btc", "eth", "sol", "xrp", "hype"):
+        e = coins.get(c) or {}
+        days = e.get("days") or []
+        if not days:
+            continue
+        d = days[-1]
+        out["etf"].append({"c": c, "day": int(d[0]), "v": round((d[1] or 0) * 1000), "n": d[2]})
+        if c == "btc":
+            funds = e.get("funds") or []
+            per = [(funds[i]["t"], (v or 0) * 1000) for i, v in enumerate(d[4] or []) if i < len(funds) and v]
+            per.sort(key=lambda x: -x[1])
+            out["top"] = [{"t": t, "v": round(v)} for t, v in per if v > 0][:3]
+            out["bot"] = [{"t": t, "v": round(v)} for t, v in reversed(per) if v < 0][:3]
+    cbp = ((etf.get("cbp") or {}).get("btc") or {}).get("now")
+    if cbp is not None:
+        out["cbp"] = round(cbp, 4)
+    return out
+
+
+def _dg_btc() -> dict:
+    """Bitcoin на биржах за сутки: сколько ушло и пришло, по каким биржам
+    больше всего, и самые крупные выводы и заводы."""
+    out: dict = {}
+    w = ((btc_flow() or {}).get("wins") or {}).get("24")
+    if w:
+        ex = sorted(w.get("ex") or [], key=lambda e: -abs(e["out"] - e["in"]))[:3]
+        out.update({"in": w["in"], "out": w["out"], "net": w["net"], "full": w.get("full", False),
+                    "ex": [{"ex": e["ex"], "net": round(e["out"] - e["in"], 2)} for e in ex]})
+    for side in ("buy", "sell"):
+        rows = (btc_big("24h", side, 10) or {}).get("rows") or []
+        out[side] = [{"a": r["a"], "ex": r["ex"], "btc": r["btc"], "v": r["v"], "n": r.get("n", 1)} for r in rows[:3]]
+    return out
+
+
+def _dg_leaders(pub: dict) -> dict:
+    """Лидеры рейтинга за 30 дней: первое место по прибыли на BSC и в
+    биткоине — кого стоит открыть и посмотреть, что он делает."""
+    out: dict = {}
+    spot = (((pub.get("rank") or {}).get("spot") or {}).get("pnl") or [])
+    if spot:
+        r = spot[0]
+        out["spot"] = {"a": r.get("a"), "pnl": r.get("pnl"), "win": r.get("win"), "tr": r.get("tr")}
+    br = (btc_rank(30, True) or {}).get("pnl") or []
+    if br:
+        r = br[0]
+        out["btc"] = {"a": r["a"], "pnl": r["pnl"], "btc": r["btc"], "roi": r["roi"]}
+    return out
+
+
+def _dg_signals(body: dict) -> list:
+    """Табло дня: пять независимых показателей, каждый «за рост» (1), «за
+    падение» (-1) или ровно (0). Каждый — из своей вкладки и со своим
+    числом рядом, чтобы вывод можно было проверить, а не принять на веру."""
+    sig = []
+    m, inst, b, fl = body.get("mkt") or {}, body.get("inst") or {}, body.get("btc") or {}, body.get("flow") or {}
+    if m.get("fng"):
+        v = m["fng"]["v"]
+        # Те же границы, что у зон на вкладке «Страх и жадность»: выше 54 —
+        # жадность, до 46 — страх, между ними нейтрально.
+        sig.append({"k": "fng", "d": 1 if v > 54 else -1 if v <= 46 else 0, "v": v})
+    etf_btc = next((e for e in inst.get("etf") or [] if e["c"] == "btc"), None)
+    if etf_btc:
+        sig.append({"k": "etf", "d": (etf_btc["v"] > 0) - (etf_btc["v"] < 0), "v": etf_btc["v"]})
+    if "net" in b:
+        # Меньше десятой доли процента оборота бирж — шум, а не сигнал.
+        flat = abs(b["net"]) < 0.001 * max(1.0, b["in"] + b["out"])
+        sig.append({"k": "btcx", "d": 0 if flat else (1 if b["net"] > 0 else -1), "v": b["net"]})
+    if fl.get("net") is not None:
+        sig.append({"k": "whales", "d": (fl["net"] > 0) - (fl["net"] < 0), "v": fl["net"]})
+    if inst.get("cbp") is not None:
+        c = inst["cbp"]
+        sig.append({"k": "cbp", "d": 1 if c > 0.02 else -1 if c < -0.02 else 0, "v": c})
+    return sig
+
+
 def digest_build(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict:
     """Содержимое выпуска за последние сутки. Раздел без данных — пустой,
-    а не выдуманный: приложение так и пишет, что событий не было."""
+    а не выдуманный: приложение так и пишет, что событий не было.
+
+    Порядок — как у профессионального обзора: сперва итог дня одной строкой
+    и табло сигналов, потом рынок целиком, институционалы, биткоин на
+    биржах, киты BSC, деривативы, лидеры рейтинга и календарь."""
     to = now()
-    body: dict = {"from": to - 86400, "to": to}
+    # v2 — выпуск со сводкой, рынком, институционалами, биткоином, лидерами
+    # и халвингом. Старые выпуски без этих разделов показываются как были.
+    body: dict = {"v": 2, "from": to - 86400, "to": to}
 
     pub = get_public(cur, hl) or {}
     fw = (pub.get("flow") or {}).get("24") or {}
@@ -10809,6 +10947,17 @@ def digest_build(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
         unl.append({k: e.get(k) for k in ("sym", "name", "ts", "tokens", "usd", "pct", "kind")})
     unl.sort(key=lambda e: (-(e.get("pct") or 0), -(e.get("usd") or 0)))
     body["unl"] = unl[:DIGEST_UNL_TOP]
+
+    for key, fn in (("mkt", _dg_market), ("inst", _dg_inst), ("btc", _dg_btc),
+                    ("lead", lambda: _dg_leaders(pub))):
+        part = _dg_safe(key, fn)
+        if part:
+            body[key] = part
+    hv = _dg_safe("halving", halving_data) or {}
+    if hv.get("ok") and hv.get("height"):
+        left = hv["next"] - hv["height"]
+        body["halv"] = {"left": left, "eta": int(to + left * hv["avg"]), "next": hv["next"]}
+    body["sig"] = _dg_signals(body)
     return body
 
 
