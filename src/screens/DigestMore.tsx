@@ -281,19 +281,19 @@ export function Leaders({ it, lang }: { it: DigestItem; lang: Lang }) {
   const l = it.lead;
   if (!l || (!l.spot && !l.btc)) return null;
   return (
-    <Sec icon={<TopGlyph size={20} />} title={t(lang, "dg_p_lead")} onOpen={() => goTab("top")}>
+    <Sec icon={<TopGlyph size={20} />} title={t(lang, "rk_top_traders_30d")} onOpen={() => goTab("top")}>
       {l.spot ? (
         <Row icon={<span className="dg-medal" aria-hidden="true">🥇</span>}
-          title={iso(shortAddr(l.spot.a))}
-          sub={`BSC · ${t(lang, "dg_lead_stats", { w: num(l.spot.win), n: num(l.spot.tr) })}`}
-          value={sUsd(l.spot.pnl)} tone={tone(l.spot.pnl)}
+          title={<>{iso(shortAddr(l.spot.a))} <span className="dim">· BSC</span></>}
+          sub={t(lang, "dg_lead_stats", { w: num(l.spot.win), n: num(l.spot.tr) })}
+          value={sUsd(l.spot.pnl)} tone={tone(l.spot.pnl)} wrap
           onClick={() => open("deals", l.spot!.a, "spot")} />
       ) : null}
       {l.btc ? (
         <Row icon={<span className="dg-medal" aria-hidden="true">🥇</span>}
-          title={iso(shortAddr(l.btc.a))}
-          sub={`Bitcoin · ${t(lang, "btc_hold")} ${btcAmt(l.btc.btc)}`}
-          value={sUsd(l.btc.pnl)} tone={tone(l.btc.pnl)}
+          title={<>{iso(shortAddr(l.btc.a))} <span className="dim">· Bitcoin</span></>}
+          sub={`${t(lang, "btc_hold")} ${btcAmt(l.btc.btc)}`}
+          value={sUsd(l.btc.pnl)} tone={tone(l.btc.pnl)} wrap
           onClick={() => open("btcWallet", l.btc!.a)} />
       ) : null}
       <p className="dg-note">{t(lang, "dg_lead_note")}</p>
@@ -309,7 +309,6 @@ export function HalvingLine({ it, lang }: { it: DigestItem; lang: Lang }) {
   return (
     <Row icon={<span className="dg-medal" aria-hidden="true">₿</span>}
       title={t(lang, "hv_title")}
-      sub={t(lang, "dg_halv", { n: num(h.left) })}
-      value={`≈ ${dateWord(lang, h.eta)}`} />
+      sub={`${t(lang, "dg_halv", { n: num(h.left) })} · ≈ ${dateWord(lang, h.eta)}`} />
   );
 }
