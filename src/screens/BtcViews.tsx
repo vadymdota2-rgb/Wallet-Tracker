@@ -223,22 +223,27 @@ export function BtcBigView({ winPicker, win }: { winPicker: ReactNode; win: BigW
   const open = useApp((s) => s.open);
   const side = useApp((s) => s.btcSide);
   const setSide = useApp((s) => s.setBtcSide);
-  const min = useApp((s) => s.btcMin);
+  const rawMin = useApp((s) => s.btcMin);
   const setMin = useApp((s) => s.setBtcMin);
+  const base = useApp((s) => s.btcBase);
+  const setBase = useApp((s) => s.setBtcBase);
+  // «Все» — только у базы: остальные движения сканер пишет от биткоина.
+  const min: BtcMin = !base && rawMin === 0 ? 1 : rawMin;
   const now = useNow();
-  const [data, setData] = useState<BtcBigReply | null>(() => peekBtcBig(win, side, min) ?? null);
+  const [data, setData] = useState<BtcBigReply | null>(() => peekBtcBig(win, side, min, base) ?? null);
 
   useEffect(() => {
     let alive = true;
-    const hit = peekBtcBig(win, side, min);
+    const hit = peekBtcBig(win, side, min, base);
     setData(hit ?? null);
-    void fetchBtcBig(win, side, min).then((r) => {
+    void fetchBtcBig(win, side, min, base).then((r) => {
       if (alive) setData(r ?? { ok: false } as BtcBigReply);
     });
     return () => {
       alive = false;
     };
-  }, [win, side, min]);
+  }, [win, side, min, base]);
+  const mins: BtcMin[] = base ? [0, ...MINS] : MINS;
 
   const buy = data?.tot?.buy;
   const sell = data?.tot?.sell;
@@ -246,6 +251,17 @@ export function BtcBigView({ winPicker, win }: { winPicker: ReactNode; win: BigW
   return (
     <Card>
       <SectionTitle note={t(lang, "btc_big_hint")}>{t(lang, "btc_big_tab")}</SectionTitle>
+      {/* Чьи движения: все кошельки сети или только база — адреса из
+          /import и найденные сканером. У базы пишется каждое движение от
+          $50, поэтому у неё есть и порог «все». */}
+      <Segmented<string>
+        value={base ? "base" : "all"}
+        onChange={(v) => setBase(v === "base")}
+        options={[
+          { id: "all", label: t(lang, "btc_scope_all") },
+          { id: "base", label: t(lang, "btc_scope_base") },
+        ]}
+      />
       <Segmented
         value={side}
         onChange={setSide}
@@ -257,9 +273,12 @@ export function BtcBigView({ winPicker, win }: { winPicker: ReactNode; win: BigW
       <Segmented<string>
         value={String(min)}
         onChange={(v) => setMin(Number(v) as BtcMin)}
-        options={MINS.map((m) => ({ id: String(m), label: `≥ ${m} BTC` }))}
+        options={mins.map((m) => ({ id: String(m), label: m ? `≥ ${m} BTC` : t(lang, "flow_side_all") }))}
       />
       {winPicker}
+      {base && data?.ok ? (
+        <p className="note dim">{t(lang, "btc_base_n", { n: num(data.baseN ?? 0) })}</p>
+      ) : null}
       {buy && sell ? (
         <Tiles
           cols={3}
@@ -274,6 +293,20 @@ export function BtcBigView({ winPicker, win }: { winPicker: ReactNode; win: BigW
             },
           ]}
         />
+      ) : null}
+      {data?.ok && data.byEx?.length ? (
+        /* Через какие биржи: та же сторона и то же окно, что у списка ниже. */
+        <div className="btc-via">
+          <p className="btc-via-t">{t(lang, side === "buy" ? "btc_via_buy" : "btc_via_sell")}</p>
+          {data.byEx.map((e) => (
+            <div key={e.ex} className="btc-ex-row">
+              <b>{e.ex}</b>
+              <span className="dim">{t(lang, "btc_n_wallets", { n: num(e.w) })}</span>
+              <span className={side === "buy" ? "up" : "dn"}>{short(e.btc)}</span>
+              <span>{iso(usd(e.v))}</span>
+            </div>
+          ))}
+        </div>
       ) : null}
       {data === null ? (
         <Empty text={t(lang, "ui_loading")} />

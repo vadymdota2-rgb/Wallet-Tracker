@@ -103,7 +103,7 @@ function plan(): (() => Promise<unknown>)[] {
 
   // 5б. Биткоин: поток для NetFlow и выводы с бирж за выбранное окно.
   jobs.push(() => fetchBtcFlow());
-  jobs.push(() => fetchBtcBig(app.bigWin, app.btcSide, app.btcMin));
+  jobs.push(() => fetchBtcBig(app.bigWin, app.btcSide, app.btcBase ? app.btcMin : Math.max(1, app.btcMin), app.btcBase));
 
   // 6. Справочник монет для поиска на графике.
   jobs.push(() => fetchSymbols());

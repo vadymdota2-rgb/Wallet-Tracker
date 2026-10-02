@@ -38,7 +38,7 @@ export type BigView = "flow" | "spot" | "perp" | "rot" | "ls" | "btc";
 /** Площадка рейтинга: BSC, Hyperliquid и Bitcoin. */
 export type RankVenue = Venue | "btc";
 /** Порог крупных движений BTC, в монетах. */
-export type BtcMin = 1 | 10 | 100;
+export type BtcMin = 0 | 1 | 10 | 100;
 /** Окна потока: часы. */
 export type FlowWin = "1" | "6" | "24" | "168" | "720";
 /** Окна рейтинга: дни. */
@@ -67,6 +67,8 @@ interface AppState {
   /** Крупные движения BTC: выводы с бирж или заводы, и от скольких монет. */
   btcSide: BigSide;
   btcMin: BtcMin;
+  /** Только кошельки базы сервисного аккаунта (/import и найденные сканером). */
+  btcBase: boolean;
 
   chartTf: Timeframe;
   /** Монета полноэкранного графика TradingView — последняя открытая. */
@@ -98,6 +100,7 @@ interface AppState {
   setRankVenue(v: RankVenue): void;
   setBtcSide(s: BigSide): void;
   setBtcMin(m: BtcMin): void;
+  setBtcBase(b: boolean): void;
   setRankKind(k: RankKind): void;
   setRankWin(w: RankWin): void;
   setChartTf(tf: Timeframe): void;
@@ -131,6 +134,7 @@ export const useApp = create<AppState>()(
       rankWin: "30",
       btcSide: "buy",
       btcMin: 1,
+      btcBase: false,
 
       chartTf: "1d",
       tvSym: "BTC",
@@ -163,6 +167,7 @@ export const useApp = create<AppState>()(
       setRankWin: (rankWin) => set({ rankWin }),
       setBtcSide: (btcSide) => set({ btcSide }),
       setBtcMin: (btcMin) => set({ btcMin }),
+      setBtcBase: (btcBase) => set({ btcBase }),
       setChartTf: (chartTf) => set({ chartTf }),
       setTvSym: (tvSym) => set({ tvSym }),
       setLiq: (liqSym, liqRange) => set({ liqSym, liqRange }),
@@ -215,6 +220,7 @@ export const useApp = create<AppState>()(
         rankWin: s.rankWin,
         btcSide: s.btcSide,
         btcMin: s.btcMin,
+        btcBase: s.btcBase,
         chartTf: s.chartTf,
         tvSym: s.tvSym,
         liqSym: s.liqSym,

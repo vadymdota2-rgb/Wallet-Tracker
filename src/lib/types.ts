@@ -819,6 +819,11 @@ export interface BtcBigReply {
   full: boolean;
   since: number;
   rows: BtcMove[];
+  /** Только кошельки базы и сколько их всего. */
+  base?: boolean;
+  baseN?: number;
+  /** Через какие биржи прошли движения выбранной стороны. */
+  byEx?: { ex: string; n: number; w: number; btc: number; v: number }[];
 }
 
 export interface BtcTrader extends BtcExtra {

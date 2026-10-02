@@ -449,12 +449,12 @@ export const fetchBtcFlow = () =>
   });
 export const peekBtcFlow = () => peek<BtcFlowReply | null>("/api/btc/flow", BTC_TTL) ?? savedBtcFlow();
 
-const btcBigPath = (win: string, side: string, min: number) =>
-  `/api/btc/big?win=${encodeURIComponent(win)}&side=${encodeURIComponent(side)}&min=${min}`;
-export const fetchBtcBig = (win: string, side: string, min: number) =>
-  cachedGet<BtcBigReply>(btcBigPath(win, side, min), BTC_TTL);
-export const peekBtcBig = (win: string, side: string, min: number) =>
-  peek<BtcBigReply | null>(btcBigPath(win, side, min), BTC_TTL);
+const btcBigPath = (win: string, side: string, min: number, base = false) =>
+  `/api/btc/big?win=${encodeURIComponent(win)}&side=${encodeURIComponent(side)}&min=${min}${base ? "&base=1" : ""}`;
+export const fetchBtcBig = (win: string, side: string, min: number, base = false) =>
+  cachedGet<BtcBigReply>(btcBigPath(win, side, min, base), BTC_TTL);
+export const peekBtcBig = (win: string, side: string, min: number, base = false) =>
+  peek<BtcBigReply | null>(btcBigPath(win, side, min, base), BTC_TTL);
 
 const btcRankPath = (win: string) => `/api/btc/rank?win=${encodeURIComponent(win)}`;
 export const fetchBtcRank = (win: string) => cachedGet<BtcRankReply>(btcRankPath(win), 2 * BTC_TTL);

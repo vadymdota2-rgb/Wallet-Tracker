@@ -2894,3 +2894,5 @@
 .btc-ex-tg i { font-style: normal; color: var(--dim); transition: transform .2s; transform: rotate(-90deg); }
 .btc-ex-tg i.on { transform: none; }
 .btc-ex-tg + .btc-ex { margin-top: 8px; }
+.btc-via { display: grid; gap: 6px; margin: 4px 0 12px; }
+.btc-via-t { margin: 0; color: var(--dim); font-size: 12px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }

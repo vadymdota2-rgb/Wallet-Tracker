@@ -599,5 +599,11 @@ say("bitcoin: подписка на кошелёк и алерты «покуп�
     and "function FollowBtn(" in _btv and 'valueSub={t(lang, side === "buy" ? "alert_buy" : "alert_sell")}' in _btv
     and 'open("btcWallet", w.btc ?? w.addr)' in read(f"{APP}/src/screens/WalletsTab.tsx"))
 
+say("bitcoin: кошельки базы — каждая продажа и покупка и через какие биржи они прошли",
+    "def _btc_big_build(win: str, side: str, min_btc: int, base: bool = False)" in api
+    and '"byEx": by_ex' in api and 'qs.get("base", ["0"])[0] == "1"' in api
+    and 'className="btc-via"' in _btv and '"btc_scope_base"' in _btv
+    and '"Bybit"' in _ws_btc and '"OKX"' in _ws_btc)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
