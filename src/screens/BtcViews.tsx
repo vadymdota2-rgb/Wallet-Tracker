@@ -245,8 +245,7 @@ export function BtcBigView({ winPicker, win }: { winPicker: ReactNode; win: BigW
   }, [win, side, min, base]);
   const mins: BtcMin[] = base ? [0, ...MINS] : MINS;
 
-  const buy = data?.tot?.buy;
-  const sell = data?.tot?.sell;
+  const sideTot = data?.ok ? data.tot?.[side] : undefined;
 
   return (
     <Card>
@@ -279,20 +278,14 @@ export function BtcBigView({ winPicker, win }: { winPicker: ReactNode; win: BigW
       {base && data?.ok ? (
         <p className="note dim">{t(lang, "btc_base_n", { n: num(data.baseN ?? 0) })}</p>
       ) : null}
-      {buy && sell ? (
-        <Tiles
-          cols={3}
-          size="sm"
-          items={[
-            { label: t(lang, "btc_wd"), value: btc(buy.btc, 1), tone: "up" },
-            { label: t(lang, "btc_dep"), value: btc(sell.btc, 1), tone: "dn" },
-            {
-              label: t(lang, "btc_net"),
-              value: btcSigned(Math.round((buy.btc - sell.btc) * 10) / 10),
-              tone: buy.btc >= sell.btc ? "up" : "dn",
-            },
-          ]}
-        />
+      {/* Итог — ровно по строкам списка ниже: столько сделок, монет и
+          долларов. Плиток «выведено / заведено / чистый вывод» здесь больше
+          нет: они считались по крупным сделкам, а такие же подписи в
+          карточке бирж — по всем потокам, и числа спорили друг с другом. */}
+      {sideTot ? (
+        <p className="note dim btc-sum">
+          {t(lang, "btc_sum", { n: num(sideTot.n), b: btc(sideTot.btc, 1), v: iso(usd(sideTot.v)) })}
+        </p>
       ) : null}
       {data?.ok && data.byEx?.length ? (
         /* Через какие биржи: та же сторона и то же окно, что у списка ниже. */
@@ -320,7 +313,7 @@ export function BtcBigView({ winPicker, win }: { winPicker: ReactNode; win: BigW
           <Row
             key={`${r.tx}-${r.a}-${i}`}
             icon={<CoinIcon sym="BTC" size={30} />}
-            title={btc(r.btc)}
+            title={r.n && r.n > 1 ? iso(`${num(r.btc, r.btc >= 1000 ? 0 : 2)} BTC ×${r.n}`) : btc(r.btc)}
             sub={`${shortAddr(r.a)} · ${since(now - r.t)}`}
             /* Вторая строка — биржа: стрелка от неё (вывод) или к ней
                (завод), и цена сделки. */

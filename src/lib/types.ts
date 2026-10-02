@@ -800,6 +800,8 @@ export interface BtcExtra {
 }
 
 export interface BtcMove extends BtcExtra {
+  /** Сколько транзакций кошелька с этой биржей склеено в строку. */
+  n?: number;
   tx: string;
   t: number;
   a: string;

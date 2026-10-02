@@ -9765,11 +9765,15 @@ def _btc_flow_build() -> dict:
             tout = sum(int(r["o"] or 0) for r in by_ex) / 1e8
             # Линия накопленного чистого вывода: ноль в начале окна, дальше
             # «столько ушло с бирж к этому моменту». Как у NetFlow монет.
+            # Окно длиннее, чем работает сканер, — линия строится от первого
+            # блока, а не от начала окна. Иначе месяц из полудня данных был
+            # плоской чертой с обрывом в самом конце.
+            start = max(since, int(first or since))
             arr = [0.0] * TREND_BUCKETS
-            step = max(1, sec // TREND_BUCKETS)
+            step = max(1, (t - start) // TREND_BUCKETS)
             for r in con.execute(
                     "SELECT (ts - ?) / ? b, SUM(out_sats - in_sats) n FROM btc_flow "
-                    "WHERE ts >= ? GROUP BY b", (since, step, since)):
+                    "WHERE ts >= ? GROUP BY b", (start, step, since)):
                 arr[min(TREND_BUCKETS - 1, max(0, int(r["b"] or 0)))] += int(r["n"] or 0) / 1e8
             tr, run = [0.0], 0.0
             for v in arr:
@@ -9841,10 +9845,18 @@ def _btc_big_build(win: str, side: str, min_btc: int, base: bool = False) -> dic
             join, lead = "JOIN w ON w.wallet = m.wallet ", (since,)
             keep = {1: "w.s < 0.9 * w.b", 2: "w.b < 0.9 * w.s"}
         where = f"m.ts >= ? AND m.kind = ? AND m.ex != '' AND m.sats >= ? AND {{keep}} AND {cond}"
+        # Строка — кошелёк и биржа за окно, а не каждая транзакция: кошелёк,
+        # который шесть раз завёл по 62 BTC, раньше занимал шесть одинаковых
+        # строк и читался дублями. Теперь одна строка «×6» с суммой, ценой
+        # по средней и ссылкой на самую крупную транзакцию.
         rows = con.execute(
-            flows + f"SELECT m.txid, m.ts, m.wallet, m.ex, m.sats, m.usd_nanos, m.price_nanos "
+            flows + f"SELECT m.wallet, m.ex, SUM(m.sats) sats, SUM(m.usd_nanos) usd_nanos, "
+            f"COUNT(*) n, MAX(m.ts) ts, MAX(m.sats) top, "
+            f"(SELECT m2.txid FROM btc_moves m2 WHERE m2.wallet = m.wallet AND m2.kind = m.kind "
+            f" AND m2.ex = m.ex AND m2.ts >= ? ORDER BY m2.sats DESC LIMIT 1) txid "
             f"FROM btc_moves m {join}WHERE {where.format(keep=keep[kind])} "
-            f"ORDER BY m.sats DESC, m.ts DESC LIMIT ?", (*lead, since, kind, floor, BTC_ROWS)).fetchall()
+            f"GROUP BY m.wallet, m.ex ORDER BY sats DESC, ts DESC LIMIT ?",
+            (*lead, since, since, kind, floor, BTC_ROWS)).fetchall()
         tot = {}
         for k, name in ((1, "buy"), (2, "sell")):
             r = con.execute(
@@ -9870,9 +9882,11 @@ def _btc_big_build(win: str, side: str, min_btc: int, base: bool = False) -> dic
             "ok": True, "win": win, "side": side, "min": min_btc, "base": base, "baseN": int(base_n),
             "tot": tot, "byEx": by_ex,
             "full": bool(first and first <= since + 600), "since": int(first or 0),
-            "rows": [{"tx": r["txid"], "t": int(r["ts"]), "a": r["wallet"], "ex": r["ex"],
+            "rows": [{"tx": r["txid"], "t": int(r["ts"]), "a": r["wallet"], "ex": r["ex"], "n": int(r["n"]),
                       "btc": round(int(r["sats"]) / 1e8, 4), "v": round(int(r["usd_nanos"]) / 1e9, 2),
-                      "px": round(int(r["price_nanos"]) / 1e9, 2), **extra.get(r["wallet"], {})}
+                      # Цена — средняя по строке: доллары на монеты.
+                      "px": round(int(r["usd_nanos"]) / 1e9 / (int(r["sats"]) / 1e8), 2) if r["sats"] else 0,
+                      **extra.get(r["wallet"], {})}
                      for r in rows],
         }
     except sqlite3.Error as e:
