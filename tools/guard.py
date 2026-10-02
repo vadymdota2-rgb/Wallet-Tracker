@@ -605,5 +605,11 @@ say("bitcoin: кошельки базы — каждая продажа и по�
     and 'className="btc-via"' in _btv and '"btc_scope_base"' in _btv
     and '"Bybit"' in _ws_btc and '"OKX"' in _ws_btc)
 
+say("bitcoin: перестройка цепочки откатывает блок, цена на час блока, выплаты биржи не путаются с CoinJoin, PnL только по биржевым движениям",
+    "bool rolledBack(const Block& b)" in _ws_btc and "long long priceAt(long long ts)" in _ws_btc
+    and "basic && (!exIn.empty() || !coinjoin(tx))" in _ws_btc and "AND price_nanos > 0 AND ex != ''" in _ws_btc
+    and "UPDATE btc_labels SET at=? WHERE address=? AND how != 'seed'" in _ws_btc and "void reloadWatch()" in _ws_btc
+    and "AND price_nanos > 0 AND m.ex != ''" in api and 'r["price_nanos"] or 0) > 0 and r["ex"]' in api)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

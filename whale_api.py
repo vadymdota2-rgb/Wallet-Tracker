@@ -9971,9 +9971,14 @@ def _btc_rank_build(days: int) -> dict:
         since = now() - days * 86400
         books = []
         cur_w, moves = None, []
+        # Только движения с биржей. Перевод на свой холодный кошелёк — не
+        # продажа, пополнение со своего — не покупка: у кошельков базы такие
+        # строки есть (там пишется всё), и раньше они превращались в сделки
+        # по рыночной цене, а PnL — в выдумку.
         rows = con.execute(
             f"SELECT wallet, kind, sats, price_nanos, ts, ex FROM btc_moves m "
-            f"WHERE ts >= ? AND price_nanos > 0 AND {_btc_clean(con)} ORDER BY wallet, ts, id", (since,))
+            f"WHERE ts >= ? AND price_nanos > 0 AND m.ex != '' AND {_btc_clean(con)} "
+            f"ORDER BY wallet, ts, id", (since,))
         for r in rows:
             if r["wallet"] != cur_w:
                 if cur_w and moves:
@@ -10010,7 +10015,9 @@ def _btc_rank_build(days: int) -> dict:
 
 def btc_rank(days: int, prem: bool) -> dict:
     days = days if days in BTC_RANK_DAYS else 30
-    res = cached_small(_BTC, ("rank", days), 120.0, lambda: _btc_rank_build(days))
+    # Месяц — раз в две минуты, длинные окна — раз в десять: там год движений
+    # базы, а за десять минут доска заметно не меняется.
+    res = cached_small(_BTC, ("rank", days), 120.0 if days <= 30 else 600.0, lambda: _btc_rank_build(days))
     if prem or not res.get("ok"):
         return res
     # Как у спота: бесплатно — первые тридцать мест.
@@ -10027,8 +10034,10 @@ def _btc_wallet_build(addr: str) -> dict:
         rows = con.execute(
             "SELECT txid, kind, sats, usd_nanos, price_nanos, ts, ex FROM btc_moves "
             "WHERE wallet = ? ORDER BY ts, id", (addr,)).fetchall()
+        # Итог — по движениям с биржей, как в рейтинге; переводы видны в
+        # списке ниже, но сделками не считаются.
         book = _btc_book([(int(r["kind"]), int(r["sats"]), int(r["price_nanos"]), int(r["ts"]), r["ex"] or "")
-                          for r in rows if int(r["price_nanos"] or 0) > 0], px)
+                          for r in rows if int(r["price_nanos"] or 0) > 0 and r["ex"]], px)
         return {
             "ok": True, "addr": addr, "price": round(px, 2), "ex": lab["ex"] if lab else "",
             "book": book, **_btc_extra(con, [addr])[addr],
