@@ -40,11 +40,11 @@ Hoạt động của ví lấy từ dữ liệu công khai của blockchain và 
 
 Dữ liệu nằm trên máy chủ của chúng tôi, không bao giờ được bán, và chỉ đi tới nơi cần thiết để gửi được tin nhắn (Telegram) và biết được giá (API công khai). Chúng tôi giữ chừng nào tài khoản của bạn còn.
 
-Nếu bạn thích hoặc bình luận một bản tin, chúng tôi lưu Telegram id của bạn, tên mà Telegram hiển thị và nội dung bình luận. Bình luận hiển thị với mọi người mở bản tin; bạn có thể xoá bình luận của mình bất cứ lúc nào, và /forgetme xoá chúng cùng mọi thứ khác. Bình luận ẩn danh hiển thị với mọi người mà không có tên, nhưng chúng tôi vẫn lưu Telegram id của bạn kèm theo — nếu không bạn sẽ không xoá được. Khi người đọc chạm Dịch, nội dung bình luận được gửi tới một dịch vụ dịch công khai (Google Translate hoặc MyMemory).
+Nếu bạn thích hoặc bình luận một bản tin, chúng tôi lưu Telegram id của bạn, tên mà Telegram hiển thị và nội dung bình luận. Bình luận hiển thị với mọi người mở bản tin; bạn có thể xoá bình luận của mình bất cứ lúc nào, và «Xoá dữ liệu của tôi» xoá chúng cùng mọi thứ khác. Bình luận ẩn danh hiển thị với mọi người mà không có tên, nhưng chúng tôi vẫn lưu Telegram id của bạn kèm theo — nếu không bạn sẽ không xoá được. Khi người đọc chạm Dịch, nội dung bình luận được gửi tới một dịch vụ dịch công khai (Google Translate hoặc MyMemory).
 
 Thanh toán bằng Sao để lại bản ghi: mã của nó trong Telegram, số tiền và loại tiền. Thanh toán USD₮ để lại chú thích hoá đơn, số tiền và mã băm giao dịch — địa chỉ người gửi thì chúng tôi không lưu. Khi kết nối ví, địa chỉ công khai của nó đến chỗ chúng tôi rồi tới trình duyệt mạng công khai: không còn cách nào khác để tìm ví USD₮ của bạn. Nó không được ghi vào cơ sở dữ liệu. Bản thân giao dịch được ký bên trong ví, khoá và cụm từ khôi phục không bao giờ đến chỗ chúng tôi, và bạn có thể huỷ kết nối ngay trong ví.
 
-Lệnh /forgetme và nút «Xoá dữ liệu của tôi» xoá mọi thứ chúng tôi giữ về bạn — ngay lập tức và không thể lấy lại. Một dòng sống sót: ID cuộc trò chuyện và ngày tuần miễn phí được cấp, vì nếu không cùng một tài khoản có thể lấy tuần đó mãi. Bạn có thể hỏi chúng tôi đang giữ gì về bạn qua bot.
+Nút «Xoá dữ liệu của tôi» xoá mọi thứ chúng tôi giữ về bạn — ngay lập tức và không thể lấy lại. Một dòng sống sót: ID cuộc trò chuyện và ngày tuần miễn phí được cấp, vì nếu không cùng một tài khoản có thể lấy tuần đó mãi. Bạn có thể hỏi chúng tôi đang giữ gì về bạn qua bot.
 
 Chính sách có thể thay đổi; bản hiện hành luôn ở đây và trong bot.`,legal_privacy_title:"🔒 Chính sách quyền riêng tư",legal_terms_body:`Wallet Tracker là dịch vụ thông tin. Nó hiển thị các giao dịch đã xảy ra, lấy từ nguồn công khai, và mỗi ngày một lần gom những giao dịch lớn nhất — cùng các đợt mở khoá token sắp tới — thành một bản tin.
 

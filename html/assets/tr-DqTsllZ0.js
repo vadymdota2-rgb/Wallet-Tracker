@@ -40,11 +40,11 @@ Cüzdan hareketleri, bottan bağımsız var olan genel blokzincir ve borsa veril
 
 Veriler sunucumuzda durur, asla satılmaz ve yalnızca bir mesajın iletilmesi (Telegram) ve bir fiyatın bilinmesi (genel API'ler) için gereken yere gider. Hesabınız durdukça saklarız.
 
-Bir özeti beğenir ya da yorum yazarsanız Telegram kimliğinizi, Telegram'ın gösterdiği adınızı ve yorum metnini saklarız. Yorumları özeti açan herkes görür; kendi yorumunuzu istediğiniz zaman silebilirsiniz, /forgetme ise onları da diğer her şeyle birlikte siler. Anonim bir yorum herkese adsız gösterilir, ancak Telegram kimliğinizi yine de onunla birlikte saklarız — aksi hâlde onu silemezdiniz. Bir okur Çevir'e dokunduğunda yorum metni halka açık bir çeviri servisine (Google Translate veya MyMemory) gider.
+Bir özeti beğenir ya da yorum yazarsanız Telegram kimliğinizi, Telegram'ın gösterdiği adınızı ve yorum metnini saklarız. Yorumları özeti açan herkes görür; kendi yorumunuzu istediğiniz zaman silebilirsiniz, «Verilerimi sil» ise onları da diğer her şeyle birlikte siler. Anonim bir yorum herkese adsız gösterilir, ancak Telegram kimliğinizi yine de onunla birlikte saklarız — aksi hâlde onu silemezdiniz. Bir okur Çevir'e dokunduğunda yorum metni halka açık bir çeviri servisine (Google Translate veya MyMemory) gider.
 
 Yıldızla ödeme bir ödeme kaydı bırakır: Telegram kimliği, tutar ve para birimi. USD₮ ile ödeme fatura yorumunu, tutarı ve transfer özetini bırakır; gönderenin adresini saklamayız. Cüzdan bağlarken genel adresi bize, oradan da ağın genel gezginine gider: USD₮ cüzdanınızı başka türlü bulmak mümkün değil. Veritabanına yazılmaz. Transferin kendisi cüzdan içinde imzalanır, anahtarlar ve kurtarma ifadeleri bize hiç ulaşmaz, bağlantıyı cüzdandan iptal edebilirsiniz.
 
-/forgetme komutu ve «Verilerimi sil» düğmesi hakkınızda tuttuğumuz her şeyi siler — hemen ve dönüşü olmadan. Silmeden bir satır sağ çıkar: sohbet kimliği ve ücretsiz haftanın verildiği tarih; onsuz aynı hesap o haftayı tekrar tekrar alabilirdi. Hakkınızda ne olduğunu bot üzerinden sorabilirsiniz.
+«Verilerimi sil» düğmesi hakkınızda tuttuğumuz her şeyi siler — hemen ve dönüşü olmadan. Silmeden bir satır sağ çıkar: sohbet kimliği ve ücretsiz haftanın verildiği tarih; onsuz aynı hesap o haftayı tekrar tekrar alabilirdi. Hakkınızda ne olduğunu bot üzerinden sorabilirsiniz.
 
 Bu politika değişebilir; yürürlükteki sürüm her zaman burada ve bottadır.`,legal_privacy_title:"🔒 Gizlilik Politikası",legal_terms_body:`Wallet Tracker bir bilgi servisidir. Halka açık kaynaklardan alınan, çoktan gerçekleşmiş işlemleri gösterir ve günde bir kez en büyüklerini — yaklaşan token kilit açılışlarıyla birlikte — bir özette toplar.
 

@@ -419,15 +419,13 @@ say("дайджест: удалить чужой комментарий може
     'row["chat_id"] != chat and not mod' in api)
 _dg_tables = ("digest_likes", "digest_comments", "digest_mute")
 _dg_all = ("digests", "digest_likes", "digest_comments", "digest_mute", "digest_tr")
-say("удаление данных стирает лайки и комментарии и в боте, и в приложении",
-    all(f"DELETE FROM {t} WHERE chat_id=?" in _dg_main and f"DELETE FROM {t} WHERE chat_id=?" in api
-        for t in _dg_tables))
+say("удаление данных (только в приложении) стирает лайки и комментарии",
+    all(f"DELETE FROM {t} WHERE chat_id=?" in api for t in _dg_tables) and "/forgetme" not in _dg_main)
 say("таблицы дайджеста одинаковые у бота и API",
     all(f"CREATE TABLE IF NOT EXISTS {t}" in _dg_main and f"CREATE TABLE IF NOT EXISTS {t}" in api
         for t in _dg_all))
-say("удаление данных стирает и переводы комментариев — в боте и в приложении",
-    "DELETE FROM digest_tr WHERE comment_id IN (SELECT id FROM digest_comments WHERE chat_id=?)" in _dg_main
-    and "DELETE FROM digest_tr WHERE comment_id IN (SELECT id FROM digest_comments WHERE chat_id=?)" in api)
+say("удаление данных стирает и переводы комментариев",
+    "DELETE FROM digest_tr WHERE comment_id IN (SELECT id FROM digest_comments WHERE chat_id=?)" in api)
 say("дайджест: акции и металлы отдельно от крипты в лонг/шорте и позициях",
     'for c in ("crypto", "rwa")' in api and '"crypto", "rwa")}' in api and "lsGroups(" in _dg_tab and "perpGroups(" in _dg_tab)
 say("анонимный комментарий уходит без имени, перевод — кнопкой, тикеры не переводятся",
@@ -594,7 +592,6 @@ say("bitcoin: подписка на кошелёк и алерты «покуп�
     "void dispatchBtcAlert(const BtcAlert& a)" in _mc and "btcSetAlertSink(dispatchBtcAlert);" in _mc
     and 'tr(lang, a.kind == BtcAlert::BUY ? "alert_from_exchange" : "alert_to_exchange")' in _mc
     and 'if (addr.rfind("0x", 0) != 0) continue;' in _mc
-    and "std::string cbAddr(const std::string& address)" in read(os.path.join(BOT, "wallet_menu.cpp"))
     and "def wallet_key(raw: str)" in api and "_b58check_ok" in api
     and "function FollowBtn(" in _btv and 'valueSub={t(lang, side === "buy" ? "alert_buy" : "alert_sell")}' in _btv
     and 'open("btcWallet", w.btc ?? w.addr)' in read(f"{APP}/src/screens/WalletsTab.tsx"))
@@ -617,6 +614,20 @@ say("дайджест v2: сводка сигналов, рынок, инсти�
     and "export function Summary(" in _dgm and "export function Institutions(" in _dgm
     and "export function BitcoinSec(" in _dgm and "export function HalvingLine(" in _dgm
     and "const v2 = (it.v ?? 1) >= 2;" in read(f"{APP}/src/screens/DigestTab.tsx"))
+
+_ui_left = [f for f in ("wallet_menu.cpp", "big_trades.cpp", "hyperliquid_ui.cpp", "alert_settings.cpp")
+            if os.path.exists(os.path.join(BOT, f))]
+_bot_src = "".join(read(os.path.join(BOT, f)) for f in os.listdir(BOT)
+                   if f.endswith(".cpp") and f not in ("ru.cpp", "translations.cpp"))
+say("бот: меню в чате нет — на любое сообщение кнопка приложения; алерты, оплата и команды владельца на месте",
+    not _ui_left and "callback_data" not in _bot_src and "void sendOpenApp(const std::string& chatId)" in _mc
+    and "bool handleOwnerCommand(const std::string& cid, const std::string& txt)" in _mc
+    and "handlePreCheckoutQuery(" in _mc and "handleSuccessfulPayment(" in _mc
+    and '"start_open_app"' in read(os.path.join(BOT, "ru.cpp")), str(_ui_left))
+_sync = read(f"{APP}/tools/sync-i18n.py")
+say("словарь приложения свой (tools/i18n.json), из исходников бота не собирается",
+    os.path.exists(f"{APP}/tools/i18n.json") and not os.path.exists(f"{APP}/tools/i18n-extra.json")
+    and "ru.cpp" not in _sync and "translations.cpp" not in _sync)
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

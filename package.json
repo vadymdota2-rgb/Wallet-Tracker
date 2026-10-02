@@ -9,7 +9,7 @@
     "clean": "node tools/clean-build.mjs",
     "build": "tsc -p . && npm run clean && vite build",
     "preview": "vite preview",
-    "i18n": "python3 tools/sync-i18n.py ../WhaleScanner"
+    "i18n": "python3 tools/sync-i18n.py"
   },
   "dependencies": {
     "@tonconnect/ui": "^3.0.2",

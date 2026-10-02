@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
-"""Собирает src/i18n/*.ts из словарей бота WhaleScanner.
+"""Собирает src/i18n/*.ts из tools/i18n.json.
 
-    python3 tools/sync-i18n.py ../WhaleScanner
+    python3 tools/sync-i18n.py
 
-Тексты мини-аппа и бота обязаны совпадать: человек приходит из чата и
-должен встретить те же слова. Поэтому словари не пишутся руками, а
-вынимаются из ru.cpp (en + ru) и translations.cpp (остальные 14).
-
-Ключи, которых у бота нет — оболочка самого мини-аппа, — лежат рядом в
-tools/i18n-extra.json и обязаны быть заполнены на всех шестнадцати языках:
-скрипт проверяет это и падает, если язык пропущен.
+Все тексты приложения живут в одном файле — tools/i18n.json: ключ, под ним
+шестнадцать языков. Раньше часть словаря вынималась из исходников бота, но
+меню в чате больше нет и бот хранит только тексты алертов, поэтому словарь
+приложения теперь свой. Скрипт проверяет, что у каждого ключа заполнены все
+шестнадцать языков, и падает, если язык пропущен.
 """
 import json
 import os
-import re
 import sys
 
 LANGS = ["en", "ru", "uk", "vi", "ko", "zh", "ja", "es",
@@ -28,92 +25,26 @@ NAMES = {
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(os.path.dirname(HERE), "src", "i18n")
-EXTRA = os.path.join(HERE, "i18n-extra.json")
-
-# Бот шлёт HTML в Telegram. React рисует текстом — теги убираем, иначе
-# пользователь увидит <b> буквально.
-TAG = re.compile(r"</?(?:b|i|u|s|code|pre|a|tg-spoiler|blockquote)(?:\s[^>]*)?>")
-
-
-def clean(s: str) -> str:
-    s = TAG.sub("", s)
-    return s.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&").strip("\n")
-
-
-def literals(text: str) -> str:
-    """Склеивает соседние строковые литералы C++ в одну строку."""
-    parts = re.findall(r'"((?:[^"\\]|\\.)*)"', text)
-    s = "".join(parts)
-    return (s.replace('\\"', '"').replace("\\n", "\n").replace("\\t", "\t")
-             .replace("\\u00A0", " ").replace("\\\\", "\\"))
-
-
-def read_en_ru(bot_dir: str) -> tuple[dict, dict]:
-    src = open(os.path.join(bot_dir, "ru.cpp"), encoding="utf-8").read()
-    start = src.index("const std::unordered_map<std::string, Entry>& table()")
-    body = src[start: src.index("\n}", src.index("{", start))]
-    en, ru = {}, {}
-    # Значение ищется как пара групп строковых литералов, а не «всё между
-    # скобками». Прежний разбор запрещал фигурные скобки внутри значения, и
-    # ключ с подстановкой — «угадывает {n} раз из 100» — молча не попадал в
-    # словарь: в приложении на его месте оставалось имя ключа.
-    lit = r'(?:"(?:[^"\\]|\\.)*"\s*)+'
-    pat = r'\{"([a-z0-9_]+)",\s*\{\s*(' + lit + r'),\s*(' + lit + r')\}\s*\}'
-    for m in re.finditer(pat, body, re.S):
-        en[m.group(1)] = literals(m.group(2))
-        ru[m.group(1)] = literals(m.group(3))
-    # Молчаливая потеря ключа — худшее, что может сделать этот скрипт:
-    # на экране появится «ai_hits_of», и заметит это только пользователь.
-    declared = {mm.group(1) for mm in re.finditer(r'\{"([a-z0-9_]+)",\s*\{', body)}
-    lost = sorted(declared - set(en))
-    if lost:
-        print("ru.cpp: не разобраны ключи: " + ", ".join(lost), file=sys.stderr)
-        raise SystemExit(1)
-    return en, ru
-
-
-def read_rest(bot_dir: str) -> dict[str, dict]:
-    src = open(os.path.join(bot_dir, "translations.cpp"), encoding="utf-8").read()
-    out: dict[str, dict] = {}
-    for m in re.finditer(r"const Table& table(\w+)\(\)", src):
-        code = m.group(1).lower()
-        nxt = src.find("const Table& table", m.end())
-        body = src[m.end(): nxt if nxt > 0 else len(src)]
-        out[code] = {
-            mm.group(1): literals(mm.group(2))
-            for mm in re.finditer(r'\{"([a-z0-9_]+)",\s*((?:"(?:[^"\\]|\\.)*"\s*)+)\}', body, re.S)
-        }
-    return out
+SRC = os.path.join(HERE, "i18n.json")
 
 
 def main() -> int:
-    bot_dir = sys.argv[1] if len(sys.argv) > 1 else "../WhaleScanner"
-    if not os.path.isfile(os.path.join(bot_dir, "ru.cpp")):
-        print(f"не вижу исходников бота в {bot_dir}", file=sys.stderr)
-        return 1
+    table = json.load(open(SRC, encoding="utf-8"))
 
-    en, ru = read_en_ru(bot_dir)
-    tables = {"en": en, "ru": ru, **read_rest(bot_dir)}
-    extra = json.load(open(EXTRA, encoding="utf-8"))
-
-    missing = {k: sorted(set(LANGS) - set(v)) for k, v in extra.items() if set(LANGS) - set(v)}
+    missing = {k: sorted(set(LANGS) - set(v)) for k, v in table.items() if set(LANGS) - set(v)}
     if missing:
         for key, langs in missing.items():
-            print(f"{EXTRA}: у ключа {key} нет языков: {', '.join(langs)}", file=sys.stderr)
+            print(f"{SRC}: у ключа {key} нет языков: {', '.join(langs)}", file=sys.stderr)
         return 1
 
-    keys = sorted(set(en) | set(extra))
+    keys = sorted(table)
     for lang in LANGS:
-        rows = {
-            k: extra[k][lang] if k in extra else clean(tables.get(lang, {}).get(k) or en[k])
-            for k in keys
-        }
+        rows = {k: table[k][lang] for k in keys}
         head = (
             "/** Английский задаёт набор ключей: остальные словари обязаны ему\n"
-            " *  соответствовать. Тексты синхронизированы с ботом WhaleScanner —\n"
-            " *  мини-апп говорит теми же словами. Файл собран tools/sync-i18n.py. */"
+            " *  соответствовать. Файл собран tools/sync-i18n.py из tools/i18n.json. */"
             if lang == "en"
-            else f"/** {NAMES[lang]} ({lang}). Собрано tools/sync-i18n.py из словарей бота. */"
+            else f"/** {NAMES[lang]} ({lang}). Собрано tools/sync-i18n.py из tools/i18n.json. */"
         )
         body = [head]
         if lang == "en":
@@ -126,8 +57,7 @@ def main() -> int:
         with open(os.path.join(OUT, f"{lang}.ts"), "w", encoding="utf-8") as f:
             f.write("\n".join(body) + "\n")
 
-    print(f"{len(keys)} ключей × {len(LANGS)} языков "
-          f"({len(en)} из бота, {len(extra)} своих)")
+    print(f"{len(keys)} ключей × {len(LANGS)} языков")
     return 0
 
 
