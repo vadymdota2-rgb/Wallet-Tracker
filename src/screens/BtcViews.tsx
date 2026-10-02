@@ -95,16 +95,25 @@ function FollowBtn({ addr, size = 19 }: { addr: string; size?: number }) {
   );
 }
 
-/* ── NetFlow: биткоин на биржах ───────────────────────────────────────── */
+/* ── Биткоин на биржах ────────────────────────────────────────────────── */
+
+/* Окна ордеров и ключи окон потока на сервере: те же пять сроков. */
+const FLOW_KEY: Record<BigWin, { id: string; label: Parameters<typeof t>[1] }> = {
+  "1h": { id: "1", label: "big_win_1h" },
+  "6h": { id: "6", label: "win_6h" },
+  "24h": { id: "24", label: "big_win_24h" },
+  "7d": { id: "168", label: "big_win_7d" },
+  "30d": { id: "720", label: "big_win_30d" },
+};
 
 /**
- * Карточка над потоком монет BSC: сколько биткоина за то же окно ушло с
- * бирж и сколько пришло на них. Окно общее с NetFlow — вопрос тот же, «кто
- * копит, кто продаёт», только про другую сеть.
+ * Сколько биткоина за окно ушло с бирж и сколько пришло на них. Стоит во
+ * вкладке «Крупные ордера BTC», над самими ордерами: сперва общий итог по
+ * сети, потом кто именно выводил и заводил. Окно общее с ордерами.
  */
-export function BtcFlowCard() {
+export function BtcFlowCard({ bigWin }: { bigWin: BigWin }) {
   const lang = useApp((s) => s.lang);
-  const win = useApp((s) => s.flowWin);
+  const win = FLOW_KEY[bigWin].id;
   const [data, setData] = useState<BtcFlowReply | null>(() => peekBtcFlow() ?? null);
 
   useEffect(() => {
@@ -131,7 +140,7 @@ export function BtcFlowCard() {
       </SectionTitle>
       <div className="trend">
         <p className="trend-ttl">
-          <span>{t(lang, "btc_net")}</span>
+          <span>{t(lang, "btc_net")} · {t(lang, FLOW_KEY[bigWin].label)}</span>
           <span>{t(lang, "btc_labels", { n: num(data.labels) })}</span>
         </p>
         <p className="trend-top">

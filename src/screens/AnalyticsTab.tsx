@@ -211,7 +211,10 @@ function useBigTrades(win: BigWin) {
   }, [win]);
 
   if (win === "24h") return { data: cached, loading: false };
-  return { data: rows ?? { spot: [], perp: [] }, loading: rows === null };
+  /* Ответ-отказ ({ok:false}) списков не несёт: без этой проверки фильтр
+     ниже падал и уносил с собой всю вкладку. */
+  const safe = rows && Array.isArray(rows.spot) && Array.isArray(rows.perp) ? rows : { spot: [], perp: [] };
+  return { data: safe, loading: rows === null };
 }
 
 export function AnalyticsTab() {
@@ -310,12 +313,10 @@ export function AnalyticsTab() {
         />
       </Card>
 
+      {/* Биткоин — своя вкладка: сперва итог по биржам за окно, ниже
+          ордера с тем же окном. В NetFlow его нет — там монеты BSC. */}
+      {view === "btc" ? <BtcFlowCard bigWin={bigWin} /> : null}
       {view === "btc" ? <BtcBigView winPicker={winPicker} win={bigWin} /> : null}
-
-      {/* Биткоин — над потоком монет BSC: тот же вопрос «копят или
-          продают», то же окно, но другая сеть, и списку монет он не
-          подчиняется. */}
-      {view === "flow" ? <BtcFlowCard /> : null}
       {view === "flow" ? (
         <Card>
           {/* NetFlow — термин, он одинаков во всех языках, как PnL и ROI.

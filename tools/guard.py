@@ -579,9 +579,11 @@ say("bitcoin: сканер блоков бота, база сервисного 
     ("WATCH_MIN_USD_NANOS = 50LL" in _ws_btc and "CREATE TABLE IF NOT EXISTS btc_watch" in _ws_btc
                     and "blockchain.info/rawblock/" in _ws_btc and "std::string btcStatsLine()" in _ws_btc
                     and 'txt=="/statsbtc"' in read(os.path.join(BOT, "main.cpp"))))
-say("bitcoin: поток бирж в NetFlow, «Крупные покупки BTC» в аналитике, третья доска рейтинга, экран кошелька",
+say("bitcoin: вкладка «Крупные ордера BTC» с потоком бирж (в NetFlow его нет), третья доска рейтинга, экран кошелька",
     'path in ("/btc/flow", "/api/btc/flow")' in api and "def _btc_clean(" in api and "w.s < 0.9 * w.b" in api
     and "export function BtcFlowCard(" in _btv and "export function BtcBigView(" in _btv
+    and '{view === "btc" ? <BtcFlowCard bigWin={bigWin} /> : null}' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
+    and '{view === "flow" ? <BtcFlowCard' not in read(f"{APP}/src/screens/AnalyticsTab.tsx")
     and "export function BtcBoard(" in _btv and "export function BtcWalletScreen(" in _btv
     and '{ id: "btc", ic: <CoinIcon sym="BTC"' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
     and "<BtcBoard win={win} />" in read(f"{APP}/src/screens/TopTab.tsx")
