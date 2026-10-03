@@ -629,5 +629,18 @@ say("словарь приложения свой (tools/i18n.json), из исх
     os.path.exists(f"{APP}/tools/i18n.json") and not os.path.exists(f"{APP}/tools/i18n-extra.json")
     and "ru.cpp" not in _sync and "translations.cpp" not in _sync)
 
+_sch = _mc[_mc.index('const char* sql = R"('):_mc.index("ALTER TABLE user_whales ADD COLUMN is_primary")]
+say("бот: на новой базе таблицы создаются раньше колонок, индекс по priority — после неё",
+    _sch.index("if (sqlite3_exec(db, sql, nullptr, nullptr, &err)") < _sch.index("ALTER TABLE deliveries ADD COLUMN priority")
+    and "priority DESC" not in _sch[:_sch.index('    )";')]
+    and "idx_deliveries_prio" in _sch)
+say("бот: все вызовы Bot API идут через tgApi()",
+    _bot_src.count("api.telegram.org") == 2 and 'return tgApi(method);' in read(os.path.join(BOT, "premium.cpp")))
+_legal = json.load(open(f"{APP}/tools/i18n.json", encoding="utf-8"))
+say("тексты приложения не посылают в чат бота: нет /forgetme и /start, вопросы — в поддержку",
+    all("/forgetme" not in v and "/start" not in v for k in ("legal_privacy_body", "legal_terms_body", "legal_forget_done")
+        for v in _legal[k].values())
+    and all("@WalletTrackerHelp" in _legal["legal_terms_body"][l] for l in _legal["legal_terms_body"]))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
