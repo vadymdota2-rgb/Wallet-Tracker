@@ -3039,3 +3039,75 @@
 .dg-notify.on .dg-switch { background: rgb(30 155 255 / 0.55); }
 .dg-notify.on .dg-switch::after { background: #fff; transform: translateX(16px); }
 [dir="rtl"] .dg-notify.on .dg-switch::after { transform: translateX(-16px); }
+
+/* Карточка алерта ------------------------------------------------------- */
+/* Край слева — направление: зелёный вверх, красный вниз, фиолетовый —
+   ликвидация, серый — перевод и прочее без ставки. */
+.alc {
+  --alc-c: var(--dim-2);
+  position: relative;
+  display: grid;
+  gap: 10px;
+  padding: 12px 12px 10px 14px;
+  border-radius: var(--r-md);
+  background: linear-gradient(180deg, rgb(11 22 40 / 0.55), rgb(7 14 30 / 0.35));
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.alc::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 3px;
+  background: var(--alc-c);
+}
+.alc.up { --alc-c: var(--up); }
+.alc.dn { --alc-c: var(--dn); }
+.alc.liq { --alc-c: #b67cff; }
+.alc.fresh { border-color: rgb(127 216 255 / 0.45); box-shadow: 0 0 0 1px rgb(127 216 255 / 0.12); }
+.alc-hd { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12px; color: var(--dim); }
+.alc-venue {
+  display: inline-flex; align-items: center; gap: 5px; flex: none;
+  padding: 2px 7px 2px 4px; border-radius: 999px; border: 1px solid var(--line);
+  font-weight: 600; letter-spacing: 0.02em;
+}
+.alc-who {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 0; border: 0; background: none; font: inherit; font-weight: 600; color: var(--ink);
+}
+button.alc-who { cursor: pointer; text-decoration: underline dotted rgb(124 151 188 / 0.6); text-underline-offset: 3px; }
+.alc-t { margin-inline-start: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--dim); font-size: 12px; }
+.alc-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.alc-what { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.alc-act {
+  justify-self: start; max-width: 100%;
+  padding: 2px 8px; border-radius: 6px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+  color: var(--alc-c); background: color-mix(in srgb, var(--alc-c) 14%, transparent);
+  overflow-wrap: anywhere;
+}
+.alc-sym { font-size: 17px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.alc-sym small { color: var(--dim); font-size: 12px; font-weight: 600; }
+.alc-sum { display: grid; justify-items: end; gap: 2px; flex: none; text-align: end; }
+.alc-sum b { font-size: 19px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.alc-sum small { font-size: 11.5px; color: var(--warn); font-weight: 600; }
+.alc-grid {
+  display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0;
+  padding: 10px 0 0; border-top: 1px solid rgb(27 61 104 / 0.45);
+  font-size: 13px;
+}
+.alc-grid dt { color: var(--dim); }
+.alc-grid dd { margin: 0; text-align: end; color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.alc-grid dd small { color: var(--dim); font-weight: 500; }
+.alc-grid dd.up { color: var(--up); }
+.alc-grid dd.dn { color: var(--dn); }
+.alc-closed { margin: 0; font-size: 12.5px; color: var(--up); }
+.alc .upsell { margin: 0; }
+.alc-links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.alc-links button {
+  padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line-2);
+  background: rgb(11 22 40 / 0.4); color: var(--glow); font: inherit; font-size: 12px; cursor: pointer;
+}
+.alc-links button:active { opacity: 0.6; }
+.alc-who { flex: 1; text-align: start; }

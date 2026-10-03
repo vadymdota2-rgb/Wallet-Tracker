@@ -1372,6 +1372,26 @@ def alert_text(msg: str) -> str:
     return "\n".join(out).strip()
 
 
+# Действия алерта, которые для ленты — «вниз»: продажа, вывод на биржу,
+# закрытие лонга и открытие шорта, ликвидация.
+ALERT_DOWN = {"sell", "out", "hl_close_long", "hl_partial_long", "hl_open_short", "hl_add_short",
+              "hl_liq_long", "hl_liquidated"}
+
+
+def alert_card(raw: str | None) -> dict | None:
+    """Поля алерта из alerts.data. Битое или пустое — None, тогда приложение
+    покажет текст как раньше."""
+    if not raw:
+        return None
+    try:
+        card = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(card, dict) or card.get("k") not in ("bsc", "btc", "hl"):
+        return None
+    return card
+
+
 def alert_prefs(con: sqlite3.Connection, chat: str) -> tuple[bool, int]:
     """Куда слать алерты и когда человек последний раз открыл историю.
 
@@ -1810,8 +1830,12 @@ def load_alerts(cur: sqlite3.Connection, chat: str, wallets: list) -> tuple[list
     if not (table_exists(cur, "alerts") and table_exists(cur, "deliveries")):
         return alerts, feed
     # История — сколько бот её хранит: доставки чистятся через двое суток.
+    # data — тот же алерт полями (JSON, пишет бот): из него приложение рисует
+    # карточку. У алертов от старого бота колонки или значения нет — тогда
+    # остаётся текст.
+    data_col = "a.data" if "data" in cols(cur, "alerts") else "''"
     rows = cur.execute(
-        "SELECT d.id, d.status, a.message, a.created_at FROM alerts a "
+        f"SELECT d.id, d.status, a.message, a.created_at, {data_col} AS data FROM alerts a "
         "JOIN deliveries d ON d.alert_id=a.id "
         "WHERE d.chat_id=? AND a.created_at>=? "
         "ORDER BY a.created_at DESC, d.id DESC LIMIT ?",
@@ -1824,6 +1848,14 @@ def load_alerts(cur: sqlite3.Connection, chat: str, wallets: list) -> tuple[list
         parsed["text"] = alert_text(r["message"])
         # 6 — «только в приложении»: в чат не отправлялся и не отправится.
         parsed["tg"] = int(r["status"] or 0) != 6
+        card = alert_card(r["data"])
+        if card:
+            parsed["d"] = card
+            parsed["sym"] = card.get("sym") or parsed["sym"]
+            parsed["notional"] = float(card.get("usd") or parsed["notional"] or 0)
+            parsed["side"] = "SHORT" if card.get("a") in ALERT_DOWN else "LONG"
+            if card.get("n"):
+                parsed["name"] = str(card["n"])
         alerts.append(parsed)
         feed.append(
             {

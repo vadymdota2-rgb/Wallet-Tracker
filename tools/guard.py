@@ -711,5 +711,14 @@ say("меню: карта ликвидаций за 7 и 30 дней и реак
     and 'const reacts = premium ? reply?.react ?? {} : {};' in _uns and '<Upsell src="unlock"' in _uns
     and '"cmp_liq"' in read(f"{APP}/src/screens/PremiumScreen.tsx"))
 
+_hlc = read(os.path.join(BOT, "hyperliquid_core.cpp"))
+_alc = read(f"{APP}/src/components/AlertCard.tsx")
+say("алерты: BSC и BTC в виде Hyperliquid, все три — с полями для карточки в приложении",
+    "json* card = nullptr" in _mcpp and _mcpp.count("card.dump()") == 4 and "dexscreener.com/bsc/" in _mcpp
+    and "hlAlertCard(entry.first.first, wallet, a).dump()" in _hlc
+    and "ALTER TABLE alerts ADD COLUMN data TEXT" in _mcpp and "INSERT INTO alerts(message,created_at,markup,data)" in _mq
+    and "def alert_card(" in api and 'parsed["d"] = card' in api
+    and "export function AlertCard(" in _alc and "<AlertCard d={a.d}" in read(f"{APP}/src/screens/AlertsScreen.tsx"))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

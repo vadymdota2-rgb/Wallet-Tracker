@@ -409,6 +409,48 @@ export interface AlertRow {
   text?: string;
   /** Уходил ли в Telegram: false — «только в приложении». */
   tg?: boolean;
+  /** Тот же алерт полями — из них рисуется карточка. Нет у старых алертов. */
+  d?: AlertCardData;
+}
+
+/** Алерт полями, как его пишет бот (alerts.data). Деньги — в долларах. */
+export interface AlertCardData {
+  v: number;
+  k: "bsc" | "btc" | "hl";
+  /** Действие: buy, sell, transfer, add_liq… у BSC; buy, sell, in, out у
+   *  биткоина; ключ направления (hl_open_long…) у Hyperliquid. */
+  a: string;
+  /** Адрес кошелька и его имя в списке человека. */
+  w?: string;
+  n?: string;
+  sym: string;
+  usd: number;
+  qty?: number;
+  px?: number;
+  tx?: string;
+  /** Контракт токена BSC. */
+  ca?: string;
+  /** Что отдал за покупку или получил за продажу. */
+  cq?: number;
+  cs?: string;
+  avg?: number;
+  pnl?: number;
+  pnlPct?: number;
+  prior?: { px: number; ago: number; chg: number };
+  /** Цена входа и PnL скрыты — бесплатный тариф. */
+  lock?: boolean;
+  /** Биткоин: сколько транзакций склеено и биржа на той стороне. */
+  txs?: number;
+  ex?: string;
+  /** Hyperliquid: плечо, позиция, маржа, ликвидация, счёт. */
+  lev?: number;
+  iso?: boolean;
+  fills?: number;
+  pos?: number;
+  margin?: number;
+  liq?: number;
+  closed?: boolean;
+  acct?: number;
 }
 
 /** Чем и почём продаётся подписка — числа приходят с сервера. */

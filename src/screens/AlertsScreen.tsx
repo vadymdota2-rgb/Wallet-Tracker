@@ -2,7 +2,8 @@
  * История алертов и выбор, куда их слать.
  *
  * Список — то, что бот прислал человеку за двое суток (дольше бот доставки не
- * хранит), текстом как в чате. Открыли экран — счётчик новых в «Ещё»
+ * хранит): карточками из полей алерта (AlertCard), а старые алерты, у которых
+ * полей нет, — текстом как в чате. Открыли экран — счётчик новых в «Ещё»
  * обнуляется: на сервере запоминается время последнего показанного алерта,
  * так что пришедший после этого останется новым.
  *
@@ -19,6 +20,7 @@ import { haptic } from "../lib/telegram";
 import { markAlertsSeen, setAlertMode } from "../lib/api";
 import { toast } from "../components/Toast";
 import { Card, Empty, SectionTitle, Segmented } from "../components/ui";
+import { AlertCard } from "../components/AlertCard";
 import { useNow } from "../lib/tick";
 
 type Mode = "tg" | "app";
@@ -79,7 +81,11 @@ export function AlertsScreen() {
           <Empty text={t(lang, "alerts_empty")} />
         ) : (
           <ul className="alert-list">
-            {alerts.map((a, i) => (
+            {alerts.map((a, i) => a.d ? (
+              <li key={a.id ?? i}>
+                <AlertCard d={a.d} ts={a.ts} nowSec={nowSec} fresh={i < fresh} appOnly={a.tg === false} />
+              </li>
+            ) : (
               <li key={a.id ?? i} className={i < fresh ? "alert-row fresh" : "alert-row"}>
                 <div className="alert-hd">
                   <span className="alert-t">
