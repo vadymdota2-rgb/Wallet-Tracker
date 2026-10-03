@@ -130,7 +130,7 @@ export function HelpScreen() {
         <SectionTitle>{t(lang, "hp_premium_t")}</SectionTitle>
         <p className="help-p">{t(lang, "hp_premium_d")}</p>
         <div className="stack-actions">
-          <Action kind="ghost" onClick={() => open("premium")}>{t(lang, "hp_premium_btn")}</Action>
+          <Action kind="ghost" onClick={() => open("premium", "help")}>{t(lang, "hp_premium_btn")}</Action>
         </div>
       </Card>
 

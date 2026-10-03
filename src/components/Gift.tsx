@@ -29,7 +29,7 @@ export function Gift() {
     <div className="gift-wrap" role="dialog" aria-modal="true" aria-labelledby="gift-ttl">
       <div className="gift">
         <span className="gift-ic" aria-hidden="true">🎁</span>
-        <h2 id="gift-ttl">{t(lang, "gift_title").replace("{n}", String(days))}</h2>
+        <h2 id="gift-ttl">{t(lang, "gift_title", { n: String(days) })}</h2>
         <p>{t(lang, "gift_body")}</p>
         <div className="stack-actions">
           <Action onClick={close}>{t(lang, "gift_ok")}</Action>
@@ -38,7 +38,7 @@ export function Gift() {
             onClick={() => {
               drop();
               goTab("more");
-              open("premium");
+              open("premium", "gift");
             }}
           >
             {t(lang, "gift_more")}

@@ -4,6 +4,7 @@
  * имя до 32 символов. Лимит плана проверяет сервер — на бесплатном один
  * кошелёк, на премиуме пятьдесят.
  */
+import { Upsell } from "../components/Upsell";
 import { useState } from "react";
 import { Frame } from "./Screen";
 import type { ScreenProps } from "./Screen";
@@ -21,7 +22,6 @@ const NAME_MAX = 32;
 export function AddWalletScreen({ arg }: ScreenProps) {
   const lang = useApp((s) => s.lang);
   const back = useApp((s) => s.back);
-  const open = useApp((s) => s.open);
   const { me, wallets } = useLive();
 
   /* Экран открывают и с пустыми руками, и из рейтинга — там адрес уже
@@ -114,14 +114,11 @@ export function AddWalletScreen({ arg }: ScreenProps) {
           </Action>
           {full ? (
             <>
-              <small className="hint warn">
-                {me.plan === "premium" ? t(lang, "limit_50_reached") : t(lang, "pr_limit_free")}
-              </small>
-              {me.plan !== "premium" ? (
-                <Action kind="ghost" onClick={() => open("premium")}>
-                  {t(lang, "mw_upgrade")}
-                </Action>
-              ) : null}
+              {me.plan === "premium" ? (
+                <small className="hint warn">{t(lang, "limit_50_reached")}</small>
+              ) : (
+                <Upsell src="wallets" text={t(lang, "up_wallets")} />
+              )}
             </>
           ) : null}
         </div>

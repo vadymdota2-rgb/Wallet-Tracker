@@ -51,7 +51,7 @@ export function WalletScreen({ arg }: ScreenProps) {
     );
   }
 
-  const paused = isPaused(plan, w.primary);
+  const paused = isPaused(plan, w);
   const place = walletRank(rank, w.addr);
   // Длинное «не в рейтинге» в плитку не влезает — там прочерк, а словами
   // это сказано примечанием к разделу.

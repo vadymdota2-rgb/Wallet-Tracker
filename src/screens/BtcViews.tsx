@@ -11,6 +11,8 @@
  * того, сколько он работает, каждый экран говорит об этом прямо — иначе
  * сумма за полдня выдавалась бы за месячную.
  */
+import { FREE } from "../lib/upsell";
+import { DelayNote, Upsell } from "../components/Upsell";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Frame } from "./Screen";
@@ -301,6 +303,7 @@ export function BtcBigView({ winPicker, win }: { winPicker: ReactNode; win: BigW
           ))}
         </div>
       ) : null}
+      {data?.ok ? <DelayNote delay={data.delay} hidden={data.hidden} /> : null}
       {data === null ? (
         <Empty text={t(lang, "ui_loading")} />
       ) : !data.ok || !data.rows?.length ? (
@@ -336,8 +339,6 @@ export function BtcBigView({ winPicker, win }: { winPicker: ReactNode; win: BigW
 
 /* ── Топ трейдеров: доска Bitcoin ─────────────────────────────────────── */
 
-const FREE_ROWS = 30;
-const PREMIUM_ROWS = 100;
 const KINDS: BtcRankKind[] = ["pnl", "roi", "act"];
 
 export function BtcBoard({ win }: { win: RankWin }) {
@@ -358,7 +359,7 @@ export function BtcBoard({ win }: { win: RankWin }) {
     };
   }, [win]);
 
-  const cap = plan === "premium" ? PREMIUM_ROWS : FREE_ROWS;
+  const cap = plan === "premium" ? FREE.premiumTop : FREE.top;
   const rows = data?.ok ? (data[kind] ?? []).slice(0, cap) : [];
   const label = (k: BtcRankKind) => (k === "act" ? t(lang, "btc_rk_acc") : k === "roi" ? "ROI" : "PnL");
 
@@ -425,9 +426,9 @@ export function BtcBoard({ win }: { win: RankWin }) {
           );
         })
       )}
-      {plan !== "premium" && rows.length >= FREE_ROWS ? (
+      {plan !== "premium" && rows.length >= FREE.top ? (
         <Card>
-          <p className="note warn">{t(lang, "rk_unlock_top100")}</p>
+          <Upsell src="top" text={t(lang, "up_top", { f: String(FREE.top), p: String(FREE.premiumTop) })} />
         </Card>
       ) : null}
     </>

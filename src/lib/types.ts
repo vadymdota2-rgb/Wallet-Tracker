@@ -61,6 +61,9 @@ export interface Wallet {
   pos: Position[];
   /** Кошелёк биткоина: позиций и сделок BSC у него нет, свой экран. */
   chain?: "btc";
+  /** Шлёт ли алерты. Бесплатно — первые три кошелька; поле есть только у
+   *  бесплатного, у премиума молчит — там алерты идут со всех. */
+  active?: boolean;
   /** Адрес как пишется: `addr` строчными, а base58 без регистра не найти. */
   btc?: string;
 }
@@ -246,6 +249,10 @@ export interface Rank {
   perp: RankTable;
   /** Рейтинг по окнам: "30" | "90" | "180" | "365". */
   wins?: Record<string, { spot: RankTable; perp: RankTable } | undefined>;
+  /** Сколько мест на доске всего — бесплатному сервер отдаёт верх доски и
+   *  говорит, сколько осталось за замком. */
+  spotN?: Partial<Record<RankKind, number>>;
+  perpN?: Partial<Record<RankKind, number>>;
 }
 
 export interface TradeRow {
@@ -268,6 +275,10 @@ export interface TradeRow {
 export interface Trades {
   spot: TradeRow[];
   perp: TradeRow[];
+  /** Бесплатному сделки приходят с задержкой: на сколько секунд и сколько
+   *  свежих строк спрятано. */
+  delay?: number;
+  hidden?: number;
 
 }
 
@@ -551,6 +562,8 @@ export interface DigestUnlock {
 /** Раздел про фьючерсы без подписки: сервер отдаёт только отметку. */
 export interface DigestLocked {
   locked: true;
+  /** Сколько строк за замком. */
+  n?: number;
 }
 
 /** Строка крупного движения биткоина в выпуске. */
@@ -871,6 +884,9 @@ export interface BtcBigReply {
   /** Только кошельки базы и сколько их всего. */
   base?: boolean;
   baseN?: number;
+  /** Бесплатному — с задержкой: секунды и сколько свежих строк спрятано. */
+  delay?: number;
+  hidden?: number;
   /** Через какие биржи прошли движения выбранной стороны. */
   byEx?: { ex: string; n: number; w: number; btc: number; v: number }[];
 }

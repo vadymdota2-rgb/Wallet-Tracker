@@ -4,6 +4,8 @@
  * было неудобно, а на экране видно. Фандинг переехал в боковое меню, под
  * карту ликвидаций.
  */
+import { DelayNote, Upsell } from "../components/Upsell";
+import { FREE_BIG_WINS, FREE_FLOW_WINS } from "../lib/upsell";
 import { useEffect, useState, type ReactNode } from "react";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
@@ -220,7 +222,6 @@ function useBigTrades(win: BigWin) {
 export function AnalyticsTab() {
   const lang = useApp((s) => s.lang);
   const open = useApp((s) => s.open);
-  const goTab = useApp((s) => s.goTab);
   const saved = useApp((s) => s.bigView);
   const setView = useApp((s) => s.setBigView);
   /* У кого-то в браузере сохранён раздел, плитки которого больше нет —
@@ -245,6 +246,23 @@ export function AnalyticsTab() {
   const rotSum = useLive((s) => s.rotSum)[flowWin];
   const premium = me.plan === "premium";
   const big = useBigTrades(bigWin);
+  /* Бесплатно открыты час, шесть часов и сутки; неделя и месяц — премиум.
+     Кнопки длинных окон видны всем, с замком: что они есть, человек должен
+     знать, а нажатие показывает, что за ними. */
+  const bigLocked = !premium && !(FREE_BIG_WINS as readonly string[]).includes(bigWin);
+  const flowLocked = !premium && !(FREE_FLOW_WINS as readonly string[]).includes(flowWin);
+  const lockMark = (locked: boolean) => (locked ? " 🔒" : "");
+  const windowUpsell = <Upsell src="window" text={t(lang, "up_window")} />;
+  const flowWinPicker = (
+    <Segmented<FlowWin>
+      value={flowWin}
+      onChange={setFlowWin}
+      options={FLOW_WINS.map((w) => ({
+        id: w.id,
+        label: t(lang, w.key) + lockMark(!premium && !(FREE_FLOW_WINS as readonly string[]).includes(w.id)),
+      }))}
+    />
+  );
   /* Окно стоит внутри своего раздела, а не в общей шапке: в шапке оно
      висело над плитками и выглядело настройкой всей аналитики, хотя
      половина разделов его не знает. Теперь оно там, где действует, — и
@@ -254,7 +272,10 @@ export function AnalyticsTab() {
     <Segmented<BigWin>
       value={bigWin}
       onChange={setBigWin}
-      options={BIG_WINS.map((w) => ({ id: w.id, label: t(lang, w.key) }))}
+      options={BIG_WINS.map((w) => ({
+        id: w.id,
+        label: t(lang, w.key) + lockMark(!premium && !(FREE_BIG_WINS as readonly string[]).includes(w.id)),
+      }))}
     />
   );
   /* Сторона приходит отдельным полем. Разбирать подпись нельзя: она на языке
@@ -282,10 +303,7 @@ export function AnalyticsTab() {
     <Locked
       text={t(lang, "hl_locked_body")}
       cta={t(lang, "mw_upgrade")}
-      onCta={() => {
-        goTab("more");
-        open("premium");
-      }}
+      onCta={() => open("premium", "perp")}
     />
   );
 
@@ -315,8 +333,15 @@ export function AnalyticsTab() {
 
       {/* Биткоин — своя вкладка: сперва итог по биржам за окно, ниже
           ордера с тем же окном. В NetFlow его нет — там монеты BSC. */}
-      {view === "btc" ? <BtcFlowCard bigWin={bigWin} /> : null}
-      {view === "btc" ? <BtcBigView winPicker={winPicker} win={bigWin} /> : null}
+      {view === "btc" && bigLocked ? (
+        <Card>
+          <SectionTitle>{t(lang, "btc_big_tab")}</SectionTitle>
+          {winPicker}
+          {windowUpsell}
+        </Card>
+      ) : null}
+      {view === "btc" && !bigLocked ? <BtcFlowCard bigWin={bigWin} /> : null}
+      {view === "btc" && !bigLocked ? <BtcBigView winPicker={winPicker} win={bigWin} /> : null}
       {view === "flow" ? (
         <Card>
           {/* NetFlow — термин, он одинаков во всех языках, как PnL и ROI.
@@ -324,11 +349,7 @@ export function AnalyticsTab() {
               оттоке киты как раз продают. */}
           <SectionTitle note={t(lang, "flow_hint")}>NetFlow</SectionTitle>
           <FlowTrend />
-          <Segmented<FlowWin>
-            value={flowWin}
-            onChange={setFlowWin}
-            options={FLOW_WINS.map((w) => ({ id: w.id, label: t(lang, w.key) }))}
-          />
+          {flowWinPicker}
           {/* Знак потока отдельной строкой от окна: это два независимых
               вопроса — «за какой срок» и «кого показывать». Одним рядом они
               бы выглядели как один выбор из восьми. */}
@@ -345,7 +366,7 @@ export function AnalyticsTab() {
             inputMode="search"
             aria-label={t(lang, "flow_search_btn")}
           />
-          <FlowBody />
+          {flowLocked ? windowUpsell : <FlowBody />}
         </Card>
       ) : null}
 
@@ -393,7 +414,7 @@ export function AnalyticsTab() {
           {/* Заголовок тот же, что на плитке. Прежний «Крупнейшие покупки /
               продажи» перечислял обе стороны, а на экране теперь одна: он и
               противоречил кнопкам, и занимал две строки. */}
-          <SectionTitle note={`${t(lang, bigSide === "buy" ? "ui_side_buys" : "ui_side_sells")} · ${num(spotRows.length)}`}>
+          <SectionTitle note={bigLocked ? undefined : `${t(lang, bigSide === "buy" ? "ui_side_buys" : "ui_side_sells")} · ${num(spotRows.length)}`}>
             {t(lang, "ui_tab_orders")}
           </SectionTitle>
           <Segmented<BigSide>
@@ -402,7 +423,12 @@ export function AnalyticsTab() {
             options={BIG_SIDES.map((v) => ({ id: v.id, label: t(lang, v.key) }))}
           />
           {winPicker}
-          {big.loading ? <Skeleton rows={3} /> : <TradeList rows={spotRows} empty={t(lang, "big_empty")} />}
+          {bigLocked ? windowUpsell : big.loading ? <Skeleton rows={3} /> : (
+            <>
+              <DelayNote delay={big.data.delay} hidden={big.data.hidden} />
+              <TradeList rows={spotRows} empty={t(lang, "big_empty")} />
+            </>
+          )}
         </Card>
       ) : null}
 
@@ -445,14 +471,10 @@ export function AnalyticsTab() {
           {/* Окно перед таблицей, а не под ней: сперва выбирают срок, потом
               смотрят, что за него вышло. Сам выбор общий с потоком — оба
               раздела про одни и те же деньги на одной площадке. */}
-          <Segmented<FlowWin>
-            value={flowWin}
-            onChange={setFlowWin}
-            options={FLOW_WINS.map((w) => ({ id: w.id, label: t(lang, w.key) }))}
-          />
+          {flowWinPicker}
           {/* Пустое окно — без таблицы: «$0 переложено, 0 пар» и два пустых
               столбца выглядят как поломка, хотя это просто тихий час. */}
-          {rotSum && rotSum.pairs > 0 ? (
+          {flowLocked ? windowUpsell : rotSum && rotSum.pairs > 0 ? (
             <RotBody sum={rotSum} win={flowWin} />
           ) : (
             <Empty text={t(lang, "flow_empty")} />

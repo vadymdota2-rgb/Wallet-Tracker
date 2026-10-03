@@ -66,10 +66,31 @@ ALLOWED_ORIGINS = {
 # Срок годности подписи Telegram. Без него однажды перехваченная initData
 # работала бы вечно.
 INIT_DATA_TTL = int(os.environ.get("WHALE_API_INITDATA_TTL", "86400"))
-# Те же числа, что в premium.cpp и alert_settings.cpp. Раньше API их не знал
-# и пускал мимо лимитов.
-FREE_MAX_WALLETS = 1
+# Те же числа, что в premium.cpp и main.cpp бота. Раньше API их не знал и
+# пускал мимо лимитов.
+#
+# Бесплатный тариф — три кошелька с алертами: одного не хватало, чтобы
+# человек успел убедиться, что алерты работают, а три уже дают привычку и
+# упираются в потолок ровно тогда, когда хочется добавить ещё.
+FREE_MAX_WALLETS = 3
+FREE_ALERT_WALLETS = 3
 PREMIUM_MAX_WALLETS = 50
+# Что ещё отличает бесплатный тариф. Общая мысль: бесплатно — понять рынок
+# и проверить нас в деле; премиум — узнать раньше, увидеть глубже и следить
+# за многими. Публичные данные (страх и жадность, ETF, доминация, разлоки,
+# суммарные потоки) открыты всем — за то, что есть везде, не платят.
+#
+# Сделки китов бесплатному — с задержкой в 15 минут: увидеть, кто что купил,
+# можно, успеть следом — нет.
+FREE_DELAY_SEC = 15 * 60
+# Окна, открытые всем: час, шесть часов, сутки. Неделя и месяц — премиум.
+FREE_BIG_WINDOWS = ("1h", "6h", "24h")
+FREE_FLOW_WINDOWS = ("1", "6", "24")
+# Карточка кошелька: последние десять завершённых сделок.
+FREE_DEALS = 10
+# Витрина Hyperliquid: первые три строки каждой доски — чтобы было видно,
+# что за замком, а не пустое место.
+PERP_SHOWCASE = 3
 # Сервисный аккаунт бота — тот, что держит базу кошельков. Бот (main.cpp,
 # SERVICE_CHAT_ID; isPremium в premium.cpp) считает его подпиской навсегда и
 # без лимита кошельков. API этого не знал: для него это был бесплатный
@@ -80,7 +101,7 @@ SERVICE_MAX_WALLETS = 1_000_000
 # Глубина доски трейдеров. Те же числа, что FREE_TOP_TRADERS и
 # PREMIUM_TOP_TRADERS в premium.cpp: приложение и чат обязаны показывать
 # одинаково глубоко, иначе премиум значит разное в двух местах.
-RANK_FREE_DEPTH = 30
+RANK_FREE_DEPTH = 10
 RANK_MAX_DEPTH = 100
 # Цена и срок — те же, что в premium.cpp: бот и приложение обязаны продавать
 # одно и то же, иначе «премиум» значит разное в двух местах.
@@ -593,8 +614,11 @@ def for_plan(data: dict, prem: bool) -> dict:
     то не должно уходить с сервера вовсе. Выгрузка при этом не копируется
     глубоко: общий кэш остаётся целым для подписчиков.
 
-    Закрыто всё, что про фьючерсы Hyperliquid: доска перпов, крупные позиции,
-    лонги и шорты, фандинг, позиции кошельков.
+    Закрыто всё, что про фьючерсы Hyperliquid: доска перпов (кроме витрины из
+    трёх первых мест), крупные позиции, лонги и шорты, фандинг, позиции
+    кошельков. Сделки спота — с задержкой FREE_DELAY_SEC, доска — первые
+    RANK_FREE_DEPTH мест за 30 дней, алерты — с первых FREE_ALERT_WALLETS
+    кошельков.
     """
     if prem or not isinstance(data, dict):
         return data
@@ -605,21 +629,46 @@ def for_plan(data: dict, prem: bool) -> dict:
         perp = rank.get("perp") if isinstance(rank.get("perp"), dict) else {}
         out["rank"] = {
             "spot": {k: v[:RANK_FREE_DEPTH] if isinstance(v, list) else v for k, v in spot.items()},
-            "perp": {k: [] for k in (perp or {"pnl": 0, "roi": 0, "win": 0, "act": 0})},
+            "perp": {k: v[:PERP_SHOWCASE] if isinstance(v, list) else []
+                     for k, v in (perp or {"pnl": [], "roi": [], "win": [], "act": []}).items()},
+            # Сколько мест за замком — витрина говорит не «что-то есть», а
+            # «ещё 97 трейдеров».
+            "perpN": {k: len(v) for k, v in perp.items() if isinstance(v, list)},
+            "spotN": {k: len(v) for k, v in spot.items() if isinstance(v, list)},
         }
+    cut = now() - FREE_DELAY_SEC
     if isinstance(out.get("trades"), dict):
-        out["trades"] = {**out["trades"], "perp": []}
+        spot_rows = out["trades"].get("spot") or []
+        out["trades"] = {**out["trades"], "perp": [],
+                         "spot": [r for r in spot_rows if not isinstance(r, dict) or int(r.get("ts") or 0) <= cut],
+                         "delay": FREE_DELAY_SEC,
+                         "hidden": sum(1 for r in spot_rows if isinstance(r, dict) and int(r.get("ts") or 0) > cut)}
     if isinstance(out.get("perp"), list):
         out["perp"] = []
+    # Ответ /api/big: сделки спота лежат прямо в «spot».
+    if isinstance(out.get("spot"), list) and "win" in out:
+        rows = out["spot"]
+        out["spot"] = [r for r in rows if not isinstance(r, dict) or int(r.get("ts") or 0) <= cut]
+        out["delay"] = FREE_DELAY_SEC
+        out["hidden"] = sum(1 for r in rows if isinstance(r, dict) and int(r.get("ts") or 0) > cut)
+    # Потоки и ротация за неделю и месяц — премиум; час, шесть часов и сутки
+    # открыты всем.
+    for k in ("flow", "rotSum"):
+        if isinstance(out.get(k), dict):
+            out[k] = {w: v for w, v in out[k].items() if w in FREE_FLOW_WINDOWS}
     # Лонги и шорты — тоже Hyperliquid.
     for k in ("fund", "fundN", "ls"):
         if k in out:
             out[k] = {}
     if isinstance(out.get("marketFeed"), list):
         out["marketFeed"] = [r for r in out["marketFeed"]
-                             if not (isinstance(r, dict) and r.get("venue") == "perp")]
+                             if not (isinstance(r, dict) and (r.get("venue") == "perp"
+                                                              or int(r.get("ts") or 0) > cut))]
     if isinstance(out.get("wallets"), list):
-        out["wallets"] = [{**w, "pos": []} if isinstance(w, dict) else w for w in out["wallets"]]
+        # Порядок списка — тот же, что у бота в refreshWatchers: основной,
+        # потом по дате добавления. Алерты идут с первых FREE_ALERT_WALLETS.
+        out["wallets"] = [{**w, "pos": [], "active": i < FREE_ALERT_WALLETS} if isinstance(w, dict) else w
+                          for i, w in enumerate(out["wallets"])]
     if isinstance(out.get("pos"), list):
         out["pos"] = []
     return out
@@ -1639,7 +1688,7 @@ def load_wallets(cur: sqlite3.Connection, chat: str,
     rows = cur.execute(
         f"SELECT wa.id AS id, wa.address AS addr, uw.label AS label, {primary_sql} AS is_primary "
         "FROM user_whales uw JOIN whale_addresses wa ON wa.id=uw.whale_id "
-        "WHERE uw.user_id=? ORDER BY uw.is_primary DESC, uw.created_at ASC",
+        "WHERE uw.user_id=? ORDER BY uw.is_primary DESC, uw.created_at ASC, uw.rowid ASC",
         (chat,),
     ).fetchall() if "is_primary" in uw_cols else cur.execute(
         "SELECT wa.id AS id, wa.address AS addr, uw.label AS label, 0 AS is_primary "
@@ -6605,6 +6654,9 @@ def load_trades(cur: sqlite3.Connection, hl: sqlite3.Connection | None, hours: i
                         # подписка требует всех сорока двух знаков.
                         "wa": (r["wallet"] or "").lower(),
                         "t": ago(r["timestamp"]),
+                        # Время числом — по нему бесплатному прячутся сделки
+                        # последних FREE_DELAY_SEC.
+                        "ts": int(r["timestamp"] or 0),
                     }
                 )
     if hl and table_exists(hl, "hl_fills"):
@@ -6799,7 +6851,7 @@ def load_feed_market(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> 
             )
     items.sort(key=lambda x: -x.get("_ts", 0))
     for it in items:
-        it.pop("_ts", None)
+        it["ts"] = it.pop("_ts", 0)
     return items[:24]
 
 
@@ -7507,6 +7559,69 @@ def fund_aster() -> list:
         if row:
             out.append(row)
     return out
+
+
+# --- Воронка продаж ------------------------------------------------------------
+#
+# Без замера не понять, что продаёт: где человек упёрся в замок, сколько из
+# этих людей открыли экран оплаты и сколько заплатили. Событие пишется раз в
+# сутки на человека, вид и источник — таблица не растёт от того, что кто-то
+# десять раз открыл приложение, а «сколько людей» считается одной строкой.
+#
+#   open      — открыл приложение;          trial — получил пробную неделю;
+#   wallet    — добавил кошелёк;            paywall — увидел экран премиума
+#                                            (src — откуда пришёл);
+#   checkout  — нажал оплату (src — stars или usdt);
+#   paid      — оплатил; пишет бот при выдаче подписки (premium.cpp).
+#
+# Таблицу заводит и бот: он хозяин базы и читает её для /stats.
+FUNNEL_SCHEMA = """
+CREATE TABLE IF NOT EXISTS funnel_events (
+    chat_id TEXT NOT NULL,
+    ev TEXT NOT NULL,
+    src TEXT NOT NULL DEFAULT '',
+    day TEXT NOT NULL,
+    at INTEGER NOT NULL,
+    PRIMARY KEY (chat_id, ev, src, day)
+);
+CREATE INDEX IF NOT EXISTS idx_funnel_day ON funnel_events(day, ev);
+"""
+FUNNEL_FROM_APP = ("paywall",)
+_FUNNEL_SRC_RE = re.compile(r"^[a-z0-9_]{0,24}$")
+_funnel_ready = False
+# Уже записанное за сегодня: выгрузку приложение просит часто, и без этого
+# каждый запрос открывал бы базу на запись ради строки, которая уже есть.
+_funnel_seen: set[tuple] = set()
+_funnel_lock = threading.Lock()
+
+
+def track(chat: str, ev: str, src: str = "") -> None:
+    """Записать событие воронки. Сбой записи не мешает ответу человеку."""
+    global _funnel_ready
+    if not chat or is_service(chat) or not _FUNNEL_SRC_RE.match(src or ""):
+        return
+    key = (chat, ev, src or "", time.strftime("%Y-%m-%d", time.gmtime()))
+    with _funnel_lock:
+        if key in _funnel_seen:
+            return
+        if len(_funnel_seen) > 200_000:
+            _funnel_seen.clear()
+        _funnel_seen.add(key)
+    con = open_db(DB, write=True)
+    if not con:
+        return
+    try:
+        if not _funnel_ready:
+            con.executescript(FUNNEL_SCHEMA)
+            _funnel_ready = True
+        t = now()
+        con.execute("INSERT OR IGNORE INTO funnel_events(chat_id, ev, src, day, at) VALUES(?,?,?,?,?)",
+                    (chat, ev, src or "", time.strftime("%Y-%m-%d", time.gmtime(t)), t))
+        con.commit()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] funnel {ev}: {e}\n")
+    finally:
+        con.close()
 
 
 # --- Оплата премиума из приложения ------------------------------------------
@@ -10666,6 +10781,15 @@ DIGEST_COMMENTS_PAGE = 30
 # Разделы про фьючерсы Hyperliquid закрыты подпиской, как и сами вкладки:
 # бесплатному они не уходят с сервера вовсе — только отметка, что раздел есть.
 DIGEST_PREMIUM = ("ls", "perp", "fund")
+
+
+def _dg_count(v) -> int:
+    """Число строк в разделе дайджеста любой формы: список, группы, доски."""
+    if isinstance(v, list):
+        return len(v)
+    if isinstance(v, dict):
+        return sum(_dg_count(x) for x in v.values() if isinstance(x, (list, dict)))
+    return 0
 # Владелец бота — тот же chat_id, что OWNER_CHAT_ID в main.cpp: удаляет любые
 # комментарии и может закрыть автору комментирование.
 OWNER_CHAT_ID = os.environ.get("WHALE_OWNER_CHAT", "546348566").strip()
@@ -11066,7 +11190,9 @@ def digest_list(chat: str, premium: bool) -> dict:
             if not premium:
                 for k in DIGEST_PREMIUM:
                     if k in body:
-                        body[k] = {"locked": True}
+                        # Сколько строк за замком: «скрыто 6 позиций» продаёт
+                        # лучше, чем просто замок.
+                        body[k] = {"locked": True, "n": _dg_count(body[k])}
             items.append({"id": r["id"], "day": r["day"], "at": r["made_at"], **body,
                           "likes": r["likes"], "comments": r["comments"], "views": r["views"],
                           "liked": bool(r["liked"])})
@@ -11540,6 +11666,9 @@ class Handler(BaseHTTPRequestHandler):
                 gift = grant_trial(chat, who.get("lang", "")) if who else False
                 if gift:
                     boot_drop(chat)
+                    track(chat, "trial")
+                if chat:
+                    track(chat, "open")
                 boot = bootstrap_cached(chat)
                 boot = for_plan(boot, plan_of(boot))
                 if gift:
@@ -11587,6 +11716,9 @@ class Handler(BaseHTTPRequestHandler):
                 win = (qs.get("win", ["24"])[0] or "24").strip()
                 if win not in FLOW_WINDOWS:
                     self._json(400, {"ok": False, "error": "bad_win"})
+                    return
+                if win not in FREE_FLOW_WINDOWS and not chat_premium(self._user(qs)):
+                    self._json(403, {"ok": False, "error": "premium"})
                     return
                 q = (qs.get("q", [""])[0] or "")[:32]
                 side = (qs.get("side", ["all"])[0] or "all").strip()
@@ -11637,6 +11769,9 @@ class Handler(BaseHTTPRequestHandler):
                 win = (qs.get("win", ["24"])[0] or "24").strip()
                 if win not in ROT_WINDOWS:
                     self._json(400, {"ok": False, "error": "bad_win"})
+                    return
+                if win not in FREE_FLOW_WINDOWS and not chat_premium(self._user(qs)):
+                    self._json(403, {"ok": False, "error": "premium"})
                     return
                 try:
                     offset = int(qs.get("offset", ["0"])[0])
@@ -11704,6 +11839,11 @@ class Handler(BaseHTTPRequestHandler):
                     n = int(qs.get("n", ["10"])[0])
                 except (TypeError, ValueError):
                     n = 10
+                # Бесплатно — последние FREE_DEALS сделок; дальше история за
+                # подпиской, и ответ об этом говорит прямо.
+                capped = n > FREE_DEALS and not chat_premium(self._user(qs))
+                if capped:
+                    n = FREE_DEALS
                 cur = open_db(DB)
                 if not cur:
                     self._json(200, {"ok": False, "error": "db"})
@@ -11714,7 +11854,8 @@ class Handler(BaseHTTPRequestHandler):
                         _DEALS, (a, venue, n), SMALL_TTL,
                         lambda: wallet_deals(cur, hl, a, venue, n),
                     )
-                    self._json(200, {"ok": True, "addr": a, "venue": venue, "deals": deals})
+                    self._json(200, {"ok": True, "addr": a, "venue": venue, "deals": deals,
+                                     **({"cap": FREE_DEALS} if capped else {})})
                 finally:
                     for c in (cur, hl):
                         if c:
@@ -11777,15 +11918,31 @@ class Handler(BaseHTTPRequestHandler):
                     mn = int(qs.get("min", ["1"])[0])
                 except (TypeError, ValueError):
                     mn = 1
-                self._json(200, btc_big(qs.get("win", ["24h"])[0], qs.get("side", ["buy"])[0], mn,
-                                        qs.get("base", ["0"])[0] == "1"))
+                bwin = qs.get("win", ["24h"])[0]
+                prem = chat_premium(self._user(qs))
+                if bwin not in FREE_BIG_WINDOWS and not prem:
+                    self._json(403, {"ok": False, "error": "premium"})
+                    return
+                res = btc_big(bwin, qs.get("side", ["buy"])[0], mn, qs.get("base", ["0"])[0] == "1")
+                if not prem and isinstance(res.get("rows"), list):
+                    # Итоги по биржам — сразу, отдельные кошельки — с задержкой.
+                    cut = now() - FREE_DELAY_SEC
+                    rows = res["rows"]
+                    res = {**res, "rows": [r for r in rows if int(r.get("t") or 0) <= cut],
+                           "delay": FREE_DELAY_SEC,
+                           "hidden": sum(1 for r in rows if int(r.get("t") or 0) > cut)}
+                self._json(200, res)
                 return
             if path in ("/btc/rank", "/api/btc/rank"):
                 try:
                     days = int(qs.get("win", ["30"])[0])
                 except (TypeError, ValueError):
                     days = 30
-                self._json(200, btc_rank(days, chat_premium(self._user(qs))))
+                prem = chat_premium(self._user(qs))
+                if days != 30 and not prem:
+                    self._json(403, {"ok": False, "error": "premium"})
+                    return
+                self._json(200, btc_rank(days, prem))
                 return
             if path in ("/btc/wallet", "/api/btc/wallet"):
                 a = (qs.get("addr", [""])[0] or "").strip()
@@ -11852,7 +12009,11 @@ class Handler(BaseHTTPRequestHandler):
                 if hours is None:
                     self._json(400, {"ok": False, "error": "bad_window"})
                     return
-                self._json(200, for_plan(big_trades(win, hours), chat_premium(self._user(qs))))
+                prem = chat_premium(self._user(qs))
+                if win not in FREE_BIG_WINDOWS and not prem:
+                    self._json(403, {"ok": False, "error": "premium"})
+                    return
+                self._json(200, for_plan(big_trades(win, hours), prem))
                 return
             if path in ("/quotes", "/api/quotes"):
                 cur = open_db(DB)
@@ -11928,8 +12089,16 @@ class Handler(BaseHTTPRequestHandler):
                 res = digest_act(self._user_full(qs), dg, body)
                 self._json(200, res)
                 return
+            if path == "/api/ev":
+                ev = str(body.get("ev") or "")
+                if ev in FUNNEL_FROM_APP:
+                    track(chat, ev, str(body.get("src") or "")[:24])
+                self._json(200, {"ok": True})
+                return
             if path in ("/api/pay/stars", "/api/pay/usdt", "/api/pay/check", "/api/pay/jetton"):
                 lang = (body.get("lang") or "en")[:5]
+                if path in ("/api/pay/stars", "/api/pay/usdt"):
+                    track(chat, "checkout", path.rsplit("/", 1)[-1])
                 if path == "/api/pay/stars":
                     res = pay_stars(chat, lang)
                 elif path == "/api/pay/usdt":
@@ -11959,6 +12128,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(404, {"ok": False, "error": "not_found"})
                 return
             res = mutate(chat, kind, body)
+            if kind == "add" and res.get("ok"):
+                track(chat, "wallet")
             # Данные человека изменились — старая выгрузка больше не годится,
             # и следующий ответ должен собираться заново, а не из памяти.
             boot_drop(chat)

@@ -16,6 +16,7 @@
  * Закрытое подпиской не запрашивается: сервер его бесплатному всё равно не
  * отдаст, а лишние отказы — лишняя нагрузка.
  */
+import { FREE, FREE_BIG_WINS, FREE_FLOW_WINS } from "./upsell";
 import {
   fetchBig, fetchBtcBig, fetchBtcFlow, fetchBtcRank, fetchDeals, fetchFlow, fetchLs, fetchSymbols, fetchTokenHist,
   fetchUnlocks, fetchWallet,
@@ -81,11 +82,15 @@ function plan(): (() => Promise<unknown>)[] {
     jobs.push(() => fetchWallet(w.addr).then((d) => applyWalletLive(w.addr, d)));
   }
 
-  // 2. Крупные сделки за все окна.
-  for (const win of BIG_WINS) jobs.push(() => fetchBig(win));
+  // 2. Крупные сделки за все окна — те, что открыты по плану: неделю и
+  //    месяц бесплатному сервер не отдаёт, и запрос был бы впустую.
+  for (const win of BIG_WINS) {
+    if (premium || (FREE_BIG_WINS as readonly string[]).includes(win)) jobs.push(() => fetchBig(win));
+  }
 
   // 3. Поток: притоки и оттоки выбранного окна. «Все» уже в выгрузке.
-  for (const side of ["in", "out"]) jobs.push(() => fetchFlow(app.flowWin, "", 0, side));
+  if (premium || (FREE_FLOW_WINS as readonly string[]).includes(app.flowWin))
+    for (const side of ["in", "out"]) jobs.push(() => fetchFlow(app.flowWin, "", 0, side));
 
   // 4. Лонги и шорты — только подписчику.
   if (premium) {
@@ -98,7 +103,8 @@ function plan(): (() => Promise<unknown>)[] {
   } else {
     const venue = app.rankVenue === "perp" && !premium ? "spot" : app.rankVenue;
     const board = live.rank[venue]?.[app.rankKind] ?? live.rank[venue]?.pnl ?? [];
-    for (const r of board.slice(0, TOP_DEALS)) jobs.push(() => fetchDeals(r.a, venue));
+    const n = premium ? FREE.premiumDeals : FREE.deals;
+    for (const r of board.slice(0, TOP_DEALS)) jobs.push(() => fetchDeals(r.a, venue, n));
   }
 
   // 5б. Биткоин: поток для NetFlow и выводы с бирж за выбранное окно.

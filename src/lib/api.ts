@@ -190,12 +190,19 @@ export const fetchRot = (win: string, offset = 0, limit = 15, _signal?: AbortSig
  * открыл, а тянуть по десять сделок на каждого из ста трейдеров при каждом
  * запуске — это сто запросов к базе ради экрана, куда заходят изредка.
  */
-const dealsPath = (addr: string, venue: string) =>
-  `/api/deals?addr=${encodeURIComponent(addr.toLowerCase())}&venue=${encodeURIComponent(venue)}&n=10`;
-export const fetchDeals = (addr: string, venue: string, _signal?: AbortSignal) =>
-  cachedGet<{ ok?: boolean; deals?: Deal[] }>(dealsPath(addr, venue), TTL.deals);
-export const peekDeals = (addr: string, venue: string) =>
-  peek<{ ok?: boolean; deals?: Deal[] } | null>(dealsPath(addr, venue), TTL.deals);
+const dealsPath = (addr: string, venue: string, n: number) =>
+  `/api/deals?addr=${encodeURIComponent(addr.toLowerCase())}&venue=${encodeURIComponent(venue)}&n=${n}`;
+/** Ответ истории. `cap` — бесплатному отдано столько, дальше за подпиской. */
+export type DealsReply = { ok?: boolean; deals?: Deal[]; cap?: number };
+export const fetchDeals = (addr: string, venue: string, n: number, _signal?: AbortSignal) =>
+  cachedGet<DealsReply>(dealsPath(addr, venue, n), TTL.deals);
+export const peekDeals = (addr: string, venue: string, n: number) =>
+  peek<DealsReply | null>(dealsPath(addr, venue, n), TTL.deals);
+
+/** Событие воронки продаж: сервер пишет его раз в сутки на человека. Ответ
+ *  не нужен — замер не должен ничего задерживать. */
+export const trackEvent = (ev: "paywall", src: string) =>
+  void call<{ ok?: boolean }>("/api/ev", { method: "POST", body: { ev, src } });
 
 /**
  * Право на забвение. Сервер удаляет те же таблицы, что команда /forgetme в

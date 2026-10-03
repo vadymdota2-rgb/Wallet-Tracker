@@ -21,7 +21,8 @@ import { venueName } from "../lib/rank";
 import { removeWallet } from "../lib/api";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
-import { PremiumLock } from "../components/PremiumLock";
+import { Upsell } from "../components/Upsell";
+import { FREE } from "../lib/upsell";
 import { haptic } from "../lib/telegram";
 import {
   Card, DealsGlyph, Empty, MinusGlyph, PlusGlyph, SectionTitle, Segmented, TileNav,
@@ -31,8 +32,6 @@ import type { RankKind, RankTable, Trader, Venue } from "../lib/types";
 import type { RankVenue, RankWin } from "../store/app";
 import { BtcBoard } from "./BtcViews";
 
-const FREE_ROWS = 30;
-const PREMIUM_ROWS = 100;
 
 const KINDS: RankKind[] = ["pnl", "roi", "win", "act"];
 
@@ -82,9 +81,17 @@ export function TopTab() {
   // показываем прибыль, а не пустой экран.
   const kind = kinds.includes(rawKind) ? rawKind : "pnl";
 
-  const table = pick(rank, board, win);
-  const cap = plan === "premium" ? PREMIUM_ROWS : FREE_ROWS;
+  const premium = plan === "premium";
+  /* Бесплатно: рейтинг за 30 дней, первые десять мест спота и витрина из
+     трёх мест Hyperliquid. Длинные окна — премиум; сервер их бесплатному и
+     не отдаёт, поэтому вместо пустой доски — приглашение. */
+  const winLocked = !premium && win !== "30";
+  const table = winLocked ? null : pick(rank, board, win);
+  const cap = premium ? FREE.premiumTop : board === "perp" ? FREE.showcase : FREE.top;
   const rows: Trader[] = (table?.[kind] ?? []).slice(0, cap);
+  // Сколько мест за замком — витрина говорит «ещё 97», а не «что-то есть».
+  const total = (board === "perp" ? rank.perpN : rank.spotN)?.[kind] ?? 0;
+  const more = Math.max(0, total - rows.length);
 
   const tracked = new Set(wallets.map((w) => w.addr.toLowerCase()));
 
@@ -131,7 +138,6 @@ export function TopTab() {
               id: "perp",
               ic: <VenueMark venue="perp" size={30} />,
               label: `${venueName("perp")} · ${t(lang, "wl_perp_rank")}`,
-              lock: plan !== "premium",
             },
             {
               id: "btc",
@@ -150,16 +156,19 @@ export function TopTab() {
         <Segmented<RankWin>
           value={win}
           onChange={setWin}
-          options={WINDOWS.map((w) => ({ id: w, label: `${w}${t(lang, "unit_day")}` }))}
+          options={WINDOWS.map((w) => ({
+            id: w,
+            label: `${w}${t(lang, "unit_day")}${!premium && w !== "30" ? " 🔒" : ""}`,
+          }))}
         />
       </Card>
 
-      {venue === "btc" ? (
-        <BtcBoard win={win} />
-      ) : venue === "perp" && plan !== "premium" ? (
+      {winLocked ? (
         <Card>
-          <PremiumLock fromTab />
+          <Upsell src="top" text={t(lang, "up_top_win")} />
         </Card>
+      ) : venue === "btc" ? (
+        <BtcBoard win={win} />
       ) : rows.length === 0 ? (
         <Card>
           <Empty
@@ -230,9 +239,19 @@ export function TopTab() {
         })
       )}
 
-      {plan !== "premium" && venue === "spot" && rows.length >= FREE_ROWS ? (
+      {!premium && !winLocked && venue === "spot" && rows.length >= FREE.top ? (
         <Card>
-          <p className="note warn">{t(lang, "rk_unlock_top100")}</p>
+          <Upsell src="top" text={t(lang, "up_top", { f: String(FREE.top), p: String(FREE.premiumTop) })} />
+        </Card>
+      ) : null}
+      {/* Hyperliquid бесплатно — витрина: три первых места видно целиком, а
+          что за ними, сказано числом. */}
+      {!premium && !winLocked && venue === "perp" ? (
+        <Card>
+          <Upsell
+            src="perp"
+            text={more > 0 ? t(lang, "up_perp", { n: String(more) }) : t(lang, "up_perp0")}
+          />
         </Card>
       ) : null}
     </>

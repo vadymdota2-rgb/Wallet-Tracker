@@ -120,18 +120,29 @@ say("на сотнях процентов десятые не нужны", "Math
 # везде: рейтинг перпов и позиции были видны. Бот всё это закрывает.
 say("срез по подписке есть", "def for_plan(data: dict, prem: bool) -> dict:" in api)
 fp = pybody(api, "def for_plan(")
-say("срез: 30 мест спота, пустые перпы, без фандинга и позиций",
-    "v[:RANK_FREE_DEPTH]" in fp and '"perp": {k: []' in fp and '"pos": []' in fp
-    and 'out[k] = {}' in fp and '"trades"' in fp)
+say("срез: 10 мест спота, витрина из 3 перпов, без фандинга и позиций",
+    "v[:RANK_FREE_DEPTH]" in fp and "v[:PERP_SHOWCASE]" in fp and '"pos": []' in fp
+    and 'out[k] = {}' in fp and '"trades"' in fp and "RANK_FREE_DEPTH = 10" in api and "PERP_SHOWCASE = 3" in api)
+say("срез: сделки китов бесплатному — с задержкой 15 минут, длинные окна — премиум",
+    "FREE_DELAY_SEC = 15 * 60" in api and '"hidden"' in fp and "FREE_FLOW_WINDOWS" in fp
+    and "if win not in FREE_BIG_WINDOWS and not prem:" in api and "if bwin not in FREE_BIG_WINDOWS and not prem:" in api
+    and api.count("if win not in FREE_FLOW_WINDOWS and not chat_premium(self._user(qs)):") == 2
+    and "if days != 30 and not prem:" in api)
+say("срез: 3 кошелька с алертами — одно число у API, бота и приложения",
+    "FREE_MAX_WALLETS = 3" in api and "FREE_ALERT_WALLETS = 3" in api
+    and "constexpr size_t FREE_ALERT_WALLETS = 3;" in read(f"{BOT}/main.cpp")
+    and "loadedForUser >= FREE_ALERT_WALLETS" in read(f"{BOT}/main.cpp")
+    and "wallets: 3," in read(f"{APP}/src/lib/upsell.ts") and '"active": i < FREE_ALERT_WALLETS' in fp)
 say("срез не трогает Cortex", "cortex" not in code_only(fp).lower() and "sonar" not in fp)
 say("выгрузка срезается по своему же плану", "for_plan(boot, plan_of(boot))" in api)
 say("выгрузка без подписи — как бесплатная", "}, False))" in api)
-say("крупные сделки срезаются", "for_plan(big_trades(win, hours), chat_premium(self._user(qs)))" in api)
+say("крупные сделки срезаются", "for_plan(big_trades(win, hours), prem)" in api)
 say("фандинг и сделки перпов — отказ без подписки",
     api.count('self._json(403, {"ok": False, "error": "premium"})') >= 2)
 say("живой кошелёк срезается", "), is_premium(cur, chat)))" in api)
 top = read(f"{APP}/src/screens/TopTab.tsx")
-say("рейтинг перпов за замком", 'venue === "perp" && plan !== "premium"' in top and "<PremiumLock fromTab />" in top)
+say("рейтинг перпов: витрина и приглашение с числом скрытых мест",
+    '!premium && !winLocked && venue === "perp"' in top and '"up_perp"' in top and "rank.perpN" in top)
 say("позиции за замком, а не «позиций нет»",
     "<PremiumLock />" in read(f"{APP}/src/screens/PositionScreen.tsx")
     and "<PremiumLock />" in read(f"{APP}/src/screens/WalletScreen.tsx"))
@@ -142,7 +153,7 @@ say("лонг/шорт и крупные позиции — за подписк�
     and 'id: "fund"' not in ana and "premium ? (\n          <FundBody />" in _fscr)
 say("лонг/шорт закрыт и на экране, и на сервере",
     ana.count("{!premium ? locked : (") >= 2 and '"fund", "fundN", "ls"' in fp
-    and api.count('self._json(403, {"ok": False, "error": "premium"})') == 3)
+    and api.count('self._json(403, {"ok": False, "error": "premium"})') == 8)
 prem_scr = read(f"{APP}/src/screens/PremiumScreen.tsx")
 say("цена на экране премиума — один раз, на кнопке",
     'title={t(lang, "pay_stars_btn")} value=' not in prem_scr and 'title={t(lang, "pay_usdt_btn")} value=' not in prem_scr)
@@ -155,7 +166,7 @@ sync = read(f"{APP}/src/lib/sync.ts")
 say("подгрузка запускается после выгрузки", "setTimeout(() => void prefetchAll(), 400);" in sync)
 say("подгрузка берёт кошельки, окна, фильтры, сделки, монеты",
     all(x in pre for x in ("fetchWallet(w.addr)", "BIG_WINS", 'fetchFlow(app.flowWin, "", 0, side)',
-                           "fetchDeals(r.a, venue)", "holdJobs()")))
+                           "fetchDeals(r.a, venue, n)", "holdJobs()")))
 say("закрытое подпиской не запрашивается", "if (premium) {" in pre and "fetchLs(" in pre.split("if (premium) {")[1][:200])
 say("запросы в очереди, не лавиной", "const PARALLEL = 4;" in pre)
 apits = read(f"{APP}/src/lib/api.ts")
@@ -216,7 +227,7 @@ say("бот и API заводят одни и те же колонки",
 say("API: прочитано — по последнему показанному, не назад",
     "MAX(alerts_seen_at, ?)" in api and "upto = min(upto, now())" in api)
 say("«Ещё» начинается с истории алертов",
-    more.index('open("alerts")') < more.index('open("premium")'))
+    more.index('open("alerts")') < more.index('open("premium"'))
 
 # --- помощь называет вкладки так же, как приложение ------------------------
 # Тексты помощи собраны с подстановкой названий из словаря каждого языка. Если
@@ -412,7 +423,7 @@ say("дайджест: выпуск раз в сутки, тридцать по�
     and "SELECT 1 FROM digests WHERE day=?" in api
     and "DIGEST_HOUR_LONDON = 12" in api and "ln.tm_hour < DIGEST_HOUR_LONDON" in api)
 say("дайджест: фьючерсы бесплатному не уходят с сервера",
-    'DIGEST_PREMIUM = ("ls", "perp", "fund")' in api and 'body[k] = {"locked": True}' in api)
+    'DIGEST_PREMIUM = ("ls", "perp", "fund")' in api and 'body[k] = {"locked": True, "n": _dg_count(body[k])}' in api)
 say("дайджест: ссылки, частота и суточный лимит комментариев проверяются на сервере",
     '"error": "links"' in api and '"error": "too_fast"' in api and '"error": "day_limit"' in api)
 say("дайджест: удалить чужой комментарий может только владелец",
@@ -580,7 +591,7 @@ say("bitcoin: сканер блоков бота, база сервисного 
 say("bitcoin: вкладка «Крупные ордера BTC» с потоком бирж (в NetFlow его нет), третья доска рейтинга, экран кошелька",
     'path in ("/btc/flow", "/api/btc/flow")' in api and "def _btc_clean(" in api and "w.s < 0.9 * w.b" in api
     and "export function BtcFlowCard(" in _btv and "export function BtcBigView(" in _btv
-    and '{view === "btc" ? <BtcFlowCard bigWin={bigWin} /> : null}' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
+    and '{view === "btc" && !bigLocked ? <BtcFlowCard bigWin={bigWin} /> : null}' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
     and '{view === "flow" ? <BtcFlowCard' not in read(f"{APP}/src/screens/AnalyticsTab.tsx")
     and "export function BtcBoard(" in _btv and "export function BtcWalletScreen(" in _btv
     and '{ id: "btc", ic: <CoinIcon sym="BTC"' in read(f"{APP}/src/screens/AnalyticsTab.tsx")

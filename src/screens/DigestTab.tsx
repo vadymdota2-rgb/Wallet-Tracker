@@ -126,11 +126,15 @@ function actError(lang: Lang, r: DigestActReply | null): string {
 }
 
 
-function LockedSec({ lang, onPremium }: { lang: Lang; onPremium: () => void }) {
+function LockedSec({ lang, onPremium, n }: { lang: Lang; onPremium: () => void; n?: number }) {
+  // Сколько строк за замком — «скрыто 8» говорит больше, чем просто замок.
   return (
     <button type="button" className="dg-locked" onClick={onPremium}>
       <span aria-hidden="true">🔒</span>
-      <span>{t(lang, "dg_locked")}</span>
+      <span>
+        {t(lang, "dg_locked")}
+        {n ? ` · ${t(lang, "dg_locked_n", { n: String(n) })}` : ""}
+      </span>
       <b>{t(lang, "menu_premium")}</b>
     </button>
   );
@@ -178,7 +182,7 @@ function perpGroups(v: DigestItem["perp"]): [string, DigestCoin[]][] {
 
 function Sections({ it, lang, premium }: { it: DigestItem; lang: Lang; premium: boolean }) {
   const open = useApp((s) => s.open);
-  const toPremium = () => open("premium");
+  const toPremium = () => open("premium", "digest");
   const coin = (c: DigestCoin) => () => open("coin", c.sym, c.addr);
   const chart = (sym: string) => () => open("chart", sym);
 
@@ -279,7 +283,7 @@ function Sections({ it, lang, premium }: { it: DigestItem; lang: Lang; premium: 
       {v2 ? <Part>{t(lang, "dg_p_deriv")}</Part> : null}
       <Sec icon={<PositionsGlyph size={20} />} title={t(lang, "ui_tab_ls")}>
         {isLocked(it.ls) || (!premium && it.ls === undefined) ? (
-          <LockedSec lang={lang} onPremium={toPremium} />
+          <LockedSec lang={lang} onPremium={toPremium} n={isLocked(it.ls) ? it.ls.n : undefined} />
         ) : (
           lsGroups(it.ls).map(([cls, g]) => (
             <div key={cls} className="dg-grp">
@@ -309,7 +313,7 @@ function Sections({ it, lang, premium }: { it: DigestItem; lang: Lang; premium: 
 
       <Sec icon={<StackGlyph size={20} />} title={t(lang, "ui_tab_positions")}>
         {isLocked(it.perp) ? (
-          <LockedSec lang={lang} onPremium={toPremium} />
+          <LockedSec lang={lang} onPremium={toPremium} n={it.perp.n} />
         ) : (
           perpGroups(it.perp).map(([cls, g]) => (
             <div key={cls} className="dg-grp">
@@ -329,7 +333,7 @@ function Sections({ it, lang, premium }: { it: DigestItem; lang: Lang; premium: 
 
       <Sec icon={<FundingGlyph size={20} />} title={t(lang, "ui_tab_funding")}>
         {isLocked(it.fund) ? (
-          <LockedSec lang={lang} onPremium={toPremium} />
+          <LockedSec lang={lang} onPremium={toPremium} n={it.fund.n} />
         ) : it.fund && (it.fund.hi.length || it.fund.lo.length) ? (
           <>
             {it.fund.hi.length ? <Sub>{t(lang, "dg_fund_hi")}</Sub> : null}

@@ -2,6 +2,7 @@
  * «Мои кошельки» — крупная сумма за сутки, перевес покупок, порог алертов
  * и список кошельков с местом в рейтинге.
  */
+import { Upsell } from "../components/Upsell";
 import { useRef } from "react";
 import { useApp, isPaused, walletLimit } from "../store/app";
 import { useLive } from "../store/live";
@@ -75,8 +76,9 @@ export function WalletsTab() {
           <Action onClick={() => open("addWallet")} disabled={wallets.length >= limit}>
             <PlusGlyph /> {bare(t(lang, "menu_add_wallet"))}
           </Action>
-          {wallets.length >= limit && me.plan !== "premium" ? (
-            <small className="hint warn">{t(lang, "pr_limit_free")}</small>
+          {/* Упёрся в бесплатный лимит — не «нельзя», а что будет дальше. */}
+          {wallets.length >= limit && me.plan !== "premium" && !me.service ? (
+            <Upsell src="wallets" text={t(lang, "up_wallets")} />
           ) : null}
         </div>
 
@@ -84,7 +86,7 @@ export function WalletsTab() {
           <Empty text={t(lang, "mw_no_wallets")} hint={botNodes(t(lang, "mw_tap_add"))} />
         ) : (
           wallets.map((w) => {
-            const paused = isPaused(me.plan, w.primary);
+            const paused = isPaused(me.plan, w);
             const place = walletRank(rank, w.addr);
             const venue = w.chain === "btc" ? null : rowVenue(w);
             // Лучшее место кошелька вообще, а не по площадке значка:

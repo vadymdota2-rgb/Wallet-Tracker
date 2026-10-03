@@ -1,5 +1,6 @@
 /**
- * Последние десять завершённых сделок кошелька из рейтинга.
+ * Последние завершённые сделки кошелька из рейтинга: бесплатно десять,
+ * с премиумом — пятьдесят.
  *
  * Завершённых, а не отдельных переводов: покупка сама по себе ничего не
  * говорит о трейдере, смысл появляется, когда видно за сколько взял, за
@@ -17,6 +18,8 @@ import { t } from "../i18n/t";
 import { pct, px, shortAddr, signed, since, usd } from "../lib/format";
 import { fetchDeals, peekDeals } from "../lib/api";
 import { CoinIcon } from "../components/CoinIcon";
+import { Upsell, usePremium } from "../components/Upsell";
+import { FREE } from "../lib/upsell";
 import { Card, Empty } from "../components/ui";
 import type { Deal } from "../lib/types";
 
@@ -24,22 +27,27 @@ export function DealsScreen({ arg, arg2 }: ScreenProps) {
   const lang = useApp((s) => s.lang);
   const addr = arg ?? "";
   const venue = arg2 === "perp" ? "perp" : "spot";
+  const premium = usePremium();
+  const n = premium ? FREE.premiumDeals : FREE.deals;
 
   // Первые трейдеры доски подтянуты при запуске — их сделки видны сразу.
   const [deals, setDeals] = useState<Deal[] | null>(() => {
-    const hit = addr ? peekDeals(addr, venue) : undefined;
+    const hit = addr ? peekDeals(addr, venue, n) : undefined;
     return hit?.ok ? hit.deals ?? [] : null;
   });
 
+  // История фьючерсов — за подпиской: сервер её бесплатному не отдаёт.
+  const locked = venue === "perp" && !premium;
+
   useEffect(() => {
-    if (!addr) return;
+    if (!addr || locked) return;
     const ctrl = new AbortController();
     void (async () => {
-      const res = await fetchDeals(addr, venue, ctrl.signal);
+      const res = await fetchDeals(addr, venue, n, ctrl.signal);
       if (!ctrl.signal.aborted) setDeals(res?.ok ? res.deals ?? [] : []);
     })();
     return () => ctrl.abort();
-  }, [addr, venue]);
+  }, [addr, venue, n, locked]);
 
   /**
    * Чем была сделка: сторона и плечо.
@@ -59,9 +67,11 @@ export function DealsScreen({ arg, arg2 }: ScreenProps) {
   };
 
   return (
-    <Frame title={t(lang, "ui_deals")} sub={`${shortAddr(addr)} · ${t(lang, "ui_deals_last")}`}>
+    <Frame title={t(lang, "ui_deals")} sub={`${shortAddr(addr)} · ${t(lang, "ui_deals_last", { n: String(n) })}`}>
       <Card>
-        {deals === null ? (
+        {locked ? (
+          <Upsell src="perp" text={t(lang, "up_perp0")} />
+        ) : deals === null ? (
           <Empty text={t(lang, "ui_loading")} />
         ) : deals.length === 0 ? (
           <Empty text={t(lang, "rk_no_completed_trades")} />
@@ -101,6 +111,11 @@ export function DealsScreen({ arg, arg2 }: ScreenProps) {
             </div>
           ))
         )}
+        {/* Десять сделок — это срез, а не история: у активного трейдера
+            это пара дней. Остальное — с премиумом. */}
+        {!premium && deals && deals.length >= FREE.deals ? (
+          <Upsell src="history" text={t(lang, "up_history", { n: String(FREE.premiumDeals) })} />
+        ) : null}
       </Card>
     </Frame>
   );

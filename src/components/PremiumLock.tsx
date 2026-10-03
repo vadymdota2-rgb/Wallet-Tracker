@@ -6,30 +6,15 @@
  * не замок. Поэтому вместо пустоты прямо сказано, что это за подпиской.
  */
 import { useApp } from "../store/app";
-import { useLive } from "../store/live";
 import { t } from "../i18n/t";
-import { haptic } from "../lib/telegram";
+import type { PaySrc } from "../lib/upsell";
 import { Locked } from "./ui";
+import { usePaywall } from "./Upsell";
 
-export function usePremium(): boolean {
-  return useLive((s) => s.me.plan === "premium");
-}
+export { usePremium } from "./Upsell";
 
-/** `fromTab` — замок стоит на вкладке: экран премиума живёт в «Ещё», туда и
-    переходим, чтобы «Назад» вёл туда же, куда из аналитики. */
-export function PremiumLock({ fromTab = false }: { fromTab?: boolean }) {
+export function PremiumLock({ src = "perp" }: { src?: PaySrc }) {
   const lang = useApp((s) => s.lang);
-  const open = useApp((s) => s.open);
-  const goTab = useApp((s) => s.goTab);
-  return (
-    <Locked
-      text={t(lang, "hl_locked_body")}
-      cta={t(lang, "mw_upgrade")}
-      onCta={() => {
-        haptic("select");
-        if (fromTab) goTab("more");
-        open("premium");
-      }}
-    />
-  );
+  const toPremium = usePaywall();
+  return <Locked text={t(lang, "hl_locked_body")} cta={t(lang, "mw_upgrade")} onCta={() => toPremium(src)} />;
 }

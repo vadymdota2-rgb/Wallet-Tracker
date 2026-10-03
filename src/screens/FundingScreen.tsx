@@ -24,7 +24,6 @@ import { Frame } from "./Screen";
 export function FundingScreen() {
   const lang = useApp((s) => s.lang);
   const open = useApp((s) => s.open);
-  const goTab = useApp((s) => s.goTab);
   const premium = useLive((s) => s.me.plan === "premium");
   return (
     <Frame title={t(lang, "ui_tab_funding")}>
@@ -36,10 +35,7 @@ export function FundingScreen() {
           <Locked
             text={t(lang, "hl_locked_body")}
             cta={t(lang, "mw_upgrade")}
-            onCta={() => {
-              goTab("more");
-              open("premium");
-            }}
+            onCta={() => open("premium", "perp")}
           />
         )}
       </Card>
@@ -82,7 +78,7 @@ function everyLabel(lang: LangCode, per: number): string {
   const hours = Math.round(24 / (per || 1));
   return hours <= 1
     ? t(lang, "fund_hourly")
-    : t(lang, "fund_every").replace("{h}", String(hours));
+    : t(lang, "fund_every", { h: String(hours) });
 }
 
 /** Ставка за выплату: у часовых она сотые доли процента, у восьмичасовых — целые. */
@@ -101,7 +97,7 @@ function leftTime(lang: LangCode, sec: number): string {
   const body = h > 0
     ? `${h}${t(lang, "unit_hour")} ${String(m).padStart(2, "0")}${t(lang, "unit_min")}`
     : `${m}:${String(ss).padStart(2, "0")}`;
-  return t(lang, "fund_in").replace("{t}", body);
+  return t(lang, "fund_in", { t: body });
 }
 
 /**
