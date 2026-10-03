@@ -13,6 +13,8 @@
  * Под каждым выпуском — лайки и комментарии. Лайк меняется сразу, не
  * дожидаясь сервера, и откатывается, если тот отказал.
  */
+import { shareTg, useRefInfo } from "../components/Invite";
+import { toast } from "../components/Toast";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
@@ -25,6 +27,7 @@ import {
   fetchDigestComments,
   translateComment,
   likeDigest,
+  setDigestNotify,
   viewDigest,
   peekDigest,
   uncommentDigest,
@@ -582,7 +585,7 @@ function Comments({ it, lang, mod, muted, onCount }: {
   );
 }
 
-function DigestCard({ it, lang, premium, mod, muted, fresh }: {
+function DigestCard({ it, lang, premium, mod, muted, fresh, share }: {
   it: DigestItem;
   lang: Lang;
   premium: boolean;
@@ -590,6 +593,9 @@ function DigestCard({ it, lang, premium, mod, muted, fresh }: {
   muted: boolean;
   /** Свежий выпуск открыт сразу, прошлые — свёрнуты. */
   fresh: boolean;
+  /** Ссылка-приглашение: выпуском делятся со своей ссылкой — друг, который
+   *  по ней пришёл, приносит обоим по неделе премиума. */
+  share?: string;
 }) {
   const [shown, setShown] = useState(fresh);
   const [talk, setTalk] = useState(false);
@@ -653,7 +659,7 @@ function DigestCard({ it, lang, premium, mod, muted, fresh }: {
         </span>
       </button>
       {shown ? <Sections it={it} lang={lang} premium={premium} /> : null}
-      <div className="dg-foot">
+      <div className={`dg-foot${share ? " has-share" : ""}`}>
         <button type="button" className={`dg-like${liked ? " on" : ""}`} aria-pressed={liked}
           aria-label={t(lang, "dg_like")} onClick={() => void like()}>
           <span aria-hidden="true">{liked ? "♥" : "♡"}</span>
@@ -668,6 +674,13 @@ function DigestCard({ it, lang, premium, mod, muted, fresh }: {
           <b>{count}</b>
           <small>{t(lang, "dg_comments")}</small>
         </button>
+        {share ? (
+          <button type="button" className="dg-like dg-share" aria-label={t(lang, "dg_share")}
+            onClick={() => shareTg(share, t(lang, "dg_share_text"))}>
+            <span aria-hidden="true">↗</span>
+            <small>{t(lang, "dg_share")}</small>
+          </button>
+        ) : null}
         {/* Просмотры — справа и без рамки: это не кнопка, а счётчик. */}
         <span className="dg-views" role="img" aria-label={t(lang, "dg_views", { n: views })}>
           <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
@@ -690,6 +703,19 @@ export function DigestTab() {
   const premium = useLive((s) => s.me.plan === "premium");
   const [reply, setReply] = useState<DigestReply | null>(() => peekDigest() ?? null);
   const [failed, setFailed] = useState(false);
+  const ref = useRefInfo();
+  const [notify, setNotify] = useState<boolean | null>(null);
+  const notifyOn = notify ?? Boolean(reply?.notify);
+  const toggleNotify = async () => {
+    haptic("select");
+    const want = !notifyOn;
+    setNotify(want);
+    const r = await setDigestNotify(want);
+    if (!r?.ok) {
+      setNotify(!want);
+      toast(t(lang, "generic_error_retry"), "err");
+    } else toast(t(lang, want ? "dg_notify_on" : "dg_notify_off"));
+  };
 
   useEffect(() => {
     let alive = true;
@@ -725,8 +751,16 @@ export function DigestTab() {
   return (
     <div className="dg">
       <p className="dg-lead">{t(lang, "dg_sub", { t: next })}</p>
+      {/* Новый выпуск — уведомлением в Telegram, по желанию: привычка
+          заглядывать каждый день держится на этом. */}
+      <button type="button" className={notifyOn ? "dg-notify on" : "dg-notify"} aria-pressed={notifyOn}
+        onClick={() => void toggleNotify()}>
+        <span aria-hidden="true">{notifyOn ? "🔔" : "🔕"}</span>
+        <span>{t(lang, "dg_notify")}</span>
+        <i className="dg-switch" aria-hidden="true" />
+      </button>
       <DigestCard key={first.id} it={first} lang={lang} premium={premium}
-        mod={Boolean(reply.mod)} muted={Boolean(reply.muted)} fresh />
+        mod={Boolean(reply.mod)} muted={Boolean(reply.muted)} fresh share={ref?.link} />
       {items.length > 1 ? <SectionTitle>{t(lang, "dg_past")}</SectionTitle> : null}
       {items.slice(1).map((it) => (
         <DigestCard key={it.id} it={it} lang={lang} premium={premium}

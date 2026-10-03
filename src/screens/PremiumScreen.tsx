@@ -10,6 +10,7 @@
  * Connect, тоже должен уметь заплатить — адрес, сумма и памятка для этого и
  * лежат на виду.
  */
+import { InviteCard } from "../components/Invite";
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { Frame } from "./Screen";
 import { useApp } from "../store/app";
@@ -297,6 +298,9 @@ export function PremiumScreen({ arg }: ScreenProps) {
           />
         ))}
       </Card>
+
+      {/* Не готов платить — может пригласить друга: +7 дней обоим. */}
+      {me.service ? null : <InviteCard />}
 
       <Card>
         <SectionTitle>{t(lang, "pr_free_title")}</SectionTitle>

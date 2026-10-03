@@ -676,5 +676,15 @@ _wt = read(f"{APP}/src/screens/WalletsTab.tsx")
 say("приложение: плашка пробной недели и «Первые шаги»",
     '"tr_left"' in _wt and '"fs_1"' in _wt and "me.trial" in _wt and '"trial": trial,' in api)
 
+_inv = read(f"{APP}/src/components/Invite.tsx")
+_dgt = read(f"{APP}/src/screens/DigestTab.tsx")
+say("рост: приглашение друга (+7 дней обоим), «Поделиться» в дайджесте, уведомление о новом выпуске",
+    "def apply_referral(" in api and '"start": str(parts.get("start_param")' in api
+    and "REF_DAYS = 7" in api and '"/api/digest/notify": "notify"' in api
+    and "export function InviteCard(" in _inv and "<InviteCard" in read(f"{APP}/src/screens/MoreTab.tsx")
+    and "<InviteCard" in read(f"{APP}/src/screens/PremiumScreen.tsx")
+    and "setDigestNotify" in _dgt and "shareTg(" in _dgt
+    and "void digestTick()" in _lc and "digestTick();" in _lc and '"dg_ready"' in _lc)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

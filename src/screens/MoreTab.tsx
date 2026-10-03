@@ -9,6 +9,7 @@
  * дорогой. Значок уже стоит слева, поэтому из подписи он снимается — иначе
  * каждый пункт начинался с двух одинаковых картинок подряд.
  */
+import { InviteCard } from "../components/Invite";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import { bare, t } from "../i18n/t";
@@ -67,6 +68,8 @@ export function MoreTab() {
           onClick={() => open("legal")}
         />
       </Card>
+      {/* Пригласить друга — второй путь к премиуму, без оплаты. */}
+      {me.service ? null : <InviteCard />}
     </>
   );
 }

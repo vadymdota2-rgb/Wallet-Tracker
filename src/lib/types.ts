@@ -647,6 +647,8 @@ export interface DigestReply {
   items: DigestItem[];
   /** Автору закрыты комментарии. */
   muted?: boolean;
+  /** Человек просил присылать в Telegram новый выпуск. */
+  notify?: boolean;
   /** Владелец бота: удаляет любые комментарии. */
   mod?: boolean;
   error?: string;

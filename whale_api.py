@@ -548,7 +548,10 @@ def verify_init_data(raw: str) -> dict | None:
     return {"id": str(uid), "lang": user.get("language_code") or "ru",
             # Имя — только для подписи под комментарием дайджеста.
             "first": str(user.get("first_name") or ""), "last": str(user.get("last_name") or ""),
-            "username": str(user.get("username") or "")}
+            "username": str(user.get("username") or ""),
+            # Параметр ссылки запуска (t.me/…?startapp=…) — подписан вместе
+            # со всем остальным, подделать его нельзя.
+            "start": str(parts.get("start_param") or "")[:64]}
 
 
 class RateLimiter:
@@ -7653,6 +7656,170 @@ def track(chat: str, ev: str, src: str = "") -> None:
         con.close()
 
 
+# --- Приглашения ---------------------------------------------------------------
+#
+# Пригласил друга — +7 дней премиума обоим. Ссылка ведёт прямо в приложение
+# (t.me/<бот>?startapp=ref_<код>); Telegram передаёт параметр в подписанных
+# данных запуска, и при первом открытии новичок получает к пробной неделе
+# ещё семь дней, а пригласивший — семь дней к своему сроку (не больше
+# REF_MAX_30D наград за 30 дней, чтобы ссылку не крутили ботами).
+# Код — случайный, а не номер чата: номер аккаунта в чужие руки не уходит.
+REF_DAYS = 7
+REF_MAX_30D = 10
+REF_SCHEMA = """
+CREATE TABLE IF NOT EXISTS ref_codes (
+    chat_id TEXT PRIMARY KEY,
+    code TEXT NOT NULL UNIQUE,
+    at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS referrals (
+    invitee TEXT PRIMARY KEY,
+    inviter TEXT NOT NULL,
+    at INTEGER NOT NULL,
+    rewarded INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_referrals_inviter ON referrals(inviter, at);
+"""
+REF_LINK_BASE = os.environ.get("WHALE_REF_LINK", "").strip()
+_ref_base_cache: list[str] = []
+
+REF_NOTE = {
+    "en": "🎁 A friend joined with your link — +{n} days of Premium for you.",
+    "ru": "🎁 По вашей ссылке пришёл друг — вам +{n} дней Премиума.",
+    "uk": "🎁 За вашим посиланням прийшов друг — вам +{n} днів Преміуму.",
+    "es": "🎁 Un amigo se unió con tu enlace: +{n} días de Premium para ti.",
+    "pt": "🎁 Um amigo entrou pelo seu link — +{n} dias de Premium para você.",
+    "de": "🎁 Ein Freund kam über deinen Link — +{n} Tage Premium für dich.",
+    "fr": "🎁 Un ami vous a rejoint avec votre lien — +{n} jours de Premium pour vous.",
+    "tr": "🎁 Bağlantınla bir arkadaşın katıldı — sana +{n} gün Premium.",
+    "pl": "🎁 Znajomy dołączył z twojego linku — +{n} dni Premium dla ciebie.",
+    "id": "🎁 Teman bergabung lewat tautan Anda — +{n} hari Premium untuk Anda.",
+    "vi": "🎁 Một người bạn đã tham gia qua liên kết của bạn — bạn được +{n} ngày Premium.",
+    "ja": "🎁 あなたのリンクから友だちが参加しました — プレミアム+{n}日。",
+    "ko": "🎁 내 링크로 친구가 가입했습니다 — 프리미엄 +{n}일.",
+    "zh": "🎁 有朋友通过你的链接加入——你获得 +{n} 天高级版。",
+    "hi": "🎁 आपके लिंक से एक दोस्त जुड़ा — आपको +{n} दिन प्रीमियम।",
+    "ar": "🎁 انضم صديق عبر رابطك — لك +{n} أيام من بريميوم.",
+}
+
+
+def extend_premium(con: sqlite3.Connection, chat: str, days: int) -> bool:
+    """Прибавить дни премиума — к действующему сроку, а не вместо него.
+    Тот же расчёт, что grantPremiumDays в premium.cpp. Без своей транзакции:
+    её ведёт вызывающий."""
+    ucols = cols(con, "users")
+    if not {"is_premium", "premium_expire"} <= ucols:
+        return False
+    t = now()
+    row = con.execute("SELECT is_premium, premium_expire" + (", premium_start" if "premium_start" in ucols else "")
+                      + " FROM users WHERE chat_id=?", (chat,)).fetchone()
+    if not row:
+        return False
+    expire = int(row["premium_expire"] or 0)
+    active = bool(row["is_premium"]) and expire > t
+    new_expire = (expire if active else t) + days * 86400
+    if "premium_start" in ucols:
+        start = int(row["premium_start"] or 0)
+        con.execute("UPDATE users SET is_premium=1, premium_start=?, premium_expire=? WHERE chat_id=?",
+                    (start if active and start > 0 else t, new_expire, chat))
+    else:
+        con.execute("UPDATE users SET is_premium=1, premium_expire=? WHERE chat_id=?", (new_expire, chat))
+    return True
+
+
+def ref_link_base() -> str:
+    """Начало ссылки-приглашения. По умолчанию — главное мини-приложение бота
+    (t.me/<бот>?startapp=); имя бота спрашиваем у Telegram один раз."""
+    if REF_LINK_BASE:
+        return REF_LINK_BASE
+    if not _ref_base_cache:
+        me = tg_api("getMe", {})
+        name = me.get("username") if isinstance(me, dict) else ""
+        if not name:
+            return ""
+        _ref_base_cache.append(f"https://t.me/{name}?startapp=")
+    return _ref_base_cache[0]
+
+
+def ref_info(chat: str) -> dict:
+    """Ссылка человека и сколько он уже пригласил."""
+    if not chat:
+        return {"ok": False, "error": "unauthorized"}
+    con = open_db(DB, write=True)
+    if not con:
+        return {"ok": False, "error": "db"}
+    try:
+        con.executescript(REF_SCHEMA)
+        row = con.execute("SELECT code FROM ref_codes WHERE chat_id=?", (chat,)).fetchone()
+        code = row["code"] if row else ""
+        while not code:
+            cand = "".join(secrets.choice("23456789abcdefghjkmnpqrstuvwxyz") for _ in range(8))
+            if con.execute("INSERT OR IGNORE INTO ref_codes(chat_id, code, at) VALUES(?,?,?)",
+                           (chat, cand, now())).rowcount == 1:
+                code = cand
+        con.commit()
+        r = con.execute("SELECT COUNT(*) n, COALESCE(SUM(rewarded), 0) d FROM referrals WHERE inviter=?",
+                        (chat,)).fetchone()
+        base = ref_link_base()
+        return {"ok": True, "code": code, "link": base + "ref_" + code if base else "",
+                "invited": int(r["n"] or 0), "days": int(r["d"] or 0), "bonus": REF_DAYS}
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] ref {chat}: {e}\n")
+        return {"ok": False, "error": "db"}
+    finally:
+        con.close()
+
+
+def apply_referral(invitee: str, start: str) -> int:
+    """Новичок пришёл по ссылке: +REF_DAYS ему и пригласившему. Возвращает,
+    сколько дней добавлено новичку (0 — ссылки не было или она не годится).
+    Зовётся только сразу после выдачи пробной недели — то есть ровно один
+    раз в жизни аккаунта."""
+    if not start.startswith("ref_") or is_service(invitee):
+        return 0
+    code = start[4:].strip().lower()
+    con = open_db(DB, write=True)
+    if not con:
+        return 0
+    inviter, rewarded = "", False
+    try:
+        con.executescript(REF_SCHEMA)
+        row = con.execute("SELECT chat_id FROM ref_codes WHERE code=?", (code,)).fetchone()
+        inviter = row["chat_id"] if row else ""
+        if not inviter or inviter == invitee:
+            return 0
+        con.isolation_level = None
+        con.execute("BEGIN IMMEDIATE")
+        try:
+            if con.execute("INSERT OR IGNORE INTO referrals(invitee, inviter, at) VALUES(?,?,?)",
+                           (invitee, inviter, now())).rowcount != 1:
+                con.execute("ROLLBACK")
+                return 0
+            extend_premium(con, invitee, REF_DAYS)
+            recent = con.execute("SELECT COUNT(*) FROM referrals WHERE inviter=? AND rewarded>0 AND at>?",
+                                 (inviter, now() - 30 * 86400)).fetchone()[0]
+            if recent < REF_MAX_30D and extend_premium(con, inviter, REF_DAYS):
+                con.execute("UPDATE referrals SET rewarded=? WHERE invitee=?", (REF_DAYS, invitee))
+                rewarded = True
+            con.execute("COMMIT")
+        except sqlite3.Error:
+            con.execute("ROLLBACK")
+            raise
+        lang_row = con.execute("SELECT language FROM users WHERE chat_id=?", (inviter,)).fetchone()
+        lang = (lang_row["language"] if lang_row else "en") or "en"
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] referral {invitee}: {e}\n")
+        return 0
+    finally:
+        con.close()
+    track(invitee, "ref")
+    if rewarded:
+        boot_drop(inviter)
+        tg_api("sendMessage", {"chat_id": inviter,
+                               "text": REF_NOTE.get(lang, REF_NOTE["en"]).replace("{n}", str(REF_DAYS))})
+    return REF_DAYS
+
+
 # --- Оплата премиума из приложения ------------------------------------------
 #
 # Своей выдачи подписки здесь нет намеренно: она уже написана в premium.cpp и
@@ -10927,6 +11094,10 @@ CREATE TABLE IF NOT EXISTS digest_tr (
     src TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (comment_id, lang)
 );
+CREATE TABLE IF NOT EXISTS digest_subs (
+    chat_id TEXT PRIMARY KEY,
+    at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS digest_mute (
     chat_id TEXT PRIMARY KEY,
     at INTEGER NOT NULL
@@ -11293,7 +11464,9 @@ def digest_list(chat: str, premium: bool) -> dict:
                           "likes": r["likes"], "comments": r["comments"], "views": r["views"],
                           "liked": bool(r["liked"])})
         muted = bool(chat) and bool(con.execute("SELECT 1 FROM digest_mute WHERE chat_id=?", (chat,)).fetchone())
-        return {"ok": True, "items": items, "muted": muted, "mod": bool(chat) and chat == OWNER_CHAT_ID}
+        notify = bool(chat) and bool(con.execute("SELECT 1 FROM digest_subs WHERE chat_id=?", (chat,)).fetchone())
+        return {"ok": True, "items": items, "muted": muted, "notify": notify,
+                "mod": bool(chat) and chat == OWNER_CHAT_ID}
     finally:
         con.close()
 
@@ -11415,6 +11588,15 @@ def digest_act(user: dict, kind: str, body: dict) -> dict:
         with _digest_lock:
             # Просмотр — человек раскрыл выпуск. Каждый считается один раз:
             # раскрыл трижды — всё равно один просмотр.
+            # Присылать ли в Telegram, что вышел новый выпуск. Рассылает бот
+            # (lifecycle.cpp) — по этой таблице.
+            if kind == "notify":
+                if body.get("on"):
+                    con.execute("INSERT OR IGNORE INTO digest_subs(chat_id, at) VALUES(?,?)", (chat, now()))
+                else:
+                    con.execute("DELETE FROM digest_subs WHERE chat_id=?", (chat,))
+                con.commit()
+                return {"ok": True, "notify": bool(body.get("on"))}
             if kind == "view":
                 did = int(body.get("id") or 0)
                 if not con.execute("SELECT 1 FROM digests WHERE id=?", (did,)).fetchone():
@@ -11578,6 +11760,8 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
                 "DELETE FROM digest_tr WHERE comment_id IN (SELECT id FROM digest_comments WHERE chat_id=?)",
                 "DELETE FROM digest_comments WHERE chat_id=?",
                 "DELETE FROM digest_mute WHERE chat_id=?",
+                "DELETE FROM digest_subs WHERE chat_id=?",
+                "DELETE FROM ref_codes WHERE chat_id=?",
                 "DELETE FROM users WHERE chat_id=?",
             ):
                 try:
@@ -11760,7 +11944,10 @@ class Handler(BaseHTTPRequestHandler):
                 # Первое открытие приложения — неделя премиума в подарок.
                 # Выгрузка в памяти собрана ещё без неё, поэтому её сбрасываем.
                 gift = grant_trial(chat, who.get("lang", "")) if who else False
+                bonus = 0
                 if gift:
+                    # Пришёл по приглашению — к неделе ещё REF_DAYS дней.
+                    bonus = apply_referral(chat, who.get("start", ""))
                     boot_drop(chat)
                     track(chat, "trial")
                 if chat:
@@ -11768,7 +11955,7 @@ class Handler(BaseHTTPRequestHandler):
                 boot = bootstrap_cached(chat)
                 boot = for_plan(boot, plan_of(boot))
                 if gift:
-                    boot = {**boot, "gift": {"days": TRIAL_DAYS}}
+                    boot = {**boot, "gift": {"days": TRIAL_DAYS + bonus}}
                 self._json(200, boot)
                 return
             if path in ("/market", "/api/market"):
@@ -12066,6 +12253,9 @@ class Handler(BaseHTTPRequestHandler):
             if path in ("/liqmap", "/api/liqmap"):
                 self._json(200, liq_map(qs.get("sym", ["BTC"])[0], (qs.get("range", ["1d"])[0] or "1d")))
                 return
+            if path in ("/ref", "/api/ref"):
+                self._json(200, ref_info(self._user(qs)))
+                return
             if path in ("/digest", "/api/digest"):
                 chat = self._user(qs)
                 self._json(200, digest_list(chat, chat_premium(chat)))
@@ -12178,7 +12368,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(401, {"ok": False, "error": "unauthorized"})
                 return
             dg = {"/api/digest/like": "like", "/api/digest/comment": "comment",
-                  "/api/digest/uncomment": "uncomment", "/api/digest/view": "view"}.get(path)
+                  "/api/digest/uncomment": "uncomment", "/api/digest/view": "view",
+                  "/api/digest/notify": "notify"}.get(path)
             if dg:
                 # Отказ (часто, ссылка, лимит) — тоже 200: приложению нужна
                 # причина, а на ошибочный код оно видит только «нет ответа».

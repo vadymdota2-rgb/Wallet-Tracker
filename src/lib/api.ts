@@ -199,6 +199,24 @@ export const fetchDeals = (addr: string, venue: string, n: number, _signal?: Abo
 export const peekDeals = (addr: string, venue: string, n: number) =>
   peek<DealsReply | null>(dealsPath(addr, venue, n), TTL.deals);
 
+/** Приглашения: ссылка человека и сколько друзей по ней пришло. */
+export interface RefInfo {
+  ok: boolean;
+  code?: string;
+  /** Пусто, если сервер не узнал имя бота: тогда и звать некуда. */
+  link?: string;
+  invited?: number;
+  days?: number;
+  bonus?: number;
+}
+const REF_TTL = 10 * 60_000;
+export const fetchRef = () => cachedGet<RefInfo>("/api/ref", REF_TTL);
+export const peekRef = () => peek<RefInfo | null>("/api/ref", REF_TTL);
+
+/** Присылать ли в Telegram, что вышел новый выпуск дайджеста. */
+export const setDigestNotify = (on: boolean) =>
+  call<{ ok: boolean; notify?: boolean }>("/api/digest/notify", { method: "POST", body: { on } });
+
 /** Событие воронки продаж: сервер пишет его раз в сутки на человека. Ответ
  *  не нужен — замер не должен ничего задерживать. */
 export const trackEvent = (ev: "paywall", src: string) =>
