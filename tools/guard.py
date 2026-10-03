@@ -671,7 +671,7 @@ say("бот: письма жизненного цикла — 2 дня до ко
 _mcpp = read(f"{BOT}/main.cpp")
 say("бот: бесплатному алерт без цены входа и PnL, со строкой о премиуме",
     _mcpp.count("const std::set<std::string> prem = premiumSubsetOf(chatIds);") == 2
-    and _mcpp.count('tr(lang, "alert_locked")') == 2)
+    and _mcpp.count('tr(lang, "alert_locked")') == 3)  # две строки в алертах + проверка для кнопки
 _wt = read(f"{APP}/src/screens/WalletsTab.tsx")
 say("приложение: плашка пробной недели и «Первые шаги»",
     '"tr_left"' in _wt and '"fs_1"' in _wt and "me.trial" in _wt and '"trial": trial,' in api)
@@ -685,6 +685,23 @@ say("рост: приглашение друга (+7 дней обоим), «П�
     and "<InviteCard" in read(f"{APP}/src/screens/PremiumScreen.tsx")
     and "setDigestNotify" in _dgt and "shareTg(" in _dgt
     and "void digestTick()" in _lc and "digestTick();" in _lc and '"dg_ready"' in _lc)
+
+_tg = read(f"{APP}/src/lib/telegram.ts")
+_mq = read(os.path.join(BOT, "message_queue.cpp"))
+say("воронка: кнопки бота ведут прямо на экран Премиума (скидка, продление, возврат, бесплатный алерт)",
+    'openAppKeyboard(lang, "premium-intro", "btn_intro")' in _lc and '"premium-trial", "btn_keep"' in _lc
+    and '"premium-renew", "btn_extend"' in _lc and '"premium-back", "btn_plans"' in _lc
+    and "freeAlertKeyboard(m, labelLang.second)" in _mcpp and "a.markup FROM deliveries" in _mq
+    and "sendMsg(cid,msg,markup)" in _mq and "export function launchGo()" in _tg
+    and "launchGo()" in read(f"{APP}/src/App.tsx"))
+_i18n = json.load(open(f"{APP}/tools/i18n.json", encoding="utf-8"))
+_bad_ru = [k for k, v in _i18n.items()
+           if re.search(r"(?<![А-Яа-яЁё])[СсВв] Премиум(?![а-яё])|Premium", v.get("ru", ""))]
+say("тексты: «с Премиумом», «в Премиуме» и без латинского Premium в русском",
+    not _bad_ru, ", ".join(_bad_ru[:5]))
+say("приложение: карточка вводной цены на дайджесте и в кошельках, строка «цена входа и PnL» в сравнении",
+    "<IntroOffer />" in read(f"{APP}/src/screens/DigestTab.tsx") and "<IntroOffer />" in _wt
+    and '"cmp_alert_pnl"' in read(f"{APP}/src/screens/PremiumScreen.tsx"))
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

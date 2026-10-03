@@ -54,7 +54,10 @@ export function PremiumScreen({ arg }: ScreenProps) {
   /* Откуда пришли: заголовок говорит про то, за чем человек открыл экран, —
      «следите за 50 кошельками», а не общее «раскройте потенциал». */
   const src = isPaySrc(arg) ? arg : "more";
-  const head = SRC_HEAD[src];
+  const trial = Boolean(me.trial) && me.plan === "premium";
+  /* Пробному — всегда про то, что будет после пробы: сравнение ниже
+     показывает, что именно урежется. */
+  const head = SRC_HEAD[src] ?? (trial ? SRC_HEAD.trial : undefined);
   /* Цены и способы оплаты — с сервера: ценник в сборке приложения означал бы
      две правды сразу, а кнопку USDT без настроенного кошелька показывать
      нечестно. */
@@ -85,8 +88,8 @@ export function PremiumScreen({ arg }: ScreenProps) {
   }, [pay.ton]);
   // Замер воронки: экран увидел тот, кому есть что покупать.
   useEffect(() => {
-    if (!active && !me.service) trackEvent("paywall", src);
-  }, [active, me.service, src]);
+    if ((!active || trial) && !me.service) trackEvent("paywall", src);
+  }, [active, trial, me.service, src]);
 
   /* Что даёт подписка — подробно, с пояснением к каждому пункту. Прежний
      список из четырёх строк обрезался на полуслове («Hyperliquid futures:
@@ -111,6 +114,7 @@ export function PremiumScreen({ arg }: ScreenProps) {
   const cmp: [Parameters<typeof t>[1], string, string][] = [
     ["cmp_speed", `${FREE.delayMin} ${t(lang, "unit_min")}`, "0"],
     ["cmp_wallets", String(FREE.wallets), String(FREE.premiumWallets)],
+    ["cmp_alert_pnl", "—", "✓"],
     ["cmp_top", String(FREE.top), String(FREE.premiumTop)],
     ["cmp_hl", String(FREE.showcase), String(FREE.premiumTop)],
     ["cmp_windows", t(lang, "big_win_24h"), t(lang, "big_win_30d")],
@@ -192,7 +196,7 @@ export function PremiumScreen({ arg }: ScreenProps) {
       ) : null}
       {/* Сначала — зачем: одна фраза про то, за чем человек пришёл, и
           сравнение числами. Потом оплата: цена написана один раз, на кнопке. */}
-      {me.service || active ? null : (
+      {me.service || (active && !trial) ? null : (
         <Card>
           {head ? <p className="pw-why">{t(lang, head)}</p> : null}
           <div className="cmp">

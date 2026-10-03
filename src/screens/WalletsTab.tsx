@@ -3,7 +3,7 @@
  * и список кошельков с местом в рейтинге.
  */
 import { FREE } from "../lib/upsell";
-import { Upsell } from "../components/Upsell";
+import { IntroOffer, Upsell } from "../components/Upsell";
 import { useRef } from "react";
 import { useApp, isPaused, walletLimit } from "../store/app";
 import { useLive } from "../store/live";
@@ -63,6 +63,7 @@ export function WalletsTab() {
 
   return (
     <>
+      <IntroOffer />
       {/* Пробная неделя: сколько осталось и что будет после — заранее. */}
       {trialDays ? (
         <Card>

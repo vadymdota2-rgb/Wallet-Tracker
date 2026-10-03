@@ -13,7 +13,7 @@ import { HalvingCard } from "./components/HalvingCard";
 import { t, bare } from "./i18n/t";
 import { ensureLang, isRtl, normalizeLang } from "./i18n";
 import { setLocale } from "./lib/format";
-import { bootTelegram, haptic, initData, telegramLang, waitForTelegram, webApp } from "./lib/telegram";
+import { bootTelegram, haptic, initData, launchGo, telegramLang, waitForTelegram, webApp } from "./lib/telegram";
 import { startSync, syncNow } from "./lib/sync";
 import { Toaster, toast } from "./components/Toast";
 import { Background } from "./components/Background";
@@ -127,6 +127,23 @@ export default function App() {
     };
     // Достаточно одного прохода на старте: дальше язык меняет applyLang,
     // который сначала грузит словарь и только потом трогает состояние.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Запуск кнопкой бота «Забрать скидку», «Продлить», «Открыть дайджест» —
+  // сразу туда. Один раз за сессию: при перезагрузке страницы Telegram
+  // оставляет тот же адрес, и экран оплаты не должен всплывать снова.
+  useEffect(() => {
+    const go = launchGo();
+    if (!go) return;
+    try {
+      if (sessionStorage.getItem("wt-go") === "1") return;
+      sessionStorage.setItem("wt-go", "1");
+    } catch {
+      // без sessionStorage — просто открываем
+    }
+    if (go.to === "digest") goTab("digest");
+    else open("premium", go.src);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

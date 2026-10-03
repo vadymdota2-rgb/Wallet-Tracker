@@ -41,7 +41,14 @@ export type PaySrc =
   | "more"
   | "help"
   | "gift"
-  | "trial";
+  | "trial"
+  // Кнопки бота: бесплатный алерт без цены входа, письма жизненного цикла.
+  | "alert"
+  | "intro"
+  | "ended"
+  | "renew"
+  | "back"
+  | "tg";
 
 /** Заголовок экрана премиума по поводу, с которым человек пришёл. Для общих
  *  входов (меню, помощь, подарок) — общий заголовок. */
@@ -53,6 +60,11 @@ export const SRC_HEAD: Partial<Record<PaySrc, DictKey>> = {
   delay: "pw_h_delay",
   history: "pw_h_history",
   digest: "pw_h_digest",
+  alert: "pw_h_alert",
+  trial: "pw_h_trial",
+  intro: "pw_h_intro",
+  ended: "pw_h_back",
+  back: "pw_h_back",
 };
 
 export function isPaySrc(v: unknown): v is PaySrc {

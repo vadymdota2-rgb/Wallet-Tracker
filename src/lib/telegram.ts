@@ -103,6 +103,26 @@ const LAUNCH_USER: string = (() => {
   }
 })();
 
+/**
+ * Куда открыться сразу после запуска. Кнопка бота дописывает к адресу
+ * `?go=premium-intro`, ссылка t.me/<бот>?startapp=premium-intro приходит
+ * как start_param. Формат «экран-повод»: письмо про скидку открывает экран
+ * Премиума с заголовком про скидку, а не главный экран, где её ещё искать.
+ * Приглашения (ref_…) сюда не относятся — их разбирает сервер.
+ */
+export function launchGo(): { to: string; src: string } | null {
+  let raw = "";
+  try {
+    raw = new URLSearchParams(window.location.search).get("go") || "";
+    if (!raw) raw = new URLSearchParams(LAUNCH).get("start_param") || "";
+    if (!raw) raw = new URLSearchParams(window.location.hash.slice(1)).get("tgWebAppStartParam") || "";
+  } catch {
+    return null;
+  }
+  const m = /^(premium|digest)(?:-([a-z]{2,12}))?$/.exec(raw);
+  return m ? { to: m[1] ?? "", src: m[2] || "tg" } : null;
+}
+
 export function initData(): string {
   return webApp()?.initData || LAUNCH;
 }

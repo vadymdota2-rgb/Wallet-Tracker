@@ -15,6 +15,7 @@
  */
 import { shareTg, useRefInfo } from "../components/Invite";
 import { toast } from "../components/Toast";
+import { IntroOffer } from "../components/Upsell";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
@@ -750,6 +751,8 @@ export function DigestTab() {
   }
   return (
     <div className="dg">
+      {/* Приложение открывается на дайджесте — скидку видно с порога. */}
+      <IntroOffer />
       <p className="dg-lead">{t(lang, "dg_sub", { t: next })}</p>
       {/* Новый выпуск — уведомлением в Telegram, по желанию: привычка
           заглядывать каждый день держится на этом. */}
