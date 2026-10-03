@@ -2,6 +2,7 @@
  * «Мои кошельки» — крупная сумма за сутки, перевес покупок, порог алертов
  * и список кошельков с местом в рейтинге.
  */
+import { FREE } from "../lib/upsell";
 import { Upsell } from "../components/Upsell";
 import { useRef } from "react";
 import { useApp, isPaused, walletLimit } from "../store/app";
@@ -18,6 +19,7 @@ const PRESETS = [100, 500, 1000, 5000, 10000, 50000];
 export function WalletsTab() {
   const lang = useApp((s) => s.lang);
   const open = useApp((s) => s.open);
+  const goTab = useApp((s) => s.goTab);
   const { me, wallets, rank } = useLive();
 
   const limit = walletLimit(me.plan, me.service);
@@ -48,8 +50,38 @@ export function WalletsTab() {
     }
   };
 
+  // «Первые шаги»: пока не набраны три бесплатных кошелька. Без кошелька
+  // пробная неделя сгорает зря — алертов просто не от кого получать.
+  const topAddr = rank.spot?.pnl?.[0]?.a;
+  const steps: { key: Parameters<typeof t>[1]; done: boolean; go: () => void }[] = [
+    { key: "fs_1", done: wallets.length >= 1, go: () => (topAddr ? open("addWallet", topAddr) : goTab("top")) },
+    { key: "fs_2", done: wallets.length >= FREE.wallets, go: () => goTab("top") },
+    { key: "fs_3", done: me.alertTg !== false, go: () => open("alerts") },
+  ];
+  const showSteps = !me.service && steps.some((s) => !s.done) && wallets.length < FREE.wallets;
+  const trialDays = me.trial && me.premUntil ? Math.max(1, Math.ceil((me.premUntil - Date.now()) / 86400000)) : 0;
+
   return (
     <>
+      {/* Пробная неделя: сколько осталось и что будет после — заранее. */}
+      {trialDays ? (
+        <Card>
+          <SectionTitle>{t(lang, "tr_left", { n: trialDays })}</SectionTitle>
+          <Upsell src="trial" text={t(lang, "tr_after")} cta={t(lang, "tr_cta")} />
+        </Card>
+      ) : null}
+      {showSteps ? (
+        <Card>
+          <SectionTitle>{t(lang, "fs_title")}</SectionTitle>
+          {steps.map((s, i) => (
+            <button key={s.key} type="button" className={s.done ? "fstep done" : "fstep"}
+              onClick={s.done ? undefined : s.go} disabled={s.done}>
+              <span className="fstep-n" aria-hidden="true">{s.done ? "✓" : i + 1}</span>
+              <span>{t(lang, s.key)}</span>
+            </button>
+          ))}
+        </Card>
+      ) : null}
       <Card>
         <Tiles
           items={[

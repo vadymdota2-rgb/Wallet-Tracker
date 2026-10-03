@@ -130,7 +130,7 @@ say("срез: сделки китов бесплатному — с задер�
     and "if days != 30 and not prem:" in api)
 say("срез: 3 кошелька с алертами — одно число у API, бота и приложения",
     "FREE_MAX_WALLETS = 3" in api and "FREE_ALERT_WALLETS = 3" in api
-    and "constexpr size_t FREE_ALERT_WALLETS = 3;" in read(f"{BOT}/main.cpp")
+    and "constexpr size_t FREE_ALERT_WALLETS = 3;" in read(f"{BOT}/telegram.h")
     and "loadedForUser >= FREE_ALERT_WALLETS" in read(f"{BOT}/main.cpp")
     and "wallets: 3," in read(f"{APP}/src/lib/upsell.ts") and '"active": i < FREE_ALERT_WALLETS' in fp)
 say("срез не трогает Cortex", "cortex" not in code_only(fp).lower() and "sonar" not in fp)
@@ -661,6 +661,20 @@ say("тарифы: месяц подпиской, год и вводная це�
     and '"payload": "premium_30_intro", "stars": 150, "days": 30' in api
     and '"subscription_period": STAR_SUB_PERIOD' in api and "STAR_SUB_PERIOD = 30 * 86400" in api
     and "grantPremiumDays(chatId, days)" in _prem_cpp and "if not intro_until(con, chat):" in api, str(_bot_plans))
+
+_lc = read(os.path.join(BOT, "lifecycle.cpp"))
+say("бот: письма жизненного цикла — 2 дня до конца пробы, конец пробы со скидкой, возврат 14/30, продление без автоплатежа",
+    'claim(r.chat, "trial_d5")' in _lc and '"renew:" + std::to_string(r.expire)' in _lc
+    and "for (const int after : {14, 30})" in _lc and 'tr(lang, "lc_intro")' in _lc
+    and "p.sub_until >= u.premium_expire - 86400" in _lc and "if (n <= 0 ||" in _lc
+    and "sendPremiumEnded(cid)" in _prem_cpp and "lifecycleTick();" in read(f"{BOT}/main.cpp"))
+_mcpp = read(f"{BOT}/main.cpp")
+say("бот: бесплатному алерт без цены входа и PnL, со строкой о премиуме",
+    _mcpp.count("const std::set<std::string> prem = premiumSubsetOf(chatIds);") == 2
+    and _mcpp.count('tr(lang, "alert_locked")') == 2)
+_wt = read(f"{APP}/src/screens/WalletsTab.tsx")
+say("приложение: плашка пробной недели и «Первые шаги»",
+    '"tr_left"' in _wt and '"fs_1"' in _wt and "me.trial" in _wt and '"trial": trial,' in api)
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

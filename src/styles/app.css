@@ -3008,3 +3008,17 @@
 .plan-badge { padding: 2px 8px; border-radius: 999px; background: var(--warn); color: #1a1200; font-size: 12px; font-weight: 700; white-space: nowrap; }
 .plan-px { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
 .plan small { color: var(--dim); font-size: 12px; line-height: 1.35; }
+
+/* Первые шаги на вкладке кошельков. */
+.fstep {
+  display: flex; align-items: center; gap: 11px; width: 100%; padding: 10px 2px;
+  border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--ink);
+  font: inherit; font-size: 14px; text-align: start; cursor: pointer;
+}
+.fstep:last-child { border-bottom: 0; }
+.fstep-n {
+  display: grid; place-items: center; flex: none; width: 26px; height: 26px; border-radius: 50%;
+  border: 1px solid var(--blue); color: var(--glow); font-size: 13px; font-weight: 700;
+}
+.fstep.done { color: var(--dim); cursor: default; }
+.fstep.done .fstep-n { border-color: var(--up); background: rgb(61 220 151 / 0.15); color: var(--up); }

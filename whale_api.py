@@ -1481,10 +1481,21 @@ def load_me(cur: sqlite3.Connection, chat: str) -> dict:
             "WHERE d.chat_id=? AND a.created_at>=?",
             (chat, now() - 30 * 86400),
         ).fetchone()[0]
+    # Пробная неделя: премиум есть, а платежей нет. Приложение показывает,
+    # сколько дней осталось и что будет после, — заранее, а не в последний час.
+    trial = False
+    if plan == "premium" and not service and table_exists(cur, "trial_granted") and \
+            cur.execute("SELECT 1 FROM trial_granted WHERE chat_id=?", (chat,)).fetchone():
+        paid = table_exists(cur, "premium_payments") and cur.execute(
+            "SELECT 1 FROM premium_payments WHERE chat_id=? LIMIT 1", (chat,)).fetchone()
+        paid = paid or (table_exists(cur, "ton_invoices") and cur.execute(
+            "SELECT 1 FROM ton_invoices WHERE chat_id=? AND status='paid' LIMIT 1", (chat,)).fetchone())
+        trial = not paid
     return {
         "plan": plan,
-        "limit": SERVICE_MAX_WALLETS if service else (50 if plan == "premium" else 1),
+        "limit": SERVICE_MAX_WALLETS if service else (PREMIUM_MAX_WALLETS if plan == "premium" else FREE_MAX_WALLETS),
         "service": service,
+        "trial": trial,
         "alertTg": alert_tg,
         "unread": unread,
         "threshold": thr,
