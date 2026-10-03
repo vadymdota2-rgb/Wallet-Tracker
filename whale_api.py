@@ -108,9 +108,27 @@ RANK_MAX_DEPTH = 100
 PREMIUM_DAYS = 30
 PREMIUM_STARS = 250
 PREMIUM_PAYLOAD = "premium_30_days"
+# Тарифы. Нагрузка, цена и срок — те же, что STAR_PLANS в premium.cpp: бот
+# сверяет их перед выдачей подписки.
+#
+#   m     — месяц подпиской Telegram: звёзды списываются сами каждые 30 дней,
+#           отменить можно в настройках Telegram в любой момент;
+#   y     — год разовой оплатой, около трети дешевле двенадцати месяцев;
+#   intro — первый месяц по вводной цене: 48 часов после конца пробной
+#           недели и только тем, кто ещё ни разу не платил.
+STAR_PLANS = {
+    "m": {"payload": PREMIUM_PAYLOAD, "stars": PREMIUM_STARS, "days": 30, "sub": True},
+    "y": {"payload": "premium_365_days", "stars": 1990, "days": 365, "sub": False},
+    "intro": {"payload": "premium_30_intro", "stars": 150, "days": 30, "sub": False},
+}
+INTRO_WINDOW_SEC = 48 * 3600
+# Подписка Telegram бывает только на 30 дней.
+STAR_SUB_PERIOD = 30 * 86400
 # Цена в USDT. Отдельным числом, а не пересчётом звёзд: курс звезды плавает,
 # а ценник в долларах человек видит заранее и без сюрпризов.
 PREMIUM_USDT = float(os.environ.get("WHALE_PREMIUM_USDT", "3.99"))
+PREMIUM_USDT_YEAR = float(os.environ.get("WHALE_PREMIUM_USDT_YEAR", "29.99"))
+USDT_PLANS = {"m": {"usdt": PREMIUM_USDT, "days": 30}, "y": {"usdt": PREMIUM_USDT_YEAR, "days": 365}}
 # Кошелёк, на который приходят деньги. Тот же самый и тем же способом, что в
 # tonWallet() из premium.cpp: переменная окружения, а если её нет — адрес по
 # умолчанию. Требовать переменную только здесь нельзя: у бота и у API разные
@@ -7691,52 +7709,99 @@ PAY_TEXT = {
         "hi": "Wallet Tracker प्रीमियम", "ar": "Wallet Tracker بريميوم",
     },
     "desc": {
-        "en": "30 days: 50 wallets, Hyperliquid futures, full Top-100",
-        "ru": "30 дней: 50 кошельков, фьючерсы Hyperliquid, полный Топ-100",
-        "uk": "30 днів: 50 гаманців, ф’ючерси Hyperliquid, повний Топ-100",
-        "es": "30 días: 50 carteras, futuros de Hyperliquid, Top-100 completo",
-        "pt": "30 dias: 50 carteiras, futuros da Hyperliquid, Top-100 completo",
-        "de": "30 Tage: 50 Wallets, Hyperliquid-Futures, komplette Top-100",
-        "fr": "30 jours : 50 portefeuilles, futures Hyperliquid, Top-100 complet",
-        "tr": "30 gün: 50 cüzdan, Hyperliquid vadeli işlemler, tam Top-100",
-        "pl": "30 dni: 50 portfeli, kontrakty Hyperliquid, pełny Top-100",
-        "id": "30 hari: 50 dompet, futures Hyperliquid, Top-100 penuh",
-        "vi": "30 ngày: 50 ví, futures Hyperliquid, Top-100 đầy đủ",
-        "ja": "30日間：ウォレット50個、Hyperliquid先物、トップ100すべて",
-        "ko": "30일: 지갑 50개, Hyperliquid 선물, 전체 Top-100",
-        "zh": "30 天：50 个钱包、Hyperliquid 合约、完整前 100",
-        "hi": "30 दिन: 50 वॉलेट, Hyperliquid फ्यूचर्स, पूरा टॉप-100",
-        "ar": "30 يومًا: 50 محفظة، عقود Hyperliquid، أفضل 100 كاملة",
+        "en": "{n} days: 50 wallets, Hyperliquid futures, full Top-100",
+        "ru": "{n} дней: 50 кошельков, фьючерсы Hyperliquid, полный Топ-100",
+        "uk": "{n} днів: 50 гаманців, ф’ючерси Hyperliquid, повний Топ-100",
+        "es": "{n} días: 50 carteras, futuros de Hyperliquid, Top-100 completo",
+        "pt": "{n} dias: 50 carteiras, futuros da Hyperliquid, Top-100 completo",
+        "de": "{n} Tage: 50 Wallets, Hyperliquid-Futures, komplette Top-100",
+        "fr": "{n} jours : 50 portefeuilles, futures Hyperliquid, Top-100 complet",
+        "tr": "{n} gün: 50 cüzdan, Hyperliquid vadeli işlemler, tam Top-100",
+        "pl": "{n} dni: 50 portfeli, kontrakty Hyperliquid, pełny Top-100",
+        "id": "{n} hari: 50 dompet, futures Hyperliquid, Top-100 penuh",
+        "vi": "{n} ngày: 50 ví, futures Hyperliquid, Top-100 đầy đủ",
+        "ja": "{n}日間：ウォレット50個、Hyperliquid先物、トップ100すべて",
+        "ko": "{n}일: 지갑 50개, Hyperliquid 선물, 전체 Top-100",
+        "zh": "{n} 天：50 个钱包、Hyperliquid 合约、完整前 100",
+        "hi": "{n} दिन: 50 वॉलेट, Hyperliquid फ्यूचर्स, पूरा टॉप-100",
+        "ar": "{n} يومًا: 50 محفظة، عقود Hyperliquid، أفضل 100 كاملة",
     },
 }
 
 
-def t_pay(lang: str, key: str) -> str:
+def t_pay(lang: str, key: str, days: int = PREMIUM_DAYS) -> str:
     box = PAY_TEXT[key]
-    return box.get((lang or "en").lower(), box["en"])
+    return box.get((lang or "en").lower(), box["en"]).replace("{n}", str(days))
 
 
-def pay_stars(chat: str, lang: str) -> dict:
+def intro_until(con: sqlite3.Connection | None, chat: str) -> int:
+    """До какого времени человеку доступна вводная цена; 0 — недоступна.
+
+    Только тем, у кого кончилась пробная неделя и кто ещё ни разу не платил:
+    48 часов с конца недели. Это не скидка всем, а повод решиться у тех, кто
+    неделю пользовался и видит, что потерял."""
+    if not con or not chat or is_service(chat) or not table_exists(con, "trial_granted"):
+        return 0
+    try:
+        row = con.execute("SELECT granted_at FROM trial_granted WHERE chat_id=?", (chat,)).fetchone()
+        if not row:
+            return 0
+        end = int(row["granted_at"] or 0) + TRIAL_DAYS * 86400
+        t = now()
+        if not (end <= t < end + INTRO_WINDOW_SEC) or is_premium(con, chat):
+            return 0
+        if table_exists(con, "premium_payments") and con.execute(
+                "SELECT 1 FROM premium_payments WHERE chat_id=? LIMIT 1", (chat,)).fetchone():
+            return 0
+        if table_exists(con, "ton_invoices") and con.execute(
+                "SELECT 1 FROM ton_invoices WHERE chat_id=? AND status='paid' LIMIT 1", (chat,)).fetchone():
+            return 0
+        return end + INTRO_WINDOW_SEC
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] intro {chat}: {e}\n")
+        return 0
+
+
+def pay_stars(chat: str, lang: str, plan: str = "m") -> dict:
     """Ссылка на счёт в звёздах.
 
     Полезная нагрузка и сумма — ровно те, что ждёт бот: он проверяет их у
-    себя и с чужим счётом подписку не выдаст.
+    себя и с чужим счётом подписку не выдаст. Месяц — подпиской Telegram с
+    автопродлением; если Telegram подписку не принял, счёт выставляется
+    разовым, чтобы человек всё равно мог заплатить.
     """
-    link = tg_api("createInvoiceLink", {
+    p = STAR_PLANS.get(plan)
+    if not p:
+        return {"ok": False, "error": "bad_plan"}
+    if plan == "intro":
+        con = open_db(DB)
+        try:
+            if not intro_until(con, chat):
+                return {"ok": False, "error": "intro_gone"}
+        finally:
+            if con:
+                con.close()
+    req = {
         "title": t_pay(lang, "title"),
-        "description": t_pay(lang, "desc"),
-        "payload": PREMIUM_PAYLOAD,
+        "description": t_pay(lang, "desc", p["days"]),
+        "payload": p["payload"],
         # Для звёзд поставщик не нужен, и поле обязано быть пустым.
         "provider_token": "",
         "currency": "XTR",
-        "prices": [{"label": t_pay(lang, "title"), "amount": PREMIUM_STARS}],
-    })
+        "prices": [{"label": t_pay(lang, "title"), "amount": p["stars"]}],
+    }
+    sub = bool(p["sub"])
+    link = tg_api("createInvoiceLink", {**req, "subscription_period": STAR_SUB_PERIOD} if sub else req)
+    if sub and (not isinstance(link, str) or not link):
+        sys.stderr.write(f"[api] подписка звёздами не выставилась, счёт разовый: {chat}\n")
+        sub = False
+        link = tg_api("createInvoiceLink", req)
     if not isinstance(link, str) or not link:
         return {"ok": False, "error": "invoice_failed"}
-    return {"ok": True, "link": link, "stars": PREMIUM_STARS, "days": PREMIUM_DAYS}
+    return {"ok": True, "link": link, "stars": p["stars"], "days": p["days"], "sub": sub, "plan": plan}
 
 
-def pay_usdt(chat: str) -> dict:
+def pay_usdt(chat: str, plan: str = "m") -> dict:
     """Счёт на USD₮: памятка, сумма и кошелёк.
 
     Строка кладётся в таблицу счетов бота — ту же, что он завёл для TON, с
@@ -7745,25 +7810,37 @@ def pay_usdt(chat: str) -> dict:
     Пока счёт жив, повторный запрос отдаёт тот же: два счёта на одного
     человека означали бы, что один перевод закрывает не тот из них.
     """
+    p = USDT_PLANS.get(plan)
+    if not p:
+        return {"ok": False, "error": "bad_plan"}
     con = open_db(DB, write=True)
     if not con:
         return {"ok": False, "error": "db_missing"}
     try:
         if not usdt_ready(con):
             return {"ok": False, "error": "ton_off"}
-        units = int(round(PREMIUM_USDT * (10 ** USDT_DECIMALS)))
+        # Срок счёта: месяц или год. Колонку заводит и бот (premium.cpp) —
+        # кто обновился первым, тот и добавил.
+        if "days" not in cols(con, "ton_invoices"):
+            try:
+                con.execute("ALTER TABLE ton_invoices ADD COLUMN days INTEGER NOT NULL DEFAULT 30")
+            except sqlite3.OperationalError:
+                pass
+        units = int(round(p["usdt"] * (10 ** USDT_DECIMALS)))
+        # Живой счёт того же тарифа отдаётся снова: два счёта на одного
+        # человека значили бы, что один перевод закрывает не тот из них.
         row = con.execute(
             "SELECT memo, nano_amount, created_at FROM ton_invoices "
-            "WHERE chat_id=? AND status='active' AND kind='usdt' AND created_at>? "
+            "WHERE chat_id=? AND status='active' AND kind='usdt' AND created_at>? AND days=? "
             "ORDER BY created_at DESC LIMIT 1",
-            (chat, now() - PAY_TTL)).fetchone()
+            (chat, now() - PAY_TTL, p["days"])).fetchone()
         if row:
             memo, units, made = row["memo"], int(row["nano_amount"]), int(row["created_at"])
         else:
             memo, made = pay_memo(), now()
             con.execute(
-                "INSERT INTO ton_invoices(memo, chat_id, nano_amount, status, created_at, kind) "
-                "VALUES(?,?,?,'active',?,'usdt')", (memo, chat, units, made))
+                "INSERT INTO ton_invoices(memo, chat_id, nano_amount, status, created_at, kind, days) "
+                "VALUES(?,?,?,'active',?,'usdt',?)", (memo, chat, units, made, p["days"]))
             con.commit()
     except sqlite3.Error as e:
         sys.stderr.write(f"[api] счёт USD₮: {e}\n")
@@ -7779,7 +7856,7 @@ def pay_usdt(chat: str) -> dict:
         "jetton": USDT_MASTER_UI,
         "decimals": USDT_DECIMALS,
         "until": made + PAY_TTL,
-        "days": PREMIUM_DAYS,
+        "days": p["days"],
     }
 
 
@@ -8673,6 +8750,14 @@ def bootstrap(chat: str, fast: bool = False) -> dict:
                 "usdt": PREMIUM_USDT,
                 "ton": usdt_ready(cur),
                 "days": PREMIUM_DAYS,
+                # Тарифы: месяц с автопродлением и год со скидкой. Вводная
+                # цена — только тому, кому она сейчас доступна, со сроком.
+                "plans": {
+                    "m": {"stars": STAR_PLANS["m"]["stars"], "usdt": USDT_PLANS["m"]["usdt"], "days": 30, "auto": True},
+                    "y": {"stars": STAR_PLANS["y"]["stars"], "usdt": USDT_PLANS["y"]["usdt"], "days": 365},
+                },
+                **({"intro": {"stars": STAR_PLANS["intro"]["stars"], "days": 30, "until": intro_end}}
+                   if (intro_end := intro_until(cur, chat)) else {}),
             },
         }
         if not _fund_ready.is_set():
@@ -12098,11 +12183,12 @@ class Handler(BaseHTTPRequestHandler):
             if path in ("/api/pay/stars", "/api/pay/usdt", "/api/pay/check", "/api/pay/jetton"):
                 lang = (body.get("lang") or "en")[:5]
                 if path in ("/api/pay/stars", "/api/pay/usdt"):
-                    track(chat, "checkout", path.rsplit("/", 1)[-1])
+                    track(chat, "checkout", path.rsplit("/", 1)[-1] + "_" + str(body.get("plan") or "m")[:5])
+                plan = str(body.get("plan") or "m")
                 if path == "/api/pay/stars":
-                    res = pay_stars(chat, lang)
+                    res = pay_stars(chat, lang, plan)
                 elif path == "/api/pay/usdt":
-                    res = pay_usdt(chat)
+                    res = pay_usdt(chat, plan)
                 elif path == "/api/pay/jetton":
                     res = pay_jetton(str(body.get("owner") or ""))
                 else:

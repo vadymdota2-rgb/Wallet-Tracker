@@ -19,7 +19,7 @@ import { num } from "../lib/format";
 import { haptic } from "../lib/telegram";
 import { copyText } from "../lib/copy";
 import { toast } from "../components/Toast";
-import { buyStars, payUsdt, usdtInvoice, warmWallet, type PayEnd, type UsdtInvoice } from "../lib/pay";
+import { buyStars, payUsdt, usdtInvoice, warmWallet, type PayEnd, type Plan, type UsdtInvoice } from "../lib/pay";
 import { trackEvent } from "../lib/api";
 import { FREE, SRC_HEAD, isPaySrc } from "../lib/upsell";
 import type { ScreenProps } from "./Screen";
@@ -62,8 +62,19 @@ export function PremiumScreen({ arg }: ScreenProps) {
   const days = me.premUntil ? Math.max(0, Math.ceil((me.premUntil - Date.now()) / 86400000)) : 0;
 
   const [busy, setBusy] = useState<"" | "stars" | "usdt">("");
+  /* Тариф. По умолчанию — вводная цена, если она сейчас есть, иначе год:
+     он выгоднее и честно помечен скидкой; месяц с автопродлением рядом. */
+  const plans = pay.plans ?? {};
+  const intro = pay.intro && pay.intro.until * 1000 > Date.now() ? pay.intro : undefined;
+  const [plan, setPlan] = useState<Plan>(() => (intro ? "intro" : plans.y ? "y" : "m"));
+  const chosen = plan === "intro" ? intro : plans[plan];
+  const stars = chosen?.stars ?? pay.stars;
+  const usdt = plan === "intro" ? 0 : (plans[plan]?.usdt ?? pay.usdt);
+  const off = plans.m && plans.y ? Math.round((1 - plans.y.stars / (plans.m.stars * 12)) * 100) : 0;
   const [step, setStep] = useState<Step>("");
   const [inv, setInv] = useState<UsdtInvoice | null>(null);
+  // Другой тариф — другой счёт USDT: старый с чужой суммой не показываем.
+  useEffect(() => setInv(null), [plan]);
   const alive = useRef(true);
   useEffect(() => () => void (alive.current = false), []);
   // Кошельки грузятся заранее: нажатие должно открывать кошелёк сразу, а не
@@ -144,14 +155,14 @@ export function PremiumScreen({ arg }: ScreenProps) {
     if (busy) return;
     haptic("select");
     setBusy("stars");
-    done(await buyStars(lang));
+    done(await buyStars(lang, plan));
   };
 
   const onUsdt = async () => {
     if (busy) return;
     haptic("select");
     setBusy("usdt");
-    const made = inv ?? (await usdtInvoice().then((r) => (r?.ok ? r : null)));
+    const made = inv && inv.days === chosen?.days ? inv : await usdtInvoice(plan).then((r) => (r?.ok ? r : null));
     if (!made) {
       done("off");
       return;
@@ -199,20 +210,49 @@ export function PremiumScreen({ arg }: ScreenProps) {
       )}
       {me.service ? null : (
         <Card>
-          <SectionTitle note={t(lang, "pr_subscription_label")}>
-            {t(lang, active ? "pr_extend_title" : "pr_pay_title")}
-          </SectionTitle>
+          <SectionTitle>{t(lang, active ? "pl_extend" : "pl_title")}</SectionTitle>
+          {/* Тарифы карточками: цена, срок и чем каждый хорош. */}
+          <div className="plans" role="radiogroup" aria-label={t(lang, "pl_title")}>
+            {intro ? (
+              <button type="button" role="radio" aria-checked={plan === "intro"}
+                className={plan === "intro" ? "plan on" : "plan"} onClick={() => setPlan("intro")}>
+                <span className="plan-hd">
+                  <b>{t(lang, "pl_intro")}</b>
+                  <span className="plan-badge">−{Math.round((1 - intro.stars / (plans.m?.stars ?? pay.stars)) * 100)}%</span>
+                </span>
+                <span className="plan-px">{num(intro.stars)} ⭐</span>
+                <small>{t(lang, "pl_intro_d", { h: Math.max(1, Math.ceil((intro.until * 1000 - Date.now()) / 3600000)) })}</small>
+              </button>
+            ) : null}
+            {plans.y ? (
+              <button type="button" role="radio" aria-checked={plan === "y"}
+                className={plan === "y" ? "plan on" : "plan"} onClick={() => setPlan("y")}>
+                <span className="plan-hd">
+                  <b>{t(lang, "pl_year")}</b>
+                  {off > 0 ? <span className="plan-badge">−{off}%</span> : null}
+                </span>
+                <span className="plan-px">{num(plans.y.stars)} ⭐{pay.ton ? ` · ${plans.y.usdt} USDT` : ""}</span>
+                <small>{t(lang, "pl_year_d", { s: num(Math.round(plans.y.stars / 12)) })}</small>
+              </button>
+            ) : null}
+            <button type="button" role="radio" aria-checked={plan === "m"}
+              className={plan === "m" ? "plan on" : "plan"} onClick={() => setPlan("m")}>
+              <span className="plan-hd"><b>{t(lang, "pl_month")}</b></span>
+              <span className="plan-px">{num(plans.m?.stars ?? pay.stars)} ⭐{pay.ton ? ` · ${plans.m?.usdt ?? pay.usdt} USDT` : ""}</span>
+              <small>{t(lang, plans.m?.auto ? "pl_auto" : "pl_once")}</small>
+            </button>
+          </div>
           <div className="stack-actions">
-            <Action onClick={onStars} disabled={busy !== "" || !pay.stars}>
+            <Action onClick={onStars} disabled={busy !== "" || !stars}>
               {busy === "stars"
                 ? t(lang, "pay_wait_step")
-                : `${t(lang, "pay_stars_btn")} · ${num(pay.stars)} ⭐`}
+                : `${t(lang, "pay_stars_btn")} · ${num(stars)} ⭐`}
             </Action>
-            {pay.ton ? (
+            {pay.ton && usdt ? (
               <Action kind="ghost" onClick={onUsdt} disabled={busy !== ""}>
                 {busy === "usdt"
                   ? t(lang, step === "sign" ? "pay_sign_step" : step === "wait" ? "pay_wait_step" : "pay_wallet_step")
-                  : `${t(lang, "pay_usdt_btn")} · ${pay.usdt} USDT`}
+                  : `${t(lang, "pay_usdt_btn")} · ${usdt} USDT`}
               </Action>
             ) : null}
           </div>

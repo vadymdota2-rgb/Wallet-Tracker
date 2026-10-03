@@ -653,5 +653,14 @@ say("тексты приложения не посылают в чат бота:
         for v in _legal[k].values())
     and all("@WalletTrackerHelp" in _legal["legal_terms_body"][l] for l in _legal["legal_terms_body"]))
 
+_prem_cpp = read(os.path.join(BOT, "premium.cpp"))
+_bot_plans = set(re.findall(r'\{"(premium_[a-z0-9_]+)", (\d+), (\d+)\}', _prem_cpp))
+_api_plans = {("premium_30_days", "250", "30"), ("premium_365_days", "1990", "365"), ("premium_30_intro", "150", "30")}
+say("тарифы: месяц подпиской, год и вводная цена — одинаковые у бота и API",
+    _bot_plans == _api_plans and '"payload": "premium_365_days", "stars": 1990, "days": 365' in api
+    and '"payload": "premium_30_intro", "stars": 150, "days": 30' in api
+    and '"subscription_period": STAR_SUB_PERIOD' in api and "STAR_SUB_PERIOD = 30 * 86400" in api
+    and "grantPremiumDays(chatId, days)" in _prem_cpp and "if not intro_until(con, chat):" in api, str(_bot_plans))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

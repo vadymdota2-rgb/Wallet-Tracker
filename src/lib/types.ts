@@ -416,6 +416,10 @@ export interface PayInfo {
   /** Настроен ли кошелёк: без него кнопку USDT показывать нечестно. */
   ton: boolean;
   days: number;
+  /** Тарифы: месяц с автопродлением звёздами и год со скидкой. */
+  plans?: Partial<Record<"m" | "y", { stars: number; usdt: number; days: number; auto?: boolean }>>;
+  /** Вводная цена первого месяца — только если сейчас доступна, со сроком. */
+  intro?: { stars: number; days: number; until: number };
 }
 
 export interface Bootstrap {

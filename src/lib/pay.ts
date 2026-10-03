@@ -42,8 +42,11 @@ async function post<T>(path: string, body: unknown): Promise<T | null> {
 export type PayEnd = "paid" | "cancelled" | "failed" | "no_usdt" | "off";
 
 /** Звёзды: ссылка на счёт от нашего API, окно оплаты — телеграмовское. */
-export async function buyStars(lang: string): Promise<PayEnd> {
-  const r = await post<{ ok: boolean; link?: string }>("/api/pay/stars", { lang });
+/** Тариф: месяц, год или вводная цена первого месяца. */
+export type Plan = "m" | "y" | "intro";
+
+export async function buyStars(lang: string, plan: Plan = "m"): Promise<PayEnd> {
+  const r = await post<{ ok: boolean; link?: string }>("/api/pay/stars", { lang, plan });
   if (!r?.ok || !r.link) return "failed";
   const w = webApp();
   if (!w?.openInvoice) {
@@ -59,8 +62,8 @@ export async function buyStars(lang: string): Promise<PayEnd> {
 }
 
 /** Счёт на USDT: памятка, сумма и кошелёк получателя. */
-export function usdtInvoice(): Promise<(UsdtInvoice & { ok: boolean; error?: string }) | null> {
-  return post<UsdtInvoice & { ok: boolean; error?: string }>("/api/pay/usdt", {});
+export function usdtInvoice(plan: Plan = "m"): Promise<(UsdtInvoice & { ok: boolean; error?: string }) | null> {
+  return post<UsdtInvoice & { ok: boolean; error?: string }>("/api/pay/usdt", { plan });
 }
 
 type Ui = {
