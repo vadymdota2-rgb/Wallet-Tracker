@@ -12251,6 +12251,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, liq_coins())
                 return
             if path in ("/liqmap", "/api/liqmap"):
+                # Карта за сутки — всем, за неделю и месяц — Премиум.
+                if (qs.get("range", ["1d"])[0] or "1d") != "1d" and not chat_premium(self._user(qs)):
+                    self._json(403, {"ok": False, "error": "premium"})
+                    return
                 self._json(200, liq_map(qs.get("sym", ["BTC"])[0], (qs.get("range", ["1d"])[0] or "1d")))
                 return
             if path in ("/ref", "/api/ref"):
@@ -12283,7 +12287,15 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, digest_comments(self._user(qs), did, before))
                 return
             if path in ("/unlocks", "/api/unlocks"):
-                self._json(200, unlocks())
+                data = unlocks()
+                # Как цена вела себя на прошлых разлоках — Премиум. Бесплатному
+                # уходит только число прошлых разлоков: замок говорит «по 6
+                # прошлым разлокам», а не просто «что-то есть».
+                if isinstance(data, dict) and data.get("react") and not chat_premium(self._user(qs)):
+                    data = {**data, "react": {},
+                            "reactN": {k: int(v.get("n") or 0) for k, v in data["react"].items()
+                                       if isinstance(v, dict)}}
+                self._json(200, data)
                 return
             if path in ("/symbols", "/api/symbols"):
                 rows = symbols()

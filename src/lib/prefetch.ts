@@ -73,7 +73,7 @@ function plan(): (() => Promise<unknown>)[] {
 
   // 0. Календарь разлоков — самым первым: сервер отдаёт его из памяти
   // мгновенно, а в конце очереди экран ждал десятки чужих запросов.
-  jobs.push(() => fetchUnlocks());
+  jobs.push(() => fetchUnlocks(premium));
 
   // 1. Кошельки — первыми: их открывают чаще всего.
   for (const w of live.wallets) {

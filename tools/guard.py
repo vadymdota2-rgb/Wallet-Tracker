@@ -153,7 +153,7 @@ say("лонг/шорт и крупные позиции — за подписк�
     and 'id: "fund"' not in ana and "premium ? (\n          <FundBody />" in _fscr)
 say("лонг/шорт закрыт и на экране, и на сервере",
     ana.count("{!premium ? locked : (") >= 2 and '"fund", "fundN", "ls"' in fp
-    and api.count('self._json(403, {"ok": False, "error": "premium"})') == 8)
+    and api.count('self._json(403, {"ok": False, "error": "premium"})') == 9)  # +длинные окна карты ликвидаций
 prem_scr = read(f"{APP}/src/screens/PremiumScreen.tsx")
 say("цена на экране премиума — один раз, на кнопке",
     'title={t(lang, "pay_stars_btn")} value=' not in prem_scr and 'title={t(lang, "pay_usdt_btn")} value=' not in prem_scr)
@@ -373,7 +373,7 @@ say("календарь отдаётся из памяти, собирается
     and "        unlocks()\n" in api and "ThreadPoolExecutor" in pybody(api, "def _unlocks_build("))
 say("экран разлоков открывается сразу: запас на устройстве и отрисовка порциями",
     "savedUnlocks()" in unl_scr and "new IntersectionObserver" in unl_scr
-    and "jobs.push(() => fetchUnlocks());" in read(f"{APP}/src/lib/prefetch.ts").split("// 1. Кошельки")[0])
+    and "jobs.push(() => fetchUnlocks(premium));" in read(f"{APP}/src/lib/prefetch.ts").split("// 1. Кошельки")[0])
 _book_syms = {c["s"] for c in _wm.UNLOCK_BOOK}
 say("монета не бывает и в календаре, и в списке отсеянных",
     not (_book_syms & set(_wm.UNLOCK_SKIPPED)), str(_book_syms & set(_wm.UNLOCK_SKIPPED)))
@@ -702,6 +702,14 @@ say("тексты: «с Премиумом», «в Премиуме» и без 
 say("приложение: карточка вводной цены на дайджесте и в кошельках, строка «цена входа и PnL» в сравнении",
     "<IntroOffer />" in read(f"{APP}/src/screens/DigestTab.tsx") and "<IntroOffer />" in _wt
     and '"cmp_alert_pnl"' in read(f"{APP}/src/screens/PremiumScreen.tsx"))
+
+_lqs = read(f"{APP}/src/screens/LiqMapScreen.tsx")
+_uns = read(f"{APP}/src/screens/UnlocksScreen.tsx")
+say("меню: карта ликвидаций за 7 и 30 дней и реакция цены на разлоки — Премиум (и на сервере)",
+    '!= "1d" and not chat_premium(self._user(qs))' in api and '"reactN": {k: int(v.get("n") or 0)' in api
+    and 'const locked = !premium && range !== "1d";' in _lqs and '<Upsell src="liq"' in _lqs
+    and 'const reacts = premium ? reply?.react ?? {} : {};' in _uns and '<Upsell src="unlock"' in _uns
+    and '"cmp_liq"' in read(f"{APP}/src/screens/PremiumScreen.tsx"))
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

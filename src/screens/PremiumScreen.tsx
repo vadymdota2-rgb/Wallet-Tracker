@@ -119,6 +119,8 @@ export function PremiumScreen({ arg }: ScreenProps) {
     ["cmp_hl", String(FREE.showcase), String(FREE.premiumTop)],
     ["cmp_windows", t(lang, "big_win_24h"), t(lang, "big_win_30d")],
     ["cmp_rank_win", `30${day}`, `365${day}`],
+    ["cmp_liq", t(lang, "big_win_24h"), t(lang, "big_win_30d")],
+    ["cmp_react", "—", "✓"],
     ["cmp_history", String(FREE.deals), String(FREE.premiumDeals)],
     ["cmp_digest", "—", "✓"],
     ["cmp_prio", "—", "✓"],

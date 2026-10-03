@@ -1457,6 +1457,24 @@
     "vi": "Trader Hyperliquid",
     "zh": "Hyperliquid 交易员"
   },
+  "cmp_liq": {
+    "ar": "نافذة خريطة التصفيات",
+    "de": "Zeitraum der Liquidationskarte",
+    "en": "Liquidation map window",
+    "es": "Ventana del mapa de liquidaciones",
+    "fr": "Fenêtre de la carte des liquidations",
+    "hi": "लिक्विडेशन मैप की अवधि",
+    "id": "Rentang peta likuidasi",
+    "ja": "清算マップの期間",
+    "ko": "청산 지도 기간",
+    "pl": "Okno mapy likwidacji",
+    "pt": "Janela do mapa de liquidações",
+    "ru": "Окно карты ликвидаций",
+    "tr": "Likidasyon haritası aralığı",
+    "uk": "Вікно карти ліквідацій",
+    "vi": "Khung bản đồ thanh lý",
+    "zh": "清算地图时间范围"
+  },
   "cmp_prem": {
     "ar": "بريميوم",
     "de": "Premium",
@@ -1510,6 +1528,24 @@
     "uk": "Вікно рейтингу",
     "vi": "Khung bảng xếp hạng",
     "zh": "排行时间窗口"
+  },
+  "cmp_react": {
+    "ar": "تفاعل السعر مع عمليات الفتح السابقة",
+    "de": "Preisreaktion auf frühere Unlocks",
+    "en": "Price reaction to past unlocks",
+    "es": "Reacción del precio a desbloqueos anteriores",
+    "fr": "Réaction du prix aux déblocages passés",
+    "hi": "पिछले अनलॉक पर कीमत की प्रतिक्रिया",
+    "id": "Reaksi harga pada unlock sebelumnya",
+    "ja": "過去のアンロックへの価格反応",
+    "ko": "지난 언락에 대한 가격 반응",
+    "pl": "Reakcja ceny na poprzednie odblokowania",
+    "pt": "Reação do preço a desbloqueios anteriores",
+    "ru": "Реакция цены на прошлые разлоки",
+    "tr": "Geçmiş kilit açılışlarına fiyat tepkisi",
+    "uk": "Реакція ціни на минулі розлоки",
+    "vi": "Phản ứng giá với các lần mở khóa trước",
+    "zh": "价格对过往解锁的反应"
   },
   "cmp_speed": {
     "ar": "تأخير صفقات الحيتان",
@@ -12581,6 +12617,24 @@
     "vi": "Mọi thứ trong tuần dùng thử — tháng đầu với giá riêng cho bạn.",
     "zh": "试用周里的一切——首月享专属价格。"
   },
+  "pw_h_liq": {
+    "ar": "خريطة التصفيات للأسبوع والشهر: أين تُصفّى المراكز الكبيرة.",
+    "de": "Die Liquidationskarte für Woche und Monat: wo große Positionen rausfliegen.",
+    "en": "The liquidation map for the week and the month: where big positions get wiped out.",
+    "es": "El mapa de liquidaciones de la semana y el mes: dónde caen las grandes posiciones.",
+    "fr": "La carte des liquidations sur la semaine et le mois : où sautent les grosses positions.",
+    "hi": "हफ़्ते और महीने का लिक्विडेशन मैप: बड़ी पोज़िशन कहाँ साफ़ होती हैं।",
+    "id": "Peta likuidasi mingguan dan bulanan: di mana posisi besar tersapu.",
+    "ja": "週・月の清算マップ：大口ポジションがどこで吹き飛ぶか。",
+    "ko": "주간·월간 청산 지도: 큰 포지션이 어디서 청산되는지.",
+    "pl": "Mapa likwidacji z tygodnia i miesiąca: gdzie wylatują duże pozycje.",
+    "pt": "O mapa de liquidações da semana e do mês: onde as grandes posições são liquidadas.",
+    "ru": "Карта ликвидаций за неделю и месяц: где выносит крупные позиции.",
+    "tr": "Haftalık ve aylık likidasyon haritası: büyük pozisyonların nerede silindiği.",
+    "uk": "Карта ліквідацій за тиждень і місяць: де виносить великі позиції.",
+    "vi": "Bản đồ thanh lý theo tuần và tháng: nơi các vị thế lớn bị quét.",
+    "zh": "周和月的清算地图：大仓位在哪里被清算。"
+  },
   "pw_h_perp": {
     "ar": "عقود Hyperliquid الآجلة: من في مركز شراء ومن في مركز بيع، وبأي رافعة وأين التصفية.",
     "de": "Hyperliquid-Futures: wer long ist, wer short, mit welchem Hebel und wo liquidiert wird.",
@@ -12634,6 +12688,24 @@
     "uk": "Коли пробний тиждень закінчиться, залишиться безкоштовний тариф. Оформіть заздалегідь — дні, що лишилися, не згорять.",
     "vi": "Khi hết dùng thử, chỉ còn gói miễn phí. Chọn gói trước — những ngày còn lại không mất đi.",
     "zh": "试用结束后只剩免费版。提前选择方案——剩余天数不会作废。"
+  },
+  "pw_h_unlock": {
+    "ar": "كيف تفاعل السعر مع عمليات الفتح السابقة — قبل العملية التالية.",
+    "de": "Wie der Preis auf frühere Unlocks reagiert hat — bevor der nächste kommt.",
+    "en": "How the price reacted to past unlocks — before the next one.",
+    "es": "Cómo reaccionó el precio a los desbloqueos anteriores, antes del próximo.",
+    "fr": "Comment le prix a réagi aux déblocages passés — avant le prochain.",
+    "hi": "पिछले अनलॉक पर कीमत ने कैसे रिएक्ट किया — अगले से पहले।",
+    "id": "Bagaimana harga bereaksi pada unlock sebelumnya — sebelum yang berikutnya.",
+    "ja": "過去のアンロックに価格がどう反応したか — 次のアンロックの前に。",
+    "ko": "지난 언락에 가격이 어떻게 반응했는지 — 다음 언락 전에.",
+    "pl": "Jak cena reagowała na poprzednie odblokowania — zanim nastąpi kolejne.",
+    "pt": "Como o preço reagiu aos desbloqueios anteriores — antes do próximo.",
+    "ru": "Как цена реагировала на прошлые разлоки — до того, как случится следующий.",
+    "tr": "Fiyatın geçmiş kilit açılışlarına tepkisi — bir sonraki gelmeden önce.",
+    "uk": "Як ціна реагувала на минулі розлоки — до того, як станеться наступний.",
+    "vi": "Giá đã phản ứng thế nào với các lần mở khóa trước — trước khi lần tiếp theo diễn ra.",
+    "zh": "价格对过往解锁的反应——在下一次解锁之前看清。"
   },
   "pw_h_wallets": {
     "ar": "تابع حتى 50 محفظة واحصل على تنبيهات من كل واحدة منها.",
@@ -16091,6 +16163,24 @@
     "vi": "Toàn bộ lịch sử — tới {n} giao dịch — với Premium.",
     "zh": "完整历史（最多 {n} 笔）需开通高级版。"
   },
+  "up_liq": {
+    "ar": "خريطة الأسبوع والشهر في Premium. مجانًا: آخر 24 ساعة.",
+    "de": "Karten für Woche und Monat gibt es mit Premium. Kostenlos: die letzten 24 Stunden.",
+    "en": "Week and month maps are in Premium. Free: the last 24 hours.",
+    "es": "Los mapas de semana y mes están en Premium. Gratis: las últimas 24 horas.",
+    "fr": "Les cartes sur la semaine et le mois sont dans Premium. Gratuit : les dernières 24 heures.",
+    "hi": "हफ़्ते और महीने का मैप Premium में है। फ्री: पिछले 24 घंटे।",
+    "id": "Peta mingguan dan bulanan ada di Premium. Gratis: 24 jam terakhir.",
+    "ja": "週・月のマップはプレミアムで。無料：直近24時間。",
+    "ko": "주간·월간 지도는 프리미엄에서. 무료: 최근 24시간.",
+    "pl": "Mapa z tygodnia i miesiąca jest w Premium. Za darmo: ostatnie 24 godziny.",
+    "pt": "Os mapas de semana e mês estão no Premium. Grátis: as últimas 24 horas.",
+    "ru": "Карта за неделю и месяц — в Премиуме. Бесплатно: последние сутки.",
+    "tr": "Haftalık ve aylık harita Premium'da. Ücretsiz: son 24 saat.",
+    "uk": "Карта за тиждень і місяць — у Преміумі. Безкоштовно: остання доба.",
+    "vi": "Bản đồ theo tuần và tháng có trong Premium. Miễn phí: 24 giờ gần nhất.",
+    "zh": "周和月地图在高级版中。免费：最近 24 小时。"
+  },
   "up_perp": {
     "ar": "{n} متداولًا آخر في العقود الآجلة ومراكزهم المفتوحة بالرافعة وسعر التصفية — ضمن بريميوم.",
     "de": "{n} weitere Futures-Trader und ihre offenen Positionen mit Hebel und Liquidationspreis — in Premium.",
@@ -16126,6 +16216,24 @@
     "uk": "Позиції ф'ючерсних трейдерів із плечем і ціною ліквідації — у Преміумі.",
     "vi": "Vị thế của trader hợp đồng tương lai với đòn bẩy và giá thanh lý có trong Premium.",
     "zh": "合约交易员的持仓（含杠杆和爆仓价）属于高级版。"
+  },
+  "up_react": {
+    "ar": "كيف تحرّك السعر بعد {n} عمليات فتح سابقة لهذه العملة — في Premium.",
+    "de": "Wie sich der Preis nach den {n} früheren Unlocks dieses Coins bewegt hat — mit Premium.",
+    "en": "How the price moved after the past {n} unlocks of this coin — in Premium.",
+    "es": "Cómo se movió el precio tras los {n} desbloqueos anteriores de esta moneda — en Premium.",
+    "fr": "Comment le prix a réagi aux {n} précédents déblocages de ce jeton — dans Premium.",
+    "hi": "इस कॉइन के पिछले {n} अनलॉक के बाद कीमत कैसे चली — Premium में।",
+    "id": "Bagaimana harga bergerak setelah {n} unlock sebelumnya dari koin ini — di Premium.",
+    "ja": "このコインの過去{n}回のアンロック後の値動き — プレミアムで。",
+    "ko": "이 코인의 지난 {n}번 언락 후 가격 흐름 — 프리미엄에서.",
+    "pl": "Jak zachowywała się cena po {n} poprzednich odblokowaniach tej monety — w Premium.",
+    "pt": "Como o preço se moveu após os {n} desbloqueios anteriores desta moeda — no Premium.",
+    "ru": "Как вела себя цена после {n} прошлых разлоков этой монеты — в Премиуме.",
+    "tr": "Bu coinin geçmiş {n} kilit açılışından sonra fiyatın nasıl davrandığı — Premium'da.",
+    "uk": "Як поводилася ціна після {n} минулих розлоків цієї монети — у Преміумі.",
+    "vi": "Giá diễn biến ra sao sau {n} lần mở khóa trước của đồng này — trong Premium.",
+    "zh": "该币过去 {n} 次解锁后的价格走势——在高级版中。"
   },
   "up_top": {
     "ar": "هذه أول {f} مراكز. التصنيف الكامل لـ {p} ضمن بريميوم.",

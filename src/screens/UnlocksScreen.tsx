@@ -21,6 +21,7 @@ import { haptic, openExternal } from "../lib/telegram";
 import { fetchUnlocks, peekUnlocks, savedUnlocks } from "../lib/api";
 import type { UnlockEvent, UnlockNoEmit, UnlockSkip, UnlockStake, UnlockWho, UnlocksReply } from "../lib/types";
 import { CoinIcon } from "../components/CoinIcon";
+import { Upsell, usePremium } from "../components/Upsell";
 import { Empty, Segmented } from "../components/ui";
 import { useNow } from "../lib/tick";
 
@@ -109,19 +110,23 @@ export function UnlocksScreen() {
 
   /* Сразу — из памяти этого запуска или из прошлого (сохранён на
      устройстве); свежий ответ заменит его, как только придёт. */
-  const [reply, setReply] = useState<UnlocksReply | null>(() => peekUnlocks() ?? savedUnlocks());
+  const premium = usePremium();
+  const [reply, setReply] = useState<UnlocksReply | null>(() => peekUnlocks(premium) ?? savedUnlocks());
   const items = reply?.items ?? null;
   const none = reply?.none ?? {};
   const noEmit = reply?.noEmit ?? {};
   const stake = reply?.stake ?? {};
   const supplyRef = reply?.supply ?? {};
   const vols = reply?.vol ?? {};
-  const reacts = reply?.react ?? {};
+  /* Реакция цены на прошлые разлоки — Премиум. Сохранённый на устройстве
+     ответ мог прийти ещё подписчику — бесплатному его всё равно не рисуем. */
+  const reacts = premium ? reply?.react ?? {} : {};
+  const reactN = premium ? {} : reply?.reactN ?? {};
   const measuredAll = reply?.measured ?? {};
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let alive = true;
-    void fetchUnlocks().then((r) => {
+    void fetchUnlocks(premium).then((r) => {
       if (!alive) return;
       if (r?.ok) setReply({ ...r, items: r.items ?? [] });
       else if (!items) setFailed(true);
@@ -129,8 +134,9 @@ export function UnlocksScreen() {
     return () => {
       alive = false;
     };
-    // Один запрос при открытии: дальше хватает кэша на полчаса.
-  }, []);
+    // Один запрос при открытии (и после покупки — у подписчика ответ полнее):
+    // дальше хватает кэша на полчаса.
+  }, [premium]);
 
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<Kind>("all");
@@ -403,6 +409,7 @@ export function UnlocksScreen() {
                       ref0={supplyRef[e.sym]}
                       vol={vols[e.sym]}
                       react={reacts[e.sym]}
+                      reactN={reactN[e.sym]}
                       fact={measuredAll[e.sym]}
                       onChart={() => chart(e.sym)}
                     />
@@ -501,6 +508,7 @@ function CoinMore({
   ref0,
   vol,
   react,
+  reactN,
   fact,
   onChart,
 }: {
@@ -513,6 +521,8 @@ function CoinMore({
   ref0: { t: number; m: number } | undefined;
   vol: number | undefined;
   react: { n: number; med: number; down: number; btc: number | null } | undefined;
+  /** Бесплатному: сколько прошлых разлоков посчитано (сама реакция — Премиум). */
+  reactN?: number;
   fact: { d: number; r: number } | undefined;
   onChart: () => void;
 }) {
@@ -666,6 +676,7 @@ function CoinMore({
             </button>
           </p>
         ) : null}
+        {!react && reactN ? <Upsell src="unlock" text={t(lang, "up_react", { n: reactN })} /> : null}
         {help === "v:react" ? <p className="unl-help">{t(lang, "unl_q_react")}</p> : null}
         {help === "v:vol" ? <p className="unl-help">{t(lang, "unl_q_vol")}</p> : null}
         {help === "v:pressure" ? <p className="unl-help">{t(lang, "unl_q_pressure")}</p> : null}

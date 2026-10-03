@@ -48,7 +48,10 @@ export type PaySrc =
   | "ended"
   | "renew"
   | "back"
-  | "tg";
+  | "tg"
+  // Меню: длинные окна карты ликвидаций, реакция цены на разлоки.
+  | "liq"
+  | "unlock";
 
 /** Заголовок экрана премиума по поводу, с которым человек пришёл. Для общих
  *  входов (меню, помощь, подарок) — общий заголовок. */
@@ -65,6 +68,8 @@ export const SRC_HEAD: Partial<Record<PaySrc, DictKey>> = {
   intro: "pw_h_intro",
   ended: "pw_h_back",
   back: "pw_h_back",
+  liq: "pw_h_liq",
+  unlock: "pw_h_unlock",
 };
 
 export function isPaySrc(v: unknown): v is PaySrc {

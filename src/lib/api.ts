@@ -267,13 +267,17 @@ export function savedUnlocks(): UnlocksReply | null {
   }
 }
 
-export const fetchUnlocks = () =>
-  cachedGet<UnlocksReply>("/api/unlocks", UNLOCKS_TTL).then((r) => {
+/* Подписчику ответ полнее (реакция цены на прошлые разлоки), поэтому у него
+   свой адрес в памяти ответов: купил премиум — получает полный, а не
+   бесплатный из кэша. `p` сервер не читает. */
+const unlocksPath = (premium: boolean) => (premium ? "/api/unlocks?p=1" : "/api/unlocks");
+export const fetchUnlocks = (premium = false) =>
+  cachedGet<UnlocksReply>(unlocksPath(premium), UNLOCKS_TTL).then((r) => {
     if (r?.ok && r.items?.length) {
       try {
         localStorage.setItem(
           UNLOCKS_SAVED,
-          JSON.stringify({ at: Date.now(), items: r.items, none: r.none, noEmit: r.noEmit, stake: r.stake, supply: r.supply, vol: r.vol, react: r.react, measured: r.measured }),
+          JSON.stringify({ at: Date.now(), items: r.items, none: r.none, noEmit: r.noEmit, stake: r.stake, supply: r.supply, vol: r.vol, react: r.react, reactN: r.reactN, measured: r.measured }),
         );
       } catch {
         // место кончилось или хранилище закрыто — просто без запаса
@@ -281,7 +285,7 @@ export const fetchUnlocks = () =>
     }
     return r;
   });
-export const peekUnlocks = () => peek<UnlocksReply | null>("/api/unlocks", UNLOCKS_TTL);
+export const peekUnlocks = (premium = false) => peek<UnlocksReply | null>(unlocksPath(premium), UNLOCKS_TTL);
 
 /** Язык хранится в той же строке users, что читает бот: выбор общий. */
 export const setLangRemote = (lang: string) =>

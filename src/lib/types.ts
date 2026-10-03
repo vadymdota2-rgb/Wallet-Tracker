@@ -509,6 +509,8 @@ export interface UnlocksReply {
   /** Эмиссия по факту сети: d — дней измерения, r — прирост в месяц
    *  (отрицательный — сжигание больше выпуска). */
   measured?: Record<string, { d: number; r: number }>;
+  /** Бесплатному вместо react: сколько прошлых разлоков посчитано. */
+  reactN?: Record<string, number>;
 }
 
 export interface UnlockStake {
