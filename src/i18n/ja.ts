@@ -52,6 +52,8 @@ export const ja: Dict = {
   big_win_30d: "30日",
   big_win_7d: "7日",
   bn_already: "このボーナスは受け取り済みです",
+  bn_checking: "確認中・約{m}分",
+  bn_checking_toast: "フォローを確認中です — 5分以内に付与されます",
   bn_claim: "+{n}日を受け取る",
   bn_days: "+{n}日",
   bn_done: "受け取り済み",

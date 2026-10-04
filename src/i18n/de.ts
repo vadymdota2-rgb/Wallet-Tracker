@@ -52,6 +52,8 @@ export const de: Dict = {
   big_win_30d: "30T",
   big_win_7d: "7T",
   bn_already: "Dieser Bonus wurde schon erhalten",
+  bn_checking: "Prüfung · ≈{m} Min.",
+  bn_checking_toast: "Wir prüfen dein Abo — der Tag kommt innerhalb von 5 Minuten",
   bn_claim: "+{n} T holen",
   bn_days: "+{n} Tage",
   bn_done: "Bonus erhalten",

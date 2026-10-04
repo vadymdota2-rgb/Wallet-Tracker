@@ -221,10 +221,12 @@ export interface BonusReply {
   items?: { id: string; days: number }[];
   got?: Record<string, number>;
   opened?: Record<string, number>;
+  /** «На проверке»: до какого времени (сек), потом сервер начислит дни. */
+  pending?: Record<string, number>;
 }
 export const fetchBonus = () => call<BonusReply>("/api/bonus");
 export const bonusAct = (kind: string, act: "open" | "claim") =>
-  call<{ ok: boolean; days?: number; error?: string; left?: number }>(`/api/bonus/${act}`, { method: "POST", body: { kind } });
+  call<{ ok: boolean; days?: number; error?: string; left?: number; due?: number }>(`/api/bonus/${act}`, { method: "POST", body: { kind } });
 
 /** Токен проекта: подписан ли человек на уведомление о запуске. */
 export const fetchTokenState = () => call<{ ok: boolean; on?: boolean }>("/api/token-launch");

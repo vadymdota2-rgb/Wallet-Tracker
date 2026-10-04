@@ -52,6 +52,8 @@ export const zh: Dict = {
   big_win_30d: "30天",
   big_win_7d: "7天",
   bn_already: "该奖励已领取",
+  bn_checking: "核验中 · 约 {m} 分钟",
+  bn_checking_toast: "正在核验关注——5 分钟内到账",
   bn_claim: "领取 +{n} 天",
   bn_days: "+{n} 天",
   bn_done: "已领取",

@@ -52,6 +52,8 @@ export const vi: Dict = {
   big_win_30d: "30n",
   big_win_7d: "7n",
   bn_already: "Phần thưởng này đã được nhận",
+  bn_checking: "Đang kiểm tra · ≈{m} phút",
+  bn_checking_toast: "Đang kiểm tra theo dõi — ngày thưởng sẽ đến trong 5 phút",
   bn_claim: "Nhận +{n} ngày",
   bn_days: "+{n} ngày",
   bn_done: "Đã nhận thưởng",

@@ -52,6 +52,8 @@ export const ko: Dict = {
   big_win_30d: "30일",
   big_win_7d: "7일",
   bn_already: "이미 받은 보너스입니다",
+  bn_checking: "확인 중 · 약 {m}분",
+  bn_checking_toast: "구독을 확인하고 있습니다 — 5분 안에 지급됩니다",
   bn_claim: "+{n}일 받기",
   bn_days: "+{n}일",
   bn_done: "보너스 받음",

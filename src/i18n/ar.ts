@@ -52,6 +52,8 @@ export const ar: Dict = {
   big_win_30d: "30ي",
   big_win_7d: "7ي",
   bn_already: "تم استلام هذه المكافأة بالفعل",
+  bn_checking: "جارٍ التحقق · ≈{m} د",
+  bn_checking_toast: "نتحقق من اشتراكك — سيصل اليوم خلال 5 دقائق",
   bn_claim: "احصل على +{n} يوم",
   bn_days: "+{n} يوم",
   bn_done: "تم استلام المكافأة",

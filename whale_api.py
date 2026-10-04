@@ -7741,13 +7741,15 @@ def token_state(chat: str, on: bool | None = None) -> dict:
 # Канал в Telegram проверяем по-настоящему — getChatMember (боту нужны права
 # администратора канала; без них Telegram отвечает ошибкой, и тогда дни
 # выдаются через BONUS_WAIT_SEC после открытия). У X, TikTok, Instagram и
-# YouTube открытой проверки нет, и её не изображаем: одно нажатие
-# «Подписаться» открывает страницу и сразу даёт день — подпишется человек
-# или нет, его дело. Каждый бонус — один раз на аккаунт (bonus_claims, ключ
-# — человек и сеть).
+# YouTube открытой проверки нет: нажатие «Подписаться» открывает страницу и
+# ставит бонус «на проверку», а через BONUS_DELAY_SEC фоновый проход
+# (bonus_settle) начисляет день и бот пишет «подписка подтверждена». Каждый
+# бонус — один раз на аккаунт (bonus_claims, ключ — человек и сеть).
 SOCIAL_BONUS = {"tg": 3, "x": 1, "tiktok": 1, "instagram": 1, "youtube": 1}
+SOCIAL_NAMES = {"tg": "Telegram", "x": "Twitter", "tiktok": "TikTok", "instagram": "Instagram", "youtube": "YouTube"}
 TG_CHANNEL = os.environ.get("WHALE_TG_CHANNEL", "@WalletTrackerOfficial").strip()
 BONUS_WAIT_SEC = 10
+BONUS_DELAY_SEC = 5 * 60
 BONUS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS bonus_claims (
     chat_id TEXT NOT NULL,
@@ -7758,13 +7760,104 @@ CREATE TABLE IF NOT EXISTS bonus_claims (
     PRIMARY KEY (chat_id, kind)
 );
 """
+BONUS_NOTE = {
+    "en": "✅ Your {name} subscription is confirmed — +{n} d of Premium.",
+    "ru": "✅ Подписка на {name} подтверждена — +{n} дн. Премиума.",
+    "uk": "✅ Підписку на {name} підтверджено — +{n} дн. Преміуму.",
+    "es": "✅ Tu suscripción a {name} está confirmada: +{n} d de Premium.",
+    "pt": "✅ Sua inscrição no {name} foi confirmada — +{n} d de Premium.",
+    "de": "✅ Dein {name}-Abo ist bestätigt — +{n} T Premium.",
+    "fr": "✅ Votre abonnement à {name} est confirmé — +{n} j de Premium.",
+    "tr": "✅ {name} aboneliğiniz onaylandı — +{n} gün Premium.",
+    "pl": "✅ Subskrypcja {name} potwierdzona — +{n} dn. Premium.",
+    "id": "✅ Langganan {name} Anda terkonfirmasi — +{n} hari Premium.",
+    "vi": "✅ Đã xác nhận bạn theo dõi {name} — +{n} ngày Premium.",
+    "ja": "✅ {name}のフォローを確認しました — プレミアム+{n}日。",
+    "ko": "✅ {name} 팔로우가 확인되었습니다 — 프리미엄 +{n}일.",
+    "zh": "✅ 已确认你关注了 {name}——高级版 +{n} 天。",
+    "hi": "✅ {name} सदस्यता की पुष्टि हुई — +{n} दिन Premium।",
+    "ar": "✅ تم تأكيد اشتراكك في {name} — +{n} يوم Premium.",
+}
+
+
+def _bonus_grant(con: sqlite3.Connection, chat: str, kind: str, t: int) -> int:
+    """Начислить бонус одной транзакцией. Вернёт дни или 0 (уже начислен)."""
+    days = SOCIAL_BONUS[kind]
+    con.isolation_level = None
+    con.execute("BEGIN IMMEDIATE")
+    try:
+        if con.execute("UPDATE bonus_claims SET claimed_at=?, days=? WHERE chat_id=? AND kind=? AND claimed_at=0",
+                       (t, days, chat, kind)).rowcount != 1 or not extend_premium(con, chat, days):
+            con.execute("ROLLBACK")
+            return 0
+        con.execute("COMMIT")
+    except sqlite3.Error:
+        con.execute("ROLLBACK")
+        raise
+    return days
+
+
+def _bonus_note(chat: str, kind: str, days: int, lang: str) -> None:
+    tg_api("sendMessage", {"chat_id": chat, "text": BONUS_NOTE.get(lang, BONUS_NOTE["en"])
+                           .replace("{name}", SOCIAL_NAMES.get(kind, kind)).replace("{n}", str(days))})
+
+
+def bonus_settle(chat: str = "", notify: bool = True) -> int:
+    """Начислить бонусы, у которых прошла «проверка» (BONUS_DELAY_SEC с
+    нажатия). Без `chat` — всем: так зовёт фоновый проход. Возвращает,
+    сколько начислено."""
+    con = open_db(DB, write=True)
+    if not con:
+        return 0
+    done: list[tuple[str, str, int, str]] = []
+    try:
+        t = now()
+        try:
+            rows = con.execute(
+                "SELECT b.chat_id, b.kind, COALESCE(u.language, 'en') AS lang FROM bonus_claims b "
+                "LEFT JOIN users u ON u.chat_id = b.chat_id "
+                "WHERE b.claimed_at=0 AND b.kind!='tg' AND b.opened_at>0 AND b.opened_at<=?"
+                + (" AND b.chat_id=?" if chat else "") + " LIMIT 200",
+                (t - BONUS_DELAY_SEC, chat) if chat else (t - BONUS_DELAY_SEC,)).fetchall()
+        except sqlite3.OperationalError:
+            return 0  # таблицы ещё нет
+        for r in rows:
+            if r["kind"] not in SOCIAL_BONUS:
+                continue
+            days = _bonus_grant(con, r["chat_id"], r["kind"], t)
+            if days:
+                done.append((r["chat_id"], r["kind"], days, r["lang"] or "en"))
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] bonus settle: {e}\n")
+    finally:
+        con.close()
+    for c, k, d, lang in done:
+        boot_drop(c)
+        track(c, "bonus", k)
+        if notify:
+            threading.Thread(target=_bonus_note, args=(c, k, d, lang), daemon=True).start()
+    return len(done)
+
+
+def _bonus_loop() -> None:
+    """Фоновый проход: раз в полминуты начисляет бонусы, чья «проверка»
+    закончилась, — даже если приложение у человека закрыто."""
+    while True:
+        try:
+            bonus_settle()
+        except Exception as e:  # проход не должен умирать от одной ошибки
+            sys.stderr.write(f"[api] bonus loop: {e}\n")
+        time.sleep(30)
 
 
 def bonus_state(chat: str) -> dict:
-    """Что из бонусов за подписки человек уже забрал и сколько за что дают."""
-    out = {"ok": True, "items": [{"id": k, "days": d} for k, d in SOCIAL_BONUS.items()], "got": {}, "opened": {}}
+    """Что из бонусов за подписки человек уже забрал, что «на проверке» (до
+    какого времени) и сколько за что дают."""
+    out = {"ok": True, "items": [{"id": k, "days": d} for k, d in SOCIAL_BONUS.items()],
+           "got": {}, "opened": {}, "pending": {}}
     if not chat:
         return out
+    bonus_settle(chat)
     con = open_db(DB)
     if not con:
         return out
@@ -7773,7 +7866,10 @@ def bonus_state(chat: str) -> dict:
             if int(r["claimed_at"] or 0):
                 out["got"][r["kind"]] = int(r["days"] or 0)
             elif int(r["opened_at"] or 0):
-                out["opened"][r["kind"]] = int(r["opened_at"])
+                if r["kind"] == "tg":
+                    out["opened"][r["kind"]] = int(r["opened_at"])
+                else:
+                    out["pending"][r["kind"]] = int(r["opened_at"]) + BONUS_DELAY_SEC
     except sqlite3.OperationalError:
         pass  # таблицы ещё нет: никто ничего не забирал
     finally:
@@ -7792,7 +7888,9 @@ def tg_channel_member(chat: str) -> bool | None:
 
 
 def bonus_act(chat: str, kind: str, act: str) -> dict:
-    """open — человек открыл страницу соцсети; claim — забрать дни."""
+    """open — человек нажал «Подписаться»: у Telegram это начало проверки, у
+    остальных — бонус «на проверке» до BONUS_DELAY_SEC. claim — забрать дни
+    за канал Telegram (проверка подписки)."""
     if kind not in SOCIAL_BONUS:
         return {"ok": False, "error": "bad_kind"}
     con = open_db(DB, write=True)
@@ -7805,38 +7903,30 @@ def bonus_act(chat: str, kind: str, act: str) -> dict:
         if row and int(row["claimed_at"] or 0):
             return {"ok": False, "error": "already"}
         t = now()
-        if act == "open":
-            con.execute("INSERT INTO bonus_claims(chat_id, kind, opened_at) VALUES(?,?,?) "
-                        "ON CONFLICT(chat_id, kind) DO UPDATE SET opened_at=excluded.opened_at "
-                        "WHERE bonus_claims.opened_at=0", (chat, kind, t))
-            con.commit()
-            return {"ok": True}
         opened = int(row["opened_at"] or 0) if row else 0
+        if act == "open":
+            if not opened:
+                con.execute("INSERT INTO bonus_claims(chat_id, kind, opened_at) VALUES(?,?,?) "
+                            "ON CONFLICT(chat_id, kind) DO UPDATE SET opened_at=excluded.opened_at "
+                            "WHERE bonus_claims.opened_at=0", (chat, kind, t))
+                con.commit()
+                opened = t
+            return {"ok": True} if kind == "tg" else {"ok": True, "pending": True, "due": opened + BONUS_DELAY_SEC}
         if kind != "tg":
-            # Без проверки: нажатие и есть получение. Строку заводим здесь же.
-            con.execute("INSERT OR IGNORE INTO bonus_claims(chat_id, kind, opened_at) VALUES(?,?,?)",
-                        (chat, kind, t))
-        elif not opened:
+            # Дни за остальные сети начисляет только «проверка» по времени.
+            return {"ok": False, "error": "pending", "due": opened + BONUS_DELAY_SEC} if opened \
+                else {"ok": False, "error": "not_opened"}
+        if not opened:
             return {"ok": False, "error": "not_opened"}
-        if kind == "tg":
-            # Канал проверяем по-настоящему; нет прав — как у остальных.
-            member = tg_channel_member(chat)
-            if member is False:
-                return {"ok": False, "error": "not_member"}
-            if member is None and t - opened < BONUS_WAIT_SEC:
-                return {"ok": False, "error": "wait", "left": BONUS_WAIT_SEC - (t - opened)}
-        days = SOCIAL_BONUS[kind]
-        con.isolation_level = None
-        con.execute("BEGIN IMMEDIATE")
-        try:
-            if con.execute("UPDATE bonus_claims SET claimed_at=?, days=? WHERE chat_id=? AND kind=? AND claimed_at=0",
-                           (t, days, chat, kind)).rowcount != 1 or not extend_premium(con, chat, days):
-                con.execute("ROLLBACK")
-                return {"ok": False, "error": "already"}
-            con.execute("COMMIT")
-        except sqlite3.Error:
-            con.execute("ROLLBACK")
-            raise
+        # Канал проверяем по-настоящему; нет прав — ждём BONUS_WAIT_SEC.
+        member = tg_channel_member(chat)
+        if member is False:
+            return {"ok": False, "error": "not_member"}
+        if member is None and t - opened < BONUS_WAIT_SEC:
+            return {"ok": False, "error": "wait", "left": BONUS_WAIT_SEC - (t - opened)}
+        days = _bonus_grant(con, chat, kind, t)
+        if not days:
+            return {"ok": False, "error": "already"}
     except sqlite3.Error as e:
         sys.stderr.write(f"[api] bonus {chat} {kind}: {e}\n")
         return {"ok": False, "error": "db"}
@@ -12678,6 +12768,7 @@ def main():
     )
     threading.Thread(target=warmup, daemon=True).start()
     threading.Thread(target=refresher, daemon=True).start()
+    threading.Thread(target=_bonus_loop, daemon=True).start()
     httpd = ThreadingHTTPServer((HOST, PORT), Handler)
     httpd.serve_forever()
 

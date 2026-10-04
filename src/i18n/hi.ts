@@ -52,6 +52,8 @@ export const hi: Dict = {
   big_win_30d: "30दिन",
   big_win_7d: "7दिन",
   bn_already: "यह बोनस पहले ही मिल चुका है",
+  bn_checking: "जाँच जारी · ≈{m} मिनट",
+  bn_checking_toast: "हम सदस्यता जाँच रहे हैं — दिन 5 मिनट में मिलेगा",
   bn_claim: "+{n} दिन पाएँ",
   bn_days: "+{n} दिन",
   bn_done: "बोनस मिल गया",

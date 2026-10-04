@@ -52,6 +52,8 @@ export const tr: Dict = {
   big_win_30d: "30g",
   big_win_7d: "7g",
   bn_already: "Bu bonus zaten alındı",
+  bn_checking: "Kontrol ediliyor · ≈{m} dk",
+  bn_checking_toast: "Aboneliğiniz kontrol ediliyor — gün 5 dakika içinde gelecek",
   bn_claim: "+{n} gün al",
   bn_days: "+{n} gün",
   bn_done: "Bonus alındı",

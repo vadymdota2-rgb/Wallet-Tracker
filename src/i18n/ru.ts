@@ -52,6 +52,8 @@ export const ru: Dict = {
   big_win_30d: "30д",
   big_win_7d: "7д",
   bn_already: "Этот бонус уже получен",
+  bn_checking: "Проверяем · ≈{m} мин",
+  bn_checking_toast: "Проверяем подписку — день придёт в течение 5 минут",
   bn_claim: "Получить +{n} дн.",
   bn_days: "+{n} дн.",
   bn_done: "Бонус получен",

@@ -5,8 +5,9 @@
  * тебе, и другу. Ниже — соцсети, каждая один раз на аккаунт. Канал Telegram
  * сервер проверяет по-настоящему (getChatMember): открыл канал, вернулся,
  * «Получить». У X, TikTok, Instagram и YouTube проверки нет — одно нажатие
- * «Подписаться» открывает страницу и сразу даёт день; второй раз кнопка
- * уже не нажимается.
+ * «Подписаться» открывает страницу и ставит бонус «на проверку»: через пять
+ * минут сервер сам начисляет день (bonus_settle), а бот пишет «подписка
+ * подтверждена». Второй раз кнопка уже не нажимается.
  */
 import { useEffect, useMemo, useState } from "react";
 import { Frame } from "./Screen";
@@ -34,7 +35,10 @@ export function BonusScreen() {
   /* Когда человек открыл страницу — здесь, а не только на сервере: отсчёт до
      «Получить» должен идти сразу, без лишнего запроса. */
   const [opened, setOpened] = useState<Record<string, number>>({});
+  /** До какого времени идёт «проверка» подписки (X, TikTok, Instagram, YouTube). */
+  const [pending, setPending] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState("");
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     let alive = true;
@@ -42,11 +46,21 @@ export function BonusScreen() {
       if (!alive || !r?.ok) return;
       setSt(r);
       setOpened((o) => ({ ...r.opened, ...o }));
+      setPending((p) => ({ ...r.pending, ...p }));
     });
     return () => {
       alive = false;
     };
-  }, []);
+  }, [tick]);
+
+  /* Пока что-то «на проверке» и экран открыт — раз в полминуты спрашиваем
+     сервер: начислил — строка сама станет «✓ +1». */
+  const waiting = Object.keys(pending).some((k) => !st?.got?.[k]);
+  useEffect(() => {
+    if (!waiting) return;
+    const id = window.setInterval(() => setTick((n) => n + 1), 30_000);
+    return () => window.clearInterval(id);
+  }, [waiting]);
 
   const days = useMemo(() => Object.fromEntries((st?.items ?? []).map((i) => [i.id, i.days])), [st]);
   const got = st?.got ?? {};
@@ -56,9 +70,14 @@ export function BonusScreen() {
     haptic("select");
     openSocial(s);
     if (got[s.id]) return;
-    // Не Telegram: нажал — открыл — получил, одним касанием.
+    // Не Telegram: одно нажатие — и бонус «на проверке» до начисления.
     if (s.id !== "tg") {
-      void claim(s);
+      if (pending[s.id]) return;
+      setPending((p) => ({ ...p, [s.id]: Math.floor(Date.now() / 1000) + 300 }));
+      void bonusAct(s.id, "open").then((r) => {
+        if (r?.due) setPending((p) => ({ ...p, [s.id]: r.due ?? 0 }));
+      });
+      toast(t(lang, "bn_checking_toast"));
       return;
     }
     setOpened((o) => ({ ...o, [s.id]: o[s.id] ?? Math.floor(Date.now() / 1000) }));
@@ -116,6 +135,12 @@ export function BonusScreen() {
                 </button>
                 {done ? (
                   <span className="bn-ok">✓ +{done}</span>
+                ) : pending[s.id] ? (
+                  <span className="bn-wait">
+                    {/* «Проверяем · ≈5 мин» — двумя строками: слово и срок. */}
+                    {t(lang, "bn_checking", { m: Math.max(1, Math.ceil((pending[s.id]! - nowSec) / 60)) })
+                      .split(" · ").map((part, i) => <span key={i}>{part}</span>)}
+                  </span>
                 ) : s.id !== "tg" || !at ? (
                   <button type="button" className="bn-go" disabled={busy === s.id} onClick={() => open(s)}>
                     {t(lang, "bn_subscribe")}

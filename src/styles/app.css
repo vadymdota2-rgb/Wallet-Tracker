@@ -3195,3 +3195,5 @@ button.alc-who { cursor: pointer; text-decoration: underline dotted rgb(124 151 
 .bn-go:disabled { opacity: 0.55; cursor: default; }
 .bn-ok { flex: none; color: var(--up); font-weight: 700; font-size: 13px; }
 .bn-note { margin: 10px 0 0; color: var(--dim-2); font-size: 11.5px; line-height: 1.5; }
+.bn-wait { flex: none; display: grid; justify-items: end; gap: 1px; max-width: 46%; text-align: end; color: var(--warn); font-size: 12px; font-weight: 600; line-height: 1.3; }
+.bn-wait span + span { color: var(--dim); font-weight: 500; }

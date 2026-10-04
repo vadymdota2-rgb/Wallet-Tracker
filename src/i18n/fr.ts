@@ -52,6 +52,8 @@ export const fr: Dict = {
   big_win_30d: "30j",
   big_win_7d: "7j",
   bn_already: "Ce bonus a déjà été reçu",
+  bn_checking: "Vérification · ≈{m} min",
+  bn_checking_toast: "Nous vérifions votre abonnement — le jour arrivera d'ici 5 minutes",
   bn_claim: "Obtenir +{n} j",
   bn_days: "+{n} jours",
   bn_done: "Bonus reçu",

@@ -52,6 +52,8 @@ export const pt: Dict = {
   big_win_30d: "30d",
   big_win_7d: "7d",
   bn_already: "Este bônus já foi recebido",
+  bn_checking: "Verificando · ≈{m} min",
+  bn_checking_toast: "Verificando sua inscrição — o dia chega em até 5 minutos",
   bn_claim: "Pegar +{n} d",
   bn_days: "+{n} dias",
   bn_done: "Bônus recebido",

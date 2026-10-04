@@ -52,6 +52,8 @@ export const id: Dict = {
   big_win_30d: "30h",
   big_win_7d: "7h",
   bn_already: "Bonus ini sudah diterima",
+  bn_checking: "Memeriksa · ≈{m} mnt",
+  bn_checking_toast: "Kami memeriksa langganan — harinya datang dalam 5 menit",
   bn_claim: "Ambil +{n} hari",
   bn_days: "+{n} hari",
   bn_done: "Bonus diterima",

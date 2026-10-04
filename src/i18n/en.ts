@@ -51,6 +51,8 @@ export const en = {
   big_win_30d: "30d",
   big_win_7d: "7d",
   bn_already: "This bonus has already been received",
+  bn_checking: "Checking · ≈{m} min",
+  bn_checking_toast: "Checking your subscription — the day will arrive within 5 minutes",
   bn_claim: "Get +{n} d",
   bn_days: "+{n} days",
   bn_done: "Bonus received",
