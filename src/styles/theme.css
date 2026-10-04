@@ -33,7 +33,9 @@
   --legal-h: 26px;
   /* Вся нижняя панель: вкладки плюс полоска. Отступы, которые резервируют
      под неё место, считают от этой высоты, а не от одних вкладок. */
-  --dock-h: calc(var(--tab-h) + var(--legal-h));
+  /* Строка с X (Twitter) под документами. */
+  --social-h: 26px;
+  --dock-h: calc(var(--tab-h) + var(--legal-h) + var(--social-h));
   --hdr-h: 56px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 }

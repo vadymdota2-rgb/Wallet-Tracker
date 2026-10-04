@@ -13,7 +13,7 @@ import { HalvingCard } from "./components/HalvingCard";
 import { t, bare } from "./i18n/t";
 import { ensureLang, isRtl, normalizeLang } from "./i18n";
 import { setLocale } from "./lib/format";
-import { bootTelegram, haptic, initData, launchGo, telegramLang, waitForTelegram, webApp } from "./lib/telegram";
+import { bootTelegram, haptic, initData, launchGo, openExternal, telegramLang, waitForTelegram, webApp } from "./lib/telegram";
 import { startSync, syncNow } from "./lib/sync";
 import { Toaster, toast } from "./components/Toast";
 import { Background } from "./components/Background";
@@ -27,6 +27,9 @@ import { MoreTab } from "./screens/MoreTab";
 import type { DictKey } from "./i18n/types";
 import type { ScreenName, Tab } from "./store/app";
 
+
+/** Официальный аккаунт проекта в X (Twitter) — самая нижняя строка. */
+const X_URL = "https://x.com/WalletTrackerX";
 
 const TABS: { id: Tab; key: DictKey; glyph: ReactNode }[] = [
   { id: "wallets", key: "menu_my_wallets", glyph: <WalletGlyph /> },
@@ -305,6 +308,16 @@ export default function App() {
           <i aria-hidden="true">·</i>
           <button type="button" onClick={() => { haptic("select"); open("legal", "terms"); }}>
             {bare(t(lang, "legal_terms_title"))}
+          </button>
+        </div>
+        {/* Официальный X (Twitter) — самой нижней строкой, под документами. */}
+        <div className="social-bar">
+          <button type="button" aria-label="X (Twitter)"
+            onClick={() => { haptic("select"); openExternal(X_URL); }}>
+            <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
+              <path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+            </svg>
+            <span>@WalletTrackerX</span>
           </button>
         </div>
       </div>
