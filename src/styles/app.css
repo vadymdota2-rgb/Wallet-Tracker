@@ -3148,18 +3148,27 @@ button.alc-who { cursor: pointer; text-decoration: underline dotted rgb(124 151 
   height: 100%;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  /* Четыре ссылки должны уместиться и на 320 точках. */
-  padding: 0 7px;
+  gap: 4px;
+  /* Пять ссылок с подписями — плотно, чтобы уместиться от 360 точек. */
+  padding: 0 5px;
   color: var(--dim);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
+  white-space: nowrap;
   transition: color 0.2s var(--ease);
 }
 .social-bar button:active { color: var(--glow); }
 .social-bar svg { color: var(--ink); }
-/* Самые узкие телефоны: системный шрифт бывает шире нашего — запас, чтобы
-   четыре ссылки не вылезли за край. */
-@media (max-width: 340px) {
-  .social-bar button { padding: 0 5px; gap: 4px; font-size: 10.5px; }
+/* Самые узкие телефоны: пять подписей не помещаются — остаются значки,
+   крупнее и с зоной нажатия пошире. Название — в aria-label. */
+/* 360–399 точек: подписи остаются, отступы и шрифт — с запасом на
+   системные шрифты пошире нашего. */
+@media (min-width: 360px) and (max-width: 399px) {
+  .social-bar button { padding: 0 3px; gap: 3px; font-size: 10px; }
+}
+@media (max-width: 359px) {
+  .social-bar { gap: 6px; }
+  .social-bar button { padding: 0 9px; }
+  .social-bar button span { display: none; }
+  .social-bar svg { width: 15px; height: 15px; }
 }
