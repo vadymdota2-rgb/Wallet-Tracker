@@ -213,7 +213,15 @@ export default function App() {
     return () => btn.offClick?.(onBack);
   }, [stack.length, menuOpen, back, setMenu]);
 
-  if (!i18nReady) return <div className="boot">WALLET TRACKER</div>;
+  // Заставка из index.html уходит, когда есть что показать: язык загружен
+  // и первые данные (или снимок прошлого запуска) уже на месте.
+  const shown = i18nReady && status !== "boot";
+  useEffect(() => {
+    if (shown) window.__wtSplash?.();
+  }, [shown]);
+
+  // Пока язык не загружен, приложение пустое: его закрывает заставка.
+  if (!i18nReady) return null;
 
   const top = stack[stack.length - 1];
   /* Без Премиума открыты только экраны, где его получают, и служебные;

@@ -39,6 +39,8 @@ export interface WebApp {
 declare global {
   interface Window {
     Telegram?: { WebApp?: WebApp };
+    /** Убрать заставку (index.html): приложению есть что показать. */
+    __wtSplash?: () => void;
   }
 }
 

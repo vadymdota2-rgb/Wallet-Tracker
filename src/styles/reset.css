@@ -47,17 +47,6 @@ input::placeholder { color: var(--dim-2); }
 
 :focus-visible { outline: 2px solid var(--glow); outline-offset: 2px; }
 
-.boot {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--glow);
-  font: 700 18px var(--font-sans);
-  letter-spacing: 0.4em;
-}
-
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
