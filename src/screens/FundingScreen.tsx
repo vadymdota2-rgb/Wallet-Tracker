@@ -3,7 +3,7 @@
  *
  * Раньше он был плиткой «Аналитики», но по смыслу ближе к карте: и то и
  * другое — про фьючерсы и плечо, про то, кто и сколько платит за позицию.
- * Доступ тот же — по подписке, как всё, что про фьючерсы.
+ * Доступ — с Премиумом, как и всё приложение.
  */
 import { useEffect, useState } from "react";
 import { useApp } from "../store/app";
@@ -15,7 +15,7 @@ import { useNow } from "../lib/tick";
 import { num, pct, usd } from "../lib/format";
 import { fundingSideKey, showSym } from "../lib/labels";
 import { CoinIcon } from "../components/CoinIcon";
-import { Card, Chips, Empty, Locked, Row, SectionTitle, Skeleton, VenueReel } from "../components/ui";
+import { Card, Chips, Empty, Row, SectionTitle, Skeleton, VenueReel } from "../components/ui";
 import { fetchFund } from "../lib/api";
 import { syncNow } from "../lib/sync";
 import type { FundRow } from "../lib/types";
@@ -23,21 +23,11 @@ import { Frame } from "./Screen";
 
 export function FundingScreen() {
   const lang = useApp((s) => s.lang);
-  const open = useApp((s) => s.open);
-  const premium = useLive((s) => s.me.plan === "premium");
   return (
     <Frame title={t(lang, "ui_tab_funding")}>
       <Card>
         <SectionTitle note={t(lang, "fund_hint")}>{t(lang, "fund_title")}</SectionTitle>
-        {premium ? (
-          <FundBody />
-        ) : (
-          <Locked
-            text={t(lang, "hl_locked_body")}
-            cta={t(lang, "mw_upgrade")}
-            onCta={() => open("premium", "perp")}
-          />
-        )}
+        <FundBody />
       </Card>
     </Frame>
   );

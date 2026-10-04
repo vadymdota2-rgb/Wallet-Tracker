@@ -61,9 +61,6 @@ export interface Wallet {
   pos: Position[];
   /** Кошелёк биткоина: позиций и сделок BSC у него нет, свой экран. */
   chain?: "btc";
-  /** Шлёт ли алерты. Бесплатно — первые три кошелька; поле есть только у
-   *  бесплатного, у премиума молчит — там алерты идут со всех. */
-  active?: boolean;
   /** Адрес как пишется: `addr` строчными, а base58 без регистра не найти. */
   btc?: string;
 }
@@ -251,10 +248,6 @@ export interface Rank {
   perp: RankTable;
   /** Рейтинг по окнам: "30" | "90" | "180" | "365". */
   wins?: Record<string, { spot: RankTable; perp: RankTable } | undefined>;
-  /** Сколько мест на доске всего — бесплатному сервер отдаёт верх доски и
-   *  говорит, сколько осталось за замком. */
-  spotN?: Partial<Record<RankKind, number>>;
-  perpN?: Partial<Record<RankKind, number>>;
 }
 
 export interface TradeRow {
@@ -277,10 +270,6 @@ export interface TradeRow {
 export interface Trades {
   spot: TradeRow[];
   perp: TradeRow[];
-  /** Бесплатному сделки приходят с задержкой: на сколько секунд и сколько
-   *  свежих строк спрятано. */
-  delay?: number;
-  hidden?: number;
 
 }
 
@@ -437,8 +426,6 @@ export interface AlertCardData {
   pnl?: number;
   pnlPct?: number;
   prior?: { px: number; ago: number; chg: number };
-  /** Цена входа и PnL скрыты — бесплатный тариф. */
-  lock?: boolean;
   /** Биткоин: сколько транзакций склеено и биржа на той стороне. */
   txs?: number;
   ex?: string;
@@ -551,8 +538,6 @@ export interface UnlocksReply {
   /** Эмиссия по факту сети: d — дней измерения, r — прирост в месяц
    *  (отрицательный — сжигание больше выпуска). */
   measured?: Record<string, { d: number; r: number }>;
-  /** Бесплатному вместо react: сколько прошлых разлоков посчитано. */
-  reactN?: Record<string, number>;
 }
 
 export interface UnlockStake {
@@ -607,13 +592,6 @@ export interface DigestUnlock {
   usd: number | null;
   pct: number | null;
   kind: "cliff" | "monthly";
-}
-
-/** Раздел про фьючерсы без подписки: сервер отдаёт только отметку. */
-export interface DigestLocked {
-  locked: true;
-  /** Сколько строк за замком. */
-  n?: number;
 }
 
 /** Строка крупного движения биткоина в выпуске. */
@@ -675,9 +653,9 @@ export interface DigestItem {
   spot?: DigestCoin[];
   rot?: { usd?: number; pairs?: number; w?: number; src: RotSide[]; dst: RotSide[] };
   /** Выпуски до разделения — один список; новые — крипта и акции с металлами. */
-  ls?: DigestLs | { crypto: DigestLs; rwa: DigestLs } | DigestLocked;
-  perp?: DigestCoin[] | { crypto: DigestCoin[]; rwa: DigestCoin[] } | DigestLocked;
-  fund?: { hi: DigestFund[]; lo: DigestFund[] } | DigestLocked;
+  ls?: DigestLs | { crypto: DigestLs; rwa: DigestLs };
+  perp?: DigestCoin[] | { crypto: DigestCoin[]; rwa: DigestCoin[] };
+  fund?: { hi: DigestFund[]; lo: DigestFund[] };
   unl?: DigestUnlock[];
   likes: number;
   comments: number;
@@ -936,9 +914,6 @@ export interface BtcBigReply {
   /** Только кошельки базы и сколько их всего. */
   base?: boolean;
   baseN?: number;
-  /** Бесплатному — с задержкой: секунды и сколько свежих строк спрятано. */
-  delay?: number;
-  hidden?: number;
   /** Через какие биржи прошли движения выбранной стороны. */
   byEx?: { ex: string; n: number; w: number; btc: number; v: number }[];
 }

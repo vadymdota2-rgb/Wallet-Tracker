@@ -13,10 +13,10 @@
  * приложение открыто, подгрузка повторяется с каждым опросом сервера —
  * иначе через несколько минут память устарела бы и скелеты вернулись.
  *
- * Закрытое подпиской не запрашивается: сервер его бесплатному всё равно не
- * отдаст, а лишние отказы — лишняя нагрузка.
+ * Без Премиума не запрашивается ничего: приложение закрыто замком, и
+ * сервер данных всё равно не отдаст.
  */
-import { FREE, FREE_BIG_WINS, FREE_FLOW_WINS } from "./upsell";
+import { FREE } from "./upsell";
 import {
   fetchBig, fetchBtcBig, fetchBtcFlow, fetchBtcRank, fetchDeals, fetchFlow, fetchLs, fetchSymbols, fetchTokenHist,
   fetchUnlocks, fetchWallet,
@@ -68,12 +68,12 @@ const isAddr = (a: unknown): a is string => typeof a === "string" && /^0x[0-9a-f
 function plan(): (() => Promise<unknown>)[] {
   const live = useLive.getState();
   const app = useApp.getState();
-  const premium = live.me.plan === "premium";
   const jobs: (() => Promise<unknown>)[] = [];
+  if (live.me.plan !== "premium") return jobs;
 
   // 0. Календарь разлоков — самым первым: сервер отдаёт его из памяти
   // мгновенно, а в конце очереди экран ждал десятки чужих запросов.
-  jobs.push(() => fetchUnlocks(premium));
+  jobs.push(() => fetchUnlocks());
 
   // 1. Кошельки — первыми: их открывают чаще всего.
   for (const w of live.wallets) {
@@ -82,29 +82,22 @@ function plan(): (() => Promise<unknown>)[] {
     jobs.push(() => fetchWallet(w.addr).then((d) => applyWalletLive(w.addr, d)));
   }
 
-  // 2. Крупные сделки за все окна — те, что открыты по плану: неделю и
-  //    месяц бесплатному сервер не отдаёт, и запрос был бы впустую.
-  for (const win of BIG_WINS) {
-    if (premium || (FREE_BIG_WINS as readonly string[]).includes(win)) jobs.push(() => fetchBig(win));
-  }
+  // 2. Крупные сделки за все окна.
+  for (const win of BIG_WINS) jobs.push(() => fetchBig(win));
 
   // 3. Поток: притоки и оттоки выбранного окна. «Все» уже в выгрузке.
-  if (premium || (FREE_FLOW_WINS as readonly string[]).includes(app.flowWin))
-    for (const side of ["in", "out"]) jobs.push(() => fetchFlow(app.flowWin, "", 0, side));
+  for (const side of ["in", "out"]) jobs.push(() => fetchFlow(app.flowWin, "", 0, side));
 
-  // 4. Лонги и шорты — только подписчику.
-  if (premium) {
-    for (const side of ["in", "out"]) jobs.push(() => fetchLs(app.flowWin, "", 0, side, app.lsCls));
-  }
+  // 4. Лонги и шорты.
+  for (const side of ["in", "out"]) jobs.push(() => fetchLs(app.flowWin, "", 0, side, app.lsCls));
 
   // 5. Сделки первых трейдеров доски, которую человек смотрит.
   if (app.rankVenue === "btc") {
     jobs.push(() => fetchBtcRank(app.rankWin));
   } else {
-    const venue = app.rankVenue === "perp" && !premium ? "spot" : app.rankVenue;
+    const venue = app.rankVenue;
     const board = live.rank[venue]?.[app.rankKind] ?? live.rank[venue]?.pnl ?? [];
-    const n = premium ? FREE.premiumDeals : FREE.deals;
-    for (const r of board.slice(0, TOP_DEALS)) jobs.push(() => fetchDeals(r.a, venue, n));
+    for (const r of board.slice(0, TOP_DEALS)) jobs.push(() => fetchDeals(r.a, venue, FREE.premiumDeals));
   }
 
   // 5б. Биткоин: поток для NetFlow и выводы с бирж за выбранное окно.

@@ -52,7 +52,6 @@ const GUIDE: { ic: ReactNode; title: Key; sub: Key; body: Key }[] = [
 
 const FAQ: [Key, Key][] = [
   ["hp_q1", "hp_a1"],
-  ["hp_q2", "hp_a2"],
   ["hp_q3", "hp_a3"],
   ["hp_q4", "hp_a4"],
   ["hp_q6", "hp_a6"],

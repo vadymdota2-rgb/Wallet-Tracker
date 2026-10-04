@@ -16,14 +16,12 @@ import { CoinIcon } from "../components/CoinIcon";
 import { Candles } from "../components/Chart";
 import { Hero } from "../components/Hero";
 import { Card, Empty, Segmented, Skeleton, Tiles } from "../components/ui";
-import { PremiumLock, usePremium } from "../components/PremiumLock";
 
 export function PositionScreen({ arg, arg2 }: ScreenProps) {
   const lang = useApp((s) => s.lang);
   const tf = useApp((s) => s.chartTf);
   const setTf = useApp((s) => s.setChartTf);
   const wallets = useLive((s) => s.wallets);
-  const premium = usePremium();
 
   const w = walletByAddr(wallets, arg);
   const idx = Number(arg2 ?? -1);
@@ -46,10 +44,10 @@ export function PositionScreen({ arg, arg2 }: ScreenProps) {
     return () => ctrl.abort();
   }, [sym, tf]);
 
-  if (!premium || !w || !p) {
+  if (!w || !p) {
     return (
       <Frame title={t(lang, "hl_open_positions")}>
-        <Card>{premium ? <Empty text={t(lang, "hl_no_open_positions")} /> : <PremiumLock />}</Card>
+        <Card><Empty text={t(lang, "hl_no_open_positions")} /></Card>
       </Frame>
     );
   }

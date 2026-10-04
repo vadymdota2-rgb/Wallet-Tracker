@@ -192,8 +192,7 @@ export const fetchRot = (win: string, offset = 0, limit = 15, _signal?: AbortSig
  */
 const dealsPath = (addr: string, venue: string, n: number) =>
   `/api/deals?addr=${encodeURIComponent(addr.toLowerCase())}&venue=${encodeURIComponent(venue)}&n=${n}`;
-/** Ответ истории. `cap` — бесплатному отдано столько, дальше за подпиской. */
-export type DealsReply = { ok?: boolean; deals?: Deal[]; cap?: number };
+export type DealsReply = { ok?: boolean; deals?: Deal[] };
 export const fetchDeals = (addr: string, venue: string, n: number, _signal?: AbortSignal) =>
   cachedGet<DealsReply>(dealsPath(addr, venue, n), TTL.deals);
 export const peekDeals = (addr: string, venue: string, n: number) =>
@@ -286,17 +285,13 @@ export function savedUnlocks(): UnlocksReply | null {
   }
 }
 
-/* Подписчику ответ полнее (реакция цены на прошлые разлоки), поэтому у него
-   свой адрес в памяти ответов: купил премиум — получает полный, а не
-   бесплатный из кэша. `p` сервер не читает. */
-const unlocksPath = (premium: boolean) => (premium ? "/api/unlocks?p=1" : "/api/unlocks");
-export const fetchUnlocks = (premium = false) =>
-  cachedGet<UnlocksReply>(unlocksPath(premium), UNLOCKS_TTL).then((r) => {
+export const fetchUnlocks = () =>
+  cachedGet<UnlocksReply>("/api/unlocks", UNLOCKS_TTL).then((r) => {
     if (r?.ok && r.items?.length) {
       try {
         localStorage.setItem(
           UNLOCKS_SAVED,
-          JSON.stringify({ at: Date.now(), items: r.items, none: r.none, noEmit: r.noEmit, stake: r.stake, supply: r.supply, vol: r.vol, react: r.react, reactN: r.reactN, measured: r.measured }),
+          JSON.stringify({ at: Date.now(), items: r.items, none: r.none, noEmit: r.noEmit, stake: r.stake, supply: r.supply, vol: r.vol, react: r.react, measured: r.measured }),
         );
       } catch {
         // место кончилось или хранилище закрыто — просто без запаса
@@ -304,7 +299,7 @@ export const fetchUnlocks = (premium = false) =>
     }
     return r;
   });
-export const peekUnlocks = (premium = false) => peek<UnlocksReply | null>(unlocksPath(premium), UNLOCKS_TTL);
+export const peekUnlocks = () => peek<UnlocksReply | null>("/api/unlocks", UNLOCKS_TTL);
 
 /** Язык хранится в той же строке users, что читает бот: выбор общий. */
 export const setLangRemote = (lang: string) =>

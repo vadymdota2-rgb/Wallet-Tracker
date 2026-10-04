@@ -21,7 +21,6 @@ import { venueName } from "../lib/rank";
 import { removeWallet } from "../lib/api";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
-import { Upsell } from "../components/Upsell";
 import { FREE } from "../lib/upsell";
 import { haptic } from "../lib/telegram";
 import {
@@ -71,7 +70,6 @@ export function TopTab() {
   const setWin = useApp((s) => s.setRankWin);
 
   const rank = useLive((s) => s.rank);
-  const plan = useLive((s) => s.me.plan);
   const wallets = useLive((s) => s.wallets);
 
   // У Bitcoin своя доска со своими видами; здесь — только BSC и Hyperliquid.
@@ -81,17 +79,10 @@ export function TopTab() {
   // показываем прибыль, а не пустой экран.
   const kind = kinds.includes(rawKind) ? rawKind : "pnl";
 
-  const premium = plan === "premium";
-  /* Бесплатно: рейтинг за 30 дней, первые десять мест спота и витрина из
-     трёх мест Hyperliquid. Длинные окна — премиум; сервер их бесплатному и
-     не отдаёт, поэтому вместо пустой доски — приглашение. */
-  const winLocked = !premium && win !== "30";
-  const table = winLocked ? null : pick(rank, board, win);
-  const cap = premium ? FREE.premiumTop : board === "perp" ? FREE.showcase : FREE.top;
-  const rows: Trader[] = (table?.[kind] ?? []).slice(0, cap);
-  // Сколько мест за замком — витрина говорит «ещё 97», а не «что-то есть».
-  const total = (board === "perp" ? rank.perpN : rank.spotN)?.[kind] ?? 0;
-  const more = Math.max(0, total - rows.length);
+  // Без Премиума приложение закрыто целиком (LockScreen), поэтому здесь
+  // доска всегда полная: сто мест и все окна.
+  const table = pick(rank, board, win);
+  const rows: Trader[] = (table?.[kind] ?? []).slice(0, FREE.premiumTop);
 
   const tracked = new Set(wallets.map((w) => w.addr.toLowerCase()));
 
@@ -158,16 +149,12 @@ export function TopTab() {
           onChange={setWin}
           options={WINDOWS.map((w) => ({
             id: w,
-            label: `${w}${t(lang, "unit_day")}${!premium && w !== "30" ? " 🔒" : ""}`,
+            label: `${w}${t(lang, "unit_day")}`,
           }))}
         />
       </Card>
 
-      {winLocked ? (
-        <Card>
-          <Upsell src="top" text={t(lang, "up_top_win")} />
-        </Card>
-      ) : venue === "btc" ? (
+      {venue === "btc" ? (
         <BtcBoard win={win} />
       ) : rows.length === 0 ? (
         <Card>
@@ -239,21 +226,6 @@ export function TopTab() {
         })
       )}
 
-      {!premium && !winLocked && venue === "spot" && rows.length >= FREE.top ? (
-        <Card>
-          <Upsell src="top" text={t(lang, "up_top", { f: String(FREE.top), p: String(FREE.premiumTop) })} />
-        </Card>
-      ) : null}
-      {/* Hyperliquid бесплатно — витрина: три первых места видно целиком, а
-          что за ними, сказано числом. */}
-      {!premium && !winLocked && venue === "perp" ? (
-        <Card>
-          <Upsell
-            src="perp"
-            text={more > 0 ? t(lang, "up_perp", { n: String(more) }) : t(lang, "up_perp0")}
-          />
-        </Card>
-      ) : null}
     </>
   );
 }

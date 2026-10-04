@@ -3,9 +3,9 @@
  * и список кошельков с местом в рейтинге.
  */
 import { FREE } from "../lib/upsell";
-import { IntroOffer, TrialCard, Upsell } from "../components/Upsell";
+import { TrialCard } from "../components/Upsell";
 import { useRef } from "react";
-import { useApp, isPaused, walletLimit } from "../store/app";
+import { useApp, walletLimit } from "../store/app";
 import { useLive } from "../store/live";
 import { bare, t } from "../i18n/t";
 import { num, shortAddr, usd } from "../lib/format";
@@ -22,7 +22,7 @@ export function WalletsTab() {
   const goTab = useApp((s) => s.goTab);
   const { me, wallets, rank } = useLive();
 
-  const limit = walletLimit(me.plan, me.service);
+  const limit = walletLimit(me.service);
 
   // Порог меняем на месте и только потом сохраняем. Раньше чип ждал ответа
   // сервера, а следом полной выгрузки — секунды на нажатие, за которые
@@ -50,8 +50,8 @@ export function WalletsTab() {
     }
   };
 
-  // «Первые шаги»: пока не набраны три бесплатных кошелька. Без кошелька
-  // пробная неделя сгорает зря — алертов просто не от кого получать.
+  // «Первые шаги»: пока не набраны первые три кошелька. Без кошелька
+  // пробный Премиум сгорает зря — алертов просто не от кого получать.
   const topAddr = rank.spot?.pnl?.[0]?.a;
   const steps: { key: Parameters<typeof t>[1]; done: boolean; go: () => void }[] = [
     { key: "fs_1", done: wallets.length >= 1, go: () => (topAddr ? open("addWallet", topAddr) : goTab("top")) },
@@ -62,7 +62,6 @@ export function WalletsTab() {
 
   return (
     <>
-      <IntroOffer />
       {/* Пробная неделя: сколько осталось и что будет после — заранее. */}
       <TrialCard />
       {showSteps ? (
@@ -103,19 +102,12 @@ export function WalletsTab() {
           <Action onClick={() => open("addWallet")} disabled={wallets.length >= limit}>
             <PlusGlyph /> {bare(t(lang, "menu_add_wallet"))}
           </Action>
-          {/* Бесплатно алерты идут только с основного: есть кошелёк на паузе
-              или упёрся в лимит — не «нельзя», а что будет с Премиумом. */}
-          {me.plan !== "premium" && !me.service &&
-          (wallets.length >= limit || wallets.some((w) => isPaused(me.plan, w))) ? (
-            <Upsell src="wallets" text={t(lang, "up_wallets")} />
-          ) : null}
         </div>
 
         {wallets.length === 0 ? (
           <Empty text={t(lang, "mw_no_wallets")} hint={botNodes(t(lang, "mw_tap_add"))} />
         ) : (
           wallets.map((w) => {
-            const paused = isPaused(me.plan, w);
             const place = walletRank(rank, w.addr);
             const venue = w.chain === "btc" ? null : rowVenue(w);
             // Лучшее место кошелька вообще, а не по площадке значка:
@@ -126,7 +118,7 @@ export function WalletsTab() {
               <Row
                 key={w.addr}
                 title={w.name}
-                badge={w.primary ? bare(t(lang, "wl_main_wallet")) : paused ? t(lang, "wl_paused") : undefined}
+                badge={w.primary ? bare(t(lang, "wl_main_wallet")) : undefined}
                 sub={shortAddr(w.btc ?? w.addr)}
                 // Площадка — третьей строкой под адресом. В середине она
                 // вместе с местом не помещалась: имя резалось до «Silent …»,

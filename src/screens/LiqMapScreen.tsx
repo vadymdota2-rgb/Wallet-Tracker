@@ -34,8 +34,6 @@ import { t } from "../i18n/t";
 import { num, pct, px, since, usd } from "../lib/format";
 import { haptic } from "../lib/telegram";
 import { fetchLiqCoins, fetchLiqMap, peekLiqCoins, peekLiqMap, refreshLiqMap, savedLiqMap } from "../lib/api";
-import { Upsell, usePremium } from "../components/Upsell";
-import { useLive } from "../store/live";
 import { useNow } from "../lib/tick";
 import { CoinIcon } from "../components/CoinIcon";
 import { Card, Chips, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
@@ -632,12 +630,7 @@ export function LiqMapScreen() {
   const setLiq = useApp((s) => s.setLiq);
   const open = useApp((s) => s.open);
   const [sym, setSym] = useState(saved || "BTC");
-  const premium = usePremium();
-  /* Сутки открыты всем, неделя и месяц — Премиум (сервер отвечает 403).
-     Бесплатный открывает экран на сутках, даже если раньше выбирал неделю. */
-  const [range, setRange] = useState<LiqRange>(() =>
-    useLive.getState().me.plan === "premium" ? savedRange || "1d" : "1d");
-  const locked = !premium && range !== "1d";
+  const [range, setRange] = useState<LiqRange>(savedRange || "1d");
   const [span, setSpan] = useState<Span>("10");
   const [sel, setSel] = useState<number | null>(null);
   const [on, setOn] = useState<boolean[]>([true, true, true, true]);
@@ -654,7 +647,6 @@ export function LiqMapScreen() {
      монеты и окна). Свежая догружается поверх, и экран не пустеет. Не
      пришла — остаётся прежняя с пометкой, когда она снята. */
   useEffect(() => {
-    if (locked) return;
     let alive = true;
     setSel(null);
     const cached = peekLiqMap(sym, range);
@@ -677,7 +669,7 @@ export function LiqMapScreen() {
     return () => {
       alive = false;
     };
-  }, [sym, range, setLiq, retry, locked]);
+  }, [sym, range, setLiq, retry]);
 
   /* Пока экран открыт, карта обновляется сама раз в минуту: сервер
      пересчитывает её каждые две, и уровни, которые цена уже прошла
@@ -685,7 +677,6 @@ export function LiqMapScreen() {
      Выбранный уровень и масштаб при этом не сбрасываются. Скрытое
      приложение не спрашивает. */
   useEffect(() => {
-    if (locked) return;
     const id = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
       void refreshLiqMap(sym, range).then((r) => {
@@ -696,7 +687,7 @@ export function LiqMapScreen() {
       });
     }, LIVE_EVERY);
     return () => window.clearInterval(id);
-  }, [sym, range, locked]);
+  }, [sym, range]);
 
   const again = () => {
     haptic("select");
@@ -846,17 +837,11 @@ export function LiqMapScreen() {
           onChange={setRange}
           options={[
             { id: "1d", label: t(lang, "big_win_24h") },
-            { id: "7d", label: t(lang, "big_win_7d") + (premium ? "" : " 🔒") },
-            { id: "30d", label: t(lang, "big_win_30d") + (premium ? "" : " 🔒") },
+            { id: "7d", label: t(lang, "big_win_7d") },
+            { id: "30d", label: t(lang, "big_win_30d") },
           ]}
         />
       </div>
-
-      {locked ? (
-        <Card>
-          <Upsell src="liq" text={t(lang, "up_liq")} />
-        </Card>
-      ) : null}
 
       {staleAt ? (
         <p className="lq-stale">
@@ -865,7 +850,7 @@ export function LiqMapScreen() {
         </p>
       ) : null}
 
-      {locked ? null : !reply ? (
+      {!reply ? (
         <Card><Skeleton rows={10} /></Card>
       ) : !reply.ok ? (
         <Empty

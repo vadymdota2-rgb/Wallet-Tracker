@@ -1,10 +1,8 @@
 /**
  * Добавление кошелька. Проверки те же, что в боте: адрес 0x + 40 знаков или
  * адрес биткоина (bc1…, 1…, 3…),
- * имя до 32 символов. Лимит плана проверяет сервер — на бесплатном один
- * кошелёк, на премиуме пятьдесят.
+ * имя до 32 символов. Лимит — пятьдесят кошельков, его проверяет и сервер.
  */
-import { Upsell } from "../components/Upsell";
 import { useState } from "react";
 import { Frame } from "./Screen";
 import type { ScreenProps } from "./Screen";
@@ -31,7 +29,7 @@ export function AddWalletScreen({ arg }: ScreenProps) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const limit = walletLimit(me.plan, me.service);
+  const limit = walletLimit(me.service);
   const full = wallets.length >= limit;
   // В боте это одно сообщение: строка заголовка, а под ней объяснение —
   // какой адрес слать и где взять чужой. Мини-апп загонял всё в заголовок
@@ -112,15 +110,7 @@ export function AddWalletScreen({ arg }: ScreenProps) {
           <Action onClick={submit} disabled={busy || full || !addr.trim()}>
             <PlusGlyph /> {bare(t(lang, "menu_add_wallet"))}
           </Action>
-          {full ? (
-            <>
-              {me.plan === "premium" ? (
-                <small className="hint warn">{t(lang, "limit_50_reached")}</small>
-              ) : (
-                <Upsell src="wallets" text={t(lang, "up_wallets")} />
-              )}
-            </>
-          ) : null}
+          {full ? <small className="hint warn">{t(lang, "limit_50_reached")}</small> : null}
         </div>
       </Card>
     </Frame>

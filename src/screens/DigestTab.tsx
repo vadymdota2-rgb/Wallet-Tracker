@@ -15,10 +15,9 @@
  */
 import { shareTg, useRefInfo } from "../components/Invite";
 import { toast } from "../components/Toast";
-import { IntroOffer, TrialCard } from "../components/Upsell";
+import { TrialCard } from "../components/Upsell";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useApp } from "../store/app";
-import { useLive } from "../store/live";
 import { t } from "../i18n/t";
 import { num, pct, usd } from "../lib/format";
 import { haptic } from "../lib/telegram";
@@ -56,7 +55,6 @@ import type {
   DigestComment,
   DigestCoin,
   DigestItem,
-  DigestLocked,
   DigestLs,
   DigestReply,
 } from "../lib/types";
@@ -64,9 +62,6 @@ import type {
 type Lang = Parameters<typeof t>[0];
 
 const COMMENT_MAX = 500;
-
-const isLocked = (v: unknown): v is DigestLocked =>
-  typeof v === "object" && v !== null && (v as DigestLocked).locked === true;
 
 /** Время по часам телефона на языке приложения: «03:00». Выпуск выходит в
  *  12:00 по Лондону; «2:00 PM» читается хуже, чем «14:00». */
@@ -130,19 +125,6 @@ function actError(lang: Lang, r: DigestActReply | null): string {
 }
 
 
-function LockedSec({ lang, onPremium, n }: { lang: Lang; onPremium: () => void; n?: number }) {
-  // Сколько строк за замком — «скрыто 8» говорит больше, чем просто замок.
-  return (
-    <button type="button" className="dg-locked" onClick={onPremium}>
-      <span aria-hidden="true">🔒</span>
-      <span>
-        {t(lang, "dg_locked")}
-        {n ? ` · ${t(lang, "dg_locked_n", { n: String(n) })}` : ""}
-      </span>
-      <b>{t(lang, "menu_premium")}</b>
-    </button>
-  );
-}
 
 
 function CoinRow({
@@ -171,28 +153,31 @@ function CoinRow({
 }
 
 /** Лонг/шорт по группам. В выпусках до разделения — один общий список, его
- *  показываем как есть, без придуманной группы «акций». */
+ *  показываем как есть, без придуманной группы «акций». Раздел незнакомой
+ *  формы (старый сервер отдавал его закрытым) — как пустой, а не падение. */
 function lsGroups(v: DigestItem["ls"]): [string, DigestLs | undefined][] {
-  if (!v || isLocked(v)) return [["crypto", undefined], ["rwa", undefined]];
-  if ("crypto" in v) return [["crypto", v.crypto], ["rwa", v.rwa]];
-  return [["crypto", v]];
+  const ok = (g: DigestLs | undefined) => (g && Array.isArray(g.long) && Array.isArray(g.short) ? g : undefined);
+  if (!v) return [["crypto", undefined], ["rwa", undefined]];
+  if ("crypto" in v) return [["crypto", ok(v.crypto)], ["rwa", ok(v.rwa)]];
+  return [["crypto", ok(v)]];
 }
 
 function perpGroups(v: DigestItem["perp"]): [string, DigestCoin[]][] {
-  if (!v || isLocked(v)) return [["crypto", []], ["rwa", []]];
+  if (!v) return [["crypto", []], ["rwa", []]];
   if (Array.isArray(v)) return [["crypto", v]];
-  return [["crypto", v.crypto ?? []], ["rwa", v.rwa ?? []]];
+  return [["crypto", Array.isArray(v.crypto) ? v.crypto : []], ["rwa", Array.isArray(v.rwa) ? v.rwa : []]];
 }
 
-function Sections({ it, lang, premium }: { it: DigestItem; lang: Lang; premium: boolean }) {
+function Sections({ it, lang }: { it: DigestItem; lang: Lang }) {
   const open = useApp((s) => s.open);
-  const toPremium = () => open("premium", "digest");
   const coin = (c: DigestCoin) => () => open("coin", c.sym, c.addr);
   const chart = (sym: string) => () => open("chart", sym);
 
   const flow = it.flow;
   const rot = it.rot;
   const unl = it.unl ?? [];
+  const fundHi = Array.isArray(it.fund?.hi) ? it.fund.hi : [];
+  const fundLo = Array.isArray(it.fund?.lo) ? it.fund.lo : [];
 
   /* Новые выпуски (v2) идут частями — от общей картины к деталям. У старых
      этих частей нет: они показываются как были, без пустых заголовков. */
@@ -286,10 +271,7 @@ function Sections({ it, lang, premium }: { it: DigestItem; lang: Lang; premium: 
 
       {v2 ? <Part>{t(lang, "dg_p_deriv")}</Part> : null}
       <Sec icon={<PositionsGlyph size={20} />} title={t(lang, "ui_tab_ls")}>
-        {isLocked(it.ls) || (!premium && it.ls === undefined) ? (
-          <LockedSec lang={lang} onPremium={toPremium} n={isLocked(it.ls) ? it.ls.n : undefined} />
-        ) : (
-          lsGroups(it.ls).map(([cls, g]) => (
+        {lsGroups(it.ls).map(([cls, g]) => (
             <div key={cls} className="dg-grp">
               <p className="dg-grp-t">{t(lang, cls === "rwa" ? "ui_cls_rwa" : "ui_cls_crypto")}</p>
               {g && (g.long.length || g.short.length) ? (
@@ -311,15 +293,11 @@ function Sections({ it, lang, premium }: { it: DigestItem; lang: Lang; premium: 
                 <Quiet lang={lang} />
               )}
             </div>
-          ))
-        )}
+          ))}
       </Sec>
 
       <Sec icon={<StackGlyph size={20} />} title={t(lang, "ui_tab_positions")}>
-        {isLocked(it.perp) ? (
-          <LockedSec lang={lang} onPremium={toPremium} n={it.perp.n} />
-        ) : (
-          perpGroups(it.perp).map(([cls, g]) => (
+        {perpGroups(it.perp).map(([cls, g]) => (
             <div key={cls} className="dg-grp">
               <p className="dg-grp-t">{t(lang, cls === "rwa" ? "ui_cls_rwa" : "ui_cls_crypto")}</p>
               {g.length ? (
@@ -331,22 +309,19 @@ function Sections({ it, lang, premium }: { it: DigestItem; lang: Lang; premium: 
                 <Quiet lang={lang} />
               )}
             </div>
-          ))
-        )}
+          ))}
       </Sec>
 
       <Sec icon={<FundingGlyph size={20} />} title={t(lang, "ui_tab_funding")}>
-        {isLocked(it.fund) ? (
-          <LockedSec lang={lang} onPremium={toPremium} n={it.fund.n} />
-        ) : it.fund && (it.fund.hi.length || it.fund.lo.length) ? (
+        {fundHi.length || fundLo.length ? (
           <>
-            {it.fund.hi.length ? <Sub>{t(lang, "dg_fund_hi")}</Sub> : null}
-            {it.fund.hi.map((f) => (
+            {fundHi.length ? <Sub>{t(lang, "dg_fund_hi")}</Sub> : null}
+            {fundHi.map((f) => (
               <CoinRow key={`fh${f.sym}${f.ex}`} c={{ sym: f.sym }} sub={f.ex.toUpperCase()}
                 value={pct(f.day, 3, true)} tone="up" onOpen={chart(f.sym)} />
             ))}
-            {it.fund.lo.length ? <Sub>{t(lang, "dg_fund_lo")}</Sub> : null}
-            {it.fund.lo.map((f) => (
+            {fundLo.length ? <Sub>{t(lang, "dg_fund_lo")}</Sub> : null}
+            {fundLo.map((f) => (
               <CoinRow key={`fl${f.sym}${f.ex}`} c={{ sym: f.sym }} sub={f.ex.toUpperCase()}
                 value={pct(f.day, 3, true)} tone="dn" onOpen={chart(f.sym)} />
             ))}
@@ -586,10 +561,9 @@ function Comments({ it, lang, mod, muted, onCount }: {
   );
 }
 
-function DigestCard({ it, lang, premium, mod, muted, fresh, share }: {
+function DigestCard({ it, lang, mod, muted, fresh, share }: {
   it: DigestItem;
   lang: Lang;
-  premium: boolean;
   mod: boolean;
   muted: boolean;
   /** Свежий выпуск открыт сразу, прошлые — свёрнуты. */
@@ -659,7 +633,7 @@ function DigestCard({ it, lang, premium, mod, muted, fresh, share }: {
           </svg>
         </span>
       </button>
-      {shown ? <Sections it={it} lang={lang} premium={premium} /> : null}
+      {shown ? <Sections it={it} lang={lang} /> : null}
       <div className={`dg-foot${share ? " has-share" : ""}`}>
         <button type="button" className={`dg-like${liked ? " on" : ""}`} aria-pressed={liked}
           aria-label={t(lang, "dg_like")} onClick={() => void like()}>
@@ -701,7 +675,6 @@ function DigestCard({ it, lang, premium, mod, muted, fresh, share }: {
 
 export function DigestTab() {
   const lang = useApp((s) => s.lang);
-  const premium = useLive((s) => s.me.plan === "premium");
   const [reply, setReply] = useState<DigestReply | null>(() => peekDigest() ?? null);
   const [failed, setFailed] = useState(false);
   const ref = useRefInfo();
@@ -728,9 +701,8 @@ export function DigestTab() {
     return () => {
       alive = false;
     };
-    // Подписка поменялась — закрытые разделы надо перезапросить.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [premium]);
+  }, []);
 
   const nowSec = useMemo(() => Math.floor(Date.now() / 1000), [reply]);
   const next = clock(lang, nextIssue(nowSec));
@@ -751,8 +723,6 @@ export function DigestTab() {
   }
   return (
     <div className="dg">
-      {/* Приложение открывается на дайджесте — скидку видно с порога. */}
-      <IntroOffer />
       <TrialCard within={3} />
       <p className="dg-lead">{t(lang, "dg_sub", { t: next })}</p>
       {/* Новый выпуск — уведомлением в Telegram, по желанию: привычка
@@ -763,11 +733,11 @@ export function DigestTab() {
         <span>{t(lang, "dg_notify")}</span>
         <i className="dg-switch" aria-hidden="true" />
       </button>
-      <DigestCard key={first.id} it={first} lang={lang} premium={premium}
+      <DigestCard key={first.id} it={first} lang={lang}
         mod={Boolean(reply.mod)} muted={Boolean(reply.muted)} fresh share={ref?.link} />
       {items.length > 1 ? <SectionTitle>{t(lang, "dg_past")}</SectionTitle> : null}
       {items.slice(1).map((it) => (
-        <DigestCard key={it.id} it={it} lang={lang} premium={premium}
+        <DigestCard key={it.id} it={it} lang={lang}
           mod={Boolean(reply.mod)} muted={Boolean(reply.muted)} fresh={false} />
       ))}
     </div>

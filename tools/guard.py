@@ -120,47 +120,48 @@ say("на сотнях процентов десятые не нужны", "Math
 # везде: рейтинг перпов и позиции были видны. Бот всё это закрывает.
 say("срез по подписке есть", "def for_plan(data: dict, prem: bool) -> dict:" in api)
 fp = pybody(api, "def for_plan(")
-say("срез: 10 мест спота, витрина из 3 перпов, без фандинга и позиций",
-    "v[:RANK_FREE_DEPTH]" in fp and "v[:PERP_SHOWCASE]" in fp and '"pos": []' in fp
-    and 'out[k] = {}' in fp and '"trades"' in fp and "RANK_FREE_DEPTH = 10" in api and "PERP_SHOWCASE = 3" in api)
-say("срез: сделки китов бесплатному — с задержкой 15 минут, длинные окна — премиум",
-    "FREE_DELAY_SEC = 15 * 60" in api and '"hidden"' in fp and "FREE_FLOW_WINDOWS" in fp
-    and "if win not in FREE_BIG_WINDOWS and not prem:" in api and "if bwin not in FREE_BIG_WINDOWS and not prem:" in api
-    and api.count("if win not in FREE_FLOW_WINDOWS and not chat_premium(self._user(qs)):") == 2
-    and "if days != 30 and not prem:" in api)
-say("срез: добавить 3 кошелька, алерты — с 1 (основного), проба 14 дней — одни числа у API, бота и приложения",
-    "FREE_MAX_WALLETS = 3" in api and "FREE_ALERT_WALLETS = 1" in api and "TRIAL_DAYS = 14" in api
+say("без Премиума выгрузка — только план, цены и подарок",
+    'PLAN_OPEN_KEYS = ("ok", "live", "error", "me", "pay", "gift", "partial", "cachedAt")' in api
+    and "return {k: v for k, v in data.items() if k in PLAN_OPEN_KEYS}" in fp)
+say("старых срезов бесплатного тарифа на сервере нет",
+    not any(x in api for x in ("FREE_DELAY_SEC", "RANK_FREE_DEPTH", "PERP_SHOWCASE", "FREE_BIG_WINDOWS",
+                               "FREE_FLOW_WINDOWS", "FREE_DEALS", "FREE_ALERT_WALLETS", "DIGEST_PREMIUM", "reactN")))
+say("числа: 3 кошелька и алерты с 1 у бота, проба 14 дней — одни у API, бота и приложения",
+    "FREE_MAX_WALLETS = 3" in api and "TRIAL_DAYS = 14" in api
     and "constexpr size_t FREE_ALERT_WALLETS = 1;" in read(f"{BOT}/telegram.h")
     and "constexpr size_t FREE_MAX_WALLETS    = 3;" in read(f"{BOT}/premium.cpp")
     and "loadedForUser >= FREE_ALERT_WALLETS" in read(f"{BOT}/main.cpp")
-    and "wallets: 3," in read(f"{APP}/src/lib/upsell.ts") and "alertWallets: 1," in read(f"{APP}/src/lib/upsell.ts")
-    and "trialDays: 14," in read(f"{APP}/src/lib/upsell.ts") and '"active": i < FREE_ALERT_WALLETS' in fp)
+    and "wallets: 3," in read(f"{APP}/src/lib/upsell.ts") and "trialDays: 14," in read(f"{APP}/src/lib/upsell.ts"))
 say("срез не трогает Cortex", "cortex" not in code_only(fp).lower() and "sonar" not in fp)
 say("выгрузка срезается по своему же плану", "for_plan(boot, plan_of(boot))" in api)
-say("выгрузка без подписи — как бесплатная", "}, False))" in api)
-say("крупные сделки срезаются", "for_plan(big_trades(win, hours), prem)" in api)
-say("фандинг и сделки перпов — отказ без подписки",
-    api.count('self._json(403, {"ok": False, "error": "premium"})') >= 2)
-say("живой кошелёк срезается", "), is_premium(cur, chat)))" in api)
+say("выгрузка без подписи — пустая: приложение покажет замок",
+    'self._json(200, {"ok": True, "live": True})' in api)
+say("данные — только с Премиумом, одним правилом на все запросы",
+    "if path in PAID_PATHS and not chat_premium(self._user(qs)):" in api
+    and api.count('self._json(403, {"ok": False, "error": "premium"})') == 1
+    and all(f'"{x}"' in api.split("PAID_PATHS = frozenset(")[1][:900]
+            for x in ("flow", "fund", "rot", "ls", "deals", "wallet", "big", "btc/big", "btc/rank", "liqmap",
+                      "unlocks", "digest", "quotes"))
+    and not any(f'"{x}"' in api.split("PAID_PATHS = frozenset(")[1][:900]
+                for x in ("bonus", "token-launch", "ref", "bootstrap", "health")))
 top = read(f"{APP}/src/screens/TopTab.tsx")
-say("рейтинг перпов: витрина и приглашение с числом скрытых мест",
-    '!premium && !winLocked && venue === "perp"' in top and '"up_perp"' in top and "rank.perpN" in top)
-say("позиции за замком, а не «позиций нет»",
-    "<PremiumLock />" in read(f"{APP}/src/screens/PositionScreen.tsx")
-    and "<PremiumLock />" in read(f"{APP}/src/screens/WalletScreen.tsx"))
+say("доски — до 100 мест, без витрин и замков",
+    "FREE.premiumTop" in top and '"up_perp"' not in top and "perpN" not in top and "usePremium" not in top and "me.plan" not in top)
+say("позиции без замка", not os.path.exists(f"{APP}/src/components/PremiumLock.tsx")
+    and "PremiumLock" not in read(f"{APP}/src/screens/PositionScreen.tsx")
+    and "PremiumLock" not in read(f"{APP}/src/screens/WalletScreen.tsx"))
 ana = read(f"{APP}/src/screens/AnalyticsTab.tsx")
 _fscr = read(f"{APP}/src/screens/FundingScreen.tsx")
-say("лонг/шорт и крупные позиции — за подпиской, фандинг — тоже, уже в боковом меню",
-    ana.count("prem: true") == 2 and "lock: Boolean(v.prem) && !premium" in ana
-    and 'id: "fund"' not in ana and "premium ? (\n          <FundBody />" in _fscr)
-say("лонг/шорт закрыт и на экране, и на сервере",
-    ana.count("{!premium ? locked : (") >= 2 and '"fund", "fundN", "ls"' in fp
-    and api.count('self._json(403, {"ok": False, "error": "premium"})') == 9)  # +длинные окна карты ликвидаций
+say("аналитика и фандинг без внутренних замков, фандинг — в боковом меню",
+    "prem: true" not in ana and "premium" not in ana and 'id: "fund"' not in ana
+    and "<FundBody />" in _fscr and "premium" not in _fscr)
 prem_scr = read(f"{APP}/src/screens/PremiumScreen.tsx")
 say("цена на экране премиума — один раз, на кнопке",
     'title={t(lang, "pay_stars_btn")} value=' not in prem_scr and 'title={t(lang, "pay_usdt_btn")} value=' not in prem_scr)
 say("оплата выше описания", prem_scr.index('className="stack-actions"') < prem_scr.index('"pr_includes"'))
-say("дайджест назван бесплатным", '"pr_free_digest_d"' in prem_scr)
+say("экран Премиума без сравнения с бесплатным тарифом",
+    '"pr_free_digest_d"' not in prem_scr and 'className="cmp"' not in prem_scr and "HARD_PAYWALL" not in prem_scr
+    and '"pr_perk_all_t"' in prem_scr)
 
 # --- при запуске подгружается всё ------------------------------------------
 pre = read(f"{APP}/src/lib/prefetch.ts")
@@ -168,8 +169,8 @@ sync = read(f"{APP}/src/lib/sync.ts")
 say("подгрузка запускается после выгрузки", "setTimeout(() => void prefetchAll(), 400);" in sync)
 say("подгрузка берёт кошельки, окна, фильтры, сделки, монеты",
     all(x in pre for x in ("fetchWallet(w.addr)", "BIG_WINS", 'fetchFlow(app.flowWin, "", 0, side)',
-                           "fetchDeals(r.a, venue, n)", "holdJobs()")))
-say("закрытое подпиской не запрашивается", "if (premium) {" in pre and "fetchLs(" in pre.split("if (premium) {")[1][:200])
+                           "fetchDeals(r.a, venue, FREE.premiumDeals)", "holdJobs()")))
+say("без Премиума подгрузки нет", 'if (live.me.plan !== "premium") return jobs;' in pre)
 say("запросы в очереди, не лавиной", "const PARALLEL = 4;" in pre)
 apits = read(f"{APP}/src/lib/api.ts")
 say("чтения идут через память", apits.count("cachedGet<") >= 7 and "remember<T | null>(path, ttl" in apits)
@@ -201,8 +202,8 @@ say("сервисный — премиум и без лимита",
     "if is_service(chat):\n        return True" in api and "return SERVICE_MAX_WALLETS" in api
     and '"service": service,' in api)
 say("приложение не ставит сервисному паузу и лимит",
-    "walletLimit(me.plan, me.service)" in read(f"{APP}/src/screens/WalletsTab.tsx")
-    and "if (service) return Infinity;" in read(f"{APP}/src/store/app.ts"))
+    "walletLimit(me.service)" in read(f"{APP}/src/screens/WalletsTab.tsx")
+    and "return service ? Infinity : FREE.premiumWallets;" in read(f"{APP}/src/store/app.ts"))
 
 # --- данные приходят сами, без «обновить» ------------------------------------
 tg = read(f"{APP}/src/lib/telegram.ts")
@@ -375,7 +376,7 @@ say("календарь отдаётся из памяти, собирается
     and "        unlocks()\n" in api and "ThreadPoolExecutor" in pybody(api, "def _unlocks_build("))
 say("экран разлоков открывается сразу: запас на устройстве и отрисовка порциями",
     "savedUnlocks()" in unl_scr and "new IntersectionObserver" in unl_scr
-    and "jobs.push(() => fetchUnlocks(premium));" in read(f"{APP}/src/lib/prefetch.ts").split("// 1. Кошельки")[0])
+    and "jobs.push(() => fetchUnlocks());" in read(f"{APP}/src/lib/prefetch.ts").split("// 1. Кошельки")[0])
 _book_syms = {c["s"] for c in _wm.UNLOCK_BOOK}
 say("монета не бывает и в календаре, и в списке отсеянных",
     not (_book_syms & set(_wm.UNLOCK_SKIPPED)), str(_book_syms & set(_wm.UNLOCK_SKIPPED)))
@@ -424,8 +425,8 @@ say("дайджест: выпуск раз в сутки, тридцать по�
     "DIGEST_KEEP = 30" in api and 'target=digest_refresher' in api
     and "SELECT 1 FROM digests WHERE day=?" in api
     and "DIGEST_HOUR_LONDON = 12" in api and "ln.tm_hour < DIGEST_HOUR_LONDON" in api)
-say("дайджест: фьючерсы бесплатному не уходят с сервера",
-    'DIGEST_PREMIUM = ("ls", "perp", "fund")' in api and 'body[k] = {"locked": True, "n": _dg_count(body[k])}' in api)
+say("дайджест целиком — подписчику, без закрытых разделов",
+    "def digest_list(chat: str) -> dict:" in api and "isLocked" not in read(f"{APP}/src/screens/DigestTab.tsx"))
 say("дайджест: ссылки, частота и суточный лимит комментариев проверяются на сервере",
     '"error": "links"' in api and '"error": "too_fast"' in api and '"error": "day_limit"' in api)
 say("дайджест: удалить чужой комментарий может только владелец",
@@ -593,7 +594,7 @@ say("bitcoin: сканер блоков бота, база сервисного 
 say("bitcoin: вкладка «Крупные ордера BTC» с потоком бирж (в NetFlow его нет), третья доска рейтинга, экран кошелька",
     'path in ("/btc/flow", "/api/btc/flow")' in api and "def _btc_clean(" in api and "w.s < 0.9 * w.b" in api
     and "export function BtcFlowCard(" in _btv and "export function BtcBigView(" in _btv
-    and '{view === "btc" && !bigLocked ? <BtcFlowCard bigWin={bigWin} /> : null}' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
+    and '{view === "btc" ? <BtcFlowCard bigWin={bigWin} /> : null}' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
     and '{view === "flow" ? <BtcFlowCard' not in read(f"{APP}/src/screens/AnalyticsTab.tsx")
     and "export function BtcBoard(" in _btv and "export function BtcWalletScreen(" in _btv
     and '{ id: "btc", ic: <CoinIcon sym="BTC"' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
@@ -705,17 +706,14 @@ _bad_ru = [k for k, v in _i18n.items()
            if re.search(r"(?<![А-Яа-яЁё])[СсВв] Премиум(?![а-яё])|Premium", v.get("ru", ""))]
 say("тексты: «с Премиумом», «в Премиуме» и без латинского Premium в русском",
     not _bad_ru, ", ".join(_bad_ru[:5]))
-say("приложение: карточка вводной цены на дайджесте и в кошельках, строка «цена входа и PnL» в сравнении",
-    "<IntroOffer />" in read(f"{APP}/src/screens/DigestTab.tsx") and "<IntroOffer />" in _wt
-    and '"cmp_alert_pnl"' in read(f"{APP}/src/screens/PremiumScreen.tsx"))
+say("приложение: вводная цена — на замке, пробный срок — в кошельках и на дайджесте",
+    "<IntroOffer />" in read(f"{APP}/src/components/LockScreen.tsx") and "<TrialCard />" in _wt
+    and "<TrialCard within={3} />" in read(f"{APP}/src/screens/DigestTab.tsx"))
 
 _lqs = read(f"{APP}/src/screens/LiqMapScreen.tsx")
 _uns = read(f"{APP}/src/screens/UnlocksScreen.tsx")
-say("меню: карта ликвидаций за 7 и 30 дней и реакция цены на разлоки — Премиум (и на сервере)",
-    '!= "1d" and not chat_premium(self._user(qs))' in api and '"reactN": {k: int(v.get("n") or 0)' in api
-    and 'const locked = !premium && range !== "1d";' in _lqs and '<Upsell src="liq"' in _lqs
-    and 'const reacts = premium ? reply?.react ?? {} : {};' in _uns and '<Upsell src="unlock"' in _uns
-    and '"cmp_liq"' in read(f"{APP}/src/screens/PremiumScreen.tsx"))
+say("карта ликвидаций и разлоки без отдельных замков: всё за Премиумом",
+    "const locked" not in _lqs and "Upsell" not in _lqs and "reactN" not in _uns and "Upsell" not in _uns)
 
 _hlc = read(os.path.join(BOT, "hyperliquid_core.cpp"))
 _alc = read(f"{APP}/src/components/AlertCard.tsx")
@@ -757,7 +755,7 @@ say("бонусы: приглашение и дни за соцсети (кан�
 
 _lock = read(f"{APP}/src/components/LockScreen.tsx")
 say("жёсткий пейволл: без Премиума вкладки, меню и история алертов — замок «купить / бесплатно в Бонусах», не мигает до загрузки",
-    "export const HARD_PAYWALL = true;" in read(f"{APP}/src/lib/upsell.ts")
+    'if (service || plan === "premium") return false;' in _lock
     and 'return status !== "boot";' in _lock and 'open("bonus")' in _lock and 'trackEvent("paywall", "lock")' in _lock
     and '{locked && tab !== "more" ? <LockScreen /> : <TabBody tab={tab} />}' in read(f"{APP}/src/App.tsx")
     and "LOCK_OPEN_SCREENS" in read(f"{APP}/src/App.tsx")

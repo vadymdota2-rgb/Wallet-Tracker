@@ -1,6 +1,6 @@
 /**
  * Замок на всё приложение: без Премиума вкладки, боковое меню и история
- * алертов закрыты (HARD_PAYWALL в lib/upsell.ts). Вместо них — этот экран:
+ * алертов закрыты. Вместо них — этот экран:
  * купить Премиум или получить дни бесплатно в «Бонусах» (за друзей и
  * подписки на соцсети — почти два месяца).
  *
@@ -15,7 +15,6 @@ import { useLive } from "../store/live";
 import { t } from "../i18n/t";
 import { haptic } from "../lib/telegram";
 import { trackEvent } from "../lib/api";
-import { HARD_PAYWALL } from "../lib/upsell";
 import { Action, Card } from "./ui";
 import { IntroOffer } from "./Upsell";
 import { Frame } from "../screens/Screen";
@@ -25,7 +24,7 @@ export function useLocked(): boolean {
   const plan = useLive((s) => s.me.plan);
   const service = useLive((s) => s.me.service);
   const status = useLive((s) => s.status);
-  if (!HARD_PAYWALL || service || plan === "premium") return false;
+  if (service || plan === "premium") return false;
   // «boot» — первая загрузка, о плане ещё ничего не известно.
   return status !== "boot";
 }

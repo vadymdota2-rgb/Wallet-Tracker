@@ -14,7 +14,6 @@
  */
 import type { ReactNode } from "react";
 import { useApp } from "../store/app";
-import { useLive } from "../store/live";
 import { t } from "../i18n/t";
 import type { DictKey } from "../i18n/types";
 import { num, pct, px, qtyWord, since, usd } from "../lib/format";
@@ -22,7 +21,6 @@ import { haptic, openExternal } from "../lib/telegram";
 import type { AlertCardData } from "../lib/types";
 import { CoinIcon } from "./CoinIcon";
 import { VenueMark } from "./ui";
-import { Upsell } from "./Upsell";
 
 type Lang = Parameters<typeof t>[0];
 type Tone = "up" | "dn" | "liq" | "flat";
@@ -94,7 +92,6 @@ export function AlertCard({ d, ts, nowSec, fresh, appOnly }: {
 }) {
   const lang = useApp((s) => s.lang);
   const open = useApp((s) => s.open);
-  const premium = useLive((s) => s.me.plan === "premium");
   const tn = tone(d.a);
   const v = VENUE[d.k] ?? VENUE.bsc;
   const isHl = d.k === "hl";
@@ -177,7 +174,6 @@ export function AlertCard({ d, ts, nowSec, fresh, appOnly }: {
 
       {facts.length ? <dl className="alc-grid">{facts}</dl> : null}
       {d.closed ? <p className="alc-closed">✓ {t(lang, "hl_position_closed")}</p> : null}
-      {d.lock && !premium ? <Upsell src="alert" text={t(lang, "alert_locked")} /> : null}
 
       <footer className="alc-links">
         {txUrl ? (

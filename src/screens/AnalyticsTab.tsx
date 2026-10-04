@@ -4,8 +4,6 @@
  * было неудобно, а на экране видно. Фандинг переехал в боковое меню, под
  * карту ликвидаций.
  */
-import { DelayNote, Upsell } from "../components/Upsell";
-import { FREE_BIG_WINS, FREE_FLOW_WINS } from "../lib/upsell";
 import { useEffect, useState, type ReactNode } from "react";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
@@ -25,7 +23,7 @@ import { CoinIcon } from "../components/CoinIcon";
 import { BuySellBar, FlowSpark, TrendChart } from "../components/Chart";
 import { BtcBigView, BtcFlowCard } from "./BtcViews";
 import {
-  Card, CopyGlyph, Empty, Locked, MinusGlyph, NetFlowGlyph, OrdersGlyph,
+  Card, CopyGlyph, Empty, MinusGlyph, NetFlowGlyph, OrdersGlyph,
   PlusGlyph, PositionsGlyph, RotationGlyph, Row, SectionTitle, Segmented, Skeleton, StackGlyph,
   TileNav,
 } from "../components/ui";
@@ -105,17 +103,15 @@ const VIEWS: {
   id: BigView;
   ic: ReactNode;
   venue?: "spot" | "perp" | "btc";
-  /** За подпиской — как в боте: всё, что про фьючерсы. */
-  prem?: boolean;
   label: (t: (k: DictKey) => string) => string;
 }[] = [
   { id: "flow", ic: <NetFlowGlyph size={22} />, venue: "spot", label: () => "NetFlow" },
   { id: "spot", ic: <OrdersGlyph size={22} />, venue: "spot", label: (tr) => tr("ui_tab_orders") },
   { id: "rot", ic: <RotationGlyph size={22} />, venue: "spot", label: (tr) => tr("ui_rotation") },
-  { id: "ls", ic: <PositionsGlyph size={22} />, venue: "perp", prem: true, label: (tr) => tr("ui_tab_ls") },
-  { id: "perp", ic: <StackGlyph size={22} />, venue: "perp", prem: true, label: (tr) => tr("ui_tab_positions") },
+  { id: "ls", ic: <PositionsGlyph size={22} />, venue: "perp", label: (tr) => tr("ui_tab_ls") },
+  { id: "perp", ic: <StackGlyph size={22} />, venue: "perp", label: (tr) => tr("ui_tab_positions") },
   /* Биткоин — своя сеть: значок монеты в середине и в уголке, подпись —
-     то, что внутри. Бесплатно, как всё про спот. */
+     то, что внутри. */
   { id: "btc", ic: <CoinIcon sym="BTC" size={22} />, venue: "btc", label: (tr) => tr("btc_big_tab") },
 ];
 
@@ -221,7 +217,6 @@ function useBigTrades(win: BigWin) {
 
 export function AnalyticsTab() {
   const lang = useApp((s) => s.lang);
-  const open = useApp((s) => s.open);
   const saved = useApp((s) => s.bigView);
   const setView = useApp((s) => s.setBigView);
   /* У кого-то в браузере сохранён раздел, плитки которого больше нет —
@@ -242,24 +237,17 @@ export function AnalyticsTab() {
   const lsCls = useApp((s) => s.lsCls);
   const setLsCls = useApp((s) => s.setLsCls);
 
-  const { me } = useLive();
   const rotSum = useLive((s) => s.rotSum)[flowWin];
-  const premium = me.plan === "premium";
+  // Без Премиума приложение закрыто целиком (LockScreen): здесь все окна
+  // и все разделы открыты.
   const big = useBigTrades(bigWin);
-  /* Бесплатно открыты час, шесть часов и сутки; неделя и месяц — премиум.
-     Кнопки длинных окон видны всем, с замком: что они есть, человек должен
-     знать, а нажатие показывает, что за ними. */
-  const bigLocked = !premium && !(FREE_BIG_WINS as readonly string[]).includes(bigWin);
-  const flowLocked = !premium && !(FREE_FLOW_WINS as readonly string[]).includes(flowWin);
-  const lockMark = (locked: boolean) => (locked ? " 🔒" : "");
-  const windowUpsell = <Upsell src="window" text={t(lang, "up_window")} />;
   const flowWinPicker = (
     <Segmented<FlowWin>
       value={flowWin}
       onChange={setFlowWin}
       options={FLOW_WINS.map((w) => ({
         id: w.id,
-        label: t(lang, w.key) + lockMark(!premium && !(FREE_FLOW_WINS as readonly string[]).includes(w.id)),
+        label: t(lang, w.key),
       }))}
     />
   );
@@ -274,7 +262,7 @@ export function AnalyticsTab() {
       onChange={setBigWin}
       options={BIG_WINS.map((w) => ({
         id: w.id,
-        label: t(lang, w.key) + lockMark(!premium && !(FREE_BIG_WINS as readonly string[]).includes(w.id)),
+        label: t(lang, w.key),
       }))}
     />
   );
@@ -299,14 +287,6 @@ export function AnalyticsTab() {
     r.buy === undefined ? (tradeKind(r.side) === "buy") === (bigSide === "buy") : r.buy === (bigSide === "buy"),
   );
 
-  const locked = (
-    <Locked
-      text={t(lang, "hl_locked_body")}
-      cta={t(lang, "mw_upgrade")}
-      onCta={() => open("premium", "perp")}
-    />
-  );
-
   return (
     <>
       <Card>
@@ -325,7 +305,6 @@ export function AnalyticsTab() {
             id: v.id,
             ic: v.ic,
             venue: v.venue,
-            lock: Boolean(v.prem) && !premium,
             label: v.label((k) => t(lang, k)),
           }))}
         />
@@ -333,15 +312,8 @@ export function AnalyticsTab() {
 
       {/* Биткоин — своя вкладка: сперва итог по биржам за окно, ниже
           ордера с тем же окном. В NetFlow его нет — там монеты BSC. */}
-      {view === "btc" && bigLocked ? (
-        <Card>
-          <SectionTitle>{t(lang, "btc_big_tab")}</SectionTitle>
-          {winPicker}
-          {windowUpsell}
-        </Card>
-      ) : null}
-      {view === "btc" && !bigLocked ? <BtcFlowCard bigWin={bigWin} /> : null}
-      {view === "btc" && !bigLocked ? <BtcBigView winPicker={winPicker} win={bigWin} /> : null}
+      {view === "btc" ? <BtcFlowCard bigWin={bigWin} /> : null}
+      {view === "btc" ? <BtcBigView winPicker={winPicker} win={bigWin} /> : null}
       {view === "flow" ? (
         <Card>
           {/* NetFlow — термин, он одинаков во всех языках, как PnL и ROI.
@@ -366,17 +338,14 @@ export function AnalyticsTab() {
             inputMode="search"
             aria-label={t(lang, "flow_search_btn")}
           />
-          {flowLocked ? windowUpsell : <FlowBody />}
+          <FlowBody />
         </Card>
       ) : null}
 
       {view === "ls" ? (
         <Card>
           <SectionTitle note={t(lang, "ls_hint")}>{t(lang, "ui_tab_ls")}</SectionTitle>
-          {/* Лонги и шорты — фьючерсы Hyperliquid, а они за подпиской, как
-              крупные позиции и фандинг: бесплатному сервер их не отдаёт. */}
-          {!premium ? locked : (
-            <>
+          <>
               {/* Класс инструментов стоит первым: это самый крупный выбор, всё
                   остальное — окно, перевес, поиск — уточняет уже его. */}
               <Segmented<CoinClass>
@@ -404,8 +373,7 @@ export function AnalyticsTab() {
                 aria-label={t(lang, "flow_search_btn")}
               />
               <LsBody />
-            </>
-          )}
+          </>
         </Card>
       ) : null}
 
@@ -414,7 +382,7 @@ export function AnalyticsTab() {
           {/* Заголовок тот же, что на плитке. Прежний «Крупнейшие покупки /
               продажи» перечислял обе стороны, а на экране теперь одна: он и
               противоречил кнопкам, и занимал две строки. */}
-          <SectionTitle note={bigLocked ? undefined : `${t(lang, bigSide === "buy" ? "ui_side_buys" : "ui_side_sells")} · ${num(spotRows.length)}`}>
+          <SectionTitle note={`${t(lang, bigSide === "buy" ? "ui_side_buys" : "ui_side_sells")} · ${num(spotRows.length)}`}>
             {t(lang, "ui_tab_orders")}
           </SectionTitle>
           <Segmented<BigSide>
@@ -423,24 +391,18 @@ export function AnalyticsTab() {
             options={BIG_SIDES.map((v) => ({ id: v.id, label: t(lang, v.key) }))}
           />
           {winPicker}
-          {bigLocked ? windowUpsell : big.loading ? <Skeleton rows={3} /> : (
-            <>
-              <DelayNote delay={big.data.delay} hidden={big.data.hidden} />
-              <TradeList rows={spotRows} empty={t(lang, "big_empty")} />
-            </>
+          {big.loading ? <Skeleton rows={3} /> : (
+            <TradeList rows={spotRows} empty={t(lang, "big_empty")} />
           )}
         </Card>
       ) : null}
 
       {view === "perp" ? (
         <Card>
-          {/* Бесплатному — без счётчика и без кнопок: «Лонги · 0» над замком
-              читалось как «лонгов нет», а переключатели ничего не меняли. */}
-          <SectionTitle note={premium ? `${t(lang, wantLong ? "ls_side_long" : "ls_side_short")} · ${num(perpRows.length)}` : undefined}>
+          <SectionTitle note={`${t(lang, wantLong ? "ls_side_long" : "ls_side_short")} · ${num(perpRows.length)}`}>
             {t(lang, "big_perp_title")}
           </SectionTitle>
-          {!premium ? locked : (
-            <>
+          <>
               {/* Тот же раздельник, что в «Лонг / Шорт», и та же выбранная
                   кнопка: акции с металлами и крипта — разные рынки, а не разные
                   разделы, и переключать их дважды человек не должен. */}
@@ -460,8 +422,7 @@ export function AnalyticsTab() {
               {big.loading ? <Skeleton rows={3} /> : (
                 <TradeList rows={perpRows} empty={t(lang, "big_empty")} />
               )}
-            </>
-          )}
+          </>
         </Card>
       ) : null}
 
@@ -474,7 +435,7 @@ export function AnalyticsTab() {
           {flowWinPicker}
           {/* Пустое окно — без таблицы: «$0 переложено, 0 пар» и два пустых
               столбца выглядят как поломка, хотя это просто тихий час. */}
-          {flowLocked ? windowUpsell : rotSum && rotSum.pairs > 0 ? (
+          {rotSum && rotSum.pairs > 0 ? (
             <RotBody sum={rotSum} win={flowWin} />
           ) : (
             <Empty text={t(lang, "flow_empty")} />

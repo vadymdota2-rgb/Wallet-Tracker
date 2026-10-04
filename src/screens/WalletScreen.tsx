@@ -7,7 +7,7 @@
  */
 import { useEffect } from "react";
 import { Frame, type ScreenProps } from "./Screen";
-import { useApp, isPaused } from "../store/app";
+import { useApp } from "../store/app";
 import { useLive, walletByAddr } from "../store/live";
 import { boardKey, venueName, walletRank } from "../lib/rank";
 import { bare, t } from "../i18n/t";
@@ -19,7 +19,6 @@ import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
 import { CoinIcon } from "../components/CoinIcon";
 import { Action, AddrBar, Card, Empty, EyeGlyph, Row, SectionTitle, Tiles, VenueMark } from "../components/ui";
-import { PremiumLock } from "../components/PremiumLock";
 
 export function WalletScreen({ arg }: ScreenProps) {
   const lang = useApp((s) => s.lang);
@@ -27,7 +26,6 @@ export function WalletScreen({ arg }: ScreenProps) {
   const back = useApp((s) => s.back);
   const wallets = useLive((s) => s.wallets);
   const rank = useLive((s) => s.rank);
-  const plan = useLive((s) => s.me.plan);
 
   const w = walletByAddr(wallets, arg);
   const addr = w?.addr ?? "";
@@ -51,14 +49,11 @@ export function WalletScreen({ arg }: ScreenProps) {
     );
   }
 
-  const paused = isPaused(plan, w);
   const place = walletRank(rank, w.addr);
   // Длинное «не в рейтинге» в плитку не влезает — там прочерк, а словами
   // это сказано примечанием к разделу.
   const spot = place.spot ? `🏆 ${place.spot.place}` : "—";
-  // Доска перпов бесплатному не приходит вовсе: прочерк читался бы как «не
-  // в рейтинге», а это неизвестно — поэтому замок.
-  const perp = plan !== "premium" ? "🔒" : place.perp ? `🏆 ${place.perp.place}` : "—";
+  const perp = place.perp ? `🏆 ${place.perp.place}` : "—";
   // За что именно место — по прибыли, доходности, винрейту или активности.
   // Доски кошелька — всегда за 30 дней; окно подписано, чтобы «+$412K» не
   // читалось как прибыль за всё время.
@@ -141,16 +136,13 @@ export function WalletScreen({ arg }: ScreenProps) {
           {t(lang, "hl_account")}
         </SectionTitle>
         <p className="big">{usd(w.bal)}</p>
-        {paused ? <p className="note warn">{t(lang, "mw_free_notice1")}</p> : null}
       </Card>
 
       <Card>
-        <SectionTitle note={plan === "premium" && w.pos.length ? `${w.pos.length}` : undefined}>
+        <SectionTitle note={w.pos.length ? `${w.pos.length}` : undefined}>
           {t(lang, "hl_open_positions")}
         </SectionTitle>
-        {plan !== "premium" ? (
-          <PremiumLock />
-        ) : w.pos.length === 0 ? (
+        {w.pos.length === 0 ? (
           <Empty text={t(lang, "hl_no_open_positions")} />
         ) : (
           w.pos.map((p, i) => (

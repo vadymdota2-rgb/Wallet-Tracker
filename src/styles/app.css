@@ -906,15 +906,6 @@
   line-height: 0;
   opacity: 0.85;
 }
-/* Замок раздела за подпиской — левый верхний угол: правый занят площадкой. */
-.views .v-lock {
-  position: absolute;
-  top: 5px;
-  left: 6px;
-  font-size: 10px;
-  line-height: 1;
-  opacity: 0.9;
-}
 .views button.on {
   background: var(--blue);
   border-color: var(--blue);
@@ -1193,10 +1184,6 @@
 }
 .empty p { color: var(--dim); font-size: 13px; }
 .empty small { color: var(--dim-2); font-size: 12px; }
-
-.locked { display: grid; gap: 9px; justify-items: center; padding: 20px 10px; text-align: center; }
-.locked span { font-size: 22px; }
-.locked p { color: var(--dim); font-size: 13px; white-space: pre-line; }
 
 .skel { display: grid; gap: 8px; padding: 6px 0; }
 .skel span {
@@ -1944,20 +1931,6 @@
 .dg-chip.dn em { color: var(--dn); }
 .dg-chip:active { opacity: 0.6; }
 
-.dg-locked {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 11px 12px;
-  border-radius: var(--r-md);
-  border: 1px dashed rgb(58 130 214 / 0.45);
-  background: rgb(11 22 40 / 0.23);
-  color: var(--dim);
-  font-size: 13px;
-  text-align: start;
-}
-.dg-locked b { margin-inline-start: auto; color: var(--glow); font-weight: 700; white-space: nowrap; }
 
 .dg-foot { display: flex; gap: 8px; padding-top: 10px; border-top: 1px solid rgb(27 61 104 / 0.45); }
 .dg-like, .dg-talk {
@@ -2986,14 +2959,6 @@
 .upsell-go { color: var(--warn); font-size: 20px; flex: none; }
 [dir="rtl"] .upsell-go { transform: scaleX(-1); }
 
-/* Сравнение тарифов на экране премиума. */
-.cmp { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 0; font-size: 13px; }
-.cmp > span { padding: 8px 6px; border-bottom: 1px solid var(--line); }
-.cmp > span:nth-last-child(-n + 3) { border-bottom: 0; }
-.cmp .cmp-h { color: var(--dim); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.04em; }
-.cmp .cmp-v { text-align: center; color: var(--dim); white-space: nowrap; }
-.cmp .cmp-p { text-align: center; color: var(--warn); font-weight: 600; white-space: nowrap; }
-.cmp .cmp-l { overflow-wrap: anywhere; }
 .pw-why { margin: 0 0 4px; font-size: 15px; font-weight: 600; line-height: 1.35; }
 
 /* Тарифы на экране премиума: карточки с ценой, сроком и пояснением. */
@@ -3103,7 +3068,6 @@ button.alc-who { cursor: pointer; text-decoration: underline dotted rgb(124 151 
 .alc-grid dd.up { color: var(--up); }
 .alc-grid dd.dn { color: var(--dn); }
 .alc-closed { margin: 0; font-size: 12.5px; color: var(--up); }
-.alc .upsell { margin: 0; }
 .alc-links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .alc-links button {
   padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line-2);

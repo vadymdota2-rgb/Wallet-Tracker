@@ -398,7 +398,7 @@ export function TileNav<T extends string>({
   value: T;
   /** venue — значок площадки уголком: знак говорит «что», значок «где». */
   /** lock — раздел за подпиской: замочек уголком, напротив значка площадки. */
-  options: { id: T; ic: ReactNode; venue?: "spot" | "perp" | "btc"; lock?: boolean; label: ReactNode }[];
+  options: { id: T; ic: ReactNode; venue?: "spot" | "perp" | "btc"; label: ReactNode }[];
   onChange: (id: T) => void;
   cols?: number;
   label?: string;
@@ -432,7 +432,6 @@ export function TileNav<T extends string>({
               <VenueMark venue={o.venue} size={13} />
             </span>
           ) : null}
-          {o.lock ? <span className="v-lock" aria-label="Premium">🔒</span> : null}
           <span className="v-ic" aria-hidden="true">{o.ic}</span>
           <span>{o.label}</span>
         </button>
@@ -862,16 +861,6 @@ export function Empty({ text, hint }: { text: ReactNode; hint?: ReactNode }) {
       <span className="empty-mark" aria-hidden="true" />
       <p>{text}</p>
       {hint ? <small>{hint}</small> : null}
-    </div>
-  );
-}
-
-export function Locked({ text, cta, onCta }: { text: ReactNode; cta: ReactNode; onCta: () => void }) {
-  return (
-    <div className="locked">
-      <span aria-hidden="true">🔒</span>
-      <p>{text}</p>
-      <Action onClick={onCta}>{cta}</Action>
     </div>
   );
 }

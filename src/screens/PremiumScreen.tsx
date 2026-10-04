@@ -10,7 +10,7 @@
  * Connect, тоже должен уметь заплатить — адрес, сумма и памятка для этого и
  * лежат на виду.
  */
-import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Frame } from "./Screen";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
@@ -21,7 +21,7 @@ import { copyText } from "../lib/copy";
 import { toast } from "../components/Toast";
 import { buyStars, payUsdt, usdtInvoice, warmWallet, type PayEnd, type Plan, type UsdtInvoice } from "../lib/pay";
 import { trackEvent } from "../lib/api";
-import { FREE, HARD_PAYWALL, SRC_HEAD, isPaySrc } from "../lib/upsell";
+import { SRC_HEAD, isPaySrc } from "../lib/upsell";
 import type { ScreenProps } from "./Screen";
 import {
   Action,
@@ -55,8 +55,7 @@ export function PremiumScreen({ arg }: ScreenProps) {
      «следите за 50 кошельками», а не общее «раскройте потенциал». */
   const src = isPaySrc(arg) ? arg : "more";
   const trial = Boolean(me.trial) && me.plan === "premium";
-  /* Пробному — всегда про то, что будет после пробы: сравнение ниже
-     показывает, что именно урежется. */
+  /* Пробному — всегда про то, что будет после пробы. */
   const head = SRC_HEAD[src] ?? (trial ? SRC_HEAD.trial : undefined);
   /* Цены и способы оплаты — с сервера: ценник в сборке приложения означал бы
      две правды сразу, а кнопку USDT без настроенного кошелька показывать
@@ -101,31 +100,14 @@ export function PremiumScreen({ arg }: ScreenProps) {
      площадка, к которой пункт относится. Системные эмодзи рядом с ними
      рисовались бы другим стилем и не совпадали с тем, куда пункт ведёт. */
   const perks: Perk[] = [
-    // Жёсткий пейволл: без Премиума закрыто всё приложение — об этом первым.
-    ...(HARD_PAYWALL ? [{ ic: <DigestGlyph size={24} />, title: "pr_perk_all_t", text: "pr_perk_all_d" } as Perk] : []),
+    // Без Премиума закрыто всё приложение — об этом первым.
+    { ic: <DigestGlyph size={24} />, title: "pr_perk_all_t", text: "pr_perk_all_d" },
     { ic: <BoltGlyph size={24} />, title: "pr_perk_live_t", text: "pr_perk_live_d" },
     { ic: <VenueMark venue="perp" size={26} />, title: "pr_perk_hl_t", text: "pr_perk_hl_d" },
     { ic: <WalletGlyph size={24} />, title: "pr_perk_wallets_t", text: "pr_perk_wallets_d" },
     { ic: <TopGlyph size={24} />, title: "pr_perk_top_t", text: "pr_perk_top_d" },
     { ic: <AnalyticsGlyph size={24} />, title: "pr_perk_deep_t", text: "pr_perk_deep_d" },
     { ic: <BellGlyph size={24} />, title: "pr_perk_prio_t", text: "pr_perk_prio_d" },
-  ];
-  /* Бесплатно и Премиум рядом, числами. Числа — те же, что режет сервер
-     (FREE_* в whale_api.py), поэтому сравнение не обещает лишнего. */
-  const day = t(lang, "unit_day");
-  const cmp: [Parameters<typeof t>[1], string, string][] = [
-    ["cmp_speed", `${FREE.delayMin} ${t(lang, "unit_min")}`, "0"],
-    ["cmp_wallets", String(FREE.alertWallets), String(FREE.premiumWallets)],
-    ["cmp_alert_pnl", "—", "✓"],
-    ["cmp_top", String(FREE.top), String(FREE.premiumTop)],
-    ["cmp_hl", String(FREE.showcase), String(FREE.premiumTop)],
-    ["cmp_windows", t(lang, "big_win_24h"), t(lang, "big_win_30d")],
-    ["cmp_rank_win", `30${day}`, `365${day}`],
-    ["cmp_liq", t(lang, "big_win_24h"), t(lang, "big_win_30d")],
-    ["cmp_react", "—", "✓"],
-    ["cmp_history", String(FREE.deals), String(FREE.premiumDeals)],
-    ["cmp_digest", "—", "✓"],
-    ["cmp_prio", "—", "✓"],
   ];
   const perkIcon = (p: Perk) => (
     <span className="perk-ic" aria-hidden="true">
@@ -198,26 +180,11 @@ export function PremiumScreen({ arg }: ScreenProps) {
           <p className="note">{t(lang, "pr_service_account")}</p>
         </Card>
       ) : null}
-      {/* Сначала — зачем: одна фраза про то, за чем человек пришёл, и
-          сравнение числами. Потом оплата: цена написана один раз, на кнопке. */}
-      {me.service || (active && !trial) ? null : (
+      {/* Сначала — зачем: одна фраза про то, за чем человек пришёл. Потом
+          оплата: цена написана один раз, на кнопке. */}
+      {me.service || (active && !trial) || !head ? null : (
         <Card>
-          {head ? <p className="pw-why">{t(lang, head)}</p> : null}
-          {/* Колонка «бесплатно» при закрытом приложении была бы неправдой. */}
-          {HARD_PAYWALL ? null : (
-            <div className="cmp">
-              <span className="cmp-h" />
-              <span className="cmp-h cmp-v">{t(lang, "cmp_free")}</span>
-              <span className="cmp-h cmp-p">{t(lang, "cmp_prem")}</span>
-              {cmp.map(([k, f, p]) => (
-                <Fragment key={k}>
-                  <span className="cmp-l">{t(lang, k)}</span>
-                  <span className="cmp-v">{f}</span>
-                  <span className="cmp-p">{p}</span>
-                </Fragment>
-              ))}
-            </div>
-          )}
+          <p className="pw-why">{t(lang, head)}</p>
         </Card>
       )}
       {me.service ? null : (
@@ -321,19 +288,6 @@ export function PremiumScreen({ arg }: ScreenProps) {
             onClick={() => open("bonus")}
           />
         </Card>
-      )}
-
-      {/* «Бесплатно для всех» — только без жёсткого пейволла. */}
-      {HARD_PAYWALL ? null : (
-        <>
-        <Card>
-          <SectionTitle>{t(lang, "pr_free_title")}</SectionTitle>
-          <Row wrap icon={perkIcon({ ic: <DigestGlyph size={24} />, title: "dg_title", text: "pr_free_digest_d" })}
-            title={t(lang, "dg_title")} sub={t(lang, "pr_free_digest_d")} />
-          <Row wrap icon={perkIcon({ ic: <AnalyticsGlyph size={24} />, title: "pr_free_market_t", text: "pr_free_market_d" })}
-            title={t(lang, "pr_free_market_t")} sub={t(lang, "pr_free_market_d")} />
-        </Card>
-        </>
       )}
     </Frame>
   );

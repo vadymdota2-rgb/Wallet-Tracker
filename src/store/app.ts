@@ -233,17 +233,9 @@ export const useApp = create<AppState>()(
   ),
 );
 
-/** Лимит кошельков по плану — те же числа, что в premium.cpp бота. У
- *  сервисного аккаунта лимита нет: он держит базу кошельков. */
-export function walletLimit(plan: string, service = false): number {
-  if (service) return Infinity;
-  return plan === "premium" ? FREE.premiumWallets : FREE.wallets;
-}
-
-/** На бесплатном плане алерты идут только с основного кошелька (остальные
- *  добавленные — на паузе). Какие именно — говорит сервер (`active`); у
- *  старого ответа поля нет, и тогда молчат все, кроме основного. */
-export function isPaused(plan: string, w: { primary: boolean; active?: boolean }): boolean {
-  if (plan === "premium") return false;
-  return w.active === undefined ? !w.primary : !w.active;
+/** Лимит кошельков — то же число, что в premium.cpp бота: приложением
+ *  пользуются только с Премиумом. У сервисного аккаунта лимита нет: он
+ *  держит базу кошельков. */
+export function walletLimit(service = false): number {
+  return service ? Infinity : FREE.premiumWallets;
 }
