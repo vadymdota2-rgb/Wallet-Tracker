@@ -7739,12 +7739,13 @@ def token_state(chat: str, on: bool | None = None) -> dict:
 # Бонусы: дни Премиума за подписку на соцсети ---------------------------------
 #
 # Канал в Telegram проверяем по-настоящему — getChatMember (боту нужны права
-# администратора канала; без них Telegram отвечает ошибкой, и тогда верим на
-# слово, как с остальными). У X, TikTok, Instagram и YouTube открытой
-# проверки нет: человек открывает страницу из приложения (bonus/open), и не
-# раньше чем через BONUS_WAIT_SEC может забрать дни. Каждый бонус — один раз
-# на аккаунт (bonus_claims, ключ — человек и сеть).
-SOCIAL_BONUS = {"tg": 3, "x": 2, "tiktok": 2, "instagram": 2, "youtube": 2}
+# администратора канала; без них Telegram отвечает ошибкой, и тогда дни
+# выдаются через BONUS_WAIT_SEC после открытия). У X, TikTok, Instagram и
+# YouTube открытой проверки нет, и её не изображаем: одно нажатие
+# «Подписаться» открывает страницу и сразу даёт день — подпишется человек
+# или нет, его дело. Каждый бонус — один раз на аккаунт (bonus_claims, ключ
+# — человек и сеть).
+SOCIAL_BONUS = {"tg": 3, "x": 1, "tiktok": 1, "instagram": 1, "youtube": 1}
 TG_CHANNEL = os.environ.get("WHALE_TG_CHANNEL", "@WalletTrackerOfficial").strip()
 BONUS_WAIT_SEC = 10
 BONUS_SCHEMA = """
@@ -7811,7 +7812,11 @@ def bonus_act(chat: str, kind: str, act: str) -> dict:
             con.commit()
             return {"ok": True}
         opened = int(row["opened_at"] or 0) if row else 0
-        if not opened:
+        if kind != "tg":
+            # Без проверки: нажатие и есть получение. Строку заводим здесь же.
+            con.execute("INSERT OR IGNORE INTO bonus_claims(chat_id, kind, opened_at) VALUES(?,?,?)",
+                        (chat, kind, t))
+        elif not opened:
             return {"ok": False, "error": "not_opened"}
         if kind == "tg":
             # Канал проверяем по-настоящему; нет прав — как у остальных.
@@ -7820,8 +7825,6 @@ def bonus_act(chat: str, kind: str, act: str) -> dict:
                 return {"ok": False, "error": "not_member"}
             if member is None and t - opened < BONUS_WAIT_SEC:
                 return {"ok": False, "error": "wait", "left": BONUS_WAIT_SEC - (t - opened)}
-        elif t - opened < BONUS_WAIT_SEC:
-            return {"ok": False, "error": "wait", "left": BONUS_WAIT_SEC - (t - opened)}
         days = SOCIAL_BONUS[kind]
         con.isolation_level = None
         con.execute("BEGIN IMMEDIATE")

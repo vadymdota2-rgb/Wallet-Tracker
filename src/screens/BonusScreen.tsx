@@ -3,10 +3,10 @@
  *
  * Приглашение — та же карточка, что была в «Ещё» (InviteCard): +7 дней и
  * тебе, и другу. Ниже — соцсети, каждая один раз на аккаунт. Канал Telegram
- * сервер проверяет по-настоящему (getChatMember); у X, TikTok, Instagram и
- * YouTube проверки нет — человек открывает страницу, и через BONUS_WAIT
- * секунд кнопка «Получить» оживает. Время открытия сервер тоже запоминает и
- * раньше дни не выдаст.
+ * сервер проверяет по-настоящему (getChatMember): открыл канал, вернулся,
+ * «Получить». У X, TikTok, Instagram и YouTube проверки нет — одно нажатие
+ * «Подписаться» открывает страницу и сразу даёт день; второй раз кнопка
+ * уже не нажимается.
  */
 import { useEffect, useMemo, useState } from "react";
 import { Frame } from "./Screen";
@@ -22,7 +22,8 @@ import { InviteCard } from "../components/Invite";
 import { Card, SectionTitle } from "../components/ui";
 import { useNow } from "../lib/tick";
 
-/** Секунд между «открыл страницу» и «можно забрать» — BONUS_WAIT_SEC в API. */
+/** Канал Telegram без прав бота: секунд между «открыл» и «можно забрать» —
+ *  BONUS_WAIT_SEC в API. */
 const BONUS_WAIT = 10;
 
 export function BonusScreen() {
@@ -55,11 +56,16 @@ export function BonusScreen() {
     haptic("select");
     openSocial(s);
     if (got[s.id]) return;
+    // Не Telegram: нажал — открыл — получил, одним касанием.
+    if (s.id !== "tg") {
+      void claim(s);
+      return;
+    }
     setOpened((o) => ({ ...o, [s.id]: o[s.id] ?? Math.floor(Date.now() / 1000) }));
     void bonusAct(s.id, "open");
   };
 
-  const claim = async (s: Social) => {
+  async function claim(s: Social) {
     if (busy) return;
     haptic("select");
     setBusy(s.id);
@@ -77,7 +83,7 @@ export function BonusScreen() {
     if (err === "already") setSt((x) => (x ? { ...x, got: { ...x.got, [s.id]: days[s.id] ?? 0 } } : x));
     toast(t(lang, err === "not_member" ? "bn_not_member" : err === "wait" ? "bn_wait" : err === "already"
       ? "bn_already" : "generic_error_retry"), "err");
-  };
+  }
 
   return (
     <Frame title={t(lang, "bn_title")} sub={t(lang, "bn_sub")}>
@@ -110,8 +116,8 @@ export function BonusScreen() {
                 </button>
                 {done ? (
                   <span className="bn-ok">✓ +{done}</span>
-                ) : !at ? (
-                  <button type="button" className="bn-go" onClick={() => open(s)}>
+                ) : s.id !== "tg" || !at ? (
+                  <button type="button" className="bn-go" disabled={busy === s.id} onClick={() => open(s)}>
                     {t(lang, "bn_subscribe")}
                   </button>
                 ) : (
