@@ -12340,7 +12340,10 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 self._json(200, liq_map(qs.get("sym", ["BTC"])[0], (qs.get("range", ["1d"])[0] or "1d")))
                 return
-            if path in ("/token", "/api/token"):
+            # Не «/api/token»: этот адрес давно занят историей цены монеты, и
+            # проверка подписки попадала туда — после перезахода подписка
+            # всегда читалась как «нет».
+            if path in ("/token-launch", "/api/token-launch"):
                 self._json(200, token_state(self._user(qs)))
                 return
             if path in ("/ref", "/api/ref"):
@@ -12474,7 +12477,7 @@ class Handler(BaseHTTPRequestHandler):
                 res = digest_act(self._user_full(qs), dg, body)
                 self._json(200, res)
                 return
-            if path == "/api/token/notify":
+            if path == "/api/token-launch/notify":
                 self._json(200, token_state(chat, bool(body.get("on"))))
                 return
             if path == "/api/ev":
