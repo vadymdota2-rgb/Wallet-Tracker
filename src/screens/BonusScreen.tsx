@@ -19,7 +19,7 @@ import { bonusAct, fetchBonus, type BonusReply } from "../lib/api";
 import { SOCIALS, openSocial, type Social } from "../lib/social";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
-import { InviteCard } from "../components/Invite";
+import { InviteCard, useRefInfo } from "../components/Invite";
 import { Card, SectionTitle } from "../components/ui";
 import { useNow } from "../lib/tick";
 
@@ -39,18 +39,34 @@ export function BonusScreen() {
   const [pending, setPending] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState("");
   const [tick, setTick] = useState(0);
+  const ref = useRefInfo();
 
   useEffect(() => {
     let alive = true;
     void fetchBonus().then((r) => {
       if (!alive || !r?.ok) return;
+      // Проверка закончилась, пока экран открыт: сказать и обновить срок
+      // Премиума в приложении, а не только галочку в строке.
+      const fresh = Object.keys(r.got ?? {}).filter((k) => pending[k] && !st?.got?.[k]);
+      if (fresh.length) {
+        const n = fresh.reduce((a, k) => a + (r.got?.[k] ?? 0), 0);
+        haptic("success");
+        toast(t(lang, "bn_got_toast", { n }));
+        void syncNow();
+      }
       setSt(r);
       setOpened((o) => ({ ...r.opened, ...o }));
-      setPending((p) => ({ ...r.pending, ...p }));
+      setPending((p) => {
+        const next = { ...r.pending, ...p };
+        for (const k of Object.keys(r.got ?? {})) delete next[k];
+        return next;
+      });
     });
     return () => {
       alive = false;
     };
+    // pending и st — снимок на момент запроса; сам запрос — по tick.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick]);
 
   /* Пока что-то «на проверке» и экран открыт — раз в полминуты спрашиваем
@@ -64,7 +80,14 @@ export function BonusScreen() {
 
   const days = useMemo(() => Object.fromEntries((st?.items ?? []).map((i) => [i.id, i.days])), [st]);
   const got = st?.got ?? {};
-  const total = Object.values(got).reduce((a, b) => a + b, 0);
+  /* Итог — вместе с днями за друзей: «получено бонусами» без них было бы
+     неправдой у того, кто уже пригласил. */
+  const total = Object.values(got).reduce((a, b) => a + b, 0) + (ref?.days ?? 0);
+  /** Сколько ещё можно забрать за подписки. */
+  const left = (st?.items ?? []).reduce((a, i) => a + (got[i.id] ? 0 : i.days), 0);
+  /* Канал Telegram — первым: за него больше всего дней, и подписку на него
+     правда проверяем. */
+  const socials = useMemo(() => [...SOCIALS].sort((a, b) => (a.id === "tg" ? -1 : b.id === "tg" ? 1 : 0)), []);
 
   const open = (s: Social) => {
     haptic("select");
@@ -75,9 +98,20 @@ export function BonusScreen() {
       if (pending[s.id]) return;
       setPending((p) => ({ ...p, [s.id]: Math.floor(Date.now() / 1000) + 300 }));
       void bonusAct(s.id, "open").then((r) => {
-        if (r?.due) setPending((p) => ({ ...p, [s.id]: r.due ?? 0 }));
+        if (r?.ok && r.due) {
+          setPending((p) => ({ ...p, [s.id]: r.due ?? 0 }));
+          toast(t(lang, "bn_checking_toast"));
+          return;
+        }
+        // Сервер не записал — не делаем вид, что проверка идёт.
+        setPending((p) => {
+          const next = { ...p };
+          delete next[s.id];
+          return next;
+        });
+        if (r?.error === "already") setSt((x) => (x ? { ...x, got: { ...x.got, [s.id]: days[s.id] ?? 0 } } : x));
+        else toast(t(lang, "generic_error_retry"), "err");
       });
-      toast(t(lang, "bn_checking_toast"));
       return;
     }
     setOpened((o) => ({ ...o, [s.id]: o[s.id] ?? Math.floor(Date.now() / 1000) }));
@@ -106,11 +140,18 @@ export function BonusScreen() {
 
   return (
     <Frame title={t(lang, "bn_title")} sub={t(lang, "bn_sub")}>
-      {total > 0 ? (
+      {/* Сверху — сколько ещё можно получить и сколько уже получено. */}
+      {service ? null : (
         <Card>
-          <p className="bn-total">🎁 {t(lang, "bn_total", { n: total })}</p>
+          <div className="bn-hero">
+            <span className="bn-gift" aria-hidden="true">🎁</span>
+            <div>
+              <p className="bn-left">{t(lang, "bn_left", { n: left, r: ref?.bonus ?? 7 })}</p>
+              {total > 0 ? <p className="bn-total">{t(lang, "bn_total", { n: total })}</p> : null}
+            </div>
+          </div>
         </Card>
-      ) : null}
+      )}
 
       {/* Пригласить друга — +7 дней обоим. */}
       {service ? null : <InviteCard />}
@@ -119,7 +160,7 @@ export function BonusScreen() {
         <SectionTitle>{t(lang, "bn_social_title")}</SectionTitle>
         <p className="note dim">{t(lang, "bn_social_d")}</p>
         <ul className="bn-list">
-          {SOCIALS.map((s) => {
+          {socials.map((s) => {
             const d = days[s.id] ?? 0;
             const done = got[s.id];
             const at = opened[s.id];

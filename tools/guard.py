@@ -745,7 +745,8 @@ say("токен проекта: экран в «Ещё», подписка на 
 
 _bns = read(f"{APP}/src/screens/BonusScreen.tsx")
 say("бонусы: приглашение и дни за соцсети (канал +3 — getChatMember, остальные +1 — нажал, через 5 мин начислено и сообщение), один раз",
-    "export function BonusScreen(" in _bns and "<InviteCard />" in _bns and "SOCIALS.map" in _bns
+    "export function BonusScreen(" in _bns and "<InviteCard />" in _bns and "socials.map" in _bns
+    and '"bn_left"' in _bns
     and "<InviteCard" not in read(f"{APP}/src/screens/MoreTab.tsx") and 'open("bonus")' in read(f"{APP}/src/screens/MoreTab.tsx")
     and 'SOCIAL_BONUS = {"tg": 3, "x": 1, "tiktok": 1, "instagram": 1, "youtube": 1}' in api
     and "def bonus_act(" in api and '"getChatMember"' in api and "BONUS_WAIT_SEC = 10" in api
