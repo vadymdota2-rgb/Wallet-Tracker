@@ -8901,7 +8901,7 @@ def bootstrap(chat: str, fast: bool = False) -> dict:
 
     try:
         empty_me = {
-            "plan": "free", "limit": 1, "threshold": 10000, "lang": "ru",
+            "plan": "free", "limit": FREE_MAX_WALLETS, "threshold": 10000, "lang": "ru",
             "alertsToday": 0, "alerts30d": 0, "premUntil": 0, "updatedKey": "justNow",
             "alertTg": True, "unread": 0,
         }
