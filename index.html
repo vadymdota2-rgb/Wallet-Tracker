@@ -133,11 +133,6 @@
   }
   .sp-name .sp-sp { width: 0.5em; }
   @keyframes spLetter { to { opacity: 1; transform: none; filter: none; } }
-  .sp-tag {
-    position: absolute; left: 0; right: 0; top: calc(46% + 130px); text-align: center;
-    font-size: 11px; font-weight: 600; letter-spacing: 0.42em; color: #7fd8ff; opacity: 0;
-    animation: spTag calc(0.6s * var(--k)) ease-out calc(1.25s * var(--k)) forwards;
-  }
   @keyframes spTag { to { opacity: 0.75; } }
   /* Полоса загрузки. */
   .sp-bar {
@@ -169,7 +164,7 @@
   @keyframes spBurst { to { transform: scale(1); } }
   .sp.out .sp-mark { animation: spZoom 0.5s cubic-bezier(.6,0,.4,1) forwards; }
   @keyframes spZoom { to { transform: scale(2.4); opacity: 0; } }
-  .sp.out .sp-name, .sp.out .sp-tag, .sp.out .sp-bar { transition: opacity 0.25s; opacity: 0; }
+  .sp.out .sp-name, .sp.out .sp-bar { transition: opacity 0.25s; opacity: 0; }
   /* Без @property круг не анимируется — тогда просто растворяемся. */
   .sp.out.flat { -webkit-mask: none; mask: none; animation: spFade 0.45s ease-out forwards; }
   .sp.out.flat .sp-burst { display: none; }
@@ -224,7 +219,6 @@
     </div>
   </div>
   <div class="sp-name"></div>
-  <div class="sp-tag">WHALE RADAR</div>
   <div class="sp-bar"><i></i></div>
 </div>
 <script>
