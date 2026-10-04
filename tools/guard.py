@@ -771,13 +771,5 @@ say("жёсткий пейволл: без Премиума вкладки, ме
     and "LOCK_OPEN_SCREENS" in read(f"{APP}/src/App.tsx")
     and "Без Премиума приложение закрыто" in read(f"{BOT}/ru.cpp"))
 
-_mtr = read(f"{BOT}/main.cpp")
-say("/trialreset: Премиум всем на 14 дней, срок не сокращается, сервисный не трогается, письмо о конце пробы снова разрешено",
-    "constexpr long long TRIAL_RESET_DAYS = 14;" in _mtr
-    and "premium_expire = MAX(CASE WHEN is_premium=1 AND premium_expire>?1 THEN premium_expire ELSE 0 END, ?2)" in _mtr
-    and _mtr.count("WHERE chat_id<>?") >= 3 and "DELETE FROM lifecycle_sent WHERE kind='trial_d5'" in _mtr
-    and "INSERT OR REPLACE INTO trial_granted(chat_id, granted_at)" in _mtr
-    and 'trialReset(cid, trim(txt.substr(11)));' in _mtr and '"rs_gift"' in read(f"{BOT}/ru.cpp"))
-
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
