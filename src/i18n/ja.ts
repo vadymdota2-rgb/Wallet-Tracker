@@ -732,7 +732,6 @@ export const ja: Dict = {
   pr_perk_top_t: "トップ100トレーダー",
   pr_perk_wallets_d: "追跡しているすべてのウォレットのアラート — Telegram とアプリで。",
   pr_perk_wallets_t: "最大50ウォレット",
-  pr_service_account: "サービスアカウント：ウォレットのデータベースを無制限に保持します。プレミアムは付与されません。",
   pr_title: "⭐ Wallet Tracker プレミアム",
   pr_unlock: "アプリのすべて：クジラの取引、Hyperliquid 先物、分析、最大50ウォレット。",
   pw_h_alert: "すべてのアラートに平均取得単価と取引の損益。",

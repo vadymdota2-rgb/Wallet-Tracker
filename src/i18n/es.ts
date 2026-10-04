@@ -732,7 +732,6 @@ export const es: Dict = {
   pr_perk_top_t: "Top 100 traders",
   pr_perk_wallets_d: "Alertas de cada billetera que sigues, en Telegram y en la app.",
   pr_perk_wallets_t: "Hasta 50 billeteras",
-  pr_service_account: "Cuenta de servicio: guarda la base de billeteras sin límite. No recibe Premium.",
   pr_title: "⭐ Wallet Tracker Premium",
   pr_unlock: "Toda la app: operaciones de ballenas, futuros de Hyperliquid, análisis y hasta 50 billeteras.",
   pw_h_alert: "Precio medio de entrada y PnL de la operación en cada alerta.",

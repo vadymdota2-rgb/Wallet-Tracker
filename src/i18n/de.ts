@@ -732,7 +732,6 @@ export const de: Dict = {
   pr_perk_top_t: "Top-100-Trader",
   pr_perk_wallets_d: "Alerts von jeder Wallet, der du folgst – in Telegram und in der App.",
   pr_perk_wallets_t: "Bis zu 50 Wallets",
-  pr_service_account: "Servicekonto: Es hält die Wallet-Datenbank ohne Limit. Premium bekommt es nie.",
   pr_title: "⭐ Wallet Tracker Premium",
   pr_unlock: "Die ganze App: Whale-Trades, Hyperliquid-Futures, Analysen und bis zu 50 Wallets.",
   pw_h_alert: "Durchschnittlicher Einstiegspreis und Trade-PnL in jedem Alert.",

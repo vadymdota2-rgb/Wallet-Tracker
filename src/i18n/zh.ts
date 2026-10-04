@@ -732,7 +732,6 @@ export const zh: Dict = {
   pr_perk_top_t: "前 100 名交易员",
   pr_perk_wallets_d: "你追踪的每个钱包都会发提醒——在 Telegram 和应用里。",
   pr_perk_wallets_t: "最多 50 个钱包",
-  pr_service_account: "服务账号：无限量保存钱包库，不会获得 Premium。",
   pr_title: "⭐ Wallet Tracker 高级版",
   pr_unlock: "整个应用：巨鲸交易、Hyperliquid 合约、分析，以及最多 50 个钱包。",
   pw_h_alert: "每条提醒都带平均入场价和该笔交易的盈亏。",

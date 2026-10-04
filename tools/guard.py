@@ -208,6 +208,9 @@ say("сервисный — без Премиума нигде и никогда
     and "UPDATE users SET is_premium=0, premium_expire=0 WHERE chat_id=?" in _prem_cpp
     and "uid != SERVICE_CHAT_ID && loadedForUser >= FREE_ALERT_WALLETS" in read(f"{BOT}/main.cpp")
     and "(chatId != SERVICE_CHAT_ID)\n                            ? premiumMaxWallets(chatId) : 0;" in read(f"{BOT}/wallets.cpp"))
+say("сервисный в приложении — как обычный аккаунт без Премиума (замок, оплата, бонусы)",
+    not any("service" in read(f"{APP}/src/{f}") for f in ("components/LockScreen.tsx", "screens/PremiumScreen.tsx",
+                                                           "screens/MoreTab.tsx", "screens/BonusScreen.tsx")))
 say("приложение не ставит сервисному паузу и лимит",
     "walletLimit(me.service)" in read(f"{APP}/src/screens/WalletsTab.tsx")
     and "return service ? Infinity : FREE.premiumWallets;" in read(f"{APP}/src/store/app.ts"))

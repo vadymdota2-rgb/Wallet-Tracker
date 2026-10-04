@@ -87,8 +87,8 @@ export function PremiumScreen({ arg }: ScreenProps) {
   }, [pay.ton]);
   // Замер воронки: экран увидел тот, кому есть что покупать.
   useEffect(() => {
-    if ((!active || trial) && !me.service) trackEvent("paywall", src);
-  }, [active, trial, me.service, src]);
+    if (!active || trial) trackEvent("paywall", src);
+  }, [active, trial, src]);
 
   /* Что даёт подписка — подробно, с пояснением к каждому пункту. Прежний
      список из четырёх строк обрезался на полуслове («Hyperliquid futures:
@@ -173,72 +173,63 @@ export function PremiumScreen({ arg }: ScreenProps) {
       title={active ? t(lang, "pr_active_title") : t(lang, "pr_title")}
       sub={active ? `${t(lang, "pr_days_left")} ${num(days)}` : t(lang, "pr_unlock")}
     >
-      {/* Сервисный аккаунт держит базу кошельков, Премиум ему не выдаётся
-          (сервер откажет). Вместо оплаты — одна строка, почему. */}
-      {me.service ? (
-        <Card>
-          <p className="note">{t(lang, "pr_service_account")}</p>
-        </Card>
-      ) : null}
       {/* Сначала — зачем: одна фраза про то, за чем человек пришёл. Потом
           оплата: цена написана один раз, на кнопке. */}
-      {me.service || (active && !trial) || !head ? null : (
+      {(active && !trial) || !head ? null : (
         <Card>
           <p className="pw-why">{t(lang, head)}</p>
         </Card>
       )}
-      {me.service ? null : (
-        <Card>
-          <SectionTitle>{t(lang, active ? "pl_extend" : "pl_title")}</SectionTitle>
-          {/* Тарифы карточками: цена, срок и чем каждый хорош. */}
-          <div className="plans" role="radiogroup" aria-label={t(lang, "pl_title")}>
-            {intro ? (
-              <button type="button" role="radio" aria-checked={plan === "intro"}
-                className={plan === "intro" ? "plan on" : "plan"} onClick={() => setPlan("intro")}>
-                <span className="plan-hd">
-                  <b>{t(lang, "pl_intro")}</b>
-                  <span className="plan-badge">−{Math.round((1 - intro.stars / (plans.m?.stars ?? pay.stars)) * 100)}%</span>
-                </span>
-                <span className="plan-px">{num(intro.stars)} ⭐</span>
-                <small>{t(lang, "pl_intro_d", { h: Math.max(1, Math.ceil((intro.until * 1000 - Date.now()) / 3600000)) })}</small>
-              </button>
-            ) : null}
-            {plans.y ? (
-              <button type="button" role="radio" aria-checked={plan === "y"}
-                className={plan === "y" ? "plan on" : "plan"} onClick={() => setPlan("y")}>
-                <span className="plan-hd">
-                  <b>{t(lang, "pl_year")}</b>
-                  {off > 0 ? <span className="plan-badge">−{off}%</span> : null}
-                </span>
-                <span className="plan-px">{num(plans.y.stars)} ⭐{pay.ton ? ` · ${plans.y.usdt} USDT` : ""}</span>
-                <small>{t(lang, "pl_year_d", { s: num(Math.round(plans.y.stars / 12)) })}</small>
-              </button>
-            ) : null}
-            <button type="button" role="radio" aria-checked={plan === "m"}
-              className={plan === "m" ? "plan on" : "plan"} onClick={() => setPlan("m")}>
-              <span className="plan-hd"><b>{t(lang, "pl_month")}</b></span>
-              <span className="plan-px">{num(plans.m?.stars ?? pay.stars)} ⭐{pay.ton ? ` · ${plans.m?.usdt ?? pay.usdt} USDT` : ""}</span>
-              <small>{t(lang, plans.m?.auto ? "pl_auto" : "pl_once")}</small>
+      <Card>
+        <SectionTitle>{t(lang, active ? "pl_extend" : "pl_title")}</SectionTitle>
+        {/* Тарифы карточками: цена, срок и чем каждый хорош. */}
+        <div className="plans" role="radiogroup" aria-label={t(lang, "pl_title")}>
+          {intro ? (
+            <button type="button" role="radio" aria-checked={plan === "intro"}
+              className={plan === "intro" ? "plan on" : "plan"} onClick={() => setPlan("intro")}>
+              <span className="plan-hd">
+                <b>{t(lang, "pl_intro")}</b>
+                <span className="plan-badge">−{Math.round((1 - intro.stars / (plans.m?.stars ?? pay.stars)) * 100)}%</span>
+              </span>
+              <span className="plan-px">{num(intro.stars)} ⭐</span>
+              <small>{t(lang, "pl_intro_d", { h: Math.max(1, Math.ceil((intro.until * 1000 - Date.now()) / 3600000)) })}</small>
             </button>
-          </div>
-          <div className="stack-actions">
-            <Action onClick={onStars} disabled={busy !== "" || !stars}>
-              {busy === "stars"
-                ? t(lang, "pay_wait_step")
-                : `${t(lang, "pay_stars_btn")} · ${num(stars)} ⭐`}
+          ) : null}
+          {plans.y ? (
+            <button type="button" role="radio" aria-checked={plan === "y"}
+              className={plan === "y" ? "plan on" : "plan"} onClick={() => setPlan("y")}>
+              <span className="plan-hd">
+                <b>{t(lang, "pl_year")}</b>
+                {off > 0 ? <span className="plan-badge">−{off}%</span> : null}
+              </span>
+              <span className="plan-px">{num(plans.y.stars)} ⭐{pay.ton ? ` · ${plans.y.usdt} USDT` : ""}</span>
+              <small>{t(lang, "pl_year_d", { s: num(Math.round(plans.y.stars / 12)) })}</small>
+            </button>
+          ) : null}
+          <button type="button" role="radio" aria-checked={plan === "m"}
+            className={plan === "m" ? "plan on" : "plan"} onClick={() => setPlan("m")}>
+            <span className="plan-hd"><b>{t(lang, "pl_month")}</b></span>
+            <span className="plan-px">{num(plans.m?.stars ?? pay.stars)} ⭐{pay.ton ? ` · ${plans.m?.usdt ?? pay.usdt} USDT` : ""}</span>
+            <small>{t(lang, plans.m?.auto ? "pl_auto" : "pl_once")}</small>
+          </button>
+        </div>
+        <div className="stack-actions">
+          <Action onClick={onStars} disabled={busy !== "" || !stars}>
+            {busy === "stars"
+              ? t(lang, "pay_wait_step")
+              : `${t(lang, "pay_stars_btn")} · ${num(stars)} ⭐`}
+          </Action>
+          {pay.ton && usdt ? (
+            <Action kind="ghost" onClick={onUsdt} disabled={busy !== ""}>
+              {busy === "usdt"
+                ? t(lang, step === "sign" ? "pay_sign_step" : step === "wait" ? "pay_wait_step" : "pay_wallet_step")
+                : `${t(lang, "pay_usdt_btn")} · ${usdt} USDT`}
             </Action>
-            {pay.ton && usdt ? (
-              <Action kind="ghost" onClick={onUsdt} disabled={busy !== ""}>
-                {busy === "usdt"
-                  ? t(lang, step === "sign" ? "pay_sign_step" : step === "wait" ? "pay_wait_step" : "pay_wallet_step")
-                  : `${t(lang, "pay_usdt_btn")} · ${usdt} USDT`}
-              </Action>
-            ) : null}
-          </div>
-          {pay.ton ? <p className="note dim">{t(lang, "pay_note")}</p> : null}
-          {active ? <p className="note dim">{t(lang, "pr_extend_note")}</p> : null}
-        </Card>
-      )}
+          ) : null}
+        </div>
+        {pay.ton ? <p className="note dim">{t(lang, "pay_note")}</p> : null}
+        {active ? <p className="note dim">{t(lang, "pr_extend_note")}</p> : null}
+      </Card>
 
       {inv ? (
         <Card>
@@ -279,16 +270,14 @@ export function PremiumScreen({ arg }: ScreenProps) {
 
       {/* Не готов платить — «Бонусы»: дни Премиума за друга и за подписки
           на соцсети. */}
-      {me.service ? null : (
-        <Card>
-          <Row
-            icon={<span aria-hidden="true">🎁</span>}
-            title={t(lang, "bn_title")}
-            sub={t(lang, "bn_premium_sub")}
-            onClick={() => open("bonus")}
-          />
-        </Card>
-      )}
+      <Card>
+        <Row
+          icon={<span aria-hidden="true">🎁</span>}
+          title={t(lang, "bn_title")}
+          sub={t(lang, "bn_premium_sub")}
+          onClick={() => open("bonus")}
+        />
+      </Card>
     </Frame>
   );
 }

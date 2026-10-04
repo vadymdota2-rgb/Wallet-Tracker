@@ -732,7 +732,6 @@ export const ko: Dict = {
   pr_perk_top_t: "Top 100 트레이더",
   pr_perk_wallets_d: "추적하는 모든 지갑의 알림 — 텔레그램과 앱에서.",
   pr_perk_wallets_t: "최대 50개 지갑",
-  pr_service_account: "서비스 계정: 지갑 데이터베이스를 제한 없이 보관합니다. 프리미엄은 지급되지 않습니다.",
   pr_title: "⭐ Wallet Tracker 프리미엄",
   pr_unlock: "앱 전체: 고래 거래, Hyperliquid 선물, 분석, 최대 50개 지갑.",
   pw_h_alert: "모든 알림에 평균 진입가와 거래 PnL.",

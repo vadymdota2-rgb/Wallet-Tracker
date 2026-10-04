@@ -44,20 +44,18 @@ export function MoreTab() {
           icon={<span aria-hidden="true">⭐</span>}
           title={bare(t(lang, "menu_premium"))}
           sub={me.plan === "premium" ? `${t(lang, "pr_days_left")} ${num(days)}`
-            : me.service ? t(lang, "pr_service_account") : t(lang, "pr_unlock")}
+            : t(lang, "pr_unlock")}
           value={me.plan === "premium" ? "✓" : "🔒"}
           onClick={() => open("premium", "more")}
         />
         {/* Бонусы — дни Премиума без оплаты: за друга и за подписки на
-            соцсети. Сервисному аккаунту Премиум не выдаётся. */}
-        {me.service ? null : (
-          <Row
-            icon={<span aria-hidden="true">🎁</span>}
-            title={t(lang, "bn_title")}
-            sub={t(lang, "bn_more_sub")}
-            onClick={() => open("bonus")}
-          />
-        )}
+            соцсети. */}
+        <Row
+          icon={<span aria-hidden="true">🎁</span>}
+          title={t(lang, "bn_title")}
+          sub={t(lang, "bn_more_sub")}
+          onClick={() => open("bonus")}
+        />
         {/* Токен проекта — пока «скоро»: что опубликуем перед запуском и
             подписка на уведомление. */}
         <Row

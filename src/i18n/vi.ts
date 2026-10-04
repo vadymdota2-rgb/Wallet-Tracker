@@ -732,7 +732,6 @@ export const vi: Dict = {
   pr_perk_top_t: "Top 100 trader",
   pr_perk_wallets_d: "Cảnh báo từ mọi ví bạn theo dõi — trong Telegram và trong ứng dụng.",
   pr_perk_wallets_t: "Tối đa 50 ví",
-  pr_service_account: "Tài khoản dịch vụ: giữ cơ sở dữ liệu ví không giới hạn. Không bao giờ được cấp Premium.",
   pr_title: "⭐ Wallet Tracker Premium",
   pr_unlock: "Toàn bộ ứng dụng: giao dịch cá voi, hợp đồng tương lai Hyperliquid, phân tích và tới 50 ví.",
   pw_h_alert: "Giá vào trung bình và PnL của giao dịch trong mọi cảnh báo.",

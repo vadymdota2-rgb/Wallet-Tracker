@@ -13121,24 +13121,6 @@
     "vi": "Tối đa 50 ví",
     "zh": "最多 50 个钱包"
   },
-  "pr_service_account": {
-    "ru": "Сервисный аккаунт: держит базу кошельков без лимита. Премиум ему не выдаётся.",
-    "en": "Service account: it holds the wallet base with no limit. Premium is never given to it.",
-    "es": "Cuenta de servicio: guarda la base de billeteras sin límite. No recibe Premium.",
-    "pt": "Conta de serviço: guarda a base de carteiras sem limite. Não recebe Premium.",
-    "fr": "Compte de service : il garde la base de portefeuilles sans limite. Il ne reçoit jamais Premium.",
-    "tr": "Hizmet hesabı: cüzdan veritabanını sınırsız tutar. Premium verilmez.",
-    "ar": "حساب الخدمة: يحتفظ بقاعدة المحافظ بلا حد. لا يُمنح Premium.",
-    "pl": "Konto serwisowe: przechowuje bazę portfeli bez limitu. Nie dostaje Premium.",
-    "de": "Servicekonto: Es hält die Wallet-Datenbank ohne Limit. Premium bekommt es nie.",
-    "uk": "Сервісний акаунт: тримає базу гаманців без ліміту. Преміум йому не видається.",
-    "hi": "सर्विस अकाउंट: यह वॉलेट डेटाबेस बिना सीमा के रखता है। इसे Premium नहीं मिलता।",
-    "id": "Akun layanan: menyimpan basis dompet tanpa batas. Tidak pernah mendapat Premium.",
-    "vi": "Tài khoản dịch vụ: giữ cơ sở dữ liệu ví không giới hạn. Không bao giờ được cấp Premium.",
-    "ko": "서비스 계정: 지갑 데이터베이스를 제한 없이 보관합니다. 프리미엄은 지급되지 않습니다.",
-    "zh": "服务账号：无限量保存钱包库，不会获得 Premium。",
-    "ja": "サービスアカウント：ウォレットのデータベースを無制限に保持します。プレミアムは付与されません。"
-  },
   "pr_title": {
     "ar": "⭐ Wallet Tracker Premium",
     "de": "⭐ Wallet Tracker Premium",

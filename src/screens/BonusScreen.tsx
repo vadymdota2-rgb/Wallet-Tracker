@@ -12,7 +12,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Frame } from "./Screen";
 import { useApp } from "../store/app";
-import { useLive } from "../store/live";
 import { t } from "../i18n/t";
 import { haptic } from "../lib/telegram";
 import { bonusAct, fetchBonus, type BonusReply } from "../lib/api";
@@ -29,7 +28,6 @@ const BONUS_WAIT = 10;
 
 export function BonusScreen() {
   const lang = useApp((s) => s.lang);
-  const service = useLive((s) => s.me.service);
   const nowSec = useNow();
   const [st, setSt] = useState<BonusReply | null>(null);
   /* Когда человек открыл страницу — здесь, а не только на сервере: отсчёт до
@@ -141,20 +139,18 @@ export function BonusScreen() {
   return (
     <Frame title={t(lang, "bn_title")} sub={t(lang, "bn_sub")}>
       {/* Сверху — сколько ещё можно получить и сколько уже получено. */}
-      {service ? null : (
-        <Card>
-          <div className="bn-hero">
-            <span className="bn-gift" aria-hidden="true">🎁</span>
-            <div>
-              <p className="bn-left">{t(lang, "bn_left", { n: left, r: ref?.bonus ?? 7 })}</p>
-              {total > 0 ? <p className="bn-total">{t(lang, "bn_total", { n: total })}</p> : null}
-            </div>
+      <Card>
+        <div className="bn-hero">
+          <span className="bn-gift" aria-hidden="true">🎁</span>
+          <div>
+            <p className="bn-left">{t(lang, "bn_left", { n: left, r: ref?.bonus ?? 7 })}</p>
+            {total > 0 ? <p className="bn-total">{t(lang, "bn_total", { n: total })}</p> : null}
           </div>
-        </Card>
-      )}
+        </div>
+      </Card>
 
       {/* Пригласить друга — +7 дней обоим. */}
-      {service ? null : <InviteCard />}
+      <InviteCard />
 
       <Card>
         <SectionTitle>{t(lang, "bn_social_title")}</SectionTitle>
