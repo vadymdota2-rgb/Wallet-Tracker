@@ -10,7 +10,6 @@
  * Connect, тоже должен уметь заплатить — адрес, сумма и памятка для этого и
  * лежат на виду.
  */
-import { InviteCard } from "../components/Invite";
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { Frame } from "./Screen";
 import { useApp } from "../store/app";
@@ -51,6 +50,7 @@ type Perk = {
 export function PremiumScreen({ arg }: ScreenProps) {
   const lang = useApp((s) => s.lang);
   const me = useLive((s) => s.me);
+  const open = useApp((s) => s.open);
   /* Откуда пришли: заголовок говорит про то, за чем человек открыл экран, —
      «следите за 50 кошельками», а не общее «раскройте потенциал». */
   const src = isPaySrc(arg) ? arg : "more";
@@ -305,8 +305,18 @@ export function PremiumScreen({ arg }: ScreenProps) {
         ))}
       </Card>
 
-      {/* Не готов платить — может пригласить друга: +7 дней обоим. */}
-      {me.service ? null : <InviteCard />}
+      {/* Не готов платить — «Бонусы»: дни Премиума за друга и за подписки
+          на соцсети. */}
+      {me.service ? null : (
+        <Card>
+          <Row
+            icon={<span aria-hidden="true">🎁</span>}
+            title={t(lang, "bn_title")}
+            sub={t(lang, "bn_premium_sub")}
+            onClick={() => open("bonus")}
+          />
+        </Card>
+      )}
 
       <Card>
         <SectionTitle>{t(lang, "pr_free_title")}</SectionTitle>

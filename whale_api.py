@@ -7736,6 +7736,114 @@ def token_state(chat: str, on: bool | None = None) -> dict:
         con.close()
 
 
+# Бонусы: дни Премиума за подписку на соцсети ---------------------------------
+#
+# Канал в Telegram проверяем по-настоящему — getChatMember (боту нужны права
+# администратора канала; без них Telegram отвечает ошибкой, и тогда верим на
+# слово, как с остальными). У X, TikTok, Instagram и YouTube открытой
+# проверки нет: человек открывает страницу из приложения (bonus/open), и не
+# раньше чем через BONUS_WAIT_SEC может забрать дни. Каждый бонус — один раз
+# на аккаунт (bonus_claims, ключ — человек и сеть).
+SOCIAL_BONUS = {"tg": 3, "x": 2, "tiktok": 2, "instagram": 2, "youtube": 2}
+TG_CHANNEL = os.environ.get("WHALE_TG_CHANNEL", "@WalletTrackerOfficial").strip()
+BONUS_WAIT_SEC = 10
+BONUS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS bonus_claims (
+    chat_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    opened_at INTEGER NOT NULL DEFAULT 0,
+    claimed_at INTEGER NOT NULL DEFAULT 0,
+    days INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (chat_id, kind)
+);
+"""
+
+
+def bonus_state(chat: str) -> dict:
+    """Что из бонусов за подписки человек уже забрал и сколько за что дают."""
+    out = {"ok": True, "items": [{"id": k, "days": d} for k, d in SOCIAL_BONUS.items()], "got": {}, "opened": {}}
+    if not chat:
+        return out
+    con = open_db(DB)
+    if not con:
+        return out
+    try:
+        for r in con.execute("SELECT kind, opened_at, claimed_at, days FROM bonus_claims WHERE chat_id=?", (chat,)):
+            if int(r["claimed_at"] or 0):
+                out["got"][r["kind"]] = int(r["days"] or 0)
+            elif int(r["opened_at"] or 0):
+                out["opened"][r["kind"]] = int(r["opened_at"])
+    except sqlite3.OperationalError:
+        pass  # таблицы ещё нет: никто ничего не забирал
+    finally:
+        con.close()
+    return out
+
+
+def tg_channel_member(chat: str) -> bool | None:
+    """Подписан ли человек на канал. None — проверить нельзя (у бота нет прав
+    в канале или Telegram недоступен)."""
+    res = tg_api("getChatMember", {"chat_id": TG_CHANNEL, "user_id": int(chat)}, timeout=8.0) \
+        if chat.lstrip("-").isdigit() else None
+    if not isinstance(res, dict):
+        return None
+    return res.get("status") in ("creator", "administrator", "member", "restricted")
+
+
+def bonus_act(chat: str, kind: str, act: str) -> dict:
+    """open — человек открыл страницу соцсети; claim — забрать дни."""
+    if kind not in SOCIAL_BONUS:
+        return {"ok": False, "error": "bad_kind"}
+    con = open_db(DB, write=True)
+    if not con:
+        return {"ok": False, "error": "db"}
+    try:
+        con.executescript(BONUS_SCHEMA)
+        row = con.execute("SELECT opened_at, claimed_at FROM bonus_claims WHERE chat_id=? AND kind=?",
+                          (chat, kind)).fetchone()
+        if row and int(row["claimed_at"] or 0):
+            return {"ok": False, "error": "already"}
+        t = now()
+        if act == "open":
+            con.execute("INSERT INTO bonus_claims(chat_id, kind, opened_at) VALUES(?,?,?) "
+                        "ON CONFLICT(chat_id, kind) DO UPDATE SET opened_at=excluded.opened_at "
+                        "WHERE bonus_claims.opened_at=0", (chat, kind, t))
+            con.commit()
+            return {"ok": True}
+        opened = int(row["opened_at"] or 0) if row else 0
+        if not opened:
+            return {"ok": False, "error": "not_opened"}
+        if kind == "tg":
+            # Канал проверяем по-настоящему; нет прав — как у остальных.
+            member = tg_channel_member(chat)
+            if member is False:
+                return {"ok": False, "error": "not_member"}
+            if member is None and t - opened < BONUS_WAIT_SEC:
+                return {"ok": False, "error": "wait", "left": BONUS_WAIT_SEC - (t - opened)}
+        elif t - opened < BONUS_WAIT_SEC:
+            return {"ok": False, "error": "wait", "left": BONUS_WAIT_SEC - (t - opened)}
+        days = SOCIAL_BONUS[kind]
+        con.isolation_level = None
+        con.execute("BEGIN IMMEDIATE")
+        try:
+            if con.execute("UPDATE bonus_claims SET claimed_at=?, days=? WHERE chat_id=? AND kind=? AND claimed_at=0",
+                           (t, days, chat, kind)).rowcount != 1 or not extend_premium(con, chat, days):
+                con.execute("ROLLBACK")
+                return {"ok": False, "error": "already"}
+            con.execute("COMMIT")
+        except sqlite3.Error:
+            con.execute("ROLLBACK")
+            raise
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] bonus {chat} {kind}: {e}\n")
+        return {"ok": False, "error": "db"}
+    finally:
+        con.close()
+    boot_drop(chat)
+    track(chat, "bonus", kind)
+    return {"ok": True, "days": days}
+
+
 REF_DAYS = 7
 REF_MAX_30D = 10
 REF_SCHEMA = """
@@ -11845,6 +11953,7 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
                 "DELETE FROM digest_subs WHERE chat_id=?",
                 "DELETE FROM ref_codes WHERE chat_id=?",
                 "DELETE FROM token_subs WHERE chat_id=?",
+                "DELETE FROM bonus_claims WHERE chat_id=?",
                 "DELETE FROM users WHERE chat_id=?",
             ):
                 try:
@@ -12343,6 +12452,9 @@ class Handler(BaseHTTPRequestHandler):
             # Не «/api/token»: этот адрес давно занят историей цены монеты, и
             # проверка подписки попадала туда — после перезахода подписка
             # всегда читалась как «нет».
+            if path in ("/bonus", "/api/bonus"):
+                self._json(200, bonus_state(self._user(qs)))
+                return
             if path in ("/token-launch", "/api/token-launch"):
                 self._json(200, token_state(self._user(qs)))
                 return
@@ -12476,6 +12588,9 @@ class Handler(BaseHTTPRequestHandler):
                 # причина, а на ошибочный код оно видит только «нет ответа».
                 res = digest_act(self._user_full(qs), dg, body)
                 self._json(200, res)
+                return
+            if path in ("/api/bonus/open", "/api/bonus/claim"):
+                self._json(200, bonus_act(chat, str(body.get("kind") or ""), path.rsplit("/", 1)[-1]))
                 return
             if path == "/api/token-launch/notify":
                 self._json(200, token_state(chat, bool(body.get("on"))))

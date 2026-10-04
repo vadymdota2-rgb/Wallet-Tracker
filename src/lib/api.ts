@@ -214,6 +214,18 @@ export const fetchRef = () => cachedGet<RefInfo>("/api/ref", REF_TTL);
 export const peekRef = () => peek<RefInfo | null>("/api/ref", REF_TTL);
 
 /** Присылать ли в Telegram, что вышел новый выпуск дайджеста. */
+/** Бонусы за подписку на соцсети: сколько за что дают, что уже забрано и
+ *  что открыто (время, с которого идёт отсчёт до «Получить»). */
+export interface BonusReply {
+  ok: boolean;
+  items?: { id: string; days: number }[];
+  got?: Record<string, number>;
+  opened?: Record<string, number>;
+}
+export const fetchBonus = () => call<BonusReply>("/api/bonus");
+export const bonusAct = (kind: string, act: "open" | "claim") =>
+  call<{ ok: boolean; days?: number; error?: string; left?: number }>(`/api/bonus/${act}`, { method: "POST", body: { kind } });
+
 /** Токен проекта: подписан ли человек на уведомление о запуске. */
 export const fetchTokenState = () => call<{ ok: boolean; on?: boolean }>("/api/token-launch");
 export const setTokenNotify = (on: boolean) =>

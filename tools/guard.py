@@ -687,8 +687,8 @@ _dgt = read(f"{APP}/src/screens/DigestTab.tsx")
 say("рост: приглашение друга (+7 дней обоим), «Поделиться» в дайджесте, уведомление о новом выпуске",
     "def apply_referral(" in api and '"start": str(parts.get("start_param")' in api
     and "REF_DAYS = 7" in api and '"/api/digest/notify": "notify"' in api
-    and "export function InviteCard(" in _inv and "<InviteCard" in read(f"{APP}/src/screens/MoreTab.tsx")
-    and "<InviteCard" in read(f"{APP}/src/screens/PremiumScreen.tsx")
+    and "export function InviteCard(" in _inv and "<InviteCard" in read(f"{APP}/src/screens/BonusScreen.tsx")
+    and 'open("bonus")' in read(f"{APP}/src/screens/PremiumScreen.tsx")
     and "setDigestNotify" in _dgt and "shareTg(" in _dgt
     and "void digestTick()" in _lc and "digestTick();" in _lc and '"dg_ready"' in _lc)
 
@@ -742,6 +742,15 @@ say("токен проекта: экран в «Ещё», подписка на 
     and api.count('if path in ("/token", "/api/token"):') == 1 and "DELETE FROM token_subs WHERE chat_id=?" in api
     and "void tokenCast(" in _mcpp and 'txt.rfind("/tokencast", 0) == 0' in _mcpp and "CREATE TABLE IF NOT EXISTS token_subs" in _mcpp
     and '"tk_ready"' in read(f"{BOT}/ru.cpp"))
+
+_bns = read(f"{APP}/src/screens/BonusScreen.tsx")
+say("бонусы: приглашение и дни за соцсети (канал — getChatMember, остальные — открыл и 10 с), один раз; общий список соцсетей",
+    "export function BonusScreen(" in _bns and "<InviteCard />" in _bns and "SOCIALS.map" in _bns
+    and "<InviteCard" not in read(f"{APP}/src/screens/MoreTab.tsx") and 'open("bonus")' in read(f"{APP}/src/screens/MoreTab.tsx")
+    and 'SOCIAL_BONUS = {"tg": 3, "x": 2, "tiktok": 2, "instagram": 2, "youtube": 2}' in api
+    and "def bonus_act(" in api and '"getChatMember"' in api and "BONUS_WAIT_SEC = 10" in api
+    and "const BONUS_WAIT = 10;" in _bns and "DELETE FROM bonus_claims WHERE chat_id=?" in api
+    and "SOCIALS.map" in read(f"{APP}/src/App.tsx") and 'n["bonus"]' in _mcpp)
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
