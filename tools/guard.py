@@ -673,7 +673,16 @@ say("тарифы: месяц подпиской, год и вводная це�
     _bot_plans == _api_plans and '"payload": "premium_365_days", "stars": 1990, "days": 365' in api
     and '"payload": "premium_30_intro", "stars": 150, "days": 30' in api
     and '"subscription_period": STAR_SUB_PERIOD' in api and "STAR_SUB_PERIOD = 30 * 86400" in api
-    and "grantPremiumDays(chatId, days)" in _prem_cpp and "if not intro_until(con, chat):" in api, str(_bot_plans))
+    and "grantPremiumDays(chatId, days)" in _prem_cpp and "until = intro_until(con, chat)" in api, str(_bot_plans))
+_pay_ts = read(f"{APP}/src/lib/pay.ts")
+say("вводная цена привязана к покупателю и сроку: сервер вшивает их в счёт, бот сверяет перед оплатой",
+    'payload = f"{payload}:{chat}:{until}"' in api and "bool introBinding(" in _prem_cpp
+    and "introChat != buyerChatId" in _prem_cpp and "now > introUntil + INTRO_GRACE_SEC" in _prem_cpp)
+say("оплата: успех — только по закрытому счёту или выросшему сроку, возврат из кошелька — в мини-приложение, ручного перевода нет",
+    'r.status === "paid" || (r.premUntil ?? 0) > before' in _pay_ts and "WalletTrackerOfficial" not in _pay_ts
+    and '"app": app_link(),' in api and '"pay_manual"' not in read(f"{APP}/src/screens/PremiumScreen.tsx"))
+say("бот продлевает Премиум одной транзакцией (не теряет дни при одновременном бонусе)",
+    "Чтение срока и запись нового — одной транзакцией" in _prem_cpp)
 
 _lc = read(os.path.join(BOT, "lifecycle.cpp"))
 say("бот: письма жизненного цикла — 2 дня до конца пробы, конец пробы со скидкой, возврат 14/30, продление без автоплатежа",

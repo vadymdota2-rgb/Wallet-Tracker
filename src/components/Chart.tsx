@@ -296,26 +296,6 @@ export function Candles({
   );
 }
 
-/** Крошечная линия в строке списка. */
-export function Spark({ values, width = 56, height = 20 }: { values: number[]; width?: number; height?: number }) {
-  const vals = (values || []).filter((v) => Number.isFinite(v));
-  if (vals.length < 2) return <span className="spark-gap" style={{ width, height }} />;
-  const [lo, hi] = extent(vals);
-  const span = hi - lo;
-  const stepX = width / (vals.length - 1);
-  const first = vals[0] ?? 0;
-  const last = vals[vals.length - 1] ?? 0;
-  const d = vals
-    .map((v, i) => `${i === 0 ? "M" : "L"}${(i * stepX).toFixed(1)},${(2 + (1 - (v - lo) / span) * (height - 4)).toFixed(1)}`)
-    .join("");
-  return (
-    <svg className="spark" width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-hidden="true">
-      <path d={d} fill="none" stroke={last >= first ? "var(--up)" : "var(--dn)"} strokeWidth="1.5"
-            strokeLinejoin="round" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 /**
  * Линия накопленного потока денег.
  *
@@ -428,7 +408,6 @@ export function TrendChart({ values }: { values: number[] }) {
     </svg>
   );
 }
-
 
 export function BuySellBar({ buy, sell }: { buy: number; sell: number }) {
   const total = (Number(buy) || 0) + (Number(sell) || 0);

@@ -13,6 +13,7 @@
 import { jettonTransfer } from "./ton";
 import { initData, webApp } from "./telegram";
 import { syncNow } from "./sync";
+import { useLive } from "../store/live";
 
 export interface UsdtInvoice {
   memo: string;
@@ -24,8 +25,6 @@ export interface UsdtInvoice {
   days: number;
 }
 
-/** Куда возвращается кошелёк после подписи: обратно в наш мини-апп. */
-const APP_LINK = "https://t.me/WalletTrackerOfficial";
 
 async function post<T>(path: string, body: unknown): Promise<T | null> {
   const headers = new Headers({ "Content-Type": "application/json" });
@@ -54,10 +53,12 @@ export async function buyStars(lang: string, plan: Plan = "m"): Promise<PayEnd> 
     window.open(r.link, "_blank", "noopener");
     return "cancelled";
   }
+  const before = premUntil();
   const end = await new Promise<string>((done) => w.openInvoice!(r.link!, done));
   if (end !== "paid") return end === "cancelled" ? "cancelled" : "failed";
-  // Подписку выдаёт бот по подтверждению от Telegram — ждём, пока дойдёт.
-  await waitPremium(20000);
+  // Окно Telegram уже сказало «оплачено». Подписку выдаёт бот по его
+  // подтверждению — ждём, пока срок вырастет, чтобы показать новый.
+  await waitPaid(20000, (r) => (r.premUntil ?? 0) > before);
   return "paid";
 }
 
@@ -82,9 +83,13 @@ let ui: Ui | null = null;
 async function wallet(): Promise<Ui> {
   if (ui) return ui;
   const { TonConnectUI } = await import("@tonconnect/ui");
+  /* Куда кошелёк вернёт человека после подписи — в наше мини-приложение.
+     Ссылку знает сервер (t.me/<бот>?startapp). Раньше здесь был зашит адрес
+     канала, и после оплаты человек оказывался в канале, а не в приложении. */
+  const app = useLive.getState().pay.app;
   ui = new TonConnectUI({
     manifestUrl: `${location.origin}/tonconnect-manifest.json`,
-    actionsConfiguration: { twaReturnUrl: APP_LINK as `${string}://${string}` },
+    ...(app ? { actionsConfiguration: { twaReturnUrl: app as `${string}://${string}` } } : {}),
   }) as unknown as Ui;
   return ui;
 }
@@ -160,15 +165,26 @@ export async function payUsdt(inv: UsdtInvoice, step: (s: "wallet" | "sign" | "w
     return "cancelled";
   }
   step("wait");
-  return (await waitPremium(240000)) ? "paid" : "failed";
+  // Ждём, пока бот увидит перевод и закроет именно этот счёт. Раньше ждали
+  // ответа «Премиум есть» — а у продлевающих и у тех, кто на пробе, он есть
+  // и до оплаты, и успех показывался, даже если перевод не прошёл.
+  const before = premUntil();
+  return (await waitPaid(240000, (r) => r.status === "paid" || (r.premUntil ?? 0) > before)) ? "paid" : "failed";
 }
 
-/** Опрос: сервер видит приход сам, нам остаётся дождаться ответа «премиум». */
-export async function waitPremium(ms: number): Promise<boolean> {
+type Check = { ok: boolean; status?: string; plan?: string; premUntil?: number };
+
+/** Срок Премиума сейчас (мс): от него меряем, что оплата правда прошла. */
+function premUntil(): number {
+  return useLive.getState().me.premUntil ?? 0;
+}
+
+/** Опрос: сервер видит оплату сам, нам остаётся дождаться её признака. */
+async function waitPaid(ms: number, done: (r: Check) => boolean): Promise<boolean> {
   const till = Date.now() + ms;
   while (Date.now() < till) {
-    const r = await post<{ ok: boolean; plan?: string }>("/api/pay/check", {});
-    if (r?.plan === "premium") {
+    const r = await post<Check>("/api/pay/check", {});
+    if (r?.ok && done(r)) {
       await syncNow();
       return true;
     }

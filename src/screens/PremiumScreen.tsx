@@ -3,12 +3,9 @@
  *
  * Оба способа работают прямо здесь. Звёзды — окном Telegram: счёт выставляет
  * наш сервер, подтверждение платежа Telegram отправляет боту, и подписку
- * выдаёт он. USDT — переводом в сети TON на наш кошелёк с памяткой в
- * комментарии: приход видит сервер и включает подписку сам.
- *
- * Ручной перевод показан рядом с кнопкой намеренно: кошелёк, не знающий TON
- * Connect, тоже должен уметь заплатить — адрес, сумма и памятка для этого и
- * лежат на виду.
+ * выдаёт он. USDT — только через TON Connect: кошелёк сам подставляет сумму,
+ * адрес и памятку, приход видит бот и включает подписку сам. Ручного
+ * перевода нет: ошибка в памятке или опоздание со счётом стоили бы денег.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Frame } from "./Screen";
@@ -17,7 +14,6 @@ import { useLive } from "../store/live";
 import { t } from "../i18n/t";
 import { num } from "../lib/format";
 import { haptic } from "../lib/telegram";
-import { copyText } from "../lib/copy";
 import { toast } from "../components/Toast";
 import { buyStars, payUsdt, usdtInvoice, warmWallet, type PayEnd, type Plan, type UsdtInvoice } from "../lib/pay";
 import { trackEvent } from "../lib/api";
@@ -162,12 +158,6 @@ export function PremiumScreen({ arg }: ScreenProps) {
     done(await payUsdt(made, (s) => alive.current && setStep(s)));
   };
 
-  const copy = async (text: string) => {
-    haptic("select");
-    const ok = await copyText(text);
-    toast(t(lang, ok ? "ui_copied" : "ui_copy_failed"), ok ? "ok" : "err");
-  };
-
   return (
     <Frame
       title={active ? t(lang, "pr_active_title") : t(lang, "pr_title")}
@@ -230,30 +220,6 @@ export function PremiumScreen({ arg }: ScreenProps) {
         {pay.ton ? <p className="note dim">{t(lang, "pay_note")}</p> : null}
         {active ? <p className="note dim">{t(lang, "pr_extend_note")}</p> : null}
       </Card>
-
-      {inv ? (
-        <Card>
-          <SectionTitle note={t(lang, "pay_hour")}>{t(lang, "pay_manual")}</SectionTitle>
-          <Row
-            title={t(lang, "pay_amount")}
-            value={`${inv.amount} USDT`}
-            action={t(lang, "ui_copy")}
-            onClick={() => copy(String(inv.amount))}
-          />
-          <Row
-            title={t(lang, "pay_address")}
-            sub={<span className="mono">{inv.wallet}</span>}
-            action={t(lang, "ui_copy")}
-            onClick={() => copy(inv.wallet)}
-          />
-          <Row
-            title={t(lang, "pay_memo")}
-            sub={<span className="mono">{inv.memo}</span>}
-            action={t(lang, "ui_copy")}
-            onClick={() => copy(inv.memo)}
-          />
-        </Card>
-      ) : null}
 
       <Card>
         <SectionTitle>{t(lang, "pr_includes")}</SectionTitle>

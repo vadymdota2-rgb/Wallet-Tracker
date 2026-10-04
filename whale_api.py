@@ -15,7 +15,6 @@ import re
 import secrets
 import sqlite3
 import statistics
-import struct
 import sys
 import threading
 import time
@@ -126,14 +125,14 @@ USDT_PLANS = {"m": {"usdt": PREMIUM_USDT, "days": 30}, "y": {"usdt": PREMIUM_USD
 # службы, и приложение осталось бы без кнопки оплаты на ровном месте.
 TON_WALLET = (os.environ.get("TON_WALLET_ADDRESS", "").strip()
               or "UQDAiNYvy2KUIwjEcgD1ZxPVw-CPwdk4WbBQwpVsQQ5jsO6o")
-# USD₮ в сети TON: мастер-контракт и шесть знаков после запятой.
-USDT_MASTER = "0:B113A994B5024A16719F69139328EB759596C38A25F59028B146FECDC3621DFE"
+# USD₮ в сети TON: мастер-контракт и шесть знаков после запятой. Сверяет
+# контракт при приёме перевода бот (USDT_MASTER в telegram.h).
 USDT_MASTER_UI = "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs"
 USDT_DECIMALS = 6
-# Счёт живёт час — столько же, сколько у бота. Оплату по нему принимаем
-# сутки: человек, заплативший с опозданием, не должен терять деньги.
+# Счёт живёт час — столько же, сколько у бота. Оплату по нему бот принимает
+# сутки (pollUsdtPayments): человек, заплативший с опозданием, не должен
+# терять деньги.
 PAY_TTL = 3600
-PAY_GRACE = 86400
 TONCENTER = "https://toncenter.com/api/v3/"
 TONCENTER_KEY = os.environ.get("TONCENTER_API_KEY", "")
 MIN_THRESHOLD_USD = 50.0
@@ -3883,7 +3882,6 @@ UNLOCK_SUPPLY: dict[str, tuple[int, int]] = {
     "SN44": (0, 21_000_000),
     "SN53": (0, 21_000_000),
 }
-UNLOCK_WHO = ("team", "investors", "treasury", "community", "foundation", "mixed", "emission")
 
 # Эмиссия — новые монеты сети (награды стейкинга, блоков), давит на цену так
 # же, как разлок. У монет выше она записана строкой «emission»; у остальных
@@ -8014,6 +8012,11 @@ def ref_link_base() -> str:
     return _ref_base_cache[0]
 
 
+def app_link() -> str:
+    """Ссылка на мини-приложение бота: t.me/<бот>?startapp."""
+    return ref_link_base().rstrip("=")
+
+
 def ref_info(chat: str) -> dict:
     """Ссылка человека и сколько он уже пригласил."""
     if not chat:
@@ -8279,18 +8282,24 @@ def pay_stars(chat: str, lang: str, plan: str = "m") -> dict:
     p = STAR_PLANS.get(plan)
     if not p:
         return {"ok": False, "error": "bad_plan"}
+    payload = p["payload"]
     if plan == "intro":
         con = open_db(DB)
         try:
-            if not intro_until(con, chat):
-                return {"ok": False, "error": "intro_gone"}
+            until = intro_until(con, chat)
         finally:
             if con:
                 con.close()
+        if not until:
+            return {"ok": False, "error": "intro_gone"}
+        # Ссылку на счёт Telegram не гасит: её можно сохранить или переслать.
+        # Покупатель и срок в нагрузке — бот сверит их перед оплатой
+        # (introBinding в premium.cpp), и скидка достанется только своему.
+        payload = f"{payload}:{chat}:{until}"
     req = {
         "title": t_pay(lang, "title"),
         "description": t_pay(lang, "desc", p["days"]),
-        "payload": p["payload"],
+        "payload": payload,
         # Для звёзд поставщик не нужен, и поле обязано быть пустым.
         "provider_token": "",
         "currency": "XTR",
@@ -9252,6 +9261,9 @@ def bootstrap(chat: str, fast: bool = False) -> dict:
             # пересборкой приложения — значит держать два источника правды, а
             # кнопку «оплатить в USDT» без кошелька показывать нечестно.
             "pay": {
+                # Куда кошелёк вернёт человека после подписи перевода USDT —
+                # в мини-приложение бота, а не в канал.
+                "app": app_link(),
                 "stars": PREMIUM_STARS,
                 "usdt": PREMIUM_USDT,
                 "ton": usdt_ready(cur),

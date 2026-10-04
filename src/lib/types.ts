@@ -451,6 +451,8 @@ export interface PayInfo {
   plans?: Partial<Record<"m" | "y", { stars: number; usdt: number; days: number; auto?: boolean }>>;
   /** Вводная цена первого месяца — только если сейчас доступна, со сроком. */
   intro?: { stars: number; days: number; until: number };
+  /** Ссылка на мини-приложение бота: сюда кошелёк вернёт после подписи. */
+  app?: string;
 }
 
 export interface Bootstrap {
