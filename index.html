@@ -151,31 +151,35 @@
     animation: spRun 1.1s ease-in-out infinite;
   }
   @keyframes spRun { from { left: -45%; } to { left: 100%; } }
-  /* Уход — в две фазы, без обрывов.
-     1) Затихание (0–0,5 с): точки и волны гаснут, название уплывает вверх
+  /* Уход — в две фазы, медленно и без обрывов (~2,8 с).
+     1) Затихание (0–0,9 с): точки и волны гаснут, название уплывает вверх
         и размывается, логотип чуть сжимается и вспыхивает — как вдох.
-     2) Раскрытие (0,35–1,55 с): из логотипа расходится круг с мягким
-        размытым краем, логотип растёт и тает, приложение проявляется. */
-  .sp-dots, .sp-rings, .sp-bar { transition: opacity 0.5s ease; }
+     2) Раскрытие (0,6–2,7 с): из логотипа расходится круг с широким мягким
+        краем, логотип растёт и тает, приложение проявляется. Кривые —
+        с плавным разгоном и торможением, без рывков. */
+  .sp-dots, .sp-rings, .sp-bar { transition: opacity 0.9s cubic-bezier(.37,0,.63,1); }
   .sp.out .sp-dots, .sp.out .sp-rings, .sp.out .sp-bar { opacity: 0; }
-  .sp-name { transition: opacity 0.55s ease, transform 0.6s cubic-bezier(.4,0,.2,1), filter 0.55s ease; }
-  .sp.out .sp-name { opacity: 0; transform: translateY(-10px); filter: blur(6px); }
-  .sp.out .sp-mark { animation: spExitMark 1.45s cubic-bezier(.45,0,.2,1) forwards; }
+  .sp-name {
+    transition: opacity 0.9s cubic-bezier(.37,0,.63,1), transform 1.1s cubic-bezier(.37,0,.63,1),
+                filter 0.9s cubic-bezier(.37,0,.63,1);
+  }
+  .sp.out .sp-name { opacity: 0; transform: translateY(-14px); filter: blur(8px); }
+  .sp.out .sp-mark { animation: spExitMark 2.5s cubic-bezier(.37,0,.63,1) forwards; }
   @keyframes spExitMark {
     0% { transform: scale(1); opacity: 1; filter: drop-shadow(0 0 14px rgb(30 155 255 / 0.7)); }
-    28% { transform: scale(0.93); opacity: 1; filter: drop-shadow(0 0 30px rgb(127 216 255 / 1)); }
-    100% { transform: scale(1.9); opacity: 0; filter: drop-shadow(0 0 40px rgb(127 216 255 / 0)); }
+    30% { transform: scale(0.94); opacity: 1; filter: drop-shadow(0 0 30px rgb(127 216 255 / 1)); }
+    100% { transform: scale(1.7); opacity: 0; filter: drop-shadow(0 0 40px rgb(127 216 255 / 0)); }
   }
   .sp.out {
     -webkit-mask: radial-gradient(circle at 50% 46%, transparent var(--sp-hole),
-      rgb(0 0 0 / 0.55) calc(var(--sp-hole) + 70px), #000 calc(var(--sp-hole) + 160px));
+      rgb(0 0 0 / 0.5) calc(var(--sp-hole) + 120px), #000 calc(var(--sp-hole) + 260px));
     mask: radial-gradient(circle at 50% 46%, transparent var(--sp-hole),
-      rgb(0 0 0 / 0.55) calc(var(--sp-hole) + 70px), #000 calc(var(--sp-hole) + 160px));
-    animation: spHole 1.2s cubic-bezier(.45,0,.2,1) 0.35s both;
+      rgb(0 0 0 / 0.5) calc(var(--sp-hole) + 120px), #000 calc(var(--sp-hole) + 260px));
+    animation: spHole 2.1s cubic-bezier(.37,0,.63,1) 0.6s both;
   }
   @keyframes spHole {
-    0% { --sp-hole: -170px; opacity: 1; }
-    70% { opacity: 1; }
+    0% { --sp-hole: -270px; opacity: 1; }
+    60% { opacity: 1; }
     100% { --sp-hole: 110vmax; opacity: 0; }
   }
   /* Мягкое свечение по краю круга — едет вместе с ним и гаснет. */
@@ -185,19 +189,19 @@
     border: 2px solid rgb(127 216 255 / 0.7); filter: blur(3px);
     box-shadow: 0 0 50px 10px rgb(30 155 255 / 0.45), inset 0 0 50px 10px rgb(30 155 255 / 0.35);
     opacity: 0; transform: scale(0);
-    animation: spBurst 1.2s cubic-bezier(.45,0,.2,1) 0.35s both;
+    animation: spBurst 2.1s cubic-bezier(.37,0,.63,1) 0.6s both;
   }
   @keyframes spBurst {
     0% { transform: scale(0); opacity: 0; }
-    20% { opacity: 0.9; }
+    30% { opacity: 0.7; }
     100% { transform: scale(1); opacity: 0; }
   }
   /* Приложение проявляется, а не выскакивает. Только прозрачность:
      сдвиг или масштаб корня сбил бы закреплённые шапку и нижнее меню. */
-  .sp-reveal #root { animation: spRootIn 1s ease 0.45s both; }
+  .sp-reveal #root { animation: spRootIn 1.7s cubic-bezier(.37,0,.63,1) 0.8s both; }
   @keyframes spRootIn { from { opacity: 0; } to { opacity: 1; } }
   /* Без @property круг не анимируется — тогда плавно растворяемся. */
-  .sp.out.flat { -webkit-mask: none; mask: none; animation: spFade 1.1s ease 0.3s both; }
+  .sp.out.flat { -webkit-mask: none; mask: none; animation: spFade 1.8s cubic-bezier(.37,0,.63,1) 0.6s both; }
   .sp.out.flat .sp-burst { display: none; }
   @keyframes spFade { from { opacity: 1; } to { opacity: 0; } }
   /* Без движения: сразу итоговый кадр, без летящих точек и волн. */
@@ -283,11 +287,11 @@
       // Вибрация — в момент, когда раскрывается круг.
       setTimeout(function () {
         try { window.Telegram.WebApp.HapticFeedback.impactOccurred("soft"); } catch (e) {}
-      }, 350);
+      }, 600);
       setTimeout(function () {
         if (sp.parentNode) sp.parentNode.removeChild(sp);
         document.documentElement.classList.remove("sp-reveal");
-      }, 1700);
+      }, 2850);
     }
     // Приложение говорит «готово» — уходим, но не раньше конца анимации.
     // Не дождались данных за 6 секунд — уходим всё равно: заставка не
