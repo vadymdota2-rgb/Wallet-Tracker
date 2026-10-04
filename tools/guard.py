@@ -771,5 +771,15 @@ say("жёсткий пейволл: без Премиума вкладки, ме
     and "LOCK_OPEN_SCREENS" in read(f"{APP}/src/App.tsx")
     and "Без Премиума приложение закрыто" in read(f"{BOT}/ru.cpp"))
 
+_ref_fn = pybody(api, "def apply_referral(")
+_ref_st = pybody(api, "def ref_settle(")
+say("приглашения: другу +7 сразу, пригласившему — только когда друг добавил кошелёк и заходил 3 разных дня (≤30 дней, ≤10 за 30 дней)",
+    "extend_premium(con, invitee, REF_DAYS)" in _ref_fn and "inviter, REF_DAYS" not in _ref_fn
+    and "REF_ACTIVE_DAYS = 3" in api and "REF_WAIT_SEC = 30 * 86400" in api
+    and "EXISTS (SELECT 1 FROM user_whales w WHERE w.user_id=r.invitee)" in _ref_st
+    and "COUNT(DISTINCT f.day)" in _ref_st and "recent < REF_MAX_30D and extend_premium(con, inviter, REF_DAYS)" in _ref_st
+    and "ref_settle()" in pybody(api, "def _bonus_loop(")
+    and '"ref_wait"' in read(f"{APP}/src/components/Invite.tsx"))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

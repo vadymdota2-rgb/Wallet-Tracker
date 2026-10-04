@@ -7632,9 +7632,12 @@ def track(chat: str, ev: str, src: str = "") -> None:
 #
 # Пригласил друга — +7 дней премиума обоим. Ссылка ведёт прямо в приложение
 # (t.me/<бот>?startapp=ref_<код>); Telegram передаёт параметр в подписанных
-# данных запуска, и при первом открытии новичок получает к пробной неделе
-# ещё семь дней, а пригласивший — семь дней к своему сроку (не больше
-# REF_MAX_30D наград за 30 дней, чтобы ссылку не крутили ботами).
+# данных запуска, и при первом открытии новичок сразу получает к пробе ещё
+# семь дней. Пригласивший — не сразу, а когда друг правда начал пользоваться:
+# добавил кошелёк и открывал приложение в REF_ACTIVE_DAYS разных дней, не
+# позже REF_WAIT_SEC после прихода (ref_settle). Иначе ссылку крутили бы
+# пустыми аккаунтами и сидели на бесплатном Премиуме вечно. Наград — не
+# больше REF_MAX_30D за 30 дней.
 # Код — случайный, а не номер чата: номер аккаунта в чужие руки не уходит.
 # Токен проекта ---------------------------------------------------------------
 #
@@ -7781,12 +7784,22 @@ def bonus_settle(chat: str = "", notify: bool = True) -> int:
 
 def _bonus_loop() -> None:
     """Фоновый проход: раз в полминуты начисляет бонусы, чья «проверка»
-    закончилась, — даже если приложение у человека закрыто."""
+    закончилась, раз в пять минут — дни за друзей, начавших пользоваться;
+    даже если приложение у человека закрыто."""
+    n = 0
     while True:
         try:
             bonus_settle()
         except Exception as e:  # проход не должен умирать от одной ошибки
             sys.stderr.write(f"[api] bonus loop: {e}\n")
+        # Друзья, начавшие пользоваться, — раз в пять минут: дни дня
+        # открытия считаются по суткам, спешить некуда.
+        if n % 10 == 0:
+            try:
+                ref_settle()
+            except Exception as e:
+                sys.stderr.write(f"[api] ref loop: {e}\n")
+        n += 1
         time.sleep(30)
 
 
@@ -7879,6 +7892,8 @@ def bonus_act(chat: str, kind: str, act: str) -> dict:
 
 REF_DAYS = 7
 REF_MAX_30D = 10
+REF_ACTIVE_DAYS = 3
+REF_WAIT_SEC = 30 * 86400
 REF_SCHEMA = """
 CREATE TABLE IF NOT EXISTS ref_codes (
     chat_id TEXT PRIMARY KEY,
@@ -7889,30 +7904,45 @@ CREATE TABLE IF NOT EXISTS referrals (
     invitee TEXT PRIMARY KEY,
     inviter TEXT NOT NULL,
     at INTEGER NOT NULL,
-    rewarded INTEGER NOT NULL DEFAULT 0
+    rewarded INTEGER NOT NULL DEFAULT 0,
+    rewarded_at INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_referrals_inviter ON referrals(inviter, at);
 """
+
+
+def ref_schema(con: sqlite3.Connection) -> None:
+    """Таблицы приглашений и столбец rewarded_at у базы, заведённой раньше."""
+    con.executescript(REF_SCHEMA)
+    if "rewarded_at" not in cols(con, "referrals"):
+        try:
+            con.execute("ALTER TABLE referrals ADD COLUMN rewarded_at INTEGER NOT NULL DEFAULT 0")
+            # Прежние награды — временем прихода друга: лимит за 30 дней
+            # считается по ним так же, как раньше.
+            con.execute("UPDATE referrals SET rewarded_at=at WHERE rewarded>0")
+            con.commit()
+        except sqlite3.OperationalError:
+            pass
 REF_LINK_BASE = os.environ.get("WHALE_REF_LINK", "").strip()
 _ref_base_cache: list[str] = []
 
 REF_NOTE = {
-    "en": "🎁 A friend joined with your link — +{n} days of Premium for you.",
-    "ru": "🎁 По вашей ссылке пришёл друг — вам +{n} дней Премиума.",
-    "uk": "🎁 За вашим посиланням прийшов друг — вам +{n} днів Преміуму.",
-    "es": "🎁 Un amigo se unió con tu enlace: +{n} días de Premium para ti.",
-    "pt": "🎁 Um amigo entrou pelo seu link — +{n} dias de Premium para você.",
-    "de": "🎁 Ein Freund kam über deinen Link — +{n} Tage Premium für dich.",
-    "fr": "🎁 Un ami vous a rejoint avec votre lien — +{n} jours de Premium pour vous.",
-    "tr": "🎁 Bağlantınla bir arkadaşın katıldı — sana +{n} gün Premium.",
-    "pl": "🎁 Znajomy dołączył z twojego linku — +{n} dni Premium dla ciebie.",
-    "id": "🎁 Teman bergabung lewat tautan Anda — +{n} hari Premium untuk Anda.",
-    "vi": "🎁 Một người bạn đã tham gia qua liên kết của bạn — bạn được +{n} ngày Premium.",
-    "ja": "🎁 あなたのリンクから友だちが参加しました — プレミアム+{n}日。",
-    "ko": "🎁 내 링크로 친구가 가입했습니다 — 프리미엄 +{n}일.",
-    "zh": "🎁 有朋友通过你的链接加入——你获得 +{n} 天高级版。",
-    "hi": "🎁 आपके लिंक से एक दोस्त जुड़ा — आपको +{n} दिन प्रीमियम।",
-    "ar": "🎁 انضم صديق عبر رابطك — لك +{n} أيام من بريميوم.",
+    "en": "🎁 Your friend has started using Wallet Tracker — +{n} days of Premium for you.",
+    "ru": "🎁 Ваш друг начал пользоваться Wallet Tracker — вам +{n} дней Премиума.",
+    "uk": "🎁 Ваш друг почав користуватися Wallet Tracker — вам +{n} днів Преміуму.",
+    "es": "🎁 Tu amigo empezó a usar Wallet Tracker: +{n} días de Premium para ti.",
+    "pt": "🎁 Seu amigo começou a usar o Wallet Tracker — +{n} dias de Premium para você.",
+    "de": "🎁 Dein Freund nutzt jetzt Wallet Tracker — +{n} Tage Premium für dich.",
+    "fr": "🎁 Votre ami a commencé à utiliser Wallet Tracker — +{n} jours de Premium pour vous.",
+    "tr": "🎁 Arkadaşın Wallet Tracker'ı kullanmaya başladı — sana +{n} gün Premium.",
+    "pl": "🎁 Twój znajomy zaczął korzystać z Wallet Tracker — +{n} dni Premium dla ciebie.",
+    "id": "🎁 Teman Anda mulai memakai Wallet Tracker — +{n} hari Premium untuk Anda.",
+    "vi": "🎁 Bạn của bạn đã bắt đầu dùng Wallet Tracker — bạn được +{n} ngày Premium.",
+    "ja": "🎁 友だちが Wallet Tracker を使い始めました — プレミアム+{n}日。",
+    "ko": "🎁 친구가 Wallet Tracker를 쓰기 시작했습니다 — 프리미엄 +{n}일.",
+    "zh": "🎁 你的朋友开始使用 Wallet Tracker 了——你获得 +{n} 天高级版。",
+    "hi": "🎁 आपके दोस्त ने Wallet Tracker इस्तेमाल करना शुरू किया — आपको +{n} दिन प्रीमियम।",
+    "ar": "🎁 بدأ صديقك باستخدام Wallet Tracker — لك +{n} أيام من بريميوم.",
 }
 
 
@@ -7965,7 +7995,7 @@ def ref_info(chat: str) -> dict:
     if not con:
         return {"ok": False, "error": "db"}
     try:
-        con.executescript(REF_SCHEMA)
+        ref_schema(con)
         row = con.execute("SELECT code FROM ref_codes WHERE chat_id=?", (chat,)).fetchone()
         code = row["code"] if row else ""
         while not code:
@@ -7974,11 +8004,15 @@ def ref_info(chat: str) -> dict:
                            (chat, cand, now())).rowcount == 1:
                 code = cand
         con.commit()
-        r = con.execute("SELECT COUNT(*) n, COALESCE(SUM(rewarded), 0) d FROM referrals WHERE inviter=?",
-                        (chat,)).fetchone()
+        r = con.execute("SELECT COUNT(*) n, COALESCE(SUM(rewarded), 0) d, "
+                        "COALESCE(SUM(rewarded=0 AND at>?), 0) w FROM referrals WHERE inviter=?",
+                        (now() - REF_WAIT_SEC, chat)).fetchone()
         base = ref_link_base()
+        # waiting — друзья, которые пришли, но ещё не начали пользоваться:
+        # дни за них придут позже (ref_settle).
         return {"ok": True, "code": code, "link": base + "ref_" + code if base else "",
-                "invited": int(r["n"] or 0), "days": int(r["d"] or 0), "bonus": REF_DAYS}
+                "invited": int(r["n"] or 0), "days": int(r["d"] or 0), "waiting": int(r["w"] or 0),
+                "bonus": REF_DAYS, "activeDays": REF_ACTIVE_DAYS}
     except sqlite3.Error as e:
         sys.stderr.write(f"[api] ref {chat}: {e}\n")
         return {"ok": False, "error": "db"}
@@ -7987,19 +8021,18 @@ def ref_info(chat: str) -> dict:
 
 
 def apply_referral(invitee: str, start: str) -> int:
-    """Новичок пришёл по ссылке: +REF_DAYS ему и пригласившему. Возвращает,
-    сколько дней добавлено новичку (0 — ссылки не было или она не годится).
-    Зовётся только сразу после выдачи пробной недели — то есть ровно один
-    раз в жизни аккаунта."""
+    """Новичок пришёл по ссылке: +REF_DAYS ему сразу. Пригласившему — позже,
+    когда новичок начнёт пользоваться (ref_settle). Возвращает, сколько дней
+    добавлено новичку (0 — ссылки не было или она не годится). Зовётся только
+    сразу после выдачи пробы — то есть ровно один раз в жизни аккаунта."""
     if not start.startswith("ref_") or is_service(invitee):
         return 0
     code = start[4:].strip().lower()
     con = open_db(DB, write=True)
     if not con:
         return 0
-    inviter, rewarded = "", False
     try:
-        con.executescript(REF_SCHEMA)
+        ref_schema(con)
         row = con.execute("SELECT chat_id FROM ref_codes WHERE code=?", (code,)).fetchone()
         inviter = row["chat_id"] if row else ""
         if not inviter or inviter == invitee:
@@ -8012,28 +8045,70 @@ def apply_referral(invitee: str, start: str) -> int:
                 con.execute("ROLLBACK")
                 return 0
             extend_premium(con, invitee, REF_DAYS)
-            recent = con.execute("SELECT COUNT(*) FROM referrals WHERE inviter=? AND rewarded>0 AND at>?",
-                                 (inviter, now() - 30 * 86400)).fetchone()[0]
-            if recent < REF_MAX_30D and extend_premium(con, inviter, REF_DAYS):
-                con.execute("UPDATE referrals SET rewarded=? WHERE invitee=?", (REF_DAYS, invitee))
-                rewarded = True
             con.execute("COMMIT")
         except sqlite3.Error:
             con.execute("ROLLBACK")
             raise
-        lang_row = con.execute("SELECT language FROM users WHERE chat_id=?", (inviter,)).fetchone()
-        lang = (lang_row["language"] if lang_row else "en") or "en"
     except sqlite3.Error as e:
         sys.stderr.write(f"[api] referral {invitee}: {e}\n")
         return 0
     finally:
         con.close()
     track(invitee, "ref")
-    if rewarded:
+    return REF_DAYS
+
+
+def ref_settle() -> int:
+    """Наградить пригласивших за друзей, которые начали пользоваться: добавили
+    кошелёк и открывали приложение в REF_ACTIVE_DAYS разных дней, не позже
+    REF_WAIT_SEC после прихода. Лимит — REF_MAX_30D наград за 30 дней; кто
+    упёрся в лимит, получит награду, когда окно освободится (пока друг не
+    вышел за REF_WAIT_SEC). Возвращает, сколько наград выдано."""
+    con = open_db(DB, write=True)
+    if not con:
+        return 0
+    done: list[tuple[str, str]] = []
+    try:
+        ref_schema(con)
+        if not (table_exists(con, "funnel_events") and table_exists(con, "user_whales")):
+            return 0
+        t = now()
+        rows = con.execute(
+            "SELECT r.invitee, r.inviter FROM referrals r "
+            "WHERE r.rewarded=0 AND r.at>? "
+            "AND EXISTS (SELECT 1 FROM user_whales w WHERE w.user_id=r.invitee) "
+            "AND (SELECT COUNT(DISTINCT f.day) FROM funnel_events f "
+            "     WHERE f.chat_id=r.invitee AND f.ev='open') >= ? "
+            "ORDER BY r.at", (t - REF_WAIT_SEC, REF_ACTIVE_DAYS)).fetchall()
+        for r in rows:
+            invitee, inviter = r["invitee"], r["inviter"]
+            con.isolation_level = None
+            con.execute("BEGIN IMMEDIATE")
+            try:
+                recent = con.execute("SELECT COUNT(*) FROM referrals WHERE inviter=? AND rewarded>0 "
+                                     "AND rewarded_at>?", (inviter, t - 30 * 86400)).fetchone()[0]
+                if recent < REF_MAX_30D and extend_premium(con, inviter, REF_DAYS):
+                    con.execute("UPDATE referrals SET rewarded=?, rewarded_at=? WHERE invitee=? AND rewarded=0",
+                                (REF_DAYS, t, invitee))
+                    done.append((inviter, invitee))
+                con.execute("COMMIT")
+            except sqlite3.Error:
+                con.execute("ROLLBACK")
+                raise
+        langs = {}
+        for inviter, _ in done:
+            row = con.execute("SELECT language FROM users WHERE chat_id=?", (inviter,)).fetchone()
+            langs[inviter] = (row["language"] if row else "en") or "en"
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] ref settle: {e}\n")
+        return 0
+    finally:
+        con.close()
+    for inviter, _ in done:
         boot_drop(inviter)
         tg_api("sendMessage", {"chat_id": inviter,
-                               "text": REF_NOTE.get(lang, REF_NOTE["en"]).replace("{n}", str(REF_DAYS))})
-    return REF_DAYS
+                               "text": REF_NOTE.get(langs.get(inviter, "en"), REF_NOTE["en"]).replace("{n}", str(REF_DAYS))})
+    return len(done)
 
 
 # --- Оплата премиума из приложения ------------------------------------------

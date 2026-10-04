@@ -206,7 +206,11 @@ export interface RefInfo {
   link?: string;
   invited?: number;
   days?: number;
+  /** Пришли, но ещё не начали пользоваться — дни за них придут позже. */
+  waiting?: number;
   bonus?: number;
+  /** В скольких разных днях другу нужно открыть приложение. */
+  activeDays?: number;
 }
 const REF_TTL = 10 * 60_000;
 export const fetchRef = () => cachedGet<RefInfo>("/api/ref", REF_TTL);
