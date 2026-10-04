@@ -34,7 +34,6 @@
     color: #eaf5ff; font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
     -webkit-user-select: none; user-select: none; pointer-events: none;
   }
-  .sp.quick { --k: 0.55; }
   /* Сетка — как фон приложения, проявляется из центра. */
   .sp-grid {
     position: absolute; inset: -10%;
@@ -232,11 +231,7 @@
   (function () {
     var sp = document.getElementById("sp");
     if (!sp) return;
-    var t0 = Date.now(), day = new Date().toISOString().slice(0, 10), quick = false;
-    // Полный показ — первый запуск за день; дальше — короткий, чтобы
-    // заставка радовала, а не задерживала.
-    try { quick = localStorage.getItem("wt-splash-day") === day; localStorage.setItem("wt-splash-day", day); } catch (e) {}
-    if (quick) sp.classList.add("quick");
+    var t0 = Date.now();
     if (!(window.CSS && CSS.registerProperty)) sp.classList.add("flat");
     var name = sp.querySelector(".sp-name"), word = "WALLET TRACKER", html = "";
     for (var i = 0; i < word.length; i++)
@@ -251,7 +246,9 @@
            "s;--col:" + cols[j % cols.length] + '"></i>';
     }
     dots.innerHTML = d;
-    var min = quick ? 900 : 1900, gone = false;
+    // Приложение — только после всего вступления: последним заканчивается
+    // блик по лупе (2,1 с), плюс миг, чтобы логотип успели рассмотреть.
+    var min = 2400, gone = false;
     function leave() {
       if (gone) return;
       gone = true;
@@ -260,9 +257,9 @@
       try { window.Telegram.WebApp.HapticFeedback.impactOccurred("soft"); } catch (e) {}
       setTimeout(function () { if (sp.parentNode) sp.parentNode.removeChild(sp); }, 950);
     }
-    // Приложение говорит «готово» — уходим, но не раньше, чем анимация
-    // успела показаться. Не дождались за 6 секунд — уходим всё равно:
-    // заставка не должна держать человека дольше самого приложения.
+    // Приложение говорит «готово» — уходим, но не раньше конца анимации.
+    // Не дождались данных за 6 секунд — уходим всё равно: заставка не
+    // должна держать человека дольше самого приложения.
     window.__wtSplash = function () { setTimeout(leave, Math.max(0, min - (Date.now() - t0))); };
     setTimeout(leave, 6000);
   })();
