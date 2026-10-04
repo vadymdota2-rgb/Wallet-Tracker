@@ -103,8 +103,10 @@ export function WalletsTab() {
           <Action onClick={() => open("addWallet")} disabled={wallets.length >= limit}>
             <PlusGlyph /> {bare(t(lang, "menu_add_wallet"))}
           </Action>
-          {/* Упёрся в бесплатный лимит — не «нельзя», а что будет дальше. */}
-          {wallets.length >= limit && me.plan !== "premium" && !me.service ? (
+          {/* Бесплатно алерты идут только с основного: есть кошелёк на паузе
+              или упёрся в лимит — не «нельзя», а что будет с Премиумом. */}
+          {me.plan !== "premium" && !me.service &&
+          (wallets.length >= limit || wallets.some((w) => isPaused(me.plan, w))) ? (
             <Upsell src="wallets" text={t(lang, "up_wallets")} />
           ) : null}
         </div>

@@ -113,7 +113,7 @@ export function PremiumScreen({ arg }: ScreenProps) {
   const day = t(lang, "unit_day");
   const cmp: [Parameters<typeof t>[1], string, string][] = [
     ["cmp_speed", `${FREE.delayMin} ${t(lang, "unit_min")}`, "0"],
-    ["cmp_wallets", String(FREE.wallets), String(FREE.premiumWallets)],
+    ["cmp_wallets", String(FREE.alertWallets), String(FREE.premiumWallets)],
     ["cmp_alert_pnl", "—", "✓"],
     ["cmp_top", String(FREE.top), String(FREE.premiumTop)],
     ["cmp_hl", String(FREE.showcase), String(FREE.premiumTop)],

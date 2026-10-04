@@ -128,11 +128,13 @@ say("срез: сделки китов бесплатному — с задер�
     and "if win not in FREE_BIG_WINDOWS and not prem:" in api and "if bwin not in FREE_BIG_WINDOWS and not prem:" in api
     and api.count("if win not in FREE_FLOW_WINDOWS and not chat_premium(self._user(qs)):") == 2
     and "if days != 30 and not prem:" in api)
-say("срез: 3 кошелька с алертами — одно число у API, бота и приложения",
-    "FREE_MAX_WALLETS = 3" in api and "FREE_ALERT_WALLETS = 3" in api
-    and "constexpr size_t FREE_ALERT_WALLETS = 3;" in read(f"{BOT}/telegram.h")
+say("срез: добавить 3 кошелька, алерты — с 1 (основного), проба 14 дней — одни числа у API, бота и приложения",
+    "FREE_MAX_WALLETS = 3" in api and "FREE_ALERT_WALLETS = 1" in api and "TRIAL_DAYS = 14" in api
+    and "constexpr size_t FREE_ALERT_WALLETS = 1;" in read(f"{BOT}/telegram.h")
+    and "constexpr size_t FREE_MAX_WALLETS    = 3;" in read(f"{BOT}/premium.cpp")
     and "loadedForUser >= FREE_ALERT_WALLETS" in read(f"{BOT}/main.cpp")
-    and "wallets: 3," in read(f"{APP}/src/lib/upsell.ts") and '"active": i < FREE_ALERT_WALLETS' in fp)
+    and "wallets: 3," in read(f"{APP}/src/lib/upsell.ts") and "alertWallets: 1," in read(f"{APP}/src/lib/upsell.ts")
+    and "trialDays: 14," in read(f"{APP}/src/lib/upsell.ts") and '"active": i < FREE_ALERT_WALLETS' in fp)
 say("срез не трогает Cortex", "cortex" not in code_only(fp).lower() and "sonar" not in fp)
 say("выгрузка срезается по своему же плану", "for_plan(boot, plan_of(boot))" in api)
 say("выгрузка без подписи — как бесплатная", "}, False))" in api)
@@ -723,6 +725,14 @@ say("алерты: BSC и BTC в виде Hyperliquid, все три — с по
     and "ALTER TABLE alerts ADD COLUMN data TEXT" in _mcpp and "INSERT INTO alerts(message,created_at,markup,data)" in _mq
     and "def alert_card(" in api and 'parsed["d"] = card' in api
     and "export function AlertCard(" in _alc and "<AlertCard d={a.d}" in read(f"{APP}/src/screens/AlertsScreen.tsx"))
+
+_i18n2 = json.load(open(f"{APP}/tools/i18n.json", encoding="utf-8"))
+_stale = [k for k, v in _i18n2.items() if re.search(
+    r"проб\w* недел|бесплатн\w* недел|7 дней Прем|с 3 кошел|первых 3 кошел|3 кошелька с алерт", v.get("ru", ""), re.I)]
+_bru = read(f"{BOT}/ru.cpp")
+say("тексты: проба — 14 дней «пробного Премиума», бесплатно алерты только с основного кошелька",
+    not _stale and "алерты с 3 кошельков" not in _bru and "Пробная неделя" not in _bru
+    and "14" in _i18n2["hp_a4"]["ru"], ", ".join(_stale))
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

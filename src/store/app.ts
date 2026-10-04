@@ -240,9 +240,9 @@ export function walletLimit(plan: string, service = false): number {
   return plan === "premium" ? FREE.premiumWallets : FREE.wallets;
 }
 
-/** На бесплатном плане алерты идут с первых трёх кошельков: основной, потом
- *  по дате добавления. Какие именно — говорит сервер (`active`); у старого
- *  ответа поля нет, и тогда молчат все, кроме основного. */
+/** На бесплатном плане алерты идут только с основного кошелька (остальные
+ *  добавленные — на паузе). Какие именно — говорит сервер (`active`); у
+ *  старого ответа поля нет, и тогда молчат все, кроме основного. */
 export function isPaused(plan: string, w: { primary: boolean; active?: boolean }): boolean {
   if (plan === "premium") return false;
   return w.active === undefined ? !w.primary : !w.active;

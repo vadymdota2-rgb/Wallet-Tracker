@@ -14,7 +14,12 @@
 import type { DictKey } from "../i18n/types";
 
 export const FREE = {
+  /** Сколько кошельков можно добавить бесплатно. */
   wallets: 3,
+  /** С скольких из них идут алерты: только с основного. */
+  alertWallets: 1,
+  /** Дней пробного премиума при первом открытии (TRIAL_DAYS в whale_api.py). */
+  trialDays: 14,
   premiumWallets: 50,
   top: 10,
   premiumTop: 100,
