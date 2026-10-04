@@ -59,6 +59,7 @@ const SCREEN_TITLE: Record<ScreenName, DictKey> = {
   spot: "ui_spot_open",
   legal: "ui_legal",
   btcWallet: "btc_wallet_title",
+  token: "tk_title",
 };
 
 /* Боковое меню — рыночные инструменты: график, разлоки, карта ликвидаций,
@@ -143,6 +144,7 @@ export default function App() {
       // без sessionStorage — просто открываем
     }
     if (go.to === "digest") goTab("digest");
+    else if (go.to === "token") open("token");
     else open("premium", go.src);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

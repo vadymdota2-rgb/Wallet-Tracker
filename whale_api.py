@@ -7696,6 +7696,46 @@ def track(chat: str, ev: str, src: str = "") -> None:
 # ещё семь дней, а пригласивший — семь дней к своему сроку (не больше
 # REF_MAX_30D наград за 30 дней, чтобы ссылку не крутили ботами).
 # Код — случайный, а не номер чата: номер аккаунта в чужие руки не уходит.
+# Токен проекта ---------------------------------------------------------------
+#
+# Токена ещё нет: раздел в приложении говорит, что он готовится, и
+# предлагает подписаться на уведомление о запуске. Список подписавшихся —
+# в базе бота: рассылку делает бот командой владельца /tokencast, когда
+# будут готовы токеномика, адрес контракта и дата. Подписка — это только
+# «сообщите мне», никаких денег, адресов кошельков и обещаний.
+TOKEN_SCHEMA = "CREATE TABLE IF NOT EXISTS token_subs (chat_id TEXT PRIMARY KEY, at INTEGER NOT NULL)"
+
+
+def token_state(chat: str, on: bool | None = None) -> dict:
+    """Подписан ли человек на уведомление о токене; `on` — включить или
+    выключить. Без подписи — просто «не подписан»."""
+    if not chat:
+        return {"ok": True, "on": False}
+    con = open_db(DB, write=on is not None)
+    if not con:
+        return {"ok": False, "error": "db"}
+    try:
+        if on is not None:
+            con.execute(TOKEN_SCHEMA)
+            if on:
+                con.execute("INSERT OR IGNORE INTO token_subs(chat_id, at) VALUES(?,?)", (chat, now()))
+            else:
+                con.execute("DELETE FROM token_subs WHERE chat_id=?", (chat,))
+            con.commit()
+        # Без table_exists: его кэш запомнил бы «таблицы нет» с первого
+        # запроса, и подписка, созданная потом, навсегда читалась бы как «нет».
+        try:
+            row = con.execute("SELECT 1 FROM token_subs WHERE chat_id=?", (chat,)).fetchone()
+        except sqlite3.OperationalError:
+            row = None  # таблицы ещё нет: никто не подписывался
+        return {"ok": True, "on": bool(row)}
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] token {chat}: {e}\n")
+        return {"ok": False, "error": "db"}
+    finally:
+        con.close()
+
+
 REF_DAYS = 7
 REF_MAX_30D = 10
 REF_SCHEMA = """
@@ -11789,7 +11829,7 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
         elif kind == "forget":
             # Право на забвение. Меню в чате бота больше нет, и удалить свои
             # данные можно только здесь — поэтому список таблиц полный.
-            # trial_granted в списке нет намеренно: строка «неделя уже
+            # trial_granted в списке нет намеренно: строка «проба уже
             # выдавалась» — единственное, что переживает удаление. Иначе данные стирались бы ради нового
             # бесплатного премиума, и так по кругу.
             for sql in (
@@ -11804,6 +11844,7 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
                 "DELETE FROM digest_mute WHERE chat_id=?",
                 "DELETE FROM digest_subs WHERE chat_id=?",
                 "DELETE FROM ref_codes WHERE chat_id=?",
+                "DELETE FROM token_subs WHERE chat_id=?",
                 "DELETE FROM users WHERE chat_id=?",
             ):
                 try:
@@ -12299,6 +12340,9 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 self._json(200, liq_map(qs.get("sym", ["BTC"])[0], (qs.get("range", ["1d"])[0] or "1d")))
                 return
+            if path in ("/token", "/api/token"):
+                self._json(200, token_state(self._user(qs)))
+                return
             if path in ("/ref", "/api/ref"):
                 self._json(200, ref_info(self._user(qs)))
                 return
@@ -12429,6 +12473,9 @@ class Handler(BaseHTTPRequestHandler):
                 # причина, а на ошибочный код оно видит только «нет ответа».
                 res = digest_act(self._user_full(qs), dg, body)
                 self._json(200, res)
+                return
+            if path == "/api/token/notify":
+                self._json(200, token_state(chat, bool(body.get("on"))))
                 return
             if path == "/api/ev":
                 ev = str(body.get("ev") or "")

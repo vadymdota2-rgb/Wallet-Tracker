@@ -734,5 +734,13 @@ say("тексты: проба — 14 дней «пробного Премиум�
     not _stale and "алерты с 3 кошельков" not in _bru and "Пробная неделя" not in _bru
     and "14" in _i18n2["hp_a4"]["ru"], ", ".join(_stale))
 
+_tks = read(f"{APP}/src/screens/TokenScreen.tsx")
+say("токен проекта: экран в «Ещё», подписка на запуск (token_subs), безопасность и оговорка; бот — /tokencast и счётчик",
+    "export function TokenScreen(" in _tks and '"tk_safe_3"' in _tks and '"tk_disclaimer"' in _tks
+    and 'open("token")' in read(f"{APP}/src/screens/MoreTab.tsx") and "token: TokenScreen" in read(f"{APP}/src/screens/registry.ts")
+    and "def token_state(" in api and '"/api/token/notify"' in api and "DELETE FROM token_subs WHERE chat_id=?" in api
+    and "void tokenCast(" in _mcpp and 'txt.rfind("/tokencast", 0) == 0' in _mcpp and "CREATE TABLE IF NOT EXISTS token_subs" in _mcpp
+    and '"tk_ready"' in read(f"{BOT}/ru.cpp"))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

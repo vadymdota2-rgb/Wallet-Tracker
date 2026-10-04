@@ -48,6 +48,15 @@ export function MoreTab() {
           value={me.plan === "premium" ? "✓" : "🔒"}
           onClick={() => open("premium", "more")}
         />
+        {/* Токен проекта — пока «скоро»: что опубликуем перед запуском и
+            подписка на уведомление. */}
+        <Row
+          icon={<span aria-hidden="true">🪙</span>}
+          title={t(lang, "tk_title")}
+          sub={t(lang, "tk_more_sub")}
+          value={<span className="tk-soon">{t(lang, "tk_soon")}</span>}
+          onClick={() => open("token")}
+        />
         <Row
           icon={<span aria-hidden="true">🌐</span>}
           title={bare(t(lang, "menu_languages"))}

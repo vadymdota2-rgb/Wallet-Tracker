@@ -18,7 +18,7 @@ export type ScreenName =
   | "wallet" | "position" | "coin" | "deals"
   | "addWallet" | "threshold" | "lang" | "premium" | "help"
   | "alerts" | "chart" | "unlocks" | "liqmap" | "funding" | "fng" | "dom" | "etf" | "rename" | "spot"
-  | "legal" | "btcWallet";
+  | "legal" | "btcWallet" | "token";
 
 export interface Screen {
   name: ScreenName;

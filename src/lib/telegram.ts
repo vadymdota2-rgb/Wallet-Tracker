@@ -119,7 +119,7 @@ export function launchGo(): { to: string; src: string } | null {
   } catch {
     return null;
   }
-  const m = /^(premium|digest)(?:-([a-z]{2,12}))?$/.exec(raw);
+  const m = /^(premium|digest|token)(?:-([a-z]{2,12}))?$/.exec(raw);
   return m ? { to: m[1] ?? "", src: m[2] || "tg" } : null;
 }
 

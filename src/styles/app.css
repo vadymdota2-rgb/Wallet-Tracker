@@ -3111,3 +3111,28 @@ button.alc-who { cursor: pointer; text-decoration: underline dotted rgb(124 151 
 }
 .alc-links button:active { opacity: 0.6; }
 .alc-who { flex: 1; text-align: start; }
+
+/* Токен проекта --------------------------------------------------------- */
+.tk-hero { display: flex; align-items: center; gap: 14px; }
+.tk-coin {
+  flex: none; display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%;
+  font-size: 30px; background: radial-gradient(circle at 35% 30%, rgb(255 194 77 / 0.35), rgb(255 194 77 / 0.06) 70%);
+  box-shadow: 0 0 0 1px rgb(255 194 77 / 0.35), 0 0 22px rgb(255 194 77 / 0.18);
+}
+.tk-chip {
+  display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  letter-spacing: 0.04em; text-transform: uppercase; color: var(--warn); background: rgb(255 194 77 / 0.12);
+  border: 1px solid rgb(255 194 77 / 0.35);
+}
+.tk-name { margin: 6px 0 0; font-size: 19px; color: var(--ink); }
+.tk-lead { margin: 12px 0 0; color: var(--dim); font-size: 13.5px; line-height: 1.55; }
+.tk-on { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px;
+  padding: 10px 12px; border-radius: var(--r-md); background: rgb(61 220 151 / 0.08); border: 1px solid rgb(61 220 151 / 0.35); }
+.tk-on span { color: var(--up); font-weight: 600; font-size: 13.5px; min-width: 0; overflow-wrap: anywhere; }
+.tk-off { flex: none; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line-2); background: none;
+  color: var(--dim); font: inherit; font-size: 12px; cursor: pointer; }
+.tk-safe { margin: 0; padding-inline-start: 18px; display: grid; gap: 8px; color: var(--ink); font-size: 13px; line-height: 1.5; }
+.tk-safe li::marker { color: var(--warn); }
+.tk-disc { margin: 4px 4px 0; color: var(--dim-2); font-size: 11.5px; line-height: 1.5; }
+.tk-soon { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; color: var(--warn);
+  background: rgb(255 194 77 / 0.12); border: 1px solid rgb(255 194 77 / 0.35); }
