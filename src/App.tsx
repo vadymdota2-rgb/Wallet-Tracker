@@ -13,7 +13,7 @@ import { HalvingCard } from "./components/HalvingCard";
 import { t, bare } from "./i18n/t";
 import { ensureLang, isRtl, normalizeLang } from "./i18n";
 import { setLocale } from "./lib/format";
-import { bootTelegram, haptic, initData, launchGo, openExternal, telegramLang, waitForTelegram, webApp } from "./lib/telegram";
+import { bootTelegram, haptic, initData, launchGo, openExternal, openTg, telegramLang, waitForTelegram, webApp } from "./lib/telegram";
 import { startSync, syncNow } from "./lib/sync";
 import { Toaster, toast } from "./components/Toast";
 import { Background } from "./components/Background";
@@ -28,8 +28,10 @@ import type { DictKey } from "./i18n/types";
 import type { ScreenName, Tab } from "./store/app";
 
 
-/** Официальный аккаунт проекта в X (Twitter) — самая нижняя строка. */
+/** Официальные каналы проекта — самая нижняя строка: X (Twitter) и канал
+ *  в Telegram. */
 const X_URL = "https://x.com/WalletTrackerX";
+const TG_CHANNEL_URL = "https://t.me/WalletTrackerOfficial";
 
 const TABS: { id: Tab; key: DictKey; glyph: ReactNode }[] = [
   { id: "wallets", key: "menu_my_wallets", glyph: <WalletGlyph /> },
@@ -310,7 +312,8 @@ export default function App() {
             {bare(t(lang, "legal_terms_title"))}
           </button>
         </div>
-        {/* Официальный X (Twitter) — самой нижней строкой, под документами. */}
+        {/* Официальные X (Twitter) и канал Telegram — самой нижней строкой,
+            под документами. Канал открывается самим Telegram, без браузера. */}
         <div className="social-bar">
           <button type="button" aria-label="X (Twitter)"
             onClick={() => { haptic("select"); openExternal(X_URL); }}>
@@ -318,6 +321,13 @@ export default function App() {
               <path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
             </svg>
             <span>Twitter</span>
+          </button>
+          <button type="button" aria-label="Telegram"
+            onClick={() => { haptic("select"); openTg(TG_CHANNEL_URL); }}>
+            <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
+              <path fill="currentColor" d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z" />
+            </svg>
+            <span>Telegram</span>
           </button>
         </div>
       </div>
