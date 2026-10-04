@@ -9,6 +9,8 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useApp } from "./store/app";
 import { useLive } from "./store/live";
 import { Gift } from "./components/Gift";
+import { LockScreen, LockSheet, useLocked } from "./components/LockScreen";
+import { LOCK_OPEN_SCREENS } from "./lib/upsell";
 import { HalvingCard } from "./components/HalvingCard";
 import { t, bare } from "./i18n/t";
 import { ensureLang, isRtl, normalizeLang } from "./i18n";
@@ -110,6 +112,7 @@ export default function App() {
   const menuOpen = useApp((s) => s.menuOpen);
   const setMenu = useApp((s) => s.setMenu);
   const openFromMenu = useApp((s) => s.openFromMenu);
+  const locked = useLocked();
   const [i18nReady, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -213,7 +216,11 @@ export default function App() {
   if (!i18nReady) return <div className="boot">WALLET TRACKER</div>;
 
   const top = stack[stack.length - 1];
-  const Screen = top ? SCREENS[top.name] : null;
+  /* Без Премиума открыты только экраны, где его получают, и служебные;
+     остальное (график, кошелёк, история алертов…) — замок в рамке экрана. */
+  const Screen = top
+    ? locked && !(LOCK_OPEN_SCREENS as readonly string[]).includes(top.name) ? LockSheet : SCREENS[top.name]
+    : null;
   const titleKey: DictKey = top
     ? SCREEN_TITLE[top.name]
     : (TABS.find((x) => x.id === tab)?.key ?? "menu_title");
@@ -250,7 +257,9 @@ export default function App() {
       {status === "offline" ? <p className="banner">{t(lang, "ui_offline")}</p> : null}
 
       <main className="body">
-        <TabBody tab={tab} />
+        {/* Без Премиума вкладки закрыты; «Ещё» открыта — там Премиум,
+            Бонусы, язык и документы. */}
+        {locked && tab !== "more" ? <LockScreen /> : <TabBody tab={tab} />}
       </main>
 
       <Gift />
@@ -270,6 +279,7 @@ export default function App() {
                       onClick={() => { haptic("select"); openFromMenu(m.name); }}>
                 <span aria-hidden="true">{m.glyph}</span>
                 {bare(t(lang, m.key))}
+                {locked ? <em className="drawer-lock" aria-hidden="true">🔒</em> : null}
               </button>
             ))}
             {/* Внизу меню — отсчёт до халвинга; дата сборки здесь была

@@ -56,7 +56,9 @@ export type PaySrc =
   | "tg"
   // Меню: длинные окна карты ликвидаций, реакция цены на разлоки.
   | "liq"
-  | "unlock";
+  | "unlock"
+  // Замок на всё приложение (HARD_PAYWALL).
+  | "lock";
 
 /** Заголовок экрана премиума по поводу, с которым человек пришёл. Для общих
  *  входов (меню, помощь, подарок) — общий заголовок. */
@@ -80,3 +82,11 @@ export const SRC_HEAD: Partial<Record<PaySrc, DictKey>> = {
 export function isPaySrc(v: unknown): v is PaySrc {
   return typeof v === "string" && /^[a-z]{2,12}$/.test(v);
 }
+
+/** Жёсткий пейволл: без Премиума приложение закрыто целиком — вкладки,
+ *  боковое меню, история алертов (LockScreen). Дни можно получить бесплатно
+ *  в «Бонусах». false — прежняя модель: бесплатный тариф с замками внутри. */
+export const HARD_PAYWALL = true;
+
+/** Экраны, открытые и без Премиума: где его получают, и служебные. */
+export const LOCK_OPEN_SCREENS = ["premium", "bonus", "token", "lang", "help", "legal"] as const;

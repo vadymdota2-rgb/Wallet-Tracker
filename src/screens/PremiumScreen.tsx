@@ -21,7 +21,7 @@ import { copyText } from "../lib/copy";
 import { toast } from "../components/Toast";
 import { buyStars, payUsdt, usdtInvoice, warmWallet, type PayEnd, type Plan, type UsdtInvoice } from "../lib/pay";
 import { trackEvent } from "../lib/api";
-import { FREE, SRC_HEAD, isPaySrc } from "../lib/upsell";
+import { FREE, HARD_PAYWALL, SRC_HEAD, isPaySrc } from "../lib/upsell";
 import type { ScreenProps } from "./Screen";
 import {
   Action,
@@ -101,6 +101,8 @@ export function PremiumScreen({ arg }: ScreenProps) {
      площадка, к которой пункт относится. Системные эмодзи рядом с ними
      рисовались бы другим стилем и не совпадали с тем, куда пункт ведёт. */
   const perks: Perk[] = [
+    // Жёсткий пейволл: без Премиума закрыто всё приложение — об этом первым.
+    ...(HARD_PAYWALL ? [{ ic: <DigestGlyph size={24} />, title: "pr_perk_all_t", text: "pr_perk_all_d" } as Perk] : []),
     { ic: <BoltGlyph size={24} />, title: "pr_perk_live_t", text: "pr_perk_live_d" },
     { ic: <VenueMark venue="perp" size={26} />, title: "pr_perk_hl_t", text: "pr_perk_hl_d" },
     { ic: <WalletGlyph size={24} />, title: "pr_perk_wallets_t", text: "pr_perk_wallets_d" },
@@ -201,18 +203,21 @@ export function PremiumScreen({ arg }: ScreenProps) {
       {me.service || (active && !trial) ? null : (
         <Card>
           {head ? <p className="pw-why">{t(lang, head)}</p> : null}
-          <div className="cmp">
-            <span className="cmp-h" />
-            <span className="cmp-h cmp-v">{t(lang, "cmp_free")}</span>
-            <span className="cmp-h cmp-p">{t(lang, "cmp_prem")}</span>
-            {cmp.map(([k, f, p]) => (
-              <Fragment key={k}>
-                <span className="cmp-l">{t(lang, k)}</span>
-                <span className="cmp-v">{f}</span>
-                <span className="cmp-p">{p}</span>
-              </Fragment>
-            ))}
-          </div>
+          {/* Колонка «бесплатно» при закрытом приложении была бы неправдой. */}
+          {HARD_PAYWALL ? null : (
+            <div className="cmp">
+              <span className="cmp-h" />
+              <span className="cmp-h cmp-v">{t(lang, "cmp_free")}</span>
+              <span className="cmp-h cmp-p">{t(lang, "cmp_prem")}</span>
+              {cmp.map(([k, f, p]) => (
+                <Fragment key={k}>
+                  <span className="cmp-l">{t(lang, k)}</span>
+                  <span className="cmp-v">{f}</span>
+                  <span className="cmp-p">{p}</span>
+                </Fragment>
+              ))}
+            </div>
+          )}
         </Card>
       )}
       {me.service ? null : (
@@ -318,13 +323,18 @@ export function PremiumScreen({ arg }: ScreenProps) {
         </Card>
       )}
 
-      <Card>
-        <SectionTitle>{t(lang, "pr_free_title")}</SectionTitle>
-        <Row wrap icon={perkIcon({ ic: <DigestGlyph size={24} />, title: "dg_title", text: "pr_free_digest_d" })}
-          title={t(lang, "dg_title")} sub={t(lang, "pr_free_digest_d")} />
-        <Row wrap icon={perkIcon({ ic: <AnalyticsGlyph size={24} />, title: "pr_free_market_t", text: "pr_free_market_d" })}
-          title={t(lang, "pr_free_market_t")} sub={t(lang, "pr_free_market_d")} />
-      </Card>
+      {/* «Бесплатно для всех» — только без жёсткого пейволла. */}
+      {HARD_PAYWALL ? null : (
+        <>
+        <Card>
+          <SectionTitle>{t(lang, "pr_free_title")}</SectionTitle>
+          <Row wrap icon={perkIcon({ ic: <DigestGlyph size={24} />, title: "dg_title", text: "pr_free_digest_d" })}
+            title={t(lang, "dg_title")} sub={t(lang, "pr_free_digest_d")} />
+          <Row wrap icon={perkIcon({ ic: <AnalyticsGlyph size={24} />, title: "pr_free_market_t", text: "pr_free_market_d" })}
+            title={t(lang, "pr_free_market_t")} sub={t(lang, "pr_free_market_d")} />
+        </Card>
+        </>
+      )}
     </Frame>
   );
 }

@@ -755,5 +755,13 @@ say("бонусы: приглашение и дни за соцсети (кан�
     and "const BONUS_WAIT = 10;" in _bns and "DELETE FROM bonus_claims WHERE chat_id=?" in api
     and "SOCIALS.map" in read(f"{APP}/src/App.tsx") and 'n["bonus"]' in _mcpp)
 
+_lock = read(f"{APP}/src/components/LockScreen.tsx")
+say("жёсткий пейволл: без Премиума вкладки, меню и история алертов — замок «купить / бесплатно в Бонусах», не мигает до загрузки",
+    "export const HARD_PAYWALL = true;" in read(f"{APP}/src/lib/upsell.ts")
+    and 'return status !== "boot";' in _lock and 'open("bonus")' in _lock and 'trackEvent("paywall", "lock")' in _lock
+    and '{locked && tab !== "more" ? <LockScreen /> : <TabBody tab={tab} />}' in read(f"{APP}/src/App.tsx")
+    and "LOCK_OPEN_SCREENS" in read(f"{APP}/src/App.tsx")
+    and "Без Премиума приложение закрыто" in read(f"{BOT}/ru.cpp"))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

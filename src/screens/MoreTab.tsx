@@ -15,11 +15,13 @@ import { bare, t } from "../i18n/t";
 import { LANGS } from "../i18n";
 import { num } from "../lib/format";
 import { BellGlyph, Card, Row, SectionTitle } from "../components/ui";
+import { useLocked } from "../components/LockScreen";
 
 export function MoreTab() {
   const lang = useApp((s) => s.lang);
   const open = useApp((s) => s.open);
   const me = useLive((s) => s.me);
+  const locked = useLocked();
 
   const langName = LANGS.find((l) => l.id === lang);
   const unread = me.unread ?? 0;
@@ -35,7 +37,7 @@ export function MoreTab() {
           icon={<span className="row-glyph"><BellGlyph size={22} /></span>}
           title={t(lang, "alerts_title")}
           sub={unread > 0 ? `${num(unread)} ${t(lang, "alerts_new")}` : t(lang, "alerts_sub")}
-          value={unread > 0 ? <span className="count-badge">{unread > 99 ? "99+" : unread}</span> : undefined}
+          value={locked ? "🔒" : unread > 0 ? <span className="count-badge">{unread > 99 ? "99+" : unread}</span> : undefined}
           onClick={() => open("alerts")}
         />
         <Row

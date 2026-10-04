@@ -3202,3 +3202,17 @@ button.alc-who { cursor: pointer; text-decoration: underline dotted rgb(124 151 
   background: radial-gradient(circle at 35% 30%, rgb(61 220 151 / 0.3), rgb(61 220 151 / 0.05) 70%); box-shadow: 0 0 0 1px rgb(61 220 151 / 0.3); }
 .bn-left { margin: 0; color: var(--ink); font-size: 14.5px; font-weight: 700; line-height: 1.4; }
 .bn-hero .bn-total { margin: 4px 0 0; font-size: 13px; font-weight: 600; }
+
+/* Замок на всё приложение ------------------------------------------------ */
+.lock { display: grid; gap: 12px; }
+.lock-body { display: grid; justify-items: center; text-align: center; padding: 10px 4px 4px; }
+.lock-ic {
+  display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; font-size: 30px;
+  background: radial-gradient(circle at 35% 30%, rgb(255 194 77 / 0.35), rgb(255 194 77 / 0.06) 70%);
+  box-shadow: 0 0 0 1px rgb(255 194 77 / 0.35), 0 0 26px rgb(255 194 77 / 0.2);
+}
+.lock-ttl { margin: 14px 0 0; font-size: 20px; color: var(--ink); }
+.lock-txt { margin: 8px 0 0; color: var(--dim); font-size: 13.5px; line-height: 1.55; max-width: 34ch; }
+.lock-acts { width: 100%; margin-top: 16px; }
+.lock-note { margin-top: 10px; max-width: 36ch; }
+.drawer-lock { margin-inline-start: auto; font-style: normal; font-size: 12px; opacity: 0.7; }
