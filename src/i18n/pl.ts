@@ -732,7 +732,7 @@ export const pl: Dict = {
   pr_perk_top_t: "Top 100 traderów",
   pr_perk_wallets_d: "Alerty z każdego śledzonego portfela — w Telegramie i w aplikacji.",
   pr_perk_wallets_t: "Do 50 portfeli",
-  pr_service_account: "Konto serwisowe — dostęp Premium jest stały.",
+  pr_service_account: "Konto serwisowe: przechowuje bazę portfeli bez limitu. Nie dostaje Premium.",
   pr_title: "⭐ Wallet Tracker Premium",
   pr_unlock: "Cała aplikacja: transakcje wielorybów, futures Hyperliquid, analityka i do 50 portfeli.",
   pw_h_alert: "Średnia cena wejścia i PnL transakcji w każdym alercie.",

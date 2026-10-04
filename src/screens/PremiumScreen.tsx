@@ -171,10 +171,10 @@ export function PremiumScreen({ arg }: ScreenProps) {
   return (
     <Frame
       title={active ? t(lang, "pr_active_title") : t(lang, "pr_title")}
-      sub={active ? `${t(lang, "pr_days_left")} ${me.service ? "∞" : num(days)}` : t(lang, "pr_unlock")}
+      sub={active ? `${t(lang, "pr_days_left")} ${num(days)}` : t(lang, "pr_unlock")}
     >
-      {/* Сервисному аккаунту платить не за что: подписка у него бессрочная,
-          как в боте. Вместо оплаты — одна строка, почему. */}
+      {/* Сервисный аккаунт держит базу кошельков, Премиум ему не выдаётся
+          (сервер откажет). Вместо оплаты — одна строка, почему. */}
       {me.service ? (
         <Card>
           <p className="note">{t(lang, "pr_service_account")}</p>

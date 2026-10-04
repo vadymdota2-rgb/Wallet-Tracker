@@ -732,7 +732,7 @@ export const hi: Dict = {
   pr_perk_top_t: "टॉप 100 ट्रेडर",
   pr_perk_wallets_d: "आपके ट्रैक किए हर वॉलेट से अलर्ट — Telegram में और ऐप में।",
   pr_perk_wallets_t: "50 वॉलेट तक",
-  pr_service_account: "सर्विस अकाउंट — प्रीमियम स्थायी।",
+  pr_service_account: "सर्विस अकाउंट: यह वॉलेट डेटाबेस बिना सीमा के रखता है। इसे Premium नहीं मिलता।",
   pr_title: "⭐ Wallet Tracker प्रीमियम",
   pr_unlock: "पूरा ऐप: व्हेल के सौदे, Hyperliquid फ़्यूचर्स, एनालिटिक्स और 50 वॉलेट तक।",
   pw_h_alert: "हर अलर्ट में औसत एंट्री प्राइस और ट्रेड का PnL।",

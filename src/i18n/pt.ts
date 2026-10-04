@@ -732,7 +732,7 @@ export const pt: Dict = {
   pr_perk_top_t: "Top 100 traders",
   pr_perk_wallets_d: "Alertas de cada carteira que você acompanha, no Telegram e no app.",
   pr_perk_wallets_t: "Até 50 carteiras",
-  pr_service_account: "Conta de serviço — o acesso Premium é permanente.",
+  pr_service_account: "Conta de serviço: guarda a base de carteiras sem limite. Não recebe Premium.",
   pr_title: "⭐ Wallet Tracker Premium",
   pr_unlock: "O app inteiro: operações de baleias, futuros da Hyperliquid, análises e até 50 carteiras.",
   pw_h_alert: "Preço médio de entrada e PnL da operação em cada alerta.",

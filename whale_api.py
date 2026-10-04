@@ -74,11 +74,9 @@ INIT_DATA_TTL = int(os.environ.get("WHALE_API_INITDATA_TTL", "86400"))
 # только на кошельки в боте: алерты в Telegram идут с основного.
 FREE_MAX_WALLETS = 3
 PREMIUM_MAX_WALLETS = 50
-# Сервисный аккаунт бота — тот, что держит базу кошельков. Бот (main.cpp,
-# SERVICE_CHAT_ID; isPremium в premium.cpp) считает его подпиской навсегда и
-# без лимита кошельков. API этого не знал: для него это был бесплатный
-# аккаунт, и приложение ставило на паузу все его кошельки, кроме основного,
-# а сервер срезал ему Hyperliquid. Номер тот же, что в боте.
+# Сервисный аккаунт бота — тот, что держит базу кошельков: без лимита, и бот
+# сканирует все его кошельки (main.cpp, SERVICE_CHAT_ID). Премиума у него нет
+# и быть не может — см. is_service. Номер тот же, что в боте.
 SERVICE_CHAT_ID = os.environ.get("WHALE_SERVICE_CHAT", "7479880531").strip()
 SERVICE_MAX_WALLETS = 1_000_000
 # Глубина доски трейдеров — PREMIUM_TOP_TRADERS в premium.cpp.
@@ -586,15 +584,16 @@ def wallet_banned(con: sqlite3.Connection, addr: str) -> bool:
 
 
 def is_service(chat: str) -> bool:
-    """Сервисный аккаунт бота: подписка навсегда, лимита кошельков нет."""
+    """Сервисный аккаунт бота: держит всю базу кошельков, лимита у него нет.
+    Подписчиком он не бывает никогда: Премиум ему не выдаётся ни оплатой, ни
+    пробой, ни бонусами, а приложение для него закрыто, как для любого без
+    Премиума. Бот сканирует его кошельки сам (refreshWatchers в main.cpp)."""
     return bool(SERVICE_CHAT_ID) and str(chat or "") == SERVICE_CHAT_ID
 
 
 def is_premium(con: sqlite3.Connection, chat: str) -> bool:
     """Действует ли подписка — та же проверка, что isPremium() в premium.cpp."""
-    if is_service(chat):
-        return True
-    if not chat or not table_exists(con, "users"):
+    if not chat or is_service(chat) or not table_exists(con, "users"):
         return False
     if "is_premium" not in cols(con, "users"):
         return False
@@ -1432,8 +1431,8 @@ def load_me(cur: sqlite3.Connection, chat: str) -> dict:
     unread = unread_alerts(cur, chat, seen_at)
     service = is_service(chat)
     if service:
-        # Бессрочно: срока нет, и «осталось дней: 0» было бы неправдой.
-        plan, prem_until = "premium", 0
+        # Сервисному Премиума не бывает, даже если в базе осталась отметка.
+        plan, prem_until = "free", 0
     alerts_today = alerts_30 = 0
     if table_exists(cur, "deliveries") and table_exists(cur, "alerts"):
         alerts_today = cur.execute(
@@ -7920,7 +7919,10 @@ REF_NOTE = {
 def extend_premium(con: sqlite3.Connection, chat: str, days: int) -> bool:
     """Прибавить дни премиума — к действующему сроку, а не вместо него.
     Тот же расчёт, что grantPremiumDays в premium.cpp. Без своей транзакции:
-    её ведёт вызывающий."""
+    её ведёт вызывающий. Сервисному аккаунту дней не прибавляет: он держит
+    базу кошельков, а не подписку."""
+    if is_service(chat):
+        return False
     ucols = cols(con, "users")
     if not {"is_premium", "premium_expire"} <= ucols:
         return False
@@ -12519,6 +12521,10 @@ class Handler(BaseHTTPRequestHandler):
                 # причина, а на ошибочный код оно видит только «нет ответа».
                 res = digest_act(self._user_full(qs), dg, body)
                 self._json(200, res)
+                return
+            # Сервисный аккаунт Премиум не покупает и не получает бонусами.
+            if is_service(chat) and (path.startswith("/api/pay/") or path.startswith("/api/bonus/")):
+                self._json(200, {"ok": False, "error": "service"})
                 return
             if path in ("/api/bonus/open", "/api/bonus/claim"):
                 self._json(200, bonus_act(chat, str(body.get("kind") or ""), path.rsplit("/", 1)[-1]))

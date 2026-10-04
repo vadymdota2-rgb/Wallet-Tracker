@@ -732,7 +732,7 @@ export const id: Dict = {
   pr_perk_top_t: "Top 100 trader",
   pr_perk_wallets_d: "Peringatan dari setiap dompet yang Anda pantau — di Telegram dan di aplikasi.",
   pr_perk_wallets_t: "Hingga 50 dompet",
-  pr_service_account: "Akun layanan — akses Premium permanen.",
+  pr_service_account: "Akun layanan: menyimpan basis dompet tanpa batas. Tidak pernah mendapat Premium.",
   pr_title: "⭐ Wallet Tracker Premium",
   pr_unlock: "Seluruh aplikasi: transaksi paus, futures Hyperliquid, analitik, dan hingga 50 dompet.",
   pw_h_alert: "Harga masuk rata-rata dan PnL transaksi di setiap notifikasi.",

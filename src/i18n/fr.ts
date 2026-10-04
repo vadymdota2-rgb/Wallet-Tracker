@@ -732,7 +732,7 @@ export const fr: Dict = {
   pr_perk_top_t: "Top 100 des traders",
   pr_perk_wallets_d: "Des alertes pour chaque portefeuille que vous suivez, dans Telegram et dans l'app.",
   pr_perk_wallets_t: "Jusqu'à 50 portefeuilles",
-  pr_service_account: "Compte de service — l'accès Premium est permanent.",
+  pr_service_account: "Compte de service : il garde la base de portefeuilles sans limite. Il ne reçoit jamais Premium.",
   pr_title: "⭐ Wallet Tracker Premium",
   pr_unlock: "Toute l'app : transactions des baleines, futures Hyperliquid, analyses et jusqu'à 50 portefeuilles.",
   pw_h_alert: "Prix d'entrée moyen et PnL du trade dans chaque alerte.",

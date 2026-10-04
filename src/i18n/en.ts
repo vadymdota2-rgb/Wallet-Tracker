@@ -731,7 +731,7 @@ export const en = {
   pr_perk_top_t: "Top 100 traders",
   pr_perk_wallets_d: "Alerts from every wallet you track — in Telegram and in the app.",
   pr_perk_wallets_t: "Up to 50 wallets",
-  pr_service_account: "Service account — Premium access is permanent.",
+  pr_service_account: "Service account: it holds the wallet base with no limit. Premium is never given to it.",
   pr_title: "⭐ Wallet Tracker Premium",
   pr_unlock: "The whole app: whale trades, Hyperliquid futures, analytics and up to 50 wallets.",
   pw_h_alert: "Average entry price and trade PnL in every alert.",

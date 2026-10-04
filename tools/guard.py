@@ -191,16 +191,23 @@ say("порога алертов во «Ещё» нет — он в «Моих �
 appx = read(f"{APP}/src/App.tsx")
 say("состояние кнопки обновления — с приставкой", "refresh st-${status}" in appx and "refresh ${status}" not in appx)
 
-# --- сервисный аккаунт бота — подписка навсегда и в API ---------------------
+# --- сервисный аккаунт бота — без Премиума, но база кошельков без лимита ----
 # Бот считает его премиумом без срока и без лимита кошельков (isPremium в
 # premium.cpp). API этого не знал, и приложение ставило его кошельки на паузу.
 main_cpp = read(f"{BOT}/main.cpp")
 svc = re.search(r'SERVICE_CHAT_ID = "(\d+)"', main_cpp)
 say("номер сервисного аккаунта в API совпадает с ботом",
     bool(svc) and f'"WHALE_SERVICE_CHAT", "{svc.group(1)}"' in api)
-say("сервисный — премиум и без лимита",
-    "if is_service(chat):\n        return True" in api and "return SERVICE_MAX_WALLETS" in api
-    and '"service": service,' in api)
+_prem_cpp = read(f"{BOT}/premium.cpp")
+say("сервисный — без Премиума нигде и никогда, но без лимита кошельков",
+    'if not chat or is_service(chat) or not table_exists(con, "users"):' in api
+    and 'plan, prem_until = "free", 0' in api and "if is_service(chat):\n        return False" in api
+    and 'if is_service(chat) and (path.startswith("/api/pay/") or path.startswith("/api/bonus/")):' in api
+    and "return SERVICE_MAX_WALLETS" in api and '"service": service,' in api
+    and "chatId == g_serviceChatId) return false;" in _prem_cpp and "out.erase(g_serviceChatId);" in _prem_cpp
+    and "UPDATE users SET is_premium=0, premium_expire=0 WHERE chat_id=?" in _prem_cpp
+    and "uid != SERVICE_CHAT_ID && loadedForUser >= FREE_ALERT_WALLETS" in read(f"{BOT}/main.cpp")
+    and "(chatId != SERVICE_CHAT_ID)\n                            ? premiumMaxWallets(chatId) : 0;" in read(f"{BOT}/wallets.cpp"))
 say("приложение не ставит сервисному паузу и лимит",
     "walletLimit(me.service)" in read(f"{APP}/src/screens/WalletsTab.tsx")
     and "return service ? Infinity : FREE.premiumWallets;" in read(f"{APP}/src/store/app.ts"))
@@ -755,7 +762,7 @@ say("бонусы: приглашение и дни за соцсети (кан�
 
 _lock = read(f"{APP}/src/components/LockScreen.tsx")
 say("жёсткий пейволл: без Премиума вкладки, меню и история алертов — замок «купить / бесплатно в Бонусах», не мигает до загрузки",
-    'if (service || plan === "premium") return false;' in _lock
+    'if (plan === "premium") return false;' in _lock
     and 'return status !== "boot";' in _lock and 'open("bonus")' in _lock and 'trackEvent("paywall", "lock")' in _lock
     and '{locked && tab !== "more" ? <LockScreen /> : <TabBody tab={tab} />}' in read(f"{APP}/src/App.tsx")
     and "LOCK_OPEN_SCREENS" in read(f"{APP}/src/App.tsx")

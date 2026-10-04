@@ -732,7 +732,7 @@ export const ar: Dict = {
   pr_perk_top_t: "أفضل 100 متداول",
   pr_perk_wallets_d: "تنبيهات من كل محفظة تتابعها — في Telegram وفي التطبيق.",
   pr_perk_wallets_t: "حتى 50 محفظة",
-  pr_service_account: "حساب خدمي — وصول بريميوم دائم.",
+  pr_service_account: "حساب الخدمة: يحتفظ بقاعدة المحافظ بلا حد. لا يُمنح Premium.",
   pr_title: "⭐ Wallet Tracker Premium",
   pr_unlock: "التطبيق كاملًا: صفقات الحيتان، عقود Hyperliquid الآجلة، التحليلات وحتى 50 محفظة.",
   pw_h_alert: "متوسط سعر الدخول وربح الصفقة في كل تنبيه.",

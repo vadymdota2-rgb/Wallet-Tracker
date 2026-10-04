@@ -732,7 +732,7 @@ export const tr: Dict = {
   pr_perk_top_t: "Top 100 trader",
   pr_perk_wallets_d: "Takip ettiğiniz her cüzdandan uyarılar — Telegram'da ve uygulamada.",
   pr_perk_wallets_t: "50 cüzdana kadar",
-  pr_service_account: "Servis hesabı — Premium erişimi kalıcıdır.",
+  pr_service_account: "Hizmet hesabı: cüzdan veritabanını sınırsız tutar. Premium verilmez.",
   pr_title: "⭐ Wallet Tracker Premium",
   pr_unlock: "Uygulamanın tamamı: balina işlemleri, Hyperliquid vadeli, analizler ve 50 cüzdana kadar.",
   pw_h_alert: "Her uyarıda ortalama giriş fiyatı ve işlem PnL'i.",

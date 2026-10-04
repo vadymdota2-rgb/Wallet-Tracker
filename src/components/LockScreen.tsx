@@ -19,12 +19,12 @@ import { Action, Card } from "./ui";
 import { IntroOffer } from "./Upsell";
 import { Frame } from "../screens/Screen";
 
-/** Закрыто ли приложение для этого человека. */
+/** Закрыто ли приложение для этого человека. Сервисному аккаунту — тоже:
+ *  он держит базу кошельков, а Премиума у него нет. */
 export function useLocked(): boolean {
   const plan = useLive((s) => s.me.plan);
-  const service = useLive((s) => s.me.service);
   const status = useLive((s) => s.status);
-  if (service || plan === "premium") return false;
+  if (plan === "premium") return false;
   // «boot» — первая загрузка, о плане ещё ничего не известно.
   return status !== "boot";
 }
@@ -32,10 +32,11 @@ export function useLocked(): boolean {
 export function LockScreen() {
   const lang = useApp((s) => s.lang);
   const open = useApp((s) => s.open);
+  const service = useLive((s) => s.me.service);
 
   useEffect(() => {
-    trackEvent("paywall", "lock");
-  }, []);
+    if (!service) trackEvent("paywall", "lock");
+  }, [service]);
 
   const go = (fn: () => void) => () => {
     haptic("select");
@@ -44,17 +45,24 @@ export function LockScreen() {
 
   return (
     <div className="lock">
-      <IntroOffer />
+      {service ? null : <IntroOffer />}
       <Card>
         <div className="lock-body">
           <span className="lock-ic" aria-hidden="true">⭐</span>
           <h2 className="lock-ttl">{t(lang, "lk_title")}</h2>
-          <p className="lock-txt">{t(lang, "lk_body")}</p>
-          <div className="stack-actions lock-acts">
-            <Action onClick={go(() => open("premium", "lock"))}>⭐ {t(lang, "lk_buy")}</Action>
-            <Action kind="ghost" onClick={go(() => open("bonus"))}>🎁 {t(lang, "lk_free")}</Action>
-          </div>
-          <p className="note dim lock-note">{t(lang, "lk_free_d")}</p>
+          {/* Сервисному купить и получить Премиум нечем — только почему. */}
+          {service ? (
+            <p className="lock-txt">{t(lang, "pr_service_account")}</p>
+          ) : (
+            <>
+              <p className="lock-txt">{t(lang, "lk_body")}</p>
+              <div className="stack-actions lock-acts">
+                <Action onClick={go(() => open("premium", "lock"))}>⭐ {t(lang, "lk_buy")}</Action>
+                <Action kind="ghost" onClick={go(() => open("bonus"))}>🎁 {t(lang, "lk_free")}</Action>
+              </div>
+              <p className="note dim lock-note">{t(lang, "lk_free_d")}</p>
+            </>
+          )}
         </div>
       </Card>
     </div>
