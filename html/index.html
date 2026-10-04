@@ -51,7 +51,7 @@
   .sp-c { position: absolute; left: 50%; top: 46%; width: 0; height: 0; }
   /* Волны сонара. */
   .sp-ring {
-    position: absolute; left: -70px; top: -70px; width: 140px; height: 140px; border-radius: 50%;
+    position: absolute; left: -95px; top: -95px; width: 190px; height: 190px; border-radius: 50%;
     border: 1.5px solid rgb(127 216 255 / 0.55);
     box-shadow: 0 0 18px rgb(30 155 255 / 0.35), inset 0 0 18px rgb(30 155 255 / 0.2);
     opacity: 0; transform: scale(0.6);
@@ -81,7 +81,7 @@
   /* Логотип: кошелёк с лупой, как у бота. Иконка из линий — каждая
      линия рисуется светом по очереди, потом лупа «ищет». */
   .sp-mark {
-    position: absolute; left: -78px; top: -78px; width: 156px; height: 156px;
+    position: absolute; left: -105px; top: -105px; width: 210px; height: 210px;
     filter: drop-shadow(0 0 10px rgb(30 155 255 / 0.6));
     animation: spBreath 2.4s ease-in-out infinite; animation-delay: calc(1.3s * var(--k));
   }
@@ -121,7 +121,7 @@
   @keyframes spShine { to { transform: translateX(40px) skewX(-20deg); } }
   /* Название: буквы проявляются по одной. */
   .sp-name {
-    position: absolute; left: 0; right: 0; top: calc(46% + 96px);
+    position: absolute; left: 0; right: 0; top: calc(46% + 122px);
     display: flex; justify-content: center; gap: 0.06em;
     font-weight: 700; font-size: 20px; letter-spacing: 0.22em; color: #eaf5ff;
     text-shadow: 0 0 18px rgb(30 155 255 / 0.6);
