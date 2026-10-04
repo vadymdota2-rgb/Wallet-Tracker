@@ -30,7 +30,7 @@
   .sp {
     --k: 1;
     position: fixed; inset: 0; z-index: 9999; overflow: hidden;
-    background: radial-gradient(120% 80% at 50% 46%, #0a1f63 0%, #040d33 38%, #01030a 78%);
+    background: radial-gradient(120% 80% at 50% 46%, #071a33 0%, #030914 45%, #01030a 75%);
     color: #eaf5ff; font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
     -webkit-user-select: none; user-select: none; pointer-events: none;
   }
@@ -82,10 +82,10 @@
      линия рисуется светом по очереди, потом лупа «ищет». */
   .sp-mark {
     position: absolute; left: -78px; top: -78px; width: 156px; height: 156px;
-    filter: drop-shadow(0 0 10px rgb(59 130 246 / 0.65));
+    filter: drop-shadow(0 0 10px rgb(30 155 255 / 0.6));
     animation: spBreath 2.4s ease-in-out infinite; animation-delay: calc(1.3s * var(--k));
   }
-  @keyframes spBreath { 50% { filter: drop-shadow(0 0 22px rgb(80 150 255 / 0.95)); } }
+  @keyframes spBreath { 50% { filter: drop-shadow(0 0 22px rgb(30 155 255 / 0.95)); } }
   .sp-mark svg { width: 100%; height: 100%; overflow: visible; }
   .sp-s {
     fill: none; stroke: url(#spStroke); stroke-width: 3.9; stroke-linecap: round; stroke-linejoin: round;
@@ -95,7 +95,7 @@
   .sp-s.handle { stroke-width: 6; }
   @keyframes spDraw { to { stroke-dashoffset: 0; } }
   .sp-dotc {
-    fill: #5b9bff; transform-box: fill-box; transform-origin: center; transform: scale(0);
+    fill: #7fd8ff; transform-box: fill-box; transform-origin: center; transform: scale(0);
     animation: spPop calc(0.45s * var(--k)) cubic-bezier(.34,1.8,.5,1) calc(0.95s * var(--k)) forwards;
   }
   @keyframes spPop { to { transform: scale(1); } }
@@ -162,8 +162,8 @@
   .sp.out .sp-burst {
     position: absolute; left: 50%; top: 46%; width: 300vmax; height: 300vmax;
     margin: -150vmax 0 0 -150vmax; border-radius: 50%;
-    border: 3px solid #a8dcff;
-    box-shadow: 0 0 60px 14px rgb(59 130 246 / 0.85), inset 0 0 60px 14px rgb(59 130 246 / 0.6);
+    border: 3px solid #7fd8ff;
+    box-shadow: 0 0 60px 14px rgb(30 155 255 / 0.8), inset 0 0 60px 14px rgb(30 155 255 / 0.55);
     transform: scale(0); animation: spBurst 0.85s cubic-bezier(.7,0,.25,1) forwards;
   }
   @keyframes spBurst { to { transform: scale(1); } }
@@ -192,10 +192,10 @@
       <svg viewBox="0 0 120 120">
         <defs>
           <linearGradient id="spStroke" x1="0" y1="0" x2="0.4" y2="1">
-            <stop offset="0" stop-color="#8cc4ff"/><stop offset="0.55" stop-color="#4b8bff"/><stop offset="1" stop-color="#2f6df0"/>
+            <stop offset="0" stop-color="#7fd8ff"/><stop offset="1" stop-color="#1e9bff"/>
           </linearGradient>
           <radialGradient id="spGlass" cx="0.38" cy="0.35" r="0.75">
-            <stop offset="0" stop-color="#9fd3ff" stop-opacity="0.45"/><stop offset="1" stop-color="#1e5bff" stop-opacity="0.08"/>
+            <stop offset="0" stop-color="#7fd8ff" stop-opacity="0.45"/><stop offset="1" stop-color="#1e9bff" stop-opacity="0.08"/>
           </radialGradient>
           <clipPath id="spClip"><circle cx="41.6" cy="71.5" r="17"/></clipPath>
         </defs>
