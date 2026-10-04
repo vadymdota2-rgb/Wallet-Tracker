@@ -89,7 +89,7 @@ export function Area({
  * принадлежность к ряду. Поэтому у каждой линии всегда есть подпись со
  * значком: по одному цвету различать их нельзя, и не всем это доступно.
  */
-export interface PlanLevel {
+interface PlanLevel {
   v: number;
   tone: "up" | "dn" | "warn";
   /** Короткая подпись слева, например «🛑 Стоп». */
@@ -97,7 +97,7 @@ export interface PlanLevel {
 }
 
 /** Полоса между двумя ценами: риск от входа до стопа, прибыль до цели. */
-export interface PlanZone {
+interface PlanZone {
   from: number;
   to: number;
   tone: "up" | "dn";

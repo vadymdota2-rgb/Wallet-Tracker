@@ -22,7 +22,7 @@ function usePaywall(): (src: PaySrc) => void {
   };
 }
 
-export function Upsell({ src, text, cta }: { src: PaySrc; text: ReactNode; cta?: ReactNode }) {
+function Upsell({ src, text, cta }: { src: PaySrc; text: ReactNode; cta?: ReactNode }) {
   const lang = useApp((s) => s.lang);
   const toPremium = usePaywall();
   return (

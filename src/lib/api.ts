@@ -195,7 +195,7 @@ export const fetchRot = (win: string, offset = 0, limit = 15, _signal?: AbortSig
  */
 const dealsPath = (addr: string, venue: string, n: number) =>
   `/api/deals?addr=${encodeURIComponent(addr.toLowerCase())}&venue=${encodeURIComponent(venue)}&n=${n}`;
-export type DealsReply = { ok?: boolean; deals?: Deal[] };
+type DealsReply = { ok?: boolean; deals?: Deal[] };
 export const fetchDeals = (addr: string, venue: string, n: number, _signal?: AbortSignal) =>
   cachedGet<DealsReply>(dealsPath(addr, venue, n), TTL.deals);
 export const peekDeals = (addr: string, venue: string, n: number) =>
@@ -418,7 +418,7 @@ export function refreshLiqMap(sym: string, range: string): Promise<LiqMapReply |
 /* Страх и жадность: индекс выходит раз в сутки. Последний ответ лежит на
    устройстве — экран открывается сразу, свежий догружается поверх. */
 const FNG_SAVED = "wt-fng-v1";
-export function savedFng(): FngReply | null {
+function savedFng(): FngReply | null {
   const hit = readSaved<FngReply>(FNG_SAVED).all;
   return hit && hit.v?.days?.length ? hit.v : null;
 }
@@ -432,7 +432,7 @@ export const peekFng = () => peek<FngReply | null>("/api/fng", 30 * 60_000) ?? s
 /* Доминация и альтсезон: данные меняются за часы, ответ живёт час и лежит
    на устройстве, как страх и жадность. */
 const DOM_SAVED = "wt-dom-v1";
-export function savedDom(): DomReply | null {
+function savedDom(): DomReply | null {
   const hit = readSaved<DomReply>(DOM_SAVED).all;
   return hit && hit.v?.rows?.length ? hit.v : null;
 }
@@ -446,7 +446,7 @@ export const peekDom = () => peek<DomReply | null>("/api/dom", 60 * 60_000) ?? s
 /* ETF и крупные держатели: отчёты фондов выходят раз в сутки — ответ живёт
    час и лежит на устройстве. */
 const ETF_SAVED = "wt-etf-v1";
-export function savedEtf(): EtfReply | null {
+function savedEtf(): EtfReply | null {
   const hit = readSaved<EtfReply>(ETF_SAVED).all;
   return hit && hit.v?.coins?.btc ? hit.v : null;
 }
@@ -460,7 +460,7 @@ export const peekEtf = () => peek<EtfReply | null>("/api/etf", 60 * 60_000) ?? s
 /* Халвинг: блок раз в десять минут — ответ живёт пять, последний лежит на
    устройстве, и отсчёт в меню виден сразу, даже без сети. */
 const HALVING_SAVED = "wt-halving-v1";
-export function savedHalving(): HalvingReply | null {
+function savedHalving(): HalvingReply | null {
   const hit = readSaved<HalvingReply>(HALVING_SAVED).all;
   return hit && hit.v?.height ? hit.v : null;
 }
@@ -472,7 +472,7 @@ export const fetchHalving = () =>
 export const peekHalving = () => peek<HalvingReply | null>("/api/halving", 5 * 60_000) ?? savedHalving();
 
 /** Все монеты с фьючерсами — список раз в час; последний лежит на устройстве. */
-export function savedLiqCoins(): LiqCoinsReply | null {
+function savedLiqCoins(): LiqCoinsReply | null {
   const hit = readSaved<LiqCoinsReply>(LIQ_COINS_SAVED).all;
   return hit && Date.now() - hit.at < 7 * 24 * 3600_000 && hit.v?.coins?.length ? hit.v : null;
 }
@@ -488,7 +488,7 @@ export const peekLiqCoins = () => peek<LiqCoinsReply | null>("/api/liqcoins", 60
    рейтинг две. Поток лежит и на устройстве: карточка в NetFlow видна сразу. */
 const BTC_TTL = 60_000;
 const BTC_FLOW_SAVED = "wt-btcflow-v1";
-export function savedBtcFlow(): BtcFlowReply | null {
+function savedBtcFlow(): BtcFlowReply | null {
   const hit = readSaved<BtcFlowReply>(BTC_FLOW_SAVED).all;
   return hit && hit.v?.ok && hit.v.wins ? hit.v : null;
 }

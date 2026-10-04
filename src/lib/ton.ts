@@ -14,7 +14,7 @@
  * Сырой приходит от кошелька через TON Connect, человеческий — от нашего
  * сервера, и разбирать нужно оба: это один и тот же адрес в двух записях.
  */
-export function parseAddr(addr: string): { wc: number; hash: Uint8Array } {
+function parseAddr(addr: string): { wc: number; hash: Uint8Array } {
   const raw0 = String(addr || "").trim();
   if (raw0.includes(":")) {
     const [wcs, hex] = raw0.split(":");

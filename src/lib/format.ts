@@ -124,7 +124,7 @@ export function since(seconds: number): string {
 }
 
 /** Количество монет коротко: 1.41B, 93.75M, 36.8K. */
-export function qty(v: unknown): string {
+function qty(v: unknown): string {
   if (!isNum(v)) return "—";
   const a = Math.abs(v);
   if (a >= 1e9) return `${nf({ maximumFractionDigits: 2 }).format(v / 1e9)}B`;

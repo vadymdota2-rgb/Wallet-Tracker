@@ -14,7 +14,7 @@ import type { Rank, RankKind, RankTable, Trader, Venue, Wallet } from "./types";
 
 const BOARDS: RankKind[] = ["pnl", "roi", "win", "act"];
 
-export interface VenuePlace {
+interface VenuePlace {
   place: number;
   kind: RankKind;
   /** Сама строка доски: прибыль, доходность, винрейт, сделки за окно. */
@@ -37,7 +37,7 @@ function bestIn(table: RankTable | undefined, addr: string): VenuePlace | null {
   return best;
 }
 
-export interface Place {
+interface Place {
   spot: VenuePlace | null;
   perp: VenuePlace | null;
   /** Лучшее из двух — им подписывают строку списка. */

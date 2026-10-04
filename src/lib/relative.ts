@@ -16,7 +16,7 @@ const UNITS: [RegExp, number][] = [
 ];
 
 /** Секунды из серверной строки, либо null. */
-export function parseAgo(raw: string | undefined | null): number | null {
+function parseAgo(raw: string | undefined | null): number | null {
   const s = String(raw || "").trim();
   if (!s) return null;
   for (const [re, mult] of UNITS) {

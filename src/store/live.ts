@@ -12,7 +12,7 @@ import type {
 } from "../lib/types";
 import { tgUserId } from "../lib/telegram";
 
-export type Status = "boot" | "ready" | "stale" | "offline" | "anon";
+type Status = "boot" | "ready" | "stale" | "offline" | "anon";
 
 const EMPTY_RANK: Rank = {
   spot: { pnl: [], roi: [], win: [], act: [] },

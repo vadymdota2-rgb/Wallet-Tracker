@@ -8,7 +8,7 @@
 import { en } from "./en";
 import type { Dict, LangCode } from "./types";
 
-export type { Dict, DictKey, LangCode } from "./types";
+export type { DictKey, LangCode } from "./types";
 
 export const LANGS: { id: LangCode; name: string; flag: string }[] = [
   { id: "en", name: "English", flag: "🇬🇧" },

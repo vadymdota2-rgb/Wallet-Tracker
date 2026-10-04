@@ -11,7 +11,6 @@
 export type ServerText = string;
 
 export type Venue = "spot" | "perp";
-export type Side = "buy" | "sell";
 
 export interface Position {
   sym: string;
@@ -339,7 +338,7 @@ export interface RotSum {
 }
 export type RotSums = Record<string, RotSum | undefined>;
 
-export interface CoinHolder {
+interface CoinHolder {
   w: string;
   v: number;
   t: ServerText;
@@ -883,7 +882,7 @@ export interface BtcFlowReply {
 }
 
 /** Что сканер знает о кошельке помимо движений. */
-export interface BtcExtra {
+interface BtcExtra {
   /** Остаток на адресе по последней проверке, BTC. */
   bal?: number;
   txs?: number;

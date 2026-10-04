@@ -17,7 +17,7 @@ interface BackButton {
   offClick?(cb: () => void): void;
 }
 
-export interface WebApp {
+interface WebApp {
   initData?: string;
   initDataUnsafe?: { user?: { id?: number; language_code?: string } };
   colorScheme?: string;

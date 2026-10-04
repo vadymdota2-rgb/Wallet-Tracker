@@ -140,7 +140,7 @@ export function Row({
   );
 }
 
-export interface Tile {
+interface Tile {
   label: ReactNode;
   value: ReactNode;
   tone?: "up" | "dn" | "dim";
@@ -185,23 +185,6 @@ export function Tiles({
     </div>
   );
 }
-
-export interface BarItem {
-  name: string;
-  /** −1…1 для расходящихся полос, 0…1 для обычных. */
-  value: number;
-  label: string;
-  /** Цвет по смыслу, а не по знаку: нужен там, где минус — это хорошо. */
-  tone?: "up" | "dn";
-}
-
-/**
- * Полосы в обе стороны от нуля: довод за сигнал вправо, против — влево.
- *
- * Цвет здесь не единственный признак: сторона и знак в подписи говорят то же
- * самое. Зелёный с красным различимы не для всех глаз, и полагаться на один
- * цвет нельзя.
- */
 
 export function Action({
   children,
@@ -1197,7 +1180,7 @@ export function PlusGlyph({ size = 19 }: { size?: number }) {
 }
 
 /** Лампочка подсказки. Янтарная — в сером абзаце она и должна цеплять глаз. */
-export function HintGlyph({ size = 16 }: { size?: number }) {
+function HintGlyph({ size = 16 }: { size?: number }) {
   return (
     <svg
       className="glyph hint-mark"

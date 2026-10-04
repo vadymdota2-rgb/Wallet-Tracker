@@ -1711,7 +1711,7 @@ def load_wallets(cur: sqlite3.Connection, chat: str,
     # Кошельки биткоина: настоящее написание адреса — для экрана и ссылок.
     cases = btc_cases([(r["addr"] or "").lower() for r in rows if is_btc_key((r["addr"] or "").lower())])
     wallets = []
-    for i, r in enumerate(rows):
+    for r in rows:
         addr = (r["addr"] or "").lower()
         name = (r["label"] or "").strip() or short_addr(addr)
         pos, equity = [], dict(ZERO_EQUITY)

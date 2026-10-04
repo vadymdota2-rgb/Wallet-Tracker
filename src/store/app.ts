@@ -20,7 +20,7 @@ export type ScreenName =
   | "alerts" | "chart" | "unlocks" | "liqmap" | "funding" | "fng" | "dom" | "etf" | "rename" | "spot"
   | "legal" | "btcWallet" | "token" | "bonus";
 
-export interface Screen {
+interface Screen {
   name: ScreenName;
   /** Что открыли: адрес кошелька, тикер. */
   arg?: string;
