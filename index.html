@@ -51,17 +51,22 @@
   .sp-c { position: absolute; left: 50%; top: 46%; width: 0; height: 0; }
   /* Волны сонара. */
   .sp-ring {
-    position: absolute; left: -95px; top: -95px; width: 190px; height: 190px; border-radius: 50%;
+    /* Круг растёт до ширины экрана (с отступом) и там гаснет — целиком
+       в кадре на любом телефоне. */
+    --rs: min(94vw, 76vh, 560px);
+    position: absolute; left: calc(var(--rs) / -2); top: calc(var(--rs) / -2);
+    width: var(--rs); height: var(--rs); border-radius: 50%;
     border: 1.5px solid rgb(127 216 255 / 0.55);
     box-shadow: 0 0 18px rgb(30 155 255 / 0.35), inset 0 0 18px rgb(30 155 255 / 0.2);
-    opacity: 0; transform: scale(0.6);
+    opacity: 0; transform: scale(0.3);
     animation: spRing 2.4s cubic-bezier(.2,.6,.3,1) infinite;
     animation-delay: calc(0.75s * var(--k) + var(--i) * 0.8s);
   }
   @keyframes spRing {
-    0% { opacity: 0; transform: scale(0.6); }
+    0% { opacity: 0; transform: scale(0.3); }
     12% { opacity: 0.9; }
-    100% { opacity: 0; transform: scale(3.6); }
+    80% { opacity: 0.35; }
+    100% { opacity: 0; transform: scale(1); }
   }
   /* Точки сделок: летят к центру со всех сторон. */
   .sp-dot {
