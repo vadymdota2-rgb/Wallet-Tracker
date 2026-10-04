@@ -5537,7 +5537,7 @@ def coin_class(coin: str) -> str:
     return "rwa" if ":" in c or c in METAL_SYMS else "crypto"
 
 
-def ls_scan(hl: sqlite3.Connection | None, since: int) -> list[dict]:
+def ls_scan(hl: sqlite3.Connection | None, since: int) -> list[dict] | None:
     """Все монеты окна: сколько денег двинуло цену вверх и сколько вниз.
 
     Считается всё движение, а не одни открытия: закрытие позиции — такая же
@@ -5592,8 +5592,10 @@ def ls_scan(hl: sqlite3.Connection | None, since: int) -> list[dict]:
             (since * 1000,),
         ).fetchall()
     except sqlite3.Error as e:
+        # Сбой чтения — не «за окно ничего нет». Пустой список ушёл бы в
+        # кэш на полторы минуты, и экран всё это время писал бы «данных нет».
         sys.stderr.write(f"[api] ls scan: {e}\n")
-        return []
+        return None
 
     out: list[dict] = []
     for r in rows:
@@ -5638,6 +5640,8 @@ def ls_rows_cached(hl: sqlite3.Connection | None, win: str) -> list[dict]:
                 threading.Thread(target=_ls_rebuild, args=(win, sec), daemon=True).start()
             return hit[1]
     rows = ls_scan(hl, now() - sec)
+    if rows is None:
+        return []
     ls_rows_put(win, rows)
     return rows
 
@@ -5652,7 +5656,10 @@ def _ls_rebuild(win: str, sec: int) -> None:
     try:
         con = open_db(HL_DB)
         if con:
-            ls_rows_put(win, ls_scan(con, now() - sec))
+            rows = ls_scan(con, now() - sec)
+            # Сбой — оставляем прошлый список, а не пустоту.
+            if rows is not None:
+                ls_rows_put(win, rows)
     except Exception as e:
         sys.stderr.write(f"[api] ls rows {win}: {e}\n")
     finally:
@@ -5665,37 +5672,54 @@ def _ls_rebuild(win: str, sec: int) -> None:
             _ls_busy.discard(win)
 
 
-def load_ls(hl: sqlite3.Connection | None) -> dict:
-    """Лонг/шорт по окнам — в общую выгрузку, как и поток."""
-    tnow = now()
-    by_win = {}
-    for key, sec in FLOW_WINDOWS.items():
-        coins = ls_scan(hl, tnow - sec)
-        ls_rows_put(key, coins)
-        def totals(rows: list[dict]) -> dict:
-            lng = sum(c["long"] for c in rows)
-            shrt = sum(c["short"] for c in rows)
-            return {
-                "long": lng,
-                "short": shrt,
-                "net": lng - shrt,
-                "pct": round(lng / (lng + shrt) * 100, 1) if lng + shrt > 0 else 0.0,
-                "coins": len(rows),
-            }
+def ls_totals(rows: list[dict]) -> dict:
+    """Итог по списку монет: сколько денег на рост, сколько на падение."""
+    lng = sum(c["long"] for c in rows)
+    shrt = sum(c["short"] for c in rows)
+    return {
+        "long": lng,
+        "short": shrt,
+        "net": lng - shrt,
+        "pct": round(lng / (lng + shrt) * 100, 1) if lng + shrt > 0 else 0.0,
+        "coins": len(rows),
+    }
 
-        # Итоги считаются отдельно для крипты и для акций с золотом: у них
-        # разные размеры и разные настроения, и общая цифра, где сотня
-        # миллионов биткоина смешана с парой миллионов в акциях, не говорит
-        # ни о том, ни о другом.
+
+def ls_pack(rows_by_win: dict[str, list[dict]]) -> dict:
+    """Лонг/шорт по окнам в виде выгрузки: итоги и первая страница монет.
+
+    Итоги считаются отдельно для крипты и для акций с золотом: у них разные
+    размеры и разные настроения, и общая цифра, где сотня миллионов биткоина
+    смешана с парой миллионов в акциях, не говорит ни о том, ни о другом."""
+    by_win = {}
+    for key, coins in rows_by_win.items():
         crypto = [c for c in coins if c["cls"] == "crypto"]
         rwa = [c for c in coins if c["cls"] == "rwa"]
         by_win[key] = {
-            **totals(coins),
-            "crypto": {**totals(crypto), "rows": [dict(c) for c in crypto[:FLOW_ROWS]]},
-            "rwa": {**totals(rwa), "rows": [dict(c) for c in rwa[:FLOW_ROWS]]},
+            **ls_totals(coins),
+            "crypto": {**ls_totals(crypto), "rows": [dict(c) for c in crypto[:FLOW_ROWS]]},
+            "rwa": {**ls_totals(rwa), "rows": [dict(c) for c in rwa[:FLOW_ROWS]]},
             "rows": [dict(c) for c in coins[:FLOW_ROWS]],
         }
     return by_win
+
+
+def load_ls(hl: sqlite3.Connection | None) -> dict:
+    """Лонг/шорт по окнам — в общую выгрузку, как и поток.
+
+    Из памяти (ls_rows_cached), а не пятью свежими проходами по таблице
+    сделок за год на каждую сборку раз в полминуты: это было тяжело, сборка
+    не укладывалась в бюджет, кусок пропускался, и экран писал «данных нет».
+    Память обновляется своим потоком раз в FLOW_ROWS_TTL."""
+    return ls_pack({key: ls_rows_cached(hl, key) for key in FLOW_WINDOWS})
+
+
+def ls_from_memory() -> dict:
+    """Лонг/шорт из памяти без похода в базу — на случай, когда сборке не
+    хватило времени: лучше чуть старые цифры, чем пустой экран."""
+    with _ls_lock:
+        got = {k: v[1] for k, v in _LS_ROWS.items() if k in FLOW_WINDOWS}
+    return ls_pack(got) if got else {}
 
 
 def ls_search(hl: sqlite3.Connection | None, win: str, q: str, limit: int = 40,
@@ -5717,7 +5741,10 @@ def ls_search(hl: sqlite3.Connection | None, win: str, q: str, limit: int = 40,
         allrows = [r for r in allrows if r["pct"] >= 50]
     elif side == "out":
         allrows = [r for r in allrows if r["pct"] < 50]
-    return {"rows": [dict(r) for r in allrows[offset:offset + limit]], "total": len(allrows)}
+    # Итог по выбранному — для сводки над списком, когда в общей выгрузке
+    # раздела нет (сборка его пропустила): экран не остаётся пустым.
+    return {"rows": [dict(r) for r in allrows[offset:offset + limit]], "total": len(allrows),
+            "sum": ls_totals(allrows)}
 
 
 def load_flow(cur: sqlite3.Connection) -> dict:
@@ -8810,7 +8837,7 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
     market_feed = take("feed", lambda: load_feed_market(cur, hl), market_feed, True)
     # Ротацию считает свой поток (rot_refresher) — здесь только готовое.
     rot = rot_latest()
-    ls = take("ls", lambda: load_ls(hl), was.get("ls") or {})
+    ls = take("ls", lambda: load_ls(hl), ls_from_memory() or was.get("ls") or {})
     coins = take("coins", lambda: load_coins(cur, hl, flow, []), was.get("coins") or {})
     return {
         "flow": flow,

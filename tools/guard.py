@@ -781,5 +781,13 @@ say("приглашения: другу +7 сразу, пригласившем�
     and "ref_settle()" in pybody(api, "def _bonus_loop(")
     and '"ref_wait"' in read(f"{APP}/src/components/Invite.tsx"))
 
+_ana = read(f"{APP}/src/screens/AnalyticsTab.tsx")
+say("лонг/шорт: из памяти, при пропуске сборки — из памяти, сбой чтения не обнуляет, экран спрашивает сервер сам",
+    "return ls_pack({key: ls_rows_cached(hl, key) for key in FLOW_WINDOWS})" in api
+    and 'take("ls", lambda: load_ls(hl), ls_from_memory() or was.get("ls") or {})' in api
+    and "        return None\n" in pybody(api, "def ls_scan(") and '"sum": ls_totals(allrows)' in api
+    and 'const local = !query && side === "all" && page === 1 && have;' in _ana
+    and "const b = have ? local : asked;" in _ana)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

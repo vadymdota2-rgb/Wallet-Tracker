@@ -11,7 +11,7 @@ import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
   LiqCoinsReply, FngReply, DomReply, EtfReply, HalvingReply, FundRow, LsRow, MutationResult,
   RotSide, SymbolRow, TokenHist, Trades, UnlocksReply, WalletLive,
-  BtcBigReply, BtcFlowReply, BtcRankReply, BtcWalletReply,
+  BtcBigReply, BtcFlowReply, BtcRankReply, BtcWalletReply, LsTotals,
 } from "./types";
 
 const TIMEOUT_MS = 15000;
@@ -138,6 +138,9 @@ const flowPath = (win: string, q: string, offset: number, side: string) =>
   `/api/flow?win=${encodeURIComponent(win)}&q=${encodeURIComponent(q)}` +
   `&offset=${offset}&side=${encodeURIComponent(side)}`;
 type Page<R> = { ok?: boolean; rows?: R[]; total?: number };
+/** Страница лонг/шорта с итогом по выбранному классу — для сводки, когда в
+ *  общей выгрузке раздела нет. */
+export type LsPage = Page<LsRow> & { sum?: Omit<LsTotals, "rows"> };
 export const fetchFlow = (
   win: string,
   q: string,
@@ -159,9 +162,9 @@ export const fetchLs = (
   side = "all",
   cls = "crypto",
   _signal?: AbortSignal,
-) => cachedGet<Page<LsRow>>(lsPath(win, q, offset, side, cls), TTL.board);
+) => cachedGet<LsPage>(lsPath(win, q, offset, side, cls), TTL.board);
 export const peekLs = (win: string, q: string, offset = 0, side = "all", cls = "crypto") =>
-  peek<Page<LsRow> | null>(lsPath(win, q, offset, side, cls), TTL.board);
+  peek<LsPage | null>(lsPath(win, q, offset, side, cls), TTL.board);
 
 /**
  * Страница доски фандинга. Первая приходит с общей выгрузкой, остальные —

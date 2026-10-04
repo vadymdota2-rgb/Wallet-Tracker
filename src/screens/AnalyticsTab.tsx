@@ -27,7 +27,7 @@ import {
   PlusGlyph, PositionsGlyph, RotationGlyph, Row, SectionTitle, Segmented, Skeleton, StackGlyph,
   TileNav,
 } from "../components/ui";
-import { fetchBig, fetchFlow, fetchLs, fetchRot, peekBig, peekFlow, peekLs } from "../lib/api";
+import { fetchBig, fetchFlow, fetchLs, fetchRot, peekBig, peekFlow, peekLs, type LsPage } from "../lib/api";
 import type { BigSide, BigView, BigWin, FlowWin } from "../store/app";
 import type {
   CoinClass, FlowRow, FlowSide, LsRow, RotSide, RotSum, TradeRow, Trades,
@@ -674,7 +674,26 @@ function LsHead() {
      золоте» стояла бы цифра, посчитанная в основном по биткоину. Старые
      ответы разбивки не знают — для них берём общий итог, он хотя бы не
      врёт про сумму. */
-  const b = (cls === "rwa" ? all?.rwa : all?.crypto) ?? all;
+  const local = (cls === "rwa" ? all?.rwa : all?.crypto) ?? all;
+  const have = !!local && local.long + local.short > 0;
+  /* В общей выгрузке раздела нет (сервер не успел его собрать) — итог
+     спрашиваем отдельно, а не прячем сводку. */
+  const [asked, setAsked] = useState<LsPage["sum"] | null>(() => peekLs(win, "", 0, "all", cls)?.sum ?? null);
+  useEffect(() => {
+    if (have) return;
+    const hit = peekLs(win, "", 0, "all", cls);
+    if (hit?.sum) {
+      setAsked(hit.sum);
+      return;
+    }
+    setAsked(null);
+    const ctrl = new AbortController();
+    void fetchLs(win, "", 0, "all", cls, ctrl.signal).then((r) => {
+      if (!ctrl.signal.aborted) setAsked(r?.ok ? r.sum ?? null : null);
+    });
+    return () => ctrl.abort();
+  }, [have, win, cls]);
+  const b = have ? local : asked;
   if (!b || b.long + b.short <= 0) return null;
   const up = b.pct >= 50;
   /* Смотришь шорты — и число должно быть про шорты. Прежде и там, и там
@@ -729,14 +748,19 @@ function LsBody() {
   const [qTotal, setQTotal] = useState<number | null>(() => peekLs(win, query, 0, side, cls)?.total ?? null);
   const [busy, setBusy] = useState(false);
 
-  const local = !query && side === "all" && page === 1;
-  const total = (query || side !== "all" ? qTotal : bucket?.coins) ?? 0;
+  /* Первая страница «всех» — из общей выгрузки, без запроса. Но только если
+     раздел там правда есть: сервер мог не успеть его собрать (тогда в
+     выгрузке пусто), и раньше экран в этом случае писал «данных нет», хотя
+     у сервера они были. Теперь — спрашиваем отдельно. */
+  const have = !!bucket?.rows?.length;
+  const local = !query && side === "all" && page === 1 && have;
+  const total = (!query && side === "all" && have ? bucket?.coins : qTotal) ?? 0;
   const pages = Math.max(1, Math.ceil(total / FLOW_PAGE));
 
   useEffect(() => setPage(1), [win, side, cls, query]);
 
   useEffect(() => {
-    if (!query && side === "all" && page === 1) {
+    if (!query && side === "all" && page === 1 && have) {
       setRows(null);
       setBusy(false);
       return;
@@ -762,7 +786,7 @@ function LsBody() {
       clearTimeout(timer);
       ctrl.abort();
     };
-  }, [win, side, cls, query, page]);
+  }, [win, side, cls, query, page, have]);
 
   const shown: LsRow[] = local ? bucket?.rows ?? [] : rows ?? [];
   /* Выбраны шорты — и доля должна быть про шорты. Прежде под обеими кнопками
