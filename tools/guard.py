@@ -674,7 +674,11 @@ say("бот: бесплатному алерт без цены входа и PnL
     and _mcpp.count('tr(lang, "alert_locked")') == 3)  # две строки в алертах + проверка для кнопки
 _wt = read(f"{APP}/src/screens/WalletsTab.tsx")
 say("приложение: плашка пробной недели и «Первые шаги»",
-    '"tr_left"' in _wt and '"fs_1"' in _wt and "me.trial" in _wt and '"trial": trial,' in api)
+    "<TrialCard />" in _wt and '"fs_1"' in _wt and '"tr_left"' in read(f"{APP}/src/components/Upsell.tsx")
+    and '"trial": trial,' in api)
+say("скидка после пробы — от настоящего конца премиума (проба по приглашению длиннее недели), счётчик пробы и на дайджесте",
+    'if exp and int(exp["premium_expire"] or 0) > end:' in api
+    and "<TrialCard within={3} />" in read(f"{APP}/src/screens/DigestTab.tsx"))
 
 _inv = read(f"{APP}/src/components/Invite.tsx")
 _dgt = read(f"{APP}/src/screens/DigestTab.tsx")

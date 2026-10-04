@@ -75,3 +75,20 @@ export function IntroOffer() {
     </Card>
   );
 }
+
+/** Пробный премиум: сколько осталось и что будет после — заранее. В
+ *  кошельках — всю неделю; на дайджесте, с которого открывается приложение,
+ *  — в последние `within` дней: раньше это только мешало бы читать. */
+export function TrialCard({ within }: { within?: number }) {
+  const lang = useApp((s) => s.lang);
+  const me = useLive((s) => s.me);
+  if (!me.trial || !me.premUntil || me.plan !== "premium") return null;
+  const days = Math.max(1, Math.ceil((me.premUntil - Date.now()) / 86400000));
+  if (within && days > within) return null;
+  return (
+    <Card>
+      <SectionTitle>{t(lang, "tr_left", { n: days })}</SectionTitle>
+      <Upsell src="trial" text={t(lang, "tr_after")} cta={t(lang, "tr_cta")} />
+    </Card>
+  );
+}

@@ -7948,8 +7948,14 @@ def intro_until(con: sqlite3.Connection | None, chat: str) -> int:
     """До какого времени человеку доступна вводная цена; 0 — недоступна.
 
     Только тем, у кого кончилась пробная неделя и кто ещё ни разу не платил:
-    48 часов с конца недели. Это не скидка всем, а повод решиться у тех, кто
-    неделю пользовался и видит, что потерял."""
+    48 часов с конца премиума. Это не скидка всем, а повод решиться у тех, кто
+    неделю пользовался и видит, что потерял.
+
+    Конец — настоящий, users.premium_expire, а не «выдача + 7 дней»: у
+    пришедшего по приглашению проба длится две недели, пригласившему каждый
+    друг добавляет по неделе. Считая от выдачи, окно скидки закрывалось ещё
+    до конца пробы, а бот в конце пробы обещал скидку, которой на экране уже
+    не было."""
     if not con or not chat or is_service(chat) or not table_exists(con, "trial_granted"):
         return 0
     try:
@@ -7957,6 +7963,10 @@ def intro_until(con: sqlite3.Connection | None, chat: str) -> int:
         if not row:
             return 0
         end = int(row["granted_at"] or 0) + TRIAL_DAYS * 86400
+        if "premium_expire" in cols(con, "users"):
+            exp = con.execute("SELECT premium_expire FROM users WHERE chat_id=?", (chat,)).fetchone()
+            if exp and int(exp["premium_expire"] or 0) > end:
+                end = int(exp["premium_expire"])
         t = now()
         if not (end <= t < end + INTRO_WINDOW_SEC) or is_premium(con, chat):
             return 0

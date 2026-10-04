@@ -3,7 +3,7 @@
  * и список кошельков с местом в рейтинге.
  */
 import { FREE } from "../lib/upsell";
-import { IntroOffer, Upsell } from "../components/Upsell";
+import { IntroOffer, TrialCard, Upsell } from "../components/Upsell";
 import { useRef } from "react";
 import { useApp, isPaused, walletLimit } from "../store/app";
 import { useLive } from "../store/live";
@@ -59,18 +59,12 @@ export function WalletsTab() {
     { key: "fs_3", done: me.alertTg !== false, go: () => open("alerts") },
   ];
   const showSteps = !me.service && steps.some((s) => !s.done) && wallets.length < FREE.wallets;
-  const trialDays = me.trial && me.premUntil ? Math.max(1, Math.ceil((me.premUntil - Date.now()) / 86400000)) : 0;
 
   return (
     <>
       <IntroOffer />
       {/* Пробная неделя: сколько осталось и что будет после — заранее. */}
-      {trialDays ? (
-        <Card>
-          <SectionTitle>{t(lang, "tr_left", { n: trialDays })}</SectionTitle>
-          <Upsell src="trial" text={t(lang, "tr_after")} cta={t(lang, "tr_cta")} />
-        </Card>
-      ) : null}
+      <TrialCard />
       {showSteps ? (
         <Card>
           <SectionTitle>{t(lang, "fs_title")}</SectionTitle>
