@@ -7995,14 +7995,38 @@ def exch_uid_ok(uid: str) -> bool:
     return uid.isascii() and uid.isdigit() and 6 <= len(uid) <= 20
 
 
+def _exch_history(ex: str, uid: str, chat: str, cid: int) -> str:
+    """Что уже было с этим UID и у этого человека — владельцу перед решением."""
+    con = open_db(DB)
+    if not con:
+        return ""
+    try:
+        uid_no = con.execute("SELECT COUNT(*), COUNT(DISTINCT chat_id) FROM exch_claims "
+                             "WHERE ex=? AND uid=? AND status='no' AND id!=?", (ex, uid, cid)).fetchone()
+        mine_no = con.execute("SELECT COUNT(*) FROM exch_claims WHERE ex=? AND chat_id=? AND status='no'",
+                              (ex, chat)).fetchone()[0]
+    except sqlite3.Error:
+        return ""
+    finally:
+        con.close()
+    lines = []
+    if uid_no[0]:
+        lines.append(f"⚠️ Этот UID уже отклоняли: {uid_no[0]} раз(а), людей: {uid_no[1]}")
+    if mine_no:
+        lines.append(f"⚠️ У этого человека отклонённых заявок: {mine_no}")
+    return "\n".join(lines)
+
+
 def _exch_owner_note(cid: int, chat: str, ex: str, uid: str, who: str) -> None:
     """Владельцу — заявка с кнопками. Не дошла — заявка всё равно лежит в
     базе, и бот покажет её по /okx."""
+    hist = _exch_history(ex, uid, chat, cid)
     text = (f"🏦 <b>{EXCH_NAMES.get(ex, ex)}: заявка #{cid}</b>\n"
             f"UID: <code>{html.escape(uid)}</code>\n"
             f"Пользователь: <a href=\"tg://user?id={html.escape(chat)}\">{html.escape(who or chat)}</a> "
-            f"(<code>{html.escape(chat)}</code>)\n\n"
-            f"Проверьте UID среди приглашённых в кабинете партнёра.")
+            f"(<code>{html.escape(chat)}</code>)\n"
+            + (f"\n{hist}\n" if hist else "")
+            + "\nПроверьте UID среди приглашённых в кабинете партнёра.")
     tg_api("sendMessage", {"chat_id": OWNER_CHAT_ID, "text": text, "parse_mode": "HTML",
                            "reply_markup": {"inline_keyboard": [[
                                {"text": "✅ Одобрить", "callback_data": f"ex:ok:{cid}"},
@@ -8024,7 +8048,9 @@ def exch_state(con: sqlite3.Connection, chat: str) -> dict:
 
 def exch_submit(chat: str, ex: str, uid: str, who: str = "") -> dict:
     """Человек прислал UID на бирже — заявка уходит владельцу на проверку."""
-    uid = re.sub(r"\s+", "", uid or "")
+    # Ведущие нули отбрасываем: «0123…» и «123…» — один и тот же UID, и
+    # нулём спереди нельзя обойти «один UID — одна награда».
+    uid = re.sub(r"\s+", "", uid or "").lstrip("0")
     if ex not in EXCH_BONUS:
         return {"ok": False, "error": "bad_kind"}
     if not exch_uid_ok(uid):
@@ -8092,6 +8118,12 @@ def exch_settle(notify: bool = True) -> int:
                 days = 0
                 if r["status"] == "ok":
                     days = EXCH_BONUS.get(r["ex"], 0)
+                    # Вторая линия защиты (первая — уникальный индекс): если
+                    # за этот UID дни уже выдавались, второй раз — ноль.
+                    if con.execute("SELECT 1 FROM exch_claims WHERE ex=? AND uid=? AND id!=? AND days>0",
+                                   (r["ex"], r["uid"], r["id"])).fetchone():
+                        sys.stderr.write(f"[api] exch #{r['id']}: UID {r['uid']} already rewarded\n")
+                        days = 0
                     if con.execute("UPDATE exch_claims SET granted_at=?, days=?, notified=1 "
                                    "WHERE id=? AND status='ok' AND granted_at=0", (t, days, r["id"])).rowcount != 1:
                         con.execute("ROLLBACK")

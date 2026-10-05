@@ -807,6 +807,8 @@ say("OKX: UID на ручную проверку — кнопки только �
     'EXCH_BONUS = {"okx": 30}' in api and "WHERE status!='no'" in api and "exch_uid_ok(uid)" in _ex_sub
     and '"error": "uid_taken"' in _ex_sub and '"error": "pending"' in _ex_sub and "EXCH_MAX_TRIES" in _ex_sub
     and "WHERE id=? AND status='ok' AND granted_at=0" in _ex_set and "extend_premium(con, r[\"chat_id\"], days)" in _ex_set
+    and '.lstrip("0")' in _ex_sub and "AND uid=? AND id!=? AND days>0" in _ex_set
+    and "o.uid=exch_claims.uid AND o.status='ok'" in _ex_cb and "_exch_history(" in api
     and "exch_settle()" in pybody(api, "def _bonus_loop(") and 'path == "/api/bonus/exchange"' in api
     and "DELETE FROM exch_claims WHERE chat_id=? AND status!='ok'" in api
     and "if (from != OWNER_CHAT_ID)" in _ex_cb and "WHERE id=? AND status='wait'" in _ex_cb
