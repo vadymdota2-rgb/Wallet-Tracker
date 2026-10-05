@@ -875,6 +875,7 @@ say("автопополнение базы китов: BSC и Hyperliquid от $
     and 'envInt("WHALE_BSC_AUTO_DAILY", 500), envInt("WHALE_HL_AUTO_DAILY", 500)' in read(f"{BOT}/autobase.cpp")
     and "static const double v[NETS]" in read(f"{BOT}/autobase.cpp") and "autoLimit(AutoNet::HL) / 2" in _hlc
     and "SELECT 1 FROM hl_fills WHERE wallet=? AND ts>=?" in _mcpp and "retryLater(a)" in _mcpp
+    and "HL_LB_RETRY_SEC = 600" in _hlc and "std::string hlAutoStatus()" in _hlc and "hlAutoStatus()" in read(f"{BOT}/autobase.cpp")
     and 'txt.rfind("/autobase ", 0) == 0' in _mcpp
     and "t.timestamp>=?" in _mcpp and "hlAutoForget(w.addr);" in _mcpp and "g_bscAutoSeen.erase(w.addr);" in _mcpp
     and "btcPruneAuto(cut)" in _mcpp and "int btcPruneAuto(long long cut)" in read(f"{BOT}/btc_chain.cpp")
