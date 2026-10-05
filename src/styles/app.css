@@ -1245,12 +1245,17 @@
 }
 .back { color: var(--glow); font-size: 13px; font-weight: 600; white-space: nowrap; }
 .screen-ttl { min-width: 0; }
+/* Длинное название экрана («Desequilibrios de funding») на узком телефоне —
+   в две строки, а не обрезанным многоточием. Третьей строки не бывает. */
 .screen-ttl h1 {
   font-size: 16px;
   font-weight: 700;
+  line-height: 1.25;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
 }
 .screen-ttl small { color: var(--dim); font-size: 12px; }
 .screen-body { padding: 12px; display: grid; gap: 12px; }
