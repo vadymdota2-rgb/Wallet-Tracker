@@ -7937,7 +7937,9 @@ def bonus_act(chat: str, kind: str, act: str) -> dict:
 # действующая заявка на биржу, после отказа можно прислать другой UID.
 EXCH_BONUS = {"okx": 30}
 EXCH_NAMES = {"okx": "OKX"}
-EXCH_LINKS = {"okx": os.environ.get("WHALE_OKX_REF", "https://my.okx.com/ua-eu/join/SY5IQVFB").strip()}
+# Ссылка без языка в адресе (не /ua-eu/join/…): OKX сам открывает страницу на
+# языке телефона человека, код приглашения при этом сохраняется.
+EXCH_LINKS = {"okx": os.environ.get("WHALE_OKX_REF", "https://my.okx.com/join/SY5IQVFB").strip()}
 # Код — для тех, кто регистрируется не по ссылке, и для тех, у кого аккаунт
 # уже есть: OKX разрешает один раз сменить пригласившего.
 EXCH_CODES = {"okx": os.environ.get("WHALE_OKX_CODE", "SY5IQVFB").strip()}
