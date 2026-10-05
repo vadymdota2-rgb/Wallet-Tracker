@@ -859,13 +859,12 @@ say("накрутки по IP: проба — не больше 3 новых а�
     and all("IP" in v for v in json.load(open(f"{APP}/tools/i18n.json"))["legal_privacy_body"].values()))
 
 _hlc = read(f"{BOT}/hyperliquid_core.cpp")
-say("автопополнение базы китов как у биткоина: BSC — крупный вывод с горячего кошелька биржи на обычный кошелёк, Hyperliquid — крупная сделка и рейтинг трейдеров без маркетмейкеров; молчащих месяц — убираем",
+say("автопополнение базы китов BSC как у биткоина (вывод с горячего кошелька биржи от $10k на обычный кошелёк, молчащих месяц — убираем); Hyperliquid сам базу не пополняет — каждый кошелёк тратил бы бюджет запросов",
     "bscAutoConsider(tx, to, watchers.get());" in _mcpp and "BSC_HOT_NONCE = 300000" in _mcpp
-    and '"eth_getCode"' in _mcpp and "BSC_AUTO_MAX_NONCE = 1000" in _mcpp and 'addUserWhale(SERVICE_CHAT_ID, a, "auto-bsc")' in _mcpp
-    and "std::thread(bscAutoLoop).detach();" in _mcpp and "pruneAutoWallets();" in _mcpp
-    and "if (big) autoCandidate(addr);" in _hlc and '"userRateLimit"' in _hlc and "HL_AUTO_MAX_REQ = 100000" in _hlc
-    and "stats-data.hyperliquid.xyz/Mainnet/leaderboard" in _hlc and "HL_LB_MAX_TURNOVER = 30.0" in _hlc
-    and "g_autoThread = std::thread(autoLoop);" in _hlc and "Автобаза за сутки" in _mcpp)
+    and "std::atof(v) : 10000.0" in _mcpp and '"eth_getCode"' in _mcpp and "BSC_AUTO_MAX_NONCE = 1000" in _mcpp
+    and 'addUserWhale(SERVICE_CHAT_ID, a, "auto-bsc")' in _mcpp and "std::thread(bscAutoLoop).detach();" in _mcpp
+    and "pruneAutoWallets();" in _mcpp and "label='auto-hl'\")" in _mcpp
+    and "autoCandidate" not in _hlc and "leaderboard" not in _hlc and "Автобаза BSC" in _mcpp)
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
