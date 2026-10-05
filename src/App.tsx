@@ -66,6 +66,7 @@ const SCREEN_TITLE: Record<ScreenName, DictKey> = {
   btcWallet: "btc_wallet_title",
   token: "tk_title",
   bonus: "bn_title",
+  lock: "lk_title",
 };
 
 /* Боковое меню — рыночные инструменты: график, разлоки, карта ликвидаций,

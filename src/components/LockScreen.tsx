@@ -72,3 +72,14 @@ export function LockSheet() {
     </Frame>
   );
 }
+
+/** Замок, открытый значком Премиума в шапке («0 дн.»). Премиум появился
+ *  (купил или получил дни в «Бонусах» и вернулся) — экран закрывается сам. */
+export function LockPage() {
+  const plan = useLive((s) => s.me.plan);
+  const back = useApp((s) => s.back);
+  useEffect(() => {
+    if (plan === "premium") back();
+  }, [plan, back]);
+  return <LockSheet />;
+}

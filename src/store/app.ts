@@ -18,7 +18,10 @@ export type ScreenName =
   | "wallet" | "position" | "coin" | "deals"
   | "addWallet" | "threshold" | "lang" | "premium" | "help"
   | "alerts" | "chart" | "unlocks" | "liqmap" | "funding" | "fng" | "dom" | "etf" | "rename" | "spot"
-  | "legal" | "btcWallet" | "token" | "bonus";
+  | "legal" | "btcWallet" | "token" | "bonus"
+  // Замок «купить / бесплатно в Бонусах» отдельным экраном — значок
+  // Премиума в шапке, когда дней ноль.
+  | "lock";
 
 interface Screen {
   name: ScreenName;

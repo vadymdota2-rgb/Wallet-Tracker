@@ -25,6 +25,7 @@ import { EtfScreen } from "./EtfScreen";
 import { BtcWalletScreen } from "./BtcViews";
 import { TokenScreen } from "./TokenScreen";
 import { BonusScreen } from "./BonusScreen";
+import { LockPage } from "../components/LockScreen";
 
 export const SCREENS: Record<ScreenName, ComponentType<ScreenProps>> = {
   wallet: WalletScreen,
@@ -50,4 +51,5 @@ export const SCREENS: Record<ScreenName, ComponentType<ScreenProps>> = {
   btcWallet: BtcWalletScreen,
   token: TokenScreen,
   bonus: BonusScreen,
+  lock: LockPage,
 };

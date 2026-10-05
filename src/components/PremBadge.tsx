@@ -2,8 +2,9 @@
  * Значок Премиума в шапке (вертикальный: корона, под ней дни) — на месте прежней кнопки «обновить»: данные и так
  * приходят сами (раз в три минуты и при возвращении в приложение), а сколько
  * осталось Премиума человек теперь видит сразу. Нажатие — экран Премиума.
- * Премиума нет — та же кнопка зовёт его получить. Осталось три дня и меньше —
- * значок тёплого цвета: пора продлить.
+ * Премиума нет — «0 дн.», нажатие открывает замок на весь экран («купить /
+ * бесплатно в Бонусах»). Осталось три дня и меньше — значок тёплого цвета:
+ * пора продлить.
  */
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
@@ -26,20 +27,26 @@ export function PremBadge() {
   const status = useLive((s) => s.status);
   if (status === "boot") return null;
 
+  const left = me.plan === "premium" && me.premUntil ? me.premUntil - Date.now() : 0;
+  // Дней нет — тот же значок с нулём, а нажатие открывает замок на весь
+  // экран: купить или получить дни бесплатно в «Бонусах».
+  if (left <= 0) {
+    return (
+      <button type="button" className="prem-badge zero" onClick={() => { haptic("select"); open("lock"); }}
+        aria-label={`${bare(t(lang, "menu_premium"))}: ${t(lang, "pr_days_left")} 0`}>
+        <Crown />
+        <span className="pb-n">
+          <b>0</b>
+          <small>{t(lang, "hdr_days")}</small>
+        </span>
+      </button>
+    );
+  }
   const go = () => {
     haptic("select");
     goTab("more");
     open("premium", "hdr");
   };
-  const left = me.plan === "premium" && me.premUntil ? me.premUntil - Date.now() : 0;
-  if (left <= 0) {
-    return (
-      <button type="button" className="prem-badge get" onClick={go}>
-        <Crown />
-        <span>{bare(t(lang, "menu_premium"))}</span>
-      </button>
-    );
-  }
   const days = Math.max(1, Math.ceil(left / 86400000));
   return (
     <button type="button" className={days <= 3 ? "prem-badge soon" : "prem-badge"} onClick={go}

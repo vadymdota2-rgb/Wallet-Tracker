@@ -845,7 +845,8 @@ say("каналы партнёров: подписка проверяется ge
 _app = read(f"{APP}/src/App.tsx")
 say("шапка: вместо кнопки «обновить» — вертикальный значок Премиума с днями (данные обновляются сами), заголовок вкладки целиком",
     "<PremBadge />" in _app and "function HdrTitle(" in _app and "flex-direction: column;" in read(f"{APP}/src/styles/app.css")[read(f"{APP}/src/styles/app.css").find(".prem-badge {"):] and 'className={`refresh' not in _app and "OK_DELAY = 180_000" in read(f"{APP}/src/lib/sync.ts")
-    and '"visibilitychange"' in read(f"{APP}/src/lib/sync.ts") and 'open("premium", "hdr")' in read(f"{APP}/src/components/PremBadge.tsx"))
+    and '"visibilitychange"' in read(f"{APP}/src/lib/sync.ts") and 'open("premium", "hdr")' in read(f"{APP}/src/components/PremBadge.tsx")
+    and 'open("lock")' in read(f"{APP}/src/components/PremBadge.tsx") and "lock: LockPage," in read(f"{APP}/src/screens/registry.ts"))
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
