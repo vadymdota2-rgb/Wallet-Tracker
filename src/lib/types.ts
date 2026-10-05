@@ -446,8 +446,8 @@ export interface PayInfo {
   /** Настроен ли кошелёк: без него кнопку USDT показывать нечестно. */
   ton: boolean;
   days: number;
-  /** Тарифы: месяц с автопродлением звёздами и год со скидкой. */
-  plans?: Partial<Record<"m" | "y", { stars: number; usdt: number; days: number; auto?: boolean }>>;
+  /** Тарифы: месяц и год со скидкой, оба разовые — без автопродления. */
+  plans?: Partial<Record<"m" | "y", { stars: number; usdt: number; days: number }>>;
   /** Вводная цена первого месяца — только если сейчас доступна, со сроком. */
   intro?: { stars: number; days: number; until: number };
   /** Ссылка на мини-приложение бота: сюда кошелёк вернёт после подписи. */

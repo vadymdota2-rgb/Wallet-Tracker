@@ -671,10 +671,12 @@ say("тексты приложения не посылают в чат бота:
 _prem_cpp = read(os.path.join(BOT, "premium.cpp"))
 _bot_plans = set(re.findall(r'\{"(premium_[a-z0-9_]+)", (\d+), (\d+)\}', _prem_cpp))
 _api_plans = {("premium_30_days", "250", "30"), ("premium_365_days", "1990", "365"), ("premium_30_intro", "150", "30")}
-say("тарифы: месяц подпиской, год и вводная цена — одинаковые у бота и API",
+say("тарифы: месяц, год и вводная цена — одинаковые у бота и API, все разовые (автопродления нет, старые подписки бот отменяет)",
     _bot_plans == _api_plans and '"payload": "premium_365_days", "stars": 1990, "days": 365' in api
     and '"payload": "premium_30_intro", "stars": 150, "days": 30' in api
-    and '"subscription_period": STAR_SUB_PERIOD' in api and "STAR_SUB_PERIOD = 30 * 86400" in api
+    and "subscription_period" not in api and "STAR_SUB_PERIOD" not in api and '"auto"' not in api
+    and "editUserStarSubscription" in _prem_cpp and "cancelStarSubscriptions(OWNER_CHAT_ID, false)" in read(f"{BOT}/main.cpp")
+    and 'txt == "/autorenew"' in read(f"{BOT}/main.cpp") and "p.sub_until >=" not in read(f"{BOT}/lifecycle.cpp")
     and "grantPremiumDays(chatId, days)" in _prem_cpp and "until = intro_until(con, chat)" in api, str(_bot_plans))
 _pay_ts = read(f"{APP}/src/lib/pay.ts")
 say("вводная цена привязана к покупателю и сроку: сервер вшивает их в счёт, бот сверяет перед оплатой",
@@ -687,10 +689,10 @@ say("бот продлевает Премиум одной транзакцие�
     "Чтение срока и запись нового — одной транзакцией" in _prem_cpp)
 
 _lc = read(os.path.join(BOT, "lifecycle.cpp"))
-say("бот: письма жизненного цикла — 2 дня до конца пробы, конец пробы со скидкой, возврат 14/30, продление без автоплатежа",
+say("бот: письма жизненного цикла — 2 дня до конца пробы, конец пробы со скидкой, возврат 14/30, напоминание о продлении каждому, кто платил",
     'claim(r.chat, "trial_d5")' in _lc and '"renew:" + std::to_string(r.expire)' in _lc
     and "for (const int after : {14, 30})" in _lc and 'tr(lang, "lc_intro")' in _lc
-    and "p.sub_until >= u.premium_expire - 86400" in _lc and "if (n <= 0 ||" in _lc
+    and "p.sub_until" not in _lc and "if (n <= 0 ||" in _lc
     and "sendPremiumEnded(cid)" in _prem_cpp and "lifecycleTick();" in read(f"{BOT}/main.cpp"))
 _mcpp = read(f"{BOT}/main.cpp")
 say("бот: бесплатному алерт без цены входа и PnL, со строкой о премиуме",

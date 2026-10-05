@@ -62,7 +62,7 @@ export function PremiumScreen({ arg }: ScreenProps) {
 
   const [busy, setBusy] = useState<"" | "stars" | "usdt">("");
   /* Тариф. По умолчанию — вводная цена, если она сейчас есть, иначе год:
-     он выгоднее и честно помечен скидкой; месяц с автопродлением рядом. */
+     он выгоднее и честно помечен скидкой; месяц рядом. Оба разовые. */
   const plans = pay.plans ?? {};
   const intro = pay.intro && pay.intro.until * 1000 > Date.now() ? pay.intro : undefined;
   const [plan, setPlan] = useState<Plan>(() => (intro ? "intro" : plans.y ? "y" : "m"));
@@ -200,7 +200,7 @@ export function PremiumScreen({ arg }: ScreenProps) {
             className={plan === "m" ? "plan on" : "plan"} onClick={() => setPlan("m")}>
             <span className="plan-hd"><b>{t(lang, "pl_month")}</b></span>
             <span className="plan-px">{num(plans.m?.stars ?? pay.stars)} ⭐{pay.ton ? ` · ${plans.m?.usdt ?? pay.usdt} USDT` : ""}</span>
-            <small>{t(lang, plans.m?.auto ? "pl_auto" : "pl_once")}</small>
+            <small>{t(lang, "pl_once")}</small>
           </button>
         </div>
         <div className="stack-actions">

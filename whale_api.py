@@ -101,19 +101,19 @@ PREMIUM_PAYLOAD = "premium_30_days"
 # Тарифы. Нагрузка, цена и срок — те же, что STAR_PLANS в premium.cpp: бот
 # сверяет их перед выдачей подписки.
 #
-#   m     — месяц подпиской Telegram: звёзды списываются сами каждые 30 дней,
-#           отменить можно в настройках Telegram в любой момент;
-#   y     — год разовой оплатой, около трети дешевле двенадцати месяцев;
+#   m     — месяц;
+#   y     — год, около трети дешевле двенадцати месяцев;
 #   intro — первый месяц по вводной цене: 48 часов после конца пробной
 #           недели и только тем, кто ещё ни разу не платил.
+#
+# Все тарифы — разовые: автопродления (подписки Telegram) нет. Продлить или
+# нет — каждый раз решает человек; за 3 дня до конца бот напоминает.
 STAR_PLANS = {
-    "m": {"payload": PREMIUM_PAYLOAD, "stars": PREMIUM_STARS, "days": 30, "sub": True},
-    "y": {"payload": "premium_365_days", "stars": 1990, "days": 365, "sub": False},
-    "intro": {"payload": "premium_30_intro", "stars": 150, "days": 30, "sub": False},
+    "m": {"payload": PREMIUM_PAYLOAD, "stars": PREMIUM_STARS, "days": 30},
+    "y": {"payload": "premium_365_days", "stars": 1990, "days": 365},
+    "intro": {"payload": "premium_30_intro", "stars": 150, "days": 30},
 }
 INTRO_WINDOW_SEC = 48 * 3600
-# Подписка Telegram бывает только на 30 дней.
-STAR_SUB_PERIOD = 30 * 86400
 # Цена в USDT. Отдельным числом, а не пересчётом звёзд: курс звезды плавает,
 # а ценник в долларах человек видит заранее и без сюрпризов.
 PREMIUM_USDT = float(os.environ.get("WHALE_PREMIUM_USDT", "3.99"))
@@ -8779,9 +8779,8 @@ def pay_stars(chat: str, lang: str, plan: str = "m") -> dict:
     """Ссылка на счёт в звёздах.
 
     Полезная нагрузка и сумма — ровно те, что ждёт бот: он проверяет их у
-    себя и с чужим счётом подписку не выдаст. Месяц — подпиской Telegram с
-    автопродлением; если Telegram подписку не принял, счёт выставляется
-    разовым, чтобы человек всё равно мог заплатить.
+    себя и с чужим счётом подписку не выдаст. Счёт всегда разовый: звёзды
+    сами не списываются, продлевает человек.
     """
     p = STAR_PLANS.get(plan)
     if not p:
@@ -8809,15 +8808,10 @@ def pay_stars(chat: str, lang: str, plan: str = "m") -> dict:
         "currency": "XTR",
         "prices": [{"label": t_pay(lang, "title"), "amount": p["stars"]}],
     }
-    sub = bool(p["sub"])
-    link = tg_api("createInvoiceLink", {**req, "subscription_period": STAR_SUB_PERIOD} if sub else req)
-    if sub and (not isinstance(link, str) or not link):
-        sys.stderr.write(f"[api] подписка звёздами не выставилась, счёт разовый: {chat}\n")
-        sub = False
-        link = tg_api("createInvoiceLink", req)
+    link = tg_api("createInvoiceLink", req)
     if not isinstance(link, str) or not link:
         return {"ok": False, "error": "invoice_failed"}
-    return {"ok": True, "link": link, "stars": p["stars"], "days": p["days"], "sub": sub, "plan": plan}
+    return {"ok": True, "link": link, "stars": p["stars"], "days": p["days"], "plan": plan}
 
 
 def pay_usdt(chat: str, plan: str = "m") -> dict:
@@ -9772,10 +9766,10 @@ def bootstrap(chat: str, fast: bool = False) -> dict:
                 "usdt": PREMIUM_USDT,
                 "ton": usdt_ready(cur),
                 "days": PREMIUM_DAYS,
-                # Тарифы: месяц с автопродлением и год со скидкой. Вводная
+                # Тарифы: месяц и год со скидкой, оба разовые. Вводная
                 # цена — только тому, кому она сейчас доступна, со сроком.
                 "plans": {
-                    "m": {"stars": STAR_PLANS["m"]["stars"], "usdt": USDT_PLANS["m"]["usdt"], "days": 30, "auto": True},
+                    "m": {"stars": STAR_PLANS["m"]["stars"], "usdt": USDT_PLANS["m"]["usdt"], "days": 30},
                     "y": {"stars": STAR_PLANS["y"]["stars"], "usdt": USDT_PLANS["y"]["usdt"], "days": 365},
                 },
                 **({"intro": {"stars": STAR_PLANS["intro"]["stars"], "days": 30, "until": intro_end}}
