@@ -880,7 +880,8 @@ say("автопополнение базы китов: BSC и Hyperliquid от $
     and "t.timestamp>=?" in _mcpp and "hlAutoForget(w.addr);" in _mcpp and "g_bscAutoSeen.erase(w.addr);" in _mcpp
     and "btcPruneAuto(cut)" in _mcpp and "int btcPruneAuto(long long cut)" in read(f"{BOT}/btc_chain.cpp")
     and "void autoPruned(AutoNet n, int count)" in read(f"{BOT}/autobase.cpp") and "Сегодня: добавлено" in read(f"{BOT}/autobase.cpp") and "Всего поиском: добавлено" in read(f"{BOT}/autobase.cpp")
-    and "std::string serviceBaseSummary()" in _mcpp and "serviceBaseSummary()" in read(f"{BOT}/autobase.cpp")
+    and "std::string serviceBaseSummary(std::string& totals)" in _mcpp and "serviceBaseSummary(totals)" in read(f"{BOT}/autobase.cpp")
+    and "Кошельков в базе" in _mcpp and "thousands(evm + btc)" in _mcpp and 't << "\\n\\n" << totals;' in read(f"{BOT}/autobase.cpp")
     and "Вся база сервисного аккаунта" in _mcpp and "long long btcWatchCount(bool autoOnly)" in read(f"{BOT}/btc_chain.cpp")
     and "void autoBanned(AutoNet n, int count)" in read(f"{BOT}/autobase.cpp") and "long long btcAutoCount()" in read(f"{BOT}/btc_chain.cpp")
     and 'if (label == "auto-bsc") autoBanned(AutoNet::BSC);' in read(f"{BOT}/wallets.cpp")
