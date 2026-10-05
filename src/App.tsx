@@ -9,6 +9,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useApp } from "./store/app";
 import { useLive } from "./store/live";
 import { Gift } from "./components/Gift";
+import { PremBadge } from "./components/PremBadge";
 import { LockScreen, LockSheet, useLocked } from "./components/LockScreen";
 import { LOCK_OPEN_SCREENS } from "./lib/upsell";
 import { HalvingCard } from "./components/HalvingCard";
@@ -18,7 +19,7 @@ import { setLocale } from "./lib/format";
 import { bootTelegram, haptic, initData, launchGo, telegramLang, waitForTelegram, webApp } from "./lib/telegram";
 import { SOCIALS, openSocial } from "./lib/social";
 import { startSync, syncNow } from "./lib/sync";
-import { Toaster, toast } from "./components/Toast";
+import { Toaster } from "./components/Toast";
 import { Background } from "./components/Background";
 import { AnalyticsGlyph, ChartGlyph, DigestGlyph, DomGlyph, EtfGlyph, FundLineGlyph, GaugeGlyph, LiqGlyph, UnlockGlyph, TopGlyph, WalletGlyph } from "./components/ui";
 import { SCREENS } from "./screens/registry";
@@ -114,7 +115,6 @@ export default function App() {
   const openFromMenu = useApp((s) => s.openFromMenu);
   const locked = useLocked();
   const [i18nReady, setReady] = useState(false);
-  const [busy, setBusy] = useState(false);
 
   // Язык: выбор человека главнее подсказки Telegram. Прошлая версия при
   // отсутствии явного выбора принудительно ставила английский и выбор
@@ -233,15 +233,6 @@ export default function App() {
     ? SCREEN_TITLE[top.name]
     : (TABS.find((x) => x.id === tab)?.key ?? "menu_title");
 
-  const refresh = async () => {
-    if (busy) return;
-    setBusy(true);
-    haptic("light");
-    const ok = await syncNow();
-    if (!ok) toast(t(lang, "ui_sync_failed"), "err");
-    setBusy(false);
-  };
-
   return (
     <div className="app">
       <Background />
@@ -253,13 +244,11 @@ export default function App() {
         </button>
         <h1 className="hdr-ttl">
           <span className="hdr-mark" aria-hidden="true">◱</span>
-          {bare(t(lang, titleKey))}
+          <span className="hdr-txt">{bare(t(lang, titleKey))}</span>
         </h1>
-        {/* Состояние — с приставкой: голое «boot» совпадало с классом заставки
-            (.boot { position: fixed; inset: 0 }), и до первой выгрузки кнопка
-            выпадала из шапки в левый верхний угол, поверх меню. */}
-        <button type="button" className={`refresh st-${status}${busy ? " spin" : ""}`}
-                onClick={refresh} aria-label={t(lang, "ui_updated")}>↻</button>
+        {/* Сколько осталось Премиума — вместо кнопки «обновить»: данные
+            приходят сами (lib/sync.ts). */}
+        <PremBadge />
       </header>
 
       {status === "offline" ? <p className="banner">{t(lang, "ui_offline")}</p> : null}

@@ -9629,6 +9629,24 @@
     "vi": "Mọi thứ hoạt động đến {d}",
     "zh": "{d} 前全部可用"
   },
+  "hdr_days": {
+    "ar": "يوم",
+    "de": "Tage",
+    "en": "days",
+    "es": "días",
+    "fr": "j",
+    "hi": "दिन",
+    "id": "hari",
+    "ja": "日",
+    "ko": "일",
+    "pl": "dni",
+    "pt": "dias",
+    "ru": "дн.",
+    "tr": "gün",
+    "uk": "дн.",
+    "vi": "ngày",
+    "zh": "天"
+  },
   "help_disclaimer": {
     "ar": "⚠️ إخلاء مسؤولية\nيعرض البوت معاملات وقعت فعلًا على البلوكشين. هذه خدمة معلوماتية، وليست نصيحة استثمارية ولا دعوة للتداول. نتائج أي محفظة في الماضي لا تدل على نتائجها في المستقبل. التداول بالرافعة قد يكلّفك كامل رصيدك. القرار قرارك والمخاطرة مخاطرتك.",
     "de": "⚠️ Haftungsausschluss\nDer Bot zeigt On-Chain-Transaktionen, die bereits stattgefunden haben. Dies ist ein Informationsdienst, keine Anlageberatung und keine Handelsempfehlung. Vergangene Ergebnisse einer Wallet sagen nichts über die Zukunft aus. Hebelhandel kann deinen gesamten Einsatz kosten. Entscheidungen und Risiko liegen bei dir.",
@@ -15712,24 +15730,6 @@
     "uk": "до ліквідації",
     "vi": "đến thanh lý",
     "zh": "距强平"
-  },
-  "ui_updated": {
-    "ar": "تم التحديث",
-    "de": "aktualisiert",
-    "en": "updated",
-    "es": "actualizado",
-    "fr": "mis à jour",
-    "hi": "अपडेट किया गया",
-    "id": "diperbarui",
-    "ja": "更新済み",
-    "ko": "업데이트됨",
-    "pl": "zaktualizowano",
-    "pt": "atualizado",
-    "ru": "обновлено",
-    "tr": "güncellendi",
-    "uk": "оновлено",
-    "vi": "đã cập nhật",
-    "zh": "已更新"
   },
   "ui_worth_now": {
     "ar": "القيمة الآن",
