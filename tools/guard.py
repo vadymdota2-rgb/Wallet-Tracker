@@ -862,12 +862,12 @@ _hlc = read(f"{BOT}/hyperliquid_core.cpp")
 _hl_auto = _hlc[_hlc.find("Автопополнение базы сервисного аккаунта"):_hlc.find("void handleTrades(")]
 say("автопополнение базы китов: BSC и Hyperliquid от $10k, Bitcoin от 1 BTC, по 100 в сутки на сеть, /autobase включает и выключает каждую сеть; Hyperliquid ищет без бюджета запросов; молчащих месяц — убираем",
     "bscAutoConsider(tx, to, watchers.get());" in _mcpp and "BSC_HOT_NONCE = 300000" in _mcpp
-    and "std::atof(v) : 10000.0" in _mcpp and '"eth_getCode"' in _mcpp and "BSC_AUTO_MAX_NONCE = 1000" in _mcpp
+    and "autoMinUsd(AutoNet::BSC)" in _mcpp and '"eth_getCode"' in _mcpp and "BSC_AUTO_MAX_NONCE = 1000" in _mcpp
     and 'addUserWhale(SERVICE_CHAT_ID, a, "auto-bsc")' in _mcpp and "std::thread(bscAutoLoop).detach();" in _mcpp
     and "pruneAutoWallets();" in _mcpp and "Автобаза за сутки" in _mcpp
     and "if (big) autoCandidate(addr);" in _hlc and "if (!g_lbGood.count(addr)) return;" in _hlc
     and "stats-data.hyperliquid.xyz/Mainnet/leaderboard" in _hlc and "HL_LB_MAX_TURNOVER = 30.0" in _hlc
-    and "g_autoThread = std::thread(autoLoop);" in _hlc and "g_autoToday >= HL_AUTO_DAILY" in _hlc
+    and "g_autoThread = std::thread(autoLoop);" in _hlc and "autoCounted(AutoNet::HL);" in _hlc
     and "infoPost" not in _hl_auto and "userRateLimit" not in _hl_auto
     and "autoRoom(AutoNet::BSC)" in _mcpp and "autoRoom(AutoNet::HL)" in _hlc
     and "autoRoom(AutoNet::BTC)" in read(f"{BOT}/btc_chain.cpp") and 'envSats("WHALE_BTC_AUTO_MIN", 1.0)' in read(f"{BOT}/btc_chain.cpp")
