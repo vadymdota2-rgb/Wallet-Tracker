@@ -7837,7 +7837,8 @@ def bonus_state(chat: str) -> dict:
     какого времени) и сколько за что дают; плюс заявки с бирж."""
     out = {"ok": True, "items": [{"id": k, "days": d} for k, d in SOCIAL_BONUS.items()],
            "got": {}, "opened": {}, "pending": {},
-           "exItems": [{"id": k, "days": d, "name": EXCH_NAMES[k], "link": EXCH_LINKS[k]} for k, d in EXCH_BONUS.items()],
+           "exItems": [{"id": k, "days": d, "name": EXCH_NAMES[k], "link": EXCH_LINKS[k], "code": EXCH_CODES[k],
+                        "minDep": EXCH_MIN_DEP[k], "gift": EXCH_GIFT[k]} for k, d in EXCH_BONUS.items()],
            "exch": {k: {"status": "none"} for k in EXCH_BONUS}}
     if not chat:
         return out
@@ -7925,8 +7926,9 @@ def bonus_act(chat: str, kind: str, act: str) -> dict:
 
 # Бонус за регистрацию на бирже по нашей ссылке ------------------------------
 #
-# Проверить приглашённых у биржи открыто нельзя, поэтому проверка ручная:
-# человек присылает свой UID, владельцу бота приходит сообщение с кнопками
+# Условие — регистрация по ссылке или коду (или смена пригласившего на наш
+# код) и депозит с покупкой от EXCH_MIN_DEP. Проверить приглашённых у биржи
+# открыто нельзя, поэтому проверка ручная: человек присылает свой UID, владельцу бота приходит сообщение с кнопками
 # «Одобрить» / «Отклонить» (callback «ex:ok:<id>» / «ex:no:<id>» — их ловит
 # бот и меняет status). Дни начисляет и человеку пишет фоновый проход
 # exch_settle: так начисление идёт одной транзакцией с отметкой о нём, как у
@@ -7935,6 +7937,13 @@ def bonus_act(chat: str, kind: str, act: str) -> dict:
 EXCH_BONUS = {"okx": 30}
 EXCH_NAMES = {"okx": "OKX"}
 EXCH_LINKS = {"okx": os.environ.get("WHALE_OKX_REF", "https://my.okx.com/ua-eu/join/SY5IQVFB").strip()}
+# Код — для тех, кто регистрируется не по ссылке, и для тех, у кого аккаунт
+# уже есть: OKX разрешает один раз сменить пригласившего.
+EXCH_CODES = {"okx": os.environ.get("WHALE_OKX_CODE", "SY5IQVFB").strip()}
+# Условие награды: депозит и покупка криптовалюты от этой суммы (его же
+# партнёру засчитывает OKX). И что человек получит от самой биржи.
+EXCH_MIN_DEP = {"okx": "200 €"}
+EXCH_GIFT = {"okx": "400 €"}
 EXCH_MAX_TRIES = 5
 EXCH_SCHEMA = """
 CREATE TABLE IF NOT EXISTS exch_claims (
@@ -7971,22 +7980,22 @@ EXCH_OK_NOTE = {
     "ar": "✅ تم تأكيد تسجيلك في {name} — +{n} يومًا من بريميوم. شكرًا!",
 }
 EXCH_NO_NOTE = {
-    "en": "❌ We couldn't find UID {uid} among {name} sign-ups via our link. Check the UID or register with our link and send it again in the app: More → Bonuses.",
-    "ru": "❌ UID {uid} не найден среди регистраций на {name} по нашей ссылке. Проверьте UID или зарегистрируйтесь по ссылке и отправьте заново в приложении: Ещё → Бонусы.",
-    "uk": "❌ UID {uid} не знайдено серед реєстрацій на {name} за нашим посиланням. Перевірте UID або зареєструйтеся за посиланням і надішліть знову в застосунку: Ще → Бонуси.",
-    "es": "❌ No encontramos el UID {uid} entre los registros en {name} con nuestro enlace. Revisa el UID o regístrate con el enlace y envíalo de nuevo en la app: Más → Bonos.",
-    "pt": "❌ Não encontramos o UID {uid} entre os cadastros na {name} pelo nosso link. Confira o UID ou cadastre-se pelo link e envie de novo no app: Mais → Bônus.",
-    "de": "❌ UID {uid} ist nicht unter den {name}-Registrierungen über unseren Link. Prüfe die UID oder registriere dich über den Link und sende sie erneut in der App: Mehr → Boni.",
-    "fr": "❌ L'UID {uid} ne figure pas parmi les inscriptions sur {name} via notre lien. Vérifiez l'UID ou inscrivez-vous via le lien et renvoyez-le dans l'app : Plus → Bonus.",
-    "tr": "❌ UID {uid}, bağlantımızla yapılan {name} kayıtları arasında bulunamadı. UID'yi kontrol edin veya bağlantıyla kaydolup uygulamada tekrar gönderin: Daha fazla → Bonuslar.",
-    "pl": "❌ Nie znaleźliśmy UID {uid} wśród rejestracji na {name} z naszego linku. Sprawdź UID lub zarejestruj się z linku i wyślij ponownie w aplikacji: Więcej → Bonusy.",
-    "id": "❌ UID {uid} tidak ditemukan di antara pendaftaran {name} lewat tautan kami. Periksa UID atau daftar lewat tautan lalu kirim lagi di aplikasi: Lainnya → Bonus.",
-    "vi": "❌ Không tìm thấy UID {uid} trong số đăng ký {name} qua liên kết của chúng tôi. Hãy kiểm tra UID hoặc đăng ký qua liên kết rồi gửi lại trong ứng dụng: Thêm → Phần thưởng.",
-    "ja": "❌ UID {uid} は当リンク経由の{name}登録に見つかりませんでした。UIDを確認するか、リンクから登録してアプリで再送してください：その他 → ボーナス。",
-    "ko": "❌ UID {uid}을(를) 저희 링크로 가입한 {name} 계정에서 찾지 못했습니다. UID를 확인하거나 링크로 가입한 뒤 앱에서 다시 보내 주세요: 더 보기 → 보너스.",
-    "zh": "❌ 在通过我们链接注册的 {name} 用户中未找到 UID {uid}。请检查 UID，或通过链接注册后在应用中重新提交：更多 → 奖励。",
-    "hi": "❌ हमारे लिंक से {name} पर हुए पंजीकरणों में UID {uid} नहीं मिला। UID जाँचें या लिंक से पंजीकरण करके ऐप में दोबारा भेजें: और → बोनस।",
-    "ar": "❌ لم نجد UID {uid} بين التسجيلات في {name} عبر رابطنا. تحقّق من UID أو سجّل عبر الرابط وأرسله مجددًا في التطبيق: المزيد ← المكافآت.",
+    "en": "❌ UID {uid}: we couldn't find a {name} sign-up with our link or code, or a deposit and purchase of {m}+. Check the terms and send it again in the app: More → Bonuses.",
+    "ru": "❌ UID {uid}: не нашли регистрацию на {name} по нашей ссылке или коду либо депозит и покупку от {m}. Проверьте условия и отправьте снова в приложении: Ещё → Бонусы.",
+    "uk": "❌ UID {uid}: не знайшли реєстрацію на {name} за нашим посиланням чи кодом або депозит і купівлю від {m}. Перевірте умови й надішліть знову в застосунку: Ще → Бонуси.",
+    "es": "❌ UID {uid}: no encontramos un registro en {name} con nuestro enlace o código, o un depósito y compra desde {m}. Revisa las condiciones y envíalo de nuevo en la app: Más → Bonos.",
+    "pt": "❌ UID {uid}: não encontramos cadastro na {name} pelo nosso link ou código, ou depósito e compra a partir de {m}. Confira as condições e envie de novo no app: Mais → Bônus.",
+    "de": "❌ UID {uid}: Keine {name}-Registrierung über unseren Link oder Code oder keine Einzahlung und kein Kauf ab {m} gefunden. Prüfe die Bedingungen und sende erneut in der App: Mehr → Boni.",
+    "fr": "❌ UID {uid} : aucune inscription sur {name} via notre lien ou code, ou aucun dépôt et achat dès {m}. Vérifiez les conditions et renvoyez-le dans l'app : Plus → Bonus.",
+    "tr": "❌ UID {uid}: bağlantımız veya kodumuzla {name} kaydı ya da en az {m} yatırma ve alım bulunamadı. Koşulları kontrol edip uygulamada tekrar gönderin: Daha fazla → Bonuslar.",
+    "pl": "❌ UID {uid}: nie znaleźliśmy rejestracji na {name} z naszego linku lub kodu albo wpłaty i zakupu od {m}. Sprawdź warunki i wyślij ponownie w aplikacji: Więcej → Bonusy.",
+    "id": "❌ UID {uid}: kami tidak menemukan pendaftaran {name} lewat tautan atau kode kami, atau deposit dan pembelian mulai {m}. Periksa syaratnya lalu kirim lagi di aplikasi: Lainnya → Bonus.",
+    "vi": "❌ UID {uid}: không tìm thấy đăng ký {name} qua liên kết hoặc mã của chúng tôi, hoặc khoản nạp và mua từ {m}. Hãy kiểm tra điều kiện rồi gửi lại trong ứng dụng: Thêm → Phần thưởng.",
+    "ja": "❌ UID {uid}：当リンク・コードでの{name}登録、または{m}以上の入金と購入が確認できませんでした。条件を確認してアプリで再送してください：その他 → ボーナス。",
+    "ko": "❌ UID {uid}: 저희 링크·코드로 가입한 {name} 내역이나 {m} 이상 입금·구매 내역을 찾지 못했습니다. 조건을 확인하고 앱에서 다시 보내 주세요: 더 보기 → 보너스.",
+    "zh": "❌ UID {uid}：未找到通过我们链接或邀请码的 {name} 注册，或不少于 {m} 的充值和购买。请检查条件后在应用中重新提交：更多 → 奖励。",
+    "hi": "❌ UID {uid}: हमारे लिंक या कोड से {name} पर पंजीकरण, या {m} से जमा और खरीद नहीं मिली। शर्तें जाँचें और ऐप में दोबारा भेजें: और → बोनस।",
+    "ar": "❌ UID {uid}: لم نجد تسجيلًا في {name} عبر رابطنا أو رمزنا، أو إيداعًا وشراءً من {m}. تحقّق من الشروط وأرسله مجددًا في التطبيق: المزيد ← المكافآت.",
 }
 
 
@@ -8026,7 +8035,8 @@ def _exch_owner_note(cid: int, chat: str, ex: str, uid: str, who: str) -> None:
             f"Пользователь: <a href=\"tg://user?id={html.escape(chat)}\">{html.escape(who or chat)}</a> "
             f"(<code>{html.escape(chat)}</code>)\n"
             + (f"\n{hist}\n" if hist else "")
-            + "\nПроверьте UID среди приглашённых в кабинете партнёра.")
+            + f"\nПроверьте в кабинете партнёра: UID среди приглашённых, депозит и покупка "
+              f"от {EXCH_MIN_DEP.get(ex, '')}.")
     tg_api("sendMessage", {"chat_id": OWNER_CHAT_ID, "text": text, "parse_mode": "HTML",
                            "reply_markup": {"inline_keyboard": [[
                                {"text": "✅ Одобрить", "callback_data": f"ex:ok:{cid}"},
@@ -8154,7 +8164,8 @@ def exch_settle(notify: bool = True) -> int:
             track(c, "exch", ex)
             text = EXCH_OK_NOTE.get(lang, EXCH_OK_NOTE["en"]).replace("{name}", name).replace("{n}", str(d))
         else:
-            text = EXCH_NO_NOTE.get(lang, EXCH_NO_NOTE["en"]).replace("{name}", name).replace("{uid}", uid)
+            text = EXCH_NO_NOTE.get(lang, EXCH_NO_NOTE["en"]).replace("{name}", name).replace("{uid}", uid) \
+                .replace("{m}", EXCH_MIN_DEP.get(ex, ""))
         if notify:
             threading.Thread(target=tg_api, args=("sendMessage", {"chat_id": c, "text": text}), daemon=True).start()
     return len(done)

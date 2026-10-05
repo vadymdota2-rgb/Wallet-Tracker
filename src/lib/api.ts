@@ -230,7 +230,7 @@ export interface BonusReply {
   /** «На проверке»: до какого времени (сек), потом сервер начислит дни. */
   pending?: Record<string, number>;
   /** Биржи: регистрация по нашей ссылке, UID проверяет владелец вручную. */
-  exItems?: { id: string; days: number; name: string; link: string }[];
+  exItems?: { id: string; days: number; name: string; link: string; code?: string; minDep?: string; gift?: string }[];
   exch?: Record<string, ExchClaim>;
 }
 /** Заявка с биржи: none — не было, wait — на проверке, ok — одобрена, no — отклонена. */

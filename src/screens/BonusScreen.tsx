@@ -9,7 +9,9 @@
  * минут сервер сам начисляет день (bonus_settle), а бот пишет «подписка
  * подтверждена». Второй раз кнопка уже не нажимается.
  *
- * Биржа (OKX): регистрация по нашей ссылке. Проверить приглашённых открыто
+ * Биржа (OKX): регистрация по нашей ссылке или коду (у кого аккаунт уже
+ * есть — смена пригласившего на наш код, OKX даёт её один раз), депозит и
+ * покупка от суммы, которую присылает сервер. Проверить приглашённых открыто
  * нельзя, поэтому человек присылает свой UID, а владелец одобряет его в боте
  * (exch_claims в API). Одобрили — дни начисляет сервер, бот пишет человеку.
  */
@@ -21,6 +23,7 @@ import { haptic, openExternal } from "../lib/telegram";
 import { bonusAct, exchSubmit, fetchBonus, type BonusReply } from "../lib/api";
 import { SOCIALS, openSocial, type Social } from "../lib/social";
 import { syncNow } from "../lib/sync";
+import { copyText } from "../lib/copy";
 import { toast } from "../components/Toast";
 import { InviteCard, useRefInfo } from "../components/Invite";
 import { Action, Card, SectionTitle } from "../components/ui";
@@ -208,7 +211,7 @@ export function BonusScreen() {
   );
 }
 
-/** Регистрация на бирже по нашей ссылке: ссылка → UID → «Отправить на проверку». */
+/** Бирже по нашей ссылке или коду: ссылка/код → депозит → UID → «Отправить на проверку». */
 function ExchCard({ ex, claim, onSent }: {
   ex: NonNullable<BonusReply["exItems"]>[number];
   claim?: NonNullable<BonusReply["exch"]>[string];
@@ -218,7 +221,7 @@ function ExchCard({ ex, claim, onSent }: {
   const [uid, setUid] = useState("");
   const [busy, setBusy] = useState(false);
   const status = claim?.status ?? "none";
-  const vars = { name: ex.name, n: ex.days };
+  const vars = { name: ex.name, n: ex.days, m: ex.minDep ?? "", g: ex.gift ?? "" };
 
   async function send() {
     const v = uid.replace(/\s+/g, "");
@@ -264,10 +267,28 @@ function ExchCard({ ex, claim, onSent }: {
       ) : (
         <>
           <p className="note dim">{t(lang, "bn_ex_d", vars)}</p>
-          {status === "no" ? <p className="bn-ex-no">{t(lang, "bn_ex_no", { uid: claim?.uid ?? "" })}</p> : null}
+          {ex.gift ? <p className="bn-ex-gift">🎁 {t(lang, "bn_ex_okx", vars)}</p> : null}
+          {status === "no" ? <p className="bn-ex-no">{t(lang, "bn_ex_no", { uid: claim?.uid ?? "", m: vars.m })}</p> : null}
           <div className="stack-actions">
             <Action kind="ghost" onClick={() => openExternal(ex.link)}>{t(lang, "bn_ex_open", vars)}</Action>
           </div>
+          {ex.code ? (
+            <>
+              <div className="bn-ex-code">
+                <span className="bn-ex-code-t">
+                  <span>{t(lang, "bn_ex_code")}</span>
+                  <b className="mono">{ex.code}</b>
+                </span>
+                <button type="button" onClick={() => {
+                  haptic("select");
+                  void copyText(ex.code ?? "").then((ok) =>
+                    toast(t(lang, ok ? "bn_ex_code_ok" : "ui_copy_failed"), ok ? undefined : "err"));
+                }}>{t(lang, "ui_copy")}</button>
+              </div>
+              <p className="bn-note">{t(lang, "bn_ex_rebind", vars)}</p>
+            </>
+          ) : null}
+          {ex.minDep ? <p className="bn-ex-label">{t(lang, "bn_ex_dep", vars)}</p> : null}
           <label className="bn-ex-label" htmlFor={`ex-uid-${ex.id}`}>{t(lang, "bn_ex_uid", vars)}</label>
           <input
             id={`ex-uid-${ex.id}`}
