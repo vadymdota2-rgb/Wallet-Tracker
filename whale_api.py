@@ -7714,7 +7714,7 @@ def token_state(chat: str, on: bool | None = None) -> dict:
 # (bonus_settle) начисляет день и бот пишет «подписка подтверждена». Каждый
 # бонус — один раз на аккаунт (bonus_claims, ключ — человек и сеть).
 SOCIAL_BONUS = {"tg": 3, "tgc": 3, "x": 1, "tiktok": 1, "instagram": 1, "youtube": 1}
-SOCIAL_NAMES = {"tg": "Telegram", "tgc": "Wallet Tracker Community", "x": "Twitter", "tiktok": "TikTok",
+SOCIAL_NAMES = {"tg": "Telegram Channel", "tgc": "Wallet Tracker Community", "x": "Twitter", "tiktok": "TikTok",
                 "instagram": "Instagram", "youtube": "YouTube"}
 TG_CHANNEL = os.environ.get("WHALE_TG_CHANNEL", "@WalletTrackerOfficial").strip()
 # Чаты Telegram, подписку на которые проверяем по-настоящему (getChatMember):

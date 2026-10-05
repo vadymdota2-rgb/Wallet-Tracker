@@ -187,7 +187,7 @@ export function BonusScreen() {
                 <button type="button" className="bn-net" onClick={() => open(s)}>
                   <span className="bn-ic">{s.icon(18)}</span>
                   <span className="bn-name">
-                    <b>{s.name}</b>
+                    <b>{s.bonusName ?? s.name}</b>
                     <small>{done ? t(lang, "bn_done") : t(lang, "bn_days", { n: d })}</small>
                   </span>
                 </button>

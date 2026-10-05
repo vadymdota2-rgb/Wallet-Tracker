@@ -18,6 +18,8 @@ export interface Social {
   icon: (size: number) => ReactNode;
   /** Только в «Бонусах», не в нижней строке ссылок: там места на пять. */
   bonusOnly?: boolean;
+  /** Подпись в «Бонусах», если там нужна точнее, чем в нижней строке. */
+  bonusName?: string;
 }
 
 /** Чаты Telegram (канал и сообщество): подписку на них сервер проверяет
@@ -46,6 +48,8 @@ export const SOCIALS: Social[] = [
     name: "Telegram",
     url: "https://t.me/WalletTrackerOfficial",
     icon: tgIcon,
+    // В «Бонусах» рядом стоит сообщество — подписываем, что это канал.
+    bonusName: "Telegram Channel",
   },
   {
     id: "tgc",
