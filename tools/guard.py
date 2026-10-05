@@ -879,7 +879,10 @@ say("автопополнение базы китов: BSC и Hyperliquid от $
     and 'txt.rfind("/autobase ", 0) == 0' in _mcpp
     and "t.timestamp>=?" in _mcpp and "hlAutoForget(w.addr);" in _mcpp and "g_bscAutoSeen.erase(w.addr);" in _mcpp
     and "btcPruneAuto(cut)" in _mcpp and "int btcPruneAuto(long long cut)" in read(f"{BOT}/btc_chain.cpp")
-    and "void autoPruned(AutoNet n, int count)" in read(f"{BOT}/autobase.cpp") and "убрано за бездействие" in read(f"{BOT}/autobase.cpp")
+    and "void autoPruned(AutoNet n, int count)" in read(f"{BOT}/autobase.cpp") and "Сегодня: добавлено" in read(f"{BOT}/autobase.cpp") and "Всего: добавлено" in read(f"{BOT}/autobase.cpp")
+    and "void autoBanned(AutoNet n)" in read(f"{BOT}/autobase.cpp") and "long long btcAutoCount()" in read(f"{BOT}/btc_chain.cpp")
+    and 'if (label == "auto-bsc") autoBanned(AutoNet::BSC);' in read(f"{BOT}/wallets.cpp")
+    and 'else if (label == "auto-hl") autoBanned(AutoNet::HL);' in read(f"{BOT}/wallets.cpp")
     and "autoPruned(AutoNet::BSC, removedBsc)" in _mcpp and "autoPruned(AutoNet::HL, removedHl)" in _mcpp and "autoPruned(AutoNet::BTC, btc)" in _mcpp
     and "ignored_wallets" not in _mcpp[_mcpp.find("void pruneAutoWallets()"):_mcpp.find("bool processBlock(")])
 
