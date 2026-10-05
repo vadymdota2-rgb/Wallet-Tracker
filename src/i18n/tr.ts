@@ -88,7 +88,7 @@ export const tr: Dict = {
   bn_pt_not: "Henüz abonelik yok — abone olup «Kontrol et»e dokunun",
   bn_pt_title: "Partner kanallar",
   bn_pt_wait: "Sayıldı · günler {d}",
-  bn_social_d: "Telegram kanalı için +3 gün, diğer her ağ için +1 gün. Aboneliği otomatik kontrol ederiz: günler kendiliğinden eklenir, bot size mesaj gönderir.",
+  bn_social_d: "Telegram kanalı ve topluluğu için ayrı ayrı +3 gün, diğer her ağ için +1 gün. Aboneliği otomatik kontrol ederiz: günler kendiliğinden eklenir, bot size mesaj gönderir.",
   bn_social_title: "Bizi takip edin",
   bn_sub: "Ücretsiz Premium günleri",
   bn_subscribe: "Takip et",

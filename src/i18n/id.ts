@@ -88,7 +88,7 @@ export const id: Dict = {
   bn_pt_not: "Belum berlangganan — berlangganan lalu ketuk «Cek»",
   bn_pt_title: "Kanal mitra",
   bn_pt_wait: "Tercatat · hari pada {d}",
-  bn_social_d: "+3 hari untuk kanal Telegram dan +1 hari untuk tiap jaringan lain. Langganan kami periksa otomatis: hari ditambahkan sendiri dan bot mengirim pesan.",
+  bn_social_d: "Masing-masing +3 hari untuk kanal dan komunitas Telegram, +1 hari untuk tiap jaringan lain. Langganan kami periksa otomatis: hari ditambahkan sendiri dan bot mengirim pesan.",
   bn_social_title: "Ikuti kami",
   bn_sub: "Hari Premium gratis",
   bn_subscribe: "Ikuti",

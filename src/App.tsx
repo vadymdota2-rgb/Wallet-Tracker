@@ -323,7 +323,7 @@ export default function App() {
             — самой нижней строкой, под документами. Канал открывается самим
             Telegram, без браузера. На самых узких экранах — одни значки. */}
         <div className="social-bar">
-          {SOCIALS.map((so) => (
+          {SOCIALS.filter((so) => !so.bonusOnly).map((so) => (
             <button key={so.id} type="button" aria-label={so.name}
               onClick={() => { haptic("select"); openSocial(so); }}>
               {so.icon(12)}

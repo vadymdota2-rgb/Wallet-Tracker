@@ -88,7 +88,7 @@ export const pl: Dict = {
   bn_pt_not: "Brak subskrypcji — zasubskrybuj i stuknij „Sprawdź”",
   bn_pt_title: "Kanały partnerów",
   bn_pt_wait: "Zaliczone · dni {d}",
-  bn_social_d: "+3 dn. za kanał w Telegramie i +1 dn. za każdą inną sieć. Subskrypcję sprawdzamy automatycznie: dni dodadzą się same, a bot wyśle wiadomość.",
+  bn_social_d: "Po +3 dn. za kanał i społeczność w Telegramie i +1 dn. za każdą inną sieć. Subskrypcję sprawdzamy automatycznie: dni dodadzą się same, a bot wyśle wiadomość.",
   bn_social_title: "Obserwuj nas",
   bn_sub: "Darmowe dni Premium",
   bn_subscribe: "Obserwuj",

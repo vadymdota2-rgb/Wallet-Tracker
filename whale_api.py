@@ -7706,16 +7706,22 @@ def token_state(chat: str, on: bool | None = None) -> dict:
 
 # Бонусы: дни Премиума за подписку на соцсети ---------------------------------
 #
-# Канал в Telegram проверяем по-настоящему — getChatMember (боту нужны права
-# администратора канала; без них Telegram отвечает ошибкой, и тогда дни
+# Канал и сообщество в Telegram проверяем по-настоящему — getChatMember (боту
+# нужны права администратора; без них Telegram отвечает ошибкой, и тогда дни
 # выдаются через BONUS_WAIT_SEC после открытия). У X, TikTok, Instagram и
 # YouTube открытой проверки нет: нажатие «Подписаться» открывает страницу и
 # ставит бонус «на проверку», а через BONUS_DELAY_SEC фоновый проход
 # (bonus_settle) начисляет день и бот пишет «подписка подтверждена». Каждый
 # бонус — один раз на аккаунт (bonus_claims, ключ — человек и сеть).
-SOCIAL_BONUS = {"tg": 3, "x": 1, "tiktok": 1, "instagram": 1, "youtube": 1}
-SOCIAL_NAMES = {"tg": "Telegram", "x": "Twitter", "tiktok": "TikTok", "instagram": "Instagram", "youtube": "YouTube"}
+SOCIAL_BONUS = {"tg": 3, "tgc": 3, "x": 1, "tiktok": 1, "instagram": 1, "youtube": 1}
+SOCIAL_NAMES = {"tg": "Telegram", "tgc": "Wallet Tracker Community", "x": "Twitter", "tiktok": "TikTok",
+                "instagram": "Instagram", "youtube": "YouTube"}
 TG_CHANNEL = os.environ.get("WHALE_TG_CHANNEL", "@WalletTrackerOfficial").strip()
+# Чаты Telegram, подписку на которые проверяем по-настоящему (getChatMember):
+# канал и сообщество. Для проверки бот должен быть в них администратором;
+# без прав — дни через BONUS_WAIT_SEC после открытия, как раньше у канала.
+TG_CHATS = {"tg": TG_CHANNEL,
+            "tgc": os.environ.get("WHALE_TG_COMMUNITY", "@wallettrackercommunity").strip()}
 BONUS_WAIT_SEC = 10
 BONUS_DELAY_SEC = 5 * 60
 BONUS_SCHEMA = """
@@ -7784,7 +7790,7 @@ def bonus_settle(chat: str = "", notify: bool = True) -> int:
             rows = con.execute(
                 "SELECT b.chat_id, b.kind, COALESCE(u.language, 'en') AS lang FROM bonus_claims b "
                 "LEFT JOIN users u ON u.chat_id = b.chat_id "
-                "WHERE b.claimed_at=0 AND b.kind!='tg' AND b.opened_at>0 AND b.opened_at<=?"
+                "WHERE b.claimed_at=0 AND b.kind NOT IN ('tg', 'tgc') AND b.opened_at>0 AND b.opened_at<=?"
                 + (" AND b.chat_id=?" if chat else "") + " LIMIT 200",
                 (t - BONUS_DELAY_SEC, chat) if chat else (t - BONUS_DELAY_SEC,)).fetchall()
         except sqlite3.OperationalError:
@@ -7856,7 +7862,7 @@ def bonus_state(chat: str) -> dict:
             if int(r["claimed_at"] or 0):
                 out["got"][r["kind"]] = int(r["days"] or 0)
             elif int(r["opened_at"] or 0):
-                if r["kind"] == "tg":
+                if r["kind"] in TG_CHATS:
                     out["opened"][r["kind"]] = int(r["opened_at"])
                 else:
                     out["pending"][r["kind"]] = int(r["opened_at"]) + BONUS_DELAY_SEC
@@ -7870,15 +7876,10 @@ def bonus_state(chat: str) -> dict:
     return out
 
 
-def tg_channel_member(chat: str) -> bool | None:
-    """Подписан ли человек на наш канал. None — проверить нельзя."""
-    return tg_member(TG_CHANNEL, chat)
-
-
 def bonus_act(chat: str, kind: str, act: str) -> dict:
-    """open — человек нажал «Подписаться»: у Telegram это начало проверки, у
-    остальных — бонус «на проверке» до BONUS_DELAY_SEC. claim — забрать дни
-    за канал Telegram (проверка подписки)."""
+    """open — человек нажал «Подписаться»: у Telegram (канал и сообщество) это
+    начало проверки, у остальных — бонус «на проверке» до BONUS_DELAY_SEC.
+    claim — забрать дни за чат Telegram (проверка подписки)."""
     if kind not in SOCIAL_BONUS:
         return {"ok": False, "error": "bad_kind"}
     con = open_db(DB, write=True)
@@ -7899,15 +7900,15 @@ def bonus_act(chat: str, kind: str, act: str) -> dict:
                             "WHERE bonus_claims.opened_at=0", (chat, kind, t))
                 con.commit()
                 opened = t
-            return {"ok": True} if kind == "tg" else {"ok": True, "pending": True, "due": opened + BONUS_DELAY_SEC}
-        if kind != "tg":
+            return {"ok": True} if kind in TG_CHATS else {"ok": True, "pending": True, "due": opened + BONUS_DELAY_SEC}
+        if kind not in TG_CHATS:
             # Дни за остальные сети начисляет только «проверка» по времени.
             return {"ok": False, "error": "pending", "due": opened + BONUS_DELAY_SEC} if opened \
                 else {"ok": False, "error": "not_opened"}
         if not opened:
             return {"ok": False, "error": "not_opened"}
-        # Канал проверяем по-настоящему; нет прав — ждём BONUS_WAIT_SEC.
-        member = tg_channel_member(chat)
+        # Канал и сообщество проверяем по-настоящему; нет прав — ждём BONUS_WAIT_SEC.
+        member = tg_member(TG_CHATS[kind], chat)
         if member is False:
             return {"ok": False, "error": "not_member"}
         if member is None and t - opened < BONUS_WAIT_SEC:

@@ -88,7 +88,7 @@ export const vi: Dict = {
   bn_pt_not: "Chưa theo dõi — hãy theo dõi rồi nhấn «Kiểm tra»",
   bn_pt_title: "Kênh đối tác",
   bn_pt_wait: "Đã ghi nhận · ngày {d}",
-  bn_social_d: "+3 ngày cho kênh Telegram và +1 ngày cho mỗi mạng khác. Chúng tôi kiểm tra tự động: ngày sẽ tự được cộng và bot sẽ gửi tin nhắn.",
+  bn_social_d: "Mỗi thứ +3 ngày cho kênh và cộng đồng Telegram, +1 ngày cho mỗi mạng khác. Chúng tôi kiểm tra tự động: ngày sẽ tự được cộng và bot sẽ gửi tin nhắn.",
   bn_social_title: "Theo dõi chúng tôi",
   bn_sub: "Ngày Premium miễn phí",
   bn_subscribe: "Theo dõi",

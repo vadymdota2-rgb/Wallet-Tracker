@@ -88,7 +88,7 @@ export const pt: Dict = {
   bn_pt_not: "Ainda sem inscrição — inscreva-se e toque em «Verificar»",
   bn_pt_title: "Canais parceiros",
   bn_pt_wait: "Contado · dias em {d}",
-  bn_social_d: "+3 dias pelo canal do Telegram e +1 dia por cada outra rede. Verificamos a inscrição automaticamente: os dias entram sozinhos e o bot envia uma mensagem.",
+  bn_social_d: "+3 dias pelo canal e +3 pela comunidade do Telegram, e +1 dia por cada outra rede. Verificamos a inscrição automaticamente: os dias entram sozinhos e o bot envia uma mensagem.",
   bn_social_title: "Siga a gente",
   bn_sub: "Dias de Premium grátis",
   bn_subscribe: "Seguir",

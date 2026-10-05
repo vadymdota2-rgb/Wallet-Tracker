@@ -88,7 +88,7 @@ export const de: Dict = {
   bn_pt_not: "Noch kein Abo — abonniere und tippe auf „Prüfen“",
   bn_pt_title: "Partnerkanäle",
   bn_pt_wait: "Gezählt · Tage am {d}",
-  bn_social_d: "+3 Tage für den Telegram-Kanal und +1 Tag für jedes weitere Netzwerk. Wir prüfen das Abo automatisch: Die Tage kommen von selbst, und der Bot schickt dir eine Nachricht.",
+  bn_social_d: "Je +3 Tage für Telegram-Kanal und -Community und +1 Tag für jedes weitere Netzwerk. Wir prüfen das Abo automatisch: Die Tage kommen von selbst, und der Bot schickt dir eine Nachricht.",
   bn_social_title: "Folge uns",
   bn_sub: "Kostenlose Premium-Tage",
   bn_subscribe: "Folgen",

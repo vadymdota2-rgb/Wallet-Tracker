@@ -2,9 +2,9 @@
  * Бонусы — дни Премиума бесплатно: за друга и за подписку на наши соцсети.
  *
  * Приглашение — та же карточка, что была в «Ещё» (InviteCard): +7 дней и
- * тебе, и другу. Ниже — соцсети, каждая один раз на аккаунт. Канал Telegram
- * сервер проверяет по-настоящему (getChatMember): открыл канал, вернулся,
- * «Получить». У X, TikTok, Instagram и YouTube проверки нет — одно нажатие
+ * тебе, и другу. Ниже — соцсети, каждая один раз на аккаунт. Канал и
+ * сообщество в Telegram сервер проверяет по-настоящему (getChatMember):
+ * открыл, вернулся, «Получить». У X, TikTok, Instagram и YouTube проверки нет — одно нажатие
  * «Подписаться» открывает страницу и ставит бонус «на проверку»: через пять
  * минут сервер сам начисляет день (bonus_settle), а бот пишет «подписка
  * подтверждена». Второй раз кнопка уже не нажимается.
@@ -26,7 +26,7 @@ import { t } from "../i18n/t";
 import { haptic, openExternal, openTg } from "../lib/telegram";
 import { dateLong } from "../lib/format";
 import { bonusAct, exchSubmit, fetchBonus, partnerJoin, type BonusReply } from "../lib/api";
-import { SOCIALS, openSocial, type Social } from "../lib/social";
+import { SOCIALS, isTgChat, openSocial, type Social } from "../lib/social";
 import { syncNow } from "../lib/sync";
 import { copyText } from "../lib/copy";
 import { toast } from "../components/Toast";
@@ -96,16 +96,19 @@ export function BonusScreen() {
   const total = Object.values(got).reduce((a, b) => a + b, 0) + (ref?.days ?? 0) + exDays + (st?.pGot ?? 0);
   /** Сколько ещё можно забрать за подписки. */
   const left = (st?.items ?? []).reduce((a, i) => a + (got[i.id] ? 0 : i.days), 0);
-  /* Канал Telegram — первым: за него больше всего дней, и подписку на него
+  /* Канал и сообщество Telegram — первыми: за них больше всего дней, и подписку на них
      правда проверяем. */
-  const socials = useMemo(() => [...SOCIALS].sort((a, b) => (a.id === "tg" ? -1 : b.id === "tg" ? 1 : 0)), []);
+  const socials = useMemo(() => {
+    const rank = (id: string) => (id === "tg" ? 0 : id === "tgc" ? 1 : 2);
+    return [...SOCIALS].sort((a, b) => rank(a.id) - rank(b.id));
+  }, []);
 
   const open = (s: Social) => {
     haptic("select");
     openSocial(s);
     if (got[s.id]) return;
     // Не Telegram: одно нажатие — и бонус «на проверке» до начисления.
-    if (s.id !== "tg") {
+    if (!isTgChat(s.id)) {
       if (pending[s.id]) return;
       setPending((p) => ({ ...p, [s.id]: Math.floor(Date.now() / 1000) + 300 }));
       void bonusAct(s.id, "open").then((r) => {
@@ -196,7 +199,7 @@ export function BonusScreen() {
                     {t(lang, "bn_checking", { m: Math.max(1, Math.ceil((pending[s.id]! - nowSec) / 60)) })
                       .split(" · ").map((part, i) => <span key={i}>{part}</span>)}
                   </span>
-                ) : s.id !== "tg" || !at ? (
+                ) : !isTgChat(s.id) || !at ? (
                   <button type="button" className="bn-go" disabled={busy === s.id} onClick={() => open(s)}>
                     {t(lang, "bn_subscribe")}
                   </button>

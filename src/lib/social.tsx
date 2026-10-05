@@ -9,14 +9,26 @@
 import type { ReactNode } from "react";
 import { openExternal, openTg } from "./telegram";
 
-export type SocialId = "x" | "tg" | "tiktok" | "instagram" | "youtube";
+export type SocialId = "x" | "tg" | "tgc" | "tiktok" | "instagram" | "youtube";
 
 export interface Social {
   id: SocialId;
   name: string;
   url: string;
   icon: (size: number) => ReactNode;
+  /** Только в «Бонусах», не в нижней строке ссылок: там места на пять. */
+  bonusOnly?: boolean;
 }
+
+/** Чаты Telegram (канал и сообщество): подписку на них сервер проверяет
+ *  по-настоящему, а открывает их сам Telegram. */
+export const isTgChat = (id: SocialId): boolean => id === "tg" || id === "tgc";
+
+const tgIcon = (s: number) => (
+  <svg viewBox="0 0 24 24" width={s + 1} height={s + 1} aria-hidden="true">
+    <path fill="currentColor" d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z" />
+  </svg>
+);
 
 export const SOCIALS: Social[] = [
   {
@@ -33,11 +45,14 @@ export const SOCIALS: Social[] = [
     id: "tg",
     name: "Telegram",
     url: "https://t.me/WalletTrackerOfficial",
-    icon: (s) => (
-      <svg viewBox="0 0 24 24" width={s + 1} height={s + 1} aria-hidden="true">
-        <path fill="currentColor" d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z" />
-      </svg>
-    ),
+    icon: tgIcon,
+  },
+  {
+    id: "tgc",
+    name: "Wallet Tracker Community",
+    url: "https://t.me/wallettrackercommunity",
+    icon: tgIcon,
+    bonusOnly: true,
   },
   {
     id: "tiktok",
@@ -73,8 +88,8 @@ export const SOCIALS: Social[] = [
   },
 ];
 
-/** Открыть соцсеть: канал — самим Telegram, остальное — его браузером. */
+/** Открыть соцсеть: канал и сообщество — самим Telegram, остальное — его браузером. */
 export function openSocial(s: Social): void {
-  if (s.id === "tg") openTg(s.url);
+  if (isTgChat(s.id)) openTg(s.url);
   else openExternal(s.url);
 }

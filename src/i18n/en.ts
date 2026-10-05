@@ -87,7 +87,7 @@ export const en = {
   bn_pt_not: "No subscription yet — subscribe and tap “Check”",
   bn_pt_title: "Partner channels",
   bn_pt_wait: "Counted · days on {d}",
-  bn_social_d: "+3 days for the Telegram channel and +1 day for every other network. We check the subscription automatically: the days are added on their own, and the bot sends you a message.",
+  bn_social_d: "+3 days each for our Telegram channel and community, +1 day for every other network. We check the subscription automatically: the days are added on their own, and the bot sends you a message.",
   bn_social_title: "Follow us",
   bn_sub: "Free days of Premium",
   bn_subscribe: "Follow",

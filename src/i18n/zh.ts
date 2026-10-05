@@ -88,7 +88,7 @@ export const zh: Dict = {
   bn_pt_not: "尚未关注——请先关注再点「检查」",
   bn_pt_title: "合作频道",
   bn_pt_wait: "已记录 · {d} 发放",
-  bn_social_d: "关注 Telegram 频道 +3 天，其他每个平台 +1 天。我们会自动核验：天数自动到账，机器人会发消息通知你。",
+  bn_social_d: "关注 Telegram 频道和社区各 +3 天，其他每个平台 +1 天。我们会自动核验：天数自动到账，机器人会发消息通知你。",
   bn_social_title: "关注我们",
   bn_sub: "免费高级版天数",
   bn_subscribe: "关注",
