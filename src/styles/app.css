@@ -1410,30 +1410,93 @@
 [dir="rtl"] .fold-body { padding: 0 51px 12px 12px; }
 [dir="rtl"] .fold.faq .fold-body { padding-right: 12px; }
 
-/* Подарок при первом открытии -------------------------------------------- */
+/* Приветствие с подарком при первом открытии — на весь экран ------------- */
 .gift-wrap {
   position: fixed;
   inset: 0;
   z-index: 60;
-  display: grid;
-  place-items: center;
-  padding: 16px;
-  background: rgb(1 3 10 / 0.72);
-  backdrop-filter: blur(6px);
+  overflow-y: auto;
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgb(30 155 255 / 0.22), transparent 62%),
+    radial-gradient(90% 45% at 50% 100%, rgb(61 220 151 / 0.08), transparent 70%),
+    var(--bg);
+  animation: giftIn 0.45s ease-out both;
 }
 .gift {
-  width: 100%;
-  max-width: 380px;
-  padding: 22px 18px 16px;
-  border-radius: 18px;
-  border: 1px solid rgb(127 216 255 / 0.35);
-  background: var(--card, #07101f);
-  box-shadow: var(--shadow);
+  min-height: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+  padding: calc(18px + env(safe-area-inset-top)) 20px calc(16px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
 }
-.gift-ic { font-size: 40px; line-height: 1; display: block; margin-bottom: 10px; }
-.gift h2 { margin: 0 0 8px; font-size: 19px; color: var(--ink); }
-.gift p { margin: 0 0 14px; color: var(--dim); font-size: 13.5px; line-height: 1.55; }
+.gift-badge {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 92px;
+  margin: 10px 0 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgb(127 216 255 / 0.35), rgb(30 155 255 / 0.12) 60%, transparent 72%);
+  border: 1px solid rgb(127 216 255 / 0.45);
+  box-shadow: 0 0 36px rgb(30 155 255 / 0.35);
+}
+.gift-badge span { font-size: 44px; line-height: 1; animation: giftPop 0.6s 0.15s cubic-bezier(.2,1.4,.4,1) both; }
+.gift-badge::before,
+.gift-badge::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: 50%;
+  border: 1px solid rgb(127 216 255 / 0.5);
+  animation: giftRing 2.6s ease-out infinite;
+}
+.gift-badge::after { animation-delay: 1.3s; }
+.gift-hi { margin: 0 0 6px; color: var(--glow); font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+.gift h1 { margin: 0 0 10px; color: var(--ink); font-size: 24px; line-height: 1.2; font-weight: 800; }
+.gift-until {
+  margin: 0 0 16px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgb(61 220 151 / 0.12);
+  border: 1px solid rgb(61 220 151 / 0.35);
+  color: var(--up);
+  font-size: 13px;
+  font-weight: 700;
+}
+.gift-list {
+  list-style: none;
+  width: 100%;
+  margin: 0 0 16px;
+  padding: 6px 14px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  background: rgb(5 10 22 / 0.7);
+  text-align: start;
+}
+.gift-list li { display: flex; align-items: center; gap: 12px; padding: 8px 0; color: var(--ink); font-size: 14px; line-height: 1.4; }
+.gift-list li + li { border-top: 1px solid var(--line); }
+.gift-li-ic {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgb(30 155 255 / 0.12);
+  font-size: 17px;
+}
+.gift-after { margin: 0 0 16px; color: var(--dim); font-size: 13px; line-height: 1.5; }
+.gift-actions { width: 100%; margin-top: auto; }
+@keyframes giftIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes giftPop { from { transform: scale(0.4); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes giftRing { from { transform: scale(1); opacity: 0.7; } to { transform: scale(1.7); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .gift-wrap, .gift-badge span, .gift-badge::before, .gift-badge::after { animation: none; }
+}
 
 /* График TradingView на весь экран ---------------------------------------- */
 /* Экран во всю высоту между шапкой и нижним меню: окно графика растягивается

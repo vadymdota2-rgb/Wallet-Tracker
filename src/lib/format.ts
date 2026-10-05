@@ -180,6 +180,19 @@ export function day(tsSec: number, nowSec: number): string {
   }
 }
 
+/** Дата словами: «19 октября»; год — если не текущий. По часам человека:
+ *  «до какого числа» он читает по своему календарю. */
+export function dateLong(tsSec: number): string {
+  const d = new Date(tsSec * 1000);
+  const opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "long" };
+  if (d.getFullYear() !== new Date().getFullYear()) opts.year = "numeric";
+  try {
+    return new Intl.DateTimeFormat(locale, opts).format(d);
+  } catch {
+    return d.toISOString().slice(0, 10);
+  }
+}
+
 /** Сколько осталось до дня: «сегодня», «завтра», «через 12 дн.». Считается
  *  по календарным дням UTC — разлоки назначены на дату, а не на час. */
 export function untilDay(tsSec: number, nowSec: number): string {

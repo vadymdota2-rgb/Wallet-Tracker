@@ -816,5 +816,15 @@ say("OKX: UID на ручную проверку — кнопки только �
     and "CREATE TABLE IF NOT EXISTS exch_claims" in _mcpp
     and "exchSubmit(ex.id, v)" in read(f"{APP}/src/screens/BonusScreen.tsx"))
 
+s_css = read(f"{APP}/src/styles/app.css")
+_gift = read(f"{APP}/src/components/Gift.tsx")
+_lc = read(f"{BOT}/lifecycle.cpp")
+say("приветствие новичку: в приложении — на весь экран (сколько дней, до какого числа, что входит, что потом), в чате — сообщение бота только недавним, один раз",
+    'className="gift-wrap"' in _gift and '"gift_until"' in _gift and '"gift_after"' in _gift and "dayForm(lang" in _gift
+    and "inset: 0;" in s_css[s_css.find(".gift-wrap {"):s_css.find(".gift {")]
+    and "void welcomeTick()" in _lc and "now - 3 * 3600, now" in _lc and 'claim(r.chat, "welcome")' in _lc
+    and "r.chat == SERVICE_CHAT_ID" in _lc[_lc.find("void welcomeTick()"):] and "welcomeTick();" in _mcpp
+    and '"lc_welcome"' in read(f"{BOT}/ru.cpp"))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
