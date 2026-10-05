@@ -1,9 +1,11 @@
 /**
- * Приветствие при первом открытии: подарок — дни Премиума.
+ * Приветствие при первом открытии: подарок — бесплатные дни.
  *
  * На весь экран, а не всплывашкой: человек в первый раз смотрит на
- * приложение, и без этого Премиум «откуда-то взялся» и так же молча кончился
- * бы. Здесь — сколько дней, до какого числа, что входит и что будет потом.
+ * приложение, и без этого бесплатные дни «откуда-то взялись» и так же молча
+ * кончились бы. Здесь — сколько дней, до какого числа, что в приложении
+ * можно делать и что будет потом. Бесплатного тарифа нет, поэтому список —
+ * не «что даёт Премиум», а короткий тур по приложению.
  * Экран один на всю жизнь аккаунта: сервер присылает подарок ровно в том
  * ответе, где его выдал. Тот же повод бот отмечает сообщением в чате.
  */
@@ -38,7 +40,6 @@ export function dayForm(lang: string, text: string, n: number): string {
 
 export function Gift() {
   const lang = useApp((s) => s.lang);
-  const open = useApp((s) => s.open);
   const goTab = useApp((s) => s.goTab);
   const days = useLive((s) => s.gift);
   const until = useLive((s) => s.me.premUntil);
@@ -57,6 +58,7 @@ export function Gift() {
         <p className="gift-hi">{t(lang, "gift_hi")}</p>
         <h1 id="gift-ttl">{dayForm(lang, t(lang, "gift_title", { n: String(days) }), days)}</h1>
         <p className="gift-until">{t(lang, "gift_until", { d: dateLong(end / 1000) })}</p>
+        <p className="gift-can">{t(lang, "gift_can")}</p>
         <ul className="gift-list">
           {FEATURES.map(([ic, key]) => (
             <li key={key}>
@@ -77,16 +79,6 @@ export function Gift() {
             }}
           >
             {t(lang, "gift_go")}
-          </Action>
-          <Action
-            kind="ghost"
-            onClick={() => {
-              drop();
-              goTab("more");
-              open("premium", "gift");
-            }}
-          >
-            {t(lang, "gift_more")}
           </Action>
         </div>
       </div>

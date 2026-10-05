@@ -1467,6 +1467,7 @@
   font-size: 13px;
   font-weight: 700;
 }
+.gift-can { align-self: flex-start; margin: 0 0 8px 4px; color: var(--dim); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 .gift-list {
   list-style: none;
   width: 100%;
