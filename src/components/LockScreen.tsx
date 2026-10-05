@@ -12,7 +12,7 @@
 import { useEffect } from "react";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
-import { t } from "../i18n/t";
+import { bare, t } from "../i18n/t";
 import { haptic } from "../lib/telegram";
 import { trackEvent } from "../lib/api";
 import { Action, Card } from "./ui";
@@ -66,8 +66,11 @@ export function LockScreen() {
  *  замок, но в рамке экрана: «Назад» возвращает, откуда пришли. */
 export function LockSheet() {
   const lang = useApp((s) => s.lang);
+  // Наверху — короткое «Премиум»: длинное «Wallet Tracker — только с
+  // Премиумом» не помещалось и резалось многоточием, а крупно оно и так
+  // стоит в самом замке.
   return (
-    <Frame title={t(lang, "lk_title")}>
+    <Frame title={bare(t(lang, "menu_premium"))}>
       <LockScreen />
     </Frame>
   );
