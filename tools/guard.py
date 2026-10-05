@@ -860,7 +860,7 @@ say("накрутки по IP: проба — не больше 3 новых а�
 
 _hlc = read(f"{BOT}/hyperliquid_core.cpp")
 _hl_auto = _hlc[_hlc.find("Автопополнение базы сервисного аккаунта"):_hlc.find("void handleTrades(")]
-say("автопополнение базы китов: BSC и Hyperliquid от $10k, Bitcoin от 1 BTC, по 100 в сутки на сеть, /autobase включает и выключает каждую сеть; Hyperliquid ищет без бюджета запросов; молчащих месяц — убираем",
+say("автопополнение базы китов: BSC и Hyperliquid от $10k, Bitcoin от 1 BTC, по 100 в сутки на сеть, /autobase включает и выключает каждую сеть; Hyperliquid ищет без бюджета запросов; неактивных 30 дней — убираем без бана (найдутся снова), боты — бан навсегда",
     "bscAutoConsider(tx, to, watchers.get());" in _mcpp and "BSC_HOT_NONCE = 300000" in _mcpp
     and "autoMinUsd(AutoNet::BSC)" in _mcpp and '"eth_getCode"' in _mcpp and "BSC_AUTO_MAX_NONCE = 1000" in _mcpp
     and 'addUserWhale(SERVICE_CHAT_ID, a, "auto-bsc")' in _mcpp and "std::thread(bscAutoLoop).detach();" in _mcpp
@@ -873,7 +873,10 @@ say("автопополнение базы китов: BSC и Hyperliquid от $
     and "autoRoom(AutoNet::BTC)" in read(f"{BOT}/btc_chain.cpp") and 'envSats("WHALE_BTC_AUTO_MIN", 1.0)' in read(f"{BOT}/btc_chain.cpp")
     and 'envUsd("WHALE_BSC_AUTO_MIN", 10000.0), envUsd("WHALE_HL_AUTO_MIN", 10000.0)' in read(f"{BOT}/autobase.cpp")
     and 'envInt("WHALE_BSC_AUTO_DAILY", 100)' in read(f"{BOT}/autobase.cpp")
-    and 'txt.rfind("/autobase ", 0) == 0' in _mcpp)
+    and 'txt.rfind("/autobase ", 0) == 0' in _mcpp
+    and "t.timestamp>=?" in _mcpp and "hlAutoForget(w.addr);" in _mcpp and "g_bscAutoSeen.erase(w.addr);" in _mcpp
+    and "btcPruneAuto(cut)" in _mcpp and "int btcPruneAuto(long long cut)" in read(f"{BOT}/btc_chain.cpp")
+    and "ignored_wallets" not in _mcpp[_mcpp.find("void pruneAutoWallets()"):_mcpp.find("bool processBlock(")])
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
