@@ -641,6 +641,124 @@ def plan_of(boot: dict) -> bool:
     return isinstance(me, dict) and me.get("plan") == "premium"
 
 
+# Защита от накруток по IP ---------------------------------------------------
+#
+# Новый аккаунт Telegram — это новая проба на TRIAL_DAYS, а приглашённый
+# «друг» — +REF_DAYS пригласившему. С одного телефона можно наделать
+# аккаунтов и жить бесплатно. Один IP у мобильного оператора делят тысячи
+# людей, поэтому правило не «один IP — одна проба», а то, что отличает
+# ферму от людей:
+#   • проба — не больше TRIAL_PER_IP_DAY новых аккаунтов с одного IP за сутки;
+#   • награда за друга — нет, если «друг» заходил с того же IP, что и
+#     пригласивший, или что другой уже засчитанный друг этого человека.
+# Сам адрес не храним: только необратимый отпечаток (HMAC с секретом из
+# токена бота; у IPv6 — по сети /64, её фермы и перебирают). Отпечатки
+# старше IP_KEEP_SEC удаляются.
+TRIAL_PER_IP_DAY = 3
+IP_KEEP_SEC = 90 * 86400
+REF_IP_WINDOW_SEC = 30 * 86400
+IP_SCHEMA = """
+CREATE TABLE IF NOT EXISTS ip_seen (
+    ip TEXT NOT NULL,
+    chat_id TEXT NOT NULL,
+    day TEXT NOT NULL,
+    at INTEGER NOT NULL,
+    PRIMARY KEY (ip, chat_id, day)
+);
+CREATE INDEX IF NOT EXISTS idx_ip_seen_chat ON ip_seen(chat_id, at);
+CREATE TABLE IF NOT EXISTS trial_ip (
+    ip TEXT NOT NULL,
+    chat_id TEXT NOT NULL,
+    at INTEGER NOT NULL,
+    PRIMARY KEY (ip, chat_id)
+);
+CREATE INDEX IF NOT EXISTS idx_trial_ip_at ON trial_ip(ip, at);
+"""
+_IP_KEY = hashlib.sha256(("wt-ip:" + BOT_TOKEN).encode()).digest()
+_ip_seen_mem: set[tuple] = set()
+_ip_lock = threading.Lock()
+
+
+def ip_tag(ip: str) -> str:
+    """Отпечаток адреса. Пусто — адреса нет (тогда защита не срабатывает)."""
+    ip = (ip or "").strip()
+    if ip.lower().startswith("::ffff:") and "." in ip:
+        ip = ip[7:]  # IPv4, записанный как IPv6
+    if not ip or ip in ("127.0.0.1", "::1"):
+        return ""
+    if ":" in ip:
+        # IPv6: сеть /64 — первые четыре группы.
+        groups = ip.split("%")[0].split(":")
+        if "" in groups:
+            i = groups.index("")
+            groups = groups[:i] + ["0"] * (8 - len(groups) + 1) + groups[i + 1:]
+        ip = ":".join(g.lower().lstrip("0") or "0" for g in groups[:4]) + "::/64"
+    return hmac.new(_IP_KEY, ip.encode(), hashlib.sha256).hexdigest()[:20]
+
+
+def ip_note(chat: str, ip: str) -> None:
+    """Запомнить, что человек заходил с этого адреса сегодня (раз в сутки)."""
+    tag = ip_tag(ip)
+    if not chat or not tag or is_service(chat):
+        return
+    day = time.strftime("%Y-%m-%d", time.gmtime())
+    key = (tag, chat, day)
+    with _ip_lock:
+        if key in _ip_seen_mem:
+            return
+        if len(_ip_seen_mem) > 200_000:
+            _ip_seen_mem.clear()
+        _ip_seen_mem.add(key)
+    con = open_db(DB, write=True)
+    if not con:
+        return
+    try:
+        con.executescript(IP_SCHEMA)
+        con.execute("INSERT OR IGNORE INTO ip_seen(ip, chat_id, day, at) VALUES(?,?,?,?)", (tag, chat, day, now()))
+        con.commit()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] ip note: {e}\n")
+    finally:
+        con.close()
+
+
+def ip_prune(con: sqlite3.Connection) -> None:
+    """Отпечатки старше IP_KEEP_SEC не нужны ни одной проверке."""
+    try:
+        cut = now() - IP_KEEP_SEC
+        con.execute("DELETE FROM ip_seen WHERE at<?", (cut,))
+        con.execute("DELETE FROM trial_ip WHERE at<?", (cut,))
+        con.commit()
+    except sqlite3.OperationalError:
+        pass  # таблиц ещё нет
+
+
+def _ips_of(con: sqlite3.Connection, chats: list[str], since: int) -> set[str]:
+    if not chats:
+        return set()
+    try:
+        marks = ",".join("?" * len(chats))
+        return {r[0] for r in con.execute(f"SELECT DISTINCT ip FROM ip_seen WHERE at>=? AND chat_id IN ({marks})",
+                                          (since, *chats))}
+    except sqlite3.OperationalError:
+        return set()
+
+
+def ref_suspicious(con: sqlite3.Connection, inviter: str, invitee: str) -> bool:
+    """Друг заходил с адреса пригласившего или другого уже засчитанного
+    друга этого человека — похоже на аккаунты с одного телефона."""
+    since = now() - REF_IP_WINDOW_SEC
+    mine = _ips_of(con, [invitee], since)
+    if not mine:
+        return False
+    if mine & _ips_of(con, [inviter], since):
+        return True
+    others = [r[0] for r in con.execute("SELECT invitee FROM referrals WHERE inviter=? AND rewarded>0 AND invitee!=?",
+                                        (inviter, invitee))]
+    return bool(mine & _ips_of(con, others, since))
+
+
+
 # Бесплатная неделя премиума — при первом открытии мини-аппа. Раньше её
 # выдавал бот по /start, и кто открывал только приложение, не получал ничего,
 # а кто писал боту и в приложение не заходил — получал неделю впустую.
@@ -649,13 +767,16 @@ def plan_of(boot: dict) -> bool:
 TRIAL_DAYS = 14
 
 
-def grant_trial(chat: str, lang: str = "") -> bool:
+def grant_trial(chat: str, lang: str = "", ip: str = "") -> bool:
     """Выдать неделю, если человеку её ещё не давали. True — выдали сейчас.
 
     Всё одной транзакцией: отметка и продление либо вместе, либо никак. Два
     одновременных первых запроса не выдадут неделю дважды — INSERT OR IGNORE
     в trial_granted пропустит только один. Продление — как grantPremiumDays в
-    premium.cpp: к действующей подписке дни прибавляются, а не заменяют её."""
+    premium.cpp: к действующей подписке дни прибавляются, а не заменяют её.
+    С одного IP — не больше TRIAL_PER_IP_DAY проб за сутки (ферма аккаунтов);
+    отказ ничего не помечает: с другого адреса или на другой день проба
+    выдастся."""
     if not chat or is_service(chat):
         return False
     con = open_db(DB, write=True)
@@ -667,14 +788,28 @@ def grant_trial(chat: str, lang: str = "") -> bool:
         ucols = cols(con, "users")
         if not {"is_premium", "premium_expire"} <= ucols:
             return False
+        tag = ip_tag(ip)
+        if tag:
+            con.executescript(IP_SCHEMA)
         con.isolation_level = None
         con.execute("BEGIN IMMEDIATE")
         try:
             t = now()
+            if con.execute("SELECT 1 FROM trial_granted WHERE chat_id=?", (chat,)).fetchone():
+                con.execute("ROLLBACK")
+                return False
+            if tag and con.execute("SELECT COUNT(*) FROM trial_ip WHERE ip=? AND at>?",
+                                   (tag, t - 86400)).fetchone()[0] >= TRIAL_PER_IP_DAY:
+                con.execute("ROLLBACK")
+                sys.stderr.write(f"[api] trial: отказ {chat} — {TRIAL_PER_IP_DAY}+ проб с одного IP за сутки\n")
+                track(chat, "abuse", "trial_ip")
+                return False
             if con.execute("INSERT OR IGNORE INTO trial_granted(chat_id, granted_at) VALUES(?,?)",
                            (chat, t)).rowcount != 1:
                 con.execute("ROLLBACK")
                 return False
+            if tag:
+                con.execute("INSERT OR IGNORE INTO trial_ip(ip, chat_id, at) VALUES(?,?,?)", (tag, chat, t))
             code = (lang or "").strip().lower()[:2]
             con.execute("INSERT OR IGNORE INTO users(chat_id, language, threshold_nanos, created_at) VALUES(?,?,?,?)",
                         (chat, code if code in LANG_CODES else "en", 100000000000, t))
@@ -8539,7 +8674,7 @@ def ref_info(chat: str) -> dict:
                            (chat, cand, now())).rowcount == 1:
                 code = cand
         con.commit()
-        r = con.execute("SELECT COUNT(*) n, COALESCE(SUM(rewarded), 0) d, "
+        r = con.execute("SELECT COUNT(*) n, COALESCE(SUM(CASE WHEN rewarded>0 THEN rewarded ELSE 0 END), 0) d, "
                         "COALESCE(SUM(rewarded=0 AND at>?), 0) w FROM referrals WHERE inviter=?",
                         (now() - REF_WAIT_SEC, chat)).fetchone()
         base = ref_link_base()
@@ -8615,8 +8750,18 @@ def ref_settle() -> int:
             "AND (SELECT COUNT(DISTINCT f.day) FROM funnel_events f "
             "     WHERE f.chat_id=r.invitee AND f.ev='open') >= ? "
             "ORDER BY r.at", (t - REF_WAIT_SEC, REF_ACTIVE_DAYS)).fetchall()
+        ip_prune(con)
         for r in rows:
             invitee, inviter = r["invitee"], r["inviter"]
+            # Похоже на аккаунт с того же телефона — награды не будет
+            # (rewarded=-1: больше не проверяем и в «ждут» не считаем).
+            if ref_suspicious(con, inviter, invitee):
+                con.execute("UPDATE referrals SET rewarded=-1, rewarded_at=? WHERE invitee=? AND rewarded=0",
+                            (t, invitee))
+                con.commit()
+                sys.stderr.write(f"[api] ref: отказ {inviter} за {invitee} — общий IP\n")
+                track(inviter, "abuse", "ref_ip")
+                continue
             con.isolation_level = None
             con.execute("BEGIN IMMEDIATE")
             try:
@@ -12586,6 +12731,9 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
                 "DELETE FROM exch_claims WHERE chat_id=? AND status!='ok'",
                 "DELETE FROM partner_claims WHERE chat_id=?",
                 "DELETE FROM partner_refs WHERE chat_id=?",
+                # Отпечатки адресов, с которых заходил. trial_ip остаётся, как
+                # trial_granted: иначе удаление данных открывало бы новую пробу.
+                "DELETE FROM ip_seen WHERE chat_id=?",
                 "UPDATE exch_claims SET chat_id='' WHERE chat_id=?",
                 "DELETE FROM users WHERE chat_id=?",
             ):
@@ -12772,7 +12920,8 @@ class Handler(BaseHTTPRequestHandler):
                 chat = who["id"] if who else ""
                 # Первое открытие приложения — неделя премиума в подарок.
                 # Выгрузка в памяти собрана ещё без неё, поэтому её сбрасываем.
-                gift = grant_trial(chat, who.get("lang", "")) if who else False
+                peer = self._peer()
+                gift = grant_trial(chat, who.get("lang", ""), peer) if who else False
                 bonus = 0
                 if gift:
                     # Пришёл по приглашению — к неделе ещё REF_DAYS дней.
@@ -12783,6 +12932,7 @@ class Handler(BaseHTTPRequestHandler):
                     track(chat, "trial")
                 if chat:
                     track(chat, "open")
+                    ip_note(chat, peer)
                 boot = bootstrap_cached(chat)
                 boot = for_plan(boot, plan_of(boot))
                 if gift:

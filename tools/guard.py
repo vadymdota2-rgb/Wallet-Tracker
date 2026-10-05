@@ -850,5 +850,13 @@ say("шапка: вместо кнопки «обновить» — вертик
     and '"visibilitychange"' in read(f"{APP}/src/lib/sync.ts") and 'open("premium", "hdr")' in read(f"{APP}/src/components/PremBadge.tsx")
     and 'open("lock")' in read(f"{APP}/src/components/PremBadge.tsx") and "lock: LockPage," in read(f"{APP}/src/screens/registry.ts"))
 
+say("накрутки по IP: проба — не больше 3 новых аккаунтов с IP за сутки, награда за друга — нет при общем IP, адрес хранится только отпечатком 90 дней",
+    "TRIAL_PER_IP_DAY = 3" in api and "IP_KEEP_SEC = 90 * 86400" in api and "hmac.new(_IP_KEY" in api
+    and "grant_trial(chat, who.get(\"lang\", \"\"), peer)" in api and "ip_note(chat, peer)" in api
+    and "if ref_suspicious(con, inviter, invitee):" in pybody(api, "def ref_settle(")
+    and "SUM(CASE WHEN rewarded>0 THEN rewarded ELSE 0 END)" in api and "DELETE FROM ip_seen WHERE chat_id=?" in api
+    and "src='trial_ip'" in _mcpp
+    and all("IP" in v for v in json.load(open(f"{APP}/tools/i18n.json"))["legal_privacy_body"].values()))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
