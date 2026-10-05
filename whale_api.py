@@ -7809,7 +7809,7 @@ def bonus_settle(chat: str = "", notify: bool = True) -> int:
 
 def _bonus_loop() -> None:
     """Фоновый проход: раз в полминуты начисляет бонусы, чья «проверка»
-    закончилась, раз в пять минут — дни за друзей, начавших пользоваться;
+    закончилась, и исполняет решения владельца по заявкам с биржи, раз в пять минут — дни за друзей, начавших пользоваться;
     даже если приложение у человека закрыто."""
     n = 0
     while True:
@@ -7817,6 +7817,10 @@ def _bonus_loop() -> None:
             bonus_settle()
         except Exception as e:  # проход не должен умирать от одной ошибки
             sys.stderr.write(f"[api] bonus loop: {e}\n")
+        try:
+            exch_settle()
+        except Exception as e:
+            sys.stderr.write(f"[api] exch loop: {e}\n")
         # Друзья, начавшие пользоваться, — раз в пять минут: дни дня
         # открытия считаются по суткам, спешить некуда.
         if n % 10 == 0:
@@ -7830,9 +7834,11 @@ def _bonus_loop() -> None:
 
 def bonus_state(chat: str) -> dict:
     """Что из бонусов за подписки человек уже забрал, что «на проверке» (до
-    какого времени) и сколько за что дают."""
+    какого времени) и сколько за что дают; плюс заявки с бирж."""
     out = {"ok": True, "items": [{"id": k, "days": d} for k, d in SOCIAL_BONUS.items()],
-           "got": {}, "opened": {}, "pending": {}}
+           "got": {}, "opened": {}, "pending": {},
+           "exItems": [{"id": k, "days": d, "name": EXCH_NAMES[k], "link": EXCH_LINKS[k]} for k, d in EXCH_BONUS.items()],
+           "exch": {k: {"status": "none"} for k in EXCH_BONUS}}
     if not chat:
         return out
     bonus_settle(chat)
@@ -7850,6 +7856,8 @@ def bonus_state(chat: str) -> dict:
                     out["pending"][r["kind"]] = int(r["opened_at"]) + BONUS_DELAY_SEC
     except sqlite3.OperationalError:
         pass  # таблицы ещё нет: никто ничего не забирал
+    try:
+        out["exch"] = exch_state(con, chat)
     finally:
         con.close()
     return out
@@ -7913,6 +7921,211 @@ def bonus_act(chat: str, kind: str, act: str) -> dict:
     boot_drop(chat)
     track(chat, "bonus", kind)
     return {"ok": True, "days": days}
+
+
+# Бонус за регистрацию на бирже по нашей ссылке ------------------------------
+#
+# Проверить приглашённых у биржи открыто нельзя, поэтому проверка ручная:
+# человек присылает свой UID, владельцу бота приходит сообщение с кнопками
+# «Одобрить» / «Отклонить» (callback «ex:ok:<id>» / «ex:no:<id>» — их ловит
+# бот и меняет status). Дни начисляет и человеку пишет фоновый проход
+# exch_settle: так начисление идёт одной транзакцией с отметкой о нём, как у
+# бонусов за подписки. Один UID — одна награда навсегда; у человека одна
+# действующая заявка на биржу, после отказа можно прислать другой UID.
+EXCH_BONUS = {"okx": 30}
+EXCH_NAMES = {"okx": "OKX"}
+EXCH_LINKS = {"okx": os.environ.get("WHALE_OKX_REF", "https://my.okx.com/ua-eu/join/SY5IQVFB").strip()}
+EXCH_MAX_TRIES = 5
+EXCH_SCHEMA = """
+CREATE TABLE IF NOT EXISTS exch_claims (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id TEXT NOT NULL,
+    ex TEXT NOT NULL,
+    uid TEXT NOT NULL,
+    at INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'wait',
+    decided_at INTEGER NOT NULL DEFAULT 0,
+    granted_at INTEGER NOT NULL DEFAULT 0,
+    days INTEGER NOT NULL DEFAULT 0,
+    notified INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_exch_chat ON exch_claims(chat_id, ex);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_exch_uid ON exch_claims(ex, uid) WHERE status!='no';
+"""
+EXCH_OK_NOTE = {
+    "en": "✅ Your {name} registration is confirmed — +{n} days of Premium. Thank you!",
+    "ru": "✅ Регистрация на {name} подтверждена — +{n} дней Премиума. Спасибо!",
+    "uk": "✅ Реєстрацію на {name} підтверджено — +{n} днів Преміуму. Дякуємо!",
+    "es": "✅ Tu registro en {name} está confirmado: +{n} días de Premium. ¡Gracias!",
+    "pt": "✅ Seu cadastro na {name} foi confirmado — +{n} dias de Premium. Obrigado!",
+    "de": "✅ Deine {name}-Registrierung ist bestätigt — +{n} Tage Premium. Danke!",
+    "fr": "✅ Votre inscription sur {name} est confirmée — +{n} jours de Premium. Merci !",
+    "tr": "✅ {name} kaydınız onaylandı — +{n} gün Premium. Teşekkürler!",
+    "pl": "✅ Rejestracja na {name} potwierdzona — +{n} dni Premium. Dziękujemy!",
+    "id": "✅ Pendaftaran {name} Anda terkonfirmasi — +{n} hari Premium. Terima kasih!",
+    "vi": "✅ Đã xác nhận bạn đăng ký {name} — +{n} ngày Premium. Cảm ơn bạn!",
+    "ja": "✅ {name}の登録を確認しました — プレミアム+{n}日。ありがとうございます！",
+    "ko": "✅ {name} 가입이 확인되었습니다 — 프리미엄 +{n}일. 감사합니다!",
+    "zh": "✅ 已确认你在 {name} 注册——高级版 +{n} 天。谢谢！",
+    "hi": "✅ {name} पर आपका पंजीकरण पुष्ट हुआ — +{n} दिन प्रीमियम। धन्यवाद!",
+    "ar": "✅ تم تأكيد تسجيلك في {name} — +{n} يومًا من بريميوم. شكرًا!",
+}
+EXCH_NO_NOTE = {
+    "en": "❌ We couldn't find UID {uid} among {name} sign-ups via our link. Check the UID or register with our link and send it again in the app: More → Bonuses.",
+    "ru": "❌ UID {uid} не найден среди регистраций на {name} по нашей ссылке. Проверьте UID или зарегистрируйтесь по ссылке и отправьте заново в приложении: Ещё → Бонусы.",
+    "uk": "❌ UID {uid} не знайдено серед реєстрацій на {name} за нашим посиланням. Перевірте UID або зареєструйтеся за посиланням і надішліть знову в застосунку: Ще → Бонуси.",
+    "es": "❌ No encontramos el UID {uid} entre los registros en {name} con nuestro enlace. Revisa el UID o regístrate con el enlace y envíalo de nuevo en la app: Más → Bonos.",
+    "pt": "❌ Não encontramos o UID {uid} entre os cadastros na {name} pelo nosso link. Confira o UID ou cadastre-se pelo link e envie de novo no app: Mais → Bônus.",
+    "de": "❌ UID {uid} ist nicht unter den {name}-Registrierungen über unseren Link. Prüfe die UID oder registriere dich über den Link und sende sie erneut in der App: Mehr → Boni.",
+    "fr": "❌ L'UID {uid} ne figure pas parmi les inscriptions sur {name} via notre lien. Vérifiez l'UID ou inscrivez-vous via le lien et renvoyez-le dans l'app : Plus → Bonus.",
+    "tr": "❌ UID {uid}, bağlantımızla yapılan {name} kayıtları arasında bulunamadı. UID'yi kontrol edin veya bağlantıyla kaydolup uygulamada tekrar gönderin: Daha fazla → Bonuslar.",
+    "pl": "❌ Nie znaleźliśmy UID {uid} wśród rejestracji na {name} z naszego linku. Sprawdź UID lub zarejestruj się z linku i wyślij ponownie w aplikacji: Więcej → Bonusy.",
+    "id": "❌ UID {uid} tidak ditemukan di antara pendaftaran {name} lewat tautan kami. Periksa UID atau daftar lewat tautan lalu kirim lagi di aplikasi: Lainnya → Bonus.",
+    "vi": "❌ Không tìm thấy UID {uid} trong số đăng ký {name} qua liên kết của chúng tôi. Hãy kiểm tra UID hoặc đăng ký qua liên kết rồi gửi lại trong ứng dụng: Thêm → Phần thưởng.",
+    "ja": "❌ UID {uid} は当リンク経由の{name}登録に見つかりませんでした。UIDを確認するか、リンクから登録してアプリで再送してください：その他 → ボーナス。",
+    "ko": "❌ UID {uid}을(를) 저희 링크로 가입한 {name} 계정에서 찾지 못했습니다. UID를 확인하거나 링크로 가입한 뒤 앱에서 다시 보내 주세요: 더 보기 → 보너스.",
+    "zh": "❌ 在通过我们链接注册的 {name} 用户中未找到 UID {uid}。请检查 UID，或通过链接注册后在应用中重新提交：更多 → 奖励。",
+    "hi": "❌ हमारे लिंक से {name} पर हुए पंजीकरणों में UID {uid} नहीं मिला। UID जाँचें या लिंक से पंजीकरण करके ऐप में दोबारा भेजें: और → बोनस।",
+    "ar": "❌ لم نجد UID {uid} بين التسجيلات في {name} عبر رابطنا. تحقّق من UID أو سجّل عبر الرابط وأرسله مجددًا في التطبيق: المزيد ← المكافآت.",
+}
+
+
+def exch_uid_ok(uid: str) -> bool:
+    """UID биржи — только цифры: у OKX это 15–18 знаков, берём с запасом."""
+    return uid.isascii() and uid.isdigit() and 6 <= len(uid) <= 20
+
+
+def _exch_owner_note(cid: int, chat: str, ex: str, uid: str, who: str) -> None:
+    """Владельцу — заявка с кнопками. Не дошла — заявка всё равно лежит в
+    базе, и бот покажет её по /okx."""
+    text = (f"🏦 <b>{EXCH_NAMES.get(ex, ex)}: заявка #{cid}</b>\n"
+            f"UID: <code>{html.escape(uid)}</code>\n"
+            f"Пользователь: <a href=\"tg://user?id={html.escape(chat)}\">{html.escape(who or chat)}</a> "
+            f"(<code>{html.escape(chat)}</code>)\n\n"
+            f"Проверьте UID среди приглашённых в кабинете партнёра.")
+    tg_api("sendMessage", {"chat_id": OWNER_CHAT_ID, "text": text, "parse_mode": "HTML",
+                           "reply_markup": {"inline_keyboard": [[
+                               {"text": "✅ Одобрить", "callback_data": f"ex:ok:{cid}"},
+                               {"text": "❌ Отклонить", "callback_data": f"ex:no:{cid}"}]]}})
+
+
+def exch_state(con: sqlite3.Connection, chat: str) -> dict:
+    """Последняя заявка человека по каждой бирже: status none / wait / ok / no."""
+    out = {ex: {"status": "none"} for ex in EXCH_BONUS}
+    try:
+        for r in con.execute("SELECT ex, uid, status, days FROM exch_claims WHERE chat_id=? ORDER BY id", (chat,)):
+            if r["ex"] in out and out[r["ex"]]["status"] != "ok":
+                out[r["ex"]] = {"status": r["status"], "uid": r["uid"],
+                                "days": int(r["days"] or 0) or EXCH_BONUS[r["ex"]]}
+    except sqlite3.OperationalError:
+        pass  # таблицы ещё нет: заявок не было
+    return out
+
+
+def exch_submit(chat: str, ex: str, uid: str, who: str = "") -> dict:
+    """Человек прислал UID на бирже — заявка уходит владельцу на проверку."""
+    uid = re.sub(r"\s+", "", uid or "")
+    if ex not in EXCH_BONUS:
+        return {"ok": False, "error": "bad_kind"}
+    if not exch_uid_ok(uid):
+        return {"ok": False, "error": "bad_uid"}
+    con = open_db(DB, write=True)
+    if not con:
+        return {"ok": False, "error": "db"}
+    try:
+        con.executescript(EXCH_SCHEMA)
+        con.isolation_level = None
+        con.execute("BEGIN IMMEDIATE")
+        try:
+            mine = con.execute("SELECT status FROM exch_claims WHERE chat_id=? AND ex=?", (chat, ex)).fetchall()
+            if any(r["status"] == "ok" for r in mine):
+                con.execute("ROLLBACK")
+                return {"ok": False, "error": "already"}
+            if any(r["status"] == "wait" for r in mine):
+                con.execute("ROLLBACK")
+                return {"ok": False, "error": "pending"}
+            if len(mine) >= EXCH_MAX_TRIES:
+                con.execute("ROLLBACK")
+                return {"ok": False, "error": "limit"}
+            if con.execute("SELECT 1 FROM exch_claims WHERE ex=? AND uid=? AND status!='no'", (ex, uid)).fetchone():
+                con.execute("ROLLBACK")
+                return {"ok": False, "error": "uid_taken"}
+            cid = con.execute("INSERT INTO exch_claims(chat_id, ex, uid, at) VALUES(?,?,?,?)",
+                              (chat, ex, uid, now())).lastrowid
+            con.execute("COMMIT")
+        except sqlite3.Error:
+            con.execute("ROLLBACK")
+            raise
+    except sqlite3.IntegrityError:
+        return {"ok": False, "error": "uid_taken"}
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] exch {chat} {ex}: {e}\n")
+        return {"ok": False, "error": "db"}
+    finally:
+        con.close()
+    track(chat, "exch", ex + "_sent")
+    threading.Thread(target=_exch_owner_note, args=(cid, chat, ex, uid, who), daemon=True).start()
+    return {"ok": True, "status": "wait", "uid": uid}
+
+
+def exch_settle(notify: bool = True) -> int:
+    """Решения владельца, принятые в боте: одобренным — дни (одной
+    транзакцией с отметкой granted_at), отклонённым — сообщение. Возвращает,
+    сколько заявок обработано."""
+    con = open_db(DB, write=True)
+    if not con:
+        return 0
+    done: list[tuple[str, str, str, str, int, str]] = []
+    try:
+        try:
+            rows = con.execute(
+                "SELECT e.id, e.chat_id, e.ex, e.uid, e.status, COALESCE(u.language, 'en') AS lang "
+                "FROM exch_claims e LEFT JOIN users u ON u.chat_id = e.chat_id "
+                "WHERE (e.status='ok' AND e.granted_at=0) OR (e.status='no' AND e.notified=0) LIMIT 100").fetchall()
+        except sqlite3.OperationalError:
+            return 0  # таблицы ещё нет
+        t = now()
+        con.isolation_level = None
+        for r in rows:
+            con.execute("BEGIN IMMEDIATE")
+            try:
+                days = 0
+                if r["status"] == "ok":
+                    days = EXCH_BONUS.get(r["ex"], 0)
+                    if con.execute("UPDATE exch_claims SET granted_at=?, days=?, notified=1 "
+                                   "WHERE id=? AND status='ok' AND granted_at=0", (t, days, r["id"])).rowcount != 1:
+                        con.execute("ROLLBACK")
+                        continue
+                    # Человека нет (удалил данные) или это сервисный аккаунт —
+                    # заявка закрывается без дней, иначе проход крутил бы её вечно.
+                    if not days or not r["chat_id"] or not extend_premium(con, r["chat_id"], days):
+                        con.execute("UPDATE exch_claims SET days=0 WHERE id=?", (r["id"],))
+                        days = 0
+                elif con.execute("UPDATE exch_claims SET notified=1 WHERE id=? AND status='no' AND notified=0",
+                                 (r["id"],)).rowcount != 1:
+                    con.execute("ROLLBACK")
+                    continue
+                con.execute("COMMIT")
+            except sqlite3.Error:
+                con.execute("ROLLBACK")
+                raise
+            if r["chat_id"] and (r["status"] == "no" or days):
+                done.append((r["chat_id"], r["ex"], r["uid"], r["status"], days, r["lang"] or "en"))
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] exch settle: {e}\n")
+    finally:
+        con.close()
+    for c, ex, uid, st, d, lang in done:
+        name = EXCH_NAMES.get(ex, ex)
+        if st == "ok":
+            boot_drop(c)
+            track(c, "exch", ex)
+            text = EXCH_OK_NOTE.get(lang, EXCH_OK_NOTE["en"]).replace("{name}", name).replace("{n}", str(d))
+        else:
+            text = EXCH_NO_NOTE.get(lang, EXCH_NO_NOTE["en"]).replace("{name}", name).replace("{uid}", uid)
+        if notify:
+            threading.Thread(target=tg_api, args=("sendMessage", {"chat_id": c, "text": text}), daemon=True).start()
+    return len(done)
 
 
 REF_DAYS = 7
@@ -12082,6 +12295,10 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
                 "DELETE FROM ref_codes WHERE chat_id=?",
                 "DELETE FROM token_subs WHERE chat_id=?",
                 "DELETE FROM bonus_claims WHERE chat_id=?",
+                # Одобренная заявка с биржи остаётся без хозяина: UID уже
+                # получил награду, и после удаления данных его не прислать снова.
+                "DELETE FROM exch_claims WHERE chat_id=? AND status!='ok'",
+                "UPDATE exch_claims SET chat_id='' WHERE chat_id=?",
                 "DELETE FROM users WHERE chat_id=?",
             ):
                 try:
@@ -12639,6 +12856,12 @@ class Handler(BaseHTTPRequestHandler):
             # Сервисный аккаунт Премиум не покупает и не получает бонусами.
             if is_service(chat) and (path.startswith("/api/pay/") or path.startswith("/api/bonus/")):
                 self._json(200, {"ok": False, "error": "service"})
+                return
+            if path == "/api/bonus/exchange":
+                u = self._user_full(qs)
+                who = ("@" + u["username"]) if u.get("username") else " ".join(
+                    x for x in (u.get("first", ""), u.get("last", "")) if x)
+                self._json(200, exch_submit(chat, str(body.get("ex") or ""), str(body.get("uid") or "")[:40], who[:64]))
                 return
             if path in ("/api/bonus/open", "/api/bonus/claim"):
                 self._json(200, bonus_act(chat, str(body.get("kind") or ""), path.rsplit("/", 1)[-1]))

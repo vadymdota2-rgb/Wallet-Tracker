@@ -8,18 +8,22 @@
  * «Подписаться» открывает страницу и ставит бонус «на проверку»: через пять
  * минут сервер сам начисляет день (bonus_settle), а бот пишет «подписка
  * подтверждена». Второй раз кнопка уже не нажимается.
+ *
+ * Биржа (OKX): регистрация по нашей ссылке. Проверить приглашённых открыто
+ * нельзя, поэтому человек присылает свой UID, а владелец одобряет его в боте
+ * (exch_claims в API). Одобрили — дни начисляет сервер, бот пишет человеку.
  */
 import { useEffect, useMemo, useState } from "react";
 import { Frame } from "./Screen";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
-import { haptic } from "../lib/telegram";
-import { bonusAct, fetchBonus, type BonusReply } from "../lib/api";
+import { haptic, openExternal } from "../lib/telegram";
+import { bonusAct, exchSubmit, fetchBonus, type BonusReply } from "../lib/api";
 import { SOCIALS, openSocial, type Social } from "../lib/social";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
 import { InviteCard, useRefInfo } from "../components/Invite";
-import { Card, SectionTitle } from "../components/ui";
+import { Action, Card, SectionTitle } from "../components/ui";
 import { useNow } from "../lib/tick";
 
 /** Канал Telegram без прав бота: секунд между «открыл» и «можно забрать» —
@@ -80,7 +84,8 @@ export function BonusScreen() {
   const got = st?.got ?? {};
   /* Итог — вместе с днями за друзей: «получено бонусами» без них было бы
      неправдой у того, кто уже пригласил. */
-  const total = Object.values(got).reduce((a, b) => a + b, 0) + (ref?.days ?? 0);
+  const exDays = Object.values(st?.exch ?? {}).reduce((a, c) => a + (c.status === "ok" ? c.days ?? 0 : 0), 0);
+  const total = Object.values(got).reduce((a, b) => a + b, 0) + (ref?.days ?? 0) + exDays;
   /** Сколько ещё можно забрать за подписки. */
   const left = (st?.items ?? []).reduce((a, i) => a + (got[i.id] ? 0 : i.days), 0);
   /* Канал Telegram — первым: за него больше всего дней, и подписку на него
@@ -152,6 +157,11 @@ export function BonusScreen() {
       {/* Пригласить друга — +7 дней обоим. */}
       <InviteCard />
 
+      {(st?.exItems ?? []).map((ex) => (
+        <ExchCard key={ex.id} ex={ex} claim={st?.exch?.[ex.id]}
+          onSent={(uid) => setSt((x) => (x ? { ...x, exch: { ...x.exch, [ex.id]: { status: "wait", uid } } } : x))} />
+      ))}
+
       <Card>
         <SectionTitle>{t(lang, "bn_social_title")}</SectionTitle>
         <p className="note dim">{t(lang, "bn_social_d")}</p>
@@ -195,5 +205,87 @@ export function BonusScreen() {
         <p className="bn-note">{t(lang, "bn_once")}</p>
       </Card>
     </Frame>
+  );
+}
+
+/** Регистрация на бирже по нашей ссылке: ссылка → UID → «Отправить на проверку». */
+function ExchCard({ ex, claim, onSent }: {
+  ex: NonNullable<BonusReply["exItems"]>[number];
+  claim?: NonNullable<BonusReply["exch"]>[string];
+  onSent: (uid: string) => void;
+}) {
+  const lang = useApp((s) => s.lang);
+  const [uid, setUid] = useState("");
+  const [busy, setBusy] = useState(false);
+  const status = claim?.status ?? "none";
+  const vars = { name: ex.name, n: ex.days };
+
+  async function send() {
+    const v = uid.replace(/\s+/g, "");
+    if (busy) return;
+    if (!/^\d{6,20}$/.test(v)) {
+      haptic("error");
+      toast(t(lang, "bn_ex_bad_uid", vars), "err");
+      return;
+    }
+    setBusy(true);
+    const r = await exchSubmit(ex.id, v);
+    setBusy(false);
+    if (r?.ok) {
+      haptic("success");
+      toast(t(lang, "bn_ex_sent"));
+      onSent(v);
+      return;
+    }
+    haptic("error");
+    const err = r?.error ?? "";
+    // Заявка уже лежит (отправили с другого устройства) — показать её.
+    if (err === "pending") {
+      onSent(v);
+      return;
+    }
+    toast(t(lang, err === "bad_uid" ? "bn_ex_bad_uid" : err === "uid_taken" ? "bn_ex_taken"
+      : err === "limit" ? "bn_ex_limit" : err === "already" ? "bn_already" : "generic_error_retry", vars), "err");
+  }
+
+  return (
+    <Card>
+      <SectionTitle>{t(lang, "bn_ex_title", vars)}</SectionTitle>
+      {status === "ok" ? (
+        <div className="bn-row done">
+          <span className="bn-name">
+            <b>{t(lang, "bn_ex_ok")}</b>
+            <small>UID {claim?.uid}</small>
+          </span>
+          <span className="bn-ok">✓ +{claim?.days ?? ex.days}</span>
+        </div>
+      ) : status === "wait" ? (
+        <p className="bn-ex-wait">⏳ {t(lang, "bn_ex_wait", { uid: claim?.uid ?? "" })}</p>
+      ) : (
+        <>
+          <p className="note dim">{t(lang, "bn_ex_d", vars)}</p>
+          {status === "no" ? <p className="bn-ex-no">{t(lang, "bn_ex_no", { uid: claim?.uid ?? "" })}</p> : null}
+          <div className="stack-actions">
+            <Action kind="ghost" onClick={() => openExternal(ex.link)}>{t(lang, "bn_ex_open", vars)}</Action>
+          </div>
+          <label className="bn-ex-label" htmlFor={`ex-uid-${ex.id}`}>{t(lang, "bn_ex_uid", vars)}</label>
+          <input
+            id={`ex-uid-${ex.id}`}
+            className="find mono"
+            value={uid}
+            inputMode="numeric"
+            placeholder="UID"
+            maxLength={24}
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(e) => setUid(e.target.value)}
+          />
+          <p className="bn-note">{t(lang, "bn_ex_hint", vars)}</p>
+          <div className="stack-actions">
+            <Action onClick={() => void send()} disabled={busy || !uid.trim()}>{t(lang, "bn_ex_send")}</Action>
+          </div>
+        </>
+      )}
+    </Card>
   );
 }

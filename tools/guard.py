@@ -641,10 +641,12 @@ say("дайджест v2: сводка сигналов, рынок, инсти�
 
 _ui_left = [f for f in ("wallet_menu.cpp", "big_trades.cpp", "hyperliquid_ui.cpp", "alert_settings.cpp")
             if os.path.exists(os.path.join(BOT, f))]
+# Кнопки под заявками с бирж (ExchClaim … exchPending) — только владельцу.
 _bot_src = "".join(read(os.path.join(BOT, f)) for f in os.listdir(BOT)
                    if f.endswith(".cpp") and f not in ("ru.cpp", "translations.cpp"))
 say("бот: меню в чате нет — на любое сообщение кнопка приложения; алерты, оплата и команды владельца на месте",
-    not _ui_left and "callback_data" not in _bot_src and "void sendOpenApp(const std::string& chatId)" in _mc
+    not _ui_left and "callback_data" not in _bot_src.replace(
+        _bot_src[_bot_src.find("struct ExchClaim {"):_bot_src.find("void exchPending(")], "") and "void sendOpenApp(const std::string& chatId)" in _mc
     and "bool handleOwnerCommand(const std::string& cid, const std::string& txt)" in _mc
     and "handlePreCheckoutQuery(" in _mc and "handleSuccessfulPayment(" in _mc
     and '"start_open_app"' in read(os.path.join(BOT, "ru.cpp")), str(_ui_left))
@@ -797,6 +799,20 @@ say("лонг/шорт: из памяти, при пропуске сборки 
     and "        return None\n" in pybody(api, "def ls_scan(") and '"sum": ls_totals(allrows)' in api
     and 'const local = !query && side === "all" && page === 1 && have;' in _ana
     and "const b = have ? local : asked;" in _ana)
+
+_ex_sub = pybody(api, "def exch_submit(")
+_ex_set = pybody(api, "def exch_settle(")
+_ex_cb = _mcpp[_mcpp.find("bool handleExchCallback("):_mcpp.find("void exchPending(")]
+say("OKX: UID на ручную проверку — кнопки только владельцу, решение один раз, дни одной транзакцией, UID один раз навсегда",
+    'EXCH_BONUS = {"okx": 30}' in api and "WHERE status!='no'" in api and "exch_uid_ok(uid)" in _ex_sub
+    and '"error": "uid_taken"' in _ex_sub and '"error": "pending"' in _ex_sub and "EXCH_MAX_TRIES" in _ex_sub
+    and "WHERE id=? AND status='ok' AND granted_at=0" in _ex_set and "extend_premium(con, r[\"chat_id\"], days)" in _ex_set
+    and "exch_settle()" in pybody(api, "def _bonus_loop(") and 'path == "/api/bonus/exchange"' in api
+    and "DELETE FROM exch_claims WHERE chat_id=? AND status!='ok'" in api
+    and "if (from != OWNER_CHAT_ID)" in _ex_cb and "WHERE id=? AND status='wait'" in _ex_cb
+    and "if (handleExchCallback(cq)) continue;" in _mcpp and 'txt == "/okx"' in _mcpp
+    and "CREATE TABLE IF NOT EXISTS exch_claims" in _mcpp
+    and "exchSubmit(ex.id, v)" in read(f"{APP}/src/screens/BonusScreen.tsx"))
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

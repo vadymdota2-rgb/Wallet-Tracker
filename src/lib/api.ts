@@ -229,10 +229,21 @@ export interface BonusReply {
   opened?: Record<string, number>;
   /** «На проверке»: до какого времени (сек), потом сервер начислит дни. */
   pending?: Record<string, number>;
+  /** Биржи: регистрация по нашей ссылке, UID проверяет владелец вручную. */
+  exItems?: { id: string; days: number; name: string; link: string }[];
+  exch?: Record<string, ExchClaim>;
+}
+/** Заявка с биржи: none — не было, wait — на проверке, ok — одобрена, no — отклонена. */
+export interface ExchClaim {
+  status: "none" | "wait" | "ok" | "no";
+  uid?: string;
+  days?: number;
 }
 export const fetchBonus = () => call<BonusReply>("/api/bonus");
 export const bonusAct = (kind: string, act: "open" | "claim") =>
   call<{ ok: boolean; days?: number; error?: string; left?: number; due?: number }>(`/api/bonus/${act}`, { method: "POST", body: { kind } });
+export const exchSubmit = (ex: string, uid: string) =>
+  call<{ ok: boolean; status?: "wait"; uid?: string; error?: string }>("/api/bonus/exchange", { method: "POST", body: { ex, uid } });
 
 /** Токен проекта: подписан ли человек на уведомление о запуске. */
 export const fetchTokenState = () => call<{ ok: boolean; on?: boolean }>("/api/token-launch");
