@@ -860,7 +860,7 @@ say("накрутки по IP: проба — не больше 3 новых а�
 
 _hlc = read(f"{BOT}/hyperliquid_core.cpp")
 _hl_auto = _hlc[_hlc.find("Автопополнение базы сервисного аккаунта"):_hlc.find("void handleTrades(")]
-say("автопополнение базы китов: BSC и Hyperliquid от $10k, Bitcoin от 1 BTC, по 500 в сутки на сеть, /autobase включает и выключает каждую сеть; Hyperliquid ищет без бюджета запросов; неактивных 30 дней — убираем без бана (найдутся снова), боты — бан навсегда",
+say("автопополнение базы китов: BSC и Hyperliquid от $10k, Bitcoin от 1 BTC, по 500 в сутки на сеть, /autobase включает и выключает каждую сеть; Hyperliquid ищет без бюджета запросов; неактивных 30 дней — убираем без бана (найдутся снова; Bitcoin с 1 BTC и больше не трогаем), боты и BTC-сервисы — бан навсегда",
     "bscAutoConsider(tx, to, watchers.get());" in _mcpp and "BSC_HOT_NONCE = 300000" in _mcpp
     and "autoMinUsd(AutoNet::BSC)" in _mcpp and '"eth_getCode"' in _mcpp and "BSC_AUTO_MAX_NONCE = 1000" in _mcpp
     and 'addUserWhale(SERVICE_CHAT_ID, a, "auto-bsc")' in _mcpp and "std::thread(bscAutoLoop).detach();" in _mcpp
@@ -880,9 +880,13 @@ say("автопополнение базы китов: BSC и Hyperliquid от $
     and "t.timestamp>=?" in _mcpp and "hlAutoForget(w.addr);" in _mcpp and "g_bscAutoSeen.erase(w.addr);" in _mcpp
     and "btcPruneAuto(cut)" in _mcpp and "int btcPruneAuto(long long cut)" in read(f"{BOT}/btc_chain.cpp")
     and "void autoPruned(AutoNet n, int count)" in read(f"{BOT}/autobase.cpp") and "Сегодня: добавлено" in read(f"{BOT}/autobase.cpp") and "Всего: добавлено" in read(f"{BOT}/autobase.cpp")
-    and "void autoBanned(AutoNet n)" in read(f"{BOT}/autobase.cpp") and "long long btcAutoCount()" in read(f"{BOT}/btc_chain.cpp")
+    and "void autoBanned(AutoNet n, int count)" in read(f"{BOT}/autobase.cpp") and "long long btcAutoCount()" in read(f"{BOT}/btc_chain.cpp")
     and 'if (label == "auto-bsc") autoBanned(AutoNet::BSC);' in read(f"{BOT}/wallets.cpp")
     and 'else if (label == "auto-hl") autoBanned(AutoNet::HL);' in read(f"{BOT}/wallets.cpp")
+    and "AND a.bal_sats < ? " in read(f"{BOT}/btc_chain.cpp") and "int btcBanServices()" in read(f"{BOT}/btc_chain.cpp")
+    and "void refreshIdleBalances()" in read(f"{BOT}/btc_chain.cpp") and "refreshIdleBalances();" in read(f"{BOT}/btc_chain.cpp")
+    and _mcpp.find("autoBanned(AutoNet::BTC, btcBanServices());") != -1
+    and _mcpp.find("autoBanned(AutoNet::BTC, btcBanServices());") < _mcpp.find("const int btc = btcPruneAuto(cut);")
     and "autoPruned(AutoNet::BSC, removedBsc)" in _mcpp and "autoPruned(AutoNet::HL, removedHl)" in _mcpp and "autoPruned(AutoNet::BTC, btc)" in _mcpp
     and "ignored_wallets" not in _mcpp[_mcpp.find("void pruneAutoWallets()"):_mcpp.find("bool processBlock(")])
 
