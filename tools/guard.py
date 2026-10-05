@@ -829,5 +829,14 @@ say("приветствие новичку: в приложении — на в�
     and "r.chat == SERVICE_CHAT_ID" in _lc[_lc.find("void welcomeTick()"):] and "welcomeTick();" in _mcpp
     and '"lc_welcome"' in read(f"{BOT}/ru.cpp"))
 
+_pt_set = pybody(api, "def partner_settle(")
+say("каналы партнёров: подписка проверяется getChatMember, дни — через 3 дня если ещё подписан, ≤7 дней на всех; /partner в боте; ссылка блогера p_<канал>",
+    "PARTNER_WAIT_SEC = 3 * 86400" in api and "PARTNER_MAX_DAYS = 7" in api
+    and "tg_member(handle, chat)" in pybody(api, "def partner_join(") and 'tg_member(r["handle"], r["chat_id"])' in _pt_set
+    and "PARTNER_MAX_DAYS - int(got or 0)" in _pt_set and "partner_settle()" in pybody(api, "def _bonus_loop(")
+    and 'partner_ref(chat, who.get("start", ""))' in api and 'path == "/api/bonus/partner"' in api
+    and "void partnerCommand(" in _mcpp and 'txt.rfind("/partner ", 0) == 0' in _mcpp
+    and "CREATE TABLE IF NOT EXISTS partner_channels" in _mcpp and "PartnersCard" in read(f"{APP}/src/screens/BonusScreen.tsx"))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

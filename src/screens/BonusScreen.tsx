@@ -9,6 +9,10 @@
  * минут сервер сам начисляет день (bonus_settle), а бот пишет «подписка
  * подтверждена». Второй раз кнопка уже не нажимается.
  *
+ * Каналы партнёров (блогеры, взаимная реклама): подписка → «Проверить»
+ * (сервер смотрит getChatMember) → через три дня сервер проверяет ещё раз и,
+ * если человек всё ещё подписан, начисляет дни (partner_settle).
+ *
  * Биржа (OKX): регистрация по нашей ссылке или коду (у кого аккаунт уже
  * есть — смена пригласившего на наш код, OKX даёт её один раз), депозит и
  * покупка от суммы, которую присылает сервер. Проверить приглашённых открыто
@@ -19,8 +23,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Frame } from "./Screen";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
-import { haptic, openExternal } from "../lib/telegram";
-import { bonusAct, exchSubmit, fetchBonus, type BonusReply } from "../lib/api";
+import { haptic, openExternal, openTg } from "../lib/telegram";
+import { dateLong } from "../lib/format";
+import { bonusAct, exchSubmit, fetchBonus, partnerJoin, type BonusReply } from "../lib/api";
 import { SOCIALS, openSocial, type Social } from "../lib/social";
 import { syncNow } from "../lib/sync";
 import { copyText } from "../lib/copy";
@@ -88,7 +93,7 @@ export function BonusScreen() {
   /* Итог — вместе с днями за друзей: «получено бонусами» без них было бы
      неправдой у того, кто уже пригласил. */
   const exDays = Object.values(st?.exch ?? {}).reduce((a, c) => a + (c.status === "ok" ? c.days ?? 0 : 0), 0);
-  const total = Object.values(got).reduce((a, b) => a + b, 0) + (ref?.days ?? 0) + exDays;
+  const total = Object.values(got).reduce((a, b) => a + b, 0) + (ref?.days ?? 0) + exDays + (st?.pGot ?? 0);
   /** Сколько ещё можно забрать за подписки. */
   const left = (st?.items ?? []).reduce((a, i) => a + (got[i.id] ? 0 : i.days), 0);
   /* Канал Telegram — первым: за него больше всего дней, и подписку на него
@@ -207,6 +212,8 @@ export function BonusScreen() {
         </ul>
         <p className="bn-note">{t(lang, "bn_once")}</p>
       </Card>
+
+      {st?.partners?.length ? <PartnersCard st={st} onChange={(x) => setSt(x)} /> : null}
     </Frame>
   );
 }
@@ -307,6 +314,79 @@ function ExchCard({ ex, claim, onSent }: {
           </div>
         </>
       )}
+    </Card>
+  );
+}
+
+/** Каналы партнёров: «Подписаться» → «Проверить» → «Засчитано · дни N» → «✓ +2». */
+function PartnersCard({ st, onChange }: { st: BonusReply; onChange: (x: BonusReply) => void }) {
+  const lang = useApp((s) => s.lang);
+  const [opened, setOpened] = useState<Record<string, boolean>>({});
+  const [busy, setBusy] = useState("");
+  const claims = st.pclaims ?? {};
+  const max = st.pMax ?? 7;
+  const capped = (st.pGot ?? 0) >= max;
+  const waitDays = Math.round((st.pWait ?? 259200) / 86400);
+
+  const open = (handle: string) => {
+    haptic("select");
+    openTg(`https://t.me/${handle.replace(/^@/, "")}`);
+    setOpened((o) => ({ ...o, [handle]: true }));
+  };
+
+  async function check(handle: string) {
+    if (busy) return;
+    haptic("select");
+    setBusy(handle);
+    const r = await partnerJoin(handle);
+    setBusy("");
+    if (r?.ok && r.checkAt) {
+      haptic("success");
+      onChange({ ...st, pclaims: { ...claims, [handle]: { status: "wait", checkAt: r.checkAt, days: 0 } } });
+      return;
+    }
+    haptic("error");
+    const err = r?.error ?? "";
+    toast(t(lang, err === "not_member" ? "bn_pt_not" : err === "check" ? "bn_pt_err" : err === "cap" ? "bn_pt_cap"
+      : err === "already" ? "bn_already" : "generic_error_retry"), "err");
+  }
+
+  return (
+    <Card>
+      <SectionTitle>{t(lang, "bn_pt_title")}</SectionTitle>
+      <p className="note dim">{t(lang, "bn_pt_d", { w: waitDays, max })}</p>
+      <ul className="bn-list">
+        {(st.partners ?? []).map((p) => {
+          const c = claims[p.handle];
+          const done = c?.status === "ok";
+          return (
+            <li key={p.handle} className={done ? "bn-row done" : "bn-row"}>
+              <button type="button" className="bn-net" onClick={() => open(p.handle)}>
+                <span className="bn-ic" aria-hidden="true">📣</span>
+                <span className="bn-name">
+                  <b>{p.title}</b>
+                  <small>{done ? t(lang, "bn_done") : c?.status === "left" ? t(lang, "bn_pt_left")
+                    : `${p.handle} · ${t(lang, "bn_days", { n: p.days })}`}</small>
+                </span>
+              </button>
+              {done ? (
+                <span className="bn-ok">✓ +{c?.days}</span>
+              ) : c?.status === "wait" ? (
+                <span className="bn-wait">
+                  {t(lang, "bn_pt_wait", { d: dateLong(c.checkAt) }).split(" · ").map((part, i) => <span key={i}>{part}</span>)}
+                </span>
+              ) : c || capped ? null : opened[p.handle] ? (
+                <button type="button" className="bn-go claim" disabled={busy === p.handle} onClick={() => void check(p.handle)}>
+                  {t(lang, "bn_pt_check")}
+                </button>
+              ) : (
+                <button type="button" className="bn-go" onClick={() => open(p.handle)}>{t(lang, "bn_subscribe")}</button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {capped ? <p className="bn-note">{t(lang, "bn_pt_cap")}</p> : null}
     </Card>
   );
 }

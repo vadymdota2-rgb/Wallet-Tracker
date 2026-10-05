@@ -232,6 +232,12 @@ export interface BonusReply {
   /** Биржи: регистрация по нашей ссылке, UID проверяет владелец вручную. */
   exItems?: { id: string; days: number; name: string; link: string; code?: string; minDep?: string; gift?: string }[];
   exch?: Record<string, ExchClaim>;
+  /** Каналы партнёров: подписка → через pWait секунд проверка → дни. */
+  partners?: { handle: string; title: string; days: number }[];
+  pclaims?: Record<string, { status: "wait" | "ok" | "left" | "cap"; checkAt: number; days: number }>;
+  pMax?: number;
+  pGot?: number;
+  pWait?: number;
 }
 /** Заявка с биржи: none — не было, wait — на проверке, ok — одобрена, no — отклонена. */
 export interface ExchClaim {
@@ -242,6 +248,8 @@ export interface ExchClaim {
 export const fetchBonus = () => call<BonusReply>("/api/bonus");
 export const bonusAct = (kind: string, act: "open" | "claim") =>
   call<{ ok: boolean; days?: number; error?: string; left?: number; due?: number }>(`/api/bonus/${act}`, { method: "POST", body: { kind } });
+export const partnerJoin = (handle: string) =>
+  call<{ ok: boolean; status?: "wait"; checkAt?: number; error?: string }>("/api/bonus/partner", { method: "POST", body: { handle } });
 export const exchSubmit = (ex: string, uid: string) =>
   call<{ ok: boolean; status?: "wait"; uid?: string; error?: string }>("/api/bonus/exchange", { method: "POST", body: { ex, uid } });
 

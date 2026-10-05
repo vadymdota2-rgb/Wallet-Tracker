@@ -7828,6 +7828,11 @@ def _bonus_loop() -> None:
                 ref_settle()
             except Exception as e:
                 sys.stderr.write(f"[api] ref loop: {e}\n")
+            # Подписки на каналы партнёров, чья трёхдневная проверка подошла.
+            try:
+                partner_settle()
+            except Exception as e:
+                sys.stderr.write(f"[api] partner loop: {e}\n")
         n += 1
         time.sleep(30)
 
@@ -7859,19 +7864,15 @@ def bonus_state(chat: str) -> dict:
         pass  # таблицы ещё нет: никто ничего не забирал
     try:
         out["exch"] = exch_state(con, chat)
+        out.update(partner_state(con, chat))
     finally:
         con.close()
     return out
 
 
 def tg_channel_member(chat: str) -> bool | None:
-    """Подписан ли человек на канал. None — проверить нельзя (у бота нет прав
-    в канале или Telegram недоступен)."""
-    res = tg_api("getChatMember", {"chat_id": TG_CHANNEL, "user_id": int(chat)}, timeout=8.0) \
-        if chat.lstrip("-").isdigit() else None
-    if not isinstance(res, dict):
-        return None
-    return res.get("status") in ("creator", "administrator", "member", "restricted")
+    """Подписан ли человек на наш канал. None — проверить нельзя."""
+    return tg_member(TG_CHANNEL, chat)
 
 
 def bonus_act(chat: str, kind: str, act: str) -> dict:
@@ -8169,6 +8170,251 @@ def exch_settle(notify: bool = True) -> int:
         if notify:
             threading.Thread(target=tg_api, args=("sendMessage", {"chat_id": c, "text": text}), daemon=True).start()
     return len(done)
+
+
+# Каналы партнёров: подписка на канал блогера за дни Премиума ----------------
+#
+# Взаимная реклама: блогер рекламирует приложение своей аудитории по своей
+# ссылке t.me/<бот>?startapp=p_<канал> (кто пришёл — пишется в partner_refs),
+# а мы в «Бонусах» даём дни за подписку на его канал. Каналы заводит владелец
+# командой /partner в боте (partner_channels). Подписку проверяем
+# по-настоящему — getChatMember, для этого бот должен быть админом канала.
+# Дни — не сразу, а через PARTNER_WAIT_SEC, если человек всё ещё подписан:
+# блогеру нужны живые подписчики, а не отписавшиеся сразу после награды.
+# За все каналы партнёров вместе — не больше PARTNER_MAX_DAYS дней.
+PARTNER_WAIT_SEC = 3 * 86400
+PARTNER_RETRY_SEC = 6 * 3600
+PARTNER_MAX_DAYS = 7
+PARTNER_SCHEMA = """
+CREATE TABLE IF NOT EXISTS partner_channels (
+    handle TEXT PRIMARY KEY,
+    title TEXT NOT NULL DEFAULT '',
+    days INTEGER NOT NULL DEFAULT 2,
+    active INTEGER NOT NULL DEFAULT 1,
+    slug TEXT NOT NULL DEFAULT '',
+    added_at INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS partner_claims (
+    chat_id TEXT NOT NULL,
+    handle TEXT NOT NULL,
+    joined_at INTEGER NOT NULL,
+    check_at INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'wait',
+    done_at INTEGER NOT NULL DEFAULT 0,
+    days INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (chat_id, handle)
+);
+CREATE INDEX IF NOT EXISTS idx_partner_claims_due ON partner_claims(status, check_at);
+CREATE TABLE IF NOT EXISTS partner_refs (
+    chat_id TEXT PRIMARY KEY,
+    slug TEXT NOT NULL,
+    at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_partner_refs_slug ON partner_refs(slug);
+"""
+PARTNER_OK_NOTE = {
+    "en": "✅ You've stayed subscribed to {name} — +{n} d of Premium.",
+    "ru": "✅ Вы остались подписаны на {name} — +{n} дн. Премиума.",
+    "uk": "✅ Ви залишилися підписані на {name} — +{n} дн. Преміуму.",
+    "es": "✅ Sigues suscrito a {name}: +{n} d de Premium.",
+    "pt": "✅ Você continua inscrito em {name} — +{n} d de Premium.",
+    "de": "✅ Du bist {name} treu geblieben — +{n} T Premium.",
+    "fr": "✅ Vous êtes resté abonné à {name} — +{n} j de Premium.",
+    "tr": "✅ {name} aboneliğinizi sürdürdünüz — +{n} gün Premium.",
+    "pl": "✅ Nadal subskrybujesz {name} — +{n} dn. Premium.",
+    "id": "✅ Anda tetap berlangganan {name} — +{n} hari Premium.",
+    "vi": "✅ Bạn vẫn theo dõi {name} — +{n} ngày Premium.",
+    "ja": "✅ {name}の購読が続いています — プレミアム+{n}日。",
+    "ko": "✅ {name} 구독을 유지하셨네요 — 프리미엄 +{n}일.",
+    "zh": "✅ 你一直关注着 {name}——高级版 +{n} 天。",
+    "hi": "✅ आप {name} से जुड़े रहे — +{n} दिन Premium।",
+    "ar": "✅ بقيت مشتركًا في {name} — +{n} يوم Premium.",
+}
+PARTNER_LEFT_NOTE = {
+    "en": "You unsubscribed from {name}, so the bonus for it wasn't added.",
+    "ru": "Вы отписались от {name}, поэтому бонус за подписку не начислен.",
+    "uk": "Ви відписалися від {name}, тому бонус за підписку не нараховано.",
+    "es": "Cancelaste la suscripción a {name}, así que no se añadió el bono.",
+    "pt": "Você saiu de {name}, por isso o bônus não foi adicionado.",
+    "de": "Du hast {name} entfolgt, daher wurde der Bonus nicht gutgeschrieben.",
+    "fr": "Vous vous êtes désabonné de {name}, le bonus n'a donc pas été ajouté.",
+    "tr": "{name} aboneliğinden çıktınız, bu yüzden bonus eklenmedi.",
+    "pl": "Anulowałeś subskrypcję {name}, więc bonus nie został dodany.",
+    "id": "Anda berhenti berlangganan {name}, jadi bonusnya tidak ditambahkan.",
+    "vi": "Bạn đã bỏ theo dõi {name} nên phần thưởng không được cộng.",
+    "ja": "{name}の購読を解除したため、ボーナスは付与されませんでした。",
+    "ko": "{name} 구독을 취소하셔서 보너스가 지급되지 않았습니다.",
+    "zh": "你已取消关注 {name}，因此奖励未发放。",
+    "hi": "आपने {name} की सदस्यता छोड़ दी, इसलिए बोनस नहीं जुड़ा।",
+    "ar": "ألغيت الاشتراك في {name}، لذلك لم تُضف المكافأة.",
+}
+_PARTNER_HANDLE_RE = re.compile(r"^@[A-Za-z0-9_]{4,32}$")
+
+
+def tg_member(channel: str, chat: str) -> bool | None:
+    """Подписан ли человек на канал. None — проверить нельзя (у бота нет прав
+    в канале или Telegram недоступен)."""
+    res = tg_api("getChatMember", {"chat_id": channel, "user_id": int(chat)}, timeout=8.0) \
+        if chat.lstrip("-").isdigit() else None
+    if not isinstance(res, dict):
+        return None
+    return res.get("status") in ("creator", "administrator", "member", "restricted")
+
+
+def partner_state(con: sqlite3.Connection, chat: str) -> dict:
+    """Действующие каналы партнёров и что по ним у человека."""
+    out = {"partners": [], "pclaims": {}, "pMax": PARTNER_MAX_DAYS, "pGot": 0, "pWait": PARTNER_WAIT_SEC}
+    try:
+        out["partners"] = [{"handle": r["handle"], "title": r["title"] or r["handle"], "days": int(r["days"])}
+                           for r in con.execute("SELECT handle, title, days FROM partner_channels "
+                                                "WHERE active=1 ORDER BY added_at")]
+        if chat:
+            for r in con.execute("SELECT handle, status, check_at, days FROM partner_claims WHERE chat_id=?", (chat,)):
+                out["pclaims"][r["handle"]] = {"status": r["status"], "checkAt": int(r["check_at"]),
+                                               "days": int(r["days"] or 0)}
+                if r["status"] == "ok":
+                    out["pGot"] += int(r["days"] or 0)
+    except sqlite3.OperationalError:
+        pass  # таблиц ещё нет: каналов не заводили
+    return out
+
+
+def partner_join(chat: str, handle: str) -> dict:
+    """Человек подписался на канал партнёра и нажал «Проверить»: подписка
+    есть — ставим проверку через PARTNER_WAIT_SEC."""
+    handle = (handle or "").strip().lower()
+    if not _PARTNER_HANDLE_RE.match(handle):
+        return {"ok": False, "error": "bad_kind"}
+    con = open_db(DB, write=True)
+    if not con:
+        return {"ok": False, "error": "db"}
+    try:
+        con.executescript(PARTNER_SCHEMA)
+        ch = con.execute("SELECT days FROM partner_channels WHERE handle=? AND active=1", (handle,)).fetchone()
+        if not ch:
+            return {"ok": False, "error": "bad_kind"}
+        if con.execute("SELECT 1 FROM partner_claims WHERE chat_id=? AND handle=?", (chat, handle)).fetchone():
+            return {"ok": False, "error": "already"}
+        got = con.execute("SELECT COALESCE(SUM(days), 0) FROM partner_claims WHERE chat_id=? AND status='ok'",
+                          (chat,)).fetchone()[0]
+        if int(got or 0) >= PARTNER_MAX_DAYS:
+            return {"ok": False, "error": "cap"}
+    finally:
+        con.close()
+    # Сетевой запрос — без открытой базы.
+    member = tg_member(handle, chat)
+    if member is None:
+        return {"ok": False, "error": "check"}
+    if not member:
+        return {"ok": False, "error": "not_member"}
+    t = now()
+    con = open_db(DB, write=True)
+    if not con:
+        return {"ok": False, "error": "db"}
+    try:
+        if con.execute("INSERT OR IGNORE INTO partner_claims(chat_id, handle, joined_at, check_at) VALUES(?,?,?,?)",
+                       (chat, handle, t, t + PARTNER_WAIT_SEC)).rowcount != 1:
+            return {"ok": False, "error": "already"}
+        con.commit()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] partner {chat} {handle}: {e}\n")
+        return {"ok": False, "error": "db"}
+    finally:
+        con.close()
+    track(chat, "pjoin", handle[1:25])
+    return {"ok": True, "status": "wait", "checkAt": t + PARTNER_WAIT_SEC}
+
+
+def partner_settle(notify: bool = True) -> int:
+    """Проверка через PARTNER_WAIT_SEC: подписан — дни (в пределах
+    PARTNER_MAX_DAYS за все каналы), отписался — без дней. Проверить нельзя
+    (бота убрали из админов, Telegram не ответил) — повтор через
+    PARTNER_RETRY_SEC. Возвращает, сколько заявок закрыто."""
+    con = open_db(DB, write=True)
+    if not con:
+        return 0
+    try:
+        rows = con.execute(
+            "SELECT p.chat_id, p.handle, c.title, c.days, COALESCE(u.language, 'en') AS lang FROM partner_claims p "
+            "JOIN partner_channels c ON c.handle = p.handle LEFT JOIN users u ON u.chat_id = p.chat_id "
+            "WHERE p.status='wait' AND p.check_at<=? LIMIT 100", (now(),)).fetchall()
+    except sqlite3.OperationalError:
+        return 0  # таблиц ещё нет
+    finally:
+        con.close()
+    done: list[tuple[str, str, str, int, str]] = []
+    for r in rows:
+        member = tg_member(r["handle"], r["chat_id"])
+        con = open_db(DB, write=True)
+        if not con:
+            break
+        try:
+            t = now()
+            if member is None:
+                con.execute("UPDATE partner_claims SET check_at=? WHERE chat_id=? AND handle=? AND status='wait'",
+                            (t + PARTNER_RETRY_SEC, r["chat_id"], r["handle"]))
+                con.commit()
+                continue
+            con.isolation_level = None
+            con.execute("BEGIN IMMEDIATE")
+            try:
+                days = 0
+                if member:
+                    got = con.execute("SELECT COALESCE(SUM(days), 0) FROM partner_claims "
+                                      "WHERE chat_id=? AND status='ok'", (r["chat_id"],)).fetchone()[0]
+                    days = max(0, min(int(r["days"]), PARTNER_MAX_DAYS - int(got or 0)))
+                status = ("ok" if days else "cap") if member else "left"
+                if con.execute("UPDATE partner_claims SET status=?, done_at=?, days=? "
+                               "WHERE chat_id=? AND handle=? AND status='wait'",
+                               (status, t, days, r["chat_id"], r["handle"])).rowcount != 1:
+                    con.execute("ROLLBACK")
+                    continue
+                if days and not extend_premium(con, r["chat_id"], days):
+                    con.execute("UPDATE partner_claims SET status='cap', days=0 WHERE chat_id=? AND handle=?",
+                                (r["chat_id"], r["handle"]))
+                    status, days = "cap", 0
+                con.execute("COMMIT")
+            except sqlite3.Error:
+                con.execute("ROLLBACK")
+                raise
+            if status != "cap":
+                done.append((r["chat_id"], r["title"] or r["handle"], status, days, r["lang"] or "en"))
+        except sqlite3.Error as e:
+            sys.stderr.write(f"[api] partner settle: {e}\n")
+        finally:
+            con.close()
+    for c, name, st, d, lang in done:
+        if st == "ok":
+            boot_drop(c)
+            track(c, "bonus", "partner")
+            text = PARTNER_OK_NOTE.get(lang, PARTNER_OK_NOTE["en"]).replace("{name}", name).replace("{n}", str(d))
+        else:
+            text = PARTNER_LEFT_NOTE.get(lang, PARTNER_LEFT_NOTE["en"]).replace("{name}", name)
+        if notify:
+            threading.Thread(target=tg_api, args=("sendMessage", {"chat_id": c, "text": text}), daemon=True).start()
+    return len(done)
+
+
+def partner_ref(chat: str, start: str) -> None:
+    """Новичок пришёл по ссылке блогера (p_<канал>): запомнить, от кого, —
+    /partner в боте покажет, сколько пришло и сколько из них платит."""
+    slug = start[2:].strip().lower() if start.startswith("p_") else ""
+    if not re.fullmatch(r"[a-z0-9_]{4,32}", slug) or is_service(chat):
+        return
+    con = open_db(DB, write=True)
+    if not con:
+        return
+    try:
+        con.executescript(PARTNER_SCHEMA)
+        if con.execute("SELECT 1 FROM partner_channels WHERE slug=?", (slug,)).fetchone():
+            con.execute("INSERT OR IGNORE INTO partner_refs(chat_id, slug, at) VALUES(?,?,?)", (chat, slug, now()))
+            con.commit()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] partner ref {chat}: {e}\n")
+        return
+    finally:
+        con.close()
+    track(chat, "pref", slug[:24])
 
 
 REF_DAYS = 7
@@ -12341,6 +12587,8 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
                 # Одобренная заявка с биржи остаётся без хозяина: UID уже
                 # получил награду, и после удаления данных его не прислать снова.
                 "DELETE FROM exch_claims WHERE chat_id=? AND status!='ok'",
+                "DELETE FROM partner_claims WHERE chat_id=?",
+                "DELETE FROM partner_refs WHERE chat_id=?",
                 "UPDATE exch_claims SET chat_id='' WHERE chat_id=?",
                 "DELETE FROM users WHERE chat_id=?",
             ):
@@ -12532,6 +12780,8 @@ class Handler(BaseHTTPRequestHandler):
                 if gift:
                     # Пришёл по приглашению — к неделе ещё REF_DAYS дней.
                     bonus = apply_referral(chat, who.get("start", ""))
+                    # Пришёл по ссылке блогера-партнёра — запомнить, от кого.
+                    partner_ref(chat, who.get("start", ""))
                     boot_drop(chat)
                     track(chat, "trial")
                 if chat:
@@ -12899,6 +13149,9 @@ class Handler(BaseHTTPRequestHandler):
             # Сервисный аккаунт Премиум не покупает и не получает бонусами.
             if is_service(chat) and (path.startswith("/api/pay/") or path.startswith("/api/bonus/")):
                 self._json(200, {"ok": False, "error": "service"})
+                return
+            if path == "/api/bonus/partner":
+                self._json(200, partner_join(chat, str(body.get("handle") or "")[:40]))
                 return
             if path == "/api/bonus/exchange":
                 u = self._user_full(qs)
