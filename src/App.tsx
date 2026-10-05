@@ -5,7 +5,7 @@
  * сонар и всё остальное. Человек, пришедший из чата, находит те же пункты и
  * те же слова — словари взяты из бота.
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useApp } from "./store/app";
 import { useLive } from "./store/live";
 import { Gift } from "./components/Gift";
@@ -244,7 +244,7 @@ export default function App() {
         </button>
         <h1 className="hdr-ttl">
           <span className="hdr-mark" aria-hidden="true">◱</span>
-          <span className="hdr-txt">{bare(t(lang, titleKey))}</span>
+          <HdrTitle text={bare(t(lang, titleKey))} />
         </h1>
         {/* Сколько осталось Премиума — вместо кнопки «обновить»: данные
             приходят сами (lib/sync.ts). */}
@@ -335,4 +335,33 @@ export default function App() {
       <Toaster />
     </div>
   );
+}
+
+/** Заголовок вкладки в шапке — целиком, без многоточия: не помещается —
+ *  сначала плотнее буквы, потом мельче шрифт (до 11px). Длинные названия
+ *  («Mes portefeuilles», «Melhores traders») на узком телефоне иначе
+ *  обрезались бы, а короткие остаются крупными. */
+function HdrTitle({ text }: { text: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const h1 = el?.parentElement;
+    if (!el || !h1) return;
+    const fit = () => {
+      h1.style.fontSize = "";
+      h1.style.letterSpacing = "";
+      const over = () => el.scrollWidth > el.clientWidth + 1;
+      if (!over()) return;
+      h1.style.letterSpacing = "0.02em";
+      let size = parseFloat(getComputedStyle(h1).fontSize);
+      while (over() && size > 11) {
+        size -= 0.5;
+        h1.style.fontSize = `${size}px`;
+      }
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [text]);
+  return <span ref={ref} className="hdr-txt">{text}</span>;
 }

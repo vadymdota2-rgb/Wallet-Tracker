@@ -1,5 +1,5 @@
 /**
- * Значок Премиума в шапке — на месте прежней кнопки «обновить»: данные и так
+ * Значок Премиума в шапке (вертикальный: корона, под ней дни) — на месте прежней кнопки «обновить»: данные и так
  * приходят сами (раз в три минуты и при возвращении в приложение), а сколько
  * осталось Премиума человек теперь видит сразу. Нажатие — экран Премиума.
  * Премиума нет — та же кнопка зовёт его получить. Осталось три дня и меньше —
@@ -12,7 +12,7 @@ import { haptic } from "../lib/telegram";
 
 function Crown() {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
       <path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5L3 8z" fill="currentColor" />
     </svg>
   );
@@ -45,8 +45,10 @@ export function PremBadge() {
     <button type="button" className={days <= 3 ? "prem-badge soon" : "prem-badge"} onClick={go}
       aria-label={`${bare(t(lang, "menu_premium"))}: ${t(lang, "pr_days_left")} ${days}`}>
       <Crown />
-      <b>{days}</b>
-      <small>{t(lang, "hdr_days")}</small>
+      <span className="pb-n">
+        <b>{days}</b>
+        <small>{t(lang, "hdr_days")}</small>
+      </span>
     </button>
   );
 }
