@@ -982,6 +982,7 @@ export const de: Dict = {
   venue_spot: "Spot",
   wallet_bot_banned: "🤖 Das ist ein Trading-Bot: Hunderte Trades pro Tag, nicht im Ranking. Verfolgen bringt nichts.\n\nGib eine andere Adresse ein oder drücke Abbrechen.",
   win_6h: "6Std",
+  wl_cex_moves: "Börsen: Ein- und Auszahlungen",
   wl_main_wallet: "Haupt",
   wl_not_ranked: "nicht im Ranking",
   wl_perp_rank: "Futures",

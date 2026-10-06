@@ -982,6 +982,7 @@ export const ja: Dict = {
   venue_spot: "スポット",
   wallet_bot_banned: "🤖 取引ボットです: 1日に数百回取引し、ランキング外。追跡する意味がありません。\n\n別のアドレスを入力するか、キャンセルを押してください。",
   win_6h: "6時間",
+  wl_cex_moves: "取引所: 入金と出金",
   wl_main_wallet: "メイン",
   wl_not_ranked: "ランク外",
   wl_perp_rank: "先物",

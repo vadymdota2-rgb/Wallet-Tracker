@@ -982,6 +982,7 @@ export const tr: Dict = {
   venue_spot: "Spot",
   wallet_bot_banned: "🤖 Bu bir alım satım botu: günde yüzlerce işlem, sıralamada yok. Takip etmenin anlamı yok.\n\nBaşka bir adres gir ya da İptal'e dokun.",
   win_6h: "6sa",
+  wl_cex_moves: "Borsalar: yatırma ve çekim",
   wl_main_wallet: "ana",
   wl_not_ranked: "sıralamada yok",
   wl_perp_rank: "Vadeli",

@@ -17710,5 +17710,23 @@
     "uk": "Вінрейт",
     "vi": "Tỷ lệ thắng",
     "zh": "胜率"
+  },
+  "wl_cex_moves": {
+    "ar": "البورصات: إيداع وسحب",
+    "de": "Börsen: Ein- und Auszahlungen",
+    "en": "Exchanges: deposits and withdrawals",
+    "es": "Exchanges: depósitos y retiros",
+    "fr": "Plateformes : dépôts et retraits",
+    "hi": "एक्सचेंज: जमा और निकासी",
+    "id": "Bursa: setoran dan penarikan",
+    "ja": "取引所: 入金と出金",
+    "ko": "거래소: 입금과 출금",
+    "pl": "Giełdy: wpłaty i wypłaty",
+    "pt": "Corretoras: depósitos e saques",
+    "ru": "Биржи: заводы и выводы",
+    "tr": "Borsalar: yatırma ve çekim",
+    "uk": "Біржі: заведення і виведення",
+    "vi": "Sàn: nạp và rút",
+    "zh": "交易所：转入与提出"
   }
 }

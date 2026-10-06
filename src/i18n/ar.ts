@@ -982,6 +982,7 @@ export const ar: Dict = {
   venue_spot: "سبوت",
   wallet_bot_banned: "🤖 هذا روبوت تداول: مئات الصفقات يوميًا وخارج الترتيب. متابعته لا تفيد.\n\nأدخل عنوانًا آخر أو اضغط إلغاء.",
   win_6h: "6س",
+  wl_cex_moves: "البورصات: إيداع وسحب",
   wl_main_wallet: "رئيسية",
   wl_not_ranked: "خارج الترتيب",
   wl_perp_rank: "عقود دائمة",

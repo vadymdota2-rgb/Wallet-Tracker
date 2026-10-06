@@ -981,6 +981,7 @@ export const en = {
   venue_spot: "Spot",
   wallet_bot_banned: "🤖 This is a trading bot — hundreds of trades a day, not in the ranking. Tracking it tells you nothing.\n\nEnter a different address or press Cancel.",
   win_6h: "6h",
+  wl_cex_moves: "Exchanges: deposits and withdrawals",
   wl_main_wallet: "main",
   wl_not_ranked: "not in ranking",
   wl_perp_rank: "Futures",

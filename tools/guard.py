@@ -903,5 +903,18 @@ say("автопополнение базы китов: BSC и Hyperliquid от $
     and "autoPruned(AutoNet::BTC, btc)" in _mcpp and "autoPruned(AutoNet::BSC" not in _mcpp and "autoPruned(AutoNet::HL" not in _mcpp
     and "ignored_wallets" not in _mcpp[_mcpp.find("void pruneAutoWallets()"):_mcpp.find("bool processBlock(")])
 
+_bex = read(f"{BOT}/bsc_exchanges.cpp")
+say("биржи BSC: проверенные адреса бирж, обучение адресов пополнения, заводы и выводы кошельков — без алертов и отдельно от DEX",
+    "const Seed SEEDS[] = {" in _bex and "lt && lt->seed && !lf && !watched(from)" in _bex
+    and "resolvePendingLocked(from, exTo, late);" in _bex and "bsc_ex_moves" in _bex and "bsc_ex_flow" in _bex
+    and "if (exFresh) bscExObserve(tx, from, to, bn, blockTs, hash, isWatched);" in _mcpp
+    and "initBscExchanges();" in _mcpp and "bscExCleanup();" in _mcpp
+    and 'txt.rfind("/exlabel ", 0) == 0' in _mcpp and 'txt == "/exunknown"' in _mcpp
+    and "CEX Deposit" not in _mcpp and "alert_cex" not in read(f"{APP}/src/components/AlertCard.tsx")
+    and "if (isBaseAsset(res.tokenAddr) && !res.isSwap) { markTxProcessed(hash,bn); continue; }" in _mcpp
+    and "bsc_ex" not in pybody(api, "def flow_scan(")
+    and "if (chainCtx().stablecoins.count(a)) {" in read(f"{BOT}/token_prices.cpp")
+    and '"cex": bsc_cex_moves(cur, key),' in api and 'w.cex?.length' in read(f"{APP}/src/screens/WalletScreen.tsx"))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

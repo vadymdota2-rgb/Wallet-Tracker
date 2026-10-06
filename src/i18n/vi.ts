@@ -982,6 +982,7 @@ export const vi: Dict = {
   venue_spot: "Spot",
   wallet_bot_banned: "🤖 Đây là bot giao dịch: hàng trăm lệnh mỗi ngày, ngoài xếp hạng. Theo dõi cũng vô ích.\n\nNhập địa chỉ khác hoặc nhấn Hủy.",
   win_6h: "6g",
+  wl_cex_moves: "Sàn: nạp và rút",
   wl_main_wallet: "chính",
   wl_not_ranked: "ngoài xếp hạng",
   wl_perp_rank: "Futures",

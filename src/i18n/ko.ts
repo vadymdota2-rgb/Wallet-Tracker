@@ -982,6 +982,7 @@ export const ko: Dict = {
   venue_spot: "현물",
   wallet_bot_banned: "🤖 트레이딩 봇입니다: 하루 수백 건 거래, 순위 밖. 추적할 의미가 없습니다.\n\n다른 주소를 입력하거나 취소를 누르세요.",
   win_6h: "6시간",
+  wl_cex_moves: "거래소: 입금과 출금",
   wl_main_wallet: "기본",
   wl_not_ranked: "순위 없음",
   wl_perp_rank: "선물",

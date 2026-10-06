@@ -982,6 +982,7 @@ export const zh: Dict = {
   venue_spot: "现货",
   wallet_bot_banned: "🤖 这是交易机器人：每天数百笔交易，不在排行榜内。追踪没有意义。\n\n请输入其他地址或点击取消。",
   win_6h: "6时",
+  wl_cex_moves: "交易所：转入与提出",
   wl_main_wallet: "主",
   wl_not_ranked: "未入榜",
   wl_perp_rank: "合约",

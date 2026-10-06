@@ -982,6 +982,7 @@ export const es: Dict = {
   venue_spot: "Spot",
   wallet_bot_banned: "🤖 Esto es un bot de trading: cientos de operaciones al día, fuera del ranking. Seguirlo no aporta nada.\n\nPrueba con otra dirección o pulsa Cancelar.",
   win_6h: "6h",
+  wl_cex_moves: "Exchanges: depósitos y retiros",
   wl_main_wallet: "principal",
   wl_not_ranked: "sin ranking",
   wl_perp_rank: "Futuros",

@@ -982,6 +982,7 @@ export const id: Dict = {
   venue_spot: "Spot",
   wallet_bot_banned: "🤖 Ini bot trading: ratusan transaksi per hari, di luar peringkat. Memantaunya tidak berguna.\n\nMasukkan alamat lain atau tekan Batal.",
   win_6h: "6j",
+  wl_cex_moves: "Bursa: setoran dan penarikan",
   wl_main_wallet: "utama",
   wl_not_ranked: "tidak di peringkat",
   wl_perp_rank: "Futures",

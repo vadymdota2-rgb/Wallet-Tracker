@@ -1800,10 +1800,47 @@ def wallet_live(cur: sqlite3.Connection, chat: str, addr: str) -> dict:
         "addr": key,
         "pos": pos,
         "holds": spot_open(cur, key),
+        "cex": bsc_cex_moves(cur, key),
         "equity": equity,
         "bal": bal,
         "d1": (stats["net"] / bal * 100.0) if bal else 0.0,
     }
+
+
+def bsc_cex_moves(cur: sqlite3.Connection, addr: str, limit: int = 30) -> list[dict]:
+    """Заводы кошелька на биржи и выводы с бирж на BSC — последние сначала.
+
+    Пишет бот (bsc_ex_moves): перевод BNB или transfer() токена, где на другой
+    стороне адрес биржи — её кошелёк или выученный адрес пополнения. wd —
+    вывод с биржи кошельку, иначе завод кошелька на биржу.
+    """
+    if not table_exists(cur, "bsc_ex_moves"):
+        return []
+    try:
+        rows = cur.execute(
+            "SELECT tx, ts, kind, ex, token, qty, usd_nanos FROM bsc_ex_moves "
+            "WHERE wallet=? ORDER BY ts DESC, id DESC LIMIT ?",
+            (addr, limit),
+        ).fetchall()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] cex moves: {e}\n")
+        return []
+    syms = symbol_map(cur)
+    out = []
+    for r in rows:
+        tok = (r["token"] or "").lower()
+        native = not tok.startswith("0x")
+        out.append({
+            "tx": r["tx"],
+            "t": int(r["ts"] or 0),
+            "wd": int(r["kind"] or 0) == 1,
+            "ex": r["ex"] or "",
+            "sym": "BNB" if native else syms.get(tok, "?"),
+            "token": "" if native else tok,
+            "qty": float(r["qty"] or 0),
+            "v": usd(r["usd_nanos"]),
+        })
+    return out
 
 
 def load_wallets(cur: sqlite3.Connection, chat: str,

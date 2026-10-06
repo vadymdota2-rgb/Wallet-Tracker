@@ -40,6 +40,7 @@ export function applyWalletLive(addr: string, d: WalletLive | null): void {
   useLive.getState().patchWallet(addr, {
     pos: d.pos ?? [],
     holds: d.holds ?? [],
+    cex: d.cex ?? [],
     equity: d.equity,
     bal: d.bal ?? 0,
     d1: d.d1 ?? 0,
