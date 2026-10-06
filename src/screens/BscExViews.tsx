@@ -1,6 +1,5 @@
 /**
- * Поток бирж BSC — режим плитки NetFlow рядом с DEX (переключатель
- * «DEX · Поток бирж»). Данные свои (бот: bsc_exchanges.cpp, таблица
+ * Потоки бирж BSC — своя плитка рядом с NetFlow DEX. Данные свои (бот: bsc_exchanges.cpp, таблица
  * bsc_ex_flow; API: /api/bsc/exflow), с логикой DEX не смешиваются: там
  * свопы кошельков базы, здесь — переводы на биржи и с бирж всей сети.
  *
@@ -80,7 +79,7 @@ function Head({ w, win, data }: { w: BscExFlowWin; win: FlowWin; data: BscExFlow
     <>
       <div className="trend">
         <p className="trend-ttl">
-          <span>{t(lang, "bscx_title")} · {t(lang, WIN_KEY[win])}</span>
+          <span>{t(lang, "ex_flows")} · {t(lang, WIN_KEY[win])}</span>
           <span>{num(w.coins.length)} {t(lang, "flow_coins")}</span>
         </p>
         <p className="trend-top">

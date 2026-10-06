@@ -917,19 +917,22 @@ say("биржи BSC: проверенные адреса бирж, обучен�
     # Заводы и выводы конкретных кошельков на BSC не показываем.
     and "bsc_cex_moves" not in api and "cex" not in read(f"{APP}/src/screens/WalletScreen.tsx"))
 
-say("аналитика: NetFlow BSC — режимы DEX и «Поток бирж» (по монетам, как NetFlow, данные раздельно); поток бирж Bitcoin; рейтинг BSC подписан DEX",
-    'label: () => "NetFlow BSC"' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
-    and '{ id: "bscx",' not in read(f"{APP}/src/screens/AnalyticsTab.tsx")
-    and '{flowSrc === "cex" ? <BscExBody /> : <FlowBody />}' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
-    and '{flowSrc === "cex" ? <BscExHead /> : <FlowTrend />}' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
+say("аналитика: NetFlow DEX, ордера DEX, ротация DEX, Long/Short, позиции, BTC · потоки бирж, BSC · потоки бирж (NetFlow по монетам, без алертов); рейтинг «BSC DEX»",
+    'label: () => "NetFlow DEX"' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
+    and 'label: (tr) => `${tr("ui_tab_orders")} DEX`' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
+    and 'label: (tr) => `${tr("ui_rotation")} DEX`' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
+    and 'label: (tr) => `BTC · ${tr("ex_flows")}`' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
+    and 'label: (tr) => `BSC · ${tr("ex_flows")}`' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
+    and "<BscExBody />" in read(f"{APP}/src/screens/AnalyticsTab.tsx") and "flowSrc" not in read(f"{APP}/src/screens/AnalyticsTab.tsx")
     and "<FlowSpark values={c.sp} />" in read(f"{APP}/src/screens/BscExViews.tsx")
     and '"sp": []' in pybody(api, "def _bscx_flow_build(")
     and 'path in ("/bsc/exflow", "/api/bsc/exflow")' in api and '"bsc/exflow"' in api.split("PAID_PATHS = frozenset(")[1][:900]
     and "FROM bsc_ex_flow WHERE ts >= ?" in pybody(api, "def _bscx_flow_build(")
     and "bsc_ex" not in pybody(api, "def flow_scan(")
-    and '`${venueName("spot")} · DEX`' in read(f"{APP}/src/screens/TopTab.tsx")
-    and json.load(open(f"{APP}/tools/i18n.json"))["btc_flow_title"]["ru"] == "Поток бирж Bitcoin"
-    and json.load(open(f"{APP}/tools/i18n.json"))["bscx_title"]["ru"] == "Поток бирж BSC")
+    and '`${venueName("spot")} DEX`' in read(f"{APP}/src/screens/TopTab.tsx")
+    and json.load(open(f"{APP}/tools/i18n.json"))["btc_flow_title"]["ru"] == "Потоки бирж Bitcoin"
+    and json.load(open(f"{APP}/tools/i18n.json"))["bscx_title"]["ru"] == "NetFlow · Потоки бирж BSC"
+    and "std::thread(pricerLoop).detach();" in _bex)
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
