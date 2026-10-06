@@ -860,7 +860,7 @@ say("накрутки по IP: проба — не больше 3 новых а�
 
 _hlc = read(f"{BOT}/hyperliquid_core.cpp")
 _hl_auto = _hlc[_hlc.find("Автопополнение базы сервисного аккаунта"):_hlc.find("void handleTrades(")]
-say("автопополнение базы китов: BSC и Hyperliquid от $10k, Bitcoin от 1 BTC, по 500 в сутки на сеть, /autobase включает и выключает каждую сеть; Hyperliquid ищет без бюджета запросов; неактивных 30 дней — убираем без бана (найдутся снова; Bitcoin с 1 BTC и больше не трогаем), боты и BTC-сервисы — бан навсегда",
+say("автопополнение базы китов: BSC и Hyperliquid от $10k, Bitcoin от 1 BTC, по 500 в сутки на сеть, /autobase включает и выключает каждую сеть; Hyperliquid ищет без бюджета запросов; BSC и Hyperliquid: 30 дней без сделок — сон в этой сети, не удаление (и импорт); Bitcoin: найденные без движений и меньше 1 BTC — убираем без бана, боты и BTC-сервисы — бан навсегда",
     "bscAutoConsider(tx, to, watchers.get());" in _mcpp and "BSC_HOT_NONCE = 300000" in _mcpp
     and "autoMinUsd(AutoNet::BSC)" in _mcpp and '"eth_getCode"' in _mcpp and "BSC_AUTO_MAX_NONCE = 1000" in _mcpp
     and 'addUserWhale(SERVICE_CHAT_ID, a, "auto-bsc")' in _mcpp and "std::thread(bscAutoLoop).detach();" in _mcpp
@@ -877,13 +877,14 @@ say("автопополнение базы китов: BSC и Hyperliquid от $
     and "SELECT 1 FROM hl_fills WHERE wallet=? AND ts>=?" in _mcpp and "retryLater(a)" in _mcpp
     and "HL_LB_RETRY_SEC = 600" in _hlc and "std::string hlAutoStatus()" in _hlc and "hlAutoStatus()" in read(f"{BOT}/autobase.cpp")
     and 'txt.rfind("/autobase ", 0) == 0' in _mcpp
-    and "t.timestamp>=?" in _mcpp and "hlAutoForget(w.addr);" in _mcpp and "g_bscAutoSeen.erase(w.addr);" in _mcpp
+    and "t.timestamp >= ?2" in _mcpp and "uid != SERVICE_CHAT_ID" in _mcpp and "CREATE TABLE IF NOT EXISTS auto_woke" in _mcpp
+    and "label='auto-bsc' AND uw.created_at>0" not in _mcpp and "if (stored > 0 && !awake) autoWoke(AutoNet::HL, wallet);" in _hlc
     and "btcPruneAuto(cut)" in _mcpp and "int btcPruneAuto(long long cut)" in read(f"{BOT}/btc_chain.cpp")
     and "void autoPruned(AutoNet n, int count)" in read(f"{BOT}/autobase.cpp") and "<b>Найдено поиском</b>" in read(f"{BOT}/autobase.cpp") and 'row(" в базе", base[0], base[1], base[2])' in read(f"{BOT}/autobase.cpp")
     and "ServiceBaseStats serviceBaseStats()" in _mcpp and "serviceBaseStats();" in read(f"{BOT}/autobase.cpp")
     and "else if (watchers->count(from)) { mA=from; cold=true; }" in _mcpp and "hasHlFill" not in _mcpp
     and "                hlActive->insert(addr);" in _mcpp and "lastFull >= std::chrono::hours(1)" in _mcpp
-    and 'row("Холодные", num(sb.bscCold), num(sb.hlCold), "—")' in read(f"{BOT}/autobase.cpp") and 'row("Проснулись", "", "", "")' in read(f"{BOT}/autobase.cpp")
+    and 'row("Спят", num(sb.bscSleep), num(sb.hlSleep), "—")' in read(f"{BOT}/autobase.cpp") and "Спят на обеих сетях" in read(f"{BOT}/autobase.cpp") and 'row("Проснулись", "", "", "")' in read(f"{BOT}/autobase.cpp")
     and "if (matched[i].cold && res.isSwap) autoWoke(AutoNet::BSC, mA);" in _mcpp
     and "autoWoke(AutoNet::HL, wallet);" in _hlc and "void autoWoke(AutoNet n, const std::string& addr)" in read(f"{BOT}/autobase.cpp")
     and "CREATE TABLE IF NOT EXISTS auto_woke" in read(f"{BOT}/autobase.cpp")
@@ -897,7 +898,7 @@ say("автопополнение базы китов: BSC и Hyperliquid от $
     and "void refreshIdleBalances()" in read(f"{BOT}/btc_chain.cpp") and "refreshIdleBalances();" in read(f"{BOT}/btc_chain.cpp")
     and _mcpp.find("autoBanned(AutoNet::BTC, btcBanServices());") != -1
     and _mcpp.find("autoBanned(AutoNet::BTC, btcBanServices());") < _mcpp.find("const int btc = btcPruneAuto(cut);")
-    and "autoPruned(AutoNet::BSC, removedBsc)" in _mcpp and "autoPruned(AutoNet::HL, removedHl)" in _mcpp and "autoPruned(AutoNet::BTC, btc)" in _mcpp
+    and "autoPruned(AutoNet::BTC, btc)" in _mcpp and "autoPruned(AutoNet::BSC" not in _mcpp and "autoPruned(AutoNet::HL" not in _mcpp
     and "ignored_wallets" not in _mcpp[_mcpp.find("void pruneAutoWallets()"):_mcpp.find("bool processBlock(")])
 
 print("ПРОВАЛОВ:", bad)
