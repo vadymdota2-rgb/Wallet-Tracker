@@ -1001,7 +1001,12 @@ say("bitcoin от 0,2 BTC: движения, автопоиск, держате�
     and "<Segmented<string>\n        tight" in read(f"{APP}/src/screens/BtcViews.tsx")
     and "btcMin: 0.2," in read(f"{APP}/src/store/app.ts")
     and "if (from < 8 && s.btcMin === 1) s.btcMin = 0.2;" in read(f"{APP}/src/store/app.ts")
-    and "меньше 1 BTC" not in read(f"{BOT}/autobase.cpp") + read(f"{BOT}/main.cpp"))
+    and "меньше 1 BTC" not in read(f"{BOT}/autobase.cpp") + read(f"{BOT}/main.cpp")
+    # Кандидаты автопоиска не теряются между блоками и проверяются первыми.
+    and "std::unordered_map<std::string, long long> autoCand_;" in _ws_btc2
+    and "autoCand_.clear();" not in _ws_btc2
+    and "ask.insert(ask.begin(), askAuto.begin(), askAuto.end());" in _ws_btc2
+    and "if (sqlite3_step(q) != SQLITE_ROW) { ++it; continue; }" in _ws_btc2)
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
