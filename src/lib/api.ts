@@ -6,7 +6,7 @@
  * когда принимал — по одному номеру в адресе открывался чужой аккаунт.
  */
 import { initData } from "./telegram";
-import { forget, peek, remember } from "./memo";
+import { forget, peek, peekAny, remember } from "./memo";
 import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
   LiqCoinsReply, FngReply, DomReply, EtfReply, HalvingReply, FundRow, LsRow, MutationResult,
@@ -503,36 +503,73 @@ export const fetchLiqCoins = () =>
     });
 export const peekLiqCoins = () => peek<LiqCoinsReply | null>("/api/liqcoins", 60 * 60_000) ?? savedLiqCoins();
 
-/* Bitcoin: сканер бота пишет блок раз в десять минут — ответы живут минуту,
-   рейтинг две. Поток лежит и на устройстве: карточка в NetFlow видна сразу. */
+/* Потоки бирж BTC и BSC и рейтинг BTC. Сканеры пишут блоки раз в минуты,
+   поэтому ответ живёт минуту (рейтинг — две), а после этого не пропадает:
+   экран сразу показывает последний ответ — из памяти или с устройства, — а
+   новый тихо подменяет его, когда придёт. Скелет — только при самом первом
+   открытии, когда на устройстве ещё ничего нет. */
 const BTC_TTL = 60_000;
-const BTC_FLOW_SAVED = "wt-btcflow-v1";
-function savedBtcFlow(): BtcFlowReply | null {
-  const hit = readSaved<BtcFlowReply>(BTC_FLOW_SAVED).all;
-  return hit && hit.v?.ok && hit.v.wins ? hit.v : null;
+const EX_SAVED = "wt-exflows-v1";
+const EX_SAVED_KEEP = 24;
+const EX_SAVED_MAX_AGE = 3 * 24 * 3600_000;
+
+/** Последний ответ с устройства (не старше трёх суток). */
+function exSaved<T extends { ok?: boolean }>(path: string): T | undefined {
+  const hit = readSaved<T>(EX_SAVED)[path];
+  return hit && hit.v?.ok && Date.now() - hit.at < EX_SAVED_MAX_AGE ? hit.v : undefined;
 }
-export const fetchBtcFlow = () =>
-  remember<BtcFlowReply | null>("/api/btc/flow", BTC_TTL, () => call<BtcFlowReply>("/api/btc/flow"), good).then((r) => {
-    if (r?.ok && r.wins) writeSaved(BTC_FLOW_SAVED, { all: { at: Date.now(), v: r } });
+
+/** Запрос с запасом: годный ответ ложится и на устройство. */
+function exGet<T extends { ok?: boolean }>(path: string, ttl: number): Promise<T | null> {
+  // Ответ из памяти на устройство заново не пишем: он там уже лежит.
+  const had = peek<T | null>(path, ttl) !== undefined;
+  return cachedGet<T>(path, ttl).then((r) => {
+    if (r?.ok && !had) {
+      const all = readSaved<T>(EX_SAVED);
+      delete all[path];
+      all[path] = { at: Date.now(), v: r };
+      /* Поток бирж BSC за пять окон — до мегабайта. Не влезло в хранилище —
+         оставляем самые свежие ответы, а не теряем все. */
+      for (let keep = EX_SAVED_KEEP; keep >= 1; keep = Math.floor(keep / 2)) {
+        const ks = Object.keys(all);
+        for (const k of ks.slice(0, Math.max(0, ks.length - keep))) delete all[k];
+        try {
+          localStorage.setItem(EX_SAVED, JSON.stringify(all));
+          break;
+        } catch {
+          // мало места — пробуем меньше
+        }
+      }
+    }
     return r;
   });
-export const peekBtcFlow = () => peek<BtcFlowReply | null>("/api/btc/flow", BTC_TTL) ?? savedBtcFlow();
+}
+
+/** Что показать сразу: свежий ответ, иначе последний из памяти, иначе с устройства. */
+function exPeek<T extends { ok?: boolean }>(path: string, ttl: number): T | undefined {
+  const fresh = peek<T | null>(path, ttl);
+  if (fresh?.ok) return fresh;
+  const old = peekAny<T | null>(path);
+  return old?.ok ? old : exSaved<T>(path);
+}
+
+export const fetchBtcFlow = () => exGet<BtcFlowReply>("/api/btc/flow", BTC_TTL);
+export const peekBtcFlow = () => exPeek<BtcFlowReply>("/api/btc/flow", BTC_TTL);
 
 /** Поток бирж BSC — переводы на биржи и с бирж по всей сети (не DEX). */
-export const fetchBscExFlow = () =>
-  remember<BscExFlowReply | null>("/api/bsc/exflow", BTC_TTL, () => call<BscExFlowReply>("/api/bsc/exflow"), good);
-export const peekBscExFlow = () => peek<BscExFlowReply | null>("/api/bsc/exflow", BTC_TTL) ?? null;
+export const fetchBscExFlow = () => exGet<BscExFlowReply>("/api/bsc/exflow", BTC_TTL);
+export const peekBscExFlow = () => exPeek<BscExFlowReply>("/api/bsc/exflow", BTC_TTL);
 
 const btcBigPath = (win: string, side: string, min: number, base = false) =>
   `/api/btc/big?win=${encodeURIComponent(win)}&side=${encodeURIComponent(side)}&min=${min}${base ? "&base=1" : ""}`;
 export const fetchBtcBig = (win: string, side: string, min: number, base = false) =>
-  cachedGet<BtcBigReply>(btcBigPath(win, side, min, base), BTC_TTL);
+  exGet<BtcBigReply>(btcBigPath(win, side, min, base), BTC_TTL);
 export const peekBtcBig = (win: string, side: string, min: number, base = false) =>
-  peek<BtcBigReply | null>(btcBigPath(win, side, min, base), BTC_TTL);
+  exPeek<BtcBigReply>(btcBigPath(win, side, min, base), BTC_TTL);
 
 const btcRankPath = (win: string) => `/api/btc/rank?win=${encodeURIComponent(win)}`;
-export const fetchBtcRank = (win: string) => cachedGet<BtcRankReply>(btcRankPath(win), 2 * BTC_TTL);
-export const peekBtcRank = (win: string) => peek<BtcRankReply | null>(btcRankPath(win), 2 * BTC_TTL);
+export const fetchBtcRank = (win: string) => exGet<BtcRankReply>(btcRankPath(win), 2 * BTC_TTL);
+export const peekBtcRank = (win: string) => exPeek<BtcRankReply>(btcRankPath(win), 2 * BTC_TTL);
 
 const btcWalletPath = (addr: string) => `/api/btc/wallet?addr=${encodeURIComponent(addr)}`;
 export const fetchBtcWallet = (addr: string) => cachedGet<BtcWalletReply>(btcWalletPath(addr), BTC_TTL);

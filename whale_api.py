@@ -9707,6 +9707,7 @@ def warmup() -> None:
     # дальше он обновляет их сам и в бюджет сборки не лезет.
     threading.Thread(target=fund_refresher, daemon=True, name="funding").start()
     threading.Thread(target=rot_refresher, daemon=True, name="rotation").start()
+    threading.Thread(target=exflow_warmer, daemon=True, name="exflow").start()
     threading.Thread(target=stake_live_refresher, daemon=True, name="staking").start()
     threading.Thread(target=reactions_refresher, daemon=True, name="reactions").start()
     threading.Thread(target=digest_refresher, daemon=True, name="digest").start()
@@ -9765,6 +9766,50 @@ def cached_small(store: dict, key, ttl: float, build):
         store[key] = (time.monotonic(), val)
         cap_cache(store, 2048)
     return val
+
+
+_bg_busy: set = set()
+
+
+def cached_bg(store: dict, key, ttl: float, build, wait: bool = False):
+    """Как cached_small, но устаревший ответ отдаётся сразу, а новый
+    собирается в фоне — никто не ждёт сборки, кроме самого первого запроса
+    после запуска (его обычно опережает exflow_warmer).
+
+    Неудачная сборка ({"ok": False}) годный ответ не затирает: человек
+    продолжает видеть прошлые данные, а новая попытка — через полминуты.
+    `wait` — собрать здесь же, без отдельного потока (так греет exflow_warmer).
+    """
+    bk = (id(store), key)
+    with _small_lock:
+        hit = store.get(key)
+        if hit and time.monotonic() - hit[0] < ttl:
+            return hit[1]
+        busy = bk in _bg_busy
+        if not busy:
+            _bg_busy.add(bk)
+    if busy:
+        return hit[1] if hit else build()
+
+    def run():
+        try:
+            val = build()
+            bad = isinstance(val, dict) and val.get("ok") is False
+            with _small_lock:
+                if not bad or not hit:
+                    store[key] = (time.monotonic(), val)
+                else:
+                    store[key] = (time.monotonic() - ttl + 30.0, hit[1])
+                cap_cache(store, 2048)
+            return val if not bad or not hit else hit[1]
+        finally:
+            with _small_lock:
+                _bg_busy.discard(bk)
+
+    if hit and not wait:
+        threading.Thread(target=run, daemon=True, name="cache-bg").start()
+        return hit[1]
+    return run()
 
 
 _COINS: dict[str, tuple[float, dict]] = {}
@@ -11290,7 +11335,7 @@ def _btc_flow_build() -> dict:
 
 
 def btc_flow() -> dict:
-    return cached_small(_BTC, "flow", BTC_TTL, _btc_flow_build)
+    return cached_bg(_BTC, "flow", BTC_TTL, _btc_flow_build)
 
 
 # ── Поток бирж BSC ────────────────────────────────────────────────────────
@@ -11431,7 +11476,7 @@ def _bscx_flow_build() -> dict:
 
 
 def bscx_flow() -> dict:
-    return cached_small(_BSCX, "flow", BTC_TTL, _bscx_flow_build)
+    return cached_bg(_BSCX, "flow", BTC_TTL, _bscx_flow_build)
 
 
 def _btc_big_build(win: str, side: str, min_btc: int, base: bool = False) -> dict:
@@ -11528,7 +11573,7 @@ def btc_big(win: str, side: str, min_btc: int, base: bool = False) -> dict:
     # пишет лишь от одного биткоина.
     allowed = (0, *BTC_BIG_MIN) if base else BTC_BIG_MIN
     min_btc = min_btc if min_btc in allowed else BTC_BIG_MIN[0]
-    return cached_small(_BTC, ("big", win, side, min_btc, base), BTC_TTL,
+    return cached_bg(_BTC, ("big", win, side, min_btc, base), BTC_TTL,
                         lambda: _btc_big_build(win, side, min_btc, base))
 
 
@@ -11638,11 +11683,29 @@ def _btc_rank_build(days: int) -> dict:
         con.close()
 
 
-def btc_rank(days: int) -> dict:
-    days = days if days in BTC_RANK_DAYS else 30
+def btc_rank_ttl(days: int) -> float:
     # Месяц — раз в две минуты, длинные окна — раз в десять: там год движений
     # базы, а за десять минут доска заметно не меняется.
-    return cached_small(_BTC, ("rank", days), 120.0 if days <= 30 else 600.0, lambda: _btc_rank_build(days))
+    return 120.0 if days <= 30 else 600.0
+
+
+def exflow_warmer() -> None:
+    """Потоки бирж BTC и BSC и рейтинг BTC собираются здесь, заранее и по
+    кругу: запрос из приложения берёт готовое и никогда не ждёт сборки."""
+    while True:
+        jobs = [(_BTC, "flow", BTC_TTL, _btc_flow_build), (_BSCX, "flow", BTC_TTL, _bscx_flow_build)]
+        jobs += [(_BTC, ("rank", d), btc_rank_ttl(d), (lambda d=d: _btc_rank_build(d))) for d in BTC_RANK_DAYS]
+        for store, key, ttl, build in jobs:
+            try:
+                cached_bg(store, key, ttl, build, wait=True)
+            except Exception as e:
+                sys.stderr.write(f"[api] потоки бирж, прогрев {key}: {e}\n")
+        time.sleep(20)
+
+
+def btc_rank(days: int) -> dict:
+    days = days if days in BTC_RANK_DAYS else 30
+    return cached_bg(_BTC, ("rank", days), btc_rank_ttl(days), lambda: _btc_rank_build(days))
 
 
 def _btc_wallet_build(addr: str) -> dict:

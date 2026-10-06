@@ -52,6 +52,11 @@ export function remember<T>(
   return p;
 }
 
+/** Последний годный ответ любой свежести — показать сразу, пока идёт новый. */
+export function peekAny<T>(key: string): T | undefined {
+  return store.get(key)?.v as T | undefined;
+}
+
 /** Забыть один ответ — следующий запрос пойдёт на сервер. */
 export function forget(key: string): void {
   store.delete(key);

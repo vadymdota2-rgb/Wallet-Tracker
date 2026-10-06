@@ -47,8 +47,9 @@ function useExFlow(): BscExFlowReply | null | undefined {
   const [data, setData] = useState<BscExFlowReply | null | undefined>(() => peekBscExFlow() ?? undefined);
   useEffect(() => {
     let alive = true;
+    // Сбой сети не стирает показанное: остаётся последний годный ответ.
     void fetchBscExFlow().then((r) => {
-      if (alive) setData(r?.ok ? r : null);
+      if (alive) setData((prev) => (r?.ok ? r : prev ?? null));
     });
     return () => {
       alive = false;

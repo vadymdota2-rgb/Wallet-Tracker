@@ -18,7 +18,7 @@
  */
 import { FREE } from "./upsell";
 import {
-  fetchBig, fetchBtcBig, fetchBtcFlow, fetchBtcRank, fetchDeals, fetchFlow, fetchLs, fetchSymbols, fetchTokenHist,
+  fetchBig, fetchBscExFlow, fetchBtcBig, fetchBtcFlow, fetchBtcRank, fetchDeals, fetchFlow, fetchLs, fetchSymbols, fetchTokenHist,
   fetchUnlocks, fetchWallet,
 } from "./api";
 import { useApp } from "../store/app";
@@ -100,8 +100,9 @@ function plan(): (() => Promise<unknown>)[] {
     for (const r of board.slice(0, TOP_DEALS)) jobs.push(() => fetchDeals(r.a, venue, FREE.premiumDeals));
   }
 
-  // 5б. Биткоин: поток для NetFlow и выводы с бирж за выбранное окно.
+  // 5б. Потоки бирж BTC и BSC и выводы с бирж за выбранное окно.
   jobs.push(() => fetchBtcFlow());
+  jobs.push(() => fetchBscExFlow());
   jobs.push(() => fetchBtcBig(app.bigWin, app.btcSide, app.btcBase ? app.btcMin : Math.max(1, app.btcMin), app.btcBase));
 
   // 6. Справочник монет для поиска на графике.

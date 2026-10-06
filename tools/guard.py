@@ -968,5 +968,27 @@ say("логотипы BSC: поиск по адресу на сервере, р�
     and "addr={arg2 && hasAddr ? addr : undefined}" in read(f"{APP}/src/screens/CoinScreen.tsx")
     and "urls.push(`/bsclogo/${addr.toLowerCase()}`)" in read(f"{APP}/src/components/CoinIcon.tsx"))
 
+# Потоки бирж BTC и BSC и рейтинг BTC: сервер собирает их сам по кругу и
+# отдаёт готовое (устаревшее — сразу, новое — в фоне), приложение показывает
+# последний ответ из памяти или с устройства и тихо подменяет свежим.
+_apits = read(f"{APP}/src/lib/api.ts")
+say("потоки бирж и рейтинг BTC кэшируются: сервер в фоне, приложение — память и устройство",
+    'cached_bg(_BTC, "flow", BTC_TTL, _btc_flow_build)' in api
+    and 'cached_bg(_BSCX, "flow", BTC_TTL, _bscx_flow_build)' in api
+    and 'cached_bg(_BTC, ("rank", days), btc_rank_ttl(days)' in api
+    and 'cached_bg(_BTC, ("big", win, side, min_btc, base)' in api
+    and 'threading.Thread(target=exflow_warmer, daemon=True, name="exflow").start()' in api
+    and 'bad = isinstance(val, dict) and val.get("ok") is False' in pybody(api, "def cached_bg(")
+    and 'export const fetchBtcRank = (win: string) => exGet<BtcRankReply>' in _apits
+    and 'export const peekBtcRank = (win: string) => exPeek<BtcRankReply>' in _apits
+    and 'export const fetchBscExFlow = () => exGet<BscExFlowReply>' in _apits
+    and 'export const peekBscExFlow = () => exPeek<BscExFlowReply>' in _apits
+    and 'export const fetchBtcFlow = () => exGet<BtcFlowReply>' in _apits
+    and 'export const fetchBtcBig = (win: string, side: string, min: number, base = false) =>\n  exGet<BtcBigReply>' in _apits
+    and "export function peekAny<T>(key: string)" in read(f"{APP}/src/lib/memo.ts")
+    and "setData((prev) => (r?.ok ? r : prev ?? null))" in read(f"{APP}/src/screens/BscExViews.tsx")
+    and read(f"{APP}/src/screens/BtcViews.tsx").count("r?.ok ? r : hit ?? r ??") == 2
+    and "jobs.push(() => fetchBscExFlow());" in read(f"{APP}/src/lib/prefetch.ts"))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

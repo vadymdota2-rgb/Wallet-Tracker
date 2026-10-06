@@ -237,8 +237,9 @@ export function BtcBigView({ winPicker, win }: { winPicker: ReactNode; win: BigW
     let alive = true;
     const hit = peekBtcBig(win, side, min, base);
     setData(hit ?? null);
+    // Сбой сети не стирает показанное: остаётся последний годный ответ.
     void fetchBtcBig(win, side, min, base).then((r) => {
-      if (alive) setData(r ?? { ok: false } as BtcBigReply);
+      if (alive) setData(r?.ok ? r : hit ?? r ?? { ok: false } as BtcBigReply);
     });
     return () => {
       alive = false;
@@ -347,9 +348,11 @@ export function BtcBoard({ win }: { win: RankWin }) {
 
   useEffect(() => {
     let alive = true;
-    setData(peekBtcRank(win) ?? null);
+    const hit = peekBtcRank(win);
+    setData(hit ?? null);
+    // Сбой сети не стирает показанное: остаётся последний годный ответ.
     void fetchBtcRank(win).then((r) => {
-      if (alive) setData(r ?? { ok: false } as BtcRankReply);
+      if (alive) setData(r?.ok ? r : hit ?? r ?? { ok: false } as BtcRankReply);
     });
     return () => {
       alive = false;
