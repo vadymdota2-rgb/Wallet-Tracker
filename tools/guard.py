@@ -1008,5 +1008,14 @@ say("bitcoin от 0,2 BTC: движения, автопоиск, держате�
     and "ask.insert(ask.begin(), askAuto.begin(), askAuto.end());" in _ws_btc2
     and "if (sqlite3_step(q) != SQLITE_ROW) { ++it; continue; }" in _ws_btc2)
 
+# Многоточием ничего не режем: строки с цифрами переносятся (Strategy:
+# «+1,7 тыс. BTC», «$75 442 +11%» пропадали за «…»).
+_css = read(f"{APP}/src/styles/app.css")
+_unclip = _css.split("/* Ничего не прячем за многоточием.")[-1] if "/* Ничего не прячем за многоточием." in _css else ""
+say("многоточие нигде не прячет данные: подписи строк переносятся",
+    all(sel in _unclip for sel in (".ef-hr-id small", ".ef-hr-id b", ".row-sub", ".row-name", ".tile b",
+                                    ".dg-cell b", ".alc-sym", ".unl-id small", ".hdr-txt"))
+    and "text-overflow: clip;" in _unclip and "white-space: normal;" in _unclip)
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

@@ -3213,3 +3213,19 @@ button.alc-who { cursor: pointer; text-decoration: underline dotted rgb(124 151 
    переноса, иначе «↑ $126,2K» ломалось на две строки. */
 .btc-ex-row.bscx-row { grid-template-columns: minmax(5.2em, 1fr) auto auto auto; column-gap: 8px; }
 .btc-ex-row.bscx-row span { white-space: nowrap; }
+
+/* Ничего не прячем за многоточием. Обрезка съедала самое нужное: у Strategy
+   в «Институциональных потоках» — прирост за неделю и доходность от средней
+   цены («+3…», «$75 …»), в «Ещё» — подписи пунктов на немецком. Строка лучше
+   перенесётся, чем потеряет цифру. Числа внутри <bdi> не рвутся. */
+.hdr-txt, .hv-cell small, .row-name, .row-sub, .tile b, .nf-ttl > :first-child, .nf-tag,
+.lb-addr, .rot-line-nm, .unl-id small, .dg-chip span, .dg-com-head b, .lq-li small,
+.lq-top-r b, .dm-ch small, .dm-top-s, .ef-f-id small, .ef-hr-id b, .ef-hr-id small,
+.btc-ex-row b, .dg-sig-k, .dg-cell small, .dg-cell b, .dg-cell em, .alc-who, .alc-sym {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+.ef-hr-id small, .ef-f-id small, .row-sub, .unl-id small { line-height: 1.35; }
+.ef-hr-id bdi, .ef-f-id bdi, .row-sub bdi { white-space: nowrap; }
