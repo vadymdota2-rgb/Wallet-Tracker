@@ -910,7 +910,15 @@ say("биржи BSC: отдельный модуль (своя база bsc_ex.d
     and "bscExEnqueue(bn, blockTs, std::move(exTxs)," in _mcpp and "bscExObserve" not in _mcpp
     # Живёт отдельно от DEX: своя база, свой поток, своя очередь; при выходе гасится.
     and 'return (p && *p) ? std::string(p) : std::string("bsc_ex.db");' in _bex and "extern sqlite3* db;" not in _bex
-    and "g_worker = std::thread(workerLoop);" in _bex and "if (b.block <= g_lastBlock) continue;" in _bex
+    and "g_worker = std::thread(workerLoop);" in _bex and "if (b.block <= g_lastBlock) return;" in _bex
+    # Ревизия: спам-токены не заводы, вывод — только с проверенного кошелька,
+    # обучение — не с живых кошельков, память и диск под крышкой, шаг 10 минут.
+    and "if (listedLocked(token)) addFlow(t, exTo, token, true, usd, qty);" in _bex
+    and "if (lf && lf->seed) addFlow(t, exFrom, token, false, usd, qty);" in _bex
+    and "hexLD(tx.nonce, 2, 64) < LEARN_MAX_NONCE" in _bex and "constexpr size_t LEARNED_MAX = 300000;" in _bex
+    and "constexpr long long BUCKET = 600;" in _bex and "sqlite3_bind_int64(s, 1, t - FLOW_KEEP);" in _bex
+    and "for (const auto& b : rest) handleBlock(b);" in _bex and "idx_bsc_ex_labels_at" in _bex
+    and "since = (t - sec) // 600 * 600" in pybody(api, "def _bscx_flow_build(")
     and "bscExStop();" in _mcpp and 'BSCX_DB = _db_path("WHALE_BSCEX_DB", "bsc_ex.db")' in api
     and "cur = open_db(BSCX_DB)" in pybody(api, "def _bscx_flow_build(")
     and "s.bscxWin" in read(f"{APP}/src/screens/BscExViews.tsx") and "flowWin" not in read(f"{APP}/src/screens/BscExViews.tsx")

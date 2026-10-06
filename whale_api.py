@@ -11218,8 +11218,9 @@ def _bscx_flow_build() -> dict:
             "SELECT how, COUNT(*) n FROM bsc_ex_labels GROUP BY how")} if table_exists(cur, "bsc_ex_labels") else {}
         wins = {}
         for key, sec in BTC_FLOW_WINS.items():
-            # Строки — по часам: окно берёт и текущий неполный час.
-            since = (t - sec) // 3600 * 3600
+            # Строки — по 10 минут (BUCKET в bsc_exchanges.cpp): окно «1 час»
+            # берёт час и текущие неполные десять минут.
+            since = (t - sec) // 600 * 600
             by_ex = cur.execute(
                 "SELECT ex, SUM(in_usd) i, SUM(out_usd) o, SUM(in_n) ni, SUM(out_n) no "
                 "FROM bsc_ex_flow WHERE ts >= ? GROUP BY ex", (since,)).fetchall()
@@ -11285,7 +11286,7 @@ def _bscx_flow_build() -> dict:
                 # Ширина: сколько монет выводят с бирж и сколько заводят.
                 "up": sum(1 for c in coins if c["net"] > 0), "dn": sum(1 for c in coins if c["net"] < 0),
                 "ex": ex, "coins": coins, "tr": tr,
-                "full": bool(first and first <= since + 3600),
+                "full": bool(first and first <= since + 600),
             }
         return {
             "ok": True, "since": int(first or 0),
