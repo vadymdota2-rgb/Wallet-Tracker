@@ -904,10 +904,16 @@ say("автопополнение базы китов: BSC и Hyperliquid от $
     and "ignored_wallets" not in _mcpp[_mcpp.find("void pruneAutoWallets()"):_mcpp.find("bool processBlock(")])
 
 _bex = read(f"{BOT}/bsc_exchanges.cpp")
-say("биржи BSC: проверенные адреса бирж, обучение адресов пополнения, заводы и выводы кошельков — без алертов и отдельно от DEX",
+say("биржи BSC: отдельный модуль (своя база bsc_ex.db, свой поток), проверенные адреса бирж, обучение адресов пополнения — без алертов и без связи с DEX",
     "const Seed SEEDS[] = {" in _bex and "lt && lt->seed && !lf && !watched(from)" in _bex
     and "resolvePendingLocked(from, exTo, late);" in _bex and "bsc_ex_moves" in _bex and "bsc_ex_flow" in _bex
-    and "if (exFresh) bscExObserve(tx, from, to, bn, blockTs, hash, isWatched);" in _mcpp
+    and "bscExEnqueue(bn, blockTs, std::move(exTxs)," in _mcpp and "bscExObserve" not in _mcpp
+    # Живёт отдельно от DEX: своя база, свой поток, своя очередь; при выходе гасится.
+    and 'return (p && *p) ? std::string(p) : std::string("bsc_ex.db");' in _bex and "extern sqlite3* db;" not in _bex
+    and "g_worker = std::thread(workerLoop);" in _bex and "if (b.block <= g_lastBlock) continue;" in _bex
+    and "bscExStop();" in _mcpp and 'BSCX_DB = _db_path("WHALE_BSCEX_DB", "bsc_ex.db")' in api
+    and "cur = open_db(BSCX_DB)" in pybody(api, "def _bscx_flow_build(")
+    and "s.bscxWin" in read(f"{APP}/src/screens/BscExViews.tsx") and "flowWin" not in read(f"{APP}/src/screens/BscExViews.tsx")
     and "initBscExchanges();" in _mcpp and "bscExCleanup();" in _mcpp
     and 'txt.rfind("/exlabel ", 0) == 0' in _mcpp and 'txt == "/exunknown"' in _mcpp
     and "CEX Deposit" not in _mcpp and "alert_cex" not in read(f"{APP}/src/components/AlertCard.tsx")
@@ -932,7 +938,7 @@ say("аналитика: NetFlow DEX, ордера DEX, ротация DEX, Long
     and '`${venueName("spot")} DEX`' in read(f"{APP}/src/screens/TopTab.tsx")
     and json.load(open(f"{APP}/tools/i18n.json"))["btc_flow_title"]["ru"] == "Потоки бирж Bitcoin"
     and json.load(open(f"{APP}/tools/i18n.json"))["bscx_title"]["ru"] == "NetFlow · Потоки бирж BSC"
-    and "std::thread(pricerLoop).detach();" in _bex)
+    and "g_pricer = std::thread(pricerLoop);" in _bex and "void bscExStop()" in _bex)
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

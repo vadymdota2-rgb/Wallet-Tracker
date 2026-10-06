@@ -11177,6 +11177,8 @@ def btc_flow() -> dict:
 # transfer() токенов напрямую; через контракты не видно. С DEX не смешивается:
 # NetFlow DEX — свопы кошельков базы, это — переводы на биржи всей сети.
 _BSCX: dict = {}
+# Своя база потоков бирж BSC — бот пишет её отдельно от базы DEX.
+BSCX_DB = _db_path("WHALE_BSCEX_DB", "bsc_ex.db")
 BSCX_COINS_MAX = 300
 BSCX_SPARK = 12
 # Имена главных монет BSC: стейблкоины бот считает по $1 и в свопах может их
@@ -11196,9 +11198,17 @@ BSC_KNOWN_SYMS = {
 
 
 def _bscx_flow_build() -> dict:
-    cur = open_db(DB)
+    # Тикеры — из основной базы (token_cache, общий справочник монет), всё
+    # остальное — из своей базы потоков бирж: с DEX у них общих таблиц нет.
+    main = open_db(DB)
+    try:
+        syms = symbol_map(main) if main else {}
+    finally:
+        if main:
+            main.close()
+    cur = open_db(BSCX_DB)
     if not cur:
-        return {"ok": False, "error": "db"}
+        return {"ok": False, "error": "no_data"}
     try:
         if not table_exists(cur, "bsc_ex_flow"):
             return {"ok": False, "error": "no_data"}
@@ -11206,7 +11216,6 @@ def _bscx_flow_build() -> dict:
         first = cur.execute("SELECT MIN(ts) FROM bsc_ex_flow").fetchone()[0]
         labels = {r["how"]: int(r["n"]) for r in cur.execute(
             "SELECT how, COUNT(*) n FROM bsc_ex_labels GROUP BY how")} if table_exists(cur, "bsc_ex_labels") else {}
-        syms = symbol_map(cur)
         wins = {}
         for key, sec in BTC_FLOW_WINS.items():
             # Строки — по часам: окно берёт и текущий неполный час.

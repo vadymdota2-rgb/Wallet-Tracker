@@ -139,7 +139,7 @@ function Head({ w, win, data }: { w: BscExFlowWin; win: FlowWin; data: BscExFlow
 
 /** Сводка — над переключателями окна и стороны, как у NetFlow DEX. */
 export function BscExHead() {
-  const win = useApp((s) => s.flowWin);
+  const win = useApp((s) => s.bscxWin);
   const data = useExFlow();
   const w = data?.wins?.[win];
   if (!data || !w || (!w.in && !w.out)) return null;
@@ -150,9 +150,9 @@ export function BscExHead() {
 export function BscExBody() {
   const lang = useApp((s) => s.lang);
   const open = useApp((s) => s.open);
-  const win = useApp((s) => s.flowWin);
-  const side = useApp((s) => s.flowSide);
-  const query = useApp((s) => s.flowQuery).trim().toUpperCase();
+  const win = useApp((s) => s.bscxWin);
+  const side = useApp((s) => s.bscxSide);
+  const query = useApp((s) => s.bscxQuery).trim().toUpperCase();
   const data = useExFlow();
   const [page, setPage] = useState(1);
   useEffect(() => setPage(1), [win, side, query]);

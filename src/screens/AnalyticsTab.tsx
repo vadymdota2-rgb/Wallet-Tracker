@@ -241,6 +241,12 @@ export function AnalyticsTab() {
   const flowSide = useApp((s) => s.flowSide);
   const setFlowSide = useApp((s) => s.setFlowSide);
   const query = useApp((s) => s.flowQuery);
+  const bscxWin = useApp((s) => s.bscxWin);
+  const setBscxWin = useApp((s) => s.setBscxWin);
+  const bscxSide = useApp((s) => s.bscxSide);
+  const setBscxSide = useApp((s) => s.setBscxSide);
+  const bscxQuery = useApp((s) => s.bscxQuery);
+  const setBscxQuery = useApp((s) => s.setBscxQuery);
   const setQuery = useApp((s) => s.setFlowQuery);
   const bigWin = useApp((s) => s.bigWin);
   const setBigWin = useApp((s) => s.setBigWin);
@@ -360,17 +366,22 @@ export function AnalyticsTab() {
         <Card>
           <SectionTitle note={t(lang, "bscx_hint")}>{t(lang, "bscx_title")}</SectionTitle>
           <BscExHead />
-          {flowWinPicker}
+          {/* Свои окно, сторона и поиск: с NetFlow DEX ручки не общие. */}
+          <Segmented<FlowWin>
+            value={bscxWin}
+            onChange={setBscxWin}
+            options={FLOW_WINS.map((w) => ({ id: w.id, label: t(lang, w.key) }))}
+          />
           <Segmented<FlowSide>
-            value={flowSide}
-            onChange={setFlowSide}
+            value={bscxSide}
+            onChange={setBscxSide}
             options={CEX_SIDES.map((v) => ({ id: v.id, label: t(lang, v.key) }))}
           />
           <input
             className="find"
-            value={query}
+            value={bscxQuery}
             placeholder={t(lang, "flow_search_prompt")}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => setBscxQuery(e.target.value)}
             inputMode="search"
             aria-label={t(lang, "flow_search_btn")}
           />

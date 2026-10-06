@@ -64,6 +64,10 @@ interface AppState {
   flowWin: FlowWin;
   flowSide: FlowSide;
   flowQuery: string;
+  /** Потоки бирж BSC — свои ручки: с NetFlow DEX не делятся. */
+  bscxWin: FlowWin;
+  bscxSide: FlowSide;
+  bscxQuery: string;
 
   rankVenue: RankVenue;
   rankKind: RankKind;
@@ -101,6 +105,9 @@ interface AppState {
   setLsCls(c: CoinClass): void;
   setFlowSide(s: FlowSide): void;
   setFlowQuery(q: string): void;
+  setBscxWin(w: FlowWin): void;
+  setBscxSide(s: FlowSide): void;
+  setBscxQuery(q: string): void;
   setRankVenue(v: RankVenue): void;
   setBtcSide(s: BigSide): void;
   setBtcMin(m: BtcMin): void;
@@ -132,6 +139,9 @@ export const useApp = create<AppState>()(
       flowWin: "24",
       flowSide: "all",
       flowQuery: "",
+      bscxWin: "24",
+      bscxSide: "all",
+      bscxQuery: "",
 
       rankVenue: "spot",
       rankKind: "pnl",
@@ -166,6 +176,9 @@ export const useApp = create<AppState>()(
       setLsCls: (lsCls) => set({ lsCls }),
       setFlowSide: (flowSide) => set({ flowSide }),
       setFlowQuery: (flowQuery) => set({ flowQuery }),
+      setBscxWin: (bscxWin) => set({ bscxWin }),
+      setBscxSide: (bscxSide) => set({ bscxSide }),
+      setBscxQuery: (bscxQuery) => set({ bscxQuery }),
       setRankVenue: (rankVenue) => set({ rankVenue }),
       setRankKind: (rankKind) => set({ rankKind }),
       setRankWin: (rankWin) => set({ rankWin }),
@@ -219,6 +232,8 @@ export const useApp = create<AppState>()(
         lsCls: s.lsCls,
         flowWin: s.flowWin,
         flowSide: s.flowSide,
+        bscxWin: s.bscxWin,
+        bscxSide: s.bscxSide,
         rankVenue: s.rankVenue,
         rankKind: s.rankKind,
         rankWin: s.rankWin,
