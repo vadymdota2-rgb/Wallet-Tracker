@@ -623,9 +623,11 @@ say("bitcoin: подписка на кошелёк и алерты «покуп�
     and 'open("btcWallet", w.btc ?? w.addr)' in read(f"{APP}/src/screens/WalletsTab.tsx"))
 
 say("bitcoin: кошельки базы — каждая продажа и покупка и через какие биржи они прошли",
-    "def _btc_big_build(win: str, side: str, min_btc: float, base: bool = False)" in api
-    and '"byEx": by_ex' in api and 'qs.get("base", ["0"])[0] == "1"' in api
-    and 'className="btc-via"' in _btv and '"btc_scope_base"' in _btv
+    "def _btc_big_build(win: str, side: str, min_btc: float, ex: str = \"\")" in api
+    and '"byEx": by_ex' in api and 'qs.get("ex", [""])[0]' in api
+    # Без деления «база / все»; биржи — фильтром списка, импортированные — ★.
+    and 'className="btc-exf"' in _btv and '"btc_scope_base"' not in _btv and "btcBase" not in _btv
+    and 'r.imp ? "★ " : ""' in _btv and "src != 'auto' AS imp" in api
     and '"Bybit"' in _ws_btc and '"OKX"' in _ws_btc)
 
 say("bitcoin: перестройка цепочки откатывает блок, цена на час блока, выплаты биржи не путаются с CoinJoin, PnL только по биржевым движениям",
@@ -976,7 +978,7 @@ say("потоки бирж и рейтинг BTC кэшируются: серв�
     'cached_bg(_BTC, "flow", BTC_TTL, _btc_flow_build)' in api
     and 'cached_bg(_BSCX, "flow", BTC_TTL, _bscx_flow_build)' in api
     and 'cached_bg(_BTC, ("rank", days), btc_rank_ttl(days)' in api
-    and 'cached_bg(_BTC, ("big", win, side, min_btc, base)' in api
+    and 'cached_bg(_BTC, ("big", win, side, min_btc, ex)' in api
     and 'threading.Thread(target=exflow_warmer, daemon=True, name="exflow").start()' in api
     and 'bad = isinstance(val, dict) and val.get("ok") is False' in pybody(api, "def cached_bg(")
     and 'export const fetchBtcRank = (win: string) => exGet<BtcRankReply>' in _apits
@@ -984,7 +986,7 @@ say("потоки бирж и рейтинг BTC кэшируются: серв�
     and 'export const fetchBscExFlow = () => exGet<BscExFlowReply>' in _apits
     and 'export const peekBscExFlow = () => exPeek<BscExFlowReply>' in _apits
     and 'export const fetchBtcFlow = () => exGet<BtcFlowReply>' in _apits
-    and 'export const fetchBtcBig = (win: string, side: string, min: number, base = false) =>\n  exGet<BtcBigReply>' in _apits
+    and 'export const fetchBtcBig = (win: string, side: string, min: number, ex = "") =>\n  exGet<BtcBigReply>' in _apits
     and "export function peekAny<T>(key: string)" in read(f"{APP}/src/lib/memo.ts")
     and "setData((prev) => (r?.ok ? r : prev ?? null))" in read(f"{APP}/src/screens/BscExViews.tsx")
     and read(f"{APP}/src/screens/BtcViews.tsx").count("r?.ok ? r : hit ?? r ??") == 2
@@ -1025,6 +1027,18 @@ say("bitcoin: адреса бирж из отчётов о резервах по
     and '#include "btc_seeds_book.h"' in read(f"{BOT}/btc_chain.cpp")
     and "all.insert(all.end(), SEEDS.begin(), SEEDS.end());" in read(f"{BOT}/btc_chain.cpp")
     and os.path.exists(f"{BOT}/tools/btc_seeds.py"))
+
+# Круги «с биржи и обратно» (у Kraken — 9 «выводов» из 10) не считаются
+# сделками: пара снимается, со второго круга адрес — адрес биржи, его прошлые
+# строки и потоки вычищаются; разово — по уже записанному.
+_ws_btc3 = read(f"{BOT}/btc_chain.cpp")
+say("bitcoin: круги «с биржи и обратно» не считаются ни покупкой, ни продажей",
+    "bool unBounce(const std::string& wallet" in _ws_btc3 and "int cancelBounces()" in _ws_btc3
+    and "int purgeWallet(const std::string& a" in _ws_btc3
+    and 'putLabel(i.addr, ex, "bounce");' in _ws_btc3 and 'sc.state("bounce") != "1"' in _ws_btc3
+    and "const bool round = toEx.size() == 1 && unBounce(sender->addr, ex, total, b, flow);" in _ws_btc3
+    # Карточка потоков не показывает биржи с нулями.
+    and "e.in + e.out >= 0.05" in read(f"{APP}/src/screens/BtcViews.tsx"))
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

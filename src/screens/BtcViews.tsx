@@ -41,8 +41,10 @@ const EXPLORER = "https://mempool.space";
 /* Числа со знаком и единицей — изолированным куском слева направо: в
    арабском иначе «+72» превращалось в «72+», а «175 BTC» — в «BTC 175». */
 const iso = (x: string | number) => `\u2066${x}\u2069`;
-const btc = (v: number, d = 2) => iso(`${num(v, Math.abs(v) >= 1000 ? 0 : d)} BTC`);
-const btcSigned = (v: number) => iso(`${v > 0 ? "+" : ""}${num(v, Math.abs(v) >= 1000 ? 0 : 2)} BTC`);
+/* Между числом и единицей — неразрывный пробел: строки теперь переносятся
+   вместо многоточия, и «429,17 BTC» рвалось на «429,17» и «BTC». */
+const btc = (v: number, d = 2) => iso(`${num(v, Math.abs(v) >= 1000 ? 0 : d)}\u00a0BTC`);
+const btcSigned = (v: number) => iso(`${v > 0 ? "+" : ""}${num(v, Math.abs(v) >= 1000 ? 0 : 2)}\u00a0BTC`);
 /** Число монет без единицы: до сотни — с десятыми, дальше целыми. */
 const short = (v: number, sign = false) => iso(`${sign && v > 0 ? "+" : ""}${num(v, Math.abs(v) >= 100 ? 0 : 1)}`);
 
@@ -144,7 +146,10 @@ export function BtcFlowCard({ bigWin }: { bigWin: BigWin }) {
     };
   }, []);
 
-  const w = data?.wins?.[win];
+  const w0 = data?.wins?.[win];
+  /* Биржи, у которых за окно в обе стороны меньше 0,05 BTC, на экране
+     выглядят строкой «↑ 0 ↓ 0 +0» и только мешают. */
+  const w = w0 ? { ...w0, ex: w0.ex.filter((e) => e.in + e.out >= 0.05) } : w0;
   if (!data?.ok || !w) return null;
   const price = data.price || 0;
 
@@ -226,44 +231,35 @@ export function BtcBigView({ winPicker, win }: { winPicker: ReactNode; win: BigW
   const setSide = useApp((s) => s.setBtcSide);
   const rawMin = useApp((s) => s.btcMin);
   const setMin = useApp((s) => s.setBtcMin);
-  const base = useApp((s) => s.btcBase);
-  const setBase = useApp((s) => s.setBtcBase);
-  // «Все» — только у базы: остальные движения сканер пишет от 0,2 биткоина.
-  const min: BtcMin = !base && rawMin === 0 ? 0.2 : rawMin;
+  const ex = useApp((s) => s.btcEx);
+  const setEx = useApp((s) => s.setBtcEx);
+  const min: BtcMin = rawMin || 0.2;
   const now = useNow();
-  const [data, setData] = useState<BtcBigReply | null>(() => peekBtcBig(win, side, min, base) ?? null);
+  const [data, setData] = useState<BtcBigReply | null>(() => peekBtcBig(win, side, min, ex) ?? null);
 
   useEffect(() => {
     let alive = true;
-    const hit = peekBtcBig(win, side, min, base);
+    const hit = peekBtcBig(win, side, min, ex);
     setData(hit ?? null);
     // Сбой сети не стирает показанное: остаётся последний годный ответ.
-    void fetchBtcBig(win, side, min, base).then((r) => {
+    void fetchBtcBig(win, side, min, ex).then((r) => {
       if (alive) setData(r?.ok ? r : hit ?? r ?? { ok: false } as BtcBigReply);
     });
     return () => {
       alive = false;
     };
-  }, [win, side, min, base]);
-  const mins: BtcMin[] = base ? [0, ...MINS] : MINS;
+  }, [win, side, min, ex]);
+  /* Кнопки фильтра — биржи, через которые шли движения этой стороны и окна.
+     Выбранная остаётся кнопкой, даже если в новом окне её нет: иначе фильтр
+     нечем было бы снять. */
+  const exList = (data?.ok ? data.byEx ?? [] : []).map((e) => e.ex);
+  if (ex && !exList.includes(ex)) exList.unshift(ex);
 
   const sideTot = data?.ok ? data.tot?.[side] : undefined;
 
   return (
     <Card>
       <SectionTitle note={t(lang, "btc_big_hint")}>{t(lang, "btc_big_tab")}</SectionTitle>
-      {/* Чьи движения: все кошельки сети или только база — адреса из
-          /import и найденные сканером. У базы пишется каждое движение от
-          $50, поэтому у неё есть и порог «все». */}
-      <Segmented<string>
-        wrap
-        value={base ? "base" : "all"}
-        onChange={(v) => setBase(v === "base")}
-        options={[
-          { id: "all", label: t(lang, "btc_scope_all") },
-          { id: "base", label: t(lang, "btc_scope_base") },
-        ]}
-      />
       <Segmented
         value={side}
         onChange={setSide}
@@ -279,12 +275,9 @@ export function BtcBigView({ winPicker, win }: { winPicker: ReactNode; win: BigW
         tight
         value={String(min)}
         onChange={(v) => setMin(Number(v) as BtcMin)}
-        options={mins.map((m) => ({ id: String(m), label: m ? `≥${m.toLocaleString(lang)}` : t(lang, "flow_side_all") }))}
+        options={MINS.map((m) => ({ id: String(m), label: `≥${m.toLocaleString(lang)}` }))}
       />
       {winPicker}
-      {base && data?.ok ? (
-        <p className="note dim">{t(lang, "btc_base_n", { n: num(data.baseN ?? 0) })}</p>
-      ) : null}
       {/* Итог — ровно по строкам списка ниже: столько сделок, монет и
           долларов. Плиток «выведено / заведено / чистый вывод» здесь больше
           нет: они считались по крупным сделкам, а такие же подписи в
@@ -294,17 +287,26 @@ export function BtcBigView({ winPicker, win }: { winPicker: ReactNode; win: BigW
           {t(lang, "btc_sum", { n: num(sideTot.n), b: btc(sideTot.btc, 1), v: iso(usd(sideTot.v)) })}
         </p>
       ) : null}
-      {data?.ok && data.byEx?.length ? (
-        /* Через какие биржи: та же сторона и то же окно, что у списка ниже. */
-        <div className="btc-via">
-          <p className="btc-via-t">{t(lang, side === "buy" ? "btc_via_buy" : "btc_via_sell")}</p>
-          {data.byEx.map((e) => (
-            <div key={e.ex} className="btc-ex-row">
-              <b>{e.ex}</b>
-              <span className="dim">{t(lang, "btc_n_wallets", { n: num(e.w) })}</span>
-              <span className={side === "buy" ? "up" : "dn"}>{short(e.btc)}</span>
-              <span>{iso(usd(e.v))}</span>
-            </div>
+      {exList.length > 1 || ex ? (
+        /* Биржи — фильтром списка, а не таблицей: суммы по биржам уже есть
+           в карточке потоков выше, а здесь важнее увидеть сами ордера одной
+           биржи. */
+        <div className="btc-exf" role="tablist" aria-label={t(lang, "ex_flows")}>
+          {["", ...exList].map((e) => (
+            <button
+              key={e || "all"}
+              type="button"
+              role="tab"
+              aria-selected={e === ex}
+              className={e === ex ? "on" : undefined}
+              onClick={() => {
+                if (e === ex) return;
+                haptic("select");
+                setEx(e);
+              }}
+            >
+              {e || t(lang, "flow_side_all")}
+            </button>
           ))}
         </div>
       ) : null}
@@ -319,9 +321,11 @@ export function BtcBigView({ winPicker, win }: { winPicker: ReactNode; win: BigW
              стрелкой, она читается на любом языке. */
           <Row
             key={`${r.tx}-${r.a}-${i}`}
-            icon={<CoinIcon sym="BTC" size={30} />}
-            title={r.n && r.n > 1 ? iso(`${num(r.btc, r.btc >= 1000 ? 0 : 2)} BTC ×${r.n}`) : btc(r.btc)}
-            sub={`${shortAddr(r.a)} · ${since(now - r.t)}`}
+            /* Без значка монеты: здесь каждая строка — биткоин, а на узком
+               экране этот значок отнимал у суммы и адреса треть ширины. */
+            title={r.n && r.n > 1 ? iso(`${num(r.btc, r.btc >= 1000 ? 0 : 2)}\u00a0BTC\u00a0×${r.n}`) : btc(r.btc)}
+            /* Звёздочка — кошелёк, добавленный в базу импортом. */
+            sub={`${r.imp ? "★ " : ""}${shortAddr(r.a)} · ${since(now - r.t)}`}
             /* Вторая строка — биржа: стрелка от неё (вывод) или к ней
                (завод), и цена сделки. */
             sub2={`${side === "buy" ? "←" : "→"} ${r.ex} · ${px(r.px)}`}

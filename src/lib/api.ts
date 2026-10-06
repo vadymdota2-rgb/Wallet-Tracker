@@ -560,12 +560,12 @@ export const peekBtcFlow = () => exPeek<BtcFlowReply>("/api/btc/flow", BTC_TTL);
 export const fetchBscExFlow = () => exGet<BscExFlowReply>("/api/bsc/exflow", BTC_TTL);
 export const peekBscExFlow = () => exPeek<BscExFlowReply>("/api/bsc/exflow", BTC_TTL);
 
-const btcBigPath = (win: string, side: string, min: number, base = false) =>
-  `/api/btc/big?win=${encodeURIComponent(win)}&side=${encodeURIComponent(side)}&min=${min}${base ? "&base=1" : ""}`;
-export const fetchBtcBig = (win: string, side: string, min: number, base = false) =>
-  exGet<BtcBigReply>(btcBigPath(win, side, min, base), BTC_TTL);
-export const peekBtcBig = (win: string, side: string, min: number, base = false) =>
-  exPeek<BtcBigReply>(btcBigPath(win, side, min, base), BTC_TTL);
+const btcBigPath = (win: string, side: string, min: number, ex = "") =>
+  `/api/btc/big?win=${encodeURIComponent(win)}&side=${encodeURIComponent(side)}&min=${min}${ex ? `&ex=${encodeURIComponent(ex)}` : ""}`;
+export const fetchBtcBig = (win: string, side: string, min: number, ex = "") =>
+  exGet<BtcBigReply>(btcBigPath(win, side, min, ex), BTC_TTL);
+export const peekBtcBig = (win: string, side: string, min: number, ex = "") =>
+  exPeek<BtcBigReply>(btcBigPath(win, side, min, ex), BTC_TTL);
 
 const btcRankPath = (win: string) => `/api/btc/rank?win=${encodeURIComponent(win)}`;
 export const fetchBtcRank = (win: string) => exGet<BtcRankReply>(btcRankPath(win), 2 * BTC_TTL);

@@ -11210,8 +11210,14 @@ def _btc_extra(con, wallets: list[str]) -> dict[str, dict]:
         for r in con.execute(f"SELECT address, bal_sats, txs FROM btc_addr WHERE address IN ({marks})", wallets):
             out[r["address"]].update(bal=round(int(r["bal_sats"] or 0) / 1e8, 4), txs=int(r["txs"] or 0))
     if table_exists(con, "btc_watch"):
-        for r in con.execute(f"SELECT address FROM btc_watch WHERE address IN ({marks})", wallets):
+        # base — в базе сервисного аккаунта; imp — добавлен импортом, а не
+        # найден поиском (поиск берёт почти каждого, кто вывел от 0,2 BTC,
+        # поэтому звёздочку в приложении ставим только импортированным).
+        for r in con.execute(f"SELECT address, src != 'auto' AS imp FROM btc_watch WHERE address IN ({marks})",
+                             wallets):
             out[r["address"]]["base"] = True
+            if r["imp"]:
+                out[r["address"]]["imp"] = True
     return out
 
 
@@ -11480,7 +11486,7 @@ def bscx_flow() -> dict:
     return cached_bg(_BSCX, "flow", BTC_TTL, _bscx_flow_build)
 
 
-def _btc_big_build(win: str, side: str, min_btc: float, base: bool = False) -> dict:
+def _btc_big_build(win: str, side: str, min_btc: float, ex: str = "") -> dict:
     con = _btc_open()
     if not con:
         return {"ok": False, "error": "no_data"}
@@ -11488,34 +11494,26 @@ def _btc_big_build(win: str, side: str, min_btc: float, base: bool = False) -> d
         since = now() - BIG_WINDOWS[win] * 3600
         kind = 1 if side == "buy" else 2
         floor = round(min_btc * 1e8)
-        has_base = table_exists(con, "btc_watch")
-        if base:
-            # Только кошельки базы сервисного аккаунта — те, что добавлены
-            # через /import и найдены сканером. Их владелец выбрал сам, поэтому
-            # ни фильтра сервисов, ни фильтра транзита: важно каждое движение,
-            # и через какую биржу оно прошло.
-            if not has_base:
-                return {"ok": True, "win": win, "side": side, "min": min_btc, "base": True, "baseN": 0,
-                        "tot": {k: {"n": 0, "btc": 0, "v": 0} for k in ("buy", "sell")},
-                        "byEx": [], "rows": [], "full": False, "since": 0}
-            flows = ""
-            cond = ("EXISTS (SELECT 1 FROM btc_watch bw WHERE bw.address = m.wallet) "
-                    "AND NOT EXISTS (SELECT 1 FROM btc_labels l WHERE l.address = m.wallet)")
-            join, lead = "", ()
-            keep = {1: "1", 2: "1"}
-        else:
-            # Только движения с биржей: перевод между частными кошельками
-            # покупкой не является. И без транзита: кто за то же окно вернул
-            # на биржи почти всё выведенное (или наоборот), тот гоняет монеты,
-            # а не копит и не продаёт.
-            flows = ("WITH w AS (SELECT wallet, "
-                     "SUM(CASE WHEN kind = 1 THEN sats ELSE 0 END) b, "
-                     "SUM(CASE WHEN kind = 2 THEN sats ELSE 0 END) s "
-                     "FROM btc_moves WHERE ts >= ? AND ex != '' GROUP BY wallet) ")
-            cond = _btc_clean(con)
-            join, lead = "JOIN w ON w.wallet = m.wallet ", (since,)
-            keep = {1: "w.s < 0.9 * w.b", 2: "w.b < 0.9 * w.s"}
-        where = f"m.ts >= ? AND m.kind = ? AND m.ex != '' AND m.sats >= ? AND {{keep}} AND {cond}"
+        # Все кошельки сети, без деления на «базу»: база — те же выводы от
+        # 0,2 BTC, только меньше, и переключатель лишь повторял список. Свои
+        # кошельки помечены в строках (base, звёздочка в приложении).
+        #
+        # Только движения с биржей: перевод между частными кошельками
+        # покупкой не является. И без транзита: кто за то же окно вернул на
+        # биржи почти всё выведенное (или наоборот), тот гоняет монеты, а не
+        # копит и не продаёт.
+        flows = ("WITH w AS (SELECT wallet, "
+                 "SUM(CASE WHEN kind = 1 THEN sats ELSE 0 END) b, "
+                 "SUM(CASE WHEN kind = 2 THEN sats ELSE 0 END) s "
+                 "FROM btc_moves WHERE ts >= ? AND ex != '' GROUP BY wallet) ")
+        cond = _btc_clean(con)
+        join, lead = "JOIN w ON w.wallet = m.wallet ", (since,)
+        keep = {1: "w.s < 0.9 * w.b", 2: "w.b < 0.9 * w.s"}
+        where_all = f"m.ts >= ? AND m.kind = ? AND m.ex != '' AND m.sats >= ? AND {{keep}} AND {cond}"
+        # Фильтр по бирже — у списка и итога; список бирж (byEx) — всегда
+        # полный, из него приложение рисует кнопки фильтра.
+        where = where_all + (" AND m.ex = ?" if ex else "")
+        exa = (ex,) if ex else ()
         # Строка — кошелёк и биржа за окно, а не каждая транзакция: кошелёк,
         # который шесть раз завёл по 62 BTC, раньше занимал шесть одинаковых
         # строк и читался дублями. Теперь одна строка «×6» с суммой, ценой
@@ -11527,13 +11525,13 @@ def _btc_big_build(win: str, side: str, min_btc: float, base: bool = False) -> d
             f" AND m2.ex = m.ex AND m2.ts >= ? ORDER BY m2.sats DESC LIMIT 1) txid "
             f"FROM btc_moves m {join}WHERE {where.format(keep=keep[kind])} "
             f"GROUP BY m.wallet, m.ex ORDER BY sats DESC, ts DESC LIMIT ?",
-            (*lead, since, since, kind, floor, BTC_ROWS)).fetchall()
+            (*lead, since, since, kind, floor, *exa, BTC_ROWS)).fetchall()
         tot = {}
         for k, name in ((1, "buy"), (2, "sell")):
             r = con.execute(
                 flows + f"SELECT COUNT(*) n, SUM(m.sats) s, SUM(m.usd_nanos) u "
                 f"FROM btc_moves m {join}WHERE {where.format(keep=keep[k])}",
-                (*lead, since, k, floor)).fetchone()
+                (*lead, since, k, floor, *exa)).fetchone()
             tot[name] = {"n": int(r["n"] or 0), "btc": round(int(r["s"] or 0) / 1e8, 4),
                          "v": round(int(r["u"] or 0) / 1e9, 2)}
         # Через какие биржи: сумма по бирже на выбранной стороне — сколько
@@ -11543,14 +11541,13 @@ def _btc_big_build(win: str, side: str, min_btc: float, base: bool = False) -> d
              "btc": round(int(r["s"] or 0) / 1e8, 4), "v": round(int(r["u"] or 0) / 1e9, 2)}
             for r in con.execute(
                 flows + f"SELECT m.ex, COUNT(*) n, COUNT(DISTINCT m.wallet) w, SUM(m.sats) s, "
-                f"SUM(m.usd_nanos) u FROM btc_moves m {join}WHERE {where.format(keep=keep[kind])} "
+                f"SUM(m.usd_nanos) u FROM btc_moves m {join}WHERE {where_all.format(keep=keep[kind])} "
                 f"GROUP BY m.ex ORDER BY s DESC", (*lead, since, kind, floor))
         ]
         extra = _btc_extra(con, sorted({r["wallet"] for r in rows}))
         first = con.execute("SELECT MIN(ts) FROM btc_flow").fetchone()[0]
-        base_n = con.execute("SELECT COUNT(*) FROM btc_watch").fetchone()[0] if has_base else 0
         return {
-            "ok": True, "win": win, "side": side, "min": min_btc, "base": base, "baseN": int(base_n),
+            "ok": True, "win": win, "side": side, "min": min_btc, "ex": ex,
             "tot": tot, "byEx": by_ex,
             "full": bool(first and first <= since + 600), "since": int(first or 0),
             "rows": [{"tx": r["txid"], "t": int(r["ts"]), "a": r["wallet"], "ex": r["ex"], "n": int(r["n"]),
@@ -11567,15 +11564,14 @@ def _btc_big_build(win: str, side: str, min_btc: float, base: bool = False) -> d
         con.close()
 
 
-def btc_big(win: str, side: str, min_btc: float, base: bool = False) -> dict:
+def btc_big(win: str, side: str, min_btc: float, ex: str = "") -> dict:
     win = win if win in BIG_WINDOWS else "24h"
     side = "sell" if side == "sell" else "buy"
-    # «Все» (ноль) — только для базы: остальные движения сканер и так
-    # пишет лишь от 0,2 биткоина.
-    allowed = (0, *BTC_BIG_MIN) if base else BTC_BIG_MIN
-    min_btc = min_btc if min_btc in allowed else BTC_BIG_MIN[0]
-    return cached_bg(_BTC, ("big", win, side, min_btc, base), BTC_TTL,
-                        lambda: _btc_big_build(win, side, min_btc, base))
+    min_btc = min_btc if min_btc in BTC_BIG_MIN else BTC_BIG_MIN[0]
+    # Имя биржи — как в разметке сканера; идёт в запрос параметром.
+    ex = (ex or "").strip()[:40]
+    return cached_bg(_BTC, ("big", win, side, min_btc, ex), BTC_TTL,
+                     lambda: _btc_big_build(win, side, min_btc, ex))
 
 
 def _btc_book(moves, px: float) -> dict | None:
@@ -13473,7 +13469,7 @@ class Handler(BaseHTTPRequestHandler):
                 except (TypeError, ValueError, OverflowError):
                     mn = 0.2
                 bwin = qs.get("win", ["24h"])[0]
-                self._json(200, btc_big(bwin, qs.get("side", ["buy"])[0], mn, qs.get("base", ["0"])[0] == "1"))
+                self._json(200, btc_big(bwin, qs.get("side", ["buy"])[0], mn, qs.get("ex", [""])[0]))
                 return
             if path in ("/btc/rank", "/api/btc/rank"):
                 try:

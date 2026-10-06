@@ -42,7 +42,7 @@ export type BigView = "flow" | "spot" | "perp" | "rot" | "ls" | "btc" | "bscx";
 /** Площадка рейтинга: BSC, Hyperliquid и Bitcoin. */
 export type RankVenue = Venue | "btc";
 /** Порог крупных движений BTC, в монетах. */
-export type BtcMin = 0 | 0.2 | 1 | 10 | 100;
+export type BtcMin = 0.2 | 1 | 10 | 100;
 /** Окна потока: часы. */
 export type FlowWin = "1" | "6" | "24" | "168" | "720";
 /** Окна рейтинга: дни. */
@@ -75,8 +75,8 @@ interface AppState {
   /** Крупные движения BTC: выводы с бирж или заводы, и от скольких монет. */
   btcSide: BigSide;
   btcMin: BtcMin;
-  /** Только кошельки базы сервисного аккаунта (/import и найденные сканером). */
-  btcBase: boolean;
+  /** Биржа, по которой отфильтрован список крупных ордеров BTC; "" — все. */
+  btcEx: string;
 
   chartTf: Timeframe;
   /** Монета полноэкранного графика TradingView — последняя открытая. */
@@ -111,7 +111,7 @@ interface AppState {
   setRankVenue(v: RankVenue): void;
   setBtcSide(s: BigSide): void;
   setBtcMin(m: BtcMin): void;
-  setBtcBase(b: boolean): void;
+  setBtcEx(ex: string): void;
   setRankKind(k: RankKind): void;
   setRankWin(w: RankWin): void;
   setChartTf(tf: Timeframe): void;
@@ -148,7 +148,7 @@ export const useApp = create<AppState>()(
       rankWin: "30",
       btcSide: "buy",
       btcMin: 0.2,
-      btcBase: false,
+      btcEx: "",
 
       chartTf: "1d",
       tvSym: "BTC",
@@ -184,7 +184,7 @@ export const useApp = create<AppState>()(
       setRankWin: (rankWin) => set({ rankWin }),
       setBtcSide: (btcSide) => set({ btcSide }),
       setBtcMin: (btcMin) => set({ btcMin }),
-      setBtcBase: (btcBase) => set({ btcBase }),
+      setBtcEx: (btcEx) => set({ btcEx }),
       setChartTf: (chartTf) => set({ chartTf }),
       setTvSym: (tvSym) => set({ tvSym }),
       setLiq: (liqSym, liqRange) => set({ liqSym, liqRange }),
@@ -206,8 +206,10 @@ export const useApp = create<AppState>()(
          У тех, кто открывал раньше, сохранённая вкладка стирается, иначе
          при загрузке она легла бы поверх дайджеста. */
       /* Восьмая — у крупных движений BTC порог по умолчанию стал 0,2 вместо
-         1: прежняя «1» почти у всех стояла сама, по умолчанию. */
-      version: 8,
+         1: прежняя «1» почти у всех стояла сама, по умолчанию.
+         Девятая — у крупных ордеров BTC нет выбора «база / все» и порога
+         «все» (он был только у базы); вместо них — фильтр по бирже. */
+      version: 9,
       migrate: (prev, from) => {
         let s = prev as Record<string, unknown>;
         if (from < 1) s = { ...s, fundAmount: 0, fundLev: 1 };
@@ -223,6 +225,10 @@ export const useApp = create<AppState>()(
         // Вкладка больше не хранится: запуск всегда с дайджеста.
         delete s.tab;
         if (from < 8 && s.btcMin === 1) s.btcMin = 0.2;
+        if (from < 9) {
+          delete s.btcBase;
+          if (s.btcMin === 0) s.btcMin = 0.2;
+        }
         return s;
       },
       // Стек экранов не сохраняем: запуск всегда начинается с вкладки.
@@ -242,7 +248,7 @@ export const useApp = create<AppState>()(
         rankWin: s.rankWin,
         btcSide: s.btcSide,
         btcMin: s.btcMin,
-        btcBase: s.btcBase,
+        btcEx: s.btcEx,
         chartTf: s.chartTf,
         tvSym: s.tvSym,
         liqSym: s.liqSym,

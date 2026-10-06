@@ -923,6 +923,8 @@ interface BtcExtra {
   txs?: number;
   /** В базе сервисного аккаунта. */
   base?: boolean;
+  /** Добавлен в базу импортом, а не найден поиском. */
+  imp?: boolean;
 }
 
 export interface BtcMove extends BtcExtra {
@@ -947,10 +949,9 @@ export interface BtcBigReply {
   full: boolean;
   since: number;
   rows: BtcMove[];
-  /** Только кошельки базы и сколько их всего. */
-  base?: boolean;
-  baseN?: number;
-  /** Через какие биржи прошли движения выбранной стороны. */
+  /** Биржа, по которой отфильтрованы строки и итог; "" — все. */
+  ex?: string;
+  /** Через какие биржи прошли движения выбранной стороны — кнопки фильтра. */
   byEx?: { ex: string; n: number; w: number; btc: number; v: number }[];
 }
 
