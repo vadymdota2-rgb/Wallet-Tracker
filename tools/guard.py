@@ -1049,7 +1049,12 @@ say("bsc: адреса бирж из отчётов о резервах подк
     and '#include "bsc_seeds_book.h"' in read(f"{BOT}/bsc_exchanges.cpp")
     and "for (const BscSeedBook& sd : BSC_SEEDS_BOOK) put(sd.addr, sd.ex);" in read(f"{BOT}/bsc_exchanges.cpp")
     and "BTC_SEEDS_BOOK" in read(f"{BOT}/btc_seeds_book.h") and "SEEDS_BOOK =" not in read(f"{BOT}/btc_seeds_book.h").replace("BTC_SEEDS_BOOK =", "")
-    and os.path.exists(f"{BOT}/tools/bsc_seeds.py"))
+    and os.path.exists(f"{BOT}/tools/bsc_seeds.py")
+    # Метки кошельков бирж и отчёт Bybit — третий источник; казино и кастоди
+    # (Stake.com, Cobo) не биржи и в «без подписи» не показываются.
+    and _bbook.count('{"0x') >= 120 and os.path.exists(f"{BOT}/tools/data/bsc_labels_extra.tsv")
+    and '"0xef3aeff9a5f61c6dda33069c58c1434006e13b20", "Bybit"' in _bbook
+    and "NOT_EXCHANGE.count(a)" in read(f"{BOT}/bsc_exchanges.cpp"))
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
