@@ -10203,7 +10203,11 @@ def _liq_gate(sym: str, period: str, n: int) -> list | None:
         if not k:
             continue
         lt, stk = _fnum(r.get("long_taker_size")), _fnum(r.get("short_taker_size"))
-        out.append((t, float(k["h"]), float(k["l"]), float(k["c"]), _fnum(r.get("open_interest_usd")),
+        # open_interest_usd у Gate — лонги и шорты вместе, вдвое больше
+        # открытого интереса: справочник контракта (position_size — все лонги)
+        # даёт по BTC $2,15 млрд против $4,30 млрд здесь. Без деления Gate
+        # весил на карте вдвое и ещё становился опорной биржей.
+        out.append((t, float(k["h"]), float(k["l"]), float(k["c"]), _fnum(r.get("open_interest_usd")) / 2,
                     lt / (lt + stk) if lt + stk > 0 else 0.5))
     return sorted(out)
 
@@ -10958,7 +10962,9 @@ def _liq_build(sym: str, rng: str) -> dict:
         except Exception:  # noqa: BLE001 — биржа недоступна: карта без неё
             rows = None
         if rows and len(rows) >= 8:
-            found[name] = rows
+            # Ровно окно, у всех бирж одно и то же: OKX отдаёт страницами по
+            # сто, и в «30 дней» у него попадали 33 дня, а у остальных — 30.
+            found[name] = rows[-n:]
 
     pool = ThreadPoolExecutor(max_workers=len(LIQ_SOURCES))
     futures = [pool.submit(one, src) for src in LIQ_SOURCES]

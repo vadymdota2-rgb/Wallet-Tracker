@@ -1060,5 +1060,11 @@ say("bsc: адреса бирж из отчётов о резервах подк
     and 'rpc("eth_getTransactionCount", json::array({a, "latest"}), 1)' in read(f"{BOT}/bsc_exchanges.cpp")
     and "Похожи на фермы и копилки" in read(f"{BOT}/bsc_exchanges.cpp"))
 
+# Карта ликвидаций: у Gate open_interest_usd — обе стороны (вдвое больше
+# интереса), ряды бирж обрезаны ровно по окну (OKX отдавал 33 дня вместо 30).
+say("карта ликвидаций: интерес Gate без удвоения, у всех бирж одно и то же окно",
+    '_fnum(r.get("open_interest_usd")) / 2' in pybody(api, "def _liq_gate(")
+    and "found[name] = rows[-n:]" in pybody(api, "def _liq_build("))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
