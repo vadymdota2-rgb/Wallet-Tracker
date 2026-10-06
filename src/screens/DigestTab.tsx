@@ -244,8 +244,8 @@ function Sections({ it, lang }: { it: DigestItem; lang: Lang }) {
                 <Sub>{t(lang, "dg_rot_src")}</Sub>
                 {rot.src.map((r) => (
                   <button key={`rs${r.sym}`} type="button" className="dg-chip dn"
-                    onClick={() => { haptic("select"); open("coin", r.sym); }}>
-                    <CoinIcon sym={r.sym} size={18} />
+                    onClick={() => { haptic("select"); open("coin", r.sym, r.token); }}>
+                    <CoinIcon sym={r.sym} icon={r.icon} addr={r.token} size={18} />
                     <span>{r.sym}</span>
                     <em>{usd(r.usd)}</em>
                   </button>
@@ -255,8 +255,8 @@ function Sections({ it, lang }: { it: DigestItem; lang: Lang }) {
                 <Sub>{t(lang, "dg_rot_dst")}</Sub>
                 {rot.dst.map((r) => (
                   <button key={`rd${r.sym}`} type="button" className="dg-chip up"
-                    onClick={() => { haptic("select"); open("coin", r.sym); }}>
-                    <CoinIcon sym={r.sym} size={18} />
+                    onClick={() => { haptic("select"); open("coin", r.sym, r.token); }}>
+                    <CoinIcon sym={r.sym} icon={r.icon} addr={r.token} size={18} />
                     <span>{r.sym}</span>
                     <em>{usd(r.usd)}</em>
                   </button>

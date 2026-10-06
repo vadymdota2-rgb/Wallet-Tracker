@@ -1010,11 +1010,11 @@ function RotBody({ sum, win }: { sum: RotSum; win: FlowWin }) {
             key={x.sym}
             type="button"
             className="rot-line"
-            onClick={() => { haptic("select"); open("coin", x.sym); }}
+            onClick={() => { haptic("select"); open("coin", x.sym, x.token); }}
           >
             <span className={`rot-line-fill ${side === "src" ? "dn" : "up"}`}
                   style={{ width: `${Math.max(6, (x.usd / top) * 100)}%` }} />
-            <CoinIcon sym={x.sym} size={16} />
+            <CoinIcon sym={x.sym} icon={x.icon} addr={x.token} size={16} />
             <span className="rot-line-nm">{showSym(x.sym)}</span>
             <i>{usd(x.usd)}</i>
           </button>

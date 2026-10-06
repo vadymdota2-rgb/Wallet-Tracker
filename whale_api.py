@@ -365,6 +365,9 @@ def coin_icon(sym: str, addr: str = "") -> list[str]:
         # это одиннадцать токенов из двадцати девяти безымянных. Адрес ему
         # нужен в нижнем регистре, в отличие от соседей.
         out.append(f"/dslogo/{a}.png")
+        # Последний шаг — сервер: он ищет по адресу ещё и в GeckoTerminal,
+        # у которого есть картинки монет, не попавших ни в один список.
+        out.append(f"/bsclogo/{a}")
         return out
     if not key:
         return out
@@ -394,6 +397,109 @@ def coin_icon(sym: str, addr: str = "") -> list[str]:
             out.append(f"/hllogo/{name}.svg")
     return out
 
+
+# Логотип токена BSC по одному адресу: /bsclogo/0x… (nginx) → /api/logo/bsc/0x….
+#
+# Нужен там, где у приложения есть только адрес контракта: контрольную сумму
+# адреса, по которой лежат файлы PancakeSwap и Trust Wallet, считает сервер.
+# Он же — последний шаг в списке coin_icon: у части монет нет картинки ни в
+# одном списке, но она есть у GeckoTerminal. На живой выдаче BSC так находится
+# ещё половина тех, кто оставался буквой в кружке.
+#
+# Ответ — переадресация на нашу же раздачу картинок (её кэширует nginx) или
+# 404. Найденное помнится здесь и в кэше nginx: повторно источники не
+# опрашиваются.
+LOGO_PROBE = (
+    ("/pcslogo/{cs}.png", "https://tokens.pancakeswap.finance/images/{cs}.png"),
+    ("/twlogo/{cs}/logo.png",
+     "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/smartchain/assets/{cs}/logo.png"),
+    ("/dslogo/{a}.png", "https://dd.dexscreener.com/ds-data/tokens/bsc/{a}.png"),
+)
+LOGO_GT = "https://api.geckoterminal.com/api/v2/networks/bsc/tokens/{a}"
+LOGO_HIT_TTL = 7 * 86400
+LOGO_MISS_TTL = 86400
+# GeckoTerminal даёт 30 запросов в минуту на адрес — берём меньше.
+LOGO_GT_RPM = 20
+_logo_seen: dict[str, tuple[str, float]] = {}
+_logo_gt_calls: list[float] = []
+_logo_lock = threading.Lock()
+
+
+def _logo_is_image(url: str) -> bool:
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0", "Range": "bytes=0-0"})
+    try:
+        with urllib.request.urlopen(req, timeout=4) as r:
+            return r.status in (200, 206) and (r.headers.get("Content-Type") or "").startswith("image/")
+    except Exception:
+        return False
+
+
+def _logo_gt_slot() -> bool:
+    t = time.monotonic()
+    with _logo_lock:
+        _logo_gt_calls[:] = [x for x in _logo_gt_calls if t - x < 60]
+        if len(_logo_gt_calls) >= LOGO_GT_RPM:
+            return False
+        _logo_gt_calls.append(t)
+        return True
+
+
+def _logo_gt(a: str) -> str | None:
+    """Картинка GeckoTerminal: путь для <img>, "" — картинки нет, None — не
+    спросили (лимит или сбой), тогда «нет» запоминать нельзя."""
+    if not _logo_gt_slot():
+        return None
+    req = urllib.request.Request(LOGO_GT.format(a=a),
+                                 headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=6) as r:
+            img = ((json.loads(r.read().decode()).get("data") or {}).get("attributes") or {}).get("image_url") or ""
+    except urllib.error.HTTPError as e:
+        return "" if e.code == 404 else None
+    except Exception:
+        return None
+    if not isinstance(img, str) or not img.startswith("https://") or "missing" in img:
+        return ""
+    # Картинки CoinGecko — через нашу раздачу, как и весь остальной CoinGecko.
+    cg = "https://coin-images.coingecko.com/"
+    if img.startswith(cg):
+        return "/cglogo/" + img[len(cg):]
+    return img if img.startswith("https://assets.geckoterminal.com/") else ""
+
+
+def bsc_logo(addr: str) -> tuple[str, int]:
+    """Куда отправить за картинкой и на сколько секунд это запомнить;
+    пустой адрес — картинки нет."""
+    a = (addr or "").strip().lower()
+    if not re.fullmatch(r"0x[0-9a-f]{40}", a):
+        return "", LOGO_MISS_TTL
+    _load_logo_manifest()
+    cs = to_checksum(a)
+    if cs in _logo_local["bsc"]:
+        return f"/coins/bsc/{cs}.png", LOGO_HIT_TTL
+    t = time.time()
+    with _logo_lock:
+        hit = _logo_seen.get(a)
+    if hit and t < hit[1]:
+        return hit[0], int(hit[1] - t)
+    # Источники опрашиваются разом, а берётся первый по порядку доверия:
+    # подряд это до двенадцати секунд ожидания на одну картинку.
+    with ThreadPoolExecutor(len(LOGO_PROBE)) as ex:
+        found = list(ex.map(lambda pr: _logo_is_image(pr[1].format(cs=cs, a=a)), LOGO_PROBE))
+    url = next((pr[0].format(cs=cs, a=a) for pr, ok in zip(LOGO_PROBE, found) if ok), "")
+    ttl = LOGO_HIT_TTL if url else LOGO_MISS_TTL
+    if not url:
+        gt = _logo_gt(a)
+        if gt is None:
+            # Не спросили — не запоминаем: спросим при следующем показе.
+            return "", 300
+        url = gt
+        ttl = LOGO_HIT_TTL if url else LOGO_MISS_TTL
+    with _logo_lock:
+        if len(_logo_seen) > 50_000:
+            _logo_seen.clear()
+        _logo_seen[a] = (url, t + ttl)
+    return url, ttl
 
 
 def now() -> int:
@@ -9168,8 +9274,15 @@ def empty_rot() -> dict:
 
 
 def rot_page(rows: list, offset: int, limit: int) -> list[dict]:
-    """Страница столбца: пары (тикер, сумма) — в то, что понимает приложение."""
-    return [{"sym": s, "usd": u} for s, u in rows[max(0, offset):max(0, offset) + limit]]
+    """Страница столбца: (тикер, сумма, адрес) — в то, что понимает приложение.
+    Адрес — самый крупный контракт под этим тикером: по нему ищется логотип и
+    открывается монета; по одному тикеру картинку токена BSC не найти."""
+    out = []
+    for row in rows[max(0, offset):max(0, offset) + limit]:
+        s, u = row[0], row[1]
+        a = row[2] if len(row) > 2 else ""
+        out.append({"sym": s, "usd": u, "token": a, "icon": coin_icon(s, a)})
+    return out
 
 
 def load_rot(cur: sqlite3.Connection) -> dict:
@@ -9220,6 +9333,8 @@ def load_rot(cur: sqlite3.Connection) -> dict:
     # ротации в десять секунд на каждой перестройке кэша.
     syms = symbol_map(cur)
     last_sell: dict[str, tuple[str, int]] = {}
+    # Сколько прошло через каждый контракт тикера — чтобы назвать главный.
+    sym_addr: dict[str, dict[str, float]] = {}
     # Курсор читаем на ходу, без fetchall: за месяц это полмиллиона строк, и
     # держать их все в памяти незачем — каждая нужна ровно один раз.
     #
@@ -9236,9 +9351,12 @@ def load_rot(cur: sqlite3.Connection) -> dict:
     )
     for r in rows:
         w = (r["wallet"] or "").lower()
-        tok = syms.get((r["token"] or "").lower())
+        addr = (r["token"] or "").lower()
+        tok = syms.get(addr)
         if not tok:
             continue
+        per = sym_addr.setdefault(tok, {})
+        per[addr] = per.get(addr, 0.0) + usd(r["usd_nanos"])
         if r["is_buy"]:
             prev = last_sell.get(w)
             if prev and prev[0] != tok:
@@ -9270,7 +9388,11 @@ def load_rot(cur: sqlite3.Connection) -> dict:
             src_sum[s] = src_sum.get(s, 0.0) + v[0]
             dst_sum[d] = dst_sum.get(d, 0.0) + v[0]
             seen |= v[1]
-        keep = lambda m: sorted(m.items(), key=lambda kv: -kv[1])[:ROT_KEEP]  # noqa: E731
+        def keep(m: dict[str, float]) -> list[tuple[str, float, str]]:
+            top = sorted(m.items(), key=lambda kv: -kv[1])[:ROT_KEEP]
+            return [(k, v, max((sym_addr.get(k) or {"": 0}).items(), key=lambda kv: kv[1])[0])
+                    for k, v in top]
+
         full_src, full_dst = keep(src_sum), keep(dst_sum)
         page[key] = {"src": full_src, "dst": full_dst}
         out[key] = {
@@ -12235,7 +12357,7 @@ def _dg_coin(r: dict, *keys: str) -> dict:
     подписей сервера («5 мин назад»): в выпуске они бы тут же устарели."""
     out = {"sym": r.get("sym") or ""}
     if r.get("icon"):
-        out["icon"] = list(r["icon"])[:4]
+        out["icon"] = list(r["icon"])[:5]
     for k in keys:
         if r.get(k) is not None:
             out[k] = r[k]
@@ -13262,6 +13384,15 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path in ("/halving", "/api/halving"):
                 self._json(200, halving_data())
+                return
+            if path.startswith("/api/logo/bsc/"):
+                url, ttl = bsc_logo(path[len("/api/logo/bsc/"):])
+                self.send_response(302 if url else 404)
+                if url:
+                    self.send_header("Location", url)
+                self.send_header("Cache-Control", f"public, max-age={ttl}")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
                 return
             if path in ("/bsc/exflow", "/api/bsc/exflow"):
                 self._json(200, bscx_flow())

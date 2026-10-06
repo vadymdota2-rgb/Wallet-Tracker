@@ -311,6 +311,9 @@ export type FundN = Record<string, number | undefined>;
 export interface RotSide {
   sym: string;
   usd: number;
+  /** Главный контракт тикера: по нему логотип и экран монеты. */
+  token?: string;
+  icon?: string[];
 }
 
 /**

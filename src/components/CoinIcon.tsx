@@ -45,9 +45,13 @@ export function CoinIcon({
   sym,
   size = 32,
   icon,
+  addr,
 }: {
   sym: string;
   size?: number;
+  /** Адрес контракта BSC, когда готового списка нет: картинку по нему
+   *  найдёт сервер (/bsclogo/ — он же считает контрольную сумму адреса). */
+  addr?: string;
   /** Готовый список от сервера: локальный файл, PancakeSwap, Trust Wallet.
    *  Нужен там, где монеты нет в общей выдаче — например у покупок на BSC:
    *  без адреса токена искать было негде, и оставалась буква в кружке. */
@@ -62,6 +66,7 @@ export function CoinIcon({
 
   const urls: string[] = [];
   if (icon?.length) urls.push(...icon.filter(Boolean));
+  else if (addr && /^0x[0-9a-fA-F]{40}$/.test(addr)) urls.push(`/bsclogo/${addr.toLowerCase()}`);
   const fromServer = coin?.icon;
   const serverList = Array.isArray(fromServer)
     ? fromServer.filter(Boolean)
@@ -71,7 +76,7 @@ export function CoinIcon({
   /* Выверенный значок — раньше файла из образа, но не для токена BSC: там
      значок по адресу контракта, и одноимённая монета другой сети его
      подменять не должна. */
-  const byAddr = [...urls, ...serverList].some((u) => u.startsWith("/coins/bsc/") || u.startsWith("/pcslogo/"));
+  const byAddr = [...urls, ...serverList].some((u) => u.startsWith("/coins/bsc/") || u.startsWith("/pcslogo/") || u.startsWith("/bsclogo/"));
   const override = LOGO_OVERRIDE[normalizeSym(sym)];
   if (override && !byAddr) urls.push(override);
   urls.push(...serverList);
@@ -139,7 +144,7 @@ export function CoinIcon({
   }
 
   // Сменили монету — перебор начинается заново.
-  useEffect(() => setStep(0), [key, icon?.[0]]);
+  useEffect(() => setStep(0), [key, icon?.[0], addr]);
 
   // Повторов в цепочке быть не должно: каждый лишний адрес — лишний запрос
   // впустую и лишний шаг до картинки, которая есть.

@@ -950,5 +950,22 @@ say("аналитика: NetFlow DEX, ордера DEX, ротация DEX, Long
     and json.load(open(f"{APP}/tools/i18n.json"))["bscx_title"]["ru"] == "NetFlow · Потоки бирж BSC"
     and "g_pricer = std::thread(pricerLoop);" in _bex and "void bscExStop()" in _bex)
 
+# Логотипы токенов BSC: по одному тикеру их не найти, нужен адрес контракта.
+# Последний шаг — сервер (/bsclogo/ → bsc_logo): он считает контрольную сумму
+# адреса и добирает картинку из GeckoTerminal.
+_ng = read(f"{APP}/nginx.conf")
+say("логотипы BSC: поиск по адресу на сервере, ротация, дайджест, алерты и экран монеты передают адрес",
+    'out.append(f"/bsclogo/{a}")' in pybody(api, "def coin_icon(")
+    and 'path.startswith("/api/logo/bsc/")' in api and "def bsc_logo(" in api
+    and 're.fullmatch(r"0x[0-9a-f]{40}", a)' in pybody(api, "def bsc_logo(")
+    and "location /bsclogo/ {" in _ng and "proxy_pass http://127.0.0.1:8090/api/logo/bsc/;" in _ng
+    and '"/api/logo/bsc/"' not in api.split("PAID_PATHS = frozenset(")[1][:900]
+    and '"token": a, "icon": coin_icon(s, a)' in pybody(api, "def rot_page(")
+    and "addr={x.token}" in read(f"{APP}/src/screens/AnalyticsTab.tsx")
+    and read(f"{APP}/src/screens/DigestTab.tsx").count("addr={r.token}") == 2
+    and 'addr={d.k === "bsc" ? d.ca : undefined}' in read(f"{APP}/src/components/AlertCard.tsx")
+    and "addr={arg2 && hasAddr ? addr : undefined}" in read(f"{APP}/src/screens/CoinScreen.tsx")
+    and "urls.push(`/bsclogo/${addr.toLowerCase()}`)" in read(f"{APP}/src/components/CoinIcon.tsx"))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

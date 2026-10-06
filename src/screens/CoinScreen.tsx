@@ -102,7 +102,7 @@ export function CoinScreen({ arg, arg2 }: ScreenProps) {
     <Frame
       title={
         <span className="ttl-coin">
-          <CoinIcon sym={sym} size={30} />
+          <CoinIcon sym={sym} addr={arg2 && hasAddr ? addr : undefined} size={30} />
           {sym}
         </span>
       }

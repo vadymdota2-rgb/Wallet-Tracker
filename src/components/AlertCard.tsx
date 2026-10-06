@@ -158,7 +158,7 @@ export function AlertCard({ d, ts, nowSec, fresh, appOnly }: {
       </header>
 
       <div className="alc-main">
-        <CoinIcon sym={d.sym || "?"} size={38} />
+        <CoinIcon sym={d.sym || "?"} addr={d.k === "bsc" ? d.ca : undefined} size={38} />
         <div className="alc-what">
           <span className="alc-act">{title(lang, d)}</span>
           <b className="alc-sym">
