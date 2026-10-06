@@ -11,8 +11,7 @@ import { useApp } from "../store/app";
 import { useLive, walletByAddr } from "../store/live";
 import { boardKey, venueName, walletRank } from "../lib/rank";
 import { bare, t } from "../i18n/t";
-import { lev as levFmt, num, pct, px, shortAddr, signed, since, usd } from "../lib/format";
-import { openExternal } from "../lib/telegram";
+import { lev as levFmt, num, pct, px, shortAddr, signed, usd } from "../lib/format";
 import { holdTime } from "../lib/labels";
 import { fetchWallet, removeWallet, setPrimary } from "../lib/api";
 import { applyWalletLive } from "../lib/prefetch";
@@ -194,26 +193,6 @@ export function WalletScreen({ arg }: ScreenProps) {
               valueSub={pct(h.pct)}
               after={<EyeGlyph size={18} />}
               onClick={() => open("spot", w.addr, String(i))}
-            />
-          ))}
-        </Card>
-      ) : null}
-
-      {/* Заводы на биржи и выводы с бирж (BSC): завод часто бывает перед
-          продажей, вывод — после покупки. */}
-      {w.cex?.length ? (
-        <Card>
-          <SectionTitle note={String(w.cex.length)}>{t(lang, "wl_cex_moves")}</SectionTitle>
-          {w.cex.map((m, i) => (
-            <Row
-              key={`${m.tx}-${i}`}
-              icon={<CoinIcon sym={m.sym} size={30} />}
-              title={`${m.wd ? "+" : "−"}${num(m.qty, m.qty >= 1000 ? 0 : 2)} ${m.sym}`}
-              sub={t(lang, m.wd ? "btc_wd_from" : "btc_dep_to", { ex: m.ex })}
-              sub2={since(Math.floor(Date.now() / 1000) - m.t)}
-              value={m.v ? usd(m.v) : "—"}
-              tone={m.wd ? "up" : "dn"}
-              onClick={() => openExternal(`https://bscscan.com/tx/${m.tx}`)}
             />
           ))}
         </Card>

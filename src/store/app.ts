@@ -38,7 +38,9 @@ export type BigWin = "1h" | "6h" | "24h" | "7d" | "30d";
 /** Сторона доски крупных ордеров. */
 export type BigSide = "buy" | "sell";
 /** Разделы аналитики — те же кнопки, что в меню бота. */
-export type BigView = "flow" | "bscx" | "spot" | "perp" | "rot" | "ls" | "btc";
+export type BigView = "flow" | "spot" | "perp" | "rot" | "ls" | "btc";
+/** Режим NetFlow: свопы DEX или поток бирж BSC (переводы на биржи и с бирж). */
+export type FlowSrc = "dex" | "cex";
 /** Площадка рейтинга: BSC, Hyperliquid и Bitcoin. */
 export type RankVenue = Venue | "btc";
 /** Порог крупных движений BTC, в монетах. */
@@ -63,6 +65,7 @@ interface AppState {
   lsCls: CoinClass;
   flowWin: FlowWin;
   flowSide: FlowSide;
+  flowSrc: FlowSrc;
   flowQuery: string;
 
   rankVenue: RankVenue;
@@ -100,6 +103,7 @@ interface AppState {
   setBigSide(s: BigSide): void;
   setLsCls(c: CoinClass): void;
   setFlowSide(s: FlowSide): void;
+  setFlowSrc(s: FlowSrc): void;
   setFlowQuery(q: string): void;
   setRankVenue(v: RankVenue): void;
   setBtcSide(s: BigSide): void;
@@ -131,6 +135,7 @@ export const useApp = create<AppState>()(
       lsCls: "crypto",
       flowWin: "24",
       flowSide: "all",
+      flowSrc: "dex",
       flowQuery: "",
 
       rankVenue: "spot",
@@ -165,6 +170,7 @@ export const useApp = create<AppState>()(
       setBigSide: (bigSide) => set({ bigSide }),
       setLsCls: (lsCls) => set({ lsCls }),
       setFlowSide: (flowSide) => set({ flowSide }),
+      setFlowSrc: (flowSrc) => set({ flowSrc }),
       setFlowQuery: (flowQuery) => set({ flowQuery }),
       setRankVenue: (rankVenue) => set({ rankVenue }),
       setRankKind: (rankKind) => set({ rankKind }),
@@ -219,6 +225,7 @@ export const useApp = create<AppState>()(
         lsCls: s.lsCls,
         flowWin: s.flowWin,
         flowSide: s.flowSide,
+        flowSrc: s.flowSrc,
         rankVenue: s.rankVenue,
         rankKind: s.rankKind,
         rankWin: s.rankWin,

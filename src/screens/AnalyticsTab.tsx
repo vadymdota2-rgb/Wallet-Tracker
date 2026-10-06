@@ -22,14 +22,14 @@ import {
 import { CoinIcon } from "../components/CoinIcon";
 import { BuySellBar, FlowSpark, TrendChart } from "../components/Chart";
 import { BtcBigView, BtcFlowCard } from "./BtcViews";
-import { BscExFlowCard } from "./BscExViews";
+import { BscExBody, BscExHead } from "./BscExViews";
 import {
   Card, CopyGlyph, Empty, MinusGlyph, NetFlowGlyph, OrdersGlyph,
   PlusGlyph, PositionsGlyph, RotationGlyph, Row, SectionTitle, Segmented, Skeleton, StackGlyph,
   TileNav,
 } from "../components/ui";
 import { fetchBig, fetchFlow, fetchLs, fetchRot, peekBig, peekFlow, peekLs, type LsPage } from "../lib/api";
-import type { BigSide, BigView, BigWin, FlowWin } from "../store/app";
+import type { BigSide, BigView, BigWin, FlowSrc, FlowWin } from "../store/app";
 import type {
   CoinClass, FlowRow, FlowSide, LsRow, RotSide, RotSum, TradeRow, Trades,
 } from "../lib/types";
@@ -72,6 +72,14 @@ const FLOW_SIDES: { id: FlowSide; key: Parameters<typeof t>[1] }[] = [
   { id: "out", key: "flow_side_out" },
 ];
 
+/* Те же три положения, подписи под поток бирж: «приток» к монете здесь —
+   вывод с бирж. */
+const CEX_SIDES: { id: FlowSide; key: Parameters<typeof t>[1] }[] = [
+  { id: "all", key: "flow_side_all" },
+  { id: "in", key: "bscx_side_out" },
+  { id: "out", key: "bscx_side_in" },
+];
+
 const FLOW_WINS: { id: FlowWin; key: Parameters<typeof t>[1] }[] = [
   { id: "1", key: "big_win_1h" },
   { id: "6", key: "win_6h" },
@@ -106,10 +114,9 @@ const VIEWS: {
   venue?: "spot" | "perp" | "btc";
   label: (t: (k: DictKey) => string) => string;
 }[] = [
-  /* NetFlow DEX — свопы кошельков базы; поток бирж BSC — переводы на биржи
-     и с бирж всей сети. Разное, поэтому рядом, но раздельно. */
-  { id: "flow", ic: <NetFlowGlyph size={22} />, venue: "spot", label: () => "NetFlow DEX" },
-  { id: "bscx", ic: <CoinIcon sym="BNB" size={22} />, venue: "spot", label: (tr) => tr("bscx_title") },
+  /* NetFlow BSC: внутри два режима — DEX (свопы кошельков базы) и поток
+     бирж (переводы на биржи и с бирж всей сети). Рядом, но раздельно. */
+  { id: "flow", ic: <NetFlowGlyph size={22} />, venue: "spot", label: () => "NetFlow BSC" },
   { id: "spot", ic: <OrdersGlyph size={22} />, venue: "spot", label: (tr) => tr("ui_tab_orders") },
   { id: "rot", ic: <RotationGlyph size={22} />, venue: "spot", label: (tr) => tr("ui_rotation") },
   { id: "ls", ic: <PositionsGlyph size={22} />, venue: "perp", label: (tr) => tr("ui_tab_ls") },
@@ -231,6 +238,8 @@ export function AnalyticsTab() {
   const flowWin = useApp((s) => s.flowWin);
   const setFlowWin = useApp((s) => s.setFlowWin);
   const flowSide = useApp((s) => s.flowSide);
+  const flowSrc = useApp((s) => s.flowSrc);
+  const setFlowSrc = useApp((s) => s.setFlowSrc);
   const setFlowSide = useApp((s) => s.setFlowSide);
   const query = useApp((s) => s.flowQuery);
   const setQuery = useApp((s) => s.setFlowQuery);
@@ -317,15 +326,26 @@ export function AnalyticsTab() {
       {/* Биткоин — своя вкладка: сперва итог по биржам за окно, ниже
           ордера с тем же окном. В NetFlow его нет — там монеты BSC. */}
       {view === "btc" ? <BtcFlowCard bigWin={bigWin} /> : null}
-      {view === "bscx" ? <BscExFlowCard bigWin={bigWin} picker={winPicker} /> : null}
       {view === "btc" ? <BtcBigView winPicker={winPicker} win={bigWin} /> : null}
       {view === "flow" ? (
         <Card>
           {/* NetFlow — термин, он одинаков во всех языках, как PnL и ROI.
               Прежнее «Что покупают киты» описывало только половину: при
               оттоке киты как раз продают. */}
-          <SectionTitle note={t(lang, "flow_hint")}>NetFlow DEX</SectionTitle>
-          <FlowTrend />
+          <SectionTitle note={t(lang, flowSrc === "cex" ? "bscx_hint" : "flow_hint")}>
+            {flowSrc === "cex" ? t(lang, "bscx_title") : "NetFlow DEX"}
+          </SectionTitle>
+          {/* Поток бирж прикручен сбоку: свой переключатель, свои данные,
+              с логикой DEX не смешивается. */}
+          <Segmented<FlowSrc>
+            value={flowSrc}
+            onChange={setFlowSrc}
+            options={[
+              { id: "dex", label: "DEX" },
+              { id: "cex", label: t(lang, "bscx_short") },
+            ]}
+          />
+          {flowSrc === "cex" ? <BscExHead /> : <FlowTrend />}
           {flowWinPicker}
           {/* Знак потока отдельной строкой от окна: это два независимых
               вопроса — «за какой срок» и «кого показывать». Одним рядом они
@@ -333,7 +353,7 @@ export function AnalyticsTab() {
           <Segmented<FlowSide>
             value={flowSide}
             onChange={setFlowSide}
-            options={FLOW_SIDES.map((v) => ({ id: v.id, label: t(lang, v.key) }))}
+            options={(flowSrc === "cex" ? CEX_SIDES : FLOW_SIDES).map((v) => ({ id: v.id, label: t(lang, v.key) }))}
           />
           <input
             className="find"
@@ -343,7 +363,7 @@ export function AnalyticsTab() {
             inputMode="search"
             aria-label={t(lang, "flow_search_btn")}
           />
-          <FlowBody />
+          {flowSrc === "cex" ? <BscExBody /> : <FlowBody />}
         </Card>
       ) : null}
 

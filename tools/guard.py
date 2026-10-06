@@ -914,12 +914,16 @@ say("биржи BSC: проверенные адреса бирж, обучен�
     and "if (isBaseAsset(res.tokenAddr) && !res.isSwap) { markTxProcessed(hash,bn); continue; }" in _mcpp
     and "bsc_ex" not in pybody(api, "def flow_scan(")
     and "if (chainCtx().stablecoins.count(a)) {" in read(f"{BOT}/token_prices.cpp")
-    and '"cex": bsc_cex_moves(cur, key),' in api and 'w.cex?.length' in read(f"{APP}/src/screens/WalletScreen.tsx"))
+    # Заводы и выводы конкретных кошельков на BSC не показываем.
+    and "bsc_cex_moves" not in api and "cex" not in read(f"{APP}/src/screens/WalletScreen.tsx"))
 
-say("аналитика: NetFlow DEX, поток бирж Bitcoin и поток бирж BSC — раздельно; рейтинг BSC подписан DEX",
-    'label: () => "NetFlow DEX"' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
-    and '{ id: "bscx",' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
-    and '<BscExFlowCard bigWin={bigWin} picker={winPicker} />' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
+say("аналитика: NetFlow BSC — режимы DEX и «Поток бирж» (по монетам, как NetFlow, данные раздельно); поток бирж Bitcoin; рейтинг BSC подписан DEX",
+    'label: () => "NetFlow BSC"' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
+    and '{ id: "bscx",' not in read(f"{APP}/src/screens/AnalyticsTab.tsx")
+    and '{flowSrc === "cex" ? <BscExBody /> : <FlowBody />}' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
+    and '{flowSrc === "cex" ? <BscExHead /> : <FlowTrend />}' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
+    and "<FlowSpark values={c.sp} />" in read(f"{APP}/src/screens/BscExViews.tsx")
+    and '"sp": []' in pybody(api, "def _bscx_flow_build(")
     and 'path in ("/bsc/exflow", "/api/bsc/exflow")' in api and '"bsc/exflow"' in api.split("PAID_PATHS = frozenset(")[1][:900]
     and "FROM bsc_ex_flow WHERE ts >= ?" in pybody(api, "def _bscx_flow_build(")
     and "bsc_ex" not in pybody(api, "def flow_scan(")

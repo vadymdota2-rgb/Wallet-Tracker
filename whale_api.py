@@ -1800,47 +1800,10 @@ def wallet_live(cur: sqlite3.Connection, chat: str, addr: str) -> dict:
         "addr": key,
         "pos": pos,
         "holds": spot_open(cur, key),
-        "cex": bsc_cex_moves(cur, key),
         "equity": equity,
         "bal": bal,
         "d1": (stats["net"] / bal * 100.0) if bal else 0.0,
     }
-
-
-def bsc_cex_moves(cur: sqlite3.Connection, addr: str, limit: int = 30) -> list[dict]:
-    """Заводы кошелька на биржи и выводы с бирж на BSC — последние сначала.
-
-    Пишет бот (bsc_ex_moves): перевод BNB или transfer() токена, где на другой
-    стороне адрес биржи — её кошелёк или выученный адрес пополнения. wd —
-    вывод с биржи кошельку, иначе завод кошелька на биржу.
-    """
-    if not table_exists(cur, "bsc_ex_moves"):
-        return []
-    try:
-        rows = cur.execute(
-            "SELECT tx, ts, kind, ex, token, qty, usd_nanos FROM bsc_ex_moves "
-            "WHERE wallet=? ORDER BY ts DESC, id DESC LIMIT ?",
-            (addr, limit),
-        ).fetchall()
-    except sqlite3.Error as e:
-        sys.stderr.write(f"[api] cex moves: {e}\n")
-        return []
-    syms = symbol_map(cur)
-    out = []
-    for r in rows:
-        tok = (r["token"] or "").lower()
-        native = not tok.startswith("0x")
-        out.append({
-            "tx": r["tx"],
-            "t": int(r["ts"] or 0),
-            "wd": int(r["kind"] or 0) == 1,
-            "ex": r["ex"] or "",
-            "sym": "BNB" if native else (BSC_KNOWN_SYMS.get(tok) or syms.get(tok) or "?"),
-            "token": "" if native else tok,
-            "qty": float(r["qty"] or 0),
-            "v": usd(r["usd_nanos"]),
-        })
-    return out
 
 
 def load_wallets(cur: sqlite3.Connection, chat: str,
@@ -11214,6 +11177,8 @@ def btc_flow() -> dict:
 # transfer() токенов напрямую; через контракты не видно. С DEX не смешивается:
 # NetFlow DEX — свопы кошельков базы, это — переводы на биржи всей сети.
 _BSCX: dict = {}
+BSCX_COINS_MAX = 300
+BSCX_SPARK = 12
 # Имена главных монет BSC: стейблкоины бот считает по $1 и в свопах может их
 # не встречать — тогда тикера в token_cache нет, а показать надо.
 BSC_KNOWN_SYMS = {
@@ -11265,22 +11230,51 @@ def _bscx_flow_build() -> dict:
             ex = sorted(
                 ({"ex": r["ex"], "in": round(usd(r["i"]), 2), "out": round(usd(r["o"]), 2)} for r in by_ex),
                 key=lambda e: -(e["in"] + e["out"]))
+            # Монеты — как в NetFlow DEX: у каждой свой итог, обороты в обе
+            # стороны, число переводов и своя линия накопленного вывода.
             coins = []
             for r in cur.execute(
-                    "SELECT token, SUM(in_usd) i, SUM(out_usd) o, SUM(in_qty) qi, SUM(out_qty) qo "
-                    "FROM bsc_ex_flow WHERE ts >= ? GROUP BY token "
-                    "ORDER BY SUM(in_usd) + SUM(out_usd) DESC LIMIT 20", (since,)):
+                    "SELECT token, SUM(in_usd) i, SUM(out_usd) o, SUM(in_qty) qi, SUM(out_qty) qo, "
+                    "SUM(in_n) + SUM(out_n) n FROM bsc_ex_flow WHERE ts >= ? GROUP BY token "
+                    "ORDER BY ABS(SUM(out_usd) - SUM(in_usd)) DESC LIMIT ?", (since, BSCX_COINS_MAX)):
                 tok = (r["token"] or "").lower()
                 native = not tok.startswith("0x")
                 coins.append({
                     "sym": "BNB" if native else (BSC_KNOWN_SYMS.get(tok) or syms.get(tok) or "?"),
                     "token": "" if native else tok,
                     "in": round(usd(r["i"]), 2), "out": round(usd(r["o"]), 2),
+                    "net": round(usd(r["o"]) - usd(r["i"]), 2),
                     "qin": float(r["qi"] or 0), "qout": float(r["qo"] or 0),
+                    "n": int(r["n"] or 0), "sp": [],
                 })
+            # Безымянные монеты (тикера нет нигде) не показываем: открыть и
+            # различить их нельзя.
+            coins = [c for c in coins if c["sym"] != "?"]
+            if coins:
+                idx = {(c["token"] or "native"): c for c in coins}
+                series: dict[str, list[float]] = {}
+                spk = BSCX_SPARK
+                sstep = max(1, (t - start) // spk)
+                for r in cur.execute(
+                        "SELECT token, (ts - ?) / ? b, SUM(out_usd - in_usd) n FROM bsc_ex_flow "
+                        "WHERE ts >= ? GROUP BY token, b", (start, sstep, since)):
+                    tok = (r["token"] or "").lower()
+                    k = tok if tok.startswith("0x") else "native"
+                    if k not in idx:
+                        continue
+                    arr2 = series.setdefault(k, [0.0] * spk)
+                    arr2[min(spk - 1, max(0, int(r["b"] or 0)))] += usd(r["n"])
+                for k, arr2 in series.items():
+                    run2, line = 0.0, [0.0]
+                    for v in arr2:
+                        run2 += v
+                        line.append(round(run2, 2))
+                    idx[k]["sp"] = line
             wins[key] = {
                 "in": round(tin, 2), "out": round(tout, 2), "net": round(tout - tin, 2),
                 "nin": sum(int(r["ni"] or 0) for r in by_ex), "nout": sum(int(r["no"] or 0) for r in by_ex),
+                # Ширина: сколько монет выводят с бирж и сколько заводят.
+                "up": sum(1 for c in coins if c["net"] > 0), "dn": sum(1 for c in coins if c["net"] < 0),
                 "ex": ex, "coins": coins, "tr": tr,
                 "full": bool(first and first <= since + 3600),
             }

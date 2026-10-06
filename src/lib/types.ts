@@ -57,7 +57,6 @@ export interface Wallet {
   /** Покупки на BSC, ещё не проданные. Приходят вместе с позициями.
    *  Не `spot` — так уже названо место кошелька в спотовом рейтинге. */
   holds?: SpotHold[];
-  cex?: CexMove[];
   pos: Position[];
   /** Кошелёк биткоина: позиций и сделок BSC у него нет, свой экран. */
   chain?: "btc";
@@ -189,26 +188,12 @@ export interface TokenHist {
   hist?: [number, number][];
 }
 
-/** Завод на биржу или вывод с биржи кошелька на BSC (bsc_ex_moves). */
-export interface CexMove {
-  tx: string;
-  t: number;
-  /** true — вывел с биржи, false — завёл на биржу. */
-  wd: boolean;
-  ex: string;
-  sym: string;
-  token: string;
-  qty: number;
-  v: number;
-}
-
 /** Ответ /api/wallet: позиции и остаток одного кошелька. */
 export interface WalletLive {
   ok: boolean;
   addr?: string;
   pos?: Position[];
   holds?: SpotHold[];
-  cex?: CexMove[];
   equity?: Equity;
   bal?: number;
   d1?: number;
@@ -892,8 +877,14 @@ export interface BscExFlowWin {
   net: number;
   nin: number;
   nout: number;
+  /** Монет, которые выводят с бирж (итог > 0) и заводят (итог < 0). */
+  up?: number;
+  dn?: number;
   ex: { ex: string; in: number; out: number }[];
-  coins: { sym: string; token: string; in: number; out: number; qin: number; qout: number }[];
+  coins: {
+    sym: string; token: string; in: number; out: number; net: number;
+    qin: number; qout: number; n: number; sp: number[];
+  }[];
   tr: number[];
   full: boolean;
 }
