@@ -42,7 +42,7 @@ export type BigView = "flow" | "spot" | "perp" | "rot" | "ls" | "btc" | "bscx";
 /** Площадка рейтинга: BSC, Hyperliquid и Bitcoin. */
 export type RankVenue = Venue | "btc";
 /** Порог крупных движений BTC, в монетах. */
-export type BtcMin = 0 | 1 | 10 | 100;
+export type BtcMin = 0 | 0.2 | 1 | 10 | 100;
 /** Окна потока: часы. */
 export type FlowWin = "1" | "6" | "24" | "168" | "720";
 /** Окна рейтинга: дни. */
@@ -147,7 +147,7 @@ export const useApp = create<AppState>()(
       rankKind: "pnl",
       rankWin: "30",
       btcSide: "buy",
-      btcMin: 1,
+      btcMin: 0.2,
       btcBase: false,
 
       chartTf: "1d",
@@ -205,7 +205,9 @@ export const useApp = create<AppState>()(
       /* Седьмая — вкладка больше не хранится: запуск всегда с дайджеста.
          У тех, кто открывал раньше, сохранённая вкладка стирается, иначе
          при загрузке она легла бы поверх дайджеста. */
-      version: 7,
+      /* Восьмая — у крупных движений BTC порог по умолчанию стал 0,2 вместо
+         1: прежняя «1» почти у всех стояла сама, по умолчанию. */
+      version: 8,
       migrate: (prev, from) => {
         let s = prev as Record<string, unknown>;
         if (from < 1) s = { ...s, fundAmount: 0, fundLev: 1 };
@@ -220,6 +222,7 @@ export const useApp = create<AppState>()(
         }
         // Вкладка больше не хранится: запуск всегда с дайджеста.
         delete s.tab;
+        if (from < 8 && s.btcMin === 1) s.btcMin = 0.2;
         return s;
       },
       // Стек экранов не сохраняем: запуск всегда начинается с вкладки.

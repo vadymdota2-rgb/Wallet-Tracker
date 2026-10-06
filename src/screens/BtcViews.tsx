@@ -217,7 +217,7 @@ export function BtcFlowCard({ bigWin }: { bigWin: BigWin }) {
 
 /* ── Аналитика: крупные покупки BTC ───────────────────────────────────── */
 
-const MINS: BtcMin[] = [1, 10, 100];
+const MINS: BtcMin[] = [0.2, 1, 10, 100];
 
 export function BtcBigView({ winPicker, win }: { winPicker: ReactNode; win: BigWin }) {
   const lang = useApp((s) => s.lang);
@@ -228,8 +228,8 @@ export function BtcBigView({ winPicker, win }: { winPicker: ReactNode; win: BigW
   const setMin = useApp((s) => s.setBtcMin);
   const base = useApp((s) => s.btcBase);
   const setBase = useApp((s) => s.setBtcBase);
-  // «Все» — только у базы: остальные движения сканер пишет от биткоина.
-  const min: BtcMin = !base && rawMin === 0 ? 1 : rawMin;
+  // «Все» — только у базы: остальные движения сканер пишет от 0,2 биткоина.
+  const min: BtcMin = !base && rawMin === 0 ? 0.2 : rawMin;
   const now = useNow();
   const [data, setData] = useState<BtcBigReply | null>(() => peekBtcBig(win, side, min, base) ?? null);
 
@@ -256,6 +256,7 @@ export function BtcBigView({ winPicker, win }: { winPicker: ReactNode; win: BigW
           /import и найденные сканером. У базы пишется каждое движение от
           $50, поэтому у неё есть и порог «все». */}
       <Segmented<string>
+        wrap
         value={base ? "base" : "all"}
         onChange={(v) => setBase(v === "base")}
         options={[
@@ -271,10 +272,14 @@ export function BtcBigView({ winPicker, win }: { winPicker: ReactNode; win: BigW
           { id: "sell", label: t(lang, "ui_side_sells") },
         ]}
       />
+      {/* Пять порогов у базы на узком экране в ленту не влезали: последний
+          уезжал за край. Плотнее и без единицы — она в заголовке карточки
+          («… BTC»), — и все в одну строку даже с польским «Wszystkie». */}
       <Segmented<string>
+        tight
         value={String(min)}
         onChange={(v) => setMin(Number(v) as BtcMin)}
-        options={mins.map((m) => ({ id: String(m), label: m ? `≥ ${m} BTC` : t(lang, "flow_side_all") }))}
+        options={mins.map((m) => ({ id: String(m), label: m ? `≥${m.toLocaleString(lang)}` : t(lang, "flow_side_all") }))}
       />
       {winPicker}
       {base && data?.ok ? (

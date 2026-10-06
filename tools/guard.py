@@ -623,7 +623,7 @@ say("bitcoin: подписка на кошелёк и алерты «покуп�
     and 'open("btcWallet", w.btc ?? w.addr)' in read(f"{APP}/src/screens/WalletsTab.tsx"))
 
 say("bitcoin: кошельки базы — каждая продажа и покупка и через какие биржи они прошли",
-    "def _btc_big_build(win: str, side: str, min_btc: int, base: bool = False)" in api
+    "def _btc_big_build(win: str, side: str, min_btc: float, base: bool = False)" in api
     and '"byEx": by_ex' in api and 'qs.get("base", ["0"])[0] == "1"' in api
     and 'className="btc-via"' in _btv and '"btc_scope_base"' in _btv
     and '"Bybit"' in _ws_btc and '"OKX"' in _ws_btc)
@@ -870,7 +870,7 @@ say("автопополнение базы китов: BSC и Hyperliquid от $
     and "g_autoThread = std::thread(autoLoop);" in _hlc and "autoCounted(AutoNet::HL);" in _hlc
     and "infoPost" not in _hl_auto and "userRateLimit" not in _hl_auto
     and "autoRoom(AutoNet::BSC)" in _mcpp and "autoRoom(AutoNet::HL)" in _hlc
-    and "autoRoom(AutoNet::BTC)" in read(f"{BOT}/btc_chain.cpp") and 'envSats("WHALE_BTC_AUTO_MIN", 1.0)' in read(f"{BOT}/btc_chain.cpp")
+    and "autoRoom(AutoNet::BTC)" in read(f"{BOT}/btc_chain.cpp") and 'envSats("WHALE_BTC_AUTO_MIN", 0.2)' in read(f"{BOT}/btc_chain.cpp")
     and 'envUsd("WHALE_BSC_AUTO_MIN", 10000.0), envUsd("WHALE_HL_AUTO_MIN", 10000.0)' in read(f"{BOT}/autobase.cpp")
     and 'envInt("WHALE_BSC_AUTO_DAILY", 500), envInt("WHALE_HL_AUTO_DAILY", 500)' in read(f"{BOT}/autobase.cpp")
     and "static const double v[NETS]" in read(f"{BOT}/autobase.cpp") and "autoLimit(AutoNet::HL) / 2" in _hlc
@@ -989,6 +989,19 @@ say("потоки бирж и рейтинг BTC кэшируются: серв�
     and "setData((prev) => (r?.ok ? r : prev ?? null))" in read(f"{APP}/src/screens/BscExViews.tsx")
     and read(f"{APP}/src/screens/BtcViews.tsx").count("r?.ok ? r : hit ?? r ??") == 2
     and "jobs.push(() => fetchBscExFlow());" in read(f"{APP}/src/lib/prefetch.ts"))
+
+# Bitcoin — от 0,2 BTC: сканер пишет движения и находит кошельки от 0,2,
+# держит в базе молчащих с остатком от 0,2; доска крупных движений — от 0,2.
+_ws_btc2 = read(f"{BOT}/btc_chain.cpp")
+say("bitcoin от 0,2 BTC: движения, автопоиск, держатели, доска крупных движений",
+    'envSats("WHALE_BTC_MOVE_MIN", 0.2)' in _ws_btc2 and 'envSats("WHALE_BTC_AUTO_MIN", 0.2)' in _ws_btc2
+    and "BTC_BIG_MIN = (0.2, 1, 10, 100)" in api
+    and "except (TypeError, ValueError, OverflowError):\n                    mn = 0.2" in api
+    and "const MINS: BtcMin[] = [0.2, 1, 10, 100];" in read(f"{APP}/src/screens/BtcViews.tsx")
+    and "<Segmented<string>\n        tight" in read(f"{APP}/src/screens/BtcViews.tsx")
+    and "btcMin: 0.2," in read(f"{APP}/src/store/app.ts")
+    and "if (from < 8 && s.btcMin === 1) s.btcMin = 0.2;" in read(f"{APP}/src/store/app.ts")
+    and "меньше 1 BTC" not in read(f"{BOT}/autobase.cpp") + read(f"{BOT}/main.cpp"))
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

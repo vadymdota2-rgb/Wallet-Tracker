@@ -218,6 +218,7 @@ export function Segmented<T extends string>({
   options,
   onChange,
   wrap = false,
+  tight = false,
 }: {
   value: T;
   options: { id: T; label: ReactNode }[];
@@ -226,9 +227,11 @@ export function Segmented<T extends string>({
    *  «Только в приложении»: в ленте вторая кнопка уезжала за край и читалась
    *  обрывком, а что её можно докрутить, ничто не говорило. */
   wrap?: boolean;
+  /** Короткие подписи плотнее: много кнопок в одну строку без ленты. */
+  tight?: boolean;
 }) {
   return (
-    <div className={wrap ? "seg wrap" : "seg"} role="tablist">
+    <div className={`seg${wrap ? " wrap" : ""}${tight ? " tight" : ""}`} role="tablist">
       {options.map((o) => (
         <button
           key={o.id}

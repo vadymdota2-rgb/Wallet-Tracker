@@ -103,7 +103,7 @@ function plan(): (() => Promise<unknown>)[] {
   // 5б. Потоки бирж BTC и BSC и выводы с бирж за выбранное окно.
   jobs.push(() => fetchBtcFlow());
   jobs.push(() => fetchBscExFlow());
-  jobs.push(() => fetchBtcBig(app.bigWin, app.btcSide, app.btcBase ? app.btcMin : Math.max(1, app.btcMin), app.btcBase));
+  jobs.push(() => fetchBtcBig(app.bigWin, app.btcSide, app.btcBase ? app.btcMin : app.btcMin || 0.2, app.btcBase));
 
   // 6. Справочник монет для поиска на графике.
   jobs.push(() => fetchSymbols());

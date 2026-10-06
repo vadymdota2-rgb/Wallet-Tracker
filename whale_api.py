@@ -11177,7 +11177,8 @@ def halving_data() -> dict:
 BTC_DB = _db_path("WHALE_BTC_DB", "btc.db")
 BTC_ADDR_RE = re.compile(r"^(bc1[02-9ac-hj-np-z]{6,87}|[13][1-9A-HJ-NP-Za-km-z]{25,34})$")
 BTC_FLOW_WINS = {"1": 3600, "6": 21600, "24": 86400, "168": 604800, "720": 2592000}
-BTC_BIG_MIN = (1, 10, 100)
+# Пороги доски крупных движений, в биткоинах. Сканер пишет движения от 0,2.
+BTC_BIG_MIN = (0.2, 1, 10, 100)
 BTC_RANK_DAYS = (30, 90, 180, 365)
 BTC_TTL = 60.0
 BTC_ROWS = 100
@@ -11479,14 +11480,14 @@ def bscx_flow() -> dict:
     return cached_bg(_BSCX, "flow", BTC_TTL, _bscx_flow_build)
 
 
-def _btc_big_build(win: str, side: str, min_btc: int, base: bool = False) -> dict:
+def _btc_big_build(win: str, side: str, min_btc: float, base: bool = False) -> dict:
     con = _btc_open()
     if not con:
         return {"ok": False, "error": "no_data"}
     try:
         since = now() - BIG_WINDOWS[win] * 3600
         kind = 1 if side == "buy" else 2
-        floor = int(min_btc * 1e8)
+        floor = round(min_btc * 1e8)
         has_base = table_exists(con, "btc_watch")
         if base:
             # Только кошельки базы сервисного аккаунта — те, что добавлены
@@ -11566,11 +11567,11 @@ def _btc_big_build(win: str, side: str, min_btc: int, base: bool = False) -> dic
         con.close()
 
 
-def btc_big(win: str, side: str, min_btc: int, base: bool = False) -> dict:
+def btc_big(win: str, side: str, min_btc: float, base: bool = False) -> dict:
     win = win if win in BIG_WINDOWS else "24h"
     side = "sell" if side == "sell" else "buy"
     # «Все» (ноль) — только для базы: остальные движения сканер и так
-    # пишет лишь от одного биткоина.
+    # пишет лишь от 0,2 биткоина.
     allowed = (0, *BTC_BIG_MIN) if base else BTC_BIG_MIN
     min_btc = min_btc if min_btc in allowed else BTC_BIG_MIN[0]
     return cached_bg(_BTC, ("big", win, side, min_btc, base), BTC_TTL,
@@ -13465,9 +13466,12 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path in ("/btc/big", "/api/btc/big"):
                 try:
-                    mn = int(qs.get("min", ["1"])[0])
-                except (TypeError, ValueError):
-                    mn = 1
+                    mn = float(qs.get("min", ["0.2"])[0])
+                    # Целые — целыми: ключ кэша и ответ одинаковы для «1» и
+                    # «1.0». nan и inf отсюда выходят ошибкой — и порогом 0,2.
+                    mn = int(mn) if mn == int(mn) else mn
+                except (TypeError, ValueError, OverflowError):
+                    mn = 0.2
                 bwin = qs.get("win", ["24h"])[0]
                 self._json(200, btc_big(bwin, qs.get("side", ["buy"])[0], mn, qs.get("base", ["0"])[0] == "1"))
                 return
