@@ -916,5 +916,16 @@ say("биржи BSC: проверенные адреса бирж, обучен�
     and "if (chainCtx().stablecoins.count(a)) {" in read(f"{BOT}/token_prices.cpp")
     and '"cex": bsc_cex_moves(cur, key),' in api and 'w.cex?.length' in read(f"{APP}/src/screens/WalletScreen.tsx"))
 
+say("аналитика: NetFlow DEX, поток бирж Bitcoin и поток бирж BSC — раздельно; рейтинг BSC подписан DEX",
+    'label: () => "NetFlow DEX"' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
+    and '{ id: "bscx",' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
+    and '<BscExFlowCard bigWin={bigWin} picker={winPicker} />' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
+    and 'path in ("/bsc/exflow", "/api/bsc/exflow")' in api and '"bsc/exflow"' in api.split("PAID_PATHS = frozenset(")[1][:900]
+    and "FROM bsc_ex_flow WHERE ts >= ?" in pybody(api, "def _bscx_flow_build(")
+    and "bsc_ex" not in pybody(api, "def flow_scan(")
+    and '`${venueName("spot")} · DEX`' in read(f"{APP}/src/screens/TopTab.tsx")
+    and json.load(open(f"{APP}/tools/i18n.json"))["btc_flow_title"]["ru"] == "Поток бирж Bitcoin"
+    and json.load(open(f"{APP}/tools/i18n.json"))["bscx_title"]["ru"] == "Поток бирж BSC")
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

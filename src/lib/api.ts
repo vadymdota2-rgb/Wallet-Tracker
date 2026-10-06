@@ -10,7 +10,7 @@ import { forget, peek, remember } from "./memo";
 import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
   LiqCoinsReply, FngReply, DomReply, EtfReply, HalvingReply, FundRow, LsRow, MutationResult,
-  RotSide, SymbolRow, TokenHist, Trades, UnlocksReply, WalletLive,
+  RotSide, SymbolRow, TokenHist, Trades, UnlocksReply, WalletLive, BscExFlowReply,
   BtcBigReply, BtcFlowReply, BtcRankReply, BtcWalletReply, LsTotals,
 } from "./types";
 
@@ -517,6 +517,11 @@ export const fetchBtcFlow = () =>
     return r;
   });
 export const peekBtcFlow = () => peek<BtcFlowReply | null>("/api/btc/flow", BTC_TTL) ?? savedBtcFlow();
+
+/** Поток бирж BSC — переводы на биржи и с бирж по всей сети (не DEX). */
+export const fetchBscExFlow = () =>
+  remember<BscExFlowReply | null>("/api/bsc/exflow", BTC_TTL, () => call<BscExFlowReply>("/api/bsc/exflow"), good);
+export const peekBscExFlow = () => peek<BscExFlowReply | null>("/api/bsc/exflow", BTC_TTL) ?? null;
 
 const btcBigPath = (win: string, side: string, min: number, base = false) =>
   `/api/btc/big?win=${encodeURIComponent(win)}&side=${encodeURIComponent(side)}&min=${min}${base ? "&base=1" : ""}`;

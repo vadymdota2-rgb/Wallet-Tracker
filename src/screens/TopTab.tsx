@@ -123,7 +123,8 @@ export function TopTab() {
             {
               id: "spot",
               ic: <VenueMark venue="spot" size={30} />,
-              label: `${venueName("spot")} · ${t(lang, "venue_spot")}`,
+              // Рейтинг BSC — по сделкам на DEX (заводы на биржи в него не входят).
+              label: `${venueName("spot")} · DEX`,
             },
             {
               id: "perp",

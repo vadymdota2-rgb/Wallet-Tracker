@@ -38,7 +38,7 @@ export type BigWin = "1h" | "6h" | "24h" | "7d" | "30d";
 /** Сторона доски крупных ордеров. */
 export type BigSide = "buy" | "sell";
 /** Разделы аналитики — те же кнопки, что в меню бота. */
-export type BigView = "flow" | "spot" | "perp" | "rot" | "ls" | "btc";
+export type BigView = "flow" | "bscx" | "spot" | "perp" | "rot" | "ls" | "btc";
 /** Площадка рейтинга: BSC, Hyperliquid и Bitcoin. */
 export type RankVenue = Venue | "btc";
 /** Порог крупных движений BTC, в монетах. */

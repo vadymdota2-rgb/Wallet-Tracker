@@ -884,6 +884,30 @@ export interface BtcFlowWin {
   full: boolean;
 }
 
+/** Поток бирж BSC за окно: доллары, заведённые на биржи и выведенные с них. */
+export interface BscExFlowWin {
+  in: number;
+  out: number;
+  /** Вывод минус завод: плюс — деньги уходят с бирж. */
+  net: number;
+  nin: number;
+  nout: number;
+  ex: { ex: string; in: number; out: number }[];
+  coins: { sym: string; token: string; in: number; out: number; qin: number; qout: number }[];
+  tr: number[];
+  full: boolean;
+}
+
+export interface BscExFlowReply {
+  ok: boolean;
+  error?: string;
+  since: number;
+  /** Адресов бирж: проверенных и выученных адресов пополнения. */
+  labels: number;
+  learned: number;
+  wins: Record<string, BscExFlowWin | undefined>;
+}
+
 export interface BtcFlowReply {
   ok: boolean;
   error?: string;

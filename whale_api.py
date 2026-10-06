@@ -88,7 +88,7 @@ DEALS_MAX = 50
 PAID_PATHS = frozenset(
     p for name in (
     "flow", "fund", "rot", "ls", "deals", "token",
-    "wallet", "fng", "halving", "btc/flow", "btc/big", "btc/rank",
+    "wallet", "fng", "halving", "btc/flow", "btc/big", "btc/rank", "bsc/exflow",
     "btc/wallet", "dom", "etf", "liqcoins", "liqmap", "digest",
     "digest/translate", "digest/comments", "unlocks", "symbols", "big", "quotes",
     ) for p in ("/" + name, "/api/" + name)
@@ -1835,7 +1835,7 @@ def bsc_cex_moves(cur: sqlite3.Connection, addr: str, limit: int = 30) -> list[d
             "t": int(r["ts"] or 0),
             "wd": int(r["kind"] or 0) == 1,
             "ex": r["ex"] or "",
-            "sym": "BNB" if native else syms.get(tok, "?"),
+            "sym": "BNB" if native else (BSC_KNOWN_SYMS.get(tok) or syms.get(tok) or "?"),
             "token": "" if native else tok,
             "qty": float(r["qty"] or 0),
             "v": usd(r["usd_nanos"]),
@@ -11208,6 +11208,101 @@ def btc_flow() -> dict:
     return cached_small(_BTC, "flow", BTC_TTL, _btc_flow_build)
 
 
+# ── Поток бирж BSC ────────────────────────────────────────────────────────
+# Пишет бот (bsc_exchanges.cpp): по часам, биржам и монетам — сколько
+# долларов завели на биржи и вывели с них по всей сети. Переводы BNB и
+# transfer() токенов напрямую; через контракты не видно. С DEX не смешивается:
+# NetFlow DEX — свопы кошельков базы, это — переводы на биржи всей сети.
+_BSCX: dict = {}
+# Имена главных монет BSC: стейблкоины бот считает по $1 и в свопах может их
+# не встречать — тогда тикера в token_cache нет, а показать надо.
+BSC_KNOWN_SYMS = {
+    "0x55d398326f99059ff775485246999027b3197955": "USDT",
+    "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d": "USDC",
+    "0xe9e7cea3dedca5984780bafc599bd69add087d56": "BUSD",
+    "0xc5f0f7b66764f6ec8c8dff7ba683102295e16409": "FDUSD",
+    "0x8d0d000ee44948fc98c9b98a4fa4921476f08b0d": "USD1",
+    "0x1af3f329e8be154074d8769d1ffa4ee058b1dbc3": "DAI",
+    "0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c": "BTCB",
+    "0x2170ed0880ac9a755fd29b2688956bd959f933f8": "ETH",
+    "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82": "CAKE",
+    "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c": "WBNB",
+}
+
+
+def _bscx_flow_build() -> dict:
+    cur = open_db(DB)
+    if not cur:
+        return {"ok": False, "error": "db"}
+    try:
+        if not table_exists(cur, "bsc_ex_flow"):
+            return {"ok": False, "error": "no_data"}
+        t = now()
+        first = cur.execute("SELECT MIN(ts) FROM bsc_ex_flow").fetchone()[0]
+        labels = {r["how"]: int(r["n"]) for r in cur.execute(
+            "SELECT how, COUNT(*) n FROM bsc_ex_labels GROUP BY how")} if table_exists(cur, "bsc_ex_labels") else {}
+        syms = symbol_map(cur)
+        wins = {}
+        for key, sec in BTC_FLOW_WINS.items():
+            # Строки — по часам: окно берёт и текущий неполный час.
+            since = (t - sec) // 3600 * 3600
+            by_ex = cur.execute(
+                "SELECT ex, SUM(in_usd) i, SUM(out_usd) o, SUM(in_n) ni, SUM(out_n) no "
+                "FROM bsc_ex_flow WHERE ts >= ? GROUP BY ex", (since,)).fetchall()
+            tin = sum(usd(r["i"]) for r in by_ex)
+            tout = sum(usd(r["o"]) for r in by_ex)
+            start = max(since, int(first or since))
+            arr = [0.0] * TREND_BUCKETS
+            step = max(1, (t - start) // TREND_BUCKETS)
+            for r in cur.execute(
+                    "SELECT (ts - ?) / ? b, SUM(out_usd - in_usd) n FROM bsc_ex_flow "
+                    "WHERE ts >= ? GROUP BY b", (start, step, since)):
+                arr[min(TREND_BUCKETS - 1, max(0, int(r["b"] or 0)))] += usd(r["n"])
+            tr, run = [0.0], 0.0
+            for v in arr:
+                run += v
+                tr.append(round(run, 2))
+            ex = sorted(
+                ({"ex": r["ex"], "in": round(usd(r["i"]), 2), "out": round(usd(r["o"]), 2)} for r in by_ex),
+                key=lambda e: -(e["in"] + e["out"]))
+            coins = []
+            for r in cur.execute(
+                    "SELECT token, SUM(in_usd) i, SUM(out_usd) o, SUM(in_qty) qi, SUM(out_qty) qo "
+                    "FROM bsc_ex_flow WHERE ts >= ? GROUP BY token "
+                    "ORDER BY SUM(in_usd) + SUM(out_usd) DESC LIMIT 20", (since,)):
+                tok = (r["token"] or "").lower()
+                native = not tok.startswith("0x")
+                coins.append({
+                    "sym": "BNB" if native else (BSC_KNOWN_SYMS.get(tok) or syms.get(tok) or "?"),
+                    "token": "" if native else tok,
+                    "in": round(usd(r["i"]), 2), "out": round(usd(r["o"]), 2),
+                    "qin": float(r["qi"] or 0), "qout": float(r["qo"] or 0),
+                })
+            wins[key] = {
+                "in": round(tin, 2), "out": round(tout, 2), "net": round(tout - tin, 2),
+                "nin": sum(int(r["ni"] or 0) for r in by_ex), "nout": sum(int(r["no"] or 0) for r in by_ex),
+                "ex": ex, "coins": coins, "tr": tr,
+                "full": bool(first and first <= since + 3600),
+            }
+        return {
+            "ok": True, "since": int(first or 0),
+            "labels": labels.get("seed", 0) + labels.get("owner", 0), "learned": labels.get("learned", 0),
+            "wins": wins,
+        }
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] bsc ex flow: {e}\n")
+        return {"ok": False, "error": "db"}
+    finally:
+        try:
+            cur.close()
+        except Exception:
+            pass
+
+
+def bscx_flow() -> dict:
+    return cached_small(_BSCX, "flow", BTC_TTL, _bscx_flow_build)
+
+
 def _btc_big_build(win: str, side: str, min_btc: int, base: bool = False) -> dict:
     con = _btc_open()
     if not con:
@@ -13158,6 +13253,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path in ("/halving", "/api/halving"):
                 self._json(200, halving_data())
+                return
+            if path in ("/bsc/exflow", "/api/bsc/exflow"):
+                self._json(200, bscx_flow())
                 return
             if path in ("/btc/flow", "/api/btc/flow"):
                 self._json(200, btc_flow())

@@ -22,6 +22,7 @@ import {
 import { CoinIcon } from "../components/CoinIcon";
 import { BuySellBar, FlowSpark, TrendChart } from "../components/Chart";
 import { BtcBigView, BtcFlowCard } from "./BtcViews";
+import { BscExFlowCard } from "./BscExViews";
 import {
   Card, CopyGlyph, Empty, MinusGlyph, NetFlowGlyph, OrdersGlyph,
   PlusGlyph, PositionsGlyph, RotationGlyph, Row, SectionTitle, Segmented, Skeleton, StackGlyph,
@@ -105,7 +106,10 @@ const VIEWS: {
   venue?: "spot" | "perp" | "btc";
   label: (t: (k: DictKey) => string) => string;
 }[] = [
-  { id: "flow", ic: <NetFlowGlyph size={22} />, venue: "spot", label: () => "NetFlow" },
+  /* NetFlow DEX — свопы кошельков базы; поток бирж BSC — переводы на биржи
+     и с бирж всей сети. Разное, поэтому рядом, но раздельно. */
+  { id: "flow", ic: <NetFlowGlyph size={22} />, venue: "spot", label: () => "NetFlow DEX" },
+  { id: "bscx", ic: <CoinIcon sym="BNB" size={22} />, venue: "spot", label: (tr) => tr("bscx_title") },
   { id: "spot", ic: <OrdersGlyph size={22} />, venue: "spot", label: (tr) => tr("ui_tab_orders") },
   { id: "rot", ic: <RotationGlyph size={22} />, venue: "spot", label: (tr) => tr("ui_rotation") },
   { id: "ls", ic: <PositionsGlyph size={22} />, venue: "perp", label: (tr) => tr("ui_tab_ls") },
@@ -313,13 +317,14 @@ export function AnalyticsTab() {
       {/* Биткоин — своя вкладка: сперва итог по биржам за окно, ниже
           ордера с тем же окном. В NetFlow его нет — там монеты BSC. */}
       {view === "btc" ? <BtcFlowCard bigWin={bigWin} /> : null}
+      {view === "bscx" ? <BscExFlowCard bigWin={bigWin} picker={winPicker} /> : null}
       {view === "btc" ? <BtcBigView winPicker={winPicker} win={bigWin} /> : null}
       {view === "flow" ? (
         <Card>
           {/* NetFlow — термин, он одинаков во всех языках, как PnL и ROI.
               Прежнее «Что покупают киты» описывало только половину: при
               оттоке киты как раз продают. */}
-          <SectionTitle note={t(lang, "flow_hint")}>NetFlow</SectionTitle>
+          <SectionTitle note={t(lang, "flow_hint")}>NetFlow DEX</SectionTitle>
           <FlowTrend />
           {flowWinPicker}
           {/* Знак потока отдельной строкой от окна: это два независимых

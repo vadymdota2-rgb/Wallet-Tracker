@@ -84,7 +84,7 @@ export function WalletScreen({ arg }: ScreenProps) {
         <Tiles
           items={[
             {
-              label: <><VenueMark venue="spot" size={13} />{t(lang, "wl_spot_rank")} · {venueName("spot")}</>,
+              label: <><VenueMark venue="spot" size={13} />{t(lang, "wl_spot_rank")} · {venueName("spot")} DEX</>,
               value: spot,
               tone: place.spot === null ? "dim" : undefined,
             },

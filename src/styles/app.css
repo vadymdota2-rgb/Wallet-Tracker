@@ -3204,3 +3204,11 @@ button.alc-who { cursor: pointer; text-decoration: underline dotted rgb(124 151 
 .lock-acts { width: 100%; margin-top: 16px; }
 .lock-note { margin-top: 10px; max-width: 36ch; }
 .drawer-lock { margin-inline-start: auto; font-style: normal; font-size: 12px; opacity: 0.7; }
+
+/* Поток бирж BSC: монеты списком под биржами, с иконкой. */
+.bscx-coins { margin-top: 14px; }
+.bscx-coin { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+/* Суммы в долларах длиннее, чем в биткоинах: столбцы — по содержимому и без
+   переноса, иначе «↑ $126,2K» ломалось на две строки. */
+.btc-ex-row.bscx-row { grid-template-columns: minmax(5.2em, 1fr) auto auto auto; column-gap: 8px; }
+.btc-ex-row.bscx-row span { white-space: nowrap; }
