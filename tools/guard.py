@@ -1017,5 +1017,14 @@ say("многоточие нигде не прячет данные: подпи�
                                     ".dg-cell b", ".alc-sym", ".unl-id small", ".hdr-txt"))
     and "text-overflow: clip;" in _unclip and "white-space: normal;" in _unclip)
 
+# Адреса бирж Bitcoin из отчётов о резервах: собирает tools/btc_seeds.py,
+# бот грузит их вместе с ручным списком (ручной главнее).
+_book = read(f"{BOT}/btc_seeds_book.h")
+say("bitcoin: адреса бирж из отчётов о резервах подключены (1000+ адресов, ручной список главнее)",
+    _book.count('", "') >= 1000 and "SEEDS_BOOK" in _book
+    and '#include "btc_seeds_book.h"' in read(f"{BOT}/btc_chain.cpp")
+    and "all.insert(all.end(), SEEDS.begin(), SEEDS.end());" in read(f"{BOT}/btc_chain.cpp")
+    and os.path.exists(f"{BOT}/tools/btc_seeds.py"))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
