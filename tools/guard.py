@@ -1064,7 +1064,9 @@ say("bsc: адреса бирж из отчётов о резервах подк
 # интереса), ряды бирж обрезаны ровно по окну (OKX отдавал 33 дня вместо 30).
 say("карта ликвидаций: интерес Gate без удвоения, у всех бирж одно и то же окно",
     '_fnum(r.get("open_interest_usd")) / 2' in pybody(api, "def _liq_gate(")
-    and "found[name] = rows[-n:]" in pybody(api, "def _liq_build("))
+    and "found[name] = rows[-n:]" in pybody(api, "def _liq_build(")
+    # Ещё биржи в снимках интереса: BloFin и XT.com; Zoomex — нет (отдаёт Bybit).
+    and '("BloFin", _snap_blofin), ("XT.com", _snap_xt))' in api and "_snap_zoomex" not in api)
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

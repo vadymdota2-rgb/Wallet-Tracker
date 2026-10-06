@@ -10583,13 +10583,58 @@ def _snap_bingx() -> dict:
     return _snap_top("https://open-api.bingx.com/openApi/swap/v2/quote/ticker", "quoteVolume", 60, one)
 
 
+def _snap_blofin() -> dict:
+    """BloFin: интерес всех монет одним запросом, в монетах; цена — тикеры."""
+    px = {str(r.get("instId") or ""): _fnum(r.get("last"))
+          for r in (get_json("https://openapi.blofin.com/api/v1/market/tickers", 20) or {}).get("data") or []}
+    out = {}
+    for r in (get_json("https://openapi.blofin.com/api/v1/market/open-interest", 20) or {}).get("data") or []:
+        inst = str(r.get("instId") or "")
+        p = px.get(inst, 0.0)
+        if inst.endswith("-USDT") and p > 0 and (sym := _snap_sym(inst[:-5])):
+            out[sym] = (_fnum(r.get("openInterestCurrency")) * p, p)
+    return out
+
+
+# Zoomex не берём: его общий список тикеров отдаёт интерес Bybit (BTC
+# $4,86 млрд — ровно Bybit), а запрос по одной монете — свой ($12 млн).
+# С Bybit на карте это был бы двойной счёт.
+def _snap_xt() -> dict:
+    """XT.com отдаёт интерес по одной монете — берём 60 самых торгуемых."""
+    ticks = (get_json("https://fapi.xt.com/future/market/v1/public/q/agg-tickers", 20) or {}).get("result") or []
+
+    def one(r):
+        s = str(r.get("s") or "")
+        sym = _snap_sym(s[:-5]) if s.endswith("_usdt") else ""
+        p = _fnum(r.get("c"))
+        if not sym or p <= 0:
+            return None
+        got = (get_json(f"https://fapi.xt.com/future/market/v1/public/contract/open-interest?symbol={s}", 10) or {}).get("result") or {}
+        return sym, (_fnum(got.get("openInterestUsd")), p)
+
+    rows = sorted((r for r in ticks if isinstance(r, dict)), key=lambda r: -_fnum(r.get("v")))[:60]
+    out: dict = {}
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        for got in pool.map(lambda r: _safe(one, r), rows):
+            if got:
+                out[got[0]] = got[1]
+    return out
+
+
+def _safe(fn, *a):
+    try:
+        return fn(*a)
+    except Exception:  # noqa: BLE001 — одна монета не ответила
+        return None
+
+
 LIQ_SNAPS = (("Hyperliquid", _snap_hl), ("Bitget", _snap_bitget), ("MEXC", _snap_mexc), ("KuCoin", _snap_kucoin),
              ("Kraken", _snap_kraken), ("Phemex", _snap_phemex), ("WOO X", _snap_woo), ("WhiteBIT", _snap_whitebit),
              ("Bitfinex", _snap_bitfinex), ("Deribit", _snap_deribit), ("CoinEx", _snap_coinex),
              ("Coinbase Intl", _snap_cbintl), ("Crypto.com", _snap_cryptocom), ("Paradex", _snap_paradex),
              ("Lighter", _snap_lighter), ("Backpack", _snap_backpack), ("Orderly", _snap_orderly),
              ("GMX", _snap_gmx), ("Aster", _snap_aster), ("BingX", _snap_bingx),
-             ("Bitstamp", _snap_bitstamp))
+             ("Bitstamp", _snap_bitstamp), ("BloFin", _snap_blofin), ("XT.com", _snap_xt))
 
 
 def liq_oi_sample() -> dict:

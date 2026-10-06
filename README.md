@@ -180,6 +180,12 @@ USD₮. Счёт кладётся в таблицу `ton_invoices` бота с �
 `futures.kraken.com`, `api.international.coinbase.com`, `fapi.asterdex.com`,
 `api.coingecko.com` и `toncenter.com` (жетонный кошелёк плательщика).
 
+Карте ликвидаций, кроме того, нужны история открытого интереса и свечи
+Binance, OKX, Bybit, Gate, HTX и dYdX и снимки интереса ещё двух десятков
+бирж — среди них `openapi.blofin.com` и `fapi.xt.com`. Binance и Bybit
+закрыты для некоторых стран (ответ 451 и 403): проверить машину —
+`curl -s -o /dev/null -w "%{http_code}" https://fapi.binance.com/fapi/v1/ping`.
+
 Домен фьючерсов MEXC (`contract.mexc.com`) отказывает облачным адресам, тот
 же API отдаёт `api.mexc.com` — по нему и ходим. Размер контракта нужен там,
 чтобы перевести открытый интерес в доллары; выгрузка на два мегабайта
