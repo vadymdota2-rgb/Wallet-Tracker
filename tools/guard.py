@@ -1054,7 +1054,11 @@ say("bsc: адреса бирж из отчётов о резервах подк
     # (Stake.com, Cobo) не биржи и в «без подписи» не показываются.
     and _bbook.count('{"0x') >= 120 and os.path.exists(f"{BOT}/tools/data/bsc_labels_extra.tsv")
     and '"0xef3aeff9a5f61c6dda33069c58c1434006e13b20", "Bybit"' in _bbook
-    and "NOT_EXCHANGE.count(a)" in read(f"{BOT}/bsc_exchanges.cpp"))
+    and "NOT_EXCHANGE.count(a)" in read(f"{BOT}/bsc_exchanges.cpp")
+    # /exunknown делит сборщиков по тому, сколько они сами отправили:
+    # биржа (от 50 000) или ферма/копилка (меньше 5 000).
+    and 'rpc("eth_getTransactionCount", json::array({a, "latest"}), 1)' in read(f"{BOT}/bsc_exchanges.cpp")
+    and "Похожи на фермы и копилки" in read(f"{BOT}/bsc_exchanges.cpp"))
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
