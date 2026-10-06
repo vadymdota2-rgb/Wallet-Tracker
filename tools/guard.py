@@ -861,7 +861,7 @@ say("накрутки по IP: проба — не больше 3 новых а�
 _hlc = read(f"{BOT}/hyperliquid_core.cpp")
 _hl_auto = _hlc[_hlc.find("Автопополнение базы сервисного аккаунта"):_hlc.find("void handleTrades(")]
 say("автопополнение базы китов: BSC и Hyperliquid от $10k, Bitcoin от 1 BTC, по 500 в сутки на сеть, /autobase включает и выключает каждую сеть; Hyperliquid ищет без бюджета запросов; BSC и Hyperliquid: 30 дней без сделок — сон в этой сети, не удаление (и импорт); Bitcoin: найденные без движений и меньше 1 BTC — убираем без бана, боты и BTC-сервисы — бан навсегда",
-    "bscAutoConsider(tx, to, watchers.get());" in _mcpp and "BSC_HOT_NONCE = 300000" in _mcpp
+    "bscAutoConsider(tx, to, watchers.get(), bscActive.get());" in _mcpp and "BSC_HOT_NONCE = 300000" in _mcpp
     and "autoMinUsd(AutoNet::BSC)" in _mcpp and '"eth_getCode"' in _mcpp and "BSC_AUTO_MAX_NONCE = 1000" in _mcpp
     and 'addUserWhale(SERVICE_CHAT_ID, a, "auto-bsc")' in _mcpp and "std::thread(bscAutoLoop).detach();" in _mcpp
     and "pruneAutoWallets();" in _mcpp and "Автобаза за сутки" in _mcpp
@@ -879,6 +879,8 @@ say("автопополнение базы китов: BSC и Hyperliquid от $
     and 'txt.rfind("/autobase ", 0) == 0' in _mcpp
     and "t.timestamp >= ?2" in _mcpp and "uid != SERVICE_CHAT_ID" in _mcpp and "CREATE TABLE IF NOT EXISTS auto_woke" in _mcpp
     and "label='auto-bsc' AND uw.created_at>0" not in _mcpp and "if (stored > 0 && !awake) autoWoke(AutoNet::HL, wallet);" in _hlc
+    and "else if (!wokeBy.empty()) mA=wokeBy;" in _mcpp and "autoWoke(AutoNet::BSC, rcpt);" in _mcpp
+    and "крупный вывод" in read(f"{BOT}/autobase.cpp")
     and "btcPruneAuto(cut)" in _mcpp and "int btcPruneAuto(long long cut)" in read(f"{BOT}/btc_chain.cpp")
     and "void autoPruned(AutoNet n, int count)" in read(f"{BOT}/autobase.cpp") and "<b>Найдено поиском</b>" in read(f"{BOT}/autobase.cpp") and 'row(" в базе", base[0], base[1], base[2])' in read(f"{BOT}/autobase.cpp")
     and "ServiceBaseStats serviceBaseStats()" in _mcpp and "serviceBaseStats();" in read(f"{BOT}/autobase.cpp")
