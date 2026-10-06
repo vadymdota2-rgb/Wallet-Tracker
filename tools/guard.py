@@ -1023,7 +1023,7 @@ say("многоточие нигде не прячет данные: подпи�
 # бот грузит их вместе с ручным списком (ручной главнее).
 _book = read(f"{BOT}/btc_seeds_book.h")
 say("bitcoin: адреса бирж из отчётов о резервах подключены (1000+ адресов, ручной список главнее)",
-    _book.count('", "') >= 1000 and "SEEDS_BOOK" in _book
+    _book.count('", "') >= 1000 and "BTC_SEEDS_BOOK" in _book
     and '#include "btc_seeds_book.h"' in read(f"{BOT}/btc_chain.cpp")
     and "all.insert(all.end(), SEEDS.begin(), SEEDS.end());" in read(f"{BOT}/btc_chain.cpp")
     and os.path.exists(f"{BOT}/tools/btc_seeds.py"))
@@ -1039,6 +1039,17 @@ say("bitcoin: круги «с биржи и обратно» не считают
     and "const bool round = toEx.size() == 1 && unBounce(sender->addr, ex, total, b, flow);" in _ws_btc3
     # Карточка потоков не показывает биржи с нулями.
     and "e.in + e.out >= 0.05" in read(f"{APP}/src/screens/BtcViews.tsx"))
+
+# BSC: адреса бирж из отчётов о резервах (проверены в BSC: кошелёк, от пяти
+# отправок). Имена списков BTC и BSC разные: одинаковое inline-имя в двух
+# файлах склеивалось компоновщиком, и бот падал ещё до main().
+_bbook = read(f"{BOT}/bsc_seeds_book.h")
+say("bsc: адреса бирж из отчётов о резервах подключены, имена списков BTC и BSC не совпадают",
+    _bbook.count('{"0x') >= 60 and "inline const BscSeedBook BSC_SEEDS_BOOK[]" in _bbook
+    and '#include "bsc_seeds_book.h"' in read(f"{BOT}/bsc_exchanges.cpp")
+    and "for (const BscSeedBook& sd : BSC_SEEDS_BOOK) put(sd.addr, sd.ex);" in read(f"{BOT}/bsc_exchanges.cpp")
+    and "BTC_SEEDS_BOOK" in read(f"{BOT}/btc_seeds_book.h") and "SEEDS_BOOK =" not in read(f"{BOT}/btc_seeds_book.h").replace("BTC_SEEDS_BOOK =", "")
+    and os.path.exists(f"{BOT}/tools/bsc_seeds.py"))
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
