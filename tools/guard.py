@@ -939,6 +939,8 @@ say("аналитика: NetFlow DEX, ордера DEX, ротация DEX, Long
     and 'label: (tr) => `BSC · ${tr("ex_flows")}`' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
     and "<BscExBody />" in read(f"{APP}/src/screens/AnalyticsTab.tsx") and "flowSrc" not in read(f"{APP}/src/screens/AnalyticsTab.tsx")
     and "<FlowSpark values={c.sp} />" in read(f"{APP}/src/screens/BscExViews.tsx")
+    and '"icon"] = coin_icon(c["sym"], c["token"])' in pybody(api, "def _bscx_flow_build(")
+    and "<CoinIcon sym={c.sym} icon={c.icon} size={32} />" in read(f"{APP}/src/screens/BscExViews.tsx")
     and '"sp": []' in pybody(api, "def _bscx_flow_build(")
     and 'path in ("/bsc/exflow", "/api/bsc/exflow")' in api and '"bsc/exflow"' in api.split("PAID_PATHS = frozenset(")[1][:900]
     and "FROM bsc_ex_flow WHERE ts >= ?" in pybody(api, "def _bscx_flow_build(")

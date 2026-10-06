@@ -184,7 +184,7 @@ export function BscExBody() {
             className="nf-hit"
             onClick={() => open("coin", c.sym, c.token)}
           >
-            <CoinIcon sym={c.sym} size={32} />
+            <CoinIcon sym={c.sym} icon={c.icon} size={32} />
             <span className="nf-main">
               <span className="nf-ttl">
                 <span>{c.sym}</span>

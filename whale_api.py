@@ -11260,6 +11260,11 @@ def _bscx_flow_build() -> dict:
             # Безымянные монеты (тикера нет нигде) не показываем: открыть и
             # различить их нельзя.
             coins = [c for c in coins if c["sym"] != "?"]
+            # Логотипы — как у NetFlow DEX: по адресу контракта (локальные,
+            # PancakeSwap, TrustWallet, DexScreener). По одному тикеру BTCB и
+            # мелкие монеты оставались буквой.
+            for c in coins:
+                c["icon"] = coin_icon(c["sym"], c["token"])
             if coins:
                 idx = {(c["token"] or "native"): c for c in coins}
                 series: dict[str, list[float]] = {}

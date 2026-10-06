@@ -884,6 +884,8 @@ export interface BscExFlowWin {
   coins: {
     sym: string; token: string; in: number; out: number; net: number;
     qin: number; qout: number; n: number; sp: number[];
+    /** Логотипы по убыванию доверия — как у строк NetFlow DEX. */
+    icon?: string[];
   }[];
   tr: number[];
   full: boolean;
