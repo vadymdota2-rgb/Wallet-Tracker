@@ -139,7 +139,6 @@ export const ru: Dict = {
   btc_wd: "Выведено с бирж",
   btc_wd_dep: "Выводы / заводы",
   btc_wd_from: "Вывод с {ex}",
-  btc_whales: "Киты",
   calc_amount: "Свои деньги",
   calc_lev: "Плечо",
   calc_note: "Только фандинг — движение цены не учтено",

@@ -139,7 +139,6 @@ export const ko: Dict = {
   btc_wd: "출금",
   btc_wd_dep: "출금/입금",
   btc_wd_from: "{ex}에서 출금",
-  btc_whales: "고래",
   calc_amount: "내 증거금",
   calc_lev: "레버리지",
   calc_note: "펀딩만 — 가격 변동은 미포함",

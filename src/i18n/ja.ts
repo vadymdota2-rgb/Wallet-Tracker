@@ -139,7 +139,6 @@ export const ja: Dict = {
   btc_wd: "出金",
   btc_wd_dep: "出金/入金",
   btc_wd_from: "{ex}から出金",
-  btc_whales: "クジラ",
   calc_amount: "自己資金",
   calc_lev: "レバレッジ",
   calc_note: "ファンディングのみ — 価格変動は含まない",

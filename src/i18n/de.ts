@@ -139,7 +139,6 @@ export const de: Dict = {
   btc_wd: "Abgehoben",
   btc_wd_dep: "Ab / Ein",
   btc_wd_from: "Abhebung von {ex}",
-  btc_whales: "Wale",
   calc_amount: "Dein Einsatz",
   calc_lev: "Hebel",
   calc_note: "Nur Funding — die Kursbewegung zählt nicht mit",

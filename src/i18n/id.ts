@@ -139,7 +139,6 @@ export const id: Dict = {
   btc_wd: "Ditarik",
   btc_wd_dep: "Tarik / setor",
   btc_wd_from: "Ditarik dari {ex}",
-  btc_whales: "Paus",
   calc_amount: "Modal Anda",
   calc_lev: "Leverage",
   calc_note: "Hanya funding — pergerakan harga tidak dihitung",

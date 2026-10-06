@@ -139,7 +139,6 @@ export const hi: Dict = {
   btc_wd: "निकाला गया",
   btc_wd_dep: "निकासी / जमा",
   btc_wd_from: "{ex} से निकासी",
-  btc_whales: "व्हेल",
   calc_amount: "आपकी रकम",
   calc_lev: "लीवरेज",
   calc_note: "केवल फंडिंग — कीमत की चाल शामिल नहीं",

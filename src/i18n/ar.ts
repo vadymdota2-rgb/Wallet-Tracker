@@ -139,7 +139,6 @@ export const ar: Dict = {
   btc_wd: "المسحوب",
   btc_wd_dep: "سحب / إيداع",
   btc_wd_from: "سحب من {ex}",
-  btc_whales: "الحيتان",
   calc_amount: "أموالك",
   calc_lev: "الرافعة",
   calc_note: "التمويل فقط — حركة السعر غير محسوبة",

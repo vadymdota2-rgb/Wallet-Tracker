@@ -139,7 +139,6 @@ export const pl: Dict = {
   btc_wd: "Wypłacono",
   btc_wd_dep: "Wypłaty / wpłaty",
   btc_wd_from: "Wypłata z {ex}",
-  btc_whales: "Wieloryby",
   calc_amount: "Własne środki",
   calc_lev: "Dźwignia",
   calc_note: "Tylko funding — ruch ceny nie jest liczony",

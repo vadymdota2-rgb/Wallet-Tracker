@@ -946,6 +946,7 @@ say("аналитика: NetFlow DEX, ордера DEX, ротация DEX, Long
     and "FROM bsc_ex_flow WHERE ts >= ?" in pybody(api, "def _bscx_flow_build(")
     and "bsc_ex" not in pybody(api, "def flow_scan(")
     and '`${venueName("spot")} DEX`' in read(f"{APP}/src/screens/TopTab.tsx")
+    and 'label: `BTC · ${t(lang, "ex_flows")}`' in read(f"{APP}/src/screens/TopTab.tsx")
     and json.load(open(f"{APP}/tools/i18n.json"))["btc_flow_title"]["ru"] == "Потоки бирж Bitcoin"
     and json.load(open(f"{APP}/tools/i18n.json"))["bscx_title"]["ru"] == "NetFlow · Потоки бирж BSC"
     and "g_pricer = std::thread(pricerLoop);" in _bex and "void bscExStop()" in _bex)

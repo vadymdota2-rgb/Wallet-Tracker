@@ -134,7 +134,7 @@ export function TopTab() {
             {
               id: "btc",
               ic: <VenueMark venue="btc" size={30} />,
-              label: `Bitcoin · ${t(lang, "btc_whales")}`,
+              label: `BTC · ${t(lang, "ex_flows")}`,
             },
           ]}
         />

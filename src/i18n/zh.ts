@@ -139,7 +139,6 @@ export const zh: Dict = {
   btc_wd: "提出",
   btc_wd_dep: "提币/充币",
   btc_wd_from: "从 {ex} 提币",
-  btc_whales: "巨鲸",
   calc_amount: "自有资金",
   calc_lev: "杠杆",
   calc_note: "仅资金费 — 未计价格波动",

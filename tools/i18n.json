@@ -2267,24 +2267,6 @@
     "vi": "Rút từ {ex}",
     "zh": "从 {ex} 提币"
   },
-  "btc_whales": {
-    "ar": "الحيتان",
-    "de": "Wale",
-    "en": "Whales",
-    "es": "Ballenas",
-    "fr": "Baleines",
-    "hi": "व्हेल",
-    "id": "Paus",
-    "ja": "クジラ",
-    "ko": "고래",
-    "pl": "Wieloryby",
-    "pt": "Baleias",
-    "ru": "Киты",
-    "tr": "Balinalar",
-    "uk": "Кити",
-    "vi": "Cá voi",
-    "zh": "巨鲸"
-  },
   "calc_amount": {
     "ar": "أموالك",
     "de": "Dein Einsatz",

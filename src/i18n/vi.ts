@@ -139,7 +139,6 @@ export const vi: Dict = {
   btc_wd: "Đã rút",
   btc_wd_dep: "Rút / nạp",
   btc_wd_from: "Rút từ {ex}",
-  btc_whales: "Cá voi",
   calc_amount: "Tiền của bạn",
   calc_lev: "Đòn bẩy",
   calc_note: "Chỉ funding — chưa tính biến động giá",

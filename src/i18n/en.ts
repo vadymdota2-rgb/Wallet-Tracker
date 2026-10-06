@@ -138,7 +138,6 @@ export const en = {
   btc_wd: "Withdrawn",
   btc_wd_dep: "Out / in",
   btc_wd_from: "Withdrawn from {ex}",
-  btc_whales: "Whales",
   calc_amount: "Your margin",
   calc_lev: "Leverage",
   calc_note: "Funding only — the price move is not counted",

@@ -139,7 +139,6 @@ export const es: Dict = {
   btc_wd: "Retirado",
   btc_wd_dep: "Retiros / depósitos",
   btc_wd_from: "Retiro de {ex}",
-  btc_whales: "Ballenas",
   calc_amount: "Tu margen",
   calc_lev: "Apalancamiento",
   calc_note: "Solo el funding — no incluye el movimiento del precio",

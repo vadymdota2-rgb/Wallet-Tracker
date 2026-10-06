@@ -139,7 +139,6 @@ export const tr: Dict = {
   btc_wd: "Çekilen",
   btc_wd_dep: "Çekim / yatırma",
   btc_wd_from: "{ex} borsasından çekim",
-  btc_whales: "Balinalar",
   calc_amount: "Kendi paran",
   calc_lev: "Kaldıraç",
   calc_note: "Yalnızca fonlama — fiyat hareketi dahil değil",
