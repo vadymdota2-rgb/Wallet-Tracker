@@ -1137,6 +1137,9 @@ say("календарь обновляется сам: ФРС с её сайта
     and 'con.execute("DELETE FROM cal_ev2 WHERE t BETWEEN ? AND ?", (min(week), max(week)))' in api
     and "_cal_ff_at = time.monotonic() - CAL_FF_EVERY + 300" in api
     and 'document.addEventListener("visibilitychange", pull);' in read(f"{APP}/src/screens/CalendarScreen.tsx"))
+say("календарь: подписан часовой пояс, у каждого события — отсчёт до него",
+    all(x in read(f"{APP}/src/screens/CalendarScreen.tsx") for x in
+        ("function zoneLabel()", 't(lang, "cal_tz", { z: zoneLabel() })', "function rowCountdown(", 't(lang, "cal_in_ms"')))
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

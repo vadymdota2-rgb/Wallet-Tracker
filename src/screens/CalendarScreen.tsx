@@ -101,12 +101,43 @@ function dayTitle(lang: Lang, key: number, today: number): string {
   return `${dateLong(key)}${wd ? `, ${wd}` : ""}`;
 }
 
-/** «через 2 д 4 ч» / «через 35 мин». */
+/** «через 2 д 4 ч» / «через 3 ч 5 мин» / «через 12 мин 40 с» — в последний
+    час отсчёт идёт по секундам, чтобы было видно, что он живой. */
 function countdown(lang: Lang, sec: number): string {
   const d = Math.floor(sec / 86400);
   const h = Math.floor((sec % 86400) / 3600);
   const m = Math.floor((sec % 3600) / 60);
-  return d > 0 ? t(lang, "cal_in_dh", { d, h }) : h > 0 ? t(lang, "cal_in_hm", { h, m }) : t(lang, "cal_in_m", { m: Math.max(1, m) });
+  return d > 0 ? t(lang, "cal_in_dh", { d, h }) : h > 0 ? t(lang, "cal_in_hm", { h, m })
+    : t(lang, "cal_in_ms", { m, s: sec % 60 });
+}
+
+/** Отсчёт в строке: до часа события, а у события дня — сколько дней до него. */
+function rowCountdown(lang: Lang, e: CalEv, nowSec: number, today: number): { text: string; soon: boolean } | null {
+  if (e.k === "list") return null; // объявление биржи — уже случившаяся новость
+  if (allDay(e)) {
+    const d = Math.round((dayKey(e.t) - today) / 86400);
+    return d >= 1 ? { text: t(lang, "cal_in_d", { d }), soon: false } : null;
+  }
+  const left = e.t - nowSec;
+  if (left <= 0) return { text: t(lang, "cal_now"), soon: true };
+  return { text: countdown(lang, left), soon: left < 3600 };
+}
+
+/** Часовой пояс телефона — по нему показано всё время на экране:
+    «Kyiv, UTC+3». */
+function zoneLabel(): string {
+  const off = -new Date().getTimezoneOffset();
+  const hh = Math.floor(Math.abs(off) / 60);
+  const mm = Math.abs(off) % 60;
+  const utc = `UTC${off >= 0 ? "+" : "−"}${hh}${mm ? `:${String(mm).padStart(2, "0")}` : ""}`;
+  let city = "";
+  try {
+    const z = Intl.DateTimeFormat().resolvedOptions().timeZone ?? "";
+    city = z.includes("/") ? z.split("/").pop()!.replace(/_/g, " ") : "";
+  } catch {
+    city = "";
+  }
+  return city ? `${city}, ${utc}` : utc;
 }
 
 function title(lang: Lang, e: CalEv): string {
@@ -123,8 +154,11 @@ function title(lang: Lang, e: CalEv): string {
 /** Цветная метка вида события: макро, экспирации, разлоки, отчёты, листинги. */
 const mark = (e: CalEv) => (e.k === "fomc" ? "macro" : e.k === "cme" ? "opt" : e.k);
 
-function Row({ lang, e, past, onOpen }: { lang: Lang; e: CalEv; past: boolean; onOpen: (e: CalEv) => void }) {
+function Row({ lang, e, past, nowSec, today, onOpen }: {
+  lang: Lang; e: CalEv; past: boolean; nowSec: number; today: number; onOpen: (e: CalEv) => void;
+}) {
   const tap = e.k === "opt" || e.k === "unl" || (e.k === "list" && Boolean(e.url));
+  const cd = past ? null : rowCountdown(lang, e, nowSec, today);
   const body = (
     <>
       {/* Разлок и отчёт без объявленного часа назначены на день — время не пишем. */}
@@ -171,6 +205,7 @@ function Row({ lang, e, past, onOpen }: { lang: Lang; e: CalEv; past: boolean; o
             {e.name && e.name !== e.sym ? ` · ${e.name}` : ""}
           </small>
         )}
+        {cd ? <span className={cd.soon ? "cal-cd soon" : "cal-cd"}>{cd.text}</span> : null}
       </span>
       {tap ? <span className="cal-go" aria-hidden="true">›</span> : null}
     </>
@@ -256,6 +291,7 @@ export function CalendarScreen() {
   return (
     <Frame title={t(lang, "cal_title")}>
       <p className="lq-lead">{t(lang, "cal_sub")}</p>
+      <p className="cal-tz">🕐 {t(lang, "cal_tz", { z: zoneLabel() })}</p>
       <div className="op-exps" role="tablist">
         {kinds.map(([k, key]) => (
           <button key={k} type="button" role="tab" aria-selected={kind === k} className={kind === k ? "chip on" : "chip"}
@@ -294,7 +330,8 @@ export function CalendarScreen() {
             <section key={k} className="cal-day">
               <h3 className={k === today ? "today" : k < today ? "past" : ""}>{dayTitle(lang, k, today)}</h3>
               <Card>
-                {list.map((e, i) => <Row key={`${e.k}-${e.t}-${e.sym ?? e.title}-${i}`} lang={lang} e={e} past={isPast(e)} onOpen={onOpen} />)}
+                {list.map((e, i) => <Row key={`${e.k}-${e.t}-${e.sym ?? e.title}-${i}`} lang={lang} e={e} past={isPast(e)}
+                  nowSec={nowSec} today={today} onOpen={onOpen} />)}
               </Card>
             </section>
           )) : <Empty text={t(lang, "cal_none")} />}
