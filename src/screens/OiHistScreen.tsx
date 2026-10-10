@@ -1,6 +1,5 @@
 /**
- * Открытый интерес и фандинг во времени — вкладка «Перекосов фандинга»: не
- * «сколько сейчас», а как менялось.
+ * Открытый интерес и фандинг во времени: не «сколько сейчас», а как менялось.
  *
  * Интерес — сумма бирж (шесть со своей историей и снимки двадцати трёх),
  * доли бирж — таблицей. Цена — отдельной панелью под
@@ -22,6 +21,7 @@ import { fetchLiqCoins, fetchOiHist, peekLiqCoins, peekOiHist, savedOiHist } fro
 import { CoinIcon } from "../components/CoinIcon";
 import { Card, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import type { OiChg, OiHistReply } from "../lib/types";
+import { Frame } from "./Screen";
 
 type Lang = Parameters<typeof t>[0];
 type Range = "1d" | "7d" | "30d";
@@ -149,8 +149,7 @@ function Chg({ lang, c, p }: { lang: Lang; c: OiChg; p: OiChg }) {
   );
 }
 
-/** История интереса и фандинга — вкладка экрана «Перекосы фандинга». */
-export function OiHistBody() {
+export function OiHistScreen() {
   const lang = useApp((s) => s.lang);
   const [sym, setSym] = useState("BTC");
   const [range, setRange] = useState<Range>("7d");
@@ -212,13 +211,13 @@ export function OiHistBody() {
 
   if (!reply || !reply.ok) {
     return (
-      <>
+      <Frame title={t(lang, "oih_title")}>
         {head}
         {!reply || busy ? <Card><Skeleton rows={8} /></Card> : (
           <Empty text={reply.error === "no_data" ? t(lang, "oih_no_data", { s: sym }) : t(lang, "oih_err")}
             hint={<button type="button" className="lq-retry" onClick={() => setRetry((n) => n + 1)}>{t(lang, "ui_retry")}</button>} />
         )}
-      </>
+      </Frame>
     );
   }
 
@@ -235,7 +234,7 @@ export function OiHistBody() {
   const exMax = Math.max(1, ...reply.ex.map(([, v]) => v));
 
   return (
-    <>
+    <Frame title={t(lang, "oih_title")}>
       {head}
 
       <Card>
@@ -321,6 +320,6 @@ export function OiHistBody() {
         </ul>
       </details>
       <p className="lq-src">{t(lang, "oih_src", { n: num(reply.ex.length) })} {t(lang, "lq_updated", { t: since(Date.now() / 1000 - reply.at) })}</p>
-    </>
+    </Frame>
   );
 }

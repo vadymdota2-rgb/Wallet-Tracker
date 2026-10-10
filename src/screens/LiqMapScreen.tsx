@@ -39,7 +39,6 @@ import { CoinIcon } from "../components/CoinIcon";
 import { Card, Chips, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import type { LiqCoin, LiqMapReply } from "../lib/types";
 import { Frame } from "./Screen";
-import { LiqsBody } from "./LiqsScreen";
 
 type Lang = Parameters<typeof t>[0];
 
@@ -624,28 +623,8 @@ function LiveAge({ lang, at }: { lang: Lang; at: number }) {
   );
 }
 
-type LiqTab = "map" | "live";
-
-/** Переключатель «Карта | Ликвидации вживую» — вверху экрана. */
-function LiqTabs({ lang, tab, onTab }: { lang: Lang; tab: LiqTab; onTab: (t: LiqTab) => void }) {
-  return (
-    <div className="lq-tabs">
-      <Segmented<LiqTab>
-        value={tab}
-        onChange={onTab}
-        options={[
-          { id: "map", label: t(lang, "lq_tab_map") },
-          { id: "live", label: t(lang, "lq_tab_live") },
-        ]}
-      />
-    </div>
-  );
-}
-
 export function LiqMapScreen() {
   const lang = useApp((s) => s.lang);
-  /* Вкладка: оценка уровней (карта) или настоящие закрытия (вживую). */
-  const [tab, setTab] = useState<LiqTab>("map");
   const saved = useApp((s) => s.liqSym);
   const savedRange = useApp((s) => s.liqRange);
   const setLiq = useApp((s) => s.setLiq);
@@ -847,18 +826,8 @@ export function LiqMapScreen() {
   const rowUp = row && reply?.ok ? row.mid > reply.px : false;
   const tipBelow = sel !== null && view.rows.length ? (sel + 0.5) / view.rows.length < 0.34 : false;
 
-  if (tab === "live") {
-    return (
-      <Frame title={t(lang, "lq_title")}>
-        <LiqTabs lang={lang} tab={tab} onTab={setTab} />
-        <LiqsBody onMap={() => setTab("map")} />
-      </Frame>
-    );
-  }
-
   return (
     <Frame title={t(lang, "lq_title")}>
-      <LiqTabs lang={lang} tab={tab} onTab={setTab} />
       <p className="lq-lead">{t(lang, "lq_sub")}</p>
 
       <CoinPicker lang={lang} sym={sym} onPick={setSym} />

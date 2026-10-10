@@ -2126,8 +2126,6 @@
 .lq-none { margin: 0; padding: 12px; color: var(--dim); font-size: 13px; }
 .lq-none button { color: var(--glow); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 .lq-ctl { display: grid; gap: 8px; margin-bottom: 12px; }
-/* Вкладки экрана (карта | вживую, перекосы | история) — над всем остальным. */
-.lq-tabs { margin: 0 0 12px; }
 
 /* Шапка: монета, цена, путь цены за окно. */
 .lq-hero { display: flex; align-items: center; gap: 10px; }

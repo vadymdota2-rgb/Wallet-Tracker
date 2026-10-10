@@ -19,6 +19,8 @@ import { ChartScreen } from "./ChartScreen";
 import { UnlocksScreen } from "./UnlocksScreen";
 import { LiqMapScreen } from "./LiqMapScreen";
 import { OptionsScreen } from "./OptionsScreen";
+import { LiqsScreen } from "./LiqsScreen";
+import { OiHistScreen } from "./OiHistScreen";
 import { CalendarScreen } from "./CalendarScreen";
 import { FundingScreen } from "./FundingScreen";
 import { FearGreedScreen } from "./FearGreedScreen";
@@ -47,6 +49,8 @@ export const SCREENS: Record<ScreenName, ComponentType<ScreenProps>> = {
   unlocks: UnlocksScreen,
   liqmap: LiqMapScreen,
   options: OptionsScreen,
+  liqs: LiqsScreen,
+  oihist: OiHistScreen,
   calendar: CalendarScreen,
   funding: FundingScreen,
   fng: FearGreedScreen,

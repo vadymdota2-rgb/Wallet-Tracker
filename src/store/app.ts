@@ -17,7 +17,7 @@ export type LiqRange = "1d" | "7d" | "30d";
 export type ScreenName =
   | "wallet" | "position" | "coin" | "deals"
   | "addWallet" | "threshold" | "lang" | "premium" | "help"
-  | "alerts" | "chart" | "unlocks" | "liqmap" | "options" | "calendar" | "funding" | "fng" | "dom" | "etf" | "rename" | "spot"
+  | "alerts" | "chart" | "unlocks" | "liqmap" | "options" | "liqs" | "oihist" | "calendar" | "funding" | "fng" | "dom" | "etf" | "rename" | "spot"
   | "legal" | "btcWallet" | "token" | "bonus"
   // Замок «купить / бесплатно в Бонусах» отдельным экраном — значок
   // Премиума в шапке, когда дней ноль.
