@@ -1131,6 +1131,12 @@ say("календарь: макро всех стран, отчёты компа
     and "cal_ev2" in api and '"COIN"' in api and "api.nasdaq.com/api/calendar/earnings" in api
     and "announcements-new-listings" in api and "calendar_data()" in pybody(api, "def liq_warm_refresher(")
     and all(f'"{x}"' in read(f"{APP}/src/screens/CalendarScreen.tsx") for x in ("earn", "list", "cme")))
+say("календарь обновляется сам: ФРС с её сайта, отчёты по дням, ленты бирж по отдельности, экран раз в пять минут",
+    "CAL_FOMC_URL" in api and "for t, tent in _cal_fomc_dates():" in pybody(api, "def _cal_build(")
+    and "_cal_earn_days[day0 + i * 86400] = (mono, rows)" in api and "_cal_list_last[key] = got" in api
+    and 'con.execute("DELETE FROM cal_ev2 WHERE t BETWEEN ? AND ?", (min(week), max(week)))' in api
+    and "_cal_ff_at = time.monotonic() - CAL_FF_EVERY + 300" in api
+    and 'document.addEventListener("visibilitychange", pull);' in read(f"{APP}/src/screens/CalendarScreen.tsx"))
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

@@ -199,6 +199,21 @@ export function CalendarScreen() {
     });
   }, []);
 
+  /* Экран открыт долго — календарь подтягивается сам: раз в пять минут и
+     сразу, когда приложение снова на виду. */
+  useEffect(() => {
+    const pull = () => {
+      if (document.visibilityState !== "visible") return;
+      void fetchCalendar().then((r) => r?.ok && setReply(r));
+    };
+    const id = window.setInterval(pull, 5 * 60_000);
+    document.addEventListener("visibilitychange", pull);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", pull);
+    };
+  }, []);
+
   const nowSec = Math.floor(now);
   const today = dayKey(nowSec);
   const items = useMemo(() => (reply?.items ?? []).filter((e) =>

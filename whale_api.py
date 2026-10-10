@@ -13527,11 +13527,14 @@ CAL_DAYS = 45
 CAL_UNL_MIN = 10_000_000.0
 CAL_OPT_MIN = {"BTC": 300_000_000.0, "ETH": 100_000_000.0}
 # Решения ФРС: день и 14:00 по Нью-Йорку (18:00 UTC летом, 19:00 зимой).
+# Расписание раз в сутки читается с сайта ФРС; этот список — запасной, на
+# случай, если сайт не ответил.
 CAL_FOMC = (
     ("2026-10-28", 18), ("2026-12-09", 19),
-    ("2027-01-27", 19), ("2027-03-17", 18), ("2027-07-28", 18), ("2027-09-15", 18),
-    ("2027-10-27", 18), ("2027-12-08", 19),
+    ("2027-01-27", 19), ("2027-03-17", 18), ("2027-04-28", 18), ("2027-06-09", 18),
+    ("2027-07-28", 18), ("2027-09-15", 18), ("2027-10-27", 18), ("2027-12-08", 19),
 )
+CAL_FOMC_URL = "https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm"
 # Отчёты каких компаний двигают крипту. Важные — те, что держат биткоин или
 # зарабатывают на нём прямо; остальные — общий риск-аппетит рынка.
 CAL_EARN_HIGH = {"COIN", "MSTR", "NVDA", "HOOD", "CRCL"}
@@ -13574,10 +13577,13 @@ def _cal_ff_pull() -> None:
     global _cal_ff_at
     if time.monotonic() - _cal_ff_at < CAL_FF_EVERY and _cal_ff_at:
         return
-    _cal_ff_at = time.monotonic()
     rows = get_json("https://nfs.faireconomy.media/ff_calendar_thisweek.json", 20)
-    if not isinstance(rows, list):
+    if not isinstance(rows, list) or not rows:
+        # Не ответил — пробуем снова через пять минут, со следующей сборкой,
+        # а не через час.
+        _cal_ff_at = time.monotonic() - CAL_FF_EVERY + 300
         return
+    _cal_ff_at = time.monotonic()
     put = []
     for r in rows:
         cc, imp = str(r.get("country") or ""), str(r.get("impact") or "")
@@ -13595,6 +13601,12 @@ def _cal_ff_pull() -> None:
         return
     con = _cal_con()
     try:
+        # Перенесённое или отменённое событие исчезает из недели — убираем его
+        # и из базы: всё, что лежит в границах недели, заменяется свежим.
+        week = [_cal_ts(r.get("date") or "") for r in rows]
+        week = [t for t in week if t is not None]
+        if week:
+            con.execute("DELETE FROM cal_ev2 WHERE t BETWEEN ? AND ?", (min(week), max(week)))
         con.executemany("INSERT OR REPLACE INTO cal_ev2 VALUES (?,?,?,?,?,?,?)", put)
         con.execute("DELETE FROM cal_ev2 WHERE t < ?", (now() - 120 * 86400,))
         con.commit()
@@ -13602,38 +13614,117 @@ def _cal_ff_pull() -> None:
         con.close()
 
 
-def _cal_earnings() -> list:
-    """Отчёты компаний на полтора месяца вперёд — по дню за запрос, раз в шесть часов."""
-    def build() -> list:
-        day0 = now() // 86400 * 86400
+def _ny_hour_utc(day: int, hour: int) -> int:
+    """Час по Нью-Йорку в этот день → UTC: летнее время — со второго
+    воскресенья марта до первого воскресенья ноября."""
+    y = time.gmtime(day).tm_year
 
-        def one(i: int) -> list:
-            d = time.strftime("%Y-%m-%d", time.gmtime(day0 + i * 86400))
-            r = _get_json_raw(f"https://api.nasdaq.com/api/calendar/earnings?date={d}", 15,
-                              {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}) or {}
-            out = []
-            for x in ((r.get("data") or {}).get("rows") or []):
-                sym = str(x.get("symbol") or "").upper()
-                if sym not in CAL_EARN:
+    def sunday(m: int, n: int) -> int:
+        d = calendar.timegm((y, m, 1, 0, 0, 0))
+        while time.gmtime(d).tm_wday != 6:
+            d += 86400
+        return d + (n - 1) * 7 * 86400
+
+    return day + (hour + (4 if sunday(3, 2) <= day < sunday(11, 1) else 5)) * 3600
+
+
+_cal_fomc: list = []
+_cal_fomc_at = 0.0
+
+
+def _cal_fomc_dates() -> list:
+    """Даты решений ФРС с её сайта — раз в сутки; при сбое — прошлые или запасные."""
+    global _cal_fomc, _cal_fomc_at
+    if _cal_fomc_at and time.monotonic() - _cal_fomc_at < (86400 if _cal_fomc else 3600):
+        return _cal_fomc or [(calendar.timegm(time.strptime(d, "%Y-%m-%d")) + h * 3600, d >= "2027")
+                             for d, h in CAL_FOMC]
+    _cal_fomc_at = time.monotonic()
+    out = []
+    try:
+        req = urllib.request.Request(CAL_FOMC_URL, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=20) as r:
+            page = r.read(2_000_000).decode("utf-8", "replace")
+        for blk in re.split(r'<h4><a id="\d+">', page)[1:]:
+            y = blk[:4]
+            if not y.isdigit():
+                continue
+            # «April/May» и «30-1»: заседание через границу месяцев — решение
+            # во второй день, значит, берём последний месяц и последнее число.
+            for m in re.finditer(r'fomc-meeting__month[^>]*>\s*<strong>([A-Za-z/]+)</strong>.*?'
+                                 r'fomc-meeting__date[^>]*>\s*(\d+)(?:-(\d+))?', blk, re.S):
+                try:
+                    mon = time.strptime(m.group(1).split("/")[-1][:3], "%b").tm_mon
+                except ValueError:
                     continue
-                when = str(x.get("time") or "")
-                # До открытия — 13:30 UTC (9:30 в Нью-Йорке), после закрытия —
-                # 20:00 UTC; время не дано — событие дня, как разлок.
-                hour = 13.5 if "pre" in when else 20 if "after" in when else None
-                out.append({"k": "earn", "t": day0 + i * 86400 + int((hour or 0) * 3600), "sym": sym,
-                            "name": str(x.get("name") or sym)[:60], "eps": str(x.get("epsForecast") or "")[:12],
-                            "when": "pre" if hour == 13.5 else "post" if hour == 20 else "day",
-                            "imp": "high" if sym in CAL_EARN_HIGH else "mid"})
-            return out
+                day = calendar.timegm((int(y), mon, int(m.group(3) or m.group(2)), 0, 0, 0))
+                out.append((_ny_hour_utc(day, 14), False))
+    except Exception as e:  # noqa: BLE001
+        print(f"calendar fomc: {e}", file=sys.stderr)
+    if len(out) >= 8:
+        _cal_fomc = sorted(set(out))
+    return _cal_fomc or [(calendar.timegm(time.strptime(d, "%Y-%m-%d")) + h * 3600, d >= "2027")
+                         for d, h in CAL_FOMC]
 
+
+_cal_earn_days: dict = {}  # день → (когда взят, отчёты)
+
+
+def _cal_earnings() -> list:
+    """Отчёты компаний на полтора месяца вперёд — по дню за запрос.
+
+    Каждый день хранится отдельно: ближайшие перечитываются раз в час (время
+    отчёта и прогноз меняются ближе к дате), дальние — раз в шесть часов.
+    Не ответил Nasdaq — остаётся прошлый ответ за этот день, а сам день
+    спрашивается снова на следующей сборке, через пять минут.
+    """
+    day0 = now() // 86400 * 86400
+    mono = time.monotonic()
+
+    def due(i: int) -> bool:
+        hit = _cal_earn_days.get(day0 + i * 86400)
+        return not hit or mono - hit[0] > (3600 if -1 <= i <= 3 else CAL_EARN_EVERY)
+
+    def one(i: int):
+        d = time.strftime("%Y-%m-%d", time.gmtime(day0 + i * 86400))
+        r = _get_json_raw(f"https://api.nasdaq.com/api/calendar/earnings?date={d}", 15,
+                          {"User-Agent": "Mozilla/5.0", "Accept": "application/json"})
+        if not isinstance(r, dict) or not isinstance(r.get("data"), dict):
+            return None
+        out = []
+        for x in r["data"].get("rows") or []:
+            sym = str(x.get("symbol") or "").upper()
+            if sym not in CAL_EARN:
+                continue
+            when = str(x.get("time") or "")
+            # До открытия — 13:30 UTC (9:30 в Нью-Йорке), после закрытия —
+            # 20:00 UTC; время не дано — событие дня, как разлок.
+            hour = 13.5 if "pre" in when else 20 if "after" in when else None
+            out.append({"k": "earn", "t": day0 + i * 86400 + int((hour or 0) * 3600), "sym": sym,
+                        "name": str(x.get("name") or sym)[:60], "eps": str(x.get("epsForecast") or "")[:12],
+                        "when": "pre" if hour == 13.5 else "post" if hour == 20 else "day",
+                        "imp": "high" if sym in CAL_EARN_HIGH else "mid"})
+        return out
+
+    todo = [i for i in range(-7, CAL_DAYS) if due(i)]
+    if todo:
         with ThreadPoolExecutor(max_workers=6) as pool:
-            return [e for day in pool.map(one, range(-7, CAL_DAYS)) for e in day]
+            for i, rows in zip(todo, pool.map(one, todo)):
+                if rows is not None:
+                    _cal_earn_days[day0 + i * 86400] = (mono, rows)
+    for d in [d for d in _cal_earn_days if d < day0 - 7 * 86400]:
+        del _cal_earn_days[d]
+    return [e for i in range(-7, CAL_DAYS) for e in (_cal_earn_days.get(day0 + i * 86400) or (0, []))[1]]
 
-    return cached_small(_CAL_SLOW, "earn", CAL_EARN_EVERY, build)
+
+_cal_list_last: dict = {}  # источник → последний удачный список
 
 
 def _cal_listings() -> list:
-    """Листинги и делистинги трёх бирж за неделю — новости, не расписание."""
+    """Листинги и делистинги трёх бирж за неделю — новости, не расписание.
+
+    Каждая лента — отдельно: не ответила одна биржа — её объявления берутся
+    из прошлого удачного ответа, а не пропадают из календаря.
+    """
     def build() -> list:
         since = (now() - CAL_LIST_DAYS * 86400) * 1000
         out = []
@@ -13646,27 +13737,37 @@ def _cal_listings() -> list:
                             "url": url, "de": delist,
                             "imp": "low" if low else "high" if ex == "Binance" and not delist else "mid"})
 
+        def feed(key: str, url: str, ok, walk) -> None:
+            r = get_json(url, 15)
+            if isinstance(r, dict) and ok(r):
+                got: list = []
+                walk(r, lambda *a: got.append(a))
+                _cal_list_last[key] = got
+            for a in _cal_list_last.get(key) or []:
+                add(*a)
+
         for cat, delist in ((48, False), (161, True)):
-            r = get_json(f"https://www.binance.com/bapi/composite/v1/public/cms/article/list/query"
-                         f"?type=1&catalogId={cat}&pageNo=1&pageSize=20", 15) or {}
-            for c in ((r.get("data") or {}).get("catalogs") or []):
-                for a in c.get("articles") or []:
-                    add("Binance", a.get("title"), int(a.get("releaseDate") or 0),
-                        f"https://www.binance.com/en/support/announcement/{a.get('code')}", delist)
+            feed(f"binance{cat}", f"https://www.binance.com/bapi/composite/v1/public/cms/article/list/query"
+                 f"?type=1&catalogId={cat}&pageNo=1&pageSize=20",
+                 lambda r: isinstance(r.get("data"), dict),
+                 lambda r, put, de=delist: [put("Binance", a.get("title"), int(a.get("releaseDate") or 0),
+                                                f"https://www.binance.com/en/support/announcement/{a.get('code')}", de)
+                                            for c in r["data"].get("catalogs") or [] for a in c.get("articles") or []])
         for typ, delist in (("announcements-new-listings", False), ("announcements-delistings", True)):
-            r = get_json(f"https://www.okx.com/api/v5/support/announcements?annType={typ}", 15) or {}
-            for blk in r.get("data") or []:
-                for a in blk.get("details") or []:
-                    add("OKX", a.get("title"), int(a.get("pTime") or 0), a.get("url") or "", delist)
+            feed(f"okx{typ}", f"https://www.okx.com/api/v5/support/announcements?annType={typ}",
+                 lambda r: str(r.get("code")) == "0",
+                 lambda r, put, de=delist: [put("OKX", a.get("title"), int(a.get("pTime") or 0), a.get("url") or "", de)
+                                            for blk in r.get("data") or [] for a in blk.get("details") or []])
         for typ, delist in (("new_crypto", False), ("delistings", True)):
-            r = ((get_json(f"https://api.bybit.com/v5/announcements/index?locale=en-US&type={typ}&limit=20", 15)
-                  or {}).get("result") or {}).get("list") or []
-            for a in r:
-                add("Bybit", a.get("title"), int(a.get("publishTime") or a.get("dateTimestamp") or 0),
-                    a.get("url") or "", delist)
+            feed(f"bybit{typ}", f"https://api.bybit.com/v5/announcements/index?locale=en-US&type={typ}&limit=20",
+                 lambda r: r.get("retCode") == 0,
+                 lambda r, put, de=delist: [put("Bybit", a.get("title"),
+                                                int(a.get("publishTime") or a.get("dateTimestamp") or 0),
+                                                a.get("url") or "", de)
+                                            for a in (r.get("result") or {}).get("list") or []])
         return out
 
-    return cached_small(_CAL_SLOW, "list", 900.0, build)
+    return cached_small(_CAL_SLOW, "list", CAL_TTL, build)
 
 
 def _cal_cme(lo: int, hi: int) -> list:
@@ -13710,10 +13811,9 @@ def _cal_build() -> dict:
             con.close()
     except sqlite3.Error as e:
         print(f"calendar db: {e}", file=sys.stderr)
-    for d, hour in CAL_FOMC:
-        t = calendar.timegm(time.strptime(d, "%Y-%m-%d")) + hour * 3600
+    for t, tent in _cal_fomc_dates():
         if lo <= t <= hi:
-            ev.append({"k": "fomc", "t": t, "imp": "high", "tent": d >= "2027"})
+            ev.append({"k": "fomc", "t": t, "imp": "high", "tent": tent})
     for name, fn in (("earnings", _cal_earnings), ("listings", _cal_listings)):
         try:
             ev += [e for e in fn() if lo <= e["t"] <= hi]
