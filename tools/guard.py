@@ -1137,6 +1137,12 @@ say("календарь обновляется сам: ФРС с её сайта
     and 'con.execute("DELETE FROM cal_ev2 WHERE t BETWEEN ? AND ?", (min(week), max(week)))' in api
     and "_cal_ff_at = time.monotonic() - CAL_FF_EVERY + 300" in api
     and 'document.addEventListener("visibilitychange", pull);' in read(f"{APP}/src/screens/CalendarScreen.tsx"))
+say("календарь: макро Nasdaq на недели вперёд, опционы и в первой сборке после запуска",
+    "def _cal_nasdaq_macro(" in api and "api.nasdaq.com/api/calendar/economicevents" in api
+    and "time.gmtime(day + 86400)" in pybody(api, "def _cal_nasdaq_macro(")
+    and 'e["t"] > max(ff_end, lo)' in pybody(api, "def _cal_build(")
+    and "cached_bg(_OPT, sym, OPT_TTL, lambda s=sym: _opt_build(s), wait=True)" in pybody(api, "def _cal_build(")
+    and read(f"{APP}/src/screens/CalendarScreen.tsx").index('"cal_m_adp"') < read(f"{APP}/src/screens/CalendarScreen.tsx").index('"cal_m_nfp"'))
 say("календарь: подписан часовой пояс, у каждого события — отсчёт до него",
     all(x in read(f"{APP}/src/screens/CalendarScreen.tsx") for x in
         ("function zoneLabel()", 't(lang, "cal_tz", { z: zoneLabel() })', "function rowCountdown(", 't(lang, "cal_in_ms"')))

@@ -13770,6 +13770,90 @@ def _cal_listings() -> list:
     return cached_small(_CAL_SLOW, "list", CAL_TTL, build)
 
 
+# Макро после недели ForexFactory — из календаря Nasdaq: он знает недели на
+# три вперёд, но без важности — её даём сами, по названию. США — важное и
+# среднее; остальные страны — только решения по ставкам, инфляция, ВВП и
+# главы центробанков. Мелочь (индексы ипотеки, аукционы векселей, подсчёты
+# нефти по видам) не берём — ею неделя ForexFactory и так полна.
+CAL_NQ_CC = {"United States": "USD", "Euro Zone": "EUR", "Germany": "EUR", "United Kingdom": "GBP",
+             "Japan": "JPY", "China": "CNY", "Canada": "CAD", "Australia": "AUD", "New Zealand": "NZD",
+             "Switzerland": "CHF"}
+CAL_NQ_HIGH = re.compile(
+    r"^(Core )?CPI$|^(Core )?PPI$|Nonfarm Payrolls|^Unemployment Rate|^Retail Sales$|^Core Retail Sales"
+    r"|^GDP|PCE Price Index|Interest Rate Decision|Deposit Facility Rate|^Rate Decision|Monetary Policy Statement"
+    r"|FOMC (Meeting )?Minutes|Fed Chair|ISM (Manufacturing|Non-Manufacturing|Services) PMI$|JOLTS Job Openings$"
+    r"|ECB Press Conference|BoJ Press Conference|ECB President|BoE Gov |BoJ Gov", re.I)
+CAL_NQ_MID = re.compile(
+    r"Initial Jobless Claims|ADP Nonfarm Employment Change$|Michigan Consumer Sentiment$|CB Consumer Confidence"
+    r"|^Durable Goods Orders|Philadelphia Fed Manufacturing Index|NY Empire State Manufacturing Index"
+    r"|^(Existing|New|Pending) Home Sales$|^Housing Starts$|^Building Permits$|^Crude Oil Inventories$"
+    r"|Beige Book|Fed .*Speaks|FOMC Member|(10|20|30)-Year (Bond|Note) Auction|^Industrial Production$"
+    r"|^Trade Balance$|S&P Global (Composite|Manufacturing|Services) PMI|OPEC|Average Hourly Earnings|Employment Cost", re.I)
+CAL_NQ_DAYS = 28
+_cal_nq_days: dict = {}  # день (полночь UTC по дате в Нью-Йорке) → (когда взят, события)
+
+
+def _cal_nasdaq_macro() -> list:
+    """Макро Nasdaq на четыре недели вперёд, по дню за запрос.
+
+    Две странности источника: время в «gmt» — нью-йоркское, а параметр
+    `date` сдвинут на день вперёд (за четверг отвечает запрос пятницы) —
+    проверено по известным событиям недели ForexFactory.
+    """
+    day0 = now() // 86400 * 86400
+    mono = time.monotonic()
+
+    def one(i: int):
+        day = day0 + i * 86400
+        q = time.strftime("%Y-%m-%d", time.gmtime(day + 86400))
+        r = _get_json_raw(f"https://api.nasdaq.com/api/calendar/economicevents?date={q}", 15,
+                          {"User-Agent": "Mozilla/5.0", "Accept": "application/json"})
+        if not isinstance(r, dict) or not isinstance(r.get("data"), (dict, type(None))):
+            return None
+        out, seen = [], set()
+        for x in (r.get("data") or {}).get("rows") or []:
+            cc = CAL_NQ_CC.get(str(x.get("country") or ""))
+            name = html.unescape(str(x.get("eventName") or "")).strip()[:80]
+            if not cc or not name:
+                continue
+            when = str(x.get("gmt") or "")
+            hol = when == "All Day"
+            if hol:
+                if cc != "USD":
+                    continue
+                t, imp = day, "mid"
+            else:
+                m = re.match(r"^(\d{1,2}):(\d{2})$", when)
+                if not m:
+                    continue
+                t = _ny_hour_utc(day, int(m.group(1))) + int(m.group(2)) * 60
+                imp = "high" if CAL_NQ_HIGH.search(name) else "mid" if CAL_NQ_MID.search(name) else None
+                if imp is None or (cc != "USD" and imp != "high"):
+                    continue
+                # Решение ФРС уже есть своим событием, со временем пресс-конференции.
+                if cc == "USD" and re.search(r"Interest Rate Decision|Rate Statement", name, re.I):
+                    continue
+            # Одно событие часто идёт строками «м/м» и «г/г» — оставляем первую.
+            if (cc, name, t) in seen:
+                continue
+            seen.add((cc, name, t))
+            clean = lambda v: html.unescape(str(v or "")).replace("\xa0", "").strip()[:20]  # noqa: E731
+            out.append({"k": "macro", "t": t, "cc": cc, "title": name, "imp": imp, "hol": hol,
+                        "fc": clean(x.get("consensus")), "prev": clean(x.get("previous"))})
+        return out
+
+    todo = [i for i in range(0, CAL_NQ_DAYS)
+            if not (hit := _cal_nq_days.get(day0 + i * 86400)) or mono - hit[0] > (3600 if i <= 3 else CAL_EARN_EVERY)]
+    if todo:
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            for i, rows in zip(todo, pool.map(one, todo)):
+                if rows is not None:
+                    _cal_nq_days[day0 + i * 86400] = (mono, rows)
+    for d in [d for d in _cal_nq_days if d < day0 - 86400]:
+        del _cal_nq_days[d]
+    return [e for i in range(0, CAL_NQ_DAYS) for e in (_cal_nq_days.get(day0 + i * 86400) or (0, []))[1]]
+
+
 def _cal_cme(lo: int, hi: int) -> list:
     """Экспирация фьючерсов CME на BTC — последняя пятница месяца, 16:00 по
     Лондону (15:00 UTC летом, 16:00 зимой)."""
@@ -13795,9 +13879,11 @@ def _cal_build() -> dict:
         _cal_ff_pull()
     except Exception as e:  # noqa: BLE001 — календарь без свежей недели, но с накопленным
         print(f"calendar ff: {e}", file=sys.stderr)
+    ff_end = 0
     try:
         con = _cal_con()
         try:
+            ff_end = (con.execute("SELECT MAX(t) FROM cal_ev2").fetchone() or [0])[0] or 0
             for _id, t, cc, title, imp, fc, prev in con.execute(
                     "SELECT * FROM cal_ev2 WHERE t BETWEEN ? AND ? ORDER BY t", (lo, hi)):
                 # Решение ФРС из недели ForexFactory совпадает с нашим
@@ -13811,6 +13897,12 @@ def _cal_build() -> dict:
             con.close()
     except sqlite3.Error as e:
         print(f"calendar db: {e}", file=sys.stderr)
+    # Дальше недели ForexFactory — макро Nasdaq: неделя ForexFactory точнее
+    # (своя важность), поэтому Nasdaq берётся только после её последнего события.
+    try:
+        ev += [e for e in _cal_nasdaq_macro() if e["t"] > max(ff_end, lo) and e["t"] <= hi]
+    except Exception as e:  # noqa: BLE001
+        print(f"calendar nasdaq macro: {e}", file=sys.stderr)
     for t, tent in _cal_fomc_dates():
         if lo <= t <= hi:
             ev.append({"k": "fomc", "t": t, "imp": "high", "tent": tent})
@@ -13823,6 +13915,15 @@ def _cal_build() -> dict:
     for sym in ("BTC", "ETH"):
         with _small_lock:
             hit = _OPT.get(sym)
+        if not hit:
+            # Сразу после запуска опционы ещё не прогреты — без этого первый
+            # календарь (а он живёт пять минут) вышел бы без экспираций.
+            try:
+                cached_bg(_OPT, sym, OPT_TTL, lambda s=sym: _opt_build(s), wait=True)
+            except Exception as e:  # noqa: BLE001
+                print(f"calendar options {sym}: {e}", file=sys.stderr)
+            with _small_lock:
+                hit = _OPT.get(sym)
         r = hit[1] if isinstance(hit, tuple) and isinstance(hit[1], dict) else None
         if not r or not r.get("ok"):
             continue

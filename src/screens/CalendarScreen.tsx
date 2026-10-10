@@ -27,18 +27,19 @@ type Lang = Parameters<typeof t>[0];
 type Kind = "all" | "macro" | "opt" | "unl" | "earn" | "list";
 
 /**
- * Названия данных США у ForexFactory → наши слова. Не узнали — оставляем
- * английское: оно точное, а неверный перевод хуже.
+ * Названия данных у ForexFactory и Nasdaq → наши слова. Не узнали —
+ * оставляем английское: оно точное, а неверный перевод хуже. Порядок
+ * важен: ADP проверяется раньше NFP — в обоих есть «Non-Farm».
  */
 const MACRO: [RegExp, DictKey][] = [
   [/^Core CPI/i, "cal_m_core_cpi"],
   [/^CPI/i, "cal_m_cpi"],
   [/^Core PPI/i, "cal_m_core_ppi"],
   [/^PPI/i, "cal_m_ppi"],
-  [/Non-Farm Employment/i, "cal_m_nfp"],
-  [/ADP Non-Farm/i, "cal_m_adp"],
+  [/ADP Non-?Farm/i, "cal_m_adp"],
+  [/Non-?Farm (Employment|Payrolls)/i, "cal_m_nfp"],
   [/Unemployment Rate/i, "cal_m_unemp"],
-  [/Unemployment Claims/i, "cal_m_claims"],
+  [/Unemployment Claims|Jobless Claims/i, "cal_m_claims"],
   [/Core PCE/i, "cal_m_core_pce"],
   [/GDP/i, "cal_m_gdp"],
   [/Retail Sales/i, "cal_m_retail"],
