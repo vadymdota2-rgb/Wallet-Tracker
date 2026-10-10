@@ -1137,6 +1137,20 @@ say("календарь обновляется сам: ФРС с её сайта
     and 'con.execute("DELETE FROM cal_ev2 WHERE t BETWEEN ? AND ?", (min(week), max(week)))' in api
     and "_cal_ff_at = time.monotonic() - CAL_FF_EVERY + 300" in api
     and 'document.addEventListener("visibilitychange", pull);' in read(f"{APP}/src/screens/CalendarScreen.tsx"))
+_shield = read(f"{APP}/wt_shield.py") if os.path.exists(f"{APP}/wt_shield.py") else ""
+say("щит API: тело, соединения, тайм-аут, баны за ключ, логи без секретов, ошибки без текста",
+    "import wt_shield as shield" in api and "class ShieldServer(ThreadingHTTPServer):" in _shield
+    and "httpd = shield.ShieldServer((HOST, PORT), Handler)" in api and "ThreadingHTTPServer((HOST" not in api
+    and "timeout = shield.CONN_TIMEOUT" in api and "shield.redact(fmt % args)" in api
+    and "raise BodyError(413" in _shield and "raw = shield.read_body(self.rfile, self.headers)" in api
+    and "shield.bans.fail(self.client_address[0])" in pybody(api, "def _keyed(")
+    and 'qs.get("init"' not in api and '"error": str(e)' not in api
+    and "for k, v in shield.SECURITY_HEADERS:" in api and "if self._shield():" in pybody(api, "def do_POST(")
+    and "if self._shield():" in pybody(api, "def do_GET(") and "_logo_slots.acquire(blocking=False)" in api
+    and "len(raw) > shield.MAX_INIT_DATA" in api
+    and "client_body_timeout 10s;" in _ngx and "limit_except GET POST OPTIONS { deny all; }" in _ngx
+    and _ngx.count('add_header Strict-Transport-Security "max-age=31536000" always;') == 4
+    and not os.path.exists(f"{APP}/whale_bot.db") and "*.db" in read(f"{APP}/.gitignore"))
 say("ликвидации с 11 бирж, фандинг-история с 22, интерес с 32, доска фандинга — 21 биржа",
     all(f"def _liqs_{x}(" in api for x in ("kraken", "bitfinex", "deribit", "dydx", "lighter", "paradex"))
     and 'LIQS_ALL = ("Binance", "Bybit", "OKX", "Kraken", "Gate", "HTX", "Bitfinex", "Deribit", "dYdX", "Lighter", "Paradex")' in api

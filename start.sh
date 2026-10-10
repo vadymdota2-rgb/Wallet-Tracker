@@ -6,6 +6,12 @@ sed -i "s/listen 8080/listen ${PORT}/" "$CONF"
 
 if [ -n "${API_UPSTREAM:-}" ]; then
   sed -i "s|http://127.0.0.1:8090|${API_UPSTREAM%/}|g" "$CONF"
+  # По HTTP через интернет подпись Telegram и X-Api-Key едут открытым
+  # текстом — их видит любой узел по дороге.
+  case "$API_UPSTREAM" in
+    http://127.*|http://localhost*|https://*) ;;
+    *) echo "start.sh: ВНИМАНИЕ — API_UPSTREAM по HTTP: ключ и подписи идут открытым текстом. Включи TLS (WHALE_API_TLS_CERT/KEY) и укажи https://" >&2 ;;
+  esac
 fi
 
 # Секрет, которым nginx подписывает поход в API. Пусто — API поднимется без

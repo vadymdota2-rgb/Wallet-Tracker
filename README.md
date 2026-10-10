@@ -16,6 +16,7 @@ src/screens/    вкладки и экраны стека
 src/styles/     тема, сброс, правила приложения
 tools/          словарь tools/i18n.json и его сборка, проверки guard.py
 whale_api.py    JSON API поверх whale_bot.db и hyperliquid.db
+wt_shield.py    щит API: размер тела, соединения, тайм-ауты, баны, логи без секретов, TLS
 nginx.conf      статика, прокси к API и к биржам, кэш логотипов
 fetch_logos.py  разовая выкачка логотипов в html/coins/
 ```
@@ -396,3 +397,35 @@ nginx и API стоят на разных машинах, между ними и
 
 **`API_UPSTREAM` задавай по HTTPS.** По HTTP через интернет уедут открытым
 текстом и `X-Telegram-Init-Data`, и `X-Api-Key`.
+
+### Щит API (`wt_shield.py`)
+
+Стоит перед каждым обработчиком; только стандартная библиотека.
+
+| От чего | Как |
+|---|---|
+| Тело в гигабайт (забить память) | длина проверяется до чтения: больше 16 КБ — 413 |
+| Медленный клиент (Slowloris) | тайм-аут сокета 20 с; в nginx — 10 с на заголовки и тело |
+| Тысяча соединений разом | не больше 256 одновременно, сверх — 503 без отдельного потока |
+| Подбор `X-Api-Key` мимо nginx | 20 промахов за 10 минут — бан адреса на час |
+| Выход из папки, нулевой байт | путь с `..`, `%00`, `\` или управляющими символами — 400 |
+| Утечка подписи Telegram | подпись берётся только из заголовка, не из адреса; в журнале — `init=***` |
+| Утечка устройства сервера | при сбое наружу уходит номер ошибки, текст — только в журнал |
+| Подмена X-Forwarded-For | без ключа API ему не верит вовсе |
+| Чужой сайт встраивает ответ | `nosniff`, `default-src 'none'`, `frame-ancestors 'none'`, `DENY` |
+| Перехват по дороге | `WHALE_API_TLS_CERT` и `WHALE_API_TLS_KEY` — API сам говорит по TLS |
+| Усиление через логотипы | проверка неизвестного логотипа — не больше восьми одновременно |
+
+Переменные: `WHALE_API_MAX_BODY`, `WHALE_API_MAX_CONN`, `WHALE_API_CONN_TIMEOUT`,
+`WHALE_API_TLS_CERT`, `WHALE_API_TLS_KEY`.
+
+TLS без домена — самоподписанным сертификатом:
+
+```
+openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=whale-api" \
+  -keyout /etc/whale-api/key.pem -out /etc/whale-api/cert.pem
+```
+
+и в `/etc/whale-api.env`: `WHALE_API_TLS_CERT=/etc/whale-api/cert.pem`,
+`WHALE_API_TLS_KEY=/etc/whale-api/key.pem`; у Cloud Run `API_UPSTREAM` —
+`https://…:8090`. Шифрует он так же, как купленный.

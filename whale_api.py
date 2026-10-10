@@ -25,7 +25,11 @@ from concurrent.futures import ThreadPoolExecutor, wait
 import urllib.error
 import urllib.parse
 import urllib.request
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
+
+# Щит лежит рядом: находим его, откуда бы API ни запускали.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import wt_shield as shield  # noqa: E402
 from urllib.parse import parse_qs, unquote, urlparse, urlsplit
 
 # Петля по умолчанию: наружу API выходит только через nginx. Раньше здесь
@@ -470,6 +474,9 @@ def _logo_gt(a: str) -> str | None:
     return img if img.startswith("https://assets.geckoterminal.com/") else ""
 
 
+_logo_slots = threading.BoundedSemaphore(8)
+
+
 def bsc_logo(addr: str) -> tuple[str, int]:
     """Куда отправить за картинкой и на сколько секунд это запомнить;
     пустой адрес — картинки нет."""
@@ -485,10 +492,18 @@ def bsc_logo(addr: str) -> tuple[str, int]:
         hit = _logo_seen.get(a)
     if hit and t < hit[1]:
         return hit[0], int(hit[1] - t)
-    # Источники опрашиваются разом, а берётся первый по порядку доверия:
-    # подряд это до двенадцати секунд ожидания на одну картинку.
-    with ThreadPoolExecutor(len(LOGO_PROBE)) as ex:
-        found = list(ex.map(lambda pr: _logo_is_image(pr[1].format(cs=cs, a=a)), LOGO_PROBE))
+    # Каждый неизвестный адрес — дюжина запросов наружу. Поток случайных
+    # адресов превратил бы нас в усилитель чужой атаки, поэтому проверок
+    # одновременно — не больше восьми; остальным «спроси через минуту».
+    if not _logo_slots.acquire(blocking=False):
+        return "", 60
+    try:
+        # Источники опрашиваются разом, а берётся первый по порядку доверия:
+        # подряд это до двенадцати секунд ожидания на одну картинку.
+        with ThreadPoolExecutor(len(LOGO_PROBE)) as ex:
+            found = list(ex.map(lambda pr: _logo_is_image(pr[1].format(cs=cs, a=a)), LOGO_PROBE))
+    finally:
+        _logo_slots.release()
     url = next((pr[0].format(cs=cs, a=a) for pr, ok in zip(LOGO_PROBE, found) if ok), "")
     ttl = LOGO_HIT_TTL if url else LOGO_MISS_TTL
     if not url:
@@ -603,7 +618,7 @@ def verify_init_data(raw: str) -> dict | None:
     запрос анонимным."""
     # Проверять подпись нечем — значит доверять нечему. Раньше при пустом
     # токене данные принимались как есть.
-    if not raw or not BOT_TOKEN:
+    if not raw or not BOT_TOKEN or len(raw) > shield.MAX_INIT_DATA:
         return None
     parts = {}
     for chunk in raw.split("&"):
@@ -9360,7 +9375,8 @@ def pay_check(chat: str) -> dict:
             "until": until,
         }
     except sqlite3.Error as e:
-        return {"ok": False, "error": str(e)}
+        sys.stderr.write(f"[api] pay_check: {e}\n")
+        return {"ok": False, "error": "db_error"}
     finally:
         con.close()
 
@@ -10285,7 +10301,7 @@ def bootstrap(chat: str, fast: bool = False) -> dict:
         return out
     except Exception as e:
         sys.stderr.write(f"[api] bootstrap fatal: {e}\n")
-        return {"ok": False, "live": False, "error": str(e)}
+        return {"ok": False, "live": False, "error": "server_error"}
     finally:
         try:
             cur.close()
@@ -15244,16 +15260,44 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
             con.rollback()
         except Exception:
             pass
-        return {"ok": False, "error": str(e)}
+        sys.stderr.write(f"[api] запись: {e}\n")
+        return {"ok": False, "error": "db_error"}
     finally:
         con.close()
 
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
+    # Тайм-аут сокета: клиент, что тянет с запросом (Slowloris), не держит
+    # поток дольше этого.
+    timeout = shield.CONN_TIMEOUT
 
     def log_message(self, fmt, *args):
-        sys.stderr.write("[api] " + (fmt % args) + "\n")
+        # Без секретов: подпись Telegram и ключи в журнал не попадают.
+        sys.stderr.write("[api] " + shield.redact(fmt % args) + "\n")
+
+    def _shield(self) -> bool:
+        """Отказы до разбора запроса. True — ответ уже отправлен."""
+        ip = self.client_address[0]
+        if shield.bans.banned(ip):
+            self.close_connection = True
+            self._json(403, {"ok": False, "error": "banned"})
+            return True
+        if shield.bad_path(self.path):
+            self.close_connection = True
+            self._json(400, {"ok": False, "error": "bad_path"})
+            return True
+        return False
+
+    def _fail(self, e: Exception, where: str) -> None:
+        """Сбой обработчика: подробности — в журнал, наружу — только номер."""
+        eid = shield.error_id()
+        sys.stderr.write(f"[api] {where} fail #{eid}: {type(e).__name__}: {shield.redact(str(e))}\n")
+        try:
+            self.close_connection = True
+            self._json(500, {"ok": False, "error": "server_error", "id": eid})
+        except Exception:
+            pass
 
     def _cors(self):
         # Только известные адреса. Раньше стояла звёздочка, и любая страница
@@ -15290,26 +15334,37 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(raw)))
         self.send_header("Cache-Control", "no-store")
+        for k, v in shield.SECURITY_HEADERS:
+            self.send_header(k, v)
         self.end_headers()
         self.wfile.write(raw)
 
     def _user(self, qs: dict) -> str:
         """Возвращает chat_id только по сошедшейся подписи, иначе пустую
         строку. Прежний хвост `return qs["tg"]` пускал в чужой аккаунт по
-        одному номеру в адресе запроса."""
-        init = self.headers.get("X-Telegram-Init-Data") or qs.get("init", [""])[0]
+        одному номеру в адресе запроса.
+
+        Подпись — только из заголовка. Из адреса (?init=) её больше не берём:
+        адрес оседает в журналах nginx, истории браузера и Referer, а подпись
+        сутки работает как ключ от аккаунта."""
+        init = self.headers.get("X-Telegram-Init-Data") or ""
         parsed = verify_init_data(init)
         return parsed["id"] if parsed else ""
 
     def _user_full(self, qs: dict) -> dict:
         """Пользователь из подписи целиком: id и имя для комментариев."""
-        init = self.headers.get("X-Telegram-Init-Data") or qs.get("init", [""])[0]
+        init = self.headers.get("X-Telegram-Init-Data") or ""
         return verify_init_data(init) or {}
 
     def _keyed(self) -> bool:
         if not API_KEY:
             return True
-        return hmac.compare_digest(self.headers.get("X-Api-Key") or "", API_KEY)
+        ok = hmac.compare_digest(self.headers.get("X-Api-Key") or "", API_KEY)
+        if not ok:
+            # Мимо nginx с неверным ключом — серия таких промахов даёт бан.
+            # Адрес nginx сюда не попадает: его запросы ключ несут всегда.
+            shield.bans.fail(self.client_address[0])
+        return ok
 
     def _peer(self) -> str:
         """Адрес для счётчика запросов.
@@ -15319,6 +15374,10 @@ class Handler(BaseHTTPRequestHandler):
         клиент — раньше брали именно его, и лимит снимался подстановкой
         заголовка. Верить можно только последнему.
         """
+        # Без ключа запрос мог прийти мимо nginx — тогда X-Forwarded-For
+        # написал сам клиент, и верить ему нельзя совсем.
+        if not API_KEY:
+            return self.client_address[0]
         parts = [p.strip() for p in (self.headers.get("X-Forwarded-For") or "").split(",") if p.strip()]
         return parts[-1] if parts else self.client_address[0]
 
@@ -15334,14 +15393,16 @@ class Handler(BaseHTTPRequestHandler):
         return "u:" + chat if chat else self._peer()
 
     def _body(self) -> dict:
-        n = int(self.headers.get("Content-Length") or 0)
-        if n <= 0:
+        """JSON тела. Длина проверяется до чтения (wt_shield.read_body);
+        слишком большое тело — исключение BodyError, ответ 413."""
+        raw = shield.read_body(self.rfile, self.headers)
+        if not raw:
             return {}
-        raw = self.rfile.read(n)
         try:
-            return json.loads(raw.decode() or "{}")
-        except json.JSONDecodeError:
+            got = json.loads(raw.decode("utf-8", "replace") or "{}")
+        except (json.JSONDecodeError, RecursionError):
             return {}
+        return got if isinstance(got, dict) else {}
 
     def do_OPTIONS(self):
         self.send_response(204)
@@ -15349,6 +15410,8 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        if self._shield():
+            return
         try:
             u = urlparse(self.path)
             qs = parse_qs(u.query)
@@ -15377,8 +15440,7 @@ class Handler(BaseHTTPRequestHandler):
                 })
                 return
             if path in ("/bootstrap", "/api/bootstrap", "/api/me"):
-                init = self.headers.get("X-Telegram-Init-Data") or qs.get("init", [""])[0]
-                who = verify_init_data(init)
+                who = verify_init_data(self.headers.get("X-Telegram-Init-Data") or "")
                 chat = who["id"] if who else ""
                 # Первое открытие приложения — неделя премиума в подарок.
                 # Выгрузка в памяти собрана ещё без неё, поэтому её сбрасываем.
@@ -15748,13 +15810,11 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self._json(404, {"ok": False, "error": "not_found"})
         except Exception as e:
-            sys.stderr.write(f"[api] GET fail: {e}\n")
-            try:
-                self._json(500, {"ok": False, "error": str(e)})
-            except Exception:
-                pass
+            self._fail(e, "GET")
 
     def do_POST(self):
+        if self._shield():
+            return
         try:
             u = urlparse(self.path)
             qs = parse_qs(u.query)
@@ -15855,12 +15915,12 @@ class Handler(BaseHTTPRequestHandler):
                 # следующее «обновить» заберёт её готовой, а не повторит.
                 res = {**res, **bootstrap_cached(chat)}
             self._json(200 if res.get("ok") else 400, res)
+        except shield.BodyError as e:
+            # Тело не прочитано — соединение дальше не годится.
+            self.close_connection = True
+            self._json(e.code, {"ok": False, "error": e.error})
         except Exception as e:
-            sys.stderr.write(f"[api] POST fail: {e}\n")
-            try:
-                self._json(500, {"ok": False, "error": str(e)})
-            except Exception:
-                pass
+            self._fail(e, "POST")
 
 
 def main():
@@ -15883,7 +15943,10 @@ def main():
     threading.Thread(target=warmup, daemon=True).start()
     threading.Thread(target=refresher, daemon=True).start()
     threading.Thread(target=_bonus_loop, daemon=True).start()
-    httpd = ThreadingHTTPServer((HOST, PORT), Handler)
+    httpd = shield.ShieldServer((HOST, PORT), Handler)
+    tls = shield.tls_wrap(httpd)
+    sys.stderr.write(f"[api] щит: тело ≤ {shield.MAX_BODY} Б, соединений ≤ {shield.MAX_CONN}, "
+                     f"тайм-аут {shield.CONN_TIMEOUT:g} с, TLS {'да' if tls else 'нет'}\n")
     httpd.serve_forever()
 
 
