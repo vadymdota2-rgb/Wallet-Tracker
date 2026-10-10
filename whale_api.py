@@ -10979,11 +10979,12 @@ def liq_warm_refresher() -> None:
             etf_data()  # и потоки ETF с крупными держателями
         except Exception:  # noqa: BLE001
             pass
-        for sym in OPT_SYMS:  # и опционы
+        for sym in OPT_SYMS:  # и опционы — по одной монете, без своих потоков
             try:
-                options_data(sym)
+                cached_bg(_OPT, sym, OPT_TTL, lambda s=sym: _opt_build(s), wait=True)
             except Exception:  # noqa: BLE001
                 pass
+            time.sleep(0.5)
         try:
             listed = [c["s"] for c in (liq_coins().get("coins") or [])[:LIQ_WARM_COINS]]
         except Exception:  # noqa: BLE001
@@ -12384,30 +12385,42 @@ def etf_data() -> dict:
 
 
 # --- Опционы -------------------------------------------------------------
-# Открытый интерес по страйкам и датам, Max Pain, Put/Call, индекс
-# волатильности DVOL и крупные сделки. Интерес складывается с четырёх бирж
-# (Deribit, OKX, Bybit, Binance), у всех — в монетах базового актива: один
-# контракт опциона на BTC — один биткоин. Сделки и DVOL — только Deribit:
-# на нём большая часть рынка опционов, и только он отдаёт ленту за сутки.
-# Binance и Bybit с сервера закрыты по стране — они идут через ретранслятор
-# (get_json сам переключается).
-OPT_SYMS = ("BTC", "ETH")
+# Открытый интерес по страйкам и датам, Max Pain, Put/Call, волатильность по
+# датам и перекос, DVOL и крупные сделки — по двенадцати монетам с шести бирж.
+#
+# Каждая биржа отдаёт свои опционы в своей записи, а сервер приводит их к
+# одной строке: (дата, страйк, C|P, интерес в монетах, объём за сутки в
+# монетах, IV в %, форвард). У всех интерес — в монетах базового актива.
+#   Deribit — BTC и ETH в монете (инверсные), а в USDC ещё SOL, XRP, HYPE,
+#             AVAX, TRX и те же BTC/ETH; сделки, перекос и DVOL — тоже отсюда;
+#   OKX — BTC, ETH, SOL; Bybit и Binance — всё, что у них есть (с этой машины
+#   закрыты по стране — get_json идёт через ретранслятор); Gate — десяток
+#   монет; Delta Exchange — BTC и ETH.
+# Derive, Thalex и Aevo интерес по страйкам одним запросом не отдают — их нет.
+OPT_SYMS = ("BTC", "ETH", "SOL", "XRP", "HYPE", "BNB", "DOGE", "AVAX", "TRX", "SUI", "ADA", "LTC")
 OPT_TTL = 180.0
-# Крупная сделка — от миллиона долларов номинала по BTC, от полумиллиона по ETH.
+# Крупная сделка: от миллиона долларов номинала по BTC, полумиллиона по ETH,
+# ста тысяч по остальным — у них и рынок меньше.
 OPT_BIG = {"BTC": 1_000_000.0, "ETH": 500_000.0}
+OPT_BIG_OTHER = 100_000.0
 OPT_BIG_KEEP = 40
 # Лента сделок Deribit отдаётся по тысяче; за сутки по BTC — около трёх тысяч.
 OPT_TRADE_PAGES = 8
 _OPT: dict = {}
+# Общие выгрузки (весь USDC Deribit, все тикеры Binance, все опционы Delta):
+# одна на все монеты, живёт минуту.
+_OPT_SHARED: dict = {}
 _OPT_MON = {m: i + 1 for i, m in enumerate(("JAN", "FEB", "MAR", "APR", "MAY", "JUN",
                                             "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"))}
 
 
 def _opt_name(name: str):
-    """Имя опциона любой из бирж → (дата экспирации, страйк, C|P).
+    """Имя опциона → (дата экспирации, страйк, C|P).
 
-    Deribit и Bybit: BTC-12OCT26-84500-C (у Bybit бывает хвост -USDT),
-    OKX: BTC-USD-261012-84500-C, Binance: BTC-261012-84500-C."""
+    Deribit и Bybit: BTC-12OCT26-84500-C (у Deribit в USDC — SOL_USDC-…,
+    у Bybit бывает хвост -USDT), OKX: BTC-USD-261012-84500-C,
+    Binance: BTC-261012-84500-C, Gate: BTC_USDT-20261012-84500-C.
+    Страйк в записи Deribit бывает с «d» вместо точки: XRP_USDC-…-1d4-C."""
     parts = (name or "").upper().split("-")
     for i, p in enumerate(parts[:-2]):
         m = re.fullmatch(r"(\d{1,2})([A-Z]{3})(\d{2})", p)
@@ -12415,61 +12428,121 @@ def _opt_name(name: str):
             y, mo, d = 2000 + int(m.group(3)), _OPT_MON[m.group(2)], int(m.group(1))
         elif re.fullmatch(r"\d{6}", p):
             y, mo, d = 2000 + int(p[:2]), int(p[2:4]), int(p[4:])
+        elif re.fullmatch(r"20\d{6}", p):
+            y, mo, d = int(p[:4]), int(p[4:6]), int(p[6:])
         else:
             continue
         cp = parts[i + 2]
         if cp not in ("C", "P"):
             return None
-        k = _fnum(parts[i + 1])
+        k = _fnum(parts[i + 1].replace("D", "."))
         if k <= 0 or not (1 <= mo <= 12 and 1 <= d <= 31):
             return None
         return f"{y:04d}-{mo:02d}-{d:02d}", k, cp
     return None
 
 
+def _opt_base(name: str) -> str:
+    return (name or "").upper().split("-")[0].split("_")[0]
+
+
+def _opt_shared(key: str, build):
+    return cached_small(_OPT_SHARED, key, 60.0, build)
+
+
+def _opt_rows(names_rows, sym: str) -> list:
+    """(имя, интерес, объём, IV, форвард) → строки одной записи, только монета sym."""
+    out = []
+    for name, oi, vol, iv, fwd in names_rows:
+        if _opt_base(name) != sym:
+            continue
+        nm = _opt_name(name)
+        if nm:
+            out.append((nm[0], nm[1], nm[2], oi, vol, iv, fwd))
+    return out
+
+
 def _opt_deribit(sym: str) -> list:
-    """Кроме интереса и объёма — подразумеваемая волатильность и форвард: из
-    них считаются волатильность «на деньгах» и перекос по каждой дате."""
-    rows = (get_json(f"https://www.deribit.com/api/v2/public/get_book_summary_by_currency?currency={sym}&kind=option", 15) or {}).get("result") or []
-    return [(r.get("instrument_name"), _fnum(r.get("open_interest")), _fnum(r.get("volume")),
-             _fnum(r.get("mark_iv")), _fnum(r.get("underlying_price"))) for r in rows]
+    """Инверсные (BTC, ETH) и линейные в USDC — одной биржей."""
+    rows = []
+    if sym in ("BTC", "ETH"):
+        rows += (get_json(f"https://www.deribit.com/api/v2/public/get_book_summary_by_currency?currency={sym}&kind=option", 15) or {}).get("result") or []
+    rows += _opt_shared("deribit-usdc", lambda: (get_json(
+        "https://www.deribit.com/api/v2/public/get_book_summary_by_currency?currency=USDC&kind=option", 20) or {}).get("result") or [])
+    return _opt_rows(((r.get("instrument_name"), _fnum(r.get("open_interest")), _fnum(r.get("volume")),
+                       _fnum(r.get("mark_iv")), _fnum(r.get("underlying_price"))) for r in rows), sym)
 
 
 def _opt_okx(sym: str) -> list:
+    fams = _opt_shared("okx-fams", lambda: [f for x in ((get_json(
+        "https://www.okx.com/api/v5/public/underlying?instType=OPTION", 10) or {}).get("data") or []) for f in x])
     fam = f"{sym}-USD"
-    oi = (get_json(f"https://www.okx.com/api/v5/public/open-interest?instType=OPTION&instFamily={fam}", 15) or {}).get("data") or []
-    tk = (get_json(f"https://www.okx.com/api/v5/market/tickers?instType=OPTION&instFamily={fam}", 15) or {}).get("data") or []
+    if fam not in fams:
+        return []
+    # По uly, а не instFamily: у SOL семейство называется SOL-USD_UM, и
+    # запрос по instFamily=SOL-USD отвечал ошибкой.
+    oi = (get_json(f"https://www.okx.com/api/v5/public/open-interest?instType=OPTION&uly={fam}", 15) or {}).get("data") or []
+    tk = (get_json(f"https://www.okx.com/api/v5/market/tickers?instType=OPTION&uly={fam}", 15) or {}).get("data") or []
     vol = {r.get("instId"): _fnum(r.get("volCcy24h")) for r in tk}
-    return [(r.get("instId"), _fnum(r.get("oiCcy")), vol.get(r.get("instId"), 0.0)) for r in oi]
+    return _opt_rows(((r.get("instId"), _fnum(r.get("oiCcy")), vol.get(r.get("instId"), 0.0), 0.0, 0.0) for r in oi), sym)
 
 
 def _opt_bybit(sym: str) -> list:
     rows = ((get_json(f"https://api.bybit.com/v5/market/tickers?category=option&baseCoin={sym}", 15) or {}).get("result") or {}).get("list") or []
-    return [(r.get("symbol"), _fnum(r.get("openInterest")), _fnum(r.get("volume24h"))) for r in rows]
+    return _opt_rows(((r.get("symbol"), _fnum(r.get("openInterest")), _fnum(r.get("volume24h")),
+                       _fnum(r.get("markIv")) * 100, _fnum(r.get("underlyingPrice"))) for r in rows), sym)
 
 
 def _opt_binance(sym: str) -> list:
-    tk = get_json("https://eapi.binance.com/eapi/v1/ticker", 15)
+    tk = _opt_shared("binance-ticker", lambda: get_json("https://eapi.binance.com/eapi/v1/ticker", 15))
     if not isinstance(tk, list):
         return []
-    vol = {r.get("symbol"): _fnum(r.get("volume")) for r in tk if str(r.get("symbol", "")).startswith(sym + "-")}
+    vol = {r.get("symbol"): _fnum(r.get("volume")) for r in tk if _opt_base(r.get("symbol")) == sym}
     out = []
     for e in sorted({s.split("-")[1] for s in vol if len(s.split("-")) == 4}):
         rows = get_json(f"https://eapi.binance.com/eapi/v1/openInterest?underlyingAsset={sym}&expiration={e}", 15)
-        for r in rows if isinstance(rows, list) else []:
-            out.append((r.get("symbol"), _fnum(r.get("sumOpenInterest")), vol.get(r.get("symbol"), 0.0)))
+        out += [(r.get("symbol"), _fnum(r.get("sumOpenInterest")), vol.get(r.get("symbol"), 0.0), 0.0, 0.0)
+                for r in (rows if isinstance(rows, list) else [])]
+    return _opt_rows(out, sym)
+
+
+def _opt_gate(sym: str) -> list:
+    """Интерес у Gate — в контрактах, контракт — multiplier монеты."""
+    unds = _opt_shared("gate-unds", lambda: [u.get("name") for u in (get_json(
+        "https://api.gateio.ws/api/v4/options/underlyings", 10) or []) if isinstance(u, dict)])
+    und = f"{sym}_USDT"
+    if und not in unds:
+        return []
+    rows = get_json(f"https://api.gateio.ws/api/v4/options/contracts?underlying={und}", 15)
+    return _opt_rows(((r.get("name"), _fnum(r.get("position_size")) * _fnum(r.get("multiplier")), 0.0, 0.0,
+                       _fnum(r.get("underlying_price"))) for r in (rows if isinstance(rows, list) else [])), sym)
+
+
+def _opt_delta(sym: str) -> list:
+    """Delta Exchange пишет иначе: P-ETH-2500-111026 (тип, монета, страйк, ДДММГГ)."""
+    rows = _opt_shared("delta", lambda: (get_json(
+        "https://api.delta.exchange/v2/tickers?contract_types=call_options,put_options", 20) or {}).get("result") or [])
+    out = []
+    for r in rows:
+        p = str(r.get("symbol") or "").upper().split("-")
+        if len(p) != 4 or p[1] != sym or p[0] not in ("C", "P") or not re.fullmatch(r"\d{6}", p[3]):
+            continue
+        d = f"20{p[3][4:]}-{p[3][2:4]}-{p[3][:2]}"
+        cv = _fnum(r.get("contract_value"))
+        iv = _fnum((r.get("quotes") or {}).get("mark_iv")) * 100
+        out.append((d, _fnum(p[2]), p[0], _fnum(r.get("oi")), _fnum(r.get("volume")) * cv, iv, _fnum(r.get("spot_price"))))
     return out
 
 
-OPT_SOURCES = (("Deribit", _opt_deribit), ("OKX", _opt_okx), ("Bybit", _opt_bybit), ("Binance", _opt_binance))
+OPT_SOURCES = (("Deribit", _opt_deribit), ("OKX", _opt_okx), ("Bybit", _opt_bybit),
+               ("Binance", _opt_binance), ("Gate", _opt_gate), ("Delta", _opt_delta))
 
 
 def _opt_maxpain(strikes: dict) -> float:
     """Цена экспирации, при которой покупатели опционов получают меньше всего:
-    по каждому страйку-кандидату — выплата всем колам ниже и путам выше."""
+    по каждому страйку-кандидату — выплата всем коллам ниже и путам выше."""
     best, at = None, 0.0
-    ks = sorted(strikes)
-    for x in ks:
+    for x in sorted(strikes):
         pay = sum(c * (x - k) for k, (c, _p) in strikes.items() if k < x) \
             + sum(p * (k - x) for k, (_c, p) in strikes.items() if k > x)
         if best is None or pay < best:
@@ -12478,7 +12551,7 @@ def _opt_maxpain(strikes: dict) -> float:
 
 
 def _opt_smile(rows: list) -> dict:
-    """Дата → (волатильность на деньгах, перекос), по Deribit.
+    """Дата → (волатильность на деньгах, перекос).
 
     На деньгах — среднее колла и пута на страйке, ближайшем к форварду.
     Перекос — как «риск-реверсал 25 дельты», только наоборот по знаку:
@@ -12488,12 +12561,11 @@ def _opt_smile(rows: list) -> dict:
     ±10% не годились: у опциона на день это крайние крылья, у годового —
     почти деньги, и перекос дат не сравнивался между собой."""
     by: dict = {}
-    for inst, _oi, _vol, iv, und in rows:
-        nm = _opt_name(inst)
-        if not nm or iv <= 0 or und <= 0:
+    for d, k, cp, _oi, _vol, iv, fwd in rows:
+        if iv <= 0 or fwd <= 0:
             continue
-        e = by.setdefault(nm[0], {"f": und, "C": {}, "P": {}})
-        e[nm[2]][nm[1]] = iv
+        e = by.setdefault(d, {"f": fwd, "C": {}, "P": {}})
+        e[cp][k] = iv
 
     def near(side: dict, x: float):
         return side[min(side, key=lambda k: abs(k - x))] if side else 0.0
@@ -12515,6 +12587,8 @@ def _opt_smile(rows: list) -> dict:
 
 
 def _opt_dvol(sym: str) -> dict | None:
+    if sym not in ("BTC", "ETH"):
+        return None
     end = int(time.time() * 1000)
     rows = ((get_json(f"https://www.deribit.com/api/v2/public/get_volatility_index_data?currency={sym}"
                       f"&start_timestamp={end - 7 * 86400_000}&end_timestamp={end}&resolution=3600", 15) or {})
@@ -12526,47 +12600,78 @@ def _opt_dvol(sym: str) -> dict | None:
     return {"v": path[-1], "chg": round(path[-1] - ago, 2), "path": path[-168:]}
 
 
-def _opt_trades(sym: str) -> tuple[list, dict]:
-    """Лента Deribit за сутки: крупные сделки и куда льются деньги
-    (номинал по стороне агрессора: колы/путы × купили/продали)."""
+def _opt_tape(cur: str) -> list:
+    """Лента опционов Deribit за сутки по валюте расчёта (BTC, ETH или USDC)."""
     end = int(time.time() * 1000)
     start = end - 86400_000
-    flow = {"cb": 0.0, "cs": 0.0, "pb": 0.0, "ps": 0.0}
-    big, first = [], end
+    out = []
     for _ in range(OPT_TRADE_PAGES):
-        res = (get_json(f"https://www.deribit.com/api/v2/public/get_last_trades_by_currency_and_time?currency={sym}"
+        res = (get_json(f"https://www.deribit.com/api/v2/public/get_last_trades_by_currency_and_time?currency={cur}"
                         f"&kind=option&start_timestamp={start}&end_timestamp={end}&count=1000&sorting=desc", 15) or {}).get("result") or {}
         trades = res.get("trades") or []
-        for t in trades:
-            nm = _opt_name(t.get("instrument_name"))
-            ix = _fnum(t.get("index_price"))
-            amt = _fnum(t.get("amount"))
-            if not nm or ix <= 0 or amt <= 0:
-                continue
-            n = amt * ix
-            buy = t.get("direction") == "buy"
-            flow[("c" if nm[2] == "C" else "p") + ("b" if buy else "s")] += n
-            first = min(first, int(t.get("timestamp") or end))
-            if n >= OPT_BIG.get(sym, 1e6):
-                big.append({"t": int(t.get("timestamp") or 0) // 1000, "e": nm[0], "k": nm[1], "cp": nm[2],
-                            "s": "b" if buy else "s", "a": round(amt, 4), "n": round(n),
-                            "pr": round(_fnum(t.get("price")) * amt * ix), "iv": round(_fnum(t.get("iv")), 1),
-                            "blk": str(t.get("block_trade_id") or "")})
+        out += trades
         if not res.get("has_more") or not trades:
             break
         end = int(trades[-1].get("timestamp") or start) - 1
         if end <= start:
             break
+    return out
+
+
+def _opt_trades(sym: str) -> tuple[list, dict]:
+    """Крупные сделки и куда льются деньги (номинал по стороне агрессора:
+    коллы/путы × купили/продали). BTC и ETH — инверсная лента и USDC,
+    остальные — USDC."""
+    tape = [t for t in _opt_shared("deribit-usdc-tape", lambda: _opt_tape("USDC"))
+            if _opt_base(t.get("instrument_name")) == sym]
+    if sym in ("BTC", "ETH"):
+        tape += _opt_tape(sym)
+    if not tape:
+        return [], {}
+    flow = {"cb": 0.0, "cs": 0.0, "pb": 0.0, "ps": 0.0}
+    big, first = [], time.time() * 1000
+    lim = OPT_BIG.get(sym, OPT_BIG_OTHER)
+    for t in tape:
+        nm = _opt_name(t.get("instrument_name"))
+        ix = _fnum(t.get("index_price"))
+        amt = _fnum(t.get("amount"))
+        if not nm or ix <= 0 or amt <= 0:
+            continue
+        n = amt * ix
+        buy = t.get("direction") == "buy"
+        flow[("c" if nm[2] == "C" else "p") + ("b" if buy else "s")] += n
+        first = min(first, int(t.get("timestamp") or first))
+        if n >= lim:
+            # Цена опциона у инверсных — в монете, у USDC — уже в долларах.
+            pr = _fnum(t.get("price")) * amt * (1.0 if "_USDC" in str(t.get("instrument_name")) else ix)
+            big.append({"t": int(t.get("timestamp") or 0) // 1000, "e": nm[0], "k": nm[1], "cp": nm[2],
+                        "s": "b" if buy else "s", "a": round(amt, 4), "n": round(n), "pr": round(pr),
+                        "iv": round(_fnum(t.get("iv")), 1), "blk": str(t.get("block_trade_id") or "")})
     big = sorted(sorted(big, key=lambda b: -b["n"])[:OPT_BIG_KEEP], key=lambda b: (-b["t"], b["blk"], b["k"]))
     flow = {k: round(v) for k, v in flow.items()}
     flow["h"] = round(max(1.0, (time.time() * 1000 - first) / 3600_000), 1)
     return big, flow
 
 
+def _opt_index(sym: str) -> float:
+    """Цена индекса: Deribit для BTC/ETH, иначе индекс OKX."""
+    if sym in ("BTC", "ETH"):
+        v = _fnum(((get_json(f"https://www.deribit.com/api/v2/public/get_index_price?index_name={sym.lower()}_usd", 10) or {})
+                   .get("result") or {}).get("index_price"))
+        if v > 0:
+            return v
+    for inst in (f"{sym}-USDT", f"{sym}-USD"):
+        rows = (get_json(f"https://www.okx.com/api/v5/market/index-tickers?instId={inst}", 10) or {}).get("data") or []
+        v = _fnum((rows[0] if rows else {}).get("idxPx"))
+        if v > 0:
+            return v
+    return 0.0
+
+
 def _opt_build(sym: str) -> dict:
-    with ThreadPoolExecutor(max_workers=7) as pool:
+    with ThreadPoolExecutor(max_workers=9) as pool:
         futs = {name: pool.submit(fn, sym) for name, fn in OPT_SOURCES}
-        f_ix = pool.submit(get_json, f"https://www.deribit.com/api/v2/public/get_index_price?index_name={sym.lower()}_usd", 10)
+        f_ix = pool.submit(_opt_index, sym)
         f_dv = pool.submit(_opt_dvol, sym)
         f_tr = pool.submit(_opt_trades, sym)
         got = {}
@@ -12576,7 +12681,10 @@ def _opt_build(sym: str) -> dict:
             except Exception as e:  # noqa: BLE001 — одна биржа не валит остальные
                 print(f"options {sym} {name}: {e}", file=sys.stderr)
                 got[name] = []
-        px = _fnum(((f_ix.result() or {}).get("result") or {}).get("index_price"))
+        try:
+            px = f_ix.result()
+        except Exception:  # noqa: BLE001
+            px = 0.0
         try:
             dvol = f_dv.result()
         except Exception:  # noqa: BLE001
@@ -12585,18 +12693,19 @@ def _opt_build(sym: str) -> dict:
             big, flow = f_tr.result()
         except Exception:  # noqa: BLE001
             big, flow = [], {}
+    today = time.strftime("%Y-%m-%d", time.gmtime())
+    if px <= 0:
+        # Индекса нет — берём форвард ближайшей даты у любой биржи, что его дала.
+        fw = sorted((d, fwd) for rows in got.values() for d, _k, _cp, _oi, _v, _iv, fwd in rows if fwd > 0 and d >= today)
+        px = fw[0][1] if fw else 0.0
     if px <= 0:
         return {"ok": False, "error": "no_data"}
-    today = time.strftime("%Y-%m-%d", time.gmtime())
     exp: dict = {}
     ex_oi: dict = {}
-    smile = _opt_smile(got.get("Deribit") or [])
     for name, rows in got.items():
-        for inst, oi, vol, *_ in rows:
-            nm = _opt_name(inst)
-            if not nm or not inst.upper().startswith(sym + "-") or nm[0] < today or (oi <= 0 and vol <= 0):
+        for d, k, cp, oi, vol, _iv, _fwd in rows:
+            if d < today or (oi <= 0 and vol <= 0):
                 continue
-            d, k, cp = nm
             e = exp.setdefault(d, {"k": {}, "v": [0.0, 0.0]})
             s = e["k"].setdefault(k, [0.0, 0.0])
             j = 0 if cp == "C" else 1
@@ -12605,6 +12714,12 @@ def _opt_build(sym: str) -> dict:
             ex_oi[name] = ex_oi.get(name, 0.0) + oi
     if not exp:
         return {"ok": False, "error": "no_data"}
+    # Волатильность — с той биржи, где её больше всего: Deribit, потом Bybit,
+    # Delta, Gate. Дата, которой у первой нет, берётся у следующей.
+    smile: dict = {}
+    for name in ("Deribit", "Bybit", "Delta", "Gate"):
+        for d, v in _opt_smile(got.get(name) or []).items():
+            smile.setdefault(d, v)
     out = []
     for d in sorted(exp):
         e = exp[d]
@@ -12615,20 +12730,45 @@ def _opt_build(sym: str) -> dict:
         p = sum(v[1] for v in ks.values())
         ts = calendar.timegm(time.strptime(d, "%Y-%m-%d")) + 8 * 3600
         iv, sk = smile.get(d, (0.0, 0.0))
-        out.append({"d": d, "ts": ts, "c": round(c, 2), "p": round(p, 2),
-                    "vc": round(e["v"][0], 2), "vp": round(e["v"][1], 2), "mp": _opt_maxpain(ks),
+        out.append({"d": d, "ts": ts, "c": round(c, 4), "p": round(p, 4),
+                    "vc": round(e["v"][0], 4), "vp": round(e["v"][1], 4), "mp": _opt_maxpain(ks),
                     "iv": iv, "sk": sk,
-                    "k": [[k, round(cv, 2), round(pv, 2)] for k, (cv, pv) in sorted(ks.items())]})
-    return {"ok": True, "sym": sym, "at": int(time.time()), "px": round(px, 2), "exp": out,
+                    "k": [[k, round(cv, 4), round(pv, 4)] for k, (cv, pv) in sorted(ks.items())]})
+    if not out:
+        return {"ok": False, "error": "no_data"}
+    return {"ok": True, "sym": sym, "at": int(time.time()), "px": round(px, 6), "exp": out,
             "ex": sorted(([n, round(v * px)] for n, v in ex_oi.items() if v > 0), key=lambda x: -x[1]),
-            "dvol": dvol, "big": big, "flow": flow}
+            "dvol": dvol, "big": big, "flow": flow, "bigMin": OPT_BIG.get(sym, OPT_BIG_OTHER),
+            "tape": bool(flow)}
+
+
+def options_coins() -> list:
+    """Монеты экрана с их интересом в долларах — из уже собранного; ещё не
+    собранные идут в конце с нулём, пока их не прогреет liq_warm_refresher."""
+    with _small_lock:
+        known = {s: v[1] for s, v in _OPT.items() if isinstance(v, tuple) and isinstance(v[1], dict) and v[1].get("ok")}
+    rows = []
+    for s in OPT_SYMS:
+        r = known.get(s)
+        if not r:
+            rows.append([s, 0, 0, 0.0, 0.0])
+            continue
+        c = sum(e["c"] for e in r["exp"])
+        p = sum(e["p"] for e in r["exp"])
+        # Волатильность месячной даты — та, что ближе всего к тридцати дням.
+        ivs = [e for e in r["exp"] if e.get("iv")]
+        m = min(ivs, key=lambda e: abs(e["ts"] - time.time() - 30 * 86400)) if ivs else None
+        rows.append([s, round((c + p) * r["px"]), len(r["ex"]), round(p / c, 2) if c > 0 else 0.0,
+                     m["iv"] if m else 0.0])
+    return sorted(rows, key=lambda x: (-x[1], OPT_SYMS.index(x[0])))
 
 
 def options_data(sym: str) -> dict:
     sym = (sym or "BTC").upper()
     if sym not in OPT_SYMS:
         return {"ok": False, "error": "bad_args"}
-    return cached_bg(_OPT, sym, OPT_TTL, lambda: _opt_build(sym))
+    r = cached_bg(_OPT, sym, OPT_TTL, lambda: _opt_build(sym))
+    return {**r, "coins": options_coins()} if isinstance(r, dict) else r
 
 
 # --- Дайджест ------------------------------------------------------------

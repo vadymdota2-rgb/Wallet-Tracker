@@ -1085,7 +1085,11 @@ say("кошельки: отказ с причиной, норма запросо
 # крупные сделки Deribit; только с Премиумом, экран — в боковом меню.
 _op = read(f"{APP}/src/screens/OptionsScreen.tsx")
 say("опционы: Deribit, OKX, Bybit, Binance; Max Pain, DVOL, крупные сделки; Премиум",
-    'OPT_SOURCES = (("Deribit", _opt_deribit), ("OKX", _opt_okx), ("Bybit", _opt_bybit), ("Binance", _opt_binance))' in api
+    # Шесть бирж и двенадцать монет; общие выгрузки — одна на все монеты.
+    'OPT_SOURCES = (("Deribit", _opt_deribit), ("OKX", _opt_okx), ("Bybit", _opt_bybit),\n               ("Binance", _opt_binance), ("Gate", _opt_gate), ("Delta", _opt_delta))' in api
+    and 'OPT_SYMS = ("BTC", "ETH", "SOL", "XRP", "HYPE", "BNB", "DOGE", "AVAX", "TRX", "SUI", "ADA", "LTC")' in api
+    and "def options_coins(" in api and 'currency=USDC&kind=option' in api and "&uly={fam}" in api
+    and "function CoinSwitch(" in _op and '"op_all_coins"' in _op
     and "def _opt_maxpain(" in api and "get_volatility_index_data" in api
     and "get_last_trades_by_currency_and_time" in api
     and '"options"' in api.split("PAID_PATHS = frozenset(")[1][:900]

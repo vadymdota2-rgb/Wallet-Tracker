@@ -27,13 +27,16 @@ import { haptic } from "../lib/telegram";
 import { fetchOptions, peekOptions, refreshOptions, savedOptions } from "../lib/api";
 import { useNow } from "../lib/tick";
 import { CoinIcon } from "../components/CoinIcon";
-import { Card, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
-import type { OptExpiry, OptionsReply, OptTrade } from "../lib/types";
+import { Card, Empty, SectionTitle, Skeleton } from "../components/ui";
+import type { OptCoin, OptExpiry, OptionsReply, OptTrade } from "../lib/types";
 import { Frame } from "./Screen";
 
 type Lang = Parameters<typeof t>[0];
 
-const COINS = ["BTC", "ETH"] as const;
+/** Монеты до первого ответа сервера; дальше список и порядок — из ответа. */
+const COINS = ["BTC", "ETH", "SOL", "XRP", "HYPE", "BNB", "DOGE", "AVAX", "TRX"];
+/** Монета без заметного интереса в ленте не показывается — кроме выбранной. */
+const COIN_MIN_OI = 100_000;
 /** Строк в лесенке страйков — не больше: дальше они сливаются в полоски. */
 const MAX_ROWS = 36;
 /** Сколько крупных сделок (или блоков) видно сразу. */
@@ -96,6 +99,11 @@ function strikeRows(all: StrikeRow[], price: number, span: number): { rows: Stri
     rows = [...b.values()];
   }
   return { rows: rows.sort((a, b) => b.k - a.k), step };
+}
+
+/** Страйк: у дешёвых монет — с долями («0,34», «1,75»), у BTC — целым. */
+function strike(k: number): string {
+  return num(k, k < 1 ? 3 : k < 10 ? 2 : k < 100 ? 1 : 0);
 }
 
 /** Настрой по Put/Call открытого интереса — как его читают на рынке. */
@@ -237,7 +245,7 @@ function Leg({ lang, b, sym, nowSec }: { lang: Lang; b: OptTrade; sym: string; n
     <span className="op-leg">
       <span className="op-leg-t">
         <i className={`op-dot ${call ? "up" : "dn"}`} aria-hidden="true" />
-        <b>{t(lang, call ? "op_call" : "op_put")} {num(b.k)}</b>
+        <b>{t(lang, call ? "op_call" : "op_put")} {strike(b.k)}</b>
         <small>{dayMonth(exp, nowSec)}</small>
       </span>
       <span className="op-leg-s">
@@ -303,7 +311,7 @@ export function OptionsScreen() {
   const lang = useApp((s) => s.lang);
   const saved = useApp((s) => s.optSym);
   const setOptSym = useApp((s) => s.setOptSym);
-  const [sym, setSym] = useState<string>((COINS as readonly string[]).includes(saved) ? saved : "BTC");
+  const [sym, setSym] = useState<string>(saved || "BTC");
   const [exp, setExp] = useState<string>("all");
   const [sel, setSel] = useState<number | null>(null);
   const [bigN, setBigN] = useState(BIG_PAGE);
@@ -312,6 +320,9 @@ export function OptionsScreen() {
   const [staleAt, setStaleAt] = useState<number | null>(null);
   const [retry, setRetry] = useState(0);
   const ladderRef = useRef<HTMLDivElement>(null);
+  /* Список монет из прошлого ответа: пока грузится новая, лента не прыгает. */
+  const lastCoins = useRef<OptCoin[] | undefined>(undefined);
+  if (reply?.coins?.length) lastCoins.current = reply.coins;
 
   useEffect(() => {
     let alive = true;
@@ -370,7 +381,7 @@ export function OptionsScreen() {
     return (
       <Frame title={t(lang, "op_title")}>
         <p className="lq-lead">{t(lang, "op_sub")}</p>
-        <CoinSwitch sym={sym} onPick={setSym} />
+        <CoinSwitch sym={sym} onPick={setSym} coins={reply?.coins ?? lastCoins.current} />
         {!reply ? (
           <Card><Skeleton rows={10} /></Card>
         ) : (
@@ -438,7 +449,7 @@ export function OptionsScreen() {
   return (
     <Frame title={t(lang, "op_title")}>
       <p className="lq-lead">{t(lang, "op_sub")}</p>
-      <CoinSwitch sym={sym} onPick={setSym} />
+      <CoinSwitch sym={sym} onPick={setSym} coins={reply?.coins ?? lastCoins.current} />
 
       {staleAt ? (
         <p className="lq-stale">
@@ -508,6 +519,14 @@ export function OptionsScreen() {
               <Spark path={reply.dvol.path} />
               <span className="op-tile-d">{t(lang, "op_dvol_sub", { x: `${reply.dvol.chg > 0 ? "+" : ""}${num(reply.dvol.chg, 1)}` })}</span>
             </div>
+          ) : month ? (
+            /* DVOL у Deribit есть только для BTC и ETH; у остальных монет —
+               волатильность «на деньгах» месячной даты, смысл тот же. */
+            <div className="op-tile">
+              <small>{t(lang, "op_dvol")}</small>
+              <b>{num(month.iv, 1)}%</b>
+              <span className="op-tile-d">{t(lang, "op_iv_m", { d: dayMonth(month.ts, nowSec) })}</span>
+            </div>
           ) : null}
         </div>
       </Card>
@@ -553,7 +572,7 @@ export function OptionsScreen() {
                   {topP.has(r.k) ? <small>{usd(r.p * P)}</small> : null}
                   <i style={{ width: `${(r.p / maxBar) * BAR_MAX * 100}%` }} />
                 </span>
-                <b>{num(r.k)}</b>
+                <b>{strike(r.k)}</b>
                 <span className="op-bar r">
                   <i style={{ width: `${(r.c / maxBar) * BAR_MAX * 100}%` }} />
                   {topC.has(r.k) ? <small>{usd(r.c * P)}</small> : null}
@@ -574,18 +593,18 @@ export function OptionsScreen() {
         {rowSel ? (
           <div className="op-sel" aria-live="polite">
             <div className="op-sel-h">
-              <b>{t(lang, "op_strike_n", { x: view.step ? `≈ ${num(rowSel.k)}` : num(rowSel.k) })}</b>
+              <b>{t(lang, "op_strike_n", { x: view.step ? `≈ ${strike(rowSel.k)}` : strike(rowSel.k) })}</b>
               <span>{pct(((rowSel.k - P) / P) * 100, 1, true)}</span>
             </div>
             <div className="op-sel-r">
               <span><i className="op-dot dn" />{t(lang, "op_puts")}</span>
               <b>{usd(rowSel.p * P)}</b>
-              <small>{num(rowSel.p, 1)} {reply.sym}</small>
+              <small>{num(rowSel.p, rowSel.p < 100 ? 2 : 0)} {reply.sym}</small>
             </div>
             <div className="op-sel-r">
               <span><i className="op-dot up" />{t(lang, "op_calls")}</span>
               <b>{usd(rowSel.c * P)}</b>
-              <small>{num(rowSel.c, 1)} {reply.sym}</small>
+              <small>{num(rowSel.c, rowSel.c < 100 ? 2 : 0)} {reply.sym}</small>
             </div>
           </div>
         ) : (
@@ -703,10 +722,12 @@ export function OptionsScreen() {
         </>
       ) : null}
 
-      {/* 6. Крупные сделки */}
+      {/* 6. Крупные сделки — только где есть лента Deribit */}
+      {reply.tape !== false ? (
+      <>
       <SectionTitle>{t(lang, "op_big")}</SectionTitle>
       <Card>
-        <p className="lq-hint op-big-sub">{t(lang, "op_big_sub", { x: usd(reply.sym === "BTC" ? 1_000_000 : 500_000) })}</p>
+        <p className="lq-hint op-big-sub">{t(lang, "op_big_sub", { x: usd(reply.bigMin ?? (reply.sym === "BTC" ? 1_000_000 : 500_000)) })}</p>
         {groups.length ? (
           <>
             {groups.slice(0, bigN).map((g) => (
@@ -722,6 +743,8 @@ export function OptionsScreen() {
           <p className="lq-none">{t(lang, "op_big_none")}</p>
         )}
       </Card>
+      </>
+      ) : null}
 
       {/* 7. Доля бирж */}
       {reply.ex.length > 1 ? (
@@ -736,6 +759,44 @@ export function OptionsScreen() {
                 <small>{pct((v / Math.max(1, exTot)) * 100, 0, false)}</small>
               </div>
             ))}
+          </Card>
+        </>
+      ) : null}
+
+      {/* 8. Все монеты — рынок опционов целиком */}
+      {(reply.coins ?? []).filter(([, oi]) => oi >= COIN_MIN_OI).length > 1 ? (
+        <>
+          <SectionTitle>{t(lang, "op_all_coins")}</SectionTitle>
+          <Card>
+            <div className="op-mk-h">
+              <small>{t(lang, "op_coin")}</small>
+              <small>{t(lang, "op_oi_col")}</small>
+              <small>P/C</small>
+              <small>IV</small>
+            </div>
+            {(reply.coins ?? []).filter(([, oi]) => oi >= COIN_MIN_OI).map(([c, oi, nex, pc, iv]) => {
+              const mx = Math.max(1, reply.coins?.[0]?.[1] ?? 1);
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  className={c === sym ? "op-mk on" : "op-mk"}
+                  onClick={() => { if (c !== sym) { haptic("select"); setSym(c); document.querySelector(".op-coins")?.scrollIntoView({ behavior: "smooth", block: "start" }); } }}
+                >
+                  <span className="op-mk-c">
+                    <CoinIcon sym={c} size={22} />
+                    <span><b>{c}</b><small>{t(lang, "op_n_ex", { n: nex })}</small></span>
+                  </span>
+                  <span className="op-exp-oi">
+                    <em>{usd(oi)}</em>
+                    <span className="op-mk-bar"><i style={{ width: `${Math.max(2, Math.sqrt(oi / mx) * 100)}%` }} /></span>
+                  </span>
+                  <span className="op-exp-n">{pc ? fix2(pc) : "—"}</span>
+                  <span className="op-exp-n">{iv ? `${num(iv, 0)}%` : "—"}</span>
+                </button>
+              );
+            })}
+            <p className="lq-hint">{t(lang, "op_all_coins_note")}</p>
           </Card>
         </>
       ) : null}
@@ -760,14 +821,29 @@ export function OptionsScreen() {
   );
 }
 
-function CoinSwitch({ sym, onPick }: { sym: string; onPick: (s: string) => void }) {
+/** Монеты лентой: иконка, тикер и интерес — сразу видно, где рынок есть. */
+function CoinSwitch({ sym, onPick, coins }: { sym: string; onPick: (s: string) => void; coins?: OptCoin[] }) {
+  const list = coins?.length
+    ? coins.filter(([s, oi]) => oi >= COIN_MIN_OI || s === sym)
+    : COINS.map((s): OptCoin => [s, 0, 0]);
   return (
-    <div className="lq-ctl">
-      <Segmented<string>
-        value={sym}
-        onChange={onPick}
-        options={COINS.map((c) => ({ id: c, label: <span className="op-coin"><CoinIcon sym={c} size={18} /> {c}</span> }))}
-      />
+    <div className="op-coins" role="tablist">
+      {list.map(([s, oi]) => (
+        <button
+          key={s}
+          type="button"
+          role="tab"
+          aria-selected={s === sym}
+          className={s === sym ? "op-coin on" : "op-coin"}
+          onClick={() => { if (s !== sym) { haptic("select"); onPick(s); } }}
+        >
+          <CoinIcon sym={s} size={22} />
+          <span>
+            <b>{s}</b>
+            {oi > 0 ? <small>{usd(oi)}</small> : null}
+          </span>
+        </button>
+      ))}
     </div>
   );
 }

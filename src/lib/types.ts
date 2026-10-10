@@ -788,6 +788,8 @@ export interface OptTrade {
   blk: string;
 }
 
+export type OptCoin = [string, number, number, number?, number?];
+
 export interface OptionsReply {
   ok: boolean;
   error?: string;
@@ -802,6 +804,12 @@ export interface OptionsReply {
   big: OptTrade[];
   /** Номинал за сутки по агрессору: колы/путы × купили/продали; h — часов ленты. */
   flow: { cb: number; cs: number; pb: number; ps: number; h: number } | Record<string, never>;
+  /** Порог крупной сделки, $ номинала. */
+  bigMin?: number;
+  /** Есть ли у монеты лента сделок Deribit (поток и крупные сделки). */
+  tape?: boolean;
+  /** Все монеты экрана: [тикер, интерес $, бирж, Put/Call, IV месячной даты %]. */
+  coins?: OptCoin[];
 }
 
 /** Индекс страха и жадности: дни [начало суток UTC, индекс 0–100, закрытие BTC]. */
