@@ -802,7 +802,7 @@ export const tr: Dict = {
   op_strike: "Strike, $",
   op_strike_n: "Strike {x}",
   op_strikes: "Kullanım fiyatına göre açık pozisyon",
-  op_sub: "Altı borsadan en büyük coinlerin opsiyonları — Deribit, OKX, Bybit, Binance, Gate ve Delta: strike'a göre bahisler, Max Pain, volatilite, piyasa havası ve büyük işlemler.",
+  op_sub: "Sekiz borsadan kripto ve altın opsiyonları — Deribit, Bullish, OKX, Bybit, Binance, Gate, Delta, Delta India: strike'a göre bahisler, Max Pain, volatilite, piyasa havası ve büyük işlemler.",
   op_tap: "Rakamları görmek için bir satıra dokun. Max Pain için bir tarih seç.",
   op_tap_mp: "Rakamları görmek için bir satıra dokun. MP — bu tarihin Max Pain'i.",
   op_term_dn: "Yakın tarihler uzaklardan ucuz — şimdi sakin, büyük hareketler sonra bekleniyor",

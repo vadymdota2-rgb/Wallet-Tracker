@@ -801,7 +801,7 @@ export const en = {
   op_strike: "Strike, $",
   op_strike_n: "Strike {x}",
   op_strikes: "Open interest by strike",
-  op_sub: "Options on the top coins from six exchanges — Deribit, OKX, Bybit, Binance, Gate and Delta: where bets sit by strike, Max Pain, volatility, market mood and big trades.",
+  op_sub: "Crypto and gold options from eight exchanges — Deribit, Bullish, OKX, Bybit, Binance, Gate, Delta, Delta India: where bets sit by strike, Max Pain, volatility, market mood and big trades.",
   op_tap: "Tap a row to see the numbers. Pick a date to see its Max Pain.",
   op_tap_mp: "Tap a row to see the numbers. MP — Max Pain for this date.",
   op_term_dn: "Near dates are cheaper than far ones — calm now, big moves expected later",

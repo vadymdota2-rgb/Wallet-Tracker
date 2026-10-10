@@ -7170,6 +7170,8 @@ RELAY_HOSTS = {
     "https://api.bybit.com/": "/xr/bybit/",
     # Опционы Binance — свой адрес, закрыт по стране так же.
     "https://eapi.binance.com/": "/xr/binance-o/",
+    # Bullish — если и он закрыт по стране; полторы тысячи тикеров за проход.
+    "https://api.exchange.bullish.com/": "/xr/bullish/",
 }
 _relay_first: dict[str, float] = {}
 
@@ -12386,18 +12388,25 @@ def etf_data() -> dict:
 
 # --- Опционы -------------------------------------------------------------
 # Открытый интерес по страйкам и датам, Max Pain, Put/Call, волатильность по
-# датам и перекос, DVOL и крупные сделки — по двенадцати монетам с шести бирж.
+# датам и перекос, DVOL и крупные сделки — по четырнадцати монетам с восьми бирж.
 #
 # Каждая биржа отдаёт свои опционы в своей записи, а сервер приводит их к
 # одной строке: (дата, страйк, C|P, интерес в монетах, объём за сутки в
 # монетах, IV в %, форвард). У всех интерес — в монетах базового актива.
 #   Deribit — BTC и ETH в монете (инверсные), а в USDC ещё SOL, XRP, HYPE,
 #             AVAX, TRX и те же BTC/ETH; сделки, перекос и DVOL — тоже отсюда;
-#   OKX — BTC, ETH, SOL; Bybit и Binance — всё, что у них есть (с этой машины
-#   закрыты по стране — get_json идёт через ретранслятор); Gate — десяток
-#   монет; Delta Exchange — BTC и ETH.
-# Derive, Thalex и Aevo интерес по страйкам одним запросом не отдают — их нет.
-OPT_SYMS = ("BTC", "ETH", "SOL", "XRP", "HYPE", "BNB", "DOGE", "AVAX", "TRX", "SUI", "ADA", "LTC")
+#   Bullish — BTC; интерес отдаёт только по одному опциону за запрос, их
+#             около полутора тысяч, поэтому снимок собирается в фоне раз в
+#             пятнадцать минут;
+#   OKX — BTC, ETH, SOL, золото; Bybit и Binance — всё, что у них есть (с этой
+#   машины закрыты по стране — get_json идёт через ретранслятор); Gate —
+#   десяток монет; Delta Exchange и Delta Exchange India — BTC, ETH, золото.
+# Нет: Derive (общий список тикеров пуст, а в тикере опциона — лимиты, а не
+# позиции), CoinCall (интерес только с ключом), Thalex (полмиллиона долларов
+# на 436 запросов) и Aevo (интерес только суммой, без страйков).
+OPT_SYMS = ("BTC", "ETH", "SOL", "XRP", "HYPE", "BNB", "DOGE", "AVAX", "TRX", "SUI", "ADA", "LTC", "XAUT", "MNT")
+# Как монету зовут на бирже, если не так, как у нас: золото у OKX — XAU.
+OPT_ALIAS = {"OKX": {"XAUT": "XAU"}}
 OPT_TTL = 180.0
 # Крупная сделка: от миллиона долларов номинала по BTC, полумиллиона по ETH,
 # ста тысяч по остальным — у них и рынок меньше.
@@ -12476,7 +12485,8 @@ def _opt_deribit(sym: str) -> list:
 def _opt_okx(sym: str) -> list:
     fams = _opt_shared("okx-fams", lambda: [f for x in ((get_json(
         "https://www.okx.com/api/v5/public/underlying?instType=OPTION", 10) or {}).get("data") or []) for f in x])
-    fam = f"{sym}-USD"
+    own = OPT_ALIAS["OKX"].get(sym, sym)
+    fam = f"{own}-USD"
     if fam not in fams:
         return []
     # По uly, а не instFamily: у SOL семейство называется SOL-USD_UM, и
@@ -12484,7 +12494,7 @@ def _opt_okx(sym: str) -> list:
     oi = (get_json(f"https://www.okx.com/api/v5/public/open-interest?instType=OPTION&uly={fam}", 15) or {}).get("data") or []
     tk = (get_json(f"https://www.okx.com/api/v5/market/tickers?instType=OPTION&uly={fam}", 15) or {}).get("data") or []
     vol = {r.get("instId"): _fnum(r.get("volCcy24h")) for r in tk}
-    return _opt_rows(((r.get("instId"), _fnum(r.get("oiCcy")), vol.get(r.get("instId"), 0.0), 0.0, 0.0) for r in oi), sym)
+    return _opt_rows(((r.get("instId"), _fnum(r.get("oiCcy")), vol.get(r.get("instId"), 0.0), 0.0, 0.0) for r in oi), own)
 
 
 def _opt_bybit(sym: str) -> list:
@@ -12518,10 +12528,11 @@ def _opt_gate(sym: str) -> list:
                        _fnum(r.get("underlying_price"))) for r in (rows if isinstance(rows, list) else [])), sym)
 
 
-def _opt_delta(sym: str) -> list:
-    """Delta Exchange пишет иначе: P-ETH-2500-111026 (тип, монета, страйк, ДДММГГ)."""
-    rows = _opt_shared("delta", lambda: (get_json(
-        "https://api.delta.exchange/v2/tickers?contract_types=call_options,put_options", 20) or {}).get("result") or [])
+def _opt_delta(sym: str, host: str = "api.delta.exchange") -> list:
+    """Delta Exchange пишет иначе: P-ETH-2500-111026 (тип, монета, страйк, ДДММГГ).
+    У индийской Delta — та же запись на своём адресе."""
+    rows = _opt_shared(host, lambda: (get_json(
+        f"https://{host}/v2/tickers?contract_types=call_options,put_options", 20) or {}).get("result") or [])
     out = []
     for r in rows:
         p = str(r.get("symbol") or "").upper().split("-")
@@ -12534,8 +12545,50 @@ def _opt_delta(sym: str) -> list:
     return out
 
 
-OPT_SOURCES = (("Deribit", _opt_deribit), ("OKX", _opt_okx), ("Bybit", _opt_bybit),
-               ("Binance", _opt_binance), ("Gate", _opt_gate), ("Delta", _opt_delta))
+def _opt_delta_in(sym: str) -> list:
+    return _opt_delta(sym, "api.india.delta.exchange")
+
+
+# Снимок Bullish: строки (имя, интерес, объём, IV, 0) и время сборки.
+OPT_BULLISH_EVERY = 900.0
+_opt_bullish_snap: dict = {"at": 0.0, "rows": [], "busy": False}
+
+
+def _opt_bullish_pass() -> None:
+    """Полный проход по опционам Bullish: список рынков и тикер каждого.
+    Десять потоков, около минуты на проход."""
+    try:
+        ms = get_json("https://api.exchange.bullish.com/trading-api/v1/markets", 20)
+        ms = [m for m in (ms if isinstance(ms, list) else []) if m.get("marketType") == "OPTION"]
+
+        def tick(m):
+            r = get_json(f"https://api.exchange.bullish.com/trading-api/v1/markets/{m.get('symbol')}/tick", 15) or {}
+            return (m.get("symbol"), _fnum(r.get("openInterest")), _fnum(r.get("baseVolume")),
+                    _fnum(r.get("impliedVolatility")) * 100, 0.0)
+
+        with ThreadPoolExecutor(max_workers=10) as pool:
+            rows = list(pool.map(tick, ms))
+        if rows:
+            _opt_bullish_snap["rows"] = rows
+            _opt_bullish_snap["at"] = time.monotonic()
+    except Exception as e:  # noqa: BLE001
+        print(f"options bullish: {e}", file=sys.stderr)
+    finally:
+        _opt_bullish_snap["busy"] = False
+
+
+def _opt_bullish(sym: str) -> list:
+    """Из последнего снимка; устарел — следующий собирается в фоне, а до
+    первого снимка Bullish в сумме просто нет."""
+    snap = _opt_bullish_snap
+    if time.monotonic() - snap["at"] > OPT_BULLISH_EVERY and not snap["busy"]:
+        snap["busy"] = True
+        threading.Thread(target=_opt_bullish_pass, daemon=True, name="opt-bullish").start()
+    return _opt_rows(snap["rows"], sym)
+
+
+OPT_SOURCES = (("Deribit", _opt_deribit), ("Bullish", _opt_bullish), ("OKX", _opt_okx), ("Bybit", _opt_bybit),
+               ("Binance", _opt_binance), ("Gate", _opt_gate), ("Delta", _opt_delta), ("Delta India", _opt_delta_in))
 
 
 def _opt_maxpain(strikes: dict) -> float:
@@ -12669,7 +12722,7 @@ def _opt_index(sym: str) -> float:
 
 
 def _opt_build(sym: str) -> dict:
-    with ThreadPoolExecutor(max_workers=9) as pool:
+    with ThreadPoolExecutor(max_workers=11) as pool:
         futs = {name: pool.submit(fn, sym) for name, fn in OPT_SOURCES}
         f_ix = pool.submit(_opt_index, sym)
         f_dv = pool.submit(_opt_dvol, sym)
@@ -12693,10 +12746,15 @@ def _opt_build(sym: str) -> dict:
             big, flow = f_tr.result()
         except Exception:  # noqa: BLE001
             big, flow = [], {}
-    today = time.strftime("%Y-%m-%d", time.gmtime())
+    # Сегодняшняя дата живёт до 12:00 UTC: в 08:00 рассчитываются Deribit,
+    # OKX, Bybit, Binance, Bullish и Gate (их опционы к этому часу сами
+    # исчезают из выгрузок), а Delta — в 12:00. Дальше сегодняшнее — истёкшее.
+    now = time.gmtime()
+    today = time.strftime("%Y-%m-%d", now)
+    live_from = today if now.tm_hour < 12 else time.strftime("%Y-%m-%d", time.gmtime(time.time() + 86400))
     if px <= 0:
         # Индекса нет — берём форвард ближайшей даты у любой биржи, что его дала.
-        fw = sorted((d, fwd) for rows in got.values() for d, _k, _cp, _oi, _v, _iv, fwd in rows if fwd > 0 and d >= today)
+        fw = sorted((d, fwd) for rows in got.values() for d, _k, _cp, _oi, _v, _iv, fwd in rows if fwd > 0 and d >= live_from)
         px = fw[0][1] if fw else 0.0
     if px <= 0:
         return {"ok": False, "error": "no_data"}
@@ -12704,7 +12762,7 @@ def _opt_build(sym: str) -> dict:
     ex_oi: dict = {}
     for name, rows in got.items():
         for d, k, cp, oi, vol, _iv, _fwd in rows:
-            if d < today or (oi <= 0 and vol <= 0):
+            if d < live_from or (oi <= 0 and vol <= 0):
                 continue
             e = exp.setdefault(d, {"k": {}, "v": [0.0, 0.0]})
             s = e["k"].setdefault(k, [0.0, 0.0])
@@ -12715,9 +12773,9 @@ def _opt_build(sym: str) -> dict:
     if not exp:
         return {"ok": False, "error": "no_data"}
     # Волатильность — с той биржи, где её больше всего: Deribit, потом Bybit,
-    # Delta, Gate. Дата, которой у первой нет, берётся у следующей.
+    # Delta, Gate. У Bullish форварда нет — без него «на деньгах» не найти. Дата, которой у первой нет, берётся у следующей.
     smile: dict = {}
-    for name in ("Deribit", "Bybit", "Delta", "Gate"):
+    for name in ("Deribit", "Bybit", "Delta India", "Delta", "Gate"):
         for d, v in _opt_smile(got.get(name) or []).items():
             smile.setdefault(d, v)
     out = []

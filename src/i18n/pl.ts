@@ -802,7 +802,7 @@ export const pl: Dict = {
   op_strike: "Strike, $",
   op_strike_n: "Strike {x}",
   op_strikes: "Otwarte pozycje wg strike'ów",
-  op_sub: "Opcje na największe monety z sześciu giełd — Deribit, OKX, Bybit, Binance, Gate i Delta: zakłady wg strike'ów, Max Pain, zmienność, nastroje rynku i duże transakcje.",
+  op_sub: "Opcje na krypto i złoto z ośmiu giełd — Deribit, Bullish, OKX, Bybit, Binance, Gate, Delta, Delta India: zakłady wg strike'ów, Max Pain, zmienność, nastroje rynku i duże transakcje.",
   op_tap: "Dotknij wiersza, by zobaczyć liczby. Wybierz datę, by zobaczyć jej Max Pain.",
   op_tap_mp: "Dotknij wiersza, by zobaczyć liczby. MP — Max Pain tej daty.",
   op_term_dn: "Bliskie daty tańsze od dalekich — teraz spokojnie, duże ruchy rynek widzi później",

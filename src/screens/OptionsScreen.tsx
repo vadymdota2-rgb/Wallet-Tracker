@@ -34,7 +34,7 @@ import { Frame } from "./Screen";
 type Lang = Parameters<typeof t>[0];
 
 /** Монеты до первого ответа сервера; дальше список и порядок — из ответа. */
-const COINS = ["BTC", "ETH", "SOL", "XRP", "HYPE", "BNB", "DOGE", "AVAX", "TRX"];
+const COINS = ["BTC", "ETH", "SOL", "XRP", "HYPE", "XAUT", "BNB", "DOGE", "AVAX", "TRX"];
 /** Монета без заметного интереса в ленте не показывается — кроме выбранной. */
 const COIN_MIN_OI = 100_000;
 /** Строк в лесенке страйков — не больше: дальше они сливаются в полоски. */
@@ -363,7 +363,10 @@ export function OptionsScreen() {
   }, [sym]);
 
   const nowSec = Math.floor(Date.now() / 1000);
-  const exps = useMemo(() => (reply?.ok ? reply.exp.filter((e) => e.ts > nowSec) : []), [reply, nowSec]);
+  /* Истёкшие даты отсекает сервер: у Delta расчёт в 12:00 UTC, не в 08:00,
+     и сегодняшняя дата до полудня ещё живая. Здесь — только запас на
+     сохранённый с устройства ответ: дата старше четырёх часов после 08:00 ушла. */
+  const exps = useMemo(() => (reply?.ok ? reply.exp.filter((e) => e.ts + 4 * 3600 > nowSec) : []), [reply, nowSec]);
   const cur = exp === "all" ? null : exps.find((e) => e.d === exp) ?? null;
   const strikes = useMemo(() => strikeMap(cur ? [cur] : exps), [cur, exps]);
   const view = useMemo(

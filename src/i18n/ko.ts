@@ -802,7 +802,7 @@ export const ko: Dict = {
   op_strike: "행사가, $",
   op_strike_n: "행사가 {x}",
   op_strikes: "행사가별 미결제약정",
-  op_sub: "6개 거래소(Deribit, OKX, Bybit, Binance, Gate, Delta)의 주요 코인 옵션: 행사가별 베팅, 맥스 페인, 변동성, 시장 분위기, 대형 거래.",
+  op_sub: "8개 거래소(Deribit, Bullish, OKX, Bybit, Binance, Gate, Delta, Delta India)의 암호화폐·금 옵션: 행사가별 베팅, 맥스 페인, 변동성, 시장 분위기, 대형 거래.",
   op_tap: "행을 누르면 수치가 보입니다. 만기를 고르면 맥스 페인을 표시합니다.",
   op_tap_mp: "행을 누르면 수치가 보입니다. MP — 이 만기의 맥스 페인.",
   op_term_dn: "가까운 만기가 먼 만기보다 저렴 — 지금은 잠잠, 큰 변동은 나중에 예상",

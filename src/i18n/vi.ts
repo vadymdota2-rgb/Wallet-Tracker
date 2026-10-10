@@ -802,7 +802,7 @@ export const vi: Dict = {
   op_strike: "Strike, $",
   op_strike_n: "Strike {x}",
   op_strikes: "Hợp đồng mở theo giá thực hiện",
-  op_sub: "Quyền chọn các đồng lớn nhất từ sáu sàn — Deribit, OKX, Bybit, Binance, Gate và Delta: cược theo giá thực hiện, Max Pain, biến động, tâm lý thị trường và giao dịch lớn.",
+  op_sub: "Quyền chọn crypto và vàng từ tám sàn — Deribit, Bullish, OKX, Bybit, Binance, Gate, Delta, Delta India: cược theo giá thực hiện, Max Pain, biến động, tâm lý thị trường và giao dịch lớn.",
   op_tap: "Chạm vào một dòng để xem số liệu. Chọn ngày để xem Max Pain của ngày đó.",
   op_tap_mp: "Chạm vào một dòng để xem số liệu. MP — Max Pain của ngày này.",
   op_term_dn: "Ngày gần rẻ hơn ngày xa — hiện yên ả, biến động lớn được chờ sau",

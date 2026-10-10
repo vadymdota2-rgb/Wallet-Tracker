@@ -802,7 +802,7 @@ export const fr: Dict = {
   op_strike: "Strike, $",
   op_strike_n: "Strike {x}",
   op_strikes: "Intérêt ouvert par strike",
-  op_sub: "Options sur les principales cryptos de six plateformes — Deribit, OKX, Bybit, Binance, Gate et Delta : paris par strike, Max Pain, volatilité, humeur du marché et grosses transactions.",
+  op_sub: "Options crypto et or sur huit plateformes — Deribit, Bullish, OKX, Bybit, Binance, Gate, Delta, Delta India : paris par strike, Max Pain, volatilité, humeur du marché et grosses transactions.",
   op_tap: "Touchez une ligne pour voir les chiffres. Choisissez une date pour voir son Max Pain.",
   op_tap_mp: "Touchez une ligne pour voir les chiffres. MP — Max Pain de cette date.",
   op_term_dn: "Les échéances proches sont moins chères que les lointaines — calme maintenant, gros mouvements attendus plus tard",

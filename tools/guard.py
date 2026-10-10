@@ -507,8 +507,10 @@ say("карта ликвидаций: отдаётся из памяти сра�
 _ngx = read(f"{APP}/nginx.conf")
 say("Binance и Bybit — через nginx в Европе, если отсюда закрыты; ретранслятор только с ключом",
     'location /xr/binance-f/' in _ngx and 'location /xr/bybit/' in _ngx
-    and _ngx.count('if ($http_x_api_key != "__API_KEY__") { return 403; }') == 3
-    and _ngx.count('if ($http_x_api_key = "") { return 403; }') == 3
+    and _ngx.count('if ($http_x_api_key != "__API_KEY__") { return 403; }') == 4
+    and _ngx.count('if ($http_x_api_key = "") { return 403; }') == 4
+    # Четвёртый — Bullish, со своей широкой нормой: проход — полторы тысячи запросов.
+    and 'location /xr/bullish/' in _ngx and "zone=relay_bulk" in _ngx
     # Третий адрес — опционы Binance (eapi), закрыты по стране так же.
     and 'location /xr/binance-o/' in _ngx and '"https://eapi.binance.com/": "/xr/binance-o/"' in api
     and "def _geo_refused(" in api and '"https://fapi.binance.com/": "/xr/binance-f/"' in api)
@@ -1085,9 +1087,10 @@ say("кошельки: отказ с причиной, норма запросо
 # крупные сделки Deribit; только с Премиумом, экран — в боковом меню.
 _op = read(f"{APP}/src/screens/OptionsScreen.tsx")
 say("опционы: Deribit, OKX, Bybit, Binance; Max Pain, DVOL, крупные сделки; Премиум",
-    # Шесть бирж и двенадцать монет; общие выгрузки — одна на все монеты.
-    'OPT_SOURCES = (("Deribit", _opt_deribit), ("OKX", _opt_okx), ("Bybit", _opt_bybit),\n               ("Binance", _opt_binance), ("Gate", _opt_gate), ("Delta", _opt_delta))' in api
-    and 'OPT_SYMS = ("BTC", "ETH", "SOL", "XRP", "HYPE", "BNB", "DOGE", "AVAX", "TRX", "SUI", "ADA", "LTC")' in api
+    # Восемь бирж и четырнадцать монет; общие выгрузки — одна на все монеты.
+    'OPT_SOURCES = (("Deribit", _opt_deribit), ("Bullish", _opt_bullish), ("OKX", _opt_okx), ("Bybit", _opt_bybit),\n               ("Binance", _opt_binance), ("Gate", _opt_gate), ("Delta", _opt_delta), ("Delta India", _opt_delta_in))' in api
+    and 'OPT_SYMS = ("BTC", "ETH", "SOL", "XRP", "HYPE", "BNB", "DOGE", "AVAX", "TRX", "SUI", "ADA", "LTC", "XAUT", "MNT")' in api
+    and "OPT_BULLISH_EVERY = 900.0" in api
     and "def options_coins(" in api and 'currency=USDC&kind=option' in api and "&uly={fam}" in api
     and "function CoinSwitch(" in _op and '"op_all_coins"' in _op
     and "def _opt_maxpain(" in api and "get_volatility_index_data" in api

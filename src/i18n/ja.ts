@@ -802,7 +802,7 @@ export const ja: Dict = {
   op_strike: "行使価格, $",
   op_strike_n: "行使価格 {x}",
   op_strikes: "権利行使価格別の建玉",
-  op_sub: "6取引所（Deribit・OKX・Bybit・Binance・Gate・Delta）の主要コインのオプション：行使価格別の賭け、マックスペイン、ボラティリティ、市場心理、大口取引。",
+  op_sub: "8取引所（Deribit, Bullish, OKX, Bybit, Binance, Gate, Delta, Delta India）の暗号資産・金オプション：行使価格別の賭け、マックスペイン、ボラティリティ、市場心理、大口取引。",
   op_tap: "行をタップすると数値を表示。満期を選ぶとマックスペインを表示します。",
   op_tap_mp: "行をタップすると数値を表示。MP — この満期のマックスペイン。",
   op_term_dn: "近い満期が遠い満期より安い — 今は落ち着き、大きな動きは先と予想",

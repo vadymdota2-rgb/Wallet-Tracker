@@ -802,7 +802,7 @@ export const id: Dict = {
   op_strike: "Strike, $",
   op_strike_n: "Strike {x}",
   op_strikes: "Open interest per strike",
-  op_sub: "Opsi koin terbesar dari enam bursa — Deribit, OKX, Bybit, Binance, Gate, dan Delta: taruhan per strike, Max Pain, volatilitas, suasana pasar, dan transaksi besar.",
+  op_sub: "Opsi kripto dan emas dari delapan bursa — Deribit, Bullish, OKX, Bybit, Binance, Gate, Delta, Delta India: taruhan per strike, Max Pain, volatilitas, suasana pasar, dan transaksi besar.",
   op_tap: "Ketuk baris untuk melihat angka. Pilih tanggal untuk melihat Max Pain-nya.",
   op_tap_mp: "Ketuk baris untuk melihat angka. MP — Max Pain tanggal ini.",
   op_term_dn: "Tanggal dekat lebih murah dari yang jauh — tenang sekarang, gerakan besar diharapkan nanti",

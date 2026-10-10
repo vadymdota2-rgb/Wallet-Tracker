@@ -802,7 +802,7 @@ export const zh: Dict = {
   op_strike: "行权价，$",
   op_strike_n: "行权价 {x}",
   op_strikes: "按行权价的未平仓量",
-  op_sub: "六家交易所（Deribit、OKX、Bybit、Binance、Gate、Delta）主流币期权：各行权价押注、最大痛点、波动率、市场情绪和大额交易。",
+  op_sub: "八家交易所（Deribit, Bullish, OKX, Bybit, Binance, Gate, Delta, Delta India）的加密货币与黄金期权：各行权价押注、最大痛点、波动率、市场情绪和大额交易。",
   op_tap: "点击一行查看数字。选择日期可查看其最大痛点。",
   op_tap_mp: "点击一行查看数字。MP——该日期的最大痛点。",
   op_term_dn: "近月比远月便宜——当前平静，大波动预期在后",
