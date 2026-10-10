@@ -11,7 +11,7 @@ import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
   LiqCoinsReply, FngReply, DomReply, EtfReply, HalvingReply, FundRow, LsRow, MutationResult,
   RotSide, SymbolRow, TokenHist, Trades, UnlocksReply, WalletLive, BscExFlowReply,
-  BtcBigReply, BtcFlowReply, BtcRankReply, BtcWalletReply, LsTotals,
+  BtcBigReply, BtcFlowReply, BtcRankReply, BtcWalletReply, LsTotals, OptionsReply,
 } from "./types";
 
 const TIMEOUT_MS = 15000;
@@ -444,6 +444,30 @@ export const peekLiqMap = (sym: string, range: string) => peek<LiqMapReply | nul
 export function refreshLiqMap(sym: string, range: string): Promise<LiqMapReply | null> {
   forget(liqPath(sym, range));
   return fetchLiqMap(sym, range);
+}
+
+/* Опционы: сервер пересобирает раз в три минуты. Последний ответ по каждой
+   монете лежит на устройстве — экран открывается сразу, свежий поверх. */
+const optPath = (sym: string) => `/api/options?sym=${encodeURIComponent(sym)}`;
+const OPT_TTL = 2 * 60_000;
+const OPT_SAVED = "wt-options-v1";
+export function savedOptions(sym: string): { at: number; v: OptionsReply } | null {
+  const hit = readSaved<OptionsReply>(OPT_SAVED)[sym];
+  return hit && Date.now() - hit.at < LIQ_SAVED_MAX_AGE && hit.v?.ok ? hit : null;
+}
+export const fetchOptions = (sym: string) =>
+  remember<OptionsReply | null>(optPath(sym), OPT_TTL, () => callTwice<OptionsReply>(optPath(sym)), good).then((r) => {
+    if (r?.ok) {
+      const all = readSaved<OptionsReply>(OPT_SAVED);
+      all[sym] = { at: Date.now(), v: r };
+      writeSaved(OPT_SAVED, all);
+    }
+    return r;
+  });
+export const peekOptions = (sym: string) => peek<OptionsReply | null>(optPath(sym), OPT_TTL);
+export function refreshOptions(sym: string): Promise<OptionsReply | null> {
+  forget(optPath(sym));
+  return fetchOptions(sym);
 }
 
 /* Страх и жадность: индекс выходит раз в сутки. Последний ответ лежит на

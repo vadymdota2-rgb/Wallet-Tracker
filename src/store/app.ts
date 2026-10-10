@@ -17,7 +17,7 @@ export type LiqRange = "1d" | "7d" | "30d";
 export type ScreenName =
   | "wallet" | "position" | "coin" | "deals"
   | "addWallet" | "threshold" | "lang" | "premium" | "help"
-  | "alerts" | "chart" | "unlocks" | "liqmap" | "funding" | "fng" | "dom" | "etf" | "rename" | "spot"
+  | "alerts" | "chart" | "unlocks" | "liqmap" | "options" | "funding" | "fng" | "dom" | "etf" | "rename" | "spot"
   | "legal" | "btcWallet" | "token" | "bonus"
   // Замок «купить / бесплатно в Бонусах» отдельным экраном — значок
   // Премиума в шапке, когда дней ноль.
@@ -83,6 +83,8 @@ interface AppState {
   tvSym: string;
   /** Карта ликвидаций: монета и окно — последние выбранные. */
   liqSym: string;
+  /** Монета экрана опционов. */
+  optSym: string;
   liqRange: LiqRange;
   /** Свои деньги в калькуляторе фандинга. Ноль — поле пустое, счёта нет. */
   fundAmount: number;
@@ -117,6 +119,7 @@ interface AppState {
   setChartTf(tf: Timeframe): void;
   setTvSym(sym: string): void;
   setLiq(sym: string, range: LiqRange): void;
+  setOptSym(sym: string): void;
   setFundAmount(v: number): void;
   setFundLev(v: number): void;
 }
@@ -153,6 +156,7 @@ export const useApp = create<AppState>()(
       chartTf: "1d",
       tvSym: "BTC",
       liqSym: "BTC",
+      optSym: "BTC",
       liqRange: "1d",
       fundAmount: 0,
       fundLev: 1,
@@ -188,6 +192,7 @@ export const useApp = create<AppState>()(
       setChartTf: (chartTf) => set({ chartTf }),
       setTvSym: (tvSym) => set({ tvSym }),
       setLiq: (liqSym, liqRange) => set({ liqSym, liqRange }),
+      setOptSym: (optSym) => set({ optSym }),
       setFundAmount: (fundAmount) => set({ fundAmount: Math.max(0, fundAmount) }),
       /* Сто двадцать пять — предел самых щедрых бирж; выше плеча не бывает, а
          опечатка в поле не должна рисовать миллионные доходы. */
@@ -253,6 +258,7 @@ export const useApp = create<AppState>()(
         tvSym: s.tvSym,
         liqSym: s.liqSym,
         liqRange: s.liqRange,
+        optSym: s.optSym,
         fundAmount: s.fundAmount,
         fundLev: s.fundLev,
       }),

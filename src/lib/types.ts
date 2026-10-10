@@ -751,6 +751,54 @@ export interface LiqMapReply {
   at: number;
 }
 
+/** Дата экспирации опционов: интерес в монетах, страйки — [страйк, колы, путы]. */
+export interface OptExpiry {
+  /** YYYY-MM-DD. */
+  d: string;
+  /** Момент экспирации, сек (08:00 UTC). */
+  ts: number;
+  c: number;
+  p: number;
+  /** Объём за сутки в монетах. */
+  vc: number;
+  vp: number;
+  /** Max Pain — цена, при которой покупатели опционов получат меньше всего. */
+  mp: number;
+  k: [number, number, number][];
+}
+
+export interface OptTrade {
+  t: number;
+  e: string;
+  k: number;
+  cp: "C" | "P";
+  /** Сторона агрессора: b — купил, s — продал. */
+  s: "b" | "s";
+  a: number;
+  /** Номинал, $. */
+  n: number;
+  /** Уплаченная премия, $. */
+  pr: number;
+  iv: number;
+  blk: boolean;
+}
+
+export interface OptionsReply {
+  ok: boolean;
+  error?: string;
+  sym: string;
+  at: number;
+  px: number;
+  exp: OptExpiry[];
+  /** Открытый интерес по биржам: [имя, $]. */
+  ex: [string, number][];
+  /** Индекс волатильности Deribit: значение, изменение за сутки, почасовой путь. */
+  dvol: { v: number; chg: number; path: number[] } | null;
+  big: OptTrade[];
+  /** Номинал за сутки по агрессору: колы/путы × купили/продали; h — часов ленты. */
+  flow: { cb: number; cs: number; pb: number; ps: number; h: number } | Record<string, never>;
+}
+
 /** Индекс страха и жадности: дни [начало суток UTC, индекс 0–100, закрытие BTC]. */
 export interface FngReply {
   ok: boolean;

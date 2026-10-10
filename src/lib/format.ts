@@ -180,6 +180,25 @@ export function day(tsSec: number, nowSec: number): string {
   }
 }
 
+/** Число и короткий месяц без дня недели: «11 окт.», для другого года —
+ *  «26 мар. 27». По UTC: экспирации и разлоки назначены на дату биржи. */
+export function dayMonth(tsSec: number, nowSec: number): string {
+  const d = new Date(tsSec * 1000);
+  const opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", timeZone: "UTC" };
+  if (d.getUTCFullYear() !== new Date(nowSec * 1000).getUTCFullYear()) opts.year = "2-digit";
+  try {
+    return new Intl.DateTimeFormat(locale, opts).format(d);
+  } catch {
+    return d.toISOString().slice(0, 10);
+  }
+}
+
+/** Ровно два знака после запятой: «1,30», а не «1,3» — в столбце рядом с «1,44». */
+export function fix2(v: unknown): string {
+  if (typeof v !== "number" || !Number.isFinite(v)) return "—";
+  return nf({ minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
+}
+
 /** Дата словами: «19 октября»; год — если не текущий. По часам человека:
  *  «до какого числа» он читает по своему календарю. */
 export function dateLong(tsSec: number): string {

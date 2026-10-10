@@ -276,10 +276,10 @@ say("помощь не обещает неделю за /start", all("/start" no
 # --- боковое меню: график TradingView и разлоки -----------------------------
 _m0 = appx.index("= [", appx.index("const MENU:"))
 menu = appx[_m0:appx.index("];", _m0)]
-say("в боковом меню пять пунктов: график, разлоки, карта ликвидаций, фандинг, страх и жадность",
-    menu.count("name:") == 7
+say("в боковом меню восемь пунктов: график, разлоки, карта ликвидаций, опционы, фандинг, страх и жадность, доминация, ETF",
+    menu.count("name:") == 8
     and menu.index('name: "chart"') < menu.index('name: "unlocks"') < menu.index('name: "liqmap"')
-    < menu.index('name: "funding"') < menu.index('name: "fng"') < menu.index('name: "dom"') < menu.index('name: "etf"'))
+    < menu.index('name: "options"') < menu.index('name: "funding"') < menu.index('name: "fng"') < menu.index('name: "dom"') < menu.index('name: "etf"'))
 tv = read(f"{APP}/src/lib/tradingview.ts")
 chart_scr = read(f"{APP}/src/screens/ChartScreen.tsx")
 say("график — официальный код виджета TradingView со сменой монеты",
@@ -507,8 +507,10 @@ say("карта ликвидаций: отдаётся из памяти сра�
 _ngx = read(f"{APP}/nginx.conf")
 say("Binance и Bybit — через nginx в Европе, если отсюда закрыты; ретранслятор только с ключом",
     'location /xr/binance-f/' in _ngx and 'location /xr/bybit/' in _ngx
-    and _ngx.count('if ($http_x_api_key != "__API_KEY__") { return 403; }') == 2
-    and _ngx.count('if ($http_x_api_key = "") { return 403; }') == 2
+    and _ngx.count('if ($http_x_api_key != "__API_KEY__") { return 403; }') == 3
+    and _ngx.count('if ($http_x_api_key = "") { return 403; }') == 3
+    # Третий адрес — опционы Binance (eapi), закрыты по стране так же.
+    and 'location /xr/binance-o/' in _ngx and '"https://eapi.binance.com/": "/xr/binance-o/"' in api
     and "def _geo_refused(" in api and '"https://fapi.binance.com/": "/xr/binance-f/"' in api)
 
 say("карта ликвидаций в гамме Coinglass: плечи фиолетовый/голубой/жёлтый/оранжевый, чёрное поле, красная линия цены",
@@ -1078,6 +1080,19 @@ say("кошельки: отказ с причиной, норма запросо
     and "_limiter.allow(self._rate_key(qs))" in api and "_limiter.allow(self._peer())" not in api
     and 'not path.startswith("/api/logo/")' in api
     and "limit_req_zone $api_who zone=api:10m" in read(f"{APP}/nginx.conf"))
+
+# Опционы BTC и ETH: интерес по страйкам с четырёх бирж, Max Pain, DVOL и
+# крупные сделки Deribit; только с Премиумом, экран — в боковом меню.
+_op = read(f"{APP}/src/screens/OptionsScreen.tsx")
+say("опционы: Deribit, OKX, Bybit, Binance; Max Pain, DVOL, крупные сделки; Премиум",
+    'OPT_SOURCES = (("Deribit", _opt_deribit), ("OKX", _opt_okx), ("Bybit", _opt_bybit), ("Binance", _opt_binance))' in api
+    and "def _opt_maxpain(" in api and "get_volatility_index_data" in api
+    and "get_last_trades_by_currency_and_time" in api
+    and '"options"' in api.split("PAID_PATHS = frozenset(")[1][:900]
+    and 'if path in ("/options", "/api/options"):' in api
+    and "options: OptionsScreen" in read(f"{APP}/src/screens/registry.ts")
+    and "savedOptions(sym)" in _op and "refreshOptions(sym)" in _op
+    and '<p className="lq-lead">{t(lang, "op_sub")}</p>' in _op)
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

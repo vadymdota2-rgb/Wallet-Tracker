@@ -89,7 +89,7 @@ PAID_PATHS = frozenset(
     p for name in (
     "flow", "fund", "rot", "ls", "deals", "token",
     "wallet", "fng", "halving", "btc/flow", "btc/big", "btc/rank", "bsc/exflow",
-    "btc/wallet", "dom", "etf", "liqcoins", "liqmap", "digest",
+    "btc/wallet", "dom", "etf", "liqcoins", "liqmap", "options", "digest",
     "digest/translate", "digest/comments", "unlocks", "symbols", "big", "quotes",
     ) for p in ("/" + name, "/api/" + name)
 )
@@ -7168,6 +7168,8 @@ RELAY = (os.environ.get("WHALE_RELAY") or next(
 RELAY_HOSTS = {
     "https://fapi.binance.com/": "/xr/binance-f/",
     "https://api.bybit.com/": "/xr/bybit/",
+    # Опционы Binance — свой адрес, закрыт по стране так же.
+    "https://eapi.binance.com/": "/xr/binance-o/",
 }
 _relay_first: dict[str, float] = {}
 
@@ -10977,6 +10979,11 @@ def liq_warm_refresher() -> None:
             etf_data()  # и потоки ETF с крупными держателями
         except Exception:  # noqa: BLE001
             pass
+        for sym in OPT_SYMS:  # и опционы
+            try:
+                options_data(sym)
+            except Exception:  # noqa: BLE001
+                pass
         try:
             listed = [c["s"] for c in (liq_coins().get("coins") or [])[:LIQ_WARM_COINS]]
         except Exception:  # noqa: BLE001
@@ -12376,6 +12383,211 @@ def etf_data() -> dict:
         return hit[1] if hit else _etf_build()
 
 
+# --- Опционы -------------------------------------------------------------
+# Открытый интерес по страйкам и датам, Max Pain, Put/Call, индекс
+# волатильности DVOL и крупные сделки. Интерес складывается с четырёх бирж
+# (Deribit, OKX, Bybit, Binance), у всех — в монетах базового актива: один
+# контракт опциона на BTC — один биткоин. Сделки и DVOL — только Deribit:
+# на нём большая часть рынка опционов, и только он отдаёт ленту за сутки.
+# Binance и Bybit с сервера закрыты по стране — они идут через ретранслятор
+# (get_json сам переключается).
+OPT_SYMS = ("BTC", "ETH")
+OPT_TTL = 180.0
+# Крупная сделка — от миллиона долларов номинала по BTC, от полумиллиона по ETH.
+OPT_BIG = {"BTC": 1_000_000.0, "ETH": 500_000.0}
+OPT_BIG_KEEP = 40
+# Лента сделок Deribit отдаётся по тысяче; за сутки по BTC — около трёх тысяч.
+OPT_TRADE_PAGES = 8
+_OPT: dict = {}
+_OPT_MON = {m: i + 1 for i, m in enumerate(("JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+                                            "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"))}
+
+
+def _opt_name(name: str):
+    """Имя опциона любой из бирж → (дата экспирации, страйк, C|P).
+
+    Deribit и Bybit: BTC-12OCT26-84500-C (у Bybit бывает хвост -USDT),
+    OKX: BTC-USD-261012-84500-C, Binance: BTC-261012-84500-C."""
+    parts = (name or "").upper().split("-")
+    for i, p in enumerate(parts[:-2]):
+        m = re.fullmatch(r"(\d{1,2})([A-Z]{3})(\d{2})", p)
+        if m and m.group(2) in _OPT_MON:
+            y, mo, d = 2000 + int(m.group(3)), _OPT_MON[m.group(2)], int(m.group(1))
+        elif re.fullmatch(r"\d{6}", p):
+            y, mo, d = 2000 + int(p[:2]), int(p[2:4]), int(p[4:])
+        else:
+            continue
+        cp = parts[i + 2]
+        if cp not in ("C", "P"):
+            return None
+        k = _fnum(parts[i + 1])
+        if k <= 0 or not (1 <= mo <= 12 and 1 <= d <= 31):
+            return None
+        return f"{y:04d}-{mo:02d}-{d:02d}", k, cp
+    return None
+
+
+def _opt_deribit(sym: str) -> list:
+    rows = (get_json(f"https://www.deribit.com/api/v2/public/get_book_summary_by_currency?currency={sym}&kind=option", 15) or {}).get("result") or []
+    return [(r.get("instrument_name"), _fnum(r.get("open_interest")), _fnum(r.get("volume"))) for r in rows]
+
+
+def _opt_okx(sym: str) -> list:
+    fam = f"{sym}-USD"
+    oi = (get_json(f"https://www.okx.com/api/v5/public/open-interest?instType=OPTION&instFamily={fam}", 15) or {}).get("data") or []
+    tk = (get_json(f"https://www.okx.com/api/v5/market/tickers?instType=OPTION&instFamily={fam}", 15) or {}).get("data") or []
+    vol = {r.get("instId"): _fnum(r.get("volCcy24h")) for r in tk}
+    return [(r.get("instId"), _fnum(r.get("oiCcy")), vol.get(r.get("instId"), 0.0)) for r in oi]
+
+
+def _opt_bybit(sym: str) -> list:
+    rows = ((get_json(f"https://api.bybit.com/v5/market/tickers?category=option&baseCoin={sym}", 15) or {}).get("result") or {}).get("list") or []
+    return [(r.get("symbol"), _fnum(r.get("openInterest")), _fnum(r.get("volume24h"))) for r in rows]
+
+
+def _opt_binance(sym: str) -> list:
+    tk = get_json("https://eapi.binance.com/eapi/v1/ticker", 15)
+    if not isinstance(tk, list):
+        return []
+    vol = {r.get("symbol"): _fnum(r.get("volume")) for r in tk if str(r.get("symbol", "")).startswith(sym + "-")}
+    out = []
+    for e in sorted({s.split("-")[1] for s in vol if len(s.split("-")) == 4}):
+        rows = get_json(f"https://eapi.binance.com/eapi/v1/openInterest?underlyingAsset={sym}&expiration={e}", 15)
+        for r in rows if isinstance(rows, list) else []:
+            out.append((r.get("symbol"), _fnum(r.get("sumOpenInterest")), vol.get(r.get("symbol"), 0.0)))
+    return out
+
+
+OPT_SOURCES = (("Deribit", _opt_deribit), ("OKX", _opt_okx), ("Bybit", _opt_bybit), ("Binance", _opt_binance))
+
+
+def _opt_maxpain(strikes: dict) -> float:
+    """Цена экспирации, при которой покупатели опционов получают меньше всего:
+    по каждому страйку-кандидату — выплата всем колам ниже и путам выше."""
+    best, at = None, 0.0
+    ks = sorted(strikes)
+    for x in ks:
+        pay = sum(c * (x - k) for k, (c, _p) in strikes.items() if k < x) \
+            + sum(p * (k - x) for k, (_c, p) in strikes.items() if k > x)
+        if best is None or pay < best:
+            best, at = pay, x
+    return at
+
+
+def _opt_dvol(sym: str) -> dict | None:
+    end = int(time.time() * 1000)
+    rows = ((get_json(f"https://www.deribit.com/api/v2/public/get_volatility_index_data?currency={sym}"
+                      f"&start_timestamp={end - 7 * 86400_000}&end_timestamp={end}&resolution=3600", 15) or {})
+            .get("result") or {}).get("data") or []
+    path = [round(_fnum(r[4]), 2) for r in sorted(rows) if len(r) >= 5 and _fnum(r[4]) > 0]
+    if not path:
+        return None
+    ago = path[-25] if len(path) >= 25 else path[0]
+    return {"v": path[-1], "chg": round(path[-1] - ago, 2), "path": path[-168:]}
+
+
+def _opt_trades(sym: str) -> tuple[list, dict]:
+    """Лента Deribit за сутки: крупные сделки и куда льются деньги
+    (номинал по стороне агрессора: колы/путы × купили/продали)."""
+    end = int(time.time() * 1000)
+    start = end - 86400_000
+    flow = {"cb": 0.0, "cs": 0.0, "pb": 0.0, "ps": 0.0}
+    big, first = [], end
+    for _ in range(OPT_TRADE_PAGES):
+        res = (get_json(f"https://www.deribit.com/api/v2/public/get_last_trades_by_currency_and_time?currency={sym}"
+                        f"&kind=option&start_timestamp={start}&end_timestamp={end}&count=1000&sorting=desc", 15) or {}).get("result") or {}
+        trades = res.get("trades") or []
+        for t in trades:
+            nm = _opt_name(t.get("instrument_name"))
+            ix = _fnum(t.get("index_price"))
+            amt = _fnum(t.get("amount"))
+            if not nm or ix <= 0 or amt <= 0:
+                continue
+            n = amt * ix
+            buy = t.get("direction") == "buy"
+            flow[("c" if nm[2] == "C" else "p") + ("b" if buy else "s")] += n
+            first = min(first, int(t.get("timestamp") or end))
+            if n >= OPT_BIG.get(sym, 1e6):
+                big.append({"t": int(t.get("timestamp") or 0) // 1000, "e": nm[0], "k": nm[1], "cp": nm[2],
+                            "s": "b" if buy else "s", "a": round(amt, 4), "n": round(n),
+                            "pr": round(_fnum(t.get("price")) * amt * ix), "iv": round(_fnum(t.get("iv")), 1),
+                            "blk": bool(t.get("block_trade_id"))})
+        if not res.get("has_more") or not trades:
+            break
+        end = int(trades[-1].get("timestamp") or start) - 1
+        if end <= start:
+            break
+    big = sorted(sorted(big, key=lambda b: -b["n"])[:OPT_BIG_KEEP], key=lambda b: -b["t"])
+    flow = {k: round(v) for k, v in flow.items()}
+    flow["h"] = round(max(1.0, (time.time() * 1000 - first) / 3600_000), 1)
+    return big, flow
+
+
+def _opt_build(sym: str) -> dict:
+    with ThreadPoolExecutor(max_workers=7) as pool:
+        futs = {name: pool.submit(fn, sym) for name, fn in OPT_SOURCES}
+        f_ix = pool.submit(get_json, f"https://www.deribit.com/api/v2/public/get_index_price?index_name={sym.lower()}_usd", 10)
+        f_dv = pool.submit(_opt_dvol, sym)
+        f_tr = pool.submit(_opt_trades, sym)
+        got = {}
+        for name, f in futs.items():
+            try:
+                got[name] = f.result() or []
+            except Exception as e:  # noqa: BLE001 — одна биржа не валит остальные
+                print(f"options {sym} {name}: {e}", file=sys.stderr)
+                got[name] = []
+        px = _fnum(((f_ix.result() or {}).get("result") or {}).get("index_price"))
+        try:
+            dvol = f_dv.result()
+        except Exception:  # noqa: BLE001
+            dvol = None
+        try:
+            big, flow = f_tr.result()
+        except Exception:  # noqa: BLE001
+            big, flow = [], {}
+    if px <= 0:
+        return {"ok": False, "error": "no_data"}
+    today = time.strftime("%Y-%m-%d", time.gmtime())
+    exp: dict = {}
+    ex_oi: dict = {}
+    for name, rows in got.items():
+        for inst, oi, vol in rows:
+            nm = _opt_name(inst)
+            if not nm or not inst.upper().startswith(sym + "-") or nm[0] < today or (oi <= 0 and vol <= 0):
+                continue
+            d, k, cp = nm
+            e = exp.setdefault(d, {"k": {}, "v": [0.0, 0.0]})
+            s = e["k"].setdefault(k, [0.0, 0.0])
+            j = 0 if cp == "C" else 1
+            s[j] += oi
+            e["v"][j] += vol
+            ex_oi[name] = ex_oi.get(name, 0.0) + oi
+    if not exp:
+        return {"ok": False, "error": "no_data"}
+    out = []
+    for d in sorted(exp):
+        e = exp[d]
+        ks = {k: (c, p) for k, (c, p) in e["k"].items() if c > 0 or p > 0}
+        if not ks:
+            continue
+        c = sum(v[0] for v in ks.values())
+        p = sum(v[1] for v in ks.values())
+        ts = calendar.timegm(time.strptime(d, "%Y-%m-%d")) + 8 * 3600
+        out.append({"d": d, "ts": ts, "c": round(c, 2), "p": round(p, 2),
+                    "vc": round(e["v"][0], 2), "vp": round(e["v"][1], 2), "mp": _opt_maxpain(ks),
+                    "k": [[k, round(cv, 2), round(pv, 2)] for k, (cv, pv) in sorted(ks.items())]})
+    return {"ok": True, "sym": sym, "at": int(time.time()), "px": round(px, 2), "exp": out,
+            "ex": sorted(([n, round(v * px)] for n, v in ex_oi.items() if v > 0), key=lambda x: -x[1]),
+            "dvol": dvol, "big": big, "flow": flow}
+
+
+def options_data(sym: str) -> dict:
+    sym = (sym or "BTC").upper()
+    if sym not in OPT_SYMS:
+        return {"ok": False, "error": "bad_args"}
+    return cached_bg(_OPT, sym, OPT_TTL, lambda: _opt_build(sym))
+
+
 # --- Дайджест ------------------------------------------------------------
 # Раз в сутки, в 12:00 по Лондону, сервер собирает выпуск: самое крупное из каждой
 # вкладки аналитики за прошедшие 24 часа и ближайшие разлоки. Хранятся
@@ -13565,6 +13777,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path in ("/liqcoins", "/api/liqcoins"):
                 self._json(200, liq_coins())
+                return
+            if path in ("/options", "/api/options"):
+                self._json(200, options_data(qs.get("sym", ["BTC"])[0]))
                 return
             if path in ("/liqmap", "/api/liqmap"):
                 self._json(200, liq_map(qs.get("sym", ["BTC"])[0], (qs.get("range", ["1d"])[0] or "1d")))
