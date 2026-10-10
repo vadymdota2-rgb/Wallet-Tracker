@@ -412,6 +412,8 @@ export const tr: Dict = {
   err_loading_wallet: "❌ Cüzdan yüklenirken hata oluştu.",
   err_name_empty: "❌ İsim boş olamaz.\n\nBir isim gir ya da İptal'e dokun.",
   err_name_too_long: "❌ İsim çok uzun (en fazla 32 karakter).\n\nDaha kısa bir isim gir ya da İptal'e dokun.",
+  err_rate_limit: "⏳ Çok fazla istek. Bir dakika bekleyip tekrar dene.",
+  err_session: "🔑 Oturumun süresi doldu. Uygulamayı kapatıp bottan yeniden aç.",
   err_threshold_decimals: "❌ En fazla 2 ondalık basamak kullan (örneğin 7500.50).",
   err_threshold_positive: "❌ Eşik pozitif olmalı.",
   err_threshold_too_large: "❌ Eşik çok yüksek.",

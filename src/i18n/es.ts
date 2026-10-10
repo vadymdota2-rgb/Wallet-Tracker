@@ -412,6 +412,8 @@ export const es: Dict = {
   err_loading_wallet: "❌ Error al cargar la billetera.",
   err_name_empty: "❌ El nombre no puede estar vacío.\n\nIntroduce un nombre o pulsa Cancelar.",
   err_name_too_long: "❌ El nombre es demasiado largo (máx. 32 caracteres).\n\nIntroduce un nombre más corto o pulsa Cancelar.",
+  err_rate_limit: "⏳ Demasiadas solicitudes. Espera un minuto e inténtalo de nuevo.",
+  err_session: "🔑 La sesión ha caducado. Cierra la app y ábrela de nuevo desde el bot.",
   err_threshold_decimals: "❌ Usa como máximo 2 decimales (por ejemplo, 7500.50).",
   err_threshold_positive: "❌ El umbral debe ser positivo.",
   err_threshold_too_large: "❌ El umbral es demasiado alto.",

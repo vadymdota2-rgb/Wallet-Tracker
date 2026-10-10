@@ -13,7 +13,7 @@ import { boardKey, venueName, walletRank } from "../lib/rank";
 import { bare, t } from "../i18n/t";
 import { lev as levFmt, num, pct, px, shortAddr, signed, usd } from "../lib/format";
 import { holdTime } from "../lib/labels";
-import { fetchWallet, removeWallet, setPrimary } from "../lib/api";
+import { fetchWallet, removeWallet, setPrimary, failKey } from "../lib/api";
 import { applyWalletLive } from "../lib/prefetch";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
@@ -208,7 +208,7 @@ export function WalletScreen({ arg }: ScreenProps) {
                 if (res?.ok) {
                   toast(t(lang, "toast_main_wallet_set"));
                   void syncNow();
-                } else toast(t(lang, "generic_error_retry"), "err");
+                } else toast(t(lang, failKey()), "err");
               }}
             >
               {t(lang, "ui_set_main")}
@@ -225,7 +225,7 @@ export function WalletScreen({ arg }: ScreenProps) {
                 toast(t(lang, "toast_wallet_removed"));
                 back();
                 void syncNow();
-              } else toast(t(lang, "generic_error_retry"), "err");
+              } else toast(t(lang, failKey()), "err");
             }}
           >
             {t(lang, "remove_yes")}

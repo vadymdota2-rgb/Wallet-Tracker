@@ -412,6 +412,8 @@ export const de: Dict = {
   err_loading_wallet: "❌ Fehler beim Laden der Wallet.",
   err_name_empty: "❌ Name darf nicht leer sein.\n\nGib einen Namen ein oder tippe auf Abbrechen.",
   err_name_too_long: "❌ Name zu lang (max. 32 Zeichen).\n\nGib einen kürzeren Namen ein oder tippe auf Abbrechen.",
+  err_rate_limit: "⏳ Zu viele Anfragen. Warte eine Minute und versuche es erneut.",
+  err_session: "🔑 Sitzung abgelaufen. Schließe die App und öffne sie erneut über den Bot.",
   err_threshold_decimals: "❌ Höchstens 2 Dezimalstellen (z. B. 7500.50).",
   err_threshold_positive: "❌ Die Schwelle muss positiv sein.",
   err_threshold_too_large: "❌ Die Schwelle ist zu hoch.",

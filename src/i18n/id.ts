@@ -412,6 +412,8 @@ export const id: Dict = {
   err_loading_wallet: "❌ Gagal memuat dompet.",
   err_name_empty: "❌ Nama tidak boleh kosong.\n\nMasukkan nama atau ketuk Batal.",
   err_name_too_long: "❌ Nama terlalu panjang (maks. 32).\n\nMasukkan lebih pendek atau ketuk Batal.",
+  err_rate_limit: "⏳ Terlalu banyak permintaan. Tunggu sebentar lalu coba lagi.",
+  err_session: "🔑 Sesi kedaluwarsa. Tutup aplikasi dan buka lagi dari bot.",
   err_threshold_decimals: "❌ Maks. 2 desimal (mis. 7500.50).",
   err_threshold_positive: "❌ Ambang harus positif.",
   err_threshold_too_large: "❌ Ambang terlalu besar.",

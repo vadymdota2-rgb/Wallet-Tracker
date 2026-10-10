@@ -412,6 +412,8 @@ export const pl: Dict = {
   err_loading_wallet: "❌ Błąd ładowania portfela.",
   err_name_empty: "❌ Nazwa nie może być pusta.\n\nWpisz nazwę lub naciśnij Anuluj.",
   err_name_too_long: "❌ Nazwa za długa (maks. 32 znaki).\n\nWpisz krótszą lub naciśnij Anuluj.",
+  err_rate_limit: "⏳ Zbyt wiele żądań. Odczekaj minutę i spróbuj ponownie.",
+  err_session: "🔑 Sesja wygasła. Zamknij aplikację i otwórz ją ponownie z bota.",
   err_threshold_decimals: "❌ Użyj co najwyżej 2 miejsc po przecinku (np. 7500.50).",
   err_threshold_positive: "❌ Próg musi być dodatni.",
   err_threshold_too_large: "❌ Próg jest za wysoki.",

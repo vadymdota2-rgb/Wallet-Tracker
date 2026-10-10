@@ -9,7 +9,7 @@ import type { ScreenProps } from "./Screen";
 import { useApp, walletLimit } from "../store/app";
 import { useLive } from "../store/live";
 import { bare, split, t } from "../i18n/t";
-import { addWallet } from "../lib/api";
+import { addWallet, failKey } from "../lib/api";
 import { isWalletAddr } from "../lib/labels";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
@@ -52,10 +52,17 @@ export function AddWalletScreen({ arg }: ScreenProps) {
         back();
         void syncNow();
       } else if (res?.error === "limit") toast(t(lang, "pr_limit_title"), "err");
-      else if (res?.error === "dup") toast(t(lang, "already_tracking"), "err");
+      else if (res?.error === "dup") {
+        // Сервер уже записал кошелёк — обычно первое нажатие, ответ на
+        // которое не дошёл. Список на экране старый: обновляем и уходим,
+        // иначе каждое новое нажатие снова упиралось бы в «уже есть».
+        toast(t(lang, "already_tracking"));
+        back();
+        void syncNow();
+      }
       else if (res?.error === "banned") toast(t(lang, "wallet_bot_banned"), "err");
       else if (res?.error === "bad_addr") toast(t(lang, "err_invalid_address"), "err");
-      else toast(t(lang, "generic_error_retry"), "err");
+      else toast(t(lang, failKey()), "err");
     } finally {
       setBusy(false);
     }

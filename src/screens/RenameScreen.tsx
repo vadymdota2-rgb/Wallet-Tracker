@@ -4,7 +4,7 @@ import { Frame, type ScreenProps } from "./Screen";
 import { useApp } from "../store/app";
 import { useLive, walletByAddr } from "../store/live";
 import { t } from "../i18n/t";
-import { renameWallet } from "../lib/api";
+import { renameWallet, failKey } from "../lib/api";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
 import { Action, Card, Empty, SectionTitle } from "../components/ui";
@@ -38,7 +38,7 @@ export function RenameScreen({ arg }: ScreenProps) {
         toast(t(lang, "rename_success"));
         back();
         void syncNow();
-      } else toast(t(lang, "generic_error_retry"), "err");
+      } else toast(t(lang, failKey()), "err");
     } finally {
       setBusy(false);
     }

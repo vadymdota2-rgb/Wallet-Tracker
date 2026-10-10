@@ -412,6 +412,8 @@ export const pt: Dict = {
   err_loading_wallet: "❌ Erro ao carregar a carteira.",
   err_name_empty: "❌ O nome não pode ficar vazio.\n\nDigite um nome ou toque em Cancelar.",
   err_name_too_long: "❌ O nome é longo demais (máx. 32 caracteres).\n\nDigite um nome mais curto ou toque em Cancelar.",
+  err_rate_limit: "⏳ Muitas solicitações. Aguarde um minuto e tente novamente.",
+  err_session: "🔑 A sessão expirou. Feche o app e abra novamente pelo bot.",
   err_threshold_decimals: "❌ Use no máximo 2 casas decimais (por exemplo, 7500.50).",
   err_threshold_positive: "❌ O valor mínimo deve ser positivo.",
   err_threshold_too_large: "❌ O valor é alto demais.",

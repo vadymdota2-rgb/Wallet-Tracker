@@ -18,7 +18,7 @@ import { t, bare } from "../i18n/t";
 import { num, pct, shortAddr, signed } from "../lib/format";
 import { holdTime } from "../lib/labels";
 import { venueName } from "../lib/rank";
-import { removeWallet } from "../lib/api";
+import { removeWallet, failKey } from "../lib/api";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
 import { FREE } from "../lib/upsell";
@@ -98,7 +98,7 @@ export function TopTab() {
     if (res?.ok) {
       toast(t(lang, "toast_wallet_removed"));
       void syncNow();
-    } else toast(t(lang, "generic_error_retry"), "err");
+    } else toast(t(lang, failKey()), "err");
   };
 
   return (

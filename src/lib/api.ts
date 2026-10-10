@@ -19,6 +19,11 @@ const TIMEOUT_MS = 15000;
 /** Код последнего ответа: 0 — сети не было. Нужен опросу, чтобы не долбиться. */
 export let lastStatus = 0;
 
+/** Текст отказа по коду последнего ответа: «подождите минуту» и «откройте
+ *  заново» человек может исправить сам, а «что-то пошло не так» — нет. */
+export const failKey = () =>
+  lastStatus === 429 ? "err_rate_limit" : lastStatus === 401 ? "err_session" : "generic_error_retry";
+
 interface Opts {
   method?: string;
   body?: unknown;
@@ -27,6 +32,9 @@ interface Opts {
   signal?: AbortSignal;
   /** Своё время ожидания — для тяжёлых ответов, которые сервер считает. */
   timeout?: number;
+  /** Отказ сервера вернуть с причиной ({ok:false,error}), а не null:
+   *  иначе «уже добавлен» и «лимит» выглядели как сбой связи. */
+  reason?: boolean;
 }
 
 async function call<T>(path: string, opts: Opts = {}): Promise<T | null> {
@@ -49,7 +57,11 @@ async function call<T>(path: string, opts: Opts = {}): Promise<T | null> {
       signal: ctrl.signal,
     });
     lastStatus = res.status;
-    if (!res.ok) return null;
+    if (!res.ok) {
+      if (!opts.reason) return null;
+      const why = (await res.json().catch(() => null)) as { ok?: boolean } | null;
+      return why && typeof why === "object" && why.ok === false ? (why as T) : null;
+    }
     return (await res.json()) as T;
   } catch {
     lastStatus = 0;
@@ -113,16 +125,16 @@ export function fetchBig(win: string, _signal?: AbortSignal): Promise<Trades | n
 export const peekBig = (win: string) => peek<Trades | null>(bigPath(win), TTL.board);
 
 export const addWallet = (addr: string, name: string) =>
-  call<MutationResult>("/api/wallets", { method: "POST", body: { addr, name } });
+  call<MutationResult>("/api/wallets", { method: "POST", body: { addr, name }, reason: true });
 
 export const removeWallet = (addr: string) =>
-  call<MutationResult>("/api/wallets/remove", { method: "POST", body: { addr } });
+  call<MutationResult>("/api/wallets/remove", { method: "POST", body: { addr }, reason: true });
 
 export const setPrimary = (addr: string) =>
-  call<MutationResult>("/api/wallets/primary", { method: "POST", body: { addr } });
+  call<MutationResult>("/api/wallets/primary", { method: "POST", body: { addr }, reason: true });
 
 export const renameWallet = (addr: string, name: string) =>
-  call<MutationResult>("/api/wallets/rename", { method: "POST", body: { addr, name } });
+  call<MutationResult>("/api/wallets/rename", { method: "POST", body: { addr, name }, reason: true });
 
 export const setThreshold = (usd: number) =>
   call<MutationResult>("/api/threshold", { method: "POST", body: { usd } });

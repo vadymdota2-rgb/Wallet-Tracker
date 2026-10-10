@@ -1068,5 +1068,16 @@ say("карта ликвидаций: интерес Gate без удвоени�
     # Ещё биржи в снимках интереса: BloFin и XT.com; Zoomex — нет (отдаёт Bybit).
     and '("BloFin", _snap_blofin), ("XT.com", _snap_xt))' in api and "_snap_zoomex" not in api)
 
+# «Добавить кошелёк» больше не отвечает общей ошибкой: причина отказа доходит
+# до экрана («уже добавлен» — обновить список), а норма запросов считается
+# на человека — на Cloud Run адрес у всех один, и норма делилась на всех.
+_add = read(f"{APP}/src/screens/AddWalletScreen.tsx")
+say("кошельки: отказ с причиной, норма запросов на человека, а не на адрес",
+    'call<MutationResult>("/api/wallets", { method: "POST", body: { addr, name }, reason: true })' in read(f"{APP}/src/lib/api.ts")
+    and 'toast(t(lang, failKey()), "err")' in _add and 'res?.error === "dup") {' in _add
+    and "_limiter.allow(self._rate_key(qs))" in api and "_limiter.allow(self._peer())" not in api
+    and 'not path.startswith("/api/logo/")' in api
+    and "limit_req_zone $api_who zone=api:10m" in read(f"{APP}/nginx.conf"))
+
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

@@ -23,7 +23,7 @@ import { t, bare } from "../i18n/t";
 import { num, pct, px, shortAddr, signed, since, usd } from "../lib/format";
 import { useNow } from "../lib/tick";
 import { haptic, openExternal } from "../lib/telegram";
-import { removeWallet } from "../lib/api";
+import { removeWallet, failKey } from "../lib/api";
 import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
 import {
@@ -90,7 +90,7 @@ function FollowBtn({ addr, size = 19 }: { addr: string; size?: number }) {
         if (res?.ok) {
           toast(t(lang, "toast_wallet_removed"));
           void syncNow();
-        } else toast(t(lang, "generic_error_retry"), "err");
+        } else toast(t(lang, failKey()), "err");
       }}
     >
       {on ? <MinusGlyph size={size} /> : <PlusGlyph size={size} />}

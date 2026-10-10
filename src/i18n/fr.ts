@@ -412,6 +412,8 @@ export const fr: Dict = {
   err_loading_wallet: "❌ Erreur lors du chargement du portefeuille.",
   err_name_empty: "❌ Le nom ne peut pas être vide.\n\nSaisissez un nom ou appuyez sur Annuler.",
   err_name_too_long: "❌ Le nom est trop long (32 caractères maximum).\n\nSaisissez un nom plus court ou appuyez sur Annuler.",
+  err_rate_limit: "⏳ Trop de requêtes. Attendez une minute et réessayez.",
+  err_session: "🔑 Session expirée. Fermez l'app et rouvrez-la depuis le bot.",
   err_threshold_decimals: "❌ Utilisez au maximum 2 décimales (par exemple, 7500.50).",
   err_threshold_positive: "❌ Le seuil doit être positif.",
   err_threshold_too_large: "❌ Le seuil est trop élevé.",

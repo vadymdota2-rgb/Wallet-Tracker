@@ -412,6 +412,8 @@ export const hi: Dict = {
   err_loading_wallet: "❌ वॉलेट लोड त्रुटि।",
   err_name_empty: "❌ नाम खाली नहीं हो सकता।\n\nनाम लिखें या रद्द करें दबाएँ।",
   err_name_too_long: "❌ नाम बहुत लंबा (अधिकतम 32)।\n\nछोटा नाम लिखें या रद्द करें दबाएँ।",
+  err_rate_limit: "⏳ बहुत ज़्यादा अनुरोध। एक मिनट रुककर फिर कोशिश करें।",
+  err_session: "🔑 सत्र समाप्त हो गया। ऐप बंद करें और बॉट से फिर खोलें।",
   err_threshold_decimals: "❌ अधिकतम 2 दशमलव (जैसे 7500.50)।",
   err_threshold_positive: "❌ सीमा धनात्मक होनी चाहिए।",
   err_threshold_too_large: "❌ सीमा बहुत बड़ी है।",

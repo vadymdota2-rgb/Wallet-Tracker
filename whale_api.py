@@ -13248,6 +13248,17 @@ class Handler(BaseHTTPRequestHandler):
         parts = [p.strip() for p in (self.headers.get("X-Forwarded-For") or "").split(",") if p.strip()]
         return parts[-1] if parts else self.client_address[0]
 
+    def _rate_key(self, qs: dict) -> str:
+        """Чей счётчик запросов: человека по подписи Telegram, без неё — адреса.
+
+        Адрес один на всех, когда мини-апп ходит через Cloud Run: nginx там
+        видит не телефон, а внутренний узел Google, и его адрес попадает в
+        X-Forwarded-For последним. Минутная норма делилась на всех людей
+        сразу, и в час наплыва «Добавить кошелёк» отвечал ошибкой.
+        """
+        chat = self._user(qs)
+        return "u:" + chat if chat else self._peer()
+
     def _body(self) -> dict:
         n = int(self.headers.get("Content-Length") or 0)
         if n <= 0:
@@ -13272,7 +13283,10 @@ class Handler(BaseHTTPRequestHandler):
                 if not self._keyed():
                     self._json(403, {"ok": False, "error": "forbidden"})
                     return
-                if not _limiter.allow(self._peer()):
+                # Логотипы монет счётчик не тратят: экран с сотней монет
+                # съедал бы минутную норму человека одними картинками, а
+                # перебор их держит nginx — своим лимитом и кэшем.
+                if not path.startswith("/api/logo/") and not _limiter.allow(self._rate_key(qs)):
                     self._json(429, {"ok": False, "error": "rate_limit"})
                     return
             # Без Премиума приложение закрыто — данные только подписчику.
@@ -13662,7 +13676,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._body()
                 self._json(403, {"ok": False, "error": "forbidden"})
                 return
-            if not _limiter.allow(self._peer()):
+            if not _limiter.allow(self._rate_key(qs)):
                 self._body()
                 self._json(429, {"ok": False, "error": "rate_limit"})
                 return

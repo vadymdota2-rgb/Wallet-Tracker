@@ -412,6 +412,8 @@ export const ko: Dict = {
   err_loading_wallet: "❌ 지갑 로드 오류.",
   err_name_empty: "❌ 이름은 비울 수 없습니다.\n\n이름을 입력하거나 취소를 누르세요.",
   err_name_too_long: "❌ 이름이 너무 깁니다 (최대 32자).\n\n짧게 입력하거나 취소를 누르세요.",
+  err_rate_limit: "⏳ 요청이 너무 많습니다. 1분 후 다시 시도하세요.",
+  err_session: "🔑 세션이 만료되었습니다. 앱을 닫고 봇에서 다시 여세요.",
   err_threshold_decimals: "❌ 소수점은 최대 2자리 (예: 7500.50).",
   err_threshold_positive: "❌ 기준은 양수여야 합니다.",
   err_threshold_too_large: "❌ 기준이 너무 큽니다.",

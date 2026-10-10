@@ -17782,5 +17782,41 @@
     "uk": "Потоки бірж",
     "vi": "Dòng tiền sàn",
     "zh": "交易所流向"
+  },
+  "err_rate_limit": {
+    "ar": "⏳ طلبات كثيرة جدًا. انتظر دقيقة ثم حاول مرة أخرى.",
+    "de": "⏳ Zu viele Anfragen. Warte eine Minute und versuche es erneut.",
+    "en": "⏳ Too many requests. Wait a minute and try again.",
+    "es": "⏳ Demasiadas solicitudes. Espera un minuto e inténtalo de nuevo.",
+    "fr": "⏳ Trop de requêtes. Attendez une minute et réessayez.",
+    "hi": "⏳ बहुत ज़्यादा अनुरोध। एक मिनट रुककर फिर कोशिश करें।",
+    "id": "⏳ Terlalu banyak permintaan. Tunggu sebentar lalu coba lagi.",
+    "ja": "⏳ リクエストが多すぎます。1分待ってからもう一度お試しください。",
+    "ko": "⏳ 요청이 너무 많습니다. 1분 후 다시 시도하세요.",
+    "pl": "⏳ Zbyt wiele żądań. Odczekaj minutę i spróbuj ponownie.",
+    "pt": "⏳ Muitas solicitações. Aguarde um minuto e tente novamente.",
+    "ru": "⏳ Слишком много запросов. Подождите минуту и попробуйте снова.",
+    "tr": "⏳ Çok fazla istek. Bir dakika bekleyip tekrar dene.",
+    "uk": "⏳ Забагато запитів. Зачекайте хвилину й спробуйте знову.",
+    "vi": "⏳ Quá nhiều yêu cầu. Hãy đợi một phút rồi thử lại.",
+    "zh": "⏳ 请求过多，请等一分钟再试。"
+  },
+  "err_session": {
+    "ar": "🔑 انتهت الجلسة. أغلق التطبيق وافتحه مجددًا من البوت.",
+    "de": "🔑 Sitzung abgelaufen. Schließe die App und öffne sie erneut über den Bot.",
+    "en": "🔑 Session expired. Close the app and open it again from the bot.",
+    "es": "🔑 La sesión ha caducado. Cierra la app y ábrela de nuevo desde el bot.",
+    "fr": "🔑 Session expirée. Fermez l'app et rouvrez-la depuis le bot.",
+    "hi": "🔑 सत्र समाप्त हो गया। ऐप बंद करें और बॉट से फिर खोलें।",
+    "id": "🔑 Sesi kedaluwarsa. Tutup aplikasi dan buka lagi dari bot.",
+    "ja": "🔑 セッションの有効期限が切れました。アプリを閉じてボットから開き直してください。",
+    "ko": "🔑 세션이 만료되었습니다. 앱을 닫고 봇에서 다시 여세요.",
+    "pl": "🔑 Sesja wygasła. Zamknij aplikację i otwórz ją ponownie z bota.",
+    "pt": "🔑 A sessão expirou. Feche o app e abra novamente pelo bot.",
+    "ru": "🔑 Сессия устарела. Закройте приложение и откройте его снова из бота.",
+    "tr": "🔑 Oturumun süresi doldu. Uygulamayı kapatıp bottan yeniden aç.",
+    "uk": "🔑 Сесія застаріла. Закрийте застосунок і відкрийте його знову з бота.",
+    "vi": "🔑 Phiên đã hết hạn. Hãy đóng ứng dụng và mở lại từ bot.",
+    "zh": "🔑 会话已过期。请关闭应用，再从机器人重新打开。"
   }
 }

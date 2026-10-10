@@ -412,6 +412,8 @@ export const ja: Dict = {
   err_loading_wallet: "❌ ウォレットの読み込みエラー。",
   err_name_empty: "❌ 名前は空にできません。\n\n名前を入力するかキャンセルを押してください。",
   err_name_too_long: "❌ 名前が長すぎます（最大32文字）。\n\n短くするかキャンセルを押してください。",
+  err_rate_limit: "⏳ リクエストが多すぎます。1分待ってからもう一度お試しください。",
+  err_session: "🔑 セッションの有効期限が切れました。アプリを閉じてボットから開き直してください。",
   err_threshold_decimals: "❌ 小数点以下は最大2桁（例：7500.50）。",
   err_threshold_positive: "❌ 閾値は正の数である必要があります。",
   err_threshold_too_large: "❌ 閾値が大きすぎます。",

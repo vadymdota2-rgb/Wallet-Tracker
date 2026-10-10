@@ -412,6 +412,8 @@ export const vi: Dict = {
   err_loading_wallet: "❌ Lỗi tải ví.",
   err_name_empty: "❌ Tên không được trống.\n\nNhập tên hoặc nhấn Hủy.",
   err_name_too_long: "❌ Tên quá dài (tối đa 32).\n\nNhập ngắn hơn hoặc nhấn Hủy.",
+  err_rate_limit: "⏳ Quá nhiều yêu cầu. Hãy đợi một phút rồi thử lại.",
+  err_session: "🔑 Phiên đã hết hạn. Hãy đóng ứng dụng và mở lại từ bot.",
   err_threshold_decimals: "❌ Tối đa 2 chữ số thập phân (vd. 7500.50).",
   err_threshold_positive: "❌ Ngưỡng phải dương.",
   err_threshold_too_large: "❌ Ngưỡng quá lớn.",

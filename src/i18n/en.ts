@@ -411,6 +411,8 @@ export const en = {
   err_loading_wallet: "❌ Error loading wallet.",
   err_name_empty: "❌ Name cannot be empty.\n\nPlease enter a name or press Cancel.",
   err_name_too_long: "❌ Name is too long (max 32 characters).\n\nPlease enter a shorter name or press Cancel.",
+  err_rate_limit: "⏳ Too many requests. Wait a minute and try again.",
+  err_session: "🔑 Session expired. Close the app and open it again from the bot.",
   err_threshold_decimals: "❌ Use at most 2 decimal places (e.g., 7500.50).",
   err_threshold_positive: "❌ Threshold must be positive.",
   err_threshold_too_large: "❌ Threshold is too large.",

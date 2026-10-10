@@ -11,7 +11,7 @@ import { t, bare } from "../i18n/t";
 import type { DictKey } from "../i18n";
 import { haptic } from "../lib/telegram";
 import { toast } from "../components/Toast";
-import { removeWallet } from "../lib/api";
+import { removeWallet, failKey } from "../lib/api";
 import { syncNow } from "../lib/sync";
 import { copyText } from "../lib/copy";
 import { num, pct, signed, usd } from "../lib/format";
@@ -149,7 +149,7 @@ function TradeList({ rows, empty }: { rows: TradeRow[]; empty: string }) {
     if (res?.ok) {
       toast(t(lang, "toast_wallet_removed"));
       void syncNow();
-    } else toast(t(lang, "generic_error_retry"), "err");
+    } else toast(t(lang, failKey()), "err");
   };
 
   if (!rows.length) return <Empty text={empty} />;

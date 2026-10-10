@@ -412,6 +412,8 @@ export const zh: Dict = {
   err_loading_wallet: "❌ 加载钱包出错。",
   err_name_empty: "❌ 名称不能为空。\n\n请输入名称或点取消。",
   err_name_too_long: "❌ 名称过长（最多 32 个字符）。\n\n请缩短或点取消。",
+  err_rate_limit: "⏳ 请求过多，请等一分钟再试。",
+  err_session: "🔑 会话已过期。请关闭应用，再从机器人重新打开。",
   err_threshold_decimals: "❌ 最多 2 位小数（如 7500.50）。",
   err_threshold_positive: "❌ 阈值必须为正数。",
   err_threshold_too_large: "❌ 阈值过高。",
