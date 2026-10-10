@@ -12428,8 +12428,11 @@ def _opt_name(name: str):
 
 
 def _opt_deribit(sym: str) -> list:
+    """Кроме интереса и объёма — подразумеваемая волатильность и форвард: из
+    них считаются волатильность «на деньгах» и перекос по каждой дате."""
     rows = (get_json(f"https://www.deribit.com/api/v2/public/get_book_summary_by_currency?currency={sym}&kind=option", 15) or {}).get("result") or []
-    return [(r.get("instrument_name"), _fnum(r.get("open_interest")), _fnum(r.get("volume"))) for r in rows]
+    return [(r.get("instrument_name"), _fnum(r.get("open_interest")), _fnum(r.get("volume")),
+             _fnum(r.get("mark_iv")), _fnum(r.get("underlying_price"))) for r in rows]
 
 
 def _opt_okx(sym: str) -> list:
@@ -12474,6 +12477,43 @@ def _opt_maxpain(strikes: dict) -> float:
     return at
 
 
+def _opt_smile(rows: list) -> dict:
+    """Дата → (волатильность на деньгах, перекос), по Deribit.
+
+    На деньгах — среднее колла и пута на страйке, ближайшем к форварду.
+    Перекос — как «риск-реверсал 25 дельты», только наоборот по знаку:
+    волатильность пута минус колла на страйках, удалённых от форварда на
+    0,674·σ·√T (там у опциона дельта около 25). Плюс — защита от падения
+    дороже ставок на рост (рынок боится), минус — наоборот. Фиксированные
+    ±10% не годились: у опциона на день это крайние крылья, у годового —
+    почти деньги, и перекос дат не сравнивался между собой."""
+    by: dict = {}
+    for inst, _oi, _vol, iv, und in rows:
+        nm = _opt_name(inst)
+        if not nm or iv <= 0 or und <= 0:
+            continue
+        e = by.setdefault(nm[0], {"f": und, "C": {}, "P": {}})
+        e[nm[2]][nm[1]] = iv
+
+    def near(side: dict, x: float):
+        return side[min(side, key=lambda k: abs(k - x))] if side else 0.0
+
+    out = {}
+    for d, e in by.items():
+        f = e["f"]
+        if not e["C"] or not e["P"]:
+            continue
+        k = min(set(e["C"]) | set(e["P"]), key=lambda k: abs(k - f))
+        atm = [v for v in (e["C"].get(k), e["P"].get(k)) if v]
+        if not atm:
+            continue
+        sig = sum(atm) / len(atm)
+        days = max(0.5, (calendar.timegm(time.strptime(d, "%Y-%m-%d")) + 8 * 3600 - time.time()) / 86400)
+        w = math.exp(0.674 * sig / 100 * math.sqrt(days / 365))
+        out[d] = (round(sig, 1), round(near(e["P"], f / w) - near(e["C"], f * w), 1))
+    return out
+
+
 def _opt_dvol(sym: str) -> dict | None:
     end = int(time.time() * 1000)
     rows = ((get_json(f"https://www.deribit.com/api/v2/public/get_volatility_index_data?currency={sym}"
@@ -12511,13 +12551,13 @@ def _opt_trades(sym: str) -> tuple[list, dict]:
                 big.append({"t": int(t.get("timestamp") or 0) // 1000, "e": nm[0], "k": nm[1], "cp": nm[2],
                             "s": "b" if buy else "s", "a": round(amt, 4), "n": round(n),
                             "pr": round(_fnum(t.get("price")) * amt * ix), "iv": round(_fnum(t.get("iv")), 1),
-                            "blk": bool(t.get("block_trade_id"))})
+                            "blk": str(t.get("block_trade_id") or "")})
         if not res.get("has_more") or not trades:
             break
         end = int(trades[-1].get("timestamp") or start) - 1
         if end <= start:
             break
-    big = sorted(sorted(big, key=lambda b: -b["n"])[:OPT_BIG_KEEP], key=lambda b: -b["t"])
+    big = sorted(sorted(big, key=lambda b: -b["n"])[:OPT_BIG_KEEP], key=lambda b: (-b["t"], b["blk"], b["k"]))
     flow = {k: round(v) for k, v in flow.items()}
     flow["h"] = round(max(1.0, (time.time() * 1000 - first) / 3600_000), 1)
     return big, flow
@@ -12550,8 +12590,9 @@ def _opt_build(sym: str) -> dict:
     today = time.strftime("%Y-%m-%d", time.gmtime())
     exp: dict = {}
     ex_oi: dict = {}
+    smile = _opt_smile(got.get("Deribit") or [])
     for name, rows in got.items():
-        for inst, oi, vol in rows:
+        for inst, oi, vol, *_ in rows:
             nm = _opt_name(inst)
             if not nm or not inst.upper().startswith(sym + "-") or nm[0] < today or (oi <= 0 and vol <= 0):
                 continue
@@ -12573,8 +12614,10 @@ def _opt_build(sym: str) -> dict:
         c = sum(v[0] for v in ks.values())
         p = sum(v[1] for v in ks.values())
         ts = calendar.timegm(time.strptime(d, "%Y-%m-%d")) + 8 * 3600
+        iv, sk = smile.get(d, (0.0, 0.0))
         out.append({"d": d, "ts": ts, "c": round(c, 2), "p": round(p, 2),
                     "vc": round(e["v"][0], 2), "vp": round(e["v"][1], 2), "mp": _opt_maxpain(ks),
+                    "iv": iv, "sk": sk,
                     "k": [[k, round(cv, 2), round(pv, 2)] for k, (cv, pv) in sorted(ks.items())]})
     return {"ok": True, "sym": sym, "at": int(time.time()), "px": round(px, 2), "exp": out,
             "ex": sorted(([n, round(v * px)] for n, v in ex_oi.items() if v > 0), key=lambda x: -x[1]),

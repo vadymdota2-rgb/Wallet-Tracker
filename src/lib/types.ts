@@ -764,6 +764,10 @@ export interface OptExpiry {
   vp: number;
   /** Max Pain — цена, при которой покупатели опционов получат меньше всего. */
   mp: number;
+  /** Волатильность на деньгах, % годовых (Deribit; 0 — нет данных). */
+  iv: number;
+  /** Перекос: IV пута минус IV колла около 25 дельты, пункты. */
+  sk: number;
   k: [number, number, number][];
 }
 
@@ -780,7 +784,8 @@ export interface OptTrade {
   /** Уплаченная премия, $. */
   pr: number;
   iv: number;
-  blk: boolean;
+  /** Номер блочной сделки, общий у её ног; пусто — обычная сделка. */
+  blk: string;
 }
 
 export interface OptionsReply {

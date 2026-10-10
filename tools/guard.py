@@ -1092,7 +1092,12 @@ say("опционы: Deribit, OKX, Bybit, Binance; Max Pain, DVOL, крупны�
     and 'if path in ("/options", "/api/options"):' in api
     and "options: OptionsScreen" in read(f"{APP}/src/screens/registry.ts")
     and "savedOptions(sym)" in _op and "refreshOptions(sym)" in _op
-    and '<p className="lq-lead">{t(lang, "op_sub")}</p>' in _op)
+    and '<p className="lq-lead">{t(lang, "op_sub")}</p>' in _op
+    # Профессиональный слой: волатильность по датам, перекос около 25 дельты,
+    # блоки одной карточкой с названием стратегии, у каждого блока вывод словами.
+    and "def _opt_smile(" in api and "0.674 * sig / 100" in api
+    and "function TermChart(" in _op and "function strategyOf(" in _op and "function groupBig(" in _op
+    and 'className="op-say"' in _op and 'className="op-verdict"' in _op)
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

@@ -181,16 +181,19 @@ export function day(tsSec: number, nowSec: number): string {
 }
 
 /** Число и короткий месяц без дня недели: «11 окт.», для другого года —
- *  «26 мар. 27». По UTC: экспирации и разлоки назначены на дату биржи. */
+ *  «26 мар. ’27». По UTC: экспирации назначены на дату биржи. Год
+ *  дописывается сам: Intl в русском давал «26 мар. 27 г.», и в столбец дат
+ *  это не влезало. */
 export function dayMonth(tsSec: number, nowSec: number): string {
   const d = new Date(tsSec * 1000);
-  const opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", timeZone: "UTC" };
-  if (d.getUTCFullYear() !== new Date(nowSec * 1000).getUTCFullYear()) opts.year = "2-digit";
+  let s: string;
   try {
-    return new Intl.DateTimeFormat(locale, opts).format(d);
+    s = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", timeZone: "UTC" }).format(d);
   } catch {
-    return d.toISOString().slice(0, 10);
+    s = d.toISOString().slice(5, 10);
   }
+  const y = d.getUTCFullYear();
+  return y !== new Date(nowSec * 1000).getUTCFullYear() ? `${s} ’${String(y).slice(2)}` : s;
 }
 
 /** Ровно два знака после запятой: «1,30», а не «1,3» — в столбце рядом с «1,44». */
