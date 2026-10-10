@@ -1,5 +1,6 @@
 /**
- * Ликвидации в реальном времени: настоящие принудительные закрытия позиций
+ * Ликвидации в реальном времени — вкладка «Карты ликвидаций»: настоящие
+ * принудительные закрытия позиций
  * на Binance, Bybit, OKX, Gate и HTX — в отличие от карты ликвидаций, где
  * уровни лишь оценка.
  *
@@ -21,7 +22,6 @@ import { useNow } from "../lib/tick";
 import { CoinIcon } from "../components/CoinIcon";
 import { Card, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import type { LiqEv, LiqsReply } from "../lib/types";
-import { Frame } from "./Screen";
 
 type Lang = Parameters<typeof t>[0];
 type Win = "1h" | "4h" | "12h" | "24h" | "7d";
@@ -100,9 +100,9 @@ function FeedRow({ lang, e, nowSec }: { lang: Lang; e: LiqEv; nowSec: number }) 
   );
 }
 
-export function LiqsScreen() {
+/** Ликвидации вживую — вкладка экрана карты ликвидаций. `onMap` — назад к карте. */
+export function LiqsBody({ onMap }: { onMap?: () => void }) {
   const lang = useApp((s) => s.lang);
-  const open = useApp((s) => s.open);
   const [win, setWin] = useState<Win>("24h");
   const [sym, setSym] = useState("");
   const [min, setMin] = useState(10_000);
@@ -154,13 +154,13 @@ export function LiqsScreen() {
 
   if (!reply || !reply.ok) {
     return (
-      <Frame title={t(lang, "lqs_title")}>
+      <>
         {controls}
         {!reply || busy ? <Card><Skeleton rows={8} /></Card> : (
           <Empty text={t(lang, "lqs_err")}
             hint={<button type="button" className="lq-retry" onClick={() => setRetry((n) => n + 1)}>{t(lang, "ui_retry")}</button>} />
         )}
-      </Frame>
+      </>
     );
   }
 
@@ -175,7 +175,7 @@ export function LiqsScreen() {
   const young = youngSec !== null && youngSec < ({ "1h": 3600, "4h": 14400, "12h": 43200, "24h": 86400, "7d": 604800 } as const)[win];
 
   return (
-    <Frame title={t(lang, "lqs_title")}>
+    <>
       {controls}
 
       {/* Монета: все или одна из самых ликвидируемых */}
@@ -325,8 +325,8 @@ export function LiqsScreen() {
       </details>
       <p className="lq-src">
         {t(lang, "lqs_src")}{" "}
-        <button type="button" className="lq-chart" onClick={() => open("liqmap")}>{t(lang, "lqs_to_map")}</button>
+        {onMap ? <button type="button" className="lq-chart" onClick={onMap}>{t(lang, "lqs_to_map")}</button> : null}
       </p>
-    </Frame>
+    </>
   );
 }

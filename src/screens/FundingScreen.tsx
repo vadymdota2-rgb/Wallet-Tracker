@@ -5,6 +5,9 @@
  * Раньше он был плиткой «Аналитики», но по смыслу ближе к карте: и то и
  * другое — про фьючерсы и плечо, про то, кто и сколько платит за позицию.
  * Доступ — с Премиумом, как и всё приложение.
+ *
+ * Вторая вкладка — история открытого интереса и фандинга (OiHistBody): не
+ * «кто переплачивает сейчас», а как это менялось по дням.
  */
 import { useEffect, useState } from "react";
 import { useApp } from "../store/app";
@@ -16,16 +19,42 @@ import { useNow } from "../lib/tick";
 import { num, pct, usd } from "../lib/format";
 import { fundingSideKey, showSym } from "../lib/labels";
 import { CoinIcon } from "../components/CoinIcon";
-import { Card, Chips, Empty, Row, SectionTitle, Skeleton, VenueReel } from "../components/ui";
+import { Card, Chips, Empty, Row, SectionTitle, Segmented, Skeleton, VenueReel } from "../components/ui";
 import { fetchFund } from "../lib/api";
 import { syncNow } from "../lib/sync";
 import type { FundRow } from "../lib/types";
 import { Frame } from "./Screen";
+import { OiHistBody } from "./OiHistScreen";
+
+type FundTab = "now" | "hist";
 
 export function FundingScreen() {
   const lang = useApp((s) => s.lang);
+  /* Вкладки: перекосы сейчас — или как менялись интерес и фандинг. */
+  const [tab, setTab] = useState<FundTab>("now");
+  const tabs = (
+    <div className="lq-tabs">
+      <Segmented<FundTab>
+        value={tab}
+        onChange={setTab}
+        options={[
+          { id: "now", label: t(lang, "fund_tab_now") },
+          { id: "hist", label: t(lang, "fund_tab_hist") },
+        ]}
+      />
+    </div>
+  );
+  if (tab === "hist") {
+    return (
+      <Frame title={t(lang, "ui_tab_funding")}>
+        {tabs}
+        <OiHistBody />
+      </Frame>
+    );
+  }
   return (
     <Frame title={t(lang, "ui_tab_funding")}>
+      {tabs}
       <Card>
         {/* Подсказка — под заголовком, а не сбоку: рядом с ней длинное
             «Экстремальные ставки» рвалось посреди слова. */}

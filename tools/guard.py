@@ -276,10 +276,10 @@ say("помощь не обещает неделю за /start", all("/start" no
 # --- боковое меню: график TradingView и разлоки -----------------------------
 _m0 = appx.index("= [", appx.index("const MENU:"))
 menu = appx[_m0:appx.index("];", _m0)]
-say("в боковом меню одиннадцать пунктов: график, календарь, разлоки, карта ликвидаций, ликвидации, опционы, интерес и фандинг, фандинг, страх и жадность, доминация, ETF",
-    menu.count("name:") == 11
+say("в боковом меню девять пунктов: график, календарь, разлоки, карта ликвидаций, опционы, фандинг, страх и жадность, доминация, ETF",
+    menu.count("name:") == 9
     and menu.index('name: "chart"') < menu.index('name: "calendar"') < menu.index('name: "unlocks"') < menu.index('name: "liqmap"')
-    < menu.index('name: "liqs"') < menu.index('name: "options"') < menu.index('name: "oihist"') < menu.index('name: "funding"') < menu.index('name: "fng"') < menu.index('name: "dom"') < menu.index('name: "etf"'))
+    < menu.index('name: "options"') < menu.index('name: "funding"') < menu.index('name: "fng"') < menu.index('name: "dom"') < menu.index('name: "etf"'))
 tv = read(f"{APP}/src/lib/tradingview.ts")
 chart_scr = read(f"{APP}/src/screens/ChartScreen.tsx")
 say("график — официальный код виджета TradingView со сменой монеты",
@@ -1122,7 +1122,12 @@ say("ликвидации, история интереса и фандинга, 
     and all(f'"{x}"' in api.split("PAID_PATHS = frozenset(")[1][:900] for x in ("liqs", "oihist", "calendar"))
     and "location /xr/binance-ws/" in _ngx2 and "location /xr/bybit-ws/" in _ngx2
     and 'proxy_set_header Upgrade $http_upgrade;' in _ngx2
-    and all(x in read(f"{APP}/src/screens/registry.ts") for x in ("liqs: LiqsScreen", "oihist: OiHistScreen", "calendar: CalendarScreen")))
+    and "calendar: CalendarScreen" in read(f"{APP}/src/screens/registry.ts")
+    # Ликвидации вживую — вкладка карты ликвидаций, история интереса и
+    # фандинга — вкладка «Перекосов фандинга»; своих пунктов меню у них нет.
+    and "<LiqsBody onMap=" in read(f"{APP}/src/screens/LiqMapScreen.tsx")
+    and "<OiHistBody />" in read(f"{APP}/src/screens/FundingScreen.tsx")
+    and 'name: "liqs"' not in menu and 'name: "oihist"' not in menu)
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)
