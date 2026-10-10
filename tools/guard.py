@@ -276,10 +276,10 @@ say("помощь не обещает неделю за /start", all("/start" no
 # --- боковое меню: график TradingView и разлоки -----------------------------
 _m0 = appx.index("= [", appx.index("const MENU:"))
 menu = appx[_m0:appx.index("];", _m0)]
-say("в боковом меню восемь пунктов: график, разлоки, карта ликвидаций, опционы, фандинг, страх и жадность, доминация, ETF",
-    menu.count("name:") == 8
-    and menu.index('name: "chart"') < menu.index('name: "unlocks"') < menu.index('name: "liqmap"')
-    < menu.index('name: "options"') < menu.index('name: "funding"') < menu.index('name: "fng"') < menu.index('name: "dom"') < menu.index('name: "etf"'))
+say("в боковом меню одиннадцать пунктов: график, календарь, разлоки, карта ликвидаций, ликвидации, опционы, интерес и фандинг, фандинг, страх и жадность, доминация, ETF",
+    menu.count("name:") == 11
+    and menu.index('name: "chart"') < menu.index('name: "calendar"') < menu.index('name: "unlocks"') < menu.index('name: "liqmap"')
+    < menu.index('name: "liqs"') < menu.index('name: "options"') < menu.index('name: "oihist"') < menu.index('name: "funding"') < menu.index('name: "fng"') < menu.index('name: "dom"') < menu.index('name: "etf"'))
 tv = read(f"{APP}/src/lib/tradingview.ts")
 chart_scr = read(f"{APP}/src/screens/ChartScreen.tsx")
 say("график — официальный код виджета TradingView со сменой монеты",
@@ -507,9 +507,10 @@ say("карта ликвидаций: отдаётся из памяти сра�
 _ngx = read(f"{APP}/nginx.conf")
 say("Binance и Bybit — через nginx в Европе, если отсюда закрыты; ретранслятор только с ключом",
     'location /xr/binance-f/' in _ngx and 'location /xr/bybit/' in _ngx
-    and _ngx.count('if ($http_x_api_key != "__API_KEY__") { return 403; }') == 4
-    and _ngx.count('if ($http_x_api_key = "") { return 403; }') == 4
-    # Четвёртый — Bullish, со своей широкой нормой: проход — полторы тысячи запросов.
+    and _ngx.count('if ($http_x_api_key != "__API_KEY__") { return 403; }') == 6
+    and _ngx.count('if ($http_x_api_key = "") { return 403; }') == 6
+    # Четвёртый — Bullish, со своей широкой нормой: проход — полторы тысячи
+    # запросов; пятый и шестой — вебсокеты ликвидаций Binance и Bybit.
     and 'location /xr/bullish/' in _ngx and "zone=relay_bulk" in _ngx
     # Третий адрес — опционы Binance (eapi), закрыты по стране так же.
     and 'location /xr/binance-o/' in _ngx and '"https://eapi.binance.com/": "/xr/binance-o/"' in api
@@ -1068,7 +1069,7 @@ say("bsc: адреса бирж из отчётов о резервах подк
 # интереса), ряды бирж обрезаны ровно по окну (OKX отдавал 33 дня вместо 30).
 say("карта ликвидаций: интерес Gate без удвоения, у всех бирж одно и то же окно",
     '_fnum(r.get("open_interest_usd")) / 2' in pybody(api, "def _liq_gate(")
-    and "found[name] = rows[-n:]" in pybody(api, "def _liq_build(")
+    and "found[name] = rows[-n:]" in pybody(api, "def _liq_gather(")
     # Ещё биржи в снимках интереса: BloFin и XT.com; Zoomex — нет (отдаёт Bybit).
     and '("BloFin", _snap_blofin), ("XT.com", _snap_xt))' in api and "_snap_zoomex" not in api)
 
@@ -1105,6 +1106,23 @@ say("опционы: Deribit, OKX, Bybit, Binance; Max Pain, DVOL, крупны�
     and "def _opt_smile(" in api and "0.674 * sig / 100" in api
     and "function TermChart(" in _op and "function strategyOf(" in _op and "function groupBig(" in _op
     and 'className="op-say"' in _op and 'className="op-verdict"' in _op)
+
+# Ликвидации вживую: вебсокеты Binance/Bybit/OKX (свой клиент на стандартной
+# библиотеке, с обходом страны через nginx), опрос Gate и HTX, семь дней в
+# liq_oi.db. История интереса и фандинга — на тех же рядах, что карта
+# ликвидаций. Календарь: данные США, решения ФРС, экспирации, разлоки.
+_ngx2 = read(f"{APP}/nginx.conf")
+say("ликвидации, история интереса и фандинга, календарь — сервер, экраны, Премиум",
+    "class _WS:" in api and "def _liqs_binance(" in api and "def _liqs_bybit(" in api and "def _liqs_okx(" in api
+    and "def _liqs_gate_loop(" in api and "def _liqs_htx_loop(" in api and "def liqs_data(" in api
+    and "LIQS_KEEP = 7 * 86400" in api and "liqs_start()" in pybody(api, "def warmup(")
+    and "def _liq_gather(" in api and "got, ref = _liq_gather(sym, period, n)" in pybody(api, "def _liq_build(")
+    and "def oi_hist(" in api and "def _fund_hist(" in api and 'FUND_HIST_EX = ("Binance", "Bybit", "OKX", "Hyperliquid", "Gate", "Bitget")' in api
+    and "def calendar_data(" in api and "ff_calendar_thisweek.json" in api and '("2026-10-28", 18)' in api
+    and all(f'"{x}"' in api.split("PAID_PATHS = frozenset(")[1][:900] for x in ("liqs", "oihist", "calendar"))
+    and "location /xr/binance-ws/" in _ngx2 and "location /xr/bybit-ws/" in _ngx2
+    and 'proxy_set_header Upgrade $http_upgrade;' in _ngx2
+    and all(x in read(f"{APP}/src/screens/registry.ts") for x in ("liqs: LiqsScreen", "oihist: OiHistScreen", "calendar: CalendarScreen")))
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

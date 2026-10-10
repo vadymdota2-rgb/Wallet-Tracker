@@ -1112,6 +1112,72 @@ export function OptionsGlyph({ size = 25 }: { size?: number }) {
   );
 }
 
+/** Ликвидации — разрыв: столбик, перечёркнутый вспышкой. */
+export function LiqsGlyph({ size = 25 }: { size?: number }) {
+  return (
+    <svg
+      className="glyph"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 20.2h16" />
+      <path d="M7 17V9.5M12 17v-4M17 17V6.5" />
+      <path d="m13.5 3.5-3 5h3l-3 5" />
+    </svg>
+  );
+}
+
+/** Интерес во времени — слои площадей. */
+export function OiGlyph({ size = 25 }: { size?: number }) {
+  return (
+    <svg
+      className="glyph"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3.5 20.2h17" />
+      <path d="M3.5 16.5 8 13l4 2 4.5-4.5 4 2" />
+      <path d="M3.5 11.5 8 8l4 2 4.5-5 4 2.5" />
+    </svg>
+  );
+}
+
+/** Календарь — лист с кольцами и отмеченным днём. */
+export function CalGlyph({ size = 25 }: { size?: number }) {
+  return (
+    <svg
+      className="glyph"
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+      <path d="M3.5 9.5h17M8 3v4M16 3v4" />
+      <path d="M8 13.5h2M12 13.5h2M16 13.5h.5M8 17h2M12 17h2" />
+    </svg>
+  );
+}
+
 /** Молния — «быстрее остальных». Тот же контур, что у соседних значков. */
 export function BoltGlyph({ size = 22 }: { size?: number }) {
   return (

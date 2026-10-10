@@ -13,8 +13,11 @@ import math
 import os
 import re
 import secrets
+import socket
 import sqlite3
+import ssl
 import statistics
+import struct
 import sys
 import threading
 import time
@@ -23,7 +26,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse, urlsplit
 
 # Петля по умолчанию: наружу API выходит только через nginx. Раньше здесь
 # было 0.0.0.0, и обе базы бота слушали любой IP.
@@ -89,7 +92,7 @@ PAID_PATHS = frozenset(
     p for name in (
     "flow", "fund", "rot", "ls", "deals", "token",
     "wallet", "fng", "halving", "btc/flow", "btc/big", "btc/rank", "bsc/exflow",
-    "btc/wallet", "dom", "etf", "liqcoins", "liqmap", "options", "digest",
+    "btc/wallet", "dom", "etf", "liqcoins", "liqmap", "options", "liqs", "oihist", "calendar", "digest",
     "digest/translate", "digest/comments", "unlocks", "symbols", "big", "quotes",
     ) for p in ("/" + name, "/api/" + name)
 )
@@ -9717,6 +9720,7 @@ def warmup() -> None:
     threading.Thread(target=digest_refresher, daemon=True, name="digest").start()
     threading.Thread(target=liq_oi_refresher, daemon=True, name="liq-oi").start()
     threading.Thread(target=liq_warm_refresher, daemon=True, name="liq-warm").start()
+    liqs_start()
     cur = open_db(DB)
     hl = open_db(HL_DB)
     if not cur:
@@ -11005,9 +11009,11 @@ def liq_warm_refresher() -> None:
         time.sleep(LIQ_WARM_EVERY)
 
 
-def _liq_build(sym: str, rng: str) -> dict:
-    key = (sym, rng)
-    period, n = LIQ_RANGES[rng]
+def _liq_gather(sym: str, period: str, n: int) -> tuple[dict, list | None]:
+    """Ряды бирж за окно: (t, макс, мин, закрытие, интерес $, доля покупок).
+    Биржи со своей историей — запросом, остальные — из снимков liq_oi.db,
+    приведённых к свечам опорной. Общая часть карты ликвидаций и истории
+    открытого интереса."""
     found: dict[str, list] = {}
 
     def one(src):
@@ -11040,6 +11046,13 @@ def _liq_build(sym: str, rng: str) -> dict:
             got.update(_liq_sampled(sym, period, n, ref, ref[-1][3]))
         except (sqlite3.Error, OSError) as e:  # своя база недоступна — карта по биржам с историей
             print(f"liq sampled: {e}", file=sys.stderr)
+    return got, ref
+
+
+def _liq_build(sym: str, rng: str) -> dict:
+    key = (sym, rng)
+    period, n = LIQ_RANGES[rng]
+    got, ref = _liq_gather(sym, period, n)
     if not got:
         res = {"ok": False, "error": "no_data", "sym": sym}
         with _liq_lock:
@@ -12386,6 +12399,635 @@ def etf_data() -> dict:
         return hit[1] if hit else _etf_build()
 
 
+# --- История открытого интереса и фандинга --------------------------------
+# Интерес — сумма бирж по тем же рядам, что и у карты ликвидаций: шесть бирж
+# со своей историей и снимки двадцати трёх бирж (liq_oi.db). Цена — у
+# опорной биржи. Фандинг — история шести бирж, приведённая к ставке за восемь
+# часов: у Hyperliquid выплата каждый час, у части монет Binance — раз в
+# четыре, и сырые числа между собой не сравнивались бы.
+OIH_TTL = 120.0
+_OIH: dict = {}
+# Биржа ряда считается, если покрывает почти всё окно: иначе, появившись на
+# середине, она давала бы ступеньку «интерес вырос», которой не было.
+OIH_COVER = 0.9
+OIH_FUND_DAYS = {"1d": 3, "7d": 7, "30d": 30}
+
+
+def _oih_series(got: dict, grid: list) -> dict:
+    """Биржа → интерес на каждой точке сетки (пропуски — прошлым значением)."""
+    out = {}
+    for name, rows in got.items():
+        m = {r[0]: r[4] for r in rows if r[4] > 0}
+        if len(m) < len(grid) * OIH_COVER:
+            continue
+        ser, last = [], None
+        for t in grid:
+            last = m.get(t, last)
+            ser.append(last)
+        first = next((v for v in ser if v is not None), None)
+        if first is None:
+            continue
+        out[name] = [v if v is not None else first for v in ser]
+    return out
+
+
+def _fund_rows(name: str, sym: str, start_ms: int) -> list:
+    """История ставок биржи: [(время мс, ставка за выплату)]."""
+    if name == "Binance":
+        r = get_json(f"https://fapi.binance.com/fapi/v1/fundingRate?symbol={sym}USDT&startTime={start_ms}&limit=1000", 15)
+        return [(int(x["fundingTime"]), _fnum(x.get("fundingRate"))) for x in (r if isinstance(r, list) else [])]
+    if name == "Bybit":
+        out, end = [], now() * 1000
+        for _ in range(5):
+            r = ((get_json(f"https://api.bybit.com/v5/market/funding/history?category=linear&symbol={sym}USDT"
+                           f"&startTime={start_ms}&endTime={end}&limit=200", 15) or {}).get("result") or {}).get("list") or []
+            out += [(int(x["fundingRateTimestamp"]), _fnum(x.get("fundingRate"))) for x in r]
+            if len(r) < 200:
+                break
+            end = min(int(x["fundingRateTimestamp"]) for x in r) - 1
+        return out
+    if name == "OKX":
+        out, after = [], ""
+        for _ in range(8):
+            r = (get_json(f"https://www.okx.com/api/v5/public/funding-rate-history?instId={sym}-USDT-SWAP&limit=100"
+                          + (f"&after={after}" if after else ""), 15) or {}).get("data") or []
+            out += [(int(x["fundingTime"]), _fnum(x.get("realizedRate") or x.get("fundingRate"))) for x in r]
+            if len(r) < 100 or int(r[-1]["fundingTime"]) < start_ms:
+                break
+            after = r[-1]["fundingTime"]
+        return out
+    if name == "Hyperliquid":
+        out, t0 = [], start_ms
+        for _ in range(4):
+            r = hl_post({"type": "fundingHistory", "coin": sym, "startTime": t0}, 15)
+            r = r if isinstance(r, list) else []
+            out += [(int(x["time"]), _fnum(x.get("fundingRate"))) for x in r]
+            if len(r) < 500:
+                break
+            t0 = int(r[-1]["time"]) + 1
+        return out
+    if name == "Gate":
+        r = get_json(f"https://api.gateio.ws/api/v4/futures/usdt/funding_rate?contract={sym}_USDT&limit=1000", 15)
+        return [(int(x["t"]) * 1000, _fnum(x.get("r"))) for x in (r if isinstance(r, list) else [])]
+    if name == "Bitget":
+        out = []
+        for page in range(1, 6):
+            r = (get_json(f"https://api.bitget.com/api/v2/mix/market/history-fund-rate?symbol={sym}USDT"
+                          f"&productType=usdt-futures&pageSize=100&pageNo={page}", 15) or {}).get("data") or []
+            out += [(int(x["fundingTime"]), _fnum(x.get("fundingRate"))) for x in r]
+            if len(r) < 100 or min(int(x["fundingTime"]) for x in r) < start_ms:
+                break
+        return out
+    return []
+
+
+FUND_HIST_EX = ("Binance", "Bybit", "OKX", "Hyperliquid", "Gate", "Bitget")
+
+
+def _fund_hist(sym: str, days: int) -> dict:
+    start = (now() - days * 86400) * 1000
+    raw: dict = {}
+
+    def one(name):
+        try:
+            rows = sorted({t: r for t, r in _fund_rows(name, sym, start) if t >= start}.items())
+        except Exception:  # noqa: BLE001 — биржа не ответила: без неё
+            rows = []
+        if len(rows) >= 2:
+            raw[name] = rows
+
+    with ThreadPoolExecutor(max_workers=len(FUND_HIST_EX)) as pool:
+        list(pool.map(one, FUND_HIST_EX))
+    per: dict = {}
+    ex = []
+    for name, rows in raw.items():
+        gaps = sorted(rows[i + 1][0] - rows[i][0] for i in range(len(rows) - 1))
+        step_h = max(1.0, round(gaps[len(gaps) // 2] / 3.6e6))
+        k = 8.0 / step_h
+        for t, r in rows:
+            b = t // 28_800_000 * 28800
+            per.setdefault(b, {}).setdefault(name, []).append(r * k)
+        last = rows[-1][1] * k
+        ex.append([name, round(last * 100, 5), round(last * 3 * 365 * 100, 2), int(step_h)])
+    bars = []
+    for b in sorted(per):
+        vals = [sum(v) / len(v) for v in per[b].values()]
+        bars.append([b, round(sum(vals) / len(vals) * 100, 5)])
+    ex.sort(key=lambda x: -abs(x[1]))
+    avg = sum(x[1] for x in ex) / len(ex) if ex else 0.0
+    return {"ex": ex, "bars": bars, "avg": round(avg, 5), "apr": round(avg * 3 * 365, 2), "days": days}
+
+
+def _oih_build(sym: str, rng: str) -> dict:
+    period, n = LIQ_RANGES[rng]
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        f_fund = pool.submit(_fund_hist, sym, OIH_FUND_DAYS[rng])
+        got, ref = _liq_gather(sym, period, n)
+        try:
+            fund = f_fund.result()
+        except Exception:  # noqa: BLE001
+            fund = {"ex": [], "bars": []}
+    if not ref or not got:
+        return {"ok": False, "error": "no_data", "sym": sym}
+    grid = [r[0] for r in ref]
+    ser = _oih_series(got, grid)
+    if not ser:
+        return {"ok": False, "error": "no_data", "sym": sym}
+    tot = [round(sum(s[i] for s in ser.values())) for i in range(len(grid))]
+    px = [r[3] for r in ref]
+    sec = _LIQ_SEC[period]
+
+    def chg(series: list, hours: float):
+        back = int(round(hours * 3600 / sec))
+        # «За сутки» в окне ровно в сутки — от первой точки: её на одну меньше.
+        if back == len(series):
+            back -= 1
+        if back < 1 or back >= len(series) or not series[-1 - back]:
+            return None
+        return round((series[-1] / series[-1 - back] - 1) * 100, 2)
+
+    # Слои графика: пять крупнейших бирж и «остальные».
+    order = sorted(ser, key=lambda k: -ser[k][-1])
+    top = order[:5]
+    stack = [[k, [round(v) for v in ser[k]]] for k in top]
+    rest = order[5:]
+    if rest:
+        stack.append(["", [round(sum(ser[k][i] for k in rest)) for i in range(len(grid))]])
+    span_h = (grid[-1] - grid[0]) / 3600
+    return {"ok": True, "sym": sym, "range": rng, "at": now(), "t": grid, "px": px, "oi": tot, "stack": stack,
+            "chg": {"1h": chg(tot, 1), "4h": chg(tot, 4), "24h": chg(tot, 24), "all": chg(tot, span_h)},
+            "pchg": {"1h": chg(px, 1), "4h": chg(px, 4), "24h": chg(px, 24), "all": chg(px, span_h)},
+            "ex": [[k, round(ser[k][-1]), round((ser[k][-1] / ser[k][0] - 1) * 100, 2) if ser[k][0] else None]
+                   for k in order],
+            "fund": fund}
+
+
+def oi_hist(sym: str, rng: str) -> dict:
+    sym = re.sub(r"[^A-Z0-9]", "", (sym or "BTC").upper())[:12] or "BTC"
+    rng = rng if rng in LIQ_RANGES else "7d"
+    return cached_bg(_OIH, (sym, rng), OIH_TTL, lambda: _oih_build(sym, rng))
+
+
+# --- Ликвидации в реальном времени ---------------------------------------
+# Настоящие принудительные закрытия, а не оценка карты ликвидаций.
+#   Binance (!forceOrder@arr), Bybit (allLiquidation.*) и OKX
+#   (liquidation-orders) — вебсокетами; Binance и Bybit с этой машины закрыты
+#   по стране — тогда соединение идёт через nginx в Европе (/xr/…-ws/);
+#   Gate (все контракты одним запросом) и HTX (по крупным монетам) — опросом.
+# Binance отдаёт по каждой монете не больше одной ликвидации в секунду —
+# так он устроен, и суммы по нему чуть занижены; так считают и Coinglass,
+# и все, кто берёт этот поток.
+# События лежат в liq_oi.db семь дней: ex, монета, время (мс), сторона
+# (1 — ликвидирован лонг, 0 — шорт), цена, сумма в долларах.
+LIQS_KEEP = 7 * 86400
+LIQS_WIN = {"1h": (3600, 300), "4h": (14400, 900), "12h": (43200, 1800), "24h": (86400, 3600), "7d": (604800, 21600)}
+LIQS_TTL = 10.0
+LIQS_FEED = 80
+# Монеты, по которым HTX спрашивается отдельно, — крупнейшие по ликвидациям.
+LIQS_HTX = ("BTC", "ETH", "SOL", "XRP", "DOGE", "BNB", "SUI", "ADA", "LTC", "LINK", "AVAX", "TRX")
+# Bybit не даёт общей подписки — только по монете; берём сотню самых торгуемых.
+LIQS_BYBIT_TOP = 100
+_liqs_q: list = []
+_liqs_q_lock = threading.Lock()
+_liqs_live: dict = {}  # биржа → время последнего события (сек)
+_LIQS: dict = {}
+_liqs_started = False
+
+
+def _liqs_con() -> sqlite3.Connection:
+    con = _liq_oi_con()
+    con.execute("CREATE TABLE IF NOT EXISTS liq_ev (ex TEXT NOT NULL, sym TEXT NOT NULL, t INTEGER NOT NULL, "
+                "side INTEGER NOT NULL, px REAL NOT NULL, usd REAL NOT NULL)")
+    con.execute("CREATE UNIQUE INDEX IF NOT EXISTS liq_ev_u ON liq_ev (ex, t, sym, side, px, usd)")
+    con.execute("CREATE INDEX IF NOT EXISTS liq_ev_t ON liq_ev (t)")
+    return con
+
+
+def _liqs_sym(raw: str) -> tuple[str, float]:
+    """BTCUSDT / BTC-USDT-SWAP / BTC_USDT / 1000PEPEUSDT → (монета, делитель цены).
+    У «1000PEPE» цена контракта — за тысячу монет; сумма в долларах верна и так,
+    а цену для ленты делим обратно."""
+    s = str(raw or "").upper().replace("-SWAP", "")
+    s = re.sub(r"[-_]?(USDT|USDC|USD|PERP)$", "", s).replace("-", "").replace("_", "")
+    m = re.fullmatch(r"(1000000|10000|1000|100)([A-Z][A-Z0-9]*)", s)
+    if m:
+        return m.group(2), float(m.group(1))
+    return ("BTC" if s == "XBT" else s), 1.0
+
+
+def _liqs_put(ex: str, raw_sym: str, t_ms: int, long_liq: bool, px: float, usd: float) -> None:
+    sym, div = _liqs_sym(raw_sym)
+    if not sym or usd <= 0 or px <= 0 or not re.fullmatch(r"[A-Z][A-Z0-9]{0,14}", sym):
+        return
+    with _liqs_q_lock:
+        _liqs_q.append((ex, sym, int(t_ms), 1 if long_liq else 0, px / div, round(usd, 2)))
+    _liqs_live[ex] = time.time()
+
+
+def _liqs_writer() -> None:
+    """Очередь событий → база, раз в две секунды; раз в час — чистка старого."""
+    last_prune = 0.0
+    while True:
+        time.sleep(2)
+        with _liqs_q_lock:
+            batch = _liqs_q[:]
+            _liqs_q.clear()
+        if not batch and time.time() - last_prune < 3600:
+            continue
+        try:
+            con = _liqs_con()
+            try:
+                con.executemany("INSERT OR IGNORE INTO liq_ev VALUES (?,?,?,?,?,?)", batch)
+                if time.time() - last_prune >= 3600:
+                    con.execute("DELETE FROM liq_ev WHERE t < ?", ((now() - LIQS_KEEP) * 1000,))
+                    last_prune = time.time()
+                con.commit()
+            finally:
+                con.close()
+        except sqlite3.Error as e:
+            print(f"liqs write: {e}", file=sys.stderr)
+
+
+# Свой маленький клиент вебсокетов: стандартной библиотеки хватает, а лишняя
+# зависимость на сервере — это ещё одна вещь, которая может не встать.
+class _WS:
+    def __init__(self, url: str, headers: dict | None = None, timeout: float = 30.0):
+        u = urlsplit(url)
+        port = u.port or (443 if u.scheme == "wss" else 80)
+        # Прокси из окружения — как у urllib: где он задан, напрямую не выйти.
+        proxy = urllib.request.getproxies().get("https", "")
+        if proxy and not urllib.request.proxy_bypass(u.hostname or ""):
+            pu = urlsplit(proxy)
+            raw = socket.create_connection((pu.hostname, pu.port or 80), timeout=timeout)
+            raw.sendall(f"CONNECT {u.hostname}:{port} HTTP/1.1\r\nHost: {u.hostname}:{port}\r\n\r\n".encode())
+            resp = b""
+            while b"\r\n\r\n" not in resp:
+                chunk = raw.recv(4096)
+                if not chunk:
+                    raise ConnectionError("ws: proxy closed")
+                resp += chunk
+            if b" 200" not in resp.split(b"\r\n", 1)[0]:
+                raise ConnectionError("ws: proxy " + resp.split(b"\r\n", 1)[0].decode(errors="replace"))
+        else:
+            raw = socket.create_connection((u.hostname, port), timeout=timeout)
+        self.sock = ssl.create_default_context().wrap_socket(raw, server_hostname=u.hostname) if u.scheme == "wss" else raw
+        key = base64.b64encode(secrets.token_bytes(16)).decode()
+        path = (u.path or "/") + (("?" + u.query) if u.query else "")
+        req = (f"GET {path} HTTP/1.1\r\nHost: {u.hostname}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+               f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\nUser-Agent: wallet-tracker/1.0\r\n"
+               + "".join(f"{k}: {v}\r\n" for k, v in (headers or {}).items()) + "\r\n")
+        self.sock.sendall(req.encode())
+        head = b""
+        while b"\r\n\r\n" not in head:
+            chunk = self.sock.recv(4096)
+            if not chunk:
+                raise ConnectionError("ws: handshake closed")
+            head += chunk
+            if len(head) > 65536:
+                raise ConnectionError("ws: handshake too long")
+        top, self.buf = head.split(b"\r\n\r\n", 1)
+        self.parts: list[bytes] = []
+        status = top.split(b"\r\n", 1)[0].decode(errors="replace")
+        if " 101 " not in status + " ":
+            raise ConnectionError(f"ws: {status}")
+
+    def send(self, data: str | bytes, opcode: int = 1) -> None:
+        payload = data.encode() if isinstance(data, str) else data
+        n = len(payload)
+        head = bytes([0x80 | opcode])
+        if n < 126:
+            head += bytes([0x80 | n])
+        elif n < 65536:
+            head += bytes([0x80 | 126]) + struct.pack(">H", n)
+        else:
+            head += bytes([0x80 | 127]) + struct.pack(">Q", n)
+        mask = secrets.token_bytes(4)
+        self.sock.sendall(head + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(payload)))
+
+    def _frame(self):
+        """Целый кадр из буфера: (fin, код, данные) или None, если ещё не пришёл.
+        Буфер не трогается, пока кадр не целый: тайм-аут чтения посреди кадра
+        иначе съел бы его заголовок, и поток дальше читался бы со сдвигом."""
+        b = self.buf
+        if len(b) < 2:
+            return None
+        op, n, i = b[0] & 0x0F, b[1] & 0x7F, 2
+        if n == 126:
+            if len(b) < 4:
+                return None
+            n, i = struct.unpack(">H", b[2:4])[0], 4
+        elif n == 127:
+            if len(b) < 10:
+                return None
+            n, i = struct.unpack(">Q", b[2:10])[0], 10
+        mask = b""
+        if b[1] & 0x80:
+            if len(b) < i + 4:
+                return None
+            mask, i = b[i:i + 4], i + 4
+        if len(b) < i + n:
+            return None
+        data = b[i:i + n]
+        self.buf = b[i + n:]
+        if mask:
+            data = bytes(x ^ mask[j % 4] for j, x in enumerate(data))
+        return bool(b[0] & 0x80), op, data
+
+    def recv(self) -> str | None:
+        """Следующее текстовое сообщение; пинг отвечается сам; None — закрыто.
+        Тайм-аут сокета пробрасывается наружу — уже прочитанное остаётся в буфере."""
+        while True:
+            f = self._frame()
+            if f is None:
+                chunk = self.sock.recv(65536)
+                if not chunk:
+                    raise ConnectionError("ws: closed")
+                self.buf += chunk
+                continue
+            fin, op, data = f
+            if op == 9:
+                self.send(data, 10)
+                continue
+            if op == 10:
+                continue
+            if op == 8:
+                return None
+            self.parts.append(data)
+            if fin:
+                out = b"".join(self.parts).decode(errors="replace")
+                self.parts = []
+                return out
+
+    def close(self) -> None:
+        try:
+            self.sock.close()
+        except OSError:
+            pass
+
+
+# Хост → до какого времени ходить сразу через nginx: биржа отказала или
+# молчала напрямую (соединение есть, а событий нет — так тоже закрывают).
+_liqs_relay_until: dict = {}
+
+
+def _liqs_ws_open(url: str, relay_path: str) -> tuple[_WS, bool]:
+    """Сначала напрямую; отказ (страна, сеть) — через nginx в Европе.
+    Возвращает соединение и признак «через ретранслятор»."""
+    u = urlsplit(url)
+    via = RELAY.replace("https://", "wss://").replace("http://", "ws://") + relay_path + u.path.lstrip("/") \
+        + (("?" + u.query) if u.query else "")
+    relay_ok = bool(RELAY and API_KEY)
+    if relay_ok and time.time() < _liqs_relay_until.get(u.hostname, 0.0):
+        return _WS(via, {"X-Api-Key": API_KEY}), True
+    try:
+        return _WS(url), False
+    except (OSError, ConnectionError) as e:
+        if not relay_ok:
+            raise
+        print(f"liqs ws {u.hostname}: {e} — через ретранслятор", file=sys.stderr)
+        _liqs_relay_until[u.hostname] = time.time() + 1800
+        return _WS(via, {"X-Api-Key": API_KEY}), True
+
+
+def _liqs_silent(url: str, relayed: bool) -> None:
+    """Напрямую — тишина: следующие полчаса подключаемся через nginx."""
+    if not relayed:
+        _liqs_relay_until[urlsplit(url).hostname] = time.time() + 1800
+
+
+def _liqs_loop(name: str, run) -> None:
+    """Переподключение с паузой, растущей до минуты; удачная минута — сброс."""
+    pause = 2.0
+    while True:
+        t0 = time.time()
+        try:
+            run()
+        except Exception as e:  # noqa: BLE001 — обрыв: заново
+            print(f"liqs {name}: {e}", file=sys.stderr)
+        pause = 2.0 if time.time() - t0 > 60 else min(60.0, pause * 2)
+        time.sleep(pause)
+
+
+def _liqs_binance() -> None:
+    url = "wss://fstream.binance.com/ws/!forceOrder@arr"
+    ws, relayed = _liqs_ws_open(url, "/xr/binance-ws/")
+    # Ликвидации на Binance идут каждые несколько секунд: пять минут тишины —
+    # соединение мёртвое (или биржа молча не пускает).
+    ws.sock.settimeout(300)
+    try:
+        while True:
+            try:
+                msg = ws.recv()
+            except socket.timeout:
+                _liqs_silent(url, relayed)
+                raise
+            if msg is None:
+                return
+            o = (json.loads(msg) or {}).get("o") or {}
+            q, ap = _fnum(o.get("z") or o.get("q")), _fnum(o.get("ap") or o.get("p"))
+            # Продажа по ликвидации — закрывается лонг.
+            _liqs_put("Binance", o.get("s"), int(o.get("T") or now() * 1000), o.get("S") == "SELL", ap, q * ap)
+    finally:
+        ws.close()
+
+
+def _liqs_bybit() -> None:
+    rows = ((get_json("https://api.bybit.com/v5/market/tickers?category=linear", 15) or {}).get("result") or {}).get("list") or []
+    syms = [r["symbol"] for r in sorted(rows, key=lambda r: -_fnum(r.get("turnover24h")))
+            if str(r.get("symbol", "")).endswith("USDT")][:LIQS_BYBIT_TOP]
+    if not syms:
+        raise ConnectionError("bybit: no symbols")
+    url = "wss://stream.bybit.com/v5/public/linear"
+    ws, relayed = _liqs_ws_open(url, "/xr/bybit-ws/")
+    ws.sock.settimeout(20)
+    try:
+        for i in range(0, len(syms), 10):
+            ws.send(json.dumps({"op": "subscribe", "args": [f"allLiquidation.{s}" for s in syms[i:i + 10]]}))
+        last_ping = last_msg = time.time()
+        while True:
+            if time.time() - last_ping > 20:
+                ws.send('{"op":"ping"}')
+                last_ping = time.time()
+            if time.time() - last_msg > 120:
+                # Даже на пинг молчит — соединение мёртвое.
+                _liqs_silent(url, relayed)
+                raise ConnectionError("bybit: silent")
+            try:
+                msg = ws.recv()
+            except socket.timeout:
+                continue
+            if msg is None:
+                return
+            last_msg = time.time()
+            for d in (json.loads(msg) or {}).get("data") or []:
+                v, p = _fnum(d.get("v")), _fnum(d.get("p"))
+                # У Bybit «Buy» значит: ликвидирован лонг.
+                _liqs_put("Bybit", d.get("s"), int(d.get("T") or now() * 1000), d.get("S") == "Buy", p, v * p)
+    finally:
+        ws.close()
+
+
+_liqs_okx_ct: dict = {}
+
+
+def _liqs_okx_contracts() -> None:
+    """Размер контракта OKX: линейный — в монетах, инверсный — в долларах."""
+    rows = (get_json("https://www.okx.com/api/v5/public/instruments?instType=SWAP", 20) or {}).get("data") or []
+    for r in rows:
+        _liqs_okx_ct[r.get("instId")] = (_fnum(r.get("ctVal")), r.get("ctType") == "inverse")
+
+
+def _liqs_okx() -> None:
+    _liqs_okx_contracts()
+    ws = _WS("wss://ws.okx.com/ws/v5/public")
+    ws.sock.settimeout(25)
+    try:
+        ws.send(json.dumps({"op": "subscribe", "args": [{"channel": "liquidation-orders", "instType": "SWAP"}]}))
+        while True:
+            try:
+                msg = ws.recv()
+            except socket.timeout:
+                ws.send("ping")
+                continue
+            if msg is None:
+                return
+            if msg == "pong":
+                continue
+            for d in (json.loads(msg) or {}).get("data") or []:
+                inst = d.get("instId")
+                ct, inverse = _liqs_okx_ct.get(inst, (0.0, False))
+                if ct <= 0:
+                    continue
+                for x in d.get("details") or []:
+                    sz, px = _fnum(x.get("sz")), _fnum(x.get("bkPx"))
+                    usd = sz * ct if inverse else sz * ct * px
+                    _liqs_put("OKX", inst, int(x.get("ts") or now() * 1000), x.get("posSide") == "long", px, usd)
+    finally:
+        ws.close()
+
+
+def _liqs_gate_loop() -> None:
+    mult: dict = {}
+    seen: set = set()
+    since = now() - 3600
+    while True:
+        try:
+            if not mult or int(time.time()) % 3600 < 30:
+                for r in get_json("https://api.gateio.ws/api/v4/futures/usdt/contracts", 20) or []:
+                    mult[r.get("name")] = _fnum(r.get("quanto_multiplier"))
+            rows = get_json(f"https://api.gateio.ws/api/v4/futures/usdt/liq_orders?from={since}&limit=1000", 15) or []
+            for r in rows if isinstance(rows, list) else []:
+                key = (r.get("contract"), r.get("time"), r.get("size"), r.get("fill_price"), r.get("order_price"))
+                if key in seen:
+                    continue
+                seen.add(key)
+                size, px = _fnum(r.get("size")), _fnum(r.get("fill_price"))
+                usd = abs(size) * mult.get(r.get("contract"), 0.0) * px
+                # Отрицательный размер — закрывался шорт.
+                _liqs_put("Gate", r.get("contract"), int(r.get("time") or 0) * 1000, size > 0, px, usd)
+                since = max(since, int(r.get("time") or 0))
+            if len(seen) > 20000:
+                seen = set(list(seen)[-5000:])
+        except Exception as e:  # noqa: BLE001
+            print(f"liqs gate: {e}", file=sys.stderr)
+        time.sleep(20)
+
+
+def _liqs_htx_loop() -> None:
+    seen: set = set()
+    while True:
+        for c in LIQS_HTX:
+            try:
+                res = get_json(f"https://api.hbdm.com/linear-swap-api/v3/swap_liquidation_orders?contract={c}-USDT&trade_type=0", 15) or {}
+                for r in res.get("data") or []:
+                    qid = r.get("query_id")
+                    if qid in seen:
+                        continue
+                    seen.add(qid)
+                    # Покупка на закрытие — закрывался шорт; продажа — лонг.
+                    _liqs_put("HTX", r.get("contract_code"), int(r.get("created_at") or 0),
+                              r.get("direction") == "sell", _fnum(r.get("price")), _fnum(r.get("trade_turnover")))
+            except Exception as e:  # noqa: BLE001
+                print(f"liqs htx {c}: {e}", file=sys.stderr)
+            time.sleep(2)
+        if len(seen) > 50000:
+            seen = set(list(seen)[-10000:])
+        time.sleep(30)
+
+
+def liqs_start() -> None:
+    """Сборщики — по потоку на биржу и писатель; запускается один раз."""
+    global _liqs_started
+    if _liqs_started:
+        return
+    _liqs_started = True
+    try:
+        _liqs_con().close()
+    except sqlite3.Error as e:
+        print(f"liqs db: {e}", file=sys.stderr)
+    threading.Thread(target=_liqs_writer, daemon=True, name="liqs-db").start()
+    for name, fn in (("Binance", _liqs_binance), ("Bybit", _liqs_bybit), ("OKX", _liqs_okx)):
+        threading.Thread(target=_liqs_loop, args=(name, fn), daemon=True, name=f"liqs-{name}").start()
+    threading.Thread(target=_liqs_gate_loop, daemon=True, name="liqs-gate").start()
+    threading.Thread(target=_liqs_htx_loop, daemon=True, name="liqs-htx").start()
+
+
+def _liqs_build(win: str, sym: str, min_usd: float) -> dict:
+    span, step = LIQS_WIN[win]
+    end = now()
+    start = end - span
+    con = _liqs_con()
+    try:
+        q = "FROM liq_ev WHERE t >= ?" + (" AND sym = ?" if sym else "")
+        args: tuple = (start * 1000,) + ((sym,) if sym else ())
+        tot = con.execute(f"SELECT side, SUM(usd), COUNT(*) {q} GROUP BY side", args).fetchall()
+        by_ex = con.execute(f"SELECT ex, side, SUM(usd) {q} GROUP BY ex, side", args).fetchall()
+        by_sym = con.execute(f"SELECT sym, side, SUM(usd) {q} GROUP BY sym, side", args).fetchall()
+        bars = con.execute(f"SELECT (t / 1000 - ?) / ?, side, SUM(usd) {q} GROUP BY 1, side",
+                           (start, step) + args).fetchall()
+        feed = con.execute(f"SELECT ex, sym, t, side, px, usd {q} AND usd >= ? ORDER BY t DESC LIMIT ?",
+                           args + (min_usd, LIQS_FEED)).fetchall()
+        big = con.execute(f"SELECT ex, sym, t, side, px, usd {q} ORDER BY usd DESC LIMIT 1", args).fetchone()
+        first = con.execute("SELECT MIN(t) FROM liq_ev").fetchone()[0]
+    finally:
+        con.close()
+    T = {"L": 0.0, "S": 0.0, "n": 0}
+    for side, usd, n in tot:
+        T["L" if side else "S"] += usd or 0.0
+        T["n"] += n
+    exs: dict = {}
+    for ex, side, usd in by_ex:
+        exs.setdefault(ex, [0.0, 0.0])[0 if side else 1] += usd or 0.0
+    syms: dict = {}
+    for s, side, usd in by_sym:
+        syms.setdefault(s, [0.0, 0.0])[0 if side else 1] += usd or 0.0
+    nb = span // step
+    B = [[start + i * step, 0.0, 0.0] for i in range(nb)]
+    for i, side, usd in bars:
+        if 0 <= int(i) < nb:
+            B[int(i)][1 if side else 2] += usd or 0.0
+
+    def ev(r):
+        return {"ex": r[0], "s": r[1], "t": r[2] // 1000, "L": bool(r[3]), "px": r[4], "usd": round(r[5])}
+
+    live = {ex: int(t) for ex, t in _liqs_live.items()}
+    return {"ok": True, "win": win, "sym": sym, "at": end,
+            "tot": {"L": round(T["L"]), "S": round(T["S"]), "n": T["n"]},
+            "ex": sorted(([e, round(v[0]), round(v[1])] for e, v in exs.items()), key=lambda x: -(x[1] + x[2])),
+            "coins": sorted(([s, round(v[0]), round(v[1])] for s, v in syms.items()), key=lambda x: -(x[1] + x[2]))[:40],
+            "bars": [[b[0], round(b[1]), round(b[2])] for b in B], "step": step,
+            "feed": [ev(r) for r in feed], "big": ev(big) if big else None,
+            "live": live, "since": (first // 1000) if first else None}
+
+
+def liqs_data(win: str, sym: str = "", min_usd: float = 0.0) -> dict:
+    liqs_start()
+    win = win if win in LIQS_WIN else "24h"
+    sym = re.sub(r"[^A-Z0-9]", "", (sym or "").upper())[:15]
+    min_usd = min(10_000_000.0, max(0.0, min_usd))
+    return cached_small(_LIQS, (win, sym, min_usd), LIQS_TTL, lambda: _liqs_build(win, sym, min_usd))
+
+
 # --- Опционы -------------------------------------------------------------
 # Открытый интерес по страйкам и датам, Max Pain, Put/Call, волатильность по
 # датам и перекос, DVOL и крупные сделки — по четырнадцати монетам с восьми бирж.
@@ -12794,10 +13436,33 @@ def _opt_build(sym: str) -> dict:
                     "k": [[k, round(cv, 4), round(pv, 4)] for k, (cv, pv) in sorted(ks.items())]})
     if not out:
         return {"ok": False, "error": "no_data"}
-    return {"ok": True, "sym": sym, "at": int(time.time()), "px": round(px, 6), "exp": out,
+    hist = _opt_hist_put(sym, sum(e["c"] for e in out) * px, sum(e["p"] for e in out) * px)
+    return {"ok": True, "sym": sym, "at": int(time.time()), "px": round(px, 6), "exp": out, "hist": hist,
             "ex": sorted(([n, round(v * px)] for n, v in ex_oi.items() if v > 0), key=lambda x: -x[1]),
             "dvol": dvol, "big": big, "flow": flow, "bigMin": OPT_BIG.get(sym, OPT_BIG_OTHER),
             "tape": bool(flow)}
+
+
+def _opt_hist_put(sym: str, c_usd: float, p_usd: float) -> list:
+    """Почасовой снимок интереса опционов монеты и история за неделю:
+    [[час, коллы $, путы $]]. Хранится два месяца."""
+    t = now() // 3600 * 3600
+    try:
+        con = _liq_oi_con()
+        try:
+            con.execute("CREATE TABLE IF NOT EXISTS opt_snap (coin TEXT NOT NULL, t INTEGER NOT NULL, "
+                        "c REAL NOT NULL, p REAL NOT NULL, PRIMARY KEY (coin, t)) WITHOUT ROWID")
+            con.execute("INSERT OR REPLACE INTO opt_snap VALUES (?,?,?,?)", (sym, t, c_usd, p_usd))
+            con.execute("DELETE FROM opt_snap WHERE t < ?", (t - 60 * 86400,))
+            con.commit()
+            rows = con.execute("SELECT t, c, p FROM opt_snap WHERE coin=? AND t >= ? ORDER BY t",
+                               (sym, t - 7 * 86400)).fetchall()
+        finally:
+            con.close()
+    except sqlite3.Error as e:
+        print(f"options hist: {e}", file=sys.stderr)
+        return []
+    return [[a, round(b), round(c)] for a, b, c in rows]
 
 
 def options_coins() -> list:
@@ -12827,6 +13492,135 @@ def options_data(sym: str) -> dict:
         return {"ok": False, "error": "bad_args"}
     r = cached_bg(_OPT, sym, OPT_TTL, lambda: _opt_build(sym))
     return {**r, "coins": options_coins()} if isinstance(r, dict) else r
+
+
+# --- Календарь событий ----------------------------------------------------
+# Три вида событий в одной ленте по дням:
+#   macro — данные США (инфляция, занятость, ставка ФРС…) из открытого
+#           недельного календаря ForexFactory: он отдаёт только текущую
+#           неделю, поэтому всё увиденное копится в liq_oi.db, и прошедшие
+#           дни остаются в календаре с прогнозом и прошлым значением;
+#           решения ФРС — по расписанию на год вперёд (2026 — утверждено,
+#           2027 — предварительно, без двух дат, по которым источники
+#           расходятся);
+#   opt   — экспирации опционов BTC и ETH: номинал, Max Pain, Put/Call — из
+#           того же, что и экран опционов;
+#   unl   — разлоки токенов из календаря разлоков, от $10M.
+# Прошедшая неделя тоже в ответе — приложение показывает её по кнопке: макро
+# из недели ForexFactory чаще всего уже позади, а итог важен.
+CAL_TTL = 300.0
+CAL_FF_EVERY = 3600.0
+CAL_DAYS = 45
+CAL_UNL_MIN = 10_000_000.0
+# Крупная экспирация — от миллиарда номинала: такие двигают рынок.
+CAL_OPT_MIN = {"BTC": 300_000_000.0, "ETH": 100_000_000.0}
+# Решения ФРС: день и 14:00 по Нью-Йорку (18:00 UTC летом, 19:00 зимой).
+CAL_FOMC = (
+    ("2026-10-28", 18), ("2026-12-09", 19),
+    ("2027-01-27", 19), ("2027-03-17", 18), ("2027-07-28", 18), ("2027-09-15", 18),
+    ("2027-10-27", 18), ("2027-12-08", 19),
+)
+_CAL: dict = {}
+_cal_ff_at = 0.0
+
+
+def _cal_con() -> sqlite3.Connection:
+    con = _liq_oi_con()
+    con.execute("CREATE TABLE IF NOT EXISTS cal_ev (id TEXT PRIMARY KEY, t INTEGER NOT NULL, title TEXT NOT NULL, "
+                "impact TEXT NOT NULL, forecast TEXT NOT NULL, previous TEXT NOT NULL)")
+    return con
+
+
+def _cal_ff_pull() -> None:
+    """Неделя ForexFactory → база; только США и только важное и среднее."""
+    global _cal_ff_at
+    if time.monotonic() - _cal_ff_at < CAL_FF_EVERY and _cal_ff_at:
+        return
+    _cal_ff_at = time.monotonic()
+    rows = get_json("https://nfs.faireconomy.media/ff_calendar_thisweek.json", 20)
+    if not isinstance(rows, list):
+        return
+    put = []
+    for r in rows:
+        if r.get("country") != "USD" or r.get("impact") not in ("High", "Medium"):
+            continue
+        try:
+            t = int(calendar.timegm(time.strptime(str(r["date"])[:19], "%Y-%m-%dT%H:%M:%S")))
+            off = str(r["date"])[19:]
+            if re.fullmatch(r"[+-]\d\d:\d\d", off):
+                sign = 1 if off[0] == "+" else -1
+                t -= sign * (int(off[1:3]) * 3600 + int(off[4:6]) * 60)
+        except (KeyError, ValueError):
+            continue
+        title = str(r.get("title") or "")[:80]
+        put.append((f"{title}|{t}", t, title, r.get("impact") or "", str(r.get("forecast") or "")[:20],
+                    str(r.get("previous") or "")[:20]))
+    if not put:
+        return
+    con = _cal_con()
+    try:
+        con.executemany("INSERT OR REPLACE INTO cal_ev VALUES (?,?,?,?,?,?)", put)
+        con.execute("DELETE FROM cal_ev WHERE t < ?", (now() - 120 * 86400,))
+        con.commit()
+    finally:
+        con.close()
+
+
+def _cal_build() -> dict:
+    lo = now() // 86400 * 86400 - 7 * 86400
+    hi = now() + CAL_DAYS * 86400
+    ev = []
+    try:
+        _cal_ff_pull()
+    except Exception as e:  # noqa: BLE001 — календарь без свежей недели, но с накопленным
+        print(f"calendar ff: {e}", file=sys.stderr)
+    try:
+        con = _cal_con()
+        try:
+            for _id, t, title, imp, fc, prev in con.execute(
+                    "SELECT * FROM cal_ev WHERE t BETWEEN ? AND ? ORDER BY t", (lo, hi)):
+                # Решение по ставке из недели ForexFactory совпадает с нашим
+                # расписанием ФРС — его оставляем одним событием, своим.
+                if re.search(r"Federal Funds Rate|FOMC Statement", title):
+                    continue
+                ev.append({"k": "macro", "t": t, "title": title, "imp": "high" if imp == "High" else "mid",
+                           "fc": fc, "prev": prev})
+        finally:
+            con.close()
+    except sqlite3.Error as e:
+        print(f"calendar db: {e}", file=sys.stderr)
+    for d, hour in CAL_FOMC:
+        t = calendar.timegm(time.strptime(d, "%Y-%m-%d")) + hour * 3600
+        if lo <= t <= hi:
+            ev.append({"k": "fomc", "t": t, "imp": "high", "tent": d >= "2027"})
+    for sym in ("BTC", "ETH"):
+        with _small_lock:
+            hit = _OPT.get(sym)
+        r = hit[1] if isinstance(hit, tuple) and isinstance(hit[1], dict) else None
+        if not r or not r.get("ok"):
+            continue
+        for e in r["exp"]:
+            n = (e["c"] + e["p"]) * r["px"]
+            if e["ts"] < lo or e["ts"] > hi or n < CAL_OPT_MIN[sym]:
+                continue
+            ev.append({"k": "opt", "t": e["ts"], "sym": sym, "n": round(n), "mp": e["mp"],
+                       "pcr": round(e["p"] / e["c"], 2) if e["c"] else None, "px": r["px"],
+                       "imp": "high" if n >= 1e9 else "mid"})
+    try:
+        u = unlocks()
+        for e in u.get("items") or []:
+            if lo <= e["ts"] <= hi and (e.get("usd") or 0) >= CAL_UNL_MIN:
+                ev.append({"k": "unl", "t": e["ts"], "sym": e["sym"], "name": e.get("name") or e["sym"],
+                           "usd": round(e["usd"]), "pct": e.get("pct"), "kind": e.get("kind"),
+                           "imp": "high" if (e.get("pct") or 0) >= 2 or e["usd"] >= 50e6 else "mid"})
+    except Exception as e:  # noqa: BLE001
+        print(f"calendar unlocks: {e}", file=sys.stderr)
+    ev.sort(key=lambda x: (x["t"], x["k"]))
+    return {"ok": True, "at": now(), "items": ev}
+
+
+def calendar_data() -> dict:
+    return cached_bg(_CAL, "all", CAL_TTL, _cal_build)
 
 
 # --- Дайджест ------------------------------------------------------------
@@ -14018,6 +14812,16 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path in ("/liqcoins", "/api/liqcoins"):
                 self._json(200, liq_coins())
+                return
+            if path in ("/oihist", "/api/oihist"):
+                self._json(200, oi_hist(qs.get("sym", ["BTC"])[0], qs.get("range", ["7d"])[0]))
+                return
+            if path in ("/calendar", "/api/calendar"):
+                self._json(200, calendar_data())
+                return
+            if path in ("/liqs", "/api/liqs"):
+                self._json(200, liqs_data(qs.get("win", ["24h"])[0], qs.get("sym", [""])[0],
+                                          _fnum(qs.get("min", ["0"])[0])))
                 return
             if path in ("/options", "/api/options"):
                 self._json(200, options_data(qs.get("sym", ["BTC"])[0]))

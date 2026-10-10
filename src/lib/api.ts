@@ -11,7 +11,7 @@ import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
   LiqCoinsReply, FngReply, DomReply, EtfReply, HalvingReply, FundRow, LsRow, MutationResult,
   RotSide, SymbolRow, TokenHist, Trades, UnlocksReply, WalletLive, BscExFlowReply,
-  BtcBigReply, BtcFlowReply, BtcRankReply, BtcWalletReply, LsTotals, OptionsReply,
+  BtcBigReply, BtcFlowReply, BtcRankReply, BtcWalletReply, LsTotals, OptionsReply, LiqsReply, OiHistReply, CalReply,
 } from "./types";
 
 const TIMEOUT_MS = 15000;
@@ -469,6 +469,52 @@ export function refreshOptions(sym: string): Promise<OptionsReply | null> {
   forget(optPath(sym));
   return fetchOptions(sym);
 }
+
+/* Ликвидации: сервер считает раз в десять секунд, открытый экран спрашивает
+   раз в пятнадцать. На устройстве не лежат — им важна свежесть. */
+const liqsPath = (win: string, sym: string, min: number) =>
+  `/api/liqs?win=${encodeURIComponent(win)}&sym=${encodeURIComponent(sym)}&min=${min}`;
+export const fetchLiqs = (win: string, sym: string, min: number) =>
+  remember<LiqsReply | null>(liqsPath(win, sym, min), 10_000, () => call<LiqsReply>(liqsPath(win, sym, min)), good);
+export const peekLiqs = (win: string, sym: string, min: number) => peek<LiqsReply | null>(liqsPath(win, sym, min), 10_000);
+export function refreshLiqs(win: string, sym: string, min: number): Promise<LiqsReply | null> {
+  forget(liqsPath(win, sym, min));
+  return fetchLiqs(win, sym, min);
+}
+
+/* История интереса и фандинга: сервер пересобирает раз в две минуты;
+   последний ответ монеты и окна лежит на устройстве. */
+const oihPath = (sym: string, range: string) => `/api/oihist?sym=${encodeURIComponent(sym)}&range=${encodeURIComponent(range)}`;
+const OIH_SAVED = "wt-oihist-v1";
+export function savedOiHist(sym: string, range: string): OiHistReply | null {
+  const hit = readSaved<OiHistReply>(OIH_SAVED)[`${sym}|${range}`];
+  return hit && Date.now() - hit.at < LIQ_SAVED_MAX_AGE && hit.v?.ok ? hit.v : null;
+}
+export const fetchOiHist = (sym: string, range: string) =>
+  remember<OiHistReply | null>(oihPath(sym, range), 2 * 60_000, () => callTwice<OiHistReply>(oihPath(sym, range)), good).then((r) => {
+    if (r?.ok) {
+      const all = readSaved<OiHistReply>(OIH_SAVED);
+      all[`${sym}|${range}`] = { at: Date.now(), v: r };
+      const keys = Object.keys(all).sort((a, b) => (all[b]?.at ?? 0) - (all[a]?.at ?? 0));
+      for (const k of keys.slice(LIQ_SAVED_KEEP)) delete all[k];
+      writeSaved(OIH_SAVED, all);
+    }
+    return r;
+  });
+export const peekOiHist = (sym: string, range: string) => peek<OiHistReply | null>(oihPath(sym, range), 2 * 60_000);
+
+/* Календарь: события меняются за часы — ответ живёт пять минут и лежит на устройстве. */
+const CAL_SAVED = "wt-calendar-v1";
+export function savedCalendar(): CalReply | null {
+  const hit = readSaved<CalReply>(CAL_SAVED).all;
+  return hit && hit.v?.items ? hit.v : null;
+}
+export const fetchCalendar = () =>
+  remember<CalReply | null>("/api/calendar", 5 * 60_000, () => callTwice<CalReply>("/api/calendar"), good).then((r) => {
+    if (r?.ok) writeSaved(CAL_SAVED, { all: { at: Date.now(), v: r } });
+    return r;
+  });
+export const peekCalendar = () => peek<CalReply | null>("/api/calendar", 5 * 60_000) ?? savedCalendar();
 
 /* Страх и жадность: индекс выходит раз в сутки. Последний ответ лежит на
    устройстве — экран открывается сразу, свежий догружается поверх. */

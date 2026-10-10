@@ -21,7 +21,7 @@ import { SOCIALS, openSocial } from "./lib/social";
 import { startSync, syncNow } from "./lib/sync";
 import { Toaster } from "./components/Toast";
 import { Background } from "./components/Background";
-import { AnalyticsGlyph, ChartGlyph, DigestGlyph, DomGlyph, EtfGlyph, FundLineGlyph, GaugeGlyph, LiqGlyph, OptionsGlyph, UnlockGlyph, TopGlyph, WalletGlyph } from "./components/ui";
+import { AnalyticsGlyph, ChartGlyph, DigestGlyph, DomGlyph, EtfGlyph, FundLineGlyph, GaugeGlyph, CalGlyph, LiqGlyph, LiqsGlyph, OiGlyph, OptionsGlyph, UnlockGlyph, TopGlyph, WalletGlyph } from "./components/ui";
 import { SCREENS } from "./screens/registry";
 import { WalletsTab } from "./screens/WalletsTab";
 import { TopTab } from "./screens/TopTab";
@@ -57,6 +57,9 @@ const SCREEN_TITLE: Record<ScreenName, DictKey> = {
   unlocks: "unl_title",
   liqmap: "lq_title",
   options: "op_title",
+  liqs: "lqs_title",
+  oihist: "oih_title",
+  calendar: "cal_title",
   funding: "ui_tab_funding",
   fng: "fg_title",
   dom: "dm_title",
@@ -70,16 +73,19 @@ const SCREEN_TITLE: Record<ScreenName, DictKey> = {
   lock: "menu_premium",
 };
 
-/* Боковое меню — рыночные инструменты: график, разлоки, карта ликвидаций,
-   опционы, фандинг, страх и жадность, доминация с альтсезоном, институциональные потоки.
+/* Боковое меню — рыночные инструменты: график, календарь, разлоки, карта
+   ликвидаций, ликвидации вживую, опционы, интерес и фандинг во времени, фандинг, страх и жадность, доминация с альтсезоном, институциональные потоки.
    Порог, премиум,
    язык и помощь живут во вкладке «Ещё»; повторять их здесь значило держать
    две дороги к одному. */
 const MENU: { name: ScreenName; key: DictKey; glyph: ReactNode }[] = [
   { name: "chart", key: "chart_title", glyph: <ChartGlyph /> },
+  { name: "calendar", key: "cal_title", glyph: <CalGlyph /> },
   { name: "unlocks", key: "unl_title", glyph: <UnlockGlyph /> },
   { name: "liqmap", key: "lq_title", glyph: <LiqGlyph /> },
+  { name: "liqs", key: "lqs_title", glyph: <LiqsGlyph /> },
   { name: "options", key: "op_title", glyph: <OptionsGlyph /> },
+  { name: "oihist", key: "oih_title", glyph: <OiGlyph /> },
   { name: "funding", key: "ui_tab_funding", glyph: <FundLineGlyph /> },
   { name: "fng", key: "fg_title", glyph: <GaugeGlyph /> },
   { name: "dom", key: "dm_title", glyph: <DomGlyph /> },

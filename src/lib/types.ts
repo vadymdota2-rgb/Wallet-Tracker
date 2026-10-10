@@ -1064,3 +1064,92 @@ export interface BtcWalletReply extends BtcExtra {
   book: Omit<BtcTrader, "a"> | null;
   moves: { tx: string; buy: boolean; btc: number; v: number; px: number; t: number; ex: string }[];
 }
+
+/** Ликвидация: биржа, монета, время (сек), лонг ли закрыт, цена, $. */
+export interface LiqEv {
+  ex: string;
+  s: string;
+  t: number;
+  L: boolean;
+  px: number;
+  usd: number;
+}
+
+export interface LiqsReply {
+  ok: boolean;
+  error?: string;
+  win: string;
+  sym: string;
+  at: number;
+  tot: { L: number; S: number; n: number };
+  /** [биржа, лонги $, шорты $]. */
+  ex: [string, number, number][];
+  coins: [string, number, number][];
+  /** [начало корзины, лонги $, шорты $]. */
+  bars: [number, number, number][];
+  step: number;
+  feed: LiqEv[];
+  big: LiqEv | null;
+  /** Биржа → время последнего события, сек. */
+  live: Record<string, number>;
+  /** С какого момента идёт запись, сек. */
+  since: number | null;
+}
+
+export interface OiChg {
+  "1h": number | null;
+  "4h": number | null;
+  "24h": number | null;
+  all: number | null;
+}
+
+export interface OiHistReply {
+  ok: boolean;
+  error?: string;
+  sym: string;
+  range: string;
+  at: number;
+  t: number[];
+  px: number[];
+  oi: number[];
+  /** Слои графика: [биржа ("" — остальные), ряд $]. */
+  stack: [string, number[]][];
+  chg: OiChg;
+  pchg: OiChg;
+  /** [биржа, интерес $, изменение за окно %]. */
+  ex: [string, number, number | null][];
+  fund: {
+    /** [биржа, ставка за 8 ч %, годовых %, выплата раз в N ч]. */
+    ex: [string, number, number, number][];
+    /** [начало 8 ч, средняя ставка за 8 ч %]. */
+    bars: [number, number][];
+    avg?: number;
+    apr?: number;
+    days?: number;
+  };
+}
+
+export interface CalEv {
+  k: "macro" | "fomc" | "opt" | "unl";
+  t: number;
+  imp: "high" | "mid";
+  title?: string;
+  fc?: string;
+  prev?: string;
+  tent?: boolean;
+  sym?: string;
+  n?: number;
+  mp?: number;
+  pcr?: number | null;
+  px?: number;
+  name?: string;
+  usd?: number;
+  pct?: number | null;
+  kind?: string;
+}
+
+export interface CalReply {
+  ok: boolean;
+  at: number;
+  items: CalEv[];
+}
