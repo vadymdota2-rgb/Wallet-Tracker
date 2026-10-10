@@ -92,6 +92,41 @@ const MENU: { name: ScreenName; key: DictKey; glyph: ReactNode }[] = [
   { name: "etf", key: "ef_title", glyph: <EtfGlyph /> },
 ];
 
+/**
+ * Боковое меню. Пунктов больше, чем влезает на низкий экран, а по
+ * обрезанному списку не видно, что ниже есть ещё: внизу тогда — затемнение
+ * со стрелкой «ещё», и оно уходит, когда список долистан до конца.
+ */
+function Drawer({ children, label }: { children: ReactNode; label: string }) {
+  const ref = useRef<HTMLElement>(null);
+  const [more, setMore] = useState(false);
+  const check = () => {
+    const el = ref.current;
+    if (el) setMore(el.scrollHeight - el.scrollTop - el.clientHeight > 12);
+  };
+  useLayoutEffect(() => {
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+  return (
+    <nav ref={ref} className="drawer" onScroll={check} onClick={(e) => e.stopPropagation()} aria-label={label}>
+      {children}
+      {more ? (
+        <button
+          type="button"
+          className="drawer-more"
+          aria-hidden="true"
+          tabIndex={-1}
+          onClick={() => ref.current?.scrollBy({ top: ref.current.clientHeight * 0.7, behavior: "smooth" })}
+        >
+          <span>⌄</span>
+        </button>
+      ) : null}
+    </nav>
+  );
+}
+
 function TabBody({ tab }: { tab: Tab }) {
   switch (tab) {
     case "wallets":
@@ -278,7 +313,7 @@ export default function App() {
 
       {menuOpen ? (
         <div className="drawer-wrap" onClick={() => setMenu(false)}>
-          <nav className="drawer" onClick={(e) => e.stopPropagation()} aria-label={t(lang, "menu_title")}>
+          <Drawer label={t(lang, "menu_title")}>
             <p className="drawer-ttl">{bare(t(lang, "menu_title"))}</p>
             {MENU.map((m) => (
               <button key={m.name} type="button" className="drawer-row"
@@ -291,7 +326,7 @@ export default function App() {
             {/* Внизу меню — отсчёт до халвинга; дата сборки здесь была
                 служебной и человеку ничего не говорила. */}
             <HalvingCard />
-          </nav>
+          </Drawer>
         </div>
       ) : null}
 

@@ -168,7 +168,9 @@
   display: flex;
   align-items: center;
   gap: 11px;
-  padding: 13px 8px;
+  /* Плотнее, чем было: одиннадцать пунктов должны влезать на обычный
+     телефон целиком, без прокрутки. */
+  padding: 9px 8px;
   border-radius: var(--r-md);
   font-size: 14px;
   font-weight: 600;
@@ -181,6 +183,37 @@
    само, значок при этом не сжимается и стоит в одну линию с остальными. */
 .drawer-row > span + span { line-height: 1.25; }
 .drawer-row:active { background: var(--panel-2); }
+.drawer-row svg.glyph { width: 22px; height: 22px; }
+/* «Ещё ниже» — затемнение у нижнего края меню со стрелкой; липнет к низу
+   прокрутки и пропадает, когда список долистан. */
+.drawer-more {
+  position: sticky;
+  bottom: -18px;
+  margin: -64px -14px -18px;
+  height: 82px;
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 14px;
+  background: linear-gradient(180deg, rgb(1 3 10 / 0), rgb(1 3 10 / 0.92) 62%);
+  pointer-events: auto;
+}
+.drawer-more span {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--line-2);
+  background: var(--panel-2);
+  color: var(--glow);
+  font-size: 20px;
+  line-height: 1;
+  padding-bottom: 6px;
+  animation: drawer-bob 1.6s var(--ease) infinite;
+}
+@keyframes drawer-bob { 50% { transform: translateY(3px); } }
 /* Отсчёт до халвинга — внизу меню. */
 .hv {
   margin-top: auto;
