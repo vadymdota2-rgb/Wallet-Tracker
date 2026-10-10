@@ -507,10 +507,12 @@ say("карта ликвидаций: отдаётся из памяти сра�
 _ngx = read(f"{APP}/nginx.conf")
 say("Binance и Bybit — через nginx в Европе, если отсюда закрыты; ретранслятор только с ключом",
     'location /xr/binance-f/' in _ngx and 'location /xr/bybit/' in _ngx
-    and _ngx.count('if ($http_x_api_key != "__API_KEY__") { return 403; }') == 6
-    and _ngx.count('if ($http_x_api_key = "") { return 403; }') == 6
+    and _ngx.count('if ($http_x_api_key != "__API_KEY__") { return 403; }') == 7
+    and _ngx.count('if ($http_x_api_key = "") { return 403; }') == 7
     # Четвёртый — Bullish, со своей широкой нормой: проход — полторы тысячи
-    # запросов; пятый и шестой — вебсокеты ликвидаций Binance и Bybit.
+    # запросов; пятый и шестой — вебсокеты ликвидаций Binance и Bybit;
+    # седьмой — www.binance.com, объявления о листингах для календаря.
+    and 'location /xr/binance-www/' in _ngx and '"https://www.binance.com/": "/xr/binance-www/"' in api
     and 'location /xr/bullish/' in _ngx and "zone=relay_bulk" in _ngx
     # Третий адрес — опционы Binance (eapi), закрыты по стране так же.
     and 'location /xr/binance-o/' in _ngx and '"https://eapi.binance.com/": "/xr/binance-o/"' in api
@@ -1123,6 +1125,12 @@ say("ликвидации, история интереса и фандинга, 
     and "location /xr/binance-ws/" in _ngx2 and "location /xr/bybit-ws/" in _ngx2
     and 'proxy_set_header Upgrade $http_upgrade;' in _ngx2
     and all(x in read(f"{APP}/src/screens/registry.ts") for x in ("liqs: LiqsScreen", "oihist: OiHistScreen", "calendar: CalendarScreen")))
+
+say("календарь: макро всех стран, отчёты компаний, листинги бирж, экспирации CME",
+    "def _cal_earnings(" in api and "def _cal_listings(" in api and "def _cal_cme(" in api
+    and "cal_ev2" in api and '"COIN"' in api and "api.nasdaq.com/api/calendar/earnings" in api
+    and "announcements-new-listings" in api and "calendar_data()" in pybody(api, "def liq_warm_refresher(")
+    and all(f'"{x}"' in read(f"{APP}/src/screens/CalendarScreen.tsx") for x in ("earn", "list", "cme")))
 
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

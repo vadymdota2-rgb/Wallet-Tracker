@@ -7175,6 +7175,8 @@ RELAY_HOSTS = {
     "https://eapi.binance.com/": "/xr/binance-o/",
     # Bullish — если и он закрыт по стране; полторы тысячи тикеров за проход.
     "https://api.exchange.bullish.com/": "/xr/bullish/",
+    # Объявления Binance о листингах — для календаря.
+    "https://www.binance.com/": "/xr/binance-www/",
 }
 _relay_first: dict[str, float] = {}
 
@@ -10985,6 +10987,13 @@ def liq_warm_refresher() -> None:
             etf_data()  # и потоки ETF с крупными держателями
         except Exception:  # noqa: BLE001
             pass
+        try:
+            # Календарь — после опционов прошлого круга: в нём их экспирации;
+            # первая сборка (отчёты компаний по дню за запрос) идёт здесь,
+            # а не в чьём-то запросе.
+            calendar_data()
+        except Exception:  # noqa: BLE001
+            pass
         for sym in OPT_SYMS:  # и опционы — по одной монете, без своих потоков
             try:
                 cached_bg(_OPT, sym, OPT_TTL, lambda s=sym: _opt_build(s), wait=True)
@@ -13495,24 +13504,27 @@ def options_data(sym: str) -> dict:
 
 
 # --- Календарь событий ----------------------------------------------------
-# Три вида событий в одной ленте по дням:
-#   macro — данные США (инфляция, занятость, ставка ФРС…) из открытого
-#           недельного календаря ForexFactory: он отдаёт только текущую
-#           неделю, поэтому всё увиденное копится в liq_oi.db, и прошедшие
-#           дни остаются в календаре с прогнозом и прошлым значением;
-#           решения ФРС — по расписанию на год вперёд (2026 — утверждено,
-#           2027 — предварительно, без двух дат, по которым источники
-#           расходятся);
-#   opt   — экспирации опционов BTC и ETH: номинал, Max Pain, Put/Call — из
-#           того же, что и экран опционов;
+# Всё, что двигает рынок, одной лентой по дням:
+#   macro — данные и решения центробанков всех крупных экономик из открытого
+#           недельного календаря ForexFactory: по США — всё, включая мелкое
+#           и выходные бирж, по остальным — важное и среднее (ставки ЕЦБ,
+#           Банка Англии, Банка Японии, данные Китая, ОПЕК…). Источник
+#           отдаёт только текущую неделю, поэтому увиденное копится в
+#           liq_oi.db, и прошедшие дни остаются с прогнозом и прошлым;
+#   fomc  — решения ФРС по расписанию на год вперёд (2026 — утверждено,
+#           2027 — предварительно, без двух дат, где источники расходятся);
+#   earn  — отчёты компаний, за которыми ходит крипта: Coinbase,
+#           MicroStrategy, майнеры, Nvidia, большая техника (Nasdaq);
+#   list  — листинги и делистинги Binance, OKX и Bybit — новости, которые
+#           двигают цену монеты сильнее всего;
+#   cme   — экспирация фьючерсов CME на BTC: последняя пятница месяца;
+#   opt   — экспирации опционов BTC и ETH: номинал, Max Pain, Put/Call;
 #   unl   — разлоки токенов из календаря разлоков, от $10M.
-# Прошедшая неделя тоже в ответе — приложение показывает её по кнопке: макро
-# из недели ForexFactory чаще всего уже позади, а итог важен.
+# Прошедшая неделя тоже в ответе — приложение показывает её по кнопке.
 CAL_TTL = 300.0
 CAL_FF_EVERY = 3600.0
 CAL_DAYS = 45
 CAL_UNL_MIN = 10_000_000.0
-# Крупная экспирация — от миллиарда номинала: такие двигают рынок.
 CAL_OPT_MIN = {"BTC": 300_000_000.0, "ETH": 100_000_000.0}
 # Решения ФРС: день и 14:00 по Нью-Йорку (18:00 UTC летом, 19:00 зимой).
 CAL_FOMC = (
@@ -13520,19 +13532,45 @@ CAL_FOMC = (
     ("2027-01-27", 19), ("2027-03-17", 18), ("2027-07-28", 18), ("2027-09-15", 18),
     ("2027-10-27", 18), ("2027-12-08", 19),
 )
+# Отчёты каких компаний двигают крипту. Важные — те, что держат биткоин или
+# зарабатывают на нём прямо; остальные — общий риск-аппетит рынка.
+CAL_EARN_HIGH = {"COIN", "MSTR", "NVDA", "HOOD", "CRCL"}
+CAL_EARN = CAL_EARN_HIGH | {"MARA", "RIOT", "CLSK", "CORZ", "IREN", "HUT", "CIFR", "WULF", "GLXY", "BLSH",
+                            "XYZ", "PYPL", "TSLA", "AAPL", "MSFT", "GOOGL", "AMZN", "META", "AMD", "AVGO",
+                            "TSM", "BLK", "GS", "JPM", "SMLR", "BITF", "BTDR"}
+CAL_EARN_EVERY = 6 * 3600.0
+CAL_LIST_DAYS = 7
 _CAL: dict = {}
+_CAL_SLOW: dict = {}
 _cal_ff_at = 0.0
 
 
 def _cal_con() -> sqlite3.Connection:
     con = _liq_oi_con()
-    con.execute("CREATE TABLE IF NOT EXISTS cal_ev (id TEXT PRIMARY KEY, t INTEGER NOT NULL, title TEXT NOT NULL, "
-                "impact TEXT NOT NULL, forecast TEXT NOT NULL, previous TEXT NOT NULL)")
+    # cal_ev2: с кодом страны. Первая версия (cal_ev) копила только США.
+    con.execute("CREATE TABLE IF NOT EXISTS cal_ev2 (id TEXT PRIMARY KEY, t INTEGER NOT NULL, cc TEXT NOT NULL, "
+                "title TEXT NOT NULL, impact TEXT NOT NULL, forecast TEXT NOT NULL, previous TEXT NOT NULL)")
+    if con.execute("SELECT 1 FROM sqlite_master WHERE name='cal_ev'").fetchone():
+        con.execute("INSERT OR IGNORE INTO cal_ev2 SELECT id, t, 'USD', title, impact, forecast, previous FROM cal_ev")
+        con.execute("DROP TABLE cal_ev")
+        con.commit()
     return con
 
 
+def _cal_ts(s: str) -> int | None:
+    """«2026-10-04T05:15:00-04:00» → UTC, сек."""
+    try:
+        t = int(calendar.timegm(time.strptime(str(s)[:19], "%Y-%m-%dT%H:%M:%S")))
+    except ValueError:
+        return None
+    off = str(s)[19:]
+    if re.fullmatch(r"[+-]\d\d:\d\d", off):
+        t -= (1 if off[0] == "+" else -1) * (int(off[1:3]) * 3600 + int(off[4:6]) * 60)
+    return t
+
+
 def _cal_ff_pull() -> None:
-    """Неделя ForexFactory → база; только США и только важное и среднее."""
+    """Неделя ForexFactory → база. США — всё; остальные — важное и среднее."""
     global _cal_ff_at
     if time.monotonic() - _cal_ff_at < CAL_FF_EVERY and _cal_ff_at:
         return
@@ -13542,28 +13580,110 @@ def _cal_ff_pull() -> None:
         return
     put = []
     for r in rows:
-        if r.get("country") != "USD" or r.get("impact") not in ("High", "Medium"):
+        cc, imp = str(r.get("country") or ""), str(r.get("impact") or "")
+        if not (cc == "USD" or imp in ("High", "Medium")):
             continue
-        try:
-            t = int(calendar.timegm(time.strptime(str(r["date"])[:19], "%Y-%m-%dT%H:%M:%S")))
-            off = str(r["date"])[19:]
-            if re.fullmatch(r"[+-]\d\d:\d\d", off):
-                sign = 1 if off[0] == "+" else -1
-                t -= sign * (int(off[1:3]) * 3600 + int(off[4:6]) * 60)
-        except (KeyError, ValueError):
+        if imp == "Holiday" and cc != "USD":
+            continue
+        t = _cal_ts(r.get("date") or "")
+        if t is None:
             continue
         title = str(r.get("title") or "")[:80]
-        put.append((f"{title}|{t}", t, title, r.get("impact") or "", str(r.get("forecast") or "")[:20],
+        put.append((f"{cc}|{title}|{t}", t, cc[:4], title, imp, str(r.get("forecast") or "")[:20],
                     str(r.get("previous") or "")[:20]))
     if not put:
         return
     con = _cal_con()
     try:
-        con.executemany("INSERT OR REPLACE INTO cal_ev VALUES (?,?,?,?,?,?)", put)
-        con.execute("DELETE FROM cal_ev WHERE t < ?", (now() - 120 * 86400,))
+        con.executemany("INSERT OR REPLACE INTO cal_ev2 VALUES (?,?,?,?,?,?,?)", put)
+        con.execute("DELETE FROM cal_ev2 WHERE t < ?", (now() - 120 * 86400,))
         con.commit()
     finally:
         con.close()
+
+
+def _cal_earnings() -> list:
+    """Отчёты компаний на полтора месяца вперёд — по дню за запрос, раз в шесть часов."""
+    def build() -> list:
+        day0 = now() // 86400 * 86400
+
+        def one(i: int) -> list:
+            d = time.strftime("%Y-%m-%d", time.gmtime(day0 + i * 86400))
+            r = _get_json_raw(f"https://api.nasdaq.com/api/calendar/earnings?date={d}", 15,
+                              {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}) or {}
+            out = []
+            for x in ((r.get("data") or {}).get("rows") or []):
+                sym = str(x.get("symbol") or "").upper()
+                if sym not in CAL_EARN:
+                    continue
+                when = str(x.get("time") or "")
+                # До открытия — 13:30 UTC (9:30 в Нью-Йорке), после закрытия —
+                # 20:00 UTC; время не дано — событие дня, как разлок.
+                hour = 13.5 if "pre" in when else 20 if "after" in when else None
+                out.append({"k": "earn", "t": day0 + i * 86400 + int((hour or 0) * 3600), "sym": sym,
+                            "name": str(x.get("name") or sym)[:60], "eps": str(x.get("epsForecast") or "")[:12],
+                            "when": "pre" if hour == 13.5 else "post" if hour == 20 else "day",
+                            "imp": "high" if sym in CAL_EARN_HIGH else "mid"})
+            return out
+
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            return [e for day in pool.map(one, range(-7, CAL_DAYS)) for e in day]
+
+    return cached_small(_CAL_SLOW, "earn", CAL_EARN_EVERY, build)
+
+
+def _cal_listings() -> list:
+    """Листинги и делистинги трёх бирж за неделю — новости, не расписание."""
+    def build() -> list:
+        since = (now() - CAL_LIST_DAYS * 86400) * 1000
+        out = []
+
+        def add(ex, title, t_ms, url, delist):
+            if t_ms >= since and title:
+                # Binance Alpha — витрина мелких монет внутри кошелька: шум.
+                low = ex == "Binance" and str(title).startswith("Binance Alpha")
+                out.append({"k": "list", "t": int(t_ms) // 1000, "ex": ex, "title": str(title)[:140],
+                            "url": url, "de": delist,
+                            "imp": "low" if low else "high" if ex == "Binance" and not delist else "mid"})
+
+        for cat, delist in ((48, False), (161, True)):
+            r = get_json(f"https://www.binance.com/bapi/composite/v1/public/cms/article/list/query"
+                         f"?type=1&catalogId={cat}&pageNo=1&pageSize=20", 15) or {}
+            for c in ((r.get("data") or {}).get("catalogs") or []):
+                for a in c.get("articles") or []:
+                    add("Binance", a.get("title"), int(a.get("releaseDate") or 0),
+                        f"https://www.binance.com/en/support/announcement/{a.get('code')}", delist)
+        for typ, delist in (("announcements-new-listings", False), ("announcements-delistings", True)):
+            r = get_json(f"https://www.okx.com/api/v5/support/announcements?annType={typ}", 15) or {}
+            for blk in r.get("data") or []:
+                for a in blk.get("details") or []:
+                    add("OKX", a.get("title"), int(a.get("pTime") or 0), a.get("url") or "", delist)
+        for typ, delist in (("new_crypto", False), ("delistings", True)):
+            r = ((get_json(f"https://api.bybit.com/v5/announcements/index?locale=en-US&type={typ}&limit=20", 15)
+                  or {}).get("result") or {}).get("list") or []
+            for a in r:
+                add("Bybit", a.get("title"), int(a.get("publishTime") or a.get("dateTimestamp") or 0),
+                    a.get("url") or "", delist)
+        return out
+
+    return cached_small(_CAL_SLOW, "list", 900.0, build)
+
+
+def _cal_cme(lo: int, hi: int) -> list:
+    """Экспирация фьючерсов CME на BTC — последняя пятница месяца, 16:00 по
+    Лондону (15:00 UTC летом, 16:00 зимой)."""
+    out = []
+    y, m = time.gmtime(lo).tm_year, time.gmtime(lo).tm_mon
+    for _ in range(3):
+        nxt = calendar.timegm((y + (m == 12), m % 12 + 1, 1, 0, 0, 0))
+        d = nxt - 86400
+        while time.gmtime(d).tm_wday != 4:
+            d -= 86400
+        t = d + (15 if 4 <= m <= 10 else 16) * 3600
+        if lo <= t <= hi:
+            out.append({"k": "cme", "t": t, "imp": "mid"})
+        y, m = y + (m == 12), m % 12 + 1
+    return out
 
 
 def _cal_build() -> dict:
@@ -13577,14 +13697,15 @@ def _cal_build() -> dict:
     try:
         con = _cal_con()
         try:
-            for _id, t, title, imp, fc, prev in con.execute(
-                    "SELECT * FROM cal_ev WHERE t BETWEEN ? AND ? ORDER BY t", (lo, hi)):
-                # Решение по ставке из недели ForexFactory совпадает с нашим
-                # расписанием ФРС — его оставляем одним событием, своим.
-                if re.search(r"Federal Funds Rate|FOMC Statement", title):
+            for _id, t, cc, title, imp, fc, prev in con.execute(
+                    "SELECT * FROM cal_ev2 WHERE t BETWEEN ? AND ? ORDER BY t", (lo, hi)):
+                # Решение ФРС из недели ForexFactory совпадает с нашим
+                # расписанием — оставляем одно событие, своё.
+                if cc == "USD" and re.search(r"Federal Funds Rate|FOMC Statement", title):
                     continue
-                ev.append({"k": "macro", "t": t, "title": title, "imp": "high" if imp == "High" else "mid",
-                           "fc": fc, "prev": prev})
+                ev.append({"k": "macro", "t": t, "cc": cc, "title": title,
+                           "imp": {"High": "high", "Medium": "mid", "Holiday": "mid"}.get(imp, "low"),
+                           "hol": imp == "Holiday", "fc": fc, "prev": prev})
         finally:
             con.close()
     except sqlite3.Error as e:
@@ -13593,6 +13714,12 @@ def _cal_build() -> dict:
         t = calendar.timegm(time.strptime(d, "%Y-%m-%d")) + hour * 3600
         if lo <= t <= hi:
             ev.append({"k": "fomc", "t": t, "imp": "high", "tent": d >= "2027"})
+    for name, fn in (("earnings", _cal_earnings), ("listings", _cal_listings)):
+        try:
+            ev += [e for e in fn() if lo <= e["t"] <= hi]
+        except Exception as e:  # noqa: BLE001
+            print(f"calendar {name}: {e}", file=sys.stderr)
+    ev += _cal_cme(lo, hi)
     for sym in ("BTC", "ETH"):
         with _small_lock:
             hit = _OPT.get(sym)

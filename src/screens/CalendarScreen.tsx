@@ -1,6 +1,8 @@
 /**
- * Календарь событий, которые двигают рынок: данные США и решения ФРС,
- * крупные экспирации опционов BTC и ETH, разлоки токенов.
+ * Календарь событий, которые двигают рынок: данные и решения центробанков
+ * США и других крупных экономик, отчёты компаний, за которыми ходит крипта,
+ * листинги и делистинги крупных бирж, экспирации опционов и фьючерсов CME,
+ * разлоки токенов.
  *
  * Сверху — ближайшее важное событие с обратным отсчётом. Ниже — лента по
  * дням: время по часам телефона, вид события цветной меткой и словом,
@@ -13,7 +15,7 @@ import { useApp } from "../store/app";
 import { t } from "../i18n/t";
 import type { DictKey } from "../i18n/types";
 import { dateLong, fix2, pct, px, usd } from "../lib/format";
-import { haptic } from "../lib/telegram";
+import { haptic, openExternal } from "../lib/telegram";
 import { fetchCalendar, peekCalendar } from "../lib/api";
 import { useNow } from "../lib/tick";
 import { CoinIcon } from "../components/CoinIcon";
@@ -22,7 +24,7 @@ import type { CalEv, CalReply } from "../lib/types";
 import { Frame } from "./Screen";
 
 type Lang = Parameters<typeof t>[0];
-type Kind = "all" | "macro" | "opt" | "unl";
+type Kind = "all" | "macro" | "opt" | "unl" | "earn" | "list";
 
 /**
  * Названия данных США у ForexFactory → наши слова. Не узнали — оставляем
@@ -48,7 +50,24 @@ const MACRO: [RegExp, DictKey][] = [
   [/Powell|Fed Chair/i, "cal_m_powell"],
   [/FOMC Member|Fed .*Speaks/i, "cal_m_fedspeak"],
   [/Durable Goods/i, "cal_m_durable"],
+  [/Main Refinancing Rate|Official Bank Rate|BOJ Policy Rate|Cash Rate|Overnight Rate|SNB Policy Rate|Monetary Policy Statement|Interest Rate Decision|Policy Rate/i, "cal_m_rate"],
+  [/OPEC/i, "cal_m_opec"],
+  [/Bank Holiday/i, "cal_m_holiday"],
+  [/Auction/i, "cal_m_auction"],
+  [/Crude Oil Inventories/i, "cal_m_oil"],
+  [/Trade Balance/i, "cal_m_trade"],
+  [/PMI/i, "cal_m_pmi"],
+  [/Home Sales|Housing Starts|Building Permits|HPI/i, "cal_m_housing"],
+  [/Speaks|Testifies/i, "cal_m_speech"],
 ];
+
+/** Валюта страны данных → флаг: страну видно сразу, без подписи. */
+const FLAG: Record<string, string> = {
+  USD: "🇺🇸", EUR: "🇪🇺", GBP: "🇬🇧", JPY: "🇯🇵", CNY: "🇨🇳", CAD: "🇨🇦", AUD: "🇦🇺", NZD: "🇳🇿", CHF: "🇨🇭", All: "🌍",
+};
+
+/** Событие дня, а не часа: разлок, отчёт без объявленного времени. */
+const allDay = (e: CalEv) => e.k === "unl" || (e.k === "earn" && e.when === "day");
 
 function macroName(lang: Lang, title: string): string | null {
   const hit = MACRO.find(([re]) => re.test(title));
@@ -94,29 +113,50 @@ function title(lang: Lang, e: CalEv): string {
   if (e.k === "fomc") return t(lang, "cal_fomc");
   if (e.k === "opt") return t(lang, "cal_opt", { s: e.sym ?? "" });
   if (e.k === "unl") return t(lang, "cal_unl", { s: e.sym ?? "" });
+  if (e.k === "earn") return t(lang, "cal_earn", { s: e.sym ?? "" });
+  if (e.k === "cme") return t(lang, "cal_cme");
+  /* Объявление биржи — как есть, по-английски: в нём тикеры и точное время. */
+  if (e.k === "list") return e.title ?? "";
   return macroName(lang, e.title ?? "") ?? e.title ?? "";
 }
 
+/** Цветная метка вида события: макро, экспирации, разлоки, отчёты, листинги. */
+const mark = (e: CalEv) => (e.k === "fomc" ? "macro" : e.k === "cme" ? "opt" : e.k);
+
 function Row({ lang, e, past, onOpen }: { lang: Lang; e: CalEv; past: boolean; onOpen: (e: CalEv) => void }) {
-  const tap = e.k === "opt" || e.k === "unl";
+  const tap = e.k === "opt" || e.k === "unl" || (e.k === "list" && Boolean(e.url));
   const body = (
     <>
-      {/* Разлок назначен на день, не на час — время не пишем. */}
-      <span className="cal-time">{e.k === "unl" ? "" : hm(e.t)}</span>
-      <span className={`cal-k ${e.k === "fomc" ? "macro" : e.k}`} aria-hidden="true" />
+      {/* Разлок и отчёт без объявленного часа назначены на день — время не пишем. */}
+      <span className="cal-time">{allDay(e) ? "" : hm(e.t)}</span>
+      <span className={`cal-k ${mark(e)}`} aria-hidden="true" />
       <span className="cal-m">
         <span className="cal-t">
           {e.k === "opt" || e.k === "unl" ? <CoinIcon sym={e.sym ?? ""} size={18} /> : null}
-          <b>{title(lang, e)}</b>
-          <span className={`cal-imp ${e.imp}`} role="img" aria-label={t(lang, e.imp === "high" ? "cal_imp_high" : "cal_imp_mid")}>
+          {e.k === "macro" && e.cc ? <span className="cal-flag" aria-label={e.cc}>{FLAG[e.cc] ?? e.cc}</span> : null}
+          {e.k === "list" ? <em className={e.de ? "cal-ex de" : "cal-ex"}>{e.ex}</em> : null}
+          <b className={e.k === "list" ? "cal-news" : undefined}>{title(lang, e)}</b>
+          <span className={`cal-imp ${e.imp}`} role="img"
+            aria-label={t(lang, e.imp === "high" ? "cal_imp_high" : e.imp === "mid" ? "cal_imp_mid" : "cal_imp_low")}>
             <i /><i /><i />
           </span>
         </span>
         {e.k === "macro" ? (
           <small>
-            {macroName(lang, e.title ?? "") ? `${e.title} · ` : ""}
+            {macroName(lang, e.title ?? "") ? `${e.title}` : ""}
+            {macroName(lang, e.title ?? "") && (e.fc || e.prev) ? " · " : ""}
             {e.fc ? t(lang, "cal_fc", { x: e.fc }) : ""}{e.fc && e.prev ? " · " : ""}{e.prev ? t(lang, "cal_prev", { x: e.prev }) : ""}
           </small>
+        ) : e.k === "earn" ? (
+          <small>
+            {e.name}
+            {" · "}{t(lang, e.when === "pre" ? "cal_earn_pre" : e.when === "post" ? "cal_earn_post" : "cal_earn_day")}
+            {e.eps ? ` · ${t(lang, "cal_eps", { x: e.eps })}` : ""}
+          </small>
+        ) : e.k === "list" ? (
+          <small>{t(lang, e.de ? "cal_delist" : "cal_list")}</small>
+        ) : e.k === "cme" ? (
+          <small>{t(lang, "cal_cme_sub")}</small>
         ) : e.k === "fomc" ? (
           <small>{t(lang, "cal_fomc_sub")}{e.tent ? ` · ${t(lang, "cal_tent")}` : ""}</small>
         ) : e.k === "opt" ? (
@@ -162,13 +202,16 @@ export function CalendarScreen() {
   const nowSec = Math.floor(now);
   const today = dayKey(nowSec);
   const items = useMemo(() => (reply?.items ?? []).filter((e) =>
-    (kind === "all" || (kind === "macro" ? e.k === "macro" || e.k === "fomc" : e.k === kind))
+    (kind === "all" || (kind === "macro" ? e.k === "macro" || e.k === "fomc" : kind === "opt" ? e.k === "opt" || e.k === "cme" : e.k === kind))
     && (!onlyHigh || e.imp === "high")), [reply, kind, onlyHigh]);
   /* Разлок назначен на день, не на час: он «прошёл», только когда кончился день. */
-  const isPast = (e: CalEv) => (e.k === "unl" ? e.t + 86400 : e.t + 3600) < nowSec;
+  const isPast = (e: CalEv) => (allDay(e) ? e.t + 86400 : e.t + 3600) < nowSec;
   const past = items.filter(isPast);
   const next = items.filter((e) => !isPast(e));
-  const hero = next.find((e) => e.imp === "high" && e.k !== "unl" && e.t > nowSec) ?? next.find((e) => e.t > nowSec);
+  /* Ближайшее важное — то, что назначено на час: листинг — уже новость, а у
+     события дня нет точного отсчёта. */
+  const hero = next.find((e) => e.imp === "high" && !allDay(e) && e.k !== "list" && e.t > nowSec)
+    ?? next.find((e) => e.t > nowSec && e.k !== "list");
 
   const groups = useMemo(() => {
     const out: [number, CalEv[]][] = [];
@@ -187,9 +230,13 @@ export function CalendarScreen() {
       setOptSym(e.sym);
       open("options");
     } else if (e.k === "unl") open("unlocks");
+    else if (e.k === "list" && e.url) openExternal(e.url);
   };
 
-  const kinds: [Kind, DictKey][] = [["all", "cal_f_all"], ["macro", "cal_f_macro"], ["opt", "cal_f_opt"], ["unl", "cal_f_unl"]];
+  const kinds: [Kind, DictKey][] = [
+    ["all", "cal_f_all"], ["macro", "cal_f_macro"], ["earn", "cal_f_earn"], ["list", "cal_f_list"],
+    ["opt", "cal_f_opt"], ["unl", "cal_f_unl"],
+  ];
 
   return (
     <Frame title={t(lang, "cal_title")}>
@@ -216,7 +263,7 @@ export function CalendarScreen() {
               <div className="cal-hero">
                 <small>{t(lang, "cal_next")}</small>
                 <b>{title(lang, hero)}</b>
-                <span>{dayTitle(lang, dayKey(hero.t), today)}{hero.k !== "unl" ? `, ${hm(hero.t)}` : ""}</span>
+                <span>{dayTitle(lang, dayKey(hero.t), today)}{!allDay(hero) ? `, ${hm(hero.t)}` : ""}</span>
                 <em>{countdown(lang, Math.max(60, hero.t - nowSec))}</em>
               </div>
             </Card>
@@ -241,6 +288,8 @@ export function CalendarScreen() {
             <span><i className="cal-k macro" />{t(lang, "cal_f_macro")}</span>
             <span><i className="cal-k opt" />{t(lang, "cal_f_opt")}</span>
             <span><i className="cal-k unl" />{t(lang, "cal_f_unl")}</span>
+            <span><i className="cal-k earn" />{t(lang, "cal_f_earn")}</span>
+            <span><i className="cal-k list" />{t(lang, "cal_f_list")}</span>
             <span><span className="cal-imp high" aria-hidden="true"><i /><i /><i /></span>{t(lang, "cal_imp_high")}</span>
           </div>
           <p className="lq-src">{t(lang, "cal_src")}</p>

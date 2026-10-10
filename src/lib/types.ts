@@ -1130,9 +1130,20 @@ export interface OiHistReply {
 }
 
 export interface CalEv {
-  k: "macro" | "fomc" | "opt" | "unl";
+  k: "macro" | "fomc" | "opt" | "unl" | "earn" | "list" | "cme";
   t: number;
-  imp: "high" | "mid";
+  imp: "high" | "mid" | "low";
+  /** Валюта страны данных (USD, EUR…; All — ОПЕК и общее). */
+  cc?: string;
+  /** Выходной день бирж. */
+  hol?: boolean;
+  /** Отчёт компании: прогноз прибыли на акцию и когда — до открытия, после закрытия, днём. */
+  eps?: string;
+  when?: "pre" | "post" | "day";
+  /** Листинг: биржа, ссылка на объявление, делистинг ли. */
+  ex?: string;
+  url?: string;
+  de?: boolean;
   title?: string;
   fc?: string;
   prev?: string;
