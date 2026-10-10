@@ -1,6 +1,6 @@
 /**
  * Ликвидации в реальном времени: настоящие принудительные закрытия позиций
- * на Binance, Bybit, OKX, Gate и HTX — в отличие от карты ликвидаций, где
+ * на одиннадцати биржах (список — с сервера) — в отличие от карты ликвидаций, где
  * уровни лишь оценка.
  *
  * Сверху — сколько ликвидировано за окно и чья сторона пострадала больше,
@@ -227,7 +227,7 @@ export function LiqsScreen() {
           </div>
         ) : null}
         <div className="lqs-live">
-          {["Binance", "Bybit", "OKX", "Gate", "HTX"].map((e) => (
+          {(reply.srcs ?? ["Binance", "Bybit", "OKX", "Gate", "HTX"]).map((e) => (
             <span key={e} className={live.includes(e) ? "on" : ""}><i />{e}</span>
           ))}
         </div>

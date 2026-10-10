@@ -1073,7 +1073,7 @@ say("карта ликвидаций: интерес Gate без удвоени�
     '_fnum(r.get("open_interest_usd")) / 2' in pybody(api, "def _liq_gate(")
     and "found[name] = rows[-n:]" in pybody(api, "def _liq_gather(")
     # Ещё биржи в снимках интереса: BloFin и XT.com; Zoomex — нет (отдаёт Bybit).
-    and '("BloFin", _snap_blofin), ("XT.com", _snap_xt))' in api and "_snap_zoomex" not in api)
+    and '("BloFin", _snap_blofin), ("XT.com", _snap_xt),' in api and "_snap_zoomex" not in api)
 
 # «Добавить кошелёк» больше не отвечает общей ошибкой: причина отказа доходит
 # до экрана («уже добавлен» — обновить список), а норма запросов считается
@@ -1119,7 +1119,7 @@ say("ликвидации, история интереса и фандинга, 
     and "def _liqs_gate_loop(" in api and "def _liqs_htx_loop(" in api and "def liqs_data(" in api
     and "LIQS_KEEP = 7 * 86400" in api and "liqs_start()" in pybody(api, "def warmup(")
     and "def _liq_gather(" in api and "got, ref = _liq_gather(sym, period, n)" in pybody(api, "def _liq_build(")
-    and "def oi_hist(" in api and "def _fund_hist(" in api and 'FUND_HIST_EX = ("Binance", "Bybit", "OKX", "Hyperliquid", "Gate", "Bitget")' in api
+    and "def oi_hist(" in api and "def _fund_hist(" in api and 'FUND_HIST_EX = ("Binance", "Bybit", "OKX", "Hyperliquid", "Gate", "Bitget", "Deribit",' in api
     and "def calendar_data(" in api and "ff_calendar_thisweek.json" in api and '("2026-10-28", 18)' in api
     and all(f'"{x}"' in api.split("PAID_PATHS = frozenset(")[1][:900] for x in ("liqs", "oihist", "calendar"))
     and "location /xr/binance-ws/" in _ngx2 and "location /xr/bybit-ws/" in _ngx2
@@ -1137,6 +1137,19 @@ say("календарь обновляется сам: ФРС с её сайта
     and 'con.execute("DELETE FROM cal_ev2 WHERE t BETWEEN ? AND ?", (min(week), max(week)))' in api
     and "_cal_ff_at = time.monotonic() - CAL_FF_EVERY + 300" in api
     and 'document.addEventListener("visibilitychange", pull);' in read(f"{APP}/src/screens/CalendarScreen.tsx"))
+say("ликвидации с 11 бирж, фандинг-история с 22, интерес с 32, доска фандинга — 21 биржа",
+    all(f"def _liqs_{x}(" in api for x in ("kraken", "bitfinex", "deribit", "dydx", "lighter", "paradex"))
+    and 'LIQS_ALL = ("Binance", "Bybit", "OKX", "Kraken", "Gate", "HTX", "Bitfinex", "Deribit", "dYdX", "Lighter", "Paradex")' in api
+    and '"srcs": list(LIQS_ALL)' in api and "_liqs_live[name] = time.time()" in pybody(api, "def _liqs_poll(")
+    and "reply.srcs ??" in read(f"{APP}/src/screens/LiqsScreen.tsx")
+    and len(api.split("FUND_HIST_EX = (")[1].split(")")[0].split(",")) == 22
+    and all(f'"{x}"' in api.split("def _fund_rows_more(")[1].split("FUND_HIST_EX = (")[0] for x in
+            ("Deribit", "Kraken", "dYdX", "MEXC", "KuCoin", "HTX", "BingX", "Aster", "WOO X", "Phemex", "Crypto.com",
+             "Backpack", "Lighter", "BloFin", "XT", "Orderly"))
+    and '("Bullish", _snap_bullish)' in api and '_snap_delta("api.india.delta.exchange")' in api
+    and all(f'"{v}": fund_{v},' in api and f'{{ id: "{v}"' in read(f"{APP}/src/screens/FundingScreen.tsx")
+            for v in ("htx", "deribit", "dydx", "lighter", "paradex", "woo", "backpack", "orderly", "delta"))
+    and 'return "BTC" if s == "XBT" else s' in pybody(api, "def fund_sym("))
 say("календарь: макро Nasdaq на недели вперёд, опционы и в первой сборке после запуска",
     "def _cal_nasdaq_macro(" in api and "api.nasdaq.com/api/calendar/economicevents" in api
     and "time.gmtime(day + 86400)" in pybody(api, "def _cal_nasdaq_macro(")

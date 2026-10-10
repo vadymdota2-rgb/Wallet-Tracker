@@ -319,7 +319,7 @@ export function OiHistScreen() {
           <li>{t(lang, "oih_how_3")}</li>
         </ul>
       </details>
-      <p className="lq-src">{t(lang, "oih_src", { n: num(reply.ex.length) })} {t(lang, "lq_updated", { t: since(Date.now() / 1000 - reply.at) })}</p>
+      <p className="lq-src">{t(lang, "oih_src", { n: num(reply.ex.length), f: num(reply.fund.ex.length) })} {t(lang, "lq_updated", { t: since(Date.now() / 1000 - reply.at) })}</p>
     </Frame>
   );
 }

@@ -60,6 +60,15 @@ const FUND_VENUES: { id: string; name: string; logo: string }[] = [
   { id: "kraken", name: "Kraken", logo: "/cglogo/markets/images/29/small/kraken.jpg" },
   { id: "coinbase", name: "Coinbase", logo: "/cglogo/markets/images/23/small/Coinbase_Coin_Primary.png" },
   { id: "aster", name: "Aster", logo: "/cglogo/markets/images/22084/small/aster-profile-200.png" },
+  { id: "htx", name: "HTX", logo: "/cglogo/markets/images/433/small/huobi-futures.png" },
+  { id: "deribit", name: "Deribit", logo: "/cglogo/markets/images/402/small/deribit-logo.jpg" },
+  { id: "dydx", name: "dYdX", logo: "/cglogo/markets/images/1451/small/dydx.png" },
+  { id: "lighter", name: "Lighter", logo: "/cglogo/markets/images/22097/small/lighter.jpg" },
+  { id: "paradex", name: "Paradex", logo: "/cglogo/markets/images/1310/small/paradex.jpg" },
+  { id: "woo", name: "WOO X", logo: "/cglogo/markets/images/874/small/KcTZZnui_400x400.jpeg" },
+  { id: "backpack", name: "Backpack", logo: "/cglogo/markets/images/11822/small/backpack_copy.png" },
+  { id: "orderly", name: "Orderly", logo: "/cglogo/markets/images/1394/small/Orderly_Network_Coingecko_200*200.png" },
+  { id: "delta", name: "Delta Exchange", logo: "/cglogo/markets/images/480/small/Z31YpPwu_400x400.jpg" },
 ];
 
 const venueName = (ex: string) => FUND_VENUES.find((v) => v.id === ex)?.name ?? ex;

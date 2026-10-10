@@ -7152,7 +7152,8 @@ FUND_TTL = 600.0
 
 # Биржи, с которых берём ставки. Порядок — тот же, что в приложении.
 FUND_VENUES = ("hl", "binance", "bybit", "okx", "bitget", "bingx",
-               "gate", "mexc", "kucoin", "kraken", "coinbase", "aster")
+               "gate", "mexc", "kucoin", "kraken", "coinbase", "aster",
+               "htx", "deribit", "dydx", "lighter", "paradex", "woo", "backpack", "orderly", "delta")
 # Строк на биржу в общей выгрузке — ровно одна страница. Остальные доски
 # достаются по запросу: перекосов на крупной бирже под тысячу, и возить их
 # все каждому запуску незачем.
@@ -7270,7 +7271,8 @@ def fund_sym(raw: str) -> str:
         if s.startswith(mul) and len(s) > len(mul):
             s = s[len(mul):]
             break
-    return s
+    # Биткоин у Kraken и BitMEX — XBT.
+    return "BTC" if s == "XBT" else s
 
 
 def fund_next(ts: float) -> int:
@@ -7835,6 +7837,172 @@ def fund_aster() -> list:
         row = fund_row(fund_sym(raw), _fnum(it.get("lastFundingRate")),
                        24.0 / steps.get(raw, 8.0), 0.0, vols.get(raw, 0.0), "aster",
                        nxt=_fnum(it.get("nextFundingTime")) / 1000.0)
+        if row:
+            out.append(row)
+    return out
+
+
+def _fund_8h_next() -> float:
+    """Ближайшая из 00:00, 08:00, 16:00 UTC — у кого время выплаты не отдаётся."""
+    return float((now() // 28800 + 1) * 28800)
+
+
+def fund_dydx() -> list:
+    """dYdX: ставка часовая, интерес в монетах, оборот в долларах — одним запросом."""
+    mk = (get_json("https://indexer.dydx.trade/v4/perpetualMarkets", timeout=20.0) or {}).get("markets") or {}
+    out = []
+    for t, m in mk.items():
+        if not isinstance(m, dict) or m.get("status") != "ACTIVE":
+            continue
+        px = _fnum(m.get("oraclePrice"))
+        row = fund_row(fund_sym(t), _fnum(m.get("nextFundingRate")), 24.0, _fnum(m.get("openInterest")) * px,
+                       _fnum(m.get("volume24H")), "dydx", nxt=(now() // 3600 + 1) * 3600)
+        if row:
+            out.append(row)
+    return out
+
+
+def fund_paradex() -> list:
+    """Paradex: ставка за восемь часов, начисляется непрерывно."""
+    rows = (get_json("https://api.prod.paradex.trade/v1/markets/summary?market=ALL", timeout=30.0) or {}).get("results") or []
+    out = []
+    for r in rows:
+        m = str(r.get("symbol") or "")
+        if not m.endswith("-USD-PERP"):
+            continue
+        px = _fnum(r.get("mark_price"))
+        row = fund_row(fund_sym(m[:-9]), _fnum(r.get("funding_rate")), 3.0, _fnum(r.get("open_interest")) * px,
+                       _fnum(r.get("volume_24h")), "paradex")
+        if row:
+            out.append(row)
+    return out
+
+
+def fund_orderly() -> list:
+    """Orderly: ожидаемая ставка ближайшей восьмичасовой выплаты."""
+    rows = ((get_json("https://api.orderly.org/v1/public/futures", timeout=20.0) or {}).get("data") or {}).get("rows") or []
+    out = []
+    for r in rows:
+        m = str(r.get("symbol") or "")
+        if not m.startswith("PERP_"):
+            continue
+        px = _fnum(r.get("mark_price"))
+        row = fund_row(fund_sym(m[5:]), _fnum(r.get("est_funding_rate")), 3.0, _fnum(r.get("open_interest")) * px,
+                       _fnum(r.get("24h_amount")), "orderly", nxt=_fnum(r.get("next_funding_time")) / 1000.0 or _fund_8h_next())
+        if row:
+            out.append(row)
+    return out
+
+
+def fund_delta() -> list:
+    """Delta Exchange India: ставка — в процентах за восемь часов."""
+    rows = (get_json("https://api.india.delta.exchange/v2/tickers?contract_types=perpetual_futures", timeout=20.0)
+            or {}).get("result") or []
+    out = []
+    for r in rows:
+        row = fund_row(fund_sym(r.get("underlying_asset_symbol")), _fnum(r.get("funding_rate")) / 100, 3.0,
+                       _fnum(r.get("oi_value_usd")), _fnum(r.get("turnover_usd")), "delta", nxt=_fund_8h_next())
+        if row:
+            out.append(row)
+    return out
+
+
+def fund_deribit() -> list:
+    """Deribit: funding_8h — ставка, приведённая к восьми часам. Обратные BTC и
+    ETH считают интерес в долларах, линейные USDC — в монетах."""
+    out = []
+    for cur in ("BTC", "ETH", "USDC"):
+        for r in (get_json("https://www.deribit.com/api/v2/public/get_book_summary_by_currency"
+                           f"?kind=future&currency={cur}", timeout=20.0) or {}).get("result") or []:
+            name = str(r.get("instrument_name") or "")
+            if not name.endswith("-PERPETUAL"):
+                continue
+            px = _fnum(r.get("mark_price"))
+            oi = _fnum(r.get("open_interest")) * (px if cur == "USDC" else 1.0)
+            row = fund_row(fund_sym(name.split("-")[0]), _fnum(r.get("funding_8h")), 3.0, oi,
+                           _fnum(r.get("volume_usd")) or _fnum(r.get("volume_notional")), "deribit", nxt=_fund_8h_next())
+            if row:
+                out.append(row)
+    return out
+
+
+def fund_htx() -> list:
+    """HTX: ставки, интерес и оборот — три общих запроса."""
+    rates = (get_json("https://api.hbdm.com/linear-swap-api/v1/swap_batch_funding_rate", timeout=20.0) or {}).get("data") or []
+    ois = {str(r.get("contract_code")): _fnum(r.get("value")) for r in
+           (get_json("https://api.hbdm.com/linear-swap-api/v1/swap_open_interest?business_type=swap", timeout=20.0)
+            or {}).get("data") or [] if isinstance(r, dict)}
+    vols = {str(r.get("contract_code")): _fnum(r.get("trade_turnover")) for r in
+            (get_json("https://api.hbdm.com/linear-swap-ex/market/detail/batch_merged?business_type=swap", timeout=20.0)
+             or {}).get("ticks") or [] if isinstance(r, dict)}
+    out = []
+    for r in rates:
+        code = str(r.get("contract_code") or "")
+        if not code.endswith("-USDT"):
+            continue
+        row = fund_row(fund_sym(code), _fnum(r.get("funding_rate")), 3.0, ois.get(code, 0.0), vols.get(code, 0.0),
+                       "htx", nxt=_fnum(r.get("funding_time")) / 1000.0)
+        if row:
+            out.append(row)
+    return out
+
+
+def fund_woo() -> list:
+    """WOO X: шаг выплаты у каждой монеты свой — его отдаёт сама биржа."""
+    rows = (get_json("https://api.woox.io/v1/public/futures", timeout=20.0) or {}).get("rows") or []
+    steps = {str(r.get("symbol")): _fnum(r.get("est_funding_rate_interval")) for r in
+             (get_json("https://api.woox.io/v1/public/funding_rates", timeout=20.0) or {}).get("rows") or [] if isinstance(r, dict)}
+    out = []
+    for r in rows:
+        m = str(r.get("symbol") or "")
+        if not m.startswith("PERP_"):
+            continue
+        px = _fnum(r.get("mark_price"))
+        row = fund_row(fund_sym(m[5:]), _fnum(r.get("est_funding_rate")), 24.0 / (steps.get(m) or 8.0),
+                       _fnum(r.get("open_interest")) * px, _fnum(r.get("24h_amount")), "woo",
+                       nxt=_fnum(r.get("next_funding_time")) / 1000.0)
+        if row:
+            out.append(row)
+    return out
+
+
+def fund_backpack() -> list:
+    """Backpack: ставка часовая; интерес — в монетах, отдельным запросом."""
+    marks = get_json("https://api.backpack.exchange/api/v1/markPrices", timeout=20.0)
+    ois = {str(r.get("symbol")): _fnum(r.get("openInterest")) for r in
+           (get_json("https://api.backpack.exchange/api/v1/openInterest", timeout=20.0) or []) if isinstance(r, dict)}
+    vols = {str(r.get("symbol")): _fnum(r.get("quoteVolume")) for r in
+            (get_json("https://api.backpack.exchange/api/v1/tickers", timeout=20.0) or []) if isinstance(r, dict)}
+    out = []
+    for r in marks if isinstance(marks, list) else []:
+        m = str(r.get("symbol") or "")
+        if not m.endswith("_PERP"):
+            continue
+        px = _fnum(r.get("markPrice"))
+        row = fund_row(fund_sym(m), _fnum(r.get("fundingRate")), 24.0, ois.get(m, 0.0) * px, vols.get(m, 0.0),
+                       "backpack", nxt=_fnum(r.get("nextFundingTimestamp")) / 1000.0)
+        if row:
+            out.append(row)
+    return out
+
+
+def fund_lighter() -> list:
+    """Lighter: свои ставки из общего списка, ликвидность — из списка рынков.
+    Список сравнивает Lighter с Binance и Bybit, поэтому ставки в нём приведены
+    к восьми часам (у Hyperliquid там — его часовая, умноженная на восемь)."""
+    rates = (get_json("https://mainnet.zklighter.elliot.ai/api/v1/funding-rates", timeout=20.0) or {}).get("funding_rates") or []
+    mk = {r.get("market_id"): r for r in
+          (get_json("https://mainnet.zklighter.elliot.ai/api/v1/orderBookDetails", timeout=25.0) or {}).get("order_book_details") or []
+          if isinstance(r, dict) and r.get("market_type") == "perp"}
+    out = []
+    for r in rates:
+        m = mk.get(r.get("market_id")) if r.get("exchange") == "lighter" else None
+        if not m:
+            continue
+        px = _fnum(m.get("mark_price")) or _fnum(m.get("last_trade_price"))
+        # Платит Lighter каждый час — восьмичасовую ставку делим на восемь.
+        row = fund_row(fund_sym(r.get("symbol")), _fnum(r.get("rate")) / 8, 24.0, _fnum(m.get("open_interest")) * px,
+                       _fnum(m.get("daily_quote_token_volume")), "lighter", nxt=(now() // 3600 + 1) * 3600)
         if row:
             out.append(row)
     return out
@@ -9209,6 +9377,15 @@ FUND_FETCH = {
     "gate": fund_gate,
     "kraken": fund_kraken,
     "coinbase": fund_coinbase,
+    "htx": fund_htx,
+    "deribit": fund_deribit,
+    "dydx": fund_dydx,
+    "lighter": fund_lighter,
+    "paradex": fund_paradex,
+    "woo": fund_woo,
+    "backpack": fund_backpack,
+    "orderly": fund_orderly,
+    "delta": fund_delta,
 }
 
 
@@ -10581,6 +10758,35 @@ def _snap_aster() -> dict:
     return _snap_top("https://fapi.asterdex.com/fapi/v1/ticker/24hr", "quoteVolume", 60, one)
 
 
+def _snap_delta(host: str) -> dict:
+    """Delta Exchange и Delta Exchange India: интерес в долларах сразу, одним запросом."""
+    out: dict = {}
+    for r in (get_json(f"https://{host}/v2/tickers?contract_types=perpetual_futures", 25) or {}).get("result") or []:
+        px = _fnum(r.get("mark_price"))
+        if (sym := _snap_sym(r.get("underlying_asset_symbol"))) and px > 0:
+            prev = out.get(sym, (0.0, px))
+            out[sym] = (prev[0] + _fnum(r.get("oi_value_usd")), px)
+    return out
+
+
+def _snap_bullish() -> dict:
+    """Bullish: интерес только по одному рынку за запрос — бессрочных у него
+    около полусотни, спрашиваем все."""
+    mk = get_json("https://api.exchange.bullish.com/trading-api/v1/markets", 20)
+    perps = [m.get("symbol") for m in (mk if isinstance(mk, list) else []) if m.get("marketType") == "PERPETUAL"]
+    out: dict = {}
+
+    def one(m) -> None:
+        r = get_json(f"https://api.exchange.bullish.com/trading-api/v1/markets/{m}/tick", 10) or {}
+        px = _fnum(r.get("markPrice")) or _fnum(r.get("last"))
+        if (sym := _snap_sym(str(m).split("-")[0])) and px > 0:
+            out[sym] = (_fnum(r.get("openInterestUSD")), px)
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(lambda m: _safe(one, m), perps))
+    return out
+
+
 def _snap_bingx() -> dict:
     def one(r):
         s = str(r.get("symbol") or "")
@@ -10644,7 +10850,9 @@ LIQ_SNAPS = (("Hyperliquid", _snap_hl), ("Bitget", _snap_bitget), ("MEXC", _snap
              ("Coinbase Intl", _snap_cbintl), ("Crypto.com", _snap_cryptocom), ("Paradex", _snap_paradex),
              ("Lighter", _snap_lighter), ("Backpack", _snap_backpack), ("Orderly", _snap_orderly),
              ("GMX", _snap_gmx), ("Aster", _snap_aster), ("BingX", _snap_bingx),
-             ("Bitstamp", _snap_bitstamp), ("BloFin", _snap_blofin), ("XT.com", _snap_xt))
+             ("Bitstamp", _snap_bitstamp), ("BloFin", _snap_blofin), ("XT.com", _snap_xt),
+             ("Bullish", _snap_bullish), ("Delta", lambda: _snap_delta("api.delta.exchange")),
+             ("Delta India", lambda: _snap_delta("api.india.delta.exchange")))
 
 
 def liq_oi_sample() -> dict:
@@ -12487,10 +12695,134 @@ def _fund_rows(name: str, sym: str, start_ms: int) -> list:
             if len(r) < 100 or min(int(x["fundingTime"]) for x in r) < start_ms:
                 break
         return out
+    return _fund_rows_more(name, sym, start_ms)
+
+
+_FUND_IDS: dict = {}
+
+
+def _fund_lighter_id(sym: str):
+    """Номер рынка Lighter по монете — список рынков живёт час."""
+    def build() -> dict:
+        rows = (get_json("https://mainnet.zklighter.elliot.ai/api/v1/orderBookDetails", 25) or {}).get("order_book_details") or []
+        return {str(r.get("symbol")): r.get("market_id") for r in rows if r.get("market_type") == "perp"}
+    return cached_small(_FUND_IDS, "lighter", 3600.0, build).get(sym)
+
+
+def _fund_rows_more(name: str, sym: str, start_ms: int) -> list:
+    """Остальные биржи истории фандинга: [(время мс, ставка за выплату)]."""
+    end_ms, start_s = now() * 1000, start_ms // 1000
+    xbt = "XBT" if sym == "BTC" else sym
+    if name == "Deribit":
+        inst = f"{sym}-PERPETUAL" if sym in ("BTC", "ETH") else f"{sym}_USDC-PERPETUAL"
+        r = (get_json(f"https://www.deribit.com/api/v2/public/get_funding_rate_history?instrument_name={inst}"
+                      f"&start_timestamp={start_ms}&end_timestamp={end_ms}", 15) or {}).get("result") or []
+        return [(int(x["timestamp"]), _fnum(x.get("interest_1h"))) for x in r]
+    if name == "Kraken":
+        r = (get_json(f"https://futures.kraken.com/derivatives/api/v4/historicalfundingrates?symbol=PF_{xbt}USD", 20)
+             or {}).get("rates") or []
+        out = []
+        for x in r:
+            try:
+                t = calendar.timegm(time.strptime(str(x["timestamp"])[:19], "%Y-%m-%dT%H:%M:%S")) * 1000
+            except (KeyError, ValueError):
+                continue
+            if t >= start_ms:
+                out.append((t, _fnum(x.get("relativeFundingRate"))))
+        return out
+    if name == "dYdX":
+        out, before = [], ""
+        for _ in range(8):
+            r = (get_json(f"https://indexer.dydx.trade/v4/historicalFunding/{sym}-USD?limit=100"
+                          + (f"&effectiveBeforeOrAt={before}" if before else ""), 15) or {}).get("historicalFunding") or []
+            for x in r:
+                try:
+                    t = calendar.timegm(time.strptime(str(x["effectiveAt"])[:19], "%Y-%m-%dT%H:%M:%S")) * 1000
+                except (KeyError, ValueError):
+                    continue
+                out.append((t, _fnum(x.get("rate"))))
+            if len(r) < 100 or not out or min(t for t, _ in out) < start_ms:
+                break
+            before = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(min(t for t, _ in out) / 1000 - 1))
+        return out
+    if name == "MEXC":
+        r = (((get_json(f"https://contract.mexc.com/api/v1/contract/funding_rate/history?symbol={sym}_USDT"
+                        f"&page_num=1&page_size=100", 15) or {}).get("data") or {}).get("resultList") or [])
+        return [(int(x["settleTime"]), _fnum(x.get("fundingRate"))) for x in r]
+    if name == "KuCoin":
+        r = (get_json(f"https://api-futures.kucoin.com/api/v1/contract/funding-rates?symbol={xbt}USDTM"
+                      f"&from={start_ms}&to={end_ms}", 15) or {}).get("data") or []
+        return [(int(x["timepoint"]), _fnum(x.get("fundingRate"))) for x in r if isinstance(x, dict)]
+    if name == "HTX":
+        out = []
+        for page in (1, 2, 3):
+            r = ((get_json(f"https://api.hbdm.com/linear-swap-api/v1/swap_historical_funding_rate?contract_code={sym}-USDT"
+                           f"&page_size=50&page_index={page}", 15) or {}).get("data") or {}).get("data") or []
+            out += [(int(x["funding_time"]), _fnum(x.get("funding_rate"))) for x in r]
+            if len(r) < 50 or int(r[-1]["funding_time"]) < start_ms:
+                break
+        return out
+    if name == "BingX":
+        r = (get_json(f"https://open-api.bingx.com/openApi/swap/v2/quote/fundingRate?symbol={sym}-USDT"
+                      f"&startTime={start_ms}&limit=1000", 15) or {}).get("data") or []
+        return [(int(x["fundingTime"]), _fnum(x.get("fundingRate"))) for x in r if isinstance(x, dict)]
+    if name == "Aster":
+        r = get_json(f"https://fapi.asterdex.com/fapi/v1/fundingRate?symbol={sym}USDT&startTime={start_ms}&limit=1000", 15)
+        return [(int(x["fundingTime"]), _fnum(x.get("fundingRate"))) for x in (r if isinstance(r, list) else [])]
+    if name == "WOO X":
+        r = (get_json(f"https://api.woox.io/v1/public/funding_rate_history?symbol=PERP_{sym}_USDT"
+                      f"&start_t={start_s}&size=1000", 15) or {}).get("rows") or []
+        return [(int(_fnum(x["funding_rate_timestamp"])), _fnum(x.get("funding_rate"))) for x in r]
+    if name == "Phemex":
+        r = (((get_json(f"https://api.phemex.com/api-data/public/data/funding-rate-history?symbol=.{sym}USDTFR8H"
+                        f"&start={start_ms}&limit=100", 15) or {}).get("data") or {}).get("rows") or [])
+        return [(int(x["fundingTime"]), _fnum(x.get("fundingRate"))) for x in r]
+    if name == "Crypto.com":
+        r = (((get_json(f"https://api.crypto.com/exchange/v1/public/get-valuations?instrument_name={sym}USD-PERP"
+                        f"&valuation_type=funding_hist&count=1000&start_ts={start_ms}&end_ts={end_ms}", 15)
+               or {}).get("result") or {}).get("data") or [])
+        return [(int(x["t"]), _fnum(x.get("v"))) for x in r]
+    if name == "Backpack":
+        r = get_json(f"https://api.backpack.exchange/api/v1/fundingRates?symbol={sym}_USDC_PERP&limit=1000", 15)
+        out = []
+        for x in r if isinstance(r, list) else []:
+            try:
+                t = calendar.timegm(time.strptime(str(x["intervalEndTimestamp"])[:19], "%Y-%m-%dT%H:%M:%S")) * 1000
+            except (KeyError, ValueError):
+                continue
+            out.append((t, _fnum(x.get("fundingRate"))))
+        return out
+    if name == "Lighter":
+        mid = _fund_lighter_id(sym)
+        if mid is None:
+            return []
+        r = (get_json(f"https://mainnet.zklighter.elliot.ai/api/v1/fundings?market_id={mid}&resolution=1h"
+                      f"&start_timestamp={start_s}&end_timestamp={end_ms // 1000}&count_back=1000", 15) or {}).get("fundings") or []
+        # Ставка — в процентах, знак — в direction: «long» — платят лонги.
+        return [(int(x["timestamp"]) * 1000, _fnum(x.get("rate")) / 100 * (1 if x.get("direction") == "long" else -1))
+                for x in r]
+    if name == "BloFin":
+        r = (get_json(f"https://openapi.blofin.com/api/v1/market/funding-rate-history?instId={sym}-USDT&limit=100", 15)
+             or {}).get("data") or []
+        return [(int(x["fundingTime"]), _fnum(x.get("fundingRate"))) for x in r]
+    if name == "XT":
+        r = (((get_json(f"https://fapi.xt.com/future/market/v1/public/q/funding-rate-record?symbol={sym.lower()}_usdt"
+                        f"&limit=100", 15) or {}).get("result") or {}).get("items") or [])
+        return [(int(x["createdTime"]), _fnum(x.get("fundingRate"))) for x in r]
+    if name == "Orderly":
+        r = (((get_json(f"https://api.orderly.org/v1/public/funding_rate_history?symbol=PERP_{sym}_USDC"
+                        f"&start_t={start_s}&size=500", 15) or {}).get("data") or {}).get("rows") or [])
+        return [(int(_fnum(x["funding_rate_timestamp"])), _fnum(x.get("funding_rate"))) for x in r]
     return []
 
 
-FUND_HIST_EX = ("Binance", "Bybit", "OKX", "Hyperliquid", "Gate", "Bitget")
+# Биржи истории фандинга. Нет: Coinbase International (история отстаёт на
+# дни), BitMEX (бессрочные закрыты в сентябре 2026), Paradex (ставка
+# начисляется непрерывно, выплат нет), CoinEx (ставки на порядок выше всех —
+# собственная формула, средняя от неё врёт).
+FUND_HIST_EX = ("Binance", "Bybit", "OKX", "Hyperliquid", "Gate", "Bitget", "Deribit", "Kraken", "dYdX", "MEXC",
+                "KuCoin", "HTX", "BingX", "Aster", "WOO X", "Phemex", "Crypto.com", "Backpack", "Lighter", "BloFin",
+                "XT", "Orderly")
 
 
 def _fund_hist(sym: str, days: int) -> dict:
@@ -12583,6 +12915,11 @@ def oi_hist(sym: str, rng: str) -> dict:
 #   (liquidation-orders) — вебсокетами; Binance и Bybit с этой машины закрыты
 #   по стране — тогда соединение идёт через nginx в Европе (/xr/…-ws/);
 #   Gate (все контракты одним запросом) и HTX (по крупным монетам) — опросом.
+#   Kraken Futures — вебсокетом сделок (type = liquidation); Bitfinex (общая
+#   лента ликвидаций), Deribit (поле liquidation в сделке), dYdX (LIQUIDATED),
+#   Lighter (type = liquidation) и Paradex (LIQUIDATION) — опросом сделок.
+#   Нет: Bitget, MEXC, KuCoin, BingX — публичных ликвидаций не отдают;
+#   BitMEX закрыл бессрочные в сентябре 2026; Aster молчит в своём потоке.
 # Binance отдаёт по каждой монете не больше одной ликвидации в секунду —
 # так он устроен, и суммы по нему чуть занижены; так считают и Coinglass,
 # и все, кто берёт этот поток.
@@ -12598,7 +12935,9 @@ LIQS_HTX = ("BTC", "ETH", "SOL", "XRP", "DOGE", "BNB", "SUI", "ADA", "LTC", "LIN
 LIQS_BYBIT_TOP = 100
 _liqs_q: list = []
 _liqs_q_lock = threading.Lock()
-_liqs_live: dict = {}  # биржа → время последнего события (сек)
+# Биржа → когда она последний раз подала признак жизни: событие, сообщение
+# вебсокета или удачный опрос. Тихая биржа без ликвидаций — не сломанная.
+_liqs_live: dict = {}
 _LIQS: dict = {}
 _liqs_started = False
 
@@ -12832,6 +13171,7 @@ def _liqs_binance() -> None:
                 raise
             if msg is None:
                 return
+            _liqs_live["Binance"] = time.time()
             o = (json.loads(msg) or {}).get("o") or {}
             q, ap = _fnum(o.get("z") or o.get("q")), _fnum(o.get("ap") or o.get("p"))
             # Продажа по ликвидации — закрывается лонг.
@@ -12867,7 +13207,7 @@ def _liqs_bybit() -> None:
                 continue
             if msg is None:
                 return
-            last_msg = time.time()
+            last_msg = _liqs_live["Bybit"] = time.time()
             for d in (json.loads(msg) or {}).get("data") or []:
                 v, p = _fnum(d.get("v")), _fnum(d.get("p"))
                 # У Bybit «Buy» значит: ликвидирован лонг.
@@ -12900,6 +13240,7 @@ def _liqs_okx() -> None:
                 continue
             if msg is None:
                 return
+            _liqs_live["OKX"] = time.time()
             if msg == "pong":
                 continue
             for d in (json.loads(msg) or {}).get("data") or []:
@@ -12925,6 +13266,8 @@ def _liqs_gate_loop() -> None:
                 for r in get_json("https://api.gateio.ws/api/v4/futures/usdt/contracts", 20) or []:
                     mult[r.get("name")] = _fnum(r.get("quanto_multiplier"))
             rows = get_json(f"https://api.gateio.ws/api/v4/futures/usdt/liq_orders?from={since}&limit=1000", 15) or []
+            if isinstance(rows, list):
+                _liqs_live["Gate"] = time.time()
             for r in rows if isinstance(rows, list) else []:
                 key = (r.get("contract"), r.get("time"), r.get("size"), r.get("fill_price"), r.get("order_price"))
                 if key in seen:
@@ -12948,6 +13291,8 @@ def _liqs_htx_loop() -> None:
         for c in LIQS_HTX:
             try:
                 res = get_json(f"https://api.hbdm.com/linear-swap-api/v3/swap_liquidation_orders?contract={c}-USDT&trade_type=0", 15) or {}
+                if res.get("code") == 200 or res.get("status") == "ok":
+                    _liqs_live["HTX"] = time.time()
                 for r in res.get("data") or []:
                     qid = r.get("query_id")
                     if qid in seen:
@@ -12964,6 +13309,158 @@ def _liqs_htx_loop() -> None:
         time.sleep(30)
 
 
+def _liqs_kraken() -> None:
+    """Kraken Futures: лента сделок всех бессрочных PF_ — у ликвидаций
+    type = liquidation. Сторона — у того, кто взял: ликвидация и берёт."""
+    rows = (get_json("https://futures.kraken.com/derivatives/api/v3/tickers", 20) or {}).get("tickers") or []
+    pids = [r["symbol"] for r in rows if str(r.get("symbol", "")).startswith("PF_") and not r.get("suspended")]
+    if not pids:
+        raise ConnectionError("kraken: no products")
+    ws = _WS("wss://futures.kraken.com/ws/v1")
+    ws.sock.settimeout(30)
+    try:
+        ws.send(json.dumps({"event": "subscribe", "feed": "heartbeat"}))
+        for i in range(0, len(pids), 50):
+            ws.send(json.dumps({"event": "subscribe", "feed": "trade", "product_ids": pids[i:i + 50]}))
+        while True:
+            try:
+                msg = ws.recv()
+            except socket.timeout:
+                raise ConnectionError("kraken: silent")  # раз в минуту приходит хотя бы heartbeat
+            if msg is None:
+                return
+            _liqs_live["Kraken"] = time.time()
+            m = json.loads(msg) or {}
+            if m.get("feed") not in ("trade", "trade_snapshot"):
+                continue
+            for d in m.get("trades") or [m]:
+                if d.get("type") != "liquidation":
+                    continue
+                q, p = _fnum(d.get("qty")), _fnum(d.get("price"))
+                _liqs_put("Kraken", str(d.get("product_id") or m.get("product_id") or "")[3:],
+                          int(d.get("time") or now() * 1000), d.get("side") == "sell", p, q * p)
+    finally:
+        ws.close()
+
+
+class _LiqsSeen:
+    """Что из опроса уже записано: повтор того же ответа — не новое событие."""
+
+    def __init__(self, cap: int = 20000):
+        self.s: set = set()
+        self.cap = cap
+
+    def new(self, key) -> bool:
+        if key in self.s:
+            return False
+        self.s.add(key)
+        if len(self.s) > self.cap:
+            self.s = set(list(self.s)[-self.cap // 4:])
+        return True
+
+
+def _liqs_poll(name: str, every: float, fn) -> None:
+    """Опрос биржи по кругу; сбой — в журнал, круг — дальше."""
+    seen = _LiqsSeen()
+    while True:
+        try:
+            fn(seen)
+            _liqs_live[name] = time.time()
+        except Exception as e:  # noqa: BLE001
+            print(f"liqs {name}: {e}", file=sys.stderr)
+        time.sleep(every)
+
+
+def _liqs_bitfinex(seen: _LiqsSeen) -> None:
+    """Bitfinex: общая лента ликвидаций всех деривативов одним запросом.
+    Каждая позиция — двумя строками: срабатывание и исполнение; берём одну."""
+    for row in get_json("https://api-pub.bitfinex.com/v2/liquidations/hist?limit=200", 15) or []:
+        r = row[0] if isinstance(row, list) and row and isinstance(row[0], list) else row
+        if not isinstance(r, list) or len(r) < 12 or r[0] != "pos" or not seen.new(r[1]):
+            continue
+        key = str(r[4] or "")
+        if not (key.startswith("t") and "F0:" in key) or key.startswith("tTEST"):
+            continue
+        amt, px = _fnum(r[5]), _fnum(r[11]) or _fnum(r[6])
+        # Положительный размер — позиция была лонгом.
+        _liqs_put("Bitfinex", key[1:key.index("F0:")], int(r[2] or 0), amt > 0, px, abs(amt) * px)
+
+
+def _liqs_deribit(seen: _LiqsSeen) -> None:
+    """Deribit: в сделке поле liquidation — M (ликвидирован мейкер), T (тейкер)
+    или MT. Обратные BTC и ETH считают объём в долларах, линейные USDC — в монетах."""
+    for cur in ("BTC", "ETH", "USDC"):
+        r = (get_json(f"https://www.deribit.com/api/v2/public/get_last_trades_by_currency"
+                      f"?currency={cur}&kind=future&count=1000", 15) or {}).get("result") or {}
+        for x in r.get("trades") or []:
+            liq = str(x.get("liquidation") or "")
+            if not liq or not seen.new(x.get("trade_id")):
+                continue
+            name, px, amt = str(x.get("instrument_name") or ""), _fnum(x.get("price")), _fnum(x.get("amount"))
+            sell = x.get("direction") == "sell"
+            # Ликвидирован тейкер — его сторона та же, что у сделки; мейкер — обратная.
+            long_liq = sell if "T" in liq else not sell
+            _liqs_put("Deribit", name.split("-")[0].split("_")[0], int(x.get("timestamp") or 0), long_liq,
+                      px, amt if cur != "USDC" else amt * px)
+        time.sleep(1)
+
+
+def _liqs_top(rows: list, key, n: int) -> list:
+    return [r for r in sorted(rows, key=key)][:n]
+
+
+def _liqs_dydx(seen: _LiqsSeen) -> None:
+    """dYdX: у ликвидации в ленте сделок type = LIQUIDATED; по 20 самым торгуемым рынкам."""
+    mk = ((get_json("https://indexer.dydx.trade/v4/perpetualMarkets", 20) or {}).get("markets") or {}).values()
+    for m in _liqs_top([m for m in mk if m.get("status") == "ACTIVE"], lambda m: -_fnum(m.get("volume24H")), 20):
+        t = m.get("ticker")
+        for x in (get_json(f"https://indexer.dydx.trade/v4/trades/perpetualMarket/{t}?limit=100", 15) or {}).get("trades") or []:
+            if x.get("type") != "LIQUIDATED" or not seen.new(x.get("id")):
+                continue
+            sz, px = _fnum(x.get("size")), _fnum(x.get("price"))
+            try:
+                ts = calendar.timegm(time.strptime(str(x.get("createdAt"))[:19], "%Y-%m-%dT%H:%M:%S")) * 1000
+            except ValueError:
+                continue
+            _liqs_put("dYdX", str(t).split("-")[0], ts, x.get("side") == "SELL", px, sz * px)
+        time.sleep(0.5)
+
+
+def _liqs_lighter(seen: _LiqsSeen) -> None:
+    """Lighter: у ликвидации type = liquidation. Ликвидирует тейкер: продал
+    (мейкер — покупатель) — значит, закрывали лонг."""
+    rows = (get_json("https://mainnet.zklighter.elliot.ai/api/v1/orderBookDetails", 25) or {}).get("order_book_details") or []
+    rows = [r for r in rows if r.get("market_type") == "perp" and r.get("status") == "active"]
+    for r in _liqs_top(rows, lambda r: -_fnum(r.get("daily_quote_token_volume")), 20):
+        got = get_json(f"https://mainnet.zklighter.elliot.ai/api/v1/recentTrades?market_id={r.get('market_id')}&limit=100", 15) or {}
+        for x in got.get("trades") or []:
+            if x.get("type") != "liquidation" or not seen.new(x.get("trade_id")):
+                continue
+            _liqs_put("Lighter", str(r.get("symbol") or ""), int(x.get("timestamp") or 0),
+                      not x.get("is_maker_ask"), _fnum(x.get("price")), _fnum(x.get("usd_amount")))
+        time.sleep(0.5)
+
+
+def _liqs_paradex(seen: _LiqsSeen) -> None:
+    """Paradex: у ликвидации trade_type = LIQUIDATION, сторона — тейкера."""
+    rows = (get_json("https://api.prod.paradex.trade/v1/markets/summary?market=ALL", 30) or {}).get("results") or []
+    rows = [r for r in rows if str(r.get("symbol") or "").endswith("-USD-PERP")]
+    for r in _liqs_top(rows, lambda r: -_fnum(r.get("volume_24h")), 15):
+        m = r.get("symbol")
+        for x in (get_json(f"https://api.prod.paradex.trade/v1/trades?market={m}&page_size=100", 15) or {}).get("results") or []:
+            if x.get("trade_type") != "LIQUIDATION" or not seen.new(x.get("id")):
+                continue
+            sz, px = _fnum(x.get("size")), _fnum(x.get("price"))
+            _liqs_put("Paradex", str(m)[:-9], int(x.get("created_at") or 0), x.get("side") == "SELL", px, sz * px)
+        time.sleep(0.5)
+
+
+# Все источники ленты — в порядке, в каком их показывает приложение.
+LIQS_ALL = ("Binance", "Bybit", "OKX", "Kraken", "Gate", "HTX", "Bitfinex", "Deribit", "dYdX", "Lighter", "Paradex")
+LIQS_POLL = (("Bitfinex", 60, _liqs_bitfinex), ("Deribit", 60, _liqs_deribit), ("dYdX", 90, _liqs_dydx),
+             ("Lighter", 90, _liqs_lighter), ("Paradex", 120, _liqs_paradex))
+
+
 def liqs_start() -> None:
     """Сборщики — по потоку на биржу и писатель; запускается один раз."""
     global _liqs_started
@@ -12975,8 +13472,10 @@ def liqs_start() -> None:
     except sqlite3.Error as e:
         print(f"liqs db: {e}", file=sys.stderr)
     threading.Thread(target=_liqs_writer, daemon=True, name="liqs-db").start()
-    for name, fn in (("Binance", _liqs_binance), ("Bybit", _liqs_bybit), ("OKX", _liqs_okx)):
+    for name, fn in (("Binance", _liqs_binance), ("Bybit", _liqs_bybit), ("OKX", _liqs_okx), ("Kraken", _liqs_kraken)):
         threading.Thread(target=_liqs_loop, args=(name, fn), daemon=True, name=f"liqs-{name}").start()
+    for name, every, fn in LIQS_POLL:
+        threading.Thread(target=_liqs_poll, args=(name, every, fn), daemon=True, name=f"liqs-{name}").start()
     threading.Thread(target=_liqs_gate_loop, daemon=True, name="liqs-gate").start()
     threading.Thread(target=_liqs_htx_loop, daemon=True, name="liqs-htx").start()
 
@@ -13026,7 +13525,7 @@ def _liqs_build(win: str, sym: str, min_usd: float) -> dict:
             "coins": sorted(([s, round(v[0]), round(v[1])] for s, v in syms.items()), key=lambda x: -(x[1] + x[2]))[:40],
             "bars": [[b[0], round(b[1]), round(b[2])] for b in B], "step": step,
             "feed": [ev(r) for r in feed], "big": ev(big) if big else None,
-            "live": live, "since": (first // 1000) if first else None}
+            "live": live, "srcs": list(LIQS_ALL), "since": (first // 1000) if first else None}
 
 
 def liqs_data(win: str, sym: str = "", min_usd: float = 0.0) -> dict:

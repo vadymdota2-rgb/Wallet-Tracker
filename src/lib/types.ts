@@ -1090,8 +1090,10 @@ export interface LiqsReply {
   step: number;
   feed: LiqEv[];
   big: LiqEv | null;
-  /** Биржа → время последнего события, сек. */
+  /** Биржа → когда она последний раз отвечала (событие или удачный опрос), сек. */
   live: Record<string, number>;
+  /** Все источники ленты, в порядке показа. */
+  srcs?: string[];
   /** С какого момента идёт запись, сек. */
   since: number | null;
 }
