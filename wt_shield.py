@@ -26,6 +26,7 @@
 """
 from __future__ import annotations
 
+import ipaddress
 import os
 import re
 import secrets
@@ -44,9 +45,11 @@ MAX_INIT_DATA = 4096
 # Секунд на то, чтобы прислать запрос и тело; молчит дольше — соединение
 # закрывается. Ответы считаются отдельно и тут не ограничены.
 CONN_TIMEOUT = float(os.environ.get("WHALE_API_CONN_TIMEOUT", "20"))
-# Одновременных соединений. nginx держит к API единицы-десятки — сотни
-# бывают только при атаке.
-MAX_CONN = int(os.environ.get("WHALE_API_MAX_CONN", "256"))
+# Одновременных соединений. nginx в каждом экземпляре Cloud Run держит к API
+# до шестнадцати постоянных соединений на процесс, а экземпляров при
+# наплыве — десятки: потолок с запасом под сотни тысяч людей, но не под
+# атаку в десятки тысяч сокетов.
+MAX_CONN = int(os.environ.get("WHALE_API_MAX_CONN", "1024"))
 # Промахов ключом с одного адреса за окно — и бан.
 BAN_FAILS = 20
 BAN_WINDOW = 600.0
@@ -67,6 +70,34 @@ SECURITY_HEADERS = (
     ("X-Frame-Options", "DENY"),
     ("Cross-Origin-Resource-Policy", "same-site"),
 )
+
+
+# Прокси балансировщиков Google: их адрес бывает в X-Forwarded-For после
+# адреса человека, и он — один на всех.
+_GOOGLE_PROXY = (ipaddress.ip_network("35.191.0.0/16"), ipaddress.ip_network("130.211.0.0/22"))
+
+
+def client_ip(xff: str, fallback: str) -> str:
+    """Настоящий адрес человека из X-Forwarded-For, собранного Google и nginx.
+
+    Цепочка у API: «[что прислал сам клиент…], адрес человека (дописал
+    Google), адрес узла, с которого пришёл nginx». Справа налево пропускаем
+    внутренние адреса (узлы Cloud Run, 169.254/10/…) и прокси Google — первый
+    внешний адрес и есть человек. Подделать его клиент не может: всё, что он
+    прислал сам, стоит левее.
+
+    Раньше брался последний элемент — внутренний узел, один на всех: так
+    защита пробного периода (три пробы с адреса в сутки) и лимиты по адресу
+    делились между всеми людьми сразу."""
+    for part in reversed([p.strip() for p in (xff or "").split(",") if p.strip()]):
+        try:
+            ip = ipaddress.ip_address(part.split("%")[0])
+        except ValueError:
+            continue
+        if not ip.is_global or any(ip in net for net in _GOOGLE_PROXY):
+            continue
+        return str(ip)
+    return fallback
 
 
 def redact(text: str) -> str:

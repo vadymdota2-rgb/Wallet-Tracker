@@ -5,7 +5,12 @@ PORT="${PORT:-8080}"
 sed -i "s/listen 8080/listen ${PORT}/" "$CONF"
 
 if [ -n "${API_UPSTREAM:-}" ]; then
-  sed -i "s|http://127.0.0.1:8090|${API_UPSTREAM%/}|g" "$CONF"
+  # https://host:8090 → схема в proxy_pass, host:8090 — в upstream.
+  UP_SCHEME="${API_UPSTREAM%%://*}"
+  UP_HOST="${API_UPSTREAM#*://}"
+  UP_HOST="${UP_HOST%%/*}"
+  sed -i "s|server 127.0.0.1:8090;|server ${UP_HOST};|" "$CONF"
+  sed -i "s|proxy_pass http://whale_api|proxy_pass ${UP_SCHEME}://whale_api|g" "$CONF"
   # По HTTP через интернет подпись Telegram и X-Api-Key едут открытым
   # текстом — их видит любой узел по дороге.
   case "$API_UPSTREAM" in

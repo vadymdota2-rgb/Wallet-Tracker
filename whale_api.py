@@ -15271,6 +15271,10 @@ class Handler(BaseHTTPRequestHandler):
     # Тайм-аут сокета: клиент, что тянет с запросом (Slowloris), не держит
     # поток дольше этого.
     timeout = shield.CONN_TIMEOUT
+    # Заголовки и тело уходят двумя записями; с алгоритмом Нейгла на
+    # постоянном соединении второе ждёт подтверждения первого (~40 мс на
+    # каждый ответ). Без него постоянные соединения от nginx быстрее новых.
+    disable_nagle_algorithm = True
 
     def log_message(self, fmt, *args):
         # Без секретов: подпись Telegram и ключи в журнал не попадают.
@@ -15378,8 +15382,9 @@ class Handler(BaseHTTPRequestHandler):
         # написал сам клиент, и верить ему нельзя совсем.
         if not API_KEY:
             return self.client_address[0]
-        parts = [p.strip() for p in (self.headers.get("X-Forwarded-For") or "").split(",") if p.strip()]
-        return parts[-1] if parts else self.client_address[0]
+        # С ключом — запрос от нашего nginx: берём адрес, который дописал
+        # Google, а не внутренний узел Cloud Run (он один на всех людей).
+        return shield.client_ip(self.headers.get("X-Forwarded-For") or "", self.client_address[0])
 
     def _rate_key(self, qs: dict) -> str:
         """Чей счётчик запросов: человека по подписи Telegram, без неё — адреса.

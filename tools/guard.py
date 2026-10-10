@@ -968,7 +968,7 @@ say("логотипы BSC: поиск по адресу на сервере, р�
     'out.append(f"/bsclogo/{a}")' in pybody(api, "def coin_icon(")
     and 'path.startswith("/api/logo/bsc/")' in api and "def bsc_logo(" in api
     and 're.fullmatch(r"0x[0-9a-f]{40}", a)' in pybody(api, "def bsc_logo(")
-    and "location /bsclogo/ {" in _ng and "proxy_pass http://127.0.0.1:8090/api/logo/bsc/;" in _ng
+    and "location /bsclogo/ {" in _ng and "proxy_pass http://whale_api/api/logo/bsc/;" in _ng
     and '"/api/logo/bsc/"' not in api.split("PAID_PATHS = frozenset(")[1][:900]
     and '"token": a, "icon": coin_icon(s, a)' in pybody(api, "def rot_page(")
     and "addr={x.token}" in read(f"{APP}/src/screens/AnalyticsTab.tsx")
@@ -1151,6 +1151,12 @@ say("щит API: тело, соединения, тайм-аут, баны за 
     and "client_body_timeout 10s;" in _ngx and "limit_except GET POST OPTIONS { deny all; }" in _ngx
     and _ngx.count('add_header Strict-Transport-Security "max-age=31536000" always;') == 4
     and not os.path.exists(f"{APP}/whale_bot.db") and "*.db" in read(f"{APP}/.gitignore"))
+say("масштаб: адрес человека — не узел Google, nginx→API постоянными соединениями, без Нейгла",
+    "def client_ip(" in _shield and 'shield.client_ip(self.headers.get("X-Forwarded-For")' in pybody(api, "def _peer(")
+    and "map $http_x_forwarded_for $client_ip {" in _ngx and "$binary_remote_addr" not in _ngx
+    and "upstream whale_api {" in _ngx and "keepalive 16;" in _ngx and _ngx.count("proxy_pass http://whale_api") == 3
+    and _ngx.count('proxy_set_header Connection "";') == 3 and "disable_nagle_algorithm = True" in api
+    and 'sed -i "s|server 127.0.0.1:8090;|server ${UP_HOST};|"' in read(f"{APP}/start.sh"))
 say("ликвидации с 11 бирж, фандинг-история с 22, интерес с 32, доска фандинга — 21 биржа",
     all(f"def _liqs_{x}(" in api for x in ("kraken", "bitfinex", "deribit", "dydx", "lighter", "paradex"))
     and 'LIQS_ALL = ("Binance", "Bybit", "OKX", "Kraken", "Gate", "HTX", "Bitfinex", "Deribit", "dYdX", "Lighter", "Paradex")' in api
