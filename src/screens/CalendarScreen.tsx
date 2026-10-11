@@ -14,7 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
 import type { DictKey } from "../i18n/types";
-import { dateLong, fix2, pct, px, usd } from "../lib/format";
+import { dateLong, pct, px, usd } from "../lib/format";
 import { haptic, openExternal } from "../lib/telegram";
 import { fetchCalendar, peekCalendar } from "../lib/api";
 import { useNow } from "../lib/tick";
@@ -61,6 +61,37 @@ const MACRO: [RegExp, DictKey][] = [
   [/Home Sales|Housing Starts|Building Permits|HPI/i, "cal_m_housing"],
   [/Speaks|Testifies/i, "cal_m_speech"],
 ];
+
+/** Ключ названия → тема объяснения «что это и как влияет на крипту». Близкие
+ *  показатели объясняются одинаково: базовая инфляция — как инфляция. */
+const TOPIC: Partial<Record<DictKey, DictKey>> = {
+  cal_m_core_cpi: "cal_x_cpi", cal_m_cpi: "cal_x_cpi", cal_m_core_ppi: "cal_x_ppi", cal_m_ppi: "cal_x_ppi",
+  cal_m_adp: "cal_x_adp", cal_m_nfp: "cal_x_nfp", cal_m_unemp: "cal_x_unemp", cal_m_claims: "cal_x_claims",
+  cal_m_core_pce: "cal_x_pce", cal_m_gdp: "cal_x_gdp", cal_m_retail: "cal_x_retail", cal_m_ism_m: "cal_x_pmi",
+  cal_m_ism_s: "cal_x_pmi", cal_m_pmi: "cal_x_pmi", cal_m_jolts: "cal_x_jolts", cal_m_sent: "cal_x_sent",
+  cal_m_minutes: "cal_x_minutes", cal_m_powell: "cal_x_speech", cal_m_fedspeak: "cal_x_speech",
+  cal_m_speech: "cal_x_speech", cal_m_durable: "cal_x_durable", cal_m_rate: "cal_x_rate", cal_m_opec: "cal_x_opec",
+  cal_m_holiday: "cal_x_holiday", cal_m_auction: "cal_x_auction", cal_m_oil: "cal_x_oil", cal_m_trade: "cal_x_trade",
+  cal_m_housing: "cal_x_housing",
+};
+
+/** Что это за событие и как оно обычно влияет на крипту — одной-двумя фразами. */
+function explain(lang: Lang, e: CalEv): string {
+  if (e.k === "macro") {
+    const hit = MACRO.find(([re]) => re.test(e.title ?? ""));
+    return t(lang, (hit && TOPIC[hit[1]]) || "cal_x_other");
+  }
+  const byKind: Record<Exclude<CalEv["k"], "macro">, DictKey> = {
+    fomc: "cal_x_fomc", opt: "cal_x_opt", unl: "cal_x_unl", earn: "cal_x_earn", list: "cal_x_list", cme: "cal_x_cme",
+  };
+  return t(lang, byKind[e.k]);
+}
+
+/** Валюта данных → страна словами: флаг один не все узнают. */
+const COUNTRY: Record<string, DictKey> = {
+  USD: "cal_cc_usd", EUR: "cal_cc_eur", GBP: "cal_cc_gbp", JPY: "cal_cc_jpy", CNY: "cal_cc_cny", CAD: "cal_cc_cad",
+  AUD: "cal_cc_aud", NZD: "cal_cc_nzd", CHF: "cal_cc_chf", All: "cal_cc_all",
+};
 
 /** Валюта страны данных → флаг: страну видно сразу, без подписи. */
 export const FLAG: Record<string, string> = {
@@ -158,8 +189,12 @@ const mark = (e: CalEv) => (e.k === "fomc" ? "macro" : e.k === "cme" ? "opt" : e
 function Row({ lang, e, past, nowSec, today, onOpen }: {
   lang: Lang; e: CalEv; past: boolean; nowSec: number; today: number; onOpen: (e: CalEv) => void;
 }) {
+  /* Нажатие раскрывает объяснение; у экспирации, разлока и листинга под ним —
+     переход к подробностям (вкладка опционов, разлоки, объявление биржи). */
   const tap = e.k === "opt" || e.k === "unl" || (e.k === "list" && Boolean(e.url));
+  const [open, setOpen] = useState(false);
   const cd = past ? null : rowCountdown(lang, e, nowSec, today);
+  const country = e.cc && COUNTRY[e.cc] ? t(lang, COUNTRY[e.cc]!) : e.cc;
   const body = (
     <>
       {/* Разлок и отчёт без объявленного часа назначены на день — время не пишем. */}
@@ -177,10 +212,11 @@ function Row({ lang, e, past, nowSec, today, onOpen }: {
           </span>
         </span>
         {e.k === "macro" ? (
+          /* Страна словами и цифры: прогноз и прошлое значение. Английское
+             название — только в раскрытом объяснении, в строке оно шум. */
           <small>
-            {macroName(lang, e.title ?? "") ? `${e.title}` : ""}
-            {macroName(lang, e.title ?? "") && (e.fc || e.prev) ? " · " : ""}
-            {e.fc ? t(lang, "cal_fc", { x: e.fc }) : ""}{e.fc && e.prev ? " · " : ""}{e.prev ? t(lang, "cal_prev", { x: e.prev }) : ""}
+            {[country, e.fc ? t(lang, "cal_fc", { x: e.fc }) : "", e.prev ? t(lang, "cal_prev", { x: e.prev }) : ""]
+              .filter(Boolean).join(" · ")}
           </small>
         ) : e.k === "earn" ? (
           <small>
@@ -195,10 +231,11 @@ function Row({ lang, e, past, nowSec, today, onOpen }: {
         ) : e.k === "fomc" ? (
           <small>{t(lang, "cal_fomc_sub")}{e.tent ? ` · ${t(lang, "cal_tent")}` : ""}</small>
         ) : e.k === "opt" ? (
+          /* Без жаргона: сколько истекает, куда тянет цену (Max Pain) и чьих
+             ставок больше (Put/Call). Термины — в объяснении по нажатию. */
           <small>
-            {usd(e.n)} · {t(lang, "op_mp")} {px(e.mp)}
-            {e.px && e.mp ? ` (${pct(((e.mp - e.px) / e.px) * 100, 1, true)})` : ""}
-            {e.pcr ? ` · P/C ${fix2(e.pcr)}` : ""}
+            {t(lang, "cal_opt_sub", { n: usd(e.n), p: px(e.mp) })}
+            {e.pcr ? ` · ${t(lang, e.pcr > 1 ? "cal_opt_dn" : e.pcr < 0.7 ? "cal_opt_up" : "cal_opt_eq")}` : ""}
           </small>
         ) : (
           <small>
@@ -208,13 +245,27 @@ function Row({ lang, e, past, nowSec, today, onOpen }: {
         )}
         {cd ? <span className={cd.soon ? "cal-cd soon" : "cal-cd"}>{cd.text}</span> : null}
       </span>
-      {tap ? <span className="cal-go" aria-hidden="true">›</span> : null}
+      <span className={open ? "cal-go on" : "cal-go"} aria-hidden="true">⌄</span>
     </>
   );
   const cls = `cal-row${past ? " past" : ""}${e.imp === "high" ? " hi" : ""}`;
-  return tap ? (
-    <button type="button" className={cls} onClick={() => { haptic("select"); onOpen(e); }}>{body}</button>
-  ) : <div className={cls}>{body}</div>;
+  return (
+    <div className={open ? "cal-item on" : "cal-item"}>
+      <button type="button" className={cls} aria-expanded={open}
+        onClick={() => { haptic("select"); setOpen(!open); }}>{body}</button>
+      {open ? (
+        <div className="cal-x">
+          <p>{explain(lang, e)}</p>
+          {e.k === "macro" && e.title && calTitle(lang, e) !== e.title ? <small>{e.title}</small> : null}
+          {tap ? (
+            <button type="button" className="cal-x-go" onClick={() => { haptic("select"); onOpen(e); }}>
+              {t(lang, e.k === "list" ? "cal_x_read" : "cal_x_more")} ›
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export function CalendarScreen() {
@@ -293,6 +344,7 @@ export function CalendarScreen() {
     <Frame title={t(lang, "cal_title")}>
       <p className="lq-lead">{t(lang, "cal_sub")}</p>
       <p className="cal-tz">🕐 {t(lang, "cal_tz", { z: zoneLabel() })}</p>
+      <p className="cal-tz">👆 {t(lang, "cal_tap_hint")}</p>
       <div className="op-exps" role="tablist">
         {kinds.map(([k, key]) => (
           <button key={k} type="button" role="tab" aria-selected={kind === k} className={kind === k ? "chip on" : "chip"}

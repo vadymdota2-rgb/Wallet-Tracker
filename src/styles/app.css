@@ -2937,7 +2937,7 @@
 .cal-day h3.today { color: var(--glow); }
 .cal-day h3.past { color: var(--dim-2); }
 .cal-row { width: 100%; display: grid; grid-template-columns: 42px 4px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 0; text-align: start; }
-.cal-row + .cal-row { border-top: 1px solid rgb(27 61 104 / 0.3); }
+.cal-item + .cal-item { border-top: 1px solid rgb(27 61 104 / 0.3); }
 button.cal-row:active { background: rgb(58 130 214 / 0.08); }
 .cal-row.past { opacity: 0.55; }
 .cal-time { font-size: 12.5px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
@@ -3810,3 +3810,12 @@ button.alc-who { cursor: pointer; text-decoration: underline dotted rgb(124 151 
 .dg-fold.on .dg-fold-ch { transform: rotate(180deg); }
 .dg-fold-body { display: grid; gap: 6px; padding: 0 0 10px; }
 .dg-fold-go { justify-self: start; margin-top: 2px; padding: 6px 12px; border-radius: 999px; border: 1px solid rgb(58 130 214 / 0.35); background: transparent; color: var(--glow); font-size: 12.5px; font-weight: 700; }
+
+/* Календарь: событие раскрывается объяснением — что это и как влияет на крипту. */
+button.cal-row { background: transparent; border: 0; color: inherit; font: inherit; }
+.cal-go { transition: transform 0.2s ease; }
+.cal-item.on .cal-go { transform: rotate(180deg); }
+.cal-x { display: grid; gap: 6px; margin: 0 0 12px 56px; padding: 10px 12px; border-radius: 12px; background: rgb(30 155 255 / 0.07); border: 1px solid rgb(58 130 214 / 0.18); }
+.cal-x p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink); }
+.cal-x small { font-size: 11.5px; color: var(--dim); }
+.cal-x-go { justify-self: start; padding: 5px 12px; border-radius: 999px; border: 1px solid rgb(58 130 214 / 0.35); background: transparent; color: var(--glow); font-size: 12.5px; font-weight: 700; }

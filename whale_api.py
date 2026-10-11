@@ -14383,7 +14383,7 @@ def _cal_nasdaq_macro() -> list:
                 continue
             seen.add((cc, name, t))
             clean = lambda v: html.unescape(str(v or "")).replace("\xa0", "").strip()[:20]  # noqa: E731
-            out.append({"k": "macro", "t": t, "cc": cc, "title": name, "imp": imp, "hol": hol,
+            out.append({"k": "macro", "t": t, "cc": cc, "title": name, "imp": _cal_imp_crypto(cc, name, imp), "hol": hol,
                         "fc": clean(x.get("consensus")), "prev": clean(x.get("previous"))})
         return out
 
@@ -14392,11 +14392,37 @@ def _cal_nasdaq_macro() -> list:
     if todo:
         with ThreadPoolExecutor(max_workers=6) as pool:
             for i, rows in zip(todo, pool.map(one, todo)):
-                if rows is not None:
-                    _cal_nq_days[day0 + i * 86400] = (mono, rows)
+                if rows is None:
+                    continue
+                key = day0 + i * 86400
+                if not rows:
+                    # Nasdaq временами отдаёт «No record found» на день, где
+                    # вчера были события (решение Банка Англии пропадало и
+                    # возвращалось). Пустой ответ не затирает прошлый и
+                    # перепроверяется через час, а не через шесть.
+                    prev = (_cal_nq_days.get(key) or (0, []))[1]
+                    _cal_nq_days[key] = (mono - CAL_EARN_EVERY + 3600, prev)
+                else:
+                    _cal_nq_days[key] = (mono, rows)
     for d in [d for d in _cal_nq_days if d < day0 - 86400]:
         del _cal_nq_days[d]
     return [e for i in range(0, CAL_NQ_DAYS) for e in (_cal_nq_days.get(day0 + i * 86400) or (0, []))[1]]
+
+
+# Важность — для крипты, а не для валютного рынка: ForexFactory метит красным
+# безработицу Японии, потому что она двигает йену, но биткоину до неё дела
+# почти нет. Чужие данные — на ступень ниже; решения крупных центробанков
+# (ЕЦБ, Банк Англии, Банк Японии, Народный банк Китая) — важные всегда.
+CAL_RATE_RE = re.compile(r"Rate Decision|Interest Rate|Main Refinancing Rate|Official Bank Rate|Policy Rate|"
+                         r"Cash Rate|Overnight Rate|Deposit Facility Rate|Monetary Policy Statement|Loan Prime Rate", re.I)
+
+
+def _cal_imp_crypto(cc: str, title: str, imp: str) -> str:
+    if cc in ("USD", ""):
+        return imp
+    if CAL_RATE_RE.search(title or "") and cc in ("EUR", "GBP", "JPY", "CNY"):
+        return "high"
+    return "mid" if imp == "high" else "low"
 
 
 def _cal_cme(lo: int, hi: int) -> list:
@@ -14436,7 +14462,7 @@ def _cal_build() -> dict:
                 if cc == "USD" and re.search(r"Federal Funds Rate|FOMC Statement", title):
                     continue
                 ev.append({"k": "macro", "t": t, "cc": cc, "title": title,
-                           "imp": {"High": "high", "Medium": "mid", "Holiday": "mid"}.get(imp, "low"),
+                           "imp": _cal_imp_crypto(cc, title, {"High": "high", "Medium": "mid", "Holiday": "mid"}.get(imp, "low")),
                            "hol": imp == "Holiday", "fc": fc, "prev": prev})
         finally:
             con.close()
