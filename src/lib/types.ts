@@ -608,8 +608,22 @@ export interface DigestBtcRow {
 }
 
 /** Сигнал табло: из какой вкладки, куда указывает и число, на котором стоит. */
+/** Событие календаря в выпуске — те же поля, что у CalEv, без лишних. */
+export interface DigestCalEv {
+  k: CalEv["k"];
+  t: number;
+  sym?: string;
+  cc?: string;
+  title?: string;
+  n?: number;
+  usd?: number;
+  pct?: number;
+  when?: string;
+  mp?: number;
+}
+
 export interface DigestSignal {
-  k: "fng" | "etf" | "btcx" | "whales" | "cbp";
+  k: "fng" | "etf" | "btcx" | "whales" | "cbp" | "liq" | "oi" | "fund" | "pcr";
   d: -1 | 0 | 1;
   v: number;
 }
@@ -646,6 +660,17 @@ export interface DigestItem {
     btc?: { a: string; pnl: number; btc: number; roi: number };
   };
   halv?: { left: number; eta: number; next: number };
+  /** v3: ликвидации за сутки со всех бирж. */
+  liq?: { L: number; S: number; n: number; ex: number; coins: { sym: string; L: number; S: number }[];
+    big?: { sym: string; ex: string; usd: number; L: boolean } };
+  /** v3: открытый интерес и фандинг (средний за 8 ч, %) по BTC и ETH. */
+  oi?: Partial<Record<"btc" | "eth", { oi: number; ch: number | null; pch: number | null; ex: number;
+    fund: number | null; fex: number }>>;
+  /** v3: опционы — весь интерес $, Put/Call, DVOL, крупнейшая экспирация недели. */
+  opt?: Partial<Record<"btc" | "eth", { px: number; n: number; pcr: number | null; dvol?: number;
+    next?: { ts: number; n: number; mp: number; pcr: number | null } }>>;
+  /** v3: важное на неделю вперёд из календаря. */
+  cal?: DigestCalEv[];
   id: number;
   /** Дата выпуска по UTC, YYYY-MM-DD. */
   day: string;

@@ -63,12 +63,12 @@ const MACRO: [RegExp, DictKey][] = [
 ];
 
 /** Валюта страны данных → флаг: страну видно сразу, без подписи. */
-const FLAG: Record<string, string> = {
+export const FLAG: Record<string, string> = {
   USD: "🇺🇸", EUR: "🇪🇺", GBP: "🇬🇧", JPY: "🇯🇵", CNY: "🇨🇳", CAD: "🇨🇦", AUD: "🇦🇺", NZD: "🇳🇿", CHF: "🇨🇭", All: "🌍",
 };
 
 /** Событие дня, а не часа: разлок, отчёт без объявленного времени. */
-const allDay = (e: CalEv) => e.k === "unl" || (e.k === "earn" && e.when === "day");
+export const allDay = (e: CalEv) => e.k === "unl" || (e.k === "earn" && e.when === "day");
 
 function macroName(lang: Lang, title: string): string | null {
   const hit = MACRO.find(([re]) => re.test(title));
@@ -141,7 +141,7 @@ function zoneLabel(): string {
   return city ? `${city}, ${utc}` : utc;
 }
 
-function title(lang: Lang, e: CalEv): string {
+export function calTitle(lang: Lang, e: CalEv): string {
   if (e.k === "fomc") return t(lang, "cal_fomc");
   if (e.k === "opt") return t(lang, "cal_opt", { s: e.sym ?? "" });
   if (e.k === "unl") return t(lang, "cal_unl", { s: e.sym ?? "" });
@@ -170,7 +170,7 @@ function Row({ lang, e, past, nowSec, today, onOpen }: {
           {e.k === "opt" || e.k === "unl" ? <CoinIcon sym={e.sym ?? ""} size={18} /> : null}
           {e.k === "macro" && e.cc ? <span className="cal-flag" aria-label={e.cc}>{FLAG[e.cc] ?? e.cc}</span> : null}
           {e.k === "list" ? <em className={e.de ? "cal-ex de" : "cal-ex"}>{e.ex}</em> : null}
-          <b className={e.k === "list" ? "cal-news" : undefined}>{title(lang, e)}</b>
+          <b className={e.k === "list" ? "cal-news" : undefined}>{calTitle(lang, e)}</b>
           <span className={`cal-imp ${e.imp}`} role="img"
             aria-label={t(lang, e.imp === "high" ? "cal_imp_high" : e.imp === "mid" ? "cal_imp_mid" : "cal_imp_low")}>
             <i /><i /><i />
@@ -314,7 +314,7 @@ export function CalendarScreen() {
             <Card>
               <div className="cal-hero">
                 <small>{t(lang, "cal_next")}</small>
-                <b>{title(lang, hero)}</b>
+                <b>{calTitle(lang, hero)}</b>
                 <span>{dayTitle(lang, dayKey(hero.t), today)}{!allDay(hero) ? `, ${hm(hero.t)}` : ""}</span>
                 <em>{countdown(lang, Math.max(60, hero.t - nowSec))}</em>
               </div>

@@ -34,7 +34,8 @@ import {
 } from "../lib/api";
 import { CoinIcon } from "../components/CoinIcon";
 import {
-  BitcoinSec, HalvingLine, Institutions, Leaders, Market, Part, Quiet, Sec, Sub, Summary,
+  AheadSec, BitcoinSec, FoldCtx, HalvingLine, Institutions, Leaders, LiqSec, Market, OiSec, OptSec, Part, Quiet, Sec,
+  Sub, Summary,
 } from "./DigestMore";
 import {
   Action,
@@ -182,20 +183,24 @@ function Sections({ it, lang }: { it: DigestItem; lang: Lang }) {
   /* Новые выпуски (v2) идут частями — от общей картины к деталям. У старых
      этих частей нет: они показываются как были, без пустых заголовков. */
   const v2 = (it.v ?? 1) >= 2;
-  return (
-    <>
-      {v2 ? (
-        <>
-          <Part>{t(lang, "dg_p_sum")}</Part>
-          <Summary it={it} lang={lang} />
-          <Part>{t(lang, "dg_p_mkt")}</Part>
-          <Market it={it} lang={lang} />
-          <Institutions it={it} lang={lang} />
-          <BitcoinSec it={it} lang={lang} />
-          <Part>{t(lang, "dg_p_whales")}</Part>
-        </>
-      ) : null}
-      <Sec icon={<NetFlowGlyph size={20} />} title="NetFlow">
+  /* Строки вывода свёрнутых разделов (выпуск v3). */
+  const flowLine = flow?.net !== undefined
+    ? flow.net >= 0 ? { text: t(lang, "dg_l_flow_in", { v: usd(flow.net) }), tone: "up" as const }
+      : { text: t(lang, "dg_l_flow_out", { v: usd(-flow.net) }), tone: "dn" as const }
+    : null;
+  const top = it.spot?.[0];
+  const spotLine = top ? t(lang, "dg_l_big", { s: top.sym, v: usd(top.v ?? 0), side: t(lang, top.buy ? "dg_buy" : "dg_sell") }) : null;
+  const rotLine = rot?.src[0] && rot?.dst[0] ? t(lang, "dg_l_rot", { a: rot.src[0].sym, b: rot.dst[0].sym }) : null;
+  const lsC = lsGroups(it.ls)[0]?.[1];
+  const lsA = lsC?.long[0];
+  const lsB = lsC?.short[0];
+  const lsLine = lsA && lsB ? t(lang, "dg_l_ls", { a: lsA.sym, b: lsB.sym }) : null;
+  const pz = perpGroups(it.perp)[0]?.[1][0];
+  const posLine = pz ? t(lang, "dg_l_pos", { s: pz.sym, v: usd(pz.v ?? 0), side: t(lang, pz.long ? "dg_long" : "dg_short") }) : null;
+  const fundLine = fundHi[0] ? t(lang, "dg_l_fund", { s: fundHi[0].sym, v: pct(fundHi[0].day, 3, true), ex: fundHi[0].ex.toUpperCase() }) : null;
+
+  const flowSec = (
+      <Sec icon={<NetFlowGlyph size={20} />} title="NetFlow" line={flowLine?.text} tone={flowLine?.tone}>
         {flow && (flow.in.length || flow.out.length) ? (
           <>
             {flow.net !== undefined ? (
@@ -219,8 +224,9 @@ function Sections({ it, lang }: { it: DigestItem; lang: Lang }) {
           <Quiet lang={lang} />
         )}
       </Sec>
-
-      <Sec icon={<OrdersGlyph size={20} />} title={t(lang, "ui_tab_orders")}>
+  );
+  const spotSec = (
+      <Sec icon={<OrdersGlyph size={20} />} title={t(lang, "ui_tab_orders")} line={spotLine}>
         {it.spot?.length ? (
           it.spot.map((c, i) => (
             <CoinRow key={`s${i}`} c={c} value={usd(c.v)} tone={c.buy ? "up" : "dn"}
@@ -230,8 +236,9 @@ function Sections({ it, lang }: { it: DigestItem; lang: Lang }) {
           <Quiet lang={lang} />
         )}
       </Sec>
-
-      <Sec icon={<RotationGlyph size={20} />} title={t(lang, "ui_rotation")}>
+  );
+  const rotSec = (
+      <Sec icon={<RotationGlyph size={20} />} title={t(lang, "ui_rotation")} line={rotLine}>
         {rot && (rot.src.length || rot.dst.length) ? (
           <>
             {rot.usd ? (
@@ -268,9 +275,9 @@ function Sections({ it, lang }: { it: DigestItem; lang: Lang }) {
           <Quiet lang={lang} />
         )}
       </Sec>
-
-      {v2 ? <Part>{t(lang, "dg_p_deriv")}</Part> : null}
-      <Sec icon={<PositionsGlyph size={20} />} title={t(lang, "ui_tab_ls")}>
+  );
+  const lsSec = (
+      <Sec icon={<PositionsGlyph size={20} />} title={t(lang, "ui_tab_ls")} line={lsLine}>
         {lsGroups(it.ls).map(([cls, g]) => (
             <div key={cls} className="dg-grp">
               <p className="dg-grp-t">{t(lang, cls === "rwa" ? "ui_cls_rwa" : "ui_cls_crypto")}</p>
@@ -295,8 +302,9 @@ function Sections({ it, lang }: { it: DigestItem; lang: Lang }) {
             </div>
           ))}
       </Sec>
-
-      <Sec icon={<StackGlyph size={20} />} title={t(lang, "ui_tab_positions")}>
+  );
+  const posSec = (
+      <Sec icon={<StackGlyph size={20} />} title={t(lang, "ui_tab_positions")} line={posLine}>
         {perpGroups(it.perp).map(([cls, g]) => (
             <div key={cls} className="dg-grp">
               <p className="dg-grp-t">{t(lang, cls === "rwa" ? "ui_cls_rwa" : "ui_cls_crypto")}</p>
@@ -311,8 +319,9 @@ function Sections({ it, lang }: { it: DigestItem; lang: Lang }) {
             </div>
           ))}
       </Sec>
-
-      <Sec icon={<FundingGlyph size={20} />} title={t(lang, "ui_tab_funding")}>
+  );
+  const fundSec = (
+      <Sec icon={<FundingGlyph size={20} />} title={t(lang, "ui_tab_funding")} line={fundLine}>
         {fundHi.length || fundLo.length ? (
           <>
             {fundHi.length ? <Sub>{t(lang, "dg_fund_hi")}</Sub> : null}
@@ -331,14 +340,8 @@ function Sections({ it, lang }: { it: DigestItem; lang: Lang }) {
           <Quiet lang={lang} />
         )}
       </Sec>
-
-      {v2 ? (
-        <>
-          <Part>{t(lang, "dg_p_lead")}</Part>
-          <Leaders it={it} lang={lang} />
-          <Part>{t(lang, "dg_p_cal")}</Part>
-        </>
-      ) : null}
+  );
+  const unlSec = (
       <Sec icon={<UnlockGlyph size={20} />} title={t(lang, "dg_unl")}>
         {unl.length ? (
           unl.map((e) => (
@@ -357,6 +360,71 @@ function Sections({ it, lang }: { it: DigestItem; lang: Lang }) {
         )}
         <HalvingLine it={it} lang={lang} />
       </Sec>
+  );
+
+  /* v3: всё свёрнуто до строки вывода — от итога дня к рынку, деривативам,
+     китам и неделе вперёд. Разделы с пустыми данными не показываются вовсе. */
+  if ((it.v ?? 1) >= 3) {
+    return (
+      <FoldCtx.Provider value>
+        <Part>{t(lang, "dg_p_sum")}</Part>
+        <Summary it={it} lang={lang} />
+        <Part>{t(lang, "dg_p_mkt")}</Part>
+        <Market it={it} lang={lang} />
+        <Institutions it={it} lang={lang} />
+        <Part>{t(lang, "dg_p_deriv_all")}</Part>
+        <LiqSec it={it} lang={lang} icon={<StackGlyph size={20} />} />
+        <OiSec it={it} lang={lang} icon={<PositionsGlyph size={20} />} />
+        <OptSec it={it} lang={lang} icon={<OrdersGlyph size={20} />} />
+        {lsLine ? lsSec : null}
+        {posLine ? posSec : null}
+        {fundLine ? fundSec : null}
+        <Part>{t(lang, "dg_p_whales3")}</Part>
+        {flowLine ? flowSec : null}
+        {spotLine ? spotSec : null}
+        {rotLine ? rotSec : null}
+        <BitcoinSec it={it} lang={lang} />
+        <Leaders it={it} lang={lang} />
+        <Part>{t(lang, "dg_p_cal")}</Part>
+        <AheadSec it={it} lang={lang} icon={<UnlockGlyph size={20} />} />
+      </FoldCtx.Provider>
+    );
+  }
+
+  return (
+    <>
+      {v2 ? (
+        <>
+          <Part>{t(lang, "dg_p_sum")}</Part>
+          <Summary it={it} lang={lang} />
+          <Part>{t(lang, "dg_p_mkt")}</Part>
+          <Market it={it} lang={lang} />
+          <Institutions it={it} lang={lang} />
+          <BitcoinSec it={it} lang={lang} />
+          <Part>{t(lang, "dg_p_whales")}</Part>
+        </>
+      ) : null}
+      {flowSec}
+
+      {spotSec}
+
+      {rotSec}
+
+      {v2 ? <Part>{t(lang, "dg_p_deriv")}</Part> : null}
+      {lsSec}
+
+      {posSec}
+
+      {fundSec}
+
+      {v2 ? (
+        <>
+          <Part>{t(lang, "dg_p_lead")}</Part>
+          <Leaders it={it} lang={lang} />
+          <Part>{t(lang, "dg_p_cal")}</Part>
+        </>
+      ) : null}
+      {unlSec}
     </>
   );
 }

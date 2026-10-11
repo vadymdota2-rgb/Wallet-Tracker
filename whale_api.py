@@ -14701,6 +14701,76 @@ def _dg_leaders(pub: dict) -> dict:
     return out
 
 
+def _dg_liq() -> dict:
+    """Ликвидации за сутки со всех бирж: сколько, чья сторона, крупнейшая и
+    самые ликвидируемые монеты."""
+    r = liqs_data("24h") or {}
+    if not r.get("ok") or not (r.get("tot") or {}).get("n"):
+        return {}
+    out = {"L": r["tot"]["L"], "S": r["tot"]["S"], "n": r["tot"]["n"], "ex": len(r.get("ex") or []),
+           "coins": [{"sym": c, "L": L, "S": S} for c, L, S in (r.get("coins") or [])[:3]]}
+    if r.get("big"):
+        b = r["big"]
+        out["big"] = {"sym": b["s"], "ex": b["ex"], "usd": b["usd"], "L": b["L"]}
+    return out
+
+
+def _dg_oi() -> dict:
+    """Открытый интерес и фандинг BTC и ETH: изменение за сутки рядом с ценой —
+    по паре видно, заходят ли новые деньги и с какой стороны."""
+    out: dict = {}
+    for sym in ("BTC", "ETH"):
+        r = _oih_build(sym, "1d")
+        if not r.get("ok"):
+            continue
+        f = r.get("fund") or {}
+        out[sym.lower()] = {"oi": r["oi"][-1], "ch": (r.get("chg") or {}).get("24h"),
+                            "pch": (r.get("pchg") or {}).get("24h"), "ex": len(r.get("ex") or []),
+                            "fund": f.get("avg"), "fex": len(f.get("ex") or [])}
+    return out
+
+
+def _dg_opt() -> dict:
+    """Опционы BTC и ETH: весь открытый интерес, Put/Call, индекс страха
+    опционов DVOL и крупнейшая экспирация недели с Max Pain."""
+    out: dict = {}
+    for sym, big_min in (("BTC", 300e6), ("ETH", 100e6)):
+        with _small_lock:
+            hit = _OPT.get(sym)
+        r = hit[1] if isinstance(hit, tuple) and isinstance(hit[1], dict) else None
+        if not r or not r.get("ok") or not r.get("exp"):
+            r = _opt_build(sym)
+        if not r or not r.get("ok") or not r.get("exp"):
+            continue
+        px = r["px"]
+        c = sum(e["c"] for e in r["exp"])
+        p = sum(e["p"] for e in r["exp"])
+        part = {"px": px, "n": round((c + p) * px), "pcr": round(p / c, 2) if c else None}
+        if r.get("dvol"):
+            part["dvol"] = r["dvol"].get("v")
+        # Крупнейшая экспирация недели — обычно пятничная; дневные мелкие.
+        week = [e for e in r["exp"] if now() < e["ts"] <= now() + 8 * 86400 and (e["c"] + e["p"]) * px >= big_min]
+        nxt = max(week, key=lambda e: e["c"] + e["p"]) if week else None
+        if nxt:
+            part["next"] = {"ts": nxt["ts"], "n": round((nxt["c"] + nxt["p"]) * px), "mp": nxt["mp"],
+                            "pcr": round(nxt["p"] / nxt["c"], 2) if nxt["c"] else None}
+        out[sym.lower()] = part
+    return out
+
+
+def _dg_cal(to: int) -> list:
+    """Неделя вперёд из календаря: только важное — решения центробанков,
+    главные данные, крупные экспирации, разлоки и отчёты, — не больше шести."""
+    items = (calendar_data() or {}).get("items") or []
+    out = []
+    for e in items:
+        if not (to <= e["t"] <= to + 7 * 86400) or e.get("imp") != "high" or e["k"] == "list":
+            continue
+        x = {k: e[k] for k in ("k", "t", "sym", "cc", "title", "n", "usd", "pct", "when", "mp") if e.get(k) is not None}
+        out.append(x)
+    return out[:6]
+
+
 def _dg_signals(body: dict) -> list:
     """Табло дня: пять независимых показателей, каждый «за рост» (1), «за
     падение» (-1) или ровно (0). Каждый — из своей вкладки и со своим
@@ -14724,6 +14794,27 @@ def _dg_signals(body: dict) -> list:
     if inst.get("cbp") is not None:
         c = inst["cbp"]
         sig.append({"k": "cbp", "d": 1 if c > 0.02 else -1 if c < -0.02 else 0, "v": c})
+    lq = body.get("liq") or {}
+    if lq.get("n"):
+        # Чью сторону выносило больше: шорты — цену тянули вверх, лонги — вниз.
+        # Перевес меньше чем в полтора раза — ровно.
+        L, S = lq["L"], lq["S"]
+        # Число на табло — доля лонгов в ликвидациях, %.
+        sig.append({"k": "liq", "d": 1 if S > 1.5 * L else -1 if L > 1.5 * S else 0, "v": round(100 * L / (L + S))})
+    oi = (body.get("oi") or {}).get("btc") or {}
+    if oi.get("ch") is not None and oi.get("pch") is not None:
+        # Интерес растёт вместе с ценой — заходят лонги; растёт при падении —
+        # шорты; меньше процента — денег не прибавилось.
+        d = 0 if abs(oi["ch"]) < 1 or oi["ch"] < 0 else (1 if oi["pch"] > 0 else -1)
+        sig.append({"k": "oi", "d": d, "v": oi["ch"]})
+    if oi.get("fund") is not None:
+        # Фандинг за 8 ч: 0,01% — обычная плата, выше — лонги в азарте, ниже нуля — перевес шортов.
+        f = oi["fund"]
+        sig.append({"k": "fund", "d": 1 if f > 0.012 else -1 if f < 0 else 0, "v": f})
+    op = (body.get("opt") or {}).get("btc") or {}
+    if op.get("pcr") is not None:
+        r = op["pcr"]
+        sig.append({"k": "pcr", "d": 1 if r < 0.7 else -1 if r > 1.0 else 0, "v": r})
     return sig
 
 
@@ -14736,8 +14827,10 @@ def digest_build(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
     биржах, киты BSC, деривативы, лидеры рейтинга и календарь."""
     to = now()
     # v2 — выпуск со сводкой, рынком, институционалами, биткоином, лидерами
-    # и халвингом. Старые выпуски без этих разделов показываются как были.
-    body: dict = {"v": 2, "from": to - 86400, "to": to}
+    # и халвингом. v3 — ещё ликвидации, интерес с фандингом, опционы и
+    # неделя вперёд из календаря; разделы в приложении свёрнуты до одной
+    # строки вывода. Старые выпуски показываются как были.
+    body: dict = {"v": 3, "from": to - 86400, "to": to}
 
     pub = get_public(cur, hl) or {}
     fw = (pub.get("flow") or {}).get("24") or {}
@@ -14802,7 +14895,8 @@ def digest_build(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
     body["unl"] = unl[:DIGEST_UNL_TOP]
 
     for key, fn in (("mkt", _dg_market), ("inst", _dg_inst), ("btc", _dg_btc),
-                    ("lead", lambda: _dg_leaders(pub))):
+                    ("lead", lambda: _dg_leaders(pub)), ("liq", _dg_liq), ("oi", _dg_oi),
+                    ("opt", _dg_opt), ("cal", lambda: _dg_cal(to))):
         part = _dg_safe(key, fn)
         if part:
             body[key] = part

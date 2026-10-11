@@ -10,14 +10,15 @@
  * проверить, а не принять на веру. Табло не прогноз — оно только сводит в
  * одно место то, что вкладки показывают порознь.
  */
-import type { ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
 import { num, pct, px, shortAddr, usd } from "../lib/format";
 import { haptic } from "../lib/telegram";
 import { CoinIcon } from "../components/CoinIcon";
 import { EtfGlyph, GaugeGlyph, Row, TopGlyph } from "../components/ui";
-import type { DigestItem, DigestSignal } from "../lib/types";
+import type { CalEv, DigestItem, DigestSignal } from "../lib/types";
+import { FLAG, allDay, calTitle } from "./CalendarScreen";
 
 type Lang = Parameters<typeof t>[0];
 
@@ -25,6 +26,8 @@ type Lang = Parameters<typeof t>[0];
    «+95» превращалось в «95+». */
 const iso = (x: string | number) => `⁦${x}⁩`;
 const sUsd = (v: number) => iso(usd(v, true));
+/** Сумма без знака — там, где сторону говорит само слово («купили», «ликвидировано»). */
+const pUsd = (v: number) => iso(usd(v));
 const sPct = (v: number, d = 2) => iso(pct(v, d, true));
 const btcAmt = (v: number, sign = false) =>
   iso(`${sign && v > 0 ? "+" : ""}${num(v, Math.abs(v) >= 100 ? 0 : 2)} BTC`);
@@ -38,14 +41,52 @@ function dateWord(lang: Lang, tsSec: number): string {
   }
 }
 
+/** Выпуск v3 сворачивает разделы до одной строки вывода. Контекст, а не
+ *  проп: разделы старых выпусков те же компоненты и должны остаться как были. */
+export const FoldCtx = createContext(false);
+
 /** Раздел выпуска: значок вкладки, её имя и содержимое. Нажатие на шапку
- *  открывает саму вкладку — там то же самое подробно. */
-export function Sec({ icon, title, children, onOpen }: {
+ *  открывает саму вкладку — там то же самое подробно.
+ *
+ *  В свёрнутом виде (выпуск v3, есть `line`) под шапкой — одна строка вывода,
+ *  а подробности и ссылка на вкладку открываются нажатием: выпуск целиком
+ *  читается за минуту, а цифры под каждым выводом — в одно касание. */
+export function Sec({ icon, title, children, onOpen, line, tone: lineTone }: {
   icon: ReactNode;
   title: ReactNode;
   children: ReactNode;
   onOpen?: () => void;
+  line?: ReactNode;
+  tone?: "up" | "dn";
 }) {
+  const fold = useContext(FoldCtx);
+  const [open, setOpen] = useState(false);
+  const lang = useApp((s) => s.lang);
+  if (fold && line) {
+    return (
+      <div className={open ? "dg-sec dg-fold on" : "dg-sec dg-fold"}>
+        <button type="button" className="dg-fold-head" aria-expanded={open}
+          onClick={() => { haptic("select"); setOpen(!open); }}>
+          <span className="dg-sec-ic" aria-hidden="true">{icon}</span>
+          <span className="dg-fold-t">
+            <h3>{title}</h3>
+            <span className={lineTone ? `dg-fold-l ${lineTone}` : "dg-fold-l"}>{line}</span>
+          </span>
+          <span className="dg-fold-ch" aria-hidden="true">⌄</span>
+        </button>
+        {open ? (
+          <div className="dg-fold-body">
+            {children}
+            {onOpen ? (
+              <button type="button" className="dg-fold-go" onClick={() => { haptic("select"); onOpen(); }}>
+                {t(lang, "dg_go")} ›
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
   return (
     <div className="dg-sec">
       {onOpen ? (
@@ -88,6 +129,10 @@ const SIG_KEY: Record<DigestSignal["k"], Parameters<typeof t>[1]> = {
   btcx: "dg_sig_btcx",
   whales: "dg_sig_whales",
   cbp: "dg_sig_cbp",
+  liq: "dg_sig_liq",
+  oi: "dg_sig_oi",
+  fund: "dg_sig_fund",
+  pcr: "dg_sig_pcr",
 };
 
 function sigValue(s: DigestSignal): string {
@@ -101,6 +146,14 @@ function sigValue(s: DigestSignal): string {
       return btcAmt(s.v, true);
     case "cbp":
       return sPct(s.v, 3);
+    case "liq":
+      return iso(`${num(s.v)}%`);
+    case "oi":
+      return sPct(s.v, 1);
+    case "fund":
+      return sPct(s.v, 4);
+    case "pcr":
+      return iso(num(s.v, 2));
   }
 }
 
@@ -163,7 +216,8 @@ export function Market({ it, lang }: { it: DigestItem; lang: Lang }) {
   if (!m) return null;
   const zone = m.fng ? FNG_ZONES.find(([max]) => m.fng!.v <= max)?.[1] : undefined;
   return (
-    <Sec icon={<GaugeGlyph size={20} />} title={t(lang, "dg_mkt_title")} onOpen={() => open("fng")}>
+    <Sec icon={<GaugeGlyph size={20} />} title={t(lang, "dg_mkt_title")} onOpen={() => open("fng")}
+      line={marketLine(it, lang)} tone={m.btc ? tone(m.btc.ch) : undefined}>
       <div className="dg-cells">
         {m.fng ? (
           <Cell label={t(lang, "dg_sig_fng")} value={num(m.fng.v)}
@@ -193,8 +247,10 @@ export function Institutions({ it, lang }: { it: DigestItem; lang: Lang }) {
   const inst = it.inst;
   if (!inst || !inst.etf.length) return null;
   const day = inst.etf[0]?.day;
+  const il = instLine(it, lang);
   return (
-    <Sec icon={<EtfGlyph size={20} />} title={t(lang, "dg_p_inst")} onOpen={() => open("etf")}>
+    <Sec icon={<EtfGlyph size={20} />} title={t(lang, "dg_p_inst")} onOpen={() => open("etf")}
+      line={il?.text} tone={il?.tone}>
       {day ? <p className="dg-sum">{t(lang, "dg_etf_day", { d: dateWord(lang, day) })}</p> : null}
       {inst.etf.map((e) => (
         <Row key={e.c} icon={<CoinIcon sym={e.c.toUpperCase()} size={28} />}
@@ -248,8 +304,10 @@ export function BitcoinSec({ it, lang }: { it: DigestItem; lang: Lang }) {
         value={usd(r.v)} tone={buy ? "up" : "dn"}
         onClick={() => open("btcWallet", r.a)} />
     ));
+  const bl = btcLine(it, lang);
   return (
-    <Sec icon={<CoinIcon sym="BTC" size={20} />} title={t(lang, "btc_flow_title")} onOpen={toTab}>
+    <Sec icon={<CoinIcon sym="BTC" size={20} />} title={t(lang, "btc_flow_title")} onOpen={toTab}
+      line={bl?.text} tone={bl?.tone}>
       {b.net !== undefined ? (
         <p className="dg-sum">
           {t(lang, "btc_net")}{" "}
@@ -281,7 +339,8 @@ export function Leaders({ it, lang }: { it: DigestItem; lang: Lang }) {
   const l = it.lead;
   if (!l || (!l.spot && !l.btc)) return null;
   return (
-    <Sec icon={<TopGlyph size={20} />} title={t(lang, "rk_top_traders_30d")} onOpen={() => goTab("top")}>
+    <Sec icon={<TopGlyph size={20} />} title={t(lang, "rk_top_traders_30d")} onOpen={() => goTab("top")}
+      line={leadLine(it, lang)} tone="up">
       {l.spot ? (
         <Row icon={<span className="dg-medal" aria-hidden="true">🥇</span>}
           title={<>{iso(shortAddr(l.spot.a))} <span className="dim">· BSC</span></>}
@@ -310,5 +369,172 @@ export function HalvingLine({ it, lang }: { it: DigestItem; lang: Lang }) {
     <Row icon={<span className="dg-medal" aria-hidden="true">₿</span>}
       title={t(lang, "hv_title")}
       sub={`${t(lang, "dg_halv", { n: num(h.left) })} · ≈ ${dateWord(lang, h.eta)}`} />
+  );
+}
+
+/* ── v3: строки вывода для старых разделов ─────────────────────────────── */
+
+export function marketLine(it: DigestItem, lang: Lang): ReactNode {
+  const m = it.mkt;
+  if (!m?.btc) return null;
+  const zone = m.fng ? FNG_ZONES.find(([max]) => m.fng!.v <= max)?.[1] : undefined;
+  return t(lang, "dg_l_mkt", {
+    p: iso(px(m.btc.px)), c: sPct(m.btc.ch), z: zone ? `${t(lang, zone)}: ${m.fng!.v}` : "—",
+  });
+}
+
+export function instLine(it: DigestItem, lang: Lang): { text: string; tone?: "up" | "dn" } | null {
+  const e = it.inst?.etf.find((x) => x.c === "btc");
+  if (!e) return null;
+  if (Math.abs(e.v) < 1e6) return { text: t(lang, "dg_l_etf_flat") };
+  return e.v > 0 ? { text: t(lang, "dg_l_etf_in", { v: pUsd(e.v) }), tone: "up" }
+    : { text: t(lang, "dg_l_etf_out", { v: pUsd(Math.abs(e.v)) }), tone: "dn" };
+}
+
+export function btcLine(it: DigestItem, lang: Lang): { text: string; tone?: "up" | "dn" } | null {
+  const n = it.btc?.net;
+  if (n === undefined) return null;
+  return n >= 0 ? { text: t(lang, "dg_l_btcx_out", { v: btcAmt(n) }), tone: "up" }
+    : { text: t(lang, "dg_l_btcx_in", { v: btcAmt(Math.abs(n)) }), tone: "dn" };
+}
+
+export function leadLine(it: DigestItem, lang: Lang): string | null {
+  const l = it.lead?.spot ?? it.lead?.btc;
+  return l ? t(lang, "dg_l_lead", { v: pUsd(l.pnl) }) : null;
+}
+
+/* ── v3: ликвидации ───────────────────────────────────────────────────── */
+
+function liqVerdict(lang: Lang, L: number, S: number): string {
+  const ratio = L > 0 && S > 0 ? Math.max(L / S, S / L) : 0;
+  const x = num(ratio, 1);
+  return ratio < 1.25 && L > 0 && S > 0 ? t(lang, "lqs_v_eq") : L > S ? t(lang, "lqs_v_long", { x }) : t(lang, "lqs_v_short", { x });
+}
+
+export function LiqSec({ it, lang, icon }: { it: DigestItem; lang: Lang; icon: ReactNode }) {
+  const open = useApp((s) => s.open);
+  const q = it.liq;
+  if (!q?.n) return null;
+  const line = t(lang, "dg_l_liq", { v: pUsd(q.L + q.S), w: liqVerdict(lang, q.L, q.S) });
+  return (
+    <Sec icon={icon} title={t(lang, "lqs_title")} line={line} tone={q.S > q.L ? "up" : "dn"} onOpen={() => open("liqs")}>
+      <p className="dg-sum">{t(lang, "dg_liq_split", { l: pUsd(q.L), s: pUsd(q.S), n: num(q.n), e: num(q.ex) })}</p>
+      {q.coins.map((c) => (
+        <Row key={c.sym} icon={<CoinIcon sym={c.sym} size={28} />} title={c.sym}
+          sub={`${t(lang, "lqs_longs")} ${usd(c.L)} · ${t(lang, "lqs_shorts")} ${usd(c.S)}`}
+          value={usd(c.L + c.S)} tone={c.S > c.L ? "up" : "dn"} onClick={() => open("liqs")} />
+      ))}
+      {q.big ? (
+        <p className="dg-line">
+          {t(lang, "lqs_biggest")}: <b>{pUsd(q.big.usd)}</b> · {t(lang, q.big.L ? "lqs_long" : "lqs_short")} {q.big.sym} · {q.big.ex}
+        </p>
+      ) : null}
+    </Sec>
+  );
+}
+
+/* ── v3: открытый интерес и фандинг ───────────────────────────────────── */
+
+function oiVerdict(lang: Lang, ch: number, pch: number): string {
+  const key = Math.abs(ch) < 1 ? "oih_q_flat" : ch > 0 ? (pch >= 0 ? "oih_q_up_up" : "oih_q_up_dn") : (pch >= 0 ? "oih_q_dn_up" : "oih_q_dn_dn");
+  return t(lang, key, { oi: sPct(ch, 1), p: sPct(pch, 1) });
+}
+
+export function OiSec({ it, lang, icon }: { it: DigestItem; lang: Lang; icon: ReactNode }) {
+  const open = useApp((s) => s.open);
+  const b = it.oi?.btc;
+  if (!b || b.ch === null || b.pch === null) return null;
+  return (
+    <Sec icon={icon} title={t(lang, "oih_title")} line={t(lang, "dg_l_oi", { w: oiVerdict(lang, b.ch, b.pch) })}
+      onOpen={() => open("oihist")}>
+      {(["btc", "eth"] as const).map((k) => {
+        const o = it.oi?.[k];
+        if (!o) return null;
+        return (
+          <div key={k} className="dg-grp">
+            <Row icon={<CoinIcon sym={k.toUpperCase()} size={28} />} title={k.toUpperCase()}
+              sub={o.ch !== null && o.pch !== null ? oiVerdict(lang, o.ch, o.pch) : undefined}
+              value={usd(o.oi)} valueSub={o.ch !== null ? sPct(o.ch, 1) : undefined}
+              tone={o.ch !== null ? tone(o.ch) : undefined} wrap onClick={() => open("oihist")} />
+            {o.fund !== null ? (
+              <p className="dg-line">
+                {t(lang, "dg_oi_fund", { v: sPct(o.fund, 4), n: num(o.fex) })}
+              </p>
+            ) : null}
+          </div>
+        );
+      })}
+      <p className="dg-note">{t(lang, "dg_oi_note")}</p>
+    </Sec>
+  );
+}
+
+/* ── v3: опционы ──────────────────────────────────────────────────────── */
+
+function optMood(pcr: number | null): Parameters<typeof t>[1] {
+  return pcr === null ? "op_mood_eq" : pcr < 0.7 ? "op_mood_up" : pcr > 1 ? "op_mood_dn" : "op_mood_eq";
+}
+
+export function OptSec({ it, lang, icon }: { it: DigestItem; lang: Lang; icon: ReactNode }) {
+  const open = useApp((s) => s.open);
+  const setOptSym = useApp((s) => s.setOptSym);
+  const b = it.opt?.btc;
+  if (!b) return null;
+  const go = (sym: string) => () => { setOptSym(sym); open("options"); };
+  return (
+    <Sec icon={icon} title={t(lang, "op_title")}
+      line={t(lang, "dg_l_opt", { n: pUsd(b.n), w: t(lang, optMood(b.pcr)) })}
+      tone={b.pcr !== null && b.pcr < 0.7 ? "up" : b.pcr !== null && b.pcr > 1 ? "dn" : undefined}
+      onOpen={go("BTC")}>
+      {(["btc", "eth"] as const).map((k) => {
+        const o = it.opt?.[k];
+        if (!o) return null;
+        return (
+          <div key={k} className="dg-grp">
+            <Row icon={<CoinIcon sym={k.toUpperCase()} size={28} />} title={k.toUpperCase()}
+              sub={`Put/Call ${o.pcr !== null ? num(o.pcr, 2) : "—"}${o.dvol ? ` · DVOL ${num(o.dvol, 1)}` : ""}`}
+              value={usd(o.n)} onClick={go(k.toUpperCase())} />
+            {o.next ? (
+              <p className="dg-line">
+                {t(lang, "dg_opt_next", { d: dateWord(lang, o.next.ts), n: pUsd(o.next.n), mp: iso(px(o.next.mp)) })}
+                <span className="dim"> · {t(lang, "dg_opt_mp", { p: sPct((o.next.mp / o.px - 1) * 100, 1) })}</span>
+              </p>
+            ) : null}
+          </div>
+        );
+      })}
+      <p className="dg-note">{t(lang, "dg_opt_note")}</p>
+    </Sec>
+  );
+}
+
+/* ── v3: неделя вперёд ────────────────────────────────────────────────── */
+
+function dayTime(lang: Lang, e: CalEv): string {
+  const d = dateWord(lang, e.t);
+  if (allDay(e)) return d;
+  const dt = new Date(e.t * 1000);
+  return `${d}, ${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`;
+}
+
+export function AheadSec({ it, lang, icon }: { it: DigestItem; lang: Lang; icon: ReactNode }) {
+  const open = useApp((s) => s.open);
+  const cal = (it.cal ?? []) as CalEv[];
+  return (
+    <Sec icon={icon} title={t(lang, "dg_p_ahead")} onOpen={() => open("calendar")}>
+      {cal.length ? cal.map((e, i) => (
+        <Row key={`${e.k}${e.t}${i}`}
+          icon={e.k === "macro" || e.k === "fomc"
+            ? <span className="dg-medal" aria-hidden="true">{e.k === "fomc" ? "🇺🇸" : FLAG[e.cc ?? ""] ?? "🌍"}</span>
+            : e.k === "cme" ? <span className="dg-medal" aria-hidden="true">📅</span>
+              : <CoinIcon sym={e.sym ?? ""} size={28} />}
+          title={calTitle(lang, e)}
+          sub={e.k === "macro" && e.title && !calTitle(lang, e).includes(e.title) ? `${dayTime(lang, e)} · ${e.title}` : dayTime(lang, e)}
+          value={e.n ? usd(e.n) : e.usd ? usd(e.usd) : undefined}
+          valueSub={e.pct ? t(lang, "dg_unl_of", { p: pct(e.pct, 2, false) }) : undefined}
+          wrap onClick={() => open("calendar")} />
+      )) : <Quiet lang={lang} />}
+      <HalvingLine it={it} lang={lang} />
+    </Sec>
   );
 }

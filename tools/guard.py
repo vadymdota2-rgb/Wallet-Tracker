@@ -646,7 +646,7 @@ say("bitcoin: перестройка цепочки откатывает бло�
 
 _dgm = read(f"{APP}/src/screens/DigestMore.tsx")
 say("дайджест v2: сводка сигналов, рынок, институционалы, bitcoin, лидеры, халвинг; старые выпуски как были",
-    "def _dg_signals(body: dict)" in api and 'body: dict = {"v": 2' in api and 'body["halv"] = {' in api
+    "def _dg_signals(body: dict)" in api and 'body: dict = {"v": 3' in api and 'body["halv"] = {' in api
     and "export function Summary(" in _dgm and "export function Institutions(" in _dgm
     and "export function BitcoinSec(" in _dgm and "export function HalvingLine(" in _dgm
     and "const v2 = (it.v ?? 1) >= 2;" in read(f"{APP}/src/screens/DigestTab.tsx"))
@@ -1152,6 +1152,14 @@ say("щит API: тело, соединения, тайм-аут, баны за 
     and "client_body_timeout 10s;" in _ngx and "limit_except GET POST OPTIONS { deny all; }" in _ngx
     and _ngx.count('add_header Strict-Transport-Security "max-age=31536000" always;') == 4
     and not os.path.exists(f"{APP}/whale_bot.db") and "*.db" in read(f"{APP}/.gitignore"))
+_dgm = read(f"{APP}/src/screens/DigestMore.tsx")
+say("дайджест v3: все вкладки — ликвидации, интерес с фандингом, опционы, неделя вперёд; разделы свёрнуты до вывода",
+    'body: dict = {"v": 3,' in api and all(f"def _dg_{x}(" in api for x in ("liq", "oi", "opt", "cal"))
+    and all(f'"k": "{x}"' in pybody(api, "def _dg_signals(") for x in ("liq", "oi", "fund", "pcr"))
+    and all(f"export function {x}(" in _dgm for x in ("LiqSec", "OiSec", "OptSec", "AheadSec"))
+    and "export const FoldCtx = createContext(false);" in _dgm and "if (fold && line) {" in _dgm
+    and "<FoldCtx.Provider value>" in read(f"{APP}/src/screens/DigestTab.tsx")
+    and ".dg-fold-l.up::before" in read(f"{APP}/src/styles/app.css"))
 say("поиск любой монеты в ликвидациях и истории интереса; монеты с множителем (1000PEPE, kPEPE)",
     os.path.exists(f"{APP}/src/components/CoinFind.tsx")
     and all("<CoinFind " in read(f"{APP}/src/screens/{x}.tsx") for x in ("LiqsScreen", "OiHistScreen", "LiqMapScreen"))
