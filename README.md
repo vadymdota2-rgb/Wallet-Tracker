@@ -17,6 +17,8 @@ src/styles/     тема, сброс, правила приложения
 tools/          словарь tools/i18n.json и его сборка, проверки guard.py
 whale_api.py    JSON API поверх whale_bot.db и hyperliquid.db
 wt_shield.py    щит API: размер тела, соединения, тайм-ауты, баны, логи без секретов, TLS
+wt_digest_img.py картинка выпуска на сервере (Pillow) — автопостинг в Telegram-канал
+fonts/          IBM Plex Sans для этой картинки (OFL)
 nginx.conf      статика, прокси к API и к биржам, кэш логотипов
 fetch_logos.py  разовая выкачка логотипов в html/coins/
 ```
@@ -435,3 +437,14 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=whale-api" \
 и в `/etc/whale-api.env`: `WHALE_API_TLS_CERT=/etc/whale-api/cert.pem`,
 `WHALE_API_TLS_KEY=/etc/whale-api/key.pem`; у Cloud Run `API_UPSTREAM` —
 `https://…:8090`. Шифрует он так же, как купленный.
+
+### Автопостинг дайджеста в канал
+
+Сразу после выхода выпуска (12:00 по Лондону) бот публикует его картинкой с
+подписью в `WHALE_DIGEST_CHANNEL` (по умолчанию `@WalletTrackerOfficial`; бот
+должен быть админом канала), раз в день. Язык — `WHALE_DIGEST_CHANNEL_LANG`
+(по умолчанию `ru`). Пустой `WHALE_DIGEST_CHANNEL` выключает постинг.
+
+Картинку рисует `wt_digest_img.py` — нужен Pillow: `sudo apt install -y python3-pil`.
+Без него выпуск уходит в канал текстом. Что опубликовано — таблица
+`digest_channel`; не ушло — повтор через 10 минут, до шести попыток.

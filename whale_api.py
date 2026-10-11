@@ -14586,6 +14586,12 @@ CREATE TABLE IF NOT EXISTS digest_subs (
     chat_id TEXT PRIMARY KEY,
     at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS digest_channel (
+    day TEXT PRIMARY KEY,
+    at INTEGER NOT NULL,
+    ok INTEGER NOT NULL DEFAULT 0,
+    tries INTEGER NOT NULL DEFAULT 0
+);
 CREATE TABLE IF NOT EXISTS digest_mute (
     chat_id TEXT PRIMARY KEY,
     at INTEGER NOT NULL
@@ -15006,14 +15012,77 @@ def digest_make() -> bool:
         con.close()
 
 
+# Автопостинг в Telegram-канал: свежий выпуск картинкой с подписью, раз в
+# день, сразу как он собран. Бот — админ канала. Пустой WHALE_DIGEST_CHANNEL
+# выключает постинг. Картинку рисует wt_digest_img (Pillow); без Pillow
+# в канал уходит тот же выпуск текстом — пост не пропадает.
+DIGEST_CHANNEL = os.environ.get("WHALE_DIGEST_CHANNEL", "@WalletTrackerOfficial").strip()
+DIGEST_CHANNEL_LANG = os.environ.get("WHALE_DIGEST_CHANNEL_LANG", "ru").strip() or "ru"
+# Не вышло (Telegram не ответил, бот не админ) — снова через десять минут,
+# но не больше шести попыток за выпуск: дальше ошибка не случайная.
+DIGEST_CHANNEL_RETRY = 600
+DIGEST_CHANNEL_TRIES = 6
+
+
+def digest_channel_post() -> bool:
+    """Свежий выпуск — в канал, если он там ещё не появился. True — опубликован."""
+    if not DIGEST_CHANNEL or not BOT_TOKEN:
+        return False
+    con = _digest_con()
+    if not con:
+        return False
+    try:
+        row = con.execute("SELECT day, body FROM digests ORDER BY day DESC LIMIT 1").fetchone()
+        if not row:
+            return False
+        day = row[0]
+        # Только сегодняшний (по Лондону) выпуск: после простоя сервера
+        # вчерашний в канал задним числом не уходит.
+        if day != time.strftime("%Y-%m-%d", london_now()):
+            return False
+        done = con.execute("SELECT ok, tries, at FROM digest_channel WHERE day=?", (day,)).fetchone()
+        if done and (done[0] or done[1] >= DIGEST_CHANNEL_TRIES or now() - done[2] < DIGEST_CHANNEL_RETRY):
+            return False
+        try:
+            body = json.loads(row[1])
+        except ValueError:
+            return False
+        body["to"] = body.get("to") or now()
+        import wt_digest_img as dgi
+        cap = dgi.caption(body, DIGEST_CHANNEL_LANG)
+        try:
+            png = dgi.render(body, DIGEST_CHANNEL_LANG)
+        except Exception as e:  # noqa: BLE001 — шрифт, Pillow: текстом
+            sys.stderr.write(f"[api] канал: картинка не нарисовалась: {e}\n")
+            png = None
+        if png:
+            ok = tg_send_document(DIGEST_CHANNEL, f"wallet-tracker-digest-{day}.png", png, cap, "sendPhoto", "photo")
+        else:
+            ok = tg_api("sendMessage", {"chat_id": DIGEST_CHANNEL, "text": cap,
+                                        "disable_web_page_preview": True}) is not None
+        con.execute("INSERT INTO digest_channel(day, at, ok, tries) VALUES(?,?,?,1) "
+                    "ON CONFLICT(day) DO UPDATE SET at=excluded.at, ok=excluded.ok, tries=tries+1",
+                    (day, now(), 1 if ok else 0))
+        con.commit()
+        sys.stderr.write(f"[api] канал {DIGEST_CHANNEL}: выпуск {day} {'опубликован' if ok else 'не ушёл'}"
+                         f"{'' if png else ' (текстом — нет Pillow)'}\n")
+        return ok
+    finally:
+        con.close()
+
+
 def digest_refresher() -> None:
-    """Раз в минуту: наступили новые сутки — собрать выпуск."""
+    """Раз в минуту: наступили новые сутки — собрать выпуск и выложить в канал."""
     time.sleep(90)  # дать общему кэшу и разлокам собраться после запуска
     while True:
         try:
             digest_make()
         except Exception as e:  # noqa: BLE001
             sys.stderr.write(f"[api] digest failed: {e}\n")
+        try:
+            digest_channel_post()
+        except Exception as e:  # noqa: BLE001
+            sys.stderr.write(f"[api] digest channel failed: {e}\n")
         time.sleep(60)
 
 
@@ -15159,27 +15228,29 @@ def _png_size(data: bytes) -> tuple[int, int] | None:
     return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
 
 
-def tg_send_document(chat: str, name: str, data: bytes, caption: str = "") -> bool:
-    """sendDocument файлом из памяти: multipart собираем сами — без библиотек."""
+def tg_send_document(chat: str, name: str, data: bytes, caption: str = "", method: str = "sendDocument",
+                     field: str = "document") -> bool:
+    """sendDocument (или sendPhoto) файлом из памяти: multipart собираем сами —
+    без библиотек."""
     if not BOT_TOKEN:
         return False
     edge = "----wt" + secrets.token_hex(12)
     parts = [f'--{edge}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n{chat}\r\n'.encode()]
     if caption:
         parts.append(f'--{edge}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n{caption}\r\n'.encode())
-    parts.append(f'--{edge}\r\nContent-Disposition: form-data; name="document"; filename="{name}"\r\n'
+    parts.append(f'--{edge}\r\nContent-Disposition: form-data; name="{field}"; filename="{name}"\r\n'
                  f'Content-Type: image/png\r\n\r\n'.encode() + data + b"\r\n")
     parts.append(f"--{edge}--\r\n".encode())
-    req = urllib.request.Request(f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument", data=b"".join(parts),
+    req = urllib.request.Request(f"https://api.telegram.org/bot{BOT_TOKEN}/{method}", data=b"".join(parts),
                                  headers={"Content-Type": f"multipart/form-data; boundary={edge}"})
     try:
         with urllib.request.urlopen(req, timeout=60) as r:
             out = json.loads(r.read().decode())
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError, OSError) as e:
-        sys.stderr.write(f"[api] sendDocument: {e}\n")
+        sys.stderr.write(f"[api] {method}: {e}\n")
         return False
     if not isinstance(out, dict) or not out.get("ok"):
-        sys.stderr.write(f"[api] sendDocument: {str(out)[:200]}\n")
+        sys.stderr.write(f"[api] {method}: {str(out)[:200]}\n")
         return False
     return True
 
