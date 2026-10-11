@@ -1189,18 +1189,6 @@ say("автопостинг выпуска в канал: картинка на 
     # Ключи словаря, по которым сервер собирает выводы, есть в словаре приложения.
     and all(k in _i18n for k in ("dg_l_mkt", "dg_l_liq", "dg_l_oi", "dg_l_opt", "dg_l_etf_in", "dg_l_btcx_out",
                                  "dg_img_find", "dg_img_title", "dg_img_kicker", "dg_img_disc", "dg_v_bull")))
-_ig = read(f"{APP}/wt_instagram.py") if os.path.exists(f"{APP}/wt_instagram.py") else ""
-say("Instagram: тот же альбом каруселью раз в день; токен только из env, продление, без двойного поста",
-    "def publish(uid: str, token: str, urls: list[str], caption: str) -> str:" in _ig
-    and "def refresh(token: str)" in _ig and "def posted(uid: str, token: str, marker: str) -> str:" in _ig
-    and "def to_jpeg(png: bytes) -> bytes:" in _ig and "FILE_TTL = 3600" in _ig
-    and 'IG_TOKEN_ENV = os.environ.get("WHALE_IG_TOKEN", "").strip()' in api
-    and "def digest_ig_post() -> bool:" in api and "digest_ig_post()" in pybody(api, "def digest_refresher(")
-    and "CREATE TABLE IF NOT EXISTS digest_ig (" in api and "CREATE TABLE IF NOT EXISTS ig_state (" in api
-    and "ig.posted(uid, tok," in pybody(api, "def digest_ig_post(") and "ig.drop_files(names)" in pybody(api, "def digest_ig_post(")
-    and r're.fullmatch(r"[0-9a-f]{32}\.jpg", name)' in api
-    and 'os.environ.get("WHALE_IG_LANG", "en")' in api and "dg_ig_foot" in _i18n
-    and "def caption(it: dict, lang: str = \"ru\", limit: int = 1024, bot: bool = True) -> str:" in _dgi)
 say("поиск любой монеты в ликвидациях и истории интереса; монеты с множителем (1000PEPE, kPEPE)",
     os.path.exists(f"{APP}/src/components/CoinFind.tsx")
     and all("<CoinFind " in read(f"{APP}/src/screens/{x}.tsx") for x in ("LiqsScreen", "OiHistScreen", "LiqMapScreen"))

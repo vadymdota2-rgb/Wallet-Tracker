@@ -14592,17 +14592,6 @@ CREATE TABLE IF NOT EXISTS digest_channel (
     ok INTEGER NOT NULL DEFAULT 0,
     tries INTEGER NOT NULL DEFAULT 0
 );
-CREATE TABLE IF NOT EXISTS digest_ig (
-    day TEXT PRIMARY KEY,
-    at INTEGER NOT NULL,
-    ok INTEGER NOT NULL DEFAULT 0,
-    tries INTEGER NOT NULL DEFAULT 0,
-    media TEXT NOT NULL DEFAULT ''
-);
-CREATE TABLE IF NOT EXISTS ig_state (
-    k TEXT PRIMARY KEY,
-    v TEXT NOT NULL
-);
 CREATE TABLE IF NOT EXISTS digest_mute (
     chat_id TEXT PRIMARY KEY,
     at INTEGER NOT NULL
@@ -15129,128 +15118,6 @@ def digest_channel_post() -> bool:
         con.close()
 
 
-# Автопубликация в Instagram: тот же альбом, что в канале, — каруселью.
-# Включается двумя строками в /etc/whale-api.env:
-#   WHALE_IG_TOKEN    — долгий токен Instagram API (вход через Instagram);
-#   WHALE_PUBLIC_URL  — адрес приложения в интернете (откуда Instagram
-#                       скачает картинки), например https://….run.app
-# ID профиля сервер узнаёт по токену сам. Нет любой из строк — выключено.
-IG_TOKEN_ENV = os.environ.get("WHALE_IG_TOKEN", "").strip()
-IG_LANG = os.environ.get("WHALE_IG_LANG", "en").strip() or "en"
-# После канала — через пять минут: если с картинками беда, канал узнает
-# первым, а Instagram не получит полупустой пост.
-IG_AFTER_CHANNEL = 300
-IG_RETRY = 900
-IG_TRIES = 6
-
-
-def _public_url() -> str:
-    raw = (os.environ.get("WHALE_PUBLIC_URL") or os.environ.get("WHALE_MINIAPP_URL") or "").strip()
-    u = urlsplit(raw)
-    return f"https://{u.netloc}" if u.netloc and u.scheme in ("https", "http") else ""
-
-
-def _ig_get(con, k: str) -> str:
-    row = con.execute("SELECT v FROM ig_state WHERE k=?", (k,)).fetchone()
-    return row[0] if row else ""
-
-
-def _ig_set(con, **kv) -> None:
-    for k, v in kv.items():
-        con.execute("INSERT INTO ig_state(k, v) VALUES(?, ?) ON CONFLICT(k) DO UPDATE SET v=excluded.v", (k, str(v)))
-    con.commit()
-
-
-def ig_token(con) -> str:
-    """Рабочий токен Instagram: продлённый из базы или новый из env.
-
-    Токен из env, который мы ещё не видели, — главнее: человек выдал его
-    заново. Раз в неделю токен продлевается ещё на 60 дней."""
-    import wt_instagram as ig
-    if not IG_TOKEN_ENV:
-        return ""
-    src = hashlib.sha256(IG_TOKEN_ENV.encode()).hexdigest()[:16]
-    if _ig_get(con, "src") != src or not _ig_get(con, "token"):
-        _ig_set(con, src=src, token=IG_TOKEN_ENV, refreshed=int(time.time()), tried=0, uid="")
-    tok = _ig_get(con, "token")
-    t = time.time()
-    try:
-        last, tried = int(_ig_get(con, "refreshed") or 0), int(_ig_get(con, "tried") or 0)
-    except ValueError:
-        last, tried = 0, 0
-    if t - last > ig.REFRESH_EVERY and t - tried > ig.REFRESH_RETRY:
-        try:
-            tok, ttl = ig.refresh(tok)
-            _ig_set(con, token=tok, refreshed=int(t), tried=0)
-            ig.log(f"токен продлён ещё на {ttl // 86400} дн.")
-        except ig.IgError as e:
-            _ig_set(con, tried=int(t))
-            ig.log(f"токен не продлился: {e} — попробую через {ig.REFRESH_RETRY // 3600} ч")
-    return tok
-
-
-def digest_ig_post() -> bool:
-    """Свежий выпуск — в Instagram каруселью, если его там ещё нет."""
-    base = _public_url()
-    if not IG_TOKEN_ENV or not base:
-        return False
-    con = _digest_con()
-    if not con:
-        return False
-    try:
-        row = con.execute("SELECT day, body FROM digests ORDER BY day DESC LIMIT 1").fetchone()
-        if not row or row[0] != time.strftime("%Y-%m-%d", london_now()):
-            return False
-        day = row[0]
-        ch = con.execute("SELECT at FROM digest_channel WHERE day=?", (day,)).fetchone()
-        if DIGEST_CHANNEL and BOT_TOKEN and (not ch or now() - ch[0] < IG_AFTER_CHANNEL):
-            return False
-        done = con.execute("SELECT ok, tries, at FROM digest_ig WHERE day=?", (day,)).fetchone()
-        if done and (done[0] or done[1] >= IG_TRIES or now() - done[2] < IG_RETRY):
-            return False
-        try:
-            body = json.loads(row[1])
-        except ValueError:
-            return False
-        body["to"] = body.get("to") or now()
-        import wt_digest_img as dgi
-        import wt_instagram as ig
-        names: list[str] = []
-        ok, mid = False, ""
-        try:
-            tok = ig_token(con)
-            uid = _ig_get(con, "uid")
-            if not uid:
-                uid, who = ig.me(tok)
-                _ig_set(con, uid=uid)
-                ig.log(f"профиль @{who} ({uid})")
-            text = dgi.caption(body, IG_LANG, limit=ig.CAPTION_MAX, bot=False)
-            cap = ig.ig_caption(text, dgi.tr(IG_LANG, "dg_ig_foot", at=dgi.BOT_AT))
-            # Пост уже есть (прошлая попытка вышла, а ответ потерялся) — не
-            # повторять: первая строка подписи у выпуска своя на каждый день.
-            mid = ig.posted(uid, tok, cap.split("\n", 1)[0])
-            if not mid:
-                pages = dgi.render_album(body, IG_LANG)
-                names = [ig.put_file(ig.to_jpeg(p)) for p in pages[:ig.MAX_ITEMS]]
-                mid = ig.publish(uid, tok, [f"{base}/api/ig/{n}" for n in names], cap)
-            ok = True
-        except ig.IgError as e:
-            ig.log(f"выпуск {day} не ушёл: {e}")
-        except Exception as e:  # noqa: BLE001 — Pillow, шрифт
-            ig.log(f"выпуск {day}: картинки не нарисовались: {e}")
-        finally:
-            ig.drop_files(names)
-        con.execute("INSERT INTO digest_ig(day, at, ok, tries, media) VALUES(?,?,?,1,?) "
-                    "ON CONFLICT(day) DO UPDATE SET at=excluded.at, ok=excluded.ok, tries=tries+1, "
-                    "media=excluded.media", (day, now(), 1 if ok else 0, mid))
-        con.commit()
-        if ok:
-            ig.log(f"выпуск {day} опубликован ({mid})")
-        return ok
-    finally:
-        con.close()
-
-
 def digest_refresher() -> None:
     """Раз в минуту: наступили новые сутки — собрать выпуск и выложить в канал."""
     time.sleep(90)  # дать общему кэшу и разлокам собраться после запуска
@@ -15267,10 +15134,6 @@ def digest_refresher() -> None:
             digest_channel_post()
         except Exception as e:  # noqa: BLE001
             sys.stderr.write(f"[api] digest channel failed: {e}\n")
-        try:
-            digest_ig_post()
-        except Exception as e:  # noqa: BLE001
-            sys.stderr.write(f"[api] digest instagram failed: {e}\n")
         time.sleep(60)
 
 
@@ -16153,24 +16016,6 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path in ("/halving", "/api/halving"):
                 self._json(200, halving_data())
-                return
-            if path.startswith("/api/ig/"):
-                # Картинки поста для Instagram: он скачивает их сам по ссылке.
-                # Имя случайное и живёт час — перебирать бесполезно.
-                import wt_instagram as ig
-                name = path[len("/api/ig/"):]
-                data = ig.get_file(name) if re.fullmatch(r"[0-9a-f]{32}\.jpg", name) else None
-                if not data:
-                    self._json(404, {"ok": False, "error": "not_found"})
-                    return
-                self.send_response(200)
-                self.send_header("Content-Type", "image/jpeg")
-                self.send_header("Content-Length", str(len(data)))
-                self.send_header("Cache-Control", "no-store")
-                for k, v in shield.SECURITY_HEADERS:
-                    self.send_header(k, v)
-                self.end_headers()
-                self.wfile.write(data)
                 return
             if path.startswith("/api/logo/bsc/"):
                 url, ttl = bsc_logo(path[len("/api/logo/bsc/"):])

@@ -294,7 +294,6 @@ export const id: Dict = {
   dg_fund_lo: "Short membayar",
   dg_go: "Buka tab",
   dg_halv: "dalam {n} blok",
-  dg_ig_foot: "🤖 Ringkasan lengkap, peringatan paus, dan data pasar langsung — di bot Telegram kami {at} (tautan di bio)",
   dg_img_btn: "Gambar",
   dg_img_disc: "Ringkasan data, bukan nasihat keuangan.",
   dg_img_err: "Gagal mengirim gambar, coba lagi",

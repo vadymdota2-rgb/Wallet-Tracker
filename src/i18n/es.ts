@@ -294,7 +294,6 @@ export const es: Dict = {
   dg_fund_lo: "Pagan los cortos",
   dg_go: "Abrir la pestaña",
   dg_halv: "en {n} bloques",
-  dg_ig_foot: "🤖 Resumen completo, alertas de ballenas y datos del mercado en vivo — en nuestro bot de Telegram {at} (enlace en la bio)",
   dg_img_btn: "Imagen",
   dg_img_disc: "Resumen de datos, no asesoramiento financiero.",
   dg_img_err: "No se pudo enviar la imagen, inténtalo de nuevo",

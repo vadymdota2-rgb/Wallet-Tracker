@@ -294,7 +294,6 @@ export const pl: Dict = {
   dg_fund_lo: "Płacą shorty",
   dg_go: "Otwórz kartę",
   dg_halv: "za {n} bloków",
-  dg_ig_foot: "🤖 Pełny digest, alerty o wielorybach i rynek na żywo — w naszym bocie Telegram {at} (link w bio)",
   dg_img_btn: "Obraz",
   dg_img_disc: "Podsumowanie danych, nie porada finansowa.",
   dg_img_err: "Nie udało się wysłać obrazu, spróbuj ponownie",

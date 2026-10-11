@@ -293,7 +293,6 @@ export const en = {
   dg_fund_lo: "Shorts pay",
   dg_go: "Open the tab",
   dg_halv: "in {n} blocks",
-  dg_ig_foot: "🤖 Full digest, whale alerts and live market data — in our Telegram bot {at} (link in bio)",
   dg_img_btn: "Image",
   dg_img_disc: "A data summary, not financial advice.",
   dg_img_err: "Couldn’t send the image, please try again",
