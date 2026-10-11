@@ -481,7 +481,8 @@ say("карта ликвидаций: плечо — своим оттенком
 
 say("карта ликвидаций: свечи цены на той же оси и список всех монет с фьючерсами",
     "def liq_coins(" in api and '"/api/liqcoins"' in api and '"ohlc": _liq_candles(main)' in api
-    and "function Candles(" in _lq and "function CoinPicker(" in _lq and "fetchLiqCoins" in _lq)
+    and "function Candles(" in _lq and "function CoinPicker(" in _lq and "useLiqCoins()" in _lq
+    and "fetchLiqCoins" in read(f"{APP}/src/components/CoinFind.tsx"))
 
 say("карта ликвидаций: уровень виден, пока палец на карте, и гаснет, когда его убрали",
     'el.addEventListener("touchend", end)' in _lq and 'el.addEventListener("touchcancel", end)' in _lq
