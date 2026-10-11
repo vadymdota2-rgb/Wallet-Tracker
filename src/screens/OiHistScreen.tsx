@@ -17,7 +17,8 @@ import { useApp } from "../store/app";
 import { t } from "../i18n/t";
 import { num, pct, px, since, usd } from "../lib/format";
 import { haptic } from "../lib/telegram";
-import { fetchLiqCoins, fetchOiHist, peekLiqCoins, peekOiHist, savedOiHist } from "../lib/api";
+import { fetchOiHist, peekOiHist, savedOiHist } from "../lib/api";
+import { CoinFind, useLiqCoins } from "../components/CoinFind";
 import { CoinIcon } from "../components/CoinIcon";
 import { Card, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import type { OiChg, OiHistReply } from "../lib/types";
@@ -157,14 +158,8 @@ export function OiHistScreen() {
   const [reply, setReply] = useState<OiHistReply | null>(() => peekOiHist("BTC", "7d") ?? savedOiHist("BTC", "7d"));
   const [busy, setBusy] = useState(false);
   const [retry, setRetry] = useState(0);
-  const [coins, setCoins] = useState<string[]>(() => (peekLiqCoins()?.coins ?? []).slice(0, 14).map((c) => c.s));
-
-  useEffect(() => {
-    void fetchLiqCoins().then((r) => {
-      const list = (r?.coins ?? []).slice(0, 14).map((c) => c.s);
-      if (list.length) setCoins(list);
-    });
-  }, []);
+  const all = useLiqCoins();
+  const coins = useMemo(() => all.slice(0, 14).map((c) => c.s), [all]);
 
   useEffect(() => {
     let alive = true;
@@ -198,6 +193,9 @@ export function OiHistScreen() {
             <span><b>{c}</b></span>
           </button>
         ))}
+      </div>
+      <div className="lq-pick">
+        <CoinFind lang={lang} sym={sym} onPick={(c) => { if (c !== sym) setSym(c); }} list={all} />
       </div>
       <div className="lq-ctl">
         <Segmented<Range> value={range} onChange={setRange} options={[

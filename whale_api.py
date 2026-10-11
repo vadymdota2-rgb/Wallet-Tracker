@@ -10972,8 +10972,25 @@ def _liq_sampled(sym: str, period: str, n: int, ref: list, px: float) -> dict:
     return out
 
 
-LIQ_SOURCES = (("Binance", _liq_binance), ("OKX", _liq_okx), ("Bybit", _liq_bybit), ("Gate", _liq_gate),
-               ("HTX", _liq_htx), ("dYdX", _liq_dydx))
+def _liq_mult(fn):
+    """Binance и Bybit держат дешёвые монеты как 1000PEPE: цена в свече —
+    за тысячу монет, интерес в долларах — тот же. Не нашлось под своим
+    именем — ищем под множителем и делим цену обратно."""
+    def wrapped(sym: str, period: str, n: int):
+        rows = fn(sym, period, n)
+        if (rows and len(rows) >= 8) or sym in ("BTC", "ETH", "SOL", "XRP", "BNB"):
+            return rows
+        for m in ("1000", "1000000"):
+            got = fn(m + sym, period, n)
+            if got and len(got) >= 8:
+                k = float(m)
+                return [(t, h / k, lo / k, c / k, oi, bs) for t, h, lo, c, oi, bs in got]
+        return rows
+    return wrapped
+
+
+LIQ_SOURCES = (("Binance", _liq_mult(_liq_binance)), ("OKX", _liq_okx), ("Bybit", _liq_mult(_liq_bybit)),
+               ("Gate", _liq_gate), ("HTX", _liq_htx), ("dYdX", _liq_dydx))
 
 
 def _liq_model(rows: list) -> list:
@@ -12841,15 +12858,28 @@ FUND_HIST_EX = ("Binance", "Bybit", "OKX", "Hyperliquid", "Gate", "Bitget", "Der
                 "XT", "Orderly")
 
 
+def _fund_aliases(name: str, sym: str) -> list:
+    """Под какими именами монета может быть на бирже: как есть, с множителем."""
+    if sym in ("BTC", "ETH", "SOL", "XRP", "BNB"):
+        return [sym]
+    return [sym, f"k{sym}"] if name == "Hyperliquid" else [sym, f"1000{sym}", f"1000000{sym}"]
+
+
 def _fund_hist(sym: str, days: int) -> dict:
     start = (now() - days * 86400) * 1000
     raw: dict = {}
 
     def one(name):
-        try:
-            rows = sorted({t: r for t, r in _fund_rows(name, sym, start) if t >= start}.items())
-        except Exception:  # noqa: BLE001 — биржа не ответила: без неё
-            rows = []
+        # Дешёвые монеты многие биржи держат как 1000PEPE, Hyperliquid — как
+        # kPEPE: на ставку множитель не влияет, ищем и под этими именами.
+        rows: list = []
+        for alias in _fund_aliases(name, sym):
+            try:
+                rows = sorted({t: r for t, r in _fund_rows(name, alias, start) if t >= start}.items())
+            except Exception:  # noqa: BLE001 — биржа не ответила: без неё
+                rows = []
+            if len(rows) >= 2:
+                break
         if len(rows) >= 2:
             raw[name] = rows
 

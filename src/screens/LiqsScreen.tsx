@@ -17,6 +17,7 @@ import { t } from "../i18n/t";
 import { num, pct, px, since, usd } from "../lib/format";
 import { haptic } from "../lib/telegram";
 import { fetchLiqs, peekLiqs, refreshLiqs } from "../lib/api";
+import { CoinFind, useLiqCoins } from "../components/CoinFind";
 import { useNow } from "../lib/tick";
 import { CoinIcon } from "../components/CoinIcon";
 import { Card, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
@@ -105,6 +106,7 @@ export function LiqsScreen() {
   const open = useApp((s) => s.open);
   const [win, setWin] = useState<Win>("24h");
   const [sym, setSym] = useState("");
+  const allCoins = useLiqCoins();
   const [min, setMin] = useState(10_000);
   const [sel, setSel] = useState<number | null>(null);
   const [feedN, setFeedN] = useState(FEED_PAGE);
@@ -189,6 +191,11 @@ export function LiqsScreen() {
               {c || t(lang, "lqs_all")}
             </button>
           ))}
+      </div>
+      {/* Любая другая монета — поиском: ликвидации по ней собираются со всех бирж. */}
+      <div className="lq-pick">
+        <CoinFind lang={lang} sym={sym} list={allCoins}
+          onPick={(c) => { if (c !== sym) { setSym(c); setFeedN(FEED_PAGE); } }} />
       </div>
 
       {young ? <p className="lq-stale">{t(lang, "lqs_young", { t: since(youngSec ?? 0) })}</p> : null}

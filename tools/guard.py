@@ -1151,6 +1151,11 @@ say("щит API: тело, соединения, тайм-аут, баны за 
     and "client_body_timeout 10s;" in _ngx and "limit_except GET POST OPTIONS { deny all; }" in _ngx
     and _ngx.count('add_header Strict-Transport-Security "max-age=31536000" always;') == 4
     and not os.path.exists(f"{APP}/whale_bot.db") and "*.db" in read(f"{APP}/.gitignore"))
+say("поиск любой монеты в ликвидациях и истории интереса; монеты с множителем (1000PEPE, kPEPE)",
+    os.path.exists(f"{APP}/src/components/CoinFind.tsx")
+    and all("<CoinFind " in read(f"{APP}/src/screens/{x}.tsx") for x in ("LiqsScreen", "OiHistScreen", "LiqMapScreen"))
+    and "def _fund_aliases(" in api and "for alias in _fund_aliases(name, sym):" in pybody(api, "def _fund_hist(")
+    and '("Binance", _liq_mult(_liq_binance))' in api and '("Bybit", _liq_mult(_liq_bybit))' in api)
 say("масштаб: адрес человека — не узел Google, nginx→API постоянными соединениями, без Нейгла",
     "def client_ip(" in _shield and 'shield.client_ip(self.headers.get("X-Forwarded-For")' in pybody(api, "def _peer(")
     and "map $http_x_forwarded_for $client_ip {" in _ngx and "$binary_remote_addr" not in _ngx
