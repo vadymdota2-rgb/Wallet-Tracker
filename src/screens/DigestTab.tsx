@@ -21,9 +21,7 @@ import { useApp } from "../store/app";
 import { t } from "../i18n/t";
 import { num, pct, usd } from "../lib/format";
 import { haptic } from "../lib/telegram";
-import { blobToBase64, renderDigestImage } from "../lib/digestImage";
 import {
-  sendDigestImage,
   commentDigest,
   fetchDigest,
   fetchDigestComments,
@@ -645,29 +643,6 @@ function DigestCard({ it, lang, mod, muted, fresh, share }: {
   const [shown, setShown] = useState(fresh);
   const [talk, setTalk] = useState(false);
   const [likes, setLikes] = useState(it.likes);
-  /* Картинка для соцсетей: рисуем здесь, бот присылает её в чат файлом —
-     оттуда её сохраняют и выкладывают. Пока рисуется — кнопка занята. */
-  const [imgBusy, setImgBusy] = useState(false);
-  const toImage = async () => {
-    if (imgBusy) return;
-    haptic("select");
-    setImgBusy(true);
-    toast(t(lang, "dg_img_wait"));
-    try {
-      const png = await blobToBase64(await renderDigestImage(it, lang));
-      const r = await sendDigestImage(png, it.day);
-      if (r?.ok) {
-        haptic("success");
-        toast(t(lang, "dg_img_sent"));
-      } else if (r?.error === "rate") {
-        toast(t(lang, "dg_img_rate", { n: Math.max(1, Math.ceil((r.wait ?? 60) / 60)) }), "err");
-      } else toast(t(lang, "dg_img_err"), "err");
-    } catch {
-      toast(t(lang, "dg_img_err"), "err");
-    } finally {
-      setImgBusy(false);
-    }
-  };
   const [liked, setLiked] = useState(it.liked);
   const [count, setCount] = useState(it.comments);
   const [views, setViews] = useState(it.views ?? 0);
@@ -742,13 +717,6 @@ function DigestCard({ it, lang, mod, muted, fresh, share }: {
           <b>{count}</b>
           <small>{t(lang, "dg_comments")}</small>
         </button>
-        {it.sig?.length ? (
-          <button type="button" className="dg-like dg-share" aria-label={t(lang, "dg_img_btn")} disabled={imgBusy}
-            onClick={() => void toImage()}>
-            <span aria-hidden="true">🖼</span>
-            <small>{imgBusy ? "…" : t(lang, "dg_img_btn")}</small>
-          </button>
-        ) : null}
         {share ? (
           <button type="button" className="dg-like dg-share" aria-label={t(lang, "dg_share")}
             onClick={() => shareTg(share, t(lang, "dg_share_text"))}>

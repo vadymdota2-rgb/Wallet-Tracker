@@ -351,10 +351,6 @@ export const fetchDigest = () => cachedGet<DigestReply>("/api/digest", DIGEST_TT
 export const peekDigest = () => peek<DigestReply | null>("/api/digest", DIGEST_TTL);
 export const fetchDigestComments = (id: number, before = 0) =>
   call<DigestCommentsReply>(`/api/digest/comments?id=${id}${before ? `&before=${before}` : ""}`);
-/** Картинка выпуска для соцсетей: бот присылает её человеку в чат файлом. */
-export const sendDigestImage = (png: string, day: string) =>
-  call<{ ok: boolean; error?: string; wait?: number }>("/api/digest/image",
-    { method: "POST", body: { png, day }, timeout: 75_000 });
 
 export const likeDigest = (id: number) =>
   call<DigestActReply>("/api/digest/like", { method: "POST", body: { id } });
