@@ -1177,11 +1177,15 @@ say("картинка выпуска для соцсетей: рисуется �
     and '"@WalletTrackerAppBot\\nhttps://t.me/WalletTrackerAppBot"' in api)
 _dgi = read(f"{APP}/wt_digest_img.py") if os.path.exists(f"{APP}/wt_digest_img.py") else ""
 say("автопостинг выпуска в канал: картинка на сервере (Pillow + IBM Plex), раз в день, повтор при сбое",
-    "def render(it: dict, lang: str = \"ru\") -> bytes | None:" in _dgi and "def caption(" in _dgi
+    "def render(it: dict, lang: str = \"ru\", page: str = \"\") -> bytes | None:" in _dgi and "def caption(" in _dgi
     and all(os.path.exists(f"{APP}/fonts/IBMPlexSans-{w}.ttf") for w in ("Regular", "Medium", "SemiBold", "Bold"))
     and "def digest_channel_post() -> bool:" in api and "digest_channel_post()" in pybody(api, "def digest_refresher(")
     and 'os.environ.get("WHALE_DIGEST_CHANNEL", "@WalletTrackerOfficial")' in api
     and "CREATE TABLE IF NOT EXISTS digest_channel (" in api
+    # Канал — на английском, весь выпуск альбомом; сегодняшний короткий выпуск пересобирается в полный.
+    and 'os.environ.get("WHALE_DIGEST_CHANNEL_LANG", "en")' in api and "def tg_send_album(" in api
+    and "def render_album(" in _dgi and all(f"def _page_{x}(" in _dgi for x in ("deriv", "pos", "flows", "week"))
+    and "def digest_upgrade_today() -> bool:" in api and "digest_upgrade_today()" in pybody(api, "def digest_refresher(")
     # Ключи словаря, по которым сервер собирает выводы, есть в словаре приложения.
     and all(k in _i18n for k in ("dg_l_mkt", "dg_l_liq", "dg_l_oi", "dg_l_opt", "dg_l_etf_in", "dg_l_btcx_out",
                                  "dg_img_find", "dg_img_title", "dg_img_kicker", "dg_img_disc", "dg_v_bull")))

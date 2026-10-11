@@ -245,7 +245,7 @@ def _arrow(d, x: int, y: int, kind: str, color, size: int = 22) -> None:
         d.ellipse([x + h / 2 - r, cy - r, x + h / 2 + r, cy + r], fill=color)
 
 
-def render(it: dict, lang: str = "ru") -> bytes | None:
+def render(it: dict, lang: str = "ru", page: str = "") -> bytes | None:
     """PNG 1080×1350 или None, если Pillow не установлен."""
     if Image is None:
         return None
@@ -275,7 +275,11 @@ def render(it: dict, lang: str = "ru") -> bytes | None:
     text("W", PAD + 28, y + 40, "Bold", 30, C["glow"], "ms")
     text("WALLET TRACKER", PAD + 76, y + 25, "Bold", 26, C["ink"])
     text(tr(lang, "dg_img_kicker"), PAD + 76, y + 54, "Medium", 22, C["dim"])
-    text(date_word(lang, int(it.get("to") or time.time())), W - PAD, y + 40, "SemiBold", 26, C["dim"], "rs")
+    if page:
+        text(date_word(lang, int(it.get("to") or time.time())), W - PAD, y + 25, "SemiBold", 24, C["dim"], "rs")
+        text(page, W - PAD, y + 56, "Bold", 22, C["glow"], "rs")
+    else:
+        text(date_word(lang, int(it.get("to") or time.time())), W - PAD, y + 40, "SemiBold", 26, C["dim"], "rs")
 
     # Заголовок и итог.
     y += 140
@@ -351,3 +355,319 @@ def caption(it: dict, lang: str = "ru") -> str:
         out = "\n\n".join(parts)
     return out[:1024]
 
+
+
+# --- Альбом для канала: весь выпуск на четырёх страницах ---------------------
+#
+# Канал получает не одну картинку, а альбом (листается как карусель):
+#   1 — обложка: итог, табло, главные выводы (render() выше);
+#   2 — фьючерсы и опционы; 3 — киты и потоки; 4 — неделя вперёд.
+# Разделы идут по важности; что не влезло в страницу — отрезается целиком
+# по строкам, а не наезжает на подвал.
+
+# Названия макро-событий — копия MACRO из src/screens/CalendarScreen.tsx.
+MACRO = [
+    (r"^Core CPI", "cal_m_core_cpi"), (r"^CPI", "cal_m_cpi"), (r"^Core PPI", "cal_m_core_ppi"), (r"^PPI", "cal_m_ppi"),
+    (r"ADP Non-?Farm", "cal_m_adp"), (r"Non-?Farm (Employment|Payrolls)", "cal_m_nfp"),
+    (r"Unemployment Rate", "cal_m_unemp"), (r"Unemployment Claims|Jobless Claims", "cal_m_claims"),
+    (r"Core PCE", "cal_m_core_pce"), (r"GDP", "cal_m_gdp"), (r"Retail Sales", "cal_m_retail"),
+    (r"ISM Manufacturing", "cal_m_ism_m"), (r"ISM Services", "cal_m_ism_s"), (r"JOLTS", "cal_m_jolts"),
+    (r"Consumer Sentiment|Consumer Confidence", "cal_m_sent"), (r"FOMC Meeting Minutes", "cal_m_minutes"),
+    (r"Powell|Fed Chair", "cal_m_powell"), (r"FOMC Member|Fed .*Speaks", "cal_m_fedspeak"),
+    (r"Durable Goods", "cal_m_durable"),
+    (r"Main Refinancing Rate|Official Bank Rate|BOJ Policy Rate|Cash Rate|Overnight Rate|SNB Policy Rate|"
+     r"Monetary Policy Statement|Interest Rate Decision|Policy Rate", "cal_m_rate"),
+    (r"OPEC", "cal_m_opec"), (r"Bank Holiday", "cal_m_holiday"), (r"Auction", "cal_m_auction"),
+    (r"Crude Oil Inventories", "cal_m_oil"), (r"Trade Balance", "cal_m_trade"), (r"PMI", "cal_m_pmi"),
+    (r"Home Sales|Housing Starts|Building Permits|HPI", "cal_m_housing"), (r"Speaks|Testifies", "cal_m_speech"),
+]
+COUNTRY = {"USD": "cal_cc_usd", "EUR": "cal_cc_eur", "GBP": "cal_cc_gbp", "JPY": "cal_cc_jpy", "CNY": "cal_cc_cny",
+           "CAD": "cal_cc_cad", "AUD": "cal_cc_aud", "NZD": "cal_cc_nzd", "CHF": "cal_cc_chf", "All": "cal_cc_all"}
+_WD = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+_MON3 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+
+def cal_title(e: dict, lang: str) -> str:
+    k = e.get("k")
+    if k == "fomc":
+        return tr(lang, "cal_fomc")
+    if k in ("opt", "unl", "earn"):
+        return tr(lang, f"cal_{k}", s=e.get("sym") or "")
+    if k == "cme":
+        return tr(lang, "cal_cme")
+    title = e.get("title") or ""
+    hit = next((key for rx, key in MACRO if re.search(rx, title, re.I)), None)
+    return tr(lang, hit) if hit else title
+
+
+def when_utc(e: dict, lang: str) -> str:
+    """«Wed, Oct 14 · 12:30 UTC» — канал читают в разных поясах, поэтому UTC."""
+    g = time.gmtime(int(e["t"]))
+    day = f"{_WD[g.tm_wday]}, {_MON3[g.tm_mon - 1]} {g.tm_mday}" if lang == "en" else date_word(lang, int(e["t"])).rsplit(" ", 2)[0]
+    all_day = e.get("k") == "unl" or (e.get("k") == "earn" and e.get("when") == "day")
+    return day if all_day else f"{day} · {g.tm_hour:02d}:{g.tm_min:02d} UTC"
+
+
+def _short(a: str) -> str:
+    a = str(a or "")
+    return a if len(a) < 12 else f"{a[:6]}…{a[-4:]}"
+
+
+class _Page:
+    """Страница альбома: фон, шапка с номером, подвал и курсор строк."""
+
+    def __init__(self, it: dict, lang: str, title: str, page: int, total: int):
+        col = Image.new("RGB", (1, H))
+        for yy in range(H):
+            k = yy / H
+            col.putpixel((0, yy), tuple(int(C["bg1"][i] * (1 - k) + C["bg0"][i] * k) for i in range(3)))
+        self.img = col.resize((W, H))
+        self.d = ImageDraw.Draw(self.img, "RGBA")
+        d = self.d
+        for x in range(0, W + 1, 54):
+            d.line([(x, 0), (x, H)], fill=(58, 130, 214, 18))
+        for y in range(0, H + 1, 54):
+            d.line([(0, y), (W, y)], fill=(58, 130, 214, 18))
+        self.lang = lang
+        y = PAD
+        d.rounded_rectangle([PAD, y, PAD + 56, y + 56], radius=14, outline=C["glow"], width=3)
+        self.text("W", PAD + 28, y + 40, "Bold", 30, C["glow"], "ms")
+        self.text("WALLET TRACKER", PAD + 76, y + 25, "Bold", 26, C["ink"])
+        self.text(tr(lang, "dg_img_kicker"), PAD + 76, y + 54, "Medium", 22, C["dim"])
+        self.text(date_word(lang, int(it.get("to") or time.time())), W - PAD, y + 25, "SemiBold", 24, C["dim"], "rs")
+        self.text(f"{page}/{total}", W - PAD, y + 56, "Bold", 22, C["glow"], "rs")
+        self.y = y + 140
+        self.text(title, PAD, self.y, "Bold", 52, C["ink"])
+        self.y += 40
+        self.limit = H - PAD - 120
+
+    def text(self, s, x, y, weight, size, color, anchor="ls"):
+        self.d.text((x, y), s, font=_font(weight, size), fill=color, anchor=anchor)
+
+    def room(self, h: int) -> bool:
+        return self.y + h <= self.limit
+
+    def section(self, title: str) -> bool:
+        if not self.room(110):
+            return False
+        self.y += 44
+        self.text(title.upper(), PAD, self.y, "Bold", 22, C["glow"])
+        self.d.line([(PAD, self.y + 12), (W - PAD, self.y + 12)], fill=(58, 130, 214, 40), width=1)
+        self.y += 14
+        return True
+
+    def row(self, label: str, value: str = "", color=None, sub: str = "", arrow: str | None = None) -> bool:
+        h = 44 + (28 if sub else 0)
+        if not self.room(h):
+            return False
+        self.y += 44
+        x = PAD
+        if arrow:
+            _arrow(self.d, PAD, self.y, arrow, C["up"] if arrow == "up" else C["dn"] if arrow == "dn" else C["glow"], 20)
+            x = PAD + 36
+        f = _font("Medium", 28)
+        vw = self.d.textlength(value, font=_font("Bold", 28)) if value else 0
+        lab = label
+        while lab and self.d.textlength(lab, font=f) > W - 2 * PAD - (x - PAD) - vw - 24:
+            lab = lab[:-2] + "…"
+        self.text(lab, x, self.y, "Medium", 28, C["ink"])
+        if value:
+            self.text(value, W - PAD, self.y, "Bold", 28, color or C["ink"], "rs")
+        if sub:
+            self.y += 28
+            fs = _font("Regular", 22)
+            sb = sub
+            while sb and self.d.textlength(sb, font=fs) > W - 2 * PAD - (x - PAD):
+                sb = sb[:-2] + "…"
+            self.text(sb, x, self.y, "Regular", 22, C["dim"])
+        return True
+
+    def para(self, s: str, tone: str | None = None) -> bool:
+        f = _font("SemiBold", 27)
+        rows = _wrap(self.d, s, f, W - 2 * PAD - 36, 3)
+        if not self.room(16 + len(rows) * 36):
+            return False
+        self.y += 40
+        _arrow(self.d, PAD, self.y, tone or "dot", C["up"] if tone == "up" else C["dn"] if tone == "dn" else C["glow"], 20)
+        for i, r in enumerate(rows):
+            self.text(r, PAD + 36, self.y + i * 36, "SemiBold", 27, C["ink"])
+        self.y += (len(rows) - 1) * 36
+        return True
+
+    def png(self) -> bytes:
+        d, lang = self.d, self.lang
+        d.line([(PAD, H - PAD - 100), (W - PAD, H - PAD - 100)], fill=(58, 130, 214, 56), width=2)
+        self.text(tr(lang, "dg_img_find"), PAD, H - PAD - 58, "Medium", 24, C["dim"])
+        self.text(BOT_AT, PAD, H - PAD - 14, "Bold", 34, C["glow"])
+        self.text(BOT_URL, W - PAD, H - PAD - 14, "SemiBold", 28, C["ink"], "rs")
+        self.text(tr(lang, "dg_img_disc"), PAD, H - PAD + 22, "Regular", 18, (124, 151, 188, 180))
+        buf = io.BytesIO()
+        self.img.save(buf, "PNG", optimize=True)
+        return buf.getvalue()
+
+
+def _col(v: float):
+    return C["up"] if v > 0 else C["dn"] if v < 0 else C["ink"]
+
+
+def _page_deriv(it: dict, lang: str, n: int, total: int) -> bytes | None:
+    """Фьючерсы и опционы: ликвидации, открытый интерес с фандингом, опционы."""
+    p = _Page(it, lang, tr(lang, "dg_p_deriv_all"), n, total)
+    has = False
+    q = it.get("liq") or {}
+    if q.get("n") and p.section(tr(lang, "lqs_title")):
+        has = True
+        L, S = q["L"], q["S"]
+        ratio = max(L / S, S / L) if L > 0 and S > 0 else 0
+        w = tr(lang, "lqs_v_eq") if ratio < 1.25 and L > 0 and S > 0 else tr(lang, "lqs_v_long" if L > S else "lqs_v_short", x=num(ratio, lang, 1))
+        p.para(tr(lang, "dg_l_liq", v=usd(L + S, lang), w=w), "up" if S > L else "dn")
+        p.row(f"{tr(lang, 'lqs_longs')} {usd(L, lang)} · {tr(lang, 'lqs_shorts')} {usd(S, lang)}", "")
+        for c in (q.get("coins") or [])[:2]:
+            p.row(c["sym"], usd(c["L"] + c["S"], lang), C["dn"] if c["L"] > c["S"] else C["up"])
+    oi = it.get("oi") or {}
+    if oi and p.section(tr(lang, "oih_title")):
+        has = True
+        for k in ("btc", "eth"):
+            o = oi.get(k)
+            if not o:
+                continue
+            sub = ""
+            if o.get("ch") is not None and o.get("pch") is not None:
+                ch, pch = o["ch"], o["pch"]
+                key = "oih_q_flat" if abs(ch) < 1 else ("oih_q_up_up" if pch >= 0 else "oih_q_up_dn") if ch > 0 else (
+                    "oih_q_dn_up" if pch >= 0 else "oih_q_dn_dn")
+                sub = tr(lang, key, oi=pct(ch, lang, 1), p=pct(pch, lang, 1))
+            val = usd(o["oi"], lang) + (f"  {pct(o['ch'], lang, 1)}" if o.get("ch") is not None else "")
+            p.row(f"{k.upper()} · {tr(lang, 'oih_oi')}", val, _col(o.get("ch") or 0), sub)
+        fu = [f"{k.upper()} {pct(oi[k]['fund'], lang, 4)}" for k in ("btc", "eth") if oi.get(k) and oi[k].get("fund") is not None]
+        if fu:
+            fex = max((oi[k].get("fex") or 0) for k in ("btc", "eth") if oi.get(k))
+            p.row(tr(lang, "dg_img_fund8", n=fex) + ": " + " · ".join(fu), "")
+    opt = it.get("opt") or {}
+    if opt and p.section(tr(lang, "op_title")):
+        has = True
+        for k in ("btc", "eth"):
+            o = opt.get(k)
+            if not o:
+                continue
+            mood = "op_mood_eq" if o.get("pcr") is None else "op_mood_up" if o["pcr"] < 0.7 else "op_mood_dn" if o["pcr"] > 1 else "op_mood_eq"
+            p.row(f"{k.upper()} · Put/Call {num(o['pcr'], lang, 2) if o.get('pcr') is not None else '—'}"
+                  + (f" · DVOL {num(o['dvol'], lang, 1)}" if o.get("dvol") else ""), usd(o["n"], lang), None, tr(lang, mood))
+        for k in ("btc", "eth"):
+            nx = (opt.get(k) or {}).get("next")
+            if nx:
+                p.row(f"{k.upper()} · {when_utc({'t': nx['ts'], 'k': 'unl'}, lang)}", usd(nx["n"], lang), None,
+                      tr(lang, "dg_img_exp", mp=px(nx["mp"], lang)))
+    return p.png() if has else None
+
+
+def _page_pos(it: dict, lang: str, n: int, total: int) -> bytes | None:
+    """Фандинг и позиции: перекосы фандинга, лонг/шорт и крупные позиции
+    Hyperliquid, ротация денег и лучший трейдер."""
+    p = _Page(it, lang, tr(lang, "dg_img_pos"), n, total)
+    has = False
+    fund = it.get("fund") or {}
+    if (fund.get("hi") or fund.get("lo")) and p.section(tr(lang, "ui_tab_funding") + " · " + tr(lang, "dg_per_day").rstrip(".")):
+        has = True
+        for f in (fund.get("hi") or [])[:2]:
+            p.row(f"{f['sym']} · {str(f['ex']).upper()} · {tr(lang, 'dg_fund_hi')}", pct(f["day"], lang, 3), C["up"])
+        for f in (fund.get("lo") or [])[:2]:
+            p.row(f"{f['sym']} · {str(f['ex']).upper()} · {tr(lang, 'dg_fund_lo')}", pct(f["day"], lang, 3), C["dn"])
+    ls = it.get("ls") or {}
+    g = ls.get("crypto") if isinstance(ls, dict) and "crypto" in ls else ls
+    if isinstance(g, dict) and (g.get("long") or g.get("short")) and p.section("Hyperliquid · " + tr(lang, "ui_tab_ls")):
+        has = True
+        for c in (g.get("long") or [])[:1]:
+            p.row(f"{c['sym']} · {tr(lang, 'dg_ls_long')}", usd(c["net"], lang, True), C["up"])
+        for c in (g.get("short") or [])[:1]:
+            p.row(f"{c['sym']} · {tr(lang, 'dg_ls_short')}", usd(c["net"], lang, True), C["dn"])
+    pr = it.get("perp") or {}
+    pc = pr.get("crypto") if isinstance(pr, dict) else pr
+    if pc and p.section("Hyperliquid · " + tr(lang, "ui_tab_positions")):
+        has = True
+        for c in pc[:2]:
+            p.row(f"{c['sym']} · {tr(lang, 'dg_long' if c.get('long') else 'dg_short')}", usd(c.get("v") or 0, lang),
+                  C["up"] if c.get("long") else C["dn"])
+    rot = it.get("rot") or {}
+    if (rot.get("src") or rot.get("dst")) and p.section("BSC · " + tr(lang, "ui_rotation")):
+        has = True
+        p.row(f"{tr(lang, 'dg_rot_src')}: " + ", ".join(r["sym"] for r in (rot.get("src") or [])[:3]), "", None)
+        p.row(f"{tr(lang, 'dg_rot_dst')}: " + ", ".join(r["sym"] for r in (rot.get("dst") or [])[:3]), "", None)
+    lead = (it.get("lead") or {}).get("spot")
+    if lead and p.section(tr(lang, "rk_top_traders_30d")):
+        has = True
+        p.row(f"{_short(lead['a'])} · BSC", usd(lead["pnl"], lang, True), _col(lead["pnl"]),
+              tr(lang, "dg_lead_stats", w=num(lead.get("win") or 0, lang), n=num(lead.get("tr") or 0, lang)))
+    return p.png() if has else None
+
+
+def _page_flows(it: dict, lang: str, n: int, total: int) -> bytes | None:
+    """Киты и потоки: ETF и премия Coinbase, биткоин на биржах, NetFlow и
+    крупные сделки на BSC."""
+    p = _Page(it, lang, tr(lang, "dg_p_whales3"), n, total)
+    has = False
+    inst = it.get("inst") or {}
+    if inst.get("etf") and p.section(tr(lang, "dg_p_inst")):
+        has = True
+        for e in [e for e in inst["etf"] if e.get("v")][:3]:
+            p.row(tr(lang, "dg_etf_coin", c=e["c"].upper()), usd(e["v"], lang, True), _col(e["v"]))
+        if inst.get("cbp") is not None:
+            p.row(tr(lang, "dg_sig_cbp"), pct(inst["cbp"], lang, 3), _col(inst["cbp"]))
+    b = it.get("btc") or {}
+    if b.get("net") is not None and p.section(tr(lang, "btc_flow_title")):
+        has = True
+        p.row(tr(lang, "btc_net"), btc_amt(b["net"], lang, True), _col(b["net"]),
+              f"{tr(lang, 'btc_wd')} {btc_amt(b.get('out') or 0, lang)} · {tr(lang, 'btc_dep')} {btc_amt(b.get('in') or 0, lang)}")
+        for e in (b.get("ex") or [])[:2]:
+            p.row(e["ex"], btc_amt(e["net"], lang, True), _col(e["net"]))
+    fl = it.get("flow") or {}
+    if (fl.get("in") or fl.get("out")) and p.section("BSC · NetFlow"):
+        has = True
+        if fl.get("net") is not None:
+            p.row(tr(lang, "dg_net"), usd(fl["net"], lang, True), _col(fl["net"]))
+        for c in (fl.get("in") or [])[:1]:
+            p.row(f"{c['sym']} · {tr(lang, 'dg_in')}", usd(c["net"], lang, True), C["up"])
+        for c in (fl.get("out") or [])[:1]:
+            p.row(f"{c['sym']} · {tr(lang, 'dg_out')}", usd(c["net"], lang, True), C["dn"])
+    sp = it.get("spot") or []
+    if sp and p.section("BSC · " + tr(lang, "ui_tab_orders")):
+        has = True
+        for c in sp[:2]:
+            p.row(f"{c['sym']} · {tr(lang, 'dg_buy' if c.get('buy') else 'dg_sell')}", usd(c.get("v") or 0, lang),
+                  C["up"] if c.get("buy") else C["dn"])
+    return p.png() if has else None
+
+
+def _page_week(it: dict, lang: str, n: int, total: int) -> bytes | None:
+    cal = it.get("cal") or []
+    if not cal:
+        return None
+    p = _Page(it, lang, tr(lang, "dg_p_ahead"), n, total)
+    p.y += 10
+    for e in cal[:8]:
+        sub = when_utc(e, lang)
+        if e.get("k") == "macro" and e.get("cc"):
+            sub = f"{tr(lang, COUNTRY.get(e['cc'], ''))} · {sub}" if COUNTRY.get(e["cc"]) else sub
+        val = usd(e["n"], lang) if e.get("n") else usd(e["usd"], lang) if e.get("usd") else ""
+        if not p.row(cal_title(e, lang), val, None, sub):
+            break
+    h = it.get("halv")
+    if h:
+        p.row(tr(lang, "hv_title"), "", None, tr(lang, "dg_halv", n=num(h["left"], lang)))
+    return p.png()
+
+
+def render_album(it: dict, lang: str = "en") -> list[bytes]:
+    """Обложка и страницы по разделам; пустые страницы не попадают."""
+    if Image is None:
+        return []
+    builders = (_page_deriv, _page_pos, _page_flows, _page_week)
+    total = 1 + sum(1 for _ in builders)  # номер «N/всего» — до сборки; пустые отсекаются ниже
+    pages = []
+    for i, fn in enumerate(builders):
+        pages.append(fn(it, lang, i + 2, total))
+    pages = [x for x in pages if x]
+    # Если какая-то страница пустая, номера на остальных уже нарисованы: так
+    # бывает лишь у выпусков без данных, и альбом от этого не ломается.
+    cover = render(it, lang, f"1/{total}")
+    return [cover] + pages if cover else pages

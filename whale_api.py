@@ -15017,11 +15017,54 @@ def digest_make() -> bool:
 # выключает постинг. Картинку рисует wt_digest_img (Pillow); без Pillow
 # в канал уходит тот же выпуск текстом — пост не пропадает.
 DIGEST_CHANNEL = os.environ.get("WHALE_DIGEST_CHANNEL", "@WalletTrackerOfficial").strip()
-DIGEST_CHANNEL_LANG = os.environ.get("WHALE_DIGEST_CHANNEL_LANG", "ru").strip() or "ru"
+DIGEST_CHANNEL_LANG = os.environ.get("WHALE_DIGEST_CHANNEL_LANG", "en").strip() or "en"
 # Не вышло (Telegram не ответил, бот не админ) — снова через десять минут,
 # но не больше шести попыток за выпуск: дальше ошибка не случайная.
 DIGEST_CHANNEL_RETRY = 600
 DIGEST_CHANNEL_TRIES = 6
+
+
+def digest_upgrade_today() -> bool:
+    """Сегодняшний выпуск в старом формате (до v3) — пересобрать в полный.
+
+    Так бывает один раз — в день, когда сервер обновили после полудня: выпуск
+    уже вышел коротким, а в канал и в приложение должен попасть полный.
+    Лайки, просмотры и комментарии остаются — меняется только содержимое."""
+    con = _digest_con()
+    if not con:
+        return False
+    try:
+        day = time.strftime("%Y-%m-%d", london_now())
+        row = con.execute("SELECT body FROM digests WHERE day=?", (day,)).fetchone()
+        if not row:
+            return False
+        try:
+            v = int((json.loads(row[0]) or {}).get("v") or 1)
+        except (ValueError, TypeError):
+            v = 1
+        if v >= 3:
+            return False
+        with _pub_lock:
+            if _pub["data"] is None:
+                return False
+        cur, hl = open_db(DB), open_db(HL_DB)
+        try:
+            body = digest_build(cur, hl)
+        finally:
+            for c in (cur, hl):
+                if c:
+                    try:
+                        c.close()
+                    except Exception:
+                        pass
+        with _digest_lock:
+            con.execute("UPDATE digests SET body=? WHERE day=?",
+                        (json.dumps(body, ensure_ascii=False, separators=(",", ":")), day))
+            con.commit()
+        sys.stderr.write(f"[api] digest {day} пересобран в полный (v3)\n")
+        return True
+    finally:
+        con.close()
 
 
 def digest_channel_post() -> bool:
@@ -15051,11 +15094,15 @@ def digest_channel_post() -> bool:
         import wt_digest_img as dgi
         cap = dgi.caption(body, DIGEST_CHANNEL_LANG)
         try:
-            png = dgi.render(body, DIGEST_CHANNEL_LANG)
+            # Весь выпуск — альбомом: обложка и страницы по разделам.
+            pages = dgi.render_album(body, DIGEST_CHANNEL_LANG)
         except Exception as e:  # noqa: BLE001 — шрифт, Pillow: текстом
-            sys.stderr.write(f"[api] канал: картинка не нарисовалась: {e}\n")
-            png = None
-        if png:
+            sys.stderr.write(f"[api] канал: картинки не нарисовались: {e}\n")
+            pages = []
+        png = pages[0] if pages else None
+        if len(pages) > 1:
+            ok = tg_send_album(DIGEST_CHANNEL, pages, cap, f"wallet-tracker-digest-{day}")
+        elif png:
             ok = tg_send_document(DIGEST_CHANNEL, f"wallet-tracker-digest-{day}.png", png, cap, "sendPhoto", "photo")
         else:
             ok = tg_api("sendMessage", {"chat_id": DIGEST_CHANNEL, "text": cap,
@@ -15079,6 +15126,10 @@ def digest_refresher() -> None:
             digest_make()
         except Exception as e:  # noqa: BLE001
             sys.stderr.write(f"[api] digest failed: {e}\n")
+        try:
+            digest_upgrade_today()
+        except Exception as e:  # noqa: BLE001
+            sys.stderr.write(f"[api] digest upgrade failed: {e}\n")
         try:
             digest_channel_post()
         except Exception as e:  # noqa: BLE001
@@ -15251,6 +15302,34 @@ def tg_send_document(chat: str, name: str, data: bytes, caption: str = "", metho
         return False
     if not isinstance(out, dict) or not out.get("ok"):
         sys.stderr.write(f"[api] {method}: {str(out)[:200]}\n")
+        return False
+    return True
+
+
+def tg_send_album(chat: str, pages: list, caption: str, stem: str) -> bool:
+    """sendMediaGroup: до десяти фото одним альбомом, подпись — у первого."""
+    if not BOT_TOKEN or not pages:
+        return False
+    edge = "----wt" + secrets.token_hex(12)
+    media = [{"type": "photo", "media": f"attach://p{i}", **({"caption": caption} if i == 0 and caption else {})}
+             for i in range(len(pages[:10]))]
+    parts = [f'--{edge}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n{chat}\r\n'.encode(),
+             f'--{edge}\r\nContent-Disposition: form-data; name="media"\r\n\r\n'.encode()
+             + json.dumps(media, ensure_ascii=False).encode() + b"\r\n"]
+    for i, data in enumerate(pages[:10]):
+        parts.append(f'--{edge}\r\nContent-Disposition: form-data; name="p{i}"; filename="{stem}-{i + 1}.png"\r\n'
+                     f'Content-Type: image/png\r\n\r\n'.encode() + data + b"\r\n")
+    parts.append(f"--{edge}--\r\n".encode())
+    req = urllib.request.Request(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMediaGroup", data=b"".join(parts),
+                                 headers={"Content-Type": f"multipart/form-data; boundary={edge}"})
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            out = json.loads(r.read().decode())
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError, OSError) as e:
+        sys.stderr.write(f"[api] sendMediaGroup: {e}\n")
+        return False
+    if not isinstance(out, dict) or not out.get("ok"):
+        sys.stderr.write(f"[api] sendMediaGroup: {str(out)[:200]}\n")
         return False
     return True
 
