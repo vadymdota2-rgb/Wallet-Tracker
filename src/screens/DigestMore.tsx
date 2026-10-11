@@ -123,7 +123,7 @@ export function Part({ children }: { children: ReactNode }) {
 
 /* ── Сводка дня ───────────────────────────────────────────────────────── */
 
-const SIG_KEY: Record<DigestSignal["k"], Parameters<typeof t>[1]> = {
+export const SIG_KEY: Record<DigestSignal["k"], Parameters<typeof t>[1]> = {
   fng: "dg_sig_fng",
   etf: "dg_sig_etf",
   btcx: "dg_sig_btcx",
@@ -135,7 +135,7 @@ const SIG_KEY: Record<DigestSignal["k"], Parameters<typeof t>[1]> = {
   pcr: "dg_sig_pcr",
 };
 
-function sigValue(s: DigestSignal): string {
+export function sigValue(s: DigestSignal): string {
   switch (s.k) {
     case "fng":
       return num(s.v);
@@ -157,19 +157,25 @@ function sigValue(s: DigestSignal): string {
   }
 }
 
-export function Summary({ it, lang }: { it: DigestItem; lang: Lang }) {
+/** Итог табло. Перевес — когда за одну сторону больше половины сигналов.
+ *  Иначе честно пишем, что сигналы расходятся: натягивать вывод на 2 против 2 нельзя. */
+export function verdictOf(it: DigestItem, lang: Lang): { cls: "up" | "dn" | "mix"; text: string } | null {
   const sig = it.sig ?? [];
   if (!sig.length) return null;
   const up = sig.filter((s) => s.d > 0).length;
   const dn = sig.filter((s) => s.d < 0).length;
   const n = sig.length;
-  /* Перевес — когда за одну сторону больше половины сигналов. Иначе честно
-     пишем, что сигналы расходятся: натягивать вывод на 2 против 2 нельзя. */
-  const verdict = up > n / 2
+  return up > n / 2
     ? { cls: "up", text: t(lang, "dg_v_bull", { b: up, n }) }
     : dn > n / 2
       ? { cls: "dn", text: t(lang, "dg_v_bear", { s: dn, n }) }
       : { cls: "mix", text: t(lang, "dg_v_mix", { b: up, s: dn }) };
+}
+
+export function Summary({ it, lang }: { it: DigestItem; lang: Lang }) {
+  const sig = it.sig ?? [];
+  const verdict = verdictOf(it, lang);
+  if (!sig.length || !verdict) return null;
   return (
     <div className="dg-sum-box">
       <p className={`dg-verdict ${verdict.cls}`}>{verdict.text}</p>
@@ -374,7 +380,7 @@ export function HalvingLine({ it, lang }: { it: DigestItem; lang: Lang }) {
 
 /* ── v3: строки вывода для старых разделов ─────────────────────────────── */
 
-export function marketLine(it: DigestItem, lang: Lang): ReactNode {
+export function marketLine(it: DigestItem, lang: Lang): string | null {
   const m = it.mkt;
   if (!m?.btc) return null;
   const zone = m.fng ? FNG_ZONES.find(([max]) => m.fng!.v <= max)?.[1] : undefined;
@@ -537,4 +543,30 @@ export function AheadSec({ it, lang, icon }: { it: DigestItem; lang: Lang; icon:
       <HalvingLine it={it} lang={lang} />
     </Sec>
   );
+}
+
+/* ── Главные выводы одним списком — для картинки в соцсети ─────────────── */
+
+export type DigestLine = { text: string; tone?: "up" | "dn" };
+
+/** Выводы по вкладкам в порядке важности: рынок, ликвидации, интерес,
+ *  опционы, ETF, биткоин на биржах. Те же слова, что в свёрнутых разделах. */
+export function digestLines(it: DigestItem, lang: Lang): DigestLine[] {
+  const out: DigestLine[] = [];
+  const m = marketLine(it, lang);
+  if (m) out.push({ text: m, tone: it.mkt?.btc ? tone(it.mkt.btc.ch) : undefined });
+  const q = it.liq;
+  if (q?.n) out.push({ text: t(lang, "dg_l_liq", { v: pUsd(q.L + q.S), w: liqVerdict(lang, q.L, q.S) }), tone: q.S > q.L ? "up" : "dn" });
+  const b = it.oi?.btc;
+  if (b && b.ch !== null && b.pch !== null) out.push({ text: t(lang, "dg_l_oi", { w: oiVerdict(lang, b.ch, b.pch) }) });
+  const o = it.opt?.btc;
+  if (o) {
+    out.push({ text: t(lang, "dg_l_opt", { n: pUsd(o.n), w: t(lang, optMood(o.pcr)) }),
+      tone: o.pcr !== null && o.pcr < 0.7 ? "up" : o.pcr !== null && o.pcr > 1 ? "dn" : undefined });
+  }
+  const il = instLine(it, lang);
+  if (il) out.push(il);
+  const bl = btcLine(it, lang);
+  if (bl) out.push(bl);
+  return out;
 }

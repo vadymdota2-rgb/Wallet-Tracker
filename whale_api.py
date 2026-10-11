@@ -15142,6 +15142,71 @@ def digest_translate(cid: int, lang: str) -> dict:
         con.close()
 
 
+# Картинка выпуска для соцсетей: приложение рисует её само (canvas) и
+# присылает сюда, а бот отправляет её человеку в чат файлом — в исходном
+# качестве, без сжатия Telegram. Хранить у себя нечего: картинка уходит
+# сразу. Не чаще DIGEST_IMG_HOUR раз в час на человека.
+DIGEST_IMG_HOUR = 12
+DIGEST_IMG_MAX = 3 * 1024 * 1024
+_dg_img_hits: dict = {}
+_dg_img_lock = threading.Lock()
+
+
+def _png_size(data: bytes) -> tuple[int, int] | None:
+    """Ширина и высота из заголовка PNG; не PNG — None."""
+    if len(data) < 24 or data[:8] != b"\x89PNG\r\n\x1a\n" or data[12:16] != b"IHDR":
+        return None
+    return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
+
+
+def tg_send_document(chat: str, name: str, data: bytes, caption: str = "") -> bool:
+    """sendDocument файлом из памяти: multipart собираем сами — без библиотек."""
+    if not BOT_TOKEN:
+        return False
+    edge = "----wt" + secrets.token_hex(12)
+    parts = [f'--{edge}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n{chat}\r\n'.encode()]
+    if caption:
+        parts.append(f'--{edge}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n{caption}\r\n'.encode())
+    parts.append(f'--{edge}\r\nContent-Disposition: form-data; name="document"; filename="{name}"\r\n'
+                 f'Content-Type: image/png\r\n\r\n'.encode() + data + b"\r\n")
+    parts.append(f"--{edge}--\r\n".encode())
+    req = urllib.request.Request(f"https://api.telegram.org/bot{BOT_TOKEN}/sendDocument", data=b"".join(parts),
+                                 headers={"Content-Type": f"multipart/form-data; boundary={edge}"})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            out = json.loads(r.read().decode())
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError, OSError) as e:
+        sys.stderr.write(f"[api] sendDocument: {e}\n")
+        return False
+    if not isinstance(out, dict) or not out.get("ok"):
+        sys.stderr.write(f"[api] sendDocument: {str(out)[:200]}\n")
+        return False
+    return True
+
+
+def digest_image_send(chat: str, b64: str, day: str) -> dict:
+    """Проверить картинку и отправить её человеку в чат с ботом."""
+    try:
+        data = base64.b64decode(b64.split(",", 1)[-1], validate=True)
+    except (ValueError, TypeError):
+        return {"ok": False, "error": "bad_image"}
+    size = _png_size(data)
+    # Только PNG разумного размера: это картинка для поста, а не что угодно,
+    # что кто-то решил переслать себе через нашего бота.
+    if not size or len(data) > DIGEST_IMG_MAX or not (200 <= size[0] <= 2160 and 200 <= size[1] <= 2700):
+        return {"ok": False, "error": "bad_image"}
+    t = time.monotonic()
+    with _dg_img_lock:
+        seq = [x for x in _dg_img_hits.get(chat, ()) if t - x < 3600]
+        if len(seq) >= DIGEST_IMG_HOUR:
+            return {"ok": False, "error": "rate", "wait": int(3600 - (t - seq[0]))}
+        seq.append(t)
+        _dg_img_hits[chat] = seq
+    day = day if re.fullmatch(r"\d{4}-\d{2}-\d{2}", day or "") else time.strftime("%Y-%m-%d", time.gmtime())
+    ok = tg_send_document(chat, f"wallet-tracker-digest-{day}.png", data)
+    return {"ok": ok} if ok else {"ok": False, "error": "send"}
+
+
 def _dg_name(user: dict) -> str:
     """Имя автора так, как его показывает Telegram. Без управляющих символов
     и не длиннее сорока: имя — не место для второго комментария."""
@@ -15547,10 +15612,10 @@ class Handler(BaseHTTPRequestHandler):
         chat = self._user(qs)
         return "u:" + chat if chat else self._peer()
 
-    def _body(self) -> dict:
+    def _body(self, limit: int = 0) -> dict:
         """JSON тела. Длина проверяется до чтения (wt_shield.read_body);
         слишком большое тело — исключение BodyError, ответ 413."""
-        raw = shield.read_body(self.rfile, self.headers)
+        raw = shield.read_body(self.rfile, self.headers, limit)
         if not raw:
             return {}
         try:
@@ -15985,9 +16050,12 @@ class Handler(BaseHTTPRequestHandler):
             chat = self._user(qs)
             # Тело читаем всегда: иначе непрочитанные байты остаются в сокете
             # и портят следующий запрос на том же keep-alive соединении.
-            body = self._body()
+            body = self._body(shield.MAX_UPLOAD if path == "/api/digest/image" else 0)
             if not chat:
                 self._json(401, {"ok": False, "error": "unauthorized"})
+                return
+            if path == "/api/digest/image":
+                self._json(200, digest_image_send(chat, str(body.get("png") or ""), str(body.get("day") or "")))
                 return
             dg = {"/api/digest/like": "like", "/api/digest/comment": "comment",
                   "/api/digest/uncomment": "uncomment", "/api/digest/view": "view",

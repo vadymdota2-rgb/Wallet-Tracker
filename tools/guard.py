@@ -1143,14 +1143,14 @@ say("щит API: тело, соединения, тайм-аут, баны за 
     "import wt_shield as shield" in api and "class ShieldServer(ThreadingHTTPServer):" in _shield
     and "httpd = shield.ShieldServer((HOST, PORT), Handler)" in api and "ThreadingHTTPServer((HOST" not in api
     and "timeout = shield.CONN_TIMEOUT" in api and "shield.redact(fmt % args)" in api
-    and "raise BodyError(413" in _shield and "raw = shield.read_body(self.rfile, self.headers)" in api
+    and "raise BodyError(413" in _shield and "raw = shield.read_body(self.rfile, self.headers, limit)" in api
     and "shield.bans.fail(self.client_address[0])" in pybody(api, "def _keyed(")
     and 'qs.get("init"' not in api and '"error": str(e)' not in api
     and "for k, v in shield.SECURITY_HEADERS:" in api and "if self._shield():" in pybody(api, "def do_POST(")
     and "if self._shield():" in pybody(api, "def do_GET(") and "_logo_slots.acquire(blocking=False)" in api
     and "len(raw) > shield.MAX_INIT_DATA" in api
     and "client_body_timeout 10s;" in _ngx and "limit_except GET POST OPTIONS { deny all; }" in _ngx
-    and _ngx.count('add_header Strict-Transport-Security "max-age=31536000" always;') == 4
+    and _ngx.count('add_header Strict-Transport-Security "max-age=31536000" always;') == 5
     and not os.path.exists(f"{APP}/whale_bot.db") and "*.db" in read(f"{APP}/.gitignore"))
 _dgm = read(f"{APP}/src/screens/DigestMore.tsx")
 say("дайджест v3: все вкладки — ликвидации, интерес с фандингом, опционы, неделя вперёд; разделы свёрнуты до вывода",
@@ -1166,6 +1166,12 @@ say("календарь понятен: объяснение по нажатию
     and "const COUNTRY: Record<string, DictKey> = {" in _cal and 't(lang, "cal_opt_sub"' in _cal
     and 'cal_tap_hint' in _cal and "def _cal_imp_crypto(" in api
     and api.count("_cal_imp_crypto(cc, ") == 2 and "prev = (_cal_nq_days.get(key) or (0, []))[1]" in api)
+say("картинка выпуска для соцсетей: рисуется в приложении, бот присылает файлом в чат",
+    os.path.exists(f"{APP}/src/lib/digestImage.ts") and "export async function renderDigestImage(" in read(f"{APP}/src/lib/digestImage.ts")
+    and "def digest_image_send(" in api and "def tg_send_document(" in api and "def _png_size(" in api
+    and 'path == "/api/digest/image"' in api and "MAX_UPLOAD = 4 * 1024 * 1024" in _shield
+    and "location = /api/digest/image {" in _ngx and "client_max_body_size 5m;" in _ngx
+    and "void toImage()" in read(f"{APP}/src/screens/DigestTab.tsx"))
 say("поиск любой монеты в ликвидациях и истории интереса; монеты с множителем (1000PEPE, kPEPE)",
     os.path.exists(f"{APP}/src/components/CoinFind.tsx")
     and all("<CoinFind " in read(f"{APP}/src/screens/{x}.tsx") for x in ("LiqsScreen", "OiHistScreen", "LiqMapScreen"))
@@ -1174,8 +1180,8 @@ say("поиск любой монеты в ликвидациях и истор�
 say("масштаб: адрес человека — не узел Google, nginx→API постоянными соединениями, без Нейгла",
     "def client_ip(" in _shield and 'shield.client_ip(self.headers.get("X-Forwarded-For")' in pybody(api, "def _peer(")
     and "map $http_x_forwarded_for $client_ip {" in _ngx and "$binary_remote_addr" not in _ngx
-    and "upstream whale_api {" in _ngx and "keepalive 16;" in _ngx and _ngx.count("proxy_pass http://whale_api") == 3
-    and _ngx.count('proxy_set_header Connection "";') == 3 and "disable_nagle_algorithm = True" in api
+    and "upstream whale_api {" in _ngx and "keepalive 16;" in _ngx and _ngx.count("proxy_pass http://whale_api") == 4
+    and _ngx.count('proxy_set_header Connection "";') == 4 and "disable_nagle_algorithm = True" in api
     and 'sed -i "s|server 127.0.0.1:8090;|server ${UP_HOST};|"' in read(f"{APP}/start.sh"))
 say("ликвидации с 11 бирж, фандинг-история с 22, интерес с 32, доска фандинга — 21 биржа",
     all(f"def _liqs_{x}(" in api for x in ("kraken", "bitfinex", "deribit", "dydx", "lighter", "paradex"))

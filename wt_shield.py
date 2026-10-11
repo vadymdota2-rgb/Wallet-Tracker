@@ -40,6 +40,9 @@ from http.server import ThreadingHTTPServer
 MAX_BODY = int(os.environ.get("WHALE_API_MAX_BODY", str(16 * 1024)))
 # Адрес запроса целиком: самый длинный у приложения — меньше пятисот байт.
 MAX_URL = 4096
+# Картинка дайджеста для соцсетей (PNG 1080×1350 в base64) — единственный
+# запрос, которому нужно тело больше: ему свой потолок.
+MAX_UPLOAD = 4 * 1024 * 1024
 # Подпись Telegram — около полукилобайта; в разы больше — не подпись.
 MAX_INIT_DATA = 4096
 # Секунд на то, чтобы прислать запрос и тело; молчит дольше — соединение
@@ -116,7 +119,7 @@ class BodyError(Exception):
         self.error = error
 
 
-def read_body(rfile, headers) -> bytes:
+def read_body(rfile, headers, limit: int = 0) -> bytes:
     """Тело запроса с потолком. Неверная длина — 400, слишком большое — 413.
 
     Длину проверяем до чтения: прочитать гигабайт, чтобы потом отказать, —
@@ -130,7 +133,7 @@ def read_body(rfile, headers) -> bytes:
         raise BodyError(400, "bad_length") from None
     if n < 0:
         raise BodyError(400, "bad_length")
-    if n > MAX_BODY:
+    if n > (limit or MAX_BODY):
         raise BodyError(413, "too_large")
     return rfile.read(n) if n else b""
 
