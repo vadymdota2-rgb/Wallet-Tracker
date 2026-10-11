@@ -294,6 +294,7 @@ export const fr: Dict = {
   dg_fund_lo: "Les shorts paient",
   dg_go: "Ouvrir l’onglet",
   dg_halv: "dans {n} blocs",
+  dg_ig_foot: "🤖 Digest complet, alertes baleines et données de marché en direct — dans notre bot Telegram {at} (lien en bio)",
   dg_img_btn: "Image",
   dg_img_disc: "Un résumé de données, pas un conseil financier.",
   dg_img_err: "Impossible d’envoyer l’image, réessayez",

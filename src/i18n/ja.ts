@@ -294,6 +294,7 @@ export const ja: Dict = {
   dg_fund_lo: "ショートが支払う",
   dg_go: "タブを開く",
   dg_halv: "あと{n}ブロック",
+  dg_ig_foot: "🤖 完全版ダイジェスト、クジラアラート、リアルタイム市場データは Telegram ボット {at} で(リンクはプロフィールに)",
   dg_img_btn: "画像",
   dg_img_disc: "データの要約であり、投資助言ではありません。",
   dg_img_err: "画像を送信できませんでした。もう一度お試しください",

@@ -294,6 +294,7 @@ export const vi: Dict = {
   dg_fund_lo: "Short trả phí",
   dg_go: "Mở tab",
   dg_halv: "sau {n} khối",
+  dg_ig_foot: "🤖 Bản tin đầy đủ, cảnh báo cá voi và dữ liệu thị trường trực tiếp — trong bot Telegram của chúng tôi {at} (link ở bio)",
   dg_img_btn: "Ảnh",
   dg_img_disc: "Tóm tắt dữ liệu, không phải lời khuyên tài chính.",
   dg_img_err: "Không gửi được ảnh, vui lòng thử lại",

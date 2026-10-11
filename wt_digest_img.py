@@ -335,8 +335,11 @@ def render(it: dict, lang: str = "ru", page: str = "") -> bytes | None:
     return buf.getvalue()
 
 
-def caption(it: dict, lang: str = "ru") -> str:
-    """Подпись к посту (и пост целиком, если Pillow нет): итог, выводы, бот."""
+def caption(it: dict, lang: str = "ru", limit: int = 1024, bot: bool = True) -> str:
+    """Подпись к посту (и пост целиком, если Pillow нет): итог, выводы, бот.
+
+    limit — потолок длины (Telegram — 1024, Instagram — 2200); bot=False —
+    без строки с ботом: у Instagram она своя, ссылки там не кликаются."""
     parts = []
     v = verdict(it, lang)
     head = f"📊 {tr(lang, 'dg_img_title')} · {date_word(lang, int(it.get('to') or time.time()))}"
@@ -346,14 +349,15 @@ def caption(it: dict, lang: str = "ru") -> str:
     ls = lines(it, lang)
     if ls:
         parts.append("\n".join(("▲ " if t == "up" else "▼ " if t == "dn" else "• ") + s for s, t in ls))
-    parts.append(f"{BOT_AT}\nhttps://{BOT_URL}")
+    if bot:
+        parts.append(f"{BOT_AT}\nhttps://{BOT_URL}")
     out = "\n\n".join(parts)
     # Подпись к фото в Telegram — до 1024 знаков: лишние выводы отрезаем.
-    while len(out) > 1024 and ls:
+    while len(out) > limit and ls:
         ls = ls[:-1]
         parts[2 if v else 1] = "\n".join(("▲ " if t == "up" else "▼ " if t == "dn" else "• ") + s for s, t in ls)
         out = "\n\n".join(parts)
-    return out[:1024]
+    return out[:limit]
 
 
 

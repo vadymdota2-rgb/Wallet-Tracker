@@ -294,6 +294,7 @@ export const tr: Dict = {
   dg_fund_lo: "Short'lar öder",
   dg_go: "Sekmeyi aç",
   dg_halv: "{n} blok sonra",
+  dg_ig_foot: "🤖 Tam özet, balina uyarıları ve canlı piyasa verileri — Telegram botumuzda {at} (bağlantı biyografide)",
   dg_img_btn: "Görsel",
   dg_img_disc: "Veri özeti, yatırım tavsiyesi değildir.",
   dg_img_err: "Görsel gönderilemedi, lütfen tekrar deneyin",

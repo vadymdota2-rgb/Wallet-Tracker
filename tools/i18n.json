@@ -23722,5 +23722,23 @@
     "uk": "Найбільша експірація тижня · Max Pain {mp}",
     "vi": "Đáo hạn lớn nhất tuần · Max Pain {mp}",
     "zh": "本周最大到期 · Max Pain {mp}"
+  },
+  "dg_ig_foot": {
+    "en": "🤖 Full digest, whale alerts and live market data — in our Telegram bot {at} (link in bio)",
+    "ru": "🤖 Полный дайджест, алерты по китам и рынок в реальном времени — в нашем Telegram-боте {at} (ссылка в профиле)",
+    "uk": "🤖 Повний дайджест, алерти по китах і ринок у реальному часі — у нашому Telegram-боті {at} (посилання в профілі)",
+    "de": "🤖 Vollständiger Digest, Wal-Alarme und Live-Marktdaten — in unserem Telegram-Bot {at} (Link in der Bio)",
+    "es": "🤖 Resumen completo, alertas de ballenas y datos del mercado en vivo — en nuestro bot de Telegram {at} (enlace en la bio)",
+    "fr": "🤖 Digest complet, alertes baleines et données de marché en direct — dans notre bot Telegram {at} (lien en bio)",
+    "pt": "🤖 Resumo completo, alertas de baleias e dados do mercado ao vivo — no nosso bot do Telegram {at} (link na bio)",
+    "pl": "🤖 Pełny digest, alerty o wielorybach i rynek na żywo — w naszym bocie Telegram {at} (link w bio)",
+    "tr": "🤖 Tam özet, balina uyarıları ve canlı piyasa verileri — Telegram botumuzda {at} (bağlantı biyografide)",
+    "id": "🤖 Ringkasan lengkap, peringatan paus, dan data pasar langsung — di bot Telegram kami {at} (tautan di bio)",
+    "vi": "🤖 Bản tin đầy đủ, cảnh báo cá voi và dữ liệu thị trường trực tiếp — trong bot Telegram của chúng tôi {at} (link ở bio)",
+    "hi": "🤖 पूरा डाइजेस्ट, व्हेल अलर्ट और लाइव मार्केट डेटा — हमारे Telegram बॉट {at} में (लिंक बायो में)",
+    "ar": "🤖 الملخص الكامل وتنبيهات الحيتان وبيانات السوق المباشرة — في بوت تيليجرام {at} (الرابط في النبذة)",
+    "ja": "🤖 完全版ダイジェスト、クジラアラート、リアルタイム市場データは Telegram ボット {at} で(リンクはプロフィールに)",
+    "ko": "🤖 전체 다이제스트, 고래 알림, 실시간 시장 데이터 — 텔레그램 봇 {at}에서 (링크는 프로필에)",
+    "zh": "🤖 完整摘要、巨鲸提醒和实时市场数据 — 尽在我们的 Telegram 机器人 {at}(链接见简介)"
   }
 }

@@ -294,6 +294,7 @@ export const ko: Dict = {
   dg_fund_lo: "숏이 지불",
   dg_go: "탭 열기",
   dg_halv: "{n}블록 후",
+  dg_ig_foot: "🤖 전체 다이제스트, 고래 알림, 실시간 시장 데이터 — 텔레그램 봇 {at}에서 (링크는 프로필에)",
   dg_img_btn: "이미지",
   dg_img_disc: "데이터 요약이며 투자 조언이 아닙니다.",
   dg_img_err: "이미지를 보내지 못했어요. 다시 시도해 주세요",

@@ -294,6 +294,7 @@ export const de: Dict = {
   dg_fund_lo: "Shorts zahlen",
   dg_go: "Tab öffnen",
   dg_halv: "in {n} Blöcken",
+  dg_ig_foot: "🤖 Vollständiger Digest, Wal-Alarme und Live-Marktdaten — in unserem Telegram-Bot {at} (Link in der Bio)",
   dg_img_btn: "Bild",
   dg_img_disc: "Eine Datenübersicht, keine Finanzberatung.",
   dg_img_err: "Bild konnte nicht gesendet werden, bitte erneut versuchen",

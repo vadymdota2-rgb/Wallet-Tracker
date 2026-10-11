@@ -294,6 +294,7 @@ export const zh: Dict = {
   dg_fund_lo: "空头支付",
   dg_go: "打开标签页",
   dg_halv: "还有 {n} 个区块",
+  dg_ig_foot: "🤖 完整摘要、巨鲸提醒和实时市场数据 — 尽在我们的 Telegram 机器人 {at}(链接见简介)",
   dg_img_btn: "图片",
   dg_img_disc: "数据摘要，不构成投资建议。",
   dg_img_err: "图片发送失败，请重试",
