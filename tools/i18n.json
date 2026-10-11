@@ -23561,24 +23561,6 @@
     "vi": "Điểm chính",
     "zh": "要点"
   },
-  "dg_img_more": {
-    "ar": "التفاصيل في التطبيق",
-    "de": "Details in der App",
-    "en": "Full details in the app",
-    "es": "Detalles en la app",
-    "fr": "Détails dans l’app",
-    "hi": "पूरी जानकारी ऐप में",
-    "id": "Detail di aplikasi",
-    "ja": "詳しくはアプリで",
-    "ko": "자세한 내용은 앱에서",
-    "pl": "Szczegóły w aplikacji",
-    "pt": "Detalhes no app",
-    "ru": "Подробно — в приложении",
-    "tr": "Ayrıntılar uygulamada",
-    "uk": "Детально — в застосунку",
-    "vi": "Chi tiết trong ứng dụng",
-    "zh": "详情见应用"
-  },
   "dg_img_disc": {
     "ar": "ملخص بيانات وليس نصيحة مالية.",
     "de": "Eine Datenübersicht, keine Finanzberatung.",
@@ -23668,5 +23650,23 @@
     "uk": "Занадто часто — спробуйте за {n} хв",
     "vi": "Quá thường xuyên — thử lại sau {n} phút",
     "zh": "太频繁了——请 {n} 分钟后再试"
+  },
+  "dg_img_find": {
+    "ar": "أين تجدنا",
+    "de": "Hier findest du uns",
+    "en": "Find us",
+    "es": "Dónde encontrarnos",
+    "fr": "Où nous trouver",
+    "hi": "हमें यहाँ पाएँ",
+    "id": "Temukan kami",
+    "ja": "アクセスはこちら",
+    "ko": "여기서 만나요",
+    "pl": "Gdzie nas znaleźć",
+    "pt": "Onde nos encontrar",
+    "ru": "Где нас найти",
+    "tr": "Bizi burada bulun",
+    "uk": "Де нас знайти",
+    "vi": "Tìm chúng tôi",
+    "zh": "在这里找到我们"
   }
 }

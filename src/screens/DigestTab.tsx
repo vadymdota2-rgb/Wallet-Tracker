@@ -654,7 +654,7 @@ function DigestCard({ it, lang, mod, muted, fresh, share }: {
     setImgBusy(true);
     toast(t(lang, "dg_img_wait"));
     try {
-      const png = await blobToBase64(await renderDigestImage(it, lang, share ?? ""));
+      const png = await blobToBase64(await renderDigestImage(it, lang));
       const r = await sendDigestImage(png, it.day);
       if (r?.ok) {
         haptic("success");

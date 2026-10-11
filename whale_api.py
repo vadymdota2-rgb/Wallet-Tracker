@@ -15203,7 +15203,8 @@ def digest_image_send(chat: str, b64: str, day: str) -> dict:
         seq.append(t)
         _dg_img_hits[chat] = seq
     day = day if re.fullmatch(r"\d{4}-\d{2}-\d{2}", day or "") else time.strftime("%Y-%m-%d", time.gmtime())
-    ok = tg_send_document(chat, f"wallet-tracker-digest-{day}.png", data)
+    ok = tg_send_document(chat, f"wallet-tracker-digest-{day}.png", data,
+                          "@WalletTrackerAppBot\nhttps://t.me/WalletTrackerAppBot")
     return {"ok": ok} if ok else {"ok": False, "error": "send"}
 
 

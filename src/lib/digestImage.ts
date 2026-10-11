@@ -20,6 +20,9 @@ const C = {
   up: "#3ddc97", dn: "#ff5c77", mix: "#f0b90b", line: "rgba(58,130,214,0.22)", panel: "rgba(127,216,255,0.05)",
 };
 const FONT = '"IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif';
+/** Где нас найти — подпись на каждой картинке. */
+const BOT_AT = "@WalletTrackerAppBot";
+const BOT_URL = "t.me/WalletTrackerAppBot";
 
 /* Изолирующие символы направления (⁦…⁩) нужны тексту на экране, а canvas
    рисует их как пустые квадраты на части шрифтов — убираем. */
@@ -69,7 +72,7 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 
 const toneColor = (tone?: string) => (tone === "up" ? C.up : tone === "dn" ? C.dn : C.glow);
 
-export async function renderDigestImage(it: DigestItem, lang: Lang, link: string): Promise<Blob> {
+export async function renderDigestImage(it: DigestItem, lang: Lang): Promise<Blob> {
   try {
     await document.fonts?.ready;
   } catch {
@@ -156,7 +159,7 @@ export async function renderDigestImage(it: DigestItem, lang: Lang, link: string
   }
 
   /* Главные выводы — сколько поместится до подвала. */
-  const foot = H - PAD - 70;
+  const foot = H - PAD - 120;
   text(t(lang, "dg_img_main").toUpperCase(), PAD, y, `700 22px ${FONT}`, C.glow);
   y += 44;
   ctx.font = `600 29px ${FONT}`;
@@ -171,17 +174,17 @@ export async function renderDigestImage(it: DigestItem, lang: Lang, link: string
     y += 16;
   }
 
-  /* Подвал: куда идти за подробностями и честная оговорка. */
+  /* Подвал: где нас найти — бот и ссылка — и честная оговорка. */
   ctx.strokeStyle = C.line;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(PAD, H - PAD - 64);
-  ctx.lineTo(W - PAD, H - PAD - 64);
+  ctx.moveTo(PAD, H - PAD - 100);
+  ctx.lineTo(W - PAD, H - PAD - 100);
   ctx.stroke();
-  const where = link.replace(/^https?:\/\//, "").replace(/\?.*$/, "") || "Wallet Tracker";
-  text(t(lang, "dg_img_more"), PAD, H - PAD - 16, `500 24px ${FONT}`, C.dim);
-  text(where, W - PAD, H - PAD - 16, `700 28px ${FONT}`, C.glow, "right");
-  text(t(lang, "dg_img_disc"), PAD, H - PAD + 18, `400 18px ${FONT}`, "rgba(124,151,188,0.7)");
+  text(t(lang, "dg_img_find"), PAD, H - PAD - 58, `500 24px ${FONT}`, C.dim);
+  text(BOT_AT, PAD, H - PAD - 14, `700 34px ${FONT}`, C.glow);
+  text(BOT_URL, W - PAD, H - PAD - 14, `600 28px ${FONT}`, C.ink, "right");
+  text(t(lang, "dg_img_disc"), PAD, H - PAD + 22, `400 18px ${FONT}`, "rgba(124,151,188,0.7)");
 
   return new Promise((resolve, reject) => cv.toBlob((b) => (b ? resolve(b) : reject(new Error("blob"))), "image/png"));
 }

@@ -1171,7 +1171,10 @@ say("картинка выпуска для соцсетей: рисуется �
     and "def digest_image_send(" in api and "def tg_send_document(" in api and "def _png_size(" in api
     and 'path == "/api/digest/image"' in api and "MAX_UPLOAD = 4 * 1024 * 1024" in _shield
     and "location = /api/digest/image {" in _ngx and "client_max_body_size 5m;" in _ngx
-    and "void toImage()" in read(f"{APP}/src/screens/DigestTab.tsx"))
+    and "void toImage()" in read(f"{APP}/src/screens/DigestTab.tsx")
+    # Где нас найти — на картинке и подписью к файлу.
+    and 'const BOT_AT = "@WalletTrackerAppBot";' in read(f"{APP}/src/lib/digestImage.ts")
+    and '"@WalletTrackerAppBot\\nhttps://t.me/WalletTrackerAppBot"' in api)
 say("поиск любой монеты в ликвидациях и истории интереса; монеты с множителем (1000PEPE, kPEPE)",
     os.path.exists(f"{APP}/src/components/CoinFind.tsx")
     and all("<CoinFind " in read(f"{APP}/src/screens/{x}.tsx") for x in ("LiqsScreen", "OiHistScreen", "LiqMapScreen"))
