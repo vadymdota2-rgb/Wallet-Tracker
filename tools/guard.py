@@ -1160,6 +1160,12 @@ say("дайджест v3: все вкладки — ликвидации, инт
     and "export const FoldCtx = createContext(false);" in _dgm and "if (fold && line) {" in _dgm
     and "<FoldCtx.Provider value>" in read(f"{APP}/src/screens/DigestTab.tsx")
     and ".dg-fold-l.up::before" in read(f"{APP}/src/styles/app.css"))
+_cal = read(f"{APP}/src/screens/CalendarScreen.tsx")
+say("календарь понятен: объяснение по нажатию, страна словами, экспирации без жаргона, важность — для крипты",
+    "function explain(lang: Lang, e: CalEv): string {" in _cal and '<div className="cal-x">' in _cal
+    and "const COUNTRY: Record<string, DictKey> = {" in _cal and 't(lang, "cal_opt_sub"' in _cal
+    and 'cal_tap_hint' in _cal and "def _cal_imp_crypto(" in api
+    and api.count("_cal_imp_crypto(cc, ") == 2 and "prev = (_cal_nq_days.get(key) or (0, []))[1]" in api)
 say("поиск любой монеты в ликвидациях и истории интереса; монеты с множителем (1000PEPE, kPEPE)",
     os.path.exists(f"{APP}/src/components/CoinFind.tsx")
     and all("<CoinFind " in read(f"{APP}/src/screens/{x}.tsx") for x in ("LiqsScreen", "OiHistScreen", "LiqMapScreen"))
