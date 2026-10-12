@@ -344,6 +344,9 @@ say("график помнит всё: монету, таймфрейм, вид,
     "setP({ sym: v });" in chart_scr and "log: (on) => setP({ log: on })," in chart_scr and "if (!arg && next.sym && next.sym !== sym) {" in chart_scr
     and "this.ev.log?.(this.log);" in _ce and "grid-template-columns: minmax(0, 1fr);" in read(f"{APP}/src/styles/app.css")
     and "width: fit-content; max-width: 100%; min-width: 0;" in read(f"{APP}/src/styles/app.css"))
+say("текущая свеча и её цена — посередине окна (по ширине и высоте), пока не листали историю",
+    "private centerRight()" in _ce and "if (this.centered && !this.fit) this.right = this.centerRight();" in _ce
+    and "if (this.centered && n - 1 >= i0 && n - 1 <= i1" in _ce and "RIGHT_PAD_BARS" not in _ce)
 say("полный экран: график ниже кнопок Telegram (safe area), выход ✕ на самом графике и через Telegram",
     '"--ch-top"' in chart_scr and '"contentSafeAreaChanged"' in chart_scr and '"fullscreenChanged"' in chart_scr
     and 'className="ch-exitfull"' in chart_scr and "var(--ch-top, 0px)" in read(f"{APP}/src/styles/app.css"))

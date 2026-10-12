@@ -133,7 +133,6 @@ const TIME_H = 24;
 const PEEK = 34;
 const MIN_SPACING = 1.2;
 const MAX_SPACING = 64;
-const RIGHT_PAD_BARS = 4;
 
 const finite = (v: number | undefined): v is number => v !== undefined && Number.isFinite(v);
 
@@ -270,6 +269,11 @@ export class Engine {
   private lastMoveT = 0;
   private reveal = "";
   private indsSet = false;
+  /**
+   * Текущая свеча — посередине окна, пока график не листали. Так видно и
+   * историю слева, и место справа под прогноз, фибо и цели.
+   */
+  private centered = true;
   private syShown = 0;
   /** Снимок: всё в один кадр, как раньше, без прокрутки. */
   private fit = false;
@@ -324,8 +328,9 @@ export class Engine {
     this.crossSticky = false;
     const last = bars[bars.length - 1];
     this.dec = last ? priceDecimals(last.c) : 2;
-    this.right = bars.length - 1 + RIGHT_PAD_BARS;
     this.spacing = 6;
+    this.centered = true;
+    this.right = this.centerRight();
     for (const p of this.panes) p.scale.auto = true;
     this.refresh();
   }
@@ -465,6 +470,7 @@ export class Engine {
 
   /** Сдвинуть на n свечей (клавиши ← →). */
   nudge(n: number) {
+    this.centered = false;
     this.right += n;
     this.clampRight();
     this.ev.view(this.right >= this.bars.length - 1);
@@ -547,7 +553,8 @@ export class Engine {
 
   /** К последней свече, масштаб — авто. */
   goLatest() {
-    this.right = this.bars.length - 1 + RIGHT_PAD_BARS;
+    this.centered = true;
+    this.right = this.centerRight();
     this.resetScale();
     this.ev.view(true);
   }
@@ -741,6 +748,11 @@ export class Engine {
 
   /* ── Геометрия ──────────────────────────────────────────────────────── */
 
+  /** right, при котором последняя свеча стоит ровно посередине. */
+  private centerRight() {
+    return this.bars.length - 1.5 + this.plotR / this.spacing / 2;
+  }
+
   private get plotR() {
     return this.w - this.priceW;
   }
@@ -928,6 +940,17 @@ export class Engine {
           hi += hi * 0.001 || 1;
           lo -= lo * 0.001 || 1;
         }
+        // Пока смотрят на текущую свечу — её цена посередине и по высоте.
+        // Листают историю — обычная подгонка, без скачков на краю.
+        const n = this.shown.length;
+        const c = this.shown[n - 1]?.c;
+        if (this.centered && n - 1 >= i0 && n - 1 <= i1 && finite(c) && c >= lo && c <= hi) {
+          const s = main.scale;
+          const fc = this.f(c, s);
+          const half = Math.max(this.f(hi, s) - fc, fc - this.f(lo, s));
+          lo = this.fi(fc - half, s);
+          hi = this.fi(fc + half, s);
+        }
         main.scale.lo = lo;
         main.scale.hi = hi;
       }
@@ -1025,6 +1048,7 @@ export class Engine {
     // Ширина шкалы цены — по самой длинной подписи.
     const sample = fmtPrice(this.panes[0]!.scale.hi, this.dec);
     this.priceW = Math.max(58, Math.ceil(ctx.measureText(sample).width) + 18);
+    if (this.centered && !this.fit) this.right = this.centerRight();
     const [i0, i1] = this.visible();
     this.baseI = i0;
     this.autoscale(i0, i1);
@@ -2488,6 +2512,7 @@ export class Engine {
       }
       case "pan": {
         const ddx = x - this.down.x;
+        if (Math.abs(ddx) > 2) this.centered = false;
         this.right = this.down.right - ddx / this.spacing;
         this.clampRight();
         const main = this.panes[0]!;
@@ -2705,6 +2730,7 @@ export class Engine {
       return;
     }
     if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+      this.centered = false;
       this.right += e.deltaX / this.spacing;
       this.clampRight();
       this.invalidate();
