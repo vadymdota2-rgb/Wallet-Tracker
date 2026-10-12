@@ -97,7 +97,7 @@ PAID_PATHS = frozenset(
     "flow", "fund", "rot", "ls", "deals", "token",
     "wallet", "fng", "halving", "btc/flow", "btc/big", "btc/rank", "bsc/exflow",
     "btc/wallet", "dom", "etf", "liqcoins", "liqmap", "options", "liqs", "oihist", "calendar", "digest",
-    "digest/translate", "digest/comments", "unlocks", "symbols", "big", "quotes",
+    "digest/translate", "digest/comments", "unlocks", "symbols", "big", "quotes", "chart/liqs", "chart/whales",
     ) for p in ("/" + name, "/api/" + name)
 )
 # Цена и срок — те же, что в premium.cpp: бот и приложение обязаны продавать
@@ -13582,6 +13582,319 @@ def liqs_data(win: str, sym: str = "", min_usd: float = 0.0) -> dict:
     return cached_small(_LIQS, (win, sym, min_usd), LIQS_TTL, lambda: _liqs_build(win, sym, min_usd))
 
 
+# --- График: ликвидации и сделки китов на свечах ---------------------------
+# Для своего графика приложения. Ликвидации — настоящие принудительные
+# закрытия с 11 бирж из liq_ev, сложенные по свечам нужного размера.
+# Сделки китов — крупные филлы кошельков базы на Hyperliquid (от $100 000)
+# за неделю: один проход по всем монетам раз в пять минут, а не запрос на
+# каждого человека.
+CHART_LIQ_TTL = 30
+CHART_WHALE_TTL = 300
+CHART_WHALE_DAYS = 7
+CHART_WHALE_MIN = 100_000
+CHART_WHALE_TOP = 150
+_CHART: dict = {}
+
+
+def chart_liqs(sym: str, step: int) -> dict:
+    sym = re.sub(r"[^A-Z0-9]", "", (sym or "").upper())[:15]
+    if not sym:
+        return {"ok": False, "error": "bad_args"}
+    step = max(60, min(7 * 86400, int(step or 3600)))
+
+    def build() -> dict:
+        liqs_start()
+        end = now()
+        # Неделя хранится; мелкими свечами столько не нужно — до 1500 свечей.
+        start = end - min(LIQS_KEEP, step * 1500)
+        con = _liqs_con()
+        try:
+            rows = con.execute(
+                "SELECT (t / 1000) / ? * ?, side, SUM(usd), COUNT(*) FROM liq_ev "
+                "WHERE t >= ? AND sym = ? GROUP BY 1, side", (step, step, start * 1000, sym)).fetchall()
+        finally:
+            con.close()
+        by: dict = {}
+        for t, side, usd_, n in rows:
+            r = by.setdefault(int(t), [int(t), 0, 0, 0])
+            r[1 if side else 2] += round(usd_ or 0)
+            r[3] += n
+        return {"ok": True, "sym": sym, "step": step, "rows": sorted(by.values())}
+
+    return cached_small(_CHART, ("liq", sym, step), CHART_LIQ_TTL, build)
+
+
+def _chart_whales_build() -> dict:
+    hl = open_db(HL_DB)
+    if not hl or not table_exists(hl, "hl_fills"):
+        return {}
+    since = (now() - CHART_WHALE_DAYS * 86400) * 1000
+    out: dict = {}
+    try:
+        rows = hl.execute(
+            "SELECT coin, ts, px, notional_nanos, dir_code, side, wallet FROM hl_fills "
+            "WHERE ts >= ? AND notional_nanos >= ? AND wallet NOT IN (SELECT wallet FROM hl_banned)"
+            if table_exists(hl, "hl_banned") else
+            "SELECT coin, ts, px, notional_nanos, dir_code, side, wallet FROM hl_fills WHERE ts >= ? AND notional_nanos >= ?",
+            (since, int(CHART_WHALE_MIN * 1e9))).fetchall()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] chart whales: {e}\n")
+        return {}
+    finally:
+        hl.close()
+    for coin, ts, px, notional, code, side, wallet in rows:
+        out.setdefault(coin, []).append((int(ts), _f(px), usd(notional), int(code or 0), str(side or ""), wallet))
+    res: dict = {}
+    for coin, lst in out.items():
+        lst.sort(key=lambda r: -r[2])
+        res[coin] = [{"t": r[0] // 1000, "px": r[1], "usd": round(r[2]),
+                      # Покупка — открыл лонг или закрыл шорт; продажа — наоборот.
+                      "buy": r[3] in (DIR_OPEN_LONG, DIR_CLOSE_SHORT) or (r[3] not in (DIR_OPEN_SHORT, DIR_CLOSE_LONG) and r[4] == "B"),
+                      "open": r[3] in (DIR_OPEN_LONG, DIR_OPEN_SHORT),
+                      "w": r[5]} for r in lst[:CHART_WHALE_TOP]]
+    return res
+
+
+def chart_whales(coin: str) -> dict:
+    coin = (coin or "").strip()[:24]
+    if not re.fullmatch(r"(?:[a-z]{1,8}:)?[A-Za-z0-9]{1,16}", coin):
+        return {"ok": False, "error": "bad_args"}
+    allc = cached_bg(_CHART, "whales", CHART_WHALE_TTL, _chart_whales_build) or {}
+    rows = allc.get(coin) or allc.get(coin.upper()) or []
+    return {"ok": True, "coin": coin, "min": CHART_WHALE_MIN, "days": CHART_WHALE_DAYS, "rows": rows}
+
+
+# --- Алерты по цене с графика ----------------------------------------------
+# Человек проводит на графике горизонтальную линию и жмёт «🔔» — бот пишет
+# ему в Telegram, когда цена её коснётся. Цены — раз в 10 секунд одним
+# запросом на всё: Binance spot (через публичное зеркало data-api) и
+# Hyperliquid allMids — для того, чего на Binance нет, и для рынков HIP-3.
+# Сработавший алерт снимается (одноразовый, как у TradingView по умолчанию)
+# и неделю виден в списке как «сработал».
+PXA_SCHEMA = """
+CREATE TABLE IF NOT EXISTS px_alerts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id TEXT NOT NULL,
+    sym TEXT NOT NULL,
+    price REAL NOT NULL,
+    dir INTEGER NOT NULL,
+    lang TEXT NOT NULL DEFAULT 'en',
+    note TEXT NOT NULL DEFAULT '',
+    created INTEGER NOT NULL,
+    fired INTEGER NOT NULL DEFAULT 0,
+    fired_px REAL NOT NULL DEFAULT 0,
+    tries INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_px_alerts_chat ON px_alerts(chat_id, fired);
+CREATE INDEX IF NOT EXISTS idx_px_alerts_open ON px_alerts(fired);
+"""
+PXA_MAX = 30
+PXA_DAY = 200
+PXA_EVERY = 10
+PXA_KEEP_FIRED = 7 * 86400
+PXA_LANGS = ("en", "ru", "uk", "de", "es", "fr", "pt", "pl", "tr", "id", "vi", "hi", "ar", "ja", "ko", "zh")
+_PXA_SYM = re.compile(r"(?:[a-z]{1,8}:)?[A-Z0-9]{1,16}")
+_pxa_px: dict = {"at": 0.0, "px": {}}
+
+
+def _pxa_con():
+    con = open_db(DB, write=True)
+    if con:
+        con.executescript(PXA_SCHEMA)
+    return con
+
+
+def _pxa_sym(raw: str) -> str:
+    s = str(raw or "").strip()
+    if ":" in s:
+        dex, name = s.split(":", 1)
+        s = f"{dex.lower()}:{name.upper()}"
+    else:
+        s = s.upper()
+    return s if _PXA_SYM.fullmatch(s) else ""
+
+
+def _pxa_prices(syms: set) -> dict:
+    """Текущие цены нужных монет: Binance spot, иначе Hyperliquid."""
+    out: dict = {}
+    try:
+        with urllib.request.urlopen("https://data-api.binance.vision/api/v3/ticker/price", timeout=8) as r:
+            rows = json.loads(r.read().decode())
+        bmap = {str(x.get("symbol")): float(x.get("price") or 0) for x in rows if isinstance(x, dict)}
+    except (urllib.error.URLError, TimeoutError, ValueError, OSError):
+        bmap = {}
+    for s in syms:
+        v = bmap.get(f"{s}USDT") if ":" not in s else None
+        if v:
+            out[s] = v
+    rest = [s for s in syms if s not in out]
+    if rest:
+        dexes = {s.split(":", 1)[0] for s in rest if ":" in s}
+        mids: dict = {}
+        got = hl_post({"type": "allMids"})
+        if isinstance(got, dict):
+            mids.update(got)
+        for dx in dexes:
+            got = hl_post({"type": "allMids", "dex": dx})
+            if isinstance(got, dict):
+                mids.update(got)
+        for s in rest:
+            v = mids.get(s)
+            if v is None and f"k{s}" in mids:
+                # kPEPE у Hyperliquid — цена тысячи PEPE.
+                v = float(mids[f"k{s}"]) / 1000
+            try:
+                if v is not None and float(v) > 0:
+                    out[s] = float(v)
+            except (TypeError, ValueError):
+                pass
+    return out
+
+
+def _pxa_fmt(v: float) -> str:
+    a = abs(v)
+    d = 2 if a >= 100 else 4 if a >= 1 else min(12, -int(math.floor(math.log10(a))) + 3) if a > 0 else 2
+    return f"{v:,.{d}f}".replace(",", " ")
+
+
+def pxa_list(chat: str) -> dict:
+    con = _pxa_con()
+    if not con:
+        return {"ok": False, "error": "db"}
+    try:
+        cut = now() - PXA_KEEP_FIRED
+        rows = con.execute(
+            "SELECT id, sym, price, dir, note, created, fired, fired_px FROM px_alerts "
+            "WHERE chat_id=? AND (fired=0 OR fired>=?) ORDER BY fired>0, created DESC LIMIT 100", (chat, cut)).fetchall()
+        return {"ok": True, "max": PXA_MAX, "items": [
+            {"id": r[0], "sym": r[1], "price": r[2], "dir": r[3], "note": r[4], "at": r[5], "fired": r[6], "fpx": r[7]}
+            for r in rows]}
+    finally:
+        con.close()
+
+
+def pxa_add(chat: str, body: dict) -> dict:
+    sym = _pxa_sym(body.get("sym"))
+    try:
+        price = float(body.get("price"))
+    except (TypeError, ValueError):
+        price = 0.0
+    if not sym or not (price > 0) or not math.isfinite(price):
+        return {"ok": False, "error": "bad_args"}
+    lang = str(body.get("lang") or "en")
+    lang = lang if lang in PXA_LANGS else "en"
+    note = re.sub(r"[\x00-\x1f\x7f]", "", str(body.get("note") or ""))[:24]
+    cur = _pxa_prices({sym}).get(sym)
+    if not cur:
+        return {"ok": False, "error": "no_price"}
+    con = _pxa_con()
+    if not con:
+        return {"ok": False, "error": "db"}
+    try:
+        n = con.execute("SELECT COUNT(*) FROM px_alerts WHERE chat_id=? AND fired=0", (chat,)).fetchone()[0]
+        day = con.execute("SELECT COUNT(*) FROM px_alerts WHERE chat_id=? AND created>=?", (chat, now() - 86400)).fetchone()[0]
+        if n >= PXA_MAX or day >= PXA_DAY:
+            return {"ok": False, "error": "limit", "max": PXA_MAX}
+        # Выше текущей цены — ждём роста до неё, ниже — падения.
+        d = 1 if price >= cur else -1
+        cur_id = con.execute(
+            "INSERT INTO px_alerts(chat_id, sym, price, dir, lang, note, created) VALUES(?,?,?,?,?,?,?)",
+            (chat, sym, price, d, lang, note, now())).lastrowid
+        con.commit()
+        return {"ok": True, "id": cur_id, "dir": d, "now": cur}
+    finally:
+        con.close()
+
+
+def pxa_move(chat: str, body: dict) -> dict:
+    try:
+        aid = int(body.get("id"))
+        price = float(body.get("price"))
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "bad_args"}
+    if not (price > 0) or not math.isfinite(price):
+        return {"ok": False, "error": "bad_args"}
+    con = _pxa_con()
+    if not con:
+        return {"ok": False, "error": "db"}
+    try:
+        row = con.execute("SELECT sym FROM px_alerts WHERE id=? AND chat_id=? AND fired=0", (aid, chat)).fetchone()
+        if not row:
+            return {"ok": False, "error": "not_found"}
+        cur = _pxa_prices({row[0]}).get(row[0])
+        if not cur:
+            return {"ok": False, "error": "no_price"}
+        d = 1 if price >= cur else -1
+        con.execute("UPDATE px_alerts SET price=?, dir=? WHERE id=?", (price, d, aid))
+        con.commit()
+        return {"ok": True, "id": aid, "dir": d}
+    finally:
+        con.close()
+
+
+def pxa_del(chat: str, body: dict) -> dict:
+    try:
+        aid = int(body.get("id"))
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "bad_args"}
+    con = _pxa_con()
+    if not con:
+        return {"ok": False, "error": "db"}
+    try:
+        con.execute("DELETE FROM px_alerts WHERE id=? AND chat_id=?", (aid, chat))
+        con.commit()
+        return {"ok": True}
+    finally:
+        con.close()
+
+
+def pxa_check() -> int:
+    """Один проход: сверить цены, отправить сработавшие. Вернёт, сколько ушло."""
+    con = _pxa_con()
+    if not con:
+        return 0
+    try:
+        rows = con.execute("SELECT id, chat_id, sym, price, dir, lang, note, tries FROM px_alerts WHERE fired=0").fetchall()
+        if not rows:
+            return 0
+        px = _pxa_prices({r[2] for r in rows})
+        _pxa_px.update(at=time.time(), px=px)
+        sent = 0
+        import wt_digest_img as dgi
+        for aid, chat, sym, price, d, lang, note, tries in rows:
+            cur = px.get(sym)
+            if not cur or not ((d > 0 and cur >= price) or (d < 0 and cur <= price)):
+                continue
+            name = sym.split(":")[-1]
+            text = dgi.tr(lang, "pxa_up" if d > 0 else "pxa_dn", s=name, p=_pxa_fmt(price), now=_pxa_fmt(cur))
+            if note:
+                text += f"\n{note}"
+            ok = tg_api("sendMessage", {"chat_id": chat, "text": text, "disable_web_page_preview": True}) is not None
+            # Не дошло (бот заблокирован, сеть) — ещё две попытки, потом снимаем.
+            if ok or tries >= 2:
+                con.execute("UPDATE px_alerts SET fired=?, fired_px=?, tries=tries+1 WHERE id=?", (now(), cur, aid))
+                sent += 1 if ok else 0
+            else:
+                con.execute("UPDATE px_alerts SET tries=tries+1 WHERE id=?", (aid,))
+        con.execute("DELETE FROM px_alerts WHERE fired>0 AND fired<?", (now() - PXA_KEEP_FIRED,))
+        con.commit()
+        return sent
+    finally:
+        con.close()
+
+
+def pxa_loop() -> None:
+    time.sleep(20)
+    while True:
+        try:
+            n = pxa_check()
+            if n:
+                sys.stderr.write(f"[api] алерты по цене: отправлено {n}\n")
+        except Exception as e:  # noqa: BLE001
+            sys.stderr.write(f"[api] px alerts: {e}\n")
+        time.sleep(PXA_EVERY)
+
+
 # --- Опционы -------------------------------------------------------------
 # Открытый интерес по страйкам и датам, Max Pain, Put/Call, волатильность по
 # датам и перекос, DVOL и крупные сделки — по четырнадцати монетам с восьми бирж.
@@ -16054,6 +16367,20 @@ class Handler(BaseHTTPRequestHandler):
             if path in ("/liqcoins", "/api/liqcoins"):
                 self._json(200, liq_coins())
                 return
+            if path == "/api/chart/liqs":
+                try:
+                    step = int(qs.get("step", ["3600"])[0])
+                except ValueError:
+                    step = 3600
+                self._json(200, chart_liqs(qs.get("sym", [""])[0], step))
+                return
+            if path == "/api/chart/whales":
+                self._json(200, chart_whales(qs.get("coin", [""])[0]))
+                return
+            if path == "/api/pxalert/list":
+                chat = self._user(qs)
+                self._json(200, pxa_list(chat) if chat else {"ok": False, "error": "unauthorized"})
+                return
             if path in ("/oihist", "/api/oihist"):
                 self._json(200, oi_hist(qs.get("sym", ["BTC"])[0], qs.get("range", ["7d"])[0]))
                 return
@@ -16195,6 +16522,13 @@ class Handler(BaseHTTPRequestHandler):
                 res = digest_act(self._user_full(qs), dg, body)
                 self._json(200, res)
                 return
+            pxa = {"/api/pxalert/add": pxa_add, "/api/pxalert/move": pxa_move, "/api/pxalert/del": pxa_del}.get(path)
+            if pxa:
+                if path == "/api/pxalert/add" and not chat_premium(chat):
+                    self._json(200, {"ok": False, "error": "premium"})
+                    return
+                self._json(200, pxa(chat, body))
+                return
             # Сервисный аккаунт Премиум не покупает и не получает бонусами.
             if is_service(chat) and (path.startswith("/api/pay/") or path.startswith("/api/bonus/")):
                 self._json(200, {"ok": False, "error": "service"})
@@ -16295,6 +16629,7 @@ def main():
     threading.Thread(target=warmup, daemon=True).start()
     threading.Thread(target=refresher, daemon=True).start()
     threading.Thread(target=_bonus_loop, daemon=True).start()
+    threading.Thread(target=pxa_loop, daemon=True).start()
     httpd = shield.ShieldServer((HOST, PORT), Handler)
     tls = shield.tls_wrap(httpd)
     sys.stderr.write(f"[api] щит: тело ≤ {shield.MAX_BODY} Б, соединений ≤ {shield.MAX_CONN}, "

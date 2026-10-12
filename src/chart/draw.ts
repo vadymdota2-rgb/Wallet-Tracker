@@ -36,6 +36,10 @@ export interface Drawing {
   levels?: number[];
   /** Фибоначчи: продлить уровни вправо до края. */
   extend?: boolean;
+  /** Горизонталь с алертом: номер алерта на сервере. */
+  alert?: number;
+  /** Алерт сработал (сек) — линия помечена галочкой. */
+  fired?: number;
 }
 
 /** Сколько точек ставит человек: позиции и текст — одной, кисть — сколько нарисует. */
@@ -372,7 +376,10 @@ export function render(ctx: CanvasRenderingContext2D, d: Drawing, v: View, selec
         const ch = pct(d.pts[0]!.p, d.pts[1]!.p);
         label(ctx, `${sgn(ch)}${ch.toFixed(2)}%`, b[0] + 8, b[1], col, v);
       }
-      if ((d.type === "hline" || d.type === "hray") && a) label(ctx, v.fmt(d.pts[0]!.p), v.right - 4, a[1] - 11, col, v, "right");
+      if ((d.type === "hline" || d.type === "hray") && a) {
+        const mark = d.alert ? "🔔 " : d.fired ? "✓ " : "";
+        label(ctx, `${mark}${v.fmt(d.pts[0]!.p)}`, v.right - 4, a[1] - 11, d.fired ? "#3ddc97" : col, v, "right");
+      }
       break;
     case "rect":
       if (a && b) {

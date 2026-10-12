@@ -657,3 +657,58 @@ export const peekBtcRank = (win: string) => exPeek<BtcRankReply>(btcRankPath(win
 const btcWalletPath = (addr: string) => `/api/btc/wallet?addr=${encodeURIComponent(addr)}`;
 export const fetchBtcWallet = (addr: string) => cachedGet<BtcWalletReply>(btcWalletPath(addr), BTC_TTL);
 export const peekBtcWallet = (addr: string) => peek<BtcWalletReply | null>(btcWalletPath(addr), BTC_TTL);
+
+/* ── Свой график: ликвидации и сделки китов на свечах, алерты по цене ── */
+
+export interface ChartLiqsReply {
+  ok: boolean;
+  step?: number;
+  /** [начало свечи, сек; ликвидировано лонгов $; шортов $; событий]. */
+  rows?: [number, number, number, number][];
+}
+export interface ChartWhale {
+  t: number;
+  px: number;
+  usd: number;
+  buy: boolean;
+  open: boolean;
+  w: string;
+}
+export interface ChartWhalesReply {
+  ok: boolean;
+  rows?: ChartWhale[];
+  min?: number;
+}
+export interface PxAlert {
+  id: number;
+  sym: string;
+  price: number;
+  /** 1 — ждём роста до цены, −1 — падения. */
+  dir: number;
+  note: string;
+  at: number;
+  /** Когда сработал (сек), 0 — ещё ждёт. */
+  fired: number;
+  fpx: number;
+}
+export interface PxAlertReply {
+  ok: boolean;
+  error?: string;
+  id?: number;
+  dir?: number;
+  max?: number;
+  items?: PxAlert[];
+}
+
+export const fetchChartLiqs = (sym: string, step: number) =>
+  remember<ChartLiqsReply | null>(`/api/chart/liqs?sym=${encodeURIComponent(sym)}&step=${step}`, 30_000,
+    () => call<ChartLiqsReply>(`/api/chart/liqs?sym=${encodeURIComponent(sym)}&step=${step}`), (r) => !!r?.ok);
+export const fetchChartWhales = (coin: string) =>
+  remember<ChartWhalesReply | null>(`/api/chart/whales?coin=${encodeURIComponent(coin)}`, 120_000,
+    () => call<ChartWhalesReply>(`/api/chart/whales?coin=${encodeURIComponent(coin)}`), (r) => !!r?.ok);
+export const pxAlertList = () => call<PxAlertReply>("/api/pxalert/list");
+export const pxAlertAdd = (sym: string, price: number, lang: string, note = "") =>
+  call<PxAlertReply>("/api/pxalert/add", { method: "POST", body: { sym, price, lang, note } });
+export const pxAlertMove = (id: number, price: number) =>
+  call<PxAlertReply>("/api/pxalert/move", { method: "POST", body: { id, price } });
+export const pxAlertDel = (id: number) => call<PxAlertReply>("/api/pxalert/del", { method: "POST", body: { id } });

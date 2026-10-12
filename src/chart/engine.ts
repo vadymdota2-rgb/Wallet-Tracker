@@ -40,6 +40,17 @@ export interface LiqLevels {
   rows: { p: number; L: number; S: number }[];
 }
 
+/** Ликвидации по свечам: [начало, сек; лонги $; шорты $; событий]. */
+export type LiqRows = [number, number, number, number][];
+/** Крупная сделка кита: время (сек), цена, сумма $, сторона. */
+export interface WhaleMark {
+  t: number;
+  px: number;
+  usd: number;
+  buy: boolean;
+  open: boolean;
+}
+
 export interface Hover {
   /** Номер свечи под перекрестием (или последней). */
   i: number;
@@ -49,6 +60,10 @@ export interface Hover {
   vals: Record<string, number[]>;
   /** Перекрестие стоит (а не просто последняя свеча). */
   live: boolean;
+  /** Ликвидации на этой свече, $: лонги и шорты. */
+  liq?: { L: number; S: number };
+  /** Сделки китов на этой свече: куплено и продано, $. */
+  wh?: { buy: number; sell: number };
 }
 
 export interface Events {
@@ -195,6 +210,8 @@ export class Engine {
   private rateTimer: ReturnType<typeof setTimeout> | null = null;
   private indDirty = true;
   private own: { oi: OwnSeries | null; fund: OwnSeries | null; liq: LiqLevels | null } = { oi: null, fund: null, liq: null };
+  private liqx: LiqRows | null = null;
+  private whales: WhaleMark[] | null = null;
 
   private drawings: Drawing[] = [];
   private sel: string | null = null;
@@ -353,6 +370,16 @@ export class Engine {
     this.invalidate();
   }
 
+  setLiqx(r: LiqRows | null) {
+    this.liqx = r;
+    this.invalidate();
+  }
+
+  setWhales(w: WhaleMark[] | null) {
+    this.whales = w;
+    this.invalidate();
+  }
+
   setLog(on: boolean) {
     this.panes[0]!.scale.log = on;
     this.panes[0]!.scale.auto = true;
@@ -463,6 +490,19 @@ export class Engine {
     const d = this.drawings.find((x) => x.id === id);
     if (d && this.sel === id) this.ev.select(d);
     this.invalidate();
+  }
+
+  /** Правка без шага отмены: сверка с сервером (алерт сработал). */
+  patchQuiet(id: string, patch: Partial<Drawing>) {
+    this.drawings = this.drawings.map((d) => (d.id === id ? { ...d, ...patch } : d));
+    this.ev.drawings(this.drawings);
+    const d = this.drawings.find((x) => x.id === id);
+    if (d && this.sel === id) this.ev.select(d);
+    this.invalidate();
+  }
+
+  get allDrawings(): Drawing[] {
+    return this.drawings;
   }
 
   deleteSelected() {
@@ -1274,11 +1314,107 @@ export class Engine {
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
 
+    this.paintLiqx(main, i0, i1);
+    this.paintWhales(main, i0, i1);
+
     // Рисунки.
     if (!this.hideDrawings) {
       const v = this.view();
       for (const d of this.drawings) renderDrawing(ctx, d, v, d.id === this.sel);
       if (this.creating) renderDrawing(ctx, this.creating.d, v, true);
+    }
+  }
+
+  /**
+   * Ликвидации на свечах: пузырь под свечой — выбило лонги, над — шорты.
+   * Размер — по сумме (площадь круга ∝ $), крупнейшие подписаны.
+   */
+  private paintLiqx(p: Pane, i0: number, i1: number) {
+    if (!this.liqx?.length || !this.inds.some((i) => i.kind === "wt_liqx" && !i.hidden)) return;
+    const ctx = this.ctx;
+    // Ликвидации — в свечу, в которую попадает их время (свеча может быть крупнее шага данных).
+    const L = new Map<number, number>();
+    const S = new Map<number, number>();
+    for (const [t, l, sh] of this.liqx) {
+      const i = Math.floor(this.tIdx(t * 1000) + 1e-6);
+      if (i < i0 - 1 || i > i1 + 1) continue;
+      L.set(i, (L.get(i) ?? 0) + l);
+      S.set(i, (S.get(i) ?? 0) + sh);
+    }
+    const max = Math.max(1, ...L.values(), ...S.values());
+    const rMax = Math.max(6, Math.min(18, this.spacing * 1.6));
+    const draw = (i: number, v: number, long: boolean) => {
+      if (v <= 0) return;
+      const b = this.bars[i];
+      if (!b) return;
+      const r = Math.max(2, Math.sqrt(v / max) * rMax);
+      const x = this.x(i);
+      const y = long ? this.py(p, b.l) + r + 4 : this.py(p, b.h) - r - 4;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = long ? "rgba(255,92,119,0.55)" : "rgba(61,220,151,0.55)";
+      ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = long ? "#ff5c77" : "#3ddc97";
+      ctx.stroke();
+      if (v >= max * 0.45 && this.spacing >= 3) {
+        ctx.font = `600 ${this.font.replace(/^\d+px/, "10px")}`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = long ? "top" : "bottom";
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "rgba(5,11,22,0.9)";
+        const txt = `$${fmtShort(v)}`;
+        const ty = long ? y + r + 2 : y - r - 2;
+        ctx.strokeText(txt, x, ty);
+        ctx.fillStyle = long ? "#ff5c77" : "#3ddc97";
+        ctx.fillText(txt, x, ty);
+      }
+    };
+    for (const [i, v] of L) draw(i, v, true);
+    for (const [i, v] of S) draw(i, v, false);
+  }
+
+  /** Сделки китов: ромб на цене сделки, зелёный — покупка, красный — продажа. */
+  private paintWhales(p: Pane, i0: number, i1: number) {
+    if (!this.whales?.length || !this.inds.some((i) => i.kind === "wt_whale" && !i.hidden)) return;
+    const ctx = this.ctx;
+    const vis = this.whales.filter((w) => {
+      const i = this.tIdx(w.t * 1000);
+      return i >= i0 - 1 && i <= i1 + 1;
+    });
+    if (!vis.length) return;
+    const max = Math.max(...vis.map((w) => w.usd));
+    // Сначала мелкие — крупные ложатся сверху.
+    for (const w of [...vis].sort((a, b) => a.usd - b.usd)) {
+      const x = this.x(Math.floor(this.tIdx(w.t * 1000) + 1e-6));
+      const y = this.py(p, w.px);
+      const r = Math.max(3, Math.sqrt(w.usd / max) * 9);
+      ctx.beginPath();
+      ctx.moveTo(x, y - r);
+      ctx.lineTo(x + r, y);
+      ctx.lineTo(x, y + r);
+      ctx.lineTo(x - r, y);
+      ctx.closePath();
+      ctx.fillStyle = w.buy ? "rgba(61,220,151,0.85)" : "rgba(255,92,119,0.85)";
+      ctx.fill();
+      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = "#050b16";
+      ctx.stroke();
+      if (w.usd >= max * 0.5 && this.spacing >= 3) {
+        ctx.font = `600 ${this.font.replace(/^\d+px/, "10px")}`;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "rgba(5,11,22,0.9)";
+        const txt = `🐋 $${fmtShort(w.usd)}`;
+        // У правого края подпись — слева от ромба, иначе её режет шкала цены.
+        const tw = ctx.measureText(txt).width;
+        const left = x + r + 3 + tw > this.plotR - 2;
+        const tx = left ? x - r - 3 - tw : x + r + 3;
+        ctx.strokeText(txt, tx, y);
+        ctx.fillStyle = w.buy ? "#3ddc97" : "#ff5c77";
+        ctx.fillText(txt, tx, y);
+      }
     }
   }
 
@@ -1732,7 +1868,30 @@ export class Engine {
         }
       }
     }
-    this.ev.hover({ i, bar: this.bars[i] ?? null, prev: this.bars[i - 1] ?? null, vals, live });
+    let liq: Hover["liq"];
+    if (this.liqx?.length && this.inds.some((x) => x.kind === "wt_liqx" && !x.hidden)) {
+      let L = 0;
+      let S = 0;
+      for (const [t, l, sh] of this.liqx) {
+        if (Math.floor(this.tIdx(t * 1000) + 1e-6) === i) {
+          L += l;
+          S += sh;
+        }
+      }
+      if (L || S) liq = { L, S };
+    }
+    let wh: Hover["wh"];
+    if (this.whales?.length && this.inds.some((x) => x.kind === "wt_whale" && !x.hidden)) {
+      let buy = 0;
+      let sell = 0;
+      for (const w of this.whales) {
+        if (Math.floor(this.tIdx(w.t * 1000) + 1e-6) !== i) continue;
+        if (w.buy) buy += w.usd;
+        else sell += w.usd;
+      }
+      if (buy || sell) wh = { buy, sell };
+    }
+    this.ev.hover({ i, bar: this.bars[i] ?? null, prev: this.bars[i - 1] ?? null, vals, live, liq, wh });
   }
 
   /* ── Жесты ──────────────────────────────────────────────────────────── */

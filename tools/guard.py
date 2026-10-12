@@ -296,10 +296,10 @@ say("свечи: Binance (зеркало vision), Hyperliquid с HIP-3, Bybit, K
     and "wss://api.hyperliquid.xyz/ws" in _cd and "startPoll()" in _cd
     and "location = /klines-hl {" in _cngx and "proxy_pass https://api.hyperliquid.xyz/info;" in _cngx
     and _cngx.count("proxy_cache klines;") == 5 and "zone=kl:10m" in _cngx)
-say("график: 14 таймфреймов, 6 видов, 53 индикатора + 3 своих, 21 инструмент рисования",
+say("график: 14 таймфреймов, 6 видов, 53 индикатора + 5 своих, 21 инструмент рисования",
     "export const TFS: Tf[] = [\"1m\", \"3m\", \"5m\", \"15m\", \"30m\", \"1h\", \"2h\", \"4h\", \"6h\", \"12h\", \"1d\", \"3d\", \"1w\", \"1M\"];" in _cd
     and 'export type ChartType = "candles" | "hollow" | "heikin" | "bars" | "line" | "area";' in _ce
-    and len(re.findall(r"^  (\w+): \{ kind: \"", _ci, re.M)) == 56
+    and len(re.findall(r"^  (\w+): \{ kind: \"", _ci, re.M)) == 58
     and all(f'"chart_i_{k}"' in json.dumps(list(_ckeys)) for k in ("wt_oi", "wt_fund", "wt_liq", "rsi", "macd", "ichi"))
     and _cw.count(": 2,") + _cw.count(": 1,") + _cw.count(": 3,") + _cw.count(": 0,") >= 14
     and all(f'"{k}"' in chart_scr for k in ("trend", "ray", "ext", "hline", "hray", "vline", "channel", "rect", "fib", "fibext", "fibfan",
@@ -316,6 +316,14 @@ say("график будущего: лупа под пальцем, отмена
 say("график: жесты и шкалы как у TradingView — щипок, долгое нажатие, шкала цены, авто и лог, отсчёт до закрытия",
     'this.mode = "pinch"' in _ce and 'this.mode = "cross"' in _ce and 'this.mode = "price"' in _ce
     and "setLog(on: boolean)" in _ce and "private countdown(): string" in _ce and "this.ev.needOlder()" in _ce)
+say("график: алерты по цене с горизонтали — сервер сверяет раз в 10 с и пишет ботом; ликвидации и киты на свечах",
+    "def pxa_check() -> int:" in api and "threading.Thread(target=pxa_loop, daemon=True).start()" in api
+    and "PXA_MAX = 30" in api and "CREATE TABLE IF NOT EXISTS px_alerts (" in api
+    and '"/api/pxalert/add": pxa_add' in api and "WHERE id=? AND chat_id=?" in pybody(api, "def pxa_del(")
+    and all(k in _ckeys for k in ("pxa_up", "pxa_dn", "chart_alert_on", "chart_alert_off", "chart_alerts"))
+    and "def chart_liqs(sym: str, step: int) -> dict:" in api and "def chart_whales(coin: str) -> dict:" in api
+    and '"chart/liqs", "chart/whales"' in api and "private paintLiqx(" in _ce and "private paintWhales(" in _ce
+    and "prevAlerted.current = new Map(list.filter((d) => d.alert)" in chart_scr)
 say("рисунки — во времени и цене, по монете на устройстве; настройки графика запоминаются",
     "export interface Pt {\n  t: number;\n  p: number;\n}" in _cw and 'const DRAW_KEY = "wt-chart-draw-v1";' in chart_scr
     and 'const PREFS_KEY = "wt-chart-v1";' in chart_scr)

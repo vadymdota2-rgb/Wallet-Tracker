@@ -1649,6 +1649,17 @@
 }
 .ch-fibs button.on { color: var(--ink); background: rgb(31 142 255 / 0.22); border-color: rgb(127 216 255 / 0.5); }
 .ch-fibs button.gold { background: rgb(240 185 11 / 0.25); border-color: #f0b90b; color: #f0b90b; }
+.ch-own b.up { color: #3ddc97; }
+.ch-own b.dn { color: #ff5c77; }
+.ch-alert { display: flex; align-items: center; gap: 6px; border-bottom: 1px solid rgb(58 130 214 / 0.12); }
+.ch-alert.fired { opacity: 0.6; }
+.ch-alert-main {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 8px 4px;
+  border: 0; background: transparent; color: var(--ink); text-align: start;
+}
+.ch-alert-main span { display: grid; gap: 2px; min-width: 0; }
+.ch-alert-main b { font-size: 14px; font-variant-numeric: tabular-nums; }
+.ch-alert-main small { font-size: 12px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ch-hint { margin: 2px 0; font-size: 12px; line-height: 1.45; color: var(--dim); }
 .ch-tools-sep { flex: 0 0 1px; width: 22px; background: rgb(58 130 214 / 0.25); margin: 4px 0; }
 .ch-plot { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; }

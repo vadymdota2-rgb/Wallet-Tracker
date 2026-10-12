@@ -23,7 +23,7 @@ export type IndKind =
   | "rsi" | "macd" | "stoch" | "srsi" | "atr" | "obv" | "mfi" | "cci" | "adx" | "wr"
   | "cvd" | "mom" | "roc" | "aroon" | "cmf" | "ao" | "trix" | "uo" | "sqz" | "ad" | "chop" | "hv"
   | "vortex" | "fisher" | "bbw" | "pctb" | "bbp" | "efi"
-  | "wt_oi" | "wt_fund" | "wt_liq";
+  | "wt_oi" | "wt_fund" | "wt_liq" | "wt_liqx" | "wt_whale";
 
 /**
  * Как рисовать ряд:
@@ -1215,10 +1215,12 @@ export const IND: Record<IndKind, IndDef> = {
   wt_fund: { kind: "wt_fund", short: "Funding", pane: true, params: [], own: true,
     lines: [{ name: "8h", color: "#3ddc97", style: "hist", signed: true }], levels: [0] },
   wt_liq: { kind: "wt_liq", short: "Liq levels", pane: false, params: [], own: true, lines: [] },
+  wt_liqx: { kind: "wt_liqx", short: "Liquidations", pane: false, params: [], own: true, lines: [] },
+  wt_whale: { kind: "wt_whale", short: "Whales", pane: false, params: [], own: true, lines: [] },
 };
 
 /** Порядок в меню: свои данные первыми — их нет больше нигде. */
-export const OWN_KINDS: IndKind[] = ["wt_liq", "wt_oi", "wt_fund"];
+export const OWN_KINDS: IndKind[] = ["wt_liqx", "wt_whale", "wt_liq", "wt_oi", "wt_fund"];
 /** Автоанализ: график сам находит уровни, вершины, паттерны и дивергенции. */
 export const AUTO_KINDS: IndKind[] = ["vp", "sr", "autofib", "zz", "pivots", "div", "cdl", "linreg"];
 export const OVERLAY_KINDS: IndKind[] = ["vol", "sma", "ema", "wma", "hma", "vwma", "dema", "tema", "ribbon", "bb", "kc", "env", "dc", "vwap", "st", "psar", "ichi"];

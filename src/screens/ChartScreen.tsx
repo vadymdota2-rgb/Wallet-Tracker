@@ -18,10 +18,14 @@ import { useLive } from "../store/live";
 import { t } from "../i18n/t";
 import type { DictKey } from "../i18n/types";
 import { haptic } from "../lib/telegram";
-import { fetchLiqMap, fetchOiHist, fetchSymbols, peekSymbols } from "../lib/api";
+import {
+  fetchChartLiqs, fetchChartWhales, fetchLiqMap, fetchOiHist, fetchSymbols, peekSymbols,
+  pxAlertAdd, pxAlertDel, pxAlertList, pxAlertMove, type PxAlert,
+} from "../lib/api";
+import { toast } from "../components/Toast";
 import type { SymbolRow } from "../lib/types";
 import { CoinIcon } from "../components/CoinIcon";
-import { loadHistory, loadOlder, market, SOURCE_NAME, subscribe, TFS, type Source, type Tf } from "../chart/data";
+import { loadHistory, loadOlder, market, SOURCE_NAME, subscribe, TF_MS, TFS, type Source, type Tf } from "../chart/data";
 import { Engine, fmtPrice, fmtShort, priceDecimals, type ChartType, type Hover, type Tool } from "../chart/engine";
 import {
   AUTO_KINDS, IND, indTitle, newInd, OVERLAY_KINDS, OWN_KINDS, PANE_KINDS, rateKey, type IndInst, type IndKind, type Rating,
@@ -282,6 +286,79 @@ export function ChartScreen({ arg }: ScreenProps) {
     } catch { /* не запомнится — покажем ещё раз */ }
   }, [gest, hover?.live]);
 
+  /* ── Алерты по цене ───────────────────────────────────────────────────
+     Алерт живёт на сервере, а линия — на устройстве; связь — номер алерта в
+     рисунке. Линию подвинули — алерт переезжает, удалили — снимается. */
+  const [alerts, setAlerts] = useState<PxAlert[]>([]);
+  const [alertsOpen, setAlertsOpen] = useState(false);
+  const alertPx = useRef(new Map<number, number>());
+  const refreshAlerts = () => void pxAlertList().then((r) => {
+    if (!r?.ok) return;
+    const items = r.items ?? [];
+    setAlerts(items);
+    alertPx.current = new Map(items.filter((a) => !a.fired).map((a) => [a.id, a.price]));
+    // Сработавшие и снятые в другом месте — убрать колокольчик с линий.
+    const e = eng.current;
+    if (!e) return;
+    for (const d of e.allDrawings) {
+      if (!d.alert) continue;
+      const a = items.find((x) => x.id === d.alert);
+      if (!a) e.patchQuiet(d.id, { alert: undefined });
+      else if (a.fired) e.patchQuiet(d.id, { alert: undefined, fired: a.fired });
+    }
+  });
+  const prevAlerted = useRef(new Map<number, string>());
+  const syncAlerts = (list: Drawing[]) => {
+    const now = new Map<number, string>();
+    for (const d of list) {
+      if (!d.alert) continue;
+      now.set(d.alert, d.id);
+      const p = d.pts[0]?.p;
+      const was = alertPx.current.get(d.alert);
+      if (p && was !== undefined && Math.abs(p - was) > Math.abs(was) * 1e-9) {
+        alertPx.current.set(d.alert, p);
+        void pxAlertMove(d.alert, p);
+      }
+    }
+    for (const id of prevAlerted.current.keys()) {
+      if (!now.has(id)) {
+        alertPx.current.delete(id);
+        void pxAlertDel(id).then(refreshAlerts);
+      }
+    }
+    prevAlerted.current = now;
+  };
+  useEffect(() => {
+    refreshAlerts();
+    const timer = setInterval(refreshAlerts, 60_000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const toggleAlert = async (d: Drawing) => {
+    const e = eng.current;
+    if (!e) return;
+    haptic("select");
+    if (d.alert) {
+      const id = d.alert;
+      e.patchQuiet(d.id, { alert: undefined });
+      alertPx.current.delete(id);
+      await pxAlertDel(id);
+      refreshAlerts();
+      return;
+    }
+    const p = d.pts[0]?.p;
+    if (!p) return;
+    const r = await pxAlertAdd(m.hip3 ?? m.base, p, lang, `${m.label} · ${TF_LABEL[prefs.tf]}`);
+    if (r?.ok && r.id) {
+      alertPx.current.set(r.id, p);
+      e.patchQuiet(d.id, { alert: r.id, fired: undefined });
+      haptic("success");
+      toast(t(lang, "chart_alert_set", { s: m.label, p: fmtPrice(p, priceDecimals(p)) }));
+      refreshAlerts();
+    } else if (r?.error === "limit") toast(t(lang, "chart_alert_limit", { n: r.max ?? 30 }), "err");
+    else toast(t(lang, "chart_alert_err"), "err");
+  };
+
   // Движок — один на всё время экрана.
   useEffect(() => {
     const c = cv.current;
@@ -298,7 +375,10 @@ export function ChartScreen({ arg }: ScreenProps) {
           e.prepend(older);
         }).catch(() => e.olderFailed());
       },
-      drawings: (list) => saveDrawings(live.current.key, list),
+      drawings: (list) => {
+        saveDrawings(live.current.key, list);
+        syncAlerts(list);
+      },
       select: (d) => setSel(d),
       toolDone: () => setTool("cursor"),
       textNew: (d) => setTextEdit({ id: d.id, text: "" }),
@@ -351,8 +431,14 @@ export function ChartScreen({ arg }: ScreenProps) {
   useEffect(() => eng.current?.setHideDrawings(hideDraw), [hideDraw]);
   useEffect(() => eng.current?.setText((k) => t(lang, k as DictKey)), [lang]);
   useEffect(() => {
-    eng.current?.setDrawings(loadDrawings(drawKey));
+    const list = loadDrawings(drawKey);
+    // Алерты на линиях этой монеты — точка отсчёта для сверки: без неё смена
+    // монеты выглядела бы как «линии с алертами удалили», и алерты снялись бы.
+    prevAlerted.current = new Map(list.filter((d) => d.alert).map((d) => [d.alert!, d.id]));
+    eng.current?.setDrawings(list);
     setSel(null);
+    refreshAlerts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drawKey]);
 
   // Свои данные Wallet Tracker: интерес, фандинг, уровни ликвидаций.
@@ -414,6 +500,46 @@ export function ChartScreen({ arg }: ScreenProps) {
       clearInterval(timer);
     };
   }, [wantLiq, ownSym]);
+
+  const wantLiqx = prefs.inds.some((i) => i.kind === "wt_liqx");
+  const wantWhale = prefs.inds.some((i) => i.kind === "wt_whale");
+  const liqStep = Math.min(7 * 86400, Math.round(TF_MS[prefs.tf] / 1000));
+  useEffect(() => {
+    const e = eng.current;
+    if (!e) return;
+    if (!wantLiqx || !ownSym) {
+      e.setLiqx(null);
+      return;
+    }
+    let alive = true;
+    const load = () => void fetchChartLiqs(ownSym, liqStep).then((r) => {
+      if (alive) e.setLiqx(r?.ok ? r.rows ?? [] : null);
+    });
+    load();
+    const timer = setInterval(load, 60_000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [wantLiqx, ownSym, liqStep]);
+  useEffect(() => {
+    const e = eng.current;
+    if (!e) return;
+    if (!wantWhale) {
+      e.setWhales(null);
+      return;
+    }
+    let alive = true;
+    const load = () => void fetchChartWhales(m.hl).then((r) => {
+      if (alive) e.setWhales(r?.ok ? r.rows ?? [] : null);
+    });
+    load();
+    const timer = setInterval(load, 5 * 60_000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [wantWhale, m.hl]);
 
   /* ── Действия ────────────────────────────────────────────────────────── */
 
@@ -503,6 +629,10 @@ export function ChartScreen({ arg }: ScreenProps) {
             onClick={() => { haptic("select"); setP({ tools: !prefs.tools }); if (prefs.tools) setTool("cursor"); }}>
             <ToolIcon k="brush" />
           </button>
+          <button type="button" className={alertsOpen ? "ch-btn on" : "ch-btn"} aria-label={t(lang, "chart_alerts")}
+            onClick={() => { haptic("select"); setAlertsOpen(!alertsOpen); refreshAlerts(); }}>
+            🔔{alerts.filter((a) => !a.fired).length ? <small className="ch-n">{alerts.filter((a) => !a.fired).length}</small> : null}
+          </button>
         </div>
 
         <div className="ch-main">
@@ -579,6 +709,14 @@ export function ChartScreen({ arg }: ScreenProps) {
                   {chg !== null ? <b>{chg >= 0 ? "+" : ""}{chg.toFixed(2)}%</b> : null}
                 </div>
               ) : null}
+              {hover?.liq || hover?.wh ? (
+                <div className="ch-ohlc ch-own">
+                  {hover.liq?.L ? <span>💥L <b className="dn">${fmtShort(hover.liq.L)}</b></span> : null}
+                  {hover.liq?.S ? <span>💥S <b className="up">${fmtShort(hover.liq.S)}</b></span> : null}
+                  {hover.wh?.buy ? <span>🐋 <b className="up">+${fmtShort(hover.wh.buy)}</b></span> : null}
+                  {hover.wh?.sell ? <span>🐋 <b className="dn">−${fmtShort(hover.wh.sell)}</b></span> : null}
+                </div>
+              ) : null}
               {rating ? (
                 <button type="button" className={`ch-rate ${rateKey(rating.total)}`} onClick={() => setRateOpen(true)}>
                   {t(lang, "chart_rate")}: <b>{t(lang, rateKey(rating.total))}</b>
@@ -622,6 +760,11 @@ export function ChartScreen({ arg }: ScreenProps) {
                   <button key={c} type="button" className={sel.color === c ? "ch-color on" : "ch-color"} style={{ background: c }}
                     aria-label={c} onClick={() => eng.current?.patchDrawing(sel.id, { color: c })} />
                 ))}
+                {sel.type === "hline" || sel.type === "hray" ? (
+                  <button type="button" className={sel.alert ? "ch-selbtn on" : "ch-selbtn"} onClick={() => void toggleAlert(sel)}>
+                    {sel.alert ? t(lang, "chart_alert_off") : t(lang, "chart_alert_on")}
+                  </button>
+                ) : null}
                 {isFib(sel.type) ? (
                   <button type="button" className="ch-selbtn" onClick={() => setFibEdit(true)}>{t(lang, "chart_fib_levels")}</button>
                 ) : null}
@@ -827,6 +970,36 @@ export function ChartScreen({ arg }: ScreenProps) {
               </section>
             ))}
             <p className="ch-hint">{t(lang, "chart_rate_note")}</p>
+          </div>
+        ) : null}
+
+        {alertsOpen ? (
+          <div className="ch-sheet" role="dialog" aria-label={t(lang, "chart_alerts")}>
+            <div className="ch-sheet-hd">
+              <b>{t(lang, "chart_alerts")}</b>
+              <button type="button" className="ch-close" onClick={() => setAlertsOpen(false)}>{t(lang, "chart_ok")}</button>
+            </div>
+            {alerts.length ? alerts.map((a) => (
+              <div key={a.id} className={a.fired ? "ch-alert fired" : "ch-alert"}>
+                <button type="button" className="ch-alert-main" onClick={() => { setAlertsOpen(false); pick(a.sym); }}>
+                  <CoinIcon sym={label(a.sym)} size={24} />
+                  <span>
+                    <b>{label(a.sym)} {a.dir > 0 ? "↑" : "↓"} {fmtPrice(a.price, priceDecimals(a.price))}</b>
+                    <small>{a.fired ? `✓ ${t(lang, "chart_alert_fired")} · ${new Date(a.fired * 1000).toLocaleString(lang, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : t(lang, "chart_alert_wait")}
+                      {a.note ? ` · ${a.note}` : ""}</small>
+                  </span>
+                </button>
+                <button type="button" className="ch-lg-x" aria-label={t(lang, "chart_del")} onClick={() => {
+                  haptic("light");
+                  const e = eng.current;
+                  const d = e?.allDrawings.find((x) => x.alert === a.id);
+                  if (e && d) e.patchQuiet(d.id, { alert: undefined });
+                  alertPx.current.delete(a.id);
+                  setAlerts((xs) => xs.filter((x) => x.id !== a.id));
+                  void pxAlertDel(a.id);
+                }}>×</button>
+              </div>
+            )) : <p className="ch-hint">{t(lang, "chart_alert_none")}</p>}
           </div>
         ) : null}
 
