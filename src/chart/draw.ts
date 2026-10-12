@@ -560,13 +560,18 @@ export function render(ctx: CanvasRenderingContext2D, d: Drawing, v: View, selec
   }
 
   if (selected) {
+    // Опорные точки — голубые кольца с мягким ореолом, как на иконках.
     for (const h of handles(d, v)) {
+      ctx.beginPath();
+      ctx.arc(h[0], h[1], 10, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(127,216,255,0.14)";
+      ctx.fill();
       ctx.beginPath();
       ctx.arc(h[0], h[1], 5, 0, Math.PI * 2);
       ctx.fillStyle = "#050b16";
       ctx.fill();
       ctx.lineWidth = 2;
-      ctx.strokeStyle = col;
+      ctx.strokeStyle = "#7fd8ff";
       ctx.stroke();
     }
   }

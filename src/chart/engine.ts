@@ -2017,17 +2017,33 @@ export class Engine {
     const ctx = this.ctx;
     const h = sub ? 30 : 17;
     const x = this.plotR;
+    // Свой стиль: бирка с носиком к линии цены и круглым правым краем.
+    const tip = x + 1;
+    const xb = x + 6;
+    const xr = x + this.priceW - 2;
+    const top = y - 8.5;
+    const bot = top + h;
+    const r = 7;
     ctx.fillStyle = bg;
     ctx.beginPath();
-    ctx.roundRect(x + 1, y - 8.5, this.priceW - 2, h, 3);
+    ctx.moveTo(tip, y + 0.5);
+    ctx.lineTo(xb, y - 5.5);
+    ctx.lineTo(xb, top);
+    ctx.lineTo(xr - r, top);
+    ctx.arcTo(xr, top, xr, top + r, r);
+    ctx.lineTo(xr, bot - r);
+    ctx.arcTo(xr, bot, xr - r, bot, r);
+    ctx.lineTo(xb, bot);
+    ctx.lineTo(xb, y + 6.5);
+    ctx.closePath();
     ctx.fill();
     ctx.fillStyle = fg;
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillText(txt, x + 6, y + 0.5);
+    ctx.fillText(txt, x + 8, y + 0.5);
     if (sub) {
       ctx.fillStyle = "rgba(255,255,255,0.85)";
-      ctx.fillText(sub, x + 6, y + 13.5);
+      ctx.fillText(sub, x + 8, y + 13.5);
     }
   }
 
@@ -2128,13 +2144,24 @@ export class Engine {
     // Кнопки шкалы: A — авто, L — логарифм.
     const by = this.h - TIME_H / 2;
     ctx.textAlign = "center";
-    ctx.fillStyle = main.scale.auto ? "#7fd8ff" : C.axis;
     ctx.font = `700 ${this.font}`;
-    ctx.fillText("A", R + this.priceW * 0.2, by);
-    ctx.fillStyle = main.scale.log ? "#7fd8ff" : C.axis;
-    ctx.fillText("L", R + this.priceW * 0.5, by);
-    ctx.fillStyle = this.pctMode ? "#7fd8ff" : C.axis;
-    ctx.fillText("%", R + this.priceW * 0.8, by);
+    // Переключатели шкалы — круглые фишки: включённая светится.
+    const chips: [string, number, boolean][] = [["A", 0.2, main.scale.auto], ["L", 0.5, main.scale.log], ["%", 0.8, this.pctMode]];
+    for (const [txt, at, on] of chips) {
+      const cx = R + this.priceW * at;
+      const rr = Math.min(8, this.priceW * 0.14);
+      if (on) {
+        ctx.fillStyle = "rgba(127,216,255,0.16)";
+        ctx.strokeStyle = "rgba(127,216,255,0.55)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(cx, by, rr, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.fillStyle = on ? "#7fd8ff" : C.axis;
+      ctx.fillText(txt, cx, by + 0.5);
+    }
     ctx.font = this.font;
   }
 
@@ -2175,7 +2202,7 @@ export class Engine {
     const bx = Math.max(0, Math.min(this.plotR - tw, x - tw / 2));
     ctx.fillStyle = "#2a3f5f";
     ctx.beginPath();
-    ctx.roundRect(bx, this.h - TIME_H + 2, tw, TIME_H - 4, 3);
+    ctx.roundRect(bx, this.h - TIME_H + 2, tw, TIME_H - 4, (TIME_H - 4) / 2);
     ctx.fill();
     ctx.fillStyle = "#fff";
     ctx.textAlign = "left";

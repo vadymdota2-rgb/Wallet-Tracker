@@ -189,44 +189,58 @@ const GROUPS: { key: DictKey; tools: DrawType[] }[] = [
 const indName = (k: IndKind) => `chart_i_${k}` as DictKey;
 
 /* Значки инструментов — тонкие линии, как у TradingView. */
-function ToolIcon({ k }: { k: DrawType | "cursor" | "magnet" | "eye" | "trash" | "undo" | "redo" | ChartType }) {
-  const p = { fill: "none", stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
-  const body: Record<string, ReactNode> = {
-    cursor: <path {...p} d="M6 3l12 7-5 1.5L10.5 17z" />,
-    trend: <><path {...p} d="M5 18L19 6" /><circle cx="5" cy="18" r="1.8" fill="currentColor" /><circle cx="19" cy="6" r="1.8" fill="currentColor" /></>,
-    ray: <><path {...p} d="M5 18L21 4" /><circle cx="5" cy="18" r="1.8" fill="currentColor" /><circle cx="12" cy="12" r="1.8" fill="currentColor" /></>,
-    ext: <><path {...p} d="M2 20L22 4" /><circle cx="8" cy="15" r="1.8" fill="currentColor" /><circle cx="16" cy="9" r="1.8" fill="currentColor" /></>,
-    hline: <><path {...p} d="M2 12h20" /><circle cx="12" cy="12" r="1.8" fill="currentColor" /></>,
-    hray: <><path {...p} d="M7 12h15" /><circle cx="7" cy="12" r="1.8" fill="currentColor" /></>,
-    vline: <><path {...p} d="M12 2v20" /><circle cx="12" cy="12" r="1.8" fill="currentColor" /></>,
-    channel: <><path {...p} d="M3 14L17 5M7 19L21 10" /><path {...p} strokeDasharray="2 2" d="M5 16.5L19 7.5" /></>,
-    rect: <><rect {...p} x="4" y="6" width="16" height="12" rx="1" /></>,
-    fib: <><path {...p} d="M3 5h18M3 10h18M3 14h18M3 19h18" /><path {...p} strokeDasharray="2 2" d="M5 19L19 5" /></>,
-    long: <><rect x="4" y="5" width="16" height="7" fill="rgba(61,220,151,.35)" stroke="#3ddc97" strokeWidth="1.3" /><rect x="4" y="12" width="16" height="5" fill="rgba(255,92,119,.35)" stroke="#ff5c77" strokeWidth="1.3" /></>,
-    short: <><rect x="4" y="12" width="16" height="7" fill="rgba(61,220,151,.35)" stroke="#3ddc97" strokeWidth="1.3" /><rect x="4" y="7" width="16" height="5" fill="rgba(255,92,119,.35)" stroke="#ff5c77" strokeWidth="1.3" /></>,
-    measure: <><path {...p} d="M4 17L17 4l3 3L7 20z" /><path {...p} d="M8 13l2 2M11 10l2 2M14 7l2 2" /></>,
-    text: <path {...p} d="M5 6V4h14v2M12 4v16M9 20h6" />,
-    brush: <path {...p} d="M4 18c3 0 3-4 6-4s2 5 6 3 3-8 4-11" />,
-    fibext: <><path {...p} d="M3 18L9 8l5 6" /><path {...p} d="M14 4h8M14 9h8M14 14h8" /></>,
-    fibfan: <><path {...p} d="M3 20L21 4M3 20L21 9M3 20L21 14M3 20L21 19" /></>,
-    fibtime: <path {...p} d="M3 3v18M6 3v18M9 3v18M14 3v18M21 3v18" />,
-    ew5: <><path {...p} d="M2 19l4-7 3 3 5-10 3 5 5-6" /><text x="13" y="23" fontSize="7" fill="currentColor" stroke="none">5</text></>,
-    abc: <><path {...p} d="M3 6l6 10 5-5 7 9" /><text x="1" y="23" fontSize="7" fill="currentColor" stroke="none">ABC</text></>,
-    tri: <path {...p} d="M2 6l4 12 4-9 4 7 4-5 4 3" />,
-    wxy: <><path {...p} d="M3 5l6 9 5-4 7 10" /><text x="1" y="23" fontSize="7" fill="currentColor" stroke="none">WXY</text></>,
-    undo: <path {...p} d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3" />,
-    redo: <path {...p} d="M15 14l5-5-5-5M20 9H10a6 6 0 000 12h3" />,
-    magnet: <path {...p} d="M6 4v8a6 6 0 0012 0V4M6 8h4M14 8h4" />,
-    eye: <><path {...p} d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" /><circle {...p} cx="12" cy="12" r="3" /></>,
-    trash: <path {...p} d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />,
-    candles: <><path {...p} d="M7 3v18M17 5v14" /><rect x="5" y="7" width="4" height="9" fill="currentColor" /><rect {...p} x="15" y="8" width="4" height="7" /></>,
-    hollow: <><path {...p} d="M7 3v18M17 5v14" /><rect {...p} x="5" y="7" width="4" height="9" /><rect x="15" y="8" width="4" height="7" fill="currentColor" /></>,
-    heikin: <><path {...p} d="M7 4v16M17 6v12" /><rect x="5" y="7" width="4" height="10" fill="currentColor" opacity=".6" /><rect x="15" y="9" width="4" height="6" fill="currentColor" opacity=".6" /></>,
+/* Иконки графика — свой рисунок, не как у TradingView: линия толще и
+   круглее, полупрозрачная заливка фигур, а опорные точки — голубые кольца
+   (ровно так точки рисунков выглядят и на самом графике). */
+type IconKey = DrawType | "cursor" | "magnet" | "eye" | "trash" | "undo" | "redo" | ChartType
+  | "bell" | "camera" | "expand" | "shrink" | "vs";
+
+function ToolIcon({ k }: { k: IconKey }) {
+  const p = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  const f = { fill: "currentColor", opacity: 0.18 };
+  const N = (x: number, y: number) => <circle cx={x} cy={y} r="2.3" fill="#050b16" stroke="#7fd8ff" strokeWidth="1.6" />;
+  const lbl = (x: number, txt: string) => <text x={x} y="23" fontSize="6.5" fontWeight="700" fill="#7fd8ff" stroke="none">{txt}</text>;
+  const body: Record<IconKey, ReactNode> = {
+    cursor: <><path d="M5 3.5l13.5 7-5.8 1.9-2.4 5.6z" {...f} /><path {...p} d="M5 3.5l13.5 7-5.8 1.9-2.4 5.6z" /><path {...p} d="M13 13l5 6" /></>,
+    trend: <><path {...p} d="M5 18L19 6" />{N(5, 18)}{N(19, 6)}</>,
+    ray: <><path {...p} d="M5 18L21 4M16.5 4H21v4.5" />{N(5, 18)}{N(11.5, 12.4)}</>,
+    ext: <><path {...p} d="M2 20L22 4" />{N(8, 15.2)}{N(16, 8.8)}</>,
+    hline: <><path {...p} d="M2 12h20" />{N(12, 12)}</>,
+    hray: <><path {...p} d="M7 12h15M19 9l3 3-3 3" />{N(7, 12)}</>,
+    vline: <><path {...p} d="M12 2v20" />{N(12, 12)}</>,
+    channel: <><path d="M3 14L17 5l4 5-14 9z" {...f} /><path {...p} d="M3 14L17 5M7 19L21 10" />{N(3, 14)}{N(17, 5)}</>,
+    rect: <><rect x="4" y="6" width="16" height="12" rx="3" {...f} /><rect {...p} x="4" y="6" width="16" height="12" rx="3" />{N(4, 6)}{N(20, 18)}</>,
+    fib: <><rect x="3" y="9.5" width="18" height="5" rx="1" fill="#f0b90b" opacity=".28" /><path {...p} d="M3 5h18M3 9.5h18M3 14.5h18M3 19h18" />{N(3, 19)}{N(21, 5)}</>,
+    long: <><rect x="4" y="4.5" width="16" height="8" rx="2.5" fill="rgba(61,220,151,.28)" stroke="#3ddc97" strokeWidth="1.5" /><rect x="4" y="12.5" width="16" height="6" rx="2.5" fill="rgba(255,92,119,.28)" stroke="#ff5c77" strokeWidth="1.5" />{N(4, 12.5)}</>,
+    short: <><rect x="4" y="11.5" width="16" height="8" rx="2.5" fill="rgba(61,220,151,.28)" stroke="#3ddc97" strokeWidth="1.5" /><rect x="4" y="5.5" width="16" height="6" rx="2.5" fill="rgba(255,92,119,.28)" stroke="#ff5c77" strokeWidth="1.5" />{N(4, 11.5)}</>,
+    measure: <><path d="M4 18L18 4l2.5 2.5-14 14z" {...f} /><path {...p} d="M4 18L18 4l2.5 2.5-14 14zM8.5 13.5l2 2M11.5 10.5l2 2M14.5 7.5l2 2" /></>,
+    text: <><path {...p} strokeWidth="2.2" d="M6 6.5V5h12v1.5M12 5v14M9.5 19h5" />{N(19, 18)}</>,
+    brush: <><path {...p} d="M4 18c3 0 3-4 6-4s2 5 6 3 3-8 4-11" />{N(20, 6)}</>,
+    fibext: <><path {...p} d="M3 18L8.5 9l5 5" /><path {...p} opacity=".7" d="M15 5h7M15 10h7M15 15h7" />{N(3, 18)}{N(8.5, 9)}{N(13.5, 14)}</>,
+    fibfan: <><path d="M3 20L21 4v15z" {...f} /><path {...p} d="M3 20L21 4M3 20L21 10M3 20L21 15" />{N(3, 20)}</>,
+    fibtime: <><path {...p} d="M4 3v18M7 3v18M10 3v18M15 3v18M21 3v18" />{N(4, 12)}</>,
+    ew5: <><path {...p} d="M2 18l4-6 3 3 5-9 3 5 5-6" />{N(6, 12)}{N(14, 6)}{N(22, 5)}{lbl(1, "1-5")}</>,
+    abc: <><path {...p} d="M3 5l6 10 5-5 7 8" />{N(9, 15)}{N(14, 10)}{N(21, 18)}{lbl(1, "ABC")}</>,
+    tri: <><path d="M2 6l20 4.5L2 16z" {...f} /><path {...p} d="M2 6l4 10 4-8 4 6 4-4 4 3" /></>,
+    wxy: <><path {...p} d="M3 5l6 9 5-4 7 9" />{N(9, 14)}{N(14, 10)}{lbl(1, "WXY")}</>,
+    undo: <path {...p} d="M9.5 14.5L5 10l4.5-4.5M5 10h9.5a5 5 0 010 10H12" />,
+    redo: <path {...p} d="M14.5 14.5L19 10l-4.5-4.5M19 10H9.5a5 5 0 000 10H12" />,
+    magnet: <><path {...p} d="M6 4v8a6 6 0 0012 0V4" /><path d="M4.6 3.5h2.8v4H4.6zM16.6 3.5h2.8v4h-2.8z" fill="#7fd8ff" /></>,
+    eye: <><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" {...f} /><path {...p} d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" fill="#7fd8ff" /></>,
+    trash: <><path d="M6.5 8h11l-1 11.5a1.5 1.5 0 01-1.5 1.5H9a1.5 1.5 0 01-1.5-1.5z" {...f} /><path {...p} d="M4 7.5h16M9.5 7.5V5a1 1 0 011-1h3a1 1 0 011 1v2.5M6.5 8l1 11.5A1.5 1.5 0 009 21h6a1.5 1.5 0 001.5-1.5l1-11.5" /></>,
+    candles: <><path {...p} d="M7.5 3v18M16.5 5v14" /><rect x="5" y="7" width="5" height="9" rx="1.6" fill="currentColor" /><rect x="14" y="8.5" width="5" height="6.5" rx="1.6" {...f} /><rect {...p} x="14" y="8.5" width="5" height="6.5" rx="1.6" /></>,
+    hollow: <><path {...p} d="M7.5 3v18M16.5 5v14" /><rect {...p} x="5" y="7" width="5" height="9" rx="1.6" /><rect x="14" y="8.5" width="5" height="6.5" rx="1.6" fill="currentColor" /></>,
+    heikin: <><path {...p} d="M7.5 4v16M16.5 6v12" /><rect x="5" y="7" width="5" height="10" rx="2.5" fill="currentColor" opacity=".55" /><rect x="14" y="9" width="5" height="6" rx="2.5" fill="currentColor" opacity=".55" /></>,
     bars: <path {...p} d="M8 4v16M5 8h3M8 16h3M16 6v12M13 9h3M16 15h3" />,
-    line: <path {...p} d="M3 17l5-6 4 3 5-8 4 4" />,
-    area: <><path d="M3 17l5-6 4 3 5-8 4 4v10H3z" fill="currentColor" opacity=".3" /><path {...p} d="M3 17l5-6 4 3 5-8 4 4" /></>,
+    line: <><path {...p} d="M3 17l5-6 4 3 5-8 4 4" />{N(17, 6)}</>,
+    area: <><path d="M3 17l5-6 4 3 5-8 4 4v10H3z" {...f} /><path {...p} d="M3 17l5-6 4 3 5-8 4 4" />{N(17, 6)}</>,
+    bell: <><path d="M6 16V11a6 6 0 0112 0v5l1.5 2h-15z" {...f} /><path {...p} d="M6 16V11a6 6 0 0112 0v5l1.5 2h-15zM10 20.5a2.2 2.2 0 004 0" /><circle cx="18" cy="5.5" r="2.4" fill="#7fd8ff" /></>,
+    camera: <><rect x="3" y="7" width="18" height="13" rx="4" {...f} /><path {...p} d="M3 11a4 4 0 014-4h1.5l1.5-2.5h4L15.5 7H17a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4z" /><circle cx="12" cy="13.5" r="3.2" fill="none" stroke="#7fd8ff" strokeWidth="1.8" /></>,
+    expand: <path {...p} d="M4 9V6a2 2 0 012-2h3M15 4h3a2 2 0 012 2v3M20 15v3a2 2 0 01-2 2h-3M9 20H6a2 2 0 01-2-2v-3" />,
+    shrink: <path {...p} d="M9 4v3a2 2 0 01-2 2H4M20 9h-3a2 2 0 01-2-2V4M15 20v-3a2 2 0 012-2h3M4 15h3a2 2 0 012 2v3" />,
+    vs: <><path {...p} d="M3 16l5-5 4 3 9-8" /><path {...p} opacity=".55" strokeDasharray="0.5 3.2" d="M3 8l6 5 5-2 7 6" />{N(21, 6)}</>,
   };
-  return <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">{body[k]}</svg>;
+  return <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true">{body[k]}</svg>;
 }
 
 export function ChartScreen({ arg }: ScreenProps) {
@@ -933,6 +947,7 @@ export function ChartScreen({ arg }: ScreenProps) {
       <div className="ch">
         {/* Верхняя панель: таймфреймы, вид, индикаторы, рисование. */}
         <div className="ch-bar" role="toolbar">
+          <div className="ch-tfs">
           {TF_QUICK.map((tf) => (
             <button key={tf} type="button" className={prefs.tf === tf ? "ch-tf on" : "ch-tf"}
               onClick={() => { haptic("select"); setP({ tf }); setMenu(null); }}>
@@ -943,14 +958,14 @@ export function ChartScreen({ arg }: ScreenProps) {
             aria-expanded={menu === "tf"} onClick={() => setMenu(menu === "tf" ? null : "tf")}>
             {TF_QUICK.includes(prefs.tf) ? "⋯" : TF_LABEL[prefs.tf]}
           </button>
-          <span className="ch-sep" />
+          </div>
           <button type="button" className={menu === "type" ? "ch-btn on" : "ch-btn"} aria-label={t(lang, "chart_type")}
             onClick={() => setMenu(menu === "type" ? null : "type")}>
             <ToolIcon k={prefs.type} />
           </button>
           <button type="button" className={prefs.cmp?.length ? "ch-btn on" : "ch-btn"} aria-label={t(lang, "chart_cmp")}
             onClick={() => { haptic("select"); setCmpPick(true); setPicking(true); }}>
-            <b className="ch-vs">VS</b>
+            <ToolIcon k="vs" />
           </button>
           <button type="button" className={menu === "ind" ? "ch-btn wide on" : "ch-btn wide"} aria-label={t(lang, "chart_ind")}
             onClick={() => { setMenu(menu === "ind" ? null : "ind"); setIndQ(""); }}>
@@ -962,12 +977,12 @@ export function ChartScreen({ arg }: ScreenProps) {
           </button>
           <button type="button" className={alertsOpen ? "ch-btn on" : "ch-btn"} aria-label={t(lang, "chart_alerts")}
             onClick={() => { haptic("select"); setAlertsOpen(!alertsOpen); refreshAlerts(); }}>
-            🔔{alerts.filter((a) => !a.fired).length ? <small className="ch-n">{alerts.filter((a) => !a.fired).length}</small> : null}
+            <ToolIcon k="bell" />{alerts.filter((a) => !a.fired).length ? <small className="ch-n">{alerts.filter((a) => !a.fired).length}</small> : null}
           </button>
           <button type="button" className="ch-btn" aria-label={t(lang, "chart_snap")} disabled={snapBusy || status !== "ok"}
-            onClick={() => void snap()}>{snapBusy ? "…" : "📷"}</button>
+            onClick={() => void snap()}>{snapBusy ? "…" : <ToolIcon k="camera" />}</button>
           <button type="button" className={full ? "ch-btn on" : "ch-btn"} aria-label={t(lang, "chart_full")} aria-pressed={full}
-            onClick={() => { haptic("select"); setFull(!full); }}>⛶</button>
+            onClick={() => { haptic("select"); setFull(!full); }}><ToolIcon k={full ? "shrink" : "expand"} /></button>
         </div>
 
         <div className="ch-main">
@@ -1024,11 +1039,14 @@ export function ChartScreen({ arg }: ScreenProps) {
             {flyout !== null && prefs.tools ? (
               <div className="ch-fly" role="menu" aria-label={t(lang, GROUPS[flyout]!.key)}>
                 <h3>{t(lang, GROUPS[flyout]!.key)}</h3>
-                {GROUPS[flyout]!.tools.map((k) => (
-                  <button key={k} type="button" role="menuitem" className={tool === k ? "ch-row on" : "ch-row"} onClick={() => pickTool(k, flyout)}>
-                    <ToolIcon k={k} /> <span className="ch-row-name">{toolLabel(k)}</span>
-                  </button>
-                ))}
+                <div className="ch-tiles row">
+                  {GROUPS[flyout]!.tools.map((k) => (
+                    <button key={k} type="button" role="menuitem" className={tool === k ? "ch-tile on" : "ch-tile"} onClick={() => pickTool(k, flyout)}>
+                      <span className="ch-tile-ic"><ToolIcon k={k} /></span>
+                      <span className="ch-tile-name">{toolLabel(k)}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             ) : null}
 
@@ -1160,12 +1178,15 @@ export function ChartScreen({ arg }: ScreenProps) {
         {menu === "type" ? (
           <div className="ch-pop" role="menu">
             <h3>{t(lang, "chart_type")}</h3>
-            {TYPES.map((k) => (
-              <button key={k} type="button" className={prefs.type === k ? "ch-row on" : "ch-row"}
-                onClick={() => { haptic("select"); setP({ type: k }); setMenu(null); }}>
-                <ToolIcon k={k} /> {t(lang, `chart_t_${k}` as DictKey)}
-              </button>
-            ))}
+            <div className="ch-tiles">
+              {TYPES.map((k) => (
+                <button key={k} type="button" className={prefs.type === k ? "ch-tile on" : "ch-tile"}
+                  onClick={() => { haptic("select"); setP({ type: k }); setMenu(null); }}>
+                  <span className="ch-tile-ic"><ToolIcon k={k} /></span>
+                  <span className="ch-tile-name">{t(lang, `chart_t_${k}` as DictKey)}</span>
+                </button>
+              ))}
+            </div>
           </div>
         ) : null}
 

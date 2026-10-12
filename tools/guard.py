@@ -347,6 +347,12 @@ say("график помнит всё: монету, таймфрейм, вид,
 say("текущая свеча и её цена — посередине окна (по ширине и высоте), пока не листали историю",
     "private centerRight()" in _ce and "if (this.centered && !this.fit) this.right = this.centerRight();" in _ce
     and "if (this.centered && n - 1 >= i0 && n - 1 <= i1" in _ce and "RIGHT_PAD_BARS" not in _ce)
+_ccss = read(f"{APP}/src/styles/app.css")
+say("свой стиль графика, не как у TradingView: круглые кнопки, капсула таймфреймов, плитки, свои иконки без эмодзи, бирка цены с носиком",
+    'className="ch-tfs"' in chart_scr and 'className="ch-tiles row"' in chart_scr and "ch-tile-ic" in chart_scr
+    and 'ToolIcon k="bell"' in chart_scr and 'ToolIcon k="camera"' in chart_scr and "🔔" not in chart_scr and "📷" not in chart_scr and "⛶" not in chart_scr
+    and ".ch-tools button.grp::after" in _ccss and "border-right-color: currentColor" not in _ccss
+    and "ctx.arcTo(xr, top, xr, top + r, r);" in _ce)
 say("полный экран: график ниже кнопок Telegram (safe area), выход ✕ на самом графике и через Telegram",
     '"--ch-top"' in chart_scr and '"contentSafeAreaChanged"' in chart_scr and '"fullscreenChanged"' in chart_scr
     and 'className="ch-exitfull"' in chart_scr and "var(--ch-top, 0px)" in read(f"{APP}/src/styles/app.css"))
