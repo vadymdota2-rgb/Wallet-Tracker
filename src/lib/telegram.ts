@@ -42,6 +42,9 @@ interface WebApp {
    *  поверх приложения в полноэкранном режиме (content). */
   safeAreaInset?: { top: number; bottom: number; left: number; right: number };
   contentSafeAreaInset?: { top: number; bottom: number; left: number; right: number };
+  /** Bot API 7.7: свайп вниз не сворачивает приложение. */
+  disableVerticalSwipes?(): void;
+  enableVerticalSwipes?(): void;
   onEvent?(name: string, cb: () => void): void;
   offEvent?(name: string, cb: () => void): void;
 }

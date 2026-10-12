@@ -322,6 +322,8 @@ export function ChartScreen({ arg }: ScreenProps) {
   const drawKey = m.hip3 ?? m.base;
 
   const box = useRef<HTMLDivElement>(null);
+  /** Легенда цены — едет вверх, когда листают к индикаторам. */
+  const legendEl = useRef<HTMLDivElement>(null);
   const cv = useRef<HTMLCanvasElement>(null);
   const eng = useRef<Engine | null>(null);
   const live = useRef<{ sym: string; tf: Tf; src: Source | null; key: string }>({ sym, tf: prefs.tf, src: null, key: drawKey });
@@ -502,6 +504,10 @@ export function ChartScreen({ arg }: ScreenProps) {
     if (!c) return;
     const e = new Engine(c, {
       hover: (h) => setHover(h),
+      scroll: (y) => {
+        const el = legendEl.current;
+        if (el) el.style.transform = y ? `translateY(${-y}px)` : "";
+      },
       needOlder: () => {
         const { sym: s, tf, src: from } = live.current;
         if (!from) return;
@@ -789,6 +795,11 @@ export function ChartScreen({ arg }: ScreenProps) {
       if (wa && !wa.isFullscreen) setFull(false);
     };
     sync();
+    // Вертикальный свайп по графику листает панели индикаторов — не даём ему
+    // сворачивать само мини-приложение.
+    try {
+      wa?.disableVerticalSwipes?.();
+    } catch { /* старый клиент */ }
     wa?.onEvent?.("safeAreaChanged", sync);
     wa?.onEvent?.("contentSafeAreaChanged", sync);
     wa?.onEvent?.("fullscreenChanged", onFull);
@@ -796,6 +807,9 @@ export function ChartScreen({ arg }: ScreenProps) {
       wa?.offEvent?.("safeAreaChanged", sync);
       wa?.offEvent?.("contentSafeAreaChanged", sync);
       wa?.offEvent?.("fullscreenChanged", onFull);
+      try {
+        wa?.enableVerticalSwipes?.();
+      } catch { /* старый клиент */ }
     };
   }, []);
   useEffect(() => () => {
@@ -996,7 +1010,7 @@ export function ChartScreen({ arg }: ScreenProps) {
             ) : null}
 
             {/* Легенда: монета, таймфрейм, биржа, OHLC и индикаторы. */}
-            <div className="ch-legend">
+            <div className="ch-legend" ref={legendEl}>
               <div className="ch-lg-head">
                 <b>{m.label}{m.hip3 ? "" : "USDT"}</b>
                 <span>· {TF_LABEL[prefs.tf]}</span>

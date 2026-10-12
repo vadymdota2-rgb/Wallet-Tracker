@@ -20,7 +20,7 @@
  */
 import type { Bar, Tf } from "./data";
 import { TF_MS, tfEnd } from "./data";
-import { IND, techRating, type IndInst, type Mark, type Rating, type Ser } from "./indicators";
+import { IND, indTitle, techRating, type IndInst, type Mark, type Rating, type Ser } from "./indicators";
 import {
   axisMarks, hit as hitDrawing, render as renderDrawing, TOOL_POINTS,
   type Drawing, type DrawType, type Pt, type View,
@@ -91,6 +91,8 @@ export interface Events {
   rating(r: Rating | null): void;
   /** Процентную шкалу включили или выключили кнопкой «%». */
   pct(on: boolean): void;
+  /** Панели пролистаны на y px — легенда цены уезжает вместе с ценой. */
+  scroll?(y: number): void;
 }
 
 interface Scale {
@@ -125,6 +127,8 @@ const C = {
 };
 
 const TIME_H = 24;
+/** Сколько видно от первой панели индикатора под ценой — подсказка «листай вниз». */
+const PEEK = 34;
 const MIN_SPACING = 1.2;
 const MAX_SPACING = 64;
 const RIGHT_PAD_BARS = 4;
@@ -249,14 +253,24 @@ export class Engine {
 
   /* Жесты. */
   private ptrs = new Map<number, { x: number; y: number }>();
-  private mode: "" | "pan" | "pending" | "cross" | "price" | "time" | "sep" | "create" | "handle" | "move" | "pinch" = "";
-  private down = { x: 0, y: 0, t: 0, right: 0, spacing: 0, lo: 0, hi: 0, pane: 0, handle: -1, pts: [] as Pt[], id: "" };
+  private mode: "" | "pan" | "pending" | "cross" | "price" | "time" | "sep" | "vscroll" | "create" | "handle" | "move" | "pinch" = "";
+  private down = { x: 0, y: 0, t: 0, right: 0, spacing: 0, lo: 0, hi: 0, pane: 0, handle: -1, pts: [] as Pt[], id: "", sy: 0 };
   private pinch = { d: 0, cx: 0, spacing: 0, anchor: 0 };
   private longTimer: ReturnType<typeof setTimeout> | null = null;
   private lastTap = { t: 0, x: 0, y: 0 };
   private vel = 0;
   private lastMove = { x: 0, t: 0 };
   private inertia = 0;
+  /** Панели индикаторов не сжимают цену, а идут ниже — их листают по вертикали. */
+  private sy = 0;
+  private maxSy = 0;
+  private velY = 0;
+  private lastMoveT = 0;
+  private reveal = "";
+  private indsSet = false;
+  private syShown = 0;
+  /** Снимок: всё в один кадр, как раньше, без прокрутки. */
+  private fit = false;
 
   constructor(canvas: HTMLCanvasElement, ev: Events) {
     this.cv = canvas;
@@ -368,10 +382,12 @@ export class Engine {
     const next: Pane[] = [main];
     for (const i of list) {
       if (!IND[i.kind].pane) continue;
-      next.push(keep.get(i.uid) ?? { key: i.uid, ind: i, top: 0, h: 0, frac: 0.2, scale: { auto: true, lo: 0, hi: 1, log: false } });
+      if (!keep.has(i.uid) && this.indsSet) this.reveal = i.uid;
+      next.push(keep.get(i.uid) ?? { key: i.uid, ind: i, top: 0, h: 0, frac: 0.28, scale: { auto: true, lo: 0, hi: 1, log: false } });
       next[next.length - 1]!.ind = i;
     }
     this.panes = next;
+    this.indsSet = true;
     this.indDirty = true;
     this.invalidate();
   }
@@ -481,9 +497,11 @@ export class Engine {
     this.w = W;
     this.h = H - head - foot;
     this.dpr = dpr;
+    this.fit = true;
     try {
       this.paint();
     } finally {
+      this.fit = false;
       this.cv = keep.cv;
       this.ctx = keep.ctx;
       this.w = keep.w;
@@ -776,18 +794,48 @@ export class Engine {
   private layout() {
     const total = this.h - TIME_H;
     const subs = this.panes.slice(1);
-    const maxSub = total * 0.6;
-    let subH = subs.reduce((s, p) => s + Math.max(48, p.frac * total), 0);
-    const k = subH > maxSub ? maxSub / subH : 1;
-    subH = 0;
-    for (const p of subs) {
-      p.h = Math.max(40, Math.round(Math.max(48, p.frac * total) * k));
-      subH += p.h;
-    }
     const main = this.panes[0]!;
-    main.top = 0;
-    main.h = total - subH;
-    let y = main.h;
+    if (this.fit || !subs.length) {
+      // Снимок или нет панелей: всё в один кадр, панели делят высоту с ценой.
+      const maxSub = total * 0.6;
+      let subH = subs.reduce((s, p) => s + Math.max(48, p.frac * total), 0);
+      const k = subH > maxSub ? maxSub / subH : 1;
+      subH = 0;
+      for (const p of subs) {
+        p.h = Math.max(40, Math.round(Math.max(48, p.frac * total) * k));
+        subH += p.h;
+      }
+      main.top = 0;
+      main.h = total - subH;
+      let y = main.h;
+      for (const p of subs) {
+        p.top = y;
+        y += p.h;
+      }
+      if (!this.fit) this.sy = this.maxSy = 0;
+      return;
+    }
+    // Цена — на весь экран (чуть выглядывает первая панель), индикаторы — ниже, листаются.
+    main.h = Math.round((total - PEEK) * Math.max(0.3, Math.min(1, main.frac)));
+    let content = main.h;
+    for (const p of subs) {
+      p.h = Math.round(Math.max(72, Math.min(total * 0.8, p.frac * total)));
+      content += p.h;
+    }
+    this.maxSy = Math.max(0, content - total);
+    if (this.reveal) {
+      // Новый индикатор — докручиваем, чтобы его было видно.
+      let bottom = main.h;
+      for (const p of subs) {
+        bottom += p.h;
+        if (p.key === this.reveal) break;
+      }
+      this.sy = Math.max(this.sy, bottom - total);
+      this.reveal = "";
+    }
+    this.sy = Math.max(0, Math.min(this.maxSy, this.sy));
+    main.top = -this.sy;
+    let y = main.top + main.h;
     for (const p of subs) {
       p.top = y;
       y += p.h;
@@ -964,6 +1012,10 @@ export class Engine {
     ctx.fillRect(0, 0, this.w, this.h);
     ctx.font = this.font;
     this.layout();
+    if (!this.fit && this.sy !== this.syShown) {
+      this.syShown = this.sy;
+      this.ev.scroll?.(this.sy);
+    }
     if (!this.shown.length) {
       this.emitHover();
       return;
@@ -992,13 +1044,20 @@ export class Engine {
       ctx.restore();
     }
 
+    const vb = this.h - TIME_H;
     for (const p of this.panes) {
+      const t = Math.max(0, p.top);
+      const b = Math.min(vb, p.top + p.h);
+      if (b <= t) continue;
       ctx.save();
       ctx.beginPath();
-      ctx.rect(0, p.top, this.plotR, p.h);
+      ctx.rect(0, t, this.plotR, b - t);
       ctx.clip();
       if (p.key === "main") this.paintMain(i0, i1);
-      else this.paintSub(p, i0, i1);
+      else {
+        this.paintSub(p, i0, i1);
+        this.paneTitle(p);
+      }
       ctx.restore();
     }
 
@@ -1006,15 +1065,52 @@ export class Engine {
     ctx.strokeStyle = C.line;
     ctx.lineWidth = 1;
     for (const p of this.panes.slice(1)) {
+      if (p.top < 0 || p.top > vb) continue;
       ctx.beginPath();
       ctx.moveTo(0, p.top + 0.5);
       ctx.lineTo(this.w, p.top + 0.5);
       ctx.stroke();
     }
     this.paintAxes();
+    this.paintScrollbar();
     this.paintCross();
     this.paintLoupe();
     this.emitHover();
+  }
+
+  /** Название индикатора в углу его панели — при прокрутке видно, что где. */
+  private paneTitle(p: Pane) {
+    if (!p.ind) return;
+    const ctx = this.ctx;
+    ctx.font = this.font;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    const txt = indTitle(p.ind);
+    const w = ctx.measureText(txt).width;
+    ctx.fillStyle = "rgba(6,12,22,0.72)";
+    ctx.fillRect(4, p.top + 3, w + 10, 17);
+    ctx.fillStyle = p.ind.hidden ? C.axis : (p.ind.colors[0] ?? C.text);
+    ctx.fillText(txt, 9, p.top + 12);
+  }
+
+  /** Полоска прокрутки панелей у правого края графика. */
+  private paintScrollbar() {
+    if (this.maxSy <= 0 || this.fit) return;
+    const ctx = this.ctx;
+    const vb = this.h - TIME_H;
+    const content = vb + this.maxSy;
+    const bh = Math.max(24, (vb * vb) / content);
+    const by = (this.sy / this.maxSy) * (vb - bh);
+    ctx.fillStyle = this.mode === "vscroll" ? "rgba(127,216,255,0.55)" : "rgba(127,216,255,0.22)";
+    ctx.beginPath();
+    ctx.roundRect(this.plotR - 5, by + 2, 3, bh - 4, 2);
+    ctx.fill();
+  }
+
+  /** Листание панелей: dy > 0 — вниз, к индикаторам. */
+  scrollPanes(dy: number) {
+    this.sy = Math.max(0, Math.min(this.maxSy, this.sy + dy));
+    this.invalidate();
   }
 
   /**
@@ -1941,9 +2037,13 @@ export class Engine {
     ctx.font = this.font;
     ctx.textBaseline = "middle";
     ctx.textAlign = "left";
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(R, 0, this.priceW, this.h - TIME_H);
+    ctx.clip();
     for (const p of this.panes) {
       ctx.fillStyle = C.axis;
-      if (p.empty) continue;
+      if (p.empty || p.top > this.h - TIME_H || p.top + p.h < 0) continue;
       for (const [y, v] of this.priceTicks(p)) {
         if (y < p.top + 8 || y > p.top + p.h - 6) continue;
         ctx.fillText(p.key === "main" ? (this.pctMode ? `${v > 0 ? "+" : ""}${+v.toFixed(2)}%` : fmtPrice(v, this.dec)) : fmtShort(v), R + 6, y);
@@ -1957,12 +2057,19 @@ export class Engine {
           if (finite(v)) this.axisLabel(this.py(p, v), p.ind.kind === "wt_fund" ? `${v.toFixed(4)}%` : fmtShort(v), p.ind.colors[0] ?? "#3a9bff");
         } else {
           const ser = this.calc.get(p.ind.uid);
+          const tags: { y: number; txt: string; c: string }[] = [];
           d.lines.forEach((l, k) => {
             if (l.style === "hist") return;
             const s = ser?.[k];
             const v = s?.[this.bars.length - 1];
-            if (finite(v)) this.axisLabel(this.py(p, v), fmtShort(v), p.ind!.colors[k] ?? l.color);
+            if (finite(v)) tags.push({ y: this.py(p, v), txt: fmtShort(v), c: p.ind!.colors[k] ?? l.color });
           });
+          // Плашки не налезают друг на друга: раздвигаем по высоте.
+          tags.sort((a, b) => a.y - b.y);
+          for (let k = 1; k < tags.length; k++) tags[k]!.y = Math.max(tags[k]!.y, tags[k - 1]!.y + 18);
+          const over = tags.length ? tags[tags.length - 1]!.y - (p.top + p.h - 9) : 0;
+          if (over > 0) for (const g of tags) g.y -= over;
+          for (const g of tags) this.axisLabel(g.y, g.txt, g.c);
         }
       }
     }
@@ -1982,6 +2089,7 @@ export class Engine {
       this.axisLabel(Math.max(main.top + 9, Math.min(main.top + main.h - 22, ly)), fmtPrice(last.c, this.dec),
         last.c >= last.o ? "#1fa972" : "#d9405b", "#fff", this.countdown() || undefined);
     }
+    ctx.restore();
     // Время.
     ctx.textAlign = "center";
     for (const [x, txt, bold] of this.timeTicks()) {
@@ -2177,8 +2285,10 @@ export class Engine {
 
     const R = this.plotR;
     const bottom = this.h - TIME_H;
-    this.down = { ...this.down, x, y, t: performance.now(), right: this.right, spacing: this.spacing, handle: -1, id: "", pts: [] };
+    this.down = { ...this.down, x, y, t: performance.now(), right: this.right, spacing: this.spacing, handle: -1, id: "", pts: [], sy: this.sy };
     this.vel = 0;
+    this.velY = 0;
+    this.lastMoveT = performance.now();
     this.lastMove = { x, t: performance.now() };
     this.lastMoveY = y;
 
@@ -2198,10 +2308,10 @@ export class Engine {
     // Граница панелей.
     for (let k = 1; k < this.panes.length; k++) {
       const p = this.panes[k]!;
-      if (Math.abs(y - p.top) <= (this.mouse ? 4 : 9) && x < R) {
+      if (Math.abs(y - p.top) <= (this.mouse ? 4 : 6) && x < R && p.top > 0) {
         this.mode = "sep";
         this.down.pane = k;
-        this.down.lo = p.h;
+        this.down.lo = this.panes[k - 1]!.h;
         return;
       }
     }
@@ -2343,7 +2453,7 @@ export class Engine {
         for (let k = c.idx; k < c.d.pts.length; k++) c.d.pts[k] = { ...pt };
       }
       if (this.tool === "cursor" && !this.creating) {
-        const h = y < this.panes[0]!.h ? this.hitAny(x, y, 6) : null;
+        const h = y < this.panes[0]!.top + this.panes[0]!.h ? this.hitAny(x, y, 6) : null;
         this.cv.style.cursor = h ? (h.handle >= 0 ? "grab" : "pointer") : x > this.plotR ? "ns-resize" : y > this.h - TIME_H ? "ew-resize" : "default";
       }
       this.invalidate();
@@ -2357,16 +2467,29 @@ export class Engine {
       // Палец сдвинулся до долгого нажатия — это листание.
       if (Math.hypot(dx, dy) <= 7) return;
       if (this.longTimer) clearTimeout(this.longTimer);
-      this.mode = "pan";
+      // Вертикально — листаем панели индикаторов (на цене — если шкала авто).
+      const vert = Math.abs(dy) > Math.abs(dx) * 1.2;
+      this.mode = vert && this.maxSy > 0 && (this.paneAt(this.down.y) > 0 || this.panes[0]!.scale.auto) ? "vscroll" : "pan";
       if (!this.crossSticky) this.cross = null;
     }
     switch (this.mode) {
+      case "vscroll": {
+        this.sy = Math.max(0, Math.min(this.maxSy, this.down.sy - dy));
+        const dt = now - this.lastMoveT;
+        if (dt > 0) this.velY = 0.8 * ((y - this.lastMoveY) / dt) + 0.2 * this.velY;
+        this.lastMoveT = now;
+        this.invalidate();
+        break;
+      }
       case "pan": {
         const ddx = x - this.down.x;
         this.right = this.down.right - ddx / this.spacing;
         this.clampRight();
         const main = this.panes[0]!;
-        if (!main.scale.auto && this.paneAt(this.down.y) === 0) {
+        if (this.mouse && this.maxSy > 0 && this.paneAt(this.down.y) > 0) {
+          // Мышью панели индикаторов тянутся и по вертикали.
+          this.sy = Math.max(0, Math.min(this.maxSy, this.down.sy - dy));
+        } else if (!main.scale.auto && this.paneAt(this.down.y) === 0) {
           // Ручная шкала: двигаем и по вертикали.
           const k = (y - this.lastMoveY) / (main.h * 0.84);
           const s = main.scale;
@@ -2409,10 +2532,11 @@ export class Engine {
         break;
       }
       case "sep": {
-        const p = this.panes[this.down.pane]!;
+        // Тянем нижний край панели над разделителем.
+        const p = this.panes[this.down.pane - 1]!;
         const total = this.h - TIME_H;
-        const nh = Math.max(40, Math.min(total * 0.6, this.down.lo - dy));
-        p.frac = nh / total;
+        const nh = this.down.lo + dy;
+        p.frac = p.key === "main" ? Math.max(0.3, Math.min(1, nh / (total - PEEK))) : Math.max(72, Math.min(total * 0.8, nh)) / total;
         this.invalidate();
         break;
       }
@@ -2520,6 +2644,10 @@ export class Engine {
       case "price":
         this.lastTap = { t: performance.now(), x, y };
         break;
+      case "vscroll":
+        if (Math.abs(this.velY) > 0.25) this.glideY();
+        else this.invalidate();
+        break;
       case "create": {
         const c = this.creating;
         if (!c) break;
@@ -2565,7 +2693,12 @@ export class Engine {
 
   private onWheel = (e: WheelEvent) => {
     e.preventDefault();
-    const { x } = this.pos(e);
+    const { x, y } = this.pos(e);
+    if (this.maxSy > 0 && Math.abs(e.deltaY) >= Math.abs(e.deltaX) && (x > this.plotR || this.paneAt(y) > 0)) {
+      // Колесо над шкалой или над панелью индикатора — листаем панели.
+      this.scrollPanes(e.deltaY);
+      return;
+    }
     if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
       this.right += e.deltaX / this.spacing;
       this.clampRight();
@@ -2587,6 +2720,22 @@ export class Engine {
     const n = this.bars.length;
     const vis = this.plotR / this.spacing;
     this.right = Math.max(Math.min(8, vis * 0.3), Math.min(n - 1 + vis * 0.75, this.right));
+  }
+
+  private glideY() {
+    let v = this.velY;
+    let last = performance.now();
+    const step = () => {
+      const now = performance.now();
+      const dt = now - last;
+      last = now;
+      const before = this.sy;
+      this.sy = Math.max(0, Math.min(this.maxSy, this.sy - v * dt));
+      v *= Math.pow(0.994, dt);
+      this.invalidate();
+      if (Math.abs(v) > 0.02 && this.sy !== before) this.inertia = requestAnimationFrame(step);
+    };
+    this.inertia = requestAnimationFrame(step);
   }
 
   private glide() {
