@@ -770,6 +770,34 @@ export function ChartScreen({ arg }: ScreenProps) {
     } catch { /* старый клиент Telegram — хватит CSS */ }
     return () => root.classList.remove("ch-full");
   }, [full]);
+  /* В полноэкранном режиме Telegram кладёт поверх приложения свои кнопки
+     («Назад», «⌄», «⋮»), а сверху — строка статуса телефона. Панель графика
+     уезжала под них вместе с кнопкой выхода: развернуть можно, свернуть —
+     нет. Берём отступы у самого Telegram и держим их в CSS-переменных; вышли
+     из полного экрана средствами Telegram — выключаем и у себя. */
+  useEffect(() => {
+    const wa = webApp();
+    const root = document.documentElement;
+    const sync = () => {
+      const s = wa?.safeAreaInset;
+      const c = wa?.contentSafeAreaInset;
+      root.style.setProperty("--ch-top", `${(s?.top ?? 0) + (c?.top ?? 0)}px`);
+      root.style.setProperty("--ch-bottom", `${(s?.bottom ?? 0) + (c?.bottom ?? 0)}px`);
+    };
+    const onFull = () => {
+      sync();
+      if (wa && !wa.isFullscreen) setFull(false);
+    };
+    sync();
+    wa?.onEvent?.("safeAreaChanged", sync);
+    wa?.onEvent?.("contentSafeAreaChanged", sync);
+    wa?.onEvent?.("fullscreenChanged", onFull);
+    return () => {
+      wa?.offEvent?.("safeAreaChanged", sync);
+      wa?.offEvent?.("contentSafeAreaChanged", sync);
+      wa?.offEvent?.("fullscreenChanged", onFull);
+    };
+  }, []);
   useEffect(() => () => {
     try {
       const wa = webApp();
@@ -950,6 +978,11 @@ export function ChartScreen({ arg }: ScreenProps) {
 
           <div className="ch-plot" ref={box}>
             <canvas ref={cv} className="ch-cv" />
+
+            {full ? (
+              <button type="button" className="ch-exitfull" aria-label={t(lang, "chart_full")}
+                onClick={() => { haptic("select"); setFull(false); }}>✕</button>
+            ) : null}
 
             {flyout !== null && prefs.tools ? (
               <div className="ch-fly" role="menu" aria-label={t(lang, GROUPS[flyout]!.key)}>

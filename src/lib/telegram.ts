@@ -38,6 +38,12 @@ interface WebApp {
   requestFullscreen?(): void;
   exitFullscreen?(): void;
   isFullscreen?: boolean;
+  /** Отступы: от выреза и строки статуса (safe) и от кнопок самого Telegram
+   *  поверх приложения в полноэкранном режиме (content). */
+  safeAreaInset?: { top: number; bottom: number; left: number; right: number };
+  contentSafeAreaInset?: { top: number; bottom: number; left: number; right: number };
+  onEvent?(name: string, cb: () => void): void;
+  offEvent?(name: string, cb: () => void): void;
 }
 
 declare global {

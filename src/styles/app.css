@@ -1574,7 +1574,20 @@
 /* Во весь экран: шапка экрана и нижнее меню прячутся, график — до краёв. */
 html.ch-full .dock, html.ch-full .sheet .screen-hd { display: none; }
 html.ch-full .sheet:has(.screen.full) { padding: 0; }
-html.ch-full .screen.full { height: 100dvh; padding-top: env(safe-area-inset-top); }
+/* Сверху — строка статуса и кнопки Telegram поверх приложения (их высоту
+   отдаёт сам Telegram, см. ChartScreen); без Telegram — вырез экрана. */
+html.ch-full .screen.full {
+  height: 100dvh;
+  padding-top: max(var(--ch-top, 0px), env(safe-area-inset-top));
+  padding-bottom: max(var(--ch-bottom, 0px), env(safe-area-inset-bottom));
+}
+/* Выход из полного экрана — на самом графике, слева внизу: его не накроют
+   ни кнопки Telegram, ни строка статуса. */
+.ch-exitfull {
+  position: absolute; left: 8px; bottom: 32px; z-index: 3; width: 38px; height: 38px; border-radius: 50%;
+  border: 1px solid rgb(127 216 255 / 0.45); background: rgb(11 22 40 / 0.92); color: var(--ink); font-size: 16px;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.45);
+}
 .ch { position: absolute; inset: 0; display: flex; flex-direction: column; background: #050b16; }
 .ch-bar {
   display: flex; align-items: center; gap: 2px; padding: 4px 6px; flex: 0 0 auto;

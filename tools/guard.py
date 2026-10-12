@@ -336,6 +336,9 @@ say("график: снимок 1280×800 в чат через бота, во в
     and "snapshot(title: string, sub: string, W = 1280, H = 800)" in _ce
     and "wa?.requestFullscreen?.()" in chart_scr and 'html.ch-full .dock' in read(f"{APP}/src/styles/app.css")
     and 'KeyH: "hline"' in chart_scr and "nudge(n: number)" in _ce)
+say("полный экран: график ниже кнопок Telegram (safe area), выход ✕ на самом графике и через Telegram",
+    '"--ch-top"' in chart_scr and '"contentSafeAreaChanged"' in chart_scr and '"fullscreenChanged"' in chart_scr
+    and 'className="ch-exitfull"' in chart_scr and "var(--ch-top, 0px)" in read(f"{APP}/src/styles/app.css"))
 say("рисунки — во времени и цене, по монете на устройстве; настройки графика запоминаются",
     "export interface Pt {\n  t: number;\n  p: number;\n}" in _cw and 'const DRAW_KEY = "wt-chart-draw-v1";' in chart_scr
     and 'const PREFS_KEY = "wt-chart-v1";' in chart_scr)
