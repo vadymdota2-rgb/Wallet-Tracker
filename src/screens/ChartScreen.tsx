@@ -24,9 +24,9 @@ import { CoinIcon } from "../components/CoinIcon";
 import { loadHistory, loadOlder, market, SOURCE_NAME, subscribe, TFS, type Source, type Tf } from "../chart/data";
 import { Engine, fmtPrice, fmtShort, priceDecimals, type ChartType, type Hover, type Tool } from "../chart/engine";
 import {
-  IND, indTitle, newInd, OVERLAY_KINDS, OWN_KINDS, PANE_KINDS, type IndInst, type IndKind,
+  AUTO_KINDS, IND, indTitle, newInd, OVERLAY_KINDS, OWN_KINDS, PANE_KINDS, rateKey, type IndInst, type IndKind, type Rating,
 } from "../chart/indicators";
-import { DRAW_COLORS, type DrawType, type Drawing } from "../chart/draw";
+import { DRAW_COLORS, FIB_ALL, FIB_DEF, FIBEXT_DEF, isFib, type DrawType, type Drawing } from "../chart/draw";
 
 const POPULAR = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "TON", "HYPE", "SUI", "PEPE", "LINK", "AVAX"];
 const VENUE_NAME: Record<string, string> = { binance: "Binance", bybit: "Bybit", hl: "Hyperliquid" };
@@ -122,14 +122,20 @@ const TF_LABEL: Record<Tf, string> = {
 };
 const TF_QUICK: Tf[] = ["15m", "1h", "4h", "1d"];
 const TYPES: ChartType[] = ["candles", "hollow", "heikin", "bars", "line", "area"];
-const TOOLS: (DrawType | "cursor")[] = [
-  "cursor", "trend", "ray", "ext", "hline", "hray", "vline", "channel", "rect", "fib", "long", "short", "measure", "text", "brush",
+/* Инструменты — группами, как у TradingView, но со словами: на телефоне по
+   значку не угадать, где «расширение Фибоначчи», а где «веер». */
+const GROUPS: { key: DictKey; tools: DrawType[] }[] = [
+  { key: "chart_g_lines", tools: ["trend", "ray", "ext", "hline", "hray", "vline", "channel"] },
+  { key: "chart_g_fib", tools: ["fib", "fibext", "fibfan", "fibtime"] },
+  { key: "chart_g_ew", tools: ["ew5", "abc", "tri", "wxy"] },
+  { key: "chart_g_pos", tools: ["long", "short", "measure"] },
+  { key: "chart_g_shapes", tools: ["rect", "text", "brush"] },
 ];
 
 const indName = (k: IndKind) => `chart_i_${k}` as DictKey;
 
 /* Значки инструментов — тонкие линии, как у TradingView. */
-function ToolIcon({ k }: { k: DrawType | "cursor" | "magnet" | "eye" | "trash" | ChartType }) {
+function ToolIcon({ k }: { k: DrawType | "cursor" | "magnet" | "eye" | "trash" | "undo" | "redo" | ChartType }) {
   const p = { fill: "none", stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
   const body: Record<string, ReactNode> = {
     cursor: <path {...p} d="M6 3l12 7-5 1.5L10.5 17z" />,
@@ -147,6 +153,15 @@ function ToolIcon({ k }: { k: DrawType | "cursor" | "magnet" | "eye" | "trash" |
     measure: <><path {...p} d="M4 17L17 4l3 3L7 20z" /><path {...p} d="M8 13l2 2M11 10l2 2M14 7l2 2" /></>,
     text: <path {...p} d="M5 6V4h14v2M12 4v16M9 20h6" />,
     brush: <path {...p} d="M4 18c3 0 3-4 6-4s2 5 6 3 3-8 4-11" />,
+    fibext: <><path {...p} d="M3 18L9 8l5 6" /><path {...p} d="M14 4h8M14 9h8M14 14h8" /></>,
+    fibfan: <><path {...p} d="M3 20L21 4M3 20L21 9M3 20L21 14M3 20L21 19" /></>,
+    fibtime: <path {...p} d="M3 3v18M6 3v18M9 3v18M14 3v18M21 3v18" />,
+    ew5: <><path {...p} d="M2 19l4-7 3 3 5-10 3 5 5-6" /><text x="13" y="23" fontSize="7" fill="currentColor" stroke="none">5</text></>,
+    abc: <><path {...p} d="M3 6l6 10 5-5 7 9" /><text x="1" y="23" fontSize="7" fill="currentColor" stroke="none">ABC</text></>,
+    tri: <path {...p} d="M2 6l4 12 4-9 4 7 4-5 4 3" />,
+    wxy: <><path {...p} d="M3 5l6 9 5-4 7 10" /><text x="1" y="23" fontSize="7" fill="currentColor" stroke="none">WXY</text></>,
+    undo: <path {...p} d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3" />,
+    redo: <path {...p} d="M15 14l5-5-5-5M20 9H10a6 6 0 000 12h3" />,
     magnet: <path {...p} d="M6 4v8a6 6 0 0012 0V4M6 8h4M14 8h4" />,
     eye: <><path {...p} d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" /><circle {...p} cx="12" cy="12" r="3" /></>,
     trash: <path {...p} d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />,
@@ -244,6 +259,13 @@ export function ChartScreen({ arg }: ScreenProps) {
   const [ownNone, setOwnNone] = useState<Record<string, boolean>>({});
   /* Список индикаторов в легенде свёрнут: на телефоне он закрывал свечи. */
   const [legendOpen, setLegendOpen] = useState(false);
+  const [hist, setHist] = useState({ undo: false, redo: false });
+  const [rating, setRating] = useState<Rating | null>(null);
+  const [rateOpen, setRateOpen] = useState(false);
+  /* Открытая группа инструментов и последний выбранный в каждой — его значок на кнопке группы. */
+  const [flyout, setFlyout] = useState<number | null>(null);
+  const [groupLast, setGroupLast] = useState<DrawType[]>(() => GROUPS.map((g) => g.tools[0]!));
+  const [fibEdit, setFibEdit] = useState(false);
   /* Подсказка по жестам — пока человек ни разу не поставил перекрестие. */
   const [gest, setGest] = useState(() => {
     try {
@@ -281,6 +303,8 @@ export function ChartScreen({ arg }: ScreenProps) {
       toolDone: () => setTool("cursor"),
       textNew: (d) => setTextEdit({ id: d.id, text: "" }),
       view: (at) => setAtLatest(at),
+      history: (u, r) => setHist({ undo: u, redo: r }),
+      rating: (r) => setRating(r),
     });
     eng.current = e;
     return () => {
@@ -325,6 +349,7 @@ export function ChartScreen({ arg }: ScreenProps) {
   useEffect(() => eng.current?.setMagnet(prefs.magnet), [prefs.magnet]);
   useEffect(() => eng.current?.setTool(tool), [tool]);
   useEffect(() => eng.current?.setHideDrawings(hideDraw), [hideDraw]);
+  useEffect(() => eng.current?.setText((k) => t(lang, k as DictKey)), [lang]);
   useEffect(() => {
     eng.current?.setDrawings(loadDrawings(drawKey));
     setSel(null);
@@ -421,10 +446,16 @@ export function ChartScreen({ arg }: ScreenProps) {
     if (i.kind === "wt_fund") return Number.isFinite(v[0]) ? `${(v[0] ?? 0).toFixed(4)}%` : "";
     if (i.kind === "vol" || i.kind === "obv" || i.kind === "wt_oi") return v.filter(Number.isFinite).map((x) => fmtShort(x)).join(" ");
     const d = IND[i.kind];
-    return v.map((x, k) => (Number.isFinite(x) ? (d.pane ? fmtShort(x) : fmtPrice(x, dec)) : (d.lines[k] ? "∅" : ""))).filter(Boolean).join(" ");
+    return v.filter(Number.isFinite).map((x) => (d.pane ? fmtShort(x) : fmtPrice(x, dec))).join(" ");
   };
 
   const toolLabel = (k: DrawType | "cursor") => t(lang, `chart_d_${k}` as DictKey);
+  const pickTool = (k: DrawType, g: number) => {
+    haptic("select");
+    setTool(k);
+    setGroupLast((a) => a.map((x, i) => (i === g ? k : x)));
+    setFlyout(null);
+  };
 
   return (
     <Frame
@@ -477,14 +508,31 @@ export function ChartScreen({ arg }: ScreenProps) {
         <div className="ch-main">
           {prefs.tools ? (
             <div className="ch-tools" role="toolbar" aria-label={t(lang, "chart_tools")}>
-              {TOOLS.map((k) => (
-                <button key={k} type="button" title={toolLabel(k)} aria-label={toolLabel(k)}
-                  className={tool === k ? "on" : undefined}
-                  onClick={() => { haptic("select"); setTool(tool === k && k !== "cursor" ? "cursor" : k); }}>
-                  <ToolIcon k={k} />
-                </button>
-              ))}
+              <button type="button" title={toolLabel("cursor")} aria-label={toolLabel("cursor")}
+                className={tool === "cursor" ? "on" : undefined}
+                onClick={() => { haptic("select"); setTool("cursor"); setFlyout(null); }}>
+                <ToolIcon k="cursor" />
+              </button>
+              {GROUPS.map((g, gi) => {
+                const active = g.tools.includes(tool as DrawType);
+                const icon = active ? (tool as DrawType) : groupLast[gi]!;
+                return (
+                  <button key={g.key} type="button" title={t(lang, g.key)} aria-label={t(lang, g.key)} aria-expanded={flyout === gi}
+                    className={active || flyout === gi ? "on grp" : "grp"}
+                    onClick={() => { haptic("select"); setFlyout(flyout === gi ? null : gi); }}>
+                    <ToolIcon k={icon} />
+                  </button>
+                );
+              })}
               <span className="ch-tools-sep" />
+              <button type="button" title={t(lang, "chart_undo")} aria-label={t(lang, "chart_undo")} disabled={!hist.undo}
+                onClick={() => { haptic("light"); eng.current?.undo(); }}>
+                <ToolIcon k="undo" />
+              </button>
+              <button type="button" title={t(lang, "chart_redo")} aria-label={t(lang, "chart_redo")} disabled={!hist.redo}
+                onClick={() => { haptic("light"); eng.current?.redo(); }}>
+                <ToolIcon k="redo" />
+              </button>
               <button type="button" title={t(lang, "chart_magnet")} aria-label={t(lang, "chart_magnet")} aria-pressed={prefs.magnet}
                 className={prefs.magnet ? "on" : undefined} onClick={() => setP({ magnet: !prefs.magnet })}>
                 <ToolIcon k="magnet" />
@@ -503,6 +551,17 @@ export function ChartScreen({ arg }: ScreenProps) {
           <div className="ch-plot" ref={box}>
             <canvas ref={cv} className="ch-cv" />
 
+            {flyout !== null && prefs.tools ? (
+              <div className="ch-fly" role="menu" aria-label={t(lang, GROUPS[flyout]!.key)}>
+                <h3>{t(lang, GROUPS[flyout]!.key)}</h3>
+                {GROUPS[flyout]!.tools.map((k) => (
+                  <button key={k} type="button" role="menuitem" className={tool === k ? "ch-row on" : "ch-row"} onClick={() => pickTool(k, flyout)}>
+                    <ToolIcon k={k} /> <span className="ch-row-name">{toolLabel(k)}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
             {/* Легенда: монета, таймфрейм, биржа, OHLC и индикаторы. */}
             <div className="ch-legend">
               <div className="ch-lg-head">
@@ -519,6 +578,11 @@ export function ChartScreen({ arg }: ScreenProps) {
                   <span>C<b>{fmtPrice(bar.c, dec)}</b></span>
                   {chg !== null ? <b>{chg >= 0 ? "+" : ""}{chg.toFixed(2)}%</b> : null}
                 </div>
+              ) : null}
+              {rating ? (
+                <button type="button" className={`ch-rate ${rateKey(rating.total)}`} onClick={() => setRateOpen(true)}>
+                  {t(lang, "chart_rate")}: <b>{t(lang, rateKey(rating.total))}</b>
+                </button>
               ) : null}
               {prefs.inds.length ? (
                 <button type="button" className="ch-lg-fold" aria-expanded={legendOpen} onClick={() => setLegendOpen(!legendOpen)}>
@@ -558,6 +622,9 @@ export function ChartScreen({ arg }: ScreenProps) {
                   <button key={c} type="button" className={sel.color === c ? "ch-color on" : "ch-color"} style={{ background: c }}
                     aria-label={c} onClick={() => eng.current?.patchDrawing(sel.id, { color: c })} />
                 ))}
+                {isFib(sel.type) ? (
+                  <button type="button" className="ch-selbtn" onClick={() => setFibEdit(true)}>{t(lang, "chart_fib_levels")}</button>
+                ) : null}
                 {sel.type === "text" ? (
                   <button type="button" className="ch-selbtn" onClick={() => setTextEdit({ id: sel.id, text: sel.text ?? "" })}>
                     {t(lang, "chart_edit_text")}
@@ -609,7 +676,7 @@ export function ChartScreen({ arg }: ScreenProps) {
             </div>
             <input className="find" value={indQ} onChange={(e) => setIndQ(e.target.value)} placeholder={t(lang, "chart_ind_search")}
               aria-label={t(lang, "chart_ind_search")} />
-            {([["chart_ind_own", OWN_KINDS], ["chart_ind_over", OVERLAY_KINDS], ["chart_ind_osc", PANE_KINDS]] as [DictKey, IndKind[]][]).map(([head, kinds]) => {
+            {([["chart_ind_own", OWN_KINDS], ["chart_ind_auto", AUTO_KINDS], ["chart_ind_over", OVERLAY_KINDS], ["chart_ind_osc", PANE_KINDS]] as [DictKey, IndKind[]][]).map(([head, kinds]) => {
               const q = indQ.trim().toLowerCase();
               const list = kinds.filter((k) => !q || t(lang, indName(k)).toLowerCase().includes(q) || IND[k].short.toLowerCase().includes(q));
               if (!list.length) return null;
@@ -696,6 +763,73 @@ export function ChartScreen({ arg }: ScreenProps) {
           </div>
         ) : null}
 
+        {/* Уровни Фибоначчи — любые из двадцати, плюс продление вправо. */}
+        {fibEdit && sel && isFib(sel.type) ? (() => {
+          const cur = sel.levels ?? (sel.type === "fib" ? FIB_DEF : FIBEXT_DEF);
+          return (
+            <div className="ch-sheet small" role="dialog" aria-label={t(lang, "chart_fib_levels")}>
+              <div className="ch-sheet-hd">
+                <b>{t(lang, "chart_fib_levels")}</b>
+                <button type="button" className="ch-close" onClick={() => setFibEdit(false)}>{t(lang, "chart_ok")}</button>
+              </div>
+              <div className="ch-fibs">
+                {FIB_ALL.map((lv) => {
+                  const on = cur.includes(lv);
+                  return (
+                    <button key={lv} type="button" className={on ? (lv === 0.618 || lv === 0.65 ? "on gold" : "on") : undefined}
+                      onClick={() => {
+                        const next = on ? cur.filter((x) => x !== lv) : [...cur, lv].sort((a, b) => a - b);
+                        eng.current?.patchDrawing(sel.id, { levels: next });
+                      }}>{lv}</button>
+                  );
+                })}
+              </div>
+              <p className="ch-hint">{t(lang, "chart_fib_gold")}</p>
+              <div className="ch-sheet-acts">
+                <button type="button" className={sel.extend ? "ch-selbtn on" : "ch-selbtn"}
+                  onClick={() => eng.current?.patchDrawing(sel.id, { extend: !sel.extend })}>{t(lang, "chart_fib_ext")}</button>
+                <button type="button" className="ch-selbtn" onClick={() => eng.current?.patchDrawing(sel.id, { levels: undefined })}>
+                  {t(lang, "chart_defaults")}
+                </button>
+              </div>
+            </div>
+          );
+        })() : null}
+
+        {/* Технический рейтинг: что думают 26 индикаторов — словами. */}
+        {rateOpen && rating ? (
+          <div className="ch-sheet" role="dialog" aria-label={t(lang, "chart_rate")}>
+            <div className="ch-sheet-hd">
+              <b>{t(lang, "chart_rate")} · {m.label} · {TF_LABEL[prefs.tf]}</b>
+              <button type="button" className="ch-close" onClick={() => setRateOpen(false)}>{t(lang, "chart_ok")}</button>
+            </div>
+            <div className={`ch-gauge ${rateKey(rating.total)}`}>
+              <div className="ch-gauge-bar"><span style={{ left: `${((rating.total + 1) / 2) * 100}%` }} /></div>
+              <div className="ch-gauge-lbl">
+                <span>{t(lang, "chart_r_ss")}</span><span>{t(lang, "chart_r_n")}</span><span>{t(lang, "chart_r_sb")}</span>
+              </div>
+              <b>{t(lang, rateKey(rating.total))}</b>
+            </div>
+            {([["chart_rate_osc", rating.oscItems, rating.osc], ["chart_rate_ma", rating.maItems, rating.ma]] as const).map(([head, items, score]) => (
+              <section key={head} className="ch-rate-grp">
+                <h3>{t(lang, head)} · <span className={rateKey(score)}>{t(lang, rateKey(score))}</span>
+                  <small> ▲{items.filter((x) => x.vote > 0).length} ●{items.filter((x) => x.vote === 0).length} ▼{items.filter((x) => x.vote < 0).length}</small>
+                </h3>
+                {items.map((x) => (
+                  <div key={x.name} className="ch-rate-row">
+                    <span>{x.name}</span>
+                    <span className="dim">{head === "chart_rate_ma" ? fmtPrice(x.value, dec) : fmtShort(x.value)}</span>
+                    <b className={x.vote > 0 ? "chart_r_b" : x.vote < 0 ? "chart_r_s" : "chart_r_n"}>
+                      {t(lang, x.vote > 0 ? "chart_r_b" : x.vote < 0 ? "chart_r_s" : "chart_r_n")}
+                    </b>
+                  </div>
+                ))}
+              </section>
+            ))}
+            <p className="ch-hint">{t(lang, "chart_rate_note")}</p>
+          </div>
+        ) : null}
+
         {confirmClear ? (
           <div className="ch-sheet small" role="alertdialog">
             <p>{t(lang, "chart_clear_q", { s: m.label })}</p>
@@ -703,8 +837,7 @@ export function ChartScreen({ arg }: ScreenProps) {
               <button type="button" className="ch-selbtn" onClick={() => setConfirmClear(false)}>{t(lang, "chart_cancel")}</button>
               <button type="button" className="ch-selbtn dn" onClick={() => {
                 haptic("light");
-                eng.current?.setDrawings([]);
-                saveDrawings(drawKey, []);
+                eng.current?.clearDrawings();
                 setSel(null);
                 setConfirmClear(false);
               }}>{t(lang, "chart_del")}</button>

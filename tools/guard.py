@@ -296,13 +296,23 @@ say("свечи: Binance (зеркало vision), Hyperliquid с HIP-3, Bybit, K
     and "wss://api.hyperliquid.xyz/ws" in _cd and "startPoll()" in _cd
     and "location = /klines-hl {" in _cngx and "proxy_pass https://api.hyperliquid.xyz/info;" in _cngx
     and _cngx.count("proxy_cache klines;") == 5 and "zone=kl:10m" in _cngx)
-say("график: 14 таймфреймов, 6 видов, 20 индикаторов + 3 своих, 14 инструментов рисования",
+say("график: 14 таймфреймов, 6 видов, 53 индикатора + 3 своих, 21 инструмент рисования",
     "export const TFS: Tf[] = [\"1m\", \"3m\", \"5m\", \"15m\", \"30m\", \"1h\", \"2h\", \"4h\", \"6h\", \"12h\", \"1d\", \"3d\", \"1w\", \"1M\"];" in _cd
     and 'export type ChartType = "candles" | "hollow" | "heikin" | "bars" | "line" | "area";' in _ce
-    and len(re.findall(r"^  (\w+): \{ kind: \"", _ci, re.M)) == 23
+    and len(re.findall(r"^  (\w+): \{ kind: \"", _ci, re.M)) == 56
     and all(f'"chart_i_{k}"' in json.dumps(list(_ckeys)) for k in ("wt_oi", "wt_fund", "wt_liq", "rsi", "macd", "ichi"))
     and _cw.count(": 2,") + _cw.count(": 1,") + _cw.count(": 3,") + _cw.count(": 0,") >= 14
-    and all(f'"{k}"' in chart_scr for k in ("trend", "ray", "ext", "hline", "hray", "vline", "channel", "rect", "fib", "long", "short", "measure", "text", "brush")))
+    and all(f'"{k}"' in chart_scr for k in ("trend", "ray", "ext", "hline", "hray", "vline", "channel", "rect", "fib", "fibext", "fibfan",
+                                             "fibtime", "ew5", "abc", "tri", "wxy", "long", "short", "measure", "text", "brush"))
+    and all(f"chart_i_{k}" in _ckeys for k in re.findall(r"^  (\w+): \{ kind: \"", _ci, re.M)))
+say("Фибоначчи и Эллиотт: уровни на выбор, золотой карман, три правила импульса, пропорции волн",
+    "export const FIB_ALL = [" in _cw and "const gold = l0 === 0.618 && l1 === 0.65;" in _cw
+    and "export function elliottBroken(pts: Pt[]): string[]" in _cw and all(k in _ckeys for k in ("chart_ew_r2", "chart_ew_r3", "chart_ew_r4"))
+    and "function waveRatio(" in _cw and "setFibEdit(true)" in chart_scr)
+say("график будущего: лупа под пальцем, отмена и возврат, тех. рейтинг словами, далёкие уровни не сплющивают свечи",
+    "private paintLoupe()" in _ce and "undo() {" in _ce and "redo() {" in _ce and "this.snap();" in _ce
+    and "export function techRating(" in _ci and "setRateOpen(true)" in chart_scr
+    and "noScale: true" in _ci and "d.noScale" in _ce and 'arrow = "↑ ";' in _ce)
 say("график: жесты и шкалы как у TradingView — щипок, долгое нажатие, шкала цены, авто и лог, отсчёт до закрытия",
     'this.mode = "pinch"' in _ce and 'this.mode = "cross"' in _ce and 'this.mode = "price"' in _ce
     and "setLog(on: boolean)" in _ce and "private countdown(): string" in _ce and "this.ev.needOlder()" in _ce)

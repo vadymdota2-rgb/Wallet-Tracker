@@ -30,6 +30,8 @@ export interface Bar {
   c: number;
   /** Объём в монетах. */
   v: number;
+  /** Из него куплено по рынку (taker buy) — у Binance; для дельты объёма. */
+  tb?: number;
 }
 
 export type Tf = "1m" | "3m" | "5m" | "15m" | "30m" | "1h" | "2h" | "4h" | "6h" | "12h" | "1d" | "3d" | "1w" | "1M";
@@ -163,7 +165,7 @@ async function pageBinance(m: Market, iv: string, end: number | null, url: strin
   const q = `symbol=${m.base}USDT&interval=${iv}&limit=${PAGE}${end ? `&endTime=${end}` : ""}`;
   const raw = await getJson(`${url}?${q}`, undefined, signal);
   if (!Array.isArray(raw)) return null;
-  return raw.map((a: unknown[]) => ({ t: num(a[0]), o: num(a[1]), h: num(a[2]), l: num(a[3]), c: num(a[4]), v: num(a[5]) })).filter(good);
+  return raw.map((a: unknown[]) => ({ t: num(a[0]), o: num(a[1]), h: num(a[2]), l: num(a[3]), c: num(a[4]), v: num(a[5]), tb: num(a[9]) })).filter(good);
 }
 
 async function pageHl(m: Market, iv: string, tf: Tf, end: number | null, signal?: AbortSignal): Promise<Page> {
@@ -228,13 +230,14 @@ export function aggregate(bars: Bar[], tf: Tf): Bar[] {
   for (const b of bars) {
     const t = tfStart(tf, b.t);
     if (!cur || cur.t !== t) {
-      cur = { t, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v };
+      cur = { t, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v, ...(b.tb !== undefined ? { tb: b.tb } : {}) };
       out.push(cur);
     } else {
       cur.h = Math.max(cur.h, b.h);
       cur.l = Math.min(cur.l, b.l);
       cur.c = b.c;
       cur.v += b.v;
+      if (b.tb !== undefined) cur.tb = (cur.tb ?? 0) + b.tb;
     }
   }
   return out;
@@ -393,7 +396,7 @@ export function subscribe(raw: string, tf: Tf, src: Source, on: (b: Bar) => void
       }
       if (src === "binance") {
         const k = msg.k as Record<string, unknown> | undefined;
-        if (k) emit({ t: num(k.t), o: num(k.o), h: num(k.h), l: num(k.l), c: num(k.c), v: num(k.v) });
+        if (k) emit({ t: num(k.t), o: num(k.o), h: num(k.h), l: num(k.l), c: num(k.c), v: num(k.v), tb: num(k.V) });
       } else if (src === "hl") {
         if (msg.channel !== "candle") return;
         const d = msg.data as Record<string, unknown> | undefined;

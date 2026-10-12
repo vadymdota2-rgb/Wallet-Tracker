@@ -20,7 +20,7 @@
  */
 import type { Bar, Tf } from "./data";
 import { TF_MS, tfEnd } from "./data";
-import { IND, type IndInst, type Ser } from "./indicators";
+import { IND, techRating, type IndInst, type Mark, type Rating, type Ser } from "./indicators";
 import {
   axisMarks, hit as hitDrawing, render as renderDrawing, TOOL_POINTS,
   type Drawing, type DrawType, type Pt, type View,
@@ -60,6 +60,10 @@ export interface Events {
   /** Только что поставлен текст — открыть ввод. */
   textNew(d: Drawing): void;
   view(atLatest: boolean): void;
+  /** Можно ли отменить и вернуть последнее действие с рисунками. */
+  history(canUndo: boolean, canRedo: boolean): void;
+  /** Технический рейтинг пересчитан (не чаще раза в 3 с). */
+  rating(r: Rating | null): void;
 }
 
 interface Scale {
@@ -182,6 +186,13 @@ export class Engine {
   private panes: Pane[] = [];
   private inds: IndInst[] = [];
   private calc = new Map<string, Ser[]>();
+  private marks = new Map<string, Mark[]>();
+  private tr: (k: string) => string = (k) => k;
+  private past: Drawing[][] = [];
+  private future: Drawing[][] = [];
+  private loupe: { x: number; y: number } | null = null;
+  private rateAt = 0;
+  private rateTimer: ReturnType<typeof setTimeout> | null = null;
   private indDirty = true;
   private own: { oi: OwnSeries | null; fund: OwnSeries | null; liq: LiqLevels | null } = { oi: null, fund: null, liq: null };
 
@@ -243,6 +254,7 @@ export class Engine {
     cancelAnimationFrame(this.raf);
     cancelAnimationFrame(this.inertia);
     clearInterval(this.tick);
+    if (this.rateTimer) clearTimeout(this.rateTimer);
     this.ro.disconnect();
     this.cv.removeEventListener("pointerdown", this.onDown);
     window.removeEventListener("pointermove", this.onMove);
@@ -369,7 +381,58 @@ export class Engine {
 
   /* ── Рисунки ────────────────────────────────────────────────────────── */
 
+  /** Перевод подписей на холсте (паттерны, правила Эллиотта). */
+  setText(fn: (k: string) => string) {
+    this.tr = fn;
+    this.invalidate();
+  }
+
+  /** Запомнить состояние рисунков перед изменением — для «Отменить». */
+  private snap() {
+    this.past.push(this.drawings.map((d) => ({ ...d, pts: d.pts.map((p) => ({ ...p })) })));
+    if (this.past.length > 100) this.past.shift();
+    this.future = [];
+    this.ev.history(true, false);
+  }
+
+  undo() {
+    const prev = this.past.pop();
+    if (!prev) return;
+    this.future.push(this.drawings);
+    this.drawings = prev;
+    this.afterHistory();
+  }
+
+  redo() {
+    const next = this.future.pop();
+    if (!next) return;
+    this.past.push(this.drawings);
+    this.drawings = next;
+    this.afterHistory();
+  }
+
+  private afterHistory() {
+    if (this.sel && !this.drawings.some((d) => d.id === this.sel)) this.select(null);
+    else if (this.sel) this.ev.select(this.drawings.find((d) => d.id === this.sel) ?? null);
+    this.ev.drawings(this.drawings);
+    this.ev.history(this.past.length > 0, this.future.length > 0);
+    this.invalidate();
+  }
+
+  /** Удалить все рисунки — одним шагом, который можно отменить. */
+  clearDrawings() {
+    if (!this.drawings.length) return;
+    this.snap();
+    this.drawings = [];
+    this.select(null);
+    this.ev.drawings(this.drawings);
+    this.invalidate();
+  }
+
   setDrawings(list: Drawing[]) {
+    this.past = [];
+    this.future = [];
+    this.ev.history(false, false);
     this.drawings = list.slice();
     if (this.sel && !list.some((d) => d.id === this.sel)) this.select(null);
     this.invalidate();
@@ -394,6 +457,7 @@ export class Engine {
   }
 
   patchDrawing(id: string, patch: Partial<Drawing>) {
+    this.snap();
     this.drawings = this.drawings.map((d) => (d.id === id ? { ...d, ...patch } : d));
     this.ev.drawings(this.drawings);
     const d = this.drawings.find((x) => x.id === id);
@@ -403,6 +467,7 @@ export class Engine {
 
   deleteSelected() {
     if (!this.sel) return;
+    this.snap();
     this.drawings = this.drawings.filter((d) => d.id !== this.sel);
     this.select(null);
     this.ev.drawings(this.drawings);
@@ -453,6 +518,8 @@ export class Engine {
     if (!this.indDirty) return;
     this.indDirty = false;
     this.calc.clear();
+    this.marks.clear();
+    this.scheduleRating();
     for (const i of this.inds) {
       const d = IND[i.kind];
       if (!d.calc || !this.bars.length) continue;
@@ -462,6 +529,28 @@ export class Engine {
         /* битые параметры — индикатор просто не рисуется */
       }
     }
+    for (const i of this.inds) {
+      const d = IND[i.kind];
+      if (!d.marks || !this.bars.length) continue;
+      try {
+        this.marks.set(i.uid, d.marks(this.bars, i.params));
+      } catch { /* то же */ }
+    }
+  }
+
+  /** Рейтинг считается по 26 индикаторам — не на каждый тик, а раз в 3 с. */
+  private scheduleRating() {
+    if (this.rateTimer) return;
+    const wait = Math.max(0, 3000 - (Date.now() - this.rateAt));
+    this.rateTimer = setTimeout(() => {
+      this.rateTimer = null;
+      this.rateAt = Date.now();
+      try {
+        this.ev.rating(techRating(this.bars));
+      } catch {
+        this.ev.rating(null);
+      }
+    }, wait);
   }
 
   /* ── Геометрия ──────────────────────────────────────────────────────── */
@@ -596,7 +685,7 @@ export class Engine {
       }
       for (const ind of this.inds) {
         const d = IND[ind.kind];
-        if (d.pane || ind.hidden || ind.kind === "vol") continue;
+        if (d.pane || ind.hidden || ind.kind === "vol" || d.noScale) continue;
         const ser = this.calc.get(ind.uid);
         if (!ser) continue;
         for (const s of ser) {
@@ -686,6 +775,7 @@ export class Engine {
       fmt: (p) => fmtPrice(p, this.dec),
       bars: (t0, t1) => Math.round(Math.abs(this.tIdx(t1) - this.tIdx(t0))),
       font: this.font,
+      tr: (k) => this.tr(k),
     };
   }
 
@@ -747,7 +837,49 @@ export class Engine {
     }
     this.paintAxes();
     this.paintCross();
+    this.paintLoupe();
     this.emitHover();
+  }
+
+  /**
+   * Лупа: палец закрывает точку, которую ставит, — над пальцем показываем
+   * увеличенный участок с перекрестием. У TradingView на телефоне такого нет,
+   * и точку там ставят наугад.
+   */
+  private paintLoupe() {
+    const l = this.loupe;
+    if (!l) return;
+    const ctx = this.ctx;
+    const r = 52;
+    const zoom = 2;
+    const cx = Math.max(r + 4, Math.min(this.w - r - 4, l.x));
+    const cy = l.y - r - 46 < r ? l.y + r + 46 : l.y - r - 46;
+    const src = (r / zoom) * this.dpr;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.fillStyle = C.bg;
+    ctx.fill();
+    ctx.clip();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(this.cv, l.x * this.dpr - src, l.y * this.dpr - src, src * 2, src * 2,
+      (cx - r) * this.dpr, (cy - r) * this.dpr, r * 2 * this.dpr, r * 2 * this.dpr);
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.strokeStyle = "rgba(255,255,255,0.7)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx - 10, cy);
+    ctx.lineTo(cx + 10, cy);
+    ctx.moveTo(cx, cy - 10);
+    ctx.lineTo(cx, cy + 10);
+    ctx.stroke();
+    ctx.restore();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.strokeStyle = "#7fd8ff";
+    ctx.lineWidth = 2;
+    ctx.stroke();
   }
 
   private paintGrid() {
@@ -867,6 +999,10 @@ export class Engine {
     const main = this.panes[0]!;
     const sp = this.spacing;
     const bw = Math.max(1, Math.min(sp * 0.72, sp - 1));
+
+    // Профиль объёма видимого участка: где торговали больше всего.
+    const vp = this.inds.find((i) => i.kind === "vp" && !i.hidden);
+    if (vp && i1 > i0) this.paintVp(main, i0, i1, vp.params[0] ?? 40, (vp.params[1] ?? 70) / 100);
 
     // Уровни ликвидаций — позади всего: горизонтальные полосы справа.
     const liqOn = this.inds.some((i) => i.kind === "wt_liq" && !i.hidden);
@@ -1005,6 +1141,9 @@ export class Engine {
       }
     }
 
+    // Уровни вне экрана — ярлыком у края со стрелкой: не сжимаем свечи
+    // и не прячем уровень молча.
+    const edge = { top: 0, bottom: 0 };
     for (const ind of this.inds) {
       const d = IND[ind.kind];
       if (d.pane || ind.hidden || d.own || ind.kind === "vol") continue;
@@ -1013,7 +1152,84 @@ export class Engine {
       d.lines.forEach((l, k) => {
         const sr = ser[k];
         if (sr) this.series(main, sr, i0, ind.kind === "ichi" ? i1 + (ind.params[3] ?? 26) : i1, ind.colors[k] ?? l.color, l.style ?? "line", false, bw);
+        // Подпись у правого конца: «R1 84 120», «0.618 (83 950)».
+        if (sr && l.label) {
+          let j = Math.min(i1, sr.length - 1);
+          while (j >= i0 && !finite(sr[j])) j--;
+          const v = sr[j];
+          if (j >= i0 && finite(v)) {
+            let y = this.py(main, v);
+            let arrow = "";
+            if (y < main.top + 16) {
+              arrow = "↑ ";
+              y = main.top + 30 + 13 * edge.top++;
+            } else if (y > main.top + main.h - 4) {
+              arrow = "↓ ";
+              y = main.top + main.h - 6 - 13 * edge.bottom++;
+            }
+            const txt = `${arrow}${l.name}  ${fmtPrice(v, this.dec)}`;
+            ctx.font = this.font;
+            const tw = ctx.measureText(txt).width;
+            const x = Math.min(this.plotR - tw - 4, this.x(j) + 4);
+            ctx.fillStyle = "rgba(5,11,22,0.75)";
+            ctx.fillRect(x - 2, y - 13, tw + 4, 12);
+            ctx.fillStyle = ind.colors[k] ?? l.color;
+            ctx.textAlign = "left";
+            ctx.textBaseline = "bottom";
+            ctx.fillText(txt, x, y - 2);
+          }
+        }
       });
+    }
+
+    // Значки: свечные паттерны и дивергенции.
+    for (const ind of this.inds) {
+      if (ind.hidden) continue;
+      const ms = this.marks.get(ind.uid);
+      if (!ms) continue;
+      ctx.font = `600 ${this.font.replace(/^\d+px/, "10px")}`;
+      ctx.textAlign = "center";
+      // Подписи не должны налезать друг на друга: над и под свечами —
+      // своя очередь, следующая подпись не ближе её ширины.
+      const lastX = { up: -Infinity, dn: -Infinity };
+      for (const m of ms) {
+        if (m.i < i0 - 1 || m.i > i1 + 1) continue;
+        const x = this.x(m.i);
+        const y = this.py(main, m.p);
+        if (m.link) {
+          ctx.strokeStyle = m.color;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(this.x(m.link.i), this.py(main, m.link.p));
+          ctx.lineTo(x, y);
+          ctx.stroke();
+        }
+        const ty = m.below ? y + 16 : y - 16;
+        ctx.fillStyle = m.color;
+        ctx.beginPath();
+        if (m.below) {
+          ctx.moveTo(x, y + 4);
+          ctx.lineTo(x - 4, y + 9);
+          ctx.lineTo(x + 4, y + 9);
+        } else {
+          ctx.moveTo(x, y - 4);
+          ctx.lineTo(x - 4, y - 9);
+          ctx.lineTo(x + 4, y - 9);
+        }
+        ctx.fill();
+        // Подпись — только если свечи не слиплись и есть место.
+        const txt = this.tr(m.text);
+        const tw = ctx.measureText(txt).width;
+        const lane = m.below ? "dn" : "up";
+        if (this.spacing >= 4 && x - tw / 2 > lastX[lane] + 4) {
+          ctx.textBaseline = m.below ? "top" : "bottom";
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = "rgba(5,11,22,0.9)";
+          ctx.strokeText(txt, x, m.below ? ty - 5 : ty + 5);
+          ctx.fillText(txt, x, m.below ? ty - 5 : ty + 5);
+          lastX[lane] = x + tw / 2;
+        }
+      }
     }
 
     // Максимум и минимум видимого участка.
@@ -1064,6 +1280,76 @@ export class Engine {
       for (const d of this.drawings) renderDrawing(ctx, d, v, d.id === this.sel);
       if (this.creating) renderDrawing(ctx, this.creating.d, v, true);
     }
+  }
+
+  /** Профиль объёма: объём свечи раскладывается по ценам от минимума до максимума. */
+  private paintVp(p: Pane, i0: number, i1: number, rows: number, area: number) {
+    const ctx = this.ctx;
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let i = i0; i <= i1; i++) {
+      const b = this.bars[i]!;
+      lo = Math.min(lo, b.l);
+      hi = Math.max(hi, b.h);
+    }
+    if (!(hi > lo)) return;
+    const n = Math.max(5, Math.round(rows));
+    const step = (hi - lo) / n;
+    const up = new Float64Array(n);
+    const dn = new Float64Array(n);
+    for (let i = i0; i <= i1; i++) {
+      const b = this.bars[i]!;
+      const a = Math.max(0, Math.floor((b.l - lo) / step));
+      const z = Math.min(n - 1, Math.floor((b.h - lo) / step));
+      const share = b.v / (z - a + 1);
+      for (let k = a; k <= z; k++) {
+        if (b.c >= b.o) up[k] = (up[k] ?? 0) + share;
+        else dn[k] = (dn[k] ?? 0) + share;
+      }
+    }
+    const tot = Array.from(up, (v, k) => v + dn[k]!);
+    let poc = 0;
+    tot.forEach((v, k) => {
+      if (v > tot[poc]!) poc = k;
+    });
+    // Зона стоимости: от точки контроля в обе стороны, пока не наберётся area объёма.
+    const all = tot.reduce((x, y) => x + y, 0);
+    let va0 = poc;
+    let va1 = poc;
+    let acc = tot[poc]!;
+    while (acc < all * area && (va0 > 0 || va1 < n - 1)) {
+      const below = va0 > 0 ? tot[va0 - 1]! : -1;
+      const above = va1 < n - 1 ? tot[va1 + 1]! : -1;
+      if (above >= below) acc += tot[++va1]!;
+      else acc += tot[--va0]!;
+    }
+    const max = tot[poc]! || 1;
+    const maxW = this.plotR * 0.3;
+    for (let k = 0; k < n; k++) {
+      const y0 = this.py(p, lo + (k + 1) * step);
+      const y1 = this.py(p, lo + k * step);
+      const h = Math.max(1, y1 - y0 - 1);
+      const inVa = k >= va0 && k <= va1;
+      const wu = (up[k]! / max) * maxW;
+      const wd = (dn[k]! / max) * maxW;
+      ctx.fillStyle = inVa ? "rgba(61,220,151,0.30)" : "rgba(61,220,151,0.14)";
+      ctx.fillRect(this.plotR - wu - wd, y0, wu, h);
+      ctx.fillStyle = inVa ? "rgba(255,92,119,0.30)" : "rgba(255,92,119,0.14)";
+      ctx.fillRect(this.plotR - wd, y0, wd, h);
+    }
+    // Точка контроля (POC) — цена, где наторговали больше всего.
+    const py = Math.round(this.py(p, lo + (poc + 0.5) * step)) + 0.5;
+    ctx.strokeStyle = "#f0b90b";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(0, py);
+    ctx.lineTo(this.plotR, py);
+    ctx.stroke();
+    ctx.font = this.font;
+    ctx.fillStyle = "#f0b90b";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "bottom";
+    ctx.fillText(`POC ${fmtPrice(lo + (poc + 0.5) * step, this.dec)}`, 6, py - 2);
   }
 
   private fill(p: Pane, a: Ser | undefined, b: Ser | undefined, i0: number, i1: number, color: string, byDir: boolean) {
@@ -1120,6 +1406,58 @@ export class Engine {
         ctx.arc(this.x(i), this.py(p, v), r, 0, Math.PI * 2);
         ctx.fill();
       }
+      return;
+    }
+    if (style === "zz") {
+      // Ломаная через вершины: точки есть не на каждой свече.
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      let first = true;
+      let from = i0;
+      while (from > 0 && !finite(s[from])) from--;
+      let to = end;
+      while (to < s.length - 1 && !finite(s[to])) to++;
+      for (let i = from; i <= to; i++) {
+        const v = s[i];
+        if (!finite(v)) continue;
+        const x = this.x(i);
+        const y = this.py(p, v);
+        if (first) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+        first = false;
+      }
+      ctx.stroke();
+      return;
+    }
+    if (style === "level") {
+      const v = s[s.length - 1];
+      if (!finite(v)) return;
+      const y = Math.round(this.py(p, v)) + 0.5;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(this.plotR, y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = color.startsWith("#") ? `${color}22` : color;
+      ctx.fillRect(0, y - 3, this.plotR, 6);
+      return;
+    }
+    if (style === "step") {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      for (let i = Math.max(0, i0 - 1); i <= end; i++) {
+        const v = s[i];
+        if (!finite(v)) continue;
+        const y = Math.round(this.py(p, v)) + 0.5;
+        ctx.moveTo(this.x(i) - this.spacing / 2, y);
+        ctx.lineTo(this.x(i) + this.spacing / 2, y);
+      }
+      ctx.stroke();
       return;
     }
     ctx.strokeStyle = color;
@@ -1527,6 +1865,7 @@ export class Engine {
       const h = this.hitAny(x, y, this.tol(e));
       if (h) {
         this.select(h.d.id);
+        this.dragBefore = this.drawings.map((d) => ({ ...d, pts: d.pts.map((q) => ({ ...q })) }));
         this.down.id = h.d.id;
         this.down.pts = h.d.pts.map((p) => ({ ...p }));
         this.down.handle = h.handle;
@@ -1585,12 +1924,13 @@ export class Engine {
     }
     const c = this.creating;
     c.downs++;
-    c.d.pts[c.idx] = pt;
+    for (let k = c.idx; k < c.d.pts.length; k++) c.d.pts[k] = { ...pt };
     this.mode = "create";
     this.invalidate();
   }
 
   private commit(d: Drawing) {
+    this.snap();
     this.creating = null;
     this.drawings = [...this.drawings, d];
     this.ev.drawings(this.drawings);
@@ -1623,8 +1963,7 @@ export class Engine {
       if (this.creating && this.creating.d.type !== "brush") {
         const c = this.creating;
         const pt = this.ptAt(x, y);
-        c.d.pts[c.idx] = pt;
-        if (c.d.type === "channel" && c.idx === 1) c.d.pts[2] = { ...pt };
+        for (let k = c.idx; k < c.d.pts.length; k++) c.d.pts[k] = { ...pt };
       }
       if (this.tool === "cursor" && !this.creating) {
         const h = y < this.panes[0]!.h ? this.hitAny(x, y, 6) : null;
@@ -1709,9 +2048,9 @@ export class Engine {
           if (!last || Math.abs(this.tx(last.t) - x) + Math.abs(this.py(this.panes[0]!, last.p) - y) > 3) c.d.pts.push(pt);
         } else {
           const pt = this.ptAt(x, y);
-          c.d.pts[c.idx] = pt;
-          if (c.d.type === "channel" && c.idx === 1) c.d.pts[2] = { ...pt };
+          for (let k = c.idx; k < c.d.pts.length; k++) c.d.pts[k] = { ...pt };
         }
+        this.loupe = this.mouse ? null : { x, y };
         this.invalidate();
         break;
       }
@@ -1741,6 +2080,7 @@ export class Engine {
           else pts[k] = pt;
         }
         this.drawings = this.drawings.map((q) => (q.id === d.id ? { ...q, pts } : q));
+        this.loupe = this.mouse || this.mode === "move" ? null : { x, y };
         this.invalidate();
         break;
       }
@@ -1749,10 +2089,15 @@ export class Engine {
   };
 
   private lastMoveY = 0;
+  private dragBefore: Drawing[] | null = null;
 
   private onUp = (e: PointerEvent) => {
     if (!this.ptrs.has(e.pointerId)) return;
     this.ptrs.delete(e.pointerId);
+    if (this.loupe) {
+      this.loupe = null;
+      this.invalidate();
+    }
     if (this.longTimer) clearTimeout(this.longTimer);
     const { x, y } = this.pos(e);
     if (this.mode === "pinch") {
@@ -1816,7 +2161,15 @@ export class Engine {
       }
       case "handle":
       case "move":
-        if (moved > 2) this.ev.drawings(this.drawings);
+        if (moved > 2) {
+          if (this.dragBefore) {
+            this.past.push(this.dragBefore);
+            this.future = [];
+            this.ev.history(true, false);
+          }
+          this.ev.drawings(this.drawings);
+        }
+        this.dragBefore = null;
         {
           const d = this.drawings.find((q) => q.id === this.down.id);
           if (d) this.ev.select(d);
