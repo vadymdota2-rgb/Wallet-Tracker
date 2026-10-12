@@ -273,29 +273,50 @@ say("API выдаёт неделю при первом открытии, одн�
 say("помощь не обещает неделю за /start", all("/start" not in ts_dict(lg).get("hp_a4", "")
     for lg in ("en","ru","es","pt","fr","tr","ar","pl","de","uk","hi","id","vi","ko","zh","ja")))
 
-# --- боковое меню: график TradingView и разлоки -----------------------------
+# --- боковое меню: свой график и разлоки -----------------------------------
 _m0 = appx.index("= [", appx.index("const MENU:"))
 menu = appx[_m0:appx.index("];", _m0)]
 say("в боковом меню одиннадцать пунктов: график, календарь, разлоки, карта ликвидаций, ликвидации, опционы, интерес и фандинг, фандинг, страх и жадность, доминация, ETF",
     menu.count("name:") == 11
     and menu.index('name: "chart"') < menu.index('name: "calendar"') < menu.index('name: "unlocks"') < menu.index('name: "liqmap"')
     < menu.index('name: "liqs"') < menu.index('name: "options"') < menu.index('name: "oihist"') < menu.index('name: "funding"') < menu.index('name: "fng"') < menu.index('name: "dom"') < menu.index('name: "etf"'))
-tv = read(f"{APP}/src/lib/tradingview.ts")
 chart_scr = read(f"{APP}/src/screens/ChartScreen.tsx")
-say("график — официальный код виджета TradingView со сменой монеты",
-    "external-embedding/embed-widget-advanced-chart.js" in tv and "allow_symbol_change: true" in tv
-    and "widgetembed" not in tv + chart_scr)
-say("атрибуция TradingView — как в их коде, не убрана",
-    'span.textContent = "Track all markets on TradingView"' in chart_scr and 'a.href = "https://www.tradingview.com/"' in chart_scr
-    and 'copy.className = "tradingview-widget-copyright"' in chart_scr)
+_cd = read(f"{APP}/src/chart/data.ts")
+_ce = read(f"{APP}/src/chart/engine.ts")
+_ci = read(f"{APP}/src/chart/indicators.ts")
+_cw = read(f"{APP}/src/chart/draw.ts")
+_cngx = read(f"{APP}/nginx.conf")
+_ckeys = json.load(open(f"{APP}/tools/i18n.json", encoding="utf-8"))
+say("график свой, без TradingView: ни виджета, ни их скриптов",
+    not os.path.exists(f"{APP}/src/lib/tradingview.ts") and "tradingview.com" not in (chart_scr + _ce) and "TV_EMBED" not in chart_scr
+    and "new Engine(c, {" in chart_scr and '<canvas ref={cv} className="ch-cv" />' in chart_scr)
+say("свечи: Binance (зеркало vision), Hyperliquid с HIP-3, Bybit, KuCoin; подгрузка истории назад; живая свеча вебсокетом",
+    all(u in _cd for u in ('"/klines-vision"', '"/klines-hl"', "/klines-bybit?", "/klines-kucoin?"))
+    and "export async function loadOlder(" in _cd and "wss://data-stream.binance.vision/ws/" in _cd
+    and "wss://api.hyperliquid.xyz/ws" in _cd and "startPoll()" in _cd
+    and "location = /klines-hl {" in _cngx and "proxy_pass https://api.hyperliquid.xyz/info;" in _cngx
+    and _cngx.count("proxy_cache klines;") == 5 and "zone=kl:10m" in _cngx)
+say("график: 14 таймфреймов, 6 видов, 20 индикаторов + 3 своих, 14 инструментов рисования",
+    "export const TFS: Tf[] = [\"1m\", \"3m\", \"5m\", \"15m\", \"30m\", \"1h\", \"2h\", \"4h\", \"6h\", \"12h\", \"1d\", \"3d\", \"1w\", \"1M\"];" in _cd
+    and 'export type ChartType = "candles" | "hollow" | "heikin" | "bars" | "line" | "area";' in _ce
+    and len(re.findall(r"^  (\w+): \{ kind: \"", _ci, re.M)) == 23
+    and all(f'"chart_i_{k}"' in json.dumps(list(_ckeys)) for k in ("wt_oi", "wt_fund", "wt_liq", "rsi", "macd", "ichi"))
+    and _cw.count(": 2,") + _cw.count(": 1,") + _cw.count(": 3,") + _cw.count(": 0,") >= 14
+    and all(f'"{k}"' in chart_scr for k in ("trend", "ray", "ext", "hline", "hray", "vline", "channel", "rect", "fib", "long", "short", "measure", "text", "brush")))
+say("график: жесты и шкалы как у TradingView — щипок, долгое нажатие, шкала цены, авто и лог, отсчёт до закрытия",
+    'this.mode = "pinch"' in _ce and 'this.mode = "cross"' in _ce and 'this.mode = "price"' in _ce
+    and "setLog(on: boolean)" in _ce and "private countdown(): string" in _ce and "this.ev.needOlder()" in _ce)
+say("рисунки — во времени и цене, по монете на устройстве; настройки графика запоминаются",
+    "export interface Pt {\n  t: number;\n  p: number;\n}" in _cw and 'const DRAW_KEY = "wt-chart-draw-v1";' in chart_scr
+    and 'const PREFS_KEY = "wt-chart-v1";' in chart_scr)
 say("монета графика запоминается", "tvSym: s.tvSym" in read(f"{APP}/src/store/app.ts"))
 
 # --- поиск монеты на графике — по всем биржам, не только по своим ----------
 say("справочник монет: Binance, Bybit, Hyperliquid и HIP-3",
     "def _symbols_build(" in api and "api.bybit.com/v5/market/instruments-info" in api
     and 'hl_post({"type": "meta"}' in pybody(api, "def _symbols_build(") and '"c": "rwa"' in api)
-say("металлы и индексы HIP-3 — на свои символы TradingView, а не на акции-двойники",
-    'GOLD: "TVC:GOLD"' in tv and 'SP500: "SP:SPX"' in tv)
+say("рынки HIP-3 (xyz:NVDA) — свечами Hyperliquid под своим именем",
+    'if (m.hip3) return ["hl"];' in _cd and "hip3: `${dex}:${name}`" in _cd)
 say("введённый тикер открывается, даже если его нет в справочнике",
     "results[0]?.s !== typed" in chart_scr and 'onClick={() => pick(typed)}' in chart_scr)
 

@@ -79,7 +79,7 @@ interface AppState {
   btcEx: string;
 
   chartTf: Timeframe;
-  /** Монета полноэкранного графика TradingView — последняя открытая. */
+  /** Монета полноэкранного графика — последняя открытая. */
   tvSym: string;
   /** Карта ликвидаций: монета и окно — последние выбранные. */
   liqSym: string;

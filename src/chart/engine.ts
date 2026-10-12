@@ -1,0 +1,1878 @@
+/**
+ * Движок графика: canvas, без библиотек.
+ *
+ * Модель — как у TradingView. По горизонтали два числа: ширина свечи в
+ * пикселях (spacing) и номер свечи у правого края (right, дробный — отступ
+ * справа от последней свечи). По вертикали у каждой панели своя шкала:
+ * авто (по видимым свечам) или ручная, линейная или логарифмическая.
+ *
+ * Панели: главная (цена, объём внизу, индикаторы поверх цены, рисунки,
+ * уровни ликвидаций) и под ней — по панели на каждый осциллятор. Границы
+ * панелей тянутся пальцем.
+ *
+ * Управление:
+ *   палец/мышь по графику — листать (с инерцией), щипок и колесо — масштаб,
+ *   по шкале цены — растянуть по вертикали (двойной тап — снова авто),
+ *   по шкале времени — растянуть по горизонтали, тап — перекрестие,
+ *   долгое нажатие — перекрестие, которое водится пальцем, двойной тап по
+ *   графику — к последней свече.
+ * Мышь: перекрестие ходит за курсором.
+ */
+import type { Bar, Tf } from "./data";
+import { TF_MS, tfEnd } from "./data";
+import { IND, type IndInst, type Ser } from "./indicators";
+import {
+  axisMarks, hit as hitDrawing, render as renderDrawing, TOOL_POINTS,
+  type Drawing, type DrawType, type Pt, type View,
+} from "./draw";
+
+export type ChartType = "candles" | "hollow" | "heikin" | "bars" | "line" | "area";
+export type Tool = "cursor" | DrawType;
+
+/** Свой ряд Wallet Tracker во времени (интерес, фандинг): t — мс. */
+export interface OwnSeries {
+  t: number[];
+  v: number[];
+}
+
+/** Уровни ликвидаций: цена и сколько ликвидируется лонгов и шортов, $. */
+export interface LiqLevels {
+  rows: { p: number; L: number; S: number }[];
+}
+
+export interface Hover {
+  /** Номер свечи под перекрестием (или последней). */
+  i: number;
+  bar: Bar | null;
+  prev: Bar | null;
+  /** Значения индикаторов на этой свече: uid → значения рядов. */
+  vals: Record<string, number[]>;
+  /** Перекрестие стоит (а не просто последняя свеча). */
+  live: boolean;
+}
+
+export interface Events {
+  hover(h: Hover): void;
+  needOlder(): void;
+  drawings(list: Drawing[]): void;
+  select(d: Drawing | null): void;
+  toolDone(): void;
+  /** Только что поставлен текст — открыть ввод. */
+  textNew(d: Drawing): void;
+  view(atLatest: boolean): void;
+}
+
+interface Scale {
+  auto: boolean;
+  lo: number;
+  hi: number;
+  log: boolean;
+}
+
+interface Pane {
+  key: string;
+  ind: IndInst | null;
+  top: number;
+  h: number;
+  /** Доля высоты подпанели (у главной не используется). */
+  frac: number;
+  /** В видимом окне нет ни одного значения — шкалу не подписываем. */
+  empty?: boolean;
+  scale: Scale;
+}
+
+const C = {
+  bg: "#050b16",
+  grid: "rgba(58,130,214,0.07)",
+  axis: "#7c97bc",
+  text: "#c9d8ee",
+  line: "rgba(58,130,214,0.22)",
+  up: "#3ddc97",
+  dn: "#ff5c77",
+  cross: "rgba(201,216,238,0.55)",
+  label: "#1b2b44",
+};
+
+const TIME_H = 24;
+const MIN_SPACING = 1.2;
+const MAX_SPACING = 64;
+const RIGHT_PAD_BARS = 4;
+
+const finite = (v: number | undefined): v is number => v !== undefined && Number.isFinite(v);
+
+/** Знаков после запятой — по величине цены, как у бирж. */
+export function priceDecimals(p: number): number {
+  const a = Math.abs(p);
+  if (!a || !Number.isFinite(a)) return 2;
+  if (a >= 100) return 2;
+  if (a >= 1) return 4;
+  return Math.min(12, -Math.floor(Math.log10(a)) + 3);
+}
+
+export function fmtPrice(p: number, dec: number): string {
+  if (!Number.isFinite(p)) return "—";
+  return p.toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+
+/** Короткое число для панелей индикаторов и объёма: 1.25K, 3.4M, 2.1B. */
+export function fmtShort(v: number): string {
+  const a = Math.abs(v);
+  if (!Number.isFinite(v)) return "—";
+  if (a >= 1e12) return `${(v / 1e12).toFixed(2)}T`;
+  if (a >= 1e9) return `${(v / 1e9).toFixed(2)}B`;
+  if (a >= 1e6) return `${(v / 1e6).toFixed(2)}M`;
+  if (a >= 1e4) return `${(v / 1e3).toFixed(1)}K`;
+  if (a >= 100) return v.toFixed(1);
+  if (a >= 1) return v.toFixed(2);
+  if (a === 0) return "0";
+  return v.toPrecision(3);
+}
+
+function niceStep(span: number, target: number): number {
+  const raw = span / Math.max(1, target);
+  const p = 10 ** Math.floor(Math.log10(raw));
+  for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= raw) return m * p;
+  return 10 * p;
+}
+
+/** Свечи Хейкен-Аши — только для показа: индикаторы считаются по настоящим. */
+function heikin(bars: Bar[]): Bar[] {
+  const out: Bar[] = [];
+  let po = 0;
+  let pc = 0;
+  for (let i = 0; i < bars.length; i++) {
+    const b = bars[i]!;
+    const c = (b.o + b.h + b.l + b.c) / 4;
+    const o = i === 0 ? (b.o + b.c) / 2 : (po + pc) / 2;
+    out.push({ t: b.t, o, h: Math.max(b.h, o, c), l: Math.min(b.l, o, c), c, v: b.v });
+    po = o;
+    pc = c;
+  }
+  return out;
+}
+
+/* Шаги подписей времени: от минуты до года. */
+const T_STEPS: [number, "m" | "h" | "d" | "M" | "Y", number][] = [
+  [60_000, "m", 1], [5 * 60_000, "m", 5], [15 * 60_000, "m", 15], [30 * 60_000, "m", 30],
+  [3600_000, "h", 1], [2 * 3600_000, "h", 2], [3 * 3600_000, "h", 3], [6 * 3600_000, "h", 6], [12 * 3600_000, "h", 12],
+  [86400_000, "d", 1], [2 * 86400_000, "d", 2], [7 * 86400_000, "d", 7], [14 * 86400_000, "d", 14],
+  [30 * 86400_000, "M", 1], [91 * 86400_000, "M", 3], [182 * 86400_000, "M", 6], [365 * 86400_000, "Y", 1],
+];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+export class Engine {
+  private cv: HTMLCanvasElement;
+  private ctx: CanvasRenderingContext2D;
+  private ev: Events;
+  private w = 0;
+  private h = 0;
+  private dpr = 1;
+  private font = "11px sans-serif";
+  private priceW = 64;
+
+  private bars: Bar[] = [];
+  private shown: Bar[] = [];
+  private tf: Tf = "1h";
+  private type: ChartType = "candles";
+  private dec = 2;
+  private mark = "";
+
+  private spacing = 6;
+  private right = 0;
+  private panes: Pane[] = [];
+  private inds: IndInst[] = [];
+  private calc = new Map<string, Ser[]>();
+  private indDirty = true;
+  private own: { oi: OwnSeries | null; fund: OwnSeries | null; liq: LiqLevels | null } = { oi: null, fund: null, liq: null };
+
+  private drawings: Drawing[] = [];
+  private sel: string | null = null;
+  private tool: Tool = "cursor";
+  private magnet = true;
+  private hideDrawings = false;
+  private creating: { d: Drawing; idx: number; downs: number } | null = null;
+
+  private cross: { x: number; y: number } | null = null;
+  private crossSticky = false;
+  private mouse = false;
+
+  private olderAsked = false;
+  private noOlder = false;
+  private raf = 0;
+  private dirty = true;
+  private tick: ReturnType<typeof setInterval>;
+  private ro: ResizeObserver;
+
+  /* Жесты. */
+  private ptrs = new Map<number, { x: number; y: number }>();
+  private mode: "" | "pan" | "pending" | "cross" | "price" | "time" | "sep" | "create" | "handle" | "move" | "pinch" = "";
+  private down = { x: 0, y: 0, t: 0, right: 0, spacing: 0, lo: 0, hi: 0, pane: 0, handle: -1, pts: [] as Pt[], id: "" };
+  private pinch = { d: 0, cx: 0, spacing: 0, anchor: 0 };
+  private longTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastTap = { t: 0, x: 0, y: 0 };
+  private vel = 0;
+  private lastMove = { x: 0, t: 0 };
+  private inertia = 0;
+
+  constructor(canvas: HTMLCanvasElement, ev: Events) {
+    this.cv = canvas;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("canvas");
+    this.ctx = ctx;
+    this.ev = ev;
+    const fam = getComputedStyle(document.body).fontFamily || "sans-serif";
+    this.font = `11px ${fam}`;
+    this.ro = new ResizeObserver(() => this.resize());
+    this.ro.observe(canvas.parentElement ?? canvas);
+    this.resize();
+    canvas.addEventListener("pointerdown", this.onDown);
+    window.addEventListener("pointermove", this.onMove);
+    window.addEventListener("pointerup", this.onUp);
+    window.addEventListener("pointercancel", this.onUp);
+    canvas.addEventListener("pointerleave", this.onLeave);
+    canvas.addEventListener("wheel", this.onWheel, { passive: false });
+    canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+    // Отсчёт до закрытия свечи — раз в секунду.
+    this.tick = setInterval(() => {
+      if (this.bars.length) this.invalidate();
+    }, 1000);
+    this.panes = [{ key: "main", ind: null, top: 0, h: 0, frac: 1, scale: { auto: true, lo: 0, hi: 1, log: false } }];
+  }
+
+  destroy() {
+    cancelAnimationFrame(this.raf);
+    cancelAnimationFrame(this.inertia);
+    clearInterval(this.tick);
+    this.ro.disconnect();
+    this.cv.removeEventListener("pointerdown", this.onDown);
+    window.removeEventListener("pointermove", this.onMove);
+    window.removeEventListener("pointerup", this.onUp);
+    window.removeEventListener("pointercancel", this.onUp);
+    this.cv.removeEventListener("pointerleave", this.onLeave);
+    this.cv.removeEventListener("wheel", this.onWheel);
+  }
+
+  /* ── Данные ─────────────────────────────────────────────────────────── */
+
+  setData(bars: Bar[], tf: Tf) {
+    this.bars = bars.slice();
+    this.tf = tf;
+    this.olderAsked = false;
+    this.noOlder = false;
+    this.cross = null;
+    this.crossSticky = false;
+    const last = bars[bars.length - 1];
+    this.dec = last ? priceDecimals(last.c) : 2;
+    this.right = bars.length - 1 + RIGHT_PAD_BARS;
+    this.spacing = 6;
+    for (const p of this.panes) p.scale.auto = true;
+    this.refresh();
+  }
+
+  /** Живая свеча: та же — заменить, новая — добавить. */
+  update(b: Bar) {
+    const last = this.bars[this.bars.length - 1];
+    if (!last || b.t < last.t) return;
+    const follow = this.right >= this.bars.length - 1;
+    if (b.t === last.t) this.bars[this.bars.length - 1] = b;
+    else {
+      this.bars.push(b);
+      if (follow) this.right += 1;
+    }
+    this.refresh();
+  }
+
+  /** Старые свечи слева. Пусто — история кончилась. */
+  prepend(older: Bar[]) {
+    this.olderAsked = false;
+    const first = this.bars[0];
+    const add = first ? older.filter((b) => b.t < first.t) : older;
+    if (!add.length) {
+      this.noOlder = true;
+      return;
+    }
+    this.bars = [...add, ...this.bars];
+    this.right += add.length;
+    if (this.down.right) this.down.right += add.length;
+    this.refresh();
+  }
+
+  /** Время первой загруженной свечи — откуда грузить историю назад. */
+  get firstTime(): number | null {
+    return this.bars[0]?.t ?? null;
+  }
+
+  olderFailed() {
+    this.olderAsked = false;
+  }
+
+  setType(t: ChartType) {
+    this.type = t;
+    this.refresh();
+  }
+
+  setWatermark(s: string) {
+    this.mark = s;
+    this.invalidate();
+  }
+
+  setIndicators(list: IndInst[]) {
+    this.inds = list;
+    const keep = new Map(this.panes.map((p) => [p.key, p]));
+    const main = keep.get("main")!;
+    const next: Pane[] = [main];
+    for (const i of list) {
+      if (!IND[i.kind].pane) continue;
+      next.push(keep.get(i.uid) ?? { key: i.uid, ind: i, top: 0, h: 0, frac: 0.2, scale: { auto: true, lo: 0, hi: 1, log: false } });
+      next[next.length - 1]!.ind = i;
+    }
+    this.panes = next;
+    this.indDirty = true;
+    this.invalidate();
+  }
+
+  setOwn(kind: "oi" | "fund", s: OwnSeries | null) {
+    this.own[kind] = s;
+    this.invalidate();
+  }
+
+  setLiq(l: LiqLevels | null) {
+    this.own.liq = l;
+    this.invalidate();
+  }
+
+  setLog(on: boolean) {
+    this.panes[0]!.scale.log = on;
+    this.panes[0]!.scale.auto = true;
+    this.invalidate();
+  }
+
+  get log() {
+    return this.panes[0]!.scale.log;
+  }
+
+  get autoScale() {
+    return this.panes[0]!.scale.auto;
+  }
+
+  resetScale() {
+    for (const p of this.panes) p.scale.auto = true;
+    this.invalidate();
+  }
+
+  /** К последней свече, масштаб — авто. */
+  goLatest() {
+    this.right = this.bars.length - 1 + RIGHT_PAD_BARS;
+    this.resetScale();
+    this.ev.view(true);
+  }
+
+  /* ── Рисунки ────────────────────────────────────────────────────────── */
+
+  setDrawings(list: Drawing[]) {
+    this.drawings = list.slice();
+    if (this.sel && !list.some((d) => d.id === this.sel)) this.select(null);
+    this.invalidate();
+  }
+
+  setTool(t: Tool) {
+    this.tool = t;
+    this.creating = null;
+    if (t !== "cursor") this.select(null);
+    this.cv.style.cursor = t === "cursor" ? "default" : "crosshair";
+    this.invalidate();
+  }
+
+  setMagnet(on: boolean) {
+    this.magnet = on;
+  }
+
+  setHideDrawings(on: boolean) {
+    this.hideDrawings = on;
+    if (on) this.select(null);
+    this.invalidate();
+  }
+
+  patchDrawing(id: string, patch: Partial<Drawing>) {
+    this.drawings = this.drawings.map((d) => (d.id === id ? { ...d, ...patch } : d));
+    this.ev.drawings(this.drawings);
+    const d = this.drawings.find((x) => x.id === id);
+    if (d && this.sel === id) this.ev.select(d);
+    this.invalidate();
+  }
+
+  deleteSelected() {
+    if (!this.sel) return;
+    this.drawings = this.drawings.filter((d) => d.id !== this.sel);
+    this.select(null);
+    this.ev.drawings(this.drawings);
+    this.invalidate();
+  }
+
+  private select(id: string | null) {
+    if (this.sel === id) return;
+    this.sel = id;
+    this.ev.select(id ? this.drawings.find((d) => d.id === id) ?? null : null);
+  }
+
+  /* ── Пересчёт и кадр ────────────────────────────────────────────────── */
+
+  private refresh() {
+    this.shown = this.type === "heikin" ? heikin(this.bars) : this.bars;
+    const last = this.bars[this.bars.length - 1];
+    if (last) this.dec = priceDecimals(last.c);
+    this.indDirty = true;
+    this.invalidate();
+  }
+
+  invalidate() {
+    if (this.dirty && this.raf) return;
+    this.dirty = true;
+    this.raf = requestAnimationFrame(() => {
+      this.raf = 0;
+      if (!this.dirty) return;
+      this.dirty = false;
+      this.paint();
+    });
+  }
+
+  private resize() {
+    const box = this.cv.parentElement ?? this.cv;
+    const r = box.getBoundingClientRect();
+    this.w = Math.max(100, Math.floor(r.width));
+    this.h = Math.max(120, Math.floor(r.height));
+    this.dpr = Math.min(3, window.devicePixelRatio || 1);
+    this.cv.width = Math.floor(this.w * this.dpr);
+    this.cv.height = Math.floor(this.h * this.dpr);
+    this.cv.style.width = `${this.w}px`;
+    this.cv.style.height = `${this.h}px`;
+    this.invalidate();
+  }
+
+  private compute() {
+    if (!this.indDirty) return;
+    this.indDirty = false;
+    this.calc.clear();
+    for (const i of this.inds) {
+      const d = IND[i.kind];
+      if (!d.calc || !this.bars.length) continue;
+      try {
+        this.calc.set(i.uid, d.calc(this.bars, i.params, this.tf));
+      } catch {
+        /* битые параметры — индикатор просто не рисуется */
+      }
+    }
+  }
+
+  /* ── Геометрия ──────────────────────────────────────────────────────── */
+
+  private get plotR() {
+    return this.w - this.priceW;
+  }
+
+  private x(i: number) {
+    return this.plotR - (this.right - i + 0.5) * this.spacing;
+  }
+
+  private idx(x: number) {
+    return this.right - (this.plotR - x) / this.spacing - 0.5;
+  }
+
+  /** Время → дробный номер свечи (за краями — по шагу таймфрейма). */
+  private tIdx(t: number): number {
+    const b = this.bars;
+    const n = b.length;
+    if (!n) return 0;
+    const step = TF_MS[this.tf];
+    const first = b[0]!.t;
+    const last = b[n - 1]!.t;
+    if (t <= first) return (t - first) / step;
+    if (t >= last) return n - 1 + (t - last) / step;
+    let lo = 0;
+    let hi = n - 1;
+    while (hi - lo > 1) {
+      const m = (lo + hi) >> 1;
+      if (b[m]!.t <= t) lo = m;
+      else hi = m;
+    }
+    const a = b[lo]!.t;
+    const c = b[hi]!.t;
+    return lo + (c > a ? (t - a) / (c - a) : 0);
+  }
+
+  /** Дробный номер свечи → время. */
+  private iTime(i: number): number {
+    const b = this.bars;
+    const n = b.length;
+    if (!n) return Date.now();
+    const step = TF_MS[this.tf];
+    if (i <= 0) return b[0]!.t + i * step;
+    if (i >= n - 1) return b[n - 1]!.t + (i - (n - 1)) * step;
+    const lo = Math.floor(i);
+    const a = b[lo]!.t;
+    const c = b[lo + 1]!.t;
+    return a + (c - a) * (i - lo);
+  }
+
+  private tx(t: number) {
+    return this.x(this.tIdx(t));
+  }
+
+  private layout() {
+    const total = this.h - TIME_H;
+    const subs = this.panes.slice(1);
+    const maxSub = total * 0.6;
+    let subH = subs.reduce((s, p) => s + Math.max(48, p.frac * total), 0);
+    const k = subH > maxSub ? maxSub / subH : 1;
+    subH = 0;
+    for (const p of subs) {
+      p.h = Math.max(40, Math.round(Math.max(48, p.frac * total) * k));
+      subH += p.h;
+    }
+    const main = this.panes[0]!;
+    main.top = 0;
+    main.h = total - subH;
+    let y = main.h;
+    for (const p of subs) {
+      p.top = y;
+      y += p.h;
+    }
+  }
+
+  private f(v: number, s: Scale) {
+    return s.log ? Math.log(Math.max(v, 1e-12)) : v;
+  }
+
+  private fi(v: number, s: Scale) {
+    return s.log ? Math.exp(v) : v;
+  }
+
+  private py(p: Pane, v: number) {
+    const s = p.scale;
+    const pad = p.key === "main" ? 0.08 : 0.1;
+    const top = p.top + p.h * pad;
+    const hh = p.h * (1 - pad * 2);
+    const lo = this.f(s.lo, s);
+    const hi = this.f(s.hi, s);
+    return top + (1 - (this.f(v, s) - lo) / (hi - lo || 1)) * hh;
+  }
+
+  private yp(p: Pane, y: number) {
+    const s = p.scale;
+    const pad = p.key === "main" ? 0.08 : 0.1;
+    const top = p.top + p.h * pad;
+    const hh = p.h * (1 - pad * 2);
+    const lo = this.f(s.lo, s);
+    const hi = this.f(s.hi, s);
+    return this.fi(lo + (1 - (y - top) / (hh || 1)) * (hi - lo), s);
+  }
+
+  private paneAt(y: number): number {
+    for (let i = this.panes.length - 1; i >= 0; i--) if (y >= this.panes[i]!.top) return i;
+    return 0;
+  }
+
+  private visible(): [number, number] {
+    const n = this.shown.length;
+    const a = Math.max(0, Math.floor(this.idx(0)));
+    const b = Math.min(n - 1, Math.ceil(this.idx(this.plotR)));
+    return [a, b];
+  }
+
+  private autoscale(i0: number, i1: number) {
+    const main = this.panes[0]!;
+    if (main.scale.auto && i1 >= i0) {
+      let lo = Infinity;
+      let hi = -Infinity;
+      for (let i = i0; i <= i1; i++) {
+        const b = this.shown[i]!;
+        if (this.type === "line" || this.type === "area") {
+          lo = Math.min(lo, b.c);
+          hi = Math.max(hi, b.c);
+        } else {
+          lo = Math.min(lo, b.l);
+          hi = Math.max(hi, b.h);
+        }
+      }
+      for (const ind of this.inds) {
+        const d = IND[ind.kind];
+        if (d.pane || ind.hidden || ind.kind === "vol") continue;
+        const ser = this.calc.get(ind.uid);
+        if (!ser) continue;
+        for (const s of ser) {
+          for (let i = i0; i <= i1; i++) {
+            const v = s[i];
+            if (finite(v)) {
+              lo = Math.min(lo, v);
+              hi = Math.max(hi, v);
+            }
+          }
+        }
+      }
+      if (Number.isFinite(lo) && Number.isFinite(hi)) {
+        if (hi - lo < hi * 1e-6) {
+          hi += hi * 0.001 || 1;
+          lo -= lo * 0.001 || 1;
+        }
+        main.scale.lo = lo;
+        main.scale.hi = hi;
+      }
+    }
+    for (const p of this.panes.slice(1)) {
+      if (!p.scale.auto || !p.ind) continue;
+      const d = IND[p.ind.kind];
+      if (d.range) {
+        p.scale.lo = d.range[0];
+        p.scale.hi = d.range[1];
+        continue;
+      }
+      let lo = Infinity;
+      let hi = -Infinity;
+      const own = p.ind.kind === "wt_oi" ? this.own.oi : p.ind.kind === "wt_fund" ? this.own.fund : null;
+      if (own) {
+        const t0 = this.iTime(i0);
+        const t1 = this.iTime(i1 + 1);
+        own.t.forEach((t, k) => {
+          const v = own.v[k];
+          if (t >= t0 - TF_MS[this.tf] * 4 && t <= t1 && finite(v)) {
+            lo = Math.min(lo, v);
+            hi = Math.max(hi, v);
+          }
+        });
+        if (p.ind.kind === "wt_fund") {
+          lo = Math.min(lo, 0);
+          hi = Math.max(hi, 0);
+        }
+      } else {
+        const ser = this.calc.get(p.ind.uid) ?? [];
+        for (const s of ser) {
+          for (let i = i0; i <= i1; i++) {
+            const v = s[i];
+            if (finite(v)) {
+              lo = Math.min(lo, v);
+              hi = Math.max(hi, v);
+            }
+          }
+        }
+        for (const lv of d.levels ?? []) {
+          if (Number.isFinite(lo)) {
+            lo = Math.min(lo, lv);
+            hi = Math.max(hi, lv);
+          }
+        }
+      }
+      p.empty = !(Number.isFinite(lo) && Number.isFinite(hi));
+      if (Number.isFinite(lo) && Number.isFinite(hi)) {
+        if (hi === lo) {
+          hi += Math.abs(hi) * 0.01 || 1;
+          lo -= Math.abs(lo) * 0.01 || 1;
+        }
+        p.scale.lo = lo;
+        p.scale.hi = hi;
+      }
+    }
+  }
+
+  /** Вид главной панели для рисунков. */
+  private view(): View {
+    const main = this.panes[0]!;
+    return {
+      x: (t) => this.tx(t),
+      y: (p) => this.py(main, p),
+      left: 0,
+      right: this.plotR,
+      top: main.top,
+      bottom: main.top + main.h,
+      fmt: (p) => fmtPrice(p, this.dec),
+      bars: (t0, t1) => Math.round(Math.abs(this.tIdx(t1) - this.tIdx(t0))),
+      font: this.font,
+    };
+  }
+
+  /* ── Кадр ───────────────────────────────────────────────────────────── */
+
+  private paint() {
+    this.compute();
+    const ctx = this.ctx;
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.fillStyle = C.bg;
+    ctx.fillRect(0, 0, this.w, this.h);
+    ctx.font = this.font;
+    this.layout();
+    if (!this.shown.length) {
+      this.emitHover();
+      return;
+    }
+    // Ширина шкалы цены — по самой длинной подписи.
+    const sample = fmtPrice(this.panes[0]!.scale.hi, this.dec);
+    this.priceW = Math.max(58, Math.ceil(ctx.measureText(sample).width) + 18);
+    const [i0, i1] = this.visible();
+    this.autoscale(i0, i1);
+
+    if (!this.olderAsked && !this.noOlder && this.idx(0) < 40) {
+      this.olderAsked = true;
+      this.ev.needOlder();
+    }
+
+    this.paintGrid();
+    if (this.mark) {
+      const main = this.panes[0]!;
+      ctx.save();
+      ctx.font = `700 ${Math.round(Math.min(64, this.w / 9))}px ${this.font.replace(/^\d+px\s*/, "")}`;
+      ctx.fillStyle = "rgba(127,216,255,0.045)";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(this.mark, this.plotR / 2, main.top + main.h / 2);
+      ctx.restore();
+    }
+
+    for (const p of this.panes) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, p.top, this.plotR, p.h);
+      ctx.clip();
+      if (p.key === "main") this.paintMain(i0, i1);
+      else this.paintSub(p, i0, i1);
+      ctx.restore();
+    }
+
+    // Разделители панелей.
+    ctx.strokeStyle = C.line;
+    ctx.lineWidth = 1;
+    for (const p of this.panes.slice(1)) {
+      ctx.beginPath();
+      ctx.moveTo(0, p.top + 0.5);
+      ctx.lineTo(this.w, p.top + 0.5);
+      ctx.stroke();
+    }
+    this.paintAxes();
+    this.paintCross();
+    this.emitHover();
+  }
+
+  private paintGrid() {
+    const ctx = this.ctx;
+    ctx.strokeStyle = C.grid;
+    ctx.lineWidth = 1;
+    // Вертикали — по подписям времени.
+    for (const [x] of this.timeTicks()) {
+      ctx.beginPath();
+      ctx.moveTo(Math.round(x) + 0.5, 0);
+      ctx.lineTo(Math.round(x) + 0.5, this.h - TIME_H);
+      ctx.stroke();
+    }
+    for (const p of this.panes) {
+      if (p.empty) continue;
+      for (const [y] of this.priceTicks(p)) {
+        ctx.beginPath();
+        ctx.moveTo(0, Math.round(y) + 0.5);
+        ctx.lineTo(this.plotR, Math.round(y) + 0.5);
+        ctx.stroke();
+      }
+    }
+  }
+
+  private priceTicks(p: Pane): [number, number][] {
+    const s = p.scale;
+    const out: [number, number][] = [];
+    const target = Math.max(2, Math.floor(p.h / 46));
+    if (s.log && p.key === "main") {
+      // Лог-шкала: шаги по кратности, подписи не теснее 26 px.
+      let last = Infinity;
+      const lo = s.lo;
+      const hi = s.hi;
+      const step0 = niceStep(hi - lo, target * 2);
+      for (let v = Math.ceil(lo / step0) * step0; v <= hi; v += step0) {
+        const y = this.py(p, v);
+        if (Math.abs(last - y) >= 26) {
+          out.push([y, v]);
+          last = y;
+        }
+      }
+      return out;
+    }
+    const step = niceStep(s.hi - s.lo, target);
+    if (!(step > 0)) return out;
+    for (let v = Math.ceil(s.lo / step) * step; v <= s.hi + step * 0.01; v += step) out.push([this.py(p, v), v]);
+    return out;
+  }
+
+  private timeTicks(): [number, string, boolean][] {
+    const out: [number, string, boolean][] = [];
+    const n = this.shown.length;
+    if (!n) return out;
+    const per = TF_MS[this.tf];
+    const minPx = 78;
+    let step = T_STEPS[T_STEPS.length - 1]!;
+    for (const s of T_STEPS) {
+      if (s[0] < per) continue;
+      if ((s[0] / per) * this.spacing >= minPx) {
+        step = s;
+        break;
+      }
+    }
+    const daily = per >= 86400_000;
+    const key = (t: number): number => {
+      const d = new Date(t);
+      const Y = daily ? d.getUTCFullYear() : d.getFullYear();
+      const M = daily ? d.getUTCMonth() : d.getMonth();
+      const D = daily ? d.getUTCDate() : d.getDate();
+      const H = daily ? d.getUTCHours() : d.getHours();
+      const m = daily ? d.getUTCMinutes() : d.getMinutes();
+      switch (step[1]) {
+        case "Y": return Y;
+        case "M": return Y * 12 + Math.floor(M / step[2]);
+        case "d": return step[2] === 1 ? Y * 400 + M * 32 + D
+          : step[2] >= 7 ? Math.floor((t - 4 * 86400_000) / (step[2] * 86400_000)) : Math.floor(t / (step[2] * 86400_000));
+        case "h": return (Y * 400 + M * 32 + D) * 24 + Math.floor(H / step[2]);
+        default: return ((Y * 400 + M * 32 + D) * 24 + H) * 60 + Math.floor(m / step[2]);
+      }
+    };
+    const [a, b] = this.visible();
+    let prev = a > 0 ? key(this.shown[a - 1]!.t) : NaN;
+    let lastX = -Infinity;
+    for (let i = a; i <= b; i++) {
+      const t = this.shown[i]!.t;
+      const k = key(t);
+      if (k !== prev) {
+        const x = this.x(i);
+        if (x - lastX >= minPx * 0.7) {
+          const d = new Date(t);
+          const Y = daily ? d.getUTCFullYear() : d.getFullYear();
+          const M = daily ? d.getUTCMonth() : d.getMonth();
+          const D = daily ? d.getUTCDate() : d.getDate();
+          const H = daily ? d.getUTCHours() : d.getHours();
+          const mi = daily ? d.getUTCMinutes() : d.getMinutes();
+          let txt: string;
+          let bold = false;
+          if (M === 0 && D === 1 && H === 0 && mi === 0) {
+            txt = String(Y);
+            bold = true;
+          } else if (D === 1 && H === 0 && mi === 0) {
+            txt = MONTHS[M]!;
+            bold = true;
+          } else if (H === 0 && mi === 0) txt = String(D);
+          else txt = `${String(H).padStart(2, "0")}:${String(mi).padStart(2, "0")}`;
+          out.push([x, txt, bold]);
+          lastX = x;
+        }
+        prev = k;
+      }
+    }
+    return out;
+  }
+
+  private paintMain(i0: number, i1: number) {
+    const ctx = this.ctx;
+    const main = this.panes[0]!;
+    const sp = this.spacing;
+    const bw = Math.max(1, Math.min(sp * 0.72, sp - 1));
+
+    // Уровни ликвидаций — позади всего: горизонтальные полосы справа.
+    const liqOn = this.inds.some((i) => i.kind === "wt_liq" && !i.hidden);
+    if (liqOn && this.own.liq?.rows.length) {
+      const rows = this.own.liq.rows;
+      const max = Math.max(...rows.map((r) => r.L + r.S), 1);
+      const maxW = this.plotR * 0.28;
+      const last = this.bars[this.bars.length - 1]!.c;
+      const steps = rows.length > 1 ? Math.abs(rows[1]!.p - rows[0]!.p) : last * 0.002;
+      for (const r of rows) {
+        const y0 = this.py(main, r.p + steps / 2);
+        const y1 = this.py(main, r.p - steps / 2);
+        // Тонкая полоса по центру уровня — как тепловая карта, а не кирпич.
+        const hh = Math.max(1, Math.min(5, Math.abs(y1 - y0) - 0.5));
+        const v = r.L + r.S;
+        const w = (v / max) * maxW;
+        if (w < 0.5) continue;
+        const a = 0.18 + 0.55 * (v / max);
+        ctx.fillStyle = r.p < last ? `rgba(255,92,119,${a})` : `rgba(61,220,151,${a})`;
+        ctx.fillRect(this.plotR - w, (y0 + y1) / 2 - hh / 2, w, hh);
+      }
+    }
+
+    // Объём — внизу главной панели, своя шкала.
+    const vol = this.inds.find((i) => i.kind === "vol" && !i.hidden);
+    if (vol) {
+      let vmax = 0;
+      for (let i = i0; i <= i1; i++) vmax = Math.max(vmax, this.bars[i]?.v ?? 0);
+      const base = main.top + main.h;
+      const vh = main.h * 0.18;
+      if (vmax > 0) {
+        for (let i = i0; i <= i1; i++) {
+          const b = this.bars[i]!;
+          const hgt = (b.v / vmax) * vh;
+          ctx.fillStyle = b.c >= b.o ? "rgba(61,220,151,0.28)" : "rgba(255,92,119,0.28)";
+          ctx.fillRect(this.x(i) - bw / 2, base - hgt, bw, hgt);
+        }
+        const ma = this.calc.get(vol.uid)?.[1];
+        if (ma) {
+          ctx.strokeStyle = vol.colors[1] ?? "#f0b90b";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          let pen = false;
+          for (let i = i0; i <= i1; i++) {
+            const v = ma[i];
+            if (!finite(v)) {
+              pen = false;
+              continue;
+            }
+            const y = base - (v / vmax) * vh;
+            if (pen) ctx.lineTo(this.x(i), y);
+            else ctx.moveTo(this.x(i), y);
+            pen = true;
+          }
+          ctx.stroke();
+        }
+      }
+    }
+
+    // Индикаторы поверх цены: сперва заливки, потом линии.
+    for (const ind of this.inds) {
+      const d = IND[ind.kind];
+      if (d.pane || ind.hidden || d.own || ind.kind === "vol") continue;
+      const ser = this.calc.get(ind.uid);
+      if (!ser) continue;
+      for (const f of d.fills ?? []) this.fill(main, ser[f.a], ser[f.b], i0, i1 + 30, f.color, !!f.byDir);
+    }
+
+    // Цена.
+    const s = this.shown;
+    if (this.type === "line" || this.type === "area") {
+      const first = s[i0];
+      const last = s[i1];
+      const up = !!first && !!last && last.c >= first.c;
+      if (this.type === "area") {
+        const g = ctx.createLinearGradient(0, main.top, 0, main.top + main.h);
+        g.addColorStop(0, "rgba(58,155,255,0.32)");
+        g.addColorStop(1, "rgba(58,155,255,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(this.x(i0), main.top + main.h);
+        for (let i = i0; i <= i1; i++) ctx.lineTo(this.x(i), this.py(main, s[i]!.c));
+        ctx.lineTo(this.x(i1), main.top + main.h);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.strokeStyle = this.type === "area" ? "#3a9bff" : up ? C.up : "#3a9bff";
+      ctx.lineWidth = 2;
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      for (let i = i0; i <= i1; i++) {
+        const y = this.py(main, s[i]!.c);
+        if (i === i0) ctx.moveTo(this.x(i), y);
+        else ctx.lineTo(this.x(i), y);
+      }
+      ctx.stroke();
+    } else {
+      ctx.lineWidth = 1;
+      for (let i = i0; i <= i1; i++) {
+        const b = s[i]!;
+        const x = Math.round(this.x(i)) + 0.5;
+        const up = b.c >= b.o;
+        const col = up ? C.up : C.dn;
+        const yo = this.py(main, b.o);
+        const yc = this.py(main, b.c);
+        const yh = this.py(main, b.h);
+        const yl = this.py(main, b.l);
+        ctx.strokeStyle = col;
+        ctx.fillStyle = col;
+        if (this.type === "bars") {
+          ctx.beginPath();
+          ctx.moveTo(x, yh);
+          ctx.lineTo(x, yl);
+          ctx.moveTo(x - bw / 2, yo);
+          ctx.lineTo(x, yo);
+          ctx.moveTo(x, yc);
+          ctx.lineTo(x + bw / 2, yc);
+          ctx.stroke();
+          continue;
+        }
+        const top = Math.min(yo, yc);
+        const bh = Math.max(1, Math.abs(yc - yo));
+        ctx.beginPath();
+        ctx.moveTo(x, yh);
+        ctx.lineTo(x, top);
+        ctx.moveTo(x, top + bh);
+        ctx.lineTo(x, yl);
+        ctx.stroke();
+        if (bw <= 2) {
+          ctx.fillRect(x - 0.5, top, 1, bh);
+        } else if (this.type === "hollow" && up) {
+          ctx.strokeRect(Math.round(x - bw / 2) + 0.5, top + 0.5, Math.round(bw) - 1, Math.max(1, bh - 1));
+        } else {
+          ctx.fillRect(Math.round(x - bw / 2), top, Math.round(bw), bh);
+        }
+      }
+    }
+
+    for (const ind of this.inds) {
+      const d = IND[ind.kind];
+      if (d.pane || ind.hidden || d.own || ind.kind === "vol") continue;
+      const ser = this.calc.get(ind.uid);
+      if (!ser) continue;
+      d.lines.forEach((l, k) => {
+        const sr = ser[k];
+        if (sr) this.series(main, sr, i0, ind.kind === "ichi" ? i1 + (ind.params[3] ?? 26) : i1, ind.colors[k] ?? l.color, l.style ?? "line", false, bw);
+      });
+    }
+
+    // Максимум и минимум видимого участка.
+    if (i1 > i0 && this.type !== "line" && this.type !== "area") {
+      let hiI = i0;
+      let loI = i0;
+      for (let i = i0; i <= i1; i++) {
+        if (s[i]!.h > s[hiI]!.h) hiI = i;
+        if (s[i]!.l < s[loI]!.l) loI = i;
+      }
+      ctx.font = this.font;
+      ctx.fillStyle = C.axis;
+      ctx.textBaseline = "middle";
+      const mk = (i: number, v: number, dy: number) => {
+        const x = this.x(i);
+        const y = this.py(main, v) + dy;
+        const txt = fmtPrice(v, this.dec);
+        const right = x < this.plotR * 0.6;
+        const s2 = right ? `← ${txt}` : `${txt} →`;
+        const tw = ctx.measureText(s2).width;
+        const tx = right ? x + 4 : x - 4 - tw;
+        ctx.fillStyle = "rgba(5,11,22,0.7)";
+        ctx.fillRect(tx - 2, y - 7, tw + 4, 14);
+        ctx.fillStyle = C.axis;
+        ctx.textAlign = "left";
+        ctx.fillText(s2, tx, y);
+      };
+      mk(hiI, s[hiI]!.h, -9);
+      mk(loI, s[loI]!.l, 9);
+    }
+
+    // Линия последней цены.
+    const last = this.bars[this.bars.length - 1]!;
+    const ly = Math.round(this.py(main, last.c)) + 0.5;
+    ctx.strokeStyle = last.c >= last.o ? C.up : C.dn;
+    ctx.globalAlpha = 0.7;
+    ctx.setLineDash([2, 3]);
+    ctx.beginPath();
+    ctx.moveTo(0, ly);
+    ctx.lineTo(this.plotR, ly);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+
+    // Рисунки.
+    if (!this.hideDrawings) {
+      const v = this.view();
+      for (const d of this.drawings) renderDrawing(ctx, d, v, d.id === this.sel);
+      if (this.creating) renderDrawing(ctx, this.creating.d, v, true);
+    }
+  }
+
+  private fill(p: Pane, a: Ser | undefined, b: Ser | undefined, i0: number, i1: number, color: string, byDir: boolean) {
+    if (!a || !b) return;
+    const ctx = this.ctx;
+    const end = Math.min(i1, a.length - 1, b.length - 1);
+    let i = i0;
+    while (i <= end) {
+      while (i <= end && !(finite(a[i]) && finite(b[i]))) i++;
+      if (i > end) break;
+      const start = i;
+      const up = (a[i] as number) >= (b[i] as number);
+      while (i <= end && finite(a[i]) && finite(b[i]) && (!byDir || ((a[i] as number) >= (b[i] as number)) === up)) i++;
+      const stop = i - 1;
+      if (stop <= start) continue;
+      ctx.fillStyle = byDir && !up ? "rgba(255,92,119,0.12)" : color;
+      ctx.beginPath();
+      for (let k = start; k <= stop; k++) {
+        const y = this.py(p, a[k] as number);
+        if (k === start) ctx.moveTo(this.x(k), y);
+        else ctx.lineTo(this.x(k), y);
+      }
+      for (let k = stop; k >= start; k--) ctx.lineTo(this.x(k), this.py(p, b[k] as number));
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  private series(p: Pane, s: Ser, i0: number, i1: number, color: string, style: string, signed: boolean, bw: number) {
+    const ctx = this.ctx;
+    const end = Math.min(i1, s.length - 1);
+    if (style === "hist") {
+      const zero = this.py(p, Math.max(p.scale.lo, Math.min(p.scale.hi, 0)));
+      for (let i = i0; i <= end; i++) {
+        const v = s[i];
+        if (!finite(v)) continue;
+        const y = this.py(p, v);
+        const prev = s[i - 1];
+        if (signed) {
+          const grow = finite(prev) ? Math.abs(v) >= Math.abs(prev) : true;
+          ctx.fillStyle = v >= 0 ? (grow ? "#3ddc97" : "rgba(61,220,151,0.5)") : grow ? "#ff5c77" : "rgba(255,92,119,0.5)";
+        } else ctx.fillStyle = color;
+        ctx.fillRect(this.x(i) - bw / 2, Math.min(y, zero), bw, Math.max(1, Math.abs(zero - y)));
+      }
+      return;
+    }
+    if (style === "dots") {
+      ctx.fillStyle = color;
+      const r = Math.max(1.2, Math.min(2.5, this.spacing / 4));
+      for (let i = i0; i <= end; i++) {
+        const v = s[i];
+        if (!finite(v)) continue;
+        ctx.beginPath();
+        ctx.arc(this.x(i), this.py(p, v), r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      return;
+    }
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    let pen = false;
+    for (let i = Math.max(0, i0 - 1); i <= end; i++) {
+      const v = s[i];
+      if (!finite(v)) {
+        pen = false;
+        continue;
+      }
+      const x = this.x(i);
+      const y = this.py(p, v);
+      if (pen) ctx.lineTo(x, y);
+      else ctx.moveTo(x, y);
+      pen = true;
+    }
+    ctx.stroke();
+  }
+
+  private paintSub(p: Pane, i0: number, i1: number) {
+    const ctx = this.ctx;
+    const ind = p.ind;
+    if (!ind) return;
+    const d = IND[ind.kind];
+    const bw = Math.max(1, Math.min(this.spacing * 0.72, this.spacing - 1));
+    // Уровни (30/70 и т. п.) и заливка между крайними.
+    const lv = d.levels ?? [];
+    if (lv.length === 2 && d.range) {
+      const y0 = this.py(p, lv[0]!);
+      const y1 = this.py(p, lv[1]!);
+      ctx.fillStyle = "rgba(127,216,255,0.04)";
+      ctx.fillRect(0, Math.min(y0, y1), this.plotR, Math.abs(y1 - y0));
+    }
+    ctx.strokeStyle = "rgba(124,151,188,0.35)";
+    ctx.setLineDash([4, 4]);
+    for (const l of lv) {
+      const y = Math.round(this.py(p, l)) + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(this.plotR, y);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    if (ind.hidden) return;
+
+    if (d.own) {
+      const own = ind.kind === "wt_oi" ? this.own.oi : this.own.fund;
+      if (!own || !own.t.length) return;
+      const t0 = this.iTime(i0 - 2);
+      const t1 = this.iTime(i1 + 2);
+      if (ind.kind === "wt_oi") {
+        const pts: [number, number][] = [];
+        own.t.forEach((t, k) => {
+          const v = own.v[k];
+          if (t >= t0 - 86400_000 && t <= t1 + 86400_000 && finite(v)) pts.push([this.tx(t), this.py(p, v)]);
+        });
+        if (pts.length < 2) return;
+        const g = ctx.createLinearGradient(0, p.top, 0, p.top + p.h);
+        g.addColorStop(0, "rgba(127,216,255,0.3)");
+        g.addColorStop(1, "rgba(127,216,255,0)");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(pts[0]![0], p.top + p.h);
+        for (const [x, y] of pts) ctx.lineTo(x, y);
+        ctx.lineTo(pts[pts.length - 1]![0], p.top + p.h);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = ind.colors[0] ?? "#7fd8ff";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        pts.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+        ctx.stroke();
+      } else {
+        const zero = this.py(p, 0);
+        // Ширина столбика — его промежуток времени (8 ч) в пикселях.
+        const span = own.t.length > 1 ? Math.abs(own.t[1]! - own.t[0]!) : 8 * 3600_000;
+        const w = Math.max(1, (span / TF_MS[this.tf]) * this.spacing * 0.8);
+        own.t.forEach((t, k) => {
+          const v = own.v[k];
+          if (!finite(v) || t < t0 - span || t > t1 + span) return;
+          const x = this.tx(t + span / 2);
+          const y = this.py(p, v);
+          ctx.fillStyle = v >= 0 ? "rgba(61,220,151,0.8)" : "rgba(255,92,119,0.8)";
+          ctx.fillRect(x - w / 2, Math.min(y, zero), w, Math.max(1, Math.abs(zero - y)));
+        });
+      }
+      return;
+    }
+    const ser = this.calc.get(ind.uid);
+    if (!ser) return;
+    d.lines.forEach((l, k) => {
+      const s = ser[k];
+      if (s) this.series(p, s, i0, i1, ind.colors[k] ?? l.color, l.style ?? "line", !!l.signed, bw);
+    });
+  }
+
+  private axisLabel(y: number, txt: string, bg: string, fg = "#fff", sub?: string) {
+    const ctx = this.ctx;
+    const h = sub ? 30 : 17;
+    const x = this.plotR;
+    ctx.fillStyle = bg;
+    ctx.beginPath();
+    ctx.roundRect(x + 1, y - 8.5, this.priceW - 2, h, 3);
+    ctx.fill();
+    ctx.fillStyle = fg;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(txt, x + 6, y + 0.5);
+    if (sub) {
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.fillText(sub, x + 6, y + 13.5);
+    }
+  }
+
+  private countdown(): string {
+    const last = this.bars[this.bars.length - 1];
+    if (!last) return "";
+    const left = tfEnd(this.tf, last.t) - Date.now();
+    if (left <= 0) return "";
+    const s = Math.floor(left / 1000);
+    const d = Math.floor(s / 86400);
+    const h = Math.floor((s % 86400) / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    if (d > 0) return `${d}d ${h}h`;
+    if (h > 0) return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+    return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  }
+
+  private paintAxes() {
+    const ctx = this.ctx;
+    const R = this.plotR;
+    ctx.fillStyle = C.bg;
+    ctx.fillRect(R, 0, this.priceW, this.h);
+    ctx.fillRect(0, this.h - TIME_H, this.w, TIME_H);
+    ctx.strokeStyle = C.line;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(R + 0.5, 0);
+    ctx.lineTo(R + 0.5, this.h - TIME_H);
+    ctx.moveTo(0, this.h - TIME_H + 0.5);
+    ctx.lineTo(this.w, this.h - TIME_H + 0.5);
+    ctx.stroke();
+    ctx.font = this.font;
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left";
+    for (const p of this.panes) {
+      ctx.fillStyle = C.axis;
+      if (p.empty) continue;
+      for (const [y, v] of this.priceTicks(p)) {
+        if (y < p.top + 8 || y > p.top + p.h - 6) continue;
+        ctx.fillText(p.key === "main" ? fmtPrice(v, this.dec) : fmtShort(v), R + 6, y);
+      }
+      // Последнее значение индикатора — плашкой его цвета.
+      if (p.ind && !p.ind.hidden) {
+        const d = IND[p.ind.kind];
+        if (d.own) {
+          const own = p.ind.kind === "wt_oi" ? this.own.oi : this.own.fund;
+          const v = own?.v[own.v.length - 1];
+          if (finite(v)) this.axisLabel(this.py(p, v), p.ind.kind === "wt_fund" ? `${v.toFixed(4)}%` : fmtShort(v), p.ind.colors[0] ?? "#3a9bff");
+        } else {
+          const ser = this.calc.get(p.ind.uid);
+          d.lines.forEach((l, k) => {
+            if (l.style === "hist") return;
+            const s = ser?.[k];
+            const v = s?.[this.bars.length - 1];
+            if (finite(v)) this.axisLabel(this.py(p, v), fmtShort(v), p.ind!.colors[k] ?? l.color);
+          });
+        }
+      }
+    }
+    // Подписи рисунков на шкале цены.
+    const main = this.panes[0]!;
+    if (!this.hideDrawings) {
+      for (const d of this.drawings) {
+        for (const m of axisMarks(d)) {
+          if (m.p !== undefined) this.axisLabel(this.py(main, m.p), fmtPrice(m.p, this.dec), d.color);
+        }
+      }
+    }
+    // Последняя цена с отсчётом до закрытия свечи.
+    const last = this.bars[this.bars.length - 1]!;
+    const ly = this.py(main, last.c);
+    if (ly > main.top - 10 && ly < main.top + main.h + 10) {
+      this.axisLabel(Math.max(main.top + 9, Math.min(main.top + main.h - 22, ly)), fmtPrice(last.c, this.dec),
+        last.c >= last.o ? "#1fa972" : "#d9405b", "#fff", this.countdown() || undefined);
+    }
+    // Время.
+    ctx.textAlign = "center";
+    for (const [x, txt, bold] of this.timeTicks()) {
+      if (x < 12 || x > R - 12) continue;
+      ctx.fillStyle = bold ? C.text : C.axis;
+      ctx.font = bold ? `600 ${this.font}` : this.font;
+      ctx.fillText(txt, x, this.h - TIME_H / 2);
+    }
+    ctx.font = this.font;
+    // Кнопки шкалы: A — авто, L — логарифм.
+    const by = this.h - TIME_H / 2;
+    ctx.textAlign = "center";
+    ctx.fillStyle = main.scale.auto ? "#7fd8ff" : C.axis;
+    ctx.font = `700 ${this.font}`;
+    ctx.fillText("A", R + this.priceW * 0.3, by);
+    ctx.fillStyle = main.scale.log ? "#7fd8ff" : C.axis;
+    ctx.fillText("L", R + this.priceW * 0.7, by);
+    ctx.font = this.font;
+  }
+
+  private paintCross() {
+    const c = this.cross;
+    if (!c || !this.shown.length) return;
+    const ctx = this.ctx;
+    const pi = this.paneAt(c.y);
+    const p = this.panes[pi]!;
+    const i = Math.round(this.idx(c.x));
+    const x = Math.round(this.x(i)) + 0.5;
+    const y = Math.round(c.y) + 0.5;
+    ctx.strokeStyle = C.cross;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, this.h - TIME_H);
+    if (c.y < this.h - TIME_H) {
+      ctx.moveTo(0, y);
+      ctx.lineTo(this.plotR, y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = this.font;
+    if (c.y < this.h - TIME_H) {
+      const v = this.yp(p, c.y);
+      this.axisLabel(c.y, p.key === "main" ? fmtPrice(v, this.dec) : fmtShort(v), "#2a3f5f");
+    }
+    // Время под перекрестием.
+    const t = this.iTime(i);
+    const d = new Date(t);
+    const daily = TF_MS[this.tf] >= 86400_000;
+    const ds = daily
+      ? `${String(d.getUTCDate()).padStart(2, "0")} ${MONTHS[d.getUTCMonth()]} '${String(d.getUTCFullYear()).slice(2)}`
+      : `${String(d.getDate()).padStart(2, "0")} ${MONTHS[d.getMonth()]} '${String(d.getFullYear()).slice(2)}  ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    const tw = ctx.measureText(ds).width + 12;
+    const bx = Math.max(0, Math.min(this.plotR - tw, x - tw / 2));
+    ctx.fillStyle = "#2a3f5f";
+    ctx.beginPath();
+    ctx.roundRect(bx, this.h - TIME_H + 2, tw, TIME_H - 4, 3);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText(ds, bx + 6, this.h - TIME_H / 2);
+  }
+
+  private emitHover() {
+    const n = this.bars.length;
+    let i = n - 1;
+    const live = !!this.cross;
+    if (this.cross) i = Math.max(0, Math.min(n - 1, Math.round(this.idx(this.cross.x))));
+    const vals: Record<string, number[]> = {};
+    for (const ind of this.inds) {
+      const s = this.calc.get(ind.uid);
+      if (s) vals[ind.uid] = s.map((a) => a[i] ?? NaN);
+      else if (ind.kind === "wt_oi" || ind.kind === "wt_fund") {
+        const own = ind.kind === "wt_oi" ? this.own.oi : this.own.fund;
+        if (own && own.t.length) {
+          const t = this.bars[i]?.t ?? 0;
+          let k = own.t.length - 1;
+          while (k > 0 && own.t[k]! > t + TF_MS[this.tf]) k--;
+          vals[ind.uid] = [own.v[k] ?? NaN];
+        }
+      }
+    }
+    this.ev.hover({ i, bar: this.bars[i] ?? null, prev: this.bars[i - 1] ?? null, vals, live });
+  }
+
+  /* ── Жесты ──────────────────────────────────────────────────────────── */
+
+  private pos(e: PointerEvent | WheelEvent) {
+    const r = this.cv.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  /** Точка рисунка под пальцем: время — по свече, цена — с магнитом. */
+  private ptAt(x: number, y: number, snap = true): Pt {
+    const main = this.panes[0]!;
+    const fi = this.idx(x);
+    const i = snap ? Math.round(fi) : fi;
+    let p = this.yp(main, y);
+    if (this.magnet && snap) {
+      const b = this.bars[Math.round(fi)];
+      if (b) {
+        let best = p;
+        let dist = Infinity;
+        for (const v of [b.o, b.h, b.l, b.c]) {
+          const dd = Math.abs(this.py(main, v) - y);
+          if (dd < dist) {
+            dist = dd;
+            best = v;
+          }
+        }
+        if (dist < 28) p = best;
+      }
+    }
+    return { t: this.iTime(i), p };
+  }
+
+  private tol(e: PointerEvent) {
+    return e.pointerType === "mouse" ? 6 : 14;
+  }
+
+  private hitAny(x: number, y: number, tol: number): { d: Drawing; handle: number } | null {
+    if (this.hideDrawings) return null;
+    const v = this.view();
+    // Сверху — выбранный, потом последние нарисованные.
+    const sel = this.drawings.filter((d) => d.id === this.sel);
+    const rest = this.drawings.filter((d) => d.id !== this.sel).reverse();
+    for (const d of [...sel, ...rest]) {
+      const h = hitDrawing(d, v, x, y, tol, d.id === this.sel);
+      if (h) return { d, handle: "handle" in h ? h.handle : -1 };
+    }
+    return null;
+  }
+
+  private onDown = (e: PointerEvent) => {
+    const { x, y } = this.pos(e);
+    this.mouse = e.pointerType === "mouse";
+    try {
+      this.cv.setPointerCapture(e.pointerId);
+    } catch { /* старые webview */ }
+    this.ptrs.set(e.pointerId, { x, y });
+    cancelAnimationFrame(this.inertia);
+    if (this.longTimer) clearTimeout(this.longTimer);
+
+    if (this.ptrs.size === 2) {
+      const [a, b] = [...this.ptrs.values()] as [{ x: number; y: number }, { x: number; y: number }];
+      this.mode = "pinch";
+      this.creating = this.creating && this.creating.d.type === "brush" ? null : this.creating;
+      this.pinch = { d: Math.abs(a.x - b.x) || 1, cx: (a.x + b.x) / 2, spacing: this.spacing, anchor: this.idx((a.x + b.x) / 2) };
+      return;
+    }
+    if (this.ptrs.size > 2) return;
+    if (e.button === 2) return;
+
+    const R = this.plotR;
+    const bottom = this.h - TIME_H;
+    this.down = { ...this.down, x, y, t: performance.now(), right: this.right, spacing: this.spacing, handle: -1, id: "", pts: [] };
+    this.vel = 0;
+    this.lastMove = { x, t: performance.now() };
+    this.lastMoveY = y;
+
+    // Кнопки A и L под шкалой цены.
+    if (x > R && y > bottom) {
+      if (x < R + this.priceW / 2) this.resetScale();
+      else this.setLog(!this.log);
+      this.ev.view(this.right >= this.bars.length - 1);
+      this.mode = "";
+      return;
+    }
+    // Граница панелей.
+    for (let k = 1; k < this.panes.length; k++) {
+      const p = this.panes[k]!;
+      if (Math.abs(y - p.top) <= (this.mouse ? 4 : 9) && x < R) {
+        this.mode = "sep";
+        this.down.pane = k;
+        this.down.lo = p.h;
+        return;
+      }
+    }
+    if (x > R) {
+      const pi = this.paneAt(y);
+      const p = this.panes[pi]!;
+      // Двойной тап по шкале — снова авто.
+      if (performance.now() - this.lastTap.t < 320 && Math.abs(this.lastTap.y - y) < 30 && this.lastTap.x > R) {
+        p.scale.auto = true;
+        this.lastTap.t = 0;
+        this.invalidate();
+        this.mode = "";
+        return;
+      }
+      this.mode = "price";
+      this.down.pane = pi;
+      this.down.lo = p.scale.lo;
+      this.down.hi = p.scale.hi;
+      return;
+    }
+    if (y > bottom) {
+      this.mode = "time";
+      return;
+    }
+    const pi = this.paneAt(y);
+
+    // Рисование.
+    if (this.tool !== "cursor" && pi === 0) {
+      this.drawDown(x, y);
+      return;
+    }
+    if (this.creating) {
+      this.drawDown(x, y);
+      return;
+    }
+    // Рисунок под пальцем: ручка или тело.
+    if (pi === 0) {
+      const h = this.hitAny(x, y, this.tol(e));
+      if (h) {
+        this.select(h.d.id);
+        this.down.id = h.d.id;
+        this.down.pts = h.d.pts.map((p) => ({ ...p }));
+        this.down.handle = h.handle;
+        this.mode = h.d.locked ? "pan" : h.handle >= 0 ? "handle" : "move";
+        this.invalidate();
+        return;
+      }
+      if (this.sel) this.select(null);
+    }
+    if (this.mouse) {
+      this.mode = "pan";
+      return;
+    }
+    // Палец: ждём — тап, сдвиг или долгое нажатие.
+    this.mode = "pending";
+    this.longTimer = setTimeout(() => {
+      if (this.mode === "pending") {
+        this.mode = "cross";
+        this.cross = { x, y };
+        this.crossSticky = true;
+        try {
+          navigator.vibrate?.(8);
+        } catch { /* нет вибро */ }
+        this.invalidate();
+      }
+    }, 380);
+  };
+
+  private drawDown(x: number, y: number) {
+    const tool = this.creating?.d.type ?? (this.tool === "cursor" ? null : this.tool);
+    if (!tool) return;
+    const pt = this.ptAt(x, y, tool !== "brush");
+    if (!this.creating) {
+      const need = TOOL_POINTS[tool];
+      const d: Drawing = { id: `d${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, type: tool, pts: [pt], color: tool === "long" || tool === "short" ? "#9aa7b8" : "#3a9bff" };
+      if (tool === "long" || tool === "short") {
+        const main = this.panes[0]!;
+        const span = main.scale.hi - main.scale.lo;
+        const t2 = this.iTime(this.idx(x) + Math.max(12, 120 / this.spacing));
+        const up = tool === "long" ? 1 : -1;
+        d.pts = [pt, { t: t2, p: pt.p + up * span * 0.12 }, { t: t2, p: pt.p - up * span * 0.06 }];
+        this.commit(d);
+        return;
+      }
+      if (need === 1) {
+        if (tool === "text") d.text = "";
+        this.commit(d);
+        if (tool === "text") this.ev.textNew(d);
+        return;
+      }
+      if (tool !== "brush") for (let k = 1; k < need; k++) d.pts.push({ ...pt });
+      this.creating = { d, idx: 1, downs: 1 };
+      this.mode = "create";
+      this.invalidate();
+      return;
+    }
+    const c = this.creating;
+    c.downs++;
+    c.d.pts[c.idx] = pt;
+    this.mode = "create";
+    this.invalidate();
+  }
+
+  private commit(d: Drawing) {
+    this.creating = null;
+    this.drawings = [...this.drawings, d];
+    this.ev.drawings(this.drawings);
+    this.tool = "cursor";
+    this.cv.style.cursor = "default";
+    this.ev.toolDone();
+    this.select(d.id);
+    this.invalidate();
+  }
+
+  private onMove = (e: PointerEvent) => {
+    const { x, y } = this.pos(e);
+    const had = this.ptrs.get(e.pointerId);
+    if (had) this.ptrs.set(e.pointerId, { x, y });
+
+    if (this.mode === "pinch" && this.ptrs.size >= 2) {
+      const [a, b] = [...this.ptrs.values()] as [{ x: number; y: number }, { x: number; y: number }];
+      const dist = Math.abs(a.x - b.x) || 1;
+      const cx = (a.x + b.x) / 2;
+      this.zoomTo(this.pinch.spacing * (dist / this.pinch.d), this.pinch.anchor, cx);
+      return;
+    }
+
+    // Мышь без нажатия: перекрестие за курсором, превью рисунка.
+    if (!had) {
+      if (e.pointerType !== "mouse") return;
+      const r = this.cv.getBoundingClientRect();
+      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
+      this.cross = x < this.plotR && y < this.h - TIME_H ? { x, y } : null;
+      if (this.creating && this.creating.d.type !== "brush") {
+        const c = this.creating;
+        const pt = this.ptAt(x, y);
+        c.d.pts[c.idx] = pt;
+        if (c.d.type === "channel" && c.idx === 1) c.d.pts[2] = { ...pt };
+      }
+      if (this.tool === "cursor" && !this.creating) {
+        const h = y < this.panes[0]!.h ? this.hitAny(x, y, 6) : null;
+        this.cv.style.cursor = h ? (h.handle >= 0 ? "grab" : "pointer") : x > this.plotR ? "ns-resize" : y > this.h - TIME_H ? "ew-resize" : "default";
+      }
+      this.invalidate();
+      return;
+    }
+
+    const dx = x - this.down.x;
+    const dy = y - this.down.y;
+    const now = performance.now();
+    if (this.mode === "pending") {
+      // Палец сдвинулся до долгого нажатия — это листание.
+      if (Math.hypot(dx, dy) <= 7) return;
+      if (this.longTimer) clearTimeout(this.longTimer);
+      this.mode = "pan";
+      if (!this.crossSticky) this.cross = null;
+    }
+    switch (this.mode) {
+      case "pan": {
+        const ddx = x - this.down.x;
+        this.right = this.down.right - ddx / this.spacing;
+        this.clampRight();
+        const main = this.panes[0]!;
+        if (!main.scale.auto && this.paneAt(this.down.y) === 0) {
+          // Ручная шкала: двигаем и по вертикали.
+          const k = (y - this.lastMoveY) / (main.h * 0.84);
+          const s = main.scale;
+          const lo = this.f(s.lo, s);
+          const hi = this.f(s.hi, s);
+          const sh = (hi - lo) * k;
+          s.lo = this.fi(lo + sh, s);
+          s.hi = this.fi(hi + sh, s);
+        }
+        const dt = now - this.lastMove.t;
+        if (dt > 0) this.vel = 0.8 * ((x - this.lastMove.x) / dt) + 0.2 * this.vel;
+        this.lastMove = { x, t: now };
+        if (this.mouse) this.cross = { x, y };
+        this.ev.view(this.right >= this.bars.length - 1);
+        this.invalidate();
+        break;
+      }
+      case "cross":
+        this.cross = { x: Math.min(x, this.plotR - 1), y: Math.min(y, this.h - TIME_H - 1) };
+        this.invalidate();
+        break;
+      case "price": {
+        const p = this.panes[this.down.pane]!;
+        const s = p.scale;
+        s.auto = false;
+        const k = Math.exp(dy * 0.006);
+        const lo = this.f(this.down.lo, s);
+        const hi = this.f(this.down.hi, s);
+        const mid = (lo + hi) / 2;
+        const half = ((hi - lo) / 2) * k;
+        s.lo = this.fi(mid - half, s);
+        s.hi = this.fi(mid + half, s);
+        this.invalidate();
+        break;
+      }
+      case "time": {
+        const k = Math.exp(dx * 0.006);
+        const anchor = this.idx(this.plotR);
+        this.zoomTo(this.down.spacing * k, anchor, this.plotR);
+        break;
+      }
+      case "sep": {
+        const p = this.panes[this.down.pane]!;
+        const total = this.h - TIME_H;
+        const nh = Math.max(40, Math.min(total * 0.6, this.down.lo - dy));
+        p.frac = nh / total;
+        this.invalidate();
+        break;
+      }
+      case "create": {
+        const c = this.creating;
+        if (!c) break;
+        if (c.d.type === "brush") {
+          const last = c.d.pts[c.d.pts.length - 1];
+          const pt = this.ptAt(x, y, false);
+          if (!last || Math.abs(this.tx(last.t) - x) + Math.abs(this.py(this.panes[0]!, last.p) - y) > 3) c.d.pts.push(pt);
+        } else {
+          const pt = this.ptAt(x, y);
+          c.d.pts[c.idx] = pt;
+          if (c.d.type === "channel" && c.idx === 1) c.d.pts[2] = { ...pt };
+        }
+        this.invalidate();
+        break;
+      }
+      case "handle":
+      case "move": {
+        const d = this.drawings.find((q) => q.id === this.down.id);
+        if (!d) break;
+        const main = this.panes[0]!;
+        const pt = this.ptAt(x, y);
+        let pts = this.down.pts.map((p) => ({ ...p }));
+        if (this.mode === "move") {
+          const i0 = this.idx(this.down.x);
+          const di = Math.round(this.idx(x) - i0);
+          const dp = this.yp(main, y) - this.yp(main, this.down.y);
+          pts = pts.map((p) => ({ t: this.iTime(this.tIdx(p.t) + di), p: p.p + dp }));
+        } else {
+          const k = this.down.handle;
+          if (d.type === "long" || d.type === "short") {
+            if (k === 0) pts[0] = { t: pt.t, p: pt.p };
+            else {
+              pts[k] = { t: pt.t, p: pt.p };
+              const other = k === 1 ? 2 : 1;
+              pts[other] = { ...pts[other]!, t: pt.t };
+            }
+          } else if (d.type === "hline") pts[0] = { ...pts[0]!, p: pt.p };
+          else if (d.type === "vline") pts[0] = { ...pts[0]!, t: pt.t };
+          else pts[k] = pt;
+        }
+        this.drawings = this.drawings.map((q) => (q.id === d.id ? { ...q, pts } : q));
+        this.invalidate();
+        break;
+      }
+    }
+    this.lastMoveY = y;
+  };
+
+  private lastMoveY = 0;
+
+  private onUp = (e: PointerEvent) => {
+    if (!this.ptrs.has(e.pointerId)) return;
+    this.ptrs.delete(e.pointerId);
+    if (this.longTimer) clearTimeout(this.longTimer);
+    const { x, y } = this.pos(e);
+    if (this.mode === "pinch") {
+      if (this.ptrs.size === 0) this.mode = "";
+      else {
+        // Остался один палец — продолжаем листать от него.
+        const rest = [...this.ptrs.values()][0]!;
+        this.mode = "pan";
+        this.down = { ...this.down, x: rest.x, y: rest.y, right: this.right };
+      }
+      return;
+    }
+    const moved = Math.hypot(x - this.down.x, y - this.down.y);
+    switch (this.mode) {
+      case "pending": {
+        // Тап: двойной — к последней свече, одиночный — перекрестие.
+        const now = performance.now();
+        if (now - this.lastTap.t < 320 && Math.hypot(this.lastTap.x - x, this.lastTap.y - y) < 30) {
+          this.cross = null;
+          this.crossSticky = false;
+          this.goLatest();
+          this.lastTap.t = 0;
+        } else {
+          this.lastTap = { t: now, x, y };
+          if (this.cross) {
+            this.cross = null;
+            this.crossSticky = false;
+          } else {
+            this.cross = { x, y };
+            this.crossSticky = true;
+          }
+        }
+        this.invalidate();
+        break;
+      }
+      case "pan":
+        if (this.mouse && moved < 3) {
+          const now = performance.now();
+          if (now - this.lastTap.t < 320) this.goLatest();
+          this.lastTap = { t: now, x, y };
+        } else if (Math.abs(this.vel) > 0.25) this.glide();
+        break;
+      case "price":
+        this.lastTap = { t: performance.now(), x, y };
+        break;
+      case "create": {
+        const c = this.creating;
+        if (!c) break;
+        if (c.d.type === "brush") {
+          if (c.d.pts.length > 1) this.commit(c.d);
+          else this.creating = null;
+          break;
+        }
+        const need = TOOL_POINTS[c.d.type];
+        // Первая точка: потянул — вторая встала, где отпустил; тапнул — ждём второй тап.
+        if (c.downs === 1 && moved < 8) break;
+        c.idx++;
+        if (c.idx >= need) this.commit(c.d);
+        else this.invalidate();
+        break;
+      }
+      case "handle":
+      case "move":
+        if (moved > 2) this.ev.drawings(this.drawings);
+        {
+          const d = this.drawings.find((q) => q.id === this.down.id);
+          if (d) this.ev.select(d);
+        }
+        break;
+    }
+    if (this.mode !== "create" || !this.creating) this.mode = "";
+  };
+
+  private onLeave = () => {
+    if (this.mouse && !this.ptrs.size) {
+      this.cross = null;
+      this.invalidate();
+    }
+  };
+
+  private onWheel = (e: WheelEvent) => {
+    e.preventDefault();
+    const { x } = this.pos(e);
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+      this.right += e.deltaX / this.spacing;
+      this.clampRight();
+      this.invalidate();
+      return;
+    }
+    const k = Math.exp(-e.deltaY * 0.0015);
+    this.zoomTo(this.spacing * k, this.idx(x), x);
+  };
+
+  private zoomTo(spacing: number, anchor: number, ax: number) {
+    this.spacing = Math.max(MIN_SPACING, Math.min(MAX_SPACING, spacing));
+    this.right = anchor + (this.plotR - ax) / this.spacing - 0.5;
+    this.clampRight();
+    this.invalidate();
+  }
+
+  private clampRight() {
+    const n = this.bars.length;
+    const vis = this.plotR / this.spacing;
+    this.right = Math.max(Math.min(8, vis * 0.3), Math.min(n - 1 + vis * 0.75, this.right));
+  }
+
+  private glide() {
+    let v = this.vel;
+    let last = performance.now();
+    const step = () => {
+      const now = performance.now();
+      const dt = now - last;
+      last = now;
+      this.right -= (v * dt) / this.spacing;
+      this.clampRight();
+      v *= Math.pow(0.994, dt);
+      this.invalidate();
+      this.ev.view(this.right >= this.bars.length - 1);
+      if (Math.abs(v) > 0.02) this.inertia = requestAnimationFrame(step);
+    };
+    this.inertia = requestAnimationFrame(step);
+  }
+}
