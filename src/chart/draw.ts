@@ -36,8 +36,10 @@ export interface Drawing {
   levels?: number[];
   /** Фибоначчи: продлить уровни вправо до края. */
   extend?: boolean;
-  /** Горизонталь с алертом: номер алерта на сервере. */
+  /** Алерт на сервере: у горизонтали и линии — один, у позиции — тейк. */
   alert?: number;
+  /** Позиция: алерт на стоп. */
+  alert2?: number;
   /** Алерт сработал (сек) — линия помечена галочкой. */
   fired?: number;
 }
@@ -372,6 +374,9 @@ export function render(ctx: CanvasRenderingContext2D, d: Drawing, v: View, selec
     case "vline":
     case "brush":
       for (const s of shape(d, v).segs) line(s);
+      if ((d.type === "trend" || d.type === "ray" || d.type === "ext") && a && b && (d.alert || d.fired)) {
+        halo(ctx, d.alert ? "🔔" : "✓", b[0] + 12, b[1] - 12, d.fired ? "#3ddc97" : col, v.font);
+      }
       if ((d.type === "trend" || d.type === "ray") && a && b && selected) {
         const ch = pct(d.pts[0]!.p, d.pts[1]!.p);
         label(ctx, `${sgn(ch)}${ch.toFixed(2)}%`, b[0] + 8, b[1], col, v);
@@ -523,7 +528,7 @@ export function render(ctx: CanvasRenderingContext2D, d: Drawing, v: View, selec
         const cx = (x0 + x1) / 2;
         label(ctx, `${v.fmt(tp)}  ${sgn(pct(e, tp))}${pct(e, tp).toFixed(2)}%`, cx, b[1] + (b[1] < a[1] ? -11 : 11), UP, v, "center");
         label(ctx, `${v.fmt(sl)}  ${sgn(pct(e, sl))}${pct(e, sl).toFixed(2)}%`, cx, c[1] + (c[1] > a[1] ? 11 : -11), DN, v, "center");
-        label(ctx, `${d.type === "long" ? "LONG" : "SHORT"} ${v.fmt(e)} · R/R ${rr.toFixed(2)}`, cx, a[1], "#eaf5ff", v, "center");
+        label(ctx, `${d.alert || d.alert2 ? "🔔 " : ""}${d.type === "long" ? "LONG" : "SHORT"} ${v.fmt(e)} · R/R ${rr.toFixed(2)}`, cx, a[1], "#eaf5ff", v, "center");
       }
       break;
     case "measure":

@@ -51,6 +51,13 @@ export interface WhaleMark {
   open: boolean;
 }
 
+/** Монета для сравнения: её свечи того же таймфрейма и цвет линии. */
+export interface Compare {
+  label: string;
+  color: string;
+  bars: Bar[];
+}
+
 export interface Hover {
   /** Номер свечи под перекрестием (или последней). */
   i: number;
@@ -64,6 +71,9 @@ export interface Hover {
   liq?: { L: number; S: number };
   /** Сделки китов на этой свече: куплено и продано, $. */
   wh?: { buy: number; sell: number };
+  /** Режим сравнения: изменение от первой видимой свечи, %, — у главной монеты и у каждой сравниваемой. */
+  cmp?: { label: string; color: string; pct: number }[];
+  mainPct?: number;
 }
 
 export interface Events {
@@ -79,6 +89,8 @@ export interface Events {
   history(canUndo: boolean, canRedo: boolean): void;
   /** Технический рейтинг пересчитан (не чаще раза в 3 с). */
   rating(r: Rating | null): void;
+  /** Процентную шкалу включили или выключили кнопкой «%». */
+  pct(on: boolean): void;
 }
 
 interface Scale {
@@ -211,6 +223,10 @@ export class Engine {
   private indDirty = true;
   private own: { oi: OwnSeries | null; fund: OwnSeries | null; liq: LiqLevels | null } = { oi: null, fund: null, liq: null };
   private liqx: LiqRows | null = null;
+  private cmp: { label: string; color: string; at: Map<number, number> }[] = [];
+  private pct = false;
+  /** Свеча-точка отсчёта для процентов — первая видимая. */
+  private baseI = 0;
   private whales: WhaleMark[] | null = null;
 
   private drawings: Drawing[] = [];
@@ -368,6 +384,36 @@ export class Engine {
   setLiq(l: LiqLevels | null) {
     this.own.liq = l;
     this.invalidate();
+  }
+
+  /** Сравнение с другими монетами: их цены приводятся к старту главной. */
+  setCompare(list: Compare[]) {
+    this.cmp = list.map((c) => ({ label: c.label, color: c.color, at: new Map(c.bars.map((b) => [b.t, b.c])) }));
+    this.invalidate();
+  }
+
+  setPct(on: boolean) {
+    this.pct = on;
+    this.invalidate();
+  }
+
+  /** Шкала в процентах: включена вручную или сама — при сравнении. */
+  get pctMode() {
+    return this.pct || this.cmp.length > 0;
+  }
+
+  /** Цена сравниваемой монеты на свече i — в масштабе главной (от общей точки старта). */
+  private cmpAt(c: { at: Map<number, number> }, i: number): number {
+    const b = this.bars[i];
+    const v = b ? c.at.get(b.t) : undefined;
+    if (v === undefined) return NaN;
+    let base: number | undefined;
+    for (let k = this.baseI; k < Math.min(this.bars.length, this.baseI + 50) && base === undefined; k++) {
+      const bk = this.bars[k];
+      if (bk) base = c.at.get(bk.t);
+    }
+    const mb = this.bars[this.baseI]?.c;
+    return base && mb ? (mb * v) / base : NaN;
   }
 
   setLiqx(r: LiqRows | null) {
@@ -738,6 +784,15 @@ export class Engine {
           }
         }
       }
+      for (const c of this.cmp) {
+        for (let i = i0; i <= i1; i++) {
+          const v = this.cmpAt(c, i);
+          if (finite(v)) {
+            lo = Math.min(lo, v);
+            hi = Math.max(hi, v);
+          }
+        }
+      }
       if (Number.isFinite(lo) && Number.isFinite(hi)) {
         if (hi - lo < hi * 1e-6) {
           hi += hi * 0.001 || 1;
@@ -837,6 +892,7 @@ export class Engine {
     const sample = fmtPrice(this.panes[0]!.scale.hi, this.dec);
     this.priceW = Math.max(58, Math.ceil(ctx.measureText(sample).width) + 18);
     const [i0, i1] = this.visible();
+    this.baseI = i0;
     this.autoscale(i0, i1);
 
     if (!this.olderAsked && !this.noOlder && this.idx(0) < 40) {
@@ -948,6 +1004,23 @@ export class Engine {
     const s = p.scale;
     const out: [number, number][] = [];
     const target = Math.max(2, Math.floor(p.h / 46));
+    if (p.key === "main" && this.pctMode) {
+      // Проценты от первой видимой свечи: шаг подбираем в процентах.
+      const base = this.bars[this.baseI]?.c;
+      if (base) {
+        const plo = (s.lo / base - 1) * 100;
+        const phi = (s.hi / base - 1) * 100;
+        const st = niceStep(phi - plo, target);
+        let last = Infinity;
+        for (let v = Math.ceil(plo / st) * st; v <= phi + st * 0.01; v += st) {
+          const y = this.py(p, base * (1 + v / 100));
+          if (Math.abs(last - y) < 22) continue;
+          out.push([y, v]);
+          last = y;
+        }
+        return out;
+      }
+    }
     if (s.log && p.key === "main") {
       // Лог-шкала: шаги по кратности, подписи не теснее 26 px.
       let last = Infinity;
@@ -1178,6 +1251,39 @@ export class Engine {
         } else {
           ctx.fillRect(Math.round(x - bw / 2), top, Math.round(bw), bh);
         }
+      }
+    }
+
+    // Сравниваемые монеты — линиями, в масштабе главной от общей точки старта.
+    for (const c of this.cmp) {
+      ctx.strokeStyle = c.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      let pen = false;
+      let lastX = 0;
+      let lastY = 0;
+      for (let i = i0; i <= i1; i++) {
+        const v = this.cmpAt(c, i);
+        if (!finite(v)) {
+          pen = false;
+          continue;
+        }
+        lastX = this.x(i);
+        lastY = this.py(main, v);
+        if (pen) ctx.lineTo(lastX, lastY);
+        else ctx.moveTo(lastX, lastY);
+        pen = true;
+      }
+      ctx.stroke();
+      if (lastX) {
+        ctx.font = `700 ${this.font}`;
+        ctx.textAlign = "right";
+        ctx.textBaseline = "bottom";
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "rgba(5,11,22,0.9)";
+        ctx.strokeText(c.label, lastX - 4, lastY - 4);
+        ctx.fillStyle = c.color;
+        ctx.fillText(c.label, lastX - 4, lastY - 4);
       }
     }
 
@@ -1748,7 +1854,7 @@ export class Engine {
       if (p.empty) continue;
       for (const [y, v] of this.priceTicks(p)) {
         if (y < p.top + 8 || y > p.top + p.h - 6) continue;
-        ctx.fillText(p.key === "main" ? fmtPrice(v, this.dec) : fmtShort(v), R + 6, y);
+        ctx.fillText(p.key === "main" ? (this.pctMode ? `${v > 0 ? "+" : ""}${+v.toFixed(2)}%` : fmtPrice(v, this.dec)) : fmtShort(v), R + 6, y);
       }
       // Последнее значение индикатора — плашкой его цвета.
       if (p.ind && !p.ind.hidden) {
@@ -1798,9 +1904,11 @@ export class Engine {
     ctx.textAlign = "center";
     ctx.fillStyle = main.scale.auto ? "#7fd8ff" : C.axis;
     ctx.font = `700 ${this.font}`;
-    ctx.fillText("A", R + this.priceW * 0.3, by);
+    ctx.fillText("A", R + this.priceW * 0.2, by);
     ctx.fillStyle = main.scale.log ? "#7fd8ff" : C.axis;
-    ctx.fillText("L", R + this.priceW * 0.7, by);
+    ctx.fillText("L", R + this.priceW * 0.5, by);
+    ctx.fillStyle = this.pctMode ? "#7fd8ff" : C.axis;
+    ctx.fillText("%", R + this.priceW * 0.8, by);
     ctx.font = this.font;
   }
 
@@ -1891,7 +1999,20 @@ export class Engine {
       }
       if (buy || sell) wh = { buy, sell };
     }
-    this.ev.hover({ i, bar: this.bars[i] ?? null, prev: this.bars[i - 1] ?? null, vals, live, liq, wh });
+    let cmp: Hover["cmp"];
+    let mainPct: number | undefined;
+    if (this.pctMode) {
+      const base = this.bars[this.baseI]?.c;
+      const cur = this.bars[i]?.c;
+      if (base && cur) mainPct = (cur / base - 1) * 100;
+      if (this.cmp.length && base) {
+        cmp = this.cmp.map((c) => {
+          const v = this.cmpAt(c, i);
+          return { label: c.label, color: c.color, pct: finite(v) ? (v / base - 1) * 100 : NaN };
+        });
+      }
+    }
+    this.ev.hover({ i, bar: this.bars[i] ?? null, prev: this.bars[i - 1] ?? null, vals, live, liq, wh, cmp, mainPct });
   }
 
   /* ── Жесты ──────────────────────────────────────────────────────────── */
@@ -1971,8 +2092,13 @@ export class Engine {
 
     // Кнопки A и L под шкалой цены.
     if (x > R && y > bottom) {
-      if (x < R + this.priceW / 2) this.resetScale();
-      else this.setLog(!this.log);
+      const part = (x - R) / this.priceW;
+      if (part < 0.35) this.resetScale();
+      else if (part < 0.65) this.setLog(!this.log);
+      else {
+        this.setPct(!this.pct);
+        this.ev.pct(this.pct);
+      }
       this.ev.view(this.right >= this.bars.length - 1);
       this.mode = "";
       return;

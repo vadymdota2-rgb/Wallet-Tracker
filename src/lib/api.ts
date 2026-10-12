@@ -690,6 +690,8 @@ export interface PxAlert {
   /** Когда сработал (сек), 0 — ещё ждёт. */
   fired: number;
   fpx: number;
+  /** h — горизонталь, l — наклонная линия (уровень на сейчас — в price). */
+  kind?: "h" | "l";
 }
 export interface PxAlertReply {
   ok: boolean;
@@ -707,8 +709,20 @@ export const fetchChartWhales = (coin: string) =>
   remember<ChartWhalesReply | null>(`/api/chart/whales?coin=${encodeURIComponent(coin)}`, 120_000,
     () => call<ChartWhalesReply>(`/api/chart/whales?coin=${encodeURIComponent(coin)}`), (r) => !!r?.ok);
 export const pxAlertList = () => call<PxAlertReply>("/api/pxalert/list");
-export const pxAlertAdd = (sym: string, price: number, lang: string, note = "") =>
-  call<PxAlertReply>("/api/pxalert/add", { method: "POST", body: { sym, price, lang, note } });
-export const pxAlertMove = (id: number, price: number) =>
-  call<PxAlertReply>("/api/pxalert/move", { method: "POST", body: { id, price } });
+/** Уровень алерта: горизонталь — цена, наклонная линия — две точки (мс, цена). */
+export type PxLevel = { price: number } | { line: { t1: number; p1: number; t2: number; p2: number; log: boolean } };
+export const pxAlertAdd = (sym: string, level: PxLevel, lang: string, note = "") =>
+  call<PxAlertReply>("/api/pxalert/add", { method: "POST", body: { sym, ...level, lang, note } });
+export const pxAlertMove = (id: number, level: PxLevel) =>
+  call<PxAlertReply>("/api/pxalert/move", { method: "POST", body: { id, ...level } });
+
+/* Рисунки и настройки графика на сервере — одни на всех устройствах. */
+export interface ChartStateReply {
+  ok: boolean;
+  draw?: { list: unknown[]; at: number } | null;
+  prefs?: { v: Record<string, unknown>; at: number } | null;
+}
+export const chartStateGet = (sym: string) => call<ChartStateReply>(`/api/chart/state?sym=${encodeURIComponent(sym)}`);
+export const chartStatePut = (body: { sym: string; list: unknown[]; at: number } | { prefs: unknown; at: number }) =>
+  call<{ ok: boolean; error?: string }>("/api/chart/state", { method: "POST", body });
 export const pxAlertDel = (id: number) => call<PxAlertReply>("/api/pxalert/del", { method: "POST", body: { id } });

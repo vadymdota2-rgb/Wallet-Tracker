@@ -1649,6 +1649,14 @@
 }
 .ch-fibs button.on { color: var(--ink); background: rgb(31 142 255 / 0.22); border-color: rgb(127 216 255 / 0.5); }
 .ch-fibs button.gold { background: rgb(240 185 11 / 0.25); border-color: #f0b90b; color: #f0b90b; }
+.ch-vs { font-size: 11px; letter-spacing: 0.02em; }
+.ch-seg { display: flex; gap: 4px; padding: 3px; border-radius: 10px; background: rgb(58 130 214 / 0.1); }
+.ch-seg button { flex: 1 1 0; height: 34px; border: 0; border-radius: 8px; background: transparent; color: var(--dim); font-weight: 600; font-size: 14px; }
+.ch-seg button.on { background: rgb(31 142 255 / 0.3); color: var(--ink); }
+.ch-cmp { display: flex; flex-wrap: wrap; gap: 2px 10px; pointer-events: auto; }
+.ch-cmp span { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); }
+.ch-cmp i { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+.ch-cmp b { font-variant-numeric: tabular-nums; }
 .ch-own b.up { color: #3ddc97; }
 .ch-own b.dn { color: #ff5c77; }
 .ch-alert { display: flex; align-items: center; gap: 6px; border-bottom: 1px solid rgb(58 130 214 / 0.12); }

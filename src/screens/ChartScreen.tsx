@@ -20,7 +20,7 @@ import type { DictKey } from "../i18n/types";
 import { haptic } from "../lib/telegram";
 import {
   fetchChartLiqs, fetchChartWhales, fetchLiqMap, fetchOiHist, fetchSymbols, peekSymbols,
-  pxAlertAdd, pxAlertDel, pxAlertList, pxAlertMove, type PxAlert,
+  chartStateGet, chartStatePut, pxAlertAdd, pxAlertDel, pxAlertList, pxAlertMove, type PxAlert, type PxLevel,
 } from "../lib/api";
 import { toast } from "../components/Toast";
 import type { SymbolRow } from "../lib/types";
@@ -72,10 +72,21 @@ interface Prefs {
   inds: IndInst[];
   magnet: boolean;
   tools: boolean;
+  /** Шкала в процентах. */
+  pct?: boolean;
+  /** Монеты для сравнения (до трёх). */
+  cmp?: string[];
+  /** Когда меняли (мс) — для сверки с сервером: новее тот, кто позже. */
+  at?: number;
 }
+
+const CMP_MAX = 3;
+const CMP_COLORS = ["#f0b90b", "#c38bff", "#7fd8ff"];
 
 const PREFS_KEY = "wt-chart-v1";
 const DRAW_KEY = "wt-chart-draw-v1";
+/** Когда рисунки каждой монеты меняли на этом устройстве (мс). */
+const DRAW_AT_KEY = "wt-chart-draw-at-v1";
 
 function loadPrefs(): Prefs {
   const def: Prefs = { tf: "1h", type: "candles", inds: [newInd("vol"), newInd("wt_liq")], magnet: true, tools: false };
@@ -88,6 +99,9 @@ function loadPrefs(): Prefs {
       inds: Array.isArray(raw.inds) ? raw.inds.filter((i) => i && IND[i.kind]) : def.inds,
       magnet: raw.magnet ?? true,
       tools: raw.tools ?? false,
+      pct: !!raw.pct,
+      cmp: Array.isArray(raw.cmp) ? raw.cmp.filter((x) => typeof x === "string").slice(0, CMP_MAX) : [],
+      at: Number(raw.at) || 0,
     };
   } catch {
     return def;
@@ -109,13 +123,43 @@ function loadDrawings(sym: string): Drawing[] {
   }
 }
 
-function saveDrawings(sym: string, list: Drawing[]) {
+function drawAt(sym: string): number {
+  try {
+    return Number((JSON.parse(localStorage.getItem(DRAW_AT_KEY) || "{}") as Record<string, number>)[sym]) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function saveDrawings(sym: string, list: Drawing[], at = Date.now()) {
   try {
     const all = JSON.parse(localStorage.getItem(DRAW_KEY) || "{}") as Record<string, Drawing[]>;
     if (list.length) all[sym] = list;
     else delete all[sym];
     localStorage.setItem(DRAW_KEY, JSON.stringify(all));
+    const ats = JSON.parse(localStorage.getItem(DRAW_AT_KEY) || "{}") as Record<string, number>;
+    ats[sym] = at;
+    localStorage.setItem(DRAW_AT_KEY, JSON.stringify(ats));
   } catch { /* места нет — рисунки живут до закрытия */ }
+}
+
+/* Отправка на сервер — не на каждое движение, а через полторы секунды тишины. */
+const pushTimers = new Map<string, ReturnType<typeof setTimeout>>();
+function pushLater(key: string, send: () => void) {
+  const was = pushTimers.get(key);
+  if (was) clearTimeout(was);
+  pushTimers.set(key, setTimeout(() => {
+    pushTimers.delete(key);
+    send();
+  }, 1500));
+}
+
+/** Рисунки монеты — на сервер, если влезают в запрос (длинная кисть может не влезть). */
+function pushDrawings(sym: string, list: Drawing[], at: number) {
+  pushLater(`d:${sym}`, () => {
+    if (JSON.stringify(list).length > 15_000) return;
+    void chartStatePut({ sym, list, at });
+  });
 }
 
 /* ── Подписи ───────────────────────────────────────────────────────────── */
@@ -188,6 +232,8 @@ export function ChartScreen({ arg }: ScreenProps) {
 
   const [sym, setSym] = useState(() => (arg ? arg.toUpperCase() : saved || "BTC"));
   const [picking, setPicking] = useState(false);
+  /** Выбор монеты для сравнения, а не для открытия. */
+  const [cmpPick, setCmpPick] = useState(false);
   const [query, setQuery] = useState("");
   const [dir, setDir] = useState<SymbolRow[] | null>(() => peekSymbols()?.items ?? null);
   useEffect(() => {
@@ -216,6 +262,14 @@ export function ChartScreen({ arg }: ScreenProps) {
     if (!s) return;
     haptic("select");
     const v = s.includes(":") ? s : s.toUpperCase();
+    if (cmpPick) {
+      const cur = prefs.cmp ?? [];
+      if (!cur.includes(v) && v !== sym) setP({ cmp: [...cur, v].slice(-CMP_MAX) });
+      setPicking(false);
+      setCmpPick(false);
+      setQuery("");
+      return;
+    }
     setSym(v);
     setSaved(v);
     setPicking(false);
@@ -233,10 +287,37 @@ export function ChartScreen({ arg }: ScreenProps) {
 
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
   const setP = (patch: Partial<Prefs>) => setPrefs((p) => {
-    const next = { ...p, ...patch };
+    const next = { ...p, ...patch, at: Date.now() };
     savePrefs(next);
+    pushLater("prefs", () => void chartStatePut({ prefs: next, at: next.at! }));
     return next;
   });
+  // Настройки с сервера — если там новее (меняли на другом устройстве).
+  useEffect(() => {
+    let alive = true;
+    void chartStateGet("").then((r) => {
+      const v = r?.ok ? r.prefs : null;
+      if (!alive || !v || v.at <= (prefs.at ?? 0)) return;
+      const raw = v.v as Partial<Prefs>;
+      const next: Prefs = {
+        ...prefs,
+        tf: TFS.includes(raw.tf as Tf) ? (raw.tf as Tf) : prefs.tf,
+        type: raw.type ?? prefs.type,
+        inds: Array.isArray(raw.inds) ? raw.inds.filter((i) => i && IND[i.kind]) : prefs.inds,
+        magnet: raw.magnet ?? prefs.magnet,
+        tools: raw.tools ?? prefs.tools,
+        pct: !!raw.pct,
+        cmp: Array.isArray(raw.cmp) ? raw.cmp.slice(0, CMP_MAX) : [],
+        at: v.at,
+      };
+      savePrefs(next);
+      setPrefs(next);
+    });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const m = market(sym);
   const drawKey = m.hip3 ?? m.base;
 
@@ -287,42 +368,77 @@ export function ChartScreen({ arg }: ScreenProps) {
   }, [gest, hover?.live]);
 
   /* ── Алерты по цене ───────────────────────────────────────────────────
-     Алерт живёт на сервере, а линия — на устройстве; связь — номер алерта в
-     рисунке. Линию подвинули — алерт переезжает, удалили — снимается. */
+     Алерт живёт на сервере, а рисунок — на устройстве; связь — номер алерта
+     в рисунке. У горизонтали и наклонной линии алерт один, у позиции — два:
+     тейк (alert) и стоп (alert2). Рисунок подвинули — алерт переезжает,
+     удалили — снимается. */
   const [alerts, setAlerts] = useState<PxAlert[]>([]);
   const [alertsOpen, setAlertsOpen] = useState(false);
-  const alertPx = useRef(new Map<number, number>());
+  /** Подпись уровня каждого алерта: изменилась — значит, рисунок двигали. */
+  const alertSig = useRef(new Map<number, string>());
+  const levelOf = (d: Drawing, second = false): PxLevel | null => {
+    if (d.type === "hline" || d.type === "hray") return d.pts[0] ? { price: d.pts[0].p } : null;
+    if (d.type === "long" || d.type === "short") {
+      const q = d.pts[second ? 2 : 1];
+      return q ? { price: q.p } : null;
+    }
+    if (d.type === "trend" || d.type === "ray" || d.type === "ext") {
+      const [a, b] = d.pts;
+      return a && b && a.t !== b.t ? { line: { t1: a.t, p1: a.p, t2: b.t, p2: b.p, log: !!eng.current?.log } } : null;
+    }
+    return null;
+  };
+  const sigOf = (lv: PxLevel | null) => JSON.stringify(lv);
+  const alertPairs = (d: Drawing): [number, PxLevel | null][] => {
+    const out: [number, PxLevel | null][] = [];
+    if (d.alert) out.push([d.alert, levelOf(d)]);
+    if (d.alert2) out.push([d.alert2, levelOf(d, true)]);
+    return out;
+  };
   const refreshAlerts = () => void pxAlertList().then((r) => {
     if (!r?.ok) return;
     const items = r.items ?? [];
     setAlerts(items);
-    alertPx.current = new Map(items.filter((a) => !a.fired).map((a) => [a.id, a.price]));
-    // Сработавшие и снятые в другом месте — убрать колокольчик с линий.
+    // Сработавшие и снятые в другом месте — убрать колокольчик с рисунков.
     const e = eng.current;
     if (!e) return;
+    const live2 = new Set(items.filter((a) => !a.fired).map((a) => a.id));
     for (const d of e.allDrawings) {
-      if (!d.alert) continue;
-      const a = items.find((x) => x.id === d.alert);
-      if (!a) e.patchQuiet(d.id, { alert: undefined });
-      else if (a.fired) e.patchQuiet(d.id, { alert: undefined, fired: a.fired });
+      const patch: Partial<Drawing> = {};
+      for (const key of ["alert", "alert2"] as const) {
+        const id = d[key];
+        if (!id || live2.has(id)) continue;
+        patch[key] = undefined;
+        const a = items.find((x) => x.id === id);
+        if (a?.fired) patch.fired = a.fired;
+      }
+      if (Object.keys(patch).length) e.patchQuiet(d.id, patch);
     }
   });
   const prevAlerted = useRef(new Map<number, string>());
+  const seedAlerts = (list: Drawing[]) => {
+    prevAlerted.current = new Map();
+    for (const d of list) for (const [id, lv] of alertPairs(d)) {
+      prevAlerted.current.set(id, d.id);
+      alertSig.current.set(id, sigOf(lv));
+    }
+  };
   const syncAlerts = (list: Drawing[]) => {
     const now = new Map<number, string>();
     for (const d of list) {
-      if (!d.alert) continue;
-      now.set(d.alert, d.id);
-      const p = d.pts[0]?.p;
-      const was = alertPx.current.get(d.alert);
-      if (p && was !== undefined && Math.abs(p - was) > Math.abs(was) * 1e-9) {
-        alertPx.current.set(d.alert, p);
-        void pxAlertMove(d.alert, p);
+      for (const [id, lv] of alertPairs(d)) {
+        now.set(id, d.id);
+        const sig = sigOf(lv);
+        const was = alertSig.current.get(id);
+        if (lv && was !== undefined && was !== sig) {
+          alertSig.current.set(id, sig);
+          void pxAlertMove(id, lv);
+        }
       }
     }
     for (const id of prevAlerted.current.keys()) {
       if (!now.has(id)) {
-        alertPx.current.delete(id);
+        alertSig.current.delete(id);
         void pxAlertDel(id).then(refreshAlerts);
       }
     }
@@ -338,25 +454,44 @@ export function ChartScreen({ arg }: ScreenProps) {
     const e = eng.current;
     if (!e) return;
     haptic("select");
-    if (d.alert) {
-      const id = d.alert;
-      e.patchQuiet(d.id, { alert: undefined });
-      alertPx.current.delete(id);
-      await pxAlertDel(id);
+    if (d.alert || d.alert2) {
+      const ids = [d.alert, d.alert2].filter((x): x is number => !!x);
+      e.patchQuiet(d.id, { alert: undefined, alert2: undefined });
+      for (const id of ids) {
+        alertSig.current.delete(id);
+        prevAlerted.current.delete(id);
+        await pxAlertDel(id);
+      }
       refreshAlerts();
       return;
     }
-    const p = d.pts[0]?.p;
-    if (!p) return;
-    const r = await pxAlertAdd(m.hip3 ?? m.base, p, lang, `${m.label} · ${TF_LABEL[prefs.tf]}`);
-    if (r?.ok && r.id) {
-      alertPx.current.set(r.id, p);
-      e.patchQuiet(d.id, { alert: r.id, fired: undefined });
-      haptic("success");
-      toast(t(lang, "chart_alert_set", { s: m.label, p: fmtPrice(p, priceDecimals(p)) }));
-      refreshAlerts();
-    } else if (r?.error === "limit") toast(t(lang, "chart_alert_limit", { n: r.max ?? 30 }), "err");
-    else toast(t(lang, "chart_alert_err"), "err");
+    const pos = d.type === "long" || d.type === "short";
+    const base = `${m.label} · ${TF_LABEL[prefs.tf]}`;
+    const want: [PxLevel | null, string][] = pos
+      ? [[levelOf(d), `🎯 TP · ${base}`], [levelOf(d, true), `🛑 SL · ${base}`]]
+      : [[levelOf(d), base]];
+    const ids: number[] = [];
+    for (const [lv, note] of want) {
+      if (!lv) continue;
+      const r = await pxAlertAdd(m.hip3 ?? m.base, lv, lang, note);
+      if (r?.ok && r.id) {
+        ids.push(r.id);
+        alertSig.current.set(r.id, sigOf(lv));
+        prevAlerted.current.set(r.id, d.id);
+      } else {
+        toast(r?.error === "limit" ? t(lang, "chart_alert_limit", { n: r.max ?? 30 }) : t(lang, "chart_alert_err"), "err");
+        break;
+      }
+    }
+    if (!ids.length) return;
+    e.patchQuiet(d.id, { alert: ids[0], alert2: ids[1], fired: undefined });
+    haptic("success");
+    const lv = levelOf(d);
+    const shown = lv && "price" in lv ? lv.price : null;
+    toast(shown !== null
+      ? t(lang, "chart_alert_set", { s: m.label, p: fmtPrice(shown, priceDecimals(shown)) })
+      : t(lang, "chart_alert_set_line", { s: m.label }));
+    refreshAlerts();
   };
 
   // Движок — один на всё время экрана.
@@ -376,7 +511,9 @@ export function ChartScreen({ arg }: ScreenProps) {
         }).catch(() => e.olderFailed());
       },
       drawings: (list) => {
-        saveDrawings(live.current.key, list);
+        const at = Date.now();
+        saveDrawings(live.current.key, list, at);
+        pushDrawings(live.current.key, list, at);
         syncAlerts(list);
       },
       select: (d) => setSel(d),
@@ -385,6 +522,7 @@ export function ChartScreen({ arg }: ScreenProps) {
       view: (at) => setAtLatest(at),
       history: (u, r) => setHist({ undo: u, redo: r }),
       rating: (r) => setRating(r),
+      pct: (on) => setP({ pct: on }),
     });
     eng.current = e;
     return () => {
@@ -430,14 +568,55 @@ export function ChartScreen({ arg }: ScreenProps) {
   useEffect(() => eng.current?.setTool(tool), [tool]);
   useEffect(() => eng.current?.setHideDrawings(hideDraw), [hideDraw]);
   useEffect(() => eng.current?.setText((k) => t(lang, k as DictKey)), [lang]);
+  useEffect(() => eng.current?.setPct(!!prefs.pct), [prefs.pct]);
+  // Сравнение: свечи тех же таймфрейма у каждой монеты, раз в минуту — свежие.
+  const cmpKey = (prefs.cmp ?? []).join(",");
+  useEffect(() => {
+    const e = eng.current;
+    if (!e) return;
+    const list = (prefs.cmp ?? []).filter(Boolean);
+    if (!list.length) {
+      e.setCompare([]);
+      return;
+    }
+    let alive = true;
+    const load = () => void Promise.all(list.map((s) => loadHistory(s, prefs.tf))).then((hs) => {
+      if (!alive) return;
+      e.setCompare(hs.flatMap((h, k) => (h ? [{ label: market(list[k]!).label, color: CMP_COLORS[k % CMP_COLORS.length]!, bars: h.bars }] : [])));
+    });
+    load();
+    const timer = setInterval(load, 60_000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cmpKey, prefs.tf]);
   useEffect(() => {
     const list = loadDrawings(drawKey);
     // Алерты на линиях этой монеты — точка отсчёта для сверки: без неё смена
     // монеты выглядела бы как «линии с алертами удалили», и алерты снялись бы.
-    prevAlerted.current = new Map(list.filter((d) => d.alert).map((d) => [d.alert!, d.id]));
+    seedAlerts(list);
     eng.current?.setDrawings(list);
     setSel(null);
     refreshAlerts();
+    // С сервера — если там новее; если новее здесь — отправить туда.
+    const localAt = drawAt(drawKey);
+    let alive = true;
+    void chartStateGet(drawKey).then((r) => {
+      if (!alive || !r?.ok) return;
+      const srv = r.draw;
+      if (srv && srv.at > localAt) {
+        const got = (srv.list as Drawing[]).filter((d) => d && Array.isArray(d.pts));
+        saveDrawings(drawKey, got, srv.at);
+        seedAlerts(got);
+        eng.current?.setDrawings(got);
+        refreshAlerts();
+      } else if (list.length && (!srv || srv.at < localAt)) pushDrawings(drawKey, list, localAt || Date.now());
+    });
+    return () => {
+      alive = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drawKey]);
 
@@ -621,6 +800,10 @@ export function ChartScreen({ arg }: ScreenProps) {
             onClick={() => setMenu(menu === "type" ? null : "type")}>
             <ToolIcon k={prefs.type} />
           </button>
+          <button type="button" className={prefs.cmp?.length ? "ch-btn on" : "ch-btn"} aria-label={t(lang, "chart_cmp")}
+            onClick={() => { haptic("select"); setCmpPick(true); setPicking(true); }}>
+            <b className="ch-vs">VS</b>
+          </button>
           <button type="button" className={menu === "ind" ? "ch-btn wide on" : "ch-btn wide"} aria-label={t(lang, "chart_ind")}
             onClick={() => { setMenu(menu === "ind" ? null : "ind"); setIndQ(""); }}>
             <i>ƒx</i>{prefs.inds.length ? <small className="ch-n">{prefs.inds.length}</small> : null}
@@ -709,6 +892,24 @@ export function ChartScreen({ arg }: ScreenProps) {
                   {chg !== null ? <b>{chg >= 0 ? "+" : ""}{chg.toFixed(2)}%</b> : null}
                 </div>
               ) : null}
+              {prefs.cmp?.length || prefs.pct ? (
+                <div className="ch-cmp">
+                  {hover?.mainPct !== undefined ? (
+                    <span><i style={{ background: "#eaf5ff" }} />{m.label} <b>{hover.mainPct >= 0 ? "+" : ""}{hover.mainPct.toFixed(2)}%</b></span>
+                  ) : null}
+                  {(prefs.cmp ?? []).map((c, k) => {
+                    const v = hover?.cmp?.[k];
+                    return (
+                      <span key={c}>
+                        <i style={{ background: CMP_COLORS[k % CMP_COLORS.length] }} />{market(c).label}{" "}
+                        <b>{v && Number.isFinite(v.pct) ? `${v.pct >= 0 ? "+" : ""}${v.pct.toFixed(2)}%` : "…"}</b>
+                        <button type="button" className="ch-lg-x" aria-label={t(lang, "chart_remove")}
+                          onClick={() => setP({ cmp: (prefs.cmp ?? []).filter((x) => x !== c) })}>×</button>
+                      </span>
+                    );
+                  })}
+                </div>
+              ) : null}
               {hover?.liq || hover?.wh ? (
                 <div className="ch-ohlc ch-own">
                   {hover.liq?.L ? <span>💥L <b className="dn">${fmtShort(hover.liq.L)}</b></span> : null}
@@ -760,9 +961,10 @@ export function ChartScreen({ arg }: ScreenProps) {
                   <button key={c} type="button" className={sel.color === c ? "ch-color on" : "ch-color"} style={{ background: c }}
                     aria-label={c} onClick={() => eng.current?.patchDrawing(sel.id, { color: c })} />
                 ))}
-                {sel.type === "hline" || sel.type === "hray" ? (
-                  <button type="button" className={sel.alert ? "ch-selbtn on" : "ch-selbtn"} onClick={() => void toggleAlert(sel)}>
-                    {sel.alert ? t(lang, "chart_alert_off") : t(lang, "chart_alert_on")}
+                {["hline", "hray", "trend", "ray", "ext", "long", "short"].includes(sel.type) ? (
+                  <button type="button" className={sel.alert || sel.alert2 ? "ch-selbtn on" : "ch-selbtn"} onClick={() => void toggleAlert(sel)}>
+                    {sel.alert || sel.alert2 ? t(lang, "chart_alert_off")
+                      : sel.type === "long" || sel.type === "short" ? t(lang, "chart_alert_tpsl") : t(lang, "chart_alert_on")}
                   </button>
                 ) : null}
                 {isFib(sel.type) ? (
@@ -984,7 +1186,7 @@ export function ChartScreen({ arg }: ScreenProps) {
                 <button type="button" className="ch-alert-main" onClick={() => { setAlertsOpen(false); pick(a.sym); }}>
                   <CoinIcon sym={label(a.sym)} size={24} />
                   <span>
-                    <b>{label(a.sym)} {a.dir > 0 ? "↑" : "↓"} {fmtPrice(a.price, priceDecimals(a.price))}</b>
+                    <b>{label(a.sym)} {a.dir > 0 ? "↑" : "↓"} {fmtPrice(a.price, priceDecimals(a.price))}{a.kind === "l" ? ` · ${t(lang, "chart_alert_line")}` : ""}</b>
                     <small>{a.fired ? `✓ ${t(lang, "chart_alert_fired")} · ${new Date(a.fired * 1000).toLocaleString(lang, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : t(lang, "chart_alert_wait")}
                       {a.note ? ` · ${a.note}` : ""}</small>
                   </span>
@@ -992,9 +1194,10 @@ export function ChartScreen({ arg }: ScreenProps) {
                 <button type="button" className="ch-lg-x" aria-label={t(lang, "chart_del")} onClick={() => {
                   haptic("light");
                   const e = eng.current;
-                  const d = e?.allDrawings.find((x) => x.alert === a.id);
-                  if (e && d) e.patchQuiet(d.id, { alert: undefined });
-                  alertPx.current.delete(a.id);
+                  const d = e?.allDrawings.find((x) => x.alert === a.id || x.alert2 === a.id);
+                  if (e && d) e.patchQuiet(d.id, d.alert === a.id ? { alert: undefined } : { alert2: undefined });
+                  alertSig.current.delete(a.id);
+                  prevAlerted.current.delete(a.id);
                   setAlerts((xs) => xs.filter((x) => x.id !== a.id));
                   void pxAlertDel(a.id);
                 }}>×</button>
@@ -1025,6 +1228,15 @@ export function ChartScreen({ arg }: ScreenProps) {
 
       {picking ? (
         <div className="chart-picker" role="dialog" aria-label={t(lang, "chart_pick")}>
+          <div className="ch-seg" role="tablist">
+            <button type="button" role="tab" aria-selected={!cmpPick} className={!cmpPick ? "on" : undefined} onClick={() => setCmpPick(false)}>
+              {t(lang, "chart_open")}
+            </button>
+            <button type="button" role="tab" aria-selected={cmpPick} className={cmpPick ? "on" : undefined} onClick={() => setCmpPick(true)}>
+              + {t(lang, "chart_cmp")}
+            </button>
+          </div>
+          {cmpPick ? <p className="note dim">{t(lang, "chart_cmp_hint")}</p> : null}
           <form
             className="chart-find"
             onSubmit={(e) => {

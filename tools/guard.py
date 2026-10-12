@@ -323,7 +323,13 @@ say("график: алерты по цене с горизонтали — се
     and all(k in _ckeys for k in ("pxa_up", "pxa_dn", "chart_alert_on", "chart_alert_off", "chart_alerts"))
     and "def chart_liqs(sym: str, step: int) -> dict:" in api and "def chart_whales(coin: str) -> dict:" in api
     and '"chart/liqs", "chart/whales"' in api and "private paintLiqx(" in _ce and "private paintWhales(" in _ce
-    and "prevAlerted.current = new Map(list.filter((d) => d.alert)" in chart_scr)
+    and "seedAlerts(list);" in chart_scr)
+say("график: алерты на наклонных линиях (и на лог-шкале) и тейк/стоп позиции; рисунки и настройки — на сервере, новее побеждает; сравнение монет в %",
+    "def _pxa_level(" in api and "math.exp(math.log(p1) + (math.log(p2) - math.log(p1)) * k)" in api
+    and 'con.execute(f"ALTER TABLE px_alerts ADD COLUMN {name} {decl}")' in api and all(k in _ckeys for k in ("pxa_lup", "pxa_ldn", "chart_alert_tpsl"))
+    and "WHERE excluded.at >= chart_draw.at" in api and "WHERE excluded.at >= chart_prefs.at" in api and "CHART_BODY_MAX = 15 * 1024" in api
+    and "pushDrawings(drawKey, list, localAt || Date.now())" in chart_scr and "alert2" in _cw
+    and "setCompare(list: Compare[])" in _ce and "get pctMode()" in _ce and "const CMP_MAX = 3;" in chart_scr)
 say("рисунки — во времени и цене, по монете на устройстве; настройки графика запоминаются",
     "export interface Pt {\n  t: number;\n  p: number;\n}" in _cw and 'const DRAW_KEY = "wt-chart-draw-v1";' in chart_scr
     and 'const PREFS_KEY = "wt-chart-v1";' in chart_scr)

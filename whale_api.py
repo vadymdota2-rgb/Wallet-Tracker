@@ -13697,11 +13697,50 @@ _PXA_SYM = re.compile(r"(?:[a-z]{1,8}:)?[A-Z0-9]{1,16}")
 _pxa_px: dict = {"at": 0.0, "px": {}}
 
 
+# Алерт на наклонной линии (тренд, луч): две точки — время в мс и цена; на
+# лог-шкале линия прямая в логарифмах, и уровень считается так же, как она
+# нарисована. Столбцы добавлены позже таблицы — для уже созданной базы их
+# доливает _pxa_con.
+PXA_LINE_COLS = (("kind", "TEXT NOT NULL DEFAULT 'h'"), ("t1", "INTEGER NOT NULL DEFAULT 0"), ("p1", "REAL NOT NULL DEFAULT 0"),
+                 ("t2", "INTEGER NOT NULL DEFAULT 0"), ("p2", "REAL NOT NULL DEFAULT 0"), ("lg", "INTEGER NOT NULL DEFAULT 0"))
+
+
 def _pxa_con():
     con = open_db(DB, write=True)
     if con:
         con.executescript(PXA_SCHEMA)
+        have = cols(con, "px_alerts")
+        for name, decl in PXA_LINE_COLS:
+            if name not in have:
+                con.execute(f"ALTER TABLE px_alerts ADD COLUMN {name} {decl}")
+        con.commit()
     return con
+
+
+def _pxa_line(body: dict) -> tuple | None:
+    """Линия из запроса: (t1, p1, t2, p2, лог). Нет или кривая — None."""
+    ln = body.get("line")
+    if not isinstance(ln, dict):
+        return None
+    try:
+        t1, p1, t2, p2 = int(ln["t1"]), float(ln["p1"]), int(ln["t2"]), float(ln["p2"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if t1 == t2 or not all(math.isfinite(v) and v > 0 for v in (p1, p2)) or min(t1, t2) < 1_000_000_000_000:
+        return None
+    if t2 < t1:
+        t1, p1, t2, p2 = t2, p2, t1, p1
+    return t1, p1, t2, p2, 1 if ln.get("log") else 0
+
+
+def _pxa_level(kind: str, price: float, t1: int, p1: float, t2: int, p2: float, lg: int, at_ms: int | None = None) -> float:
+    """Уровень алерта сейчас: горизонталь — её цена, линия — её точка на текущий момент."""
+    if kind != "l" or t1 == t2:
+        return price
+    k = ((at_ms if at_ms is not None else now() * 1000) - t1) / (t2 - t1)
+    if lg:
+        return math.exp(math.log(p1) + (math.log(p2) - math.log(p1)) * k)
+    return p1 + (p2 - p1) * k
 
 
 def _pxa_sym(raw: str) -> str:
@@ -13764,10 +13803,11 @@ def pxa_list(chat: str) -> dict:
     try:
         cut = now() - PXA_KEEP_FIRED
         rows = con.execute(
-            "SELECT id, sym, price, dir, note, created, fired, fired_px FROM px_alerts "
+            "SELECT id, sym, price, dir, note, created, fired, fired_px, kind, t1, p1, t2, p2, lg FROM px_alerts "
             "WHERE chat_id=? AND (fired=0 OR fired>=?) ORDER BY fired>0, created DESC LIMIT 100", (chat, cut)).fetchall()
         return {"ok": True, "max": PXA_MAX, "items": [
-            {"id": r[0], "sym": r[1], "price": r[2], "dir": r[3], "note": r[4], "at": r[5], "fired": r[6], "fpx": r[7]}
+            {"id": r[0], "sym": r[1], "price": round(_pxa_level(r[8], r[2], r[9], r[10], r[11], r[12], r[13]), 12) if not r[6] else r[2],
+             "dir": r[3], "note": r[4], "at": r[5], "fired": r[6], "fpx": r[7], "kind": r[8]}
             for r in rows]}
     finally:
         con.close()
@@ -13775,8 +13815,9 @@ def pxa_list(chat: str) -> dict:
 
 def pxa_add(chat: str, body: dict) -> dict:
     sym = _pxa_sym(body.get("sym"))
+    line = _pxa_line(body)
     try:
-        price = float(body.get("price"))
+        price = float(body.get("price")) if not line else _pxa_level("l", 0, *line)
     except (TypeError, ValueError):
         price = 0.0
     if not sym or not (price > 0) or not math.isfinite(price):
@@ -13797,9 +13838,11 @@ def pxa_add(chat: str, body: dict) -> dict:
             return {"ok": False, "error": "limit", "max": PXA_MAX}
         # Выше текущей цены — ждём роста до неё, ниже — падения.
         d = 1 if price >= cur else -1
+        t1, p1, t2, p2, lg = line or (0, 0.0, 0, 0.0, 0)
         cur_id = con.execute(
-            "INSERT INTO px_alerts(chat_id, sym, price, dir, lang, note, created) VALUES(?,?,?,?,?,?,?)",
-            (chat, sym, price, d, lang, note, now())).lastrowid
+            "INSERT INTO px_alerts(chat_id, sym, price, dir, lang, note, created, kind, t1, p1, t2, p2, lg) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (chat, sym, price, d, lang, note, now(), "l" if line else "h", t1, p1, t2, p2, lg)).lastrowid
         con.commit()
         return {"ok": True, "id": cur_id, "dir": d, "now": cur}
     finally:
@@ -13807,9 +13850,10 @@ def pxa_add(chat: str, body: dict) -> dict:
 
 
 def pxa_move(chat: str, body: dict) -> dict:
+    line = _pxa_line(body)
     try:
         aid = int(body.get("id"))
-        price = float(body.get("price"))
+        price = float(body.get("price")) if not line else _pxa_level("l", 0, *line)
     except (TypeError, ValueError):
         return {"ok": False, "error": "bad_args"}
     if not (price > 0) or not math.isfinite(price):
@@ -13825,7 +13869,9 @@ def pxa_move(chat: str, body: dict) -> dict:
         if not cur:
             return {"ok": False, "error": "no_price"}
         d = 1 if price >= cur else -1
-        con.execute("UPDATE px_alerts SET price=?, dir=? WHERE id=?", (price, d, aid))
+        t1, p1, t2, p2, lg = line or (0, 0.0, 0, 0.0, 0)
+        con.execute("UPDATE px_alerts SET price=?, dir=?, kind=?, t1=?, p1=?, t2=?, p2=?, lg=? WHERE id=?",
+                    (price, d, "l" if line else "h", t1, p1, t2, p2, lg, aid))
         con.commit()
         return {"ok": True, "id": aid, "dir": d}
     finally:
@@ -13854,31 +13900,126 @@ def pxa_check() -> int:
     if not con:
         return 0
     try:
-        rows = con.execute("SELECT id, chat_id, sym, price, dir, lang, note, tries FROM px_alerts WHERE fired=0").fetchall()
+        rows = con.execute("SELECT id, chat_id, sym, price, dir, lang, note, tries, kind, t1, p1, t2, p2, lg "
+                           "FROM px_alerts WHERE fired=0").fetchall()
         if not rows:
             return 0
         px = _pxa_prices({r[2] for r in rows})
         _pxa_px.update(at=time.time(), px=px)
         sent = 0
         import wt_digest_img as dgi
-        for aid, chat, sym, price, d, lang, note, tries in rows:
+        for aid, chat, sym, price, d, lang, note, tries, kind, t1, p1, t2, p2, lg in rows:
             cur = px.get(sym)
-            if not cur or not ((d > 0 and cur >= price) or (d < 0 and cur <= price)):
+            level = _pxa_level(kind, price, t1, p1, t2, p2, lg)
+            if not cur or not ((d > 0 and cur >= level) or (d < 0 and cur <= level)):
                 continue
             name = sym.split(":")[-1]
-            text = dgi.tr(lang, "pxa_up" if d > 0 else "pxa_dn", s=name, p=_pxa_fmt(price), now=_pxa_fmt(cur))
+            key = ("pxa_lup" if d > 0 else "pxa_ldn") if kind == "l" else ("pxa_up" if d > 0 else "pxa_dn")
+            text = dgi.tr(lang, key, s=name, p=_pxa_fmt(level), now=_pxa_fmt(cur))
             if note:
                 text += f"\n{note}"
             ok = tg_api("sendMessage", {"chat_id": chat, "text": text, "disable_web_page_preview": True}) is not None
             # Не дошло (бот заблокирован, сеть) — ещё две попытки, потом снимаем.
             if ok or tries >= 2:
-                con.execute("UPDATE px_alerts SET fired=?, fired_px=?, tries=tries+1 WHERE id=?", (now(), cur, aid))
+                con.execute("UPDATE px_alerts SET fired=?, fired_px=?, price=?, tries=tries+1 WHERE id=?", (now(), cur, level, aid))
                 sent += 1 if ok else 0
             else:
                 con.execute("UPDATE px_alerts SET tries=tries+1 WHERE id=?", (aid,))
         con.execute("DELETE FROM px_alerts WHERE fired>0 AND fired<?", (now() - PXA_KEEP_FIRED,))
         con.commit()
         return sent
+    finally:
+        con.close()
+
+
+# --- Рисунки и настройки графика на сервере --------------------------------
+# Нарисовал на телефоне — видно в Telegram на компьютере. Рисунки — по монете
+# одной записью (тело запроса до 16 КБ, nginx и щит режут больше), настройки
+# (индикаторы, таймфрейм, вид) — одной записью на человека. Кто новее — тот
+# и прав: у каждой записи своё время.
+CHART_STATE_SCHEMA = """
+CREATE TABLE IF NOT EXISTS chart_draw (
+    chat_id TEXT NOT NULL,
+    sym TEXT NOT NULL,
+    body TEXT NOT NULL,
+    at INTEGER NOT NULL,
+    PRIMARY KEY (chat_id, sym)
+);
+CREATE TABLE IF NOT EXISTS chart_prefs (
+    chat_id TEXT PRIMARY KEY,
+    body TEXT NOT NULL,
+    at INTEGER NOT NULL
+);
+"""
+CHART_DRAW_SYMS = 300
+CHART_BODY_MAX = 15 * 1024
+
+
+def _chart_con():
+    con = open_db(DB, write=True)
+    if con:
+        con.executescript(CHART_STATE_SCHEMA)
+    return con
+
+
+def chart_state_get(chat: str, sym: str) -> dict:
+    sym = _pxa_sym(sym) if sym else ""
+    con = _chart_con()
+    if not con:
+        return {"ok": False, "error": "db"}
+    try:
+        out: dict = {"ok": True}
+        if sym:
+            r = con.execute("SELECT body, at FROM chart_draw WHERE chat_id=? AND sym=?", (chat, sym)).fetchone()
+            out["draw"] = {"list": json.loads(r[0]), "at": r[1]} if r else None
+        r = con.execute("SELECT body, at FROM chart_prefs WHERE chat_id=?", (chat,)).fetchone()
+        out["prefs"] = {"v": json.loads(r[0]), "at": r[1]} if r else None
+        return out
+    except ValueError:
+        return {"ok": False, "error": "bad_state"}
+    finally:
+        con.close()
+
+
+def chart_state_put(chat: str, body: dict) -> dict:
+    """Сохранить рисунки одной монеты ({sym, list, at}) или настройки ({prefs, at})."""
+    try:
+        at = int(body.get("at") or 0)
+    except (TypeError, ValueError):
+        at = 0
+    at = min(at, now() * 1000 + 60_000) or now() * 1000
+    con = _chart_con()
+    if not con:
+        return {"ok": False, "error": "db"}
+    try:
+        if "prefs" in body:
+            raw = json.dumps(body.get("prefs"), separators=(",", ":"))
+            if len(raw) > CHART_BODY_MAX or not isinstance(body.get("prefs"), dict):
+                return {"ok": False, "error": "too_large"}
+            con.execute("INSERT INTO chart_prefs(chat_id, body, at) VALUES(?,?,?) "
+                        "ON CONFLICT(chat_id) DO UPDATE SET body=excluded.body, at=excluded.at WHERE excluded.at >= chart_prefs.at",
+                        (chat, raw, at))
+            con.commit()
+            return {"ok": True}
+        sym = _pxa_sym(body.get("sym"))
+        lst = body.get("list")
+        if not sym or not isinstance(lst, list):
+            return {"ok": False, "error": "bad_args"}
+        raw = json.dumps(lst, separators=(",", ":"))
+        if len(raw) > CHART_BODY_MAX:
+            return {"ok": False, "error": "too_large"}
+        if not lst:
+            con.execute("DELETE FROM chart_draw WHERE chat_id=? AND sym=?", (chat, sym))
+        else:
+            n = con.execute("SELECT COUNT(*) FROM chart_draw WHERE chat_id=?", (chat,)).fetchone()[0]
+            known = con.execute("SELECT 1 FROM chart_draw WHERE chat_id=? AND sym=?", (chat, sym)).fetchone()
+            if n >= CHART_DRAW_SYMS and not known:
+                return {"ok": False, "error": "limit"}
+            con.execute("INSERT INTO chart_draw(chat_id, sym, body, at) VALUES(?,?,?,?) "
+                        "ON CONFLICT(chat_id, sym) DO UPDATE SET body=excluded.body, at=excluded.at WHERE excluded.at >= chart_draw.at",
+                        (chat, sym, raw, at))
+        con.commit()
+        return {"ok": True}
     finally:
         con.close()
 
@@ -16377,6 +16518,10 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/chart/whales":
                 self._json(200, chart_whales(qs.get("coin", [""])[0]))
                 return
+            if path == "/api/chart/state":
+                chat = self._user(qs)
+                self._json(200, chart_state_get(chat, qs.get("sym", [""])[0]) if chat else {"ok": False, "error": "unauthorized"})
+                return
             if path == "/api/pxalert/list":
                 chat = self._user(qs)
                 self._json(200, pxa_list(chat) if chat else {"ok": False, "error": "unauthorized"})
@@ -16521,6 +16666,9 @@ class Handler(BaseHTTPRequestHandler):
                 # причина, а на ошибочный код оно видит только «нет ответа».
                 res = digest_act(self._user_full(qs), dg, body)
                 self._json(200, res)
+                return
+            if path == "/api/chart/state":
+                self._json(200, chart_state_put(chat, body))
                 return
             pxa = {"/api/pxalert/add": pxa_add, "/api/pxalert/move": pxa_move, "/api/pxalert/del": pxa_del}.get(path)
             if pxa:
