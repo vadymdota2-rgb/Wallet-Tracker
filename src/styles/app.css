@@ -1571,6 +1571,10 @@
   flex-direction: column;
 }
 .screen.full .screen-body { flex: 1 1 auto; min-height: 0; padding: 0; display: block; position: relative; }
+/* Во весь экран: шапка экрана и нижнее меню прячутся, график — до краёв. */
+html.ch-full .dock, html.ch-full .sheet .screen-hd { display: none; }
+html.ch-full .sheet:has(.screen.full) { padding: 0; }
+html.ch-full .screen.full { height: 100dvh; padding-top: env(safe-area-inset-top); }
 .ch { position: absolute; inset: 0; display: flex; flex-direction: column; background: #050b16; }
 .ch-bar {
   display: flex; align-items: center; gap: 2px; padding: 4px 6px; flex: 0 0 auto;

@@ -445,6 +445,86 @@ export class Engine {
     this.invalidate();
   }
 
+  /** Сдвинуть на n свечей (клавиши ← →). */
+  nudge(n: number) {
+    this.right += n;
+    this.clampRight();
+    this.ev.view(this.right >= this.bars.length - 1);
+    this.invalidate();
+  }
+
+  /** Масштаб от правого края (клавиши + −). */
+  zoomBy(k: number) {
+    this.zoomTo(this.spacing * k, this.idx(this.plotR), this.plotR);
+  }
+
+  /**
+   * Снимок для чата: график 1280×800 (так он хорошо смотрится в ленте и
+   * влезает больше истории, чем на экране телефона) без перекрестия, лупы и
+   * выделения. Сверху — монета и цены, снизу — где нас найти и время.
+   */
+  snapshot(title: string, sub: string, W = 1280, H = 800): Promise<Blob> {
+    const keep = { cross: this.cross, loupe: this.loupe, sel: this.sel, cv: this.cv, ctx: this.ctx, w: this.w, h: this.h, dpr: this.dpr };
+    const head = 56;
+    const foot = 36;
+    const tmp = document.createElement("canvas");
+    const dpr = 1.5;
+    tmp.width = Math.round(W * dpr);
+    tmp.height = Math.round((H - head - foot) * dpr);
+    const tctx = tmp.getContext("2d");
+    if (!tctx) return Promise.reject(new Error("canvas"));
+    this.cross = null;
+    this.loupe = null;
+    this.sel = null;
+    this.cv = tmp;
+    this.ctx = tctx;
+    this.w = W;
+    this.h = H - head - foot;
+    this.dpr = dpr;
+    try {
+      this.paint();
+    } finally {
+      this.cv = keep.cv;
+      this.ctx = keep.ctx;
+      this.w = keep.w;
+      this.h = keep.h;
+      this.dpr = keep.dpr;
+      this.cross = keep.cross;
+      this.loupe = keep.loupe;
+      this.sel = keep.sel;
+      this.invalidate();
+    }
+    const out = document.createElement("canvas");
+    out.width = Math.round(W * dpr);
+    out.height = Math.round(H * dpr);
+    const c = out.getContext("2d")!;
+    c.scale(dpr, dpr);
+    c.fillStyle = C.bg;
+    c.fillRect(0, 0, W, H);
+    c.drawImage(tmp, 0, head, W, H - head - foot);
+    const fam = this.font.replace(/^\d+px\s*/, "");
+    c.textBaseline = "middle";
+    c.fillStyle = "#eaf5ff";
+    c.font = `700 22px ${fam}`;
+    c.fillText(title, 16, 20);
+    c.fillStyle = C.axis;
+    c.font = `500 14px ${fam}`;
+    c.fillText(sub, 16, 43);
+    c.strokeStyle = C.line;
+    c.beginPath();
+    c.moveTo(0, H - foot + 0.5);
+    c.lineTo(W, H - foot + 0.5);
+    c.stroke();
+    c.fillStyle = "#7fd8ff";
+    c.font = `700 15px ${fam}`;
+    c.fillText("Wallet Tracker · @WalletTrackerAppBot", 16, H - foot / 2);
+    c.fillStyle = C.axis;
+    c.font = `500 13px ${fam}`;
+    c.textAlign = "right";
+    c.fillText(new Date().toLocaleString(), W - 16, H - foot / 2);
+    return new Promise((ok, fail) => out.toBlob((b) => (b ? ok(b) : fail(new Error("blob"))), "image/png"));
+  }
+
   /** К последней свече, масштаб — авто. */
   goLatest() {
     this.right = this.bars.length - 1 + RIGHT_PAD_BARS;
@@ -1076,30 +1156,42 @@ export class Engine {
     const [a, b] = this.visible();
     let prev = a > 0 ? key(this.shown[a - 1]!.t) : NaN;
     let lastX = -Infinity;
+    // Что сменилось с прошлой свечи — то и подписываем: год, месяц, день или время.
+    // Смотрим на смену даты, а не на «полночь»: у 4-часовых свечей в Киеве
+    // день начинается со свечи 03:00, и раньше вместо даты стояло «03:00».
+    const parts = (t: number) => {
+      const d = new Date(t);
+      return daily
+        ? [d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes()]
+        : [d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes()];
+    };
+    // Год и месяц сверяем с прошлой подписью (между подписями могла пройти
+    // неделя — смена месяца внутри неё тоже должна стать «Oct»), день — с
+    // прошлой свечой.
+    let pp = a > 0 ? parts(this.shown[a - 1]!.t) : null;
+    let lbl = pp;
     for (let i = a; i <= b; i++) {
       const t = this.shown[i]!.t;
       const k = key(t);
+      const [Y, M, D, H, mi] = parts(t) as [number, number, number, number, number];
+      const prevP = pp;
+      pp = [Y, M, D, H, mi];
       if (k !== prev) {
         const x = this.x(i);
         if (x - lastX >= minPx * 0.7) {
-          const d = new Date(t);
-          const Y = daily ? d.getUTCFullYear() : d.getFullYear();
-          const M = daily ? d.getUTCMonth() : d.getMonth();
-          const D = daily ? d.getUTCDate() : d.getDate();
-          const H = daily ? d.getUTCHours() : d.getHours();
-          const mi = daily ? d.getUTCMinutes() : d.getMinutes();
           let txt: string;
           let bold = false;
-          if (M === 0 && D === 1 && H === 0 && mi === 0) {
+          if (lbl && lbl[0] !== Y) {
             txt = String(Y);
             bold = true;
-          } else if (D === 1 && H === 0 && mi === 0) {
+          } else if (lbl && lbl[1] !== M) {
             txt = MONTHS[M]!;
             bold = true;
-          } else if (H === 0 && mi === 0) txt = String(D);
+          } else if ((prevP && prevP[2] !== D) || step[1] === "d" || step[1] === "M" || step[1] === "Y") txt = String(D);
           else txt = `${String(H).padStart(2, "0")}:${String(mi).padStart(2, "0")}`;
           out.push([x, txt, bold]);
           lastX = x;
+          lbl = pp;
         }
         prev = k;
       }

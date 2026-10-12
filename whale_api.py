@@ -15738,6 +15738,43 @@ def digest_translate(cid: int, lang: str) -> dict:
         con.close()
 
 
+# Снимок графика: приложение рисует его само (canvas), бот присылает в чат —
+# оттуда его пересылают друзьям и в каналы. Подпись с монетой и ботом.
+# Не чаще CHART_SNAP_HOUR раз в час на человека; только PNG разумного размера.
+CHART_SNAP_MAX = 4 * 1024 * 1024
+CHART_SNAP_HOUR = 20
+_snap_hits: dict = {}
+_snap_lock = threading.Lock()
+
+
+def _png_wh(data: bytes) -> tuple[int, int] | None:
+    """Ширина и высота из заголовка PNG; не PNG — None."""
+    if len(data) < 24 or data[:8] != b"\x89PNG\r\n\x1a\n" or data[12:16] != b"IHDR":
+        return None
+    return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
+
+
+def chart_snap(chat: str, body: dict) -> dict:
+    try:
+        data = base64.b64decode(str(body.get("png") or "").split(",", 1)[-1], validate=True)
+    except (ValueError, TypeError):
+        return {"ok": False, "error": "bad_image"}
+    wh = _png_wh(data)
+    if not wh or len(data) > 3 * 1024 * 1024 or not (200 <= wh[0] <= 4000 and 200 <= wh[1] <= 4000):
+        return {"ok": False, "error": "bad_image"}
+    t = time.monotonic()
+    with _snap_lock:
+        seq = [x for x in _snap_hits.get(chat, ()) if t - x < 3600]
+        if len(seq) >= CHART_SNAP_HOUR:
+            return {"ok": False, "error": "rate"}
+        seq.append(t)
+        _snap_hits[chat] = seq
+    title = re.sub(r"[\x00-\x1f\x7f<>]", "", str(body.get("title") or ""))[:60]
+    caption = f"📈 {title}\n@WalletTrackerAppBot" if title else "@WalletTrackerAppBot"
+    ok = tg_send_document(chat, "chart.png", data, caption, "sendPhoto", "photo")
+    return {"ok": ok} if ok else {"ok": False, "error": "send"}
+
+
 def tg_send_document(chat: str, name: str, data: bytes, caption: str = "", method: str = "sendDocument",
                      field: str = "document") -> bool:
     """sendDocument (или sendPhoto) файлом из памяти: multipart собираем сами —
@@ -16654,9 +16691,12 @@ class Handler(BaseHTTPRequestHandler):
             chat = self._user(qs)
             # Тело читаем всегда: иначе непрочитанные байты остаются в сокете
             # и портят следующий запрос на том же keep-alive соединении.
-            body = self._body()
+            body = self._body(CHART_SNAP_MAX if path == "/api/chart/snap" else 0)
             if not chat:
                 self._json(401, {"ok": False, "error": "unauthorized"})
+                return
+            if path == "/api/chart/snap":
+                self._json(200, chart_snap(chat, body))
                 return
             dg = {"/api/digest/like": "like", "/api/digest/comment": "comment",
                   "/api/digest/uncomment": "uncomment", "/api/digest/view": "view",

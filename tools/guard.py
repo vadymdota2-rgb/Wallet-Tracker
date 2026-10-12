@@ -330,6 +330,12 @@ say("график: алерты на наклонных линиях (и на л
     and "WHERE excluded.at >= chart_draw.at" in api and "WHERE excluded.at >= chart_prefs.at" in api and "CHART_BODY_MAX = 15 * 1024" in api
     and "pushDrawings(drawKey, list, localAt || Date.now())" in chart_scr and "alert2" in _cw
     and "setCompare(list: Compare[])" in _ce and "get pctMode()" in _ce and "const CMP_MAX = 3;" in chart_scr)
+say("график: снимок 1280×800 в чат через бота, во весь экран, горячие клавиши как у TradingView",
+    "def chart_snap(chat: str, body: dict) -> dict:" in api and "CHART_SNAP_HOUR = 20" in api
+    and "location = /api/chart/snap {" in _cngx and "client_max_body_size 5m;" in _cngx
+    and "snapshot(title: string, sub: string, W = 1280, H = 800)" in _ce
+    and "wa?.requestFullscreen?.()" in chart_scr and 'html.ch-full .dock' in read(f"{APP}/src/styles/app.css")
+    and 'KeyH: "hline"' in chart_scr and "nudge(n: number)" in _ce)
 say("рисунки — во времени и цене, по монете на устройстве; настройки графика запоминаются",
     "export interface Pt {\n  t: number;\n  p: number;\n}" in _cw and 'const DRAW_KEY = "wt-chart-draw-v1";' in chart_scr
     and 'const PREFS_KEY = "wt-chart-v1";' in chart_scr)
@@ -1195,7 +1201,7 @@ say("щит API: тело, соединения, тайм-аут, баны за 
     and "if self._shield():" in pybody(api, "def do_GET(") and "_logo_slots.acquire(blocking=False)" in api
     and "len(raw) > shield.MAX_INIT_DATA" in api
     and "client_body_timeout 10s;" in _ngx and "limit_except GET POST OPTIONS { deny all; }" in _ngx
-    and _ngx.count('add_header Strict-Transport-Security "max-age=31536000" always;') == 4
+    and _ngx.count('add_header Strict-Transport-Security "max-age=31536000" always;') == 5
     and not os.path.exists(f"{APP}/whale_bot.db") and "*.db" in read(f"{APP}/.gitignore"))
 _dgm = read(f"{APP}/src/screens/DigestMore.tsx")
 say("дайджест v3: все вкладки — ликвидации, интерес с фандингом, опционы, неделя вперёд; разделы свёрнуты до вывода",
@@ -1211,7 +1217,7 @@ say("календарь понятен: объяснение по нажатию
     and "const COUNTRY: Record<string, DictKey> = {" in _cal and 't(lang, "cal_opt_sub"' in _cal
     and 'cal_tap_hint' in _cal and "def _cal_imp_crypto(" in api
     and api.count("_cal_imp_crypto(cc, ") == 2 and "prev = (_cal_nq_days.get(key) or (0, []))[1]" in api)
-say("картинки для скачивания из приложения нет — выпуск картинками только в канале",
+say("картинки выпуска для скачивания из приложения нет — выпуск картинками только в канале",
     not os.path.exists(f"{APP}/src/lib/digestImage.ts") and "/api/digest/image" not in api
     and "/api/digest/image" not in _ngx and "MAX_UPLOAD" not in _shield
     and "toImage" not in read(f"{APP}/src/screens/DigestTab.tsx") and "def tg_send_document(" in api)
@@ -1245,8 +1251,8 @@ say("поиск любой монеты в ликвидациях и истор�
 say("масштаб: адрес человека — не узел Google, nginx→API постоянными соединениями, без Нейгла",
     "def client_ip(" in _shield and 'shield.client_ip(self.headers.get("X-Forwarded-For")' in pybody(api, "def _peer(")
     and "map $http_x_forwarded_for $client_ip {" in _ngx and "$binary_remote_addr" not in _ngx
-    and "upstream whale_api {" in _ngx and "keepalive 16;" in _ngx and _ngx.count("proxy_pass http://whale_api") == 3
-    and _ngx.count('proxy_set_header Connection "";') == 3 and "disable_nagle_algorithm = True" in api
+    and "upstream whale_api {" in _ngx and "keepalive 16;" in _ngx and _ngx.count("proxy_pass http://whale_api") == 4
+    and _ngx.count('proxy_set_header Connection "";') == 4 and "disable_nagle_algorithm = True" in api
     and 'sed -i "s|server 127.0.0.1:8090;|server ${UP_HOST};|"' in read(f"{APP}/start.sh"))
 say("ликвидации с 11 бирж, фандинг-история с 22, интерес с 32, доска фандинга — 21 биржа",
     all(f"def _liqs_{x}(" in api for x in ("kraken", "bitfinex", "deribit", "dydx", "lighter", "paradex"))

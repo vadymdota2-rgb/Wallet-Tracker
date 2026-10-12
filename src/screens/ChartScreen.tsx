@@ -17,10 +17,10 @@ import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import { t } from "../i18n/t";
 import type { DictKey } from "../i18n/types";
-import { haptic } from "../lib/telegram";
+import { haptic, webApp } from "../lib/telegram";
 import {
   fetchChartLiqs, fetchChartWhales, fetchLiqMap, fetchOiHist, fetchSymbols, peekSymbols,
-  chartStateGet, chartStatePut, pxAlertAdd, pxAlertDel, pxAlertList, pxAlertMove, type PxAlert, type PxLevel,
+  chartSnap, chartStateGet, chartStatePut, pxAlertAdd, pxAlertDel, pxAlertList, pxAlertMove, type PxAlert, type PxLevel,
 } from "../lib/api";
 import { toast } from "../components/Toast";
 import type { SymbolRow } from "../lib/types";
@@ -344,6 +344,8 @@ export function ChartScreen({ arg }: ScreenProps) {
   const [ownNone, setOwnNone] = useState<Record<string, boolean>>({});
   /* Список индикаторов в легенде свёрнут: на телефоне он закрывал свечи. */
   const [legendOpen, setLegendOpen] = useState(false);
+  const [full, setFull] = useState(false);
+  const [snapBusy, setSnapBusy] = useState(false);
   const [hist, setHist] = useState({ undo: false, redo: false });
   const [rating, setRating] = useState<Rating | null>(null);
   const [rateOpen, setRateOpen] = useState(false);
@@ -755,6 +757,87 @@ export function ChartScreen({ arg }: ScreenProps) {
   };
 
   const toolLabel = (k: DrawType | "cursor") => t(lang, `chart_d_${k}` as DictKey);
+
+  /* Во весь экран: прячем шапку и нижнее меню, в Telegram 8.0+ — ещё и
+     полноэкранный режим самого мини-приложения. */
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle("ch-full", full);
+    const wa = webApp();
+    try {
+      if (full) wa?.requestFullscreen?.();
+      else if (wa?.isFullscreen) wa.exitFullscreen?.();
+    } catch { /* старый клиент Telegram — хватит CSS */ }
+    return () => root.classList.remove("ch-full");
+  }, [full]);
+  useEffect(() => () => {
+    try {
+      const wa = webApp();
+      if (wa?.isFullscreen) wa.exitFullscreen?.();
+    } catch { /* нет — и ладно */ }
+  }, []);
+
+  const snap = async () => {
+    const e = eng.current;
+    if (!e || snapBusy) return;
+    haptic("select");
+    setSnapBusy(true);
+    try {
+      const title = `${m.label}${m.hip3 ? "" : "USDT"} · ${TF_LABEL[prefs.tf]}${src ? ` · ${SOURCE_NAME[src]}` : ""}`;
+      const last = hover?.bar;
+      const sub = last ? `O ${fmtPrice(last.o, dec)}  H ${fmtPrice(last.h, dec)}  L ${fmtPrice(last.l, dec)}  C ${fmtPrice(last.c, dec)}` : "";
+      const blob = await e.snapshot(title, sub);
+      const b64 = await new Promise<string>((ok, fail) => {
+        const r = new FileReader();
+        r.onload = () => ok(String(r.result).split(",", 2)[1] ?? "");
+        r.onerror = () => fail(r.error);
+        r.readAsDataURL(blob);
+      });
+      const r = await chartSnap(b64, title);
+      if (r?.ok) {
+        haptic("success");
+        toast(t(lang, "chart_snap_sent"));
+      } else toast(r?.error === "rate" ? t(lang, "chart_snap_rate") : t(lang, "generic_error_retry"), "err");
+    } catch {
+      toast(t(lang, "generic_error_retry"), "err");
+    } finally {
+      setSnapBusy(false);
+    }
+  };
+
+  /* Клавиши — для Telegram на компьютере, как в TradingView. */
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      const el = ev.target as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+      const e = eng.current;
+      if (!e) return;
+      const mod = ev.ctrlKey || ev.metaKey;
+      const key = ev.key.toLowerCase();
+      const code = ev.code;
+      const tools: Record<string, DrawType> = { KeyH: "hline", KeyJ: "hray", KeyT: "trend", KeyF: "fib", KeyV: "vline", KeyR: "rect", KeyP: "long", KeyM: "measure" };
+      let hit = true;
+      if (mod && key === "z" && !ev.shiftKey) e.undo();
+      else if (mod && (key === "y" || (key === "z" && ev.shiftKey))) e.redo();
+      else if (ev.altKey && tools[code]) {
+        setP({ tools: true });
+        setTool(tools[code]!);
+      } else if (key === "escape") {
+        setTool("cursor");
+        setMenu(null);
+        setFlyout(null);
+      } else if (key === "delete" || key === "backspace") e.deleteSelected();
+      else if (key === "arrowleft") e.nudge(-10);
+      else if (key === "arrowright") e.nudge(10);
+      else if (key === "+" || key === "=") e.zoomBy(1.25);
+      else if (key === "-") e.zoomBy(0.8);
+      else hit = false;
+      if (hit) ev.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const pickTool = (k: DrawType, g: number) => {
     haptic("select");
     setTool(k);
@@ -816,6 +899,10 @@ export function ChartScreen({ arg }: ScreenProps) {
             onClick={() => { haptic("select"); setAlertsOpen(!alertsOpen); refreshAlerts(); }}>
             🔔{alerts.filter((a) => !a.fired).length ? <small className="ch-n">{alerts.filter((a) => !a.fired).length}</small> : null}
           </button>
+          <button type="button" className="ch-btn" aria-label={t(lang, "chart_snap")} disabled={snapBusy || status !== "ok"}
+            onClick={() => void snap()}>{snapBusy ? "…" : "📷"}</button>
+          <button type="button" className={full ? "ch-btn on" : "ch-btn"} aria-label={t(lang, "chart_full")} aria-pressed={full}
+            onClick={() => { haptic("select"); setFull(!full); }}>⛶</button>
         </div>
 
         <div className="ch-main">

@@ -34,6 +34,10 @@ interface WebApp {
   openInvoice?(url: string, cb: (status: string) => void): void;
   openTelegramLink?(url: string): void;
   openLink?(url: string, opts?: { try_instant_view?: boolean }): void;
+  /** Bot API 8.0: мини-приложение во весь экран телефона. */
+  requestFullscreen?(): void;
+  exitFullscreen?(): void;
+  isFullscreen?: boolean;
 }
 
 declare global {

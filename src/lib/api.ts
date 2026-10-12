@@ -726,3 +726,7 @@ export const chartStateGet = (sym: string) => call<ChartStateReply>(`/api/chart/
 export const chartStatePut = (body: { sym: string; list: unknown[]; at: number } | { prefs: unknown; at: number }) =>
   call<{ ok: boolean; error?: string }>("/api/chart/state", { method: "POST", body });
 export const pxAlertDel = (id: number) => call<PxAlertReply>("/api/pxalert/del", { method: "POST", body: { id } });
+
+/** Снимок графика — бот присылает его человеку в чат. */
+export const chartSnap = (png: string, title: string) =>
+  call<{ ok: boolean; error?: string }>("/api/chart/snap", { method: "POST", body: { png, title }, timeout: 75_000 });
