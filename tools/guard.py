@@ -903,7 +903,7 @@ say("OKX: UID на ручную проверку — кнопки только �
     and "CREATE TABLE IF NOT EXISTS exch_claims" in _mcpp
     and "exchSubmit(ex.id, v)" in read(f"{APP}/src/screens/BonusScreen.tsx")
     and 'EXCH_CODES = {"okx"' in api and 'EXCH_MIN_DEP = {"okx": "200 €"}' in api and '"code": EXCH_CODES[k]' in api
-    and '"bn_ex_rebind"' in read(f"{APP}/src/screens/BonusScreen.tsx") and '"bn_ex_okx"' in read(f"{APP}/src/screens/BonusScreen.tsx")
+    and '"bn_ex_new_only"' in read(f"{APP}/src/screens/BonusScreen.tsx") and "bn_ex_rebind" not in read(f"{APP}/tools/i18n.json") and '"bn_ex_okx"' in read(f"{APP}/src/screens/BonusScreen.tsx")
     and "депозит и покупка от 200 €" in _mcpp)
 
 s_css = read(f"{APP}/src/styles/app.css")
