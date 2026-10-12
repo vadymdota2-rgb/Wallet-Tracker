@@ -14718,14 +14718,36 @@ def _dg_btc() -> dict:
     return out
 
 
+def _dg_fund_uniq(rows: list) -> list:
+    """Перекосы фандинга — по монете один раз. Одна монета с перекосом
+    обычно перекошена сразу на нескольких биржах, и список из трёх строк
+    оказывался одной монетой трижды. Остаётся самая крайняя ставка, прочие
+    биржи с той же стороной — списком рядом (also)."""
+    out: list = []
+    by: dict = {}
+    for r in rows:
+        key = (r.get("sym") or "").upper()
+        if key in by:
+            if len(by[key]["also"]) < 3:
+                by[key]["also"].append(r["ex"])
+            continue
+        if len(out) >= DIGEST_TOP:
+            continue
+        by[key] = {**r, "also": []}
+        out.append(by[key])
+    return out
+
+
 def _dg_leaders(pub: dict) -> dict:
-    """Лидеры рейтинга за 30 дней: первое место по прибыли на BSC и в
-    биткоине — кого стоит открыть и посмотреть, что он делает."""
+    """Лидеры рейтинга за 30 дней: первое место по прибыли на BSC, на
+    Hyperliquid и в биткоине — кого стоит открыть и посмотреть, что он делает."""
     out: dict = {}
-    spot = (((pub.get("rank") or {}).get("spot") or {}).get("pnl") or [])
-    if spot:
-        r = spot[0]
-        out["spot"] = {"a": r.get("a"), "pnl": r.get("pnl"), "win": r.get("win"), "tr": r.get("tr")}
+    rank = pub.get("rank") or {}
+    for venue in ("spot", "perp"):
+        board = ((rank.get(venue) or {}).get("pnl") or [])
+        if board:
+            r = board[0]
+            out[venue] = {"a": r.get("a"), "pnl": r.get("pnl"), "win": r.get("win"), "tr": r.get("tr")}
     br = (btc_rank(30) or {}).get("pnl") or []
     if br:
         r = br[0]
@@ -14911,8 +14933,8 @@ def digest_build(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
                 continue
             fr.append({"sym": r.get("sym") or "", "ex": ex, "day": round(day, 4)})
     fr.sort(key=lambda r: -r["day"])
-    body["fund"] = {"hi": [r for r in fr if r["day"] > 0][:DIGEST_TOP],
-                    "lo": [r for r in reversed(fr) if r["day"] < 0][:DIGEST_TOP]}
+    body["fund"] = {"hi": _dg_fund_uniq([r for r in fr if r["day"] > 0]),
+                    "lo": _dg_fund_uniq([r for r in reversed(fr) if r["day"] < 0])}
 
     # Разлоки на неделю вперёд — по доле от оборота, без чистой эмиссии:
     # та течёт каждый день, и событием дня её не назвать.

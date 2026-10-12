@@ -586,6 +586,8 @@ export interface DigestFund {
   ex: string;
   /** Ставка в сутки, %. */
   day: number;
+  /** Другие биржи, где у монеты перекос в ту же сторону (с октября 2026). */
+  also?: string[];
 }
 
 export interface DigestUnlock {
@@ -657,6 +659,8 @@ export interface DigestItem {
   };
   lead?: {
     spot?: { a: string; pnl: number; win: number; tr: number };
+    /** Первое место рейтинга Hyperliquid (с октября 2026). */
+    perp?: { a: string; pnl: number; win: number; tr: number };
     btc?: { a: string; pnl: number; btc: number; roi: number };
   };
   halv?: { left: number; eta: number; next: number };

@@ -343,7 +343,7 @@ export function Leaders({ it, lang }: { it: DigestItem; lang: Lang }) {
   const open = useApp((s) => s.open);
   const goTab = useApp((s) => s.goTab);
   const l = it.lead;
-  if (!l || (!l.spot && !l.btc)) return null;
+  if (!l || (!l.spot && !l.perp && !l.btc)) return null;
   return (
     <Sec icon={<TopGlyph size={20} />} title={t(lang, "rk_top_traders_30d")} onOpen={() => goTab("top")}
       line={leadLine(it, lang)} tone="up">
@@ -353,6 +353,13 @@ export function Leaders({ it, lang }: { it: DigestItem; lang: Lang }) {
           sub={t(lang, "dg_lead_stats", { w: num(l.spot.win), n: num(l.spot.tr) })}
           value={sUsd(l.spot.pnl)} tone={tone(l.spot.pnl)} wrap
           onClick={() => open("deals", l.spot!.a, "spot")} />
+      ) : null}
+      {l.perp ? (
+        <Row icon={<span className="dg-medal" aria-hidden="true">🥇</span>}
+          title={<>{iso(shortAddr(l.perp.a))} <span className="dim">· Hyperliquid</span></>}
+          sub={t(lang, "dg_lead_stats", { w: num(l.perp.win), n: num(l.perp.tr) })}
+          value={sUsd(l.perp.pnl)} tone={tone(l.perp.pnl)} wrap
+          onClick={() => open("deals", l.perp!.a, "perp")} />
       ) : null}
       {l.btc ? (
         <Row icon={<span className="dg-medal" aria-hidden="true">🥇</span>}
@@ -405,8 +412,11 @@ export function btcLine(it: DigestItem, lang: Lang): { text: string; tone?: "up"
 }
 
 export function leadLine(it: DigestItem, lang: Lang): string | null {
-  const l = it.lead?.spot ?? it.lead?.btc;
-  return l ? t(lang, "dg_l_lead", { v: pUsd(l.pnl) }) : null;
+  /* Лучший из лучших — у кого из первых мест прибыль больше. */
+  const best = [it.lead?.spot, it.lead?.perp, it.lead?.btc]
+    .filter((x): x is { pnl: number } & NonNullable<typeof x> => !!x)
+    .sort((a, b) => b.pnl - a.pnl)[0];
+  return best ? t(lang, "dg_l_lead", { v: pUsd(best.pnl) }) : null;
 }
 
 /* ── v3: ликвидации ───────────────────────────────────────────────────── */

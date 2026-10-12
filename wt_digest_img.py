@@ -30,7 +30,6 @@ C = {
     "up": (61, 220, 151), "dn": (255, 92, 119), "mix": (240, 185, 11), "line": (26, 52, 88), "panel": (12, 26, 46),
 }
 BOT_AT = "@WalletTrackerAppBot"
-BOT_URL = "t.me/WalletTrackerAppBot"
 
 _I18N: dict = {}
 
@@ -326,7 +325,6 @@ def render(it: dict, lang: str = "ru", page: str = "") -> bytes | None:
     d.line([(PAD, H - PAD - 100), (W - PAD, H - PAD - 100)], fill=(58, 130, 214, 56), width=2)
     text(tr(lang, "dg_img_find"), PAD, H - PAD - 58, "Medium", 24, C["dim"])
     text(BOT_AT, PAD, H - PAD - 14, "Bold", 34, C["glow"])
-    text(BOT_URL, W - PAD, H - PAD - 14, "SemiBold", 28, C["ink"], "rs")
     text(tr(lang, "dg_img_disc"), PAD, H - PAD + 22, "Regular", 18, (124, 151, 188, 180))
 
     buf = io.BytesIO()
@@ -345,7 +343,7 @@ def caption(it: dict, lang: str = "ru") -> str:
     ls = lines(it, lang)
     if ls:
         parts.append("\n".join(("▲ " if t == "up" else "▼ " if t == "dn" else "• ") + s for s, t in ls))
-    parts.append(f"{BOT_AT}\nhttps://{BOT_URL}")
+    parts.append(BOT_AT)
     out = "\n\n".join(parts)
     # Подпись к фото в Telegram — до 1024 знаков: лишние выводы отрезаем.
     while len(out) > 1024 and ls:
@@ -498,7 +496,6 @@ class _Page:
         d.line([(PAD, H - PAD - 100), (W - PAD, H - PAD - 100)], fill=(58, 130, 214, 56), width=2)
         self.text(tr(lang, "dg_img_find"), PAD, H - PAD - 58, "Medium", 24, C["dim"])
         self.text(BOT_AT, PAD, H - PAD - 14, "Bold", 34, C["glow"])
-        self.text(BOT_URL, W - PAD, H - PAD - 14, "SemiBold", 28, C["ink"], "rs")
         self.text(tr(lang, "dg_img_disc"), PAD, H - PAD + 22, "Regular", 18, (124, 151, 188, 180))
         buf = io.BytesIO()
         self.img.save(buf, "PNG", optimize=True)
@@ -560,6 +557,26 @@ def _page_deriv(it: dict, lang: str, n: int, total: int) -> bytes | None:
     return p.png() if has else None
 
 
+def _fund_uniq(rows: list) -> list:
+    """По монете одна строка: у выпусков до этого правила монета с перекосом
+    стояла трижды — по строке на биржу. Новые выпуски сервер отдаёт уже так."""
+    out, seen = [], {}
+    for f in rows or []:
+        k = str(f.get("sym") or "").upper()
+        if k in seen:
+            seen[k]["also"].append(f.get("ex"))
+            continue
+        seen[k] = {**f, "also": list(f.get("also") or [])}
+        out.append(seen[k])
+    return out
+
+
+def _fund_ex(f: dict) -> str:
+    """Биржа с самой крайней ставкой и сколько ещё бирж с тем же перекосом."""
+    more = len(f.get("also") or [])
+    return str(f.get("ex") or "").upper() + (f" +{more}" if more else "")
+
+
 def _page_pos(it: dict, lang: str, n: int, total: int) -> bytes | None:
     """Фандинг и позиции: перекосы фандинга, лонг/шорт и крупные позиции
     Hyperliquid, ротация денег и лучший трейдер."""
@@ -568,10 +585,10 @@ def _page_pos(it: dict, lang: str, n: int, total: int) -> bytes | None:
     fund = it.get("fund") or {}
     if (fund.get("hi") or fund.get("lo")) and p.section(tr(lang, "ui_tab_funding") + " · " + tr(lang, "dg_per_day").rstrip(".")):
         has = True
-        for f in (fund.get("hi") or [])[:2]:
-            p.row(f"{f['sym']} · {str(f['ex']).upper()} · {tr(lang, 'dg_fund_hi')}", pct(f["day"], lang, 3), C["up"])
-        for f in (fund.get("lo") or [])[:2]:
-            p.row(f"{f['sym']} · {str(f['ex']).upper()} · {tr(lang, 'dg_fund_lo')}", pct(f["day"], lang, 3), C["dn"])
+        for f in _fund_uniq(fund.get("hi"))[:2]:
+            p.row(f"{f['sym']} · {_fund_ex(f)} · {tr(lang, 'dg_fund_hi')}", pct(f["day"], lang, 3), C["up"])
+        for f in _fund_uniq(fund.get("lo"))[:2]:
+            p.row(f"{f['sym']} · {_fund_ex(f)} · {tr(lang, 'dg_fund_lo')}", pct(f["day"], lang, 3), C["dn"])
     ls = it.get("ls") or {}
     g = ls.get("crypto") if isinstance(ls, dict) and "crypto" in ls else ls
     if isinstance(g, dict) and (g.get("long") or g.get("short")) and p.section("Hyperliquid · " + tr(lang, "ui_tab_ls")):
@@ -592,11 +609,18 @@ def _page_pos(it: dict, lang: str, n: int, total: int) -> bytes | None:
         has = True
         p.row(f"{tr(lang, 'dg_rot_src')}: " + ", ".join(r["sym"] for r in (rot.get("src") or [])[:3]), "", None)
         p.row(f"{tr(lang, 'dg_rot_dst')}: " + ", ".join(r["sym"] for r in (rot.get("dst") or [])[:3]), "", None)
-    lead = (it.get("lead") or {}).get("spot")
-    if lead and p.section(tr(lang, "rk_top_traders_30d")):
+    lead = it.get("lead") or {}
+    if any(lead.get(k) for k in ("spot", "perp", "btc")) and p.section(tr(lang, "rk_top_traders_30d")):
         has = True
-        p.row(f"{_short(lead['a'])} · BSC", usd(lead["pnl"], lang, True), _col(lead["pnl"]),
-              tr(lang, "dg_lead_stats", w=num(lead.get("win") or 0, lang), n=num(lead.get("tr") or 0, lang)))
+        for venue, name in (("spot", "BSC"), ("perp", "Hyperliquid")):
+            r = lead.get(venue)
+            if r:
+                p.row(f"{_short(r['a'])} · {name}", usd(r["pnl"], lang, True), _col(r["pnl"]),
+                      tr(lang, "dg_lead_stats", w=num(r.get("win") or 0, lang), n=num(r.get("tr") or 0, lang)))
+        r = lead.get("btc")
+        if r:
+            p.row(f"{_short(r['a'])} · Bitcoin", usd(r["pnl"], lang, True), _col(r["pnl"]),
+                  f"{tr(lang, 'btc_hold')} {btc_amt(r.get('btc') or 0, lang)}")
     return p.png() if has else None
 
 

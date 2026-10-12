@@ -1184,6 +1184,14 @@ say("автопостинг выпуска в канал: картинка на 
     # Ключи словаря, по которым сервер собирает выводы, есть в словаре приложения.
     and all(k in _i18n for k in ("dg_l_mkt", "dg_l_liq", "dg_l_oi", "dg_l_opt", "dg_l_etf_in", "dg_l_btcx_out",
                                  "dg_img_find", "dg_img_title", "dg_img_kicker", "dg_img_disc", "dg_v_bull")))
+_dmore = read(f"{APP}/src/screens/DigestMore.tsx")
+say("дайджест: в канале внизу только @WalletTrackerAppBot; монета в перекосах фандинга одна; лидер Hyperliquid",
+    "BOT_URL" not in _dgi and "t.me/WalletTrackerAppBot" not in _dgi and "parts.append(BOT_AT)" in _dgi
+    and "def _dg_fund_uniq(rows: list) -> list:" in api and '"hi": _dg_fund_uniq(' in api and '"lo": _dg_fund_uniq(' in api
+    and "def _fund_uniq(rows: list) -> list:" in _dgi
+    and "function fundUniq(" in read(f"{APP}/src/screens/DigestTab.tsx")
+    and 'for venue in ("spot", "perp"):' in pybody(api, "def _dg_leaders(")
+    and 'open("deals", l.perp!.a, "perp")' in _dmore and '("perp", "Hyperliquid")' in _dgi)
 say("поиск любой монеты в ликвидациях и истории интереса; монеты с множителем (1000PEPE, kPEPE)",
     os.path.exists(f"{APP}/src/components/CoinFind.tsx")
     and all("<CoinFind " in read(f"{APP}/src/screens/{x}.tsx") for x in ("LiqsScreen", "OiHistScreen", "LiqMapScreen"))

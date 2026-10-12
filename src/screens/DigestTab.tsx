@@ -55,6 +55,7 @@ import type {
   DigestActReply,
   DigestComment,
   DigestCoin,
+  DigestFund,
   DigestItem,
   DigestLs,
   DigestReply,
@@ -177,8 +178,8 @@ function Sections({ it, lang }: { it: DigestItem; lang: Lang }) {
   const flow = it.flow;
   const rot = it.rot;
   const unl = it.unl ?? [];
-  const fundHi = Array.isArray(it.fund?.hi) ? it.fund.hi : [];
-  const fundLo = Array.isArray(it.fund?.lo) ? it.fund.lo : [];
+  const fundHi = fundUniq(it.fund?.hi);
+  const fundLo = fundUniq(it.fund?.lo);
 
   /* Новые выпуски (v2) идут частями — от общей картины к деталям. У старых
      этих частей нет: они показываются как были, без пустых заголовков. */
@@ -326,12 +327,12 @@ function Sections({ it, lang }: { it: DigestItem; lang: Lang }) {
           <>
             {fundHi.length ? <Sub>{t(lang, "dg_fund_hi")}</Sub> : null}
             {fundHi.map((f) => (
-              <CoinRow key={`fh${f.sym}${f.ex}`} c={{ sym: f.sym }} sub={f.ex.toUpperCase()}
+              <CoinRow key={`fh${f.sym}${f.ex}`} c={{ sym: f.sym }} sub={fundEx(f)}
                 value={pct(f.day, 3, true)} tone="up" onOpen={chart(f.sym)} />
             ))}
             {fundLo.length ? <Sub>{t(lang, "dg_fund_lo")}</Sub> : null}
             {fundLo.map((f) => (
-              <CoinRow key={`fl${f.sym}${f.ex}`} c={{ sym: f.sym }} sub={f.ex.toUpperCase()}
+              <CoinRow key={`fl${f.sym}${f.ex}`} c={{ sym: f.sym }} sub={fundEx(f)}
                 value={pct(f.day, 3, true)} tone="dn" onOpen={chart(f.sym)} />
             ))}
             <p className="dg-note">{t(lang, "dg_per_day")}</p>
@@ -740,6 +741,29 @@ function DigestCard({ it, lang, mod, muted, fresh, share }: {
     </article>
   );
 }
+
+
+/** Перекосы фандинга — по монете одна строка. В выпусках до октября 2026
+ *  монета с перекосом стояла по строке на каждую биржу — тут они сводятся. */
+function fundUniq(rows: DigestFund[] | undefined): DigestFund[] {
+  const out: DigestFund[] = [];
+  const seen = new Map<string, DigestFund>();
+  for (const f of Array.isArray(rows) ? rows : []) {
+    const k = f.sym.toUpperCase();
+    const was = seen.get(k);
+    if (was) {
+      was.also = [...(was.also ?? []), f.ex];
+      continue;
+    }
+    const row = { ...f, also: [...(f.also ?? [])] };
+    seen.set(k, row);
+    out.push(row);
+  }
+  return out;
+}
+
+/** Биржа с самой крайней ставкой и остальные с тем же перекосом. */
+const fundEx = (f: DigestFund) => [f.ex, ...(f.also ?? [])].map((x) => x.toUpperCase()).join(" · ");
 
 export function DigestTab() {
   const lang = useApp((s) => s.lang);
