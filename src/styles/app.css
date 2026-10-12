@@ -1690,7 +1690,7 @@ html.ch-full .screen.full {
 .ch-plot { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; }
 .ch-cv { position: absolute; inset: 0; display: block; touch-action: none; user-select: none; -webkit-user-select: none; }
 .ch-legend {
-  position: absolute; left: 8px; top: 6px; right: 70px; display: grid; gap: 2px; pointer-events: none;
+  position: absolute; left: 8px; top: 6px; right: 70px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; pointer-events: none;
   font-size: 12px; line-height: 1.35; color: var(--dim); font-variant-numeric: tabular-nums;
 }
 .ch-lg-head { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
@@ -1710,17 +1710,22 @@ html.ch-full .screen.full {
 .ch-lg-fold i { font-family: Georgia, serif; font-weight: 700; color: var(--ink); }
 .ch-fold-c { width: 6px; height: 6px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg) translateY(-2px); }
 .ch-fold-c.on { transform: rotate(-135deg) translateY(-1px); }
-.ch-lg-ind { display: flex; align-items: center; gap: 6px; pointer-events: auto; width: max-content; max-width: 100%; }
+/* Строка индикатора не шире легенды: длинные значения (Auto Fib — семь уровней)
+   обрезаются многоточием, а «глаз» и «×» всегда на экране. */
+.ch-lg-ind {
+  display: flex; align-items: center; gap: 6px; pointer-events: auto; width: fit-content; max-width: 100%; min-width: 0;
+  background: rgb(5 11 22 / 0.55); border-radius: 5px; padding-right: 2px;
+}
 .ch-lg-ind.off { opacity: 0.45; }
 .ch-lg-name {
   border: 0; background: rgb(5 11 22 / 0.55); color: var(--ink); font-size: 12px; padding: 1px 4px; border-radius: 4px;
-  display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
 }
 .ch-dot { width: 8px; height: 8px; border-radius: 2px; flex: 0 0 auto; }
-.ch-lg-val { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ch-lg-val { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1000 auto; }
 .ch-lg-x {
   border: 0; background: transparent; color: var(--dim); width: 22px; height: 22px; padding: 0;
-  display: grid; place-items: center; font-size: 16px;
+  display: grid; place-items: center; font-size: 16px; flex: 0 0 auto;
 }
 .ch-lg-x svg { width: 15px; height: 15px; }
 .ch-note { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); font-size: 14px; padding: 24px; text-align: center; pointer-events: none; }

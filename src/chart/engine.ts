@@ -93,6 +93,8 @@ export interface Events {
   pct(on: boolean): void;
   /** Панели пролистаны на y px — легенда цены уезжает вместе с ценой. */
   scroll?(y: number): void;
+  /** Логарифмическую шкалу включили или выключили кнопкой «L». */
+  log?(on: boolean): void;
 }
 
 interface Scale {
@@ -2296,7 +2298,10 @@ export class Engine {
     if (x > R && y > bottom) {
       const part = (x - R) / this.priceW;
       if (part < 0.35) this.resetScale();
-      else if (part < 0.65) this.setLog(!this.log);
+      else if (part < 0.65) {
+        this.setLog(!this.log);
+        this.ev.log?.(this.log);
+      }
       else {
         this.setPct(!this.pct);
         this.ev.pct(this.pct);

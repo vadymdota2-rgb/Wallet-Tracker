@@ -340,6 +340,10 @@ say("индикаторы в панелях не сжимают цену: иду
     "const PEEK = 34;" in _ce and 'case "vscroll": {' in _ce and "private glideY()" in _ce and "this.fit = true;" in _ce
     and "ev.scroll?.(this.sy)" in _ce and "private paneTitle(p: Pane)" in _ce and 'ref={legendEl}' in chart_scr
     and "wa?.disableVerticalSwipes?.()" in chart_scr)
+say("график помнит всё: монету, таймфрейм, вид, индикаторы, сравнение, %, лог — на устройстве и на сервере; строка индикатора не вылезает за экран",
+    "setP({ sym: v });" in chart_scr and "log: (on) => setP({ log: on })," in chart_scr and "if (!arg && next.sym && next.sym !== sym) {" in chart_scr
+    and "this.ev.log?.(this.log);" in _ce and "grid-template-columns: minmax(0, 1fr);" in read(f"{APP}/src/styles/app.css")
+    and "width: fit-content; max-width: 100%; min-width: 0;" in read(f"{APP}/src/styles/app.css"))
 say("полный экран: график ниже кнопок Telegram (safe area), выход ✕ на самом графике и через Telegram",
     '"--ch-top"' in chart_scr and '"contentSafeAreaChanged"' in chart_scr and '"fullscreenChanged"' in chart_scr
     and 'className="ch-exitfull"' in chart_scr and "var(--ch-top, 0px)" in read(f"{APP}/src/styles/app.css"))

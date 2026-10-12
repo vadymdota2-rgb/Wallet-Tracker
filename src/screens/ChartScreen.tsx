@@ -76,6 +76,10 @@ interface Prefs {
   pct?: boolean;
   /** Монеты для сравнения (до трёх). */
   cmp?: string[];
+  /** Логарифмическая шкала цены. */
+  log?: boolean;
+  /** Последняя открытая монета — чтобы вернуться к ней и с другого устройства. */
+  sym?: string;
   /** Когда меняли (мс) — для сверки с сервером: новее тот, кто позже. */
   at?: number;
 }
@@ -101,6 +105,8 @@ function loadPrefs(): Prefs {
       tools: raw.tools ?? false,
       pct: !!raw.pct,
       cmp: Array.isArray(raw.cmp) ? raw.cmp.filter((x) => typeof x === "string").slice(0, CMP_MAX) : [],
+      log: !!raw.log,
+      sym: typeof raw.sym === "string" && raw.sym ? raw.sym : undefined,
       at: Number(raw.at) || 0,
     };
   } catch {
@@ -231,6 +237,10 @@ export function ChartScreen({ arg }: ScreenProps) {
   const flow = useLive((s) => s.flow);
 
   const [sym, setSym] = useState(() => (arg ? arg.toUpperCase() : saved || "BTC"));
+  // Открыли график на конкретной монете — она и станет «последней».
+  useEffect(() => {
+    if (arg) setSaved(arg.toUpperCase());
+  }, [arg, setSaved]);
   const [picking, setPicking] = useState(false);
   /** Выбор монеты для сравнения, а не для открытия. */
   const [cmpPick, setCmpPick] = useState(false);
@@ -272,6 +282,7 @@ export function ChartScreen({ arg }: ScreenProps) {
     }
     setSym(v);
     setSaved(v);
+    setP({ sym: v });
     setPicking(false);
     setQuery("");
   };
@@ -308,10 +319,17 @@ export function ChartScreen({ arg }: ScreenProps) {
         tools: raw.tools ?? prefs.tools,
         pct: !!raw.pct,
         cmp: Array.isArray(raw.cmp) ? raw.cmp.slice(0, CMP_MAX) : [],
+        log: !!raw.log,
+        sym: typeof raw.sym === "string" && raw.sym ? raw.sym : prefs.sym,
         at: v.at,
       };
       savePrefs(next);
       setPrefs(next);
+      // Монета, на которой остановились, — если график открыли не на конкретной.
+      if (!arg && next.sym && next.sym !== sym) {
+        setSym(next.sym);
+        setSaved(next.sym);
+      }
     });
     return () => {
       alive = false;
@@ -531,6 +549,7 @@ export function ChartScreen({ arg }: ScreenProps) {
       history: (u, r) => setHist({ undo: u, redo: r }),
       rating: (r) => setRating(r),
       pct: (on) => setP({ pct: on }),
+      log: (on) => setP({ log: on }),
     });
     eng.current = e;
     return () => {
@@ -577,6 +596,10 @@ export function ChartScreen({ arg }: ScreenProps) {
   useEffect(() => eng.current?.setHideDrawings(hideDraw), [hideDraw]);
   useEffect(() => eng.current?.setText((k) => t(lang, k as DictKey)), [lang]);
   useEffect(() => eng.current?.setPct(!!prefs.pct), [prefs.pct]);
+  useEffect(() => {
+    const e = eng.current;
+    if (e && e.log !== !!prefs.log) e.setLog(!!prefs.log);
+  }, [prefs.log]);
   // Сравнение: свечи тех же таймфрейма у каждой монеты, раз в минуту — свежие.
   const cmpKey = (prefs.cmp ?? []).join(",");
   useEffect(() => {
