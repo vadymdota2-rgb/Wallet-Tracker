@@ -660,7 +660,7 @@ _hvc = read(f"{APP}/src/components/HalvingCard.css")
 # Автотесты халвинга (приложение и сервер) — гоняем прямо здесь: красные
 # тесты не должны уехать в main.
 import subprocess as _sp
-_t_js = _sp.run(["node", "--test", "tests/halving.test.ts", "tests/tick.test.ts"], cwd=APP, capture_output=True, text=True)
+_t_js = _sp.run(["node", "--test", "tests/halving.test.ts", "tests/halving.props.test.ts", "tests/tick.test.ts"], cwd=APP, capture_output=True, text=True)
 _t_py = _sp.run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"], cwd=APP, capture_output=True, text=True)
 say("халвинг: автотесты расчёта в приложении (node --test) и сервера (unittest, без сети) зелёные",
     _t_js.returncode == 0 and "# fail 0" in _t_js.stdout and _t_py.returncode == 0 and "OK" in _t_py.stderr)
@@ -699,7 +699,9 @@ say("халвинг: среднее за эпоху, отсчёт от посл�
     # Срок ответа на сервере и в памяти приложения — один (5 минут).
     and "TTL = 300.0" in _hvs and "export const HALVING_TTL_MS = 5 * 60_000;" in _hvl
     and "class _State:" in _hvs and "_cache" not in _hvs
-    and "def _plausible(h: int) -> bool:" in _hvs and "const untilNextSecond = " in read(f"{APP}/src/lib/tick.ts")
+    and "def _plausible(h: int) -> bool:" in _hvs and "class Reply(TypedDict):" in _hvs
+    and os.path.exists(f"{APP}/tests/halving.props.test.ts") and os.path.exists(f"{APP}/tests/test_halving_fuzz.py")
+    and "typecheck:halving" in read(f"{APP}/package.json") and 'python: ["3.10", "3.11", "3.12", "3.13"]' in read(f"{APP}/.github/workflows/tests.yml") and "const untilNextSecond = " in read(f"{APP}/src/lib/tick.ts")
     and "if 1_700_000_000 < ts <= _now():" in _hvs and "except RuntimeError as e:" in _hvs and os.path.exists(f"{APP}/tools/mutate-halving.py")
     and "python tools/mutate-halving.py" in read(f"{APP}/.github/workflows/tests.yml") and "r.height <= (r.at - GENESIS_TS) / 300" in _hvl
     and '<p className="hv-rw" aria-hidden="true"><span className="hv-ph">' in _hv and ".hv-rw b { color: var(--ink); font-weight: 700; white-space: nowrap; }" in _hvc and "HALVING_TTL_MS + 5_000" in _hv

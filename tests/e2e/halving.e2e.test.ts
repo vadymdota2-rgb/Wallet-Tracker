@@ -31,8 +31,9 @@ const TYPES: Record<string, string> = {
 
 // Настоящий ответ сервера от 13.10.2026 — общий образец с тестами сервера
 // (tests/fixtures/halving.json); T — «сейчас» в браузере.
-const REAL = JSON.parse(await readFile(new URL("../fixtures/halving.json", import.meta.url), "utf8")) as Record<string, number>;
-const T = REAL.now!;
+const REAL = JSON.parse(await readFile(new URL("../fixtures/halving.json", import.meta.url), "utf8")) as
+  { now: number } & Record<string, unknown>;
+const T = REAL.now;
 // До халвинга eta − T = 47 015 123 с = 544 дн 03 ч 45 мин 23 с.
 const CLOCK_RU = "544 дн 03 ч 45 мин 23 сек";
 /** Текст как видит человек: неразрывные и узкие пробелы (разряды «1 050 000»,
@@ -72,8 +73,8 @@ after(async () => {
 interface Opts {
   lang?: string;
   width?: number;
-  /** Ответ /api/halving; null — «нет данных». */
-  reply?: Record<string, unknown> | null;
+  /** Ответ /api/halving; null — «нет данных», не задан — образец. */
+  reply?: Record<string, unknown> | null | undefined;
   delay?: number;
   /** Время в браузере (unix, с). */
   at?: number;

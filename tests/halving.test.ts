@@ -2,13 +2,20 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { clockSkew, halvingView, subsidySats, validHalving } from "../src/lib/halving.ts";
+import { clockSkew, halvingView, subsidySats, validHalving, type HalvingReply } from "../src/lib/halving.ts";
+
+/** Копия ответа без перечисленных полей — «поля нет», а не «поле = undefined». */
+function omit<T extends object, K extends keyof T>(o: T, ...keys: K[]): Omit<T, K> {
+  const c = { ...o };
+  for (const k of keys) delete c[k];
+  return c;
+}
 
 // Настоящий ответ сервера от 13.10.2026.
 const REAL = {
   ok: true, height: 971219, next: 1050000, every: 210000, avg: 596.8, src: "epoch" as const,
   tip: 1791881177, eta: 1838896423, at: 1791881255,
-};
+} satisfies HalvingReply;
 
 test("validHalving: настоящий ответ годится", () => {
   assert.equal(validHalving(REAL), true);
@@ -86,9 +93,9 @@ test("halvingView: старый ответ без eta и tip считается 
 });
 
 test("halvingView: первая эпоха и следующие — награда по эпохе", () => {
-  const e0 = { ...REAL, height: 100, next: 210000, tip: undefined, eta: undefined };
+  const e0 = { ...omit(REAL, "tip", "eta"), height: 100, next: 210000 };
   assert.equal(halvingView(e0, REAL.at).reward, 5_000_000_000);
-  const e5 = { ...REAL, height: 1050001, next: 1260000, tip: undefined, eta: undefined };
+  const e5 = { ...omit(REAL, "tip", "eta"), height: 1050001, next: 1260000 };
   const v = halvingView(e5, REAL.at);
   assert.equal(v.reward, 156_250_000);
   assert.equal(v.rewardNext, 78_125_000);
@@ -117,7 +124,7 @@ test("validHalving: повреждённые необязательные пол
 });
 
 test("halvingView: две недели после халвинга карточка говорит, что он состоялся", () => {
-  const after = { ...REAL, height: 1050100, next: 1260000, prev: 1838900000, tip: 1838900000 + 100 * 600, eta: undefined };
+  const after = { ...omit(REAL, "eta"), height: 1050100, next: 1260000, prev: 1838900000, tip: 1838900000 + 100 * 600 };
   assert.equal(halvingView(after, after.prev + 3 * 86400).justHappened, after.prev);
   assert.equal(halvingView(after, after.prev + 15 * 86400).justHappened, null);
   assert.equal(halvingView(REAL, REAL.at).justHappened, null);
@@ -135,7 +142,7 @@ test("договор с сервером: образец ответа (tests/fix
 
 test("validHalving: пограничные высоты (найдены мутационной проверкой)", () => {
   // Нулевая высота — не ответ сети биткоина.
-  assert.equal(validHalving({ ...REAL, height: 0, next: 210000, eta: undefined, tip: undefined }), false);
+  assert.equal(validHalving({ ...omit(REAL, "eta", "tip"), height: 0, next: 210000 }), false);
   // 2 млн — больше, чем при блоке раз в 5 минут с 2009 года (~1,87 млн), но
   // меньше, чем при блоке раз в 30 секунд: граница проверяется точно.
   assert.equal(validHalving({ ...REAL, height: 2_000_000, next: 2_100_000 }), false);

@@ -76,7 +76,7 @@ def run(path, cmd, muts):
             f.write(src)
     return alive
 
-a1 = run(f"{ROOT}/src/lib/halving.ts", ["node", "--test", "tests/halving.test.ts"], TS)
+a1 = run(f"{ROOT}/src/lib/halving.ts", ["node", "--test", "tests/halving.test.ts", "tests/halving.props.test.ts"], TS)
 a3 = run(f"{ROOT}/src/lib/tick.ts", ["node", "--test", "tests/tick.test.ts"], TICK)
 a2 = run(f"{ROOT}/wt_halving.py", [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"], PY)
 alive = a1 + a2 + a3

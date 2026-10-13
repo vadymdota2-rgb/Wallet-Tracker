@@ -1,0 +1,144 @@
+"""Фаззинг сервера халвинга (wt_halving.py): npm test.
+
+Тысячи случайных «ответов сети» — мусорные байты, неверные типы, абсурдные
+числа, кривые хеши. Правила: сборка никогда не падает; ответ «ok» всегда
+соблюдает инварианты; и каждый такой ответ принимает приложение — его
+validHalving из src/lib/halving.ts запускается через Node на тех же данных
+(договор между двумя языками). Генератор детерминированный — нарушение
+воспроизводится по номеру случая.
+"""
+import io
+import json
+import os
+import random
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+from unittest import mock
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+import wt_halving as hv  # noqa: E402 — модуль лежит в корне репозитория
+
+SEED = 0x5EED2028
+CASES = 3000
+NOW = 1_791_881_300
+JUNK = [None, True, False, "", "x", "1e9", -1, 0, 0.5, 10**40, -(10**12), [], {}, [1, 2], {"a": 1}, "∞"]
+KEYS = set(hv.Reply.__annotations__)
+
+
+def junk(r: random.Random) -> object:
+    return r.choice(JUNK) if r.random() < 0.5 else r.randint(-(10**10), 10**10)
+
+
+def body(r: random.Random, value: object) -> bytes | None:
+    """Ответ сети: нормальный JSON, обрезанный, двоичный мусор или ничего."""
+    roll = r.random()
+    if roll < 0.06:
+        return None
+    if roll < 0.12:
+        return bytes(r.getrandbits(8) for _ in range(r.randint(0, 40)))
+    raw = json.dumps(value).encode()
+    return raw[: r.randint(0, len(raw))] if roll < 0.18 else raw
+
+
+def network(r: random.Random):
+    """Случайная сеть: правдоподобные ответы вперемешку с мусором."""
+    height = r.choice([971_219, 1_050_000, 1_050_100, 1_051_000, 1_100_000, 2_000_000, 799_999, 99_000_000])
+    tip = NOW - r.randint(-10_000, 200_000)
+    blk = {"height": height if r.random() < 0.8 else junk(r), "timestamp": tip if r.random() < 0.8 else junk(r)}
+    blocks = [blk] if r.random() < 0.85 else junk(r)
+    adj = {"timeAvg": r.choice([570_866, 600_000, 60_000, 2_000_000]) if r.random() < 0.8 else junk(r)}
+    start_ts = r.choice([1_713_571_767, NOW - 10**6, NOW + 10**6, 0]) if r.random() < 0.8 else junk(r)
+    hsh = r.choice(["0" * 63 + "a", "../evil", "", "f" * 64, "Z" * 64])
+    tip_h = r.choice([971_219, 1_050_100, 99_000_000, 0]) if r.random() < 0.8 else junk(r)
+
+    def fetch(url: str, limit: int = 1 << 20) -> bytes | None:
+        if url.endswith("/api/v1/blocks"):
+            return body(r, blocks)
+        if "difficulty-adjustment" in url:
+            return body(r, adj)
+        if "block-height" in url:
+            return hsh.encode() if r.random() < 0.9 else body(r, junk(r))
+        if "/api/block/" in url:
+            return body(r, {"timestamp": start_ts})
+        if r.random() < 0.85:
+            return str(tip_h).encode()[:limit]
+        return body(r, junk(r))
+
+    return fetch
+
+
+class FuzzTest(unittest.TestCase):
+    def setUp(self):
+        hv._st = hv._State()
+        hv._busy.clear()
+        hv.START_TS.clear()
+        hv.START_TS[840_000] = 1_713_571_767
+
+    def check(self, i: int, res: dict) -> None:
+        m = f"случай {i}: {res}"
+        self.assertLessEqual(set(res), KEYS, m)
+        if not res["ok"]:
+            self.assertEqual(res.get("error"), "no_data", m)
+            return
+        h, nxt, every = res["height"], res["next"], res["every"]
+        self.assertEqual((every, nxt % every), (hv.EVERY, 0), m)
+        self.assertTrue(nxt - every <= h < nxt, m)
+        self.assertTrue(hv.MIN_HEIGHT < h <= (NOW - hv.GENESIS_TS) // hv.FASTEST, m)
+        src, avg = res["src"], res["avg"]
+        self.assertIn(src, ("epoch", "period", "nominal"), m)
+        self.assertTrue(avg == hv.TARGET if src == "nominal" else hv.AVG_MIN <= avg <= hv.AVG_MAX, m)
+        self.assertTrue(NOW - hv.MAX_AGE < res["tip"] <= NOW + hv.MAX_FUTURE, m)
+        self.assertGreaterEqual(res["eta"], res["tip"], m)
+        self.assertEqual(res["at"], NOW, m)
+        if "prev" in res:
+            self.assertTrue(1_700_000_000 < res["prev"] <= NOW, m)
+        for k in ("height", "next", "every", "tip", "eta", "at"):
+            self.assertIs(type(res[k]), int, m)
+
+    def test_build_never_raises_and_keeps_invariants(self):
+        r = random.Random(SEED)  # noqa: S311 — нужна повторяемость, а не криптостойкость
+        good = []
+        with mock.patch.object(hv, "_now", lambda: NOW), mock.patch("sys.stderr", io.StringIO()):
+            for i in range(CASES):
+                hv._st = hv._State()
+                hv.START_TS.clear()
+                hv.START_TS[840_000] = 1_713_571_767
+                with mock.patch.object(hv, "_fetch", network(r)):
+                    res = hv.build()
+                self.check(i, dict(res))
+                if res["ok"]:
+                    good.append({**res, "now": NOW})
+        # Генератор должен давать и годные ответы, и отказы — иначе он ничего не проверяет.
+        self.assertGreater(len(good), CASES // 10)
+        self.assertLess(len(good), CASES)
+        self.__class__.good = good
+
+    @unittest.skipUnless(shutil.which("node"), "нужен Node 22.18+")
+    def test_every_ok_reply_is_accepted_by_the_app(self):
+        if not getattr(self.__class__, "good", None):
+            self.test_build_never_raises_and_keeps_invariants()
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
+            json.dump(self.__class__.good, f)
+        try:
+            script = (
+                "import { readFileSync } from 'node:fs';"
+                f"import {{ validHalving }} from {json.dumps(os.path.join(ROOT, 'src/lib/halving.ts'))};"
+                "const all = JSON.parse(readFileSync(process.argv[1], 'utf8'));"
+                "const bad = all.filter((h) => !validHalving(h));"
+                "console.log(JSON.stringify({ n: all.length, bad: bad.slice(0, 3) }));"
+            )
+            out = subprocess.run(["node", "--input-type=module", "-e", script, f.name],
+                                 capture_output=True, text=True, timeout=60, check=True)
+            got = json.loads(out.stdout)
+            self.assertEqual(got["n"], len(self.__class__.good))
+            self.assertEqual(got["bad"], [], "приложение отвергло ответ сервера")
+        finally:
+            os.unlink(f.name)
+
+
+if __name__ == "__main__":
+    unittest.main()

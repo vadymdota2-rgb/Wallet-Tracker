@@ -16,17 +16,17 @@ interface Props {
 }
 
 export class Boundary extends Component<Props, { failed: boolean }> {
-  state = { failed: false };
+  override state = { failed: false };
 
   static getDerivedStateFromError(): { failed: boolean } {
     return { failed: true };
   }
 
-  componentDidCatch(error: unknown): void {
+  override componentDidCatch(error: unknown): void {
     console.error(`[${this.props.name}]`, error);
   }
 
-  render(): ReactNode {
+  override render(): ReactNode {
     return this.state.failed ? (this.props.fallback ?? null) : this.props.children;
   }
 }

@@ -31,6 +31,13 @@ from __future__ import annotations
 
 import http.client
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, TypedDict
+
+# Literal и NotRequired нужны только проверке типов (mypy): NotRequired есть
+# лишь с Python 3.11, а на сервере может стоять 3.8–3.10. Аннотации здесь —
+# строки (from __future__ import annotations), при запуске их никто не читает.
+if TYPE_CHECKING:
+    from typing import Literal, NotRequired
 import json
 import re
 import sys
@@ -71,11 +78,29 @@ START_TS = {840_000: 1713571767}
 _UA = {"User-Agent": "wallet-tracker/1.0"}
 
 
+class Reply(TypedDict):
+    """Ответ /api/halving — тот же договор, что HalvingReply в
+    src/lib/halving.ts и образец tests/fixtures/halving.json."""
+
+    ok: bool
+    error: NotRequired[str]
+    height: NotRequired[int]
+    next: NotRequired[int]
+    every: NotRequired[int]
+    avg: NotRequired[float]
+    src: NotRequired[Literal["epoch", "period", "nominal"]]
+    tip: NotRequired[int]
+    eta: NotRequired[int]
+    at: NotRequired[int]
+    prev: NotRequired[int]
+    now: NotRequired[int]
+
+
 @dataclass
 class _State:
     """Кэш модуля; меняется только под _lock."""
 
-    hit: tuple[float, dict] | None = None  # (monotonic, ответ)
+    hit: tuple[float, Reply] | None = None  # (monotonic, ответ)
     err_at: float = float("-inf")  # когда источники последний раз молчали (monotonic)
 
 
@@ -86,7 +111,7 @@ _busy = threading.Event()  # идёт фоновая сборка
 _dl = threading.local()  # срок текущей сборки (monotonic) — свой у каждого потока
 
 
-def _no_data() -> dict:
+def _no_data() -> Reply:
     return {"ok": False, "error": "no_data"}
 
 
@@ -108,7 +133,8 @@ def _fetch(url: str, limit: int = 1 << 20) -> bytes | None:
         return None
     try:
         with urllib.request.urlopen(urllib.request.Request(url, headers=_UA), timeout=min(HOP, left)) as r:
-            return r.read(limit)
+            data: bytes = r.read(limit)
+            return data
     except (OSError, ValueError, http.client.HTTPException):  # URLError и таймаут — тоже OSError
         return None
 
@@ -177,7 +203,7 @@ def _tip() -> tuple[int, int]:
     return 0, 0
 
 
-def build() -> dict:
+def build() -> Reply:
     """Собрать ответ из сети и положить в кэш — не дольше BUDGET секунд."""
     _dl.at = time.monotonic() + BUDGET
     try:
@@ -186,7 +212,7 @@ def build() -> dict:
         _dl.at = 0.0
 
 
-def _build() -> dict:
+def _build() -> Reply:
     with _lock:
         hit = _st.hit
     height, tip_ts = _tip()
@@ -201,7 +227,8 @@ def _build() -> dict:
         tip_ts = t_now
     start = height // EVERY * EVERY
     nxt = start + EVERY
-    avg, src = TARGET, "nominal"
+    avg = TARGET
+    src: Literal["epoch", "period", "nominal"] = "nominal"
     start_ts = _start_ts(start)
     # Среднее за эпоху — когда в ней уже хотя бы один период сложности.
     if start_ts and height - start >= RETARGET and tip_ts > start_ts:
@@ -216,7 +243,7 @@ def _build() -> dict:
             t = 0.0
         if AVG_MIN <= t <= AVG_MAX:
             avg, src = t, "period"
-    res = {"ok": True, "height": height, "next": nxt, "every": EVERY, "avg": round(avg, 1), "src": src,
+    res: Reply = {"ok": True, "height": height, "next": nxt, "every": EVERY, "avg": round(avg, 1), "src": src,
            "tip": tip_ts, "eta": int(tip_ts + (nxt - height) * avg), "at": t_now}
     if start_ts:
         res["prev"] = start_ts  # время блока прошлого халвинга
@@ -234,7 +261,7 @@ def _bg() -> None:
         _busy.clear()
 
 
-def halving_data() -> dict:
+def halving_data() -> Reply:
     """Ответ /api/halving: из кэша, свежий собирается в фоне."""
     with _lock:
         hit = _st.hit
@@ -267,7 +294,7 @@ def halving_data() -> dict:
         return build()
 
 
-def reply() -> dict:
+def reply() -> Reply:
     """Ответ для HTTP: now — время ответа (at — время сборки, оно до пяти
     минут старше); по нему приложение поправляет часы телефона."""
     return {**halving_data(), "now": _now()}
