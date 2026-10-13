@@ -16,10 +16,9 @@ import { t } from "../i18n/t";
 import { num, pct, px, shortAddr, usd } from "../lib/format";
 import { haptic } from "../lib/telegram";
 import { CoinIcon } from "../components/CoinIcon";
-import { EtfGlyph, GaugeGlyph, Row, TopGlyph } from "../components/ui";
+import { BtcGlyph, EtfGlyph, GaugeGlyph, Row, TopGlyph } from "../components/ui";
 import type { CalEv, DigestItem, DigestSignal } from "../lib/types";
 import { FLAG, allDay, calTitle } from "./CalendarScreen";
-import { BtcGlyph } from "../components/HalvingCard";
 
 type Lang = Parameters<typeof t>[0];
 

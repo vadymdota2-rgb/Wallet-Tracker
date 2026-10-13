@@ -1068,6 +1068,18 @@ export function DomGlyph({ size = 25 }: { size?: number }) {
   );
 }
 
+/** Знак биткоина рисунком: символа ₿ (Unicode 10) нет в шрифтах старых
+ *  Android — там был бы пустой квадрат. */
+export function BtcGlyph({ size = 14 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true">
+      <g transform="rotate(14 12 12)" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M8 5h5.2a3 3 0 010 6H8zm0 6h6a3 3 0 010 6H8zm0-6v12M10 3v2m3-2v2m-3 12v2m3-2v2" />
+      </g>
+    </svg>
+  );
+}
+
 /** Здание с колоннами — фонды и крупные держатели. */
 export function EtfGlyph({ size = 25 }: { size?: number }) {
   return (

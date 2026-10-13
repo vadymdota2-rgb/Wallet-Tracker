@@ -582,11 +582,11 @@ export const fetchHalving = () =>
     call<HalvingReply>("/api/halving", { timeout: 12_000 }).then((r) => {
       if (!validHalving(r)) return null;
       // Поправку на часы считаем по свежему ответу, пока задержка — секунды.
-      return { ...r, skew: clockSkew(r.now, Date.now() / 1000) };
-    }), good).then((r) => {
-    if (r) writeSaved(HALVING_SAVED, { all: { at: Date.now(), v: r } });
-    return r;
-  });
+      const v = { ...r, skew: clockSkew(r.now, Date.now() / 1000) };
+      // На устройство — только свежий ответ, а не тот же из памяти при каждом повторе.
+      writeSaved(HALVING_SAVED, { all: { at: Date.now(), v } });
+      return v;
+    }), good);
 export const peekHalving = () => peek<HalvingReply | null>("/api/halving", 5 * 60_000) ?? savedHalving();
 
 /** Все монеты с фьючерсами — список раз в час; последний лежит на устройстве. */

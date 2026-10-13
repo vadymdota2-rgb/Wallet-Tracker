@@ -1,5 +1,5 @@
 /**
- * Отсчёт до халвинга биткоина — внизу бокового меню, на месте даты сборки.
+ * Отсчёт до халвинга биткоина — внизу бокового меню.
  *
  * Сервер раз в пять минут отдаёт высоту и время последнего блока, среднее
  * время блока за всю эпоху (от прошлого халвинга) и готовую оценку момента
@@ -24,22 +24,13 @@ import { useNow } from "../lib/tick";
 import { fetchHalving, peekHalving } from "../lib/api";
 import { halvingView } from "../lib/halving";
 import type { HalvingReply } from "../lib/types";
+import { BtcGlyph } from "./ui";
 
-const pad = (n: number) => String(n).padStart(2, "0");
-
-/** Знак биткоина рисунком: символа ₿ (Unicode 10) нет в шрифтах старых Android — там был бы пустой квадрат. */
-export function BtcGlyph() {
-  return (
-    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-      <g transform="rotate(14 12 12)" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M8 5h5.2a3 3 0 010 6H8zm0 6h6a3 3 0 010 6H8zm0-6v12M10 3v2m3-2v2m-3 12v2m3-2v2" />
-      </g>
-    </svg>
-  );
-}
 // Чуть дольше, чем ответ живёт в памяти (5 мин): иначе каждый второй
 // повтор брал бы из памяти тот же ответ и обновление шло бы раз в 10 минут.
 const REFRESH_MS = 5 * 60_000 + 5_000;
+
+const pad = (n: number) => String(n).padStart(2, "0");
 /** Сатоши → BTC без лишних нулей: 3,125 и 1,5625, а на будущих эпохах — до 8 знаков. */
 const btc = (sats: number) => num(sats / 1e8, 8);
 

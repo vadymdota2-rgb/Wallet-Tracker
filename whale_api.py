@@ -8,6 +8,7 @@ import calendar
 import hashlib
 import html
 import hmac
+import http.client
 import json
 import math
 import os
@@ -11478,13 +11479,17 @@ def _halving_start_ts(h: int) -> int:
     ts = _HALVING_START_TS.get(h)
     if ts:
         return ts
+    ts = 0
     try:
         req = urllib.request.Request(f"https://mempool.space/api/block-height/{h}", headers={"User-Agent": "wallet-tracker/1.0"})
         with urllib.request.urlopen(req, timeout=8) as r:
-            bh = r.read().decode().strip()
-        blk = get_json(f"https://mempool.space/api/block/{bh}", 8) or {}
-        ts = int(blk.get("timestamp") or 0)
-    except (urllib.error.URLError, ValueError, OSError, TypeError):
+            bh = r.read(200).decode().strip()
+        # В адрес следующего запроса идёт только настоящий хеш блока.
+        if re.fullmatch(r"[0-9a-f]{64}", bh):
+            blk = get_json(f"https://mempool.space/api/block/{bh}", 8)
+            if isinstance(blk, dict):
+                ts = int(blk.get("timestamp") or 0)
+    except (urllib.error.URLError, ValueError, OSError, TypeError, http.client.HTTPException):
         ts = 0
     if ts > 1_700_000_000:
         _HALVING_START_TS[h] = ts
@@ -11510,10 +11515,10 @@ def _halving_build() -> dict:
             try:
                 req = urllib.request.Request(url, headers={"User-Agent": "wallet-tracker/1.0"})
                 with urllib.request.urlopen(req, timeout=8) as r:
-                    height = int(r.read().decode().strip())
+                    height = int(r.read(64).decode().strip())
                 if height > 800_000:
                     break
-            except (urllib.error.URLError, ValueError, OSError):
+            except (urllib.error.URLError, ValueError, OSError, http.client.HTTPException):
                 pass
             height = 0
     if not height:
@@ -11535,7 +11540,8 @@ def _halving_build() -> dict:
         if 480 <= t <= 720:
             avg, src = t, "epoch"
     if src == "nominal":
-        adj = get_json("https://mempool.space/api/v1/difficulty-adjustment", 8) or {}
+        adj = get_json("https://mempool.space/api/v1/difficulty-adjustment", 8)
+        adj = adj if isinstance(adj, dict) else {}
         try:
             t = float(adj.get("timeAvg") or 0) / 1000
             if 480 <= t <= 720:

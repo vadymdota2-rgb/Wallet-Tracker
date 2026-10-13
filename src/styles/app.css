@@ -228,7 +228,7 @@
 .hv-t { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #f7b955; }
 .hv-coin {
   display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
-  background: #f7931a; color: #fff; font-size: 13px; font-weight: 900; letter-spacing: 0;
+  background: #f7931a; color: #fff;
   box-shadow: 0 0 12px rgb(247 147 26 / 0.55);
 }
 .hv-clock { display: grid; grid-template-columns: 1.35fr 1fr 1fr 1fr; gap: 6px; }
@@ -242,7 +242,7 @@
 .hv-cell small { color: var(--dim); font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .hv-done { margin: 0 0 10px; padding: 6px 10px; border-radius: 10px; background: rgb(247 147 26 / 0.14); color: #fcd34d; font-size: 12px; font-weight: 700; }
 .hv-now { margin: 0; font-size: 18px; font-weight: 800; color: #f7b955; text-align: center; }
-.hv-bar { position: relative; height: 6px; margin-top: 12px; border-radius: 3px; background: rgb(255 255 255 / 0.07); overflow: hidden; direction: ltr; }
+.hv-bar { height: 6px; margin-top: 12px; border-radius: 3px; background: rgb(255 255 255 / 0.07); overflow: hidden; direction: ltr; }
 .hv-bar i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #f7931a, #fcd34d); box-shadow: 0 0 10px rgb(247 147 26 / 0.6); }
 .hv-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; margin-top: 6px; color: var(--dim); font-size: 11px; font-variant-numeric: tabular-nums; }
 /* На узком экране строка переносится целыми кусками, а не «62,5% / эпохи». */

@@ -657,18 +657,20 @@ _hv = read(f"{APP}/src/components/HalvingCard.tsx")
 # Автотесты халвинга (приложение и сервер) — гоняем прямо здесь: красные
 # тесты не должны уехать в main.
 import subprocess as _sp
-_t_js = _sp.run(["node", "--test", "tests/halving.test.ts"], cwd=APP, capture_output=True, text=True)
+_t_js = _sp.run(["node", "--test", "tests/halving.test.ts", "tests/tick.test.ts"], cwd=APP, capture_output=True, text=True)
 _t_py = _sp.run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"], cwd=APP, capture_output=True, text=True)
 say("халвинг: автотесты расчёта в приложении (node --test) и сервера (unittest, без сети) зелёные",
     _t_js.returncode == 0 and "# fail 0" in _t_js.stdout and _t_py.returncode == 0 and "OK" in _t_py.stderr
     and "halvingView(h, local + (h.skew ?? 0))" in _hv and 'role="progressbar"' in _hv and 'role="timer"' in _hv
     and "export function subsidySats(" in read(f"{APP}/src/lib/halving.ts")
     and '{**halving_data(), "now": now()}' in api and "HALVING_ERR_TTL = 60.0" in api and "_halving_cold = threading.Lock()" in api
-    and 'if hit and not failed and "halving" not in _liq_busy:' in api and "<BtcGlyph />" in _hv and "₿</span>" not in _hv
+    and 'if hit and not failed and "halving" not in _liq_busy:' in api and "<BtcGlyph />" in _hv and "₿" not in _hv
     and "donePct: left > 0 ? Math.min(99.9," in read(f"{APP}/src/lib/halving.ts")
     and ".hv-avg { margin: 2px 0 0; color: var(--dim);" in read(f"{APP}/src/styles/app.css")
     and '<Boundary name="halving"><HalvingCard /></Boundary>' in appx and "static getDerivedStateFromError()" in read(f"{APP}/src/components/Boundary.tsx")
-    and "opt(r.eta, time)" in read(f"{APP}/src/lib/halving.ts") and 'res["prev"] = start_ts' in api and "aria-labelledby={titleId}" in _hv)
+    and "opt(r.eta, time)" in read(f"{APP}/src/lib/halving.ts") and 'res["prev"] = start_ts' in api and "aria-labelledby={titleId}" in _hv
+    and "if (t - stamp >= 1000) stamp = t;" in read(f"{APP}/src/lib/tick.ts") and 're.fullmatch(r"[0-9a-f]{64}", bh)' in api
+    and "adj = adj if isinstance(adj, dict) else {}" in api and "export function BtcGlyph(" in read(f"{APP}/src/components/ui.tsx"))
 if _t_js.returncode or _t_py.returncode:
     print(_t_js.stdout[-1500:], _t_py.stderr[-1500:])
 # Самоочистка: каждый ключ «wt-…» из кода — в списке KEEP, иначе уборка

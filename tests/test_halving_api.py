@@ -135,6 +135,35 @@ class HalvingTest(unittest.TestCase):
             time.sleep(0.1)
             self.assertEqual(down.calls, calls, "после сбоя минуту не ходим в сеть повторно")
 
+    def test_unexpected_json_shapes_do_not_crash(self):
+        # mempool вернул список там, где ждали объект, — раньше это был
+        # AttributeError и 500 на холодном старте.
+        class Odd(Net):
+            def get_json(self, url, timeout=10.0):
+                self.calls += 1
+                if url.endswith("/api/v1/blocks"):
+                    return [{"height": 1_050_100, "timestamp": TIP}]
+                return ["not", "a", "dict"]
+        r = self.run_with(Odd())
+        self.assertTrue(r["ok"])
+        self.assertEqual((r["src"], r["avg"]), ("nominal", 600.0))
+
+    def test_block_hash_is_validated_before_use(self):
+        seen = []
+
+        class Evil(Net):
+            def urlopen(self, req, timeout=0):
+                url = getattr(req, "full_url", req)
+                if "block-height" in url:
+                    return io.BytesIO(b"../../evil?x=1")
+                return Net.urlopen(self, req, timeout)
+
+            def get_json(self, url, timeout=10.0):
+                seen.append(url)
+                return Net.get_json(self, url, timeout)
+        self.assertEqual(self.run_with(Evil(blocks=[{"height": 1_050_100, "timestamp": TIP}])) ["src"], "nominal")
+        self.assertFalse([u for u in seen if "evil" in u])
+
 
 if __name__ == "__main__":
     unittest.main()

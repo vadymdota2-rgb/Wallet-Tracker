@@ -32,12 +32,28 @@ function subscribe(fn: () => void): () => void {
   };
 }
 
+/**
+ * Снимок часов для React (экспорт — для тестов).
+ *
+ * Пока подписчиков нет, таймер стоит и stamp не обновляется: открыли меню
+ * через час — первый кадр отсчёта считался от времени часовой давности и
+ * через секунду прыгал. Без таймера берём «сейчас»; поправка не чаще раза
+ * в секунду, чтобы два вызова в одной отрисовке давали одно значение.
+ */
+export function nowSnapshot(): number {
+  if (!timer) {
+    const t = Date.now();
+    if (t - stamp >= 1000) stamp = t;
+  }
+  return Math.floor(stamp / 1000);
+}
+
 /** Текущее время в секундах эпохи, обновляется раз в секунду. */
 export function useNow(): number {
   return useSyncExternalStore(
     subscribe,
-    () => Math.floor(stamp / 1000),
+    nowSnapshot,
     // На сервере рендера нет, но тип требует снимок — берём то же время.
-    () => Math.floor(stamp / 1000),
+    nowSnapshot,
   );
 }
