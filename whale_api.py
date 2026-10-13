@@ -11545,6 +11545,8 @@ def _halving_build() -> dict:
     eta = int(tip_ts + (nxt - height) * avg)
     res = {"ok": True, "height": height, "next": nxt, "every": HALVING_EVERY, "avg": round(avg, 1), "src": src,
            "tip": tip_ts, "eta": eta, "at": t_now}
+    if start_ts:
+        res["prev"] = start_ts  # время блока прошлого халвинга
     with _liq_lock:
         _halving_cache["all"] = (time.monotonic(), res)
     return res

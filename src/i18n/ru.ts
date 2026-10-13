@@ -960,6 +960,7 @@ export const ru: Dict = {
   hv_d: "дн",
   hv_epoch: "{p} эпохи",
   hv_h: "ч",
+  hv_happened: "🎉 Халвинг состоялся {d} — блок {n}",
   hv_m: "мин",
   hv_now: "Халвинг наступает",
   hv_reward: "Награда за блок",

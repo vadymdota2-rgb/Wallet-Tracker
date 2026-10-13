@@ -240,6 +240,7 @@
 .hv-cell b { font-size: 22px; line-height: 1; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
 .hv-cell.big b { color: #f7b955; text-shadow: 0 0 14px rgb(247 147 26 / 0.45); }
 .hv-cell small { color: var(--dim); font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.hv-done { margin: 0 0 10px; padding: 6px 10px; border-radius: 10px; background: rgb(247 147 26 / 0.14); color: #fcd34d; font-size: 12px; font-weight: 700; }
 .hv-now { margin: 0; font-size: 18px; font-weight: 800; color: #f7b955; text-align: center; }
 .hv-bar { position: relative; height: 6px; margin-top: 12px; border-radius: 3px; background: rgb(255 255 255 / 0.07); overflow: hidden; direction: ltr; }
 .hv-bar i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #f7931a, #fcd34d); box-shadow: 0 0 10px rgb(247 147 26 / 0.6); }

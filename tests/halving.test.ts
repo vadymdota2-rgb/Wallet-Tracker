@@ -101,3 +101,21 @@ test("halvingView: подпись процента не показывает 100
   // Обычное округление в остальном: 62,485 → 62,5, а не 62,4.
   assert.equal(halvingView(REAL, REAL.tip + 60).donePct, 62.5);
 });
+
+test("validHalving: повреждённые необязательные поля — ответ отбрасывается", () => {
+  // Каждый из них раньше проходил проверку и ронял отрисовку или отсчёт.
+  const bad: Record<string, unknown>[] = [
+    { eta: "abc" }, { eta: 1e30 }, { eta: Number.NaN }, { tip: "x" }, { now: -1 }, { prev: true },
+    { skew: "5" }, { skew: Number.POSITIVE_INFINITY }, { skew: 400 * 86400 }, { src: "magic" },
+  ];
+  for (const b of bad) assert.equal(validHalving({ ...REAL, ...b }), false, JSON.stringify(b));
+  // А пустые — нормально: старый формат ответа.
+  assert.equal(validHalving({ ...REAL, eta: undefined, tip: null, skew: 0, prev: 1713571767 }), true);
+});
+
+test("halvingView: две недели после халвинга карточка говорит, что он состоялся", () => {
+  const after = { ...REAL, height: 1050100, next: 1260000, prev: 1838900000, tip: 1838900000 + 100 * 600, eta: undefined };
+  assert.equal(halvingView(after, after.prev + 3 * 86400).justHappened, after.prev);
+  assert.equal(halvingView(after, after.prev + 15 * 86400).justHappened, null);
+  assert.equal(halvingView(REAL, REAL.at).justHappened, null);
+});

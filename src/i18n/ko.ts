@@ -960,6 +960,7 @@ export const ko: Dict = {
   hv_d: "일",
   hv_epoch: "에포크의 {p}",
   hv_h: "시간",
+  hv_happened: "🎉 반감기가 {d}에 있었습니다 — 블록 {n}",
   hv_m: "분",
   hv_now: "지금 반감기",
   hv_reward: "블록 보상",

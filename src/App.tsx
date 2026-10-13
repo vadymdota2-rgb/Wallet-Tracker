@@ -13,6 +13,7 @@ import { PremBadge } from "./components/PremBadge";
 import { LockScreen, LockSheet, useLocked } from "./components/LockScreen";
 import { LOCK_OPEN_SCREENS } from "./lib/upsell";
 import { HalvingCard } from "./components/HalvingCard";
+import { Boundary } from "./components/Boundary";
 import { t, bare } from "./i18n/t";
 import { ensureLang, isRtl, normalizeLang } from "./i18n";
 import { setLocale } from "./lib/format";
@@ -325,7 +326,7 @@ export default function App() {
             ))}
             {/* Внизу меню — отсчёт до халвинга; дата сборки здесь была
                 служебной и человеку ничего не говорила. */}
-            <HalvingCard />
+            <Boundary name="halving"><HalvingCard /></Boundary>
           </Drawer>
         </div>
       ) : null}

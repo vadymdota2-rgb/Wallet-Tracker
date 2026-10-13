@@ -960,6 +960,7 @@ export const ja: Dict = {
   hv_d: "日",
   hv_epoch: "エポックの{p}",
   hv_h: "時間",
+  hv_happened: "🎉 半減期は{d}に到来 — ブロック{n}",
   hv_m: "分",
   hv_now: "半減期です",
   hv_reward: "ブロック報酬",

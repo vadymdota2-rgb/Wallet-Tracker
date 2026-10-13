@@ -960,6 +960,7 @@ export const ar: Dict = {
   hv_d: "يوم",
   hv_epoch: "{p} من الدورة",
   hv_h: "ساعة",
+  hv_happened: "🎉 حدث التنصيف في {d} — الكتلة {n}",
   hv_m: "دقيقة",
   hv_now: "التنصيف الآن",
   hv_reward: "مكافأة الكتلة",

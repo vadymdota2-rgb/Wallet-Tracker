@@ -666,7 +666,9 @@ say("халвинг: автотесты расчёта в приложении (
     and '{**halving_data(), "now": now()}' in api and "HALVING_ERR_TTL = 60.0" in api and "_halving_cold = threading.Lock()" in api
     and 'if hit and not failed and "halving" not in _liq_busy:' in api and "<BtcGlyph />" in _hv and "₿</span>" not in _hv
     and "donePct: left > 0 ? Math.min(99.9," in read(f"{APP}/src/lib/halving.ts")
-    and ".hv-avg { margin: 2px 0 0; color: var(--dim);" in read(f"{APP}/src/styles/app.css"))
+    and ".hv-avg { margin: 2px 0 0; color: var(--dim);" in read(f"{APP}/src/styles/app.css")
+    and '<Boundary name="halving"><HalvingCard /></Boundary>' in appx and "static getDerivedStateFromError()" in read(f"{APP}/src/components/Boundary.tsx")
+    and "opt(r.eta, time)" in read(f"{APP}/src/lib/halving.ts") and 'res["prev"] = start_ts' in api and "aria-labelledby={titleId}" in _hv)
 if _t_js.returncode or _t_py.returncode:
     print(_t_js.stdout[-1500:], _t_py.stderr[-1500:])
 # Самоочистка: каждый ключ «wt-…» из кода — в списке KEEP, иначе уборка

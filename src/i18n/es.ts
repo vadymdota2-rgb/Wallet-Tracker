@@ -960,6 +960,7 @@ export const es: Dict = {
   hv_d: "días",
   hv_epoch: "{p} de la época",
   hv_h: "h",
+  hv_happened: "🎉 El halving fue el {d}: bloque {n}",
   hv_m: "min",
   hv_now: "Halving ahora",
   hv_reward: "Recompensa por bloque",

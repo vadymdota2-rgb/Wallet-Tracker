@@ -66,6 +66,7 @@ class HalvingTest(unittest.TestCase):
         avg = (TIP - 1713571767) / (H - 840_000)
         self.assertAlmostEqual(r["avg"], avg, places=1)
         self.assertEqual(r["eta"], int(TIP + (1_050_000 - H) * avg))
+        self.assertEqual(r["prev"], 1713571767)
 
     def test_early_epoch_uses_difficulty_period(self):
         h = 1_050_100

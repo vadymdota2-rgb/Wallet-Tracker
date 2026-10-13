@@ -960,6 +960,7 @@ export const vi: Dict = {
   hv_d: "ngày",
   hv_epoch: "{p} chu kỳ",
   hv_h: "giờ",
+  hv_happened: "🎉 Halving đã diễn ra ngày {d} — khối {n}",
   hv_m: "phút",
   hv_now: "Halving ngay bây giờ",
   hv_reward: "Phần thưởng khối",

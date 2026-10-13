@@ -960,6 +960,7 @@ export const id: Dict = {
   hv_d: "hari",
   hv_epoch: "{p} dari epoch",
   hv_h: "jam",
+  hv_happened: "🎉 Halving terjadi pada {d} — blok {n}",
   hv_m: "mnt",
   hv_now: "Halving sekarang",
   hv_reward: "Imbalan blok",

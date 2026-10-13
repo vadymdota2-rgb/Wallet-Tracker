@@ -16,7 +16,7 @@
  * Отсчёт идёт по часам сервера: телефон с неверным временем иначе показал
  * бы неверный отсчёт.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
 import { num, pct } from "../lib/format";
@@ -37,13 +37,16 @@ export function BtcGlyph() {
     </svg>
   );
 }
-const REFRESH_MS = 5 * 60_000;
+// Чуть дольше, чем ответ живёт в памяти (5 мин): иначе каждый второй
+// повтор брал бы из памяти тот же ответ и обновление шло бы раз в 10 минут.
+const REFRESH_MS = 5 * 60_000 + 5_000;
 /** Сатоши → BTC без лишних нулей: 3,125 и 1,5625, а на будущих эпохах — до 8 знаков. */
 const btc = (sats: number) => num(sats / 1e8, 8);
 
 export function HalvingCard() {
   const lang = useApp((s) => s.lang);
   const local = useNow();
+  const titleId = useId();
   const [h, setH] = useState<HalvingReply | null>(() => peekHalving() ?? null);
 
   useEffect(() => {
@@ -72,17 +75,21 @@ export function HalvingCard() {
   if (!h) return null;
   // Часы телефона могут врать на минуты и часы — считаем по часам сервера.
   const v = halvingView(h, local + (h.skew ?? 0));
-  const etaText = dateFmt ? dateFmt.format(new Date(v.eta * 1000)) : new Date(v.eta * 1000).toISOString().slice(0, 10);
+  const day = (ts: number) => (dateFmt ? dateFmt.format(new Date(ts * 1000)) : new Date(ts * 1000).toISOString().slice(0, 10));
+  const etaText = day(v.eta);
   const labels = [t(lang, "hv_d"), t(lang, "hv_h"), t(lang, "hv_m"), t(lang, "hv_s")];
   const epochText = t(lang, "hv_epoch", { p: pct(v.donePct, 1, false) });
   const clock = v.parts.map((n, i) => `${i === 0 ? num(n) : pad(n)} ${labels[i]}`).join(" ");
 
   return (
-    <section className="hv" aria-label={t(lang, "hv_title")}>
-      <p className="hv-t">
+    <section className="hv" aria-labelledby={titleId}>
+      <h2 className="hv-t" id={titleId}>
         <span className="hv-coin" aria-hidden="true"><BtcGlyph /></span>
         {t(lang, "hv_title")}
-      </p>
+      </h2>
+      {v.justHappened ? (
+        <p className="hv-done">{t(lang, "hv_happened", { d: day(v.justHappened), n: num(h.next - h.every) })}</p>
+      ) : null}
       {v.left > 0 ? (
         // role="timer": читалка экрана не объявляет каждую секунду, а целиком
         // читает отсчёт, когда до него дошли.

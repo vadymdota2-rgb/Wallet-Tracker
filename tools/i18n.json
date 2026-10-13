@@ -26746,5 +26746,23 @@
     "ja": "1ブロック{m}分で計算",
     "ko": "블록당 {m}분 기준",
     "zh": "按每个区块 {m} 分钟计算"
+  },
+  "hv_happened": {
+    "ru": "🎉 Халвинг состоялся {d} — блок {n}",
+    "en": "🎉 The halving happened on {d} — block {n}",
+    "uk": "🎉 Халвінг відбувся {d} — блок {n}",
+    "de": "🎉 Das Halving war am {d} — Block {n}",
+    "es": "🎉 El halving fue el {d}: bloque {n}",
+    "fr": "🎉 Le halving a eu lieu le {d} — bloc {n}",
+    "pt": "🎉 O halving aconteceu em {d} — bloco {n}",
+    "pl": "🎉 Halving nastąpił {d} — blok {n}",
+    "tr": "🎉 Yarılanma {d} tarihinde gerçekleşti — blok {n}",
+    "id": "🎉 Halving terjadi pada {d} — blok {n}",
+    "vi": "🎉 Halving đã diễn ra ngày {d} — khối {n}",
+    "hi": "🎉 हॉल्विंग {d} को हुई — ब्लॉक {n}",
+    "ar": "🎉 حدث التنصيف في {d} — الكتلة {n}",
+    "ja": "🎉 半減期は{d}に到来 — ブロック{n}",
+    "ko": "🎉 반감기가 {d}에 있었습니다 — 블록 {n}",
+    "zh": "🎉 减半已于 {d} 完成 — 区块 {n}"
   }
 }

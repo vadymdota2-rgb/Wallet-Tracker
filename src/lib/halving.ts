@@ -7,6 +7,8 @@ import type { HalvingReply } from "./types";
 
 /** Награда за блок в эпоху 0 — 50 BTC в сатоши. */
 const SUBSIDY0 = 5_000_000_000;
+/** Сколько после халвинга карточка говорит «состоялся». */
+const JUST_HAPPENED = 14 * 86400;
 
 /**
  * Ответ сервера пригоден для отсчёта. Мусор (обрезанный JSON, старый формат,
@@ -16,10 +18,17 @@ export function validHalving(h: unknown): h is HalvingReply {
   if (!h || typeof h !== "object") return false;
   const r = h as Partial<HalvingReply>;
   const int = (v: unknown) => typeof v === "number" && Number.isInteger(v) && v > 0;
+  // Unix-время в разумных пределах: с 2020 по 2096 год.
+  const time = (v: unknown) => typeof v === "number" && v > 1_600_000_000 && v < 4_000_000_000;
+  // Необязательные поля, если есть, — тоже числа: строка в eta рисовала
+  // «NaN дн», а new Date(NaN) в формате даты роняла всё приложение.
+  const opt = (v: unknown, ok: (x: unknown) => boolean) => v === undefined || v === null || ok(v);
   return r.ok === true && int(r.height) && int(r.next) && int(r.every)
     && r.next! % r.every! === 0 && r.next! - r.every! <= r.height! && r.height! < r.next!
     && typeof r.avg === "number" && r.avg >= 300 && r.avg <= 1200
-    && typeof r.at === "number" && r.at > 1_600_000_000;
+    && time(r.at) && opt(r.eta, time) && opt(r.tip, time) && opt(r.now, time) && opt(r.prev, time)
+    && opt(r.skew, (v) => typeof v === "number" && Number.isFinite(v) && Math.abs(v) < 366 * 86400)
+    && opt(r.src, (v) => v === "epoch" || v === "period" || v === "nominal");
 }
 
 /**
@@ -55,6 +64,8 @@ export interface HalvingView {
   /** Награда сейчас и после халвинга, сатоши. */
   reward: number;
   rewardNext: number;
+  /** Прошлый халвинг был меньше двух недель назад — его время, иначе null. */
+  justHappened: number | null;
 }
 
 /** Всё, что рисует карточка, — на момент now (unix-секунды по часам сервера). */
@@ -62,6 +73,8 @@ export function halvingView(h: HalvingReply, now: number): HalvingView {
   // Старый ответ (до поля eta) — считаем от момента ответа.
   const tip = h.tip ?? h.at;
   const eta = h.eta ?? h.at + (h.next - h.height) * h.avg;
+  // Прошлый халвинг — недавно (две недели): карточка скажет, что он состоялся.
+  const since = h.prev ? now - h.prev : Infinity;
   const left = Math.max(0, Math.floor(eta - now));
   // Текущая высота: последний известный блок плюс вышедшие с тех пор по
   // среднему. До халвинга — не выше next − 1, как бы ни ошиблась оценка.
@@ -80,5 +93,6 @@ export function halvingView(h: HalvingReply, now: number): HalvingView {
     eta,
     reward: subsidySats(epoch),
     rewardNext: subsidySats(epoch + 1),
+    justHappened: h.prev && since >= 0 && since < JUST_HAPPENED ? h.prev : null,
   };
 }

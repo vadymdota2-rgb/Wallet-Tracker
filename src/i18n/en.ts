@@ -959,6 +959,7 @@ export const en = {
   hv_d: "days",
   hv_epoch: "{p} of the epoch",
   hv_h: "hrs",
+  hv_happened: "🎉 The halving happened on {d} — block {n}",
   hv_m: "min",
   hv_now: "Halving now",
   hv_reward: "Block reward",

@@ -960,6 +960,7 @@ export const tr: Dict = {
   hv_d: "gün",
   hv_epoch: "dönemin {p}'i",
   hv_h: "sa",
+  hv_happened: "🎉 Yarılanma {d} tarihinde gerçekleşti — blok {n}",
   hv_m: "dk",
   hv_now: "Halving şimdi",
   hv_reward: "Blok ödülü",

@@ -960,6 +960,7 @@ export const zh: Dict = {
   hv_d: "天",
   hv_epoch: "周期已过{p}",
   hv_h: "时",
+  hv_happened: "🎉 减半已于 {d} 完成 — 区块 {n}",
   hv_m: "分",
   hv_now: "减半进行中",
   hv_reward: "区块奖励",

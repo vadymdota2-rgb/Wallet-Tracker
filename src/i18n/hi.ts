@@ -960,6 +960,7 @@ export const hi: Dict = {
   hv_d: "दिन",
   hv_epoch: "युग का {p}",
   hv_h: "घं",
+  hv_happened: "🎉 हॉल्विंग {d} को हुई — ब्लॉक {n}",
   hv_m: "मि",
   hv_now: "हॉल्विंग अभी",
   hv_reward: "ब्लॉक इनाम",
