@@ -30,14 +30,6 @@
 from __future__ import annotations
 
 import http.client
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, TypedDict
-
-# Literal и NotRequired нужны только проверке типов (mypy): NotRequired есть
-# лишь с Python 3.11, а на сервере может стоять 3.8–3.10. Аннотации здесь —
-# строки (from __future__ import annotations), при запуске их никто не читает.
-if TYPE_CHECKING:
-    from typing import Literal, NotRequired
 import json
 import re
 import sys
@@ -45,6 +37,14 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, TypedDict
+
+# Literal и NotRequired нужны только проверке типов (mypy): NotRequired есть
+# лишь с Python 3.11, а на сервере может стоять 3.8–3.10. Аннотации здесь —
+# строки (from __future__ import annotations), при запуске их никто не читает.
+if TYPE_CHECKING:  # pragma: no cover — только для mypy, при запуске не выполняется
+    from typing import Literal, NotRequired
 
 EVERY = 210_000
 # Целевое время блока по правилам биткоина, с.
