@@ -24,6 +24,21 @@
 заканчивается за 20 секунд, а не за сумму таймаутов всех адресов (раньше
 это было до минуты — дольше, чем ждёт nginx).
 
+Защита от атак через источник (взломан mempool или подменён ответ):
+  - запросы — только https и только к трём известным адресам; перенаправления
+    не выполняются: взломанный источник не отправит сервер ни на внутренние
+    адреса машины (SSRF), ни на чужие;
+  - сертификат проверяется (обычный контекст ssl);
+  - ответ — не больше заданного размера и не дольше своего срока целиком
+    (источник, цедящий по байту, не держит поток часами);
+  - разбор — без бесконечностей, NaN, чисел из тысяч цифр и сверхглубокой
+    вложенности: всё это раньше роняло сборку (OverflowError,
+    RecursionError) или жгло процессор и превращало каждый запрос в попытку;
+  - любой сбой сборки — сбой источника: минута паузы, а не повтор на каждый
+    запрос;
+  - в журнал — без управляющих символов и не длиннее строки: текст ошибки
+    от источника не подделает записи журнала.
+
 Модуль ни от чего в whale_api не зависит: сеть — через _fetch (тесты
 подменяют только её), часы — через _now.
 """
@@ -31,11 +46,14 @@ from __future__ import annotations
 
 import http.client
 import json
+import math
 import re
+import ssl
 import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypedDict
@@ -76,6 +94,41 @@ MIN_LEFT = 0.2
 START_TS = {840_000: 1713571767}
 
 _UA = {"User-Agent": "wallet-tracker/1.0"}
+# Куда модулю можно ходить — и больше никуда.
+HOSTS = frozenset({"mempool.space", "blockstream.info", "blockchain.info"})
+SCHEMES = frozenset({"https"})
+# Самая длинная строка в журнале от модуля.
+LOG_MAX = 300
+# Ответ читается кусками по CHUNK байт. Целое в JSON — не длиннее INT_MAX
+# цифр: разбор числа из миллиона цифр — секунды процессора (CVE-2020-10735).
+CHUNK = 16_384
+INT_MAX = 20
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Перенаправление не выполняется: 3xx — это ошибка, а не новый адрес."""
+
+    def redirect_request(self, *args: object, **kwargs: object) -> None:
+        return None
+
+
+# Своя «открывалка»: без перенаправлений, сертификат проверяется.
+_opener = urllib.request.build_opener(_NoRedirect, urllib.request.HTTPSHandler(context=ssl.create_default_context()))
+
+
+def _allowed(url: str) -> bool:
+    """https и известный адрес — иначе в сеть не идём."""
+    try:
+        u = urllib.parse.urlsplit(url)
+    except ValueError:
+        return False
+    return u.scheme in SCHEMES and u.hostname in HOSTS and not u.username and not u.password
+
+
+def _log(msg: str) -> None:
+    """В журнал — одной строкой, без управляющих символов и не длиннее LOG_MAX."""
+    clean = "".join(c if c.isprintable() else "?" for c in msg)
+    print(f"halving: {clean[:LOG_MAX]}", file=sys.stderr)
 
 
 class Reply(TypedDict):
@@ -127,23 +180,56 @@ def _now() -> int:
 def _fetch(url: str, limit: int = 1 << 20) -> bytes | None:
     """GET; ответ не больше limit байт. Любая ошибка сети — None.
     Внутри сборки — не дольше, чем осталось от её бюджета."""
+    if not _allowed(url):
+        return None
     dl = getattr(_dl, "at", 0.0)
     left = dl - time.monotonic() if dl else HOP
     if left <= MIN_LEFT:
         return None
+    hop = min(HOP, left)
+    end = time.monotonic() + hop
     try:
-        with urllib.request.urlopen(urllib.request.Request(url, headers=_UA), timeout=min(HOP, left)) as r:
-            data: bytes = r.read(limit)
-            return data
+        with _opener.open(urllib.request.Request(url, headers=_UA), timeout=hop) as r:
+            # По кускам и со своим сроком: таймаут сокета — на каждый кусок,
+            # и источник, цедящий по байту, держал бы поток часами.
+            buf = bytearray()
+            while len(buf) < limit:
+                if time.monotonic() > end:
+                    return None
+                chunk: bytes = r.read1(min(CHUNK, limit - len(buf)))
+                if not chunk:
+                    break
+                buf += chunk
+            return bytes(buf)
     except (OSError, ValueError, http.client.HTTPException):  # URLError и таймаут — тоже OSError
         return None
+
+
+def _finite(text: str) -> float:
+    """Число из JSON — только конечное: 1e400 и Infinity не проходят."""
+    v = float(text)
+    if not math.isfinite(v):
+        raise ValueError("не конечное число")
+    return v
+
+
+def _short_int(text: str) -> int:
+    """Целое из JSON — не длиннее INT_MAX цифр."""
+    if len(text) > INT_MAX:
+        raise ValueError("слишком длинное число")
+    return int(text)
+
+
+def _no_constant(name: str) -> float:
+    raise ValueError(f"{name} в JSON")
 
 
 def _json(url: str) -> object:
     raw = _fetch(url)
     try:
-        return json.loads(raw.decode()) if raw else None
-    except ValueError:
+        return json.loads(raw.decode(), parse_float=_finite, parse_int=_short_int,
+                          parse_constant=_no_constant) if raw else None
+    except (ValueError, RecursionError):  # RecursionError — сверхглубокая вложенность
         return None
 
 
@@ -168,7 +254,7 @@ def _start_ts(h: int) -> int:
     blk = _json(f"https://mempool.space/api/block/{bh}")
     try:
         ts = int(blk.get("timestamp") or 0) if isinstance(blk, dict) else 0
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         ts = 0
     # Запоминаем навсегда только правдоподобное: после 2023 года и не из
     # будущего. Иначе мусор от источника жил бы до перезапуска API и всю
@@ -193,7 +279,7 @@ def _tip() -> tuple[int, int]:
             h = int(blocks[0].get("height") or 0)
             if _plausible(h):
                 return h, int(blocks[0].get("timestamp") or 0)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             pass
     for url in ("https://mempool.space/api/blocks/tip/height", "https://blockstream.info/api/blocks/tip/height",
                 "https://blockchain.info/q/getblockcount"):
@@ -204,10 +290,20 @@ def _tip() -> tuple[int, int]:
 
 
 def build() -> Reply:
-    """Собрать ответ из сети и положить в кэш — не дольше BUDGET секунд."""
+    """Собрать ответ из сети и положить в кэш — не дольше BUDGET секунд.
+
+    Любая непредвиденная ошибка — сбой источника: минута паузы, как когда
+    источники молчат. Иначе ответ, который роняет разбор, превращал бы
+    каждый запрос в новую попытку — и в нагрузку на сервер."""
     _dl.at = time.monotonic() + BUDGET
     try:
         return _build()
+    except Exception as e:  # noqa: BLE001 — граница модуля: наружу ошибка не выходит
+        _log(f"сборка: {type(e).__name__}: {e}")
+        with _lock:
+            _st.err_at = time.monotonic()
+            hit = _st.hit
+        return hit[1] if hit else _no_data()
     finally:
         _dl.at = 0.0
 
@@ -217,7 +313,7 @@ def _build() -> Reply:
         hit = _st.hit
     height, tip_ts = _tip()
     if not height:
-        print("halving: нет высоты блока ни от одного источника", file=sys.stderr)
+        _log("нет высоты блока ни от одного источника")
         with _lock:
             _st.err_at = time.monotonic()
         return hit[1] if hit else _no_data()
@@ -239,7 +335,7 @@ def _build() -> Reply:
         adj = _json("https://mempool.space/api/v1/difficulty-adjustment")
         try:
             t = float(adj.get("timeAvg") or 0) / 1000 if isinstance(adj, dict) else 0.0
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             t = 0.0
         if AVG_MIN <= t <= AVG_MAX:
             avg, src = t, "period"
@@ -256,7 +352,7 @@ def _bg() -> None:
     try:
         build()
     except Exception as e:  # noqa: BLE001 — фоновый поток не должен умирать молча
-        print(f"halving: {e}", file=sys.stderr)
+        _log(str(e))
     finally:
         _busy.clear()
 
@@ -278,7 +374,7 @@ def halving_data() -> Reply:
                 # Поток не запустился (кончились потоки) — флаг снимаем, иначе
                 # «идёт сборка» висело бы вечно и ответ больше не обновлялся.
                 _busy.clear()
-                print(f"halving: фон не запущен: {e}", file=sys.stderr)
+                _log(f"фон не запущен: {e}")
         if hit:
             return hit[1]
         if failed:

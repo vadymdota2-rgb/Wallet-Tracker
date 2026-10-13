@@ -7,7 +7,7 @@
  */
 import { initData } from "./telegram";
 import { forget, peek, peekAny, remember } from "./memo";
-import { HALVING_TTL_MS, clockSkew, validHalving, type HalvingReply } from "./halving";
+import { HALVING_TTL_MS, clockSkew, pickHalving, validHalving, type HalvingReply } from "./halving";
 import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
   LiqCoinsReply, FngReply, DomReply, EtfReply, FundRow, LsRow, MutationResult,
@@ -575,14 +575,14 @@ function savedHalving(): HalvingReply | null {
   // отсчёт нарисовал бы «Халвинг наступает» до ответа сервера.
   if (!hit || !validHalving(hit.v) || Date.now() - hit.at > 30 * 24 * 3600_000) return null;
   if (hit.v.eta && hit.v.eta * 1000 < Date.now()) return null;
-  return hit.v;
+  return pickHalving(hit.v);
 }
 export const fetchHalving = () =>
   remember<HalvingReply | null>("/api/halving", HALVING_TTL_MS, () =>
     call<HalvingReply>("/api/halving", { timeout: 12_000 }).then((r) => {
       if (!validHalving(r)) return null;
       // Поправку на часы считаем по свежему ответу, пока задержка — секунды.
-      const v = { ...r, skew: clockSkew(r.now, Date.now() / 1000) };
+      const v = { ...pickHalving(r), skew: clockSkew(r.now, Date.now() / 1000) };
       // На устройство — только свежий ответ, а не тот же из памяти при каждом повторе.
       writeSaved(HALVING_SAVED, { all: { at: Date.now(), v } });
       return v;

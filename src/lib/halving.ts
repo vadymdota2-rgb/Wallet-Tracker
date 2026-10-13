@@ -64,6 +64,19 @@ export function validHalving(h: unknown): h is HalvingReply {
     && opt(r.src, (v) => v === "epoch" || v === "period" || v === "nominal");
 }
 
+const FIELDS = ["ok", "height", "next", "every", "avg", "src", "tip", "eta", "at", "now", "skew", "prev"] as const;
+
+/**
+ * Только известные поля ответа (уже проверенного validHalving): лишнее от
+ * подменённого сервера или из хранилища — мегабайт мусора, «__proto__» — не
+ * идёт ни в память, ни на устройство.
+ */
+export function pickHalving(r: HalvingReply): HalvingReply {
+  const out: Record<string, unknown> = {};
+  for (const k of FIELDS) if (r[k] !== undefined && r[k] !== null) out[k] = r[k];
+  return out as unknown as HalvingReply;
+}
+
 /**
  * Поправка на часы телефона: на сколько секунд время сервера впереди.
  * Мелочь (задержка сети, пара секунд расхождения) не трогаем — иначе отсчёт

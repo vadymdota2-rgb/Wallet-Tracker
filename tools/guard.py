@@ -695,7 +695,14 @@ say("халвинг: среднее за эпоху, отсчёт от посл�
     and "halvingView(h, local + (h.skew ?? 0))" in _hv and 'role="progressbar"' in _hv and 'role="timer"' in _hv
     and "aria-labelledby={titleId}" in _hv and "<BtcGlyph />" in _hv and "₿" not in _hv
     and ".hv-avg { margin: 2px 0 0; color: var(--dim);" in _hvc
-    and "BUDGET = 20.0" in _hvs and "timeout=min(HOP, left)" in _hvs
+    and "BUDGET = 20.0" in _hvs and "hop = min(HOP, left)" in _hvs
+    # Защита от атак через источник: только https и три адреса, без
+    # перенаправлений, числа конечные и короткие, срок на весь ответ.
+    and 'HOSTS = frozenset({"mempool.space", "blockstream.info", "blockchain.info"})' in _hvs
+    and "build_opener(_NoRedirect, " in _hvs and "if not _allowed(url):" in _hvs and "urlopen" not in _hvs
+    and "parse_float=_finite, parse_int=_short_int," in _hvs and "except (ValueError, RecursionError):" in _hvs
+    and "if time.monotonic() > end:" in _hvs and _hvs.count("print(") == 1
+    and os.path.exists(f"{APP}/tests/test_halving_security.py") and "pickHalving(r)" in read(f"{APP}/src/lib/api.ts")
     # Срок ответа на сервере и в памяти приложения — один (5 минут).
     and "TTL = 300.0" in _hvs and "export const HALVING_TTL_MS = 5 * 60_000;" in _hvl
     and "class _State:" in _hvs and "_cache" not in _hvs

@@ -179,7 +179,7 @@ class HalvingTest(unittest.TestCase):
             raise TimeoutError("hung")
 
         with mock.patch.object(hv, "BUDGET", 0.6), mock.patch.object(hv, "HOP", 0.25), \
-                mock.patch.object(hv.urllib.request, "urlopen", hang), mock.patch("sys.stderr", io.StringIO()):
+                mock.patch.object(hv._opener, "open", hang), mock.patch("sys.stderr", io.StringIO()):
             t0 = time.monotonic()
             self.assertFalse(hv.build()["ok"])
             # Без бюджета — 7 запросов по 0,25 с; с бюджетом — не дольше ~0,6 с
@@ -204,8 +204,8 @@ class HalvingTest(unittest.TestCase):
 
     def test_fetch_never_raises(self):
         for exc in (urllib.error.URLError("x"), OSError("x"), http.client.IncompleteRead(b""), ValueError("x")):
-            with mock.patch.object(hv.urllib.request, "urlopen", side_effect=exc):
-                self.assertIsNone(hv._fetch("https://example.invalid/"))
+            with mock.patch.object(hv._opener, "open", side_effect=exc):
+                self.assertIsNone(hv._fetch("https://mempool.space/api/x"))
 
     # ── Испорченные ответы источников: каждая ветка разбора ──────────────
 
@@ -270,17 +270,17 @@ class HalvingTest(unittest.TestCase):
             seen["timeout"], seen["ua"] = timeout, req.get_header("User-agent")
             return Resp(b"x" * 100)
 
-        with mock.patch.object(hv.urllib.request, "urlopen", fake):
-            self.assertEqual(hv._fetch("https://x/", 10), b"x" * 10)
+        with mock.patch.object(hv._opener, "open", fake):
+            self.assertEqual(hv._fetch("https://mempool.space/x", 10), b"x" * 10)
             self.assertEqual(seen["timeout"], hv.HOP)
             self.assertEqual(seen["ua"], "wallet-tracker/1.0")
             hv._dl.at = time.monotonic() + 1.0  # внутри сборки — не дольше остатка
             try:
-                hv._fetch("https://x/")
+                hv._fetch("https://mempool.space/x")
                 self.assertLessEqual(seen["timeout"], 1.0)
                 hv._dl.at = time.monotonic() + 0.1  # остатка нет — в сеть не идём
                 seen.clear()
-                self.assertIsNone(hv._fetch("https://x/"))
+                self.assertIsNone(hv._fetch("https://mempool.space/x"))
                 self.assertEqual(seen, {})
             finally:
                 hv._dl.at = 0.0

@@ -7,7 +7,6 @@ validHalving из src/lib/halving.ts запускается через Node на
 (договор между двумя языками). Генератор детерминированный — нарушение
 воспроизводится по номеру случая.
 """
-import io
 import json
 import os
 import random
@@ -27,6 +26,11 @@ CASES = 3000
 NOW = 1_791_881_300
 JUNK = [None, True, False, "", "x", "1e9", -1, 0, 0.5, 10**40, -(10**12), [], {}, [1, 2], {"a": 1}, "∞"]
 KEYS = set(hv.Reply.__annotations__)
+# Враждебные тела: числа вне float, NaN/Infinity, глубокая вложенность, нули.
+EVIL = [b'[{"height":1e400,"timestamp":1e400}]', b'{"timeAvg":1e400,"timestamp":-1e400}', b"1e400",
+        b'[{"height":NaN,"timestamp":Infinity}]', b'{"timeAvg":-Infinity,"timestamp":NaN}', b"Infinity",
+        b"[" * 100_000 + b"]" * 100_000, b'{"a":' * 50_000 + b"1" + b"}" * 50_000, b"\x00" * 64,
+        b'[{"height":' + b"9" * 5000 + b"}]", b'"\ud800"', b"\xef\xbb\xbf[]"]
 
 
 def junk(r: random.Random) -> object:
@@ -38,6 +42,8 @@ def body(r: random.Random, value: object) -> bytes | None:
     roll = r.random()
     if roll < 0.06:
         return None
+    if roll < 0.09:
+        return r.choice(EVIL)
     if roll < 0.12:
         return bytes(r.getrandbits(8) for _ in range(r.randint(0, 40)))
     raw = json.dumps(value).encode()
@@ -64,9 +70,10 @@ def network(r: random.Random):
             return hsh.encode() if r.random() < 0.9 else body(r, junk(r))
         if "/api/block/" in url:
             return body(r, {"timestamp": start_ts})
-        if r.random() < 0.85:
+        roll = r.random()
+        if roll < 0.8:
             return str(tip_h).encode()[:limit]
-        return body(r, junk(r))
+        return r.choice([b"1e400", b"9" * 5000, b"Infinity", b"NaN", b"-0"]) if roll < 0.86 else body(r, junk(r))
 
     return fetch
 
@@ -101,8 +108,8 @@ class FuzzTest(unittest.TestCase):
 
     def test_build_never_raises_and_keeps_invariants(self):
         r = random.Random(SEED)  # noqa: S311 — нужна повторяемость, а не криптостойкость
-        good = []
-        with mock.patch.object(hv, "_now", lambda: NOW), mock.patch("sys.stderr", io.StringIO()):
+        good, logs = [], []
+        with mock.patch.object(hv, "_now", lambda: NOW), mock.patch.object(hv, "_log", logs.append):
             for i in range(CASES):
                 hv._st = hv._State()
                 hv.START_TS.clear()
@@ -112,6 +119,8 @@ class FuzzTest(unittest.TestCase):
                 self.check(i, dict(res))
                 if res["ok"]:
                     good.append({**res, "now": NOW})
+        # Общий перехват в build — страховка: ни один ответ сети до него не доходит.
+        self.assertEqual([m for m in logs if m.startswith("сборка")], [])
         # Генератор должен давать и годные ответы, и отказы — иначе он ничего не проверяет.
         self.assertGreater(len(good), CASES // 10)
         self.assertLess(len(good), CASES)

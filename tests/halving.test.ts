@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { clockSkew, clockSpeech, halvingView, subsidySats, unitLabel, validHalving, type HalvingReply } from "../src/lib/halving.ts";
+import { clockSkew, clockSpeech, halvingView, pickHalving, subsidySats, unitLabel, validHalving, type HalvingReply } from "../src/lib/halving.ts";
 
 /** Копия ответа без перечисленных полей — «поля нет», а не «поле = undefined». */
 function omit<T extends object, K extends keyof T>(o: T, ...keys: K[]): Omit<T, K> {
@@ -221,4 +221,21 @@ test("старый WebView без Intl.ListFormat и formatToParts — запа�
     proto["formatToParts"] = parts;
   }
   assert.equal(unitLabel("ru", "day", 544), "дн.");
+});
+
+test("атака через ответ: строки, скрипты, __proto__ и лишние поля не проходят", () => {
+  const evil: unknown[] = [
+    { ...REAL, height: "971219" }, { ...REAL, eta: "<img src=x onerror=alert(1)>" },
+    { ...REAL, src: "<script>alert(1)</script>" }, { ...REAL, avg: Infinity }, { ...REAL, skew: 1e308 },
+    { ...REAL, at: [1791881255] }, { ...REAL, ok: "true" }, JSON.parse('{"__proto__":{"ok":true}}'),
+  ];
+  for (const e of evil) assert.equal(validHalving(e), false, JSON.stringify(e));
+  // Годный ответ с мусором сверху: остаются только известные поля, прототип не тронут.
+  const raw = JSON.parse(JSON.stringify(REAL).replace("{", '{"__proto__":{"polluted":1},"junk":"xxxxxxxxx",'));
+  assert.equal(validHalving(raw), true);
+  const kept = pickHalving(raw);
+  assert.deepEqual(kept, REAL);
+  assert.equal(Object.getPrototypeOf(kept), Object.prototype);
+  assert.equal(({} as Record<string, unknown>)["polluted"], undefined);
+  assert.deepEqual(pickHalving({ ...REAL, prev: null as unknown as number }), REAL);
 });
