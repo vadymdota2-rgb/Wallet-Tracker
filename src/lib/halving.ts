@@ -34,6 +34,8 @@ export const HALVING_TTL_MS = 5 * 60_000;
 const SUBSIDY0 = 5_000_000_000;
 /** Сколько после халвинга карточка говорит «состоялся». */
 const JUST_HAPPENED = 14 * 86400;
+/** Время генезис-блока биткоина (3 января 2009). */
+const GENESIS_TS = 1_231_006_505;
 
 /**
  * Ответ сервера пригоден для отсчёта. Мусор (обрезанный JSON, старый формат,
@@ -49,10 +51,13 @@ export function validHalving(h: unknown): h is HalvingReply {
   // «NaN дн», а new Date(NaN) в формате даты роняла всё приложение.
   const opt = (v: unknown, ok: (x: unknown) => boolean) => v === undefined || v === null || ok(v);
   // Среднее — шире, чем пускает сервер (480–720 с): лишь бы не мусор.
-  return r.ok === true && int(r.height) && int(r.next) && int(r.every)
+  // Высота — не больше, чем вышло бы при блоке раз в 5 минут с генезиса
+  // (как и на сервере): 99 миллионов от сломанного источника не пройдут.
+  return r.ok === true && int(r.height) && int(r.next) && int(r.every) && time(r.at)
+    && r.height <= (r.at - GENESIS_TS) / 300
     && r.next % r.every === 0 && r.next - r.every <= r.height && r.height < r.next
     && typeof r.avg === "number" && r.avg >= 300 && r.avg <= 1200
-    && time(r.at) && opt(r.eta, time) && opt(r.tip, time) && opt(r.now, time) && opt(r.prev, time)
+    && opt(r.eta, time) && opt(r.tip, time) && opt(r.now, time) && opt(r.prev, time)
     && opt(r.skew, (v) => typeof v === "number" && Number.isFinite(v) && Math.abs(v) < 366 * 86400)
     && opt(r.src, (v) => v === "epoch" || v === "period" || v === "nominal");
 }

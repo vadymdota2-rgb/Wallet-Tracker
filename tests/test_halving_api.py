@@ -84,6 +84,16 @@ class HalvingTest(unittest.TestCase):
         r = self.run_with(Net(blocks=[{"height": H, "timestamp": NOW + 99_999}]))
         self.assertEqual(r["tip"], NOW)
 
+    def test_implausible_height_is_rejected(self):
+        # mempool прислал 99 миллионов — не верим, берём запасной источник.
+        r = self.run_with(Net(blocks=[{"height": 99_000_000, "timestamp": TIP}]))
+        self.assertEqual((r["height"], r["tip"]), (H, NOW))
+        # И запасные врут — данных нет, а не бессмыслица в карточке.
+        with mock.patch("sys.stderr", io.StringIO()):
+            hv._st = hv._State()
+            r = self.run_with(Net(blocks=[{"height": 99_000_000, "timestamp": TIP}], tip_height=99_000_000))
+        self.assertFalse(r["ok"])
+
     def test_fallback_height_source(self):
         r = self.run_with(Net(blocks="garbage"))
         self.assertTrue(r["ok"])

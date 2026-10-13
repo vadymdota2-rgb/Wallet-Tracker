@@ -46,6 +46,10 @@ RETARGET = 2016
 AVG_MIN, AVG_MAX = 480.0, 720.0
 # Высота ниже — мусор в ответе (такой уже была в 2023 году).
 MIN_HEIGHT = 800_000
+# Время генезис-блока. Выше, чем блок раз в 5 минут с него, высота быть не
+# может (реальность — раз в ~10): источник, приславший 99 миллионов, врёт.
+GENESIS_TS = 1231006505
+FASTEST = 300
 TTL = 300.0
 # Все источники молчат — минуту отвечаем «нет данных», не пытаясь снова:
 # иначе каждое открытие меню ждало бы четыре таймаута.
@@ -137,20 +141,26 @@ def _start_ts(h: int) -> int:
     return ts
 
 
+def _plausible(h: int) -> bool:
+    """Высота в возможных пределах: не меньше уже пройденной и не больше,
+    чем успело бы выйти при блоке раз в 5 минут с генезиса."""
+    return MIN_HEIGHT < h <= (_now() - GENESIS_TS) // FASTEST
+
+
 def _tip() -> tuple[int, int]:
     """Высота и время последнего блока; время 0 — не знаем."""
     blocks = _json("https://mempool.space/api/v1/blocks")
     if isinstance(blocks, list) and blocks and isinstance(blocks[0], dict):
         try:
             h = int(blocks[0].get("height") or 0)
-            if h > MIN_HEIGHT:
+            if _plausible(h):
                 return h, int(blocks[0].get("timestamp") or 0)
         except (TypeError, ValueError):
             pass
     for url in ("https://mempool.space/api/blocks/tip/height", "https://blockstream.info/api/blocks/tip/height",
                 "https://blockchain.info/q/getblockcount"):
         h = _int(url)
-        if h > MIN_HEIGHT:
+        if _plausible(h):
             return h, 0
     return 0, 0
 

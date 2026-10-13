@@ -19,6 +19,8 @@ test("validHalving: мусор не годится", () => {
     null, undefined, "x", 42, {}, { ...REAL, ok: false }, { ...REAL, height: 0 }, { ...REAL, height: 971219.5 },
     { ...REAL, next: 1049999 }, { ...REAL, height: 1050000 }, { ...REAL, height: 839999 }, { ...REAL, every: 0 },
     { ...REAL, avg: 0 }, { ...REAL, avg: Number.NaN }, { ...REAL, avg: 5000 }, { ...REAL, at: 0 },
+    // Высота, которой не может быть: больше, чем при блоке раз в 5 минут с 2009 года.
+    { ...REAL, height: 99_000_000, next: 99_120_000 },
   ];
   for (const b of bad) assert.equal(validHalving(b), false, JSON.stringify(b));
 });

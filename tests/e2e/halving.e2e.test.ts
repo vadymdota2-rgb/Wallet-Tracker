@@ -6,7 +6,9 @@
  * интернета) и проверяет то, что видит человек: отсчёт, дату, полосу,
  * заглушку, сбои, узкий экран, арабский, доступность.
  *
- * Время в браузере закреплено, поэтому отсчёт сверяется до секунды.
+ * Время в браузере закреплено, поэтому отсчёт сверяется до секунды. Шрифт —
+ * тот же IBM Plex Sans, что у людей (из fonts/ проекта вместо Google Fonts):
+ * с запасным шрифтом строки переносились бы иначе, чем на телефоне.
  * Нужен Chromium для Playwright: npx playwright install chromium.
  */
 import { after, before, describe, test } from "node:test";
@@ -18,9 +20,13 @@ import { fileURLToPath } from "node:url";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 
 const HTML = fileURLToPath(new URL("../../html/", import.meta.url));
+const FONTS = fileURLToPath(new URL("../../fonts/", import.meta.url));
+const FACES = (base: string) => [["Regular", 400], ["Medium", 500], ["SemiBold", 600], ["Bold", 700]]
+  .map(([n, w]) => `@font-face{font-family:"IBM Plex Sans";font-weight:${w};font-display:block;src:url(${base}/__fonts/IBMPlexSans-${n}.ttf) format("truetype")}`)
+  .join("");
 const TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml",
-  ".png": "image/png", ".webp": "image/webp", ".json": "application/json", ".woff2": "font/woff2", ".ico": "image/x-icon",
+  ".png": "image/png", ".webp": "image/webp", ".json": "application/json", ".woff2": "font/woff2", ".ttf": "font/ttf", ".ico": "image/x-icon",
 };
 
 // Настоящий ответ сервера от 13.10.2026 — общий образец с тестами сервера
@@ -40,6 +46,10 @@ let browser: Browser;
 before(async () => {
   server = createServer(async (req, res) => {
     const path = normalize(decodeURIComponent((req.url ?? "/").split("?")[0]!)).replace(/^(\.\.[/\\])+/, "");
+    if (path.startsWith("/__fonts/")) {
+      const font = join(FONTS, path.slice("/__fonts/".length));
+      if (font.startsWith(FONTS)) return void res.writeHead(200, { "Content-Type": TYPES[".ttf"] }).end(await readFile(font));
+    }
     const file = join(HTML, path.endsWith("/") ? "index.html" : path);
     try {
       const body = await readFile(file.startsWith(HTML) ? file : join(HTML, "index.html"));
@@ -84,8 +94,9 @@ async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; er
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => { if (m.type() === "error") logs.push(m.text()); });
   await page.clock.setFixedTime((o.at ?? T) * 1000);
-  // Наружу — ничего: тест не зависит от сети.
-  await ctx.route((url) => !url.href.startsWith(base), (r) => r.abort());
+  // Наружу — ничего: тест не зависит от сети. Google Fonts — подменяем.
+  await ctx.route((url) => !url.href.startsWith(base) && !url.href.startsWith("https://fonts.googleapis.com/"), (r) => r.abort());
+  await ctx.route("https://fonts.googleapis.com/**", (r) => r.fulfill({ contentType: "text/css", body: FACES(base) }));
   await ctx.route(`${base}/api/**`, (r) => r.fulfill({ contentType: "application/json", body: '{"ok":false}' }));
   await ctx.route(`${base}/api/halving`, async (r) => {
     if (o.delay) await new Promise((ok) => setTimeout(ok, o.delay));
@@ -112,6 +123,7 @@ async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; er
     if (a.saved) localStorage.setItem("wt-halving-v1", JSON.stringify(a.saved));
   }, { lang: o.lang ?? "ru", saved: o.saved ?? null, breakDate: !!o.breakDate });
   await page.goto(base + "/");
+  await page.evaluate(() => document.fonts.ready);
   await page.locator(".burger").click();
   await page.locator(".drawer-row").first().waitFor();
   return { ctx, page, errors, console: logs };
@@ -122,6 +134,8 @@ describe("карточка халвинга", () => {
     const { ctx, page, errors } = await open();
     const card = page.locator(".hv:not(.hv-skel)");
     await card.waitFor();
+    // Тест видит тот же шрифт, что человек, — иначе проверки вёрстки врут.
+    assert.equal(await page.evaluate(() => document.fonts.check('700 22px "IBM Plex Sans"')), true);
     assert.equal(sp(await page.locator(".hv-clock").getAttribute("aria-label")), CLOCK_RU);
     assert.deepEqual(await page.locator(".hv-cell b").allInnerTexts(), ["544", "03", "45", "23"]);
     assert.equal(sp(await page.locator(".hv-eta").innerText()), "≈ 9 апреля 2028 г.");
@@ -171,11 +185,16 @@ describe("карточка халвинга", () => {
     await ctx.close();
   });
 
-  test("пока ответа нет — заглушка того же места, потом карточка", async () => {
+  test("пока ответа нет — заглушка той же высоты, потом карточка", async () => {
     const { ctx, page } = await open({ delay: 1500 });
-    assert.equal(await page.locator(".hv.hv-skel[aria-busy=true]").count(), 1);
+    const skel = page.locator(".hv.hv-skel[aria-busy=true]");
+    assert.equal(await skel.count(), 1);
+    const before = await skel.evaluate((e) => e.getBoundingClientRect().height);
     await page.locator(".hv:not(.hv-skel)").waitFor({ timeout: 5000 });
     assert.equal(await page.locator(".hv").count(), 1);
+    // Карточка встаёт на место заглушки, не вырастая: разница — меньше 4 px.
+    const after = await page.locator(".hv").evaluate((e) => e.getBoundingClientRect().height);
+    assert.ok(Math.abs(after - before) < 4, `заглушка ${before} px, карточка ${after} px`);
     await ctx.close();
   });
 
@@ -233,6 +252,10 @@ describe("карточка халвинга", () => {
         });
       });
       assert.deepEqual(outside, []);
+      // Награда — одной строкой значения: «BTC» не уезжает отдельно.
+      const oneLine = await page.locator(".hv-rw b").evaluate((e) =>
+        e.getBoundingClientRect().height < parseFloat(getComputedStyle(e).fontSize) * 1.8);
+      assert.ok(oneLine, "значение награды в одну строку");
       await ctx.close();
     });
   }

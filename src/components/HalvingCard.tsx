@@ -80,6 +80,12 @@ export function HalvingCard() {
           {[0, 1, 2, 3].map((i) => <div key={i} className={i === 0 ? "hv-cell hv-days" : "hv-cell"}><b>&nbsp;</b><small>&nbsp;</small></div>)}
         </div>
         <div className="hv-bar" aria-hidden="true" />
+        {/* Строки под полосой — те же блоки, что у карточки: заглушка той же
+            высоты, и при ответе ничего не прыгает. */}
+        <div className="hv-meta" aria-hidden="true"><span className="hv-ph">&nbsp;</span><span className="hv-ph">&nbsp;</span></div>
+        <p className="hv-eta" aria-hidden="true"><span className="hv-ph">&nbsp;</span></p>
+        <p className="hv-avg" aria-hidden="true"><span className="hv-ph">&nbsp;</span></p>
+        <p className="hv-rw" aria-hidden="true"><span className="hv-ph">&nbsp;</span></p>
       </section>
     );
   }
