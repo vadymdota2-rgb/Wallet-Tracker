@@ -40,23 +40,31 @@ import urllib.error
 import urllib.request
 
 EVERY = 210_000
+# Целевое время блока по правилам биткоина, с.
+TARGET = 600.0
+# Насколько блок по правилам сети может быть «из будущего» (2 часа), и
+# старше какого последнего блока не бывает (сутки без блоков — сбой источника).
+MAX_FUTURE, MAX_AGE = 7200, 86400
 # Период сложности: столько блоков эпохи нужно, чтобы её среднему верить.
 RETARGET = 2016
 # Разумное среднее время блока, с: всё вне — сбой источника, а не сеть.
 AVG_MIN, AVG_MAX = 480.0, 720.0
-# Высота ниже — мусор в ответе (такой уже была в 2023 году).
+# Сеть прошла эту высоту ещё в 2023 году — меньше быть не может.
 MIN_HEIGHT = 800_000
 # Время генезис-блока. Выше, чем блок раз в 5 минут с него, высота быть не
 # может (реальность — раз в ~10): источник, приславший 99 миллионов, врёт.
 GENESIS_TS = 1231006505
 FASTEST = 300
+# Сколько ответ живёт в кэше, с (приложение держит столько же — HALVING_TTL_MS).
 TTL = 300.0
 # Все источники молчат — минуту отвечаем «нет данных», не пытаясь снова:
 # иначе каждое открытие меню ждало бы четыре таймаута.
 ERR_TTL = 60.0
-# Бюджет одной сборки и предел на один запрос, секунды.
+# Бюджет одной сборки и предел на один запрос, секунды. Меньше MIN_LEFT
+# от бюджета — в сеть уже не идём: не хватит и на соединение.
 BUDGET = 20.0
 HOP = 6.0
+MIN_LEFT = 0.2
 # Время блока каждого прошлого халвинга, уже известное (дальше — из сети).
 START_TS = {840_000: 1713571767}
 
@@ -96,12 +104,12 @@ def _fetch(url: str, limit: int = 1 << 20) -> bytes | None:
     Внутри сборки — не дольше, чем осталось от её бюджета."""
     dl = getattr(_dl, "at", 0.0)
     left = dl - time.monotonic() if dl else HOP
-    if left <= 0.2:
+    if left <= MIN_LEFT:
         return None
     try:
         with urllib.request.urlopen(urllib.request.Request(url, headers=_UA), timeout=min(HOP, left)) as r:
             return r.read(limit)
-    except (urllib.error.URLError, OSError, ValueError, http.client.HTTPException):
+    except (OSError, ValueError, http.client.HTTPException):  # URLError и таймаут — тоже OSError
         return None
 
 
@@ -136,9 +144,13 @@ def _start_ts(h: int) -> int:
         ts = int(blk.get("timestamp") or 0) if isinstance(blk, dict) else 0
     except (TypeError, ValueError):
         ts = 0
-    if ts > 1_700_000_000:
+    # Запоминаем навсегда только правдоподобное: после 2023 года и не из
+    # будущего. Иначе мусор от источника жил бы до перезапуска API и всю
+    # эпоху отключал бы среднее по ней.
+    if 1_700_000_000 < ts <= _now():
         START_TS[h] = ts
-    return ts
+        return ts
+    return 0
 
 
 def _plausible(h: int) -> bool:
@@ -185,11 +197,11 @@ def _build() -> dict:
         return hit[1] if hit else _no_data()
     t_now = _now()
     # Время блока из будущего или старше суток — не верим, считаем от «сейчас».
-    if not (t_now - 86400 < tip_ts <= t_now + 7200):
+    if not (t_now - MAX_AGE < tip_ts <= t_now + MAX_FUTURE):
         tip_ts = t_now
     start = height // EVERY * EVERY
     nxt = start + EVERY
-    avg, src = 600.0, "nominal"
+    avg, src = TARGET, "nominal"
     start_ts = _start_ts(start)
     # Среднее за эпоху — когда в ней уже хотя бы один период сложности.
     if start_ts and height - start >= RETARGET and tip_ts > start_ts:
@@ -233,7 +245,13 @@ def halving_data() -> dict:
         # сбое mempool фоновые сборки шли бы одна за другой без перерыва.
         if hit and not failed and not _busy.is_set():
             _busy.set()
-            threading.Thread(target=_bg, daemon=True).start()
+            try:
+                threading.Thread(target=_bg, daemon=True).start()
+            except RuntimeError as e:
+                # Поток не запустился (кончились потоки) — флаг снимаем, иначе
+                # «идёт сборка» висело бы вечно и ответ больше не обновлялся.
+                _busy.clear()
+                print(f"halving: фон не запущен: {e}", file=sys.stderr)
         if hit:
             return hit[1]
         if failed:

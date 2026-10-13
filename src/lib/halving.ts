@@ -34,6 +34,8 @@ export const HALVING_TTL_MS = 5 * 60_000;
 const SUBSIDY0 = 5_000_000_000;
 /** Сколько после халвинга карточка говорит «состоялся». */
 const JUST_HAPPENED = 14 * 86400;
+/** Расхождение часов меньше этого (с) — задержка сети, не неверные часы. */
+const SKEW_MIN = 60;
 /** Время генезис-блока биткоина (3 января 2009). */
 const GENESIS_TS = 1_231_006_505;
 
@@ -70,7 +72,7 @@ export function validHalving(h: unknown): h is HalvingReply {
 export function clockSkew(serverNow: number | undefined, localNow: number): number {
   if (typeof serverNow !== "number" || !Number.isFinite(serverNow)) return 0;
   const d = Math.round(serverNow - localNow);
-  return Math.abs(d) > 60 ? d : 0;
+  return Math.abs(d) > SKEW_MIN ? d : 0;
 }
 
 /** Награда за блок в эпоху n, в сатоши: как в консенсусе, 50 BTC >> n. */

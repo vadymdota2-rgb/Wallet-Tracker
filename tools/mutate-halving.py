@@ -14,7 +14,7 @@ EQUIV = {"граница награды"}  # 50 BTC >> 63 и >> 64 — оба н
 TS = [
     ("v > 0;", "v >= 0;", "int: ноль как высота"),
     ("r.height < r.next", "r.height <= r.next", "высота равна next"),
-    ("Math.abs(d) > 60 ? d : 0", "d", "поправка часов на любую мелочь"),
+    ("Math.abs(d) > SKEW_MIN ? d : 0", "d", "поправка часов на любую мелочь"),
     ("epoch >= 64 ? 0", "epoch >= 63 ? 0", "граница награды"),
     ("Math.floor(eta - now)", "Math.ceil(eta - now)", "округление остатка"),
     ("Math.min(h.next - 1,", "Math.min(h.next,", "высота до халвинга"),
@@ -30,11 +30,11 @@ TS = [
 ]
 PY = [
     ("if hit and not failed and not _busy.is_set():", "if hit and not _busy.is_set():", "пауза после сбоя"),
-    ("tip_ts <= t_now + 7200", "tip_ts <= t_now + 10**9", "время блока из будущего"),
+    ("tip_ts <= t_now + MAX_FUTURE", "tip_ts <= t_now + 10**9", "время блока из будущего"),
     ("height - start >= RETARGET", "height - start >= 0", "среднее в начале эпохи"),
     ("return MIN_HEIGHT < h <= (_now() - GENESIS_TS) // FASTEST", "return MIN_HEIGHT < h", "правдоподобие высоты"),
     ('"eta": int(tip_ts + (nxt - height) * avg)', '"eta": int(t_now + (nxt - height) * avg)', "eta от последнего блока"),
-    ("if left <= 0.2:", "if left <= -1:", "бюджет исчерпан"),
+    ("if left <= MIN_LEFT:", "if left <= -1:", "бюджет исчерпан"),
     ("timeout=min(HOP, left)", "timeout=HOP", "таймаут по остатку бюджета"),
     ('if not re.fullmatch(r"[0-9a-f]{64}", bh):', "if False:", "проверка хеша"),
     ("        _dl.at = 0.0\n", "        pass\n", "срок сборки сбрасывается"),
@@ -43,7 +43,16 @@ PY = [
     ("            _st.err_at = time.monotonic()", "            pass", "запоминание сбоя"),
     ("nxt = start + EVERY", "nxt = start + EVERY + 1", "номер блока халвинга"),
     ('"now": _now()', '"now": 0', "now в ответе"),
-    ("        _busy.clear()", "        pass", "флаг фона снимается"),
+    ("    finally:\n        _busy.clear()", "    finally:\n        pass", "флаг фона снимается"),
+    ("if 1_700_000_000 < ts <= _now():", "if 1_700_000_000 < ts:", "время начала эпохи из будущего"),
+    ("                _busy.clear()\n                print(f\"halving: фон не запущен", "                pass\n                print(f\"halving: фон не запущен", "флаг при сбое запуска потока"),
+]
+TICK = [
+    ("1000 - (t % 1000) + TICK_SLACK", "1000", "тик на границе секунды"),
+    ("timer = subs.size ? setTimeout(tick, untilNextSecond(Date.now())) : undefined;",
+     "timer = setTimeout(tick, untilNextSecond(Date.now()));", "остановка после отписки в тике"),
+    ("if (Math.abs(t - stamp) >= 1000) stamp = t;", "if (t - stamp >= 1000) stamp = t;", "часы назад"),
+    ("if (!timer) timer = setTimeout", "timer = setTimeout", "один таймер на всех"),
 ]
 
 def run(path, cmd, muts):
@@ -68,7 +77,9 @@ def run(path, cmd, muts):
     return alive
 
 a1 = run(f"{ROOT}/src/lib/halving.ts", ["node", "--test", "tests/halving.test.ts"], TS)
+a3 = run(f"{ROOT}/src/lib/tick.ts", ["node", "--test", "tests/tick.test.ts"], TICK)
 a2 = run(f"{ROOT}/wt_halving.py", [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"], PY)
-total = len(TS) + len(PY) - len(EQUIV)
-print(f"ИТОГ: убито {total - len(a1) - len(a2)} из {total}; выжили: {a1 + a2}")
-sys.exit(1 if a1 + a2 else 0)
+alive = a1 + a2 + a3
+total = len(TS) + len(PY) + len(TICK) - len(EQUIV)
+print(f"ИТОГ: убито {total - len(alive)} из {total}; выжили: {alive}")
+sys.exit(1 if alive else 0)

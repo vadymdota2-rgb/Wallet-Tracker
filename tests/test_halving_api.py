@@ -72,10 +72,14 @@ class HalvingTest(unittest.TestCase):
         self.assertEqual(r["prev"], 1713571767)
 
     def test_early_epoch_uses_difficulty_period(self):
-        r = self.run_with(Net(blocks=[{"height": 1_050_100, "timestamp": TIP}], adj={"timeAvg": 570_866}))
+        # Новая эпоха уже идёт: блок 1 050 000 вышел в 1838896000 (его отдаёт
+        # подставная сеть), сейчас — 100 блоков спустя.
+        tip = 1838896000 + 100 * 600
+        r = self.run_with(Net(blocks=[{"height": 1_050_100, "timestamp": tip}], adj={"timeAvg": 570_866}), t=tip + 60)
         self.assertEqual((r["next"], r["src"]), (1_260_000, "period"))
         self.assertAlmostEqual(r["avg"], 570.9, places=1)
         self.assertEqual(hv.START_TS[1_050_000], 1838896000)  # время начала эпохи запомнено
+        self.assertEqual(r["prev"], 1838896000)
 
     def test_first_days_of_epoch_do_not_trust_epoch_average(self):
         # 100 блоков новой эпохи по 10 минут: среднему по ним не верим (мало),
@@ -220,6 +224,23 @@ class HalvingTest(unittest.TestCase):
         with mock.patch.object(hv, "_fetch", net.fetch):
             self.assertEqual(hv._start_ts(1_050_000), 0)
         self.assertNotIn(1_050_000, hv.START_TS)
+
+    def test_start_time_from_the_future_is_not_cached(self):
+        net = Net()
+        net._answer = lambda url: HASH.encode() if "block-height" in url else b'{"timestamp": 9000000000}'
+        with mock.patch.object(hv, "_fetch", net.fetch), mock.patch.object(hv, "_now", lambda: NOW):
+            self.assertEqual(hv._start_ts(1_050_000), 0)
+        self.assertNotIn(1_050_000, hv.START_TS)
+
+    def test_thread_start_failure_releases_the_flag(self):
+        self.run_with(Net(blocks=[{"height": H, "timestamp": TIP}]))
+        at, res = hv._st.hit
+        hv._st.hit = (at - hv.TTL - 1, res)
+        with mock.patch.object(hv.threading.Thread, "start", side_effect=RuntimeError("can't start new thread")), \
+                mock.patch("sys.stderr", io.StringIO()) as err:
+            self.assertEqual(hv.halving_data(), res)  # старый ответ — как обычно
+        self.assertFalse(hv._busy.is_set(), "флаг снят — следующая попытка возможна")
+        self.assertIn("фон не запущен", err.getvalue())
 
     def test_tip_with_bad_height_type_uses_fallback(self):
         r = self.run_with(Net(blocks=[{"height": "abc", "timestamp": TIP}]))
