@@ -202,6 +202,12 @@ class SecurityTest(unittest.TestCase):
         self.assertEqual((r["height"], r["src"], r["tip"]), (1_050_100, "nominal", NOW))
         self.assertFalse([m for m in logs if m.startswith("сборка")])
 
+    def test_height_text_is_ascii_digits_only(self):
+        for raw, want in ((b"1050100", 1_050_100), (b" 1050100\n", 1_050_100), (b"1_050_100", 0), (b"+1050100", 0),
+                          ("١٠٥٠١٠٠".encode(), 0), (b"-5", 0), (b"1e6", 0), (b"9" * 21, 0), (b"", 0), (None, 0)):
+            with mock.patch.object(hv, "_fetch", lambda url, limit=1 << 20, raw=raw: raw):
+                self.assertEqual(hv._int("https://mempool.space/x"), want, raw)
+
     # ── Падение и журнал ─────────────────────────────────────────────────
 
     def test_crash_in_build_pauses_the_sources(self):

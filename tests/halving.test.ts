@@ -24,7 +24,7 @@ test("validHalving: настоящий ответ годится", () => {
 test("validHalving: мусор не годится", () => {
   const bad: unknown[] = [
     null, undefined, "x", 42, {}, { ...REAL, ok: false }, { ...REAL, height: 0 }, { ...REAL, height: 971219.5 },
-    { ...REAL, next: 1049999 }, { ...REAL, height: 1050000 }, { ...REAL, height: 839999 }, { ...REAL, every: 0 },
+    { ...REAL, next: 1049999 }, { ...omit(REAL, "eta"), height: 1050000 }, { ...REAL, height: 839999 }, { ...REAL, every: 0 },
     { ...REAL, avg: 0 }, { ...REAL, avg: Number.NaN }, { ...REAL, avg: 5000 }, { ...REAL, at: 0 },
     // Высота, которой не может быть: больше, чем при блоке раз в 5 минут с 2009 года.
     { ...REAL, height: 99_000_000, next: 99_120_000 },
@@ -145,8 +145,8 @@ test("validHalving: пограничные высоты (найдены мута
   assert.equal(validHalving({ ...omit(REAL, "eta", "tip"), height: 0, next: 210000 }), false);
   // 2 млн — больше, чем при блоке раз в 5 минут с 2009 года (~1,87 млн), но
   // меньше, чем при блоке раз в 30 секунд: граница проверяется точно.
-  assert.equal(validHalving({ ...REAL, height: 2_000_000, next: 2_100_000 }), false);
-  assert.equal(validHalving({ ...REAL, height: 1_800_000, next: 1_890_000 }), true);
+  assert.equal(validHalving({ ...omit(REAL, "eta"), height: 2_000_000, next: 2_100_000 }), false);
+  assert.equal(validHalving({ ...omit(REAL, "eta"), height: 1_800_000, next: 1_890_000 }), true);
 });
 
 test("halvingView: остаток — целые секунды вниз, даже при дробной оценке", () => {
@@ -206,7 +206,8 @@ test("старый WebView без Intl.ListFormat и formatToParts — запа�
   const parts = proto["formatToParts"];
   try {
     delete intl["ListFormat"];
-    assert.equal(clockSpeech("ru", [544, 3, 45, 23]), null);
+    // Язык, для которого формат списка ещё не создан (он кэшируется по языку).
+    assert.equal(clockSpeech("uk", [544, 3, 45, 23]), null);
     delete proto["formatToParts"];
     assert.equal(unitLabel("ru", "day", 544), null);
   } finally {
@@ -238,4 +239,25 @@ test("атака через ответ: строки, скрипты, __proto__ 
   assert.equal(Object.getPrototypeOf(kept), Object.prototype);
   assert.equal(({} as Record<string, unknown>)["polluted"], undefined);
   assert.deepEqual(pickHalving({ ...REAL, prev: null as unknown as number }), REAL);
+});
+
+test("validHalving: поля сходятся между собой, как их считает сервер", () => {
+  // Интервал халвинга — правило сети, а не настройка.
+  assert.equal(validHalving({ ...REAL, every: 105000 }), false);
+  // Последний блок — не старше суток и не дальше 2 часов вперёд от at.
+  const noEta = omit(REAL, "eta");
+  assert.equal(validHalving({ ...noEta, tip: REAL.at - 86_400 }), false);
+  assert.equal(validHalving({ ...noEta, tip: REAL.at - 86_399 }), true);
+  assert.equal(validHalving({ ...noEta, tip: REAL.at + 7200 }), true);
+  assert.equal(validHalving({ ...noEta, tip: REAL.at + 7201 }), false);
+  // eta — от последнего блока по среднему, запас — сутки:
+  // tip + 78 781 × 596,8 = 1 838 897 677,8.
+  assert.equal(validHalving({ ...REAL, eta: 1_838_984_077 }), true);
+  assert.equal(validHalving({ ...REAL, eta: 1_838_984_079 }), false);
+  assert.equal(validHalving({ ...REAL, eta: 1_838_811_279 }), true);
+  assert.equal(validHalving({ ...REAL, eta: 1_838_811_276 }), false);
+  // Отсчёт на 70 лет при высоте 2026 года — подделка.
+  assert.equal(validHalving({ ...REAL, eta: 3_999_999_999 }), false);
+  // Без tip (старый ответ) сверять не с чем — eta принимается.
+  assert.equal(validHalving({ ...omit(REAL, "tip"), eta: 3_999_999_999 }), true);
 });

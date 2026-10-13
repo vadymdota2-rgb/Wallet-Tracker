@@ -38,6 +38,14 @@ const JUST_HAPPENED = 14 * 86400;
 const SKEW_MIN = 60;
 /** Время генезис-блока биткоина (3 января 2009). */
 const GENESIS_TS = 1_231_006_505;
+/** Интервал халвинга — правило консенсуса биткоина, а не настройка сервера. */
+const EVERY = 210_000;
+/** Последний блок старше at на сутки или впереди на 2 часа — так не бывает (как MAX_AGE и MAX_FUTURE на сервере). */
+const TIP_AGE = 86_400;
+const TIP_AHEAD = 7200;
+/** Насколько eta может разойтись с «последний блок + оставшиеся блоки × среднее»:
+ *  сервер шлёт среднее, округлённое до 0,1 с, — это до 3 часов на эпоху. */
+const ETA_SLACK = 86_400;
 
 /**
  * Ответ сервера пригоден для отсчёта. Мусор (обрезанный JSON, старый формат,
@@ -55,13 +63,26 @@ export function validHalving(h: unknown): h is HalvingReply {
   // Среднее — шире, чем пускает сервер (480–720 с): лишь бы не мусор.
   // Высота — не больше, чем вышло бы при блоке раз в 5 минут с генезиса
   // (как и на сервере): 99 миллионов от сломанного источника не пройдут.
-  return r.ok === true && int(r.height) && int(r.next) && int(r.every) && time(r.at)
+  return r.ok === true && int(r.height) && int(r.next) && r.every === EVERY && time(r.at)
     && r.height <= (r.at - GENESIS_TS) / 300
     && r.next % r.every === 0 && r.next - r.every <= r.height && r.height < r.next
     && typeof r.avg === "number" && r.avg >= 300 && r.avg <= 1200
     && opt(r.eta, time) && opt(r.tip, time) && opt(r.now, time) && opt(r.prev, time)
     && opt(r.skew, (v) => typeof v === "number" && Number.isFinite(v) && Math.abs(v) < 366 * 86400)
-    && opt(r.src, (v) => v === "epoch" || v === "period" || v === "nominal");
+    && opt(r.src, (v) => v === "epoch" || v === "period" || v === "nominal")
+    && consistent(r as HalvingReply);
+}
+
+/**
+ * Поля сходятся между собой так, как их считает сервер: каждое по
+ * отдельности правдоподобно, но отсчёт на 70 лет при eta из 2096 года и
+ * высоте 2026-го — подделка или поломка, а не оценка.
+ */
+function consistent(r: HalvingReply): boolean {
+  const { tip, eta } = r;
+  if (typeof tip !== "number") return true;
+  return tip > r.at - TIP_AGE && tip <= r.at + TIP_AHEAD
+    && (typeof eta !== "number" || Math.abs(eta - (tip + (r.next - r.height) * r.avg)) <= ETA_SLACK);
 }
 
 const FIELDS = ["ok", "height", "next", "every", "avg", "src", "tip", "eta", "at", "now", "skew", "prev"] as const;
@@ -98,6 +119,8 @@ export type ClockUnit = "day" | "hour" | "minute" | "second";
 export const CLOCK_UNITS: readonly ClockUnit[] = ["day", "hour", "minute", "second"];
 
 const unitFormats = new Map<string, Intl.NumberFormat | null>();
+/** Список для озвучки — один на язык, а не новый каждую секунду. */
+const listFormats = new Map<string, Intl.ListFormat>();
 
 /** Формат единицы для языка — один на язык, единицу и вид; null — Intl не умеет. */
 function unitFormat(lang: string, unit: ClockUnit, display: "short" | "long"): Intl.NumberFormat | null {
@@ -144,7 +167,9 @@ export function clockSpeech(lang: string, parts: readonly number[]): string | nu
       if (!w) return null;
       words.push(w);
     }
-    return new Intl.ListFormat(lang, { type: "unit", style: "long" }).format(words);
+    let list = listFormats.get(lang);
+    if (!list) listFormats.set(lang, (list = new Intl.ListFormat(lang, { type: "unit", style: "long" })));
+    return list.format(words);
   } catch {
     return null;
   }

@@ -282,6 +282,36 @@ describe("карточка халвинга", () => {
     await ctx.close();
   });
 
+  test("свёрнутое приложение сеть не трогает, вернулись — свежий ответ сразу", async () => {
+    const { ctx, page } = await open();
+    await page.locator(".hv:not(.hv-skel)").waitFor();
+    let calls = 0;
+    page.on("request", (q) => { if (q.url().endsWith("/api/halving")) calls++; });
+    const show = (hidden: boolean) => page.evaluate((h) => {
+      Object.defineProperty(document, "hidden", { configurable: true, get: () => h });
+      document.dispatchEvent(new Event("visibilitychange"));
+    }, hidden);
+    // Свернули на 10 минут: ответ в памяти устарел, но в сеть не идём.
+    await show(true);
+    await page.clock.setFixedTime((T + 600) * 1000);
+    await show(true);
+    await page.waitForTimeout(300);
+    assert.equal(calls, 0);
+    // Вернулись — запрос сразу, а не через пять минут.
+    const req = page.waitForRequest((q) => q.url().endsWith("/api/halving"), { timeout: 3000 });
+    await show(false);
+    await req;
+    await ctx.close();
+  });
+
+  test("подделанный ответ (eta не сходится с высотой) — карточки нет", async () => {
+    const eta = (REAL["eta"] as number) + 10 * 365 * 86400;
+    const { ctx, page, errors } = await open({ reply: { ...REAL, eta } });
+    await page.waitForFunction(() => !document.querySelector(".hv"), null, { timeout: 5000 });
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
   test("две недели после халвинга — «состоялся» и отсчёт до следующего", async () => {
     const prev = T - 3 * 86400;
     const { ctx, page } = await open({ reply: { ...AFTER, prev } });

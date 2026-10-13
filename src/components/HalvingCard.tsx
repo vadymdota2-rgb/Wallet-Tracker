@@ -53,11 +53,18 @@ export function HalvingCard() {
         if (r) setH(r);
         setLoading(false);
       });
+    // Свёрнутое приложение сеть не трогает; вернулись — сразу свежий ответ
+    // (из памяти, если он моложе пяти минут), а не через пять минут.
+    const visible = () => {
+      if (!document.hidden) load();
+    };
     load();
-    const id = setInterval(load, REFRESH_MS);
+    const id = setInterval(visible, REFRESH_MS);
+    document.addEventListener("visibilitychange", visible);
     return () => {
       alive = false;
       clearInterval(id);
+      document.removeEventListener("visibilitychange", visible);
     };
   }, []);
 

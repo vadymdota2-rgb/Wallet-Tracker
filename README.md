@@ -259,7 +259,7 @@ OKX, Gate, Bitget, MEXC и KuCoin — раз в час, четыре или во
 | Тип ответа, проверка, расчёт | `src/lib/halving.ts` |
 | Карточка и её стили | `src/components/HalvingCard.tsx`, `HalvingCard.css` |
 | Запрос и запас на устройстве | `fetchHalving` в `src/lib/api.ts` (там все запросы) |
-| Тесты | `tests/test_halving_api.py`, `tests/halving.test.ts`, `tests/tick.test.ts`, `tests/e2e/halving.e2e.test.ts` |
+| Тесты | `tests/test_halving_api.py`, `tests/test_halving_security.py`, `tests/test_halving_fuzz.py`, `tests/halving.test.ts`, `tests/halving.props.test.ts`, `tests/tick.test.ts`, `tests/e2e/halving.e2e.test.ts` |
 | Образец ответа — договор приложения и сервера | `tests/fixtures/halving.json` |
 
 Внизу бокового меню, у всех, с Премиумом и без (`/api/halving` открыт:
@@ -298,6 +298,14 @@ OKX, Gate, Bitget, MEXC и KuCoin — раз в час, четыре или во
    (высота правдоподобна, среднее 480–720 с или ровно 600, время блока не
    из будущего, eta ≥ tip) — и приложение принимает каждый такой ответ
    (проверяется запуском его `validHalving` через Node).
+8. Поля ответа сходятся между собой: интервал — ровно 210 000 блоков
+   (правило сети); последний блок — не старше суток и не дальше 2 часов
+   вперёд от времени ответа; eta — от последнего блока по среднему (запас —
+   сутки). Подделку, где каждое поле правдоподобно, а вместе — нет
+   (отсчёт на 70 лет при высоте 2026 года), приложение не показывает.
+
+Свёрнутое приложение сервер не спрашивает; вернулись — свежий ответ сразу,
+а не через пять минут.
 
 Подписи под числами и фраза для читалки экрана — из Intl (CLDR), в
 правильной форме слова для числа и языка: «1 day / 2 days», «1 dzień /
@@ -324,9 +332,9 @@ noImplicitOverride, noPropertyAccessFromIndexSignature, noImplicitReturns).
 Качество тестов меряется двумя способами. Покрытие — 100 % строк и ветвлений
 у `wt_halving.py`, `src/lib/halving.ts` и `src/lib/tick.ts`
 (`python3 -m coverage run --branch …`, `node --test --experimental-test-coverage`).
-Мутационная проверка — `python3 tools/mutate-halving.py`: 53 порчи кода
+Мутационная проверка — `python3 tools/mutate-halving.py`: 59 порч кода
 (границы, знаки, константы, защиты от атак, гонки, таймер секунд, формы слов), тесты
-убивают все 51 значимую; две мутации эквивалентны (не меняют ничего
+убивают все 57 значимых; две мутации эквивалентны (не меняют ничего
 наблюдаемого) и не считаются. Гонять после любой правки модуля; идёт и в CI.
 
 Отсчёт тикает на границе каждой секунды (`src/lib/tick.ts`), а не «раз в

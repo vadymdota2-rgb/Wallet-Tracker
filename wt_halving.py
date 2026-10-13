@@ -234,11 +234,10 @@ def _json(url: str) -> object:
 
 
 def _int(url: str) -> int:
-    raw = _fetch(url, 64)
-    try:
-        return int(raw.decode().strip()) if raw else 0
-    except ValueError:
-        return 0
+    """Число из ответа-строки; 0 — не число. Только ASCII-цифры: int() принял
+    бы и «1_050_100», и «+1», и цифры других письменностей."""
+    raw = (_fetch(url, 64) or b"").strip()
+    return int(raw) if re.fullmatch(rb"[0-9]{1,20}", raw) else 0
 
 
 def _start_ts(h: int) -> int:

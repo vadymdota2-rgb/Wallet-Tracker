@@ -37,7 +37,9 @@ function reply(r: () => number): HalvingReply {
   const tip = at - Math.floor(r() * 86_400);
   const h: HalvingReply = { ok: true, height, next, every, avg, at, src: (["epoch", "period", "nominal"] as const)[Math.floor(r() * 3)]! };
   if (r() < 0.9) h.tip = tip;
-  if (r() < 0.9) h.eta = Math.floor(tip + (next - height) * avg * (0.8 + r() * 0.4));
+  // eta — как у сервера (от последнего блока по среднему) ± 3 часа: сервер
+  // считает по точному среднему, а шлёт округлённое до 0,1 с.
+  if (r() < 0.9) h.eta = Math.floor(tip + (next - height) * avg + (r() - 0.5) * 6 * 3600);
   if (r() < 0.5) h.prev = at - Math.floor(r() * 4e7);
   if (r() < 0.5) h.skew = Math.floor((r() - 0.5) * 7200);
   return h;

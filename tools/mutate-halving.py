@@ -35,6 +35,11 @@ TS = [
     ('formatToParts(n);', 'formatToParts(1);', "форма слова по числу"),
     ('{ type: "unit", style: "long" }', '{ type: "conjunction", style: "long" }', "озвучка без «и»"),
     ("if (n === undefined) break;", "if (n === undefined) continue;", "озвучка неполного отсчёта"),
+    ("r.every === EVERY", "int(r.every)", "интервал халвинга — правило сети"),
+    ("tip > r.at - TIP_AGE", "tip >= r.at - TIP_AGE", "последний блок не старше суток"),
+    ("tip <= r.at + TIP_AHEAD", "tip <= r.at + TIP_AHEAD + 1", "последний блок не из будущего"),
+    ("<= ETA_SLACK", "<= ETA_SLACK + 2", "eta сходится с высотой и средним"),
+    ('if (typeof tip !== "number") return true;', 'if (typeof tip !== "number") return false;', "старый ответ без tip"),
 ]
 PY = [
     ("if hit and not failed and not _busy.is_set():", "if hit and not _busy.is_set():", "пауза после сбоя"),
@@ -67,6 +72,7 @@ PY = [
     ("except (ValueError, RecursionError):", "except ValueError:", "сверхглубокая вложенность"),
     ('c if c.isprintable() else "?"', "c", "журнал без управляющих символов"),
     ("clean[:LOG_MAX]", "clean", "длина строки журнала"),
+    ('re.fullmatch(rb"[0-9]{1,20}", raw)', "raw.strip(b\" \").isascii()", "высота — только ASCII-цифры"),
 ]
 TICK = [
     ("1000 - (t % 1000) + TICK_SLACK", "1000", "тик на границе секунды"),

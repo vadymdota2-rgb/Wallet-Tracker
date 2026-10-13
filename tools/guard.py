@@ -673,8 +673,8 @@ _no_browser = "Executable doesn't exist" in _t_e2e.stdout + _t_e2e.stderr or "Ca
 if _no_browser:
     print("--  халвинг: браузерный тест пропущен — нет Playwright/Chromium (npm i; npx playwright install chromium)")
 else:
-    say("халвинг: браузерный тест карточки (13 проверок: отсчёт до секунды, свои классы, часы, заглушка, сбои, 320 px с 544 и 1 457 днями, арабский, доступность) зелёный",
-        _t_e2e.returncode == 0 and "# fail 0" in _t_e2e.stdout and "# pass 13" in _t_e2e.stdout)
+    say("халвинг: браузерный тест карточки (15 проверок: отсчёт до секунды, свои классы, часы, заглушка, сбои, подделка, свёрнутое приложение, 320 px с 544 и 1 457 днями, арабский, доступность) зелёный",
+        _t_e2e.returncode == 0 and "# fail 0" in _t_e2e.stdout and "# pass 15" in _t_e2e.stdout)
     if _t_e2e.returncode:
         print(_t_e2e.stdout[-2500:])
 # Модуль халвинга: сервер — wt_halving.py, расчёт и тип — lib/halving.ts,
@@ -703,6 +703,9 @@ say("халвинг: среднее за эпоху, отсчёт от посл�
     and "parse_float=_finite, parse_int=_short_int," in _hvs and "except (ValueError, RecursionError):" in _hvs
     and "if time.monotonic() > end:" in _hvs and _hvs.count("print(") == 1
     and os.path.exists(f"{APP}/tests/test_halving_security.py") and "pickHalving(r)" in read(f"{APP}/src/lib/api.ts")
+    # Поля ответа сходятся между собой; свёрнутое приложение сеть не трогает.
+    and "r.every === EVERY" in _hvl and "&& consistent(r as HalvingReply);" in _hvl
+    and 'document.addEventListener("visibilitychange", visible);' in _hv and 're.fullmatch(rb"[0-9]{1,20}", raw)' in _hvs
     # Срок ответа на сервере и в памяти приложения — один (5 минут).
     and "TTL = 300.0" in _hvs and "export const HALVING_TTL_MS = 5 * 60_000;" in _hvl
     and "class _State:" in _hvs and "_cache" not in _hvs
