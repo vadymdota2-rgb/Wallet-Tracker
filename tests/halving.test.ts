@@ -132,3 +132,25 @@ test("договор с сервером: образец ответа (tests/fix
   assert.equal(v.left, fx.eta - fx.now);
   assert.equal(v.reward, 312_500_000);
 });
+
+test("validHalving: пограничные высоты (найдены мутационной проверкой)", () => {
+  // Нулевая высота — не ответ сети биткоина.
+  assert.equal(validHalving({ ...REAL, height: 0, next: 210000, eta: undefined, tip: undefined }), false);
+  // 2 млн — больше, чем при блоке раз в 5 минут с 2009 года (~1,87 млн), но
+  // меньше, чем при блоке раз в 30 секунд: граница проверяется точно.
+  assert.equal(validHalving({ ...REAL, height: 2_000_000, next: 2_100_000 }), false);
+  assert.equal(validHalving({ ...REAL, height: 1_800_000, next: 1_890_000 }), true);
+});
+
+test("halvingView: остаток — целые секунды вниз, даже при дробной оценке", () => {
+  // Старый ответ без eta: eta = at + блоки × 596,8 — дробное.
+  const old = { ok: true, height: 971219, next: 1050000, every: 210000, avg: 596.8, at: 1791881255 };
+  const eta = old.at + (old.next - old.height) * old.avg;
+  assert.notEqual(eta % 1, 0);
+  assert.equal(halvingView(old, old.at).left, Math.floor(eta - old.at));
+});
+
+test("halvingView: «состоялся» не показывается для prev из будущего", () => {
+  const h = { ...REAL, prev: REAL.at + 3600 };
+  assert.equal(halvingView(h, REAL.at).justHappened, null);
+});

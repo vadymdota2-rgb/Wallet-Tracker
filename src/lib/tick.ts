@@ -15,7 +15,8 @@ const subs = new Set<() => void>();
 let timer: ReturnType<typeof setInterval> | undefined;
 let stamp = Date.now();
 
-function subscribe(fn: () => void): () => void {
+/** Подписка на тик (экспорт — для тестов; в приложении — через useNow). */
+export function subscribe(fn: () => void): () => void {
   subs.add(fn);
   if (!timer) {
     timer = setInterval(() => {
@@ -43,7 +44,9 @@ function subscribe(fn: () => void): () => void {
 export function nowSnapshot(): number {
   if (!timer) {
     const t = Date.now();
-    if (t - stamp >= 1000) stamp = t;
+    // В обе стороны: часы телефона могли и перевести назад (синхронизация
+    // времени), и тогда снимок «из будущего» висел бы до первого тика.
+    if (Math.abs(t - stamp) >= 1000) stamp = t;
   }
   return Math.floor(stamp / 1000);
 }

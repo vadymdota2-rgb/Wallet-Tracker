@@ -699,11 +699,12 @@ say("халвинг: среднее за эпоху, отсчёт от посл�
     # Срок ответа на сервере и в памяти приложения — один (5 минут).
     and "TTL = 300.0" in _hvs and "export const HALVING_TTL_MS = 5 * 60_000;" in _hvl
     and "class _State:" in _hvs and "_cache" not in _hvs
-    and "def _plausible(h: int) -> bool:" in _hvs and "r.height <= (r.at - GENESIS_TS) / 300" in _hvl
+    and "def _plausible(h: int) -> bool:" in _hvs and os.path.exists(f"{APP}/tools/mutate-halving.py")
+    and "python tools/mutate-halving.py" in read(f"{APP}/.github/workflows/tests.yml") and "r.height <= (r.at - GENESIS_TS) / 300" in _hvl
     and '<p className="hv-rw" aria-hidden="true"><span className="hv-ph">' in _hv and ".hv-rw b { color: var(--ink); font-weight: 700; white-space: nowrap; }" in _hvc and "HALVING_TTL_MS + 5_000" in _hv
     and 'remember<HalvingReply | null>("/api/halving", HALVING_TTL_MS' in read(f"{APP}/src/lib/api.ts")
     and 'className="hv hv-skel" aria-busy="true"' in _hv and "prefers-reduced-motion: reduce" in _hvc
-    and "if (t - stamp >= 1000) stamp = t;" in read(f"{APP}/src/lib/tick.ts")
+    and "if (Math.abs(t - stamp) >= 1000) stamp = t;" in read(f"{APP}/src/lib/tick.ts")
     and "export function BtcGlyph(" in read(f"{APP}/src/components/ui.tsx")
     and "<HalvingCard />" in appx and "drawer-build" not in appx and 'int(hv.get("eta") or' in api)
 # Самоочистка: каждый ключ «wt-…» из кода — в списке KEEP, иначе уборка

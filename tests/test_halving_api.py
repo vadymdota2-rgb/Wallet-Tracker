@@ -5,6 +5,7 @@ import io
 import json
 import os
 import sys
+import threading
 import time
 import unittest
 import urllib.error
@@ -75,6 +76,13 @@ class HalvingTest(unittest.TestCase):
         self.assertEqual((r["next"], r["src"]), (1_260_000, "period"))
         self.assertAlmostEqual(r["avg"], 570.9, places=1)
         self.assertEqual(hv.START_TS[1_050_000], 1838896000)  # время начала эпохи запомнено
+
+    def test_first_days_of_epoch_do_not_trust_epoch_average(self):
+        # 100 блоков новой эпохи по 10 минут: среднему по ним не верим (мало),
+        # берём период сложности. Найдено мутационной проверкой.
+        hv.START_TS[1_050_000] = TIP - 100 * 600
+        r = self.run_with(Net(blocks=[{"height": 1_050_100, "timestamp": TIP}], adj={"timeAvg": 570_866}))
+        self.assertEqual(r["src"], "period")
 
     def test_bad_period_average_falls_back_to_600(self):
         r = self.run_with(Net(blocks=[{"height": 1_050_100, "timestamp": TIP}], adj={"timeAvg": 60_000}))
@@ -194,6 +202,119 @@ class HalvingTest(unittest.TestCase):
         for exc in (urllib.error.URLError("x"), OSError("x"), http.client.IncompleteRead(b""), ValueError("x")):
             with mock.patch.object(hv.urllib.request, "urlopen", side_effect=exc):
                 self.assertIsNone(hv._fetch("https://example.invalid/"))
+
+    # ── Испорченные ответы источников: каждая ветка разбора ──────────────
+
+    def test_garbage_bodies_are_rejected_not_raised(self):
+        with mock.patch.object(hv, "_fetch", lambda url, limit=1 << 20: b"{not json"):
+            self.assertIsNone(hv._json("https://x/"))
+        with mock.patch.object(hv, "_fetch", lambda url, limit=1 << 20: b"abc"):
+            self.assertEqual(hv._int("https://x/"), 0)
+        with mock.patch.object(hv, "_fetch", lambda url, limit=1 << 20: None):
+            self.assertIsNone(hv._json("https://x/"))
+            self.assertEqual(hv._int("https://x/"), 0)
+
+    def test_start_time_with_bad_type_is_not_cached(self):
+        net = Net()
+        net._answer = lambda url: HASH.encode() if "block-height" in url else b'{"timestamp": "soon"}'
+        with mock.patch.object(hv, "_fetch", net.fetch):
+            self.assertEqual(hv._start_ts(1_050_000), 0)
+        self.assertNotIn(1_050_000, hv.START_TS)
+
+    def test_tip_with_bad_height_type_uses_fallback(self):
+        r = self.run_with(Net(blocks=[{"height": "abc", "timestamp": TIP}]))
+        self.assertEqual((r["height"], r["tip"]), (H, NOW))
+
+    def test_epoch_average_out_of_range_falls_back(self):
+        # Время начала эпохи такое, что среднее вышло бы ~1000 с на блок.
+        hv.START_TS[840_000] = TIP - (H - 840_000) * 1000
+        r = self.run_with(Net(blocks=[{"height": H, "timestamp": TIP}], adj={"timeAvg": 570_866}))
+        self.assertEqual(r["src"], "period")
+
+    def test_period_average_of_bad_type_gives_nominal(self):
+        r = self.run_with(Net(blocks=[{"height": 1_050_100, "timestamp": TIP}], adj={"timeAvg": "fast"}))
+        self.assertEqual((r["src"], r["avg"]), ("nominal", 600.0))
+
+    def test_fetch_reads_with_limit_and_budget_timeout(self):
+        seen = {}
+
+        class Resp(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def fake(req, timeout=0):
+            seen["timeout"], seen["ua"] = timeout, req.get_header("User-agent")
+            return Resp(b"x" * 100)
+
+        with mock.patch.object(hv.urllib.request, "urlopen", fake):
+            self.assertEqual(hv._fetch("https://x/", 10), b"x" * 10)
+            self.assertEqual(seen["timeout"], hv.HOP)
+            self.assertEqual(seen["ua"], "wallet-tracker/1.0")
+            hv._dl.at = time.monotonic() + 1.0  # внутри сборки — не дольше остатка
+            try:
+                hv._fetch("https://x/")
+                self.assertLessEqual(seen["timeout"], 1.0)
+                hv._dl.at = time.monotonic() + 0.1  # остатка нет — в сеть не идём
+                seen.clear()
+                self.assertIsNone(hv._fetch("https://x/"))
+                self.assertEqual(seen, {})
+            finally:
+                hv._dl.at = 0.0
+
+    def test_clock_is_unix_seconds(self):
+        self.assertLessEqual(abs(hv._now() - time.time()), 1)
+
+    # ── Фон и гонки ──────────────────────────────────────────────────────
+
+    def test_background_crash_is_logged_and_releases_the_flag(self):
+        hv._busy.set()
+        err = io.StringIO()
+        with mock.patch.object(hv, "build", side_effect=RuntimeError("boom")), mock.patch("sys.stderr", err):
+            hv._bg()
+        self.assertFalse(hv._busy.is_set())
+        self.assertIn("halving: boom", err.getvalue())
+
+    def _race(self, net, n=6):
+        """n человек одновременно открывают меню на холодном сервере."""
+        out = []
+        with mock.patch.object(hv, "_fetch", net.fetch), mock.patch.object(hv, "_now", lambda: NOW), \
+                mock.patch("sys.stderr", io.StringIO()):
+            ts = [threading.Thread(target=lambda: out.append(hv.halving_data())) for _ in range(n)]
+            for t in ts:
+                t.start()
+            for t in ts:
+                t.join(10)
+        return out
+
+    def test_cold_start_race_builds_once(self):
+        slow = Net(blocks=[{"height": H, "timestamp": TIP}])
+        orig = slow.fetch
+
+        def lazy(url, limit=1 << 20):
+            time.sleep(0.2)
+            return orig(url, limit)
+
+        slow.fetch = lazy
+        out = self._race(slow)
+        self.assertEqual(len(out), 6)
+        self.assertTrue(all(r is out[0] and r["ok"] for r in out))
+        self.assertEqual(slow.calls, 1, "сборка одна: остальные дождались и взяли готовое")
+
+    def test_cold_start_race_when_sources_are_down(self):
+        down = Net(fail=True)
+        orig = down.fetch
+
+        def lazy(url, limit=1 << 20):
+            time.sleep(0.05)
+            return orig(url, limit)
+
+        down.fetch = lazy
+        out = self._race(down)
+        self.assertTrue(all(not r["ok"] for r in out))
+        self.assertEqual(down.calls, 4, "одна неудачная сборка (4 адреса), остальные не ходили в сеть")
 
 
 if __name__ == "__main__":
