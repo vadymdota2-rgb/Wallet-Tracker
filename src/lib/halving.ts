@@ -45,8 +45,11 @@ export interface HalvingView {
   parts: [number, number, number, number];
   /** Оценка текущей высоты. */
   height: number;
-  /** Пройдено эпохи, %. */
+  /** Пройдено эпохи, % — для полосы. */
   done: number;
+  /** То же для подписи: до десятых, но до халвинга не больше 99,9 —
+   *  обычное округление превратило бы 99,96 в «100,0 %». */
+  donePct: number;
   /** Момент халвинга, unix-секунды. */
   eta: number;
   /** Награда сейчас и после халвинга, сатоши. */
@@ -73,6 +76,7 @@ export function halvingView(h: HalvingReply, now: number): HalvingView {
     parts: [Math.floor(left / 86400), Math.floor((left % 86400) / 3600), Math.floor((left % 3600) / 60), left % 60],
     height,
     done,
+    donePct: left > 0 ? Math.min(99.9, Math.round(done * 10) / 10) : 100,
     eta,
     reward: subsidySats(epoch),
     rewardNext: subsidySats(epoch + 1),

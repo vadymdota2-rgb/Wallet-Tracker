@@ -90,3 +90,14 @@ test("halvingView: первая эпоха и следующие — награ�
   assert.equal(v.reward, 156_250_000);
   assert.equal(v.rewardNext, 78_125_000);
 });
+
+test("halvingView: подпись процента не показывает 100 % до халвинга", () => {
+  // До халвинга 10 блоков из 210 000: 99,995 %.
+  const near = { ...REAL, height: REAL.next - 10, tip: REAL.at, eta: REAL.at + 6000 };
+  const v = halvingView(near, REAL.at);
+  assert.ok(v.done > 99.99);
+  assert.equal(v.donePct, 99.9);
+  assert.equal(halvingView(REAL, REAL.eta + 1).donePct, 100);
+  // Обычное округление в остальном: 62,485 → 62,5, а не 62,4.
+  assert.equal(halvingView(REAL, REAL.tip + 60).donePct, 62.5);
+});

@@ -114,6 +114,26 @@ class HalvingTest(unittest.TestCase):
                 time.sleep(0.05)
         self.assertEqual(w._halving_cache["all"][1]["height"], H + 1)
 
+    def test_outage_with_stale_answer_does_not_hammer_sources(self):
+        first = self.run_with(Net(blocks=[{"height": H, "timestamp": TIP}]))
+        k = w._halving_cache["all"]
+        w._halving_cache["all"] = (k[0] - w.HALVING_TTL - 1, k[1])
+        down = Net(fail=True)
+        with mock.patch.object(w, "get_json", down.get_json), \
+                mock.patch.object(w.urllib.request, "urlopen", down.urlopen), \
+                mock.patch("sys.stderr", io.StringIO()):
+            self.assertEqual(w.halving_data(), first)  # старый ответ — сразу
+            for _ in range(50):
+                if "halving" not in w._liq_busy:
+                    break
+                time.sleep(0.02)
+            calls = down.calls
+            self.assertGreater(calls, 0)
+            for _ in range(5):
+                self.assertEqual(w.halving_data(), first)
+            time.sleep(0.1)
+            self.assertEqual(down.calls, calls, "после сбоя минуту не ходим в сеть повторно")
+
 
 if __name__ == "__main__":
     unittest.main()

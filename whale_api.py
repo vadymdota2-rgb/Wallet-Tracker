@@ -11565,11 +11565,14 @@ def halving_data() -> dict:
         hit = _halving_cache.get("all")
         if hit and time.monotonic() - hit[0] < HALVING_TTL:
             return hit[1]
-        if hit and "halving" not in _liq_busy:
+        err = _halving_cache.get("err")
+        failed = bool(err and time.monotonic() - err[0] < HALVING_ERR_TTL)
+        # Источники только что молчали — не дёргаем их снова сразу: иначе при
+        # сбое mempool фоновые сборки шли бы одна за другой без перерыва.
+        if hit and not failed and "halving" not in _liq_busy:
             _liq_busy.add("halving")
             threading.Thread(target=_halving_bg, daemon=True).start()
-        err = _halving_cache.get("err")
-        if not hit and err and time.monotonic() - err[0] < HALVING_ERR_TTL:
+        if not hit and failed:
             return {"ok": False, "error": "no_data"}
     if hit:
         return hit[1]

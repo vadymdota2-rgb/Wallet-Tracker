@@ -19,6 +19,7 @@ import { CoinIcon } from "../components/CoinIcon";
 import { EtfGlyph, GaugeGlyph, Row, TopGlyph } from "../components/ui";
 import type { CalEv, DigestItem, DigestSignal } from "../lib/types";
 import { FLAG, allDay, calTitle } from "./CalendarScreen";
+import { BtcGlyph } from "../components/HalvingCard";
 
 type Lang = Parameters<typeof t>[0];
 
@@ -379,7 +380,7 @@ export function HalvingLine({ it, lang }: { it: DigestItem; lang: Lang }) {
   const h = it.halv;
   if (!h) return null;
   return (
-    <Row icon={<span className="dg-medal" aria-hidden="true">₿</span>}
+    <Row icon={<span className="dg-medal" aria-hidden="true"><BtcGlyph /></span>}
       title={t(lang, "hv_title")}
       sub={`${t(lang, "dg_halv", { n: num(h.left) })} · ≈ ${dateWord(lang, h.eta)}`} />
   );
