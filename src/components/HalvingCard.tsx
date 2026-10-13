@@ -103,7 +103,9 @@ export function HalvingCard() {
       {v.left > 0 ? (
         // role="timer": читалка экрана не объявляет каждую секунду, а целиком
         // читает отсчёт, когда до него дошли.
-        <div className="hv-clock" dir="ltr" role="timer" aria-label={clock}>
+        // Больше 999 дней (первые месяцы после халвинга) — «1 457» шире
+        // ячейки на узком экране: дням больше места и шрифт поменьше.
+        <div className={v.parts[0] >= 1000 ? "hv-clock wide" : "hv-clock"} dir="ltr" role="timer" aria-label={clock}>
           {v.parts.map((n, i) => (
             <div key={i} className={i === 0 ? "hv-cell big" : "hv-cell"} aria-hidden="true">
               <b>{i === 0 ? num(n) : pad(n)}</b>

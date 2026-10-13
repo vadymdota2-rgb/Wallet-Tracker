@@ -673,8 +673,8 @@ _no_browser = "Executable doesn't exist" in _t_e2e.stdout + _t_e2e.stderr or "Ca
 if _no_browser:
     print("--  халвинг: браузерный тест пропущен — нет Playwright/Chromium (npm i; npx playwright install chromium)")
 else:
-    say("халвинг: браузерный тест карточки (10 проверок: отсчёт до секунды, часы, заглушка, сбои, 320 px, арабский, доступность) зелёный",
-        _t_e2e.returncode == 0 and "# fail 0" in _t_e2e.stdout and "# pass 10" in _t_e2e.stdout)
+    say("халвинг: браузерный тест карточки (12 проверок: отсчёт до секунды, часы, заглушка, сбои, 320 px с 544 и 1 457 днями, арабский, доступность) зелёный",
+        _t_e2e.returncode == 0 and "# fail 0" in _t_e2e.stdout and "# pass 12" in _t_e2e.stdout)
     if _t_e2e.returncode:
         print(_t_e2e.stdout[-2500:])
 # Модуль халвинга: сервер — wt_halving.py, расчёт и тип — lib/halving.ts,
@@ -688,7 +688,7 @@ say("халвинг — отдельный модуль: сервер, расч�
     and '<Boundary name="halving"><HalvingCard /></Boundary>' in appx and "static getDerivedStateFromError()" in read(f"{APP}/src/components/Boundary.tsx"))
 say("халвинг: среднее за эпоху, отсчёт от последнего блока, фон и пауза после сбоя, проверка ответа, поправка часов, доступность",
     'avg, src = t, "epoch"' in _hvs and "mempool.space/api/v1/blocks" in _hvs and "START_TS = {840_000: 1713571767}" in _hvs
-    and "ERR_TTL = 60.0" in _hvs and "if hit and not failed and not _busy:" in _hvs and 're.fullmatch(r"[0-9a-f]{64}", bh)' in _hvs
+    and "ERR_TTL = 60.0" in _hvs and "if hit and not failed and not _busy.is_set():" in _hvs and 're.fullmatch(r"[0-9a-f]{64}", bh)' in _hvs
     and 'res["prev"] = start_ts' in _hvs and '"now": _now()' in _hvs
     and "opt(r.eta, time)" in _hvl and "donePct: left > 0 ? Math.min(99.9," in _hvl and "export function subsidySats(" in _hvl
     and "const eta = h.eta ?? h.at + (h.next - h.height) * h.avg;" in _hvl

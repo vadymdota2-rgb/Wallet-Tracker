@@ -1,6 +1,7 @@
 /* Отсчёт до халвинга: npm test (node --test, типы Node снимает сам). */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { clockSkew, halvingView, subsidySats, validHalving } from "../src/lib/halving.ts";
 
 // Настоящий ответ сервера от 13.10.2026.
@@ -118,4 +119,14 @@ test("halvingView: две недели после халвинга карточ�
   assert.equal(halvingView(after, after.prev + 3 * 86400).justHappened, after.prev);
   assert.equal(halvingView(after, after.prev + 15 * 86400).justHappened, null);
   assert.equal(halvingView(REAL, REAL.at).justHappened, null);
+});
+
+test("договор с сервером: образец ответа (tests/fixtures/halving.json) приложение принимает целиком", () => {
+  // Тот же файл сверяет и тест сервера: поменяли формат с одной стороны —
+  // упадёт тест с другой, а не карточка у людей.
+  const fx = JSON.parse(readFileSync(new URL("./fixtures/halving.json", import.meta.url), "utf8"));
+  assert.equal(validHalving(fx), true);
+  const v = halvingView(fx, fx.now);
+  assert.equal(v.left, fx.eta - fx.now);
+  assert.equal(v.reward, 312_500_000);
 });

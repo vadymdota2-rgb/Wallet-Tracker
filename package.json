@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "typecheck": "tsc -p .",
+    "typecheck:tests": "tsc -p tsconfig.tests.json",
     "clean": "node tools/clean-build.mjs",
     "build": "tsc -p . && npm run clean && vite build",
     "preview": "vite preview",

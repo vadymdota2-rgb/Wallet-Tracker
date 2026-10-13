@@ -23,12 +23,10 @@ const TYPES: Record<string, string> = {
   ".png": "image/png", ".webp": "image/webp", ".json": "application/json", ".woff2": "font/woff2", ".ico": "image/x-icon",
 };
 
-// Настоящий ответ сервера от 13.10.2026; T — «сейчас» в браузере.
-const REAL = {
-  ok: true, height: 971219, next: 1050000, every: 210000, avg: 596.8, src: "epoch",
-  tip: 1791881177, eta: 1838896423, at: 1791881255, prev: 1713571767,
-};
-const T = 1791881300;
+// Настоящий ответ сервера от 13.10.2026 — общий образец с тестами сервера
+// (tests/fixtures/halving.json); T — «сейчас» в браузере.
+const REAL = JSON.parse(await readFile(new URL("../fixtures/halving.json", import.meta.url), "utf8")) as Record<string, number>;
+const T = REAL.now!;
 // До халвинга eta − T = 47 015 123 с = 544 дн 03 ч 45 мин 23 с.
 const CLOCK_RU = "544 дн 03 ч 45 мин 23 сек";
 /** Текст как видит человек: неразрывные и узкие пробелы (разряды «1 050 000»,
@@ -104,7 +102,7 @@ async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; er
         }
         return f;
       } as unknown as typeof Intl.DateTimeFormat;
-      W.prototype = D.prototype;
+      Object.defineProperty(W, "prototype", { value: D.prototype });
       (Intl as { DateTimeFormat: typeof Intl.DateTimeFormat }).DateTimeFormat = W;
     }
     if (sessionStorage.getItem("e2e")) return;
@@ -193,19 +191,36 @@ describe("карточка халвинга", () => {
     await ctx.close();
   });
 
-  test("320 px: ничего не вылезает за карточку", async () => {
-    const { ctx, page } = await open({ width: 320 });
-    const card = page.locator(".hv:not(.hv-skel)");
-    await card.waitFor();
-    const over = await card.evaluate((root) =>
-      [root, ...root.querySelectorAll<HTMLElement>("*")].filter((e) => e.scrollWidth > e.clientWidth + 1 && getComputedStyle(e).overflow !== "visible")
-        .map((e) => e.className));
-    assert.deepEqual(over, []);
-    const box = await card.boundingBox();
-    const meta = await page.locator(".hv-meta").boundingBox();
-    assert.ok(box && meta && meta.x + meta.width <= box.x + box.width + 1);
-    await ctx.close();
-  });
+  // Сразу после халвинга до следующего ~1 457 дней — четыре цифры с
+  // разделителем; на 320 px раньше они вылезали из ячейки (68 px в 52).
+  const AFTER = { ok: true, height: 1050150, next: 1260000, every: 210000, avg: 600, src: "period",
+    tip: T - 300, eta: T - 300 + (1260000 - 1050150) * 600, at: T, prev: T - 3 * 86400 };
+  for (const [name, lang, reply] of [
+    ["544 дня, русский", "ru", undefined], ["1 457 дней, русский", "ru", AFTER], ["1.457 Tage, немецкий", "de", AFTER],
+  ] as const) {
+    test(`320 px: ничего не вылезает за свои рамки — ${name}`, async () => {
+      const { ctx, page } = await open({ width: 320, lang, reply });
+      const card = page.locator(".hv:not(.hv-skel)");
+      await card.waitFor();
+      // Любой элемент, чьё содержимое шире его самого, — вылез (видно или обрезано).
+      const over = await card.evaluate((root) =>
+        [root, ...root.querySelectorAll<HTMLElement>("*")]
+          .filter((e) => e.clientWidth > 0 && e.scrollWidth > e.clientWidth + 1)
+          .map((e) => `${e.tagName}.${e.className}: ${e.scrollWidth}>${e.clientWidth}`));
+      assert.deepEqual(over, []);
+      // Все замеры — в одном кадре: меню ещё может выезжать, и координаты,
+      // снятые по очереди, принадлежали бы разным кадрам анимации.
+      const outside = await card.evaluate((root) => {
+        const box = root.getBoundingClientRect();
+        return [".hv-meta", ".hv-clock", ".hv-eta", ".hv-rw"].filter((sel) => {
+          const b = root.querySelector(sel)!.getBoundingClientRect();
+          return b.left < box.left - 1 || b.right > box.right + 1;
+        });
+      });
+      assert.deepEqual(outside, []);
+      await ctx.close();
+    });
+  }
 
   test("арабский: страница справа налево, цифры отсчёта слева направо", async () => {
     const { ctx, page, errors } = await open({ lang: "ar" });
@@ -213,15 +228,20 @@ describe("карточка халвинга", () => {
     assert.equal(await page.evaluate(() => document.documentElement.dir), "rtl");
     assert.equal(await page.locator(".hv-clock").getAttribute("dir"), "ltr");
     assert.deepEqual(await page.locator(".hv-cell b").allInnerTexts(), ["544", "03", "45", "23"]);
+    // Полоса растёт от начала строки — на арабском справа (замер в одном кадре).
+    const fromRight = await page.locator(".hv-bar").evaluate((bar) => {
+      const b = bar.getBoundingClientRect();
+      const f = bar.querySelector("i")!.getBoundingClientRect();
+      return Math.abs(f.right - b.right) < 1 && f.left > b.left + 1;
+    });
+    assert.equal(fromRight, true);
     assert.deepEqual(errors, []);
     await ctx.close();
   });
 
   test("две недели после халвинга — «состоялся» и отсчёт до следующего", async () => {
     const prev = T - 3 * 86400;
-    const reply = { ok: true, height: 1050150, next: 1260000, every: 210000, avg: 600, src: "period",
-      tip: T - 300, eta: T - 300 + (1260000 - 1050150) * 600, at: T, prev };
-    const { ctx, page } = await open({ reply });
+    const { ctx, page } = await open({ reply: { ...AFTER, prev } });
     await page.locator(".hv:not(.hv-skel)").waitFor();
     assert.match(sp(await page.locator(".hv-done").innerText()), /Халвинг состоялся 10 октября 2026 г\. — блок 1 050 000/);
     assert.match(sp(await page.locator(".hv-rw").innerText()), /1,5625 → 0,78125 BTC/);

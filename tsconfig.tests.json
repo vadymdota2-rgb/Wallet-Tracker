@@ -1,0 +1,10 @@
+// Проверка типов тестов (tests/**/*.ts): npm run typecheck:tests.
+// Тесты запускает Node, сам снимая типы, — поэтому импорт с «.ts».
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "types": ["node"]
+  },
+  "include": ["tests/**/*.ts"]
+}

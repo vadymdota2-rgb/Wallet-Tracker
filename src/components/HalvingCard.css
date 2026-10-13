@@ -23,13 +23,18 @@
   border-radius: 10px; background: rgb(255 255 255 / 0.05); border: 1px solid rgb(255 255 255 / 0.06);
   min-width: 0;
 }
-.hv-cell b { font-size: 22px; line-height: 1; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+.hv-cell b { font-size: 22px; line-height: 1; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Четырёхзначные дни: ячейка шире, шрифт меньше — «1 457» влезает и на 320 px. */
+.hv-clock.wide { grid-template-columns: 1.9fr 1fr 1fr 1fr; }
+.hv-clock.wide .hv-cell.big b { font-size: 18px; }
 .hv-cell.big b { color: #f7b955; text-shadow: 0 0 14px rgb(247 147 26 / 0.45); }
 .hv-cell small { color: var(--dim); font-size: 10.5px; max-width: 100%; overflow-wrap: break-word; text-align: center; }
 .hv-done { margin: 0 0 10px; padding: 6px 10px; border-radius: 10px; background: rgb(247 147 26 / 0.14); color: #fcd34d; font-size: 12px; font-weight: 700; }
 .hv-now { margin: 0; font-size: 18px; font-weight: 800; color: #f7b955; text-align: center; }
-.hv-bar { height: 6px; margin-top: 12px; border-radius: 3px; background: rgb(255 255 255 / 0.07); overflow: hidden; direction: ltr; }
+/* Полоса растёт от начала строки: слева направо, а на арабском — справа налево. */
+.hv-bar { height: 6px; margin-top: 12px; border-radius: 3px; background: rgb(255 255 255 / 0.07); overflow: hidden; }
 .hv-bar i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #f7931a, #fcd34d); box-shadow: 0 0 10px rgb(247 147 26 / 0.6); }
+[dir="rtl"] .hv-bar i { background: linear-gradient(270deg, #f7931a, #fcd34d); }
 .hv-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; margin-top: 6px; color: var(--dim); font-size: 11px; font-variant-numeric: tabular-nums; }
 /* На узком экране строка переносится целыми кусками, а не «62,5% / эпохи». */
 .hv-meta > span { white-space: nowrap; }

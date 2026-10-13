@@ -53,7 +53,7 @@ _UA = {"User-Agent": "wallet-tracker/1.0"}
 _lock = threading.Lock()
 _cold = threading.Lock()
 _cache: dict = {}
-_busy = False
+_busy = threading.Event()  # идёт фоновая сборка
 _dl = threading.local()  # срок текущей сборки (monotonic) — свой у каждого потока
 
 
@@ -178,19 +178,16 @@ def _build() -> dict:
 
 
 def _bg() -> None:
-    global _busy
     try:
         build()
     except Exception as e:  # noqa: BLE001 — фоновый поток не должен умирать молча
         print(f"halving: {e}", file=sys.stderr)
     finally:
-        with _lock:
-            _busy = False
+        _busy.clear()
 
 
 def halving_data() -> dict:
     """Ответ /api/halving: из кэша, свежий собирается в фоне."""
-    global _busy
     with _lock:
         hit = _cache.get("all")
         if hit and time.monotonic() - hit[0] < TTL:
@@ -198,8 +195,8 @@ def halving_data() -> dict:
         failed = time.monotonic() - _cache.get("err", -1e9) < ERR_TTL
         # Источники только что молчали — не дёргаем их снова сразу: иначе при
         # сбое mempool фоновые сборки шли бы одна за другой без перерыва.
-        if hit and not failed and not _busy:
-            _busy = True
+        if hit and not failed and not _busy.is_set():
+            _busy.set()
             threading.Thread(target=_bg, daemon=True).start()
         if hit:
             return hit[1]

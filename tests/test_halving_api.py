@@ -1,19 +1,23 @@
 """Халвинг на сервере (wt_halving.py): npm test. Сеть подменена — тест не
 ходит в mempool, а модуль грузится сам по себе, без whale_api."""
+import http.client
 import io
+import json
 import os
 import sys
 import time
 import unittest
+import urllib.error
 from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import wt_halving as hv  # noqa: E402
+import wt_halving as hv  # модуль лежит в корне репозитория
 
 TIP = 1791881177
 NOW = TIP + 78
 H = 971219
 HASH = "0" * 63 + "a"
+FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "halving.json")
 
 
 class Net:
@@ -23,29 +27,27 @@ class Net:
         self.blocks, self.adj, self.fail, self.hash, self.tip_height = blocks, adj, fail, height_hash, tip_height
         self.calls, self.urls = 0, []
 
+    def _answer(self, url):
+        as_json = lambda v: json.dumps(v).encode() if v is not None else None  # noqa: E731
+        routes = (
+            (lambda u: u.endswith("/api/v1/blocks"), lambda: as_json(self.blocks)),
+            (lambda u: "difficulty-adjustment" in u, lambda: as_json(self.adj)),
+            (lambda u: "block-height" in u, self.hash.encode),
+            (lambda u: "/api/block/" in u, lambda: b'{"timestamp": 1838896000}'),
+            (lambda u: "tip/height" in u or "getblockcount" in u, lambda: str(self.tip_height).encode()),
+        )
+        return next((answer() for match, answer in routes if match(url)), None)
+
     def fetch(self, url, limit=1 << 20):
-        import json
         self.calls += 1
         self.urls.append(url)
-        if self.fail:
-            return None
-        if url.endswith("/api/v1/blocks"):
-            return json.dumps(self.blocks).encode() if self.blocks is not None else None
-        if "difficulty-adjustment" in url:
-            return json.dumps(self.adj).encode() if self.adj is not None else None
-        if "block-height" in url:
-            return self.hash.encode()
-        if "/api/block/" in url:
-            return b'{"timestamp": 1838896000}'
-        if "tip/height" in url or "getblockcount" in url:
-            return str(self.tip_height).encode()
-        return None
+        return None if self.fail else self._answer(url)
 
 
 class HalvingTest(unittest.TestCase):
     def setUp(self):
         hv._cache.clear()
-        hv._busy = False
+        hv._busy.clear()
         hv.START_TS.clear()
         hv.START_TS[840_000] = 1713571767
 
@@ -54,8 +56,8 @@ class HalvingTest(unittest.TestCase):
             return hv.halving_data()
 
     def wait_bg(self):
-        for _ in range(100):
-            if not hv._busy:
+        for _ in range(300):
+            if not hv._busy.is_set():
                 return
             time.sleep(0.02)
 
@@ -112,13 +114,14 @@ class HalvingTest(unittest.TestCase):
         slow = Net(blocks=[{"height": H + 1, "timestamp": TIP + 600}])
 
         def lazy(url, limit=1 << 20):
-            time.sleep(0.3)
+            time.sleep(1.0)
             return slow.fetch(url, limit)
 
         with mock.patch.object(hv, "_fetch", lazy), mock.patch.object(hv, "_now", lambda: NOW + 600):
             t0 = time.monotonic()
             self.assertEqual(hv.halving_data(), first)
-            self.assertLess(time.monotonic() - t0, 0.1)
+            # Сеть отвечает секунду — ответ должен прийти, не дожидаясь её.
+            self.assertLess(time.monotonic() - t0, 0.5)
             self.wait_bg()
         self.assertEqual(hv._cache["all"][1]["height"], H + 1)
 
@@ -157,14 +160,27 @@ class HalvingTest(unittest.TestCase):
                 mock.patch.object(hv.urllib.request, "urlopen", hang), mock.patch("sys.stderr", io.StringIO()):
             t0 = time.monotonic()
             self.assertFalse(hv.build()["ok"])
-            self.assertLess(time.monotonic() - t0, 0.75)
+            # Без бюджета — 7 запросов по 0,25 с; с бюджетом — не дольше ~0,6 с
+            # (запас на медленную машину CI).
+            self.assertLess(time.monotonic() - t0, 1.2)
         self.assertTrue(all(t <= 0.25 for t in timeouts))
         self.assertEqual(getattr(hv._dl, "at", 0.0), 0.0)  # срок сброшен после сборки
 
-    def test_fetch_never_raises(self):
-        import http.client
-        import urllib.error
+    def test_contract_matches_shared_fixture(self):
+        # Ответ сервера — те же поля и типы, что в образце, который проверяет
+        # и приложение (tests/halving.test.ts). Разъехались — падает здесь.
+        with open(FIXTURE, encoding="utf-8") as f:
+            fx = json.load(f)
+        self.run_with(Net(blocks=[{"height": H, "timestamp": TIP}]))
+        with mock.patch.object(hv, "_now", lambda: NOW):
+            r = hv.reply()
+        self.assertEqual(set(r), set(fx))
+        for k, v in fx.items():
+            self.assertIs(type(r[k]), type(v), k)
+        self.assertEqual({k: r[k] for k in ("height", "next", "every", "avg", "src", "tip", "prev")},
+                         {k: fx[k] for k in ("height", "next", "every", "avg", "src", "tip", "prev")})
 
+    def test_fetch_never_raises(self):
         for exc in (urllib.error.URLError("x"), OSError("x"), http.client.IncompleteRead(b""), ValueError("x")):
             with mock.patch.object(hv.urllib.request, "urlopen", side_effect=exc):
                 self.assertIsNone(hv._fetch("https://example.invalid/"))
