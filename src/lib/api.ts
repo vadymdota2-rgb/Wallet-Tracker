@@ -452,6 +452,7 @@ export function refreshLiqMap(sym: string, range: string): Promise<LiqMapReply |
 const optPath = (sym: string) => `/api/options?sym=${encodeURIComponent(sym)}`;
 const OPT_TTL = 2 * 60_000;
 const OPT_SAVED = "wt-options-v1";
+const OPT_SAVED_KEEP = 4;
 export function savedOptions(sym: string): { at: number; v: OptionsReply } | null {
   const hit = readSaved<OptionsReply>(OPT_SAVED)[sym];
   return hit && Date.now() - hit.at < LIQ_SAVED_MAX_AGE && hit.v?.ok ? hit : null;
@@ -459,8 +460,13 @@ export function savedOptions(sym: string): { at: number; v: OptionsReply } | nul
 export const fetchOptions = (sym: string) =>
   remember<OptionsReply | null>(optPath(sym), OPT_TTL, () => callTwice<OptionsReply>(optPath(sym)), good).then((r) => {
     if (r?.ok) {
+      // Монет с опционами полтора десятка, ответ по каждой большой — храним
+      // только последние, а не все, что когда-то открывали.
       const all = readSaved<OptionsReply>(OPT_SAVED);
+      delete all[sym];
       all[sym] = { at: Date.now(), v: r };
+      const keys = Object.keys(all);
+      for (const k of keys.slice(0, Math.max(0, keys.length - OPT_SAVED_KEEP))) delete all[k];
       writeSaved(OPT_SAVED, all);
     }
     return r;
@@ -564,7 +570,11 @@ export const peekEtf = () => peek<EtfReply | null>("/api/etf", 60 * 60_000) ?? s
 const HALVING_SAVED = "wt-halving-v1";
 function savedHalving(): HalvingReply | null {
   const hit = readSaved<HalvingReply>(HALVING_SAVED).all;
-  return hit && hit.v?.height ? hit.v : null;
+  // Запас старше месяца или с прошедшим халвингом не показываем: отсчёт
+  // нарисовал бы «Халвинг наступает» до ответа сервера.
+  if (!hit?.v?.height || Date.now() - hit.at > 30 * 24 * 3600_000) return null;
+  if (hit.v.eta && hit.v.eta * 1000 < Date.now()) return null;
+  return hit.v;
 }
 export const fetchHalving = () =>
   remember<HalvingReply | null>("/api/halving", 5 * 60_000, () => call<HalvingReply>("/api/halving", { timeout: 12_000 }), good).then((r) => {

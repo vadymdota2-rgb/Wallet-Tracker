@@ -654,6 +654,22 @@ say("ETF и крупные игроки: потоки по фондам и дн�
     and "minedPerDay(" in _ef and "glyph: <EtfGlyph />" in appx)
 
 _hv = read(f"{APP}/src/components/HalvingCard.tsx")
+# Самоочистка: каждый ключ «wt-…» из кода — в списке KEEP, иначе уборка
+# сотрёт его при следующем запуске.
+_st = read(f"{APP}/src/lib/storage.ts")
+_keep = set(re.findall(r'"(wt-[a-z0-9-]+)"', _st.split("const KEEP")[1].split("]);")[0]))
+_used = set()
+for _root, _dirs, _files in os.walk(f"{APP}/src"):
+    for _f in _files:
+        if _f.endswith((".ts", ".tsx")) and _f != "storage.ts":
+            _used |= set(re.findall(r'["`\'](wt-[a-z0-9-]+)["`\']', read(os.path.join(_root, _f))))
+_used.discard("wt-go")  # sessionStorage, живёт до закрытия
+say("самоочистка хранилища: все ключи приложения в списке, уборка после запуска, старые запасы и прошедший халвинг стираются",
+    not (_used - _keep) and "setTimeout(sweepStorage, 4000);" in read(f"{APP}/src/main.tsx")
+    and "SAVED_MAX_AGE = 30 * 24 * 3600_000" in _st and 'key === "wt-halving-v1"' in _st
+    and "OPT_SAVED_KEEP = 4;" in read(f"{APP}/src/lib/api.ts"))
+if _used - _keep:
+    print("   нет в KEEP:", sorted(_used - _keep))
 say("внизу меню — отсчёт до халвинга, а не дата сборки",
     "def halving_data(" in api and '"/api/halving"' in api and "mempool.space/api/blocks/tip/height" in api
     and "<HalvingCard />" in appx and "drawer-build" not in appx and "const eta = h.eta ?? h.at + (h.next - h.height) * h.avg;" in _hv

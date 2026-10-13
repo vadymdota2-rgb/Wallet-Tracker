@@ -119,7 +119,7 @@ function coins(v: number, sym: string): string {
 /** Сколько новых биткоинов за сутки: 144 блока × награда за блок. */
 function minedPerDay(ts: number): number {
   if (ts < 1713571200) return 900; // до халвинга 20 апреля 2024
-  if (ts < 1837000000) return 450; // до следующего, весна 2028
+  if (ts < 1838900000) return 450; // до следующего — по оценке ≈ 9 апреля 2028
   return 225;
 }
 

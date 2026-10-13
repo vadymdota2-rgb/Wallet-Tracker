@@ -92,10 +92,12 @@ DEALS_MAX = 50
 # Запросы с данными: без Премиума приложение закрыто, и сервер их не
 # отдаёт (403 «premium»). Открыты выгрузка (план, цены — нужны замку),
 # «Бонусы», «Токен проекта» и приглашения: через них Премиум и получают.
+# Открыт и халвинг: отсчёт стоит внизу меню у всех, а без Премиума там было
+# пусто (сервер отвечал 403). Это общедоступные данные блокчейна.
 PAID_PATHS = frozenset(
     p for name in (
     "flow", "fund", "rot", "ls", "deals", "token",
-    "wallet", "fng", "halving", "btc/flow", "btc/big", "btc/rank", "bsc/exflow",
+    "wallet", "fng", "btc/flow", "btc/big", "btc/rank", "bsc/exflow",
     "btc/wallet", "dom", "etf", "liqcoins", "liqmap", "options", "liqs", "oihist", "calendar", "digest",
     "digest/translate", "digest/comments", "unlocks", "symbols", "big", "quotes", "chart/liqs", "chart/whales",
     ) for p in ("/" + name, "/api/" + name)
@@ -11459,6 +11461,9 @@ def fng_data() -> dict:
 # меняется: спрашиваем один раз, для 840 000 оно и так известно.
 # Дата халвинга (eta) считается от времени последнего блока, а не от момента
 # запроса — блок мог выйти и десять минут назад.
+# Как у страха и жадности: устаревший ответ отдаётся сразу, свежий собирается
+# в фоне одним потоком — запрос не ждёт mempool по 8 секунд на адрес, а сто
+# человек, открывших меню в одну минуту, не делают сто одинаковых запросов.
 HALVING_EVERY = 210_000
 HALVING_TTL = 300.0
 _halving_cache: dict = {}
@@ -11482,11 +11487,9 @@ def _halving_start_ts(h: int) -> int:
     return ts
 
 
-def halving_data() -> dict:
+def _halving_build() -> dict:
     with _liq_lock:
         hit = _halving_cache.get("all")
-        if hit and time.monotonic() - hit[0] < HALVING_TTL:
-            return hit[1]
     height = 0
     tip_ts = 0
     blocks = get_json("https://mempool.space/api/v1/blocks", 8)
@@ -11538,6 +11541,29 @@ def halving_data() -> dict:
     with _liq_lock:
         _halving_cache["all"] = (time.monotonic(), res)
     return res
+
+
+def _halving_bg() -> None:
+    try:
+        _halving_build()
+    except Exception as e:  # noqa: BLE001
+        print(f"halving: {e}", file=sys.stderr)
+    finally:
+        with _liq_lock:
+            _liq_busy.discard("halving")
+
+
+def halving_data() -> dict:
+    with _liq_lock:
+        hit = _halving_cache.get("all")
+        if hit and time.monotonic() - hit[0] < HALVING_TTL:
+            return hit[1]
+        if hit and "halving" not in _liq_busy:
+            _liq_busy.add("halving")
+            threading.Thread(target=_halving_bg, daemon=True).start()
+    if hit:
+        return hit[1]
+    return _halving_build()
 
 # --- Bitcoin: биржевые потоки, крупные выводы и рейтинг -----------------------
 # Данные пишет сканер бота (WhaleScanner/btc_chain.cpp) в свою базу btc.db:
