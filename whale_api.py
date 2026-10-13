@@ -11466,7 +11466,11 @@ def fng_data() -> dict:
 # человек, открывших меню в одну минуту, не делают сто одинаковых запросов.
 HALVING_EVERY = 210_000
 HALVING_TTL = 300.0
+# Все источники молчат и запаса нет — минуту отвечаем «нет данных», не
+# пытаясь снова: иначе каждое открытие меню ждало бы четыре таймаута.
+HALVING_ERR_TTL = 60.0
 _halving_cache: dict = {}
+_halving_cold = threading.Lock()
 _HALVING_START_TS = {840_000: 1713571767}
 
 
@@ -11513,6 +11517,9 @@ def _halving_build() -> dict:
                 pass
             height = 0
     if not height:
+        print("halving: нет высоты блока ни от одного источника", file=sys.stderr)
+        with _liq_lock:
+            _halving_cache["err"] = (time.monotonic(), None)
         return hit[1] if hit else {"ok": False, "error": "no_data"}
     t_now = now()
     # Время блока из будущего или старше суток — не верим, считаем от «сейчас».
@@ -11561,9 +11568,21 @@ def halving_data() -> dict:
         if hit and "halving" not in _liq_busy:
             _liq_busy.add("halving")
             threading.Thread(target=_halving_bg, daemon=True).start()
+        err = _halving_cache.get("err")
+        if not hit and err and time.monotonic() - err[0] < HALVING_ERR_TTL:
+            return {"ok": False, "error": "no_data"}
     if hit:
         return hit[1]
-    return _halving_build()
+    # Холодный старт: первый собирает, остальные ждут его и берут готовое.
+    with _halving_cold:
+        with _liq_lock:
+            hit = _halving_cache.get("all")
+            err = _halving_cache.get("err")
+        if hit:
+            return hit[1]
+        if err and time.monotonic() - err[0] < HALVING_ERR_TTL:
+            return {"ok": False, "error": "no_data"}
+        return _halving_build()
 
 # --- Bitcoin: биржевые потоки, крупные выводы и рейтинг -----------------------
 # Данные пишет сканер бота (WhaleScanner/btc_chain.cpp) в свою базу btc.db:
@@ -16562,7 +16581,9 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, fng_data())
                 return
             if path in ("/halving", "/api/halving"):
-                self._json(200, halving_data())
+                # now — время ответа (at — время сборки, оно до пяти минут
+                # старше): по нему приложение поправляет часы телефона.
+                self._json(200, {**halving_data(), "now": now()})
                 return
             if path.startswith("/api/logo/bsc/"):
                 url, ttl = bsc_logo(path[len("/api/logo/bsc/"):])

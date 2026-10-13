@@ -460,7 +460,7 @@ export const pl: Dict = {
   dg_fund_hi: "Płacą longi",
   dg_fund_lo: "Płacą shorty",
   dg_go: "Otwórz kartę",
-  dg_halv: "za {n} bloków",
+  dg_halv: "pozostało bloków: {n}",
   dg_img_disc: "Podsumowanie danych, nie porada finansowa.",
   dg_img_exp: "Największe wygaśnięcie tygodnia · Max Pain {mp}",
   dg_img_find: "Gdzie nas znaleźć",

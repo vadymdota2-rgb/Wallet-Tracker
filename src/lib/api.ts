@@ -7,6 +7,7 @@
  */
 import { initData } from "./telegram";
 import { forget, peek, peekAny, remember } from "./memo";
+import { clockSkew, validHalving } from "./halving";
 import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
   LiqCoinsReply, FngReply, DomReply, EtfReply, HalvingReply, FundRow, LsRow, MutationResult,
@@ -570,15 +571,20 @@ export const peekEtf = () => peek<EtfReply | null>("/api/etf", 60 * 60_000) ?? s
 const HALVING_SAVED = "wt-halving-v1";
 function savedHalving(): HalvingReply | null {
   const hit = readSaved<HalvingReply>(HALVING_SAVED).all;
-  // Запас старше месяца или с прошедшим халвингом не показываем: отсчёт
-  // нарисовал бы «Халвинг наступает» до ответа сервера.
-  if (!hit?.v?.height || Date.now() - hit.at > 30 * 24 * 3600_000) return null;
+  // Запас старше месяца, битый или с прошедшим халвингом не показываем:
+  // отсчёт нарисовал бы «Халвинг наступает» до ответа сервера.
+  if (!hit || !validHalving(hit.v) || Date.now() - hit.at > 30 * 24 * 3600_000) return null;
   if (hit.v.eta && hit.v.eta * 1000 < Date.now()) return null;
   return hit.v;
 }
 export const fetchHalving = () =>
-  remember<HalvingReply | null>("/api/halving", 5 * 60_000, () => call<HalvingReply>("/api/halving", { timeout: 12_000 }), good).then((r) => {
-    if (r?.ok && r.height) writeSaved(HALVING_SAVED, { all: { at: Date.now(), v: r } });
+  remember<HalvingReply | null>("/api/halving", 5 * 60_000, () =>
+    call<HalvingReply>("/api/halving", { timeout: 12_000 }).then((r) => {
+      if (!validHalving(r)) return null;
+      // Поправку на часы считаем по свежему ответу, пока задержка — секунды.
+      return { ...r, skew: clockSkew(r.now, Date.now() / 1000) };
+    }), good).then((r) => {
+    if (r) writeSaved(HALVING_SAVED, { all: { at: Date.now(), v: r } });
     return r;
   });
 export const peekHalving = () => peek<HalvingReply | null>("/api/halving", 5 * 60_000) ?? savedHalving();

@@ -9,7 +9,8 @@
     "clean": "node tools/clean-build.mjs",
     "build": "tsc -p . && npm run clean && vite build",
     "preview": "vite preview",
-    "i18n": "python3 tools/sync-i18n.py"
+    "i18n": "python3 tools/sync-i18n.py",
+    "test": "node --test tests/*.test.ts && python3 -m unittest discover -s tests -p 'test_*.py'"
   },
   "dependencies": {
     "@tonconnect/ui": "^3.0.2",

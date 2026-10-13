@@ -654,6 +654,18 @@ say("ETF и крупные игроки: потоки по фондам и дн�
     and "minedPerDay(" in _ef and "glyph: <EtfGlyph />" in appx)
 
 _hv = read(f"{APP}/src/components/HalvingCard.tsx")
+# Автотесты халвинга (приложение и сервер) — гоняем прямо здесь: красные
+# тесты не должны уехать в main.
+import subprocess as _sp
+_t_js = _sp.run(["node", "--test", "tests/halving.test.ts"], cwd=APP, capture_output=True, text=True)
+_t_py = _sp.run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"], cwd=APP, capture_output=True, text=True)
+say("халвинг: автотесты расчёта в приложении (node --test) и сервера (unittest, без сети) зелёные",
+    _t_js.returncode == 0 and "# fail 0" in _t_js.stdout and _t_py.returncode == 0 and "OK" in _t_py.stderr
+    and "halvingView(h, local + (h.skew ?? 0))" in _hv and 'role="progressbar"' in _hv and 'role="timer"' in _hv
+    and "export function subsidySats(" in read(f"{APP}/src/lib/halving.ts")
+    and '{**halving_data(), "now": now()}' in api and "HALVING_ERR_TTL = 60.0" in api and "_halving_cold = threading.Lock()" in api)
+if _t_js.returncode or _t_py.returncode:
+    print(_t_js.stdout[-1500:], _t_py.stderr[-1500:])
 # Самоочистка: каждый ключ «wt-…» из кода — в списке KEEP, иначе уборка
 # сотрёт его при следующем запуске.
 _st = read(f"{APP}/src/lib/storage.ts")
@@ -672,7 +684,7 @@ if _used - _keep:
     print("   нет в KEEP:", sorted(_used - _keep))
 say("внизу меню — отсчёт до халвинга, а не дата сборки",
     "def halving_data(" in api and '"/api/halving"' in api and "mempool.space/api/blocks/tip/height" in api
-    and "<HalvingCard />" in appx and "drawer-build" not in appx and "const eta = h.eta ?? h.at + (h.next - h.height) * h.avg;" in _hv
+    and "<HalvingCard />" in appx and "drawer-build" not in appx and "const eta = h.eta ?? h.at + (h.next - h.height) * h.avg;" in read(f"{APP}/src/lib/halving.ts")
     and "mempool.space/api/v1/blocks" in api and "_HALVING_START_TS = {840_000: 1713571767}" in api
     and 'avg, src = t, "epoch"' in api and '"eta": eta' in api and 'int(hv.get("eta") or' in api)
 
