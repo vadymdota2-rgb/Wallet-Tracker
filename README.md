@@ -287,7 +287,7 @@ OKX, Gate, Bitget, MEXC и KuCoin — раз в час, четыре или во
 (предохранитель); экран 320 px; арабский; доступность. `tools/guard.py`
 запускает и его, а где Chromium нет — пишет, что пропустил.
 
-На GitHub всё это идёт само на каждый push и pull request —
+На GitHub всё это идёт само на каждый push в main, pull request и по кнопке —
 `.github/workflows/tests.yml`: `unit` (типы, синтаксис сервера, `npm test`) и
 `e2e` (сборка и браузерный тест). Статус — на вкладке Actions репозитория.
 

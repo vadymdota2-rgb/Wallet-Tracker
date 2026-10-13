@@ -8,9 +8,11 @@
 # соседнего репозитория WhaleScanner, которого в этой проверке нет.
 name: tests
 
+# Только main: каждый коммит рабочей ветки уходит и в main, и тесты на двух
+# ветках шли бы дважды на одном и том же коде.
 on:
   push:
-    branches: [main, "claude/**"]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
