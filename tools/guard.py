@@ -706,6 +706,7 @@ say("халвинг: среднее за эпоху, отсчёт от посл�
     # Поля ответа сходятся между собой; свёрнутое приложение сеть не трогает.
     and "r.every === EVERY" in _hvl and "&& consistent(r as HalvingReply);" in _hvl
     and 'document.addEventListener("visibilitychange", visible);' in _hv and 're.fullmatch(rb"[0-9]{1,20}", raw)' in _hvs
+    and "return v if type(v) is int else 0" in _hvs and "while len(buf) <= limit:" in _hvs and "except (TypeError, ValueError, OverflowError)" not in _hvs
     # Срок ответа на сервере и в памяти приложения — один (5 минут).
     and "TTL = 300.0" in _hvs and "export const HALVING_TTL_MS = 5 * 60_000;" in _hvl
     and "class _State:" in _hvs and "_cache" not in _hvs

@@ -129,13 +129,13 @@ class SecurityTest(unittest.TestCase):
             # 1000 байт по 0,05 с — это 50 секунд; срок — 0,4 с (+ один кусок).
             self.assertLess(time.monotonic() - t0, 1.5)
 
-    def test_huge_body_is_read_only_up_to_the_limit(self):
+    def test_huge_body_is_rejected_not_cut(self):
+        # Обрезанный ответ — не ответ: начало длинного числа или списка
+        # могло бы разобраться как что-то правдоподобное.
         with self.local():
-            got = hv._fetch(f"{self.base}/huge", 100_000)
-        self.assertIsNotNone(got)
-        self.assertEqual(len(got), 100_000)
+            self.assertIsNone(hv._fetch(f"{self.base}/huge", 100_000))
 
-    def test_chunks_respect_the_limit(self):
+    def test_chunks_stop_one_byte_past_the_limit(self):
         sizes = []
 
         class Resp(io.BytesIO):
@@ -150,9 +150,40 @@ class SecurityTest(unittest.TestCase):
                 return super().read1(n)
 
         with mock.patch.object(hv._opener, "open", lambda req, timeout=0: Resp(b"x" * 100_000)):
-            self.assertEqual(len(hv._fetch("https://mempool.space/x", 40_000)), 40_000)
+            self.assertIsNone(hv._fetch("https://mempool.space/x", 40_000))
         self.assertTrue(all(0 < n <= hv.CHUNK for n in sizes))
-        self.assertEqual(sum(sizes), 40_000)
+        self.assertEqual(sum(sizes), 40_001)  # ровно на байт больше limit — и стоп
+        sizes.clear()
+        with mock.patch.object(hv._opener, "open", lambda req, timeout=0: Resp(b"x" * 40_000)):
+            self.assertEqual(len(hv._fetch("https://mempool.space/x", 40_000)), 40_000)
+
+    def test_numbers_from_json_must_have_the_right_type(self):
+        # Высота и время — только целые; строка, дробь, True — сбой источника.
+        for v, want in ((1_050_100, 1_050_100), ("1050100", 0), (1050100.0, 0), (True, 0), (None, 0), ([1], 0)):
+            self.assertEqual(hv._whole(v), want, v)
+        for v, want in ((570_866, 570_866.0), (570_866.5, 570_866.5), ("570866", 0.0), (True, 0.0), ({}, 0.0)):
+            self.assertEqual(hv._real(v), want, v)
+        logs = []
+        net = {"/api/v1/blocks": b'[{"height":"1050100","timestamp":1791881000}]',
+               "difficulty-adjustment": b'{"timeAvg":"570866"}'}
+
+        def fetch(url, limit=1 << 20):
+            return next((v for k, v in net.items() if k in url), None)
+
+        with mock.patch.object(hv, "_fetch", fetch), mock.patch.object(hv, "_now", lambda: NOW), \
+                mock.patch.object(hv, "_log", logs.append):
+            self.assertEqual(hv.build(), {"ok": False, "error": "no_data"})  # высота-строка не годится
+            hv._st = hv._State()
+            net["/api/v1/blocks"] = b'[{"height":1050100,"timestamp":1791881000}]'
+            hv.START_TS.pop(1_050_000, None)
+            r = hv.build()
+        self.assertEqual((r["height"], r["src"], r["avg"]), (1_050_100, "nominal", 600.0))  # среднее-строка — нет
+
+    def test_log_never_breaks_the_module(self):
+        dead = io.StringIO()
+        dead.close()
+        with mock.patch("sys.stderr", dead):
+            hv._log("журнал закрыт")  # не падает
 
     # ── Что разбираем ────────────────────────────────────────────────────
 

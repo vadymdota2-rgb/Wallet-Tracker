@@ -44,6 +44,7 @@
 """
 from __future__ import annotations
 
+import contextlib
 import http.client
 import json
 import math
@@ -128,7 +129,9 @@ def _allowed(url: str) -> bool:
 def _log(msg: str) -> None:
     """В журнал — одной строкой, без управляющих символов и не длиннее LOG_MAX."""
     clean = "".join(c if c.isprintable() else "?" for c in msg)
-    print(f"halving: {clean[:LOG_MAX]}", file=sys.stderr)
+    # Журнал закрыт или сломан — работа модуля важнее записи о ней.
+    with contextlib.suppress(OSError, ValueError):
+        print(f"halving: {clean[:LOG_MAX]}", file=sys.stderr)
 
 
 class Reply(TypedDict):
@@ -178,8 +181,8 @@ def _now() -> int:
 
 
 def _fetch(url: str, limit: int = 1 << 20) -> bytes | None:
-    """GET; ответ не больше limit байт. Любая ошибка сети — None.
-    Внутри сборки — не дольше, чем осталось от её бюджета."""
+    """GET. Любая ошибка сети и ответ больше limit байт — None (обрезанный
+    ответ — не ответ). Внутри сборки — не дольше, чем осталось от бюджета."""
     if not _allowed(url):
         return None
     dl = getattr(_dl, "at", 0.0)
@@ -193,14 +196,14 @@ def _fetch(url: str, limit: int = 1 << 20) -> bytes | None:
             # По кускам и со своим сроком: таймаут сокета — на каждый кусок,
             # и источник, цедящий по байту, держал бы поток часами.
             buf = bytearray()
-            while len(buf) < limit:
+            while len(buf) <= limit:
                 if time.monotonic() > end:
                     return None
-                chunk: bytes = r.read1(min(CHUNK, limit - len(buf)))
+                chunk: bytes = r.read1(min(CHUNK, limit + 1 - len(buf)))
                 if not chunk:
-                    break
+                    return bytes(buf)
                 buf += chunk
-            return bytes(buf)
+            return None
     except (OSError, ValueError, http.client.HTTPException):  # URLError и таймаут — тоже OSError
         return None
 
@@ -233,6 +236,17 @@ def _json(url: str) -> object:
         return None
 
 
+def _whole(v: object) -> int:
+    """Целое из разобранного JSON; 0 — не целое. Высота и время блока у
+    источников всегда целые: строка, дробь, True — сбой источника."""
+    return v if type(v) is int else 0
+
+
+def _real(v: object) -> float:
+    """Число из разобранного JSON, целое или дробное; 0.0 — не число."""
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else 0.0
+
+
 def _int(url: str) -> int:
     """Число из ответа-строки; 0 — не число. Только ASCII-цифры: int() принял
     бы и «1_050_100», и «+1», и цифры других письменностей."""
@@ -251,10 +265,7 @@ def _start_ts(h: int) -> int:
     if not re.fullmatch(r"[0-9a-f]{64}", bh):
         return 0
     blk = _json(f"https://mempool.space/api/block/{bh}")
-    try:
-        ts = int(blk.get("timestamp") or 0) if isinstance(blk, dict) else 0
-    except (TypeError, ValueError, OverflowError):
-        ts = 0
+    ts = _whole(blk.get("timestamp")) if isinstance(blk, dict) else 0
     # Запоминаем навсегда только правдоподобное: после 2023 года и не из
     # будущего. Иначе мусор от источника жил бы до перезапуска API и всю
     # эпоху отключал бы среднее по ней.
@@ -274,12 +285,9 @@ def _tip() -> tuple[int, int]:
     """Высота и время последнего блока; время 0 — не знаем."""
     blocks = _json("https://mempool.space/api/v1/blocks")
     if isinstance(blocks, list) and blocks and isinstance(blocks[0], dict):
-        try:
-            h = int(blocks[0].get("height") or 0)
-            if _plausible(h):
-                return h, int(blocks[0].get("timestamp") or 0)
-        except (TypeError, ValueError, OverflowError):
-            pass
+        h = _whole(blocks[0].get("height"))
+        if _plausible(h):
+            return h, _whole(blocks[0].get("timestamp"))
     for url in ("https://mempool.space/api/blocks/tip/height", "https://blockstream.info/api/blocks/tip/height",
                 "https://blockchain.info/q/getblockcount"):
         h = _int(url)
@@ -332,10 +340,7 @@ def _build() -> Reply:
             avg, src = t, "epoch"
     if src == "nominal":
         adj = _json("https://mempool.space/api/v1/difficulty-adjustment")
-        try:
-            t = float(adj.get("timeAvg") or 0) / 1000 if isinstance(adj, dict) else 0.0
-        except (TypeError, ValueError, OverflowError):
-            t = 0.0
+        t = _real(adj.get("timeAvg")) / 1000 if isinstance(adj, dict) else 0.0
         if AVG_MIN <= t <= AVG_MAX:
             avg, src = t, "period"
     res: Reply = {"ok": True, "height": height, "next": nxt, "every": EVERY, "avg": round(avg, 1), "src": src,
@@ -349,9 +354,7 @@ def _build() -> Reply:
 
 def _bg() -> None:
     try:
-        build()
-    except Exception as e:  # noqa: BLE001 — фоновый поток не должен умирать молча
-        _log(str(e))
+        build()  # сама не падает: любой сбой — минута паузы (см. build)
     finally:
         _busy.clear()
 

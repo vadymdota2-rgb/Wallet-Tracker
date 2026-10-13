@@ -271,7 +271,8 @@ class HalvingTest(unittest.TestCase):
             return Resp(b"x" * 100)
 
         with mock.patch.object(hv._opener, "open", fake):
-            self.assertEqual(hv._fetch("https://mempool.space/x", 10), b"x" * 10)
+            self.assertEqual(hv._fetch("https://mempool.space/x", 100), b"x" * 100)  # ровно limit — годится
+            self.assertIsNone(hv._fetch("https://mempool.space/x", 99))  # больше limit — не ответ
             self.assertEqual(seen["timeout"], hv.HOP)
             self.assertEqual(seen["ua"], "wallet-tracker/1.0")
             hv._dl.at = time.monotonic() + 1.0  # внутри сборки — не дольше остатка
@@ -290,13 +291,13 @@ class HalvingTest(unittest.TestCase):
 
     # ── Фон и гонки ──────────────────────────────────────────────────────
 
-    def test_background_crash_is_logged_and_releases_the_flag(self):
+    def test_background_releases_the_flag_whatever_happens(self):
+        # build сама не падает; но даже если бы упала — флаг «идёт сборка»
+        # снимается, иначе ответ больше никогда не обновился бы.
         hv._busy.set()
-        err = io.StringIO()
-        with mock.patch.object(hv, "build", side_effect=RuntimeError("boom")), mock.patch("sys.stderr", err):
+        with mock.patch.object(hv, "build", side_effect=RuntimeError("boom")), self.assertRaises(RuntimeError):
             hv._bg()
         self.assertFalse(hv._busy.is_set())
-        self.assertIn("halving: boom", err.getvalue())
 
     def _race(self, net, n=6):
         """n человек одновременно открывают меню на холодном сервере."""

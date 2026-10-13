@@ -65,7 +65,7 @@ PY = [
     (" and not u.username and not u.password", "", "адрес с логином"),
     ("build_opener(_NoRedirect, ", "build_opener(", "без перенаправлений"),
     ("if time.monotonic() > end:", "if False:", "срок чтения целиком"),
-    ("r.read1(min(CHUNK, limit - len(buf)))", "r.read1(CHUNK)", "кусок не больше остатка"),
+    ("r.read1(min(CHUNK, limit + 1 - len(buf)))", "r.read1(CHUNK)", "кусок не больше остатка"),
     ("parse_float=_finite, ", "", "числа без бесконечностей"),
     ("parse_int=_short_int,\n", "\n", "числа не длиннее INT_MAX цифр"),
     (",\n                          parse_constant=_no_constant)", ")", "NaN и Infinity"),
@@ -73,6 +73,11 @@ PY = [
     ('c if c.isprintable() else "?"', "c", "журнал без управляющих символов"),
     ("clean[:LOG_MAX]", "clean", "длина строки журнала"),
     ('re.fullmatch(rb"[0-9]{1,20}", raw)', "raw.strip(b\" \").isascii()", "высота — только ASCII-цифры"),
+    ("return v if type(v) is int else 0", "return int(v) if isinstance(v, (int, float, str)) else 0", "высота и время — только целые"),
+    ("isinstance(v, (int, float)) and not isinstance(v, bool)", "isinstance(v, (int, float, str))", "среднее — только число"),
+    ("while len(buf) <= limit:", "while len(buf) < limit:", "ответ больше limit — не ответ"),
+    ("            return None\n    except (OSError", "            return bytes(buf)\n    except (OSError", "обрезанный ответ — не ответ"),
+    ("    with contextlib.suppress(OSError, ValueError):\n        print(", "    if True:\n        print(", "журнал не роняет модуль"),
 ]
 TICK = [
     ("1000 - (t % 1000) + TICK_SLACK", "1000", "тик на границе секунды"),
