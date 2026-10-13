@@ -143,6 +143,24 @@ class HalvingTest(unittest.TestCase):
             r = hv.reply()
         self.assertEqual((r["now"], r["at"]), (NOW + 250, NOW))
 
+    def test_hung_sources_fit_the_time_budget(self):
+        # Все источники висят до таймаута: сборка укладывается в бюджет, а
+        # не ждёт каждый адрес по очереди.
+        timeouts = []
+
+        def hang(req, timeout=0):
+            timeouts.append(timeout)
+            time.sleep(timeout)
+            raise TimeoutError("hung")
+
+        with mock.patch.object(hv, "BUDGET", 0.6), mock.patch.object(hv, "HOP", 0.25), \
+                mock.patch.object(hv.urllib.request, "urlopen", hang), mock.patch("sys.stderr", io.StringIO()):
+            t0 = time.monotonic()
+            self.assertFalse(hv.build()["ok"])
+            self.assertLess(time.monotonic() - t0, 0.75)
+        self.assertTrue(all(t <= 0.25 for t in timeouts))
+        self.assertEqual(getattr(hv._dl, "at", 0.0), 0.0)  # срок сброшен после сборки
+
     def test_fetch_never_raises(self):
         import http.client
         import urllib.error

@@ -684,6 +684,9 @@ say("халвинг: среднее за эпоху, отсчёт от посл�
     and "halvingView(h, local + (h.skew ?? 0))" in _hv and 'role="progressbar"' in _hv and 'role="timer"' in _hv
     and "aria-labelledby={titleId}" in _hv and "<BtcGlyph />" in _hv and "₿" not in _hv
     and ".hv-avg { margin: 2px 0 0; color: var(--dim);" in _hvc
+    and "BUDGET = 20.0" in _hvs and "timeout=min(HOP, left)" in _hvs and "HALVING_TTL_MS + 5_000" in _hv
+    and 'remember<HalvingReply | null>("/api/halving", HALVING_TTL_MS' in read(f"{APP}/src/lib/api.ts")
+    and 'className="hv hv-skel" aria-busy="true"' in _hv and "prefers-reduced-motion: reduce" in _hvc
     and "if (t - stamp >= 1000) stamp = t;" in read(f"{APP}/src/lib/tick.ts")
     and "export function BtcGlyph(" in read(f"{APP}/src/components/ui.tsx")
     and "<HalvingCard />" in appx and "drawer-build" not in appx and 'int(hv.get("eta") or' in api)

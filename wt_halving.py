@@ -20,6 +20,10 @@
 человек, открывших меню в одну минуту, не делают сто одинаковых запросов.
 Если все источники молчат, минуту источники не трогаем.
 
+У сборки общий бюджет времени BUDGET: источники зависли — сборка
+заканчивается за 20 секунд, а не за 7 таймаутов по 8 (почти минута — и
+запрос на холодном старте, и nginx ждали бы её целиком).
+
 Модуль ни от чего в whale_api не зависит: сеть — через _fetch (тесты
 подменяют только её), часы — через _now.
 """
@@ -39,6 +43,9 @@ TTL = 300.0
 # Все источники молчат — минуту отвечаем «нет данных», не пытаясь снова:
 # иначе каждое открытие меню ждало бы четыре таймаута.
 ERR_TTL = 60.0
+# Бюджет одной сборки и предел на один запрос, секунды.
+BUDGET = 20.0
+HOP = 6.0
 # Время блока каждого прошлого халвинга, уже известное (дальше — из сети).
 START_TS = {840_000: 1713571767}
 
@@ -47,6 +54,7 @@ _lock = threading.Lock()
 _cold = threading.Lock()
 _cache: dict = {}
 _busy = False
+_dl = threading.local()  # срок текущей сборки (monotonic) — свой у каждого потока
 
 
 def _now() -> int:
@@ -54,9 +62,14 @@ def _now() -> int:
 
 
 def _fetch(url: str, limit: int = 1 << 20) -> bytes | None:
-    """GET; ответ не больше limit байт. Любая ошибка сети — None."""
+    """GET; ответ не больше limit байт. Любая ошибка сети — None.
+    Внутри сборки — не дольше, чем осталось от её бюджета."""
+    dl = getattr(_dl, "at", 0.0)
+    left = dl - time.monotonic() if dl else HOP
+    if left <= 0.2:
+        return None
     try:
-        with urllib.request.urlopen(urllib.request.Request(url, headers=_UA), timeout=8) as r:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=_UA), timeout=min(HOP, left)) as r:
             return r.read(limit)
     except (urllib.error.URLError, OSError, ValueError, http.client.HTTPException):
         return None
@@ -117,7 +130,15 @@ def _tip() -> tuple[int, int]:
 
 
 def build() -> dict:
-    """Собрать ответ из сети и положить в кэш."""
+    """Собрать ответ из сети и положить в кэш — не дольше BUDGET секунд."""
+    _dl.at = time.monotonic() + BUDGET
+    try:
+        return _build()
+    finally:
+        _dl.at = 0.0
+
+
+def _build() -> dict:
     with _lock:
         hit = _cache.get("all")
     height, tip_ts = _tip()

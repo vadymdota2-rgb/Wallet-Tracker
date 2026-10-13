@@ -22,13 +22,13 @@ import { t } from "../i18n/t";
 import { num, pct } from "../lib/format";
 import { useNow } from "../lib/tick";
 import { fetchHalving, peekHalving } from "../lib/api";
-import { halvingView, type HalvingReply } from "../lib/halving";
+import { HALVING_TTL_MS, halvingView, type HalvingReply } from "../lib/halving";
 import { BtcGlyph } from "./ui";
 import "./HalvingCard.css";
 
-// Чуть дольше, чем ответ живёт в памяти (5 мин): иначе каждый второй
-// повтор брал бы из памяти тот же ответ и обновление шло бы раз в 10 минут.
-const REFRESH_MS = 5 * 60_000 + 5_000;
+// Чуть дольше, чем ответ живёт в памяти: иначе каждый второй повтор брал
+// бы из памяти тот же ответ и обновление шло бы вдвое реже.
+const REFRESH_MS = HALVING_TTL_MS + 5_000;
 
 const pad = (n: number) => String(n).padStart(2, "0");
 /** Сатоши → BTC без лишних нулей: 3,125 и 1,5625, а на будущих эпохах — до 8 знаков. */
@@ -39,12 +39,17 @@ export function HalvingCard() {
   const local = useNow();
   const titleId = useId();
   const [h, setH] = useState<HalvingReply | null>(() => peekHalving() ?? null);
+  // Первый запрос ещё идёт — заглушка того же размера, а не пустое место,
+  // в которое карточка потом «выпрыгнет». Не ответил — карточки нет.
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
     const load = () =>
       void fetchHalving().then((r) => {
-        if (alive && r) setH(r);
+        if (!alive) return;
+        if (r) setH(r);
+        setLoading(false);
       });
     load();
     const id = setInterval(load, REFRESH_MS);
@@ -63,7 +68,21 @@ export function HalvingCard() {
     }
   }, [lang]);
 
-  if (!h) return null;
+  if (!h) {
+    if (!loading) return null;
+    return (
+      <section className="hv hv-skel" aria-busy="true" aria-labelledby={titleId}>
+        <h2 className="hv-t" id={titleId}>
+          <span className="hv-coin" aria-hidden="true"><BtcGlyph /></span>
+          {t(lang, "hv_title")}
+        </h2>
+        <div className="hv-clock" aria-hidden="true">
+          {[0, 1, 2, 3].map((i) => <div key={i} className={i === 0 ? "hv-cell big" : "hv-cell"}><b>&nbsp;</b><small>&nbsp;</small></div>)}
+        </div>
+        <div className="hv-bar" aria-hidden="true" />
+      </section>
+    );
+  }
   // Часы телефона могут врать на минуты и часы — считаем по часам сервера.
   const v = halvingView(h, local + (h.skew ?? 0));
   const day = (ts: number) => (dateFmt ? dateFmt.format(new Date(ts * 1000)) : new Date(ts * 1000).toISOString().slice(0, 10));

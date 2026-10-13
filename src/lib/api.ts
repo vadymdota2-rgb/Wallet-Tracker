@@ -7,7 +7,7 @@
  */
 import { initData } from "./telegram";
 import { forget, peek, peekAny, remember } from "./memo";
-import { clockSkew, validHalving, type HalvingReply } from "./halving";
+import { HALVING_TTL_MS, clockSkew, validHalving, type HalvingReply } from "./halving";
 import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
   LiqCoinsReply, FngReply, DomReply, EtfReply, FundRow, LsRow, MutationResult,
@@ -578,7 +578,7 @@ function savedHalving(): HalvingReply | null {
   return hit.v;
 }
 export const fetchHalving = () =>
-  remember<HalvingReply | null>("/api/halving", 5 * 60_000, () =>
+  remember<HalvingReply | null>("/api/halving", HALVING_TTL_MS, () =>
     call<HalvingReply>("/api/halving", { timeout: 12_000 }).then((r) => {
       if (!validHalving(r)) return null;
       // Поправку на часы считаем по свежему ответу, пока задержка — секунды.
@@ -587,7 +587,7 @@ export const fetchHalving = () =>
       writeSaved(HALVING_SAVED, { all: { at: Date.now(), v } });
       return v;
     }), good);
-export const peekHalving = () => peek<HalvingReply | null>("/api/halving", 5 * 60_000) ?? savedHalving();
+export const peekHalving = () => peek<HalvingReply | null>("/api/halving", HALVING_TTL_MS) ?? savedHalving();
 
 /** Все монеты с фьючерсами — список раз в час; последний лежит на устройстве. */
 function savedLiqCoins(): LiqCoinsReply | null {
