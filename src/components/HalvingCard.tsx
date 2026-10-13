@@ -22,9 +22,9 @@ import { t } from "../i18n/t";
 import { num, pct } from "../lib/format";
 import { useNow } from "../lib/tick";
 import { fetchHalving, peekHalving } from "../lib/api";
-import { halvingView } from "../lib/halving";
-import type { HalvingReply } from "../lib/types";
+import { halvingView, type HalvingReply } from "../lib/halving";
 import { BtcGlyph } from "./ui";
+import "./HalvingCard.css";
 
 // Чуть дольше, чем ответ живёт в памяти (5 мин): иначе каждый второй
 // повтор брал бы из памяти тот же ответ и обновление шло бы раз в 10 минут.

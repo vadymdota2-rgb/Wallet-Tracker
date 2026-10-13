@@ -8,7 +8,6 @@ import calendar
 import hashlib
 import html
 import hmac
-import http.client
 import json
 import math
 import os
@@ -31,6 +30,7 @@ from http.server import BaseHTTPRequestHandler
 # Щит лежит рядом: находим его, откуда бы API ни запускали.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wt_shield as shield  # noqa: E402
+import wt_halving as halving  # noqa: E402
 from urllib.parse import parse_qs, unquote, urlparse, urlsplit
 
 # Петля по умолчанию: наружу API выходит только через nginx. Раньше здесь
@@ -11450,150 +11450,9 @@ def fng_data() -> dict:
 
 
 # --- Халвинг -----------------------------------------------------------------
-# Высота и время последнего блока — mempool.space (/api/v1/blocks, без ключа);
-# запасной путь — blockstream.info и blockchain.info (тогда время блока не
-# знаем и берём текущее). Халвинг каждые 210 000 блоков.
-#
-# Скорость блоков — СРЕДНЕЕ ЗА ВСЮ ЭПОХУ (от прошлого халвинга до последнего
-# блока), а не за текущий период сложности: тот длится две недели и гуляет
-# от 9,3 до 10,5 минуты, а до халвинга полтора года — растянутое на 78 тысяч
-# блоков, такое среднее сдвигало дату на недели и прыгало после каждой
-# перенастройки сложности. Время блока, с которого началась эпоха, не
-# меняется: спрашиваем один раз, для 840 000 оно и так известно.
-# Дата халвинга (eta) считается от времени последнего блока, а не от момента
-# запроса — блок мог выйти и десять минут назад.
-# Как у страха и жадности: устаревший ответ отдаётся сразу, свежий собирается
-# в фоне одним потоком — запрос не ждёт mempool по 8 секунд на адрес, а сто
-# человек, открывших меню в одну минуту, не делают сто одинаковых запросов.
-HALVING_EVERY = 210_000
-HALVING_TTL = 300.0
-# Все источники молчат и запаса нет — минуту отвечаем «нет данных», не
-# пытаясь снова: иначе каждое открытие меню ждало бы четыре таймаута.
-HALVING_ERR_TTL = 60.0
-_halving_cache: dict = {}
-_halving_cold = threading.Lock()
-_HALVING_START_TS = {840_000: 1713571767}
+# Отдельный модуль wt_halving.py: расчёт, кэш, фоновое обновление, тесты.
+halving_data = halving.halving_data
 
-
-def _halving_start_ts(h: int) -> int:
-    ts = _HALVING_START_TS.get(h)
-    if ts:
-        return ts
-    ts = 0
-    try:
-        req = urllib.request.Request(f"https://mempool.space/api/block-height/{h}", headers={"User-Agent": "wallet-tracker/1.0"})
-        with urllib.request.urlopen(req, timeout=8) as r:
-            bh = r.read(200).decode().strip()
-        # В адрес следующего запроса идёт только настоящий хеш блока.
-        if re.fullmatch(r"[0-9a-f]{64}", bh):
-            blk = get_json(f"https://mempool.space/api/block/{bh}", 8)
-            if isinstance(blk, dict):
-                ts = int(blk.get("timestamp") or 0)
-    except (urllib.error.URLError, ValueError, OSError, TypeError, http.client.HTTPException):
-        ts = 0
-    if ts > 1_700_000_000:
-        _HALVING_START_TS[h] = ts
-    return ts
-
-
-def _halving_build() -> dict:
-    with _liq_lock:
-        hit = _halving_cache.get("all")
-    height = 0
-    tip_ts = 0
-    blocks = get_json("https://mempool.space/api/v1/blocks", 8)
-    if isinstance(blocks, list) and blocks and isinstance(blocks[0], dict):
-        try:
-            height = int(blocks[0].get("height") or 0)
-            tip_ts = int(blocks[0].get("timestamp") or 0)
-        except (TypeError, ValueError):
-            height = tip_ts = 0
-    if height <= 800_000:
-        height = 0
-        for url in ("https://mempool.space/api/blocks/tip/height", "https://blockstream.info/api/blocks/tip/height",
-                    "https://blockchain.info/q/getblockcount"):
-            try:
-                req = urllib.request.Request(url, headers={"User-Agent": "wallet-tracker/1.0"})
-                with urllib.request.urlopen(req, timeout=8) as r:
-                    height = int(r.read(64).decode().strip())
-                if height > 800_000:
-                    break
-            except (urllib.error.URLError, ValueError, OSError, http.client.HTTPException):
-                pass
-            height = 0
-    if not height:
-        print("halving: нет высоты блока ни от одного источника", file=sys.stderr)
-        with _liq_lock:
-            _halving_cache["err"] = (time.monotonic(), None)
-        return hit[1] if hit else {"ok": False, "error": "no_data"}
-    t_now = now()
-    # Время блока из будущего или старше суток — не верим, считаем от «сейчас».
-    if not (t_now - 86400 < tip_ts <= t_now + 7200):
-        tip_ts = t_now
-    start = height // HALVING_EVERY * HALVING_EVERY
-    nxt = start + HALVING_EVERY
-    avg, src = 600.0, "nominal"
-    start_ts = _halving_start_ts(start)
-    # Среднее за эпоху — когда в ней уже хотя бы один период сложности.
-    if start_ts and height - start >= 2016 and tip_ts > start_ts:
-        t = (tip_ts - start_ts) / (height - start)
-        if 480 <= t <= 720:
-            avg, src = t, "epoch"
-    if src == "nominal":
-        adj = get_json("https://mempool.space/api/v1/difficulty-adjustment", 8)
-        adj = adj if isinstance(adj, dict) else {}
-        try:
-            t = float(adj.get("timeAvg") or 0) / 1000
-            if 480 <= t <= 720:
-                avg, src = t, "period"
-        except (TypeError, ValueError):
-            pass
-    eta = int(tip_ts + (nxt - height) * avg)
-    res = {"ok": True, "height": height, "next": nxt, "every": HALVING_EVERY, "avg": round(avg, 1), "src": src,
-           "tip": tip_ts, "eta": eta, "at": t_now}
-    if start_ts:
-        res["prev"] = start_ts  # время блока прошлого халвинга
-    with _liq_lock:
-        _halving_cache["all"] = (time.monotonic(), res)
-    return res
-
-
-def _halving_bg() -> None:
-    try:
-        _halving_build()
-    except Exception as e:  # noqa: BLE001
-        print(f"halving: {e}", file=sys.stderr)
-    finally:
-        with _liq_lock:
-            _liq_busy.discard("halving")
-
-
-def halving_data() -> dict:
-    with _liq_lock:
-        hit = _halving_cache.get("all")
-        if hit and time.monotonic() - hit[0] < HALVING_TTL:
-            return hit[1]
-        err = _halving_cache.get("err")
-        failed = bool(err and time.monotonic() - err[0] < HALVING_ERR_TTL)
-        # Источники только что молчали — не дёргаем их снова сразу: иначе при
-        # сбое mempool фоновые сборки шли бы одна за другой без перерыва.
-        if hit and not failed and "halving" not in _liq_busy:
-            _liq_busy.add("halving")
-            threading.Thread(target=_halving_bg, daemon=True).start()
-        if not hit and failed:
-            return {"ok": False, "error": "no_data"}
-    if hit:
-        return hit[1]
-    # Холодный старт: первый собирает, остальные ждут его и берут готовое.
-    with _halving_cold:
-        with _liq_lock:
-            hit = _halving_cache.get("all")
-            err = _halving_cache.get("err")
-        if hit:
-            return hit[1]
-        if err and time.monotonic() - err[0] < HALVING_ERR_TTL:
-            return {"ok": False, "error": "no_data"}
-        return _halving_build()
 
 # --- Bitcoin: биржевые потоки, крупные выводы и рейтинг -----------------------
 # Данные пишет сканер бота (WhaleScanner/btc_chain.cpp) в свою базу btc.db:
@@ -16592,9 +16451,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, fng_data())
                 return
             if path in ("/halving", "/api/halving"):
-                # now — время ответа (at — время сборки, оно до пяти минут
-                # старше): по нему приложение поправляет часы телефона.
-                self._json(200, {**halving_data(), "now": now()})
+                self._json(200, halving.reply())
                 return
             if path.startswith("/api/logo/bsc/"):
                 url, ttl = bsc_logo(path[len("/api/logo/bsc/"):])

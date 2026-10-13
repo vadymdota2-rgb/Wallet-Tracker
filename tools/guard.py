@@ -654,25 +654,39 @@ say("ETF и крупные игроки: потоки по фондам и дн�
     and "minedPerDay(" in _ef and "glyph: <EtfGlyph />" in appx)
 
 _hv = read(f"{APP}/src/components/HalvingCard.tsx")
+_hvl = read(f"{APP}/src/lib/halving.ts")
+_hvs = read(f"{APP}/wt_halving.py")
+_hvc = read(f"{APP}/src/components/HalvingCard.css")
 # Автотесты халвинга (приложение и сервер) — гоняем прямо здесь: красные
 # тесты не должны уехать в main.
 import subprocess as _sp
 _t_js = _sp.run(["node", "--test", "tests/halving.test.ts", "tests/tick.test.ts"], cwd=APP, capture_output=True, text=True)
 _t_py = _sp.run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"], cwd=APP, capture_output=True, text=True)
 say("халвинг: автотесты расчёта в приложении (node --test) и сервера (unittest, без сети) зелёные",
-    _t_js.returncode == 0 and "# fail 0" in _t_js.stdout and _t_py.returncode == 0 and "OK" in _t_py.stderr
-    and "halvingView(h, local + (h.skew ?? 0))" in _hv and 'role="progressbar"' in _hv and 'role="timer"' in _hv
-    and "export function subsidySats(" in read(f"{APP}/src/lib/halving.ts")
-    and '{**halving_data(), "now": now()}' in api and "HALVING_ERR_TTL = 60.0" in api and "_halving_cold = threading.Lock()" in api
-    and 'if hit and not failed and "halving" not in _liq_busy:' in api and "<BtcGlyph />" in _hv and "₿" not in _hv
-    and "donePct: left > 0 ? Math.min(99.9," in read(f"{APP}/src/lib/halving.ts")
-    and ".hv-avg { margin: 2px 0 0; color: var(--dim);" in read(f"{APP}/src/styles/app.css")
-    and '<Boundary name="halving"><HalvingCard /></Boundary>' in appx and "static getDerivedStateFromError()" in read(f"{APP}/src/components/Boundary.tsx")
-    and "opt(r.eta, time)" in read(f"{APP}/src/lib/halving.ts") and 'res["prev"] = start_ts' in api and "aria-labelledby={titleId}" in _hv
-    and "if (t - stamp >= 1000) stamp = t;" in read(f"{APP}/src/lib/tick.ts") and 're.fullmatch(r"[0-9a-f]{64}", bh)' in api
-    and "adj = adj if isinstance(adj, dict) else {}" in api and "export function BtcGlyph(" in read(f"{APP}/src/components/ui.tsx"))
+    _t_js.returncode == 0 and "# fail 0" in _t_js.stdout and _t_py.returncode == 0 and "OK" in _t_py.stderr)
 if _t_js.returncode or _t_py.returncode:
     print(_t_js.stdout[-1500:], _t_py.stderr[-1500:])
+# Модуль халвинга: сервер — wt_halving.py, расчёт и тип — lib/halving.ts,
+# вид — HalvingCard.tsx + .css. В общих файлах — только подключение.
+say("халвинг — отдельный модуль: сервер, расчёт, тип, вид и стили в своих файлах, в общих — только подключение",
+    "import wt_halving as halving" in api and "halving_data = halving.halving_data" in api
+    and 'self._json(200, halving.reply())' in api and "mempool" not in api.split("# --- Халвинг")[1].split("# --- Bitcoin")[0]
+    and "export interface HalvingReply" in _hvl and "HalvingReply" not in read(f"{APP}/src/lib/types.ts")
+    and 'import "./HalvingCard.css";' in _hv and ".hv" not in read(f"{APP}/src/styles/app.css").replace("HalvingCard.css", "")
+    and "from whale_api" not in _hvs and "import whale_api" not in _hvs
+    and '<Boundary name="halving"><HalvingCard /></Boundary>' in appx and "static getDerivedStateFromError()" in read(f"{APP}/src/components/Boundary.tsx"))
+say("халвинг: среднее за эпоху, отсчёт от последнего блока, фон и пауза после сбоя, проверка ответа, поправка часов, доступность",
+    'avg, src = t, "epoch"' in _hvs and "mempool.space/api/v1/blocks" in _hvs and "START_TS = {840_000: 1713571767}" in _hvs
+    and "ERR_TTL = 60.0" in _hvs and "if hit and not failed and not _busy:" in _hvs and 're.fullmatch(r"[0-9a-f]{64}", bh)' in _hvs
+    and 'res["prev"] = start_ts' in _hvs and '"now": _now()' in _hvs
+    and "opt(r.eta, time)" in _hvl and "donePct: left > 0 ? Math.min(99.9," in _hvl and "export function subsidySats(" in _hvl
+    and "const eta = h.eta ?? h.at + (h.next - h.height) * h.avg;" in _hvl
+    and "halvingView(h, local + (h.skew ?? 0))" in _hv and 'role="progressbar"' in _hv and 'role="timer"' in _hv
+    and "aria-labelledby={titleId}" in _hv and "<BtcGlyph />" in _hv and "₿" not in _hv
+    and ".hv-avg { margin: 2px 0 0; color: var(--dim);" in _hvc
+    and "if (t - stamp >= 1000) stamp = t;" in read(f"{APP}/src/lib/tick.ts")
+    and "export function BtcGlyph(" in read(f"{APP}/src/components/ui.tsx")
+    and "<HalvingCard />" in appx and "drawer-build" not in appx and 'int(hv.get("eta") or' in api)
 # Самоочистка: каждый ключ «wt-…» из кода — в списке KEEP, иначе уборка
 # сотрёт его при следующем запуске.
 _st = read(f"{APP}/src/lib/storage.ts")
@@ -689,12 +703,6 @@ say("самоочистка хранилища: все ключи приложе
     and "OPT_SAVED_KEEP = 4;" in read(f"{APP}/src/lib/api.ts"))
 if _used - _keep:
     print("   нет в KEEP:", sorted(_used - _keep))
-say("внизу меню — отсчёт до халвинга, а не дата сборки",
-    "def halving_data(" in api and '"/api/halving"' in api and "mempool.space/api/blocks/tip/height" in api
-    and "<HalvingCard />" in appx and "drawer-build" not in appx and "const eta = h.eta ?? h.at + (h.next - h.height) * h.avg;" in read(f"{APP}/src/lib/halving.ts")
-    and "mempool.space/api/v1/blocks" in api and "_HALVING_START_TS = {840_000: 1713571767}" in api
-    and 'avg, src = t, "epoch"' in api and '"eta": eta' in api and 'int(hv.get("eta") or' in api)
-
 _dgt = read(f"{APP}/src/screens/DigestTab.tsx")
 say("дайджест: просмотры — каждый человек один раз, счётчик у каждого выпуска",
     "CREATE TABLE IF NOT EXISTS digest_views" in api and "INSERT OR IGNORE INTO digest_views" in api

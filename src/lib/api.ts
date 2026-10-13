@@ -7,10 +7,10 @@
  */
 import { initData } from "./telegram";
 import { forget, peek, peekAny, remember } from "./memo";
-import { clockSkew, validHalving } from "./halving";
+import { clockSkew, validHalving, type HalvingReply } from "./halving";
 import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
-  LiqCoinsReply, FngReply, DomReply, EtfReply, HalvingReply, FundRow, LsRow, MutationResult,
+  LiqCoinsReply, FngReply, DomReply, EtfReply, FundRow, LsRow, MutationResult,
   RotSide, SymbolRow, TokenHist, Trades, UnlocksReply, WalletLive, BscExFlowReply,
   BtcBigReply, BtcFlowReply, BtcRankReply, BtcWalletReply, LsTotals, OptionsReply, LiqsReply, OiHistReply, CalReply,
 } from "./types";
