@@ -34,8 +34,9 @@ const TYPES: Record<string, string> = {
 const REAL = JSON.parse(await readFile(new URL("../fixtures/halving.json", import.meta.url), "utf8")) as
   { now: number } & Record<string, unknown>;
 const T = REAL.now;
-// До халвинга eta − T = 47 015 123 с = 544 дн 03 ч 45 мин 23 с.
-const CLOCK_RU = "544 дн 03 ч 45 мин 23 сек";
+// До халвинга eta − T = 47 015 123 с = 544 дн 03 ч 45 мин 23 с. Читалка экрана
+// слышит его словами, в правильной форме (Intl).
+const CLOCK_RU = "544 дня 3 часа 45 минут 23 секунды";
 /** Текст как видит человек: неразрывные и узкие пробелы (разряды «1 050 000»,
  *  «9 апреля 2028 г.») — как обычные. */
 const sp = (s: string | null) => (s ?? "").replace(/[\s\u00a0\u202f]+/g, " ").trim();
@@ -139,6 +140,7 @@ describe("карточка халвинга", () => {
     assert.equal(await page.evaluate(() => document.fonts.check('700 22px "IBM Plex Sans"')), true);
     assert.equal(sp(await page.locator(".hv-clock").getAttribute("aria-label")), CLOCK_RU);
     assert.deepEqual(await page.locator(".hv-cell b").allInnerTexts(), ["544", "03", "45", "23"]);
+    assert.deepEqual(await page.locator(".hv-cell small").allInnerTexts(), ["дн.", "ч", "мин", "с"]);
     assert.equal(sp(await page.locator(".hv-eta").innerText()), "≈ 9 апреля 2028 г.");
     assert.equal(sp(await page.locator(".hv-meta span").first().innerText()), "62,5% эпохи");
     assert.equal(sp(await page.locator(".hv-meta bdi").innerText()), "971 219 / 1 050 000");
@@ -267,6 +269,8 @@ describe("карточка халвинга", () => {
     assert.equal(await page.evaluate(() => document.documentElement.dir), "rtl");
     assert.equal(await page.locator(".hv-clock").getAttribute("dir"), "ltr");
     assert.deepEqual(await page.locator(".hv-cell b").allInnerTexts(), ["544", "03", "45", "23"]);
+    // Подписи — в арабской форме для своего числа (раньше «يوم» и «ساعة» на всё).
+    assert.deepEqual(await page.locator(".hv-cell small").allInnerTexts(), ["يومًا", "س", "د", "ث"]);
     // Полоса растёт от начала строки — на арабском справа (замер в одном кадре).
     const fromRight = await page.locator(".hv-bar").evaluate((bar) => {
       const b = bar.getBoundingClientRect();

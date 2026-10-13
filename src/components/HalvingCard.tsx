@@ -22,7 +22,7 @@ import { t } from "../i18n/t";
 import { num, pct } from "../lib/format";
 import { useNow } from "../lib/tick";
 import { fetchHalving, peekHalving } from "../lib/api";
-import { HALVING_TTL_MS, halvingView, type HalvingReply } from "../lib/halving";
+import { CLOCK_UNITS, HALVING_TTL_MS, clockSpeech, halvingView, unitLabel, type HalvingReply } from "../lib/halving";
 import { BtcGlyph } from "./ui";
 import "./HalvingCard.css";
 
@@ -31,6 +31,8 @@ import "./HalvingCard.css";
 const REFRESH_MS = HALVING_TTL_MS + 5_000;
 
 const pad = (n: number) => String(n).padStart(2, "0");
+/** Подписи из словаря — запасные, если Intl не умеет единицы (старый WebView). */
+const FALLBACK = ["hv_d", "hv_h", "hv_m", "hv_s"] as const;
 /** Сатоши → BTC без лишних нулей: 3,125 и 1,5625, а на будущих эпохах — до 8 знаков. */
 const btc = (sats: number) => num(sats / 1e8, 8);
 
@@ -93,9 +95,11 @@ export function HalvingCard() {
   const v = halvingView(h, local + (h.skew ?? 0));
   const day = (ts: number) => (dateFmt ? dateFmt.format(new Date(ts * 1000)) : new Date(ts * 1000).toISOString().slice(0, 10));
   const etaText = day(v.eta);
-  const labels = [t(lang, "hv_d"), t(lang, "hv_h"), t(lang, "hv_m"), t(lang, "hv_s")];
+  // Форма слова — по числу и языку (Intl): «1 day» и «2 days», «544 يومًا».
+  const labels = v.parts.map((n, i) => unitLabel(lang, CLOCK_UNITS[i]!, n) ?? t(lang, FALLBACK[i]!));
   const epochText = t(lang, "hv_epoch", { p: pct(v.donePct, 1, false) });
-  const clock = v.parts.map((n, i) => `${i === 0 ? num(n) : pad(n)} ${labels[i]}`).join(" ");
+  // Для читалки — словами целиком: «544 дня 3 часа 45 минут 23 секунды».
+  const clock = clockSpeech(lang, v.parts) ?? v.parts.map((n, i) => `${i === 0 ? num(n) : pad(n)} ${labels[i]}`).join(" ");
 
   return (
     <section className="hv" aria-labelledby={titleId}>

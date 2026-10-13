@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { clockSkew, halvingView, subsidySats, validHalving, type HalvingReply } from "../src/lib/halving.ts";
+import { clockSkew, clockSpeech, halvingView, subsidySats, unitLabel, validHalving, type HalvingReply } from "../src/lib/halving.ts";
 
 /** Копия ответа без перечисленных полей — «поля нет», а не «поле = undefined». */
 function omit<T extends object, K extends keyof T>(o: T, ...keys: K[]): Omit<T, K> {
@@ -160,4 +160,65 @@ test("halvingView: остаток — целые секунды вниз, даж
 test("halvingView: «состоялся» не показывается для prev из будущего", () => {
   const h = { ...REAL, prev: REAL.at + 3600 };
   assert.equal(halvingView(h, REAL.at).justHappened, null);
+});
+
+test("подписи под числами — в правильной форме слова для языка", () => {
+  // Раньше подпись была одна на все числа: «1 days», «1 dni», «03 ساعة».
+  assert.equal(unitLabel("en", "day", 1), "day");
+  assert.equal(unitLabel("en", "day", 2), "days");
+  assert.equal(unitLabel("pl", "day", 1), "dzień");
+  assert.equal(unitLabel("pl", "day", 544), "dni");
+  assert.equal(unitLabel("ar", "day", 2), "يومان");
+  assert.equal(unitLabel("ar", "day", 544), "يومًا");
+  assert.equal(unitLabel("pt", "day", 1), "dia");
+  assert.equal(unitLabel("ru", "minute", 45), "мин");
+});
+
+test("подпись есть в каждом из 16 языков для любого числа", () => {
+  const langs = ["ru", "uk", "en", "de", "es", "fr", "pt", "pl", "tr", "id", "vi", "hi", "ar", "ja", "ko", "zh"];
+  for (const lang of langs) {
+    for (const unit of ["day", "hour", "minute", "second"] as const) {
+      for (let n = 0; n <= 1500; n += unit === "day" ? 1 : 7) {
+        const l = unitLabel(lang, unit, n);
+        assert.ok(l && !/\d/.test(l), `${lang} ${unit} ${n}: «${l}»`);
+      }
+    }
+  }
+});
+
+test("отсчёт для читалки — словами целиком и по-русски грамотно", () => {
+  assert.equal(clockSpeech("ru", [544, 3, 45, 23]), "544 дня 3 часа 45 минут 23 секунды");
+  assert.equal(clockSpeech("ru", [1, 1, 1, 1]), "1 день 1 час 1 минута 1 секунда");
+  assert.equal(clockSpeech("en", [1, 2, 0, 1]), "1 day, 2 hours, 0 minutes, 1 second");
+  assert.equal(clockSpeech("ru", [1, 2]), "1 день 2 часа");
+});
+
+test("неизвестный язык — запасной путь, а не падение", () => {
+  assert.equal(unitLabel("xx-invalid-!!", "day", 1), null);
+  assert.equal(clockSpeech("xx-invalid-!!", [1, 2, 3, 4]), null);
+});
+
+test("старый WebView без Intl.ListFormat и formatToParts — запасной путь", () => {
+  // iOS до 14.5 не знает Intl.ListFormat; ещё более старые — formatToParts.
+  const intl = Intl as unknown as Record<string, unknown>;
+  const list = intl["ListFormat"];
+  const proto = Intl.NumberFormat.prototype as unknown as Record<string, unknown>;
+  const parts = proto["formatToParts"];
+  try {
+    delete intl["ListFormat"];
+    assert.equal(clockSpeech("ru", [544, 3, 45, 23]), null);
+    delete proto["formatToParts"];
+    assert.equal(unitLabel("ru", "day", 544), null);
+  } finally {
+    intl["ListFormat"] = list;
+    proto["formatToParts"] = parts;
+  }
+  // Intl вернул число без единицы — тоже запасной путь, а не пустая подпись.
+  try {
+    proto["formatToParts"] = () => [{ type: "integer", value: "544" }];
+    assert.equal(unitLabel("ru", "day", 544), null);
+  } finally {
+    proto["formatToParts"] = parts;
+  }
+  assert.equal(unitLabel("ru", "day", 544), "дн.");
 });

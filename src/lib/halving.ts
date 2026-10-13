@@ -80,6 +80,63 @@ export function subsidySats(epoch: number): number {
   return epoch >= 64 ? 0 : Math.floor(SUBSIDY0 / 2 ** epoch);
 }
 
+/** Единицы отсчёта — по порядку частей HalvingView.parts. */
+export type ClockUnit = "day" | "hour" | "minute" | "second";
+export const CLOCK_UNITS: readonly ClockUnit[] = ["day", "hour", "minute", "second"];
+
+const unitFormats = new Map<string, Intl.NumberFormat | null>();
+
+/** Формат единицы для языка — один на язык, единицу и вид; null — Intl не умеет. */
+function unitFormat(lang: string, unit: ClockUnit, display: "short" | "long"): Intl.NumberFormat | null {
+  const key = `${lang}|${unit}|${display}`;
+  let f = unitFormats.get(key);
+  if (f === undefined) {
+    try {
+      f = new Intl.NumberFormat(lang, { style: "unit", unit, unitDisplay: display });
+    } catch {
+      f = null;
+    }
+    unitFormats.set(key, f);
+  }
+  return f;
+}
+
+/**
+ * Подпись под числом в нужной форме слова: 1 day / 2 days, 1 dzień / 2 dni,
+ * 544 يومًا / 2 يومان. Неизменная подпись из словаря («1 days», «03 ساعة»)
+ * была неграмотной во многих языках. null — Intl этого не умеет (старый
+ * WebView): тогда карточка берёт подпись из словаря.
+ */
+export function unitLabel(lang: string, unit: ClockUnit, n: number): string | null {
+  try {
+    const parts = unitFormat(lang, unit, "short")?.formatToParts(n);
+    const label = parts?.filter((p) => p.type === "unit").map((p) => p.value).join("").trim();
+    return label || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Отсчёт целиком словами — для читалки экрана: «544 дня 3 часа 45 минут
+ * 23 секунды», «544 days, 3 hours, 45 minutes, 23 seconds». null — Intl не умеет.
+ */
+export function clockSpeech(lang: string, parts: readonly number[]): string | null {
+  try {
+    const words: string[] = [];
+    for (const [i, unit] of CLOCK_UNITS.entries()) {
+      const n = parts[i];
+      if (n === undefined) break; // частей меньше четырёх — сколько есть
+      const w = unitFormat(lang, unit, "long")?.format(n);
+      if (!w) return null;
+      words.push(w);
+    }
+    return new Intl.ListFormat(lang, { type: "unit", style: "long" }).format(words);
+  } catch {
+    return null;
+  }
+}
+
 export interface HalvingView {
   /** Секунд до халвинга (0 — наступает). */
   left: number;

@@ -10,7 +10,10 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EQUIV = {"граница награды"}  # 50 BTC >> 63 и >> 64 — оба ноль
+# Эквивалентные: «граница награды» — 50 BTC >> 63 и >> 64 оба ноль;
+# «озвучка неполного отсчёта» — массив частей плотный: после первой
+# пропущенной пропущены и все следующие, break и continue дают одно и то же.
+EQUIV = {"граница награды", "озвучка неполного отсчёта"}
 TS = [
     ("v > 0;", "v >= 0;", "int: ноль как высота"),
     ("r.height < r.next", "r.height <= r.next", "высота равна next"),
@@ -27,6 +30,11 @@ TS = [
     ("since >= 0 &&", "since >= -1e12 &&", "«состоялся» из будущего"),
     ("Math.abs(v) < 366 * 86400", "Math.abs(v) < 1e12", "предел поправки часов"),
     ('v === "epoch" || v === "period" || v === "nominal"', "true", "src любой"),
+    ('.filter((p) => p.type === "unit")', '.filter((p) => p.type !== "literal")', "подпись — только единица"),
+    ('unitFormat(lang, unit, "short")?.formatToParts(n)', 'unitFormat(lang, unit, "long")?.formatToParts(n)', "подпись короткая"),
+    ('formatToParts(n);', 'formatToParts(1);', "форма слова по числу"),
+    ('{ type: "unit", style: "long" }', '{ type: "conjunction", style: "long" }', "озвучка без «и»"),
+    ("if (n === undefined) break;", "if (n === undefined) continue;", "озвучка неполного отсчёта"),
 ]
 PY = [
     ("if hit and not failed and not _busy.is_set():", "if hit and not _busy.is_set():", "пауза после сбоя"),

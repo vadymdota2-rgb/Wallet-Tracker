@@ -700,6 +700,8 @@ say("халвинг: среднее за эпоху, отсчёт от посл�
     and "TTL = 300.0" in _hvs and "export const HALVING_TTL_MS = 5 * 60_000;" in _hvl
     and "class _State:" in _hvs and "_cache" not in _hvs
     and "def _plausible(h: int) -> bool:" in _hvs and "class Reply(TypedDict):" in _hvs
+    and "export function unitLabel(" in _hvl and "export function clockSpeech(" in _hvl
+    and "unitLabel(lang, CLOCK_UNITS[i]!, n) ?? t(lang, FALLBACK[i]!)" in _hv
     and os.path.exists(f"{APP}/tests/halving.props.test.ts") and os.path.exists(f"{APP}/tests/test_halving_fuzz.py")
     and "typecheck:halving" in read(f"{APP}/package.json") and 'python: ["3.10", "3.11", "3.12", "3.13"]' in read(f"{APP}/.github/workflows/tests.yml") and "const untilNextSecond = " in read(f"{APP}/src/lib/tick.ts")
     and "if 1_700_000_000 < ts <= _now():" in _hvs and "except RuntimeError as e:" in _hvs and os.path.exists(f"{APP}/tools/mutate-halving.py")
