@@ -1,4 +1,8 @@
 /* Карточка халвинга (HalvingCard.tsx) — внизу бокового меню.
+   Все классы — с приставкой hv-: общий .big из app.css (28 px, жирный)
+   раньше попадал в ячейку дней, и подпись «дн» была толще остальных.
+   Насыщенность — не больше 700: толще у IBM Plex Sans не бывает, и 800
+   браузер всё равно рисовал как 700.
    Подпись под числом («дн», «Tage», «ساعة») не обрезается многоточием, а
    переносится: на немецком и арабском она длиннее, а цифра важнее. */
 .hv {
@@ -11,7 +15,7 @@
     linear-gradient(180deg, rgb(16 22 36 / 0.9), rgb(6 10 20 / 0.9));
   box-shadow: 0 10px 30px rgb(0 0 0 / 0.35), inset 0 1px 0 rgb(255 255 255 / 0.04);
 }
-.hv-t { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #f7b955; }
+.hv-t { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #f7b955; }
 .hv-coin {
   display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
   background: #f7931a; color: #fff;
@@ -23,14 +27,14 @@
   border-radius: 10px; background: rgb(255 255 255 / 0.05); border: 1px solid rgb(255 255 255 / 0.06);
   min-width: 0;
 }
-.hv-cell b { font-size: 22px; line-height: 1; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hv-cell b { font-size: 22px; line-height: 1; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
 /* Четырёхзначные дни: ячейка шире, шрифт меньше — «1 457» влезает и на 320 px. */
-.hv-clock.wide { grid-template-columns: 1.9fr 1fr 1fr 1fr; }
-.hv-clock.wide .hv-cell.big b { font-size: 18px; }
-.hv-cell.big b { color: #f7b955; text-shadow: 0 0 14px rgb(247 147 26 / 0.45); }
+.hv-clock.hv-wide { grid-template-columns: 1.9fr 1fr 1fr 1fr; }
+.hv-clock.hv-wide .hv-days b { font-size: 18px; }
+.hv-days b { color: #f7b955; text-shadow: 0 0 14px rgb(247 147 26 / 0.45); }
 .hv-cell small { color: var(--dim); font-size: 10.5px; max-width: 100%; overflow-wrap: break-word; text-align: center; }
 .hv-done { margin: 0 0 10px; padding: 6px 10px; border-radius: 10px; background: rgb(247 147 26 / 0.14); color: #fcd34d; font-size: 12px; font-weight: 700; }
-.hv-now { margin: 0; font-size: 18px; font-weight: 800; color: #f7b955; text-align: center; }
+.hv-now { margin: 0; font-size: 18px; font-weight: 700; color: #f7b955; text-align: center; }
 /* Полоса растёт от начала строки: слева направо, а на арабском — справа налево. */
 .hv-bar { height: 6px; margin-top: 12px; border-radius: 3px; background: rgb(255 255 255 / 0.07); overflow: hidden; }
 .hv-bar i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #f7931a, #fcd34d); box-shadow: 0 0 10px rgb(247 147 26 / 0.6); }

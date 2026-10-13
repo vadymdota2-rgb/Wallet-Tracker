@@ -77,7 +77,7 @@ export function HalvingCard() {
           {t(lang, "hv_title")}
         </h2>
         <div className="hv-clock" aria-hidden="true">
-          {[0, 1, 2, 3].map((i) => <div key={i} className={i === 0 ? "hv-cell big" : "hv-cell"}><b>&nbsp;</b><small>&nbsp;</small></div>)}
+          {[0, 1, 2, 3].map((i) => <div key={i} className={i === 0 ? "hv-cell hv-days" : "hv-cell"}><b>&nbsp;</b><small>&nbsp;</small></div>)}
         </div>
         <div className="hv-bar" aria-hidden="true" />
       </section>
@@ -105,9 +105,9 @@ export function HalvingCard() {
         // читает отсчёт, когда до него дошли.
         // Больше 999 дней (первые месяцы после халвинга) — «1 457» шире
         // ячейки на узком экране: дням больше места и шрифт поменьше.
-        <div className={v.parts[0] >= 1000 ? "hv-clock wide" : "hv-clock"} dir="ltr" role="timer" aria-label={clock}>
+        <div className={v.parts[0] >= 1000 ? "hv-clock hv-wide" : "hv-clock"} dir="ltr" role="timer" aria-label={clock}>
           {v.parts.map((n, i) => (
-            <div key={i} className={i === 0 ? "hv-cell big" : "hv-cell"} aria-hidden="true">
+            <div key={i} className={i === 0 ? "hv-cell hv-days" : "hv-cell"} aria-hidden="true">
               <b>{i === 0 ? num(n) : pad(n)}</b>
               <small>{labels[i]}</small>
             </div>

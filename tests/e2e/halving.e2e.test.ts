@@ -134,6 +134,21 @@ describe("карточка халвинга", () => {
     await ctx.close();
   });
 
+  test("вид: классы только свои (hv-), подписи ячеек одинаковые", async () => {
+    // Общий .big из app.css уже однажды попал в ячейку дней и сделал «дн»
+    // жирнее остальных. Свои классы — и общие стили карточку не трогают.
+    const { ctx, page } = await open();
+    const card = page.locator(".hv:not(.hv-skel)");
+    await card.waitFor();
+    const foreign = await card.evaluate((root) =>
+      [root, ...root.querySelectorAll("*")].flatMap((e) => [...e.classList]).filter((c) => !c.startsWith("hv")));
+    assert.deepEqual(foreign, []);
+    const labels = await page.locator(".hv-cell small").evaluateAll((els) =>
+      els.map((e) => { const c = getComputedStyle(e); return `${c.fontSize} ${c.fontWeight} ${c.letterSpacing} ${c.color}`; }));
+    assert.equal(new Set(labels).size, 1, labels.join(" | "));
+    await ctx.close();
+  });
+
   test("часы телефона на 3 часа вперёд — отсчёт тот же (по часам сервера)", async () => {
     const { ctx, page } = await open({ at: T + 3 * 3600 });
     await page.locator(".hv:not(.hv-skel)").waitFor();

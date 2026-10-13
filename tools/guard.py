@@ -673,8 +673,8 @@ _no_browser = "Executable doesn't exist" in _t_e2e.stdout + _t_e2e.stderr or "Ca
 if _no_browser:
     print("--  халвинг: браузерный тест пропущен — нет Playwright/Chromium (npm i; npx playwright install chromium)")
 else:
-    say("халвинг: браузерный тест карточки (12 проверок: отсчёт до секунды, часы, заглушка, сбои, 320 px с 544 и 1 457 днями, арабский, доступность) зелёный",
-        _t_e2e.returncode == 0 and "# fail 0" in _t_e2e.stdout and "# pass 12" in _t_e2e.stdout)
+    say("халвинг: браузерный тест карточки (13 проверок: отсчёт до секунды, свои классы, часы, заглушка, сбои, 320 px с 544 и 1 457 днями, арабский, доступность) зелёный",
+        _t_e2e.returncode == 0 and "# fail 0" in _t_e2e.stdout and "# pass 13" in _t_e2e.stdout)
     if _t_e2e.returncode:
         print(_t_e2e.stdout[-2500:])
 # Модуль халвинга: сервер — wt_halving.py, расчёт и тип — lib/halving.ts,
