@@ -656,7 +656,9 @@ say("ETF и крупные игроки: потоки по фондам и дн�
 _hv = read(f"{APP}/src/components/HalvingCard.tsx")
 say("внизу меню — отсчёт до халвинга, а не дата сборки",
     "def halving_data(" in api and '"/api/halving"' in api and "mempool.space/api/blocks/tip/height" in api
-    and "<HalvingCard />" in appx and "drawer-build" not in appx and "(h.next - h.height) * h.avg - since" in _hv)
+    and "<HalvingCard />" in appx and "drawer-build" not in appx and "const eta = h.eta ?? h.at + (h.next - h.height) * h.avg;" in _hv
+    and "mempool.space/api/v1/blocks" in api and "_HALVING_START_TS = {840_000: 1713571767}" in api
+    and 'avg, src = t, "epoch"' in api and '"eta": eta' in api and 'int(hv.get("eta") or' in api)
 
 _dgt = read(f"{APP}/src/screens/DigestTab.tsx")
 say("дайджест: просмотры — каждый человек один раз, счётчик у каждого выпуска",

@@ -26710,5 +26710,41 @@
     "ja": "全画面",
     "ko": "전체 화면",
     "zh": "全屏"
+  },
+  "hv_avg_epoch": {
+    "ru": "Среднее за эпоху: {m} мин на блок",
+    "en": "Epoch average: {m} min per block",
+    "uk": "Середнє за епоху: {m} хв на блок",
+    "de": "Epochen-Schnitt: {m} Min. pro Block",
+    "es": "Según la media de la época: {m} min por bloque",
+    "fr": "Calculé sur la moyenne de l'époque : {m} min par bloc",
+    "pt": "Com base na média da época: {m} min por bloco",
+    "pl": "Średnia z epoki: {m} min na blok",
+    "tr": "Dönem ortalamasına göre: blok başına {m} dk",
+    "id": "Berdasarkan rata-rata epoch: {m} menit per blok",
+    "vi": "Tính theo trung bình kỷ nguyên: {m} phút mỗi khối",
+    "hi": "युग के औसत के आधार पर: प्रति ब्लॉक {m} मिनट",
+    "ar": "حسب متوسط الحقبة: {m} دقيقة لكل كتلة",
+    "ja": "エポック平均で計算：1ブロック{m}分",
+    "ko": "에포크 평균 기준: 블록당 {m}분",
+    "zh": "按本周期平均计算：每个区块 {m} 分钟"
+  },
+  "hv_avg": {
+    "ru": "Оценка по {m} мин на блок",
+    "en": "Estimate at {m} min per block",
+    "uk": "Оцінка за {m} хв на блок",
+    "de": "Berechnet mit {m} Min. pro Block",
+    "es": "Según {m} min por bloque",
+    "fr": "Calculé sur {m} min par bloc",
+    "pt": "Com base em {m} min por bloco",
+    "pl": "Wg {m} min na blok",
+    "tr": "Blok başına {m} dk'ya göre",
+    "id": "Berdasarkan {m} menit per blok",
+    "vi": "Tính theo {m} phút mỗi khối",
+    "hi": "प्रति ब्लॉक {m} मिनट के आधार पर",
+    "ar": "حسب {m} دقيقة لكل كتلة",
+    "ja": "1ブロック{m}分で計算",
+    "ko": "블록당 {m}분 기준",
+    "zh": "按每个区块 {m} 分钟计算"
   }
 }

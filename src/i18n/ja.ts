@@ -955,6 +955,8 @@ export const ja: Dict = {
   hp_support_btn: "サポートに連絡",
   hp_support_d: "ご質問にお答えし、問題を調べます。ニュースとアップデートはチャンネルで。",
   hp_support_title: "サポート",
+  hv_avg: "1ブロック{m}分で計算",
+  hv_avg_epoch: "エポック平均で計算：1ブロック{m}分",
   hv_d: "日",
   hv_epoch: "エポックの{p}",
   hv_h: "時間",

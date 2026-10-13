@@ -955,6 +955,8 @@ export const id: Dict = {
   hp_support_btn: "Hubungi dukungan",
   hp_support_d: "Kami akan menjawab pertanyaan Anda dan memeriksa masalahnya. Berita dan pembaruan ada di kanal.",
   hp_support_title: "Dukungan",
+  hv_avg: "Berdasarkan {m} menit per blok",
+  hv_avg_epoch: "Berdasarkan rata-rata epoch: {m} menit per blok",
   hv_d: "hari",
   hv_epoch: "{p} dari epoch",
   hv_h: "jam",

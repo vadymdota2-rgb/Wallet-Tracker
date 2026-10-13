@@ -955,6 +955,8 @@ export const de: Dict = {
   hp_support_btn: "Support kontaktieren",
   hp_support_d: "Wir beantworten deine Frage und kümmern uns um das Problem. Neuigkeiten und Updates im Kanal.",
   hp_support_title: "Support",
+  hv_avg: "Berechnet mit {m} Min. pro Block",
+  hv_avg_epoch: "Epochen-Schnitt: {m} Min. pro Block",
   hv_d: "Tage",
   hv_epoch: "{p} der Epoche",
   hv_h: "Std",

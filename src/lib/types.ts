@@ -925,7 +925,13 @@ export interface HalvingReply {
   height: number;
   next: number;
   every: number;
+  /** Секунд на блок: среднее за эпоху («epoch»), за период сложности
+   *  («period») или ровно 600 («nominal»). */
   avg: number;
+  src?: "epoch" | "period" | "nominal";
+  /** Время последнего блока и оценка момента халвинга (unix, с). */
+  tip?: number;
+  eta?: number;
   at: number;
 }
 

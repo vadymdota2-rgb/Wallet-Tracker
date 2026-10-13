@@ -955,6 +955,8 @@ export const zh: Dict = {
   hp_support_btn: "联系客服",
   hp_support_d: "我们会回答你的问题并排查故障。新闻和更新请看频道。",
   hp_support_title: "客服支持",
+  hv_avg: "按每个区块 {m} 分钟计算",
+  hv_avg_epoch: "按本周期平均计算：每个区块 {m} 分钟",
   hv_d: "天",
   hv_epoch: "周期已过{p}",
   hv_h: "时",

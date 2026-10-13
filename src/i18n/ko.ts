@@ -955,6 +955,8 @@ export const ko: Dict = {
   hp_support_btn: "지원팀에 문의",
   hp_support_d: "질문에 답하고 문제를 살펴 드립니다. 소식과 업데이트는 채널에서 확인하세요.",
   hp_support_title: "지원",
+  hv_avg: "블록당 {m}분 기준",
+  hv_avg_epoch: "에포크 평균 기준: 블록당 {m}분",
   hv_d: "일",
   hv_epoch: "에포크의 {p}",
   hv_h: "시간",

@@ -954,6 +954,8 @@ export const en = {
   hp_support_btn: "Contact support",
   hp_support_d: "We'll answer your question and look into the problem. News and updates are in the channel.",
   hp_support_title: "Support",
+  hv_avg: "Estimate at {m} min per block",
+  hv_avg_epoch: "Epoch average: {m} min per block",
   hv_d: "days",
   hv_epoch: "{p} of the epoch",
   hv_h: "hrs",

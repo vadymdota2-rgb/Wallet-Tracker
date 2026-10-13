@@ -955,6 +955,8 @@ export const tr: Dict = {
   hp_support_btn: "Desteğe yaz",
   hp_support_d: "Sorunuzu yanıtlar, sorunu inceleriz. Haberler ve güncellemeler kanalda.",
   hp_support_title: "Destek",
+  hv_avg: "Blok başına {m} dk'ya göre",
+  hv_avg_epoch: "Dönem ortalamasına göre: blok başına {m} dk",
   hv_d: "gün",
   hv_epoch: "dönemin {p}'i",
   hv_h: "sa",

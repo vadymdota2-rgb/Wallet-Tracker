@@ -955,6 +955,8 @@ export const vi: Dict = {
   hp_support_btn: "Liên hệ hỗ trợ",
   hp_support_d: "Chúng tôi sẽ trả lời câu hỏi và xử lý vấn đề của bạn. Tin tức và cập nhật có trong kênh.",
   hp_support_title: "Hỗ trợ",
+  hv_avg: "Tính theo {m} phút mỗi khối",
+  hv_avg_epoch: "Tính theo trung bình kỷ nguyên: {m} phút mỗi khối",
   hv_d: "ngày",
   hv_epoch: "{p} chu kỳ",
   hv_h: "giờ",

@@ -955,6 +955,8 @@ export const ar: Dict = {
   hp_support_btn: "راسل الدعم",
   hp_support_d: "نجيب عن سؤالك ونفحص المشكلة. الأخبار والتحديثات في القناة.",
   hp_support_title: "الدعم",
+  hv_avg: "حسب {m} دقيقة لكل كتلة",
+  hv_avg_epoch: "حسب متوسط الحقبة: {m} دقيقة لكل كتلة",
   hv_d: "يوم",
   hv_epoch: "{p} من الدورة",
   hv_h: "ساعة",

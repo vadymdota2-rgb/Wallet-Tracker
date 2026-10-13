@@ -11447,14 +11447,39 @@ def fng_data() -> dict:
 
 
 # --- Халвинг -----------------------------------------------------------------
-# Высота последнего блока и среднее время блока за текущий период сложности —
-# mempool.space (без ключа); запасной путь — blockstream.info и
-# blockchain.info, тогда среднее берётся за 600 секунд. Халвинг каждые 210 000
-# блоков, следующий — на 1 050 000. Ответ живёт пять минут: блок — раз в
-# десять, а отсчёт до секунд приложение ведёт само.
+# Высота и время последнего блока — mempool.space (/api/v1/blocks, без ключа);
+# запасной путь — blockstream.info и blockchain.info (тогда время блока не
+# знаем и берём текущее). Халвинг каждые 210 000 блоков.
+#
+# Скорость блоков — СРЕДНЕЕ ЗА ВСЮ ЭПОХУ (от прошлого халвинга до последнего
+# блока), а не за текущий период сложности: тот длится две недели и гуляет
+# от 9,3 до 10,5 минуты, а до халвинга полтора года — растянутое на 78 тысяч
+# блоков, такое среднее сдвигало дату на недели и прыгало после каждой
+# перенастройки сложности. Время блока, с которого началась эпоха, не
+# меняется: спрашиваем один раз, для 840 000 оно и так известно.
+# Дата халвинга (eta) считается от времени последнего блока, а не от момента
+# запроса — блок мог выйти и десять минут назад.
 HALVING_EVERY = 210_000
 HALVING_TTL = 300.0
 _halving_cache: dict = {}
+_HALVING_START_TS = {840_000: 1713571767}
+
+
+def _halving_start_ts(h: int) -> int:
+    ts = _HALVING_START_TS.get(h)
+    if ts:
+        return ts
+    try:
+        req = urllib.request.Request(f"https://mempool.space/api/block-height/{h}", headers={"User-Agent": "wallet-tracker/1.0"})
+        with urllib.request.urlopen(req, timeout=8) as r:
+            bh = r.read().decode().strip()
+        blk = get_json(f"https://mempool.space/api/block/{bh}", 8) or {}
+        ts = int(blk.get("timestamp") or 0)
+    except (urllib.error.URLError, ValueError, OSError, TypeError):
+        ts = 0
+    if ts > 1_700_000_000:
+        _HALVING_START_TS[h] = ts
+    return ts
 
 
 def halving_data() -> dict:
@@ -11463,29 +11488,53 @@ def halving_data() -> dict:
         if hit and time.monotonic() - hit[0] < HALVING_TTL:
             return hit[1]
     height = 0
-    avg = 600.0
-    for url in ("https://mempool.space/api/blocks/tip/height", "https://blockstream.info/api/blocks/tip/height",
-                "https://blockchain.info/q/getblockcount"):
+    tip_ts = 0
+    blocks = get_json("https://mempool.space/api/v1/blocks", 8)
+    if isinstance(blocks, list) and blocks and isinstance(blocks[0], dict):
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "wallet-tracker/1.0"})
-            with urllib.request.urlopen(req, timeout=8) as r:
-                height = int(r.read().decode().strip())
-            if height > 800_000:
-                break
-        except (urllib.error.URLError, ValueError, OSError):
+            height = int(blocks[0].get("height") or 0)
+            tip_ts = int(blocks[0].get("timestamp") or 0)
+        except (TypeError, ValueError):
+            height = tip_ts = 0
+    if height <= 800_000:
+        height = 0
+        for url in ("https://mempool.space/api/blocks/tip/height", "https://blockstream.info/api/blocks/tip/height",
+                    "https://blockchain.info/q/getblockcount"):
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "wallet-tracker/1.0"})
+                with urllib.request.urlopen(req, timeout=8) as r:
+                    height = int(r.read().decode().strip())
+                if height > 800_000:
+                    break
+            except (urllib.error.URLError, ValueError, OSError):
+                pass
             height = 0
     if not height:
         return hit[1] if hit else {"ok": False, "error": "no_data"}
-    adj = get_json("https://mempool.space/api/v1/difficulty-adjustment", 8) or {}
-    try:
-        t = float(adj.get("timeAvg") or 0) / 1000
-        # Разумные пределы: в начале периода среднее бывает по двум блокам.
-        if 420 <= t <= 900:
-            avg = t
-    except (TypeError, ValueError):
-        pass
-    nxt = (height // HALVING_EVERY + 1) * HALVING_EVERY
-    res = {"ok": True, "height": height, "next": nxt, "every": HALVING_EVERY, "avg": round(avg, 1), "at": now()}
+    t_now = now()
+    # Время блока из будущего или старше суток — не верим, считаем от «сейчас».
+    if not (t_now - 86400 < tip_ts <= t_now + 7200):
+        tip_ts = t_now
+    start = height // HALVING_EVERY * HALVING_EVERY
+    nxt = start + HALVING_EVERY
+    avg, src = 600.0, "nominal"
+    start_ts = _halving_start_ts(start)
+    # Среднее за эпоху — когда в ней уже хотя бы один период сложности.
+    if start_ts and height - start >= 2016 and tip_ts > start_ts:
+        t = (tip_ts - start_ts) / (height - start)
+        if 480 <= t <= 720:
+            avg, src = t, "epoch"
+    if src == "nominal":
+        adj = get_json("https://mempool.space/api/v1/difficulty-adjustment", 8) or {}
+        try:
+            t = float(adj.get("timeAvg") or 0) / 1000
+            if 480 <= t <= 720:
+                avg, src = t, "period"
+        except (TypeError, ValueError):
+            pass
+    eta = int(tip_ts + (nxt - height) * avg)
+    res = {"ok": True, "height": height, "next": nxt, "every": HALVING_EVERY, "avg": round(avg, 1), "src": src,
+           "tip": tip_ts, "eta": eta, "at": t_now}
     with _liq_lock:
         _halving_cache["all"] = (time.monotonic(), res)
     return res
@@ -15411,7 +15460,7 @@ def digest_build(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
     hv = _dg_safe("halving", halving_data) or {}
     if hv.get("ok") and hv.get("height"):
         left = hv["next"] - hv["height"]
-        body["halv"] = {"left": left, "eta": int(to + left * hv["avg"]), "next": hv["next"]}
+        body["halv"] = {"left": left, "eta": int(hv.get("eta") or to + left * hv["avg"]), "next": hv["next"]}
     body["sig"] = _dg_signals(body)
     return body
 
