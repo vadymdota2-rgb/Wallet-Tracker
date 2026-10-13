@@ -16,13 +16,13 @@
 запроса — блок мог выйти и десять минут назад.
 
 Как у страха и жадности: устаревший ответ отдаётся сразу, свежий собирается
-в фоне одним потоком — запрос не ждёт mempool по 8 секунд на адрес, а сто
+в фоне одним потоком — запрос не ждёт источники, а сто
 человек, открывших меню в одну минуту, не делают сто одинаковых запросов.
 Если все источники молчат, минуту источники не трогаем.
 
 У сборки общий бюджет времени BUDGET: источники зависли — сборка
-заканчивается за 20 секунд, а не за 7 таймаутов по 8 (почти минута — и
-запрос на холодном старте, и nginx ждали бы её целиком).
+заканчивается за 20 секунд, а не за сумму таймаутов всех адресов (раньше
+это было до минуты — дольше, чем ждёт nginx).
 
 Модуль ни от чего в whale_api не зависит: сеть — через _fetch (тесты
 подменяют только её), часы — через _now.
@@ -30,6 +30,7 @@
 from __future__ import annotations
 
 import http.client
+from dataclasses import dataclass
 import json
 import re
 import sys
@@ -39,6 +40,12 @@ import urllib.error
 import urllib.request
 
 EVERY = 210_000
+# Период сложности: столько блоков эпохи нужно, чтобы её среднему верить.
+RETARGET = 2016
+# Разумное среднее время блока, с: всё вне — сбой источника, а не сеть.
+AVG_MIN, AVG_MAX = 480.0, 720.0
+# Высота ниже — мусор в ответе (такой уже была в 2023 году).
+MIN_HEIGHT = 800_000
 TTL = 300.0
 # Все источники молчат — минуту отвечаем «нет данных», не пытаясь снова:
 # иначе каждое открытие меню ждало бы четыре таймаута.
@@ -50,11 +57,30 @@ HOP = 6.0
 START_TS = {840_000: 1713571767}
 
 _UA = {"User-Agent": "wallet-tracker/1.0"}
+
+
+@dataclass
+class _State:
+    """Кэш модуля; меняется только под _lock."""
+
+    hit: tuple[float, dict] | None = None  # (monotonic, ответ)
+    err_at: float = float("-inf")  # когда источники последний раз молчали (monotonic)
+
+
+_st = _State()
 _lock = threading.Lock()
 _cold = threading.Lock()
-_cache: dict = {}
 _busy = threading.Event()  # идёт фоновая сборка
 _dl = threading.local()  # срок текущей сборки (monotonic) — свой у каждого потока
+
+
+def _no_data() -> dict:
+    return {"ok": False, "error": "no_data"}
+
+
+def _failed() -> bool:
+    """Источники молчали меньше ERR_TTL назад. Вызывать под _lock."""
+    return time.monotonic() - _st.err_at < ERR_TTL
 
 
 def _now() -> int:
@@ -75,7 +101,7 @@ def _fetch(url: str, limit: int = 1 << 20) -> bytes | None:
         return None
 
 
-def _json(url: str):
+def _json(url: str) -> object:
     raw = _fetch(url)
     try:
         return json.loads(raw.decode()) if raw else None
@@ -117,14 +143,14 @@ def _tip() -> tuple[int, int]:
     if isinstance(blocks, list) and blocks and isinstance(blocks[0], dict):
         try:
             h = int(blocks[0].get("height") or 0)
-            if h > 800_000:
+            if h > MIN_HEIGHT:
                 return h, int(blocks[0].get("timestamp") or 0)
         except (TypeError, ValueError):
             pass
     for url in ("https://mempool.space/api/blocks/tip/height", "https://blockstream.info/api/blocks/tip/height",
                 "https://blockchain.info/q/getblockcount"):
         h = _int(url)
-        if h > 800_000:
+        if h > MIN_HEIGHT:
             return h, 0
     return 0, 0
 
@@ -140,13 +166,13 @@ def build() -> dict:
 
 def _build() -> dict:
     with _lock:
-        hit = _cache.get("all")
+        hit = _st.hit
     height, tip_ts = _tip()
     if not height:
         print("halving: нет высоты блока ни от одного источника", file=sys.stderr)
         with _lock:
-            _cache["err"] = time.monotonic()
-        return hit[1] if hit else {"ok": False, "error": "no_data"}
+            _st.err_at = time.monotonic()
+        return hit[1] if hit else _no_data()
     t_now = _now()
     # Время блока из будущего или старше суток — не верим, считаем от «сейчас».
     if not (t_now - 86400 < tip_ts <= t_now + 7200):
@@ -156,9 +182,9 @@ def _build() -> dict:
     avg, src = 600.0, "nominal"
     start_ts = _start_ts(start)
     # Среднее за эпоху — когда в ней уже хотя бы один период сложности.
-    if start_ts and height - start >= 2016 and tip_ts > start_ts:
+    if start_ts and height - start >= RETARGET and tip_ts > start_ts:
         t = (tip_ts - start_ts) / (height - start)
-        if 480 <= t <= 720:
+        if AVG_MIN <= t <= AVG_MAX:
             avg, src = t, "epoch"
     if src == "nominal":
         adj = _json("https://mempool.space/api/v1/difficulty-adjustment")
@@ -166,14 +192,14 @@ def _build() -> dict:
             t = float(adj.get("timeAvg") or 0) / 1000 if isinstance(adj, dict) else 0.0
         except (TypeError, ValueError):
             t = 0.0
-        if 480 <= t <= 720:
+        if AVG_MIN <= t <= AVG_MAX:
             avg, src = t, "period"
     res = {"ok": True, "height": height, "next": nxt, "every": EVERY, "avg": round(avg, 1), "src": src,
            "tip": tip_ts, "eta": int(tip_ts + (nxt - height) * avg), "at": t_now}
     if start_ts:
         res["prev"] = start_ts  # время блока прошлого халвинга
     with _lock:
-        _cache["all"] = (time.monotonic(), res)
+        _st.hit = (time.monotonic(), res)
     return res
 
 
@@ -189,10 +215,10 @@ def _bg() -> None:
 def halving_data() -> dict:
     """Ответ /api/halving: из кэша, свежий собирается в фоне."""
     with _lock:
-        hit = _cache.get("all")
+        hit = _st.hit
         if hit and time.monotonic() - hit[0] < TTL:
             return hit[1]
-        failed = time.monotonic() - _cache.get("err", -1e9) < ERR_TTL
+        failed = _failed()
         # Источники только что молчали — не дёргаем их снова сразу: иначе при
         # сбое mempool фоновые сборки шли бы одна за другой без перерыва.
         if hit and not failed and not _busy.is_set():
@@ -201,16 +227,15 @@ def halving_data() -> dict:
         if hit:
             return hit[1]
         if failed:
-            return {"ok": False, "error": "no_data"}
+            return _no_data()
     # Холодный старт: первый собирает, остальные ждут его и берут готовое.
     with _cold:
         with _lock:
-            hit = _cache.get("all")
-            failed = time.monotonic() - _cache.get("err", -1e9) < ERR_TTL
+            hit, failed = _st.hit, _failed()
         if hit:
             return hit[1]
         if failed:
-            return {"ok": False, "error": "no_data"}
+            return _no_data()
         return build()
 
 

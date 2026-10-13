@@ -3,6 +3,7 @@
  * тесты (tests/halving.test.ts): здесь нет ни React, ни сети, ни часов —
  * время приходит параметром.
  */
+
 /** Ответ /api/halving (сервер — wt_halving.py). */
 export interface HalvingReply {
   ok: boolean;
@@ -27,7 +28,6 @@ export interface HalvingReply {
   prev?: number;
 }
 
-
 /** Сколько ответ живёт в памяти приложения (на сервере — так же, TTL в wt_halving.py). */
 export const HALVING_TTL_MS = 5 * 60_000;
 /** Награда за блок в эпоху 0 — 50 BTC в сатоши. */
@@ -42,14 +42,15 @@ const JUST_HAPPENED = 14 * 86400;
 export function validHalving(h: unknown): h is HalvingReply {
   if (!h || typeof h !== "object") return false;
   const r = h as Partial<HalvingReply>;
-  const int = (v: unknown) => typeof v === "number" && Number.isInteger(v) && v > 0;
+  const int = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v > 0;
   // Unix-время в разумных пределах: с 2020 по 2096 год.
-  const time = (v: unknown) => typeof v === "number" && v > 1_600_000_000 && v < 4_000_000_000;
+  const time = (v: unknown): v is number => typeof v === "number" && v > 1_600_000_000 && v < 4_000_000_000;
   // Необязательные поля, если есть, — тоже числа: строка в eta рисовала
   // «NaN дн», а new Date(NaN) в формате даты роняла всё приложение.
   const opt = (v: unknown, ok: (x: unknown) => boolean) => v === undefined || v === null || ok(v);
+  // Среднее — шире, чем пускает сервер (480–720 с): лишь бы не мусор.
   return r.ok === true && int(r.height) && int(r.next) && int(r.every)
-    && r.next! % r.every! === 0 && r.next! - r.every! <= r.height! && r.height! < r.next!
+    && r.next % r.every === 0 && r.next - r.every <= r.height && r.height < r.next
     && typeof r.avg === "number" && r.avg >= 300 && r.avg <= 1200
     && time(r.at) && opt(r.eta, time) && opt(r.tip, time) && opt(r.now, time) && opt(r.prev, time)
     && opt(r.skew, (v) => typeof v === "number" && Number.isFinite(v) && Math.abs(v) < 366 * 86400)

@@ -46,7 +46,7 @@ class Net:
 
 class HalvingTest(unittest.TestCase):
     def setUp(self):
-        hv._cache.clear()
+        hv._st = hv._State()
         hv._busy.clear()
         hv.START_TS.clear()
         hv.START_TS[840_000] = 1713571767
@@ -109,8 +109,8 @@ class HalvingTest(unittest.TestCase):
 
     def test_stale_answer_is_instant_and_refreshes_in_background(self):
         first = self.run_with(Net(blocks=[{"height": H, "timestamp": TIP}]))
-        at, res = hv._cache["all"]
-        hv._cache["all"] = (at - hv.TTL - 1, res)
+        at, res = hv._st.hit
+        hv._st.hit = (at - hv.TTL - 1, res)
         slow = Net(blocks=[{"height": H + 1, "timestamp": TIP + 600}])
 
         def lazy(url, limit=1 << 20):
@@ -123,12 +123,12 @@ class HalvingTest(unittest.TestCase):
             # Сеть отвечает секунду — ответ должен прийти, не дожидаясь её.
             self.assertLess(time.monotonic() - t0, 0.5)
             self.wait_bg()
-        self.assertEqual(hv._cache["all"][1]["height"], H + 1)
+        self.assertEqual(hv._st.hit[1]["height"], H + 1)
 
     def test_outage_with_stale_answer_does_not_hammer_sources(self):
         first = self.run_with(Net(blocks=[{"height": H, "timestamp": TIP}]))
-        at, res = hv._cache["all"]
-        hv._cache["all"] = (at - hv.TTL - 1, res)
+        at, res = hv._st.hit
+        hv._st.hit = (at - hv.TTL - 1, res)
         down = Net(fail=True)
         with mock.patch.object(hv, "_fetch", down.fetch), mock.patch("sys.stderr", io.StringIO()):
             self.assertEqual(hv.halving_data(), first)  # старый ответ — сразу
