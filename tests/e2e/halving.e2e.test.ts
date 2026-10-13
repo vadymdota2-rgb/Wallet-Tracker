@@ -1,0 +1,231 @@
+/*
+ * Карточка халвинга в настоящем браузере: npm run test:e2e.
+ *
+ * Тест поднимает собранное приложение (html/) на случайном порту, подменяет
+ * ответы сервера (сеть наружу закрыта — тест не зависит от mempool и от
+ * интернета) и проверяет то, что видит человек: отсчёт, дату, полосу,
+ * заглушку, сбои, узкий экран, арабский, доступность.
+ *
+ * Время в браузере закреплено, поэтому отсчёт сверяется до секунды.
+ * Нужен Chromium для Playwright: npx playwright install chromium.
+ */
+import { after, before, describe, test } from "node:test";
+import assert from "node:assert/strict";
+import { createServer, type Server } from "node:http";
+import { readFile } from "node:fs/promises";
+import { extname, join, normalize } from "node:path";
+import { fileURLToPath } from "node:url";
+import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+
+const HTML = fileURLToPath(new URL("../../html/", import.meta.url));
+const TYPES: Record<string, string> = {
+  ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml",
+  ".png": "image/png", ".webp": "image/webp", ".json": "application/json", ".woff2": "font/woff2", ".ico": "image/x-icon",
+};
+
+// Настоящий ответ сервера от 13.10.2026; T — «сейчас» в браузере.
+const REAL = {
+  ok: true, height: 971219, next: 1050000, every: 210000, avg: 596.8, src: "epoch",
+  tip: 1791881177, eta: 1838896423, at: 1791881255, prev: 1713571767,
+};
+const T = 1791881300;
+// До халвинга eta − T = 47 015 123 с = 544 дн 03 ч 45 мин 23 с.
+const CLOCK_RU = "544 дн 03 ч 45 мин 23 сек";
+/** Текст как видит человек: неразрывные и узкие пробелы (разряды «1 050 000»,
+ *  «9 апреля 2028 г.») — как обычные. */
+const sp = (s: string | null) => (s ?? "").replace(/[\s\u00a0\u202f]+/g, " ").trim();
+
+let server: Server;
+let base = "";
+let browser: Browser;
+
+before(async () => {
+  server = createServer(async (req, res) => {
+    const path = normalize(decodeURIComponent((req.url ?? "/").split("?")[0]!)).replace(/^(\.\.[/\\])+/, "");
+    const file = join(HTML, path.endsWith("/") ? "index.html" : path);
+    try {
+      const body = await readFile(file.startsWith(HTML) ? file : join(HTML, "index.html"));
+      res.writeHead(200, { "Content-Type": TYPES[extname(file)] ?? "application/octet-stream" }).end(body);
+    } catch {
+      res.writeHead(200, { "Content-Type": TYPES[".html"] }).end(await readFile(join(HTML, "index.html")));
+    }
+  });
+  await new Promise<void>((ok) => server.listen(0, "127.0.0.1", ok));
+  const addr = server.address();
+  base = `http://127.0.0.1:${typeof addr === "object" && addr ? addr.port : 0}`;
+  browser = await chromium.launch();
+});
+
+after(async () => {
+  await browser?.close();
+  await new Promise((ok) => server?.close(ok));
+});
+
+interface Opts {
+  lang?: string;
+  width?: number;
+  /** Ответ /api/halving; null — «нет данных». */
+  reply?: Record<string, unknown> | null;
+  delay?: number;
+  /** Время в браузере (unix, с). */
+  at?: number;
+  /** Что лежит на устройстве до запуска. */
+  saved?: unknown;
+  /** Сломать формат даты карточки — проверить предохранитель. */
+  breakDate?: boolean;
+}
+
+async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; errors: string[]; console: string[] }> {
+  const ctx = await browser.newContext({
+    viewport: { width: o.width ?? 360, height: 780 }, deviceScaleFactor: 1,
+    locale: o.lang === "ar" ? "ar" : "ru-RU", timezoneId: "Europe/Kyiv",
+  });
+  const page = await ctx.newPage();
+  const errors: string[] = [];
+  const logs: string[] = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  page.on("console", (m) => { if (m.type() === "error") logs.push(m.text()); });
+  await page.clock.setFixedTime((o.at ?? T) * 1000);
+  // Наружу — ничего: тест не зависит от сети.
+  await ctx.route((url) => !url.href.startsWith(base), (r) => r.abort());
+  await ctx.route(`${base}/api/**`, (r) => r.fulfill({ contentType: "application/json", body: '{"ok":false}' }));
+  await ctx.route(`${base}/api/halving`, async (r) => {
+    if (o.delay) await new Promise((ok) => setTimeout(ok, o.delay));
+    const body = o.reply === null ? { ok: false, error: "no_data" } : { ...(o.reply ?? REAL), now: T };
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.addInitScript((a: { lang: string; saved: unknown; breakDate: boolean }) => {
+    if (a.breakDate) {
+      const D = Intl.DateTimeFormat;
+      const W = function (l?: string, opt?: Intl.DateTimeFormatOptions) {
+        const f = new D(l, opt);
+        if (opt?.month === "long" && opt.day === "numeric" && opt.year === "numeric" && !opt.hour && !opt.weekday) {
+          return { format() { throw new RangeError("boom"); }, resolvedOptions: () => f.resolvedOptions() };
+        }
+        return f;
+      } as unknown as typeof Intl.DateTimeFormat;
+      W.prototype = D.prototype;
+      (Intl as { DateTimeFormat: typeof Intl.DateTimeFormat }).DateTimeFormat = W;
+    }
+    if (sessionStorage.getItem("e2e")) return;
+    sessionStorage.setItem("e2e", "1");
+    localStorage.clear();
+    localStorage.setItem("wt-miniapp-v7", JSON.stringify({ state: { lang: a.lang, langPinned: true }, version: 9 }));
+    if (a.saved) localStorage.setItem("wt-halving-v1", JSON.stringify(a.saved));
+  }, { lang: o.lang ?? "ru", saved: o.saved ?? null, breakDate: !!o.breakDate });
+  await page.goto(base + "/");
+  await page.locator(".burger").click();
+  await page.locator(".drawer-row").first().waitFor();
+  return { ctx, page, errors, console: logs };
+}
+
+describe("карточка халвинга", () => {
+  test("отсчёт, дата, эпоха, блок, награда — до секунды", async () => {
+    const { ctx, page, errors } = await open();
+    const card = page.locator(".hv:not(.hv-skel)");
+    await card.waitFor();
+    assert.equal(sp(await page.locator(".hv-clock").getAttribute("aria-label")), CLOCK_RU);
+    assert.deepEqual(await page.locator(".hv-cell b").allInnerTexts(), ["544", "03", "45", "23"]);
+    assert.equal(sp(await page.locator(".hv-eta").innerText()), "≈ 9 апреля 2028 г.");
+    assert.equal(sp(await page.locator(".hv-meta span").first().innerText()), "62,5% эпохи");
+    assert.equal(sp(await page.locator(".hv-meta bdi").innerText()), "971 219 / 1 050 000");
+    assert.equal(sp(await page.locator(".hv-avg").innerText()), "Среднее за эпоху: 9,95 мин на блок");
+    assert.match(sp(await page.locator(".hv-rw").innerText()), /3,125 → 1,5625 BTC/);
+    assert.equal(await page.locator(".hv-done").count(), 0);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("часы телефона на 3 часа вперёд — отсчёт тот же (по часам сервера)", async () => {
+    const { ctx, page } = await open({ at: T + 3 * 3600 });
+    await page.locator(".hv:not(.hv-skel)").waitFor();
+    assert.equal(sp(await page.locator(".hv-clock").getAttribute("aria-label")), CLOCK_RU);
+    await ctx.close();
+  });
+
+  test("доступность: заголовок, таймер одной фразой, полоса прогресса", async () => {
+    const { ctx, page } = await open();
+    const card = page.locator(".hv:not(.hv-skel)");
+    await card.waitFor();
+    const id = await card.getAttribute("aria-labelledby");
+    assert.ok(id);
+    assert.equal(await page.locator(`[id="${id}"]`).evaluate((e) => e.tagName), "H2");
+    assert.equal(await page.locator(".hv-clock").getAttribute("role"), "timer");
+    const bar = page.locator(".hv-bar");
+    assert.equal(await bar.getAttribute("role"), "progressbar");
+    assert.equal(await bar.getAttribute("aria-valuenow"), "62.5");
+    assert.equal(sp(await bar.getAttribute("aria-valuetext")), "62,5% эпохи");
+    await ctx.close();
+  });
+
+  test("пока ответа нет — заглушка того же места, потом карточка", async () => {
+    const { ctx, page } = await open({ delay: 1500 });
+    assert.equal(await page.locator(".hv.hv-skel[aria-busy=true]").count(), 1);
+    await page.locator(".hv:not(.hv-skel)").waitFor({ timeout: 5000 });
+    assert.equal(await page.locator(".hv").count(), 1);
+    await ctx.close();
+  });
+
+  test("сервер без данных — карточки нет, меню работает", async () => {
+    const { ctx, page, errors } = await open({ reply: null });
+    await page.waitForFunction(() => !document.querySelector(".hv"), null, { timeout: 5000 });
+    assert.ok((await page.locator(".drawer-row").count()) > 5);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("испорченный запас на устройстве — приложение живо, мусор не показан", async () => {
+    const saved = { all: { at: T * 1000, v: { ...REAL, eta: "abc" } } };
+    const { ctx, page, errors } = await open({ saved, reply: null });
+    await page.waitForFunction(() => !document.querySelector(".hv"), null, { timeout: 5000 });
+    assert.ok((await page.locator(".drawer-row").count()) > 5);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("поломка внутри карточки — пропадает только она (предохранитель)", async () => {
+    const { ctx, page, console: logs } = await open({ breakDate: true });
+    await page.waitForFunction(() => !document.querySelector(".hv:not(.hv-skel)"), null, { timeout: 5000 });
+    await page.waitForTimeout(300);
+    assert.equal(await page.locator(".hv").count(), 0);
+    assert.ok((await page.locator(".drawer-row").count()) > 5);
+    assert.ok(logs.some((l) => l.includes("[halving]")), "ошибка записана в консоль с именем блока");
+    await ctx.close();
+  });
+
+  test("320 px: ничего не вылезает за карточку", async () => {
+    const { ctx, page } = await open({ width: 320 });
+    const card = page.locator(".hv:not(.hv-skel)");
+    await card.waitFor();
+    const over = await card.evaluate((root) =>
+      [root, ...root.querySelectorAll<HTMLElement>("*")].filter((e) => e.scrollWidth > e.clientWidth + 1 && getComputedStyle(e).overflow !== "visible")
+        .map((e) => e.className));
+    assert.deepEqual(over, []);
+    const box = await card.boundingBox();
+    const meta = await page.locator(".hv-meta").boundingBox();
+    assert.ok(box && meta && meta.x + meta.width <= box.x + box.width + 1);
+    await ctx.close();
+  });
+
+  test("арабский: страница справа налево, цифры отсчёта слева направо", async () => {
+    const { ctx, page, errors } = await open({ lang: "ar" });
+    await page.locator(".hv:not(.hv-skel)").waitFor();
+    assert.equal(await page.evaluate(() => document.documentElement.dir), "rtl");
+    assert.equal(await page.locator(".hv-clock").getAttribute("dir"), "ltr");
+    assert.deepEqual(await page.locator(".hv-cell b").allInnerTexts(), ["544", "03", "45", "23"]);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("две недели после халвинга — «состоялся» и отсчёт до следующего", async () => {
+    const prev = T - 3 * 86400;
+    const reply = { ok: true, height: 1050150, next: 1260000, every: 210000, avg: 600, src: "period",
+      tip: T - 300, eta: T - 300 + (1260000 - 1050150) * 600, at: T, prev };
+    const { ctx, page } = await open({ reply });
+    await page.locator(".hv:not(.hv-skel)").waitFor();
+    assert.match(sp(await page.locator(".hv-done").innerText()), /Халвинг состоялся 10 октября 2026 г\. — блок 1 050 000/);
+    assert.match(sp(await page.locator(".hv-rw").innerText()), /1,5625 → 0,78125 BTC/);
+    assert.equal(sp(await page.locator(".hv-avg").innerText()), "Оценка по 10 мин на блок");
+    await ctx.close();
+  });
+});

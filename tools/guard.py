@@ -666,6 +666,17 @@ say("халвинг: автотесты расчёта в приложении (
     _t_js.returncode == 0 and "# fail 0" in _t_js.stdout and _t_py.returncode == 0 and "OK" in _t_py.stderr)
 if _t_js.returncode or _t_py.returncode:
     print(_t_js.stdout[-1500:], _t_py.stderr[-1500:])
+# Браузерный тест карточки — на собранном html/. Где нет Chromium для
+# Playwright (сервер бота), он пропускается, и об этом сказано.
+_t_e2e = _sp.run(["node", "--test", "tests/e2e/halving.e2e.test.ts"], cwd=APP, capture_output=True, text=True)
+_no_browser = "Executable doesn't exist" in _t_e2e.stdout + _t_e2e.stderr or "Cannot find package 'playwright'" in _t_e2e.stdout + _t_e2e.stderr
+if _no_browser:
+    print("--  халвинг: браузерный тест пропущен — нет Playwright/Chromium (npm i; npx playwright install chromium)")
+else:
+    say("халвинг: браузерный тест карточки (10 проверок: отсчёт до секунды, часы, заглушка, сбои, 320 px, арабский, доступность) зелёный",
+        _t_e2e.returncode == 0 and "# fail 0" in _t_e2e.stdout and "# pass 10" in _t_e2e.stdout)
+    if _t_e2e.returncode:
+        print(_t_e2e.stdout[-2500:])
 # Модуль халвинга: сервер — wt_halving.py, расчёт и тип — lib/halving.ts,
 # вид — HalvingCard.tsx + .css. В общих файлах — только подключение.
 say("халвинг — отдельный модуль: сервер, расчёт, тип, вид и стили в своих файлах, в общих — только подключение",
