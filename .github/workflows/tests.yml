@@ -1,0 +1,64 @@
+# Автотесты на каждый push и pull request.
+#
+# unit — быстрые: типы TypeScript, синтаксис сервера (Python), тесты расчёта
+#        в приложении (node --test) и тесты сервера (unittest, сеть подменена).
+# e2e  — карточка халвинга в настоящем Chromium на свежесобранном html/.
+#
+# tools/guard.py здесь не запускается: он сверяет приложение и с ботом из
+# соседнего репозитория WhaleScanner, которого в этой проверке нет.
+name: tests
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+      - name: Типы TypeScript
+        run: npm run typecheck
+      - name: Синтаксис сервера
+        run: python -m py_compile whale_api.py wt_halving.py wt_shield.py wt_digest_img.py
+      - name: Тесты расчёта и сервера
+        run: npm test
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: npm
+      - run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+      - name: Chromium для Playwright
+        run: npx playwright install --with-deps chromium
+      - name: Сборка приложения
+        run: npm run build
+      - name: Браузерный тест карточки халвинга
+        run: npm run test:e2e
