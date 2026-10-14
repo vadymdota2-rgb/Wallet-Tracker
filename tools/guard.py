@@ -712,7 +712,7 @@ say("халвинг: среднее за эпоху, отсчёт от посл�
     and os.path.exists(f"{APP}/tests/test_halving_policy.py") and "urllib.request.ProxyHandler({})" in _hvs
     and '"Accept-Encoding": "identity"' in _hvs and "TLSv1_2" in read(f"{APP}/tests/test_halving_policy.py")
     and "var(--hv-fit, 1)" in _hvc and "var(--hv-fit-l, 1)" in _hvc and "@media (forced-colors: active)" in _hvc
-    and 'el.style.setProperty("--hv-fit",' in _hv and "--drawer-pb: calc(env(safe-area-inset-bottom) + 18px);" in read(f"{APP}/src/styles/app.css")
+    and "frame = requestAnimationFrame(fit)" in _hv and "document.fonts?.ready.then(later)" in _hv and "--drawer-pb: calc(env(safe-area-inset-bottom) + 18px);" in read(f"{APP}/src/styles/app.css")
     and "persist-credentials: false" in read(f"{APP}/.github/workflows/tests.yml") and "actions/checkout@v" not in read(f"{APP}/.github/workflows/tests.yml")
     # Срок ответа на сервере и в памяти приложения — один (5 минут).
     and "TTL = 300.0" in _hvs and "export const HALVING_TTL_MS = 5 * 60_000;" in _hvl

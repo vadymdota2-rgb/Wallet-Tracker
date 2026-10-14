@@ -4,7 +4,8 @@
  * Сервер раз в пять минут отдаёт высоту и время последнего блока, среднее
  * время блока за всю эпоху (от прошлого халвинга) и готовую оценку момента
  * халвинга. Приложение тикает раз в секунду от этой оценки, а пока меню
- * открыто — раз в пять минут переспрашивает сервер. Высота между ответами
+ * открыто и приложение не свёрнуто — раз в пять минут переспрашивает
+ * сервер. Высота между ответами
  * оценивается по тому же среднему, поэтому полоса эпохи и номер блока не
  * стоят на месте.
  *
@@ -71,9 +72,11 @@ export function HalvingCard() {
   // Цифры влезают в ячейки при любом системном размере шрифта: Android
   // увеличивает текст до 130–200 %, и «15» вылезало за рамку ячейки. Не
   // влезает — все четыре числа уменьшаются одинаково (--hv-fit), ровно
-  // настолько, чтобы влезло самое широкое. Пересчёт — при смене размера
-  // (поворот, другой шрифт), языка и числа цифр в днях, а не каждую секунду:
-  // цифры моноширинные.
+  // настолько, чтобы влезло самое широкое; подписи — своим коэффициентом
+  // (--hv-fit-l), чтобы не мельчали из-за широкого числа.
+  // Пересчёт — при смене размера (поворот, другой шрифт), когда догрузился
+  // свой шрифт (у запасного цифры другой ширины), при смене языка и числа
+  // цифр в днях; не каждую секунду — цифры моноширинные.
   const clockRef = useRef<HTMLDivElement>(null);
   // Часы телефона могут врать на минуты и часы — считаем по часам сервера.
   const view = h ? halvingView(h, local + (h.skew ?? 0)) : null;
@@ -81,31 +84,49 @@ export function HalvingCard() {
   useLayoutEffect(() => {
     const el = clockRef.current;
     if (!el) return undefined;
+    let frame = 0;
+    let alive = true;
     const fit = () => {
-      el.style.removeProperty("--hv-fit");
-      el.style.removeProperty("--hv-fit-l");
-      // Число и подпись в ячейке по центру и шириной по себе — сравниваем с
-      // местом в ячейке (без её полей). Числа и подписи — каждые своим
-      // коэффициентом: подпись не должна мельчать из-за широкого числа.
+      frame = 0;
+      // Ширина «как без уменьшения» = нынешняя / нынешний коэффициент:
+      // свойство не снимается на время замера, и размер не скачет туда-сюда.
+      const k0 = (name: string) => Number(el.style.getPropertyValue(name)) || 1;
+      const kb0 = k0("--hv-fit");
+      const kl0 = k0("--hv-fit-l");
       let kb = 1;
       let kl = 1;
+      // Число и подпись в ячейке по центру и шириной по себе — сравниваем с
+      // местом в ячейке (без её полей), а не с ними самими.
       for (const cell of el.querySelectorAll<HTMLElement>(".hv-cell")) {
         const cs = getComputedStyle(cell);
         const room = cell.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
         if (room <= 0) continue;
         const b = cell.querySelector("b");
         const l = cell.querySelector("small");
-        if (b && b.scrollWidth > room) kb = Math.min(kb, room / b.scrollWidth);
-        if (l && l.scrollWidth > room) kl = Math.min(kl, room / l.scrollWidth);
+        if (b && b.scrollWidth / kb0 > room) kb = Math.min(kb, (room * kb0) / b.scrollWidth);
+        if (l && l.scrollWidth / kl0 > room) kl = Math.min(kl, (room * kl0) / l.scrollWidth);
       }
-      if (kb < 1) el.style.setProperty("--hv-fit", String(Math.floor(kb * 1000) / 1000));
-      if (kl < 1) el.style.setProperty("--hv-fit-l", String(Math.floor(kl * 1000) / 1000));
+      for (const [name, k] of [["--hv-fit", kb], ["--hv-fit-l", kl]] as const) {
+        const val = k < 1 ? String(Math.floor(k * 1000) / 1000) : "";
+        if (el.style.getPropertyValue(name) === val) continue;
+        if (val) el.style.setProperty(name, val);
+        else el.style.removeProperty(name);
+      }
     };
+    // Первый раз — сразу, до отрисовки; потом — в следующем кадре: правка
+    // размера прямо в ResizeObserver давала в консоли «ResizeObserver loop».
     fit();
-    if (typeof ResizeObserver !== "function") return undefined;
-    const ro = new ResizeObserver(fit);
-    ro.observe(el);
-    return () => ro.disconnect();
+    const later = () => {
+      if (alive && !frame) frame = requestAnimationFrame(fit);
+    };
+    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(later) : null;
+    ro?.observe(el);
+    void document.fonts?.ready.then(later);
+    return () => {
+      alive = false;
+      ro?.disconnect();
+      if (frame) cancelAnimationFrame(frame);
+    };
   }, [shape]);
 
   // Формат даты — один на язык, а не новый каждую секунду тика.

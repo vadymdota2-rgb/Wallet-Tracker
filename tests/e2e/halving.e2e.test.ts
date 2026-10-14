@@ -394,10 +394,20 @@ describe("карточка халвинга", () => {
 
   for (const [z, lang, reply] of [[1.3, "ru", undefined], [2, "de", undefined], [2, "ar", undefined], [1.6, "ru", AFTER]] as const) {
     test(`крупный системный шрифт ${z * 100} % (${lang}${reply ? ", 1 457 дней" : ""}): цифры и подписи в своих ячейках`, async () => {
-      const { ctx, page } = await open({ width: 320, lang, reply });
+      const { ctx, page, errors } = await open({ width: 320, lang, reply });
       await page.locator(".hv:not(.hv-skel)").waitFor();
+      // Ошибки окна — в том числе «ResizeObserver loop», если подгон правит
+      // размер прямо в наблюдателе.
+      await page.evaluate(() => {
+        const w = window as unknown as { __hvErr: string[] };
+        w.__hvErr = [];
+        addEventListener("error", (e) => w.__hvErr.push(e.message));
+      });
       await bigText(page, z);
       assert.deepEqual(await overflow(page), []);
+      await page.waitForTimeout(200);
+      assert.deepEqual(await page.evaluate(() => (window as unknown as { __hvErr: string[] }).__hvErr), []);
+      assert.deepEqual(errors, []);
       // Цифры уменьшены ровно настолько, чтобы влезть, — а не во много раз.
       const fit = Number(await page.locator(".hv-clock").evaluate((e) => getComputedStyle(e).getPropertyValue("--hv-fit") || "1"));
       assert.ok(fit > 0.5 && fit < 1, `--hv-fit = ${fit}`);
