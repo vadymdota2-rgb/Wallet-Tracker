@@ -63,7 +63,7 @@ PY = [
     # Защита от атак через источник.
     ("return u.scheme in SCHEMES and u.hostname in HOSTS and", "return True or", "только https и известные адреса"),
     (" and not u.username and not u.password", "", "адрес с логином"),
-    ("build_opener(_NoRedirect, ", "build_opener(", "без перенаправлений"),
+    ("ProxyHandler({}), _NoRedirect,", "ProxyHandler({}),", "без перенаправлений"),
     ("if time.monotonic() > end:", "if False:", "срок чтения целиком"),
     ("r.read1(min(CHUNK, limit + 1 - len(buf)))", "r.read1(CHUNK)", "кусок не больше остатка"),
     ("parse_float=_finite, ", "", "числа без бесконечностей"),
@@ -78,6 +78,8 @@ PY = [
     ("while len(buf) <= limit:", "while len(buf) < limit:", "ответ больше limit — не ответ"),
     ("            return None\n    except (OSError", "            return bytes(buf)\n    except (OSError", "обрезанный ответ — не ответ"),
     ("    with contextlib.suppress(OSError, ValueError):\n        print(", "    if True:\n        print(", "журнал не роняет модуль"),
+    ("build_opener(urllib.request.ProxyHandler({}), ", "build_opener(", "прокси из окружения не берётся"),
+    (', "Accept-Encoding": "identity"}', "}", "ответ без сжатия"),
 ]
 TICK = [
     ("1000 - (t % 1000) + TICK_SLACK", "1000", "тик на границе секунды"),

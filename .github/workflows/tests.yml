@@ -22,6 +22,9 @@ concurrency:
   group: tests-${{ github.ref }}
   cancel-in-progress: true
 
+# Наименьшие права: тестам нужно только прочитать код. Сторонние действия
+# закреплены по хешу коммита, а не по метке v4: метку можно перевесить на
+# подменённый код, хеш — нет. Токен после checkout не остаётся на диске.
 permissions:
   contents: read
 
@@ -30,12 +33,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
         with:
           node-version: "22.x"
           cache: npm
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
           python-version: "3.11"
       - run: npm ci
@@ -49,7 +54,7 @@ jobs:
         run: >-
           pipx run ruff==0.15.8 check --target-version py310
           --select E,F,W,B,UP,SIM,PL,RUF,S,BLE,I --ignore E501,PLR2004,RUF001,RUF002,RUF003,S310,S603,S607
-          wt_halving.py tests/test_halving_api.py tests/test_halving_fuzz.py tests/test_halving_security.py tools/mutate-halving.py
+          wt_halving.py tests/test_halving_api.py tests/test_halving_fuzz.py tests/test_halving_security.py tests/test_halving_policy.py tools/mutate-halving.py
       - name: Строгие типы Python (mypy --strict)
         run: pipx run mypy==1.11.2 --strict --python-version 3.11 wt_halving.py
       - name: Тесты расчёта и сервера
@@ -59,8 +64,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
         with:
           node-version: "22.x"
           cache: npm
@@ -82,11 +89,13 @@ jobs:
       matrix:
         python: ["3.10", "3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
         with:
           node-version: "22.x"
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
           python-version: ${{ matrix.python }}
       - name: Тесты сервера халвинга (вкл. фаззинг и договор с приложением)
@@ -96,11 +105,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
         with:
           node-version: "22.x"
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
         with:
           python-version: "3.11"
       - name: Мутационная проверка модуля халвинга

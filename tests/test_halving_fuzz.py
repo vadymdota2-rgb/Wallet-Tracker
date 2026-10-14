@@ -26,6 +26,7 @@ CASES = 3000
 NOW = 1_791_881_300
 JUNK = [None, True, False, "", "x", "1e9", -1, 0, 0.5, 10**40, -(10**12), [], {}, [1, 2], {"a": 1}, "∞"]
 KEYS = set(hv.Reply.__annotations__)
+OWN = {"epoch", "period", "nominal", "no_data"}
 # Враждебные тела: числа вне float, NaN/Infinity, глубокая вложенность, нули.
 EVIL = [b'[{"height":1e400,"timestamp":1e400}]', b'{"timeAvg":1e400,"timestamp":-1e400}', b"1e400",
         b'[{"height":NaN,"timestamp":Infinity}]', b'{"timeAvg":-Infinity,"timestamp":NaN}', b"Infinity",
@@ -88,6 +89,9 @@ class FuzzTest(unittest.TestCase):
     def check(self, i: int, res: dict) -> None:
         m = f"случай {i}: {res}"
         self.assertLessEqual(set(res), KEYS, m)
+        # Ни одного символа текста от источника: строки в ответе — только наши.
+        for k, v in res.items():
+            self.assertTrue(type(v) in (int, float, bool) or v in OWN, f"{m}: {k}={v!r}")
         if not res["ok"]:
             self.assertEqual(res.get("error"), "no_data", m)
             return
