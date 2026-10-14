@@ -16,7 +16,7 @@
  * Отсчёт идёт по часам сервера: телефон с неверным временем иначе показал
  * бы неверный отсчёт.
  */
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
 import { num, pct } from "../lib/format";
@@ -68,6 +68,46 @@ export function HalvingCard() {
     };
   }, []);
 
+  // Цифры влезают в ячейки при любом системном размере шрифта: Android
+  // увеличивает текст до 130–200 %, и «15» вылезало за рамку ячейки. Не
+  // влезает — все четыре числа уменьшаются одинаково (--hv-fit), ровно
+  // настолько, чтобы влезло самое широкое. Пересчёт — при смене размера
+  // (поворот, другой шрифт), языка и числа цифр в днях, а не каждую секунду:
+  // цифры моноширинные.
+  const clockRef = useRef<HTMLDivElement>(null);
+  // Часы телефона могут врать на минуты и часы — считаем по часам сервера.
+  const view = h ? halvingView(h, local + (h.skew ?? 0)) : null;
+  const shape = `${lang}|${String(view?.parts[0] ?? 0).length}|${view ? view.left > 0 : "-"}`;
+  useLayoutEffect(() => {
+    const el = clockRef.current;
+    if (!el) return undefined;
+    const fit = () => {
+      el.style.removeProperty("--hv-fit");
+      el.style.removeProperty("--hv-fit-l");
+      // Число и подпись в ячейке по центру и шириной по себе — сравниваем с
+      // местом в ячейке (без её полей). Числа и подписи — каждые своим
+      // коэффициентом: подпись не должна мельчать из-за широкого числа.
+      let kb = 1;
+      let kl = 1;
+      for (const cell of el.querySelectorAll<HTMLElement>(".hv-cell")) {
+        const cs = getComputedStyle(cell);
+        const room = cell.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+        if (room <= 0) continue;
+        const b = cell.querySelector("b");
+        const l = cell.querySelector("small");
+        if (b && b.scrollWidth > room) kb = Math.min(kb, room / b.scrollWidth);
+        if (l && l.scrollWidth > room) kl = Math.min(kl, room / l.scrollWidth);
+      }
+      if (kb < 1) el.style.setProperty("--hv-fit", String(Math.floor(kb * 1000) / 1000));
+      if (kl < 1) el.style.setProperty("--hv-fit-l", String(Math.floor(kl * 1000) / 1000));
+    };
+    fit();
+    if (typeof ResizeObserver !== "function") return undefined;
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [shape]);
+
   // Формат даты — один на язык, а не новый каждую секунду тика.
   const dateFmt = useMemo(() => {
     try {
@@ -77,7 +117,7 @@ export function HalvingCard() {
     }
   }, [lang]);
 
-  if (!h) {
+  if (!h || !view) {
     if (!loading) return null;
     return (
       <section className="hv hv-skel" aria-busy="true" aria-labelledby={titleId}>
@@ -98,8 +138,7 @@ export function HalvingCard() {
       </section>
     );
   }
-  // Часы телефона могут врать на минуты и часы — считаем по часам сервера.
-  const v = halvingView(h, local + (h.skew ?? 0));
+  const v = view;
   const day = (ts: number) => (dateFmt ? dateFmt.format(new Date(ts * 1000)) : new Date(ts * 1000).toISOString().slice(0, 10));
   const etaText = day(v.eta);
   // Форма слова — по числу и языку (Intl): «1 day» и «2 days», «544 يومًا».
@@ -122,7 +161,7 @@ export function HalvingCard() {
         // читает отсчёт, когда до него дошли.
         // Больше 999 дней (первые месяцы после халвинга) — «1 457» шире
         // ячейки на узком экране: дням больше места и шрифт поменьше.
-        <div className={v.parts[0] >= 1000 ? "hv-clock hv-wide" : "hv-clock"} dir="ltr" role="timer" aria-label={clock}>
+        <div ref={clockRef} className={v.parts[0] >= 1000 ? "hv-clock hv-wide" : "hv-clock"} dir="ltr" role="timer" aria-label={clock}>
           {v.parts.map((n, i) => (
             <div key={i} className={i === 0 ? "hv-cell hv-days" : "hv-cell"} aria-hidden="true">
               <b>{i === 0 ? num(n) : pad(n)}</b>
@@ -139,12 +178,15 @@ export function HalvingCard() {
       </div>
       <div className="hv-meta">
         <span>{epochText}</span>
-        <span><bdi dir="ltr">{num(v.height)} / {num(h.next)}</bdi></span>
+        {/* Перенос — только после «/» (крупный шрифт на узком экране), а не
+            посреди числа: разряды у num — неразрывные пробелы. */}
+        <span className="hv-blk"><bdi dir="ltr">{num(v.height)}{"\u00a0"}/ {num(h.next)}</bdi></span>
       </div>
       <p className="hv-eta">≈ {etaText}</p>
       <p className="hv-avg">{t(lang, h.src === "epoch" ? "hv_avg_epoch" : "hv_avg", { m: num(h.avg / 60, 2) })}</p>
       <p className="hv-rw">
-        {t(lang, "hv_reward")} <b><bdi dir="ltr">{btc(v.reward)} → {btc(v.rewardNext)} BTC</bdi></b>
+        {/* Перенос — только после «→», а BTC не отрывается от числа. */}
+        {t(lang, "hv_reward")} <b><bdi dir="ltr">{btc(v.reward)}{"\u00a0"}→ {btc(v.rewardNext)}{"\u00a0"}BTC</bdi></b>
       </p>
     </section>
   );

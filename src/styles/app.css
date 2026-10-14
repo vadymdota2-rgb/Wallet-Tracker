@@ -142,9 +142,15 @@
 @keyframes fade { from { opacity: 0; } }
 
 .drawer {
+  /* Отступы с учётом выреза и «полоски» iPhone: снизу — над полоской
+     (иначе последние строки отсчёта халвинга уходили под неё), сбоку в
+     горизонтальном положении — мимо выреза камеры. */
+  --drawer-pb: calc(env(safe-area-inset-bottom) + 18px);
   width: min(78vw, 300px);
   height: 100%;
-  padding: calc(env(safe-area-inset-top) + 18px) 14px 18px;
+  padding: calc(env(safe-area-inset-top) + 18px) 14px var(--drawer-pb);
+  --drawer-ps: max(14px, env(safe-area-inset-left));
+  padding-inline-start: var(--drawer-ps);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -155,6 +161,7 @@
   overflow-y: auto;
 }
 @keyframes slide { from { transform: translateX(-14px); opacity: 0; } }
+[dir="rtl"] .drawer { --drawer-ps: max(14px, env(safe-area-inset-right)); }
 
 .drawer-ttl {
   font-size: 12px;
@@ -188,14 +195,15 @@
    прокрутки и пропадает, когда список долистан. */
 .drawer-more {
   position: sticky;
-  bottom: -18px;
-  margin: -64px -14px -18px;
-  height: 82px;
+  bottom: calc(-1 * var(--drawer-pb));
+  margin: -64px -14px calc(-1 * var(--drawer-pb));
+  margin-inline-start: calc(-1 * var(--drawer-ps));
+  height: calc(64px + var(--drawer-pb));
   flex: none;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding-bottom: 14px;
+  padding-bottom: calc(var(--drawer-pb) - 4px);
   background: linear-gradient(180deg, rgb(1 3 10 / 0), rgb(1 3 10 / 0.92) 62%);
   pointer-events: auto;
 }

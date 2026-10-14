@@ -83,14 +83,22 @@ interface Opts {
   saved?: unknown;
   /** Сломать формат даты карточки — проверить предохранитель. */
   breakDate?: boolean;
+  /** Высота окна и плотность пикселей (по умолчанию 780 и 1). */
+  height?: number;
+  dpr?: number;
+  /** Вырез и «полоска» iPhone (env(safe-area-inset-*)). */
+  insets?: { top: number; bottom: number; left: number; right: number };
+  /** Высокая контрастность Windows. */
+  forcedColors?: boolean;
 }
 
 async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; errors: string[]; console: string[] }> {
   const ctx = await browser.newContext({
-    viewport: { width: o.width ?? 360, height: 780 }, deviceScaleFactor: 1,
-    locale: o.lang === "ar" ? "ar" : "ru-RU", timezoneId: "Europe/Kyiv",
+    viewport: { width: o.width ?? 360, height: o.height ?? 780 }, deviceScaleFactor: o.dpr ?? 1,
+    locale: o.lang === "ar" ? "ar" : "ru-RU", timezoneId: "Europe/Kyiv", forcedColors: o.forcedColors ? "active" : "none",
   });
   const page = await ctx.newPage();
+  if (o.insets) await (await ctx.newCDPSession(page)).send("Emulation.setSafeAreaInsetsOverride", { insets: o.insets });
   const errors: string[] = [];
   const logs: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -130,6 +138,46 @@ async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; er
   await page.locator(".drawer-row").first().waitFor();
   return { ctx, page, errors, console: logs };
 }
+
+/**
+ * Крупный системный шрифт (Android: 130–200 %): весь текст карточки
+ * крупнее в z раз — как это делает WebView, без накопления у вложенных.
+ */
+async function bigText(page: Page, z: number): Promise<void> {
+  await page.evaluate((k) => {
+    const els = [document.querySelector(".hv"), ...document.querySelectorAll(".hv *:not(.hv-cell b):not(.hv-cell small)")] as HTMLElement[];
+    const px = els.map((el) => parseFloat(getComputedStyle(el).fontSize) * k);
+    els.forEach((el, i) => { el.style.fontSize = `${px[i]}px`; });
+    const st = document.createElement("style");
+    st.textContent = `.hv-cell b{font-size:calc(22px*${k}*var(--hv-fit,1))!important}`
+      + `.hv-clock.hv-wide .hv-days b{font-size:calc(18px*${k}*var(--hv-fit,1))!important}`
+      + `.hv-cell small{font-size:calc(10.5px*${k}*var(--hv-fit-l,1))!important}`;
+    document.head.append(st);
+  }, z);
+  await page.waitForTimeout(150); // ResizeObserver подгоняет цифры в следующем кадре
+}
+
+/** Что вылезает: за карточку, за свою ячейку отсчёта, за край экрана. */
+function overflow(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const card = document.querySelector(".hv")!.getBoundingClientRect();
+    const out: string[] = [];
+    if (card.left < 0 || card.right > innerWidth) out.push(`карточка за экраном ${card.left}–${card.right}`);
+    for (const el of document.querySelectorAll<HTMLElement>(".hv *")) {
+      const r = el.getBoundingClientRect();
+      if (!r.width) continue;
+      if (r.left < card.left - 0.5 || r.right > card.right + 0.5) out.push(`за карточкой: ${el.tagName} «${el.textContent}»`);
+      const cell = el.closest(".hv-cell");
+      if (cell && cell !== el) {
+        const c = cell.getBoundingClientRect();
+        if (r.left < c.left + 0.5 || r.right > c.right - 0.5) out.push(`за ячейкой: ${el.tagName} «${el.textContent}»`);
+      }
+    }
+    return out;
+  });
+}
+
+const LANGS = ["ar", "de", "en", "es", "fr", "hi", "id", "ja", "ko", "pl", "pt", "ru", "tr", "uk", "vi", "zh"];
 
 describe("карточка халвинга", () => {
   test("отсчёт, дата, эпоха, блок, награда — до секунды", async () => {
@@ -319,6 +367,85 @@ describe("карточка халвинга", () => {
     assert.match(sp(await page.locator(".hv-done").innerText()), /Халвинг состоялся 10 октября 2026 г\. — блок 1 050 000/);
     assert.match(sp(await page.locator(".hv-rw").innerText()), /1,5625 → 0,78125 BTC/);
     assert.equal(sp(await page.locator(".hv-avg").innerText()), "Оценка по 10 мин на блок");
+    await ctx.close();
+  });
+
+  test("все 16 языков на 320 px: ничего не вылезает ни за карточку, ни за ячейку", async () => {
+    const ctxs = await Promise.all(LANGS.map((lang) => open({ width: 320, lang })));
+    try {
+      for (const [i, { page, errors }] of ctxs.entries()) {
+        await page.locator(".hv:not(.hv-skel)").waitFor();
+        assert.deepEqual(await overflow(page), [], LANGS[i] ?? "");
+        assert.deepEqual(errors, [], LANGS[i] ?? "");
+      }
+    } finally {
+      await Promise.all(ctxs.map(({ ctx }) => ctx.close()));
+    }
+  });
+
+  test("от 320 до 1280 px и плотность ×1–×3: ровно, без вылезаний", async () => {
+    for (const [width, dpr] of [[320, 2], [360, 3], [390, 3], [430, 3], [768, 2], [1280, 1]] as const) {
+      const { ctx, page } = await open({ width, dpr });
+      await page.locator(".hv:not(.hv-skel)").waitFor();
+      assert.deepEqual(await overflow(page), [], `${width} px ×${dpr}`);
+      await ctx.close();
+    }
+  });
+
+  for (const [z, lang, reply] of [[1.3, "ru", undefined], [2, "de", undefined], [2, "ar", undefined], [1.6, "ru", AFTER]] as const) {
+    test(`крупный системный шрифт ${z * 100} % (${lang}${reply ? ", 1 457 дней" : ""}): цифры и подписи в своих ячейках`, async () => {
+      const { ctx, page } = await open({ width: 320, lang, reply });
+      await page.locator(".hv:not(.hv-skel)").waitFor();
+      await bigText(page, z);
+      assert.deepEqual(await overflow(page), []);
+      // Цифры уменьшены ровно настолько, чтобы влезть, — а не во много раз.
+      const fit = Number(await page.locator(".hv-clock").evaluate((e) => getComputedStyle(e).getPropertyValue("--hv-fit") || "1"));
+      assert.ok(fit > 0.5 && fit < 1, `--hv-fit = ${fit}`);
+      await ctx.close();
+    });
+  }
+
+  test("обычный шрифт: цифры не уменьшаются", async () => {
+    const { ctx, page } = await open({ width: 320 });
+    await page.locator(".hv:not(.hv-skel)").waitFor();
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator(".hv-clock").evaluate((e) => e.style.getPropertyValue("--hv-fit")), "");
+    assert.equal(await page.locator(".hv-cell b").first().evaluate((e) => getComputedStyle(e).fontSize), "22px");
+    await ctx.close();
+  });
+
+  for (const [name, width, height, insets, lang] of [
+    ["iPhone вертикально: над «полоской»", 393, 852, { top: 59, bottom: 34, left: 0, right: 0 }, "ru"],
+    ["iPhone горизонтально: мимо выреза камеры", 852, 393, { top: 0, bottom: 21, left: 59, right: 59 }, "ru"],
+    ["iPhone горизонтально, арабский: мимо выреза справа", 852, 393, { top: 0, bottom: 21, left: 59, right: 59 }, "ar"],
+  ] as const) {
+    test(name, async () => {
+      const { ctx, page } = await open({ width, height, dpr: 3, insets, lang });
+      await page.locator(".hv:not(.hv-skel)").waitFor();
+      // Меню выезжает 0,22 с — мерим, когда встало на место, и долистав до конца.
+      await page.locator(".drawer").evaluate(async (d) => {
+        await Promise.all(d.getAnimations().map((x) => x.finished));
+        d.scrollTop = d.scrollHeight;
+      });
+      await page.waitForTimeout(100);
+      const r = await page.locator(".hv").evaluate((e) => e.getBoundingClientRect().toJSON() as DOMRect);
+      // Низ карточки — выше полоски; бок — не ближе границы выреза (и не
+      // ближе обычных 14 px от края меню).
+      assert.ok(r.bottom <= height - insets.bottom - 8, `низ ${r.bottom}`);
+      if (lang === "ar") assert.ok(r.right <= width - Math.max(14, insets.right), `правый край ${r.right}`);
+      else assert.ok(r.left >= Math.max(14, insets.left), `левый край ${r.left}`);
+      // Долистали до конца — стрелка «ещё» не закрывает карточку.
+      assert.equal(await page.locator(".drawer-more").count(), 0);
+      await ctx.close();
+    });
+  }
+
+  test("высокая контрастность Windows: полоса эпохи видна", async () => {
+    const { ctx, page } = await open({ forcedColors: true });
+    await page.locator(".hv:not(.hv-skel)").waitFor();
+    const fill = await page.locator(".hv-bar i").evaluate((e) => getComputedStyle(e).backgroundColor);
+    assert.notEqual(fill, "rgba(0, 0, 0, 0)");
+    assert.ok(!/, 0\)$/.test(fill), fill);
     await ctx.close();
   });
 });

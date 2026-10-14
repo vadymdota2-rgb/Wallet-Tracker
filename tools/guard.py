@@ -673,8 +673,8 @@ _no_browser = "Executable doesn't exist" in _t_e2e.stdout + _t_e2e.stderr or "Ca
 if _no_browser:
     print("--  халвинг: браузерный тест пропущен — нет Playwright/Chromium (npm i; npx playwright install chromium)")
 else:
-    say("халвинг: браузерный тест карточки (15 проверок: отсчёт до секунды, свои классы, часы, заглушка, сбои, подделка, свёрнутое приложение, 320 px с 544 и 1 457 днями, арабский, доступность) зелёный",
-        _t_e2e.returncode == 0 and "# fail 0" in _t_e2e.stdout and "# pass 15" in _t_e2e.stdout)
+    say("халвинг: браузерный тест карточки (26 проверок: отсчёт до секунды, свои классы, часы, заглушка, сбои, подделка, свёрнутое приложение, 16 языков, 320–1280 px и ×1–×3, крупный шрифт до 200 %, вырез и полоска iPhone, высокая контрастность, арабский, доступность) зелёный",
+        _t_e2e.returncode == 0 and "# fail 0" in _t_e2e.stdout and "# pass 26" in _t_e2e.stdout)
     if _t_e2e.returncode:
         print(_t_e2e.stdout[-2500:])
 # Модуль халвинга: сервер — wt_halving.py, расчёт и тип — lib/halving.ts,
@@ -711,6 +711,8 @@ say("халвинг: среднее за эпоху, отсчёт от посл�
     # GitHub закреплена по хешам; соединение напрямую, без сжатия.
     and os.path.exists(f"{APP}/tests/test_halving_policy.py") and "urllib.request.ProxyHandler({})" in _hvs
     and '"Accept-Encoding": "identity"' in _hvs and "TLSv1_2" in read(f"{APP}/tests/test_halving_policy.py")
+    and "var(--hv-fit, 1)" in _hvc and "var(--hv-fit-l, 1)" in _hvc and "@media (forced-colors: active)" in _hvc
+    and 'el.style.setProperty("--hv-fit",' in _hv and "--drawer-pb: calc(env(safe-area-inset-bottom) + 18px);" in read(f"{APP}/src/styles/app.css")
     and "persist-credentials: false" in read(f"{APP}/.github/workflows/tests.yml") and "actions/checkout@v" not in read(f"{APP}/.github/workflows/tests.yml")
     # Срок ответа на сервере и в памяти приложения — один (5 минут).
     and "TTL = 300.0" in _hvs and "export const HALVING_TTL_MS = 5 * 60_000;" in _hvl
@@ -722,7 +724,7 @@ say("халвинг: среднее за эпоху, отсчёт от посл�
     and "typecheck:halving" in read(f"{APP}/package.json") and 'python: ["3.10", "3.11", "3.12", "3.13"]' in read(f"{APP}/.github/workflows/tests.yml") and "const untilNextSecond = " in read(f"{APP}/src/lib/tick.ts")
     and "if 1_700_000_000 < ts <= _now():" in _hvs and "except RuntimeError as e:" in _hvs and os.path.exists(f"{APP}/tools/mutate-halving.py")
     and "python tools/mutate-halving.py" in read(f"{APP}/.github/workflows/tests.yml") and "r.height <= (r.at - GENESIS_TS) / 300" in _hvl
-    and '<p className="hv-rw" aria-hidden="true"><span className="hv-ph">' in _hv and ".hv-rw b { color: var(--ink); font-weight: 700; white-space: nowrap; }" in _hvc and "HALVING_TTL_MS + 5_000" in _hv
+    and '<p className="hv-rw" aria-hidden="true"><span className="hv-ph">' in _hv and ".hv-rw b { color: var(--ink); font-weight: 700; display: inline-block; }" in _hvc and ".hv-meta > .hv-blk { white-space: normal;" in _hvc and "HALVING_TTL_MS + 5_000" in _hv
     and 'remember<HalvingReply | null>("/api/halving", HALVING_TTL_MS' in read(f"{APP}/src/lib/api.ts")
     and 'className="hv hv-skel" aria-busy="true"' in _hv and "prefers-reduced-motion: reduce" in _hvc
     and "if (Math.abs(t - stamp) >= 1000) stamp = t;" in read(f"{APP}/src/lib/tick.ts")
