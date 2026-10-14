@@ -332,9 +332,9 @@ noImplicitOverride, noPropertyAccessFromIndexSignature, noImplicitReturns).
 Качество тестов меряется двумя способами. Покрытие — 100 % строк и ветвлений
 у `wt_halving.py`, `src/lib/halving.ts` и `src/lib/tick.ts`
 (`python3 -m coverage run --branch …`, `node --test --experimental-test-coverage`).
-Мутационная проверка — `python3 tools/mutate-halving.py`: 67 порч кода
+Мутационная проверка — `python3 tools/mutate-halving.py`: 68 порч кода
 (границы, знаки, константы, защиты от атак, гонки, таймер секунд, формы слов), тесты
-убивают все 65 значимых; две мутации эквивалентны (не меняют ничего
+убивают все 66 значимых; две мутации эквивалентны (не меняют ничего
 наблюдаемого) и не считаются. Гонять после любой правки модуля; идёт и в CI.
 
 **На любом устройстве.** Иконка — векторная (SVG), шрифт — IBM Plex Sans

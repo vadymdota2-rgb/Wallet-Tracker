@@ -32,7 +32,7 @@ class Net:
 
     def __init__(self, blocks=None, adj=None, fail=False, height_hash=HASH, tip_height=H):
         self.blocks, self.adj, self.fail, self.hash, self.tip_height = blocks, adj, fail, height_hash, tip_height
-        self.calls, self.urls = 0, []
+        self.calls, self.urls, self.start_height = 0, [], 0
 
     def _answer(self, url):
         as_json = lambda v: json.dumps(v).encode() if v is not None else None  # noqa: E731
@@ -41,11 +41,16 @@ class Net:
             (lambda u: u.endswith("/api/blocks/tip/hash"), lambda: TIP_HASH.encode() if self.blocks is not None else None),
             (lambda u: u.endswith(f"/api/block/{TIP_HASH}"), lambda: as_json(tip)),
             (lambda u: "difficulty-adjustment" in u, lambda: as_json(self.adj)),
-            (lambda u: "block-height" in u, self.hash.encode),
-            (lambda u: "/api/block/" in u, lambda: b'{"timestamp": 1838896000}'),
+            (lambda u: "block-height" in u, lambda: self._asked(url)),
+            (lambda u: "/api/block/" in u, lambda: as_json({"height": self.start_height, "timestamp": 1838896000})),
             (lambda u: "tip/height" in u or "getblockcount" in u, lambda: str(self.tip_height).encode()),
         )
         return next((answer() for match, answer in routes if match(url)), None)
+
+    def _asked(self, url):
+        """Хеш блока по высоте; блок потом отдаётся с этой же высотой."""
+        self.start_height = int(url.rsplit("/", 1)[1])
+        return self.hash.encode()
 
     def fetch(self, url, limit=1 << 20):
         self.calls += 1
@@ -88,6 +93,23 @@ class HalvingTest(unittest.TestCase):
         self.assertAlmostEqual(r["avg"], 570.9, places=1)
         self.assertEqual(hv.START_TS[1_050_000], 1838896000)  # время начала эпохи запомнено
         self.assertEqual(r["prev"], 1838896000)
+
+    def test_start_block_of_another_height_is_not_remembered(self):
+        # Источник на «блок 1 050 000» прислал другой блок — его время не
+        # запоминается (иначе жило бы до перезапуска API).
+        net = Net(blocks=[{"height": 1_050_100, "timestamp": 1838896000 + 100 * 600}], adj={"timeAvg": 570_866})
+        net._asked = lambda url: (setattr(net, "start_height", 1_049_999), net.hash.encode())[1]
+        r = self.run_with(net, t=1838896000 + 100 * 600 + 60)
+        self.assertNotIn(1_050_000, hv.START_TS)
+        self.assertNotIn("prev", r)
+        self.assertEqual(r["src"], "period")
+
+    def test_fallbacks_are_other_sources(self):
+        # mempool молчит — следующий адрес уже другого источника.
+        net = Net(fail=True)
+        self.run_with(net)
+        hosts = [u.split("/")[2] for u in net.urls]
+        self.assertEqual(hosts, ["mempool.space", "blockstream.info", "blockchain.info"])
 
     def test_first_days_of_epoch_do_not_trust_epoch_average(self):
         # 100 блоков новой эпохи по 10 минут: среднему по ним не верим (мало),
@@ -345,7 +367,7 @@ class HalvingTest(unittest.TestCase):
         down.fetch = lazy
         out = self._race(down)
         self.assertTrue(all(not r["ok"] for r in out))
-        self.assertEqual(down.calls, 4, "одна неудачная сборка (4 адреса), остальные не ходили в сеть")
+        self.assertEqual(down.calls, 3, "одна неудачная сборка (3 адреса), остальные не ходили в сеть")
 
 
     # ── Не засоряет сервер ───────────────────────────────────────────────

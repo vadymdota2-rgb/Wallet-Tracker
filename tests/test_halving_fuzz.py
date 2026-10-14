@@ -64,13 +64,20 @@ def network(r: random.Random):
     tip_h = r.choice([971_219, 1_050_100, 99_000_000, 0]) if r.random() < 0.8 else junk(r)
 
     tip_blk = blocks[0] if isinstance(blocks, list) and blocks else blocks
+    asked = {"h": 0}  # высота, по которой спросили хеш блока начала эпохи
+
+    def by_height(url: str) -> bytes | None:
+        asked["h"] = int(url.rsplit("/", 1)[1])
+        return hsh.encode() if r.random() < 0.9 else body(r, junk(r))
+
     # Адрес → ответ; первый подходящий. Остальное — «высота строкой».
     routes = (
         (lambda u: u.endswith("/api/blocks/tip/hash"), lambda: TIP_HASH.encode() if r.random() < 0.9 else body(r, junk(r))),
         (lambda u: u.endswith(f"/api/block/{TIP_HASH}"), lambda: body(r, tip_blk)),
         (lambda u: "difficulty-adjustment" in u, lambda: body(r, adj)),
-        (lambda u: "block-height" in u, lambda: hsh.encode() if r.random() < 0.9 else body(r, junk(r))),
-        (lambda u: "/api/block/" in u, lambda: body(r, {"timestamp": start_ts})),
+        (lambda u: "block-height" in u, None),
+        (lambda u: "/api/block/" in u,
+         lambda: body(r, {"height": asked["h"] if r.random() < 0.9 else junk(r), "timestamp": start_ts})),
     )
 
     def height_text(limit: int) -> bytes | None:
@@ -82,7 +89,7 @@ def network(r: random.Random):
     def fetch(url: str, limit: int = 1 << 20) -> bytes | None:
         for match, answer in routes:
             if match(url):
-                return answer()
+                return answer() if answer else by_height(url)
         return height_text(limit)
 
     return fetch

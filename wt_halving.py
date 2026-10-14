@@ -298,7 +298,8 @@ def _start_ts(h: int) -> int:
     if ts:
         return ts
     blk = _block(f"https://mempool.space/api/block-height/{h}")
-    ts = _whole(blk.get("timestamp")) if blk else 0
+    # Тот ли это блок: время чужого запомнилось бы до перезапуска API.
+    ts = _whole(blk.get("timestamp")) if blk and _whole(blk.get("height")) == h else 0
     # Запоминаем навсегда только правдоподобное: после 2023 года и не из
     # будущего. Иначе мусор от источника жил бы до перезапуска API и всю
     # эпоху отключал бы среднее по ней.
@@ -321,8 +322,9 @@ def _tip() -> tuple[int, int]:
         h = _whole(blk.get("height"))
         if _plausible(h):
             return h, _whole(blk.get("timestamp"))
-    for url in ("https://mempool.space/api/blocks/tip/height", "https://blockstream.info/api/blocks/tip/height",
-                "https://blockchain.info/q/getblockcount"):
+    # Запасные — другие источники, а не другой адрес того же mempool: завис
+    # mempool — второй запрос к нему съел бы ещё HOP секунд из бюджета.
+    for url in ("https://blockstream.info/api/blocks/tip/height", "https://blockchain.info/q/getblockcount"):
         h = _int(url)
         if _plausible(h):
             return h, 0

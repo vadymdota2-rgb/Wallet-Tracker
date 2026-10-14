@@ -70,6 +70,7 @@ PY = [
     ("parse_int=_short_int,\n", "\n", "числа не длиннее INT_MAX цифр"),
     (",\n                            parse_constant=_no_constant)", ")", "NaN и Infinity"),
     ("raw = _fetch(url, JSON_MAX)", "raw = _fetch(url)", "ответ-JSON не больше 4 КБ"),
+    (' if blk and _whole(blk.get("height")) == h else 0', " if blk else 0", "блок начала эпохи — той высоты"),
     ("except (ValueError, RecursionError):", "except ValueError:", "сверхглубокая вложенность"),
     ('c if c.isprintable() else "?"', "c", "журнал без управляющих символов"),
     ("clean[:LOG_MAX]", "clean", "длина строки журнала"),
