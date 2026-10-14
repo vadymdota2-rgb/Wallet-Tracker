@@ -111,7 +111,7 @@ class ServerPolicyTest(unittest.TestCase):
         self.assertGreaterEqual(ctx.minimum_version, hv.ssl.TLSVersion.TLSv1_2)  # TLS не старше 1.2
         self.assertEqual(ctx.verify_mode, hv.ssl.CERT_REQUIRED)
         self.assertTrue(ctx.check_hostname)
-        self.assertEqual(hv._UA.get("Accept-Encoding"), "identity")
+        self.assertEqual(hv._HEADERS.get("Accept-Encoding"), "identity")
         self.assertEqual(set(hv.SCHEMES), {"https"})
 
     def test_reply_strings_are_ours(self):

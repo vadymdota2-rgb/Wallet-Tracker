@@ -70,8 +70,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypedDict
 
 # Literal и NotRequired нужны только проверке типов (mypy): NotRequired есть
-# лишь с Python 3.11, а на сервере может стоять 3.8–3.10. Аннотации здесь —
-# строки (from __future__ import annotations), при запуске их никто не читает.
+# лишь с Python 3.11, а модуль работает и на 3.10 (CI проверяет 3.10–3.13).
+# Аннотации здесь — строки (from __future__ import annotations), при запуске
+# их никто не читает.
 if TYPE_CHECKING:  # pragma: no cover — только для mypy, при запуске не выполняется
     from typing import Literal, NotRequired
 
@@ -93,8 +94,9 @@ GENESIS_TS = 1231006505
 FASTEST = 300
 # Сколько ответ живёт в кэше, с (приложение держит столько же — HALVING_TTL_MS).
 TTL = 300.0
-# Все источники молчат — минуту отвечаем «нет данных», не пытаясь снова:
-# иначе каждое открытие меню ждало бы четыре таймаута.
+# Все источники молчат — минуту отвечаем «нет данных» (или последним
+# хорошим ответом), не пытаясь снова: иначе каждое открытие меню ждало бы
+# сборку до BUDGET секунд.
 ERR_TTL = 60.0
 # Бюджет одной сборки и предел на один запрос, секунды. Меньше MIN_LEFT
 # от бюджета — в сеть уже не идём: не хватит и на соединение.
@@ -104,8 +106,9 @@ MIN_LEFT = 0.2
 # Время блока каждого прошлого халвинга, уже известное (дальше — из сети).
 START_TS = {840_000: 1713571767}
 
-# identity — без сжатия: «бомба» в 1 МБ сжатого не развернётся в гигабайты.
-_UA = {"User-Agent": "wallet-tracker/1.0", "Accept-Encoding": "identity"}
+# Заголовки запроса. identity — без сжатия: «бомба» в 1 МБ сжатого не
+# развернётся в гигабайты.
+_HEADERS = {"User-Agent": "wallet-tracker/1.0", "Accept-Encoding": "identity"}
 # Куда модулю можно ходить — и больше никуда.
 HOSTS = frozenset({"mempool.space", "blockstream.info", "blockchain.info"})
 SCHEMES = frozenset({"https"})
@@ -207,7 +210,7 @@ def _fetch(url: str, limit: int = 1 << 20) -> bytes | None:
     hop = min(HOP, left)
     end = time.monotonic() + hop
     try:
-        with _opener.open(urllib.request.Request(url, headers=_UA), timeout=hop) as r:
+        with _opener.open(urllib.request.Request(url, headers=_HEADERS), timeout=hop) as r:
             # По кускам и со своим сроком: таймаут сокета — на каждый кусок,
             # и источник, цедящий по байту, держал бы поток часами.
             buf = bytearray()
