@@ -7,6 +7,7 @@ main это не попадёт. Сервер проверяется по дер
 поиском текста: обойти переименованием или пробелами не выйдет.
 """
 import ast
+import importlib
 import inspect
 import os
 import re
@@ -93,13 +94,18 @@ class ServerPolicyTest(unittest.TestCase):
         self.assertEqual(inspect.signature(hv.halving_data).parameters, {})
 
     def test_opener_is_direct_and_strict(self):
-        # Прокси из окружения не берётся: пустой ProxyHandler заменяет тот,
-        # что urllib строит из HTTPS_PROXY, и сам ничего не перехватывает.
-        with unittest.mock.patch.dict(os.environ, {"HTTPS_PROXY": "http://evil.example:1", "https_proxy": "http://evil.example:1"}):
+        # Прокси из окружения не берётся: модуль собирается заново с
+        # подложенным HTTPS_PROXY — его «открывалка» всё равно идёт напрямую.
+        evil = {"HTTPS_PROXY": "http://evil.example:1", "https_proxy": "http://evil.example:1", "NO_PROXY": "", "no_proxy": ""}
+        with unittest.mock.patch.dict(os.environ, evil):
             default = hv.urllib.request.build_opener()
+            try:
+                importlib.reload(hv)
+                poisoned = list(hv._opener.handlers)
+            finally:
+                importlib.reload(hv)
         self.assertTrue(any(getattr(h, "proxies", None) for h in default.handlers))  # без защиты прокси был бы
-        self.assertFalse(any(getattr(h, "proxies", None) for h in hv._opener.handlers))
-        self.assertFalse(any(hasattr(h, "https_open") and type(h).__name__ == "ProxyHandler" for h in hv._opener.handlers))
+        self.assertFalse(any(getattr(h, "proxies", None) for h in poisoned))
         https = [h for h in hv._opener.handlers if type(h).__name__ == "HTTPSHandler"]
         ctx = https[0]._context
         self.assertGreaterEqual(ctx.minimum_version, hv.ssl.TLSVersion.TLSv1_2)  # TLS не старше 1.2
