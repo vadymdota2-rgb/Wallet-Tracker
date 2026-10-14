@@ -27,6 +27,7 @@ NOW = 1_791_881_300
 JUNK = [None, True, False, "", "x", "1e9", -1, 0, 0.5, 10**40, -(10**12), [], {}, [1, 2], {"a": 1}, "∞"]
 KEYS = set(hv.Reply.__annotations__)
 OWN = {"epoch", "period", "nominal", "no_data"}
+TIP_HASH = "b" * 64  # хеш последнего блока
 # Враждебные тела: числа вне float, NaN/Infinity, глубокая вложенность, нули.
 EVIL = [b'[{"height":1e400,"timestamp":1e400}]', b'{"timeAvg":1e400,"timestamp":-1e400}', b"1e400",
         b'[{"height":NaN,"timestamp":Infinity}]', b'{"timeAvg":-Infinity,"timestamp":NaN}', b"Infinity",
@@ -62,19 +63,27 @@ def network(r: random.Random):
     hsh = r.choice(["0" * 63 + "a", "../evil", "", "f" * 64, "Z" * 64])
     tip_h = r.choice([971_219, 1_050_100, 99_000_000, 0]) if r.random() < 0.8 else junk(r)
 
-    def fetch(url: str, limit: int = 1 << 20) -> bytes | None:
-        if url.endswith("/api/v1/blocks"):
-            return body(r, blocks)
-        if "difficulty-adjustment" in url:
-            return body(r, adj)
-        if "block-height" in url:
-            return hsh.encode() if r.random() < 0.9 else body(r, junk(r))
-        if "/api/block/" in url:
-            return body(r, {"timestamp": start_ts})
+    tip_blk = blocks[0] if isinstance(blocks, list) and blocks else blocks
+    # Адрес → ответ; первый подходящий. Остальное — «высота строкой».
+    routes = (
+        (lambda u: u.endswith("/api/blocks/tip/hash"), lambda: TIP_HASH.encode() if r.random() < 0.9 else body(r, junk(r))),
+        (lambda u: u.endswith(f"/api/block/{TIP_HASH}"), lambda: body(r, tip_blk)),
+        (lambda u: "difficulty-adjustment" in u, lambda: body(r, adj)),
+        (lambda u: "block-height" in u, lambda: hsh.encode() if r.random() < 0.9 else body(r, junk(r))),
+        (lambda u: "/api/block/" in u, lambda: body(r, {"timestamp": start_ts})),
+    )
+
+    def height_text(limit: int) -> bytes | None:
         roll = r.random()
         if roll < 0.8:
             return str(tip_h).encode()[:limit]
         return r.choice([b"1e400", b"9" * 5000, b"Infinity", b"NaN", b"-0"]) if roll < 0.86 else body(r, junk(r))
+
+    def fetch(url: str, limit: int = 1 << 20) -> bytes | None:
+        for match, answer in routes:
+            if match(url):
+                return answer()
+        return height_text(limit)
 
     return fetch
 

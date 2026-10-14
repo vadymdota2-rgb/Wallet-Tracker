@@ -1,5 +1,6 @@
 """Халвинг на сервере (wt_halving.py): npm test. Сеть подменена — тест не
 ходит в mempool, а модуль грузится сам по себе, без whale_api."""
+import gc
 import http.client
 import io
 import json
@@ -7,6 +8,7 @@ import os
 import sys
 import threading
 import time
+import tracemalloc
 import unittest
 import urllib.error
 from unittest import mock
@@ -18,11 +20,15 @@ TIP = 1791881177
 NOW = TIP + 78
 H = 971219
 HASH = "0" * 63 + "a"
+TIP_HASH = "b" * 64  # хеш последнего блока
 FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "halving.json")
 
 
 class Net:
-    """Подставная сеть: ответ по адресу и счётчик запросов."""
+    """Подставная сеть: ответ по адресу и счётчик запросов.
+
+    blocks — как список последних блоков: последний блок — blocks[0]
+    (а мусор вместо списка — мусор вместо блока)."""
 
     def __init__(self, blocks=None, adj=None, fail=False, height_hash=HASH, tip_height=H):
         self.blocks, self.adj, self.fail, self.hash, self.tip_height = blocks, adj, fail, height_hash, tip_height
@@ -30,8 +36,10 @@ class Net:
 
     def _answer(self, url):
         as_json = lambda v: json.dumps(v).encode() if v is not None else None  # noqa: E731
+        tip = self.blocks[0] if isinstance(self.blocks, list) and self.blocks else self.blocks
         routes = (
-            (lambda u: u.endswith("/api/v1/blocks"), lambda: as_json(self.blocks)),
+            (lambda u: u.endswith("/api/blocks/tip/hash"), lambda: TIP_HASH.encode() if self.blocks is not None else None),
+            (lambda u: u.endswith(f"/api/block/{TIP_HASH}"), lambda: as_json(tip)),
             (lambda u: "difficulty-adjustment" in u, lambda: as_json(self.adj)),
             (lambda u: "block-height" in u, self.hash.encode),
             (lambda u: "/api/block/" in u, lambda: b'{"timestamp": 1838896000}'),
@@ -323,7 +331,8 @@ class HalvingTest(unittest.TestCase):
         out = self._race(slow)
         self.assertEqual(len(out), 6)
         self.assertTrue(all(r is out[0] and r["ok"] for r in out))
-        self.assertEqual(slow.calls, 1, "сборка одна: остальные дождались и взяли готовое")
+        # Хеш последнего блока и сам блок — два запроса на одну сборку.
+        self.assertEqual(slow.calls, 2, "сборка одна: остальные дождались и взяли готовое")
 
     def test_cold_start_race_when_sources_are_down(self):
         down = Net(fail=True)
@@ -337,6 +346,51 @@ class HalvingTest(unittest.TestCase):
         out = self._race(down)
         self.assertTrue(all(not r["ok"] for r in out))
         self.assertEqual(down.calls, 4, "одна неудачная сборка (4 адреса), остальные не ходили в сеть")
+
+
+    # ── Не засоряет сервер ───────────────────────────────────────────────
+
+    def test_memory_threads_and_cache_do_not_grow(self):
+        # Тысячи ответов и сотни пересборок: память, потоки и кэш — те же.
+        # Растёт — значит модуль что-то копит (утечка), и за месяцы работы
+        # сервер бы «засорился».
+        net = Net(blocks=[{"height": H, "timestamp": TIP}])
+        threads = threading.active_count()
+        # Сеть без журнала адресов: копить здесь должен только модуль, если копит.
+        with mock.patch.object(hv, "_fetch", lambda url, limit=1 << 20: net._answer(url)), \
+                mock.patch.object(hv, "_now", lambda: NOW):
+            for _ in range(300):  # разогрев: кэши самого Python
+                hv.build()
+            gc.collect()
+            tracemalloc.start()
+            before = tracemalloc.get_traced_memory()[0]
+            for i in range(20_000):
+                hv.reply()
+                if i % 50 == 0:
+                    hv.build()
+            gc.collect()
+            grown = tracemalloc.get_traced_memory()[0] - before
+            tracemalloc.stop()
+        self.wait_bg()
+        self.assertLess(grown, 64 * 1024, f"память выросла на {grown} байт")
+        self.assertLessEqual(threading.active_count(), threads)
+        self.assertEqual(set(hv.START_TS), {840_000})  # одно время на эпоху, не больше
+
+    def test_json_answers_are_read_small(self):
+        # Ответ-JSON — не больше JSON_MAX (блок ~0,5 КБ): мегабайт не читаем.
+        limits = {}
+        net = Net(blocks=[{"height": H, "timestamp": TIP}])
+
+        def fetch(url, limit=1 << 20):
+            limits[url.rsplit("/", 2)[-2]] = limit
+            return net.fetch(url, limit)
+
+        self.run_with(Net())  # пусто
+        hv._st = hv._State()
+        with mock.patch.object(hv, "_fetch", fetch), mock.patch.object(hv, "_now", lambda: NOW):
+            hv.build()
+        self.assertEqual(limits["block"], hv.JSON_MAX)
+        self.assertLessEqual(hv.JSON_MAX, 4096)
 
 
 if __name__ == "__main__":

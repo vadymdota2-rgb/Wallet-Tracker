@@ -164,7 +164,8 @@ class SecurityTest(unittest.TestCase):
         for v, want in ((570_866, 570_866.0), (570_866.5, 570_866.5), ("570866", 0.0), (True, 0.0), ({}, 0.0)):
             self.assertEqual(hv._real(v), want, v)
         logs = []
-        net = {"/api/v1/blocks": b'[{"height":"1050100","timestamp":1791881000}]',
+        tip = "/api/block/" + "b" * 64
+        net = {"tip/hash": b"b" * 64, tip: b'{"height":"1050100","timestamp":1791881000}',
                "difficulty-adjustment": b'{"timeAvg":"570866"}'}
 
         def fetch(url, limit=1 << 20):
@@ -174,7 +175,7 @@ class SecurityTest(unittest.TestCase):
                 mock.patch.object(hv, "_log", logs.append):
             self.assertEqual(hv.build(), {"ok": False, "error": "no_data"})  # высота-строка не годится
             hv._st = hv._State()
-            net["/api/v1/blocks"] = b'[{"height":1050100,"timestamp":1791881000}]'
+            net[tip] = b'{"height":1050100,"timestamp":1791881000}'
             hv.START_TS.pop(1_050_000, None)
             r = hv.build()
         self.assertEqual((r["height"], r["src"], r["avg"]), (1_050_100, "nominal", 600.0))  # среднее-строка — нет
@@ -212,7 +213,8 @@ class SecurityTest(unittest.TestCase):
         # Каждый источник шлёт отраву: сборка не падает и не уходит в «общий
         # перехват» (тот — последняя страховка, а не способ разбора).
         poison = {
-            "/api/v1/blocks": b'[{"height":1e400,"timestamp":Infinity}]',
+            "tip/hash": b"b" * 64,
+            "/api/block/" + "b" * 64: b'{"height":1e400,"timestamp":Infinity}',
             "difficulty-adjustment": b'{"timeAvg":1e400}',
             "block-height": b"../../../etc/passwd",
             "/api/block/": b'{"timestamp":NaN}',

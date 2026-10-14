@@ -1,6 +1,7 @@
 """Отсчёт до халвинга биткоина — отдельный модуль API (/api/halving).
 
-Высота и время последнего блока — mempool.space (/api/v1/blocks, без ключа);
+Высота и время последнего блока — mempool.space (хеш последнего блока и
+сам блок, без ключа: полкилобайта, а не 30 КБ списка из 15 блоков);
 запасной путь — blockstream.info и blockchain.info (тогда время блока не
 знаем и берём текущее). Халвинг каждые 210 000 блоков.
 
@@ -118,6 +119,9 @@ LOG_MAX = 300
 # цифр: разбор числа из миллиона цифр — секунды процессора (CVE-2020-10735).
 CHUNK = 16_384
 INT_MAX = 20
+# Самый большой ответ-JSON, который модуль читает: блок — ~0,5 КБ, данные о
+# сложности — ~0,3 КБ. Больше — не тот ответ.
+JSON_MAX = 4096
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -245,11 +249,16 @@ def _no_constant(name: str) -> float:
     raise ValueError(f"{name} в JSON")
 
 
+# Один разборщик на всё время работы, а не новый на каждый ответ (так делает
+# json.loads с параметрами): вдвое быстрее и без лишней памяти.
+_DECODER = json.JSONDecoder(parse_float=_finite, parse_int=_short_int,
+                            parse_constant=_no_constant)
+
+
 def _json(url: str) -> object:
-    raw = _fetch(url)
+    raw = _fetch(url, JSON_MAX)
     try:
-        return json.loads(raw.decode(), parse_float=_finite, parse_int=_short_int,
-                          parse_constant=_no_constant) if raw else None
+        return _DECODER.decode(raw.decode()) if raw else None
     except (ValueError, RecursionError):  # RecursionError — сверхглубокая вложенность
         return None
 
@@ -272,18 +281,24 @@ def _int(url: str) -> int:
     return int(raw) if re.fullmatch(rb"[0-9]{1,20}", raw) else 0
 
 
+def _block(url: str) -> dict[str, object] | None:
+    """Блок по адресу, который отвечает его хешем; None — не узнали."""
+    raw = _fetch(url, 200)
+    bh = raw.decode(errors="replace").strip() if raw else ""
+    # В адрес следующего запроса идёт только настоящий хеш блока.
+    if not re.fullmatch(r"[0-9a-f]{64}", bh):
+        return None
+    blk = _json(f"https://mempool.space/api/block/{bh}")
+    return blk if isinstance(blk, dict) else None
+
+
 def _start_ts(h: int) -> int:
     """Время блока h (начала эпохи); 0 — не узнали."""
     ts = START_TS.get(h)
     if ts:
         return ts
-    raw = _fetch(f"https://mempool.space/api/block-height/{h}", 200)
-    bh = raw.decode(errors="replace").strip() if raw else ""
-    # В адрес следующего запроса идёт только настоящий хеш блока.
-    if not re.fullmatch(r"[0-9a-f]{64}", bh):
-        return 0
-    blk = _json(f"https://mempool.space/api/block/{bh}")
-    ts = _whole(blk.get("timestamp")) if isinstance(blk, dict) else 0
+    blk = _block(f"https://mempool.space/api/block-height/{h}")
+    ts = _whole(blk.get("timestamp")) if blk else 0
     # Запоминаем навсегда только правдоподобное: после 2023 года и не из
     # будущего. Иначе мусор от источника жил бы до перезапуска API и всю
     # эпоху отключал бы среднее по ней.
@@ -301,11 +316,11 @@ def _plausible(h: int) -> bool:
 
 def _tip() -> tuple[int, int]:
     """Высота и время последнего блока; время 0 — не знаем."""
-    blocks = _json("https://mempool.space/api/v1/blocks")
-    if isinstance(blocks, list) and blocks and isinstance(blocks[0], dict):
-        h = _whole(blocks[0].get("height"))
+    blk = _block("https://mempool.space/api/blocks/tip/hash")
+    if blk:
+        h = _whole(blk.get("height"))
         if _plausible(h):
-            return h, _whole(blocks[0].get("timestamp"))
+            return h, _whole(blk.get("timestamp"))
     for url in ("https://mempool.space/api/blocks/tip/height", "https://blockstream.info/api/blocks/tip/height",
                 "https://blockchain.info/q/getblockcount"):
         h = _int(url)

@@ -687,7 +687,7 @@ say("халвинг — отдельный модуль: сервер, расч�
     and "from whale_api" not in _hvs and "import whale_api" not in _hvs
     and '<Boundary name="halving"><HalvingCard /></Boundary>' in appx and "static getDerivedStateFromError()" in read(f"{APP}/src/components/Boundary.tsx"))
 say("халвинг: среднее за эпоху, отсчёт от последнего блока, фон и пауза после сбоя, проверка ответа, поправка часов, доступность",
-    'avg, src = t, "epoch"' in _hvs and "mempool.space/api/v1/blocks" in _hvs and "START_TS = {840_000: 1713571767}" in _hvs
+    'avg, src = t, "epoch"' in _hvs and "mempool.space/api/blocks/tip/hash" in _hvs and "JSON_MAX = 4096" in _hvs and "_DECODER = json.JSONDecoder(" in _hvs and "START_TS = {840_000: 1713571767}" in _hvs
     and "ERR_TTL = 60.0" in _hvs and "if hit and not failed and not _busy.is_set():" in _hvs and 're.fullmatch(r"[0-9a-f]{64}", bh)' in _hvs
     and 'res["prev"] = start_ts' in _hvs and '"now": _now()' in _hvs
     and "opt(r.eta, time)" in _hvl and "donePct: left > 0 ? Math.min(99.9," in _hvl and "export function subsidySats(" in _hvl
