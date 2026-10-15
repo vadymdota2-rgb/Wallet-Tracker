@@ -12,13 +12,14 @@
  * Binance. Coinbase — главная площадка фондов и компаний США, поэтому её
  * читают как спрос из Америки.
  */
-import { useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import { t } from "../i18n/t";
 import type { DictKey } from "../i18n/types";
 import { num, pct, px, usdWord } from "../lib/format";
 import { haptic } from "../lib/telegram";
 import { Card, Chips, SectionTitle } from "../components/ui";
-import type { BtcHolder, EtfReply } from "../lib/types";
+import { fetchEtfChain, peekEtfChain } from "../lib/api";
+import type { BtcHolder, EtfChainFund, EtfChainReply, EtfReply } from "../lib/types";
 import { dateStr, timeTicks } from "./FearGreedScreen";
 
 type Lang = Parameters<typeof t>[0];
@@ -392,6 +393,111 @@ export function AltHolders({ list, sym, price, lang }: { list: [string, string, 
           </button>
         ) : null}
       </Card>
+    </>
+  );
+}
+
+/** Чистый поток в монетах со знаком: «+27,13 BTC», «−81,38 BTC». */
+function coinsSigned(v: number): string {
+  const r = Math.round(v * 100) / 100;
+  return `${r > 0 ? "+" : r < 0 ? "−" : ""}${num(Math.abs(r), 2)} BTC`;
+}
+
+function ChainFund({ f, price, lang }: { f: EtfChainFund; price: number; lang: Lang }) {
+  // Поток — приток минус отток; плата фонду за управление сюда не входит.
+  const net = (d: EtfChainFund["days"][number]) => d[1] - d[2];
+  const today = Math.floor(Date.now() / 86_400_000) * 86400;
+  const day = f.days.find((d) => d[0] === today);
+  const d30 = f.days.filter((d) => d[0] > today - 30 * 86400).reduce((s, d) => s + net(d), 0);
+  const view = (() => {
+    const out: [number, number][] = [];
+    const by = new Map(f.days.map((d) => [d[0], net(d)]));
+    for (let t = today - 59 * 86400; t <= today; t += 86400) out.push([t, by.get(t) ?? 0]);
+    return out;
+  })();
+  const n = view.length;
+  const maxAbs = Math.max(1, ...view.map((x) => Math.abs(x[1])));
+  const MH = 90;
+  const bw = PW / Math.max(1, n);
+  const y0 = 6 + MH / 2;
+  const dayNet = day ? net(day) : 0;
+  return (
+    <Card>
+      <div className="ef-ch-head"><b>{f.t}</b></div>
+      <div className="dm-chs three ef-chs">
+        <div className="dm-ch">
+          <small>{t(lang, "ef_ch_hold")}</small>
+          <b><bdi dir="ltr">{num(f.hold, 2)} BTC</bdi></b>
+          {price > 0 ? <small><bdi dir="ltr">{usdWord(f.hold * price)}</bdi></small> : null}
+        </div>
+        <div className="dm-ch">
+          <small>{t(lang, "ef_ch_day")}</small>
+          <b className={dayNet > 0 ? "up" : dayNet < 0 ? "dn" : "dim"}><bdi dir="ltr">{coinsSigned(dayNet)}</bdi></b>
+          {price > 0 ? <small><bdi dir="ltr">{money(dayNet * price)}</bdi></small> : null}
+        </div>
+        <div className="dm-ch">
+          <small>{t(lang, "ef_ch_30")}</small>
+          <b className={d30 > 0 ? "up" : d30 < 0 ? "dn" : "dim"}><bdi dir="ltr">{coinsSigned(d30)}</bdi></b>
+          {price > 0 ? <small><bdi dir="ltr">{money(d30 * price)}</bdi></small> : null}
+        </div>
+      </div>
+      <svg className="fg-svg" viewBox={`0 0 ${W} ${MH + 26}`} width="100%" role="img" aria-label={`${t(lang, "ef_ch_title")} · ${f.t}`}>
+        <rect x={0} y={6} width={PW} height={MH} className="fg-bg" />
+        {(() => {
+          const a = view[0]?.[0] ?? 0;
+          const b = view[n - 1]?.[0] ?? 1;
+          return timeTicks(lang, a, b).filter((_, i, arr) => (arr.length - 1 - i) % Math.max(1, Math.ceil(arr.length / 5)) === 0).map((x) => {
+            const xx = ((x.t - a) / Math.max(1, b - a)) * PW;
+            return (
+              <g key={x.t}>
+                <line x1={xx} x2={xx} y1={6} y2={6 + MH} className="fg-grid" />
+                <text x={xx} y={MH + 22} textAnchor="middle" className="fg-tick">{x.label}</text>
+              </g>
+            );
+          });
+        })()}
+        <line x1={0} x2={PW} y1={y0} y2={y0} className="ef-zero" />
+        <text x={W - 2} y={y0 + 3.5} textAnchor="end" className="fg-tick">0</text>
+        <text x={W - 2} y={10 + 3.5} textAnchor="end" className="fg-tick">{coinsShort(lang, maxAbs, "")}</text>
+        {view.map((x, i) => {
+          const h = (Math.abs(x[1]) / maxAbs) * (MH / 2 - 2);
+          return x[1] === 0 ? null : (
+            <rect key={x[0]} x={i * bw} width={Math.max(1, bw - 0.6)} y={x[1] > 0 ? y0 - h : y0} height={Math.max(0.8, h)}
+              fill={x[1] > 0 ? UP : DN} opacity={0.85}>
+              <title>{`${dateStr(lang, x[0], { day: "numeric", month: "short" })}: ${coinsSigned(x[1])}`}</title>
+            </rect>
+          );
+        })}
+      </svg>
+      <p className="lq-hint">{t(lang, "ef_ch_wallets", { n: num(f.n), c: num(f.checked) })}</p>
+    </Card>
+  );
+}
+
+/**
+ * Фонды по цепочке — своя разметка сканера бота: кошельки, которые фонд
+ * публикует сам (сейчас Bitwise BITB), и найденные по совместной трате.
+ * Ничего чужого: запас и потоки посчитаны по блокам.
+ */
+export function EtfChain({ price, lang }: { price: number; lang: Lang }) {
+  const [r, setR] = useState<EtfChainReply | null>(() => peekEtfChain() ?? null);
+  useEffect(() => {
+    let alive = true;
+    void fetchEtfChain().then((v) => {
+      if (alive && v?.ok) setR(v);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const funds = (r?.funds ?? []).filter((f) => f.n > 0);
+  if (!r?.ok || !funds.length) return null;
+  return (
+    <>
+      <SectionTitle>{t(lang, "ef_ch_title")}</SectionTitle>
+      {funds.map((f) => <ChainFund key={f.t} f={f} price={price} lang={lang} />)}
+      <p className="lq-hint">{t(lang, "ef_ch_what")}</p>
+      <p className="lq-hint">{t(lang, "ef_ch_others")}</p>
     </>
   );
 }

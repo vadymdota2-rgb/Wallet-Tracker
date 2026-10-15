@@ -11653,6 +11653,61 @@ def btc_flow() -> dict:
     return cached_bg(_BTC, "flow", BTC_TTL, _btc_flow_build)
 
 
+# Биржевые фонды по цепочке — своя разметка сканера (WhaleScanner/btc_etf.cpp):
+# кошельки, которые фонд публикует сам, и найденные по совместной трате. Поток
+# — по суткам UTC: приток, отток и отдельно плата фонду за управление. Запас —
+# сумма остатков кошельков фонда, сверенная с цепочкой.
+BTC_ETF_DAYS = 60
+
+
+def _btc_etf_build() -> dict:
+    con = open_db(BTC_DB)
+    if not con:
+        return {"ok": False, "error": "no_data"}
+    try:
+        if not table_exists(con, "btc_etf_addr") or not table_exists(con, "btc_etf_flow"):
+            return {"ok": False, "error": "no_data"}
+        t = now()
+        since = t - t % 86400 - (BTC_ETF_DAYS - 1) * 86400
+        funds = []
+        for r in con.execute(
+            "SELECT fund, COUNT(*) AS n, SUM(how = 'seed') AS seed, COALESCE(SUM(bal_sats), 0) AS bal, "
+            "SUM(bal_at > 0) AS checked, MAX(bal_at) AS at FROM btc_etf_addr GROUP BY fund ORDER BY bal DESC"
+        ):
+            fund = str(r["fund"])[:12]
+            days = [
+                [int(d["day"]), d["in_sats"] / 1e8, d["out_sats"] / 1e8, d["fee_sats"] / 1e8]
+                for d in con.execute(
+                    "SELECT day, in_sats, out_sats, fee_sats FROM btc_etf_flow WHERE fund = ? AND day >= ? ORDER BY day",
+                    (r["fund"], since),
+                )
+            ]
+            hist = []
+            if table_exists(con, "btc_etf_hold"):
+                hist = [
+                    [int(h["day"]), h["sats"] / 1e8]
+                    for h in con.execute(
+                        "SELECT day, sats FROM btc_etf_hold WHERE fund = ? AND day >= ? ORDER BY day", (r["fund"], since)
+                    )
+                ]
+            funds.append({
+                "t": fund, "n": int(r["n"]), "seed": int(r["seed"] or 0), "checked": int(r["checked"] or 0),
+                "hold": r["bal"] / 1e8, "checked_at": int(r["at"] or 0), "days": days, "hist": hist,
+            })
+        block = con.execute("SELECT height, ts FROM btc_blocks ORDER BY height DESC LIMIT 1").fetchone() \
+            if table_exists(con, "btc_blocks") else None
+        return {
+            "ok": True, "funds": funds, "at": t,
+            "block": {"h": int(block["height"]), "ts": int(block["ts"])} if block else None,
+        }
+    finally:
+        con.close()
+
+
+def btc_etf_chain() -> dict:
+    return cached_bg(_BTC, "etf", BTC_TTL, _btc_etf_build)
+
+
 # ── Поток бирж BSC ────────────────────────────────────────────────────────
 # Пишет бот (bsc_exchanges.cpp): по часам, биржам и монетам — сколько
 # долларов завели на биржи и вывели с них по всей сети. Переводы BNB и
@@ -16137,6 +16192,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path in ("/dom", "/api/dom"):
                 self._json(200, dom_data())
+                return
+            if path in ("/etf/chain", "/api/etf/chain"):
+                self._json(200, btc_etf_chain())
                 return
             if path in ("/etf", "/api/etf"):
                 self._json(200, etf_data())

@@ -801,6 +801,11 @@ say("bitcoin: свои метки ETF — кошельки, опубликова
     and "etfBlock(g_btcDb, b);" in _ws_btc and "etfRollback(g_btcDb, b.height - 1);" in _ws_btc
     and "if (!etfFund(a).empty()) return;" in _ws_btc and "void refreshEtfBalances()" in _ws_btc
     and "urlopen" not in read(os.path.join(BOT, "tools", "btc_etf_seeds.py")).split("def on_chain")[0])
+say("ETF по цепочке: догонка двух месяцев и простоя, /api/etf/chain, карточка на вкладке BTC",
+    "void etfBackfill(long long since, long long upTo)" in _ws_btc and 'sc.state("etf_back") != "1"' in _ws_btc
+    and 'if path in ("/etf/chain", "/api/etf/chain"):' in api and "def _btc_etf_build() -> dict:" in api
+    and "export function EtfChain(" in read(f"{APP}/src/screens/EtfMore.tsx")
+    and "<EtfChain price={btcPx} lang={lang} />" in read(f"{APP}/src/screens/EtfScreen.tsx"))
 say("bitcoin: вкладка «Крупные ордера BTC» с потоком бирж (в NetFlow его нет), третья доска рейтинга, экран кошелька",
     'path in ("/btc/flow", "/api/btc/flow")' in api and "def _btc_clean(" in api and "w.s < 0.9 * w.b" in api
     and "export function BtcFlowCard(" in _btv and "export function BtcBigView(" in _btv
