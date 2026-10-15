@@ -775,8 +775,15 @@ _btv = read(f"{APP}/src/screens/BtcViews.tsx")
 _ws_btc = read(os.path.join(BOT, "btc_chain.cpp"))
 say("bitcoin: сканер блоков бота, база сервисного аккаунта с порогом $50, /statsbtc",
     ("WATCH_MIN_USD_NANOS = 50LL" in _ws_btc and "CREATE TABLE IF NOT EXISTS btc_watch" in _ws_btc
-                    and "blockchain.info/rawblock/" in _ws_btc and "std::string btcStatsLine()" in _ws_btc
+                    and "std::string btcStatsLine()" in _ws_btc
                     and 'txt=="/statsbtc"' in read(os.path.join(BOT, "main.cpp"))))
+say("bitcoin: блоки с узлов по JSON-RPC (свой WHALE_BTC_RPC + публичные), без blockchain.info и walletexplorer",
+    'btcRpc("getblock", json::array({b.hash, 3})' in _ws_btc and 'std::getenv("WHALE_BTC_RPC")' in _ws_btc
+    and 'if (!i.contains("prevout") || !i["prevout"].is_object()) return false;' in _ws_btc
+    and "std::string safeUrl(const std::string& url)" in _ws_btc and "body->size() + s * n > BODY_MAX" in _ws_btc
+    and "DELETE FROM btc_labels WHERE how = 'we';" in _ws_btc
+    and "blockchain.info" not in _ws_btc and "walletexplorer.com/api" not in _ws_btc
+    and "/api/block/" not in _ws_btc and "/api/block-height/" not in _ws_btc)
 say("bitcoin: вкладка «Крупные ордера BTC» с потоком бирж (в NetFlow его нет), третья доска рейтинга, экран кошелька",
     'path in ("/btc/flow", "/api/btc/flow")' in api and "def _btc_clean(" in api and "w.s < 0.9 * w.b" in api
     and "export function BtcFlowCard(" in _btv and "export function BtcBigView(" in _btv
