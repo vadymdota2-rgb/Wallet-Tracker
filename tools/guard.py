@@ -784,6 +784,13 @@ say("bitcoin: блоки с узлов по JSON-RPC (свой WHALE_BTC_RPC + �
     and "DELETE FROM btc_labels WHERE how = 'we';" in _ws_btc
     and "blockchain.info" not in _ws_btc and "walletexplorer.com/api" not in _ws_btc
     and "/api/block/" not in _ws_btc and "/api/block-height/" not in _ws_btc)
+say("bitcoin: самоочистка как у BSC (откаты разобранных блоков, снимки адресов, пустые потоки, WAL) и /statsbtc с Lag, TX, узлами и разбором",
+    "constexpr long long FINAL_DEPTH = 12;" in _ws_btc and "UPDATE btc_blocks SET flow = NULL WHERE flow IS NOT NULL" in _ws_btc
+    and "NOT EXISTS (SELECT 1 FROM btc_moves m WHERE m.wallet = btc_addr.address)" in _ws_btc
+    and "SQLITE_CHECKPOINT_TRUNCATE" in _ws_btc
+    and '"\\n⏳ Lag: "' in _ws_btc and '"\\n🔍 TX: "' in _ws_btc and "🌐 <b>Узлы Bitcoin</b>" in _ws_btc
+    and "📈 <b>Разбор транзакций</b>" in _ws_btc and "🧹 <b>Самоочистка</b>" in _ws_btc
+    and "bump(sweep ? g_bs.sweep : toEx.empty() ? g_bs.plain : g_bs.toEx);" in _ws_btc)
 say("bitcoin: вкладка «Крупные ордера BTC» с потоком бирж (в NetFlow его нет), третья доска рейтинга, экран кошелька",
     'path in ("/btc/flow", "/api/btc/flow")' in api and "def _btc_clean(" in api and "w.s < 0.9 * w.b" in api
     and "export function BtcFlowCard(" in _btv and "export function BtcBigView(" in _btv
