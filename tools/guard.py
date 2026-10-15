@@ -791,6 +791,16 @@ say("bitcoin: самоочистка как у BSC (откаты разобра�
     and '"\\n⏳ Lag: "' in _ws_btc and '"\\n🔍 TX: "' in _ws_btc and "🌐 <b>Узлы Bitcoin</b>" in _ws_btc
     and "📈 <b>Разбор транзакций</b>" in _ws_btc and "🧹 <b>Самоочистка</b>" in _ws_btc
     and "bump(sweep ? g_bs.sweep : toEx.empty() ? g_bs.plain : g_bs.toEx);" in _ws_btc)
+_ws_etf = read(os.path.join(BOT, "btc_etf.cpp"))
+_ws_etfbook = read(os.path.join(BOT, "btc_etf_book.h"))
+say("bitcoin: свои метки ETF — кошельки, опубликованные фондом, совместная трата, снятие оттока задним числом, кошельки комиссий хранителя не учатся",
+    "void etfBlock(sqlite3* db, const Block& b)" in _ws_etf and "void unOut(sqlite3* db" in _ws_etf
+    and "constexpr long long DUST = SAT / 100;" in _ws_etf and "constexpr size_t LEARN_MAX = 20;" in _ws_etf
+    and "g_service.count(addr)" in _ws_etf and "t->second.count(addrType(addr))" in _ws_etf
+    and "bool isFee(sqlite3* db" in _ws_etf and _ws_etfbook.count('"BITB"},') >= 60
+    and "etfBlock(g_btcDb, b);" in _ws_btc and "etfRollback(g_btcDb, b.height - 1);" in _ws_btc
+    and "if (!etfFund(a).empty()) return;" in _ws_btc and "void refreshEtfBalances()" in _ws_btc
+    and "urlopen" not in read(os.path.join(BOT, "tools", "btc_etf_seeds.py")).split("def on_chain")[0])
 say("bitcoin: вкладка «Крупные ордера BTC» с потоком бирж (в NetFlow его нет), третья доска рейтинга, экран кошелька",
     'path in ("/btc/flow", "/api/btc/flow")' in api and "def _btc_clean(" in api and "w.s < 0.9 * w.b" in api
     and "export function BtcFlowCard(" in _btv and "export function BtcBigView(" in _btv
