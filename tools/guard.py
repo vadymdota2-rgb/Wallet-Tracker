@@ -224,7 +224,11 @@ say("подпись берётся из адреса запуска, не ждё
 say("первый заход на сервере — быстрая выгрузка, полная в фоне",
     "data = _boot_build(key, fast=True)" in api and 'errors.append("coins:later")' in api)
 say("приложение переспрашивает за быстрой выгрузкой через секунды",
-    'data.partial.includes("coins:later")' in sync and "SOON_DELAY" in sync)
+    'p === "coins:later"' in sync and "SOON_DELAY" in sync)
+say("личное (профиль, кошельки, алерты) собирается раньше общего и не стирается пустым на холодном сервере",
+    "missing.add(name)" in api and api.index('own("me",') < api.index('piece("pub",')
+    and "/^(me|wallets|alerts):/" in sync and 'const meLate = ' in read(f"{APP}/src/store/live.ts")
+    and os.path.exists(f"{APP}/tests/test_bootstrap_personal.py"))
 say("повтор после сбоя — через секунды, серия считается отдельно",
     "const MIN_DELAY = 3_000;" in sync and "MIN_DELAY * 2 ** fails" in sync)
 
@@ -640,7 +644,7 @@ say("фандинг не пропадает: собирается первым, 
 _sy = read(f"{APP}/src/lib/sync.ts")
 say("фандинг после перезапуска: биржи опрашиваются разом, кэш пересобирается сразу, приложение переспрашивает по «fund:later»",
     "pool.submit(fund_pull, ex)" in api and "wait(futs, timeout=25)" in api and "_fund_ready.set()" in api
-    and 'errors.append("fund:later")' in api and 'data.partial.includes("fund:later")' in _sy)
+    and 'errors.append("fund:later")' in api and 'p === "fund:later"' in _sy)
 
 _un = read(f"{APP}/src/screens/UnlocksScreen.tsx")
 say("токеномика: видно, что монету можно открыть — стрелка в строке и подсказка до первого нажатия",

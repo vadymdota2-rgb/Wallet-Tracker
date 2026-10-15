@@ -185,8 +185,11 @@ export const useLive = create<LiveState>((set, get) => ({
        сервер данных не отдаёт. Забываем, подгрузка соберёт заново. */
     const was = get().me.plan;
     if (d.me?.plan && was !== d.me.plan) forgetAll();
+    // Сервер не успел собрать профиль (холодный старт) — это не «не вошёл»:
+    // оставляем показанное, а сервер скоро переспросим (lib/sync.ts).
+    const meLate = Array.isArray(d.partial) && d.partial.some((p) => p.startsWith("me:"));
     set((prev) => ({
-      status: d.me ? "ready" : "anon",
+      status: d.me || meLate ? "ready" : "anon",
       syncedAt: Date.now(),
       partial: Array.isArray(d.partial) ? d.partial : [],
       gift: d.gift?.days && d.gift.days > 0 ? d.gift.days : prev.gift,

@@ -10228,17 +10228,32 @@ def bootstrap(chat: str, fast: bool = False) -> dict:
             "alertTg": True, "unread": 0,
         }
         empty_rank = {"spot": {"pnl": [], "roi": [], "win": [], "act": []}, "perp": {"pnl": [], "roi": [], "win": [], "act": []}}
-        pub = piece("pub", lambda: get_public(cur, hl), {}, True) or {}
-        me = piece("me", lambda: load_me(cur, chat) if chat else empty_me, empty_me)
+        # Личное — первым: это быстрые запросы к своей базе. Общее (pub) на
+        # холодном сервере, сразу после перезапуска, собирается секунды; шло
+        # оно первым — и личное не укладывалось в бюджет: приложение получало
+        # пустую историю алертов и ноль новых, хотя в базе их сотни.
+        # Не собралось личное — его ключа в ответе нет: приложение оставит
+        # показанное, а не сотрёт его пустым.
+        missing: set[str] = set()
+
+        def own(name: str, fn, fallback):
+            n = len(errors)
+            val = piece(name, fn, fallback)
+            if len(errors) > n:
+                missing.add(name)
+            return val
+
+        me = own("me", lambda: load_me(cur, chat) if chat else empty_me, empty_me)
         if isinstance(me, dict):
             me = dict(me)
             me.pop("lang", None)
-        wallets = piece("wallets", lambda: load_wallets(cur, chat, hl) if chat else [], [])
-        alerts, feed = piece(
+        wallets = own("wallets", lambda: load_wallets(cur, chat, hl) if chat else [], [])
+        alerts, feed = own(
             "alerts",
             lambda: load_alerts(cur, chat, wallets) if chat else ([], []),
             ([], []),
         )
+        pub = piece("pub", lambda: get_public(cur, hl), {}, True) or {}
         flow = pub.get("flow") or {}
         ls = pub.get("ls") or {}
         rank_raw = pub.get("rank") or empty_rank
@@ -10295,6 +10310,10 @@ def bootstrap(chat: str, fast: bool = False) -> dict:
                    if (intro_end := intro_until(cur, chat)) else {}),
             },
         }
+        for name in missing:
+            out.pop(name, None)
+            if name == "alerts":
+                out.pop("feed", None)
         if not _fund_ready.is_set():
             errors.append("fund:later")
         if errors:
