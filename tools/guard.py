@@ -651,9 +651,12 @@ say("токеномика: видно, что монету можно откры
     '<span className="unl-chev" aria-hidden="true" />' in _un and '"unl_tap_hint"' in _un and "localStorage.setItem(TIP_KEY" in _un)
 
 _ef = read(f"{APP}/src/screens/EtfScreen.tsx")
+_etfs = read(f"{APP}/wt_etf.py")
 say("ETF и крупные игроки: потоки по фондам и дням (BTC, ETH, SOL, XRP, HYPE), спрос против добычи, держатели и кто докупал",
-    "def etf_data(" in api and '"/api/etf"' in api and "etf/detail/netflow/list?category=" in api
-    and "bitcointreasuries.net/__data.json" in api and "etf_data()  # и потоки ETF" in api
+    "etf_data = etf.etf_data" in api and "import wt_etf as etf" in api and '"/api/etf"' in api
+    and "def etf_data(" in _etfs and "etf/detail/netflow/list?category=" in _etfs
+    and 'id="bt-query-snapshot"' in _etfs and "etf_data()  # и потоки ETF" in api
+    and "from whale_api" not in _etfs and "import whale_api" not in _etfs
     and "function FlowChart(" in _ef and "function Funds(" in _ef and "function Holders(" in _ef
     and "minedPerDay(" in _ef and "glyph: <EtfGlyph />" in appx)
 
@@ -762,8 +765,8 @@ say("институциональные потоки: накопленный п�
 
 _em = read(f"{APP}/src/screens/EtfMore.tsx")
 say("институциональные потоки: позиции CME по CFTC, премия Coinbase, все держатели с поиском и группами, казначейства ETH/SOL/BNB/XRP",
-    "def _inst_cme(" in api and "publicreporting.cftc.gov" in api and "def _inst_cbp(" in api
-    and '"top": top, "movers": movers, "alts": alts' in api
+    "def _cme(" in _etfs and "publicreporting.cftc.gov" in _etfs and "def _cbp(" in _etfs
+    and '"top": top, "movers": movers, "alts": alts' in _etfs
     and "export function CmeSection(" in _em and "export function CbpSection(" in _em
     and "export function HoldersAll(" in _em and "export function AltHolders(" in _em
     and "<CmeSection" in _ef and "<HoldersAll" in _ef)
