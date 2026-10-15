@@ -12500,16 +12500,59 @@ def _devalue(data: list):
     return res(0)
 
 
-def _etf_holders() -> dict:
+_BT_SNAP = re.compile(r'<script type="application/json" id="bt-query-snapshot">(.*?)</script>', re.S)
+
+
+def _bt_page() -> dict | None:
+    """Держатели с главной страницы bitcointreasuries.net.
+
+    С октября 2026 сайт кладёт данные прямо в страницу — снимком своих
+    запросов (bt-query-snapshot): держатели — entities.listOverviews,
+    казначейства в других монетах — entities.getAltcoinHoldings. В
+    __data.json осталась только оболочка, и раздел «Держатели» пропал."""
+    req = urllib.request.Request("https://bitcointreasuries.net/", headers={"User-Agent": "wallet-tracker/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            page = r.read(8 << 20).decode("utf-8", "replace")
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError):
+        return None
+    m = _BT_SNAP.search(page)
+    if not m:
+        return None
+    try:
+        snap = json.loads(m.group(1))
+    except ValueError:
+        return None
+    rpc: dict = {}
+    for q in (snap.get("queries") if isinstance(snap, dict) else None) or []:
+        try:
+            rpc[json.loads(q["hash"])[0]["rpc"]] = q["data"]
+        except (KeyError, TypeError, ValueError, IndexError):
+            continue
+    ents = rpc.get("entities.listOverviews")
+    if not isinstance(ents, list) or not ents:
+        return None
+    alts = {str(p[0]): p[1] for p in rpc.get("entities.getAltcoinHoldings") or []
+            if isinstance(p, list) and len(p) == 2 and isinstance(p[1], dict)}
+    return {"entities": ents, "altcoinHoldings": alts}
+
+
+def _bt_data_json() -> dict | None:
+    """Прежний путь — __data.json сайта (до октября 2026): запасной."""
     raw = get_json("https://bitcointreasuries.net/__data.json", 30) or {}
-    root = None
     for node in raw.get("nodes") or []:
         if isinstance(node, dict) and isinstance(node.get("data"), list) and node["data"]:
             head = node["data"][0]
             if isinstance(head, dict) and "entities" in head:
                 root = _devalue(node["data"])
-                break
+                return root if isinstance(root, dict) else None
+    return None
+
+
+def _etf_holders() -> dict:
+    root = _bt_page() or _bt_data_json()
     if not isinstance(root, dict):
+        print("etf holders: bitcointreasuries.net — данных нет ни в странице, ни в __data.json", file=sys.stderr)
         return {}
     groups: dict = {}
     top = []
