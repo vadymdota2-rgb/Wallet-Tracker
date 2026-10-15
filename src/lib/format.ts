@@ -153,15 +153,17 @@ export function qtyWord(v: unknown): string {
 /** Сумма в долларах с разрядом словом: «74,38 млн $», «2,35 млрд $». */
 export function usdWord(v: unknown): string {
   if (!isNum(v)) return "—";
-  if (Math.abs(v) < 1e4) return usd(v);
   try {
+    // Мелкие суммы — тем же форматом языка, только без «тыс.»: раньше они
+    // шли через usd(), и рядом стояли «Приток $0» и «Отток −16,9 млн $».
     return new Intl.NumberFormat(locale, {
       style: "currency",
       currency: "USD",
-      notation: "compact",
-      compactDisplay: "short",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 2,
+      // Крупное — три значащие цифры: «93,5 млн», «390 млн», «1,36 млрд», а
+      // не вперемешку «389,77 млн» и «382,8 млн» в соседних строках.
+      ...(Math.abs(v) >= 1e4
+        ? { notation: "compact", compactDisplay: "short", maximumSignificantDigits: 3 }
+        : { minimumFractionDigits: 0, maximumFractionDigits: 2 }),
     }).format(v);
   } catch {
     return usd(v);

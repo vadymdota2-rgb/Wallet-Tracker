@@ -161,7 +161,8 @@ export function CmeSection({ rows, sym, price, lang }: { rows: number[][]; sym: 
       <SectionTitle>{t(lang, "ef_cme_title")}</SectionTitle>
       <Card>
         <p className="ef-h-lead">
-          {t(lang, "ef_cme_sub", { d: dateStr(lang, last[0]!, { day: "numeric", month: "long", year: "numeric" }) })}
+          {/* Дата — целиком, без «2026 / г.» на отдельной строке. */}
+          {t(lang, "ef_cme_sub", { d: dateStr(lang, last[0]!, { day: "numeric", month: "long", year: "numeric" }).replace(/ /g, "\u00a0") })}
         </p>
         <div className="ef-cme-oi">
           <small>{t(lang, "ef_cme_oi")}</small>

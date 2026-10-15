@@ -76,12 +76,12 @@ function money(v: number): string {
   return `${v > 0 ? "+" : "−"}${usdWord(Math.abs(v))}`;
 }
 
-/** То же коротко — один знак после запятой: для плиток в три столбца. */
+/** То же коротко — три значащие цифры, как и везде на экране: для плиток в три столбца. */
 function moneyShort(lang: Lang, v: number): string {
   try {
     const f = new Intl.NumberFormat(lang, {
       style: "currency", currency: "USD", currencyDisplay: "narrowSymbol", notation: "compact", compactDisplay: "short",
-      maximumFractionDigits: 1,
+      maximumSignificantDigits: 3,
     }).format(Math.abs(v));
     /* Пробелы обычные, а не неразрывные: в узкой плитке «+59.1 مليار US$»
        должно переноситься между словами, а не вылезать за край. */
@@ -170,11 +170,23 @@ function niceStep(span: number, parts: number): number {
   return [1, 2, 2.5, 5, 10].map((m) => m * p).find((s) => s >= raw) ?? raw;
 }
 
-/** Короткие деньги для оси: $1.2B, −$300M. */
-function axisMoney(vK: number): string {
+/**
+ * Короткие деньги для оси — тем же языком, что и весь экран: «−1,5 млрд $»,
+ * «40 Mio. $», «$250K». Ось — 50 единиц ширины: подпись длиннее 11 знаков
+ * (арабское «40 مليون US$») не влезла бы — тогда «$40M».
+ */
+function axisMoney(lang: Lang, vK: number): string {
   const v = vK * 1000;
   const a = Math.abs(v);
   const s = v < 0 ? "−" : "";
+  try {
+    const f = new Intl.NumberFormat(lang, {
+      style: "currency", currency: "USD", currencyDisplay: "narrowSymbol", notation: "compact", maximumSignificantDigits: 2,
+    }).format(a);
+    if (f.length + s.length <= 11) return s + f;
+  } catch {
+    // старый WebView — короткая запись ниже
+  }
   const f = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
   if (a >= 1e9) return `${s}$${f(a / 1e9)}B`;
   if (a >= 1e6) return `${s}$${f(a / 1e6)}M`;
@@ -288,7 +300,7 @@ function FlowChart({ data, cum, zero, lang, sel, onSel }: {
       {(cum ? cTicks : [top, 0, -top]).map((v) => (
         <g key={v}>
           <line x1={0} x2={PW} y1={cum ? yC(v) : yF(v)} y2={cum ? yC(v) : yF(v)} className={v === 0 ? "ef-zero" : "fg-grid"} />
-          <text x={W - 2} y={(cum ? yC(v) : yF(v)) + 3.5} textAnchor="end" className="fg-tick">{v === 0 ? "0" : axisMoney(v)}</text>
+          <text x={W - 2} y={(cum ? yC(v) : yF(v)) + 3.5} textAnchor="end" className="fg-tick">{v === 0 ? "0" : axisMoney(lang, v)}</text>
         </g>
       ))}
       <text x={4} y={P1.y + 11} className="fg-ptl">{t(lang, "ef_price")}{log ? ` · ${t(lang, "fg_log")}` : ""}</text>
@@ -357,8 +369,9 @@ function Funds({ c, coin, lang }: { c: EtfCoin; coin: Coin; lang: Lang }) {
         ]}
       />
       <p className="ef-fsum">
-        <span className="up">{t(lang, "ef_in")} <bdi dir="ltr">{money(ins * 1000)}</bdi></span>
-        <span className="dn">{t(lang, "ef_out")} <bdi dir="ltr">{money(outs * 1000)}</bdi></span>
+        {/* Ноль — без цвета: зелёный «Приток 0 $» читался как приток. */}
+        <span className={ins ? "up" : "dim"}>{t(lang, "ef_in")} <bdi dir="ltr">{money(ins * 1000)}</bdi></span>
+        <span className={outs ? "dn" : "dim"}>{t(lang, "ef_out")} <bdi dir="ltr">{money(outs * 1000)}</bdi></span>
       </p>
       <div className="ef-funds">
         {moving.map(({ f, v }) => {
@@ -548,6 +561,24 @@ export function EtfScreen() {
       if (runSign > 0 && run > runs.up.n) runs.up = { n: run, at: runAt };
       if (runSign < 0 && run > runs.dn.n) runs.dn = { n: run, at: runAt };
     }
+    // Лучший и худший месяц — только завершённые: идущий месяц (последний
+    // день данных в нём, а календарь ещё в нём же) неполон, и «худший месяц —
+    // октябрь» посреди октября вводил в заблуждение.
+    const months = new Map<number, number>();
+    for (const d of days) {
+      const m = new Date(d[0] * 1000);
+      const key = Date.UTC(m.getUTCFullYear(), m.getUTCMonth(), 1) / 1000;
+      months.set(key, (months.get(key) ?? 0) + d[1]);
+    }
+    const nowM = new Date();
+    const open = Date.UTC(nowM.getUTCFullYear(), nowM.getUTCMonth(), 1) / 1000;
+    let bestM: [number, number] | null = null;
+    let worstM: [number, number] | null = null;
+    for (const [m, v] of months) {
+      if (m >= open) continue;
+      if (!bestM || v > bestM[1]) bestM = [m, v];
+      if (!worstM || v < worstM[1]) worstM = [m, v];
+    }
     const m30 = win(30);
     const mined = m30.length ? Array.from({ length: 30 }, (_, i) => minedPerDay(end - i * 86400)).reduce((a, b) => a + b, 0) : 0;
     const aum = c.funds.reduce((s, f) => s + f.aum, 0);
@@ -555,7 +586,7 @@ export function EtfScreen() {
     return {
       cumc,
       d7: sumU(win(7)), d30: sumU(m30), cum, streak, sign,
-      c30: sumC(m30), mined, best, worst, runs, aum,
+      c30: sumC(m30), mined, best, worst, runs, aum, bestM, worstM,
       held: aum > 0 && lastPx > 0 ? aum / lastPx : 0,
     };
   }, [c, days, lastPx]);
@@ -737,16 +768,16 @@ export function EtfScreen() {
                 <span>{t(lang, "ef_r_worst")}<small> · {dateStr(lang, stats.worst[0], { day: "numeric", month: "short", year: "numeric" })}</small></span>
                 <b className="dn"><bdi dir="ltr">{money(stats.worst[1] * 1000)}</bdi></b>
               </div>
-              {c.best ? (
+              {stats.bestM ? (
                 <div className="fg-row two">
-                  <span>{t(lang, "ef_r_bestm")}<small> · {dateStr(lang, c.best[0], { month: "long", year: "numeric" })}</small></span>
-                  <b className={c.best[1] >= 0 ? "up" : "dn"}><bdi dir="ltr">{money(c.best[1])}</bdi></b>
+                  <span>{t(lang, "ef_r_bestm")}<small> · {dateStr(lang, stats.bestM[0], { month: "long", year: "numeric" })}</small></span>
+                  <b className={stats.bestM[1] >= 0 ? "up" : "dn"}><bdi dir="ltr">{money(stats.bestM[1] * 1000)}</bdi></b>
                 </div>
               ) : null}
-              {c.worst ? (
+              {stats.worstM && stats.worstM[0] !== stats.bestM?.[0] ? (
                 <div className="fg-row two">
-                  <span>{t(lang, "ef_r_worstm")}<small> · {dateStr(lang, c.worst[0], { month: "long", year: "numeric" })}</small></span>
-                  <b className={c.worst[1] >= 0 ? "up" : "dn"}><bdi dir="ltr">{money(c.worst[1])}</bdi></b>
+                  <span>{t(lang, "ef_r_worstm")}<small> · {dateStr(lang, stats.worstM[0], { month: "long", year: "numeric" })}</small></span>
+                  <b className={stats.worstM[1] >= 0 ? "up" : "dn"}><bdi dir="ltr">{money(stats.worstM[1] * 1000)}</bdi></b>
                 </div>
               ) : null}
               <div className="fg-row two">
