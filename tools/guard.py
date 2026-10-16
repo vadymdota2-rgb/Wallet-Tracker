@@ -783,11 +783,12 @@ say("крупнейшие держатели: ETF и компании (по их
 _wsm = read(os.path.join(BOT, "main.cpp"))
 _wse = read(os.path.join(BOT, "btc_etf.cpp"))
 _wsc = read(os.path.join(BOT, "btc_chain.cpp"))
-say("бот: /import — кнопки фондов (IBIT, FBTC…) и «Другое»; файл CSV; тикер в строке — разметка сама; только владелец; разметку переносит сканер, историю дочитывает",
+say("бот: /import — кнопки фондов (IBIT, FBTC…) и «Другое»; файл CSV; тикер в строке — разметка сама; уже добавленный без пометки — помечается; только владелец; разметку переносит сканер, историю дочитывает",
     "std::string importKeyboard(long long id)" in _wsm and 'callback_data", "imp:" + std::to_string(id) + ":other"' in _wsm
     and "if (handleImportCallback(cq)) continue;" in _wsm and "if (from != OWNER_CHAT_ID) {" in _wsm.split("bool handleImportCallback(")[1][:900]
     and "importCommand(cid, txt);" in _wsm and "tgFileText(m[\"document\"])" in _wsm and "IMPORT_FILE_MAX" in _wsm
-    and "int etfDrainLabels(sqlite3* db)" in _wse and "WHERE btc_etf_addr.how != 'seed'\");" in _wse
+    and "int etfDrainLabels(sqlite3* db)" in _wse and "++r.inBase;" in _wse and "++r.named;" in _wse
+    and "UPDATE btc_watch SET src = 'import' WHERE address = ? AND src = 'auto'" in _wsc and "WHERE btc_etf_addr.how != 'seed'\");" in _wse
     and "etfDrainLabels(g_btcDb);" in _wsc and "void backfillImported(long long tip)" in _wsc
     and "COVER_MAX = 1.25" in _etfs)
 _eal = read(f"{APP}/wt_etfalert.py")
