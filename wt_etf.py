@@ -71,7 +71,12 @@ CME_FIELDS = ("open_interest_all", "asset_mgr_positions_long", "asset_mgr_positi
               "nonrept_positions_long_all", "nonrept_positions_short_all")
 
 # Куда модулю можно ходить — и больше никуда.
-HOSTS = frozenset({"data-api.binance.vision", "publicreporting.cftc.gov", "api.exchange.coinbase.com"})
+HOSTS = frozenset({"data-api.binance.vision", "publicreporting.cftc.gov", "api.exchange.coinbase.com",
+                   "api.coinmarketcap.com"})
+# Сводка потоков фондов по дням — временно, пока не размечены кошельки всех
+# фондов: по ней экран показывает дни фондов без полной разметки, и по ней же
+# API сверяет корзины хранителя (имена групп по совпадению потоков).
+CMC = "https://api.coinmarketcap.com/data-api/v3/"
 # Самый большой ответ — отчёт CFTC, ~2 МБ.
 BODY_MAX = 8 << 20
 _HEADERS = {"User-Agent": "wallet-tracker/1.0", "Accept-Encoding": "identity"}
@@ -185,6 +190,58 @@ def _klines(symbol: str, start_ms: int) -> dict[int, float]:
 
 
 Day = tuple[dict[str, dict[str, Json]], float, float]  # фонды, итог $, итог монет
+
+
+def _cmc(path: str, timeout: float = 25) -> dict[str, Json]:
+    got = _get(CMC + path, timeout)
+    data = got.get("data") if isinstance(got, dict) else None
+    return data if isinstance(data, dict) else {}
+
+
+def _cmc_points() -> list[Json] | None:
+    """Все дни потоков биткоин-ETF страницами по сто; None — страница не
+    пришла (не рисуем дыру на месяцы — сводки в этот раз нет)."""
+    first = _cmc("etf/detail/netflow/list?category=btc&size=100&page=1")
+    pts = list(first.get("points") or [])
+    if not pts:
+        return None
+    pages = min(12, (int(_num(first.get("totalCount"))) + 99) // 100)
+
+    def page(n: int) -> list[Json]:
+        # Под нагрузкой сводка иногда отдаёт пустую страницу — второй заход
+        # через пару секунд её приносит.
+        for attempt in range(3):
+            got = _cmc(f"etf/detail/netflow/list?category=btc&size=100&page={n}").get("points") or []
+            if got:
+                return list(got)
+            time.sleep(1.5 * (attempt + 1))
+        return []
+
+    if pages > 1:
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            rest = list(pool.map(page, range(2, pages + 1)))
+        if not all(rest):
+            return None
+        for chunk in rest:
+            pts.extend(chunk)
+    return pts
+
+
+def _cmc_days(funds: set[str]) -> dict[int, Day]:
+    """Торговые дни сводки по фондам из списка (фонды США из SEC):
+    начало суток → (фонды {usd, btc}, итог $, итог монет). День, по которому
+    фонды ещё не отчитались (всё пусто), — пропускается."""
+    days: dict[int, Day] = {}
+    for p in _cmc_points() or []:
+        if not isinstance(p, dict):
+            continue
+        ts = int(_num(p.get("date"))) // 1000
+        by = {str(k): {"usd": _num(v.get("usd")), "btc": _num(v.get("btc"))} for k, v in p.items()
+              if k in funds and isinstance(v, dict) and v.get("usd") is not None}
+        if ts <= 0 or not by:
+            continue
+        days[ts - ts % 86400] = (by, sum(v["usd"] for v in by.values()), sum(v["btc"] for v in by.values()))
+    return days
 
 
 def _after(last: int, today: int) -> list[int]:
@@ -322,6 +379,13 @@ def _fund_row(info: dict[str, Any], rep: tuple[float, int], cum: tuple[float, fl
     return f
 
 
+def _day_src(funds: list[dict[str, Json]]) -> None:
+    """Откуда у фонда дни: «chain» — своя цепочка (разметка полная), иначе
+    сводка (временно, пока кошельки фонда не размечены)."""
+    for f in funds:
+        f["days"] = "chain" if f.get("src") == "chain" and not f.get("part") else "cmc"
+
+
 def _coin(cat: str, symbol: str) -> dict[str, Json] | None:
     """Фонды по отчётам в SEC (кварталы, запас) и по своей цепочке (дни)."""
     sec = wt_treasury.etf_funds() if cat == "btc" else {}
@@ -333,21 +397,28 @@ def _coin(cat: str, symbol: str) -> dict[str, Json] | None:
         return None
     last_px = px[max(px)]
     flows, price, last = _quarters(sec, px)
-    # Дни — только фонды, чьи кошельки сканер знает (и знает почти все).
+    # Запас по цепочке — у фондов с разметкой; дни по цепочке — только у
+    # размеченных полностью (у остальных цепочка видит часть потока), их дни
+    # — по сводке, пока разметка не закончена.
     chain_ok = {t: c for t, c in _chain().items() if t in sec and _usable(c, (last.get(t) or (0.0, 0))[0])}
+    chain_full = {t: c for t, c in chain_ok.items() if not _partial(c, (last.get(t) or (0.0, 0))[0])}
     today = _now() - _now() % 86400
-    days: dict[int, Day] = {}
-    if chain_ok:
-        first = min(int(c.get("from") or today) for c in chain_ok.values())
-        days = {t: ({}, 0.0, 0.0) for t in _after(first - first % 86400 - 86400, today)}
+    days = _cmc_days(set(sec))
+    if chain_full:
+        # После последнего дня сводки — рабочие дни, чьи деньги уже в цепочке
+        # (внутри сводки её дни и есть торговые: праздники биржи не выдумываем).
+        first = min(int(c.get("from") or today) for c in chain_full.values())
+        for t in _after(max(days) if days else first - first % 86400 - 86400, today):
+            days.setdefault(t, ({}, 0.0, 0.0))
     if days:
-        _apply_chain(days, px, chain_ok)
+        _apply_chain(days, px, chain_full)
     # Запас по цепочке — у каждого фонда с разметкой, даже если торговых
     # дней по ней ещё нет (разметили только что, деньги дня ещё в пути).
     funds = [_fund_row({**sec[t], "t": t}, last[t],
                        (sum(v[t][0] for v in flows.values() if t in v), sum(v[t][1] for v in flows.values() if t in v)),
                        chain_ok.get(t), last_px) for t in sec if t in last]
     funds.sort(key=lambda f: -_num(f["hold"]))
+    _day_src(funds)
     order = [str(f["t"]) for f in funds]
     quarters = []
     for e in sorted(flows):
