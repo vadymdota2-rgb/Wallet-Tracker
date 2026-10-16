@@ -652,11 +652,11 @@ say("токеномика: видно, что монету можно откры
 
 _ef = read(f"{APP}/src/screens/EtfScreen.tsx")
 _etfs = read(f"{APP}/wt_etf.py")
-say("институциональные потоки — только биткоин: потоки фондов по дням, спрос против добычи; без «кто докупал за неделю» и подписи источников; других монет нет",
+say("институциональные потоки — только биткоин: потоки фондов по кварталам (SEC) и дням (цепочка), спрос против добычи; без «кто докупал за неделю» и подписи источников; других монет нет",
     'COINS = (("btc", "BTCUSDT"),)' in _etfs and "type Coin" not in _ef and "Segmented<Coin>" not in _ef
     and "ETHUSDT" not in _etfs and "SOLUSDT" not in _etfs and "HYPE" not in _etfs
     and "etf_data = etf.etf_data" in api and "import wt_etf as etf" in api and '"/api/etf"' in api
-    and "def etf_data(" in _etfs and "api.coinmarketcap.com" not in _etfs and "def _base() -> dict[str, Json]:" in _etfs
+    and "def etf_data(" in _etfs and "coinmarketcap" not in _etfs.lower() and "def _base(" not in _etfs
     and "coingecko.com/api/v3/governments" not in api
     and "etf_data()  # и потоки ETF" in api
     and "from whale_api" not in _etfs and "import whale_api" not in _etfs
@@ -763,8 +763,8 @@ say("дайджест: просмотры — каждый человек оди
     and '"/api/digest/view": "view"' in api and "DELETE FROM digest_views WHERE chat_id=?" in api
     and "viewDigest(it.id)" in _dgt and 'className="dg-views"' in _dgt)
 
-say("институциональные потоки: накопленный приток, доля фондов",
-    "cum={mode === \"c\" ? cumView : null}" in _ef and '"ef_mshare"' in _ef and "coinsRound(" in _ef)
+say("институциональные потоки: накопленный приток по кварталам, доля фондов",
+    "cum={isQ && mode === \"c\" ? cumView : null}" in _ef and '"ef_mshare"' in _ef and "coinsRound(" in _ef)
 
 _em = read(f"{APP}/src/screens/EtfMore.tsx")
 say("институциональные потоки: позиции CME по CFTC, премия Coinbase",
@@ -816,9 +816,14 @@ say("алерты ETF: итог дня по всем фондам или по ф
     and "<EtfAlertsCard" in _ef and "<FundBell" in _ef)
 _wsb = read(os.path.join(BOT, "btc_chain.cpp"))
 _wsg = read(os.path.join(BOT, "btc_gov.cpp"))
-say("ETF: база — снимок, взятый один раз (data/etf_base.json), дальше только цепочка; флаги фондов; бот ведёт государства по раскрытым ими адресам",
-    "flagOf(f.c)" in _ef and os.path.isfile(f"{APP}/data/etf_base.json")
-    and "btc + sum(float(v) for d, v in (c.get(\"days\") or {}).items() if int(d) > cut)" in _etfs
+_tre0 = read(f"{APP}/wt_treasury.py")
+say("ETF: база — официальные отчёты фондов в SEC (кварталы, запас), по дням — только своя цепочка; снимка CoinMarketCap нет; флаги фондов; бот ведёт государства по раскрытым ими адресам",
+    "flagOf(f.c)" in _ef and not os.path.exists(f"{APP}/data/etf_base.json") and "BASE_FILE" not in _etfs
+    and "sec = wt_treasury.etf_funds() if cat == \"btc\" else {}" in _etfs and "def _quarters(" in _etfs
+    and "def _sec_holdings(" in _etfs and "def fund_points(" in _tre0 and "def etf_funds(" in _tre0
+    and '("IBIT", "iShares Bitcoin Trust", 1980994)' in _tre0 and "/api/xbrl/companyfacts/CIK" in _tre0
+    and "after = sum(float(v) for d, v in (c.get(\"days\") or {}).items() if int(d) > cut)" in _etfs
+    and "quarterly(qs)" in _ef and '"ef_d_note"' in _ef and '"ef_asof"' in _ef
     and "set_holders" not in api and "gov_base" not in api
     and "bc1qa5wkgaew2dkv56kfvj49j0av5nml45x9ek9hz6" in _wsg and "void govBlock(sqlite3* db, const Block& b)" in _wsg
     and "govBlock(g_btcDb, b);" in _wsb and "govRollback(g_btcDb);" in _wsb and "void readGovOfficial()" in _wsb

@@ -890,8 +890,19 @@ export interface EtfCoin {
     src?: "chain";
     /** Запас фонда, BTC. */
     hold?: number;
+    /** Дата отчёта в SEC, на которую взят запас (unix). */
+    asof?: number;
   }[];
+  /** Дни — только фонды, чьи кошельки знает сканер (своя цепочка). */
   days: [number, number, number, number, (number | null)[]][];
+  /**
+   * Кварталы по отчётам фондов в SEC: [конец квартала, поток всех фондов $
+   * тыс., монет, цена отчётов, [поток фонда $ тыс. | None]].
+   */
+  quarters: [number, number, number, number, (number | null)[]][];
+  /** Дата последнего отчёта в SEC (unix) и цена BTC сейчас. */
+  asof?: number;
+  px?: number;
   /** Доля фондов от добытых монет, %. */
   share: number | null;
 }

@@ -1,10 +1,9 @@
-"""Экран «Институциональные потоки»: фонды, найденные по цепочке, — своими
-потоками (wt_etf.set_chain), остальные — по снимку-базе; запас — база
-плюс то, что прошло через кошельки фонда после неё (npm test).
+"""Экран «Институциональные потоки»: дни фондов, найденных по цепочке
+(wt_etf.set_chain); запас — отчёт в SEC плюс то, что прошло через кошельки
+фонда после него (npm test).
 
 В цепочке деньги фонда приходят на следующий рабочий день после торгов:
-заявка во вторник — в среду, в пятницу — в понедельник. Итоги дня правятся
-на разницу, чтобы экран всегда был полным.
+заявка во вторник — в среду, в пятницу — в понедельник.
 """
 import copy
 import os
@@ -21,16 +20,15 @@ MON = 20_710 * DAY  # понедельник, 14 сентября 2026
 PX = 80_000.0
 
 
-def base(aum_btc: float = 0.0) -> dict:
-    """Снимок-база из тех же пяти дней; IBIT — запас aum_btc на последний день."""
-    return {"last_trade": MON + 4 * DAY,
-            "funds": [{"t": "IBIT", "n": "", "c": "US", "fee": None, "btc": aum_btc},
-                      {"t": "BITB", "n": "", "c": "US", "fee": None, "btc": 0.0}],
-            "days": [[d, {t: [v["usd"], v["btc"]] for t, v in by.items()}] for d, (by, _, _) in cmc_days().items()]}
+def sec(ibit_btc: float = 0.0) -> dict:
+    """Отчёты в SEC на пятницу MON + 4: IBIT — ibit_btc монет, BITB — 37 000."""
+    end = MON + 4 * DAY
+    return {"IBIT": {"n": "", "fee": None, "q": {end: [ibit_btc or None, ibit_btc * PX or None]}},
+            "BITB": {"n": "", "fee": None, "q": {end: [37_000.0, None]}}}
 
 
 def cmc_days() -> dict:
-    """Пять торговых дней: BITB и IBIT по отчётам ($ и BTC), итог дня."""
+    """Пять торговых дней: BITB и IBIT ($ и BTC), итог дня — для подмены цепочкой."""
     out = {}
     for i, (b, ib) in enumerate(((10.0, 100.0), (0.0, -50.0), (-20.0, 30.0), (5.0, 0.0), (7.0, 70.0))):
         by = {"BITB": {"usd": b * PX, "btc": b}, "IBIT": {"usd": ib * PX, "btc": ib}}
@@ -87,8 +85,8 @@ class ChainMergeTest(unittest.TestCase):
     def test_coin_marks_chain_funds(self) -> None:
         chain = {"BITB": {"from": MON - 7 * DAY, "hold": 37_000.0, "exact": True, "days": {MON + 2 * DAY: 1.0}}}
         e.set_chain(lambda: chain)
-        with mock.patch.object(e, "_base", base), \
-                mock.patch.object(e, "_prices", lambda sym, days: dict(self.px)), \
+        with mock.patch.object(e.wt_treasury, "etf_funds", lambda: sec(8_000.0)), \
+                mock.patch.object(e, "_klines", lambda sym, ms: dict(self.px)), \
                 mock.patch.object(e, "_share", lambda funds, price: {}), \
                 mock.patch.object(e, "_now", lambda: MON + 30 * DAY):
             c = e._coin("btc", "BTCUSDT")
@@ -98,15 +96,15 @@ class ChainMergeTest(unittest.TestCase):
         self.assertEqual(funds["BITB"]["aum"], round(37_000.0 * PX))
         self.assertNotIn("src", funds["IBIT"])
 
-    def test_holdings_are_base_plus_chain_after_it(self):
-        # Фонд у хранителя: всех кошельков не знаем — база снимка на последний
-        # торговый день (пятница), к ней — то, что пришло в цепочку после
-        # расчёта пятничных денег (понедельник следующей недели).
+    def test_holdings_are_report_plus_chain_after_it(self):
+        # Фонд у хранителя: всех кошельков не знаем — запас из отчёта на
+        # пятницу, к нему — то, что пришло в цепочку после расчёта пятничных
+        # денег (понедельник следующей недели).
         chain = {"IBIT": {"from": MON - 7 * DAY, "hold": None, "matched": True,
                           "days": {MON + 1 * DAY: 100.0, MON + 7 * DAY: 99.0, MON + 8 * DAY: 3.0}}}
         e.set_chain(lambda: chain)
-        with mock.patch.object(e, "_base", lambda: base(8_000.0)), \
-                mock.patch.object(e, "_prices", lambda sym, days: dict(self.px)), \
+        with mock.patch.object(e.wt_treasury, "etf_funds", lambda: sec(8_000.0)), \
+                mock.patch.object(e, "_klines", lambda sym, ms: dict(self.px)), \
                 mock.patch.object(e, "_share", lambda funds, price: {}), \
                 mock.patch.object(e, "_now", lambda: MON + 30 * DAY):
             c = e._coin("btc", "BTCUSDT")
@@ -115,11 +113,11 @@ class ChainMergeTest(unittest.TestCase):
 
 
     def test_list_wallets_count_only_with_full_cover(self):
-        # Кошельки фонда из чужого списка: держат половину запаса базы — поток
-        # по ним занижен, экран остаётся на базе; держат почти весь — свои.
+        # Кошельки фонда из чужого списка: держат половину запаса из отчёта —
+        # поток по ним занижен, дней у фонда нет; держат почти весь — есть.
         self.assertFalse(e._usable({"hold": 500.0}, 1_000.0))
         self.assertTrue(e._usable({"hold": 950.0}, 1_000.0))
-        # Монет на кошельках заметно больше запаса — разметка неверна, база.
+        # Монет на кошельках заметно больше запаса — разметка неверна, дней нет.
         self.assertTrue(e._usable({"hold": 1_250.0}, 1_000.0))
         self.assertFalse(e._usable({"hold": 1_300.0}, 1_000.0))
         self.assertFalse(e._usable({"hold": 950.0}, 0.0))
