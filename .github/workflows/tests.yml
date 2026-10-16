@@ -56,7 +56,7 @@ jobs:
           --select E,F,W,B,UP,SIM,PL,RUF,S,BLE,I --ignore E501,PLR2004,RUF001,RUF002,RUF003,S310,S603,S607
           wt_halving.py tests/test_halving_api.py tests/test_halving_fuzz.py tests/test_halving_security.py tests/test_halving_policy.py tools/mutate-halving.py
           wt_etf.py tests/test_etf_api.py tests/test_bootstrap_personal.py tests/test_btc_etf_chain.py
-          wt_etfchain.py tests/test_etfchain.py tests/test_btc_holders.py
+          wt_etfchain.py tests/test_etfchain.py tests/test_etf_chain_merge.py tests/test_btc_holders.py
           wt_etfalert.py tests/test_etfalert.py
       - name: Строгие типы Python (mypy --strict)
         run: >-

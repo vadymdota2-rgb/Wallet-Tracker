@@ -116,8 +116,7 @@ class BtcEtfChainTest(unittest.TestCase):
         con.execute("INSERT INTO btc_cust_vault VALUES('bc1qa', '3fee', 0, 0, 1)")
         con.commit()
         con.close()
-        with mock.patch.object(api, "BTC_DB", self.db), mock.patch.object(api, "now", lambda: NOW), \
-                mock.patch.object(api.etf, "check_reply", lambda: None):
+        with mock.patch.object(api, "BTC_DB", self.db), mock.patch.object(api, "now", lambda: NOW):
             r = api._btc_custody_build()
         self.assertTrue(r["ok"])
         self.assertEqual((r["vaults"], r["xfers"]), (1, 6))
@@ -145,7 +144,7 @@ class BtcEtfChainTest(unittest.TestCase):
         return rows
 
     def etf_reply(self, rows, ticker: str = "IBIT", scale: float = 1.0):
-        """Ключ сверки (wt_etf.check_reply): те же потоки фонда днём раньше (T+1), $ тыс. по цене."""
+        """Ответ /api/etf: те же потоки фонда днём раньше (T+1), $ тыс. по цене."""
         px = 80_000.0
         by_day: dict[int, float] = {}
         for r in rows:
@@ -155,7 +154,7 @@ class BtcEtfChainTest(unittest.TestCase):
 
     def custody(self, reply):
         with mock.patch.object(api, "BTC_DB", self.db), mock.patch.object(api, "now", lambda: NOW + 3600), \
-                mock.patch.object(api.etf, "check_reply", lambda: reply):
+                mock.patch.object(api.etf, "peek", lambda: reply):
             return api._btc_custody_build()
 
     def test_custody_learns_name_by_flows(self):

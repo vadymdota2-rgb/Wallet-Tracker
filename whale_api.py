@@ -11732,9 +11732,9 @@ def _btc_learn(funds: list[dict], live_from: int) -> None:
     снимается. Сверка — только с того дня, как сканер начал находить
     хранилища: раньше в цепочке у нас пусто, и любое сравнение было бы
     «не совпало»."""
-    # Ключ сверки — ежедневные потоки фондов из сводки (wt_etf.check_reply):
-    # на экран они не идут, только помогают узнать, чьё это хранилище.
-    reply = etf.check_reply() or {}
+    # Только готовый ответ: сборка экрана ETF сама зовёт данные по цепочке, и
+    # сборка отсюда на холодном старте ждала бы саму себя.
+    reply = etf.peek() or {}
     series, fees = etfchain.fund_series(reply)
     if not series:
         return
@@ -11844,45 +11844,112 @@ def _etf_chain_src() -> dict:
 etf.set_chain(_etf_chain_src)
 
 
-# «Кто держит биткоин» — государства по своему сканеру бота (btc_gov.cpp):
-# адреса, которые государство раскрыло само (Сальвадор — список своего
-# Национального биткоин-офиса, США — адрес конфискации по делу Silk Road),
-# остатки — сверкой с цепочкой, неделя назад — суточный снимок btc_gov_day.
-# Фонды к ним добавляет сам экран ETF (wt_etf) — из своего списка фондов.
+# «Кто держит биткоин» — государства. База — открытый API CoinGecko (запасы
+# государств, источник подписан на экране). К базе — наша цепочка: адреса,
+# которые знает сканер бота (btc_gov.cpp), двигались — запас меняется на
+# столько же. Где наш список адресов полный, раскрытый самим государством
+# (Сальвадор — его Национальный биткоин-офис), запас — точно по нему.
+# База фиксируется в gov_base: когда CoinGecko обновил цифру, новая база —
+# она, а наш остаток на этот момент — точка отсчёта движений.
 BTC_HOLD_TTL = 600.0
-# Код страны → имя (приложение переводит его само по коду) и флаг.
-BTC_GOVS = {"US": ("United States", "🇺🇸"), "SV": ("El Salvador", "🇸🇻")}
+BTC_GOV_CG = "https://api.coingecko.com/api/v3/governments/public_treasury/bitcoin"
+# Государства, чей список адресов наш полностью (раскрыт им самим).
+BTC_GOV_FULL = frozenset({"SV"})
 
 
-def _btc_holders_build() -> dict:
+def _gov_flag(code: str) -> str:
+    return "".join(chr(0x1F1E6 + ord(ch) - ord("A")) for ch in code) if re.fullmatch(r"[A-Z]{2}", code) else ""
+
+
+def _gov_own(t: int) -> tuple[dict[str, float], dict[str, float]]:
+    """Наш запас по государствам (только у сверенных целиком) и неделю назад."""
+    own: dict[str, float] = {}
+    was: dict[str, float] = {}
     con = open_db(BTC_DB)
     if not con:
-        return {}
+        return own, was
     try:
-        if not table_exists(con, "btc_gov_addr"):
-            return {}
-        t = now()
-        was: dict[str, float] = {}
+        if table_exists(con, "btc_gov_addr"):
+            own = {str(r[0]): (r[1] or 0) / 1e8 for r in con.execute(
+                "SELECT gov, SUM(bal_sats) FROM btc_gov_addr GROUP BY gov HAVING MIN(checked_at) > 0")}
         if table_exists(con, "btc_gov_day"):
             week = t - t % 86400 - 7 * 86400
             was = {str(r[0]): r[1] / 1e8 for r in con.execute(
                 "SELECT gov, sats FROM btc_gov_day WHERE day = (SELECT MAX(day) FROM btc_gov_day WHERE day <= ?)",
                 (week,))}
-        top = []
-        # Пока сверены не все адреса государства, его запас неполон — не показываем.
-        for r in con.execute("SELECT gov, SUM(bal_sats) AS sats FROM btc_gov_addr GROUP BY gov "
-                             "HAVING MIN(checked_at) > 0"):
-            code, btc = str(r["gov"]), (r["sats"] or 0) / 1e8
-            name, flag = BTC_GOVS.get(code, (code, ""))
-            if btc >= 1:
-                top.append([name, "GOVERNMENT", "", flag, code, round(btc, 2),
-                            round(btc - was[code], 2) if code in was else 0.0, 0])
-        return {"top": top}
     except sqlite3.Error as e:
         sys.stderr.write(f"[api] btc holders: {e}\n")
-        return {}
     finally:
         con.close()
+    return own, was
+
+
+def _gov_base(code: str, cg: float, own: float, t: int) -> float:
+    """Наш остаток на момент, когда CoinGecko последний раз изменил цифру."""
+    con = open_db(DB, write=True)
+    if not con:
+        return own
+    try:
+        con.execute("CREATE TABLE IF NOT EXISTS gov_base (gov TEXT PRIMARY KEY, cg_btc REAL NOT NULL, "
+                    "own_btc REAL NOT NULL, at INTEGER NOT NULL)")
+        r = con.execute("SELECT cg_btc, own_btc FROM gov_base WHERE gov = ?", (code,)).fetchone()
+        if r and abs(float(r[0]) - cg) < 1e-6:
+            return float(r[1])
+        con.execute("INSERT OR REPLACE INTO gov_base(gov, cg_btc, own_btc, at) VALUES(?,?,?,?)", (code, cg, own, t))
+        con.commit()
+        return own
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] gov base: {e}\n")
+        return own
+    finally:
+        con.close()
+
+
+_GOV_CG: dict = {}
+
+
+def _gov_cg() -> list | None:
+    """Список CoinGecko; бесплатный API иногда отвечает «слишком часто» —
+    тогда прошлый удачный ответ (обновляется у них раз в сутки-двое)."""
+    got = get_json(BTC_GOV_CG, 20)
+    govs = got.get("governments") if isinstance(got, dict) else None
+    if isinstance(govs, list) and govs:
+        _GOV_CG["list"] = govs
+    return _GOV_CG.get("list")
+
+
+def _btc_holders_build() -> dict:
+    t = now()
+    own, was = _gov_own(t)
+    govs = _gov_cg()
+    top = []
+    if isinstance(govs, list):
+        rows = [g for g in govs if isinstance(g, dict) and isinstance(g.get("country"), str)]
+        # У страны бывает и штат или город (Техас, Росуэлл) — страна та, что держит больше.
+        nation: dict[str, dict] = {}
+        for g in rows:
+            c = g["country"].upper()
+            if c not in nation or float(g.get("total_holdings") or 0) > float(nation[c].get("total_holdings") or 0):
+                nation[c] = g
+        for g in rows:
+            code = g["country"].upper()
+            cg = float(g.get("total_holdings") or 0)
+            is_nation = nation.get(code) is g
+            btc, d7 = cg, 0.0
+            if is_nation and code in own:
+                btc = own[code] if code in BTC_GOV_FULL else cg + own[code] - _gov_base(code, cg, own[code], t)
+                d7 = own[code] - was[code] if code in was else 0.0
+            if btc >= 1:
+                top.append([str(g.get("name") or code)[:40], "GOVERNMENT", "", _gov_flag(code),
+                            code if is_nation else "", round(btc, 2), round(d7, 2), 0])
+    else:
+        # CoinGecko молчит — хотя бы то, что видим сами.
+        names = {"US": "United States", "SV": "El Salvador"}
+        for code, btc in own.items():
+            if btc >= 1:
+                top.append([names.get(code, code), "GOVERNMENT", "", _gov_flag(code), code, round(btc, 2),
+                            round(btc - was[code], 2) if code in was else 0.0, 0])
+    return {"top": top} if top else {}
 
 
 def btc_holders() -> dict:
