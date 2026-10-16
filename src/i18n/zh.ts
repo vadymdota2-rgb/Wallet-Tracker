@@ -642,6 +642,7 @@ export const zh: Dict = {
   ef_cbp_what: "{s}在Coinbase上比Binance贵多少。Coinbase是美国基金和公司的主要平台:为正表示美国需求更强,为负则更弱。柱状:最近180天。",
   ef_ch_30: "30天",
   ef_ch_day: "最近一天",
+  ef_ch_found: "借助「篮子」——基金每笔申赎恰好是其篮子的整数倍——扫描器在同一托管方又找到 {n} 只基金。其资金流已在统计，名称将在核对后显示。",
   ef_ch_hold: "基金持仓",
   ef_ch_others: "其他基金未公布钱包——扫描器会自行在链上寻找，找到后添加到这里。",
   ef_ch_title: "链上ETF",

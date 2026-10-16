@@ -642,6 +642,7 @@ export const de: Dict = {
   ef_cbp_what: "Wie viel teurer {s} auf Coinbase als auf Binance ist. Coinbase ist der Hauptplatz für US-Fonds und -Firmen: Plus heißt stärkere Nachfrage aus den USA, Minus schwächere. Balken: letzte 180 Tage.",
   ef_ch_30: "30 Tage",
   ef_ch_day: "Letzter Tag",
+  ef_ch_found: "Anhand der Körbe — jeder Auftrag eines Fonds ist genau eine ganze Zahl seiner Körbe — fand der Scanner beim selben Verwahrer weitere Fonds: {n}. Ihre Flüsse werden bereits erfasst; Namen folgen nach dem Abgleich.",
   ef_ch_hold: "Bestand des Fonds",
   ef_ch_others: "Andere Fonds veröffentlichen ihre Wallets nicht — der Scanner sucht sie selbst on-chain und fügt sie hier hinzu, sobald er sie findet.",
   ef_ch_title: "ETFs on-chain",

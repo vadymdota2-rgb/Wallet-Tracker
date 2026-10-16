@@ -642,6 +642,7 @@ export const id: Dict = {
   ef_cbp_what: "Seberapa mahal {s} di Coinbase dibanding Binance. Coinbase adalah platform utama dana dan perusahaan AS: plus berarti permintaan AS lebih kuat, minus lebih lemah. Batang: 180 hari terakhir.",
   ef_ch_30: "30 hari",
   ef_ch_day: "Hari terakhir",
+  ef_ch_found: "Lewat «keranjang» — setiap order dana tepat bilangan bulat keranjangnya — pemindai menemukan {n} dana lain di kustodian yang sama. Arusnya sudah dihitung; nama akan muncul setelah pencocokan.",
   ef_ch_hold: "Cadangan dana",
   ef_ch_others: "Dana lain tidak mempublikasikan dompetnya — pemindai mencarinya sendiri di rantai dan akan menambahkannya di sini setelah ditemukan.",
   ef_ch_title: "ETF on-chain",

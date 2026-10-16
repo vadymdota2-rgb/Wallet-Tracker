@@ -641,6 +641,7 @@ export const en = {
   ef_cbp_what: "How much more {s} costs on Coinbase than on Binance. Coinbase is the main venue for US funds and companies: plus means stronger US demand, minus means weaker. Bars: last 180 days.",
   ef_ch_30: "30 days",
   ef_ch_day: "Last day",
+  ef_ch_found: "Using baskets — each fund's order is an exact whole number of its baskets — the scanner found {n} more funds at the same custodian. Their flows are already tracked; names will appear after matching.",
   ef_ch_hold: "Fund holdings",
   ef_ch_others: "Other funds don't publish their wallets — the scanner searches the chain for them and will add them here once found.",
   ef_ch_title: "ETFs on-chain",

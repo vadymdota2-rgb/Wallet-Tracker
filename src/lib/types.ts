@@ -934,12 +934,26 @@ export interface EtfChainFund {
   hist: [number, number][];
 }
 
+/** Фонд у хранителя, найденный по «корзинам» (wt_etfchain): «#…» — без имени. */
+export interface EtfCustodyFund {
+  t: string;
+  vaults: number;
+  /** Корзина, BTC — отпечаток фонда. */
+  basket: number;
+  /** Комиссия в год, % — по тому, как тает корзина. */
+  fee: number | null;
+  /** [сутки UTC, приток BTC, отток BTC]. */
+  days: [number, number, number][];
+  vol: number;
+}
+
 export interface EtfChainReply {
   ok: boolean;
   error?: string;
   funds: EtfChainFund[];
   at: number;
   block: { h: number; ts: number } | null;
+  custody?: { ok: boolean; funds?: EtfCustodyFund[]; vaults?: number; xfers?: number };
 }
 
 /** Высота последнего блока биткоина, блок следующего халвинга и среднее время блока, с. */

@@ -32,6 +32,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wt_shield as shield  # noqa: E402
 import wt_halving as halving  # noqa: E402
 import wt_etf as etf  # noqa: E402
+import wt_etfchain as etfchain  # noqa: E402
 from urllib.parse import parse_qs, unquote, urlparse, urlsplit
 
 # Петля по умолчанию: наружу API выходит только через nginx. Раньше здесь
@@ -11714,6 +11715,34 @@ def btc_etf_chain() -> dict:
     return cached_bg(_BTC, "etf", BTC_TTL, _btc_etf_build)
 
 
+# Фонды у хранителя по «корзинам» (wt_etfchain): хранилища и переводы с ними
+# пишет сканер бота, разбор — здесь. Разбор тяжелее остального — раз в 15 мин.
+BTC_CUST_TTL = 900.0
+
+
+def _btc_custody_build() -> dict:
+    con = open_db(BTC_DB)
+    if not con:
+        return {"ok": False, "error": "no_data"}
+    try:
+        if not table_exists(con, "btc_cust_xfer") or not table_exists(con, "btc_etf_addr"):
+            return {"ok": False, "error": "no_data"}
+        vaults = con.execute("SELECT COUNT(*) FROM btc_cust_vault").fetchone()[0] \
+            if table_exists(con, "btc_cust_vault") else 0
+        xfers = con.execute("SELECT COUNT(*) FROM btc_cust_xfer").fetchone()[0]
+        return {"ok": True, "funds": etfchain.build(con, now(), BTC_ETF_DAYS), "vaults": int(vaults or 0),
+                "xfers": int(xfers or 0), "at": now()}
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] btc custody: {e}\n")
+        return {"ok": False, "error": "db"}
+    finally:
+        con.close()
+
+
+def btc_custody() -> dict:
+    return cached_bg(_BTC, "cust", BTC_CUST_TTL, _btc_custody_build)
+
+
 # ── Поток бирж BSC ────────────────────────────────────────────────────────
 # Пишет бот (bsc_exchanges.cpp): по часам, биржам и монетам — сколько
 # долларов завели на биржи и вывели с них по всей сети. Переводы BNB и
@@ -16200,7 +16229,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, dom_data())
                 return
             if path in ("/etf/chain", "/api/etf/chain"):
-                self._json(200, btc_etf_chain())
+                self._json(200, {**btc_etf_chain(), "custody": btc_custody()})
                 return
             if path in ("/etf", "/api/etf"):
                 self._json(200, etf_data())

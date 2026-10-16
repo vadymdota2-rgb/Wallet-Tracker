@@ -96,10 +96,38 @@ class BtcEtfChainTest(unittest.TestCase):
         self.assertNotIn("etf", ex["bc1qgroup"])
         self.assertNotIn("etf", ex["bc1qnone"])
 
+    def test_custody_without_tables(self):
+        with mock.patch.object(api, "BTC_DB", self.db), mock.patch.object(api, "now", lambda: NOW):
+            self.assertEqual(api._btc_custody_build(), {"ok": False, "error": "no_data"})
+
+    def test_custody_build(self):
+        con = sqlite3.connect(self.db)
+        con.executescript(
+            "CREATE TABLE btc_cust_vault (address TEXT PRIMARY KEY, fee_wallet TEXT, at INTEGER, height INTEGER,"
+            " read INTEGER);"
+            "CREATE TABLE btc_cust_xfer (txid TEXT, n INTEGER, height INTEGER, ts INTEGER, src TEXT, dst TEXT,"
+            " sats INTEGER, sv INTEGER, dv INTEGER, PRIMARY KEY (txid, n));")
+        q = 542_593_761
+        rows = []
+        for i, k in enumerate((7, 15, 3, 11, 5, 9)):
+            day = DAY - 86400 * (i // 2)
+            rows.append((f"t{i}", 0, 0, day, "3APx", "bc1qa", k * q, 0, 1))
+        con.executemany("INSERT INTO btc_cust_xfer VALUES(?,?,?,?,?,?,?,?,?)", rows)
+        con.execute("INSERT INTO btc_cust_vault VALUES('bc1qa', '3fee', 0, 0, 1)")
+        con.commit()
+        con.close()
+        with mock.patch.object(api, "BTC_DB", self.db), mock.patch.object(api, "now", lambda: NOW):
+            r = api._btc_custody_build()
+        self.assertTrue(r["ok"])
+        self.assertEqual((r["vaults"], r["xfers"]), (1, 6))
+        # bc1qa — опубликованный кошелёк BITB (setUp), значит фонд назван.
+        self.assertEqual([f["t"] for f in r["funds"]], ["BITB"])
+
     def test_route(self):
         with open(os.path.join(ROOT, "whale_api.py"), encoding="utf-8") as f:
             src = f.read()
         self.assertIn('if path in ("/etf/chain", "/api/etf/chain"):', src)
+        self.assertIn('{**btc_etf_chain(), "custody": btc_custody()}', src)
 
 
 if __name__ == "__main__":

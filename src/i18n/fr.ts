@@ -642,6 +642,7 @@ export const fr: Dict = {
   ef_cbp_what: "De combien {s} est plus cher sur Coinbase que sur Binance. Coinbase est la plateforme des fonds et sociétés américains : positif = demande américaine plus forte, négatif = plus faible. Barres : 180 derniers jours.",
   ef_ch_30: "30 jours",
   ef_ch_day: "Dernier jour",
+  ef_ch_found: "Grâce aux paniers — chaque ordre d'un fonds vaut exactement un nombre entier de ses paniers — le scanner a trouvé {n} autres fonds chez le même dépositaire. Leurs flux sont déjà suivis ; les noms viendront après rapprochement.",
   ef_ch_hold: "Avoirs du fonds",
   ef_ch_others: "Les autres fonds ne publient pas leurs portefeuilles — le scanner les cherche on-chain et les ajoutera ici dès qu'il les trouvera.",
   ef_ch_title: "ETF on-chain",

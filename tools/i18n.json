@@ -26908,5 +26908,23 @@
     "ko": "상장지수펀드 {f}(ETF)의 지갑입니다. 이 지갑의 움직임은 펀드의 유입·유출이며 개인 고래의 거래가 아닙니다.",
     "vi": "Ví của quỹ ETF {f}. Các giao dịch của ví là dòng vào và dòng ra của quỹ, không phải giao dịch của cá voi cá nhân.",
     "zh": "交易所交易基金 {f}（ETF）的钱包。其变动是基金的流入和流出，而非个人巨鲸的交易。"
+  },
+  "ef_ch_found": {
+    "ru": "По «корзинам» — сумма каждой заявки фонда ровно целое число его корзин — сканер нашёл у того же хранителя ещё фондов: {n}. Их потоки уже считаются; имена появятся после сверки.",
+    "en": "Using baskets — each fund's order is an exact whole number of its baskets — the scanner found {n} more funds at the same custodian. Their flows are already tracked; names will appear after matching.",
+    "uk": "За «кошиками» — сума кожної заявки фонду рівно ціле число його кошиків — сканер знайшов у того ж зберігача ще фондів: {n}. Їхні потоки вже рахуються; назви з'являться після звірки.",
+    "de": "Anhand der Körbe — jeder Auftrag eines Fonds ist genau eine ganze Zahl seiner Körbe — fand der Scanner beim selben Verwahrer weitere Fonds: {n}. Ihre Flüsse werden bereits erfasst; Namen folgen nach dem Abgleich.",
+    "es": "Con las cestas —cada orden de un fondo es un número entero exacto de sus cestas— el escáner encontró {n} fondos más en el mismo custodio. Sus flujos ya se cuentan; los nombres aparecerán tras la verificación.",
+    "fr": "Grâce aux paniers — chaque ordre d'un fonds vaut exactement un nombre entier de ses paniers — le scanner a trouvé {n} autres fonds chez le même dépositaire. Leurs flux sont déjà suivis ; les noms viendront après rapprochement.",
+    "pt": "Pelas cestas — cada ordem de um fundo é exatamente um número inteiro de suas cestas — o scanner encontrou mais {n} fundos no mesmo custodiante. Seus fluxos já são contados; os nomes aparecerão após a verificação.",
+    "pl": "Dzięki koszykom — każde zlecenie funduszu to dokładnie całkowita liczba jego koszyków — skaner znalazł u tego samego depozytariusza kolejne fundusze: {n}. Ich przepływy są już liczone; nazwy pojawią się po weryfikacji.",
+    "tr": "Sepetler sayesinde — bir fonun her emri tam olarak sepetlerinin tam katıdır — tarayıcı aynı saklayıcıda {n} fon daha buldu. Akışları zaten sayılıyor; adlar eşleştirmeden sonra görünecek.",
+    "ar": "بفضل «السلال» — كل طلب للصندوق يساوي عددًا صحيحًا تمامًا من سلاله — وجد الماسح لدى الحافظ نفسه صناديق إضافية: {n}. تدفقاتها تُحتسب بالفعل؛ وستظهر الأسماء بعد المطابقة.",
+    "hi": "«बास्केट» से — फंड का हर ऑर्डर ठीक उसके बास्केट की पूर्ण संख्या होता है — स्कैनर को उसी कस्टोडियन के पास और फंड मिले: {n}। उनके प्रवाह गिने जा रहे हैं; नाम मिलान के बाद दिखेंगे।",
+    "id": "Lewat «keranjang» — setiap order dana tepat bilangan bulat keranjangnya — pemindai menemukan {n} dana lain di kustodian yang sama. Arusnya sudah dihitung; nama akan muncul setelah pencocokan.",
+    "ja": "「バスケット」から——ファンドの注文は必ずそのバスケットのちょうど整数倍——スキャナーは同じカストディアンでさらに {n} 本のファンドを見つけました。フローは既に集計中で、名前は照合後に表示されます。",
+    "ko": "「바스켓」으로 — 펀드의 모든 주문은 정확히 바스켓의 정수 배 — 스캐너가 같은 수탁기관에서 펀드 {n}개를 더 찾았습니다. 흐름은 이미 집계되며, 이름은 대조 후 표시됩니다.",
+    "vi": "Nhờ «giỏ» — mỗi lệnh của quỹ đúng bằng số nguyên giỏ của nó — trình quét tìm thêm {n} quỹ tại cùng đơn vị lưu ký. Dòng tiền đã được tính; tên sẽ xuất hiện sau khi đối chiếu.",
+    "zh": "借助「篮子」——基金每笔申赎恰好是其篮子的整数倍——扫描器在同一托管方又找到 {n} 只基金。其资金流已在统计，名称将在核对后显示。"
   }
 }

@@ -642,6 +642,7 @@ export const pl: Dict = {
   ef_cbp_what: "O ile {s} jest droższy na Coinbase niż na Binance. Coinbase to główna platforma funduszy i firm z USA: plus — mocniejszy popyt z USA, minus — słabszy. Słupki: ostatnie 180 dni.",
   ef_ch_30: "30 dni",
   ef_ch_day: "Ostatnia doba",
+  ef_ch_found: "Dzięki koszykom — każde zlecenie funduszu to dokładnie całkowita liczba jego koszyków — skaner znalazł u tego samego depozytariusza kolejne fundusze: {n}. Ich przepływy są już liczone; nazwy pojawią się po weryfikacji.",
   ef_ch_hold: "Zasoby funduszu",
   ef_ch_others: "Pozostałe fundusze nie publikują portfeli — skaner szuka ich w łańcuchu sam i doda je tutaj, gdy je znajdzie.",
   ef_ch_title: "ETF w blockchainie",

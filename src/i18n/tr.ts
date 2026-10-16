@@ -642,6 +642,7 @@ export const tr: Dict = {
   ef_cbp_what: "{s}'nin Coinbase'te Binance'e göre ne kadar pahalı olduğu. Coinbase, ABD fon ve şirketlerinin ana platformu: artı ABD talebinin güçlü, eksi zayıf olduğunu gösterir. Çubuklar: son 180 gün.",
   ef_ch_30: "30 gün",
   ef_ch_day: "Son gün",
+  ef_ch_found: "Sepetler sayesinde — bir fonun her emri tam olarak sepetlerinin tam katıdır — tarayıcı aynı saklayıcıda {n} fon daha buldu. Akışları zaten sayılıyor; adlar eşleştirmeden sonra görünecek.",
   ef_ch_hold: "Fon varlığı",
   ef_ch_others: "Diğer fonlar cüzdanlarını yayımlamıyor — tarayıcı onları zincirde kendisi arıyor ve bulunca buraya ekleyecek.",
   ef_ch_title: "Zincir üstü ETF'ler",

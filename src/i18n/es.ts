@@ -642,6 +642,7 @@ export const es: Dict = {
   ef_cbp_what: "Cuánto más cuesta {s} en Coinbase que en Binance. Coinbase es la plataforma principal de fondos y empresas de EE. UU.: positivo indica demanda estadounidense más fuerte; negativo, más débil. Barras: últimos 180 días.",
   ef_ch_30: "30 días",
   ef_ch_day: "Último día",
+  ef_ch_found: "Con las cestas —cada orden de un fondo es un número entero exacto de sus cestas— el escáner encontró {n} fondos más en el mismo custodio. Sus flujos ya se cuentan; los nombres aparecerán tras la verificación.",
   ef_ch_hold: "Reservas del fondo",
   ef_ch_others: "Los demás fondos no publican sus billeteras: el escáner las busca en la cadena y las añadirá aquí cuando las encuentre.",
   ef_ch_title: "ETF en la cadena",

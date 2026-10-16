@@ -811,6 +811,15 @@ say("BTC: кошельки ETF подписаны тикером фонда — 
     "AND fund NOT LIKE '#%'" in api and 'out[r["address"]]["etf"]' in api
     and '{r.etf ? <span className="bt-etf">ETF · {r.etf}</span> : null}' in _btv2
     and '${r.etf ? `ETF ${r.etf} · ` : ""}' in _btv2 and 't(lang, "btc_is_etf", { f: data.etf })' in _btv2)
+_ws_etf2 = read(os.path.join(BOT, "btc_etf.cpp"))
+_chain = read(f"{APP}/wt_etfchain.py")
+say("ETF у хранителя по корзинам: бот находит хранилища (пылинка кошелька комиссий) и пишет переводы, API раскладывает по фондам",
+    "bool feeTopUp(sqlite3* db, const Block& b, const BTx& tx)" in _ws_etf2 and "void custTx(sqlite3* db" in _ws_etf2
+    and "CREATE TABLE IF NOT EXISTS btc_cust_xfer (" in _ws_etf2 and "void readNewVaults()" in _ws_btc
+    and "def anchors(xs: list[Xfer])" in _chain and "def _bridge(fs: list[Fund])" in _chain
+    and "def mixed(self) -> bool:" in _chain and "OWN_ALL = 0.5" in _chain and "def _names(" in _chain
+    and '{**btc_etf_chain(), "custody": btc_custody()}' in api
+    and "wt_etfchain.py tests/test_etfchain.py" in read(f"{APP}/.github/workflows/tests.yml"))
 say("bitcoin: вкладка «Крупные ордера BTC» с потоком бирж (в NetFlow его нет), третья доска рейтинга, экран кошелька",
     'path in ("/btc/flow", "/api/btc/flow")' in api and "def _btc_clean(" in api and "w.s < 0.9 * w.b" in api
     and "export function BtcFlowCard(" in _btv and "export function BtcBigView(" in _btv

@@ -491,13 +491,17 @@ export function EtfChain({ price, lang }: { price: number; lang: Lang }) {
     };
   }, []);
   const funds = (r?.funds ?? []).filter((f) => f.n > 0);
+  // Фонды у того же хранителя, найденные по корзинам, но ещё без имени.
+  const found = (r?.custody?.funds ?? []).filter((f) => f.t.startsWith("#")).length;
   if (!r?.ok || !funds.length) return null;
   return (
     <>
       <SectionTitle>{t(lang, "ef_ch_title")}</SectionTitle>
       {funds.map((f) => <ChainFund key={f.t} f={f} price={price} lang={lang} />)}
       <p className="lq-hint">{t(lang, "ef_ch_what")}</p>
-      <p className="lq-hint">{t(lang, "ef_ch_others")}</p>
+      {found > 0
+        ? <p className="lq-hint">{t(lang, "ef_ch_found", { n: num(found) })}</p>
+        : <p className="lq-hint">{t(lang, "ef_ch_others")}</p>}
     </>
   );
 }
