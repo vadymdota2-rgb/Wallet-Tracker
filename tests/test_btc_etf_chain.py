@@ -1,8 +1,9 @@
-"""/api/etf/chain: потоки фондов по своей разметке сканера (npm test).
+"""Разметка кошельков фондов (npm test): метки в рейтинге, корзины
+хранителя и сверка с «Институциональными потоками».
 
-Таблицы пишет бот (WhaleScanner/btc_etf.cpp), API их только читает: запас
-фонда — сумма остатков его кошельков, поток — по суткам UTC, плата фонду —
-отдельной графой, а не оттоком инвесторов.
+Таблицы пишет бот (WhaleScanner/btc_etf.cpp), API их читает; корзины
+с размеченным кошельком уходят в очередь разметки бота, а сверка только
+проверяет разметку (btc_etf_check) и ничего в ней не меняет.
 """
 import os
 import sqlite3
@@ -54,31 +55,6 @@ class BtcEtfChainTest(unittest.TestCase):
 
     def tearDown(self):
         os.unlink(self.db)
-
-    def build(self):
-        with mock.patch.object(api, "BTC_DB", self.db), mock.patch.object(api, "now", lambda: NOW):
-            return api._btc_etf_build()
-
-    def test_fund(self):
-        r = self.build()
-        self.assertTrue(r["ok"])
-        self.assertEqual(r["block"], {"h": 971600, "ts": NOW - 300})
-        (f,) = r["funds"]
-        self.assertEqual((f["t"], f["n"], f["seed"], f["checked"]), ("BITB", 3, 2, 2))
-        self.assertAlmostEqual(f["hold"], 1005.0)
-        # Окно — 60 суток: запись 70-дневной давности не попадает.
-        self.assertEqual(f["days"], [[DAY - 86400, 27.0, 0.0, 6.0], [DAY, 0.0, 81.0, 0.0]])
-        self.assertEqual(f["hist"], [[DAY, 1005.0]])
-
-    def test_no_tables(self):
-        con = sqlite3.connect(self.db)
-        con.executescript("DROP TABLE btc_etf_addr; DROP TABLE btc_etf_flow;")
-        con.close()
-        self.assertEqual(self.build(), {"ok": False, "error": "no_data"})
-
-    def test_no_db(self):
-        with mock.patch.object(api, "BTC_DB", self.db + ".missing"):
-            self.assertEqual(api._btc_etf_build(), {"ok": False, "error": "no_data"})
 
     def test_extra_tags_etf_wallets(self):
         con = sqlite3.connect(self.db)
@@ -157,33 +133,65 @@ class BtcEtfChainTest(unittest.TestCase):
                 mock.patch.object(api.etf, "peek", lambda: reply):
             return api._btc_custody_build()
 
-    def test_custody_learns_name_by_flows(self):
+    def test_flows_never_name_a_basket(self):
+        # Потоки фонда совпали с безымянной корзиной — имени она не получает:
+        # имена даёт только своя разметка.
         rows = self.make_custody()
         r = self.custody(self.etf_reply(rows))
-        self.assertEqual([f["t"] for f in r["funds"]], ["IBIT"])
+        self.assertTrue(r["funds"][0]["t"].startswith("#"))
         self.assertNotIn("_vaults", r["funds"][0])
         ro = api.open_db(self.db)
         try:
-            self.assertEqual(ro.execute("SELECT fund FROM btc_etf_learned WHERE address='bc1qnew'").fetchone()[0],
-                             "IBIT")
-            # Имя держится само и подписывает кошелёк в рейтинге.
-            self.assertEqual(api._btc_extra(ro, ["bc1qnew"])["bc1qnew"].get("etf"), "IBIT")
+            self.assertIsNone(ro.execute("SELECT 1 FROM sqlite_master WHERE name = 'btc_etf_learned'").fetchone())
+            self.assertNotIn("etf", api._btc_extra(ro, ["bc1qnew"])["bc1qnew"])
         finally:
             ro.close()
-        r = self.custody({"ok": False})
-        self.assertEqual([f["t"] for f in r["funds"]], ["IBIT"])
 
-    def test_custody_unlearns_when_flows_diverge(self):
-        rows = self.make_custody()
-        self.custody(self.etf_reply(rows))
-        # Фонд стал отчитываться втрое большими потоками — это не он.
-        r = self.custody(self.etf_reply(rows, scale=3.0))
-        ro = api.open_db(self.db)
+    def flows(self, scale: float):
+        """BITB: десять торговых дней; в цепочке — те же монеты × scale на
+        следующий рабочий день. Ответ /api/etf — потоки торговых дней."""
+        px = 80_000.0
+        settle = api.etfchain.settle_day
+        today = NOW // 86400
+        trade = [d for d in range(today - 20, today - 2) if (d + 3) % 7 < 5][-10:]
+        con = sqlite3.connect(self.db)
+        con.execute("DELETE FROM btc_etf_flow")
+        for i, d in enumerate(trade):
+            v = (40 + 13 * i) * (1 if i % 3 else -1)
+            con.execute("INSERT INTO btc_etf_flow(day, fund, in_sats, out_sats) VALUES(?, 'BITB', ?, ?)",
+                        (settle(d) * 86400, max(v, 0) * scale * SAT, max(-v, 0) * scale * SAT))
+        con.commit()
+        con.close()
+        days = [[d * 86400, 0, 0, px, [round((40 + 13 * i) * (1 if i % 3 else -1) * px / 1000)]]
+                for i, d in enumerate(trade)]
+        return {"ok": True, "coins": {"btc": {"funds": [{"t": "BITB", "fee": 0.2}], "days": days}}}
+
+    def check(self, reply):
+        con = sqlite3.connect(self.db)
         try:
-            self.assertEqual(ro.execute("SELECT COUNT(*) FROM btc_etf_learned").fetchone()[0], 0)
+            with mock.patch.object(api, "now", lambda: NOW), mock.patch.object(api.etf, "peek", lambda: reply):
+                n = api._btc_check(con)
+            con.commit()
+            rows = con.execute("SELECT fund, v, days, share FROM btc_etf_check").fetchall() if n else []
         finally:
-            ro.close()
-        self.assertTrue(r["ok"])
+            con.close()
+        return n, rows
+
+    def test_check_labels_against_institutional_flows(self):
+        n, rows = self.check(self.flows(1.0))
+        self.assertEqual(n, 1)
+        self.assertEqual(rows[0][:3], ("BITB", "ok", 9))  # первые сутки разметки — неполные, без них
+        _, rows = self.check(self.flows(0.4))  # размечена часть кошельков
+        self.assertEqual(rows[0][1], "part")
+        self.assertAlmostEqual(rows[0][3], 0.4, delta=0.02)
+        # Разметка при этом не меняется.
+        con = sqlite3.connect(self.db)
+        self.assertEqual(con.execute("SELECT COUNT(*) FROM btc_etf_addr").fetchone()[0], 3)
+        con.close()
+
+    def test_check_without_flows_does_nothing(self):
+        self.assertEqual(self.check({"ok": False}), (0, []))
+        self.assertEqual(self.check({}), (0, []))
 
     def test_basket_with_labeled_wallet_spreads_to_its_vaults(self):
         # Корзина «IBIT» (в ней размеченный кошелёк) — её хранилища в
@@ -201,11 +209,11 @@ class BtcEtfChainTest(unittest.TestCase):
         con.close()
         self.assertEqual(got, [("bc1qv1", "IBIT", NOW), ("bc1qv2", "IBIT", NOW)])
 
-    def test_route(self):
+    def test_no_dead_route(self):
         with open(os.path.join(ROOT, "whale_api.py"), encoding="utf-8") as f:
             src = f.read()
-        self.assertIn('if path in ("/etf/chain", "/api/etf/chain"):', src)
-        self.assertIn('{**btc_etf_chain(), "custody": btc_custody()}', src)
+        self.assertNotIn("/api/etf/chain", src)
+        self.assertNotIn("btc_etf_learned(address, fund, at) VALUES", src)
 
 
 if __name__ == "__main__":

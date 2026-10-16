@@ -28,7 +28,6 @@ import { Boundary } from "../components/Boundary";
 import { Frame } from "./Screen";
 import { CbpSection, CmeSection, Holders } from "./EtfMore";
 import { dateStr, timeTicks } from "./FearGreedScreen";
-import { EtfAlertsCard, FundBell, useEtfAlerts, type EtfAlerts } from "./EtfAlerts";
 
 type Lang = Parameters<typeof t>[0];
 type Range = "30" | "90" | "365" | "all";
@@ -320,7 +319,7 @@ function fundLabel(f: EtfCoin["funds"][number]): string {
   return ISSUER[f.t] ?? f.n.replace(/ (ETF|Trust|Fund).*$/i, "");
 }
 
-function Funds({ c, al, lang }: { c: EtfCoin; al: EtfAlerts; lang: Lang }) {
+function Funds({ c, lang }: { c: EtfCoin; lang: Lang }) {
   const [period, setPeriod] = useState<Period>("w");
   const aumAll = c.funds.reduce((s, f) => s + (f.aum || 0), 0);
   const rows = useMemo(() => {
@@ -361,7 +360,7 @@ function Funds({ c, al, lang }: { c: EtfCoin; al: EtfAlerts; lang: Lang }) {
           return (
             <div key={f.t} className="ef-f">
               <span className="ef-f-id">
-                <b>{f.c ? <span aria-hidden="true">{flagOf(f.c)} </span> : null}{f.t}<FundBell fund={f.t} al={al} lang={lang} /></b>
+                <b>{f.c ? <span aria-hidden="true">{flagOf(f.c)} </span> : null}{f.t}</b>
                 {label && label !== f.t ? <small>{label}</small> : null}
               </span>
               <span className="ef-f-bar">
@@ -404,7 +403,6 @@ export function EtfScreen() {
     }
   });
   const [sel, setSel] = useState<number | null>(null);
-  const alerts = useEtfAlerts(lang);
   const [mode, setMode] = useState<"d" | "c">(() => {
     try {
       return localStorage.getItem(MODE_KEY) === "c" ? "c" : "d";
@@ -646,8 +644,7 @@ export function EtfScreen() {
           </Card>
 
           <SectionTitle>{t(lang, "ef_f_title")}</SectionTitle>
-          <Funds c={c} al={alerts} lang={lang} />
-          <EtfAlertsCard al={alerts} lang={lang} />
+          <Funds c={c} lang={lang} />
 
           <SectionTitle>{t(lang, "ef_r_title")}</SectionTitle>
           <Card>

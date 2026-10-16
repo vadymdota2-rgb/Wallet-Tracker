@@ -786,12 +786,11 @@ say("защита API: бан за промахи ключом — кроме с
 say("ETF: корзина хранителя с размеченным кошельком — вся этого фонда: её хранилища уходят в разметку бота (очередь /import)",
     "def _btc_spread(con: sqlite3.Connection, funds: list[dict]) -> int:" in api
     and "INSERT OR IGNORE INTO btc_etf_import(address, fund, at) VALUES(?,?,?)" in api
-    and "if _btc_spread(con, funds):" in api and "BTC_SPREAD_MAX = 500" in api)
-say("ревизия ETF: алерт не считает хранилище дважды; новый кошелёк бота — без остатка до сверки",
-    "str(dst) not in labeled" in read(f"{APP}/wt_etfalert.py") and "str(src) not in labeled" in read(f"{APP}/wt_etfalert.py")
-    and "constexpr long long UNKNOWN_HEIGHT = 1LL << 62;" in read(os.path.join(BOT, "btc_etf.cpp"))
+    and "            _btc_spread(con, funds)\n" in api and "BTC_SPREAD_MAX = 500" in api)
+say("ревизия ETF: новый кошелёк бота — без остатка до сверки",
+    "constexpr long long UNKNOWN_HEIGHT = 1LL << 62;" in read(os.path.join(BOT, "btc_etf.cpp"))
     and "for (int page = 0; page < 8; ++page)" in read(os.path.join(BOT, "btc_chain.cpp")))
-say("кеш: тяжёлые ответы API — и на диске (после перезапуска сразу, свежий — в фоне); ETF и отчёты SEC — тоже; в приложении — дайджест, кошелёк BTC, алерты ETF на устройстве",
+say("кеш: тяжёлые ответы API — и на диске (после перезапуска сразу, свежий — в фоне); ETF и отчёты SEC — тоже; в приложении — дайджест и кошелёк BTC на устройстве",
     "def disk_cache(store: dict, name: str) -> dict:" in api and "def _disk_load(name: str, key):" in api
     and 'disk_cache({}, "btc")' in api and 'disk_cache({}, "bscx")' in api and 'disk_cache({}, "opt")' in api
     and 'disk_warm(_fng_cache, "all", "fng", FNG_TTL)' in api and 'disk_warm(_dom_cache, "all", "dom", DOM_TTL)' in api
@@ -799,7 +798,6 @@ say("кеш: тяжёлые ответы API — и на диске (после 
     and "def _file_load() -> dict[str, Json] | None:" in _etfs and "_file_save(\"sec_funds.json\", out)" in read(f"{APP}/wt_treasury.py")
     and 'const DIGEST_SAVED = "wt-digest-v1";' in read(f"{APP}/src/lib/api.ts")
     and "exGet<BtcWalletReply>(btcWalletPath(addr), BTC_TTL, WALLET_STORE)" in read(f"{APP}/src/lib/api.ts")
-    and "useState<EtfAlertSub[] | null>(() => savedEtfAlerts())" in read(f"{APP}/src/screens/EtfAlerts.tsx")
     and "api_cache/" in read(f"{APP}/.gitignore") and os.path.isfile(f"{APP}/tests/test_disk_cache.py"))
 _tre = read(f"{APP}/wt_treasury.py")
 say("крупнейшие держатели: ETF и компании (по их отчётам в SEC, CryptoAssetNumberOfUnits), без государств; выбор группы",
@@ -821,16 +819,12 @@ say("бот: /import — кнопки фондов (IBIT, FBTC…) и «Друг
     and "int etfDrainLabels(sqlite3* db)" in _wse and "++r.inBase;" in _wse and "++r.named;" in _wse
     and "UPDATE btc_watch SET src = 'import' WHERE address = ? AND src = 'auto'" in _wsc and "WHERE btc_etf_addr.how != 'seed'\");" in _wse
     and "etfDrainLabels(g_btcDb);" in _wsc and "void backfillImported(long long tip)" in _wsc)
-_eal = read(f"{APP}/wt_etfalert.py")
-_eaa = read(f"{APP}/src/screens/EtfAlerts.tsx")
-say("алерты ETF: итог дня по всем фондам или по фонду и движения фондов в цепочке — в Telegram, один раз, с Премиумом",
-    "def check(" in _eal and "def day_event(" in _eal and "def chain_events(" in _eal and "etf_alert_sent" in _eal
-    and "from whale_api" not in _eal and "import whale_api" not in _eal
-    and 'if path == "/api/etfalert/set":' in api and 'if path == "/api/etfalert/list":' in api
-    and "threading.Thread(target=etfa_loop, daemon=True).start()" in api
-    and 'and not chat_premium(chat):' in api.split('if path == "/api/etfalert/set":')[1][:200]
-    and "export function EtfAlertsCard(" in _eaa and "export function FundBell(" in _eaa
-    and "<EtfAlertsCard" in _ef and "<FundBell" in _ef)
+say("алертов по ETF нет: ни модуля, ни экрана, ни адресов API; их старые таблицы стираются при запуске",
+    not os.path.exists(f"{APP}/wt_etfalert.py") and not os.path.exists(f"{APP}/src/screens/EtfAlerts.tsx")
+    and "etfalert" not in api and "EtfAlert" not in _ef and "FundBell" not in _ef
+    and "etfAlert" not in read(f"{APP}/src/lib/api.ts") and "wt-etfa" not in read(f"{APP}/src/lib/storage.ts")
+    and '(lambda: DB, ("etf_alert_subs", "etf_alert_sent", "etf_alert_state"))' in api and "    old_tables_drop()\n" in api
+    and ".ef-bell" not in read(f"{APP}/src/styles/app.css") and "wt_etfalert" not in read(f"{APP}/.github/workflows/tests.yml"))
 _wsb = read(os.path.join(BOT, "btc_chain.cpp"))
 _wsg = read(os.path.join(BOT, "btc_gov.cpp"))
 _tre0 = read(f"{APP}/wt_treasury.py")
@@ -879,10 +873,10 @@ say("bitcoin: свои метки ETF — кошельки, опубликова
     and "etfBlock(g_btcDb, b);" in _ws_btc and "etfRollback(g_btcDb, b.height - 1);" in _ws_btc
     and "if (!etfFund(a).empty()) return;" in _ws_btc and "void refreshEtfBalances()" in _ws_btc
     and "urlopen" not in read(os.path.join(BOT, "tools", "btc_etf_seeds.py")).split("def on_chain")[0])
-say("ETF по цепочке: догонка двух месяцев и простоя, /api/etf/chain; отдельной карточки на экране нет",
+say("ETF по цепочке: догонка двух месяцев и простоя; мёртвого /api/etf/chain нет; отдельной карточки на экране нет",
     "bool etfBackfill(long long since, long long upTo)" in _ws_btc and 'sc.state("etf_back") != "3"' in _ws_btc
     and "json addrPage(const std::string& path, bool& ok)" in _ws_btc
-    and 'if path in ("/etf/chain", "/api/etf/chain"):' in api and "def _btc_etf_build() -> dict:" in api
+    and "/api/etf/chain" not in api and "_btc_etf_build" not in api
     # Отдельной карточки «ETF по цепочке» на экране нет: свои данные идут в
     # основной экран вместо чужих, а не рядом с ними.
     and "EtfChain" not in read(f"{APP}/src/screens/EtfScreen.tsx"))
@@ -898,19 +892,23 @@ say("ETF у хранителя по корзинам: бот находит хр
     and "CREATE TABLE IF NOT EXISTS btc_cust_xfer (" in _ws_etf2 and "void readNewVaults()" in _ws_btc
     and "def anchors(xs: list[Xfer])" in _chain and "def _bridge(fs: list[Fund])" in _chain
     and "def mixed(self) -> bool:" in _chain and "OWN_ALL = 0.5" in _chain and "def _names(" in _chain
-    and '{**btc_etf_chain(), "custody": btc_custody()}' in api
+    and '(_BTC, "cust", BTC_CUST_TTL, _btc_custody_build)' in api
     and "wt_etfchain.py tests/test_etfchain.py" in read(f"{APP}/.github/workflows/tests.yml"))
-say("ETF у хранителя: имена по сверке ежедневных потоков (T+1), память имён, снятие при расхождении, метки в рейтинге",
-    "def settle_day(trade_day: int) -> int:" in _chain and "def match_names(" in _chain and "def flow_err(" in _chain
-    and "MATCH_ERR = 0.12" in _chain and "UNMATCH_ERR = 0.35" in _chain and "def known_names(" in _chain
-    and "def _btc_learn(funds: list[dict], live_from: int) -> None:" in api
-    and "CREATE TABLE IF NOT EXISTS btc_etf_learned" in api and 'f.pop("_vaults", None)' in api
-    and "SELECT address, fund FROM btc_etf_learned WHERE address IN" in api)
+say("разметка ETF — только своя (список, /import, опубликованные, корзины с размеченным кошельком); с «Институциональными потоками» её лишь сверяют (T+1) — итог в /statsbtc, имён по потокам не подбирают",
+    "def settle_day(trade_day: int) -> int:" in _chain and "def check(" in _chain and "MATCH_ERR = 0.12" in _chain
+    and "match_names" not in _chain + api and "flow_err" not in _chain + api and "_btc_learn" not in api
+    and "btc_etf_learned" not in _chain and "SELECT address, fund FROM btc_etf_learned" not in api
+    and '(lambda: BTC_DB, ("btc_etf_learned",))' in api
+    and "def _btc_check(con: sqlite3.Connection) -> int:" in api and "            _btc_check(con)\n" in api
+    and "INSERT OR REPLACE INTO btc_etf_check(fund, v, days, err, share, at)" in api
+    and "CREATE TABLE IF NOT EXISTS btc_etf_check (" in _ws_etf2 and "std::string checkLine(sqlite3* db, const std::string& fund)" in _ws_etf2
+    and 'f.pop("_vaults", None)' in api)
 _etfs2 = read(f"{APP}/wt_etf.py")
-say("Институциональные потоки: своя разметка фондов — для алертов, рейтинга и потоков бирж, на экран ETF не подмешивается; сверка имён корзин — по дневным потокам набора; без взаимного ожидания сборок",
+say("Институциональные потоки — независимый модуль: своя разметка (рейтинг BTC, потоки бирж, алерты по сделкам кошельков) в него не входит, только сверяется с ним по готовому ответу, без ожидания сборки",
     "def peek() -> dict[str, Json] | None:" in _etfs2 and "_apply_chain" not in _etfs2 and "set_chain" not in _etfs2 + api
-    and "reply = etf.peek() or {}" in api and "series, fees = etfchain.fund_series(reply)" in api
-    and '(_BTC, "cust", BTC_CUST_TTL, _btc_custody_build)' in api and "имя по списку подтверждено сверкой" in api
+    and "etfchain" not in _etfs2 and "btc_etf" not in _etfs2 and "import whale_api" not in _etfs2
+    and "series = etfchain.fund_series(etf.peek() or {})" in api
+    and '(_BTC, "cust", BTC_CUST_TTL, _btc_custody_build)' in api
     and os.path.isfile(os.path.join(BOT, "btc_etf_list.h")) and "bool paidBefore(" in read(os.path.join(BOT, "btc_etf.cpp"))
     and "it->second * 2 >= held" in read(os.path.join(BOT, "btc_etf.cpp")) and "freshAddr(it->first, tx.txid, b.height)" in read(os.path.join(BOT, "btc_etf.cpp"))
     and "etfSetFreshCheck(addrFresh);" in read(os.path.join(BOT, "btc_chain.cpp"))

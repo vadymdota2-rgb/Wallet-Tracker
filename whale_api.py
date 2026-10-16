@@ -33,7 +33,6 @@ import wt_shield as shield  # noqa: E402
 import wt_halving as halving  # noqa: E402
 import wt_etf as etf  # noqa: E402
 import wt_etfchain as etfchain  # noqa: E402
-import wt_etfalert as etfalert  # noqa: E402
 import wt_treasury as treasury
 from urllib.parse import parse_qs, unquote, urlparse, urlsplit
 
@@ -11616,10 +11615,6 @@ def _btc_extra(con, wallets: list[str]) -> dict[str, dict]:
         for r in con.execute(f"SELECT address, fund FROM btc_etf_addr WHERE address IN ({marks}) "
                              f"AND fund NOT LIKE '#%'", wallets):
             out[r["address"]]["etf"] = str(r["fund"])[:12]
-    if table_exists(con, "btc_etf_learned"):
-        # Хранилища групп, названных сверкой потоков с отчётами фондов.
-        for r in con.execute(f"SELECT address, fund FROM btc_etf_learned WHERE address IN ({marks})", wallets):
-            out[r["address"]].setdefault("etf", str(r["fund"])[:12])
     return out
 
 
@@ -11747,59 +11742,10 @@ def btc_flow() -> dict:
     return cached_bg(_BTC, "flow", BTC_TTL, _btc_flow_build)
 
 
-# Биржевые фонды по цепочке — своя разметка сканера (WhaleScanner/btc_etf.cpp):
-# кошельки, которые фонд публикует сам, и найденные по совместной трате. Поток
-# — по суткам UTC: приток, отток и отдельно плата фонду за управление. Запас —
-# сумма остатков кошельков фонда, сверенная с цепочкой.
+# Сколько суток потоков разбирать: корзины хранителя и сверка разметки.
 BTC_ETF_DAYS = 60
-
-
-def _btc_etf_build() -> dict:
-    con = open_db(BTC_DB)
-    if not con:
-        return {"ok": False, "error": "no_data"}
-    try:
-        if not table_exists(con, "btc_etf_addr") or not table_exists(con, "btc_etf_flow"):
-            return {"ok": False, "error": "no_data"}
-        t = now()
-        since = t - t % 86400 - (BTC_ETF_DAYS - 1) * 86400
-        funds = []
-        for r in con.execute(
-            "SELECT fund, COUNT(*) AS n, SUM(how = 'seed') AS seed, COALESCE(SUM(bal_sats), 0) AS bal, "
-            "SUM(bal_at > 0) AS checked, MAX(bal_at) AS at FROM btc_etf_addr GROUP BY fund ORDER BY bal DESC"
-        ):
-            fund = str(r["fund"])[:12]
-            days = [
-                [int(d["day"]), d["in_sats"] / 1e8, d["out_sats"] / 1e8, d["fee_sats"] / 1e8]
-                for d in con.execute(
-                    "SELECT day, in_sats, out_sats, fee_sats FROM btc_etf_flow WHERE fund = ? AND day >= ? ORDER BY day",
-                    (r["fund"], since),
-                )
-            ]
-            hist = []
-            if table_exists(con, "btc_etf_hold"):
-                hist = [
-                    [int(h["day"]), h["sats"] / 1e8]
-                    for h in con.execute(
-                        "SELECT day, sats FROM btc_etf_hold WHERE fund = ? AND day >= ? ORDER BY day", (r["fund"], since)
-                    )
-                ]
-            funds.append({
-                "t": fund, "n": int(r["n"]), "seed": int(r["seed"] or 0), "checked": int(r["checked"] or 0),
-                "hold": r["bal"] / 1e8, "checked_at": int(r["at"] or 0), "days": days, "hist": hist,
-            })
-        block = con.execute("SELECT height, ts FROM btc_blocks ORDER BY height DESC LIMIT 1").fetchone() \
-            if table_exists(con, "btc_blocks") else None
-        return {
-            "ok": True, "funds": funds, "at": t,
-            "block": {"h": int(block["height"]), "ts": int(block["ts"])} if block else None,
-        }
-    finally:
-        con.close()
-
-
-def btc_etf_chain() -> dict:
-    return cached_bg(_BTC, "etf", BTC_TTL, _btc_etf_build)
+# Сверка разметки фондов с «Институциональными потоками» — за столько суток.
+BTC_CHECK_DAYS = 30
 
 
 # Фонды у хранителя по «корзинам» (wt_etfchain): хранилища и переводы с ними
@@ -11837,61 +11783,32 @@ def _btc_spread(con: sqlite3.Connection, funds: list[dict]) -> int:
     return len(rows)
 
 
-def _btc_learn(funds: list[dict], live_from: int) -> None:
-    """Имена групп по сверке их потоков с ежедневными потоками фондов
-    (wt_etfchain.match_names): новое имя — в btc_etf_learned на хранилища
-    группы, и оно держится само; имя, с которым потоки за месяц разошлись, —
-    снимается. Сверка — только с того дня, как сканер начал находить
-    хранилища: раньше в цепочке у нас пусто, и любое сравнение было бы
-    «не совпало»."""
-    # Только готовый ответ экрана ETF (дневные потоки фондов): собирать его
-    # отсюда — значит держать разбор корзин, пока качаются чужие данные.
-    con = open_db(BTC_DB, write=True)
-    if con:
-        try:
-            if _btc_spread(con, funds):
-                con.commit()
-        finally:
-            con.close()
-    reply = etf.peek() or {}
-    series, fees = etfchain.fund_series(reply)
-    if not series:
-        return
+def _btc_check(con: sqlite3.Connection) -> int:
+    """Сверка своей разметки с «Институциональными потоками»: поток
+    размеченных кошельков каждого фонда (btc_etf_flow) против его дневного
+    потока из открытого набора (T+1) за BTC_CHECK_DAYS суток. Только
+    проверка: разметку она не меняет. Итог — в btc_etf_check, его
+    показывает бот (/statsbtc). Возвращает, сколько фондов сверено."""
+    series = etfchain.fund_series(etf.peek() or {})
+    if not series or not table_exists(con, "btc_etf_flow"):
+        return 0
+    con.execute("CREATE TABLE IF NOT EXISTS btc_etf_check (fund TEXT PRIMARY KEY, v TEXT NOT NULL,"
+                " days INTEGER NOT NULL, err REAL, share REAL, at INTEGER NOT NULL)")
     t = now()
-    window = (max(t // 86400 - BTC_ETF_DAYS + 1, live_from // 86400 + 2), t // 86400)
-    if window[0] > window[1]:
-        return
-    con = open_db(BTC_DB, write=True)
-    if not con:
-        return
-    try:
-        con.execute("CREATE TABLE IF NOT EXISTS btc_etf_learned (address TEXT PRIMARY KEY, fund TEXT NOT NULL,"
-                    " at INTEGER NOT NULL DEFAULT 0)")
-        taken = {str(f["t"]) for f in funds if not str(f["t"]).startswith("#")}
-        named = etfchain.match_names(funds, series, fees, taken, window)
-        for f in funds:
-            name = str(f["t"])
-            if name in named:
-                con.executemany("INSERT OR REPLACE INTO btc_etf_learned(address, fund, at) VALUES(?,?,?)",
-                                [(a, named[name], t) for a in f["_vaults"]])
-                f["t"] = named[name]
-                sys.stderr.write(f"[api] фонд по корзинам назван: {name} → {named[name]}\n")
-            elif not name.startswith("#") and name in series:
-                learned = con.execute("SELECT COUNT(*) FROM btc_etf_learned WHERE fund = ?", (name,)).fetchone()[0]
-                chain = {int(r[0]) // 86400: float(r[1]) - float(r[2]) for r in f["days"]}
-                err, days = etfchain.flow_err(chain, series[name], window)
-                if learned and days >= 6 and err > etfchain.UNMATCH_ERR:
-                    con.execute("DELETE FROM btc_etf_learned WHERE fund = ?", (name,))
-                    sys.stderr.write(f"[api] фонд {name}: потоки разошлись ({err:.2f}) — имя снято\n")
-                elif not learned and days >= etfchain.MATCH_DAYS and err <= etfchain.MATCH_ERR:
-                    # Имя дал список кошельков (btc_etf_addr), сверка потоков
-                    # его подтвердила — группа считается фондом и на экране.
-                    con.executemany("INSERT OR REPLACE INTO btc_etf_learned(address, fund, at) VALUES(?,?,?)",
-                                    [(a, name, t) for a in f["_vaults"]])
-                    sys.stderr.write(f"[api] фонд {name}: имя по списку подтверждено сверкой ({err:.2f})\n")
-        con.commit()
-    finally:
-        con.close()
+    today = t // 86400
+    n = 0
+    for (fund,) in con.execute("SELECT DISTINCT fund FROM btc_etf_flow WHERE fund NOT LIKE '#%'").fetchall():
+        rows = con.execute("SELECT day, in_sats, out_sats FROM btc_etf_flow WHERE fund = ?", (fund,)).fetchall()
+        chain = {int(r[0]) // 86400: (int(r[1]) - int(r[2])) / 1e8 for r in rows}
+        if not chain or str(fund) not in series:
+            continue
+        # С первых полных суток разметки и до вчера: сегодня в цепочке ещё не всё.
+        window = (max(today - BTC_CHECK_DAYS, min(chain) + 1), today - 1)
+        r = etfchain.check(chain, series[str(fund)], window)
+        con.execute("INSERT OR REPLACE INTO btc_etf_check(fund, v, days, err, share, at) VALUES(?,?,?,?,?,?)",
+                    (str(fund), r["v"], r["days"], r["err"], r["share"], t))
+        n += 1
+    return n
 
 
 def _btc_custody_build() -> dict:
@@ -11913,11 +11830,16 @@ def _btc_custody_build() -> dict:
         return {"ok": False, "error": "db"}
     finally:
         con.close()
-    if live_from:
+    con = open_db(BTC_DB, write=True)
+    if con:
         try:
-            _btc_learn(funds, int(live_from))
+            _btc_spread(con, funds)
+            _btc_check(con)
+            con.commit()
         except (sqlite3.Error, KeyError, TypeError, ValueError) as e:
-            sys.stderr.write(f"[api] btc custody, сверка имён: {e}\n")
+            sys.stderr.write(f"[api] btc custody, разметка корзин и сверка: {e}\n")
+        finally:
+            con.close()
     for f in funds:
         f.pop("_vaults", None)
     # С какого дня потоки групп полны: сканер начал находить хранилища.
@@ -13904,67 +13826,27 @@ def chart_state_put(chat: str, body: dict) -> dict:
         con.close()
 
 
-# --- Алерты по биткоин-ETF (wt_etfalert) ------------------------------------
-# Итог дня по фондам и движения кошельков фондов в цепочке — в Telegram, как
-# алерты по цене. Проход раз в минуту: блок биткоина — раз в десять минут, а
-# отчёты фондов приходят раз в сутки.
-ETFA_EVERY = 60
+# Старые таблицы — стереть один раз при запуске (пустые проходы ничего не
+# стоят): алертов по биткоин-ETF больше нет, а имена корзин по совпадению с
+# потоками фондов больше не подбираются — метки даёт только своя разметка,
+# потоки фондов её лишь проверяют (_btc_check).
+OLD_TABLES = ((lambda: DB, ("etf_alert_subs", "etf_alert_sent", "etf_alert_state")),
+              (lambda: BTC_DB, ("btc_etf_learned",)))
 
 
-def _etfa_con():
-    con = open_db(DB, write=True)
-    if con:
-        etfalert.open_schema(con)
-    return con
-
-
-def etfa_list(chat: str) -> dict:
-    con = _etfa_con()
-    if not con:
-        return {"ok": False, "error": "db"}
-    try:
-        return etfalert.subs_list(con, chat)
-    finally:
-        con.close()
-
-
-def etfa_set(chat: str, body: dict) -> dict:
-    con = _etfa_con()
-    if not con:
-        return {"ok": False, "error": "db"}
-    try:
-        return etfalert.subs_set(con, chat, body, now())
-    finally:
-        con.close()
-
-
-def _etfa_send(chat: str, text: str) -> bool:
-    return tg_api("sendMessage", {"chat_id": chat, "text": text, "disable_web_page_preview": True}) is not None
-
-
-def etfa_check() -> int:
-    con = _etfa_con()
-    if not con:
-        return 0
-    btc = open_db(BTC_DB)
-    try:
-        return etfalert.check(con, btc, etf.peek(), _etfa_send, now())
-    finally:
-        con.close()
-        if btc:
-            btc.close()
-
-
-def etfa_loop() -> None:
-    time.sleep(45)
-    while True:
+def old_tables_drop() -> None:
+    for path, names in OLD_TABLES:
+        con = open_db(path(), write=True)
+        if not con:
+            continue
         try:
-            n = etfa_check()
-            if n:
-                sys.stderr.write(f"[api] алерты ETF: отправлено {n}\n")
-        except Exception as e:  # noqa: BLE001
-            sys.stderr.write(f"[api] etf alerts: {e}\n")
-        time.sleep(ETFA_EVERY)
+            for name in names:
+                con.execute(f"DROP TABLE IF EXISTS {name}")
+            con.commit()
+        except sqlite3.Error as e:
+            sys.stderr.write(f"[api] старые таблицы: {e}\n")
+        finally:
+            con.close()
 
 
 def pxa_loop() -> None:
@@ -16478,9 +16360,6 @@ class Handler(BaseHTTPRequestHandler):
             if path in ("/dom", "/api/dom"):
                 self._json(200, dom_data())
                 return
-            if path in ("/etf/chain", "/api/etf/chain"):
-                self._json(200, {**btc_etf_chain(), "custody": btc_custody()})
-                return
             if path in ("/etf", "/api/etf"):
                 self._json(200, etf_data())
                 return
@@ -16504,10 +16383,6 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/pxalert/list":
                 chat = self._user(qs)
                 self._json(200, pxa_list(chat) if chat else {"ok": False, "error": "unauthorized"})
-                return
-            if path == "/api/etfalert/list":
-                chat = self._user(qs)
-                self._json(200, etfa_list(chat) if chat else {"ok": False, "error": "unauthorized"})
                 return
             if path in ("/oihist", "/api/oihist"):
                 self._json(200, oi_hist(qs.get("sym", ["BTC"])[0], qs.get("range", ["7d"])[0]))
@@ -16656,13 +16531,6 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/chart/state":
                 self._json(200, chart_state_put(chat, body))
                 return
-            if path == "/api/etfalert/set":
-                # Включить — Премиум, как и алерты по цене; выключить можно всегда.
-                if (body.get("day") or body.get("chain")) and not chat_premium(chat):
-                    self._json(200, {"ok": False, "error": "premium"})
-                    return
-                self._json(200, etfa_set(chat, body))
-                return
             pxa = {"/api/pxalert/add": pxa_add, "/api/pxalert/move": pxa_move, "/api/pxalert/del": pxa_del}.get(path)
             if pxa:
                 if path == "/api/pxalert/add" and not chat_premium(chat):
@@ -16771,7 +16639,7 @@ def main():
     threading.Thread(target=refresher, daemon=True).start()
     threading.Thread(target=_bonus_loop, daemon=True).start()
     threading.Thread(target=pxa_loop, daemon=True).start()
-    threading.Thread(target=etfa_loop, daemon=True).start()
+    old_tables_drop()
     httpd = shield.ShieldServer((HOST, PORT), Handler)
     tls = shield.tls_wrap(httpd)
     sys.stderr.write(f"[api] щит: тело ≤ {shield.MAX_BODY} Б, соединений ≤ {shield.MAX_CONN}, "

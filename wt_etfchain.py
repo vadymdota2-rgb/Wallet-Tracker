@@ -21,8 +21,13 @@
      расчётный узел хранителя (через него идут деньги многих фондов).
   5. Поток фонда — переводы на его хранилища извне (приток) и с них наружу
      (отток); переводы между его хранилищами — внутри фонда.
-Имя: фонд, чьи хранилища фонд опубликовал сам (btc_etf_addr, how='seed'),
-получает его тикер. Остальные — «#…» до сверки по ежедневным потокам.
+Имя: корзина, в которой есть размеченный кошелёк фонда (btc_etf_addr:
+опубликованные фондом, свой список, /import владельца), получает его тикер.
+Остальные — «#…».
+
+Сверка (check): поток размеченных кошельков фонда против его дневного
+потока из «Институциональных потоков» — только проверка, правильно ли
+размечено; разметку она не меняет.
 """
 
 from __future__ import annotations
@@ -454,25 +459,19 @@ def _name(k: int, res: Result) -> str:
 
 
 def known_names(con: sqlite3.Connection) -> dict[str, str]:
-    """Адрес → тикер: кошельки, опубликованные фондами (разметка бота), и
-    хранилища групп, названных сверкой потоков (btc_etf_learned)."""
-    out = {str(r[0]): str(r[1]) for r in con.execute(
+    """Адрес → тикер: своя разметка бота (btc_etf_addr)."""
+    return {str(r[0]): str(r[1]) for r in con.execute(
         "SELECT address, fund FROM btc_etf_addr WHERE fund NOT LIKE '#%'")}
-    has = con.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'btc_etf_learned'").fetchone()
-    if has:
-        for r in con.execute("SELECT address, fund FROM btc_etf_learned"):
-            out.setdefault(str(r[0]), str(r[1]))
-    return out
 
 
-def fund_series(reply: dict[str, object]) -> tuple[dict[str, dict[int, float | None]], dict[str, float | None]]:
-    """Ежедневные потоки фондов в биткоинах и их комиссии — из ответа
-    /api/etf (coins.btc): строка дня — [время, итог $ тыс., монет, цена,
-    [поток фонда $ тыс. | None]]. Монеты — доллары по цене дня."""
+def fund_series(reply: dict[str, object]) -> dict[str, dict[int, float | None]]:
+    """Ежедневные потоки фондов в биткоинах — из ответа /api/etf
+    (coins.btc): строка дня — [время, итог $ тыс., монет, цена, [поток фонда
+    $ тыс. | None]]. Монеты — доллары по цене дня."""
     coins = reply.get("coins")
     btc = coins.get("btc") if isinstance(coins, dict) else None
     if not isinstance(btc, dict):
-        return {}, {}
+        return {}
     funds = [f for f in btc.get("funds") or [] if isinstance(f, dict)]
     days: dict[str, dict[int, float | None]] = {str(f.get("t")): {} for f in funds}
     for row in btc.get("days") or []:
@@ -481,8 +480,7 @@ def fund_series(reply: dict[str, object]) -> tuple[dict[str, dict[int, float | N
         day, px = int(row[0]) // DAY, float(row[3] or 0)
         for f, v in zip(funds, row[4], strict=False):
             days[str(f.get("t"))][day] = None if v is None or px <= 0 else float(v) * 1000 / px
-    fees = {str(f.get("t")): (None if f.get("fee") is None else float(f["fee"])) for f in funds}
-    return days, fees
+    return days
 
 
 def load(con: sqlite3.Connection, since: int) -> list[Xfer]:
@@ -527,21 +525,21 @@ def build(con: sqlite3.Connection, now: int, days: int = 60) -> list[dict[str, o
 
 # ── Имена по сверке потоков ─────────────────────────────────────────────────
 #
-# Группа без имени получает тикер фонда, чьи ежедневные потоки (в биткоинах,
-# по торговым дням) совпадают с её потоками в цепочке. В цепочке деньги
-# фонда приходят на следующий рабочий день после торгов (T+1): заявка BITB
-# во вторник 8 сентября — в среду 9-го, в пятницу 18-го — в понедельник 21-го.
+# Сверка разметки с ежедневными потоками фондов. В цепочке деньги фонда
+# приходят на следующий рабочий день после торгов (T+1): заявка BITB во
+# вторник 8 сентября — в среду 9-го, в пятницу 18-го — в понедельник 21-го.
 # Отчётные цифры в биткоинах пересчитаны из долларов по своей цене, поэтому
 # сходятся до процентов, а не до сатоши.
 
-# Сверка: суммарное расхождение — не больше доли от суммарного оборота.
+# «Сходится»: суммарное расхождение — не больше доли от суммарного оборота.
 MATCH_ERR = 0.12
-# Сколько дней с движением нужно для имени.
+# Сколько дней с движением нужно для вывода.
 MATCH_DAYS = 4
-# Насколько второй по сходству фонд должен быть хуже лучшего.
-MATCH_GAP = 0.2
-# Имя снимается, если за месяц потоки группы с фондом разошлись так.
-UNMATCH_ERR = 0.35
+# «Верно, но не всё»: видна доля потока фонда от PART_MIN до PART_MAX, и
+# после поправки на эту долю потоки сходятся так.
+PART_MIN = 0.05
+PART_MAX = 0.9
+PART_ERR = 0.25
 
 
 def settle_day(trade_day: int) -> int:
@@ -554,56 +552,37 @@ def settle_day(trade_day: int) -> int:
     return d
 
 
-def flow_err(chain: dict[int, float], fund: dict[int, float | None], window: tuple[int, int]) -> tuple[float, int]:
-    """Расхождение потоков группы (сутки цепочки → BTC) и фонда (торговые
-    сутки → BTC; None — фонд в тот день не отчитался) за окно разбора (сутки
-    цепочки, включительно) и сколько дней с движением сравнено. 0 — совпали,
-    1 — ничего общего. Дни, за которые фонд ещё не отчитался, не сравниваются."""
+def _err(pairs: list[tuple[float, float]]) -> float:
+    tot = sum(abs(a) + abs(b) for a, b in pairs)
+    return sum(abs(a - b) for a, b in pairs) / tot if tot else 1.0
+
+
+def check(chain: dict[int, float], fund: dict[int, float | None], window: tuple[int, int]) -> dict[str, object]:
+    """Сверка разметки фонда: его поток по размеченным кошелькам (сутки
+    цепочки → BTC) против дневного потока фонда (торговые сутки → BTC; None
+    — не отчитался) за окно (сутки цепочки, включительно).
+
+    {"v": вывод, "days": сравнено дней с движением, "err": расхождение 0…1,
+    "share": какую долю потока фонда видит разметка}. Вывод: «ok» —
+    сходится; «part» — размечено верно, но не всё; «bad» — не сходится
+    (проверить разметку); «few» — мало дней с движением."""
     want: dict[int, float] = defaultdict(float)
     for d, v in fund.items():
         if v is not None:
             want[settle_day(d)] += v
     first = max(window[0], min(want, default=window[0]))
     last = min(window[1], max(want, default=window[0] - 1))
-    diff = tot = 0.0
-    days = 0
-    for d in range(first, last + 1):
-        a, b = chain.get(d, 0.0), want.get(d, 0.0)
-        if abs(a) < 1 and abs(b) < 1:
-            continue
-        days += 1
-        diff += abs(a - b)
-        tot += abs(a) + abs(b)
-    return (diff / tot if tot else 1.0), days
-
-
-def match_names(groups: list[dict[str, object]], fund_days: dict[str, dict[int, float | None]],
-                fund_fee: dict[str, float | None], taken: set[str], window: tuple[int, int]) -> dict[str, str]:
-    """Группа «#…» → тикер фонда: потоки сошлись (MATCH_ERR) за MATCH_DAYS
-    дней с движением, второй фонд заметно хуже, комиссия по таянию корзины
-    не спорит с комиссией фонда. Фонд с уже известными кошельками (taken)
-    второй группой не назначается."""
-    out: dict[str, str] = {}
-    used = set(taken)
-    for g in groups:
-        name = str(g["t"])
-        if not name.startswith("#"):
-            continue
-        chain = {int(r[0]) // DAY: float(r[1]) - float(r[2]) for r in g["days"]}  # type: ignore[attr-defined]
-        scores = []
-        for t, fd in fund_days.items():
-            if t in used:
-                continue
-            err, days = flow_err(chain, fd, window)
-            scores.append((err, days, t))
-        scores.sort()
-        if not scores:
-            continue
-        err, days, t = scores[0]
-        second = scores[1][0] if len(scores) > 1 else 1.0
-        fee_g, fee_f = g.get("fee"), fund_fee.get(t)
-        fee_ok = fee_g is None or fee_f is None or abs(float(fee_g) - float(fee_f)) <= max(0.05, 0.25 * float(fee_f))  # type: ignore[arg-type]
-        if err <= MATCH_ERR and days >= MATCH_DAYS and second - err >= MATCH_GAP and fee_ok:
-            out[name] = t
-            used.add(t)
-    return out
+    pairs = [(chain.get(d, 0.0), want.get(d, 0.0)) for d in range(first, last + 1)]
+    pairs = [(a, b) for a, b in pairs if abs(a) >= 1 or abs(b) >= 1]
+    if len(pairs) < MATCH_DAYS:
+        return {"v": "few", "days": len(pairs), "err": None, "share": None}
+    err = _err(pairs)
+    bb = sum(b * b for _, b in pairs)
+    share = sum(a * b for a, b in pairs) / bb if bb else 0.0
+    if err <= MATCH_ERR:
+        verdict = "ok"
+    elif PART_MIN <= share < PART_MAX and _err([(a / share, b) for a, b in pairs]) <= PART_ERR:
+        verdict = "part"
+    else:
+        verdict = "bad"
+    return {"v": verdict, "days": len(pairs), "err": round(err, 3), "share": round(share, 3)}

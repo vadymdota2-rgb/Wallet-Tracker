@@ -121,9 +121,9 @@ class EtfChainTest(unittest.TestCase):
 
 
 
-class NamesTest(unittest.TestCase):
-    """Имя группе — по сверке её потоков в цепочке с ежедневными потоками
-    фондов: в цепочке деньги приходят на следующий рабочий день (T+1)."""
+class CheckTest(unittest.TestCase):
+    """Сверка разметки с ежедневными потоками фондов — только проверка: в
+    цепочке деньги приходят на следующий рабочий день (T+1)."""
 
     # 2026-09-14 — понедельник; 20_710 — сутки этой даты.
     MON = 20_710
@@ -133,71 +133,53 @@ class NamesTest(unittest.TestCase):
         self.assertEqual(w.settle_day(self.MON + 4), self.MON + 7)  # пт → пн
         self.assertEqual(w.settle_day(self.MON + 3), self.MON + 4)  # чт → пт
 
-    def fund(self, flows: dict[int, float]) -> dict[int, float | None]:
+    def fund(self, flows: dict[int, float | None]) -> dict[int, float | None]:
         return {self.MON + d: v for d, v in flows.items()}
 
-    def chain_of(self, fund: dict[int, float | None], noise: float = 0.0) -> dict[int, float]:
+    def chain_of(self, fund: dict[int, float | None], k: float = 1.0, noise: float = 0.0) -> dict[int, float]:
         out: dict[int, float] = {}
-        for d, v in fund.items():
+        for i, (d, v) in enumerate(sorted(fund.items())):
             if v:
-                out[w.settle_day(d)] = v * (1 + noise)
+                out[w.settle_day(d)] = v * k * (1 + (noise if i % 2 else -noise))
         return out
 
     def setUp(self) -> None:
-        self.funds = {
-            "BITB": self.fund({0: 183.0, 2: -161.0, 4: 127.0, 7: 266.0, 10: -140.0, 11: 0.0}),
-            "IBIT": self.fund({0: 1445.0, 1: -248.0, 3: 1749.0, 4: -2069.0, 8: 4700.0, 9: 1930.0}),
-            "GBTC": self.fund({1: -300.0, 2: -150.0, 8: -90.0, 9: -210.0}),
-            "ARKB": self.fund({0: None, 3: 80.0, 4: 0.0, 11: -45.0}),  # type: ignore[dict-item]
-        }
-        self.fees: dict[str, float | None] = {"BITB": 0.2, "IBIT": 0.25, "GBTC": 1.5, "ARKB": 0.21}
+        self.ibit = self.fund({0: 1445.0, 1: -248.0, 3: 1749.0, 4: -2069.0, 8: 4700.0, 9: 1930.0, 10: None})
+        self.gbtc = self.fund({1: -300.0, 2: -150.0, 8: -90.0, 9: -210.0})
         self.window = (self.MON, self.MON + 14)
 
-    def group(self, name: str, chain: dict[int, float], fee: float | None) -> dict[str, object]:
-        return {"t": name, "fee": fee, "days": [[d * w.DAY, max(v, 0.0), max(-v, 0.0)] for d, v in chain.items()]}
+    def test_full_labels_match(self) -> None:
+        r = w.check(self.chain_of(self.ibit, noise=0.02), self.ibit, self.window)
+        self.assertEqual((r["v"], r["days"]), ("ok", 6))
+        self.assertLess(r["err"], 0.03)  # type: ignore[operator]
+        self.assertAlmostEqual(r["share"], 1.0, delta=0.03)  # type: ignore[arg-type]
 
-    def test_flow_err(self) -> None:
-        chain = self.chain_of(self.funds["IBIT"], noise=0.02)
-        err, days = w.flow_err(chain, self.funds["IBIT"], self.window)
-        self.assertLess(err, 0.02)
-        self.assertEqual(days, 6)
-        err, _ = w.flow_err(chain, self.funds["GBTC"], self.window)
-        self.assertGreater(err, 0.8)
+    def test_part_of_wallets_is_right_but_not_all(self) -> None:
+        r = w.check(self.chain_of(self.ibit, k=0.3, noise=0.05), self.ibit, self.window)
+        self.assertEqual(r["v"], "part")
+        self.assertAlmostEqual(r["share"], 0.3, delta=0.03)  # type: ignore[arg-type]
 
-    def test_names_by_flows(self) -> None:
-        groups = [
-            self.group("#aaaa", self.chain_of(self.funds["IBIT"], 0.03), 0.249),
-            self.group("#bbbb", self.chain_of(self.funds["GBTC"], -0.02), 1.49),
-            self.group("#cccc", {self.MON + 5: 77.0, self.MON + 6: -12.0}, None),  # чужой клиент хранителя
-            self.group("BITB", self.chain_of(self.funds["BITB"]), 0.18),
-        ]
-        got = w.match_names(groups, self.funds, self.fees, {"BITB"}, self.window)
-        self.assertEqual(got, {"#aaaa": "IBIT", "#bbbb": "GBTC"})
-
-    def test_fee_must_agree(self) -> None:
-        groups = [self.group("#aaaa", self.chain_of(self.funds["IBIT"]), 1.5)]
-        self.assertEqual(w.match_names(groups, self.funds, self.fees, set(), self.window), {})
+    def test_wrong_fund_does_not_match(self) -> None:
+        self.assertEqual(w.check(self.chain_of(self.gbtc), self.ibit, self.window)["v"], "bad")
+        # Чужой клиент хранителя: движения в дни, когда у фонда их нет.
+        stray = {self.MON + 5: 77.0, self.MON + 6: -12.0, self.MON + 12: 40.0, self.MON + 13: -9.0}
+        self.assertEqual(w.check(stray, self.ibit, self.window)["v"], "bad")
 
     def test_too_few_days(self) -> None:
-        short = (self.MON, self.MON + 2)
-        groups = [self.group("#aaaa", self.chain_of(self.funds["IBIT"]), None)]
-        self.assertEqual(w.match_names(groups, self.funds, self.fees, set(), short), {})
-
-    def test_taken_fund_not_reused(self) -> None:
-        groups = [self.group("#aaaa", self.chain_of(self.funds["BITB"]), 0.2)]
-        self.assertEqual(w.match_names(groups, self.funds, self.fees, {"BITB"}, self.window), {})
+        r = w.check(self.chain_of(self.ibit), self.ibit, (self.MON, self.MON + 2))
+        self.assertEqual(r, {"v": "few", "days": 2, "err": None, "share": None})
+        self.assertEqual(w.check({}, {}, self.window)["v"], "few")
 
     def test_fund_series(self) -> None:
         reply = {"coins": {"btc": {
             "funds": [{"t": "IBIT", "fee": 0.25}, {"t": "GBTC", "fee": 1.5}],
             "days": [[self.MON * w.DAY, 0, 0, 100_000.0, [1_000, None]], [(self.MON + 1) * w.DAY, 0, 0, 0, [5, 7]]],
         }}}
-        days, fees = w.fund_series(reply)
+        days = w.fund_series(reply)
         self.assertEqual(days["IBIT"][self.MON], 10.0)  # 1 000 тыс. $ по 100 000 $ = 10 BTC
         self.assertIsNone(days["GBTC"][self.MON])
         self.assertIsNone(days["IBIT"][self.MON + 1])  # без цены — не знаем
-        self.assertEqual(fees, {"IBIT": 0.25, "GBTC": 1.5})
-        self.assertEqual(w.fund_series({}), ({}, {}))
+        self.assertEqual(w.fund_series({}), {})
 
 
 if __name__ == "__main__":
