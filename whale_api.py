@@ -11764,6 +11764,12 @@ def _btc_learn(funds: list[dict], live_from: int) -> None:
                 if learned and days >= 6 and err > etfchain.UNMATCH_ERR:
                     con.execute("DELETE FROM btc_etf_learned WHERE fund = ?", (name,))
                     sys.stderr.write(f"[api] фонд {name}: потоки разошлись ({err:.2f}) — имя снято\n")
+                elif not learned and days >= etfchain.MATCH_DAYS and err <= etfchain.MATCH_ERR:
+                    # Имя дал список кошельков (btc_etf_addr), сверка потоков
+                    # его подтвердила — группа считается фондом и на экране.
+                    con.executemany("INSERT OR REPLACE INTO btc_etf_learned(address, fund, at) VALUES(?,?,?)",
+                                    [(a, name, t) for a in f["_vaults"]])
+                    sys.stderr.write(f"[api] фонд {name}: имя по списку подтверждено сверкой ({err:.2f})\n")
         con.commit()
     finally:
         con.close()
@@ -11808,22 +11814,29 @@ def btc_custody() -> dict:
 def _etf_chain_src() -> dict:
     """Фонды, найденные по цепочке, — экрану «Институциональные потоки»
     (wt_etf.set_chain): чистый поток по суткам цепочки в BTC, с какого дня
-    цепочка наблюдается, запас. BITB — по кошелькам, которые фонд публикует
-    сам (точнее всего); остальные — группы хранителя, названные сверкой."""
+    цепочка наблюдается, запас по известным кошелькам. exact — кошельки фонд
+    опубликовал сам (BITB): запас точный. Кошельки из чужих списков (how =
+    'list') — запас по ним, а годятся ли они, решает экран (покрытие базы).
+    Группы хранителя — только те, чьё имя подтвердила сверка потоков."""
     out: dict = {}
+    learned: set[str] = set()
     con = open_db(BTC_DB)
     if con:
         try:
             if table_exists(con, "btc_etf_flow") and table_exists(con, "btc_etf_addr"):
-                for (fund,) in con.execute("SELECT DISTINCT fund FROM btc_etf_addr WHERE how = 'seed'"):
+                for fund, exact in con.execute(
+                        "SELECT fund, MAX(how = 'seed') FROM btc_etf_addr WHERE fund NOT LIKE '#%' "
+                        "GROUP BY fund HAVING MAX(how IN ('seed', 'list')) = 1"):
                     days = {int(r[0]): (int(r[1]) - int(r[2])) / 1e8 for r in con.execute(
                         "SELECT day, in_sats, out_sats FROM btc_etf_flow WHERE fund = ?", (fund,))}
                     if not days:
                         continue
                     hold = con.execute("SELECT SUM(bal_sats), MIN(bal_at) FROM btc_etf_addr WHERE fund = ?",
                                        (fund,)).fetchone()
-                    out[str(fund)] = {"from": min(days), "days": days,
+                    out[str(fund)] = {"from": min(days), "days": days, "exact": bool(exact),
                                       "hold": hold[0] / 1e8 if hold and hold[0] and hold[1] else None}
+            if table_exists(con, "btc_etf_learned"):
+                learned = {str(r[0]) for r in con.execute("SELECT DISTINCT fund FROM btc_etf_learned")}
         except sqlite3.Error as e:
             sys.stderr.write(f"[api] etf по цепочке: {e}\n")
         finally:
@@ -11835,9 +11848,9 @@ def _etf_chain_src() -> dict:
     if cust.get("ok") and cust.get("since"):
         for f in cust.get("funds") or []:
             t = str(f.get("t") or "")
-            if t and not t.startswith("#") and t not in out:
-                out[t] = {"from": int(cust["since"]),
-                          "days": {int(r[0]): float(r[1]) - float(r[2]) for r in f.get("days") or []}, "hold": None}
+            if t and t in learned and t not in out:
+                out[t] = {"from": int(cust["since"]), "matched": True, "hold": None,
+                          "days": {int(r[0]): float(r[1]) - float(r[2]) for r in f.get("days") or []}}
     return out
 
 

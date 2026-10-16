@@ -822,7 +822,7 @@ say("bitcoin: свои метки ETF — кошельки, опубликова
     and "if (!etfFund(a).empty()) return;" in _ws_btc and "void refreshEtfBalances()" in _ws_btc
     and "urlopen" not in read(os.path.join(BOT, "tools", "btc_etf_seeds.py")).split("def on_chain")[0])
 say("ETF по цепочке: догонка двух месяцев и простоя, /api/etf/chain; отдельной карточки на экране нет",
-    "bool etfBackfill(long long since, long long upTo)" in _ws_btc and 'sc.state("etf_back") != "2"' in _ws_btc
+    "bool etfBackfill(long long since, long long upTo)" in _ws_btc and 'sc.state("etf_back") != "3"' in _ws_btc
     and "json addrPage(const std::string& path, bool& ok)" in _ws_btc
     and 'if path in ("/etf/chain", "/api/etf/chain"):' in api and "def _btc_etf_build() -> dict:" in api
     # Отдельной карточки «ETF по цепочке» на экране нет: свои данные идут в
@@ -850,7 +850,12 @@ say("ETF у хранителя: имена по сверке ежедневны�
     and "SELECT address, fund FROM btc_etf_learned WHERE address IN" in api)
 _etfs2 = read(f"{APP}/wt_etf.py")
 say("Институциональные потоки: фонды, найденные по цепочке, — своими потоками (T+1), остальные — по отчётам; итоги на разницу; без взаимного ожидания сборок",
-    "def _apply_chain(days: dict[int, Day], px: dict[int, float])" in _etfs2 and "def peek() -> dict[str, Json] | None:" in _etfs2
+    "def _apply_chain(days: dict[int, Day], px: dict[int, float], chain:" in _etfs2 and "def peek() -> dict[str, Json] | None:" in _etfs2
+    and "COVER = 0.9" in _etfs2 and "def _usable(" in _etfs2 and "MAX(how IN ('seed', 'list'))" in api
+    and "if t and t in learned and t not in out:" in api and "имя по списку подтверждено сверкой" in api
+    and os.path.isfile(os.path.join(BOT, "btc_etf_list.h")) and "bool paidBefore(" in read(os.path.join(BOT, "btc_etf.cpp"))
+    and "it->second * 2 >= held" in read(os.path.join(BOT, "btc_etf.cpp")) and "freshAddr(it->first, tx.txid, b.height)" in read(os.path.join(BOT, "btc_etf.cpp"))
+    and "etfSetFreshCheck(addrFresh);" in read(os.path.join(BOT, "btc_chain.cpp"))
     and 'f["src"] = "chain"' in _etfs2 and "settle >= today" in _etfs2
     and "etf.set_chain(_etf_chain_src)" in api and "reply = etf.peek() or {}" in api
     and 'hit = _BTC.get("cust")' in api and '(_BTC, "cust", BTC_CUST_TTL, _btc_custody_build)' in api

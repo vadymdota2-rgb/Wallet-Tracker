@@ -281,19 +281,20 @@ def _coin(cat: str, symbol: str) -> dict[str, Json] | None:
     for t in _after(last_trade, today):
         days.setdefault(t, ({}, 0.0, 0.0))
     px = _prices(symbol, days)
-    chain = _apply_chain(days, px)
+    base_btc = {str(f.get("t")): _num(f.get("btc")) for f in base.get("funds") or [] if isinstance(f, dict)}
+    chain = _apply_chain(days, px, {t: c for t, c in _chain().items() if _usable(c, base_btc.get(t, 0.0))})
     funds = _funds(base, days)
     last_px = px[max(px)] if px else 0.0
     # Запас: база снимка плюс то, что после него прошло через кошельки фонда
     # (деньги дня снимка доходят до цепочки на следующий рабочий день). Фонд,
-    # чьи кошельки известны все (BITB), — точно по их остаткам.
+    # чьи кошельки он публикует сам (BITB), — точно по их остаткам.
     cut = settle_day(last_trade // 86400) * 86400
     for f in funds:
         btc = _num(f.pop("base"))
         c = chain.get(str(f["t"]))
         if c is not None:
             f["src"] = "chain"
-            if c.get("hold"):
+            if c.get("exact") and c.get("hold"):
                 btc = float(c["hold"])
             elif btc > 0:
                 btc = max(0.0, btc + sum(float(v) for d, v in (c.get("days") or {}).items() if int(d) > cut))
@@ -306,31 +307,49 @@ def _coin(cat: str, symbol: str) -> dict[str, Json] | None:
     return {"funds": funds, "days": rows, **_share(funds, last_px)}
 
 
+# Кошельки из чужого списка годятся вместо базы, только когда на них лежит
+# почти весь запас фонда: по части кошельков поток фонда был бы занижен.
+COVER = 0.9
+
+
+def _chain() -> dict[str, dict[str, Any]]:
+    src = _st.chain
+    if src is None:
+        return {}
+    try:
+        return src()
+    except Exception as e:  # noqa: BLE001 — свои данные не должны ломать экран
+        _log(f"цепочка: {type(e).__name__}: {e}")
+        return {}
+
+
+def _usable(c: dict[str, Any], base_btc: float) -> bool:
+    """Фонд по цепочке вместо базы: кошельки опубликованы самим фондом,
+    имя группы хранителя подтверждено сверкой потоков, или известные
+    кошельки держат не меньше COVER запаса из базы."""
+    if c.get("exact") or c.get("matched"):
+        return True
+    hold = _num(c.get("hold"))
+    return base_btc > 0 and hold >= COVER * base_btc
+
+
 def _chain_btc(flows: dict[int, float], lo: int, hi: int) -> float:
     return sum(v for d, v in flows.items() if lo < d <= hi)
 
 
-def _apply_chain(days: dict[int, Day], px: dict[int, float]) -> dict[str, dict[str, Any]]:
+def _apply_chain(days: dict[int, Day], px: dict[int, float], chain: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
     """Подмена по фонду: у фондов, найденных по цепочке, поток торгового дня —
     свой: монеты, дошедшие до цепочки в следующий рабочий день (T+1), в
     долларах по цене дня. Итоги дня правятся на разницу — экран всегда
     полный. Не подменяется: день до начала наблюдения цепочки и последний
     день, чьи деньги до цепочки ещё не дошли. Возвращает подменённые фонды."""
-    src = _st.chain
-    if src is None:
-        return {}
-    try:
-        chain = src()
-    except Exception as e:  # noqa: BLE001 — свои данные не должны ломать экран
-        _log(f"цепочка: {type(e).__name__}: {e}")
-        return {}
     today = _now() - _now() % 86400
     trade = sorted(days)
     used: dict[str, dict[str, Any]] = {}
     for ticker, c in chain.items():
         start = int(c.get("from") or 0)
         flows = {int(d): float(v) for d, v in (c.get("days") or {}).items()}
-        prev = None
+        prev: int | None = None
         for t in trade:
             settle = settle_day(t // 86400) * 86400
             lo, prev = prev, settle

@@ -48,9 +48,8 @@ class ChainMergeTest(unittest.TestCase):
     def run_merge(self, chain: dict, today: int) -> tuple[dict, dict, dict]:
         days = cmc_days()
         orig = copy.deepcopy(days)
-        e.set_chain(lambda: chain)
         with mock.patch.object(e, "_now", lambda: today):
-            used = e._apply_chain(days, self.px)
+            used = e._apply_chain(days, self.px, chain)
         return days, orig, used
 
     def test_substitutes_settled_days_with_t_plus_1(self) -> None:
@@ -82,14 +81,11 @@ class ChainMergeTest(unittest.TestCase):
         def boom() -> dict:
             raise RuntimeError("база занята")
 
-        days = cmc_days()
-        orig = copy.deepcopy(days)
         e.set_chain(boom)
-        self.assertEqual(e._apply_chain(days, self.px), {})
-        self.assertEqual(days, orig)
+        self.assertEqual(e._chain(), {})
 
     def test_coin_marks_chain_funds(self) -> None:
-        chain = {"BITB": {"from": MON - 7 * DAY, "hold": 37_000.0, "days": {MON + 2 * DAY: 1.0}}}
+        chain = {"BITB": {"from": MON - 7 * DAY, "hold": 37_000.0, "exact": True, "days": {MON + 2 * DAY: 1.0}}}
         e.set_chain(lambda: chain)
         with mock.patch.object(e, "_base", base), \
                 mock.patch.object(e, "_prices", lambda sym, days: dict(self.px)), \
@@ -106,7 +102,7 @@ class ChainMergeTest(unittest.TestCase):
         # Фонд у хранителя: всех кошельков не знаем — база снимка на последний
         # торговый день (пятница), к ней — то, что пришло в цепочку после
         # расчёта пятничных денег (понедельник следующей недели).
-        chain = {"IBIT": {"from": MON - 7 * DAY, "hold": None,
+        chain = {"IBIT": {"from": MON - 7 * DAY, "hold": None, "matched": True,
                           "days": {MON + 1 * DAY: 100.0, MON + 7 * DAY: 99.0, MON + 8 * DAY: 3.0}}}
         e.set_chain(lambda: chain)
         with mock.patch.object(e, "_base", lambda: base(8_000.0)), \
@@ -116,6 +112,16 @@ class ChainMergeTest(unittest.TestCase):
             c = e._coin("btc", "BTCUSDT")
         ibit = {f["t"]: f for f in (c or {}).get("funds", [])}["IBIT"]
         self.assertEqual(ibit["aum"], round((8_000 + 3.0) * PX))
+
+
+    def test_list_wallets_count_only_with_full_cover(self):
+        # Кошельки фонда из чужого списка: держат половину запаса базы — поток
+        # по ним занижен, экран остаётся на базе; держат почти весь — свои.
+        self.assertFalse(e._usable({"hold": 500.0}, 1_000.0))
+        self.assertTrue(e._usable({"hold": 950.0}, 1_000.0))
+        self.assertFalse(e._usable({"hold": 950.0}, 0.0))
+        self.assertTrue(e._usable({"exact": True, "hold": None}, 0.0))
+        self.assertTrue(e._usable({"matched": True}, 0.0))
 
 
 if __name__ == "__main__":
