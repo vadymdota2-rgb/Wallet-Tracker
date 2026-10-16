@@ -5,7 +5,9 @@
 import io
 import json
 import os
+import shutil
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -24,6 +26,12 @@ def row(end, val, form="10-Q", filed="2026-08-01"):
 class TreasuryTest(unittest.TestCase):
     def setUp(self):
         tr._st = tr._State()
+        tr._fst = tr._FundState()
+        # Копии на диске — только во временной папке теста, не на сервере.
+        self.tmp = tempfile.mkdtemp()
+        tr.set_cache_dir(self.tmp)
+        self.addCleanup(tr.set_cache_dir, None)
+        self.addCleanup(shutil.rmtree, self.tmp, True)
 
     def test_latest_report_in_bitcoin_units(self):
         c = {"units": {"Bitcoin": [row("2025-12-31", 672_500, "10-K"), row("2026-03-31", 762_099),

@@ -348,8 +348,19 @@ export const setLangRemote = (lang: string) =>
    пять минут; лайки и комментарии экран меняет у себя сразу, не дожидаясь
    нового списка. */
 const DIGEST_TTL = 5 * 60_000;
-export const fetchDigest = () => cachedGet<DigestReply>("/api/digest", DIGEST_TTL);
-export const peekDigest = () => peek<DigestReply | null>("/api/digest", DIGEST_TTL);
+/* Последний список лежит и на устройстве: лента открывается сразу, свежая
+   подменяет её, когда придёт. */
+const DIGEST_SAVED = "wt-digest-v1";
+function savedDigest(): DigestReply | null {
+  const hit = readSaved<DigestReply>(DIGEST_SAVED).all;
+  return hit?.v?.ok ? hit.v : null;
+}
+export const fetchDigest = () =>
+  cachedGet<DigestReply>("/api/digest", DIGEST_TTL).then((r) => {
+    if (r?.ok) writeSaved(DIGEST_SAVED, { all: { at: Date.now(), v: r } });
+    return r;
+  });
+export const peekDigest = () => peek<DigestReply | null>("/api/digest", DIGEST_TTL) ?? savedDigest();
 export const fetchDigestComments = (id: number, before = 0) =>
   call<DigestCommentsReply>(`/api/digest/comments?id=${id}${before ? `&before=${before}` : ""}`);
 
@@ -612,28 +623,35 @@ const EX_SAVED = "wt-exflows-v1";
 const EX_SAVED_KEEP = 24;
 const EX_SAVED_MAX_AGE = 3 * 24 * 3600_000;
 
+/** Где лежат запасы на устройстве: ключ хранилища и сколько ответов держать. */
+interface ExStore { key: string; keep: number }
+const EX_STORE: ExStore = { key: EX_SAVED, keep: EX_SAVED_KEEP };
+/* Карточки кошельков — отдельно: их открывают десятками, и они не должны
+   вытеснять с устройства потоки бирж и рейтинг. */
+const WALLET_STORE: ExStore = { key: "wt-btcw-v1", keep: 12 };
+
 /** Последний ответ с устройства (не старше трёх суток). */
-function exSaved<T extends { ok?: boolean }>(path: string): T | undefined {
-  const hit = readSaved<T>(EX_SAVED)[path];
+function exSaved<T extends { ok?: boolean }>(path: string, st: ExStore = EX_STORE): T | undefined {
+  const hit = readSaved<T>(st.key)[path];
   return hit && hit.v?.ok && Date.now() - hit.at < EX_SAVED_MAX_AGE ? hit.v : undefined;
 }
 
 /** Запрос с запасом: годный ответ ложится и на устройство. */
-function exGet<T extends { ok?: boolean }>(path: string, ttl: number): Promise<T | null> {
+function exGet<T extends { ok?: boolean }>(path: string, ttl: number, st: ExStore = EX_STORE): Promise<T | null> {
   // Ответ из памяти на устройство заново не пишем: он там уже лежит.
   const had = peek<T | null>(path, ttl) !== undefined;
   return cachedGet<T>(path, ttl).then((r) => {
     if (r?.ok && !had) {
-      const all = readSaved<T>(EX_SAVED);
+      const all = readSaved<T>(st.key);
       delete all[path];
       all[path] = { at: Date.now(), v: r };
       /* Поток бирж BSC за пять окон — до мегабайта. Не влезло в хранилище —
          оставляем самые свежие ответы, а не теряем все. */
-      for (let keep = EX_SAVED_KEEP; keep >= 1; keep = Math.floor(keep / 2)) {
+      for (let keep = st.keep; keep >= 1; keep = Math.floor(keep / 2)) {
         const ks = Object.keys(all);
         for (const k of ks.slice(0, Math.max(0, ks.length - keep))) delete all[k];
         try {
-          localStorage.setItem(EX_SAVED, JSON.stringify(all));
+          localStorage.setItem(st.key, JSON.stringify(all));
           break;
         } catch {
           // мало места — пробуем меньше
@@ -645,11 +663,11 @@ function exGet<T extends { ok?: boolean }>(path: string, ttl: number): Promise<T
 }
 
 /** Что показать сразу: свежий ответ, иначе последний из памяти, иначе с устройства. */
-function exPeek<T extends { ok?: boolean }>(path: string, ttl: number): T | undefined {
+function exPeek<T extends { ok?: boolean }>(path: string, ttl: number, st: ExStore = EX_STORE): T | undefined {
   const fresh = peek<T | null>(path, ttl);
   if (fresh?.ok) return fresh;
   const old = peekAny<T | null>(path);
-  return old?.ok ? old : exSaved<T>(path);
+  return old?.ok ? old : exSaved<T>(path, st);
 }
 
 export const fetchBtcFlow = () => exGet<BtcFlowReply>("/api/btc/flow", BTC_TTL);
@@ -671,8 +689,8 @@ export const fetchBtcRank = (win: string) => exGet<BtcRankReply>(btcRankPath(win
 export const peekBtcRank = (win: string) => exPeek<BtcRankReply>(btcRankPath(win), 2 * BTC_TTL);
 
 const btcWalletPath = (addr: string) => `/api/btc/wallet?addr=${encodeURIComponent(addr)}`;
-export const fetchBtcWallet = (addr: string) => cachedGet<BtcWalletReply>(btcWalletPath(addr), BTC_TTL);
-export const peekBtcWallet = (addr: string) => peek<BtcWalletReply | null>(btcWalletPath(addr), BTC_TTL);
+export const fetchBtcWallet = (addr: string) => exGet<BtcWalletReply>(btcWalletPath(addr), BTC_TTL, WALLET_STORE);
+export const peekBtcWallet = (addr: string) => exPeek<BtcWalletReply>(btcWalletPath(addr), BTC_TTL, WALLET_STORE);
 
 /* ── Свой график: ликвидации и сделки китов на свечах, алерты по цене ── */
 
@@ -746,10 +764,21 @@ export interface EtfAlertReply {
   mins?: number[];
   items?: EtfAlertSub[];
 }
-export const etfAlertList = () => call<EtfAlertReply>("/api/etfalert/list");
+/* Подписки на алерты ETF — и на устройстве: колокольчики у фондов видны
+   сразу, сервер их уточняет. */
+const ETFA_SAVED = "wt-etfa-v1";
+function keepEtfAlerts(r: EtfAlertReply | null): EtfAlertReply | null {
+  if (r?.ok) writeSaved(ETFA_SAVED, { all: { at: Date.now(), v: r } });
+  return r;
+}
+export function savedEtfAlerts(): EtfAlertSub[] | null {
+  const hit = readSaved<EtfAlertReply>(ETFA_SAVED).all;
+  return hit?.v?.ok && Array.isArray(hit.v.items) ? hit.v.items : null;
+}
+export const etfAlertList = () => call<EtfAlertReply>("/api/etfalert/list").then(keepEtfAlerts);
 /** Включить, поменять или (day и chain выключены) снять подписку; ответ — весь список. */
 export const etfAlertSet = (sub: EtfAlertSub, lang: string) =>
-  call<EtfAlertReply>("/api/etfalert/set", { method: "POST", body: { ...sub, lang } });
+  call<EtfAlertReply>("/api/etfalert/set", { method: "POST", body: { ...sub, lang } }).then(keepEtfAlerts);
 
 /* Рисунки и настройки графика на сервере — одни на всех устройствах. */
 export interface ChartStateReply {

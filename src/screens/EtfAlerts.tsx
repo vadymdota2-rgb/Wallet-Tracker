@@ -17,7 +17,7 @@ import { useEffect, useState } from "react";
 import { t } from "../i18n/t";
 import { num } from "../lib/format";
 import { haptic } from "../lib/telegram";
-import { etfAlertList, etfAlertSet, type EtfAlertSub } from "../lib/api";
+import { etfAlertList, etfAlertSet, savedEtfAlerts, type EtfAlertSub } from "../lib/api";
 import { toast } from "../components/Toast";
 import { Card, Chips, SectionTitle } from "../components/ui";
 
@@ -33,7 +33,7 @@ export interface EtfAlerts {
 
 /** Подписки человека и сохранение одной из них. */
 export function useEtfAlerts(lang: Lang): EtfAlerts {
-  const [subs, setSubs] = useState<EtfAlertSub[] | null>(null);
+  const [subs, setSubs] = useState<EtfAlertSub[] | null>(() => savedEtfAlerts());
   useEffect(() => {
     let alive = true;
     void etfAlertList().then((r) => {

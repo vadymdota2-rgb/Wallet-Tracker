@@ -34,6 +34,7 @@ import wt_halving as halving  # noqa: E402
 import wt_etf as etf  # noqa: E402
 import wt_etfchain as etfchain  # noqa: E402
 import wt_etfalert as etfalert  # noqa: E402
+import wt_treasury as treasury
 from urllib.parse import parse_qs, unquote, urlparse, urlsplit
 
 # Петля по умолчанию: наружу API выходит только через nginx. Раньше здесь
@@ -9980,6 +9981,75 @@ def cached_small(store: dict, key, ttl: float, build):
 _bg_busy: set = set()
 
 
+# Кеш на диске: последний годный ответ тяжёлых сборок (потоки бирж, рейтинг,
+# ETF, опционы, календарь…) лежит файлом рядом с базой. После перезапуска API
+# первый запрос получает его сразу, а свежий собирается в фоне — без него
+# первый человек ждал бы сборку (экран ETF — десятки секунд). Файл старше
+# DISK_MAX_AGE не берётся; на хранилище — не больше DISK_KEEP файлов (ключи
+# бывают с параметрами запроса, и разрастись каталогу нельзя).
+CACHE_DIR = os.environ.get("WHALE_CACHE_DIR") or os.path.join(os.path.dirname(DB), "api_cache")
+DISK_MAX_AGE = 3 * 86400
+DISK_KEEP = 128
+_DISK: dict[int, str] = {}
+etf.set_cache_file(os.path.join(CACHE_DIR, "etf.json"))
+treasury.set_cache_dir(CACHE_DIR)
+
+
+def disk_cache(store: dict, name: str) -> dict:
+    """Хранилище cached_bg с копией на диске под именем name."""
+    _DISK[id(store)] = name
+    return store
+
+
+def _disk_file(name: str, key) -> str:
+    return os.path.join(CACHE_DIR, f"{name}-{hashlib.sha256(repr(key).encode()).hexdigest()[:16]}.json")
+
+
+def _disk_load(name: str, key):
+    try:
+        with open(_disk_file(name, key), encoding="utf-8") as f:
+            got = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(got, dict) or got.get("k") != repr(key):
+        return None
+    try:
+        fresh = time.time() - float(got.get("at") or 0) <= DISK_MAX_AGE
+    except (TypeError, ValueError):
+        return None
+    return got.get("v") if fresh else None
+
+
+def _disk_save(name: str, key, val) -> None:
+    path = _disk_file(name, key)
+    tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
+    try:
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"at": time.time(), "k": repr(key), "v": val}, f, separators=(",", ":"))
+        os.replace(tmp, path)
+        mine = [os.path.join(CACHE_DIR, x) for x in os.listdir(CACHE_DIR)
+                if x.startswith(name + "-") and x.endswith(".json")]
+        if len(mine) > DISK_KEEP:
+            for old in sorted(mine, key=os.path.getmtime)[:len(mine) - DISK_KEEP]:
+                os.remove(old)
+    except (OSError, TypeError, ValueError) as e:
+        sys.stderr.write(f"[api] кеш на диске {name}: {e}\n")
+        if os.path.exists(tmp):
+            os.remove(tmp)
+
+
+def disk_warm(cache: dict, key, name: str, ttl: float) -> None:
+    """Для кешей со своей сборкой (страх и жадность, доминация): после
+    перезапуска — копия с диска как устаревшая, свежую соберёт их фон."""
+    if key in cache:
+        return
+    old = _disk_load(name, key)
+    if old is not None:
+        with _small_lock:
+            cache.setdefault(key, (time.monotonic() - ttl - 1.0, old))
+
+
 def cached_bg(store: dict, key, ttl: float, build, wait: bool = False):
     """Как cached_small, но устаревший ответ отдаётся сразу, а новый
     собирается в фоне — никто не ждёт сборки, кроме самого первого запроса
@@ -9990,6 +10060,17 @@ def cached_bg(store: dict, key, ttl: float, build, wait: bool = False):
     `wait` — собрать здесь же, без отдельного потока (так греет exflow_warmer).
     """
     bk = (id(store), key)
+    disk = _DISK.get(id(store))
+    if disk:
+        with _small_lock:
+            known = key in store
+        if not known:
+            # После перезапуска: прошлый ответ с диска — сразу, как устаревший
+            # (свежий соберётся в фоне ниже).
+            old = _disk_load(disk, key)
+            if old is not None:
+                with _small_lock:
+                    store.setdefault(key, (time.monotonic() - ttl - 1.0, old))
     with _small_lock:
         hit = store.get(key)
         if hit and time.monotonic() - hit[0] < ttl:
@@ -10010,6 +10091,8 @@ def cached_bg(store: dict, key, ttl: float, build, wait: bool = False):
                 else:
                     store[key] = (time.monotonic() - ttl + 30.0, hit[1])
                 cap_cache(store, 2048)
+            if disk and not bad and val is not None:
+                _disk_save(disk, key, val)
             return val if not bad or not hit else hit[1]
         finally:
             with _small_lock:
@@ -11444,6 +11527,7 @@ def _fng_build() -> dict:
     res = {"ok": True, "days": days, "at": now()}
     with _liq_lock:
         _fng_cache["all"] = (time.monotonic(), res)
+    _disk_save("fng", "all", res)
     return res
 
 
@@ -11458,6 +11542,7 @@ def _fng_bg() -> None:
 
 
 def fng_data() -> dict:
+    disk_warm(_fng_cache, "all", "fng", FNG_TTL)
     with _liq_lock:
         hit = _fng_cache.get("all")
         if hit and time.monotonic() - hit[0] < FNG_TTL:
@@ -11496,7 +11581,7 @@ BTC_ROWS = 100
 # платёжный шлюз или сервис. В доски такие не идут — кроме кошельков базы
 # сервисного аккаунта: их владелец добавил сам.
 BTC_SERVICE_TXS = 1000
-_BTC: dict = {}
+_BTC: dict = disk_cache({}, "btc")
 
 
 def _btc_clean(con) -> str:
@@ -11898,7 +11983,7 @@ etf.set_chain(_etf_chain_src)
 # долларов завели на биржи и вывели с них по всей сети. Переводы BNB и
 # transfer() токенов напрямую; через контракты не видно. С DEX не смешивается:
 # NetFlow DEX — свопы кошельков базы, это — переводы на биржи всей сети.
-_BSCX: dict = {}
+_BSCX: dict = disk_cache({}, "bscx")
 # Своя база потоков бирж BSC — бот пишет её отдельно от базы DEX.
 BSCX_DB = _db_path("WHALE_BSCEX_DB", "bsc_ex.db")
 BSCX_COINS_MAX = 300
@@ -12449,6 +12534,7 @@ def _dom_build() -> dict:
     res = {"ok": True, "t0": first, "rows": rows, "alt": alt, "at": now()}
     with _liq_lock:
         _dom_cache["all"] = (time.monotonic(), res)
+    _disk_save("dom", "all", res)
     return res
 
 
@@ -12466,6 +12552,7 @@ _dom_first = threading.Lock()
 
 
 def dom_data() -> dict:
+    disk_warm(_dom_cache, "all", "dom", DOM_TTL)
     with _liq_lock:
         hit = _dom_cache.get("all")
         if hit and time.monotonic() - hit[0] < DOM_TTL:
@@ -12496,7 +12583,7 @@ etf_data = etf.etf_data
 # часов: у Hyperliquid выплата каждый час, у части монет Binance — раз в
 # четыре, и сырые числа между собой не сравнивались бы.
 OIH_TTL = 120.0
-_OIH: dict = {}
+_OIH: dict = disk_cache({}, "oih")
 # Биржа ряда считается, если покрывает почти всё окно: иначе, появившись на
 # середине, она давала бы ступеньку «интерес вырос», которой не было.
 OIH_COVER = 0.9
@@ -13433,7 +13520,7 @@ CHART_WHALE_TTL = 300
 CHART_WHALE_DAYS = 7
 CHART_WHALE_MIN = 100_000
 CHART_WHALE_TOP = 150
-_CHART: dict = {}
+_CHART: dict = disk_cache({}, "chart")
 
 
 def chart_liqs(sym: str, step: int) -> dict:
@@ -13968,7 +14055,7 @@ OPT_BIG_OTHER = 100_000.0
 OPT_BIG_KEEP = 40
 # Лента сделок Deribit отдаётся по тысяче; за сутки по BTC — около трёх тысяч.
 OPT_TRADE_PAGES = 8
-_OPT: dict = {}
+_OPT: dict = disk_cache({}, "opt")
 # Общие выгрузки (весь USDC Deribit, все тикеры Binance, все опционы Delta):
 # одна на все монеты, живёт минуту.
 _OPT_SHARED: dict = {}
@@ -14445,7 +14532,7 @@ CAL_EARN = CAL_EARN_HIGH | {"MARA", "RIOT", "CLSK", "CORZ", "IREN", "HUT", "CIFR
                             "TSM", "BLK", "GS", "JPM", "SMLR", "BITF", "BTDR"}
 CAL_EARN_EVERY = 6 * 3600.0
 CAL_LIST_DAYS = 7
-_CAL: dict = {}
+_CAL: dict = disk_cache({}, "cal")
 _CAL_SLOW: dict = {}
 _cal_ff_at = 0.0
 

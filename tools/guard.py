@@ -792,6 +792,16 @@ say("ревизия ETF: запас по цепочке — у каждого ф
     and "str(dst) not in labeled" in read(f"{APP}/wt_etfalert.py") and "str(src) not in labeled" in read(f"{APP}/wt_etfalert.py")
     and "constexpr long long UNKNOWN_HEIGHT = 1LL << 62;" in read(os.path.join(BOT, "btc_etf.cpp"))
     and "for (int page = 0; page < 8; ++page)" in read(os.path.join(BOT, "btc_chain.cpp")))
+say("кеш: тяжёлые ответы API — и на диске (после перезапуска сразу, свежий — в фоне); ETF и отчёты SEC — тоже; в приложении — дайджест, кошелёк BTC, алерты ETF на устройстве",
+    "def disk_cache(store: dict, name: str) -> dict:" in api and "def _disk_load(name: str, key):" in api
+    and 'disk_cache({}, "btc")' in api and 'disk_cache({}, "bscx")' in api and 'disk_cache({}, "opt")' in api
+    and 'disk_warm(_fng_cache, "all", "fng", FNG_TTL)' in api and 'disk_warm(_dom_cache, "all", "dom", DOM_TTL)' in api
+    and 'etf.set_cache_file(os.path.join(CACHE_DIR, "etf.json"))' in api and "treasury.set_cache_dir(CACHE_DIR)" in api
+    and "def _file_load() -> dict[str, Json] | None:" in _etfs and "_file_save(\"sec_funds.json\", out)" in read(f"{APP}/wt_treasury.py")
+    and 'const DIGEST_SAVED = "wt-digest-v1";' in read(f"{APP}/src/lib/api.ts")
+    and "exGet<BtcWalletReply>(btcWalletPath(addr), BTC_TTL, WALLET_STORE)" in read(f"{APP}/src/lib/api.ts")
+    and "useState<EtfAlertSub[] | null>(() => savedEtfAlerts())" in read(f"{APP}/src/screens/EtfAlerts.tsx")
+    and "api_cache/" in read(f"{APP}/.gitignore") and os.path.isfile(f"{APP}/tests/test_disk_cache.py"))
 _tre = read(f"{APP}/wt_treasury.py")
 say("крупнейшие держатели: ETF и компании (по их отчётам в SEC, CryptoAssetNumberOfUnits), без государств; выбор группы",
     "export function Holders(" in _em and '<Boundary name="etf-holders"><Holders raw={reply.holders}' in _ef

@@ -41,6 +41,7 @@ import contextlib
 import http.client
 import json
 import math
+import os
 import sys
 import threading
 import time
@@ -512,6 +513,51 @@ class _State:
 
     hit: tuple[float, dict[str, Json]] | None = None
     chain: ChainSrc | None = None
+    # Копия последнего ответа на диске (set_cache_file): после перезапуска
+    # API экран получает её сразу, свежий ответ собирается в фоне.
+    file: str | None = None
+
+
+# Копия с диска старше этого не берётся.
+FILE_MAX_AGE = 3 * 86400
+
+
+def set_cache_file(path: str | None) -> None:
+    """Где держать копию последнего ответа (None — нигде)."""
+    _st.file = path
+
+
+def _file_load() -> dict[str, Json] | None:
+    path = _st.file
+    if not path:
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            got = _parse(f.read().encode())
+    except (OSError, ValueError):
+        return None
+    if not isinstance(got, dict) or not isinstance(got.get("v"), dict) or not got["v"].get("ok"):
+        return None
+    if _now() - _num(got.get("at")) > FILE_MAX_AGE:
+        return None
+    v: dict[str, Json] = got["v"]
+    return v
+
+
+def _file_save(res: dict[str, Json]) -> None:
+    path = _st.file
+    if not path:
+        return
+    tmp = f"{path}.{os.getpid()}.tmp"
+    try:
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"at": _now(), "v": res}, f, separators=(",", ":"))
+        os.replace(tmp, path)
+    except (OSError, TypeError, ValueError) as e:
+        _log(f"копия на диске: {type(e).__name__}: {e}")
+        with contextlib.suppress(OSError):
+            os.remove(tmp)
 
 
 def _holders(c: Json, companies: list[list[Any]]) -> list[list[Any]]:
@@ -588,6 +634,7 @@ def build() -> dict[str, Json]:
            "cme": extra["cme"], "cbp": extra["cbp"], "at": _now()}
     with _lock:
         _st.hit = (time.monotonic(), res)
+    _file_save(res)
     return res
 
 
@@ -601,7 +648,13 @@ def _bg() -> None:
 
 
 def etf_data() -> dict[str, Json]:
-    """Ответ /api/etf: из кэша, свежий собирается в фоне одним потоком."""
+    """Ответ /api/etf: из кэша, свежий собирается в фоне одним потоком.
+    После перезапуска — копия с диска (как устаревшая), свежий — в фоне."""
+    if _st.hit is None and _st.file:
+        saved = _file_load()
+        with _lock:
+            if _st.hit is None and saved is not None:
+                _st.hit = (time.monotonic() - TTL - 1.0, saved)
     with _lock:
         hit = _st.hit
         if hit and time.monotonic() - hit[0] < TTL:

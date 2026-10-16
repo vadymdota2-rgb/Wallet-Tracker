@@ -33,3 +33,6 @@ Thumbs.db
 *.swp
 *~
 .coverage
+
+# Кеш ответов API на диске (whale_api: CACHE_DIR) — данные сервера, не код
+api_cache/

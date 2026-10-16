@@ -204,6 +204,55 @@ class _State:
 _st = _State()
 _lock = threading.Lock()
 
+# Копии последних сборок на диске (set_cache_dir): перезапуск API не
+# спрашивает SEC заново, пока копия моложе TTL; старше — годится, пока SEC
+# не ответил (не дольше FILE_MAX_AGE).
+FILE_MAX_AGE = 7 * 86400
+
+
+class _Files:
+    dir: str | None = None
+
+
+_files = _Files()
+
+
+def set_cache_dir(path: str | None) -> None:
+    _files.dir = path
+
+
+def _file_load(name: str) -> tuple[float, Any] | None:
+    """(monotonic «когда собрано», данные) из копии на диске или None."""
+    if not _files.dir:
+        return None
+    try:
+        with open(os.path.join(_files.dir, name), encoding="utf-8") as f:
+            got = _parse(f.read().encode())
+    except (OSError, ValueError):
+        return None
+    if not isinstance(got, dict) or "v" not in got:
+        return None
+    age = time.time() - float(got.get("at") or 0) if isinstance(got.get("at"), (int, float)) else FILE_MAX_AGE + 1
+    if age > FILE_MAX_AGE:
+        return None
+    return time.monotonic() - max(0.0, age), got["v"]
+
+
+def _file_save(name: str, v: Any) -> None:
+    if not _files.dir:
+        return
+    path = os.path.join(_files.dir, name)
+    tmp = f"{path}.{os.getpid()}.tmp"
+    try:
+        os.makedirs(_files.dir, exist_ok=True)
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"at": time.time(), "v": v}, f, separators=(",", ":"))
+        os.replace(tmp, path)
+    except (OSError, TypeError, ValueError) as e:
+        _log(f"копия на диске: {e}")
+        with contextlib.suppress(OSError):
+            os.remove(tmp)
+
 
 def _build() -> list[list[Any]]:
     out: list[list[Any]] = []
@@ -224,6 +273,12 @@ def companies() -> list[list[Any]]:
     Зовёт сборка экрана ETF из своего фонового потока."""
     with _lock:
         hit = _st.hit
+    if hit is None:
+        saved = _file_load("sec_companies.json")
+        if saved and isinstance(saved[1], list):
+            hit = (saved[0], [r for r in saved[1] if isinstance(r, list) and len(r) == 6])
+            with _lock:
+                _st.hit = hit
     if hit and time.monotonic() - hit[0] < TTL:
         return hit[1]
     if not _ua():
@@ -235,6 +290,7 @@ def companies() -> list[list[Any]]:
         return hit[1] if hit else []
     with _lock:
         _st.hit = (time.monotonic(), rows)
+    _file_save("sec_companies.json", rows)
     return rows
 
 
@@ -312,6 +368,18 @@ def etf_funds() -> dict[str, dict[str, Any]]:
     Фонд, чей отчёт не прочитался, берётся из прошлой сборки."""
     with _lock:
         hit = _fst.hit
+    if hit is None:
+        saved = _file_load("sec_funds.json")
+        if saved and isinstance(saved[1], dict):
+            # В JSON ключи кварталов — строки: обратно в числа.
+            funds = {}
+            for t, f in saved[1].items():
+                if isinstance(f, dict) and isinstance(f.get("q"), dict):
+                    q = {int(k): v for k, v in f["q"].items() if str(k).isdigit() and isinstance(v, list) and len(v) == 2}
+                    funds[str(t)] = {"n": f.get("n"), "fee": f.get("fee"), "q": q}
+            hit = (saved[0], funds)
+            with _lock:
+                _fst.hit = hit
     if hit and time.monotonic() - hit[0] < TTL:
         return hit[1]
     if not _ua():
@@ -330,4 +398,5 @@ def etf_funds() -> dict[str, dict[str, Any]]:
         return hit[1] if hit else {}
     with _lock:
         _fst.hit = (time.monotonic(), out)
+    _file_save("sec_funds.json", out)
     return out
