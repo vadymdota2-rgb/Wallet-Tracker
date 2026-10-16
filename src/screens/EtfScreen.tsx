@@ -2,17 +2,18 @@
  * Институциональные потоки биткоина: сколько денег заходит в спотовые
  * биржевые фонды и кто из крупных держателей покупает или продаёт.
  *
- * Сверху — последний торговый день фондов и суммы за неделю, месяц и с
- * запуска, серия притоков или оттоков подряд. Для биткоина — главное
- * сравнение: сколько монет забрали ETF и сколько за то же время намайнено.
- * Ниже — цена и потоки на двух панелях одной оси времени (это две шкалы, а не
- * две оси на одном поле), затем фонды поимённо за выбранный срок, рекорды и
- * крупные держатели по своему сканеру цепочки: биржи, фонды и киты — кто
- * сколько держит и кто докупал за неделю.
+ * Только свои данные: фонды — те, что наш сканер видит в цепочке (BITB по
+ * его опубликованным кошелькам и фонды, найденные у хранителя), поток — за
+ * сутки UTC, запас — остатки кошельков. Чужих сводок на экране нет.
  *
- * Приток — зелёный, отток — красный, как на биржах. Цифры фондов приходят
- * раз в сутки после закрытия торгов в США, поэтому «сегодня» здесь нет:
- * последний день — последний, по которому фонды отчитались.
+ * Сверху — последние сутки и суммы за неделю, месяц и с начала наблюдения,
+ * серия притоков или оттоков подряд. Ниже — цена и потоки на двух панелях
+ * одной оси времени (это две шкалы, а не две оси на одном поле), затем фонды
+ * поимённо за выбранный срок, алерты, рекорды, CME по отчёту CFTC, премия
+ * Coinbase и крупные держатели: фонды и государства.
+ *
+ * Приток — зелёный, отток — красный, как на биржах. Сегодняшние сутки ещё
+ * идут, поэтому последний день — вчерашний.
  */
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import { useApp } from "../store/app";
@@ -97,13 +98,6 @@ function stamp(lang: Lang, at: number): string {
 function coins(v: number, sym: string): string {
   const d = Math.abs(v) >= 100 ? 0 : Math.abs(v) >= 1 ? 1 : 3;
   return `${v > 0 ? "+" : v < 0 ? "−" : ""}${num(Math.abs(v), d)} ${sym}`;
-}
-
-/** Сколько новых биткоинов за сутки: 144 блока × награда за блок. */
-function minedPerDay(ts: number): number {
-  if (ts < 1713571200) return 900; // до халвинга 20 апреля 2024
-  if (ts < 1838900000) return 450; // до следующего — по оценке ≈ 9 апреля 2028
-  return 225;
 }
 
 interface Bucket { a: number; b: number; usd: number; coin: number; px: number; per: number[] }
@@ -317,6 +311,11 @@ function FlowChart({ data, cum, zero, lang, sel, onSel }: {
 
 /* ---------------------------------------------------------------------- */
 
+/** Флаг страны по коду ISO: «US» → 🇺🇸. */
+function flagOf(code?: string): string {
+  return code && /^[A-Z]{2}$/.test(code) ? String.fromCodePoint(...[...code].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65)) : "";
+}
+
 function fundLabel(f: EtfCoin["funds"][number]): string {
   if (MINI[f.t] && /mini/i.test(f.n || "Mini")) return MINI[f.t]!;
   return ISSUER[f.t] ?? f.n.replace(/ (ETF|Trust|Fund).*$/i, "");
@@ -363,7 +362,7 @@ function Funds({ c, al, lang }: { c: EtfCoin; al: EtfAlerts; lang: Lang }) {
           return (
             <div key={f.t} className="ef-f">
               <span className="ef-f-id">
-                <b>{f.t}<FundBell fund={f.t} al={al} lang={lang} /></b>
+                <b>{f.c ? <span className="ef-flag" aria-hidden="true">{flagOf(f.c)} </span> : null}{f.t}<FundBell fund={f.t} al={al} lang={lang} /></b>
                 {label && label !== f.t ? <small>{label}</small> : null}
               </span>
               <span className="ef-f-bar">
@@ -378,7 +377,6 @@ function Funds({ c, al, lang }: { c: EtfCoin; al: EtfAlerts; lang: Lang }) {
                   {t(lang, "ef_aum", { v: iso(usdWord(f.aum)) })}
                   {aumAll > 0 ? ` · ${t(lang, "ef_mshare", { p: iso(pct((f.aum / aumAll) * 100, 1, false)) })}` : ""}
                   {f.fee !== null && f.fee !== undefined ? ` · ${t(lang, "ef_fee", { v: iso(pct(f.fee, 2, false)) })}` : ""}
-                  {f.src === "chain" ? ` · ${t(lang, "ef_src_chain")}` : ""}
                 </small>
               ) : null}
             </div>
@@ -504,7 +502,6 @@ export function EtfScreen() {
     const end = days[days.length - 1]![0];
     const win = (n: number) => days.filter((d) => d[0] > end - n * 86400);
     const sumU = (ds: typeof days) => ds.reduce((s, d) => s + d[1], 0) * 1000;
-    const sumC = (ds: typeof days) => ds.reduce((s, d) => s + d[2], 0);
     const cum = c.funds.reduce((s, f) => s + f.cum, 0);
     let streak = 0;
     const sign = Math.sign(days[days.length - 1]![1]);
@@ -547,11 +544,10 @@ export function EtfScreen() {
       if (!worstM || v < worstM[1]) worstM = [m, v];
     }
     const m30 = win(30);
-    const mined = m30.length ? Array.from({ length: 30 }, (_, i) => minedPerDay(end - i * 86400)).reduce((a, b) => a + b, 0) : 0;
     const aum = c.funds.reduce((s, f) => s + f.aum, 0);
     return {
       d7: sumU(win(7)), d30: sumU(m30), cum, streak, sign,
-      c30: sumC(m30), mined, best, worst, runs, aum, bestM, worstM,
+      best, worst, runs, aum, bestM, worstM,
       held: aum > 0 && lastPx > 0 ? aum / lastPx : 0,
     };
   }, [c, days, lastPx]);
@@ -620,37 +616,6 @@ export function EtfScreen() {
               </p>
             ) : null}
           </Card>
-
-          {stats.mined > 0 ? (
-            <Card>
-              <p className="ef-mine-t">{t(lang, "ef_mine_title")}</p>
-              <div className="ef-mine">
-                <div>
-                  <small>{t(lang, stats.c30 >= 0 ? "ef_mine_etf_in" : "ef_mine_etf_out")}</small>
-                  <span className="ef-mine-bar"><i style={{
-                    width: `${Math.min(100, (Math.abs(stats.c30) / Math.max(Math.abs(stats.c30), stats.mined)) * 100)}%`,
-                    background: stats.c30 >= 0 ? UP : DN,
-                  }} /></span>
-                  <b><bdi dir="ltr">{num(Math.abs(stats.c30))} BTC</bdi></b>
-                </div>
-                <div>
-                  <small>{t(lang, "ef_mine_new")}</small>
-                  <span className="ef-mine-bar"><i style={{
-                    width: `${Math.min(100, (stats.mined / Math.max(Math.abs(stats.c30), stats.mined)) * 100)}%`,
-                    background: "#f7931a",
-                  }} /></span>
-                  <b><bdi dir="ltr">{num(stats.mined)} BTC</bdi></b>
-                </div>
-              </div>
-              <p className="ef-mine-say">
-                {stats.c30 > 0
-                  ? stats.c30 >= stats.mined
-                    ? t(lang, "ef_mine_more", { x: iso(num(stats.c30 / stats.mined, 1)) })
-                    : t(lang, "ef_mine_less", { x: iso(pct((stats.c30 / stats.mined) * 100, 0, false)) })
-                  : t(lang, "ef_mine_sell")}
-              </p>
-            </Card>
-          ) : null}
 
           <SectionTitle>{t(lang, "ef_chart")}</SectionTitle>
           <Card>
@@ -748,7 +713,6 @@ export function EtfScreen() {
             <ul>
               <li>{t(lang, "ef_how_1")}</li>
               <li>{t(lang, "ef_how_2")}</li>
-              <li>{t(lang, "ef_how_3")}</li>
               <li>{t(lang, "ef_how_4")}</li>
               <li>{t(lang, "ef_how_5")}</li>
               <li>{t(lang, "ef_how_6")}</li>

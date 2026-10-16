@@ -652,15 +652,15 @@ say("токеномика: видно, что монету можно откры
 
 _ef = read(f"{APP}/src/screens/EtfScreen.tsx")
 _etfs = read(f"{APP}/wt_etf.py")
-say("институциональные потоки — только биткоин: потоки фондов по дням, спрос против добычи, держатели и кто докупал; других монет нет",
+say("институциональные потоки — только биткоин: потоки фондов по дням, держатели и кто докупал; других монет нет",
     'COINS = (("btc", "BTCUSDT"),)' in _etfs and "type Coin" not in _ef and "Segmented<Coin>" not in _ef
     and "ETHUSDT" not in _etfs and "SOLUSDT" not in _etfs and "HYPE" not in _etfs
     and "etf_data = etf.etf_data" in api and "import wt_etf as etf" in api and '"/api/etf"' in api
-    and "def etf_data(" in _etfs and "etf/detail/netflow/list?category=" in _etfs
+    and "def etf_data(" in _etfs
     and "etf_data()  # и потоки ETF" in api
     and "from whale_api" not in _etfs and "import whale_api" not in _etfs
     and "function FlowChart(" in _ef and "function Funds(" in _ef and "function Holders(" in _ef
-    and "minedPerDay(" in _ef and "glyph: <EtfGlyph />" in appx)
+    and "minedPerDay(" not in _ef and "glyph: <EtfGlyph />" in appx)
 
 _hv = read(f"{APP}/src/components/HalvingCard.tsx")
 _hvl = read(f"{APP}/src/lib/halving.ts")
@@ -786,6 +786,7 @@ _wsg = read(os.path.join(BOT, "btc_gov.cpp"))
 say("держатели биткоина на вкладке ETF — только фонды и государства (биржи — в Нетфлоу, киты — в Рейтинге); государства — по раскрытым ими адресам и своей цепочке",
     "bitcointreasuries" not in _etfs and "def set_holders(" in _etfs and "etf.set_holders(btc_holders)" in api
     and "def _fund_holders(" in _etfs and 'r[1] == "GOVERNMENT"' in _etfs
+    and "def _flag(code: str)" in _etfs and '"c": country' in _etfs and "flagOf(f.c)" in _ef
     and "btc_gov_addr" in api and '(_BTC, "hold", BTC_HOLD_TTL, _btc_holders_build)' in api
     and "def _hold_whales(" not in api and "def _hold_exchanges(" not in api
     and "WHALE" not in _ef + _em and "EXCHANGE" not in _ef + _em and "btcWallet" not in _ef + _em
@@ -852,12 +853,13 @@ say("ETF у хранителя: имена по сверке ежедневны�
     and "CREATE TABLE IF NOT EXISTS btc_etf_learned" in api and 'f.pop("_vaults", None)' in api
     and "SELECT address, fund FROM btc_etf_learned WHERE address IN" in api)
 _etfs2 = read(f"{APP}/wt_etf.py")
-say("Институциональные потоки: фонды, найденные по цепочке, — своими потоками (T+1), остальные — по отчётам; итоги на разницу; без взаимного ожидания сборок",
-    "def _apply_chain(days: dict[int, Day], px: dict[int, float])" in _etfs2 and "def peek() -> dict[str, Json] | None:" in _etfs2
-    and 'f["src"] = "chain"' in _etfs2 and "settle >= today" in _etfs2
-    and "etf.set_chain(_etf_chain_src)" in api and "reply = etf.peek() or {}" in api
+_cfn = pybody(_etfs2, "def _coin(")
+say("Институциональные потоки — только свои данные: фонды по цепочке (свой сканер), сводка CoinMarketCap — лишь ключ сверки имён, на экран не идёт",
+    "def check_reply() -> dict[str, Json] | None:" in _etfs2 and "coinmarketcap" not in _cfn.lower() and "_cmc(" not in _cfn
+    and "_chain()" in _cfn and "def _apply_chain(" not in _etfs2 and 'f.src === "chain"' not in read(f"{APP}/src/screens/EtfScreen.tsx")
+    and "def peek() -> dict[str, Json] | None:" in _etfs2
+    and "etf.set_chain(_etf_chain_src)" in api and "reply = etf.check_reply() or {}" in api
     and 'hit = _BTC.get("cust")' in api and '(_BTC, "cust", BTC_CUST_TTL, _btc_custody_build)' in api
-    and 'f.src === "chain"' in read(f"{APP}/src/screens/EtfScreen.tsx")
     and "refreshEtfBalances();\n                if (etfBackfill(" in _ws_btc)
 say("bitcoin: вкладка «Крупные ордера BTC» с потоком бирж (в NetFlow его нет), третья доска рейтинга, экран кошелька",
     'path in ("/btc/flow", "/api/btc/flow")' in api and "def _btc_clean(" in api and "w.s < 0.9 * w.b" in api

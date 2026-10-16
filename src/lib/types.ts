@@ -884,6 +884,8 @@ export interface DomReply {
 export interface EtfCoin {
   funds: {
     t: string; n: string; aum: number; fee: number | null; cum: number; cumc: number;
+    /** Страна, где фонд торгуется: код ISO (US, HK), пусто — неизвестна. */
+    c?: string;
     /** «chain» — поток фонда посчитан по цепочке своим сканером, а не по отчётам. */
     src?: "chain";
   }[];
