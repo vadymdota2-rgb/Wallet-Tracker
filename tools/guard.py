@@ -820,6 +820,13 @@ say("ETF у хранителя по корзинам: бот находит хр
     and "def mixed(self) -> bool:" in _chain and "OWN_ALL = 0.5" in _chain and "def _names(" in _chain
     and '{**btc_etf_chain(), "custody": btc_custody()}' in api
     and "wt_etfchain.py tests/test_etfchain.py" in read(f"{APP}/.github/workflows/tests.yml"))
+say("ETF у хранителя: имена по сверке ежедневных потоков (T+1), память имён, снятие при расхождении, метки и карточки",
+    "def settle_day(trade_day: int) -> int:" in _chain and "def match_names(" in _chain and "def flow_err(" in _chain
+    and "MATCH_ERR = 0.12" in _chain and "UNMATCH_ERR = 0.35" in _chain and "def known_names(" in _chain
+    and "def _btc_learn(funds: list[dict], live_from: int) -> None:" in api
+    and "CREATE TABLE IF NOT EXISTS btc_etf_learned" in api and 'f.pop("_vaults", None)' in api
+    and "SELECT address, fund FROM btc_etf_learned WHERE address IN" in api
+    and "function ofBaskets(f: EtfCustodyFund, lang: Lang): FundView" in read(f"{APP}/src/screens/EtfMore.tsx"))
 say("bitcoin: вкладка «Крупные ордера BTC» с потоком бирж (в NetFlow его нет), третья доска рейтинга, экран кошелька",
     'path in ("/btc/flow", "/api/btc/flow")' in api and "def _btc_clean(" in api and "w.s < 0.9 * w.b" in api
     and "export function BtcFlowCard(" in _btv and "export function BtcBigView(" in _btv

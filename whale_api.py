@@ -11533,6 +11533,10 @@ def _btc_extra(con, wallets: list[str]) -> dict[str, dict]:
         for r in con.execute(f"SELECT address, fund FROM btc_etf_addr WHERE address IN ({marks}) "
                              f"AND fund NOT LIKE '#%'", wallets):
             out[r["address"]]["etf"] = str(r["fund"])[:12]
+    if table_exists(con, "btc_etf_learned"):
+        # Хранилища групп, названных сверкой потоков с отчётами фондов.
+        for r in con.execute(f"SELECT address, fund FROM btc_etf_learned WHERE address IN ({marks})", wallets):
+            out[r["address"]].setdefault("etf", str(r["fund"])[:12])
     return out
 
 
@@ -11720,6 +11724,48 @@ def btc_etf_chain() -> dict:
 BTC_CUST_TTL = 900.0
 
 
+def _btc_learn(funds: list[dict], live_from: int) -> None:
+    """Имена групп по сверке их потоков с ежедневными потоками фондов
+    (wt_etfchain.match_names): новое имя — в btc_etf_learned на хранилища
+    группы, и оно держится само; имя, с которым потоки за месяц разошлись, —
+    снимается. Сверка — только с того дня, как сканер начал находить
+    хранилища: раньше в цепочке у нас пусто, и любое сравнение было бы
+    «не совпало»."""
+    reply = etf_data() or {}
+    series, fees = etfchain.fund_series(reply)
+    if not series:
+        return
+    t = now()
+    window = (max(t // 86400 - BTC_ETF_DAYS + 1, live_from // 86400 + 2), t // 86400)
+    if window[0] > window[1]:
+        return
+    con = open_db(BTC_DB, write=True)
+    if not con:
+        return
+    try:
+        con.execute("CREATE TABLE IF NOT EXISTS btc_etf_learned (address TEXT PRIMARY KEY, fund TEXT NOT NULL,"
+                    " at INTEGER NOT NULL DEFAULT 0)")
+        taken = {str(f["t"]) for f in funds if not str(f["t"]).startswith("#")}
+        named = etfchain.match_names(funds, series, fees, taken, window)
+        for f in funds:
+            name = str(f["t"])
+            if name in named:
+                con.executemany("INSERT OR REPLACE INTO btc_etf_learned(address, fund, at) VALUES(?,?,?)",
+                                [(a, named[name], t) for a in f["_vaults"]])
+                f["t"] = named[name]
+                sys.stderr.write(f"[api] фонд по корзинам назван: {name} → {named[name]}\n")
+            elif not name.startswith("#") and name in series:
+                learned = con.execute("SELECT COUNT(*) FROM btc_etf_learned WHERE fund = ?", (name,)).fetchone()[0]
+                chain = {int(r[0]) // 86400: float(r[1]) - float(r[2]) for r in f["days"]}
+                err, days = etfchain.flow_err(chain, series[name], window)
+                if learned and days >= 6 and err > etfchain.UNMATCH_ERR:
+                    con.execute("DELETE FROM btc_etf_learned WHERE fund = ?", (name,))
+                    sys.stderr.write(f"[api] фонд {name}: потоки разошлись ({err:.2f}) — имя снято\n")
+        con.commit()
+    finally:
+        con.close()
+
+
 def _btc_custody_build() -> dict:
     con = open_db(BTC_DB)
     if not con:
@@ -11727,16 +11773,26 @@ def _btc_custody_build() -> dict:
     try:
         if not table_exists(con, "btc_cust_xfer") or not table_exists(con, "btc_etf_addr"):
             return {"ok": False, "error": "no_data"}
-        vaults = con.execute("SELECT COUNT(*) FROM btc_cust_vault").fetchone()[0] \
-            if table_exists(con, "btc_cust_vault") else 0
+        vaults, live_from = 0, 0
+        if table_exists(con, "btc_cust_vault"):
+            vaults = con.execute("SELECT COUNT(*) FROM btc_cust_vault").fetchone()[0]
+            live_from = con.execute("SELECT MIN(at) FROM btc_cust_vault WHERE fee_wallet != '' AND at > 0"
+                                    ).fetchone()[0] or 0
         xfers = con.execute("SELECT COUNT(*) FROM btc_cust_xfer").fetchone()[0]
-        return {"ok": True, "funds": etfchain.build(con, now(), BTC_ETF_DAYS), "vaults": int(vaults or 0),
-                "xfers": int(xfers or 0), "at": now()}
+        funds = etfchain.build(con, now(), BTC_ETF_DAYS)
     except sqlite3.Error as e:
         sys.stderr.write(f"[api] btc custody: {e}\n")
         return {"ok": False, "error": "db"}
     finally:
         con.close()
+    if live_from:
+        try:
+            _btc_learn(funds, int(live_from))
+        except (sqlite3.Error, KeyError, TypeError, ValueError) as e:
+            sys.stderr.write(f"[api] btc custody, сверка имён: {e}\n")
+    for f in funds:
+        f.pop("_vaults", None)
+    return {"ok": True, "funds": funds, "vaults": int(vaults or 0), "xfers": int(xfers or 0), "at": now()}
 
 
 def btc_custody() -> dict:

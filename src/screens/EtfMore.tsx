@@ -19,7 +19,7 @@ import { num, pct, px, usdWord } from "../lib/format";
 import { haptic } from "../lib/telegram";
 import { Card, Chips, SectionTitle } from "../components/ui";
 import { fetchEtfChain, peekEtfChain } from "../lib/api";
-import type { BtcHolder, EtfChainFund, EtfChainReply, EtfReply } from "../lib/types";
+import type { BtcHolder, EtfChainFund, EtfChainReply, EtfCustodyFund, EtfReply } from "../lib/types";
 import { dateStr, timeTicks } from "./FearGreedScreen";
 
 type Lang = Parameters<typeof t>[0];
@@ -403,9 +403,34 @@ function coinsSigned(v: number): string {
   return `${r > 0 ? "+" : r < 0 ? "−" : ""}${num(Math.abs(r), 2)} BTC`;
 }
 
-function ChainFund({ f, price, lang }: { f: EtfChainFund; price: number; lang: Lang }) {
+/** Что рисует карточка фонда: свои кошельки (BITB) или группа хранителя,
+ *  названная по корзинам. У группы запас не сверен — вместо него комиссия. */
+interface FundView {
+  t: string;
+  /** [сутки UTC, приток BTC, отток BTC]. */
+  days: [number, number, number][];
+  hold?: number;
+  fee?: number | null;
+  foot: string;
+}
+
+function ofWallets(f: EtfChainFund, lang: Lang): FundView {
+  return {
+    t: f.t, hold: f.hold, days: f.days.map((d) => [d[0], d[1], d[2]]),
+    foot: t(lang, "ef_ch_wallets", { n: num(f.n), c: num(f.checked) }),
+  };
+}
+
+function ofBaskets(f: EtfCustodyFund, lang: Lang): FundView {
+  return {
+    t: f.t, fee: f.fee, days: f.days,
+    foot: t(lang, "ef_ch_basket", { b: num(f.basket, 4), n: num(f.vaults) }),
+  };
+}
+
+function ChainFund({ f, price, lang }: { f: FundView; price: number; lang: Lang }) {
   // Поток — приток минус отток; плата фонду за управление сюда не входит.
-  const net = (d: EtfChainFund["days"][number]) => d[1] - d[2];
+  const net = (d: FundView["days"][number]) => d[1] - d[2];
   const today = Math.floor(Date.now() / 86_400_000) * 86400;
   const day = f.days.find((d) => d[0] === today);
   const d30 = f.days.filter((d) => d[0] > today - 30 * 86400).reduce((s, d) => s + net(d), 0);
@@ -425,11 +450,18 @@ function ChainFund({ f, price, lang }: { f: EtfChainFund; price: number; lang: L
     <Card>
       <div className="ef-ch-head"><b>{f.t}</b></div>
       <div className="dm-chs three ef-chs">
-        <div className="dm-ch">
-          <small>{t(lang, "ef_ch_hold")}</small>
-          <b><bdi dir="ltr">{num(f.hold, 2)} BTC</bdi></b>
-          {price > 0 ? <small><bdi dir="ltr">{usdWord(f.hold * price)}</bdi></small> : null}
-        </div>
+        {f.hold !== undefined ? (
+          <div className="dm-ch">
+            <small>{t(lang, "ef_ch_hold")}</small>
+            <b><bdi dir="ltr">{num(f.hold, 2)} BTC</bdi></b>
+            {price > 0 ? <small><bdi dir="ltr">{usdWord(f.hold * price)}</bdi></small> : null}
+          </div>
+        ) : (
+          <div className="dm-ch">
+            <small>{t(lang, "ef_ch_fee")}</small>
+            <b><bdi dir="ltr">{f.fee == null ? "—" : `≈${num(f.fee, 2)}%`}</bdi></b>
+          </div>
+        )}
         <div className="dm-ch">
           <small>{t(lang, "ef_ch_day")}</small>
           <b className={dayNet > 0 ? "up" : dayNet < 0 ? "dn" : "dim"}><bdi dir="ltr">{coinsSigned(dayNet)}</bdi></b>
@@ -469,7 +501,7 @@ function ChainFund({ f, price, lang }: { f: EtfChainFund; price: number; lang: L
           );
         })}
       </svg>
-      <p className="lq-hint">{t(lang, "ef_ch_wallets", { n: num(f.n), c: num(f.checked) })}</p>
+      <p className="lq-hint">{f.foot}</p>
     </Card>
   );
 }
@@ -491,13 +523,18 @@ export function EtfChain({ price, lang }: { price: number; lang: Lang }) {
     };
   }, []);
   const funds = (r?.funds ?? []).filter((f) => f.n > 0);
+  const cust = r?.custody?.funds ?? [];
+  // Группы хранителя, названные сверкой потоков; фонд со своими кошельками
+  // (BITB) уже показан точнее — по ним.
+  const named = cust.filter((f) => !f.t.startsWith("#") && !funds.some((w) => w.t === f.t));
   // Фонды у того же хранителя, найденные по корзинам, но ещё без имени.
-  const found = (r?.custody?.funds ?? []).filter((f) => f.t.startsWith("#")).length;
-  if (!r?.ok || !funds.length) return null;
+  const found = cust.filter((f) => f.t.startsWith("#")).length;
+  if (!r?.ok || (!funds.length && !named.length)) return null;
   return (
     <>
       <SectionTitle>{t(lang, "ef_ch_title")}</SectionTitle>
-      {funds.map((f) => <ChainFund key={f.t} f={f} price={price} lang={lang} />)}
+      {funds.map((f) => <ChainFund key={f.t} f={ofWallets(f, lang)} price={price} lang={lang} />)}
+      {named.map((f) => <ChainFund key={f.t} f={ofBaskets(f, lang)} price={price} lang={lang} />)}
       <p className="lq-hint">{t(lang, "ef_ch_what")}</p>
       {found > 0
         ? <p className="lq-hint">{t(lang, "ef_ch_found", { n: num(found) })}</p>

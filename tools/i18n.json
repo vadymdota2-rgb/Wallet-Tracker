@@ -26926,5 +26926,41 @@
     "ko": "「바스켓」으로 — 펀드의 모든 주문은 정확히 바스켓의 정수 배 — 스캐너가 같은 수탁기관에서 펀드 {n}개를 더 찾았습니다. 흐름은 이미 집계되며, 이름은 대조 후 표시됩니다.",
     "vi": "Nhờ «giỏ» — mỗi lệnh của quỹ đúng bằng số nguyên giỏ của nó — trình quét tìm thêm {n} quỹ tại cùng đơn vị lưu ký. Dòng tiền đã được tính; tên sẽ xuất hiện sau khi đối chiếu.",
     "zh": "借助「篮子」——基金每笔申赎恰好是其篮子的整数倍——扫描器在同一托管方又找到 {n} 只基金。其资金流已在统计，名称将在核对后显示。"
+  },
+  "ef_ch_fee": {
+    "ru": "Комиссия по цепочке",
+    "en": "Fee from the chain",
+    "uk": "Комісія за ланцюжком",
+    "de": "Gebühr laut Chain",
+    "es": "Comisión según la cadena",
+    "fr": "Frais selon la chaîne",
+    "pt": "Taxa pela blockchain",
+    "pl": "Opłata z łańcucha",
+    "tr": "Zincire göre ücret",
+    "ar": "الرسوم وفق السلسلة",
+    "hi": "चेन से शुल्क",
+    "id": "Biaya dari rantai",
+    "ja": "チェーンから見た手数料",
+    "ko": "체인 기준 수수료",
+    "vi": "Phí theo chuỗi",
+    "zh": "链上推算费率"
+  },
+  "ef_ch_basket": {
+    "ru": "Найден по «корзинам» (корзина {b} BTC), имя — по сверке ежедневных потоков. Хранилищ: {n}. Комиссия — по тому, как тает корзина.",
+    "en": "Found by baskets ({b} BTC per basket); named by matching daily flows. Vaults: {n}. Fee — from how the basket shrinks.",
+    "uk": "Знайдено за «кошиками» (кошик {b} BTC), назву — за звіркою щоденних потоків. Сховищ: {n}. Комісія — за тим, як тане кошик.",
+    "de": "Über Körbe gefunden ({b} BTC je Korb), Name per Abgleich der täglichen Flüsse. Verwahrstellen: {n}. Gebühr — daraus, wie der Korb schrumpft.",
+    "es": "Hallado por cestas ({b} BTC por cesta); nombre por cotejo de flujos diarios. Bóvedas: {n}. Comisión: según cómo se reduce la cesta.",
+    "fr": "Trouvé grâce aux paniers ({b} BTC par panier) ; nommé par rapprochement des flux quotidiens. Coffres : {n}. Frais : d'après la fonte du panier.",
+    "pt": "Encontrado pelas cestas ({b} BTC por cesta); nome pela verificação dos fluxos diários. Cofres: {n}. Taxa — pelo encolhimento da cesta.",
+    "pl": "Znaleziony po koszykach ({b} BTC na koszyk), nazwa — z porównania dziennych przepływów. Skarbców: {n}. Opłata — z tego, jak kurczy się koszyk.",
+    "tr": "Sepetlerden bulundu (sepet başına {b} BTC); ad, günlük akış eşleştirmesiyle. Kasa: {n}. Ücret — sepetin küçülme hızından.",
+    "ar": "عُثر عليه عبر «السلال» (السلة {b} BTC)، والاسم بمطابقة التدفقات اليومية. الخزائن: {n}. الرسوم — من وتيرة تقلّص السلة.",
+    "hi": "«बास्केट» से मिला (बास्केट {b} BTC); नाम दैनिक प्रवाह मिलान से। वॉल्ट: {n}। शुल्क — बास्केट के घटने से।",
+    "id": "Ditemukan lewat keranjang ({b} BTC per keranjang); nama dari pencocokan arus harian. Brankas: {n}. Biaya — dari laju penyusutan keranjang.",
+    "ja": "「バスケット」で発見（1バスケット {b} BTC）。名前は日次フローの照合による。保管庫：{n}。手数料はバスケットの減り方から。",
+    "ko": "「바스켓」으로 발견(바스켓 {b} BTC), 이름은 일일 흐름 대조로. 보관소: {n}. 수수료는 바스켓이 줄어드는 속도로 계산.",
+    "vi": "Tìm qua «giỏ» ({b} BTC mỗi giỏ); tên từ đối chiếu dòng tiền hằng ngày. Kho: {n}. Phí — theo tốc độ giỏ thu nhỏ.",
+    "zh": "通过「篮子」找到（每篮 {b} BTC），名称来自每日流量核对。保管库：{n}。费率由篮子缩减速度推算。"
   }
 }
