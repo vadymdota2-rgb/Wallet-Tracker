@@ -22,6 +22,7 @@ import { haptic } from "../lib/telegram";
 import { fetchEtf, peekEtf } from "../lib/api";
 import { Card, Chips, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import type { EtfCoin, EtfReply } from "../lib/types";
+import { Boundary } from "../components/Boundary";
 import { Frame } from "./Screen";
 import { CbpSection, CmeSection, Holders } from "./EtfMore";
 import { dateStr, timeTicks } from "./FearGreedScreen";
@@ -671,9 +672,14 @@ export function EtfScreen() {
             <p className="lq-hint">{t(lang, "ef_r_note", { d: dateStr(lang, days[0]![0], { day: "numeric", month: "long", year: "numeric" }) })}</p>
           </Card>
 
-          <Holders rows={reply.holders ?? []} price={lastPx} lang={lang} />
-          {reply.cme?.btc?.length ? <CmeSection rows={reply.cme.btc} sym={sym} price={lastPx} lang={lang} /> : null}
-          {reply.cbp?.btc?.days?.length ? <CbpSection d={reply.cbp.btc} sym={sym} lang={lang} /> : null}
+          {/* Блок упал (чужой ответ, старый формат) — пропадает только он, а не весь экран. */}
+          <Boundary name="etf-holders"><Holders raw={reply.holders} price={lastPx} lang={lang} /></Boundary>
+          <Boundary name="etf-cme">
+            {reply.cme?.btc?.length ? <CmeSection rows={reply.cme.btc} sym={sym} price={lastPx} lang={lang} /> : null}
+          </Boundary>
+          <Boundary name="etf-cbp">
+            {reply.cbp?.btc?.days?.length ? <CbpSection d={reply.cbp.btc} sym={sym} lang={lang} /> : null}
+          </Boundary>
 
           <details className="lq-how">
             <summary>{t(lang, "fg_how")}</summary>

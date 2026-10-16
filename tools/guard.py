@@ -782,7 +782,8 @@ say("страх и жадность: источник alternative.me рядом 
     and "(alternative.me)\" if zone else" in _dgi and '" · alternative.me" if s["k"] == "fng"' in _dgi)
 _tre = read(f"{APP}/wt_treasury.py")
 say("крупнейшие держатели: ETF и компании (по их отчётам в SEC, CryptoAssetNumberOfUnits), без государств; выбор группы",
-    "export function Holders(" in _em and "<Holders rows={reply.holders ?? []}" in _ef
+    "export function Holders(" in _em and '<Boundary name="etf-holders"><Holders raw={reply.holders}' in _ef
+    and "Array.isArray(raw) ? raw.filter(holderRow) : []" in _em
     and '{ id: "COMPANY", key: "ef_g_co" }' in _em and "GOVERNMENT" not in _em + _etfs
     and '"holders": _holders(coins.get("btc"), companies)' in _etfs and "co_f = pool.submit(wt_treasury.companies)" in _etfs
     and 'HOST = "data.sec.gov"' in _tre and "/us-gaap/CryptoAssetNumberOfUnits.json" in _tre
