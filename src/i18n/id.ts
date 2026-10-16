@@ -119,6 +119,7 @@ export const id: Dict = {
   btc_followed: "Anda mengikuti dompet ini: bot akan memberi tahu setiap beli, jual, atau transfer.",
   btc_hold: "Terkumpul",
   btc_in_profit: "Beli untung",
+  btc_is_etf: "Dompet dana yang diperdagangkan di bursa {f} (ETF). Pergerakannya adalah arus masuk dan keluar dana, bukan transaksi paus pribadi.",
   btc_is_exchange: "Alamat ini milik {ex}.",
   btc_labels: "alamat bursa: {n}",
   btc_move_in: "Diterima",

@@ -806,6 +806,11 @@ say("ETF по цепочке: догонка двух месяцев и прос
     and 'if path in ("/etf/chain", "/api/etf/chain"):' in api and "def _btc_etf_build() -> dict:" in api
     and "export function EtfChain(" in read(f"{APP}/src/screens/EtfMore.tsx")
     and "<EtfChain price={btcPx} lang={lang} />" in read(f"{APP}/src/screens/EtfScreen.tsx"))
+_btv2 = read(f"{APP}/src/screens/BtcViews.tsx")
+say("BTC: кошельки ETF подписаны тикером фонда — в рейтинге, крупных ордерах (потоки бирж) и на экране кошелька",
+    "AND fund NOT LIKE '#%'" in api and 'out[r["address"]]["etf"]' in api
+    and '{r.etf ? <span className="bt-etf">ETF · {r.etf}</span> : null}' in _btv2
+    and '${r.etf ? `ETF ${r.etf} · ` : ""}' in _btv2 and 't(lang, "btc_is_etf", { f: data.etf })' in _btv2)
 say("bitcoin: вкладка «Крупные ордера BTC» с потоком бирж (в NetFlow его нет), третья доска рейтинга, экран кошелька",
     'path in ("/btc/flow", "/api/btc/flow")' in api and "def _btc_clean(" in api and "w.s < 0.9 * w.b" in api
     and "export function BtcFlowCard(" in _btv and "export function BtcBigView(" in _btv

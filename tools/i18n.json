@@ -26890,5 +26890,23 @@
     "ko": "다른 펀드는 지갑을 공개하지 않습니다. 스캐너가 체인에서 직접 찾아 발견하면 여기에 추가합니다.",
     "vi": "Các quỹ khác không công bố ví — trình quét tự tìm trên chuỗi và sẽ thêm vào đây khi tìm thấy.",
     "zh": "其他基金未公布钱包——扫描器会自行在链上寻找，找到后添加到这里。"
+  },
+  "btc_is_etf": {
+    "ru": "Кошелёк биржевого фонда {f} (ETF). Его движения — притоки и оттоки фонда, а не сделки частного кита.",
+    "en": "Wallet of the exchange-traded fund {f} (ETF). Its moves are the fund's inflows and outflows, not a private whale's trades.",
+    "uk": "Гаманець біржового фонду {f} (ETF). Його рухи — припливи й відпливи фонду, а не угоди приватного кита.",
+    "de": "Wallet des börsengehandelten Fonds {f} (ETF). Seine Bewegungen sind Zu- und Abflüsse des Fonds, keine Trades eines privaten Wals.",
+    "es": "Billetera del fondo cotizado {f} (ETF). Sus movimientos son entradas y salidas del fondo, no operaciones de una ballena privada.",
+    "fr": "Portefeuille du fonds coté {f} (ETF). Ses mouvements sont des entrées et sorties du fonds, pas les transactions d'une baleine privée.",
+    "pt": "Carteira do fundo negociado em bolsa {f} (ETF). Seus movimentos são entradas e saídas do fundo, não negociações de uma baleia privada.",
+    "pl": "Portfel funduszu giełdowego {f} (ETF). Jego ruchy to napływy i odpływy funduszu, a nie transakcje prywatnego wieloryba.",
+    "tr": "Borsa yatırım fonu {f} (ETF) cüzdanı. Hareketleri fonun giriş ve çıkışlarıdır, özel bir balinanın işlemleri değil.",
+    "ar": "محفظة صندوق التداول {f} (ETF). تحركاتها تدفقات داخلة وخارجة للصندوق، وليست صفقات حوت خاص.",
+    "hi": "एक्सचेंज-ट्रेडेड फंड {f} (ETF) का वॉलेट। इसकी गतिविधियाँ फंड के अंतर्वाह और बहिर्वाह हैं, किसी निजी व्हेल के सौदे नहीं।",
+    "id": "Dompet dana yang diperdagangkan di bursa {f} (ETF). Pergerakannya adalah arus masuk dan keluar dana, bukan transaksi paus pribadi.",
+    "ja": "上場投資信託 {f}（ETF）のウォレット。その動きはファンドへの流入・流出であり、個人クジラの取引ではありません。",
+    "ko": "상장지수펀드 {f}(ETF)의 지갑입니다. 이 지갑의 움직임은 펀드의 유입·유출이며 개인 고래의 거래가 아닙니다.",
+    "vi": "Ví của quỹ ETF {f}. Các giao dịch của ví là dòng vào và dòng ra của quỹ, không phải giao dịch của cá voi cá nhân.",
+    "zh": "交易所交易基金 {f}（ETF）的钱包。其变动是基金的流入和流出，而非个人巨鲸的交易。"
   }
 }

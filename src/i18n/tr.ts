@@ -119,6 +119,7 @@ export const tr: Dict = {
   btc_followed: "Bu cüzdanı takip ediyorsunuz: bot her alım, satım veya transferde uyarı gönderecek.",
   btc_hold: "Biriken",
   btc_in_profit: "Kârdaki alımlar",
+  btc_is_etf: "Borsa yatırım fonu {f} (ETF) cüzdanı. Hareketleri fonun giriş ve çıkışlarıdır, özel bir balinanın işlemleri değil.",
   btc_is_exchange: "Bu adres {ex} borsasına ait.",
   btc_labels: "borsa adresi: {n}",
   btc_move_in: "Alındı",

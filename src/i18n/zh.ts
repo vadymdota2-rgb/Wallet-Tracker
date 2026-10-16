@@ -119,6 +119,7 @@ export const zh: Dict = {
   btc_followed: "你已关注此钱包：每次买入、卖出或转账，机器人都会提醒你。",
   btc_hold: "累计",
   btc_in_profit: "盈利买入",
+  btc_is_etf: "交易所交易基金 {f}（ETF）的钱包。其变动是基金的流入和流出，而非个人巨鲸的交易。",
   btc_is_exchange: "该地址属于 {ex}。",
   btc_labels: "交易所地址：{n}",
   btc_move_in: "收到",

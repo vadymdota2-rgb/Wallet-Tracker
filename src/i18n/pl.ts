@@ -119,6 +119,7 @@ export const pl: Dict = {
   btc_followed: "Obserwujesz ten portfel: bot powiadomi o każdym zakupie, sprzedaży lub przelewie.",
   btc_hold: "Zgromadzono",
   btc_in_profit: "Zakupy na plusie",
+  btc_is_etf: "Portfel funduszu giełdowego {f} (ETF). Jego ruchy to napływy i odpływy funduszu, a nie transakcje prywatnego wieloryba.",
   btc_is_exchange: "Ten adres należy do {ex}.",
   btc_labels: "adresy giełd: {n}",
   btc_move_in: "Otrzymano",

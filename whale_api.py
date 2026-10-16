@@ -11526,6 +11526,12 @@ def _btc_extra(con, wallets: list[str]) -> dict[str, dict]:
             out[r["address"]]["base"] = True
             if r["imp"]:
                 out[r["address"]]["imp"] = True
+    if table_exists(con, "btc_etf_addr"):
+        # Кошелёк биржевого фонда — по своей разметке сканера (btc_etf.cpp):
+        # тикер фонда. Группы без имени («#…») не подписываем.
+        for r in con.execute(f"SELECT address, fund FROM btc_etf_addr WHERE address IN ({marks}) "
+                             f"AND fund NOT LIKE '#%'", wallets):
+            out[r["address"]]["etf"] = str(r["fund"])[:12]
     return out
 
 

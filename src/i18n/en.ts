@@ -118,6 +118,7 @@ export const en = {
   btc_followed: "You follow this wallet: the bot will alert you on every buy, sell or transfer.",
   btc_hold: "Accumulated",
   btc_in_profit: "Buys in profit",
+  btc_is_etf: "Wallet of the exchange-traded fund {f} (ETF). Its moves are the fund's inflows and outflows, not a private whale's trades.",
   btc_is_exchange: "This address belongs to {ex}.",
   btc_labels: "exchange addresses: {n}",
   btc_move_in: "Received",

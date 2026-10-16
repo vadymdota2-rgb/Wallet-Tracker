@@ -119,6 +119,7 @@ export const vi: Dict = {
   btc_followed: "Bạn đang theo dõi ví này: bot sẽ báo mỗi lần mua, bán hoặc chuyển.",
   btc_hold: "Tích lũy",
   btc_in_profit: "Lần mua có lãi",
+  btc_is_etf: "Ví của quỹ ETF {f}. Các giao dịch của ví là dòng vào và dòng ra của quỹ, không phải giao dịch của cá voi cá nhân.",
   btc_is_exchange: "Địa chỉ này thuộc {ex}.",
   btc_labels: "địa chỉ sàn: {n}",
   btc_move_in: "Đã nhận",

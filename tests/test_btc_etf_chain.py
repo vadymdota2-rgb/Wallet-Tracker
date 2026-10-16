@@ -80,6 +80,22 @@ class BtcEtfChainTest(unittest.TestCase):
         with mock.patch.object(api, "BTC_DB", self.db + ".missing"):
             self.assertEqual(api._btc_etf_build(), {"ok": False, "error": "no_data"})
 
+    def test_extra_tags_etf_wallets(self):
+        con = sqlite3.connect(self.db)
+        con.execute("INSERT INTO btc_etf_addr(address, fund, how) VALUES('bc1qgroup', '#7', 'fee')")
+        con.commit()
+        con.close()
+        ro = api.open_db(self.db)
+        try:
+            ex = api._btc_extra(ro, ["bc1qa", "bc1qc", "bc1qgroup", "bc1qnone"])
+        finally:
+            ro.close()
+        # Кошельки фонда подписаны тикером; группа без имени и чужой адрес — нет.
+        self.assertEqual(ex["bc1qa"].get("etf"), "BITB")
+        self.assertEqual(ex["bc1qc"].get("etf"), "BITB")
+        self.assertNotIn("etf", ex["bc1qgroup"])
+        self.assertNotIn("etf", ex["bc1qnone"])
+
     def test_route(self):
         with open(os.path.join(ROOT, "whale_api.py"), encoding="utf-8") as f:
             src = f.read()

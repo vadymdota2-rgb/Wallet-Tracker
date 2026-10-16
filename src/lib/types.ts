@@ -1029,6 +1029,8 @@ interface BtcExtra {
   base?: boolean;
   /** Добавлен в базу импортом, а не найден поиском. */
   imp?: boolean;
+  /** Кошелёк биржевого фонда — тикер (своя разметка сканера). */
+  etf?: string;
 }
 
 export interface BtcMove extends BtcExtra {

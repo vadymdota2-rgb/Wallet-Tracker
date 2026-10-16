@@ -119,6 +119,7 @@ export const ko: Dict = {
   btc_followed: "이 지갑을 팔로우 중입니다: 매수, 매도, 이체마다 봇이 알림을 보냅니다.",
   btc_hold: "누적",
   btc_in_profit: "수익 중 매수",
+  btc_is_etf: "상장지수펀드 {f}(ETF)의 지갑입니다. 이 지갑의 움직임은 펀드의 유입·유출이며 개인 고래의 거래가 아닙니다.",
   btc_is_exchange: "이 주소는 {ex}의 주소입니다.",
   btc_labels: "거래소 주소: {n}",
   btc_move_in: "받음",

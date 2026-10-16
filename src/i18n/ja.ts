@@ -119,6 +119,7 @@ export const ja: Dict = {
   btc_followed: "このウォレットをフォロー中です。購入・売却・送金のたびにボットが通知します。",
   btc_hold: "蓄積",
   btc_in_profit: "含み益の購入",
+  btc_is_etf: "上場投資信託 {f}（ETF）のウォレット。その動きはファンドへの流入・流出であり、個人クジラの取引ではありません。",
   btc_is_exchange: "このアドレスは{ex}のものです。",
   btc_labels: "取引所アドレス：{n}",
   btc_move_in: "受取",

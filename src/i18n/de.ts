@@ -119,6 +119,7 @@ export const de: Dict = {
   btc_followed: "Sie folgen diesem Wallet: Der Bot meldet jeden Kauf, Verkauf und Transfer.",
   btc_hold: "Akkumuliert",
   btc_in_profit: "Käufe im Plus",
+  btc_is_etf: "Wallet des börsengehandelten Fonds {f} (ETF). Seine Bewegungen sind Zu- und Abflüsse des Fonds, keine Trades eines privaten Wals.",
   btc_is_exchange: "Diese Adresse gehört {ex}.",
   btc_labels: "Börsenadressen: {n}",
   btc_move_in: "Empfangen",
