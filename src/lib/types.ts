@@ -918,44 +918,6 @@ export interface EtfReply {
   at: number;
 }
 
-/** Фонд по своей разметке сканера: кошельки, запас, потоки по суткам UTC. */
-export interface EtfChainFund {
-  t: string;
-  /** Кошельков всего, из них опубликовано фондом и сверено с цепочкой. */
-  n: number;
-  seed: number;
-  checked: number;
-  /** Запас, BTC: сумма остатков кошельков фонда. */
-  hold: number;
-  checked_at: number;
-  /** [сутки UTC, приток BTC, отток BTC, плата фонду BTC]. */
-  days: [number, number, number, number][];
-  /** [сутки UTC, запас BTC] — по сверке с цепочкой. */
-  hist: [number, number][];
-}
-
-/** Фонд у хранителя, найденный по «корзинам» (wt_etfchain): «#…» — без имени. */
-export interface EtfCustodyFund {
-  t: string;
-  vaults: number;
-  /** Корзина, BTC — отпечаток фонда. */
-  basket: number;
-  /** Комиссия в год, % — по тому, как тает корзина. */
-  fee: number | null;
-  /** [сутки UTC, приток BTC, отток BTC]. */
-  days: [number, number, number][];
-  vol: number;
-}
-
-export interface EtfChainReply {
-  ok: boolean;
-  error?: string;
-  funds: EtfChainFund[];
-  at: number;
-  block: { h: number; ts: number } | null;
-  custody?: { ok: boolean; funds?: EtfCustodyFund[]; vaults?: number; xfers?: number };
-}
-
 /** Высота последнего блока биткоина, блок следующего халвинга и среднее время блока, с. */
 /** Монета, по которой строится карта ликвидаций. */
 export interface LiqCoin {

@@ -801,11 +801,13 @@ say("bitcoin: свои метки ETF — кошельки, опубликова
     and "etfBlock(g_btcDb, b);" in _ws_btc and "etfRollback(g_btcDb, b.height - 1);" in _ws_btc
     and "if (!etfFund(a).empty()) return;" in _ws_btc and "void refreshEtfBalances()" in _ws_btc
     and "urlopen" not in read(os.path.join(BOT, "tools", "btc_etf_seeds.py")).split("def on_chain")[0])
-say("ETF по цепочке: догонка двух месяцев и простоя, /api/etf/chain, карточка на вкладке BTC",
-    "void etfBackfill(long long since, long long upTo)" in _ws_btc and 'sc.state("etf_back") != "1"' in _ws_btc
+say("ETF по цепочке: догонка двух месяцев и простоя, /api/etf/chain; отдельной карточки на экране нет",
+    "bool etfBackfill(long long since, long long upTo)" in _ws_btc and 'sc.state("etf_back") != "2"' in _ws_btc
+    and "json addrPage(const std::string& path, bool& ok)" in _ws_btc
     and 'if path in ("/etf/chain", "/api/etf/chain"):' in api and "def _btc_etf_build() -> dict:" in api
-    and "export function EtfChain(" in read(f"{APP}/src/screens/EtfMore.tsx")
-    and "<EtfChain price={btcPx} lang={lang} />" in read(f"{APP}/src/screens/EtfScreen.tsx"))
+    # Отдельной карточки «ETF по цепочке» на экране нет: свои данные идут в
+    # основной экран вместо чужих, а не рядом с ними.
+    and "EtfChain" not in read(f"{APP}/src/screens/EtfScreen.tsx"))
 _btv2 = read(f"{APP}/src/screens/BtcViews.tsx")
 say("BTC: кошельки ETF подписаны тикером фонда — в рейтинге, крупных ордерах (потоки бирж) и на экране кошелька",
     "AND fund NOT LIKE '#%'" in api and 'out[r["address"]]["etf"]' in api
@@ -820,13 +822,12 @@ say("ETF у хранителя по корзинам: бот находит хр
     and "def mixed(self) -> bool:" in _chain and "OWN_ALL = 0.5" in _chain and "def _names(" in _chain
     and '{**btc_etf_chain(), "custody": btc_custody()}' in api
     and "wt_etfchain.py tests/test_etfchain.py" in read(f"{APP}/.github/workflows/tests.yml"))
-say("ETF у хранителя: имена по сверке ежедневных потоков (T+1), память имён, снятие при расхождении, метки и карточки",
+say("ETF у хранителя: имена по сверке ежедневных потоков (T+1), память имён, снятие при расхождении, метки в рейтинге",
     "def settle_day(trade_day: int) -> int:" in _chain and "def match_names(" in _chain and "def flow_err(" in _chain
     and "MATCH_ERR = 0.12" in _chain and "UNMATCH_ERR = 0.35" in _chain and "def known_names(" in _chain
     and "def _btc_learn(funds: list[dict], live_from: int) -> None:" in api
     and "CREATE TABLE IF NOT EXISTS btc_etf_learned" in api and 'f.pop("_vaults", None)' in api
-    and "SELECT address, fund FROM btc_etf_learned WHERE address IN" in api
-    and "function ofBaskets(f: EtfCustodyFund, lang: Lang): FundView" in read(f"{APP}/src/screens/EtfMore.tsx"))
+    and "SELECT address, fund FROM btc_etf_learned WHERE address IN" in api)
 say("bitcoin: вкладка «Крупные ордера BTC» с потоком бирж (в NetFlow его нет), третья доска рейтинга, экран кошелька",
     'path in ("/btc/flow", "/api/btc/flow")' in api and "def _btc_clean(" in api and "w.s < 0.9 * w.b" in api
     and "export function BtcFlowCard(" in _btv and "export function BtcBigView(" in _btv

@@ -24,7 +24,7 @@ import { fetchEtf, peekEtf } from "../lib/api";
 import { Card, Chips, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import type { BtcHolder, EtfCoin, EtfReply } from "../lib/types";
 import { Frame } from "./Screen";
-import { AltHolders, CbpSection, CmeSection, EtfChain, HoldersAll } from "./EtfMore";
+import { AltHolders, CbpSection, CmeSection, HoldersAll } from "./EtfMore";
 import { dateStr, timeTicks } from "./FearGreedScreen";
 
 type Lang = Parameters<typeof t>[0];
@@ -796,7 +796,6 @@ export function EtfScreen() {
           {reply.cbp?.[cur]?.days?.length ? <CbpSection d={reply.cbp[cur]!} sym={sym} lang={lang} /> : null}
           {cur === "btc" ? (
             <>
-              <EtfChain price={btcPx} lang={lang} />
               <Holders h={reply.holders ?? {}} price={btcPx} lang={lang} />
               <HoldersAll h={reply.holders ?? {}} price={btcPx} lang={lang} />
             </>

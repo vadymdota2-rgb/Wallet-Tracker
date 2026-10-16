@@ -12,7 +12,7 @@ import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
   LiqCoinsReply, FngReply, DomReply, EtfReply, FundRow, LsRow, MutationResult,
   RotSide, SymbolRow, TokenHist, Trades, UnlocksReply, WalletLive, BscExFlowReply,
-  BtcBigReply, BtcFlowReply, EtfChainReply, BtcRankReply, BtcWalletReply, LsTotals, OptionsReply, LiqsReply, OiHistReply, CalReply,
+  BtcBigReply, BtcFlowReply, BtcRankReply, BtcWalletReply, LsTotals, OptionsReply, LiqsReply, OiHistReply, CalReply,
 } from "./types";
 
 const TIMEOUT_MS = 15000;
@@ -654,10 +654,6 @@ function exPeek<T extends { ok?: boolean }>(path: string, ttl: number): T | unde
 
 export const fetchBtcFlow = () => exGet<BtcFlowReply>("/api/btc/flow", BTC_TTL);
 export const peekBtcFlow = () => exPeek<BtcFlowReply>("/api/btc/flow", BTC_TTL);
-
-/** Фонды по цепочке — своя разметка сканера бота (кошельки фондов, их потоки). */
-export const fetchEtfChain = () => exGet<EtfChainReply>("/api/etf/chain", BTC_TTL);
-export const peekEtfChain = () => exPeek<EtfChainReply>("/api/etf/chain", BTC_TTL);
 
 /** Поток бирж BSC — переводы на биржи и с бирж по всей сети (не DEX). */
 export const fetchBscExFlow = () => exGet<BscExFlowReply>("/api/bsc/exflow", BTC_TTL);
