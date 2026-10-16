@@ -207,6 +207,22 @@ class BtcEtfChainTest(unittest.TestCase):
         self.assertAlmostEqual(src["HODL"]["hold"], 14_000.0)
         self.assertTrue(src["IBIT"]["matched"])
 
+    def test_basket_with_labeled_wallet_spreads_to_its_vaults(self):
+        # Корзина «IBIT» (в ней размеченный кошелёк) — её хранилища в
+        # очередь разметки бота; уже размеченные и безымянные — нет.
+        con = sqlite3.connect(self.db)
+        con.execute("INSERT INTO btc_etf_addr(address, fund, how) VALUES('bc1qlab', 'IBIT', 'list')")
+        con.commit()
+        groups = [{"t": "IBIT", "_vaults": ["bc1qlab", "bc1qv1", "bc1qv2", "bc1qa"]},
+                  {"t": "#7c1f", "_vaults": ["bc1qx"]}]
+        with mock.patch.object(api, "now", lambda: NOW):
+            self.assertEqual(api._btc_spread(con, groups), 2)
+            con.commit()
+            self.assertEqual(api._btc_spread(con, groups), 0)  # уже в очереди
+        got = sorted(con.execute("SELECT address, fund, at FROM btc_etf_import").fetchall())
+        con.close()
+        self.assertEqual(got, [("bc1qv1", "IBIT", NOW), ("bc1qv2", "IBIT", NOW)])
+
     def test_route(self):
         with open(os.path.join(ROOT, "whale_api.py"), encoding="utf-8") as f:
             src = f.read()

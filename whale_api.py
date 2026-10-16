@@ -11722,6 +11722,36 @@ def btc_etf_chain() -> dict:
 BTC_CUST_TTL = 900.0
 
 
+# Корзина хранителя, в которой есть размеченный кошелёк фонда (свой список,
+# /import владельца, опубликованные фондом), — вся этого фонда: остальные её
+# хранилища уходят в разметку бота той же очередью, что и /import
+# (btc_etf_import). Уже размеченные не трогаем. За круг — не больше стольких.
+BTC_SPREAD_MAX = 500
+
+
+def _btc_spread(con: sqlite3.Connection, funds: list[dict]) -> int:
+    """Хранилища названных корзин — в очередь разметки бота. Возвращает,
+    сколько адресов поставлено."""
+    con.execute("CREATE TABLE IF NOT EXISTS btc_etf_import (address TEXT PRIMARY KEY, fund TEXT NOT NULL,"
+                " at INTEGER NOT NULL DEFAULT 0)")
+    known = {str(r[0]) for r in con.execute("SELECT address FROM btc_etf_addr")} \
+        if table_exists(con, "btc_etf_addr") else set()
+    queued = {str(r[0]) for r in con.execute("SELECT address FROM btc_etf_import")}
+    t = now()
+    rows = []
+    for f in funds:
+        name = str(f.get("t") or "")
+        if not name or name.startswith("#"):
+            continue
+        new = [a for a in f.get("_vaults") or [] if a not in known and a not in queued]
+        rows += [(a, name, t) for a in new]
+        if new:
+            sys.stderr.write(f"[api] корзина {name}: в разметку ещё {len(new)} хранилищ\n")
+    rows = rows[:BTC_SPREAD_MAX]
+    con.executemany("INSERT OR IGNORE INTO btc_etf_import(address, fund, at) VALUES(?,?,?)", rows)
+    return len(rows)
+
+
 def _btc_learn(funds: list[dict], live_from: int) -> None:
     """Имена групп по сверке их потоков с ежедневными потоками фондов
     (wt_etfchain.match_names): новое имя — в btc_etf_learned на хранилища
@@ -11731,6 +11761,13 @@ def _btc_learn(funds: list[dict], live_from: int) -> None:
     «не совпало»."""
     # Только готовый ответ: сборка экрана ETF сама зовёт данные по цепочке, и
     # сборка отсюда на холодном старте ждала бы саму себя.
+    con = open_db(BTC_DB, write=True)
+    if con:
+        try:
+            if _btc_spread(con, funds):
+                con.commit()
+        finally:
+            con.close()
     reply = etf.peek() or {}
     series, fees = etfchain.fund_series(reply)
     if not series:

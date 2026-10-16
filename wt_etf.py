@@ -291,6 +291,36 @@ def _quarters(sec: dict[str, dict[str, Any]], px: dict[int, float]) -> tuple[Qua
     return flows, price, last
 
 
+def _fund_row(info: dict[str, Any], rep: tuple[float, int], cum: tuple[float, float],
+              c: dict[str, Any] | None, last_px: float) -> dict[str, Json]:
+    """Фонд для экрана: запас — отчёт плюс то, что после него прошло через
+    размеченные кошельки (BITB — точно по всем); итог «с запуска» — кварталы
+    плюс то же «после отчёта»."""
+    btc, asof = rep
+    report = btc
+    after = 0.0
+    if c is not None:
+        if c.get("exact") and c.get("hold"):
+            after = float(c["hold"]) - btc
+        else:
+            cut = settle_day(asof // 86400) * 86400 if asof else 0
+            after = sum(float(v) for d, v in (c.get("days") or {}).items() if int(d) > cut)
+        btc = max(0.0, btc + after)
+    fee = info.get("fee")
+    cu, cc = cum
+    f: dict[str, Json] = {
+        "t": str(info["t"]), "n": str(info.get("n") or "")[:60], "c": "US",
+        "fee": None if fee is None else round(float(fee) * 100, 3),
+        "aum": round(btc * last_px), "hold": round(btc, 2), "asof": asof,
+        "cum": round(cu + after * last_px), "cumc": round(cc + after, 2),
+    }
+    if c is not None:
+        f["src"] = "chain"
+        if _partial(c, report):
+            f["part"] = True
+    return f
+
+
 def _coin(cat: str, symbol: str) -> dict[str, Json] | None:
     """Фонды по отчётам в SEC (кварталы, запас) и по своей цепочке (дни)."""
     sec = wt_treasury.etf_funds() if cat == "btc" else {}
@@ -310,35 +340,9 @@ def _coin(cat: str, symbol: str) -> dict[str, Json] | None:
         first = min(int(c.get("from") or today) for c in chain_ok.values())
         days = {t: ({}, 0.0, 0.0) for t in _after(first - first % 86400 - 86400, today)}
     chain = _apply_chain(days, px, chain_ok) if days else {}
-    funds: list[dict[str, Json]] = []
-    for t in sec:
-        if t not in last:
-            continue  # ни одного отчёта с запасом — фонда на экране нет
-        btc, asof = last[t]
-        c = chain.get(t)
-        # Что прошло через кошельки фонда после его отчёта.
-        after = 0.0
-        if c is not None:
-            if c.get("exact") and c.get("hold"):
-                after = float(c["hold"]) - btc
-            else:
-                cut = settle_day(asof // 86400) * 86400 if asof else 0
-                after = sum(float(v) for d, v in (c.get("days") or {}).items() if int(d) > cut)
-            btc = max(0.0, btc + after)
-        fee = sec[t].get("fee")
-        cu = sum(v[t][0] for v in flows.values() if t in v)
-        cc = sum(v[t][1] for v in flows.values() if t in v)
-        f: dict[str, Json] = {
-            "t": t, "n": str(sec[t].get("n") or "")[:60], "c": "US",
-            "fee": None if fee is None else round(float(fee) * 100, 3),
-            "aum": round(btc * last_px), "hold": round(btc, 2), "asof": asof,
-            "cum": round(cu + after * last_px), "cumc": round(cc + after, 2),
-        }
-        if c is not None:
-            f["src"] = "chain"
-            if _partial(c, (last.get(t) or (0.0, 0))[0]):
-                f["part"] = True
-        funds.append(f)
+    funds = [_fund_row({**sec[t], "t": t}, last[t],
+                       (sum(v[t][0] for v in flows.values() if t in v), sum(v[t][1] for v in flows.values() if t in v)),
+                       chain.get(t), last_px) for t in sec if t in last]
     funds.sort(key=lambda f: -_num(f["hold"]))
     order = [str(f["t"]) for f in funds]
     quarters = []
