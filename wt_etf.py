@@ -12,12 +12,11 @@
     сканер ещё не нашёл, после снимка потоков нет, запас — база;
   - цена дня — закрытие Binance; доля фондов от добытых монет — своим счётом
     по расписанию эмиссии (supply_at);
-  - кто держит биткоин — фонды отсюда же и государства (set_holders);
   - позиции на CME — еженедельный отчёт CFTC «Traders in Financial Futures»;
   - премия Coinbase к Binance — спрос американских покупателей.
 
 Ответ живёт час (TTL): устаревший отдаётся сразу, свежий собирается в фоне
-одним потоком. Часть, которая в этот раз не собралась (потоки, держатели,
+одним потоком. Часть, которая в этот раз не собралась (потоки,
 CME), берётся из прошлой сборки, а не пропадает с экрана.
 
 Безопасность — как у модуля халвинга (wt_halving.py): запросы только по
@@ -241,11 +240,6 @@ def _funds(base: dict[str, Json], days: dict[int, Day]) -> list[dict[str, Json]]
     return out
 
 
-def _flag(code: str) -> str:
-    """Флаг страны из кода ISO: две буквы → два «региональных» символа."""
-    return "".join(chr(0x1F1E6 + ord(ch) - ord("A")) for ch in code) if re.fullmatch(r"[A-Z]{2}", code) else ""
-
-
 def _prices(symbol: str, days: dict[int, Day]) -> dict[int, float]:
     """Цена закрытия каждого дня — дневные свечи Binance."""
     return _klines(symbol, min(days) * 1000)
@@ -427,76 +421,11 @@ def _cbp() -> dict[str, Json]:
 ChainSrc = Callable[[], dict[str, dict[str, Any]]]
 
 
-# «Кто держит биткоин»: фонды — из списка фондов этого же экрана, государства —
-# свой сканер бота (подключает API, set_holders): {"top": [строки держателей]},
-# строка — [имя, тип, подтип, флаг, тикер или код страны, BTC, за 7 дней, 0].
-HoldersSrc = Callable[[], dict[str, Any]]
-
-
 class _State:
     """Кэш модуля: (monotonic, ответ). Меняется только под _lock."""
 
     hit: tuple[float, dict[str, Json]] | None = None
     chain: ChainSrc | None = None
-    holders: HoldersSrc | None = None
-
-
-def set_holders(src: HoldersSrc | None) -> None:
-    """Подключить государства по цепочке (сканер бота)."""
-    _st.holders = src
-
-
-def _own_holders() -> dict[str, Json]:
-    src = _st.holders
-    if src is None:
-        return {}
-    try:
-        return src()
-    except Exception as e:  # noqa: BLE001 — свои данные не должны ломать экран
-        _log(f"держатели: {type(e).__name__}: {e}")
-        return {}
-
-
-def _fund_holders(c: dict[str, Any] | None) -> list[list[Any]]:
-    """Фонды как держатели: запас — активы фонда по цене последнего дня (у
-    фондов, найденных в цепочке, — свой запас), за неделю — сумма их дневных
-    потоков, каждый день по своей цене."""
-    if not c or not c.get("days"):
-        return []
-    days = c["days"]
-    px = next((float(d[3]) for d in reversed(days) if d[3]), 0.0)
-    if px <= 0:
-        return []
-    week = [d for d in days if d[0] > days[-1][0] - 7 * 86400]
-    out: list[list[Any]] = []
-    for i, f in enumerate(c.get("funds") or []):
-        aum = float(f.get("aum") or 0)
-        if aum <= 0:
-            continue
-        d7 = sum(float(d[4][i]) * 1000 / float(d[3]) for d in week if i < len(d[4]) and d[4][i] and d[3])
-        out.append([str(f.get("n") or f["t"]), "FUND", "", _flag(str(f.get("c") or "")), str(f["t"]),
-                    round(aum / px, 2), round(d7, 2), 0])
-    return out
-
-
-def _holders(c: dict[str, Any] | None, own: dict[str, Any]) -> dict[str, Any]:
-    """Блок «Кто держит биткоин»: группы, все держатели по убыванию запаса и
-    кто сильнее всех менялся за неделю."""
-    # От сканера — только государства: биржи и киты живут в Нетфлоу и Рейтинге.
-    top = _fund_holders(c) + [r for r in own.get("top") or []
-                              if isinstance(r, list) and len(r) == 8 and r[1] == "GOVERNMENT"]
-    if not top:
-        return {}
-    top.sort(key=lambda r: -r[5])
-    groups: dict[str, list[Any]] = {}
-    for r in top:
-        g = groups.setdefault(r[1], [r[1], 0, 0.0, 0.0])
-        g[1] += 1
-        g[2] += r[5]
-        g[3] += r[6]
-    movers = sorted((r for r in top if abs(r[6]) >= 0.5), key=lambda r: -abs(r[6]))[:12]
-    return {"groups": [[g[0], g[1], round(g[2], 2), round(g[3], 2)] for g in sorted(groups.values(), key=lambda g: -g[2])],
-            "top": top, "movers": movers}
 
 
 def peek() -> dict[str, Json] | None:
@@ -538,7 +467,6 @@ def build() -> dict[str, Json]:
             r = _part(cat, f, 90)
             if r:
                 coins[cat] = r
-        own = _own_holders()
         extra = {"cme": _part("cme", cme_f, 90) or {}, "cbp": _part("cbp", cbp_f, 90) or {}}
     with _lock:
         was = _st.hit[1] if _st.hit else {}
@@ -548,14 +476,10 @@ def build() -> dict[str, Json]:
     for cat, _ in COINS:
         if cat not in coins and cat in (was.get("coins") or {}):
             coins[cat] = was["coins"][cat]
-    if not own.get("top"):
-        # Сканер бота не ответил — государства из прошлой сборки.
-        own = {"top": [r for r in (was.get("holders") or {}).get("top") or [] if r[1] == "GOVERNMENT"]}
-    holders = _holders(coins.get("btc"), own)
     for name in ("cme", "cbp"):
         if not extra[name] and was.get(name):
             extra[name] = was[name]
-    res = {"ok": True, "coins": coins, "holders": holders, "cme": extra["cme"], "cbp": extra["cbp"], "at": _now()}
+    res = {"ok": True, "coins": coins, "cme": extra["cme"], "cbp": extra["cbp"], "at": _now()}
     with _lock:
         _st.hit = (time.monotonic(), res)
     return res

@@ -652,7 +652,7 @@ say("токеномика: видно, что монету можно откры
 
 _ef = read(f"{APP}/src/screens/EtfScreen.tsx")
 _etfs = read(f"{APP}/wt_etf.py")
-say("институциональные потоки — только биткоин: потоки фондов по дням, спрос против добычи, держатели и кто докупал; других монет нет",
+say("институциональные потоки — только биткоин: потоки фондов по дням, спрос против добычи; без держателей и подписи источников; других монет нет",
     'COINS = (("btc", "BTCUSDT"),)' in _etfs and "type Coin" not in _ef and "Segmented<Coin>" not in _ef
     and "ETHUSDT" not in _etfs and "SOLUSDT" not in _etfs and "HYPE" not in _etfs
     and "etf_data = etf.etf_data" in api and "import wt_etf as etf" in api and '"/api/etf"' in api
@@ -660,7 +660,8 @@ say("институциональные потоки — только битко
     and "coingecko.com/api/v3/governments" not in api
     and "etf_data()  # и потоки ETF" in api
     and "from whale_api" not in _etfs and "import whale_api" not in _etfs
-    and "function FlowChart(" in _ef and "function Funds(" in _ef and "function Holders(" in _ef
+    and "function FlowChart(" in _ef and "function Funds(" in _ef and "function Holders(" not in _ef
+    and '"ef_src"' not in _ef and "holders" not in _etfs
     and "minedPerDay(" in _ef and "glyph: <EtfGlyph />" in appx)
 
 _hv = read(f"{APP}/src/components/HalvingCard.tsx")
@@ -762,16 +763,14 @@ say("дайджест: просмотры — каждый человек оди
     and '"/api/digest/view": "view"' in api and "DELETE FROM digest_views WHERE chat_id=?" in api
     and "viewDigest(it.id)" in _dgt and 'className="dg-views"' in _dgt)
 
-say("институциональные потоки: накопленный приток, доля фондов, время данных",
-    "cum={mode === \"c\" ? cumView : null}" in _ef and '"ef_mshare"' in _ef
-    and '"ef_upd"' in _ef and "coinsRound(" in _ef)
+say("институциональные потоки: накопленный приток, доля фондов",
+    "cum={mode === \"c\" ? cumView : null}" in _ef and '"ef_mshare"' in _ef and "coinsRound(" in _ef)
 
 _em = read(f"{APP}/src/screens/EtfMore.tsx")
-say("институциональные потоки: позиции CME по CFTC, премия Coinbase, все держатели с поиском и группами",
+say("институциональные потоки: позиции CME по CFTC, премия Coinbase",
     "def _cme(" in _etfs and "publicreporting.cftc.gov" in _etfs and "def _cbp(" in _etfs
     and "export function CmeSection(" in _em and "export function CbpSection(" in _em
-    and "export function HoldersAll(" in _em and "AltHolders" not in _em + _ef
-    and "<CmeSection" in _ef and "<HoldersAll" in _ef)
+    and "HoldersAll" not in _em + _ef and "AltHolders" not in _em + _ef and "<CmeSection" in _ef)
 _eal = read(f"{APP}/wt_etfalert.py")
 _eaa = read(f"{APP}/src/screens/EtfAlerts.tsx")
 say("алерты ETF: итог дня по всем фондам или по фонду и движения фондов в цепочке — в Telegram, один раз, с Премиумом",
@@ -784,17 +783,10 @@ say("алерты ETF: итог дня по всем фондам или по ф
     and "<EtfAlertsCard" in _ef and "<FundBell" in _ef)
 _wsb = read(os.path.join(BOT, "btc_chain.cpp"))
 _wsg = read(os.path.join(BOT, "btc_gov.cpp"))
-say("держатели биткоина на вкладке ETF — только фонды и государства (биржи — в Нетфлоу, киты — в Рейтинге); государства — по раскрытым ими адресам и своей цепочке",
-    "bitcointreasuries" not in _etfs and "def set_holders(" in _etfs and "etf.set_holders(btc_holders)" in api
-    and "def _fund_holders(" in _etfs and 'r[1] == "GOVERNMENT"' in _etfs
-    and "def _flag(code: str)" in _etfs and "flagOf(f.c)" in _ef
+say("ETF: база — снимок, взятый один раз (data/etf_base.json), дальше только цепочка; флаги фондов; бот ведёт государства по раскрытым ими адресам",
+    "flagOf(f.c)" in _ef and os.path.isfile(f"{APP}/data/etf_base.json")
     and "btc + sum(float(v) for d, v in (c.get(\"days\") or {}).items() if int(d) > cut)" in _etfs
-    and "BTC_GOV_FILE" in api and "def _gov_base(" in api and 'BTC_GOV_FULL = frozenset({"SV"})' in api
-    and os.path.isfile(f"{APP}/data/etf_base.json") and os.path.isfile(f"{APP}/data/gov_base.json")
-    and "btc_gov_addr" in api and '(_BTC, "hold", BTC_HOLD_TTL, _btc_holders_build)' in api
-    and "def _hold_whales(" not in api and "def _hold_exchanges(" not in api
-    and "WHALE" not in _ef + _em and "EXCHANGE" not in _ef + _em and "btcWallet" not in _ef + _em
-    and "Intl.DisplayNames" in _em
+    and "set_holders" not in api and "gov_base" not in api
     and "bc1qa5wkgaew2dkv56kfvj49j0av5nml45x9ek9hz6" in _wsg and "void govBlock(sqlite3* db, const Block& b)" in _wsg
     and "govBlock(g_btcDb, b);" in _wsb and "govRollback(g_btcDb);" in _wsb and "void readGovOfficial()" in _wsb
     and "https://bitcoin.gob.sv/api/v1/wallet/ONBTC" in _wsb and "govSnapshot(g_btcDb, now, cut);" in _wsb)

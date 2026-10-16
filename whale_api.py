@@ -11844,122 +11844,6 @@ def _etf_chain_src() -> dict:
 etf.set_chain(_etf_chain_src)
 
 
-# «Кто держит биткоин» — государства. База — снимок CoinGecko, взятый один раз
-# (data/gov_base.json); больше его не спрашиваем. К базе — наша цепочка:
-# адреса, которые знает сканер бота (btc_gov.cpp), двигались — запас меняется
-# на столько же. Точка отсчёта — наш остаток при первой встрече с базой
-# (gov_base). Где наш список адресов полный, раскрытый самим государством
-# (Сальвадор — его Национальный биткоин-офис), запас — точно по нему.
-BTC_HOLD_TTL = 600.0
-BTC_GOV_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "gov_base.json")
-# Государства, чей список адресов наш полностью (раскрыт им самим).
-BTC_GOV_FULL = frozenset({"SV"})
-
-
-def _gov_flag(code: str) -> str:
-    return "".join(chr(0x1F1E6 + ord(ch) - ord("A")) for ch in code) if re.fullmatch(r"[A-Z]{2}", code) else ""
-
-
-def _gov_own(t: int) -> tuple[dict[str, float], dict[str, float]]:
-    """Наш запас по государствам (только у сверенных целиком) и неделю назад."""
-    own: dict[str, float] = {}
-    was: dict[str, float] = {}
-    con = open_db(BTC_DB)
-    if not con:
-        return own, was
-    try:
-        if table_exists(con, "btc_gov_addr"):
-            own = {str(r[0]): (r[1] or 0) / 1e8 for r in con.execute(
-                "SELECT gov, SUM(bal_sats) FROM btc_gov_addr GROUP BY gov HAVING MIN(checked_at) > 0")}
-        if table_exists(con, "btc_gov_day"):
-            week = t - t % 86400 - 7 * 86400
-            was = {str(r[0]): r[1] / 1e8 for r in con.execute(
-                "SELECT gov, sats FROM btc_gov_day WHERE day = (SELECT MAX(day) FROM btc_gov_day WHERE day <= ?)",
-                (week,))}
-    except sqlite3.Error as e:
-        sys.stderr.write(f"[api] btc holders: {e}\n")
-    finally:
-        con.close()
-    return own, was
-
-
-def _gov_base(code: str, cg: float, own: float, t: int) -> float:
-    """Наш остаток на момент первой встречи с этой базой (сменилась база —
-    отсчёт заново)."""
-    con = open_db(DB, write=True)
-    if not con:
-        return own
-    try:
-        con.execute("CREATE TABLE IF NOT EXISTS gov_base (gov TEXT PRIMARY KEY, cg_btc REAL NOT NULL, "
-                    "own_btc REAL NOT NULL, at INTEGER NOT NULL)")
-        r = con.execute("SELECT cg_btc, own_btc FROM gov_base WHERE gov = ?", (code,)).fetchone()
-        if r and abs(float(r[0]) - cg) < 1e-6:
-            return float(r[1])
-        con.execute("INSERT OR REPLACE INTO gov_base(gov, cg_btc, own_btc, at) VALUES(?,?,?,?)", (code, cg, own, t))
-        con.commit()
-        return own
-    except sqlite3.Error as e:
-        sys.stderr.write(f"[api] gov base: {e}\n")
-        return own
-    finally:
-        con.close()
-
-
-def _gov_list() -> list | None:
-    """Снимок-база; нет файла — None (тогда только наши адреса)."""
-    try:
-        with open(BTC_GOV_FILE, encoding="utf-8") as f:
-            got = json.load(f)
-    except (OSError, ValueError):
-        return None
-    govs = got.get("governments") if isinstance(got, dict) else None
-    return govs if isinstance(govs, list) and govs else None
-
-
-def _btc_holders_build() -> dict:
-    t = now()
-    own, was = _gov_own(t)
-    govs = _gov_list()
-    top = []
-    if isinstance(govs, list):
-        rows = [g for g in govs if isinstance(g, dict) and isinstance(g.get("country"), str)]
-        # У страны бывает и штат или город (Техас, Росуэлл) — страна та, что держит больше.
-        nation: dict[str, dict] = {}
-        for g in rows:
-            c = g["country"].upper()
-            if c not in nation or float(g.get("btc") or 0) > float(nation[c].get("btc") or 0):
-                nation[c] = g
-        for g in rows:
-            code = g["country"].upper()
-            cg = float(g.get("btc") or 0)
-            is_nation = nation.get(code) is g
-            btc, d7 = cg, 0.0
-            if is_nation and code in own:
-                btc = own[code] if code in BTC_GOV_FULL else cg + own[code] - _gov_base(code, cg, own[code], t)
-                d7 = own[code] - was[code] if code in was else 0.0
-            if btc >= 1:
-                top.append([str(g.get("name") or code)[:40], "GOVERNMENT", "", _gov_flag(code),
-                            code if is_nation else "", round(btc, 2), round(d7, 2), 0])
-    else:
-        # Снимка нет — хотя бы то, что видим сами.
-        names = {"US": "United States", "SV": "El Salvador"}
-        for code, btc in own.items():
-            if btc >= 1:
-                top.append([names.get(code, code), "GOVERNMENT", "", _gov_flag(code), code, round(btc, 2),
-                            round(btc - was[code], 2) if code in was else 0.0, 0])
-    return {"top": top} if top else {}
-
-
-def btc_holders() -> dict:
-    """Готовые держатели, без ожидания: сборку экрана ETF они не держат —
-    первый раз отдадут пусто, а свежими их держит exflow_warmer."""
-    if _BTC.get("hold") is None:
-        threading.Thread(target=cached_bg, args=(_BTC, "hold", BTC_HOLD_TTL, _btc_holders_build), daemon=True).start()
-        return {}
-    return cached_bg(_BTC, "hold", BTC_HOLD_TTL, _btc_holders_build)
-
-
-etf.set_holders(btc_holders)
 
 
 # ── Поток бирж BSC ────────────────────────────────────────────────────────
@@ -12308,8 +12192,7 @@ def exflow_warmer() -> None:
     кругу: запрос из приложения берёт готовое и никогда не ждёт сборки."""
     while True:
         jobs = [(_BTC, "flow", BTC_TTL, _btc_flow_build), (_BSCX, "flow", BTC_TTL, _bscx_flow_build),
-                (_BTC, "cust", BTC_CUST_TTL, _btc_custody_build),
-                (_BTC, "hold", BTC_HOLD_TTL, _btc_holders_build)]
+                (_BTC, "cust", BTC_CUST_TTL, _btc_custody_build)]
         jobs += [(_BTC, ("rank", d), btc_rank_ttl(d), (lambda d=d: _btc_rank_build(d))) for d in BTC_RANK_DAYS]
         for store, key, ttl, build in jobs:
             try:

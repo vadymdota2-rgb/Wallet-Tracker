@@ -894,22 +894,10 @@ export interface EtfCoin {
   share: number | null;
 }
 
-/**
- * Держатель биткоина по своему сканеру: [имя, тип (EXCHANGE, FUND, WHALE),
- * подтип, флаг, тикер (у кита — адрес), BTC, изменение за 7 дней, цена входа $].
- */
-export type BtcHolder = [string, string, string, string, string, number, number, number];
-
 export interface EtfReply {
   ok: boolean;
   error?: string;
   coins: Record<string, EtfCoin>;
-  holders: {
-    /** [тип, сколько держателей, BTC, изменение за 7 дней]. */
-    groups?: [string, number, number, number][];
-    top?: BtcHolder[];
-    movers?: BtcHolder[];
-  };
   /**
    * Позиции на CME по отчёту CFTC, в монетах, по неделям: [дата, открытый
    * интерес, управляющие лонг, шорт, хедж-фонды лонг, шорт, дилеры лонг,

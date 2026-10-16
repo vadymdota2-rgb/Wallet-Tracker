@@ -17,14 +17,13 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
-import type { DictKey } from "../i18n/types";
 import { num, pct, px, usdWord } from "../lib/format";
 import { haptic } from "../lib/telegram";
 import { fetchEtf, peekEtf } from "../lib/api";
 import { Card, Chips, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import type { EtfCoin, EtfReply } from "../lib/types";
 import { Frame } from "./Screen";
-import { CbpSection, CmeSection, holderName, HoldersAll, holderSub } from "./EtfMore";
+import { CbpSection, CmeSection } from "./EtfMore";
 import { dateStr, timeTicks } from "./FearGreedScreen";
 import { EtfAlertsCard, FundBell, useEtfAlerts, type EtfAlerts } from "./EtfAlerts";
 
@@ -47,11 +46,6 @@ const ISSUER: Record<string, string> = {
 /** Мини-фонд Grayscale делит тикер с монетой — без пометки «BTC» в списке фондов читается как сама монета. */
 const MINI: Record<string, string> = { BTC: "Grayscale Mini" };
 
-const GROUPS: Record<string, { key: DictKey; c: string }> = {
-  FUND: { key: "ef_g_fund", c: "#3b82f6" },
-  GOVERNMENT: { key: "ef_g_gov", c: "#a855f7" },
-};
-const BTC_SUPPLY = 21_000_000;
 
 /** Деньги со знаком словом: «+148,7 млн $», «−1,2 млрд $». */
 function money(v: number): string {
@@ -81,15 +75,6 @@ function coinsRound(lang: Lang, v: number): string {
       .format(v).replace(/[\u00a0\u202f]/g, " ");
   } catch {
     return num(v);
-  }
-}
-
-/** Когда собраны данные — по часам телефона. */
-function stamp(lang: Lang, at: number): string {
-  try {
-    return new Intl.DateTimeFormat(lang, { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }).format(new Date(at * 1000));
-  } catch {
-    return new Date(at * 1000).toISOString().slice(0, 16).replace("T", " ");
   }
 }
 
@@ -396,63 +381,6 @@ function Funds({ c, al, lang }: { c: EtfCoin; al: EtfAlerts; lang: Lang }) {
   );
 }
 
-function Holders({ h, price, lang }: { h: EtfReply["holders"]; price: number; lang: Lang }) {
-  const groups = h.groups ?? [];
-  const total = groups.reduce((s, g) => s + g[2], 0);
-  const movers = (h.movers ?? []).filter((m) => Math.abs(m[6]) >= 0.5);
-  if (!groups.length) return null;
-  return (
-    <>
-      <SectionTitle>{t(lang, "ef_h_title")}</SectionTitle>
-      <Card>
-        <p className="ef-h-lead">
-          {t(lang, "ef_h_lead", { b: iso(num(total)), p: iso(pct((total / BTC_SUPPLY) * 100, 1, false)) })}
-        </p>
-        <div className="fg-dist ef-split" role="img" aria-label={t(lang, "ef_h_title")}>
-          {groups.map((g) => (
-            <i key={g[0]} style={{ width: `${(g[2] / total) * 100}%`, background: GROUPS[g[0]]?.c ?? "#64748b" }} />
-          ))}
-        </div>
-        <div className="fg-rows">
-          {groups.map((g) => (
-            <div key={g[0]} className="fg-row two">
-              <span><i style={{ background: GROUPS[g[0]]?.c ?? "#64748b" }} />{t(lang, GROUPS[g[0]]?.key ?? "ef_g_other")}
-                <small className="ef-cnt"> · {num(g[1])}</small></span>
-              <b><bdi dir="ltr">{num(g[2])} BTC</bdi>
-                <small> · {pct((g[2] / BTC_SUPPLY) * 100, 2, false)}</small></b>
-            </div>
-          ))}
-        </div>
-        <p className="lq-hint">{t(lang, "ef_h_note")}</p>
-      </Card>
-
-      {movers.length ? (
-        <>
-          <SectionTitle>{t(lang, "ef_m_title")}</SectionTitle>
-          <Card>
-            <div className="ef-hl">
-              {movers.map((m) => (
-                <div key={m[4] || m[0]} className="ef-hr">
-                  <span className="ef-hr-id">
-                    <b>{m[3] ? `${m[3]} ` : ""}{holderName(m, lang)}</b>
-                    <small>{holderSub(m, lang)}</small>
-                  </span>
-                  <span className="ef-hr-v">
-                    <b className={m[6] > 0 ? "up" : "dn"}><bdi dir="ltr">{coins(m[6], "BTC")}</bdi></b>
-                    {price > 0 ? <small><bdi dir="ltr">{money(m[6] * price)}</bdi></small> : null}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <p className="lq-hint">{t(lang, "ef_m_note")}</p>
-          </Card>
-        </>
-      ) : null}
-
-    </>
-  );
-}
-
 /* ---------------------------------------------------------------------- */
 
 export function EtfScreen() {
@@ -745,8 +673,6 @@ export function EtfScreen() {
 
           {reply.cme?.btc?.length ? <CmeSection rows={reply.cme.btc} sym={sym} price={lastPx} lang={lang} /> : null}
           {reply.cbp?.btc?.days?.length ? <CbpSection d={reply.cbp.btc} sym={sym} lang={lang} /> : null}
-          <Holders h={reply.holders ?? {}} price={lastPx} lang={lang} />
-          <HoldersAll h={reply.holders ?? {}} price={lastPx} lang={lang} />
 
           <details className="lq-how">
             <summary>{t(lang, "fg_how")}</summary>
@@ -754,12 +680,10 @@ export function EtfScreen() {
               <li>{t(lang, "ef_how_1")}</li>
               <li>{t(lang, "ef_how_2")}</li>
               <li>{t(lang, "ef_how_3")}</li>
-              <li>{t(lang, "ef_how_4")}</li>
               <li>{t(lang, "ef_how_5")}</li>
               <li>{t(lang, "ef_how_6")}</li>
             </ul>
           </details>
-          <p className="lq-src">{t(lang, "ef_src")} {t(lang, "ef_upd", { t: stamp(lang, reply.at) })}</p>
         </>
       )}
     </Frame>
