@@ -746,6 +746,7 @@ export const vi: Dict = {
   etfa_out: "Dòng ra",
   ex_flows: "Dòng tiền sàn",
   fg_avg: "Chỉ số trung bình trong kỳ:",
+  fg_by: "Chỉ số Sợ hãi & Tham lam từ",
   fg_days: "{n} ngày",
   fg_dist: "Số ngày thị trường ở mỗi vùng",
   fg_err: "Không tải được chỉ số — hãy thử lại.",

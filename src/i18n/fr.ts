@@ -746,6 +746,7 @@ export const fr: Dict = {
   etfa_out: "Sortie",
   ex_flows: "Flux des plateformes",
   fg_avg: "Indice moyen sur la période :",
+  fg_by: "Indice de peur et d'avidité par",
   fg_days: "{n} j",
   fg_dist: "Jours passés par le marché dans chaque zone",
   fg_err: "Impossible de charger l'indice — réessayez.",

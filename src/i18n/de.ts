@@ -746,6 +746,7 @@ export const de: Dict = {
   etfa_out: "Abfluss",
   ex_flows: "Börsenflüsse",
   fg_avg: "Durchschnittlicher Index im Zeitraum:",
+  fg_by: "Fear & Greed Index von",
   fg_days: "{n} T",
   fg_dist: "Tage des Marktes in jeder Zone",
   fg_err: "Index konnte nicht geladen werden — bitte erneut versuchen.",

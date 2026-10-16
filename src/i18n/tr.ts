@@ -746,6 +746,7 @@ export const tr: Dict = {
   etfa_out: "Çıkış",
   ex_flows: "Borsa akışları",
   fg_avg: "Dönem ortalama endeksi:",
+  fg_by: "Korku ve Açgözlülük Endeksi:",
   fg_days: "{n} gün",
   fg_dist: "Piyasanın her bölgede geçirdiği gün",
   fg_err: "Endeks yüklenemedi — tekrar deneyin.",

@@ -746,6 +746,7 @@ export const zh: Dict = {
   etfa_out: "流出",
   ex_flows: "交易所流向",
   fg_avg: "期间平均指数：",
+  fg_by: "恐惧与贪婪指数来源：",
   fg_days: "{n} 天",
   fg_dist: "市场在各区间停留的天数",
   fg_err: "无法加载指数 —— 请重试。",

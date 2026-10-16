@@ -771,6 +771,15 @@ say("институциональные потоки: позиции CME по CF
     "def _cme(" in _etfs and "publicreporting.cftc.gov" in _etfs and "def _cbp(" in _etfs
     and "export function CmeSection(" in _em and "export function CbpSection(" in _em
     and "HoldersAll" not in _em + _ef and "AltHolders" not in _em + _ef and "<CmeSection" in _ef)
+_fgs = read(f"{APP}/src/screens/FearGreedScreen.tsx")
+_dgm2 = read(f"{APP}/src/screens/DigestMore.tsx")
+_dgi = read(f"{APP}/wt_digest_img.py")
+say("страх и жадность: источник alternative.me рядом с индексом везде, где он показан (условие их API)",
+    'export const FNG_URL = "https://alternative.me/crypto/fear-and-greed-index/";' in _fgs
+    and '<p className="fg-by">' in _fgs and 'openExternal(FNG_URL)' in _fgs
+    and 's.k === "fng" ? <small> · alternative.me</small>' in _dgm2 and "(alternative.me)` : \"—\"" in _dgm2
+    and 't(lang, "fg_by")} alternative.me.' in _dgm2
+    and "(alternative.me)\" if zone else" in _dgi and '" · alternative.me" if s["k"] == "fng"' in _dgi)
 _tre = read(f"{APP}/wt_treasury.py")
 say("крупнейшие держатели: ETF и компании (по их отчётам в SEC, CryptoAssetNumberOfUnits), без государств; выбор группы",
     "export function Holders(" in _em and "<Holders rows={reply.holders ?? []}" in _ef

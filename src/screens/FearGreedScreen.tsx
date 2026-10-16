@@ -21,12 +21,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
 import { num, pct, px } from "../lib/format";
-import { haptic } from "../lib/telegram";
+import { haptic, openExternal } from "../lib/telegram";
 import { fetchFng, peekFng } from "../lib/api";
 import { Card, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import type { FngReply } from "../lib/types";
 import { Frame } from "./Screen";
 import { FearGreedInsights } from "./FearGreedInsights";
+
+/** Источник индекса: его условия требуют ссылку рядом с данными. */
+export const FNG_URL = "https://alternative.me/crypto/fear-and-greed-index/";
 
 type Lang = Parameters<typeof t>[0];
 type Day = [number, number, number];
@@ -411,6 +414,11 @@ export function FearGreedScreen() {
               <b className="fg-val" style={{ color: colorOf(last[1]) }}>{last[1]}</b>
               <p className="fg-zone" style={{ color: colorOf(last[1]) }}>{t(lang, ZONES[Math.max(0, zoneOf(last[1]))]!.key)}</p>
               <p className="fg-date">{dateStr(lang, last[0], { day: "numeric", month: "long", year: "numeric" })} · BTC {px(last[2])}</p>
+              {/* Условие alternative.me: источник — рядом с данными и явной ссылкой. */}
+              <p className="fg-by">
+                {t(lang, "fg_by")}{" "}
+                <a href={FNG_URL} onClick={(e) => { e.preventDefault(); openExternal(FNG_URL); }}>alternative.me</a>
+              </p>
             </div>
             <div className="fg-cmp">
               {([["fg_yday", back(1)], ["fg_week", back(7)], ["fg_month", back(30)]] as const).map(([k, d]) => d ? (

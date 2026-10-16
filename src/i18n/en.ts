@@ -745,6 +745,7 @@ export const en = {
   etfa_out: "Outflow",
   ex_flows: "Exchange flows",
   fg_avg: "Average index for the period:",
+  fg_by: "Fear & Greed Index by",
   fg_days: "{n} d",
   fg_dist: "Days the market spent in each zone",
   fg_err: "Couldn't load the index — try again.",

@@ -746,6 +746,7 @@ export const ja: Dict = {
   etfa_out: "流出",
   ex_flows: "取引所フロー",
   fg_avg: "期間の平均指数：",
+  fg_by: "Fear & Greed指数の出典：",
   fg_days: "{n}日",
   fg_dist: "各ゾーンに市場がいた日数",
   fg_err: "指数を読み込めませんでした — もう一度お試しください。",

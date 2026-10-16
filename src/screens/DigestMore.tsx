@@ -185,7 +185,7 @@ export function Summary({ it, lang }: { it: DigestItem; lang: Lang }) {
             <span className={`dg-sig-d ${s.d > 0 ? "up" : s.d < 0 ? "dn" : "flat"}`} aria-hidden="true">
               {s.d > 0 ? "▲" : s.d < 0 ? "▼" : "●"}
             </span>
-            <span className="dg-sig-k">{t(lang, SIG_KEY[s.k])}</span>
+            <span className="dg-sig-k">{t(lang, SIG_KEY[s.k])}{s.k === "fng" ? <small> · alternative.me</small> : null}</span>
             <b className={s.d > 0 ? "up" : s.d < 0 ? "dn" : undefined}>{sigValue(s)}</b>
           </li>
         ))}
@@ -241,7 +241,7 @@ export function Market({ it, lang }: { it: DigestItem; lang: Lang }) {
             sub={iso(`${m.alt.d1 > 0 ? "+" : ""}${m.alt.d1}`)} tone={tone(m.alt.d1)} />
         ) : null}
       </div>
-      <p className="dg-note">{t(lang, "dg_mkt_note")}</p>
+      <p className="dg-note">{t(lang, "dg_mkt_note")}{m.fng ? ` ${t(lang, "fg_by")} alternative.me.` : ""}</p>
     </Sec>
   );
 }
@@ -392,7 +392,7 @@ export function marketLine(it: DigestItem, lang: Lang): string | null {
   if (!m?.btc) return null;
   const zone = m.fng ? FNG_ZONES.find(([max]) => m.fng!.v <= max)?.[1] : undefined;
   return t(lang, "dg_l_mkt", {
-    p: iso(px(m.btc.px)), c: sPct(m.btc.ch), z: zone ? `${t(lang, zone)}: ${m.fng!.v}` : "—",
+    p: iso(px(m.btc.px)), c: sPct(m.btc.ch), z: zone ? `${t(lang, zone)}: ${m.fng!.v} (alternative.me)` : "—",
   });
 }
 

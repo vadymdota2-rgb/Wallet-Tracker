@@ -746,6 +746,7 @@ export const ko: Dict = {
   etfa_out: "유출",
   ex_flows: "거래소 흐름",
   fg_avg: "기간 평균 지수:",
+  fg_by: "공포·탐욕 지수 출처:",
   fg_days: "{n}일",
   fg_dist: "구간별로 시장이 머문 일수",
   fg_err: "지수를 불러오지 못했습니다 — 다시 시도하세요.",

@@ -167,7 +167,8 @@ def lines(it: dict, lang: str) -> list[tuple[str, str | None]]:
     m = it.get("mkt") or {}
     if m.get("btc"):
         zone = next((z for mx, z in FNG_ZONES if m.get("fng") and m["fng"]["v"] <= mx), None)
-        z = f"{tr(lang, zone)}: {m['fng']['v']}" if zone else "—"
+        # Условие alternative.me: источник индекса — рядом с ним.
+        z = f"{tr(lang, zone)}: {m['fng']['v']} (alternative.me)" if zone else "—"
         out.append((tr(lang, "dg_l_mkt", p=px(m["btc"]["px"], lang), c=pct(m["btc"]["ch"], lang, 2), z=z), _tone(m["btc"]["ch"])))
     q = it.get("liq") or {}
     if q.get("n"):
@@ -301,7 +302,8 @@ def render(it: dict, lang: str = "ru", page: str = "") -> bytes | None:
         for s in sig:
             col = C["up"] if s["d"] > 0 else C["dn"] if s["d"] < 0 else C["dim"]
             _arrow(d, PAD + 30, ry, "up" if s["d"] > 0 else "dn" if s["d"] < 0 else "dot", col)
-            text(tr(lang, SIG_KEY.get(s["k"], s["k"])), PAD + 72, ry, "Regular", 30, C["ink"])
+            label = tr(lang, SIG_KEY.get(s["k"], s["k"])) + (" · alternative.me" if s["k"] == "fng" else "")
+            text(label, PAD + 72, ry, "Regular", 30, C["ink"])
             text(sig_value(s, lang), W - PAD - 30, ry, "Bold", 30, C["ink"] if s["d"] == 0 else col, "rs")
             ry += row_h
         y += box_h + 50

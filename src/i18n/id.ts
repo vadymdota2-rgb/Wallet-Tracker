@@ -746,6 +746,7 @@ export const id: Dict = {
   etfa_out: "Arus keluar",
   ex_flows: "Arus bursa",
   fg_avg: "Rata-rata indeks periode:",
+  fg_by: "Indeks Ketakutan & Keserakahan dari",
   fg_days: "{n} hr",
   fg_dist: "Hari pasar di tiap zona",
   fg_err: "Gagal memuat indeks — coba lagi.",

@@ -7145,6 +7145,24 @@
     "vi": "Chỉ số: alternative.me. Giá BTC: Binance. Chỉ số cập nhật mỗi ngày một lần.",
     "zh": "指数来自 alternative.me，BTC 价格来自 Binance。指数每天更新一次。"
   },
+  "fg_by": {
+    "ar": "مؤشر الخوف والجشع من",
+    "de": "Fear & Greed Index von",
+    "en": "Fear & Greed Index by",
+    "es": "Índice de miedo y codicia de",
+    "fr": "Indice de peur et d'avidité par",
+    "hi": "डर और लालच सूचकांक:",
+    "id": "Indeks Ketakutan & Keserakahan dari",
+    "ja": "Fear & Greed指数の出典：",
+    "ko": "공포·탐욕 지수 출처:",
+    "pl": "Indeks strachu i chciwości:",
+    "pt": "Índice de medo e ganância de",
+    "ru": "Индекс страха и жадности —",
+    "tr": "Korku ve Açgözlülük Endeksi:",
+    "uk": "Індекс страху та жадібності —",
+    "vi": "Chỉ số Sợ hãi & Tham lam từ",
+    "zh": "恐惧与贪婪指数来源："
+  },
   "fg_st_avg": {
     "ar": "متوسط التتابع",
     "de": "Ø am Stück",
