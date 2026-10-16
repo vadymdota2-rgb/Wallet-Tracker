@@ -622,7 +622,7 @@ export function EtfScreen() {
               />
             ) : null}
             <p className="lq-hint">
-              {isQ && mode === "c" ? t(lang, "ef_cum_hint") : t(lang, isQ ? "ef_chart_q" : "ef_chart_d")} {t(lang, "fg_hint")}
+              {isQ && mode === "c" ? t(lang, "ef_cum_hint") : t(lang, isQ ? "ef_chart_q" : "ef_chart_d")} {t(lang, isQ ? "ef_hint_q" : "fg_hint")}
             </p>
           </Card>
 
