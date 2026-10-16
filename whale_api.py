@@ -11844,111 +11844,45 @@ def _etf_chain_src() -> dict:
 etf.set_chain(_etf_chain_src)
 
 
-# «Кто держит биткоин» — свой блок из сканера бота, без чужих списков:
-#   • биржи — остатки их адресов из разметки (btc_ex_bal: сверка с цепочкой и
-#     дальше по блокам), неделя назад — суточный снимок btc_ex_day;
-#   • фонды — запас по своим кошелькам (сейчас BITB), неделя — btc_etf_hold;
-#   • киты — частные адреса от 100 BTC, которые сканер видел за месяц: не
-#     биржа, не сервис (меньше 1000 транзакций), не фонд и не хранилище
-#     хранителя; неделя — их выводы с бирж и заводы на биржи.
-BTC_WHALE_MIN = 100
-BTC_WHALE_SEEN = 30 * 86400
-BTC_HOLD_ROWS = 500
+# «Кто держит биткоин» — государства по своему сканеру бота (btc_gov.cpp):
+# адреса, которые государство раскрыло само (Сальвадор — список своего
+# Национального биткоин-офиса, США — адрес конфискации по делу Silk Road),
+# остатки — сверкой с цепочкой, неделя назад — суточный снимок btc_gov_day.
+# Фонды к ним добавляет сам экран ETF (wt_etf) — из своего списка фондов.
 BTC_HOLD_TTL = 600.0
-
-
-def _btc_whale_name(addr: str) -> str:
-    return addr if len(addr) <= 16 else f"{addr[:8]}…{addr[-6:]}"
-
-
-def _hold_exchanges(con, week: int) -> list[list]:
-    if not table_exists(con, "btc_ex_bal") or not table_exists(con, "btc_labels"):
-        return []
-    was: dict[str, float] = {}
-    if table_exists(con, "btc_ex_day"):
-        was = {str(r[0]): r[1] / 1e8 for r in con.execute(
-            "SELECT ex, sats FROM btc_ex_day WHERE day = (SELECT MAX(day) FROM btc_ex_day WHERE day <= ?)", (week,))}
-    out = []
-    for r in con.execute(
-        "SELECT b.ex, SUM(MAX(e.bal_sats, 0)) AS sats FROM btc_ex_bal e "
-        "JOIN btc_labels b ON b.address = e.address WHERE e.checked_at != 0 GROUP BY b.ex"
-    ):
-        btc, ex = (r["sats"] or 0) / 1e8, str(r["ex"])
-        if btc >= 1:
-            out.append([ex, "EXCHANGE", "", "", "", round(btc, 2), round(btc - was[ex], 2) if ex in was else 0.0, 0])
-    return out
-
-
-def _hold_funds(con, week: int) -> list[list]:
-    if not table_exists(con, "btc_etf_addr"):
-        return []
-    names = {str(f.get("t")): str(f.get("n") or "")
-             for f in (((etf.peek() or {}).get("coins") or {}).get("btc") or {}).get("funds") or []}
-    hist = table_exists(con, "btc_etf_hold")
-    out = []
-    for r in con.execute("SELECT fund, SUM(bal_sats) AS sats, MIN(bal_at) AS at FROM btc_etf_addr "
-                         "WHERE fund NOT LIKE '#%' GROUP BY fund"):
-        if not r["at"] or not r["sats"]:
-            continue  # запас ещё не сверен с цепочкой
-        fund, btc = str(r["fund"]), r["sats"] / 1e8
-        h = con.execute("SELECT sats FROM btc_etf_hold WHERE fund = ? AND day <= ? ORDER BY day DESC LIMIT 1",
-                        (fund, week)).fetchone() if hist else None
-        out.append([names.get(fund) or fund, "FUND", "", "", fund, round(btc, 2),
-                    round(btc - h[0] / 1e8, 2) if h else 0.0, 0])
-    return out
-
-
-def _hold_whales(con, t: int, px: float) -> list[list]:
-    if not table_exists(con, "btc_addr") or not table_exists(con, "btc_labels"):
-        return []
-    # Имена таблиц — свои константы, значения — параметрами.
-    skip = "".join(f" AND NOT EXISTS (SELECT 1 FROM {x} s WHERE s.address = a.address)"  # noqa: S608
-                   for x in ("btc_labels", "btc_etf_addr", "btc_etf_learned", "btc_cust_vault") if table_exists(con, x))
-    where = "bal_sats >= ? AND txs < ? AND at >= ?" + skip
-    sql = f"SELECT address, bal_sats FROM btc_addr a WHERE {where} ORDER BY bal_sats DESC LIMIT ?"  # noqa: S608
-    out = []
-    for w in con.execute(sql, (BTC_WHALE_MIN * 100_000_000, BTC_SERVICE_TXS, t - BTC_WHALE_SEEN, BTC_HOLD_ROWS)):
-        addr, btc = str(w["address"]), w["bal_sats"] / 1e8
-        moves = con.execute("SELECT kind, sats, price_nanos, ts, ex FROM btc_moves WHERE wallet = ? ORDER BY ts, id",
-                            (addr,)).fetchall()
-        d7 = sum((1 if int(m["kind"]) == 1 else -1) * int(m["sats"]) for m in moves
-                 if int(m["ts"]) >= t - 7 * 86400) / 1e8
-        # Цена входа — средняя по выводам с бирж, которые видел сканер, и
-        # только если ими куплена большая часть остатка.
-        book = _btc_book([(int(m["kind"]), int(m["sats"]), int(m["price_nanos"]), int(m["ts"]), m["ex"] or "")
-                          for m in moves if int(m["price_nanos"] or 0) > 0 and m["ex"]], px)
-        cost = round(book["avg"] * btc) if book and book["bought"] >= btc / 2 else 0
-        out.append([_btc_whale_name(addr), "WHALE", "", "", addr, round(btc, 2), round(d7, 2), cost])
-    return out
+# Код страны → имя (приложение переводит его само по коду) и флаг.
+BTC_GOVS = {"US": ("United States", "🇺🇸"), "SV": ("El Salvador", "🇸🇻")}
 
 
 def _btc_holders_build() -> dict:
-    con = _btc_open()
+    con = open_db(BTC_DB)
     if not con:
         return {}
     try:
+        if not table_exists(con, "btc_gov_addr"):
+            return {}
         t = now()
-        week = t - t % 86400 - 7 * 86400
-        top = _hold_exchanges(con, week) + _hold_funds(con, week) + _hold_whales(con, t, _btc_price(con))
+        was: dict[str, float] = {}
+        if table_exists(con, "btc_gov_day"):
+            week = t - t % 86400 - 7 * 86400
+            was = {str(r[0]): r[1] / 1e8 for r in con.execute(
+                "SELECT gov, sats FROM btc_gov_day WHERE day = (SELECT MAX(day) FROM btc_gov_day WHERE day <= ?)",
+                (week,))}
+        top = []
+        # Пока сверены не все адреса государства, его запас неполон — не показываем.
+        for r in con.execute("SELECT gov, SUM(bal_sats) AS sats FROM btc_gov_addr GROUP BY gov "
+                             "HAVING MIN(checked_at) > 0"):
+            code, btc = str(r["gov"]), (r["sats"] or 0) / 1e8
+            name, flag = BTC_GOVS.get(code, (code, ""))
+            if btc >= 1:
+                top.append([name, "GOVERNMENT", "", flag, code, round(btc, 2),
+                            round(btc - was[code], 2) if code in was else 0.0, 0])
+        return {"top": top}
     except sqlite3.Error as e:
         sys.stderr.write(f"[api] btc holders: {e}\n")
         return {}
     finally:
         con.close()
-    if not top:
-        return {}
-    top.sort(key=lambda r: -r[5])
-    groups: dict[str, list] = {}
-    for r in top:
-        g = groups.setdefault(r[1], [r[1], 0, 0.0, 0.0])
-        g[1] += 1
-        g[2] += r[5]
-        g[3] += r[6]
-    movers = sorted((r for r in top if abs(r[6]) >= 0.5), key=lambda r: -abs(r[6]))[:12]
-    return {
-        "groups": [[g[0], g[1], round(g[2], 2), round(g[3], 2)] for g in sorted(groups.values(), key=lambda g: -g[2])],
-        "top": top, "movers": movers,
-    }
 
 
 def btc_holders() -> dict:

@@ -761,9 +761,9 @@ say("дайджест: просмотры — каждый человек оди
     and '"/api/digest/view": "view"' in api and "DELETE FROM digest_views WHERE chat_id=?" in api
     and "viewDigest(it.id)" in _dgt and 'className="dg-views"' in _dgt)
 
-say("институциональные потоки: накопленный приток, доля фондов, средняя цена входа китов, время данных",
+say("институциональные потоки: накопленный приток, доля фондов, время данных",
     "cum={mode === \"c\" ? cumView : null}" in _ef and '"ef_mshare"' in _ef
-    and '"ef_cost"' in read(f"{APP}/src/screens/EtfMore.tsx") and '"ef_upd"' in _ef and "coinsRound(" in _ef)
+    and '"ef_upd"' in _ef and "coinsRound(" in _ef)
 
 _em = read(f"{APP}/src/screens/EtfMore.tsx")
 say("институциональные потоки: позиции CME по CFTC, премия Coinbase, все держатели с поиском и группами",
@@ -782,15 +782,17 @@ say("алерты ETF: итог дня по всем фондам или по ф
     and "export function EtfAlertsCard(" in _eaa and "export function FundBell(" in _eaa
     and "<EtfAlertsCard" in _ef and "<FundBell" in _ef)
 _wsb = read(os.path.join(BOT, "btc_chain.cpp"))
-say("держатели биткоина — свои, из сканера: резервы бирж по адресам, фонды по кошелькам, киты; без bitcointreasuries",
+_wsg = read(os.path.join(BOT, "btc_gov.cpp"))
+say("держатели биткоина на вкладке ETF — только фонды и государства (биржи — в Нетфлоу, киты — в Рейтинге); государства — по раскрытым ими адресам и своей цепочке",
     "bitcointreasuries" not in _etfs and "def set_holders(" in _etfs and "etf.set_holders(btc_holders)" in api
-    and "def _hold_exchanges(" in api and "def _hold_funds(" in api and "def _hold_whales(" in api
-    and '(_BTC, "hold", BTC_HOLD_TTL, _btc_holders_build)' in api
-    and "CREATE TABLE IF NOT EXISTS btc_ex_bal (" in _wsb and "CREATE TABLE IF NOT EXISTS btc_ex_day (" in _wsb
-    and "void exBalances(const Block& b)" in _wsb and "void refreshExBalances()" in _wsb
-    and "exBalances(b);" in _wsb and "🏦 Резервы бирж" in _wsb
-    and 'WHALE: { key: "ef_g_whale"' in _ef and 'WHALE: { key: "ef_g_whale"' in _em
-    and 'open("btcWallet", r[4])' in _em)
+    and "def _fund_holders(" in _etfs and 'r[1] == "GOVERNMENT"' in _etfs
+    and "btc_gov_addr" in api and '(_BTC, "hold", BTC_HOLD_TTL, _btc_holders_build)' in api
+    and "def _hold_whales(" not in api and "def _hold_exchanges(" not in api
+    and "WHALE" not in _ef + _em and "EXCHANGE" not in _ef + _em and "btcWallet" not in _ef + _em
+    and "Intl.DisplayNames" in _em
+    and "bc1qa5wkgaew2dkv56kfvj49j0av5nml45x9ek9hz6" in _wsg and "void govBlock(sqlite3* db, const Block& b)" in _wsg
+    and "govBlock(g_btcDb, b);" in _wsb and "govRollback(g_btcDb);" in _wsb and "void readGovOfficial()" in _wsb
+    and "https://bitcoin.gob.sv/api/v1/wallet/ONBTC" in _wsb and "govSnapshot(g_btcDb, now, cut);" in _wsb)
 
 _btv = read(f"{APP}/src/screens/BtcViews.tsx")
 _ws_btc = read(os.path.join(BOT, "btc_chain.cpp"))

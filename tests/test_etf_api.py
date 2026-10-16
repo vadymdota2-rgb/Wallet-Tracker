@@ -121,17 +121,35 @@ class EtfTest(unittest.TestCase):
 
     # ── Держатели ────────────────────────────────────────────────────────
 
-    def test_holders_are_own(self):
-        own = {"groups": [["EXCHANGE", 3, 1234.5, 0.0]], "top": [], "movers": []}
-        etf.set_holders(lambda: own)
+    def test_holders_are_funds_and_governments(self):
+        gov = [["United States", "GOVERNMENT", "", "🇺🇸", "US", 69370.18, 0.0, 0],
+               ["El Salvador", "GOVERNMENT", "", "🇸🇻", "SV", 7806.37, 7.0, 0]]
+        etf.set_holders(lambda: {"top": gov})
         try:
-            self.assertEqual(self.build()["holders"], own)
+            h = self.build()["holders"]
         finally:
             etf.set_holders(None)
-        etf._st.hit = None  # без прошлой сборки: держателей нет — пусто, а не чужие
-        self.assertEqual(self.build()["holders"], {})
+        # Фонд: активы по цене последнего дня; неделя — его дневные потоки,
+        # каждый по своей цене: 200 млн / 60 000,5 + 10 млн / 61 000.
+        ibit = ["iShares Bitcoin Trust", "FUND", "", "", "IBIT", round(9e10 / 61000, 2),
+                round(2e8 / 60000.5 + 1e7 / 61000, 2), 0]
+        self.assertEqual(h["top"], [ibit, *gov])
+        self.assertEqual([g[:2] for g in h["groups"]], [["FUND", 1], ["GOVERNMENT", 2]])
+        self.assertEqual([m[4] for m in h["movers"]], ["IBIT", "SV"])
+        # Биржи и киты — не на этой вкладке, даже если источник их пришлёт.
+        etf.set_holders(lambda: {"top": [["Binance", "EXCHANGE", "", "", "", 1e5, 0.0, 0]]})
+        try:
+            self.assertEqual([r[1] for r in self.build()["holders"]["top"]], ["FUND"])
+        finally:
+            etf.set_holders(None)
 
-    def test_holders_crash_is_empty_not_a_failure(self):
+    def test_holders_crash_keeps_funds_and_old_governments(self):
+        etf.set_holders(lambda: {"top": [["El Salvador", "GOVERNMENT", "", "🇸🇻", "SV", 7806.37, 0.0, 0]]})
+        try:
+            self.build()
+        finally:
+            etf.set_holders(None)
+
         def boom():
             raise RuntimeError("база занята")
 
@@ -141,7 +159,7 @@ class EtfTest(unittest.TestCase):
         finally:
             etf.set_holders(None)
         self.assertTrue(r["ok"])
-        self.assertEqual(r["holders"], {})
+        self.assertEqual([x[4] for x in r["holders"]["top"]], ["IBIT", "SV"])
 
     def test_only_bitcoin_is_asked(self):
         net = Net()

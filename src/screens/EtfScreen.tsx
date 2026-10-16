@@ -22,9 +22,9 @@ import { num, pct, px, usdWord } from "../lib/format";
 import { haptic } from "../lib/telegram";
 import { fetchEtf, peekEtf } from "../lib/api";
 import { Card, Chips, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
-import type { BtcHolder, EtfCoin, EtfReply } from "../lib/types";
+import type { EtfCoin, EtfReply } from "../lib/types";
 import { Frame } from "./Screen";
-import { CbpSection, CmeSection, HolderRow, HoldersAll } from "./EtfMore";
+import { CbpSection, CmeSection, holderName, HoldersAll, holderSub } from "./EtfMore";
 import { dateStr, timeTicks } from "./FearGreedScreen";
 import { EtfAlertsCard, FundBell, useEtfAlerts, type EtfAlerts } from "./EtfAlerts";
 
@@ -49,12 +49,7 @@ const MINI: Record<string, string> = { BTC: "Grayscale Mini" };
 
 const GROUPS: Record<string, { key: DictKey; c: string }> = {
   FUND: { key: "ef_g_fund", c: "#3b82f6" },
-  PUBLIC_COMPANY: { key: "ef_g_pub", c: "#f7931a" },
   GOVERNMENT: { key: "ef_g_gov", c: "#a855f7" },
-  DEFI: { key: "ef_g_defi", c: "#14b8a6" },
-  PRIVATE_COMPANY: { key: "ef_g_priv", c: "#eab308" },
-  EXCHANGE: { key: "ef_g_ex", c: "#94a3b8" },
-  WHALE: { key: "ef_g_whale", c: "#06b6d4" },
 };
 const BTC_SUPPLY = 21_000_000;
 
@@ -400,7 +395,6 @@ function Holders({ h, price, lang }: { h: EtfReply["holders"]; price: number; la
   const groups = h.groups ?? [];
   const total = groups.reduce((s, g) => s + g[2], 0);
   const movers = (h.movers ?? []).filter((m) => Math.abs(m[6]) >= 0.5);
-  const typeName = (r: BtcHolder) => t(lang, GROUPS[r[1]]?.key ?? "ef_g_other");
   if (!groups.length) return null;
   return (
     <>
@@ -433,16 +427,16 @@ function Holders({ h, price, lang }: { h: EtfReply["holders"]; price: number; la
           <Card>
             <div className="ef-hl">
               {movers.map((m) => (
-                <HolderRow key={m[4] || m[0]} r={m}>
+                <div key={m[4] || m[0]} className="ef-hr">
                   <span className="ef-hr-id">
-                    <b>{m[3] ? `${m[3]} ` : ""}{m[0]}</b>
-                    <small>{typeName(m)}{m[4] && m[1] !== "WHALE" ? ` · ${m[4]}` : ""}</small>
+                    <b>{m[3] ? `${m[3]} ` : ""}{holderName(m, lang)}</b>
+                    <small>{holderSub(m, lang)}</small>
                   </span>
                   <span className="ef-hr-v">
                     <b className={m[6] > 0 ? "up" : "dn"}><bdi dir="ltr">{coins(m[6], "BTC")}</bdi></b>
                     {price > 0 ? <small><bdi dir="ltr">{money(m[6] * price)}</bdi></small> : null}
                   </span>
-                </HolderRow>
+                </div>
               ))}
             </div>
             <p className="lq-hint">{t(lang, "ef_m_note")}</p>

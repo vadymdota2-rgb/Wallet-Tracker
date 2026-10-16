@@ -1,8 +1,8 @@
 /**
  * Остальное на экране «Институциональные потоки»: позиции на CME по отчёту
  * CFTC, премия Coinbase и все держатели — с поиском и делением по группам.
- * Держатели — свои, из сканера цепочки: биржи, фонды и киты (кит открывает
- * свой кошелёк).
+ * Держатели — фонды (из списка фондов экрана) и государства (свой сканер
+ * цепочки по адресам, которые они раскрыли сами).
  *
  * CME — то, как институционалы держат фьючерсы. Отчёт CFTC делит крупных
  * участников на управляющих активами (пенсионные и инвестиционные фонды),
@@ -14,11 +14,10 @@
  * Binance. Coinbase — главная площадка фондов и компаний США, поэтому её
  * читают как спрос из Америки.
  */
-import { useMemo, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from "react";
-import { useApp } from "../store/app";
+import { useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import { t } from "../i18n/t";
 import type { DictKey } from "../i18n/types";
-import { num, pct, px, usdWord } from "../lib/format";
+import { num, usdWord } from "../lib/format";
 import { haptic } from "../lib/telegram";
 import { Card, Chips, SectionTitle } from "../components/ui";
 import type { BtcHolder, EtfReply } from "../lib/types";
@@ -31,12 +30,7 @@ const iso = (x: string | number) => `⁦${x}⁩`;
 
 const GROUPS: Record<string, { key: DictKey; c: string }> = {
   FUND: { key: "ef_g_fund", c: "#3b82f6" },
-  PUBLIC_COMPANY: { key: "ef_g_pub", c: "#f7931a" },
   GOVERNMENT: { key: "ef_g_gov", c: "#a855f7" },
-  DEFI: { key: "ef_g_defi", c: "#14b8a6" },
-  PRIVATE_COMPANY: { key: "ef_g_priv", c: "#eab308" },
-  EXCHANGE: { key: "ef_g_ex", c: "#94a3b8" },
-  WHALE: { key: "ef_g_whale", c: "#06b6d4" },
 };
 const groupKey = (typ: string): DictKey => GROUPS[typ]?.key ?? "ef_g_other";
 
@@ -290,15 +284,21 @@ export function CbpSection({ d, sym, lang }: { d: { days: [number, number][]; no
 
 const PAGE = 20;
 
-/** Строка держателя; у кита — кнопка: открывает его кошелёк (адрес — в r[4]). */
-export function HolderRow({ r, children }: { r: BtcHolder; children: ReactNode }) {
-  const open = useApp((s) => s.open);
-  if (r[1] !== "WHALE" || !r[4]) return <div className="ef-hr">{children}</div>;
-  return (
-    <button type="button" className="ef-hr ef-hr-btn" onClick={() => { haptic("select"); open("btcWallet", r[4]); }}>
-      {children}
-    </button>
-  );
+/** Имя держателя: у государства — страна на языке приложения (код — в r[4]), у фонда — его имя. */
+export function holderName(r: BtcHolder, lang: Lang): string {
+  if (r[1] === "GOVERNMENT" && r[4]) {
+    try {
+      return new Intl.DisplayNames([lang], { type: "region" }).of(r[4]) ?? r[0];
+    } catch {
+      return r[0];
+    }
+  }
+  return r[0];
+}
+
+/** Подпись под именем: группа и тикер фонда (у государства код страны не нужен — есть флаг). */
+export function holderSub(r: BtcHolder, lang: Lang): string {
+  return t(lang, groupKey(r[1])) + (r[4] && r[1] === "FUND" ? ` · ${r[4]}` : "");
 }
 
 export function HoldersAll({ h, price, lang }: { h: EtfReply["holders"]; price: number; lang: Lang }) {
@@ -310,32 +310,22 @@ export function HoldersAll({ h, price, lang }: { h: EtfReply["holders"]; price: 
   const list = useMemo(() => {
     const qq = q.trim().toLowerCase();
     return top.filter((r) => (grp === "all" || r[1] === grp)
-      && (!qq || r[0].toLowerCase().includes(qq) || r[4].toLowerCase().includes(qq)));
-  }, [top, grp, q]);
+      && (!qq || [r[0], r[4], holderName(r, lang)].some((x) => x.toLowerCase().includes(qq))));
+  }, [top, grp, q, lang]);
   const sum = list.reduce((s, r) => s + r[5], 0);
   const row = (r: BtcHolder, i: number) => (
-    <HolderRow key={r[4] || r[0] + i} r={r}>
+    <div key={r[4] || r[0] + i} className="ef-hr">
       <span className="ef-hr-rank">{i + 1}</span>
       <span className="ef-hr-id">
-        <b>{r[3] ? `${r[3]} ` : ""}{r[0]}</b>
-        <small>{t(lang, groupKey(r[1]))}{r[4] && r[1] !== "WHALE" ? ` · ${r[4]}` : ""}
+        <b>{r[3] ? `${r[3]} ` : ""}{holderName(r, lang)}</b>
+        <small>{holderSub(r, lang)}
           {r[6] ? <em className={r[6] > 0 ? "up" : "dn"}> · <bdi dir="ltr">{coinsShort(lang, r[6], "BTC")}</bdi></em> : null}</small>
-        {r[7] > 0 && r[5] > 0 && price > 0 ? (() => {
-          const avg = r[7] / r[5];
-          const gain = (price / avg - 1) * 100;
-          return (
-            <small className="ef-cost">
-              {t(lang, "ef_cost", { p: iso(px(avg)) })}{" "}
-              <em className={gain >= 0 ? "up" : "dn"}><bdi dir="ltr">{pct(gain, 0, true)}</bdi></em>
-            </small>
-          );
-        })() : null}
       </span>
       <span className="ef-hr-v">
         <b><bdi dir="ltr">{num(r[5])} BTC</bdi></b>
         {price > 0 ? <small><bdi dir="ltr">{usdWord(r[5] * price)}</bdi></small> : null}
       </span>
-    </HolderRow>
+    </div>
   );
   if (!top.length) return null;
   return (
