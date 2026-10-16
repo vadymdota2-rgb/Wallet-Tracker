@@ -742,7 +742,7 @@ export const tr: Dict = {
   err_threshold_too_small: "❌ En düşük uyarı eşiği 50 $. 50 $ veya üzeri gir.",
   err_wallet_not_found: "❌ Cüzdan listende bulunamadı.",
   etfa_chain: "⛓ {f} · blok {h}\nZincir üstü {dir}: {b}{v}",
-  etfa_day_all: "🏦 Bitcoin ETF'leri · {d}\nGün toplamı: {v} ({b})",
+  etfa_day_all: "🏦 Zincirdeki Bitcoin ETF'leri · {d}\nGün toplamı: {v} ({b})",
   etfa_day_fund: "🏦 {f} · {d}\n{dir}: {v}",
   etfa_in: "Giriş",
   etfa_out: "Çıkış",

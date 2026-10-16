@@ -742,7 +742,7 @@ export const uk: Dict = {
   err_threshold_too_small: "❌ Мінімальний поріг алертів — $50. Введіть $50 або більше.",
   err_wallet_not_found: "❌ Гаманець не знайдено у вашому списку.",
   etfa_chain: "⛓ {f} · блок {h}\n{dir} за ланцюжком: {b}{v}",
-  etfa_day_all: "🏦 Біткоїн-ETF · {d}\nПідсумок дня: {v} ({b})",
+  etfa_day_all: "🏦 Біткоїн-ETF за блокчейном · {d}\nПідсумок дня: {v} ({b})",
   etfa_day_fund: "🏦 {f} · {d}\n{dir}: {v}",
   etfa_in: "Приплив",
   etfa_out: "Відплив",

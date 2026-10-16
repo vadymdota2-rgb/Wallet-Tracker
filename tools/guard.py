@@ -787,6 +787,11 @@ say("ETF: корзина хранителя с размеченным кошел
     "def _btc_spread(con: sqlite3.Connection, funds: list[dict]) -> int:" in api
     and "INSERT OR IGNORE INTO btc_etf_import(address, fund, at) VALUES(?,?,?)" in api
     and "if _btc_spread(con, funds):" in api and "BTC_SPREAD_MAX = 500" in api)
+say("ревизия ETF: запас по цепочке — у каждого фонда с разметкой; защита от лишней разметки и у BITB; алерт не считает хранилище дважды; новый кошелёк бота — без остатка до сверки",
+    "chain_ok.get(t), last_px) for t in sec if t in last]" in _etfs and 'if c.get("matched"):\n        return True' in _etfs
+    and "str(dst) not in labeled" in read(f"{APP}/wt_etfalert.py") and "str(src) not in labeled" in read(f"{APP}/wt_etfalert.py")
+    and "constexpr long long UNKNOWN_HEIGHT = 1LL << 62;" in read(os.path.join(BOT, "btc_etf.cpp"))
+    and "for (int page = 0; page < 8; ++page)" in read(os.path.join(BOT, "btc_chain.cpp")))
 _tre = read(f"{APP}/wt_treasury.py")
 say("крупнейшие держатели: ETF и компании (по их отчётам в SEC, CryptoAssetNumberOfUnits), без государств; выбор группы",
     "export function Holders(" in _em and '<Boundary name="etf-holders"><Holders raw={reply.holders}' in _ef

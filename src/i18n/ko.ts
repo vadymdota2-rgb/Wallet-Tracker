@@ -742,7 +742,7 @@ export const ko: Dict = {
   err_threshold_too_small: "❌ 최소 알림 기준은 $50입니다. $50 이상을 입력하세요.",
   err_wallet_not_found: "❌ 목록에 지갑이 없습니다.",
   etfa_chain: "⛓ {f} · 블록 {h}\n온체인 {dir}: {b}{v}",
-  etfa_day_all: "🏦 비트코인 ETF · {d}\n하루 합계: {v} ({b})",
+  etfa_day_all: "🏦 비트코인 ETF 온체인 · {d}\n하루 합계: {v} ({b})",
   etfa_day_fund: "🏦 {f} · {d}\n{dir}: {v}",
   etfa_in: "유입",
   etfa_out: "유출",

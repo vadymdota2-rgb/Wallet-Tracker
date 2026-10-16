@@ -742,7 +742,7 @@ export const pt: Dict = {
   err_threshold_too_small: "❌ O valor mínimo de alerta é $50. Digite $50 ou mais.",
   err_wallet_not_found: "❌ A carteira não está na sua lista.",
   etfa_chain: "⛓ {f} · bloco {h}\n{dir} on-chain: {b}{v}",
-  etfa_day_all: "🏦 ETFs de bitcoin · {d}\nTotal do dia: {v} ({b})",
+  etfa_day_all: "🏦 ETFs de bitcoin on-chain · {d}\nTotal do dia: {v} ({b})",
   etfa_day_fund: "🏦 {f} · {d}\n{dir}: {v}",
   etfa_in: "Entrada",
   etfa_out: "Saída",

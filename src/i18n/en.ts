@@ -741,7 +741,7 @@ export const en = {
   err_threshold_too_small: "❌ The minimum alert threshold is $50. Please enter $50 or more.",
   err_wallet_not_found: "❌ Wallet not found in your list.",
   etfa_chain: "⛓ {f} · block {h}\n{dir} on-chain: {b}{v}",
-  etfa_day_all: "🏦 Bitcoin ETFs · {d}\nDay total: {v} ({b})",
+  etfa_day_all: "🏦 Bitcoin ETFs on-chain · {d}\nDay total: {v} ({b})",
   etfa_day_fund: "🏦 {f} · {d}\n{dir}: {v}",
   etfa_in: "Inflow",
   etfa_out: "Outflow",

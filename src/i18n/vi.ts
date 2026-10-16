@@ -742,7 +742,7 @@ export const vi: Dict = {
   err_threshold_too_small: "❌ Ngưỡng tối thiểu $50. Nhập $50 trở lên.",
   err_wallet_not_found: "❌ Không có ví trong danh sách của bạn.",
   etfa_chain: "⛓ {f} · khối {h}\n{dir} on-chain: {b}{v}",
-  etfa_day_all: "🏦 ETF bitcoin · {d}\nTổng trong ngày: {v} ({b})",
+  etfa_day_all: "🏦 ETF bitcoin on-chain · {d}\nTổng trong ngày: {v} ({b})",
   etfa_day_fund: "🏦 {f} · {d}\n{dir}: {v}",
   etfa_in: "Dòng vào",
   etfa_out: "Dòng ra",

@@ -339,10 +339,13 @@ def _coin(cat: str, symbol: str) -> dict[str, Json] | None:
     if chain_ok:
         first = min(int(c.get("from") or today) for c in chain_ok.values())
         days = {t: ({}, 0.0, 0.0) for t in _after(first - first % 86400 - 86400, today)}
-    chain = _apply_chain(days, px, chain_ok) if days else {}
+    if days:
+        _apply_chain(days, px, chain_ok)
+    # Запас по цепочке — у каждого фонда с разметкой, даже если торговых
+    # дней по ней ещё нет (разметили только что, деньги дня ещё в пути).
     funds = [_fund_row({**sec[t], "t": t}, last[t],
                        (sum(v[t][0] for v in flows.values() if t in v), sum(v[t][1] for v in flows.values() if t in v)),
-                       chain.get(t), last_px) for t in sec if t in last]
+                       chain_ok.get(t), last_px) for t in sec if t in last]
     funds.sort(key=lambda f: -_num(f["hold"]))
     order = [str(f["t"]) for f in funds]
     quarters = []
@@ -383,10 +386,11 @@ def _chain() -> dict[str, dict[str, Any]]:
 
 
 def _usable(c: dict[str, Any], base_btc: float) -> bool:
-    """Фонд по цепочке (дни и прибавка к отчёту): кошельки опубликованы самим
-    фондом, имя группы хранителя подтверждено сверкой потоков, или на
-    размеченных кошельках не больше COVER_MAX запаса из отчёта."""
-    if c.get("exact") or c.get("matched"):
+    """Фонд по цепочке (дни и прибавка к отчёту): имя группы хранителя
+    подтверждено сверкой потоков, или на его кошельках (опубликованных им
+    самим и размеченных) не больше COVER_MAX запаса из отчёта. Так и у BITB:
+    чужой кошелёк, размеченный за ним через /import, не раздует его запас."""
+    if c.get("matched"):
         return True
     return base_btc > 0 and _num(c.get("hold")) <= COVER_MAX * base_btc
 

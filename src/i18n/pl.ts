@@ -742,7 +742,7 @@ export const pl: Dict = {
   err_threshold_too_small: "❌ Minimalny próg alertów to $50. Wpisz $50 lub więcej.",
   err_wallet_not_found: "❌ Portfela nie ma na Twojej liście.",
   etfa_chain: "⛓ {f} · blok {h}\n{dir} w łańcuchu: {b}{v}",
-  etfa_day_all: "🏦 ETF na bitcoina · {d}\nWynik dnia: {v} ({b})",
+  etfa_day_all: "🏦 ETF na bitcoina z blockchainu · {d}\nWynik dnia: {v} ({b})",
   etfa_day_fund: "🏦 {f} · {d}\n{dir}: {v}",
   etfa_in: "Napływ",
   etfa_out: "Odpływ",

@@ -124,7 +124,10 @@ class ChainMergeTest(unittest.TestCase):
         self.assertTrue(e._usable({"hold": 1_250.0}, 1_000.0))
         self.assertFalse(e._usable({"hold": 1_300.0}, 1_000.0))
         self.assertFalse(e._usable({"hold": 950.0}, 0.0))
-        self.assertTrue(e._usable({"exact": True, "hold": None}, 0.0))
+        # Опубликованные фондом кошельки — тоже под защитой: лишний (чужой)
+        # кошелёк, размеченный за ним, не раздует запас.
+        self.assertTrue(e._usable({"exact": True, "hold": 1_000.0}, 1_000.0))
+        self.assertFalse(e._usable({"exact": True, "hold": 1_300.0}, 1_000.0))
         self.assertTrue(e._usable({"matched": True}, 0.0))
 
 

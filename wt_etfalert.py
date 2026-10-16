@@ -1,9 +1,10 @@
 """Алерты по биткоин-ETF — отдельный модуль API (/api/etfalert/*).
 
 Человек выбирает на экране «Институциональные потоки», о чём ему писать:
-  - итог дня по всем фондам — как только фонды отчитались за торговый день
-    (те же цифры, что на экране: отчёты, а у фондов, найденных в цепочке, —
-    свои потоки);
+  - итог дня по фондам из блокчейна — как только деньги торгового дня
+    дошли до цепочки (те же цифры, что в карточке «По дням» на экране:
+    фонды, чьи кошельки знает сканер; отчёты в SEC — раз в квартал, по дням
+    их нет);
   - движения фондов в цепочке — сразу, как блок с переводом фонда лёг в
     цепочку и подтверждён следующим: приток в кошельки фонда и отток из них
     (свой сканер бота: BITB по кошелькам, которые фонд публикует сам, и
@@ -173,10 +174,13 @@ def chain_events(btc: sqlite3.Connection, now: int) -> list[dict[str, Any]]:
         acc = sums.setdefault((h, fund, sign), [0.0, float(ts)])
         acc[0] += sats / 1e8
 
-    # Фонды по своим кошелькам (BITB): bot пишет каждое движение строкой.
+    # Фонды по своим кошелькам (опубликованным и размеченным): бот пишет
+    # каждое движение строкой.
     seeded: set[str] = set()
+    labeled: set[str] = set()
     if has("btc_etf_moves") and has("btc_etf_addr"):
         seeded = {str(r[0]) for r in btc.execute("SELECT DISTINCT fund FROM btc_etf_addr WHERE how = 'seed'")}
+        labeled = {str(r[0]) for r in btc.execute("SELECT address FROM btc_etf_addr")}
         for h, ts, fund, kind, sats in btc.execute(
                 "SELECT height, ts, fund, kind, SUM(sats) FROM btc_etf_moves WHERE ts >= ? AND kind IN (1, 2) "
                 "AND fund NOT LIKE '#%' GROUP BY height, fund, kind", (since,)):
@@ -191,9 +195,11 @@ def chain_events(btc: sqlite3.Connection, now: int) -> list[dict[str, Any]]:
                 fs, fd = vault.get(str(src)), vault.get(str(dst))
                 if fs == fd:
                     continue
-                if fd and fd not in seeded:
+                # Хранилище уже в разметке бота (корзина разнесена по фонду) —
+                # его движение есть в btc_etf_moves: второй раз не считаем.
+                if fd and fd not in seeded and str(dst) not in labeled:
                     add(int(h), int(ts), fd, 1, int(sats))
-                if fs and fs not in seeded:
+                if fs and fs not in seeded and str(src) not in labeled:
                     add(int(h), int(ts), fs, -1, int(sats))
     px: dict[int, float] = {}
     if sums:

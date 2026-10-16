@@ -742,7 +742,7 @@ export const zh: Dict = {
   err_threshold_too_small: "❌ 最低提醒阈值为 $50。请输入 $50 或更高。",
   err_wallet_not_found: "❌ 列表中找不到该钱包。",
   etfa_chain: "⛓ {f} · 区块 {h}\n链上{dir}:{b}{v}",
-  etfa_day_all: "🏦 比特币ETF · {d}\n当日合计:{v}({b})",
+  etfa_day_all: "🏦 比特币ETF(链上) · {d}\n当日合计:{v}({b})",
   etfa_day_fund: "🏦 {f} · {d}\n{dir}:{v}",
   etfa_in: "流入",
   etfa_out: "流出",

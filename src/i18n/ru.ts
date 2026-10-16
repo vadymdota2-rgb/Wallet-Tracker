@@ -742,7 +742,7 @@ export const ru: Dict = {
   err_threshold_too_small: "❌ Минимальный порог алертов — $50. Введите $50 или больше.",
   err_wallet_not_found: "❌ Кошелёк не найден в вашем списке.",
   etfa_chain: "⛓ {f} · блок {h}\n{dir} по цепочке: {b}{v}",
-  etfa_day_all: "🏦 Биткоин-ETF · {d}\nИтог дня: {v} ({b})",
+  etfa_day_all: "🏦 Биткоин-ETF по блокчейну · {d}\nИтог дня: {v} ({b})",
   etfa_day_fund: "🏦 {f} · {d}\n{dir}: {v}",
   etfa_in: "Приток",
   etfa_out: "Отток",

@@ -742,7 +742,7 @@ export const hi: Dict = {
   err_threshold_too_small: "❌ न्यूनतम अलर्ट सीमा $50 है। $50 या अधिक लिखें।",
   err_wallet_not_found: "❌ वॉलेट आपकी सूची में नहीं।",
   etfa_chain: "⛓ {f} · ब्लॉक {h}\nऑन-चेन {dir}: {b}{v}",
-  etfa_day_all: "🏦 बिटकॉइन ETF · {d}\nदिन का कुल: {v} ({b})",
+  etfa_day_all: "🏦 बिटकॉइन ETF ऑन-चेन · {d}\nदिन का कुल: {v} ({b})",
   etfa_day_fund: "🏦 {f} · {d}\n{dir}: {v}",
   etfa_in: "इनफ़्लो",
   etfa_out: "आउटफ़्लो",

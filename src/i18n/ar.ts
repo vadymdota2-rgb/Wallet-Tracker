@@ -742,7 +742,7 @@ export const ar: Dict = {
   err_threshold_too_small: "❌ الحد الأدنى للتنبيه هو 50 دولارًا. أدخل 50 دولارًا أو أكثر.",
   err_wallet_not_found: "❌ المحفظة غير موجودة في قائمتك.",
   etfa_chain: "⛓ {f} · الكتلة {h}\n{dir} على السلسلة: {b}{v}",
-  etfa_day_all: "🏦 صناديق البيتكوين ETF · {d}\nحصيلة اليوم: {v} ({b})",
+  etfa_day_all: "🏦 صناديق البيتكوين ETF على السلسلة · {d}\nحصيلة اليوم: {v} ({b})",
   etfa_day_fund: "🏦 {f} · {d}\n{dir}: {v}",
   etfa_in: "تدفق داخل",
   etfa_out: "تدفق خارج",

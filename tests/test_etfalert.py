@@ -140,6 +140,17 @@ class EtfAlertTest(unittest.TestCase):
         self.assertEqual(got, [(972_000, "BITB", 1, 300.0), (972_003, "IBIT", 1, 37.9816),
                                (972_005, "IBIT", -1, 0.5)])
 
+    def test_labeled_vault_is_not_counted_twice(self) -> None:
+        # Хранилище IBIT уже в разметке бота (корзина разнесена): его приток —
+        # строкой btc_etf_moves, перевод хранителя второй раз не считается.
+        self.chain_data()
+        self.btc.execute("INSERT INTO btc_etf_addr VALUES('bc1qv1', 'IBIT', 'list')")
+        self.btc.execute("INSERT INTO btc_etf_moves(txid, height, ts, fund, kind, sats) VALUES('x1m', 972003, ?, 'IBIT', 1, ?)",
+                         (NOW - 4200, 7 * 542_593_761))
+        ev = [(e["h"], e["fund"], e["dir"], round(e["btc"], 4)) for e in ea.chain_events(self.btc, NOW)]
+        self.assertIn((972_003, "IBIT", 1, 37.9816), ev)
+        self.assertEqual(sum(1 for e in ev if e[0] == 972_003), 1)
+
     def test_chain_alerts_threshold_fund_and_once(self) -> None:
         self.chain_data()
         self.sub("1", "*", False, True, mn=10)

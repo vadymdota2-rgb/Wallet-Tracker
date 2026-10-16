@@ -742,7 +742,7 @@ export const fr: Dict = {
   err_threshold_too_small: "❌ Le seuil minimal d'alerte est de 50 $. Saisissez 50 $ ou plus.",
   err_wallet_not_found: "❌ Ce portefeuille ne figure pas dans votre liste.",
   etfa_chain: "⛓ {f} · bloc {h}\n{dir} on-chain : {b}{v}",
-  etfa_day_all: "🏦 ETF bitcoin · {d}\nBilan du jour : {v} ({b})",
+  etfa_day_all: "🏦 ETF bitcoin on-chain · {d}\nBilan du jour : {v} ({b})",
   etfa_day_fund: "🏦 {f} · {d}\n{dir} : {v}",
   etfa_in: "Entrée",
   etfa_out: "Sortie",

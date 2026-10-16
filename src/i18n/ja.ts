@@ -742,7 +742,7 @@ export const ja: Dict = {
   err_threshold_too_small: "❌ アラート閾値の下限は$50です。$50以上を入力してください。",
   err_wallet_not_found: "❌ リストにウォレットがありません。",
   etfa_chain: "⛓ {f} · ブロック {h}\nオンチェーンの{dir}:{b}{v}",
-  etfa_day_all: "🏦 ビットコインETF · {d}\n1日の合計: {v}({b})",
+  etfa_day_all: "🏦 ビットコインETF(オンチェーン) · {d}\n1日の合計: {v}({b})",
   etfa_day_fund: "🏦 {f} · {d}\n{dir}:{v}",
   etfa_in: "流入",
   etfa_out: "流出",

@@ -742,7 +742,7 @@ export const de: Dict = {
   err_threshold_too_small: "❌ Die minimale Alert-Schwelle ist $50. Gib $50 oder mehr ein.",
   err_wallet_not_found: "❌ Wallet nicht auf deiner Liste.",
   etfa_chain: "⛓ {f} · Block {h}\n{dir} on-chain: {b}{v}",
-  etfa_day_all: "🏦 Bitcoin-ETFs · {d}\nTagesergebnis: {v} ({b})",
+  etfa_day_all: "🏦 Bitcoin-ETFs on-chain · {d}\nTagesergebnis: {v} ({b})",
   etfa_day_fund: "🏦 {f} · {d}\n{dir}: {v}",
   etfa_in: "Zufluss",
   etfa_out: "Abfluss",

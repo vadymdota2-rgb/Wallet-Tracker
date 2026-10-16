@@ -742,7 +742,7 @@ export const id: Dict = {
   err_threshold_too_small: "❌ Ambang alert minimum $50. Masukkan $50 atau lebih.",
   err_wallet_not_found: "❌ Dompet tidak ada di daftar Anda.",
   etfa_chain: "⛓ {f} · blok {h}\n{dir} on-chain: {b}{v}",
-  etfa_day_all: "🏦 ETF bitcoin · {d}\nTotal hari ini: {v} ({b})",
+  etfa_day_all: "🏦 ETF bitcoin on-chain · {d}\nTotal hari ini: {v} ({b})",
   etfa_day_fund: "🏦 {f} · {d}\n{dir}: {v}",
   etfa_in: "Arus masuk",
   etfa_out: "Arus keluar",
