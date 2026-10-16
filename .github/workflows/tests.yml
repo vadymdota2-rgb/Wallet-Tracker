@@ -49,7 +49,7 @@ jobs:
       - name: Типы TypeScript (приложение и тесты; модуль халвинга — в строжайшем режиме)
         run: npm run typecheck && npm run typecheck:tests && npm run typecheck:halving
       - name: Синтаксис сервера
-        run: python -m py_compile whale_api.py wt_halving.py wt_etf.py wt_etfchain.py wt_shield.py wt_digest_img.py
+        run: python -m py_compile whale_api.py wt_halving.py wt_etf.py wt_etfchain.py wt_etfalert.py wt_shield.py wt_digest_img.py
       - name: Анализатор Python (модуль халвинга и его тесты)
         run: >-
           pipx run ruff==0.15.8 check --target-version py310
@@ -57,8 +57,11 @@ jobs:
           wt_halving.py tests/test_halving_api.py tests/test_halving_fuzz.py tests/test_halving_security.py tests/test_halving_policy.py tools/mutate-halving.py
           wt_etf.py tests/test_etf_api.py tests/test_bootstrap_personal.py tests/test_btc_etf_chain.py
           wt_etfchain.py tests/test_etfchain.py tests/test_etf_chain_merge.py tests/test_btc_holders.py
+          wt_etfalert.py tests/test_etfalert.py
       - name: Строгие типы Python (mypy --strict)
-        run: pipx run mypy==1.11.2 --strict --python-version 3.11 wt_halving.py wt_etf.py wt_etfchain.py
+        run: >-
+          pipx run mypy==1.11.2 --strict --python-version 3.11 wt_halving.py wt_etf.py wt_etfchain.py
+          && pipx run mypy==1.11.2 --strict --follow-imports=silent --python-version 3.11 wt_etfalert.py
       - name: Тесты расчёта и сервера
         run: npm test
 

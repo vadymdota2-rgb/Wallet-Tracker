@@ -33,6 +33,7 @@ import wt_shield as shield  # noqa: E402
 import wt_halving as halving  # noqa: E402
 import wt_etf as etf  # noqa: E402
 import wt_etfchain as etfchain  # noqa: E402
+import wt_etfalert as etfalert  # noqa: E402
 from urllib.parse import parse_qs, unquote, urlparse, urlsplit
 
 # Петля по умолчанию: наружу API выходит только через nginx. Раньше здесь
@@ -13934,6 +13935,69 @@ def chart_state_put(chat: str, body: dict) -> dict:
         con.close()
 
 
+# --- Алерты по биткоин-ETF (wt_etfalert) ------------------------------------
+# Итог дня по фондам и движения кошельков фондов в цепочке — в Telegram, как
+# алерты по цене. Проход раз в минуту: блок биткоина — раз в десять минут, а
+# отчёты фондов приходят раз в сутки.
+ETFA_EVERY = 60
+
+
+def _etfa_con():
+    con = open_db(DB, write=True)
+    if con:
+        etfalert.open_schema(con)
+    return con
+
+
+def etfa_list(chat: str) -> dict:
+    con = _etfa_con()
+    if not con:
+        return {"ok": False, "error": "db"}
+    try:
+        return etfalert.subs_list(con, chat)
+    finally:
+        con.close()
+
+
+def etfa_set(chat: str, body: dict) -> dict:
+    con = _etfa_con()
+    if not con:
+        return {"ok": False, "error": "db"}
+    try:
+        return etfalert.subs_set(con, chat, body, now())
+    finally:
+        con.close()
+
+
+def _etfa_send(chat: str, text: str) -> bool:
+    return tg_api("sendMessage", {"chat_id": chat, "text": text, "disable_web_page_preview": True}) is not None
+
+
+def etfa_check() -> int:
+    con = _etfa_con()
+    if not con:
+        return 0
+    btc = open_db(BTC_DB)
+    try:
+        return etfalert.check(con, btc, etf.peek(), _etfa_send, now())
+    finally:
+        con.close()
+        if btc:
+            btc.close()
+
+
+def etfa_loop() -> None:
+    time.sleep(45)
+    while True:
+        try:
+            n = etfa_check()
+            if n:
+                sys.stderr.write(f"[api] алерты ETF: отправлено {n}\n")
+        except Exception as e:  # noqa: BLE001
+            sys.stderr.write(f"[api] etf alerts: {e}\n")
+        time.sleep(ETFA_EVERY)
+
+
 def pxa_loop() -> None:
     time.sleep(20)
     while True:
@@ -16472,6 +16536,10 @@ class Handler(BaseHTTPRequestHandler):
                 chat = self._user(qs)
                 self._json(200, pxa_list(chat) if chat else {"ok": False, "error": "unauthorized"})
                 return
+            if path == "/api/etfalert/list":
+                chat = self._user(qs)
+                self._json(200, etfa_list(chat) if chat else {"ok": False, "error": "unauthorized"})
+                return
             if path in ("/oihist", "/api/oihist"):
                 self._json(200, oi_hist(qs.get("sym", ["BTC"])[0], qs.get("range", ["7d"])[0]))
                 return
@@ -16619,6 +16687,13 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/chart/state":
                 self._json(200, chart_state_put(chat, body))
                 return
+            if path == "/api/etfalert/set":
+                # Включить — Премиум, как и алерты по цене; выключить можно всегда.
+                if (body.get("day") or body.get("chain")) and not chat_premium(chat):
+                    self._json(200, {"ok": False, "error": "premium"})
+                    return
+                self._json(200, etfa_set(chat, body))
+                return
             pxa = {"/api/pxalert/add": pxa_add, "/api/pxalert/move": pxa_move, "/api/pxalert/del": pxa_del}.get(path)
             if pxa:
                 if path == "/api/pxalert/add" and not chat_premium(chat):
@@ -16727,6 +16802,7 @@ def main():
     threading.Thread(target=refresher, daemon=True).start()
     threading.Thread(target=_bonus_loop, daemon=True).start()
     threading.Thread(target=pxa_loop, daemon=True).start()
+    threading.Thread(target=etfa_loop, daemon=True).start()
     httpd = shield.ShieldServer((HOST, PORT), Handler)
     tls = shield.tls_wrap(httpd)
     sys.stderr.write(f"[api] щит: тело ≤ {shield.MAX_BODY} Б, соединений ≤ {shield.MAX_CONN}, "

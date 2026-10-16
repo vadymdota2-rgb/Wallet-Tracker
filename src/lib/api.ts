@@ -732,6 +732,25 @@ export const pxAlertAdd = (sym: string, level: PxLevel, lang: string, note = "")
 export const pxAlertMove = (id: number, level: PxLevel) =>
   call<PxAlertReply>("/api/pxalert/move", { method: "POST", body: { id, ...level } });
 
+/** Подписка на алерты ETF: фонд («*» — все), итог дня, движения в цепочке, порог движения в BTC. */
+export interface EtfAlertSub {
+  fund: string;
+  day: boolean;
+  chain: boolean;
+  min: number;
+}
+export interface EtfAlertReply {
+  ok: boolean;
+  error?: string;
+  max?: number;
+  mins?: number[];
+  items?: EtfAlertSub[];
+}
+export const etfAlertList = () => call<EtfAlertReply>("/api/etfalert/list");
+/** Включить, поменять или (day и chain выключены) снять подписку; ответ — весь список. */
+export const etfAlertSet = (sub: EtfAlertSub, lang: string) =>
+  call<EtfAlertReply>("/api/etfalert/set", { method: "POST", body: { ...sub, lang } });
+
 /* Рисунки и настройки графика на сервере — одни на всех устройствах. */
 export interface ChartStateReply {
   ok: boolean;

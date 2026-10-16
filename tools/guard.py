@@ -771,6 +771,16 @@ say("институциональные потоки: позиции CME по CF
     and "export function CmeSection(" in _em and "export function CbpSection(" in _em
     and "export function HoldersAll(" in _em and "AltHolders" not in _em + _ef
     and "<CmeSection" in _ef and "<HoldersAll" in _ef)
+_eal = read(f"{APP}/wt_etfalert.py")
+_eaa = read(f"{APP}/src/screens/EtfAlerts.tsx")
+say("алерты ETF: итог дня по всем фондам или по фонду и движения фондов в цепочке — в Telegram, один раз, с Премиумом",
+    "def check(" in _eal and "def day_event(" in _eal and "def chain_events(" in _eal and "etf_alert_sent" in _eal
+    and "from whale_api" not in _eal and "import whale_api" not in _eal
+    and 'if path == "/api/etfalert/set":' in api and 'if path == "/api/etfalert/list":' in api
+    and "threading.Thread(target=etfa_loop, daemon=True).start()" in api
+    and 'and not chat_premium(chat):' in api.split('if path == "/api/etfalert/set":')[1][:200]
+    and "export function EtfAlertsCard(" in _eaa and "export function FundBell(" in _eaa
+    and "<EtfAlertsCard" in _ef and "<FundBell" in _ef)
 _wsb = read(os.path.join(BOT, "btc_chain.cpp"))
 say("держатели биткоина — свои, из сканера: резервы бирж по адресам, фонды по кошелькам, киты; без bitcointreasuries",
     "bitcointreasuries" not in _etfs and "def set_holders(" in _etfs and "etf.set_holders(btc_holders)" in api

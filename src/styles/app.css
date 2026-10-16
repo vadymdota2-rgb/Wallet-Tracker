@@ -4096,3 +4096,13 @@ button.cal-row { background: transparent; border: 0; color: inherit; font: inher
 .ef-hr-btn { width: 100%; background: none; border: 0; border-top: 1px solid rgb(27 61 104 / 0.3); color: inherit; font: inherit; text-align: start; cursor: pointer; }
 .ef-hr-btn:first-child { border-top: 0; }
 .ef-hr-btn:active { background: rgb(27 61 104 / 0.2); }
+/* Алерты ETF: колокольчик у фонда, переключатели и фонды с алертом. */
+.ef-bell { margin: -6px 0 -6px 2px; padding: 6px; border: 0; background: none; font-size: 12px; line-height: 1; cursor: pointer; opacity: 0.4; vertical-align: 1px; }
+.ef-bell.on { opacity: 1; }
+.ef-al-sw { margin: 0 0 8px; }
+.ef-al-sw > span:nth-child(2) { display: grid; gap: 2px; }
+.ef-al-sw small { color: var(--dim); font-size: 12px; line-height: 1.4; }
+.ef-al-h { margin: 12px 0 6px; color: var(--dim); font-size: 12.5px; font-weight: 600; }
+.ef-al-funds { display: flex; flex-wrap: wrap; gap: 6px; }
+.ef-al-fund { padding: 5px 10px; border: 1px solid var(--line-2); border-radius: 999px; background: var(--panel); color: var(--ink); font: inherit; font-size: 12.5px; cursor: pointer; }
+.ef-al-fund span { color: var(--dim); margin-inline-start: 4px; }
