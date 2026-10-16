@@ -1,0 +1,71 @@
+{
+ "note": "Снимок CoinGecko: запасы государств, взят один раз как база, дальше — только свои адреса.",
+ "at": 1792133219,
+ "governments": [
+  {
+   "name": "United States",
+   "country": "US",
+   "btc": 329693.0
+  },
+  {
+   "name": "China",
+   "country": "CN",
+   "btc": 190000.0
+  },
+  {
+   "name": "United Kingdom",
+   "country": "GB",
+   "btc": 61245.0
+  },
+  {
+   "name": "North Korea",
+   "country": "KP",
+   "btc": 13562.0
+  },
+  {
+   "name": "Bhutan",
+   "country": "BT",
+   "btc": 10769.0
+  },
+  {
+   "name": "El Salvador",
+   "country": "SV",
+   "btc": 7474.37
+  },
+  {
+   "name": "United Arab Emirates",
+   "country": "AE",
+   "btc": 6333.0
+  },
+  {
+   "name": "Venezuela",
+   "country": "VE",
+   "btc": 240.0
+  },
+  {
+   "name": "Finland",
+   "country": "FI",
+   "btc": 90.0
+  },
+  {
+   "name": "Texas",
+   "country": "US",
+   "btc": 57.4712643678
+  },
+  {
+   "name": "Roswell, New Mexico",
+   "country": "US",
+   "btc": 0.035
+  },
+  {
+   "name": "Germany",
+   "country": "DE",
+   "btc": 0.0
+  },
+  {
+   "name": "Bulgaria",
+   "country": "BG",
+   "btc": 0.0
+  }
+ ]
+}

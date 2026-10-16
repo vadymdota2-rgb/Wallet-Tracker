@@ -656,7 +656,8 @@ say("институциональные потоки — только битко
     'COINS = (("btc", "BTCUSDT"),)' in _etfs and "type Coin" not in _ef and "Segmented<Coin>" not in _ef
     and "ETHUSDT" not in _etfs and "SOLUSDT" not in _etfs and "HYPE" not in _etfs
     and "etf_data = etf.etf_data" in api and "import wt_etf as etf" in api and '"/api/etf"' in api
-    and "def etf_data(" in _etfs and "etf/detail/netflow/list?category=" in _etfs
+    and "def etf_data(" in _etfs and "api.coinmarketcap.com" not in _etfs and "def _base() -> dict[str, Json]:" in _etfs
+    and "coingecko.com/api/v3/governments" not in api
     and "etf_data()  # и потоки ETF" in api
     and "from whale_api" not in _etfs and "import whale_api" not in _etfs
     and "function FlowChart(" in _ef and "function Funds(" in _ef and "function Holders(" in _ef
@@ -787,8 +788,9 @@ say("держатели биткоина на вкладке ETF — тольк�
     "bitcointreasuries" not in _etfs and "def set_holders(" in _etfs and "etf.set_holders(btc_holders)" in api
     and "def _fund_holders(" in _etfs and 'r[1] == "GOVERNMENT"' in _etfs
     and "def _flag(code: str)" in _etfs and "flagOf(f.c)" in _ef
-    and "after = sum(float(v) for d, v in (c.get(\"days\") or {}).items() if int(d) > cut)" in _etfs
-    and "BTC_GOV_CG" in api and "def _gov_base(" in api and 'BTC_GOV_FULL = frozenset({"SV"})' in api
+    and "btc + sum(float(v) for d, v in (c.get(\"days\") or {}).items() if int(d) > cut)" in _etfs
+    and "BTC_GOV_FILE" in api and "def _gov_base(" in api and 'BTC_GOV_FULL = frozenset({"SV"})' in api
+    and os.path.isfile(f"{APP}/data/etf_base.json") and os.path.isfile(f"{APP}/data/gov_base.json")
     and "btc_gov_addr" in api and '(_BTC, "hold", BTC_HOLD_TTL, _btc_holders_build)' in api
     and "def _hold_whales(" not in api and "def _hold_exchanges(" not in api
     and "WHALE" not in _ef + _em and "EXCHANGE" not in _ef + _em and "btcWallet" not in _ef + _em

@@ -1,8 +1,8 @@
 """«Кто держит биткоин»: государства (npm test).
 
-База — открытый API CoinGecko; к ней — движения адресов, которые знает наш
-сканер (бот, btc_gov.cpp), с момента, когда CoinGecko последний раз менял
-цифру. Где наш список адресов полный (Сальвадор), запас — точно по нему.
+База — снимок CoinGecko, взятый один раз (data/gov_base.json); к ней —
+движения адресов, которые знает наш сканер (бот, btc_gov.cpp), с первой
+встречи с базой. Где наш список адресов полный (Сальвадор), запас — точно по нему.
 Пока сверены не все адреса государства, наших цифр по нему нет.
 """
 import os
@@ -33,7 +33,6 @@ class BtcHoldersTest(unittest.TestCase):
         os.close(fd)
         fd, self.main = tempfile.mkstemp(suffix=".db")
         os.close(fd)
-        api._GOV_CG.clear()
         con = sqlite3.connect(self.db)
         con.executescript(SCHEMA)
         con.executemany("INSERT INTO btc_gov_addr(address, gov, how, bal_sats, checked_at) VALUES(?,?,?,?,?)", [
@@ -51,16 +50,16 @@ class BtcHoldersTest(unittest.TestCase):
 
     def build(self, cg=None):
         govs = [
-            {"name": "United States", "country": "US", "total_holdings": 329_693.0},
-            {"name": "China", "country": "CN", "total_holdings": 190_000.0},
-            {"name": "El Salvador", "country": "SV", "total_holdings": 7_474.37},
-            {"name": "Texas", "country": "US", "total_holdings": 57.47},
-            {"name": "Germany", "country": "DE", "total_holdings": 0.0},
+            {"name": "United States", "country": "US", "btc": 329_693.0},
+            {"name": "China", "country": "CN", "btc": 190_000.0},
+            {"name": "El Salvador", "country": "SV", "btc": 7_474.37},
+            {"name": "Texas", "country": "US", "btc": 57.47},
+            {"name": "Germany", "country": "DE", "btc": 0.0},
             "мусор",
         ] if cg is None else cg
         with mock.patch.object(api, "BTC_DB", self.db), mock.patch.object(api, "DB", self.main), \
                 mock.patch.object(api, "now", lambda: NOW), \
-                mock.patch.object(api, "get_json", lambda url, timeout=10: {"governments": govs} if govs else None):
+                mock.patch.object(api, "_gov_list", lambda: govs or None):
             return api._btc_holders_build()
 
     def setBal(self, addr, btc):
@@ -72,7 +71,7 @@ class BtcHoldersTest(unittest.TestCase):
     def test_base_plus_own_moves(self):
         rows = {(r[0]): r for r in self.build()["top"]}
         self.assertEqual(set(rows), {"United States", "China", "El Salvador", "Texas"})
-        # Первый раз: база CoinGecko как есть, наш остаток — точка отсчёта.
+        # Первый раз: база снимка как есть, наш остаток — точка отсчёта.
         self.assertEqual(rows["United States"], ["United States", "GOVERNMENT", "", "🇺🇸", "US", 329_693.0, 0.0, 0])
         self.assertEqual(rows["China"][4:6], ["CN", 190_000.0])
         # Сальвадор — наш список полный: точно по нему (7 806), неделя — к снимку.
@@ -83,25 +82,26 @@ class BtcHoldersTest(unittest.TestCase):
         self.setBal("bc1qus", 69_300)
         us = next(r for r in self.build()["top"] if r[4] == "US")
         self.assertEqual(us[5], 329_623.0)
-        # CoinGecko обновил цифру — новая база, отсчёт заново.
-        us = next(r for r in self.build([{"name": "United States", "country": "US", "total_holdings": 330_000.0}])["top"])
+        # Сменили снимок-базу — отсчёт заново.
+        us = next(r for r in self.build([{"name": "United States", "country": "US", "btc": 330_000.0}])["top"])
         self.assertEqual(us[5], 330_000.0)
 
-    def test_coingecko_down(self):
-        api._GOV_CG.clear()
-        # Ни разу не ответил — только то, что видим сами.
+    def test_no_base_file(self):
+        # Снимка нет — только то, что видим сами.
         rows = {r[4]: r[5] for r in self.build([])["top"]}
         self.assertEqual(rows, {"US": 69_370.0, "SV": 7_806.0})
-        # Отвечал раньше — прошлый ответ.
-        self.build()
-        rows = {r[4]: r[5] for r in self.build([])["top"]}
-        self.assertIn("CN", rows)
+        with mock.patch.object(api, "BTC_GOV_FILE", self.db + ".missing"):
+            self.assertIsNone(api._gov_list())
+
+    def test_base_file_is_in_repo(self):
+        govs = api._gov_list()
+        self.assertTrue(govs)
+        self.assertTrue(all({"name", "country", "btc"} <= set(g) for g in govs))
 
     def test_no_bot_tables(self):
         con = sqlite3.connect(self.db)
         con.executescript("DROP TABLE btc_gov_addr;")
         con.close()
-        api._GOV_CG.clear()
         self.assertEqual(self.build([]), {})
         rows = {r[4]: r[5] for r in self.build()["top"]}
         self.assertEqual(rows["US"], 329_693.0)

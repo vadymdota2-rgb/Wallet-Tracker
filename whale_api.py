@@ -11844,15 +11844,14 @@ def _etf_chain_src() -> dict:
 etf.set_chain(_etf_chain_src)
 
 
-# «Кто держит биткоин» — государства. База — открытый API CoinGecko (запасы
-# государств, источник подписан на экране). К базе — наша цепочка: адреса,
-# которые знает сканер бота (btc_gov.cpp), двигались — запас меняется на
-# столько же. Где наш список адресов полный, раскрытый самим государством
+# «Кто держит биткоин» — государства. База — снимок CoinGecko, взятый один раз
+# (data/gov_base.json); больше его не спрашиваем. К базе — наша цепочка:
+# адреса, которые знает сканер бота (btc_gov.cpp), двигались — запас меняется
+# на столько же. Точка отсчёта — наш остаток при первой встрече с базой
+# (gov_base). Где наш список адресов полный, раскрытый самим государством
 # (Сальвадор — его Национальный биткоин-офис), запас — точно по нему.
-# База фиксируется в gov_base: когда CoinGecko обновил цифру, новая база —
-# она, а наш остаток на этот момент — точка отсчёта движений.
 BTC_HOLD_TTL = 600.0
-BTC_GOV_CG = "https://api.coingecko.com/api/v3/governments/public_treasury/bitcoin"
+BTC_GOV_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "gov_base.json")
 # Государства, чей список адресов наш полностью (раскрыт им самим).
 BTC_GOV_FULL = frozenset({"SV"})
 
@@ -11885,7 +11884,8 @@ def _gov_own(t: int) -> tuple[dict[str, float], dict[str, float]]:
 
 
 def _gov_base(code: str, cg: float, own: float, t: int) -> float:
-    """Наш остаток на момент, когда CoinGecko последний раз изменил цифру."""
+    """Наш остаток на момент первой встречи с этой базой (сменилась база —
+    отсчёт заново)."""
     con = open_db(DB, write=True)
     if not con:
         return own
@@ -11905,23 +11905,21 @@ def _gov_base(code: str, cg: float, own: float, t: int) -> float:
         con.close()
 
 
-_GOV_CG: dict = {}
-
-
-def _gov_cg() -> list | None:
-    """Список CoinGecko; бесплатный API иногда отвечает «слишком часто» —
-    тогда прошлый удачный ответ (обновляется у них раз в сутки-двое)."""
-    got = get_json(BTC_GOV_CG, 20)
+def _gov_list() -> list | None:
+    """Снимок-база; нет файла — None (тогда только наши адреса)."""
+    try:
+        with open(BTC_GOV_FILE, encoding="utf-8") as f:
+            got = json.load(f)
+    except (OSError, ValueError):
+        return None
     govs = got.get("governments") if isinstance(got, dict) else None
-    if isinstance(govs, list) and govs:
-        _GOV_CG["list"] = govs
-    return _GOV_CG.get("list")
+    return govs if isinstance(govs, list) and govs else None
 
 
 def _btc_holders_build() -> dict:
     t = now()
     own, was = _gov_own(t)
-    govs = _gov_cg()
+    govs = _gov_list()
     top = []
     if isinstance(govs, list):
         rows = [g for g in govs if isinstance(g, dict) and isinstance(g.get("country"), str)]
@@ -11929,11 +11927,11 @@ def _btc_holders_build() -> dict:
         nation: dict[str, dict] = {}
         for g in rows:
             c = g["country"].upper()
-            if c not in nation or float(g.get("total_holdings") or 0) > float(nation[c].get("total_holdings") or 0):
+            if c not in nation or float(g.get("btc") or 0) > float(nation[c].get("btc") or 0):
                 nation[c] = g
         for g in rows:
             code = g["country"].upper()
-            cg = float(g.get("total_holdings") or 0)
+            cg = float(g.get("btc") or 0)
             is_nation = nation.get(code) is g
             btc, d7 = cg, 0.0
             if is_nation and code in own:
@@ -11943,7 +11941,7 @@ def _btc_holders_build() -> dict:
                 top.append([str(g.get("name") or code)[:40], "GOVERNMENT", "", _gov_flag(code),
                             code if is_nation else "", round(btc, 2), round(d7, 2), 0])
     else:
-        # CoinGecko молчит — хотя бы то, что видим сами.
+        # Снимка нет — хотя бы то, что видим сами.
         names = {"US": "United States", "SV": "El Salvador"}
         for code, btc in own.items():
             if btc >= 1:

@@ -1,5 +1,5 @@
 """Экран «Институциональные потоки»: фонды, найденные по цепочке, — своими
-потоками (wt_etf.set_chain), остальные — по отчётам; запас — база сводки
+потоками (wt_etf.set_chain), остальные — по снимку-базе; запас — база
 плюс то, что прошло через кошельки фонда после неё (npm test).
 
 В цепочке деньги фонда приходят на следующий рабочий день после торгов:
@@ -19,6 +19,14 @@ import wt_etf as e  # noqa: E402 — модуль лежит в корне ре�
 DAY = 86400
 MON = 20_710 * DAY  # понедельник, 14 сентября 2026
 PX = 80_000.0
+
+
+def base(aum_btc: float = 0.0) -> dict:
+    """Снимок-база из тех же пяти дней; IBIT — запас aum_btc на последний день."""
+    return {"last_trade": MON + 4 * DAY,
+            "funds": [{"t": "IBIT", "n": "", "c": "US", "fee": None, "btc": aum_btc},
+                      {"t": "BITB", "n": "", "c": "US", "fee": None, "btc": 0.0}],
+            "days": [[d, {t: [v["usd"], v["btc"]] for t, v in by.items()}] for d, (by, _, _) in cmc_days().items()]}
 
 
 def cmc_days() -> dict:
@@ -83,10 +91,8 @@ class ChainMergeTest(unittest.TestCase):
     def test_coin_marks_chain_funds(self) -> None:
         chain = {"BITB": {"from": MON - 7 * DAY, "hold": 37_000.0, "days": {MON + 2 * DAY: 1.0}}}
         e.set_chain(lambda: chain)
-        pts = [{"date": d * 1000, "total": {"usd": v[1]}, **v[0]} for d, v in cmc_days().items()]
-        with mock.patch.object(e, "_points", lambda cat: pts), \
+        with mock.patch.object(e, "_base", base), \
                 mock.patch.object(e, "_prices", lambda sym, days: dict(self.px)), \
-                mock.patch.object(e, "_get", lambda url, timeout=20: {}), \
                 mock.patch.object(e, "_share", lambda funds, price: {}), \
                 mock.patch.object(e, "_now", lambda: MON + 30 * DAY):
             c = e._coin("btc", "BTCUSDT")
@@ -97,20 +103,14 @@ class ChainMergeTest(unittest.TestCase):
         self.assertNotIn("src", funds["IBIT"])
 
     def test_holdings_are_base_plus_chain_after_it(self):
-        # Фонд у хранителя: всех кошельков не знаем — база сводки на последний
+        # Фонд у хранителя: всех кошельков не знаем — база снимка на последний
         # торговый день (пятница), к ней — то, что пришло в цепочку после
         # расчёта пятничных денег (понедельник следующей недели).
         chain = {"IBIT": {"from": MON - 7 * DAY, "hold": None,
                           "days": {MON + 1 * DAY: 100.0, MON + 7 * DAY: 99.0, MON + 8 * DAY: 3.0}}}
         e.set_chain(lambda: chain)
-        pts = [{"date": d * 1000, "total": {"usd": v[1]}, **v[0]} for d, v in cmc_days().items()]
-
-        def get(url, timeout=20):
-            return {"data": [{"ticker": "IBIT", "aum": 8_000 * PX}]} if "etf/list" in url else {}
-
-        with mock.patch.object(e, "_points", lambda cat: pts), \
+        with mock.patch.object(e, "_base", lambda: base(8_000.0)), \
                 mock.patch.object(e, "_prices", lambda sym, days: dict(self.px)), \
-                mock.patch.object(e, "_get", get), \
                 mock.patch.object(e, "_share", lambda funds, price: {}), \
                 mock.patch.object(e, "_now", lambda: MON + 30 * DAY):
             c = e._coin("btc", "BTCUSDT")
