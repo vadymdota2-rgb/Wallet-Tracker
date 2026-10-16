@@ -39,8 +39,11 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any
+
+from wt_etfchain import settle_day
 
 # Сколько ответ живёт в кэше, с: фонды отчитываются раз в сутки.
 TTL = 3600.0
@@ -312,14 +315,65 @@ def _coin(cat: str, symbol: str) -> dict[str, Json] | None:
     days = _days(pts, unit) if pts else {}
     if not days:
         return None
-    funds = _funds(cat, days, unit)
     px = _prices(symbol, days)
+    chain = _apply_chain(days, px) if cat == "btc" else {}
+    funds = _funds(cat, days, unit)
+    for f in funds:
+        c = chain.get(str(f["t"]))
+        if c is None:
+            continue
+        f["src"] = "chain"
+        last_px = px[max(px)] if px else 0.0
+        if c.get("hold") and last_px > 0:
+            f["aum"] = round(float(c["hold"]) * last_px)
     rows = []
     for ts in sorted(days):
         by, tot, coin = days[ts]
         per = [None if (v := (by.get(f["t"]) or {}).get("usd")) is None else round(_num(v) / 1000) for f in funds]
         rows.append([ts, round(tot / 1000), round(coin, 2), round(px.get(ts, 0.0), 4), per])
     return {"funds": funds, "days": rows, **_share(cat)}
+
+
+def _chain_btc(flows: dict[int, float], lo: int, hi: int) -> float:
+    return sum(v for d, v in flows.items() if lo < d <= hi)
+
+
+def _apply_chain(days: dict[int, Day], px: dict[int, float]) -> dict[str, dict[str, Any]]:
+    """Подмена по фонду: у фондов, найденных по цепочке, поток торгового дня —
+    свой: монеты, дошедшие до цепочки в следующий рабочий день (T+1), в
+    долларах по цене дня. Итоги дня правятся на разницу — экран всегда
+    полный. Не подменяется: день до начала наблюдения цепочки и последний
+    день, чьи деньги до цепочки ещё не дошли. Возвращает подменённые фонды."""
+    src = _st.chain
+    if src is None:
+        return {}
+    try:
+        chain = src()
+    except Exception as e:  # noqa: BLE001 — свои данные не должны ломать экран
+        _log(f"цепочка: {type(e).__name__}: {e}")
+        return {}
+    today = _now() - _now() % 86400
+    trade = sorted(days)
+    used: dict[str, dict[str, Any]] = {}
+    for ticker, c in chain.items():
+        start = int(c.get("from") or 0)
+        flows = {int(d): float(v) for d, v in (c.get("days") or {}).items()}
+        prev = None
+        for t in trade:
+            settle = settle_day(t // 86400) * 86400
+            lo, prev = prev, settle
+            p = px.get(t, 0.0)
+            if lo is None or lo < start or settle >= today or p <= 0:
+                continue
+            btc = _chain_btc(flows, lo, settle)
+            by, tot, coin = days[t]
+            old = by.get(ticker) or {}
+            ou = _num(old.get("usd")) if old.get("usd") is not None else 0.0
+            ob = _num(old.get("btc")) if old.get("btc") is not None else 0.0
+            by[ticker] = {"usd": btc * p, "btc": btc}
+            days[t] = (by, tot + btc * p - ou, coin + btc - ob)
+            used[ticker] = c
+    return used
 
 
 def _cme() -> dict[str, Json]:
@@ -459,10 +513,30 @@ def _holders() -> dict[str, Json]:
             "top": top, "movers": movers, "alts": alts, "eth": alts.get("eth", [])[:30]}
 
 
+# Фонды, найденные по цепочке (сканер бота): тикер → {"from": с какого дня
+# цепочка наблюдается (unix), "days": {сутки цепочки (unix): чистый поток BTC},
+# "hold": запас BTC или None}. Источник подключает API (set_chain).
+ChainSrc = Callable[[], dict[str, dict[str, Any]]]
+
+
 class _State:
     """Кэш модуля: (monotonic, ответ). Меняется только под _lock."""
 
     hit: tuple[float, dict[str, Json]] | None = None
+    chain: ChainSrc | None = None
+
+
+def peek() -> dict[str, Json] | None:
+    """Готовый ответ из кэша, без сборки: для тех, кого зовёт сама сборка
+    (сверка имён фондов по цепочке) — иначе холодный старт ждал бы сам себя."""
+    with _lock:
+        return _st.hit[1] if _st.hit else None
+
+
+def set_chain(src: ChainSrc | None) -> None:
+    """Подключить свои данные по цепочке: фонды, которые сканер нашёл, на
+    экране считаются по ним, остальные — по отчётам, пока не найдены."""
+    _st.chain = src
 
 
 _st = _State()

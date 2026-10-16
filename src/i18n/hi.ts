@@ -726,6 +726,7 @@ export const hi: Dict = {
   ef_share: "यह प्रचलन में सभी कॉइन का {p} है।",
   ef_since: "{d} से",
   ef_src: "डेटा: CoinMarketCap (ETF प्रवाह और संपत्ति), bitcointreasuries.net (होल्डर), CFTC (CME पोज़िशन), Binance, Coinbase और Hyperliquid (कीमतें, Coinbase प्रीमियम)। हर घंटे अपडेट।",
+  ef_src_chain: "चेन से",
   ef_still: "बिना हलचल वाले फ़ंड: {n}।",
   ef_streak_in: "लगातार {n} दिन प्रवाह",
   ef_streak_out: "लगातार {n} दिन निकासी",

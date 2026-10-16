@@ -726,6 +726,7 @@ export const vi: Dict = {
   ef_share: "Tức {p} tổng số coin đang lưu hành.",
   ef_since: "từ {d}",
   ef_src: "Dữ liệu: CoinMarketCap (dòng tiền và tài sản ETF), bitcointreasuries.net (người nắm giữ), CFTC (vị thế CME), Binance, Coinbase và Hyperliquid (giá, phí chênh Coinbase). Cập nhật mỗi giờ.",
+  ef_src_chain: "theo chuỗi",
   ef_still: "Quỹ không biến động: {n}.",
   ef_streak_in: "Dòng vào {n} ngày liên tiếp",
   ef_streak_out: "Dòng ra {n} ngày liên tiếp",

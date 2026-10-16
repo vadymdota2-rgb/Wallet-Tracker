@@ -882,7 +882,11 @@ export interface DomReply {
  * фондов $ тыс. в порядке funds (null — фонд в тот день не отчитался)].
  */
 export interface EtfCoin {
-  funds: { t: string; n: string; aum: number; vol: number; prem: number | null; fee: number | null; cum: number; cumc: number }[];
+  funds: {
+    t: string; n: string; aum: number; vol: number; prem: number | null; fee: number | null; cum: number; cumc: number;
+    /** «chain» — поток фонда посчитан по цепочке своим сканером, а не по отчётам. */
+    src?: "chain";
+  }[];
   days: [number, number, number, number, (number | null)[]][];
   share: number | null;
   shareHist: [number, number][];

@@ -726,6 +726,7 @@ export const zh: Dict = {
   ef_share: "占全部流通币的{p}。",
   ef_since: "自{d}起",
   ef_src: "数据:CoinMarketCap(ETF资金流与资产)、bitcointreasuries.net(持有者)、CFTC(CME持仓)、Binance、Coinbase与Hyperliquid(价格、Coinbase溢价)。每小时更新。",
+  ef_src_chain: "链上",
   ef_still: "无变动的基金:{n}个。",
   ef_streak_in: "连续{n}天流入",
   ef_streak_out: "连续{n}天流出",

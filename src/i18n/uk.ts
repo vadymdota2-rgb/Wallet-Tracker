@@ -726,6 +726,7 @@ export const uk: Dict = {
   ef_share: "Це {p} усіх монет в обігу.",
   ef_since: "з {d}",
   ef_src: "Дані: CoinMarketCap (потоки та активи ETF), bitcointreasuries.net (власники), CFTC (позиції на CME), Binance, Coinbase і Hyperliquid (ціни, премія Coinbase). Оновлюється щогодини.",
+  ef_src_chain: "за ланцюжком",
   ef_still: "Фондів без руху: {n}.",
   ef_streak_in: "Припливи {n} дн. поспіль",
   ef_streak_out: "Відпливи {n} дн. поспіль",

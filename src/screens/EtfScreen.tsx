@@ -397,6 +397,7 @@ function Funds({ c, coin, lang }: { c: EtfCoin; coin: Coin; lang: Lang }) {
                   {f.fee !== null && f.fee !== undefined ? ` · ${t(lang, "ef_fee", { v: iso(pct(f.fee, 2, false)) })}` : ""}
                   {typeof f.prem === "number" && Math.abs(f.prem) >= 0.01
                     ? ` · ${t(lang, f.prem > 0 ? "ef_prem" : "ef_disc", { v: iso(pct(Math.abs(f.prem), 2, false)) })}` : ""}
+                  {f.src === "chain" ? ` · ${t(lang, "ef_src_chain")}` : ""}
                 </small>
               ) : null}
             </div>

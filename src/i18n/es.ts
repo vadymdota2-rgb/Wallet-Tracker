@@ -726,6 +726,7 @@ export const es: Dict = {
   ef_share: "Es el {p} de todas las monedas en circulación.",
   ef_since: "desde {d}",
   ef_src: "Datos: CoinMarketCap (flujos y activos de ETF), bitcointreasuries.net (tenedores), CFTC (posiciones en CME), Binance, Coinbase y Hyperliquid (precios, prima de Coinbase). Se actualiza cada hora.",
+  ef_src_chain: "en cadena",
   ef_still: "Fondos sin movimiento: {n}.",
   ef_streak_in: "Entradas {n} días seguidos",
   ef_streak_out: "Salidas {n} días seguidos",

@@ -154,7 +154,7 @@ class BtcEtfChainTest(unittest.TestCase):
 
     def custody(self, reply):
         with mock.patch.object(api, "BTC_DB", self.db), mock.patch.object(api, "now", lambda: NOW + 3600), \
-                mock.patch.object(api, "etf_data", lambda: reply):
+                mock.patch.object(api.etf, "peek", lambda: reply):
             return api._btc_custody_build()
 
     def test_custody_learns_name_by_flows(self):

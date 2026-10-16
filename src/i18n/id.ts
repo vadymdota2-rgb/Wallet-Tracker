@@ -726,6 +726,7 @@ export const id: Dict = {
   ef_share: "Itu {p} dari semua koin yang beredar.",
   ef_since: "sejak {d}",
   ef_src: "Data: CoinMarketCap (arus dan aset ETF), bitcointreasuries.net (pemegang), CFTC (posisi CME), Binance, Coinbase, dan Hyperliquid (harga, premi Coinbase). Diperbarui tiap jam.",
+  ef_src_chain: "dari rantai",
   ef_still: "Dana tanpa pergerakan: {n}.",
   ef_streak_in: "Arus masuk {n} hari berturut-turut",
   ef_streak_out: "Arus keluar {n} hari berturut-turut",

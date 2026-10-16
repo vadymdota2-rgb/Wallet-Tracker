@@ -726,6 +726,7 @@ export const tr: Dict = {
   ef_share: "Bu, dolaşımdaki tüm coinlerin {p}'i.",
   ef_since: "{d} itibarıyla",
   ef_src: "Veri: CoinMarketCap (ETF akışları ve varlıkları), bitcointreasuries.net (sahipler), CFTC (CME pozisyonları), Binance, Coinbase ve Hyperliquid (fiyatlar, Coinbase primi). Saatte bir güncellenir.",
+  ef_src_chain: "zincirden",
   ef_still: "Hareketsiz fonlar: {n}.",
   ef_streak_in: "{n} gün üst üste giriş",
   ef_streak_out: "{n} gün üst üste çıkış",

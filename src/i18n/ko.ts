@@ -726,6 +726,7 @@ export const ko: Dict = {
   ef_share: "유통 중인 전체 코인의 {p}입니다.",
   ef_since: "{d}부터",
   ef_src: "데이터: CoinMarketCap(ETF 흐름·자산), bitcointreasuries.net(보유자), CFTC(CME 포지션), Binance·Coinbase·Hyperliquid(가격, 코인베이스 프리미엄). 매시간 갱신.",
+  ef_src_chain: "온체인",
   ef_still: "변동 없는 펀드: {n}개.",
   ef_streak_in: "{n}일 연속 유입",
   ef_streak_out: "{n}일 연속 유출",

@@ -26782,5 +26782,23 @@
     "ko": "상장지수펀드 {f}(ETF)의 지갑입니다. 이 지갑의 움직임은 펀드의 유입·유출이며 개인 고래의 거래가 아닙니다.",
     "vi": "Ví của quỹ ETF {f}. Các giao dịch của ví là dòng vào và dòng ra của quỹ, không phải giao dịch của cá voi cá nhân.",
     "zh": "交易所交易基金 {f}（ETF）的钱包。其变动是基金的流入和流出，而非个人巨鲸的交易。"
+  },
+  "ef_src_chain": {
+    "ru": "по цепочке",
+    "en": "on-chain",
+    "uk": "за ланцюжком",
+    "de": "on-chain",
+    "es": "en cadena",
+    "fr": "on-chain",
+    "pt": "na blockchain",
+    "pl": "z łańcucha",
+    "tr": "zincirden",
+    "ar": "من السلسلة",
+    "hi": "चेन से",
+    "id": "dari rantai",
+    "ja": "オンチェーン",
+    "ko": "온체인",
+    "vi": "theo chuỗi",
+    "zh": "链上"
   }
 }

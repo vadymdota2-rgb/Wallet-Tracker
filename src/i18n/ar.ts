@@ -726,6 +726,7 @@ export const ar: Dict = {
   ef_share: "وهذا {p} من كل العملات المتداولة.",
   ef_since: "من {d}",
   ef_src: "البيانات: CoinMarketCap (تدفّقات وأصول ETF)، bitcointreasuries.net (الحائزون)، CFTC (مراكز CME)، Binance وCoinbase وHyperliquid (الأسعار وعلاوة Coinbase). تُحدَّث كل ساعة.",
+  ef_src_chain: "من السلسلة",
   ef_still: "صناديق بلا حركة: {n}.",
   ef_streak_in: "تدفّقات داخلة {n} أيام متتالية",
   ef_streak_out: "تدفّقات خارجة {n} أيام متتالية",

@@ -828,6 +828,14 @@ say("ETF у хранителя: имена по сверке ежедневны�
     and "def _btc_learn(funds: list[dict], live_from: int) -> None:" in api
     and "CREATE TABLE IF NOT EXISTS btc_etf_learned" in api and 'f.pop("_vaults", None)' in api
     and "SELECT address, fund FROM btc_etf_learned WHERE address IN" in api)
+_etfs2 = read(f"{APP}/wt_etf.py")
+say("Институциональные потоки: фонды, найденные по цепочке, — своими потоками (T+1), остальные — по отчётам; итоги на разницу; без взаимного ожидания сборок",
+    "def _apply_chain(days: dict[int, Day], px: dict[int, float])" in _etfs2 and "def peek() -> dict[str, Json] | None:" in _etfs2
+    and 'f["src"] = "chain"' in _etfs2 and "settle >= today" in _etfs2
+    and "etf.set_chain(_etf_chain_src)" in api and "reply = etf.peek() or {}" in api
+    and 'hit = _BTC.get("cust")' in api and '(_BTC, "cust", BTC_CUST_TTL, _btc_custody_build)' in api
+    and 'f.src === "chain"' in read(f"{APP}/src/screens/EtfScreen.tsx")
+    and "refreshEtfBalances();\n                if (etfBackfill(" in _ws_btc)
 say("bitcoin: вкладка «Крупные ордера BTC» с потоком бирж (в NetFlow его нет), третья доска рейтинга, экран кошелька",
     'path in ("/btc/flow", "/api/btc/flow")' in api and "def _btc_clean(" in api and "w.s < 0.9 * w.b" in api
     and "export function BtcFlowCard(" in _btv and "export function BtcBigView(" in _btv

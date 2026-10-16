@@ -11731,7 +11731,9 @@ def _btc_learn(funds: list[dict], live_from: int) -> None:
     снимается. Сверка — только с того дня, как сканер начал находить
     хранилища: раньше в цепочке у нас пусто, и любое сравнение было бы
     «не совпало»."""
-    reply = etf_data() or {}
+    # Только готовый ответ: сборка экрана ETF сама зовёт данные по цепочке, и
+    # сборка отсюда на холодном старте ждала бы саму себя.
+    reply = etf.peek() or {}
     series, fees = etfchain.fund_series(reply)
     if not series:
         return
@@ -11792,11 +11794,53 @@ def _btc_custody_build() -> dict:
             sys.stderr.write(f"[api] btc custody, сверка имён: {e}\n")
     for f in funds:
         f.pop("_vaults", None)
-    return {"ok": True, "funds": funds, "vaults": int(vaults or 0), "xfers": int(xfers or 0), "at": now()}
+    # С какого дня потоки групп полны: сканер начал находить хранилища.
+    since = max(now() - BTC_ETF_DAYS * 86400, int(live_from) + 2 * 86400) if live_from else 0
+    return {"ok": True, "funds": funds, "vaults": int(vaults or 0), "xfers": int(xfers or 0), "at": now(),
+            "since": since - since % 86400 if since else 0}
 
 
 def btc_custody() -> dict:
     return cached_bg(_BTC, "cust", BTC_CUST_TTL, _btc_custody_build)
+
+
+def _etf_chain_src() -> dict:
+    """Фонды, найденные по цепочке, — экрану «Институциональные потоки»
+    (wt_etf.set_chain): чистый поток по суткам цепочки в BTC, с какого дня
+    цепочка наблюдается, запас. BITB — по кошелькам, которые фонд публикует
+    сам (точнее всего); остальные — группы хранителя, названные сверкой."""
+    out: dict = {}
+    con = open_db(BTC_DB)
+    if con:
+        try:
+            if table_exists(con, "btc_etf_flow") and table_exists(con, "btc_etf_addr"):
+                for (fund,) in con.execute("SELECT DISTINCT fund FROM btc_etf_addr WHERE how = 'seed'"):
+                    days = {int(r[0]): (int(r[1]) - int(r[2])) / 1e8 for r in con.execute(
+                        "SELECT day, in_sats, out_sats FROM btc_etf_flow WHERE fund = ?", (fund,))}
+                    if not days:
+                        continue
+                    hold = con.execute("SELECT SUM(bal_sats), MIN(bal_at) FROM btc_etf_addr WHERE fund = ?",
+                                       (fund,)).fetchone()
+                    out[str(fund)] = {"from": min(days), "days": days,
+                                      "hold": hold[0] / 1e8 if hold and hold[0] and hold[1] else None}
+        except sqlite3.Error as e:
+            sys.stderr.write(f"[api] etf по цепочке: {e}\n")
+        finally:
+            con.close()
+    # Только готовый разбор (его держит свежим exflow_warmer): собирать его
+    # отсюда — значит держать сборку экрана ETF секунды и звать её же.
+    hit = _BTC.get("cust")
+    cust = hit[1] if hit else {}
+    if cust.get("ok") and cust.get("since"):
+        for f in cust.get("funds") or []:
+            t = str(f.get("t") or "")
+            if t and not t.startswith("#") and t not in out:
+                out[t] = {"from": int(cust["since"]),
+                          "days": {int(r[0]): float(r[1]) - float(r[2]) for r in f.get("days") or []}, "hold": None}
+    return out
+
+
+etf.set_chain(_etf_chain_src)
 
 
 # ── Поток бирж BSC ────────────────────────────────────────────────────────
@@ -12144,7 +12188,8 @@ def exflow_warmer() -> None:
     """Потоки бирж BTC и BSC и рейтинг BTC собираются здесь, заранее и по
     кругу: запрос из приложения берёт готовое и никогда не ждёт сборки."""
     while True:
-        jobs = [(_BTC, "flow", BTC_TTL, _btc_flow_build), (_BSCX, "flow", BTC_TTL, _bscx_flow_build)]
+        jobs = [(_BTC, "flow", BTC_TTL, _btc_flow_build), (_BSCX, "flow", BTC_TTL, _bscx_flow_build),
+                (_BTC, "cust", BTC_CUST_TTL, _btc_custody_build)]
         jobs += [(_BTC, ("rank", d), btc_rank_ttl(d), (lambda d=d: _btc_rank_build(d))) for d in BTC_RANK_DAYS]
         for store, key, ttl, build in jobs:
             try:

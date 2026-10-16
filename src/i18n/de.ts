@@ -726,6 +726,7 @@ export const de: Dict = {
   ef_share: "Das sind {p} aller umlaufenden Coins.",
   ef_since: "ab {d}",
   ef_src: "Daten: CoinMarketCap (ETF-Flüsse und -Vermögen), bitcointreasuries.net (Halter), CFTC (CME-Positionen), Binance, Coinbase und Hyperliquid (Kurse, Coinbase-Prämie). Stündlich aktualisiert.",
+  ef_src_chain: "on-chain",
   ef_still: "Fonds ohne Bewegung: {n}.",
   ef_streak_in: "Zuflüsse {n} Tage in Folge",
   ef_streak_out: "Abflüsse {n} Tage in Folge",

@@ -725,6 +725,7 @@ export const en = {
   ef_share: "That's {p} of all coins in circulation.",
   ef_since: "from {d}",
   ef_src: "Data: CoinMarketCap (ETF flows and assets), bitcointreasuries.net (holders), CFTC (CME positions), Binance, Coinbase and Hyperliquid (prices, Coinbase premium). Updated hourly.",
+  ef_src_chain: "on-chain",
   ef_still: "Funds with no movement: {n}.",
   ef_streak_in: "Inflows {n} days in a row",
   ef_streak_out: "Outflows {n} days in a row",

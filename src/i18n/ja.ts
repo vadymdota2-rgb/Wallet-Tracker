@@ -726,6 +726,7 @@ export const ja: Dict = {
   ef_share: "流通している全コインの{p}にあたります。",
   ef_since: "{d}から",
   ef_src: "データ: CoinMarketCap(ETFのフローと資産)、bitcointreasuries.net(保有者)、CFTC(CMEポジション)、Binance・Coinbase・Hyperliquid(価格、Coinbaseプレミアム)。1時間ごとに更新。",
+  ef_src_chain: "オンチェーン",
   ef_still: "動きのないファンド: {n}。",
   ef_streak_in: "{n}日連続の流入",
   ef_streak_out: "{n}日連続の流出",
