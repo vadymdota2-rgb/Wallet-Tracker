@@ -185,28 +185,6 @@ class BtcEtfChainTest(unittest.TestCase):
             ro.close()
         self.assertTrue(r["ok"])
 
-    def test_chain_src_list_and_verified_custody(self):
-        con = sqlite3.connect(self.db)
-        # Кошельки HODL из чужого списка: потоки есть, запас — по ним, не «точный».
-        con.execute("INSERT INTO btc_etf_addr(address, fund, how, bal_sats, bal_at) VALUES('3hodl', 'HODL', 'list', ?, ?)",
-                    (14_000 * SAT, NOW - 50))
-        con.execute("INSERT INTO btc_etf_flow(day, fund, in_sats, out_sats) VALUES(?, 'HODL', ?, 0)", (DAY, 5 * SAT))
-        con.execute("CREATE TABLE btc_etf_learned (address TEXT PRIMARY KEY, fund TEXT NOT NULL, at INTEGER)")
-        con.execute("INSERT INTO btc_etf_learned VALUES('bc1qv', 'IBIT', 0)")
-        con.commit()
-        con.close()
-        cust = {"ok": True, "since": DAY - 86400 * 10, "funds": [
-            {"t": "IBIT", "days": [[DAY, 10.0, 0.0, 0.0]]},  # имя подтверждено сверкой
-            {"t": "FBTC", "days": [[DAY, 99.0, 0.0, 0.0]]},  # имя по списку, сверки ещё не было
-            {"t": "#3", "days": [[DAY, 1.0, 0.0, 0.0]]}]}
-        with mock.patch.object(api, "BTC_DB", self.db), mock.patch.dict(api._BTC, {"cust": (0.0, cust)}):
-            src = api._etf_chain_src()
-        self.assertEqual(set(src), {"BITB", "HODL", "IBIT"})
-        self.assertTrue(src["BITB"]["exact"])
-        self.assertFalse(src["HODL"]["exact"])
-        self.assertAlmostEqual(src["HODL"]["hold"], 14_000.0)
-        self.assertTrue(src["IBIT"]["matched"])
-
     def test_basket_with_labeled_wallet_spreads_to_its_vaults(self):
         # Корзина «IBIT» (в ней размеченный кошелёк) — её хранилища в
         # очередь разметки бота; уже размеченные и безымянные — нет.

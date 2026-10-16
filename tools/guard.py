@@ -652,7 +652,7 @@ say("токеномика: видно, что монету можно откры
 
 _ef = read(f"{APP}/src/screens/EtfScreen.tsx")
 _etfs = read(f"{APP}/wt_etf.py")
-say("институциональные потоки — только биткоин: потоки фондов по кварталам (SEC) и дням (цепочка), спрос против добычи; без «кто докупал за неделю» и подписи источников; других монет нет",
+say("институциональные потоки — только биткоин: потоки фондов по дням (открытый набор TFTC), спрос против добычи; без «кто докупал за неделю» и подписи источников; других монет нет",
     'COINS = (("btc", "BTCUSDT"),)' in _etfs and "type Coin" not in _ef and "Segmented<Coin>" not in _ef
     and "ETHUSDT" not in _etfs and "SOLUSDT" not in _etfs and "HYPE" not in _etfs
     and "etf_data = etf.etf_data" in api and "import wt_etf as etf" in api and '"/api/etf"' in api
@@ -763,8 +763,8 @@ say("дайджест: просмотры — каждый человек оди
     and '"/api/digest/view": "view"' in api and "DELETE FROM digest_views WHERE chat_id=?" in api
     and "viewDigest(it.id)" in _dgt and 'className="dg-views"' in _dgt)
 
-say("институциональные потоки: накопленный приток по кварталам, доля фондов",
-    "cum={isQ && mode === \"c\" ? cumView : null}" in _ef and '"ef_mshare"' in _ef and "coinsRound(" in _ef)
+say("институциональные потоки: накопленный приток, доля фондов",
+    "cum={mode === \"c\" ? cumView : null}" in _ef and '"ef_mshare"' in _ef and "coinsRound(" in _ef)
 
 _em = read(f"{APP}/src/screens/EtfMore.tsx")
 say("институциональные потоки: позиции CME по CFTC, премия Coinbase",
@@ -787,9 +787,8 @@ say("ETF: корзина хранителя с размеченным кошел
     "def _btc_spread(con: sqlite3.Connection, funds: list[dict]) -> int:" in api
     and "INSERT OR IGNORE INTO btc_etf_import(address, fund, at) VALUES(?,?,?)" in api
     and "if _btc_spread(con, funds):" in api and "BTC_SPREAD_MAX = 500" in api)
-say("ревизия ETF: запас по цепочке — у каждого фонда с разметкой; защита от лишней разметки и у BITB; алерт не считает хранилище дважды; новый кошелёк бота — без остатка до сверки",
-    "chain_ok.get(t), last_px) for t in sec if t in last]" in _etfs and 'if c.get("matched"):\n        return True' in _etfs
-    and "str(dst) not in labeled" in read(f"{APP}/wt_etfalert.py") and "str(src) not in labeled" in read(f"{APP}/wt_etfalert.py")
+say("ревизия ETF: алерт не считает хранилище дважды; новый кошелёк бота — без остатка до сверки",
+    "str(dst) not in labeled" in read(f"{APP}/wt_etfalert.py") and "str(src) not in labeled" in read(f"{APP}/wt_etfalert.py")
     and "constexpr long long UNKNOWN_HEIGHT = 1LL << 62;" in read(os.path.join(BOT, "btc_etf.cpp"))
     and "for (int page = 0; page < 8; ++page)" in read(os.path.join(BOT, "btc_chain.cpp")))
 say("кеш: тяжёлые ответы API — и на диске (после перезапуска сразу, свежий — в фоне); ETF и отчёты SEC — тоже; в приложении — дайджест, кошелёк BTC, алерты ETF на устройстве",
@@ -821,8 +820,7 @@ say("бот: /import — кнопки фондов (IBIT, FBTC…) и «Друг
     and "importCommand(cid, txt);" in _wsm and "tgFileText(m[\"document\"])" in _wsm and "IMPORT_FILE_MAX" in _wsm
     and "int etfDrainLabels(sqlite3* db)" in _wse and "++r.inBase;" in _wse and "++r.named;" in _wse
     and "UPDATE btc_watch SET src = 'import' WHERE address = ? AND src = 'auto'" in _wsc and "WHERE btc_etf_addr.how != 'seed'\");" in _wse
-    and "etfDrainLabels(g_btcDb);" in _wsc and "void backfillImported(long long tip)" in _wsc
-    and "COVER_MAX = 1.25" in _etfs)
+    and "etfDrainLabels(g_btcDb);" in _wsc and "void backfillImported(long long tip)" in _wsc)
 _eal = read(f"{APP}/wt_etfalert.py")
 _eaa = read(f"{APP}/src/screens/EtfAlerts.tsx")
 say("алерты ETF: итог дня по всем фондам или по фонду и движения фондов в цепочке — в Telegram, один раз, с Премиумом",
@@ -836,13 +834,16 @@ say("алерты ETF: итог дня по всем фондам или по ф
 _wsb = read(os.path.join(BOT, "btc_chain.cpp"))
 _wsg = read(os.path.join(BOT, "btc_gov.cpp"))
 _tre0 = read(f"{APP}/wt_treasury.py")
-say("ETF: база — официальные отчёты фондов в SEC (кварталы, запас), по дням — только своя цепочка; снимка CoinMarketCap нет; флаги фондов; бот ведёт государства по раскрытым ими адресам",
+say("ETF: потоки по дням — открытый набор TFTC (CC BY 4.0), на экране источник и лицензия со ссылками; запас — отчёты SEC плюс потоки после них; снимка и сводок CoinMarketCap нет; флаги фондов; бот ведёт государства по раскрытым ими адресам",
     "flagOf(f.c)" in _ef and not os.path.exists(f"{APP}/data/etf_base.json") and "BASE_FILE" not in _etfs
-    and "sec = wt_treasury.etf_funds() if cat == \"btc\" else {}" in _etfs and "def _quarters(" in _etfs
-    and "def _sec_holdings(" in _etfs and "def fund_points(" in _tre0 and "def etf_funds(" in _tre0
+    and 'TFTC = "https://www.tftc.io/bitcoin-etf-flows/data.json"' in _etfs and '"www.tftc.io"' in _etfs
+    and "coinmarketcap" not in _etfs.lower() and "def _tftc() -> " in _etfs and "TICKER.fullmatch(k)" in _etfs
+    and "def _last_report(" in _etfs and "sec = wt_treasury.etf_funds()" in _etfs
+    and 'const TFTC_URL = "https://www.tftc.io/bitcoin-etf-flows";' in _ef
+    and 'const CCBY_URL = "https://creativecommons.org/licenses/by/4.0/";' in _ef
+    and "openExternal(TFTC_URL)" in _ef and "openExternal(CCBY_URL)" in _ef and '"ef_by_ch"' in _ef
+    and "def fund_points(" in _tre0 and "def etf_funds(" in _tre0
     and '("IBIT", "iShares Bitcoin Trust", 1980994)' in _tre0 and "/api/xbrl/companyfacts/CIK" in _tre0
-    and "after = sum(float(v) for d, v in (c.get(\"days\") or {}).items() if int(d) > cut)" in _etfs
-    and "quarterly(qs)" in _ef and '"ef_d_note"' in _ef and '"ef_asof"' in _ef
     and "set_holders" not in api and "gov_base" not in api
     and "bc1qa5wkgaew2dkv56kfvj49j0av5nml45x9ek9hz6" in _wsg and "void govBlock(sqlite3* db, const Block& b)" in _wsg
     and "govBlock(g_btcDb, b);" in _wsb and "govRollback(g_btcDb);" in _wsb and "void readGovOfficial()" in _wsb
@@ -906,18 +907,14 @@ say("ETF у хранителя: имена по сверке ежедневны�
     and "CREATE TABLE IF NOT EXISTS btc_etf_learned" in api and 'f.pop("_vaults", None)' in api
     and "SELECT address, fund FROM btc_etf_learned WHERE address IN" in api)
 _etfs2 = read(f"{APP}/wt_etf.py")
-say("Институциональные потоки: фонды, найденные по цепочке, — своими потоками (T+1), остальные — по отчётам; итоги на разницу; без взаимного ожидания сборок",
-    "def _apply_chain(days: dict[int, Day], px: dict[int, float], chain:" in _etfs2 and "def peek() -> dict[str, Json] | None:" in _etfs2
-    and "COVER = 0.9" in _etfs2 and "def _usable(" in _etfs2 and "def _partial(" in _etfs2
-    and "return base_btc > 0 and _num(c.get(\"hold\")) <= COVER_MAX * base_btc" in _etfs2 and "MAX(how IN ('seed', 'list'))" in api
-    and "if t and t in learned and t not in out:" in api and "имя по списку подтверждено сверкой" in api
+say("Институциональные потоки: своя разметка фондов — для алертов, рейтинга и потоков бирж, на экран ETF не подмешивается; сверка имён корзин — по дневным потокам набора; без взаимного ожидания сборок",
+    "def peek() -> dict[str, Json] | None:" in _etfs2 and "_apply_chain" not in _etfs2 and "set_chain" not in _etfs2 + api
+    and "reply = etf.peek() or {}" in api and "series, fees = etfchain.fund_series(reply)" in api
+    and '(_BTC, "cust", BTC_CUST_TTL, _btc_custody_build)' in api and "имя по списку подтверждено сверкой" in api
     and os.path.isfile(os.path.join(BOT, "btc_etf_list.h")) and "bool paidBefore(" in read(os.path.join(BOT, "btc_etf.cpp"))
     and "it->second * 2 >= held" in read(os.path.join(BOT, "btc_etf.cpp")) and "freshAddr(it->first, tx.txid, b.height)" in read(os.path.join(BOT, "btc_etf.cpp"))
     and "etfSetFreshCheck(addrFresh);" in read(os.path.join(BOT, "btc_chain.cpp"))
-    and 'f["src"] = "chain"' in _etfs2 and "settle >= today" in _etfs2
-    and "etf.set_chain(_etf_chain_src)" in api and "reply = etf.peek() or {}" in api
-    and 'hit = _BTC.get("cust")' in api and '(_BTC, "cust", BTC_CUST_TTL, _btc_custody_build)' in api
-    and 'f.src === "chain"' in read(f"{APP}/src/screens/EtfScreen.tsx")
+    and 'f.src === "chain"' not in read(f"{APP}/src/screens/EtfScreen.tsx")
     and "refreshEtfBalances();\n                if (etfBackfill(" in _ws_btc)
 say("bitcoin: вкладка «Крупные ордера BTC» с потоком бирж (в NetFlow его нет), третья доска рейтинга, экран кошелька",
     'path in ("/btc/flow", "/api/btc/flow")' in api and "def _btc_clean(" in api and "w.s < 0.9 * w.b" in api

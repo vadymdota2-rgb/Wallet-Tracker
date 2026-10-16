@@ -1,26 +1,26 @@
 """Институциональные потоки — отдельный модуль API (/api/etf).
 
-Что собирается — только биткоин, только официальное и своё:
+Что собирается — только биткоин:
+  - потоки фондов по дням — открытый набор TFTC (tftc.io/bitcoin-etf-flows,
+    лицензия CC BY 4.0: можно брать и показывать с подписью и ссылкой на
+    источник — экран её показывает). Каждый торговый день с запуска фондов
+    в январе 2024: итог дня и поток каждого фонда в долларах. Монеты —
+    доллары по закрытию дня Binance;
   - фонды — спотовые биткоин-ETF США по их отчётам в SEC (wt_treasury):
-    запас на конец каждого квартала, комиссия. Поток фонда за квартал —
-    изменение запаса плюс комиссия, взятая монетами; в долларах — по средней
-    цене квартала. Где фонд пишет в отчёте только стоимость монет, монеты —
-    стоимость по цене, которую дают отчёты фондов с числом монет на ту же
-    дату (их медиана; нет — закрытие Binance);
-  - по дням — только своя цепочка (set_chain): фонды, чьи кошельки знает
-    сканер бота (BITB — все, опубликованы им самим; у остальных — разметка:
-    свой список и /import владельца, часто не все кошельки — тогда фонд
-    помечен part), поток торгового дня — монеты, дошедшие до цепочки на
-    следующий рабочий день. Остальных фондов в днях нет;
-  - запас фонда — отчёт плюс то, что после него прошло через его
-    размеченные кошельки (BITB — точно по всем кошелькам); у фонда без
-    разметки — на дату отчёта;
+    имя, комиссия, запас на конец последнего квартала. Запас сегодня —
+    отчёт плюс потоки после него, минус комиссия, взятая монетами. Где фонд
+    пишет в отчёте только стоимость монет, монеты — стоимость по цене,
+    которую дают отчёты фондов с числом монет на ту же дату (их медиана;
+    нет — закрытие Binance);
   - цена — закрытие Binance; доля фондов от добытых монет — своим счётом
     по расписанию эмиссии (supply_at);
   - крупнейшие держатели — фонды отсюда же и публичные компании по их
     отчётам в SEC (wt_treasury);
   - позиции на CME — еженедельный отчёт CFTC «Traders in Financial Futures»;
   - премия Coinbase к Binance — спрос американских покупателей.
+
+Своя разметка кошельков фондов (сканер бота) здесь не участвует: она — для
+алертов о движениях фондов в цепочке, рейтинга кошельков и потоков бирж.
 
 Ответ живёт час (TTL): устаревший отдаётся сразу, свежий собирается в фоне
 одним потоком. Часть, которая в этот раз не собралась (потоки,
@@ -42,18 +42,17 @@ import http.client
 import json
 import math
 import os
+import re
 import sys
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any
 
 import wt_treasury
-from wt_etfchain import settle_day
 
 # Сколько ответ живёт в кэше, с: фонды отчитываются раз в сутки.
 TTL = 3600.0
@@ -72,11 +71,12 @@ CME_FIELDS = ("open_interest_all", "asset_mgr_positions_long", "asset_mgr_positi
 
 # Куда модулю можно ходить — и больше никуда.
 HOSTS = frozenset({"data-api.binance.vision", "publicreporting.cftc.gov", "api.exchange.coinbase.com",
-                   "api.coinmarketcap.com"})
-# Сводка потоков фондов по дням — временно, пока не размечены кошельки всех
-# фондов: по ней экран показывает дни фондов без полной разметки, и по ней же
-# API сверяет корзины хранителя (имена групп по совпадению потоков).
-CMC = "https://api.coinmarketcap.com/data-api/v3/"
+                   "www.tftc.io"})
+# Потоки фондов по дням — открытый набор TFTC, CC BY 4.0 (см. начало модуля).
+# Обновляется вечером и утром: раз в час (TTL) — с запасом.
+TFTC = "https://www.tftc.io/bitcoin-etf-flows/data.json"
+# Тикер фонда в наборе — заглавные буквы и цифры.
+TICKER = re.compile(r"[A-Z0-9]{1,10}")
 # Самый большой ответ — отчёт CFTC, ~2 МБ.
 BODY_MAX = 8 << 20
 _HEADERS = {"User-Agent": "wallet-tracker/1.0", "Accept-Encoding": "identity"}
@@ -189,70 +189,36 @@ def _klines(symbol: str, start_ms: int) -> dict[int, float]:
     return out
 
 
-Day = tuple[dict[str, dict[str, Json]], float, float]  # фонды, итог $, итог монет
+Day = tuple[dict[str, float], float]  # поток фонда $, итог дня $
 
 
-def _cmc(path: str, timeout: float = 25) -> dict[str, Json]:
-    got = _get(CMC + path, timeout)
-    data = got.get("data") if isinstance(got, dict) else None
-    return data if isinstance(data, dict) else {}
-
-
-def _cmc_points() -> list[Json] | None:
-    """Все дни потоков биткоин-ETF страницами по сто; None — страница не
-    пришла (не рисуем дыру на месяцы — сводки в этот раз нет)."""
-    first = _cmc("etf/detail/netflow/list?category=btc&size=100&page=1")
-    pts = list(first.get("points") or [])
-    if not pts:
-        return None
-    pages = min(12, (int(_num(first.get("totalCount"))) + 99) // 100)
-
-    def page(n: int) -> list[Json]:
-        # Под нагрузкой сводка иногда отдаёт пустую страницу — второй заход
-        # через пару секунд её приносит.
-        for attempt in range(3):
-            got = _cmc(f"etf/detail/netflow/list?category=btc&size=100&page={n}").get("points") or []
-            if got:
-                return list(got)
-            time.sleep(1.5 * (attempt + 1))
-        return []
-
-    if pages > 1:
-        with ThreadPoolExecutor(max_workers=3) as pool:
-            rest = list(pool.map(page, range(2, pages + 1)))
-        if not all(rest):
-            return None
-        for chunk in rest:
-            pts.extend(chunk)
-    return pts
-
-
-def _cmc_days(funds: set[str]) -> dict[int, Day]:
-    """Торговые дни сводки по фондам из списка (фонды США из SEC):
-    начало суток → (фонды {usd, btc}, итог $, итог монет). День, по которому
-    фонды ещё не отчитались (всё пусто), — пропускается."""
+def _tftc() -> tuple[dict[int, Day], dict[int, float], str]:
+    """Дни набора TFTC: начало суток → (фонд → поток $, итог дня $), цена
+    дня из набора (запасная к Binance) и «данные по» (дата). Нет набора или
+    он битый — пусто. День без разбивки по фондам (праздник биржи) — с
+    итогом, но без фондов; итога нет — сумма фондов."""
+    got = _get(TFTC, 30)
+    rows = got.get("days") if isinstance(got, dict) else None
+    if not isinstance(rows, list):
+        return {}, {}, ""
     days: dict[int, Day] = {}
-    for p in _cmc_points() or []:
-        if not isinstance(p, dict):
+    px: dict[int, float] = {}
+    for r in rows:
+        if not isinstance(r, dict):
             continue
-        ts = int(_num(p.get("date"))) // 1000
-        by = {str(k): {"usd": _num(v.get("usd")), "btc": _num(v.get("btc"))} for k, v in p.items()
-              if k in funds and isinstance(v, dict) and v.get("usd") is not None}
-        if ts <= 0 or not by:
+        try:
+            ts = _day(r.get("date"))
+        except ValueError:
             continue
-        days[ts - ts % 86400] = (by, sum(v["usd"] for v in by.values()), sum(v["btc"] for v in by.values()))
-    return days
-
-
-def _after(last: int, today: int) -> list[int]:
-    """Рабочие дни после дня last, чьи деньги уже дошли до цепочки."""
-    out = []
-    t = last + 86400
-    while settle_day(t // 86400) * 86400 < today:
-        if time.gmtime(t).tm_wday < 5:
-            out.append(t)
-        t += 86400
-    return out
+        per = r.get("perEtfUsd")
+        by = {str(k): _num(v) for k, v in per.items()
+              if v is not None and isinstance(k, str) and TICKER.fullmatch(k)} if isinstance(per, dict) else {}
+        total = r.get("netFlowUsd")
+        days[ts] = (by, _num(total) if total is not None else sum(by.values()))
+        if _num(r.get("btcCloseUsd")) > 0:
+            px[ts] = _num(r["btcCloseUsd"])
+    through = got.get("updatedThrough")
+    return days, px, through if isinstance(through, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", through) else ""
 
 
 # Сколько биткоинов добыто к блоку 840 000 (четвёртый халвинг, 20 апреля 2024,
@@ -270,9 +236,8 @@ def supply_at(ts: int) -> float:
 
 
 def _share(funds: list[dict[str, Json]], price: float) -> dict[str, Json]:
-    """Доля фондов в биткоинах в обращении: их активы (по цепочке у найденных
-    фондов) в монетах — к добытому по расписанию. Своя арифметика, без
-    готовых цифр источника."""
+    """Доля фондов в биткоинах в обращении: их запас в монетах — к добытому
+    по расписанию. Своя арифметика, без готовых цифр источника."""
     aum = sum(_num(f.get("aum")) for f in funds)
     if aum <= 0 or price <= 0:
         return {"share": None}
@@ -285,225 +250,74 @@ def _median(xs: list[float]) -> float:
     return 0.0 if not n else xs[n // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) / 2
 
 
-def _avg_px(px: dict[int, float], lo: int, hi: int) -> float:
-    """Средняя цена закрытия дней (lo, hi]; нет дней — закрытие ближе к hi."""
-    vals = [v for d, v in px.items() if lo < d <= hi and v > 0]
-    if vals:
-        return sum(vals) / len(vals)
-    near = [d for d in px if d <= hi and px[d] > 0]
-    return px[max(near)] if near else 0.0
+def _last_report(sec: dict[str, dict[str, Any]], px: dict[int, float]) -> dict[str, tuple[float, int]]:
+    """Запас каждого фонда в монетах на дату последнего отчёта: (монет, дата).
 
-
-def _sec_holdings(sec: dict[str, dict[str, Any]], px: dict[int, float]) -> tuple[dict[int, float], dict[str, dict[int, float]]]:
-    """Цена отчётов на конец квартала и запас каждого фонда в монетах.
-
-    Цена — медиана «стоимость / монеты» у фондов, сдавших и то и другое
-    (так фонды сами оценили монеты на ту дату); нет таких — закрытие Binance.
-    Монеты фонда — из отчёта, а где их нет — стоимость по этой цене."""
-    ends = sorted({e for f in sec.values() for e in f.get("q") or {}})
-    price: dict[int, float] = {}
-    for e in ends:
-        ratios = [fv / cnt for f in sec.values() if (r := (f.get("q") or {}).get(e))
-                  for cnt, fv in [r] if cnt and fv and cnt > 0]
-        price[e] = _median(ratios) or _avg_px(px, e - 86400, e)
-    hold: dict[str, dict[int, float]] = {}
+    Где в отчёте только стоимость, монеты — стоимость по цене отчётов на ту
+    дату: медиана «стоимость / монеты» у фондов, сдавших и то и другое (так
+    фонды сами оценили монеты); нет таких — закрытие Binance."""
+    out: dict[str, tuple[float, int]] = {}
     for t, f in sec.items():
-        h: dict[int, float] = {}
-        for e, (cnt, fv) in sorted((f.get("q") or {}).items()):
+        q = f.get("q") or {}
+        for e in sorted(q, reverse=True):
+            cnt, fv = q[e]
             if cnt:
-                h[e] = float(cnt)
-            elif fv is not None and price.get(e, 0) > 0:
-                h[e] = float(fv) / price[e]
-        hold[t] = h
-    return price, hold
-
-
-QuarterFlows = dict[int, dict[str, tuple[float, float]]]  # конец квартала → фонд → ($, монет)
-
-
-def _quarters(sec: dict[str, dict[str, Any]], px: dict[int, float]) -> tuple[QuarterFlows, dict[int, float], dict[str, tuple[float, int]]]:
-    """Потоки фондов по кварталам, цена отчётов на концы кварталов и
-    последний запас фонда (монет, дата отчёта).
-
-    Поток фонда за квартал — изменение запаса плюс комиссия, взятая монетами
-    (доля в год × средний запас × длина квартала), в долларах — по средней
-    цене квартала. Первый отчёт фонда — от нуля (фонд открылся в этом
-    квартале); точка отсчёта ETF_FROM (запас GBTC до перехода в ETF) — без
-    потока."""
-    price, hold = _sec_holdings(sec, px)
-    ends = sorted(price)
-    start = calendar.timegm(time.strptime(wt_treasury.ETF_FROM, "%Y-%m-%d"))
-    flows: QuarterFlows = {}
-    last: dict[str, tuple[float, int]] = {}
-    for t, h in hold.items():
-        fee = _num(sec[t].get("fee"))
-        prev: int | None = None
-        for e in sorted(h):
-            last[t] = (h[e], e)
-            if e > start:
-                lo = prev if prev is not None else max([x for x in ends if x < e], default=e - 91 * 86400)
-                before = h[prev] if prev is not None else 0.0
-                btc = h[e] - before + fee * (h[e] + before) / 2 * (e - lo) / (365 * 86400)
-                flows.setdefault(e, {})[t] = (btc * _avg_px(px, lo, e), btc)
-            prev = e
-    return flows, price, last
-
-
-def _fund_row(info: dict[str, Any], rep: tuple[float, int], cum: tuple[float, float],
-              c: dict[str, Any] | None, last_px: float) -> dict[str, Json]:
-    """Фонд для экрана: запас — отчёт плюс то, что после него прошло через
-    размеченные кошельки (BITB — точно по всем); итог «с запуска» — кварталы
-    плюс то же «после отчёта»."""
-    btc, asof = rep
-    report = btc
-    after = 0.0
-    if c is not None:
-        if c.get("exact") and c.get("hold"):
-            after = float(c["hold"]) - btc
-        else:
-            cut = settle_day(asof // 86400) * 86400 if asof else 0
-            after = sum(float(v) for d, v in (c.get("days") or {}).items() if int(d) > cut)
-        btc = max(0.0, btc + after)
-    fee = info.get("fee")
-    cu, cc = cum
-    f: dict[str, Json] = {
-        "t": str(info["t"]), "n": str(info.get("n") or "")[:60], "c": "US",
-        "fee": None if fee is None else round(float(fee) * 100, 3),
-        "aum": round(btc * last_px), "hold": round(btc, 2), "asof": asof,
-        "cum": round(cu + after * last_px), "cumc": round(cc + after, 2),
-    }
-    if c is not None:
-        f["src"] = "chain"
-        if _partial(c, report):
-            f["part"] = True
-    return f
-
-
-def _day_src(funds: list[dict[str, Json]]) -> None:
-    """Откуда у фонда дни: «chain» — своя цепочка (разметка полная), иначе
-    сводка (временно, пока кошельки фонда не размечены)."""
-    for f in funds:
-        f["days"] = "chain" if f.get("src") == "chain" and not f.get("part") else "cmc"
+                out[t] = (float(cnt), int(e))
+                break
+            ratios = [r[1] / r[0] for g in sec.values() if (r := (g.get("q") or {}).get(e)) and r[0] and r[1] and r[0] > 0]
+            near = [d for d in px if d <= e and px[d] > 0]
+            price = _median(ratios) or (px[max(near)] if near else 0.0)
+            if fv is not None and price > 0:
+                out[t] = (float(fv) / price, int(e))
+                break
+    return out
 
 
 def _coin(cat: str, symbol: str) -> dict[str, Json] | None:
-    """Фонды по отчётам в SEC (кварталы, запас) и по своей цепочке (дни)."""
-    sec = wt_treasury.etf_funds() if cat == "btc" else {}
-    if not sec:
+    """Потоки фондов по дням (TFTC), фонды и их запас (отчёты SEC плюс потоки
+    после отчёта), доля от добытых монет."""
+    if cat != "btc":
         return None
-    start = calendar.timegm(time.strptime(wt_treasury.ETF_FROM, "%Y-%m-%d"))
-    px = _klines(symbol, (start - 120 * 86400) * 1000)
-    if not px:
+    days, tpx, through = _tftc()
+    if not days:
         return None
-    last_px = px[max(px)]
-    flows, price, last = _quarters(sec, px)
-    # Запас по цепочке — у фондов с разметкой; дни по цепочке — только у
-    # размеченных полностью (у остальных цепочка видит часть потока), их дни
-    # — по сводке, пока разметка не закончена.
-    chain_ok = {t: c for t, c in _chain().items() if t in sec and _usable(c, (last.get(t) or (0.0, 0))[0])}
-    chain_full = {t: c for t, c in chain_ok.items() if not _partial(c, (last.get(t) or (0.0, 0))[0])}
-    today = _now() - _now() % 86400
-    days = _cmc_days(set(sec))
-    if chain_full:
-        # После последнего дня сводки — рабочие дни, чьи деньги уже в цепочке
-        # (внутри сводки её дни и есть торговые: праздники биржи не выдумываем).
-        first = min(int(c.get("from") or today) for c in chain_full.values())
-        for t in _after(max(days) if days else first - first % 86400 - 86400, today):
-            days.setdefault(t, ({}, 0.0, 0.0))
-    if days:
-        _apply_chain(days, px, chain_full)
-    # Запас по цепочке — у каждого фонда с разметкой, даже если торговых
-    # дней по ней ещё нет (разметили только что, деньги дня ещё в пути).
-    funds = [_fund_row({**sec[t], "t": t}, last[t],
-                       (sum(v[t][0] for v in flows.values() if t in v), sum(v[t][1] for v in flows.values() if t in v)),
-                       chain_ok.get(t), last_px) for t in sec if t in last]
-    funds.sort(key=lambda f: -_num(f["hold"]))
-    _day_src(funds)
-    order = [str(f["t"]) for f in funds]
-    quarters = []
-    for e in sorted(flows):
-        by = flows[e]
-        quarters.append([e, round(sum(v[0] for v in by.values()) / 1000), round(sum(v[1] for v in by.values()), 2),
-                         round(price.get(e, 0.0), 2), [round(by[t][0] / 1000) if t in by else None for t in order]])
+    px = _klines(symbol, (min(days) - 2 * 86400) * 1000)
+    for ts, p in tpx.items():
+        px.setdefault(ts, p)  # нет свечи Binance — цена из набора
+    last_px = px[max(px)] if px else 0.0
+    sec = wt_treasury.etf_funds()
+    reports = _last_report(sec, px)
+    sums: dict[str, list[float]] = {}  # фонд → [$ с запуска, монет с запуска]
+    for ts, (by, _) in days.items():
+        p = px.get(ts, 0.0)
+        for t, usd in by.items():
+            acc = sums.setdefault(t, [0.0, 0.0])
+            acc[0] += usd
+            acc[1] += usd / p if p > 0 else 0.0
+    funds: list[dict[str, Json]] = []
+    for t in sorted(set(sums) | set(reports), key=lambda k: -abs((sums.get(k) or [0.0])[0])):
+        info = sec.get(t) or {}
+        fee = info.get("fee")
+        btc = 0.0
+        if t in reports:
+            # Запас: отчёт плюс потоки дней после него минус комиссия, взятая
+            # монетами (доля в год от запаса за прошедшие дни).
+            btc, asof = reports[t]
+            after = sum(by[t] / px[ts] for ts, (by, _) in days.items() if ts > asof and t in by and px.get(ts, 0) > 0)
+            btc = max(0.0, (btc + after) * (1 - _num(fee) * max(0, _now() - asof) / (365 * 86400)))
+        cu, cc = sums.get(t) or [0.0, 0.0]
+        funds.append({
+            "t": t, "n": str(info.get("n") or "")[:60], "c": "US",
+            "fee": None if fee is None else round(float(fee) * 100, 3),
+            "aum": round(btc * last_px), "hold": round(btc, 2), "cum": round(cu), "cumc": round(cc, 2),
+        })
     rows = []
     for ts in sorted(days):
-        by_day, tot, coin = days[ts]
-        if not by_day:
-            continue
-        per = [None if (v := (by_day.get(t) or {}).get("usd")) is None else round(_num(v) / 1000) for t in order]
-        rows.append([ts, round(tot / 1000), round(coin, 2), round(px.get(ts, 0.0), 4), per])
-    return {"funds": funds, "days": rows, "quarters": quarters, "px": round(last_px, 2),
-            "asof": max((int(_num(f["asof"])) for f in funds), default=0), **_share(funds, last_px)}
-
-
-# Разметка кошельков (свой список и /import владельца) прибавляется к
-# отчёту SEC всегда: что прошло через известные кошельки фонда после
-# отчёта — его поток. Знаем не все кошельки (на известных меньше COVER
-# запаса из отчёта) — фонд помечен «по части кошельков»: дни у него неполные.
-COVER = 0.9
-# Защита от неверной разметки: на «кошельках фонда» монет заметно больше
-# его запаса из отчёта — это чужой кошелёк хранителя, фонд без цепочки.
-COVER_MAX = 1.25
-
-
-def _chain() -> dict[str, dict[str, Any]]:
-    src = _st.chain
-    if src is None:
-        return {}
-    try:
-        return src()
-    except Exception as e:  # noqa: BLE001 — свои данные не должны ломать экран
-        _log(f"цепочка: {type(e).__name__}: {e}")
-        return {}
-
-
-def _usable(c: dict[str, Any], base_btc: float) -> bool:
-    """Фонд по цепочке (дни и прибавка к отчёту): имя группы хранителя
-    подтверждено сверкой потоков, или на его кошельках (опубликованных им
-    самим и размеченных) не больше COVER_MAX запаса из отчёта. Так и у BITB:
-    чужой кошелёк, размеченный за ним через /import, не раздует его запас."""
-    if c.get("matched"):
-        return True
-    return base_btc > 0 and _num(c.get("hold")) <= COVER_MAX * base_btc
-
-
-def _partial(c: dict[str, Any], base_btc: float) -> bool:
-    """Знаем не все кошельки фонда: на известных меньше COVER его запаса."""
-    return not (c.get("exact") or c.get("matched")) and _num(c.get("hold")) < COVER * base_btc
-
-
-def _chain_btc(flows: dict[int, float], lo: int, hi: int) -> float:
-    return sum(v for d, v in flows.items() if lo < d <= hi)
-
-
-def _apply_chain(days: dict[int, Day], px: dict[int, float], chain: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    """Поток торгового дня у фондов, найденных по цепочке: монеты, дошедшие
-    до цепочки в следующий рабочий день (T+1), в долларах по цене дня; итоги
-    дня — их сумма. Не считается: день до начала наблюдения цепочки и
-    последний день, чьи деньги до цепочки ещё не дошли. Возвращает фонды,
-    у которых есть дни."""
-    today = _now() - _now() % 86400
-    trade = sorted(days)
-    used: dict[str, dict[str, Any]] = {}
-    for ticker, c in chain.items():
-        start = int(c.get("from") or 0)
-        flows = {int(d): float(v) for d, v in (c.get("days") or {}).items()}
-        prev: int | None = None
-        for t in trade:
-            settle = settle_day(t // 86400) * 86400
-            lo, prev = prev, settle
-            p = px.get(t, 0.0)
-            if lo is None or lo < start or settle >= today or p <= 0:
-                continue
-            btc = _chain_btc(flows, lo, settle)
-            by, tot, coin = days[t]
-            old = by.get(ticker) or {}
-            ou = _num(old.get("usd")) if old.get("usd") is not None else 0.0
-            ob = _num(old.get("btc")) if old.get("btc") is not None else 0.0
-            by[ticker] = {"usd": btc * p, "btc": btc}
-            days[t] = (by, tot + btc * p - ou, coin + btc - ob)
-            used[ticker] = c
-    return used
+        by, tot = days[ts]
+        p = px.get(ts, 0.0)
+        per = [None if (v := by.get(str(f["t"]))) is None else round(v / 1000) for f in funds]
+        rows.append([ts, round(tot / 1000), round(tot / p, 2) if p > 0 else 0.0, round(p, 4), per])
+    return {"funds": funds, "days": rows, "px": round(last_px, 2), "through": through, **_share(funds, last_px)}
 
 
 def _cme() -> dict[str, Json]:
@@ -573,17 +387,10 @@ def _cbp() -> dict[str, Json]:
     return out
 
 
-# Фонды, найденные по цепочке (сканер бота): тикер → {"from": с какого дня
-# цепочка наблюдается (unix), "days": {сутки цепочки (unix): чистый поток BTC},
-# "hold": запас BTC или None}. Источник подключает API (set_chain).
-ChainSrc = Callable[[], dict[str, dict[str, Any]]]
-
-
 class _State:
     """Кэш модуля: (monotonic, ответ). Меняется только под _lock."""
 
     hit: tuple[float, dict[str, Json]] | None = None
-    chain: ChainSrc | None = None
     # Копия последнего ответа на диске (set_cache_file): после перезапуска
     # API экран получает её сразу, свежий ответ собирается в фоне.
     file: str | None = None
@@ -634,15 +441,13 @@ def _file_save(res: dict[str, Json]) -> None:
 def _holders(c: Json, companies: list[list[Any]]) -> list[list[Any]]:
     """«Крупнейшие держатели»: фонды (запас — как в списке фондов выше) и
     компании по их отчётам в SEC (wt_treasury), по убыванию запаса. Строка —
-    [имя, FUND или COMPANY, страна, тикер, BTC, дата отчёта unix (у фонда,
-    чей запас ведёт цепочка, — 0)]."""
+    [имя, FUND или COMPANY, страна, тикер, BTC, дата отчёта unix (у фонда 0:
+    его запас — на сегодня)]."""
     rows: list[list[Any]] = []
     for f in (c or {}).get("funds") or []:
         hold = _num(f.get("hold"))
         if hold >= 1:
-            # Дата отчёта — у фонда без цепочки: его запас — на ту дату.
-            asof = 0 if f.get("src") == "chain" else int(_num(f.get("asof")))
-            rows.append([str(f.get("n") or f.get("t")), "FUND", str(f.get("c") or ""), str(f.get("t")), hold, asof])
+            rows.append([str(f.get("n") or f.get("t")), "FUND", str(f.get("c") or ""), str(f.get("t")), hold, 0])
     rows += [r for r in companies if isinstance(r, list) and len(r) == 6]
     rows.sort(key=lambda r: -float(r[4]))
     return rows
@@ -653,12 +458,6 @@ def peek() -> dict[str, Json] | None:
     (сверка имён фондов по цепочке) — иначе холодный старт ждал бы сам себя."""
     with _lock:
         return _st.hit[1] if _st.hit else None
-
-
-def set_chain(src: ChainSrc | None) -> None:
-    """Подключить свои данные по цепочке: фонды, которые сканер нашёл, на
-    экране считаются по ним, остальные — по отчётам, пока не найдены."""
-    _st.chain = src
 
 
 _st = _State()

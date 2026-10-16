@@ -886,25 +886,17 @@ export interface EtfCoin {
     t: string; n: string; aum: number; fee: number | null; cum: number; cumc: number;
     /** Страна, где фонд торгуется: код ISO (US, HK), пусто — неизвестна. */
     c?: string;
-    /** «chain» — поток фонда посчитан по цепочке своим сканером, а не по отчётам. */
-    src?: "chain";
-    /** Кошельки фонда размечены не все: дни по цепочке у него неполные. */
-    part?: boolean;
-    /** Запас фонда, BTC. */
+    /** Запас фонда на сегодня, BTC: отчёт в SEC плюс потоки после него. */
     hold?: number;
-    /** Дата отчёта в SEC, на которую взят запас (unix). */
-    asof?: number;
   }[];
-  /** Дни — только фонды, чьи кошельки знает сканер (своя цепочка). */
-  days: [number, number, number, number, (number | null)[]][];
   /**
-   * Кварталы по отчётам фондов в SEC: [конец квартала, поток всех фондов $
-   * тыс., монет, цена отчётов, [поток фонда $ тыс. | None]].
+   * Торговые дни (открытый набор TFTC): [начало суток, поток всех фондов $
+   * тыс., монет, цена, [поток фонда $ тыс. | null]].
    */
-  quarters: [number, number, number, number, (number | null)[]][];
-  /** Дата последнего отчёта в SEC (unix) и цена BTC сейчас. */
-  asof?: number;
+  days: [number, number, number, number, (number | null)[]][];
+  /** Цена BTC сейчас и «данные по» (дата набора, ГГГГ-ММ-ДД). */
   px?: number;
+  through?: string;
   /** Доля фондов от добытых монет, %. */
   share: number | null;
 }

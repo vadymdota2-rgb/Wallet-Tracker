@@ -36,6 +36,21 @@ SEC = {
 }
 
 
+# Набор TFTC: три дня подряд и праздник биржи (без разбивки по фондам).
+H = D1 - 86400
+TFTC = {
+    "license": "https://creativecommons.org/licenses/by/4.0/", "updatedThrough": "2026-10-12",
+    "days": [
+        {"date": "2026-10-09", "netFlowUsd": 0, "btcCloseUsd": 59_000, "perEtfUsd": None},
+        {"date": "2026-10-10", "netFlowUsd": 105e6, "btcCloseUsd": 60_000,
+         "perEtfUsd": {"IBIT": 100e6, "BITB": 5e6, "MSBT": None}},
+        {"date": "2026-10-11", "netFlowUsd": -17e6, "btcCloseUsd": 61_000, "perEtfUsd": {"IBIT": -20e6, "BITB": 3e6}},
+        {"date": "2026-10-12", "netFlowUsd": None, "btcCloseUsd": 62_000,
+         "perEtfUsd": {"IBIT": 62e6, "bad ticker": 1e9, "<b>": 1e9}},
+    ],
+}
+
+
 class Net:
     """Подставная сеть. routes: часть адреса → ответ (bytes, объект или вызов)."""
 
@@ -46,6 +61,7 @@ class Net:
                                              [day_ms(Q2), 0, 0, 0, "60000"], [day_ms(D1), 0, 0, 0, "60000.5"],
                                              [day_ms(D2), 0, 0, 0, "61000"], [day_ms(D3), 0, 0, 0, "62000"]],
             "ticker/price": {"price": "61000"},
+            "tftc.io/bitcoin-etf-flows/data.json": TFTC,
             "publicreporting.cftc.gov": [
                 {"cftc_contract_market_code": "133741", "report_date_as_yyyy_mm_dd": "2026-10-06T00:00:00.000",
                  **dict.fromkeys(etf.CME_FIELDS, "10")},
@@ -90,153 +106,62 @@ class EtfTest(unittest.TestCase):
 
     # ── Потоки фондов ────────────────────────────────────────────────────
 
-    def test_quarters_and_holdings_from_sec(self):
+    def test_days_from_tftc_holdings_from_sec(self):
         net = Net()
         r = self.build(net)
         self.assertTrue(r["ok"])
         btc = r["coins"]["btc"]
-        # Цена отчётов — стоимость / монеты у IBIT; монеты FBTC — его стоимость по ней.
-        fbtc_q2 = 9e9 / 60_000
-        # Поток квартала — изменение запаса (первый отчёт — от нуля) по средней
-        # цене квартала; концы 31.12 — 90 000, 31.03 — 80 000, 30.06 — 60 000.
-        self.assertEqual(btc["quarters"], [
-            [Q0, round(700_000 * 90_000 / 1000), 700_000.0, 90_000.0, [63_000_000, None]],
-            [Q1, round((50_000 + 150_000) * 80_000 / 1000), 200_000.0, 80_000.0, [4_000_000, 12_000_000]],
-            [Q2, round((-15_739 + fbtc_q2 - 150_000) * 60_000 / 1000), round(-15_739 + fbtc_q2 - 150_000, 2), 60_000.0,
-             [-15_739 * 60, round((fbtc_q2 - 150_000) * 60)]],
+        # Фонды — по модулю итога «с запуска»: IBIT, BITB (его нет в SEC —
+        # запаса нет), FBTC (дней нет, запас из отчёта).
+        order = [f["t"] for f in btc["funds"]]
+        self.assertEqual(order, ["IBIT", "BITB", "FBTC"])
+        ibit, bitb, fbtc = btc["funds"]
+        # Запас — отчёт за 30.06 плюс потоки дней после него (в монетах по
+        # закрытию Binance), комиссии нет.
+        after = 100e6 / 60_000.5 - 20e6 / 61_000 + 62e6 / 62_000
+        self.assertEqual(ibit["hold"], round(734_261.0 + after, 2))
+        self.assertEqual(ibit["aum"], round((734_261.0 + after) * 62_000))
+        self.assertEqual((ibit["cum"], ibit["n"], ibit["c"], ibit["fee"]), (142_000_000, "iShares Bitcoin Trust", "US", None))
+        self.assertEqual((bitb["hold"], bitb["aum"], bitb["cum"], bitb["n"]), (0.0, 0, 8_000_000, ""))
+        # Только стоимость в отчёте — монеты по цене отчётов IBIT на ту дату.
+        self.assertEqual((fbtc["hold"], fbtc["cum"]), (round(9e9 / 60_000, 2), 0))
+        # Дни: итог дня из набора (нет — сумма фондов), монеты — по цене дня;
+        # праздник — с итогом, без фондов; мусорные тикеры отброшены.
+        self.assertEqual(btc["days"], [
+            [H, 0, 0.0, 59_000.0, [None, None, None]],
+            [D1, 105_000, round(105e6 / 60_000.5, 2), 60_000.5, [100_000, 5_000, None]],
+            [D2, -17_000, round(-17e6 / 61_000, 2), 61_000.0, [-20_000, 3_000, None]],
+            [D3, 62_000, 1_000.0, 62_000.0, [62_000, None, None]],
         ])
-        ibit, fbtc = btc["funds"]
-        self.assertEqual((ibit["t"], ibit["hold"], ibit["asof"], ibit["c"], ibit["fee"]), ("IBIT", 734_261.0, Q2, "US", None))
-        self.assertEqual(ibit["aum"], round(734_261.0 * 62_000))
-        self.assertEqual(ibit["cumc"], 734_261.0)
-        self.assertEqual(fbtc["hold"], round(fbtc_q2, 2))
-        self.assertNotIn("src", ibit)
-        # По дням — только своя цепочка; её нет — дней нет.
-        self.assertEqual(btc["days"], [])
-        self.assertEqual((btc["asof"], btc["px"]), (Q2, 62_000.0))
-        self.assertEqual(btc["share"], round((734_261.0 + fbtc_q2) / etf.supply_at(NOW) * 100, 3))
-        # Снимка-базы нет; сводка CMC — только за днями (её нет — дней нет).
-        self.assertFalse(any("coingecko" in u for u in net.urls))
-        self.assertFalse(hasattr(etf, "BASE_FILE"))
-        self.assertFalse(os.path.exists(os.path.join(ROOT, "data", "etf_base.json")))
+        self.assertEqual((btc["px"], btc["through"]), (62_000.0, "2026-10-12"))
+        self.assertEqual(btc["share"], round((734_261.0 + after + 9e9 / 60_000) / etf.supply_at(NOW) * 100, 3))
+        self.assertNotIn("quarters", btc)
+        # Только открытый набор TFTC: сводок CoinMarketCap и CoinGecko нет.
+        self.assertFalse(any("coinmarketcap" in u or "coingecko" in u for u in net.urls))
+        self.assertFalse(hasattr(etf, "set_chain"))
 
-    def cmc_net(self):
-        pts = [{"date": "0", "IBIT": {"usd": 9e9, "btc": 1}},  # строка итогов — не день
-               {"date": str(D1 * 1000), "IBIT": {"usd": 100e6, "btc": 1600.0}, "BITB": {"usd": 5e6, "btc": 80.0},
-                "CHINAAMC": {"usd": 7e6, "btc": 1.0}},
-               {"date": str(D2 * 1000), "IBIT": {"usd": -20e6, "btc": -320.0}, "BITB": {"usd": 3e6, "btc": 50.0}},
-               {"date": str(D3 * 1000), "IBIT": {"usd": None}}]  # фонды ещё не отчитались
-        return Net(**{"etf/detail/netflow/list": {"data": {"points": pts, "totalCount": len(pts)}}})
-
-    def test_days_from_cmc_until_wallets_are_labeled(self):
-        sec = dict(SEC, BITB={"n": "Bitwise Bitcoin ETF", "fee": None, "q": {Q2: [36_000.0, None]}})
+    def test_fee_taken_in_coins_lowers_holdings(self):
+        sec = {"X": {"n": "", "fee": 0.01, "q": {Q2: [1000.0, None]}}}
         self.sec(sec)
-        btc = self.build(self.cmc_net())["coins"]["btc"]
-        order = [f["t"] for f in btc["funds"]]
-        # Дни — из сводки, только фонды США из SEC (гонконгского нет), пустой день — нет.
-        self.assertEqual([d[0] for d in btc["days"]], [D1, D2])
-        self.assertEqual(btc["days"][0][1], 105_000)
-        self.assertEqual(btc["days"][0][4][order.index("BITB")], 5_000)
-        self.assertEqual({f["t"]: f["days"] for f in btc["funds"]}, {"IBIT": "cmc", "FBTC": "cmc", "BITB": "cmc"})
+        x = self.build()["coins"]["btc"]["funds"][-1]
+        self.assertEqual(x["t"], "X")
+        self.assertEqual(x["fee"], 1.0)
+        self.assertAlmostEqual(x["hold"], 1000.0 * (1 - 0.01 * (NOW - Q2) / (365 * 86400)), places=1)
 
-    def test_fully_labeled_fund_days_come_from_chain(self):
-        # BITB размечен целиком (опубликованные кошельки): его дни — цепочка,
-        # с T+1; IBIT размечен на часть — дни из сводки.
-        tue, wed = 20_732 * 86400, 20_733 * 86400  # вторник и среда за неделю до «сейчас»
-        thu = etf.settle_day(wed // 86400) * 86400  # деньги среды доходят в четверг
-        sec = dict(SEC, BITB={"n": "Bitwise Bitcoin ETF", "fee": None, "q": {Q2: [36_000.0, None]}})
-        self.sec(sec)
-        chain = {"BITB": {"from": tue - 10 * 86400, "exact": True, "hold": 36_000.0, "days": {thu: 7.0}},
-                 "IBIT": {"from": tue - 10 * 86400, "hold": 1_000.0, "days": {thu: 500.0}}}
-        etf.set_chain(lambda: chain)
-        self.addCleanup(etf.set_chain, None)
-        pts = [{"date": str(tue * 1000), "IBIT": {"usd": 100e6, "btc": 1600.0}, "BITB": {"usd": 5e6, "btc": 80.0}},
-               {"date": str(wed * 1000), "IBIT": {"usd": -20e6, "btc": -320.0}, "BITB": {"usd": 3e6, "btc": 50.0}}]
-        net = Net(**{"etf/detail/netflow/list": {"data": {"points": pts, "totalCount": 2}},
-                     "binance.vision/api/v3/klines": [[day_ms(Q0), 0, 0, 0, "90000"], [day_ms(Q1), 0, 0, 0, "80000"],
-                                                      [day_ms(Q2), 0, 0, 0, "60000"], [day_ms(tue), 0, 0, 0, "61000"],
-                                                      [day_ms(wed), 0, 0, 0, "62000"]]})
-        with mock.patch.object(etf.wt_treasury, "companies", list):
-            btc = self.build(net)["coins"]["btc"]
-        order = [f["t"] for f in btc["funds"]]
-        src = {f["t"]: f["days"] for f in btc["funds"]}
-        self.assertEqual((src["BITB"], src["IBIT"]), ("chain", "cmc"))
-        d1, d2, *after = btc["days"]
-        # Первый день истории (без «прошлого окна») — по сводке; среда — по
-        # цепочке: монеты, дошедшие в четверг (T+1), по цене среды.
-        self.assertEqual(d1[4][order.index("BITB")], 5_000)
-        self.assertEqual(d2[4][order.index("BITB")], round(7.0 * 62_000 / 1000))
-        self.assertEqual(d2[4][order.index("IBIT")], -20_000)  # размечен на часть — из сводки
-        # После сводки — только цепочка: у остальных фондов пусто.
-        self.assertTrue(all(v is None for d in after for j, v in enumerate(d[4]) if j != order.index("BITB")))
-
-    def test_fee_taken_in_coins_is_not_an_outflow(self):
-        # Запас упал ровно на комиссию — потока нет.
-        fee = 0.01
-        q0, q1 = 1000.0, 1000.0 * (1 - fee * (Q1 - Q0) / (365 * 86400))
-        sec = {"X": {"n": "", "fee": fee, "q": {Q0: [q0, None], Q1: [q1, None]}}}
-        flows, _, last = etf._quarters(sec, {Q0: 80_000.0, Q1: 80_000.0})
-        self.assertAlmostEqual(flows[Q1]["X"][1], 0.0, delta=0.05)
-        self.assertEqual(last["X"], (q1, Q1))
-
-    def test_gbtc_before_etf_is_the_starting_point(self):
-        start = etf.calendar.timegm(etf.time.strptime(etf.wt_treasury.ETF_FROM, "%Y-%m-%d"))
-        sec = {"GBTC": {"n": "", "fee": None, "q": {start: [619_525.9, None], Q0: [200_000.0, None]}}}
-        flows, _, _ = etf._quarters(sec, {start: 42_000.0, Q0: 90_000.0})
-        self.assertNotIn(start, flows)  # запас траста до ETF — точка отсчёта, не приток
-        self.assertAlmostEqual(flows[Q0]["GBTC"][1], 200_000.0 - 619_525.9)
-
-    def test_chain_holdings_count_before_any_trading_day(self):
-        # BITB разметили только что: торговых дней по цепочке ещё нет, а запас
-        # уже по его кошелькам.
-        sec = dict(SEC, BITB={"n": "Bitwise Bitcoin ETF", "fee": None, "q": {Q2: [36_000.0, None]}})
-        self.sec(sec)
-        etf.set_chain(lambda: {"BITB": {"from": NOW, "exact": True, "hold": 36_400.0, "days": {}}})
-        self.addCleanup(etf.set_chain, None)
-        btc = self.build()["coins"]["btc"]
-        bitb = next(f for f in btc["funds"] if f["t"] == "BITB")
-        self.assertEqual((bitb["hold"], bitb["src"]), (36_400.0, "chain"))
-        self.assertEqual(btc["days"], [])
-
-    def test_partial_labels_add_to_report(self):
-        # IBIT: размечено несколько кошельков (мало от запаса) — их движения
-        # после отчёта прибавляются, фонд помечен «по части кошельков».
-        chain = {"IBIT": {"from": D1 - 10 * 86400, "hold": 1_200.0, "days": {D2: 10.0, Q2 - 86400: 999.0}}}
-        etf.set_chain(lambda: chain)
-        self.addCleanup(etf.set_chain, None)
-        ibit = self.build()["coins"]["btc"]["funds"][0]
-        self.assertEqual((ibit["t"], ibit["src"], ibit.get("part")), ("IBIT", "chain", True))
-        self.assertEqual(ibit["hold"], 734_261.0 + 10.0)  # до отчёта — не прибавляется
-        # Разметка явно неверна (монет больше запаса) — не прибавляется.
-        chain["IBIT"]["hold"] = 2_000_000.0
-        etf._st = etf._State()
-        ibit = self.build()["coins"]["btc"]["funds"][0]
-        self.assertEqual((ibit["hold"], ibit.get("src")), (734_261.0, None))
-
-    def test_chain_fund_has_days_and_holdings_after_report(self):
-        # BITB публикует кошельки сам: запас — по ним, дни — по цепочке.
-        sec = dict(SEC, BITB={"n": "Bitwise Bitcoin ETF", "fee": None, "q": {Q2: [None, 36_000 * 60_000]}})
-        self.sec(sec)
-        chain = {"BITB": {"from": D1 - 10 * 86400, "exact": True, "hold": 36_500.0,
-                          "days": {D2: 12.0, D3: -2.0}}}
-        etf.set_chain(lambda: chain)
-        self.addCleanup(etf.set_chain, None)
-        btc = self.build()["coins"]["btc"]
-        bitb = next(f for f in btc["funds"] if f["t"] == "BITB")
-        self.assertEqual((bitb["src"], bitb["hold"]), ("chain", 36_500.0))
-        i = [f["t"] for f in btc["funds"]].index("BITB")
-        self.assertTrue(btc["days"])
-        self.assertTrue(all(len(d[4]) == len(btc["funds"]) for d in btc["days"]))
-        self.assertTrue(all(v is None for d in btc["days"] for j, v in enumerate(d[4]) if j != i))
+    def test_tftc_price_when_binance_has_no_candle(self):
+        kl = [[day_ms(Q2), 0, 0, 0, "60000"]]
+        btc = self.build(Net(**{"binance.vision/api/v3/klines": kl}))["coins"]["btc"]
+        self.assertEqual([d[3] for d in btc["days"]], [59_000.0, 60_000.0, 61_000.0, 62_000.0])
 
     def test_holders_funds_and_companies(self):
         co = [["Strategy", "COMPANY", "US", "MSTR", 846_000.0, 1_782_777_600], "мусор"]
         with mock.patch.object(etf.wt_treasury, "companies", lambda: co):
             r = self.build()
-        # Фонды — по запасу из отчёта (с датой отчёта), компании — из SEC.
+        # Фонды — по запасу на сегодня (дата 0), компании — из SEC с датой отчёта.
+        ibit = r["coins"]["btc"]["funds"][0]["hold"]
         self.assertEqual(r["holders"], [["Strategy", "COMPANY", "US", "MSTR", 846_000.0, 1_782_777_600],
-                                        ["iShares Bitcoin Trust", "FUND", "US", "IBIT", 734_261.0, Q2],
-                                        ["Fidelity Wise Origin Bitcoin Fund", "FUND", "US", "FBTC", 150_000.0, Q2]])
+                                        ["iShares Bitcoin Trust", "FUND", "US", "IBIT", ibit, 0],
+                                        ["Fidelity Wise Origin Bitcoin Fund", "FUND", "US", "FBTC", 150_000.0, 0]])
 
     def test_companies_failure_keeps_funds(self):
         def boom():
@@ -245,11 +170,15 @@ class EtfTest(unittest.TestCase):
             r = self.build()
         self.assertEqual([h[3] for h in r["holders"]], ["IBIT", "FBTC"])
 
-    def test_no_sec_or_no_prices_is_no_coin(self):
+    def test_no_tftc_is_no_coin_and_no_sec_keeps_flows(self):
+        for bad in (None, b"{", {"days": "x"}, {"days": []}, ["x"]):
+            etf._st = etf._State()
+            self.assertEqual(self.build(Net(**{"tftc.io/bitcoin-etf-flows/data.json": bad})), {"ok": False, "error": "no_data"})
+        # SEC недоступен — потоки есть, запасов нет.
         self.sec({})
-        self.assertEqual(self.build(), {"ok": False, "error": "no_data"})
-        self.sec(SEC)
-        self.assertEqual(self.build(Net(**{"binance.vision/api/v3/klines": []})), {"ok": False, "error": "no_data"})
+        btc = self.build()["coins"]["btc"]
+        self.assertEqual([f["t"] for f in btc["funds"]], ["IBIT", "BITB"])
+        self.assertEqual(sum(f["hold"] for f in btc["funds"]), 0)
 
     def test_only_bitcoin_is_asked(self):
         net = Net()
@@ -282,8 +211,7 @@ class EtfTest(unittest.TestCase):
     def test_failed_coin_comes_from_previous_build(self):
         first = self.build()
         etf._st.hit = (time.monotonic() - 99_999, first)
-        self.sec({})
-        r = self.build()
+        r = self.build(Net(**{"tftc.io/bitcoin-etf-flows/data.json": None}))
         self.assertTrue(r["ok"])
         self.assertEqual(r["coins"]["btc"], first["coins"]["btc"])
 
@@ -337,8 +265,9 @@ class EtfTest(unittest.TestCase):
 
     def test_only_https_to_known_hosts(self):
         self.assertTrue(etf._allowed("https://data-api.binance.vision/api/v3/klines"))
-        self.assertTrue(etf._allowed("https://api.coinmarketcap.com/data-api/v3/etf/detail/netflow/list"))
-        for url in ("http://data-api.binance.vision/", "https://coinmarketcap.com/", "https://evil.coinmarketcap.com/",
+        self.assertTrue(etf._allowed(etf.TFTC))
+        for url in ("http://data-api.binance.vision/", "https://api.coinmarketcap.com/data-api/v3/",
+                    "https://tftc.io/", "https://evil.tftc.io/", "http://www.tftc.io/bitcoin-etf-flows/data.json",
                     "https://api.coingecko.com/api/v3/", "https://169.254.169.254/", "https://evil.com/",
                     "https://user@data-api.binance.vision/", "https://data-api.binance.vision.evil.com/", "https://[",
                     "https://bitcointreasuries.net/", "https://api.hyperliquid.xyz/info"):
@@ -395,8 +324,15 @@ class EtfTest(unittest.TestCase):
             "products/BTC-USD/candles": {"message": "rate limited"},
             "binance.vision/api/v3/klines": ["мусор", [1], *Net().routes["binance.vision/api/v3/klines"]],
         }))
-        self.assertEqual(len(r["coins"]["btc"]["quarters"]), 3)
+        self.assertEqual(len(r["coins"]["btc"]["days"]), 4)
         self.assertEqual((r["cme"], r["cbp"]), ({}, {}))
+        # Мусор в наборе TFTC: строки без даты и не-словари пропускаются.
+        junk = {"days": ["x", {"date": 5}, {"date": "не дата"}, {"date": "2026-10-10", "perEtfUsd": [1],
+                                                                   "netFlowUsd": "1e6"}], "updatedThrough": "<b>"}
+        etf._st = etf._State()
+        btc = self.build(Net(**{"tftc.io/bitcoin-etf-flows/data.json": junk}))["coins"]["btc"]
+        self.assertEqual([d[:2] for d in btc["days"]], [[D1, 1_000]])
+        self.assertEqual(btc["through"], "")
         # Мусор в отчётах SEC: фонд без отчётов не попадает в фонды.
         self.sec(dict(SEC, BAD={"n": 5, "fee": None, "q": {}}))
         self.assertNotIn("BAD", [f["t"] for f in self.build()["coins"]["btc"]["funds"]])
