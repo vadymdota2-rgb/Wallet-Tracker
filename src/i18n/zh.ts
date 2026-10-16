@@ -723,6 +723,7 @@ export const zh: Dict = {
   ef_rng_q: "季度",
   ef_share: "占全部流通币的{p}。",
   ef_src_chain: "链上",
+  ef_src_part: "部分钱包",
   ef_still: "无变动的基金:{n}个。",
   ef_sub: "美国交易所交易基金持有多少比特币、资金流向何处 — 来自基金的 SEC 报告和区块链。",
   ef_t_title: "最大持有者",

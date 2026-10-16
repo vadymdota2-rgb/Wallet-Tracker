@@ -723,6 +723,7 @@ export const es: Dict = {
   ef_rng_q: "Trimestres",
   ef_share: "Es el {p} de todas las monedas en circulación.",
   ef_src_chain: "en cadena",
+  ef_src_part: "parte de las billeteras",
   ef_still: "Fondos sin movimiento: {n}.",
   ef_sub: "Cuántos bitcoins tienen los ETF de EE. UU. y adónde va su dinero — según los informes de los fondos a la SEC y la blockchain.",
   ef_t_title: "Mayores tenedores",

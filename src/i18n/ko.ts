@@ -723,6 +723,7 @@ export const ko: Dict = {
   ef_rng_q: "분기",
   ef_share: "유통 중인 전체 코인의 {p}입니다.",
   ef_src_chain: "온체인",
+  ef_src_part: "일부 지갑",
   ef_still: "변동 없는 펀드: {n}개.",
   ef_sub: "미국 ETF가 비트코인을 얼마나 보유하고 자금이 어디로 가는지 — 펀드의 SEC 보고서와 블록체인 기준.",
   ef_t_title: "최대 보유자",

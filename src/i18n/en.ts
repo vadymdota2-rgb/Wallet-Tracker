@@ -722,6 +722,7 @@ export const en = {
   ef_rng_q: "Quarters",
   ef_share: "That's {p} of all coins in circulation.",
   ef_src_chain: "on-chain",
+  ef_src_part: "some wallets on-chain",
   ef_still: "Funds with no movement: {n}.",
   ef_sub: "How much bitcoin US exchange-traded funds hold and where their money goes — from the funds' SEC filings and the blockchain.",
   ef_t_title: "Biggest holders",

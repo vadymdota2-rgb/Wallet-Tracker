@@ -723,6 +723,7 @@ export const tr: Dict = {
   ef_rng_q: "Çeyrekler",
   ef_share: "Bu, dolaşımdaki tüm coinlerin {p}'i.",
   ef_src_chain: "zincirden",
+  ef_src_part: "cüzdanların bir kısmı",
   ef_still: "Hareketsiz fonlar: {n}.",
   ef_sub: "ABD borsa yatırım fonları ne kadar bitcoin tutuyor ve paraları nereye gidiyor — fonların SEC raporlarından ve blokzincirden.",
   ef_t_title: "En büyük sahipler",

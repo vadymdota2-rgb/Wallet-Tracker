@@ -723,6 +723,7 @@ export const id: Dict = {
   ef_rng_q: "Kuartal",
   ef_share: "Itu {p} dari semua koin yang beredar.",
   ef_src_chain: "dari rantai",
+  ef_src_part: "sebagian dompet",
   ef_still: "Dana tanpa pergerakan: {n}.",
   ef_sub: "Berapa bitcoin yang dipegang ETF AS dan ke mana uangnya mengalir — dari laporan dana ke SEC dan blockchain.",
   ef_t_title: "Pemegang terbesar",

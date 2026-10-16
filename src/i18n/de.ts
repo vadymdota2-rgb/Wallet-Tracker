@@ -723,6 +723,7 @@ export const de: Dict = {
   ef_rng_q: "Quartale",
   ef_share: "Das sind {p} aller umlaufenden Coins.",
   ef_src_chain: "on-chain",
+  ef_src_part: "teils on-chain",
   ef_still: "Fonds ohne Bewegung: {n}.",
   ef_sub: "Wie viele Bitcoin US-ETFs halten und wohin ihr Geld fließt — aus den SEC-Berichten der Fonds und der Blockchain.",
   ef_t_title: "Größte Halter",

@@ -723,6 +723,7 @@ export const pl: Dict = {
   ef_rng_q: "Kwartały",
   ef_share: "To {p} wszystkich monet w obiegu.",
   ef_src_chain: "z łańcucha",
+  ef_src_part: "część portfeli",
   ef_still: "Fundusze bez ruchu: {n}.",
   ef_sub: "Ile bitcoinów trzymają amerykańskie ETF-y i dokąd płyną ich pieniądze — z raportów funduszy do SEC i z blockchainu.",
   ef_t_title: "Najwięksi posiadacze",

@@ -723,6 +723,7 @@ export const fr: Dict = {
   ef_rng_q: "Trimestres",
   ef_share: "Soit {p} de toutes les unités en circulation.",
   ef_src_chain: "on-chain",
+  ef_src_part: "une partie des portefeuilles",
   ef_still: "Fonds sans mouvement : {n}.",
   ef_sub: "Combien de bitcoins détiennent les ETF américains et où va leur argent — d'après les rapports des fonds à la SEC et la blockchain.",
   ef_t_title: "Plus gros détenteurs",

@@ -723,6 +723,7 @@ export const ja: Dict = {
   ef_rng_q: "四半期",
   ef_share: "流通している全コインの{p}にあたります。",
   ef_src_chain: "オンチェーン",
+  ef_src_part: "一部のウォレット",
   ef_still: "動きのないファンド: {n}。",
   ef_sub: "米国のETFがどれだけビットコインを保有し、資金がどこへ動くか — ファンドのSEC報告とブロックチェーンから。",
   ef_t_title: "最大の保有者",

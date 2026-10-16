@@ -723,6 +723,7 @@ export const vi: Dict = {
   ef_rng_q: "Theo quý",
   ef_share: "Tức {p} tổng số coin đang lưu hành.",
   ef_src_chain: "theo chuỗi",
+  ef_src_part: "một phần ví",
   ef_still: "Quỹ không biến động: {n}.",
   ef_sub: "Các quỹ ETF Mỹ nắm giữ bao nhiêu bitcoin và tiền của họ đi đâu — theo báo cáo của quỹ gửi SEC và blockchain.",
   ef_t_title: "Người nắm giữ lớn nhất",

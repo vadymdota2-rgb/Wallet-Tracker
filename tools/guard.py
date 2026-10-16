@@ -889,7 +889,8 @@ say("ETF у хранителя: имена по сверке ежедневны�
 _etfs2 = read(f"{APP}/wt_etf.py")
 say("Институциональные потоки: фонды, найденные по цепочке, — своими потоками (T+1), остальные — по отчётам; итоги на разницу; без взаимного ожидания сборок",
     "def _apply_chain(days: dict[int, Day], px: dict[int, float], chain:" in _etfs2 and "def peek() -> dict[str, Json] | None:" in _etfs2
-    and "COVER = 0.9" in _etfs2 and "def _usable(" in _etfs2 and "MAX(how IN ('seed', 'list'))" in api
+    and "COVER = 0.9" in _etfs2 and "def _usable(" in _etfs2 and "def _partial(" in _etfs2
+    and "return base_btc > 0 and _num(c.get(\"hold\")) <= COVER_MAX * base_btc" in _etfs2 and "MAX(how IN ('seed', 'list'))" in api
     and "if t and t in learned and t not in out:" in api and "имя по списку подтверждено сверкой" in api
     and os.path.isfile(os.path.join(BOT, "btc_etf_list.h")) and "bool paidBefore(" in read(os.path.join(BOT, "btc_etf.cpp"))
     and "it->second * 2 >= held" in read(os.path.join(BOT, "btc_etf.cpp")) and "freshAddr(it->first, tx.txid, b.height)" in read(os.path.join(BOT, "btc_etf.cpp"))

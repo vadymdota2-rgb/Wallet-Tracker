@@ -136,6 +136,21 @@ class EtfTest(unittest.TestCase):
         self.assertNotIn(start, flows)  # запас траста до ETF — точка отсчёта, не приток
         self.assertAlmostEqual(flows[Q0]["GBTC"][1], 200_000.0 - 619_525.9)
 
+    def test_partial_labels_add_to_report(self):
+        # IBIT: размечено несколько кошельков (мало от запаса) — их движения
+        # после отчёта прибавляются, фонд помечен «по части кошельков».
+        chain = {"IBIT": {"from": D1 - 10 * 86400, "hold": 1_200.0, "days": {D2: 10.0, Q2 - 86400: 999.0}}}
+        etf.set_chain(lambda: chain)
+        self.addCleanup(etf.set_chain, None)
+        ibit = self.build()["coins"]["btc"]["funds"][0]
+        self.assertEqual((ibit["t"], ibit["src"], ibit.get("part")), ("IBIT", "chain", True))
+        self.assertEqual(ibit["hold"], 734_261.0 + 10.0)  # до отчёта — не прибавляется
+        # Разметка явно неверна (монет больше запаса) — не прибавляется.
+        chain["IBIT"]["hold"] = 2_000_000.0
+        etf._st = etf._State()
+        ibit = self.build()["coins"]["btc"]["funds"][0]
+        self.assertEqual((ibit["hold"], ibit.get("src")), (734_261.0, None))
+
     def test_chain_fund_has_days_and_holdings_after_report(self):
         # BITB публикует кошельки сам: запас — по ним, дни — по цепочке.
         sec = dict(SEC, BITB={"n": "Bitwise Bitcoin ETF", "fee": None, "q": {Q2: [None, 36_000 * 60_000]}})

@@ -357,7 +357,7 @@ function Funds({ c, al, lang }: { c: EtfCoin; al: EtfAlerts; lang: Lang }) {
                   {t(lang, "ef_aum", { v: iso(usdWord(f.aum)) })}
                   {aumAll > 0 ? ` · ${t(lang, "ef_mshare", { p: iso(pct((f.aum / aumAll) * 100, 1, false)) })}` : ""}
                   {f.fee !== null && f.fee !== undefined ? ` · ${t(lang, "ef_fee", { v: iso(pct(f.fee, 2, false)) })}` : ""}
-                  {f.src === "chain" ? ` · ${t(lang, "ef_src_chain")}` : ""}
+                  {f.src === "chain" ? ` · ${t(lang, f.part ? "ef_src_part" : "ef_src_chain")}` : ""}
                 </small>
               ) : null}
             </div>
@@ -423,7 +423,8 @@ export function EtfScreen() {
   const days = c?.days ?? [];
   const lastQ = qs[qs.length - 1];
   const lastPx = c?.px || ([...days].reverse().find((d) => d[3] > 0)?.[3] ?? 0);
-  const chainFunds = (c?.funds ?? []).filter((f) => f.src === "chain").map((f) => f.t);
+  const chainFunds = (c?.funds ?? []).filter((f) => f.src === "chain")
+    .map((f) => (f.part ? `${f.t} (${t(lang, "ef_src_part")})` : f.t));
 
   const stats = useMemo(() => {
     if (!c || !qs.length) return null;

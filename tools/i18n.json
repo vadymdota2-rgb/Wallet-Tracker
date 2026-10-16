@@ -26045,6 +26045,24 @@
     "vi": "theo chuỗi",
     "zh": "链上"
   },
+  "ef_src_part": {
+    "ar": "جزء من المحافظ",
+    "de": "teils on-chain",
+    "en": "some wallets on-chain",
+    "es": "parte de las billeteras",
+    "fr": "une partie des portefeuilles",
+    "hi": "कुछ वॉलेट से",
+    "id": "sebagian dompet",
+    "ja": "一部のウォレット",
+    "ko": "일부 지갑",
+    "pl": "część portfeli",
+    "pt": "parte das carteiras",
+    "ru": "по части кошельков",
+    "tr": "cüzdanların bir kısmı",
+    "uk": "за частиною гаманців",
+    "vi": "một phần ví",
+    "zh": "部分钱包"
+  },
   "ef_qn": {
     "ar": "الربع {q} {y}",
     "de": "Q{q} {y}",

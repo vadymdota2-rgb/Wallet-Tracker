@@ -112,11 +112,14 @@ class ChainMergeTest(unittest.TestCase):
         self.assertEqual(ibit["aum"], round((8_000 + 3.0) * PX))
 
 
-    def test_list_wallets_count_only_with_full_cover(self):
-        # Кошельки фонда из чужого списка: держат половину запаса из отчёта —
-        # поток по ним занижен, дней у фонда нет; держат почти весь — есть.
-        self.assertFalse(e._usable({"hold": 500.0}, 1_000.0))
+    def test_labels_always_add_to_report_unless_wrong(self):
+        # Разметка прибавляется к отчёту всегда, даже если кошельков знаем
+        # часть: тогда фонд помечен «по части кошельков».
+        self.assertTrue(e._usable({"hold": 500.0}, 1_000.0))
+        self.assertTrue(e._partial({"hold": 500.0}, 1_000.0))
         self.assertTrue(e._usable({"hold": 950.0}, 1_000.0))
+        self.assertFalse(e._partial({"hold": 950.0}, 1_000.0))
+        self.assertFalse(e._partial({"exact": True, "hold": 1.0}, 1_000.0))
         # Монет на кошельках заметно больше запаса — разметка неверна, дней нет.
         self.assertTrue(e._usable({"hold": 1_250.0}, 1_000.0))
         self.assertFalse(e._usable({"hold": 1_300.0}, 1_000.0))
