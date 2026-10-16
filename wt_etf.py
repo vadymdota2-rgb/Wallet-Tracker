@@ -1,20 +1,21 @@
 """Институциональные потоки — отдельный модуль API (/api/etf).
 
-Что собирается (всё — открытые источники без ключей):
+Что собирается — только биткоин (всё — открытые источники без ключей):
   - приток и отток спотовых ETF по каждому фонду и торговому дню —
-    data-api CoinMarketCap: биткоин с января 2024, эфир с июля 2024, Solana,
-    XRP и HYPE — с их запуска; страницы по сто дней. Названия фондов, активы,
-    премия и комиссия — их же список фондов. Цена дня — закрытие Binance
-    (у HYPE дни без Binance — свечи Hyperliquid);
-  - доля фондов в капитализации монеты и лучший/худший месяц — CoinMarketCap;
-  - кто ещё держит биткоин: компании, государства, фонды —
-    bitcointreasuries.net (и казначейства в эфире, Solana, BNB, XRP);
+    data-api CoinMarketCap с января 2024, страницы по сто дней; названия
+    фондов, активы и комиссия — их же список фондов. Фонды, которые сканер
+    бота нашёл в цепочке, считаются своими потоками (set_chain, _apply_chain).
+    Цена дня — закрытие Binance;
+  - доля фондов от добытых монет — своим счётом по расписанию эмиссии
+    (supply_at), без чужих данных;
+  - кто держит биткоин — свой блок из сканера бота (set_holders): биржи,
+    фонды и киты по цепочке;
   - позиции на CME — еженедельный отчёт CFTC «Traders in Financial Futures»;
   - премия Coinbase к Binance — спрос американских покупателей.
 
 Отчёты фондов выходят раз в сутки, поэтому ответ живёт час (TTL): устаревший
 отдаётся сразу, свежий собирается в фоне одним потоком. Часть, которая в этот
-раз не собралась (монета, держатели, CME), берётся из прошлой сборки, а не
+раз не собралась (потоки, держатели, CME), берётся из прошлой сборки, а не
 пропадает с экрана.
 
 Безопасность — как у модуля халвинга (wt_halving.py): запросы только по
@@ -32,7 +33,6 @@ import contextlib
 import http.client
 import json
 import math
-import re
 import sys
 import threading
 import time
@@ -47,15 +47,13 @@ from wt_etfchain import settle_day
 
 # Сколько ответ живёт в кэше, с: фонды отчитываются раз в сутки.
 TTL = 3600.0
-# Монета → пара Binance для цены дня.
-COINS = (("btc", "BTCUSDT"), ("eth", "ETHUSDT"), ("sol", "SOLUSDT"), ("xrp", "XRPUSDT"), ("hype", "HYPEUSDT"))
+# Только биткоин: потоки других монет своими данными не проверить — их на
+# экране нет. Монета → пара Binance для цены дня.
+COINS = (("btc", "BTCUSDT"),)
 # Позиции на CME: код контракта CFTC → размер контракта в монетах (большой
 # и микро складываются в монетах: у них разный размер).
 CME_CODES = {
     "btc": (("133741", 5.0), ("133742", 0.1)),
-    "eth": (("146021", 50.0), ("146022", 0.1)),
-    "sol": (("177741", 500.0), ("177742", 25.0)),
-    "xrp": (("176740", 50000.0), ("176741", 2500.0)),
 }
 CME_FIELDS = ("open_interest_all", "asset_mgr_positions_long", "asset_mgr_positions_short",
               "lev_money_positions_long", "lev_money_positions_short",
@@ -63,14 +61,12 @@ CME_FIELDS = ("open_interest_all", "asset_mgr_positions_long", "asset_mgr_positi
               "nonrept_positions_long_all", "nonrept_positions_short_all")
 
 # Куда модулю можно ходить — и больше никуда.
-HOSTS = frozenset({"api.coinmarketcap.com", "data-api.binance.vision", "api.hyperliquid.xyz",
-                   "publicreporting.cftc.gov", "api.exchange.coinbase.com", "bitcointreasuries.net"})
-# Самый большой ответ: страница bitcointreasuries.net ~1 МБ, отчёт CFTC ~2 МБ.
+HOSTS = frozenset({"api.coinmarketcap.com", "data-api.binance.vision", "publicreporting.cftc.gov",
+                   "api.exchange.coinbase.com"})
+# Самый большой ответ — отчёт CFTC, ~2 МБ.
 BODY_MAX = 8 << 20
 _HEADERS = {"User-Agent": "wallet-tracker/1.0", "Accept-Encoding": "identity"}
 CMC = "https://api.coinmarketcap.com/data-api/v3/"
-BT_PAGE = "https://bitcointreasuries.net/"
-_BT_SNAP = re.compile(r'<script type="application/json" id="bt-query-snapshot">(.*?)</script>', re.S)
 
 Json = Any  # разобранный JSON источника: проверяется на месте, где читается
 
@@ -143,10 +139,6 @@ def _parse(raw: bytes | None) -> Json:
 
 def _get(url: str, timeout: float = 20) -> Json:
     return _parse(_fetch(url, timeout))
-
-
-def _post(url: str, payload: dict[str, Any], timeout: float = 15) -> Json:
-    return _parse(_fetch(url, timeout, json.dumps(payload).encode()))
 
 
 def _num(v: object) -> float:
@@ -244,7 +236,7 @@ def _days(pts: list[Json], unit: str) -> dict[int, Day]:
 def _funds(cat: str, days: dict[int, Day], unit: str) -> list[dict[str, Json]]:
     """Фонды по убыванию итога «с запуска»: имя, активы, премия, комиссия."""
     names: dict[str, dict[str, Json]] = {}
-    if cat in ("btc", "eth"):
+    if cat == "btc":
         lst = _get(f"https://api.coinmarketcap.com/data-api/v3/etf/list?category={cat}&size=60&start=1", 25)
         for f in (lst.get("data") if isinstance(lst, dict) else None) or []:
             if isinstance(f, dict) and isinstance(f.get("ticker"), str) and f["ticker"]:
@@ -263,8 +255,7 @@ def _funds(cat: str, days: dict[int, Day], unit: str) -> list[dict[str, Json]]:
         info = names.get(k) or {}
         out.append({
             "t": k[:20], "n": str(info.get("name") or "")[:60],
-            "aum": round(_num(info.get("aum"))), "vol": round(_num(info.get("volume"))),
-            "prem": None if info.get("premiumDiscount") is None else _num(info["premiumDiscount"]),
+            "aum": round(_num(info.get("aum"))),
             "fee": None if info.get("netFee") is None else _num(info["netFee"]),
             "cum": round(sums[k][0]), "cumc": round(sums[k][1], 2),
         })
@@ -272,46 +263,39 @@ def _funds(cat: str, days: dict[int, Day], unit: str) -> list[dict[str, Json]]:
 
 
 def _prices(symbol: str, days: dict[int, Day]) -> dict[int, float]:
-    """Цена закрытия каждого дня: Binance, а чего там нет — Hyperliquid."""
-    t0 = min(days)
-    px = _klines(symbol, t0 * 1000)
-    # На Binance монета могла появиться позже фондов (HYPE) — дни без цены
-    # добираем дневными свечами Hyperliquid.
-    if sum(1 for ts in days if ts in px) < len(days) * 0.9:
-        kl = _post("https://api.hyperliquid.xyz/info", {"type": "candleSnapshot", "req": {
-            "coin": symbol.replace("USDT", ""), "interval": "1d", "startTime": t0 * 1000, "endTime": _now() * 1000}})
-        for k in kl if isinstance(kl, list) else []:
-            if isinstance(k, dict):
-                px.setdefault(int(_num(k.get("t"))) // 1000 // 86400 * 86400, _num(k.get("c")))
-    return px
+    """Цена закрытия каждого дня — дневные свечи Binance."""
+    return _klines(symbol, min(days) * 1000)
 
 
-def _share(cat: str) -> dict[str, Json]:
-    """Доля фондов в капитализации монеты (сейчас и по дням), лучший и
-    худший месяц."""
-    m = _cmc(f"etf/netflow/metrics?category={cat}&convertId=2781")
-    ratio = _cmc(f"etf/aum/market-cap/ratio?category={cat}&range=all")
-    configs = ratio.get("configs")
-    share = None
-    if isinstance(configs, list) and configs and isinstance(configs[0], dict) and configs[0].get("value") is not None:
-        share = _num(configs[0]["value"])
-    hist = [[int(_num(q.get("timestamp"))), round(_num(q["points"][0]), 3)] for q in ratio.get("points") or []
-            if isinstance(q, dict) and isinstance(q.get("points"), list) and q["points"]]
+# Сколько биткоинов добыто к блоку 840 000 (четвёртый халвинг, 20 апреля 2024,
+# 00:09:27 UTC) и награда за блок после него — эпоха до блока 1 050 000.
+SUPPLY_840K = 19_687_500.0
+TS_840K = 1_713_571_767
+REWARD_840K = 3.125
 
-    def month(k: str) -> list[float] | None:
-        v = m.get(k)
-        if not isinstance(v, dict) or v.get("timestamp") is None or v.get("value") is None:
-            return None
-        return [int(_num(v["timestamp"])), _num(v["value"])]
 
-    return {"share": share, "shareHist": hist, "best": month("strongestMonth"), "worst": month("weakestMonth")}
+def supply_at(ts: int) -> float:
+    """Биткоинов в обращении на момент ts — по расписанию добычи, блок раз в
+    десять минут в среднем. Ошибка — тысячи монет из двадцати миллионов."""
+    blocks = max(0, (ts - TS_840K) // 600)
+    return SUPPLY_840K + min(blocks, 210_000) * REWARD_840K + max(0, blocks - 210_000) * REWARD_840K / 2
+
+
+def _share(funds: list[dict[str, Json]], price: float) -> dict[str, Json]:
+    """Доля фондов в биткоинах в обращении: их активы (по цепочке у найденных
+    фондов) в монетах — к добытому по расписанию. Своя арифметика, без
+    готовых цифр источника."""
+    aum = sum(_num(f.get("aum")) for f in funds)
+    if aum <= 0 or price <= 0:
+        return {"share": None}
+    return {"share": round(aum / price / supply_at(_now()) * 100, 3)}
 
 
 def _coin(cat: str, symbol: str) -> dict[str, Json] | None:
     """Потоки фондов одной монеты: дни (итог, монеты, цена, по фондам),
     фонды, доля в капитализации и рекорды месяца."""
     pts = _points(cat)
-    unit = "btc" if cat == "btc" else "eth"  # у остальных монет количество лежит в поле eth
+    unit = "btc"
     days = _days(pts, unit) if pts else {}
     if not days:
         return None
@@ -331,7 +315,8 @@ def _coin(cat: str, symbol: str) -> dict[str, Json] | None:
         by, tot, coin = days[ts]
         per = [None if (v := (by.get(f["t"]) or {}).get("usd")) is None else round(_num(v) / 1000) for f in funds]
         rows.append([ts, round(tot / 1000), round(coin, 2), round(px.get(ts, 0.0), 4), per])
-    return {"funds": funds, "days": rows, **_share(cat)}
+    last = px[max(px)] if px else 0.0
+    return {"funds": funds, "days": rows, **_share(funds, last)}
 
 
 def _chain_btc(flows: dict[int, float], lo: int, hi: int) -> float:
@@ -429,7 +414,7 @@ def _cbp() -> dict[str, Json]:
     компаний, поэтому плюс читают как спрос из США."""
     out: dict[str, Json] = {}
     start = (_now() - 400 * 86400) // 86400 * 86400
-    for coin, cb, bn in (("btc", "BTC-USD", "BTCUSDT"), ("eth", "ETH-USD", "ETHUSDT")):
+    for coin, cb, bn in (("btc", "BTC-USD", "BTCUSDT"),):
         c = _coinbase_daily(cb, start)
         b = _klines(bn, start * 1000)
         days = [[ts, round((c[ts] / b[ts] - 1) * 100, 4)] for ts in sorted(c) if b.get(ts)]
@@ -443,80 +428,15 @@ def _cbp() -> dict[str, Json]:
     return out
 
 
-def _bt_root() -> dict[str, Json] | None:
-    """Держатели с главной страницы bitcointreasuries.net.
-
-    С октября 2026 сайт кладёт данные прямо в страницу — снимком своих
-    запросов (bt-query-snapshot): держатели — entities.listOverviews,
-    казначейства в других монетах — entities.getAltcoinHoldings. В
-    __data.json осталась только оболочка, и раздел «Держатели» пропадал."""
-    raw = _fetch(BT_PAGE, 30)
-    m = _BT_SNAP.search(raw.decode("utf-8", "replace")) if raw else None
-    snap = _parse(m.group(1).encode()) if m else None
-    rpc: dict[str, Json] = {}
-    for q in (snap.get("queries") if isinstance(snap, dict) else None) or []:
-        if not isinstance(q, dict) or not isinstance(q.get("hash"), str):
-            continue
-        h = _parse(q["hash"].encode())
-        if isinstance(h, list) and h and isinstance(h[0], dict) and isinstance(h[0].get("rpc"), str):
-            rpc[h[0]["rpc"]] = q.get("data")
-    ents = rpc.get("entities.listOverviews")
-    if not isinstance(ents, list) or not ents:
-        return None
-    alts = {str(p[0]): p[1] for p in rpc.get("entities.getAltcoinHoldings") or []
-            if isinstance(p, list) and len(p) == 2 and isinstance(p[1], dict)}
-    return {"entities": ents, "altcoinHoldings": alts}
-
-
-def _holders() -> dict[str, Json]:
-    """Кто держит биткоин: группы (тип → число, монет, изменение за 7 дней),
-    все держатели, крупнейшие движения недели, казначейства в других монетах."""
-    root = _bt_root()
-    if root is None:
-        _log("bitcointreasuries.net: держателей в странице нет")
-        return {}
-    groups: dict[str, list[float]] = {}
-    top: list[list[Json]] = []
-    for e in root.get("entities") or []:
-        if not isinstance(e, dict):
-            continue
-        h = next((x for x in e.get("holdings") or [] if isinstance(x, dict) and x.get("asset") == "BTC"), None)
-        if not h:
-            continue
-        bal, d7 = _num(h.get("balance")), _num(h.get("balance_change_7d"))
-        if bal <= 0 and d7 == 0:
-            continue
-        typ = str(e.get("type") or "OTHER")[:20]
-        g = groups.setdefault(typ, [0, 0.0, 0.0])
-        g[0] += 1
-        g[1] += bal
-        g[2] += d7
-        tick = e["ticker"].get("symbol") if isinstance(e.get("ticker"), dict) else None
-        flag = e["country"].get("flag") if isinstance(e.get("country"), dict) else None
-        top.append([str(e.get("name") or "")[:60].strip(), typ, str(e.get("subtype") or "")[:20],
-                    str(flag or "")[:8], str(tick or "")[:24], round(bal, 2), round(d7, 2), round(_num(e.get("cost_basis")))])
-    top.sort(key=lambda r: -r[5])
-    movers = sorted([r for r in top if r[6]], key=lambda r: -abs(r[6]))[:20]
-    # Казначейства в других монетах: эфир, Solana, BNB, XRP.
-    alts: dict[str, list[list[Json]]] = {}
-    for slug, sym in (("ethereum", "eth"), ("solana", "sol"), ("bnb", "bnb"), ("xrp", "xrp")):
-        holding = (root.get("altcoinHoldings") or {}).get(slug)
-        ents = [e for e in (holding.get("entities") if isinstance(holding, dict) else None) or [] if isinstance(e, dict)]
-        ents.sort(key=lambda e: -_num(e.get("balance")))
-        lst: list[list[Json]] = [[str(e.get("name") or "")[:60].strip(), str(e.get("type") or "")[:20],
-                                  round(_num(e.get("balance")), 2)] for e in ents]
-        if lst:
-            alts[sym] = lst
-    # Все держатели, а не первые восемьдесят: экран фильтрует их по группам
-    # и ищет по имени.
-    return {"groups": sorted([[k, *v] for k, v in groups.items()], key=lambda g: -g[2]),
-            "top": top, "movers": movers, "alts": alts, "eth": alts.get("eth", [])[:30]}
-
-
 # Фонды, найденные по цепочке (сканер бота): тикер → {"from": с какого дня
 # цепочка наблюдается (unix), "days": {сутки цепочки (unix): чистый поток BTC},
 # "hold": запас BTC или None}. Источник подключает API (set_chain).
 ChainSrc = Callable[[], dict[str, dict[str, Any]]]
+
+
+# «Кто держит биткоин» — свой, из сканера бота (подключает API, set_holders):
+# группы, держатели и движения недели в формате экрана.
+HoldersSrc = Callable[[], dict[str, Any]]
 
 
 class _State:
@@ -524,6 +444,23 @@ class _State:
 
     hit: tuple[float, dict[str, Json]] | None = None
     chain: ChainSrc | None = None
+    holders: HoldersSrc | None = None
+
+
+def set_holders(src: HoldersSrc | None) -> None:
+    """Подключить своих держателей биткоина (биржи, фонды, киты по цепочке)."""
+    _st.holders = src
+
+
+def _own_holders() -> dict[str, Json]:
+    src = _st.holders
+    if src is None:
+        return {}
+    try:
+        return src()
+    except Exception as e:  # noqa: BLE001 — свои данные не должны ломать экран
+        _log(f"держатели: {type(e).__name__}: {e}")
+        return {}
 
 
 def peek() -> dict[str, Json] | None:
@@ -559,14 +496,13 @@ def build() -> dict[str, Json]:
     coins: dict[str, Json] = {}
     with ThreadPoolExecutor(max_workers=2) as pool:
         futs = {cat: pool.submit(_coin, cat, sym) for cat, sym in COINS}
-        hold_f = pool.submit(_holders)
         cme_f = pool.submit(_cme)
         cbp_f = pool.submit(_cbp)
         for cat, f in futs.items():
             r = _part(cat, f, 90)
             if r:
                 coins[cat] = r
-        holders = _part("holders", hold_f, 60) or {}
+        holders = _own_holders()
         extra = {"cme": _part("cme", cme_f, 90) or {}, "cbp": _part("cbp", cbp_f, 90) or {}}
     with _lock:
         was = _st.hit[1] if _st.hit else {}

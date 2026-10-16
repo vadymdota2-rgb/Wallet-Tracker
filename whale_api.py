@@ -11843,6 +11843,125 @@ def _etf_chain_src() -> dict:
 etf.set_chain(_etf_chain_src)
 
 
+# «Кто держит биткоин» — свой блок из сканера бота, без чужих списков:
+#   • биржи — остатки их адресов из разметки (btc_ex_bal: сверка с цепочкой и
+#     дальше по блокам), неделя назад — суточный снимок btc_ex_day;
+#   • фонды — запас по своим кошелькам (сейчас BITB), неделя — btc_etf_hold;
+#   • киты — частные адреса от 100 BTC, которые сканер видел за месяц: не
+#     биржа, не сервис (меньше 1000 транзакций), не фонд и не хранилище
+#     хранителя; неделя — их выводы с бирж и заводы на биржи.
+BTC_WHALE_MIN = 100
+BTC_WHALE_SEEN = 30 * 86400
+BTC_HOLD_ROWS = 500
+BTC_HOLD_TTL = 600.0
+
+
+def _btc_whale_name(addr: str) -> str:
+    return addr if len(addr) <= 16 else f"{addr[:8]}…{addr[-6:]}"
+
+
+def _hold_exchanges(con, week: int) -> list[list]:
+    if not table_exists(con, "btc_ex_bal") or not table_exists(con, "btc_labels"):
+        return []
+    was: dict[str, float] = {}
+    if table_exists(con, "btc_ex_day"):
+        was = {str(r[0]): r[1] / 1e8 for r in con.execute(
+            "SELECT ex, sats FROM btc_ex_day WHERE day = (SELECT MAX(day) FROM btc_ex_day WHERE day <= ?)", (week,))}
+    out = []
+    for r in con.execute(
+        "SELECT b.ex, SUM(MAX(e.bal_sats, 0)) AS sats FROM btc_ex_bal e "
+        "JOIN btc_labels b ON b.address = e.address WHERE e.checked_at != 0 GROUP BY b.ex"
+    ):
+        btc, ex = (r["sats"] or 0) / 1e8, str(r["ex"])
+        if btc >= 1:
+            out.append([ex, "EXCHANGE", "", "", "", round(btc, 2), round(btc - was[ex], 2) if ex in was else 0.0, 0])
+    return out
+
+
+def _hold_funds(con, week: int) -> list[list]:
+    if not table_exists(con, "btc_etf_addr"):
+        return []
+    names = {str(f.get("t")): str(f.get("n") or "")
+             for f in (((etf.peek() or {}).get("coins") or {}).get("btc") or {}).get("funds") or []}
+    hist = table_exists(con, "btc_etf_hold")
+    out = []
+    for r in con.execute("SELECT fund, SUM(bal_sats) AS sats, MIN(bal_at) AS at FROM btc_etf_addr "
+                         "WHERE fund NOT LIKE '#%' GROUP BY fund"):
+        if not r["at"] or not r["sats"]:
+            continue  # запас ещё не сверен с цепочкой
+        fund, btc = str(r["fund"]), r["sats"] / 1e8
+        h = con.execute("SELECT sats FROM btc_etf_hold WHERE fund = ? AND day <= ? ORDER BY day DESC LIMIT 1",
+                        (fund, week)).fetchone() if hist else None
+        out.append([names.get(fund) or fund, "FUND", "", "", fund, round(btc, 2),
+                    round(btc - h[0] / 1e8, 2) if h else 0.0, 0])
+    return out
+
+
+def _hold_whales(con, t: int, px: float) -> list[list]:
+    if not table_exists(con, "btc_addr") or not table_exists(con, "btc_labels"):
+        return []
+    # Имена таблиц — свои константы, значения — параметрами.
+    skip = "".join(f" AND NOT EXISTS (SELECT 1 FROM {x} s WHERE s.address = a.address)"  # noqa: S608
+                   for x in ("btc_labels", "btc_etf_addr", "btc_etf_learned", "btc_cust_vault") if table_exists(con, x))
+    where = "bal_sats >= ? AND txs < ? AND at >= ?" + skip
+    sql = f"SELECT address, bal_sats FROM btc_addr a WHERE {where} ORDER BY bal_sats DESC LIMIT ?"  # noqa: S608
+    out = []
+    for w in con.execute(sql, (BTC_WHALE_MIN * 100_000_000, BTC_SERVICE_TXS, t - BTC_WHALE_SEEN, BTC_HOLD_ROWS)):
+        addr, btc = str(w["address"]), w["bal_sats"] / 1e8
+        moves = con.execute("SELECT kind, sats, price_nanos, ts, ex FROM btc_moves WHERE wallet = ? ORDER BY ts, id",
+                            (addr,)).fetchall()
+        d7 = sum((1 if int(m["kind"]) == 1 else -1) * int(m["sats"]) for m in moves
+                 if int(m["ts"]) >= t - 7 * 86400) / 1e8
+        # Цена входа — средняя по выводам с бирж, которые видел сканер, и
+        # только если ими куплена большая часть остатка.
+        book = _btc_book([(int(m["kind"]), int(m["sats"]), int(m["price_nanos"]), int(m["ts"]), m["ex"] or "")
+                          for m in moves if int(m["price_nanos"] or 0) > 0 and m["ex"]], px)
+        cost = round(book["avg"] * btc) if book and book["bought"] >= btc / 2 else 0
+        out.append([_btc_whale_name(addr), "WHALE", "", "", addr, round(btc, 2), round(d7, 2), cost])
+    return out
+
+
+def _btc_holders_build() -> dict:
+    con = _btc_open()
+    if not con:
+        return {}
+    try:
+        t = now()
+        week = t - t % 86400 - 7 * 86400
+        top = _hold_exchanges(con, week) + _hold_funds(con, week) + _hold_whales(con, t, _btc_price(con))
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] btc holders: {e}\n")
+        return {}
+    finally:
+        con.close()
+    if not top:
+        return {}
+    top.sort(key=lambda r: -r[5])
+    groups: dict[str, list] = {}
+    for r in top:
+        g = groups.setdefault(r[1], [r[1], 0, 0.0, 0.0])
+        g[1] += 1
+        g[2] += r[5]
+        g[3] += r[6]
+    movers = sorted((r for r in top if abs(r[6]) >= 0.5), key=lambda r: -abs(r[6]))[:12]
+    return {
+        "groups": [[g[0], g[1], round(g[2], 2), round(g[3], 2)] for g in sorted(groups.values(), key=lambda g: -g[2])],
+        "top": top, "movers": movers,
+    }
+
+
+def btc_holders() -> dict:
+    """Готовые держатели, без ожидания: сборку экрана ETF они не держат —
+    первый раз отдадут пусто, а свежими их держит exflow_warmer."""
+    if _BTC.get("hold") is None:
+        threading.Thread(target=cached_bg, args=(_BTC, "hold", BTC_HOLD_TTL, _btc_holders_build), daemon=True).start()
+        return {}
+    return cached_bg(_BTC, "hold", BTC_HOLD_TTL, _btc_holders_build)
+
+
+etf.set_holders(btc_holders)
+
+
 # ── Поток бирж BSC ────────────────────────────────────────────────────────
 # Пишет бот (bsc_exchanges.cpp): по часам, биржам и монетам — сколько
 # долларов завели на биржи и вывели с них по всей сети. Переводы BNB и
@@ -12189,7 +12308,8 @@ def exflow_warmer() -> None:
     кругу: запрос из приложения берёт готовое и никогда не ждёт сборки."""
     while True:
         jobs = [(_BTC, "flow", BTC_TTL, _btc_flow_build), (_BSCX, "flow", BTC_TTL, _bscx_flow_build),
-                (_BTC, "cust", BTC_CUST_TTL, _btc_custody_build)]
+                (_BTC, "cust", BTC_CUST_TTL, _btc_custody_build),
+                (_BTC, "hold", BTC_HOLD_TTL, _btc_holders_build)]
         jobs += [(_BTC, ("rank", d), btc_rank_ttl(d), (lambda d=d: _btc_rank_build(d))) for d in BTC_RANK_DAYS]
         for store, key, ttl, build in jobs:
             try:
@@ -14922,25 +15042,21 @@ def _dg_market() -> dict:
 
 
 def _dg_inst() -> dict:
-    """Институционалы: чистый поток спотовых ETF по монетам за последний
+    """Институционалы: чистый поток спотовых ETF биткоина за последний
     отчётный день, кто из фондов купил и продал больше всех, и премия
     Coinbase — спрос американских покупателей прямо сейчас."""
     etf = etf_data() or {}
-    coins = etf.get("coins") or {}
     out: dict = {"etf": []}
-    for c in ("btc", "eth", "sol", "xrp", "hype"):
-        e = coins.get(c) or {}
-        days = e.get("days") or []
-        if not days:
-            continue
+    e = (etf.get("coins") or {}).get("btc") or {}
+    days = e.get("days") or []
+    if days:
         d = days[-1]
-        out["etf"].append({"c": c, "day": int(d[0]), "v": round((d[1] or 0) * 1000), "n": d[2]})
-        if c == "btc":
-            funds = e.get("funds") or []
-            per = [(funds[i]["t"], (v or 0) * 1000) for i, v in enumerate(d[4] or []) if i < len(funds) and v]
-            per.sort(key=lambda x: -x[1])
-            out["top"] = [{"t": t, "v": round(v)} for t, v in per if v > 0][:3]
-            out["bot"] = [{"t": t, "v": round(v)} for t, v in reversed(per) if v < 0][:3]
+        out["etf"].append({"c": "btc", "day": int(d[0]), "v": round((d[1] or 0) * 1000), "n": d[2]})
+        funds = e.get("funds") or []
+        per = [(funds[i]["t"], (v or 0) * 1000) for i, v in enumerate(d[4] or []) if i < len(funds) and v]
+        per.sort(key=lambda x: -x[1])
+        out["top"] = [{"t": t, "v": round(v)} for t, v in per if v > 0][:3]
+        out["bot"] = [{"t": t, "v": round(v)} for t, v in reversed(per) if v < 0][:3]
     cbp = ((etf.get("cbp") or {}).get("btc") or {}).get("now")
     if cbp is not None:
         out["cbp"] = round(cbp, 4)

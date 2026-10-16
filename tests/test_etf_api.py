@@ -36,29 +36,6 @@ def btc_points():
     ]
 
 
-def bt_page(entities, alts=None):
-    snap = {"queries": [
-        {"hash": json.dumps([{"payload": {}, "rpc": "entities.listOverviews"}]), "data": entities},
-        {"hash": json.dumps([{"payload": {}, "rpc": "entities.getAltcoinHoldings"}]),
-         "data": [[k, v] for k, v in (alts or {}).items()]},
-    ]}
-    return ('<html><script type="application/json" id="bt-query-snapshot">' + json.dumps(snap) + "</script></html>").encode()
-
-
-ENTITIES = [
-    {"name": "Strategy", "type": "PUBLIC_COMPANY", "subtype": "treasury", "country": {"flag": "🇺🇸"},
-     "ticker": {"symbol": "MSTR"}, "cost_basis": 64e9, "holdings": [{"asset": "BTC", "balance": 848250, "balance_change_7d": 250}]},
-    {"name": "iShares Bitcoin Trust", "type": "FUND", "ticker": {"symbol": "IBIT"},
-     "holdings": [{"asset": "BTC", "balance": 806037, "balance_change_7d": 0}]},
-    {"name": "Продали всё", "type": "PUBLIC_COMPANY", "holdings": [{"asset": "BTC", "balance": 0, "balance_change_7d": -570}]},
-    {"name": "Без биткоина", "type": "PUBLIC_COMPANY", "holdings": [{"asset": "ETH", "balance": 10}]},
-    {"name": "Пустой", "type": "PUBLIC_COMPANY", "holdings": [{"asset": "BTC", "balance": 0, "balance_change_7d": 0}]},
-    "мусор",
-]
-ALTS = {"ethereum": {"entities": [{"name": "BitMine", "type": "PUBLIC_COMPANY", "balance": "5929198"},
-                                  {"name": "Sharplink", "type": "PUBLIC_COMPANY", "balance": "890376"}]}}
-
-
 class Net:
     """Подставная сеть. routes: часть адреса → ответ (bytes, объект или вызов)."""
 
@@ -74,7 +51,6 @@ class Net:
             "market-cap/ratio": {"data": {"configs": [{"value": 6.6}], "points": [{"timestamp": D1, "points": [6.5]}]}},
             "binance.vision/api/v3/klines": [[day_ms(D1), 0, 0, 0, "60000.5"], [day_ms(D2), 0, 0, 0, "61000"]],
             "ticker/price": {"price": "61000"},
-            "api.hyperliquid.xyz": [],
             "publicreporting.cftc.gov": [
                 {"cftc_contract_market_code": "133741", "report_date_as_yyyy_mm_dd": "2026-10-06T00:00:00.000",
                  **dict.fromkeys(etf.CME_FIELDS, "10")},
@@ -83,10 +59,7 @@ class Net:
                 {"cftc_contract_market_code": "999999"}, "мусор",
             ],
             "products/BTC-USD/candles": [[D1, 0, 0, 0, 60060.5], [D2, 0, 0, 0, 61061], "мусор"],
-            "products/ETH-USD/candles": [],
             "products/BTC-USD/ticker": {"price": "61061"},
-            "products/ETH-USD/ticker": {},
-            "bitcointreasuries.net": bt_page(ENTITIES, ALTS),
         }
         self.routes.update(over)
 
@@ -124,11 +97,18 @@ class EtfTest(unittest.TestCase):
         # Фонды — по убыванию итога «с запуска» (сумма дней, а не строка источника).
         self.assertEqual([f["t"] for f in btc["funds"]], ["IBIT", "FBTC"])
         ibit = btc["funds"][0]
-        self.assertEqual((ibit["cum"], ibit["cumc"], ibit["n"], ibit["prem"], ibit["fee"]),
-                         (210_000_000, 2100.0, "iShares Bitcoin Trust", 0.02, 0.25))
-        self.assertIsNone(btc["funds"][1]["prem"])
-        self.assertEqual((btc["share"], btc["shareHist"], btc["best"], btc["worst"]), (6.6, [[D1, 6.5]], [D1, 5e9], None))
-        self.assertNotIn("eth", r["coins"])  # пустой источник — нет монеты, а не пустая монета
+        self.assertEqual((ibit["cum"], ibit["cumc"], ibit["n"], ibit["fee"]),
+                         (210_000_000, 2100.0, "iShares Bitcoin Trust", 0.25))
+        # Биржевые цифры источника (премия, оборот акций) не берутся: в цепочке
+        # их нет, проверить нечем.
+        self.assertNotIn("prem", ibit)
+        self.assertNotIn("vol", ibit)
+        # Доля в обращении — своя арифметика: активы в монетах к добытому по
+        # расписанию, а не готовая цифра источника.
+        want = round(9e10 / 61000 / etf.supply_at(NOW) * 100, 3)
+        self.assertEqual(btc["share"], want)
+        self.assertEqual(set(btc), {"funds", "days", "share"})
+        self.assertEqual(list(r["coins"]), ["btc"])  # только биткоин
 
     def test_missing_page_means_no_coin_not_a_hole(self):
         def pages(url):
@@ -139,29 +119,43 @@ class EtfTest(unittest.TestCase):
             r = self.build(Net(**{"netflow/list?category=btc&size=100&page=1": pages, "netflow/list?category=btc": pages}))
         self.assertEqual(r, {"ok": False, "error": "no_data"})
 
-    def test_hype_prices_from_hyperliquid_when_binance_has_none(self):
-        pts = {"data": {"totalCount": 1, "points": [{"date": day_ms(D1), "THYP": {"usd": 1_000_000, "eth": 25}}]}}
-        r = self.build(Net(**{"netflow/list?category=hype&size=100&page=1": pts,
-                              "binance.vision/api/v3/klines?symbol=HYPEUSDT": [],
-                              "api.hyperliquid.xyz": [{"t": day_ms(D1) + 3_600_000, "c": "40.5"}]}))
-        self.assertEqual(r["coins"]["hype"]["days"], [[D1, 0, 25.0, 40.5, [1000]]])
-
     # ── Держатели ────────────────────────────────────────────────────────
 
-    def test_holders_from_page_snapshot(self):
-        h = self.build()["holders"]
-        self.assertEqual(h["groups"][0][:3], ["PUBLIC_COMPANY", 2, 848250.0])
-        self.assertEqual(h["top"][0], ["Strategy", "PUBLIC_COMPANY", "treasury", "🇺🇸", "MSTR", 848250.0, 250.0, 64_000_000_000])
-        self.assertEqual([m[0] for m in h["movers"]], ["Продали всё", "Strategy"])  # по модулю изменения
-        self.assertEqual(h["eth"][0], ["BitMine", "PUBLIC_COMPANY", 5929198.0])
-        self.assertNotIn("Без биткоина", [t[0] for t in h["top"]])
-        self.assertNotIn("Пустой", [t[0] for t in h["top"]])
+    def test_holders_are_own(self):
+        own = {"groups": [["EXCHANGE", 3, 1234.5, 0.0]], "top": [], "movers": []}
+        etf.set_holders(lambda: own)
+        try:
+            self.assertEqual(self.build()["holders"], own)
+        finally:
+            etf.set_holders(None)
+        etf._st.hit = None  # без прошлой сборки: держателей нет — пусто, а не чужие
+        self.assertEqual(self.build()["holders"], {})
 
-    def test_holders_missing_keep_previous(self):
-        first = self.build()
-        etf._st.hit = (time.monotonic() - 99_999, first)
-        r = self.build(Net(**{"bitcointreasuries.net": b"<html>no snapshot</html>"}))
-        self.assertEqual(r["holders"], first["holders"])
+    def test_holders_crash_is_empty_not_a_failure(self):
+        def boom():
+            raise RuntimeError("база занята")
+
+        etf.set_holders(boom)
+        try:
+            r = self.build()
+        finally:
+            etf.set_holders(None)
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["holders"], {})
+
+    def test_only_bitcoin_is_asked(self):
+        net = Net()
+        self.build(net)
+        for other in ("category=eth", "category=sol", "category=xrp", "category=hype", "ETH-USD", "hyperliquid",
+                      "bitcointreasuries"):
+            self.assertFalse(any(other in u for u in net.urls), other)
+
+    def test_supply_by_schedule(self):
+        self.assertEqual(etf.supply_at(etf.TS_840K), 19_687_500.0)
+        self.assertEqual(etf.supply_at(etf.TS_840K + 600 * 1000), 19_687_500.0 + 3.125 * 1000)
+        # После пятого халвинга (блок 1 050 000) награда вдвое меньше.
+        self.assertEqual(etf.supply_at(etf.TS_840K + 600 * 210_010),
+                         19_687_500.0 + 3.125 * 210_000 + 1.5625 * 10)
 
     # ── CME и премия Coinbase ────────────────────────────────────────────
 
@@ -228,14 +222,15 @@ class EtfTest(unittest.TestCase):
                 t.join(30)
         self.assertEqual(len(out), 4)
         self.assertTrue(all(o is out[0] for o in out))
-        self.assertEqual(sum("bitcointreasuries" in u for u in net.urls), 1)
+        self.assertEqual(sum("etf/list?category=btc" in u for u in net.urls), 1)
 
     # ── Защита ───────────────────────────────────────────────────────────
 
     def test_only_https_to_known_hosts(self):
         self.assertTrue(etf._allowed("https://api.coinmarketcap.com/data-api/v3/etf/list"))
         for url in ("http://api.coinmarketcap.com/", "https://169.254.169.254/", "https://evil.com/",
-                    "https://user@bitcointreasuries.net/", "https://bitcointreasuries.net.evil.com/", "https://["):
+                    "https://user@api.coinmarketcap.com/", "https://api.coinmarketcap.com.evil.com/", "https://[",
+                    "https://bitcointreasuries.net/", "https://api.hyperliquid.xyz/info"):
             self.assertFalse(etf._allowed(url), url)
         with mock.patch.object(etf._opener, "open") as op:
             self.assertIsNone(etf._fetch("https://evil.com/", 5))
@@ -310,23 +305,15 @@ class EtfTest(unittest.TestCase):
             "publicreporting.cftc.gov": [{"cftc_contract_market_code": "133741", "report_date_as_yyyy_mm_dd": 5},
                                          {"cftc_contract_market_code": "133741", "report_date_as_yyyy_mm_dd": "не дата"}],
             "products/BTC-USD/candles": {"message": "rate limited"},
-            "bitcointreasuries.net": ('<script type="application/json" id="bt-query-snapshot">'
-                                      + json.dumps({"queries": ["x", {"hash": 5}, {"hash": "[1]"}, {"hash": "{bad"}]})
-                                      + "</script>").encode(),
         }))
         btc = r["coins"]["btc"]
         self.assertEqual(len(btc["days"]), 2)
         self.assertEqual(btc["funds"][0]["n"], "")
-        self.assertEqual((btc["share"], btc["shareHist"]), (None, []))
+        self.assertIsNone(btc["share"])
         self.assertEqual((r["cme"], r["cbp"], r["holders"]), ({}, {}, {}))
 
-    def test_hyperliquid_junk_and_bad_cme(self):
-        pts = {"data": {"totalCount": 1, "points": [{"date": day_ms(D1), "THYP": {"usd": 1_000_000, "eth": 25}}]}}
-        r = self.build(Net(**{"netflow/list?category=hype&size=100&page=1": pts,
-                              "binance.vision/api/v3/klines?symbol=HYPEUSDT": [],
-                              "api.hyperliquid.xyz": ["мусор", {"t": day_ms(D1), "c": "40"}],
-                              "publicreporting.cftc.gov": []}))
-        self.assertEqual(r["coins"]["hype"]["days"][0][3], 40.0)
+    def test_bad_cme_is_empty(self):
+        r = self.build(Net(**{"publicreporting.cftc.gov": []}))
         self.assertEqual(r["cme"], {})
 
     def test_previous_cme_and_premium_are_kept(self):

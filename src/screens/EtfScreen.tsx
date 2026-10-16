@@ -1,14 +1,14 @@
 /**
- * Институциональные потоки: сколько денег заходит в спотовые биржевые фонды и
- * кто из крупных держателей покупает или продаёт.
+ * Институциональные потоки биткоина: сколько денег заходит в спотовые
+ * биржевые фонды и кто из крупных держателей покупает или продаёт.
  *
  * Сверху — последний торговый день фондов и суммы за неделю, месяц и с
  * запуска, серия притоков или оттоков подряд. Для биткоина — главное
  * сравнение: сколько монет забрали ETF и сколько за то же время намайнено.
  * Ниже — цена и потоки на двух панелях одной оси времени (это две шкалы, а не
  * две оси на одном поле), затем фонды поимённо за выбранный срок, рекорды и
- * крупные держатели: компании, государства, фонды — кто сколько держит и кто
- * докупал за неделю.
+ * крупные держатели по своему сканеру цепочки: биржи, фонды и киты — кто
+ * сколько держит и кто докупал за неделю.
  *
  * Приток — зелёный, отток — красный, как на биржах. Цифры фондов приходят
  * раз в сутки после закрытия торгов в США, поэтому «сегодня» здесь нет:
@@ -24,41 +24,27 @@ import { fetchEtf, peekEtf } from "../lib/api";
 import { Card, Chips, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import type { BtcHolder, EtfCoin, EtfReply } from "../lib/types";
 import { Frame } from "./Screen";
-import { AltHolders, CbpSection, CmeSection, HoldersAll } from "./EtfMore";
+import { CbpSection, CmeSection, HolderRow, HoldersAll } from "./EtfMore";
 import { dateStr, timeTicks } from "./FearGreedScreen";
 
 type Lang = Parameters<typeof t>[0];
-type Coin = "btc" | "eth" | "sol" | "xrp" | "hype";
 type Range = "30" | "90" | "365" | "all";
 type Period = "d" | "w" | "m" | "all";
 
-const COINS: Coin[] = ["btc", "eth", "sol", "xrp", "hype"];
-const SYM: Record<Coin, string> = { btc: "BTC", eth: "ETH", sol: "SOL", xrp: "XRP", hype: "HYPE" };
-const COIN_KEY = "wt-etf-coin";
+const sym = "BTC";
 const MODE_KEY = "wt-etf-mode";
 const RANGE_KEY = "wt-etf-range";
 const UP = "#0ecb81";
 const DN = "#f6465d";
 const iso = (x: string | number) => `⁦${x}⁩`;
 
-/**
- * Управляющие компании по тикеру — только те, в которых нет сомнений. У
- * биткоина и эфира полное имя фонда приходит с данными; у остальных монет его
- * нет, и без бренда тикер «BSOL» человеку ничего не говорит.
- */
+/** Управляющие компании по тикеру — короче полного имени фонда и узнаваемее. */
 const ISSUER: Record<string, string> = {
-  IBIT: "BlackRock", ETHA: "BlackRock",
-  FBTC: "Fidelity", FETH: "Fidelity", FSOL: "Fidelity",
-  GBTC: "Grayscale", ETHE: "Grayscale", GSOL: "Grayscale", GXRP: "Grayscale",
-  BITB: "Bitwise", ETHW: "Bitwise", BSOL: "Bitwise",
-  ARKB: "ARK 21Shares", CETH: "21Shares",
-  HODL: "VanEck", ETHV: "VanEck", VSOL: "VanEck",
-  EZBC: "Franklin", EZET: "Franklin", SOEZ: "Franklin", XRPZ: "Franklin",
-  BTCO: "Invesco Galaxy", QETH: "Invesco Galaxy",
-  BTCW: "WisdomTree", BRRR: "CoinShares", XRPC: "Canary",
+  IBIT: "BlackRock", FBTC: "Fidelity", GBTC: "Grayscale", BITB: "Bitwise", ARKB: "ARK 21Shares",
+  HODL: "VanEck", EZBC: "Franklin", BTCO: "Invesco Galaxy", BTCW: "WisdomTree", BRRR: "CoinShares",
 };
-/** Мини-фонды Grayscale делят тикер с монетой — без пометки «BTC» в списке фондов читается как сама монета. */
-const MINI: Record<string, string> = { BTC: "Grayscale Mini", ETH: "Grayscale Mini" };
+/** Мини-фонд Grayscale делит тикер с монетой — без пометки «BTC» в списке фондов читается как сама монета. */
+const MINI: Record<string, string> = { BTC: "Grayscale Mini" };
 
 const GROUPS: Record<string, { key: DictKey; c: string }> = {
   FUND: { key: "ef_g_fund", c: "#3b82f6" },
@@ -67,6 +53,7 @@ const GROUPS: Record<string, { key: DictKey; c: string }> = {
   DEFI: { key: "ef_g_defi", c: "#14b8a6" },
   PRIVATE_COMPANY: { key: "ef_g_priv", c: "#eab308" },
   EXCHANGE: { key: "ef_g_ex", c: "#94a3b8" },
+  WHALE: { key: "ef_g_whale", c: "#06b6d4" },
 };
 const BTC_SUPPLY = 21_000_000;
 
@@ -339,7 +326,7 @@ function fundLabel(f: EtfCoin["funds"][number]): string {
   return ISSUER[f.t] ?? f.n.replace(/ (ETF|Trust|Fund).*$/i, "");
 }
 
-function Funds({ c, coin, lang }: { c: EtfCoin; coin: Coin; lang: Lang }) {
+function Funds({ c, lang }: { c: EtfCoin; lang: Lang }) {
   const [period, setPeriod] = useState<Period>("w");
   const aumAll = c.funds.reduce((s, f) => s + (f.aum || 0), 0);
   const rows = useMemo(() => {
@@ -395,8 +382,6 @@ function Funds({ c, coin, lang }: { c: EtfCoin; coin: Coin; lang: Lang }) {
                   {t(lang, "ef_aum", { v: iso(usdWord(f.aum)) })}
                   {aumAll > 0 ? ` · ${t(lang, "ef_mshare", { p: iso(pct((f.aum / aumAll) * 100, 1, false)) })}` : ""}
                   {f.fee !== null && f.fee !== undefined ? ` · ${t(lang, "ef_fee", { v: iso(pct(f.fee, 2, false)) })}` : ""}
-                  {typeof f.prem === "number" && Math.abs(f.prem) >= 0.01
-                    ? ` · ${t(lang, f.prem > 0 ? "ef_prem" : "ef_disc", { v: iso(pct(Math.abs(f.prem), 2, false)) })}` : ""}
                   {f.src === "chain" ? ` · ${t(lang, "ef_src_chain")}` : ""}
                 </small>
               ) : null}
@@ -405,7 +390,7 @@ function Funds({ c, coin, lang }: { c: EtfCoin; coin: Coin; lang: Lang }) {
         })}
       </div>
       {still > 0 ? <p className="lq-hint">{t(lang, "ef_still", { n: iso(num(still)) })}</p> : null}
-      <p className="lq-hint">{t(lang, coin === "btc" || coin === "eth" ? "ef_funds_note" : "ef_funds_note2")}</p>
+      <p className="lq-hint">{t(lang, "ef_funds_note")}</p>
     </Card>
   );
 }
@@ -447,16 +432,16 @@ function Holders({ h, price, lang }: { h: EtfReply["holders"]; price: number; la
           <Card>
             <div className="ef-hl">
               {movers.map((m) => (
-                <div key={m[0]} className="ef-hr">
+                <HolderRow key={m[4] || m[0]} r={m}>
                   <span className="ef-hr-id">
                     <b>{m[3] ? `${m[3]} ` : ""}{m[0]}</b>
-                    <small>{typeName(m)}{m[4] ? ` · ${m[4]}` : ""}</small>
+                    <small>{typeName(m)}{m[4] && m[1] !== "WHALE" ? ` · ${m[4]}` : ""}</small>
                   </span>
                   <span className="ef-hr-v">
                     <b className={m[6] > 0 ? "up" : "dn"}><bdi dir="ltr">{coins(m[6], "BTC")}</bdi></b>
                     {price > 0 ? <small><bdi dir="ltr">{money(m[6] * price)}</bdi></small> : null}
                   </span>
-                </div>
+                </HolderRow>
               ))}
             </div>
             <p className="lq-hint">{t(lang, "ef_m_note")}</p>
@@ -475,14 +460,6 @@ export function EtfScreen() {
   const [reply, setReply] = useState<EtfReply | null>(() => peekEtf() ?? null);
   const [failed, setFailed] = useState(false);
   const [retry, setRetry] = useState(0);
-  const [coin, setCoin] = useState<Coin>(() => {
-    try {
-      const v = localStorage.getItem(COIN_KEY) as Coin | null;
-      return v && COINS.includes(v) ? v : "btc";
-    } catch {
-      return "btc";
-    }
-  });
   const [range, setRange] = useState<Range>(() => {
     try {
       const v = localStorage.getItem(RANGE_KEY);
@@ -521,17 +498,10 @@ export function EtfScreen() {
     }
   };
 
-  const have = COINS.filter((c) => reply?.coins?.[c]?.days?.length);
-  const cur: Coin = have.includes(coin) ? coin : "btc";
-  const c = reply?.coins?.[cur];
-  const sym = SYM[cur];
+  const c = reply?.coins?.btc;
   const days = c?.days ?? [];
   const last = days[days.length - 1];
   const lastPx = [...days].reverse().find((d) => d[3] > 0)?.[3] ?? 0;
-  const btcPx = (() => {
-    const b = reply?.coins?.btc?.days ?? [];
-    return [...b].reverse().find((d) => d[3] > 0)?.[3] ?? 0;
-  })();
 
   const stats = useMemo(() => {
     if (!c || !days.length) return null;
@@ -583,9 +553,7 @@ export function EtfScreen() {
     const m30 = win(30);
     const mined = m30.length ? Array.from({ length: 30 }, (_, i) => minedPerDay(end - i * 86400)).reduce((a, b) => a + b, 0) : 0;
     const aum = c.funds.reduce((s, f) => s + f.aum, 0);
-    const cumc = c.funds.reduce((s, f) => s + f.cumc, 0);
     return {
-      cumc,
       d7: sumU(win(7)), d30: sumU(m30), cum, streak, sign,
       c30: sumC(m30), mined, best, worst, runs, aum, bestM, worstM,
       held: aum > 0 && lastPx > 0 ? aum / lastPx : 0,
@@ -606,11 +574,6 @@ export function EtfScreen() {
     return view.map((b) => (acc += b.usd));
   }, [view, days]);
 
-  const pickCoin = (v: Coin) => {
-    setCoin(v);
-    setSel(null);
-    remember(COIN_KEY, v);
-  };
   const pickRange = (r: Range) => {
     setRange(r);
     setSel(null);
@@ -630,12 +593,6 @@ export function EtfScreen() {
         ) : <Card><Skeleton rows={8} /></Card>
       ) : !c || !last || !stats ? null : (
         <>
-          <Segmented<Coin>
-            value={cur}
-            onChange={pickCoin}
-            options={have.map((k) => ({ id: k, label: SYM[k] }))}
-          />
-
           <Card>
             <div className="ef-hero">
               <small>{t(lang, "ef_last", { d: dayTxt(last[0]) })}</small>
@@ -665,19 +622,10 @@ export function EtfScreen() {
                 })}
                 {c.share ? ` ${t(lang, "ef_share", { p: iso(pct(c.share, 2, false)) })}` : ""}
               </p>
-            ) : stats.cumc > 0 && lastPx > 0 ? (
-              /* У новых фондов (SOL, XRP, HYPE) активов в данных нет, но и
-                 старых запасов, как у GBTC, нет: накопленные с запуска монеты
-                 и есть то, что у них лежит. */
-              <p className="ef-held">
-                {t(lang, "ef_held2", {
-                  c: iso(`${coinsRound(lang, stats.cumc)} ${sym}`), a: iso(usdWord(stats.cumc * lastPx)),
-                })}
-              </p>
             ) : null}
           </Card>
 
-          {cur === "btc" && stats.mined > 0 ? (
+          {stats.mined > 0 ? (
             <Card>
               <p className="ef-mine-t">{t(lang, "ef_mine_title")}</p>
               <div className="ef-mine">
@@ -756,7 +704,7 @@ export function EtfScreen() {
           </Card>
 
           <SectionTitle>{t(lang, "ef_f_title")}</SectionTitle>
-          <Funds c={c} coin={cur} lang={lang} />
+          <Funds c={c} lang={lang} />
 
           <SectionTitle>{t(lang, "ef_r_title")}</SectionTitle>
           <Card>
@@ -793,18 +741,10 @@ export function EtfScreen() {
             <p className="lq-hint">{t(lang, "ef_r_note", { d: dateStr(lang, days[0]![0], { day: "numeric", month: "long", year: "numeric" }) })}</p>
           </Card>
 
-          {reply.cme?.[cur]?.length ? <CmeSection rows={reply.cme[cur]!} sym={sym} price={lastPx} lang={lang} /> : null}
-          {reply.cbp?.[cur]?.days?.length ? <CbpSection d={reply.cbp[cur]!} sym={sym} lang={lang} /> : null}
-          {cur === "btc" ? (
-            <>
-              <Holders h={reply.holders ?? {}} price={btcPx} lang={lang} />
-              <HoldersAll h={reply.holders ?? {}} price={btcPx} lang={lang} />
-            </>
-          ) : null}
-          {reply.holders?.alts?.[cur]?.length
-            ? <AltHolders list={reply.holders.alts[cur]!} sym={sym} price={lastPx} lang={lang} />
-            : cur === "eth" && reply.holders?.eth?.length
-              ? <AltHolders list={reply.holders.eth} sym={sym} price={lastPx} lang={lang} /> : null}
+          {reply.cme?.btc?.length ? <CmeSection rows={reply.cme.btc} sym={sym} price={lastPx} lang={lang} /> : null}
+          {reply.cbp?.btc?.days?.length ? <CbpSection d={reply.cbp.btc} sym={sym} lang={lang} /> : null}
+          <Holders h={reply.holders ?? {}} price={lastPx} lang={lang} />
+          <HoldersAll h={reply.holders ?? {}} price={lastPx} lang={lang} />
 
           <details className="lq-how">
             <summary>{t(lang, "fg_how")}</summary>

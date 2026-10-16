@@ -1,6 +1,8 @@
 /**
  * Остальное на экране «Институциональные потоки»: позиции на CME по отчёту
  * CFTC, премия Coinbase и все держатели — с поиском и делением по группам.
+ * Держатели — свои, из сканера цепочки: биржи, фонды и киты (кит открывает
+ * свой кошелёк).
  *
  * CME — то, как институционалы держат фьючерсы. Отчёт CFTC делит крупных
  * участников на управляющих активами (пенсионные и инвестиционные фонды),
@@ -12,7 +14,8 @@
  * Binance. Coinbase — главная площадка фондов и компаний США, поэтому её
  * читают как спрос из Америки.
  */
-import { useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+import { useMemo, useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } from "react";
+import { useApp } from "../store/app";
 import { t } from "../i18n/t";
 import type { DictKey } from "../i18n/types";
 import { num, pct, px, usdWord } from "../lib/format";
@@ -33,6 +36,7 @@ const GROUPS: Record<string, { key: DictKey; c: string }> = {
   DEFI: { key: "ef_g_defi", c: "#14b8a6" },
   PRIVATE_COMPANY: { key: "ef_g_priv", c: "#eab308" },
   EXCHANGE: { key: "ef_g_ex", c: "#94a3b8" },
+  WHALE: { key: "ef_g_whale", c: "#06b6d4" },
 };
 const groupKey = (typ: string): DictKey => GROUPS[typ]?.key ?? "ef_g_other";
 
@@ -286,6 +290,17 @@ export function CbpSection({ d, sym, lang }: { d: { days: [number, number][]; no
 
 const PAGE = 20;
 
+/** Строка держателя; у кита — кнопка: открывает его кошелёк (адрес — в r[4]). */
+export function HolderRow({ r, children }: { r: BtcHolder; children: ReactNode }) {
+  const open = useApp((s) => s.open);
+  if (r[1] !== "WHALE" || !r[4]) return <div className="ef-hr">{children}</div>;
+  return (
+    <button type="button" className="ef-hr ef-hr-btn" onClick={() => { haptic("select"); open("btcWallet", r[4]); }}>
+      {children}
+    </button>
+  );
+}
+
 export function HoldersAll({ h, price, lang }: { h: EtfReply["holders"]; price: number; lang: Lang }) {
   const [grp, setGrp] = useState<string>("all");
   const [q, setQ] = useState("");
@@ -299,11 +314,11 @@ export function HoldersAll({ h, price, lang }: { h: EtfReply["holders"]; price: 
   }, [top, grp, q]);
   const sum = list.reduce((s, r) => s + r[5], 0);
   const row = (r: BtcHolder, i: number) => (
-    <div key={r[0] + i} className="ef-hr">
+    <HolderRow key={r[4] || r[0] + i} r={r}>
       <span className="ef-hr-rank">{i + 1}</span>
       <span className="ef-hr-id">
         <b>{r[3] ? `${r[3]} ` : ""}{r[0]}</b>
-        <small>{t(lang, groupKey(r[1]))}{r[4] ? ` · ${r[4]}` : ""}
+        <small>{t(lang, groupKey(r[1]))}{r[4] && r[1] !== "WHALE" ? ` · ${r[4]}` : ""}
           {r[6] ? <em className={r[6] > 0 ? "up" : "dn"}> · <bdi dir="ltr">{coinsShort(lang, r[6], "BTC")}</bdi></em> : null}</small>
         {r[7] > 0 && r[5] > 0 && price > 0 ? (() => {
           const avg = r[7] / r[5];
@@ -320,7 +335,7 @@ export function HoldersAll({ h, price, lang }: { h: EtfReply["holders"]; price: 
         <b><bdi dir="ltr">{num(r[5])} BTC</bdi></b>
         {price > 0 ? <small><bdi dir="ltr">{usdWord(r[5] * price)}</bdi></small> : null}
       </span>
-    </div>
+    </HolderRow>
   );
   if (!top.length) return null;
   return (
@@ -351,44 +366,6 @@ export function HoldersAll({ h, price, lang }: { h: EtfReply["holders"]; price: 
         {list.length > shown ? (
           <button type="button" className="dm-more" onClick={() => setShown((v) => v + PAGE * 2)}>
             {t(lang, "ef_h_more", { n: num(Math.min(PAGE * 2, list.length - shown)) })}
-          </button>
-        ) : null}
-      </Card>
-    </>
-  );
-}
-
-export function AltHolders({ list, sym, price, lang }: { list: [string, string, number][]; sym: string; price: number; lang: Lang }) {
-  const [all, setAll] = useState(false);
-  if (!list.length) return null;
-  const total = list.reduce((s, r) => s + r[2], 0);
-  const shown = all ? list : list.slice(0, 12);
-  return (
-    <>
-      <SectionTitle>{t(lang, "ef_a_title", { s: sym })}</SectionTitle>
-      <Card>
-        <p className="ef-h-lead">
-          {t(lang, "ef_a_lead", { n: iso(num(list.length)), b: iso(`${num(total)} ${sym}`) })}
-          {price > 0 ? ` ${t(lang, "ef_a_usd", { v: iso(usdWord(total * price)) })}` : ""}
-        </p>
-        <div className="ef-hl">
-          {shown.map((r, i) => (
-            <div key={r[0] + i} className="ef-hr">
-              <span className="ef-hr-rank">{i + 1}</span>
-              <span className="ef-hr-id">
-                <b>{r[0]}</b>
-                <small>{t(lang, groupKey(r[1]))}</small>
-              </span>
-              <span className="ef-hr-v">
-                <b><bdi dir="ltr">{num(r[2])} {sym}</bdi></b>
-                {price > 0 ? <small><bdi dir="ltr">{usdWord(r[2] * price)}</bdi></small> : null}
-              </span>
-            </div>
-          ))}
-        </div>
-        {list.length > 12 ? (
-          <button type="button" className="dm-more" onClick={() => setAll((v) => !v)}>
-            {all ? t(lang, "dm_less") : t(lang, "dm_all", { n: num(list.length) })}
           </button>
         ) : null}
       </Card>

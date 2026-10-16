@@ -877,24 +877,25 @@ export interface DomReply {
 }
 
 /**
- * Спотовые ETF одной монеты. Дни — торговые, по возрастанию: [начало суток
+ * Спотовые ETF биткоина. Дни — торговые, по возрастанию: [начало суток
  * UTC, поток всех фондов $ тыс., поток в монетах, закрытие цены, потоки
  * фондов $ тыс. в порядке funds (null — фонд в тот день не отчитался)].
  */
 export interface EtfCoin {
   funds: {
-    t: string; n: string; aum: number; vol: number; prem: number | null; fee: number | null; cum: number; cumc: number;
+    t: string; n: string; aum: number; fee: number | null; cum: number; cumc: number;
     /** «chain» — поток фонда посчитан по цепочке своим сканером, а не по отчётам. */
     src?: "chain";
   }[];
   days: [number, number, number, number, (number | null)[]][];
+  /** Доля фондов от добытых монет, %. */
   share: number | null;
-  shareHist: [number, number][];
-  best: [number, number] | null;
-  worst: [number, number] | null;
 }
 
-/** Держатель биткоина: [имя, тип, подтип, флаг, тикер, BTC, изменение за 7 дней, цена входа $]. */
+/**
+ * Держатель биткоина по своему сканеру: [имя, тип (EXCHANGE, FUND, WHALE),
+ * подтип, флаг, тикер (у кита — адрес), BTC, изменение за 7 дней, цена входа $].
+ */
 export type BtcHolder = [string, string, string, string, string, number, number, number];
 
 export interface EtfReply {
@@ -906,10 +907,6 @@ export interface EtfReply {
     groups?: [string, number, number, number][];
     top?: BtcHolder[];
     movers?: BtcHolder[];
-    /** Компании с эфиром: [имя, тип, ETH]. */
-    eth?: [string, string, number][];
-    /** Казначейства в других монетах: eth, sol, bnb, xrp → [имя, тип, монет]. */
-    alts?: Record<string, [string, string, number][]>;
   };
   /**
    * Позиции на CME по отчёту CFTC, в монетах, по неделям: [дата, открытый

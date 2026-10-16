@@ -652,10 +652,12 @@ say("токеномика: видно, что монету можно откры
 
 _ef = read(f"{APP}/src/screens/EtfScreen.tsx")
 _etfs = read(f"{APP}/wt_etf.py")
-say("ETF и крупные игроки: потоки по фондам и дням (BTC, ETH, SOL, XRP, HYPE), спрос против добычи, держатели и кто докупал",
-    "etf_data = etf.etf_data" in api and "import wt_etf as etf" in api and '"/api/etf"' in api
+say("институциональные потоки — только биткоин: потоки фондов по дням, спрос против добычи, держатели и кто докупал; других монет нет",
+    'COINS = (("btc", "BTCUSDT"),)' in _etfs and "type Coin" not in _ef and "Segmented<Coin>" not in _ef
+    and "ETHUSDT" not in _etfs and "SOLUSDT" not in _etfs and "HYPE" not in _etfs
+    and "etf_data = etf.etf_data" in api and "import wt_etf as etf" in api and '"/api/etf"' in api
     and "def etf_data(" in _etfs and "etf/detail/netflow/list?category=" in _etfs
-    and 'id="bt-query-snapshot"' in _etfs and "etf_data()  # и потоки ETF" in api
+    and "etf_data()  # и потоки ETF" in api
     and "from whale_api" not in _etfs and "import whale_api" not in _etfs
     and "function FlowChart(" in _ef and "function Funds(" in _ef and "function Holders(" in _ef
     and "minedPerDay(" in _ef and "glyph: <EtfGlyph />" in appx)
@@ -759,17 +761,26 @@ say("дайджест: просмотры — каждый человек оди
     and '"/api/digest/view": "view"' in api and "DELETE FROM digest_views WHERE chat_id=?" in api
     and "viewDigest(it.id)" in _dgt and 'className="dg-views"' in _dgt)
 
-say("институциональные потоки: накопленный приток, доля и премия фондов, средняя цена покупки держателей, время данных",
-    "cum={mode === \"c\" ? cumView : null}" in _ef and '"ef_mshare"' in _ef and '"ef_prem"' in _ef
-    and '"ef_cost"' in read(f"{APP}/src/screens/EtfMore.tsx") and '"ef_held2"' in _ef and '"ef_upd"' in _ef and "coinsRound(" in _ef)
+say("институциональные потоки: накопленный приток, доля фондов, средняя цена входа китов, время данных",
+    "cum={mode === \"c\" ? cumView : null}" in _ef and '"ef_mshare"' in _ef
+    and '"ef_cost"' in read(f"{APP}/src/screens/EtfMore.tsx") and '"ef_upd"' in _ef and "coinsRound(" in _ef)
 
 _em = read(f"{APP}/src/screens/EtfMore.tsx")
-say("институциональные потоки: позиции CME по CFTC, премия Coinbase, все держатели с поиском и группами, казначейства ETH/SOL/BNB/XRP",
+say("институциональные потоки: позиции CME по CFTC, премия Coinbase, все держатели с поиском и группами",
     "def _cme(" in _etfs and "publicreporting.cftc.gov" in _etfs and "def _cbp(" in _etfs
-    and '"top": top, "movers": movers, "alts": alts' in _etfs
     and "export function CmeSection(" in _em and "export function CbpSection(" in _em
-    and "export function HoldersAll(" in _em and "export function AltHolders(" in _em
+    and "export function HoldersAll(" in _em and "AltHolders" not in _em + _ef
     and "<CmeSection" in _ef and "<HoldersAll" in _ef)
+_wsb = read(os.path.join(BOT, "btc_chain.cpp"))
+say("держатели биткоина — свои, из сканера: резервы бирж по адресам, фонды по кошелькам, киты; без bitcointreasuries",
+    "bitcointreasuries" not in _etfs and "def set_holders(" in _etfs and "etf.set_holders(btc_holders)" in api
+    and "def _hold_exchanges(" in api and "def _hold_funds(" in api and "def _hold_whales(" in api
+    and '(_BTC, "hold", BTC_HOLD_TTL, _btc_holders_build)' in api
+    and "CREATE TABLE IF NOT EXISTS btc_ex_bal (" in _wsb and "CREATE TABLE IF NOT EXISTS btc_ex_day (" in _wsb
+    and "void exBalances(const Block& b)" in _wsb and "void refreshExBalances()" in _wsb
+    and "exBalances(b);" in _wsb and "🏦 Резервы бирж" in _wsb
+    and 'WHALE: { key: "ef_g_whale"' in _ef and 'WHALE: { key: "ef_g_whale"' in _em
+    and 'open("btcWallet", r[4])' in _em)
 
 _btv = read(f"{APP}/src/screens/BtcViews.tsx")
 _ws_btc = read(os.path.join(BOT, "btc_chain.cpp"))

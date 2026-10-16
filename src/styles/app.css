@@ -4092,3 +4092,7 @@ button.cal-row { background: transparent; border: 0; color: inherit; font: inher
 .cal-x p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink); }
 .cal-x small { font-size: 11.5px; color: var(--dim); }
 .cal-x-go { justify-self: start; padding: 5px 12px; border-radius: 999px; border: 1px solid rgb(58 130 214 / 0.35); background: transparent; color: var(--glow); font-size: 12.5px; font-weight: 700; }
+/* Кит в списке держателей — кнопка: открывает кошелёк. */
+.ef-hr-btn { width: 100%; background: none; border: 0; border-top: 1px solid rgb(27 61 104 / 0.3); color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.ef-hr-btn:first-child { border-top: 0; }
+.ef-hr-btn:active { background: rgb(27 61 104 / 0.2); }

@@ -86,7 +86,7 @@ class ChainMergeTest(unittest.TestCase):
         with mock.patch.object(e, "_points", lambda cat: pts), \
                 mock.patch.object(e, "_prices", lambda sym, days: dict(self.px)), \
                 mock.patch.object(e, "_get", lambda url, timeout=20: {}), \
-                mock.patch.object(e, "_share", lambda cat: {}), \
+                mock.patch.object(e, "_share", lambda funds, price: {}), \
                 mock.patch.object(e, "_now", lambda: MON + 30 * DAY):
             c = e._coin("btc", "BTCUSDT")
         self.assertIsNotNone(c)
