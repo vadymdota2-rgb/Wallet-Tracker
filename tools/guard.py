@@ -652,7 +652,7 @@ say("токеномика: видно, что монету можно откры
 
 _ef = read(f"{APP}/src/screens/EtfScreen.tsx")
 _etfs = read(f"{APP}/wt_etf.py")
-say("институциональные потоки — только биткоин: потоки фондов по дням, спрос против добычи; без держателей и подписи источников; других монет нет",
+say("институциональные потоки — только биткоин: потоки фондов по дням, спрос против добычи; без «кто докупал за неделю» и подписи источников; других монет нет",
     'COINS = (("btc", "BTCUSDT"),)' in _etfs and "type Coin" not in _ef and "Segmented<Coin>" not in _ef
     and "ETHUSDT" not in _etfs and "SOLUSDT" not in _etfs and "HYPE" not in _etfs
     and "etf_data = etf.etf_data" in api and "import wt_etf as etf" in api and '"/api/etf"' in api
@@ -660,8 +660,8 @@ say("институциональные потоки — только битко
     and "coingecko.com/api/v3/governments" not in api
     and "etf_data()  # и потоки ETF" in api
     and "from whale_api" not in _etfs and "import whale_api" not in _etfs
-    and "function FlowChart(" in _ef and "function Funds(" in _ef and "function Holders(" not in _ef
-    and '"ef_src"' not in _ef and "holders" not in _etfs
+    and "function FlowChart(" in _ef and "function Funds(" in _ef and "movers" not in _ef + _etfs
+    and '"ef_src"' not in _ef and '"ef_m_title"' not in _ef
     and "minedPerDay(" in _ef and "glyph: <EtfGlyph />" in appx)
 
 _hv = read(f"{APP}/src/components/HalvingCard.tsx")
@@ -771,6 +771,25 @@ say("институциональные потоки: позиции CME по CF
     "def _cme(" in _etfs and "publicreporting.cftc.gov" in _etfs and "def _cbp(" in _etfs
     and "export function CmeSection(" in _em and "export function CbpSection(" in _em
     and "HoldersAll" not in _em + _ef and "AltHolders" not in _em + _ef and "<CmeSection" in _ef)
+_tre = read(f"{APP}/wt_treasury.py")
+say("крупнейшие держатели: ETF и компании (по их отчётам в SEC, CryptoAssetNumberOfUnits), без государств; выбор группы",
+    "export function Holders(" in _em and "<Holders rows={reply.holders ?? []}" in _ef
+    and '{ id: "COMPANY", key: "ef_g_co" }' in _em and "GOVERNMENT" not in _em + _etfs
+    and '"holders": _holders(coins.get("btc"), companies)' in _etfs and "co_f = pool.submit(wt_treasury.companies)" in _etfs
+    and 'HOST = "data.sec.gov"' in _tre and "/us-gaap/CryptoAssetNumberOfUnits.json" in _tre
+    and 'os.environ.get("WT_SEC_UA"' in _tre and "if prev is not None and prev >= JUMP_FLOOR" in _tre
+    and "coingecko" not in _tre.lower() and "coinmarketcap" not in _tre.lower()
+    and "wt_treasury.py tests/test_treasury.py" in read(f"{APP}/.github/workflows/tests.yml"))
+_wsm = read(os.path.join(BOT, "main.cpp"))
+_wse = read(os.path.join(BOT, "btc_etf.cpp"))
+_wsc = read(os.path.join(BOT, "btc_chain.cpp"))
+say("бот: /import — кнопки фондов (IBIT, FBTC…) и «Другое»; файл CSV; тикер в строке — разметка сама; только владелец; разметку переносит сканер, историю дочитывает",
+    "std::string importKeyboard(long long id)" in _wsm and 'callback_data", "imp:" + std::to_string(id) + ":other"' in _wsm
+    and "if (handleImportCallback(cq)) continue;" in _wsm and "if (from != OWNER_CHAT_ID) {" in _wsm.split("bool handleImportCallback(")[1][:900]
+    and "importCommand(cid, txt);" in _wsm and "tgFileText(m[\"document\"])" in _wsm and "IMPORT_FILE_MAX" in _wsm
+    and "int etfDrainLabels(sqlite3* db)" in _wse and "WHERE btc_etf_addr.how != 'seed'\");" in _wse
+    and "etfDrainLabels(g_btcDb);" in _wsc and "void backfillImported(long long tip)" in _wsc
+    and "COVER_MAX = 1.25" in _etfs)
 _eal = read(f"{APP}/wt_etfalert.py")
 _eaa = read(f"{APP}/src/screens/EtfAlerts.tsx")
 say("алерты ETF: итог дня по всем фондам или по фонду и движения фондов в цепочке — в Telegram, один раз, с Премиумом",
@@ -903,12 +922,17 @@ say("дайджест v2: сводка сигналов, рынок, инсти�
 
 _ui_left = [f for f in ("wallet_menu.cpp", "big_trades.cpp", "hyperliquid_ui.cpp", "alert_settings.cpp")
             if os.path.exists(os.path.join(BOT, f))]
-# Кнопки под заявками с бирж (ExchClaim … exchPending) — только владельцу.
+# Кнопки под заявками с бирж (ExchClaim … exchPending) и под /import
+# («чьи адреса») — только владельцу.
 _bot_src = "".join(read(os.path.join(BOT, f)) for f in os.listdir(BOT)
                    if f.endswith(".cpp") and f not in ("ru.cpp", "translations.cpp"))
+_owner_kb = (_bot_src[_bot_src.find("struct ExchClaim {"):_bot_src.find("void exchPending(")],
+             _bot_src[_bot_src.find("// ── /import: разметка адресов владельцем"):_bot_src.find("bool handleOwnerCommand(")])
+_bot_rest = _bot_src
+for _part in _owner_kb:
+    _bot_rest = _bot_rest.replace(_part, "") if _part else _bot_rest
 say("бот: меню в чате нет — на любое сообщение кнопка приложения; алерты, оплата и команды владельца на месте",
-    not _ui_left and "callback_data" not in _bot_src.replace(
-        _bot_src[_bot_src.find("struct ExchClaim {"):_bot_src.find("void exchPending(")], "") and "void sendOpenApp(const std::string& chatId)" in _mc
+    not _ui_left and all(_owner_kb) and "callback_data" not in _bot_rest and "void sendOpenApp(const std::string& chatId)" in _mc
     and "bool handleOwnerCommand(const std::string& cid, const std::string& txt)" in _mc
     and "handlePreCheckoutQuery(" in _mc and "handleSuccessfulPayment(" in _mc
     and '"start_open_app"' in read(os.path.join(BOT, "ru.cpp")), str(_ui_left))

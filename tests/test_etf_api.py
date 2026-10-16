@@ -114,6 +114,22 @@ class EtfTest(unittest.TestCase):
         # Сводки больше не спрашиваем.
         self.assertFalse(any("coinmarketcap" in u or "coingecko" in u for u in net.urls))
 
+    def test_holders_funds_and_companies(self):
+        co = [["Strategy", "COMPANY", "US", "MSTR", 846_000.0, 1_782_777_600], "мусор"]
+        with mock.patch.object(etf.wt_treasury, "companies", lambda: co):
+            r = self.build()
+        # Фонды — по запасу (у FBTC его нет — не держатель), компании — из SEC.
+        self.assertEqual(r["holders"], [["iShares Bitcoin Trust", "FUND", "US", "IBIT", 1_500_000.0, 0],
+                                        ["Strategy", "COMPANY", "US", "MSTR", 846_000.0, 1_782_777_600]])
+        self.assertEqual(r["coins"]["btc"]["funds"][0]["hold"], 1_500_000.0)
+
+    def test_companies_failure_keeps_funds(self):
+        def boom():
+            raise RuntimeError("sec")
+        with mock.patch.object(etf.wt_treasury, "companies", boom):
+            r = self.build()
+        self.assertEqual([h[3] for h in r["holders"]], ["IBIT"])
+
     def test_base_file_in_repo(self):
         with open(os.path.join(ROOT, "data", "etf_base.json"), encoding="utf-8") as f:
             base = json.load(f)

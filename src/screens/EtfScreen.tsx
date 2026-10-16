@@ -23,7 +23,7 @@ import { fetchEtf, peekEtf } from "../lib/api";
 import { Card, Chips, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import type { EtfCoin, EtfReply } from "../lib/types";
 import { Frame } from "./Screen";
-import { CbpSection, CmeSection } from "./EtfMore";
+import { CbpSection, CmeSection, Holders } from "./EtfMore";
 import { dateStr, timeTicks } from "./FearGreedScreen";
 import { EtfAlertsCard, FundBell, useEtfAlerts, type EtfAlerts } from "./EtfAlerts";
 
@@ -671,6 +671,7 @@ export function EtfScreen() {
             <p className="lq-hint">{t(lang, "ef_r_note", { d: dateStr(lang, days[0]![0], { day: "numeric", month: "long", year: "numeric" }) })}</p>
           </Card>
 
+          <Holders rows={reply.holders ?? []} price={lastPx} lang={lang} />
           {reply.cme?.btc?.length ? <CmeSection rows={reply.cme.btc} sym={sym} price={lastPx} lang={lang} /> : null}
           {reply.cbp?.btc?.days?.length ? <CbpSection d={reply.cbp.btc} sym={sym} lang={lang} /> : null}
 

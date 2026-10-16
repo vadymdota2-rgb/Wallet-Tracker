@@ -119,6 +119,9 @@ class ChainMergeTest(unittest.TestCase):
         # по ним занижен, экран остаётся на базе; держат почти весь — свои.
         self.assertFalse(e._usable({"hold": 500.0}, 1_000.0))
         self.assertTrue(e._usable({"hold": 950.0}, 1_000.0))
+        # Монет на кошельках заметно больше запаса — разметка неверна, база.
+        self.assertTrue(e._usable({"hold": 1_250.0}, 1_000.0))
+        self.assertFalse(e._usable({"hold": 1_300.0}, 1_000.0))
         self.assertFalse(e._usable({"hold": 950.0}, 0.0))
         self.assertTrue(e._usable({"exact": True, "hold": None}, 0.0))
         self.assertTrue(e._usable({"matched": True}, 0.0))

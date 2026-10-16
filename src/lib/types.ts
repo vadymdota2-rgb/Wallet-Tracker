@@ -888,16 +888,26 @@ export interface EtfCoin {
     c?: string;
     /** «chain» — поток фонда посчитан по цепочке своим сканером, а не по отчётам. */
     src?: "chain";
+    /** Запас фонда, BTC. */
+    hold?: number;
   }[];
   days: [number, number, number, number, (number | null)[]][];
   /** Доля фондов от добытых монет, %. */
   share: number | null;
 }
 
+/**
+ * Держатель биткоина: [имя, FUND или COMPANY, страна ISO, тикер, BTC, дата
+ * отчёта unix — у компании (её отчёт в SEC), у фонда 0].
+ */
+export type BtcHolder = [string, "FUND" | "COMPANY", string, string, number, number];
+
 export interface EtfReply {
   ok: boolean;
   error?: string;
   coins: Record<string, EtfCoin>;
+  /** Крупнейшие держатели по убыванию запаса. */
+  holders?: BtcHolder[];
   /**
    * Позиции на CME по отчёту CFTC, в монетах, по неделям: [дата, открытый
    * интерес, управляющие лонг, шорт, хедж-фонды лонг, шорт, дилеры лонг,

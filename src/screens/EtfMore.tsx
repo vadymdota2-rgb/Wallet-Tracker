@@ -1,6 +1,7 @@
 /**
  * Остальное на экране «Институциональные потоки»: позиции на CME по отчёту
- * CFTC и премия Coinbase.
+ * CFTC, премия Coinbase и крупнейшие держатели — фонды (из списка фондов
+ * экрана) и публичные компании (по их отчётам в SEC).
  *
  * CME — то, как институционалы держат фьючерсы. Отчёт CFTC делит крупных
  * участников на управляющих активами (пенсионные и инвестиционные фонды),
@@ -12,12 +13,13 @@
  * Binance. Coinbase — главная площадка фондов и компаний США, поэтому её
  * читают как спрос из Америки.
  */
-import { useRef, useState, type MouseEvent, type PointerEvent } from "react";
+import { useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import { t } from "../i18n/t";
 import type { DictKey } from "../i18n/types";
 import { num, usdWord } from "../lib/format";
 import { haptic } from "../lib/telegram";
-import { Card, SectionTitle } from "../components/ui";
+import { Card, Chips, SectionTitle } from "../components/ui";
+import type { BtcHolder } from "../lib/types";
 import { dateStr, timeTicks } from "./FearGreedScreen";
 
 type Lang = Parameters<typeof t>[0];
@@ -274,3 +276,60 @@ export function CbpSection({ d, sym, lang }: { d: { days: [number, number][]; no
   );
 }
 
+const PAGE = 20;
+type Group = "all" | BtcHolder[1];
+const GROUPS: { id: Group; key: DictKey }[] = [
+  { id: "all", key: "ef_h_all" },
+  { id: "FUND", key: "ef_g_fund" },
+  { id: "COMPANY", key: "ef_g_co" },
+];
+
+/** Флаг страны по коду ISO: «US» → 🇺🇸. */
+function flag(code: string): string {
+  return /^[A-Z]{2}$/.test(code) ? String.fromCodePoint(...[...code].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65)) : "";
+}
+
+/** Крупнейшие держатели: фонды и компании, с выбором группы. */
+export function Holders({ rows, price, lang }: { rows: BtcHolder[]; price: number; lang: Lang }) {
+  const [grp, setGrp] = useState<Group>("all");
+  const [shown, setShown] = useState(PAGE);
+  const list = useMemo(() => rows.filter((r) => grp === "all" || r[1] === grp), [rows, grp]);
+  if (!rows.length) return null;
+  return (
+    <>
+      <SectionTitle>{t(lang, "ef_t_title")}</SectionTitle>
+      <Card>
+        <Chips<Group>
+          value={grp}
+          onChange={(g) => { haptic("select"); setGrp(g); setShown(PAGE); }}
+          options={GROUPS.filter((g) => g.id === "all" || rows.some((r) => r[1] === g.id))
+            .map((g) => ({ id: g.id, label: t(lang, g.key) }))}
+        />
+        <div className="ef-hl">
+          {list.slice(0, shown).map((r, i) => (
+            <div key={r[1] + r[3]} className="ef-hr">
+              <span className="ef-hr-rank">{i + 1}</span>
+              <span className="ef-hr-id">
+                <b>{r[2] ? <span aria-hidden="true">{flag(r[2])} </span> : null}{r[0]}</b>
+                <small>
+                  {r[1] === "FUND" ? `${t(lang, "ef_g_fund")} · ` : ""}{r[3]}
+                  {r[5] ? ` · ${t(lang, "ef_h_rep", { d: dateStr(lang, r[5], { day: "numeric", month: "short", year: "numeric" }) })}` : ""}
+                </small>
+              </span>
+              <span className="ef-hr-v">
+                <b><bdi dir="ltr">{num(r[4])} BTC</bdi></b>
+                {price > 0 ? <small><bdi dir="ltr">{usdWord(r[4] * price)}</bdi></small> : null}
+              </span>
+            </div>
+          ))}
+        </div>
+        {list.length > shown ? (
+          <button type="button" className="dm-more" onClick={() => setShown((v) => v + PAGE)}>
+            {t(lang, "ef_h_more", { n: num(Math.min(PAGE, list.length - shown)) })}
+          </button>
+        ) : null}
+        <p className="lq-hint">{t(lang, "ef_h_note")}</p>
+      </Card>
+    </>
+  );
+}

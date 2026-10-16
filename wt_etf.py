@@ -12,6 +12,8 @@
     сканер ещё не нашёл, после снимка потоков нет, запас — база;
   - цена дня — закрытие Binance; доля фондов от добытых монет — своим счётом
     по расписанию эмиссии (supply_at);
+  - крупнейшие держатели — фонды отсюда же и публичные компании по их
+    отчётам в SEC (wt_treasury);
   - позиции на CME — еженедельный отчёт CFTC «Traders in Financial Futures»;
   - премия Coinbase к Binance — спрос американских покупателей.
 
@@ -46,6 +48,7 @@ from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any
 
+import wt_treasury
 from wt_etfchain import settle_day
 
 # Сколько ответ живёт в кэше, с: фонды отчитываются раз в сутки.
@@ -299,6 +302,7 @@ def _coin(cat: str, symbol: str) -> dict[str, Json] | None:
             elif btc > 0:
                 btc = max(0.0, btc + sum(float(v) for d, v in (c.get("days") or {}).items() if int(d) > cut))
         f["aum"] = round(btc * last_px) if last_px > 0 else 0
+        f["hold"] = round(btc, 2)
     rows = []
     for ts in sorted(days):
         by, tot, coin = days[ts]
@@ -310,6 +314,9 @@ def _coin(cat: str, symbol: str) -> dict[str, Json] | None:
 # Кошельки из чужого списка годятся вместо базы, только когда на них лежит
 # почти весь запас фонда: по части кошельков поток фонда был бы занижен.
 COVER = 0.9
+# И не больше этого: кошельки, на которых монет заметно больше запаса фонда,
+# размечены неверно (чужой кошелёк хранителя) — тогда тоже база.
+COVER_MAX = 1.25
 
 
 def _chain() -> dict[str, dict[str, Any]]:
@@ -326,11 +333,11 @@ def _chain() -> dict[str, dict[str, Any]]:
 def _usable(c: dict[str, Any], base_btc: float) -> bool:
     """Фонд по цепочке вместо базы: кошельки опубликованы самим фондом,
     имя группы хранителя подтверждено сверкой потоков, или известные
-    кошельки держат не меньше COVER запаса из базы."""
+    кошельки держат от COVER до COVER_MAX запаса из базы."""
     if c.get("exact") or c.get("matched"):
         return True
     hold = _num(c.get("hold"))
-    return base_btc > 0 and hold >= COVER * base_btc
+    return base_btc > 0 and COVER * base_btc <= hold <= COVER_MAX * base_btc
 
 
 def _chain_btc(flows: dict[int, float], lo: int, hi: int) -> float:
@@ -447,6 +454,20 @@ class _State:
     chain: ChainSrc | None = None
 
 
+def _holders(c: Json, companies: list[list[Any]]) -> list[list[Any]]:
+    """«Крупнейшие держатели»: фонды (запас — как в списке фондов выше) и
+    компании по их отчётам в SEC (wt_treasury), по убыванию запаса. Строка —
+    [имя, FUND или COMPANY, страна, тикер, BTC, дата отчёта unix (у фонда 0)]."""
+    rows: list[list[Any]] = []
+    for f in (c or {}).get("funds") or []:
+        hold = _num(f.get("hold"))
+        if hold >= 1:
+            rows.append([str(f.get("n") or f.get("t")), "FUND", str(f.get("c") or ""), str(f.get("t")), hold, 0])
+    rows += [r for r in companies if isinstance(r, list) and len(r) == 6]
+    rows.sort(key=lambda r: -float(r[4]))
+    return rows
+
+
 def peek() -> dict[str, Json] | None:
     """Готовый ответ из кэша, без сборки: для тех, кого зовёт сама сборка
     (сверка имён фондов по цепочке) — иначе холодный старт ждал бы сам себя."""
@@ -478,15 +499,17 @@ def _part(name: str, fut: Future[Any], timeout: float) -> Any:
 def build() -> dict[str, Json]:
     """Собрать ответ из сети и положить в кэш."""
     coins: dict[str, Json] = {}
-    with ThreadPoolExecutor(max_workers=2) as pool:
+    with ThreadPoolExecutor(max_workers=3) as pool:
         futs = {cat: pool.submit(_coin, cat, sym) for cat, sym in COINS}
         cme_f = pool.submit(_cme)
         cbp_f = pool.submit(_cbp)
+        co_f = pool.submit(wt_treasury.companies)
         for cat, f in futs.items():
             r = _part(cat, f, 90)
             if r:
                 coins[cat] = r
         extra = {"cme": _part("cme", cme_f, 90) or {}, "cbp": _part("cbp", cbp_f, 90) or {}}
+        companies = _part("companies", co_f, 90) or []
     with _lock:
         was = _st.hit[1] if _st.hit else {}
     if "btc" not in coins and not was:
@@ -498,7 +521,8 @@ def build() -> dict[str, Json]:
     for name in ("cme", "cbp"):
         if not extra[name] and was.get(name):
             extra[name] = was[name]
-    res = {"ok": True, "coins": coins, "cme": extra["cme"], "cbp": extra["cbp"], "at": _now()}
+    res = {"ok": True, "coins": coins, "holders": _holders(coins.get("btc"), companies),
+           "cme": extra["cme"], "cbp": extra["cbp"], "at": _now()}
     with _lock:
         _st.hit = (time.monotonic(), res)
     return res
