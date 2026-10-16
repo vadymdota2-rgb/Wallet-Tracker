@@ -780,6 +780,9 @@ say("страх и жадность: источник alternative.me рядом 
     and 's.k === "fng" ? <small> · alternative.me</small>' in _dgm2 and "(alternative.me)` : \"—\"" in _dgm2
     and 't(lang, "fg_by")} alternative.me.' in _dgm2
     and "(alternative.me)\" if zone else" in _dgi and '" · alternative.me" if s["k"] == "fng"' in _dgi)
+say("защита API: бан за промахи ключом — кроме своей машины (127.0.0.1 — это nginx; проверка curl'ом не закроет приложение)",
+    "if _loopback(ip):\n            return" in read(f"{APP}/wt_shield.py")
+    and os.path.isfile(f"{APP}/tests/test_shield_bans.py"))
 _tre = read(f"{APP}/wt_treasury.py")
 say("крупнейшие держатели: ETF и компании (по их отчётам в SEC, CryptoAssetNumberOfUnits), без государств; выбор группы",
     "export function Holders(" in _em and '<Boundary name="etf-holders"><Holders raw={reply.holders}' in _ef

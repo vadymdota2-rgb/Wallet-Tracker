@@ -135,6 +135,13 @@ def read_body(rfile, headers, limit: int = 0) -> bytes:
     return rfile.read(n) if n else b""
 
 
+def _loopback(ip: str) -> bool:
+    try:
+        return ipaddress.ip_address(ip.split("%", 1)[0]).is_loopback
+    except ValueError:
+        return False
+
+
 class Bans:
     """Промахи ключом по адресу и временные баны. Всё в памяти: процесс один."""
 
@@ -153,6 +160,10 @@ class Bans:
             return False
 
     def fail(self, ip: str) -> None:
+        # Свою машину не баним никогда: с неё ходит nginx (127.0.0.1), и
+        # проверка владельца curl'ом без ключа закрыла бы на час всё приложение.
+        if _loopback(ip):
+            return
         now = time.monotonic()
         with self.lock:
             if len(self.fails) > 10000:  # подметаем, чтобы словарь не рос бесконечно
