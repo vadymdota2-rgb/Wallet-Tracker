@@ -325,7 +325,7 @@ export function BtcBigView({ winPicker, win }: { winPicker: ReactNode; win: BigW
                экране этот значок отнимал у суммы и адреса треть ширины. */
             title={r.n && r.n > 1 ? iso(`${num(r.btc, r.btc >= 1000 ? 0 : 2)}\u00a0BTC\u00a0×${r.n}`) : btc(r.btc)}
             /* Звёздочка — кошелёк, добавленный в базу импортом. */
-            sub={`${r.etf ? `ETF ${r.etf} · ` : ""}${r.imp ? "★ " : ""}${shortAddr(r.a)} · ${since(now - r.t)}`}
+            sub={`${r.etf ? `ETF ${r.etf} · ` : ""}${shortAddr(r.a)} · ${since(now - r.t)}`}
             /* Вторая строка — биржа: стрелка от неё (вывод) или к ней
                (завод), и цена сделки. */
             sub2={`${side === "buy" ? "←" : "→"} ${r.ex} · ${px(r.px)}`}

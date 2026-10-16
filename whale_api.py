@@ -11520,14 +11520,11 @@ def _btc_extra(con, wallets: list[str]) -> dict[str, dict]:
         for r in con.execute(f"SELECT address, bal_sats, txs FROM btc_addr WHERE address IN ({marks})", wallets):
             out[r["address"]].update(bal=round(int(r["bal_sats"] or 0) / 1e8, 4), txs=int(r["txs"] or 0))
     if table_exists(con, "btc_watch"):
-        # base — в базе сервисного аккаунта; imp — добавлен импортом, а не
-        # найден поиском (поиск берёт почти каждого, кто вывел от 0,2 BTC,
-        # поэтому звёздочку в приложении ставим только импортированным).
-        for r in con.execute(f"SELECT address, src != 'auto' AS imp FROM btc_watch WHERE address IN ({marks})",
-                             wallets):
+        # base — в базе сервисного аккаунта. Как он туда попал (импорт или
+        # поиск), не показываем: «Другое» в /import — кто угодно, без метки;
+        # метки — только у кошельков ETF (ниже).
+        for r in con.execute(f"SELECT address FROM btc_watch WHERE address IN ({marks})", wallets):
             out[r["address"]]["base"] = True
-            if r["imp"]:
-                out[r["address"]]["imp"] = True
     if table_exists(con, "btc_etf_addr"):
         # Кошелёк биржевого фонда — по своей разметке сканера (btc_etf.cpp):
         # тикер фонда. Группы без имени («#…») не подписываем.

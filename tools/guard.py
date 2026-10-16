@@ -792,7 +792,7 @@ say("крупнейшие держатели: ETF и компании (по их
 _wsm = read(os.path.join(BOT, "main.cpp"))
 _wse = read(os.path.join(BOT, "btc_etf.cpp"))
 _wsc = read(os.path.join(BOT, "btc_chain.cpp"))
-say("бот: /import — кнопки фондов (IBIT, FBTC…) и «Другое»; файл CSV; тикер в строке — разметка сама; уже добавленный без пометки — помечается; только владелец; разметку переносит сканер, историю дочитывает",
+say("бот: /import — кнопки фондов (IBIT, FBTC…) и «Другое»; файл CSV; тикер в строке — разметка сама; уже добавленный без метки ETF — получает её; «Другое» — без меток; только владелец; разметку переносит сканер, историю дочитывает",
     "std::string importKeyboard(long long id)" in _wsm and 'callback_data", "imp:" + std::to_string(id) + ":other"' in _wsm
     and "if (handleImportCallback(cq)) continue;" in _wsm and "if (from != OWNER_CHAT_ID) {" in _wsm.split("bool handleImportCallback(")[1][:900]
     and "importCommand(cid, txt);" in _wsm and "tgFileText(m[\"document\"])" in _wsm and "IMPORT_FILE_MAX" in _wsm
@@ -912,9 +912,10 @@ say("bitcoin: подписка на кошелёк и алерты «покуп�
 say("bitcoin: кошельки базы — каждая продажа и покупка и через какие биржи они прошли",
     "def _btc_big_build(win: str, side: str, min_btc: float, ex: str = \"\")" in api
     and '"byEx": by_ex' in api and 'qs.get("ex", [""])[0]' in api
-    # Без деления «база / все»; биржи — фильтром списка, импортированные — ★.
+    # Без деления «база / все»; биржи — фильтром списка. Метки — только у
+    # кошельков ETF: импорт «Другое» (кто угодно) без звёздочки и пометок.
     and 'className="btc-exf"' in _btv and '"btc_scope_base"' not in _btv and "btcBase" not in _btv
-    and 'r.imp ? "★ " : ""' in _btv and "src != 'auto' AS imp" in api
+    and "r.imp" not in _btv and "AS imp" not in api and '`ETF ${r.etf} · `' in _btv
     and '"Bybit"' in _ws_btc and '"OKX"' in _ws_btc)
 
 say("bitcoin: перестройка цепочки откатывает блок, цена на час блока, выплаты биржи не путаются с CoinJoin, PnL только по биржевым движениям",
