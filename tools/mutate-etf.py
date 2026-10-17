@@ -7,6 +7,7 @@
 import os
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Эквивалентные (не меняют ничего наблюдаемого) — в счёт не идут: «монеты
@@ -147,12 +148,20 @@ def run(path, cmd, muts):
     return alive
 
 
-a1 = run(f"{ROOT}/src/lib/etf.ts", ["node", "--test", "tests/etf.test.ts", "tests/etf.props.test.ts"], TS)
-a2 = run(f"{ROOT}/wt_etf.py", [sys.executable, "-m", "unittest", "tests.test_etf_api", "tests.test_etf_fuzz",
-                               "tests.test_etf_security", "tests.test_etf_policy", "tests.test_disk_cache"], PY)
-a3 = run(f"{ROOT}/wt_treasury.py", [sys.executable, "-m", "unittest", "tests.test_treasury", "tests.test_treasury_security",
-                                    "tests.test_disk_cache"], TR)
-alive = a1 + a2 + a3
+def server():
+    # wt_etf и wt_treasury — по очереди: тесты сервера читают оба файла.
+    return (run(f"{ROOT}/wt_etf.py", [sys.executable, "-m", "unittest", "tests.test_etf_api", "tests.test_etf_fuzz",
+                                      "tests.test_etf_security", "tests.test_etf_policy", "tests.test_disk_cache"], PY)
+            + run(f"{ROOT}/wt_treasury.py", [sys.executable, "-m", "unittest", "tests.test_treasury",
+                                             "tests.test_treasury_security", "tests.test_disk_cache"], TR))
+
+
+# Приложение и сервер — одновременно: тесты приложения (node) читают только
+# lib/etf.ts, тесты сервера — только Python, друг другу они не мешают.
+with ThreadPoolExecutor(max_workers=2) as pool:
+    app = pool.submit(run, f"{ROOT}/src/lib/etf.ts", ["node", "--test", "tests/etf.test.ts", "tests/etf.props.test.ts"], TS)
+    srv = pool.submit(server)
+    alive = app.result() + srv.result()
 total = len(TS) + len(PY) + len(TR) - len(EQUIV)
 print(f"ИТОГ: убито {total - len(alive)} из {total}; выжили: {alive}")
 sys.exit(1 if alive else 0)
