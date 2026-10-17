@@ -105,6 +105,9 @@ export function LegalScreen({ arg }: ScreenProps) {
       <Card ref={terms} lit={part === "terms"}>
         <SectionTitle>{bare(t(lang, "legal_terms_title"))}</SectionTitle>
         <p className="note">{t(lang, "legal_terms_body")}</p>
+        {/* Данные под открытыми лицензиями (CC BY 4.0 у TFTC) нельзя ограничивать
+            сверх лицензии — условия прямо говорят, что их не ограничивают. */}
+        <p className="note">{t(lang, "legal_terms_data")}</p>
       </Card>
 
       <Card>

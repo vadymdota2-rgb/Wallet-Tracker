@@ -30,6 +30,9 @@ C = {
     "up": (61, 220, 151), "dn": (255, 92, 119), "mix": (240, 185, 11), "line": (26, 52, 88), "panel": (12, 26, 46),
 }
 BOT_AT = "@WalletTrackerAppBot"
+# Потоки ETF — открытый набор TFTC (CC BY 4.0): условие — подпись источника со
+# ссылкой и лицензией рядом с цифрами — на картинке и в подписи к посту.
+TFTC_BY = "TFTC — tftc.io/bitcoin-etf-flows (CC BY 4.0)"
 
 _I18N: dict = {}
 
@@ -306,7 +309,7 @@ def render(it: dict, lang: str = "ru", page: str = "") -> bytes | None:
         for s in sig:
             col = C["up"] if s["d"] > 0 else C["dn"] if s["d"] < 0 else C["dim"]
             _arrow(d, PAD + 30, ry, "up" if s["d"] > 0 else "dn" if s["d"] < 0 else "dot", col)
-            label = tr(lang, SIG_KEY.get(s["k"], s["k"])) + (" · alternative.me" if s["k"] == "fng" else "")
+            label = tr(lang, SIG_KEY.get(s["k"], s["k"])) + {"fng": " · alternative.me", "etf": " · TFTC"}.get(s["k"], "")
             text(label, PAD + 72, ry, "Regular", 30, C["ink"])
             text(sig_value(s, lang), W - PAD - 30, ry, "Bold", 30, C["ink"] if s["d"] == 0 else col, "rs")
             ry += row_h
@@ -349,6 +352,8 @@ def caption(it: dict, lang: str = "ru") -> str:
     ls = lines(it, lang)
     if ls:
         parts.append("\n".join(("▲ " if t == "up" else "▼ " if t == "dn" else "• ") + s for s, t in ls))
+    if (it.get("inst") or {}).get("etf"):
+        parts.append(f"{tr(lang, 'dg_etf_by')} {TFTC_BY}")
     parts.append(BOT_AT)
     out = "\n\n".join(parts)
     # Подпись к фото в Telegram — до 1024 знаков: лишние выводы отрезаем.
@@ -457,6 +462,14 @@ class _Page:
         self.text(title.upper(), PAD, self.y, "Bold", 22, C["glow"])
         self.d.line([(PAD, self.y + 12), (W - PAD, self.y + 12)], fill=(58, 130, 214, 40), width=1)
         self.y += 14
+        return True
+
+    def note(self, s: str) -> bool:
+        """Мелкая строка под строками раздела — источник и лицензия данных."""
+        if not self.room(34):
+            return False
+        self.y += 34
+        self.text(s, PAD, self.y, "Regular", 20, C["dim"])
         return True
 
     def row(self, label: str, value: str = "", color=None, sub: str = "", arrow: str | None = None) -> bool:
@@ -640,6 +653,7 @@ def _page_flows(it: dict, lang: str, n: int, total: int) -> bytes | None:
         has = True
         for e in [e for e in inst["etf"] if e.get("v")][:3]:
             p.row(tr(lang, "dg_etf_coin", c=e["c"].upper()), usd(e["v"], lang, True), _col(e["v"]))
+        p.note(f"{tr(lang, 'dg_etf_by')} {TFTC_BY}")
     b = it.get("btc") or {}
     if b.get("net") is not None and p.section(tr(lang, "btc_flow_title")):
         has = True

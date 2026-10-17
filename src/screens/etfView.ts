@@ -6,6 +6,12 @@
 import { useLayoutEffect, useState, type RefObject } from "react";
 import { num, usdWord } from "../lib/format";
 
+/* Потоки фондов и цена дня — открытый набор TFTC под лицензией CC BY 4.0:
+   условие — подпись источника со ссылкой и ссылка на лицензию рядом с
+   данными, везде, где их показываем (экран потоков, дайджест). */
+export const TFTC_URL = "https://www.tftc.io/bitcoin-etf-flows";
+export const CCBY_URL = "https://creativecommons.org/licenses/by/4.0/";
+
 /** Приток — зелёный, отток — красный, как на биржах. */
 export const UP = "#0ecb81";
 export const DN = "#f6465d";

@@ -129,6 +129,8 @@ class EtfTest(unittest.TestCase):
         # wt_treasury). Ни цен бирж (условия Coinbase и Binance запрещают их
         # показывать в приложении), ни сводок CoinMarketCap и CoinGecko.
         self.assertEqual({u.split("/")[2] for u in net.urls}, {"www.tftc.io", "publicreporting.cftc.gov"})
+        # Ответ /api/etf открыт: подпись набора и лицензии — в каждом ответе.
+        self.assertEqual(r["by"], "TFTC — tftc.io/bitcoin-etf-flows (CC BY 4.0: creativecommons.org/licenses/by/4.0/)")
         self.assertFalse(hasattr(etf, "set_chain"))
 
     def test_implausible_rows_are_skipped(self):

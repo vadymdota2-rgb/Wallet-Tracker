@@ -9,8 +9,9 @@
  * две оси на одном поле), затем фонды поимённо за выбранный срок, рекорды и
  * крупнейшие держатели — фонды и публичные компании.
  *
- * Потоки фондов по дням — открытый набор TFTC (CC BY 4.0): источник и
- * лицензия подписаны рядом с цифрами.
+ * Потоки фондов по дням и цена дня — открытый набор TFTC (CC BY 4.0):
+ * источник, лицензия и «данные по» подписаны рядом с цифрами. Цен бирж
+ * (Coinbase, Binance) на экране нет — их условия это запрещают.
  *
  * Приток — зелёный, отток — красный, как на биржах. Цифры фондов приходят
  * раз в сутки после закрытия торгов в США, поэтому «сегодня» здесь нет:
@@ -35,7 +36,7 @@ import { Boundary } from "../components/Boundary";
 import { Frame } from "./Screen";
 import { CmeSection, HeldSection, Holders } from "./EtfMore";
 import { dateStr, timeTicks } from "./FearGreedScreen";
-import { DN, UP, coinsShort, flagOf, heightK, iso, money, tone, useWidth } from "./etfView";
+import { CCBY_URL, DN, TFTC_URL, UP, coinsShort, flagOf, heightK, iso, money, tone, useWidth } from "./etfView";
 import "./EtfScreen.css";
 
 type Lang = Parameters<typeof t>[0];
@@ -50,10 +51,6 @@ const ISSUER: Record<string, string> = {
   HODL: "VanEck", EZBC: "Franklin", BTCO: "Invesco Galaxy", BTCW: "WisdomTree", BRRR: "CoinShares",
   MSBT: "Morgan Stanley", DEFI: "Hashdex",
 };
-/* Потоки фондов по дням — открытый набор TFTC под лицензией CC BY 4.0:
-   условие — подпись источника со ссылкой и ссылка на лицензию рядом с данными. */
-const TFTC_URL = "https://www.tftc.io/bitcoin-etf-flows";
-const CCBY_URL = "https://creativecommons.org/licenses/by/4.0/";
 const PERIOD_KEY = { d: "ef_p_d", w: "ef_p_w", m: "ef_p_m", all: "ef_p_all" } as const;
 const RANGE_LABEL = { 30: "fg_r30", 90: "fg_r90", 365: "fg_r1y", all: "fg_rall" } as const;
 /** Мини-фонд Grayscale делит тикер с монетой — без пометки «BTC» в списке фондов читается как сама монета. */

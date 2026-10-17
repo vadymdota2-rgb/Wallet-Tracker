@@ -14,11 +14,12 @@ import { createContext, useContext, useState, type ReactNode } from "react";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
 import { num, pct, px, shortAddr, usd } from "../lib/format";
-import { haptic } from "../lib/telegram";
+import { haptic, openExternal } from "../lib/telegram";
 import { CoinIcon } from "../components/CoinIcon";
 import { BtcGlyph, EtfGlyph, GaugeGlyph, Row, TopGlyph } from "../components/ui";
 import type { CalEv, DigestItem, DigestSignal } from "../lib/types";
 import { FLAG, allDay, calTitle } from "./CalendarScreen";
+import { CCBY_URL, TFTC_URL } from "./etfView";
 
 type Lang = Parameters<typeof t>[0];
 
@@ -188,7 +189,7 @@ export function Summary({ it, lang }: { it: DigestItem; lang: Lang }) {
             <span className={`dg-sig-d ${s.d > 0 ? "up" : s.d < 0 ? "dn" : "flat"}`} aria-hidden="true">
               {s.d > 0 ? "▲" : s.d < 0 ? "▼" : "●"}
             </span>
-            <span className="dg-sig-k">{t(lang, SIG_KEY[s.k])}{s.k === "fng" ? <small> · alternative.me</small> : null}</span>
+            <span className="dg-sig-k">{t(lang, SIG_KEY[s.k])}{s.k === "fng" ? <small> · alternative.me</small> : s.k === "etf" ? <small> · TFTC</small> : null}</span>
             <b className={s.d > 0 ? "up" : s.d < 0 ? "dn" : undefined}>{sigValue(s)}</b>
           </li>
         ))}
@@ -282,6 +283,12 @@ export function Institutions({ it, lang }: { it: DigestItem; lang: Lang }) {
           ))}
         </p>
       ) : null}
+      {/* Условие CC BY 4.0: источник и лицензия — ссылками рядом с цифрами. */}
+      <p className="dg-note">
+        {t(lang, "dg_etf_by")}{" "}
+        <a href={TFTC_URL} onClick={(e) => { e.preventDefault(); e.stopPropagation(); openExternal(TFTC_URL); }}>TFTC</a>
+        {" ("}<a href={CCBY_URL} onClick={(e) => { e.preventDefault(); e.stopPropagation(); openExternal(CCBY_URL); }}>CC BY 4.0</a>{")."}
+      </p>
     </Sec>
   );
 }

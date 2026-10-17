@@ -783,7 +783,7 @@ say("страх и жадность: источник alternative.me рядом 
     and '<p className="fg-by">' in _fgs and 'openExternal(FNG_URL)' in _fgs
     and 's.k === "fng" ? <small> · alternative.me</small>' in _dgm2 and "(alternative.me)` : \"—\"" in _dgm2
     and 't(lang, "fg_by")} alternative.me.' in _dgm2
-    and "(alternative.me)\" if zone else" in _dgi and '" · alternative.me" if s["k"] == "fng"' in _dgi)
+    and "(alternative.me)\" if zone else" in _dgi and '{"fng": " · alternative.me", "etf": " · TFTC"}.get(s["k"], "")' in _dgi)
 say("защита API: бан за промахи ключом — кроме своей машины (127.0.0.1 — это nginx; проверка curl'ом не закроет приложение)",
     "if _loopback(ip):\n            return" in read(f"{APP}/wt_shield.py")
     and os.path.isfile(f"{APP}/tests/test_shield_bans.py"))
@@ -837,8 +837,8 @@ say("ETF: потоки по дням — открытый набор TFTC (CC BY
     and 'TFTC = "https://www.tftc.io/bitcoin-etf-flows/data.json"' in _etfs and '"www.tftc.io"' in _etfs
     and "coinmarketcap" not in _etfs.lower() and "def _tftc() -> " in _etfs and "TICKER.fullmatch(k)" in _etfs
     and "def _last_report(" in _etfs and "sec = _sec(sec_of() if sec_of else wt_treasury.etf_funds())" in _etfs
-    and 'const TFTC_URL = "https://www.tftc.io/bitcoin-etf-flows";' in _ef
-    and 'const CCBY_URL = "https://creativecommons.org/licenses/by/4.0/";' in _ef
+    and 'export const TFTC_URL = "https://www.tftc.io/bitcoin-etf-flows";' in read(f"{APP}/src/screens/etfView.ts")
+    and 'export const CCBY_URL = "https://creativecommons.org/licenses/by/4.0/";' in read(f"{APP}/src/screens/etfView.ts")
     and "openExternal(TFTC_URL)" in _ef and "openExternal(CCBY_URL)" in _ef and '"ef_by_ch"' in _ef
     and "def fund_points(" in _tre0 and "def etf_funds(" in _tre0
     and '("IBIT", "iShares Bitcoin Trust", 1980994)' in _tre0 and "/api/xbrl/companyfacts/CIK" in _tre0
@@ -1379,6 +1379,23 @@ say("«Институциональные потоки»: медленный SEC
     and "def funds_cached()" in read(f"{APP}/wt_treasury.py") and "_fund_busy.acquire(blocking=False)" in read(f"{APP}/wt_treasury.py")
     and "def _company_row(r: object)" in read(f"{APP}/wt_treasury.py") and "if not answered:" in read(f"{APP}/wt_treasury.py")
     and "export const tone = " in read(f"{APP}/src/screens/etfView.ts"))
+# CC BY 4.0: подпись TFTC со ссылкой и лицензией — везде, где видны его цифры
+# (экран, дайджест в приложении, картинки альбома и подпись к посту в канале,
+# открытый ответ /api/etf); условия сервиса не ограничивают права на эти данные;
+# у образца в открытом репозитории — файл с источниками; цен бирж в образце нет.
+_dgi = read(f"{APP}/wt_digest_img.py")
+_dgm3 = read(f"{APP}/src/screens/DigestMore.tsx")
+_fx = read(f"{APP}/tests/fixtures/etf.json")
+say("«Институциональные потоки»: подпись TFTC (CC BY 4.0) везде, где видны его цифры — экран, дайджест, картинки и пост канала, ответ API; условия не ограничивают права на данные; у образца — источники",
+    '"by": TFTC_BY' in _etfs and 'TFTC_BY = "TFTC — tftc.io/bitcoin-etf-flows (CC BY 4.0' in _etfs
+    and 'TFTC_BY = "TFTC — tftc.io/bitcoin-etf-flows (CC BY 4.0)"' in _dgi
+    and """p.note(f"{tr(lang, 'dg_etf_by')} {TFTC_BY}")""" in _dgi
+    and """parts.append(f"{tr(lang, 'dg_etf_by')} {TFTC_BY}")""" in _dgi and '"etf": " · TFTC"' in _dgi
+    and "openExternal(TFTC_URL)" in _dgm3 and "openExternal(CCBY_URL)" in _dgm3
+    and 's.k === "etf" ? <small> · TFTC</small>' in _dgm3
+    and '{t(lang, "legal_terms_data")}' in read(f"{APP}/src/screens/LegalScreen.tsx")
+    and os.path.isfile(f"{APP}/tests/fixtures/NOTICE.md") and "CC BY 4.0" in read(f"{APP}/tests/fixtures/NOTICE.md")
+    and '"cbp"' not in _fx and '"by":"TFTC' in _fx and os.path.isfile(f"{APP}/tests/test_digest_sources.py"))
 _etv = read(f"{APP}/src/screens/etfView.ts")
 say("«Институциональные потоки»: графики в настоящих пикселях ширины (подписи одного размера на любом экране, по высоте — в окно), колонка ≤ 760 px; подгрузка при запуске; сохранённая копия — с пометкой «не удалось обновить»",
     "export function useWidth(ref: RefObject<Element | null>, fallback = 330): number" in _etv and "new ResizeObserver(" in _etv

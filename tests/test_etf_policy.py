@@ -158,9 +158,12 @@ class ClientPolicyTest(unittest.TestCase):
         # только через openExternal (Telegram спросит, открыть ли).
         code = strip_comments(read("src/screens/EtfScreen.tsx"))
         self.assertEqual(sorted(set(re.findall(r"href=\{(\w+)\}", code))), ["CCBY_URL", "TFTC_URL"])
-        self.assertEqual(sorted(set(re.findall(r'https://[^"\s]+', code))),
-                         ["https://creativecommons.org/licenses/by/4.0/", "https://www.tftc.io/bitcoin-etf-flows"])
+        self.assertIsNone(re.search(r'https?://', code))
         self.assertEqual(code.count("openExternal("), 2)
+        # Сами адреса — в одном месте (etfView): их берут и экран, и дайджест.
+        view = strip_comments(read("src/screens/etfView.ts"))
+        self.assertEqual(sorted(set(re.findall(r'https://[^"\s]+', view))),
+                         ["https://creativecommons.org/licenses/by/4.0/", "https://www.tftc.io/bitcoin-etf-flows"])
         self.assertNotIn("href", strip_comments(read("src/screens/EtfMore.tsx")))
 
     def test_calculation_is_pure(self):

@@ -3,7 +3,8 @@
 Что собирается — только биткоин:
   - потоки фондов по дням — открытый набор TFTC (tftc.io/bitcoin-etf-flows,
     лицензия CC BY 4.0: можно брать и показывать с подписью и ссылкой на
-    источник — экран её показывает). Каждый торговый день с запуска фондов
+    источник и лицензию — их показывают экран потоков и дайджест, а сам
+    ответ /api/etf несёт их в поле by). Каждый торговый день с запуска фондов
     в январе 2024: итог дня и поток каждого фонда в долларах, цена закрытия
     дня. Монеты — доллары по этой цене;
   - фонды — спотовые биткоин-ETF США по их отчётам в SEC (wt_treasury):
@@ -79,6 +80,9 @@ HOSTS = frozenset({"publicreporting.cftc.gov", "www.tftc.io"})
 # Потоки фондов по дням — открытый набор TFTC, CC BY 4.0 (см. начало модуля).
 # Обновляется вечером и утром: раз в час (TTL) — с запасом.
 TFTC = "https://www.tftc.io/bitcoin-etf-flows/data.json"
+# Подпись, которую просит набор (поле attribution) и условие лицензии: она
+# идёт в каждом ответе /api/etf — ответ открыт, его может взять кто угодно.
+TFTC_BY = "TFTC — tftc.io/bitcoin-etf-flows (CC BY 4.0: creativecommons.org/licenses/by/4.0/)"
 # Тикер фонда в наборе — заглавные буквы и цифры; дата — ГГГГ-ММ-ДД. Цифры —
 # только ASCII: \d в Python пропустил бы и «２０２６» (полноширинные), а
 # приложение (JavaScript) такую дату не примет.
@@ -544,7 +548,7 @@ def build() -> dict[str, Json]:
         return {"ok": False, "error": "no_data"}
     coins = {"btc": btc}
     res = {"ok": True, "coins": coins, "holders": _holders(coins.get("btc"), companies),
-           "cme": cme or was.get("cme") or {}, "at": _now()}
+           "cme": cme or was.get("cme") or {}, "by": TFTC_BY, "at": _now()}
     with _lock:
         _st.hit = (time.monotonic(), res)
     _file_save(res)

@@ -165,9 +165,9 @@ describe("институциональные потоки", () => {
     assert.equal(await page.evaluate(() => document.fonts.check('700 22px "IBM Plex Sans"')), true);
     assert.equal(sp(await page.locator(".ef-hero > small").innerText()), "Последний торговый день · чт, 15 октября");
     assert.equal(sp(await page.locator(".ef-hero > b").innerText()), "+5,06 млн $");
-    assert.equal(sp(await page.locator(".ef-hero > span").innerText()), "приток в фонды · +61,5 BTC");
+    assert.equal(sp(await page.locator(".ef-hero > span").innerText()), "приток в фонды · +61,6 BTC");
     assert.deepEqual((await page.locator(".ef-chs").first().locator(".dm-ch b").allInnerTexts()).map(sp), ["−125 млн $", "+2,1 млрд $", "+57 млрд $"]);
-    assert.match(sp(await page.locator(".ef-held").innerText()), /^Фонды управляют 105 млрд \$ — это ≈1,2\d млн BTC\. Это 6,\d\d% всех монет в обращении\.$/);
+    assert.match(sp(await page.locator(".ef-held").innerText()), /^Фонды управляют 106 млрд \$ — это ≈1,2\d млн BTC\. Это 6,\d\d% всех монет в обращении\.$/);
     // Подпись источника и лицензии — ссылками (условие CC BY 4.0), с датой
     // «данные по», как просит TFTC; цен бирж (Coinbase) на экране нет.
     assert.equal(sp(await page.locator(".fg-by").innerText()),
@@ -190,7 +190,7 @@ describe("институциональные потоки", () => {
     const { ctx, page, errors } = await open();
     await ready(page);
     assert.equal(sp(await page.locator(".ef-mine-t").innerText()), "Спрос ETF против добычи за 30 дней");
-    assert.deepEqual((await page.locator(".ef-mine b").allInnerTexts()).map(sp), ["24 128 BTC", "13 500 BTC"]);
+    assert.deepEqual((await page.locator(".ef-mine b").allInnerTexts()).map(sp), ["24 087 BTC", "13 500 BTC"]);
     const rec = (await page.locator(".ef-rec .fg-row").allInnerTexts()).map(sp);
     assert.equal(rec.length, 6);
     assert.match(rec[0]!, /^Самый большой приток за день · 7 нояб\. 2024 г\. \+1,37 млрд \$$/);
@@ -296,7 +296,7 @@ describe("институциональные потоки", () => {
     await page.keyboard.press("Escape");
     assert.equal(await plot.locator(".fg-pop").count(), 0);
     // Активы в заголовке — по свежей сводке, запас — тот же, что «Сейчас».
-    assert.match(sp(await page.locator(".ef-held").innerText()), /^Фонды управляют 105 млрд \$ — это ≈1,2\d млн BTC\. Это 6,\d\d% всех монет в обращении\.$/);
+    assert.match(sp(await page.locator(".ef-held").innerText()), /^Фонды управляют 106 млрд \$ — это ≈1,2\d млн BTC\. Это 6,\d\d% всех монет в обращении\.$/);
     assert.deepEqual(errors, []);
     await ctx.close();
   });
@@ -312,7 +312,7 @@ describe("институциональные потоки", () => {
     await rows.first().waitFor();
     const days90 = REAL.coins.btc.days.filter((d) => d[0] > REAL.coins.btc.days.at(-1)![0] - 90 * 86400).length;
     assert.equal(await rows.count(), days90);
-    assert.deepEqual((await rows.first().locator("th, td").allInnerTexts()).map(sp), ["15 окт. 2026 г.", "+5,06 млн $", "$82 246"]);
+    assert.deepEqual((await rows.first().locator("th, td").allInnerTexts()).map(sp), ["15 окт. 2026 г.", "+5,06 млн $", "$82 016"]);
     assert.deepEqual(await tbl.locator("thead th").evaluateAll((ths) => ths.map((th) => th.getAttribute("scope"))), ["col", "col", "col"]);
     await ctx.close();
   });
