@@ -702,13 +702,15 @@ def render_album(it: dict, lang: str = "en") -> list[bytes]:
     """Обложка и страницы по разделам; пустые страницы не попадают."""
     if Image is None:
         return []
-    builders = (_page_deriv, _page_pos, _page_flows, _page_week)
-    total = 1 + sum(1 for _ in builders)  # номер «N/всего» — до сборки; пустые отсекаются ниже
-    pages = []
-    for i, fn in enumerate(builders):
-        pages.append(fn(it, lang, i + 2, total))
-    pages = [x for x in pages if x]
-    # Если какая-то страница пустая, номера на остальных уже нарисованы: так
-    # бывает лишь у выпусков без данных, и альбом от этого не ломается.
+    builders = [_page_deriv, _page_pos, _page_flows, _page_week]
+    total = 1 + len(builders)
+    drawn = [(fn, fn(it, lang, i + 2, total)) for i, fn in enumerate(builders)]
+    live = [fn for fn, png in drawn if png]
+    if len(live) < len(builders):
+        # Пустая страница выпала — номера «N/всего» на остальных уже неверны
+        # («1/5» при четырёх картинках): перерисовываем с верными.
+        total = 1 + len(live)
+        drawn = [(fn, fn(it, lang, i + 2, total)) for i, fn in enumerate(live)]
+    pages = [png for _, png in drawn if png]
     cover = render(it, lang, f"1/{total}")
     return [cover] + pages if cover else pages

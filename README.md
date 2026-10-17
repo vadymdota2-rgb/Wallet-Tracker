@@ -730,7 +730,7 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=whale-api" \
 Сразу после выхода выпуска (12:00 по Лондону) бот публикует его альбомом из
 пяти картинок с подписью в `WHALE_DIGEST_CHANNEL` (по умолчанию
 `@WalletTrackerOfficial`; бот должен быть админом канала), раз в день. Язык —
-`WHALE_DIGEST_CHANNEL_LANG` (по умолчанию `en`). Пустой `WHALE_DIGEST_CHANNEL`
+только английский (не настраивается). Пустой `WHALE_DIGEST_CHANNEL`
 выключает постинг.
 
 Картинку рисует `wt_digest_img.py` — нужен Pillow: `sudo apt install -y python3-pil`.

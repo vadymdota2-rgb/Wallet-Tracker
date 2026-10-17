@@ -1562,7 +1562,7 @@ say("автопостинг выпуска в канал: картинка на 
     and 'os.environ.get("WHALE_DIGEST_CHANNEL", "@WalletTrackerOfficial")' in api
     and "CREATE TABLE IF NOT EXISTS digest_channel (" in api
     # Канал — на английском, весь выпуск альбомом; сегодняшний короткий выпуск пересобирается в полный.
-    and 'os.environ.get("WHALE_DIGEST_CHANNEL_LANG", "en")' in api and "def tg_send_album(" in api
+    and 'DIGEST_CHANNEL_LANG = "en"' in api and "WHALE_DIGEST_CHANNEL_LANG" not in api and "def tg_send_album(" in api
     and "def render_album(" in _dgi and all(f"def _page_{x}(" in _dgi for x in ("deriv", "pos", "flows", "week"))
     and "def digest_upgrade_today() -> bool:" in api and "digest_upgrade_today()" in pybody(api, "def digest_refresher(")
     # Ключи словаря, по которым сервер собирает выводы, есть в словаре приложения.

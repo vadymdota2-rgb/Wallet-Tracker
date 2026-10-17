@@ -15304,7 +15304,9 @@ def digest_make() -> bool:
 # выключает постинг. Картинку рисует wt_digest_img (Pillow); без Pillow
 # в канал уходит тот же выпуск текстом — пост не пропадает.
 DIGEST_CHANNEL = os.environ.get("WHALE_DIGEST_CHANNEL", "@WalletTrackerOfficial").strip()
-DIGEST_CHANNEL_LANG = os.environ.get("WHALE_DIGEST_CHANNEL_LANG", "en").strip() or "en"
+# Канал — только на английском: язык не настраивается (переменной окружения
+# нет), картинки и подпись к посту всегда по-английски.
+DIGEST_CHANNEL_LANG = "en"
 # Не вышло (Telegram не ответил, бот не админ) — снова через десять минут,
 # но не больше шести попыток за выпуск: дальше ошибка не случайная.
 DIGEST_CHANNEL_RETRY = 600
