@@ -106,7 +106,7 @@ def network(r: random.Random):
     flows, kl, cf, cb = tftc(r), klines(r), cftc(r), candles(r)
     tick = {"price": r.choice([str(r.uniform(20_000, 150_000)), "0", "x", None])}
 
-    def fetch(url, timeout, data=None):
+    def fetch(url, timeout):
         if "tftc.io" in url:
             return json.dumps(flows).encode() if r.random() > 0.02 else b"{"
         if "klines" in url:

@@ -24,7 +24,7 @@ SERVER = os.path.join(ROOT, "wt_etf.py")
 # Только стандартная библиотека и свой модуль отчётов SEC. Ни базы (sqlite3),
 # ни бота, ни своей разметки (wt_etfchain), ни whale_api: модуль независим.
 IMPORTS = {"__future__", "calendar", "contextlib", "http.client", "json", "math", "os", "re", "sys", "threading",
-           "time", "urllib.error", "urllib.parse", "urllib.request", "concurrent.futures", "typing", "wt_treasury"}
+           "time", "urllib.parse", "urllib.request", "collections.abc", "concurrent.futures", "typing", "wt_treasury"}
 BANNED_CALLS = {"eval", "exec", "compile", "__import__", "input", "breakpoint", "globals", "locals", "vars",
                 "setattr", "delattr"}
 # Файлы — только копия ответа на диске, и только в этих функциях.

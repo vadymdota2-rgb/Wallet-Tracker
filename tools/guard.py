@@ -832,7 +832,7 @@ say("ETF: потоки по дням — открытый набор TFTC (CC BY
     "flagOf(f.c)" in _ef and not os.path.exists(f"{APP}/data/etf_base.json") and "BASE_FILE" not in _etfs
     and 'TFTC = "https://www.tftc.io/bitcoin-etf-flows/data.json"' in _etfs and '"www.tftc.io"' in _etfs
     and "coinmarketcap" not in _etfs.lower() and "def _tftc() -> " in _etfs and "TICKER.fullmatch(k)" in _etfs
-    and "def _last_report(" in _etfs and "sec = wt_treasury.etf_funds()" in _etfs
+    and "def _last_report(" in _etfs and "sec = _sec(sec_of() if sec_of else wt_treasury.etf_funds())" in _etfs
     and 'const TFTC_URL = "https://www.tftc.io/bitcoin-etf-flows";' in _ef
     and 'const CCBY_URL = "https://creativecommons.org/licenses/by/4.0/";' in _ef
     and "openExternal(TFTC_URL)" in _ef and "openExternal(CCBY_URL)" in _ef and '"ef_by_ch"' in _ef
@@ -1368,6 +1368,13 @@ say("«Институциональные потоки»: активы фонд�
     and "_point(v)" in read(f"{APP}/wt_treasury.py") and os.path.isfile(f"{APP}/tests/test_treasury_security.py")
     and "tests/test_treasury_security.py" in _wf and 'from "./etfView"' in _ef and 'from "./etfView"' in _em
     and "function money(" not in _ef + _em and "def btc_custody()" not in api)
+say("«Институциональные потоки»: медленный SEC не держит потоки (ждём SEC_WAIT, дальше — прошлые отчёты, зависшую часть не ждём, SEC не спрашивают вдвоём); мусор от SEC и из копий — мимо, а не сбой; порядок фондов и держателей не зависит от ответа",
+    "SEC_WAIT = 45.0" in _etfs and "or wt_treasury.funds_cached()" in _etfs
+    and "pool.shutdown(wait=False, cancel_futures=True)" in _etfs and "def _company(r: object) -> bool:" in _etfs
+    and "[0.0])[0]), k)" in _etfs and "(-_num(r[4]), r[3])" in _etfs and "import urllib.error" not in _etfs
+    and "def funds_cached()" in read(f"{APP}/wt_treasury.py") and "_fund_busy.acquire(blocking=False)" in read(f"{APP}/wt_treasury.py")
+    and "def _company_row(r: object)" in read(f"{APP}/wt_treasury.py") and "if not answered:" in read(f"{APP}/wt_treasury.py")
+    and "export const tone = " in read(f"{APP}/src/screens/etfView.ts"))
 _etv = read(f"{APP}/src/screens/etfView.ts")
 say("«Институциональные потоки»: графики в настоящих пикселях ширины (подписи одного размера на любом экране, по высоте — в окно), колонка ≤ 760 px; подгрузка при запуске; сохранённая копия — с пометкой «не удалось обновить»",
     "export function useWidth(ref: RefObject<Element | null>, fallback = 330): number" in _etv and "new ResizeObserver(" in _etv

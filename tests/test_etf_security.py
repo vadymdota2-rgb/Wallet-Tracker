@@ -24,7 +24,7 @@ PX = [[(1_791_590_400 + i * 86400) * 1000, 0, 0, 0, "60000"] for i in range(3)]
 def build(tftc: object, raw: bytes | None = None, sec: dict | None = None) -> dict:
     urls: list[str] = []
 
-    def fetch(url, timeout, data=None):
+    def fetch(url, timeout):
         urls.append(url)
         if "tftc.io" in url:
             return raw if raw is not None else json.dumps(tftc).encode()

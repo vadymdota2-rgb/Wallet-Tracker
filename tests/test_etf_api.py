@@ -73,7 +73,7 @@ class Net:
         }
         self.routes.update(over)
 
-    def fetch(self, url, timeout, data=None):
+    def fetch(self, url, timeout):
         self.urls.append(url)
         # Самый точный подходящий адрес — первым.
         for part, ans in sorted(self.routes.items(), key=lambda kv: -len(kv[0])):
@@ -330,9 +330,9 @@ class EtfTest(unittest.TestCase):
         net = Net()
         orig = net.fetch
 
-        def slow(url, timeout, data=None):
+        def slow(url, timeout):
             time.sleep(0.01)
-            return orig(url, timeout, data)
+            return orig(url, timeout)
 
         out = []
         with mock.patch.object(etf, "_fetch", slow), mock.patch.object(etf, "_now", lambda: NOW), \
@@ -345,6 +345,91 @@ class EtfTest(unittest.TestCase):
         self.assertEqual(len(out), 4)
         self.assertTrue(all(o is out[0] for o in out))
         self.assertEqual(sum("publicreporting.cftc.gov" in u for u in net.urls), 1)
+
+    def test_implausible_latest_report_falls_back_to_the_previous_quarter(self):
+        # Последний отчёт IBIT — 9 млн BTC (такого запаса нет): запас — от
+        # прошлого квартала плюс потоки после него, а не ноль.
+        self.sec({"IBIT": dict(SEC["IBIT"], q={Q1: [750_000.0, 60e9], Q2: [9e6, None]}), "FBTC": SEC["FBTC"]})
+        ibit = self.build()["coins"]["btc"]["funds"][0]
+        after = 100e6 / 60_000.5 - 20e6 / 61_000 + 62e6 / 62_000
+        self.assertEqual((ibit["t"], ibit["hold"]), ("IBIT", round(750_000.0 + after, 2)))
+
+    def test_fund_order_does_not_depend_on_sec_order(self):
+        # Фонды без потоков (у всех «с запуска» ноль) — по тикеру, в каком
+        # порядке их ни отдал SEC; столбцы дней — в том же порядке.
+        rep = {"n": "x", "fee": None, "q": {Q2: [1_000.0, None]}}
+        orders = []
+        for keys in (("ZZZ", "FBTC", "AAA"), ("AAA", "ZZZ", "FBTC")):
+            self.sec({k: SEC["FBTC"] if k == "FBTC" else rep for k in keys})
+            orders.append([f["t"] for f in self.build()["coins"]["btc"]["funds"]])
+        self.assertEqual(orders, [["IBIT", "BITB", "AAA", "FBTC", "ZZZ"]] * 2)
+
+    def test_junk_from_sec_is_skipped(self):
+        # Мусор от wt_treasury (тикер не тикер, отчёт не отчёт, комиссия вне
+        # пределов) не роняет сборку: такого фонда или поля просто нет.
+        self.sec({"IBIT": {"n": "iShares Bitcoin Trust", "fee": 0.5,
+                           "q": {"x": [1, 2], Q0: "мусор", Q1: [None], Q2: ["734261", None]}},
+                  "<b>": SEC["FBTC"], 5: SEC["FBTC"], "FBTC": "мусор", "ARKB": {"q": "x"}, "BRRR": {"q": {Q2: [None, 1e9]}, "fee": "0.0025"}})
+        funds = {f["t"]: f for f in self.build()["coins"]["btc"]["funds"]}
+        self.assertEqual(sorted(funds), ["BITB", "BRRR", "IBIT"])
+        self.assertIsNone(funds["IBIT"]["fee"])
+        self.assertGreater(funds["IBIT"]["hold"], 734_261)
+        self.assertEqual(funds["BRRR"]["fee"], 0.25)
+
+    def test_slow_or_broken_sec_does_not_hold_the_flows(self):
+        # SEC отвечает дольше SEC_WAIT или падает — потоки не ждут: отчёты из
+        # прошлой сборки (funds_cached).
+        gate = threading.Event()
+        self.addCleanup(gate.set)
+
+        def slow():
+            gate.wait(10)
+            return {}
+
+        def boom():
+            raise RuntimeError("sec")
+
+        ibit = self.build()["coins"]["btc"]["funds"][0]["hold"]
+        for sec in (slow, boom):
+            etf._st = etf._State()
+            with mock.patch.object(etf.wt_treasury, "etf_funds", sec), \
+                    mock.patch.object(etf.wt_treasury, "funds_cached", lambda: SEC), mock.patch.object(etf, "SEC_WAIT", 0.05):
+                t0 = time.monotonic()
+                r = self.build()
+                self.assertLess(time.monotonic() - t0, 5, sec.__name__)
+            self.assertEqual(r["coins"]["btc"]["funds"][0]["hold"], ibit, sec.__name__)
+
+    def test_junk_company_rows_are_skipped_and_ties_go_by_ticker(self):
+        good = ["Strategy", "COMPANY", "US", "MSTR", 846_000.0, 1_782_777_600]
+        co = [good, ["X", "COMPANY", "US", "AA", "nan", 1], ["X", "COMPANY", "US", ["l"], 5.0, 1],
+              ["X", "FUND", "US", "AA", 5.0, 1], ["X", "COMPANY", "US", "AA", 5.0, True], ["X", "COMPANY", "US", "AA", 9e9, 1],
+              ["X", "COMPANY", "US", "AA", 5.0, -1], ["X", "COMPANY", "US", "<b>", 5.0, 1], ["X", "COMPANY", "US", "AA", 5.0],
+              None, {"a": 1}, ["Y", "COMPANY", "US", "BB", 150_000.0, 1]]
+        with mock.patch.object(etf.wt_treasury, "companies", lambda: co):
+            r = self.build()
+        # BB и FBTC — по 150 000 BTC: при равенстве — по тикеру.
+        self.assertEqual([h[3] for h in r["holders"]], ["MSTR", "IBIT", "BB", "FBTC"])
+        with mock.patch.object(etf.wt_treasury, "companies", lambda: "мусор"):
+            self.assertEqual([h[3] for h in self.build()["holders"]], ["IBIT", "FBTC"])
+
+    def test_dates_are_ascii_only(self):
+        self.assertEqual(etf._day("2026-10-06T00:00:00.000"), 1_791_244_800)
+        self.assertEqual(etf._day("2026-10-06"), 1_791_244_800)
+        for bad in ("２０２６-10-06T00:00:00.000", "2026-10-0６", "2026-1-06", "x", 5, None):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                etf._day(bad)
+
+    def test_klines_junk_last_row_stops_paging(self):
+        for last in ("мусор", [], None):
+            calls = []
+
+            def kl(url, last=last, calls=calls):
+                calls.append(url)
+                return [[day_ms(D1), 0, 0, 0, "60000"]] * 999 + [last]
+
+            with mock.patch.object(etf, "_fetch", Net(**{"binance.vision/api/v3/klines": kl}).fetch):
+                self.assertEqual(etf._klines("BTCUSDT", 0), {D1: 60_000.0}, last)
+            self.assertEqual(len(calls), 1, last)
 
     # ── Защита ───────────────────────────────────────────────────────────
 

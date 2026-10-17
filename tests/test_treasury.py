@@ -8,6 +8,7 @@ import os
 import shutil
 import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -137,6 +138,66 @@ class TreasuryTest(unittest.TestCase):
     def test_hostile_json(self):
         self.assertIsNone(tr._parse(b'{"units": NaN}'))
         self.assertIsNone(tr._parse(b"[" * 100_000))
+
+    def test_report_date_is_ascii_only(self):
+        self.assertEqual(tr._day("2026-06-30"), Q2)
+        for bad in ("２０２６-06-30", "2026-06-3０", "2026-6-30", "2026-06-30x", None, 5):
+            self.assertEqual(tr._day(bad), 0, bad)
+        self.assertIsNone(tr.holding({"units": {"Bitcoin": [row("２０２６-06-30", 846_000)]}}))
+
+    def test_company_sec_missed_keeps_its_previous_report(self):
+        # SEC не ответил по одной компании — её прошлый отчёт, а не пропажа;
+        # ответил, но запаса в отчёте нет — компании нет.
+        answer = {"1050446": 846_000, "1167419": 19_000}
+
+        def fetch(url, timeout):
+            for cik, v in answer.items():
+                if cik in url:
+                    return json.dumps({"units": {"Bitcoin": [row("2026-06-30", v)]}}).encode() if v else b"{}"
+            return None
+
+        with mock.patch.object(tr, "_fetch", fetch), mock.patch.object(tr, "PAUSE", 0), mock.patch.object(tr, "TTL", 0), \
+                mock.patch.dict(os.environ, {"WT_SEC_UA": UA}), mock.patch("sys.stderr", io.StringIO()):
+            self.assertEqual([r[3] for r in tr.companies()], ["MSTR", "RIOT"])
+            answer = {"1167419": 0}
+            self.assertEqual(tr.companies(), [["Strategy", "COMPANY", "US", "MSTR", 846_000.0, Q2]])
+
+    def test_sec_down_is_not_saved_as_fresh(self):
+        # Ни одного ответа — прошлое как есть, и спрашиваем снова со следующей
+        # сборкой (а не через полсуток).
+        urls = []
+
+        def fetch(url, timeout):
+            urls.append(url)
+
+        old = {"IBIT": {"n": "iShares Bitcoin Trust", "q": {Q2: [734_261.0, None]}, "fee": None}}
+        stale = time.monotonic() - tr.TTL - 1
+        tr._fst.hit = (stale, old)
+        tr._st.hit = (stale, [["Strategy", "COMPANY", "US", "MSTR", 846_000.0, Q2]])
+        with mock.patch.object(tr, "_fetch", fetch), mock.patch.object(tr, "PAUSE", 0), \
+                mock.patch.dict(os.environ, {"WT_SEC_UA": UA}), mock.patch("sys.stderr", io.StringIO()):
+            for _ in range(2):
+                self.assertEqual(tr.etf_funds(), old)
+                self.assertEqual(tr.companies(), tr._st.hit[1])
+        self.assertEqual(len(urls), 2 * (len(tr.ETFS) + len(tr.COMPANIES)))
+        self.assertEqual((tr._fst.hit[0], tr._st.hit[0]), (stale, stale))
+        self.assertEqual(os.listdir(self.tmp), [])
+
+    def test_second_caller_does_not_ask_sec_while_a_build_runs(self):
+        old = {"IBIT": {"n": "iShares Bitcoin Trust", "q": {Q2: [734_261.0, None]}, "fee": None}}
+        tr._fst.hit = (time.monotonic() - tr.TTL - 1, old)
+        with mock.patch.object(tr, "_fetch") as f, mock.patch.dict(os.environ, {"WT_SEC_UA": UA}):
+            for busy, call, want in ((tr._fund_busy, tr.etf_funds, old), (tr._co_busy, tr.companies, [])):
+                with busy:
+                    self.assertEqual(call(), want)
+            f.assert_not_called()
+
+    def test_funds_cached_never_asks_sec(self):
+        with mock.patch.object(tr, "_fetch") as f, mock.patch.dict(os.environ, {"WT_SEC_UA": UA}):
+            self.assertEqual(tr.funds_cached(), {})
+            tr._file_save("sec_funds.json", {"IBIT": {"n": "x", "q": {str(Q2): [734_261.0, None]}, "fee": None}})
+            self.assertEqual(tr.funds_cached(), {"IBIT": {"n": "iShares Bitcoin Trust", "q": {Q2: [734_261.0, None]}, "fee": None}})
+            f.assert_not_called()
 
 
 if __name__ == "__main__":

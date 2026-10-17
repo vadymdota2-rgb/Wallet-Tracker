@@ -15,8 +15,9 @@ CleanSpark поле сдаёт, но цифры не сходятся с его 
 
 Поле компании заполняют по-разному: монеты бывают в единицах «Bitcoin»,
 «bitcoin», «BTC», «item»… (UNITS), а встречаются и опечатки масштаба
-(GameStop: «1» в годовом отчёте между 4 710 и 4 709). Значение, которое отличается от прошлого отчёта больше чем в
-JUMP раз, не берём — остаётся прошлое.
+(GameStop: «1» в годовом отчёте между 4 710 и 4 709). Значение, которое
+отличается от прошлого отчёта больше чем в JUMP раз, не берём — остаётся
+прошлое.
 
 Фонды (ETF, список ETFS) сдают в SEC те же квартальные и годовые отчёты.
 Поля у фондов разные: число монет — CryptoAssetNumberOfUnits или
@@ -92,8 +93,14 @@ UNITS = frozenset({"Bitcoin", "bitcoin", "BTC", "Btcoin", "Bitcoins", "bitcoinUn
 JUMP = 20.0
 # Меньше — не прошлый запас, а случайная цифра (GameStop: «1» в годовом).
 JUMP_FLOOR = 10.0
+# Запас компании по отчёту — меньше этого, BTC (больше — ошибка в отчёте).
+COUNT_MAX = 3_000_000.0
 HOST = "data.sec.gov"
+# Даты — только ASCII-цифры: \d и strptime пустили бы и «２０２６» (полноширинные).
+DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 QUARTER = re.compile(r"[0-9]{4}-(?:03-31|06-30|09-30|12-31)")
+# Ключ квартала в копии на диске — unix-время строкой.
+STAMP = re.compile(r"[0-9]{1,12}")
 # Комиссия фонда — доля в год: правдоподобно до 3 %.
 FEE_MAX = 0.03
 BODY_MAX = 4 << 20
@@ -162,10 +169,10 @@ def _parse(raw: bytes | None) -> Json:
 
 def _day(s: object) -> int:
     """'2026-06-30' → unix полночь UTC; не дата — 0."""
-    if not isinstance(s, str):
+    if not isinstance(s, str) or not DATE.fullmatch(s):
         return 0
     try:
-        return calendar.timegm(time.strptime(s, "%Y-%m-%d")) if len(s) == 10 else 0
+        return calendar.timegm(time.strptime(s, "%Y-%m-%d"))
     except (ValueError, OverflowError):
         return 0
 
@@ -187,7 +194,7 @@ def holding(concept: Json) -> tuple[float, int] | None:
             if not isinstance(r, dict) or not str(r.get("form") or "").startswith("10-"):
                 continue
             end, val, filed = _day(r.get("end")), r.get("val"), str(r.get("filed") or "")
-            if not end or isinstance(val, bool) or not isinstance(val, (int, float)) or not 0 <= val < 3_000_000:
+            if not end or isinstance(val, bool) or not isinstance(val, (int, float)) or not 0 <= val < COUNT_MAX:
                 continue
             if end not in by_end or filed >= by_end[end][0]:
                 by_end[end] = (filed, float(val))
@@ -207,6 +214,11 @@ class _State:
 
 _st = _State()
 _lock = threading.Lock()
+# Сборка идёт (у компаний и у фондов — своя): второй поток в это время SEC не
+# спрашивает, а берёт прошлое (сборка ETF не ждёт SEC дольше wt_etf.SEC_WAIT —
+# следующая может начаться, пока прошлая ещё спрашивает).
+_co_busy = threading.Lock()
+_fund_busy = threading.Lock()
 
 # Копии последних сборок на диске (set_cache_dir): перезапуск API не
 # спрашивает SEC заново, пока копия моложе TTL; старше — годится, пока SEC
@@ -258,16 +270,39 @@ def _file_save(name: str, v: Any) -> None:
             os.remove(tmp)
 
 
-def _build() -> list[list[Any]]:
+_CO = {t: (n, c) for t, n, c, _ in COMPANIES}
+
+
+def _company_row(r: object) -> list[Any] | None:
+    """Строка компании из копии на диске: тикер — из COMPANIES (имя и страна —
+    оттуда же), запас — правдоподобный, дата — unix. Иное — копия испорчена,
+    строки нет."""
+    if not (isinstance(r, list) and len(r) == 6 and isinstance(r[3], str) and r[3] in _CO
+            and _num_ok(r[4]) and 1 <= r[4] < COUNT_MAX and type(r[5]) is int and r[5] > 0):
+        return None
+    name, country = _CO[r[3]]
+    return [name, "COMPANY", country, r[3], float(r[4]), r[5]]
+
+
+def _build(prev: list[list[Any]]) -> tuple[list[list[Any]], int]:
+    """(строки, сколько компаний SEC отдал). Компания, по которой SEC не
+    ответил, — из прошлой сборки, а не пропадает."""
+    old = {r[3]: r for r in prev}
     out: list[list[Any]] = []
+    answered = 0
     for i, (ticker, name, country, cik) in enumerate(COMPANIES):
         if i:
             time.sleep(PAUSE)
         got = _parse(_fetch(f"https://{HOST}/api/xbrl/companyconcept/CIK{cik:010d}/us-gaap/CryptoAssetNumberOfUnits.json", 20))
+        if got is None:
+            if ticker in old:
+                out.append(old[ticker])
+            continue
+        answered += 1
         h = holding(got)
         if h and h[0] >= 1:
             out.append([name, "COMPANY", country, ticker, round(h[0], 2), h[1]])
-    return out
+    return out, answered
 
 
 def companies() -> list[list[Any]]:
@@ -280,15 +315,18 @@ def companies() -> list[list[Any]]:
     if hit is None:
         saved = _file_load("sec_companies.json")
         if saved and isinstance(saved[1], list):
-            hit = (saved[0], [r for r in saved[1] if isinstance(r, list) and len(r) == 6])
+            hit = (saved[0], [row for r in saved[1] if (row := _company_row(r))])
             with _lock:
                 _st.hit = hit
     if hit and time.monotonic() - hit[0] < TTL:
         return hit[1]
-    if not _ua():
+    if not _ua() or not _co_busy.acquire(blocking=False):
         return hit[1] if hit else []
-    rows = _build()
-    if not rows:
+    try:
+        rows, answered = _build(hit[1] if hit else [])
+    finally:
+        _co_busy.release()
+    if not answered:
         # SEC не ответил — прошлое (или пусто); спросим снова со следующей сборкой.
         _log("SEC не ответил")
         return hit[1] if hit else []
@@ -375,13 +413,12 @@ class _FundState:
 
 
 _fst = _FundState()
+_ETF = {t: n for t, n, _ in ETFS}
 
 
-def etf_funds() -> dict[str, dict[str, Any]]:
-    """Фонды: тикер → {"n": имя, "q": отчёты на концы кварталов, "fee"}.
-
-    Собирается раз в TTL; не собралось (нет WT_SEC_UA, SEC молчит) — прошлое.
-    Фонд, чей отчёт не прочитался, берётся из прошлой сборки."""
+def _funds_hit() -> tuple[float, dict[str, dict[str, Any]]] | None:
+    """Прошлая сборка фондов: из памяти, после перезапуска — с диска. Из копии
+    берутся только фонды из ETFS (имя — из списка) и правдоподобные отчёты."""
     with _lock:
         hit = _fst.hit
     if hit is None:
@@ -390,28 +427,49 @@ def etf_funds() -> dict[str, dict[str, Any]]:
             # В JSON ключи кварталов — строки: обратно в числа.
             funds = {}
             for t, f in saved[1].items():
-                if isinstance(f, dict) and isinstance(f.get("q"), dict):
-                    q = {int(k): v for k, v in f["q"].items() if str(k).isdigit() and _point(v)}
+                if t in _ETF and isinstance(f, dict) and isinstance(f.get("q"), dict):
+                    q = {int(k): v for k, v in f["q"].items() if STAMP.fullmatch(str(k)) and _point(v)}
                     fee = f.get("fee")
-                    funds[str(t)] = {"n": str(f.get("n") or ""), "q": q,
-                                     "fee": float(fee) if _num_ok(fee) and 0 < fee < FEE_MAX else None}
+                    funds[t] = {"n": _ETF[t], "q": q, "fee": float(fee) if _num_ok(fee) and 0 < fee < FEE_MAX else None}
             hit = (saved[0], funds)
             with _lock:
                 _fst.hit = hit
+    return hit
+
+
+def funds_cached() -> dict[str, dict[str, Any]]:
+    """Отчёты фондов без запроса к SEC: прошлая сборка или копия с диска."""
+    hit = _funds_hit()
+    return hit[1] if hit else {}
+
+
+def etf_funds() -> dict[str, dict[str, Any]]:
+    """Фонды: тикер → {"n": имя, "q": отчёты на концы кварталов, "fee"}.
+
+    Собирается раз в TTL; не собралось (нет WT_SEC_UA, SEC молчит) — прошлое.
+    Фонд, чей отчёт не прочитался, берётся из прошлой сборки."""
+    hit = _funds_hit()
     if hit and time.monotonic() - hit[0] < TTL:
         return hit[1]
-    if not _ua():
+    if not _ua() or not _fund_busy.acquire(blocking=False):
         return hit[1] if hit else {}
     out: dict[str, dict[str, Any]] = {}
-    for i, (ticker, name, cik) in enumerate(ETFS):
-        if i:
-            time.sleep(PAUSE)
-        p = fund_points(_parse(_fetch(f"https://{HOST}/api/xbrl/companyfacts/CIK{cik:010d}.json", 30)))
-        if p["q"]:
-            out[ticker] = {"n": name, **p}
-        elif hit and ticker in hit[1]:
-            out[ticker] = hit[1][ticker]
-    if not out:
+    answered = 0
+    try:
+        for i, (ticker, name, cik) in enumerate(ETFS):
+            if i:
+                time.sleep(PAUSE)
+            p = fund_points(_parse(_fetch(f"https://{HOST}/api/xbrl/companyfacts/CIK{cik:010d}.json", 30)))
+            if p["q"]:
+                answered += 1
+                out[ticker] = {"n": name, **p}
+            elif hit and ticker in hit[1]:
+                out[ticker] = hit[1][ticker]
+    finally:
+        _fund_busy.release()
+    if not answered:
+        # Ни один фонд не прочитался — прошлое как есть (и не как свежее:
+        # спросим снова со следующей сборкой).
         _log("SEC не ответил (фонды)")
         return hit[1] if hit else {}
     with _lock:

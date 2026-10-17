@@ -48,9 +48,9 @@ import re
 import sys
 import threading
 import time
-import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, NamedTuple
 
@@ -138,13 +138,12 @@ def _log(msg: str) -> None:
         print(f"etf: {clean[:300]}", file=sys.stderr)
 
 
-def _fetch(url: str, timeout: float, data: bytes | None = None) -> bytes | None:
-    """GET (или POST с data). Любая ошибка сети и ответ больше BODY_MAX — None."""
+def _fetch(url: str, timeout: float) -> bytes | None:
+    """GET. Любая ошибка сети и ответ больше BODY_MAX — None."""
     if not _allowed(url):
         return None
-    headers = dict(_HEADERS, **({"Content-Type": "application/json"} if data is not None else {}))
     try:
-        with _opener.open(urllib.request.Request(url, data=data, headers=headers), timeout=timeout) as r:
+        with _opener.open(urllib.request.Request(url, headers=_HEADERS), timeout=timeout) as r:
             body: bytes = r.read(BODY_MAX + 1)
     except (OSError, ValueError, http.client.HTTPException):
         return None
@@ -190,8 +189,10 @@ def _num(v: object) -> float:
 
 
 def _day(stamp: object) -> int:
-    """Начало суток UTC из даты CFTC «2026-09-29T00:00:00.000»; не дата — ValueError."""
-    if not isinstance(stamp, str):
+    """Начало суток UTC из даты «2026-09-29» (у CFTC — «2026-09-29T00:00:00.000»);
+    не дата — ValueError. Цифры — только ASCII (как DATE): strptime пустил бы
+    и «２０２６»."""
+    if not isinstance(stamp, str) or not DATE.fullmatch(stamp[:10]):
         raise ValueError("не дата")
     return calendar.timegm(time.strptime(stamp[:10], "%Y-%m-%d"))
 
@@ -208,7 +209,9 @@ def _klines(symbol: str, start_ms: int) -> dict[int, float]:
         for k in rows:
             if isinstance(k, list) and len(k) > 4 and PX_MIN <= _num(k[4]) <= PX_MAX:
                 out[int(_num(k[0])) // 1000] = _num(k[4])
-        if len(rows) < 1000:
+        # Неполная страница — последняя; последняя строка не свеча — дальше
+        # листать не от чего.
+        if len(rows) < 1000 or not isinstance(rows[-1], list) or not rows[-1]:
             break
         cur = int(_num(rows[-1][0])) + 86_400_000
     return out
@@ -297,34 +300,51 @@ def _median(xs: list[float]) -> float:
     return 0.0 if not n else xs[n // 2] if n % 2 else (xs[n // 2 - 1] + xs[n // 2]) / 2
 
 
+def _point(f: dict[str, Any], e: int) -> tuple[float, float]:
+    """Отчёт фонда на дату: (монет, долларов); чего нет — ноль."""
+    p = f["q"].get(e)
+    return (_num(p[0]), _num(p[1])) if isinstance(p, (list, tuple)) and len(p) == 2 else (0.0, 0.0)
+
+
+def _sec(got: object) -> dict[str, dict[str, Any]]:
+    """Фонды из wt_treasury — только с тикером как в наборе и с отчётами."""
+    if not isinstance(got, dict):
+        return {}
+    return {t: f for t, f in got.items() if isinstance(t, str) and TICKER.fullmatch(t)
+            and isinstance(f, dict) and isinstance(f.get("q"), dict)}
+
+
 def _last_report(sec: dict[str, dict[str, Any]], px: dict[int, float]) -> dict[str, tuple[float, int]]:
-    """Запас каждого фонда в монетах на дату последнего отчёта: (монет, дата).
+    """Запас каждого фонда в монетах на дату последнего правдоподобного отчёта:
+    (монет, дата).
 
     Где в отчёте только стоимость, монеты — стоимость по цене отчётов на ту
     дату: медиана «стоимость / монеты» у фондов, сдавших и то и другое (так
     фонды сами оценили монеты); нет таких — закрытие Binance."""
     out: dict[str, tuple[float, int]] = {}
     for t, f in sec.items():
-        q = f.get("q") or {}
-        for e in sorted(q, reverse=True):
-            cnt, fv = q[e]
-            if cnt:
-                if 0 < float(cnt) <= HOLD_MAX:
-                    out[t] = (float(cnt), int(e))
-                break
-            ratios = [r[1] / r[0] for g in sec.values() if (r := (g.get("q") or {}).get(e)) and r[0] and r[1] and r[0] > 0]
-            near = [d for d in px if d <= e and px[d] > 0]
-            price = _median(ratios) or (px[max(near)] if near else 0.0)
-            if fv is not None and price > 0:
-                if 0 < float(fv) / price <= HOLD_MAX:
-                    out[t] = (float(fv) / price, int(e))
+        for e in sorted((e for e in f["q"] if isinstance(e, int)), reverse=True):
+            cnt, usd = _point(f, e)
+            btc = cnt
+            if not cnt and usd > 0:
+                ratios = [v / c for c, v in (_point(g, e) for g in sec.values()) if c > 0 and v > 0]
+                near = [d for d in px if d <= e and px[d] > 0]
+                price = _median(ratios) or (px[max(near)] if near else 0.0)
+                btc = usd / price if price > 0 else 0.0
+            # Отчёт, которого не бывает (запас больше HOLD_MAX, ноль), — мимо:
+            # запас считается от прошлого квартала.
+            if 0 < btc <= HOLD_MAX:
+                out[t] = (btc, e)
                 break
     return out
 
 
-def _coin() -> dict[str, Json] | None:
+def _coin(sec_of: Callable[[], object] | None = None) -> dict[str, Json] | None:
     """Потоки фондов по дням (TFTC), фонды и их запас (отчёты SEC плюс потоки
-    после отчёта), активы всех фондов по дням (TFTC), доля от добытых монет."""
+    после отчёта), активы всех фондов по дням (TFTC), доля от добытых монет.
+
+    sec_of — откуда взять отчёты фондов (по умолчанию wt_treasury.etf_funds):
+    сборка спрашивает SEC параллельно и не ждёт его дольше SEC_WAIT."""
     days, tpx, tna, through = _tftc()
     if not days:
         return None
@@ -332,7 +352,7 @@ def _coin() -> dict[str, Json] | None:
     for ts, p in tpx.items():
         px.setdefault(ts, p)  # нет свечи Binance — цена из набора
     last_px = px[max(px)] if px else 0.0
-    sec = wt_treasury.etf_funds()
+    sec = _sec(sec_of() if sec_of else wt_treasury.etf_funds())
     reports = _last_report(sec, px)
     sums: dict[str, list[float]] = {}  # фонд → [$ с запуска, монет с запуска]
     for ts, (by, _) in days.items():
@@ -342,20 +362,23 @@ def _coin() -> dict[str, Json] | None:
             acc[0] += usd
             acc[1] += usd / p if p > 0 else 0.0
     funds: list[dict[str, Json]] = []
-    for t in sorted(set(sums) | set(reports), key=lambda k: -abs((sums.get(k) or [0.0])[0])):
+    # По модулю потока «с запуска»; при равенстве — по тикеру (порядок
+    # столбцов в днях не зависит от порядка ответа SEC).
+    for t in sorted(set(sums) | set(reports), key=lambda k: (-abs((sums.get(k) or [0.0])[0]), k)):
         info = sec.get(t) or {}
-        fee = info.get("fee")
+        fee = _num(info.get("fee"))
+        fee = fee if 0 < fee < wt_treasury.FEE_MAX else 0.0
         btc = 0.0
         if t in reports:
             # Запас: отчёт плюс потоки дней после него минус комиссия, взятая
             # монетами (доля в год от запаса за прошедшие дни).
             btc, asof = reports[t]
             after = sum(by[t] / px[ts] for ts, (by, _) in days.items() if ts > asof and t in by and px.get(ts, 0) > 0)
-            btc = max(0.0, (btc + after) * (1 - _num(fee) * max(0, _now() - asof) / (365 * 86400)))
+            btc = max(0.0, (btc + after) * (1 - fee * max(0, _now() - asof) / (365 * 86400)))
         cu, cc = sums.get(t) or [0.0, 0.0]
         funds.append({
             "t": t, "n": str(info.get("n") or "")[:60], "c": "US",
-            "fee": None if fee is None else round(float(fee) * 100, 3),
+            "fee": round(fee * 100, 3) if fee else None,
             "aum": round(btc * last_px), "hold": round(btc, 2), "cum": round(cu), "cumc": round(cc, 2),
         })
     rows = []
@@ -509,18 +532,26 @@ def _file_save(res: dict[str, Json]) -> None:
             os.remove(tmp)
 
 
-def _holders(c: Json, companies: list[list[Any]]) -> list[list[Any]]:
+def _company(r: object) -> bool:
+    """Строка компании от wt_treasury: [имя, "COMPANY", страна, тикер, BTC,
+    дата отчёта unix] — с правдоподобным запасом. Иное — мимо, а не сбой сборки."""
+    return (isinstance(r, list) and len(r) == 6 and isinstance(r[0], str) and r[1] == "COMPANY"
+            and isinstance(r[2], str) and isinstance(r[3], str) and TICKER.fullmatch(r[3]) is not None
+            and 1 <= _num(r[4]) <= HOLD_MAX and isinstance(r[5], int) and not isinstance(r[5], bool) and r[5] > 0)
+
+
+def _holders(c: Json, companies: object) -> list[list[Any]]:
     """«Крупнейшие держатели»: фонды (запас — как в списке фондов выше) и
-    компании по их отчётам в SEC (wt_treasury), по убыванию запаса. Строка —
-    [имя, FUND или COMPANY, страна, тикер, BTC, дата отчёта unix (у фонда 0:
-    его запас — на сегодня)]."""
+    компании по их отчётам в SEC (wt_treasury), по убыванию запаса (при
+    равенстве — по тикеру). Строка — [имя, FUND или COMPANY, страна, тикер,
+    BTC, дата отчёта unix (у фонда 0: его запас — на сегодня)]."""
     rows: list[list[Any]] = []
     for f in (c or {}).get("funds") or []:
         hold = _num(f.get("hold"))
         if hold >= 1:
             rows.append([str(f.get("n") or f.get("t")), "FUND", str(f.get("c") or ""), str(f.get("t")), hold, 0])
-    rows += [r for r in companies if isinstance(r, list) and len(r) == 6]
-    rows.sort(key=lambda r: -float(r[4]))
+    rows += [r for r in companies if _company(r)] if isinstance(companies, list) else []
+    rows.sort(key=lambda r: (-_num(r[4]), r[3]))
     return rows
 
 
@@ -546,16 +577,35 @@ def _part(name: str, fut: Future[Any], timeout: float) -> Any:
         return None
 
 
+# Сколько ждать части сборки, с — общий срок для всех; не уложилась — её
+# нет (см. build).
+PART_WAIT = 90.0
+# Отчёты фондов в SEC обновляются раз в полсуток (wt_treasury.TTL), и тогда
+# это десяток медленных запросов: потоки их ждут не дольше этого, дальше —
+# прошлые отчёты (wt_treasury.funds_cached), а свежие подхватит следующая сборка.
+SEC_WAIT = 45.0
+
+
 def build() -> dict[str, Json]:
     """Собрать ответ из сети и положить в кэш."""
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        btc_f = pool.submit(_coin)
+    pool = ThreadPoolExecutor(max_workers=5)
+    try:
+        sec_f = pool.submit(wt_treasury.etf_funds)
+        btc_f = pool.submit(_coin, lambda: _part("sec", sec_f, SEC_WAIT) or wt_treasury.funds_cached())
         cme_f = pool.submit(_cme)
         cbp_f = pool.submit(_cbp)
         co_f = pool.submit(wt_treasury.companies)
-        btc = _part("btc", btc_f, 90)
-        extra = {"cme": _part("cme", cme_f, 90) or {}, "cbp": _part("cbp", cbp_f, 90) or {}}
-        companies = _part("companies", co_f, 90) or []
+        end = time.monotonic() + PART_WAIT
+
+        def left() -> float:
+            return max(0.0, end - time.monotonic())
+        btc = _part("btc", btc_f, left())
+        extra = {"cme": _part("cme", cme_f, left()) or {}, "cbp": _part("cbp", cbp_f, left()) or {}}
+        companies = _part("companies", co_f, left()) or []
+    finally:
+        # Зависшую часть не ждём: её поток закончится сам по таймауту сети
+        # (SEC при этом дозаполнит свой кэш — к следующей сборке).
+        pool.shutdown(wait=False, cancel_futures=True)
     with _lock:
         was = _st.hit[1] if _st.hit else {}
     # Часть, которой в этот раз нет, — из прошлой сборки, а не пропадает с экрана.

@@ -9,6 +9,8 @@ import { num, usdWord } from "../lib/format";
 /** Приток — зелёный, отток — красный, как на биржах. */
 export const UP = "#0ecb81";
 export const DN = "#f6465d";
+/** Класс цвета по знаку (стили — .ef .up / .ef .dn): ноль — без цвета, зелёный «0 $» читался бы как приток. */
+export const tone = (v: number): "up" | "dn" | "" => (v > 0 ? "up" : v < 0 ? "dn" : "");
 
 /** Число или сумма — отдельным куском текста: в арабском не перевернётся. */
 export const iso = (x: string | number) => `⁦${x}⁩`;

@@ -157,9 +157,31 @@ class DiskCopyTest(unittest.TestCase):
         tr._file_save("sec_funds.json", body)
         with mock.patch.dict(os.environ, {"WT_SEC_UA": ""}):
             got = tr.etf_funds()
-        self.assertEqual(got["IBIT"], {"n": "{'x': 1}", "q": {1782777600: [734261, None]}, "fee": None})
+        # Имя — из списка ETFS, не из копии.
+        self.assertEqual(got["IBIT"], {"n": "iShares Bitcoin Trust", "q": {1782777600: [734261, None]}, "fee": None})
         self.assertEqual(got["FBTC"]["fee"], 0.0025)
         self.assertNotIn("BAD", got)
+
+    def test_copy_keys_and_tickers_are_ours(self):
+        # Фонд не из ETFS — мимо; ключ квартала не ASCII-число (надстрочная
+        # «²» — тоже «цифра» для isdigit, но не для int) — мимо, а не сбой.
+        tr._file_save("sec_funds.json", {"EVIL": {"n": "x", "q": {"1782777600": [1000, None]}},
+                                         "IBIT": {"n": "x", "q": {"²": [1000, None], "１２": [1000, None],
+                                                                  "1782777600": [734261, None]}}})
+        with mock.patch.dict(os.environ, {"WT_SEC_UA": ""}):
+            got = tr.etf_funds()
+        self.assertEqual(got, {"IBIT": {"n": "iShares Bitcoin Trust", "q": {1782777600: [734261, None]}, "fee": None}})
+
+    def test_poisoned_company_copy_is_cleaned_on_load(self):
+        q2 = 1_782_777_600
+        rows = [["<b>злое имя</b>", "x", "RU", "MSTR", 846_000, q2], ["X", "COMPANY", "US", "EVIL", 5.0, q2],
+                ["X", "COMPANY", "US", "RIOT", "5", q2], ["X", "COMPANY", "US", "RIOT", 5.0, True],
+                ["X", "COMPANY", "US", "RIOT", 5.0, 0], ["X", "COMPANY", "US", "RIOT", 9e9, q2],
+                ["X", "COMPANY", "US", "RIOT", 0.5, q2], ["X", "COMPANY", "US", ["RIOT"], 5.0, q2],
+                ["X", "COMPANY", "US", "RIOT", 5.0], "мусор", None, {"a": 1}]
+        tr._file_save("sec_companies.json", rows)
+        with mock.patch.dict(os.environ, {"WT_SEC_UA": ""}):
+            self.assertEqual(tr.companies(), [["Strategy", "COMPANY", "US", "MSTR", 846_000.0, q2]])
 
     def test_broken_copy_files_are_ignored(self):
         # Битый JSON, бесконечности (их JSON-разбор не пускает), не тот вид.

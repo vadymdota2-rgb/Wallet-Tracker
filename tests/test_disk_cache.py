@@ -107,9 +107,9 @@ class EtfFileTest(unittest.TestCase):
 
     def test_restart_gets_saved_reply_at_once(self):
         res = {"ok": True, "coins": {"btc": {"funds": []}}, "at": 1}
-        with mock.patch.object(etf, "_coin", lambda: {"funds": []}), \
+        with mock.patch.object(etf, "_coin", lambda sec_of=None: {"funds": []}), \
                 mock.patch.object(etf, "_cme", dict), mock.patch.object(etf, "_cbp", dict), \
-                mock.patch.object(etf.wt_treasury, "companies", list):
+                mock.patch.object(etf.wt_treasury, "companies", list), mock.patch.object(etf.wt_treasury, "etf_funds", dict):
             etf.build()
         self.assertTrue(os.path.exists(os.path.join(self.dir, "etf.json")))
         path = etf._st.file
@@ -162,7 +162,7 @@ class TreasuryFileTest(unittest.TestCase):
         self.assertEqual(list(again["IBIT"]["q"]), [1_782_777_600])  # ключи кварталов — снова числа
 
     def test_stale_copy_is_used_when_sec_is_down(self):
-        tr._file_save("sec_companies.json", [["Strategy", "COMPANY", "US", "MSTR", 1.0, 0], "мусор"])
+        tr._file_save("sec_companies.json", [["Strategy", "COMPANY", "US", "MSTR", 1.0, 1_782_777_600], "мусор"])
         path = os.path.join(self.dir, "sec_companies.json")
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
@@ -171,7 +171,7 @@ class TreasuryFileTest(unittest.TestCase):
             json.dump(data, f)
         with mock.patch.object(tr, "_fetch", lambda url, timeout: None), mock.patch.object(tr, "PAUSE", 0), \
                 mock.patch.dict(os.environ, {"WT_SEC_UA": "x a@b.c"}), mock.patch("sys.stderr", io.StringIO()):
-            self.assertEqual(tr.companies(), [["Strategy", "COMPANY", "US", "MSTR", 1.0, 0]])
+            self.assertEqual(tr.companies(), [["Strategy", "COMPANY", "US", "MSTR", 1.0, 1_782_777_600]])
 
 
 if __name__ == "__main__":

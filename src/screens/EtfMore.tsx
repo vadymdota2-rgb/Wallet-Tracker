@@ -21,7 +21,7 @@ import { haptic } from "../lib/telegram";
 import { Card, Chips, SectionTitle } from "../components/ui";
 import { type BtcHolder } from "../lib/etf";
 import { dateStr, timeTicks } from "./FearGreedScreen";
-import { DN, UP, coinsShort, flagOf, heightK, iso, money, useWidth } from "./etfView";
+import { DN, UP, coinsShort, flagOf, heightK, iso, money, tone, useWidth } from "./etfView";
 
 type Lang = Parameters<typeof t>[0];
 /**
@@ -48,10 +48,12 @@ function LinesChart({ xs, series, lang, fmt, label, zero = true }: {
   label: string;
   zero?: boolean;
 }) {
-  const [sel, setSel] = useState<number | null>(null);
+  const [picked, setSel] = useState<number | null>(null);
   const ref = useRef<SVGSVGElement>(null);
   const { W, PW, MH } = box(useWidth(ref), 130);
   const n = xs.length;
+  /* Пришёл свежий ответ с другим числом точек — выбор за краем не держим. */
+  const sel = picked !== null && picked < n ? picked : null;
   const all = series.flatMap((s) => s.v);
   const pad = zero ? 0 : (Math.max(...all) - Math.min(...all)) * 0.08 || 1;
   const lo = zero ? Math.min(0, ...all) : Math.min(...all) - pad;
@@ -166,7 +168,7 @@ export function HeldSection({ series, lang }: { series: [number, number][]; lang
           {tiles.map(([k, v, signed]) => (
             <div key={k} className="dm-ch">
               <small>{k}</small>
-              <b className={!signed ? "" : v > 0 ? "up" : v < 0 ? "dn" : ""}><bdi dir="ltr">{coinsShort(lang, v, "BTC", signed)}</bdi></b>
+              <b className={signed ? tone(v) : ""}><bdi dir="ltr">{coinsShort(lang, v, "BTC", signed)}</bdi></b>
             </div>
           ))}
         </div>
@@ -217,7 +219,7 @@ export function CmeSection({ rows, sym, price, lang }: { rows: number[][]; sym: 
                  «лонг · шорт» в три столбца не помещались и обрезались. */
               <div key={g.key} className="ef-cmr">
                 <span className="ef-cmr-n"><i className="ef-dot" style={{ background: g.c }} />{t(lang, g.key)}</span>
-                <b className={v >= 0 ? "ef-f-v up" : "ef-f-v dn"}><bdi dir="ltr">{fmt(v)}</bdi></b>
+                <b className={`ef-f-v ${tone(v)}`}><bdi dir="ltr">{fmt(v)}</bdi></b>
                 <span className="ef-f-bar ef-cmr-bar">
                   <i className="ef-f-mid" />
                   <i className="ef-f-fill" style={v >= 0
@@ -225,7 +227,7 @@ export function CmeSection({ rows, sym, price, lang }: { rows: number[][]; sym: 
                     : { insetInlineEnd: "50%", width: `${r * 50}%`, background: DN }} />
                 </span>
                 <small className="ef-cmr-s">
-                  {t(lang, "ef_cme_ls", { l: iso(coinsShort(lang, last[g.i]!, "").trim().replace(/^\+/, "")), s: iso(coinsShort(lang, last[g.i + 1]!, "").trim().replace(/^\+/, "")) })}
+                  {t(lang, "ef_cme_ls", { l: iso(coinsShort(lang, last[g.i]!, "").replace(/^\+/, "")), s: iso(coinsShort(lang, last[g.i + 1]!, "").replace(/^\+/, "")) })}
                   {prev ? ` · ${t(lang, "ef_cme_wk", { v: iso(fmt(d)) })}` : ""}
                   {price > 0 ? ` · ${t(lang, "ef_cme_usd", { v: iso(money(v * price)) })}` : ""}
                 </small>
@@ -280,11 +282,11 @@ export function CbpSection({ d, sym, lang }: { d: { days: [number, number][]; no
         <div className="dm-chs three ef-chs">
           <div className="dm-ch">
             <small>{t(lang, "ef_cbp_now")}</small>
-            <b className={nowV >= 0 ? "up" : "dn"}><bdi dir="ltr">{fmt(nowV)}</bdi></b>
+            <b className={tone(nowV)}><bdi dir="ltr">{fmt(nowV)}</bdi></b>
           </div>
           <div className="dm-ch">
             <small>{t(lang, "ef_cbp_avg")}</small>
-            <b className={avg >= 0 ? "up" : "dn"}><bdi dir="ltr">{fmt(avg)}</bdi></b>
+            <b className={tone(avg)}><bdi dir="ltr">{fmt(avg)}</bdi></b>
           </div>
           <div className="dm-ch">
             <small>{t(lang, "ef_cbp_plus")}</small>
@@ -309,7 +311,8 @@ export function CbpSection({ d, sym, lang }: { d: { days: [number, number][]; no
           })()}
           <line x1={0} x2={PW} y1={y0} y2={y0} className="ef-zero" />
           <text x={W - 2} y={y0 + 3.5} textAnchor="end" className="fg-tick">0</text>
-          <text x={W - 2} y={10 + 3.5} textAnchor="end" className="fg-tick">{fmt(maxAbs).replace(/\.?0+%$/, "%")}</text>
+          {/* num() хвостовых нулей не пишет: срезать нечего (прежняя замена делала из «+10%» «+1%»). */}
+          <text x={W - 2} y={10 + 3.5} textAnchor="end" className="fg-tick">{fmt(maxAbs)}</text>
           {view.map((x, i) => {
             const h = (Math.abs(x[1]) / maxAbs) * (MH / 2 - 2);
             return x[1] === 0 ? null : (

@@ -35,7 +35,7 @@ import { Boundary } from "../components/Boundary";
 import { Frame } from "./Screen";
 import { CbpSection, CmeSection, HeldSection, Holders } from "./EtfMore";
 import { dateStr, timeTicks } from "./FearGreedScreen";
-import { DN, UP, coinsShort, flagOf, heightK, iso, money, useWidth } from "./etfView";
+import { DN, UP, coinsShort, flagOf, heightK, iso, money, tone, useWidth } from "./etfView";
 import "./EtfScreen.css";
 
 type Lang = Parameters<typeof t>[0];
@@ -58,7 +58,6 @@ const PERIOD_KEY = { d: "ef_p_d", w: "ef_p_w", m: "ef_p_m", all: "ef_p_all" } as
 const RANGE_LABEL = { 30: "fg_r30", 90: "fg_r90", 365: "fg_r1y", all: "fg_rall" } as const;
 /** Мини-фонд Grayscale делит тикер с монетой — без пометки «BTC» в списке фондов читается как сама монета. */
 const MINI: Record<string, string> = { BTC: "Grayscale Mini" };
-
 
 /** То же коротко — три значащие цифры, как и везде на экране: для плиток в три столбца. */
 function moneyShort(lang: Lang, v: number): string {
@@ -115,8 +114,8 @@ function niceStep(span: number, parts: number): number {
 
 /**
  * Короткие деньги для оси — тем же языком, что и весь экран: «−1,5 млрд $»,
- * «40 Mio. $», «$250K». Ось — 50 единиц ширины: подпись длиннее 11 знаков
- * (арабское «40 مليون US$») не влезла бы — тогда «$40M».
+ * «40 Mio. $», «$250K». Под подписи — AXIS px: длиннее 11 знаков (арабское
+ * «40 مليون US$») не влезло бы — тогда «$40M».
  */
 function axisMoney(lang: Lang, vK: number): string {
   const v = vK * 1000;
@@ -165,10 +164,10 @@ function FlowChart({ data, cum, zero, lang, sel, onSel, label }: {
   const step = niceStep(maxAbs, 2);
   const top = Math.ceil(maxAbs / step) * step;
   const yF = (v: number) => P2.y + P2.h / 2 - (v / top) * (P2.h / 2 - 2);
-  /* «Накоплено»: одна линия от нуля, шкала — от меньшего из нуля и минимума
-     до большего из нуля и максимума. */
-  /* На 90 днях линия на $55–59 млрд при шкале от нуля лежала бы плоско у
-     верхнего края — изменения не видно. Поэтому ноль — только на всей истории. */
+  /* «Накоплено»: одна линия. На всей истории шкала — от нуля (от меньшего из
+     нуля и минимума до большего из нуля и максимума); на коротком окне — по
+     самим значениям: линия на $55–59 млрд при шкале от нуля лежала бы плоско
+     у верхнего края — изменения не видно. */
   const rawLo = cum ? Math.min(...cum) : 0;
   const rawHi = cum ? Math.max(...cum) : 1;
   const pad = Math.max(1, (rawHi - rawLo) * 0.08);
@@ -178,8 +177,10 @@ function FlowChart({ data, cum, zero, lang, sel, onSel, label }: {
   const cTop = Math.ceil(cHi / cStep) * cStep;
   const cBot = Math.floor(cLo / cStep) * cStep;
   const yC = (v: number) => P2.y + 4 + (1 - (v - cBot) / Math.max(1, cTop - cBot)) * (P2.h - 8);
+  /* Деления — от номера, а не прибавлением шага: сумма дробных шагов копит
+     ошибку, и «0» мог стать 1e-12 — без линии нуля и с подписью «−$0». */
   const cTicks: number[] = [];
-  if (cum) for (let v = cBot; v <= cTop + 1e-6; v += cStep) cTicks.push(v);
+  if (cum) for (let k = Math.round(cBot / cStep); k <= Math.round(cTop / cStep); k++) cTicks.push(k * cStep);
   const cLine = cum ? cum.map((v, i) => `${xOf(i).toFixed(1)},${yC(v).toFixed(1)}`).join(" ") : "";
   const cBase = zero ? yC(0) : P2.y + P2.h - 4;
   const cArea = cum && cum.length ? `${xOf(0).toFixed(1)},${cBase.toFixed(1)} ${cLine} ${xOf(cum.length - 1).toFixed(1)},${cBase.toFixed(1)}` : "";
@@ -302,7 +303,7 @@ function FlowTable({ view, cum, daily, lang }: { view: Bucket[]; cum: number[] |
                 return (
                   <tr key={b.a}>
                     <th scope="row">{when(b)}</th>
-                    <td className={v > 0 ? "up" : v < 0 ? "dn" : ""}><bdi dir="ltr">{money(v * 1000)}</bdi></td>
+                    <td className={tone(v)}><bdi dir="ltr">{money(v * 1000)}</bdi></td>
                     <td><bdi dir="ltr">{b.px > 0 ? px(b.px) : "—"}</bdi></td>
                   </tr>
                 );
@@ -354,7 +355,7 @@ function Funds({ c, lang }: { c: EtfCoin; lang: Lang }) {
                   ? { insetInlineStart: "50%", width: `${r * 50}%`, background: UP }
                   : { insetInlineEnd: "50%", width: `${r * 50}%`, background: DN }} />
               </span>
-              <b className={v >= 0 ? "ef-f-v up" : "ef-f-v dn"}><bdi dir="ltr">{money(v * 1000)}</bdi></b>
+              <b className={`ef-f-v ${tone(v)}`}><bdi dir="ltr">{money(v * 1000)}</bdi></b>
               {f.aum > 0 ? (
                 <small className="ef-f-sub">
                   {t(lang, "ef_aum", { v: iso(usdWord(f.aum)) })}
@@ -420,7 +421,7 @@ export function EtfScreen() {
   /* Ответ уже проверен (validEtf): в нём всегда есть фонды и хотя бы один день. */
   const c = reply?.coins.btc;
   const days = useMemo(() => c?.days ?? [], [c]);
-  const lastPx = c?.px || ([...days].reverse().find((d) => d[3] > 0)?.[3] ?? 0);
+  const lastPx = useMemo(() => c?.px || ([...days].reverse().find((d) => d[3] > 0)?.[3] ?? 0), [c, days]);
   const stats = useMemo(() => (c ? etfStats(c, Date.now() / 1000) : null), [c]);
   const view = useMemo(() => (c ? chartView(days, c.funds.length, range) : []), [c, days, range]);
   const selB = sel !== null ? view[sel] : undefined;
@@ -475,7 +476,7 @@ export function EtfScreen() {
           <Card>
             <div className="ef-hero">
               <small>{t(lang, "ef_last", { d: dayTxt(stats.last[0]) })}</small>
-              <b className={stats.last[1] > 0 ? "up" : stats.last[1] < 0 ? "dn" : ""}><bdi dir="ltr">{money(stats.last[1] * 1000)}</bdi></b>
+              <b className={tone(stats.last[1])}><bdi dir="ltr">{money(stats.last[1] * 1000)}</bdi></b>
               <span>
                 {t(lang, stats.last[1] > 0 ? "ef_inflow" : stats.last[1] < 0 ? "ef_outflow" : "ef_flat")}
                 {stats.last[2] ? <> · <bdi dir="ltr">{coins(stats.last[2], sym)}</bdi></> : null}
@@ -490,7 +491,7 @@ export function EtfScreen() {
               {([["ef_7d_sum", stats.d7], ["ef_30d_sum", stats.d30], ["ef_cum", stats.cum]] as const).map(([k, v]) => (
                 <div key={k} className="dm-ch">
                   <small>{t(lang, k)}</small>
-                  <b className={v >= 0 ? "up" : "dn"}><bdi dir="ltr">{moneyShort(lang, v)}</bdi></b>
+                  <b className={tone(v)}><bdi dir="ltr">{moneyShort(lang, v)}</bdi></b>
                 </div>
               ))}
             </div>
@@ -558,13 +559,13 @@ export function EtfScreen() {
                   <div className={sel! > view.length / 2 ? "fg-pop left ef-pop" : "fg-pop ef-pop"} aria-live="polite">
                     <small>{selB.a === selB.b ? dayTxt(selB.a)
                       : `${dateStr(lang, selB.a, { day: "numeric", month: "short" })} — ${dateStr(lang, selB.b, { day: "numeric", month: "short", year: "numeric" })}`}</small>
-                    <b className={selB.usd >= 0 ? "up" : "dn"}><bdi dir="ltr">{money(selB.usd * 1000)}</bdi></b>
+                    <b className={tone(selB.usd)}><bdi dir="ltr">{money(selB.usd * 1000)}</bdi></b>
                     {mode === "c" && cumView[sel!] !== undefined ? (
-                      <span>{t(lang, "ef_cum")} <bdi dir="ltr" className={cumView[sel!]! >= 0 ? "up" : "dn"}>{money(cumView[sel!]! * 1000)}</bdi></span>
+                      <span>{t(lang, "ef_cum")} <bdi dir="ltr" className={tone(cumView[sel!]!)}>{money(cumView[sel!]! * 1000)}</bdi></span>
                     ) : null}
                     {selB.px > 0 ? <span>{sym} <bdi dir="ltr">{px(selB.px)}</bdi></span> : null}
                     {tops.map((x) => (
-                      <span key={x.t} className="ef-pop-f"><i>{x.t}</i> <bdi dir="ltr" className={x.v >= 0 ? "up" : "dn"}>{money(x.v * 1000)}</bdi></span>
+                      <span key={x.t} className="ef-pop-f"><i>{x.t}</i> <bdi dir="ltr" className={tone(x.v)}>{money(x.v * 1000)}</bdi></span>
                     ))}
                   </div>
                 );
@@ -595,22 +596,22 @@ export function EtfScreen() {
             <div className="fg-rows ef-rec">
               <div className="fg-row two">
                 <span>{t(lang, "ef_r_best")}<small> · {dateStr(lang, stats.best[0], { day: "numeric", month: "short", year: "numeric" })}</small></span>
-                <b className="up"><bdi dir="ltr">{money(stats.best[1] * 1000)}</bdi></b>
+                <b className={tone(stats.best[1])}><bdi dir="ltr">{money(stats.best[1] * 1000)}</bdi></b>
               </div>
               <div className="fg-row two">
                 <span>{t(lang, "ef_r_worst")}<small> · {dateStr(lang, stats.worst[0], { day: "numeric", month: "short", year: "numeric" })}</small></span>
-                <b className="dn"><bdi dir="ltr">{money(stats.worst[1] * 1000)}</bdi></b>
+                <b className={tone(stats.worst[1])}><bdi dir="ltr">{money(stats.worst[1] * 1000)}</bdi></b>
               </div>
               {stats.bestM ? (
                 <div className="fg-row two">
                   <span>{t(lang, "ef_r_bestm")}<small> · {dateStr(lang, stats.bestM[0], { month: "long", year: "numeric" })}</small></span>
-                  <b className={stats.bestM[1] >= 0 ? "up" : "dn"}><bdi dir="ltr">{money(stats.bestM[1] * 1000)}</bdi></b>
+                  <b className={tone(stats.bestM[1])}><bdi dir="ltr">{money(stats.bestM[1] * 1000)}</bdi></b>
                 </div>
               ) : null}
               {stats.worstM && stats.worstM[0] !== stats.bestM?.[0] ? (
                 <div className="fg-row two">
                   <span>{t(lang, "ef_r_worstm")}<small> · {dateStr(lang, stats.worstM[0], { month: "long", year: "numeric" })}</small></span>
-                  <b className={stats.worstM[1] >= 0 ? "up" : "dn"}><bdi dir="ltr">{money(stats.worstM[1] * 1000)}</bdi></b>
+                  <b className={tone(stats.worstM[1])}><bdi dir="ltr">{money(stats.worstM[1] * 1000)}</bdi></b>
                 </div>
               ) : null}
               <div className="fg-row two">
