@@ -9,7 +9,7 @@
 import { spawnSync } from "node:child_process";
 
 const MODULE = [
-  "src/lib/etf.ts", "src/screens/EtfScreen.tsx", "src/screens/EtfMore.tsx",
+  "src/lib/etf.ts", "src/screens/EtfScreen.tsx", "src/screens/EtfMore.tsx", "src/screens/etfView.ts",
   "tests/etf.test.ts", "tests/etf.props.test.ts", "tests/e2e/etf.e2e.test.ts",
 ];
 const FLAGS = ["--exactOptionalPropertyTypes", "--noImplicitOverride", "--noPropertyAccessFromIndexSignature", "--noImplicitReturns"];

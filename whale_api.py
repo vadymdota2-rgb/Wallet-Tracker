@@ -11848,10 +11848,6 @@ def _btc_custody_build() -> dict:
             "since": since - since % 86400 if since else 0}
 
 
-def btc_custody() -> dict:
-    return cached_bg(_BTC, "cust", BTC_CUST_TTL, _btc_custody_build)
-
-
 
 # ── Поток бирж BSC ────────────────────────────────────────────────────────
 # Пишет бот (bsc_exchanges.cpp): по часам, биржам и монетам — сколько

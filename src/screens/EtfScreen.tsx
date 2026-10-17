@@ -28,13 +28,14 @@ import { haptic, openExternal } from "../lib/telegram";
 import { fetchEtf, peekEtf } from "../lib/api";
 import { Card, Chips, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import {
-  PERIODS, RANGES, chartView, cumulative, etfStats, fundTotals, topFunds,
+  PERIODS, RANGES, chartView, cumulative, etfStats, fundTotals, heldSeries, topFunds,
   type Bucket, type EtfCoin, type EtfFund, type EtfReply, type Period, type Range,
 } from "../lib/etf";
 import { Boundary } from "../components/Boundary";
 import { Frame } from "./Screen";
-import { CbpSection, CmeSection, Holders } from "./EtfMore";
+import { CbpSection, CmeSection, HeldSection, Holders } from "./EtfMore";
 import { dateStr, timeTicks } from "./FearGreedScreen";
+import { DN, UP, coinsShort, flagOf, iso, money } from "./etfView";
 import "./EtfScreen.css";
 
 type Lang = Parameters<typeof t>[0];
@@ -42,9 +43,6 @@ type Lang = Parameters<typeof t>[0];
 const sym = "BTC";
 const MODE_KEY = "wt-etf-mode";
 const RANGE_KEY = "wt-etf-range";
-const UP = "#0ecb81";
-const DN = "#f6465d";
-const iso = (x: string | number) => `⁦${x}⁩`;
 
 /** Управляющие компании по тикеру — короче полного имени фонда и узнаваемее. */
 const ISSUER: Record<string, string> = {
@@ -62,12 +60,6 @@ const RANGE_LABEL = { 30: "fg_r30", 90: "fg_r90", 365: "fg_r1y", all: "fg_rall" 
 const MINI: Record<string, string> = { BTC: "Grayscale Mini" };
 
 
-/** Деньги со знаком словом: «+148,7 млн $», «−1,2 млрд $». */
-function money(v: number): string {
-  if (Math.abs(v) < 0.5) return usdWord(0);
-  return `${v > 0 ? "+" : "−"}${usdWord(Math.abs(v))}`;
-}
-
 /** То же коротко — три значащие цифры, как и везде на экране: для плиток в три столбца. */
 function moneyShort(lang: Lang, v: number): string {
   try {
@@ -80,16 +72,6 @@ function moneyShort(lang: Lang, v: number): string {
     return `${v > 0 ? "+" : v < 0 ? "−" : ""}${f.replace(/[\u00a0\u202f]/g, " ")}`;
   } catch {
     return money(v);
-  }
-}
-
-/** Монеты без лишней точности: «1,31 млн», «903 млн», «48 тыс.». */
-function coinsRound(lang: Lang, v: number): string {
-  try {
-    return new Intl.NumberFormat(lang, { notation: "compact", compactDisplay: "short", maximumFractionDigits: 2 })
-      .format(v).replace(/[\u00a0\u202f]/g, " ");
-  } catch {
-    return num(v);
   }
 }
 
@@ -323,11 +305,6 @@ function FlowTable({ view, cum, daily, lang }: { view: Bucket[]; cum: number[] |
 
 /* ---------------------------------------------------------------------- */
 
-/** Флаг страны по коду ISO: «US» → 🇺🇸. */
-function flagOf(code?: string): string {
-  return code && /^[A-Z]{2}$/.test(code) ? String.fromCodePoint(...[...code].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65)) : "";
-}
-
 function fundLabel(f: EtfFund): string {
   if (MINI[f.t] && /mini/i.test(f.n || "Mini")) return MINI[f.t]!;
   return ISSUER[f.t] ?? f.n.replace(/ (ETF|Trust|Fund).*$/i, "");
@@ -500,7 +477,7 @@ export function EtfScreen() {
             {stats.aum > 0 ? (
               <p className="ef-held">
                 {t(lang, "ef_held", {
-                  a: iso(usdWord(stats.aum)), c: iso(`${coinsRound(lang, stats.held)} ${sym}`),
+                  a: iso(usdWord(stats.aum)), c: iso(`${coinsShort(lang, stats.held, "", false)} ${sym}`),
                 })}
                 {c.share ? ` ${t(lang, "ef_share", { p: iso(pct(c.share, 2, false)) })}` : ""}
               </p>
@@ -551,7 +528,7 @@ export function EtfScreen() {
               onChange={pickRange}
               options={RANGES.map((id) => ({ id, label: t(lang, RANGE_LABEL[id]) }))}
             />
-            <div className="fg-plot ef-plot" tabIndex={0} role="group" aria-label={t(lang, "ef_chart_keys")}
+            <div className="fg-plot ef-plot ef-flow" tabIndex={0} role="group" aria-label={t(lang, "ef_chart_keys")}
               onKeyDown={onKey} onBlur={() => setSel(null)}>
               <FlowChart data={view} cum={mode === "c" ? cumView : null} zero={range === "all"} lang={lang} sel={sel} onSel={setSel}
                 label={t(lang, "ef_chart_sum", { v: iso(money(view.reduce((s, b) => s + b.usd, 0) * 1000)) })} />
@@ -587,6 +564,8 @@ export function EtfScreen() {
             </p>
             <FlowTable view={view} cum={mode === "c" ? cumView : null} daily={daily} lang={lang} />
           </Card>
+
+          <Boundary name="etf-held"><HeldSection series={heldSeries(c)} lang={lang} /></Boundary>
 
           <SectionTitle>{t(lang, "ef_f_title")}</SectionTitle>
           <Funds c={c} lang={lang} />

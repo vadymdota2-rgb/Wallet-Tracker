@@ -29,7 +29,7 @@ BANNED_CALLS = {"eval", "exec", "compile", "__import__", "input", "breakpoint", 
                 "setattr", "delattr"}
 # Файлы — только копия ответа на диске, и только в этих функциях.
 FILE_FUNCS = {"_file_load", "_file_save"}
-CLIENT = ["src/lib/etf.ts", "src/screens/EtfScreen.tsx", "src/screens/EtfMore.tsx"]
+CLIENT = ["src/lib/etf.ts", "src/screens/EtfScreen.tsx", "src/screens/EtfMore.tsx", "src/screens/etfView.ts"]
 CLIENT_BANNED = [r"innerHTML", r"outerHTML", r"dangerouslySetInnerHTML", r"insertAdjacentHTML", r"document\.write",
                  r"\beval\s*\(", r"new\s+Function\b", r"\bfetch\s*\(", r"XMLHttpRequest", r"WebSocket", r"\bimport\s*\(",
                  r"window\.open", r"\blocation\b", r"postMessage", r"setTimeout\(\s*['\"`]", r"setInterval\(\s*['\"`]"]

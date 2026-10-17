@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  ETF_LAUNCH, chartView, cumulative, daily, etfStats, fundTotals, holderRow, lastDays, minedPerDay, topFunds, validEtf, weekly,
+  ETF_LAUNCH, assets, chartView, heldSeries, cumulative, daily, etfStats, fundTotals, holderRow, lastDays, minedPerDay, topFunds, validEtf, weekly,
   type EtfCoin, type EtfDay, type EtfReply,
 } from "../src/lib/etf.ts";
 
@@ -186,4 +186,39 @@ test("настоящие цифры: итог дня — сумма фондов
   const funds = c.funds.reduce((sum, f) => sum + f.cum, 0);
   assert.ok(Math.abs(s.cum - funds) < 1e6, `${s.cum} ≠ ${funds}`); // до округления фондов до доллара
   assert.ok(s.held > 1_000_000 && s.held < 2_000_000);
+});
+
+test("активы фондов по дням: проверка ряда, свежесть, запас в монетах", () => {
+  const v = validEtf(REAL, NOW)!;
+  const c = v.coins.btc!;
+  assert.equal(c.tna!.length, 364);
+  // Свежая сводка: активы того дня по цене сейчас, запас — по цене того дня.
+  const a = assets(c);
+  const t = c.tna!.at(-1)!;
+  const px = c.days.find((d) => d[0] === t[0])![3];
+  assert.equal(a.src, "tna");
+  assert.equal(a.held, t[1] / px);
+  assert.equal(a.aum, (t[1] * c.px!) / px);
+  // Сводка старше недели — свои оценки по фондам.
+  const old = structuredClone(c);
+  old.tna = old.tna!.filter((d) => d[0] < t[0] - 8 * DAY);
+  assert.equal(assets(old).src, "funds");
+  assert.equal(assets(old).held, old.funds.reduce((s, f) => s + (f.hold ?? 0), 0));
+  // Запас по дням: в монетах, правдоподобный (миллион с лишним).
+  const h = heldSeries(c);
+  assert.equal(h.length, 364);
+  assert.ok(h.every(([, b]) => b > 900_000 && b < 1_600_000));
+  // День без цены — в запас по дням не идёт (на ноль не делим).
+  const nopx = structuredClone(c);
+  nopx.days.find((d) => d[0] === t[0])![3] = 0;
+  assert.equal(heldSeries(nopx).length, 363);
+  assert.ok(heldSeries(nopx).every(([, b]) => Number.isFinite(b) && b < 1_600_000));
+  // Испорченный ряд пропадает, потоки остаются.
+  for (const bad of [[[1, 2]], [[t[0], 1e20]], [[t[0], 5e10], [t[0], 5e10]], "x", [[t[0] + 1, 5e10]]]) {
+    const r = structuredClone(REAL) as unknown as { coins: { btc: Record<string, unknown> } };
+    r.coins.btc["tna"] = bad;
+    const got = validEtf(r, NOW);
+    assert.ok(got);
+    assert.equal(got.coins.btc!.tna, undefined);
+  }
 });

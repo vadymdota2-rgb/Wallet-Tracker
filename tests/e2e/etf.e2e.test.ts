@@ -159,7 +159,7 @@ describe("институциональные потоки", () => {
     assert.equal(sp(await page.locator(".ef-hero > b").innerText()), "+5,06 млн $");
     assert.equal(sp(await page.locator(".ef-hero > span").innerText()), "приток в фонды · +61,5 BTC");
     assert.deepEqual((await page.locator(".ef-chs").first().locator(".dm-ch b").allInnerTexts()).map(sp), ["−125 млн $", "+2,1 млрд $", "+57 млрд $"]);
-    assert.match(sp(await page.locator(".ef-held").innerText()), /^Фонды управляют 105 млрд \$ — это ≈1,28 млн BTC\. Это 6,\d\d% всех монет в обращении\.$/);
+    assert.match(sp(await page.locator(".ef-held").innerText()), /^Фонды управляют 105 млрд \$ — это ≈1,2\d млн BTC\. Это 6,\d\d% всех монет в обращении\.$/);
     // Подпись источника и лицензии — ссылками (условие CC BY 4.0).
     const links = page.locator(".fg-by a");
     assert.deepEqual(await links.allInnerTexts(), ["TFTC", "CC BY 4.0"]);
@@ -208,7 +208,7 @@ describe("институциональные потоки", () => {
   test("график с клавиатуры: стрелки, Home/End, Esc; подсказка слышна", async () => {
     const { ctx, page, errors } = await open();
     await ready(page);
-    const plot = page.locator(".ef-plot");
+    const plot = page.locator(".ef-flow");
     assert.equal(await plot.getAttribute("tabindex"), "0");
     assert.equal(sp(await plot.getAttribute("aria-label")), "График потоков: стрелки влево и вправо выбирают столбец");
     assert.match(sp(await plot.locator("svg").getAttribute("aria-label")), /^Цена биткоина и потоки ETF за выбранный срок, всего [+−][\d,]+ (млн|млрд) \$\. Цифры — в таблице под графиком\.$/);
@@ -230,10 +230,10 @@ describe("институциональные потоки", () => {
   test("график пальцем: подсказка с фондами дня, уходит с пальцем", async () => {
     const { ctx, page } = await open();
     await ready(page);
-    await page.locator(".ef-plot svg").scrollIntoViewIfNeeded();
-    const box = (await page.locator(".ef-plot svg").boundingBox())!;
+    await page.locator(".ef-flow svg").scrollIntoViewIfNeeded();
+    const box = (await page.locator(".ef-flow svg").boundingBox())!;
     await page.mouse.move(box.x + box.width * 0.84, box.y + box.height * 0.6);
-    const pop = page.locator(".ef-plot .fg-pop");
+    const pop = page.locator(".ef-flow .fg-pop");
     await pop.waitFor();
     assert.ok((await pop.locator(".ef-pop-f").count()) >= 1);
     await page.mouse.move(box.x + box.width / 2, box.y - 60);
@@ -244,23 +244,47 @@ describe("институциональные потоки", () => {
   test("сроки графика: дни и недели, выбор запоминается; накопленное", async () => {
     const { ctx, page } = await open();
     await ready(page);
-    const seg = page.locator(".ef-plot").locator("xpath=preceding-sibling::*[1]").locator("button");
+    const seg = page.locator(".ef-flow").locator("xpath=preceding-sibling::*[1]").locator("button");
     assert.equal(await seg.count(), 4);
     await seg.nth(2).click(); // год — по неделям
-    await page.locator(".ef-plot").focus();
+    await page.locator(".ef-flow").focus();
     await page.keyboard.press("End");
-    assert.match(sp(await page.locator(".ef-plot .fg-pop small").innerText()), / — /);
+    assert.match(sp(await page.locator(".ef-flow .fg-pop small").innerText()), / — /);
     assert.equal(await page.evaluate(() => localStorage.getItem("wt-etf-range")), "365");
     // «Накоплено»: последний столбец — весь поток с запуска.
-    const modes = page.locator(".ef-plot").locator("xpath=following-sibling::*[1]").locator("button");
+    const modes = page.locator(".ef-flow").locator("xpath=following-sibling::*[1]").locator("button");
     await modes.nth(1).click();
-    await page.locator(".ef-plot").focus();
+    await page.locator(".ef-flow").focus();
     await page.keyboard.press("End");
-    assert.match(sp(await page.locator(".ef-plot .fg-pop").innerText()), /С запуска \+57 млрд \$/);
+    assert.match(sp(await page.locator(".ef-flow .fg-pop").innerText()), /С запуска \+57 млрд \$/);
     await page.reload();
     await toEtf(page, "ru");
     await ready(page);
-    assert.equal(await page.locator(".ef-plot").locator("xpath=preceding-sibling::*[1]").locator("button[aria-pressed=true], button.on, button[aria-selected=true]").innerText(), "1г");
+    assert.equal(await page.locator(".ef-flow").locator("xpath=preceding-sibling::*[1]").locator("button[aria-pressed=true], button.on, button[aria-selected=true]").innerText(), "1г");
+    await ctx.close();
+  });
+
+  test("сколько держат фонды: плитки, запас по дням, график с клавиатуры", async () => {
+    const { ctx, page, errors } = await open();
+    await ready(page);
+    const card = page.locator(".ef-plot:not(.ef-flow)").first().locator("xpath=ancestor::*[contains(@class,'card')][1]");
+    const tiles = (await card.locator(".dm-ch").allInnerTexts()).map(sp);
+    assert.equal(tiles.length, 3);
+    assert.match(tiles[0]!, /^Сейчас 1,2\d млн BTC$/);
+    assert.match(tiles[1]!, /^За 30 дней [+−][\d,]+ (тыс\. )?BTC$/);
+    assert.match(tiles[2]!, /^С 6 мая 2025 г\. [+−][\d,]+ (тыс\. )?BTC$/);
+    const plot = card.locator(".ef-plot");
+    assert.equal(sp(await plot.getAttribute("aria-label")), "График: стрелки влево и вправо выбирают точку");
+    await plot.focus();
+    await page.keyboard.press("End");
+    assert.match(sp(await plot.locator(".fg-pop small").innerText()), /^15 октября 2026 г\.$/);
+    await page.keyboard.press("Home");
+    assert.match(sp(await plot.locator(".fg-pop small").innerText()), /^6 мая 2025 г\.$/);
+    await page.keyboard.press("Escape");
+    assert.equal(await plot.locator(".fg-pop").count(), 0);
+    // Активы в заголовке — по свежей сводке, запас — тот же, что «Сейчас».
+    assert.match(sp(await page.locator(".ef-held").innerText()), /^Фонды управляют 105 млрд \$ — это ≈1,2\d млн BTC\. Это 6,\d\d% всех монет в обращении\.$/);
+    assert.deepEqual(errors, []);
     await ctx.close();
   });
 
@@ -404,10 +428,10 @@ describe("институциональные потоки", () => {
       .filter((el) => !(el.getAttribute("aria-label") || (el.textContent ?? "").trim())).map((el) => el.outerHTML.slice(0, 80)));
     assert.deepEqual(nameless, []);
     await page.keyboard.press("Tab"); // фокус «с клавиатуры» — как у человека с клавиатурой
-    await page.locator(".ef-plot").focus();
-    const outline = await page.locator(".ef-plot").evaluate((el) => getComputedStyle(el).outlineStyle);
+    await page.locator(".ef-flow").focus();
+    const outline = await page.locator(".ef-flow").evaluate((el) => getComputedStyle(el).outlineStyle);
     assert.equal(outline, "solid");
-    assert.equal(await page.locator(".ef-plot svg[role=img]").count(), 1);
+    assert.equal(await page.locator(".ef-flow svg[role=img]").count(), 1);
     await ctx.close();
   });
 });

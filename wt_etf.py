@@ -52,20 +52,25 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import Future, ThreadPoolExecutor
-from typing import Any
+from typing import Any, NamedTuple
 
 import wt_treasury
 
 # Сколько ответ живёт в кэше, с: фонды отчитываются раз в сутки.
 TTL = 3600.0
-# Только биткоин: потоки других монет своими данными не проверить — их на
-# экране нет. Монета → пара Binance для цены дня.
-COINS = (("btc", "BTCUSDT"),)
-# Позиции на CME: код контракта CFTC → размер контракта в монетах (большой
+# Только биткоин (спотовые ETF есть и на другие монеты, но открытого набора
+# их потоков нет). Пара Binance — для цены дня.
+SYMBOL = "BTCUSDT"
+# Позиции на CME: код контракта CFTC → размер контракта в биткоинах (большой
 # и микро складываются в монетах: у них разный размер).
-CME_CODES = {
-    "btc": (("133741", 5.0), ("133742", 0.1)),
-}
+CME_CODES = (("133741", 5.0), ("133742", 0.1))
+# Правдоподобие отчёта CFTC: позиция группы и открытый интерес — до стольких
+# BTC (весь рынок фьючерсов CME — около 150 тыс.); дата — с запуска фьючерсов.
+CME_MAX = 2_000_000.0
+CME_FROM = 1_513_036_800  # 12 декабря 2017 г.
+# Премия Coinbase к Binance за пределами этого, % — сбой цены, а не премия
+# (за всю историю — меньше процента).
+CBP_MAX = 10.0
 CME_FIELDS = ("open_interest_all", "asset_mgr_positions_long", "asset_mgr_positions_short",
               "lev_money_positions_long", "lev_money_positions_short",
               "dealer_positions_long_all", "dealer_positions_short_all",
@@ -89,6 +94,10 @@ ETF_LAUNCH = 1_704_931_200
 DAY_MAX = 50e9
 FUND_MAX = 25e9
 PX_MIN, PX_MAX = 1_000.0, 10_000_000.0
+# Своя оценка запаса фондов и сводка набора расходятся больше этого — в журнал.
+SPLIT_MAX = 0.1
+# Активы всех фондов за день, $ (правдоподобные: от $1 млрд до $10 трлн).
+TNA_MIN, TNA_MAX = 1e9, 1e13
 # Запас одного фонда по отчёту — не больше этого, BTC (у крупнейшего ~0,8
 # млн); больше — ошибка в отчёте, такого запаса нет.
 HOLD_MAX = 5_000_000.0
@@ -208,10 +217,20 @@ def _klines(symbol: str, start_ms: int) -> dict[int, float]:
 Day = tuple[dict[str, float], float]  # поток фонда $, итог дня $
 
 
-def _tftc() -> tuple[dict[int, Day], dict[int, float], str]:
+class Tftc(NamedTuple):
+    """Разобранный набор TFTC."""
+
+    days: dict[int, Day]
+    # Цена дня из набора (запасная к Binance) и активы всех фондов, $ (с мая 2025).
+    px: dict[int, float]
+    tna: dict[int, float]
+    # «Данные по» — дата ГГГГ-ММ-ДД или пусто.
+    through: str
+
+
+def _tftc() -> Tftc:
     """Дни набора TFTC: начало суток → (фонд → поток $, итог дня $), цена
-    дня из набора (запасная к Binance) и «данные по» (дата). Нет набора или
-    он битый — пусто.
+    дня, активы фондов и «данные по». Нет набора или он битый — пусто.
 
     Итог дня — сумма фондов: так итог, фонды и «с запуска» на экране
     сходятся до доллара (сводка набора в редкие дни расходится с фондами на
@@ -222,9 +241,10 @@ def _tftc() -> tuple[dict[int, Day], dict[int, float], str]:
     got = _get(TFTC, 30)
     rows = got.get("days") if isinstance(got, dict) else None
     if not isinstance(rows, list):
-        return {}, {}, ""
+        return Tftc({}, {}, {}, "")
     days: dict[int, Day] = {}
     px: dict[int, float] = {}
+    tna: dict[int, float] = {}
     last = _now() + 86400
     for r in rows:
         if not isinstance(r, dict) or not isinstance(r.get("date"), str) or not DATE.fullmatch(r["date"]):
@@ -243,8 +263,10 @@ def _tftc() -> tuple[dict[int, Day], dict[int, float], str]:
         days[ts] = (by, total)
         if PX_MIN <= _num(r.get("btcCloseUsd")) <= PX_MAX:
             px[ts] = _num(r["btcCloseUsd"])
+        if TNA_MIN <= _num(r.get("totalNetAssetsUsd")) <= TNA_MAX:
+            tna[ts] = _num(r["totalNetAssetsUsd"])
     through = got.get("updatedThrough")
-    return days, px, through if isinstance(through, str) and DATE.fullmatch(through) else ""
+    return Tftc(days, px, tna, through if isinstance(through, str) and DATE.fullmatch(through) else "")
 
 
 # Сколько биткоинов добыто к блоку 840 000 (четвёртый халвинг, 20 апреля 2024,
@@ -261,10 +283,9 @@ def supply_at(ts: int) -> float:
     return SUPPLY_840K + min(blocks, 210_000) * REWARD_840K + max(0, blocks - 210_000) * REWARD_840K / 2
 
 
-def _share(funds: list[dict[str, Json]], price: float) -> dict[str, Json]:
-    """Доля фондов в биткоинах в обращении: их запас в монетах — к добытому
-    по расписанию. Своя арифметика, без готовых цифр источника."""
-    aum = sum(_num(f.get("aum")) for f in funds)
+def _share(aum: float, price: float) -> dict[str, Json]:
+    """Доля фондов в биткоинах в обращении: их активы в монетах — к добытому
+    по расписанию."""
     if aum <= 0 or price <= 0:
         return {"share": None}
     return {"share": round(aum / price / supply_at(_now()) * 100, 3)}
@@ -301,15 +322,13 @@ def _last_report(sec: dict[str, dict[str, Any]], px: dict[int, float]) -> dict[s
     return out
 
 
-def _coin(cat: str, symbol: str) -> dict[str, Json] | None:
+def _coin() -> dict[str, Json] | None:
     """Потоки фондов по дням (TFTC), фонды и их запас (отчёты SEC плюс потоки
-    после отчёта), доля от добытых монет."""
-    if cat != "btc":
-        return None
-    days, tpx, through = _tftc()
+    после отчёта), активы всех фондов по дням (TFTC), доля от добытых монет."""
+    days, tpx, tna, through = _tftc()
     if not days:
         return None
-    px = _klines(symbol, (min(days) - 2 * 86400) * 1000)
+    px = _klines(SYMBOL, (min(days) - 2 * 86400) * 1000)
     for ts, p in tpx.items():
         px.setdefault(ts, p)  # нет свечи Binance — цена из набора
     last_px = px[max(px)] if px else 0.0
@@ -345,13 +364,25 @@ def _coin(cat: str, symbol: str) -> dict[str, Json] | None:
         p = px.get(ts, 0.0)
         per = [None if (v := by.get(str(f["t"]))) is None else round(v / 1000) for f in funds]
         rows.append([ts, round(tot / 1000), round(tot / p, 2) if p > 0 else 0.0, round(p, 4), per])
-    return {"funds": funds, "days": rows, "px": round(last_px, 2), "through": through, **_share(funds, last_px)}
+    # Активы всех фондов — по сводке набора, если она свежая (не старше
+    # недели от последнего дня); иначе — сумма своих оценок по фондам.
+    aum = sum(_num(f["aum"]) for f in funds)
+    if tna and max(tna) >= max(days) - 7 * 86400 and px.get(max(tna)):
+        own = sum(_num(f["hold"]) for f in funds)
+        held = tna[max(tna)] / px[max(tna)]
+        # Сверка: своя оценка запаса (SEC + потоки) против сводки. Расхождение
+        # больше SPLIT_MAX — сбой в отчётах или в наборе; видно в журнале.
+        if own > 0 and abs(own / held - 1) > SPLIT_MAX:
+            _log(f"запас: свой {own:,.0f} BTC, по сводке {held:,.0f} BTC")
+        aum = held * last_px
+    return {"funds": funds, "days": rows, "px": round(last_px, 2), "through": through,
+            "tna": [[ts, round(tna[ts])] for ts in sorted(tna)], **_share(aum, last_px)}
 
 
 def _cme() -> dict[str, Json]:
     """Позиции на CME по отчёту CFTC — раз в неделю (по вторникам, выходит в
     пятницу), открытый API CFTC (Socrata)."""
-    codes = [c for pairs in CME_CODES.values() for c, _ in pairs]
+    codes = [c for c, _ in CME_CODES]
     q = urllib.parse.urlencode({
         "$select": "cftc_contract_market_code,report_date_as_yyyy_mm_dd," + ",".join(CME_FIELDS),
         "$where": "cftc_contract_market_code in (" + ",".join(f"'{c}'" for c in codes) + ")",
@@ -361,20 +392,26 @@ def _cme() -> dict[str, Json]:
     rows = _get("https://publicreporting.cftc.gov/resource/gpe5-46if.json?" + q, 30)
     if not isinstance(rows, list) or not rows:
         return {}
-    unit = {c: (coin, u) for coin, pairs in CME_CODES.items() for c, u in pairs}
-    acc: dict[str, dict[int, list[float]]] = {}
+    unit = dict(CME_CODES)
+    acc: dict[int, list[float]] = {}
     for r in rows:
         if not isinstance(r, dict) or r.get("cftc_contract_market_code") not in unit:
             continue
-        coin, u = unit[r["cftc_contract_market_code"]]
+        u = unit[r["cftc_contract_market_code"]]
         try:
             ts = _day(r.get("report_date_as_yyyy_mm_dd"))
         except (TypeError, ValueError):
             continue
-        cur = acc.setdefault(coin, {}).setdefault(ts, [0.0] * len(CME_FIELDS))
-        for i, f in enumerate(CME_FIELDS):
-            cur[i] += _num(r.get(f)) * u
-    return {coin: [[ts, *[round(v, 1) for v in by[ts]]] for ts in sorted(by)] for coin, by in acc.items()}
+        vals = [_num(r.get(f)) * u for f in CME_FIELDS]
+        # Отчёт, которого не бывает (дата вне торгов, отрицательная или
+        # огромная позиция), — мимо: одна строка исказила бы всю неделю.
+        if not CME_FROM <= ts <= _now() or any(not 0 <= v <= CME_MAX for v in vals):
+            continue
+        cur = acc.setdefault(ts, [0.0] * len(CME_FIELDS))
+        for i, v in enumerate(vals):
+            cur[i] += v
+    weeks = [[ts, *[round(v, 1) for v in acc[ts]]] for ts in sorted(acc) if all(v <= CME_MAX for v in acc[ts])]
+    return {"btc": weeks} if weeks else {}
 
 
 def _coinbase_daily(product: str, start: int) -> dict[int, float]:
@@ -395,24 +432,30 @@ def _coinbase_daily(product: str, start: int) -> dict[int, float]:
     return out
 
 
+def _premium(cb: float, bn: float) -> float | None:
+    """Премия Coinbase к Binance, %; цены вне правдоподобного или премия
+    больше CBP_MAX — сбой цены, премии нет."""
+    if not (PX_MIN <= cb <= PX_MAX and PX_MIN <= bn <= PX_MAX):
+        return None
+    v = (cb / bn - 1) * 100
+    return round(v, 4) if abs(v) <= CBP_MAX else None
+
+
 def _cbp() -> dict[str, Json]:
-    """Премия Coinbase: на сколько процентов биткоин (эфир) на Coinbase дороже,
-    чем на Binance. Coinbase — главная площадка американских фондов и
-    компаний, поэтому плюс читают как спрос из США."""
-    out: dict[str, Json] = {}
+    """Премия Coinbase: на сколько процентов биткоин на Coinbase дороже, чем
+    на Binance. Coinbase — главная площадка американских фондов и компаний,
+    поэтому плюс читают как спрос из США."""
     start = (_now() - 400 * 86400) // 86400 * 86400
-    for coin, cb, bn in (("btc", "BTC-USD", "BTCUSDT"),):
-        c = _coinbase_daily(cb, start)
-        b = _klines(bn, start * 1000)
-        days = [[ts, round((c[ts] / b[ts] - 1) * 100, 4)] for ts in sorted(c) if b.get(ts)]
-        tc = _get(f"https://api.exchange.coinbase.com/products/{cb}/ticker", 10)
-        tb = _get(f"https://data-api.binance.vision/api/v3/ticker/price?symbol={bn}", 10)
-        pc = _num(tc.get("price")) if isinstance(tc, dict) else 0.0
-        pb = _num(tb.get("price")) if isinstance(tb, dict) else 0.0
-        live = round((pc / pb - 1) * 100, 4) if pc > 0 and pb > 0 else None
-        if days:
-            out[coin] = {"days": days[-366:], "now": live}
-    return out
+    c = _coinbase_daily("BTC-USD", start)
+    b = _klines(SYMBOL, start * 1000)
+    days = [[ts, v] for ts in sorted(c) if ts in b and (v := _premium(c[ts], b[ts])) is not None]
+    if not days:
+        return {}
+    tc = _get("https://api.exchange.coinbase.com/products/BTC-USD/ticker", 10)
+    tb = _get(f"https://data-api.binance.vision/api/v3/ticker/price?symbol={SYMBOL}", 10)
+    live = _premium(_num(tc.get("price")) if isinstance(tc, dict) else 0.0,
+                    _num(tb.get("price")) if isinstance(tb, dict) else 0.0)
+    return {"btc": {"days": days[-366:], "now": live}}
 
 
 class _State:
@@ -505,26 +548,22 @@ def _part(name: str, fut: Future[Any], timeout: float) -> Any:
 
 def build() -> dict[str, Json]:
     """Собрать ответ из сети и положить в кэш."""
-    coins: dict[str, Json] = {}
-    with ThreadPoolExecutor(max_workers=3) as pool:
-        futs = {cat: pool.submit(_coin, cat, sym) for cat, sym in COINS}
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        btc_f = pool.submit(_coin)
         cme_f = pool.submit(_cme)
         cbp_f = pool.submit(_cbp)
         co_f = pool.submit(wt_treasury.companies)
-        for cat, f in futs.items():
-            r = _part(cat, f, 90)
-            if r:
-                coins[cat] = r
+        btc = _part("btc", btc_f, 90)
         extra = {"cme": _part("cme", cme_f, 90) or {}, "cbp": _part("cbp", cbp_f, 90) or {}}
         companies = _part("companies", co_f, 90) or []
     with _lock:
         was = _st.hit[1] if _st.hit else {}
-    if "btc" not in coins and not was:
-        return {"ok": False, "error": "no_data"}
     # Часть, которой в этот раз нет, — из прошлой сборки, а не пропадает с экрана.
-    for cat, _ in COINS:
-        if cat not in coins and cat in (was.get("coins") or {}):
-            coins[cat] = was["coins"][cat]
+    if not btc:
+        btc = (was.get("coins") or {}).get("btc")
+    if not btc:
+        return {"ok": False, "error": "no_data"}
+    coins = {"btc": btc}
     for name in ("cme", "cbp"):
         if not extra[name] and was.get(name):
             extra[name] = was[name]

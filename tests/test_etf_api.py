@@ -240,6 +240,57 @@ class EtfTest(unittest.TestCase):
         self.assertEqual(cbp["btc"]["now"], 0.1)
         self.assertNotIn("eth", cbp)
 
+    def test_cme_implausible_rows_are_skipped(self):
+        good = {"cftc_contract_market_code": "133741", "report_date_as_yyyy_mm_dd": "2026-10-06T00:00:00.000",
+                **dict.fromkeys(etf.CME_FIELDS, "10")}
+        rows = [good,
+                {**good, "report_date_as_yyyy_mm_dd": "2016-01-05T00:00:00.000"},  # до фьючерсов CME
+                {**good, "report_date_as_yyyy_mm_dd": "2027-01-05T00:00:00.000"},  # из будущего
+                {**good, "report_date_as_yyyy_mm_dd": "2026-09-29T00:00:00.000", "open_interest_all": "-5"},
+                {**good, "report_date_as_yyyy_mm_dd": "2026-09-22T00:00:00.000", "open_interest_all": "1e12"}]
+        r = self.build(Net(**{"publicreporting.cftc.gov": rows}))
+        self.assertEqual([w[0] for w in r["cme"]["btc"]], [1_791_244_800])
+        etf._st = etf._State()  # без прошлой сборки: иначе её CME осталась бы на экране
+        self.assertEqual(self.build(Net(**{"publicreporting.cftc.gov": rows[1:]}))["cme"], {})
+
+    def test_coinbase_premium_without_broken_prices(self):
+        # Цена-мусор на одной из бирж или «премия» в десятки процентов — сбой
+        # цены: такого дня нет; живой премии нет, если одна из цен — мусор.
+        candles = [[D1, 0, 0, 0, 60060.5], [D2, 0, 0, 0, 1e9], [D3, 0, 0, 0, 80_000], [D3 + 3600, 0, 0, 0, 62000]]
+        r = self.build(Net(**{"products/BTC-USD/candles": candles, "products/BTC-USD/ticker": {"price": "0"}}))
+        self.assertEqual(r["cbp"]["btc"]["days"], [[D1, 0.1]])
+        self.assertIsNone(r["cbp"]["btc"]["now"])
+        self.assertEqual(etf._premium(60_000, 50_000), None)  # 20 % — не премия
+        self.assertEqual(etf._premium(60_060, 60_000), 0.1)
+        self.assertIsNone(etf._premium(5.0, 5.0))  # «цена» 5 $ — не цена биткоина, хоть премия и 0
+        self.assertIsNone(etf._premium(60_000, 2e7))
+
+    def test_total_assets_by_day_from_tftc(self):
+        days = [dict(d) for d in TFTC["days"]]
+        days[1]["totalNetAssetsUsd"] = 105e9
+        days[2]["totalNetAssetsUsd"] = 1e20  # мусор — мимо
+        days[3]["totalNetAssetsUsd"] = 104e9
+        btc = self.build(Net(**{"tftc.io/bitcoin-etf-flows/data.json": dict(TFTC, days=days)}))["coins"]["btc"]
+        self.assertEqual(btc["tna"], [[D1, 105_000_000_000], [D3, 104_000_000_000]])
+        # Доля — от свежих активов набора (D3 — последний день), по цене сейчас.
+        self.assertEqual(btc["share"], round(104e9 / 62_000 / etf.supply_at(NOW) * 100, 3))
+
+    def test_own_estimate_far_from_total_assets_is_logged(self):
+        days = [dict(d) for d in TFTC["days"]]
+        days[3]["totalNetAssetsUsd"] = 5e9  # сводка: ~80 тыс. BTC, своя оценка — ~890 тыс.
+        logs = []
+        with mock.patch.object(etf, "_log", logs.append):
+            self.build(Net(**{"tftc.io/bitcoin-etf-flows/data.json": dict(TFTC, days=days)}))
+        self.assertTrue(any(m.startswith("запас: свой") for m in logs), logs)
+
+    def test_stale_total_assets_fall_back_to_own_estimate(self):
+        days = [dict(d) for d in TFTC["days"]]
+        days.insert(0, {"date": "2026-09-01", "netFlowUsd": 1e6, "btcCloseUsd": 60_000, "perEtfUsd": {"IBIT": 1e6},
+                        "totalNetAssetsUsd": 99e9})
+        btc = self.build(Net(**{"tftc.io/bitcoin-etf-flows/data.json": dict(TFTC, days=days)}))["coins"]["btc"]
+        own = sum(f["aum"] for f in btc["funds"])
+        self.assertEqual(btc["share"], round(own / 62_000 / etf.supply_at(NOW) * 100, 3))
+
     # ── Сбои частей и кэш ────────────────────────────────────────────────
 
     def test_failed_coin_comes_from_previous_build(self):

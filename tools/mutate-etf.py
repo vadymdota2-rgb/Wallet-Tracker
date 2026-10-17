@@ -14,8 +14,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EQUIV = {"монеты дня без цены"}
 TS = [
     # Проверка ответа.
-    ("ts % DAY !== 0 || ts <= prev", "ts <= prev", "день — с начала суток"),
-    ("ts % DAY !== 0 || ts <= prev", "ts % DAY !== 0 || ts < prev", "дни строго по возрастанию"),
+    ("7 * DAY, now + 2 * DAY) || ts % DAY !== 0 || ts <= prev)", "7 * DAY, now + 2 * DAY) || ts <= prev)", "день — с начала суток"),
+    ("7 * DAY, now + 2 * DAY) || ts % DAY !== 0 || ts <= prev)", "7 * DAY, now + 2 * DAY) || ts % DAY !== 0 || ts < prev)", "дни строго по возрастанию"),
     ("per.length !== nf", "per.length > nf", "столбцы фондов совпадают"),
     ("if (!ok || seen.has(ok.t)) return null;", "if (!ok) return null;", "тикеры не повторяются"),
     ("!within(usd, -USD_K_MAX, USD_K_MAX)", "!isNum(usd)", "предел потока дня"),
@@ -23,7 +23,7 @@ TS = [
     ("if (share !== null && !within(share, 0, 100)) return null;", "", "доля в пределах"),
     ('(through !== "" && !DATE.test(through))', "false", "«данные по» — дата"),
     ("!within(raw[\"at\"], ETF_LAUNCH, now + 7 * DAY)", "!isNum(raw[\"at\"])", "время ответа правдоподобно"),
-    ("now + 2 * DAY) || ts % DAY", "now + 365 * DAY) || ts % DAY", "день не из будущего"),
+    ("7 * DAY, now + 2 * DAY) || ts % DAY", "7 * DAY, now + 365 * DAY) || ts % DAY", "день не из будущего"),
     ("if (!btc || !btc.days.length) return null;", "if (!btc) return null;", "без дней — не ответ"),
     ("TICKER.test(t)", "t.length > 0", "тикер — заглавные и цифры"),
     ("raw.holders.filter(holderRow)".replace("raw.holders", 'raw["holders"]'), 'raw["holders"]', "держатели проверяются"),
@@ -42,6 +42,11 @@ TS = [
     ('const n = period === "d" ? 1 : period === "w" ? 7 : 30;', 'const n = period === "d" ? 1 : period === "w" ? 6 : 30;', "неделя — 7 суток"),
     ("rows.filter((r) => Math.abs(r.v) >= 1)", "rows.filter((r) => Math.abs(r.v) > 1)", "фонд с движением"),
     ("Math.abs(y.v) - Math.abs(x.v)).slice(0, n)", "y.v - x.v).slice(0, n)", "крупнейшие фонды по модулю"),
+    # Активы фондов по дням.
+    ("ts % DAY !== 0 || ts <= prev || !within(v, TNA_MIN, TNA_MAX)", "ts % DAY !== 0 || !within(v, TNA_MIN, TNA_MAX)", "активы: дни по возрастанию"),
+    ("|| !within(v, TNA_MIN, TNA_MAX)) return null;", "|| !isNum(v)) return null;", "активы: правдоподобная сумма"),
+    ("t[0] >= lastDay - TNA_FRESH", "t[0] >= 0", "активы: только свежая сводка"),
+    ("return p > 0 ? [[ts, usd / p]] : [];", "return [[ts, usd / (p || 1)]];", "запас по дням без цены дня"),
 ]
 PY = [
     # Разбор набора TFTC.
@@ -72,6 +77,22 @@ PY = [
     ('c if c.isprintable() else "?"', "c", "журнал без управляющих символов"),
     ("_now() - _num(got.get(\"at\")) > FILE_MAX_AGE", "False", "старая копия с диска"),
     ("for _ in range(6):", "for _ in range(60):", "страницы свечей ограничены"),
+    # CME, премия Coinbase, активы фондов.
+    ("if not CME_FROM <= ts <= _now() or", "if not ts <= _now() or", "CME: дата не до фьючерсов"),
+    ("CME_FROM <= ts <= _now() or", "CME_FROM <= ts or", "CME: дата не из будущего"),
+    ("any(not 0 <= v <= CME_MAX for v in vals)", "False", "CME: позиции правдоподобны"),
+    ("return round(v, 4) if abs(v) <= CBP_MAX else None", "return round(v, 4)", "премия: не сбой цены"),
+    ("if not (PX_MIN <= cb <= PX_MAX and PX_MIN <= bn <= PX_MAX):", "if not (cb > 0 and bn > 0):", "премия: цены правдоподобны"),
+    ('if TNA_MIN <= _num(r.get("totalNetAssetsUsd")) <= TNA_MAX:', 'if _num(r.get("totalNetAssetsUsd")):', "активы: правдоподобная сумма"),
+    ("if tna and max(tna) >= max(days) - 7 * 86400 and", "if tna and", "активы: только свежая сводка"),
+    ("if own > 0 and abs(own / held - 1) > SPLIT_MAX:", "if False:", "сверка своей оценки со сводкой"),
+]
+TR = [
+    ("return QUARTER.fullmatch(s) is not None", 'return len(s) == 10 and s[5:] in ("03-31", "06-30", "09-30", "12-31")', "SEC: дата квартала — ASCII"),
+    ("if str(k).isdigit() and _point(v)}", "if str(k).isdigit() and isinstance(v, list)}", "SEC: копия на диске проверяется"),
+    ('"fee": float(fee) if _num_ok(fee) and 0 < fee < FEE_MAX else None}', '"fee": fee}', "SEC: комиссия из копии"),
+    ('if u.scheme != "https" or u.hostname != HOST or u.username or u.password or not ua:', "if not ua:", "SEC: только https к data.sec.gov"),
+    ('return ua if ua.isprintable() and "@" in ua and len(ua) <= 200 else ""', "return ua", "SEC: подпись с почтой и без переводов строк"),
 ]
 
 
@@ -106,7 +127,9 @@ def run(path, cmd, muts):
 a1 = run(f"{ROOT}/src/lib/etf.ts", ["node", "--test", "tests/etf.test.ts", "tests/etf.props.test.ts"], TS)
 a2 = run(f"{ROOT}/wt_etf.py", [sys.executable, "-m", "unittest", "tests.test_etf_api", "tests.test_etf_fuzz",
                                "tests.test_etf_security", "tests.test_etf_policy", "tests.test_disk_cache"], PY)
-alive = a1 + a2
-total = len(TS) + len(PY) - len(EQUIV)
+a3 = run(f"{ROOT}/wt_treasury.py", [sys.executable, "-m", "unittest", "tests.test_treasury", "tests.test_treasury_security",
+                                    "tests.test_disk_cache"], TR)
+alive = a1 + a2 + a3
+total = len(TS) + len(PY) + len(TR) - len(EQUIV)
 print(f"ИТОГ: убито {total - len(alive)} из {total}; выжили: {alive}")
 sys.exit(1 if alive else 0)

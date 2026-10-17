@@ -13,7 +13,7 @@
  * Binance. Coinbase — главная площадка фондов и компаний США, поэтому её
  * читают как спрос из Америки.
  */
-import { useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+import { useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 import { t } from "../i18n/t";
 import type { DictKey } from "../i18n/types";
 import { num, usdWord } from "../lib/format";
@@ -21,48 +21,34 @@ import { haptic } from "../lib/telegram";
 import { Card, Chips, SectionTitle } from "../components/ui";
 import { type BtcHolder } from "../lib/etf";
 import { dateStr, timeTicks } from "./FearGreedScreen";
+import { DN, UP, coinsShort, flagOf, iso, money } from "./etfView";
 
 type Lang = Parameters<typeof t>[0];
-const UP = "#0ecb81";
-const DN = "#f6465d";
-const iso = (x: string | number) => `⁦${x}⁩`;
-
-
-/** Монеты коротко: «40,4 тыс. BTC», «1,51 млн ETH». */
-function coinsShort(lang: Lang, v: number, sym: string): string {
-  const s = v > 0 ? "+" : v < 0 ? "−" : "";
-  try {
-    const f = new Intl.NumberFormat(lang, { notation: "compact", compactDisplay: "short", maximumFractionDigits: 1 })
-      .format(Math.abs(v)).replace(/[  ]/g, " ");
-    return `${s}${f} ${sym}`;
-  } catch {
-    return `${s}${num(Math.abs(v))} ${sym}`;
-  }
-}
-
-function money(v: number): string {
-  if (Math.abs(v) < 0.5) return usdWord(0);
-  return `${v > 0 ? "+" : "−"}${usdWord(Math.abs(v))}`;
-}
-
 const W = 360;
 const PW = 306;
 
-/** Линии на одной шкале с нулём посередине и пальцем по дням. */
-function LinesChart({ xs, series, lang, fmt, label }: {
+/**
+ * Линии на одной шкале и палец по дням. zero — шкала от нуля (позиции CME
+ * бывают и в плюсе, и в минусе); без него — по самим значениям (запас
+ * фондов: 1,2–1,3 млн у нуля лежал бы плоской линией). С клавиатуры —
+ * стрелки, Home/End, Esc, как у графика потоков.
+ */
+function LinesChart({ xs, series, lang, fmt, label, zero = true }: {
   xs: number[];
   series: { c: string; v: number[]; name: string }[];
   lang: Lang;
   fmt: (v: number) => string;
   label: string;
+  zero?: boolean;
 }) {
   const [sel, setSel] = useState<number | null>(null);
   const ref = useRef<SVGSVGElement>(null);
   const n = xs.length;
   const MH = 130;
   const all = series.flatMap((s) => s.v);
-  const lo = Math.min(0, ...all);
-  const hi = Math.max(0, ...all);
+  const pad = zero ? 0 : (Math.max(...all) - Math.min(...all)) * 0.08 || 1;
+  const lo = zero ? Math.min(0, ...all) : Math.min(...all) - pad;
+  const hi = zero ? Math.max(0, ...all) : Math.max(...all) + pad;
   const span = hi - lo || 1;
   const yOf = (v: number) => 6 + (1 - (v - lo) / span) * MH;
   const xOf = (i: number) => (n <= 1 ? 0 : (i / (n - 1)) * PW);
@@ -85,8 +71,24 @@ function LinesChart({ xs, series, lang, fmt, label }: {
     }
   };
   const H = MH + 26;
+  const onKey = (e: KeyboardEvent) => {
+    if (!n) return;
+    const go = (i: number) => {
+      e.preventDefault();
+      setSel(Math.max(0, Math.min(n - 1, i)));
+    };
+    if (e.key === "ArrowRight") go(sel === null ? n - 1 : sel + 1);
+    else if (e.key === "ArrowLeft") go(sel === null ? n - 1 : sel - 1);
+    else if (e.key === "Home") go(0);
+    else if (e.key === "End") go(n - 1);
+    else if (e.key === "Escape" && sel !== null) {
+      e.preventDefault();
+      setSel(null);
+    }
+  };
   return (
-    <div className="fg-plot">
+    <div className="fg-plot ef-plot" tabIndex={0} role="group" aria-label={t(lang, "ef_keys")}
+      onKeyDown={onKey} onBlur={() => setSel(null)}>
       <svg ref={ref} className="fg-svg" viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={label}
         onPointerDown={(e: PointerEvent) => pick(e.clientX)}
         onPointerMove={(e: PointerEvent) => { if (e.pointerType === "mouse" || e.buttons) pick(e.clientX); }}
@@ -101,7 +103,7 @@ function LinesChart({ xs, series, lang, fmt, label }: {
             <text x={xOfT(x.t)} y={H - 4} textAnchor="middle" className="fg-tick">{x.label}</text>
           </g>
         ))}
-        {[hi, 0, lo].filter((v, i, arr) => arr.indexOf(v) === i).map((v) => (
+        {(zero ? [hi, 0, lo] : [hi - pad, lo + pad]).filter((v, i, arr) => arr.indexOf(v) === i).map((v) => (
           <g key={v}>
             <line x1={0} x2={PW} y1={yOf(v)} y2={yOf(v)} className={v === 0 ? "ef-zero" : "fg-grid"} />
             <text x={W - 2} y={yOf(v) + 3.5} textAnchor="end" className="fg-tick">{v === 0 ? "0" : fmt(v)}</text>
@@ -131,6 +133,43 @@ function LinesChart({ xs, series, lang, fmt, label }: {
 }
 
 /* ---------------------------------------------------------------------- */
+
+/**
+ * Сколько биткоинов держат фонды по дням: активы всех фондов (сводка TFTC)
+ * по цене того же дня. Растёт — фонды забирают монеты, падает — отдают,
+ * независимо от того, что делает цена.
+ */
+export function HeldSection({ series, lang }: { series: [number, number][]; lang: Lang }) {
+  const last = series[series.length - 1];
+  const first = series[0];
+  if (!last || !first || series.length < 10) return null;
+  const back = series.find(([ts]) => ts >= last[0] - 30 * 86400) ?? first;
+  const fmt = (v: number) => coinsShort(lang, v, "", false);
+  const tiles: [string, number, boolean][] = [
+    [t(lang, "ef_hd_now"), last[1], false],
+    [t(lang, "ef_hd_30"), last[1] - back[1], true],
+    // С полной датой: «С 6 мая 2025 г.» — месяц без дня Intl даёт в именительном («С май»).
+    [t(lang, "ef_hd_since", { d: dateStr(lang, first[0], { day: "numeric", month: "short", year: "numeric" }) }), last[1] - first[1], true],
+  ];
+  return (
+    <>
+      <SectionTitle>{t(lang, "ef_hd_title")}</SectionTitle>
+      <Card>
+        <div className="dm-chs three ef-chs">
+          {tiles.map(([k, v, signed]) => (
+            <div key={k} className="dm-ch">
+              <small>{k}</small>
+              <b className={!signed ? "" : v > 0 ? "up" : v < 0 ? "dn" : ""}><bdi dir="ltr">{coinsShort(lang, v, "BTC", signed)}</bdi></b>
+            </div>
+          ))}
+        </div>
+        <LinesChart xs={series.map((d) => d[0])} lang={lang} fmt={fmt} zero={false} label={t(lang, "ef_hd_title")}
+          series={[{ c: "#f7931a", name: "BTC", v: series.map((d) => d[1]) }]} />
+        <p className="lq-hint">{t(lang, "ef_hd_note")}</p>
+      </Card>
+    </>
+  );
+}
 
 export function CmeSection({ rows, sym, price, lang }: { rows: number[][]; sym: string; price: number; lang: Lang }) {
   const last = rows[rows.length - 1];
@@ -284,11 +323,6 @@ const GROUPS: { id: Group; key: DictKey }[] = [
   { id: "COMPANY", key: "ef_g_co" },
 ];
 
-/** Флаг страны по коду ISO: «US» → 🇺🇸. */
-function flag(code: string): string {
-  return /^[A-Z]{2}$/.test(code) ? String.fromCodePoint(...[...code].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65)) : "";
-}
-
 /** Крупнейшие держатели: фонды и компании, с выбором группы. */
 export function Holders({ rows, price, lang }: { rows: BtcHolder[]; price: number; lang: Lang }) {
   const [grp, setGrp] = useState<Group>("all");
@@ -310,7 +344,7 @@ export function Holders({ rows, price, lang }: { rows: BtcHolder[]; price: numbe
             <div key={r[1] + r[3]} className="ef-hr">
               <span className="ef-hr-rank">{i + 1}</span>
               <span className="ef-hr-id">
-                <b>{r[2] ? <span aria-hidden="true">{flag(r[2])} </span> : null}{r[0]}</b>
+                <b>{r[2] ? <span aria-hidden="true">{flagOf(r[2])} </span> : null}{r[0]}</b>
                 <small>
                   {r[1] === "FUND" ? `${t(lang, "ef_g_fund")} · ` : ""}{r[3]}
                   {r[5] ? ` · ${t(lang, "ef_h_rep", { d: dateStr(lang, r[5], { day: "numeric", month: "short", year: "numeric" }) })}` : ""}

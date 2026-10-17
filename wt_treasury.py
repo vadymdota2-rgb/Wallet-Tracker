@@ -43,12 +43,13 @@ import http.client
 import json
 import math
 import os
+import re
 import sys
 import threading
 import time
 import urllib.parse
 import urllib.request
-from typing import Any
+from typing import Any, TypeGuard
 
 # (тикер, имя, страна, CIK в SEC).
 COMPANIES: tuple[tuple[str, str, str, int], ...] = (
@@ -92,6 +93,9 @@ JUMP = 20.0
 # Меньше — не прошлый запас, а случайная цифра (GameStop: «1» в годовом).
 JUMP_FLOOR = 10.0
 HOST = "data.sec.gov"
+QUARTER = re.compile(r"[0-9]{4}-(?:03-31|06-30|09-30|12-31)")
+# Комиссия фонда — доля в год: правдоподобно до 3 %.
+FEE_MAX = 0.03
 BODY_MAX = 4 << 20
 TTL = 12 * 3600.0
 PAUSE = 0.2
@@ -295,10 +299,12 @@ def companies() -> list[list[Any]]:
 
 
 def _quarter_end(s: str) -> bool:
-    return len(s) == 10 and s[5:] in ("03-31", "06-30", "09-30", "12-31")
+    """Конец квартала «ГГГГ-ММ-ДД» — только ASCII-цифры: «２０２６-06-30» (полноширинные)
+    прошло бы по длине и концу строки, а дальше уронило бы разбор даты."""
+    return QUARTER.fullmatch(s) is not None
 
 
-def _latest(rows: Json, units: frozenset[str] | None, unit_rows: Json = None) -> dict[str, float]:
+def _latest(rows: Json, units: frozenset[str] | None) -> dict[str, float]:
     """Мгновенные значения на концы кварталов из 10-Q/10-K: дата → значение,
     на дату — сданное позже всего."""
     best: dict[str, tuple[str, float]] = {}
@@ -316,6 +322,16 @@ def _latest(rows: Json, units: frozenset[str] | None, unit_rows: Json = None) ->
             if end not in best or filed >= best[end][0]:
                 best[end] = (filed, float(val))
     return {k: v[1] for k, v in best.items()}
+
+
+def _num_ok(v: object) -> TypeGuard[float]:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _point(v: object) -> bool:
+    """Отчёт на дату из копии на диске: [монет или None, долларов или None],
+    числа — конечные и неотрицательные. Иное — копия испорчена, этой точки нет."""
+    return isinstance(v, list) and len(v) == 2 and all(x is None or (_num_ok(x) and x >= 0) for x in v)
 
 
 def fund_points(facts: Json) -> dict[str, Any]:
@@ -346,7 +362,7 @@ def fund_points(facts: Json) -> dict[str, Any]:
             if not isinstance(r, dict) or "start" not in r:
                 continue
             val, end = r.get("val"), str(r.get("end") or "")
-            if isinstance(val, (int, float)) and not isinstance(val, bool) and 0 < val < 0.03 and end >= fee_end:
+            if isinstance(val, (int, float)) and not isinstance(val, bool) and 0 < val < FEE_MAX and end >= fee_end:
                 fee, fee_end = float(val), end
     q: dict[int, list[float | None]] = {}
     for end in sorted(set(count) | set(fair)):
@@ -375,8 +391,10 @@ def etf_funds() -> dict[str, dict[str, Any]]:
             funds = {}
             for t, f in saved[1].items():
                 if isinstance(f, dict) and isinstance(f.get("q"), dict):
-                    q = {int(k): v for k, v in f["q"].items() if str(k).isdigit() and isinstance(v, list) and len(v) == 2}
-                    funds[str(t)] = {"n": f.get("n"), "fee": f.get("fee"), "q": q}
+                    q = {int(k): v for k, v in f["q"].items() if str(k).isdigit() and _point(v)}
+                    fee = f.get("fee")
+                    funds[str(t)] = {"n": str(f.get("n") or ""), "q": q,
+                                     "fee": float(fee) if _num_ok(fee) and 0 < fee < FEE_MAX else None}
             hit = (saved[0], funds)
             with _lock:
                 _fst.hit = hit

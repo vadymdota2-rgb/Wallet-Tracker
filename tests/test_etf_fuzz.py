@@ -80,15 +80,44 @@ def sec(r: random.Random) -> dict:
     return out
 
 
+def cftc(r: random.Random) -> object:
+    if r.random() < 0.1:
+        return junk(r)
+    rows = []
+    for i in range(r.randrange(0, 40)):
+        ts = 1_700_000_000 + r.randrange(-3000, 1200) * DAY if r.random() > 0.1 else NOW + i * DAY
+        rows.append({"cftc_contract_market_code": r.choice(["133741", "133742", "999999", junk(r)]),
+                     "report_date_as_yyyy_mm_dd": time.strftime("%Y-%m-%dT00:00:00.000", time.gmtime(ts))
+                     if r.random() > 0.05 else junk(r),
+                     **{f: r.choice([str(r.randrange(0, 40_000)), "-5", "1e15", junk(r)]) if r.random() < 0.2
+                        else str(r.randrange(0, 40_000)) for f in etf.CME_FIELDS}})
+    return rows
+
+
+def candles(r: random.Random) -> object:
+    if r.random() < 0.1:
+        return junk(r)
+    start = (NOW - 400 * DAY) // DAY * DAY
+    return [[start + i * DAY + (0 if r.random() > 0.05 else 3600), 0, 0, 0,
+             r.uniform(20_000, 150_000) if r.random() > 0.1 else junk(r)] for i in range(r.randrange(0, 300))]
+
+
 def network(r: random.Random):
-    flows, kl = tftc(r), klines(r)
+    flows, kl, cf, cb = tftc(r), klines(r), cftc(r), candles(r)
+    tick = {"price": r.choice([str(r.uniform(20_000, 150_000)), "0", "x", None])}
 
     def fetch(url, timeout, data=None):
         if "tftc.io" in url:
             return json.dumps(flows).encode() if r.random() > 0.02 else b"{"
         if "klines" in url:
             return json.dumps(kl).encode()
-        return None  # CME и Coinbase молчат — их проверяют свои тесты
+        if "cftc.gov" in url:
+            return json.dumps(cf).encode()
+        if "candles" in url:
+            return json.dumps(cb).encode()
+        if "ticker" in url:
+            return json.dumps(tick).encode()
+        return None
 
     return fetch
 
@@ -120,7 +149,17 @@ class FuzzTest(unittest.TestCase):
             known = [v for v in d[4] if v is not None]
             if known:  # итог дня — сумма фондов (до округления)
                 self.assertLessEqual(abs(sum(known) - d[1]), len(known), m)
-        self.assertRegex(c["through"], r"^(\d{4}-\d{2}-\d{2})?$", m)
+        self.assertRegex(c["through"], r"^([0-9]{4}-[0-9]{2}-[0-9]{2})?$", m)
+        for ts, v in c["tna"]:
+            self.assertTrue(etf.TNA_MIN <= v <= etf.TNA_MAX and ts % DAY == 0, m)
+        for w in (res["cme"] or {}).get("btc", []):
+            self.assertEqual(len(w), 10, m)
+            self.assertTrue(etf.CME_FROM <= w[0] <= NOW, m)
+            self.assertTrue(all(0 <= v <= etf.CME_MAX for v in w[1:]), m)
+        cbp = (res["cbp"] or {}).get("btc")
+        if cbp:
+            self.assertTrue(all(abs(v) <= etf.CBP_MAX and ts % DAY == 0 for ts, v in cbp["days"]), m)
+            self.assertTrue(cbp["now"] is None or abs(cbp["now"]) <= etf.CBP_MAX, m)
 
     def test_build_never_raises_and_keeps_invariants(self):
         r = random.Random(SEED)  # noqa: S311 — нужна повторяемость, а не криптостойкость
@@ -154,7 +193,9 @@ class FuzzTest(unittest.TestCase):
                 "import { readFileSync } from 'node:fs';"
                 f"import {{ validEtf }} from {json.dumps(os.path.join(ROOT, 'src/lib/etf.ts'))};"
                 "const all = JSON.parse(readFileSync(process.argv[1], 'utf8'));"
-                f"const bad = all.filter((r) => !validEtf(r, {NOW}));"
+                f"const bad = all.filter((r) => {{ const v = validEtf(r, {NOW}); return !v"
+                " || (r.cme.btc && !v.cme) || (r.cbp.btc && !v.cbp) || (r.coins.btc.tna.length && !v.coins.btc.tna)"
+                " || (r.holders.length !== (v.holders || []).length); });"
                 "console.log(JSON.stringify({ n: all.length, bad: bad.slice(0, 2) }));"
             )
             out = subprocess.run(["node", "--input-type=module", "-e", script, f.name],

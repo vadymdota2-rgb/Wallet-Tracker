@@ -653,7 +653,7 @@ say("токеномика: видно, что монету можно откры
 _ef = read(f"{APP}/src/screens/EtfScreen.tsx")
 _etfs = read(f"{APP}/wt_etf.py")
 say("институциональные потоки — только биткоин: потоки фондов по дням (открытый набор TFTC), спрос против добычи; без «кто докупал за неделю» и подписи источников; других монет нет",
-    'COINS = (("btc", "BTCUSDT"),)' in _etfs and "type Coin" not in _ef and "Segmented<Coin>" not in _ef
+    'SYMBOL = "BTCUSDT"' in _etfs and "type Coin" not in _ef and "Segmented<Coin>" not in _ef
     and "ETHUSDT" not in _etfs and "SOLUSDT" not in _etfs and "HYPE" not in _etfs
     and "etf_data = etf.etf_data" in api and "import wt_etf as etf" in api and '"/api/etf"' in api
     and "def etf_data(" in _etfs and "coinmarketcap" not in _etfs.lower() and "def _base(" not in _etfs
@@ -764,7 +764,7 @@ say("дайджест: просмотры — каждый человек оди
     and "viewDigest(it.id)" in _dgt and 'className="dg-views"' in _dgt)
 
 say("институциональные потоки: накопленный приток, доля фондов",
-    "cum={mode === \"c\" ? cumView : null}" in _ef and '"ef_mshare"' in _ef and "coinsRound(" in _ef)
+    "cum={mode === \"c\" ? cumView : null}" in _ef and '"ef_mshare"' in _ef and 'coinsShort(lang, stats.held, "", false)' in _ef)
 
 _em = read(f"{APP}/src/screens/EtfMore.tsx")
 say("институциональные потоки: позиции CME по CFTC, премия Coinbase",
@@ -1359,6 +1359,15 @@ say("«Институциональные потоки»: тесты как у �
     and "npm run typecheck:etf" in _wf and '"typecheck:etf": "node tools/typecheck-etf.mjs"' in read(f"{APP}/package.json")
     and "test_etf_fuzz.py tests/test_etf_security.py tests/test_etf_policy.py" in _wf
     and "тесты красные и без мутаций" in read(f"{APP}/tools/mutate-etf.py"))
+say("«Институциональные потоки»: активы фондов по дням (TFTC) — запас в BTC по дням, заголовок по свежей сводке, сверка своей оценки; CME и премия Coinbase — с правдоподобием; SEC — дата ASCII, копия на диске проверяется",
+    'if TNA_MIN <= _num(r.get("totalNetAssetsUsd")) <= TNA_MAX:' in _etfs and "if own > 0 and abs(own / held - 1) > SPLIT_MAX:" in _etfs
+    and "export function heldSeries(" in _etl and "export function assets(" in _etl and "function validTna(" in _etl
+    and "export function HeldSection(" in _em and "<HeldSection series={heldSeries(c)}" in _ef
+    and "any(not 0 <= v <= CME_MAX for v in vals)" in _etfs and "return round(v, 4) if abs(v) <= CBP_MAX else None" in _etfs
+    and "COINS" not in _etfs and 'QUARTER = re.compile(r"[0-9]{4}-(?:03-31|06-30|09-30|12-31)")' in read(f"{APP}/wt_treasury.py")
+    and "_point(v)" in read(f"{APP}/wt_treasury.py") and os.path.isfile(f"{APP}/tests/test_treasury_security.py")
+    and "tests/test_treasury_security.py" in _wf and 'from "./etfView"' in _ef and 'from "./etfView"' in _em
+    and "function money(" not in _ef + _em and "def btc_custody()" not in api)
 say("«Институциональные потоки»: доступность — график с клавиатуры и описанием, таблица цифрами, заглушка «занята», высокая контрастность",
     'tabIndex={0} role="group" aria-label={t(lang, "ef_chart_keys")}' in _ef and "onKeyDown={onKey}" in _ef
     and 'e.key === "ArrowRight"' in _ef and 'e.key === "Escape"' in _ef and "function FlowTable(" in _ef

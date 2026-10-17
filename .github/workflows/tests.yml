@@ -60,7 +60,7 @@ jobs:
           wt_etf.py tests/test_etf_api.py tests/test_etf_fuzz.py tests/test_etf_security.py tests/test_etf_policy.py tools/mutate-etf.py
           tests/test_bootstrap_personal.py tests/test_btc_etf_chain.py
           wt_etfchain.py tests/test_etfchain.py
-          wt_treasury.py tests/test_treasury.py
+          wt_treasury.py tests/test_treasury.py tests/test_treasury_security.py
       - name: Строгие типы Python (mypy --strict)
         run: >-
           pipx run mypy==1.11.2 --strict --python-version 3.11 wt_halving.py wt_etf.py wt_etfchain.py wt_treasury.py

@@ -42,6 +42,8 @@ export interface EtfCoin {
   through?: string;
   /** Доля фондов от добытых монет, %. */
   share: number | null;
+  /** Активы всех фондов по дням (сводка TFTC, с мая 2025): [начало суток, $]. */
+  tna?: [number, number][];
 }
 
 /** Держатель: [имя, FUND или COMPANY, страна ISO, тикер, BTC, дата отчёта unix (у фонда 0)]. */
@@ -82,6 +84,9 @@ const HOLDERS_MAX = 500;
 const CME_MAX = 2_000;
 const CBP_MAX = 2_000;
 const NAME_MAX = 120;
+/** Активы всех фондов за день, $ — как на сервере (TNA_MIN…TNA_MAX). */
+const TNA_MIN = 1e9;
+const TNA_MAX = 1e13;
 const TICKER = /^[A-Z0-9]{1,10}$/;
 const COUNTRY = /^(?:[A-Z]{2})?$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -125,6 +130,21 @@ function validDays(raw: unknown, nf: number, now: number): EtfDay[] | null {
   return out;
 }
 
+/** Ряд активов: дни по возрастанию, суммы правдоподобные; иначе — ряда нет (потоки остаются). */
+function validTna(raw: unknown, now: number): [number, number][] | null {
+  if (!Array.isArray(raw) || raw.length > DAYS_MAX) return null;
+  const out: [number, number][] = [];
+  let prev = 0;
+  for (const d of raw) {
+    if (!Array.isArray(d) || d.length !== 2) return null;
+    const [ts, v] = d as unknown[];
+    if (!within(ts, ETF_LAUNCH, now + 2 * DAY) || ts % DAY !== 0 || ts <= prev || !within(v, TNA_MIN, TNA_MAX)) return null;
+    out.push([ts, v]);
+    prev = ts;
+  }
+  return out;
+}
+
 function validCoin(raw: unknown, now: number): EtfCoin | null {
   if (!isObj(raw) || !Array.isArray(raw["funds"]) || raw["funds"].length > FUNDS_MAX) return null;
   const funds: EtfFund[] = [];
@@ -144,6 +164,8 @@ function validCoin(raw: unknown, now: number): EtfCoin | null {
   const out: EtfCoin = { funds, days, share };
   if (px !== undefined) out.px = px;
   if (through) out.through = through;
+  const tna = validTna(raw["tna"], now);
+  if (tna?.length) out.tna = tna;
   return out;
 }
 
@@ -270,9 +292,10 @@ export interface EtfStats {
   /** Лучший и худший завершённый месяц: [начало месяца, $ тыс.]. */
   bestM: [number, number] | null;
   worstM: [number, number] | null;
-  /** Активы фондов, $, и их запас, BTC. */
+  /** Активы фондов, $, и их запас, BTC; откуда — сводка TFTC или свои оценки по фондам. */
   aum: number;
   held: number;
+  src: "tna" | "funds";
 }
 
 /** Итоги экрана. now — «сейчас», unix с: идущий месяц в рекорды не попадает. */
@@ -327,9 +350,41 @@ export function etfStats(c: EtfCoin, now: number): EtfStats | null {
   return {
     last, d7: sumU(lastDays(days, 7)), d30: sumU(m30), cum: sumU(days), streak, sign,
     c30: m30.reduce((s, d) => s + d[2], 0), mined, best, worst, runs, bestM, worstM,
+    ...assets(c),
+  };
+}
+
+/** Свежие активы по сводке — не старше недели от последнего дня (как на сервере). */
+const TNA_FRESH = 7 * DAY;
+
+/**
+ * Активы всех фондов, $, и их запас, BTC. По сводке TFTC, если она свежая:
+ * активы того дня в пересчёте на цену сейчас (запас в монетах тот же). Иначе
+ * — сумма своих оценок по фондам (отчёты SEC плюс потоки после них).
+ */
+export function assets(c: EtfCoin): { aum: number; held: number; src: "tna" | "funds" } {
+  const lastDay = c.days[c.days.length - 1]?.[0] ?? 0;
+  const t = c.tna?.[c.tna.length - 1];
+  const px = t ? c.days.find((d) => d[0] === t[0])?.[3] ?? 0 : 0;
+  let now = c.px ?? 0;
+  for (let i = c.days.length - 1; i >= 0 && !now; i--) now = c.days[i]![3];
+  if (t && px > 0 && now > 0 && t[0] >= lastDay - TNA_FRESH) {
+    return { aum: (t[1] * now) / px, held: t[1] / px, src: "tna" };
+  }
+  return {
     aum: c.funds.reduce((s, f) => s + f.aum, 0),
     held: c.funds.reduce((s, f) => s + (f.hold ?? 0), 0),
+    src: "funds",
   };
+}
+
+/** Запас всех фондов по дням, BTC: активы дня (сводка TFTC) по цене того же дня. */
+export function heldSeries(c: EtfCoin): [number, number][] {
+  const px = new Map(c.days.map((d) => [d[0], d[3]]));
+  return (c.tna ?? []).flatMap(([ts, usd]): [number, number][] => {
+    const p = px.get(ts) ?? 0;
+    return p > 0 ? [[ts, usd / p]] : [];
+  });
 }
 
 export type Period = "d" | "w" | "m" | "all";
