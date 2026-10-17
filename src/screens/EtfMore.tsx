@@ -19,7 +19,7 @@ import type { DictKey } from "../i18n/types";
 import { num, usdWord } from "../lib/format";
 import { haptic } from "../lib/telegram";
 import { Card, Chips, SectionTitle } from "../components/ui";
-import type { BtcHolder } from "../lib/types";
+import { type BtcHolder } from "../lib/etf";
 import { dateStr, timeTicks } from "./FearGreedScreen";
 
 type Lang = Parameters<typeof t>[0];
@@ -289,19 +289,10 @@ function flag(code: string): string {
   return /^[A-Z]{2}$/.test(code) ? String.fromCodePoint(...[...code].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65)) : "";
 }
 
-/** Строка держателя в нынешнем виде. Старый сервер (или ответ, сохранённый
- *  в телефоне до обновления) присылал держателей объектом — такое не рисуем. */
-function holderRow(r: unknown): r is BtcHolder {
-  return Array.isArray(r) && r.length === 6 && typeof r[0] === "string" && (r[1] === "FUND" || r[1] === "COMPANY")
-    && typeof r[2] === "string" && typeof r[3] === "string" && typeof r[4] === "number" && Number.isFinite(r[4])
-    && typeof r[5] === "number";
-}
-
 /** Крупнейшие держатели: фонды и компании, с выбором группы. */
-export function Holders({ raw, price, lang }: { raw: unknown; price: number; lang: Lang }) {
+export function Holders({ rows, price, lang }: { rows: BtcHolder[]; price: number; lang: Lang }) {
   const [grp, setGrp] = useState<Group>("all");
   const [shown, setShown] = useState(PAGE);
-  const rows = useMemo(() => (Array.isArray(raw) ? raw.filter(holderRow) : []), [raw]);
   const list = useMemo(() => rows.filter((r) => grp === "all" || r[1] === grp), [rows, grp]);
   if (!rows.length) return null;
   return (

@@ -15,23 +15,29 @@
  * Приток — зелёный, отток — красный, как на биржах. Цифры фондов приходят
  * раз в сутки после закрытия торгов в США, поэтому «сегодня» здесь нет:
  * последний день — последний, по которому фонды отчитались.
+ *
+ * Расчёты и проверка ответа — в lib/etf.ts (их гоняют тесты); здесь — вид.
+ * График доступен и без пальца: стрелки клавиатуры ведут по столбцам, а
+ * под графиком — те же столбцы таблицей.
  */
-import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
 import { num, pct, px, usdWord } from "../lib/format";
 import { haptic, openExternal } from "../lib/telegram";
 import { fetchEtf, peekEtf } from "../lib/api";
 import { Card, Chips, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
-import type { EtfCoin, EtfReply } from "../lib/types";
+import {
+  PERIODS, RANGES, chartView, cumulative, etfStats, fundTotals, topFunds,
+  type Bucket, type EtfCoin, type EtfFund, type EtfReply, type Period, type Range,
+} from "../lib/etf";
 import { Boundary } from "../components/Boundary";
 import { Frame } from "./Screen";
 import { CbpSection, CmeSection, Holders } from "./EtfMore";
 import { dateStr, timeTicks } from "./FearGreedScreen";
+import "./EtfScreen.css";
 
 type Lang = Parameters<typeof t>[0];
-type Range = "30" | "90" | "365" | "all";
-type Period = "d" | "w" | "m" | "all";
 
 const sym = "BTC";
 const MODE_KEY = "wt-etf-mode";
@@ -50,6 +56,8 @@ const ISSUER: Record<string, string> = {
    условие — подпись источника со ссылкой и ссылка на лицензию рядом с данными. */
 const TFTC_URL = "https://www.tftc.io/bitcoin-etf-flows";
 const CCBY_URL = "https://creativecommons.org/licenses/by/4.0/";
+const PERIOD_KEY = { d: "ef_p_d", w: "ef_p_w", m: "ef_p_m", all: "ef_p_all" } as const;
+const RANGE_LABEL = { 30: "fg_r30", 90: "fg_r90", 365: "fg_r1y", all: "fg_rall" } as const;
 /** Мини-фонд Grayscale делит тикер с монетой — без пометки «BTC» в списке фондов читается как сама монета. */
 const MINI: Record<string, string> = { BTC: "Grayscale Mini" };
 
@@ -89,39 +97,6 @@ function coinsRound(lang: Lang, v: number): string {
 function coins(v: number, sym: string): string {
   const d = Math.abs(v) >= 100 ? 0 : Math.abs(v) >= 1 ? 1 : 3;
   return `${v > 0 ? "+" : v < 0 ? "−" : ""}${num(Math.abs(v), d)} ${sym}`;
-}
-
-/** Сколько новых биткоинов за сутки: 144 блока × награда за блок. */
-function minedPerDay(ts: number): number {
-  if (ts < 1713571200) return 900; // до халвинга 20 апреля 2024
-  if (ts < 1838900000) return 450; // до следующего — по оценке ≈ 9 апреля 2028
-  return 225;
-}
-
-interface Bucket { a: number; b: number; usd: number; coin: number; px: number; per: number[] }
-
-/** Дни в недели: на годе и всей истории дневные столбцы сливаются в шум. */
-function weekly(days: EtfCoin["days"], nf: number): Bucket[] {
-  const out: Bucket[] = [];
-  for (const d of days) {
-    const wk = Math.floor((d[0] / 86400 + 3) / 7); // недели с понедельника
-    const last = out[out.length - 1];
-    if (last && Math.floor((last.a / 86400 + 3) / 7) === wk) {
-      last.b = d[0];
-      last.usd += d[1];
-      last.coin += d[2];
-      if (d[3]) last.px = d[3];
-      d[4].forEach((v, i) => { last.per[i]! += v ?? 0; });
-    } else {
-      const per = Array.from({ length: nf }, (_, i) => d[4][i] ?? 0);
-      out.push({ a: d[0], b: d[0], usd: d[1], coin: d[2], px: d[3], per });
-    }
-  }
-  return out;
-}
-
-function daily(days: EtfCoin["days"]): Bucket[] {
-  return days.map((d) => ({ a: d[0], b: d[0], usd: d[1], coin: d[2], px: d[3], per: d[4].map((v) => v ?? 0) }));
 }
 
 /* ---------------------------------------------------------------------- */
@@ -168,8 +143,10 @@ function axisMoney(lang: Lang, vK: number): string {
   return `${s}$${f(a / 1e3)}K`;
 }
 
-function FlowChart({ data, cum, zero, lang, sel, onSel }: {
+function FlowChart({ data, cum, zero, lang, sel, onSel, label }: {
   data: Bucket[];
+  /** Что на графике словами — для читалки экрана. */
+  label: string;
   /** Накопленный поток с запуска к концу каждого столбца, $ тыс.; null — режим «по дням». */
   cum: number[] | null;
   /** Шкала накопленного от нуля — на всей истории; на коротком окне — по самим значениям. */
@@ -250,7 +227,7 @@ function FlowChart({ data, cum, zero, lang, sel, onSel }: {
       viewBox={`0 0 ${W} ${H}`}
       width="100%"
       role="img"
-      aria-label={t(lang, "ef_chart")}
+      aria-label={label}
       onPointerDown={(e: PointerEvent) => pick(e.clientX)}
       onPointerMove={(e: PointerEvent) => { if (e.pointerType === "mouse" || e.buttons) pick(e.clientX); }}
       onPointerUp={(e: PointerEvent) => { if (e.pointerType !== "mouse") onSel(null); }}
@@ -307,6 +284,43 @@ function FlowChart({ data, cum, zero, lang, sel, onSel }: {
   );
 }
 
+/** Те же столбцы цифрами — для читалки экрана и для тех, кому цифры удобнее полос. */
+function FlowTable({ view, cum, daily, lang }: { view: Bucket[]; cum: number[] | null; daily: boolean; lang: Lang }) {
+  const [open, setOpen] = useState(false);
+  const when = (b: Bucket) => (daily ? dateStr(lang, b.a, { day: "numeric", month: "short", year: "numeric" })
+    : `${dateStr(lang, b.a, { day: "numeric", month: "short" })} — ${dateStr(lang, b.b, { day: "numeric", month: "short", year: "numeric" })}`);
+  return (
+    <details className="ef-tbl" onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>
+      <summary>{t(lang, "ef_tbl")}</summary>
+      {open ? (
+        <div className="ef-tbl-w">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">{t(lang, daily ? "ef_tbl_d" : "ef_tbl_w")}</th>
+                <th scope="col">{t(lang, cum ? "ef_cum" : "ef_flows")}</th>
+                <th scope="col">{t(lang, "ef_price")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {view.map((b, i) => {
+                const v = cum ? (cum[i] ?? 0) : b.usd;
+                return (
+                  <tr key={b.a}>
+                    <th scope="row">{when(b)}</th>
+                    <td className={v > 0 ? "up" : v < 0 ? "dn" : ""}><bdi dir="ltr">{money(v * 1000)}</bdi></td>
+                    <td><bdi dir="ltr">{b.px > 0 ? px(b.px) : "—"}</bdi></td>
+                  </tr>
+                );
+              }).reverse()}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </details>
+  );
+}
+
 /* ---------------------------------------------------------------------- */
 
 /** Флаг страны по коду ISO: «US» → 🇺🇸. */
@@ -314,7 +328,7 @@ function flagOf(code?: string): string {
   return code && /^[A-Z]{2}$/.test(code) ? String.fromCodePoint(...[...code].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65)) : "";
 }
 
-function fundLabel(f: EtfCoin["funds"][number]): string {
+function fundLabel(f: EtfFund): string {
   if (MINI[f.t] && /mini/i.test(f.n || "Mini")) return MINI[f.t]!;
   return ISSUER[f.t] ?? f.n.replace(/ (ETF|Trust|Fund).*$/i, "");
 }
@@ -322,31 +336,13 @@ function fundLabel(f: EtfCoin["funds"][number]): string {
 function Funds({ c, lang }: { c: EtfCoin; lang: Lang }) {
   const [period, setPeriod] = useState<Period>("w");
   const aumAll = c.funds.reduce((s, f) => s + (f.aum || 0), 0);
-  const rows = useMemo(() => {
-    const days = c.days;
-    const last = days[days.length - 1]?.[0] ?? 0;
-    const from = period === "d" ? last : period === "w" ? last - 6 * 86400 : period === "m" ? last - 29 * 86400 : 0;
-    const sum = c.funds.map(() => 0);
-    if (period === "all") c.funds.forEach((f, i) => { sum[i] = f.cum / 1000; });
-    else for (const d of days) if (d[0] >= from) d[4].forEach((v, i) => { sum[i]! += v ?? 0; });
-    return c.funds.map((f, i) => ({ f, v: sum[i]! })).sort((x, y) => y.v - x.v);
-  }, [c, period]);
-  const moving = rows.filter((r) => Math.abs(r.v) >= 1);
-  const still = rows.length - moving.length;
-  const span = Math.max(1, ...moving.map((r) => Math.abs(r.v)));
-  const ins = moving.filter((r) => r.v > 0).reduce((s, r) => s + r.v, 0);
-  const outs = moving.filter((r) => r.v < 0).reduce((s, r) => s + r.v, 0);
+  const { moving, still, span, ins, outs } = useMemo(() => fundTotals(c, period), [c, period]);
   return (
     <Card>
       <Chips<Period>
         value={period}
         onChange={(p) => { haptic("select"); setPeriod(p); }}
-        options={[
-          { id: "d", label: t(lang, "ef_p_d") },
-          { id: "w", label: t(lang, "ef_p_w") },
-          { id: "m", label: t(lang, "ef_p_m") },
-          { id: "all", label: t(lang, "ef_p_all") },
-        ]}
+        options={PERIODS.map((id) => ({ id, label: t(lang, PERIOD_KEY[id]) }))}
       />
       <p className="ef-fsum">
         {/* Ноль — без цвета: зелёный «Приток 0 $» читался как приток. */}
@@ -397,7 +393,7 @@ export function EtfScreen() {
   const [range, setRange] = useState<Range>(() => {
     try {
       const v = localStorage.getItem(RANGE_KEY);
-      return (["30", "90", "365", "all"].includes(v ?? "") ? v : "90") as Range;
+      return RANGES.find((r) => r === v) ?? "90";
     } catch {
       return "90";
     }
@@ -416,7 +412,7 @@ export function EtfScreen() {
     setFailed(false);
     void fetchEtf().then((r) => {
       if (!alive) return;
-      if (r?.ok && r.coins?.btc) setReply(r);
+      if (r) setReply(r);
       else setFailed(true);
     });
     return () => {
@@ -432,86 +428,38 @@ export function EtfScreen() {
     }
   };
 
-  const c = reply?.coins?.btc;
-  const days = c?.days ?? [];
-  const last = days[days.length - 1];
-  const lastPx = [...days].reverse().find((d) => d[3] > 0)?.[3] ?? 0;
-
-  const stats = useMemo(() => {
-    if (!c || !days.length) return null;
-    const end = days[days.length - 1]![0];
-    const win = (n: number) => days.filter((d) => d[0] > end - n * 86400);
-    const sumU = (ds: typeof days) => ds.reduce((s, d) => s + d[1], 0) * 1000;
-    const sumC = (ds: typeof days) => ds.reduce((s, d) => s + d[2], 0);
-    const cum = c.funds.reduce((s, f) => s + f.cum, 0);
-    let streak = 0;
-    const sign = Math.sign(days[days.length - 1]![1]);
-    for (let i = days.length - 1; i >= 0 && sign !== 0 && Math.sign(days[i]![1]) === sign; i--) streak++;
-    let best = days[0]!;
-    let worst = days[0]!;
-    const runs = { up: { n: 0, at: 0 }, dn: { n: 0, at: 0 } };
-    let run = 0;
-    let runSign = 0;
-    let runAt = 0;
-    for (const d of days) {
-      if (d[1] > best[1]) best = d;
-      if (d[1] < worst[1]) worst = d;
-      const s = Math.sign(d[1]);
-      if (s !== 0 && s === runSign) run++;
-      else {
-        run = s === 0 ? 0 : 1;
-        runSign = s;
-        runAt = d[0];
-      }
-      if (runSign > 0 && run > runs.up.n) runs.up = { n: run, at: runAt };
-      if (runSign < 0 && run > runs.dn.n) runs.dn = { n: run, at: runAt };
-    }
-    // Лучший и худший месяц — только завершённые: идущий месяц (последний
-    // день данных в нём, а календарь ещё в нём же) неполон, и «худший месяц —
-    // октябрь» посреди октября вводил в заблуждение.
-    const months = new Map<number, number>();
-    for (const d of days) {
-      const m = new Date(d[0] * 1000);
-      const key = Date.UTC(m.getUTCFullYear(), m.getUTCMonth(), 1) / 1000;
-      months.set(key, (months.get(key) ?? 0) + d[1]);
-    }
-    const nowM = new Date();
-    const open = Date.UTC(nowM.getUTCFullYear(), nowM.getUTCMonth(), 1) / 1000;
-    let bestM: [number, number] | null = null;
-    let worstM: [number, number] | null = null;
-    for (const [m, v] of months) {
-      if (m >= open) continue;
-      if (!bestM || v > bestM[1]) bestM = [m, v];
-      if (!worstM || v < worstM[1]) worstM = [m, v];
-    }
-    const m30 = win(30);
-    const mined = m30.length ? Array.from({ length: 30 }, (_, i) => minedPerDay(end - i * 86400)).reduce((a, b) => a + b, 0) : 0;
-    const aum = c.funds.reduce((s, f) => s + f.aum, 0);
-    return {
-      d7: sumU(win(7)), d30: sumU(m30), cum, streak, sign,
-      c30: sumC(m30), mined, best, worst, runs, aum, bestM, worstM,
-      held: aum > 0 && lastPx > 0 ? aum / lastPx : 0,
-    };
-  }, [c, days, lastPx]);
-
-  const view = useMemo(() => {
-    if (!c) return [];
-    const src = range === "all" ? days : days.filter((d) => d[0] > (days[days.length - 1]?.[0] ?? 0) - Number(range) * 86400);
-    return range === "30" || range === "90" ? daily(src) : weekly(src, c.funds.length);
-  }, [c, days, range]);
+  /* Ответ уже проверен (validEtf): в нём всегда есть фонды и хотя бы один день. */
+  const c = reply?.coins.btc;
+  const days = useMemo(() => c?.days ?? [], [c]);
+  const lastPx = c?.px || ([...days].reverse().find((d) => d[3] > 0)?.[3] ?? 0);
+  const stats = useMemo(() => (c ? etfStats(c, Date.now() / 1000) : null), [c]);
+  const view = useMemo(() => (c ? chartView(days, c.funds.length, range) : []), [c, days, range]);
   const selB = sel !== null ? view[sel] : undefined;
-  /* Накоплено с запуска к концу каждого столбца: от всей истории, а не от
-     начала выбранного окна — иначе на «90 дней» линия начиналась бы с нуля. */
-  const cumView = useMemo(() => {
-    const first = view[0]?.a ?? 0;
-    let acc = days.filter((d) => d[0] < first).reduce((s, d) => s + d[1], 0);
-    return view.map((b) => (acc += b.usd));
-  }, [view, days]);
+  const cumView = useMemo(() => cumulative(view, days), [view, days]);
+  const daily = range === "30" || range === "90";
 
   const pickRange = (r: Range) => {
     setRange(r);
     setSel(null);
     remember(RANGE_KEY, r);
+  };
+  /* Клавиатура: стрелки — соседний столбец, Home/End — первый и последний,
+     Esc — убрать подсказку. Время на графике идёт слева направо и в RTL. */
+  const onKey = (e: KeyboardEvent) => {
+    const n = view.length;
+    if (!n) return;
+    const go = (i: number) => {
+      e.preventDefault();
+      setSel(Math.max(0, Math.min(n - 1, i)));
+    };
+    if (e.key === "ArrowRight") go(sel === null ? n - 1 : sel + 1);
+    else if (e.key === "ArrowLeft") go(sel === null ? n - 1 : sel - 1);
+    else if (e.key === "Home") go(0);
+    else if (e.key === "End") go(n - 1);
+    else if (e.key === "Escape" && sel !== null) {
+      e.preventDefault();
+      setSel(null);
+    }
   };
 
   const dayTxt = (ts: number) => dateStr(lang, ts, { weekday: "short", day: "numeric", month: "long" });
@@ -524,16 +472,16 @@ export function EtfScreen() {
           <Empty text={t(lang, "ef_err")} hint={
             <button type="button" className="lq-retry" onClick={() => setRetry((n) => n + 1)}>{t(lang, "ui_retry")}</button>
           } />
-        ) : <Card><Skeleton rows={8} /></Card>
-      ) : !c || !last || !stats ? null : (
+        ) : <div aria-busy="true"><Card><Skeleton rows={8} /></Card></div>
+      ) : !c || !stats ? null : (
         <>
           <Card>
             <div className="ef-hero">
-              <small>{t(lang, "ef_last", { d: dayTxt(last[0]) })}</small>
-              <b className={last[1] > 0 ? "up" : last[1] < 0 ? "dn" : ""}><bdi dir="ltr">{money(last[1] * 1000)}</bdi></b>
+              <small>{t(lang, "ef_last", { d: dayTxt(stats.last[0]) })}</small>
+              <b className={stats.last[1] > 0 ? "up" : stats.last[1] < 0 ? "dn" : ""}><bdi dir="ltr">{money(stats.last[1] * 1000)}</bdi></b>
               <span>
-                {t(lang, last[1] > 0 ? "ef_inflow" : last[1] < 0 ? "ef_outflow" : "ef_flat")}
-                {last[2] ? <> · <bdi dir="ltr">{coins(last[2], sym)}</bdi></> : null}
+                {t(lang, stats.last[1] > 0 ? "ef_inflow" : stats.last[1] < 0 ? "ef_outflow" : "ef_flat")}
+                {stats.last[2] ? <> · <bdi dir="ltr">{coins(stats.last[2], sym)}</bdi></> : null}
               </span>
               {stats.streak >= 2 ? (
                 <em className={stats.sign > 0 ? "up" : "dn"}>
@@ -565,7 +513,7 @@ export function EtfScreen() {
             </p>
           </Card>
 
-          {stats.mined > 0 ? (
+          {stats.mined > 0 && stats.c30 !== 0 ? (
             <Card>
               <p className="ef-mine-t">{t(lang, "ef_mine_title")}</p>
               <div className="ef-mine">
@@ -601,18 +549,14 @@ export function EtfScreen() {
             <Segmented<Range>
               value={range}
               onChange={pickRange}
-              options={[
-                { id: "30", label: t(lang, "fg_r30") },
-                { id: "90", label: t(lang, "fg_r90") },
-                { id: "365", label: t(lang, "fg_r1y") },
-                { id: "all", label: t(lang, "fg_rall") },
-              ]}
+              options={RANGES.map((id) => ({ id, label: t(lang, RANGE_LABEL[id]) }))}
             />
-            <div className="fg-plot">
-              <FlowChart data={view} cum={mode === "c" ? cumView : null} zero={range === "all"} lang={lang} sel={sel} onSel={setSel} />
+            <div className="fg-plot ef-plot" tabIndex={0} role="group" aria-label={t(lang, "ef_chart_keys")}
+              onKeyDown={onKey} onBlur={() => setSel(null)}>
+              <FlowChart data={view} cum={mode === "c" ? cumView : null} zero={range === "all"} lang={lang} sel={sel} onSel={setSel}
+                label={t(lang, "ef_chart_sum", { v: iso(money(view.reduce((s, b) => s + b.usd, 0) * 1000)) })} />
               {selB ? (() => {
-                const tops = c.funds.map((f, i) => ({ t: f.t, v: selB.per[i] ?? 0 }))
-                  .filter((x) => Math.abs(x.v) >= 1).sort((x, y) => Math.abs(y.v) - Math.abs(x.v)).slice(0, 3);
+                const tops = topFunds(c.funds, selB);
                 return (
                   <div className={sel! > view.length / 2 ? "fg-pop left ef-pop" : "fg-pop ef-pop"} aria-live="polite">
                     <small>{selB.a === selB.b ? dayTxt(selB.a)
@@ -639,8 +583,9 @@ export function EtfScreen() {
             />
             <p className="lq-hint">
               {mode === "c" ? t(lang, "ef_cum_hint")
-                : t(lang, range === "30" || range === "90" ? "ef_chart_d" : "ef_chart_w")} {t(lang, "fg_hint")}
+                : t(lang, daily ? "ef_chart_d" : "ef_chart_w")} {t(lang, "fg_hint")}
             </p>
+            <FlowTable view={view} cum={mode === "c" ? cumView : null} daily={daily} lang={lang} />
           </Card>
 
           <SectionTitle>{t(lang, "ef_f_title")}</SectionTitle>
@@ -678,11 +623,11 @@ export function EtfScreen() {
                 <b>{t(lang, "ef_days_n", { n: num(stats.runs.dn.n) })}</b>
               </div>
             </div>
-            <p className="lq-hint">{t(lang, "ef_r_note", { d: dateStr(lang, days[0]![0], { day: "numeric", month: "long", year: "numeric" }) })}</p>
+            <p className="lq-hint">{t(lang, "ef_r_note", { d: dateStr(lang, days[0]?.[0] ?? 0, { day: "numeric", month: "long", year: "numeric" }) })}</p>
           </Card>
 
           {/* Блок упал (чужой ответ, старый формат) — пропадает только он, а не весь экран. */}
-          <Boundary name="etf-holders"><Holders raw={reply.holders} price={lastPx} lang={lang} /></Boundary>
+          <Boundary name="etf-holders"><Holders rows={reply.holders ?? []} price={lastPx} lang={lang} /></Boundary>
           <Boundary name="etf-cme">
             {reply.cme?.btc?.length ? <CmeSection rows={reply.cme.btc} sym={sym} price={lastPx} lang={lang} /> : null}
           </Boundary>

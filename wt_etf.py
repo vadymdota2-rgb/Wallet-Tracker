@@ -77,8 +77,21 @@ HOSTS = frozenset({"data-api.binance.vision", "publicreporting.cftc.gov", "api.e
 # Потоки фондов по дням — открытый набор TFTC, CC BY 4.0 (см. начало модуля).
 # Обновляется вечером и утром: раз в час (TTL) — с запасом.
 TFTC = "https://www.tftc.io/bitcoin-etf-flows/data.json"
-# Тикер фонда в наборе — заглавные буквы и цифры.
+# Тикер фонда в наборе — заглавные буквы и цифры; дата — ГГГГ-ММ-ДД. Цифры —
+# только ASCII: \d в Python пропустил бы и «２０２６» (полноширинные), а
+# приложение (JavaScript) такую дату не примет.
 TICKER = re.compile(r"[A-Z0-9]{1,10}")
+DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
+# Начало торгов спотовыми биткоин-ETF в США — 11 января 2024 г.
+ETF_LAUNCH = 1_704_931_200
+# Пределы правдоподобия строки набора: поток всех фондов за день и одного
+# фонда, $ (рекорд — около $1,4 млрд за день), цена BTC.
+DAY_MAX = 50e9
+FUND_MAX = 25e9
+PX_MIN, PX_MAX = 1_000.0, 10_000_000.0
+# Запас одного фонда по отчёту — не больше этого, BTC (у крупнейшего ~0,8
+# млн); больше — ошибка в отчёте, такого запаса нет.
+HOLD_MAX = 5_000_000.0
 # Самый большой ответ — отчёт CFTC, ~2 МБ.
 BODY_MAX = 8 << 20
 _HEADERS = {"User-Agent": "wallet-tracker/1.0", "Accept-Encoding": "identity"}
@@ -175,7 +188,8 @@ def _day(stamp: object) -> int:
 
 
 def _klines(symbol: str, start_ms: int) -> dict[int, float]:
-    """Закрытие дня на Binance: начало суток (с) → цена."""
+    """Закрытие дня на Binance: начало суток (с) → цена. Цена вне
+    правдоподобного (PX_MIN…PX_MAX) — мусор, её нет."""
     out: dict[int, float] = {}
     cur = start_ms
     for _ in range(6):
@@ -183,7 +197,7 @@ def _klines(symbol: str, start_ms: int) -> dict[int, float]:
         if not isinstance(rows, list) or not rows:
             break
         for k in rows:
-            if isinstance(k, list) and len(k) > 4:
+            if isinstance(k, list) and len(k) > 4 and PX_MIN <= _num(k[4]) <= PX_MAX:
                 out[int(_num(k[0])) // 1000] = _num(k[4])
         if len(rows) < 1000:
             break
@@ -197,30 +211,40 @@ Day = tuple[dict[str, float], float]  # поток фонда $, итог дня
 def _tftc() -> tuple[dict[int, Day], dict[int, float], str]:
     """Дни набора TFTC: начало суток → (фонд → поток $, итог дня $), цена
     дня из набора (запасная к Binance) и «данные по» (дата). Нет набора или
-    он битый — пусто. День без разбивки по фондам (праздник биржи) — с
-    итогом, но без фондов; итога нет — сумма фондов."""
+    он битый — пусто.
+
+    Итог дня — сумма фондов: так итог, фонды и «с запуска» на экране
+    сходятся до доллара (сводка набора в редкие дни расходится с фондами на
+    единицы процентов). Нет разбивки по фондам — итог набора; день без
+    разбивки и с нулём — праздник биржи, торгов не было, его нет. Строка,
+    которой не бывает (дата вне торгов фондов, поток или цена за пределами
+    правдоподобного), пропускается."""
     got = _get(TFTC, 30)
     rows = got.get("days") if isinstance(got, dict) else None
     if not isinstance(rows, list):
         return {}, {}, ""
     days: dict[int, Day] = {}
     px: dict[int, float] = {}
+    last = _now() + 86400
     for r in rows:
-        if not isinstance(r, dict):
+        if not isinstance(r, dict) or not isinstance(r.get("date"), str) or not DATE.fullmatch(r["date"]):
             continue
         try:
-            ts = _day(r.get("date"))
+            ts = _day(r["date"])
         except ValueError:
             continue
         per = r.get("perEtfUsd")
         by = {str(k): _num(v) for k, v in per.items()
               if v is not None and isinstance(k, str) and TICKER.fullmatch(k)} if isinstance(per, dict) else {}
-        total = r.get("netFlowUsd")
-        days[ts] = (by, _num(total) if total is not None else sum(by.values()))
-        if _num(r.get("btcCloseUsd")) > 0:
+        total = sum(by.values()) if by else _num(r.get("netFlowUsd"))
+        if not ETF_LAUNCH <= ts <= last or (not by and total == 0) or abs(total) > DAY_MAX \
+                or any(abs(v) > FUND_MAX for v in by.values()):
+            continue
+        days[ts] = (by, total)
+        if PX_MIN <= _num(r.get("btcCloseUsd")) <= PX_MAX:
             px[ts] = _num(r["btcCloseUsd"])
     through = got.get("updatedThrough")
-    return days, px, through if isinstance(through, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", through) else ""
+    return days, px, through if isinstance(through, str) and DATE.fullmatch(through) else ""
 
 
 # Сколько биткоинов добыто к блоку 840 000 (четвёртый халвинг, 20 апреля 2024,
@@ -264,13 +288,15 @@ def _last_report(sec: dict[str, dict[str, Any]], px: dict[int, float]) -> dict[s
         for e in sorted(q, reverse=True):
             cnt, fv = q[e]
             if cnt:
-                out[t] = (float(cnt), int(e))
+                if 0 < float(cnt) <= HOLD_MAX:
+                    out[t] = (float(cnt), int(e))
                 break
             ratios = [r[1] / r[0] for g in sec.values() if (r := (g.get("q") or {}).get(e)) and r[0] and r[1] and r[0] > 0]
             near = [d for d in px if d <= e and px[d] > 0]
             price = _median(ratios) or (px[max(near)] if near else 0.0)
             if fv is not None and price > 0:
-                out[t] = (float(fv) / price, int(e))
+                if 0 < float(fv) / price <= HOLD_MAX:
+                    out[t] = (float(fv) / price, int(e))
                 break
     return out
 

@@ -2,9 +2,11 @@
 #
 # unit — быстрые: типы TypeScript, синтаксис сервера (Python), тесты расчёта
 #        в приложении (node --test) и тесты сервера (unittest, сеть подменена).
-# e2e  — карточка халвинга в настоящем Chromium на свежесобранном html/.
-# mutation — мутационная проверка модуля халвинга: портит код в 30 местах и
-#        требует, чтобы тесты заметили каждую значимую порчу.
+# e2e  — карточка халвинга и «Институциональные потоки» в настоящем Chromium
+#        на свежесобранном html/.
+# mutation — мутационная проверка модулей халвинга и «Институциональных
+#        потоков»: портит код в десятках мест и требует, чтобы тесты заметили
+#        каждую значимую порчу.
 #
 # tools/guard.py здесь не запускается: он сверяет приложение и с ботом из
 # соседнего репозитория WhaleScanner, которого в этой проверке нет.
@@ -46,8 +48,8 @@ jobs:
       - run: npm ci
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
-      - name: Типы TypeScript (приложение и тесты; модуль халвинга — в строжайшем режиме)
-        run: npm run typecheck && npm run typecheck:tests && npm run typecheck:halving
+      - name: Типы TypeScript (приложение и тесты; модули халвинга и ETF — в строжайшем режиме)
+        run: npm run typecheck && npm run typecheck:tests && npm run typecheck:halving && npm run typecheck:etf
       - name: Синтаксис сервера
         run: python -m py_compile whale_api.py wt_halving.py wt_etf.py wt_etfchain.py wt_treasury.py wt_shield.py wt_digest_img.py
       - name: Анализатор Python (модуль халвинга и его тесты)
@@ -55,7 +57,8 @@ jobs:
           pipx run ruff==0.15.8 check --target-version py310
           --select E,F,W,B,UP,SIM,PL,RUF,S,BLE,I --ignore E501,PLR2004,RUF001,RUF002,RUF003,S310,S603,S607
           wt_halving.py tests/test_halving_api.py tests/test_halving_fuzz.py tests/test_halving_security.py tests/test_halving_policy.py tools/mutate-halving.py
-          wt_etf.py tests/test_etf_api.py tests/test_bootstrap_personal.py tests/test_btc_etf_chain.py
+          wt_etf.py tests/test_etf_api.py tests/test_etf_fuzz.py tests/test_etf_security.py tests/test_etf_policy.py tools/mutate-etf.py
+          tests/test_bootstrap_personal.py tests/test_btc_etf_chain.py
           wt_etfchain.py tests/test_etfchain.py
           wt_treasury.py tests/test_treasury.py
       - name: Строгие типы Python (mypy --strict)
@@ -82,7 +85,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Сборка приложения
         run: npm run build
-      - name: Браузерный тест карточки халвинга
+      - name: Браузерные тесты (халвинг и «Институциональные потоки»)
         run: npm run test:e2e
 
   # Сервер может стоять на любом Python 3.10–3.13 — модуль обязан работать на всех.
@@ -120,3 +123,5 @@ jobs:
           python-version: "3.11"
       - name: Мутационная проверка модуля халвинга
         run: python tools/mutate-halving.py
+      - name: Мутационная проверка «Институциональных потоков»
+        run: python tools/mutate-etf.py

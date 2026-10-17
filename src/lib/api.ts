@@ -8,9 +8,10 @@
 import { initData } from "./telegram";
 import { forget, peek, peekAny, remember } from "./memo";
 import { HALVING_TTL_MS, clockSkew, pickHalving, validHalving, type HalvingReply } from "./halving";
+import { ETF_TTL_MS, validEtf, type EtfReply } from "./etf";
 import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
-  LiqCoinsReply, FngReply, DomReply, EtfReply, FundRow, LsRow, MutationResult,
+  LiqCoinsReply, FngReply, DomReply, FundRow, LsRow, MutationResult,
   RotSide, SymbolRow, TokenHist, Trades, UnlocksReply, WalletLive, BscExFlowReply,
   BtcBigReply, BtcFlowReply, BtcRankReply, BtcWalletReply, LsTotals, OptionsReply, LiqsReply, OiHistReply, CalReply,
 } from "./types";
@@ -563,19 +564,23 @@ export const fetchDom = () =>
   });
 export const peekDom = () => peek<DomReply | null>("/api/dom", 60 * 60_000) ?? savedDom();
 
-/* ETF и крупные держатели: отчёты фондов выходят раз в сутки — ответ живёт
-   час и лежит на устройстве. */
+/* ETF и крупные держатели: фонды отчитываются раз в сутки — ответ живёт час
+   (как на сервере) и лежит на устройстве. В память и на устройство — только
+   проверенная копия (validEtf): подменённый или старый ответ экран не роняет. */
 const ETF_SAVED = "wt-etf-v1";
 function savedEtf(): EtfReply | null {
-  const hit = readSaved<EtfReply>(ETF_SAVED).all;
-  return hit && hit.v?.coins?.btc ? hit.v : null;
+  const hit = readSaved<unknown>(ETF_SAVED).all;
+  return hit && Date.now() - hit.at < 30 * 24 * 3600_000 ? validEtf(hit.v) : null;
 }
 export const fetchEtf = () =>
-  remember<EtfReply | null>("/api/etf", 60 * 60_000, () => callTwice<EtfReply>("/api/etf"), good).then((r) => {
-    if (r?.ok && r.coins?.btc) writeSaved(ETF_SAVED, { all: { at: Date.now(), v: r } });
-    return r;
-  });
-export const peekEtf = () => peek<EtfReply | null>("/api/etf", 60 * 60_000) ?? savedEtf();
+  remember<EtfReply | null>("/api/etf", ETF_TTL_MS, () =>
+    callTwice<unknown>("/api/etf").then((r) => {
+      const v = validEtf(r);
+      // На устройство — только свежий проверенный ответ.
+      if (v) writeSaved(ETF_SAVED, { all: { at: Date.now(), v } });
+      return v;
+    }), good);
+export const peekEtf = () => peek<EtfReply | null>("/api/etf", ETF_TTL_MS) ?? savedEtf();
 
 /* Халвинг: блок раз в десять минут — ответ живёт пять, последний лежит на
    устройстве, и отсчёт в меню виден сразу, даже без сети. */

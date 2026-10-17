@@ -36,8 +36,7 @@ SEC = {
 }
 
 
-# Набор TFTC: три дня подряд и праздник биржи (без разбивки по фондам).
-H = D1 - 86400
+# Набор TFTC: праздник биржи (без разбивки по фондам) и три дня подряд.
 TFTC = {
     "license": "https://creativecommons.org/licenses/by/4.0/", "updatedThrough": "2026-10-12",
     "days": [
@@ -125,10 +124,9 @@ class EtfTest(unittest.TestCase):
         self.assertEqual((bitb["hold"], bitb["aum"], bitb["cum"], bitb["n"]), (0.0, 0, 8_000_000, ""))
         # Только стоимость в отчёте — монеты по цене отчётов IBIT на ту дату.
         self.assertEqual((fbtc["hold"], fbtc["cum"]), (round(9e9 / 60_000, 2), 0))
-        # Дни: итог дня из набора (нет — сумма фондов), монеты — по цене дня;
-        # праздник — с итогом, без фондов; мусорные тикеры отброшены.
+        # Дни: итог дня — сумма фондов, монеты — по цене дня; праздник биржи
+        # (без фондов и с нулём) — не торговый день; мусорные тикеры отброшены.
         self.assertEqual(btc["days"], [
-            [H, 0, 0.0, 59_000.0, [None, None, None]],
             [D1, 105_000, round(105e6 / 60_000.5, 2), 60_000.5, [100_000, 5_000, None]],
             [D2, -17_000, round(-17e6 / 61_000, 2), 61_000.0, [-20_000, 3_000, None]],
             [D3, 62_000, 1_000.0, 62_000.0, [62_000, None, None]],
@@ -139,6 +137,42 @@ class EtfTest(unittest.TestCase):
         # Только открытый набор TFTC: сводок CoinMarketCap и CoinGecko нет.
         self.assertFalse(any("coinmarketcap" in u or "coingecko" in u for u in net.urls))
         self.assertFalse(hasattr(etf, "set_chain"))
+
+    def test_implausible_rows_are_skipped(self):
+        bad = {"days": [
+            {"date": "2023-12-29", "netFlowUsd": 5e6, "perEtfUsd": {"IBIT": 5e6}},  # до запуска фондов
+            {"date": "2026-11-30", "netFlowUsd": 5e6, "perEtfUsd": {"IBIT": 5e6}},  # из будущего
+            {"date": "2026-10-10<script>", "netFlowUsd": 5e6, "perEtfUsd": {"IBIT": 5e6}},
+            {"date": "2026-10-10", "netFlowUsd": 1e12, "perEtfUsd": None},  # $1 трлн за день
+            {"date": "2026-10-11", "netFlowUsd": 1e6, "perEtfUsd": {"IBIT": 3e10}},  # фонд — $30 млрд
+            {"date": "2026-10-12", "netFlowUsd": 9e6, "btcCloseUsd": 5, "perEtfUsd": {"IBIT": 7e6, "BITB": 1e6}},
+        ], "updatedThrough": "2026-10-12"}
+        btc = self.build(Net(**{"tftc.io/bitcoin-etf-flows/data.json": bad}))["coins"]["btc"]
+        # Осталась одна строка: итог — сумма фондов (8, а не 9 из сводки), цена
+        # 5 $ — не цена биткоина, берётся Binance.
+        self.assertEqual([d[:2] for d in btc["days"]], [[D3, 8_000]])
+        self.assertEqual(btc["days"][0][3], 62_000.0)
+
+    def test_implausible_prices_and_holdings_are_dropped(self):
+        # Цена со свечи за пределами правдоподобного — мусор; запас фонда
+        # больше 5 млн BTC — ошибка в отчёте, запаса нет; дата с не-ASCII
+        # цифрами — не дата (приложение её не приняло бы).
+        kl = [[day_ms(D1), 0, 0, 0, "1e300"], [day_ms(D2), 0, 0, 0, "-5"], [day_ms(D3), 0, 0, 0, "62000"]]
+        self.sec(dict(SEC, BITB={"n": "Bitwise", "fee": None, "q": {Q2: [9e9, None]}}))
+        bad = dict(TFTC, updatedThrough="２０２６-10-12")
+        btc = self.build(Net(**{"binance.vision/api/v3/klines": kl, "tftc.io/bitcoin-etf-flows/data.json": bad}))["coins"]["btc"]
+        self.assertEqual([d[3] for d in btc["days"]], [60_000.0, 61_000.0, 62_000.0])  # цена из набора
+        self.assertEqual(next(f for f in btc["funds"] if f["t"] == "BITB")["hold"], 0.0)
+        self.assertEqual(btc["through"], "")
+
+    def test_report_day_flow_is_already_in_the_report(self):
+        # Поток самого дня отчёта уже в запасе на конец дня — второй раз не прибавляется.
+        on_report = dict(TFTC, days=[{"date": "2026-06-30", "netFlowUsd": 6e8, "btcCloseUsd": 60_000,
+                                      "perEtfUsd": {"IBIT": 6e8}}, *TFTC["days"]])
+        kl = [*Net().routes["binance.vision/api/v3/klines"]]
+        btc = self.build(Net(**{"tftc.io/bitcoin-etf-flows/data.json": on_report, "binance.vision/api/v3/klines": kl}))["coins"]["btc"]
+        after = 100e6 / 60_000.5 - 20e6 / 61_000 + 62e6 / 62_000
+        self.assertEqual(btc["funds"][0]["hold"], round(734_261.0 + after, 2))
 
     def test_fee_taken_in_coins_lowers_holdings(self):
         sec = {"X": {"n": "", "fee": 0.01, "q": {Q2: [1000.0, None]}}}
@@ -151,7 +185,7 @@ class EtfTest(unittest.TestCase):
     def test_tftc_price_when_binance_has_no_candle(self):
         kl = [[day_ms(Q2), 0, 0, 0, "60000"]]
         btc = self.build(Net(**{"binance.vision/api/v3/klines": kl}))["coins"]["btc"]
-        self.assertEqual([d[3] for d in btc["days"]], [59_000.0, 60_000.0, 61_000.0, 62_000.0])
+        self.assertEqual([d[3] for d in btc["days"]], [60_000.0, 61_000.0, 62_000.0])
 
     def test_holders_funds_and_companies(self):
         co = [["Strategy", "COMPANY", "US", "MSTR", 846_000.0, 1_782_777_600], "мусор"]
@@ -311,10 +345,10 @@ class EtfTest(unittest.TestCase):
 
         def kl(url):
             calls.append(url)
-            return [[day_ms(D1), 0, 0, 0, "1"]] * 1000
+            return [[day_ms(D1), 0, 0, 0, "60000"]] * 1000
 
         with mock.patch.object(etf, "_fetch", Net(**{"binance.vision/api/v3/klines": kl}).fetch):
-            self.assertEqual(etf._klines("BTCUSDT", 0), {D1: 1.0})
+            self.assertEqual(etf._klines("BTCUSDT", 0), {D1: 60_000.0})
         self.assertEqual(len(calls), 6)
 
     def test_junk_everywhere_is_skipped(self):
@@ -324,7 +358,7 @@ class EtfTest(unittest.TestCase):
             "products/BTC-USD/candles": {"message": "rate limited"},
             "binance.vision/api/v3/klines": ["мусор", [1], *Net().routes["binance.vision/api/v3/klines"]],
         }))
-        self.assertEqual(len(r["coins"]["btc"]["days"]), 4)
+        self.assertEqual(len(r["coins"]["btc"]["days"]), 3)
         self.assertEqual((r["cme"], r["cbp"]), ({}, {}))
         # Мусор в наборе TFTC: строки без даты и не-словари пропускаются.
         junk = {"days": ["x", {"date": 5}, {"date": "не дата"}, {"date": "2026-10-10", "perEtfUsd": [1],

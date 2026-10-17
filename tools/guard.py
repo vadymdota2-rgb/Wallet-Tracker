@@ -662,7 +662,7 @@ say("институциональные потоки — только битко
     and "from whale_api" not in _etfs and "import whale_api" not in _etfs
     and "function FlowChart(" in _ef and "function Funds(" in _ef and "movers" not in _ef + _etfs
     and '"ef_src"' not in _ef and '"ef_m_title"' not in _ef
-    and "minedPerDay(" in _ef and "glyph: <EtfGlyph />" in appx)
+    and "export function minedPerDay(" in read(f"{APP}/src/lib/etf.ts") and "stats.mined" in _ef and "glyph: <EtfGlyph />" in appx)
 
 _hv = read(f"{APP}/src/components/HalvingCard.tsx")
 _hvl = read(f"{APP}/src/lib/halving.ts")
@@ -801,8 +801,8 @@ say("кеш: тяжёлые ответы API — и на диске (после 
     and "api_cache/" in read(f"{APP}/.gitignore") and os.path.isfile(f"{APP}/tests/test_disk_cache.py"))
 _tre = read(f"{APP}/wt_treasury.py")
 say("крупнейшие держатели: ETF и компании (по их отчётам в SEC, CryptoAssetNumberOfUnits), без государств; выбор группы",
-    "export function Holders(" in _em and '<Boundary name="etf-holders"><Holders raw={reply.holders}' in _ef
-    and "Array.isArray(raw) ? raw.filter(holderRow) : []" in _em
+    "export function Holders(" in _em and '<Boundary name="etf-holders"><Holders rows={reply.holders ?? []}' in _ef
+    and 'out.holders = raw["holders"].filter(holderRow)' in read(f"{APP}/src/lib/etf.ts")
     and '{ id: "COMPANY", key: "ef_g_co" }' in _em and "GOVERNMENT" not in _em + _etfs
     and '"holders": _holders(coins.get("btc"), companies)' in _etfs and "co_f = pool.submit(wt_treasury.companies)" in _etfs
     and 'HOST = "data.sec.gov"' in _tre and "/us-gaap/CryptoAssetNumberOfUnits.json" in _tre
@@ -1332,9 +1332,38 @@ say("bitcoin от 0,2 BTC: движения, автопоиск, держате�
 _css = read(f"{APP}/src/styles/app.css")
 _unclip = _css.split("/* Ничего не прячем за многоточием.")[-1] if "/* Ничего не прячем за многоточием." in _css else ""
 say("многоточие нигде не прячет данные: подписи строк переносятся",
-    all(sel in _unclip for sel in (".ef-hr-id small", ".ef-hr-id b", ".row-sub", ".row-name", ".tile b",
-                                    ".dg-cell b", ".alc-sym", ".unl-id small", ".hdr-txt"))
-    and "text-overflow: clip;" in _unclip and "white-space: normal;" in _unclip)
+    all(sel in _unclip for sel in (".row-sub", ".row-name", ".tile b", ".dg-cell b", ".alc-sym", ".unl-id small", ".hdr-txt"))
+    and "text-overflow: clip;" in _unclip and "white-space: normal;" in _unclip
+    and ".ef-f-id small, .ef-hr-id b, .ef-hr-id small {\n  white-space: normal;" in read(f"{APP}/src/screens/EtfScreen.css"))
+
+# «Институциональные потоки» — на уровне карточки халвинга: свой модуль,
+# проверка ответа до клетки, тесты всех видов, строгие типы, мутации.
+_etl = read(f"{APP}/src/lib/etf.ts")
+_etcss = read(f"{APP}/src/screens/EtfScreen.css")
+_wf = read(f"{APP}/.github/workflows/tests.yml")
+say("«Институциональные потоки» — отдельный модуль: тип, проверка ответа и расчёты в lib/etf.ts (без импортов), стили — в своём файле, в общих — только подключение",
+    "export function validEtf(raw: unknown, now: number = Date.now() / 1000): EtfReply | null" in _etl
+    and not re.search(r"^\s*import\b", _etl, re.M) and "EtfReply" not in read(f"{APP}/src/lib/types.ts")
+    and 'import "./EtfScreen.css";' in _ef and ".ef-" not in read(f"{APP}/src/styles/app.css")
+    and "const v = validEtf(r);" in read(f"{APP}/src/lib/api.ts") and "validEtf(hit.v)" in read(f"{APP}/src/lib/api.ts")
+    and "export const ETF_TTL_MS = 60 * 60_000;" in _etl and "TTL = 3600.0" in _etfs
+    and "from whale_api" not in _etfs and "wt_etfchain" not in _etfs)
+say("«Институциональные потоки»: сервер проверяет каждую строку набора (даты ASCII и в торгах, пределы потоков и цен, праздники), итог дня — сумма фондов",
+    'DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")' in _etfs and "(not by and total == 0)" in _etfs
+    and "abs(total) > DAY_MAX" in _etfs and "PX_MIN <= _num(k[4]) <= PX_MAX" in _etfs and "HOLD_MAX = 5_000_000.0" in _etfs
+    and "total = sum(by.values()) if by else" in _etfs)
+say("«Институциональные потоки»: тесты как у халвинга — модуль, свойства, сервер, fuzz с договором «сервер ↔ приложение», безопасность, правила кода, браузер (16 языков, 320–1280 px, арабский, крупный шрифт, контраст), мутации, строгий TS — в CI",
+    all(os.path.isfile(f"{APP}/tests/{f}") for f in ("etf.test.ts", "etf.props.test.ts", "e2e/etf.e2e.test.ts", "test_etf_api.py",
+        "test_etf_fuzz.py", "test_etf_security.py", "test_etf_policy.py", "fixtures/etf.json"))
+    and os.path.isfile(f"{APP}/tools/mutate-etf.py") and "python tools/mutate-etf.py" in _wf
+    and "npm run typecheck:etf" in _wf and '"typecheck:etf": "node tools/typecheck-etf.mjs"' in read(f"{APP}/package.json")
+    and "test_etf_fuzz.py tests/test_etf_security.py tests/test_etf_policy.py" in _wf
+    and "тесты красные и без мутаций" in read(f"{APP}/tools/mutate-etf.py"))
+say("«Институциональные потоки»: доступность — график с клавиатуры и описанием, таблица цифрами, заглушка «занята», высокая контрастность",
+    'tabIndex={0} role="group" aria-label={t(lang, "ef_chart_keys")}' in _ef and "onKeyDown={onKey}" in _ef
+    and 'e.key === "ArrowRight"' in _ef and 'e.key === "Escape"' in _ef and "function FlowTable(" in _ef
+    and '<th scope="col">' in _ef and '<div aria-busy="true"><Card><Skeleton rows={8} /></Card></div>' in _ef
+    and "@media (forced-colors: active)" in _etcss and ".ef-plot:focus-visible" in _etcss)
 
 # Адреса бирж Bitcoin из отчётов о резервах: собирает tools/btc_seeds.py,
 # бот грузит их вместе с ручным списком (ручной главнее).

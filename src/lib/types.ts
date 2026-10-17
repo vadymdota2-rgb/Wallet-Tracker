@@ -876,54 +876,6 @@ export interface DomReply {
   at: number;
 }
 
-/**
- * Спотовые ETF биткоина. Дни — торговые, по возрастанию: [начало суток
- * UTC, поток всех фондов $ тыс., поток в монетах, закрытие цены, потоки
- * фондов $ тыс. в порядке funds (null — фонд в тот день не отчитался)].
- */
-export interface EtfCoin {
-  funds: {
-    t: string; n: string; aum: number; fee: number | null; cum: number; cumc: number;
-    /** Страна, где фонд торгуется: код ISO (US, HK), пусто — неизвестна. */
-    c?: string;
-    /** Запас фонда на сегодня, BTC: отчёт в SEC плюс потоки после него. */
-    hold?: number;
-  }[];
-  /**
-   * Торговые дни (открытый набор TFTC): [начало суток, поток всех фондов $
-   * тыс., монет, цена, [поток фонда $ тыс. | null]].
-   */
-  days: [number, number, number, number, (number | null)[]][];
-  /** Цена BTC сейчас и «данные по» (дата набора, ГГГГ-ММ-ДД). */
-  px?: number;
-  through?: string;
-  /** Доля фондов от добытых монет, %. */
-  share: number | null;
-}
-
-/**
- * Держатель биткоина: [имя, FUND или COMPANY, страна ISO, тикер, BTC, дата
- * отчёта unix — у компании (её отчёт в SEC), у фонда 0].
- */
-export type BtcHolder = [string, "FUND" | "COMPANY", string, string, number, number];
-
-export interface EtfReply {
-  ok: boolean;
-  error?: string;
-  coins: Record<string, EtfCoin>;
-  /** Крупнейшие держатели по убыванию запаса (старый сервер присылал объект — экран проверяет). */
-  holders?: BtcHolder[] | unknown;
-  /**
-   * Позиции на CME по отчёту CFTC, в монетах, по неделям: [дата, открытый
-   * интерес, управляющие лонг, шорт, хедж-фонды лонг, шорт, дилеры лонг,
-   * шорт, мелкие лонг, шорт].
-   */
-  cme?: Record<string, number[][]>;
-  /** Премия Coinbase к Binance, %: по дням и сейчас. */
-  cbp?: Record<string, { days: [number, number][]; now: number | null }>;
-  at: number;
-}
-
 /** Высота последнего блока биткоина, блок следующего халвинга и среднее время блока, с. */
 /** Монета, по которой строится карта ликвидаций. */
 export interface LiqCoin {
