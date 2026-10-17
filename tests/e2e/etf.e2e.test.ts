@@ -81,6 +81,10 @@ interface Opts {
   /** Что ещё положить в localStorage. */
   store?: Record<string, string>;
   forcedColors?: boolean;
+  /** Вошёл с Премиумом (подпись Telegram в адресе, /api/bootstrap — plan: premium). */
+  premium?: boolean;
+  /** Не открывать экран: остаться на главном (проверка подгрузки при запуске). */
+  stay?: boolean;
 }
 
 interface Opened { ctx: BrowserContext; page: Page; errors: string[]; asked: () => number }
@@ -114,9 +118,13 @@ async function open(o: Opts = {}): Promise<Opened> {
     if (a.saved) localStorage.setItem("wt-etf-v1", JSON.stringify(a.saved));
     for (const [k, v] of Object.entries(a.store)) localStorage.setItem(k, v);
   }, { lang: o.lang ?? "ru", saved: o.saved ?? null, store: o.store ?? {} });
-  await page.goto(base + "/");
+  if (o.premium) {
+    await ctx.route(`${base}/api/bootstrap`, (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, me: { plan: "premium" } }) }));
+  }
+  const tg = o.premium ? `#tgWebAppData=${encodeURIComponent(`user=${encodeURIComponent('{"id":1}')}&hash=x`)}` : "";
+  await page.goto(`${base}/${tg}`);
   await page.evaluate(() => document.fonts.ready);
-  await toEtf(page, o.lang ?? "ru");
+  if (!o.stay) await toEtf(page, o.lang ?? "ru");
   return { ctx, page, errors, asked: () => n };
 }
 
@@ -230,9 +238,10 @@ describe("институциональные потоки", () => {
   test("график пальцем: подсказка с фондами дня, уходит с пальцем", async () => {
     const { ctx, page } = await open();
     await ready(page);
-    await page.locator(".ef-flow svg").scrollIntoViewIfNeeded();
+    // По центру окна: низ графика не под нижней панелью навигации.
+    await page.locator(".ef-flow svg").evaluate((el) => el.scrollIntoView({ block: "center" }));
     const box = (await page.locator(".ef-flow svg").boundingBox())!;
-    await page.mouse.move(box.x + box.width * 0.84, box.y + box.height * 0.6);
+    await page.mouse.move(box.x + box.width * 0.84, box.y + box.height * 0.5);
     const pop = page.locator(".ef-flow .fg-pop");
     await pop.waitFor();
     assert.ok((await pop.locator(".ef-pop-f").count()) >= 1);
@@ -348,6 +357,21 @@ describe("институциональные потоки", () => {
     }
   });
 
+  test("нет связи: сохранённая копия с пометкой, сколько ей, и «повторить»", async () => {
+    const saved = { all: { at: T * 1000 - 3 * 3600_000, v: { ...REAL, at: T - 3 * 3600 } } };
+    // Сбой дважды: приложение само повторяет запрос один раз (callTwice).
+    const { ctx, page, errors, asked } = await open({ replies: [{ ok: false }, { ok: false }, REAL], saved });
+    await ready(page);
+    const stale = page.locator(".lq-stale");
+    await stale.waitFor();
+    assert.match(sp(await stale.innerText()), /^Не удалось обновить — показаны сохранённые данные \(3 ч.*\)\. Повторить$/);
+    await stale.locator("button").click();
+    await stale.waitFor({ state: "detached" });
+    assert.equal(asked(), 3);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
   test("старый формат дополнений: потоки на месте, без держателей и CME", async () => {
     const old = { ...REAL, holders: { IBIT: 1 }, cme: { btc: [[1, 2]] }, cbp: { btc: { days: "x" } } };
     const { ctx, page, errors } = await open({ replies: [old] });
@@ -362,6 +386,61 @@ describe("институциональные потоки", () => {
     const { ctx, page } = await open({ delay: 5000, saved: { all: { at: T * 1000 - 600_000, v: REAL } } });
     await page.locator(".ef-hero > b").waitFor({ timeout: 1500 });
     assert.equal(await page.locator('[aria-busy="true"]').count(), 0);
+    await ctx.close();
+  });
+
+  test("подгрузка при запуске: с Премиумом ответ приходит до открытия экрана, экран — сразу и без второго запроса", async () => {
+    const { ctx, page, errors, asked } = await open({ premium: true, stay: true });
+    for (let i = 0; i < 50 && asked() === 0; i++) await page.waitForTimeout(100);
+    assert.equal(asked(), 1); // фоновая подгрузка спросила сервер, экран ещё не открыт
+    assert.equal(await page.locator(".ef-hero").count(), 0);
+    // Проверенная копия — и на устройстве: следующий запуск покажет её сразу.
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("wt-etf-v1") ?? "{}") as { all?: { v?: { ok?: boolean } } });
+    assert.equal(saved.all?.v?.ok, true);
+    await toEtf(page, "ru");
+    await page.locator(".ef-hero > b").waitFor({ timeout: 1000 });
+    assert.equal(await page.locator('[aria-busy="true"]').count(), 0);
+    await page.waitForTimeout(300);
+    assert.equal(asked(), 1); // ответ из памяти: сеть не тронута
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("без Премиума при запуске ничего не подгружается", async () => {
+    const { ctx, page, asked } = await open({ stay: true });
+    await page.waitForTimeout(1500);
+    assert.equal(asked(), 0);
+    await ctx.close();
+  });
+
+  test("графики в настоящих пикселях: подписи одного размера на телефоне, планшете и компьютере", async () => {
+    const sizes: number[] = [];
+    for (const width of [360, 768, 1280]) {
+      const { ctx, page } = await open({ width, height: 900 });
+      await ready(page);
+      const svgs = await page.locator(".ef-svg").evaluateAll((els) => els.map((el) => {
+        const s = el as SVGSVGElement;
+        return { vb: s.viewBox.baseVal.width, w: s.getBoundingClientRect().width };
+      }));
+      assert.ok(svgs.length >= 3, String(width));
+      for (const s of svgs) assert.ok(Math.abs(s.vb - s.w) <= 2.5, `${width}: viewBox ${s.vb} ≠ ${s.w}`);
+      sizes.push(await page.locator(".ef-flow .fg-tick").first().evaluate((el) => el.getBoundingClientRect().height));
+      // Колонка не шире 760 px и по центру.
+      const col = await page.locator(".ef").evaluate((el) => { const r = el.getBoundingClientRect(); return [r.left, r.right, innerWidth]; });
+      assert.ok(col[1]! - col[0]! <= 760.5, String(width));
+      assert.ok(Math.abs(col[0]! - (col[2]! - col[1]!)) <= 20, `${width}: колонка не по центру`);
+      await ctx.close();
+    }
+    // Подпись оси — одной высоты на всех ширинах (раньше на 1280 — втрое крупнее).
+    assert.ok(Math.max(...sizes) - Math.min(...sizes) < 1.5, sizes.join(", "));
+  });
+
+  test("телефон боком: график помещается по высоте окна", async () => {
+    const { ctx, page } = await open({ width: 844, height: 390 });
+    await ready(page);
+    const h = await page.locator(".ef-flow svg").evaluate((el) => el.getBoundingClientRect().height);
+    assert.ok(h <= 390 * 0.75, String(h));
+    assert.deepEqual(await overflow(page), []);
     await ctx.close();
   });
 

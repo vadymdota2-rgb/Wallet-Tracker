@@ -1368,6 +1368,15 @@ say("«Институциональные потоки»: активы фонд�
     and "_point(v)" in read(f"{APP}/wt_treasury.py") and os.path.isfile(f"{APP}/tests/test_treasury_security.py")
     and "tests/test_treasury_security.py" in _wf and 'from "./etfView"' in _ef and 'from "./etfView"' in _em
     and "function money(" not in _ef + _em and "def btc_custody()" not in api)
+_etv = read(f"{APP}/src/screens/etfView.ts")
+say("«Институциональные потоки»: графики в настоящих пикселях ширины (подписи одного размера на любом экране, по высоте — в окно), колонка ≤ 760 px; подгрузка при запуске; сохранённая копия — с пометкой «не удалось обновить»",
+    "export function useWidth(ref: RefObject<Element | null>, fallback = 330): number" in _etv and "new ResizeObserver(" in _etv
+    and "export function heightK(w: number, base: number): number" in _etv
+    and "const { W, PW, P1, P2, H } = geom(useWidth(ref));" in _ef and "const { W, PW, MH } = box(useWidth(ref), 130);" in _em
+    and "const { W, PW, MH } = box(useWidth(ref), 90);" in _em and "const W = 360;" not in _ef + _em
+    and ".ef { max-width: 760px; margin-inline: auto; }" in _etcss and ".ef-svg .fg-tick { font-size: 10.5px; }" in _etcss
+    and "jobs.push(() => fetchEtf());" in read(f"{APP}/src/lib/prefetch.ts")
+    and '{t(lang, "op_stale", { t: since(Math.max(0, Date.now() / 1000 - reply.at)) })}' in _ef)
 say("«Институциональные потоки»: доступность — график с клавиатуры и описанием, таблица цифрами, заглушка «занята», высокая контрастность",
     'tabIndex={0} role="group" aria-label={t(lang, "ef_chart_keys")}' in _ef and "onKeyDown={onKey}" in _ef
     and 'e.key === "ArrowRight"' in _ef and 'e.key === "Escape"' in _ef and "function FlowTable(" in _ef

@@ -107,6 +107,17 @@
 .ef-hr-id small, .ef-f-id small { line-height: 1.35; }
 .ef-hr-id bdi, .ef-f-id bdi { white-space: nowrap; }
 
+/* Графики экрана рисуются в настоящих пикселях ширины (useWidth): подписи —
+   одного размера на любом экране, крупнее общих 9,5 px — читаются на
+   телефоне без лупы. Линии не толстеют при масштабе страницы. */
+.ef-svg .fg-tick { font-size: 10.5px; }
+.ef-svg .fg-ptl { font-size: 10.5px; }
+.ef-svg .fg-line, .ef-svg .fg-grid, .ef-svg .ef-zero { vector-effect: non-scaling-stroke; }
+
+/* Планшет и компьютер: колонка не шире 760 px по центру — строки фондов и
+   подписи не разъезжаются на всю ширину монитора. */
+.ef { max-width: 760px; margin-inline: auto; }
+
 /* График с клавиатуры: фокус виден, стрелки ведут по столбцам. */
 .ef-plot:focus { outline: none; }
 .ef-plot:focus-visible { outline: 2px solid var(--glow); outline-offset: 3px; border-radius: 10px; }

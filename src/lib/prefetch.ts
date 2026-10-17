@@ -4,7 +4,7 @@
  * Человек открывает приложение кнопкой Open в Telegram — и всё, что раньше
  * грузилось только по нажатию, подтягивается сразу в фоне: позиции и остатки
  * всех его кошельков, крупные сделки за все окна, фильтры потока и лонгов с
- * шортами, сделки первых трейдеров доски, история
+ * шортами, сделки первых трейдеров доски, «Институциональные потоки», история
  * цен монет из потока и из кошельков. Ответы ложатся в память (memo.ts), и
  * экран, открытый потом, берёт готовое без скелета.
  *
@@ -18,7 +18,7 @@
  */
 import { FREE } from "./upsell";
 import {
-  fetchBig, fetchBscExFlow, fetchBtcBig, fetchBtcFlow, fetchBtcRank, fetchDeals, fetchFlow, fetchLs, fetchSymbols, fetchTokenHist,
+  fetchBig, fetchBscExFlow, fetchBtcBig, fetchBtcFlow, fetchBtcRank, fetchDeals, fetchEtf, fetchFlow, fetchLs, fetchSymbols, fetchTokenHist,
   fetchUnlocks, fetchWallet,
 } from "./api";
 import { useApp } from "../store/app";
@@ -104,6 +104,11 @@ function plan(): (() => Promise<unknown>)[] {
   jobs.push(() => fetchBtcFlow());
   jobs.push(() => fetchBscExFlow());
   jobs.push(() => fetchBtcBig(app.bigWin, app.btcSide, app.btcMin || 0.2, app.btcEx));
+
+  // 5в. «Институциональные потоки»: ответ живёт час и лежит на устройстве
+  // (проверенная копия) — экран из меню открывается сразу со свежими днями.
+  // Пока ответ в памяти свеж, повторный опрос сеть не трогает.
+  jobs.push(() => fetchEtf());
 
   // 6. Справочник монет для поиска на графике.
   jobs.push(() => fetchSymbols());

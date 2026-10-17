@@ -21,11 +21,18 @@ import { haptic } from "../lib/telegram";
 import { Card, Chips, SectionTitle } from "../components/ui";
 import { type BtcHolder } from "../lib/etf";
 import { dateStr, timeTicks } from "./FearGreedScreen";
-import { DN, UP, coinsShort, flagOf, iso, money } from "./etfView";
+import { DN, UP, coinsShort, flagOf, heightK, iso, money, useWidth } from "./etfView";
 
 type Lang = Parameters<typeof t>[0];
-const W = 360;
-const PW = 306;
+/**
+ * Размер малого графика в настоящих пикселях ширины w (как у графика потоков,
+ * geom в EtfScreen): справа — место под подписи оси, высота растёт с
+ * шириной, но график помещается по высоте окна (heightK).
+ */
+function box(w: number, h: number) {
+  const k = heightK(w, h + 26);
+  return { W: w, PW: w - 58, MH: Math.round(h * k) };
+}
 
 /**
  * Линии на одной шкале и палец по дням. zero — шкала от нуля (позиции CME
@@ -43,8 +50,8 @@ function LinesChart({ xs, series, lang, fmt, label, zero = true }: {
 }) {
   const [sel, setSel] = useState<number | null>(null);
   const ref = useRef<SVGSVGElement>(null);
+  const { W, PW, MH } = box(useWidth(ref), 130);
   const n = xs.length;
-  const MH = 130;
   const all = series.flatMap((s) => s.v);
   const pad = zero ? 0 : (Math.max(...all) - Math.min(...all)) * 0.08 || 1;
   const lo = zero ? Math.min(0, ...all) : Math.min(...all) - pad;
@@ -57,7 +64,7 @@ function LinesChart({ xs, series, lang, fmt, label, zero = true }: {
   const xOfT = (ts: number) => ((ts - a) / Math.max(1, b - a)) * PW;
   const ticksT = (() => {
     const tt = timeTicks(lang, a, b);
-    const step = Math.max(1, Math.ceil(tt.length / 6));
+    const step = Math.max(1, Math.ceil(tt.length / Math.max(3, Math.floor(PW / 64))));
     return tt.filter((_, i) => (tt.length - 1 - i) % step === 0);
   })();
   const pick = (clientX: number) => {
@@ -89,7 +96,7 @@ function LinesChart({ xs, series, lang, fmt, label, zero = true }: {
   return (
     <div className="fg-plot ef-plot" tabIndex={0} role="group" aria-label={t(lang, "ef_keys")}
       onKeyDown={onKey} onBlur={() => setSel(null)}>
-      <svg ref={ref} className="fg-svg" viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={label}
+      <svg ref={ref} className="fg-svg ef-svg" viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={label}
         onPointerDown={(e: PointerEvent) => pick(e.clientX)}
         onPointerMove={(e: PointerEvent) => { if (e.pointerType === "mouse" || e.buttons) pick(e.clientX); }}
         onPointerUp={(e: PointerEvent) => { if (e.pointerType !== "mouse") setSel(null); }}
@@ -262,7 +269,8 @@ export function CbpSection({ d, sym, lang }: { d: { days: [number, number][]; no
   const view = days.slice(-180);
   const n = view.length;
   const maxAbs = Math.max(0.05, ...view.map((x) => Math.abs(x[1])));
-  const MH = 90;
+  const ref = useRef<SVGSVGElement>(null);
+  const { W, PW, MH } = box(useWidth(ref), 90);
   const bw = PW / Math.max(1, n);
   const y0 = 6 + MH / 2;
   return (
@@ -283,12 +291,13 @@ export function CbpSection({ d, sym, lang }: { d: { days: [number, number][]; no
             <b><bdi dir="ltr">{num(plus)} / {num(m30.length)}</bdi></b>
           </div>
         </div>
-        <svg className="fg-svg" viewBox={`0 0 ${W} ${MH + 26}`} width="100%" role="img" aria-label={t(lang, "ef_cbp_title")}>
+        <svg ref={ref} className="fg-svg ef-svg" viewBox={`0 0 ${W} ${MH + 26}`} width="100%" role="img" aria-label={t(lang, "ef_cbp_title")}>
           <rect x={0} y={6} width={PW} height={MH} className="fg-bg" />
           {(() => {
             const a = view[0]?.[0] ?? 0;
             const b = view[n - 1]?.[0] ?? 1;
-            return timeTicks(lang, a, b).filter((_, i, arr) => (arr.length - 1 - i) % Math.max(1, Math.ceil(arr.length / 6)) === 0).map((x) => {
+            const most = Math.max(3, Math.floor(PW / 64));
+            return timeTicks(lang, a, b).filter((_, i, arr) => (arr.length - 1 - i) % Math.max(1, Math.ceil(arr.length / most)) === 0).map((x) => {
               const xx = ((x.t - a) / Math.max(1, b - a)) * PW;
               return (
                 <g key={x.t}>

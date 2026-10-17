@@ -23,7 +23,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
-import { num, pct, px, usdWord } from "../lib/format";
+import { num, pct, px, since, usdWord } from "../lib/format";
 import { haptic, openExternal } from "../lib/telegram";
 import { fetchEtf, peekEtf } from "../lib/api";
 import { Card, Chips, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
@@ -35,7 +35,7 @@ import { Boundary } from "../components/Boundary";
 import { Frame } from "./Screen";
 import { CbpSection, CmeSection, HeldSection, Holders } from "./EtfMore";
 import { dateStr, timeTicks } from "./FearGreedScreen";
-import { DN, UP, coinsShort, flagOf, iso, money } from "./etfView";
+import { DN, UP, coinsShort, flagOf, heightK, iso, money, useWidth } from "./etfView";
 import "./EtfScreen.css";
 
 type Lang = Parameters<typeof t>[0];
@@ -83,16 +83,27 @@ function coins(v: number, sym: string): string {
 
 /* ---------------------------------------------------------------------- */
 
-const W = 360;
-const AXIS = 50;
-const PW = W - AXIS - 4;
-const P1 = { y: 6, h: 118 };
-const P2 = { y: 138, h: 130 };
-const H = P2.y + P2.h + 18;
+/** Место под подписи оси справа, px: «−1,5 млрд $», «$80 000», арабское «40 مليون US$». */
+const AXIS = 58;
 
-function ticksOf(lang: Lang, a: number, b: number) {
+/**
+ * Разметка графика в настоящих пикселях ширины w: подписи и линии одного
+ * размера на любом экране (раньше сетка 360 растягивалась — на планшете
+ * подписи становились огромными, на узком телефоне — мелкими), а на широком
+ * экране — больше столбцов и делений. Высота панелей растёт с шириной (до
+ * 1,45 раза), но график целиком помещается по высоте окна (heightK).
+ */
+function geom(w: number) {
+  const k = heightK(w, 290);
+  const P1 = { y: 6, h: Math.round(118 * k) };
+  const P2 = { y: P1.y + P1.h + 14, h: Math.round(130 * k) };
+  return { W: w, PW: w - AXIS - 4, P1, P2, H: P2.y + P2.h + 18 };
+}
+
+/** Деления времени: не теснее одного на 64 px. */
+function ticksOf(lang: Lang, a: number, b: number, pw: number) {
   const all = timeTicks(lang, a, b);
-  const step = Math.max(1, Math.ceil(all.length / 6));
+  const step = Math.max(1, Math.ceil(all.length / Math.max(3, Math.floor(pw / 64))));
   return all.filter((_, i) => (all.length - 1 - i) % step === 0);
 }
 
@@ -137,6 +148,8 @@ function FlowChart({ data, cum, zero, lang, sel, onSel, label }: {
   sel: number | null;
   onSel: (i: number | null) => void;
 }) {
+  const ref = useRef<SVGSVGElement>(null);
+  const { W, PW, P1, P2, H } = geom(useWidth(ref));
   const n = data.length;
   const bw = PW / Math.max(1, n);
   const xOf = (i: number) => i * bw + bw / 2;
@@ -175,7 +188,6 @@ function FlowChart({ data, cum, zero, lang, sel, onSel, label }: {
   const xOfT = (ts: number) => ((ts - a) / Math.max(1, b - a)) * PW;
   const line = data.map((d, i) => (d.px > 0 ? `${xOf(i).toFixed(1)},${yPx(d.px).toFixed(1)}` : "")).filter(Boolean).join(" ");
 
-  const ref = useRef<SVGSVGElement>(null);
   const pick = (clientX: number) => {
     const el = ref.current;
     if (!el || !n) return;
@@ -205,7 +217,7 @@ function FlowChart({ data, cum, zero, lang, sel, onSel, label }: {
   return (
     <svg
       ref={ref}
-      className="fg-svg"
+      className="fg-svg ef-svg"
       viewBox={`0 0 ${W} ${H}`}
       width="100%"
       role="img"
@@ -219,7 +231,7 @@ function FlowChart({ data, cum, zero, lang, sel, onSel, label }: {
     >
       <rect x={0} y={P1.y} width={PW} height={P1.h} className="fg-bg" />
       <rect x={0} y={P2.y} width={PW} height={P2.h} className="fg-bg" />
-      {ticksOf(lang, a, b).map((x) => (
+      {ticksOf(lang, a, b, PW).map((x) => (
         <g key={x.t}>
           <line x1={xOfT(x.t)} x2={xOfT(x.t)} y1={P1.y} y2={P2.y + P2.h} className="fg-grid" />
           <text x={xOfT(x.t)} y={H - 4} textAnchor="middle" className="fg-tick">{x.label}</text>
@@ -443,6 +455,7 @@ export function EtfScreen() {
 
   return (
     <Frame title={t(lang, "ef_title")}>
+      <div className="ef">
       <p className="lq-lead">{t(lang, "ef_sub")}</p>
       {!reply ? (
         failed ? (
@@ -452,6 +465,13 @@ export function EtfScreen() {
         ) : <div aria-busy="true"><Card><Skeleton rows={8} /></Card></div>
       ) : !c || !stats ? null : (
         <>
+          {/* Сеть не ответила, а на экране — сохранённая копия: говорим, насколько она стара. */}
+          {failed ? (
+            <p className="lq-stale" role="status">
+              {t(lang, "op_stale", { t: since(Math.max(0, Date.now() / 1000 - reply.at)) })}{" "}
+              <button type="button" onClick={() => setRetry((n) => n + 1)}>{t(lang, "ui_retry")}</button>
+            </p>
+          ) : null}
           <Card>
             <div className="ef-hero">
               <small>{t(lang, "ef_last", { d: dayTxt(stats.last[0]) })}</small>
@@ -626,6 +646,7 @@ export function EtfScreen() {
           </details>
         </>
       )}
+      </div>
     </Frame>
   );
 }
