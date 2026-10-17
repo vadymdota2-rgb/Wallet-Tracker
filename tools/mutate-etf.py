@@ -88,8 +88,12 @@ def run(path, cmd, muts):
                 sys.exit(f"мутация «{name}»: текст для замены найден {src.count(a)} раз — обновите список")
             with open(path, "w", encoding="utf-8") as f:
                 f.write(src.replace(a, b))
-            r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=300, check=False)
-            killed = r.returncode != 0
+            # Тесты зависли (мутант пустил запрос в сеть, и тот ждёт) — порча
+            # замечена: убита, а не сбой проверки.
+            try:
+                killed = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=300, check=False).returncode != 0
+            except subprocess.TimeoutExpired:
+                killed = True
             print(("убита   " if killed else "экв.    " if name in EQUIV else "ВЫЖИЛА  ") + name, flush=True)
             if not killed and name not in EQUIV:
                 alive.append(name)
