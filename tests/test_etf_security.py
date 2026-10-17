@@ -18,7 +18,6 @@ sys.path.insert(0, ROOT)
 import wt_etf as etf  # noqa: E402 — модуль лежит в корне репозитория
 
 NOW = 1_792_000_000
-PX = [[(1_791_590_400 + i * 86400) * 1000, 0, 0, 0, "60000"] for i in range(3)]
 
 
 def build(tftc: object, raw: bytes | None = None, sec: dict | None = None) -> dict:
@@ -28,8 +27,6 @@ def build(tftc: object, raw: bytes | None = None, sec: dict | None = None) -> di
         urls.append(url)
         if "tftc.io" in url:
             return raw if raw is not None else json.dumps(tftc).encode()
-        if "klines" in url:
-            return json.dumps(PX).encode()
         return None
 
     etf._st = etf._State()

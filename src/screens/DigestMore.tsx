@@ -128,7 +128,6 @@ export const SIG_KEY: Record<DigestSignal["k"], Parameters<typeof t>[1]> = {
   etf: "dg_sig_etf",
   btcx: "dg_sig_btcx",
   whales: "dg_sig_whales",
-  cbp: "dg_sig_cbp",
   liq: "dg_sig_liq",
   oi: "dg_sig_oi",
   fund: "dg_sig_fund",
@@ -144,8 +143,6 @@ export function sigValue(s: DigestSignal): string {
       return sUsd(s.v);
     case "btcx":
       return btcAmt(s.v, true);
-    case "cbp":
-      return sPct(s.v, 3);
     case "liq":
       return iso(`${num(s.v)}%`);
     case "oi":
@@ -159,8 +156,14 @@ export function sigValue(s: DigestSignal): string {
 
 /** Итог табло. Перевес — когда за одну сторону больше половины сигналов.
  *  Иначе честно пишем, что сигналы расходятся: натягивать вывод на 2 против 2 нельзя. */
+/** Сигналы выпуска, которые мы ещё показываем: у старых выпусков были и снятые
+ *  (премия Coinbase — её условия запрещают показывать их данные). */
+export function sigsOf(it: DigestItem): DigestSignal[] {
+  return (it.sig ?? []).filter((s) => s.k in SIG_KEY);
+}
+
 export function verdictOf(it: DigestItem, lang: Lang): { cls: "up" | "dn" | "mix"; text: string } | null {
-  const sig = it.sig ?? [];
+  const sig = sigsOf(it);
   if (!sig.length) return null;
   const up = sig.filter((s) => s.d > 0).length;
   const dn = sig.filter((s) => s.d < 0).length;
@@ -173,7 +176,7 @@ export function verdictOf(it: DigestItem, lang: Lang): { cls: "up" | "dn" | "mix
 }
 
 export function Summary({ it, lang }: { it: DigestItem; lang: Lang }) {
-  const sig = it.sig ?? [];
+  const sig = sigsOf(it);
   const verdict = verdictOf(it, lang);
   if (!sig.length || !verdict) return null;
   return (
@@ -277,13 +280,6 @@ export function Institutions({ it, lang }: { it: DigestItem; lang: Lang }) {
           {inst.bot.map((f, i) => (
             <span key={f.t}>{i ? ", " : ""}<b>{f.t}</b> <span className="dn">{sUsd(f.v)}</span></span>
           ))}
-        </p>
-      ) : null}
-      {inst.cbp !== undefined ? (
-        <p className="dg-line">
-          {t(lang, "dg_sig_cbp")}{" "}
-          <b className={tone(inst.cbp)}>{sPct(inst.cbp, 3)}</b>
-          <span className="dim"> · {t(lang, "dg_cbp_hint")}</span>
         </p>
       ) : null}
     </Sec>

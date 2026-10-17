@@ -33,7 +33,7 @@ import {
 } from "../lib/etf";
 import { Boundary } from "../components/Boundary";
 import { Frame } from "./Screen";
-import { CbpSection, CmeSection, HeldSection, Holders } from "./EtfMore";
+import { CmeSection, HeldSection, Holders } from "./EtfMore";
 import { dateStr, timeTicks } from "./FearGreedScreen";
 import { DN, UP, coinsShort, flagOf, heightK, iso, money, tone, useWidth } from "./etfView";
 import "./EtfScreen.css";
@@ -452,6 +452,9 @@ export function EtfScreen() {
     }
   };
 
+  /* «Данные по» — как в подписи, которую просит TFTC. */
+  const through = c?.through ? Date.parse(`${c.through}T00:00:00Z`) / 1000 || 0 : 0;
+  const thru = through ? t(lang, "ef_through", { d: dateStr(lang, through, { day: "numeric", month: "short", year: "numeric" }) }) : "";
   const dayTxt = (ts: number) => dateStr(lang, ts, { weekday: "short", day: "numeric", month: "long" });
 
   return (
@@ -506,7 +509,10 @@ export function EtfScreen() {
             <p className="fg-by">
               {t(lang, "ef_by")}{" "}
               <a href={TFTC_URL} onClick={(e) => { e.preventDefault(); openExternal(TFTC_URL); }}>TFTC</a>
-              {" ("}<a href={CCBY_URL} onClick={(e) => { e.preventDefault(); openExternal(CCBY_URL); }}>CC BY 4.0</a>{"). "}
+              {" ("}<a href={CCBY_URL} onClick={(e) => { e.preventDefault(); openExternal(CCBY_URL); }}>CC BY 4.0</a>{")"}
+              {thru ? `, ${thru}` : ""}
+              {/* «…2026 г.» уже с точкой — вторую не ставим. */}
+              {/[.。]$/.test(thru) ? " " : ". "}
               {t(lang, "ef_by_ch")}
             </p>
           </Card>
@@ -630,9 +636,6 @@ export function EtfScreen() {
           <Boundary name="etf-holders"><Holders rows={reply.holders ?? []} price={lastPx} lang={lang} /></Boundary>
           <Boundary name="etf-cme">
             {reply.cme?.btc?.length ? <CmeSection rows={reply.cme.btc} sym={sym} price={lastPx} lang={lang} /> : null}
-          </Boundary>
-          <Boundary name="etf-cbp">
-            {reply.cbp?.btc?.days?.length ? <CbpSection d={reply.cbp.btc} sym={sym} lang={lang} /> : null}
           </Boundary>
 
           <details className="lq-how">

@@ -24,13 +24,17 @@ test("validEtf: настоящий ответ годится, копия — т�
   assert.equal(v.coins.btc!.days.length, REAL.coins.btc!.days.length);
   assert.equal(v.coins.btc!.funds.length, 13);
   assert.ok(v.holders && v.holders.length > 10);
-  assert.ok(v.cme?.btc?.length && v.cbp?.btc?.days.length);
+  assert.ok(v.cme?.btc?.length);
   // Лишнее от сервера (или подменённого ответа) в копию не идёт.
   const extra = { ...clone(REAL), junk: "x".repeat(1000), __proto__: { evil: 1 } } as unknown;
   const got = validEtf(extra, NOW) as unknown as Record<string, unknown>;
   assert.equal(got["junk"], undefined);
   assert.equal(got["now"], undefined);
-  assert.deepEqual(Object.keys(got).sort(), ["at", "cbp", "cme", "coins", "holders", "ok"]);
+  assert.deepEqual(Object.keys(got).sort(), ["at", "cme", "coins", "holders", "ok"]);
+  // Премии Coinbase из старых ответов и копий на телефоне в копии нет (её
+  // данные нельзя показывать в приложении — условия Coinbase).
+  const old = { ...clone(REAL), cbp: { btc: { days: [[REAL.at - (REAL.at % DAY), 0.1]], now: 0.1 } } } as unknown;
+  assert.equal((validEtf(old, NOW) as unknown as Record<string, unknown>)["cbp"], undefined);
   // Повторная проверка копии даёт то же самое.
   assert.deepEqual(validEtf(v, NOW), v);
 });
@@ -64,12 +68,10 @@ test("validEtf: испорченные дополнения пропадают, 
   const r = clone(REAL) as unknown as Record<string, unknown>;
   r["holders"] = { IBIT: 1 }; // старый сервер присылал объект
   r["cme"] = { btc: [[1, 2, 3]] };
-  r["cbp"] = { btc: { days: [[1, "x"]], now: 0 } };
   const v = validEtf(r, NOW);
   assert.ok(v);
   assert.equal(v.holders, undefined);
   assert.equal(v.cme, undefined);
-  assert.equal(v.cbp, undefined);
   // Битые строки держателей отсеиваются по одной.
   const h = clone(REAL);
   h.holders = [...h.holders!, ["<b>", "FUND", "US", "x y", 1, 0] as never, ["A", "STATE", "US", "A", 1, 0] as never];

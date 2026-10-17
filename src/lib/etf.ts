@@ -49,11 +49,6 @@ export interface EtfCoin {
 /** Держатель: [имя, FUND или COMPANY, страна ISO, тикер, BTC, дата отчёта unix (у фонда 0)]. */
 export type BtcHolder = [string, "FUND" | "COMPANY", string, string, number, number];
 
-export interface EtfCbp {
-  days: [number, number][];
-  now: number | null;
-}
-
 export interface EtfReply {
   ok: boolean;
   error?: string;
@@ -62,8 +57,6 @@ export interface EtfReply {
   holders?: BtcHolder[];
   /** Позиции на CME по отчёту CFTC, в монетах, по неделям: [дата, открытый интерес, 4 группы × (лонг, шорт)]. */
   cme?: { btc?: number[][] };
-  /** Премия Coinbase к Binance, %: по дням и сейчас. */
-  cbp?: { btc?: EtfCbp };
   at: number;
 }
 
@@ -82,7 +75,6 @@ const FUNDS_MAX = 64;
 const DAYS_MAX = 10_000;
 const HOLDERS_MAX = 500;
 const CME_MAX = 2_000;
-const CBP_MAX = 2_000;
 const NAME_MAX = 120;
 /** Активы всех фондов за день, $ — как на сервере (TNA_MIN…TNA_MAX). */
 const TNA_MIN = 1e9;
@@ -185,21 +177,11 @@ function validCme(raw: unknown): number[][] | null {
   return raw.map((r: number[]) => [...r]);
 }
 
-function validCbp(raw: unknown): EtfCbp | null {
-  if (!isObj(raw) || !Array.isArray(raw["days"]) || raw["days"].length > CBP_MAX) return null;
-  const days: [number, number][] = [];
-  for (const d of raw["days"]) {
-    if (!Array.isArray(d) || d.length !== 2 || !within(d[0], 0, 4e9) || !within(d[1], -100, 100)) return null;
-    days.push([d[0], d[1]]);
-  }
-  if (raw["now"] !== null && !within(raw["now"], -100, 100)) return null;
-  return { days, now: raw["now"] };
-}
-
 /**
  * Проверенная копия ответа /api/etf или null. Потоки фондов — главное:
- * любая ошибка в них — ответ не годится. Дополнения (держатели, CME,
- * премия Coinbase) с ошибкой просто не попадают в копию.
+ * любая ошибка в них — ответ не годится. Дополнения (держатели, CME) с
+ * ошибкой просто не попадают в копию. Чего в ответе больше нет (премия
+ * Coinbase из старых ответов и копий на телефоне), в копию тоже не идёт.
  * now — «сейчас», unix с (по умолчанию — часы телефона).
  */
 export function validEtf(raw: unknown, now: number = Date.now() / 1000): EtfReply | null {
@@ -210,8 +192,6 @@ export function validEtf(raw: unknown, now: number = Date.now() / 1000): EtfRepl
   if (Array.isArray(raw["holders"])) out.holders = raw["holders"].filter(holderRow).slice(0, HOLDERS_MAX).map((r) => [...r] as BtcHolder);
   const cme = isObj(raw["cme"]) ? validCme(raw["cme"]["btc"]) : null;
   if (cme?.length) out.cme = { btc: cme };
-  const cbp = isObj(raw["cbp"]) ? validCbp(raw["cbp"]["btc"]) : null;
-  if (cbp?.days.length) out.cbp = { btc: cbp };
   return out;
 }
 

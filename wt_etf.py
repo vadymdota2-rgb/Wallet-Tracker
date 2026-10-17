@@ -4,20 +4,24 @@
   - потоки фондов по дням — открытый набор TFTC (tftc.io/bitcoin-etf-flows,
     лицензия CC BY 4.0: можно брать и показывать с подписью и ссылкой на
     источник — экран её показывает). Каждый торговый день с запуска фондов
-    в январе 2024: итог дня и поток каждого фонда в долларах. Монеты —
-    доллары по закрытию дня Binance;
+    в январе 2024: итог дня и поток каждого фонда в долларах, цена закрытия
+    дня. Монеты — доллары по этой цене;
   - фонды — спотовые биткоин-ETF США по их отчётам в SEC (wt_treasury):
     имя, комиссия, запас на конец последнего квартала. Запас сегодня —
     отчёт плюс потоки после него, минус комиссия, взятая монетами. Где фонд
     пишет в отчёте только стоимость монет, монеты — стоимость по цене,
     которую дают отчёты фондов с числом монет на ту же дату (их медиана;
-    нет — закрытие Binance);
-  - цена — закрытие Binance; доля фондов от добытых монет — своим счётом
-    по расписанию эмиссии (supply_at);
+    нет — закрытие дня из набора);
+  - цена — закрытие дня из набора TFTC; доля фондов от добытых монет —
+    своим счётом по расписанию эмиссии (supply_at);
   - крупнейшие держатели — фонды отсюда же и публичные компании по их
     отчётам в SEC (wt_treasury);
-  - позиции на CME — еженедельный отчёт CFTC «Traders in Financial Futures»;
-  - премия Coinbase к Binance — спрос американских покупателей.
+  - позиции на CME — еженедельный отчёт CFTC «Traders in Financial Futures».
+
+Только открытые источники: TFTC (CC BY 4.0), SEC и CFTC (госданные США).
+Цен бирж здесь нет: условия Coinbase и Binance запрещают показывать их
+данные (и расчёты на их основе) в приложении для пользователей без
+письменного согласия.
 
 Модуль независим: своя разметка кошельков фондов (сканер бота — для
 рейтинга BTC, потоков бирж и алертов по сделкам кошельков) сюда не входит.
@@ -58,9 +62,6 @@ import wt_treasury
 
 # Сколько ответ живёт в кэше, с: фонды отчитываются раз в сутки.
 TTL = 3600.0
-# Только биткоин (спотовые ETF есть и на другие монеты, но открытого набора
-# их потоков нет). Пара Binance — для цены дня.
-SYMBOL = "BTCUSDT"
 # Позиции на CME: код контракта CFTC → размер контракта в биткоинах (большой
 # и микро складываются в монетах: у них разный размер).
 CME_CODES = (("133741", 5.0), ("133742", 0.1))
@@ -68,17 +69,13 @@ CME_CODES = (("133741", 5.0), ("133742", 0.1))
 # BTC (весь рынок фьючерсов CME — около 150 тыс.); дата — с запуска фьючерсов.
 CME_MAX = 2_000_000.0
 CME_FROM = 1_513_036_800  # 12 декабря 2017 г.
-# Премия Coinbase к Binance за пределами этого, % — сбой цены, а не премия
-# (за всю историю — меньше процента).
-CBP_MAX = 10.0
 CME_FIELDS = ("open_interest_all", "asset_mgr_positions_long", "asset_mgr_positions_short",
               "lev_money_positions_long", "lev_money_positions_short",
               "dealer_positions_long_all", "dealer_positions_short_all",
               "nonrept_positions_long_all", "nonrept_positions_short_all")
 
 # Куда модулю можно ходить — и больше никуда.
-HOSTS = frozenset({"data-api.binance.vision", "publicreporting.cftc.gov", "api.exchange.coinbase.com",
-                   "www.tftc.io"})
+HOSTS = frozenset({"publicreporting.cftc.gov", "www.tftc.io"})
 # Потоки фондов по дням — открытый набор TFTC, CC BY 4.0 (см. начало модуля).
 # Обновляется вечером и утром: раз в час (TTL) — с запасом.
 TFTC = "https://www.tftc.io/bitcoin-etf-flows/data.json"
@@ -197,26 +194,6 @@ def _day(stamp: object) -> int:
     return calendar.timegm(time.strptime(stamp[:10], "%Y-%m-%d"))
 
 
-def _klines(symbol: str, start_ms: int) -> dict[int, float]:
-    """Закрытие дня на Binance: начало суток (с) → цена. Цена вне
-    правдоподобного (PX_MIN…PX_MAX) — мусор, её нет."""
-    out: dict[int, float] = {}
-    cur = start_ms
-    for _ in range(6):
-        rows = _get(f"https://data-api.binance.vision/api/v3/klines?symbol={symbol}&interval=1d&limit=1000&startTime={cur}")
-        if not isinstance(rows, list) or not rows:
-            break
-        for k in rows:
-            if isinstance(k, list) and len(k) > 4 and PX_MIN <= _num(k[4]) <= PX_MAX:
-                out[int(_num(k[0])) // 1000] = _num(k[4])
-        # Неполная страница — последняя; последняя строка не свеча — дальше
-        # листать не от чего.
-        if len(rows) < 1000 or not isinstance(rows[-1], list) or not rows[-1]:
-            break
-        cur = int(_num(rows[-1][0])) + 86_400_000
-    return out
-
-
 Day = tuple[dict[str, float], float]  # поток фонда $, итог дня $
 
 
@@ -224,7 +201,7 @@ class Tftc(NamedTuple):
     """Разобранный набор TFTC."""
 
     days: dict[int, Day]
-    # Цена дня из набора (запасная к Binance) и активы всех фондов, $ (с мая 2025).
+    # Цена закрытия дня из набора и активы всех фондов, $ (с мая 2025).
     px: dict[int, float]
     tna: dict[int, float]
     # «Данные по» — дата ГГГГ-ММ-ДД или пусто.
@@ -320,7 +297,7 @@ def _last_report(sec: dict[str, dict[str, Any]], px: dict[int, float]) -> dict[s
 
     Где в отчёте только стоимость, монеты — стоимость по цене отчётов на ту
     дату: медиана «стоимость / монеты» у фондов, сдавших и то и другое (так
-    фонды сами оценили монеты); нет таких — закрытие Binance."""
+    фонды сами оценили монеты); нет таких — закрытие дня из набора."""
     out: dict[str, tuple[float, int]] = {}
     for t, f in sec.items():
         for e in sorted((e for e in f["q"] if isinstance(e, int)), reverse=True):
@@ -345,12 +322,9 @@ def _coin(sec_of: Callable[[], object] | None = None) -> dict[str, Json] | None:
 
     sec_of — откуда взять отчёты фондов (по умолчанию wt_treasury.etf_funds):
     сборка спрашивает SEC параллельно и не ждёт его дольше SEC_WAIT."""
-    days, tpx, tna, through = _tftc()
+    days, px, tna, through = _tftc()
     if not days:
         return None
-    px = _klines(SYMBOL, (min(days) - 2 * 86400) * 1000)
-    for ts, p in tpx.items():
-        px.setdefault(ts, p)  # нет свечи Binance — цена из набора
     last_px = px[max(px)] if px else 0.0
     sec = _sec(sec_of() if sec_of else wt_treasury.etf_funds())
     reports = _last_report(sec, px)
@@ -435,50 +409,6 @@ def _cme() -> dict[str, Json]:
             cur[i] += v
     weeks = [[ts, *[round(v, 1) for v in acc[ts]]] for ts in sorted(acc) if all(v <= CME_MAX for v in acc[ts])]
     return {"btc": weeks} if weeks else {}
-
-
-def _coinbase_daily(product: str, start: int) -> dict[int, float]:
-    out: dict[int, float] = {}
-    t = start
-    end = _now()
-    while t < end:
-        t2 = min(end, t + 299 * 86400)
-        a = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))
-        b = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t2))
-        rows = _get(f"https://api.exchange.coinbase.com/products/{product}/candles?granularity=86400&start={a}&end={b}")
-        if not isinstance(rows, list):
-            break
-        for k in rows:
-            if isinstance(k, list) and len(k) > 4:
-                out[int(_num(k[0]))] = _num(k[4])
-        t = t2 + 86400
-    return out
-
-
-def _premium(cb: float, bn: float) -> float | None:
-    """Премия Coinbase к Binance, %; цены вне правдоподобного или премия
-    больше CBP_MAX — сбой цены, премии нет."""
-    if not (PX_MIN <= cb <= PX_MAX and PX_MIN <= bn <= PX_MAX):
-        return None
-    v = (cb / bn - 1) * 100
-    return round(v, 4) if abs(v) <= CBP_MAX else None
-
-
-def _cbp() -> dict[str, Json]:
-    """Премия Coinbase: на сколько процентов биткоин на Coinbase дороже, чем
-    на Binance. Coinbase — главная площадка американских фондов и компаний,
-    поэтому плюс читают как спрос из США."""
-    start = (_now() - 400 * 86400) // 86400 * 86400
-    c = _coinbase_daily("BTC-USD", start)
-    b = _klines(SYMBOL, start * 1000)
-    days = [[ts, v] for ts in sorted(c) if ts in b and (v := _premium(c[ts], b[ts])) is not None]
-    if not days:
-        return {}
-    tc = _get("https://api.exchange.coinbase.com/products/BTC-USD/ticker", 10)
-    tb = _get(f"https://data-api.binance.vision/api/v3/ticker/price?symbol={SYMBOL}", 10)
-    live = _premium(_num(tc.get("price")) if isinstance(tc, dict) else 0.0,
-                    _num(tb.get("price")) if isinstance(tb, dict) else 0.0)
-    return {"btc": {"days": days[-366:], "now": live}}
 
 
 class _State:
@@ -588,19 +518,18 @@ SEC_WAIT = 45.0
 
 def build() -> dict[str, Json]:
     """Собрать ответ из сети и положить в кэш."""
-    pool = ThreadPoolExecutor(max_workers=5)
+    pool = ThreadPoolExecutor(max_workers=4)
     try:
         sec_f = pool.submit(wt_treasury.etf_funds)
         btc_f = pool.submit(_coin, lambda: _part("sec", sec_f, SEC_WAIT) or wt_treasury.funds_cached())
         cme_f = pool.submit(_cme)
-        cbp_f = pool.submit(_cbp)
         co_f = pool.submit(wt_treasury.companies)
         end = time.monotonic() + PART_WAIT
 
         def left() -> float:
             return max(0.0, end - time.monotonic())
         btc = _part("btc", btc_f, left())
-        extra = {"cme": _part("cme", cme_f, left()) or {}, "cbp": _part("cbp", cbp_f, left()) or {}}
+        cme = _part("cme", cme_f, left()) or {}
         companies = _part("companies", co_f, left()) or []
     finally:
         # Зависшую часть не ждём: её поток закончится сам по таймауту сети
@@ -614,11 +543,8 @@ def build() -> dict[str, Json]:
     if not btc:
         return {"ok": False, "error": "no_data"}
     coins = {"btc": btc}
-    for name in ("cme", "cbp"):
-        if not extra[name] and was.get(name):
-            extra[name] = was[name]
     res = {"ok": True, "coins": coins, "holders": _holders(coins.get("btc"), companies),
-           "cme": extra["cme"], "cbp": extra["cbp"], "at": _now()}
+           "cme": cme or was.get("cme") or {}, "at": _now()}
     with _lock:
         _st.hit = (time.monotonic(), res)
     _file_save(res)

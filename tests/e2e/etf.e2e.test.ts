@@ -168,7 +168,11 @@ describe("институциональные потоки", () => {
     assert.equal(sp(await page.locator(".ef-hero > span").innerText()), "приток в фонды · +61,5 BTC");
     assert.deepEqual((await page.locator(".ef-chs").first().locator(".dm-ch b").allInnerTexts()).map(sp), ["−125 млн $", "+2,1 млрд $", "+57 млрд $"]);
     assert.match(sp(await page.locator(".ef-held").innerText()), /^Фонды управляют 105 млрд \$ — это ≈1,2\d млн BTC\. Это 6,\d\d% всех монет в обращении\.$/);
-    // Подпись источника и лицензии — ссылками (условие CC BY 4.0).
+    // Подпись источника и лицензии — ссылками (условие CC BY 4.0), с датой
+    // «данные по», как просит TFTC; цен бирж (Coinbase) на экране нет.
+    assert.equal(sp(await page.locator(".fg-by").innerText()),
+      "Потоки фондов и цена дня: TFTC (CC BY 4.0), данные по 15 окт. 2026 г. Монеты, суммы и запасы считаем сами.");
+    assert.equal(await page.getByText("Coinbase").count(), 0);
     const links = page.locator(".fg-by a");
     assert.deepEqual(await links.allInnerTexts(), ["TFTC", "CC BY 4.0"]);
     assert.deepEqual(await links.evaluateAll((as) => as.map((a) => a.getAttribute("href"))),

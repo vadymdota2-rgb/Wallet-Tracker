@@ -14968,9 +14968,6 @@ def _dg_inst() -> dict:
         per.sort(key=lambda x: -x[1])
         out["top"] = [{"t": t, "v": round(v)} for t, v in per if v > 0][:3]
         out["bot"] = [{"t": t, "v": round(v)} for t, v in reversed(per) if v < 0][:3]
-    cbp = ((etf.get("cbp") or {}).get("btc") or {}).get("now")
-    if cbp is not None:
-        out["cbp"] = round(cbp, 4)
     return out
 
 
@@ -15116,9 +15113,6 @@ def _dg_signals(body: dict) -> list:
         sig.append({"k": "btcx", "d": 0 if flat else (1 if b["net"] > 0 else -1), "v": b["net"]})
     if fl.get("net") is not None:
         sig.append({"k": "whales", "d": (fl["net"] > 0) - (fl["net"] < 0), "v": fl["net"]})
-    if inst.get("cbp") is not None:
-        c = inst["cbp"]
-        sig.append({"k": "cbp", "d": 1 if c > 0.02 else -1 if c < -0.02 else 0, "v": c})
     lq = body.get("liq") or {}
     if lq.get("n"):
         # Чью сторону выносило больше: шорты — цену тянули вверх, лонги — вниз.

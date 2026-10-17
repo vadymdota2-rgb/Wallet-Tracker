@@ -121,7 +121,7 @@ def date_word(lang: str, ts: int) -> str:
 # --- Выводы: копия DigestMore.tsx --------------------------------------------
 
 SIG_KEY = {"fng": "dg_sig_fng", "etf": "dg_sig_etf", "btcx": "dg_sig_btcx", "whales": "dg_sig_whales",
-           "cbp": "dg_sig_cbp", "liq": "dg_sig_liq", "oi": "dg_sig_oi", "fund": "dg_sig_fund", "pcr": "dg_sig_pcr"}
+           "liq": "dg_sig_liq", "oi": "dg_sig_oi", "fund": "dg_sig_fund", "pcr": "dg_sig_pcr"}
 FNG_ZONES = ((25, "fg_z0"), (46, "fg_z1"), (54, "fg_z2"), (75, "fg_z3"), (100, "fg_z4"))
 
 
@@ -133,8 +133,6 @@ def sig_value(s: dict, lang: str) -> str:
         return usd(v, lang, True)
     if k == "btcx":
         return btc_amt(v, lang, True)
-    if k == "cbp":
-        return pct(v, lang, 3)
     if k == "liq":
         return num(v, lang) + "%"
     if k == "oi":
@@ -144,8 +142,14 @@ def sig_value(s: dict, lang: str) -> str:
     return num(v, lang, 2)
 
 
+def sigs(it: dict) -> list:
+    """Сигналы выпуска, которые мы ещё показываем: у старых выпусков были и
+    снятые (премия Coinbase — её условия запрещают показывать их данные)."""
+    return [s for s in it.get("sig") or [] if isinstance(s, dict) and s.get("k") in SIG_KEY]
+
+
 def verdict(it: dict, lang: str) -> tuple[str, str] | None:
-    sig = it.get("sig") or []
+    sig = sigs(it)
     if not sig:
         return None
     up = sum(1 for s in sig if s["d"] > 0)
@@ -292,7 +296,7 @@ def render(it: dict, lang: str = "ru", page: str = "") -> bytes | None:
             y += 46
 
     # Табло сигналов.
-    sig = (it.get("sig") or [])[:9]
+    sig = sigs(it)[:9]
     if sig:
         y += 14
         row_h = 54
@@ -636,8 +640,6 @@ def _page_flows(it: dict, lang: str, n: int, total: int) -> bytes | None:
         has = True
         for e in [e for e in inst["etf"] if e.get("v")][:3]:
             p.row(tr(lang, "dg_etf_coin", c=e["c"].upper()), usd(e["v"], lang, True), _col(e["v"]))
-        if inst.get("cbp") is not None:
-            p.row(tr(lang, "dg_sig_cbp"), pct(inst["cbp"], lang, 3), _col(inst["cbp"]))
     b = it.get("btc") or {}
     if b.get("net") is not None and p.section(tr(lang, "btc_flow_title")):
         has = True

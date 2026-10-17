@@ -625,7 +625,7 @@ export interface DigestCalEv {
 }
 
 export interface DigestSignal {
-  k: "fng" | "etf" | "btcx" | "whales" | "cbp" | "liq" | "oi" | "fund" | "pcr";
+  k: "fng" | "etf" | "btcx" | "whales" | "liq" | "oi" | "fund" | "pcr";
   d: -1 | 0 | 1;
   v: number;
 }
@@ -646,7 +646,6 @@ export interface DigestItem {
     etf: { c: string; day: number; v: number; n: number }[];
     top?: { t: string; v: number }[];
     bot?: { t: string; v: number }[];
-    cbp?: number;
   };
   btc?: {
     in?: number;

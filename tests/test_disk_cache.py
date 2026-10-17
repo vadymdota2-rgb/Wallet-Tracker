@@ -108,7 +108,7 @@ class EtfFileTest(unittest.TestCase):
     def test_restart_gets_saved_reply_at_once(self):
         res = {"ok": True, "coins": {"btc": {"funds": []}}, "at": 1}
         with mock.patch.object(etf, "_coin", lambda sec_of=None: {"funds": []}), \
-                mock.patch.object(etf, "_cme", dict), mock.patch.object(etf, "_cbp", dict), \
+                mock.patch.object(etf, "_cme", dict), \
                 mock.patch.object(etf.wt_treasury, "companies", list), mock.patch.object(etf.wt_treasury, "etf_funds", dict):
             etf.build()
         self.assertTrue(os.path.exists(os.path.join(self.dir, "etf.json")))

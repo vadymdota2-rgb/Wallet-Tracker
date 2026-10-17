@@ -98,12 +98,14 @@ class ServerPolicyTest(unittest.TestCase):
                 head = str(n.values[0].value)
                 if "://" in head:
                     urls.append(head)
-        self.assertGreaterEqual(len(urls), 4)
+        self.assertGreaterEqual(len(urls), 2)
         for u in urls:
             self.assertTrue(etf._allowed(u), u)
             self.assertRegex(u, r"^https://[a-z.-]+/")
-        self.assertEqual(etf.HOSTS, frozenset({"data-api.binance.vision", "publicreporting.cftc.gov",
-                                               "api.exchange.coinbase.com", "www.tftc.io"}))
+        # Только открытые источники: набор TFTC (CC BY 4.0) и CFTC (госданные
+        # США). Цен бирж нет: условия Coinbase и Binance запрещают показывать
+        # их данные в приложении без письменного согласия.
+        self.assertEqual(etf.HOSTS, frozenset({"publicreporting.cftc.gov", "www.tftc.io"}))
 
     def test_endpoint_takes_nothing_from_outside(self):
         self.assertEqual(inspect.signature(etf.etf_data).parameters, {})

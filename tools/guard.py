@@ -653,7 +653,7 @@ say("токеномика: видно, что монету можно откры
 _ef = read(f"{APP}/src/screens/EtfScreen.tsx")
 _etfs = read(f"{APP}/wt_etf.py")
 say("институциональные потоки — только биткоин: потоки фондов по дням (открытый набор TFTC), спрос против добычи; без «кто докупал за неделю» и подписи источников; других монет нет",
-    'SYMBOL = "BTCUSDT"' in _etfs and "type Coin" not in _ef and "Segmented<Coin>" not in _ef
+    'SYMBOL = "BTCUSDT"' not in _etfs and "type Coin" not in _ef and "Segmented<Coin>" not in _ef
     and "ETHUSDT" not in _etfs and "SOLUSDT" not in _etfs and "HYPE" not in _etfs
     and "etf_data = etf.etf_data" in api and "import wt_etf as etf" in api and '"/api/etf"' in api
     and "def etf_data(" in _etfs and "coinmarketcap" not in _etfs.lower() and "def _base(" not in _etfs
@@ -767,9 +767,13 @@ say("институциональные потоки: накопленный п�
     "cum={mode === \"c\" ? cumView : null}" in _ef and '"ef_mshare"' in _ef and 'coinsShort(lang, stats.held, "", false)' in _ef)
 
 _em = read(f"{APP}/src/screens/EtfMore.tsx")
-say("институциональные потоки: позиции CME по CFTC, премия Coinbase",
-    "def _cme(" in _etfs and "publicreporting.cftc.gov" in _etfs and "def _cbp(" in _etfs
-    and "export function CmeSection(" in _em and "export function CbpSection(" in _em
+say("институциональные потоки: позиции CME по CFTC; только открытые источники — цен Coinbase и Binance нет (их условия запрещают показывать данные в приложении), цена дня — из набора TFTC, в подписи — «данные по»",
+    "def _cme(" in _etfs and "publicreporting.cftc.gov" in _etfs and "def _cbp(" not in _etfs
+    and 'HOSTS = frozenset({"publicreporting.cftc.gov", "www.tftc.io"})' in _etfs and "def _klines(" not in _etfs
+    and "days, px, tna, through = _tftc()" in _etfs
+    and "export function CmeSection(" in _em and "CbpSection" not in _em + _ef and "cbp" not in read(f"{APP}/src/lib/etf.ts")
+    and '"ef_through"' in _ef and '"cbp"' not in read(f"{APP}/src/screens/DigestMore.tsx") and '"cbp"' not in read(f"{APP}/wt_digest_img.py")
+    and 'sig.append({"k": "cbp"' not in api
     and "HoldersAll" not in _em + _ef and "AltHolders" not in _em + _ef and "<CmeSection" in _ef)
 _fgs = read(f"{APP}/src/screens/FearGreedScreen.tsx")
 _dgm2 = read(f"{APP}/src/screens/DigestMore.tsx")
@@ -1350,7 +1354,7 @@ say("«Институциональные потоки» — отдельный 
     and "from whale_api" not in _etfs and "wt_etfchain" not in _etfs)
 say("«Институциональные потоки»: сервер проверяет каждую строку набора (даты ASCII и в торгах, пределы потоков и цен, праздники), итог дня — сумма фондов",
     'DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")' in _etfs and "(not by and total == 0)" in _etfs
-    and "abs(total) > DAY_MAX" in _etfs and "PX_MIN <= _num(k[4]) <= PX_MAX" in _etfs and "HOLD_MAX = 5_000_000.0" in _etfs
+    and "abs(total) > DAY_MAX" in _etfs and 'if PX_MIN <= _num(r.get("btcCloseUsd")) <= PX_MAX:' in _etfs and "HOLD_MAX = 5_000_000.0" in _etfs
     and "total = sum(by.values()) if by else" in _etfs)
 say("«Институциональные потоки»: тесты как у халвинга — модуль, свойства, сервер, fuzz с договором «сервер ↔ приложение», безопасность, правила кода, браузер (16 языков, 320–1280 px, арабский, крупный шрифт, контраст), мутации, строгий TS — в CI",
     all(os.path.isfile(f"{APP}/tests/{f}") for f in ("etf.test.ts", "etf.props.test.ts", "e2e/etf.e2e.test.ts", "test_etf_api.py",
@@ -1363,7 +1367,7 @@ say("«Институциональные потоки»: активы фонд�
     'if TNA_MIN <= _num(r.get("totalNetAssetsUsd")) <= TNA_MAX:' in _etfs and "if own > 0 and abs(own / held - 1) > SPLIT_MAX:" in _etfs
     and "export function heldSeries(" in _etl and "export function assets(" in _etl and "function validTna(" in _etl
     and "export function HeldSection(" in _em and "<HeldSection series={heldSeries(c)}" in _ef
-    and "any(not 0 <= v <= CME_MAX for v in vals)" in _etfs and "return round(v, 4) if abs(v) <= CBP_MAX else None" in _etfs
+    and "any(not 0 <= v <= CME_MAX for v in vals)" in _etfs
     and "COINS" not in _etfs and 'QUARTER = re.compile(r"[0-9]{4}-(?:03-31|06-30|09-30|12-31)")' in read(f"{APP}/wt_treasury.py")
     and "_point(v)" in read(f"{APP}/wt_treasury.py") and os.path.isfile(f"{APP}/tests/test_treasury_security.py")
     and "tests/test_treasury_security.py" in _wf and 'from "./etfView"' in _ef and 'from "./etfView"' in _em
@@ -1380,7 +1384,7 @@ say("«Институциональные потоки»: графики в на
     "export function useWidth(ref: RefObject<Element | null>, fallback = 330): number" in _etv and "new ResizeObserver(" in _etv
     and "export function heightK(w: number, base: number): number" in _etv
     and "const { W, PW, P1, P2, H } = geom(useWidth(ref));" in _ef and "const { W, PW, MH } = box(useWidth(ref), 130);" in _em
-    and "const { W, PW, MH } = box(useWidth(ref), 90);" in _em and "const W = 360;" not in _ef + _em
+    and "const W = 360;" not in _ef + _em
     and ".ef { max-width: 760px; margin-inline: auto; }" in _etcss and ".ef-svg .fg-tick { font-size: 10.5px; }" in _etcss
     and "jobs.push(() => fetchEtf());" in read(f"{APP}/src/lib/prefetch.ts")
     and '{t(lang, "op_stale", { t: since(Math.max(0, Date.now() / 1000 - reply.at)) })}' in _ef)

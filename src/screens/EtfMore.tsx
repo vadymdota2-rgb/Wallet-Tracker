@@ -1,17 +1,13 @@
 /**
- * Остальное на экране «Институциональные потоки»: позиции на CME по отчёту
- * CFTC, премия Coinbase и крупнейшие держатели — фонды (из списка фондов
- * экрана) и публичные компании (по их отчётам в SEC).
+ * Остальное на экране «Институциональные потоки»: запас фондов по дням,
+ * позиции на CME по отчёту CFTC и крупнейшие держатели — фонды (из списка
+ * фондов экрана) и публичные компании (по их отчётам в SEC).
  *
  * CME — то, как институционалы держат фьючерсы. Отчёт CFTC делит крупных
  * участников на управляющих активами (пенсионные и инвестиционные фонды),
  * хедж-фонды и дилеров (банки). Нетто — лонг минус шорт. Шорт хедж-фондов
  * обычно не ставка на падение: они держат ETF или монеты и продают фьючерс,
  * зарабатывая на разнице цен; экран так и говорит, когда картина такая.
- *
- * Премия Coinbase — на сколько процентов монета на Coinbase дороже, чем на
- * Binance. Coinbase — главная площадка фондов и компаний США, поэтому её
- * читают как спрос из Америки.
  */
 import { useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 import { t } from "../i18n/t";
@@ -256,72 +252,6 @@ export function CmeSection({ rows, sym, price, lang }: { rows: number[][]; sym: 
           </>
         ) : null}
         <p className="lq-hint">{t(lang, "ef_cme_note")}</p>
-      </Card>
-    </>
-  );
-}
-
-export function CbpSection({ d, sym, lang }: { d: { days: [number, number][]; now: number | null }; sym: string; lang: Lang }) {
-  const days = d.days;
-  const m30 = days.slice(-30);
-  const avg = m30.length ? m30.reduce((s, x) => s + x[1], 0) / m30.length : 0;
-  const plus = m30.filter((x) => x[1] > 0).length;
-  const nowV = d.now ?? days[days.length - 1]?.[1] ?? 0;
-  const fmt = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${num(Math.abs(v), 3)}%`;
-  const view = days.slice(-180);
-  const n = view.length;
-  const maxAbs = Math.max(0.05, ...view.map((x) => Math.abs(x[1])));
-  const ref = useRef<SVGSVGElement>(null);
-  const { W, PW, MH } = box(useWidth(ref), 90);
-  const bw = PW / Math.max(1, n);
-  const y0 = 6 + MH / 2;
-  return (
-    <>
-      <SectionTitle>{t(lang, "ef_cbp_title")}</SectionTitle>
-      <Card>
-        <div className="dm-chs three ef-chs">
-          <div className="dm-ch">
-            <small>{t(lang, "ef_cbp_now")}</small>
-            <b className={tone(nowV)}><bdi dir="ltr">{fmt(nowV)}</bdi></b>
-          </div>
-          <div className="dm-ch">
-            <small>{t(lang, "ef_cbp_avg")}</small>
-            <b className={tone(avg)}><bdi dir="ltr">{fmt(avg)}</bdi></b>
-          </div>
-          <div className="dm-ch">
-            <small>{t(lang, "ef_cbp_plus")}</small>
-            <b><bdi dir="ltr">{num(plus)} / {num(m30.length)}</bdi></b>
-          </div>
-        </div>
-        <svg ref={ref} className="fg-svg ef-svg" viewBox={`0 0 ${W} ${MH + 26}`} width="100%" role="img" aria-label={t(lang, "ef_cbp_title")}>
-          <rect x={0} y={6} width={PW} height={MH} className="fg-bg" />
-          {(() => {
-            const a = view[0]?.[0] ?? 0;
-            const b = view[n - 1]?.[0] ?? 1;
-            const most = Math.max(3, Math.floor(PW / 64));
-            return timeTicks(lang, a, b).filter((_, i, arr) => (arr.length - 1 - i) % Math.max(1, Math.ceil(arr.length / most)) === 0).map((x) => {
-              const xx = ((x.t - a) / Math.max(1, b - a)) * PW;
-              return (
-                <g key={x.t}>
-                  <line x1={xx} x2={xx} y1={6} y2={6 + MH} className="fg-grid" />
-                  <text x={xx} y={MH + 22} textAnchor="middle" className="fg-tick">{x.label}</text>
-                </g>
-              );
-            });
-          })()}
-          <line x1={0} x2={PW} y1={y0} y2={y0} className="ef-zero" />
-          <text x={W - 2} y={y0 + 3.5} textAnchor="end" className="fg-tick">0</text>
-          {/* num() хвостовых нулей не пишет: срезать нечего (прежняя замена делала из «+10%» «+1%»). */}
-          <text x={W - 2} y={10 + 3.5} textAnchor="end" className="fg-tick">{fmt(maxAbs)}</text>
-          {view.map((x, i) => {
-            const h = (Math.abs(x[1]) / maxAbs) * (MH / 2 - 2);
-            return x[1] === 0 ? null : (
-              <rect key={x[0]} x={i * bw} width={Math.max(1, bw - 0.4)} y={x[1] > 0 ? y0 - h : y0} height={Math.max(0.8, h)}
-                fill={x[1] > 0 ? UP : DN} opacity={0.85} />
-            );
-          })}
-        </svg>
-        <p className="lq-hint">{t(lang, "ef_cbp_what", { s: sym })}</p>
       </Card>
     </>
   );

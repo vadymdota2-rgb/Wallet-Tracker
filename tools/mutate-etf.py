@@ -61,7 +61,6 @@ PY = [
     ('DATE.fullmatch(r["date"])', 'r["date"]', "дата строки — ГГГГ-ММ-ДД"),
     ('DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")', 'DATE = re.compile(r"\\d{4}-\\d{2}-\\d{2}")', "цифры даты — ASCII"),
     ("if PX_MIN <= _num(r.get(\"btcCloseUsd\")) <= PX_MAX:", "if _num(r.get(\"btcCloseUsd\")):", "цена из набора правдоподобна"),
-    ("len(k) > 4 and PX_MIN <= _num(k[4]) <= PX_MAX", "len(k) > 4", "цена Binance правдоподобна"),
     # Запас и фонды.
     ("if 0 < btc <= HOLD_MAX:", "if btc > 0:", "запас из отчёта правдоподобен"),
     ("                out[t] = (btc, e)\n                break", "                out[t] = (btc, e)\n            break", "негодный отчёт — прошлый квартал"),
@@ -87,15 +86,11 @@ PY = [
     ("return body if len(body) <= BODY_MAX else None", "return body", "предел размера ответа"),
     ('c if c.isprintable() else "?"', "c", "журнал без управляющих символов"),
     ("_now() - _num(got.get(\"at\")) > FILE_MAX_AGE", "False", "старая копия с диска"),
-    ("for _ in range(6):", "for _ in range(60):", "страницы свечей ограничены"),
-    (" or not isinstance(rows[-1], list) or not rows[-1]:", ":", "последняя свеча не свеча"),
     (" or not DATE.fullmatch(stamp[:10]):", ":", "дата CFTC — ASCII"),
-    # CME, премия Coinbase, активы фондов.
+    # CME, активы фондов.
     ("if not CME_FROM <= ts <= _now() or", "if not ts <= _now() or", "CME: дата не до фьючерсов"),
     ("CME_FROM <= ts <= _now() or", "CME_FROM <= ts or", "CME: дата не из будущего"),
     ("any(not 0 <= v <= CME_MAX for v in vals)", "False", "CME: позиции правдоподобны"),
-    ("return round(v, 4) if abs(v) <= CBP_MAX else None", "return round(v, 4)", "премия: не сбой цены"),
-    ("if not (PX_MIN <= cb <= PX_MAX and PX_MIN <= bn <= PX_MAX):", "if not (cb > 0 and bn > 0):", "премия: цены правдоподобны"),
     ('if TNA_MIN <= _num(r.get("totalNetAssetsUsd")) <= TNA_MAX:', 'if _num(r.get("totalNetAssetsUsd")):', "активы: правдоподобная сумма"),
     ("if tna and max(tna) >= max(days) - 7 * 86400 and", "if tna and", "активы: только свежая сводка"),
     ("if own > 0 and abs(own / held - 1) > SPLIT_MAX:", "if False:", "сверка своей оценки со сводкой"),

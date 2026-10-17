@@ -4,7 +4,7 @@
 на любом входе. Генератор детерминированный (зерно SEED) — найденное
 нарушение воспроизводится, номер случая есть в сообщении.
 
-Каждый источник (набор TFTC, свечи Binance, отчёты SEC) отвечает то годным,
+Каждый источник (набор TFTC, отчёт CFTC, отчёты SEC) отвечает то годным,
 то мусором: строками вместо чисел, NaN, огромными числами, HTML в тикерах и
 датах, перепутанными типами, пустотой. Сборка не падает никогда, а каждый
 годный ответ сервера принимает приложение (validEtf в lib/etf.ts) — сервер и
@@ -61,14 +61,6 @@ def tftc(r: random.Random) -> object:
             "updatedThrough": r.choice(["2026-10-15", junk(r)])}
 
 
-def klines(r: random.Random) -> object:
-    if r.random() < 0.1:
-        return junk(r)
-    start = etf.ETF_LAUNCH - 2 * DAY
-    return [[(start + i * DAY) * 1000, 0, 0, 0, str(r.uniform(20_000, 150_000)) if r.random() > 0.05 else junk(r)]
-            for i in range(r.randrange(0, 1000))]
-
-
 def sec(r: random.Random) -> dict:
     out = {}
     for t in r.sample(TICKERS, r.randrange(0, len(TICKERS))):
@@ -94,29 +86,14 @@ def cftc(r: random.Random) -> object:
     return rows
 
 
-def candles(r: random.Random) -> object:
-    if r.random() < 0.1:
-        return junk(r)
-    start = (NOW - 400 * DAY) // DAY * DAY
-    return [[start + i * DAY + (0 if r.random() > 0.05 else 3600), 0, 0, 0,
-             r.uniform(20_000, 150_000) if r.random() > 0.1 else junk(r)] for i in range(r.randrange(0, 300))]
-
-
 def network(r: random.Random):
-    flows, kl, cf, cb = tftc(r), klines(r), cftc(r), candles(r)
-    tick = {"price": r.choice([str(r.uniform(20_000, 150_000)), "0", "x", None])}
+    flows, cf = tftc(r), cftc(r)
 
     def fetch(url, timeout):
         if "tftc.io" in url:
             return json.dumps(flows).encode() if r.random() > 0.02 else b"{"
-        if "klines" in url:
-            return json.dumps(kl).encode()
         if "cftc.gov" in url:
             return json.dumps(cf).encode()
-        if "candles" in url:
-            return json.dumps(cb).encode()
-        if "ticker" in url:
-            return json.dumps(tick).encode()
         return None
 
     return fetch
@@ -156,10 +133,8 @@ class FuzzTest(unittest.TestCase):
             self.assertEqual(len(w), 10, m)
             self.assertTrue(etf.CME_FROM <= w[0] <= NOW, m)
             self.assertTrue(all(0 <= v <= etf.CME_MAX for v in w[1:]), m)
-        cbp = (res["cbp"] or {}).get("btc")
-        if cbp:
-            self.assertTrue(all(abs(v) <= etf.CBP_MAX and ts % DAY == 0 for ts, v in cbp["days"]), m)
-            self.assertTrue(cbp["now"] is None or abs(cbp["now"]) <= etf.CBP_MAX, m)
+        self.assertNotIn("cbp", res, m)
+        self.assertTrue(all(d[3] == 0 or etf.PX_MIN <= d[3] <= etf.PX_MAX for d in c["days"]), m)
 
     def test_build_never_raises_and_keeps_invariants(self):
         r = random.Random(SEED)  # noqa: S311 — нужна повторяемость, а не криптостойкость
@@ -194,7 +169,7 @@ class FuzzTest(unittest.TestCase):
                 f"import {{ validEtf }} from {json.dumps(os.path.join(ROOT, 'src/lib/etf.ts'))};"
                 "const all = JSON.parse(readFileSync(process.argv[1], 'utf8'));"
                 f"const bad = all.filter((r) => {{ const v = validEtf(r, {NOW}); return !v"
-                " || (r.cme.btc && !v.cme) || (r.cbp.btc && !v.cbp) || (r.coins.btc.tna.length && !v.coins.btc.tna)"
+                " || (r.cme.btc && !v.cme) || (r.coins.btc.tna.length && !v.coins.btc.tna)"
                 " || (r.holders.length !== (v.holders || []).length); });"
                 "console.log(JSON.stringify({ n: all.length, bad: bad.slice(0, 2) }));"
             )
