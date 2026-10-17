@@ -47,17 +47,41 @@ class DigestSourcesTest(unittest.TestCase):
         self.assertTrue(cap.endswith(dgi.BOT_AT))
 
     def test_flows_page_shows_the_source_under_etf_rows(self):
-        notes = []
-        orig = dgi._Page.note
+        # Страница рисуется через _Page; здесь — запись её вызовов (рисовать
+        # Pillow в CI нечем): под строками ETF — строка источника.
+        calls = []
 
-        def note(self, s):
-            notes.append(s)
-            return orig(self, s)
+        class Page:
+            y = 0
 
-        with mock.patch.object(dgi._Page, "note", note):
-            png = dgi._page_flows(item(), "ru", 3, 4)
-        self.assertTrue(png)
-        self.assertEqual(notes, [f"{dgi.tr('ru', 'dg_etf_by')} {dgi.TFTC_BY}"])
+            def __init__(self, *a):
+                pass
+
+            def section(self, title):
+                calls.append(("section", title))
+                return True
+
+            def row(self, label, *a, **k):
+                calls.append(("row", label))
+                return True
+
+            def note(self, s):
+                calls.append(("note", s))
+                return True
+
+            def png(self):
+                return b"png"
+
+        with mock.patch.object(dgi, "_Page", Page):
+            self.assertEqual(dgi._page_flows(item(), "ru", 3, 4), b"png")
+        note = ("note", f"{dgi.tr('ru', 'dg_etf_by')} {dgi.TFTC_BY}")
+        self.assertIn(note, calls)
+        self.assertEqual(calls[calls.index(note) - 1], ("row", dgi.tr("ru", "dg_etf_coin", c="BTC")))
+
+    @unittest.skipUnless(dgi.Image is not None, "нужен Pillow")
+    def test_note_is_drawn(self):
+        png = dgi._page_flows(item(), "ru", 3, 4)
+        self.assertTrue(png and png.startswith(b"\x89PNG"))
 
     def test_dropped_signals_of_old_issues_are_hidden(self):
         old = item(sig=[{"k": "cbp", "d": 1, "v": 0.1}, {"k": "etf", "d": 1, "v": 5e6}, {"k": "x", "d": -1, "v": 1}, "мусор"])
