@@ -269,6 +269,25 @@ say("помощь называет вкладки и кнопки как при�
 say("помощь — руководство, а не обрезанные строки меню",
     "help_menu_add" not in read(f"{APP}/src/screens/HelpScreen.tsx") and '"hp_faq_title"' in read(f"{APP}/src/screens/HelpScreen.tsx"))
 
+# --- подсказки «?» у заголовков и словарь терминов ------------------------
+# Новичок не обязан знать, что такое NetFlow или фандинг: у заголовка раздела
+# со сложным термином есть «?», а в помощи — словарь. Тексты одни и те же, и
+# каждый абзац подсказки должен существовать во всех шестнадцати языках —
+# иначе на экране вместо объяснения встанет голый ключ.
+_ui = read(f"{APP}/src/components/ui.tsx")
+_hs = read(f"{APP}/src/screens/HelpScreen.tsx")
+_qk = json.load(open(f"{APP}/tools/i18n.json", encoding="utf-8"))
+_qsrc = "".join(read(os.path.join(f"{APP}/src/screens", f)) for f in os.listdir(f"{APP}/src/screens") if f.endswith(".tsx"))
+_qused = set(re.findall(r'"(\w+)"', " ".join(re.findall(r"help=\{\[([^\]]*)\]\}", _qsrc))))
+_qterms = set(re.findall(r'"(\w+)"', " ".join(re.findall(r"body: \[([^\]]*)\]", _hs))))
+say("подсказки «?»: у NetFlow, ротации, лонг/шорт, потоков бирж, топа, фандинга, интереса — и словарь в помощи",
+    "help?: DictKey[]" in _ui and 'aria-expanded={open}' in _ui and 'aria-label={t(lang, "q_what")}' in _ui
+    and all(k in _qused for k in ("q_netflow_1", "q_rot_1", "q_ls_1", "q_exflow_1", "q_top_1", "q_fund_1", "q_perp_1", "oih_how_1"))
+    and '"hp_terms_title"' in _hs and {"q_netflow_1", "q_rot_1", "q_fund_1", "q_top_2"} <= _qterms
+    and all(k in _qk and len(_qk[k]) == 16 and all(v.strip() and "{" not in v for v in _qk[k].values())
+            for k in _qused | _qterms),
+    ", ".join(sorted(k for k in _qused | _qterms if k not in _qk)))
+
 # --- неделя премиума — только при первом открытии приложения --------------
 say("бот по /start неделю не выдаёт", "TRIAL_DAYS" not in main_cpp and "grantPremiumDays(cid" not in main_cpp)
 say("API выдаёт неделю при первом открытии, одной транзакцией",

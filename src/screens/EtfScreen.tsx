@@ -545,7 +545,7 @@ export function EtfScreen() {
             </Card>
           ) : null}
 
-          <SectionTitle>{t(lang, "ef_chart")}</SectionTitle>
+          <SectionTitle help={["ef_how_1", "ef_how_3"]}>{t(lang, "ef_chart")}</SectionTitle>
           <Card>
             <Segmented<Range>
               value={range}

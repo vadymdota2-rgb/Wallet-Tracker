@@ -29,7 +29,7 @@ export function FundingScreen() {
       <Card>
         {/* Подсказка — под заголовком, а не сбоку: рядом с ней длинное
             «Экстремальные ставки» рвалось посреди слова. */}
-        <SectionTitle>{t(lang, "fund_title")}</SectionTitle>
+        <SectionTitle help={["q_fund_1", "q_fund_2"]}>{t(lang, "fund_title")}</SectionTitle>
         <p className="note dim">{t(lang, "fund_hint")}</p>
         <FundBody />
       </Card>

@@ -249,7 +249,7 @@ export function OiHistScreen() {
         <Chg lang={lang} c={reply.chg} p={reply.pchg} />
       </Card>
 
-      <SectionTitle>{t(lang, "oih_oi")}</SectionTitle>
+      <SectionTitle help={["oih_how_1", "oih_how_2"]}>{t(lang, "oih_oi")}</SectionTitle>
       <Card>
         <OiChart lang={lang} r={reply} range={range} sel={s} onSel={setSel} />
         <p className="op-term-sel" aria-live="polite">
@@ -274,7 +274,7 @@ export function OiHistScreen() {
 
       {f.ex.length ? (
         <>
-          <SectionTitle>{t(lang, "oih_fund")}</SectionTitle>
+          <SectionTitle help={["q_fund_1", "q_fund_2"]}>{t(lang, "oih_fund")}</SectionTitle>
           <Card>
             <div className="oih-fh">
               <div>

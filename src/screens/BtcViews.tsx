@@ -155,7 +155,7 @@ export function BtcFlowCard({ bigWin }: { bigWin: BigWin }) {
 
   return (
     <Card>
-      <SectionTitle note={t(lang, "btc_flow_hint")}>
+      <SectionTitle note={t(lang, "btc_flow_hint")} help={["q_exflow_1", "q_exflow_2"]}>
         <span className="btc-ttl">
           <CoinIcon sym="BTC" size={20} />
           {t(lang, "btc_flow_title")}

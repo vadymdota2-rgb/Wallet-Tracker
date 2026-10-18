@@ -379,6 +379,51 @@
   overflow-wrap: anywhere;
 }
 .sect-note { color: var(--dim-2); font-size: 12px; text-align: end; flex: 0 1 auto; max-width: 52%; }
+/* «?» у заголовка: кружок с глиф-вопросом. Сам кружок мелкий, чтобы не
+   спорить с заголовком, а ловит нажатие с запасом — поле 32 пикселя за счёт
+   отрицательных полей, раскладку строки оно не раздвигает. */
+.sect-q {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin: -7px -7px -7px 1px;
+  padding: 0;
+  box-sizing: content-box;
+  border: 7px solid transparent;
+  background: rgb(46 155 255 / 0.14) padding-box;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgb(46 155 255 / 0.45);
+  color: var(--glow);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  vertical-align: middle;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+[dir="rtl"] .sect-q { margin: -7px 1px -7px -7px; }
+.sect-q.on { background-color: var(--glow); color: var(--bg); box-shadow: none; }
+.sect-q:focus-visible { outline: 2px solid var(--glow); outline-offset: -5px; }
+.sect-help {
+  margin: 8px 0 2px;
+  padding: 10px 12px;
+  border-radius: var(--r-lg);
+  border: 1px solid rgb(27 61 104 / 0.55);
+  border-inline-start: 3px solid var(--glow);
+  background: rgb(7 14 30 / 0.45);
+  color: var(--dim);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  animation: sect-help-in 0.18s var(--ease);
+}
+.sect-help p { margin: 0; }
+.sect-help p + p { margin-top: 6px; }
+@keyframes sect-help-in { from { opacity: 0; transform: translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) { .sect-help { animation: none; } }
 
 /* Строки --------------------------------------------------------------- */
 .row {

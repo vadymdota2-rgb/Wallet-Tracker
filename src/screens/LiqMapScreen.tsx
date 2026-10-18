@@ -831,7 +831,7 @@ export function LiqMapScreen() {
             </p>
           </Card>
 
-          <SectionTitle>{t(lang, "lq_cum_title")}</SectionTitle>
+          <SectionTitle help={["lq_how_1", "lq_how_2", "lq_how_4"]}>{t(lang, "lq_cum_title")}</SectionTitle>
           <Card>
             <div className="lq-div-h">
               <span className="dn">▼ {t(lang, "lq_longs")}</span>

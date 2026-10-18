@@ -104,7 +104,7 @@ export function TopTab() {
   return (
     <>
       <Card>
-        <SectionTitle note={t(lang, "hl_venue")}>{t(lang, "hl_venue_title")}</SectionTitle>
+        <SectionTitle note={t(lang, "hl_venue")} help={["q_top_1", "q_top_2", "q_top_3"]}>{t(lang, "hl_venue_title")}</SectionTitle>
         {/* Площадка выбирается плитками с логотипами — теми же, что в
             аналитике: по знаку биржа узнаётся раньше, чем прочитано её имя.
             В плитке помещается и что там торгуют: раньше подпись приходилось

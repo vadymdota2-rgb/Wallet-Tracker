@@ -475,7 +475,7 @@ export function FearGreedScreen() {
             <p className="lq-hint">{t(lang, "fg_hint")}</p>
           </Card>
 
-          <SectionTitle>{t(lang, "fg_dist")}</SectionTitle>
+          <SectionTitle help={["fg_how_1", "fg_how_3"]}>{t(lang, "fg_dist")}</SectionTitle>
           <Card>
             <div className="fg-dist" role="img" aria-label={t(lang, "fg_dist")}>
               {ZONES.map((z, i) => stats.cnt[i] ? (

@@ -4,7 +4,8 @@
  * Прежняя версия повторяла меню бота строками, обрезанными на полуслове
  * («Добавить кошелёк — начать отслеж…»), и не отвечала ни на один настоящий
  * вопрос. Теперь это руководство: быстрый старт по шагам, разбор каждой
- * вкладки, частые вопросы, Premium, поддержка и отказ от ответственности.
+ * вкладки, словарь терминов, частые вопросы, Premium, поддержка и отказ
+ * от ответственности.
  *
  * Разделы и вопросы свёрнуты: развёрнутые целиком, они растянули бы экран на
  * десяток прокруток, а искать нужное человек начинает с заголовков. Сделано
@@ -48,6 +49,22 @@ const GUIDE: { ic: ReactNode; title: Key; sub: Key; body: Key }[] = [
   { ic: <AnalyticsGlyph size={22} />, title: "hp_g_an_t", sub: "hp_g_an_s", body: "hp_g_an_d" },
   { ic: <DigestGlyph size={22} />, title: "hp_g_dg_t", sub: "hp_g_dg_s", body: "hp_g_dg_d" },
   { ic: <span className="fold-dots">⋯</span>, title: "hp_g_more_t", sub: "hp_g_more_s", body: "hp_g_more_d" },
+];
+
+/** Словарь терминов: те же абзацы, что в подсказках «?» на экранах, —
+ *  объяснение одно, где бы человек его ни открыл. NetFlow — термин, его
+ *  не переводят, поэтому заголовок без ключа словаря. */
+const TERMS: { title: Key | "NetFlow"; body: Key[] }[] = [
+  { title: "NetFlow", body: ["q_netflow_1", "q_netflow_2"] },
+  { title: "ui_rotation", body: ["q_rot_1", "q_rot_2"] },
+  { title: "ex_flows", body: ["q_exflow_1", "q_exflow_2"] },
+  { title: "ui_tab_ls", body: ["q_ls_1", "q_ls_2"] },
+  { title: "q_t_lev", body: ["q_perp_2", "lqs_how_1"] },
+  { title: "q_t_fund", body: ["q_fund_1", "q_fund_2"] },
+  { title: "oih_oi", body: ["oih_how_1", "oih_how_2"] },
+  { title: "q_t_pnl", body: ["q_top_2", "q_top_3"] },
+  { title: "dm_dom", body: ["dm_how_1", "dm_how_3"] },
+  { title: "q_t_opt", body: ["op_how_1", "op_how_2", "op_how_3"] },
 ];
 
 const FAQ: [Key, Key][] = [
@@ -103,6 +120,24 @@ export function HelpScreen() {
                 <span className="fold-chev" aria-hidden="true" />
               </summary>
               <p className="fold-body">{t(lang, g.body)}</p>
+            </details>
+          ))}
+        </div>
+      </Card>
+
+      <Card>
+        <SectionTitle>{t(lang, "hp_terms_title")}</SectionTitle>
+        <p className="note dim">{t(lang, "hp_terms_note")}</p>
+        <div className="folds">
+          {TERMS.map((g) => (
+            <details key={g.title} className="fold faq" onToggle={() => haptic("select")}>
+              <summary>
+                <span className="fold-main">
+                  <b>{g.title === "NetFlow" ? g.title : t(lang, g.title)}</b>
+                </span>
+                <span className="fold-chev" aria-hidden="true" />
+              </summary>
+              <p className="fold-body">{g.body.map((k) => t(lang, k)).join("\n\n")}</p>
             </details>
           ))}
         </div>

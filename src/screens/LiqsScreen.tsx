@@ -240,7 +240,7 @@ export function LiqsScreen() {
         </div>
       </Card>
 
-      <SectionTitle>{t(lang, "lqs_bars")}</SectionTitle>
+      <SectionTitle help={["lqs_how_1", "lqs_how_2"]}>{t(lang, "lqs_bars")}</SectionTitle>
       <Card>
         <Bars lang={lang} r={reply} sel={sel} onSel={setSel} />
         <div className="op-legend">

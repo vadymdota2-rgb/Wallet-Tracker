@@ -337,7 +337,7 @@ export function AnalyticsTab() {
           {/* NetFlow — термин, он одинаков во всех языках, как PnL и ROI.
               Прежнее «Что покупают киты» описывало только половину: при
               оттоке киты как раз продают. */}
-          <SectionTitle note={t(lang, "flow_hint")}>NetFlow DEX</SectionTitle>
+          <SectionTitle note={t(lang, "flow_hint")} help={["q_netflow_1", "q_netflow_2"]}>NetFlow DEX</SectionTitle>
           <FlowTrend />
           {flowWinPicker}
           {/* Знак потока отдельной строкой от окна: это два независимых
@@ -364,7 +364,7 @@ export function AnalyticsTab() {
           сторона и поиск — те же ручки, что у NetFlow DEX. */}
       {view === "bscx" ? (
         <Card>
-          <SectionTitle note={t(lang, "bscx_hint")}>{t(lang, "bscx_title")}</SectionTitle>
+          <SectionTitle note={t(lang, "bscx_hint")} help={["q_exflow_1", "q_exflow_2"]}>{t(lang, "bscx_title")}</SectionTitle>
           <BscExHead />
           {/* Свои окно, сторона и поиск: с NetFlow DEX ручки не общие. */}
           <Segmented<FlowWin>
@@ -391,7 +391,7 @@ export function AnalyticsTab() {
 
       {view === "ls" ? (
         <Card>
-          <SectionTitle note={t(lang, "ls_hint")}>{t(lang, "ui_tab_ls")}</SectionTitle>
+          <SectionTitle note={t(lang, "ls_hint")} help={["q_ls_1", "q_ls_2"]}>{t(lang, "ui_tab_ls")}</SectionTitle>
           <>
               {/* Класс инструментов стоит первым: это самый крупный выбор, всё
                   остальное — окно, перевес, поиск — уточняет уже его. */}
@@ -446,7 +446,10 @@ export function AnalyticsTab() {
 
       {view === "perp" ? (
         <Card>
-          <SectionTitle note={`${t(lang, wantLong ? "ls_side_long" : "ls_side_short")} · ${num(perpRows.length)}`}>
+          <SectionTitle
+            note={`${t(lang, wantLong ? "ls_side_long" : "ls_side_short")} · ${num(perpRows.length)}`}
+            help={["q_perp_1", "q_perp_2"]}
+          >
             {t(lang, "big_perp_title")}
           </SectionTitle>
           <>
@@ -475,7 +478,7 @@ export function AnalyticsTab() {
 
       {view === "rot" ? (
         <Card>
-          <SectionTitle note={t(lang, "ui_rot_hint")}>{t(lang, "ui_rotation")}</SectionTitle>
+          <SectionTitle note={t(lang, "ui_rot_hint")} help={["q_rot_1", "q_rot_2"]}>{t(lang, "ui_rotation")}</SectionTitle>
           {/* Окно перед таблицей, а не под ней: сперва выбирают срок, потом
               смотрят, что за него вышло. Сам выбор общий с потоком — оба
               раздела про одни и те же деньги на одной площадке. */}

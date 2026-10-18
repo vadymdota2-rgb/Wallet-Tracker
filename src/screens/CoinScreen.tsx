@@ -153,7 +153,7 @@ export function CoinScreen({ arg, arg2 }: ScreenProps) {
       {row ? (
         <Card>
           {/* То же имя, что у раздела, откуда сюда приходят. */}
-          <SectionTitle>NetFlow</SectionTitle>
+          <SectionTitle help={["q_netflow_1", "q_netflow_2"]}>NetFlow</SectionTitle>
           <p className="flow-sum">
             <span className={row.net >= 0 ? "up" : "dn"}>{signed(row.net)}</span>
             <small>

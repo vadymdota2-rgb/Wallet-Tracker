@@ -535,7 +535,7 @@ export function OptionsScreen() {
       </Card>
 
       {/* 2. Интерес по страйкам */}
-      <SectionTitle>{t(lang, "op_strikes")}</SectionTitle>
+      <SectionTitle help={["op_how_1", "op_how_3"]}>{t(lang, "op_strikes")}</SectionTitle>
       <div className="op-exps" role="tablist">
         {[null, ...exps].map((e) => {
           const id = e ? e.d : "all";
@@ -638,7 +638,7 @@ export function OptionsScreen() {
       {/* 3. Волатильность */}
       {ivs.length > 1 ? (
         <>
-          <SectionTitle>{t(lang, "op_vol_title")}</SectionTitle>
+          <SectionTitle help={["op_how_4", "op_how_6"]}>{t(lang, "op_vol_title")}</SectionTitle>
           <Card>
             {term ? <p className="op-say">{t(lang, term)}</p> : null}
             <TermChart lang={lang} exps={exps} dvol={reply.dvol?.v ?? null} nowSec={nowSec} />

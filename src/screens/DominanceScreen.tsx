@@ -654,7 +654,7 @@ export function DominanceScreen() {
 
           {altNow !== undefined ? (
             <>
-              <SectionTitle>{t(lang, "dm_alt_title")}</SectionTitle>
+              <SectionTitle help={["dm_how_3"]}>{t(lang, "dm_alt_title")}</SectionTitle>
               <Card>
                 <div className="dm-ahero">
                   <b style={{ color: SEASON[seasonOf(altNow)]!.c }}>{altNow}</b>
@@ -702,7 +702,7 @@ export function DominanceScreen() {
             </>
           ) : null}
 
-          <SectionTitle>{t(lang, "dm_chart")}</SectionTitle>
+          <SectionTitle help={["dm_how_1", "dm_how_2"]}>{t(lang, "dm_chart")}</SectionTitle>
           <Card>
             <Segmented<Range>
               value={range}
@@ -804,7 +804,7 @@ export function DominanceScreen() {
 
           {eb ? (
             <>
-              <SectionTitle>ETH/BTC</SectionTitle>
+              <SectionTitle help={["dm_how_5"]}>ETH/BTC</SectionTitle>
               <Card>
                 <div className="dm-eb">
                   <b style={{ color: C.eth }}><bdi dir="ltr">{num(eb.cur.eb, 5)}</bdi></b>

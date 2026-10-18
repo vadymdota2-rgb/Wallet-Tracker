@@ -1,14 +1,50 @@
 /** Мелкие кирпичики интерфейса: строка списка, плитки, кнопка, заголовок. */
-import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode, type Ref } from "react";
+import { Fragment, useEffect, useId, useRef, useState, type CSSProperties, type ReactNode, type Ref } from "react";
 import { haptic } from "../lib/telegram";
 import { copyText } from "../lib/copy";
+import { useApp } from "../store/app";
+import { t } from "../i18n/t";
+import type { DictKey } from "../i18n/types";
 
-export function SectionTitle({ children, note }: { children: ReactNode; note?: ReactNode }) {
+/**
+ * Заголовок раздела. help — абзацы подсказки «?»: что значит термин и как
+ * его читать. Подсказка раскрывается под заголовком, а не всплывает поверх:
+ * на телефоне наведения нет, а всплывашка закрывала бы те самые цифры, о
+ * которых рассказывает. Повторное нажатие на «?» её сворачивает.
+ */
+export function SectionTitle({ children, note, help }: { children: ReactNode; note?: ReactNode; help?: DictKey[] }) {
+  const lang = useApp((s) => s.lang);
+  const [open, setOpen] = useState(false);
+  const id = useId();
   return (
-    <div className="sect">
-      <h2>{children}</h2>
-      {note ? <span className="sect-note">{note}</span> : null}
-    </div>
+    <>
+      <div className="sect">
+        <h2>
+          {children}
+          {help?.length ? (
+            <button
+              type="button"
+              className={open ? "sect-q on" : "sect-q"}
+              aria-expanded={open}
+              aria-controls={id}
+              aria-label={t(lang, "q_what")}
+              onClick={() => {
+                haptic("select");
+                setOpen(!open);
+              }}
+            >
+              ?
+            </button>
+          ) : null}
+        </h2>
+        {note ? <span className="sect-note">{note}</span> : null}
+      </div>
+      {help?.length && open ? (
+        <div className="sect-help" id={id} role="note">
+          {help.map((k) => <p key={k}>{t(lang, k)}</p>)}
+        </div>
+      ) : null}
+    </>
   );
 }
 
