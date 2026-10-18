@@ -22,7 +22,7 @@ import wt_etf as etf  # noqa: E402 — модуль лежит в корне р�
 
 SERVER = os.path.join(ROOT, "wt_etf.py")
 # Только стандартная библиотека и свой модуль отчётов SEC. Ни базы (sqlite3),
-# ни бота, ни своей разметки (wt_etfchain), ни whale_api: модуль независим.
+# ни бота, ни разметки кошельков, ни whale_api: модуль независим.
 IMPORTS = {"__future__", "calendar", "contextlib", "http.client", "json", "math", "os", "re", "sys", "threading",
            "time", "urllib.parse", "urllib.request", "collections.abc", "concurrent.futures", "typing", "wt_treasury"}
 BANNED_CALLS = {"eval", "exec", "compile", "__import__", "input", "breakpoint", "globals", "locals", "vars",
@@ -109,7 +109,6 @@ class ServerPolicyTest(unittest.TestCase):
 
     def test_endpoint_takes_nothing_from_outside(self):
         self.assertEqual(inspect.signature(etf.etf_data).parameters, {})
-        self.assertEqual(inspect.signature(etf.peek).parameters, {})
         self.assertEqual(inspect.signature(etf.build).parameters, {})
 
     def test_opener_is_direct_and_strict(self):
@@ -131,7 +130,7 @@ class ServerPolicyTest(unittest.TestCase):
 
     def test_independent_of_labels_bot_and_api(self):
         # Модуль ни от чего не зависит: ни разметки кошельков, ни базы бота,
-        # ни whale_api. Наоборот — разметку сверяют с ним (whale_api._btc_check).
+        # ни whale_api, и никто не сверяет с ним разметку бота.
         src = read("wt_etf.py")
         for word in ("wt_etfchain", "sqlite3", "whale_api", "btc_etf", "set_chain"):
             self.assertNotIn(word, re.sub(r'""".*?"""|#[^\n]*', "", src, flags=re.S), word)

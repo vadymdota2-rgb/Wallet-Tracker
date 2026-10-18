@@ -51,19 +51,18 @@ jobs:
       - name: Типы TypeScript (приложение и тесты; модули халвинга и ETF — в строжайшем режиме)
         run: npm run typecheck && npm run typecheck:tests && npm run typecheck:halving && npm run typecheck:etf
       - name: Синтаксис сервера
-        run: python -m py_compile whale_api.py wt_halving.py wt_etf.py wt_etfchain.py wt_treasury.py wt_shield.py wt_digest_img.py
+        run: python -m py_compile whale_api.py wt_halving.py wt_etf.py wt_treasury.py wt_shield.py wt_digest_img.py
       - name: Анализатор Python (модуль халвинга и его тесты)
         run: >-
           pipx run ruff==0.15.8 check --target-version py310
           --select E,F,W,B,UP,SIM,PL,RUF,S,BLE,I --ignore E501,PLR2004,RUF001,RUF002,RUF003,S310,S603,S607
           wt_halving.py tests/test_halving_api.py tests/test_halving_fuzz.py tests/test_halving_security.py tests/test_halving_policy.py tools/mutate-halving.py
           wt_etf.py tests/test_etf_api.py tests/test_etf_fuzz.py tests/test_etf_security.py tests/test_etf_policy.py tools/mutate-etf.py
-          tests/test_bootstrap_personal.py tests/test_btc_etf_chain.py
-          wt_etfchain.py tests/test_etfchain.py
+          tests/test_bootstrap_personal.py tests/test_btc_etf_labels.py
           wt_treasury.py tests/test_treasury.py tests/test_treasury_security.py tests/test_digest_sources.py tests/test_digest_channel.py
       - name: Строгие типы Python (mypy --strict)
         run: >-
-          pipx run mypy==1.11.2 --strict --python-version 3.11 wt_halving.py wt_etf.py wt_etfchain.py wt_treasury.py
+          pipx run mypy==1.11.2 --strict --python-version 3.11 wt_halving.py wt_etf.py wt_treasury.py
       - name: Тесты расчёта и сервера
         run: npm test
 

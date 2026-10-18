@@ -32,7 +32,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wt_shield as shield  # noqa: E402
 import wt_halving as halving  # noqa: E402
 import wt_etf as etf  # noqa: E402
-import wt_etfchain as etfchain  # noqa: E402
 import wt_treasury as treasury
 from urllib.parse import parse_qs, unquote, urlparse, urlsplit
 
@@ -11742,113 +11741,6 @@ def btc_flow() -> dict:
     return cached_bg(_BTC, "flow", BTC_TTL, _btc_flow_build)
 
 
-# Сколько суток потоков разбирать: корзины хранителя и сверка разметки.
-BTC_ETF_DAYS = 60
-# Сверка разметки фондов с «Институциональными потоками» — за столько суток.
-BTC_CHECK_DAYS = 30
-
-
-# Фонды у хранителя по «корзинам» (wt_etfchain): хранилища и переводы с ними
-# пишет сканер бота, разбор — здесь. Разбор тяжелее остального — раз в 15 мин.
-BTC_CUST_TTL = 900.0
-
-
-# Корзина хранителя, в которой есть размеченный кошелёк фонда (свой список,
-# /import владельца, опубликованные фондом), — вся этого фонда: остальные её
-# хранилища уходят в разметку бота той же очередью, что и /import
-# (btc_etf_import). Уже размеченные не трогаем. За круг — не больше стольких.
-BTC_SPREAD_MAX = 500
-
-
-def _btc_spread(con: sqlite3.Connection, funds: list[dict]) -> int:
-    """Хранилища названных корзин — в очередь разметки бота. Возвращает,
-    сколько адресов поставлено."""
-    con.execute("CREATE TABLE IF NOT EXISTS btc_etf_import (address TEXT PRIMARY KEY, fund TEXT NOT NULL,"
-                " at INTEGER NOT NULL DEFAULT 0)")
-    known = {str(r[0]) for r in con.execute("SELECT address FROM btc_etf_addr")} \
-        if table_exists(con, "btc_etf_addr") else set()
-    queued = {str(r[0]) for r in con.execute("SELECT address FROM btc_etf_import")}
-    t = now()
-    rows = []
-    for f in funds:
-        name = str(f.get("t") or "")
-        if not name or name.startswith("#"):
-            continue
-        new = [a for a in f.get("_vaults") or [] if a not in known and a not in queued]
-        rows += [(a, name, t) for a in new]
-        if new:
-            sys.stderr.write(f"[api] корзина {name}: в разметку ещё {len(new)} хранилищ\n")
-    rows = rows[:BTC_SPREAD_MAX]
-    con.executemany("INSERT OR IGNORE INTO btc_etf_import(address, fund, at) VALUES(?,?,?)", rows)
-    return len(rows)
-
-
-def _btc_check(con: sqlite3.Connection) -> int:
-    """Сверка своей разметки с «Институциональными потоками»: поток
-    размеченных кошельков каждого фонда (btc_etf_flow) против его дневного
-    потока из открытого набора (T+1) за BTC_CHECK_DAYS суток. Только
-    проверка: разметку она не меняет. Итог — в btc_etf_check, его
-    показывает бот (/statsbtc). Возвращает, сколько фондов сверено."""
-    series = etfchain.fund_series(etf.peek() or {})
-    if not series or not table_exists(con, "btc_etf_flow"):
-        return 0
-    con.execute("CREATE TABLE IF NOT EXISTS btc_etf_check (fund TEXT PRIMARY KEY, v TEXT NOT NULL,"
-                " days INTEGER NOT NULL, err REAL, share REAL, at INTEGER NOT NULL)")
-    t = now()
-    today = t // 86400
-    n = 0
-    for (fund,) in con.execute("SELECT DISTINCT fund FROM btc_etf_flow WHERE fund NOT LIKE '#%'").fetchall():
-        rows = con.execute("SELECT day, in_sats, out_sats FROM btc_etf_flow WHERE fund = ?", (fund,)).fetchall()
-        chain = {int(r[0]) // 86400: (int(r[1]) - int(r[2])) / 1e8 for r in rows}
-        if not chain or str(fund) not in series:
-            continue
-        # С первых полных суток разметки и до вчера: сегодня в цепочке ещё не всё.
-        window = (max(today - BTC_CHECK_DAYS, min(chain) + 1), today - 1)
-        r = etfchain.check(chain, series[str(fund)], window)
-        con.execute("INSERT OR REPLACE INTO btc_etf_check(fund, v, days, err, share, at) VALUES(?,?,?,?,?,?)",
-                    (str(fund), r["v"], r["days"], r["err"], r["share"], t))
-        n += 1
-    return n
-
-
-def _btc_custody_build() -> dict:
-    con = open_db(BTC_DB)
-    if not con:
-        return {"ok": False, "error": "no_data"}
-    try:
-        if not table_exists(con, "btc_cust_xfer") or not table_exists(con, "btc_etf_addr"):
-            return {"ok": False, "error": "no_data"}
-        vaults, live_from = 0, 0
-        if table_exists(con, "btc_cust_vault"):
-            vaults = con.execute("SELECT COUNT(*) FROM btc_cust_vault").fetchone()[0]
-            live_from = con.execute("SELECT MIN(at) FROM btc_cust_vault WHERE fee_wallet != '' AND at > 0"
-                                    ).fetchone()[0] or 0
-        xfers = con.execute("SELECT COUNT(*) FROM btc_cust_xfer").fetchone()[0]
-        funds = etfchain.build(con, now(), BTC_ETF_DAYS)
-    except sqlite3.Error as e:
-        sys.stderr.write(f"[api] btc custody: {e}\n")
-        return {"ok": False, "error": "db"}
-    finally:
-        con.close()
-    con = open_db(BTC_DB, write=True)
-    if con:
-        try:
-            _btc_spread(con, funds)
-            _btc_check(con)
-            con.commit()
-        except (sqlite3.Error, KeyError, TypeError, ValueError) as e:
-            sys.stderr.write(f"[api] btc custody, разметка корзин и сверка: {e}\n")
-        finally:
-            con.close()
-    for f in funds:
-        f.pop("_vaults", None)
-    # С какого дня потоки групп полны: сканер начал находить хранилища.
-    since = max(now() - BTC_ETF_DAYS * 86400, int(live_from) + 2 * 86400) if live_from else 0
-    return {"ok": True, "funds": funds, "vaults": int(vaults or 0), "xfers": int(xfers or 0), "at": now(),
-            "since": since - since % 86400 if since else 0}
-
-
-
 # ── Поток бирж BSC ────────────────────────────────────────────────────────
 # Пишет бот (bsc_exchanges.cpp): по часам, биржам и монетам — сколько
 # долларов завели на биржи и вывели с них по всей сети. Переводы BNB и
@@ -12194,8 +12086,7 @@ def exflow_warmer() -> None:
     """Потоки бирж BTC и BSC и рейтинг BTC собираются здесь, заранее и по
     кругу: запрос из приложения берёт готовое и никогда не ждёт сборки."""
     while True:
-        jobs = [(_BTC, "flow", BTC_TTL, _btc_flow_build), (_BSCX, "flow", BTC_TTL, _bscx_flow_build),
-                (_BTC, "cust", BTC_CUST_TTL, _btc_custody_build)]
+        jobs = [(_BTC, "flow", BTC_TTL, _btc_flow_build), (_BSCX, "flow", BTC_TTL, _bscx_flow_build)]
         jobs += [(_BTC, ("rank", d), btc_rank_ttl(d), (lambda d=d: _btc_rank_build(d))) for d in BTC_RANK_DAYS]
         for store, key, ttl, build in jobs:
             try:
@@ -13823,11 +13714,10 @@ def chart_state_put(chat: str, body: dict) -> dict:
 
 
 # Старые таблицы — стереть один раз при запуске (пустые проходы ничего не
-# стоят): алертов по биткоин-ETF больше нет, а имена корзин по совпадению с
-# потоками фондов больше не подбираются — метки даёт только своя разметка,
-# потоки фондов её лишь проверяют (_btc_check).
-OLD_TABLES = ((lambda: DB, ("etf_alert_subs", "etf_alert_sent", "etf_alert_state")),
-              (lambda: BTC_DB, ("btc_etf_learned",)))
+# стоят): алертов по биткоин-ETF больше нет. Таблицы слежки за фондами по
+# цепочке в btc.db снимает сам бот (btc_etf.cpp, etfOpen): метки кошельков
+# фондов — только список фонда и /import, сверки с потоками больше нет.
+OLD_TABLES = ((lambda: DB, ("etf_alert_subs", "etf_alert_sent", "etf_alert_state")),)
 
 
 def old_tables_drop() -> None:
