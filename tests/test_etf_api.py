@@ -325,13 +325,16 @@ class EtfTest(unittest.TestCase):
 
     def test_fund_order_does_not_depend_on_sec_order(self):
         # Фонды без потоков (у всех «с запуска» ноль) — по тикеру, в каком
-        # порядке их ни отдал SEC; столбцы дней — в том же порядке.
+        # порядке их ни отдал SEC; столбцы дней — в том же порядке. Фондов
+        # восемь: порядок множества совпадёт с алфавитом случайно раз на
+        # 40 000 запусков, а не раз на шесть, как было бы с тремя.
         rep = {"n": "x", "fee": None, "q": {Q2: [1_000.0, None]}}
+        keys = ("ZZZ", "FBTC", "AAA", "QQQ", "MMM", "CCC", "XXX", "HHH")
         orders = []
-        for keys in (("ZZZ", "FBTC", "AAA"), ("AAA", "ZZZ", "FBTC")):
-            self.sec({k: rep for k in keys})
+        for ks in (keys, keys[::-1]):
+            self.sec({k: rep for k in ks})
             orders.append([f["t"] for f in self.build()["coins"]["btc"]["funds"]])
-        self.assertEqual(orders, [["IBIT", "BITB", "AAA", "FBTC", "ZZZ"]] * 2)
+        self.assertEqual(orders, [["IBIT", "BITB", *sorted(keys)]] * 2)
 
     def test_junk_from_sec_is_skipped(self):
         # Мусор от wt_treasury (тикер не тикер, отчёт не отчёт, комиссия вне

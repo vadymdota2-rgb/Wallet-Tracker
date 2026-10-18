@@ -102,7 +102,7 @@ PAID_PATHS = frozenset(
     "flow", "fund", "rot", "ls", "deals", "token",
     "wallet", "fng", "btc/flow", "btc/big", "btc/rank", "bsc/exflow",
     "btc/wallet", "dom", "etf", "liqcoins", "liqmap", "options", "liqs", "oihist", "calendar", "digest",
-    "digest/translate", "digest/comments", "unlocks", "symbols", "big", "quotes", "chart/liqs", "chart/whales",
+    "digest/translate", "digest/comments", "unlocks", "symbols", "big", "chart/liqs", "chart/whales",
     ) for p in ("/" + name, "/api/" + name)
 )
 # Цена и срок — те же, что в premium.cpp: бот и приложение обязаны продавать
@@ -1517,7 +1517,7 @@ def _sparkify(sl: dict, sym: str) -> dict:
     return sl
 
 
-def price_pack(cur: sqlite3.Connection, hl: sqlite3.Connection | None, sym: str, token: str = "", http: bool = False) -> dict:
+def price_pack(cur: sqlite3.Connection, sym: str, token: str = "", http: bool = False) -> dict:
     key = (sym or "").upper()
     addr = addr_of_sym(cur, sym, token)
     pts = hist_spot(cur, addr) if addr else []
@@ -9670,7 +9670,7 @@ def rot_refresher() -> None:
         time.sleep(max(ROT_TTL, took * 4))
 
 
-def load_coins(cur: sqlite3.Connection, hl: sqlite3.Connection | None, flow: dict, wallets: list) -> dict:
+def load_coins(cur: sqlite3.Connection, flow: dict, wallets: list) -> dict:
     coins = {}
     flow24 = {(r.get("sym") or ""): r for r in ((flow.get("24") or {}).get("rows") or []) if r.get("sym")}
     rows = []
@@ -9702,7 +9702,7 @@ def load_coins(cur: sqlite3.Connection, hl: sqlite3.Connection | None, flow: dic
             continue
         seen.add(sym)
         r24 = flow24.get(sym) or r
-        pack = price_pack(cur, hl, sym, r24.get("token") or r.get("token") or r.get("addr") or "", http=True)
+        pack = price_pack(cur, sym, r24.get("token") or r.get("token") or r.get("addr") or "", http=True)
         if not pack.get("hists") or not _px_ok(sym, pack.get("price") or 0):
             need_http.append(sym)
         # Последним звеном стоял генератор выдуманной линии от знака потока.
@@ -9820,7 +9820,7 @@ def build_public(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
     # Ротацию считает свой поток (rot_refresher) — здесь только готовое.
     rot = rot_latest()
     ls = take("ls", lambda: load_ls(hl), ls_from_memory() or was.get("ls") or {})
-    coins = take("coins", lambda: load_coins(cur, hl, flow, []), was.get("coins") or {})
+    coins = take("coins", lambda: load_coins(cur, flow, []), was.get("coins") or {})
     return {
         "flow": flow,
         "ls": ls,
@@ -10128,8 +10128,7 @@ def coins_known(wallets: list) -> dict | None:
     return hit[1] if hit else None
 
 
-def coins_cached(cur: sqlite3.Connection, hl: sqlite3.Connection | None,
-                 flow: dict, wallets: list) -> dict:
+def coins_cached(cur: sqlite3.Connection, flow: dict, wallets: list) -> dict:
     """Справочник монет — общий, но с оглядкой на кошельки смотрящего.
 
     load_coins дописывает к монетам открытые позиции владельца, поэтому в
@@ -10140,7 +10139,7 @@ def coins_cached(cur: sqlite3.Connection, hl: sqlite3.Connection | None,
     """
     key = _coins_key(wallets)
     return cached_small(_COINS, key, SMALL_TTL,
-                        lambda: load_coins(cur, hl, flow, wallets))
+                        lambda: load_coins(cur, flow, wallets))
 
 
 # Личная выгрузка целиком: она у каждого своя, но у одного человека за
@@ -10356,7 +10355,7 @@ def bootstrap(chat: str, fast: bool = False) -> dict:
             # через три минуты: полная выгрузка к тому времени будет готова.
             errors.append("coins:later")
         else:
-            coins = piece("coins", lambda: coins_cached(cur, hl, flow, wallets), pub.get("coins") or {})
+            coins = piece("coins", lambda: coins_cached(cur, flow, wallets), pub.get("coins") or {})
         out = {
             "ok": True,
             "live": True,
@@ -16333,44 +16332,6 @@ class Handler(BaseHTTPRequestHandler):
                     self._json(400, {"ok": False, "error": "bad_window"})
                     return
                 self._json(200, big_trades(win, hours))
-                return
-            if path in ("/quotes", "/api/quotes"):
-                cur = open_db(DB)
-                hl = open_db(HL_DB)
-                if not cur:
-                    self._json(200, {})
-                    return
-                try:
-                    pub = get_public(cur, hl) or {}
-                    coins = pub.get("coins") or {}
-                    out = {}
-                    for sym, c in coins.items():
-                        if not isinstance(c, dict):
-                            continue
-                        out[sym] = {
-                            "price": c.get("price") or 0,
-                            "chg": c.get("chg") or 0,
-                            "c1": c.get("c1") or 0,
-                            "c6": c.get("c6") or 0,
-                            "c24": c.get("chg") or 0,
-                            "hist": c.get("hist") or [],
-                            "hists": c.get("hists") or {},
-                            "ohlc": c.get("ohlc") or {},
-                            "spark": c.get("spark") or c.get("hist") or [],
-                            "icon": c.get("icon") or "",
-                            "real": True,
-                        }
-                    self._json(200, out)
-                finally:
-                    try:
-                        cur.close()
-                    except Exception:
-                        pass
-                    if hl:
-                        try:
-                            hl.close()
-                        except Exception:
-                            pass
                 return
             self._json(404, {"ok": False, "error": "not_found"})
         except Exception as e:

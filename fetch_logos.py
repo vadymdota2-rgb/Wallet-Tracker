@@ -137,7 +137,7 @@ class Source:
                     continue
                 self.missing += 1
                 return None
-            except (urllib.error.URLError, TimeoutError, OSError) as e:
+            except (urllib.error.URLError, TimeoutError, OSError):
                 self.errors += 1
                 if attempt == tries - 1:
                     return None

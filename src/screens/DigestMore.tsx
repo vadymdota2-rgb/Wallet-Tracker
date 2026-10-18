@@ -557,29 +557,3 @@ export function AheadSec({ it, lang, icon }: { it: DigestItem; lang: Lang; icon:
     </Sec>
   );
 }
-
-/* ── Главные выводы одним списком — для картинки в соцсети ─────────────── */
-
-export type DigestLine = { text: string; tone?: "up" | "dn" };
-
-/** Выводы по вкладкам в порядке важности: рынок, ликвидации, интерес,
- *  опционы, ETF, биткоин на биржах. Те же слова, что в свёрнутых разделах. */
-export function digestLines(it: DigestItem, lang: Lang): DigestLine[] {
-  const out: DigestLine[] = [];
-  const m = marketLine(it, lang);
-  if (m) out.push({ text: m, tone: it.mkt?.btc ? tone(it.mkt.btc.ch) : undefined });
-  const q = it.liq;
-  if (q?.n) out.push({ text: t(lang, "dg_l_liq", { v: pUsd(q.L + q.S), w: liqVerdict(lang, q.L, q.S) }), tone: q.S > q.L ? "up" : "dn" });
-  const b = it.oi?.btc;
-  if (b && b.ch !== null && b.pch !== null) out.push({ text: t(lang, "dg_l_oi", { w: oiVerdict(lang, b.ch, b.pch) }) });
-  const o = it.opt?.btc;
-  if (o) {
-    out.push({ text: t(lang, "dg_l_opt", { n: pUsd(o.n), w: t(lang, optMood(o.pcr)) }),
-      tone: o.pcr !== null && o.pcr < 0.7 ? "up" : o.pcr !== null && o.pcr > 1 ? "dn" : undefined });
-  }
-  const il = instLine(it, lang);
-  if (il) out.push(il);
-  const bl = btcLine(it, lang);
-  if (bl) out.push(bl);
-  return out;
-}

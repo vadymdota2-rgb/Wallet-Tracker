@@ -311,8 +311,6 @@
 
 .hero-val.sm { font-size: 26px; letter-spacing: -0.02em; }
 
-.legend { display: flex; justify-content: space-between; font-size: 12px; }
-
 /* Чипы ----------------------------------------------------------------- */
 /* Пресеты порога переносятся на вторую строку, а не уезжают за край:
    прокрутку вбок на телефоне не видно, и $50K с «…» просто терялись. */
@@ -1059,8 +1057,6 @@
 .bs-buy { background: linear-gradient(90deg, var(--up), rgb(61 220 151 / 0.55)); }
 .bs-sell { background: linear-gradient(90deg, rgb(255 92 119 / 0.55), var(--dn)); }
 
-.pulse { display: grid; gap: 8px; }
-.pulse > b { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
 .pulse-legend { display: flex; justify-content: space-between; font-size: 12px; }
 
 /* Тренд рынка: сводка по всему окну в начале раздела -------------------- */
@@ -1619,7 +1615,6 @@ html.ch-full .screen.full {
   background: #1e9bff; color: #fff; font-size: 10px; line-height: 15px; box-shadow: 0 0 0 2px #050b16;
 }
 .ch-btn i { font-style: italic; font-weight: 700; font-family: Georgia, serif; }
-.ch-sep { flex: 0 0 1px; height: 20px; background: rgb(58 130 214 / 0.25); margin: 0 4px; }
 .ch-main { flex: 1 1 auto; min-height: 0; display: flex; }
 /* Инструменты — стеклянная капсула, кнопки круглые. Группа с выбором
    помечена голубой точкой справа, а не уголком. */
@@ -1717,7 +1712,6 @@ html.ch-full .screen.full {
 }
 .ch-fibs button.on { color: var(--ink); background: rgb(31 142 255 / 0.22); border-color: rgb(127 216 255 / 0.5); }
 .ch-fibs button.gold { background: rgb(240 185 11 / 0.25); border-color: #f0b90b; color: #f0b90b; }
-.ch-vs { font-size: 11px; letter-spacing: 0.02em; }
 .ch-seg { display: flex; gap: 4px; padding: 3px; border-radius: 10px; background: rgb(58 130 214 / 0.1); }
 .ch-seg button { flex: 1 1 0; height: 34px; border: 0; border-radius: 8px; background: transparent; color: var(--dim); font-weight: 600; font-size: 14px; }
 .ch-seg button.on { background: rgb(31 142 255 / 0.3); color: var(--ink); }
@@ -3167,7 +3161,6 @@ html.ch-full .screen.full {
 .oih-chg b { font-size: 16px; font-variant-numeric: tabular-nums; unicode-bidi: isolate; direction: ltr; justify-self: start; }
 .oih-chg em { font-style: normal; color: var(--dim-2); font-size: 11px; font-variant-numeric: tabular-nums; }
 .oih-chart { display: block; width: 100%; height: auto; direction: ltr; cursor: crosshair; }
-.oih-area { opacity: 0.78; stroke: var(--panel); stroke-width: 0.6; }
 .oih-top { fill: none; stroke: #38bdf8; stroke-width: 2; stroke-linejoin: round; }
 .oih-sep { stroke: rgb(27 61 104 / 0.6); stroke-width: 1; stroke-dasharray: 3 3; }
 .oih-px { fill: none; stroke: var(--glow); stroke-width: 1.8; stroke-linejoin: round; }
@@ -3923,9 +3916,6 @@ button.alc-who { cursor: pointer; text-decoration: underline dotted rgb(124 151 
 .lock-note { margin-top: 10px; max-width: 36ch; }
 .drawer-lock { margin-inline-start: auto; font-style: normal; font-size: 12px; opacity: 0.7; }
 
-/* Поток бирж BSC: монеты списком под биржами, с иконкой. */
-.bscx-coins { margin-top: 14px; }
-.bscx-coin { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
 /* Суммы в долларах длиннее, чем в биткоинах: столбцы — по содержимому и без
    переноса, иначе «↑ $126,2K» ломалось на две строки. */
 .btc-ex-row.bscx-row { grid-template-columns: minmax(5.2em, 1fr) auto auto auto; column-gap: 8px; }

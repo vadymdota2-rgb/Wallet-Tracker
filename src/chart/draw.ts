@@ -163,8 +163,6 @@ const EW_LABELS: Partial<Record<DrawType, string[]>> = {
   wxy: ["", "W", "X", "Y"],
 };
 
-export const isWave = (t: DrawType) => t in EW_LABELS;
-
 /**
  * Три правила импульса Эллиотта: волна 2 не уходит за начало волны 1,
  * волна 3 не самая короткая из 1, 3, 5, волна 4 не заходит на территорию

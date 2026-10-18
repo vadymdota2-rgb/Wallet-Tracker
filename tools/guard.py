@@ -141,7 +141,7 @@ say("данные — только с Премиумом, одним прави�
     and api.count('self._json(403, {"ok": False, "error": "premium"})') == 1
     and all(f'"{x}"' in api.split("PAID_PATHS = frozenset(")[1][:900]
             for x in ("flow", "fund", "rot", "ls", "deals", "wallet", "big", "btc/big", "btc/rank", "liqmap",
-                      "unlocks", "digest", "quotes"))
+                      "unlocks", "digest"))
     and not any(f'"{x}"' in api.split("PAID_PATHS = frozenset(")[1][:900]
                 for x in ("bonus", "token-launch", "ref", "bootstrap", "health")))
 top = read(f"{APP}/src/screens/TopTab.tsx")
