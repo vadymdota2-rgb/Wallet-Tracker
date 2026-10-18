@@ -417,6 +417,9 @@ class _State:
     """Кэш модуля: (monotonic, ответ). Меняется только под _lock."""
 
     hit: tuple[float, dict[str, Json]] | None = None
+    # Когда (monotonic) сборка последний раз не удалась: «нет данных» или
+    # падение. До FAIL_WAIT после неё новой сборки нет (см. etf_data).
+    fail: float | None = None
     # Копия последнего ответа на диске (set_cache_file): после перезапуска
     # API экран получает её сразу, свежий ответ собирается в фоне.
     file: str | None = None
@@ -487,6 +490,18 @@ def _holders(c: Json, companies: object) -> list[list[Any]]:
     return rows
 
 
+# Пауза после неудачной сборки, с. Без неё при упавшем источнике каждый
+# запрос заново шёл бы в сеть: на холодном старте — в очередь за замком, по
+# сборке до PART_WAIT на каждого, а фоновая сборка запускалась бы с каждым
+# запросом сразу после падения предыдущей.
+FAIL_WAIT = 120.0
+
+
+def _no_data() -> dict[str, Json]:
+    """Ответ «нет данных» — каждый раз новый: вызывающий может его дополнить."""
+    return {"ok": False, "error": "no_data"}
+
+
 _st = _State()
 _lock = threading.Lock()
 _cold = threading.Lock()
@@ -536,12 +551,15 @@ def build() -> dict[str, Json]:
     if not btc:
         btc = (was.get("coins") or {}).get("btc")
     if not btc:
-        return {"ok": False, "error": "no_data"}
+        with _lock:
+            _st.fail = time.monotonic()
+        return _no_data()
     coins = {"btc": btc}
     res = {"ok": True, "coins": coins, "holders": _holders(coins.get("btc"), companies),
            "cme": cme or was.get("cme") or {}, "by": TFTC_BY, "at": _now()}
     with _lock:
         _st.hit = (time.monotonic(), res)
+        _st.fail = None
     _file_save(res)
     return res
 
@@ -551,13 +569,22 @@ def _bg() -> None:
         build()
     except Exception as e:  # noqa: BLE001 — фоновый поток не должен умирать молча
         _log(f"сборка: {type(e).__name__}: {e}")
+        with _lock:
+            _st.fail = time.monotonic()
     finally:
         _busy.clear()
 
 
+def _resting() -> bool:
+    """Последняя сборка не удалась меньше FAIL_WAIT назад. Звать под _lock."""
+    return _st.fail is not None and time.monotonic() - _st.fail < FAIL_WAIT
+
+
 def etf_data() -> dict[str, Json]:
     """Ответ /api/etf: из кэша, свежий собирается в фоне одним потоком.
-    После перезапуска — копия с диска (как устаревшая), свежий — в фоне."""
+    После перезапуска — копия с диска (как устаревшая), свежий — в фоне.
+    Сборка не удалась — до FAIL_WAIT новой нет: устаревший ответ отдаётся
+    как есть, а без него — «нет данных» без новой сборки."""
     if _st.hit is None and _st.file:
         saved = _file_load()
         with _lock:
@@ -567,7 +594,7 @@ def etf_data() -> dict[str, Json]:
         hit = _st.hit
         if hit and time.monotonic() - hit[0] < TTL:
             return hit[1]
-        if hit and not _busy.is_set():
+        if hit and not _busy.is_set() and not _resting():
             _busy.set()
             try:
                 threading.Thread(target=_bg, daemon=True).start()
@@ -576,8 +603,10 @@ def etf_data() -> dict[str, Json]:
                 _log(f"фон не запущен: {e}")
     if hit:
         return hit[1]
-    # Холодный старт: первый собирает, остальные ждут его и берут готовое.
+    # Холодный старт: первый собирает, остальные ждут его и берут готовое —
+    # или его неудачу, а не собирают заново каждый.
     with _cold:
         with _lock:
             hit = _st.hit
-        return hit[1] if hit else build()
+            resting = _resting()
+        return hit[1] if hit else _no_data() if resting else build()

@@ -404,3 +404,40 @@ export function topFunds(funds: EtfFund[], b: Bucket, n = 3): { t: string; v: nu
   return funds.map((f, i) => ({ t: f.t, v: b.per[i] ?? 0 }))
     .filter((x) => Math.abs(x.v) >= 1).sort((x, y) => Math.abs(y.v) - Math.abs(x.v)).slice(0, n);
 }
+
+/** Фонд поимённо: его дни, итоги и рекорды — для карточки фонда под строкой списка. */
+export interface FundDetail {
+  /** Последние дни, когда фонд торговался (поток есть, хоть и нулевой): [начало суток, $ тыс.]. */
+  days: [number, number][];
+  /** Сумма этих дней, $ тыс. */
+  sum: number;
+  /** Самый большой приток и отток за день с запуска: [начало суток, $ тыс.]; не было — null. */
+  best: [number, number] | null;
+  worst: [number, number] | null;
+}
+
+/** Карточка фонда i (индекс в c.funds): последние n его торговых дней и рекорды за всю историю. */
+export function fundDetail(c: EtfCoin, i: number, n = 60): FundDetail {
+  const all: [number, number][] = [];
+  for (const d of c.days) {
+    const v = d[4][i];
+    if (v !== null && v !== undefined) all.push([d[0], v]);
+  }
+  let best: [number, number] | null = null;
+  let worst: [number, number] | null = null;
+  for (const x of all) {
+    if (x[1] > 0 && (!best || x[1] > best[1])) best = x;
+    if (x[1] < 0 && (!worst || x[1] < worst[1])) worst = x;
+  }
+  const days = all.slice(-n);
+  return { days, sum: days.reduce((s, x) => s + x[1], 0), best, worst };
+}
+
+/** Набор TFTC давно не обновлялся: последний день старше этого (выходные с праздником и задержка сводки — до 5 суток). */
+export const STALE_DAYS = 5;
+
+/** Сколько полных суток прошло с последнего дня набора до now (unix с). */
+export function staleDays(c: EtfCoin, now: number): number {
+  const last = c.days[c.days.length - 1]?.[0] ?? now;
+  return Math.max(0, Math.floor((now - last) / DAY));
+}

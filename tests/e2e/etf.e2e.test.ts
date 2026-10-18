@@ -85,6 +85,8 @@ interface Opts {
   premium?: boolean;
   /** Не открывать экран: остаться на главном (проверка подгрузки при запуске). */
   stay?: boolean;
+  /** Часы телефона, unix с (по умолчанию — время образца). */
+  clock?: number;
 }
 
 interface Opened { ctx: BrowserContext; page: Page; errors: string[]; asked: () => number }
@@ -98,7 +100,7 @@ async function open(o: Opts = {}): Promise<Opened> {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource/.test(m.text())) errors.push(m.text()); });
-  await page.clock.setFixedTime(T * 1000);
+  await page.clock.setFixedTime((o.clock ?? T) * 1000);
   await ctx.route((url) => !url.href.startsWith(base) && !url.href.startsWith("https://fonts.googleapis.com/"), (r) => r.abort());
   await ctx.route("https://fonts.googleapis.com/**", (r) => r.fulfill({ contentType: "text/css", body: FACES(base) }));
   await ctx.route(`${base}/api/**`, (r) => r.fulfill({ contentType: "application/json", body: '{"ok":false}' }));
@@ -217,6 +219,99 @@ describe("институциональные потоки", () => {
     await ctx.close();
   });
 
+  test("карточка фонда: нажатие раскрывает потоки по дням, итог, запас и рекорды; ещё нажатие — сворачивает", async () => {
+    const { ctx, page, errors } = await open();
+    await ready(page);
+    await page.locator(".ef-fsum").locator("xpath=preceding-sibling::*[1]").locator("button").nth(3).click(); // с запуска
+    const row = page.locator("button.ef-f", { hasText: "IBIT" });
+    assert.equal(await row.getAttribute("aria-expanded"), "false");
+    assert.equal(await page.locator(".ef-fd").count(), 0);
+    await row.click();
+    assert.equal(await row.getAttribute("aria-expanded"), "true");
+    const card = page.locator(".ef-fd");
+    assert.equal(await card.getAttribute("id"), await row.getAttribute("aria-controls"));
+    assert.match(sp(await card.locator(".ef-fd-t").innerText()), /^Торговых дней: 60 · всего [+−]/);
+    assert.match(await card.locator("svg").getAttribute("aria-label") ?? "", /^IBIT: потоки по дням, торговых дней: 60, всего /);
+    assert.ok(await card.locator("svg rect").count() > 30);
+    const lines = (await card.locator("li").allInnerTexts()).map(sp);
+    assert.match(lines[0]!, /^С запуска: \+\d.* млрд \$ · \+[\d ]+ BTC$/);
+    assert.match(lines[1]!, /^Запас фонда: ≈[\d ]+ BTC$/);
+    assert.match(lines[2]!, /^Самый большой приток за день: \+.* · \d+ .* г\.$/);
+    assert.match(lines[3]!, /^Самый большой отток за день: −.* · \d+ .* г\.$/);
+    // Открыт один фонд: другой закрывает первый.
+    await page.locator("button.ef-f", { hasText: "FBTC" }).click();
+    assert.equal(await row.getAttribute("aria-expanded"), "false");
+    assert.equal(await page.locator(".ef-fd").count(), 1);
+    // С клавиатуры: Enter открывает и закрывает.
+    await row.focus();
+    await page.keyboard.press("Enter");
+    assert.equal(await row.getAttribute("aria-expanded"), "true");
+    await page.keyboard.press("Enter");
+    assert.equal(await row.getAttribute("aria-expanded"), "false");
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("набор давно не обновлялся — экран говорит об этом; свежий — молчит", async () => {
+    const fresh = await open();
+    await ready(fresh.page);
+    assert.equal(await fresh.page.locator(".lq-stale").count(), 0);
+    await fresh.ctx.close();
+    // Последний день в образце — 15 октября; спустя 9 суток данных так и нет.
+    const { ctx, page } = await open({ clock: T + 9 * 86_400 });
+    await ready(page);
+    assert.match(sp(await page.locator(".lq-stale").innerText()), /^Набор TFTC не обновлялся \d+ дн\.: свежих данных фондов пока нет/);
+    assert.equal(await page.locator(".lq-stale").getAttribute("role"), "status");
+    await ctx.close();
+  });
+
+  test("вернулся в приложение через час и больше — экран сам берёт свежий ответ", async () => {
+    // С Премиумом: без него возврат в приложение заново спрашивает план, и экран закрывается замком.
+    const { ctx, page, asked } = await open({ premium: true });
+    await ready(page);
+    const n = asked();
+    // Меньше часа — сеть не трогаем.
+    await page.clock.setFixedTime((T + 600) * 1000);
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await page.waitForTimeout(300);
+    assert.equal(asked(), n);
+    await page.clock.setFixedTime((T + 2 * 3600) * 1000);
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    for (let i = 0; i < 30 && asked() === n; i++) await page.waitForTimeout(100);
+    assert.equal(asked(), n + 1);
+    await ctx.close();
+  });
+
+  test("карточки не слипаются, заголовок раздела ближе к своей карточке", async () => {
+    const { ctx, page } = await open();
+    await ready(page);
+    const boxes = await page.locator(".ef > .card").evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((r): [number, number] => [r.top, r.bottom]));
+    for (let i = 1; i < boxes.length; i++) assert.ok(boxes[i]![0] - boxes[i - 1]![1] >= 10, `карточки ${i - 1} и ${i}: ${boxes[i]![0] - boxes[i - 1]![1]}`);
+    const gaps = await page.locator(".ef > .sect").evaluateAll((els) => els.map((h) => {
+      const r = h.getBoundingClientRect();
+      const prev = h.previousElementSibling!.getBoundingClientRect();
+      let next = h.nextElementSibling!;
+      while (!next.classList.contains("card")) next = next.nextElementSibling!;
+      return [r.top - prev.bottom, next.getBoundingClientRect().top - r.bottom] as [number, number];
+    }));
+    assert.ok(gaps.length >= 4);
+    for (const [above, below] of gaps) assert.ok(above! > below!, `${above} / ${below}`);
+    await ctx.close();
+  });
+
+  test("подписи осей справа не налезают на графики", async () => {
+    const { ctx, page } = await open();
+    await ready(page);
+    const bad = await page.locator(".ef-svg").evaluateAll((svgs) => svgs.flatMap((svg) => {
+      const w = (svg as SVGSVGElement).viewBox.baseVal.width;
+      const plot = w - 58;
+      return [...svg.querySelectorAll<SVGTextElement>("text.fg-tick[text-anchor='end']")]
+        .filter((tx) => tx.getBBox().x < plot - 0.5).map((tx) => `${tx.textContent} ${tx.getBBox().x.toFixed(0)} < ${plot}`);
+    }));
+    assert.deepEqual(bad, []);
+    await ctx.close();
+  });
+
   test("график с клавиатуры: стрелки, Home/End, Esc; подсказка слышна", async () => {
     const { ctx, page, errors } = await open();
     await ready(page);
@@ -321,13 +416,36 @@ describe("институциональные потоки", () => {
     const { ctx, page } = await open();
     await ready(page);
     const rows = page.locator(".ef-hr");
-    assert.equal(await rows.count(), 20);
-    assert.match(sp(await rows.first().innerText()), /^1 🇺🇸 Strategy MSTR · отчёт в SEC на 30 июн\. 2026 г\. 846 000 BTC/);
-    await page.locator(".dm-more").click();
+    // В образце 21 строка: хвост в одну строку виден сразу, без кнопки «Показать ещё 1».
     assert.equal(await rows.count(), (REAL["holders"] as unknown[]).length);
+    assert.equal(await page.locator(".dm-more").count(), 0);
+    assert.match(sp(await rows.first().innerText()), /^1 🇺🇸 Strategy MSTR · отчёт в SEC на 30 июн\. 2026 г\. 846 000 BTC/);
+    // Дата отчёта — одним куском: «г.» не уезжает на строку одно.
+    assert.match(await rows.first().locator(".ef-hr-id small").innerText(), /30\u00a0июн\.\u00a02026\u00a0г\./);
     await page.locator(".ef-hl").locator("xpath=preceding-sibling::*[1]").locator("button").nth(2).click(); // компании
     assert.ok((await rows.allInnerTexts()).every((t) => !/ETF ·/.test(t)));
     await ctx.close();
+
+    // Длинный список — по 20, а последний короткий хвост — целиком: 47 = 20 + 20 + 7.
+    const many = (REAL["holders"] as unknown[][]).filter((r) => r[1] === "COMPANY");
+    const big = Array.from({ length: 47 }, (_, i) => {
+      const r = [...many[i % many.length]!];
+      r[3] = `T${i}`;
+      r[4] = 100_000 - i;
+      return r;
+    });
+    const o = await open({ replies: [{ ...REAL, holders: big }] });
+    await ready(o.page);
+    const r2 = o.page.locator(".ef-hr");
+    assert.equal(await r2.count(), 20);
+    assert.equal(sp(await o.page.locator(".dm-more").innerText()), "Показать ещё 20");
+    await o.page.locator(".dm-more").click();
+    assert.equal(await r2.count(), 40);
+    assert.equal(sp(await o.page.locator(".dm-more").innerText()), "Показать ещё 7");
+    await o.page.locator(".dm-more").click();
+    assert.equal(await r2.count(), 47);
+    assert.equal(await o.page.locator(".dm-more").count(), 0);
+    await o.ctx.close();
   });
 
   test("загрузка: заглушка помечена занятой, потом данные", async () => {
@@ -452,6 +570,8 @@ describe("институциональные потоки", () => {
     for (const lang of LANGS) {
       const { ctx, page, errors } = await open({ lang });
       await ready(page);
+      await page.locator("button.ef-f").first().click(); // карточка фонда — тоже на этом языке
+      await page.locator(".ef-fd").waitFor();
       assert.deepEqual(await rawKeys(page), [], lang);
       assert.deepEqual(await overflow(page), [], lang);
       assert.equal(sp(await page.locator(".fg-by").innerText()).includes("TFTC"), true, lang);

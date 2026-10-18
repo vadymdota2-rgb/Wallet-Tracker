@@ -17,7 +17,7 @@ import { haptic } from "../lib/telegram";
 import { Card, Chips, SectionTitle } from "../components/ui";
 import { type BtcHolder } from "../lib/etf";
 import { dateStr, timeTicks } from "./FearGreedScreen";
-import { DN, UP, coinsShort, flagOf, heightK, iso, money, tone, useWidth } from "./etfView";
+import { DN, UP, coinsShort, dateNb, flagOf, heightK, iso, money, tone, useWidth } from "./etfView";
 
 type Lang = Parameters<typeof t>[0];
 /**
@@ -36,11 +36,13 @@ function box(w: number, h: number) {
  * фондов: 1,2–1,3 млн у нуля лежал бы плоской линией). С клавиатуры —
  * стрелки, Home/End, Esc, как у графика потоков.
  */
-function LinesChart({ xs, series, lang, fmt, label, zero = true }: {
+function LinesChart({ xs, series, lang, fmt, axis = fmt, label, zero = true }: {
   xs: number[];
   series: { c: string; v: number[]; name: string }[];
   lang: Lang;
   fmt: (v: number) => string;
+  /** Подписи оси — короче fmt: в 58 px справа «+99,3 тыс. BTC» не помещалось и налезало на линии. */
+  axis?: (v: number) => string;
   label: string;
   zero?: boolean;
 }) {
@@ -111,7 +113,7 @@ function LinesChart({ xs, series, lang, fmt, label, zero = true }: {
         {(zero ? [hi, 0, lo] : [hi - pad, lo + pad]).filter((v, i, arr) => arr.indexOf(v) === i).map((v) => (
           <g key={v}>
             <line x1={0} x2={PW} y1={yOf(v)} y2={yOf(v)} className={v === 0 ? "ef-zero" : "fg-grid"} />
-            <text x={W - 2} y={yOf(v) + 3.5} textAnchor="end" className="fg-tick">{v === 0 ? "0" : fmt(v)}</text>
+            <text x={W - 2} y={yOf(v) + 3.5} textAnchor="end" className="fg-tick">{v === 0 ? "0" : axis(v)}</text>
           </g>
         ))}
         {series.map((s) => (
@@ -192,13 +194,23 @@ export function CmeSection({ rows, sym, price, lang }: { rows: number[][]; sym: 
   const amNet = net(last, 2);
   const xs = rows.map((r) => r[0]!);
   const fmt = (v: number) => coinsShort(lang, v, sym);
+  /* Ось — две значащие цифры и без «BTC» (монеты подписаны в заголовке и подсказке). */
+  const axis = (v: number) => {
+    try {
+      const f = new Intl.NumberFormat(lang, { notation: "compact", compactDisplay: "short", maximumSignificantDigits: 2 })
+        .format(Math.abs(v)).replace(/[\u00a0\u202f]/g, " ");
+      return `${v > 0 ? "+" : v < 0 ? "−" : ""}${f}`;
+    } catch {
+      return coinsShort(lang, v, "");
+    }
+  };
   return (
     <>
-      <SectionTitle>{t(lang, "ef_cme_title")}</SectionTitle>
+      <SectionTitle help={["ef_how_6"]}>{t(lang, "ef_cme_title")}</SectionTitle>
       <Card>
         <p className="ef-h-lead">
           {/* Дата — целиком, без «2026 / г.» на отдельной строке. */}
-          {t(lang, "ef_cme_sub", { d: dateStr(lang, last[0]!, { day: "numeric", month: "long", year: "numeric" }).replace(/ /g, "\u00a0") })}
+          {t(lang, "ef_cme_sub", { d: dateNb(lang, last[0]!, { day: "numeric", month: "long", year: "numeric" }) })}
         </p>
         <div className="ef-cme-oi">
           <small>{t(lang, "ef_cme_oi")}</small>
@@ -224,8 +236,10 @@ export function CmeSection({ rows, sym, price, lang }: { rows: number[][]; sym: 
                 </span>
                 <small className="ef-cmr-s">
                   {t(lang, "ef_cme_ls", { l: iso(coinsShort(lang, last[g.i]!, "").replace(/^\+/, "")), s: iso(coinsShort(lang, last[g.i + 1]!, "").replace(/^\+/, "")) })}
-                  {prev ? ` · ${t(lang, "ef_cme_wk", { v: iso(fmt(d)) })}` : ""}
+                  {/* Долларовая оценка — сразу за позицией: после «за неделю» она
+                      читалась как недельное изменение, а это вся позиция. */}
                   {price > 0 ? ` · ${t(lang, "ef_cme_usd", { v: iso(money(v * price)) })}` : ""}
+                  {prev ? ` · ${t(lang, "ef_cme_wk", { v: iso(fmt(d)) })}` : ""}
                 </small>
               </div>
             );
@@ -239,6 +253,7 @@ export function CmeSection({ rows, sym, price, lang }: { rows: number[][]; sym: 
               xs={xs}
               lang={lang}
               fmt={fmt}
+              axis={axis}
               label={t(lang, "ef_cme_chart")}
               series={[
                 { c: "#60a5fa", name: t(lang, "ef_cme_am"), v: rows.map((r) => net(r, 2)) },
@@ -258,6 +273,7 @@ export function CmeSection({ rows, sym, price, lang }: { rows: number[][]; sym: 
 }
 
 const PAGE = 20;
+const TAIL = 5;
 type Group = "all" | BtcHolder[1];
 const GROUPS: { id: Group; key: DictKey }[] = [
   { id: "all", key: "ef_h_all" },
@@ -270,6 +286,8 @@ export function Holders({ rows, price, lang }: { rows: BtcHolder[]; price: numbe
   const [grp, setGrp] = useState<Group>("all");
   const [shown, setShown] = useState(PAGE);
   const list = useMemo(() => rows.filter((r) => grp === "all" || r[1] === grp), [rows, grp]);
+  /* Хвост до TAIL строк показываем сразу: кнопка «Показать ещё 1» — лишнее нажатие ради одной строки. */
+  const lim = list.length - shown <= TAIL ? list.length : shown;
   if (!rows.length) return null;
   return (
     <>
@@ -282,14 +300,14 @@ export function Holders({ rows, price, lang }: { rows: BtcHolder[]; price: numbe
             .map((g) => ({ id: g.id, label: t(lang, g.key) }))}
         />
         <div className="ef-hl">
-          {list.slice(0, shown).map((r, i) => (
+          {list.slice(0, lim).map((r, i) => (
             <div key={r[1] + r[3]} className="ef-hr">
               <span className="ef-hr-rank">{i + 1}</span>
               <span className="ef-hr-id">
                 <b>{r[2] ? <span aria-hidden="true">{flagOf(r[2])} </span> : null}{r[0]}</b>
                 <small>
                   {r[1] === "FUND" ? `${t(lang, "ef_g_fund")} · ` : ""}{r[3]}
-                  {r[5] ? ` · ${t(lang, "ef_h_rep", { d: dateStr(lang, r[5], { day: "numeric", month: "short", year: "numeric" }) })}` : ""}
+                  {r[5] ? ` · ${t(lang, "ef_h_rep", { d: dateNb(lang, r[5], { day: "numeric", month: "short", year: "numeric" }) })}` : ""}
                 </small>
               </span>
               <span className="ef-hr-v">
@@ -299,9 +317,9 @@ export function Holders({ rows, price, lang }: { rows: BtcHolder[]; price: numbe
             </div>
           ))}
         </div>
-        {list.length > shown ? (
+        {list.length > lim ? (
           <button type="button" className="dm-more" onClick={() => setShown((v) => v + PAGE)}>
-            {t(lang, "ef_h_more", { n: num(Math.min(PAGE, list.length - shown)) })}
+            {t(lang, "ef_h_more", { n: num(list.length - lim - PAGE <= TAIL ? list.length - lim : PAGE) })}
           </button>
         ) : null}
         <p className="lq-hint">{t(lang, "ef_h_note")}</p>

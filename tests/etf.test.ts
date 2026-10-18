@@ -3,7 +3,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  ETF_LAUNCH, assets, chartView, heldSeries, cumulative, daily, etfStats, fundTotals, holderRow, lastDays, minedPerDay, topFunds, validEtf, weekly,
+  ETF_LAUNCH, STALE_DAYS, assets, chartView, heldSeries, cumulative, daily, etfStats, fundDetail, fundTotals, holderRow, lastDays, minedPerDay,
+  staleDays, topFunds, validEtf, weekly,
   type EtfCoin, type EtfDay, type EtfReply,
 } from "../src/lib/etf.ts";
 
@@ -223,4 +224,42 @@ test("активы фондов по дням: проверка ряда, све
     assert.ok(got);
     assert.equal(got.coins.btc!.tna, undefined);
   }
+});
+
+test("карточка фонда: последние торговые дни, их сумма и рекорды за всю историю", () => {
+  // IBIT: 3 дня потоков, FBTC в первый день не торговался (null) — этот день не его.
+  const c = coin([
+    [MON, 5, 0, 60_000, [10, null]],
+    [MON + DAY, -7, 0, 60_000, [-3, -4]],
+    [MON + 2 * DAY, 9, 0, 60_000, [9, 0]],
+  ]);
+  assert.deepEqual(fundDetail(c, 0), { days: [[MON, 10], [MON + DAY, -3], [MON + 2 * DAY, 9]], sum: 16, best: [MON, 10], worst: [MON + DAY, -3] });
+  assert.deepEqual(fundDetail(c, 1), { days: [[MON + DAY, -4], [MON + 2 * DAY, 0]], sum: -4, best: null, worst: [MON + DAY, -4] });
+  // Фонд только с притоками (и нулями): рекорда оттока нет, а не «отток 0».
+  const up = coin([[MON, 5, 0, 60_000, [5, 0]], [MON + DAY, 0, 0, 60_000, [0, 0]]]);
+  assert.deepEqual(fundDetail(up, 0), { days: [[MON, 5], [MON + DAY, 0]], sum: 5, best: [MON, 5], worst: null });
+  // n — последние дни; рекорды — всё равно за всю историю.
+  assert.deepEqual(fundDetail(c, 0, 1), { days: [[MON + 2 * DAY, 9]], sum: 9, best: [MON, 10], worst: [MON + DAY, -3] });
+  // Настоящий ответ: у IBIT 60 дней, сумма — как у потоков фонда за эти дни.
+  const r = validEtf(REAL, NOW)!.coins.btc!;
+  const i = r.funds.findIndex((f) => f.t === "IBIT");
+  const d = fundDetail(r, i, 60);
+  assert.equal(d.days.length, 60);
+  assert.equal(d.days.at(-1)![0], r.days.at(-1)![0]);
+  assert.equal(d.sum, d.days.reduce((x, [, v]) => x + v, 0));
+  assert.ok(d.best![1] > 0 && d.worst![1] < 0);
+  assert.ok(r.days.every((day) => (day[4][i] ?? 0) <= d.best![1] && (day[4][i] ?? 0) >= d.worst![1]));
+});
+
+test("свежесть набора: полных суток с последнего дня", () => {
+  const c = coin([[MON, 1, 0, 60_000, [1, 0]]]);
+  assert.equal(staleDays(c, MON), 0);
+  assert.equal(staleDays(c, MON + DAY - 1), 0);
+  assert.equal(staleDays(c, MON + 4 * DAY + 3600), 4);
+  assert.equal(staleDays(c, MON - DAY), 0); // часы телефона отстают — не «минус сутки»
+  // Пятница → вторник после праздничного понедельника — ещё не «давно».
+  const fri = MON - 3 * DAY;
+  assert.ok(staleDays(coin([[fri, 1, 0, 1, [1, 0]]]), MON + DAY + 20 * 3600) <= STALE_DAYS);
+  // Настоящий ответ в день образца — свежий.
+  assert.ok(staleDays(validEtf(REAL, NOW)!.coins.btc!, NOW) <= STALE_DAYS);
 });

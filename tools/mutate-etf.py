@@ -48,6 +48,14 @@ TS = [
     ("|| !within(v, TNA_MIN, TNA_MAX)) return null;", "|| !isNum(v)) return null;", "активы: правдоподобная сумма"),
     ("t[0] >= lastDay - TNA_FRESH", "t[0] >= 0", "активы: только свежая сводка"),
     ("return p > 0 ? [[ts, usd / p]] : [];", "return [[ts, usd / (p || 1)]];", "запас по дням без цены дня"),
+    # Карточка фонда и свежесть набора.
+    ("if (v !== null && v !== undefined) all.push([d[0], v]);", "all.push([d[0], v ?? 0]);", "фонд: дни без торгов — не его"),
+    ("const days = all.slice(-n);", "const days = all.slice(0, n);", "фонд: последние дни"),
+    ("if (x[1] > 0 && (!best || x[1] > best[1])) best = x;", "if (!best || x[1] > best[1]) best = x;", "фонд: рекорд притока — приток"),
+    ("if (x[1] < 0 && (!worst || x[1] < worst[1])) worst = x;", "if (!worst || x[1] < worst[1]) worst = x;", "фонд: рекорд оттока — отток"),
+    ("return Math.max(0, Math.floor((now - last) / DAY));", "return Math.floor((now - last) / DAY);", "свежесть: часы отстают"),
+    ("Math.floor((now - last) / DAY))", "Math.ceil((now - last) / DAY))", "свежесть: полные сутки"),
+    ("export const STALE_DAYS = 5;", "export const STALE_DAYS = 2;", "свежесть: праздники — не сбой"),
 ]
 PY = [
     # Разбор набора TFTC.
@@ -73,6 +81,11 @@ PY = [
     ("_part(\"sec\", sec_f, SEC_WAIT)", "_part(\"sec\", sec_f, 60)", "SEC ждём не дольше SEC_WAIT"),
     ("or wt_treasury.funds_cached()", "or {}", "SEC не ответил — прошлые отчёты"),
     ("pool.shutdown(wait=False, cancel_futures=True)", "pool.shutdown(wait=True)", "зависшую часть не ждём"),
+    ("if hit and not _busy.is_set() and not _resting():", "if hit and not _busy.is_set():", "после сбоя фон ждёт паузу"),
+    ("else _no_data() if resting else build()", "else build()", "очередь холодного старта не пересобирает"),
+    ("        _st.fail = None\n", "", "удачная сборка снимает паузу"),
+    ("_st.fail is not None and time.monotonic() - _st.fail < FAIL_WAIT", "_st.fail is not None", "пауза кончается"),
+    ('    return {"ok": False, "error": "no_data"}\n', '    return _NO\n_NO = {"ok": False, "error": "no_data"}\n', "«нет данных» каждый раз новый"),
     ("if ts > asof and t in by", "if ts >= asof and t in by", "потоки после отчёта"),
     ("(1 - fee * max(0, _now() - asof) / (365 * 86400))", "1", "комиссия монетами"),
     ('"n": str(info.get("n") or "")[:60]', '"n": str(info.get("n") or "")', "длина имени фонда"),

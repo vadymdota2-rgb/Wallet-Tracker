@@ -43,6 +43,7 @@
   border-top: 1px solid rgb(27 61 104 / 0.3);
 }
 .ef-f:first-child { border-top: 0; }
+.ef-fw > .ef-f { border-top: 0; }
 .ef-f-id { display: grid; min-width: 0; }
 .ef-f-id b { font-size: 13.5px; }
 .ef-f-id small { color: var(--dim); font-size: 11.5px; }
@@ -51,6 +52,46 @@
 .ef-f-fill { position: absolute; top: 0; height: 100%; border-radius: 3px; min-width: 2px; }
 .ef-f-v { font-size: 13px; text-align: end; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ef-f-sub { grid-column: 1 / -1; color: var(--dim-2); font-size: 11px; }
+/* Строка фонда — кнопка: вид строки, без рамки и фона кнопки. Стрелка справа
+   говорит, что строка раскрывается. */
+.ef-fw { border-top: 1px solid rgb(27 61 104 / 0.3); }
+.ef-fw:first-child { border-top: 0; }
+button.ef-f {
+  width: 100%;
+  border: 0;
+  border-top: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+button.ef-f:focus-visible { outline: 2px solid var(--glow); outline-offset: 2px; border-radius: 8px; }
+button.ef-f { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) auto 12px; }
+.ef-f-chev {
+  grid-column: 4;
+  grid-row: 1;
+  justify-self: end;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--dim-2);
+  border-bottom: 2px solid var(--dim-2);
+  transform: rotate(45deg);
+  transition: transform 0.18s var(--ease);
+  margin-inline-end: 2px;
+  margin-top: -3px;
+}
+.ef-f.on .ef-f-chev { transform: rotate(-135deg); margin-top: 3px; }
+.ef-fd { padding: 2px 0 12px; display: grid; gap: 6px; }
+.ef-fd-t { color: var(--dim); font-size: 12px; }
+.ef-fd-svg { display: block; width: 100%; height: auto; }
+.ef-fd-x { display: flex; justify-content: space-between; color: var(--dim-2); font-size: 10.5px; direction: ltr; }
+.ef-fd-l { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 12.5px; color: var(--dim); line-height: 1.4; }
+.ef-fd-l b { font-variant-numeric: tabular-nums; color: var(--ink); }
+.ef-fd-l b.up { color: var(--ef-up); }
+.ef-fd-l b.dn { color: var(--ef-dn); }
+@media (prefers-reduced-motion: reduce) { .ef-f-chev { transition: none; } }
 .ef-h-lead { margin: 0 0 10px; font-size: 13.5px; line-height: 1.45; color: var(--ink); }
 .ef-hl { display: grid; }
 .ef-hr {
@@ -110,8 +151,15 @@
 .ef-svg .fg-line, .ef-svg .fg-grid, .ef-svg .ef-zero { vector-effect: non-scaling-stroke; }
 
 /* Планшет и компьютер: колонка не шире 760 px по центру — строки фондов и
-   подписи не разъезжаются на всю ширину монитора. */
-.ef { max-width: 760px; margin-inline: auto; }
+   подписи не разъезжаются на всю ширину монитора. Между блоками — тот же
+   шаг, что у всех экранов (.screen-body): обёртка .ef его отменяла, и
+   карточки слипались. Заголовок раздела — ближе к своей карточке, чем к
+   предыдущей. */
+.ef { max-width: 760px; margin-inline: auto; display: grid; gap: 12px; min-width: 0; }
+.ef > * { min-width: 0; }
+.ef > .lq-lead { margin: 0; }
+.ef > .sect { margin: 8px 2px -4px; }
+.ef > .sect-help { margin: -2px 0 0; }
 
 /* График с клавиатуры: фокус виден, стрелки ведут по столбцам. */
 .ef-plot:focus { outline: none; }

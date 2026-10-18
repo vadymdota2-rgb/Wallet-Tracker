@@ -1346,6 +1346,18 @@ say("«Институциональные потоки» — отдельный 
     and "const v = validEtf(r);" in read(f"{APP}/src/lib/api.ts") and "validEtf(hit.v)" in read(f"{APP}/src/lib/api.ts")
     and "export const ETF_TTL_MS = 60 * 60_000;" in _etl and "TTL = 3600.0" in _etfs
     and "from whale_api" not in _etfs and "wt_etfchain" not in _etfs)
+_efm = read(f"{APP}/src/screens/EtfMore.tsx")
+say("«Институциональные потоки»: сбой сборки не повторяется каждым запросом (пауза FAIL_WAIT, «нет данных» — каждый раз новый ответ); карточка фонда по нажатию (потоки по дням, итог, запас, рекорды); предупреждение о старом наборе; свежий ответ при возврате через час; карточки не слипаются; даты не рвутся; ось CME без «BTC»",
+    "FAIL_WAIT = 120.0" in _etfs and "def _resting() -> bool:" in _etfs and "and not _resting():" in _etfs
+    and "else _no_data() if resting else build()" in _etfs and '"ok": False, "error": "no_data"}' in _etfs.split("def _no_data()")[1][:200]
+    and "export function fundDetail(c: EtfCoin, i: number, n = 60): FundDetail" in _etl and "export function staleDays(" in _etl
+    and 'aria-expanded={on} aria-controls={`ef-fd-${f.t}`}' in _ef and "<FundCard c={c} i={c.funds.indexOf(f)} lang={lang} />" in _ef
+    and 'old > STALE_DAYS ?' in _ef and 'document.addEventListener("visibilitychange", back)' in _ef
+    and "Date.now() - got.current > ETF_TTL_MS" in _ef
+    and ".ef { max-width: 760px; margin-inline: auto; display: grid; gap: 12px;" in _etcss
+    and "export function dateNb(" in read(f"{APP}/src/screens/etfView.ts") and "dateNb(lang, r[5]" in _efm
+    and "axis={axis}" in _efm and "const lim = list.length - shown <= TAIL ? list.length : shown;" in _efm
+    and all(k in _i18n for k in ("ef_fd_days", "ef_fd_chart", "ef_fd_hold", "ef_fd_tap", "ef_old")))
 say("«Институциональные потоки»: сервер проверяет каждую строку набора (даты ASCII и в торгах, пределы потоков и цен, праздники), итог дня — сумма фондов",
     'DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")' in _etfs and "(not by and total == 0)" in _etfs
     and "abs(total) > DAY_MAX" in _etfs and 'if PX_MIN <= _num(r.get("btcCloseUsd")) <= PX_MAX:' in _etfs and "HOLD_MAX = 5_000_000.0" in _etfs
@@ -1360,7 +1372,7 @@ say("«Институциональные потоки»: тесты как у �
 say("«Институциональные потоки»: активы фондов по дням (TFTC) — запас в BTC по дням, заголовок по свежей сводке, сверка своей оценки; CME и премия Coinbase — с правдоподобием; SEC — дата ASCII, копия на диске проверяется",
     'if TNA_MIN <= _num(r.get("totalNetAssetsUsd")) <= TNA_MAX:' in _etfs and "if own > 0 and abs(own / held - 1) > SPLIT_MAX:" in _etfs
     and "export function heldSeries(" in _etl and "export function assets(" in _etl and "function validTna(" in _etl
-    and "export function HeldSection(" in _em and "<HeldSection series={heldSeries(c)}" in _ef
+    and "export function HeldSection(" in _em and "<HeldSection series={held}" in _ef and "const held = useMemo(() => (c ? heldSeries(c) : []), [c]);" in _ef
     and "any(not 0 <= v <= CME_MAX for v in vals)" in _etfs
     and "COINS" not in _etfs and 'QUARTER = re.compile(r"[0-9]{4}-(?:03-31|06-30|09-30|12-31)")' in read(f"{APP}/wt_treasury.py")
     and "_point(v)" in read(f"{APP}/wt_treasury.py") and os.path.isfile(f"{APP}/tests/test_treasury_security.py")
@@ -1396,7 +1408,7 @@ say("«Институциональные потоки»: графики в на
     and "export function heightK(w: number, base: number): number" in _etv
     and "const { W, PW, P1, P2, H } = geom(useWidth(ref));" in _ef and "const { W, PW, MH } = box(useWidth(ref), 130);" in _em
     and "const W = 360;" not in _ef + _em
-    and ".ef { max-width: 760px; margin-inline: auto; }" in _etcss and ".ef-svg .fg-tick { font-size: 10.5px; }" in _etcss
+    and ".ef { max-width: 760px; margin-inline: auto;" in _etcss and ".ef-svg .fg-tick { font-size: 10.5px; }" in _etcss
     and "jobs.push(() => fetchEtf());" in read(f"{APP}/src/lib/prefetch.ts")
     and '{t(lang, "op_stale", { t: since(Math.max(0, Date.now() / 1000 - reply.at)) })}' in _ef)
 say("«Институциональные потоки»: доступность — график с клавиатуры и описанием, таблица цифрами, заглушка «занята», высокая контрастность",

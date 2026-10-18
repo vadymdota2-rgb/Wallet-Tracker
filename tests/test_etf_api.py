@@ -316,6 +316,58 @@ class EtfTest(unittest.TestCase):
         self.assertTrue(all(o is out[0] for o in out))
         self.assertEqual(sum("publicreporting.cftc.gov" in u for u in net.urls), 1)
 
+    def test_failed_cold_build_is_not_repeated_by_every_request(self):
+        # Набор TFTC лежит: первая сборка — «нет данных», следующие запросы до
+        # FAIL_WAIT получают то же сразу, без похода в сеть.
+        net = Net(**{"tftc.io/bitcoin-etf-flows/data.json": None})
+        with mock.patch.object(etf, "_fetch", net.fetch), mock.patch.object(etf, "_now", lambda: NOW), \
+                mock.patch("sys.stderr", io.StringIO()):
+            self.assertEqual(etf.etf_data(), {"ok": False, "error": "no_data"})
+            n = len(net.urls)
+            for _ in range(5):
+                got = etf.etf_data()
+                self.assertEqual(got, {"ok": False, "error": "no_data"})
+                got["x"] = 1  # чужая правка ответа не портит следующий
+            self.assertEqual(len(net.urls), n)
+            # Пауза прошла, набор вернулся — сборка идёт и пауза снята.
+            etf._st.fail = time.monotonic() - etf.FAIL_WAIT - 1
+            net.routes["tftc.io/bitcoin-etf-flows/data.json"] = TFTC
+            self.assertTrue(etf.etf_data()["ok"])
+            self.assertIsNone(etf._st.fail)
+
+    def test_cold_requests_wait_for_one_failing_build_not_one_each(self):
+        net = Net(**{"tftc.io/bitcoin-etf-flows/data.json": lambda url: time.sleep(0.05)})
+        out = []
+        with mock.patch.object(etf, "_fetch", net.fetch), mock.patch.object(etf, "_now", lambda: NOW), \
+                mock.patch("sys.stderr", io.StringIO()):
+            ts = [threading.Thread(target=lambda: out.append(etf.etf_data())) for _ in range(4)]
+            for t in ts:
+                t.start()
+            for t in ts:
+                t.join(30)
+        self.assertEqual(out, [{"ok": False, "error": "no_data"}] * 4)
+        self.assertEqual(sum("tftc.io" in u for u in net.urls), 1)
+
+    def test_background_crash_pauses_rebuilds(self):
+        old = {"ok": True, "v": 1}
+        etf._st.hit = (time.monotonic() - etf.TTL - 1, old)
+        calls = []
+
+        def boom():
+            calls.append(1)
+            raise RuntimeError("boom")
+        with mock.patch.object(etf, "build", boom), mock.patch("sys.stderr", io.StringIO()):
+            self.assertIs(etf.etf_data(), old)
+            for _ in range(100):
+                if not etf._busy.is_set():
+                    break
+                time.sleep(0.01)
+            # Упала — устаревший ответ отдаётся, а новой сборки до паузы нет.
+            for _ in range(5):
+                self.assertIs(etf.etf_data(), old)
+            self.assertFalse(etf._busy.is_set())
+            self.assertEqual(calls, [1])
+
     def test_implausible_latest_report_falls_back_to_the_previous_quarter(self):
         # Последний отчёт IBIT — 9 млн BTC (такого запаса нет): запас — от
         # прошлого квартала плюс потоки после него, а не ноль.

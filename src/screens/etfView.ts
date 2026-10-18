@@ -5,6 +5,7 @@
  */
 import { useLayoutEffect, useState, type RefObject } from "react";
 import { num, usdWord } from "../lib/format";
+import { dateStr } from "./FearGreedScreen";
 
 /* Потоки фондов и цена дня — открытый набор TFTC под лицензией CC BY 4.0:
    условие — подпись источника со ссылкой и ссылка на лицензию рядом с
@@ -37,6 +38,11 @@ export function coinsShort(lang: string, v: number, sym: string, signed = true):
   } catch {
     return `${s}${num(Math.abs(v))}${sym ? ` ${sym}` : ""}`;
   }
+}
+
+/** Дата одним куском: «30 июн. 2026 г.» не рвётся посередине и не оставляет «г.» одно на строке. */
+export function dateNb(lang: string, ts: number, opts: Intl.DateTimeFormatOptions): string {
+  return dateStr(lang as Parameters<typeof dateStr>[0], ts, opts).replace(/ /g, "\u00a0");
 }
 
 /** Флаг страны по коду ISO: «US» → 🇺🇸; не код — пусто. */
