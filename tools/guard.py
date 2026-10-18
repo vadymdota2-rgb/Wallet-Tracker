@@ -917,7 +917,19 @@ say("Институциональные потоки — независимый 
     and "it->second * 2 >= held" in read(os.path.join(BOT, "btc_etf.cpp")) and "freshAddr(it->first, tx.txid, b.height)" in read(os.path.join(BOT, "btc_etf.cpp"))
     and "etfSetFreshCheck(addrFresh);" in read(os.path.join(BOT, "btc_chain.cpp"))
     and 'f.src === "chain"' not in read(f"{APP}/src/screens/EtfScreen.tsx")
-    and "refreshEtfBalances();\n                if (etfBackfill(" in _ws_btc)
+    and "refreshEtfBalances();\n                    if (etfBackfill(" in _ws_btc)
+# Работа по фондам (догонка двух месяцев, сверка остатков, история /import,
+# хранилища) — в своём потоке: в цикле блоков она шла часами и при отказе
+# mempool.space повторялась каждый час — новые блоки стояли, отставание
+# переваливало за сутки, блоки пропускались, и крупные сделки с рейтингом
+# BTC вставали.
+_btc_loop = _ws_btc[_ws_btc.index("void btcLoop() {"):_ws_btc.index("void startBtcLoop() {")]
+say("bitcoin: работа по фондам ETF — в своём потоке, цикл блоков её не ждёт (крупные сделки и рейтинг не встают)",
+    "void etfLoop(Scanner& sc) {" in _ws_btc and "std::thread etf(etfLoop, std::ref(sc));" in _btc_loop
+    and "etf.join();" in _btc_loop and "etfBackfill(" not in _btc_loop and "readNewVaults();" not in _btc_loop
+    and "backfillImported(" not in _btc_loop and "refreshEtfBalances();" not in _btc_loop
+    and 'sc.setStateLocked("etf_gap", ' in _btc_loop and 'sc.state("etf_gap")' in _ws_btc
+    and "std::lock_guard<std::mutex> l(g_backMx);" in _ws_btc)
 say("bitcoin: вкладка «Крупные ордера BTC» с потоком бирж (в NetFlow его нет), третья доска рейтинга, экран кошелька",
     'path in ("/btc/flow", "/api/btc/flow")' in api and "def _btc_clean(" in api and "w.s < 0.9 * w.b" in api
     and "export function BtcFlowCard(" in _btv and "export function BtcBigView(" in _btv
