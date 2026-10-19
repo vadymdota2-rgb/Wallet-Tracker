@@ -13,7 +13,9 @@ from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-import wt_digest_img as dgi  # noqa: E402 — модуль лежит в корне репозитория
+import whale_api as api  # noqa: E402 — модули лежат в корне репозитория
+import wt_digest_img as dgi  # noqa: E402
+import wt_etf as etf  # noqa: E402
 
 DAY = 1_792_108_800
 ETF = {"etf": [{"c": "btc", "day": DAY, "v": 5_060_000, "n": 61.6}],
@@ -107,8 +109,6 @@ class DigestEtfDayTest(unittest.TestCase):
     дольше STALE_DAYS суток — раздела ETF в выпуске нет, а не старый день."""
 
     def inst(self, age_days):
-        import whale_api as api
-        import wt_etf as etf
         last = DAY - DAY % 86_400
         rep = {"ok": True, "coins": {"btc": {"funds": [{"t": "IBIT"}, {"t": "FBTC"}],
                                              "days": [[last, 5060, 61.6, 82_000, [4000, -1000]]]}}}
