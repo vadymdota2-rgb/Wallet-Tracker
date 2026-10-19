@@ -81,6 +81,8 @@ PY = [
     ("_part(\"sec\", sec_f, SEC_WAIT)", "_part(\"sec\", sec_f, 60)", "SEC ждём не дольше SEC_WAIT"),
     ("or wt_treasury.funds_cached()", "or {}", "SEC не ответил — прошлые отчёты"),
     ("pool.shutdown(wait=False, cancel_futures=True)", "pool.shutdown(wait=True)", "зависшую часть не ждём"),
+    ("if t not in known and t not in _st.told)", "if t not in known)", "о новом фонде — один раз"),
+    ("if t not in known and t not in _st.told)", "if t not in _st.told)", "о знакомом фонде — молчим"),
     ("if hit and not _busy.is_set() and not _resting():", "if hit and not _busy.is_set():", "после сбоя фон ждёт паузу"),
     ("else _no_data() if resting else build()", "else build()", "очередь холодного старта не пересобирает"),
     ("        _st.fail = None\n", "", "удачная сборка снимает паузу"),
@@ -128,6 +130,21 @@ TR = [
 ]
 
 
+# Алерт о крупном дне (whale_api: etfd_*).
+AL = [
+    ("if abs(v) < ETFD_MIN or now() - ts > ETFD_FRESH:", "if abs(v) < ETFD_MIN:", "алерт: только свежий день"),
+    ("if abs(v) < ETFD_MIN or now() - ts > ETFD_FRESH:", "if v < ETFD_MIN or now() - ts > ETFD_FRESH:", "алерт: отток тоже крупный день"),
+    (" and (x > 0) == (v > 0)]", "]", "алерт: фонды в ту же сторону"),
+    ("    per.sort(key=lambda p: -abs(p[1]))\n", "", "алерт: самые крупные фонды первыми"),
+    ("return ts, v, per[:3]", "return ts, v, per", "алерт: не больше трёх фондов"),
+    ("        if cur.rowcount == 0:\n            return 0\n", "", "алерт: один день — одна рассылка"),
+    ("            if not chat_premium(chat):\n                continue\n", "", "алерт: только с Премиумом"),
+    ('lines.append(f"{dgi.tr(lang, \'dg_etf_by\')} {dgi.TFTC_BY_POST}")', "pass", "алерт: источник и лицензия TFTC"),
+    ('con.execute("UPDATE etf_day_subs SET fails=0 WHERE chat_id=?", (chat,))', "pass", "алерт: доставка обнуляет сбои"),
+    ('con.execute("DELETE FROM etf_day_subs WHERE chat_id=? AND fails>=?", (chat, ETFD_FAILS))', "pass", "алерт: недоставка отписывает"),
+]
+
+
 def run(path, cmd, muts):
     with open(path, encoding="utf-8") as f:
         src = f.read()
@@ -161,7 +178,8 @@ def server():
     return (run(f"{ROOT}/wt_etf.py", [sys.executable, "-m", "unittest", "tests.test_etf_api", "tests.test_etf_fuzz",
                                       "tests.test_etf_security", "tests.test_etf_policy", "tests.test_disk_cache"], PY)
             + run(f"{ROOT}/wt_treasury.py", [sys.executable, "-m", "unittest", "tests.test_treasury",
-                                             "tests.test_treasury_security", "tests.test_disk_cache"], TR))
+                                             "tests.test_treasury_security", "tests.test_disk_cache"], TR)
+            + run(f"{ROOT}/whale_api.py", [sys.executable, "-m", "unittest", "tests.test_etf_day_alert"], AL))
 
 
 # Приложение и сервер — одновременно: тесты приложения (node) читают только
@@ -170,6 +188,6 @@ with ThreadPoolExecutor(max_workers=2) as pool:
     app = pool.submit(run, f"{ROOT}/src/lib/etf.ts", ["node", "--test", "tests/etf.test.ts", "tests/etf.props.test.ts"], TS)
     srv = pool.submit(server)
     alive = app.result() + srv.result()
-total = len(TS) + len(PY) + len(TR) - len(EQUIV)
+total = len(TS) + len(PY) + len(TR) + len(AL) - len(EQUIV)
 print(f"ИТОГ: убито {total - len(alive)} из {total}; выжили: {alive}")
 sys.exit(1 if alive else 0)

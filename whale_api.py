@@ -33,6 +33,7 @@ import wt_shield as shield  # noqa: E402
 import wt_halving as halving  # noqa: E402
 import wt_etf as etf  # noqa: E402
 import wt_treasury as treasury
+import wt_digest_img as dgi
 from urllib.parse import parse_qs, unquote, urlparse, urlsplit
 
 # Петля по умолчанию: наружу API выходит только через nginx. Раньше здесь
@@ -9990,6 +9991,13 @@ DISK_MAX_AGE = 3 * 86400
 DISK_KEEP = 128
 _DISK: dict[int, str] = {}
 etf.set_cache_file(os.path.join(CACHE_DIR, "etf.json"))
+# Новый фонд в наборе TFTC, которого нет в списке фондов SEC, — владельцу:
+# потоки его видны сразу, а имя, комиссию и запас даст только строка в
+# wt_treasury.ETFS (тикер, имя, CIK в SEC).
+etf.set_new_fund_hook(lambda t: tg_api("sendMessage", {
+    "chat_id": OWNER_CHAT_ID,
+    "text": f"🆕 ETF: в наборе TFTC новый фонд {t}. Его нет в списке фондов SEC (wt_treasury.ETFS): "
+            f"потоки видны, а имени, комиссии и запаса не будет, пока его не добавить (тикер, имя, CIK в SEC)."}))
 treasury.set_cache_dir(CACHE_DIR)
 
 
@@ -13595,7 +13603,6 @@ def pxa_check() -> int:
         px = _pxa_prices({r[2] for r in rows})
         _pxa_px.update(at=time.time(), px=px)
         sent = 0
-        import wt_digest_img as dgi
         for aid, chat, sym, price, d, lang, note, tries, kind, t1, p1, t2, p2, lg in rows:
             cur = px.get(sym)
             level = _pxa_level(kind, price, t1, p1, t2, p2, lg)
@@ -13618,6 +13625,157 @@ def pxa_check() -> int:
         return sent
     finally:
         con.close()
+
+
+# --- Алерт о крупном дне ETF -----------------------------------------------
+# Один переключатель на экране «Институциональные потоки»: когда спотовые
+# биткоин-ETF США за день купят или продадут биткоин на ETFD_MIN и больше,
+# подписанным с Премиумом уходит сообщение в Telegram — на их языке, с
+# подписью источника (цифры — из набора TFTC, CC BY 4.0: источник и ссылка на
+# лицензию нужны и здесь). Такие дни бывают несколько раз в месяц — не спам.
+#
+# Один день — одна рассылка (etf_day_sent). Только свежий день (не старше
+# ETFD_FRESH): после перезапуска или долгого простоя старые дни не рассылаются.
+# Без Премиума подписка не удаляется, но сообщения нет (продлит — придут).
+# Сообщение трижды подряд не дошло (бот заблокирован) — подписка снимается.
+ETFD_MIN = 500e6
+ETFD_FRESH = 3 * 86400
+ETFD_EVERY = 900
+ETFD_FAILS = 3
+ETFD_SCHEMA = """
+CREATE TABLE IF NOT EXISTS etf_day_subs (
+    chat_id TEXT PRIMARY KEY,
+    lang TEXT NOT NULL DEFAULT 'en',
+    at INTEGER NOT NULL,
+    fails INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS etf_day_sent (
+    day INTEGER PRIMARY KEY,
+    v REAL NOT NULL,
+    at INTEGER NOT NULL,
+    n INTEGER NOT NULL DEFAULT 0
+);
+"""
+
+
+def _etfd_con():
+    con = open_db(DB, write=True)
+    if con:
+        con.executescript(ETFD_SCHEMA)
+    return con
+
+
+def etfd_get(chat: str) -> dict:
+    """Включён ли алерт о крупном дне у человека."""
+    con = _etfd_con()
+    if not con:
+        return {"ok": False, "error": "db"}
+    try:
+        on = con.execute("SELECT 1 FROM etf_day_subs WHERE chat_id=?", (chat,)).fetchone() is not None
+        return {"ok": True, "on": on, "min": int(ETFD_MIN)}
+    finally:
+        con.close()
+
+
+def etfd_set(chat: str, body: dict) -> dict:
+    """Включить (on: true, язык сообщений — lang) или выключить алерт."""
+    on = body.get("on")
+    if not isinstance(on, bool):
+        return {"ok": False, "error": "bad_args"}
+    lang = body.get("lang")
+    lang = lang if isinstance(lang, str) and lang in LANG_CODES else "en"
+    con = _etfd_con()
+    if not con:
+        return {"ok": False, "error": "db"}
+    try:
+        if on:
+            con.execute("INSERT INTO etf_day_subs(chat_id, lang, at) VALUES(?,?,?) "
+                        "ON CONFLICT(chat_id) DO UPDATE SET lang=excluded.lang, fails=0", (chat, lang, now()))
+        else:
+            con.execute("DELETE FROM etf_day_subs WHERE chat_id=?", (chat,))
+        con.commit()
+        return {"ok": True, "on": on, "min": int(ETFD_MIN)}
+    finally:
+        con.close()
+
+
+def etfd_text(lang: str, day: int, v: float, top: list) -> str:
+    """Текст алерта: итог дня, крупнейшие фонды в ту же сторону, источник
+    (TFTC — с адресом лицензии) и где выключить."""
+    head = dgi.tr(lang, "ef_al_in" if v > 0 else "ef_al_out", v=dgi.usd(v, lang, True), d=dgi.date_word(lang, day))
+    lines = [head]
+    if top:
+        lines.append(dgi.tr(lang, "ef_al_top", f=", ".join(f"{t} {dgi.usd(x, lang, True)}" for t, x in top)))
+    lines.append(f"{dgi.tr(lang, 'dg_etf_by')} {dgi.TFTC_BY_POST}")
+    # Имя экрана — из словаря того же языка: совпадёт с тем, что человек видит в меню.
+    lines.append(dgi.tr(lang, "ef_al_stop", s=dgi.tr(lang, "ef_title")))
+    return "\n\n".join(lines)
+
+
+def etfd_day() -> tuple | None:
+    """Последний день набора, если он крупный и свежий: (начало суток, поток $,
+    до трёх фондов в ту же сторону [(тикер, $)]); иначе None."""
+    e = ((etf_data() or {}).get("coins") or {}).get("btc") or {}
+    days, funds = e.get("days") or [], e.get("funds") or []
+    if not days:
+        return None
+    d = days[-1]
+    ts, v = int(d[0]), float(d[1] or 0) * 1000
+    if abs(v) < ETFD_MIN or now() - ts > ETFD_FRESH:
+        return None
+    per = [(funds[i]["t"], (x or 0) * 1000) for i, x in enumerate(d[4] or []) if i < len(funds) and x and (x > 0) == (v > 0)]
+    per.sort(key=lambda p: -abs(p[1]))
+    return ts, v, per[:3]
+
+
+def etfd_check() -> int:
+    """Один проход: крупный свежий день, о котором ещё не писали, — разослать.
+    Вернёт, сколько сообщений дошло."""
+    got = etfd_day()
+    if not got:
+        return 0
+    ts, v, top = got
+    con = _etfd_con()
+    if not con:
+        return 0
+    try:
+        # День помечается разосланным до рассылки: второй проход (или второй
+        # процесс) его уже не возьмёт, даже если этот упадёт на середине.
+        cur = con.execute("INSERT OR IGNORE INTO etf_day_sent(day, v, at) VALUES(?,?,?)", (ts, v, now()))
+        con.commit()
+        if cur.rowcount == 0:
+            return 0
+        subs = con.execute("SELECT chat_id, lang FROM etf_day_subs").fetchall()
+        sent = 0
+        texts: dict = {}
+        for chat, lang in subs:
+            if not chat_premium(chat):
+                continue
+            text = texts.get(lang) or texts.setdefault(lang, etfd_text(lang, ts, v, top))
+            ok = tg_api("sendMessage", {"chat_id": chat, "text": text, "disable_web_page_preview": True}) is not None
+            if ok:
+                sent += 1
+                con.execute("UPDATE etf_day_subs SET fails=0 WHERE chat_id=?", (chat,))
+            else:
+                con.execute("UPDATE etf_day_subs SET fails=fails+1 WHERE chat_id=?", (chat,))
+                con.execute("DELETE FROM etf_day_subs WHERE chat_id=? AND fails>=?", (chat, ETFD_FAILS))
+        con.execute("UPDATE etf_day_sent SET n=? WHERE day=?", (sent, ts))
+        con.commit()
+        return sent
+    finally:
+        con.close()
+
+
+def etfd_loop() -> None:
+    time.sleep(60)
+    while True:
+        try:
+            n = etfd_check()
+            if n:
+                sys.stderr.write(f"[api] алерт о крупном дне ETF: отправлено {n}\n")
+        except Exception as e:  # noqa: BLE001
+            sys.stderr.write(f"[api] etf day alert: {e}\n")
+        time.sleep(ETFD_EVERY)
 
 
 # --- Рисунки и настройки графика на сервере --------------------------------
@@ -15270,7 +15428,6 @@ def digest_channel_post() -> bool:
         except ValueError:
             return False
         body["to"] = body.get("to") or now()
-        import wt_digest_img as dgi
         cap = dgi.caption(body, DIGEST_CHANNEL_LANG)
         try:
             # Весь выпуск — альбомом: обложка и страницы по разделам.
@@ -16262,6 +16419,10 @@ class Handler(BaseHTTPRequestHandler):
                 chat = self._user(qs)
                 self._json(200, chart_state_get(chat, qs.get("sym", [""])[0]) if chat else {"ok": False, "error": "unauthorized"})
                 return
+            if path == "/api/etfwatch":
+                chat = self._user(qs)
+                self._json(200, etfd_get(chat) if chat else {"ok": False, "error": "unauthorized"})
+                return
             if path == "/api/pxalert/list":
                 chat = self._user(qs)
                 self._json(200, pxa_list(chat) if chat else {"ok": False, "error": "unauthorized"})
@@ -16375,6 +16536,13 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/chart/state":
                 self._json(200, chart_state_put(chat, body))
                 return
+            if path == "/api/etfwatch":
+                # Включить — только с Премиумом; выключить — всегда.
+                if body.get("on") is True and not chat_premium(chat):
+                    self._json(200, {"ok": False, "error": "premium"})
+                    return
+                self._json(200, etfd_set(chat, body))
+                return
             pxa = {"/api/pxalert/add": pxa_add, "/api/pxalert/move": pxa_move, "/api/pxalert/del": pxa_del}.get(path)
             if pxa:
                 if path == "/api/pxalert/add" and not chat_premium(chat):
@@ -16483,6 +16651,7 @@ def main():
     threading.Thread(target=refresher, daemon=True).start()
     threading.Thread(target=_bonus_loop, daemon=True).start()
     threading.Thread(target=pxa_loop, daemon=True).start()
+    threading.Thread(target=etfd_loop, daemon=True).start()
     old_tables_drop()
     httpd = shield.ShieldServer((HOST, PORT), Handler)
     tls = shield.tls_wrap(httpd)

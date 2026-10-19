@@ -19,7 +19,7 @@ import { createServer, type Server } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
-import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+import { chromium, type Browser, type BrowserContext, type Page, type Route } from "playwright";
 
 const HTML = fileURLToPath(new URL("../../html/", import.meta.url));
 const FONTS = fileURLToPath(new URL("../../fonts/", import.meta.url));
@@ -87,6 +87,8 @@ interface Opts {
   stay?: boolean;
   /** Часы телефона, unix с (по умолчанию — время образца). */
   clock?: number;
+  /** Ответ сервера на /api/etfwatch (алерт о крупном дне). */
+  watch?: (r: Route) => Promise<void>;
 }
 
 interface Opened { ctx: BrowserContext; page: Page; errors: string[]; asked: () => number }
@@ -120,6 +122,7 @@ async function open(o: Opts = {}): Promise<Opened> {
     if (a.saved) localStorage.setItem("wt-etf-v1", JSON.stringify(a.saved));
     for (const [k, v] of Object.entries(a.store)) localStorage.setItem(k, v);
   }, { lang: o.lang ?? "ru", saved: o.saved ?? null, store: o.store ?? {} });
+  if (o.watch) await ctx.route(`${base}/api/etfwatch`, o.watch);
   if (o.premium) {
     await ctx.route(`${base}/api/bootstrap`, (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, me: { plan: "premium" } }) }));
   }
@@ -677,6 +680,46 @@ describe("институциональные потоки", () => {
     const bg = await page.locator(".ef-f-fill").first().evaluate((el) => getComputedStyle(el).backgroundColor);
     assert.notEqual(bg, "rgba(0, 0, 0, 0)");
     assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("алерт о крупном дне: до ответа сервера выключатель неактивен, нажатие шлёт on и язык, без Премиума — подсказка", async () => {
+    const posts: unknown[] = [];
+    let plan = "premium";
+    let gate: () => void = () => {};
+    const answered = new Promise<void>((ok) => { gate = ok; });
+    const { ctx, page } = await open({
+      premium: true,
+      watch: async (r) => {
+        if (r.request().method() === "GET") {
+          await answered;
+          await r.fulfill({ contentType: "application/json", body: '{"ok":true,"on":false,"min":500000000}' });
+          return;
+        }
+        const body = r.request().postDataJSON() as { on: boolean };
+        posts.push(body);
+        const reply = body.on && plan !== "premium" ? { ok: false, error: "premium" } : { ok: true, on: body.on, min: 5e8 };
+        await r.fulfill({ contentType: "application/json", body: JSON.stringify(reply) });
+      },
+    });
+    await ready(page);
+    const sw = page.locator(".ef-al");
+    assert.equal(await sw.getAttribute("role"), "switch");
+    assert.ok(await sw.isDisabled());
+    assert.match(sp(await sw.innerText()), new RegExp(sp(I18N["ef_al_t"]!["ru"]!)));
+    gate();
+    await page.waitForFunction(() => !document.querySelector<HTMLButtonElement>(".ef-al")!.disabled);
+    assert.equal(await sw.getAttribute("aria-checked"), "false");
+    await sw.click();
+    await page.waitForFunction(() => document.querySelector(".ef-al")!.getAttribute("aria-checked") === "true");
+    await sw.click();
+    await page.waitForFunction(() => document.querySelector(".ef-al")!.getAttribute("aria-checked") === "false");
+    assert.deepEqual(posts, [{ on: true, lang: "ru" }, { on: false, lang: "ru" }]);
+    plan = "free";
+    await sw.click();
+    await page.locator(".toast.err").waitFor();
+    assert.equal(sp(await page.locator(".toast.err").innerText()), sp(I18N["lk_title"]!["ru"]!));
+    assert.equal(await sw.getAttribute("aria-checked"), "false");
     await ctx.close();
   });
 

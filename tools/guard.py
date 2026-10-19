@@ -835,12 +835,18 @@ say("бот: /import — кнопки фондов (IBIT, FBTC…) и «Друг
     and "int etfDrainLabels(sqlite3* db)" in _wse and "++r.inBase;" in _wse and "named" not in _wse
     and "UPDATE btc_watch SET src = 'import' WHERE address = ? AND src = 'auto'" in _wsc and "WHERE btc_etf_addr.how != 'seed'\");" in _wse
     and "etfDrainLabels(g_btcDb);" in _wsc and "backfillImported" not in _wsc)
-say("алертов по ETF нет: ни модуля, ни экрана, ни адресов API; их старые таблицы стираются при запуске",
+say("старых алертов по ETF (по фондам, wt_etfalert) нет: ни модуля, ни экрана, ни адресов API; их таблицы стираются при запуске",
     not os.path.exists(f"{APP}/wt_etfalert.py") and not os.path.exists(f"{APP}/src/screens/EtfAlerts.tsx")
     and "etfalert" not in api and "EtfAlert" not in _ef and "FundBell" not in _ef
     and "etfAlert" not in read(f"{APP}/src/lib/api.ts") and "wt-etfa" not in read(f"{APP}/src/lib/storage.ts")
     and '(lambda: DB, ("etf_alert_subs", "etf_alert_sent", "etf_alert_state"))' in api and "    old_tables_drop()\n" in api
     and ".ef-bell" not in read(f"{APP}/src/styles/app.css") and "wt_etfalert" not in read(f"{APP}/.github/workflows/tests.yml"))
+say("ETF: алерт о крупном дне — по желанию, только с Премиумом, порог $500 млн, один день — одна рассылка, свежий день, в каждом сообщении источник TFTC и лицензия",
+    "ETFD_MIN = 500e6" in api and "def etfd_check() -> int:" in api and "INSERT OR IGNORE INTO etf_day_sent" in api
+    and "if not chat_premium(chat):\n                continue" in api and "now() - ts > ETFD_FRESH" in api
+    and 'if body.get("on") is True and not chat_premium(chat):' in api and "dgi.TFTC_BY_POST}\")" in api
+    and "threading.Thread(target=etfd_loop, daemon=True).start()" in api and "<BigDayAlert lang={lang} />" in _ef
+    and 'role="switch"' in _ef and "test_etf_day_alert.py" in read(f"{APP}/.github/workflows/tests.yml"))
 _wsb = read(os.path.join(BOT, "btc_chain.cpp"))
 _tre0 = read(f"{APP}/wt_treasury.py")
 say("ETF: потоки по дням — открытый набор TFTC (CC BY 4.0), на экране источник и лицензия со ссылками; запас — отчёты SEC плюс потоки после них; снимка и сводок CoinMarketCap нет; флаги фондов",

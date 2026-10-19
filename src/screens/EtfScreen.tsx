@@ -26,7 +26,8 @@ import { useApp } from "../store/app";
 import { t } from "../i18n/t";
 import { num, pct, px, since, usdWord } from "../lib/format";
 import { haptic, openExternal } from "../lib/telegram";
-import { fetchEtf, peekEtf } from "../lib/api";
+import { etfWatch, etfWatchSet, failKey, fetchEtf, peekEtf } from "../lib/api";
+import { toast } from "../components/Toast";
 import { Card, Chips, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import {
   ETF_TTL_MS, PERIODS, RANGES, STALE_DAYS, chartView, cumulative, etfStats, fundDetail, fundTotals, heldSeries, staleDays, topFunds,
@@ -437,6 +438,47 @@ function Funds({ c, lang }: { c: EtfCoin; lang: Lang }) {
   );
 }
 
+/**
+ * Алерт о крупном дне: один переключатель. Сервер шлёт сообщение в Telegram,
+ * когда фонды за день купят или продадут на $500 млн и больше (бывает
+ * несколько раз в месяц). Пока сервер не ответил, переключатель неактивен:
+ * показывать «выключен» до ответа значило бы врать тем, у кого он включён.
+ */
+function BigDayAlert({ lang }: { lang: Lang }) {
+  const [on, setOn] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void etfWatch().then((r) => {
+      if (alive && r?.ok && typeof r.on === "boolean") setOn(r.on);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const flip = async () => {
+    if (on === null || busy) return;
+    haptic("select");
+    setBusy(true);
+    const r = await etfWatchSet(!on, lang);
+    setBusy(false);
+    if (r?.ok && typeof r.on === "boolean") setOn(r.on);
+    else toast(t(lang, r?.error === "premium" ? "lk_title" : failKey()), "err");
+  };
+  return (
+    <Card>
+      <button type="button" role="switch" aria-checked={on === true} disabled={on === null || busy}
+        className={on ? "ef-al on" : "ef-al"} onClick={() => void flip()}>
+        <span className="ef-al-sw" aria-hidden="true"><i /></span>
+        <span className="ef-al-t">
+          <b>🔔 {t(lang, "ef_al_t")}</b>
+          <small>{t(lang, "ef_al_d")}</small>
+        </span>
+      </button>
+    </Card>
+  );
+}
+
 /* ---------------------------------------------------------------------- */
 
 export function EtfScreen() {
@@ -602,6 +644,8 @@ export function EtfScreen() {
               {t(lang, "ef_by_ch")}
             </p>
           </Card>
+
+          <BigDayAlert lang={lang} />
 
           {stats.mined > 0 && stats.c30 !== 0 ? (
             <>

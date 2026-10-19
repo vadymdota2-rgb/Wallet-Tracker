@@ -338,6 +338,7 @@ def _coin(sec_of: Callable[[], object] | None = None) -> dict[str, Json] | None:
     last_px = px[max(px)] if px else 0.0
     sec = _sec(sec_of() if sec_of else wt_treasury.etf_funds())
     reports = _last_report(sec, px)
+    _new_funds({t for by, _ in days.values() for t in by})
     sums: dict[str, list[float]] = {}  # фонд → [$ с запуска, монет с запуска]
     for ts, (by, _) in days.items():
         p = px.get(ts, 0.0)
@@ -424,6 +425,11 @@ def _cme() -> dict[str, Json]:
 class _State:
     """Кэш модуля: (monotonic, ответ). Меняется только под _lock."""
 
+    # Кому сказать о фонде, которого нет в wt_treasury.ETFS (set_new_fund_hook),
+    # и о каких тикерах уже сказано (раз на тикер за время жизни процесса).
+    on_new: Callable[[str], None] | None = None
+    told: frozenset[str] = frozenset()
+
     hit: tuple[float, dict[str, Json]] | None = None
     # Когда (monotonic) сборка последний раз не удалась: «нет данных» или
     # падение. До FAIL_WAIT после неё новой сборки нет (см. etf_data).
@@ -435,6 +441,31 @@ class _State:
 
 # Копия с диска старше этого не берётся.
 FILE_MAX_AGE = 3 * 86400
+
+
+def set_new_fund_hook(fn: Callable[[str], None] | None) -> None:
+    """Кому сказать о новом фонде в наборе TFTC (None — только журнал)."""
+    _st.on_new = fn
+
+
+def _new_funds(tickers: set[str]) -> None:
+    """Фонд есть в наборе TFTC, а в списке фондов SEC (wt_treasury.ETFS) — нет:
+    потоки его видны, а имени, комиссии и запаса не будет, пока его не
+    добавят в список. Говорим один раз на тикер: строкой в журнале и тому,
+    кто подписан (set_new_fund_hook, — владельцу в Telegram). Тикер уже
+    проверен (TICKER) — в сообщение он идёт как есть."""
+    known = {t for t, _, _ in wt_treasury.ETFS}
+    with _lock:
+        fresh = sorted(t for t in tickers if t not in known and t not in _st.told)
+        _st.told = _st.told | frozenset(fresh)
+        hook = _st.on_new
+    for t in fresh:
+        _log(f"новый фонд в наборе TFTC: {t} — нет в wt_treasury.ETFS (без имени, комиссии и запаса)")
+        if hook:
+            try:
+                hook(t)
+            except Exception as e:  # noqa: BLE001 — сообщение не роняет сборку
+                _log(f"сообщение о новом фонде: {type(e).__name__}: {e}")
 
 
 def set_cache_file(path: str | None) -> None:

@@ -78,6 +78,9 @@ ETFS: tuple[tuple[str, str, int], ...] = (
     ("BTCO", "Invesco Galaxy Bitcoin ETF", 1855781),
     ("BTCW", "WisdomTree Bitcoin Fund", 1850391),
     ("MSBT", "Morgan Stanley Bitcoin Trust", 2103612),
+    # Hashdex Bitcoin ETF — отчитывается как Hashdex Commodities Trust; в
+    # отчётах только стоимость монет (CryptoAssetFairValue).
+    ("DEFI", "Hashdex Bitcoin ETF", 1985840),
 )
 # Поля фонда: число монет (с единицами) и стоимость монет в долларах — по
 # порядку предпочтения; комиссия — доля в год.

@@ -581,6 +581,11 @@ export const fetchEtf = () =>
       return v;
     }), good);
 export const peekEtf = () => peek<EtfReply | null>("/api/etf", ETF_TTL_MS) ?? savedEtf();
+/** Алерт о крупном дне ETF: включён ли и с какого потока за день, $. */
+export type EtfWatchReply = { ok: boolean; on?: boolean; min?: number; error?: string };
+export const etfWatch = () => call<EtfWatchReply>("/api/etfwatch");
+export const etfWatchSet = (on: boolean, lang: string) =>
+  call<EtfWatchReply>("/api/etfwatch", { method: "POST", body: { on, lang } });
 
 /* Халвинг: блок раз в десять минут — ответ живёт пять, последний лежит на
    устройстве, и отсчёт в меню виден сразу, даже без сети. */

@@ -389,6 +389,44 @@ class EtfTest(unittest.TestCase):
         self.assertNotIn("запас:", err.getvalue())
         self.assertGreater(btc["share"], 0)
 
+    def test_new_fund_in_tftc_is_reported_once(self):
+        # Фонд есть в наборе, а в списке фондов SEC — нет: потоки на месте,
+        # а в журнал и владельцу — один раз на тикер, не на каждую сборку.
+        tftc = json.loads(json.dumps(TFTC))
+        tftc["days"][-1]["perEtfUsd"]["XBTC"] = 7e6
+        net = Net(**{"tftc.io/bitcoin-etf-flows/data.json": tftc})
+        told = []
+        etf.set_new_fund_hook(told.append)
+        self.addCleanup(etf.set_new_fund_hook, None)
+        err = io.StringIO()
+        with mock.patch.object(etf, "_fetch", net.fetch), mock.patch.object(etf, "_now", lambda: NOW), \
+                mock.patch("sys.stderr", err):
+            first = etf.build()
+            etf.build()
+        self.assertIn("XBTC", [f["t"] for f in first["coins"]["btc"]["funds"]])
+        self.assertEqual(told, ["XBTC"])
+        self.assertEqual(err.getvalue().count("новый фонд в наборе TFTC: XBTC"), 1)
+        # Сломанный получатель сборку не роняет.
+        etf._st = etf._State()
+        etf.set_new_fund_hook(lambda t: 1 / 0)
+        err = io.StringIO()
+        with mock.patch.object(etf, "_fetch", net.fetch), mock.patch.object(etf, "_now", lambda: NOW), \
+                mock.patch("sys.stderr", err):
+            self.assertTrue(etf.build()["ok"])
+        self.assertIn("сообщение о новом фонде: ZeroDivisionError", err.getvalue())
+
+    def test_known_funds_are_not_reported(self):
+        told = []
+        etf.set_new_fund_hook(told.append)
+        self.addCleanup(etf.set_new_fund_hook, None)
+        self.build()
+        self.assertEqual(told, [])
+        # Все фонды настоящего набора — в списке фондов SEC (DEFI — Hashdex).
+        with open(os.path.join(ROOT, "tests", "fixtures", "etf.json"), encoding="utf-8") as f:
+            real = json.load(f)
+        known = {t for t, _, _ in etf.wt_treasury.ETFS}
+        self.assertEqual([f["t"] for f in real["coins"]["btc"]["funds"] if f["t"] not in known], [])
+
     def test_implausible_latest_report_falls_back_to_the_previous_quarter(self):
         # Последний отчёт IBIT — 9 млн BTC (такого запаса нет): запас — от
         # прошлого квартала плюс потоки после него, а не ноль.
