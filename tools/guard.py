@@ -841,10 +841,11 @@ say("старых алертов по ETF (по фондам, wt_etfalert) не�
     and "etfAlert" not in read(f"{APP}/src/lib/api.ts") and "wt-etfa" not in read(f"{APP}/src/lib/storage.ts")
     and '(lambda: DB, ("etf_alert_subs", "etf_alert_sent", "etf_alert_state"))' in api and "    old_tables_drop()\n" in api
     and ".ef-bell" not in read(f"{APP}/src/styles/app.css") and "wt_etfalert" not in read(f"{APP}/.github/workflows/tests.yml"))
-say("ETF: алерт о крупном дне — по желанию, только с Премиумом, порог $500 млн, один день — одна рассылка, свежий день, в каждом сообщении источник TFTC и лицензия",
+say("ETF: алерт о крупном дне — по желанию, только с Премиумом, порог $500 млн, один день — одна рассылка, свежий и устоявшийся день (3 ч без изменений), в каждом сообщении источник TFTC и лицензия",
     "ETFD_MIN = 500e6" in api and "def etfd_check() -> int:" in api and "INSERT OR IGNORE INTO etf_day_sent" in api
     and "if not chat_premium(chat):\n                continue" in api and "now() - ts > ETFD_FRESH" in api
     and 'if body.get("on") is True and not chat_premium(chat):' in api and "dgi.TFTC_BY_POST}\")" in api
+    and "ETFD_STABLE = 3 * 3600" in api and "if now() - seen[1] < ETFD_STABLE:" in api
     and "threading.Thread(target=etfd_loop, daemon=True).start()" in api and "<BigDayAlert lang={lang} />" in _ef
     and 'role="switch"' in _ef and "test_etf_day_alert.py" in read(f"{APP}/.github/workflows/tests.yml"))
 _wsb = read(os.path.join(BOT, "btc_chain.cpp"))

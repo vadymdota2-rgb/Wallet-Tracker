@@ -13638,8 +13638,14 @@ def pxa_check() -> int:
 # ETFD_FRESH): после перезапуска или долгого простоя старые дни не рассылаются.
 # Без Премиума подписка не удаляется, но сообщения нет (продлит — придут).
 # Сообщение трижды подряд не дошло (бот заблокирован) — подписка снимается.
+#
+# Неполный день: фонды отчитываются в разное время (IBIT — часто последним), и
+# TFTC может дописывать день по мере отчётов. Поэтому рассылка — только когда
+# цифры дня не менялись ETFD_STABLE (etf_day_seen): иначе сообщение ушло бы с
+# неполной суммой, а то и с крупным днём, которого в итоге не было.
 ETFD_MIN = 500e6
 ETFD_FRESH = 3 * 86400
+ETFD_STABLE = 3 * 3600
 ETFD_EVERY = 900
 ETFD_FAILS = 3
 ETFD_SCHEMA = """
@@ -13654,6 +13660,11 @@ CREATE TABLE IF NOT EXISTS etf_day_sent (
     v REAL NOT NULL,
     at INTEGER NOT NULL,
     n INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS etf_day_seen (
+    day INTEGER PRIMARY KEY,
+    k TEXT NOT NULL,
+    since INTEGER NOT NULL
 );
 """
 
@@ -13739,6 +13750,17 @@ def etfd_check() -> int:
     if not con:
         return 0
     try:
+        # Цифры дня (итог и крупнейшие фонды) с прошлого прохода изменились —
+        # день ещё дописывается: запомнить и ждать, пока не устоится.
+        k = json.dumps([round(v), top])
+        seen = con.execute("SELECT k, since FROM etf_day_seen WHERE day=?", (ts,)).fetchone()
+        if not seen or seen[0] != k:
+            con.execute("INSERT OR REPLACE INTO etf_day_seen(day, k, since) VALUES(?,?,?)", (ts, k, now()))
+            con.execute("DELETE FROM etf_day_seen WHERE day<?", (ts - ETFD_FRESH,))
+            con.commit()
+            return 0
+        if now() - seen[1] < ETFD_STABLE:
+            return 0
         # День помечается разосланным до рассылки: второй проход (или второй
         # процесс) его уже не возьмёт, даже если этот упадёт на середине.
         cur = con.execute("INSERT OR IGNORE INTO etf_day_sent(day, v, at) VALUES(?,?,?)", (ts, v, now()))

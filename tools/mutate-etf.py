@@ -137,6 +137,8 @@ AL = [
     (" and (x > 0) == (v > 0)]", "]", "алерт: фонды в ту же сторону"),
     ("    per.sort(key=lambda p: -abs(p[1]))\n", "", "алерт: самые крупные фонды первыми"),
     ("return ts, v, per[:3]", "return ts, v, per", "алерт: не больше трёх фондов"),
+    ("if not seen or seen[0] != k:", "if not seen:", "алерт: дописанный день — ждать заново"),
+    ("        if now() - seen[1] < ETFD_STABLE:\n            return 0\n", "", "алерт: только устоявшийся день"),
     ("        if cur.rowcount == 0:\n            return 0\n", "", "алерт: один день — одна рассылка"),
     ("            if not chat_premium(chat):\n                continue\n", "", "алерт: только с Премиумом"),
     ('lines.append(f"{dgi.tr(lang, \'dg_etf_by\')} {dgi.TFTC_BY_POST}")', "pass", "алерт: источник и лицензия TFTC"),

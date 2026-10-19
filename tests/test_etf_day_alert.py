@@ -4,7 +4,8 @@
 биткоин-ETF за день купят или продадут на $500 млн и больше, подписанным с
 Премиумом уходит сообщение в Telegram — на их языке и с подписью источника
 (TFTC, CC BY 4.0, адрес лицензии). Один день — одна рассылка, только свежий
-день. Telegram и Премиум подменены, база — временная.
+день и только когда его цифры устоялись (фонды отчитываются в разное время).
+Telegram и Премиум подменены, база — временная.
 """
 import os
 import sys
@@ -35,11 +36,12 @@ class EtfDayAlertTest(unittest.TestCase):
         self.sent: list = []
         self.premium = {"1", "2", "3"}
         self.fail: set = set()
+        self.t = NOW
 
         def tg(method, data, timeout=15.0):
             self.sent.append((data["chat_id"], data["text"]))
             return None if data["chat_id"] in self.fail else {"ok": True}
-        for name, val in (("DB", self.db), ("now", lambda: NOW), ("tg_api", tg),
+        for name, val in (("DB", self.db), ("now", lambda: self.t), ("tg_api", tg),
                           ("chat_premium", lambda chat: chat in self.premium)):
             p = mock.patch.object(api, name, val)
             p.start()
@@ -48,6 +50,12 @@ class EtfDayAlertTest(unittest.TestCase):
         p = mock.patch.object(api, "etf_data", lambda: self.rep)
         p.start()
         self.addCleanup(p.stop)
+
+    def check(self) -> int:
+        """Проход, в котором день впервые увиден, и проход после ETFD_STABLE."""
+        self.assertEqual(api.etfd_check(), 0)
+        self.t += api.ETFD_STABLE
+        return api.etfd_check()
 
     # ── Переключатель ────────────────────────────────────────────────────
 
@@ -61,7 +69,7 @@ class EtfDayAlertTest(unittest.TestCase):
         for bad in ({"on": 1}, {"on": "true"}, {}, {"on": None}):
             self.assertEqual(api.etfd_set("1", bad), {"ok": False, "error": "bad_args"}, bad)
         api.etfd_set("2", {"on": True, "lang": "<script>"})
-        api.etfd_check()
+        self.check()
         self.assertTrue(self.sent[-1][1].startswith("🏦 Big inflow into bitcoin ETFs"))
 
     # ── Какой день — крупный ─────────────────────────────────────────────
@@ -98,7 +106,7 @@ class EtfDayAlertTest(unittest.TestCase):
         api.etfd_set("1", {"on": True, "lang": "ru"})
         api.etfd_set("2", {"on": True, "lang": "en"})
         api.etfd_set("9", {"on": True, "lang": "en"})  # без Премиума
-        self.assertEqual(api.etfd_check(), 2)
+        self.assertEqual(self.check(), 2)
         texts = dict(self.sent)
         self.assertEqual(sorted(texts), ["1", "2"])
         ru = texts["1"]
@@ -122,7 +130,7 @@ class EtfDayAlertTest(unittest.TestCase):
         for i in range(api.ETFD_FAILS):
             self.rep = reply(900_000, [900_000, None, None, None], day=DAY + i * 86_400)
             self.assertTrue(api.etfd_get("3")["on"], i)
-            api.etfd_check()
+            self.check()
         self.assertFalse(api.etfd_get("3")["on"])
 
     def test_delivery_resets_the_failure_count(self):
@@ -130,7 +138,7 @@ class EtfDayAlertTest(unittest.TestCase):
         for i, broken in enumerate((True, True, False, True, True)):
             self.fail = {"3"} if broken else set()
             self.rep = reply(900_000, [900_000, None, None, None], day=DAY + i * 86_400)
-            api.etfd_check()
+            self.check()
         self.assertTrue(api.etfd_get("3")["on"])
 
     def test_turning_back_on_clears_failures(self):
@@ -138,11 +146,47 @@ class EtfDayAlertTest(unittest.TestCase):
         self.fail = {"3"}
         for i in range(api.ETFD_FAILS - 1):
             self.rep = reply(900_000, [900_000, None, None, None], day=DAY + i * 86_400)
-            api.etfd_check()
+            self.check()
         api.etfd_set("3", {"on": True, "lang": "en"})
         self.rep = reply(900_000, [900_000, None, None, None], day=DAY + 5 * 86_400)
-        api.etfd_check()
+        self.check()
         self.assertTrue(api.etfd_get("3")["on"])
+
+    # ── Неполный день ────────────────────────────────────────────────────
+
+    def test_waits_until_the_day_settles(self):
+        api.etfd_set("1", {"on": True, "lang": "en"})
+        self.assertEqual(api.etfd_check(), 0)
+        self.t += api.ETFD_STABLE - 1
+        self.assertEqual(api.etfd_check(), 0)
+        self.assertEqual(self.sent, [])
+        self.t += 1
+        self.assertEqual(api.etfd_check(), 1)
+
+    def test_late_fund_restarts_the_wait_and_the_message_has_the_full_day(self):
+        api.etfd_set("1", {"on": True, "lang": "en"})
+        self.rep = reply(600_000, [None, 400_000, None, 200_000])
+        api.etfd_check()
+        # Через два часа отчитался IBIT: итог другой — ждём заново.
+        self.t += 2 * 3600
+        self.rep = reply(1_000_000, [400_000, 400_000, None, 200_000])
+        self.assertEqual(api.etfd_check(), 0)
+        self.t += api.ETFD_STABLE - 1
+        self.assertEqual(api.etfd_check(), 0)
+        self.t += 1
+        self.assertEqual(api.etfd_check(), 1)
+        self.assertIn("+$1B", self.sent[0][1])
+
+    def test_day_that_shrank_below_the_threshold_is_never_sent(self):
+        api.etfd_set("1", {"on": True, "lang": "en"})
+        self.rep = reply(600_000, [None, 600_000, None, None])
+        api.etfd_check()
+        # IBIT принёс отток: итог дня меньше порога — крупного дня не было.
+        self.rep = reply(200_000, [-400_000, 600_000, None, None])
+        for _ in range(3):
+            self.t += api.ETFD_STABLE
+            self.assertEqual(api.etfd_check(), 0)
+        self.assertEqual(self.sent, [])
 
     def test_outflow_text(self):
         self.rep = reply(-650_000, [-500_000, None, -150_000, None])
