@@ -26982,9 +26982,9 @@
     "ar": "رسالة في Telegram عندما تشتري الصناديق أو تبيع بيتكوين بقيمة $500M أو أكثر في يوم واحد. يحدث ذلك بضع مرات في الشهر. تصل بعد بضع ساعات من نتائج اليوم، عندما تكون جميع الصناديق قد أعلنت أرقامها."
   },
   "ef_al_in": {
-    "ru": "🏦 Крупный приток в биткоин-ETF: {v} за {d}.",
+    "ru": "🏦 Крупный приток в биткоин-ETF: {v} за {d}",
     "en": "🏦 Big inflow into bitcoin ETFs: {v} on {d}.",
-    "uk": "🏦 Великий приплив у біткоїн-ETF: {v} за {d}.",
+    "uk": "🏦 Великий приплив у біткоїн-ETF: {v} за {d}",
     "pl": "🏦 Duży napływ do ETF-ów na bitcoina: {v} w dniu {d}.",
     "de": "🏦 Großer Zufluss in Bitcoin-ETFs: {v} am {d}.",
     "fr": "🏦 Forte entrée dans les ETF bitcoin : {v} le {d}.",
@@ -27000,9 +27000,9 @@
     "ar": "🏦 تدفّق كبير إلى صناديق بيتكوين ETF: {v} في {d}."
   },
   "ef_al_out": {
-    "ru": "🏦 Крупный отток из биткоин-ETF: {v} за {d}.",
+    "ru": "🏦 Крупный отток из биткоин-ETF: {v} за {d}",
     "en": "🏦 Big outflow from bitcoin ETFs: {v} on {d}.",
-    "uk": "🏦 Великий відплив із біткоїн-ETF: {v} за {d}.",
+    "uk": "🏦 Великий відплив із біткоїн-ETF: {v} за {d}",
     "pl": "🏦 Duży odpływ z ETF-ów na bitcoina: {v} w dniu {d}.",
     "de": "🏦 Großer Abfluss aus Bitcoin-ETFs: {v} am {d}.",
     "fr": "🏦 Forte sortie des ETF bitcoin : {v} le {d}.",

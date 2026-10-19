@@ -9993,11 +9993,26 @@ _DISK: dict[int, str] = {}
 etf.set_cache_file(os.path.join(CACHE_DIR, "etf.json"))
 # Новый фонд в наборе TFTC, которого нет в списке фондов SEC, — владельцу:
 # потоки его видны сразу, а имя, комиссию и запас даст только строка в
-# wt_treasury.ETFS (тикер, имя, CIK в SEC).
-etf.set_new_fund_hook(lambda t: tg_api("sendMessage", {
-    "chat_id": OWNER_CHAT_ID,
-    "text": f"🆕 ETF: в наборе TFTC новый фонд {t}. Его нет в списке фондов SEC (wt_treasury.ETFS): "
-            f"потоки видны, а имени, комиссии и запаса не будет, пока его не добавить (тикер, имя, CIK в SEC)."}))
+# wt_treasury.ETFS (тикер, имя, CIK в SEC). Один раз на тикер — и после
+# перезапуска тоже (etf_new_funds): иначе каждый выкат повторял бы сообщение.
+def etf_new_fund(t: str) -> None:
+    con = open_db(DB, write=True)
+    if con:
+        try:
+            con.execute("CREATE TABLE IF NOT EXISTS etf_new_funds (t TEXT PRIMARY KEY, at INTEGER NOT NULL)")
+            fresh = con.execute("INSERT OR IGNORE INTO etf_new_funds(t, at) VALUES(?,?)", (t, now())).rowcount == 1
+            con.commit()
+        finally:
+            con.close()
+        if not fresh:
+            return
+    tg_api("sendMessage", {
+        "chat_id": OWNER_CHAT_ID,
+        "text": f"🆕 ETF: в наборе TFTC новый фонд {t}. Его нет в списке фондов SEC (wt_treasury.ETFS): "
+                f"потоки видны, а имени, комиссии и запаса не будет, пока его не добавить (тикер, имя, CIK в SEC)."})
+
+
+etf.set_new_fund_hook(etf_new_fund)
 treasury.set_cache_dir(CACHE_DIR)
 
 
@@ -13634,10 +13649,18 @@ def pxa_check() -> int:
 # подписью источника (цифры — из набора TFTC, CC BY 4.0: источник и ссылка на
 # лицензию нужны и здесь). Такие дни бывают несколько раз в месяц — не спам.
 #
-# Один день — одна рассылка (etf_day_sent). Только свежий день (не старше
-# ETFD_FRESH): после перезапуска или долгого простоя старые дни не рассылаются.
+# Один день — одно сообщение человеку: у подписки свой последний полученный
+# день (last_day). Только свежий день (не старше ETFD_FRESH): после
+# перезапуска или долгого простоя старые дни не рассылаются. Включил алерт
+# после того, как день уже разослан (etf_day_sent), — этот день не придёт.
 # Без Премиума подписка не удаляется, но сообщения нет (продлит — придут).
-# Сообщение трижды подряд не дошло (бот заблокирован) — подписка снимается.
+#
+# Доставка (etfd_send): сбой по пути — сеть, лимит Telegram, Telegram прилёг —
+# не вина человека: попробуем на следующем проходе, пока день свежий. Три
+# сбоя подряд — Telegram недоступен, проход прерывается. Отписка — только
+# когда Telegram ответил, что человека нет: заблокировал бота или удалил
+# аккаунт (ETFD_FAILS раз подряд). Каждая запись в базу — сразу и коротко:
+# база не держится запертой, пока идут сообщения.
 #
 # Неполный день: фонды отчитываются в разное время (IBIT — часто последним), и
 # TFTC может дописывать день по мере отчётов. Поэтому рассылка — только когда
@@ -13653,7 +13676,8 @@ CREATE TABLE IF NOT EXISTS etf_day_subs (
     chat_id TEXT PRIMARY KEY,
     lang TEXT NOT NULL DEFAULT 'en',
     at INTEGER NOT NULL,
-    fails INTEGER NOT NULL DEFAULT 0
+    fails INTEGER NOT NULL DEFAULT 0,
+    last_day INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS etf_day_sent (
     day INTEGER PRIMARY KEY,
@@ -13673,6 +13697,12 @@ def _etfd_con():
     con = open_db(DB, write=True)
     if con:
         con.executescript(ETFD_SCHEMA)
+        # Таблица из первой версии алерта — без last_day: уже разосланный день
+        # прежним подписчикам повторно не шлём.
+        if "last_day" not in cols(con, "etf_day_subs"):
+            con.execute("ALTER TABLE etf_day_subs ADD COLUMN last_day INTEGER NOT NULL DEFAULT 0")
+            con.execute("UPDATE etf_day_subs SET last_day=(SELECT COALESCE(MAX(day), 0) FROM etf_day_sent)")
+            con.commit()
     return con
 
 
@@ -13700,8 +13730,10 @@ def etfd_set(chat: str, body: dict) -> dict:
         return {"ok": False, "error": "db"}
     try:
         if on:
-            con.execute("INSERT INTO etf_day_subs(chat_id, lang, at) VALUES(?,?,?) "
-                        "ON CONFLICT(chat_id) DO UPDATE SET lang=excluded.lang, fails=0", (chat, lang, now()))
+            # Уже разосланный день новому подписчику не шлём: он его видит на экране.
+            last = con.execute("SELECT COALESCE(MAX(day), 0) FROM etf_day_sent").fetchone()[0]
+            con.execute("INSERT INTO etf_day_subs(chat_id, lang, at, last_day) VALUES(?,?,?,?) "
+                        "ON CONFLICT(chat_id) DO UPDATE SET lang=excluded.lang, fails=0", (chat, lang, now(), last))
         else:
             con.execute("DELETE FROM etf_day_subs WHERE chat_id=?", (chat,))
         con.commit()
@@ -13713,7 +13745,7 @@ def etfd_set(chat: str, body: dict) -> dict:
 def etfd_text(lang: str, day: int, v: float, top: list) -> str:
     """Текст алерта: итог дня, крупнейшие фонды в ту же сторону, источник
     (TFTC — с адресом лицензии) и где выключить."""
-    head = dgi.tr(lang, "ef_al_in" if v > 0 else "ef_al_out", v=dgi.usd(v, lang, True), d=dgi.date_word(lang, day))
+    head = dgi.tr(lang, "ef_al_in" if v > 0 else "ef_al_out", v=dgi.usd(v, lang, True), d=dgi.date_long(lang, day))
     lines = [head]
     if top:
         lines.append(dgi.tr(lang, "ef_al_top", f=", ".join(f"{t} {dgi.usd(x, lang, True)}" for t, x in top)))
@@ -13721,6 +13753,43 @@ def etfd_text(lang: str, day: int, v: float, top: list) -> str:
     # Имя экрана — из словаря того же языка: совпадёт с тем, что человек видит в меню.
     lines.append(dgi.tr(lang, "ef_al_stop", s=dgi.tr(lang, "ef_title")))
     return "\n\n".join(lines)
+
+
+def etfd_send(chat: str, text: str) -> bool | None:
+    """Одно сообщение алерта. True — дошло; False — человека нет (Telegram
+    ответил 403: бот заблокирован, аккаунт удалён — или «chat not found»);
+    None — сбой по пути (сеть, лимит, ошибка Telegram): человек ни при чём."""
+    if not BOT_TOKEN:
+        return None
+    req = urllib.request.Request(
+        f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
+        data=json.dumps({"chat_id": chat, "text": text, "disable_web_page_preview": True}).encode(),
+        headers={"Content-Type": "application/json"})
+    for attempt in range(2):
+        try:
+            with urllib.request.urlopen(req, timeout=15) as r:
+                out = json.loads(r.read().decode())
+            return True if isinstance(out, dict) and out.get("ok") else None
+        except urllib.error.HTTPError as e:
+            try:
+                err = json.loads(e.read().decode())
+            except (ValueError, OSError):
+                err = {}
+            err = err if isinstance(err, dict) else {}
+            desc = str(err.get("description") or "")[:200]
+            sys.stderr.write(f"[api] etf day alert {e.code}: {desc}\n")
+            if e.code == 403 or (e.code == 400 and "chat not found" in desc.lower()):
+                return False
+            par = err.get("parameters")
+            wait = par.get("retry_after") if isinstance(par, dict) else None
+            if e.code == 429 and attempt == 0 and isinstance(wait, int) and 0 < wait <= 30:
+                time.sleep(wait)
+                continue
+            return None
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
+            sys.stderr.write(f"[api] etf day alert: {e}\n")
+            return None
+    return None
 
 
 def etfd_day() -> tuple | None:
@@ -13761,28 +13830,31 @@ def etfd_check() -> int:
             return 0
         if now() - seen[1] < ETFD_STABLE:
             return 0
-        # День помечается разосланным до рассылки: второй проход (или второй
-        # процесс) его уже не возьмёт, даже если этот упадёт на середине.
-        cur = con.execute("INSERT OR IGNORE INTO etf_day_sent(day, v, at) VALUES(?,?,?)", (ts, v, now()))
+        # День стал рассылаемым: с этой минуты включившие алерт его не получат.
+        con.execute("INSERT OR IGNORE INTO etf_day_sent(day, v, at) VALUES(?,?,?)", (ts, v, now()))
         con.commit()
-        if cur.rowcount == 0:
-            return 0
-        subs = con.execute("SELECT chat_id, lang FROM etf_day_subs").fetchall()
-        sent = 0
+        subs = con.execute("SELECT chat_id, lang FROM etf_day_subs WHERE last_day<? ORDER BY at", (ts,)).fetchall()
+        sent = down = 0
         texts: dict = {}
         for chat, lang in subs:
             if not chat_premium(chat):
                 continue
             text = texts.get(lang) or texts.setdefault(lang, etfd_text(lang, ts, v, top))
-            ok = tg_api("sendMessage", {"chat_id": chat, "text": text, "disable_web_page_preview": True}) is not None
+            ok = etfd_send(chat, text)
+            if ok is None:
+                down += 1
+                if down >= 3:
+                    break
+                continue
+            down = 0
             if ok:
                 sent += 1
-                con.execute("UPDATE etf_day_subs SET fails=0 WHERE chat_id=?", (chat,))
+                con.execute("UPDATE etf_day_subs SET last_day=?, fails=0 WHERE chat_id=?", (ts, chat))
+                con.execute("UPDATE etf_day_sent SET n=n+1 WHERE day=?", (ts,))
             else:
-                con.execute("UPDATE etf_day_subs SET fails=fails+1 WHERE chat_id=?", (chat,))
+                con.execute("UPDATE etf_day_subs SET last_day=?, fails=fails+1 WHERE chat_id=?", (ts, chat))
                 con.execute("DELETE FROM etf_day_subs WHERE chat_id=? AND fails>=?", (chat, ETFD_FAILS))
-        con.execute("UPDATE etf_day_sent SET n=? WHERE day=?", (sent, ts))
-        con.commit()
+            con.commit()
         return sent
     finally:
         con.close()

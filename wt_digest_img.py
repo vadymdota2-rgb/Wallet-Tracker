@@ -113,6 +113,15 @@ _MONTHS = {
     "ru": ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"],
     "uk": ["січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"],
     "en": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+    "de": ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"],
+    "fr": ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"],
+    "es": ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"],
+    "pt": ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"],
+    "pl": ["stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca", "lipca", "sierpnia", "września", "października", "listopada", "grudnia"],
+    "tr": ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"],
+    "id": ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"],
+    "hi": ["जनवरी", "फ़रवरी", "मार्च", "अप्रैल", "मई", "जून", "जुलाई", "अगस्त", "सितंबर", "अक्टूबर", "नवंबर", "दिसंबर"],
+    "ar": ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"],
 }
 
 
@@ -123,6 +132,29 @@ def date_word(lang: str, ts: int) -> str:
     if lang == "en":
         return f"{_MONTHS['en'][g.tm_mon - 1]} {g.tm_mday}, {g.tm_year}"
     return time.strftime("%Y-%m-%d", g)
+
+
+def date_long(lang: str, ts: int) -> str:
+    """Дата словами на любом из шестнадцати языков — для текста сообщений.
+    На картинке дайджеста остаётся date_word: там место под дату рассчитано."""
+    g = time.gmtime(ts)
+    d, m, y = g.tm_mday, g.tm_mon, g.tm_year
+    if lang in ("ru", "uk", "en"):
+        return date_word(lang, ts)
+    if lang in ("ja", "zh"):
+        return f"{y}年{m}月{d}日"
+    if lang == "ko":
+        return f"{y}년 {m}월 {d}일"
+    if lang == "vi":
+        return f"{d} tháng {m} năm {y}"
+    if lang not in _MONTHS:
+        return time.strftime("%Y-%m-%d", g)
+    name = _MONTHS[lang][m - 1]
+    if lang == "de":
+        return f"{d}. {name} {y}"
+    if lang in ("es", "pt"):
+        return f"{d} de {name} de {y}"
+    return f"{d} {name} {y}"
 
 
 # --- Выводы: копия DigestMore.tsx --------------------------------------------

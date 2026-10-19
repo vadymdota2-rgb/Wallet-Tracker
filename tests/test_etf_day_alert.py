@@ -7,10 +7,14 @@
 день и только когда его цифры устоялись (фонды отчитываются в разное время).
 Telegram и Премиум подменены, база — временная.
 """
+import io
+import json
 import os
+import sqlite3
 import sys
 import tempfile
 import unittest
+import urllib.error
 from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -35,13 +39,14 @@ class EtfDayAlertTest(unittest.TestCase):
         self.addCleanup(os.remove, self.db)
         self.sent: list = []
         self.premium = {"1", "2", "3"}
-        self.fail: set = set()
+        self.fail: set = set()  # Telegram: человека нет (бот заблокирован)
+        self.down: set = set()  # сбой по пути: сеть, лимит
         self.t = NOW
 
-        def tg(method, data, timeout=15.0):
-            self.sent.append((data["chat_id"], data["text"]))
-            return None if data["chat_id"] in self.fail else {"ok": True}
-        for name, val in (("DB", self.db), ("now", lambda: self.t), ("tg_api", tg),
+        def send(chat, text):
+            self.sent.append((chat, text))
+            return None if chat in self.down else chat not in self.fail
+        for name, val in (("DB", self.db), ("now", lambda: self.t), ("etfd_send", send),
                           ("chat_premium", lambda chat: chat in self.premium)):
             p = mock.patch.object(api, name, val)
             p.start()
@@ -110,7 +115,7 @@ class EtfDayAlertTest(unittest.TestCase):
         texts = dict(self.sent)
         self.assertEqual(sorted(texts), ["1", "2"])
         ru = texts["1"]
-        self.assertTrue(ru.startswith("🏦 Крупный приток в биткоин-ETF: +$1,23B за 16 октября 2026 г."))
+        self.assertTrue(ru.startswith("🏦 Крупный приток в биткоин-ETF: +$1,23B за 16 октября 2026 г.\n"))
         self.assertIn("Больше всех: IBIT +$800M, FBTC +$310M.", ru)
         # Условие CC BY 4.0: источник и адрес лицензии — в каждом сообщении.
         self.assertIn(dgi.TFTC_BY_POST, ru)
@@ -151,6 +156,78 @@ class EtfDayAlertTest(unittest.TestCase):
         self.rep = reply(900_000, [900_000, None, None, None], day=DAY + 5 * 86_400)
         self.check()
         self.assertTrue(api.etfd_get("3")["on"])
+
+    def test_network_failure_is_not_the_persons_fault_and_is_retried(self):
+        api.etfd_set("3", {"on": True, "lang": "en"})
+        self.down = {"3"}
+        for _ in range(api.ETFD_FAILS + 2):
+            self.check()
+        # Сколько бы раз ни лежала сеть — подписка на месте, сообщение не потеряно.
+        self.assertTrue(api.etfd_get("3")["on"])
+        self.down = set()
+        self.t += api.ETFD_EVERY
+        self.assertEqual(api.etfd_check(), 1)
+        # Дошло — больше этот день не шлём.
+        self.t += api.ETFD_EVERY
+        self.assertEqual(api.etfd_check(), 0)
+
+    def test_telegram_down_stops_the_pass(self):
+        for c in "12345":
+            self.premium.add(c)
+            api.etfd_set(c, {"on": True, "lang": "en"})
+            self.t += 1  # порядок рассылки — по времени включения
+        self.down = set("12345")
+        self.check()
+        self.assertEqual([c for c, _ in self.sent], ["1", "2", "3"])
+        # Telegram ожил: следующий проход дошлёт всем, никого не отписав.
+        self.down = set()
+        self.sent = []
+        self.t += api.ETFD_EVERY
+        self.assertEqual(api.etfd_check(), 5)
+
+    def test_one_bad_chat_does_not_block_the_rest(self):
+        for c in "123":
+            api.etfd_set(c, {"on": True, "lang": "en"})
+            self.t += 1
+        self.down = {"1"}
+        self.assertEqual(self.check(), 2)
+
+    def test_scattered_failures_do_not_stop_the_pass(self):
+        # Сбой, доставка, два сбоя, доставка: три сбоя есть, но не подряд.
+        for c in "12345":
+            self.premium.add(c)
+            api.etfd_set(c, {"on": True, "lang": "en"})
+            self.t += 1
+        self.down = {"1", "3", "4"}
+        self.assertEqual(self.check(), 2)
+        self.assertEqual([c for c, _ in self.sent], list("12345"))
+
+    def test_turned_on_after_the_day_was_sent_gets_only_the_next_day(self):
+        api.etfd_set("1", {"on": True, "lang": "en"})
+        self.check()
+        api.etfd_set("2", {"on": True, "lang": "en"})
+        self.t += api.ETFD_EVERY
+        self.assertEqual(api.etfd_check(), 0)
+        self.assertEqual([c for c, _ in self.sent], ["1"])
+        self.rep = reply(-700_000, [-700_000, None, None, None], day=DAY + 86_400)
+        self.assertEqual(self.check(), 2)
+
+    def test_old_table_gets_last_day_and_old_subscribers_are_not_sent_again(self):
+        con = sqlite3.connect(self.db)
+        con.executescript("""
+            CREATE TABLE etf_day_subs (chat_id TEXT PRIMARY KEY, lang TEXT NOT NULL DEFAULT 'en',
+                                       at INTEGER NOT NULL, fails INTEGER NOT NULL DEFAULT 0);
+            CREATE TABLE etf_day_sent (day INTEGER PRIMARY KEY, v REAL NOT NULL, at INTEGER NOT NULL,
+                                       n INTEGER NOT NULL DEFAULT 0);
+        """)
+        con.execute("INSERT INTO etf_day_subs(chat_id, lang, at) VALUES('1', 'ru', 1)")
+        con.execute("INSERT INTO etf_day_sent(day, v, at, n) VALUES(?, 1.234e9, 1, 1)", (DAY,))
+        con.commit()
+        con.close()
+        self.assertEqual(self.check(), 0)
+        self.assertTrue(api.etfd_get("1")["on"])
+        self.rep = reply(900_000, [900_000, None, None, None], day=DAY + 86_400)
+        self.assertEqual(self.check(), 1)
 
     # ── Неполный день ────────────────────────────────────────────────────
 
@@ -204,6 +281,103 @@ class EtfDayAlertTest(unittest.TestCase):
             self.assertIn(dgi.tr(lang, "ef_title"), text, lang)
             self.assertIn(dgi.TFTC_BY_POST, text, lang)
             self.assertLess(len(text), 1000, lang)
+            # Дата — словами, без двух точек подряд («2026 г..»).
+            self.assertNotIn("..", text, lang)
+            self.assertNotIn("2026-10-16", text, lang)
+
+
+class NewFundTest(unittest.TestCase):
+    """Новый фонд в наборе TFTC — владельцу один раз, и после перезапуска тоже."""
+
+    def test_once_per_ticker_across_restarts(self):
+        fd, db = tempfile.mkstemp(suffix=".db")
+        os.close(fd)
+        self.addCleanup(os.remove, db)
+        sent: list = []
+        with mock.patch.object(api, "DB", db), \
+             mock.patch.object(api, "tg_api", lambda m, d, timeout=15.0: sent.append((d["chat_id"], d["text"]))):
+            api.etf_new_fund("NEWB")
+            api.etf_new_fund("NEWB")  # тот же тикер после перезапуска (память процесса пуста)
+            api.etf_new_fund("ABCD")
+        self.assertEqual([t for _, t in sent if "NEWB" in t], [sent[0][1]])
+        self.assertEqual(len(sent), 2)
+        self.assertEqual({c for c, _ in sent}, {api.OWNER_CHAT_ID})
+        self.assertIn("wt_treasury.ETFS", sent[0][1])
+
+    def test_without_database_still_tells(self):
+        sent: list = []
+        with mock.patch.object(api, "DB", "/nonexistent/x.db"), \
+             mock.patch.object(api, "tg_api", lambda m, d, timeout=15.0: sent.append(d)):
+            api.etf_new_fund("NEWB")
+        self.assertEqual(len(sent), 1)
+
+
+class EtfSendTest(unittest.TestCase):
+    """etfd_send: что считать «человека нет», а что — сбоем по пути."""
+
+    def setUp(self):
+        p = mock.patch.object(api, "BOT_TOKEN", "1:x")
+        p.start()
+        self.addCleanup(p.stop)
+        self.sleep = mock.patch.object(api.time, "sleep").start()
+        self.addCleanup(mock.patch.stopall)
+
+    @staticmethod
+    def http(code: int, body: dict) -> urllib.error.HTTPError:
+        return urllib.error.HTTPError("https://api.telegram.org", code, "x", None, io.BytesIO(json.dumps(body).encode()))
+
+    def answer(self, *replies):
+        def urlopen(req, timeout):
+            r = replies[min(self.n, len(replies) - 1)]
+            self.n += 1
+            if isinstance(r, Exception):
+                raise r
+            return io.BytesIO(json.dumps(r).encode())
+        self.n = 0
+        return mock.patch.object(api.urllib.request, "urlopen", urlopen)
+
+    def test_delivered(self):
+        with self.answer({"ok": True, "result": {}}):
+            self.assertIs(api.etfd_send("1", "hi"), True)
+
+    def test_blocked_or_deleted_is_gone(self):
+        for err in (self.http(403, {"ok": False, "description": "Forbidden: bot was blocked by the user"}),
+                    self.http(403, {"ok": False, "description": "Forbidden: user is deactivated"}),
+                    self.http(400, {"ok": False, "description": "Bad Request: chat not found"})):
+            with self.answer(err):
+                self.assertIs(api.etfd_send("1", "hi"), False, err)
+
+    def test_path_failures_are_not_the_persons_fault(self):
+        for err in (self.http(400, {"ok": False, "description": "Bad Request: message is too long"}),
+                    self.http(500, {"ok": False, "description": "Internal Server Error"}),
+                    self.http(502, "<html>"),  # nginx Telegram, не JSON
+                    urllib.error.URLError("down"), TimeoutError(), OSError("reset")):
+            with self.answer(err):
+                self.assertIsNone(api.etfd_send("1", "hi"), err)
+        with self.answer({"ok": False}):
+            self.assertIsNone(api.etfd_send("1", "hi"))
+        # Ждать — только по ответу «слишком часто» (429), не по любой ошибке.
+        with self.answer(self.http(500, {"ok": False, "parameters": {"retry_after": 3}}), {"ok": True}):
+            self.assertIsNone(api.etfd_send("1", "hi"))
+        self.sleep.assert_not_called()
+
+    def test_rate_limit_waits_once(self):
+        # Тело ответа читается один раз: на каждый вызов — своя ошибка.
+        def limit():
+            return self.http(429, {"ok": False, "parameters": {"retry_after": 3}})
+        with self.answer(limit(), {"ok": True}):
+            self.assertIs(api.etfd_send("1", "hi"), True)
+        self.sleep.assert_called_once_with(3)
+        # Второй раз лимит — сбой, а не бесконечное ожидание; огромное ожидание не ждём.
+        with self.answer(limit(), limit()):
+            self.assertIsNone(api.etfd_send("1", "hi"))
+        with self.answer(self.http(429, {"ok": False, "parameters": {"retry_after": 3600}}), {"ok": True}):
+            self.assertIsNone(api.etfd_send("1", "hi"))
+        self.assertEqual(self.sleep.call_count, 2)
+
+    def test_no_token(self):
+        with mock.patch.object(api, "BOT_TOKEN", ""):
+            self.assertIsNone(api.etfd_send("1", "hi"))
 
 
 if __name__ == "__main__":
