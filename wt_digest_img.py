@@ -33,6 +33,10 @@ BOT_AT = "@WalletTrackerAppBot"
 # Потоки ETF — открытый набор TFTC (CC BY 4.0): условие — подпись источника со
 # ссылкой и лицензией рядом с цифрами — на картинке и в подписи к посту.
 TFTC_BY = "TFTC — tftc.io/bitcoin-etf-flows (CC BY 4.0)"
+# В подписи к посту — со ссылкой на текст лицензии: CC BY 4.0 (п. 3(a)(1)(C))
+# требует не только название, но и адрес лицензии. На картинке ссылки не
+# нажимаются — там короткая строка, полная идёт в подписи к тому же посту.
+TFTC_BY_POST = "TFTC — https://www.tftc.io/bitcoin-etf-flows (CC BY 4.0: https://creativecommons.org/licenses/by/4.0/)"
 
 _I18N: dict = {}
 
@@ -353,7 +357,7 @@ def caption(it: dict, lang: str = "ru") -> str:
     if ls:
         parts.append("\n".join(("▲ " if t == "up" else "▼ " if t == "dn" else "• ") + s for s, t in ls))
     if (it.get("inst") or {}).get("etf"):
-        parts.append(f"{tr(lang, 'dg_etf_by')} {TFTC_BY}")
+        parts.append(f"{tr(lang, 'dg_etf_by')} {TFTC_BY_POST}")
     parts.append(BOT_AT)
     out = "\n\n".join(parts)
     # Подпись к фото в Telegram — до 1024 знаков: лишние выводы отрезаем.
@@ -644,15 +648,18 @@ def _page_pos(it: dict, lang: str, n: int, total: int) -> bytes | None:
 
 
 def _page_flows(it: dict, lang: str, n: int, total: int) -> bytes | None:
-    """Киты и потоки: ETF и премия Coinbase, биткоин на биржах, NetFlow и
-    крупные сделки на BSC."""
+    """Киты и потоки: потоки ETF (с датой отчётного дня), биткоин на биржах,
+    NetFlow и крупные сделки на BSC."""
     p = _Page(it, lang, tr(lang, "dg_p_whales3"), n, total)
     has = False
     inst = it.get("inst") or {}
     if inst.get("etf") and p.section(tr(lang, "dg_p_inst")):
         has = True
         for e in [e for e in inst["etf"] if e.get("v")][:3]:
-            p.row(tr(lang, "dg_etf_coin", c=e["c"].upper()), usd(e["v"], lang, True), _col(e["v"]))
+            # День — подписью: в выходные выпуски повторяют пятничный поток, и
+            # без даты он выглядел бы как вчерашний.
+            p.row(tr(lang, "dg_etf_coin", c=e["c"].upper()), usd(e["v"], lang, True), _col(e["v"]),
+                  tr(lang, "dg_etf_day", d=date_word(lang, int(e["day"]))) if e.get("day") else "")
         p.note(f"{tr(lang, 'dg_etf_by')} {TFTC_BY}")
     b = it.get("btc") or {}
     if b.get("net") is not None and p.section(tr(lang, "btc_flow_title")):

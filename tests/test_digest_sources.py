@@ -30,9 +30,11 @@ class DigestSourcesTest(unittest.TestCase):
     def test_caption_names_tftc_with_link_and_license(self):
         for lang in ("ru", "en", "ar"):
             cap = dgi.caption(item(), lang)
-            self.assertIn(dgi.TFTC_BY, cap, lang)
-            self.assertIn("tftc.io/bitcoin-etf-flows", cap)
+            self.assertIn(dgi.TFTC_BY_POST, cap, lang)
+            self.assertIn("https://www.tftc.io/bitcoin-etf-flows", cap)
+            # CC BY 4.0, п. 3(a)(1)(C): название лицензии и её адрес.
             self.assertIn("CC BY 4.0", cap)
+            self.assertIn("https://creativecommons.org/licenses/by/4.0/", cap)
             self.assertLessEqual(len(cap), 1024)
         # Нет потоков ETF в выпуске — нет и подписи TFTC.
         self.assertNotIn("TFTC", dgi.caption(item(inst={}, sig=[]), "ru"))
@@ -43,13 +45,14 @@ class DigestSourcesTest(unittest.TestCase):
         with mock.patch.object(dgi, "lines", lambda it, lang: many):
             cap = dgi.caption(item(), "ru")
         self.assertLessEqual(len(cap), 1024)
-        self.assertIn(dgi.TFTC_BY, cap)
+        self.assertIn(dgi.TFTC_BY_POST, cap)
         self.assertTrue(cap.endswith(dgi.BOT_AT))
 
     def test_flows_page_shows_the_source_under_etf_rows(self):
         # Страница рисуется через _Page; здесь — запись её вызовов (рисовать
         # Pillow в CI нечем): под строками ETF — строка источника.
         calls = []
+        subs = {}
 
         class Page:
             y = 0
@@ -61,8 +64,9 @@ class DigestSourcesTest(unittest.TestCase):
                 calls.append(("section", title))
                 return True
 
-            def row(self, label, *a, **k):
+            def row(self, label, value="", color=None, sub="", arrow=None):
                 calls.append(("row", label))
+                subs[label] = sub
                 return True
 
             def note(self, s):
@@ -77,6 +81,10 @@ class DigestSourcesTest(unittest.TestCase):
         note = ("note", f"{dgi.tr('ru', 'dg_etf_by')} {dgi.TFTC_BY}")
         self.assertIn(note, calls)
         self.assertEqual(calls[calls.index(note) - 1], ("row", dgi.tr("ru", "dg_etf_coin", c="BTC")))
+        # Отчётный день подписан под строкой ETF: в выходные выпуски повторяют
+        # пятничный поток, и без даты он читался бы как вчерашний.
+        self.assertEqual(subs[dgi.tr("ru", "dg_etf_coin", c="BTC")], dgi.tr("ru", "dg_etf_day", d=dgi.date_word("ru", DAY)))
+        self.assertIn("2026", subs[dgi.tr("ru", "dg_etf_coin", c="BTC")])
 
     @unittest.skipUnless(dgi.Image is not None, "нужен Pillow")
     def test_note_is_drawn(self):
@@ -92,3 +100,28 @@ class DigestSourcesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DigestEtfDayTest(unittest.TestCase):
+    """Дайджест берёт поток ETF только свежего дня: набор TFTC не обновлялся
+    дольше STALE_DAYS суток — раздела ETF в выпуске нет, а не старый день."""
+
+    def inst(self, age_days):
+        import whale_api as api
+        import wt_etf as etf
+        last = DAY - DAY % 86_400
+        rep = {"ok": True, "coins": {"btc": {"funds": [{"t": "IBIT"}, {"t": "FBTC"}],
+                                             "days": [[last, 5060, 61.6, 82_000, [4000, -1000]]]}}}
+        with mock.patch.object(api, "etf_data", lambda: rep), mock.patch.object(api, "now", lambda: last + age_days * 86_400 + 3600):
+            return api._dg_inst(), etf.STALE_DAYS
+
+    def test_fresh_day_is_taken(self):
+        got, _ = self.inst(1)
+        self.assertEqual(got["etf"], [{"c": "btc", "day": DAY - DAY % 86_400, "v": 5_060_000, "n": 61.6}])
+        self.assertEqual(got["top"], [{"t": "IBIT", "v": 4_000_000}])
+        self.assertEqual(got["bot"], [{"t": "FBTC", "v": -1_000_000}])
+
+    def test_long_weekend_is_still_fresh_but_a_stale_dataset_is_dropped(self):
+        _, stale = self.inst(0)
+        self.assertTrue(self.inst(stale)[0]["etf"])
+        self.assertEqual(self.inst(stale + 1)[0], {"etf": []})

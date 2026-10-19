@@ -178,8 +178,9 @@ button.ef-f { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) auto 12px; 
 /* Высокая контрастность (Windows): полосы и столбцы — своими цветами, а не
    цветом текста, иначе приток и отток не различить; фокус — системным. */
 @media (forced-colors: active) {
-  .ef-f-fill, .ef-mine-bar i, .ef-dot, .fg-svg { forced-color-adjust: none; }
+  .ef-f-fill, .ef-mine-bar i, .ef-dot, .fg-svg, .ef-fd-svg { forced-color-adjust: none; }
   .ef-f-mid { forced-color-adjust: none; background: CanvasText; }
   .ef-mine-bar { border: 1px solid CanvasText; }
-  .ef-plot:focus-visible { outline-color: Highlight; }
+  .ef-plot:focus-visible, button.ef-f:focus-visible { outline-color: Highlight; }
+  .ef-f-chev { border-color: CanvasText; }
 }

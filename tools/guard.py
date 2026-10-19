@@ -1396,7 +1396,8 @@ say("«Институциональные потоки»: подпись TFTC (C
     '"by": TFTC_BY' in _etfs and 'TFTC_BY = "TFTC — tftc.io/bitcoin-etf-flows (CC BY 4.0' in _etfs
     and 'TFTC_BY = "TFTC — tftc.io/bitcoin-etf-flows (CC BY 4.0)"' in _dgi
     and """p.note(f"{tr(lang, 'dg_etf_by')} {TFTC_BY}")""" in _dgi
-    and """parts.append(f"{tr(lang, 'dg_etf_by')} {TFTC_BY}")""" in _dgi and '"etf": " · TFTC"' in _dgi
+    and """parts.append(f"{tr(lang, 'dg_etf_by')} {TFTC_BY_POST}")""" in _dgi
+    and 'TFTC_BY_POST = "TFTC — https://www.tftc.io/bitcoin-etf-flows (CC BY 4.0: https://creativecommons.org/licenses/by/4.0/)"' in _dgi and '"etf": " · TFTC"' in _dgi
     and "openExternal(TFTC_URL)" in _dgm3 and "openExternal(CCBY_URL)" in _dgm3
     and 's.k === "etf" ? <small> · TFTC</small>' in _dgm3
     and '{t(lang, "legal_terms_data")}' in read(f"{APP}/src/screens/LegalScreen.tsx")

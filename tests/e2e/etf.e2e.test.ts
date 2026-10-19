@@ -494,6 +494,21 @@ describe("институциональные потоки", () => {
     await ctx.close();
   });
 
+  test("нет связи и копия двухнедельной давности: «не удалось обновить», а не «TFTC не обновлялся»", async () => {
+    // Копия с телефона — от образца; на часах — две недели спустя, сеть молчит.
+    const later = T + 14 * 86_400;
+    const saved = { all: { at: later * 1000 - 3600_000, v: REAL } };
+    const { ctx, page } = await open({ replies: [{ ok: false }], saved, clock: later, delay: 300 });
+    await ready(page);
+    // До ответа сервера предупреждения о наборе нет — копия ещё не проверена сетью.
+    assert.equal(await page.locator(".lq-stale").count(), 0);
+    const stale = page.locator(".lq-stale");
+    await stale.waitFor();
+    assert.equal(await stale.count(), 1);
+    assert.match(sp(await stale.innerText()), /^Не удалось обновить/);
+    await ctx.close();
+  });
+
   test("старый формат дополнений: потоки на месте, без держателей и CME", async () => {
     const old = { ...REAL, holders: { IBIT: 1 }, cme: { btc: [[1, 2]] }, cbp: { btc: { days: "x" } } };
     const { ctx, page, errors } = await open({ replies: [old] });
