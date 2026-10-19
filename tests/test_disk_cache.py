@@ -126,6 +126,23 @@ class EtfFileTest(unittest.TestCase):
         self.assertEqual(got["coins"], {"btc": {"funds": []}})
         self.assertEqual(calls, [1])  # свежий — в фоне
 
+    def test_disk_failure_is_logged_and_leaves_no_temp_file(self):
+        blocker = os.path.join(self.dir, "file")
+        with open(blocker, "w", encoding="utf-8") as f:
+            f.write("x")
+        etf.set_cache_file(os.path.join(blocker, "etf.json"))
+        err = io.StringIO()
+        with mock.patch("sys.stderr", err):
+            etf._file_save({"ok": True})
+        self.assertIn("etf: копия на диске:", err.getvalue())
+        self.assertEqual(sorted(os.listdir(self.dir)), ["file"])
+        # Не прочитать (это папка, а не файл) — копии нет, а не сбой.
+        etf.set_cache_file(self.dir)
+        self.assertIsNone(etf._file_load())
+        etf.set_cache_file(None)
+        etf._file_save({"ok": True})
+        self.assertIsNone(etf._file_load())
+
     def test_broken_or_old_file_is_ignored(self):
         path = os.path.join(self.dir, "etf.json")
         for body in ("{", json.dumps({"at": 0, "v": {"ok": True}}), json.dumps({"at": time.time(), "v": {"ok": False}})):

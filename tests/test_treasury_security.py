@@ -6,6 +6,8 @@ https, с подписью из окружения (почта — не в ко�
 роняет сборку — в худшем случае фонда или компании просто нет.
 """
 import ast
+import http.client
+import io
 import json
 import math
 import os
@@ -15,6 +17,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+import urllib.error
 from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -79,6 +82,49 @@ class PolicyTest(unittest.TestCase):
             with mock.patch.object(tr._opener, "open") as op, mock.patch.dict(os.environ, {"WT_SEC_UA": ua}):
                 self.assertIsNone(tr._fetch("https://data.sec.gov/x", 5), ua[:20])
                 op.assert_not_called()
+
+
+class NetDoorTest(unittest.TestCase):
+    """Сама дверь в сеть (_fetch через _opener): тесты сборки её подменяют."""
+
+    class Resp(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def setUp(self):
+        p = mock.patch.dict(os.environ, {"WT_SEC_UA": "wallet-tracker contact@example.org"})
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_body_limit_and_user_agent(self):
+        seen = []
+
+        def opener(req, timeout=0):
+            seen.append((req.get_header("User-agent"), req.get_header("Accept-encoding"), timeout))
+            return self.Resp(b"x" * (tr.BODY_MAX + 1))
+        with mock.patch.object(tr._opener, "open", opener):
+            self.assertIsNone(tr._fetch("https://data.sec.gov/x", 7))
+        # Подпись — из окружения, сжатие не просим (предел — по настоящим байтам).
+        self.assertEqual(seen, [("wallet-tracker contact@example.org", "identity", 7)])
+        with mock.patch.object(tr._opener, "open", lambda req, timeout=0: self.Resp(b"[1]")):
+            self.assertEqual(tr._fetch("https://data.sec.gov/x", 5), b"[1]")
+
+    def test_network_errors_are_none(self):
+        for exc in (OSError("down"), TimeoutError(), ValueError("bad"), http.client.IncompleteRead(b""),
+                    urllib.error.HTTPError("https://data.sec.gov/x", 429, "Too Many", {}, None)):
+            with mock.patch.object(tr._opener, "open", side_effect=exc):
+                self.assertIsNone(tr._fetch("https://data.sec.gov/x", 5), type(exc).__name__)
+
+    def test_redirect_is_not_followed(self):
+        h = next(h for h in tr._opener.handlers if type(h).__name__ == "_NoRedirect")
+        self.assertIsNone(h.redirect_request(None, None, 302, "Found", {}, "https://evil.example/"))
+
+    def test_infinity_and_nan_are_not_numbers(self):
+        for raw in (b'{"v": 1e999}', b'{"v": NaN}', b'{"v": -Infinity}', b"\xff\xfe", b"[" * 100_000):
+            self.assertIsNone(tr._parse(raw), raw[:20])
 
 
 def facts(r: random.Random) -> object:
@@ -182,6 +228,23 @@ class DiskCopyTest(unittest.TestCase):
         tr._file_save("sec_companies.json", rows)
         with mock.patch.dict(os.environ, {"WT_SEC_UA": ""}):
             self.assertEqual(tr.companies(), [["Strategy", "COMPANY", "US", "MSTR", 846_000.0, q2]])
+
+    def test_disk_failure_is_logged_and_leaves_no_temp_file(self):
+        # Папка копий — на месте файла (или без прав): записать нельзя. Сборка
+        # не падает, в журнале — строка, временного файла не остаётся.
+        blocker = os.path.join(self.dir, "file")
+        with open(blocker, "w", encoding="utf-8") as f:
+            f.write("x")
+        tr.set_cache_dir(os.path.join(blocker, "sub"))
+        err = io.StringIO()
+        with mock.patch("sys.stderr", err):
+            tr._file_save("sec_funds.json", {"IBIT": {"q": {}}})
+        self.assertIn("treasury: копия на диске:", err.getvalue())
+        self.assertEqual(sorted(os.listdir(self.dir)), ["file"])
+        # Без папки копий — ни записи, ни чтения.
+        tr.set_cache_dir(None)
+        tr._file_save("sec_funds.json", {"IBIT": {"q": {}}})
+        self.assertIsNone(tr._file_load("sec_funds.json"))
 
     def test_broken_copy_files_are_ignored(self):
         # Битый JSON, бесконечности (их JSON-разбор не пускает), не тот вид.

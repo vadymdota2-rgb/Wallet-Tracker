@@ -206,7 +206,8 @@ export function CmeSection({ rows, sym, price, lang }: { rows: number[][]; sym: 
   };
   return (
     <>
-      <SectionTitle help={["ef_how_6"]}>{t(lang, "ef_cme_title")}</SectionTitle>
+      {/* Карточка — из слов «лонг», «шорт», «открытый интерес»: их объяснение — тут же. */}
+      <SectionTitle help={["ef_how_6", "q_ls_1", "oih_how_1"]}>{t(lang, "ef_cme_title")}</SectionTitle>
       <Card>
         <p className="ef-h-lead">
           {/* Дата — целиком, без «2026 / г.» на отдельной строке. */}

@@ -368,6 +368,27 @@ class EtfTest(unittest.TestCase):
             self.assertFalse(etf._busy.is_set())
             self.assertEqual(calls, [1])
 
+    def test_sec_junk_shape_keeps_flows(self):
+        # SEC (или его копия) отдал не словарь фондов: потоки на месте, запасов нет.
+        for junk in ([["IBIT"]], "мусор", None, 5):
+            self.sec(junk)
+            btc = self.build()["coins"]["btc"]
+            self.assertEqual([f["t"] for f in btc["funds"]], ["IBIT", "BITB"], junk)
+            self.assertTrue(all(f["hold"] == 0 and f["aum"] == 0 for f in btc["funds"]))
+
+    def test_no_sec_holdings_with_fresh_total_is_not_logged_as_a_mismatch(self):
+        # Отчётов SEC нет вовсе, а сводка TFTC свежая: активы — по сводке,
+        # и «свой 0 BTC против сводки» в журнал не идёт (это не расхождение).
+        self.sec({})
+        tftc = json.loads(json.dumps(TFTC))
+        tftc["days"][-1]["totalNetAssetsUsd"] = 80e9
+        err = io.StringIO()
+        with mock.patch.object(etf, "_fetch", Net(**{"tftc.io/bitcoin-etf-flows/data.json": tftc}).fetch), \
+                mock.patch.object(etf, "_now", lambda: NOW), mock.patch("sys.stderr", err):
+            btc = etf.build()["coins"]["btc"]
+        self.assertNotIn("запас:", err.getvalue())
+        self.assertGreater(btc["share"], 0)
+
     def test_implausible_latest_report_falls_back_to_the_previous_quarter(self):
         # Последний отчёт IBIT — 9 млн BTC (такого запаса нет): запас — от
         # прошлого квартала плюс потоки после него, а не ноль.

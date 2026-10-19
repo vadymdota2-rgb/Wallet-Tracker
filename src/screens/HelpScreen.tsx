@@ -52,9 +52,10 @@ const GUIDE: { ic: ReactNode; title: Key; sub: Key; body: Key }[] = [
 ];
 
 /** Словарь терминов: те же абзацы, что в подсказках «?» на экранах, —
- *  объяснение одно, где бы человек его ни открыл. NetFlow — термин, его
- *  не переводят, поэтому заголовок без ключа словаря. */
-const TERMS: { title: Key | "NetFlow"; body: Key[] }[] = [
+ *  объяснение одно, где бы человек его ни открыл. NetFlow и ETF — термины,
+ *  их не переводят, поэтому заголовок без ключа словаря. */
+const TERMS: { title: Key | "NetFlow" | "ETF"; body: Key[] }[] = [
+  { title: "ETF", body: ["ef_how_1", "ef_how_3"] },
   { title: "NetFlow", body: ["q_netflow_1", "q_netflow_2"] },
   { title: "ui_rotation", body: ["q_rot_1", "q_rot_2"] },
   { title: "ex_flows", body: ["q_exflow_1", "q_exflow_2"] },
@@ -133,7 +134,7 @@ export function HelpScreen() {
             <details key={g.title} className="fold faq" onToggle={() => haptic("select")}>
               <summary>
                 <span className="fold-main">
-                  <b>{g.title === "NetFlow" ? g.title : t(lang, g.title)}</b>
+                  <b>{g.title === "NetFlow" || g.title === "ETF" ? g.title : t(lang, g.title)}</b>
                 </span>
                 <span className="fold-chev" aria-hidden="true" />
               </summary>

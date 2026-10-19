@@ -211,7 +211,11 @@ describe("институциональные потоки", () => {
   test("спрос против добычи, рекорды и серии", async () => {
     const { ctx, page, errors } = await open();
     await ready(page);
-    assert.equal(sp(await page.locator(".ef-mine-t").innerText()), "Спрос ETF против добычи за 30 дней");
+    // Заголовок раздела с «?»: объяснение добычи — у самой карточки.
+    const mineT = page.locator(".ef > .sect", { hasText: "Спрос ETF против добычи за 30 дней" });
+    assert.equal(await mineT.count(), 1);
+    await mineT.locator(".sect-q").click();
+    assert.match(sp(await page.locator(".sect-help").innerText()), /^Спрос ETF против добычи: сейчас майнеры создают около 450 BTC в сутки \(после халвинга 2028 г\. — около 225\)/);
     assert.deepEqual((await page.locator(".ef-mine b").allInnerTexts()).map(sp), ["24 087 BTC", "13 500 BTC"]);
     // Доля, а не «в N раза»: «в 20 раза» было бы неграмотно, а в ноябре 2024 г. так и было бы.
     assert.match(sp(await page.locator(".ef-mine-say").innerText()),
@@ -324,6 +328,15 @@ describe("институциональные потоки", () => {
     }));
     assert.ok(gaps.length >= 4);
     for (const [above, below] of gaps) assert.ok(above! > below!, `${above} / ${below}`);
+    await ctx.close();
+  });
+
+  test("CME: в «?» объяснены лонг, шорт и открытый интерес — слова, из которых состоит карточка", async () => {
+    const { ctx, page } = await open();
+    await ready(page);
+    await page.locator(".ef > .sect", { hasText: "Институционалы на CME" }).locator(".sect-q").click();
+    const ps = (await page.locator(".sect-help p").allInnerTexts()).map(sp);
+    assert.deepEqual(ps, ["ef_how_6", "q_ls_1", "oih_how_1"].map((k) => sp(I18N[k]!["ru"]!)));
     await ctx.close();
   });
 

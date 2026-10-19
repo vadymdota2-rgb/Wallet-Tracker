@@ -1369,6 +1369,10 @@ say("«Институциональные потоки» — тексты: «с�
     and 'period === "all" ? ` ${t(lang, "ef_gbtc")}` : ""' in _ef and all("GBTC" not in v for v in _i18n["ef_funds_note"].values())
     and _i18n["ef_by"]["ru"] == "Потоки и активы фондов, цена дня:" and "2028" in _i18n["ef_how_3"]["ru"]
     and not _badcjk, ", ".join(_badcjk[:5]))
+say("«Институциональные потоки» — понятно новичку: «?» у спроса против добычи (что такое добыча), у CME — лонг, шорт и открытый интерес; ETF — в словаре терминов помощи",
+    '<SectionTitle help={["ef_how_3"]}>{t(lang, "ef_mine_title")}</SectionTitle>' in _ef
+    and '<SectionTitle help={["ef_how_6", "q_ls_1", "oih_how_1"]}>{t(lang, "ef_cme_title")}</SectionTitle>' in _efm
+    and '{ title: "ETF", body: ["ef_how_1", "ef_how_3"] },' in read(f"{APP}/src/screens/HelpScreen.tsx"))
 say("«Институциональные потоки»: сервер проверяет каждую строку набора (даты ASCII и в торгах, пределы потоков и цен, праздники), итог дня — сумма фондов",
     'DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")' in _etfs and "(not by and total == 0)" in _etfs
     and "abs(total) > DAY_MAX" in _etfs and 'if PX_MIN <= _num(r.get("btcCloseUsd")) <= PX_MAX:' in _etfs and "HOLD_MAX = 5_000_000.0" in _etfs

@@ -604,8 +604,11 @@ export function EtfScreen() {
           </Card>
 
           {stats.mined > 0 && stats.c30 !== 0 ? (
+            <>
+            {/* Заголовком раздела с «?»: объяснение — что такое добыча и почему её сравнивают со
+                спросом фондов — рядом с самой карточкой, а не под графиком ниже. */}
+            <SectionTitle help={["ef_how_3"]}>{t(lang, "ef_mine_title")}</SectionTitle>
             <Card>
-              <p className="ef-mine-t">{t(lang, "ef_mine_title")}</p>
               <div className="ef-mine">
                 <div>
                   <small>{t(lang, stats.c30 >= 0 ? "ef_mine_etf_in" : "ef_mine_etf_out")}</small>
@@ -633,9 +636,10 @@ export function EtfScreen() {
                   : t(lang, "ef_mine_sell")}
               </p>
             </Card>
+            </>
           ) : null}
 
-          <SectionTitle help={["ef_how_1", "ef_how_3"]}>{t(lang, "ef_chart")}</SectionTitle>
+          <SectionTitle help={["ef_how_1"]}>{t(lang, "ef_chart")}</SectionTitle>
           <Card>
             <Segmented<Range>
               value={range}

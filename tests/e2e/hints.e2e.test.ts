@@ -222,11 +222,11 @@ describe("словарь терминов в помощи", () => {
     await card.waitFor();
     assert.equal(sp(await card.locator(".note").innerText()), sp(I18N["hp_terms_note"]!["ru"]!));
     const names = (await card.locator("summary b").allInnerTexts()).map(sp);
-    assert.equal(names.length, 10);
-    assert.equal(names[0], "NetFlow");
+    assert.equal(names.length, 11);
+    assert.deepEqual(names.slice(0, 2), ["ETF", "NetFlow"]);
     assert.ok(names.includes(I18N["q_t_fund"]!["ru"]!) && names.includes(I18N["ui_rotation"]!["ru"]!), names.join(", "));
     assert.equal(await card.locator("details[open]").count(), 0);
-    await card.locator("summary").first().click();
+    await card.locator("summary").nth(1).click();
     assert.equal(sp(await card.locator("details[open] .fold-body").innerText()),
       sp(`${I18N["q_netflow_1"]!["ru"]} ${I18N["q_netflow_2"]!["ru"]}`));
     assert.deepEqual(errors, []);
