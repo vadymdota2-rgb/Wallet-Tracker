@@ -625,7 +625,7 @@ export const tr: Dict = {
   dm_yr: "{n} yıl",
   ef_30d_sum: "30 gün",
   ef_7d_sum: "7 gün",
-  ef_al_d: "Fonlar bir günde $500M veya daha fazla bitcoin aldığında ya da sattığında Telegram mesajı. Bu ayda birkaç kez olur.",
+  ef_al_d: "Fonlar bir günde $500M veya daha fazla bitcoin aldığında ya da sattığında Telegram mesajı. Bu ayda birkaç kez olur. Tüm fonlar raporladıktan sonra, gün sonu verilerinden birkaç saat sonra gelir.",
   ef_al_in: "🏦 Bitcoin ETF'lerine büyük giriş: {d} tarihinde {v}.",
   ef_al_out: "🏦 Bitcoin ETF'lerinden büyük çıkış: {d} tarihinde {v}.",
   ef_al_stop: "Kapatmak için uygulamada «{s}» ekranını açın.",

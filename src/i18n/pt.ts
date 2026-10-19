@@ -625,7 +625,7 @@ export const pt: Dict = {
   dm_yr: "{n} anos",
   ef_30d_sum: "30 dias",
   ef_7d_sum: "7 dias",
-  ef_al_d: "Uma mensagem no Telegram quando os fundos compram ou vendem $500M ou mais em bitcoin num dia. Acontece algumas vezes por mês.",
+  ef_al_d: "Uma mensagem no Telegram quando os fundos compram ou vendem $500M ou mais em bitcoin num dia. Acontece algumas vezes por mês. Chega algumas horas após o fecho do dia, quando todos os fundos já reportaram.",
   ef_al_in: "🏦 Grande entrada nos ETFs de bitcoin: {v} em {d}.",
   ef_al_out: "🏦 Grande saída dos ETFs de bitcoin: {v} em {d}.",
   ef_al_stop: "Para desativar: tela “{s}” no app.",

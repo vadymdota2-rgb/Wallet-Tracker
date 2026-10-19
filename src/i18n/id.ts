@@ -625,7 +625,7 @@ export const id: Dict = {
   dm_yr: "{n} thn",
   ef_30d_sum: "30 hari",
   ef_7d_sum: "7 hari",
-  ef_al_d: "Pesan Telegram saat dana membeli atau menjual bitcoin senilai $500 jt atau lebih dalam sehari. Ini terjadi beberapa kali sebulan.",
+  ef_al_d: "Pesan Telegram saat dana membeli atau menjual bitcoin senilai $500 jt atau lebih dalam sehari. Ini terjadi beberapa kali sebulan. Pesan dikirim beberapa jam setelah hasil hari itu, saat semua dana sudah melapor.",
   ef_al_in: "🏦 Arus masuk besar ke ETF bitcoin: {v} pada {d}.",
   ef_al_out: "🏦 Arus keluar besar dari ETF bitcoin: {v} pada {d}.",
   ef_al_stop: "Untuk mematikan, buka layar {s} di aplikasi.",

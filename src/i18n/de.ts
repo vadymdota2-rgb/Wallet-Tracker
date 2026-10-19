@@ -625,7 +625,7 @@ export const de: Dict = {
   dm_yr: "{n} J.",
   ef_30d_sum: "30 Tage",
   ef_7d_sum: "7 Tage",
-  ef_al_d: "Eine Telegram-Nachricht, wenn die Fonds an einem Tag Bitcoin für $500 Mio. oder mehr kaufen oder verkaufen. Das kommt einige Male im Monat vor.",
+  ef_al_d: "Eine Telegram-Nachricht, wenn die Fonds an einem Tag Bitcoin für $500 Mio. oder mehr kaufen oder verkaufen. Das kommt einige Male im Monat vor. Sie kommt einige Stunden nach den Tageszahlen, wenn alle Fonds gemeldet haben.",
   ef_al_in: "🏦 Großer Zufluss in Bitcoin-ETFs: {v} am {d}.",
   ef_al_out: "🏦 Großer Abfluss aus Bitcoin-ETFs: {v} am {d}.",
   ef_al_stop: "Abschalten: im Bildschirm „{s}“ in der App.",

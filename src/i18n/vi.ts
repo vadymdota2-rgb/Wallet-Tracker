@@ -625,7 +625,7 @@ export const vi: Dict = {
   dm_yr: "{n} năm",
   ef_30d_sum: "30 ngày",
   ef_7d_sum: "7 ngày",
-  ef_al_d: "Tin nhắn Telegram khi các quỹ mua hoặc bán từ $500M bitcoin trở lên trong một ngày. Điều này xảy ra vài lần mỗi tháng.",
+  ef_al_d: "Tin nhắn Telegram khi các quỹ mua hoặc bán từ $500M bitcoin trở lên trong một ngày. Điều này xảy ra vài lần mỗi tháng. Tin nhắn đến vài giờ sau khi có kết quả trong ngày, khi tất cả các quỹ đã báo cáo.",
   ef_al_in: "🏦 Dòng tiền lớn vào ETF bitcoin: {v} ngày {d}.",
   ef_al_out: "🏦 Dòng tiền lớn rút khỏi ETF bitcoin: {v} ngày {d}.",
   ef_al_stop: "Để tắt, mở màn hình {s} trong ứng dụng.",
