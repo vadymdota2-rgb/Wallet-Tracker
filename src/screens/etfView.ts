@@ -7,7 +7,7 @@ import { useLayoutEffect, useState, type RefObject } from "react";
 import { num, usdWord } from "../lib/format";
 import { dateStr } from "./FearGreedScreen";
 
-/* Потоки фондов и цена дня — открытый набор TFTC под лицензией CC BY 4.0:
+/* Потоки и активы фондов, цена дня — открытый набор TFTC под лицензией CC BY 4.0:
    условие — подпись источника со ссылкой и ссылка на лицензию рядом с
    данными, везде, где их показываем (экран потоков, дайджест). */
 export const TFTC_URL = "https://www.tftc.io/bitcoin-etf-flows";

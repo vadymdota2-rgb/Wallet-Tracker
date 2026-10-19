@@ -1358,6 +1358,17 @@ say("«Институциональные потоки»: сбой сборки 
     and "export function dateNb(" in read(f"{APP}/src/screens/etfView.ts") and "dateNb(lang, r[5]" in _efm
     and "axis={axis}" in _efm and "const lim = list.length - shown <= TAIL ? list.length : shown;" in _efm
     and all(k in _i18n for k in ("ef_fd_days", "ef_fd_chart", "ef_fd_hold", "ef_fd_tap", "ef_old")))
+_cjk = r"[\u3040-\u30ff\u3400-\u9fff]"
+_efk = [k for k in _i18n if k.startswith(("ef_", "dg_etf", "dg_l_etf"))]
+_badcjk = [f"{k}/{lg}" for k in _efk for lg in ("zh", "ja")
+           if re.search(_cjk + r"[:,;()]|[,;()]" + _cjk, _i18n[k][lg]) or re.search(r"ETF,", _i18n[k][lg])]
+say("«Институциональные потоки» — тексты: «спрос против добычи» долей, а не «в N раза»; GBTC — только «с запуска»; источник — «потоки и активы»; в китайском и японском — полноширинная пунктуация",
+    all("{x}" in _i18n["ef_mine_more"][lg] and "раза" not in _i18n["ef_mine_more"][lg] and "разів" not in _i18n["ef_mine_more"][lg]
+        for lg in _i18n["ef_mine_more"])
+    and 'ef_mine_more", { x: iso(pct((stats.c30 / stats.mined) * 100, 0, false)) })' in _ef
+    and 'period === "all" ? ` ${t(lang, "ef_gbtc")}` : ""' in _ef and all("GBTC" not in v for v in _i18n["ef_funds_note"].values())
+    and _i18n["ef_by"]["ru"] == "Потоки и активы фондов, цена дня:" and "2028" in _i18n["ef_how_3"]["ru"]
+    and not _badcjk, ", ".join(_badcjk[:5]))
 say("«Институциональные потоки»: сервер проверяет каждую строку набора (даты ASCII и в торгах, пределы потоков и цен, праздники), итог дня — сумма фондов",
     'DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")' in _etfs and "(not by and total == 0)" in _etfs
     and "abs(total) > DAY_MAX" in _etfs and 'if PX_MIN <= _num(r.get("btcCloseUsd")) <= PX_MAX:' in _etfs and "HOLD_MAX = 5_000_000.0" in _etfs

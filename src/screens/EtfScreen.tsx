@@ -431,7 +431,8 @@ function Funds({ c, lang }: { c: EtfCoin; lang: Lang }) {
         })}
       </div>
       {still > 0 ? <p className="lq-hint">{t(lang, "ef_still", { n: iso(num(still)) })}</p> : null}
-      <p className="lq-hint">{t(lang, "ef_funds_note")} {t(lang, "ef_fd_tap")}</p>
+      {/* Про GBTC — только «с запуска»: за день или неделю его в списке может и не быть. */}
+      <p className="lq-hint">{t(lang, "ef_funds_note")}{period === "all" ? ` ${t(lang, "ef_gbtc")}` : ""} {t(lang, "ef_fd_tap")}</p>
     </Card>
   );
 }
@@ -626,7 +627,8 @@ export function EtfScreen() {
               <p className="ef-mine-say">
                 {stats.c30 > 0
                   ? stats.c30 >= stats.mined
-                    ? t(lang, "ef_mine_more", { x: iso(num(stats.c30 / stats.mined, 1)) })
+                    /* Доля, а не «в N раз»: «в 20 раза» неграмотно, а склонять число в 16 языках не выйдет. */
+                    ? t(lang, "ef_mine_more", { x: iso(pct((stats.c30 / stats.mined) * 100, 0, false)) })
                     : t(lang, "ef_mine_less", { x: iso(pct((stats.c30 / stats.mined) * 100, 0, false)) })
                   : t(lang, "ef_mine_sell")}
               </p>

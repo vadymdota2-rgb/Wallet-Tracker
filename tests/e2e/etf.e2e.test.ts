@@ -173,7 +173,7 @@ describe("институциональные потоки", () => {
     // Подпись источника и лицензии — ссылками (условие CC BY 4.0), с датой
     // «данные по», как просит TFTC; цен бирж (Coinbase) на экране нет.
     assert.equal(sp(await page.locator(".fg-by").innerText()),
-      "Потоки фондов и цена дня: TFTC (CC BY 4.0), данные по 15 окт. 2026 г. Монеты, суммы и запасы считаем сами.");
+      "Потоки и активы фондов, цена дня: TFTC (CC BY 4.0), данные по 15 окт. 2026 г. Монеты, суммы и запасы считаем сами.");
     assert.equal(await page.getByText("Coinbase").count(), 0);
     const links = page.locator(".fg-by a");
     assert.deepEqual(await links.allInnerTexts(), ["TFTC", "CC BY 4.0"]);
@@ -188,11 +188,34 @@ describe("институциональные потоки", () => {
     await ctx.close();
   });
 
+  test("спрос против добычи: меньше добычи — доля, продажи — за 30 дней, без «давления майнеров»", async () => {
+    const shift = (k: number) => {
+      const r = structuredClone(REAL) as typeof REAL;
+      const days = r.coins.btc.days;
+      const end = days.at(-1)![0];
+      for (const d of days) if (d[0] > end - 30 * 86_400) { d[1] *= k; d[2] *= k; }
+      return r;
+    };
+    const less = await open({ replies: [shift(0.25)] });
+    await ready(less.page);
+    assert.match(sp(await less.page.locator(".ef-mine-say").innerText()), /^ETF забрали 45 ?% новой добычи, остальное уходит на рынок\.$/);
+    await less.ctx.close();
+    const sell = await open({ replies: [shift(-1)] });
+    await ready(sell.page);
+    assert.equal(sp(await sell.page.locator(".ef-mine-say").innerText()),
+      "За 30 дней ETF больше продали, чем купили: их монеты идут на рынок вместе с новой добычей майнеров.");
+    assert.equal(sp(await sell.page.locator(".ef-mine small").first().innerText()), "Продали ETF");
+    await sell.ctx.close();
+  });
+
   test("спрос против добычи, рекорды и серии", async () => {
     const { ctx, page, errors } = await open();
     await ready(page);
     assert.equal(sp(await page.locator(".ef-mine-t").innerText()), "Спрос ETF против добычи за 30 дней");
     assert.deepEqual((await page.locator(".ef-mine b").allInnerTexts()).map(sp), ["24 087 BTC", "13 500 BTC"]);
+    // Доля, а не «в N раза»: «в 20 раза» было бы неграмотно, а в ноябре 2024 г. так и было бы.
+    assert.match(sp(await page.locator(".ef-mine-say").innerText()),
+      /^ETF забрали 178 ?% новой добычи — больше, чем намайнено: свободных монет на рынке становится меньше\.$/);
     const rec = (await page.locator(".ef-rec .fg-row").allInnerTexts()).map(sp);
     assert.equal(rec.length, 6);
     assert.match(rec[0]!, /^Самый большой приток за день · 7 нояб\. 2024 г\. \+1,37 млрд \$$/);
@@ -216,6 +239,11 @@ describe("институциональные потоки", () => {
     assert.equal(all[0], "🇺🇸 IBIT");
     assert.equal(all.at(-1), "🇺🇸 GBTC");
     assert.match(sp(await page.locator(".ef-fsum").innerText()), /^Приток \+\d/);
+    // Про GBTC — только «с запуска»; за неделю его в списке может и не быть.
+    const note = () => page.locator(".ef-fsum").locator("xpath=following-sibling::p[last()]").innerText().then(sp);
+    assert.match(await note(), /GBTC распродавали после перехода из траста в ETF/);
+    await chip(1).click();
+    assert.doesNotMatch(await note(), /GBTC/);
     await ctx.close();
   });
 
