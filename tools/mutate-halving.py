@@ -118,7 +118,10 @@ def run(path, cmd, muts):
 
 a1 = run(f"{ROOT}/src/lib/halving.ts", ["node", "--test", "tests/halving.test.ts", "tests/halving.props.test.ts"], TS)
 a3 = run(f"{ROOT}/src/lib/tick.ts", ["node", "--test", "tests/tick.test.ts"], TICK)
-a2 = run(f"{ROOT}/wt_halving.py", [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"], PY)
+# Сервер — только тесты халвинга (test_halving_*: wt_halving больше никто не
+# проверяет): весь набор тестов проекта на каждую мутацию не укладывался в
+# срок проверки CI.
+a2 = run(f"{ROOT}/wt_halving.py", [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_halving*.py"], PY)
 alive = a1 + a2 + a3
 total = len(TS) + len(PY) + len(TICK) - len(EQUIV)
 print(f"ИТОГ: убито {total - len(alive)} из {total}; выжили: {alive}")
