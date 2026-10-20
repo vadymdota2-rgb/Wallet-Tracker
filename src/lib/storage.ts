@@ -22,7 +22,7 @@ const KEEP = new Set([
   "wt-miniapp-v7", "wt-snapshot-v1",
   "wt-unlocks-v1", "wt-unl-tip-v1", "wt-unl-detail",
   "wt-options-v1", "wt-oihist-v1", "wt-liqmap-v1", "wt-liqcoins-v1", "wt-halving-v1", "wt-fng-v1", "wt-fg-range",
-  "wt-exflows-v1", "wt-etf-v1", "wt-etf-range", "wt-etf-mode", "wt-dom-v1", "wt-dom-range",
+  "wt-exflows-v1", "wt-etf-v1", "wt-etf-range", "wt-etf-mode", "wt-dom-v2", "wt-dom-range",
   "wt-dg-seen", "wt-dg-anon", "wt-calendar-v1", "wt-btc-ex-open", "wt-bscx-ex-open",
   "wt-chart-v1", "wt-chart-draw-v1", "wt-chart-draw-at-v1", "wt-chart-gest",
   "wt-digest-v1", "wt-btcw-v1",
@@ -31,7 +31,7 @@ const KEEP = new Set([
 /** Запасы ответов: { ключ запроса: { at, v } }. */
 const SAVED_MAPS = [
   "wt-options-v1", "wt-oihist-v1", "wt-liqmap-v1", "wt-liqcoins-v1", "wt-halving-v1", "wt-fng-v1",
-  "wt-exflows-v1", "wt-etf-v1", "wt-dom-v1", "wt-calendar-v1", "wt-digest-v1", "wt-btcw-v1",
+  "wt-exflows-v1", "wt-etf-v1", "wt-dom-v2", "wt-calendar-v1", "wt-digest-v1", "wt-btcw-v1",
 ];
 const SAVED_MAX_AGE = 30 * 24 * 3600_000;
 const DRAW_AT_MAX_AGE = 90 * 24 * 3600_000;

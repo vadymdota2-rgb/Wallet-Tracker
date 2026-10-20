@@ -647,11 +647,20 @@ say("страх и жадность: «что скрыто в данных» —
     and '"fi_caveat"' in _fi and "<FearGreedInsights" in _fg)
 
 _dm = read(f"{APP}/src/screens/DominanceScreen.tsx")
-say("доминация и альтсезон: история рынка с 2013, стейблкоины отдельно, индекс альтсезона, волны, ETH/BTC",
-    "def dom_data(" in api and '"/api/dom"' in api and "global-metrics/quotes/historical" in api
-    and "altcoin-season/chart" in api and "stablecoins.llama.fi" in api and "symbol=ETHBTC" in api
-    and "dom_data()  # и доминация" in api and "function waves(" in _dm and "function MainChart(" in _dm
-    and '"dm_say_flip_alt"' in _dm and '"dm_top_note"' in _dm and "glyph: <DomGlyph />" in appx)
+_dms = read(f"{APP}/wt_dom.py")
+_dml = read(f"{APP}/src/lib/dom.ts")
+say("альтсезон — свой расчёт по ценам Hyperliquid (wt_dom): индекс 50 монет за 90 дней, сила альтов против биткоина, ETH/BTC; ни CoinMarketCap, ни Binance, ни DefiLlama; ответ проверяется (validDom); доли рынка нет — и это сказано",
+    "dom_data = wt_dom.dom_data" in api and '"/api/dom"' in api and "wt_dom.set_cache_dir(CACHE_DIR)" in api
+    and 'HOSTS = frozenset({"api.hyperliquid.xyz"})' in _dms and "TOP = 50" in _dms and "WINDOW = 90" in _dms
+    and "parse_int=_int" in _dms and "_NoRedirect" in _dms and "BODY_MAX" in _dms
+    and all(x not in (_dms + api[api.index("# --- Альтсезон и сила биткоина"):api.index("# --- ETF и крупные держатели")]).lower()
+            for x in ("coinmarketcap.com", "binance.", "llama.fi", "coingecko.com"))
+    and '_file_save("dom_px.json"' in _dms and '_file_save("dom.json", res)' in _dms
+    and "global-metrics/quotes" not in api and "altcoin-season/chart" not in api and "symbol=ETHBTC" not in api
+    and "export function validDom(" in _dml and "validDom(r)" in read(f"{APP}/src/lib/api.ts")
+    and '"wt-dom-v2"' in read(f"{APP}/src/lib/storage.ts") and '"wt-dom-v1"' not in read(f"{APP}/src/lib/storage.ts")
+    and '"dm_how_4"' in _dm and '"dm_building"' in _dm and "glyph: <DomGlyph />" in appx
+    and "wt_dom.py" in read(f"{APP}/.github/workflows/tests.yml"))
 
 _fs = read(f"{APP}/src/screens/FundingScreen.tsx")
 say("фандинг не пропадает: собирается первым, при сбое — прошлый; пока ставок нет — загрузка с переспросом, а не «нет аномалий»",
@@ -806,10 +815,10 @@ say("страх и жадность: источник alternative.me рядом 
 say("защита API: бан за промахи ключом — кроме своей машины (127.0.0.1 — это nginx; проверка curl'ом не закроет приложение)",
     "if _loopback(ip):\n            return" in read(f"{APP}/wt_shield.py")
     and os.path.isfile(f"{APP}/tests/test_shield_bans.py"))
-say("кеш: тяжёлые ответы API — и на диске (после перезапуска сразу, свежий — в фоне); ETF и отчёты SEC — тоже; в приложении — дайджест и кошелёк BTC на устройстве",
+say("кеш: тяжёлые ответы API — и на диске (после перезапуска сразу, свежий — в фоне); ETF, отчёты SEC и альтсезон (ответ и цены) — тоже; в приложении — дайджест и кошелёк BTC на устройстве",
     "def disk_cache(store: dict, name: str) -> dict:" in api and "def _disk_load(name: str, key):" in api
     and 'disk_cache({}, "btc")' in api and 'disk_cache({}, "bscx")' in api and 'disk_cache({}, "opt")' in api
-    and 'disk_warm(_fng_cache, "all", "fng", FNG_TTL)' in api and 'disk_warm(_dom_cache, "all", "dom", DOM_TTL)' in api
+    and 'disk_warm(_fng_cache, "all", "fng", FNG_TTL)' in api and "wt_dom.set_cache_dir(CACHE_DIR)" in api
     and 'etf.set_cache_file(os.path.join(CACHE_DIR, "etf.json"))' in api and "treasury.set_cache_dir(CACHE_DIR)" in api
     and "def _file_load() -> dict[str, Json] | None:" in _etfs and "_file_save(\"sec_funds.json\", out)" in read(f"{APP}/wt_treasury.py")
     and 'const DIGEST_SAVED = "wt-digest-v1";' in read(f"{APP}/src/lib/api.ts")

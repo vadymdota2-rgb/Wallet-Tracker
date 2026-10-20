@@ -1,4 +1,4 @@
-"""Мутационная проверка «Институциональных потоков»: python3 tools/mutate-etf.py
+"""Мутационная проверка «Институциональных потоков» и «Альтсезона»: python3 tools/mutate-etf.py
 
 Как у халвинга: портим код по одному месту (граница, знак, константа,
 защита) и гоняем тесты. Убитая мутация — тесты заметили порчу; выжившая —
@@ -167,6 +167,43 @@ AL = [
     ("        if not fresh:\n            return\n", "", "новый фонд: один раз и после перезапуска"),
 ]
 
+# Альтсезон: сервер (wt_dom) и приложение (lib/dom.ts).
+DM = [
+    ("        if len(rel) < MIN_STR:", "        if len(rel) < 1:", "альтсезон: сила — не меньше MIN_STR монет"),
+    ("            if len(el) >= MIN_IDX:", "            if len(el) >= 1:", "альтсезон: индекс — не меньше MIN_IDX монет"),
+    ("max(-CLIP, min(CLIP, math.log", "max(-9e9, min(9e9, math.log", "альтсезон: сбой цены урезан"),
+    ("        acc += sum(rel) / len(rel)", "        acc += sum(rel)", "альтсезон: корзина поровну"),
+    ('if c not in ("BTC", *EXCLUDE)]', 'if c != "BTC"]', "альтсезон: без золота"),
+    (" and not _pegged(px[c], end)]", "]", "альтсезон: без привязанных к доллару"),
+    ("and not _pegged(px[c], end)][:TOP]", "and not _pegged(px[c], end)]", "альтсезон: не больше TOP монет"),
+    ("        fresh = bool(have) and max(have) >= _now() - TAIL_DAYS * DAY", "        fresh = False", "альтсезон: известные — только последние дни"),
+    ("        if t % (DAY * 1000) or not 0 < px < PX_MAX:", "        if not 0 < px:", "альтсезон: цена дня правдоподобна"),
+    ("        if PX_FROM <= ts <= _now() + DAY:", "        if True:", "альтсезон: дата цены правдоподобна"),
+    ('    if len(text.lstrip("-")) > INT_DIGITS:', "    if False:", "альтсезон: целое не длиннее INT_DIGITS"),
+    ('return u.scheme == "https" and u.hostname in HOSTS and not u.username and not u.password', "return True", "альтсезон: только https к Hyperliquid"),
+    ("    return got if len(got) <= BODY_MAX else None", "    return got", "альтсезон: предел размера ответа"),
+    ("        if i:\n            sleep(PACE)\n", "", "альтсезон: пауза между запросами"),
+    ("and int(t) % DAY == 0 and 0 < _num(v) < PX_MAX}", "}", "альтсезон: копия цен на диске проверяется"),
+    ('    return {"ok": False, "error": "building"} if building else _no_data()', "    return _no_data()", "альтсезон: «собираем» на холодном старте"),
+    ("        if not _busy.is_set() and not _resting():", "        if not _busy.is_set():", "альтсезон: пауза после сбоя"),
+    ("    return len(xs) >= 10 and max(xs) / min(xs) < PEG", "    return False", "альтсезон: привязанная монета видна по ценам"),
+    ("eb = float(f\"{eth[t] / btc[t]:.6g}\")", "eb = float(f\"{eth[t]:.6g}\")", "альтсезон: ETH/BTC — отношение цен"),
+]
+DMT = [
+    ("(v >= 75 ? 2 : v <= 25 ? 0 : 1)", "(v > 75 ? 2 : v <= 25 ? 0 : 1)", "альтсезон: 75 — уже альтсезон"),
+    ("(v >= 75 ? 2 : v <= 25 ? 0 : 1)", "(v >= 75 ? 2 : v < 25 ? 0 : 1)", "альтсезон: 25 — уже сезон биткоина"),
+    ("now + 2 * DAY) || ts % DAY !== 0 || ts <= prev)", "now + 2 * DAY) || ts <= prev)", "альтсезон: день — с начала суток"),
+    ("now + 2 * DAY) || ts % DAY !== 0 || ts <= prev)", "now + 2 * DAY) || ts % DAY !== 0 || ts < prev)", "альтсезон: дни без повторов"),
+    ("|| !Number.isInteger(idx)", "", "альтсезон: индекс — целое"),
+    ("typeof c[0] === \"string\" && COIN.test(c[0])", "typeof c[0] === \"string\"", "альтсезон: имя монеты — только буквы и цифры"),
+    ("if (s[i]![0] <= t) return s[i]!;", "if (s[i]![0] < t) return s[i]!;", "альтсезон: точка ровно n суток назад"),
+    ("  while (i > 0 && seasonOf(s[i - 1]![1]) === zone) i--;\n", "", "альтсезон: сколько подряд в зоне"),
+    ("(p) => p[0] > last[0] - 365 * DAY", "(p) => p[0] > 0", "альтсезон: максимум и минимум — за год"),
+    ("  if (tail !== undefined && out[out.length - 1] !== tail) out.push(tail);\n", "", "альтсезон: последняя точка графика"),
+    ("coins.filter((c) => c[1] > btc90)", "coins.filter((c) => c[1] >= btc90)", "альтсезон: вровень с биткоином — не обогнал"),
+    ("p[1] > 0 ? (last[1] / p[1] - 1) * 100 : null", "p[1] > 0 ? (last[1] / p[1]) * 100 : null", "альтсезон: рост в процентах"),
+]
+
 
 def run(path, cmd, muts):
     with open(path, encoding="utf-8") as f:
@@ -202,7 +239,8 @@ def server():
                                       "tests.test_etf_security", "tests.test_etf_policy", "tests.test_disk_cache"], PY)
             + run(f"{ROOT}/wt_treasury.py", [sys.executable, "-m", "unittest", "tests.test_treasury",
                                              "tests.test_treasury_security", "tests.test_disk_cache"], TR)
-            + run(f"{ROOT}/whale_api.py", [sys.executable, "-m", "unittest", "tests.test_etf_day_alert"], AL))
+            + run(f"{ROOT}/whale_api.py", [sys.executable, "-m", "unittest", "tests.test_etf_day_alert"], AL)
+            + run(f"{ROOT}/wt_dom.py", [sys.executable, "-m", "unittest", "tests.test_dom"], DM))
 
 
 # Приложение и сервер — одновременно: тесты приложения (node) читают только
@@ -210,7 +248,8 @@ def server():
 with ThreadPoolExecutor(max_workers=2) as pool:
     app = pool.submit(run, f"{ROOT}/src/lib/etf.ts", ["node", "--test", "tests/etf.test.ts", "tests/etf.props.test.ts"], TS)
     srv = pool.submit(server)
-    alive = app.result() + srv.result()
-total = len(TS) + len(PY) + len(TR) + len(AL) - len(EQUIV)
+    dmt = pool.submit(run, f"{ROOT}/src/lib/dom.ts", ["node", "--test", "tests/dom.test.ts"], DMT)
+    alive = app.result() + srv.result() + dmt.result()
+total = len(TS) + len(PY) + len(TR) + len(AL) + len(DM) + len(DMT) - len(EQUIV)
 print(f"ИТОГ: убито {total - len(alive)} из {total}; выжили: {alive}")
 sys.exit(1 if alive else 0)

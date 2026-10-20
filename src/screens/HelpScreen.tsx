@@ -64,7 +64,7 @@ const TERMS: { title: Key | "NetFlow" | "ETF"; body: Key[] }[] = [
   { title: "q_t_fund", body: ["q_fund_1", "q_fund_2"] },
   { title: "oih_oi", body: ["oih_how_1", "oih_how_2"] },
   { title: "q_t_pnl", body: ["q_top_2", "q_top_3"] },
-  { title: "dm_dom", body: ["dm_how_1", "dm_how_3"] },
+  { title: "dm_alt_title", body: ["dm_how_1", "dm_how_2"] },
   { title: "q_t_opt", body: ["op_how_1", "op_how_2", "op_how_3"] },
 ];
 

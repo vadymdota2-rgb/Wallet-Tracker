@@ -9,9 +9,10 @@ import { initData } from "./telegram";
 import { forget, peek, peekAny, remember } from "./memo";
 import { HALVING_TTL_MS, clockSkew, pickHalving, validHalving, type HalvingReply } from "./halving";
 import { ETF_TTL_MS, validEtf, type EtfReply } from "./etf";
+import { DOM_TTL_MS, validDom, type DomReply } from "./dom";
 import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
-  LiqCoinsReply, FngReply, DomReply, FundRow, LsRow, MutationResult,
+  LiqCoinsReply, FngReply, FundRow, LsRow, MutationResult,
   RotSide, SymbolRow, TokenHist, Trades, UnlocksReply, WalletLive, BscExFlowReply,
   BtcBigReply, BtcFlowReply, BtcRankReply, BtcWalletReply, LsTotals, OptionsReply, LiqsReply, OiHistReply, CalReply,
 } from "./types";
@@ -550,19 +551,26 @@ export const fetchFng = () =>
   });
 export const peekFng = () => peek<FngReply | null>("/api/fng", 30 * 60_000) ?? savedFng();
 
-/* Доминация и альтсезон: данные меняются за часы, ответ живёт час и лежит
-   на устройстве, как страх и жадность. */
-const DOM_SAVED = "wt-dom-v1";
+/* Альтсезон и сила биткоина: данные меняются за часы, ответ живёт час и
+   лежит на устройстве. В память и на устройство — только проверенная копия
+   (validDom): старый ответ с долями CoinMarketCap экран не роняет. Сервер
+   ещё собирает цены после первого запуска — «building», экран так и скажет. */
+const DOM_SAVED = "wt-dom-v2";
 function savedDom(): DomReply | null {
-  const hit = readSaved<DomReply>(DOM_SAVED).all;
-  return hit && hit.v?.rows?.length ? hit.v : null;
+  const hit = readSaved<unknown>(DOM_SAVED).all;
+  return hit && Date.now() - hit.at < 30 * 24 * 3600_000 ? validDom(hit.v) : null;
 }
 export const fetchDom = () =>
-  remember<DomReply | null>("/api/dom", 60 * 60_000, () => callTwice<DomReply>("/api/dom"), good).then((r) => {
-    if (r?.ok && r.rows.length) writeSaved(DOM_SAVED, { all: { at: Date.now(), v: r } });
-    return r;
-  });
-export const peekDom = () => peek<DomReply | null>("/api/dom", 60 * 60_000) ?? savedDom();
+  remember<DomReply | "building" | null>("/api/dom", DOM_TTL_MS, () =>
+    callTwice<unknown>("/api/dom").then((r) => {
+      const v = validDom(r);
+      if (v) writeSaved(DOM_SAVED, { all: { at: Date.now(), v } });
+      return v ?? (r && typeof r === "object" && (r as { error?: unknown }).error === "building" ? "building" : null);
+    }), (v) => v !== null && v !== "building");
+export const peekDom = () => {
+  const hit = peek<DomReply | "building" | null>("/api/dom", DOM_TTL_MS);
+  return hit && hit !== "building" ? hit : savedDom();
+};
 
 /* ETF и крупные держатели: фонды отчитываются раз в сутки — ответ живёт час
    (как на сервере) и лежит на устройстве. В память и на устройство — только

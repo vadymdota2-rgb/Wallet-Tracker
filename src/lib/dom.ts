@@ -1,0 +1,174 @@
+/**
+ * Альтсезон и сила биткоина — модуль приложения: тип ответа /api/dom, его
+ * проверка и расчёты экрана. Без React и без зависимостей: тесты (node --test)
+ * гоняют его как есть.
+ *
+ * Всё на сервере посчитано своим счётом по дневным ценам Hyperliquid
+ * (wt_dom.py). Ответ проверяется целиком: подменённый или старый (в том числе
+ * сохранённый в телефоне ответ прежнего формата, с долями CoinMarketCap) не
+ * годится — экран берёт свежий или просит повторить.
+ */
+
+/** День: [начало суток UTC, индекс альтсезона 0–100 или null, сила альтов (100 — первый день), ETH/BTC или null, цена BTC $]. */
+export type DomDay = [number, number | null, number, number | null, number];
+
+export interface DomReply {
+  ok: true;
+  rows: DomDay[];
+  /** Монеты корзины: [монета, рост за 90 дней %], по убыванию. */
+  coins: [string, number][];
+  /** Рост биткоина за те же 90 дней, %. */
+  btc90: number | null;
+  /** Сколько монет в корзине. */
+  n: number;
+  at: number;
+}
+
+/** Ответ живёт столько же, сколько на сервере (wt_dom.TTL). */
+export const DOM_TTL_MS = 60 * 60_000;
+const DAY = 86_400;
+/** Начало дневных цен Hyperliquid — 19 августа 2020 г. */
+export const PX_FROM = 1_597_795_200;
+const DAYS_MAX = 10_000;
+const COINS_MAX = 200;
+const COIN = /^[A-Za-z0-9]{1,20}$/;
+
+const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+const within = (v: unknown, lo: number, hi: number): v is number => isNum(v) && v >= lo && v <= hi;
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+
+function validRows(raw: unknown, now: number): DomDay[] | null {
+  if (!Array.isArray(raw) || !raw.length || raw.length > DAYS_MAX) return null;
+  const out: DomDay[] = [];
+  let prev = 0;
+  for (const r of raw) {
+    if (!Array.isArray(r) || r.length !== 5) return null;
+    const [ts, idx, str, eb, px] = r as unknown[];
+    if (!within(ts, PX_FROM, now + 2 * DAY) || ts % DAY !== 0 || ts <= prev) return null;
+    if (idx !== null && (!within(idx, 0, 100) || !Number.isInteger(idx))) return null;
+    if (!within(str, 1e-6, 1e6) || (eb !== null && !within(eb, 1e-6, 10)) || !within(px, 1e-6, 1e8)) return null;
+    out.push([ts, idx as number | null, str, eb as number | null, px]);
+    prev = ts;
+  }
+  return out;
+}
+
+/**
+ * Проверенная копия ответа /api/dom или null. Дни — главное: любая ошибка в
+ * них — ответ не годится. Монета с ошибкой просто не попадает в список.
+ * now — «сейчас», unix с (по умолчанию — часы телефона).
+ */
+export function validDom(raw: unknown, now: number = Date.now() / 1000): DomReply | null {
+  if (!isObj(raw) || raw["ok"] !== true || !within(raw["at"], PX_FROM, now + 7 * DAY)) return null;
+  const rows = validRows(raw["rows"], now);
+  if (!rows) return null;
+  const coins = Array.isArray(raw["coins"])
+    ? raw["coins"].slice(0, COINS_MAX).filter((c): c is [string, number] =>
+      Array.isArray(c) && c.length === 2 && typeof c[0] === "string" && COIN.test(c[0]) && within(c[1], -100, 1e6))
+      .map((c) => [c[0], c[1]] as [string, number])
+    : [];
+  const btc90 = within(raw["btc90"], -100, 1e6) ? raw["btc90"] : null;
+  const n = within(raw["n"], 0, COINS_MAX) && Number.isInteger(raw["n"]) ? raw["n"] : coins.length;
+  return { ok: true, rows, coins, btc90, n, at: raw["at"] };
+}
+
+/* --------------------------------------------------------------------- */
+
+/** Зона индекса: 0 — сезон биткоина (25 и ниже), 1 — нейтрально, 2 — альтсезон (75 и выше). */
+export const seasonOf = (v: number): 0 | 1 | 2 => (v >= 75 ? 2 : v <= 25 ? 0 : 1);
+
+/** Ряд одной величины по дням: [начало суток, значение], без пустых дней. */
+export function series(rows: DomDay[], col: 1 | 2 | 3 | 4): [number, number][] {
+  return rows.flatMap((r): [number, number][] => (r[col] === null ? [] : [[r[0], r[col] as number]]));
+}
+
+/** Точка ряда на n суток раньше последней (ближайшая не позже); нет — null. */
+export function ago(s: [number, number][], n: number): [number, number] | null {
+  const last = s[s.length - 1];
+  if (!last) return null;
+  const t = last[0] - n * DAY;
+  for (let i = s.length - 1; i >= 0; i--) if (s[i]![0] <= t) return s[i]!;
+  return null;
+}
+
+/** Рост величины за n суток, %; нет точки — null. */
+export function change(s: [number, number][], n: number): number | null {
+  const last = s[s.length - 1];
+  const p = ago(s, n);
+  return last && p && p[1] > 0 ? (last[1] / p[1] - 1) * 100 : null;
+}
+
+export interface AltStats {
+  /** Дней в каждой зоне: сезон биткоина, нейтрально, альтсезон. */
+  cnt: [number, number, number];
+  n: number;
+  from: number;
+  max: [number, number];
+  /** Максимум и минимум за последние 365 суток. */
+  hi: [number, number];
+  lo: [number, number];
+  /** Сколько суток подряд индекс в нынешней зоне (по сегодняшний день). */
+  run: number;
+}
+
+/** Итоги индекса альтсезона по его ряду [день, значение]. */
+export function altStats(s: [number, number][]): AltStats | null {
+  const last = s[s.length - 1];
+  if (!last) return null;
+  const cnt: [number, number, number] = [0, 0, 0];
+  let max = s[0]!;
+  for (const p of s) {
+    cnt[seasonOf(p[1])] += 1;
+    if (p[1] > max[1]) max = p;
+  }
+  const year = s.filter((p) => p[0] > last[0] - 365 * DAY);
+  const hi = year.reduce((m, p) => (p[1] > m[1] ? p : m), year[0]!);
+  const lo = year.reduce((m, p) => (p[1] < m[1] ? p : m), year[0]!);
+  const zone = seasonOf(last[1]);
+  let i = s.length - 1;
+  while (i > 0 && seasonOf(s[i - 1]![1]) === zone) i--;
+  return { cnt, n: s.length, from: s[0]![0], max, hi, lo, run: Math.round((last[0] - s[i]![0]) / DAY) + 1 };
+}
+
+export interface EbStats {
+  cur: [number, number];
+  /** Рост за 30, 90 и 365 суток, %. */
+  ch: (number | null)[];
+  hi: [number, number];
+  lo: [number, number];
+  /** Доля дней, когда ETH/BTC был выше нынешнего. */
+  above: number;
+}
+
+export function ebStats(s: [number, number][]): EbStats | null {
+  const cur = s[s.length - 1];
+  if (!cur || s.length < 60) return null;
+  const hi = s.reduce((m, p) => (p[1] > m[1] ? p : m), s[0]!);
+  const lo = s.reduce((m, p) => (p[1] < m[1] ? p : m), s[0]!);
+  return { cur, ch: [30, 90, 365].map((n) => change(s, n)), hi, lo, above: s.filter((p) => p[1] > cur[1]).length / s.length };
+}
+
+/** На графике не больше max точек (ширина экрана всё равно меньше); последняя — всегда. */
+export function thin<T>(s: T[], max = 600): T[] {
+  const step = Math.max(1, Math.ceil(s.length / max));
+  const out = s.filter((_, i) => i % step === 0);
+  const tail = s[s.length - 1];
+  if (tail !== undefined && out[out.length - 1] !== tail) out.push(tail);
+  return out;
+}
+
+export type Range = "365" | "1095" | "all";
+export const RANGES: readonly Range[] = ["365", "1095", "all"];
+
+/** Точки ряда за окно: последние n суток или вся история. */
+export function windowOf(s: [number, number][], range: Range): [number, number][] {
+  const last = s[s.length - 1];
+  if (!last || range === "all") return s;
+  return s.filter((p) => p[0] > last[0] - Number(range) * DAY);
+}
+
+/** Монеты против биткоина: обогнали и отстали за 90 дней. */
+export function beat(coins: [string, number][], btc90: number): { up: number; dn: number } {
+  const up = coins.filter((c) => c[1] > btc90).length;
+  return { up, dn: coins.length - up };
+}

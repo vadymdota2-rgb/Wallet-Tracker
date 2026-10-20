@@ -32,6 +32,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wt_shield as shield  # noqa: E402
 import wt_halving as halving  # noqa: E402
 import wt_etf as etf  # noqa: E402
+import wt_dom  # noqa: E402
 import wt_treasury as treasury
 import wt_digest_img as dgi
 from urllib.parse import parse_qs, unquote, urlparse, urlsplit
@@ -9991,6 +9992,15 @@ DISK_MAX_AGE = 3 * 86400
 DISK_KEEP = 128
 _DISK: dict[int, str] = {}
 etf.set_cache_file(os.path.join(CACHE_DIR, "etf.json"))
+wt_dom.set_cache_dir(CACHE_DIR)
+# Прежняя доминация (CoinMarketCap) держала копию в dom-<ключ>.json — её
+# больше никто не читает: убираем, чтобы не лежала на диске вечно.
+try:
+    for _old in os.listdir(CACHE_DIR):
+        if _old.startswith("dom-") and _old.endswith(".json"):
+            os.remove(os.path.join(CACHE_DIR, _old))
+except OSError:
+    pass
 # Новый фонд в наборе TFTC, которого нет в списке фондов SEC, — владельцу:
 # потоки его видны сразу, а имя, комиссию и запас даст только строка в
 # wt_treasury.ETFS (тикер, имя, CIK в SEC). Один раз на тикер — и после
@@ -10061,7 +10071,7 @@ def _disk_save(name: str, key, val) -> None:
 
 
 def disk_warm(cache: dict, key, name: str, ttl: float) -> None:
-    """Для кешей со своей сборкой (страх и жадность, доминация): после
+    """Для кешей со своей сборкой (страх и жадность): после
     перезапуска — копия с диска как устаревшая, свежую соберёт их фон."""
     if key in cache:
         return
@@ -11349,7 +11359,7 @@ def liq_warm_refresher() -> None:
         except Exception:  # noqa: BLE001
             pass
         try:
-            dom_data()  # и доминация с альтсезоном
+            dom_data()  # и альтсезон с силой биткоина
         except Exception:  # noqa: BLE001
             pass
         try:
@@ -12155,203 +12165,11 @@ def btc_wallet(addr: str) -> dict:
     return cached_small(_BTC, ("wallet", addr), BTC_TTL, lambda: _btc_wallet_build(addr))
 
 
-# --- Доминация и альтсезон --------------------------------------------------
-# Капитализация всего рынка, доли биткоина и эфира по дням с 29 апреля 2013 —
-# открытый data-api CoinMarketCap (без ключа), куски по 2000 дней. Стейблкоины
-# по дням — DefiLlama (с конца 2017), подогнанные под сегодняшнюю оценку
-# CoinMarketCap, чтобы доля «без стейблкоинов» сходилась с их же итогом.
-# Индекс альтсезона CoinMarketCap (сколько из 100 крупнейших монет обогнали
-# биткоин за 90 дней) есть с марта 2024, там же — сами монеты. ETH/BTC —
-# дневные закрытия Binance с июля 2017. Всё меняется медленно: ответ живёт
-# час, устаревший отдаётся сразу, свежий собирается в фоне.
-DOM_TTL = 3600.0
-DOM_START = 1367193600  # 2013-04-29 — первый день истории CoinMarketCap
-_dom_cache: dict = {}
-
-
-def _dom_cmc(path: str, timeout: float = 25):
-    return ((get_json("https://api.coinmarketcap.com/data-api/v3/" + path, timeout) or {}).get("data")) or {}
-
-
-def _dom_day(stamp) -> int:
-    """Начало суток UTC: из «2026-09-29T19:50:00.000Z» или из секунд."""
-    if isinstance(stamp, str) and "-" in stamp:
-        return calendar.timegm(time.strptime(stamp[:10], "%Y-%m-%d"))
-    return int(float(stamp)) // 86400 * 86400
-
-
-def _dom_ethbtc(start_ms: int) -> dict:
-    out: dict = {}
-    cur = start_ms
-    for _ in range(8):
-        rows = get_json(f"https://data-api.binance.vision/api/v3/klines?symbol=ETHBTC&interval=1d&limit=1000&startTime={cur}", 20)
-        if not isinstance(rows, list) or not rows:
-            break
-        for k in rows:
-            out[int(k[0]) // 1000] = float(k[4])
-        if len(rows) < 1000:
-            break
-        cur = int(rows[-1][0]) + 86_400_000
-    return out
-
-
-def _dom_build() -> dict:
-    end = now()
-    raw: dict = {}
-    t = DOM_START
-    while t < end:
-        t2 = min(end, t + 2000 * 86400)
-        chunk = _dom_cmc(f"global-metrics/quotes/historical?format=chart&interval=1d&timeStart={t}&timeEnd={t2}").get("quotes") or []
-        # Не пришёл кусок — не рисуем вместо него ровную линию на годы:
-        # сборка не удалась, экран держит прошлый ответ.
-        if not chunk and t2 - t > 3 * 86400:
-            return {"ok": False, "error": "partial"}
-        for q in chunk:
-            try:
-                tot = float(q["quote"][0]["totalMarketCap"])
-                bd = float(q["btcDominance"])
-                raw[_dom_day(q["timestamp"])] = (tot, bd, float(q.get("ethDominance") or 0))
-            except (KeyError, IndexError, TypeError, ValueError):
-                continue
-        t = t2 + 86400
-    # В истории есть дни с нулевой долей биткоина — это сбой, а не рынок.
-    raw = {k: v for k, v in raw.items() if v[0] > 0 and 0 < v[1] < 100}
-    if len(raw) < 1000:
-        return {"ok": False, "error": "no_data"}
-    ks = sorted(raw)
-    if max(b - a for a, b in zip(ks, ks[1:])) > 7 * 86400:
-        return {"ok": False, "error": "gap"}
-
-    cmc_stable = 0.0
-    latest = _dom_cmc("global-metrics/quotes/latest")
-    try:
-        q = latest["quotes"][0]
-        raw[end // 86400 * 86400] = (float(q["totalMarketCap"]), float(latest["btcDominance"]), float(latest.get("ethDominance") or 0))
-        cmc_stable = float(latest.get("stablecoinMarketCap") or q.get("stablecoinMarketCap") or 0)
-    except (KeyError, IndexError, TypeError, ValueError):
-        pass
-
-    stables: dict = {}
-    for r in get_json("https://stablecoins.llama.fi/stablecoincharts/all", 30) or []:
-        try:
-            stables[_dom_day(r["date"])] = sum(float(v) for v in (r.get("totalCirculatingUSD") or {}).values())
-        except (KeyError, TypeError, ValueError, AttributeError):
-            continue
-    # До 2020 года DefiLlama видит лишь часть стейблкоинов (в январе 2018 —
-    # $30 млн при $1,6 млрд одного USDT). Тогда почти весь рынок стейблов —
-    # USDT, и его дневная капитализация с CoinMarketCap служит нижней
-    # границей.
-    t = 1424822400  # 2015-02-25 — первый день USDT
-    while t < 1609459200:
-        t2 = min(1609459200, t + 700 * 86400)
-        for q in _dom_cmc(f"cryptocurrency/historical?id=825&convertId=2781&timeStart={t}&timeEnd={t2 + 86399}&interval=1d").get("quotes") or []:
-            try:
-                d = _dom_day(q["timeOpen"])
-                stables[d] = max(stables.get(d, 0.0), float(q["quote"]["marketCap"]))
-            except (KeyError, TypeError, ValueError):
-                continue
-        t = t2 + 86400
-    k_st = 1.0
-    if stables and cmc_stable > 0:
-        k_st = min(1.2, max(0.6, cmc_stable / stables[max(stables)]))
-
-    # Доля эфира в дневной истории CoinMarketCap есть только с октября 2020;
-    # раньше её дают дневные капитализации самого ETH (с 7 августа 2015,
-    # окнами до 700 дней — длиннее окна там отдают через день).
-    eth_mcap: dict = {}
-    no_eth = [d for d, v in raw.items() if v[2] <= 0 and d >= 1438905600]
-    if no_eth:
-        t, stop = min(no_eth), max(no_eth)
-        while t <= stop:
-            t2 = min(stop, t + 700 * 86400)
-            for q in _dom_cmc(f"cryptocurrency/historical?id=1027&convertId=2781&timeStart={t}&timeEnd={t2 + 86399}&interval=1d").get("quotes") or []:
-                try:
-                    eth_mcap[_dom_day(q["timeOpen"])] = float(q["quote"]["marketCap"])
-                except (KeyError, TypeError, ValueError):
-                    continue
-            t = t2 + 86400
-    for d in no_eth:
-        tot, bd, _ = raw[d]
-        if eth_mcap.get(d, 0) > 0:
-            raw[d] = (tot, bd, min(100 - bd, eth_mcap[d] / tot * 100))
-
-    eb = _dom_ethbtc(1500000000 * 1000)
-
-    first, last = min(raw), max(raw)
-    rows = []
-    prev = raw[first]
-    st_prev = 0.0
-    eb_prev = 0.0
-    for d in range(first, last + 1, 86400):
-        tot, bd, ed = prev = raw.get(d, prev)
-        st_prev = stables.get(d, st_prev)
-        st = min(st_prev * k_st, tot * 0.5)
-        eb_prev = eb.get(d, eb_prev)
-        rows.append([round(tot / 1e6), round(bd, 2), round(ed, 2), round(st / 1e6), float(f"{eb_prev:.6g}")])
-
-    alt: dict = {}
-    a = _dom_cmc(f"altcoin-season/chart?start=1700000000&end={end}")
-    pts: dict = {}
-    for p in a.get("points") or []:
-        try:
-            pts[_dom_day(p["timestamp"])] = int(float(p["altcoinIndex"]))
-        except (KeyError, TypeError, ValueError):
-            continue
-    if pts:
-        hv = a.get("historicalValues") or {}
-
-        def hval(k: str):
-            try:
-                return [int(float(hv[k]["altcoinIndex"])), _dom_day(hv[k]["timestamp"])]
-            except (KeyError, TypeError, ValueError):
-                return None
-
-        top = []
-        for c in a.get("topCryptos") or []:
-            try:
-                top.append([str(c["symbol"])[:12], str(c.get("name") or "")[:40], round(float(c["percentChange"]), 2)])
-            except (KeyError, TypeError, ValueError):
-                continue
-        alt = {"pts": sorted(pts.items()), "now": hval("now"), "d1": hval("yesterday"), "d7": hval("lastWeek"),
-               "d30": hval("lastMonth"), "hi": hval("yearlyHigh"), "lo": hval("yearlyLow"), "top": top}
-
-    res = {"ok": True, "t0": first, "rows": rows, "alt": alt, "at": now()}
-    with _liq_lock:
-        _dom_cache["all"] = (time.monotonic(), res)
-    _disk_save("dom", "all", res)
-    return res
-
-
-def _dom_bg() -> None:
-    try:
-        _dom_build()
-    except Exception as e:  # noqa: BLE001
-        print(f"dom: {e}", file=sys.stderr)
-    finally:
-        with _liq_lock:
-            _liq_busy.discard("dom")
-
-
-_dom_first = threading.Lock()
-
-
-def dom_data() -> dict:
-    disk_warm(_dom_cache, "all", "dom", DOM_TTL)
-    with _liq_lock:
-        hit = _dom_cache.get("all")
-        if hit and time.monotonic() - hit[0] < DOM_TTL:
-            return hit[1]
-        if hit and "dom" not in _liq_busy:
-            _liq_busy.add("dom")
-            threading.Thread(target=_dom_bg, daemon=True).start()
-    if hit:
-        return hit[1]
-    # Холодный старт: десяток запросов к CoinMarketCap делает один поток,
-    # остальные ждут его ответа, а не шлют те же запросы параллельно.
-    with _dom_first:
-        with _liq_lock:
-            hit = _dom_cache.get("all")
-        return hit[1] if hit else _dom_build()
+# --- Альтсезон и сила биткоина ----------------------------------------------
+# Отдельный модуль wt_dom.py: свой расчёт по дневным ценам Hyperliquid
+# (индекс альтсезона, сила альтов против биткоина, ETH/BTC); кэш, фоновое
+# обновление, тесты.
+dom_data = wt_dom.dom_data
 
 
 # --- ETF и крупные держатели -----------------------------------------------
@@ -15072,8 +14890,8 @@ def _dg_safe(name: str, fn):
 
 
 def _dg_market() -> dict:
-    """Рынок целиком: настроение, две главные монеты, капитализация,
-    доминация и альтсезон — то, с чего читают любой обзор."""
+    """Рынок целиком: настроение, две главные монеты и индекс альтсезона —
+    то, с чего читают любой обзор."""
     out: dict = {}
     days = (fng_data() or {}).get("days") or []
     if len(days) >= 8:
@@ -15083,19 +14901,10 @@ def _dg_market() -> dict:
         px = _dg_px(product)
         if px:
             out[sym] = px
-    dom = dom_data() or {}
-    rows = dom.get("rows") or []
-    if len(rows) >= 2:
-        cap, btc_d, eth_d = rows[-1][0], rows[-1][1], rows[-1][2]
-        cap0, btc0 = rows[-2][0], rows[-2][1]
-        if cap and cap0:
-            out["cap"] = {"v": round(cap * 1e6), "ch": round((cap / cap0 - 1) * 100, 2)}
-        if btc_d:
-            out["dom"] = {"btc": round(btc_d, 2), "d1": round(btc_d - btc0, 2), "eth": round(eth_d, 2)}
-    alt = (dom.get("alt") or {})
-    if alt.get("now"):
-        a0 = (alt.get("d1") or alt["now"])[0]
-        out["alt"] = {"v": int(alt["now"][0]), "d1": int(alt["now"][0]) - int(a0)}
+    # Индекс альтсезона — свой расчёт (wt_dom): сейчас и на сутки раньше.
+    rows = (dom_data() or {}).get("rows") or []
+    if len(rows) >= 2 and rows[-1][1] is not None and rows[-2][1] is not None:
+        out["alt"] = {"v": int(rows[-1][1]), "d1": int(rows[-1][1]) - int(rows[-2][1])}
     return out
 
 
