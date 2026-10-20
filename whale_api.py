@@ -13745,7 +13745,7 @@ def etfd_set(chat: str, body: dict) -> dict:
 def etfd_text(lang: str, day: int, v: float, top: list) -> str:
     """Текст алерта: итог дня, крупнейшие фонды в ту же сторону, источник
     (TFTC — с адресом лицензии) и где выключить."""
-    head = dgi.tr(lang, "ef_al_in" if v > 0 else "ef_al_out", v=dgi.usd(v, lang, True), d=dgi.date_long(lang, day))
+    head = dgi.tr(lang, "ef_al_in" if v > 0 else "ef_al_out", v=dgi.usd(v, lang, True), d=dgi.date_word(lang, day))
     lines = [head]
     if top:
         lines.append(dgi.tr(lang, "ef_al_top", f=", ".join(f"{t} {dgi.usd(x, lang, True)}" for t, x in top)))

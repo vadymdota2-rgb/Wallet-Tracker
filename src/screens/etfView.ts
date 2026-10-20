@@ -33,7 +33,7 @@ export function coinsShort(lang: string, v: number, sym: string, signed = true):
   const s = !signed ? "" : v > 0 ? "+" : v < 0 ? "−" : "";
   try {
     const f = new Intl.NumberFormat(lang, { notation: "compact", compactDisplay: "short", maximumFractionDigits: signed ? 1 : 2 })
-      .format(Math.abs(v)).replace(/[  ]/g, " ");
+      .format(Math.abs(v)).replace(/[\u00a0\u202f]/g, " ");
     return `${s}${f}${sym ? ` ${sym}` : ""}`;
   } catch {
     return `${s}${num(Math.abs(v))}${sym ? ` ${sym}` : ""}`;

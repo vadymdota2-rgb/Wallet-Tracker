@@ -847,7 +847,7 @@ say("ETF: алерт о крупном дне — по желанию, толь�
     and 'if body.get("on") is True and not chat_premium(chat):' in api and "dgi.TFTC_BY_POST}\")" in api
     and "ETFD_STABLE = 3 * 3600" in api and "if now() - seen[1] < ETFD_STABLE:" in api
     and "def etfd_send(chat: str, text: str) -> bool | None:" in api and "if e.code == 403 or (" in api
-    and "                if down >= 3:\n                    break" in api and "d=dgi.date_long(lang, day)" in api
+    and "                if down >= 3:\n                    break" in api and "d=dgi.date_word(lang, day)" in api
     and "INSERT OR IGNORE INTO etf_new_funds" in api
     and "threading.Thread(target=etfd_loop, daemon=True).start()" in api and "<BigDayAlert lang={lang} />" in _ef
     and 'role="switch"' in _ef and "test_etf_day_alert.py" in read(f"{APP}/.github/workflows/tests.yml"))
@@ -855,7 +855,7 @@ _tre1 = read(f"{APP}/wt_treasury.py")
 say("ETF: защита от подменённого источника — целые не длиннее 18 цифр (огромное целое не роняет разбор), не больше 60 фондов в наборе, не больше трёх сообщений о новых фондах за сборку",
     "parse_int=_int" in _etfs and "parse_int=_int" in _tre1 and "INT_DIGITS = 18" in _etfs and "INT_DIGITS = 18" in _tre1
     and "except (TypeError, ValueError, OverflowError):" in _etfs and "    except OverflowError:\n        return False" in _tre1
-    and "FUNDS_MAX = 60" in _etfs and "if hook and i < NEW_MAX:" in _etfs
+    and "FUNDS_MAX = 60" in _etfs and "not in _st.told)[:NEW_MAX]" in _etfs
     and "test_huge_integers_do_not_crash_the_build" in read(f"{APP}/tests/test_etf_security.py"))
 _wsb = read(os.path.join(BOT, "btc_chain.cpp"))
 _tre0 = read(f"{APP}/wt_treasury.py")

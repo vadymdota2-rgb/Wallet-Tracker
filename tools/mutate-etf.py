@@ -113,7 +113,7 @@ PY = [
     ('    if len(text.lstrip("-")) > INT_DIGITS:', "    if False:", "целое не длиннее INT_DIGITS цифр"),
     ("except (TypeError, ValueError, OverflowError):", "except (TypeError, ValueError):", "огромное целое — не число"),
     ("if len({t for by, _ in days.values() for t in by}) > FUNDS_MAX:", "if False:", "тысячи тикеров по дням — набор не берём"),
-    ("if hook and i < NEW_MAX:", "if hook:", "сообщений о новых фондах — не больше NEW_MAX"),
+    ("not in _st.told)[:NEW_MAX]", "not in _st.told)", "сообщений о новых фондах — не больше NEW_MAX"),
 ]
 TR = [
     ("return QUARTER.fullmatch(s) is not None", 'return len(s) == 10 and s[5:] in ("03-31", "06-30", "09-30", "12-31")', "SEC: дата квартала — ASCII"),

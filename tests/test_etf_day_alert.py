@@ -286,6 +286,29 @@ class EtfDayAlertTest(unittest.TestCase):
             self.assertNotIn("2026-10-16", text, lang)
 
 
+class DateWordTest(unittest.TestCase):
+    """Дата словами на всех шестнадцати языках — в алерте и на картинке дайджеста."""
+
+    def test_every_language_in_words(self):
+        want = {"ru": "16 октября 2026 г.", "uk": "16 жовтня 2026 р.", "en": "October 16, 2026",
+                "de": "16. Oktober 2026", "fr": "16 octobre 2026", "es": "16 de octubre de 2026",
+                "pt": "16 de outubro de 2026", "pl": "16 października 2026", "tr": "16 Ekim 2026",
+                "id": "16 Oktober 2026", "vi": "16 tháng 10 năm 2026", "ko": "2026년 10월 16일",
+                "zh": "2026年10月16日", "ja": "2026年10月16日", "hi": "16 अक्टूबर 2026", "ar": "16 أكتوبر 2026"}
+        self.assertEqual(set(want), set(api.LANG_CODES))
+        for lang, s in want.items():
+            self.assertEqual(dgi.date_word(lang, DAY), s, lang)
+            short = dgi.date_word(lang, DAY, year=False)
+            self.assertNotIn("2026", short, lang)
+            self.assertIn("16", short, lang)
+        # Язык не из списка — по-английски, а не цифрами.
+        self.assertEqual(dgi.date_word("xx", DAY), "October 16, 2026")
+        # Все двенадцать месяцев есть у каждого языка с названиями месяцев.
+        for lang, names in dgi._MONTHS.items():
+            self.assertEqual(len(names), 12, lang)
+            self.assertEqual(len(set(names)), 12, lang)
+
+
 class NewFundTest(unittest.TestCase):
     """Новый фонд в наборе TFTC — владельцу один раз, и после перезапуска тоже."""
 

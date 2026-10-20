@@ -125,36 +125,28 @@ _MONTHS = {
 }
 
 
-def date_word(lang: str, ts: int) -> str:
-    g = time.gmtime(ts)
-    if lang in ("ru", "uk"):
-        return f"{g.tm_mday} {_MONTHS[lang][g.tm_mon - 1]} {g.tm_year} {'г.' if lang == 'ru' else 'р.'}"
-    if lang == "en":
-        return f"{_MONTHS['en'][g.tm_mon - 1]} {g.tm_mday}, {g.tm_year}"
-    return time.strftime("%Y-%m-%d", g)
-
-
-def date_long(lang: str, ts: int) -> str:
-    """Дата словами на любом из шестнадцати языков — для текста сообщений.
-    На картинке дайджеста остаётся date_word: там место под дату рассчитано."""
+def date_word(lang: str, ts: int, year: bool = True) -> str:
+    """Дата словами на языке человека: «16 октября 2026 г.», «16. Oktober 2026»,
+    «2026年10月16日»; без года (year=False) — для строк календаря."""
     g = time.gmtime(ts)
     d, m, y = g.tm_mday, g.tm_mon, g.tm_year
-    if lang in ("ru", "uk", "en"):
-        return date_word(lang, ts)
     if lang in ("ja", "zh"):
-        return f"{y}年{m}月{d}日"
+        return f"{y}年{m}月{d}日" if year else f"{m}月{d}日"
     if lang == "ko":
-        return f"{y}년 {m}월 {d}일"
+        return f"{y}년 {m}월 {d}일" if year else f"{m}월 {d}일"
     if lang == "vi":
-        return f"{d} tháng {m} năm {y}"
+        return f"{d} tháng {m} năm {y}" if year else f"{d} tháng {m}"
     if lang not in _MONTHS:
-        return time.strftime("%Y-%m-%d", g)
+        return date_word("en", ts, year)
     name = _MONTHS[lang][m - 1]
-    if lang == "de":
-        return f"{d}. {name} {y}"
-    if lang in ("es", "pt"):
-        return f"{d} de {name} de {y}"
-    return f"{d} {name} {y}"
+    if lang == "en":
+        return f"{name} {d}, {y}" if year else f"{name} {d}"
+    day = f"{d}. {name}" if lang == "de" else f"{d} de {name}" if lang in ("es", "pt") else f"{d} {name}"
+    if not year:
+        return day
+    if lang in ("ru", "uk"):
+        return f"{day} {y} {'г.' if lang == 'ru' else 'р.'}"
+    return f"{day} de {y}" if lang in ("es", "pt") else f"{day} {y}"
 
 
 # --- Выводы: копия DigestMore.tsx --------------------------------------------
@@ -447,7 +439,7 @@ def cal_title(e: dict, lang: str) -> str:
 def when_utc(e: dict, lang: str) -> str:
     """«Wed, Oct 14 · 12:30 UTC» — канал читают в разных поясах, поэтому UTC."""
     g = time.gmtime(int(e["t"]))
-    day = f"{_WD[g.tm_wday]}, {_MON3[g.tm_mon - 1]} {g.tm_mday}" if lang == "en" else date_word(lang, int(e["t"])).rsplit(" ", 2)[0]
+    day = f"{_WD[g.tm_wday]}, {_MON3[g.tm_mon - 1]} {g.tm_mday}" if lang == "en" else date_word(lang, int(e["t"]), year=False)
     all_day = e.get("k") == "unl" or (e.get("k") == "earn" and e.get("when") == "day")
     return day if all_day else f"{day} · {g.tm_hour:02d}:{g.tm_min:02d} UTC"
 

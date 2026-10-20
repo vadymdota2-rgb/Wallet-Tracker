@@ -117,8 +117,12 @@ class PoisonTest(unittest.TestCase):
         with mock.patch.object(etf, "_log") as log:
             build({"days": [{"date": "2026-10-10", "perEtfUsd": per}]})
         self.assertEqual(told, ["NEW0", "NEW1", "NEW2"])
-        # В журнале — все десять.
-        self.assertEqual(sum("новый фонд в наборе TFTC" in c.args[0] for c in log.call_args_list), 10)
+        self.assertEqual(sum("новый фонд в наборе TFTC" in c.args[0] for c in log.call_args_list), 3)
+        # Остальные не теряются: по три за следующие сборки, без повторов.
+        for want in (["NEW3", "NEW4", "NEW5"], ["NEW6", "NEW7", "NEW8"], ["NEW9"], []):
+            told.clear()
+            etf._new_funds(set(per))
+            self.assertEqual(told, want)
 
     def test_wrong_types_everywhere(self):
         for days in ([None, 1, "x", [], {"date": ["2026-10-10"]}, {"date": "2026-10-10", "perEtfUsd": "IBIT"}],

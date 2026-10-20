@@ -116,7 +116,8 @@ INT_DIGITS = 18
 # подменён: тысячи тикеров раздули бы ответ API и засыпали бы владельца
 # сообщениями о «новых фондах». Такой набор не берём целиком.
 FUNDS_MAX = 60
-# Сообщений о новых фондах за одну сборку — не больше (остальные — в журнал).
+# О новых фондах за одну сборку — не больше стольких (остальные — в следующую:
+# фонды бывает запускают пачкой, но лавина сообщений не нужна).
 NEW_MAX = 3
 _HEADERS = {"User-Agent": "wallet-tracker/1.0", "Accept-Encoding": "identity"}
 
@@ -476,12 +477,12 @@ def _new_funds(tickers: set[str]) -> None:
     проверен (TICKER) — в сообщение он идёт как есть."""
     known = {t for t, _, _ in wt_treasury.ETFS}
     with _lock:
-        fresh = sorted(t for t in tickers if t not in known and t not in _st.told)
+        fresh = sorted(t for t in tickers if t not in known and t not in _st.told)[:NEW_MAX]
         _st.told = _st.told | frozenset(fresh)
         hook = _st.on_new
-    for i, t in enumerate(fresh):
+    for t in fresh:
         _log(f"новый фонд в наборе TFTC: {t} — нет в wt_treasury.ETFS (без имени, комиссии и запаса)")
-        if hook and i < NEW_MAX:
+        if hook:
             try:
                 hook(t)
             except Exception as e:  # noqa: BLE001 — сообщение не роняет сборку
