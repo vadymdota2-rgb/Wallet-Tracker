@@ -9,6 +9,7 @@ import json
 import os
 import re
 import sys
+import tempfile
 import time
 import unittest
 from unittest import mock
@@ -35,13 +36,27 @@ def usdt(cap: float = 1.8e11, symbol: str = "USDT") -> dict:
     return {"data": [{"id": 825, "symbol": symbol, "quote": [{"id": 2781, "symbol": "USD", "market_cap": cap}]}]}
 
 
-class Net:
-    def __init__(self, g=None, u=None):
-        self.g, self.u, self.calls = glob() if g is None else g, usdt() if u is None else u, []
+DAY = 86_400
+T0 = 1_700_006_400  # 15 ноября 2023 г.
 
-    def __call__(self, url, timeout=20):
+
+def hist(n: int = 400, start: int = T0, eth_from: int = 0) -> dict:
+    """Как отвечает global-metrics/quotes/historical с aux=btc_dominance,eth_dominance."""
+    return {"data": {"quotes": [
+        {"timestamp": time.strftime("%Y-%m-%dT00:00:00.000Z", time.gmtime(start + i * DAY)),
+         "quote": {"USD": {"total_market_cap": 1e12 + i * 1e9}},
+         "btc_dominance": 50 + i / 100, "eth_dominance": 15.0 if i >= eth_from else 0}
+        for i in range(n)]}}
+
+
+class Net:
+    def __init__(self, g=None, u=None, h=None):
+        self.g, self.u, self.h = glob() if g is None else g, usdt() if u is None else u, hist() if h is None else h
+        self.calls = []
+
+    def __call__(self, url, timeout=20, limit=0):
         self.calls.append(url)
-        return json.dumps(self.g if "global-metrics" in url else self.u).encode()
+        return json.dumps(self.h if "historical" in url else self.g if "global-metrics" in url else self.u).encode()
 
 
 class Base(unittest.TestCase):
@@ -102,8 +117,9 @@ class BuildTest(Base):
             res = mc.build()
         self.assertTrue(res["ok"])
         self.assertEqual(res["by"], "CoinMarketCap")
-        self.assertEqual(len(net.calls), 2)
+        self.assertEqual(len(net.calls), 3)
         self.assertIs(mc.mcap_data(), res)
+        self.assertEqual(len(res["hist"]), 400)
 
     def test_no_key_is_said_and_nothing_is_asked(self):
         with mock.patch.dict(os.environ, {"CMC_API_KEY": ""}), mock.patch.object(mc._opener, "open") as op:
@@ -131,6 +147,83 @@ class BuildTest(Base):
         with mock.patch.object(mc.threading, "Thread") as th:
             self.assertIs(mc.mcap_data(), old)
         th.assert_not_called()
+
+
+class HistoryTest(Base):
+    NOW = T0 + 1200 * DAY
+
+    def test_rows_eth_before_2020_and_weekly_thinning(self):
+        rows = mc.history(hist(1200, eth_from=100), self.NOW)
+        last = T0 + 1199 * DAY
+        # Последние HIST_DAILY дней — каждый день, раньше — раз в неделю.
+        daily = [r for r in rows if r[0] > last - mc.HIST_DAILY * DAY]
+        self.assertEqual(len(daily), mc.HIST_DAILY)
+        old = [r for r in rows if r[0] <= last - mc.HIST_DAILY * DAY]
+        self.assertTrue(old and all((r[0] // DAY) % 7 == 0 for r in old))
+        self.assertEqual(rows[-1], [last, 1e12 + 1199e9, 61.99, 15.0])
+        # Доля эфира 0 (до октября 2020 г. её нет) — это «нет данных», а не ноль.
+        first = mc.history(hist(5, eth_from=3), self.NOW)
+        self.assertEqual([r[3] for r in first], [None, None, None, 15.0, 15.0])
+
+    def test_bad_days_are_skipped_and_garbage_is_none(self):
+        h = hist(10)
+        q = h["data"]["quotes"]
+        q[1]["btc_dominance"] = 101
+        q[2]["quote"]["USD"]["total_market_cap"] = "1e12"
+        q[3]["timestamp"] = "вчера"
+        q[4]["timestamp"] = "2099-01-01T00:00:00.000Z"
+        q[5]["eth_dominance"] = 60  # BTC 50 + ETH 60 > 100 — ETH-доли нет, день есть
+        q.append("x")
+        rows = mc.history(h, self.NOW)
+        self.assertEqual([r[0] for r in rows], [T0 + i * DAY for i in (0, 5, 6, 7, 8, 9)])
+        self.assertIsNone(rows[1][3])
+        for bad in (None, [], {}, {"data": {"quotes": "x"}}, {"data": {"quotes": [q[0]]}},
+                    {"data": {"quotes": [q[0]] * (mc.HIST_MAX + 1)}}):
+            self.assertIsNone(mc.history(bad, self.NOW), str(bad)[:60])
+
+    def test_history_is_asked_twice_a_day_and_kept_on_disk(self):
+        tmp = tempfile.mkdtemp()
+        mc.set_cache_dir(tmp)
+        net = Net()
+        with mock.patch.object(mc, "_fetch", net):
+            first = mc.build()
+            mc.build()
+        self.assertEqual(sum("historical" in u for u in net.calls), 1)
+        # Конец истории — сегодня: без него CoinMarketCap отдаёт лишь 10 дней.
+        url = next(u for u in net.calls if "historical" in u)
+        self.assertIn("time_start=2013-04-28", url)
+        self.assertIn("time_end=" + time.strftime("%Y-%m-%d", time.gmtime()), url)
+        # Перезапуск: история — с диска, без запроса.
+        mc._st = mc._State()
+        mc.set_cache_dir(tmp)
+        net.calls.clear()
+        with mock.patch.object(mc, "_fetch", net):
+            again = mc.build()
+        self.assertFalse([u for u in net.calls if "historical" in u])
+        self.assertEqual(again["hist"], first["hist"])
+        # Прошло больше HIST_TTL — спрашиваем снова; сеть молчит — прошлая история.
+        mc._st.hist = (time.time() - mc.HIST_TTL - 1, first["hist"])
+
+        def silent(url, timeout=20, limit=0):
+            return None if "historical" in url else net(url, timeout, limit)
+        with mock.patch.object(mc, "_fetch", silent):
+            self.assertEqual(mc.build()["hist"], first["hist"])
+
+    def test_poisoned_disk_copy_is_ignored(self):
+        tmp = tempfile.mkdtemp()
+        mc.set_cache_dir(tmp)
+        path = os.path.join(tmp, "mcap_hist.json")
+        good = [[T0, 1e12, 50.0, None], [T0 + DAY, 1e12, 50.0, 15.0]]
+        for body in ("garbage", "[1]", json.dumps({"at": time.time(), "v": [[T0 + DAY, 1e12, 50, None], [T0, 1e12, 50, None]]}),
+                     json.dumps({"at": time.time(), "v": [[T0, 1e12, 500, None], [T0 + DAY, 1e12, 50, None]]}),
+                     json.dumps({"at": time.time(), "v": [[T0 + 5, 1e12, 50, None], [T0 + DAY, 1e12, 50, None]]}),
+                     json.dumps({"at": "x", "v": good})):
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(body)
+            self.assertIsNone(mc._file_load(), body[:60])
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"at": time.time(), "v": good}, f)
+        self.assertEqual(mc._file_load()[1], good)
 
 
 class SecurityTest(Base):
@@ -196,10 +289,14 @@ class PolicyTest(unittest.TestCase):
             elif isinstance(n, ast.ImportFrom):
                 found.add(n.module or "")
         self.assertLessEqual(found, {"__future__", "contextlib", "http.client", "json", "math", "os", "sys", "threading",
-                                     "time", "urllib.error", "urllib.parse", "urllib.request", "typing"})
+                                     "time", "urllib.error", "urllib.parse", "urllib.request", "typing", "datetime"})
         bad = [n.func.id for n in ast.walk(self.tree()) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
-               and n.func.id in {"eval", "exec", "compile", "__import__", "open", "setattr"}]
+               and n.func.id in {"eval", "exec", "compile", "__import__", "setattr"}]
         self.assertEqual(bad, [])
+        # Файлы — только копия истории на диске.
+        where = {fn.name for fn in ast.walk(self.tree()) if isinstance(fn, ast.FunctionDef)
+                 for n in ast.walk(fn) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "open"}
+        self.assertEqual(where, {"_file_load", "_file_save"})
 
     def test_only_the_official_api(self):
         urls = [n.value for n in ast.walk(self.tree())
@@ -213,8 +310,10 @@ class PolicyTest(unittest.TestCase):
 
     def test_endpoint_takes_nothing_and_credits_are_few(self):
         self.assertEqual(inspect.signature(mc.mcap_data).parameters, {})
-        # Два запроса по кредиту раз в час — меньше 1500 в месяц из 15 000 бесплатных.
-        self.assertLess(2 * 24 * 31 * 3600 / mc.TTL, 1500)
+        # Два запроса по кредиту раз в час и история (~50 кредитов) раз в
+        # HIST_TTL — меньше трети из 15 000 бесплатных в месяц.
+        month = 31 * 24 * 3600
+        self.assertLess(2 * month / mc.TTL + 50 * month / mc.HIST_TTL, 5000)
 
     def test_app_side(self):
         with open(os.path.join(ROOT, "src/lib/api.ts"), encoding="utf-8") as f:

@@ -9994,6 +9994,7 @@ DISK_KEEP = 128
 _DISK: dict[int, str] = {}
 etf.set_cache_file(os.path.join(CACHE_DIR, "etf.json"))
 wt_dom.set_cache_dir(CACHE_DIR)
+wt_mcap.set_cache_dir(CACHE_DIR)
 # Прежняя доминация (CoinMarketCap) держала копию в dom-<ключ>.json — её
 # больше никто не читает: убираем, чтобы не лежала на диске вечно.
 try:

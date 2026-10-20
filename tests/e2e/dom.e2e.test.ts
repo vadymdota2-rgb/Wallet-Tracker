@@ -82,11 +82,21 @@ interface Opts {
   mcap?: unknown;
 }
 
-/** Доминация, как её отдаёт wt_mcap по ответу CoinMarketCap. */
+/** Сервер без ключа CoinMarketCap: блока капитализации нет — графики альтсезона первые. */
+const NO_KEY = { ok: false, error: "no_key" };
+/** Доминация, как её отдаёт wt_mcap по ответу CoinMarketCap; история — выдуманная (данных CMC в репозитории нет). */
+const MCAP_DAYS = 1500;
 const MCAP = {
   ok: true, btc: [57.49, 57.21], eth: [11.2, 11.4], alt: [42.51, 42.79], alt_ns: 33.39, usdt: 6.32,
   cap: [2_850_000_000_000, 2_900_000_000_000], by: "CoinMarketCap", at: 0,
+  hist: [] as [number, number, number, number | null][],
 };
+{
+  const end = Math.floor(T / 86_400) * 86_400;
+  for (let i = 0; i < MCAP_DAYS; i++) {
+    MCAP.hist.push([end - (MCAP_DAYS - 1 - i) * 86_400, 1e12 + i * 1e9, 45 + i / 100, i < 500 ? null : 15]);
+  }
+}
 interface Opened { ctx: BrowserContext; page: Page; errors: string[]; asked: () => number }
 
 async function open(o: Opts = {}): Promise<Opened> {
@@ -183,39 +193,60 @@ describe("Альтсезон", () => {
     const day = new Intl.DateTimeFormat("ru", { timeZone: "UTC", day: "numeric", month: "long", year: "numeric" }).format(new Date(last[0] * 1000));
     assert.ok(sp(await page.locator(".fg-date").first().innerText()).startsWith(sp(I18N["dm_day"]!["ru"]!.replace("{d}", day))));
     // Три графика: индекс, сила альтов, ETH/BTC.
-    assert.equal(await page.locator(".fg-svg[role=img]").count(), 3);
+    // Четыре графика: биткоин против альтов, индекс, сила альтов, ETH/BTC.
+    assert.equal(await page.locator(".fg-svg[role=img]").count(), 4);
     assert.deepEqual(errors, []);
     await ctx.close();
   });
 
-  test("доминация: доли BTC, альтов, ETH и USDT, за сутки, источник; нет ключа или мусор — блока нет", async () => {
+  test("капитализация и доминация как в начале модуля: сумма рынка, доля BTC, из чего состоит рынок, график; нет ключа или мусор — блока нет", async () => {
     const { ctx, page, errors } = await open();
-    await page.locator(".dm-dgrid").waitFor();
-    const tiles = (await page.locator(".dm-dtile b").allInnerTexts()).map(sp);
-    assert.deepEqual(tiles, ["57,5%", "42,5%", "11,2%", "6,3%"]);
-    // Изменение за сутки — в пунктах; у USDT вчерашней доли нет.
+    await page.locator(".dm-cap").waitFor();
+    assert.equal(sp(await page.locator(".dm-cap small").first().innerText()), I18N["dm_total"]!["ru"]);
+    // Изменения капитализации: сутки (от вчерашней CMC), неделя, месяц, год (по истории).
+    const capCh = (await page.locator(".dm-cap-ch span").allInnerTexts()).map(sp);
+    assert.equal(capCh.length, 4);
+    assert.ok(capCh[0]!.startsWith(I18N["dm_24h"]!["ru"]!) && capCh[0]!.includes("-1,7%"), String(capCh[0]));
+    // Доминация биткоина и она же без стейблкоинов: 57,49 / (100 − 9,12).
+    assert.equal(sp(await page.locator(".dm-hero > b").innerText()), "57,5%");
+    assert.equal(sp(await page.locator(".dm-x b").innerText()), "63,3%");
+    // Изменения доли — в пунктах, со знаком у числа (слева направо даже в арабском).
     const minus = (x: string) => x.replace(/\u2212/g, "-");
-    const deltas = (await page.locator(".dm-dtile span").allInnerTexts()).map((x) => minus(sp(x)));
-    assert.deepEqual(deltas, ["+0,28", "-0,28", "-0,2"].map((v) => sp(I18N["dm_d_pp"]!["ru"]!.replace("{v}", v))));
-    // Знак — у числа, слева направо даже в арабском.
-    assert.deepEqual(await page.locator(".dm-dtile span bdi").evaluateAll((els) => els.map((e) => e.getAttribute("dir"))), ["ltr", "ltr", "ltr"]);
+    const pp = (await page.locator(".dm-hero + .dm-chs .dm-ch b").allInnerTexts()).map((x) => minus(sp(x)));
+    assert.equal(pp[0], sp(I18N["dm_pp"]!["ru"]!.replace("{v}", "+0,28")));
+    assert.equal(pp.length, 4);
+    const dirs = await page.locator(".dm-hero + .dm-chs bdi").evaluateAll((els) => els.map((e) => e.getAttribute("dir")));
+    assert.ok(dirs.length === 4 && dirs.every((d) => d === "ltr"));
+    // Из чего состоит рынок: биткоин, эфир, стейблкоины (в т. ч. USDT), остальные.
+    const rows = (await page.locator(".fg-rows .fg-row").allInnerTexts()).map(sp);
+    assert.equal(rows.length, 4);
+    assert.match(rows[2]!, /USDT 6,3%/);
+    assert.match(sp(await page.locator(".dm-split").getAttribute("aria-label")), /^Биткоин 57,5%, Эфириум 11,2%, Стейблкоины 9,1%, /);
+    // График «биткоин против альтов» и сроки 1г/3г/5л/всё.
+    const chart = page.locator('svg[aria-label="' + I18N["dm_chart"]!["ru"] + '"]');
+    await chart.waitFor();
     assert.ok(sp(await page.locator(".dm-dsrc").innerText()).startsWith(sp(I18N["dm_d_src"]!["ru"]!)));
-    assert.equal(await page.locator(".dm-dbar span").count(), 4);
-    // Подпись полосы — для экранного диктора.
-    assert.match(sp(await page.locator(".dm-dbar").getAttribute("aria-label")), /^BTC 57,5%, ETH 11,2%, USDT 6,3%, /);
-    // Доминация — над альтсезоном.
+    // Капитализация — над альтсезоном.
     const order = await page.evaluate(() => {
-      const d = document.querySelector(".dm-dgrid")!, h = document.querySelector(".dm-ahero")!;
+      const d = document.querySelector(".dm-cap")!, h = document.querySelector(".dm-ahero")!;
       return Boolean(d.compareDocumentPosition(h) & Node.DOCUMENT_POSITION_FOLLOWING);
     });
     assert.ok(order);
+    // Палец на графике — день, BTC в долларах и доля.
+    const box = (await chart.boundingBox())!;
+    await chart.scrollIntoViewIfNeeded();
+    const b2 = (await chart.boundingBox())!;
+    await page.mouse.move(b2.x + b2.width * 0.5, b2.y + box.height / 3);
+    const pop = page.locator(".dm-pop");
+    await pop.waitFor();
+    assert.match(sp(await pop.innerText()), /BTC .*%/);
     assert.deepEqual(errors, []);
     await ctx.close();
     for (const mcap of [{ ok: false, error: "no_key" }, { ...MCAP, at: T, btc: [57.49, null], alt: [10, null] }, { ...MCAP, at: T, cap: [5, null] }]) {
       const o = await open({ mcap });
       await ready(o.page);
       await o.page.waitForTimeout(200);
-      assert.equal(await o.page.locator(".dm-dgrid").count(), 0, JSON.stringify(mcap));
+      assert.equal(await o.page.locator(".dm-cap").count(), 0, JSON.stringify(mcap).slice(0, 80));
       assert.deepEqual(o.errors, []);
       await o.ctx.close();
     }
@@ -291,7 +322,7 @@ describe("Альтсезон", () => {
         const sv = el as SVGSVGElement;
         return { vb: sv.viewBox.baseVal.width, w: sv.getBoundingClientRect().width };
       }));
-      assert.equal(svgs.length, 3, String(width));
+      assert.equal(svgs.length, 4, String(width));
       for (const sv of svgs) assert.ok(Math.abs(sv.vb - sv.w) <= 2.5, `${width}: viewBox ${sv.vb} ≠ ${sv.w}`);
       sizes.push(await page.locator(".dm-svg .fg-tick").first().evaluate((el) => el.getBoundingClientRect().height));
       const col = await page.locator(".dm").evaluate((el) => { const r = el.getBoundingClientRect(); return [r.left, r.right, innerWidth]; });
@@ -305,8 +336,10 @@ describe("Альтсезон", () => {
   test("телефон боком: график помещается по высоте окна", async () => {
     const { ctx, page } = await open({ width: 844, height: 390 });
     await ready(page);
-    const h = await page.locator(".dm-svg").first().evaluate((el) => el.getBoundingClientRect().height);
-    assert.ok(h <= 390 * 0.75, String(h));
+    // Все графики, и двухэтажный «биткоин против альтов» тоже.
+    const hs = await page.locator(".dm-svg").evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height));
+    assert.equal(hs.length, 4);
+    for (const h of hs) assert.ok(h <= 390 * 0.75, String(h));
     assert.deepEqual(await overflow(page), []);
     await ctx.close();
   });
@@ -347,7 +380,7 @@ describe("Альтсезон", () => {
   });
 
   test("график с клавиатуры: стрелки, Home/End, Esc; подсказка слышна", async () => {
-    const { ctx, page, errors } = await open();
+    const { ctx, page, errors } = await open({ mcap: NO_KEY });
     await ready(page);
     const plot = page.locator(".dm-plot").first();
     assert.equal(await plot.getAttribute("tabindex"), "0");
@@ -372,7 +405,7 @@ describe("Альтсезон", () => {
   });
 
   test("график пальцем: подсказка с датой и значением, уходит с пальцем", async () => {
-    const { ctx, page } = await open();
+    const { ctx, page } = await open({ mcap: NO_KEY });
     await ready(page);
     const svg = page.locator(".dm-svg").nth(2);
     await svg.scrollIntoViewIfNeeded();
@@ -387,7 +420,7 @@ describe("Альтсезон", () => {
   });
 
   test("сроки графиков: год, три года, вся история; выбор запоминается", async () => {
-    const { ctx, page } = await open();
+    const { ctx, page } = await open({ mcap: NO_KEY });
     await ready(page);
     const first = () => page.locator(".dm-svg").first().locator(".fg-tick").first().textContent();
     const all = await first();

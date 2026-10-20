@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  MIN_BASKET, PX_FROM, STALE_DAYS, rebase, shareDelta, validMcap, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, windowOf,
+  MCAP_FROM, MIN_BASKET, PX_FROM, STALE_DAYS, mcapAgo, mcapWindow, rebase, shareDelta, validMcap, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, windowOf,
   type DomDay,
 } from "../src/lib/dom.ts";
 
@@ -172,7 +172,7 @@ test("validMcap: доминация — годная копия, подделк�
   const ok = { ok: true, btc: [57.49, 57.21], eth: [11.2, 11.4], alt: [42.51, 42.79], alt_ns: 33.39, usdt: 6.32,
     cap: [2.85e12, 2.9e12], by: "CoinMarketCap", at: NOW, key: "x" };
   const v = validMcap(ok, NOW);
-  assert.deepEqual(v, { ok: true, btc: [57.49, 57.21], eth: [11.2, 11.4], alt: [42.51, 42.79], altNs: 33.39, usdt: 6.32, cap: [2.85e12, 2.9e12], at: NOW });
+  assert.deepEqual(v, { ok: true, btc: [57.49, 57.21], eth: [11.2, 11.4], alt: [42.51, 42.79], altNs: 33.39, usdt: 6.32, cap: [2.85e12, 2.9e12], hist: [], at: NOW });
   assert.equal(shareDelta(v!.btc), 0.28);
   assert.equal(shareDelta([50, null]), null);
   for (const bad of [null, { ok: false, error: "no_key" }, { ...ok, ok: "true" }, { ...ok, at: NOW + 30 * DAY },
@@ -189,4 +189,38 @@ test("rebase: первая точка окна — 100, дальше — во с
   assert.deepEqual(rebase([[1, 4], [2, 2], [3, 8]]), [[1, 100], [2, 50], [3, 200]]);
   assert.deepEqual(rebase([]), []);
   assert.deepEqual(rebase([[1, 0], [2, 5]]), []);
+});
+
+test("validMcap: история рынка — годная целиком, битый день — истории нет, а доли есть", () => {
+  const base = { ok: true, btc: [57.49, 57.21], eth: [11.2, 11.4], alt: [42.51, 42.79], alt_ns: 33.39, usdt: 6.32, cap: [2.85e12, 2.9e12], at: NOW };
+  const h = Array.from({ length: 400 }, (_, i) => [T0 + i * DAY, 1e12 + i * 1e9, 50 + i / 100, i < 10 ? null : 15]);
+  const v = validMcap({ ...base, hist: h }, NOW)!;
+  assert.equal(v.hist.length, 400);
+  assert.deepEqual(v.hist[0], [T0, 1e12, 50, null]);
+  for (const bad of [
+    [[T0, 1e12, 50, null], [T0, 1e12, 50, null]],                 // повтор дня
+    [[T0 + DAY, 1e12, 50, null], [T0, 1e12, 50, null]],          // не по порядку
+    [[T0 + 5, 1e12, 50, null], [T0 + DAY, 1e12, 50, null]],      // не начало суток
+    [[MCAP_FROM - DAY, 1e12, 50, null], [T0, 1e12, 50, null]],   // до 2013 г.
+    [[T0, 1e12, 101, null], [T0 + DAY, 1e12, 50, null]],         // доля больше 100
+    [[T0, 1e12, 60, 50], [T0 + DAY, 1e12, 50, null]],            // BTC + ETH больше 100
+    [[T0, "1e12", 50, null], [T0 + DAY, 1e12, 50, null]],
+    [[T0, 1e12, 50, null]],                                     // одна точка — не история
+    "x",
+  ]) {
+    const w = validMcap({ ...base, hist: bad }, NOW);
+    assert.ok(w, JSON.stringify(bad).slice(0, 60));
+    assert.deepEqual(w.hist, [], JSON.stringify(bad).slice(0, 60));
+  }
+});
+
+test("mcapAgo и mcapWindow: точка n суток назад и окно истории", () => {
+  const h = Array.from({ length: 800 }, (_, i): [number, number, number, number | null] => [T0 + i * DAY, 1e12 + i, 50, null]);
+  assert.equal(mcapAgo(h, 7)![0], T0 + 792 * DAY);
+  assert.equal(mcapAgo(h, 365)![0], T0 + 434 * DAY);
+  assert.equal(mcapAgo(h, 1000), null);
+  assert.equal(mcapAgo([], 1), null);
+  assert.equal(mcapWindow(h, "365").length, 365);
+  assert.equal(mcapWindow(h, "all").length, 800);
+  assert.deepEqual(mcapWindow([], "1095"), []);
 });

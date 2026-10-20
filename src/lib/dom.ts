@@ -99,6 +99,9 @@ export function validDom(raw: unknown, now: number = Date.now() / 1000): DomRepl
 /** Доля во всём рынке, %: [сейчас, сутки назад или null]. */
 export type Share = [number, number | null];
 
+/** День рынка: [начало суток UTC, капитализация $, доля BTC %, доля ETH % или null (до 2020 г.)]. */
+export type McapDay = [number, number, number, number | null];
+
 /** Ответ /api/mcap — доминация по официальному API CoinMarketCap (wt_mcap.py). */
 export interface McapReply {
   ok: true;
@@ -112,6 +115,8 @@ export interface McapReply {
   usdt: number | null;
   /** Капитализация всего рынка, $: [сейчас, сутки назад или null]. */
   cap: [number, number | null];
+  /** История рынка по дням с 2013 г. (раньше трёх лет — раз в неделю); пустая — графика нет. */
+  hist: McapDay[];
   at: number;
 }
 
@@ -121,6 +126,26 @@ export const MCAP_TTL_MS = 60 * 60_000;
 function share(v: unknown, lo: number): Share | null {
   if (!Array.isArray(v) || v.length !== 2 || !within(v[0], lo, 100)) return null;
   return [v[0], within(v[1], lo, 100) ? v[1] : null];
+}
+
+/** 28 апреля 2013 г. — первый день истории CoinMarketCap. */
+export const MCAP_FROM = 1_367_107_200;
+const HIST_MAX = 20_000;
+
+/** История рынка: любой битый день — истории нет (графика нет), остальной ответ годен. */
+function validHist(raw: unknown, now: number): McapDay[] {
+  if (!Array.isArray(raw) || raw.length > HIST_MAX) return [];
+  const out: McapDay[] = [];
+  let prev = 0;
+  for (const r of raw) {
+    if (!Array.isArray(r) || r.length !== 4) return [];
+    const [ts, cap, btc, eth] = r as unknown[];
+    if (!within(ts, MCAP_FROM, now + DAY) || ts % DAY !== 0 || ts <= prev) return [];
+    if (!within(cap, 1e8, 1e15) || !within(btc, 0.5, 100) || (eth !== null && !within(eth, 0, 100 - btc))) return [];
+    out.push([ts, cap, btc, eth as number | null]);
+    prev = ts;
+  }
+  return out.length >= 2 ? out : [];
 }
 
 /** Проверенная копия ответа /api/mcap или null (нет ключа, сбой, подделка). */
@@ -134,7 +159,29 @@ export function validMcap(raw: unknown, now: number = Date.now() / 1000): McapRe
   if (!Array.isArray(cap) || cap.length !== 2 || !within(cap[0], 1e10, 1e15)) return null;
   const altNs = within(raw["alt_ns"], 0, alt[0]) ? raw["alt_ns"] : null;
   const usdt = within(raw["usdt"], 0, 100 - btc[0]) ? raw["usdt"] : null;
-  return { ok: true, btc, eth, alt, altNs, usdt, cap: [cap[0], within(cap[1], 1e10, 1e15) ? cap[1] : null], at: raw["at"] };
+  return {
+    ok: true, btc, eth, alt, altNs, usdt, cap: [cap[0], within(cap[1], 1e10, 1e15) ? cap[1] : null],
+    hist: validHist(raw["hist"], now), at: raw["at"],
+  };
+}
+
+/** День истории не позже чем за n суток до последнего; нет — null. */
+export function mcapAgo(h: McapDay[], n: number): McapDay | null {
+  const last = h[h.length - 1];
+  if (!last) return null;
+  const t = last[0] - n * DAY;
+  for (let i = h.length - 1; i >= 0; i--) if (h[i]![0] <= t) return h[i]!;
+  return null;
+}
+
+export type McapRange = "365" | "1095" | "1825" | "all";
+export const MCAP_RANGES: readonly McapRange[] = ["365", "1095", "1825", "all"];
+
+/** Дни истории за окно: последние n суток или вся. */
+export function mcapWindow(h: McapDay[], range: McapRange): McapDay[] {
+  const last = h[h.length - 1];
+  if (!last || range === "all") return h;
+  return h.filter((d) => d[0] > last[0] - Number(range) * DAY);
 }
 
 /** Изменение доли за сутки, процентных пунктов; нет вчерашней — null. */

@@ -28,8 +28,8 @@ import { haptic } from "../lib/telegram";
 import { fetchDom, fetchMcap, peekDom, peekMcap } from "../lib/api";
 import { Card, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import {
-  DOM_TTL_MS, RANGES, STALE_DAYS, ago, altStats, beat, change, daysOld, ebStats, everyNth, rebase, seasonOf, series, shareDelta, thin,
-  windowOf, type DomReply, type McapReply, type Range, type Share,
+  DOM_TTL_MS, MCAP_RANGES, RANGES, STALE_DAYS, ago, altStats, beat, change, daysOld, ebStats, everyNth, mcapAgo, mcapWindow, rebase,
+  seasonOf, series, thin, windowOf, type DomReply, type McapDay, type McapRange, type McapReply, type Range,
 } from "../lib/dom";
 import { Frame } from "./Screen";
 import { dateStr, timeTicks } from "./FearGreedScreen";
@@ -350,56 +350,286 @@ function Changes({ ch, lang }: { ch: (number | null)[]; lang: Lang }) {
 
 /* ---------------------------------------------------------------------- */
 
-/** Изменение доли за сутки в пунктах: число — отдельным куском слева направо,
- *  иначе в арабском знак уезжает на другую сторону числа. */
-function Delta({ d, lang }: { d: number; lang: Lang }) {
-  const [before = "", after = ""] = t(lang, "dm_d_pp", { v: "\u0000" }).split("\u0000");
-  const v = `${d > 0 ? "+" : d < 0 ? "\u2212" : ""}${num(Math.abs(d), 2)}`;
-  return <span>{before}<bdi dir="ltr">{v}</bdi>{after}</span>;
+/** Изменение доли в процентных пунктах со знаком: «+0,28 п.п.». Число — отдельным
+ *  куском слева направо, иначе в арабском знак уезжает на другую сторону. */
+function Pp({ d, lang }: { d: number; lang: Lang }) {
+  const [before = "", after = ""] = t(lang, "dm_pp", { v: "\u0000" }).split("\u0000");
+  const v = `${d > 0.005 ? "+" : d < -0.005 ? "−" : ""}${num(Math.abs(d), Math.abs(d) >= 10 ? 1 : 2)}`;
+  return <>{before}<bdi dir="ltr">{v}</bdi>{after}</>;
 }
 
-/** Доля во всём рынке: название, процент, изменение за сутки в пунктах. */
-function ShareTile({ label, s, c, lang }: { label: string; s: Share | number; c: string; lang: Lang }) {
-  const v = typeof s === "number" ? s : s[0];
-  const d = typeof s === "number" ? null : shareDelta(s);
+/** Короткая шкала денег для оси: $2T, $500B, $20M. */
+function axisUsd(v: number): string {
+  const f = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
+  if (v >= 1e12) return `$${f(v / 1e12)}T`;
+  if (v >= 1e9) return `$${f(v / 1e9)}B`;
+  return `$${f(v / 1e6)}M`;
+}
+
+function usdTicks(lo: number, hi: number): number[] {
+  const out: number[] = [];
+  for (let e = 6; e <= 15; e++) for (const m of [1, 2, 5]) {
+    const v = m * 10 ** e;
+    if (v >= lo && v <= hi) out.push(v);
+  }
+  return out.length > 6 ? out.filter((v) => String(v).startsWith("1")) : out;
+}
+
+
+/**
+ * Биткоин против альтов: сверху — капитализация биткоина и всех остальных монет
+ * (лог. шкала), снизу — доли рынка стопкой (биткоин, эфир, остальные). Палец и
+ * клавиатура ведут по дням, подсказка слышна читалке экрана.
+ */
+function McapChart({ days, lang }: { days: McapDay[]; lang: Lang }) {
+  const [picked, setSel] = useState<number | null>(null);
+  const ref = useRef<SVGSVGElement>(null);
+  const W = useWidth(ref);
+  const PW = W - AXIS - 4;
+  /* Высота — по ширине, но график целиком помещается в окно (телефон боком). */
+  const k = heightK(W, 300);
+  const P1 = { y: 6, h: Math.round(150 * k) };
+  const P2 = { y: P1.y + P1.h + 14, h: Math.round(112 * k) };
+  const MH2 = P2.y + P2.h + 18;
+  const n = days.length;
+  const sel = picked !== null && picked < n ? picked : null;
+  const btcOf = (d: McapDay) => (d[1] * d[2]) / 100;
+  const altOf = (d: McapDay) => d[1] - btcOf(d);
+  const lo = Math.min(...days.map((d) => Math.min(btcOf(d), altOf(d))));
+  const hi = Math.max(...days.map((d) => Math.max(btcOf(d), altOf(d))));
+  const L = (v: number) => Math.log(Math.max(1, v));
+  const yLo = L(lo * 0.8);
+  const yHi = L(hi * 1.15);
+  const xOf = (i: number) => (n <= 1 ? 0 : (i / (n - 1)) * PW);
+  const yUsd = (v: number) => P1.y + (1 - (L(v) - yLo) / (yHi - yLo || 1)) * P1.h;
+  const yPct = (v: number) => P2.y + (1 - v / 100) * P2.h;
+  const a = days[0]?.[0] ?? 0;
+  const b = days[n - 1]?.[0] ?? 1;
+  const xOfT = (ts: number) => ((ts - a) / Math.max(1, b - a)) * PW;
+  const paths = useMemo(() => {
+    const line = (f: (d: McapDay) => number) => days.map((d, i) => `${xOf(i).toFixed(1)},${f(d).toFixed(1)}`).join(" ");
+    const edge = (f: (d: McapDay) => number) => days.map((d, i) => `${xOf(i).toFixed(1)},${yPct(f(d)).toFixed(1)}`);
+    const e1 = edge((d) => d[2]);
+    const e2 = edge((d) => d[2] + (d[3] ?? 0));
+    const base = `${PW},${yPct(0)} 0,${yPct(0)}`;
+    const band = (lower: string[], upper: string[]) => `${upper.join(" ")} ${[...lower].reverse().join(" ")}`;
+    return {
+      btc: line((d) => yUsd(btcOf(d))),
+      alt: line((d) => yUsd(altOf(d))),
+      aBtc: `${e1.join(" ")} ${base}`,
+      aEth: band(e1, e2),
+      aAlt: band(e2, edge(() => 100)),
+      dom: e1.join(" "),
+    };
+  }, [days, W, k]);
+  const pick = (clientX: number) => {
+    const el = ref.current;
+    if (!el || n < 1) return;
+    const box = el.getBoundingClientRect();
+    const x = ((clientX - box.left) / box.width) * W;
+    const i = Math.max(0, Math.min(n - 1, Math.round((x / PW) * (n - 1))));
+    if (i !== sel) {
+      haptic("select");
+      setSel(i);
+    }
+  };
+  const onKey = (e: KeyboardEvent) => {
+    if (!n) return;
+    const go = (i: number) => {
+      e.preventDefault();
+      setSel(Math.max(0, Math.min(n - 1, i)));
+    };
+    if (e.key === "ArrowRight") go(sel === null ? n - 1 : sel + 1);
+    else if (e.key === "ArrowLeft") go(sel === null ? n - 1 : sel - 1);
+    else if (e.key === "Home") go(0);
+    else if (e.key === "End") go(n - 1);
+    else if (e.key === "Escape" && sel !== null) {
+      e.preventDefault();
+      setSel(null);
+    }
+  };
+  const d = sel !== null ? days[sel] : undefined;
   return (
-    <div className="dm-dtile">
-      <small><i style={{ background: c }} aria-hidden="true" />{label}</small>
-      <b><bdi dir="ltr">{pct(v, 1, false)}</bdi></b>
-      {d !== null ? <Delta d={d} lang={lang} /> : null}
+    <div className="fg-plot dm-plot" tabIndex={0} role="group" aria-label={t(lang, "ef_keys")}
+      onKeyDown={onKey} onBlur={() => setSel(null)}>
+      <svg ref={ref} className="fg-svg dm-svg dm-mc" viewBox={`0 0 ${W} ${MH2}`} width="100%" role="img" aria-label={t(lang, "dm_chart")}
+        onPointerDown={(e: PointerEvent) => pick(e.clientX)}
+        onPointerMove={(e: PointerEvent) => { if (e.pointerType === "mouse" || e.buttons) pick(e.clientX); }}
+        onPointerUp={(e: PointerEvent) => { if (e.pointerType !== "mouse") setSel(null); }}
+        onPointerCancel={() => setSel(null)}
+        onPointerLeave={() => setSel(null)}
+        onContextMenu={(e: MouseEvent) => e.preventDefault()}>
+        <rect x={0} y={P1.y} width={PW} height={P1.h} className="fg-bg" />
+        <rect x={0} y={P2.y} width={PW} height={P2.h} className="fg-bg" />
+        <polygon points={paths.aBtc} fill={C.btc} opacity={0.55} />
+        <polygon points={paths.aEth} fill={C.eth} opacity={0.55} />
+        <polygon points={paths.aAlt} fill={C.alt} opacity={0.45} />
+        <polyline points={paths.dom} className="fg-line" stroke={C.btc} />
+        {ticksOf(lang, a, b, PW).map((x) => (
+          <g key={x.t}>
+            <line x1={xOfT(x.t)} x2={xOfT(x.t)} y1={P1.y} y2={P2.y + P2.h} className="fg-grid" />
+            <text x={xOfT(x.t)} y={MH2 - 4} textAnchor="middle" className="fg-tick">{x.label}</text>
+          </g>
+        ))}
+        {usdTicks(lo * 0.8, hi * 1.15).map((v) => (
+          <g key={v}>
+            <line x1={0} x2={PW} y1={yUsd(v)} y2={yUsd(v)} className="fg-grid" />
+            <text x={W - 2} y={yUsd(v) + 3.5} textAnchor="end" className="fg-tick">{axisUsd(v)}</text>
+          </g>
+        ))}
+        {[25, 50, 75].map((v) => (
+          <g key={v}>
+            <line x1={0} x2={PW} y1={yPct(v)} y2={yPct(v)} className="dm-grid-hi" />
+            <text x={W - 2} y={yPct(v) + 3.5} textAnchor="end" className="fg-tick">{v}%</text>
+          </g>
+        ))}
+        <text x={4} y={P1.y + 11} className="fg-ptl">{t(lang, "dm_p1")} · {t(lang, "fg_log")}</text>
+        <text x={4} y={P2.y + 11} className="fg-ptl">{t(lang, "dm_p2")}</text>
+        <polyline points={paths.alt} className="fg-line" stroke={C.alt} />
+        <polyline points={paths.btc} className="fg-line" stroke={C.btc} />
+        {d ? (
+          <g className="fg-cross">
+            <line x1={xOf(sel!)} x2={xOf(sel!)} y1={P1.y} y2={P2.y + P2.h} />
+            <circle cx={xOf(sel!)} cy={yUsd(btcOf(d))} r={4} fill={C.btc} />
+            <circle cx={xOf(sel!)} cy={yUsd(altOf(d))} r={4} fill={C.alt} />
+            <circle cx={xOf(sel!)} cy={yPct(d[2])} r={4} fill={C.btc} />
+          </g>
+        ) : null}
+      </svg>
+      {d ? (
+        <div className={sel! > n / 2 ? "fg-pop left dm-pop" : "fg-pop dm-pop"} aria-live="polite">
+          <small>{dateStr(lang, d[0], { day: "numeric", month: "long", year: "numeric" })}</small>
+          <span><i style={{ background: C.btc }} />BTC <bdi dir="ltr">{usdWord(btcOf(d))} · {pct(d[2], 1, false)}</bdi></span>
+          <span><i style={{ background: C.alt }} />{t(lang, "dm_alts")} <bdi dir="ltr">{usdWord(altOf(d))}</bdi></span>
+          {d[3] !== null ? <span><i style={{ background: C.eth }} />ETH <bdi dir="ltr">{pct(d[3], 1, false)}</bdi></span> : null}
+        </div>
+      ) : null}
     </div>
   );
 }
 
-/** Доминация: доли BTC, альтов, ETH и USDT во всём рынке (CoinMarketCap). */
-function McapCard({ m, lang }: { m: McapReply; lang: Lang }) {
-  const other = Math.max(0, 100 - m.btc[0] - m.eth[0] - (m.usdt ?? 0));
-  const parts: [string, number, string][] = [
-    ["BTC", m.btc[0], C.btc], ["ETH", m.eth[0], C.eth],
-    ...(m.usdt !== null ? [["USDT", m.usdt, C.usdt] as [string, number, string]] : []),
-    [t(lang, "dm_d_other"), other, C.alt],
+const MCAP_RANGE_LABEL = { 365: "fg_r1y", 1095: "fg_r3y", 1825: "dm_r5y", all: "fg_rall" } as const;
+const MCAP_RANGE_KEY = "wt-mcap-range";
+
+/**
+ * Капитализация и доминация — как в начале модуля, по официальному API
+ * CoinMarketCap: сумма рынка и её изменения, доля биткоина (и без
+ * стейблкоинов) с изменениями в пунктах, из чего состоит рынок, график
+ * «биткоин против альтов» с 2013 г.
+ */
+function McapBlock({ m, lang }: { m: McapReply; lang: Lang }) {
+  const [range, setRange] = useState<McapRange>(() => {
+    try {
+      return MCAP_RANGES.find((r) => r === localStorage.getItem(MCAP_RANGE_KEY)) ?? "1095";
+    } catch {
+      return "1095";
+    }
+  });
+  const pickRange = (r: McapRange) => {
+    setRange(r);
+    try {
+      localStorage.setItem(MCAP_RANGE_KEY, r);
+    } catch {
+      // без памяти выбора — не беда
+    }
+  };
+  const h = m.hist;
+  const view = useMemo(() => thin(mcapWindow(h, range)), [h, range]);
+  const cap = m.cap[0];
+  const stable = m.altNs !== null ? Math.max(0, 100 - m.btc[0] - m.altNs) : null;
+  const ex = stable !== null && stable < 100 - m.btc[0] ? (m.btc[0] / (100 - stable)) * 100 : null;
+  const capCh: [DictKey, number | null][] = [
+    ["dm_24h", m.cap[1] ? (cap / m.cap[1] - 1) * 100 : null],
+    ...([["dm_7d", 7], ["dm_30d", 30], ["dm_year", 365]] as const).map(([k, n]): [DictKey, number | null] => {
+      const p = mcapAgo(h, n);
+      return [k, p ? (cap / p[1] - 1) * 100 : null];
+    }),
   ];
-  const capCh = m.cap[1] ? (m.cap[0] / m.cap[1] - 1) * 100 : null;
+  const domCh: [DictKey, number | null][] = [
+    ["dm_24h", m.btc[1] !== null ? m.btc[0] - m.btc[1] : null],
+    ...([["dm_7d", 7], ["dm_30d", 30], ["dm_year", 365]] as const).map(([k, n]): [DictKey, number | null] => {
+      const p = mcapAgo(h, n);
+      return [k, p ? m.btc[0] - p[2] : null];
+    }),
+  ];
+  const other = Math.max(0, 100 - m.btc[0] - m.eth[0] - (stable ?? 0));
+  const parts: { key: DictKey; c: string; v: number; sub?: string | undefined }[] = [
+    { key: "dm_btc", c: C.btc, v: m.btc[0] },
+    { key: "dm_eth", c: C.eth, v: m.eth[0] },
+    ...(stable !== null ? [{ key: "dm_st" as DictKey, c: C.usdt, v: stable, sub: m.usdt !== null ? `USDT ${pct(m.usdt, 1, false)}` : undefined }] : []),
+    { key: "dm_other", c: C.alt, v: other },
+  ];
   return (
-    <Card>
-      <div className="dm-dbar" role="img" aria-label={parts.map(([l, v]) => `${l} ${pct(v, 1, false)}`).join(", ")}>
-        {parts.map(([l, v, c]) => <span key={l} style={{ flexGrow: v, background: c }} />)}
-      </div>
-      <div className="dm-dlegend" aria-hidden="true">
-        {parts.map(([l, , c]) => <span key={l}><i style={{ background: c }} />{l}</span>)}
-      </div>
-      <div className="dm-dgrid">
-        <ShareTile label={t(lang, "dm_d_btc")} s={m.btc} c={C.btc} lang={lang} />
-        <ShareTile label={t(lang, "dm_d_alt")} s={m.alt} c={C.alt} lang={lang} />
-        <ShareTile label={t(lang, "dm_d_eth")} s={m.eth} c={C.eth} lang={lang} />
-        {m.usdt !== null ? <ShareTile label="USDT" s={m.usdt} c={C.usdt} lang={lang} /> : null}
-      </div>
-      {m.altNs !== null ? <p className="dm-share">{t(lang, "dm_d_altns", { v: iso(pct(m.altNs, 1, false)) })}</p> : null}
-      {capCh !== null ? (
-        <p className="dm-share">{t(lang, "dm_d_cap", { v: iso(usdWord(m.cap[0])), ch: iso(pct(capCh, 1)) })}</p>
+    <>
+      <Card>
+        <div className="dm-cap">
+          <small>{t(lang, "dm_total")}</small>
+          <b><bdi dir="ltr">{usdWord(cap)}</bdi></b>
+          <div className="dm-cap-ch">
+            {capCh.map(([k, v]) => v === null ? null : (
+              <span key={k}>{t(lang, k)} <em className={v >= 0 ? "up" : "dn"}><bdi dir="ltr">{pct(v, 1, true)}</bdi></em></span>
+            ))}
+          </div>
+        </div>
+      </Card>
+
+      <Card>
+        <div className="dm-hero">
+          <small>{t(lang, "dm_dom")}</small>
+          <b style={{ color: C.btc }}><bdi dir="ltr">{pct(m.btc[0], 1, false)}</bdi></b>
+          {ex !== null ? (
+            <span className="dm-x">{t(lang, "dm_ex")} <b><bdi dir="ltr">{pct(ex, 1, false)}</bdi></b></span>
+          ) : null}
+        </div>
+        <div className="dm-chs">
+          {domCh.map(([k, v]) => v === null ? null : (
+            <div key={k} className="dm-ch">
+              <small>{t(lang, k)}</small>
+              <b><Pp d={v} lang={lang} /></b>
+            </div>
+          ))}
+        </div>
+        {ex !== null ? <p className="lq-hint dm-exh">{t(lang, "dm_ex_hint")}</p> : null}
+        <p className="dm-cap-t">{t(lang, "dm_split")}</p>
+        <div className="fg-dist dm-split" role="img"
+          aria-label={parts.map((p) => `${t(lang, p.key)} ${pct(p.v, 1, false)}`).join(", ")}>
+          {parts.map((p) => p.v > 0 ? <i key={p.key} style={{ width: `${p.v}%`, background: p.c }} /> : null)}
+        </div>
+        <div className="fg-rows">
+          {parts.map((p) => (
+            <div key={p.key} className="fg-row two">
+              <span><i style={{ background: p.c }} />{t(lang, p.key)}{p.sub ? <small className="dm-sub"> · {p.sub}</small> : null}</span>
+              <b><bdi dir="ltr">{pct(p.v, 1, false)}</bdi><small> · {usdWord((cap * p.v) / 100)}</small></b>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {view.length > 30 ? (
+        <>
+          <SectionTitle help={["dm_chart_hint"]}>{t(lang, "dm_chart")}</SectionTitle>
+          <Card>
+            <Segmented<McapRange>
+              value={range}
+              onChange={pickRange}
+              options={MCAP_RANGES.map((id) => ({ id, label: t(lang, MCAP_RANGE_LABEL[id]) }))}
+            />
+            <div className="fg-legend dm-lines">
+              <span><i style={{ background: C.btc }} />{t(lang, "dm_btc")}</span>
+              <span><i style={{ background: C.alt }} />{t(lang, "dm_alts")}</span>
+            </div>
+            <McapChart days={view} lang={lang} />
+            <div className="fg-legend">
+              <span><i style={{ background: C.btc }} />{t(lang, "dm_btc")}</span>
+              <span><i style={{ background: C.eth }} />{t(lang, "dm_eth")}</span>
+              <span><i style={{ background: C.alt }} />{t(lang, "dm_other")}</span>
+            </div>
+            <p className="lq-hint">{t(lang, "dm_chart_hint")}</p>
+          </Card>
+        </>
       ) : null}
       <p className="dm-dsrc">{t(lang, "dm_d_src")} {stamp(lang, m.at)}</p>
-    </Card>
+    </>
   );
 }
 
@@ -511,7 +741,7 @@ export function DominanceScreen() {
       {mcap ? (
         <>
           <SectionTitle help={["dm_d_what", "dm_how_4"]}>{t(lang, "dm_d_title")}</SectionTitle>
-          <McapCard m={mcap} lang={lang} />
+          <McapBlock m={mcap} lang={lang} />
         </>
       ) : null}
 
