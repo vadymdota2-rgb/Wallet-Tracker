@@ -661,6 +661,15 @@ say("альтсезон — свой расчёт по ценам Hyperliquid (w
     and '"wt-dom-v2"' in read(f"{APP}/src/lib/storage.ts") and '"wt-dom-v1"' not in read(f"{APP}/src/lib/storage.ts")
     and '"dm_how_4"' in _dm and '"dm_building"' in _dm and "glyph: <DomGlyph />" in appx
     and "wt_dom.py" in read(f"{APP}/.github/workflows/tests.yml"))
+say("альтсезон на уровне халвинга и ETF: правила кода и fuzz сервера (годный ответ принимает приложение), свойства расчётов, строгий TypeScript; свои стили, колонка до 760 px, графики в настоящих пикселях и с клавиатуры, таблица, пометки о старой копии и старых данных, свежий ответ при возврате через час, подгрузка при запуске",
+    all(os.path.isfile(f"{APP}/tests/{f}") for f in ("test_dom_policy.py", "test_dom_fuzz.py", "dom.props.test.ts", "dom.test.ts", "test_dom.py"))
+    and os.path.isfile(f"{APP}/tests/e2e/dom.e2e.test.ts") and '"typecheck:dom"' in read(f"{APP}/package.json")
+    and "npm run typecheck:dom" in read(f"{APP}/.github/workflows/tests.yml")
+    and 'import "./DominanceScreen.css";' in _dm and ".dm { max-width: 760px;" in read(f"{APP}/src/screens/DominanceScreen.css")
+    and "const W = useWidth(ref);" in _dm and "onKeyDown={onKey}" in _dm and "function AltTable(" in _dm
+    and '"op_stale"' in _dm and '"dm_old"' in _dm and '"visibilitychange"' in _dm
+    and "jobs.push(() => fetchDom());" in read(f"{APP}/src/lib/prefetch.ts")
+    and "EB_MIN, EB_MAX = 1e-6, 10.0" in _dms and "STR_LOG = math.log(1e3)" in _dms)
 
 _fs = read(f"{APP}/src/screens/FundingScreen.tsx")
 say("фандинг не пропадает: собирается первым, при сбое — прошлый; пока ставок нет — загрузка с переспросом, а не «нет аномалий»",

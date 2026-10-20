@@ -5,7 +5,9 @@
  * ответ сервера настоящим образцом (tests/fixtures/dom.json — сборка wt_dom по
  * ценам Hyperliquid), закрывает сеть наружу и проверяет то, что видит
  * человек: индекс и его зону, «k из n», разделы, сбои сервера и «собираем»,
- * старый запас на устройстве, узкий экран, арабский и 16 языков.
+ * запас на устройстве, свежесть данных, графики пальцем и с клавиатуры,
+ * таблицу, 16 языков, ширины 320–1280, телефон боком, арабский, крупный
+ * шрифт, высокую контрастность и доступность.
  */
 import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
@@ -63,12 +65,27 @@ after(async () => {
   await new Promise((ok) => server?.close(ok));
 });
 
-interface Opts { lang?: string; width?: number; reply?: unknown; store?: Record<string, string> }
+interface Opts {
+  lang?: string;
+  width?: number;
+  height?: number;
+  /** Ответ /api/dom; replies — по очереди (последний — дальше всегда). */
+  reply?: unknown;
+  replies?: unknown[];
+  delay?: number;
+  store?: Record<string, string>;
+  forcedColors?: boolean;
+  /** Вошёл с Премиумом (подпись Telegram, /api/bootstrap — plan: premium). */
+  premium?: boolean;
+}
 interface Opened { ctx: BrowserContext; page: Page; errors: string[]; asked: () => number }
 
 async function open(o: Opts = {}): Promise<Opened> {
   const lang = o.lang ?? "ru";
-  const ctx = await browser.newContext({ viewport: { width: o.width ?? 360, height: 780 }, locale: lang === "ar" ? "ar" : "ru-RU", timezoneId: "UTC" });
+  const ctx = await browser.newContext({
+    viewport: { width: o.width ?? 360, height: o.height ?? 780 }, locale: lang === "ar" ? "ar" : "ru-RU", timezoneId: "UTC",
+    forcedColors: o.forcedColors ? "active" : "none",
+  });
   const page = await ctx.newPage();
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -78,10 +95,16 @@ async function open(o: Opts = {}): Promise<Opened> {
   await ctx.route("https://fonts.googleapis.com/**", (r) => r.fulfill({ contentType: "text/css", body: FACES(base) }));
   await ctx.route(`${base}/api/**`, (r) => r.fulfill({ contentType: "application/json", body: '{"ok":false}' }));
   let n = 0;
-  await ctx.route(`${base}/api/dom`, (r) => {
+  const replies = o.replies ?? [o.reply ?? REAL];
+  await ctx.route(`${base}/api/dom`, async (r) => {
+    const body = replies[Math.min(n, replies.length - 1)];
     n++;
-    return r.fulfill({ contentType: "application/json", body: JSON.stringify(o.reply ?? REAL) });
+    if (o.delay) await new Promise((ok) => setTimeout(ok, o.delay));
+    await r.fulfill({ contentType: "application/json", body: typeof body === "string" ? body : JSON.stringify(body) });
   });
+  if (o.premium) {
+    await ctx.route(`${base}/api/bootstrap`, (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, me: { plan: "premium" } }) }));
+  }
   await page.addInitScript((a: { lang: string; store: Record<string, string> }) => {
     if (sessionStorage.getItem("e2e")) return;
     sessionStorage.setItem("e2e", "1");
@@ -89,12 +112,31 @@ async function open(o: Opts = {}): Promise<Opened> {
     localStorage.setItem("wt-miniapp-v7", JSON.stringify({ state: { lang: a.lang, langPinned: true }, version: 9 }));
     for (const [k, v] of Object.entries(a.store)) localStorage.setItem(k, v);
   }, { lang, store: o.store ?? {} });
-  await page.goto(`${base}/`);
+  const tg = o.premium ? `#tgWebAppData=${encodeURIComponent(`user=${encodeURIComponent('{"id":1}')}&hash=x`)}` : "";
+  await page.goto(`${base}/${tg}`);
   await page.evaluate(() => document.fonts.ready);
   await page.locator(".burger").click();
   await page.locator(".drawer-row", { hasText: I18N["dm_title"]![lang]! }).evaluate((el: HTMLElement) => el.click());
   return { ctx, page, errors, asked: () => n };
 }
+
+/** Ничего не вылезает за край экрана (таблица и переключатели листаются сами). */
+function overflow(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const out: string[] = [];
+    const W = document.documentElement.clientWidth;
+    if (document.scrollingElement!.scrollWidth > W + 1) out.push(`страница шире экрана: ${document.scrollingElement!.scrollWidth} > ${W}`);
+    for (const el of document.querySelectorAll<HTMLElement>(".sheet *")) {
+      const r = el.getBoundingClientRect();
+      if (!r.width || el.closest(".dm-tbl-w, .chips, .seg")) continue;
+      if (r.left < -0.5 || r.right > W + 0.5) out.push(`${el.tagName}.${el.className} «${(el.textContent ?? "").slice(0, 40)}» ${r.left.toFixed(0)}–${r.right.toFixed(0)}`);
+    }
+    return out.slice(0, 8);
+  });
+}
+
+const ready = (page: Page) => page.locator(".dm-ahero").waitFor();
+const saved = (v: unknown, agoMs: number) => ({ "wt-dom-v2": JSON.stringify({ all: { at: T * 1000 - agoMs, v } }) });
 
 const last = REAL.rows[REAL.rows.length - 1]!;
 const beat = REAL.coins.filter((c) => c[1] > REAL.btc90).length;
@@ -177,5 +219,204 @@ describe("Альтсезон", () => {
       assert.doesNotMatch(text, /[^.]\.\.(\s|$)/, `${lang}: две точки подряд`);
       await ctx.close();
     }
+  });
+  test("графики в настоящих пикселях: подписи одного размера на телефоне, планшете и компьютере; колонка по центру", async () => {
+    const sizes: number[] = [];
+    for (const width of [360, 768, 1280]) {
+      const { ctx, page } = await open({ width, height: 900 });
+      await ready(page);
+      const svgs = await page.locator(".dm-svg").evaluateAll((els) => els.map((el) => {
+        const sv = el as SVGSVGElement;
+        return { vb: sv.viewBox.baseVal.width, w: sv.getBoundingClientRect().width };
+      }));
+      assert.equal(svgs.length, 3, String(width));
+      for (const sv of svgs) assert.ok(Math.abs(sv.vb - sv.w) <= 2.5, `${width}: viewBox ${sv.vb} ≠ ${sv.w}`);
+      sizes.push(await page.locator(".dm-svg .fg-tick").first().evaluate((el) => el.getBoundingClientRect().height));
+      const col = await page.locator(".dm").evaluate((el) => { const r = el.getBoundingClientRect(); return [r.left, r.right, innerWidth]; });
+      assert.ok(col[1]! - col[0]! <= 760.5, String(width));
+      assert.ok(Math.abs(col[0]! - (col[2]! - col[1]!)) <= 20, `${width}: колонка не по центру`);
+      await ctx.close();
+    }
+    assert.ok(Math.max(...sizes) - Math.min(...sizes) < 1.5, sizes.join(", "));
+  });
+
+  test("телефон боком: график помещается по высоте окна", async () => {
+    const { ctx, page } = await open({ width: 844, height: 390 });
+    await ready(page);
+    const h = await page.locator(".dm-svg").first().evaluate((el) => el.getBoundingClientRect().height);
+    assert.ok(h <= 390 * 0.75, String(h));
+    assert.deepEqual(await overflow(page), []);
+    await ctx.close();
+  });
+
+  test("ширины 320–1280 px: ничего не вылезает (и с открытой таблицей)", async () => {
+    for (const width of [320, 375, 414, 768, 1280]) {
+      const { ctx, page } = await open({ width });
+      await ready(page);
+      await page.locator(".dm-tbl summary").click();
+      assert.deepEqual(await overflow(page), [], String(width));
+      await ctx.close();
+    }
+  });
+
+  test("крупный шрифт (до 160 %): текст переносится, а не вылезает", async () => {
+    const { ctx, page } = await open({ width: 360 });
+    await ready(page);
+    await page.evaluate(() => {
+      const els = [...document.querySelectorAll<HTMLElement>(".sheet *")];
+      const px = els.map((el) => parseFloat(getComputedStyle(el).fontSize) * 1.6);
+      els.forEach((el, i) => { el.style.fontSize = `${px[i]}px`; });
+    });
+    await page.waitForTimeout(100);
+    assert.deepEqual(await overflow(page), []);
+    await ctx.close();
+  });
+
+  test("высокая контрастность: шкала индекса и полосы монет — своими цветами", async () => {
+    const { ctx, page, errors } = await open({ forcedColors: true });
+    await ready(page);
+    for (const sel of [".dm-top-fill", ".dm-abar-track i"]) {
+      const el = page.locator(sel).first();
+      assert.equal(await el.evaluate((x) => getComputedStyle(x).forcedColorAdjust), "none", sel);
+      assert.notEqual(await el.evaluate((x) => getComputedStyle(x).backgroundColor), "rgba(0, 0, 0, 0)", sel);
+    }
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("график с клавиатуры: стрелки, Home/End, Esc; подсказка слышна", async () => {
+    const { ctx, page, errors } = await open();
+    await ready(page);
+    const plot = page.locator(".dm-plot").first();
+    assert.equal(await plot.getAttribute("tabindex"), "0");
+    assert.equal(sp(await plot.getAttribute("aria-label")), sp(I18N["ef_keys"]!["ru"]!));
+    assert.equal(sp(await plot.locator("svg").getAttribute("aria-label")), I18N["dm_alt_title"]!["ru"]);
+    await plot.focus();
+    await page.keyboard.press("End");
+    const pop = plot.locator(".fg-pop");
+    assert.equal(await pop.getAttribute("aria-live"), "polite");
+    assert.equal(sp(await pop.locator("b").innerText()), String(last[1]));
+    const end = sp(await pop.locator("small").innerText());
+    await page.keyboard.press("ArrowLeft");
+    assert.notEqual(sp(await pop.locator("small").innerText()), end);
+    await page.keyboard.press("Home");
+    assert.match(sp(await pop.locator("small").innerText()), /2021/);
+    await page.keyboard.press("Escape");
+    assert.equal(await pop.count(), 0);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("график пальцем: подсказка с датой и значением, уходит с пальцем", async () => {
+    const { ctx, page } = await open();
+    await ready(page);
+    const svg = page.locator(".dm-svg").nth(2);
+    await svg.scrollIntoViewIfNeeded();
+    const box = (await svg.boundingBox())!;
+    await page.mouse.move(box.x + box.width * 0.3, box.y + box.height / 2);
+    const pop = page.locator(".dm-plot").nth(2).locator(".fg-pop");
+    await pop.waitFor();
+    assert.match(sp(await pop.locator("b").innerText()), /^0,0\d+$/);
+    await page.mouse.move(box.x + box.width * 0.3, box.y + box.height + 200);
+    await pop.waitFor({ state: "detached" });
+    await ctx.close();
+  });
+
+  test("сроки графиков: год, три года, вся история; выбор запоминается", async () => {
+    const { ctx, page } = await open();
+    await ready(page);
+    const first = () => page.locator(".dm-svg").first().locator(".fg-tick").first().textContent();
+    const all = await first();
+    await page.locator(".seg button", { hasText: I18N["fg_r1y"]!["ru"]! }).first().click();
+    assert.notEqual(await first(), all);
+    assert.equal(await page.evaluate(() => localStorage.getItem("wt-dom-range")), "365");
+    await ctx.close();
+  });
+
+  test("таблица под индексом: точки раз в неделю, свежие сверху", async () => {
+    const { ctx, page } = await open();
+    await ready(page);
+    assert.equal(await page.locator(".dm-tbl table").count(), 0);
+    await page.locator(".dm-tbl summary").click();
+    await page.locator(".dm-tbl table").waitFor();
+    const heads = (await page.locator(".dm-tbl thead th").allInnerTexts()).map(sp);
+    assert.deepEqual(heads, [I18N["ef_tbl_d"]!["ru"], I18N["dm_tbl_idx"]!["ru"], I18N["dm_tbl_zone"]!["ru"]]);
+    const first = (await page.locator(".dm-tbl tbody tr").first().locator("td").allInnerTexts()).map(sp);
+    assert.equal(first[0], String(last[1]));
+    const rows = await page.locator(".dm-tbl tbody tr").count();
+    const withIdx = REAL.rows.filter((x) => x[1] !== null).length;
+    assert.equal(rows, Math.ceil(withIdx / 7));
+    await ctx.close();
+  });
+
+  test("Hyperliquid давно не присылал цен — экран говорит об этом; свежие — молчит", async () => {
+    const old = { ...REAL, rows: REAL.rows.slice(0, -5) };
+    let o = await open({ reply: old });
+    await ready(o.page);
+    const note = o.page.locator(".lq-stale");
+    await note.waitFor();
+    assert.equal(sp(await note.innerText()), sp(I18N["dm_old"]!["ru"]!.replace("{n}", "5")));
+    await o.ctx.close();
+    o = await open();
+    await ready(o.page);
+    await o.page.waitForTimeout(300);
+    assert.equal(await o.page.locator(".lq-stale").count(), 0);
+    await o.ctx.close();
+  });
+
+  test("вернулся в приложение через час и больше — экран сам берёт свежий ответ", async () => {
+    const { ctx, page, asked } = await open({ premium: true });
+    await ready(page);
+    for (let i = 0; i < 30 && asked() === 0; i++) await page.waitForTimeout(100);
+    const n = asked();
+    await page.clock.setFixedTime((T + 600) * 1000);
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await page.waitForTimeout(300);
+    assert.equal(asked(), n);
+    await page.clock.setFixedTime((T + 2 * 3600) * 1000);
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    for (let i = 0; i < 30 && asked() === n; i++) await page.waitForTimeout(100);
+    assert.equal(asked(), n + 1);
+    await ctx.close();
+  });
+
+  test("нет связи: сохранённая копия с пометкой, сколько ей, и «повторить»", async () => {
+    const { ctx, page, errors, asked } = await open({ replies: [{ ok: false }, { ok: false }, REAL], store: saved({ ...REAL, at: T - 3 * 3600 }, 3 * 3600_000) });
+    await ready(page);
+    const stale = page.locator(".lq-stale");
+    await stale.waitFor();
+    assert.match(sp(await stale.innerText()), /^Не удалось обновить — показаны сохранённые данные \(3 ч.*\)\. Повторить$/);
+    await stale.locator("button").click();
+    await stale.waitFor({ state: "detached" });
+    assert.equal(asked(), 3);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("без сети: сохранённый ответ виден сразу, до ответа сервера", async () => {
+    const { ctx, page } = await open({ delay: 5000, store: saved(REAL, 600_000) });
+    await page.locator(".dm-ahero").waitFor({ timeout: 1500 });
+    assert.equal(await page.locator('[aria-busy="true"]').count(), 0);
+    await ctx.close();
+  });
+
+  test("загрузка: заглушка помечена занятой, потом данные", async () => {
+    const { ctx, page } = await open({ delay: 600 });
+    assert.equal(await page.locator('[aria-busy="true"] .skel').count(), 1);
+    await ready(page);
+    assert.equal(await page.locator('[aria-busy="true"]').count(), 0);
+    await ctx.close();
+  });
+
+  test("доступность: у кнопок есть имена, фокус виден", async () => {
+    const { ctx, page } = await open();
+    await ready(page);
+    const nameless = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".sheet button, .sheet a, .sheet [tabindex='0']")]
+      .filter((el) => !(el.getAttribute("aria-label") || (el.textContent ?? "").trim())).map((el) => el.outerHTML.slice(0, 80)));
+    assert.deepEqual(nameless, []);
+    await page.keyboard.press("Tab");
+    await page.locator(".dm-plot").first().focus();
+    assert.equal(await page.locator(".dm-plot").first().evaluate((el) => getComputedStyle(el).outlineStyle), "solid");
+    await ctx.close();
   });
 });

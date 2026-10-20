@@ -9,6 +9,7 @@
     "typecheck:tests": "tsc -p tsconfig.tests.json",
     "typecheck:halving": "node tools/typecheck-halving.mjs",
     "typecheck:etf": "node tools/typecheck-etf.mjs",
+    "typecheck:dom": "node tools/typecheck-dom.mjs",
     "clean": "node tools/clean-build.mjs",
     "build": "tsc -p . && npm run clean && vite build",
     "preview": "vite preview",

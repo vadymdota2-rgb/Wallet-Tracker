@@ -74,6 +74,16 @@ TAIL_DAYS = 5
 COINS_MAX = 1000
 CANDLES_MAX = 10_000
 PX_MAX = 1e8
+# ETH/BTC — в этих пределах (максимум — около 0,15 в 2017 г.): иначе — сбой
+# цены, ETH/BTC этого дня нет. Биткоин дешевле BTC_MIN, $ — тоже сбой.
+EB_MIN, EB_MAX = 1e-6, 10.0
+BTC_MIN = 1.0
+# Сила альтов не уходит дальше чем в e^STR_LOG раз от 100 (за всю историю —
+# 0,4…3,4 раза): дальше — сбой цен, а не рынок. Те же пределы проверяет
+# приложение (validDom).
+STR_LOG = math.log(1e3)
+# Рост монеты за WINDOW дней больше этого, % — сбой цены, монеты нет в списке.
+GROW_MAX = 1e6
 # Начало дневных цен Hyperliquid — 19 августа 2020 г.; раньше не бывает.
 PX_FROM = 1_597_795_200
 # Имя монеты в Hyperliquid: буквы и цифры («kPEPE» — тысяча PEPE).
@@ -283,7 +293,8 @@ def _px_load() -> dict[str, dict[int, float]]:
         if not isinstance(coin, str) or not COIN.fullmatch(coin) or not isinstance(days, dict):
             continue
         ok = {int(t): _num(v) for t, v in days.items()
-              if isinstance(t, str) and t.isdigit() and len(t) <= 12 and int(t) % DAY == 0 and 0 < _num(v) < PX_MAX}
+              if isinstance(t, str) and t.isdigit() and len(t) <= 12 and int(t) % DAY == 0
+              and PX_FROM <= int(t) <= _now() + DAY and 0 < _num(v) < PX_MAX}
         if ok:
             out[coin] = ok
     return out
@@ -331,7 +342,7 @@ def compute(px: dict[str, dict[int, float]], alts: list[str]) -> dict[str, Json]
     [день, индекс альтсезона или None, сила альтов, ETH/BTC или None, цена BTC];
     coins — монеты корзины с ценой сегодня и WINDOW дней назад: [монета, рост
     за WINDOW дней, %], по убыванию; btc90 — рост биткоина за то же время."""
-    btc = px.get("BTC") or {}
+    btc = {t: v for t, v in (px.get("BTC") or {}).items() if v >= BTC_MIN}
     if len(btc) < WINDOW + 2:
         return None
     eth = px.get("ETH") or {}
@@ -346,7 +357,7 @@ def compute(px: dict[str, dict[int, float]], alts: list[str]) -> dict[str, Json]
                for a in alts if t in px[a] and p in px[a]]
         if len(rel) < MIN_STR:
             continue
-        acc += sum(rel) / len(rel)
+        acc = max(-STR_LOG, min(STR_LOG, acc + sum(rel) / len(rel)))
         b = t - WINDOW * DAY
         idx = None
         if b in btc:
@@ -354,13 +365,14 @@ def compute(px: dict[str, dict[int, float]], alts: list[str]) -> dict[str, Json]
             el = [a for a in alts if t in px[a] and b in px[a]]
             if len(el) >= MIN_IDX:
                 idx = round(100 * sum(1 for a in el if px[a][t] / px[a][b] > rb) / len(el))
-        eb = float(f"{eth[t] / btc[t]:.6g}") if t in eth else None
+        eb = float(f"{eth[t] / btc[t]:.6g}") if t in eth and EB_MIN < eth[t] / btc[t] < EB_MAX else None
         rows.append([t, idx, round(100 * math.exp(acc), 2), eb, round(btc[t], 2)])
     if not rows:
         return None
     end = days[-1]
     b = end - WINDOW * DAY
-    grown = [(a, round((px[a][end] / px[a][b] - 1) * 100, 2)) for a in alts if end in px[a] and b in px[a]]
+    grown = [(a, g) for a in alts if end in px[a] and b in px[a]
+             if (g := round((px[a][end] / px[a][b] - 1) * 100, 2)) <= GROW_MAX]
     coins = [[a, g] for a, g in sorted(grown, key=lambda c: (-c[1], c[0]))]
     btc90 = round((btc[end] / btc[b] - 1) * 100, 2) if b in btc else None
     return {"rows": rows, "coins": coins, "btc90": btc90}

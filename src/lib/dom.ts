@@ -172,3 +172,20 @@ export function beat(coins: [string, number][], btc90: number): { up: number; dn
   const up = coins.filter((c) => c[1] > btc90).length;
   return { up, dn: coins.length - up };
 }
+
+/** Hyperliquid давно не присылал цен: последний день старше этого (день у
+ *  Hyperliquid — и сегодняшний, ещё идущий, так что даже выходные не в счёт). */
+export const STALE_DAYS = 2;
+
+/** Сколько полных суток прошло с последнего дня ответа до now (unix с). */
+export function daysOld(rows: DomDay[], now: number): number {
+  const last = rows[rows.length - 1]?.[0] ?? now;
+  return Math.max(0, Math.floor((now - last) / DAY));
+}
+
+/** Точки раз в n суток, считая от последней (для таблицы: свежие — первыми). */
+export function everyNth(s: [number, number][], n: number): [number, number][] {
+  const out: [number, number][] = [];
+  for (let i = s.length - 1; i >= 0; i -= n) out.push(s[i]!);
+  return out;
+}

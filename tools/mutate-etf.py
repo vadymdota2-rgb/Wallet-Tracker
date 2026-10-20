@@ -172,7 +172,11 @@ DM = [
     ("        if len(rel) < MIN_STR:", "        if len(rel) < 1:", "альтсезон: сила — не меньше MIN_STR монет"),
     ("            if len(el) >= MIN_IDX:", "            if len(el) >= 1:", "альтсезон: индекс — не меньше MIN_IDX монет"),
     ("max(-CLIP, min(CLIP, math.log", "max(-9e9, min(9e9, math.log", "альтсезон: сбой цены урезан"),
-    ("        acc += sum(rel) / len(rel)", "        acc += sum(rel)", "альтсезон: корзина поровну"),
+    ("acc + sum(rel) / len(rel)))", "acc + sum(rel)))", "альтсезон: корзина поровну"),
+    ("        acc = max(-STR_LOG, min(STR_LOG, acc + sum(rel) / len(rel)))", "        acc = acc + sum(rel) / len(rel)", "альтсезон: сила в пределах приложения"),
+    ("if t in eth and EB_MIN < eth[t] / btc[t] < EB_MAX else None", "if t in eth else None", "альтсезон: ETH/BTC правдоподобен"),
+    ('    btc = {t: v for t, v in (px.get("BTC") or {}).items() if v >= BTC_MIN}', '    btc = px.get("BTC") or {}', "альтсезон: биткоин не дешевле BTC_MIN"),
+    ("             if (g := round((px[a][end] / px[a][b] - 1) * 100, 2)) <= GROW_MAX]", "             if (g := round((px[a][end] / px[a][b] - 1) * 100, 2)) or True]", "альтсезон: рост монеты правдоподобен"),
     ('if c not in ("BTC", *EXCLUDE)]', 'if c != "BTC"]', "альтсезон: без золота"),
     (" and not _pegged(px[c], end)]", "]", "альтсезон: без привязанных к доллару"),
     ("and not _pegged(px[c], end)][:TOP]", "and not _pegged(px[c], end)]", "альтсезон: не больше TOP монет"),
@@ -183,7 +187,8 @@ DM = [
     ('return u.scheme == "https" and u.hostname in HOSTS and not u.username and not u.password', "return True", "альтсезон: только https к Hyperliquid"),
     ("    return got if len(got) <= BODY_MAX else None", "    return got", "альтсезон: предел размера ответа"),
     ("        if i:\n            sleep(PACE)\n", "", "альтсезон: пауза между запросами"),
-    ("and int(t) % DAY == 0 and 0 < _num(v) < PX_MAX}", "}", "альтсезон: копия цен на диске проверяется"),
+    ("and int(t) % DAY == 0\n              and PX_FROM <= int(t) <= _now() + DAY and 0 < _num(v) < PX_MAX}", "}", "альтсезон: копия цен на диске проверяется"),
+    ("              and PX_FROM <= int(t) <= _now() + DAY and", "              and", "альтсезон: даты копии цен — с 2020 г. и не из будущего"),
     ('    return {"ok": False, "error": "building"} if building else _no_data()', "    return _no_data()", "альтсезон: «собираем» на холодном старте"),
     ("        if not _busy.is_set() and not _resting():", "        if not _busy.is_set():", "альтсезон: пауза после сбоя"),
     ("    return len(xs) >= 10 and max(xs) / min(xs) < PEG", "    return False", "альтсезон: привязанная монета видна по ценам"),
@@ -202,6 +207,8 @@ DMT = [
     ("  if (tail !== undefined && out[out.length - 1] !== tail) out.push(tail);\n", "", "альтсезон: последняя точка графика"),
     ("coins.filter((c) => c[1] > btc90)", "coins.filter((c) => c[1] >= btc90)", "альтсезон: вровень с биткоином — не обогнал"),
     ("p[1] > 0 ? (last[1] / p[1] - 1) * 100 : null", "p[1] > 0 ? (last[1] / p[1]) * 100 : null", "альтсезон: рост в процентах"),
+    ("  return Math.max(0, Math.floor((now - last) / DAY));", "  return Math.floor((now - last) / DAY);", "альтсезон: возраст данных не отрицательный"),
+    ("for (let i = s.length - 1; i >= 0; i -= n) out.push(s[i]!);", "for (let i = s.length - 1; i >= 0; i -= 1) out.push(s[i]!);", "альтсезон: таблица — раз в неделю"),
 ]
 
 
@@ -240,7 +247,8 @@ def server():
             + run(f"{ROOT}/wt_treasury.py", [sys.executable, "-m", "unittest", "tests.test_treasury",
                                              "tests.test_treasury_security", "tests.test_disk_cache"], TR)
             + run(f"{ROOT}/whale_api.py", [sys.executable, "-m", "unittest", "tests.test_etf_day_alert"], AL)
-            + run(f"{ROOT}/wt_dom.py", [sys.executable, "-m", "unittest", "tests.test_dom"], DM))
+            + run(f"{ROOT}/wt_dom.py", [sys.executable, "-m", "unittest", "tests.test_dom", "tests.test_dom_fuzz",
+                                        "tests.test_dom_policy"], DM))
 
 
 # Приложение и сервер — одновременно: тесты приложения (node) читают только
@@ -248,7 +256,7 @@ def server():
 with ThreadPoolExecutor(max_workers=2) as pool:
     app = pool.submit(run, f"{ROOT}/src/lib/etf.ts", ["node", "--test", "tests/etf.test.ts", "tests/etf.props.test.ts"], TS)
     srv = pool.submit(server)
-    dmt = pool.submit(run, f"{ROOT}/src/lib/dom.ts", ["node", "--test", "tests/dom.test.ts"], DMT)
+    dmt = pool.submit(run, f"{ROOT}/src/lib/dom.ts", ["node", "--test", "tests/dom.test.ts", "tests/dom.props.test.ts"], DMT)
     alive = app.result() + srv.result() + dmt.result()
 total = len(TS) + len(PY) + len(TR) + len(AL) + len(DM) + len(DMT) - len(EQUIV)
 print(f"ИТОГ: убито {total - len(alive)} из {total}; выжили: {alive}")

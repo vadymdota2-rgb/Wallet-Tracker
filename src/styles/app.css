@@ -3486,51 +3486,8 @@ button.cal-row:active { background: rgb(58 130 214 / 0.08); }
 .dm-ch b i { font-style: normal; font-size: 9px; margin-inline-end: 3px; vertical-align: 1px; }
 .dm-ch b.up { color: var(--up); }
 .dm-ch b.dn { color: var(--dn); }
-.dm-say { display: grid; gap: 8px; }
-.dm-say p { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--ink); }
-.dm-say p + p { padding-top: 8px; border-top: 1px solid rgb(27 61 104 / 0.35); }
-.dm-ahero { display: flex; align-items: baseline; justify-content: center; gap: 4px; flex-wrap: wrap; }
-.dm-ahero b { font-size: 40px; line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; }
-.dm-ahero span { color: var(--dim); font-size: 14px; }
-.dm-ahero em { font-style: normal; font-weight: 800; font-size: 17px; margin-inline-start: 8px; }
-.dm-abar { margin: 12px 0 4px; }
-.dm-abar-track { position: relative; display: flex; gap: 2px; height: 10px; direction: ltr; }
-.dm-abar-track i { display: block; height: 100%; opacity: 0.8; }
-.dm-abar-track i:first-child { border-radius: 5px 0 0 5px; }
-.dm-abar-track i:nth-child(3) { border-radius: 0 5px 5px 0; }
-.dm-abar-track b {
-  position: absolute;
-  top: -4px;
-  width: 4px;
-  height: 18px;
-  margin-inline-start: -2px;
-  border-radius: 2px;
-  background: var(--ink);
-  box-shadow: 0 0 0 2px #0b0e11;
-}
-.dm-abar-ends { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; font-weight: 700; direction: ltr; }
-.dm-ahint { margin: 8px 0 0; color: var(--dim); font-size: 12.5px; line-height: 1.45; text-align: center; }
-.dm-share { margin: 10px 0 0; color: var(--dim); font-size: 12.5px; line-height: 1.5; }
-.dm-top-h { margin: 0 0 8px; font-size: 13.5px; font-weight: 700; color: var(--ink); }
-.dm-top-h span { color: var(--dim); font-weight: 500; }
-.dm-top { display: grid; }
-.dm-top-r {
-  display: grid;
-  grid-template-columns: 20px 62px minmax(0, 1fr) 70px;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 0;
-  font-size: 12.5px;
-  border-top: 1px solid rgb(27 61 104 / 0.3);
-}
-.dm-top-r:first-child { border-top: 0; }
-.dm-top-rank { color: var(--dim-2); font-size: 11px; text-align: end; font-variant-numeric: tabular-nums; }
-.dm-top-s { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dm-top-bar { position: relative; height: 8px; direction: ltr; }
-.dm-top-mid { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: rgb(247 147 26 / 0.8); }
-.dm-top-fill { position: absolute; top: 0; height: 100%; border-radius: 3px; min-width: 2px; opacity: 0.9; }
-.dm-top-r > b { text-align: end; font-variant-numeric: tabular-nums; color: var(--dim); font-weight: 600; }
-.dm-top-r > b.dm-beat { color: var(--ink); }
+/* Число в плитке — одним куском слева направо и в арабском. */
+.dm-ch b { unicode-bidi: isolate; direction: ltr; }
 .dm-more {
   display: block;
   width: 100%;
@@ -3545,9 +3502,6 @@ button.cal-row:active { background: rgb(58 130 214 / 0.08); }
   font-weight: 700;
   cursor: pointer;
 }
-.dm-eb { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.dm-eb b { font-size: 28px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.dm-eb span { color: var(--dim); font-size: 12.5px; }
 
 .fund-wait { margin: 4px 0 10px; color: var(--dim); font-size: 12.5px; text-align: center; }
 
@@ -3917,7 +3871,7 @@ button.alc-who { cursor: pointer; text-decoration: underline dotted rgb(124 151 
    перенесётся, чем потеряет цифру. Числа внутри <bdi> не рвутся. */
 .hdr-txt, .row-name, .row-sub, .tile b, .nf-ttl > :first-child, .nf-tag,
 .lb-addr, .rot-line-nm, .unl-id small, .dg-chip span, .dg-com-head b, .lq-li small,
-.lq-top-r b, .dm-ch small, .dm-top-s,
+.lq-top-r b, .dm-ch small,
 .btc-ex-row b, .dg-sig-k, .dg-cell small, .dg-cell b, .dg-cell em, .alc-who, .alc-sym {
   white-space: normal;
   overflow: visible;

@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  PX_FROM, ago, altStats, beat, change, ebStats, seasonOf, series, thin, validDom, windowOf,
+  PX_FROM, STALE_DAYS, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, windowOf,
   type DomDay,
 } from "../src/lib/dom.ts";
 
@@ -126,4 +126,20 @@ test("windowOf: год, три года, вся история", () => {
 test("beat: обогнали и отстали", () => {
   assert.deepEqual(beat([["A", 30], ["B", 10], ["C", 20]], 20), { up: 1, dn: 2 });
   assert.deepEqual(beat([], 0), { up: 0, dn: 0 });
+});
+
+test("daysOld: сколько полных суток с последнего дня; день из будущего — ноль", () => {
+  const r = rows(10);
+  const last = r[r.length - 1]![0];
+  assert.equal(daysOld(r, last + 3600), 0);
+  assert.equal(daysOld(r, last + 3 * DAY + 5), 3);
+  assert.equal(daysOld(r, last - 2 * DAY), 0);
+  assert.equal(daysOld([], NOW), 0);
+  assert.equal(STALE_DAYS, 2);
+});
+
+test("everyNth: раз в n суток от последней точки", () => {
+  const s: [number, number][] = Array.from({ length: 15 }, (_, i) => [T0 + i * DAY, i]);
+  assert.deepEqual(everyNth(s, 7).map((p) => p[1]), [14, 7, 0]);
+  assert.deepEqual(everyNth([], 7), []);
 });

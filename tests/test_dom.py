@@ -122,6 +122,30 @@ class ComputeTest(unittest.TestCase):
         # Рост к биткоину урезан до CLIP: корзина сдвинулась не больше чем на e^(CLIP/10).
         self.assertLess(max(r[2] for r in rows), 100 * math.exp(dom.CLIP / 10) + 0.01)
 
+    def test_limits_keep_the_answer_inside_what_the_app_accepts(self):
+        n = 150
+        # Каждая монета каждый день в e раз сильнее биткоина (сбой цен): сила
+        # не уходит дальше e^STR_LOG от 100 — иначе приложение отвергло бы ответ.
+        px = {"BTC": flat(n, 100), **{f"A{i}": flat(n, 1, math.e * 1.01) for i in range(10)}}
+        rows = dom.compute(px, [f"A{i}" for i in range(10)])["rows"]
+        self.assertLessEqual(max(r[2] for r in rows), 100 * math.exp(dom.STR_LOG) * 1.001)
+        # Рост монеты больше GROW_MAX — сбой цены, монеты нет в списке.
+        coins = dom.compute(px, [f"A{i}" for i in range(10)])["coins"]
+        self.assertEqual(coins, [])
+        # Биткоин дешевле BTC_MIN в какие-то дни — этих дней нет вовсе.
+        btc = flat(n, 100)
+        for d in range(100, 110):
+            btc[T0 + d * DAY] = 0.5
+        px = {"BTC": btc, "ETH": flat(n, 5), **{f"A{i}": flat(n, 1, 1.01) for i in range(10)}}
+        rows = dom.compute(px, ["ETH", *[f"A{i}" for i in range(10)]])["rows"]
+        days = {r[0] for r in rows}
+        self.assertNotIn(T0 + 105 * DAY, days)
+        self.assertTrue(all(r[4] >= dom.BTC_MIN for r in rows))
+        # ETH/BTC вне пределов — этого дня ETH/BTC нет, а сам день есть.
+        px["ETH"] = {**px["ETH"], T0 + 120 * DAY: 2_000.0}
+        row = next(r for r in dom.compute(px, ["ETH", *[f"A{i}" for i in range(10)]])["rows"] if r[0] == T0 + 120 * DAY)
+        self.assertIsNone(row[3])
+
     def test_no_bitcoin_is_nothing(self):
         self.assertIsNone(dom.compute({"ETH": flat(200, 1)}, ["ETH"]))
         self.assertIsNone(dom.compute({"BTC": flat(50, 1)}, []))
@@ -277,6 +301,10 @@ class SecurityTest(Base):
         with open(os.path.join(self.tmp, "dom_px.json"), "w", encoding="utf-8") as f:
             json.dump({"at": NOW, "v": {"BTC": {str(T0): 100, "x": 5, str(T0 + 5): 1, str(T0 + DAY): -3},
                                          "<script>": {str(T0): 1}, "ETH": "nope"}}, f)
+        self.assertEqual(dom._px_load(), {"BTC": {T0: 100.0}})
+        # Дни до цен Hyperliquid и из будущего — мимо.
+        with open(os.path.join(self.tmp, "dom_px.json"), "w", encoding="utf-8") as f:
+            json.dump({"at": NOW, "v": {"BTC": {"0": 5, str(T0): 100, str(NOW // DAY * DAY + 10 * DAY): 7}}}, f)
         self.assertEqual(dom._px_load(), {"BTC": {T0: 100.0}})
         for body in ("[1, 2]", '{"at": "x", "v": {}}', '{"at": 1, "v": {"BTC": {}}}', "garbage"):
             with open(os.path.join(self.tmp, "dom_px.json"), "w", encoding="utf-8") as f:

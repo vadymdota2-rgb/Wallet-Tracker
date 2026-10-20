@@ -16,20 +16,22 @@
  * Цвета держатся смысла по всему экрану: оранжевый — биткоин, фиолетовый —
  * альты, синий — эфир.
  */
-import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
 import type { DictKey } from "../i18n/types";
-import { num, pct } from "../lib/format";
+import { num, pct, since } from "../lib/format";
 import { haptic } from "../lib/telegram";
 import { fetchDom, peekDom } from "../lib/api";
 import { Card, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import {
-  RANGES, ago, altStats, beat, change, ebStats, seasonOf, series, thin, windowOf,
+  DOM_TTL_MS, RANGES, STALE_DAYS, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, windowOf,
   type DomReply, type Range,
 } from "../lib/dom";
 import { Frame } from "./Screen";
 import { dateStr, timeTicks } from "./FearGreedScreen";
+import { heightK, useWidth } from "./etfView";
+import "./DominanceScreen.css";
 
 type Lang = Parameters<typeof t>[0];
 
@@ -65,14 +67,13 @@ function durStr(lang: Lang, d: number): string {
 
 /* ---------------------------------------------------------------------- */
 
-const W = 360;
+/** Место под подписи оси справа, px. */
 const AXIS = 50;
-const PW = W - AXIS - 4;
 
-/** Подписи времени: не больше семи, иначе годы слипаются. */
-function ticksOf(lang: Lang, a: number, b: number) {
+/** Подписи времени: не теснее одной на 64 px. */
+function ticksOf(lang: Lang, a: number, b: number, pw: number) {
   const all = timeTicks(lang, a, b);
-  const step = Math.max(1, Math.ceil(all.length / 7));
+  const step = Math.max(1, Math.ceil(all.length / Math.max(3, Math.floor(pw / 64))));
   return all.filter((_, i) => (all.length - 1 - i) % step === 0);
 }
 
@@ -86,34 +87,13 @@ function niceTicks(lo: number, hi: number): number[] {
   return out;
 }
 
-/** Точки по пальцу. */
-function useScrub(n: number, width: number, onSel: (i: number | null) => void, sel: number | null) {
-  const ref = useRef<SVGSVGElement>(null);
-  const pick = (clientX: number) => {
-    const el = ref.current;
-    if (!el || n < 1) return;
-    const box = el.getBoundingClientRect();
-    const x = ((clientX - box.left) / box.width) * W;
-    const i = Math.max(0, Math.min(n - 1, Math.round((x / width) * (n - 1))));
-    if (i !== sel) {
-      haptic("select");
-      onSel(i);
-    }
-  };
-  return {
-    ref,
-    handlers: {
-      onPointerDown: (e: PointerEvent) => pick(e.clientX),
-      onPointerMove: (e: PointerEvent) => { if (e.pointerType === "mouse" || e.buttons) pick(e.clientX); },
-      onPointerUp: (e: PointerEvent) => { if (e.pointerType !== "mouse") onSel(null); },
-      onPointerCancel: () => onSel(null),
-      onPointerLeave: () => onSel(null),
-      onContextMenu: (e: MouseEvent) => e.preventDefault(),
-    },
-  };
-}
-
-/** Небольшой график одной величины: индекс альтсезона, сила альтов, ETH/BTC. */
+/**
+ * Небольшой график одной величины: индекс альтсезона, сила альтов, ETH/BTC.
+ * Рисуется в настоящих пикселях ширины (useWidth): подписи одного размера на
+ * телефоне, планшете и компьютере; высота растёт с шириной, но график
+ * помещается по высоте окна (heightK). Палец ведёт по дням; с клавиатуры —
+ * стрелки, Home/End, Esc; подсказка слышна читалке экрана.
+ */
 function MiniChart({ pts, lang, color, bands, fmt, fixed, label }: {
   pts: [number, number][];
   lang: Lang;
@@ -123,9 +103,14 @@ function MiniChart({ pts, lang, color, bands, fmt, fixed, label }: {
   fixed?: [number, number];
   label: string;
 }) {
-  const [sel, setSel] = useState<number | null>(null);
+  const [picked, setSel] = useState<number | null>(null);
+  const ref = useRef<SVGSVGElement>(null);
+  const W = useWidth(ref);
+  const PW = W - AXIS - 4;
+  const MH = Math.round(120 * heightK(W, 146));
   const n = pts.length;
-  const MH = 120;
+  /* Пришёл ответ с другим числом точек (сменилось окно) — выбор за краем не держим. */
+  const sel = picked !== null && picked < n ? picked : null;
   const vals = pts.map((p) => p[1]);
   const lo = fixed ? fixed[0] : Math.min(...vals) * 0.95;
   const hi = fixed ? fixed[1] : Math.max(...vals) * 1.05;
@@ -134,7 +119,6 @@ function MiniChart({ pts, lang, color, bands, fmt, fixed, label }: {
   const a = pts[0]?.[0] ?? 0;
   const b = pts[n - 1]?.[0] ?? 1;
   const xOfT = (ts: number) => ((ts - a) / Math.max(1, b - a)) * PW;
-  const { ref, handlers } = useScrub(n, PW, setSel, sel);
   /* Линия кусками своего цвета: у индекса цвет — зона. */
   const segs = useMemo(() => {
     const out: { c: string; pts: string }[] = [];
@@ -152,18 +136,51 @@ function MiniChart({ pts, lang, color, bands, fmt, fixed, label }: {
     });
     if (cur) out.push({ c: (cur as { c: string }).c, pts: (cur as { p: string[] }).p.join(" ") });
     return out;
-  }, [pts]);
+  }, [pts, W, MH]);
+  const pick = (clientX: number) => {
+    const el = ref.current;
+    if (!el || n < 1) return;
+    const box = el.getBoundingClientRect();
+    const x = ((clientX - box.left) / box.width) * W;
+    const i = Math.max(0, Math.min(n - 1, Math.round((x / PW) * (n - 1))));
+    if (i !== sel) {
+      haptic("select");
+      setSel(i);
+    }
+  };
+  const onKey = (e: KeyboardEvent) => {
+    if (!n) return;
+    const go = (i: number) => {
+      e.preventDefault();
+      setSel(Math.max(0, Math.min(n - 1, i)));
+    };
+    if (e.key === "ArrowRight") go(sel === null ? n - 1 : sel + 1);
+    else if (e.key === "ArrowLeft") go(sel === null ? n - 1 : sel - 1);
+    else if (e.key === "Home") go(0);
+    else if (e.key === "End") go(n - 1);
+    else if (e.key === "Escape" && sel !== null) {
+      e.preventDefault();
+      setSel(null);
+    }
+  };
   const ticks = fixed ? [25, 50, 75] : niceTicks(lo, hi);
   const p = sel !== null ? pts[sel] : undefined;
   const H2 = MH + 26;
   return (
-    <div className="fg-plot">
-      <svg ref={ref} className="fg-svg" viewBox={`0 0 ${W} ${H2}`} width="100%" role="img" aria-label={label} {...handlers}>
+    <div className="fg-plot dm-plot" tabIndex={0} role="group" aria-label={t(lang, "ef_keys")}
+      onKeyDown={onKey} onBlur={() => setSel(null)}>
+      <svg ref={ref} className="fg-svg dm-svg" viewBox={`0 0 ${W} ${H2}`} width="100%" role="img" aria-label={label}
+        onPointerDown={(e: PointerEvent) => pick(e.clientX)}
+        onPointerMove={(e: PointerEvent) => { if (e.pointerType === "mouse" || e.buttons) pick(e.clientX); }}
+        onPointerUp={(e: PointerEvent) => { if (e.pointerType !== "mouse") setSel(null); }}
+        onPointerCancel={() => setSel(null)}
+        onPointerLeave={() => setSel(null)}
+        onContextMenu={(e: MouseEvent) => e.preventDefault()}>
         <rect x={0} y={6} width={PW} height={MH} className="fg-bg" />
         {bands?.map((z) => (
           <rect key={z.from} x={0} y={yOf(z.to)} width={PW} height={yOf(z.from) - yOf(z.to)} fill={z.c} opacity={0.1} />
         ))}
-        {ticksOf(lang, a, b).map((x) => (
+        {ticksOf(lang, a, b, PW).map((x) => (
           <g key={x.t}>
             <line x1={xOfT(x.t)} x2={xOfT(x.t)} y1={6} y2={6 + MH} className="fg-grid" />
             <text x={xOfT(x.t)} y={H2 - 4} textAnchor="middle" className="fg-tick">{x.label}</text>
@@ -190,6 +207,38 @@ function MiniChart({ pts, lang, color, bands, fmt, fixed, label }: {
         </div>
       ) : null}
     </div>
+  );
+}
+
+/** Индекс по неделям цифрами — для читалки экрана и для тех, кому цифры удобнее линии. */
+function AltTable({ pts, lang }: { pts: [number, number][]; lang: Lang }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details className="dm-tbl" onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>
+      <summary>{t(lang, "ef_tbl")}</summary>
+      {open ? (
+        <div className="dm-tbl-w">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">{t(lang, "ef_tbl_d")}</th>
+                <th scope="col">{t(lang, "dm_tbl_idx")}</th>
+                <th scope="col">{t(lang, "dm_tbl_zone")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {everyNth(pts, 7).map(([ts, v]) => (
+                <tr key={ts}>
+                  <th scope="row">{dateStr(lang, ts, { day: "numeric", month: "short", year: "numeric" })}</th>
+                  <td>{v}</td>
+                  <td>{t(lang, SEASON[seasonOf(v)].key)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </details>
   );
 }
 
@@ -292,6 +341,10 @@ export function DominanceScreen() {
     }
   });
 
+  /* Когда ответ последний раз пришёл из сети (мс): вернувшись в приложение
+     через час и больше, экран сам берёт свежий — Telegram держит открытое
+     приложение сколько угодно. */
+  const got = useRef(0);
   useEffect(() => {
     let alive = true;
     let timer = 0;
@@ -302,6 +355,7 @@ export function DominanceScreen() {
         timer = window.setTimeout(() => setRetry((n) => n + 1), BUILD_RETRY_MS);
       } else if (r) {
         setReply(r);
+        got.current = Date.now();
         setState("wait");
       } else setState("failed");
     });
@@ -310,6 +364,13 @@ export function DominanceScreen() {
       window.clearTimeout(timer);
     };
   }, [retry]);
+  useEffect(() => {
+    const back = () => {
+      if (document.visibilityState === "visible" && got.current && Date.now() - got.current > DOM_TTL_MS) setRetry((n) => n + 1);
+    };
+    document.addEventListener("visibilitychange", back);
+    return () => document.removeEventListener("visibilitychange", back);
+  }, []);
 
   const pickRange = (r: Range) => {
     setRange(r);
@@ -330,6 +391,7 @@ export function DominanceScreen() {
   const coins = reply?.coins ?? [];
   const btc90 = reply?.btc90 ?? null;
   const k = btc90 !== null ? beat(coins, btc90).up : 0;
+  const old = daysOld(rows, Date.now() / 1000);
 
   const altCell = (key: DictKey, p: [number, number] | null) => p ? (
     <div key={key} className="fg-cmp-c">
@@ -349,6 +411,7 @@ export function DominanceScreen() {
 
   return (
     <Frame title={t(lang, "dm_title")}>
+      <div className="dm">
       <p className="lq-lead">{t(lang, "dm_sub")}</p>
 
       {!reply ? (
@@ -358,9 +421,21 @@ export function DominanceScreen() {
           } />
         ) : state === "building" ? (
           <Card><p className="lq-hint" role="status">{t(lang, "dm_building")}</p><Skeleton rows={6} /></Card>
-        ) : <Card><Skeleton rows={8} /></Card>
+        ) : <div aria-busy="true"><Card><Skeleton rows={8} /></Card></div>
       ) : (
         <>
+          {/* Сеть не ответила, а на экране — сохранённая копия: говорим, насколько она стара. */}
+          {state === "failed" ? (
+            <p className="lq-stale" role="status">
+              {t(lang, "op_stale", { t: since(Math.max(0, Date.now() / 1000 - reply.at)) })}{" "}
+              <button type="button" onClick={() => setRetry((n) => n + 1)}>{t(lang, "ui_retry")}</button>
+            </p>
+          ) : null}
+          {/* Hyperliquid давно не присылал цен — говорим прямо, иначе вчерашний индекс выглядел бы сегодняшним.
+              Только на ответе сервера: старая копия при сбое сети — не вина Hyperliquid (про неё — строка выше). */}
+          {got.current && state !== "failed" && old > STALE_DAYS ? (
+            <p className="lq-stale" role="status">{t(lang, "dm_old", { n: iso(num(old)) })}</p>
+          ) : null}
           {now && stats ? (
             <Card>
               <div className="dm-ahero">
@@ -411,6 +486,7 @@ export function DominanceScreen() {
                   fmt={(v) => num(v)}
                   fixed={[0, 100]}
                 />
+                <AltTable pts={windowOf(alt, range)} lang={lang} />
                 <p className="dm-share">
                   {t(lang, "dm_alt_days", {
                     d: dateStr(lang, stats.from, { day: "numeric", month: "long", year: "numeric" }),
@@ -483,6 +559,7 @@ export function DominanceScreen() {
           <p className="lq-src">{t(lang, "dm_src")}</p>
         </>
       )}
+      </div>
     </Frame>
   );
 }
