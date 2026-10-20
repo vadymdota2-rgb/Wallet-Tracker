@@ -578,7 +578,7 @@ export const pl: Dict = {
   dm_eb_range: "Maksimum {hi} ({hd}), minimum {lo} ({ld}).",
   dm_eb_what: "tyle BTC kosztuje 1 ETH",
   dm_err: "Nie udało się wczytać danych o altseason.",
-  dm_how_1: "Indeks altseason to odsetek z 50 najczęściej handlowanych monet Hyperliquid, które w 90 dni wzrosły bardziej niż bitcoin. Każdy dzień ma własny koszyk: 50 monet o największym obrocie w 30 dniach przed nim (bez bitcoina, złota i stablecoinów). 75 i więcej — altseason, 25 i mniej — sezon bitcoina.",
+  dm_how_1: "Indeks altseason to odsetek z 100 najczęściej handlowanych monet Hyperliquid, które w 90 dni wzrosły bardziej niż bitcoin. Każdy dzień ma własny koszyk: 100 monet o największym obrocie w 30 dniach przed nim (bez bitcoina, złota i stablecoinów). 75 i więcej — altseason, 25 i mniej — sezon bitcoina.",
   dm_how_2: "Siła altów wobec bitcoina to koszyk tych samych monet po równo: każdego dnia bierzemy średni wzrost monet względem bitcoina i go sumujemy. 100 to pierwszy dzień historii. Rośnie — alty są silniejsze od bitcoina, spada — słabsze.",
   dm_how_3: "Przeszłość liczymy uczciwie: każdy dzień to monety, które były wtedy najczęściej handlowane, także te, które później wycofano z obrotu. Tylko zamknięte dni (UTC). Historia zaczyna się od prawdziwego handlu na Hyperliquid (2023 r.); dzień z mniej niż 30 monetami w koszyku się nie liczy.",
   dm_how_4: "Dominacji (udziału bitcoina, etheru, USDT i altów w całym rynku) nie liczymy sami: potrzebna jest do niej kapitalizacja tysięcy monet. Pochodzi z oficjalnego API CoinMarketCap. Wszystko inne na ekranie to nasze obliczenia z cen Hyperliquid.",

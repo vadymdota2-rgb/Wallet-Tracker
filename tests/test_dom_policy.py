@@ -145,7 +145,8 @@ class ServerPolicyTest(unittest.TestCase):
         self.assertEqual(dom.TTL, 3600.0)
         # Корзина: самые торгуемые за VOLW дней, не меньше MIN_BASKET монет,
         # ширина — от узкой корзины до широкой, основная — среди них.
-        self.assertLessEqual(dom.TOP, 60)
+        # 100 монет — как у CoinMarketCap.
+        self.assertEqual(dom.TOP, 100)
         self.assertLessEqual(dom.MIN_BASKET, dom.TOP)
         self.assertGreaterEqual(dom.MIN_BASKET, 20)
         self.assertIn(dom.TOP, dom.TIERS)

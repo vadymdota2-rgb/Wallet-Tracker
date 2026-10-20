@@ -65,7 +65,7 @@ HOSTS = frozenset({"api.hyperliquid.xyz"})
 # Сколько монет в корзине дня; за сколько дней до него оборот выбирает
 # корзину; окно индекса, дней; меньше скольких монет в корзине день не
 # считается (горстка монет — не рынок); корзины для ширины рынка.
-TOP = 50
+TOP = 100
 VOLW = 30
 WINDOW = 90
 MIN_BASKET = 30
@@ -453,19 +453,26 @@ def compute(px: dict[str, dict[int, Candle]]) -> dict[str, Json] | None:
 def build(sleep: Any = time.sleep) -> dict[str, Json]:
     """Собрать ответ из сети и положить в кэш."""
     with _lock:
+        if not _st.px:
+            _st.px = _px_load()
         hit, have = _st.hit, _st.px
-    # Новый день ещё не закрылся — свечи те же, и ответ тот же: сеть не трогаем.
+    # Новый день ещё не закрылся — свечи те же: сеть не трогаем. Ответ тот же,
+    # если посчитан по нынешним правилам (TOP); иначе — пересчёт по свечам с
+    # диска (после перезапуска с новыми правилами — за секунды, а не минуты).
     last = max((have.get("BTC") or {0: (0.0, 0.0)}), default=0)
-    if hit and last >= _today() - DAY:
-        with _lock:
-            _st.hit = (time.monotonic(), hit[1])
-        return hit[1]
-    coins = _universe()
-    if not coins or "BTC" not in coins:
-        with _lock:
-            _st.fail = time.monotonic()
-        return _no_data()
-    got = compute(_refresh(coins, sleep))
+    if last >= _today() - DAY:
+        if hit and hit[1].get("n") == TOP:
+            with _lock:
+                _st.hit = (time.monotonic(), hit[1])
+            return hit[1]
+        got = compute(have)
+    else:
+        coins = _universe()
+        if not coins or "BTC" not in coins:
+            with _lock:
+                _st.fail = time.monotonic()
+            return _no_data()
+        got = compute(_refresh(coins, sleep))
     if not got:
         with _lock:
             _st.fail = time.monotonic()

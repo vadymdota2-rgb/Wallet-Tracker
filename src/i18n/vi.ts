@@ -578,7 +578,7 @@ export const vi: Dict = {
   dm_eb_range: "Cao nhất {hi} ({hd}), thấp nhất {lo} ({ld}).",
   dm_eb_what: "BTC cho 1 ETH",
   dm_err: "Không tải được dữ liệu Altseason.",
-  dm_how_1: "Chỉ số Altseason là tỷ lệ phần trăm trong 50 đồng coin được giao dịch nhiều nhất trên Hyperliquid tăng mạnh hơn Bitcoin trong 90 ngày. Mỗi ngày có giỏ riêng: 50 đồng coin có khối lượng giao dịch lớn nhất trong 30 ngày trước đó (không tính Bitcoin, vàng và stablecoin). Từ 75 trở lên là Altseason, từ 25 trở xuống là mùa Bitcoin.",
+  dm_how_1: "Chỉ số Altseason là tỷ lệ phần trăm trong 100 đồng coin được giao dịch nhiều nhất trên Hyperliquid tăng mạnh hơn Bitcoin trong 90 ngày. Mỗi ngày có giỏ riêng: 100 đồng coin có khối lượng giao dịch lớn nhất trong 30 ngày trước đó (không tính Bitcoin, vàng và stablecoin). Từ 75 trở lên là Altseason, từ 25 trở xuống là mùa Bitcoin.",
   dm_how_2: "Sức mạnh của altcoin so với Bitcoin là một rổ chính những đồng coin đó chia đều: mỗi ngày chúng tôi lấy mức tăng trung bình của các đồng coin so với Bitcoin rồi cộng dồn. 100 là ngày đầu tiên của lịch sử. Tăng nghĩa là altcoin mạnh hơn Bitcoin, giảm nghĩa là yếu hơn.",
   dm_how_3: "Quá khứ được tính trung thực: mỗi ngày dùng những đồng coin được giao dịch nhiều nhất vào lúc đó, kể cả những đồng sau này bị hủy niêm yết. Chỉ tính các ngày đã đóng (UTC). Lịch sử bắt đầu từ khi có giao dịch thật trên Hyperliquid (2023); ngày có dưới 30 đồng coin trong giỏ không được tính.",
   dm_how_4: "Chúng tôi không tự tính thống trị (tỷ phần của Bitcoin, Ether, USDT và altcoin trên toàn thị trường): cần vốn hóa của hàng nghìn đồng coin. Dữ liệu này lấy từ API chính thức của CoinMarketCap. Mọi thứ khác trên màn hình là tính toán của chúng tôi từ giá Hyperliquid.",

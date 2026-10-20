@@ -649,9 +649,9 @@ say("страх и жадность: «что скрыто в данных» —
 _dm = read(f"{APP}/src/screens/DominanceScreen.tsx")
 _dms = read(f"{APP}/wt_dom.py")
 _dml = read(f"{APP}/src/lib/dom.ts")
-say("альтсезон — свой расчёт по ценам Hyperliquid (wt_dom): индекс 50 монет за 90 дней, сила альтов против биткоина, ETH/BTC; ни CoinMarketCap, ни Binance, ни DefiLlama; ответ проверяется (validDom); доли рынка нет — и это сказано",
+say("альтсезон — свой расчёт по ценам Hyperliquid (wt_dom): индекс 100 монет за 90 дней (как у CoinMarketCap), сила альтов против биткоина, ETH/BTC; ни CoinMarketCap, ни Binance, ни DefiLlama; ответ проверяется (validDom); доли рынка нет — и это сказано",
     "dom_data = wt_dom.dom_data" in api and '"/api/dom"' in api and "wt_dom.set_cache_dir(CACHE_DIR)" in api
-    and 'HOSTS = frozenset({"api.hyperliquid.xyz"})' in _dms and "TOP = 50" in _dms and "WINDOW = 90" in _dms
+    and 'HOSTS = frozenset({"api.hyperliquid.xyz"})' in _dms and "TOP = 100" in _dms and "WINDOW = 90" in _dms
     and "parse_int=_int" in _dms and "_NoRedirect" in _dms and "BODY_MAX" in _dms
     and all(x not in (_dms + api[api.index("# --- Альтсезон и сила биткоина"):api.index("# --- ETF и крупные держатели")]).lower()
             for x in ("coinmarketcap.com", "binance.", "llama.fi", "coingecko.com"))
@@ -676,13 +676,13 @@ say("альтсезон честный: корзина на каждый ден�
     and "PX_FROM <= ts < _today()" in _dms and "sums[i] - sums[max(0, i - VOLW)]" in _dms
     and "export const MIN_BASKET = 30;" in _dml and "r.length !== 6" in _dml
     and '"dm_tiers"' in _dm and '"dm_day"' in _dm and '"dm_how_6"' in _dm)
-say("альтсезон на уровне халвинга и ETF: правила кода и fuzz сервера (годный ответ принимает приложение), свойства расчётов, строгий TypeScript; свои стили, колонка до 760 px, графики в настоящих пикселях и с клавиатуры, таблица, пометки о старой копии и старых данных, свежий ответ при возврате через час, подгрузка при запуске",
+say("альтсезон на уровне халвинга и ETF: правила кода и fuzz сервера (годный ответ принимает приложение), свойства расчётов, строгий TypeScript; свои стили, колонка до 760 px, графики в настоящих пикселях и с клавиатуры, таблица, сохранённая копия без плашки «не удалось» (повтор сам через минуту), пометка о старых данных, свежий ответ при возврате через час, подгрузка при запуске",
     all(os.path.isfile(f"{APP}/tests/{f}") for f in ("test_dom_policy.py", "test_dom_fuzz.py", "dom.props.test.ts", "dom.test.ts", "test_dom.py"))
     and os.path.isfile(f"{APP}/tests/e2e/dom.e2e.test.ts") and '"typecheck:dom"' in read(f"{APP}/package.json")
     and "npm run typecheck:dom" in read(f"{APP}/.github/workflows/tests.yml")
     and 'import "./DominanceScreen.css";' in _dm and ".dm { max-width: 760px;" in read(f"{APP}/src/screens/DominanceScreen.css")
     and "const W = useWidth(ref);" in _dm and "onKeyDown={onKey}" in _dm and "function AltTable(" in _dm
-    and '"op_stale"' in _dm and '"dm_old"' in _dm and '"visibilitychange"' in _dm
+    and '"op_stale"' not in _dm and "FAIL_RETRY_MS" in _dm and '"dm_old"' in _dm and '"visibilitychange"' in _dm
     and "jobs.push(() => fetchDom());" in read(f"{APP}/src/lib/prefetch.ts")
     and "EB_MIN, EB_MAX = 1e-6, 10.0" in _dms and "STR_LOG = math.log(1e3)" in _dms)
 

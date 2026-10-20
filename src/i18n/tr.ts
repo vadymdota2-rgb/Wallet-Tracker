@@ -578,7 +578,7 @@ export const tr: Dict = {
   dm_eb_range: "En yüksek {hi} ({hd}), en düşük {lo} ({ld}).",
   dm_eb_what: "1 ETH başına BTC",
   dm_err: "Altseason verileri yüklenemedi.",
-  dm_how_1: "Altseason endeksi, Hyperliquid'de en çok işlem gören 50 coin'den 90 günde Bitcoin'den fazla yükselenlerin yüzdesidir. Her günün kendi sepeti vardır: o günden önceki 30 günde işlem hacmi en yüksek 50 coin (Bitcoin, altın ve stablecoin'ler hariç). 75 ve üstü altseason, 25 ve altı Bitcoin sezonudur.",
+  dm_how_1: "Altseason endeksi, Hyperliquid'de en çok işlem gören 100 coin'den 90 günde Bitcoin'den fazla yükselenlerin yüzdesidir. Her günün kendi sepeti vardır: o günden önceki 30 günde işlem hacmi en yüksek 100 coin (Bitcoin, altın ve stablecoin'ler hariç). 75 ve üstü altseason, 25 ve altı Bitcoin sezonudur.",
   dm_how_2: "Altcoin'lerin Bitcoin'e karşı gücü, aynı coin'lerden oluşan eşit ağırlıklı bir sepettir: her gün coin'lerin Bitcoin'e karşı ortalama kazancını alıp biriktiririz. 100, geçmişin ilk günüdür. Yükseliyorsa altcoin'ler Bitcoin'den güçlü, düşüyorsa zayıftır.",
   dm_how_3: "Geçmiş dürüstçe hesaplanır: her gün, o zaman en çok işlem gören coin'leri kullanır; sonradan listeden çıkarılanlar da dahil. Yalnızca kapanmış günler (UTC) sayılır. Geçmiş, Hyperliquid'deki gerçek işlemlerin başlangıcından (2023) başlar; sepette 30'dan az coin olan gün sayılmaz.",
   dm_how_4: "Dominansı (Bitcoin, Ether, USDT ve altcoin'lerin tüm piyasadaki payı) kendimiz hesaplamıyoruz: bunun için binlerce coin'in piyasa değeri gerekir. Bu veri resmi CoinMarketCap API'sinden gelir. Bu ekrandaki diğer her şey Hyperliquid fiyatlarıyla kendi hesabımızdır.",

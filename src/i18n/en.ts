@@ -577,7 +577,7 @@ export const en = {
   dm_eb_range: "High {hi} ({hd}), low {lo} ({ld}).",
   dm_eb_what: "BTC per 1 ETH",
   dm_err: "Couldn't load the altseason data.",
-  dm_how_1: "The altseason index is the percentage of the 50 most traded Hyperliquid coins that rose more than Bitcoin over 90 days. Each day has its own basket: the 50 coins with the highest trading volume over the 30 days before it (excluding Bitcoin, gold and stablecoins). 75 and above is altseason; 25 and below is Bitcoin season.",
+  dm_how_1: "The altseason index is the percentage of the 100 most traded Hyperliquid coins that rose more than Bitcoin over 90 days. Each day has its own basket: the 100 coins with the highest trading volume over the 30 days before it (excluding Bitcoin, gold and stablecoins). 75 and above is altseason; 25 and below is Bitcoin season.",
   dm_how_2: "Altcoin strength against Bitcoin is an equally weighted basket of the same coins: each day we take the coins' average gain against Bitcoin and add it up. 100 is the first day of the history. Rising means altcoins are stronger than Bitcoin; falling means weaker.",
   dm_how_3: "The past is counted honestly: each day uses the coins that were the most traded at the time, including those later delisted. Only closed days (UTC) count. The history starts with real trading on Hyperliquid (2023); a day with fewer than 30 coins in the basket isn't counted.",
   dm_how_4: "We don't calculate dominance (the share of Bitcoin, Ether, USDT and altcoins in the whole market) ourselves: it needs the market cap of thousands of coins. It comes from the official CoinMarketCap API. Everything else on this screen is our own calculation from Hyperliquid prices.",

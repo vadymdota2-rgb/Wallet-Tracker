@@ -9,7 +9,7 @@
  * Всё посчитано своим счётом по дневным ценам Hyperliquid (сервер — wt_dom.py,
  * проверка ответа и расчёты — lib/dom.ts). Чужих индексов здесь нет.
  *
- * Сверху — индекс альтсезона на последний закрытый день: сколько из 50 самых
+ * Сверху — индекс альтсезона на последний закрытый день: сколько из 100 самых
  * торгуемых монет Hyperliquid обогнали биткоин за 90 дней; 75 и выше —
  * альтсезон, 25 и ниже — сезон биткоина. Под ним — ширина: тот же индекс для
  * 25, 50 и 100 монет. Ниже — его история (корзина на каждый день своя, со
@@ -23,7 +23,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEve
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
 import type { DictKey } from "../i18n/types";
-import { num, pct, since, usdWord } from "../lib/format";
+import { num, pct, usdWord } from "../lib/format";
 import { haptic } from "../lib/telegram";
 import { fetchDom, fetchMcap, peekDom, peekMcap } from "../lib/api";
 import { Card, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
@@ -43,6 +43,8 @@ const RANGE_KEY = "wt-dom-range";
 const RANGE_LABEL = { 365: "fg_r1y", 1095: "fg_r3y", all: "fg_rall" } as const;
 /** Сервер ещё собирает цены после первого запуска — спросить снова через столько, мс. */
 const BUILD_RETRY_MS = 30_000;
+/** Сеть не ответила — спросить снова через столько, мс (на экране тем временем копия). */
+const FAIL_RETRY_MS = 60_000;
 const iso = (x: string | number) => `⁦${x}⁩`;
 /** Индекс узкой и широкой корзин расходится на столько пунктов — рост узкий (или широкий). */
 const TIER_GAP = 15;
@@ -418,7 +420,10 @@ export function DominanceScreen() {
         setReply(r);
         got.current = Date.now();
         setState("wait");
-      } else setState("failed");
+      } else {
+        setState("failed");
+        timer = window.setTimeout(() => setRetry((n) => n + 1), FAIL_RETRY_MS);
+      }
     });
     return () => {
       alive = false;
@@ -503,16 +508,10 @@ export function DominanceScreen() {
         ) : <div aria-busy="true"><Card><Skeleton rows={8} /></Card></div>
       ) : (
         <>
-          {/* Сеть не ответила, а на экране — сохранённая копия: говорим, насколько она стара. */}
-          {state === "failed" ? (
-            <p className="lq-stale" role="status">
-              {t(lang, "op_stale", { t: since(Math.max(0, Date.now() / 1000 - reply.at)) })}{" "}
-              <button type="button" onClick={() => setRetry((n) => n + 1)}>{t(lang, "ui_retry")}</button>
-            </p>
-          ) : null}
-          {/* Hyperliquid давно не присылал цен — говорим прямо, иначе вчерашний индекс выглядел бы сегодняшним.
-              Только на ответе сервера: старая копия при сбое сети — не вина Hyperliquid (про неё — строка выше). */}
-          {got.current && state !== "failed" && old > STALE_DAYS ? (
+          {/* Сеть не ответила, а на экране — сохранённая копия: показываем её молча,
+              обновление повторится само (FAIL_RETRY_MS). Hyperliquid давно не присылал
+              цен — говорим прямо, иначе вчерашний индекс выглядел бы сегодняшним. */}
+          {got.current && old > STALE_DAYS ? (
             <p className="lq-stale" role="status">{t(lang, "dm_old", { n: iso(num(old)) })}</p>
           ) : null}
           {now && stats ? (

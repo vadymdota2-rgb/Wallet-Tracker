@@ -445,15 +445,17 @@ describe("Альтсезон", () => {
     await ctx.close();
   });
 
-  test("нет связи: сохранённая копия с пометкой, сколько ей, и «повторить»", async () => {
+  test("нет связи: сохранённая копия видна молча, без плашки, а через минуту экран сам спросит снова", async () => {
     const { ctx, page, errors, asked } = await open({ replies: [{ ok: false }, { ok: false }, REAL], store: saved({ ...REAL, at: T - 3 * 3600 }, 3 * 3600_000) });
     await ready(page);
-    const stale = page.locator(".lq-stale");
-    await stale.waitFor();
-    assert.match(sp(await stale.innerText()), /^Не удалось обновить — показаны сохранённые данные \(3 ч.*\)\. Повторить$/);
-    await stale.locator("button").click();
-    await stale.waitFor({ state: "detached" });
-    assert.equal(asked(), 3);
+    for (let i = 0; i < 30 && asked() < 2; i++) await page.waitForTimeout(100);
+    await page.waitForTimeout(300);
+    assert.equal(await page.locator(".lq-stale").count(), 0);
+    assert.equal(sp(await page.locator(".dm-ahero b").innerText()), String(last[1]));
+    const n = asked();
+    await page.clock.runFor(61_000);
+    for (let i = 0; i < 30 && asked() === n; i++) await page.waitForTimeout(100);
+    assert.ok(asked() > n);
     assert.deepEqual(errors, []);
     await ctx.close();
   });

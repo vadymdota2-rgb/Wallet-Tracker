@@ -578,7 +578,7 @@ export const id: Dict = {
   dm_eb_range: "Tertinggi {hi} ({hd}), terendah {lo} ({ld}).",
   dm_eb_what: "BTC per 1 ETH",
   dm_err: "Gagal memuat data altseason.",
-  dm_how_1: "Indeks altseason adalah persentase dari 50 koin paling banyak diperdagangkan di Hyperliquid yang naik lebih tinggi dari Bitcoin dalam 90 hari. Setiap hari punya keranjangnya sendiri: 50 koin dengan volume terbesar dalam 30 hari sebelumnya (tanpa Bitcoin, emas, dan stablecoin). 75 ke atas adalah altseason; 25 ke bawah musim Bitcoin.",
+  dm_how_1: "Indeks altseason adalah persentase dari 100 koin paling banyak diperdagangkan di Hyperliquid yang naik lebih tinggi dari Bitcoin dalam 90 hari. Setiap hari punya keranjangnya sendiri: 100 koin dengan volume terbesar dalam 30 hari sebelumnya (tanpa Bitcoin, emas, dan stablecoin). 75 ke atas adalah altseason; 25 ke bawah musim Bitcoin.",
   dm_how_2: "Kekuatan altcoin terhadap Bitcoin adalah keranjang koin yang sama dengan bobot setara: setiap hari kami ambil rata-rata kenaikan koin terhadap Bitcoin lalu menjumlahkannya. 100 adalah hari pertama riwayat. Naik berarti altcoin lebih kuat dari Bitcoin; turun berarti lebih lemah.",
   dm_how_3: "Masa lalu dihitung dengan jujur: setiap hari memakai koin yang paling banyak diperdagangkan saat itu, termasuk yang kemudian dihapus dari perdagangan. Hanya hari yang sudah ditutup (UTC) yang dihitung. Riwayat dimulai sejak perdagangan nyata di Hyperliquid (2023); hari dengan kurang dari 30 koin di keranjang tidak dihitung.",
   dm_how_4: "Dominasi (pangsa Bitcoin, Ether, USDT, dan altcoin di seluruh pasar) tidak kami hitung sendiri: butuh kapitalisasi ribuan koin. Datanya dari API resmi CoinMarketCap. Semua hal lain di layar ini adalah perhitungan kami sendiri dari harga Hyperliquid.",

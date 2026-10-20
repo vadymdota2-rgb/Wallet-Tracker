@@ -104,8 +104,8 @@ class ComputeTest(unittest.TestCase):
         self.assertAlmostEqual(got["btc90"], (1.01 ** 90 - 1) * 100, places=1)
 
     def test_basket_is_the_most_traded_before_the_day(self):
-        # 50 крупных медленных монет и 10 мелких быстрых: в корзине — крупные.
-        px = {"BTC": flat(199, 100, 1.01), **coins(50, 1.001, 1e6, prefix="B"), **coins(10, 1.02, 1e3, prefix="M")}
+        # TOP крупных медленных монет и 10 мелких быстрых: в корзине — крупные.
+        px = {"BTC": flat(199, 100, 1.01), **coins(dom.TOP, 1.001, 1e6, prefix="B"), **coins(10, 1.02, 1e3, prefix="M")}
         self.assertEqual(dom.compute(px)["rows"][-1][1], 0)
         # Оборот самого дня не известен, когда выбирают корзину: всплеск в
         # последний день корзину этого дня не меняет.
@@ -114,7 +114,7 @@ class ComputeTest(unittest.TestCase):
         # Всплеск накануне — меняет: M0 входит в корзину, слабейшая крупная выходит.
         px["M0"] = {**px["M0"], LAST - DAY: (px["M0"][LAST - DAY][0], 1e10)}
         got = dom.compute(px)
-        self.assertEqual(got["rows"][-1][1], 2)
+        self.assertEqual(got["rows"][-1][1], round(100 / dom.TOP))
         self.assertEqual(got["rows"][-1][5], dom.TOP)
         self.assertIn("M0", [c[0] for c in got["coins"]])
         # Вчера корзина была старой.
@@ -123,10 +123,10 @@ class ComputeTest(unittest.TestCase):
     def test_old_volume_does_not_count(self):
         # O была самой торгуемой в первые 100 дней, потом торги почти встали:
         # корзину решает оборот за последние VOLW дней, а не за всю историю.
-        px = {"BTC": flat(199, 100, 1.01), **coins(50, 1.001, 1e6, prefix="B"),
+        px = {"BTC": flat(199, 100, 1.01), **coins(dom.TOP, 1.001, 1e6, prefix="B"),
               "O": {t: (c, 1e10 if t < T0 + 100 * DAY else 1.0) for t, (c, _) in flat(199, 1, 1.02).items()}}
         rows = dom.compute(px)["rows"]
-        self.assertEqual(day(rows, T0 + 100 * DAY)[1], 2)
+        self.assertEqual(day(rows, T0 + 100 * DAY)[1], round(100 / dom.TOP))
         self.assertEqual(rows[-1][1], 0)
 
     def test_delisted_coins_count_while_they_traded(self):
@@ -166,7 +166,8 @@ class ComputeTest(unittest.TestCase):
             px[f"A{i}"] = flat(199, 1, 1.02 if i < 25 else 1.001, 1e8 - i * 1e5)
         got = dom.compute(px)
         self.assertEqual(got["tiers"], [[25, 100, 25], [50, 50, 50], [100, 25, 100]])
-        self.assertEqual(got["rows"][-1][1], 50)
+        # Основная корзина — TOP = 100 монет, как у CoinMarketCap.
+        self.assertEqual(got["rows"][-1][1], 25)
 
     def test_strength_is_the_equal_weight_basket_against_bitcoin(self):
         px = {"BTC": flat(100, 100, 1.01),
@@ -257,6 +258,19 @@ class BuildTest(Base):
         # Ответ — на диске: перезапуск отдаст его сразу.
         with open(os.path.join(self.tmp, "dom.json"), encoding="utf-8") as f:
             self.assertEqual(json.load(f)["v"]["rows"], res["rows"])
+
+    def test_answer_by_old_rules_is_recounted_from_disk_without_network(self):
+        net = market()
+        first = self.run_build(net)
+        # Сервер перезапущен с новыми правилами: копия посчитана по старому TOP.
+        dom._st = dom._State()
+        dom.set_cache_dir(self.tmp)
+        dom._st.hit = (time.monotonic(), {**first, "n": 50})
+        net.calls.clear()
+        res = self.run_build(net)
+        self.assertEqual(net.calls, [])
+        self.assertEqual(res["n"], dom.TOP)
+        self.assertEqual(res["rows"], first["rows"])
 
     def test_same_day_needs_no_network(self):
         net = market()
