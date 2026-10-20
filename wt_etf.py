@@ -110,6 +110,14 @@ HOLD_MAX = 5_000_000.0
 STALE_DAYS = 5
 # Самый большой ответ — отчёт CFTC, ~2 МБ.
 BODY_MAX = 8 << 20
+# Самое длинное целое в ответе: активы фондов — 12 цифр, с большим запасом.
+INT_DIGITS = 18
+# Фондов в наборе TFTC — дюжина; больше FUNDS_MAX — набор испорчен или
+# подменён: тысячи тикеров раздули бы ответ API и засыпали бы владельца
+# сообщениями о «новых фондах». Такой набор не берём целиком.
+FUNDS_MAX = 60
+# Сообщений о новых фондах за одну сборку — не больше (остальные — в журнал).
+NEW_MAX = 3
 _HEADERS = {"User-Agent": "wallet-tracker/1.0", "Accept-Encoding": "identity"}
 
 Json = Any  # разобранный JSON источника: проверяется на месте, где читается
@@ -168,7 +176,16 @@ def _finite(text: str) -> float:
     return v
 
 
-_DECODER = json.JSONDecoder(parse_float=_finite, parse_constant=_no_constant)
+def _int(text: str) -> int:
+    """Целое из JSON — не длиннее INT_DIGITS цифр. Целое в сотни цифр — валидный
+    JSON, но float() от него бросает OverflowError, а не ValueError: одно такое
+    число в ответе источника роняло бы разбор целиком. Таких чисел не бывает."""
+    if len(text.lstrip("-")) > INT_DIGITS:
+        raise ValueError("слишком длинное целое")
+    return int(text)
+
+
+_DECODER = json.JSONDecoder(parse_float=_finite, parse_int=_int, parse_constant=_no_constant)
 
 
 def _parse(raw: bytes | None) -> Json:
@@ -190,7 +207,7 @@ def _num(v: object) -> float:
         return 0.0
     try:
         f = float(v)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0.0
     return f if math.isfinite(f) else 0.0
 
@@ -255,6 +272,9 @@ def _tftc() -> Tftc:
             px[ts] = _num(r["btcCloseUsd"])
         if TNA_MIN <= _num(r.get("totalNetAssetsUsd")) <= TNA_MAX:
             tna[ts] = _num(r["totalNetAssetsUsd"])
+    if len({t for by, _ in days.values() for t in by}) > FUNDS_MAX:
+        _log(f"набор TFTC: фондов больше {FUNDS_MAX} — набор не берём")
+        return Tftc({}, {}, {}, "")
     through = got.get("updatedThrough")
     return Tftc(days, px, tna, through if isinstance(through, str) and DATE.fullmatch(through) else "")
 
@@ -459,9 +479,9 @@ def _new_funds(tickers: set[str]) -> None:
         fresh = sorted(t for t in tickers if t not in known and t not in _st.told)
         _st.told = _st.told | frozenset(fresh)
         hook = _st.on_new
-    for t in fresh:
+    for i, t in enumerate(fresh):
         _log(f"новый фонд в наборе TFTC: {t} — нет в wt_treasury.ETFS (без имени, комиссии и запаса)")
-        if hook:
+        if hook and i < NEW_MAX:
             try:
                 hook(t)
             except Exception as e:  # noqa: BLE001 — сообщение не роняет сборку

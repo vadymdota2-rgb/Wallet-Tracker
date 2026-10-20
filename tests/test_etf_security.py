@@ -29,7 +29,9 @@ def build(tftc: object, raw: bytes | None = None, sec: dict | None = None) -> di
             return raw if raw is not None else json.dumps(tftc).encode()
         return None
 
+    hook = etf._st.on_new  # кому говорить о новых фондах — переживает сброс
     etf._st = etf._State()
+    etf._st.on_new = hook
     with mock.patch.object(etf, "_fetch", fetch), mock.patch.object(etf, "_now", lambda: NOW), \
             mock.patch.object(etf.wt_treasury, "etf_funds", lambda: sec or {}), \
             mock.patch.object(etf.wt_treasury, "companies", list), mock.patch("sys.stderr", io.StringIO()):
@@ -72,6 +74,51 @@ class PoisonTest(unittest.TestCase):
             res = build(None, raw=raw)
             self.assertLess(time.monotonic() - t0, 3.0, raw[:30])
             self.assertEqual({k: v for k, v in res.items() if k != "_urls"}, {"ok": False, "error": "no_data"}, raw[:30])
+
+    def test_huge_integers_do_not_crash_the_build(self):
+        # Целое в сотни цифр — валидный JSON, но float() от него бросает
+        # OverflowError (не ValueError). Раньше это роняло разбор.
+        huge = "1" + "0" * 400
+        for field in ('"netFlowUsd": %s', '"btcCloseUsd": %s', '"totalNetAssetsUsd": %s', '"perEtfUsd": {"IBIT": %s}'):
+            raw = ('{"days": [{"date": "2026-10-10", "netFlowUsd": 5e6, "perEtfUsd": {"FBTC": 5e6}}, {"date": "2026-10-09", '
+                   + field % huge + "}]}").encode()
+            res = build(None, raw=raw)
+            self.assertFalse(res["ok"], field)
+        # Даже если такое число дошло до разбора (копия на диске, другой путь) — это «не число».
+        self.assertEqual(etf._num(10 ** 400), 0.0)
+        self.assertEqual(etf._num(-(10 ** 400)), 0.0)
+        # 18 цифр — ещё число, 19 — уже нет.
+        self.assertEqual(etf._parse(b"[123456789012345678]"), [123456789012345678])
+        self.assertIsNone(etf._parse(b"[1234567890123456789]"))
+        self.assertIsNone(etf._parse(b"[-1234567890123456789]"))
+
+    def test_thousands_of_tickers_are_refused(self):
+        # Подменённый набор с тысячами тикеров раздул бы ответ API (дни × фонды)
+        # и засыпал бы владельца сообщениями о «новых фондах».
+        many = {f"F{i}": 1e6 for i in range(etf.FUNDS_MAX + 1)}
+        told: list = []
+        etf.set_new_fund_hook(told.append)
+        self.addCleanup(etf.set_new_fund_hook, None)
+        res = build({"days": [{"date": "2026-10-10", "netFlowUsd": 5e6, "perEtfUsd": many}]})
+        self.assertFalse(res["ok"])
+        # Тикеры поровну по дням — тоже не берём.
+        days = [{"date": f"2026-10-{d:02d}", "perEtfUsd": {f"F{d}{i}": 1e6 for i in range(10)}} for d in range(1, 9)]
+        self.assertFalse(build({"days": days})["ok"])
+        self.assertEqual(told, [])
+        # Ровно FUNDS_MAX — ещё набор.
+        ok = {f"F{i}": 1e6 for i in range(etf.FUNDS_MAX)}
+        self.assertTrue(build({"days": [{"date": "2026-10-10", "perEtfUsd": ok}]})["ok"])
+
+    def test_new_fund_messages_are_capped_per_build(self):
+        told: list = []
+        etf.set_new_fund_hook(told.append)
+        self.addCleanup(etf.set_new_fund_hook, None)
+        per = {f"NEW{i}": 1e6 for i in range(10)}
+        with mock.patch.object(etf, "_log") as log:
+            build({"days": [{"date": "2026-10-10", "perEtfUsd": per}]})
+        self.assertEqual(told, ["NEW0", "NEW1", "NEW2"])
+        # В журнале — все десять.
+        self.assertEqual(sum("новый фонд в наборе TFTC" in c.args[0] for c in log.call_args_list), 10)
 
     def test_wrong_types_everywhere(self):
         for days in ([None, 1, "x", [], {"date": ["2026-10-10"]}, {"date": "2026-10-10", "perEtfUsd": "IBIT"}],

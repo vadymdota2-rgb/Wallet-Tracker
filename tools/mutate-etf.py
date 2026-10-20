@@ -109,6 +109,11 @@ PY = [
     ('if TNA_MIN <= _num(r.get("totalNetAssetsUsd")) <= TNA_MAX:', 'if _num(r.get("totalNetAssetsUsd")):', "активы: правдоподобная сумма"),
     ("if tna and max(tna) >= max(days) - 7 * 86400 and", "if tna and", "активы: только свежая сводка"),
     ("if own > 0 and abs(own / held - 1) > SPLIT_MAX:", "if False:", "сверка своей оценки со сводкой"),
+    # Атаки: огромные числа, тысячи тикеров, лавина «новых фондов».
+    ('    if len(text.lstrip("-")) > INT_DIGITS:', "    if False:", "целое не длиннее INT_DIGITS цифр"),
+    ("except (TypeError, ValueError, OverflowError):", "except (TypeError, ValueError):", "огромное целое — не число"),
+    ("if len({t for by, _ in days.values() for t in by}) > FUNDS_MAX:", "if False:", "тысячи тикеров по дням — набор не берём"),
+    ("if hook and i < NEW_MAX:", "if hook:", "сообщений о новых фондах — не больше NEW_MAX"),
 ]
 TR = [
     ("return QUARTER.fullmatch(s) is not None", 'return len(s) == 10 and s[5:] in ("03-31", "06-30", "09-30", "12-31")', "SEC: дата квартала — ASCII"),
@@ -127,6 +132,9 @@ TR = [
     ('"fee": float(fee) if _num_ok(fee) and 0 < fee < FEE_MAX else None}', '"fee": fee}', "SEC: комиссия из копии"),
     ('if u.scheme != "https" or u.hostname != HOST or u.username or u.password or not ua:', "if not ua:", "SEC: только https к data.sec.gov"),
     ('return ua if ua.isprintable() and "@" in ua and len(ua) <= 200 else ""', "return ua", "SEC: подпись с почтой и без переводов строк"),
+    ('    if len(text.lstrip("-")) > INT_DIGITS:', "    if False:", "SEC: целое не длиннее INT_DIGITS цифр"),
+    ("    except OverflowError:\n        return False", "    except ZeroDivisionError:\n        return False", "SEC: огромное целое — не число"),
+    ("            if not _num_ok(val) or val < 0:", "            if not math.isfinite(val) or val < 0:", "SEC: огромное целое в отчёте не роняет разбор"),
 ]
 
 

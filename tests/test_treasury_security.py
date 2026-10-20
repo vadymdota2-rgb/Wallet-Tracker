@@ -127,6 +127,23 @@ class NetDoorTest(unittest.TestCase):
             self.assertIsNone(tr._parse(raw), raw[:20])
 
 
+    def test_huge_integers_are_not_numbers_and_do_not_crash(self):
+        # Целое в сотни цифр — валидный JSON, но float() и math.isfinite от него
+        # бросают OverflowError: одно такое число роняло бы разбор отчёта.
+        self.assertIsNone(tr._parse(b'{"v": 1' + b"0" * 400 + b"}"))
+        self.assertIsNone(tr._parse(b"[1234567890123456789]"))
+        self.assertEqual(tr._parse(b"[123456789012345678]"), [123456789012345678])
+        self.assertFalse(tr._num_ok(10 ** 400))
+        self.assertFalse(tr._num_ok(-(10 ** 400)))
+        huge = 10 ** 400
+        rows = [{"end": "2026-06-30", "val": huge, "form": "10-Q", "filed": "2026-08-01"},
+                {"end": "2026-03-31", "val": 700_000, "form": "10-Q", "filed": "2026-05-01"}]
+        for tag, unit in (("CryptoAssetNumberOfUnits", "BTC"), ("CryptoAssetFairValue", "USD"),
+                          ("InvestmentCompanyExpenseRatioIncludingIncentiveFee", "pure")):
+            got = tr.fund_points({"facts": {"us-gaap": {tag: {"units": {unit: rows}}}}})
+            self.assertNotIn(1_782_777_600, got["q"], tag)  # 30 июня 2026 — строка с огромным числом пропущена
+
+
 def facts(r: random.Random) -> object:
     """Ответ companyfacts: годные строки вперемешку с мусором любого типа."""
     if r.random() < 0.05:

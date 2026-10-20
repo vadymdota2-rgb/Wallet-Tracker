@@ -851,6 +851,12 @@ say("ETF: алерт о крупном дне — по желанию, толь�
     and "INSERT OR IGNORE INTO etf_new_funds" in api
     and "threading.Thread(target=etfd_loop, daemon=True).start()" in api and "<BigDayAlert lang={lang} />" in _ef
     and 'role="switch"' in _ef and "test_etf_day_alert.py" in read(f"{APP}/.github/workflows/tests.yml"))
+_tre1 = read(f"{APP}/wt_treasury.py")
+say("ETF: защита от подменённого источника — целые не длиннее 18 цифр (огромное целое не роняет разбор), не больше 60 фондов в наборе, не больше трёх сообщений о новых фондах за сборку",
+    "parse_int=_int" in _etfs and "parse_int=_int" in _tre1 and "INT_DIGITS = 18" in _etfs and "INT_DIGITS = 18" in _tre1
+    and "except (TypeError, ValueError, OverflowError):" in _etfs and "    except OverflowError:\n        return False" in _tre1
+    and "FUNDS_MAX = 60" in _etfs and "if hook and i < NEW_MAX:" in _etfs
+    and "test_huge_integers_do_not_crash_the_build" in read(f"{APP}/tests/test_etf_security.py"))
 _wsb = read(os.path.join(BOT, "btc_chain.cpp"))
 _tre0 = read(f"{APP}/wt_treasury.py")
 say("ETF: потоки по дням — открытый набор TFTC (CC BY 4.0), на экране источник и лицензия со ссылками; запас — отчёты SEC плюс потоки после них; снимка и сводок CoinMarketCap нет; флаги фондов",

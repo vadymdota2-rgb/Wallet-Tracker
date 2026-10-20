@@ -158,7 +158,20 @@ def _no_constant(name: str) -> float:
     raise ValueError(f"{name} в JSON")
 
 
-_DECODER = json.JSONDecoder(parse_float=_finite, parse_constant=_no_constant)
+# Самое длинное целое в ответе SEC: доллары фонда — 12 цифр, с большим запасом.
+INT_DIGITS = 18
+
+
+def _int(text: str) -> int:
+    """Целое из JSON — не длиннее INT_DIGITS цифр. Целое в сотни цифр — валидный
+    JSON, но float() от него бросает OverflowError, а не ValueError: одно такое
+    число в ответе источника роняло бы разбор целиком. Таких чисел не бывает."""
+    if len(text.lstrip("-")) > INT_DIGITS:
+        raise ValueError("слишком длинное целое")
+    return int(text)
+
+
+_DECODER = json.JSONDecoder(parse_float=_finite, parse_int=_int, parse_constant=_no_constant)
 
 
 def _parse(raw: bytes | None) -> Json:
@@ -358,7 +371,7 @@ def _latest(rows: Json, units: frozenset[str] | None) -> dict[str, float]:
             end, val, filed = str(r.get("end") or ""), r.get("val"), str(r.get("filed") or "")
             if not _quarter_end(end) or end < ETF_FROM or isinstance(val, bool) or not isinstance(val, (int, float)):
                 continue
-            if not math.isfinite(val) or val < 0:
+            if not _num_ok(val) or val < 0:
                 continue
             if end not in best or filed >= best[end][0]:
                 best[end] = (filed, float(val))
@@ -366,7 +379,11 @@ def _latest(rows: Json, units: frozenset[str] | None) -> dict[str, float]:
 
 
 def _num_ok(v: object) -> TypeGuard[float]:
-    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+    # Огромное целое: math.isfinite бросает OverflowError — это не число для нас.
+    try:
+        return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+    except OverflowError:
+        return False
 
 
 def _point(v: object) -> bool:
