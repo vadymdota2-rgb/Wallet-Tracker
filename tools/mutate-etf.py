@@ -138,13 +138,15 @@ TR = [
 ]
 
 
-# Алерт о крупном дне (whale_api: etfd_*).
+# Итоги дня ETF в Telegram (whale_api: etfd_*).
 AL = [
-    ("if abs(v) < ETFD_MIN or now() - ts > ETFD_FRESH:", "if abs(v) < ETFD_MIN:", "алерт: только свежий день"),
-    ("if abs(v) < ETFD_MIN or now() - ts > ETFD_FRESH:", "if v < ETFD_MIN or now() - ts > ETFD_FRESH:", "алерт: отток тоже крупный день"),
-    (" and (x > 0) == (v > 0)]", "]", "алерт: фонды в ту же сторону"),
-    ("    per.sort(key=lambda p: -abs(p[1]))\n", "", "алерт: самые крупные фонды первыми"),
-    ("return ts, v, per[:3]", "return ts, v, per", "алерт: не больше трёх фондов"),
+    ("    if now() - ts > ETFD_FRESH:\n        return None\n", "", "алерт: только свежий день"),
+    ("    if not v and not buy and not sell:", "    if False:", "алерт: день без движения — без сообщения"),
+    ("if p[1] > 0), key=lambda p: -p[1])[:3]", "if p[1] > 0), key=lambda p: p[1])[:3]", "алерт: купившие — от самого большого"),
+    ("if p[1] > 0), key=lambda p: -p[1])[:3]", "if p[1] > 0), key=lambda p: -p[1])", "алерт: купивших не больше трёх"),
+    ("if p[1] < 0), key=lambda p: p[1])[:3]", "if p[1] < 0), key=lambda p: -p[1])[:3]", "алерт: продавшие — от самого большого"),
+    ("if p[1] < 0), key=lambda p: p[1])[:3]", "if p[1] < 0), key=lambda p: p[1])", "алерт: продавших не больше трёх"),
+    ('"ef_al_in" if v >= 0 else', '"ef_al_in" if v > 0 else', "алерт: ноль в итоге — не «отток»"),
     ("if not seen or seen[0] != k:", "if not seen:", "алерт: дописанный день — ждать заново"),
     ("        if now() - seen[1] < ETFD_STABLE:\n            return 0\n", "", "алерт: только устоявшийся день"),
     ('FROM etf_day_subs WHERE last_day<? ORDER BY at", (ts,)', 'FROM etf_day_subs ORDER BY at", ()', "алерт: один день — одно сообщение"),

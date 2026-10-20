@@ -87,7 +87,7 @@ interface Opts {
   stay?: boolean;
   /** Часы телефона, unix с (по умолчанию — время образца). */
   clock?: number;
-  /** Ответ сервера на /api/etfwatch (алерт о крупном дне). */
+  /** Ответ сервера на /api/etfwatch (итоги дня в Telegram). */
   watch?: (r: Route) => Promise<void>;
 }
 
@@ -683,7 +683,7 @@ describe("институциональные потоки", () => {
     await ctx.close();
   });
 
-  test("алерт о крупном дне: до ответа сервера выключатель неактивен, нажатие шлёт on и язык, без Премиума — подсказка", async () => {
+  test("итоги дня в Telegram: до ответа сервера выключатель неактивен, нажатие шлёт on и язык, без Премиума — подсказка", async () => {
     const posts: unknown[] = [];
     let plan = "premium";
     let gate: () => void = () => {};

@@ -841,15 +841,15 @@ say("старых алертов по ETF (по фондам, wt_etfalert) не�
     and "etfAlert" not in read(f"{APP}/src/lib/api.ts") and "wt-etfa" not in read(f"{APP}/src/lib/storage.ts")
     and '(lambda: DB, ("etf_alert_subs", "etf_alert_sent", "etf_alert_state"))' in api and "    old_tables_drop()\n" in api
     and ".ef-bell" not in read(f"{APP}/src/styles/app.css") and "wt_etfalert" not in read(f"{APP}/.github/workflows/tests.yml"))
-say("ETF: алерт о крупном дне — по желанию, только с Премиумом, порог $500 млн, один день — одна рассылка, свежий и устоявшийся день (3 ч без изменений), сбой сети — не отписка, дата словами, в каждом сообщении источник TFTC и лицензия",
-    "ETFD_MIN = 500e6" in api and "def etfd_check() -> int:" in api and "INSERT OR IGNORE INTO etf_day_sent" in api
+say("ETF: итоги каждого дня в Telegram — по желанию, только с Премиумом, любое движение (кто купил и кто продал), один день — одно сообщение, свежий и устоявшийся день (3 ч без изменений), сбой сети — не отписка, дата словами, в каждом сообщении источник TFTC и лицензия",
+    "if not v and not buy and not sell:" in api and "ETFD_MIN" not in api and "def etfd_check() -> int:" in api and "INSERT OR IGNORE INTO etf_day_sent" in api
     and "if not chat_premium(chat):\n                continue" in api and "now() - ts > ETFD_FRESH" in api
     and 'if body.get("on") is True and not chat_premium(chat):' in api and "dgi.TFTC_BY_POST}\")" in api
     and "ETFD_STABLE = 3 * 3600" in api and "if now() - seen[1] < ETFD_STABLE:" in api
     and "def etfd_send(chat: str, text: str) -> bool | None:" in api and "if e.code == 403 or (" in api
     and "                if down >= 3:\n                    break" in api and "d=dgi.date_word(lang, day)" in api
     and "INSERT OR IGNORE INTO etf_new_funds" in api
-    and "threading.Thread(target=etfd_loop, daemon=True).start()" in api and "<BigDayAlert lang={lang} />" in _ef
+    and "threading.Thread(target=etfd_loop, daemon=True).start()" in api and "<DayAlert lang={lang} />" in _ef
     and 'role="switch"' in _ef and "test_etf_day_alert.py" in read(f"{APP}/.github/workflows/tests.yml"))
 _tre1 = read(f"{APP}/wt_treasury.py")
 say("ETF: защита от подменённого источника — целые не длиннее 18 цифр (огромное целое не роняет разбор), не больше 60 фондов в наборе, не больше трёх сообщений о новых фондах за сборку",

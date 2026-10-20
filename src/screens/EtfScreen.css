@@ -170,7 +170,7 @@ button.ef-f { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) auto 12px; 
 .ef-tbl th { position: sticky; top: 0; background: var(--panel); color: var(--dim); font-weight: 600; border-top: 0; }
 .ef-tbl th:first-child, .ef-tbl td:first-child { text-align: start; }
 
-/* Алерт о крупном дне: переключатель во всю строку — подпись тоже нажимается. */
+/* Итоги дня в Telegram: переключатель во всю строку — подпись тоже нажимается. */
 .ef-al {
   display: flex;
   align-items: center;

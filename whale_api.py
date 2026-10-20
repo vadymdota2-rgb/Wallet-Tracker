@@ -13642,12 +13642,13 @@ def pxa_check() -> int:
         con.close()
 
 
-# --- Алерт о крупном дне ETF -----------------------------------------------
-# Один переключатель на экране «Институциональные потоки»: когда спотовые
-# биткоин-ETF США за день купят или продадут биткоин на ETFD_MIN и больше,
-# подписанным с Премиумом уходит сообщение в Telegram — на их языке, с
-# подписью источника (цифры — из набора TFTC, CC BY 4.0: источник и ссылка на
-# лицензию нужны и здесь). Такие дни бывают несколько раз в месяц — не спам.
+# --- Итоги дня ETF в Telegram ----------------------------------------------
+# Один переключатель на экране «Институциональные потоки»: каждый торговый
+# день, когда спотовые биткоин-ETF США купили или продали хоть сколько-то,
+# подписанным с Премиумом уходит сообщение в Telegram — итог дня, кто купил и
+# кто продал больше всех; на их языке, с подписью источника (цифры — из
+# набора TFTC, CC BY 4.0: источник и ссылка на лицензию нужны и здесь).
+# Выходные и праздники — без сообщения: торгов нет, нового дня в наборе нет.
 #
 # Один день — одно сообщение человеку: у подписки свой последний полученный
 # день (last_day). Только свежий день (не старше ETFD_FRESH): после
@@ -13666,7 +13667,6 @@ def pxa_check() -> int:
 # TFTC может дописывать день по мере отчётов. Поэтому рассылка — только когда
 # цифры дня не менялись ETFD_STABLE (etf_day_seen): иначе сообщение ушло бы с
 # неполной суммой, а то и с крупным днём, которого в итоге не было.
-ETFD_MIN = 500e6
 ETFD_FRESH = 3 * 86400
 ETFD_STABLE = 3 * 3600
 ETFD_EVERY = 900
@@ -13713,7 +13713,7 @@ def etfd_get(chat: str) -> dict:
         return {"ok": False, "error": "db"}
     try:
         on = con.execute("SELECT 1 FROM etf_day_subs WHERE chat_id=?", (chat,)).fetchone() is not None
-        return {"ok": True, "on": on, "min": int(ETFD_MIN)}
+        return {"ok": True, "on": on}
     finally:
         con.close()
 
@@ -13737,18 +13737,19 @@ def etfd_set(chat: str, body: dict) -> dict:
         else:
             con.execute("DELETE FROM etf_day_subs WHERE chat_id=?", (chat,))
         con.commit()
-        return {"ok": True, "on": on, "min": int(ETFD_MIN)}
+        return {"ok": True, "on": on}
     finally:
         con.close()
 
 
-def etfd_text(lang: str, day: int, v: float, top: list) -> str:
-    """Текст алерта: итог дня, крупнейшие фонды в ту же сторону, источник
-    (TFTC — с адресом лицензии) и где выключить."""
-    head = dgi.tr(lang, "ef_al_in" if v > 0 else "ef_al_out", v=dgi.usd(v, lang, True), d=dgi.date_word(lang, day))
+def etfd_text(lang: str, day: int, v: float, buy: list, sell: list) -> str:
+    """Текст сообщения: итог дня, кто купил и кто продал больше всех,
+    источник (TFTC — с адресом лицензии) и где выключить."""
+    head = dgi.tr(lang, "ef_al_in" if v >= 0 else "ef_al_out", v=dgi.usd(v, lang, True), d=dgi.date_word(lang, day))
     lines = [head]
-    if top:
-        lines.append(dgi.tr(lang, "ef_al_top", f=", ".join(f"{t} {dgi.usd(x, lang, True)}" for t, x in top)))
+    for key, funds in (("ef_al_buy", buy), ("ef_al_sell", sell)):
+        if funds:
+            lines.append(dgi.tr(lang, key, f=", ".join(f"{t} {dgi.usd(x, lang, True)}" for t, x in funds)))
     lines.append(f"{dgi.tr(lang, 'dg_etf_by')} {dgi.TFTC_BY_POST}")
     # Имя экрана — из словаря того же языка: совпадёт с тем, что человек видит в меню.
     lines.append(dgi.tr(lang, "ef_al_stop", s=dgi.tr(lang, "ef_title")))
@@ -13793,35 +13794,40 @@ def etfd_send(chat: str, text: str) -> bool | None:
 
 
 def etfd_day() -> tuple | None:
-    """Последний день набора, если он крупный и свежий: (начало суток, поток $,
-    до трёх фондов в ту же сторону [(тикер, $)]); иначе None."""
+    """Последний день набора, если он свежий и фонды в нём двигались: (начало
+    суток, поток $, до трёх купивших больше всех, до трёх продавших больше
+    всех [(тикер, $)]); иначе None."""
     e = ((etf_data() or {}).get("coins") or {}).get("btc") or {}
     days, funds = e.get("days") or [], e.get("funds") or []
     if not days:
         return None
     d = days[-1]
     ts, v = int(d[0]), float(d[1] or 0) * 1000
-    if abs(v) < ETFD_MIN or now() - ts > ETFD_FRESH:
+    if now() - ts > ETFD_FRESH:
         return None
-    per = [(funds[i]["t"], (x or 0) * 1000) for i, x in enumerate(d[4] or []) if i < len(funds) and x and (x > 0) == (v > 0)]
-    per.sort(key=lambda p: -abs(p[1]))
-    return ts, v, per[:3]
+    per = [(funds[i]["t"], x * 1000) for i, x in enumerate(d[4] or []) if i < len(funds) and x]
+    buy = sorted((p for p in per if p[1] > 0), key=lambda p: -p[1])[:3]
+    sell = sorted((p for p in per if p[1] < 0), key=lambda p: p[1])[:3]
+    # Ни итога, ни движения ни у одного фонда — сказать нечего.
+    if not v and not buy and not sell:
+        return None
+    return ts, v, buy, sell
 
 
 def etfd_check() -> int:
-    """Один проход: крупный свежий день, о котором ещё не писали, — разослать.
+    """Один проход: свежий день, о котором ещё не писали, — разослать.
     Вернёт, сколько сообщений дошло."""
     got = etfd_day()
     if not got:
         return 0
-    ts, v, top = got
+    ts, v, buy, sell = got
     con = _etfd_con()
     if not con:
         return 0
     try:
         # Цифры дня (итог и крупнейшие фонды) с прошлого прохода изменились —
         # день ещё дописывается: запомнить и ждать, пока не устоится.
-        k = json.dumps([round(v), top])
+        k = json.dumps([round(v), buy, sell])
         seen = con.execute("SELECT k, since FROM etf_day_seen WHERE day=?", (ts,)).fetchone()
         if not seen or seen[0] != k:
             con.execute("INSERT OR REPLACE INTO etf_day_seen(day, k, since) VALUES(?,?,?)", (ts, k, now()))
@@ -13839,7 +13845,7 @@ def etfd_check() -> int:
         for chat, lang in subs:
             if not chat_premium(chat):
                 continue
-            text = texts.get(lang) or texts.setdefault(lang, etfd_text(lang, ts, v, top))
+            text = texts.get(lang) or texts.setdefault(lang, etfd_text(lang, ts, v, buy, sell))
             ok = etfd_send(chat, text)
             if ok is None:
                 down += 1
@@ -13866,7 +13872,7 @@ def etfd_loop() -> None:
         try:
             n = etfd_check()
             if n:
-                sys.stderr.write(f"[api] алерт о крупном дне ETF: отправлено {n}\n")
+                sys.stderr.write(f"[api] итоги дня ETF: отправлено {n}\n")
         except Exception as e:  # noqa: BLE001
             sys.stderr.write(f"[api] etf day alert: {e}\n")
         time.sleep(ETFD_EVERY)

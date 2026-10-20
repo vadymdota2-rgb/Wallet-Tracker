@@ -1,10 +1,11 @@
-"""Алерт о крупном дне ETF (whale_api: etfd_*): npm test.
+"""Итоги дня ETF в Telegram (whale_api: etfd_*): npm test.
 
-Один переключатель на экране «Институциональные потоки»: когда спотовые
-биткоин-ETF за день купят или продадут на $500 млн и больше, подписанным с
-Премиумом уходит сообщение в Telegram — на их языке и с подписью источника
-(TFTC, CC BY 4.0, адрес лицензии). Один день — одна рассылка, только свежий
-день и только когда его цифры устоялись (фонды отчитываются в разное время).
+Один переключатель на экране «Институциональные потоки»: каждый торговый
+день, когда фонды хоть что-то купили или продали, подписанным с Премиумом
+уходит сообщение в Telegram — итог дня, кто купил и кто продал больше всех,
+на их языке и с подписью источника (TFTC, CC BY 4.0, адрес лицензии). Один
+день — одно сообщение, только свежий день и только когда его цифры
+устоялись (фонды отчитываются в разное время).
 Telegram и Премиум подменены, база — временная.
 """
 import io
@@ -65,7 +66,7 @@ class EtfDayAlertTest(unittest.TestCase):
     # ── Переключатель ────────────────────────────────────────────────────
 
     def test_switch_on_off_and_language(self):
-        self.assertEqual(api.etfd_get("1"), {"ok": True, "on": False, "min": 500_000_000})
+        self.assertEqual(api.etfd_get("1"), {"ok": True, "on": False})
         self.assertEqual(api.etfd_set("1", {"on": True, "lang": "ru"})["on"], True)
         self.assertTrue(api.etfd_get("1")["on"])
         self.assertEqual(api.etfd_set("1", {"on": False})["on"], False)
@@ -75,29 +76,36 @@ class EtfDayAlertTest(unittest.TestCase):
             self.assertEqual(api.etfd_set("1", bad), {"ok": False, "error": "bad_args"}, bad)
         api.etfd_set("2", {"on": True, "lang": "<script>"})
         self.check()
-        self.assertTrue(self.sent[-1][1].startswith("🏦 Big inflow into bitcoin ETFs"))
+        self.assertTrue(self.sent[-1][1].startswith("🏦 Inflow into bitcoin ETFs"))
 
-    # ── Какой день — крупный ─────────────────────────────────────────────
+    # ── Какой день и что в нём ───────────────────────────────────────────
 
-    def test_big_fresh_day_with_top_funds_in_the_same_direction(self):
-        ts, v, top = api.etfd_day()
+    def test_day_with_buyers_and_sellers(self):
+        ts, v, buy, sell = api.etfd_day()
         self.assertEqual((ts, v), (DAY, 1_234_000_000))
-        # Только фонды в ту же сторону, по убыванию; GBTC с оттоком — мимо.
-        self.assertEqual(top, [("IBIT", 800_000_000), ("FBTC", 310_000_000)])
+        # Купившие — по убыванию, продавшие — от самого большого оттока.
+        self.assertEqual(buy, [("IBIT", 800_000_000), ("FBTC", 310_000_000)])
+        self.assertEqual(sell, [("GBTC", -50_000_000)])
         self.rep = reply(-650_000, [-500_000, 20_000, -150_000, -10_000])
-        self.assertEqual(api.etfd_day()[2], [("IBIT", -500_000_000), ("GBTC", -150_000_000), ("ARKB", -10_000_000)])
-        # Больше трёх в ту же сторону — только три крупнейших.
+        _, _, buy, sell = api.etfd_day()
+        self.assertEqual(buy, [("FBTC", 20_000_000)])
+        self.assertEqual(sell, [("IBIT", -500_000_000), ("GBTC", -150_000_000), ("ARKB", -10_000_000)])
+        # Больше трёх в одну сторону — только три крупнейших.
         self.rep = reply(1_000_000, [100_000, 400_000, 50_000, 450_000])
         self.assertEqual(api.etfd_day()[2], [("ARKB", 450_000_000), ("FBTC", 400_000_000), ("IBIT", 100_000_000)])
+        self.rep = reply(-1_000_000, [-100_000, -400_000, -50_000, -450_000])
+        self.assertEqual(api.etfd_day()[3], [("ARKB", -450_000_000), ("FBTC", -400_000_000), ("IBIT", -100_000_000)])
 
-    def test_small_or_old_day_is_not_an_alert(self):
-        self.rep = reply(499_000, [499_000, None, None, None])
-        self.assertIsNone(api.etfd_day())
-        self.rep = reply(-499_999, [None, None, None, None])
-        self.assertIsNone(api.etfd_day())
-        # Ровно порог — уже алерт.
-        self.rep = reply(500_000, [500_000, None, None, None])
-        self.assertIsNotNone(api.etfd_day())
+    def test_any_movement_is_a_message_but_not_a_still_or_old_day(self):
+        # Любое движение — уже сообщение: и $1 тыс., и отток, и ноль в итоге при движении фондов.
+        for v, per in ((1, [1, None, None, None]), (-3_000, [None, -3_000, None, None]),
+                       (0, [20_000, -20_000, None, None])):
+            self.rep = reply(v, per)
+            self.assertIsNotNone(api.etfd_day(), (v, per))
+        # Ни итога, ни движения — сказать нечего.
+        for per in ([None, None, None, None], [0, 0, None, None]):
+            self.rep = reply(0, per)
+            self.assertIsNone(api.etfd_day(), per)
         # День старше ETFD_FRESH (простой сервера, долгие праздники) — не рассылаем.
         self.rep = reply(2_000_000, [2_000_000, None, None, None], day=NOW - api.ETFD_FRESH - 1)
         self.assertIsNone(api.etfd_day())
@@ -115,8 +123,8 @@ class EtfDayAlertTest(unittest.TestCase):
         texts = dict(self.sent)
         self.assertEqual(sorted(texts), ["1", "2"])
         ru = texts["1"]
-        self.assertTrue(ru.startswith("🏦 Крупный приток в биткоин-ETF: +$1,23B за 16 октября 2026 г.\n"))
-        self.assertIn("Больше всех: IBIT +$800M, FBTC +$310M.", ru)
+        self.assertTrue(ru.startswith("🏦 Приток в биткоин-ETF: +$1,23B за 16 октября 2026 г.\n"))
+        self.assertIn("\n\nКупили: IBIT +$800M, FBTC +$310M.\n\nПродали: GBTC -$50M.\n\n", ru)
         # Условие CC BY 4.0: источник и адрес лицензии — в каждом сообщении.
         self.assertIn(dgi.TFTC_BY_POST, ru)
         self.assertIn("https://creativecommons.org/licenses/by/4.0/", texts["2"])
@@ -126,7 +134,7 @@ class EtfDayAlertTest(unittest.TestCase):
         # Тот же день второй раз — тишина.
         self.assertEqual(api.etfd_check(), 0)
         self.assertEqual(len(self.sent), 2)
-        # Без Премиума подписка остаётся: продлит — следующий крупный день придёт.
+        # Без Премиума подписка остаётся: продлит — сообщения снова придут.
         self.assertTrue(api.etfd_get("9")["on"])
 
     def test_undelivered_three_times_unsubscribes(self):
@@ -254,30 +262,34 @@ class EtfDayAlertTest(unittest.TestCase):
         self.assertEqual(api.etfd_check(), 1)
         self.assertIn("+$1B", self.sent[0][1])
 
-    def test_day_that_shrank_below_the_threshold_is_never_sent(self):
+    def test_day_withdrawn_by_the_source_is_never_sent(self):
         api.etfd_set("1", {"on": True, "lang": "en"})
         self.rep = reply(600_000, [None, 600_000, None, None])
         api.etfd_check()
-        # IBIT принёс отток: итог дня меньше порога — крупного дня не было.
-        self.rep = reply(200_000, [-400_000, 600_000, None, None])
+        # TFTC обнулил день (ошибка в наборе): движения не было — и сообщения нет.
+        self.rep = reply(0, [None, None, None, None])
         for _ in range(3):
             self.t += api.ETFD_STABLE
             self.assertEqual(api.etfd_check(), 0)
         self.assertEqual(self.sent, [])
 
     def test_outflow_text(self):
-        self.rep = reply(-650_000, [-500_000, None, -150_000, None])
-        text = api.etfd_text("ru", DAY, -650_000_000, [("IBIT", -500_000_000), ("GBTC", -150_000_000)])
-        self.assertTrue(text.startswith("🏦 Крупный отток из биткоин-ETF: -$650M за 16 октября 2026 г."))
-        self.assertIn("Больше всех: IBIT -$500M, GBTC -$150M.", text)
-        # Без фондов — без строки «больше всех».
-        self.assertNotIn("Больше всех", api.etfd_text("ru", DAY, -650_000_000, []))
+        text = api.etfd_text("ru", DAY, -650_000_000, [("FBTC", 20_000_000)], [("IBIT", -500_000_000), ("GBTC", -150_000_000)])
+        self.assertTrue(text.startswith("🏦 Отток из биткоин-ETF: -$650M за 16 октября 2026 г.\n"))
+        self.assertIn("Купили: FBTC +$20M.", text)
+        self.assertIn("Продали: IBIT -$500M, GBTC -$150M.", text)
+        # Никто не продавал — без строки «Продали»; никто не покупал — без «Купили».
+        self.assertNotIn("Продали", api.etfd_text("ru", DAY, 5e6, [("IBIT", 5e6)], []))
+        self.assertNotIn("Купили", api.etfd_text("ru", DAY, -5e6, [], [("IBIT", -5e6)]))
+        # Ноль в итоге при движении фондов — «приток 0», а не «отток».
+        self.assertTrue(api.etfd_text("ru", DAY, 0, [("IBIT", 2e7)], [("FBTC", -2e7)]).startswith("🏦 Приток"))
 
     def test_every_language_has_all_parts(self):
         for lang in sorted(api.LANG_CODES):
-            text = api.etfd_text(lang, DAY, 1_234_000_000, [("IBIT", 8e8)])
+            text = api.etfd_text(lang, DAY, 1_234_000_000, [("IBIT", 8e8)], [("GBTC", -5e7)])
             self.assertNotRegex(text, r"\bef_al_|\{[a-z]\}", lang)
             self.assertIn("IBIT +$800M", text, lang)
+            self.assertIn("GBTC -$50M", text, lang)
             self.assertIn(dgi.tr(lang, "ef_title"), text, lang)
             self.assertIn(dgi.TFTC_BY_POST, text, lang)
             self.assertLess(len(text), 1000, lang)

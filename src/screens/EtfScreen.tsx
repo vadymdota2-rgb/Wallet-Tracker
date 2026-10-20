@@ -439,12 +439,12 @@ function Funds({ c, lang }: { c: EtfCoin; lang: Lang }) {
 }
 
 /**
- * Алерт о крупном дне: один переключатель. Сервер шлёт сообщение в Telegram,
- * когда фонды за день купят или продадут на $500 млн и больше (бывает
- * несколько раз в месяц). Пока сервер не ответил, переключатель неактивен:
- * показывать «выключен» до ответа значило бы врать тем, у кого он включён.
+ * Итоги дня в Telegram: один переключатель. Каждый торговый день сервер шлёт
+ * сообщение: сколько фонды купили или продали и кто больше всех. Пока сервер
+ * не ответил, переключатель неактивен: показывать «выключен» до ответа
+ * значило бы врать тем, у кого он включён.
  */
-function BigDayAlert({ lang }: { lang: Lang }) {
+function DayAlert({ lang }: { lang: Lang }) {
   const [on, setOn] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -645,7 +645,7 @@ export function EtfScreen() {
             </p>
           </Card>
 
-          <BigDayAlert lang={lang} />
+          <DayAlert lang={lang} />
 
           {stats.mined > 0 && stats.c30 !== 0 ? (
             <>
