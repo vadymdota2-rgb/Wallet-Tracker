@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  MIN_BASKET, PX_FROM, STALE_DAYS, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, windowOf,
+  MIN_BASKET, PX_FROM, STALE_DAYS, shareDelta, validMcap, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, windowOf,
   type DomDay,
 } from "../src/lib/dom.ts";
 
@@ -164,4 +164,21 @@ test("everyNth: раз в n суток от последней точки", () =
   const s: [number, number][] = Array.from({ length: 15 }, (_, i) => [T0 + i * DAY, i]);
   assert.deepEqual(everyNth(s, 7).map((p) => p[1]), [14, 7, 0]);
   assert.deepEqual(everyNth([], 7), []);
+});
+
+test("validMcap: доминация — годная копия, подделки и сбои — null", () => {
+  const ok = { ok: true, btc: [57.49, 57.21], eth: [11.2, 11.4], alt: [42.51, 42.79], alt_ns: 33.39, usdt: 6.32,
+    cap: [2.85e12, 2.9e12], by: "CoinMarketCap", at: NOW, key: "x" };
+  const v = validMcap(ok, NOW);
+  assert.deepEqual(v, { ok: true, btc: [57.49, 57.21], eth: [11.2, 11.4], alt: [42.51, 42.79], altNs: 33.39, usdt: 6.32, cap: [2.85e12, 2.9e12], at: NOW });
+  assert.equal(shareDelta(v!.btc), 0.28);
+  assert.equal(shareDelta([50, null]), null);
+  for (const bad of [null, { ok: false, error: "no_key" }, { ...ok, ok: "true" }, { ...ok, at: NOW + 30 * DAY },
+    { ...ok, btc: [0, 1] }, { ...ok, btc: [101, 1] }, { ...ok, btc: ["57", 1] }, { ...ok, alt: [10, null] },
+    { ...ok, btc: [80, null], alt: [20, null], eth: [30, null] }, { ...ok, cap: [5, null] }, { ...ok, cap: "x" }, { ...ok, eth: [11] }]) {
+    assert.equal(validMcap(bad, NOW), null, JSON.stringify(bad).slice(0, 80));
+  }
+  // Битые необязательные части — просто пропадают.
+  const w = validMcap({ ...ok, btc: [57.49, "x"], alt_ns: 50, usdt: 60, cap: [2.85e12, -1] }, NOW)!;
+  assert.deepEqual([w.btc, w.altNs, w.usdt, w.cap], [[57.49, null], null, null, [2.85e12, null]]);
 });

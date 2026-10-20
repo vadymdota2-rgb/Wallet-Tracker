@@ -661,6 +661,15 @@ say("альтсезон — свой расчёт по ценам Hyperliquid (w
     and '"wt-dom-v2"' in read(f"{APP}/src/lib/storage.ts") and '"wt-dom-v1"' not in read(f"{APP}/src/lib/storage.ts")
     and '"dm_how_4"' in _dm and '"dm_building"' in _dm and "glyph: <DomGlyph />" in appx
     and "wt_dom.py" in read(f"{APP}/.github/workflows/tests.yml"))
+_mcs = read(f"{APP}/wt_mcap.py")
+say("доминация (BTC, альты, ETH, USDT) — только официальный API CoinMarketCap по ключу из окружения (CMC_API_KEY), без неофициальных адресов сайта; нет ключа — блока нет; ключ не в коде и не в журнале; источник подписан",
+    'HOSTS = frozenset({"pro-api.coinmarketcap.com"})' in _mcs and 'os.environ.get("CMC_API_KEY"' in _mcs
+    and '"X-CMC_PRO_API_KEY": key' in _mcs and '_log(f"HTTP {e.code}")' in _mcs
+    and "api.coinmarketcap.com/data-api" not in (_mcs + api) and "coinmarketcap.com/data-api" not in (_mcs + api)
+    and "mcap_data = wt_mcap.mcap_data" in api and '"/api/mcap"' in api
+    and "export function validMcap(" in _dml and "validMcap(r)" in read(f"{APP}/src/lib/api.ts")
+    and '"wt-mcap-v1"' in read(f"{APP}/src/lib/storage.ts") and '"dm_d_src"' in _dm
+    and os.path.isfile(f"{APP}/tests/test_mcap.py") and "wt_mcap.py" in read(f"{APP}/.github/workflows/tests.yml"))
 say("альтсезон честный: корзина на каждый день — самые торгуемые за 30 дней до него (без заглядывания вперёд), со снятыми потом монетами, только закрытые дни, не меньше 30 монет; ширина 25/50/100; это сказано на экране",
     "VOLW = 30" in _dms and "MIN_BASKET = 30" in _dms and "TIERS = (25, 50, 100)" in _dms
     and '{"type": "meta"}' in _dms and 'u.get("isDelisted")' in _dms and "metaAndAssetCtxs" not in _dms

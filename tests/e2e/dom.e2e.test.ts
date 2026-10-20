@@ -78,7 +78,15 @@ interface Opts {
   forcedColors?: boolean;
   /** Вошёл с Премиумом (подпись Telegram, /api/bootstrap — plan: premium). */
   premium?: boolean;
+  /** Ответ /api/mcap (доминация); по умолчанию — MCAP. */
+  mcap?: unknown;
 }
+
+/** Доминация, как её отдаёт wt_mcap по ответу CoinMarketCap. */
+const MCAP = {
+  ok: true, btc: [57.49, 57.21], eth: [11.2, 11.4], alt: [42.51, 42.79], alt_ns: 33.39, usdt: 6.32,
+  cap: [2_850_000_000_000, 2_900_000_000_000], by: "CoinMarketCap", at: 0,
+};
 interface Opened { ctx: BrowserContext; page: Page; errors: string[]; asked: () => number }
 
 async function open(o: Opts = {}): Promise<Opened> {
@@ -95,6 +103,7 @@ async function open(o: Opts = {}): Promise<Opened> {
   await ctx.route((url) => !url.href.startsWith(base) && !url.href.startsWith("https://fonts.googleapis.com/"), (r) => r.abort());
   await ctx.route("https://fonts.googleapis.com/**", (r) => r.fulfill({ contentType: "text/css", body: FACES(base) }));
   await ctx.route(`${base}/api/**`, (r) => r.fulfill({ contentType: "application/json", body: '{"ok":false}' }));
+  await ctx.route(`${base}/api/mcap`, (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify(o.mcap ?? { ...MCAP, at: T }) }));
   let n = 0;
   const replies = o.replies ?? [o.reply ?? REAL];
   await ctx.route(`${base}/api/dom`, async (r) => {
@@ -159,7 +168,7 @@ describe("Альтсезон", () => {
     assert.equal(sp(await page.locator(".lq-src").innerText()), sp(I18N["dm_src"]!["ru"]!));
     // Никаких следов прежних источников.
     const body = await page.locator("body").innerText();
-    assert.doesNotMatch(body, /CoinMarketCap|DefiLlama|Binance/);
+    assert.doesNotMatch(body, /DefiLlama|Binance/);
     // Монеты: 10, по кнопке — все.
     assert.equal(await page.locator(".dm-top-r").count(), 10);
     await page.locator(".dm-more").click();
@@ -177,6 +186,39 @@ describe("Альтсезон", () => {
     assert.equal(await page.locator(".fg-svg[role=img]").count(), 3);
     assert.deepEqual(errors, []);
     await ctx.close();
+  });
+
+  test("доминация: доли BTC, альтов, ETH и USDT, за сутки, источник; нет ключа или мусор — блока нет", async () => {
+    const { ctx, page, errors } = await open();
+    await page.locator(".dm-dgrid").waitFor();
+    const tiles = (await page.locator(".dm-dtile b").allInnerTexts()).map(sp);
+    assert.deepEqual(tiles, ["57,5%", "42,5%", "11,2%", "6,3%"]);
+    // Изменение за сутки — в пунктах; у USDT вчерашней доли нет.
+    const minus = (x: string) => x.replace(/\u2212/g, "-");
+    const deltas = (await page.locator(".dm-dtile span").allInnerTexts()).map((x) => minus(sp(x)));
+    assert.deepEqual(deltas, ["+0,28", "-0,28", "-0,2"].map((v) => sp(I18N["dm_d_pp"]!["ru"]!.replace("{v}", v))));
+    // Знак — у числа, слева направо даже в арабском.
+    assert.deepEqual(await page.locator(".dm-dtile span bdi").evaluateAll((els) => els.map((e) => e.getAttribute("dir"))), ["ltr", "ltr", "ltr"]);
+    assert.ok(sp(await page.locator(".dm-dsrc").innerText()).startsWith(sp(I18N["dm_d_src"]!["ru"]!)));
+    assert.equal(await page.locator(".dm-dbar span").count(), 4);
+    // Подпись полосы — для экранного диктора.
+    assert.match(sp(await page.locator(".dm-dbar").getAttribute("aria-label")), /^BTC 57,5%, ETH 11,2%, USDT 6,3%, /);
+    // Доминация — над альтсезоном.
+    const order = await page.evaluate(() => {
+      const d = document.querySelector(".dm-dgrid")!, h = document.querySelector(".dm-ahero")!;
+      return Boolean(d.compareDocumentPosition(h) & Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+    assert.ok(order);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+    for (const mcap of [{ ok: false, error: "no_key" }, { ...MCAP, at: T, btc: [57.49, null], alt: [10, null] }, { ...MCAP, at: T, cap: [5, null] }]) {
+      const o = await open({ mcap });
+      await ready(o.page);
+      await o.page.waitForTimeout(200);
+      assert.equal(await o.page.locator(".dm-dgrid").count(), 0, JSON.stringify(mcap));
+      assert.deepEqual(o.errors, []);
+      await o.ctx.close();
+    }
   });
 
   test("сервер ещё собирает цены — так и сказано, и через 30 с спросит снова", async () => {

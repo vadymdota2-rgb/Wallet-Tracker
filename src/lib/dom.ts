@@ -95,6 +95,52 @@ export function validDom(raw: unknown, now: number = Date.now() / 1000): DomRepl
 
 /* --------------------------------------------------------------------- */
 
+/** Доля во всём рынке, %: [сейчас, сутки назад или null]. */
+export type Share = [number, number | null];
+
+/** Ответ /api/mcap — доминация по официальному API CoinMarketCap (wt_mcap.py). */
+export interface McapReply {
+  ok: true;
+  btc: Share;
+  eth: Share;
+  /** Альты — всё, кроме биткоина (100 − BTC). */
+  alt: Share;
+  /** Альты без стейблкоинов, %, или null. */
+  altNs: number | null;
+  /** Доля USDT, %, или null. */
+  usdt: number | null;
+  /** Капитализация всего рынка, $: [сейчас, сутки назад или null]. */
+  cap: [number, number | null];
+  at: number;
+}
+
+/** Ответ живёт столько же, сколько на сервере (wt_mcap.TTL). */
+export const MCAP_TTL_MS = 60 * 60_000;
+
+function share(v: unknown, lo: number): Share | null {
+  if (!Array.isArray(v) || v.length !== 2 || !within(v[0], lo, 100)) return null;
+  return [v[0], within(v[1], lo, 100) ? v[1] : null];
+}
+
+/** Проверенная копия ответа /api/mcap или null (нет ключа, сбой, подделка). */
+export function validMcap(raw: unknown, now: number = Date.now() / 1000): McapReply | null {
+  if (!isObj(raw) || raw["ok"] !== true || !within(raw["at"], PX_FROM, now + 7 * DAY)) return null;
+  const btc = share(raw["btc"], 0.5);
+  const eth = share(raw["eth"], 0);
+  const alt = share(raw["alt"], 0);
+  const cap = raw["cap"];
+  if (!btc || !eth || !alt || btc[0] + eth[0] > 100 || Math.abs(btc[0] + alt[0] - 100) > 0.02) return null;
+  if (!Array.isArray(cap) || cap.length !== 2 || !within(cap[0], 1e10, 1e15)) return null;
+  const altNs = within(raw["alt_ns"], 0, alt[0]) ? raw["alt_ns"] : null;
+  const usdt = within(raw["usdt"], 0, 100 - btc[0]) ? raw["usdt"] : null;
+  return { ok: true, btc, eth, alt, altNs, usdt, cap: [cap[0], within(cap[1], 1e10, 1e15) ? cap[1] : null], at: raw["at"] };
+}
+
+/** Изменение доли за сутки, процентных пунктов; нет вчерашней — null. */
+export const shareDelta = (s: Share): number | null => (s[1] === null ? null : Math.round((s[0] - s[1]) * 100) / 100);
+
+/* --------------------------------------------------------------------- */
+
 /** Зона индекса: 0 — сезон биткоина (25 и ниже), 1 — нейтрально, 2 — альтсезон (75 и выше). */
 export const seasonOf = (v: number): 0 | 1 | 2 => (v >= 75 ? 2 : v <= 25 ? 0 : 1);
 

@@ -18,7 +18,7 @@
  */
 import { FREE } from "./upsell";
 import {
-  fetchBig, fetchBscExFlow, fetchBtcBig, fetchBtcFlow, fetchBtcRank, fetchDeals, fetchDom, fetchEtf, fetchFlow, fetchLs, fetchSymbols, fetchTokenHist,
+  fetchBig, fetchBscExFlow, fetchBtcBig, fetchBtcFlow, fetchBtcRank, fetchDeals, fetchDom, fetchEtf, fetchMcap, fetchFlow, fetchLs, fetchSymbols, fetchTokenHist,
   fetchUnlocks, fetchWallet,
 } from "./api";
 import { useApp } from "../store/app";
@@ -110,9 +110,10 @@ function plan(): (() => Promise<unknown>)[] {
   // Пока ответ в памяти свеж, повторный опрос сеть не трогает.
   jobs.push(() => fetchEtf());
 
-  // 5г. «Альтсезон»: то же — ответ живёт час и лежит на устройстве. Сервер
+  // 5г. «Доминация и альтсезон»: то же — ответы живут час и лежат на устройстве. Сервер
   // ещё собирает цены («building») — экран спросит сам, повтор не нужен.
   jobs.push(() => fetchDom());
+  jobs.push(() => fetchMcap());
 
   // 6. Справочник монет для поиска на графике.
   jobs.push(() => fetchSymbols());

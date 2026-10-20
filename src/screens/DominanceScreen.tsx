@@ -1,5 +1,10 @@
 /**
- * Альтсезон: кто сильнее — биткоин или альткоины.
+ * Доминация и альтсезон: доля биткоина, альтов и USDT во всём рынке и кто
+ * сильнее — биткоин или альткоины.
+ *
+ * Доминация — по официальному API CoinMarketCap (сервер — wt_mcap.py): долю
+ * во всём рынке без капитализации тысяч монет не посчитать. Нет ключа на
+ * сервере — блока нет, остальной экран работает.
  *
  * Всё посчитано своим счётом по дневным ценам Hyperliquid (сервер — wt_dom.py,
  * проверка ответа и расчёты — lib/dom.ts). Чужих индексов здесь нет.
@@ -11,24 +16,20 @@
  * снятыми потом с торгов монетами), сила альтов против биткоина (корзина
  * монет поровну), список монет за 90 дней и ETH/BTC.
  *
- * Доли биткоина во всём рынке нет: для неё нужна капитализация всех монет, а
- * открытых данных о ней с правом показа нет ни у кого — об этом сказано в
- * «Как это считается».
- *
  * Цвета держатся смысла по всему экрану: оранжевый — биткоин, фиолетовый —
- * альты, синий — эфир.
+ * альты, синий — эфир, зелёный — USDT.
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
 import type { DictKey } from "../i18n/types";
-import { num, pct, since } from "../lib/format";
+import { num, pct, since, usdWord } from "../lib/format";
 import { haptic } from "../lib/telegram";
-import { fetchDom, peekDom } from "../lib/api";
+import { fetchDom, fetchMcap, peekDom, peekMcap } from "../lib/api";
 import { Card, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import {
-  DOM_TTL_MS, RANGES, STALE_DAYS, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, windowOf,
-  type DomReply, type Range,
+  DOM_TTL_MS, RANGES, STALE_DAYS, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, shareDelta, thin,
+  windowOf, type DomReply, type McapReply, type Range, type Share,
 } from "../lib/dom";
 import { Frame } from "./Screen";
 import { dateStr, timeTicks } from "./FearGreedScreen";
@@ -37,7 +38,7 @@ import "./DominanceScreen.css";
 
 type Lang = Parameters<typeof t>[0];
 
-const C = { btc: "#f7931a", eth: "#627eea", alt: "#8b5cf6", mid: "#6b7280" } as const;
+const C = { btc: "#f7931a", eth: "#627eea", alt: "#8b5cf6", usdt: "#26a17b", mid: "#6b7280" } as const;
 const RANGE_KEY = "wt-dom-range";
 const RANGE_LABEL = { 365: "fg_r1y", 1095: "fg_r3y", all: "fg_rall" } as const;
 /** Сервер ещё собирает цены после первого запуска — спросить снова через столько, мс. */
@@ -331,11 +332,67 @@ function Changes({ ch, lang }: { ch: (number | null)[]; lang: Lang }) {
 
 /* ---------------------------------------------------------------------- */
 
+/** Изменение доли за сутки в пунктах: число — отдельным куском слева направо,
+ *  иначе в арабском знак уезжает на другую сторону числа. */
+function Delta({ d, lang }: { d: number; lang: Lang }) {
+  const [before = "", after = ""] = t(lang, "dm_d_pp", { v: "\u0000" }).split("\u0000");
+  const v = `${d > 0 ? "+" : d < 0 ? "\u2212" : ""}${num(Math.abs(d), 2)}`;
+  return <span>{before}<bdi dir="ltr">{v}</bdi>{after}</span>;
+}
+
+/** Доля во всём рынке: название, процент, изменение за сутки в пунктах. */
+function ShareTile({ label, s, c, lang }: { label: string; s: Share | number; c: string; lang: Lang }) {
+  const v = typeof s === "number" ? s : s[0];
+  const d = typeof s === "number" ? null : shareDelta(s);
+  return (
+    <div className="dm-dtile">
+      <small><i style={{ background: c }} aria-hidden="true" />{label}</small>
+      <b><bdi dir="ltr">{pct(v, 1, false)}</bdi></b>
+      {d !== null ? <Delta d={d} lang={lang} /> : null}
+    </div>
+  );
+}
+
+/** Доминация: доли BTC, альтов, ETH и USDT во всём рынке (CoinMarketCap). */
+function McapCard({ m, lang }: { m: McapReply; lang: Lang }) {
+  const other = Math.max(0, 100 - m.btc[0] - m.eth[0] - (m.usdt ?? 0));
+  const parts: [string, number, string][] = [
+    ["BTC", m.btc[0], C.btc], ["ETH", m.eth[0], C.eth],
+    ...(m.usdt !== null ? [["USDT", m.usdt, C.usdt] as [string, number, string]] : []),
+    [t(lang, "dm_d_other"), other, C.alt],
+  ];
+  const capCh = m.cap[1] ? (m.cap[0] / m.cap[1] - 1) * 100 : null;
+  return (
+    <Card>
+      <div className="dm-dbar" role="img" aria-label={parts.map(([l, v]) => `${l} ${pct(v, 1, false)}`).join(", ")}>
+        {parts.map(([l, v, c]) => <span key={l} style={{ flexGrow: v, background: c }} />)}
+      </div>
+      <div className="dm-dlegend" aria-hidden="true">
+        {parts.map(([l, , c]) => <span key={l}><i style={{ background: c }} />{l}</span>)}
+      </div>
+      <div className="dm-dgrid">
+        <ShareTile label={t(lang, "dm_d_btc")} s={m.btc} c={C.btc} lang={lang} />
+        <ShareTile label={t(lang, "dm_d_alt")} s={m.alt} c={C.alt} lang={lang} />
+        <ShareTile label={t(lang, "dm_d_eth")} s={m.eth} c={C.eth} lang={lang} />
+        {m.usdt !== null ? <ShareTile label="USDT" s={m.usdt} c={C.usdt} lang={lang} /> : null}
+      </div>
+      {m.altNs !== null ? <p className="dm-share">{t(lang, "dm_d_altns", { v: iso(pct(m.altNs, 1, false)) })}</p> : null}
+      {capCh !== null ? (
+        <p className="dm-share">{t(lang, "dm_d_cap", { v: iso(usdWord(m.cap[0])), ch: iso(pct(capCh, 1)) })}</p>
+      ) : null}
+      <p className="dm-dsrc">{t(lang, "dm_d_src")} {stamp(lang, m.at)}</p>
+    </Card>
+  );
+}
+
+/* ---------------------------------------------------------------------- */
+
 export function DominanceScreen() {
   const lang = useApp((s) => s.lang);
   const [reply, setReply] = useState<DomReply | null>(() => peekDom() ?? null);
   const [state, setState] = useState<"wait" | "failed" | "building">("wait");
   const [retry, setRetry] = useState(0);
+  const [mcap, setMcap] = useState<McapReply | null>(() => peekMcap() ?? null);
   const [range, setRange] = useState<Range>(() => {
     try {
       const v = localStorage.getItem(RANGE_KEY);
@@ -366,6 +423,15 @@ export function DominanceScreen() {
     return () => {
       alive = false;
       window.clearTimeout(timer);
+    };
+  }, [retry]);
+  useEffect(() => {
+    let alive = true;
+    void fetchMcap().then((r) => {
+      if (alive && r) setMcap(r);
+    });
+    return () => {
+      alive = false;
     };
   }, [retry]);
   useEffect(() => {
@@ -419,6 +485,13 @@ export function DominanceScreen() {
     <Frame title={t(lang, "dm_title")}>
       <div className="dm">
       <p className="lq-lead">{t(lang, "dm_sub")}</p>
+
+      {mcap ? (
+        <>
+          <SectionTitle help={["dm_d_what", "dm_how_4"]}>{t(lang, "dm_d_title")}</SectionTitle>
+          <McapCard m={mcap} lang={lang} />
+        </>
+      ) : null}
 
       {!reply ? (
         state === "failed" ? (
@@ -578,6 +651,7 @@ export function DominanceScreen() {
               <li>{t(lang, "dm_how_3")}</li>
               <li>{t(lang, "dm_how_6")}</li>
               <li>{t(lang, "dm_how_5")}</li>
+              <li>{t(lang, "dm_d_what")}</li>
               <li>{t(lang, "dm_how_4")}</li>
             </ul>
           </details>

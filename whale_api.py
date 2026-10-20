@@ -33,6 +33,7 @@ import wt_shield as shield  # noqa: E402
 import wt_halving as halving  # noqa: E402
 import wt_etf as etf  # noqa: E402
 import wt_dom  # noqa: E402
+import wt_mcap
 import wt_treasury as treasury
 import wt_digest_img as dgi
 from urllib.parse import parse_qs, unquote, urlparse, urlsplit
@@ -11359,7 +11360,8 @@ def liq_warm_refresher() -> None:
         except Exception:  # noqa: BLE001
             pass
         try:
-            dom_data()  # и альтсезон с силой биткоина
+            dom_data()  # и альтсезон с силой биткоина,
+            mcap_data()  # и доминацию (оба модуля сами не бросают)
         except Exception:  # noqa: BLE001
             pass
         try:
@@ -12170,6 +12172,9 @@ def btc_wallet(addr: str) -> dict:
 # (индекс альтсезона, сила альтов против биткоина, ETH/BTC); кэш, фоновое
 # обновление, тесты.
 dom_data = wt_dom.dom_data
+# Доминация (доли BTC, ETH, USDT и альтов во всём рынке) — отдельный модуль
+# wt_mcap.py: официальный API CoinMarketCap по ключу CMC_API_KEY из окружения.
+mcap_data = wt_mcap.mcap_data
 
 
 # --- ETF и крупные держатели -----------------------------------------------
@@ -16305,8 +16310,8 @@ class Handler(BaseHTTPRequestHandler):
                     return
                 self._json(200, btc_wallet(a))
                 return
-            if path in ("/dom", "/api/dom"):
-                self._json(200, dom_data())
+            if path in ("/dom", "/api/dom", "/mcap", "/api/mcap"):
+                self._json(200, dom_data() if path.endswith("/dom") else mcap_data())
                 return
             if path in ("/etf", "/api/etf"):
                 self._json(200, etf_data())

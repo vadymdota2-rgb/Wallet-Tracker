@@ -9,7 +9,7 @@ import { initData } from "./telegram";
 import { forget, peek, peekAny, remember } from "./memo";
 import { HALVING_TTL_MS, clockSkew, pickHalving, validHalving, type HalvingReply } from "./halving";
 import { ETF_TTL_MS, validEtf, type EtfReply } from "./etf";
-import { DOM_TTL_MS, validDom, type DomReply } from "./dom";
+import { DOM_TTL_MS, MCAP_TTL_MS, validDom, validMcap, type DomReply, type McapReply } from "./dom";
 import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
   LiqCoinsReply, FngReply, FundRow, LsRow, MutationResult,
@@ -571,6 +571,23 @@ export const peekDom = () => {
   const hit = peek<DomReply | "building" | null>("/api/dom", DOM_TTL_MS);
   return hit && hit !== "building" ? hit : savedDom();
 };
+
+/* Доминация: официальный API CoinMarketCap через сервер (wt_mcap.py). Ответ
+   живёт час и лежит на устройстве; в память и на устройство — только
+   проверенная копия (validMcap). Нет ключа на сервере — null, блока нет. */
+const MCAP_SAVED = "wt-mcap-v1";
+function savedMcap(): McapReply | null {
+  const hit = readSaved<unknown>(MCAP_SAVED).all;
+  return hit && Date.now() - hit.at < 7 * 24 * 3600_000 ? validMcap(hit.v) : null;
+}
+export const fetchMcap = () =>
+  remember<McapReply | null>("/api/mcap", MCAP_TTL_MS, () =>
+    callTwice<unknown>("/api/mcap").then((r) => {
+      const v = validMcap(r);
+      if (v) writeSaved(MCAP_SAVED, { all: { at: Date.now(), v } });
+      return v;
+    }), (v) => v !== null);
+export const peekMcap = () => peek<McapReply | null>("/api/mcap", MCAP_TTL_MS) ?? savedMcap();
 
 /* ETF и крупные держатели: фонды отчитываются раз в сутки — ответ живёт час
    (как на сервере) и лежит на устройстве. В память и на устройство — только
