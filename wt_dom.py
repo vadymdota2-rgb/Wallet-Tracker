@@ -262,8 +262,9 @@ _st = _State()
 _lock = threading.Lock()
 _busy = threading.Event()
 FAIL_WAIT = 120.0
-# Копия ответа и цен на диске старше этого не берётся.
-FILE_MAX_AGE = 7 * 86400
+# Сколько монет между промежуточными записями свечей на диск: перезапуск
+# посреди первой сборки (она идёт ~15 мин) не начинает её с нуля.
+SAVE_EVERY = 25
 
 
 def set_cache_dir(path: str | None) -> None:
@@ -284,9 +285,10 @@ def _file_load(name: str) -> Json:
             got = _parse(f.read().encode())
     except (OSError, ValueError):
         return None
-    if not isinstance(got, dict) or _now() - _num(got.get("at")) > FILE_MAX_AGE:
-        return None
-    return got.get("v")
+    # Возраст копии не важен: люди видят последний посчитанный ответ (старые
+    # дни экран помечает сам), пока свежий собирается в фоне; свечи
+    # дописываются с последнего известного дня.
+    return got.get("v") if isinstance(got, dict) else None
 
 
 def _file_save(name: str, v: Json) -> None:
@@ -328,8 +330,10 @@ def _px_load() -> dict[str, dict[int, Candle]]:
 
 def _refresh(coins: dict[str, bool], sleep: Any = time.sleep) -> dict[str, dict[int, Candle]]:
     """Свечи монет: известные — дописываем с последних TAIL_DAYS известных
-    дней (сколько бы сервер ни простоял), новые — вся история; снятые с торгов, что уже есть, — не спрашиваем (у них новых дней
-    не будет). Монета без ответа остаётся с прошлыми свечами."""
+    дней (сколько бы сервер ни простоял), новые — вся история; снятые с
+    торгов, что уже есть, — не спрашиваем (у них новых дней не будет).
+    Монета без ответа остаётся с прошлыми свечами. Каждые SAVE_EVERY монет
+    свечи пишутся на диск."""
     with _lock:
         if not _st.px:
             _st.px = _px_load()
@@ -351,10 +355,16 @@ def _refresh(coins: dict[str, bool], sleep: Any = time.sleep) -> dict[str, dict[
             continue
         if got or have:
             out[coin] = {**have, **got}
+        if asked % SAVE_EVERY == 0:
+            _px_save({**old, **out})
     with _lock:
         _st.px = out
-    _file_save("dom_px.json", {c: {str(t): list(v) for t, v in d.items()} for c, d in out.items()})
+    _px_save(out)
     return out
+
+
+def _px_save(px: dict[str, dict[int, Candle]]) -> None:
+    _file_save("dom_px.json", {c: {str(t): list(v) for t, v in d.items()} for c, d in px.items()})
 
 
 # --- Расчёт ------------------------------------------------------------------

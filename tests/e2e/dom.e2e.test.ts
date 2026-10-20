@@ -231,6 +231,16 @@ describe("Альтсезон", () => {
     await ctx.close();
   });
 
+  test("сервер пересобирает, а на телефоне есть копия — человек сразу видит индекс, без «собираем»", async () => {
+    const { ctx, page, errors } = await open({ reply: { ok: false, error: "building" }, store: saved(REAL, 2 * 3600_000) });
+    await ready(page);
+    assert.equal(sp(await page.locator(".dm-ahero b").innerText()), String(last[1]));
+    await page.waitForTimeout(300);
+    assert.equal(await page.locator("[role=status]", { hasText: I18N["dm_building"]!["ru"]! }).count(), 0);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
   test("сбой и мусор от сервера — ошибка с кнопкой «Повторить», а не пустой или упавший экран", async () => {
     for (const reply of [{ ok: false, error: "no_data" }, { ok: true, rows: "x" }, "<html>"]) {
       const { ctx, page, errors } = await open({ reply });

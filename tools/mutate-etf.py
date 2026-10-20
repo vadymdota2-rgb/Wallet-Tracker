@@ -198,6 +198,8 @@ DM = [
     ('return u.scheme == "https" and u.hostname in HOSTS and not u.username and not u.password', "return True", "альтсезон: только https к Hyperliquid"),
     ("    return got if len(got) <= BODY_MAX else None", "    return got", "альтсезон: предел размера ответа"),
     ("        if asked:\n            sleep(PACE)\n", "", "альтсезон: пауза между запросами"),
+    ("        if asked % SAVE_EVERY == 0:\n            _px_save({**old, **out})\n", "", "альтсезон: свечи пишутся по ходу первой сборки"),
+    ("{**old, **out})", "out)", "альтсезон: промежуточная запись не теряет ещё не спрошенные монеты"),
     ("            if ts % DAY == 0 and PX_FROM <= ts < _today() and 0 < px < PX_MAX and 0 <= dv < VOL_MAX:", "            if True:", "альтсезон: копия цен на диске проверяется"),
     ("            if ts % DAY == 0 and PX_FROM <= ts < _today() and 0 < px < PX_MAX and 0 <= dv < VOL_MAX:", "            if ts % DAY == 0 and 0 < px < PX_MAX and 0 <= dv < VOL_MAX:", "альтсезон: даты копии цен — с 2020 г. и не идущий день"),
     ('    return {"ok": False, "error": "building"} if building else _no_data()', "    return _no_data()", "альтсезон: «собираем» на холодном старте"),

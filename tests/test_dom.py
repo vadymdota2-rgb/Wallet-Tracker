@@ -317,6 +317,22 @@ class BuildTest(Base):
         self.assertEqual(len(again["coins"]), len(first["coins"]) - 1)
         self.assertIn(LAST, dom._st.px["A1"])
 
+    def test_long_first_build_is_saved_on_the_way(self):
+        saved = []
+        real = dom._file_save
+        with mock.patch.object(dom, "_file_save", lambda name, v: (saved.append((name, len(v))), real(name, v))):
+            self.run_build(market())
+        px = [n for name, n in saved if name == "dom_px.json"]
+        # 45 монет спрошено: запись после 25-й и в конце.
+        self.assertEqual(px, [dom.SAVE_EVERY, 45])
+        # Следующий день: промежуточная запись держит и ещё не спрошенные
+        # монеты — остановка сервера посреди обновления их не теряет.
+        saved.clear()
+        self.now += DAY
+        with mock.patch.object(dom, "_file_save", lambda name, v: (saved.append((name, len(v))), real(name, v))):
+            self.run_build(market(days=201))
+        self.assertEqual([n for name, n in saved if name == "dom_px.json"], [45, 45])
+
     def test_pace_between_requests(self):
         slept = []
         with mock.patch.object(dom, "_fetch", market()):
@@ -347,6 +363,19 @@ class DataTest(Base):
         with mock.patch.object(dom.threading, "Thread"):
             got = dom.dom_data()
         self.assertEqual(got["rows"], res["rows"])
+
+    def test_old_disk_copy_is_still_served_while_a_fresh_one_builds(self):
+        res = self.run_build(market())
+        dom._st = dom._State()
+        dom.set_cache_dir(self.tmp)
+        # Сервер простоял месяц: копия старая, но люди видят её, а не «собираем».
+        self.now += 30 * DAY
+        with mock.patch.object(dom.threading, "Thread") as th:
+            got = dom.dom_data()
+        self.assertEqual(got["rows"], res["rows"])
+        th.return_value.start.assert_called_once()
+        # И свечи с диска тоже берутся: дописываются с последнего дня, а не заново.
+        self.assertIn("BTC", dom._px_load())
 
     def test_copy_of_the_old_method_is_not_served(self):
         with open(os.path.join(self.tmp, "dom.json"), "w", encoding="utf-8") as f:

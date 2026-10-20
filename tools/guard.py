@@ -655,7 +655,7 @@ say("альтсезон — свой расчёт по ценам Hyperliquid (w
     and "parse_int=_int" in _dms and "_NoRedirect" in _dms and "BODY_MAX" in _dms
     and all(x not in (_dms + api[api.index("# --- Альтсезон и сила биткоина"):api.index("# --- ETF и крупные держатели")]).lower()
             for x in ("coinmarketcap.com", "binance.", "llama.fi", "coingecko.com"))
-    and '_file_save("dom_px.json"' in _dms and '_file_save("dom.json", res)' in _dms
+    and '_file_save("dom_px.json"' in _dms and "SAVE_EVERY = 25" in _dms and "FILE_MAX_AGE" not in _dms and '_file_save("dom.json", res)' in _dms
     and "global-metrics/quotes" not in api and "altcoin-season/chart" not in api and "symbol=ETHBTC" not in api
     and "export function validDom(" in _dml and "validDom(r)" in read(f"{APP}/src/lib/api.ts")
     and '"wt-dom-v2"' in read(f"{APP}/src/lib/storage.ts") and '"wt-dom-v1"' not in read(f"{APP}/src/lib/storage.ts")
