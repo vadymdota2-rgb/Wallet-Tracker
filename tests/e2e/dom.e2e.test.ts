@@ -27,9 +27,10 @@ const TYPES: Record<string, string> = {
   ".png": "image/png", ".webp": "image/webp", ".json": "application/json", ".ttf": "font/ttf", ".ico": "image/x-icon",
 };
 
-type Row = [number, number | null, number, number | null, number];
-const REAL = JSON.parse(await readFile(new URL("../fixtures/dom.json", import.meta.url), "utf8")) as
-  { rows: Row[]; coins: [string, number][]; btc90: number; n: number; at: number; now: number };
+type Row = [number, number | null, number, number | null, number, number | null];
+const REAL = JSON.parse(await readFile(new URL("../fixtures/dom.json", import.meta.url), "utf8")) as {
+  rows: Row[]; coins: [string, number][]; btc90: number; tiers: [number, number | null, number][]; n: number; at: number; now: number;
+};
 const T = REAL.now;
 const I18N = JSON.parse(await readFile(new URL("../../tools/i18n.json", import.meta.url), "utf8")) as Record<string, Record<string, string>>;
 const LANGS = ["ar", "de", "en", "es", "fr", "hi", "id", "ja", "ko", "pl", "pt", "ru", "tr", "uk", "vi", "zh"];
@@ -163,6 +164,15 @@ describe("Альтсезон", () => {
     assert.equal(await page.locator(".dm-top-r").count(), 10);
     await page.locator(".dm-more").click();
     assert.equal(await page.locator(".dm-top-r").count(), REAL.coins.length);
+    // Ширина рынка: индекс для корзин 25, 50 и 100 монет и вывод по ним.
+    const cells = (await page.locator(".dm-tiers .fg-cmp-c b").allInnerTexts()).map(sp);
+    assert.deepEqual(cells, REAL.tiers.map((x) => String(x[1])));
+    const gap = REAL.tiers[0]![1]! - REAL.tiers[REAL.tiers.length - 1]![1]!;
+    const say = gap >= 15 ? "dm_tiers_narrow" : gap <= -15 ? "dm_tiers_wide" : "dm_tiers_even";
+    assert.ok((await page.locator(".dm-tiers > p").allInnerTexts()).map(sp).includes(sp(I18N[say]!["ru"]!)), say);
+    // Индекс — на последний закрытый день, и это сказано.
+    const day = new Intl.DateTimeFormat("ru", { timeZone: "UTC", day: "numeric", month: "long", year: "numeric" }).format(new Date(last[0] * 1000));
+    assert.ok(sp(await page.locator(".fg-date").first().innerText()).startsWith(sp(I18N["dm_day"]!["ru"]!.replace("{d}", day))));
     // Три графика: индекс, сила альтов, ETH/BTC.
     assert.equal(await page.locator(".fg-svg[role=img]").count(), 3);
     assert.deepEqual(errors, []);
@@ -300,7 +310,9 @@ describe("Альтсезон", () => {
     await page.keyboard.press("ArrowLeft");
     assert.notEqual(sp(await pop.locator("small").innerText()), end);
     await page.keyboard.press("Home");
-    assert.match(sp(await pop.locator("small").innerText()), /2021/);
+    // Начало истории — с настоящих торгов на Hyperliquid (2023 г.), не раньше.
+    const first = REAL.rows.find((x) => x[1] !== null)!;
+    assert.match(sp(await pop.locator("small").innerText()), new RegExp(String(new Date(first[0] * 1000).getUTCFullYear())));
     await page.keyboard.press("Escape");
     assert.equal(await pop.count(), 0);
     assert.deepEqual(errors, []);
@@ -355,7 +367,8 @@ describe("Альтсезон", () => {
     await ready(o.page);
     const note = o.page.locator(".lq-stale");
     await note.waitFor();
-    assert.equal(sp(await note.innerText()), sp(I18N["dm_old"]!["ru"]!.replace("{n}", "5")));
+    const n = Math.floor((T - old.rows[old.rows.length - 1]![0]) / 86_400);
+    assert.equal(sp(await note.innerText()), sp(I18N["dm_old"]!["ru"]!.replace("{n}", String(n))));
     await o.ctx.close();
     o = await open();
     await ready(o.page);

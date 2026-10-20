@@ -137,11 +137,20 @@ class ServerPolicyTest(unittest.TestCase):
         self.assertEqual(lits, {"no_data", "building"})
 
     def test_pace_and_limits_are_sane(self):
-        # Hyperliquid даёт адресу общий лимит запросов: пауза между запросами и
-        # не больше TOP + 10 альтов за сборку раз в час (TTL).
-        self.assertGreaterEqual(dom.PACE, 1.0)
+        # Hyperliquid даёт адресу 1200 «весов» в минуту на всех; запрос свечей —
+        # 20 и ещё 1 за каждые 60 свечей. Даже если бы каждая монета отдавала
+        # историю с 2020 г., модуль берёт меньше 1000: остальным модулям хватит.
+        days = (dom._now() - dom.PX_FROM) / dom.DAY + 365
+        self.assertLess(60 / dom.PACE * (20 + days / 60), 1000)
         self.assertEqual(dom.TTL, 3600.0)
+        # Корзина: самые торгуемые за VOLW дней, не меньше MIN_BASKET монет,
+        # ширина — от узкой корзины до широкой, основная — среди них.
         self.assertLessEqual(dom.TOP, 60)
+        self.assertLessEqual(dom.MIN_BASKET, dom.TOP)
+        self.assertGreaterEqual(dom.MIN_BASKET, 20)
+        self.assertIn(dom.TOP, dom.TIERS)
+        self.assertEqual(list(dom.TIERS), sorted(dom.TIERS))
+        self.assertGreaterEqual(dom.VOLW, 7)
 
 
 class ClientPolicyTest(unittest.TestCase):
@@ -170,6 +179,8 @@ class ClientPolicyTest(unittest.TestCase):
         self.assertIn('"/api/dom", DOM_TTL_MS', read("src/lib/api.ts"))
         self.assertIn(f"export const PX_FROM = {dom.PX_FROM:_};", lib)
         self.assertIn("const COIN = /^[A-Za-z0-9]{1,20}$/;", lib)
+        self.assertIn(f"export const MIN_BASKET = {dom.MIN_BASKET};", lib)
+        self.assertLessEqual(max(dom.TIERS), 200)
         self.assertEqual(dom.COIN.pattern, "[A-Za-z0-9]{1,20}")
         # Пределы сервера — внутри пределов приложения: годный ответ сервера приложение принимает.
         self.assertLess(dom.EB_MAX, 10.0001)

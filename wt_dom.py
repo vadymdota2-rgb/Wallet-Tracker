@@ -1,31 +1,42 @@
 """Альтсезон и сила биткоина — отдельный модуль API (/api/dom).
 
-Всё считаем сами по дневным ценам закрытия Hyperliquid (открытые данные
-блокчейна, info API): чужих индексов и сводок здесь нет.
+Всё считаем сами по дневным свечам Hyperliquid (открытые данные блокчейна,
+info API): цена закрытия и оборот за день. Чужих индексов и сводок здесь нет.
 
-  - монеты — TOP крупнейших бессрочных контрактов Hyperliquid по открытому
-    интересу сейчас (без самого биткоина, золота PAXG и монет, привязанных к
-    доллару); в прошлом считаются те из них, что уже торговались;
-  - индекс альтсезона на каждый день — сколько процентов этих монет выросли
-    за WINDOW дней сильнее биткоина (как у известных индексов: 75 и выше —
-    альтсезон, 25 и ниже — сезон биткоина). Считается, когда монет с ценой
-    на обе даты не меньше MIN_IDX;
-  - сила альтов против биткоина — корзина монет поровну против биткоина: за
-    день — средний по монетам дневной рост к биткоину (логарифм, урезанный до
-    CLIP: одна монета не перевешивает корзину), накопленный с первого дня; 100
-    — первый день. Растёт — альты сильнее биткоина;
+Честность расчёта — главное:
+  - корзина на каждый день своя: TOP самых торгуемых монет Hyperliquid по
+    обороту за VOLW дней ДО этого дня — только то, что было известно тогда,
+    без заглядывания в будущее;
+  - в корзину попадают и монеты, которые потом сняли с торгов (Hyperliquid
+    отдаёт их историю): прошлое не подгоняется под сегодняшних выживших;
+  - только закрытые дни (UTC): идущий день не считается, индекс за день не
+    прыгает;
+  - история — с начала настоящих торгов на Hyperliquid (раньше у свечей нет
+    оборота: цены добавлены задним числом, торгов на бирже не было);
+  - день, где в корзине меньше MIN_BASKET монет, не считается; сколько монет
+    было в корзине — в каждом дне ответа.
+
+  - индекс альтсезона — сколько процентов корзины дня выросли за WINDOW дней
+    сильнее биткоина (75 и выше — альтсезон, 25 и ниже — сезон биткоина);
+  - ширина — тот же индекс за последний день для корзин TIERS: видно, идёт
+    рост широко или только в самых торгуемых монетах;
+  - сила альтов против биткоина — корзина дня поровну: за день — средний по
+    монетам дневной рост к биткоину (логарифм, урезанный до CLIP: одна монета
+    не перевешивает корзину), накопленный с первого дня; 100 — первый день;
   - ETH/BTC — закрытие эфира в биткоинах.
+
+Без биткоина, золота PAXG и монет, привязанных к доллару (цена за всю
+историю ходит меньше чем в PEG раз).
 
 Доли биткоина во всём рынке нет: для неё нужна капитализация всех монет, а
 открытых данных о числе монет в обращении с правом коммерческого показа нет
 ни у кого (CoinMarketCap, CoinGecko, DefiLlama — только с их согласия).
 
-Ответ живёт час (TTL): устаревший отдаётся сразу, свежий собирается в фоне
-одним потоком. Цены по дням копятся в памяти и на диске: сборка спрашивает
-у Hyperliquid только последние дни, полную историю — один раз на монету.
-Первая сборка без копии на диске — пара минут (запросы идут с паузой PACE,
-чтобы не упереться в лимит Hyperliquid): до неё ответ — «собираем»
-(error: building), а не ожидание.
+Свечи копятся в памяти и на диске; у Hyperliquid спрашиваем только когда
+закрылся новый день, и только его хвост (полную историю — один раз на
+монету; снятые с торгов — один раз навсегда). Запросы идут с паузой PACE.
+Первая сборка без копии на диске — несколько минут: до неё ответ —
+«собираем» (error: building).
 
 Безопасность — как у wt_etf: запросы только по https и только к HOSTS, без
 перенаправлений и прокси из окружения, ответ ограничен по размеру, JSON — без
@@ -51,29 +62,37 @@ from typing import Any
 TTL = 3600.0
 INFO = "https://api.hyperliquid.xyz/info"
 HOSTS = frozenset({"api.hyperliquid.xyz"})
-# Сколько монет в корзине; окно индекса альтсезона, дней; меньше скольких
-# монет индекс и силу не считаем (горстка монет — не рынок).
+# Сколько монет в корзине дня; за сколько дней до него оборот выбирает
+# корзину; окно индекса, дней; меньше скольких монет в корзине день не
+# считается (горстка монет — не рынок); корзины для ширины рынка.
 TOP = 50
+VOLW = 30
 WINDOW = 90
-MIN_IDX = 15
-MIN_STR = 10
+MIN_BASKET = 30
+TIERS = (25, 50, 100)
 # Дневной рост монеты к биткоину в силе альтов — не больше этого по модулю
 # (логарифм: 1 — в 2,7 раза за день).
 CLIP = 1.0
 # Не альты: золото и привязанные к доллару. Привязанную монету видно и по
-# ценам: за WINDOW дней её цена ходит меньше чем на PEG (в разах).
+# ценам: за всю историю её цена ходит меньше чем в PEG раз.
 EXCLUDE = frozenset({"PAXG"})
 PEG = 1.05
 DAY = 86400
-# Пауза между запросами цен, с: у Hyperliquid общий лимит на адрес, его
-# делят все модули сервера.
-PACE = 1.5
-# Последних дней в обновлении цен: с запасом на простой сервера.
+# Пауза между запросами цен, с: у Hyperliquid общий лимит на адрес — 1200
+# «весов» в минуту, его делят все модули сервера; запрос свечей весит 20 и
+# ещё 1 за каждые 60 свечей ответа. С паузой 4 с — 15 запросов в минуту:
+# около 300 весов на хвостах и меньше 900, даже будь у каждой монеты история
+# с 2020 г.
+PACE = 4.0
+# Сколько последних известных дней спрашивать заново: свеча дня у
+# Hyperliquid может уточниться после закрытия.
 TAIL_DAYS = 5
-# Пределы правдоподобия: монет в списке Hyperliquid, дней цен у монеты, цена.
+# Пределы правдоподобия: монет в списке Hyperliquid, дней у монеты, цена,
+# оборот за день, $.
 COINS_MAX = 1000
 CANDLES_MAX = 10_000
 PX_MAX = 1e8
+VOL_MAX = 1e12
 # ETH/BTC — в этих пределах (максимум — около 0,15 в 2017 г.): иначе — сбой
 # цены, ETH/BTC этого дня нет. Биткоин дешевле BTC_MIN, $ — тоже сбой.
 EB_MIN, EB_MAX = 1e-6, 10.0
@@ -181,45 +200,48 @@ def _num(v: object) -> float:
     return f if math.isfinite(f) else 0.0
 
 
-# --- Монеты и цены -----------------------------------------------------------
+# --- Монеты и свечи ----------------------------------------------------------
 
-def _ranked() -> list[str] | None:
-    """Монеты Hyperliquid по открытому интересу в долларах, крупные первыми
-    (без снятых с торгов). Нет ответа — None."""
-    got = _info({"type": "metaAndAssetCtxs"})
-    if not isinstance(got, list) or len(got) != 2 or not isinstance(got[0], dict):
+def _universe() -> dict[str, bool] | None:
+    """Все монеты Hyperliquid, и торгуемые, и снятые: имя → снята ли.
+    Нет ответа — None."""
+    got = _info({"type": "meta"})
+    uni = got.get("universe") if isinstance(got, dict) else None
+    if not isinstance(uni, list) or not uni or len(uni) > COINS_MAX:
         return None
-    uni, ctxs = got[0].get("universe"), got[1]
-    if not isinstance(uni, list) or not isinstance(ctxs, list) or not uni or len(uni) > COINS_MAX:
-        return None
-    rows: list[tuple[float, str]] = []
-    for u, c in zip(uni, ctxs, strict=False):
-        if not isinstance(u, dict) or not isinstance(c, dict) or u.get("isDelisted"):
-            continue
-        name = u.get("name")
-        if not isinstance(name, str) or not COIN.fullmatch(name):
-            continue
-        rows.append((_num(c.get("openInterest")) * _num(c.get("markPx")), name))
-    rows.sort(key=lambda r: (-r[0], r[1]))
-    return [n for _, n in rows]
+    out: dict[str, bool] = {}
+    for u in uni:
+        name = u.get("name") if isinstance(u, dict) else None
+        if isinstance(name, str) and COIN.fullmatch(name):
+            out[name] = bool(u.get("isDelisted"))
+    return out or None
 
 
-def _candles(coin: str, start: int) -> dict[int, float] | None:
-    """Закрытия дня с start (unix с): начало суток UTC → цена. Нет ответа — None."""
+Candle = tuple[float, float]  # закрытие, оборот за день в $
+
+
+def _today() -> int:
+    """Начало идущих суток UTC: этот день ещё не закрыт и не считается."""
+    return _now() // DAY * DAY
+
+
+def _candles(coin: str, start: int) -> dict[int, Candle] | None:
+    """Закрытые дни с start (unix с): начало суток UTC → (закрытие, оборот $).
+    Нет ответа — None."""
     got = _info({"type": "candleSnapshot",
-                 "req": {"coin": coin, "interval": "1d", "startTime": start * 1000, "endTime": (_now() + DAY) * 1000}})
+                 "req": {"coin": coin, "interval": "1d", "startTime": start * 1000, "endTime": _today() * 1000}})
     if not isinstance(got, list) or len(got) > CANDLES_MAX:
         return None
-    out: dict[int, float] = {}
+    out: dict[int, Candle] = {}
     for k in got:
         if not isinstance(k, dict):
             continue
-        t, px = _num(k.get("t")), _num(k.get("c"))
-        if t % (DAY * 1000) or not 0 < px < PX_MAX:
+        t, px, vol = _num(k.get("t")), _num(k.get("c")), _num(k.get("v"))
+        if t % (DAY * 1000) or not 0 < px < PX_MAX or not 0 <= vol * px < VOL_MAX:
             continue
         ts = int(t) // 1000
-        if PX_FROM <= ts <= _now() + DAY:
-            out[ts] = px
+        if PX_FROM <= ts < _today():
+            out[ts] = (px, vol * px)
     return out
 
 
@@ -230,8 +252,8 @@ class _State:
     # Когда (monotonic) сборка последний раз не удалась; до FAIL_WAIT после
     # неё новой нет.
     fail: float | None = None
-    # Цены по дням: монета → {начало суток: закрытие}.
-    px: dict[str, dict[int, float]] = {}  # noqa: RUF012 — заменяется целиком, не меняется на месте
+    # Свечи: монета → {начало суток: (закрытие, оборот $)}.
+    px: dict[str, dict[int, Candle]] = {}  # noqa: RUF012 — заменяется целиком, не меняется на месте
     # Где держать копии (set_cache_dir).
     dir: str | None = None
 
@@ -283,120 +305,162 @@ def _file_save(name: str, v: Json) -> None:
             os.remove(tmp)
 
 
-def _px_load() -> dict[str, dict[int, float]]:
-    """Цены из копии на диске: только правдоподобные строки."""
+def _px_load() -> dict[str, dict[int, Candle]]:
+    """Свечи из копии на диске: только правдоподобные строки."""
     got = _file_load("dom_px.json")
-    out: dict[str, dict[int, float]] = {}
+    out: dict[str, dict[int, Candle]] = {}
     if not isinstance(got, dict):
         return out
     for coin, days in list(got.items())[:COINS_MAX]:
         if not isinstance(coin, str) or not COIN.fullmatch(coin) or not isinstance(days, dict):
             continue
-        ok = {int(t): _num(v) for t, v in days.items()
-              if isinstance(t, str) and t.isdigit() and len(t) <= 12 and int(t) % DAY == 0
-              and PX_FROM <= int(t) <= _now() + DAY and 0 < _num(v) < PX_MAX}
+        ok: dict[int, Candle] = {}
+        for t, v in days.items():
+            if not (isinstance(t, str) and t.isdigit() and len(t) <= 12 and isinstance(v, list) and len(v) == 2):
+                continue
+            ts, px, dv = int(t), _num(v[0]), _num(v[1])
+            if ts % DAY == 0 and PX_FROM <= ts < _today() and 0 < px < PX_MAX and 0 <= dv < VOL_MAX:
+                ok[ts] = (px, dv)
         if ok:
             out[coin] = ok
     return out
 
 
-def _refresh(coins: list[str], sleep: Any = time.sleep) -> dict[str, dict[int, float]]:
-    """Цены монет: известные — дописываем последними днями, новые — вся
-    история. Монета без ответа остаётся с прошлыми ценами."""
+def _refresh(coins: dict[str, bool], sleep: Any = time.sleep) -> dict[str, dict[int, Candle]]:
+    """Свечи монет: известные — дописываем с последних TAIL_DAYS известных
+    дней (сколько бы сервер ни простоял), новые — вся история; снятые с торгов, что уже есть, — не спрашиваем (у них новых дней
+    не будет). Монета без ответа остаётся с прошлыми свечами."""
     with _lock:
         if not _st.px:
             _st.px = _px_load()
         old = dict(_st.px)
-    out: dict[str, dict[int, float]] = {}
-    for i, coin in enumerate(coins):
-        if i:
-            sleep(PACE)
+    out: dict[str, dict[int, Candle]] = {}
+    asked = 0
+    for coin, gone in coins.items():
         have = old.get(coin) or {}
-        fresh = bool(have) and max(have) >= _now() - TAIL_DAYS * DAY
-        got = _candles(coin, max(have) - TAIL_DAYS * DAY if fresh else 0)
+        if gone and have:
+            out[coin] = have
+            continue
+        if asked:
+            sleep(PACE)
+        asked += 1
+        got = _candles(coin, max(have) - TAIL_DAYS * DAY if have else 0)
         if got is None:
             if have:
                 out[coin] = have
             continue
-        out[coin] = {**have, **got} if fresh else got
+        if got or have:
+            out[coin] = {**have, **got}
     with _lock:
         _st.px = out
-    _file_save("dom_px.json", {c: {str(t): v for t, v in d.items()} for c, d in out.items()})
+    _file_save("dom_px.json", {c: {str(t): list(v) for t, v in d.items()} for c, d in out.items()})
     return out
 
 
 # --- Расчёт ------------------------------------------------------------------
 
-def _pegged(p: dict[int, float], end: int) -> bool:
-    """Цена за последние WINDOW дней ходила меньше чем в PEG раз — монета
-    привязана к доллару (или замерла), это не альт."""
-    xs = [v for t, v in p.items() if t > end - WINDOW * DAY]
+def _pegged(p: dict[int, Candle]) -> bool:
+    """Цена за всю историю ходила меньше чем в PEG раз — монета привязана к
+    доллару (или замерла), это не альт."""
+    xs = [c for c, _ in p.values()]
     return len(xs) >= 10 and max(xs) / min(xs) < PEG
 
 
-def compute(px: dict[str, dict[int, float]], alts: list[str]) -> dict[str, Json] | None:
-    """Ответ по ценам: px — монета → {день: закрытие}, alts — корзина
-    (без BTC). Нет цен биткоина — None.
+def compute(px: dict[str, dict[int, Candle]]) -> dict[str, Json] | None:
+    """Ответ по свечам: px — монета → {день: (закрытие, оборот $)}. Нет цен
+    биткоина — None.
 
-    rows — по дням биткоина с первого дня, где есть сила альтов:
-    [день, индекс альтсезона или None, сила альтов, ETH/BTC или None, цена BTC];
-    coins — монеты корзины с ценой сегодня и WINDOW дней назад: [монета, рост
-    за WINDOW дней, %], по убыванию; btc90 — рост биткоина за то же время."""
-    btc = {t: v for t, v in (px.get("BTC") or {}).items() if v >= BTC_MIN}
+    rows — по закрытым дням биткоина с первого дня, где корзина силы альтов
+    набирает MIN_BASKET монет: [день, индекс альтсезона или None, сила альтов,
+    ETH/BTC или None, цена BTC, монет в корзине индекса или None];
+    coins — корзина последнего дня: [монета, рост за WINDOW дней, %], по
+    убыванию; btc90 — рост биткоина за то же время; tiers — индекс последнего
+    дня для корзин TIERS: [размер, индекс или None, монет]."""
+    btc = {t: c for t, (c, _) in (px.get("BTC") or {}).items() if c >= BTC_MIN}
     if len(btc) < WINDOW + 2:
         return None
-    eth = px.get("ETH") or {}
+    eth = {t: c for t, (c, _) in (px.get("ETH") or {}).items()}
     days = sorted(btc)
+    alts = [a for a in px if a != "BTC" and a not in EXCLUDE and not _pegged(px[a])]
+    close = {a: {t: c for t, (c, _) in px[a].items()} for a in alts}
+    # Оборот за VOLW дней до дня (сам день не в счёт — его ещё не знают, когда
+    # выбирают корзину): по накопленной сумме оборотов.
+    pos = {t: i for i, t in enumerate(days)}
+    trail: dict[str, list[float]] = {}
+    for a in alts:
+        acc_v, sums = 0.0, [0.0]
+        for t in days:
+            acc_v += px[a].get(t, (0.0, 0.0))[1]
+            sums.append(acc_v)
+        trail[a] = [(sums[i] - sums[max(0, i - VOLW)]) / VOLW for i in range(len(days))]
+
+    def basket(t: int, need: int, n: int) -> list[str]:
+        """Корзина дня t: n самых торгуемых за VOLW дней до него монет, у
+        которых есть цена в день t и за need дней до него."""
+        i = pos[t]
+        live = [a for a in alts if trail[a][i] > 0 and t in close[a] and t - need * DAY in close[a]]
+        live.sort(key=lambda a: (-trail[a][i], a))
+        return live[:n]
+
+    def index(t: int, n: int) -> tuple[int | None, int]:
+        b = t - WINDOW * DAY
+        if b not in btc:
+            return None, 0
+        el = basket(t, WINDOW, n)
+        if len(el) < min(MIN_BASKET, n):
+            return None, len(el)
+        rb = btc[t] / btc[b]
+        return round(100 * sum(1 for a in el if close[a][t] / close[a][b] > rb) / len(el)), len(el)
+
     rows: list[list[Json]] = []
     acc = 0.0
     for i, t in enumerate(days):
         if i == 0:
             continue
         p = days[i - 1]
-        rel = [max(-CLIP, min(CLIP, math.log(px[a][t] / px[a][p]) - math.log(btc[t] / btc[p])))
-               for a in alts if t in px[a] and p in px[a]]
-        if len(rel) < MIN_STR:
+        if t - p != DAY:
             continue
+        el = basket(t, 1, TOP)
+        if len(el) < MIN_BASKET:
+            continue
+        rel = [max(-CLIP, min(CLIP, math.log(close[a][t] / close[a][p]) - math.log(btc[t] / btc[p]))) for a in el]
         acc = max(-STR_LOG, min(STR_LOG, acc + sum(rel) / len(rel)))
-        b = t - WINDOW * DAY
-        idx = None
-        if b in btc:
-            rb = btc[t] / btc[b]
-            el = [a for a in alts if t in px[a] and b in px[a]]
-            if len(el) >= MIN_IDX:
-                idx = round(100 * sum(1 for a in el if px[a][t] / px[a][b] > rb) / len(el))
+        idx, n = index(t, TOP)
         eb = float(f"{eth[t] / btc[t]:.6g}") if t in eth and EB_MIN < eth[t] / btc[t] < EB_MAX else None
-        rows.append([t, idx, round(100 * math.exp(acc), 2), eb, round(btc[t], 2)])
+        rows.append([t, idx, round(100 * math.exp(acc), 2), eb, round(btc[t], 2), n if idx is not None else None])
     if not rows:
         return None
-    end = days[-1]
+    end = rows[-1][0]
     b = end - WINDOW * DAY
-    grown = [(a, g) for a in alts if end in px[a] and b in px[a]
-             if (g := round((px[a][end] / px[a][b] - 1) * 100, 2)) <= GROW_MAX]
+    grown = [(a, g) for a in basket(end, WINDOW, TOP)
+             if (g := round((close[a][end] / close[a][b] - 1) * 100, 2)) <= GROW_MAX]
     coins = [[a, g] for a, g in sorted(grown, key=lambda c: (-c[1], c[0]))]
     btc90 = round((btc[end] / btc[b] - 1) * 100, 2) if b in btc else None
-    return {"rows": rows, "coins": coins, "btc90": btc90}
+    tiers = [[n, *index(end, n)] for n in TIERS]
+    return {"rows": rows, "coins": coins, "btc90": btc90, "tiers": tiers}
 
 
 def build(sleep: Any = time.sleep) -> dict[str, Json]:
     """Собрать ответ из сети и положить в кэш."""
-    ranked = _ranked()
-    if not ranked:
+    with _lock:
+        hit, have = _st.hit, _st.px
+    # Новый день ещё не закрылся — свечи те же, и ответ тот же: сеть не трогаем.
+    last = max((have.get("BTC") or {0: (0.0, 0.0)}), default=0)
+    if hit and last >= _today() - DAY:
+        with _lock:
+            _st.hit = (time.monotonic(), hit[1])
+        return hit[1]
+    coins = _universe()
+    if not coins or "BTC" not in coins:
         with _lock:
             _st.fail = time.monotonic()
         return _no_data()
-    alts_all = [c for c in ranked if c not in ("BTC", *EXCLUDE)]
-    # С запасом: привязанные к доллару отсеются по ценам.
-    want = ["BTC", "ETH", *[c for c in alts_all[:TOP + 10] if c != "ETH"]]
-    px = _refresh(want, sleep)
-    end = max(px.get("BTC") or {0: 0})
-    alts = [c for c in alts_all if c in px and not _pegged(px[c], end)][:TOP]
-    got = compute(px, alts)
+    got = compute(_refresh(coins, sleep))
     if not got:
         with _lock:
             _st.fail = time.monotonic()
         return _no_data()
-    res = {"ok": True, **got, "n": len(alts), "by": "Hyperliquid", "at": _now()}
+    res = {"ok": True, **got, "n": TOP, "by": "Hyperliquid", "at": _now()}
     with _lock:
         _st.hit = (time.monotonic(), res)
         _st.fail = None
@@ -431,7 +495,9 @@ def dom_data() -> dict[str, Json]:
     if _st.hit is None and _st.dir:
         saved = _file_load("dom.json")
         with _lock:
-            if _st.hit is None and isinstance(saved, dict) and saved.get("ok") is True:
+            # Копия прежнего расчёта (без tiers) не годится: её не примет и приложение.
+            if _st.hit is None and isinstance(saved, dict) and saved.get("ok") is True \
+                    and isinstance(saved.get("tiers"), list):
                 _st.hit = (time.monotonic() - TTL - 1.0, saved)
     with _lock:
         hit = _st.hit

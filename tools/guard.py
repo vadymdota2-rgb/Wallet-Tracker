@@ -661,6 +661,12 @@ say("альтсезон — свой расчёт по ценам Hyperliquid (w
     and '"wt-dom-v2"' in read(f"{APP}/src/lib/storage.ts") and '"wt-dom-v1"' not in read(f"{APP}/src/lib/storage.ts")
     and '"dm_how_4"' in _dm and '"dm_building"' in _dm and "glyph: <DomGlyph />" in appx
     and "wt_dom.py" in read(f"{APP}/.github/workflows/tests.yml"))
+say("альтсезон честный: корзина на каждый день — самые торгуемые за 30 дней до него (без заглядывания вперёд), со снятыми потом монетами, только закрытые дни, не меньше 30 монет; ширина 25/50/100; это сказано на экране",
+    "VOLW = 30" in _dms and "MIN_BASKET = 30" in _dms and "TIERS = (25, 50, 100)" in _dms
+    and '{"type": "meta"}' in _dms and 'u.get("isDelisted")' in _dms and "metaAndAssetCtxs" not in _dms
+    and "PX_FROM <= ts < _today()" in _dms and "sums[i] - sums[max(0, i - VOLW)]" in _dms
+    and "export const MIN_BASKET = 30;" in _dml and "r.length !== 6" in _dml
+    and '"dm_tiers"' in _dm and '"dm_day"' in _dm and '"dm_how_6"' in _dm)
 say("альтсезон на уровне халвинга и ETF: правила кода и fuzz сервера (годный ответ принимает приложение), свойства расчётов, строгий TypeScript; свои стили, колонка до 760 px, графики в настоящих пикселях и с клавиатуры, таблица, пометки о старой копии и старых данных, свежий ответ при возврате через час, подгрузка при запуске",
     all(os.path.isfile(f"{APP}/tests/{f}") for f in ("test_dom_policy.py", "test_dom_fuzz.py", "dom.props.test.ts", "dom.test.ts", "test_dom.py"))
     and os.path.isfile(f"{APP}/tests/e2e/dom.e2e.test.ts") and '"typecheck:dom"' in read(f"{APP}/package.json")

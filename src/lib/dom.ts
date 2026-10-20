@@ -9,8 +9,15 @@
  * годится — экран берёт свежий или просит повторить.
  */
 
-/** День: [начало суток UTC, индекс альтсезона 0–100 или null, сила альтов (100 — первый день), ETH/BTC или null, цена BTC $]. */
-export type DomDay = [number, number | null, number, number | null, number];
+/**
+ * Закрытый день: [начало суток UTC, индекс альтсезона 0–100 или null, сила
+ * альтов (100 — первый день), ETH/BTC или null, цена BTC $, монет в корзине
+ * индекса или null (индекса нет)].
+ */
+export type DomDay = [number, number | null, number, number | null, number, number | null];
+
+/** Ширина рынка за последний день: [монет в корзине, индекс или null, сколько из них с историей за 90 дней]. */
+export type DomTier = [number, number | null, number];
 
 export interface DomReply {
   ok: true;
@@ -19,7 +26,9 @@ export interface DomReply {
   coins: [string, number][];
   /** Рост биткоина за те же 90 дней, %. */
   btc90: number | null;
-  /** Сколько монет в корзине. */
+  /** Индекс последнего дня для корзин 25, 50 и 100 самых торгуемых монет. */
+  tiers: DomTier[];
+  /** Сколько монет в корзине (самые торгуемые за 30 дней до дня). */
   n: number;
   at: number;
 }
@@ -31,6 +40,9 @@ const DAY = 86_400;
 export const PX_FROM = 1_597_795_200;
 const DAYS_MAX = 10_000;
 const COINS_MAX = 200;
+/** Корзина индекса — не меньше стольких монет (wt_dom.MIN_BASKET). */
+export const MIN_BASKET = 30;
+const TIERS_MAX = 5;
 const COIN = /^[A-Za-z0-9]{1,20}$/;
 
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
@@ -42,12 +54,14 @@ function validRows(raw: unknown, now: number): DomDay[] | null {
   const out: DomDay[] = [];
   let prev = 0;
   for (const r of raw) {
-    if (!Array.isArray(r) || r.length !== 5) return null;
-    const [ts, idx, str, eb, px] = r as unknown[];
+    if (!Array.isArray(r) || r.length !== 6) return null;
+    const [ts, idx, str, eb, px, n] = r as unknown[];
     if (!within(ts, PX_FROM, now + 2 * DAY) || ts % DAY !== 0 || ts <= prev) return null;
     if (idx !== null && (!within(idx, 0, 100) || !Number.isInteger(idx))) return null;
     if (!within(str, 1e-6, 1e6) || (eb !== null && !within(eb, 1e-6, 10)) || !within(px, 1e-6, 1e8)) return null;
-    out.push([ts, idx as number | null, str, eb as number | null, px]);
+    // Индекс и корзина — вместе: индекс без корзины (или корзина без индекса) — подделка.
+    if ((idx === null) !== (n === null) || (n !== null && (!within(n, MIN_BASKET, COINS_MAX) || !Number.isInteger(n)))) return null;
+    out.push([ts, idx as number | null, str, eb as number | null, px, n as number | null]);
     prev = ts;
   }
   return out;
@@ -69,7 +83,14 @@ export function validDom(raw: unknown, now: number = Date.now() / 1000): DomRepl
     : [];
   const btc90 = within(raw["btc90"], -100, 1e6) ? raw["btc90"] : null;
   const n = within(raw["n"], 0, COINS_MAX) && Number.isInteger(raw["n"]) ? raw["n"] : coins.length;
-  return { ok: true, rows, coins, btc90, n, at: raw["at"] };
+  const tiers = Array.isArray(raw["tiers"])
+    ? raw["tiers"].slice(0, TIERS_MAX).filter((t): t is DomTier => Array.isArray(t) && t.length === 3
+      && within(t[0], 1, COINS_MAX) && Number.isInteger(t[0])
+      && (t[1] === null || (within(t[1], 0, 100) && Number.isInteger(t[1])))
+      && within(t[2], 0, t[0]) && Number.isInteger(t[2]))
+      .map((t): DomTier => [t[0], t[1], t[2]])
+    : [];
+  return { ok: true, rows, coins, btc90, tiers, n, at: raw["at"] };
 }
 
 /* --------------------------------------------------------------------- */
@@ -78,7 +99,7 @@ export function validDom(raw: unknown, now: number = Date.now() / 1000): DomRepl
 export const seasonOf = (v: number): 0 | 1 | 2 => (v >= 75 ? 2 : v <= 25 ? 0 : 1);
 
 /** Ряд одной величины по дням: [начало суток, значение], без пустых дней. */
-export function series(rows: DomDay[], col: 1 | 2 | 3 | 4): [number, number][] {
+export function series(rows: DomDay[], col: 1 | 2 | 3 | 4 | 5): [number, number][] {
   return rows.flatMap((r): [number, number][] => (r[col] === null ? [] : [[r[0], r[col] as number]]));
 }
 

@@ -9,8 +9,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  PX_FROM, RANGES, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, windowOf,
-  type DomDay, type DomReply,
+  MIN_BASKET, PX_FROM, RANGES, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, windowOf,
+  type DomDay, type DomReply, type DomTier,
 } from "../src/lib/dom.ts";
 
 const SEED = 0xd0_5eed;
@@ -31,7 +31,7 @@ function rng(seed: number): () => number {
   };
 }
 
-/** Правдоподобный ответ сервера: любое число дней, пропуски индекса и ETH/BTC. */
+/** Правдоподобный ответ сервера: любое число дней, пропуски индекса (а с ним и корзины) и ETH/BTC. */
 function reply(r: () => number): DomReply {
   const n = 1 + Math.floor(r() * 900);
   const start = Math.floor(NOW / DAY) * DAY - (n - 1) * DAY - Math.floor(r() * 5) * DAY;
@@ -39,11 +39,16 @@ function reply(r: () => number): DomReply {
   let s = 100;
   for (let i = 0; i < n; i++) {
     s *= Math.exp((r() - 0.5) * 0.05);
-    rows.push([start + i * DAY, i < 90 || r() < 0.02 ? null : Math.round(r() * 100), s,
-      r() < 0.05 ? null : 0.01 + r() * 0.07, 10_000 + r() * 100_000]);
+    const idx = i < 90 || r() < 0.02 ? null : Math.round(r() * 100);
+    rows.push([start + i * DAY, idx, s, r() < 0.05 ? null : 0.01 + r() * 0.07, 10_000 + r() * 100_000,
+      idx === null ? null : MIN_BASKET + Math.floor(r() * 21)]);
   }
   const coins = Array.from({ length: Math.floor(r() * 50) }, (_, i): [string, number] => [`C${i}`, (r() - 0.3) * 300]);
-  return { ok: true, rows, coins, btc90: (r() - 0.3) * 100, n: coins.length, at: NOW };
+  const tiers = [25, 50, 100].map((size): DomTier => {
+    const k = Math.floor(r() * (size + 1));
+    return [size, k >= Math.min(MIN_BASKET, size) ? Math.round(r() * 100) : null, k];
+  });
+  return { ok: true, rows, coins, btc90: (r() - 0.3) * 100, tiers, n: 50, at: NOW };
 }
 
 /** Порча: одна клетка ответа — чем угодно. */
@@ -54,9 +59,11 @@ function spoil(r: () => number, v: DomReply): unknown {
   const k = r();
   if (k < 0.6 && v.rows.length) {
     const row = pick(c["rows"] as unknown[][]);
-    row[Math.floor(r() * 6)] = pick(JUNK);
+    row[Math.floor(r() * 7)] = pick(JUNK);
   } else if (k < 0.8) {
-    c[pick(["ok", "rows", "at", "coins", "btc90", "n"])] = pick(JUNK);
+    c[pick(["ok", "rows", "at", "coins", "btc90", "tiers", "n"])] = pick(JUNK);
+  } else if (k < 0.9) {
+    (c["tiers"] as unknown[][])[Math.floor(r() * 3)]![Math.floor(r() * 4)] = pick(JUNK);
   } else if (v.coins.length) {
     (c["coins"] as unknown[][])[0]![Math.floor(r() * 3)] = pick(JUNK);
   }
@@ -71,6 +78,7 @@ test("годный ответ принимается целиком, а копи
     assert.ok(got, `случай ${i}`);
     assert.equal(got.rows.length, v.rows.length, `случай ${i}`);
     assert.deepEqual(got.coins, v.coins, `случай ${i}`);
+    assert.deepEqual(got.tiers, v.tiers, `случай ${i}`);
     assert.deepEqual(validDom(got, NOW), got, `случай ${i}`);
   }
   // И настоящий ответ сервера.
@@ -96,6 +104,11 @@ test("испорченный ответ — никогда не исключен
       assert.ok(d[1] === null || (Number.isInteger(d[1]) && d[1] >= 0 && d[1] <= 100), `случай ${i}`);
       assert.ok(Number.isFinite(d[2]) && d[2] > 0, `случай ${i}`);
       assert.ok(d[3] === null || (d[3] > 0 && d[3] <= 10), `случай ${i}`);
+      assert.ok((d[1] === null) === (d[5] === null) && (d[5] === null || (Number.isInteger(d[5]) && d[5] >= MIN_BASKET)), `случай ${i}`);
+    }
+    for (const [size, idx, k] of v.tiers) {
+      assert.ok(Number.isInteger(size) && size >= 1 && Number.isInteger(k) && k >= 0 && k <= size, `случай ${i}`);
+      assert.ok(idx === null || (Number.isInteger(idx) && idx >= 0 && idx <= 100), `случай ${i}`);
     }
     for (const c of v.coins) assert.ok(/^[A-Za-z0-9]{1,20}$/.test(c[0]) && Number.isFinite(c[1]), `случай ${i}`);
     assert.ok(v.btc90 === null || Number.isFinite(v.btc90), `случай ${i}`);
@@ -108,7 +121,7 @@ test("ряды, окна и точки назад согласованы с дн
   const r = rng(SEED + 2);
   for (let i = 0; i < 500; i++) {
     const v = reply(r);
-    for (const col of [1, 2, 3, 4] as const) {
+    for (const col of [1, 2, 3, 4, 5] as const) {
       const s = series(v.rows, col);
       assert.ok(s.every((p, j) => j === 0 || p[0] > s[j - 1]![0]), `случай ${i}`);
       assert.equal(s.length, v.rows.filter((d) => d[col] !== null).length, `случай ${i}`);

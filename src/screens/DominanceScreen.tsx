@@ -4,10 +4,12 @@
  * Всё посчитано своим счётом по дневным ценам Hyperliquid (сервер — wt_dom.py,
  * проверка ответа и расчёты — lib/dom.ts). Чужих индексов здесь нет.
  *
- * Сверху — индекс альтсезона: сколько из 50 крупнейших монет Hyperliquid
- * обогнали биткоин за 90 дней; 75 и выше — альтсезон, 25 и ниже — сезон
- * биткоина. Ниже — его история, сила альтов против биткоина (корзина монет
- * поровну), список монет за 90 дней и ETH/BTC.
+ * Сверху — индекс альтсезона на последний закрытый день: сколько из 50 самых
+ * торгуемых монет Hyperliquid обогнали биткоин за 90 дней; 75 и выше —
+ * альтсезон, 25 и ниже — сезон биткоина. Под ним — ширина: тот же индекс для
+ * 25, 50 и 100 монет. Ниже — его история (корзина на каждый день своя, со
+ * снятыми потом с торгов монетами), сила альтов против биткоина (корзина
+ * монет поровну), список монет за 90 дней и ETH/BTC.
  *
  * Доли биткоина во всём рынке нет: для неё нужна капитализация всех монет, а
  * открытых данных о ней с правом показа нет ни у кого — об этом сказано в
@@ -41,6 +43,8 @@ const RANGE_LABEL = { 365: "fg_r1y", 1095: "fg_r3y", all: "fg_rall" } as const;
 /** Сервер ещё собирает цены после первого запуска — спросить снова через столько, мс. */
 const BUILD_RETRY_MS = 30_000;
 const iso = (x: string | number) => `⁦${x}⁩`;
+/** Индекс узкой и широкой корзин расходится на столько пунктов — рост узкий (или широкий). */
+const TIER_GAP = 15;
 
 /** Когда собраны данные — по часам телефона. */
 function stamp(lang: Lang, at: number): string {
@@ -392,6 +396,8 @@ export function DominanceScreen() {
   const btc90 = reply?.btc90 ?? null;
   const k = btc90 !== null ? beat(coins, btc90).up : 0;
   const old = daysOld(rows, Date.now() / 1000);
+  const tiers = (reply?.tiers ?? []).filter((x): x is [number, number, number] => x[1] !== null);
+  const spread = tiers.length > 1 ? tiers[0]![1] - tiers[tiers.length - 1]![1] : 0;
 
   const altCell = (key: DictKey, p: [number, number] | null) => p ? (
     <div key={key} className="fg-cmp-c">
@@ -450,6 +456,21 @@ export function DominanceScreen() {
                 {altCell("fg_week", ago(alt, 7))}
                 {altCell("fg_month", ago(alt, 30))}
               </div>
+              {tiers.length > 1 ? (
+                <div className="dm-tiers">
+                  <p>{t(lang, "dm_tiers")}</p>
+                  <div className="fg-cmp">
+                    {tiers.map(([size, v]) => (
+                      <div key={size} className="fg-cmp-c">
+                        <small>{t(lang, "dm_tier", { n: iso(num(size)) })}</small>
+                        <b style={{ color: SEASON[seasonOf(v)].c }}>{v}</b>
+                        <span>{t(lang, SEASON[seasonOf(v)].key)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p>{t(lang, spread >= TIER_GAP ? "dm_tiers_narrow" : spread <= -TIER_GAP ? "dm_tiers_wide" : "dm_tiers_even")}</p>
+                </div>
+              ) : null}
               <div className="fg-year">
                 <span>{t(lang, "fg_hi")} <b style={{ color: SEASON[seasonOf(stats.hi[1])].c }}>{stats.hi[1]}</b>
                   <small> · {dateStr(lang, stats.hi[0], { day: "numeric", month: "short", year: "numeric" })}</small></span>
@@ -468,13 +489,16 @@ export function DominanceScreen() {
                   </p>
                 </div>
               ) : null}
-              <p className="fg-date">{stamp(lang, reply.at)}</p>
+              <p className="fg-date">
+                {t(lang, "dm_day", { d: dateStr(lang, now[0], { day: "numeric", month: "long", year: "numeric" }) })}
+                {" · "}{stamp(lang, reply.at)}
+              </p>
             </Card>
           ) : null}
 
           {stats && alt.length > 30 ? (
             <>
-              <SectionTitle help={["dm_how_1", "dm_how_3"]}>{t(lang, "dm_alt_title")}</SectionTitle>
+              <SectionTitle help={["dm_how_1", "dm_how_3", "dm_how_6"]}>{t(lang, "dm_alt_title")}</SectionTitle>
               <Card>
                 {rangeSeg}
                 <MiniChart
@@ -552,6 +576,7 @@ export function DominanceScreen() {
               <li>{t(lang, "dm_how_1")}</li>
               <li>{t(lang, "dm_how_2")}</li>
               <li>{t(lang, "dm_how_3")}</li>
+              <li>{t(lang, "dm_how_6")}</li>
               <li>{t(lang, "dm_how_5")}</li>
               <li>{t(lang, "dm_how_4")}</li>
             </ul>

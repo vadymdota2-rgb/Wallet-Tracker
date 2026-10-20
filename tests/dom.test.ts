@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  PX_FROM, STALE_DAYS, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, windowOf,
+  MIN_BASKET, PX_FROM, STALE_DAYS, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, windowOf,
   type DomDay,
 } from "../src/lib/dom.ts";
 
@@ -12,9 +12,15 @@ const NOW = T0 + 400 * DAY;
 
 /** n дней с T0: индекс, сила, ETH/BTC и цена — от номера дня. */
 function rows(n: number, idx: (i: number) => number | null = () => 50): DomDay[] {
-  return Array.from({ length: n }, (_, i): DomDay => [T0 + i * DAY, idx(i), 100 + i, 0.03 + i / 1e5, 30_000 + i]);
+  return Array.from({ length: n }, (_, i): DomDay => {
+    const v = idx(i);
+    return [T0 + i * DAY, v, 100 + i, 0.03 + i / 1e5, 30_000 + i, v === null ? null : 50];
+  });
 }
-const reply = (r: DomDay[] = rows(300)) => ({ ok: true, rows: r, coins: [["NEAR", 158.3], ["ETH", -5]], btc90: 24.2, n: 50, by: "Hyperliquid", at: NOW });
+const TIERS = [[25, 80, 25], [50, 74, 50], [100, 62, 100]];
+const reply = (r: DomDay[] = rows(300)) => ({
+  ok: true, rows: r, coins: [["NEAR", 158.3], ["ETH", -5]], btc90: 24.2, tiers: TIERS, n: 50, by: "Hyperliquid", at: NOW,
+});
 
 test("validDom: годный ответ — копия только с известными полями", () => {
   const v = validDom({ ...reply(), extra: "<b>" }, NOW);
@@ -23,13 +29,15 @@ test("validDom: годный ответ — копия только с изве�
   assert.deepEqual(v.coins, [["NEAR", 158.3], ["ETH", -5]]);
   assert.equal(v.btc90, 24.2);
   assert.equal(v.n, 50);
+  assert.deepEqual(v.tiers, TIERS);
   assert.equal("extra" in v, false);
   assert.equal("by" in v, false);
 });
 
-test("validDom: старый ответ с долями CoinMarketCap и чужие ответы не годятся", () => {
+test("validDom: старые ответы (доли CoinMarketCap, прежний расчёт без корзины) и чужие — не годятся", () => {
   const old = { ok: true, t0: 1367193600, rows: [[2e6, 58, 11, 2e5, 0.03]], alt: {}, at: NOW };
-  for (const bad of [old, null, "x", [], { ok: false, error: "building" }, { ...reply(), ok: "true" },
+  const five = { ...reply(), rows: rows(5).map((r) => r.slice(0, 5)) };
+  for (const bad of [old, five, null, "x", [], { ok: false, error: "building" }, { ...reply(), ok: "true" },
     { ...reply(), at: NOW + 30 * DAY }, { ...reply(), rows: [] }, { ...reply(), rows: "x" }]) {
     assert.equal(validDom(bad, NOW), null, JSON.stringify(bad).slice(0, 60));
   }
@@ -38,18 +46,23 @@ test("validDom: старый ответ с долями CoinMarketCap и чуж�
 test("validDom: любая ошибка в днях — ответ не годится", () => {
   const ok = rows(5);
   const cases: unknown[][] = [
-    [[PX_FROM - DAY, 50, 100, 0.03, 30_000]],               // раньше цен Hyperliquid
-    [[T0 + 5, 50, 100, 0.03, 30_000]],                      // не начало суток
-    [ok[1], ok[0]],                                         // не по порядку
-    [ok[0], ok[0]],                                         // повтор
-    [[T0, 101, 100, 0.03, 30_000]], [[T0, 50.5, 100, 0.03, 30_000]], [[T0, -1, 100, 0.03, 30_000]],
-    [[T0, 50, 0, 0.03, 30_000]], [[T0, 50, Infinity, 0.03, 30_000]], [[T0, 50, 100, 11, 30_000]],
-    [[T0, 50, 100, 0.03, 0]], [[T0, 50, 100, 0.03]], [[T0, "50", 100, 0.03, 30_000]],
-    [[NOW + 3 * DAY, 50, 100, 0.03, 30_000]],
+    [[PX_FROM - DAY, 50, 100, 0.03, 30_000, 50]],               // раньше цен Hyperliquid
+    [[T0 + 5, 50, 100, 0.03, 30_000, 50]],                      // не начало суток
+    [ok[1], ok[0]],                                             // не по порядку
+    [ok[0], ok[0]],                                             // повтор
+    [[T0, 101, 100, 0.03, 30_000, 50]], [[T0, 50.5, 100, 0.03, 30_000, 50]], [[T0, -1, 100, 0.03, 30_000, 50]],
+    [[T0, 50, 0, 0.03, 30_000, 50]], [[T0, 50, Infinity, 0.03, 30_000, 50]], [[T0, 50, 100, 11, 30_000, 50]],
+    [[T0, 50, 100, 0.03, 0, 50]], [[T0, 50, 100, 0.03, 30_000]], [[T0, "50", 100, 0.03, 30_000, 50]],
+    [[NOW + 3 * DAY, 50, 100, 0.03, 30_000, 50]],
+    // Корзина: индекс без неё, она без индекса, горстка монет, дробь, лишняя колонка.
+    [[T0, 50, 100, 0.03, 30_000, null]], [[T0, null, 100, 0.03, 30_000, 50]],
+    [[T0, 50, 100, 0.03, 30_000, MIN_BASKET - 1]], [[T0, 50, 100, 0.03, 30_000, 40.5]], [[T0, 50, 100, 0.03, 30_000, 201]],
+    [[T0, 50, 100, 0.03, 30_000, 50, 1]],
   ];
   for (const r of cases) assert.equal(validDom({ ...reply(), rows: r }, NOW), null, JSON.stringify(r));
-  // Индекса и ETH/BTC может не быть — это годится.
-  assert.ok(validDom({ ...reply(), rows: [[T0, null, 100, null, 30_000]] }, NOW));
+  // Индекса (а с ним и корзины) и ETH/BTC может не быть — это годится.
+  assert.ok(validDom({ ...reply(), rows: [[T0, null, 100, null, 30_000, null]] }, NOW));
+  assert.ok(validDom({ ...reply(), rows: [[T0, 50, 100, 0.03, 30_000, MIN_BASKET]] }, NOW));
 });
 
 test("validDom: битая монета просто не попадает в список", () => {
@@ -58,6 +71,15 @@ test("validDom: битая монета просто не попадает в с
   assert.deepEqual(v.coins, [["NEAR", 1], ["kPEPE", 5]]);
   assert.equal(v.btc90, null);
   assert.equal(v.n, 2);
+});
+
+test("validDom: битая ширина рынка просто не попадает в ответ", () => {
+  const v = validDom({ ...reply(), tiers: [[25, 80, 25], [25, 80, 26], [25, 80.5, 25], [0, 1, 0], [50, null, 3], [100, 101, 100], "x", [1, 2]] }, NOW);
+  assert.ok(v);
+  assert.deepEqual(v.tiers, [[25, 80, 25], [50, null, 3]]);
+  assert.deepEqual(validDom({ ...reply(), tiers: "x" }, NOW)?.tiers, []);
+  const { tiers: _, ...none } = reply();
+  assert.deepEqual(validDom(none, NOW)?.tiers, []);
 });
 
 test("seasonOf: границы зон", () => {

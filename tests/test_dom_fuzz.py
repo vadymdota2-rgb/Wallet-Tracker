@@ -5,7 +5,7 @@
 найденное нарушение воспроизводится, номер случая есть в сообщении.
 
 Hyperliquid отвечает то годным, то мусором: строками вместо чисел, NaN,
-огромными и отрицательными ценами, HTML в именах монет, перепутанными
+огромными и отрицательными ценами и оборотами, HTML в именах монет, перепутанными
 типами, пустотой, ценами из будущего и до 2020 года. Сборка не падает
 никогда, а каждый годный ответ сервера принимает приложение (validDom в
 lib/dom.ts) — сервер и приложение понимают ответ одинаково.
@@ -31,7 +31,7 @@ DAY = 86_400
 NOW = 1_792_000_000
 END = NOW // DAY * DAY
 COINS = ["BTC", "ETH", "SOL", "DOGE", "PAXG", "USDE", "kPEPE", "HYPE", "XRP", "LINK", "AVAX", "SUI", "ADA", "TON",
-         "NEAR", "UNI", "AAVE", "ARB", "OP", "TAO", "ENA", "WLD", "LTC", "BNB"]
+         "NEAR", "UNI", "AAVE", "ARB", "OP", "TAO", "ENA", "WLD", "LTC", "BNB", *(f"C{i}" for i in range(40))]
 # Огромное целое (10**30) разбор отвергает целиком — оно идёт отдельным ответом (HUGE), а не в каждый.
 JUNK = [None, "", "x", "1e999", "NaN", True, [], {}, {"a": 1}, -1, 0, 1e300, -1e300, "<script>", "-5"]
 HUGE = b'[{"t": 1' + b"0" * 30 + b', "c": "1"}]'
@@ -50,28 +50,37 @@ def meta(r: random.Random) -> object:
         names.append("BTC")
     if r.random() < 0.1:
         names.append(r.choice(["<b>", "A" * 40, "BTC\n", "ПРИВЕТ"]))
-    uni = [{"name": n, **({"isDelisted": True} if r.random() < 0.05 else {})} if r.random() > 0.03 else junk(r) for n in names]
-    ctx = [{"openInterest": r.choice([str(r.uniform(0, 1e7)), junk(r)]), "markPx": r.choice([str(r.uniform(0.01, 1e5)), junk(r)])}
-           if r.random() > 0.03 else junk(r) for _ in names]
-    return [{"universe": uni}, ctx] if r.random() > 0.03 else [{"universe": junk(r)}, ctx]
+    uni = [{"name": n, **({"isDelisted": r.choice([True, 1, "x"])} if r.random() < 0.1 else {})}
+           if r.random() > 0.03 else junk(r) for n in names]
+    return {"universe": uni} if r.random() > 0.03 else {"universe": junk(r)}
 
 
 def candles(r: random.Random, coin: str) -> object:
     if r.random() < 0.04:
         return junk(r)
     n = r.randrange(0, 260) if r.random() < 0.2 else r.randrange(150, 260)
+    # Монета снята с торгов: свечи кончаются раньше.
+    stop = r.randrange(0, 60) if r.random() < 0.1 else 0
     start = END - n * DAY + r.choice([0, 0, 0, DAY, -DAY])
     px = r.uniform(0.001, 100_000) if coin != "BTC" else r.uniform(5_000, 150_000)
+    # Начало без торгов: цены есть, оборота нет.
+    quiet = r.randrange(0, 40) if r.random() < 0.2 else 0
     out = []
-    for i in range(n):
+    for i in range(n - stop):
         px *= math.exp(r.gauss(0, 0.05))
         c: object = str(px)
         if r.random() < 0.02:
             c = junk(r)
+        v: object = "0" if i < quiet else str(r.lognormvariate(10, 2) / px)
+        if r.random() < 0.02:
+            v = junk(r)
         t: object = (start + i * DAY) * 1000
         if r.random() < 0.01:
             t = r.choice([5, junk(r), (start + i * DAY) * 1000 + 7, (NOW + 90 * DAY) * 1000, 1_000_000_000])
-        out.append({"t": t, "c": c} if r.random() > 0.01 else junk(r))
+        k = {"t": t, "c": c, "v": v}
+        if r.random() < 0.01:
+            del k["v"]
+        out.append(k if r.random() > 0.01 else junk(r))
     if r.random() < 0.05:
         r.shuffle(out)
     return out
@@ -86,7 +95,7 @@ def network(r: random.Random):
             return None
         if r.random() < 0.005:
             return HUGE
-        if body.get("type") == "metaAndAssetCtxs":
+        if body.get("type") == "meta":
             return json.dumps(m).encode() if r.random() > 0.02 else b"{"
         coin = body["req"]["coin"]
         if coin not in cache:
@@ -102,14 +111,17 @@ class FuzzTest(unittest.TestCase):
         if not res["ok"]:
             self.assertEqual(res, {"ok": False, "error": "no_data"}, m)
             return
-        self.assertEqual(set(res), {"ok", "rows", "coins", "btc90", "n", "by", "at"}, m)
+        self.assertEqual(set(res), {"ok", "rows", "coins", "btc90", "tiers", "n", "by", "at"}, m)
         prev = 0
         for row in res["rows"]:
-            ts, idx, s, eb, px = row
+            ts, idx, s, eb, px, n = row
+            self.assertTrue(dom.PX_FROM <= ts < END, m)
+            # Индекс и число монет в корзине — вместе: оба есть или обоих нет.
+            self.assertEqual(idx is None, n is None, m)
+            self.assertTrue(n is None or dom.MIN_BASKET <= n <= dom.TOP, m)
             self.assertGreater(ts, prev, m)
             prev = ts
             self.assertEqual(ts % DAY, 0, m)
-            self.assertTrue(dom.PX_FROM <= ts <= NOW + DAY, m)
             self.assertTrue(idx is None or (isinstance(idx, int) and 0 <= idx <= 100), m)
             self.assertTrue(math.isfinite(s) and 1e-6 <= s <= 1e6, m)
             self.assertTrue(eb is None or 1e-6 <= eb <= 10, m)
@@ -121,7 +133,13 @@ class FuzzTest(unittest.TestCase):
             self.assertNotIn(name, ("BTC", "PAXG"), m)
             self.assertTrue(-100 <= g <= dom.GROW_MAX, m)
         self.assertEqual([c[1] for c in res["coins"]], sorted((c[1] for c in res["coins"]), reverse=True), m)
-        self.assertLessEqual(res["n"], dom.TOP, m)
+        self.assertLessEqual(len(names), dom.TOP, m)
+        self.assertEqual(res["n"], dom.TOP, m)
+        self.assertEqual([t[0] for t in res["tiers"]], list(dom.TIERS), m)
+        for size, idx, k in res["tiers"]:
+            self.assertTrue(idx is None or (isinstance(idx, int) and 0 <= idx <= 100), m)
+            self.assertTrue(0 <= k <= size, m)
+            self.assertTrue(idx is None or k >= min(dom.MIN_BASKET, size), m)
 
     def test_build_never_raises_and_keeps_invariants(self):
         r = random.Random(SEED)  # noqa: S311 — нужна повторяемость, а не криптостойкость
