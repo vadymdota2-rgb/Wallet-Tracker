@@ -37,6 +37,11 @@ def day(rows: list, t: int) -> list:
     return next(r for r in rows if r[0] == t)
 
 
+def strong(rows: list) -> list:
+    """Дни с силой альтов (с корзиной не меньше MIN_BASKET монет)."""
+    return [r for r in rows if r[2] is not None]
+
+
 class Net:
     """Hyperliquid из теста: список монет (снята ли с торгов) и дневные свечи."""
 
@@ -87,13 +92,17 @@ class ComputeTest(unittest.TestCase):
         # ETH тоже быстрее: 31 из 41 → 76; в корзине — 41 монета.
         self.assertEqual(last[1], round(100 * 31 / 41))
         self.assertEqual(last[5], 41)
-        # Первый день — без оборота за прошлые дни, корзины нет; со второго —
-        # сила альтов. Индекс — с 90-го дня: раньше не с чем сравнивать.
-        self.assertEqual(got["rows"][0][0], T0 + DAY)
-        self.assertIsNone(got["rows"][88][1])
-        self.assertIsNone(got["rows"][88][5])
-        self.assertEqual(got["rows"][89][0], T0 + 90 * DAY)
-        self.assertIsNotNone(got["rows"][89][1])
+        # Дни — с первого дня цен: ETH/BTC и цена BTC есть с него. Первый день —
+        # без оборота за прошлые дни, корзины нет; со второго — сила альтов.
+        # Индекс — с 90-го дня: раньше не с чем сравнивать.
+        self.assertEqual(got["rows"][0][0], T0)
+        self.assertIsNone(got["rows"][0][2])
+        self.assertIsNotNone(got["rows"][0][3])
+        self.assertEqual(strong(got["rows"])[0][0], T0 + DAY)
+        self.assertIsNone(got["rows"][89][1])
+        self.assertIsNone(got["rows"][89][5])
+        self.assertEqual(got["rows"][90][0], T0 + 90 * DAY)
+        self.assertIsNotNone(got["rows"][90][1])
         # ETH/BTC — ровно отношение цен, цена BTC — закрытие.
         self.assertAlmostEqual(last[3], px["ETH"][LAST][0] / px["BTC"][LAST][0], places=6)
         self.assertEqual(last[4], round(px["BTC"][LAST][0], 2))
@@ -144,7 +153,10 @@ class ComputeTest(unittest.TestCase):
         px = {"BTC": flat(199, 100, 1.01)}
         for i in range(40):
             px[f"A{i}"] = {t: (c, 0.0 if t < T0 + 50 * DAY else v) for t, (c, v) in flat(199, 1, 1.001).items()}
-        self.assertEqual(dom.compute(px)["rows"][0][0], T0 + 51 * DAY)
+        rows = dom.compute(px)["rows"]
+        self.assertEqual(strong(rows)[0][0], T0 + 51 * DAY)
+        # Дни до торгов — только с ETH/BTC и ценой BTC, без силы и индекса.
+        self.assertTrue(all(r[1] is None and r[2] is None for r in rows if r[0] <= T0 + 50 * DAY))
 
     def test_small_basket_is_no_day(self):
         px = {"BTC": flat(199, 100), **coins(dom.MIN_BASKET - 1)}
@@ -172,7 +184,7 @@ class ComputeTest(unittest.TestCase):
     def test_strength_is_the_equal_weight_basket_against_bitcoin(self):
         px = {"BTC": flat(100, 100, 1.01),
               **{f"A{i}": flat(100, 1, 1.01 * 1.02 if i < 20 else 1.01 / 1.02) for i in range(40)}}
-        rows = dom.compute(px)["rows"]
+        rows = strong(dom.compute(px)["rows"])
         # Половина на 2% в день сильнее биткоина, половина на 2% слабее — корзина стоит.
         self.assertTrue(all(abs(r[2] - 100) < 0.01 for r in rows))
         for i in range(20, 40):
@@ -181,19 +193,31 @@ class ComputeTest(unittest.TestCase):
         # Теперь в среднем +1% в день к биткоину (логарифм): за 99 дней — e^(99·ln1.02/2).
         self.assertAlmostEqual(rows[-1][2], 100 * math.exp(99 * math.log(1.02) / 2), delta=0.5)
 
+    def test_gap_in_bitcoin_days_is_no_strength_that_day(self):
+        btc = flat(150, 100, 1.01)
+        del btc[T0 + 100 * DAY]
+        rows = dom.compute({"BTC": btc, **coins(40, 1.02, days=150)})["rows"]
+        # Дня без цены BTC нет; следующий — без силы (рост не за сутки, а за двое),
+        # но с ETH/BTC-днём в ряду и с индексом.
+        self.assertNotIn(T0 + 100 * DAY, {r[0] for r in rows})
+        after = day(rows, T0 + 101 * DAY)
+        self.assertIsNone(after[2])
+        self.assertIsNotNone(after[1])
+        self.assertIsNotNone(day(rows, T0 + 102 * DAY)[2])
+
     def test_one_crazy_day_is_clipped(self):
         px = {"BTC": flat(100, 100, 1.001), **{f"A{i}": flat(100, 1, 1.001) for i in range(40)}}
         px["A0"] = {**px["A0"], T0 + 10 * DAY: (1e6, 1e6)}  # сбой цены: в миллион раз за день
         rows = dom.compute(px)["rows"]
         # Рост к биткоину урезан до CLIP: корзина сдвинулась не больше чем на e^(CLIP/40).
-        self.assertLess(max(r[2] for r in rows), 100 * math.exp(dom.CLIP / 40) + 0.01)
+        self.assertLess(max(r[2] for r in strong(rows)), 100 * math.exp(dom.CLIP / 40) + 0.01)
 
     def test_limits_keep_the_answer_inside_what_the_app_accepts(self):
         # Каждая монета каждый день в e раз сильнее биткоина (сбой цен): сила
         # не уходит дальше e^STR_LOG от 100 — иначе приложение отвергло бы ответ.
         px = {"BTC": flat(150, 100), **{f"A{i}": flat(150, 1e-30, math.e * 1.01) for i in range(40)}}
         got = dom.compute(px)
-        self.assertLessEqual(max(r[2] for r in got["rows"]), 100 * math.exp(dom.STR_LOG) * 1.001)
+        self.assertLessEqual(max(r[2] for r in strong(got["rows"])), 100 * math.exp(dom.STR_LOG) * 1.001)
         # Рост монеты больше GROW_MAX — сбой цены, монеты нет в списке.
         self.assertEqual(got["coins"], [])
         # Биткоин дешевле BTC_MIN в какие-то дни — этих дней нет вовсе.

@@ -11,10 +11,11 @@
 
 /**
  * Закрытый день: [начало суток UTC, индекс альтсезона 0–100 или null, сила
- * альтов (100 — первый день), ETH/BTC или null, цена BTC $, монет в корзине
- * индекса или null (индекса нет)].
+ * альтов (100 — первый день) или null (корзины ещё нет), ETH/BTC или null,
+ * цена BTC $, монет в корзине индекса или null (индекса нет)]. Дни — с
+ * первого дня цен Hyperliquid (2020 г.): ETH/BTC видно за всю историю.
  */
-export type DomDay = [number, number | null, number, number | null, number, number | null];
+export type DomDay = [number, number | null, number | null, number | null, number, number | null];
 
 /** Ширина рынка за последний день: [монет в корзине, индекс или null, сколько из них с историей за 90 дней]. */
 export type DomTier = [number, number | null, number];
@@ -58,10 +59,10 @@ function validRows(raw: unknown, now: number): DomDay[] | null {
     const [ts, idx, str, eb, px, n] = r as unknown[];
     if (!within(ts, PX_FROM, now + 2 * DAY) || ts % DAY !== 0 || ts <= prev) return null;
     if (idx !== null && (!within(idx, 0, 100) || !Number.isInteger(idx))) return null;
-    if (!within(str, 1e-6, 1e6) || (eb !== null && !within(eb, 1e-6, 10)) || !within(px, 1e-6, 1e8)) return null;
+    if ((str !== null && !within(str, 1e-6, 1e6)) || (eb !== null && !within(eb, 1e-6, 10)) || !within(px, 1e-6, 1e8)) return null;
     // Индекс и корзина — вместе: индекс без корзины (или корзина без индекса) — подделка.
     if ((idx === null) !== (n === null) || (n !== null && (!within(n, MIN_BASKET, COINS_MAX) || !Number.isInteger(n)))) return null;
-    out.push([ts, idx as number | null, str, eb as number | null, px, n as number | null]);
+    out.push([ts, idx as number | null, str as number | null, eb as number | null, px, n as number | null]);
     prev = ts;
   }
   return out;
@@ -213,6 +214,12 @@ export function ebStats(s: [number, number][]): EbStats | null {
   const hi = s.reduce((m, p) => (p[1] > m[1] ? p : m), s[0]!);
   const lo = s.reduce((m, p) => (p[1] < m[1] ? p : m), s[0]!);
   return { cur, ch: [30, 90, 365].map((n) => change(s, n)), hi, lo, above: s.filter((p) => p[1] > cur[1]).length / s.length };
+}
+
+/** Ряд от начала окна: первая точка — 100 (сила альтов «с начала периода»). */
+export function rebase(s: [number, number][]): [number, number][] {
+  const b = s[0]?.[1];
+  return b ? s.map((p): [number, number] => [p[0], (p[1] / b) * 100]) : [];
 }
 
 /** На графике не больше max точек (ширина экрана всё равно меньше); последняя — всегда. */

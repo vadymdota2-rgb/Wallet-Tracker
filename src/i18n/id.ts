@@ -597,7 +597,7 @@ export const id: Dict = {
   dm_src: "Harga dan volume adalah lilin harian Hyperliquid, hanya hari yang sudah ditutup (UTC). Sisanya kami hitung sendiri. Hari baru ditambahkan sekali sehari, setelah tengah malam UTC.",
   dm_str_base: "100 = level pada {d}",
   dm_str_title: "Altcoin vs Bitcoin",
-  dm_str_what: "Keranjang {n} koin dengan bobot sama terhadap Bitcoin. Naik berarti altcoin lebih kuat dari Bitcoin; turun berarti lebih lemah.",
+  dm_str_what: "Keranjang {n} koin dengan bobot sama terhadap Bitcoin. Naik berarti altcoin lebih kuat dari Bitcoin; turun berarti lebih lemah. 100 adalah awal periode yang dipilih. Keranjang berganti setiap hari dan juga memuat koin baru, yang biasanya turun nilainya setelah listing — karena itu selama bertahun-tahun ia turun lebih dalam daripada altcoin besar secara terpisah.",
   dm_sub: "Pangsa Bitcoin, altcoin, dan USDT di seluruh pasar — dan mana yang lebih kuat: Bitcoin atau altcoin. Indeks altseason, kekuatan altcoin, dan ETH/BTC kami hitung sendiri dari harga Hyperliquid.",
   dm_tbl_idx: "Indeks",
   dm_tbl_zone: "Zona",

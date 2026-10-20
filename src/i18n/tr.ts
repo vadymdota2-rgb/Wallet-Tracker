@@ -597,7 +597,7 @@ export const tr: Dict = {
   dm_src: "Fiyatlar ve hacimler Hyperliquid günlük mumlarıdır, yalnızca kapanmış günler (UTC). Geri kalan her şeyi kendimiz hesaplıyoruz. Yeni gün, UTC gece yarısından sonra günde bir kez eklenir.",
   dm_str_base: "100 = {d} seviyesi",
   dm_str_title: "Altcoin'ler Bitcoin'e karşı",
-  dm_str_what: "{n} coin'den oluşan eşit ağırlıklı bir sepet, Bitcoin'e karşı. Yükseliyorsa altcoin'ler Bitcoin'den güçlü, düşüyorsa zayıf.",
+  dm_str_what: "{n} coin'den oluşan eşit ağırlıklı bir sepet, Bitcoin'e karşı. Yükseliyorsa altcoin'ler Bitcoin'den güçlü, düşüyorsa zayıf. 100, seçilen dönemin başlangıcıdır. Sepet her gün değişir ve listelendikten sonra genelde değer kaybeden yeni coin'leri de içerir — bu yüzden yıllar içinde tek tek büyük altcoin'lerden daha çok düşer.",
   dm_sub: "Bitcoin, altcoin'ler ve USDT'nin tüm piyasadaki payı — ve hangisi daha güçlü: Bitcoin mi altcoin'ler mi. Altseason endeksini, altcoin gücünü ve ETH/BTC'yi Hyperliquid fiyatlarıyla kendimiz hesaplıyoruz.",
   dm_tbl_idx: "Endeks",
   dm_tbl_zone: "Bölge",

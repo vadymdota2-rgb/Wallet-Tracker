@@ -597,7 +597,7 @@ export const vi: Dict = {
   dm_src: "Giá và khối lượng là nến ngày của Hyperliquid, chỉ các ngày đã đóng (UTC). Mọi thứ khác chúng tôi tự tính. Ngày mới được thêm mỗi ngày một lần, sau nửa đêm UTC.",
   dm_str_base: "100 = mức ngày {d}",
   dm_str_title: "Altcoin so với Bitcoin",
-  dm_str_what: "Một rổ {n} đồng coin chia đều, so với Bitcoin. Tăng nghĩa là altcoin mạnh hơn Bitcoin, giảm nghĩa là yếu hơn.",
+  dm_str_what: "Một rổ {n} đồng coin chia đều, so với Bitcoin. Tăng nghĩa là altcoin mạnh hơn Bitcoin, giảm nghĩa là yếu hơn. 100 là đầu kỳ đã chọn. Giỏ thay đổi mỗi ngày và có cả các đồng coin mới, thường mất giá sau khi niêm yết — vì vậy qua nhiều năm giỏ giảm mạnh hơn từng altcoin lớn riêng lẻ.",
   dm_sub: "Tỷ phần của Bitcoin, altcoin và USDT trên toàn thị trường — và bên nào mạnh hơn: Bitcoin hay altcoin. Chỉ số Altseason, sức mạnh altcoin và ETH/BTC chúng tôi tự tính từ giá Hyperliquid.",
   dm_tbl_idx: "Chỉ số",
   dm_tbl_zone: "Vùng",

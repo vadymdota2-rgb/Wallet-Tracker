@@ -123,7 +123,7 @@ class FuzzTest(unittest.TestCase):
             prev = ts
             self.assertEqual(ts % DAY, 0, m)
             self.assertTrue(idx is None or (isinstance(idx, int) and 0 <= idx <= 100), m)
-            self.assertTrue(math.isfinite(s) and 1e-6 <= s <= 1e6, m)
+            self.assertTrue(s is None or (math.isfinite(s) and 1e-6 <= s <= 1e6), m)
             self.assertTrue(eb is None or 1e-6 <= eb <= 10, m)
             self.assertTrue(dom.BTC_MIN <= px < dom.PX_MAX, m)
         names = [c[0] for c in res["coins"]]

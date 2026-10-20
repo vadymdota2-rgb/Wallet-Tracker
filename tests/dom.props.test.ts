@@ -40,7 +40,7 @@ function reply(r: () => number): DomReply {
   for (let i = 0; i < n; i++) {
     s *= Math.exp((r() - 0.5) * 0.05);
     const idx = i < 90 || r() < 0.02 ? null : Math.round(r() * 100);
-    rows.push([start + i * DAY, idx, s, r() < 0.05 ? null : 0.01 + r() * 0.07, 10_000 + r() * 100_000,
+    rows.push([start + i * DAY, idx, i < 30 && idx === null ? null : s, r() < 0.05 ? null : 0.01 + r() * 0.07, 10_000 + r() * 100_000,
       idx === null ? null : MIN_BASKET + Math.floor(r() * 21)]);
   }
   const coins = Array.from({ length: Math.floor(r() * 50) }, (_, i): [string, number] => [`C${i}`, (r() - 0.3) * 300]);
@@ -102,7 +102,7 @@ test("испорченный ответ — никогда не исключен
       assert.ok(d[0] > prev && d[0] % DAY === 0 && d[0] >= PX_FROM, `случай ${i}`);
       prev = d[0];
       assert.ok(d[1] === null || (Number.isInteger(d[1]) && d[1] >= 0 && d[1] <= 100), `случай ${i}`);
-      assert.ok(Number.isFinite(d[2]) && d[2] > 0, `случай ${i}`);
+      assert.ok(d[2] === null || (Number.isFinite(d[2]) && d[2] > 0), `случай ${i}`);
       assert.ok(d[3] === null || (d[3] > 0 && d[3] <= 10), `случай ${i}`);
       assert.ok((d[1] === null) === (d[5] === null) && (d[5] === null || (Number.isInteger(d[5]) && d[5] >= MIN_BASKET)), `случай ${i}`);
     }

@@ -169,7 +169,9 @@ AL = [
 
 # Альтсезон: сервер (wt_dom) и приложение (lib/dom.ts).
 DM = [
-    ("        if len(el) < MIN_BASKET:\n            continue", "        if not el:\n            continue", "альтсезон: день — не меньше MIN_BASKET монет"),
+    ("        if len(el) >= MIN_BASKET:", "        if el:", "альтсезон: сила альтов — не меньше MIN_BASKET монет"),
+    ("    if all(r[2] is None for r in rows):", "    if not rows:", "альтсезон: без единого дня с корзиной ответа нет"),
+    ("        el = basket(t, 1, TOP) if i and t - p == DAY else []", "        el = basket(t, 1, TOP) if i else []", "альтсезон: сила — только за день подряд"),
     ("        if len(el) < min(MIN_BASKET, n):", "        if not el:", "альтсезон: индекс — не меньше MIN_BASKET монет"),
     ("        trail[a] = [(sums[i] - sums[max(0, i - VOLW)]) / VOLW for i in range(len(days))]",
      "        trail[a] = [(sums[i + 1] - sums[max(0, i - VOLW)]) / VOLW for i in range(len(days))]", "альтсезон: оборот самого дня не в счёт"),

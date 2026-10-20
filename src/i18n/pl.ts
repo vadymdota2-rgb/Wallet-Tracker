@@ -597,7 +597,7 @@ export const pl: Dict = {
   dm_src: "Ceny i obroty to dzienne świece Hyperliquid, tylko zamknięte dni (UTC). Resztę liczymy sami. Nowy dzień dochodzi raz na dobę, po północy UTC.",
   dm_str_base: "100 — poziom z {d}",
   dm_str_title: "Alty kontra bitcoin",
-  dm_str_what: "Koszyk {n} monet po równo wobec bitcoina. Rośnie — alty są silniejsze od bitcoina, spada — słabsze.",
+  dm_str_what: "Koszyk {n} monet po równo wobec bitcoina. Rośnie — alty są silniejsze od bitcoina, spada — słabsze. 100 to początek wybranego okresu. Koszyk co dzień jest inny i trafiają do niego też nowe monety, które po wejściu na giełdę zwykle tanieją — dlatego przez lata spada bardziej niż pojedyncze duże alty.",
   dm_sub: "Udział bitcoina, altów i USDT w całym rynku — i kto jest silniejszy: bitcoin czy altcoiny. Indeks altseason, siłę altów i ETH/BTC liczymy sami z cen Hyperliquid.",
   dm_tbl_idx: "Indeks",
   dm_tbl_zone: "Strefa",

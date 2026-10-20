@@ -597,7 +597,7 @@ export const pt: Dict = {
   dm_src: "Preços e volumes são velas diárias da Hyperliquid, só dias fechados (UTC). Todo o resto calculamos nós mesmos. Um novo dia é adicionado uma vez por dia, após a meia-noite UTC.",
   dm_str_base: "100 = nível em {d}",
   dm_str_title: "Altcoins contra o bitcoin",
-  dm_str_what: "Uma cesta de {n} moedas com pesos iguais contra o bitcoin. Subindo, as alts estão mais fortes que o bitcoin; caindo, mais fracas.",
+  dm_str_what: "Uma cesta de {n} moedas com pesos iguais contra o bitcoin. Subindo, as alts estão mais fortes que o bitcoin; caindo, mais fracas. 100 é o início do período escolhido. A cesta muda todo dia e inclui moedas novas, que costumam se desvalorizar após a listagem — por isso, ao longo dos anos, ela cai mais do que as grandes altcoins individualmente.",
   dm_sub: "A participação do bitcoin, das altcoins e do USDT em todo o mercado — e quem está mais forte, o bitcoin ou as altcoins. O índice de altseason, a força das alts e o ETH/BTC calculamos nós mesmos com preços da Hyperliquid.",
   dm_tbl_idx: "Índice",
   dm_tbl_zone: "Zona",

@@ -596,7 +596,7 @@ export const en = {
   dm_src: "Prices and volumes are Hyperliquid daily candles, closed days only (UTC). Everything else we calculate ourselves. A new day is added once a day, after midnight UTC.",
   dm_str_base: "100 = level on {d}",
   dm_str_title: "Altcoins vs Bitcoin",
-  dm_str_what: "A basket of {n} coins, equally weighted, against Bitcoin. Rising means altcoins are stronger than Bitcoin; falling means weaker.",
+  dm_str_what: "A basket of {n} coins, equally weighted, against Bitcoin. Rising means altcoins are stronger than Bitcoin; falling means weaker. 100 is the start of the selected period. The basket changes every day and includes new coins, which usually lose value after listing — so over the years it falls more than individual large altcoins.",
   dm_sub: "The share of Bitcoin, altcoins and USDT in the whole market — and which is stronger, Bitcoin or the altcoins. We calculate the altseason index, altcoin strength and ETH/BTC ourselves from Hyperliquid prices.",
   dm_tbl_idx: "Index",
   dm_tbl_zone: "Zone",

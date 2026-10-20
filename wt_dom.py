@@ -380,9 +380,9 @@ def compute(px: dict[str, dict[int, Candle]]) -> dict[str, Json] | None:
     """Ответ по свечам: px — монета → {день: (закрытие, оборот $)}. Нет цен
     биткоина — None.
 
-    rows — по закрытым дням биткоина с первого дня, где корзина силы альтов
-    набирает MIN_BASKET монет: [день, индекс альтсезона или None, сила альтов,
-    ETH/BTC или None, цена BTC, монет в корзине индекса или None];
+    rows — по всем закрытым дням биткоина: [день, индекс альтсезона или
+    None, сила альтов или None, ETH/BTC или None, цена BTC, монет в корзине
+    индекса или None];
     coins — корзина последнего дня: [монета, рост за WINDOW дней, %], по
     убыванию; btc90 — рост биткоина за то же время; tiers — индекс последнего
     дня для корзин TIERS: [размер, индекс или None, монет]."""
@@ -425,20 +425,21 @@ def compute(px: dict[str, dict[int, Candle]]) -> dict[str, Json] | None:
     rows: list[list[Json]] = []
     acc = 0.0
     for i, t in enumerate(days):
-        if i == 0:
-            continue
-        p = days[i - 1]
-        if t - p != DAY:
-            continue
-        el = basket(t, 1, TOP)
-        if len(el) < MIN_BASKET:
-            continue
-        rel = [max(-CLIP, min(CLIP, math.log(close[a][t] / close[a][p]) - math.log(btc[t] / btc[p]))) for a in el]
-        acc = max(-STR_LOG, min(STR_LOG, acc + sum(rel) / len(rel)))
+        # Сила альтов — только за день подряд после прошлого и с корзиной не
+        # меньше MIN_BASKET монет; иначе её в этот день нет (None), а ETH/BTC
+        # и цена BTC есть с первого дня цен.
+        strength = None
+        p = days[i - 1] if i else 0
+        el = basket(t, 1, TOP) if i and t - p == DAY else []
+        if len(el) >= MIN_BASKET:
+            rel = [max(-CLIP, min(CLIP, math.log(close[a][t] / close[a][p]) - math.log(btc[t] / btc[p]))) for a in el]
+            acc = max(-STR_LOG, min(STR_LOG, acc + sum(rel) / len(rel)))
+            strength = round(100 * math.exp(acc), 2)
         idx, n = index(t, TOP)
         eb = float(f"{eth[t] / btc[t]:.6g}") if t in eth and EB_MIN < eth[t] / btc[t] < EB_MAX else None
-        rows.append([t, idx, round(100 * math.exp(acc), 2), eb, round(btc[t], 2), n if idx is not None else None])
-    if not rows:
+        rows.append([t, idx, strength, eb, round(btc[t], 2), n if idx is not None else None])
+    # Ни одного дня с корзиной — это не рынок альтов: ответа нет.
+    if all(r[2] is None for r in rows):
         return None
     end = rows[-1][0]
     b = end - WINDOW * DAY

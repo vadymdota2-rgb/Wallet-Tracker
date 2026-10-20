@@ -28,7 +28,7 @@ import { haptic } from "../lib/telegram";
 import { fetchDom, fetchMcap, peekDom, peekMcap } from "../lib/api";
 import { Card, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import {
-  DOM_TTL_MS, RANGES, STALE_DAYS, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, shareDelta, thin,
+  DOM_TTL_MS, RANGES, STALE_DAYS, ago, altStats, beat, change, daysOld, ebStats, everyNth, rebase, seasonOf, series, shareDelta, thin,
   windowOf, type DomReply, type McapReply, type Range, type Share,
 } from "../lib/dom";
 import { Frame } from "./Screen";
@@ -94,6 +94,19 @@ function niceTicks(lo: number, hi: number): number[] {
   return out;
 }
 
+/** Деления логарифмической шкалы: 1, 2, 5, 10, 20, 50… в пределах [lo, hi]; не больше пяти. */
+function logTicks(lo: number, hi: number): number[] {
+  const out: number[] = [];
+  for (let e = Math.floor(Math.log10(lo)); e <= Math.ceil(Math.log10(hi)); e++) {
+    for (const m of [1, 2, 5]) {
+      const v = Number((m * 10 ** e).toPrecision(6));
+      if (v >= lo && v <= hi) out.push(v);
+    }
+  }
+  const step = Math.ceil(out.length / 5);
+  return out.length < 2 ? niceTicks(lo, hi) : out.filter((_, i) => (out.length - 1 - i) % step === 0);
+}
+
 /**
  * Небольшой график одной величины: индекс альтсезона, сила альтов, ETH/BTC.
  * Рисуется в настоящих пикселях ширины (useWidth): подписи одного размера на
@@ -101,7 +114,7 @@ function niceTicks(lo: number, hi: number): number[] {
  * помещается по высоте окна (heightK). Палец ведёт по дням; с клавиатуры —
  * стрелки, Home/End, Esc; подсказка слышна читалке экрана.
  */
-function MiniChart({ pts, lang, color, bands, fmt, fixed, label }: {
+function MiniChart({ pts, lang, color, bands, fmt, fixed, label, log }: {
   pts: [number, number][];
   lang: Lang;
   color: (v: number) => string;
@@ -109,6 +122,8 @@ function MiniChart({ pts, lang, color, bands, fmt, fixed, label }: {
   fmt: (v: number) => string;
   fixed?: [number, number];
   label: string;
+  /** Логарифмическая шкала: падение в 10 раз и рост в 10 раз — одна высота. */
+  log?: boolean;
 }) {
   const [picked, setSel] = useState<number | null>(null);
   const ref = useRef<SVGSVGElement>(null);
@@ -119,10 +134,11 @@ function MiniChart({ pts, lang, color, bands, fmt, fixed, label }: {
   /* Пришёл ответ с другим числом точек (сменилось окно) — выбор за краем не держим. */
   const sel = picked !== null && picked < n ? picked : null;
   const vals = pts.map((p) => p[1]);
-  const lo = fixed ? fixed[0] : Math.min(...vals) * 0.95;
-  const hi = fixed ? fixed[1] : Math.max(...vals) * 1.05;
+  const lo = fixed ? fixed[0] : Math.min(...vals) * (log ? 0.9 : 0.95);
+  const hi = fixed ? fixed[1] : Math.max(...vals) * (log ? 1.1 : 1.05);
   const xOf = (i: number) => (n <= 1 ? 0 : (i / (n - 1)) * PW);
-  const yOf = (v: number) => 6 + (1 - (v - lo) / (hi - lo || 1)) * MH;
+  const f = log ? (v: number) => Math.log(Math.max(v, 1e-9)) : (v: number) => v;
+  const yOf = (v: number) => 6 + (1 - (f(v) - f(lo)) / (f(hi) - f(lo) || 1)) * MH;
   const a = pts[0]?.[0] ?? 0;
   const b = pts[n - 1]?.[0] ?? 1;
   const xOfT = (ts: number) => ((ts - a) / Math.max(1, b - a)) * PW;
@@ -170,7 +186,7 @@ function MiniChart({ pts, lang, color, bands, fmt, fixed, label }: {
       setSel(null);
     }
   };
-  const ticks = fixed ? [25, 50, 75] : niceTicks(lo, hi);
+  const ticks = fixed ? [25, 50, 75] : log ? logTicks(lo, hi) : niceTicks(lo, hi);
   const p = sel !== null ? pts[sel] : undefined;
   const H2 = MH + 26;
   return (
@@ -459,6 +475,7 @@ export function DominanceScreen() {
   const rows = useMemo(() => reply?.rows ?? [], [reply]);
   const alt = useMemo(() => series(rows, 1), [rows]);
   const str = useMemo(() => series(rows, 2), [rows]);
+  const strW = useMemo(() => rebase(windowOf(str, range)), [str, range]);
   const eb = useMemo(() => series(rows, 3), [rows]);
   const stats = useMemo(() => altStats(alt), [alt]);
   const ebS = useMemo(() => ebStats(eb), [eb]);
@@ -596,17 +613,21 @@ export function DominanceScreen() {
             </>
           ) : null}
 
-          {str.length > 30 ? (
+          {strW.length > 30 ? (
             <>
               <SectionTitle help={["dm_how_2", "dm_how_3"]}>{t(lang, "dm_str_title")}</SectionTitle>
               <Card>
+                {/* Сила — от начала выбранного срока: 100 — его первый день. За всю
+                    историю альты слабели сильно, и от 2023 г. число было бы
+                    крошечным, а изменения за год — не видны. */}
                 <div className="dm-eb">
-                  <b style={{ color: C.alt }}><bdi dir="ltr">{num(str[str.length - 1]![1], 1)}</bdi></b>
-                  <span>{t(lang, "dm_str_base", { d: dateStr(lang, str[0]![0], { day: "numeric", month: "long", year: "numeric" }) })}</span>
+                  <b style={{ color: C.alt }}><bdi dir="ltr">{num(strW[strW.length - 1]![1], 1)}</bdi></b>
+                  <span>{t(lang, "dm_str_base", { d: dateStr(lang, strW[0]![0], { day: "numeric", month: "long", year: "numeric" }) })}</span>
                 </div>
+                {rangeSeg}
                 <Changes ch={[30, 90, 365].map((n) => change(str, n))} lang={lang} />
-                <MiniChart pts={thin(windowOf(str, range))} lang={lang} label={t(lang, "dm_str_title")}
-                  color={() => C.alt} fmt={(v) => num(v)} />
+                <MiniChart pts={thin(strW)} lang={lang} label={t(lang, "dm_str_title")}
+                  color={() => C.alt} fmt={(v) => num(v, v < 10 ? 1 : 0)} log />
                 <p className="lq-hint">{t(lang, "dm_str_what", { n: iso(num(reply.n)) })}</p>
               </Card>
             </>

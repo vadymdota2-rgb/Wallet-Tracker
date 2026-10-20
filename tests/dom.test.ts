@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  MIN_BASKET, PX_FROM, STALE_DAYS, shareDelta, validMcap, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, windowOf,
+  MIN_BASKET, PX_FROM, STALE_DAYS, rebase, shareDelta, validMcap, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, windowOf,
   type DomDay,
 } from "../src/lib/dom.ts";
 
@@ -62,6 +62,8 @@ test("validDom: любая ошибка в днях — ответ не годи
   for (const r of cases) assert.equal(validDom({ ...reply(), rows: r }, NOW), null, JSON.stringify(r));
   // Индекса (а с ним и корзины) и ETH/BTC может не быть — это годится.
   assert.ok(validDom({ ...reply(), rows: [[T0, null, 100, null, 30_000, null]] }, NOW));
+  // Дни до корзины (ETH/BTC с 2020 г.) — без силы альтов: тоже годятся.
+  assert.ok(validDom({ ...reply(), rows: [[T0, null, null, 0.03, 30_000, null]] }, NOW));
   assert.ok(validDom({ ...reply(), rows: [[T0, 50, 100, 0.03, 30_000, MIN_BASKET]] }, NOW));
 });
 
@@ -181,4 +183,10 @@ test("validMcap: доминация — годная копия, подделк�
   // Битые необязательные части — просто пропадают.
   const w = validMcap({ ...ok, btc: [57.49, "x"], alt_ns: 50, usdt: 60, cap: [2.85e12, -1] }, NOW)!;
   assert.deepEqual([w.btc, w.altNs, w.usdt, w.cap], [[57.49, null], null, null, [2.85e12, null]]);
+});
+
+test("rebase: первая точка окна — 100, дальше — во столько же раз", () => {
+  assert.deepEqual(rebase([[1, 4], [2, 2], [3, 8]]), [[1, 100], [2, 50], [3, 200]]);
+  assert.deepEqual(rebase([]), []);
+  assert.deepEqual(rebase([[1, 0], [2, 5]]), []);
 });
