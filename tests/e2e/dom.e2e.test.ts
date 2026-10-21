@@ -217,6 +217,9 @@ describe("Альтсезон", () => {
     assert.equal(pp.length, 4);
     const dirs = await page.locator(".dm-hero + .dm-chs bdi").evaluateAll((els) => els.map((e) => e.getAttribute("dir")));
     assert.ok(dirs.length === 4 && dirs.every((d) => d === "ltr"));
+    // Куда шли деньги за 30 дней — и кто оказался сильнее.
+    const flow = sp(await page.locator(".dm-flow").innerText());
+    assert.ok(["dm_flow_eq", "dm_flow_alt", "dm_flow_btc"].some((k) => flow.endsWith(sp(I18N[k]!["ru"]!))), flow);
     // Из чего состоит рынок: биткоин, эфир, стейблкоины (в т. ч. USDT), остальные.
     const rows = (await page.locator(".fg-rows .fg-row").allInnerTexts()).map(sp);
     assert.equal(rows.length, 4);

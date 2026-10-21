@@ -552,6 +552,12 @@ function McapBlock({ m, lang }: { m: McapReply; lang: Lang }) {
       return [k, p ? m.btc[0] - p[2] : null];
     }),
   ];
+  /* Куда шли деньги за 30 дней: капитализация биткоина и всех остальных монет. */
+  const p30 = mcapAgo(h, 30);
+  const flow = p30 ? {
+    b: ((cap * m.btc[0]) / (p30[1] * p30[2]) - 1) * 100,
+    a: ((cap * (100 - m.btc[0])) / (p30[1] * (100 - p30[2])) - 1) * 100,
+  } : null;
   const other = Math.max(0, 100 - m.btc[0] - m.eth[0] - (stable ?? 0));
   const parts: { key: DictKey; c: string; v: number; sub?: string | undefined }[] = [
     { key: "dm_btc", c: C.btc, v: m.btc[0] },
@@ -589,6 +595,12 @@ function McapBlock({ m, lang }: { m: McapReply; lang: Lang }) {
             </div>
           ))}
         </div>
+        {flow ? (
+          <p className="dm-flow">
+            {t(lang, "dm_say_flow", { b: iso(pct(flow.b, 1, true)), a: iso(pct(flow.a, 1, true)) })}{" "}
+            <b>{t(lang, Math.abs(flow.a - flow.b) < 2 ? "dm_flow_eq" : flow.a > flow.b ? "dm_flow_alt" : "dm_flow_btc")}</b>
+          </p>
+        ) : null}
         {ex !== null ? <p className="lq-hint dm-exh">{t(lang, "dm_ex_hint")}</p> : null}
         <p className="dm-cap-t">{t(lang, "dm_split")}</p>
         <div className="fg-dist dm-split" role="img"

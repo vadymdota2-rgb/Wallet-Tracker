@@ -670,6 +670,10 @@ say("доминация (BTC, альты, ETH, USDT) — только офици
     and "export function validMcap(" in _dml and "validMcap(r)" in read(f"{APP}/src/lib/api.ts")
     and '"wt-mcap-v1"' in read(f"{APP}/src/lib/storage.ts") and '"dm_d_src"' in _dm
     and os.path.isfile(f"{APP}/tests/test_mcap.py") and "wt_mcap.py" in read(f"{APP}/.github/workflows/tests.yml"))
+say("доминация укладывается в бесплатный план CoinMarketCap: дневной бюджет кредитов (счётчик на диске), пауза после неудачной истории, ответ и история на диске — перезапуск сервера кредитов не тратит",
+    "DAY_BUDGET = 400" in _mcs and "HIST_RETRY" in _mcs and '_file_save("mcap_spent.json"' in _mcs
+    and '_file_save("mcap.json"' in _mcs and '_file_save("mcap_hist.json"' in _mcs and "_last_load()" in _mcs
+    and "TTL = 3600.0" in _mcs and "HIST_TTL = 12 * 3600.0" in _mcs)
 say("альтсезон честный: корзина на каждый день — самые торгуемые за 30 дней до него (без заглядывания вперёд), со снятыми потом монетами, только закрытые дни, не меньше 30 монет; ширина 25/50/100; это сказано на экране",
     "VOLW = 30" in _dms and "MIN_BASKET = 30" in _dms and "TIERS = (25, 50, 100)" in _dms
     and '{"type": "meta"}' in _dms and 'u.get("isDelisted")' in _dms and "metaAndAssetCtxs" not in _dms

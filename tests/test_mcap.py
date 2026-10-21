@@ -142,7 +142,7 @@ class BuildTest(Base):
         with mock.patch.object(mc, "_fetch", Net()):
             old = mc.build()
         mc._st.hit = (time.monotonic() - mc.TTL - 1, old)
-        with mock.patch.object(mc, "_fetch", lambda url, timeout=20: None):
+        with mock.patch.object(mc, "_fetch", lambda url, timeout=20, limit=0: None):
             self.assertEqual(mc.build(), {"ok": False, "error": "no_data"})
         with mock.patch.object(mc.threading, "Thread") as th:
             self.assertIs(mc.mcap_data(), old)
@@ -220,10 +220,104 @@ class HistoryTest(Base):
                      json.dumps({"at": "x", "v": good})):
             with open(path, "w", encoding="utf-8") as f:
                 f.write(body)
-            self.assertIsNone(mc._file_load(), body[:60])
+            self.assertIsNone(mc._hist_load(), body[:60])
         with open(path, "w", encoding="utf-8") as f:
             json.dump({"at": time.time(), "v": good}, f)
-        self.assertEqual(mc._file_load()[1], good)
+        self.assertEqual(mc._hist_load()[1], good)
+
+
+class BudgetTest(Base):
+    """Бесплатный план — 15 000 кредитов в месяц: ни при каком сбое модуль не
+    тратит больше DAY_BUDGET в сутки, а перезапуск не тратит ничего лишнего."""
+
+    def setUp(self):
+        super().setUp()
+        self.tmp = tempfile.mkdtemp()
+        mc.set_cache_dir(self.tmp)
+
+    def test_normal_month_fits_with_room(self):
+        month = 31 * 24 * 3600
+        normal = 2 * month / mc.TTL + mc.COST_HIST * month / mc.HIST_TTL
+        self.assertLess(normal, 6000)
+        self.assertLessEqual(mc.DAY_BUDGET * 31, 15_000 * 0.85)
+
+    def test_credits_are_counted_from_the_answer_and_stop_at_the_budget(self):
+        calls = []
+
+        def broken(url, timeout=20, limit=0):
+            # CoinMarketCap ответил, но формат сменился: кредиты списаны, ответа нет.
+            calls.append(url)
+            return json.dumps({"status": {"credit_count": 7}, "data": {"x": 1}}).encode()
+        with mock.patch.object(mc, "_fetch", broken):
+            for _ in range(500):
+                mc._st.fail = None
+                mc.build()
+        # Запрос дороже ожидаемого может перешагнуть порог — но только один.
+        self.assertLessEqual(len(calls) * 7, mc.DAY_BUDGET + 7)
+        self.assertGreaterEqual(len(calls) * 7, mc.DAY_BUDGET - 7)
+        # Счётчик — на диске: перезапуск не начинает день заново.
+        mc._st = mc._State()
+        mc.set_cache_dir(self.tmp)
+        calls.clear()
+        with mock.patch.object(mc, "_fetch", broken):
+            mc.build()
+        self.assertEqual(calls, [])
+
+    def test_no_answer_costs_nothing(self):
+        with mock.patch.object(mc, "_fetch", lambda url, timeout=20, limit=0: None):
+            for _ in range(50):
+                mc._st.fail = None
+                mc.build()
+        self.assertEqual(mc._st.spent, {mc._today(): 0})
+
+    def test_failed_history_waits_before_asking_again(self):
+        net = Net(h={"data": {"quotes": "сломано"}, "status": {"credit_count": 50}})
+        with mock.patch.object(mc, "_fetch", net):
+            for _ in range(5):
+                mc._st.hit = None
+                mc.build()
+        self.assertEqual(sum("historical" in u for u in net.calls), 1)
+        mc._st.hist_try -= mc.HIST_RETRY + 1
+        with mock.patch.object(mc, "_fetch", net):
+            mc.build()
+        self.assertEqual(sum("historical" in u for u in net.calls), 2)
+
+    def test_restart_serves_the_disk_copy_without_network(self):
+        net = Net()
+        with mock.patch.object(mc, "_fetch", net):
+            first = mc.build()
+        mc._st = mc._State()
+        mc.set_cache_dir(self.tmp)
+        with mock.patch.object(mc, "_fetch", net), mock.patch.object(mc.threading, "Thread") as th:
+            net.calls.clear()
+            got = mc.mcap_data()
+        th.assert_not_called()
+        self.assertEqual(net.calls, [])
+        self.assertEqual(got["btc"], first["btc"])
+        self.assertEqual(got["hist"], first["hist"])
+        # Копия старше TTL — отдаётся сразу, свежая собирается в фоне.
+        with open(os.path.join(self.tmp, "mcap.json"), encoding="utf-8") as f:
+            saved = json.load(f)
+        saved["at"] -= int(mc.TTL) + 60
+        with open(os.path.join(self.tmp, "mcap.json"), "w", encoding="utf-8") as f:
+            json.dump(saved, f)
+        mc._st = mc._State()
+        mc.set_cache_dir(self.tmp)
+        with mock.patch.object(mc.threading, "Thread") as th:
+            self.assertEqual(mc.mcap_data()["cap"], first["cap"])
+        th.return_value.start.assert_called_once()
+
+    def test_poisoned_copies_are_ignored(self):
+        for name, body in (("mcap.json", '{"ok": true, "btc": [500, null], "eth": [1, null], "alt": [1, null], "cap": [1e12, null], "at": 1}'),
+                           ("mcap.json", "garbage"), ("mcap_spent.json", json.dumps({mc._today(): -5})),
+                           ("mcap_spent.json", json.dumps({mc._today(): True}))):
+            with open(os.path.join(self.tmp, name), "w", encoding="utf-8") as f:
+                f.write(body)
+            mc._st = mc._State()
+            mc.set_cache_dir(self.tmp)
+            self.assertIsNone(mc._last_load(), body)
+            with mc._lock:
+                self.assertEqual(mc._spent(), {mc._today(): 0}, body)
 
 
 class SecurityTest(Base):
@@ -297,6 +391,10 @@ class PolicyTest(unittest.TestCase):
         where = {fn.name for fn in ast.walk(self.tree()) if isinstance(fn, ast.FunctionDef)
                  for n in ast.walk(fn) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "open"}
         self.assertEqual(where, {"_file_load", "_file_save"})
+        # Ключ CoinMarketCap на диск не пишется.
+        saves = [n for n in ast.walk(self.tree()) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "_file_save"]
+        self.assertTrue(saves)
+        self.assertNotIn("_key", "".join(ast.unparse(n) for n in saves))
 
     def test_only_the_official_api(self):
         urls = [n.value for n in ast.walk(self.tree())

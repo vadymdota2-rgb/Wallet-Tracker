@@ -271,8 +271,12 @@ class _State:
 
     hit: tuple[float, dict[str, Json]] | None = None
     fail: float | None = None
-    # История рынка и когда (unix с) она получена.
+    # История рынка и когда (unix с) она получена; когда (unix с) её
+    # последний раз не удалось получить.
     hist: tuple[float, list[list[Json]]] | None = None
+    hist_try: float = 0.0
+    # Потрачено кредитов CoinMarketCap: день UTC «ГГГГ-ММ-ДД» → кредиты.
+    spent: dict[str, int] | None = None
     dir: str | None = None
 
 
@@ -282,21 +286,104 @@ _busy = threading.Event()
 
 
 def set_cache_dir(path: str | None) -> None:
-    """Где держать копию истории рынка (None — нигде): после перезапуска её
-    не надо спрашивать заново."""
+    """Где держать копии ответа, истории и счётчика кредитов (None — нигде):
+    после перезапуска их не надо спрашивать и считать заново."""
     _st.dir = path
 
 
-def _file_load() -> tuple[float, list[list[Json]]] | None:
-    """Копия истории с диска: только правдоподобные дни по возрастанию."""
-    path = os.path.join(_st.dir, "mcap_hist.json") if _st.dir else None
+def _file_load(name: str) -> Json:
+    path = os.path.join(_st.dir, name) if _st.dir else None
     if not path:
         return None
     try:
         with open(path, encoding="utf-8") as f:
-            got = _parse(f.read().encode())
+            return _parse(f.read().encode())
     except (OSError, ValueError):
         return None
+
+
+def _file_save(name: str, v: Json) -> None:
+    if not _st.dir:
+        return
+    path = os.path.join(_st.dir, name)
+    tmp = f"{path}.{os.getpid()}.tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(v, f, separators=(",", ":"))
+        os.replace(tmp, path)
+    except (OSError, TypeError, ValueError) as e:
+        _log(f"копия на диске: {type(e).__name__}")
+        with contextlib.suppress(OSError):
+            os.remove(tmp)
+
+
+# --- Бюджет кредитов ---------------------------------------------------------
+# Бесплатный план — 15 000 кредитов в месяц. Обычный расход — около 150 в
+# день (ответ раз в час — 2 кредита, история раз в 12 ч — около 50). Больше
+# DAY_BUDGET в сутки модуль не тратит ни при каком сбое (CoinMarketCap сменил
+# формат, сервер перезапускается по кругу): 400 × 31 = 12 400 — в пределах
+# месяца. Счётчик — на диске, перезапуск его не обнуляет.
+DAY_BUDGET = 400
+# Сколько кредитов стоит запрос, если CoinMarketCap не сказал сам
+# (status.credit_count): ответ — 1, история — 1 за 100 дней.
+COST_LATEST = 1
+COST_HIST = 60
+# История не пришла — следующая попытка не раньше чем через столько, с.
+HIST_RETRY = 3 * 3600.0
+
+
+def _today() -> str:
+    return time.strftime("%Y-%m-%d", time.gmtime())
+
+
+def _spent() -> dict[str, int]:
+    """Счётчик кредитов: из памяти или с диска; только сегодняшний день.
+    Звать под _lock."""
+    if _st.spent is None:
+        got = _file_load("mcap_spent.json")
+        v = got.get(_today()) if isinstance(got, dict) else None
+        _st.spent = {_today(): v} if isinstance(v, int) and not isinstance(v, bool) and 0 <= v <= 1_000_000 else {}
+    if _today() not in _st.spent:
+        _st.spent = {_today(): 0}
+    return _st.spent
+
+
+def _can(cost: int) -> bool:
+    """Хватит ли сегодняшнего бюджета; запрос дороже ожидаемого может
+    перешагнуть его, но только один — следующих уже не будет."""
+    with _lock:
+        return _spent()[_today()] + cost <= DAY_BUDGET
+
+
+def _charge(got: Json, guess: int) -> None:
+    """Списать кредиты запроса: сколько назвал CoinMarketCap, иначе guess."""
+    n = _get(got, "status", "credit_count")
+    cost = n if isinstance(n, int) and not isinstance(n, bool) and 0 <= n <= 1000 else guess
+    with _lock:
+        sp = _spent()
+        sp[_today()] += cost
+        snap = dict(sp)
+    _file_save("mcap_spent.json", snap)
+
+
+def _call(url: str, guess: int, timeout: float = 20, limit: int = BODY_MAX) -> Json:
+    """Запрос с бюджетом: на сегодня кредиты кончились — сеть не трогаем
+    (None). Пришёл ответ — кредиты списаны, даже если он не годится."""
+    if not _can(guess):
+        _log("дневной бюджет кредитов исчерпан")
+        return None
+    raw = _fetch(url, timeout, limit)
+    got = _parse(raw)
+    if raw is not None:
+        _charge(got, guess)
+    return got
+
+
+# --- Копии на диске ------------------------------------------------------------
+
+def _hist_load() -> tuple[float, list[list[Json]]] | None:
+    """Копия истории с диска: только правдоподобные дни по возрастанию."""
+    got = _file_load("mcap_hist.json")
     at = _num(_get(got, "at"), HIST_FROM, time.time() + DAY)
     raw = _get(got, "v")
     if at is None or not isinstance(raw, list) or len(raw) > HIST_MAX:
@@ -314,51 +401,62 @@ def _file_load() -> tuple[float, list[list[Json]]] | None:
     return (at, rows) if len(rows) >= 2 else None
 
 
-def _file_save(at: float, rows: list[list[Json]]) -> None:
-    if not _st.dir:
-        return
-    path = os.path.join(_st.dir, "mcap_hist.json")
-    tmp = f"{path}.{os.getpid()}.tmp"
-    try:
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump({"at": at, "v": rows}, f, separators=(",", ":"))
-        os.replace(tmp, path)
-    except (OSError, TypeError, ValueError) as e:
-        _log(f"копия на диске: {type(e).__name__}")
-        with contextlib.suppress(OSError):
-            os.remove(tmp)
+def _share_ok(v: object, lo: float) -> bool:
+    return (isinstance(v, list) and len(v) == 2 and _num(v[0], lo, 100) is not None
+            and (v[1] is None or _num(v[1], lo, 100) is not None))
+
+
+def _last_load() -> tuple[float, dict[str, Json]] | None:
+    """Копия последнего ответа (без истории) с диска и его время, unix с; она
+    отдаётся сразу после перезапуска, а пока ей меньше TTL — без сети."""
+    got = _file_load("mcap.json")
+    if not isinstance(got, dict) or got.get("ok") is not True:
+        return None
+    at = _num(got.get("at"), HIST_FROM, time.time() + 60)
+    cap = got.get("cap")
+    if (at is None or not all(_share_ok(got.get(k), lo) for k, lo in (("btc", 0.5), ("eth", 0), ("alt", 0)))
+            or not (isinstance(cap, list) and len(cap) == 2 and _num(cap[0], CAP_MIN, CAP_MAX) is not None)
+            or not all(got.get(k) is None or _num(got.get(k), 0, 100) is not None for k in ("alt_ns", "usdt"))):
+        return None
+    keep = ("btc", "eth", "alt", "alt_ns", "cap", "usdt")
+    return at, {"ok": True, **{k: got.get(k) for k in keep}, "by": "CoinMarketCap", "at": int(at)}
 
 
 def _hist() -> list[list[Json]] | None:
     """История рынка: из памяти или с диска, а раз в HIST_TTL — из сети.
-    Сеть не ответила — прошлая."""
+    Сеть не ответила (или ответ не годится) — прошлая, и новая попытка не
+    раньше чем через HIST_RETRY."""
     with _lock:
         if _st.hist is None:
-            _st.hist = _file_load()
-        old = _st.hist
-    if old and time.time() - old[0] < HIST_TTL:
-        return old[1]
-    rows = history(_parse(_fetch(_hist_url(time.time()), timeout=60, limit=HIST_BODY_MAX)), time.time())
-    if not rows:
+            _st.hist = _hist_load()
+        old, tried = _st.hist, _st.hist_try
+    now = time.time()
+    if (old and now - old[0] < HIST_TTL) or now - tried < HIST_RETRY:
         return old[1] if old else None
-    at = time.time()
+    rows = history(_call(_hist_url(now), COST_HIST, timeout=60, limit=HIST_BODY_MAX), now)
+    if not rows:
+        with _lock:
+            _st.hist_try = now
+        return old[1] if old else None
     with _lock:
-        _st.hist = (at, rows)
-    _file_save(at, rows)
+        _st.hist = (now, rows)
+    _file_save("mcap_hist.json", {"at": now, "v": rows})
     return rows
 
 
 def build() -> dict[str, Json]:
-    """Собрать ответ из сети и положить в кэш."""
+    """Собрать ответ из сети и положить в кэш (и на диск)."""
     if not _key():
         return {"ok": False, "error": "no_key"}
-    glob = _parse(_fetch(GLOBAL))
-    got = compute(glob, _parse(_fetch(USDT)) if glob else None)
+    glob = _call(GLOBAL, COST_LATEST)
+    got = compute(glob, _call(USDT, COST_LATEST) if glob else None)
     if not got:
         with _lock:
             _st.fail = time.monotonic()
         return {"ok": False, "error": "no_data"}
-    res = {"ok": True, **got, "hist": _hist() or [], "by": "CoinMarketCap", "at": int(time.time())}
+    at = int(time.time())
+    _file_save("mcap.json", {"ok": True, **got, "at": at})
+    res = {"ok": True, **got, "hist": _hist() or [], "by": "CoinMarketCap", "at": at}
     with _lock:
         _st.hit = (time.monotonic(), res)
         _st.fail = None
@@ -381,6 +479,15 @@ def mcap_data() -> dict[str, Json]:
     Пока свежего нет — прошлый; нет и прошлого — «нет данных»."""
     if not _key():
         return {"ok": False, "error": "no_key"}
+    if _st.hit is None and _st.dir:
+        # Перезапуск: последний ответ — с диска; моложе TTL — сеть не нужна.
+        last, hist = _last_load(), _hist_load()
+        with _lock:
+            if _st.hit is None and last:
+                age = max(0.0, time.time() - last[0])
+                _st.hit = (time.monotonic() - age, {**last[1], "hist": hist[1] if hist else []})
+                if _st.hist is None:
+                    _st.hist = hist
     with _lock:
         hit = _st.hit
         if hit and time.monotonic() - hit[0] < TTL:
