@@ -234,11 +234,13 @@ class ComputeTest(unittest.TestCase):
 
     def test_not_alts(self):
         # Ни биткоина, ни золота, ни привязанных к доллару в корзине нет.
+        # USTC — бывший стейблкоин: цена ходит, по ценам его не узнать; NFTI — индекс.
         px = {"BTC": flat(199, 100, 1.01), "PAXG": flat(199, 2000, 1.02, 1e10),
-              "USDE": flat(199, 1.0, 1.00001, 1e10), **coins(40)}
+              "USDE": flat(199, 1.0, 1.00001, 1e10), "USTC": flat(199, 0.02, 1.02, 1e10),
+              "NFTI": flat(199, 10, 1.02, 1e10), **coins(40)}
         names = [c[0] for c in dom.compute(px)["coins"]]
         self.assertEqual(len(names), 40)
-        self.assertFalse({"BTC", "PAXG", "USDE"} & set(names))
+        self.assertFalse({"BTC", "PAXG", "USDE", "USTC", "NFTI"} & set(names))
 
     def test_no_bitcoin_is_nothing(self):
         self.assertIsNone(dom.compute({"ETH": flat(199, 1), **coins(40)}))

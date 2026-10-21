@@ -675,7 +675,7 @@ say("доминация укладывается в бесплатный пла�
     and '_file_save("mcap.json"' in _mcs and '_file_save("mcap_hist.json"' in _mcs and "_last_load()" in _mcs
     and "TTL = 3600.0" in _mcs and "HIST_TTL = 12 * 3600.0" in _mcs)
 say("альтсезон честный: корзина на каждый день — самые торгуемые за 30 дней до него (без заглядывания вперёд), со снятыми потом монетами, только закрытые дни, не меньше 30 монет; ширина 25/50/100; это сказано на экране",
-    "VOLW = 30" in _dms and "MIN_BASKET = 30" in _dms and "TIERS = (25, 50, 100)" in _dms
+    "VOLW = 30" in _dms and "MIN_BASKET = 30" in _dms and 'EXCLUDE = frozenset({"PAXG", "USTC", "NFTI"})' in _dms and "TIERS = (25, 50, 100)" in _dms
     and '{"type": "meta"}' in _dms and 'u.get("isDelisted")' in _dms and "metaAndAssetCtxs" not in _dms
     and "PX_FROM <= ts < _today()" in _dms and "sums[i] - sums[max(0, i - VOLW)]" in _dms
     and "export const MIN_BASKET = 30;" in _dml and "r.length !== 6" in _dml

@@ -175,6 +175,16 @@ describe("Альтсезон", () => {
       assert.ok(titles.some((x) => x.toLowerCase().includes(I18N[k]!["ru"]!.toLowerCase())), k);
     }
     assert.ok(titles.some((x) => x.includes("ETH/BTC")));
+    // Подсказка «?» — у каждого раздела экрана, и каждая открывается.
+    const sects = page.locator(".dm .sect");
+    const total = await sects.count();
+    assert.ok(total >= 7, String(total));
+    assert.equal(await page.locator(".dm .sect .sect-q").count(), total);
+    for (let i = 0; i < total; i++) {
+      const q = sects.nth(i).locator(".sect-q");
+      await q.click();
+      assert.equal(await q.getAttribute("aria-expanded"), "true");
+    }
     assert.equal(sp(await page.locator(".lq-src").innerText()), sp(I18N["dm_src"]!["ru"]!));
     // Никаких следов прежних источников.
     const body = await page.locator("body").innerText();

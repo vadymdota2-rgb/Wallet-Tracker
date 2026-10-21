@@ -619,7 +619,7 @@ function McapBlock({ m, lang }: { m: McapReply; lang: Lang }) {
 
       {view.length > 30 ? (
         <>
-          <SectionTitle help={["dm_chart_hint"]}>{t(lang, "dm_chart")}</SectionTitle>
+          <SectionTitle help={["dm_chart_help"]}>{t(lang, "dm_chart")}</SectionTitle>
           <Card>
             <Segmented<McapRange>
               value={range}
@@ -774,6 +774,8 @@ export function DominanceScreen() {
             <p className="lq-stale" role="status">{t(lang, "dm_old", { n: iso(num(old)) })}</p>
           ) : null}
           {now && stats ? (
+            <>
+            <SectionTitle help={["dm_how_1", "dm_tiers_help", "dm_how_6"]}>{t(lang, "dm_alt_title")}</SectionTitle>
             <Card>
               <div className="dm-ahero">
                 <b style={{ color: SEASON[seasonOf(now[1])].c }}>{now[1]}</b>
@@ -825,11 +827,12 @@ export function DominanceScreen() {
                 {" · "}{stamp(lang, reply.at)}
               </p>
             </Card>
+            </>
           ) : null}
 
           {stats && alt.length > 30 ? (
             <>
-              <SectionTitle help={["dm_how_1", "dm_how_3", "dm_how_6"]}>{t(lang, "dm_alt_title")}</SectionTitle>
+              <SectionTitle help={["dm_how_3"]}>{t(lang, "dm_alt_hist")}</SectionTitle>
               <Card>
                 {rangeSeg}
                 <MiniChart
@@ -877,7 +880,7 @@ export function DominanceScreen() {
 
           {coins.length && btc90 !== null ? (
             <>
-              <SectionTitle>{t(lang, "dm_top_title")}</SectionTitle>
+              <SectionTitle help={["dm_top_help"]}>{t(lang, "dm_top_title")}</SectionTitle>
               <Top coins={coins} btc={btc90} lang={lang} />
             </>
           ) : null}
