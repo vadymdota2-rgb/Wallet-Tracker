@@ -97,6 +97,17 @@ class ComputeTest(unittest.TestCase):
             self.assertIsNone(got["usdt"], str(bad)[:60])
             self.assertEqual(got["btc"][0], 57.49)
 
+    def test_rounded_shares_never_exceed_100(self):
+        # 65,385 + 34,615 = 100, а округлённые 65,39 + 34,62 = 100,01 — приложение
+        # такой ответ отвергло бы целиком: сервер проверяет уже округлённые.
+        self.assertIsNone(mc.compute(glob(btc_dominance=65.385, eth_dominance=34.615), usdt()))
+        h = hist(3)
+        h["data"]["quotes"][1]["btc_dominance"] = 65.385
+        h["data"]["quotes"][1]["eth_dominance"] = 34.615
+        rows = mc.history(h, T0 + 10 * DAY)
+        self.assertIsNone(rows[1][3])
+        self.assertLessEqual(rows[1][2] + (rows[1][3] or 0), 100)
+
     def test_implausible_numbers_are_rejected(self):
         for bad in (glob(btc_dominance=0), glob(btc_dominance=101), glob(btc_dominance="57"), glob(btc_dominance=True),
                     glob(btc_dominance=80, eth_dominance=30), glob(quote={"USD": {"total_market_cap": 5}}),
@@ -177,9 +188,12 @@ class HistoryTest(Base):
         rows = mc.history(h, self.NOW)
         self.assertEqual([r[0] for r in rows], [T0 + i * DAY for i in (0, 5, 6, 7, 8, 9)])
         self.assertIsNone(rows[1][3])
-        for bad in (None, [], {}, {"data": {"quotes": "x"}}, {"data": {"quotes": [q[0]]}},
-                    {"data": {"quotes": [q[0]] * (mc.HIST_MAX + 1)}}):
+        for bad in (None, [], {}, {"data": {"quotes": "x"}}, {"data": {"quotes": [q[0]]}}):
             self.assertIsNone(mc.history(bad, self.NOW), str(bad)[:60])
+        # Ответ длиннее HIST_MAX дней — не история, а мусор: не разбираем вовсе.
+        with mock.patch.object(mc, "HIST_MAX", 5):
+            self.assertIsNone(mc.history(hist(6), self.NOW))
+            self.assertEqual(len(mc.history(hist(5), self.NOW)), 5)
 
     def test_history_is_asked_twice_a_day_and_kept_on_disk(self):
         tmp = tempfile.mkdtemp()
@@ -308,7 +322,8 @@ class BudgetTest(Base):
         th.return_value.start.assert_called_once()
 
     def test_poisoned_copies_are_ignored(self):
-        for name, body in (("mcap.json", '{"ok": true, "btc": [500, null], "eth": [1, null], "alt": [1, null], "cap": [1e12, null], "at": 1}'),
+        for name, body in (("mcap.json", '{"ok": true, "btc": [500, null], "eth": [1, null], "alt": [1, null], "cap": [1e12, null], "at": 1700000000}'),
+                           ("mcap.json", '{"ok": true, "btc": [50, null], "eth": [1, null], "alt": [50, null], "cap": [1e12, "x"], "at": 1700000000}'),
                            ("mcap.json", "garbage"), ("mcap_spent.json", json.dumps({mc._today(): -5})),
                            ("mcap_spent.json", json.dumps({mc._today(): True}))):
             with open(os.path.join(self.tmp, name), "w", encoding="utf-8") as f:

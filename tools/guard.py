@@ -669,7 +669,8 @@ say("доминация (BTC, альты, ETH, USDT) — только офици
     and "mcap_data = wt_mcap.mcap_data" in api and '"/api/mcap"' in api
     and "export function validMcap(" in _dml and "validMcap(r)" in read(f"{APP}/src/lib/api.ts")
     and '"wt-mcap-v1"' in read(f"{APP}/src/lib/storage.ts") and '"dm_d_src"' in _dm
-    and os.path.isfile(f"{APP}/tests/test_mcap.py") and "wt_mcap.py" in read(f"{APP}/.github/workflows/tests.yml"))
+    and os.path.isfile(f"{APP}/tests/test_mcap.py") and "wt_mcap.py" in read(f"{APP}/.github/workflows/tests.yml")
+    and os.path.isfile(f"{APP}/tests/test_mcap_fuzz.py") and 'f"{ROOT}/wt_mcap.py"' in read(f"{APP}/tools/mutate-etf.py"))
 say("доминация укладывается в бесплатный план CoinMarketCap: дневной бюджет кредитов (счётчик на диске), пауза после неудачной истории, ответ и история на диске — перезапуск сервера кредитов не тратит",
     "DAY_BUDGET = 400" in _mcs and "HIST_RETRY" in _mcs and '_file_save("mcap_spent.json"' in _mcs
     and '_file_save("mcap.json"' in _mcs and '_file_save("mcap_hist.json"' in _mcs and "_last_load()" in _mcs

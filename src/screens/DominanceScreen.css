@@ -73,9 +73,9 @@
 .dm-plot:focus-visible { outline: 2px solid var(--glow); outline-offset: 3px; border-radius: 10px; }
 
 /* Таблица под графиком индекса — те же точки цифрами. */
-.dm-tbl { margin: 10px 0 0; }
+.dm-tbl { margin: 10px 0 0; min-width: 0; max-width: 100%; }
 .dm-tbl > summary { cursor: pointer; color: var(--dim); font-size: 12.5px; font-weight: 600; }
-.dm-tbl-w { max-height: 320px; overflow: auto; margin-top: 8px; border-radius: 10px; border: 1px solid rgb(27 61 104 / 0.3); }
+.dm-tbl-w { max-height: 320px; max-width: 100%; overflow: auto; margin-top: 8px; border-radius: 10px; border: 1px solid rgb(27 61 104 / 0.3); }
 .dm-tbl table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
 .dm-tbl th, .dm-tbl td { padding: 5px 8px; text-align: end; white-space: nowrap; border-top: 1px solid rgb(27 61 104 / 0.3); }
 .dm-tbl th { position: sticky; top: 0; background: var(--panel); color: var(--dim); font-weight: 600; border-top: 0; }

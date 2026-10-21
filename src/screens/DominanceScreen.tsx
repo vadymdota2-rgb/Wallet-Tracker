@@ -28,7 +28,7 @@ import { haptic } from "../lib/telegram";
 import { fetchDom, fetchMcap, peekDom, peekMcap } from "../lib/api";
 import { Card, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import {
-  DOM_TTL_MS, MCAP_RANGES, RANGES, STALE_DAYS, ago, altStats, beat, change, daysOld, ebStats, everyNth, mcapAgo, mcapWindow, rebase,
+  DOM_TTL_MS, MCAP_RANGES, RANGES, STALE_DAYS, ago, altStats, beat, byWeek, change, daysOld, ebStats, everyNth, mcapAgo, mcapWindow, rebase,
   seasonOf, series, thin, windowOf, type DomReply, type McapDay, type McapRange, type McapReply, type Range,
 } from "../lib/dom";
 import { Frame } from "./Screen";
@@ -237,7 +237,7 @@ function MiniChart({ pts, lang, color, bands, fmt, fixed, label, log }: {
 function AltTable({ pts, lang }: { pts: [number, number][]; lang: Lang }) {
   const [open, setOpen] = useState(false);
   return (
-    <details className="dm-tbl" onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>
+    <details className="dm-tbl dm-atbl" onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>
       <summary>{t(lang, "ef_tbl")}</summary>
       {open ? (
         <div className="dm-tbl-w">
@@ -508,6 +508,42 @@ function McapChart({ days, lang }: { days: McapDay[]; lang: Lang }) {
   );
 }
 
+/** Тот же график цифрами — раз в неделю, свежие сверху. */
+function McapTable({ days, lang }: { days: McapDay[]; lang: Lang }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <details className="dm-tbl dm-mtbl" onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>
+      <summary>{t(lang, "ef_tbl")}</summary>
+      {open ? (
+        <div className="dm-tbl-w">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">{t(lang, "ef_tbl_d")}</th>
+                <th scope="col">{t(lang, "dm_btc")}</th>
+                <th scope="col">{t(lang, "dm_alts")}</th>
+                <th scope="col">BTC %</th>
+                <th scope="col">ETH %</th>
+              </tr>
+            </thead>
+            <tbody>
+              {byWeek(days).map(([ts, cap, btc, eth]) => (
+                <tr key={ts}>
+                  <th scope="row">{dateStr(lang, ts, { day: "numeric", month: "short", year: "numeric" })}</th>
+                  <td><bdi dir="ltr">{usdWord((cap * btc) / 100)}</bdi></td>
+                  <td><bdi dir="ltr">{usdWord(cap - (cap * btc) / 100)}</bdi></td>
+                  <td><bdi dir="ltr">{pct(btc, 1, false)}</bdi></td>
+                  <td>{eth !== null ? <bdi dir="ltr">{pct(eth, 1, false)}</bdi> : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </details>
+  );
+}
+
 const MCAP_RANGE_LABEL = { 365: "fg_r1y", 1095: "fg_r3y", 1825: "dm_r5y", all: "fg_rall" } as const;
 const MCAP_RANGE_KEY = "wt-mcap-range";
 
@@ -534,7 +570,8 @@ function McapBlock({ m, lang }: { m: McapReply; lang: Lang }) {
     }
   };
   const h = m.hist;
-  const view = useMemo(() => thin(mcapWindow(h, range)), [h, range]);
+  const win = useMemo(() => mcapWindow(h, range), [h, range]);
+  const view = useMemo(() => thin(win), [win]);
   const cap = m.cap[0];
   const stable = m.altNs !== null ? Math.max(0, 100 - m.btc[0] - m.altNs) : null;
   const ex = stable !== null && stable < 100 - m.btc[0] ? (m.btc[0] / (100 - stable)) * 100 : null;
@@ -637,6 +674,7 @@ function McapBlock({ m, lang }: { m: McapReply; lang: Lang }) {
               <span><i style={{ background: C.alt }} />{t(lang, "dm_other")}</span>
             </div>
             <p className="lq-hint">{t(lang, "dm_chart_hint")}</p>
+            <McapTable days={win} lang={lang} />
           </Card>
         </>
       ) : null}

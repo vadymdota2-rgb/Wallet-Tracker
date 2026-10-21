@@ -14911,6 +14911,15 @@ def _dg_market() -> dict:
     rows = (dom_data() or {}).get("rows") or []
     if len(rows) >= 2 and rows[-1][1] is not None and rows[-2][1] is not None:
         out["alt"] = {"v": int(rows[-1][1]), "d1": int(rows[-1][1]) - int(rows[-2][1])}
+    # Капитализация и доминация — из кэша вкладки (wt_mcap): тот же ответ,
+    # что видят люди, лишних кредитов CoinMarketCap выпуск не тратит.
+    mc = mcap_data()
+    if mc.get("ok"):
+        (cap, cap_y), (btc, btc_y) = mc["cap"], mc["btc"]
+        if cap_y:
+            out["cap"] = {"v": cap, "ch": round((cap / cap_y - 1) * 100, 2)}
+        if btc_y is not None:
+            out["dom"] = {"btc": btc, "d1": round(btc - btc_y, 2), "eth": mc["eth"][0]}
     return out
 
 

@@ -100,10 +100,6 @@ class DigestSourcesTest(unittest.TestCase):
         self.assertEqual(dgi.verdict(old, "ru")[0], "up")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class DigestEtfDayTest(unittest.TestCase):
     """Дайджест берёт поток ETF только свежего дня: набор TFTC не обновлялся
     дольше STALE_DAYS суток — раздела ETF в выпуске нет, а не старый день."""
@@ -125,3 +121,39 @@ class DigestEtfDayTest(unittest.TestCase):
         _, stale = self.inst(0)
         self.assertTrue(self.inst(stale)[0]["etf"])
         self.assertEqual(self.inst(stale + 1)[0], {"etf": []})
+
+
+# Ответ wt_mcap.mcap_data: сейчас и вчера.
+MC = {"ok": True, "btc": [58.1, 57.9], "eth": [11.0, 11.1], "alt": [41.9, 42.1], "alt_ns": 35.0,
+      "cap": [2_900_000_000_000, 2_877_000_000_000], "usdt": 5.6, "hist": [], "by": "CoinMarketCap", "at": 0}
+
+
+class DigestMarketTest(unittest.TestCase):
+    """Капитализация и доминация в разделе «Рынок» — из кэша вкладки
+    (wt_mcap.mcap_data): выпуск сам в CoinMarketCap не ходит."""
+
+    def market(self, mc):
+        with mock.patch.object(api, "fng_data", lambda: {}), mock.patch.object(api, "_dg_px", lambda p: None), \
+                mock.patch.object(api, "dom_data", lambda: {}), mock.patch.object(api, "mcap_data", lambda: mc), \
+                mock.patch.object(api.wt_mcap, "_fetch", side_effect=AssertionError("сеть")):
+            return api._dg_market()
+
+    def test_cap_and_dominance_come_from_the_tab_cache(self):
+        got = self.market(MC)
+        self.assertEqual(got["cap"], {"v": 2_900_000_000_000, "ch": 0.8})
+        self.assertEqual(got["dom"], {"btc": 58.1, "d1": 0.2, "eth": 11.0})
+
+    def test_no_data_or_no_yesterday_leaves_the_cell_out(self):
+        self.assertEqual(self.market({"ok": False, "error": "no_key"}), {})
+        part = self.market({**MC, "cap": [2_900_000_000_000, None], "btc": [58.1, None]})
+        self.assertNotIn("cap", part)
+        self.assertNotIn("dom", part)
+
+    def test_app_names_coinmarketcap_next_to_the_cells(self):
+        with open(os.path.join(ROOT, "src/screens/DigestMore.tsx"), encoding="utf-8") as f:
+            src = f.read()
+        self.assertIn('m.cap || m.dom ? ` ${t(lang, "dm_d_src")}`', src)
+
+
+if __name__ == "__main__":
+    unittest.main()

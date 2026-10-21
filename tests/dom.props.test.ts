@@ -9,7 +9,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  MIN_BASKET, PX_FROM, RANGES, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, windowOf,
+  MCAP_RANGES, MIN_BASKET, PX_FROM, RANGES, mcapAgo, mcapWindow, validMcap, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, windowOf,
   type DomDay, type DomReply, type DomTier,
 } from "../src/lib/dom.ts";
 
@@ -172,6 +172,68 @@ test("итоги индекса и ETH/BTC согласованы с рядом"
     if (v.btc90 !== null) {
       const b = beat(v.coins, v.btc90);
       assert.equal(b.up + b.dn, v.coins.length, `случай ${i}`);
+    }
+  }
+});
+
+/** Правдоподобный ответ /api/mcap: доли, капитализация, история любой длины. */
+function mcap(r: () => number): Record<string, unknown> {
+  const btc = 30 + r() * 60;
+  const eth = r() * (100 - btc) * 0.5;
+  const cap = 1e11 + r() * 4e12;
+  const end = Math.floor(NOW / DAY) * DAY;
+  const n = Math.floor(r() * 3000);
+  const hist = Array.from({ length: n }, (_, i) => {
+    const b = Math.round((35 + r() * 60) * 100) / 100;
+    return [end - (n - 1 - i) * DAY, 1e9 + r() * 4e12, b, r() < 0.3 ? null : Math.floor(r() * (100 - b) * 100) / 100];
+  });
+  const r2 = (v: number) => Math.round(v * 100) / 100;
+  return {
+    ok: true, btc: [r2(btc), r() < 0.1 ? null : r2(btc + r() - 0.5)], eth: [r2(eth), null], alt: [r2(100 - btc), null],
+    alt_ns: r() < 0.2 ? null : r2((100 - btc) * r()), usdt: r() < 0.2 ? null : r2((100 - btc) * r() * 0.3),
+    cap: [cap, r() < 0.2 ? null : cap * (0.9 + r() * 0.2)], hist, by: "CoinMarketCap", at: NOW,
+  };
+}
+
+test("доминация: годный ответ принят с историей целиком; испорченный — не исключение, принятое цело", () => {
+  const r = rng(SEED + 7);
+  for (let i = 0; i < CASES; i++) {
+    const raw = mcap(r);
+    const v = validMcap(raw, NOW);
+    assert.ok(v, `случай ${i}`);
+    assert.equal(v.hist.length, (raw["hist"] as unknown[]).length >= 2 ? (raw["hist"] as unknown[]).length : 0, `случай ${i}`);
+    // Порча одной клетки: доли, капитализация, день истории.
+    const bad = structuredClone(raw) as Record<string, unknown>;
+    const k = r();
+    if (k < 0.5) bad[["btc", "eth", "alt", "cap", "alt_ns", "usdt", "at", "ok"][Math.floor(r() * 8)]!] = JUNK[Math.floor(r() * JUNK.length)];
+    else if ((bad["hist"] as unknown[][]).length) (bad["hist"] as unknown[][])[Math.floor(r() * (bad["hist"] as unknown[][]).length)]![Math.floor(r() * 4)] = JUNK[Math.floor(r() * JUNK.length)];
+    let got: ReturnType<typeof validMcap> = null;
+    assert.doesNotThrow(() => { got = validMcap(bad, NOW); }, `случай ${i}`);
+    const w = got as ReturnType<typeof validMcap>;
+    if (!w) continue;
+    assert.ok(w.btc[0] + w.eth[0] <= 100 && w.cap[0] >= 1e10, `случай ${i}`);
+    let prev = 0;
+    for (const d of w.hist) {
+      assert.ok(d[0] > prev && d[0] % DAY === 0 && d[2] >= 0.5 && d[2] <= 100 && (d[3] === null || d[3] <= 100 - d[2]), `случай ${i}`);
+      prev = d[0];
+    }
+  }
+});
+
+test("доминация: точка n суток назад не позже нужного дня, окно — хвост истории", () => {
+  const r = rng(SEED + 8);
+  for (let i = 0; i < 300; i++) {
+    const v = validMcap(mcap(r), NOW);
+    assert.ok(v, `случай ${i}`);
+    const h = v.hist;
+    for (const n of [1, 7, 30, 365]) {
+      const p = mcapAgo(h, n);
+      if (p) assert.ok(p[0] <= h[h.length - 1]![0] - n * DAY, `случай ${i}`);
+      else assert.ok(!h.length || h[0]![0] > h[h.length - 1]![0] - n * DAY, `случай ${i}`);
+    }
+    for (const range of MCAP_RANGES) {
+      const w = mcapWindow(h, range);
+      assert.ok(w.length <= h.length && (w.length === 0 || w[w.length - 1] === h[h.length - 1]), `случай ${i}`);
     }
   }
 });

@@ -361,7 +361,8 @@ describe("Альтсезон", () => {
     for (const width of [320, 375, 414, 768, 1280]) {
       const { ctx, page } = await open({ width });
       await ready(page);
-      await page.locator(".dm-tbl summary").click();
+      for (const sum of await page.locator(".dm-tbl summary").all()) await sum.click();
+      await page.locator(".dm-tbl table").nth(1).waitFor();
       assert.deepEqual(await overflow(page), [], String(width));
       await ctx.close();
     }
@@ -446,16 +447,57 @@ describe("Альтсезон", () => {
   test("таблица под индексом: точки раз в неделю, свежие сверху", async () => {
     const { ctx, page } = await open();
     await ready(page);
-    assert.equal(await page.locator(".dm-tbl table").count(), 0);
-    await page.locator(".dm-tbl summary").click();
-    await page.locator(".dm-tbl table").waitFor();
-    const heads = (await page.locator(".dm-tbl thead th").allInnerTexts()).map(sp);
+    assert.equal(await page.locator(".dm-atbl table").count(), 0);
+    await page.locator(".dm-atbl summary").click();
+    await page.locator(".dm-atbl table").waitFor();
+    const heads = (await page.locator(".dm-atbl thead th").allInnerTexts()).map(sp);
     assert.deepEqual(heads, [I18N["ef_tbl_d"]!["ru"], I18N["dm_tbl_idx"]!["ru"], I18N["dm_tbl_zone"]!["ru"]]);
-    const first = (await page.locator(".dm-tbl tbody tr").first().locator("td").allInnerTexts()).map(sp);
+    const first = (await page.locator(".dm-atbl tbody tr").first().locator("td").allInnerTexts()).map(sp);
     assert.equal(first[0], String(last[1]));
-    const rows = await page.locator(".dm-tbl tbody tr").count();
+    const rows = await page.locator(".dm-atbl tbody tr").count();
     const withIdx = REAL.rows.filter((x) => x[1] !== null).length;
     assert.equal(rows, Math.ceil(withIdx / 7));
+    await ctx.close();
+  });
+
+  test("«Биткоин против альтов» с клавиатуры и цифрами: раз в неделю, свежие сверху", async () => {
+    const { ctx, page, errors } = await open();
+    await ready(page);
+    const plot = page.locator(".dm-plot").filter({ has: page.locator("svg.dm-mc") });
+    assert.equal(await plot.getAttribute("tabindex"), "0");
+    assert.equal(sp(await plot.getAttribute("aria-label")), sp(I18N["ef_keys"]!["ru"]!));
+    await plot.focus();
+    await page.keyboard.press("End");
+    const pop = plot.locator(".fg-pop");
+    assert.equal(await pop.getAttribute("aria-live"), "polite");
+    const day = (ts: number) => new Date(ts * 1000).getUTCFullYear();
+    const hist = MCAP.hist;
+    const end = sp(await pop.locator("small").innerText());
+    assert.match(end, new RegExp(String(day(hist[hist.length - 1]![0]))));
+    assert.match(sp(await pop.innerText()), /BTC .*60,0%/);
+    await page.keyboard.press("ArrowLeft");
+    assert.notEqual(sp(await pop.locator("small").innerText()), end);
+    // Срок по умолчанию — три года: Home — первый день окна, а не 2013 г.
+    await page.keyboard.press("Home");
+    assert.match(sp(await pop.locator("small").innerText()), new RegExp(String(day(hist[hist.length - 1095]![0]))));
+    await page.keyboard.press("Escape");
+    assert.equal(await pop.count(), 0);
+    // Таблица закрыта, пока не попросят; цифры — те же, что на графике.
+    assert.equal(await page.locator(".dm-mtbl table").count(), 0);
+    await page.locator(".dm-mtbl summary").click();
+    await page.locator(".dm-mtbl table").waitFor();
+    const heads = (await page.locator(".dm-mtbl thead th").allInnerTexts()).map(sp);
+    assert.deepEqual(heads, [I18N["ef_tbl_d"]!["ru"], I18N["dm_btc"]!["ru"], I18N["dm_alts"]!["ru"], "BTC %", "ETH %"]);
+    const first = (await page.locator(".dm-mtbl tbody tr").first().locator("td").allInnerTexts()).map(sp);
+    assert.deepEqual(first.slice(2), ["60,0%", "15,0%"]);
+    assert.equal(await page.locator(".dm-mtbl tbody tr").count(), Math.ceil(1095 / 7));
+    // Вся история: до эфира (первые дни) — прочерк, а не 0 %.
+    const card = page.locator("section.card").filter({ has: page.locator("svg.dm-mc") });
+    await card.locator(".seg button", { hasText: I18N["fg_rall"]!["ru"]! }).click();
+    const lastRow = (await page.locator(".dm-mtbl tbody tr").last().locator("td").allInnerTexts()).map(sp);
+    assert.equal(lastRow[3], "—");
+    assert.equal(await page.locator(".dm-mtbl tbody tr").count(), Math.ceil(MCAP_DAYS / 7));
+    assert.deepEqual(errors, []);
     await ctx.close();
   });
 

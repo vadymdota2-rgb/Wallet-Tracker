@@ -310,3 +310,16 @@ export function everyNth(s: [number, number][], n: number): [number, number][] {
   for (let i = s.length - 1; i >= 0; i -= n) out.push(s[i]!);
   return out;
 }
+
+/** Дни истории доминации раз в неделю и реже, от последнего (для таблицы:
+ *  свежие — первыми). История не везде подневная — до последних трёх лет
+ *  сервер хранит её по неделям, — поэтому шаг по датам, а не по точкам. */
+export function byWeek(s: McapDay[]): McapDay[] {
+  const out: McapDay[] = [];
+  for (let i = s.length - 1; i >= 0; i--) {
+    const d = s[i]!;
+    const prev = out[out.length - 1];
+    if (!prev || prev[0] - d[0] >= 7 * DAY) out.push(d);
+  }
+  return out;
+}

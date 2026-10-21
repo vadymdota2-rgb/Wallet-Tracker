@@ -2,8 +2,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  MCAP_FROM, MIN_BASKET, PX_FROM, STALE_DAYS, mcapAgo, mcapWindow, rebase, shareDelta, validMcap, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, windowOf,
-  type DomDay,
+  MCAP_FROM, MIN_BASKET, byWeek, PX_FROM, STALE_DAYS, mcapAgo, mcapWindow, rebase, shareDelta, validMcap, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, windowOf,
+  type DomDay, type McapDay,
 } from "../src/lib/dom.ts";
 
 const DAY = 86_400;
@@ -166,6 +166,19 @@ test("everyNth: раз в n суток от последней точки", () =
   const s: [number, number][] = Array.from({ length: 15 }, (_, i) => [T0 + i * DAY, i]);
   assert.deepEqual(everyNth(s, 7).map((p) => p[1]), [14, 7, 0]);
   assert.deepEqual(everyNth([], 7), []);
+});
+
+test("byWeek: раз в неделю по датам, и там, где история уже понедельная", () => {
+  // 10 недель по неделям, затем 15 дней подряд — как хранит сервер.
+  const s: McapDay[] = [
+    ...Array.from({ length: 10 }, (_, i): McapDay => [T0 + i * 7 * DAY, 1e12, 50, null]),
+    ...Array.from({ length: 15 }, (_, i): McapDay => [T0 + (70 + i) * DAY, 1e12, 50, 15]),
+  ];
+  const w = byWeek(s);
+  assert.equal(w[0], s[s.length - 1]);
+  for (let i = 1; i < w.length; i++) assert.ok(w[i - 1]![0] - w[i]![0] >= 7 * DAY);
+  assert.deepEqual(w.map((d) => (d[0] - T0) / DAY), [84, 77, 70, 63, 56, 49, 42, 35, 28, 21, 14, 7, 0]);
+  assert.deepEqual(byWeek([]), []);
 });
 
 test("validMcap: доминация — годная копия, подделки и сбои — null", () => {

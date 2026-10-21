@@ -64,10 +64,6 @@ USDT = f"{API}/v3/cryptocurrency/quotes/latest?id={USDT_ID}"
 # История рынка с первого дня CoinMarketCap: только капитализация и доли. Конец
 # (time_end) — обязательно: без него CoinMarketCap отдаёт лишь 10 последних дней.
 HIST = f"{API}/v1/global-metrics/quotes/historical?time_start=2013-04-28&interval=daily&aux=btc_dominance,eth_dominance"
-
-
-def _hist_url(now: float) -> str:
-    return f"{HIST}&time_end={time.strftime('%Y-%m-%d', time.gmtime(now))}"
 HIST_TTL = 12 * 3600.0
 HIST_DAILY = 3 * 365
 HIST_FROM = 1_367_107_200  # 28 апреля 2013 г.
@@ -82,6 +78,10 @@ CAP_MIN, CAP_MAX = 1e10, 1e15
 _HEADERS = {"User-Agent": "wallet-tracker/1.0", "Accept-Encoding": "identity", "Accept": "application/json"}
 
 Json = Any
+
+
+def _hist_url(now: float) -> str:
+    return f"{HIST}&time_end={time.strftime('%Y-%m-%d', time.gmtime(now))}"
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -192,7 +192,9 @@ def compute(glob: Json, usdt: Json) -> dict[str, Json] | None:
     btc = _num(_get(data, "btc_dominance"), 0.5, 100)
     eth = _num(_get(data, "eth_dominance"), 0, 100)
     cap = _num(_get(usd, "total_market_cap"), CAP_MIN, CAP_MAX)
-    if btc is None or eth is None or cap is None or btc + eth > 100:
+    # Сумма — по округлённым долям: их и проверяет приложение (60,005 и
+    # 39,995 дают 100, а округлённые 60,01 и 40,0 — уже 100,01).
+    if btc is None or eth is None or cap is None or _pct(btc) + _pct(eth) > 100:
         return None
     btc_y = _num(_get(data, "btc_dominance_yesterday"), 0.5, 100)
     eth_y = _num(_get(data, "eth_dominance_yesterday"), 0, 100)
@@ -258,7 +260,9 @@ def history(got: Json, now: float) -> list[list[Json]] | None:
         if t is None or not HIST_FROM <= t <= now or cap is None or btc is None:
             continue
         # До октября 2020 г. доли эфира в истории нет (0) — это «нет данных».
-        eth = _num(q.get("eth_dominance"), 0.01, 100 - btc)
+        # Предел — по округлённым долям, как проверяет приложение.
+        eth = _num(q.get("eth_dominance"), 0.01, 100)
+        eth = None if eth is None or _pct(eth) > 100 - _pct(btc) else eth
         days[t] = [t, round(cap), _pct(btc), None if eth is None else _pct(eth)]
     if len(days) < 2:
         return None
@@ -394,7 +398,7 @@ def _hist_load() -> tuple[float, list[list[Json]]] | None:
                 and HIST_FROM <= r[0] <= time.time() and (not rows or r[0] > rows[-1][0])):
             return None
         cap, btc = _num(r[1], 1e8, CAP_MAX), _num(r[2], 0.5, 100)
-        eth = None if r[3] is None else _num(r[3], 0.01, 100)
+        eth = None if r[3] is None or btc is None else _num(r[3], 0.01, 100 - btc)
         if cap is None or btc is None or (r[3] is not None and eth is None):
             return None
         rows.append([r[0], round(cap), btc, eth])
@@ -415,7 +419,8 @@ def _last_load() -> tuple[float, dict[str, Json]] | None:
     at = _num(got.get("at"), HIST_FROM, time.time() + 60)
     cap = got.get("cap")
     if (at is None or not all(_share_ok(got.get(k), lo) for k, lo in (("btc", 0.5), ("eth", 0), ("alt", 0)))
-            or not (isinstance(cap, list) and len(cap) == 2 and _num(cap[0], CAP_MIN, CAP_MAX) is not None)
+            or not (isinstance(cap, list) and len(cap) == 2 and _num(cap[0], CAP_MIN, CAP_MAX) is not None
+                    and (cap[1] is None or _num(cap[1], CAP_MIN, CAP_MAX) is not None))
             or not all(got.get(k) is None or _num(got.get(k), 0, 100) is not None for k in ("alt_ns", "usdt"))):
         return None
     keep = ("btc", "eth", "alt", "alt_ns", "cap", "usdt")

@@ -1,4 +1,4 @@
-"""Мутационная проверка «Институциональных потоков» и «Альтсезона»: python3 tools/mutate-etf.py
+"""Мутационная проверка «Институциональных потоков» и «Доминации и альтсезона»: python3 tools/mutate-etf.py
 
 Как у халвинга: портим код по одному месту (граница, знак, константа,
 защита) и гоняем тесты. Убитая мутация — тесты заметили порчу; выжившая —
@@ -210,6 +210,40 @@ DM = [
     ("    return len(xs) >= 10 and max(xs) / min(xs) < PEG", "    return False", "альтсезон: привязанная монета видна по ценам"),
     ("eb = float(f\"{eth[t] / btc[t]:.6g}\")", "eb = float(f\"{eth[t]:.6g}\")", "альтсезон: ETH/BTC — отношение цен"),
 ]
+# Доминация (wt_mcap): официальный API CoinMarketCap, бюджет кредитов, история.
+MC = [
+    ('return u.scheme == "https" and u.hostname in HOSTS and not u.username and not u.password', "return True", "доминация: ключ — только по https к pro-api"),
+    ("    if not key or not _allowed(url):\n        return None\n", "", "доминация: без ключа и мимо HOSTS — без сети"),
+    ('        _log(f"HTTP {e.code}")\n', "", "доминация: код ошибки CMC — в журнал"),
+    ("    return got if len(got) <= limit else None", "    return got", "доминация: предел размера ответа"),
+    ("    return k if 8 <= len(k) <= 100 and k.isascii() and k.replace(\"-\", \"\").isalnum() else \"\"", "    return k", "доминация: ключ похож на ключ"),
+    ("_pct(btc) + _pct(eth) > 100:", "btc + eth > 1000:", "доминация: доли BTC + ETH не больше 100 после округления"),
+    ('btc = _num(_get(data, "btc_dominance"), 0.5, 100)', 'btc = _num(_get(data, "btc_dominance"), 0, 100)', "доминация: доля BTC не ноль"),
+    ("cap = _num(_get(usd, \"total_market_cap\"), CAP_MIN, CAP_MAX)", "cap = _num(_get(usd, \"total_market_cap\"), 0, 1e30)", "доминация: капитализация правдоподобна"),
+    ("None if stable is None or stable / cap * 100 > 100 - btc else", "None if stable is None else", "доминация: стейблкоинов не больше, чем альтов"),
+    ('if not isinstance(c, dict) or c.get("id") != int(USDT_ID) or c.get("symbol") != "USDT":', "if not isinstance(c, dict):", "доминация: USDT — именно USDT"),
+    ('if isinstance(q, dict) and q.get("symbol") == "USD":', "if isinstance(q, dict):", "доминация: капитализация USDT — в долларах"),
+    ("ucap = _num(q.get(\"market_cap\"), 1e8, cap)", "ucap = _num(q.get(\"market_cap\"), 0, 1e30)", "доминация: USDT не дороже рынка"),
+    ("        if t is None or not HIST_FROM <= t <= now or cap is None or btc is None:", "        if t is None or cap is None or btc is None:", "доминация: дни истории — с 2013 г. и не из будущего"),
+    ("        eth = None if eth is None or _pct(eth) > 100 - _pct(btc) else eth\n", "", "доминация: ETH + BTC в истории не больше 100"),
+    ("    return [r for t, r in sorted(days.items()) if t > last - HIST_DAILY * DAY or (t // DAY) % 7 == 0]", "    return [r for t, r in sorted(days.items())]", "доминация: старая история — раз в неделю"),
+    ("    if not isinstance(quotes, list) or len(quotes) > HIST_MAX:", "    if not isinstance(quotes, list):", "доминация: предел длины истории"),
+    ("        return _spent()[_today()] + cost <= DAY_BUDGET", "        return True", "доминация: дневной бюджет кредитов"),
+    ("    if raw is not None:\n        _charge(got, guess)\n", "", "доминация: кредиты списываются"),
+    ("    cost = n if isinstance(n, int) and not isinstance(n, bool) and 0 <= n <= 1000 else guess", "    cost = guess", "доминация: кредиты — по ответу CMC"),
+    ('    _file_save("mcap_spent.json", snap)\n', "", "доминация: счётчик кредитов — на диске"),
+    ("    if (old and now - old[0] < HIST_TTL) or now - tried < HIST_RETRY:", "    if old and now - old[0] < HIST_TTL:", "доминация: пауза после неудачной истории"),
+    ("            _st.hist_try = now\n", "", "доминация: неудача истории запоминается"),
+    ('    _file_save("mcap_hist.json", {"at": now, "v": rows})\n', "", "доминация: история — на диске"),
+    ('    _file_save("mcap.json", {"ok": True, **got, "at": at})\n', "", "доминация: ответ — на диске"),
+    ("                _st.hit = (time.monotonic() - age, {**last[1], \"hist\": hist[1] if hist else []})", "                pass", "доминация: после перезапуска — копия с диска"),
+    ("                and HIST_FROM <= r[0] <= time.time() and (not rows or r[0] > rows[-1][0])):", "                ):", "доминация: копия истории проверяется"),
+    ("        resting = _st.fail is not None and time.monotonic() - _st.fail < FAIL_WAIT", "        resting = False", "доминация: пауза после сбоя"),
+    ('        return {"ok": False, "error": "no_key"}\n    if _st.hit is None and _st.dir:', '        pass\n    if _st.hit is None and _st.dir:', "доминация: без ключа — «нет ключа»"),
+    ("    return f\"{HIST}&time_end={time.strftime('%Y-%m-%d', time.gmtime(now))}\"", "    return HIST", "доминация: история до сегодня, а не 10 дней"),
+    ("\n                    and (cap[1] is None or _num(cap[1], CAP_MIN, CAP_MAX) is not None))", ")", "доминация: вчерашняя капитализация в копии — годная"),
+]
+
 DMT = [
     ("(v >= 75 ? 2 : v <= 25 ? 0 : 1)", "(v > 75 ? 2 : v <= 25 ? 0 : 1)", "альтсезон: 75 — уже альтсезон"),
     ("(v >= 75 ? 2 : v <= 25 ? 0 : 1)", "(v >= 75 ? 2 : v < 25 ? 0 : 1)", "альтсезон: 25 — уже сезон биткоина"),
@@ -219,6 +253,16 @@ DMT = [
     ("if ((idx === null) !== (n === null) || ", "if (", "альтсезон: индекс и корзина — вместе"),
     ("!within(n, MIN_BASKET, COINS_MAX)", "!within(n, 0, COINS_MAX)", "альтсезон: корзина — не меньше MIN_BASKET"),
     ("r.length !== 6", "r.length < 5", "альтсезон: день — ровно 6 колонок"),
+    ("btc[0] + eth[0] > 100 || ", "", "доминация: BTC + ETH не больше 100"),
+    ("Math.abs(btc[0] + alt[0] - 100) > 0.02", "false", "доминация: альты = 100 − BTC"),
+    ("!within(cap[0], 1e10, 1e15)) return null;", "!within(cap[0], 0, 1e30)) return null;", "доминация: капитализация правдоподобна"),
+    ("const usdt = within(raw[\"usdt\"], 0, 100 - btc[0])", "const usdt = within(raw[\"usdt\"], 0, 1e9)", "доминация: USDT не больше альтов"),
+    ("const altNs = within(raw[\"alt_ns\"], 0, alt[0])", "const altNs = within(raw[\"alt_ns\"], 0, 1e9)", "доминация: альты без стейблов не больше альтов"),
+    ("ts % DAY !== 0 || ts <= prev) return [];", "ts <= prev) return [];", "доминация: день истории — с начала суток"),
+    ("(eth !== null && !within(eth, 0, 100 - btc))) return [];", "false) return [];", "доминация: в истории ETH + BTC не больше 100"),
+    ("  return out.length >= 2 ? out : [];", "  return out;", "доминация: история — от двух дней"),
+    ("for (let i = h.length - 1; i >= 0; i--) if (h[i]![0] <= t) return h[i]!;", "for (let i = h.length - 1; i >= 0; i--) if (h[i]![0] < t) return h[i]!;", "доминация: точка ровно n суток назад"),
+    ("return h.filter((d) => d[0] > last[0] - Number(range) * DAY);", "return h;", "доминация: окно истории"),
     ("&& within(t[2], 0, t[0]) && Number.isInteger(t[2]))", "&& within(t[2], 0, 1e9))", "альтсезон: ширина — монет не больше корзины"),
     ("typeof c[0] === \"string\" && COIN.test(c[0])", "typeof c[0] === \"string\"", "альтсезон: имя монеты — только буквы и цифры"),
     ("if (s[i]![0] <= t) return s[i]!;", "if (s[i]![0] < t) return s[i]!;", "альтсезон: точка ровно n суток назад"),
@@ -229,6 +273,8 @@ DMT = [
     ("p[1] > 0 ? (last[1] / p[1] - 1) * 100 : null", "p[1] > 0 ? (last[1] / p[1]) * 100 : null", "альтсезон: рост в процентах"),
     ("  return Math.max(0, Math.floor((now - last) / DAY));", "  return Math.floor((now - last) / DAY);", "альтсезон: возраст данных не отрицательный"),
     ("for (let i = s.length - 1; i >= 0; i -= n) out.push(s[i]!);", "for (let i = s.length - 1; i >= 0; i -= 1) out.push(s[i]!);", "альтсезон: таблица — раз в неделю"),
+    ("if (!prev || prev[0] - d[0] >= 7 * DAY) out.push(d);", "if (!prev || prev[0] - d[0] > 7 * DAY) out.push(d);", "доминация: таблица — ровно раз в неделю"),
+    ("if (!prev || prev[0] - d[0] >= 7 * DAY) out.push(d);", "out.push(d);", "доминация: таблица — не каждый день"),
 ]
 
 
@@ -268,7 +314,8 @@ def server():
                                              "tests.test_treasury_security", "tests.test_disk_cache"], TR)
             + run(f"{ROOT}/whale_api.py", [sys.executable, "-m", "unittest", "tests.test_etf_day_alert"], AL)
             + run(f"{ROOT}/wt_dom.py", [sys.executable, "-m", "unittest", "tests.test_dom", "tests.test_dom_fuzz",
-                                        "tests.test_dom_policy"], DM))
+                                        "tests.test_dom_policy"], DM)
+            + run(f"{ROOT}/wt_mcap.py", [sys.executable, "-m", "unittest", "tests.test_mcap", "tests.test_mcap_fuzz"], MC))
 
 
 # Приложение и сервер — одновременно: тесты приложения (node) читают только
@@ -278,6 +325,6 @@ with ThreadPoolExecutor(max_workers=2) as pool:
     srv = pool.submit(server)
     dmt = pool.submit(run, f"{ROOT}/src/lib/dom.ts", ["node", "--test", "tests/dom.test.ts", "tests/dom.props.test.ts"], DMT)
     alive = app.result() + srv.result() + dmt.result()
-total = len(TS) + len(PY) + len(TR) + len(AL) + len(DM) + len(DMT) - len(EQUIV)
+total = len(TS) + len(PY) + len(TR) + len(AL) + len(DM) + len(MC) + len(DMT) - len(EQUIV)
 print(f"ИТОГ: убито {total - len(alive)} из {total}; выжили: {alive}")
 sys.exit(1 if alive else 0)

@@ -245,7 +245,8 @@ export function Market({ it, lang }: { it: DigestItem; lang: Lang }) {
             sub={iso(`${m.alt.d1 > 0 ? "+" : ""}${m.alt.d1}`)} tone={tone(m.alt.d1)} />
         ) : null}
       </div>
-      <p className="dg-note">{t(lang, "dg_mkt_note")}{m.fng ? ` ${t(lang, "fg_by")} alternative.me.` : ""}</p>
+      <p className="dg-note">{t(lang, "dg_mkt_note")}{m.fng ? ` ${t(lang, "fg_by")} alternative.me.` : ""}
+        {m.cap || m.dom ? ` ${t(lang, "dm_d_src")}` : ""}</p>
     </Sec>
   );
 }
