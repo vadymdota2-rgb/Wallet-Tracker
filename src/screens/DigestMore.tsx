@@ -20,6 +20,7 @@ import { BtcGlyph, EtfGlyph, GaugeGlyph, Row, TopGlyph } from "../components/ui"
 import type { CalEv, DigestItem, DigestSignal } from "../lib/types";
 import { FLAG, allDay, calTitle } from "./CalendarScreen";
 import { CCBY_URL, TFTC_URL } from "./etfView";
+import { CmcBy } from "../components/CmcBy";
 
 type Lang = Parameters<typeof t>[0];
 
@@ -246,7 +247,7 @@ export function Market({ it, lang }: { it: DigestItem; lang: Lang }) {
         ) : null}
       </div>
       <p className="dg-note">{t(lang, "dg_mkt_note")}{m.fng ? ` ${t(lang, "fg_by")} alternative.me.` : ""}
-        {m.cap || m.dom ? ` ${t(lang, "dm_d_src")}` : ""}</p>
+        {m.cap || m.dom ? <> <CmcBy lang={lang} /></> : null}</p>
     </Sec>
   );
 }

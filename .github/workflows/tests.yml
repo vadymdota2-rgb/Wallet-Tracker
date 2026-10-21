@@ -60,7 +60,7 @@ jobs:
           wt_etf.py tests/test_etf_api.py tests/test_etf_day_alert.py tests/test_etf_fuzz.py tests/test_etf_security.py tests/test_etf_policy.py tools/mutate-etf.py
           tests/test_bootstrap_personal.py tests/test_btc_etf_labels.py
           wt_treasury.py tests/test_treasury.py tests/test_treasury_security.py tests/test_digest_sources.py tests/test_digest_channel.py
-          wt_dom.py tests/test_dom.py tests/test_dom_policy.py tests/test_dom_fuzz.py wt_mcap.py tests/test_mcap.py tests/test_mcap_fuzz.py
+          wt_dom.py tests/test_dom.py tests/test_dom_policy.py tests/test_dom_fuzz.py tests/test_dom_http.py wt_mcap.py tests/test_mcap.py tests/test_mcap_fuzz.py
       - name: Строгие типы Python (mypy --strict)
         run: >-
           pipx run mypy==1.11.2 --strict --python-version 3.11 wt_halving.py wt_etf.py wt_treasury.py wt_dom.py wt_mcap.py

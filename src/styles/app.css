@@ -2273,6 +2273,7 @@ html.ch-full .screen.full {
 .dg-sum { margin: 0 2px; font-size: 13px; color: var(--dim); }
 .dg-sum b { font-size: 14px; }
 .dg-note { margin: 0 2px; font-size: 12px; color: var(--dim); }
+.dg-note a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .dg-quiet { margin: 2px; font-size: 13px; color: var(--dim); }
 
 .dg-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }

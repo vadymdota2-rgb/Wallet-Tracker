@@ -20,7 +20,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
-import { num, pct, px } from "../lib/format";
+import { dtf, num, pct, px } from "../lib/format";
 import { haptic, openExternal } from "../lib/telegram";
 import { fetchFng, peekFng } from "../lib/api";
 import { Card, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
@@ -50,7 +50,7 @@ const iso = (x: string | number) => `\u2066${x}\u2069`;
 
 export function dateStr(lang: Lang, ts: number, opts: Intl.DateTimeFormatOptions): string {
   try {
-    return new Intl.DateTimeFormat(lang, { timeZone: "UTC", ...opts }).format(new Date(ts * 1000));
+    return dtf(lang, { timeZone: "UTC", ...opts }).format(new Date(ts * 1000));
   } catch {
     return new Date(ts * 1000).toISOString().slice(0, 10);
   }

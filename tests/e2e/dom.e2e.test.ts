@@ -465,6 +465,9 @@ describe("Альтсезон", () => {
     await ready(page);
     const plot = page.locator(".dm-plot").filter({ has: page.locator("svg.dm-mc") });
     assert.equal(await plot.getAttribute("tabindex"), "0");
+    // Шкала денег: даже на узком сроке — не меньше двух подписей.
+    const usd = (await plot.locator(".fg-tick").allTextContents()).filter((x) => x.startsWith("$"));
+    assert.ok(usd.length >= 2, usd.join(" "));
     assert.equal(sp(await plot.getAttribute("aria-label")), sp(I18N["ef_keys"]!["ru"]!));
     await plot.focus();
     await page.keyboard.press("End");
@@ -544,6 +547,30 @@ describe("Альтсезон", () => {
     await page.clock.runFor(61_000);
     for (let i = 0; i < 30 && asked() === n; i++) await page.waitForTimeout(100);
     assert.ok(asked() > n);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("доминация с телефона без сети — целиком: и без стейблкоинов, и USDT, и график", async () => {
+    const { ctx, page, errors } = await open();
+    await ready(page);
+    const full = {
+      x: sp(await page.locator(".dm-x").innerText()),
+      rows: (await page.locator(".fg-rows .fg-row").allInnerTexts()).map(sp),
+    };
+    // Связь пропала, приложение открыли заново: блок — из копии на телефоне.
+    await ctx.unroute(`${base}/api/mcap`);
+    await ctx.route(`${base}/api/mcap`, (r) => r.abort());
+    await page.reload();
+    await page.locator(".burger").click();
+    await page.locator(".drawer-row", { hasText: I18N["dm_title"]!["ru"]! }).evaluate((el: HTMLElement) => el.click());
+    await ready(page);
+    await page.locator(".dm-x").waitFor();
+    assert.equal(sp(await page.locator(".dm-x").innerText()), full.x);
+    assert.deepEqual((await page.locator(".fg-rows .fg-row").allInnerTexts()).map(sp), full.rows);
+    assert.equal(await page.locator("svg.dm-mc").count(), 1);
+    // Подпись источника — ссылкой на сайт CoinMarketCap.
+    assert.equal(await page.locator(".dm-dsrc a").getAttribute("href"), "https://coinmarketcap.com/");
     assert.deepEqual(errors, []);
     await ctx.close();
   });

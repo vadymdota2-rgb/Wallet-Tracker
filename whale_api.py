@@ -12178,6 +12178,24 @@ dom_data = wt_dom.dom_data
 mcap_data = wt_mcap.mcap_data
 
 
+def _json_clean(o):
+    """NaN и бесконечности — 0.0, ключи — строки, чужие типы — строкой
+    (как в Handler._json)."""
+    if isinstance(o, float):
+        return 0.0 if o != o or o in (float("inf"), float("-inf")) else o
+    if isinstance(o, dict):
+        return {str(k): _json_clean(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [_json_clean(v) for v in o]
+    if isinstance(o, (str, int, bool)) or o is None:
+        return o
+    return str(o)
+
+
+# Готовые ответы для всех: имя → (объект из кэша модуля, байты, ETag).
+_PUBLIC: dict[str, tuple[object, bytes, str]] = {}
+
+
 # --- ETF и крупные держатели -----------------------------------------------
 # Отдельный модуль wt_etf.py: потоки фондов (TFTC), держатели (SEC), CME
 # (CFTC); кэш, фоновое обновление, тесты.
@@ -15936,6 +15954,37 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
             self.send_header("Access-Control-Max-Age", "600")
 
+    def _json_public(self, name: str, obj: dict):
+        """Ответ, одинаковый для всех (/api/dom, /api/mcap): тот же объект
+        из кэша модуля не кодируется заново на каждый запрос (сотня КБ JSON —
+        миллисекунды процессора), а у телефона с той же копией (If-None-Match)
+        — «304 не изменилось» без тела. Личных данных в таких ответах нет."""
+        hit = _PUBLIC.get(name)
+        if hit is None or hit[0] is not obj:
+            try:
+                raw = json.dumps(_json_clean(obj), ensure_ascii=False, allow_nan=False).encode()
+            except (TypeError, ValueError, RecursionError) as e:
+                self._json(500, {"ok": False, "error": f"json:{type(e).__name__}"})
+                return
+            hit = (obj, raw, f'W/"{hashlib.sha256(raw).hexdigest()[:24]}"')
+            _PUBLIC[name] = hit
+        _, raw, tag = hit
+        same = tag in [x.strip() for x in (self.headers.get("If-None-Match") or "").split(",")]
+        self.send_response(304 if same else 200)
+        self._cors()
+        self.send_header("ETag", tag)
+        # Копию можно держать, но перед показом — сверить с сервером.
+        self.send_header("Cache-Control", "no-cache")
+        for k, v in shield.SECURITY_HEADERS:
+            self.send_header(k, v)
+        if same:
+            self.end_headers()
+            return
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
     def _json(self, code: int, obj: dict):
         def clean(o):
             if isinstance(o, float):
@@ -16321,7 +16370,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, btc_wallet(a))
                 return
             if path in ("/dom", "/api/dom", "/mcap", "/api/mcap"):
-                self._json(200, dom_data() if path.endswith("/dom") else mcap_data())
+                dom = path.endswith("/dom")
+                self._json_public("dom" if dom else "mcap", dom_data() if dom else mcap_data())
                 return
             if path in ("/etf", "/api/etf"):
                 self._json(200, etf_data())

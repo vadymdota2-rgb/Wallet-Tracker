@@ -149,10 +149,22 @@ class DigestMarketTest(unittest.TestCase):
         self.assertNotIn("cap", part)
         self.assertNotIn("dom", part)
 
+    def test_channel_does_not_carry_coinmarketcap_numbers(self):
+        # Данные CoinMarketCap — только внутри приложения (лицензия: в своём
+        # продукте, не отдельной рассылкой): пост и картинки канала их не берут.
+        it = {"v": 2, "to": DAY + 86_400, "sig": [], "mkt": {"btc": {"px": 82_016, "ch": 1.2}}}
+        with_cmc = {**it, "mkt": {**it["mkt"], "cap": {"v": 2.9e12, "ch": 0.8}, "dom": {"btc": 58.1, "d1": 0.2, "eth": 11.0}}}
+        for lang in ("en", "ru"):
+            self.assertEqual(dgi.caption(with_cmc, lang), dgi.caption(it, lang))
+        with open(os.path.join(ROOT, "wt_digest_img.py"), encoding="utf-8") as f:
+            src = f.read()
+        for k in ('"cap"', '"dom"', "'cap'", "'dom'"):
+            self.assertNotIn(k, src)
+
     def test_app_names_coinmarketcap_next_to_the_cells(self):
         with open(os.path.join(ROOT, "src/screens/DigestMore.tsx"), encoding="utf-8") as f:
             src = f.read()
-        self.assertIn('m.cap || m.dom ? ` ${t(lang, "dm_d_src")}`', src)
+        self.assertIn("m.cap || m.dom ? <> <CmcBy lang={lang} /></> : null", src)
 
 
 if __name__ == "__main__":

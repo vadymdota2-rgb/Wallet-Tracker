@@ -11,12 +11,36 @@ export function setLocale(lang: LangCode): void {
   locale = lang;
 }
 
+/* Форматтеры Intl — один на язык и набор настроек: создать новый в десятки
+   и сотни раз дороже, чем отформатировать им число (на телефоне таблица в
+   сотни строк собиралась больше секунды). Наборов настроек в коде — горстка,
+   кэш не растёт без конца. */
+const NF = new Map<string, Intl.NumberFormat>();
+const DTF = new Map<string, Intl.DateTimeFormat>();
+
 function nf(opts: Intl.NumberFormatOptions): Intl.NumberFormat {
-  try {
-    return new Intl.NumberFormat(locale, opts);
-  } catch {
-    return new Intl.NumberFormat("en", opts);
+  const key = `${locale}|${JSON.stringify(opts)}`;
+  let f = NF.get(key);
+  if (!f) {
+    try {
+      f = new Intl.NumberFormat(locale, opts);
+    } catch {
+      f = new Intl.NumberFormat("en", opts);
+    }
+    NF.set(key, f);
   }
+  return f;
+}
+
+/** Форматтер дат из кэша; неверный язык или настройки — бросает, как Intl. */
+export function dtf(lang: string, opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = `${lang}|${JSON.stringify(opts)}`;
+  let f = DTF.get(key);
+  if (!f) {
+    f = new Intl.DateTimeFormat(lang, opts);
+    DTF.set(key, f);
+  }
+  return f;
 }
 
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
@@ -140,7 +164,7 @@ export function qtyWord(v: unknown): string {
   if (!isNum(v)) return "—";
   if (Math.abs(v) < 1e4) return nf({ maximumFractionDigits: 0 }).format(v);
   try {
-    return new Intl.NumberFormat(locale, {
+    return nf({
       notation: "compact",
       compactDisplay: "short",
       maximumFractionDigits: 2,
@@ -156,7 +180,7 @@ export function usdWord(v: unknown): string {
   try {
     // Мелкие суммы — тем же форматом языка, только без «тыс.»: раньше они
     // шли через usd(), и рядом стояли «Приток $0» и «Отток −16,9 млн $».
-    return new Intl.NumberFormat(locale, {
+    return nf({
       style: "currency",
       currency: "USD",
       // Крупное — три значащие цифры: «93,5 млн», «390 млн», «1,36 млрд», а
@@ -176,7 +200,7 @@ export function day(tsSec: number, nowSec: number): string {
   const opts: Intl.DateTimeFormatOptions = { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" };
   if (d.getUTCFullYear() !== new Date(nowSec * 1000).getUTCFullYear()) opts.year = "numeric";
   try {
-    return new Intl.DateTimeFormat(locale, opts).format(d);
+    return dtf(locale, opts).format(d);
   } catch {
     return d.toISOString().slice(0, 10);
   }
@@ -190,7 +214,7 @@ export function dayMonth(tsSec: number, nowSec: number): string {
   const d = new Date(tsSec * 1000);
   let s: string;
   try {
-    s = new Intl.DateTimeFormat(locale, { day: "numeric", month: "short", timeZone: "UTC" }).format(d);
+    s = dtf(locale, { day: "numeric", month: "short", timeZone: "UTC" }).format(d);
   } catch {
     s = d.toISOString().slice(5, 10);
   }
@@ -211,7 +235,7 @@ export function dateLong(tsSec: number): string {
   const opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "long" };
   if (d.getFullYear() !== new Date().getFullYear()) opts.year = "numeric";
   try {
-    return new Intl.DateTimeFormat(locale, opts).format(d);
+    return dtf(locale, opts).format(d);
   } catch {
     return d.toISOString().slice(0, 10);
   }

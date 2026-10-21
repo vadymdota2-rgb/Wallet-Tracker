@@ -277,6 +277,17 @@ DMT = [
     ("if (!prev || prev[0] - d[0] >= 7 * DAY) out.push(d);", "out.push(d);", "доминация: таблица — не каждый день"),
 ]
 
+# Общие ответы /api/dom и /api/mcap по HTTP и раздел «Рынок» дайджеста (whale_api.py).
+AP = [
+    ("        if hit is None or hit[0] is not obj:\n", "        if True:\n", "доминация: ответ кодируется раз, а не на каждый запрос"),
+    ('        same = tag in [x.strip() for x in (self.headers.get("If-None-Match") or "").split(",")]', "        same = False", "доминация: та же копия — 304"),
+    ('        same = tag in [x.strip() for x in (self.headers.get("If-None-Match") or "").split(",")]', "        same = True", "доминация: чужая копия — полный ответ"),
+    ('        self.send_header("ETag", tag)\n', "", "доминация: ETag в ответе"),
+    ('        self.send_header("Cache-Control", "no-cache")\n', '        self.send_header("Cache-Control", "no-store")\n', "доминация: копию можно держать и сверять"),
+    ("        if cap_y:\n", "        if True:\n", "дайджест: без вчерашней капитализации — без изменения"),
+    ('"d1": round(btc - btc_y, 2)', '"d1": round(btc_y - btc, 2)', "дайджест: изменение доминации за сутки со знаком"),
+]
+
 
 def run(path, cmd, muts):
     with open(path, encoding="utf-8") as f:
@@ -313,6 +324,7 @@ def server():
             + run(f"{ROOT}/wt_treasury.py", [sys.executable, "-m", "unittest", "tests.test_treasury",
                                              "tests.test_treasury_security", "tests.test_disk_cache"], TR)
             + run(f"{ROOT}/whale_api.py", [sys.executable, "-m", "unittest", "tests.test_etf_day_alert"], AL)
+            + run(f"{ROOT}/whale_api.py", [sys.executable, "-m", "unittest", "tests.test_dom_http", "tests.test_digest_sources"], AP)
             + run(f"{ROOT}/wt_dom.py", [sys.executable, "-m", "unittest", "tests.test_dom", "tests.test_dom_fuzz",
                                         "tests.test_dom_policy"], DM)
             + run(f"{ROOT}/wt_mcap.py", [sys.executable, "-m", "unittest", "tests.test_mcap", "tests.test_mcap_fuzz"], MC))
@@ -325,6 +337,6 @@ with ThreadPoolExecutor(max_workers=2) as pool:
     srv = pool.submit(server)
     dmt = pool.submit(run, f"{ROOT}/src/lib/dom.ts", ["node", "--test", "tests/dom.test.ts", "tests/dom.props.test.ts"], DMT)
     alive = app.result() + srv.result() + dmt.result()
-total = len(TS) + len(PY) + len(TR) + len(AL) + len(DM) + len(MC) + len(DMT) - len(EQUIV)
+total = len(TS) + len(PY) + len(TR) + len(AL) + len(AP) + len(DM) + len(MC) + len(DMT) - len(EQUIV)
 print(f"ИТОГ: убито {total - len(alive)} из {total}; выжили: {alive}")
 sys.exit(1 if alive else 0)

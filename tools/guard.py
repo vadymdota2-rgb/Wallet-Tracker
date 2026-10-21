@@ -668,13 +668,23 @@ say("доминация (BTC, альты, ETH, USDT) — только офици
     and "api.coinmarketcap.com/data-api" not in (_mcs + api) and "coinmarketcap.com/data-api" not in (_mcs + api)
     and "mcap_data = wt_mcap.mcap_data" in api and '"/api/mcap"' in api
     and "export function validMcap(" in _dml and "validMcap(r)" in read(f"{APP}/src/lib/api.ts")
-    and '"wt-mcap-v1"' in read(f"{APP}/src/lib/storage.ts") and '"dm_d_src"' in _dm
+    and '"wt-mcap-v1"' in read(f"{APP}/src/lib/storage.ts") and '"dm_d_src"' in read(f"{APP}/src/components/CmcBy.tsx")
     and os.path.isfile(f"{APP}/tests/test_mcap.py") and "wt_mcap.py" in read(f"{APP}/.github/workflows/tests.yml")
     and os.path.isfile(f"{APP}/tests/test_mcap_fuzz.py") and 'f"{ROOT}/wt_mcap.py"' in read(f"{APP}/tools/mutate-etf.py"))
 say("доминация укладывается в бесплатный план CoinMarketCap: дневной бюджет кредитов (счётчик на диске), пауза после неудачной истории, ответ и история на диске — перезапуск сервера кредитов не тратит",
     "DAY_BUDGET = 400" in _mcs and "HIST_RETRY" in _mcs and '_file_save("mcap_spent.json"' in _mcs
     and '_file_save("mcap.json"' in _mcs and '_file_save("mcap_hist.json"' in _mcs and "_last_load()" in _mcs
     and "TTL = 3600.0" in _mcs and "HIST_TTL = 12 * 3600.0" in _mcs)
+_cmc = read(f"{APP}/src/components/CmcBy.tsx") if os.path.isfile(f"{APP}/src/components/CmcBy.tsx") else ""
+say("доминация и альтсезон — кеш и права: ответы /api/dom и /api/mcap кодируются раз на ответ, с ETag и «304 не изменилось»; копия доминации на телефоне — исходный ответ сервера (не теряет долю стейблкоинов); источник — ссылкой на CoinMarketCap и на экране, и в дайджесте; в канал цифры CoinMarketCap не уходят; форматтеры Intl — из кэша",
+    "def _json_public(self, name: str, obj: dict):" in api and 'self._json_public("dom" if dom else "mcap"' in api
+    and '"If-None-Match"' in api and os.path.isfile(f"{APP}/tests/test_dom_http.py")
+    and "writeSaved(MCAP_SAVED, { all: { at: Date.now(), v: r } })" in read(f"{APP}/src/lib/api.ts")
+    and 'CMC_URL = "https://coinmarketcap.com/"' in _cmc and "<CmcBy lang={lang} />" in _dm
+    and "<CmcBy lang={lang} />" in read(f"{APP}/src/screens/DigestMore.tsx")
+    and "test_channel_does_not_carry_coinmarketcap_numbers" in read(f"{APP}/tests/test_digest_sources.py")
+    and "const NF = new Map<string, Intl.NumberFormat>();" in read(f"{APP}/src/lib/format.ts")
+    and "dtf(lang, { timeZone: \"UTC\", ...opts })" in read(f"{APP}/src/screens/FearGreedScreen.tsx"))
 say("альтсезон честный: корзина на каждый день — самые торгуемые за 30 дней до него (без заглядывания вперёд), со снятыми потом монетами, только закрытые дни, не меньше 30 монет; ширина 25/50/100; это сказано на экране",
     "VOLW = 30" in _dms and "MIN_BASKET = 30" in _dms and 'EXCLUDE = frozenset({"PAXG", "USTC", "NFTI"})' in _dms and "TIERS = (25, 50, 100)" in _dms
     and '{"type": "meta"}' in _dms and 'u.get("isDelisted")' in _dms and "metaAndAssetCtxs" not in _dms

@@ -584,7 +584,10 @@ export const fetchMcap = () =>
   remember<McapReply | null>("/api/mcap", MCAP_TTL_MS, () =>
     callTwice<unknown>("/api/mcap").then((r) => {
       const v = validMcap(r);
-      if (v) writeSaved(MCAP_SAVED, { all: { at: Date.now(), v } });
+      // На устройство — сам ответ сервера (он прошёл проверку): при чтении
+      // его снова проверит validMcap, а её вывод (altNs вместо alt_ns) она
+      // уже не узнала бы — и копия теряла бы долю стейблкоинов.
+      if (v) writeSaved(MCAP_SAVED, { all: { at: Date.now(), v: r } });
       return v;
     }), (v) => v !== null);
 export const peekMcap = () => peek<McapReply | null>("/api/mcap", MCAP_TTL_MS) ?? savedMcap();

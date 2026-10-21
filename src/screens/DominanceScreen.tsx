@@ -23,10 +23,11 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEve
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
 import type { DictKey } from "../i18n/types";
-import { num, pct, usdWord } from "../lib/format";
+import { dtf, num, pct, usdWord } from "../lib/format";
 import { haptic } from "../lib/telegram";
 import { fetchDom, fetchMcap, peekDom, peekMcap } from "../lib/api";
 import { Card, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
+import { CmcBy } from "../components/CmcBy";
 import {
   DOM_TTL_MS, MCAP_RANGES, RANGES, STALE_DAYS, ago, altStats, beat, byWeek, change, daysOld, ebStats, everyNth, mcapAgo, mcapWindow, rebase,
   seasonOf, series, thin, windowOf, type DomReply, type McapDay, type McapRange, type McapReply, type Range,
@@ -52,9 +53,7 @@ const TIER_GAP = 15;
 /** Когда собраны данные — по часам телефона. */
 function stamp(lang: Lang, at: number): string {
   try {
-    return new Intl.DateTimeFormat(lang, {
-      day: "numeric", month: "long", hour: "2-digit", minute: "2-digit",
-    }).format(new Date(at * 1000));
+    return dtf(lang, { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }).format(new Date(at * 1000));
   } catch {
     return new Date(at * 1000).toISOString().slice(0, 16).replace("T", " ");
   }
@@ -186,7 +185,10 @@ function MiniChart({ pts, lang, color, bands, fmt, fixed, label, log }: {
       setSel(null);
     }
   };
-  const ticks = fixed ? [25, 50, 75] : log ? logTicks(lo, hi) : niceTicks(lo, hi);
+  /* Деления и подписи — один раз на данные и ширину, а не на каждое движение
+     пальца (подписи дат — Intl, на слабом телефоне это заметно). */
+  const ticks = useMemo(() => (fixed ? [25, 50, 75] : log ? logTicks(lo, hi) : niceTicks(lo, hi)), [fixed, log, lo, hi]);
+  const xTicks = useMemo(() => ticksOf(lang, a, b, PW), [lang, a, b, PW]);
   const p = sel !== null ? pts[sel] : undefined;
   const H2 = MH + 26;
   return (
@@ -203,7 +205,7 @@ function MiniChart({ pts, lang, color, bands, fmt, fixed, label, log }: {
         {bands?.map((z) => (
           <rect key={z.from} x={0} y={yOf(z.to)} width={PW} height={yOf(z.from) - yOf(z.to)} fill={z.c} opacity={0.1} />
         ))}
-        {ticksOf(lang, a, b, PW).map((x) => (
+        {xTicks.map((x) => (
           <g key={x.t}>
             <line x1={xOfT(x.t)} x2={xOfT(x.t)} y1={6} y2={6 + MH} className="fg-grid" />
             <text x={xOfT(x.t)} y={H2 - 4} textAnchor="middle" className="fg-tick">{x.label}</text>
@@ -366,11 +368,17 @@ function axisUsd(v: number): string {
   return `$${f(v / 1e6)}M`;
 }
 
+/** Деления шкалы денег (лог.): 1, 2, 5 × 10ⁿ; узкий срок, где из них попадает
+ *  одно, — гуще (1; 1,5; 2; 3; 5; 7), чтобы подписей было хотя бы две. */
 function usdTicks(lo: number, hi: number): number[] {
-  const out: number[] = [];
-  for (let e = 6; e <= 15; e++) for (const m of [1, 2, 5]) {
-    const v = m * 10 ** e;
-    if (v >= lo && v <= hi) out.push(v);
+  let out: number[] = [];
+  for (const ms of [[1, 2, 5], [1, 1.5, 2, 3, 5, 7]]) {
+    out = [];
+    for (let e = 6; e <= 15; e++) for (const m of ms) {
+      const v = m * 10 ** e;
+      if (v >= lo && v <= hi) out.push(v);
+    }
+    if (out.length >= 2) break;
   }
   return out.length > 6 ? out.filter((v) => String(v).startsWith("1")) : out;
 }
@@ -448,6 +456,8 @@ function McapChart({ days, lang }: { days: McapDay[]; lang: Lang }) {
       setSel(null);
     }
   };
+  const xTicks = useMemo(() => ticksOf(lang, a, b, PW), [lang, a, b, PW]);
+  const yTicks = useMemo(() => usdTicks(lo * 0.8, hi * 1.15), [lo, hi]);
   const d = sel !== null ? days[sel] : undefined;
   return (
     <div className="fg-plot dm-plot" tabIndex={0} role="group" aria-label={t(lang, "ef_keys")}
@@ -465,13 +475,13 @@ function McapChart({ days, lang }: { days: McapDay[]; lang: Lang }) {
         <polygon points={paths.aEth} fill={C.eth} opacity={0.55} />
         <polygon points={paths.aAlt} fill={C.alt} opacity={0.45} />
         <polyline points={paths.dom} className="fg-line" stroke={C.btc} />
-        {ticksOf(lang, a, b, PW).map((x) => (
+        {xTicks.map((x) => (
           <g key={x.t}>
             <line x1={xOfT(x.t)} x2={xOfT(x.t)} y1={P1.y} y2={P2.y + P2.h} className="fg-grid" />
             <text x={xOfT(x.t)} y={MH2 - 4} textAnchor="middle" className="fg-tick">{x.label}</text>
           </g>
         ))}
-        {usdTicks(lo * 0.8, hi * 1.15).map((v) => (
+        {yTicks.map((v) => (
           <g key={v}>
             <line x1={0} x2={PW} y1={yUsd(v)} y2={yUsd(v)} className="fg-grid" />
             <text x={W - 2} y={yUsd(v) + 3.5} textAnchor="end" className="fg-tick">{axisUsd(v)}</text>
@@ -678,7 +688,7 @@ function McapBlock({ m, lang }: { m: McapReply; lang: Lang }) {
           </Card>
         </>
       ) : null}
-      <p className="dm-dsrc">{t(lang, "dm_d_src")} {stamp(lang, m.at)}</p>
+      <p className="dm-dsrc"><CmcBy lang={lang} /> {stamp(lang, m.at)}</p>
     </>
   );
 }
@@ -757,6 +767,11 @@ export function DominanceScreen() {
   const str = useMemo(() => series(rows, 2), [rows]);
   const strW = useMemo(() => rebase(windowOf(str, range)), [str, range]);
   const eb = useMemo(() => series(rows, 3), [rows]);
+  /* Точки графиков — на данные и срок, а не на каждую перерисовку экрана. */
+  const altW = useMemo(() => windowOf(alt, range), [alt, range]);
+  const altPts = useMemo(() => thin(altW), [altW]);
+  const strPts = useMemo(() => thin(strW), [strW]);
+  const ebPts = useMemo(() => thin(windowOf(eb, range)), [eb, range]);
   const stats = useMemo(() => altStats(alt), [alt]);
   const ebS = useMemo(() => ebStats(eb), [eb]);
   const now = alt[alt.length - 1];
@@ -874,7 +889,7 @@ export function DominanceScreen() {
               <Card>
                 {rangeSeg}
                 <MiniChart
-                  pts={thin(windowOf(alt, range))}
+                  pts={altPts}
                   lang={lang}
                   label={t(lang, "dm_alt_title")}
                   color={(v) => SEASON[seasonOf(v)].c}
@@ -882,7 +897,7 @@ export function DominanceScreen() {
                   fmt={(v) => num(v)}
                   fixed={[0, 100]}
                 />
-                <AltTable pts={windowOf(alt, range)} lang={lang} />
+                <AltTable pts={altW} lang={lang} />
                 <p className="dm-share">
                   {t(lang, "dm_alt_days", {
                     d: dateStr(lang, stats.from, { day: "numeric", month: "long", year: "numeric" }),
@@ -909,7 +924,7 @@ export function DominanceScreen() {
                 </div>
                 {rangeSeg}
                 <Changes ch={[30, 90, 365].map((n) => change(str, n))} lang={lang} />
-                <MiniChart pts={thin(strW)} lang={lang} label={t(lang, "dm_str_title")}
+                <MiniChart pts={strPts} lang={lang} label={t(lang, "dm_str_title")}
                   color={() => C.alt} fmt={(v) => num(v, v < 10 ? 1 : 0)} log />
                 <p className="lq-hint">{t(lang, "dm_str_what", { n: iso(num(reply.n)) })}</p>
               </Card>
@@ -932,7 +947,7 @@ export function DominanceScreen() {
                   <span>{t(lang, "dm_eb_what")}</span>
                 </div>
                 <Changes ch={ebS.ch} lang={lang} />
-                <MiniChart pts={thin(windowOf(eb, range))} lang={lang} label="ETH/BTC" color={() => C.eth} fmt={(v) => num(v, 3)} />
+                <MiniChart pts={ebPts} lang={lang} label="ETH/BTC" color={() => C.eth} fmt={(v) => num(v, 3)} />
                 <p className="dm-share">
                   {t(lang, "dm_eb_pos", {
                     p: iso(pct(ebS.above * 100, 0, false)), d: dateStr(lang, eb[0]![0], { day: "numeric", month: "long", year: "numeric" }),
