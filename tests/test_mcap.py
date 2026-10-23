@@ -144,7 +144,10 @@ class BuildTest(Base):
         self.assertEqual(len(res["hist"]), 400)
 
     def test_no_key_is_said_and_nothing_is_asked(self):
-        with mock.patch.dict(os.environ, {"CMC_API_KEY": ""}), mock.patch.object(mc._opener, "open") as op:
+        # Заглушка сети — с настоящим ответом: если до неё дошло, проверка
+        # падает сразу, а не крутит чтение по кускам до срока.
+        with mock.patch.dict(os.environ, {"CMC_API_KEY": ""}), \
+                mock.patch.object(mc._opener, "open", return_value=Resp(b"[1]")) as op:
             self.assertEqual(mc.mcap_data(), {"ok": False, "error": "no_key"})
             self.assertEqual(mc.build(), {"ok": False, "error": "no_key"})
         op.assert_not_called()
@@ -348,7 +351,9 @@ class BudgetTest(Base):
 
 class SecurityTest(Base):
     def test_key_goes_only_to_coinmarketcap_over_https(self):
-        with mock.patch.object(mc._opener, "open") as op:
+        # Заглушка сети — с настоящим ответом (пустая MagicMock крутила бы
+        # чтение по кускам до срока и копила вызовы в памяти).
+        with mock.patch.object(mc._opener, "open", return_value=Resp(b"[1]")) as op:
             for url in ("https://pro-api.coinmarketcap.com.evil.com/v1", "http://pro-api.coinmarketcap.com/v1",
                         "https://user:pw@pro-api.coinmarketcap.com/v1", "https://coinmarketcap.com/", "file:///etc/passwd"):
                 self.assertIsNone(mc._fetch(url), url)

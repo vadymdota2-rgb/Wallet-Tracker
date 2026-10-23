@@ -445,7 +445,9 @@ class DataTest(Base):
 
 class SecurityTest(Base):
     def test_only_hyperliquid_over_https(self):
-        with mock.patch.object(dom._opener, "open") as op:
+        # Заглушка сети — с настоящим ответом (пустая MagicMock крутила бы
+        # чтение по кускам до срока и копила вызовы в памяти).
+        with mock.patch.object(dom._opener, "open", return_value=Resp(b"[1]")) as op:
             for url in ("https://api.hyperliquid.xyz.evil.com/info", "http://api.hyperliquid.xyz/info",
                         "https://user:pw@api.hyperliquid.xyz/info", "file:///etc/passwd", "https://169.254.169.254/"):
                 self.assertIsNone(dom._fetch(url, {}, 5), url)
