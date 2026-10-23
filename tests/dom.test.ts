@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  MCAP_FROM, MIN_BASKET, byWeek, PX_FROM, STALE_DAYS, mcapAgo, mcapWindow, rebase, shareDelta, validMcap, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, windowOf,
+  MCAP_FROM, MIN_BASKET, byWeek, nearestIdx, PX_FROM, STALE_DAYS, mcapAgo, mcapWindow, rebase, shareDelta, validMcap, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, windowOf,
   type DomDay, type McapDay,
 } from "../src/lib/dom.ts";
 
@@ -236,4 +236,17 @@ test("mcapAgo и mcapWindow: точка n суток назад и окно ис
   assert.equal(mcapWindow(h, "365").length, 365);
   assert.equal(mcapWindow(h, "all").length, 800);
   assert.deepEqual(mcapWindow([], "1095"), []);
+});
+
+test("nearestIdx: ближайшая по времени точка, и там, где история редкая", () => {
+  const ts = [0, 7, 14, 15, 16];
+  assert.equal(nearestIdx(ts, -5), 0);
+  assert.equal(nearestIdx(ts, 3), 0);
+  assert.equal(nearestIdx(ts, 4), 1);
+  assert.equal(nearestIdx(ts, 3.5), 0);
+  assert.equal(nearestIdx(ts, 14.4), 2);
+  assert.equal(nearestIdx(ts, 15), 3);
+  assert.equal(nearestIdx(ts, 99), 4);
+  assert.equal(nearestIdx([5], 1), 0);
+  assert.equal(nearestIdx([], 1), -1);
 });

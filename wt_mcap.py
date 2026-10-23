@@ -72,6 +72,7 @@ DAY = 86400
 BODY_MAX = 1 << 20
 # История за 13 лет — около 1 МБ.
 HIST_BODY_MAX = 4 << 20
+CHUNK = 64 << 10
 INT_DIGITS = 18
 # Пределы правдоподобия: капитализация рынка, $; доля, %.
 CAP_MIN, CAP_MAX = 1e10, 1e15
@@ -120,16 +121,26 @@ def _fetch(url: str, timeout: float = 20, limit: int = BODY_MAX) -> bytes | None
     if not key or not _allowed(url):
         return None
     req = urllib.request.Request(url, headers={**_HEADERS, "X-CMC_PRO_API_KEY": key})
+    end = time.monotonic() + timeout
     try:
         with _opener.open(req, timeout=timeout) as r:
-            got: bytes = r.read(limit + 1)
+            # По кускам и со своим сроком: таймаут сокета — на каждый кусок,
+            # и ответ, идущий по байту, держал бы сборку часами.
+            buf = bytearray()
+            while len(buf) <= limit:
+                if time.monotonic() > end:
+                    return None
+                chunk: bytes = r.read1(min(CHUNK, limit + 1 - len(buf)))
+                if not chunk:
+                    return bytes(buf)
+                buf += chunk
+            return None
     except urllib.error.HTTPError as e:
         # Код ответа — в журнал (401 — неверный ключ, 429 — лимит), ключ — нет.
         _log(f"HTTP {e.code}")
         return None
     except (OSError, ValueError, http.client.HTTPException):
         return None
-    return got if len(got) <= limit else None
 
 
 def _finite(text: str) -> float:
@@ -210,7 +221,10 @@ def compute(glob: Json, usdt: Json) -> dict[str, Json] | None:
         "cap": [round(cap), None if cap_y is None else round(cap_y)],
         "usdt": None,
     }
-    out["usdt"] = _usdt(usdt, cap)
+    # USDT — часть «не биткоина»: больше 100 − BTC — сбой, доли нет (так же
+    # проверяет приложение).
+    u = _usdt(usdt, cap)
+    out["usdt"] = u if u is None or u <= 100 - _pct(btc) else None
     return out
 
 
@@ -282,6 +296,9 @@ class _State:
     # Потрачено кредитов CoinMarketCap: день UTC «ГГГГ-ММ-ДД» → кредиты.
     spent: dict[str, int] | None = None
     dir: str | None = None
+    # Копии с диска уже читались (один раз: без годной копии запросы диск
+    # не трогают — история с диска весит до мегабайта).
+    loaded: bool = False
 
 
 _st = _State()
@@ -354,9 +371,11 @@ def _spent() -> dict[str, int]:
 
 def _can(cost: int) -> bool:
     """Хватит ли сегодняшнего бюджета; запрос дороже ожидаемого может
-    перешагнуть его, но только один — следующих уже не будет."""
+    перешагнуть его, но только один — следующих уже не будет. День — один
+    на всю проверку: полночь между двумя _today() не роняет сборку."""
     with _lock:
-        return _spent()[_today()] + cost <= DAY_BUDGET
+        day = _today()
+        return _spent().get(day, 0) + cost <= DAY_BUDGET
 
 
 def _charge(got: Json, guess: int) -> None:
@@ -364,8 +383,9 @@ def _charge(got: Json, guess: int) -> None:
     n = _get(got, "status", "credit_count")
     cost = n if isinstance(n, int) and not isinstance(n, bool) and 0 <= n <= 1000 else guess
     with _lock:
+        day = _today()
         sp = _spent()
-        sp[_today()] += cost
+        sp[day] = sp.get(day, 0) + cost
         snap = dict(sp)
     _file_save("mcap_spent.json", snap)
 
@@ -484,7 +504,8 @@ def mcap_data() -> dict[str, Json]:
     Пока свежего нет — прошлый; нет и прошлого — «нет данных»."""
     if not _key():
         return {"ok": False, "error": "no_key"}
-    if _st.hit is None and _st.dir:
+    if not _st.loaded and _st.dir:
+        _st.loaded = True
         # Перезапуск: последний ответ — с диска; моложе TTL — сеть не нужна.
         last, hist = _last_load(), _hist_load()
         with _lock:

@@ -551,6 +551,36 @@ describe("Альтсезон", () => {
     await ctx.close();
   });
 
+  test("«Биткоин против альтов» за всю историю: подпись года — там же, где этот год на линии", async () => {
+    // Как хранит сервер: старше трёх лет — раз в неделю, потом — каждый день.
+    const end = Math.floor(T / 86_400) * 86_400;
+    const hist: [number, number, number, number | null][] = [];
+    for (let t = Date.UTC(2016, 0, 4) / 1000; t <= end; t += (end - t > 1095 * 86_400 ? 7 : 1) * 86_400) {
+      hist.push([t, 2e11 + (t - 1.45e9) * 3e3, 60, 10]);
+    }
+    const { ctx, page, errors } = await open({ mcap: { ...MCAP, at: T, hist } });
+    await ready(page);
+    const card = page.locator("section.card").filter({ has: page.locator("svg.dm-mc") });
+    await card.locator(".seg button", { hasText: I18N["fg_rall"]!["ru"]! }).click();
+    const svg = card.locator("svg.dm-mc");
+    // В середину экрана: низ графика не должен уйти под панель навигации.
+    await svg.evaluate((el) => el.scrollIntoView({ block: "center" }));
+    const pop = card.locator(".dm-pop small");
+    const years = (await svg.locator("text.fg-tick").allTextContents()).filter((x) => /^20\d\d$/.test(x));
+    assert.ok(years.length >= 3, years.join(" "));
+    for (const year of years) {
+      const tick = svg.locator("text.fg-tick", { hasText: new RegExp(`^${year}$`) });
+      const b = (await tick.boundingBox())!;
+      await page.mouse.move(b.x + b.width / 2, b.y - 40);
+      await pop.waitFor();
+      // Под подписью «2022» — конец декабря 2021 г. или январь 2022 г., а не другой год.
+      const txt = sp(await pop.innerText());
+      assert.ok(txt.includes(year) || (txt.includes(String(Number(year) - 1)) && /декабр/.test(txt)), `${year}: ${txt}`);
+    }
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
   test("доминация с телефона без сети — целиком: и без стейблкоинов, и USDT, и график", async () => {
     const { ctx, page, errors } = await open();
     await ready(page);

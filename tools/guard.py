@@ -685,6 +685,14 @@ say("доминация и альтсезон — кеш и права: отве
     and "test_channel_does_not_carry_coinmarketcap_numbers" in read(f"{APP}/tests/test_digest_sources.py")
     and "const NF = new Map<string, Intl.NumberFormat>();" in read(f"{APP}/src/lib/format.ts")
     and "dtf(lang, { timeZone: \"UTC\", ...opts })" in read(f"{APP}/src/screens/FearGreedScreen.tsx"))
+say("доминация и альтсезон — повторная ревизия: ответ источника читается по кускам с общим сроком (не держит сборку часами), копии с диска читаются один раз, полночь не роняет бюджет кредитов, USDT не больше 100 − BTC; графики ставят точки по датам (неделя и день вперемешку не расходятся с подписями лет)",
+    _dms.count("r.read1(") == 1 and _mcs.count("r.read1(") == 1 and "if time.monotonic() > end:" in _dms and "if time.monotonic() > end:" in _mcs
+    and "_st.loaded = True" in _dms and "_st.loaded = True" in _mcs and "_spent().get(day, 0)" in _mcs
+    and "u <= 100 - _pct(btc)" in _mcs and "export function nearestIdx(" in _dml
+    and _dm.count("const xOf = (i: number) => xOfT(") == 2 and _dm.count("nearestIdx(times, ") == 2
+    and "test_slow_drip_is_cut_by_the_deadline" in read(f"{APP}/tests/test_mcap.py")
+    and "test_slow_drip_is_cut_by_the_deadline" in read(f"{APP}/tests/test_dom.py")
+    and read(f"{APP}/tools/mutate-etf.py").count("drop_pyc(path)") >= 4 and "signal.signal(signal.SIGTERM, restore_and_exit)" in read(f"{APP}/tools/mutate-etf.py"))
 say("альтсезон честный: корзина на каждый день — самые торгуемые за 30 дней до него (без заглядывания вперёд), со снятыми потом монетами, только закрытые дни, не меньше 30 монет; ширина 25/50/100; это сказано на экране",
     "VOLW = 30" in _dms and "MIN_BASKET = 30" in _dms and 'EXCLUDE = frozenset({"PAXG", "USTC", "NFTI"})' in _dms and "TIERS = (25, 50, 100)" in _dms
     and '{"type": "meta"}' in _dms and 'u.get("isDelisted")' in _dms and "metaAndAssetCtxs" not in _dms

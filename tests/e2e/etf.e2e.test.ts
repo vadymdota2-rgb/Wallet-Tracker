@@ -533,6 +533,9 @@ describe("институциональные потоки", () => {
     assert.match(sp(await stale.innerText()), /^Не удалось обновить — показаны сохранённые данные \(3 ч.*\)\. Повторить$/);
     await stale.locator("button").click();
     await stale.waitFor({ state: "detached" });
+    // Плашка уходит сразу по нажатию, а запрос доходит до сервера чуть позже:
+    // ждём его, а не проверяем в тот же миг (под нагрузкой — гонка).
+    for (let i = 0; i < 50 && asked() < 3; i++) await page.waitForTimeout(100);
     assert.equal(asked(), 3);
     assert.deepEqual(errors, []);
     await ctx.close();

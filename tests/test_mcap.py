@@ -59,6 +59,17 @@ class Net:
         return json.dumps(self.h if "historical" in url else self.g if "global-metrics" in url else self.u).encode()
 
 
+class Resp(io.BytesIO):
+    """Ответ сети: тело кусками по step байт (read1), как у http.client."""
+
+    def __init__(self, body: bytes, step: int = 1 << 16):
+        super().__init__(body)
+        self.step = step
+
+    def read1(self, n=-1):
+        return super().read1(min(self.step, n if n > 0 else self.step))
+
+
 class Base(unittest.TestCase):
     def setUp(self):
         mc._st = mc._State()
@@ -369,11 +380,66 @@ class SecurityTest(Base):
         self.assertTrue(buf.getvalue().startswith("mcap: a?b"))
         self.assertLess(len(buf.getvalue()), 320)
 
+    def test_slow_drip_is_cut_by_the_deadline(self):
+        # Таймаут сокета — на каждый кусок: ответ по байту держал бы сборку
+        # часами. Весь ответ — не дольше timeout.
+        clock = iter(range(0, 10_000, 2))
+        with mock.patch.object(mc._opener, "open", return_value=Resp(b"[1]" * 100, step=1)), \
+                mock.patch.object(mc.time, "monotonic", lambda: next(clock)):
+            self.assertIsNone(mc._fetch(mc.GLOBAL, timeout=5))
+        with mock.patch.object(mc._opener, "open", return_value=Resp(b"[1]", step=1)):
+            self.assertEqual(mc._fetch(mc.GLOBAL, timeout=5), b"[1]")
+
+    def test_disk_copy_is_read_once_not_on_every_request(self):
+        # Без годной копии каждый запрос читал бы и разбирал историю с диска
+        # (до мегабайта) — лёгкий способ нагрузить сервер.
+        mc.set_cache_dir(tempfile.mkdtemp())
+        with mock.patch.object(mc, "_last_load", wraps=mc._last_load) as last, \
+                mock.patch.object(mc, "_hist_load", wraps=mc._hist_load) as hist, \
+                mock.patch.object(mc.threading, "Thread"):
+            for _ in range(5):
+                self.assertEqual(mc.mcap_data(), {"ok": False, "error": "no_data"})
+        self.assertEqual((last.call_count, hist.call_count), (1, 1))
+
+    def test_usdt_share_never_exceeds_the_non_bitcoin_part(self):
+        # Приложение берёт USDT только в пределах 100 − BTC; сервер — так же.
+        g = glob()
+        g["data"].update(btc_dominance=97.0, eth_dominance=1.0)
+        got = mc.compute(g, usdt(cap=0.05 * 3.4e12))
+        self.assertIsNone(got["usdt"])
+        self.assertIsNotNone(mc.compute(glob(), usdt())["usdt"])
+        # USDT дешевле $100 млн или дороже всего рынка — сбой, доли нет.
+        self.assertIsNone(mc.compute(glob(), usdt(cap=5e7))["usdt"])
+        self.assertIsNone(mc.compute(glob(), usdt(cap=3e12))["usdt"])
+
+    def test_midnight_between_checks_does_not_break_the_budget(self):
+        # Сутки сменились между двумя _today(): сборка не падает (KeyError),
+        # кредиты пишутся на новый день.
+        days = iter(["2026-10-20", "2026-10-21", "2026-10-21", "2026-10-21", "2026-10-21", "2026-10-21"])
+        with mc._lock:
+            mc._st.spent = {"2026-10-20": 5}
+        with mock.patch.object(mc, "_today", lambda: next(days)):
+            self.assertTrue(mc._can(1))
+        # Смена дня в любой из точек проверки — тоже без падения.
+        for flip in range(1, 5):
+            seq = iter(["2026-10-20"] * flip + ["2026-10-21"] * 8)
+            with mc._lock:
+                mc._st.spent = {"2026-10-20": 5}
+            with mock.patch.object(mc, "_today", lambda it=seq: next(it)):
+                self.assertTrue(mc._can(1), flip)
+        days = iter(["2026-10-21", "2026-10-22", "2026-10-22", "2026-10-22"])
+        with mock.patch.object(mc, "_today", lambda: next(days)):
+            mc._charge({"status": {"credit_count": 3}}, 1)
+        self.assertEqual(sum(mc._st.spent.values()), 3)
+
     def test_body_limit_and_hostile_json(self):
-        big = mock.MagicMock()
-        big.__enter__.return_value.read.return_value = b"x" * (mc.BODY_MAX + 1)
-        with mock.patch.object(mc._opener, "open", return_value=big):
+        with mock.patch.object(mc._opener, "open", return_value=Resp(b"x" * (mc.BODY_MAX + 1))):
             self.assertIsNone(mc._fetch(mc.GLOBAL))
+        with mock.patch.object(mc._opener, "open", return_value=Resp(b"x" * mc.BODY_MAX)):
+            self.assertEqual(len(mc._fetch(mc.GLOBAL) or b""), mc.BODY_MAX)
+        # История — свой, больший предел.
+        with mock.patch.object(mc._opener, "open", return_value=Resp(b"x" * (mc.BODY_MAX + 1))):
+            self.assertIsNotNone(mc._fetch(mc.GLOBAL, limit=mc.HIST_BODY_MAX))
         for raw in (b"[" * 100_000, b'{"v": NaN}', b"[1e999]", b"[1" + b"0" * 400 + b"]", b"\xff\xfe", b""):
             self.assertIsNone(mc._parse(raw), raw[:20])
 

@@ -5,6 +5,7 @@
 дыра в тестах. Файл после каждой мутации возвращается как был.
 """
 import os
+import signal
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -199,7 +200,7 @@ DM = [
     ("        if PX_FROM <= ts < _today():\n            out[ts]", "        if True:\n            out[ts]", "альтсезон: только закрытые дни с 2020 г."),
     ('    if len(text.lstrip("-")) > INT_DIGITS:', "    if False:", "альтсезон: целое не длиннее INT_DIGITS"),
     ('return u.scheme == "https" and u.hostname in HOSTS and not u.username and not u.password', "return True", "альтсезон: только https к Hyperliquid"),
-    ("    return got if len(got) <= BODY_MAX else None", "    return got", "альтсезон: предел размера ответа"),
+    ("                buf += chunk\n            return None\n    except (OSError", "                buf += chunk\n            return bytes(buf)\n    except (OSError", "альтсезон: предел размера ответа"),
     ("        if asked:\n            sleep(PACE)\n", "", "альтсезон: пауза между запросами"),
     ("        if asked % SAVE_EVERY == 0:\n            _px_save({**old, **out})\n", "", "альтсезон: свечи пишутся по ходу первой сборки"),
     ("{**old, **out})", "out)", "альтсезон: промежуточная запись не теряет ещё не спрошенные монеты"),
@@ -209,13 +210,15 @@ DM = [
     ("        if not _busy.is_set() and not _resting():", "        if not _busy.is_set():", "альтсезон: пауза после сбоя"),
     ("    return len(xs) >= 10 and max(xs) / min(xs) < PEG", "    return False", "альтсезон: привязанная монета видна по ценам"),
     ("eb = float(f\"{eth[t] / btc[t]:.6g}\")", "eb = float(f\"{eth[t]:.6g}\")", "альтсезон: ETH/BTC — отношение цен"),
+    ("                if time.monotonic() > end:\n                    return None\n", "", "альтсезон: весь ответ — не дольше срока"),
+    ("        _st.loaded = True\n        saved = _file_load(\"dom.json\")", "        saved = _file_load(\"dom.json\")", "альтсезон: копия с диска — один раз, а не на каждый запрос"),
 ]
 # Доминация (wt_mcap): официальный API CoinMarketCap, бюджет кредитов, история.
 MC = [
     ('return u.scheme == "https" and u.hostname in HOSTS and not u.username and not u.password', "return True", "доминация: ключ — только по https к pro-api"),
     ("    if not key or not _allowed(url):\n        return None\n", "", "доминация: без ключа и мимо HOSTS — без сети"),
     ('        _log(f"HTTP {e.code}")\n', "", "доминация: код ошибки CMC — в журнал"),
-    ("    return got if len(got) <= limit else None", "    return got", "доминация: предел размера ответа"),
+    ("                buf += chunk\n            return None\n    except urllib.error.HTTPError", "                buf += chunk\n            return bytes(buf)\n    except urllib.error.HTTPError", "доминация: предел размера ответа"),
     ("    return k if 8 <= len(k) <= 100 and k.isascii() and k.replace(\"-\", \"\").isalnum() else \"\"", "    return k", "доминация: ключ похож на ключ"),
     ("_pct(btc) + _pct(eth) > 100:", "btc + eth > 1000:", "доминация: доли BTC + ETH не больше 100 после округления"),
     ('btc = _num(_get(data, "btc_dominance"), 0.5, 100)', 'btc = _num(_get(data, "btc_dominance"), 0, 100)', "доминация: доля BTC не ноль"),
@@ -228,7 +231,7 @@ MC = [
     ("        eth = None if eth is None or _pct(eth) > 100 - _pct(btc) else eth\n", "", "доминация: ETH + BTC в истории не больше 100"),
     ("    return [r for t, r in sorted(days.items()) if t > last - HIST_DAILY * DAY or (t // DAY) % 7 == 0]", "    return [r for t, r in sorted(days.items())]", "доминация: старая история — раз в неделю"),
     ("    if not isinstance(quotes, list) or len(quotes) > HIST_MAX:", "    if not isinstance(quotes, list):", "доминация: предел длины истории"),
-    ("        return _spent()[_today()] + cost <= DAY_BUDGET", "        return True", "доминация: дневной бюджет кредитов"),
+    ("        return _spent().get(day, 0) + cost <= DAY_BUDGET", "        return True", "доминация: дневной бюджет кредитов"),
     ("    if raw is not None:\n        _charge(got, guess)\n", "", "доминация: кредиты списываются"),
     ("    cost = n if isinstance(n, int) and not isinstance(n, bool) and 0 <= n <= 1000 else guess", "    cost = guess", "доминация: кредиты — по ответу CMC"),
     ('    _file_save("mcap_spent.json", snap)\n', "", "доминация: счётчик кредитов — на диске"),
@@ -239,9 +242,13 @@ MC = [
     ("                _st.hit = (time.monotonic() - age, {**last[1], \"hist\": hist[1] if hist else []})", "                pass", "доминация: после перезапуска — копия с диска"),
     ("                and HIST_FROM <= r[0] <= time.time() and (not rows or r[0] > rows[-1][0])):", "                ):", "доминация: копия истории проверяется"),
     ("        resting = _st.fail is not None and time.monotonic() - _st.fail < FAIL_WAIT", "        resting = False", "доминация: пауза после сбоя"),
-    ('        return {"ok": False, "error": "no_key"}\n    if _st.hit is None and _st.dir:', '        pass\n    if _st.hit is None and _st.dir:', "доминация: без ключа — «нет ключа»"),
+    ('        return {"ok": False, "error": "no_key"}\n    if not _st.loaded and _st.dir:', '        pass\n    if not _st.loaded and _st.dir:', "доминация: без ключа — «нет ключа»"),
     ("    return f\"{HIST}&time_end={time.strftime('%Y-%m-%d', time.gmtime(now))}\"", "    return HIST", "доминация: история до сегодня, а не 10 дней"),
     ("\n                    and (cap[1] is None or _num(cap[1], CAP_MIN, CAP_MAX) is not None))", ")", "доминация: вчерашняя капитализация в копии — годная"),
+    ("                if time.monotonic() > end:\n                    return None\n", "", "доминация: весь ответ — не дольше срока"),
+    ("        _st.loaded = True\n        # Перезапуск", "        # Перезапуск", "доминация: копии с диска — один раз, а не на каждый запрос"),
+    ("    out[\"usdt\"] = u if u is None or u <= 100 - _pct(btc) else None", "    out[\"usdt\"] = u", "доминация: USDT — не больше 100 − BTC"),
+    ("        return _spent().get(day, 0) + cost <= DAY_BUDGET", "        return _spent()[_today()] + cost <= DAY_BUDGET", "доминация: полночь между проверками не роняет сборку"),
 ]
 
 DMT = [
@@ -275,6 +282,7 @@ DMT = [
     ("for (let i = s.length - 1; i >= 0; i -= n) out.push(s[i]!);", "for (let i = s.length - 1; i >= 0; i -= 1) out.push(s[i]!);", "альтсезон: таблица — раз в неделю"),
     ("if (!prev || prev[0] - d[0] >= 7 * DAY) out.push(d);", "if (!prev || prev[0] - d[0] > 7 * DAY) out.push(d);", "доминация: таблица — ровно раз в неделю"),
     ("if (!prev || prev[0] - d[0] >= 7 * DAY) out.push(d);", "out.push(d);", "доминация: таблица — не каждый день"),
+    ("  return lo > 0 && t - times[lo - 1]! <= times[lo]! - t ? lo - 1 : lo;", "  return lo;", "графики: ближайшая по времени точка, а не следующая"),
 ]
 
 # Общие ответы /api/dom и /api/mcap по HTTP и раздел «Рынок» дайджеста (whale_api.py).
@@ -289,9 +297,41 @@ AP = [
 ]
 
 
+# Байткод испорченного файла — стереть до проверки и после: мутант и исходник
+# часто одной длины и пишутся в одну секунду, и Python брал бы из __pycache__
+# байткод прошлой версии — мутант «выживал» бы ложно, а после проверки там
+# оставался бы испорченный код. Остальной байткод не трогаем: без него каждый
+# запуск заново компилировал бы весь сервер.
+def drop_pyc(path):
+    stem = os.path.splitext(os.path.basename(path))[0]
+    cache = os.path.join(os.path.dirname(path), "__pycache__")
+    for f in os.listdir(cache) if os.path.isdir(cache) else []:
+        if f.startswith(stem + ".") and f.endswith(".pyc"):
+            os.remove(os.path.join(cache, f))
+
+
+# Исходники, которые сейчас испорчены: прерывание (Ctrl+C, timeout, отмена в
+# CI) возвращает их на место, а не оставляет мутанта в рабочей копии.
+ORIG = {}
+
+
+def restore_and_exit(signum, frame):
+    for path, src in list(ORIG.items()):
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(src)
+        drop_pyc(path)
+    os._exit(128 + signum)
+
+
+signal.signal(signal.SIGTERM, restore_and_exit)
+signal.signal(signal.SIGINT, restore_and_exit)
+
+
 def run(path, cmd, muts):
     with open(path, encoding="utf-8") as f:
         src = f.read()
+    ORIG[path] = src
+    drop_pyc(path)
     # Без порчи тесты обязаны проходить: иначе любая мутация «убита» ложно.
     if subprocess.run(cmd, cwd=ROOT, capture_output=True, timeout=300, check=False).returncode != 0:
         sys.exit(f"тесты красные и без мутаций: {' '.join(cmd)}")
@@ -302,6 +342,7 @@ def run(path, cmd, muts):
                 sys.exit(f"мутация «{name}»: текст для замены найден {src.count(a)} раз — обновите список")
             with open(path, "w", encoding="utf-8") as f:
                 f.write(src.replace(a, b))
+            drop_pyc(path)
             # Тесты зависли (мутант пустил запрос в сеть, и тот ждёт) — порча
             # замечена: убита, а не сбой проверки.
             try:
@@ -314,6 +355,8 @@ def run(path, cmd, muts):
     finally:
         with open(path, "w", encoding="utf-8") as f:
             f.write(src)
+        drop_pyc(path)
+        ORIG.pop(path, None)
     return alive
 
 

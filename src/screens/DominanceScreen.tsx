@@ -29,7 +29,7 @@ import { fetchDom, fetchMcap, peekDom, peekMcap } from "../lib/api";
 import { Card, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import { CmcBy } from "../components/CmcBy";
 import {
-  DOM_TTL_MS, MCAP_RANGES, RANGES, STALE_DAYS, ago, altStats, beat, byWeek, change, daysOld, ebStats, everyNth, mcapAgo, mcapWindow, rebase,
+  DOM_TTL_MS, MCAP_RANGES, RANGES, STALE_DAYS, ago, altStats, beat, byWeek, change, daysOld, ebStats, everyNth, mcapAgo, mcapWindow, nearestIdx, rebase,
   seasonOf, series, thin, windowOf, type DomReply, type McapDay, type McapRange, type McapReply, type Range,
 } from "../lib/dom";
 import { Frame } from "./Screen";
@@ -135,12 +135,14 @@ function MiniChart({ pts, lang, color, bands, fmt, fixed, label, log }: {
   const vals = pts.map((p) => p[1]);
   const lo = fixed ? fixed[0] : Math.min(...vals) * (log ? 0.9 : 0.95);
   const hi = fixed ? fixed[1] : Math.max(...vals) * (log ? 1.1 : 1.05);
-  const xOf = (i: number) => (n <= 1 ? 0 : (i / (n - 1)) * PW);
-  const f = log ? (v: number) => Math.log(Math.max(v, 1e-9)) : (v: number) => v;
-  const yOf = (v: number) => 6 + (1 - (f(v) - f(lo)) / (f(hi) - f(lo) || 1)) * MH;
   const a = pts[0]?.[0] ?? 0;
   const b = pts[n - 1]?.[0] ?? 1;
   const xOfT = (ts: number) => ((ts - a) / Math.max(1, b - a)) * PW;
+  /* По дате, а не по номеру точки: пропуски дней не сжимают и не растягивают время. */
+  const xOf = (i: number) => xOfT(pts[i]?.[0] ?? a);
+  const times = useMemo(() => pts.map((p) => p[0]), [pts]);
+  const f = log ? (v: number) => Math.log(Math.max(v, 1e-9)) : (v: number) => v;
+  const yOf = (v: number) => 6 + (1 - (f(v) - f(lo)) / (f(hi) - f(lo) || 1)) * MH;
   /* Линия кусками своего цвета: у индекса цвет — зона. */
   const segs = useMemo(() => {
     const out: { c: string; pts: string }[] = [];
@@ -164,7 +166,7 @@ function MiniChart({ pts, lang, color, bands, fmt, fixed, label, log }: {
     if (!el || n < 1) return;
     const box = el.getBoundingClientRect();
     const x = ((clientX - box.left) / box.width) * W;
-    const i = Math.max(0, Math.min(n - 1, Math.round((x / PW) * (n - 1))));
+    const i = Math.max(0, nearestIdx(times, a + (Math.max(0, Math.min(PW, x)) / PW) * (b - a)));
     if (i !== sel) {
       haptic("select");
       setSel(i);
@@ -226,7 +228,7 @@ function MiniChart({ pts, lang, color, bands, fmt, fixed, label, log }: {
         ) : null}
       </svg>
       {p ? (
-        <div className={sel! > n / 2 ? "fg-pop left" : "fg-pop"} aria-live="polite">
+        <div className={xOf(sel!) > PW / 2 ? "fg-pop left" : "fg-pop"} aria-live="polite">
           <small>{dateStr(lang, p[0], { day: "numeric", month: "long", year: "numeric" })}</small>
           <b style={{ color: color(p[1]) }}><bdi dir="ltr">{fmt(p[1])}</bdi></b>
         </div>
@@ -403,17 +405,23 @@ function McapChart({ days, lang }: { days: McapDay[]; lang: Lang }) {
   const sel = picked !== null && picked < n ? picked : null;
   const btcOf = (d: McapDay) => (d[1] * d[2]) / 100;
   const altOf = (d: McapDay) => d[1] - btcOf(d);
-  const lo = Math.min(...days.map((d) => Math.min(btcOf(d), altOf(d))));
   const hi = Math.max(...days.map((d) => Math.max(btcOf(d), altOf(d))));
+  /* Не ниже 1/10 000 от максимума: день с долей биткоина 100 % (альты — 0 $)
+     не растягивает лог. шкалу в бесконечность. */
+  const lo = Math.max(hi / 1e4, Math.min(...days.map((d) => Math.min(btcOf(d), altOf(d)))));
   const L = (v: number) => Math.log(Math.max(1, v));
   const yLo = L(lo * 0.8);
   const yHi = L(hi * 1.15);
-  const xOf = (i: number) => (n <= 1 ? 0 : (i / (n - 1)) * PW);
-  const yUsd = (v: number) => P1.y + (1 - (L(v) - yLo) / (yHi - yLo || 1)) * P1.h;
+  const yUsd = (v: number) => P1.y + (1 - (Math.max(L(v), yLo) - yLo) / (yHi - yLo || 1)) * P1.h;
   const yPct = (v: number) => P2.y + (1 - v / 100) * P2.h;
   const a = days[0]?.[0] ?? 0;
   const b = days[n - 1]?.[0] ?? 1;
   const xOfT = (ts: number) => ((ts - a) / Math.max(1, b - a)) * PW;
+  /* По дате, а не по номеру точки: старше трёх лет история — раз в неделю,
+     и по номеру последние три года заняли бы почти весь график, разойдясь
+     с подписями лет. */
+  const xOf = (i: number) => xOfT(days[i]?.[0] ?? a);
+  const times = useMemo(() => days.map((d) => d[0]), [days]);
   const paths = useMemo(() => {
     const line = (f: (d: McapDay) => number) => days.map((d, i) => `${xOf(i).toFixed(1)},${f(d).toFixed(1)}`).join(" ");
     const edge = (f: (d: McapDay) => number) => days.map((d, i) => `${xOf(i).toFixed(1)},${yPct(f(d)).toFixed(1)}`);
@@ -435,7 +443,7 @@ function McapChart({ days, lang }: { days: McapDay[]; lang: Lang }) {
     if (!el || n < 1) return;
     const box = el.getBoundingClientRect();
     const x = ((clientX - box.left) / box.width) * W;
-    const i = Math.max(0, Math.min(n - 1, Math.round((x / PW) * (n - 1))));
+    const i = Math.max(0, nearestIdx(times, a + (Math.max(0, Math.min(PW, x)) / PW) * (b - a)));
     if (i !== sel) {
       haptic("select");
       setSel(i);
@@ -507,7 +515,7 @@ function McapChart({ days, lang }: { days: McapDay[]; lang: Lang }) {
         ) : null}
       </svg>
       {d ? (
-        <div className={sel! > n / 2 ? "fg-pop left dm-pop" : "fg-pop dm-pop"} aria-live="polite">
+        <div className={xOf(sel!) > PW / 2 ? "fg-pop left dm-pop" : "fg-pop dm-pop"} aria-live="polite">
           <small>{dateStr(lang, d[0], { day: "numeric", month: "long", year: "numeric" })}</small>
           <span><i style={{ background: C.btc }} />BTC <bdi dir="ltr">{usdWord(btcOf(d))} · {pct(d[2], 1, false)}</bdi></span>
           <span><i style={{ background: C.alt }} />{t(lang, "dm_alts")} <bdi dir="ltr">{usdWord(altOf(d))}</bdi></span>
@@ -601,7 +609,7 @@ function McapBlock({ m, lang }: { m: McapReply; lang: Lang }) {
   ];
   /* Куда шли деньги за 30 дней: капитализация биткоина и всех остальных монет. */
   const p30 = mcapAgo(h, 30);
-  const flow = p30 ? {
+  const flow = p30 && p30[2] < 100 && m.btc[0] < 100 ? {
     b: ((cap * m.btc[0]) / (p30[1] * p30[2]) - 1) * 100,
     a: ((cap * (100 - m.btc[0])) / (p30[1] * (100 - p30[2])) - 1) * 100,
   } : null;

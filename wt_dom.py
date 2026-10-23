@@ -111,6 +111,7 @@ PX_FROM = 1_597_795_200
 # Имя монеты в Hyperliquid: буквы и цифры («kPEPE» — тысяча PEPE).
 COIN = re.compile(r"[A-Za-z0-9]{1,20}")
 BODY_MAX = 4 << 20
+CHUNK = 64 << 10
 INT_DIGITS = 18
 _HEADERS = {"User-Agent": "wallet-tracker/1.0", "Accept-Encoding": "identity", "Content-Type": "application/json"}
 
@@ -146,16 +147,27 @@ def _log(msg: str) -> None:
 
 
 def _fetch(url: str, body: dict[str, Any], timeout: float) -> bytes | None:
-    """POST JSON. Любая ошибка сети и ответ больше BODY_MAX — None."""
+    """POST JSON. Любая ошибка сети, ответ больше BODY_MAX и ответ дольше
+    timeout целиком — None."""
     if not _allowed(url):
         return None
     req = urllib.request.Request(url, data=json.dumps(body).encode(), headers=_HEADERS, method="POST")
+    end = time.monotonic() + timeout
     try:
         with _opener.open(req, timeout=timeout) as r:
-            got: bytes = r.read(BODY_MAX + 1)
+            # По кускам и со своим сроком: таймаут сокета — на каждый кусок,
+            # и источник, цедящий по байту, держал бы сборку часами.
+            buf = bytearray()
+            while len(buf) <= BODY_MAX:
+                if time.monotonic() > end:
+                    return None
+                chunk: bytes = r.read1(min(CHUNK, BODY_MAX + 1 - len(buf)))
+                if not chunk:
+                    return bytes(buf)
+                buf += chunk
+            return None
     except (OSError, ValueError, http.client.HTTPException):
         return None
-    return got if len(got) <= BODY_MAX else None
 
 
 def _finite(text: str) -> float:
@@ -257,8 +269,10 @@ class _State:
     fail: float | None = None
     # Свечи: монета → {начало суток: (закрытие, оборот $)}.
     px: dict[str, dict[int, Candle]] = {}  # noqa: RUF012 — заменяется целиком, не меняется на месте
-    # Где держать копии (set_cache_dir).
+    # Где держать копии (set_cache_dir); копия ответа с диска уже читалась
+    # (читается один раз: без годной копии запросы диск не трогают).
     dir: str | None = None
+    loaded: bool = False
 
 
 _st = _State()
@@ -513,7 +527,8 @@ def dom_data() -> dict[str, Json]:
     """Ответ /api/dom: из кэша; свежий собирается в фоне одним потоком.
     После перезапуска — копия с диска (как устаревшая). Без кэша и копии —
     «собираем» (первая сборка — пара минут), сборка идёт в фоне."""
-    if _st.hit is None and _st.dir:
+    if not _st.loaded and _st.dir:
+        _st.loaded = True
         saved = _file_load("dom.json")
         with _lock:
             # Копия прежнего расчёта (без tiers) не годится: её не примет и приложение.

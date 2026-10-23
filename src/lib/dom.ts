@@ -323,3 +323,19 @@ export function byWeek(s: McapDay[]): McapDay[] {
   }
   return out;
 }
+
+/** Номер точки, ближайшей по времени к t; times — по возрастанию. Пустой — −1.
+ *  Графики ставят точки по датам, а не по номеру: история доминации старше
+ *  трёх лет — раз в неделю, и по номеру последние три года заняли бы почти
+ *  весь график, разойдясь с подписями лет. */
+export function nearestIdx(times: number[], t: number): number {
+  if (!times.length) return -1;
+  let lo = 0;
+  let hi = times.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (times[mid]! < t) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo > 0 && t - times[lo - 1]! <= times[lo]! - t ? lo - 1 : lo;
+}

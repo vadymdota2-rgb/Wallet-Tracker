@@ -63,6 +63,17 @@ class Net:
         return [c["req"]["coin"] for c in self.calls if c["type"] == "candleSnapshot"]
 
 
+class Resp(io.BytesIO):
+    """Ответ сети: тело кусками по step байт (read1), как у http.client."""
+
+    def __init__(self, body: bytes, step: int = 1 << 16):
+        super().__init__(body)
+        self.step = step
+
+    def read1(self, n=-1):
+        return super().read1(min(self.step, n if n > 0 else self.step))
+
+
 class Base(unittest.TestCase):
     def setUp(self):
         dom._st = dom._State()
@@ -441,12 +452,33 @@ class SecurityTest(Base):
             op.assert_not_called()
 
     def test_body_limit_and_network_errors(self):
-        big = mock.MagicMock()
-        big.__enter__.return_value.read.return_value = b"x" * (dom.BODY_MAX + 1)
-        with mock.patch.object(dom._opener, "open", return_value=big):
+        with mock.patch.object(dom._opener, "open", return_value=Resp(b"x" * (dom.BODY_MAX + 1))):
             self.assertIsNone(dom._fetch(dom.INFO, {}, 5))
+        with mock.patch.object(dom._opener, "open", return_value=Resp(b"x" * dom.BODY_MAX)):
+            self.assertEqual(len(dom._fetch(dom.INFO, {}, 5) or b""), dom.BODY_MAX)
         with mock.patch.object(dom._opener, "open", side_effect=OSError("down")):
             self.assertIsNone(dom._fetch(dom.INFO, {}, 5))
+
+    def test_disk_copy_is_read_once_not_on_every_request(self):
+        # Первая сборка идёт минуты; без годной копии каждый запрос читал бы
+        # и разбирал файл заново — лёгкий способ нагрузить сервер.
+        with open(os.path.join(self.tmp, "dom.json"), "w", encoding="utf-8") as f:
+            f.write('{"at": 1, "v": {"ok": true, "rows": []}}')  # прежний формат, без tiers
+        with mock.patch.object(dom, "_file_load", wraps=dom._file_load) as load, \
+                mock.patch.object(dom.threading, "Thread"):
+            for _ in range(5):
+                self.assertFalse(dom.dom_data()["ok"])
+        self.assertEqual(load.call_count, 1)
+
+    def test_slow_drip_is_cut_by_the_deadline(self):
+        # Таймаут сокета — на каждый кусок: источник, цедящий по байту, держал
+        # бы сборку часами. Весь ответ — не дольше timeout.
+        clock = iter(range(0, 10_000, 2))
+        with mock.patch.object(dom._opener, "open", return_value=Resp(b"[1]" * 100, step=1)), \
+                mock.patch.object(dom.time, "monotonic", lambda: next(clock)):
+            self.assertIsNone(dom._fetch(dom.INFO, {}, 5))
+        with mock.patch.object(dom._opener, "open", return_value=Resp(b"[1]", step=1)):
+            self.assertEqual(dom._fetch(dom.INFO, {}, 5), b"[1]")
 
     def test_hostile_json(self):
         for raw in (b"[" * 100_000, b'{"v": NaN}', b"[1e999]", b"[1" + b"0" * 400 + b"]", b"\xff\xfe", b""):

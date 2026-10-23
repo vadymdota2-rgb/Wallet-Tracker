@@ -9,7 +9,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  MCAP_RANGES, MIN_BASKET, PX_FROM, RANGES, mcapAgo, mcapWindow, validMcap, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, windowOf,
+  MCAP_RANGES, MIN_BASKET, PX_FROM, RANGES, mcapAgo, mcapWindow, nearestIdx, validMcap, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, windowOf,
   type DomDay, type DomReply, type DomTier,
 } from "../src/lib/dom.ts";
 
@@ -235,5 +235,19 @@ test("доминация: точка n суток назад не позже н�
       const w = mcapWindow(h, range);
       assert.ok(w.length <= h.length && (w.length === 0 || w[w.length - 1] === h[h.length - 1]), `случай ${i}`);
     }
+  }
+});
+
+test("nearestIdx: никакая другая точка не ближе по времени", () => {
+  const r = rng(SEED ^ 0x7e);
+  for (let i = 0; i < CASES; i++) {
+    const n = 1 + Math.floor(r() * 50);
+    const ts: number[] = [];
+    let t = r() * 100;
+    for (let k = 0; k < n; k++) ts.push((t += 1 + Math.floor(r() * 9)));
+    const q = r() * (t + 20) - 10;
+    const got = nearestIdx(ts, q);
+    assert.ok(got >= 0 && got < n, `случай ${i}`);
+    for (const x of ts) assert.ok(Math.abs(ts[got]! - q) <= Math.abs(x - q), `случай ${i}`);
   }
 });
