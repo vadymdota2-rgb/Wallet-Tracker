@@ -128,6 +128,7 @@ export const de: Dict = {
   btc_partial: "Der Scanner läuft seit {d} – dieses Zeitfenster ist noch unvollständig.",
   btc_rank_hint: "Wallets, die BTC von Börsen abheben und wieder einzahlen. Kauf zum Preis des Abhebungsblocks, Verkauf zum Preis der Einzahlung; PnL inklusive des noch gehaltenen Bestands.",
   btc_rk_acc: "Akkumuliert",
+  btc_stale: "Der Bitcoin-Scanner hat seit {n} Std. keine neuen Blöcke gespeichert — die Zahlen unten werden nicht aktualisiert. Sobald er das Netz eingeholt hat, kommen die Daten von selbst.",
   btc_sum: "Trades: {n} · {b} · {v}",
   btc_wallet_title: "Bitcoin-Wallet",
   btc_wd: "Abgehoben",

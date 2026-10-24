@@ -59,6 +59,20 @@ function stamp(lang: string, ts: number): string {
 }
 
 /** Окно не заполнено целиком: сканер работает меньше, чем длится окно. */
+/** Последний записанный блок старше этого, с: сканер стоит (блок — раз в
+ *  10 минут, час без блоков бывает, три — уже нет). */
+const BTC_STALE_SEC = 3 * 3600;
+
+/** Сканер не записывал блоков — так и сказано, а не «пока ничего, собираем»:
+ *  нули на экране иначе выглядели бы спокойным рынком. */
+function Stale({ at }: { at?: number | undefined }) {
+  const lang = useApp((s) => s.lang);
+  const now = useNow();
+  const h = at ? Math.floor((now / 1000 - at) / 3600) : 0;
+  if (!at || now / 1000 - at < BTC_STALE_SEC) return null;
+  return <p className="lq-stale" role="status">{t(lang, "btc_stale", { n: num(h) })}</p>;
+}
+
 function Partial({ full, from }: { full: boolean; from: number }) {
   const lang = useApp((s) => s.lang);
   if (full || !from) return null;
@@ -161,6 +175,7 @@ export function BtcFlowCard({ bigWin }: { bigWin: BigWin }) {
           {t(lang, "btc_flow_title")}
         </span>
       </SectionTitle>
+      <Stale at={data.at} />
       <div className="trend">
         <p className="trend-ttl">
           <span>{t(lang, "btc_net")} · {t(lang, FLOW_KEY[bigWin].label)}</span>
@@ -310,6 +325,7 @@ export function BtcBigView({ winPicker, win }: { winPicker: ReactNode; win: BigW
           ))}
         </div>
       ) : null}
+      {data?.ok ? <Stale at={data.at} /> : null}
       {data === null ? (
         <Empty text={t(lang, "ui_loading")} />
       ) : !data.ok || !data.rows?.length ? (

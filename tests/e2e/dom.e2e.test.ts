@@ -366,6 +366,8 @@ describe("Альтсезон", () => {
     for (const width of [320, 375, 414, 768, 1280]) {
       const { ctx, page } = await open({ width });
       await ready(page);
+      // Таблица доминации — в ответе отдельного запроса: ждём её, а не считаем раньше.
+      await page.locator("svg.dm-mc").waitFor();
       for (const sum of await page.locator(".dm-tbl summary").all()) await sum.click();
       await page.locator(".dm-tbl table").nth(1).waitFor();
       assert.deepEqual(await overflow(page), [], String(width));

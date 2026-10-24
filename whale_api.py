@@ -11977,9 +11977,12 @@ def _btc_big_build(win: str, side: str, min_btc: float, ex: str = "") -> dict:
         ]
         extra = _btc_extra(con, sorted({r["wallet"] for r in rows}))
         first = con.execute("SELECT MIN(ts) FROM btc_flow").fetchone()[0]
+        # Время последнего записанного блока: сканер стоит — экран говорит
+        # об этом прямо, а не «пока ничего, собираем».
+        tip = con.execute("SELECT ts FROM btc_blocks ORDER BY height DESC LIMIT 1").fetchone()
         return {
             "ok": True, "win": win, "side": side, "min": min_btc, "ex": ex,
-            "tot": tot, "byEx": by_ex,
+            "tot": tot, "byEx": by_ex, "at": int(tip["ts"]) if tip else 0,
             "full": bool(first and first <= since + 600), "since": int(first or 0),
             "rows": [{"tx": r["txid"], "t": int(r["ts"]), "a": r["wallet"], "ex": r["ex"], "n": int(r["n"]),
                       "btc": round(int(r["sats"]) / 1e8, 4), "v": round(int(r["usd_nanos"]) / 1e9, 2),

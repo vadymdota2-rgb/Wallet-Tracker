@@ -128,6 +128,7 @@ export const pt: Dict = {
   btc_partial: "O scanner funciona desde {d} — esta janela ainda não está completa.",
   btc_rank_hint: "Carteiras que sacam BTC das corretoras e voltam a depositar. Compra ao preço do bloco do saque, venda ao do depósito; o PnL inclui o que ainda está em carteira.",
   btc_rk_acc: "Acumulado",
+  btc_stale: "O scanner de Bitcoin não registra novos blocos há {n} h — os números abaixo não estão sendo atualizados. Eles voltam sozinhos assim que ele alcançar a rede.",
   btc_sum: "Operações: {n} · {b} · {v}",
   btc_wallet_title: "Carteira Bitcoin",
   btc_wd: "Sacado",

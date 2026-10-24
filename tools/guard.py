@@ -1021,10 +1021,17 @@ say("bitcoin: кошельки базы — каждая продажа и по�
     and '"Bybit"' in _ws_btc and '"OKX"' in _ws_btc)
 
 say("bitcoin: перестройка цепочки откатывает блок, цена на час блока, выплаты биржи не путаются с CoinJoin, PnL только по биржевым движениям",
-    "bool rolledBack(const Block& b)" in _ws_btc and "long long priceAt(long long ts)" in _ws_btc
+    "Back rolledBack(const Block& b)" in _ws_btc and "long long priceAt(long long ts)" in _ws_btc
     and "basic && (!exIn.empty() || !coinjoin(tx))" in _ws_btc and "AND price_nanos > 0 AND ex != ''" in _ws_btc
     and "UPDATE btc_labels SET at=? WHERE address=? AND how != 'seed'" in _ws_btc and "void reloadWatch()" in _ws_btc
     and "AND price_nanos > 0 AND m.ex != ''" in api and 'r["price_nanos"] or 0) > 0 and r["ex"]' in api)
+say("bitcoin: запись блока — транзакцией, которая обязана закрыться (BEGIN IMMEDIATE, сброс незавершённых запросов, проверка COMMIT, откат при сбое и исключении); не записался — не засчитан и читается снова; простой догоняется до недели; приложение говорит «сканер не записывал блоков N ч»",
+    "bool inTx(F&& f)" in _ws_btc and "BEGIN IMMEDIATE" in _ws_btc and "sqlite3_next_stmt(g_btcDb" in _ws_btc
+    and "Result::FAILED" in _ws_btc and "constexpr long long MAX_BEHIND = 1008;" in _ws_btc
+    and 'execSql("BEGIN")' not in _ws_btc and 'execSql("COMMIT")' not in _ws_btc
+    and '"at": int(tip["ts"]) if tip else 0' in api
+    and read(f"{APP}/src/screens/BtcViews.tsx").count("<Stale at={data.at} />") == 2
+    and os.path.isfile(f"{APP}/tests/test_btc_stale.py"))
 
 _dgm = read(f"{APP}/src/screens/DigestMore.tsx")
 say("дайджест v2: сводка сигналов, рынок, институционалы, bitcoin, лидеры, халвинг; старые выпуски как были",

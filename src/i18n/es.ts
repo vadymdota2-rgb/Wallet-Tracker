@@ -128,6 +128,7 @@ export const es: Dict = {
   btc_partial: "El escáner funciona desde {d}: esta ventana aún no está completa.",
   btc_rank_hint: "Billeteras que retiran BTC de exchanges y lo vuelven a depositar. La compra se valora al precio del bloque del retiro y la venta al del depósito; el PnL incluye lo que aún se mantiene.",
   btc_rk_acc: "Acumulado",
+  btc_stale: "El escáner de Bitcoin lleva {n} h sin registrar bloques nuevos: las cifras de abajo no se actualizan. Se pondrán al día solas en cuanto alcance la red.",
   btc_sum: "Operaciones: {n} · {b} · {v}",
   btc_wallet_title: "Billetera de Bitcoin",
   btc_wd: "Retirado",

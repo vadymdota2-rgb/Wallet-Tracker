@@ -128,6 +128,7 @@ export const fr: Dict = {
   btc_partial: "Le scanner tourne depuis {d} — cette période n'est pas encore complète.",
   btc_rank_hint: "Portefeuilles qui retirent des BTC des plateformes et les y redéposent. Achat au prix du bloc de retrait, vente au prix du dépôt ; le PnL inclut ce qui est encore détenu.",
   btc_rk_acc: "Accumulé",
+  btc_stale: "Le scanner Bitcoin n'a pas enregistré de nouveaux blocs depuis {n} h : les chiffres ci-dessous ne sont pas à jour. Ils se mettront à jour d'eux-mêmes dès qu'il aura rattrapé le réseau.",
   btc_sum: "Opérations : {n} · {b} · {v}",
   btc_wallet_title: "Portefeuille Bitcoin",
   btc_wd: "Retiré",
