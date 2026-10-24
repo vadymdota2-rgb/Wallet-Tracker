@@ -128,7 +128,6 @@ export const zh: Dict = {
   btc_partial: "扫描器自 {d} 起运行——该时间段的数据尚不完整。",
   btc_rank_hint: "从交易所提出 BTC 又充回去的钱包。买入按提币区块价格计算，卖出按充值价格计算；PnL 含仍持有的部分。",
   btc_rk_acc: "累计囤币",
-  btc_stale: "比特币扫描器已有 {n} 小时没有记录新区块——下面的数字没有更新。追上网络后数据会自动恢复。",
   btc_sum: "交易：{n} · {b} · {v}",
   btc_wallet_title: "比特币钱包",
   btc_wd: "提出",

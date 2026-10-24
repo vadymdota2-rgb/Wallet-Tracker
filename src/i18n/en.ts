@@ -127,7 +127,6 @@ export const en = {
   btc_partial: "The scanner has been running since {d} — this window is not complete yet.",
   btc_rank_hint: "Wallets that withdraw BTC from exchanges and deposit it back. A buy is priced at the withdrawal block, a sell at the deposit block; PnL includes what is still held.",
   btc_rk_acc: "Accumulated",
-  btc_stale: "The Bitcoin scanner hasn't recorded new blocks for {n} h — the numbers below aren't updating. They will catch up on their own once it syncs with the network.",
   btc_sum: "Trades: {n} · {b} · {v}",
   btc_wallet_title: "Bitcoin wallet",
   btc_wd: "Withdrawn",

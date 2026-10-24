@@ -128,7 +128,6 @@ export const pl: Dict = {
   btc_partial: "Skaner działa od {d} — to okno nie jest jeszcze pełne.",
   btc_rank_hint: "Portfele, które wypłacają BTC z giełd i wpłacają z powrotem. Zakup po cenie bloku wypłaty, sprzedaż po cenie wpłaty; PnL uwzględnia to, co wciąż trzymają.",
   btc_rk_acc: "Zgromadzone",
-  btc_stale: "Skaner Bitcoina nie zapisał nowych bloków od {n} godz. — liczby poniżej się nie aktualizują. Pojawią się same, gdy dogoni sieć.",
   btc_sum: "Transakcje: {n} · {b} · {v}",
   btc_wallet_title: "Portfel Bitcoin",
   btc_wd: "Wypłacono",

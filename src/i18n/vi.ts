@@ -128,7 +128,6 @@ export const vi: Dict = {
   btc_partial: "Trình quét chạy từ {d} — khoảng thời gian này chưa đầy đủ.",
   btc_rank_hint: "Các ví rút BTC từ sàn và nạp lại. Mua tính theo giá khối rút, bán theo giá lúc nạp; PnL gồm cả phần còn đang giữ.",
   btc_rk_acc: "Tích lũy",
-  btc_stale: "Bộ quét Bitcoin chưa ghi khối mới trong {n} giờ — các số liệu bên dưới không được cập nhật. Dữ liệu sẽ tự xuất hiện khi nó bắt kịp mạng.",
   btc_sum: "Giao dịch: {n} · {b} · {v}",
   btc_wallet_title: "Ví Bitcoin",
   btc_wd: "Đã rút",

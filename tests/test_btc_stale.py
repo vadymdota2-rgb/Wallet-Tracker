@@ -1,10 +1,8 @@
-"""BTC-сканер стоит — экран говорит об этом прямо (npm test).
+"""BTC: потоки бирж и крупные ордера отдают время последнего записанного
+блока (at) — видно, когда сканер стоит (npm test).
 
 23–24 октября сканер бота полтора дня не записывал блоки (застрявшая
-транзакция btc.db), а экран показывал нули и «пока ничего, собираем» — как
-спокойный рынок. Теперь и потоки бирж, и крупные ордера отдают время
-последнего записанного блока (at), и приложение пишет «сканер не записывал
-новых блоков N ч».
+транзакция btc.db, исправлено в WhaleScanner).
 """
 import os
 import sqlite3
@@ -72,13 +70,6 @@ class BtcStaleTest(unittest.TestCase):
         con.commit()
         con.close()
         self.assertEqual(api._btc_big_build("24h", "buy", 0.2)["at"], 0)
-
-    def test_app_shows_the_stale_note_on_both_cards(self):
-        with open(os.path.join(ROOT, "src/screens/BtcViews.tsx"), encoding="utf-8") as f:
-            src = f.read()
-        self.assertEqual(src.count("<Stale at={data.at} />"), 2)
-        self.assertIn("const BTC_STALE_SEC = 3 * 3600;", src)
-        self.assertIn('t(lang, "btc_stale", { n: num(h) })', src)
 
 
 if __name__ == "__main__":

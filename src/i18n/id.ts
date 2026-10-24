@@ -128,7 +128,6 @@ export const id: Dict = {
   btc_partial: "Pemindai berjalan sejak {d} — periode ini belum lengkap.",
   btc_rank_hint: "Dompet yang menarik BTC dari bursa dan menyetorkannya kembali. Beli dihitung pada harga blok penarikan, jual pada harga setoran; PnL termasuk yang masih dipegang.",
   btc_rk_acc: "Terakumulasi",
-  btc_stale: "Pemindai Bitcoin belum mencatat blok baru selama {n} jam — angka di bawah tidak diperbarui. Data akan muncul sendiri setelah pemindai menyusul jaringan.",
   btc_sum: "Transaksi: {n} · {b} · {v}",
   btc_wallet_title: "Dompet Bitcoin",
   btc_wd: "Ditarik",

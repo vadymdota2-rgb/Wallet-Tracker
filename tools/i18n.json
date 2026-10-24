@@ -1781,24 +1781,6 @@
     "vi": "Chưa có gì — trình quét đọc từng khối Bitcoin (khoảng 10 phút một lần) và đang thu thập dữ liệu.",
     "zh": "暂无数据——扫描器会读取每个比特币区块（约每 10 分钟一个），正在积累数据。"
   },
-  "btc_stale": {
-    "ar": "لم يسجّل ماسح البيتكوين كتلًا جديدة منذ {n} ساعة — الأرقام أدناه لا تتحدّث. ستظهر البيانات تلقائيًا بمجرد أن يلحق بالشبكة.",
-    "de": "Der Bitcoin-Scanner hat seit {n} Std. keine neuen Blöcke gespeichert — die Zahlen unten werden nicht aktualisiert. Sobald er das Netz eingeholt hat, kommen die Daten von selbst.",
-    "en": "The Bitcoin scanner hasn't recorded new blocks for {n} h — the numbers below aren't updating. They will catch up on their own once it syncs with the network.",
-    "es": "El escáner de Bitcoin lleva {n} h sin registrar bloques nuevos: las cifras de abajo no se actualizan. Se pondrán al día solas en cuanto alcance la red.",
-    "fr": "Le scanner Bitcoin n'a pas enregistré de nouveaux blocs depuis {n} h : les chiffres ci-dessous ne sont pas à jour. Ils se mettront à jour d'eux-mêmes dès qu'il aura rattrapé le réseau.",
-    "hi": "बिटकॉइन स्कैनर ने {n} घंटे से नए ब्लॉक दर्ज नहीं किए हैं — नीचे के आँकड़े अपडेट नहीं हो रहे। नेटवर्क के साथ पकड़ बनाते ही डेटा अपने आप आ जाएगा।",
-    "id": "Pemindai Bitcoin belum mencatat blok baru selama {n} jam — angka di bawah tidak diperbarui. Data akan muncul sendiri setelah pemindai menyusul jaringan.",
-    "ja": "ビットコインのスキャナーが{n}時間、新しいブロックを記録していません。下の数値は更新されていません。ネットワークに追いつけば自動で反映されます。",
-    "ko": "비트코인 스캐너가 {n}시간째 새 블록을 기록하지 못했습니다. 아래 수치는 갱신되지 않습니다. 네트워크를 따라잡으면 데이터가 자동으로 표시됩니다.",
-    "pl": "Skaner Bitcoina nie zapisał nowych bloków od {n} godz. — liczby poniżej się nie aktualizują. Pojawią się same, gdy dogoni sieć.",
-    "pt": "O scanner de Bitcoin não registra novos blocos há {n} h — os números abaixo não estão sendo atualizados. Eles voltam sozinhos assim que ele alcançar a rede.",
-    "ru": "Сканер биткоина не записывал новых блоков {n} ч — цифры ниже не обновляются. Как только он догонит сеть, данные появятся сами.",
-    "tr": "Bitcoin tarayıcısı {n} saattir yeni blok kaydetmedi — aşağıdaki rakamlar güncellenmiyor. Ağa yetiştiğinde veriler kendiliğinden gelecek.",
-    "uk": "Сканер біткоїна не записував нових блоків {n} год — цифри нижче не оновлюються. Щойно він наздожене мережу, дані з'являться самі.",
-    "vi": "Bộ quét Bitcoin chưa ghi khối mới trong {n} giờ — các số liệu bên dưới không được cập nhật. Dữ liệu sẽ tự xuất hiện khi nó bắt kịp mạng.",
-    "zh": "比特币扫描器已有 {n} 小时没有记录新区块——下面的数字没有更新。追上网络后数据会自动恢复。"
-  },
   "btc_ex_list": {
     "ar": "المنصات: {n}",
     "de": "Börsen: {n}",

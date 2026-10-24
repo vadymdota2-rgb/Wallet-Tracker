@@ -128,7 +128,6 @@ export const tr: Dict = {
   btc_partial: "Tarayıcı {d} tarihinden beri çalışıyor — bu dönem henüz tamamlanmadı.",
   btc_rank_hint: "Borsalardan BTC çekip geri yatıran cüzdanlar. Alım çekim bloğunun fiyatıyla, satış yatırma fiyatıyla; PnL hâlâ elde tutulanı da içerir.",
   btc_rk_acc: "Biriktirilen",
-  btc_stale: "Bitcoin tarayıcısı {n} saattir yeni blok kaydetmedi — aşağıdaki rakamlar güncellenmiyor. Ağa yetiştiğinde veriler kendiliğinden gelecek.",
   btc_sum: "İşlem: {n} · {b} · {v}",
   btc_wallet_title: "Bitcoin cüzdanı",
   btc_wd: "Çekilen",
