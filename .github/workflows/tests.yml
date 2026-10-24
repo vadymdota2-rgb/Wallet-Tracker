@@ -51,7 +51,7 @@ jobs:
       - name: Типы TypeScript (приложение и тесты; модули халвинга, ETF и альтсезона — в строжайшем режиме)
         run: npm run typecheck && npm run typecheck:tests && npm run typecheck:halving && npm run typecheck:etf && npm run typecheck:dom
       - name: Синтаксис сервера
-        run: python -m py_compile whale_api.py wt_halving.py wt_etf.py wt_treasury.py wt_dom.py wt_mcap.py wt_shield.py wt_digest_img.py
+        run: python -m py_compile whale_api.py wt_halving.py wt_etf.py wt_treasury.py wt_dom.py wt_mcap.py wt_btc.py wt_shield.py wt_digest_img.py
       - name: Анализатор Python (модуль халвинга и его тесты)
         run: >-
           pipx run ruff==0.15.8 check --target-version py310
@@ -61,9 +61,17 @@ jobs:
           tests/test_bootstrap_personal.py tests/test_btc_etf_labels.py
           wt_treasury.py tests/test_treasury.py tests/test_treasury_security.py tests/test_digest_sources.py tests/test_digest_channel.py
           wt_dom.py tests/test_dom.py tests/test_dom_policy.py tests/test_dom_fuzz.py tests/test_dom_http.py wt_mcap.py tests/test_mcap.py tests/test_mcap_fuzz.py
+      # Биткоин: SQL собирается из констант модуля (окна, пороги, условия),
+      # всё пришедшее снаружи — только параметрами «?» — поэтому без S608;
+      # setup() принимает общие механизмы сервера поимённо — без PLR0913.
+      - name: Анализатор Python (биткоин — wt_btc и его тесты)
+        run: >-
+          pipx run ruff==0.15.8 check --target-version py310
+          --select E,F,W,B,UP,SIM,PL,RUF,S,BLE,I --ignore E501,PLR2004,RUF001,RUF002,RUF003,S310,S603,S607,S608,PLR0913
+          wt_btc.py tests/test_btc_stale.py
       - name: Строгие типы Python (mypy --strict)
         run: >-
-          pipx run mypy==1.11.2 --strict --python-version 3.11 wt_halving.py wt_etf.py wt_treasury.py wt_dom.py wt_mcap.py
+          pipx run mypy==1.11.2 --strict --python-version 3.11 wt_halving.py wt_etf.py wt_treasury.py wt_dom.py wt_mcap.py wt_btc.py
       - name: Тесты расчёта и сервера
         run: npm test
 

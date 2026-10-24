@@ -33,6 +33,8 @@ def read(p):
 
 
 api = read(f"{APP}/whale_api.py")
+# Биткоин-часть сервера — отдельным модулем (wt_btc.py).
+btcpy = read(f"{APP}/wt_btc.py")
 labels = read(f"{APP}/src/lib/labels.ts")
 live = read(f"{APP}/src/store/live.ts")
 
@@ -872,7 +874,7 @@ say("защита API: бан за промахи ключом — кроме с
     and os.path.isfile(f"{APP}/tests/test_shield_bans.py"))
 say("кеш: тяжёлые ответы API — и на диске (после перезапуска сразу, свежий — в фоне); ETF, отчёты SEC и альтсезон (ответ и цены) — тоже; в приложении — дайджест и кошелёк BTC на устройстве",
     "def disk_cache(store: dict, name: str) -> dict:" in api and "def _disk_load(name: str, key):" in api
-    and 'disk_cache({}, "btc")' in api and 'disk_cache({}, "bscx")' in api and 'disk_cache({}, "opt")' in api
+    and 'disk_cache(_BTC, "btc")' in btcpy and "disk_cache=disk_cache" in api and 'disk_cache({}, "bscx")' in api and 'disk_cache({}, "opt")' in api
     and 'disk_warm(_fng_cache, "all", "fng", FNG_TTL)' in api and "wt_dom.set_cache_dir(CACHE_DIR)" in api
     and 'etf.set_cache_file(os.path.join(CACHE_DIR, "etf.json"))' in api and "treasury.set_cache_dir(CACHE_DIR)" in api
     and "def _file_load() -> dict[str, Json] | None:" in _etfs and "_file_save(\"sec_funds.json\", out)" in read(f"{APP}/wt_treasury.py")
@@ -965,7 +967,7 @@ say("bitcoin: метки ETF — кошельки, опубликованные 
     and "EtfChain" not in read(f"{APP}/src/screens/EtfScreen.tsx"))
 _btv2 = read(f"{APP}/src/screens/BtcViews.tsx")
 say("BTC: кошельки ETF подписаны тикером фонда — в рейтинге, крупных ордерах (потоки бирж) и на экране кошелька",
-    "AND fund NOT LIKE '#%'" in api and 'out[r["address"]]["etf"]' in api
+    "AND fund NOT LIKE '#%'" in btcpy and 'out[r["address"]]["etf"]' in btcpy
     and '{r.etf ? <span className="bt-etf">ETF · {r.etf}</span> : null}' in _btv2
     and '${r.etf ? `ETF ${r.etf} · ` : ""}' in _btv2 and 't(lang, "btc_is_etf", { f: data.etf })' in _btv2)
 _ws_etf2 = read(os.path.join(BOT, "btc_etf.cpp"))
@@ -993,7 +995,7 @@ _etfs2 = read(f"{APP}/wt_etf.py")
 # переваливало за сутки, блоки пропускались, и крупные сделки с рейтингом
 # BTC вставали.
 say("bitcoin: вкладка «Крупные ордера BTC» с потоком бирж (в NetFlow его нет), третья доска рейтинга, экран кошелька",
-    'path in ("/btc/flow", "/api/btc/flow")' in api and "def _btc_clean(" in api and "w.s < 0.9 * w.b" in api
+    'path in ("/btc/flow", "/api/btc/flow")' in api and "def _btc_clean(" in btcpy and "w.s < 0.9 * w.b" in btcpy
     and "export function BtcFlowCard(" in _btv and "export function BtcBigView(" in _btv
     and '{view === "btc" ? <BtcFlowCard bigWin={bigWin} /> : null}' in read(f"{APP}/src/screens/AnalyticsTab.tsx")
     and '{view === "flow" ? <BtcFlowCard' not in read(f"{APP}/src/screens/AnalyticsTab.tsx")
@@ -1012,8 +1014,8 @@ say("bitcoin: подписка на кошелёк и алерты «покуп�
     and 'open("btcWallet", w.btc ?? w.addr)' in read(f"{APP}/src/screens/WalletsTab.tsx"))
 
 say("bitcoin: кошельки базы — каждая продажа и покупка и через какие биржи они прошли",
-    "def _btc_big_build(win: str, side: str, min_btc: float, ex: str = \"\")" in api
-    and '"byEx": by_ex' in api and 'qs.get("ex", [""])[0]' in api
+    "def _btc_big_build(win: str, side: str, min_btc: float, ex: str = \"\")" in btcpy
+    and '"byEx": by_ex' in btcpy and 'qs.get("ex", [""])[0]' in api
     # Без деления «база / все»; биржи — фильтром списка. Метки — только у
     # кошельков ETF: импорт «Другое» (кто угодно) без звёздочки и пометок.
     and 'className="btc-exf"' in _btv and '"btc_scope_base"' not in _btv and "btcBase" not in _btv
@@ -1024,12 +1026,12 @@ say("bitcoin: перестройка цепочки откатывает бло�
     "Back rolledBack(const Block& b)" in _ws_btc and "long long priceAt(long long ts)" in _ws_btc
     and "basic && (!exIn.empty() || !coinjoin(tx))" in _ws_btc and "AND price_nanos > 0 AND ex != ''" in _ws_btc
     and "UPDATE btc_labels SET at=? WHERE address=? AND how != 'seed'" in _ws_btc and "void reloadWatch()" in _ws_btc
-    and "AND price_nanos > 0 AND m.ex != ''" in api and 'r["price_nanos"] or 0) > 0 and r["ex"]' in api)
+    and "AND price_nanos > 0 AND m.ex != ''" in btcpy and 'r["price_nanos"] or 0) > 0 and r["ex"]' in btcpy)
 say("bitcoin: запись блока — транзакцией, которая обязана закрыться (BEGIN IMMEDIATE, сброс незавершённых запросов, проверка COMMIT, откат при сбое и исключении); не записался — не засчитан и читается снова; простой догоняется до недели",
     "bool inTx(F&& f)" in _ws_btc and "BEGIN IMMEDIATE" in _ws_btc and "sqlite3_next_stmt(g_btcDb" in _ws_btc
     and "Result::FAILED" in _ws_btc and "constexpr long long MAX_BEHIND = 1008;" in _ws_btc
     and 'execSql("BEGIN")' not in _ws_btc and 'execSql("COMMIT")' not in _ws_btc
-    and '"at": int(tip["ts"]) if tip else 0' in api and os.path.isfile(f"{APP}/tests/test_btc_stale.py"))
+    and '"at": int(tip["ts"]) if tip else 0' in btcpy and os.path.isfile(f"{APP}/tests/test_btc_stale.py"))
 say("bitcoin: адресный сервис не ответил — 10 минут без него; адресам блока — не больше минуты (догоняя сеть — 10 с), блоки не ждут mempool.space",
     "constexpr long long ADDR_HOST_REST_SEC = 600;" in _ws_btc and "bool addrUp()" in _ws_btc
     and "constexpr int ADDR_BUDGET_SEC = 60;" in _ws_btc and "constexpr int ADDR_BUDGET_BEHIND_SEC = 10;" in _ws_btc
@@ -1045,9 +1047,15 @@ say("bitcoin, жёсткая ревизия: каждая запись блок�
     and 'if (!exec(db, "COMMIT") && !sqlite3_get_autocommit(db)) exec(db, "ROLLBACK");' in _ws_etf
     and "CHECK(otherRc == SQLITE_BUSY);" in read(os.path.join(BOT, "tests/btc_tx_test.cpp")))
 say("bitcoin, жёсткая ревизия: цена сервера по времени блока; фильтр биржи — только из разметки; экраны обновляются раз в минуту и не стирают показанное при сбое",
-    'SELECT price_nanos, ts FROM btc_blocks WHERE price_nanos > 0' in api and "if ex and ex not in _btc_ex_names():" in api
+    'SELECT price_nanos, ts FROM btc_blocks WHERE price_nanos > 0' in btcpy and "if ex and ex not in _btc_ex_names():" in btcpy
     and _btcv.count("const stop = everyMinute(load);") == 4 and _btcv.count("cur?.ok ? cur : hit") == 3
     and "test_exchange_filter_takes_only_names_from_the_scanner_labels" in read(f"{APP}/tests/test_btc_stale.py"))
+_ci = read(f"{APP}/.github/workflows/tests.yml")
+say("bitcoin: сервер — отдельный модуль wt_btc.py (общие база, кэш и время — через setup); whale_api только подключает его; модуль в строгих проверках CI (mypy, ruff)",
+    "import wt_btc  # noqa: E402" in api and "wt_btc.setup(open_db=open_db" in api and "def _btc_flow_build(" not in api
+    and "def _btc_rank_build(" not in api and "def setup(*, open_db:" in btcpy and "def warm_jobs()" in btcpy
+    and "jobs = [*wt_btc.warm_jobs(), (_BSCX" in api
+    and "wt_btc.py" in _ci.split("mypy==")[1].split("\n")[0] and "py_compile whale_api.py" in _ci and " wt_btc.py" in _ci.split("py_compile")[1].split("\n")[0])
 say("bitcoin, повторная ревизия: алерты только о свежих блоках (догонка простоя не шлёт вчерашние сделки), время блока не из будущего, дробные числа узла без UB; дайджест без раздела биткоина, пока сканер стоит",
     "constexpr long long ALERT_MAX_AGE_SEC = 3600;" in _ws_btc and "nowSec() - alerts_.front().ts > ALERT_MAX_AGE_SEC" in _ws_btc
     and "b.ts > nowSec() + 7200" in _ws_btc and "return d > -9e18 && d < 9e18 ? static_cast<long long>(d) : 0;" in _ws_btc
@@ -1398,10 +1406,10 @@ say("логотипы BSC: поиск по адресу на сервере, р�
 # последний ответ из памяти или с устройства и тихо подменяет свежим.
 _apits = read(f"{APP}/src/lib/api.ts")
 say("потоки бирж и рейтинг BTC кэшируются: сервер в фоне, приложение — память и устройство",
-    'cached_bg(_BTC, "flow", BTC_TTL, _btc_flow_build)' in api
+    'cached_bg(_BTC, "flow", BTC_TTL, _btc_flow_build)' in btcpy
     and 'cached_bg(_BSCX, "flow", BTC_TTL, _bscx_flow_build)' in api
-    and 'cached_bg(_BTC, ("rank", days), btc_rank_ttl(days)' in api
-    and 'cached_bg(_BTC, ("big", win, side, min_btc, ex)' in api
+    and 'cached_bg(_BTC, ("rank", days), btc_rank_ttl(days)' in btcpy
+    and 'cached_bg(_BTC, ("big", win, side, min_btc, ex)' in btcpy
     and 'threading.Thread(target=exflow_warmer, daemon=True, name="exflow").start()' in api
     and 'bad = isinstance(val, dict) and val.get("ok") is False' in pybody(api, "def cached_bg(")
     and 'export const fetchBtcRank = (win: string) => exGet<BtcRankReply>' in _apits
@@ -1420,7 +1428,7 @@ say("потоки бирж и рейтинг BTC кэшируются: серв�
 _ws_btc2 = read(f"{BOT}/btc_chain.cpp")
 say("bitcoin от 0,2 BTC: движения, автопоиск, держатели, доска крупных движений",
     'envSats("WHALE_BTC_MOVE_MIN", 0.2)' in _ws_btc2 and 'envSats("WHALE_BTC_AUTO_MIN", 0.2)' in _ws_btc2
-    and "BTC_BIG_MIN = (0.2, 1, 10, 100)" in api
+    and "BTC_BIG_MIN = (0.2, 1, 10, 100)" in btcpy
     and "except (TypeError, ValueError, OverflowError):\n                    mn = 0.2" in api
     and "const MINS: BtcMin[] = [0.2, 1, 10, 100];" in read(f"{APP}/src/screens/BtcViews.tsx")
     and "<Segmented<string>\n        tight" in read(f"{APP}/src/screens/BtcViews.tsx")

@@ -15,6 +15,7 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 import whale_api as api  # noqa: E402 — модуль лежит в корне репозитория
+import wt_btc as btc  # noqa: E402
 
 
 class BtcEtfLabelsTest(unittest.TestCase):
@@ -35,7 +36,7 @@ class BtcEtfLabelsTest(unittest.TestCase):
     def test_labeled_wallets_are_tagged_with_the_fund(self):
         ro = api.open_db(self.db)
         try:
-            ex = api._btc_extra(ro, ["bc1qa", "bc1qb", "bc1qgroup", "bc1qnone"])
+            ex = btc._btc_extra(ro, ["bc1qa", "bc1qb", "bc1qgroup", "bc1qnone"])
         finally:
             ro.close()
         # Список фонда и /import — тикер; группа без имени и чужой адрес — без метки.
