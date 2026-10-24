@@ -1030,6 +1030,11 @@ say("bitcoin: запись блока — транзакцией, которая
     and "Result::FAILED" in _ws_btc and "constexpr long long MAX_BEHIND = 1008;" in _ws_btc
     and 'execSql("BEGIN")' not in _ws_btc and 'execSql("COMMIT")' not in _ws_btc
     and '"at": int(tip["ts"]) if tip else 0' in api and os.path.isfile(f"{APP}/tests/test_btc_stale.py"))
+say("bitcoin: адресный сервис не ответил — 10 минут без него; адресам блока — не больше минуты (догоняя сеть — 10 с), блоки не ждут mempool.space",
+    "constexpr long long ADDR_HOST_REST_SEC = 600;" in _ws_btc and "bool addrUp()" in _ws_btc
+    and "constexpr int ADDR_BUDGET_SEC = 60;" in _ws_btc and "constexpr int ADDR_BUDGET_BEHIND_SEC = 10;" in _ws_btc
+    and _ws_btc.count("!addrUp() || std::chrono::steady_clock::now() >= until") == 2
+    and "g_addrRest[i] = nowSec() + ADDR_HOST_REST_SEC;" in _ws_btc)
 
 _dgm = read(f"{APP}/src/screens/DigestMore.tsx")
 say("дайджест v2: сводка сигналов, рынок, институционалы, bitcoin, лидеры, халвинг; старые выпуски как были",
