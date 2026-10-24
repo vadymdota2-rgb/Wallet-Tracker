@@ -3535,6 +3535,9 @@ button.cal-row:active { background: rgb(58 130 214 / 0.08); }
 }
 .btc-ex-tg i { font-style: normal; color: var(--dim); transition: transform .2s; transform: rotate(-90deg); }
 .btc-ex-tg i.on { transform: none; }
+/* Свёрнутый список: стрелка смотрит по ходу строки — в арабском и иврите влево. */
+[dir="rtl"] .btc-ex-tg i:not(.on) { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .btc-ex-tg i { transition: none; } }
 .btc-ex-tg + .btc-ex { margin-top: 8px; }
 .btc-sum { margin: 2px 0 8px; }
 

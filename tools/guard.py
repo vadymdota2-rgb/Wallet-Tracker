@@ -1048,6 +1048,11 @@ say("bitcoin, жёсткая ревизия: цена сервера по вре
     'SELECT price_nanos, ts FROM btc_blocks WHERE price_nanos > 0' in api and "if ex and ex not in _btc_ex_names():" in api
     and _btcv.count("const stop = everyMinute(load);") == 4 and _btcv.count("cur?.ok ? cur : hit") == 3
     and "test_exchange_filter_takes_only_names_from_the_scanner_labels" in read(f"{APP}/tests/test_btc_stale.py"))
+say("bitcoin, повторная ревизия: алерты только о свежих блоках (догонка простоя не шлёт вчерашние сделки), время блока не из будущего, дробные числа узла без UB; дайджест без раздела биткоина, пока сканер стоит",
+    "constexpr long long ALERT_MAX_AGE_SEC = 3600;" in _ws_btc and "nowSec() - alerts_.front().ts > ALERT_MAX_AGE_SEC" in _ws_btc
+    and "b.ts > nowSec() + 7200" in _ws_btc and "return d > -9e18 && d < 9e18 ? static_cast<long long>(d) : 0;" in _ws_btc
+    and "if not fl.get(\"at\") or now() - int(fl[\"at\"]) > DG_BTC_STALE:" in api
+    and "test_digest_has_no_bitcoin_section_while_the_scanner_stands" in read(f"{APP}/tests/test_btc_stale.py"))
 
 _dgm = read(f"{APP}/src/screens/DigestMore.tsx")
 say("дайджест v2: сводка сигналов, рынок, институционалы, bitcoin, лидеры, халвинг; старые выпуски как были",

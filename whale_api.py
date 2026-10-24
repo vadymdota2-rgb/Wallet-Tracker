@@ -11981,8 +11981,8 @@ def _btc_big_build(win: str, side: str, min_btc: float, ex: str = "") -> dict:
         ]
         extra = _btc_extra(con, sorted({r["wallet"] for r in rows}))
         first = con.execute("SELECT MIN(ts) FROM btc_flow").fetchone()[0]
-        # Время последнего записанного блока: сканер стоит — экран говорит
-        # об этом прямо, а не «пока ничего, собираем».
+        # Время последнего записанного блока: по нему видно, что сканер
+        # стоит (дайджест тогда не публикует раздел биткоина).
         tip = con.execute("SELECT ts FROM btc_blocks ORDER BY height DESC LIMIT 1").fetchone()
         return {
             "ok": True, "win": win, "side": side, "min": min_btc, "ex": ex,
@@ -14987,11 +14987,20 @@ def _dg_inst() -> dict:
     return out
 
 
+# Последний блок сканера старше трёх часов — сканер стоит или догоняет
+# простой: раздела биткоина в дайджесте нет. Иначе в канал ушло бы «за сутки
+# на биржи и с бирж 0 BTC» как факт (так было бы 24 октября).
+DG_BTC_STALE = 3 * 3600
+
+
 def _dg_btc() -> dict:
     """Bitcoin на биржах за сутки: сколько ушло и пришло, по каким биржам
     больше всего, и самые крупные выводы и заводы."""
     out: dict = {}
-    w = ((btc_flow() or {}).get("wins") or {}).get("24")
+    fl = btc_flow() or {}
+    if not fl.get("at") or now() - int(fl["at"]) > DG_BTC_STALE:
+        return out
+    w = (fl.get("wins") or {}).get("24")
     if w:
         ex = sorted(w.get("ex") or [], key=lambda e: -abs(e["out"] - e["in"]))[:3]
         out.update({"in": w["in"], "out": w["out"], "net": w["net"], "full": w.get("full", False),
@@ -16388,7 +16397,8 @@ class Handler(BaseHTTPRequestHandler):
                     a = a.lower()
                 # Из «Моих кошельков» base58 может прийти строчными — так он
                 # лежит в user_whales; настоящее написание — в btc_case.
-                if not BTC_ADDR_RE.match(a) or a == a.lower():
+                # Bech32 строчными и так настоящий — в базу за ним не ходим.
+                if not BTC_ADDR_RE.match(a) or (a == a.lower() and not a.startswith("bc1")):
                     a = btc_cases([a.lower()]).get(a.lower(), a)
                 if not BTC_ADDR_RE.match(a):
                     self._json(400, {"ok": False, "error": "bad_addr"})

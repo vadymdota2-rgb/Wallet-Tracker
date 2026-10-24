@@ -112,6 +112,25 @@ class BtcStaleTest(unittest.TestCase):
             api.btc_big("24h", "buy", 1, "Нет такой")
         self.assertEqual([k[-1] for k in seen], ["Binance", "", ""])
 
+    def test_digest_has_no_bitcoin_section_while_the_scanner_stands(self):
+        # Последний блок — 36 часов назад: «0 BTC за сутки» в канал не идёт.
+        stale = api._btc_flow_build()
+        with mock.patch.object(api, "btc_flow", return_value=stale), \
+                mock.patch.object(api, "btc_big", side_effect=AssertionError("не нужен")):
+            self.assertEqual(api._dg_btc(), {})
+        # Сканер живой — раздел есть, с суточным итогом.
+        con = sqlite3.connect(self.db)
+        con.execute("UPDATE btc_blocks SET ts = ? WHERE height = 972711", (NOW - 600,))
+        con.execute("INSERT INTO btc_flow VALUES(?, 'OKX', 0, 300000000, 0, 2)", (NOW - 600,))
+        con.commit()
+        con.close()
+        live = api._btc_flow_build()
+        with mock.patch.object(api, "btc_flow", return_value=live), \
+                mock.patch.object(api, "btc_big", return_value={"rows": []}):
+            got = api._dg_btc()
+        self.assertEqual(got["out"], 3.0)
+        self.assertEqual(got["buy"], [])
+
 
 if __name__ == "__main__":
     unittest.main()
