@@ -48,6 +48,24 @@ const btcSigned = (v: number) => iso(`${v > 0 ? "+" : ""}${num(v, Math.abs(v) >=
 /** Число монет без единицы: до сотни — с десятыми, дальше целыми. */
 const short = (v: number, sign = false) => iso(`${sign && v > 0 ? "+" : ""}${num(v, Math.abs(v) >= 100 ? 0 : 1)}`);
 
+/* Сканер пишет блок раз в ~10 минут, сервер собирает ответ раз в минуту.
+   Открытый экран берёт свежий ответ раз в минуту, а не только при входе:
+   после догонки сканера (24 октября) на экране так и стояли нули, пока
+   экран не открыли заново. Свёрнутое приложение сеть не трогает; вернулись
+   — сразу свежий ответ. */
+const REFRESH_MS = 60_000;
+function everyMinute(load: () => void): () => void {
+  const tick = () => {
+    if (!document.hidden) load();
+  };
+  const id = window.setInterval(tick, REFRESH_MS);
+  document.addEventListener("visibilitychange", tick);
+  return () => {
+    window.clearInterval(id);
+    document.removeEventListener("visibilitychange", tick);
+  };
+}
+
 /** Дата начала данных — на языке интерфейса. */
 function stamp(lang: string, ts: number): string {
   try {
@@ -75,22 +93,32 @@ function FollowBtn({ addr, size = 19 }: { addr: string; size?: number }) {
   const open = useApp((s) => s.open);
   const wallets = useLive((s) => s.wallets);
   const on = wallets.some((w) => w.addr.toLowerCase() === addr.toLowerCase());
+  /* Пока удаление в пути, второе нажатие ничего не шлёт: двойной тап давал
+     два запроса и тост «не удалось» поверх «удалён». */
+  const [busy, setBusy] = useState(false);
   return (
     <button
       type="button"
       className={on ? "lb-act off" : "lb-act on"}
       aria-label={bare(t(lang, on ? "remove_yes" : "menu_add_wallet"))}
+      aria-busy={busy || undefined}
       onClick={async () => {
         if (!on) {
           haptic("select");
           return open("addWallet", addr);
         }
+        if (busy) return;
+        setBusy(true);
         haptic("light");
-        const res = await removeWallet(addr.toLowerCase());
-        if (res?.ok) {
-          toast(t(lang, "toast_wallet_removed"));
-          void syncNow();
-        } else toast(t(lang, failKey()), "err");
+        try {
+          const res = await removeWallet(addr.toLowerCase());
+          if (res?.ok) {
+            toast(t(lang, "toast_wallet_removed"));
+            void syncNow();
+          } else toast(t(lang, failKey()), "err");
+        } finally {
+          setBusy(false);
+        }
       }}
     >
       {on ? <MinusGlyph size={size} /> : <PlusGlyph size={size} />}
@@ -138,11 +166,15 @@ export function BtcFlowCard({ bigWin }: { bigWin: BigWin }) {
 
   useEffect(() => {
     let alive = true;
-    void fetchBtcFlow().then((r) => {
-      if (alive && r?.ok) setData(r);
-    });
+    const load = () =>
+      void fetchBtcFlow().then((r) => {
+        if (alive && r?.ok) setData(r);
+      });
+    load();
+    const stop = everyMinute(load);
     return () => {
       alive = false;
+      stop();
     };
   }, []);
 
@@ -242,11 +274,15 @@ export function BtcBigView({ winPicker, win }: { winPicker: ReactNode; win: BigW
     const hit = peekBtcBig(win, side, min, ex);
     setData(hit ?? null);
     // Сбой сети не стирает показанное: остаётся последний годный ответ.
-    void fetchBtcBig(win, side, min, ex).then((r) => {
-      if (alive) setData(r?.ok ? r : hit ?? r ?? { ok: false } as BtcBigReply);
-    });
+    const load = () =>
+      void fetchBtcBig(win, side, min, ex).then((r) => {
+        if (alive) setData((cur) => (r?.ok ? r : cur?.ok ? cur : hit ?? r ?? ({ ok: false } as BtcBigReply)));
+      });
+    load();
+    const stop = everyMinute(load);
     return () => {
       alive = false;
+      stop();
     };
   }, [win, side, min, ex]);
   /* Кнопки фильтра — биржи, через которые шли движения этой стороны и окна.
@@ -360,11 +396,15 @@ export function BtcBoard({ win }: { win: RankWin }) {
     const hit = peekBtcRank(win);
     setData(hit ?? null);
     // Сбой сети не стирает показанное: остаётся последний годный ответ.
-    void fetchBtcRank(win).then((r) => {
-      if (alive) setData(r?.ok ? r : hit ?? r ?? { ok: false } as BtcRankReply);
-    });
+    const load = () =>
+      void fetchBtcRank(win).then((r) => {
+        if (alive) setData((cur) => (r?.ok ? r : cur?.ok ? cur : hit ?? r ?? ({ ok: false } as BtcRankReply)));
+      });
+    load();
+    const stop = everyMinute(load);
     return () => {
       alive = false;
+      stop();
     };
   }, [win]);
 
@@ -452,11 +492,19 @@ export function BtcWalletScreen({ arg }: ScreenProps) {
   useEffect(() => {
     if (!addr) return;
     let alive = true;
-    void fetchBtcWallet(addr).then((r) => {
-      if (alive) setData(r ?? { ok: false } as BtcWalletReply);
-    });
+    const hit = peekBtcWallet(addr);
+    setData(hit ?? null);
+    /* Сбой сети не стирает показанное: раньше любой сбой менял карточку,
+       открытую из запаса, на «пока ничего». */
+    const load = () =>
+      void fetchBtcWallet(addr).then((r) => {
+        if (alive) setData((cur) => (r?.ok ? r : cur?.ok ? cur : hit ?? r ?? ({ ok: false } as BtcWalletReply)));
+      });
+    load();
+    const stop = everyMinute(load);
     return () => {
       alive = false;
+      stop();
     };
   }, [addr]);
 
@@ -489,7 +537,7 @@ export function BtcWalletScreen({ arg }: ScreenProps) {
             className="unl-btn ghost"
             onClick={() => {
               haptic("light");
-              openExternal(`${EXPLORER}/address/${addr}`);
+              openExternal(`${EXPLORER}/address/${encodeURIComponent(addr)}`);
             }}
           >
             {t(lang, "btc_explorer")} ↗
@@ -507,7 +555,7 @@ export function BtcWalletScreen({ arg }: ScreenProps) {
             <Row
               key={`${m.tx}-${i}`}
               icon={<CoinIcon sym="BTC" size={30} />}
-              title={iso(`${m.buy ? "+" : "−"}${num(m.btc, m.btc >= 1000 ? 0 : 2)} BTC`)}
+              title={iso(`${m.buy ? "+" : "−"}${num(m.btc, m.btc >= 1000 ? 0 : 2)}\u00a0BTC`)}
               /* С биржей — «вывод с Binance», без биржи — просто «получено». */
               sub={m.ex
                 ? t(lang, m.buy ? "btc_wd_from" : "btc_dep_to", { ex: m.ex })
@@ -516,7 +564,7 @@ export function BtcWalletScreen({ arg }: ScreenProps) {
               value={usd(m.v)}
               valueSub={px(m.px)}
               tone={m.buy ? "up" : "dn"}
-              onClick={() => openExternal(`${EXPLORER}/tx/${m.tx}`)}
+              onClick={() => openExternal(`${EXPLORER}/tx/${encodeURIComponent(m.tx)}`)}
             />
           ))
         )}

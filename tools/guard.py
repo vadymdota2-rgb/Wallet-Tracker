@@ -898,7 +898,7 @@ say("бот: /import — кнопки фондов (IBIT, FBTC…) и «Друг
     and "importCommand(cid, txt);" in _wsm and "tgFileText(m[\"document\"])" in _wsm and "IMPORT_FILE_MAX" in _wsm
     and "int etfDrainLabels(sqlite3* db)" in _wse and "++r.inBase;" in _wse and "named" not in _wse
     and "UPDATE btc_watch SET src = 'import' WHERE address = ? AND src = 'auto'" in _wsc and "WHERE btc_etf_addr.how != 'seed'\");" in _wse
-    and "etfDrainLabels(g_btcDb);" in _wsc and "backfillImported" not in _wsc)
+    and "if (etfDrainLabels(g_btcDb) < 0) ++g_txErrs;" in _wsc and "backfillImported" not in _wsc)
 say("старых алертов по ETF (по фондам, wt_etfalert) нет: ни модуля, ни экрана, ни адресов API; их таблицы стираются при запуске",
     not os.path.exists(f"{APP}/wt_etfalert.py") and not os.path.exists(f"{APP}/src/screens/EtfAlerts.tsx")
     and "etfalert" not in api and "EtfAlert" not in _ef and "FundBell" not in _ef
@@ -976,7 +976,7 @@ _etfs2 = read(f"{APP}/wt_etf.py")
 # вставали. Осталась разметка: список фонда (BITB) и /import — подпись тикером.
 _btc_loop = _ws_btc[_ws_btc.index("void btcLoop() {"):_ws_btc.index("void startBtcLoop() {")]
 say("BTC как до слежки за фондами: метки — только список фонда (BITB) и /import; цикл блоков за фондами, резервами и государствами в сеть не ходит; сверки нет",
-    "etfDrainLabels(g_btcDb);" in _ws_btc and _ws_btc.count("etfFund(a).empty()") == 2
+    "if (etfDrainLabels(g_btcDb) < 0) ++g_txErrs;" in _ws_btc and _ws_btc.count("etfFund(a).empty()") == 2
     and all(w not in _ws_btc for w in ("etfBackfill", "readNewVaults", "refreshEtfBalances", "govBlock", "exBalances",
                                          "refreshGovBalances", "etfLoop", "addrFresh", "etfBlock"))
     and "etfOpen(g_btcDb);" in _ws_btc and "DROP TABLE IF EXISTS btc_ex_bal" in _ws_btc
@@ -1035,6 +1035,19 @@ say("bitcoin: адресный сервис не ответил — 10 мину�
     and "constexpr int ADDR_BUDGET_SEC = 60;" in _ws_btc and "constexpr int ADDR_BUDGET_BEHIND_SEC = 10;" in _ws_btc
     and _ws_btc.count("!addrUp() || std::chrono::steady_clock::now() >= until") == 2
     and "g_addrRest[i] = nowSec() + ADDR_HOST_REST_SEC;" in _ws_btc)
+_ws_etf = read(os.path.join(BOT, "btc_etf.cpp"))
+_btcv = read(f"{APP}/src/screens/BtcViews.tsx")
+say("bitcoin, жёсткая ревизия: каждая запись блока проверяется (stepW, сбой — откат), разметка ETF не теряется, откат цепочки не падает на кривом JSON, цена старого блока — свеча Kraken, а не сегодняшняя",
+    "int stepW(sqlite3_stmt* s)" in _ws_btc and "if (g_txErrs) {" in _ws_btc
+    and "if (etfDrainLabels(g_btcDb) < 0) ++g_txErrs;" in _ws_btc and "if (!q.s) return -1;" in _ws_etf
+    and "x.is_number_integer(); }))" in _ws_btc and "api.kraken.com/0/public/OHLC?pair=XBTUSD&interval=60" in _ws_btc
+    and "if (!(btc > 0 && btc <= 21e6)) btc = defBtc;" in _ws_btc
+    and 'if (!exec(db, "COMMIT") && !sqlite3_get_autocommit(db)) exec(db, "ROLLBACK");' in _ws_etf
+    and "CHECK(otherRc == SQLITE_BUSY);" in read(os.path.join(BOT, "tests/btc_tx_test.cpp")))
+say("bitcoin, жёсткая ревизия: цена сервера по времени блока; фильтр биржи — только из разметки; экраны обновляются раз в минуту и не стирают показанное при сбое",
+    'SELECT price_nanos, ts FROM btc_blocks WHERE price_nanos > 0' in api and "if ex and ex not in _btc_ex_names():" in api
+    and _btcv.count("const stop = everyMinute(load);") == 4 and _btcv.count("cur?.ok ? cur : hit") == 3
+    and "test_exchange_filter_takes_only_names_from_the_scanner_labels" in read(f"{APP}/tests/test_btc_stale.py"))
 
 _dgm = read(f"{APP}/src/screens/DigestMore.tsx")
 say("дайджест v2: сводка сигналов, рынок, институционалы, bitcoin, лидеры, халвинг; старые выпуски как были",
@@ -1394,7 +1407,7 @@ say("потоки бирж и рейтинг BTC кэшируются: серв�
     and 'export const fetchBtcBig = (win: string, side: string, min: number, ex = "") =>\n  exGet<BtcBigReply>' in _apits
     and "export function peekAny<T>(key: string)" in read(f"{APP}/src/lib/memo.ts")
     and "setData((prev) => (r?.ok ? r : prev ?? null))" in read(f"{APP}/src/screens/BscExViews.tsx")
-    and read(f"{APP}/src/screens/BtcViews.tsx").count("r?.ok ? r : hit ?? r ??") == 2
+    and read(f"{APP}/src/screens/BtcViews.tsx").count("r?.ok ? r : cur?.ok ? cur : hit ?? r ??") == 3
     and "jobs.push(() => fetchBscExFlow());" in read(f"{APP}/src/lib/prefetch.ts"))
 
 # Bitcoin — от 0,2 BTC: сканер пишет движения и находит кошельки от 0,2,

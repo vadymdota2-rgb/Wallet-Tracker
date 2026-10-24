@@ -71,6 +71,47 @@ class BtcStaleTest(unittest.TestCase):
         con.close()
         self.assertEqual(api._btc_big_build("24h", "buy", 0.2)["at"], 0)
 
+    def test_price_age_is_the_block_time_not_the_write_time(self):
+        # Догоняя простой, сканер пишет вчерашний блок сейчас (at = NOW) —
+        # его цена вчерашняя, нынешняя стоимость запасов по ней неверна.
+        con = sqlite3.connect(self.db)
+        con.execute("UPDATE btc_blocks SET at = ?", (NOW,))
+        con.commit()
+        con.close()
+        with mock.patch.object(api, "get_json", return_value={"data": {"amount": "95000.5"}}) as g:
+            c = api._btc_open()
+            try:
+                self.assertEqual(api._btc_price(c), 95000.5)
+            finally:
+                c.close()
+        g.assert_called_once()
+        # Свежий блок — его цена, без запроса наружу.
+        con = sqlite3.connect(self.db)
+        con.execute("UPDATE btc_blocks SET ts = ? WHERE height = 972711", (NOW - 600,))
+        con.commit()
+        con.close()
+        with mock.patch.object(api, "get_json") as g:
+            c = api._btc_open()
+            try:
+                self.assertEqual(api._btc_price(c), 81_000.0)
+            finally:
+                c.close()
+        g.assert_not_called()
+
+    def test_exchange_filter_takes_only_names_from_the_scanner_labels(self):
+        con = sqlite3.connect(self.db)
+        con.execute("INSERT INTO btc_labels VALUES('34xp4vRoCGJym3xR7yCVPFHoCNxv4Twseo', 'Binance', 'seed', 0)")
+        con.commit()
+        con.close()
+        api._BTC.clear()
+        self.addCleanup(api._BTC.clear)
+        seen = []
+        with mock.patch.object(api, "cached_bg", lambda store, key, ttl, build: seen.append(key) or {"ok": True}):
+            api.btc_big("24h", "buy", 1, "Binance")
+            api.btc_big("24h", "buy", 1, "x' OR 1=1 --")
+            api.btc_big("24h", "buy", 1, "Нет такой")
+        self.assertEqual([k[-1] for k in seen], ["Binance", "", ""])
+
 
 if __name__ == "__main__":
     unittest.main()

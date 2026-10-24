@@ -11696,12 +11696,16 @@ def _btc_open():
 
 
 def _btc_price(con) -> float:
-    """Цена из последнего блока: по ней сканер и считал доллары. Блока нет
-    больше двух часов — открытая цена Coinbase."""
+    """Цена из последнего блока: по ней сканер и считал доллары. Блок старше
+    двух часов — открытая цена Coinbase.
+
+    Возраст — по времени самого блока (ts), а не по времени записи (at):
+    догоняя простой, сканер пишет блоки суточной давности с ценой их часа, и
+    нынешняя стоимость запасов в рейтинге считалась по вчерашней цене."""
     try:
-        r = con.execute("SELECT price_nanos, at FROM btc_blocks WHERE price_nanos > 0 "
+        r = con.execute("SELECT price_nanos, ts FROM btc_blocks WHERE price_nanos > 0 "
                         "ORDER BY height DESC LIMIT 1").fetchone()
-        if r and now() - int(r["at"] or 0) < 7200:
+        if r and now() - int(r["ts"] or 0) < 7200:
             return float(r["price_nanos"]) / 1e9
     except sqlite3.Error:
         pass
@@ -11998,12 +12002,31 @@ def _btc_big_build(win: str, side: str, min_btc: float, ex: str = "") -> dict:
         con.close()
 
 
+def _btc_ex_names() -> frozenset:
+    """Имена бирж из разметки сканера — раз в 10 минут."""
+    def build():
+        con = _btc_open()
+        if not con:
+            return frozenset()
+        try:
+            return frozenset(r[0] for r in con.execute("SELECT DISTINCT ex FROM btc_labels"))
+        except sqlite3.Error:
+            return frozenset()
+        finally:
+            con.close()
+    return cached_small(_BTC, "ex_names", 600.0, build)
+
+
 def btc_big(win: str, side: str, min_btc: float, ex: str = "") -> dict:
     win = win if win in BIG_WINDOWS else "24h"
     side = "sell" if side == "sell" else "buy"
     min_btc = min_btc if min_btc in BTC_BIG_MIN else BTC_BIG_MIN[0]
-    # Имя биржи — как в разметке сканера; идёт в запрос параметром.
+    # Имя биржи — только из разметки сканера: любая строка до 40 знаков
+    # была своим ключом кэша и своей сборкой по всей базе — тысяча разных
+    # «бирж» тысячу раз гоняла тяжёлый запрос. Чужое имя — без фильтра.
     ex = (ex or "").strip()[:40]
+    if ex and ex not in _btc_ex_names():
+        ex = ""
     return cached_bg(_BTC, ("big", win, side, min_btc, ex), BTC_TTL,
                      lambda: _btc_big_build(win, side, min_btc, ex))
 
