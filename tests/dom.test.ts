@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  MCAP_FROM, MIN_BASKET, byWeek, nearestIdx, PX_FROM, STALE_DAYS, mcapAgo, mcapWindow, rebase, shareDelta, validMcap, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, windowOf,
+  CLOCK_LAG, MCAP_FROM, MIN_BASKET, byWeek, nearestIdx, PX_FROM, STALE_DAYS, mcapAgo, mcapWindow, rebase, shareDelta, validMcap, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, windowOf,
   type DomDay, type McapDay,
 } from "../src/lib/dom.ts";
 
@@ -38,9 +38,25 @@ test("validDom: старые ответы (доли CoinMarketCap, прежни�
   const old = { ok: true, t0: 1367193600, rows: [[2e6, 58, 11, 2e5, 0.03]], alt: {}, at: NOW };
   const five = { ...reply(), rows: rows(5).map((r) => r.slice(0, 5)) };
   for (const bad of [old, five, null, "x", [], { ok: false, error: "building" }, { ...reply(), ok: "true" },
-    { ...reply(), at: NOW + 30 * DAY }, { ...reply(), rows: [] }, { ...reply(), rows: "x" }]) {
+    { ...reply(), at: NOW + 400 * DAY }, { ...reply(), rows: [] }, { ...reply(), rows: "x" }]) {
     assert.equal(validDom(bad, NOW), null, JSON.stringify(bad).slice(0, 60));
   }
+});
+
+test("часы телефона отстают (сбились после разрядки): ответ сервера годен, дни сверяются с его временем", () => {
+  // Телефон думает, что сейчас на 10 дней раньше, — данные всё равно на экране.
+  assert.ok(validDom(reply(), NOW - 10 * DAY));
+  const m = { ok: true, btc: [57.49, 57.21], eth: [11.2, 11.4], alt: [42.51, 42.79], cap: [2.85e12, null], at: NOW,
+    hist: [[NOW - NOW % DAY - DAY, 2.8e12, 57, 11], [NOW - NOW % DAY, 2.85e12, 57.49, 11.2]] };
+  const v = validMcap(m, NOW - 10 * DAY);
+  assert.equal(v?.hist.length, 2);
+  // А день позже времени самого ответа — по-прежнему подделка.
+  const late = rows(5);
+  late[4] = [NOW - (NOW % DAY) + 3 * DAY, ...late[4]!.slice(1)] as typeof late[number];
+  assert.ok(validDom({ ...reply(), rows: late, at: NOW + 2 * DAY }, NOW + 10 * DAY), "начало суток и по порядку — годен");
+  assert.equal(validDom({ ...reply(), rows: late }, NOW + 10 * DAY), null);
+  assert.deepEqual(validMcap({ ...m, hist: [m.hist[0], [NOW - (NOW % DAY) + 2 * DAY, 2.9e12, 57, 11]] }, NOW + 10 * DAY)?.hist, []);
+  assert.equal(CLOCK_LAG, 366 * DAY);
 });
 
 test("validDom: любая ошибка в днях — ответ не годится", () => {
@@ -188,7 +204,7 @@ test("validMcap: доминация — годная копия, подделк�
   assert.deepEqual(v, { ok: true, btc: [57.49, 57.21], eth: [11.2, 11.4], alt: [42.51, 42.79], altNs: 33.39, usdt: 6.32, cap: [2.85e12, 2.9e12], hist: [], at: NOW });
   assert.equal(shareDelta(v!.btc), 0.28);
   assert.equal(shareDelta([50, null]), null);
-  for (const bad of [null, { ok: false, error: "no_key" }, { ...ok, ok: "true" }, { ...ok, at: NOW + 30 * DAY },
+  for (const bad of [null, { ok: false, error: "no_key" }, { ...ok, ok: "true" }, { ...ok, at: NOW + 400 * DAY },
     { ...ok, btc: [0, 1] }, { ...ok, btc: [101, 1] }, { ...ok, btc: ["57", 1] }, { ...ok, alt: [10, null] },
     { ...ok, btc: [80, null], alt: [20, null], eth: [30, null] }, { ...ok, cap: [5, null] }, { ...ok, cap: "x" }, { ...ok, eth: [11] }]) {
     assert.equal(validMcap(bad, NOW), null, JSON.stringify(bad).slice(0, 80));

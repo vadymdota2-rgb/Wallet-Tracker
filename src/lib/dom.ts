@@ -50,14 +50,14 @@ const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFin
 const within = (v: unknown, lo: number, hi: number): v is number => isNum(v) && v >= lo && v <= hi;
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
-function validRows(raw: unknown, now: number): DomDay[] | null {
+function validRows(raw: unknown, at: number): DomDay[] | null {
   if (!Array.isArray(raw) || !raw.length || raw.length > DAYS_MAX) return null;
   const out: DomDay[] = [];
   let prev = 0;
   for (const r of raw) {
     if (!Array.isArray(r) || r.length !== 6) return null;
     const [ts, idx, str, eb, px, n] = r as unknown[];
-    if (!within(ts, PX_FROM, now + 2 * DAY) || ts % DAY !== 0 || ts <= prev) return null;
+    if (!within(ts, PX_FROM, at + 2 * DAY) || ts % DAY !== 0 || ts <= prev) return null;
     if (idx !== null && (!within(idx, 0, 100) || !Number.isInteger(idx))) return null;
     if ((str !== null && !within(str, 1e-6, 1e6)) || (eb !== null && !within(eb, 1e-6, 10)) || !within(px, 1e-6, 1e8)) return null;
     // Индекс и корзина — вместе: индекс без корзины (или корзина без индекса) — подделка.
@@ -68,14 +68,21 @@ function validRows(raw: unknown, now: number): DomDay[] | null {
   return out;
 }
 
+/** На сколько часы телефона могут отставать от сервера (сбились после
+ *  разрядки, выставлены вручную): ответ всё равно годен. Дни ответа
+ *  сверяются с его собственным временем (at — часы сервера), а не с
+ *  телефоном: иначе при отставших часах экран говорил бы «не удалось
+ *  загрузить», хотя данные в порядке. */
+export const CLOCK_LAG = 366 * DAY;
+
 /**
  * Проверенная копия ответа /api/dom или null. Дни — главное: любая ошибка в
  * них — ответ не годится. Монета с ошибкой просто не попадает в список.
  * now — «сейчас», unix с (по умолчанию — часы телефона).
  */
 export function validDom(raw: unknown, now: number = Date.now() / 1000): DomReply | null {
-  if (!isObj(raw) || raw["ok"] !== true || !within(raw["at"], PX_FROM, now + 7 * DAY)) return null;
-  const rows = validRows(raw["rows"], now);
+  if (!isObj(raw) || raw["ok"] !== true || !within(raw["at"], PX_FROM, now + CLOCK_LAG)) return null;
+  const rows = validRows(raw["rows"], raw["at"]);
   if (!rows) return null;
   const coins = Array.isArray(raw["coins"])
     ? raw["coins"].slice(0, COINS_MAX).filter((c): c is [string, number] =>
@@ -133,14 +140,14 @@ export const MCAP_FROM = 1_367_107_200;
 const HIST_MAX = 20_000;
 
 /** История рынка: любой битый день — истории нет (графика нет), остальной ответ годен. */
-function validHist(raw: unknown, now: number): McapDay[] {
+function validHist(raw: unknown, at: number): McapDay[] {
   if (!Array.isArray(raw) || raw.length > HIST_MAX) return [];
   const out: McapDay[] = [];
   let prev = 0;
   for (const r of raw) {
     if (!Array.isArray(r) || r.length !== 4) return [];
     const [ts, cap, btc, eth] = r as unknown[];
-    if (!within(ts, MCAP_FROM, now + DAY) || ts % DAY !== 0 || ts <= prev) return [];
+    if (!within(ts, MCAP_FROM, at + DAY) || ts % DAY !== 0 || ts <= prev) return [];
     if (!within(cap, 1e8, 1e15) || !within(btc, 0.5, 100) || (eth !== null && !within(eth, 0, 100 - btc))) return [];
     out.push([ts, cap, btc, eth as number | null]);
     prev = ts;
@@ -150,7 +157,7 @@ function validHist(raw: unknown, now: number): McapDay[] {
 
 /** Проверенная копия ответа /api/mcap или null (нет ключа, сбой, подделка). */
 export function validMcap(raw: unknown, now: number = Date.now() / 1000): McapReply | null {
-  if (!isObj(raw) || raw["ok"] !== true || !within(raw["at"], PX_FROM, now + 7 * DAY)) return null;
+  if (!isObj(raw) || raw["ok"] !== true || !within(raw["at"], PX_FROM, now + CLOCK_LAG)) return null;
   const btc = share(raw["btc"], 0.5);
   const eth = share(raw["eth"], 0);
   const alt = share(raw["alt"], 0);
@@ -161,7 +168,7 @@ export function validMcap(raw: unknown, now: number = Date.now() / 1000): McapRe
   const usdt = within(raw["usdt"], 0, 100 - btc[0]) ? raw["usdt"] : null;
   return {
     ok: true, btc, eth, alt, altNs, usdt, cap: [cap[0], within(cap[1], 1e10, 1e15) ? cap[1] : null],
-    hist: validHist(raw["hist"], now), at: raw["at"],
+    hist: validHist(raw["hist"], raw["at"]), at: raw["at"],
   };
 }
 

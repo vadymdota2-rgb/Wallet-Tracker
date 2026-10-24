@@ -693,6 +693,10 @@ say("доминация и альтсезон — повторная ревиз�
     and "test_slow_drip_is_cut_by_the_deadline" in read(f"{APP}/tests/test_mcap.py")
     and "test_slow_drip_is_cut_by_the_deadline" in read(f"{APP}/tests/test_dom.py")
     and read(f"{APP}/tools/mutate-etf.py").count("drop_pyc(path)") >= 4 and "signal.signal(signal.SIGTERM, restore_and_exit)" in read(f"{APP}/tools/mutate-etf.py"))
+say("доминация и альтсезон — ревизия №3: цветной текст с контрастом не ниже 4,5:1 (INK светлее линий), часы телефона могут отставать до года — дни ответа сверяются с его собственным временем",
+    'const INK = { btc: C.btc, alt: "#a78bfa", mid: "#9ca3af" } as const;' in _dm and "SEASON[seasonOf(now[1])].c }}" not in _dm
+    and "export const CLOCK_LAG = 366 * DAY;" in _dml and "within(ts, PX_FROM, at + 2 * DAY)" in _dml and "within(ts, MCAP_FROM, at + DAY)" in _dml
+    and "цветной текст читается" in read(f"{APP}/tests/e2e/dom.e2e.test.ts") and "часы телефона отстают на 10 дней" in read(f"{APP}/tests/e2e/dom.e2e.test.ts"))
 say("альтсезон честный: корзина на каждый день — самые торгуемые за 30 дней до него (без заглядывания вперёд), со снятыми потом монетами, только закрытые дни, не меньше 30 монет; ширина 25/50/100; это сказано на экране",
     "VOLW = 30" in _dms and "MIN_BASKET = 30" in _dms and 'EXCLUDE = frozenset({"PAXG", "USTC", "NFTI"})' in _dms and "TIERS = (25, 50, 100)" in _dms
     and '{"type": "meta"}' in _dms and 'u.get("isDelisted")' in _dms and "metaAndAssetCtxs" not in _dms

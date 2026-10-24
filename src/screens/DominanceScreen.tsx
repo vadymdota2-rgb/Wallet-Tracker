@@ -40,6 +40,10 @@ import "./DominanceScreen.css";
 type Lang = Parameters<typeof t>[0];
 
 const C = { btc: "#f7931a", eth: "#627eea", alt: "#8b5cf6", usdt: "#26a17b", mid: "#6b7280" } as const;
+/* Цвет текста того же смысла: светлее линий и полос — мелкий текст на тёмной
+   карточке читается с контрастом не ниже 4,5:1 (WCAG AA). Серый #6b7280 давал
+   4:1, фиолетовый #8b5cf6 — 4,55:1 впритык. */
+const INK = { btc: C.btc, alt: "#a78bfa", mid: "#9ca3af" } as const;
 const RANGE_KEY = "wt-dom-range";
 const RANGE_LABEL = { 365: "fg_r1y", 1095: "fg_r3y", all: "fg_rall" } as const;
 /** Сервер ещё собирает цены после первого запуска — спросить снова через столько, мс. */
@@ -60,9 +64,9 @@ function stamp(lang: Lang, at: number): string {
 }
 
 const SEASON = [
-  { key: "dm_s_btc", c: C.btc },
-  { key: "dm_s_mid", c: C.mid },
-  { key: "dm_s_alt", c: C.alt },
+  { key: "dm_s_btc", c: C.btc, t: INK.btc },
+  { key: "dm_s_mid", c: C.mid, t: INK.mid },
+  { key: "dm_s_alt", c: C.alt, t: INK.alt },
 ] as const;
 
 function durStr(lang: Lang, d: number): string {
@@ -113,10 +117,12 @@ function logTicks(lo: number, hi: number): number[] {
  * помещается по высоте окна (heightK). Палец ведёт по дням; с клавиатуры —
  * стрелки, Home/End, Esc; подсказка слышна читалке экрана.
  */
-function MiniChart({ pts, lang, color, bands, fmt, fixed, label, log }: {
+function MiniChart({ pts, lang, color, ink, bands, fmt, fixed, label, log }: {
   pts: [number, number][];
   lang: Lang;
   color: (v: number) => string;
+  /** Цвет числа в подсказке (текст — светлее линии); нет — цвет линии. */
+  ink?: (v: number) => string;
   bands?: { from: number; to: number; c: string }[];
   fmt: (v: number) => string;
   fixed?: [number, number];
@@ -230,7 +236,7 @@ function MiniChart({ pts, lang, color, bands, fmt, fixed, label, log }: {
       {p ? (
         <div className={xOf(sel!) > PW / 2 ? "fg-pop left" : "fg-pop"} aria-live="polite">
           <small>{dateStr(lang, p[0], { day: "numeric", month: "long", year: "numeric" })}</small>
-          <b style={{ color: color(p[1]) }}><bdi dir="ltr">{fmt(p[1])}</bdi></b>
+          <b style={{ color: (ink ?? color)(p[1]) }}><bdi dir="ltr">{fmt(p[1])}</bdi></b>
         </div>
       ) : null}
     </div>
@@ -282,8 +288,8 @@ function AltBar({ v, lang }: { v: number; lang: Lang }) {
         <b style={{ insetInlineStart: `${v}%` }} />
       </div>
       <div className="dm-abar-ends">
-        <span style={{ color: C.btc }}>{t(lang, "dm_s_btc")}</span>
-        <span style={{ color: C.alt }}>{t(lang, "dm_s_alt")}</span>
+        <span style={{ color: INK.btc }}>{t(lang, "dm_s_btc")}</span>
+        <span style={{ color: INK.alt }}>{t(lang, "dm_s_alt")}</span>
       </div>
     </div>
   );
@@ -793,7 +799,7 @@ export function DominanceScreen() {
   const altCell = (key: DictKey, p: [number, number] | null) => p ? (
     <div key={key} className="fg-cmp-c">
       <small>{t(lang, key)}</small>
-      <b style={{ color: SEASON[seasonOf(p[1])].c }}>{p[1]}</b>
+      <b style={{ color: SEASON[seasonOf(p[1])].t }}>{p[1]}</b>
       <span>{t(lang, SEASON[seasonOf(p[1])].key)}</span>
     </div>
   ) : null;
@@ -839,9 +845,9 @@ export function DominanceScreen() {
             <SectionTitle help={["dm_how_1", "dm_tiers_help", "dm_how_6"]}>{t(lang, "dm_alt_title")}</SectionTitle>
             <Card>
               <div className="dm-ahero">
-                <b style={{ color: SEASON[seasonOf(now[1])].c }}>{now[1]}</b>
+                <b style={{ color: SEASON[seasonOf(now[1])].t }}>{now[1]}</b>
                 <span>/100</span>
-                <em style={{ color: SEASON[seasonOf(now[1])].c }}>{t(lang, SEASON[seasonOf(now[1])].key)}</em>
+                <em style={{ color: SEASON[seasonOf(now[1])].t }}>{t(lang, SEASON[seasonOf(now[1])].key)}</em>
               </div>
               <AltBar v={now[1]} lang={lang} />
               {coins.length ? <p className="dm-ahint">{t(lang, "dm_alt_what", { k: iso(num(k)), n: iso(num(coins.length)) })}</p> : null}
@@ -857,7 +863,7 @@ export function DominanceScreen() {
                     {tiers.map(([size, v]) => (
                       <div key={size} className="fg-cmp-c">
                         <small>{t(lang, "dm_tier", { n: iso(num(size)) })}</small>
-                        <b style={{ color: SEASON[seasonOf(v)].c }}>{v}</b>
+                        <b style={{ color: SEASON[seasonOf(v)].t }}>{v}</b>
                         <span>{t(lang, SEASON[seasonOf(v)].key)}</span>
                       </div>
                     ))}
@@ -866,15 +872,15 @@ export function DominanceScreen() {
                 </div>
               ) : null}
               <div className="fg-year">
-                <span>{t(lang, "fg_hi")} <b style={{ color: SEASON[seasonOf(stats.hi[1])].c }}>{stats.hi[1]}</b>
+                <span>{t(lang, "fg_hi")} <b style={{ color: SEASON[seasonOf(stats.hi[1])].t }}>{stats.hi[1]}</b>
                   <small> · {dateStr(lang, stats.hi[0], { day: "numeric", month: "short", year: "numeric" })}</small></span>
-                <span>{t(lang, "fg_lo")} <b style={{ color: SEASON[seasonOf(stats.lo[1])].c }}>{stats.lo[1]}</b>
+                <span>{t(lang, "fg_lo")} <b style={{ color: SEASON[seasonOf(stats.lo[1])].t }}>{stats.lo[1]}</b>
                   <small> · {dateStr(lang, stats.lo[0], { day: "numeric", month: "short", year: "numeric" })}</small></span>
               </div>
               {coins.length ? (
                 <div className="dm-say">
                   <p>
-                    <b style={{ color: SEASON[seasonOf(now[1])].c }}>{t(lang, SEASON[seasonOf(now[1])].key)}.</b>{" "}
+                    <b style={{ color: SEASON[seasonOf(now[1])].t }}>{t(lang, SEASON[seasonOf(now[1])].key)}.</b>{" "}
                     {t(lang, now[1] >= 75 ? "dm_say_alt" : now[1] <= 25 ? "dm_say_btc" : "dm_say_mid", {
                       k: iso(num(k)), n: iso(num(coins.length)),
                     })}{" "}
@@ -901,6 +907,7 @@ export function DominanceScreen() {
                   lang={lang}
                   label={t(lang, "dm_alt_title")}
                   color={(v) => SEASON[seasonOf(v)].c}
+                  ink={(v) => SEASON[seasonOf(v)].t}
                   bands={[{ from: 0, to: 25, c: C.btc }, { from: 75, to: 100, c: C.alt }]}
                   fmt={(v) => num(v)}
                   fixed={[0, 100]}
@@ -927,13 +934,13 @@ export function DominanceScreen() {
                     историю альты слабели сильно, и от 2023 г. число было бы
                     крошечным, а изменения за год — не видны. */}
                 <div className="dm-eb">
-                  <b style={{ color: C.alt }}><bdi dir="ltr">{num(strW[strW.length - 1]![1], 1)}</bdi></b>
+                  <b style={{ color: INK.alt }}><bdi dir="ltr">{num(strW[strW.length - 1]![1], 1)}</bdi></b>
                   <span>{t(lang, "dm_str_base", { d: dateStr(lang, strW[0]![0], { day: "numeric", month: "long", year: "numeric" }) })}</span>
                 </div>
                 {rangeSeg}
                 <Changes ch={[30, 90, 365].map((n) => change(str, n))} lang={lang} />
                 <MiniChart pts={strPts} lang={lang} label={t(lang, "dm_str_title")}
-                  color={() => C.alt} fmt={(v) => num(v, v < 10 ? 1 : 0)} log />
+                  color={() => C.alt} ink={() => INK.alt} fmt={(v) => num(v, v < 10 ? 1 : 0)} log />
                 <p className="lq-hint">{t(lang, "dm_str_what", { n: iso(num(reply.n)) })}</p>
               </Card>
             </>

@@ -254,8 +254,8 @@ MC = [
 DMT = [
     ("(v >= 75 ? 2 : v <= 25 ? 0 : 1)", "(v > 75 ? 2 : v <= 25 ? 0 : 1)", "альтсезон: 75 — уже альтсезон"),
     ("(v >= 75 ? 2 : v <= 25 ? 0 : 1)", "(v >= 75 ? 2 : v < 25 ? 0 : 1)", "альтсезон: 25 — уже сезон биткоина"),
-    ("now + 2 * DAY) || ts % DAY !== 0 || ts <= prev)", "now + 2 * DAY) || ts <= prev)", "альтсезон: день — с начала суток"),
-    ("now + 2 * DAY) || ts % DAY !== 0 || ts <= prev)", "now + 2 * DAY) || ts % DAY !== 0 || ts < prev)", "альтсезон: дни без повторов"),
+    ("at + 2 * DAY) || ts % DAY !== 0 || ts <= prev)", "at + 2 * DAY) || ts <= prev)", "альтсезон: день — с начала суток"),
+    ("at + 2 * DAY) || ts % DAY !== 0 || ts <= prev)", "at + 2 * DAY) || ts % DAY !== 0 || ts < prev)", "альтсезон: дни без повторов"),
     ("|| !Number.isInteger(idx)", "", "альтсезон: индекс — целое"),
     ("if ((idx === null) !== (n === null) || ", "if (", "альтсезон: индекс и корзина — вместе"),
     ("!within(n, MIN_BASKET, COINS_MAX)", "!within(n, 0, COINS_MAX)", "альтсезон: корзина — не меньше MIN_BASKET"),
@@ -283,6 +283,9 @@ DMT = [
     ("if (!prev || prev[0] - d[0] >= 7 * DAY) out.push(d);", "if (!prev || prev[0] - d[0] > 7 * DAY) out.push(d);", "доминация: таблица — ровно раз в неделю"),
     ("if (!prev || prev[0] - d[0] >= 7 * DAY) out.push(d);", "out.push(d);", "доминация: таблица — не каждый день"),
     ("  return lo > 0 && t - times[lo - 1]! <= times[lo]! - t ? lo - 1 : lo;", "  return lo;", "графики: ближайшая по времени точка, а не следующая"),
+    ("!within(ts, PX_FROM, at + 2 * DAY)", "!within(ts, PX_FROM, Infinity)", "альтсезон: день не позже времени ответа"),
+    ("!within(ts, MCAP_FROM, at + DAY)", "!within(ts, MCAP_FROM, Infinity)", "доминация: день истории не позже времени ответа"),
+    ('raw["ok"] !== true || !within(raw["at"], PX_FROM, now + CLOCK_LAG)) return null;\n  const rows', 'raw["ok"] !== true) return null;\n  const rows', "альтсезон: время ответа правдоподобно"),
 ]
 
 # Общие ответы /api/dom и /api/mcap по HTTP и раздел «Рынок» дайджеста (whale_api.py).

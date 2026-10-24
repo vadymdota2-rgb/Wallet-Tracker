@@ -43,7 +43,7 @@
   border-top: 1px solid rgb(27 61 104 / 0.3);
 }
 .dm-top-r:first-child { border-top: 0; }
-.dm-top-rank { color: var(--dim-2); font-size: 11px; text-align: end; font-variant-numeric: tabular-nums; }
+.dm-top-rank { color: var(--dim); font-size: 11px; text-align: end; font-variant-numeric: tabular-nums; }
 .dm-top-s { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dm-top-bar { position: relative; height: 8px; direction: ltr; }
 .dm-top-mid { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: rgb(247 147 26 / 0.8); }

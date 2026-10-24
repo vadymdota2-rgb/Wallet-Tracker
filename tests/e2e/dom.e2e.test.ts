@@ -80,6 +80,8 @@ interface Opts {
   premium?: boolean;
   /** Ответ /api/mcap (доминация); по умолчанию — MCAP. */
   mcap?: unknown;
+  /** Часы телефона, unix с (по умолчанию — T, как у ответов). */
+  clock?: number;
 }
 
 /** Сервер без ключа CoinMarketCap: блока капитализации нет — графики альтсезона первые. */
@@ -109,7 +111,7 @@ async function open(o: Opts = {}): Promise<Opened> {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource/.test(m.text())) errors.push(m.text()); });
-  await page.clock.setFixedTime(T * 1000);
+  await page.clock.setFixedTime((o.clock ?? T) * 1000);
   await ctx.route((url) => !url.href.startsWith(base) && !url.href.startsWith("https://fonts.googleapis.com/"), (r) => r.abort());
   await ctx.route("https://fonts.googleapis.com/**", (r) => r.fulfill({ contentType: "text/css", body: FACES(base) }));
   await ctx.route(`${base}/api/**`, (r) => r.fulfill({ contentType: "application/json", body: '{"ok":false}' }));
@@ -331,6 +333,7 @@ describe("Альтсезон", () => {
     for (const width of [360, 768, 1280]) {
       const { ctx, page } = await open({ width, height: 900 });
       await ready(page);
+      await page.locator("svg.dm-mc").waitFor();
       const svgs = await page.locator(".dm-svg").evaluateAll((els) => els.map((el) => {
         const sv = el as SVGSVGElement;
         return { vb: sv.viewBox.baseVal.width, w: sv.getBoundingClientRect().width };
@@ -349,7 +352,9 @@ describe("Альтсезон", () => {
   test("телефон боком: график помещается по высоте окна", async () => {
     const { ctx, page } = await open({ width: 844, height: 390 });
     await ready(page);
-    // Все графики, и двухэтажный «биткоин против альтов» тоже.
+    // Все графики, и двухэтажный «биткоин против альтов» тоже (его ответ —
+    // отдельный запрос и может прийти позже индекса).
+    await page.locator("svg.dm-mc").waitFor();
     const hs = await page.locator(".dm-svg").evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height));
     assert.equal(hs.length, 4);
     for (const h of hs) assert.ok(h <= 390 * 0.75, String(h));
@@ -379,6 +384,45 @@ describe("Альтсезон", () => {
     await page.waitForTimeout(100);
     assert.deepEqual(await overflow(page), []);
     await ctx.close();
+  });
+
+  test("часы телефона отстают на 10 дней: индекс, доминация и её график — на месте", async () => {
+    const { ctx, page, errors } = await open({ clock: T - 10 * 86_400 });
+    await ready(page);
+    assert.equal(sp(await page.locator(".dm-ahero b").innerText()), String(last[1]));
+    await page.locator(".dm-cap").waitFor();
+    assert.equal(await page.locator("svg.dm-mc").count(), 1);
+    assert.equal(await page.locator(".lq-stale").count(), 0);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("цветной текст читается: контраст не ниже 4,5:1 на карточке (WCAG AA), во всех трёх зонах", async () => {
+    // Индекс последнего дня — в каждой зоне по очереди: серый «нейтрально»
+    // был 4:1, фиолетовый «альтсезон» — 4,55:1 впритык.
+    for (const v of [12, 50, 90]) {
+      const rows = REAL.rows.map((r, i) => (i === REAL.rows.length - 1 && r[1] !== null ? [r[0], v, r[2], r[3], r[4], r[5]] : r));
+      const { ctx, page } = await open({ reply: { ...REAL, rows } });
+      await ready(page);
+      const low = await page.evaluate(() => {
+        const lum = (rgb: number[]) => {
+          const f = (c: number) => (c / 255 <= 0.03928 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4);
+          return 0.2126 * f(rgb[0]!) + 0.7152 * f(rgb[1]!) + 0.0722 * f(rgb[2]!);
+        };
+        const card = lum([7, 14, 30]);
+        const out: string[] = [];
+        for (const el of document.querySelectorAll<HTMLElement>(".dm [style*='color']:not(i), .dm-top-rank")) {
+          if (!(el.textContent ?? "").trim()) continue;
+          const rgb = getComputedStyle(el).color.match(/\d+/g)!.slice(0, 3).map(Number);
+          const l = lum(rgb);
+          const k = (Math.max(l, card) + 0.05) / (Math.min(l, card) + 0.05);
+          if (k < 4.5) out.push(`${el.tagName}.${el.className} «${(el.textContent ?? "").slice(0, 20)}» ${k.toFixed(2)}`);
+        }
+        return out;
+      });
+      assert.deepEqual(low, [], String(v));
+      await ctx.close();
+    }
   });
 
   test("высокая контрастность: шкала индекса и полосы монет — своими цветами", async () => {
