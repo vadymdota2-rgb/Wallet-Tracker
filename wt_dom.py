@@ -54,6 +54,7 @@ import re
 import sys
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Any
@@ -82,11 +83,18 @@ EXCLUDE = frozenset({"PAXG", "USTC", "NFTI"})
 PEG = 1.05
 DAY = 86400
 # Пауза между запросами цен, с: у Hyperliquid общий лимит на адрес — 1200
-# «весов» в минуту, его делят все модули сервера; запрос свечей весит 20 и
-# ещё 1 за каждые 60 свечей ответа. С паузой 4 с — 15 запросов в минуту:
-# около 300 весов на хвостах и меньше 900, даже будь у каждой монеты история
-# с 2020 г.
-PACE = 4.0
+# «весов» в минуту, его делят все модули сервера и бот; запрос свечей весит
+# 20 и ещё 1 за каждые 60 свечей ответа. С паузой 5 с — 12 запросов в минуту:
+# около 250 весов на хвостах (пятая часть лимита) и меньше 800, даже будь у
+# каждой монеты история с 2020 г.
+PACE = 5.0
+# Hyperliquid ответил 429 («слишком часто»: лимит адреса выбрали вместе с
+# ботом и другими модулями) — ждём LIMIT_WAIT с и повторяем, не больше
+# LIMIT_TRIES раз подряд; не помогло — обход прерывается (полученное
+# сохранено), следующий — не раньше чем через LIMIT_REST с.
+LIMIT_WAIT = 60.0
+LIMIT_TRIES = 3
+LIMIT_REST = 1800.0
 # Сколько последних известных дней спрашивать заново: свеча дня у
 # Hyperliquid может уточниться после закрытия.
 TAIL_DAYS = 5
@@ -146,9 +154,14 @@ def _log(msg: str) -> None:
         print(f"dom: {clean[:300]}", file=sys.stderr)
 
 
+class _Limited(Exception):
+    """Hyperliquid ответил 429: лимит запросов адреса выбран."""
+
+
 def _fetch(url: str, body: dict[str, Any], timeout: float) -> bytes | None:
     """POST JSON. Любая ошибка сети, ответ больше BODY_MAX и ответ дольше
-    timeout целиком — None."""
+    timeout целиком — None; 429 — _Limited (сеть надо поберечь, а не
+    спрашивать дальше)."""
     if not _allowed(url):
         return None
     req = urllib.request.Request(url, data=json.dumps(body).encode(), headers=_HEADERS, method="POST")
@@ -166,6 +179,10 @@ def _fetch(url: str, body: dict[str, Any], timeout: float) -> bytes | None:
                     return bytes(buf)
                 buf += chunk
             return None
+    except urllib.error.HTTPError as e:
+        if e.code == 429:
+            raise _Limited from None
+        return None
     except (OSError, ValueError, http.client.HTTPException):
         return None
 
@@ -269,6 +286,8 @@ class _State:
     fail: float | None = None
     # Свечи: монета → {начало суток: (закрытие, оборот $)}.
     px: dict[str, dict[int, Candle]] = {}  # noqa: RUF012 — заменяется целиком, не меняется на месте
+    # До какого времени (monotonic) Hyperliquid не трогаем: он ответил 429.
+    rest: float = 0.0
     # Где держать копии (set_cache_dir); копия ответа с диска уже читалась
     # (читается один раз: без годной копии запросы диск не трогают).
     dir: str | None = None
@@ -365,7 +384,20 @@ def _refresh(coins: dict[str, bool], sleep: Any = time.sleep) -> dict[str, dict[
         if asked:
             sleep(PACE)
         asked += 1
-        got = _candles(coin, max(have) - TAIL_DAYS * DAY if have else 0)
+        for tries in range(LIMIT_TRIES + 1):
+            try:
+                got = _candles(coin, max(have) - TAIL_DAYS * DAY if have else 0)
+                break
+            except _Limited:
+                if tries == LIMIT_TRIES:
+                    # Лимит адреса не отпускает: обход прерывается, полученное
+                    # не теряется (у остальных монет — прежние свечи).
+                    _px_save({**old, **out})
+                    with _lock:
+                        _st.px = {**old, **out}
+                    raise
+                _log(f"Hyperliquid: 429, пауза {LIMIT_WAIT:.0f} с")
+                sleep(LIMIT_WAIT)
         if got is None:
             if have:
                 out[coin] = have
@@ -485,12 +517,15 @@ def build(sleep: Any = time.sleep) -> dict[str, Json]:
             return hit[1]
         got = compute(have)
     else:
-        coins = _universe()
-        if not coins or "BTC" not in coins:
+        try:
+            coins = _universe()
+            got = compute(_refresh(coins, sleep)) if coins and "BTC" in coins else None
+        except _Limited:
+            _log(f"Hyperliquid: 429 не проходит — следующий обход через {LIMIT_REST:.0f} с")
             with _lock:
                 _st.fail = time.monotonic()
+                _st.rest = time.monotonic() + LIMIT_REST
             return _no_data()
-        got = compute(_refresh(coins, sleep))
     if not got:
         with _lock:
             _st.fail = time.monotonic()
@@ -519,8 +554,10 @@ def _bg() -> None:
 
 
 def _resting() -> bool:
-    """Последняя сборка не удалась меньше FAIL_WAIT назад. Звать под _lock."""
-    return _st.fail is not None and time.monotonic() - _st.fail < FAIL_WAIT
+    """Последняя сборка не удалась меньше FAIL_WAIT назад или Hyperliquid
+    просил подождать (429). Звать под _lock."""
+    now = time.monotonic()
+    return (_st.fail is not None and now - _st.fail < FAIL_WAIT) or now < _st.rest
 
 
 def dom_data() -> dict[str, Json]:

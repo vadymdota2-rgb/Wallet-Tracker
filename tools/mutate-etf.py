@@ -200,10 +200,10 @@ DM = [
     ("        if PX_FROM <= ts < _today():\n            out[ts]", "        if True:\n            out[ts]", "альтсезон: только закрытые дни с 2020 г."),
     ('    if len(text.lstrip("-")) > INT_DIGITS:', "    if False:", "альтсезон: целое не длиннее INT_DIGITS"),
     ('return u.scheme == "https" and u.hostname in HOSTS and not u.username and not u.password', "return True", "альтсезон: только https к Hyperliquid"),
-    ("                buf += chunk\n            return None\n    except (OSError", "                buf += chunk\n            return bytes(buf)\n    except (OSError", "альтсезон: предел размера ответа"),
+    ("                buf += chunk\n            return None\n    except urllib.error.HTTPError as e:\n        if e.code == 429", "                buf += chunk\n            return bytes(buf)\n    except urllib.error.HTTPError as e:\n        if e.code == 429", "альтсезон: предел размера ответа"),
     ("        if asked:\n            sleep(PACE)\n", "", "альтсезон: пауза между запросами"),
     ("        if asked % SAVE_EVERY == 0:\n            _px_save({**old, **out})\n", "", "альтсезон: свечи пишутся по ходу первой сборки"),
-    ("{**old, **out})", "out)", "альтсезон: промежуточная запись не теряет ещё не спрошенные монеты"),
+    ("        if asked % SAVE_EVERY == 0:\n            _px_save({**old, **out})", "        if asked % SAVE_EVERY == 0:\n            _px_save(out)", "альтсезон: промежуточная запись не теряет ещё не спрошенные монеты"),
     ("            if ts % DAY == 0 and PX_FROM <= ts < _today() and 0 < px < PX_MAX and 0 <= dv < VOL_MAX:", "            if True:", "альтсезон: копия цен на диске проверяется"),
     ("            if ts % DAY == 0 and PX_FROM <= ts < _today() and 0 < px < PX_MAX and 0 <= dv < VOL_MAX:", "            if ts % DAY == 0 and 0 < px < PX_MAX and 0 <= dv < VOL_MAX:", "альтсезон: даты копии цен — с 2020 г. и не идущий день"),
     ('    return {"ok": False, "error": "building"} if building else _no_data()', "    return _no_data()", "альтсезон: «собираем» на холодном старте"),
@@ -212,6 +212,11 @@ DM = [
     ("eb = float(f\"{eth[t] / btc[t]:.6g}\")", "eb = float(f\"{eth[t]:.6g}\")", "альтсезон: ETH/BTC — отношение цен"),
     ("                if time.monotonic() > end:\n                    return None\n", "", "альтсезон: весь ответ — не дольше срока"),
     ("        _st.loaded = True\n        saved = _file_load(\"dom.json\")", "        saved = _file_load(\"dom.json\")", "альтсезон: копия с диска — один раз, а не на каждый запрос"),
+    ("        if e.code == 429:\n            raise _Limited from None\n", "", "альтсезон: 429 — пауза, а не следующий запрос"),
+    ("                sleep(LIMIT_WAIT)\n", "", "альтсезон: на 429 — ждём перед повтором"),
+    ("                if tries == LIMIT_TRIES:", "                if tries == 0:", "альтсезон: на 429 — несколько повторов"),
+    ("                    _px_save({**old, **out})\n                    with _lock:", "                    with _lock:", "альтсезон: прерванный обход сохраняет полученное"),
+    ("    return (_st.fail is not None and now - _st.fail < FAIL_WAIT) or now < _st.rest", "    return _st.fail is not None and now - _st.fail < FAIL_WAIT", "альтсезон: после 429 — долгий отдых"),
 ]
 # Доминация (wt_mcap): официальный API CoinMarketCap, бюджет кредитов, история.
 MC = [

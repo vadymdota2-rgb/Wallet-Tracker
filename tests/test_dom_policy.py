@@ -23,7 +23,7 @@ import wt_dom as dom  # noqa: E402 — модуль лежит в корне р�
 SERVER = os.path.join(ROOT, "wt_dom.py")
 # Только стандартная библиотека: ни базы, ни бота, ни whale_api.
 IMPORTS = {"__future__", "contextlib", "http.client", "json", "math", "os", "re", "sys", "threading", "time",
-           "urllib.parse", "urllib.request", "typing"}
+           "urllib.error", "urllib.parse", "urllib.request", "typing"}
 BANNED_CALLS = {"eval", "exec", "compile", "__import__", "input", "breakpoint", "globals", "locals", "vars",
                 "setattr", "delattr"}
 FILE_FUNCS = {"_file_load", "_file_save"}

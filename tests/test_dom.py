@@ -391,6 +391,73 @@ class BuildTest(Base):
         self.assertEqual(len(slept), 40 + 5 - 1)
         self.assertTrue(all(s == dom.PACE for s in slept))
 
+    def test_429_once_waits_and_asks_again(self):
+        # Лимит адреса общий с ботом: на 429 — пауза LIMIT_WAIT и повтор той же
+        # монеты, а не следующая монета в лоб.
+        net = market()
+        hits = {"n": 0}
+
+        def flaky(url, body, timeout):
+            if body["type"] == "candleSnapshot" and body["req"]["coin"] == "A3" and hits["n"] < 2:
+                hits["n"] += 1
+                raise dom._Limited
+            return net(url, body, timeout)
+        slept = []
+        with mock.patch.object(dom, "_fetch", flaky):
+            got = dom.build(sleep=slept.append)
+        self.assertTrue(got["ok"])
+        self.assertEqual(slept.count(dom.LIMIT_WAIT), 2)
+        self.assertEqual(net.asked().count("A3"), 1)
+        self.assertEqual(dom._st.rest, 0.0)
+
+    def test_429_that_never_ends_stops_the_pass_keeps_progress_and_rests(self):
+        net = market()
+        asked = []
+
+        def limited(url, body, timeout):
+            if body["type"] == "candleSnapshot":
+                asked.append(body["req"]["coin"])
+                if len(asked) > 10:
+                    raise dom._Limited
+            return net(url, body, timeout)
+        with mock.patch.object(dom, "_fetch", limited):
+            self.assertEqual(dom.build(sleep=lambda s: None), {"ok": False, "error": "no_data"})
+        # Лимит не отпустил: монета спрошена 1 + LIMIT_TRIES раз, дальше обход не идёт.
+        self.assertEqual(len(asked), 10 + 1 + dom.LIMIT_TRIES)
+        # Полученное не потеряно — и в памяти, и на диске.
+        self.assertEqual(len(dom._st.px), 10)
+        self.assertEqual(len(dom._px_load()), 10)
+        # Отдых — LIMIT_REST: новых сборок (и запросов) до конца паузы нет.
+        with dom._lock:
+            self.assertTrue(dom._resting())
+        self.assertGreater(dom._st.rest - dom.time.monotonic(), dom.LIMIT_REST - 60)
+        with mock.patch.object(dom.threading, "Thread") as th:
+            dom.dom_data()
+        th.assert_not_called()
+        # Обычная пауза после сбоя (FAIL_WAIT) прошла, а отдых после 429 — ещё нет.
+        later = dom.time.monotonic() + dom.FAIL_WAIT + 1
+        with mock.patch.object(dom.time, "monotonic", lambda: later), dom._lock:
+            self.assertTrue(dom._resting())
+        with mock.patch.object(dom.time, "monotonic", lambda: later + dom.LIMIT_REST), dom._lock:
+            self.assertFalse(dom._resting())
+
+    def test_429_on_the_coin_list_is_a_rest_too(self):
+        def limited(url, body, timeout):
+            raise dom._Limited
+        with mock.patch.object(dom, "_fetch", limited):
+            self.assertEqual(dom.build(sleep=lambda s: None), {"ok": False, "error": "no_data"})
+        self.assertGreater(dom._st.rest, dom.time.monotonic())
+
+    def test_fetch_turns_429_into_limited_and_other_errors_into_none(self):
+        for code in (429, 500, 403):
+            err = dom.urllib.error.HTTPError(dom.INFO, code, "x", {}, None)  # type: ignore[arg-type]
+            with mock.patch.object(dom._opener, "open", side_effect=err):
+                if code == 429:
+                    with self.assertRaises(dom._Limited):
+                        dom._fetch(dom.INFO, {}, 5)
+                else:
+                    self.assertIsNone(dom._fetch(dom.INFO, {}, 5))
+
     def test_no_list_is_no_data_and_a_pause(self):
         with mock.patch.object(dom, "_fetch", lambda u, b, t: None):
             self.assertEqual(dom.build(sleep=lambda s: None), {"ok": False, "error": "no_data"})

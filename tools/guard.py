@@ -697,6 +697,10 @@ say("доминация и альтсезон — ревизия №3: цвет�
     'const INK = { btc: C.btc, alt: "#a78bfa", mid: "#9ca3af" } as const;' in _dm and "SEASON[seasonOf(now[1])].c }}" not in _dm
     and "export const CLOCK_LAG = 366 * DAY;" in _dml and "within(ts, PX_FROM, at + 2 * DAY)" in _dml and "within(ts, MCAP_FROM, at + DAY)" in _dml
     and "цветной текст читается" in read(f"{APP}/tests/e2e/dom.e2e.test.ts") and "часы телефона отстают на 10 дней" in read(f"{APP}/tests/e2e/dom.e2e.test.ts"))
+say("альтсезон бережёт общий лимит Hyperliquid (1200 весов в минуту на адрес — вместе с ботом): пауза 5 с между запросами; на 429 — пауза и повтор, не отпускает — обход прерывается с сохранением полученного и отдых 30 минут",
+    "PACE = 5.0" in _dms and "class _Limited(Exception):" in _dms and "if e.code == 429:" in _dms
+    and "LIMIT_WAIT = 60.0" in _dms and "LIMIT_REST = 1800.0" in _dms and "or now < _st.rest" in _dms
+    and "test_429_that_never_ends_stops_the_pass_keeps_progress_and_rests" in read(f"{APP}/tests/test_dom.py"))
 say("альтсезон честный: корзина на каждый день — самые торгуемые за 30 дней до него (без заглядывания вперёд), со снятыми потом монетами, только закрытые дни, не меньше 30 монет; ширина 25/50/100; это сказано на экране",
     "VOLW = 30" in _dms and "MIN_BASKET = 30" in _dms and 'EXCLUDE = frozenset({"PAXG", "USTC", "NFTI"})' in _dms and "TIERS = (25, 50, 100)" in _dms
     and '{"type": "meta"}' in _dms and 'u.get("isDelisted")' in _dms and "metaAndAssetCtxs" not in _dms
