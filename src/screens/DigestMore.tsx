@@ -21,6 +21,7 @@ import type { CalEv, DigestItem, DigestSignal } from "../lib/types";
 import { FLAG, allDay, calTitle } from "./CalendarScreen";
 import { CCBY_URL, TFTC_URL } from "./etfView";
 import { CmcBy } from "../components/CmcBy";
+import { zoneKey } from "../lib/fng";
 
 type Lang = Parameters<typeof t>[0];
 
@@ -202,9 +203,9 @@ export function Summary({ it, lang }: { it: DigestItem; lang: Lang }) {
 
 /* ── Рынок ────────────────────────────────────────────────────────────── */
 
-const FNG_ZONES: [number, Parameters<typeof t>[1]][] = [
-  [25, "fg_z0"], [46, "fg_z1"], [54, "fg_z2"], [75, "fg_z3"], [100, "fg_z4"],
-];
+/** Зона индекса — по тем же границам, что на экране «Страха и жадности»
+ *  (lib/fng.ts); число вне 0–100 — без зоны. */
+const fngZone = (v: number) => (v >= 0 && v <= 100 ? zoneKey(v) : undefined);
 
 function Cell({ label, value, sub, tone }: { label: ReactNode; value: ReactNode; sub?: ReactNode; tone?: "up" | "dn" }) {
   return (
@@ -225,7 +226,7 @@ export function Market({ it, lang }: { it: DigestItem; lang: Lang }) {
   const open = useApp((s) => s.open);
   const m = it.mkt;
   if (!m) return null;
-  const zone = m.fng ? FNG_ZONES.find(([max]) => m.fng!.v <= max)?.[1] : undefined;
+  const zone = m.fng ? fngZone(m.fng.v) : undefined;
   return (
     <Sec icon={<GaugeGlyph size={20} />} title={t(lang, "dg_mkt_title")} onOpen={() => open("fng")}
       line={marketLine(it, lang)} tone={m.btc ? tone(m.btc.ch) : undefined}>
@@ -395,7 +396,7 @@ export function HalvingLine({ it, lang }: { it: DigestItem; lang: Lang }) {
 export function marketLine(it: DigestItem, lang: Lang): string | null {
   const m = it.mkt;
   if (!m?.btc) return null;
-  const zone = m.fng ? FNG_ZONES.find(([max]) => m.fng!.v <= max)?.[1] : undefined;
+  const zone = m.fng ? fngZone(m.fng.v) : undefined;
   return t(lang, "dg_l_mkt", {
     p: iso(px(m.btc.px)), c: sPct(m.btc.ch), z: zone ? `${t(lang, zone)}: ${m.fng!.v} (alternative.me)` : "—",
   });

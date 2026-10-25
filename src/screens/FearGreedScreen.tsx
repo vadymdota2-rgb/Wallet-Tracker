@@ -221,7 +221,7 @@ function Chart({ days, lang, sel, onSel }: {
       width="100%"
       height={H}
       role="img"
-      aria-label={t(lang, "fg_title")}
+      aria-label={t(lang, "fg_hist_t")}
       onPointerDown={(e) => pick(e.clientX)}
       onPointerMove={(e) => { if (e.pointerType === "mouse" || e.buttons) pick(e.clientX); }}
       onPointerUp={(e) => { if (e.pointerType !== "mouse") onSel(null); }}
