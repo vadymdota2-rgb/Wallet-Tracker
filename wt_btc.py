@@ -285,8 +285,11 @@ def _btc_big_build(win: str, side: str, min_btc: float, ex: str = "") -> Json:
         # который шесть раз завёл по 62 BTC, раньше занимал шесть одинаковых
         # строк и читался дублями. Теперь одна строка «×6» с суммой, ценой
         # по средней и ссылкой на самую крупную транзакцию.
+        # Доллары — TOTAL (дробное), а не SUM: в нано-долларах месяц покупок
+        # (десятки миллиардов долларов) больше предела целого SQLite, и SUM
+        # падал «integer overflow» — окно «30 дней» не открывалось совсем.
         rows = con.execute(
-            flows + f"SELECT m.wallet, m.ex, SUM(m.sats) sats, SUM(m.usd_nanos) usd_nanos, "
+            flows + f"SELECT m.wallet, m.ex, SUM(m.sats) sats, TOTAL(m.usd_nanos) usd_nanos, "
             f"SUM(CASE WHEN m.price_nanos > 0 THEN m.sats ELSE 0 END) psats, "
             f"COUNT(*) n, MAX(m.ts) ts, MAX(m.sats) top, "
             f"(SELECT m2.txid FROM btc_moves m2 WHERE m2.wallet = m.wallet AND m2.kind = m.kind "
@@ -299,7 +302,7 @@ def _btc_big_build(win: str, side: str, min_btc: float, ex: str = "") -> Json:
         # укладывался в 15 секунд, которые ждёт приложение.
         agg = con.execute(
             flows + f"SELECT m.kind, m.ex, COUNT(*) n, COUNT(DISTINCT m.wallet) w, SUM(m.sats) s, "
-            f"SUM(m.usd_nanos) u FROM btc_moves m {join}"
+            f"TOTAL(m.usd_nanos) u FROM btc_moves m {join}"
             f"WHERE m.ts >= ? AND m.ex != '' AND m.sats >= ? AND {cond} "
             f"AND ((m.kind = 1 AND {keep[1]}) OR (m.kind = 2 AND {keep[2]})) "
             f"GROUP BY m.kind, m.ex", (*lead, since, floor)).fetchall()

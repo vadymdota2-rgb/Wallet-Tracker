@@ -361,6 +361,8 @@ BT = [
     ('"roi": sorted(books, key=lambda b: (-b["roi"], -b["btc"]))', '"roi": sorted(books, key=lambda b: (-b["pnl"], -b["btc"]))', "доска ROI — по ROI"),
     ('"act": sorted(books, key=lambda b: (-b["btc"], -b["pnl"]))', '"act": sorted(books, key=lambda b: (-b["pnl"], -b["btc"]))', "доска накопления — по запасу"),
     ("    return 120.0 if days <= 30 else 600.0", "    return 120.0", "длинные окна — раз в десять минут"),
+    ("TOTAL(m.usd_nanos) usd_nanos, \"", "SUM(m.usd_nanos) usd_nanos, \"", "доллары строки — без переполнения"),
+    ("f\"TOTAL(m.usd_nanos) u FROM btc_moves m {join}\"", "f\"SUM(m.usd_nanos) u FROM btc_moves m {join}\"", "доллары итога — без переполнения"),
     ("    days = days if days in BTC_RANK_DAYS else 30", "    days = days if days > 0 else 30", "окно рейтинга — из списка"),
     # Кошелёк.
     ('for r in rows if int(r["price_nanos"] or 0) > 0 and r["ex"]], px)', 'for r in rows], px)', "кошелёк: итог — по сделкам с биржей"),
@@ -446,7 +448,7 @@ def server():
                                         "tests.test_dom_policy"], DM)
             + run(f"{ROOT}/wt_mcap.py", [sys.executable, "-m", "unittest", "tests.test_mcap", "tests.test_mcap_fuzz"], MC)
             + run(f"{ROOT}/wt_btc.py", [sys.executable, "-m", "unittest", "tests.test_btc", "tests.test_btc_stale",
-                                        "tests.test_btc_etf_labels"], BT))
+                                        "tests.test_btc_etf_labels", "tests.test_sum_overflow"], BT))
 
 
 # Приложение и сервер — одновременно: тесты приложения (node) читают только

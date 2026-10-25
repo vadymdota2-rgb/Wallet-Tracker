@@ -1067,7 +1067,7 @@ say("wt_btc: полные тесты (потоки, крупные ордера,
     os.path.isfile(f"{APP}/tests/test_btc.py") and "BT = [" in read(f"{APP}/tools/mutate-etf.py")
     and '+ run(f"{ROOT}/wt_btc.py", [sys.executable, "-m", "unittest", "tests.test_btc"' in read(f"{APP}/tools/mutate-etf.py")
     and "len(DMT) + len(BT) - len(EQUIV)" in read(f"{APP}/tools/mutate-etf.py")
-    and "wt_btc.py tests/test_btc.py tests/test_btc_stale.py" in _ci)
+    and "wt_btc.py tests/test_btc.py tests/test_btc_stale.py tests/test_sum_overflow.py" in _ci)
 _ws_etfh = read(os.path.join(BOT, "btc_etf.h"))
 _ws_tx = read(os.path.join(BOT, "tests/btc_tx_test.cpp"))
 say("метки ETF (btc_etf.cpp), жёсткая ревизия: обновление при запуске — BEGIN IMMEDIATE, каждый шаг проверен, сбой — откат; снятый фондом адрес — не метка; кошелёк фонда — не биржа; /import — тикер проверен, повтор адреса — один, сбой записи — откат и «не записалось»; очередь снимается по строкам; имя фонда в /statsbtc экранировано",
@@ -1096,6 +1096,11 @@ say("крупные ордера BTC: все окна и стороны гото
     and "return cachedGet<T>(path, ttl, EX_TIMEOUT).then((r) => {" in read(f"{APP}/src/lib/api.ts")
     and _btcv.count("failed(data) ? (") == 3
     and "test_concurrent_cold_requests_share_one_build" in read(f"{APP}/tests/test_btc.py"))
+say("доллары в нано — TOTAL, не SUM: месяц крупных ордеров BTC и потоков бирж BSC больше предела целого SQLite («integer overflow», 25 октября окно «30 дней» не открывалось)",
+    "SUM(m.usd_nanos)" not in btcpy and "TOTAL(m.usd_nanos) usd_nanos" in btcpy and "TOTAL(m.usd_nanos) u FROM" in btcpy
+    and "SUM(in_usd)" not in api and "SUM(out_usd" not in api and "SUM(CASE WHEN is_buy=1 THEN usd_nanos" not in api
+    and "SUM(CASE WHEN t.is_buy" not in api and "TOTAL(in_usd) i, TOTAL(out_usd) o" in api
+    and os.path.isfile(f"{APP}/tests/test_sum_overflow.py"))
 say("bitcoin, повторная ревизия: алерты только о свежих блоках (догонка простоя не шлёт вчерашние сделки), время блока не из будущего, дробные числа узла без UB; дайджест без раздела биткоина, пока сканер стоит",
     "constexpr long long ALERT_MAX_AGE_SEC = 3600;" in _ws_btc and "nowSec() - alerts_.front().ts > ALERT_MAX_AGE_SEC" in _ws_btc
     and "b.ts > nowSec() + 7200" in _ws_btc and "return d > -9e18 && d < 9e18 ? static_cast<long long>(d) : 0;" in _ws_btc

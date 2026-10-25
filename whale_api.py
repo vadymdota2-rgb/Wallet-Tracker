@@ -2019,8 +2019,8 @@ def wallet_stats(cur: sqlite3.Connection, addr: str) -> dict:
     if table_exists(cur, "trades"):
         row = cur.execute(
             "SELECT COUNT(*) c, "
-            "SUM(CASE WHEN is_buy=1 THEN usd_nanos ELSE 0 END) buy, "
-            "SUM(CASE WHEN is_buy=0 THEN usd_nanos ELSE 0 END) sell "
+            "TOTAL(CASE WHEN is_buy=1 THEN usd_nanos ELSE 0 END) buy, "
+            "TOTAL(CASE WHEN is_buy=0 THEN usd_nanos ELSE 0 END) sell "
             "FROM (SELECT is_buy, usd_nanos FROM trades WHERE wallet=? "
             "ORDER BY rowid DESC LIMIT 300)",
             (addr,),
@@ -6118,7 +6118,7 @@ def market_trend(cur: sqlite3.Connection, since: int, sec: int,
     try:
         rows = cur.execute(
             "SELECT t.token, (t.timestamp - ?) / ? b, "
-            "SUM(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE -t.usd_nanos END) net "
+            "TOTAL(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE -t.usd_nanos END) net "
             "FROM trades t "
             "WHERE t.timestamp >= ? AND t.usd_nanos BETWEEN ? AND ? "
             f"{ban}"
@@ -6237,14 +6237,14 @@ def flow_scan(cur: sqlite3.Connection, since: int, tokens: list[str] | None = No
     try:
         rows = cur.execute(
             "SELECT t.token, "
-            "SUM(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE 0 END) buy, "
-            "SUM(CASE WHEN t.is_buy=0 THEN t.usd_nanos ELSE 0 END) sell, "
+            "TOTAL(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE 0 END) buy, "
+            "TOTAL(CASE WHEN t.is_buy=0 THEN t.usd_nanos ELSE 0 END) sell, "
             "COUNT(DISTINCT t.wallet) w "
             "FROM trades t "
             "WHERE t.timestamp >= ? AND t.usd_nanos BETWEEN ? AND ? "
             f"{ban}{where_tok}"
             "GROUP BY t.token "
-            "ORDER BY ABS(SUM(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE -t.usd_nanos END)) DESC",
+            "ORDER BY ABS(TOTAL(CASE WHEN t.is_buy=1 THEN t.usd_nanos ELSE -t.usd_nanos END)) DESC",
             args,
         ).fetchall()
     except sqlite3.Error as e:
@@ -11682,7 +11682,7 @@ def _bscx_flow_build() -> dict:
             # берёт час и текущие неполные десять минут.
             since = (t - sec) // 600 * 600
             by_ex = cur.execute(
-                "SELECT ex, SUM(in_usd) i, SUM(out_usd) o, SUM(in_n) ni, SUM(out_n) no "
+                "SELECT ex, TOTAL(in_usd) i, TOTAL(out_usd) o, SUM(in_n) ni, SUM(out_n) no "
                 "FROM bsc_ex_flow WHERE ts >= ? GROUP BY ex", (since,)).fetchall()
             tin = sum(usd(r["i"]) for r in by_ex)
             tout = sum(usd(r["o"]) for r in by_ex)
@@ -11690,7 +11690,7 @@ def _bscx_flow_build() -> dict:
             arr = [0.0] * TREND_BUCKETS
             step = max(1, (t - start) // TREND_BUCKETS)
             for r in cur.execute(
-                    "SELECT (ts - ?) / ? b, SUM(out_usd - in_usd) n FROM bsc_ex_flow "
+                    "SELECT (ts - ?) / ? b, TOTAL(out_usd - in_usd) n FROM bsc_ex_flow "
                     "WHERE ts >= ? GROUP BY b", (start, step, since)):
                 arr[min(TREND_BUCKETS - 1, max(0, int(r["b"] or 0)))] += usd(r["n"])
             tr, run = [0.0], 0.0
@@ -11704,9 +11704,9 @@ def _bscx_flow_build() -> dict:
             # стороны, число переводов и своя линия накопленного вывода.
             coins = []
             for r in cur.execute(
-                    "SELECT token, SUM(in_usd) i, SUM(out_usd) o, SUM(in_qty) qi, SUM(out_qty) qo, "
+                    "SELECT token, TOTAL(in_usd) i, TOTAL(out_usd) o, SUM(in_qty) qi, SUM(out_qty) qo, "
                     "SUM(in_n) + SUM(out_n) n FROM bsc_ex_flow WHERE ts >= ? GROUP BY token "
-                    "ORDER BY ABS(SUM(out_usd) - SUM(in_usd)) DESC LIMIT ?", (since, BSCX_COINS_MAX)):
+                    "ORDER BY ABS(TOTAL(out_usd) - TOTAL(in_usd)) DESC LIMIT ?", (since, BSCX_COINS_MAX)):
                 tok = (r["token"] or "").lower()
                 native = not tok.startswith("0x")
                 coins.append({
@@ -11731,7 +11731,7 @@ def _bscx_flow_build() -> dict:
                 spk = BSCX_SPARK
                 sstep = max(1, (t - start) // spk)
                 for r in cur.execute(
-                        "SELECT token, (ts - ?) / ? b, SUM(out_usd - in_usd) n FROM bsc_ex_flow "
+                        "SELECT token, (ts - ?) / ? b, TOTAL(out_usd - in_usd) n FROM bsc_ex_flow "
                         "WHERE ts >= ? GROUP BY token, b", (start, sstep, since)):
                     tok = (r["token"] or "").lower()
                     k = tok if tok.startswith("0x") else "native"
