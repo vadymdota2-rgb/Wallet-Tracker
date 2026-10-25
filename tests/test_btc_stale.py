@@ -54,6 +54,9 @@ class BtcStaleTest(unittest.TestCase):
                   mock.patch.object(api, "now", lambda: NOW)):
             p.start()
             self.addCleanup(p.stop)
+        # Кэш модуля (цена Coinbase, имена бирж) — свой у каждого теста.
+        btc._BTC.clear()
+        self.addCleanup(btc._BTC.clear)
 
     def tearDown(self):
         os.unlink(self.db)
@@ -133,6 +136,34 @@ class BtcStaleTest(unittest.TestCase):
             got = api._dg_btc()
         self.assertEqual(got["out"], 3.0)
         self.assertEqual(got["buy"], [])
+
+    def test_spot_price_answer_is_checked_and_asked_once_a_minute(self):
+        bad = [None, [], {"data": []}, {"data": {"amount": "NaN"}}, {"data": {"amount": "inf"}},
+               {"data": {"amount": "5"}}, {"data": {"amount": "abc"}}]
+        for j in bad:
+            btc._BTC.clear()
+            with mock.patch.object(btc, "get_json", return_value=j):
+                self.assertEqual(btc._spot(), 0.0, j)
+        btc._BTC.clear()
+        with mock.patch.object(btc, "get_json", return_value={"data": {"amount": "95000.5"}}) as g:
+            self.assertEqual(btc._spot(), 95000.5)
+            self.assertEqual(btc._spot(), 95000.5)
+        g.assert_called_once()
+
+    def test_big_order_price_counts_only_moves_that_have_a_price(self):
+        # Два вывода одного кошелька с одной биржи: 1 BTC по $80 000 и 1 BTC
+        # без цены (свечи не ответили). Средняя — $80 000, а не $40 000.
+        con = sqlite3.connect(self.db)
+        con.executemany(
+            "INSERT INTO btc_moves(txid, height, ts, kind, wallet, ex, sats, usd_nanos, price_nanos) "
+            "VALUES(?,?,?,?,?,?,?,?,?)",
+            [("a" * 64, 1, NOW - 600, 1, "bc1qwhale", "Binance", 10**8, 80_000 * 10**9, 80_000 * 10**9),
+             ("b" * 64, 2, NOW - 300, 1, "bc1qwhale", "Binance", 10**8, 0, 0)])
+        con.commit()
+        con.close()
+        big = btc._btc_big_build("24h", "buy", 0.2)
+        (row,) = big["rows"]
+        self.assertEqual((row["btc"], row["n"], row["px"]), (2.0, 2, 80_000.0))
 
 
 if __name__ == "__main__":

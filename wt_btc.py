@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import functools
+import math
 import re
 import sqlite3
 import sys
@@ -168,11 +169,26 @@ def _btc_price(con: sqlite3.Connection) -> float:
             return float(r["price_nanos"]) / 1e9
     except sqlite3.Error:
         pass
-    j = get_json("https://api.coinbase.com/v2/prices/BTC-USD/spot", 8) or {}
+    return _spot()
+
+
+def _spot_fetch() -> float:
+    j = get_json("https://api.coinbase.com/v2/prices/BTC-USD/spot", 8)
+    data = j.get("data") if isinstance(j, dict) else None
     try:
-        return float(((j.get("data") or {}).get("amount")) or 0)
+        p = float(data.get("amount") or 0) if isinstance(data, dict) else 0.0
     except (TypeError, ValueError):
         return 0.0
+    # «NaN», «inf» и цена вне разумного — не цена: лучше без долларов.
+    return p if math.isfinite(p) and 1000 < p < 10_000_000 else 0.0
+
+
+def _spot() -> float:
+    """Открытая цена Coinbase — раз в минуту на весь модуль. Раньше, пока
+    сканер стоял, каждая сборка (поток, рейтинг, каждая карточка кошелька)
+    шла к Coinbase сама; ответ не проверялся — список вместо объекта ронял
+    сборку, «NaN» уходил в доллары."""
+    return cast(float, cached_small(_BTC, "spot", 60.0, _spot_fetch))
 
 
 def _btc_flow_build() -> Json:
@@ -183,7 +199,7 @@ def _btc_flow_build() -> Json:
         t = now()
         px = _btc_price(con)
         first = con.execute("SELECT MIN(ts) FROM btc_flow").fetchone()[0]
-        tip = con.execute("SELECT height, ts, at FROM btc_blocks ORDER BY height DESC LIMIT 1").fetchone()
+        tip = con.execute("SELECT height, ts FROM btc_blocks ORDER BY height DESC LIMIT 1").fetchone()
         labels = con.execute("SELECT COUNT(*) FROM btc_labels").fetchone()[0]
         wins = {}
         for key, sec in BTC_FLOW_WINS.items():
@@ -273,6 +289,7 @@ def _btc_big_build(win: str, side: str, min_btc: float, ex: str = "") -> Json:
         # по средней и ссылкой на самую крупную транзакцию.
         rows = con.execute(
             flows + f"SELECT m.wallet, m.ex, SUM(m.sats) sats, SUM(m.usd_nanos) usd_nanos, "
+            f"SUM(CASE WHEN m.price_nanos > 0 THEN m.sats ELSE 0 END) psats, "
             f"COUNT(*) n, MAX(m.ts) ts, MAX(m.sats) top, "
             f"(SELECT m2.txid FROM btc_moves m2 WHERE m2.wallet = m.wallet AND m2.kind = m.kind "
             f" AND m2.ex = m.ex AND m2.ts >= ? ORDER BY m2.sats DESC LIMIT 1) txid "
@@ -308,8 +325,11 @@ def _btc_big_build(win: str, side: str, min_btc: float, ex: str = "") -> Json:
             "full": bool(first and first <= since + 600), "since": int(first or 0),
             "rows": [{"tx": r["txid"], "t": int(r["ts"]), "a": r["wallet"], "ex": r["ex"], "n": int(r["n"]),
                       "btc": round(int(r["sats"]) / 1e8, 4), "v": round(int(r["usd_nanos"]) / 1e9, 2),
-                      # Цена — средняя по строке: доллары на монеты.
-                      "px": round(int(r["usd_nanos"]) / 1e9 / (int(r["sats"]) / 1e8), 2) if r["sats"] else 0,
+                      # Цена — средняя по строке: доллары на монеты с ценой.
+                      # Движение без цены (Coinbase и Kraken не ответили)
+                      # долларов не дало — в делителе его монет нет, иначе
+                      # средняя занижалась бы вдвое.
+                      "px": round(int(r["usd_nanos"]) / 1e9 / (int(r["psats"]) / 1e8), 2) if r["psats"] else 0,
                       **extra.get(r["wallet"], {})}
                      for r in rows],
         }

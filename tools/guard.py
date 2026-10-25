@@ -1056,6 +1056,13 @@ say("bitcoin: сервер — отдельный модуль wt_btc.py (общ
     and "def _btc_rank_build(" not in api and "def setup(*, open_db:" in btcpy and "def warm_jobs()" in btcpy
     and "jobs = [*wt_btc.warm_jobs(), (_BSCX" in api
     and "wt_btc.py" in _ci.split("mypy==")[1].split("\n")[0] and "py_compile whale_api.py" in _ci and " wt_btc.py" in _ci.split("py_compile")[1].split("\n")[0])
+say("wt_btc, ревизия: цена Coinbase проверяется (не объект, NaN, вне разумного — 0) и спрашивается раз в минуту на весь модуль; средняя цена крупного ордера — только по движениям с ценой",
+    "return cast(float, cached_small(_BTC, \"spot\", 60.0, _spot_fetch))" in btcpy
+    and "math.isfinite(p) and 1000 < p < 10_000_000" in btcpy and "isinstance(j, dict)" in btcpy
+    and "SUM(CASE WHEN m.price_nanos > 0 THEN m.sats ELSE 0 END) psats" in btcpy
+    and '/ (int(r["psats"]) / 1e8), 2) if r["psats"] else 0' in btcpy
+    and "test_big_order_price_counts_only_moves_that_have_a_price" in read(f"{APP}/tests/test_btc_stale.py")
+    and "test_spot_price_answer_is_checked_and_asked_once_a_minute" in read(f"{APP}/tests/test_btc_stale.py"))
 say("bitcoin, повторная ревизия: алерты только о свежих блоках (догонка простоя не шлёт вчерашние сделки), время блока не из будущего, дробные числа узла без UB; дайджест без раздела биткоина, пока сканер стоит",
     "constexpr long long ALERT_MAX_AGE_SEC = 3600;" in _ws_btc and "nowSec() - alerts_.front().ts > ALERT_MAX_AGE_SEC" in _ws_btc
     and "b.ts > nowSec() + 7200" in _ws_btc and "return d > -9e18 && d < 9e18 ? static_cast<long long>(d) : 0;" in _ws_btc
