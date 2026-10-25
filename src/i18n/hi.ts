@@ -780,7 +780,7 @@ export const hi: Dict = {
   fg_r90: "90दि",
   fg_rall: "सब",
   fg_since_then: "तब से BTC: {p}",
-  fg_src: "सूचकांक: alternative.me। BTC कीमत: mempool.space। सूचकांक दिन में एक बार आता है।",
+  fg_src: "सूचकांक: alternative.me। BTC कीमत: mempool.space, उपलब्ध न हो तो Hyperliquid। सूचकांक दिन में एक बार आता है।",
   fg_st_avg: "औसत लगातार",
   fg_st_cmp: "ऐसा सिलसिला आमतौर पर {a} चलता है; रिकॉर्ड {m} है।",
   fg_st_left: "{l} तक पहुँचे पिछले {n} सिलसिलों में माध्यिका के हिसाब से {r} और बचे; {p} एक हफ़्ता या अधिक चले।",

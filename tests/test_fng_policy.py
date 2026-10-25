@@ -19,7 +19,7 @@ sys.path.insert(0, ROOT)
 import wt_fng as fng  # noqa: E402 — модуль лежит в корне репозитория
 
 SERVER = os.path.join(ROOT, "wt_fng.py")
-IMPORTS = {"__future__", "bisect", "contextlib", "http.client", "json", "math", "os", "re", "ssl", "sys", "threading",
+IMPORTS = {"__future__", "bisect", "collections.abc", "contextlib", "http.client", "json", "math", "os", "re", "ssl", "sys", "threading",
            "time", "urllib.error", "urllib.parse", "urllib.request", "dataclasses", "typing"}
 BANNED_CALLS = {"eval", "exec", "compile", "__import__", "input", "breakpoint", "globals", "locals", "vars",
                 "setattr", "delattr"}

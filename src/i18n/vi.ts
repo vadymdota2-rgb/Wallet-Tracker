@@ -780,7 +780,7 @@ export const vi: Dict = {
   fg_r90: "90N",
   fg_rall: "Tất cả",
   fg_since_then: "BTC từ đó: {p}",
-  fg_src: "Chỉ số: alternative.me. Giá BTC: mempool.space. Chỉ số cập nhật mỗi ngày một lần.",
+  fg_src: "Chỉ số: alternative.me. Giá BTC: mempool.space, dự phòng Hyperliquid. Chỉ số cập nhật mỗi ngày một lần.",
   fg_st_avg: "Trung bình liên tiếp",
   fg_st_cmp: "Chuỗi như vậy thường kéo dài {a}; kỷ lục là {m}.",
   fg_st_left: "Trong {n} chuỗi trước đạt tới {l}, trung vị còn lại {r}; {p} kéo dài thêm một tuần trở lên.",

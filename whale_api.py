@@ -11513,6 +11513,9 @@ def _liq_build(sym: str, rng: str) -> dict:
 # Отдельный модуль wt_fng.py: индекс alternative.me и цена биткоина
 # mempool.space по дням, кэш, копия на диске, фоновое обновление, тесты.
 fng_data = wt_fng.fng_data
+# Запасная цена BTC — закрытия Hyperliquid, которые уже знает «Альтсезон»
+# (без лишних запросов к Hyperliquid).
+wt_fng.set_backup(wt_dom.btc_closes)
 
 
 # --- Халвинг -----------------------------------------------------------------

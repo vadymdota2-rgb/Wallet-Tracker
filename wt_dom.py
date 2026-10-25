@@ -364,6 +364,21 @@ def _px_load() -> dict[str, dict[int, Candle]]:
     return out
 
 
+def btc_closes() -> dict[int, float]:
+    """Закрытия BTC по дням (начало суток UTC → $), которые модуль уже знает:
+    из памяти или копии на диске, без сети и без запросов к Hyperliquid.
+    Запасная цена для «Страха и жадности» (wt_fng), когда mempool.space
+    молчит. Только закрытые дни."""
+    with _lock:
+        px = _st.px
+    if not px:
+        px = _px_load()
+        with _lock:
+            if not _st.px:
+                _st.px = px
+    return {t: c[0] for t, c in (px.get("BTC") or {}).items()}
+
+
 def _refresh(coins: dict[str, bool], sleep: Any = time.sleep) -> dict[str, dict[int, Candle]]:
     """Свечи монет: известные — дописываем с последних TAIL_DAYS известных
     дней (сколько бы сервер ни простоял), новые — вся история; снятые с

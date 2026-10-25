@@ -8,7 +8,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  F_EST, F_FILL, FNG_START, ZONES, afterEntry, analogs, colorOf, currentStreak, dca, distribution, divergence, estUntil,
+  F_EST, F_FILL, F_HL, FNG_START, ZONES, afterEntry, analogs, colorOf, currentStreak, dca, distribution, divergence, estUntil,
   forward, median, streakLeft, streakStats, validFng, windowOf, yearExtremes, zoneKey, zoneOf, type FngDay, type FngReply,
 } from "../src/lib/fng.ts";
 
@@ -52,7 +52,7 @@ test("испорченный ответ не принимается", () => {
     ["цена копейками", (r) => { r.days[7]![2] = 5; }],
     ["цена миллиардом", (r) => { r.days[7]![2] = 1e9; }],
     ["цена NaN (null в JSON)", (r) => { r.days[7]![2] = null; }],
-    ["флаг 4", (r) => { r.days[7]![3] = 4; }],
+    ["флаг 8", (r) => { r.days[7]![3] = 8; }],
     ["флаг дробью", (r) => { r.days[7]![3] = 1.5; }],
     ["день из трёх чисел (старый ответ с Binance)", (r) => { r.days[7] = r.days[7]!.slice(0, 3); }],
     ["день не список", (r) => { r.days[7] = { t: 1 } as unknown as unknown[]; }],
@@ -63,6 +63,12 @@ test("испорченный ответ не принимается", () => {
     assert.equal(ok(r), null, name);
   }
   for (const r of [null, undefined, 1, "x", [], {}, { ok: true }, { ok: true, days: "x", at: 1 }]) assert.equal(ok(r), null);
+});
+
+test("цена Hyperliquid (флаг 4) — годный день", () => {
+  const r = copy();
+  r.days[7]![3] = F_HL;
+  assert.equal(ok(r)!.days[7]![3], F_HL);
 });
 
 test("история может начинаться и позже 1 февраля 2018", () => {

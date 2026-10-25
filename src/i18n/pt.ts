@@ -780,7 +780,7 @@ export const pt: Dict = {
   fg_r90: "90d",
   fg_rall: "Tudo",
   fg_since_then: "BTC desde então: {p}",
-  fg_src: "Índice: alternative.me. Preço do BTC: mempool.space. O índice sai uma vez por dia.",
+  fg_src: "Índice: alternative.me. Preço do BTC: mempool.space; se indisponível, Hyperliquid. O índice sai uma vez por dia.",
   fg_st_avg: "Sequência média",
   fg_st_cmp: "Uma sequência assim costuma durar {a}; o recorde é {m}.",
   fg_st_left: "De {n} sequências passadas que chegaram a {l}, a mediana teve mais {r}; {p} durou mais uma semana ou mais.",

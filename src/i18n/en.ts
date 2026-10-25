@@ -779,7 +779,7 @@ export const en = {
   fg_r90: "90D",
   fg_rall: "All",
   fg_since_then: "BTC since then: {p}",
-  fg_src: "Index: alternative.me. BTC price: mempool.space. The index is published once a day.",
+  fg_src: "Index: alternative.me. BTC price: mempool.space, with Hyperliquid as a fallback. The index is published once a day.",
   fg_st_avg: "Average run",
   fg_st_cmp: "A run like this usually lasts {a}; the record is {m}.",
   fg_st_left: "Of {n} past runs that reached {l}, the median had {r} left; {p} lasted another week or more.",

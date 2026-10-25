@@ -235,6 +235,19 @@ describe("Страх и жадность", () => {
     await ctx.close();
   });
 
+  test("цена от запасного источника — Hyperliquid назван рядом с mempool.space", async () => {
+    const hl = { ...REAL, days: REAL.days.map((d, i) => (i > REAL.days.length - 40 ? [d[0], d[1], d[2], 4] : d)) };
+    const { ctx, page, errors } = await open({ reply: hl });
+    await ready(page);
+    assert.match(sp(await page.locator(".fg-by").innerText()), /mempool\.space, Hyperliquid$/);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+    const o2 = await open();
+    await ready(o2.page);
+    assert.doesNotMatch(sp(await o2.page.locator(".fg-by").innerText()), /Hyperliquid/);
+    await o2.ctx.close();
+  });
+
   test("день без индекса у alternative.me подписан", async () => {
     const { ctx, page } = await open();
     await ready(page);

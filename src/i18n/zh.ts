@@ -780,7 +780,7 @@ export const zh: Dict = {
   fg_r90: "90天",
   fg_rall: "全部",
   fg_since_then: "此后 BTC：{p}",
-  fg_src: "指数来自 alternative.me，BTC 价格来自 mempool.space。指数每天更新一次。",
+  fg_src: "指数来自 alternative.me，BTC 价格来自 mempool.space（不可用时为 Hyperliquid）。指数每天更新一次。",
   fg_st_avg: "平均连续",
   fg_st_cmp: "这样的连续通常持续 {a}，最长为 {m}。",
   fg_st_left: "在过去 {n} 次达到 {l} 的连续中，剩余时间中位数为 {r}；{p} 又持续了一周以上。",

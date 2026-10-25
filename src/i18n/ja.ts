@@ -780,7 +780,7 @@ export const ja: Dict = {
   fg_r90: "90日",
   fg_rall: "全期間",
   fg_since_then: "それ以降のBTC：{p}",
-  fg_src: "指数：alternative.me、BTC価格：mempool.space。指数は1日1回更新されます。",
+  fg_src: "指数：alternative.me、BTC価格：mempool.space（取得できない場合はHyperliquid）。指数は1日1回更新されます。",
   fg_st_avg: "平均連続",
   fg_st_cmp: "このような連続は通常 {a} 続き、最長は {m} です。",
   fg_st_left: "{l}に達した過去の{n}回の連続では、残りの中央値は{r}、{p}がさらに1週間以上続きました。",

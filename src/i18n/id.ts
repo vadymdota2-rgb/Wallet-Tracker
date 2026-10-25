@@ -780,7 +780,7 @@ export const id: Dict = {
   fg_r90: "90H",
   fg_rall: "Semua",
   fg_since_then: "BTC sejak itu: {p}",
-  fg_src: "Indeks: alternative.me. Harga BTC: mempool.space. Indeks terbit sekali sehari.",
+  fg_src: "Indeks: alternative.me. Harga BTC: mempool.space, cadangan Hyperliquid. Indeks terbit sekali sehari.",
   fg_st_avg: "Rata-rata beruntun",
   fg_st_cmp: "Seri seperti ini biasanya bertahan {a}; rekornya {m}.",
   fg_st_left: "Dari {n} seri sebelumnya yang mencapai {l}, median sisa {r}; {p} berlanjut seminggu atau lebih.",

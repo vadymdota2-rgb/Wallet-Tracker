@@ -780,7 +780,7 @@ export const tr: Dict = {
   fg_r90: "90G",
   fg_rall: "Tümü",
   fg_since_then: "O günden beri BTC: {p}",
-  fg_src: "Endeks: alternative.me. BTC fiyatı: mempool.space. Endeks günde bir kez yayımlanır.",
+  fg_src: "Endeks: alternative.me. BTC fiyatı: mempool.space, erişilemezse Hyperliquid. Endeks günde bir kez yayımlanır.",
   fg_st_avg: "Ortalama seri",
   fg_st_cmp: "Böyle bir seri genelde {a} sürer; rekor {m}.",
   fg_st_left: "{l}'e ulaşan {n} geçmiş seride kalan sürenin medyanı {r}; {p} bir hafta ya da daha fazla sürdü.",

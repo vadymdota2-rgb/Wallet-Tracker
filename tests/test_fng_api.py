@@ -228,7 +228,7 @@ class BuildTest(unittest.TestCase):
         self.assertTrue(all(d[2] == 0 for d in r["days"]))
 
     def test_no_price_history_means_a_short_lived_answer(self):
-        r, _ = build({"historical-price": None})
+        r, _ = build({"historical-price": None, "/v1/prices": None})
         self.assertTrue(r["ok"])
         age = time.monotonic() - fng._st.hit[0]
         self.assertGreater(age, fng.TTL - fng.ERR_TTL - 5)  # устареет через ERR_TTL
@@ -236,6 +236,69 @@ class BuildTest(unittest.TestCase):
         fresh()
         build()
         self.assertLess(time.monotonic() - fng._st.hit[0], 5)  # с историей — полный TTL
+
+    def test_backup_price_fills_days_when_mempool_is_silent(self):
+        # mempool молчит — цена из запасных закрытий (Hyperliquid), с флагом
+        # F_HL; дни до начала запасной истории — без цены.
+        hl_from = fake.START + 900 * DAY
+        backup = {t: fake.price(t + DAY) * 1.001 for t in range(hl_from, fake.TODAY, DAY)}
+        backup[fake.TODAY] = 99_999.0  # идущий день — не закрыт: не берём
+        backup[hl_from - DAY] = 5.0  # копейки — не цена
+        backup[hl_from - 2 * DAY] = float("nan")
+        backup["x"] = 80_000.0  # type: ignore[index]
+        fng.set_backup(lambda: backup)
+        self.addCleanup(fng.set_backup, None)
+        r, _ = build({"historical-price": None, "/v1/prices": None})
+        by = {d[0]: d for d in r["days"]}
+        self.assertEqual(by[hl_from][2], round(backup[hl_from], 2))
+        self.assertEqual(by[hl_from][3] & fng.F_HL, fng.F_HL)
+        self.assertEqual(by[hl_from - DAY][2], 0)
+        self.assertEqual(by[hl_from - 2 * DAY][2], 0)
+        self.assertEqual(by[fake.TODAY][2], 0)
+        self.assertEqual(by[fake.START][2], 0)
+        # С запасной ценой ответ живёт обычный TTL: mempool не дёргаем чаще.
+        self.assertLess(time.monotonic() - fng._st.hit[0], 5)
+
+    def test_previous_mempool_price_beats_backup_and_mempool_beats_both(self):
+        good, _ = build()
+        fng.set_backup(lambda: {t: 12_345.0 for t in range(fake.START, fake.TODAY, DAY)})
+        self.addCleanup(fng.set_backup, None)
+        fng._st = fng._State(hit=fng._st.hit, backup=fng._st.backup)
+        r, _ = build({"historical-price": None, "/v1/prices": None})
+        self.assertEqual([d[2] for d in r["days"]], [d[2] for d in good["days"]])
+        self.assertFalse(any(d[3] & fng.F_HL for d in r["days"]))
+        fresh()
+        fng.set_backup(lambda: {t: 12_345.0 for t in range(fake.START, fake.TODAY, DAY)})
+        r, _ = build()
+        self.assertEqual(r, good)  # история mempool есть — запасная не нужна
+
+    def test_backup_fills_a_hole_in_mempool_history(self):
+        # В истории mempool месяц без точек (дальше GAP_MAX) — эти дни берут
+        # запасную цену, остальные остаются от mempool.
+        a, b = fake.START + 1100 * DAY, fake.START + 1130 * DAY
+        pts = [p for p in fake.history_points() if not a - 3 * fake.HOUR <= p["time"] <= b + 3 * fake.HOUR]
+        fng.set_backup(lambda: {t: 12_345.0 for t in range(fake.START, fake.TODAY, DAY)})
+        self.addCleanup(fng.set_backup, None)
+        r, _ = build({"historical-price": json.dumps({"prices": pts}).encode()})
+        by = {d[0]: d for d in r["days"]}
+        mid = (a + b) // 2 // DAY * DAY
+        self.assertEqual((by[mid][2], by[mid][3] & fng.F_HL), (12_345.0, fng.F_HL))
+        self.assertNotEqual(by[a - 10 * DAY][2], 12_345.0)
+        self.assertNotEqual(by[b + 10 * DAY][2], 12_345.0)
+        self.assertFalse(by[b + 10 * DAY][3] & fng.F_HL)
+
+    def test_broken_backup_does_not_break_the_build(self):
+        def boom():
+            raise RuntimeError("wt_dom сломался")
+        logs = []
+        fng.set_backup(boom)
+        self.addCleanup(fng.set_backup, None)
+        with mock.patch.object(fng, "_fetch", fake.network({"historical-price": None, "/v1/prices": None})), \
+                mock.patch.object(fng, "_now", lambda: fake.NOW), mock.patch.object(fng, "_log", logs.append):
+            r = fng.build()
+        self.assertTrue(r["ok"])
+        self.assertTrue(any("запасная цена" in m for m in logs))
+        self.assertFalse(any(m.startswith("сборка") for m in logs))
 
     def test_implausible_prices_are_dropped(self):
         good, _ = build()
@@ -278,6 +341,9 @@ class CacheTest(unittest.TestCase):
         import whale_api as api  # noqa: PLC0415 — тяжёлый модуль, нужен одному тесту
         sys.path.insert(0, os.path.join(ROOT, "tests"))
         from test_dom_http import Fake  # noqa: PLC0415
+        # Импорт whale_api подключает настоящую папку кэша и запасную цену —
+        # тесту они не нужны: начинаем с чистого модуля.
+        fresh()
         api._PUBLIC.clear()
         with mock.patch.object(fng, "_fetch", fake.network()), mock.patch.object(fng, "_now", lambda: fake.NOW):
             obj = fng.fng_data()
@@ -431,12 +497,39 @@ class CacheTest(unittest.TestCase):
             self.assertEqual(fng.valid_days(days), days)
             self.assertIsNone(fng.valid_days(days[:999]))  # мало дней
             self.assertIsNone(fng.valid_days(days[:500] + days[501:]))  # дыра
-            for i, bad in ((1, -1), (1, 101), (1, 5.5), (2, 999.0), (2, 2e7), (3, 4), (3, -1), (0, fake.START - DAY)):
+            ok_hl = [list(x) for x in days]
+            ok_hl[0][3] = fng.F_HL
+            self.assertIsNotNone(fng.valid_days(ok_hl))
+            for i, bad in ((1, -1), (1, 101), (1, 5.5), (2, 999.0), (2, 2e7), (3, 8), (3, -1), (0, fake.START - DAY)):
                 d = [list(x) for x in days]
                 d[0][i] = bad
                 self.assertIsNone(fng.valid_days(d), (i, bad))
         with mock.patch.object(fng, "_now", lambda: fake.NOW - 30 * DAY):
             self.assertIsNone(fng.valid_days(days))  # из будущего
+
+
+class DomBackupTest(unittest.TestCase):
+    """wt_dom.btc_closes — запасная цена без сети: из памяти или с диска."""
+
+    def test_closes_from_memory_and_from_disk(self):
+        import wt_dom as dom  # noqa: PLC0415 — нужен только здесь
+        saved = dom._st.px, dom._st.dir
+        self.addCleanup(lambda: (setattr(dom._st, "px", saved[0]), setattr(dom._st, "dir", saved[1])))
+        t = 1_700_000_000 // DAY * DAY
+        dom._st.px = {"BTC": {t: (37_000.0, 1e9)}, "ETH": {t: (2_000.0, 1e9)}}
+        with mock.patch.object(dom, "_fetch", side_effect=AssertionError("сеть не нужна")):
+            self.assertEqual(dom.btc_closes(), {t: 37_000.0})
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(lambda: [os.unlink(os.path.join(tmp, f)) for f in os.listdir(tmp)] and os.rmdir(tmp))
+        dom._st.dir = tmp
+        dom._px_save({"BTC": {t: (38_000.0, 1e9)}})
+        dom._st.px = {}
+        with mock.patch.object(dom, "_fetch", side_effect=AssertionError("сеть не нужна")):
+            self.assertEqual(dom.btc_closes(), {t: 38_000.0})
+        self.assertIn("BTC", dom._st.px)  # прочитанное с диска осталось в памяти
+        dom._st.px = {}
+        dom._st.dir = None
+        self.assertEqual(dom.btc_closes(), {})
 
 
 if __name__ == "__main__":

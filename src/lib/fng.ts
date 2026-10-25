@@ -28,6 +28,8 @@ export const FNG_TTL_MS = 30 * 60_000;
 export const F_EST = 1;
 /** Индекса за день у alternative.me нет — взят прошлый день. */
 export const F_FILL = 2;
+/** Цена дня — запасная, Hyperliquid (mempool.space её не дал). */
+export const F_HL = 4;
 const DAY = 86_400;
 /** Первый день индекса alternative.me — 1 февраля 2018 г. */
 export const FNG_START = 1_517_443_200;
@@ -67,7 +69,7 @@ export function validFng(raw: unknown, now: number = Date.now() / 1000): FngRepl
     const first = !prev && isInt(ts) && ts >= FNG_START && ts % DAY === 0;
     if ((!first && ts !== prev + DAY) || !isInt(ts) || !isInt(v) || v < 0 || v > 100) return null;
     if (!isNum(px) || (px !== 0 && (px <= PX_MIN || px >= PX_MAX))) return null;
-    if (!isInt(f) || f < 0 || f > (F_EST | F_FILL)) return null;
+    if (!isInt(f) || f < 0 || f > (F_EST | F_FILL | F_HL)) return null;
     out.push([ts, v, px, f]);
     prev = ts;
   }

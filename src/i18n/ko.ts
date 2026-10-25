@@ -780,7 +780,7 @@ export const ko: Dict = {
   fg_r90: "90일",
   fg_rall: "전체",
   fg_since_then: "그 이후 BTC: {p}",
-  fg_src: "지수: alternative.me, BTC 가격: mempool.space. 지수는 하루 한 번 발표됩니다.",
+  fg_src: "지수: alternative.me, BTC 가격: mempool.space(불가 시 Hyperliquid). 지수는 하루 한 번 발표됩니다.",
   fg_st_avg: "평균 연속",
   fg_st_cmp: "이런 연속은 보통 {a} 이어지고, 최장은 {m}입니다.",
   fg_st_left: "{l}에 도달했던 과거 연속 {n}건 중 남은 기간의 중앙값은 {r}였고, {p}는 일주일 이상 더 이어졌습니다.",

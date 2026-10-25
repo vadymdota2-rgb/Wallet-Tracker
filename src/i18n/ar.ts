@@ -780,7 +780,7 @@ export const ar: Dict = {
   fg_r90: "90ي",
   fg_rall: "الكل",
   fg_since_then: "BTC منذ ذلك الحين: {p}",
-  fg_src: "المؤشر: alternative.me. سعر BTC: ‏mempool.space. يصدر المؤشر مرة يوميًا.",
+  fg_src: "المؤشر: alternative.me. سعر BTC: ‏mempool.space، وعند تعذّره ‏Hyperliquid. يصدر المؤشر مرة يوميًا.",
   fg_st_avg: "متوسط التتابع",
   fg_st_cmp: "تدوم سلسلة كهذه عادةً {a}، والأطول {m}.",
   fg_st_left: "من {n} سلسلة سابقة بلغت {l}، كان الوسيط المتبقي {r}، واستمرت {p} منها أسبوعًا أو أكثر.",

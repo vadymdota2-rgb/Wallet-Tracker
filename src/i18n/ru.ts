@@ -780,7 +780,7 @@ export const ru: Dict = {
   fg_r90: "90д",
   fg_rall: "Всё",
   fg_since_then: "BTC с тех пор: {p}",
-  fg_src: "Индекс — alternative.me, цена BTC — mempool.space. Индекс выходит раз в сутки.",
+  fg_src: "Индекс — alternative.me, цена BTC — mempool.space, при его недоступности — Hyperliquid. Индекс выходит раз в сутки.",
   fg_st_avg: "В среднем подряд",
   fg_st_cmp: "Обычно такая полоса длится {a}, рекорд — {m}",
   fg_st_left: "Прошлых полос, доживших до {l}: {n}. Обычно после этого оставалось ещё {r}; неделю и дольше продолжались {p}.",

@@ -62,7 +62,7 @@ test("годный ответ принимается, любая порча од
     bad.days[i]![k] = r() < 0.5 ? spoil[0] : spoil[1];
     // Цена 0 — законна (дня без цены), флаг 1 или 2 — тоже: такие «порчи» не проверяем.
     const v = bad.days[i]![k];
-    if ((k === 2 && v === 0) || (k === 3 && (v === 1 || v === 2 || v === 3))) continue;
+    if ((k === 2 && v === 0) || (k === 3 && typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 7)) continue;
     if (k === 0 && i === 0 && typeof v === "number" && v >= FNG_START && v % DAY === 0) continue;
     assert.equal(validFng(bad, at), null, `случай ${c}: день ${i}, поле ${k} = ${String(v)}`);
   }

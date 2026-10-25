@@ -29,7 +29,7 @@ import { haptic, openExternal } from "../lib/telegram";
 import { fetchFng, peekFng } from "../lib/api";
 import { Card, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import {
-  F_EST, F_FILL, ZONES, colorOf, currentStreak, distribution, estUntil, streakLeft, streakStats, windowOf,
+  F_EST, F_FILL, F_HL, ZONES, colorOf, currentStreak, distribution, estUntil, streakLeft, streakStats, windowOf,
   yearExtremes, zoneKey, zoneOf, type FngDay, type FngReply,
 } from "../lib/fng";
 import { Frame } from "./Screen";
@@ -375,6 +375,8 @@ export function FearGreedScreen() {
   /* Текущая полоса — по всей истории: сколько дней подряд индекс в той же зоне. */
   const cur = useMemo(() => currentStreak(all), [all]);
   const left = useMemo(() => (cur ? streakLeft(all, cur) : null), [all, cur]);
+  /* Есть дни с запасной ценой (mempool.space её не дал) — источник назван. */
+  const hl = useMemo(() => all.some((d) => d[3] & F_HL), [all]);
   /* До какого дня цена в окне досчитана по недельным точкам. */
   const est = useMemo(() => estUntil(days), [days]);
   const daysStr = (v: number, digits = 0) => t(lang, "fg_days", { n: num(v, digits) });
@@ -430,7 +432,7 @@ export function FearGreedScreen() {
               <p className="fg-by">
                 {t(lang, "fg_by")}{" "}
                 <a href={FNG_URL} onClick={open(FNG_URL)}>alternative.me</a>
-                <span>{t(lang, "fg_px_by")} <a href={PX_URL} onClick={open(PX_URL)}>mempool.space</a></span>
+                <span>{t(lang, "fg_px_by")} <a href={PX_URL} onClick={open(PX_URL)}>mempool.space</a>{hl ? ", Hyperliquid" : ""}</span>
               </p>
             </div>
             <div className="fg-cmp">

@@ -17,6 +17,13 @@
   - цен бирж здесь нет: условия Binance и Coinbase запрещают показывать их
     рыночные данные без письменного согласия (раньше цена шла от них).
 
+Запасная цена — Hyperliquid: закрытия BTC по дням с августа 2020, которые
+уже держит модуль «Альтсезона» (wt_dom.btc_closes, подключает whale_api
+через set_backup). Ни одного лишнего запроса к Hyperliquid: только то, что
+уже в памяти или на диске. Берётся в день, где у mempool.space цены нет, а
+в прошлом ответе — тоже (mempool молчит или в его истории дыра); такой
+день помечен F_HL, и экран называет источник.
+
 Цена дня — закрытие: цена в 00:00 UTC следующих суток. У mempool.space
 история с 2023 года по часам (цена точная), до середины 2022 — по неделям:
 дни между недельными точками досчитываются по прямой в логарифме цены, и у
@@ -67,6 +74,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, TypedDict
 
 if TYPE_CHECKING:  # pragma: no cover — только для mypy, при запуске не выполняется
+    from collections.abc import Callable, Mapping
     from typing import NotRequired
 
 DAY = 86400
@@ -95,6 +103,12 @@ LIVE_URL = "https://mempool.space/api/v1/prices"
 # было — взят прошлый день.
 F_EST = 1
 F_FILL = 2
+# Цена дня — запасная, Hyperliquid (mempool.space её не дал).
+F_HL = 4
+# Все известные флаги.
+F_ALL = F_EST | F_FILL | F_HL
+# Сколько последних дней без единой цены — повод пересобрать ответ скоро.
+RECENT = 30
 # Точка цены не дальше этого от 00:00 — цена точная, с.
 EXACT = 3 * HOUR
 # Между соседними точками дольше этого — день не досчитываем (цена 0).
@@ -183,6 +197,8 @@ class _State:
     # Где держать копию ответа (set_cache_dir); копия уже читалась.
     dir: str | None = None
     loaded: bool = False
+    # Запасные закрытия BTC (set_backup); None — запасного источника нет.
+    backup: Callable[[], Mapping[int, float]] | None = None
 
 
 _st = _State()
@@ -392,9 +408,33 @@ def _close(ts: list[int], px: list[float], t: int, n: int) -> tuple[float, int]:
     return 0.0, 0
 
 
-def _days(idx: dict[int, int], ts: list[int], px: list[float], old: dict[int, tuple[float, int]]) -> list[Day]:
+def set_backup(fn: Callable[[], Mapping[int, float]] | None) -> None:
+    """Откуда брать запасные закрытия BTC (начало суток UTC → $)."""
+    _st.backup = fn
+
+
+def _backup() -> dict[int, float]:
+    """Запасные закрытия: только правдоподобные и только закрытые дни. Сбой
+    запасного источника — просто без него."""
+    fn = _st.backup
+    if fn is None:
+        return {}
+    try:
+        got = fn()
+    except Exception as e:  # noqa: BLE001 — запасной источник не роняет сборку
+        _log(f"запасная цена: {type(e).__name__}: {e}")
+        return {}
+    today = _now() // DAY * DAY
+    return {t: float(p) for t, p in list(got.items())[:ROWS_MAX]
+            if type(t) is int and t % DAY == 0 and START <= t < today
+            and isinstance(p, (int, float)) and not isinstance(p, bool) and PX_MIN < p < PX_MAX}
+
+
+def _days(idx: dict[int, int], ts: list[int], px: list[float], old: dict[int, tuple[float, int]],
+          backup: Mapping[int, float]) -> list[Day]:
     """Дни ответа от первого до последнего дня индекса подряд. Цены нет в
-    истории (mempool молчал) — берём из прошлого ответа."""
+    истории (mempool молчал) — из прошлого ответа, а нет и там — запасная
+    (Hyperliquid, флаг F_HL)."""
     n = _now()
     out: list[Day] = []
     for t in range(min(idx), max(idx) + DAY, DAY):
@@ -405,6 +445,8 @@ def _days(idx: dict[int, int], ts: list[int], px: list[float], old: dict[int, tu
         p, e = _close(ts, px, t, n)
         if not p and t in old:
             p, e = old[t]
+        elif not p and t in backup:
+            p, e = backup[t], F_HL
         out.append([t, v, round(p, 2), f | e])
     return out
 
@@ -454,12 +496,14 @@ def _build() -> Reply:
     live = _live()
     if live and (not ts or live[0] > ts[-1]):
         ts, px = [*ts, live[0]], [*px, live[1]]
-    old = {int(d[0]): (float(d[2]), int(d[3]) & F_EST) for d in old_days if d[2] > 0}
-    res: Reply = {"ok": True, "days": _days(idx, ts, px, old), "at": _now()}
-    # Истории цен нет (mempool молчал, а прошлого ответа с ценами нет) —
-    # индекс отдаём, но ответ живёт только ERR_TTL: цены появятся через
-    # пару минут, а не через полчаса.
-    born = time.monotonic() if hist else time.monotonic() - TTL + ERR_TTL
+    old = {int(d[0]): (float(d[2]), int(d[3]) & (F_EST | F_HL)) for d in old_days if d[2] > 0}
+    days = _days(idx, ts, px, old, _backup())
+    res: Reply = {"ok": True, "days": days, "at": _now()}
+    # Цен за последний месяц нет ни от mempool, ни запасных — ответ живёт
+    # только ERR_TTL: цена появится через пару минут, а не через полчаса.
+    # С запасной ценой — обычный TTL: mempool не дёргаем чаще раза в TTL.
+    priced = hist or any(d[2] > 0 for d in days[-RECENT:])
+    born = time.monotonic() if priced else time.monotonic() - TTL + ERR_TTL
     with _lock:
         _st.hit = (born, res)
     _file_save(res)
@@ -506,7 +550,7 @@ def valid_days(days: object) -> list[Day] | None:
         t, v, f = _whole(d[0]), _whole(d[1]), _whole(d[3])
         p = _real(d[2])
         if t < START or (out and t != out[-1][0] + DAY) or not 0 <= v <= 100 \
-                or not (p == 0 or PX_MIN < p < PX_MAX) or not 0 <= f <= F_EST | F_FILL:
+                or not (p == 0 or PX_MIN < p < PX_MAX) or not 0 <= f <= F_ALL:
             return None
         out.append([t, v, p, f])
     return out if out[-1][0] <= _now() + MAX_FUTURE else None

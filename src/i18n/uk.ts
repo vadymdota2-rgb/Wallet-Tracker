@@ -780,7 +780,7 @@ export const uk: Dict = {
   fg_r90: "90д",
   fg_rall: "Усе",
   fg_since_then: "BTC відтоді: {p}",
-  fg_src: "Індекс — alternative.me, ціна BTC — mempool.space. Індекс виходить раз на добу.",
+  fg_src: "Індекс — alternative.me, ціна BTC — mempool.space, якщо він недоступний — Hyperliquid. Індекс виходить раз на добу.",
   fg_st_avg: "У середньому поспіль",
   fg_st_cmp: "Зазвичай така смуга триває {a}, рекорд — {m}",
   fg_st_left: "Минулих смуг, що дожили до {l}: {n}. Зазвичай після цього лишалося ще {r}; тиждень і довше тривали {p}.",
