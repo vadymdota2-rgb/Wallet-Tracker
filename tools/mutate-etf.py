@@ -371,6 +371,8 @@ BT = [
     # Кошелёк.
     ('for r in rows if int(r["price_nanos"] or 0) > 0 and r["ex"]], px)', 'for r in rows], px)', "кошелёк: итог — по сделкам с биржей"),
     ("for r in reversed(rows[-50:])]", "for r in rows[:50]]", "кошелёк: последние движения первыми"),
+    ("ORDER BY ts DESC, id DESC LIMIT ?\", (addr, WALLET_MOVES_MAX))", "ORDER BY ts, id LIMIT ?\", (addr, WALLET_MOVES_MAX))", "кошелёк: предел — по последним движениям"),
+    ("        rows.reverse()\n", "", "кошелёк: история по времени"),
     ('cached_small(_BTC, ("wallet", addr), BTC_TTL', 'cached_small(_BTC, ("wallet", ""), BTC_TTL', "кошелёк: кэш по адресу"),
     ('        con.execute("INSERT OR REPLACE INTO btc_case(lower, addr) VALUES(?,?)", (addr.lower(), addr))',
      '        con.execute("INSERT OR REPLACE INTO btc_case(lower, addr) VALUES(?,?)", (addr, addr))', "написание — по строчному ключу"),

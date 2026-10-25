@@ -1107,6 +1107,9 @@ say("wt_btc, повторная ревизия: рейтинг держит в �
     and '_BTC.pop("ex_names", None)' in btcpy
     and "test_boards_keep_only_the_best_and_ties_keep_wallet_order" in read(f"{APP}/tests/test_btc.py")
     and "test_failed_first_build_is_retried_in_half_a_minute" in read(f"{APP}/tests/test_btc.py"))
+say("wt_btc: карточка кошелька читает не больше WALLET_MOVES_MAX последних движений (адрес сервиса — десятки тысяч)",
+    "WALLET_MOVES_MAX = 20_000" in btcpy and "ORDER BY ts DESC, id DESC LIMIT ?\", (addr, WALLET_MOVES_MAX))" in btcpy
+    and "test_card_reads_only_the_latest_moves" in read(f"{APP}/tests/test_btc.py"))
 say("bitcoin, повторная ревизия: алерты только о свежих блоках (догонка простоя не шлёт вчерашние сделки), время блока не из будущего, дробные числа узла без UB; дайджест без раздела биткоина, пока сканер стоит",
     "constexpr long long ALERT_MAX_AGE_SEC = 3600;" in _ws_btc and "nowSec() - alerts_.front().ts > ALERT_MAX_AGE_SEC" in _ws_btc
     and "b.ts > nowSec() + 7200" in _ws_btc and "return d > -9e18 && d < 9e18 ? static_cast<long long>(d) : 0;" in _ws_btc

@@ -344,6 +344,14 @@ class WalletTest(BtcBase):
         self.assertEqual(len(r["moves"]), 50)
         self.assertEqual(r["book"]["buys"], 55)
 
+    def test_card_reads_only_the_latest_moves(self):
+        for i in range(8):
+            self.move("bc1qa", 1, SAT, 5000 - i * 10)
+        with mock.patch.object(btc, "WALLET_MOVES_MAX", 5):
+            r = btc._btc_wallet_build("bc1qa")
+        self.assertEqual(r["book"]["buys"], 5)
+        self.assertEqual([m["t"] for m in r["moves"]], [NOW - 4930 + 10 * k for k in range(0, -5, -1)])
+
     def test_exchange_address_says_so(self):
         self.assertEqual(btc._btc_wallet_build("3OKX")["ex"], "OKX")
 

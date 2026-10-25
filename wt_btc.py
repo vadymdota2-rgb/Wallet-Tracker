@@ -76,6 +76,9 @@ BTC_ROWS = 100
 # платёжный шлюз или сервис. В доски такие не идут — кроме кошельков базы
 # сервисного аккаунта: их владелец добавил сам.
 BTC_SERVICE_TXS = 1000
+# Карточка кошелька — не больше стольких последних движений. У частного
+# кошелька столько не бывает; у неразмеченного адреса биржи — бывает.
+WALLET_MOVES_MAX = 20_000
 
 
 def _btc_clean(con: sqlite3.Connection) -> str:
@@ -542,9 +545,13 @@ def _btc_wallet_build(addr: str) -> Json:
     try:
         px = _btc_price(con)
         lab = con.execute("SELECT ex FROM btc_labels WHERE address = ?", (addr,)).fetchone()
+        # Последние WALLET_MOVES_MAX движений, а не вся история: у адреса
+        # биржи или сервиса без разметки их десятки тысяч, и каждое открытие
+        # такой карточки (любым, кто знает адрес) читало их все.
         rows = con.execute(
             "SELECT txid, kind, sats, usd_nanos, price_nanos, ts, ex FROM btc_moves "
-            "WHERE wallet = ? ORDER BY ts, id", (addr,)).fetchall()
+            "WHERE wallet = ? ORDER BY ts DESC, id DESC LIMIT ?", (addr, WALLET_MOVES_MAX)).fetchall()
+        rows.reverse()
         # Итог — по движениям с биржей, как в рейтинге; переводы видны в
         # списке ниже, но сделками не считаются.
         book = _btc_book([(int(r["kind"]), int(r["sats"]), int(r["price_nanos"]), int(r["ts"]), r["ex"] or "")
