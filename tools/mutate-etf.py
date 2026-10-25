@@ -173,6 +173,7 @@ AL = [
 
 # Альтсезон: сервер (wt_dom) и приложение (lib/dom.ts).
 DM = [
+    ("out: dict[str, dict[int, Candle]] = {c: d for c, d in old.items() if c not in coins}", "out: dict[str, dict[int, Candle]] = {}", "монета, пропавшая из списка, — со своим прошлым"),
     ("        if len(el) >= MIN_BASKET:", "        if el:", "альтсезон: сила альтов — не меньше MIN_BASKET монет"),
     ("    if all(r[2] is None for r in rows):", "    if not rows:", "альтсезон: без единого дня с корзиной ответа нет"),
     ("        el = basket(t, 1, TOP) if i and t - p == DAY else []", "        el = basket(t, 1, TOP) if i else []", "альтсезон: сила — только за день подряд"),

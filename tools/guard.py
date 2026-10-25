@@ -1110,6 +1110,11 @@ say("wt_btc, повторная ревизия: рейтинг держит в �
 say("wt_btc: карточка кошелька читает не больше WALLET_MOVES_MAX последних движений (адрес сервиса — десятки тысяч)",
     "WALLET_MOVES_MAX = 20_000" in btcpy and "ORDER BY ts DESC, id DESC LIMIT ?\", (addr, WALLET_MOVES_MAX))" in btcpy
     and "test_card_reads_only_the_latest_moves" in read(f"{APP}/tests/test_btc.py"))
+say("альтсезон, ревизия: монета, пропавшая из списка Hyperliquid, остаётся со своими свечами (прошлое не пересчитывается по выжившим); доминация в приложении повторяет запрос сама, а не ждёт альтсезона или часа",
+    "out: dict[str, dict[int, Candle]] = {c: d for c, d in old.items() if c not in coins}" in read(f"{APP}/wt_dom.py")
+    and "test_coin_gone_from_the_list_keeps_its_past" in read(f"{APP}/tests/test_dom.py")
+    and "else timer = window.setTimeout(() => setMcapRetry((n) => n + 1), FAIL_RETRY_MS);" in read(f"{APP}/src/screens/DominanceScreen.tsx")
+    and "}, [retry, mcapRetry]);" in read(f"{APP}/src/screens/DominanceScreen.tsx"))
 say("bitcoin, повторная ревизия: алерты только о свежих блоках (догонка простоя не шлёт вчерашние сделки), время блока не из будущего, дробные числа узла без UB; дайджест без раздела биткоина, пока сканер стоит",
     "constexpr long long ALERT_MAX_AGE_SEC = 3600;" in _ws_btc and "nowSec() - alerts_.front().ts > ALERT_MAX_AGE_SEC" in _ws_btc
     and "b.ts > nowSec() + 7200" in _ws_btc and "return d > -9e18 && d < 9e18 ? static_cast<long long>(d) : 0;" in _ws_btc

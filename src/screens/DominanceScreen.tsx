@@ -750,15 +750,24 @@ export function DominanceScreen() {
       window.clearTimeout(timer);
     };
   }, [retry]);
+  /* Доминация — свой повтор: первый ответ сервера после перезапуска
+     собирается секунды (и копии на диске может не быть), и «нет данных»
+     раньше держалось, пока не повторит альтсезон или пока не вернутся в
+     приложение через час. */
+  const [mcapRetry, setMcapRetry] = useState(0);
   useEffect(() => {
     let alive = true;
+    let timer = 0;
     void fetchMcap().then((r) => {
-      if (alive && r) setMcap(r);
+      if (!alive) return;
+      if (r) setMcap(r);
+      else timer = window.setTimeout(() => setMcapRetry((n) => n + 1), FAIL_RETRY_MS);
     });
     return () => {
       alive = false;
+      window.clearTimeout(timer);
     };
-  }, [retry]);
+  }, [retry, mcapRetry]);
   useEffect(() => {
     const back = () => {
       if (document.visibilityState === "visible" && got.current && Date.now() - got.current > DOM_TTL_MS) setRetry((n) => n + 1);

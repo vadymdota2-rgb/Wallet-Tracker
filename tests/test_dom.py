@@ -352,6 +352,18 @@ class BuildTest(Base):
         self.assertNotIn(0, starts)
         self.assertNotIn("OLD", net.asked())
 
+    def test_coin_gone_from_the_list_keeps_its_past(self):
+        # Снятую OLD Hyperliquid убрал из списка совсем: её прошлые дни
+        # остаются в корзинах — индекс за прошлое не пересчитывается по
+        # нынешним выжившим.
+        net = market(days=201)
+        first = self.run_build(net)
+        del net.uni["OLD"]
+        self.now += DAY
+        res = self.run_build(net)
+        self.assertIn("OLD", dom._st.px)
+        self.assertEqual(day(res["rows"], T0 + 100 * DAY), day(first["rows"], T0 + 100 * DAY))
+
     def test_coin_without_answer_keeps_old_prices(self):
         net = market(days=201)
         first = self.run_build(net)
