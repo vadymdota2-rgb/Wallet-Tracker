@@ -316,6 +316,12 @@ describe("Страх и жадность", () => {
       assert.equal(sp(await page.locator(".lq-src").innerText()), sp(I18N["fg_src"]![lang]!));
       assert.ok(sp(await page.locator(".fg-by").innerText()).includes("mempool.space"), lang);
       assert.deepEqual(await overflow(page), [], lang);
+      // «выше в 45 % случаев» не обрезана краем карточки.
+      const cut = await page.locator(".fi-fwd-r > small").evaluateAll((els) => els.filter((el) => {
+        const card = el.closest(".card") ?? el.parentElement!;
+        return el.scrollWidth > el.clientWidth + 1 || el.getBoundingClientRect().right > card.getBoundingClientRect().right + 0.5;
+      }).map((el) => el.textContent));
+      assert.deepEqual(cut, [], lang);
       assert.deepEqual(errors, [], lang);
       await ctx.close();
     }
