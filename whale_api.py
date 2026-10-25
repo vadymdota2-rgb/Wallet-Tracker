@@ -9981,6 +9981,11 @@ def cached_small(store: dict, key, ttl: float, build):
 
 
 _bg_busy: set = set()
+# Сборка, которая идёт сейчас: второй запрос того же ключа без готового
+# ответа ждёт её, а не запускает вторую такую же (тяжёлый список за 30 дней
+# собирался параллельно столько раз, сколько раз его открыли).
+_bg_done: dict = {}
+BG_WAIT = 25.0
 
 
 # Кеш на диске: последний годный ответ тяжёлых сборок (потоки бирж, рейтинг,
@@ -10112,8 +10117,17 @@ def cached_bg(store: dict, key, ttl: float, build, wait: bool = False):
         busy = bk in _bg_busy
         if not busy:
             _bg_busy.add(bk)
+            _bg_done[bk] = threading.Event()
+        done = _bg_done.get(bk)
     if busy:
-        return hit[1] if hit else build()
+        if hit:
+            return hit[1]
+        if done is not None and done.wait(BG_WAIT):
+            with _small_lock:
+                ready = store.get(key)
+            if ready is not None:
+                return ready[1]
+        return build()
 
     def run():
         try:
@@ -10131,6 +10145,9 @@ def cached_bg(store: dict, key, ttl: float, build, wait: bool = False):
         finally:
             with _small_lock:
                 _bg_busy.discard(bk)
+                ev = _bg_done.pop(bk, None)
+            if ev is not None:
+                ev.set()
 
     if hit and not wait:
         threading.Thread(target=run, daemon=True, name="cache-bg").start()

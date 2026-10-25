@@ -89,8 +89,8 @@ const TTL = {
 };
 
 /** GET из памяти: один путь — один ответ, и экран, и подгрузка ждут его же. */
-function cachedGet<T>(path: string, ttl: number): Promise<T | null> {
-  return remember<T | null>(path, ttl, () => call<T>(path), good);
+function cachedGet<T>(path: string, ttl: number, timeout?: number): Promise<T | null> {
+  return remember<T | null>(path, ttl, () => call<T>(path, { timeout }), good);
 }
 
 /** Полная выгрузка: личное и общее одним запросом. */
@@ -675,10 +675,15 @@ function exSaved<T extends { ok?: boolean }>(path: string, st: ExStore = EX_STOR
 }
 
 /** Запрос с запасом: годный ответ ложится и на устройство. */
+/* Списки биткоина за неделю и месяц сервер собирает секунды; первый запрос
+   окна после перезапуска ждёт сборки. 15 секунд не хватало — экран писал
+   «пока пусто», хотя данные были. */
+const EX_TIMEOUT = 30_000;
+
 function exGet<T extends { ok?: boolean }>(path: string, ttl: number, st: ExStore = EX_STORE): Promise<T | null> {
   // Ответ из памяти на устройство заново не пишем: он там уже лежит.
   const had = peek<T | null>(path, ttl) !== undefined;
-  return cachedGet<T>(path, ttl).then((r) => {
+  return cachedGet<T>(path, ttl, EX_TIMEOUT).then((r) => {
     if (r?.ok && !had) {
       const all = readSaved<T>(st.key);
       delete all[path];

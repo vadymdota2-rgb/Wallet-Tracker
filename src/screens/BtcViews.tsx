@@ -66,6 +66,12 @@ function everyMinute(load: () => void): () => void {
   };
 }
 
+/* Ответа нет (сеть, сервер не успел) — так и сказать. «Пока пусто» — только
+   когда данных правда нет: раньше любой сбой выглядел как пустой сканер, и
+   окно «30 дней» казалось пустым, хотя сделки были. Раз в минуту экран
+   спрашивает снова сам (everyMinute). */
+const failed = (d: { ok: boolean; error?: string }) => !d.ok && d.error !== "no_data";
+
 /** Дата начала данных — на языке интерфейса. */
 function stamp(lang: string, ts: number): string {
   try {
@@ -348,6 +354,8 @@ export function BtcBigView({ winPicker, win }: { winPicker: ReactNode; win: BigW
       ) : null}
       {data === null ? (
         <Empty text={t(lang, "ui_loading")} />
+      ) : failed(data) ? (
+        <Empty text={t(lang, "generic_error_retry")} />
       ) : !data.ok || !data.rows?.length ? (
         <Empty text={t(lang, "btc_empty")} />
       ) : (
@@ -425,6 +433,10 @@ export function BtcBoard({ win }: { win: RankWin }) {
       {data === null ? (
         <Card>
           <Empty text={t(lang, "ui_loading")} />
+        </Card>
+      ) : failed(data) ? (
+        <Card>
+          <Empty text={t(lang, "generic_error_retry")} />
         </Card>
       ) : rows.length === 0 ? (
         <Card>
@@ -548,6 +560,8 @@ export function BtcWalletScreen({ arg }: ScreenProps) {
         <SectionTitle>{t(lang, "btc_moves")}</SectionTitle>
         {data === null ? (
           <Empty text={t(lang, "ui_loading")} />
+        ) : failed(data) ? (
+          <Empty text={t(lang, "generic_error_retry")} />
         ) : !data.moves?.length ? (
           <Empty text={t(lang, "btc_empty")} />
         ) : (

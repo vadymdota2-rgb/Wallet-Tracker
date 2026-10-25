@@ -1088,6 +1088,14 @@ say("метки ETF, повторная ревизия: карта меток в
     and "etfRemember(etfNew);" in _ws_btc and _ws_btc.index("etfRemember(etfNew);") > _ws_btc.index("return Result::FAILED;\n            }\n            // Метки фондов")
     and "if (pend.row() && pend.str(0) == fund) { ++r.dup; continue; }" in _ws_etf
     and "CHECK(etfFund(\"bc1qrb\").empty());" in _ws_tx and "CHECK(again.dup == 1 && again.queued == 0);" in _ws_tx)
+say("крупные ордера BTC: все окна и стороны готовы заранее (прогрев), итоги и биржи — одним проходом, неделя и месяц — раз в 5 минут; второй запрос ждёт идущую сборку; приложение ждёт тяжёлый ответ 30 с и при сбое пишет «что-то пошло не так», а не «пока пусто»",
+    "for w in BIG_WINDOWS for side in (\"buy\", \"sell\")]" in btcpy and "def btc_big_ttl(win: str) -> float:" in btcpy
+    and "AND ((m.kind = 1 AND {keep[1]}) OR (m.kind = 2 AND {keep[2]})) " in btcpy and "where_all" not in btcpy
+    and "_bg_done[bk] = threading.Event()" in api and "if done is not None and done.wait(BG_WAIT):" in api
+    and "const EX_TIMEOUT = 30_000;" in read(f"{APP}/src/lib/api.ts")
+    and "return cachedGet<T>(path, ttl, EX_TIMEOUT).then((r) => {" in read(f"{APP}/src/lib/api.ts")
+    and _btcv.count("failed(data) ? (") == 3
+    and "test_concurrent_cold_requests_share_one_build" in read(f"{APP}/tests/test_btc.py"))
 say("bitcoin, повторная ревизия: алерты только о свежих блоках (догонка простоя не шлёт вчерашние сделки), время блока не из будущего, дробные числа узла без UB; дайджест без раздела биткоина, пока сканер стоит",
     "constexpr long long ALERT_MAX_AGE_SEC = 3600;" in _ws_btc and "nowSec() - alerts_.front().ts > ALERT_MAX_AGE_SEC" in _ws_btc
     and "b.ts > nowSec() + 7200" in _ws_btc and "return d > -9e18 && d < 9e18 ? static_cast<long long>(d) : 0;" in _ws_btc

@@ -278,10 +278,8 @@ def _btc_big_build(win: str, side: str, min_btc: float, ex: str = "") -> Json:
         cond = _btc_clean(con)
         join, lead = "JOIN w ON w.wallet = m.wallet ", (since,)
         keep = {1: "w.s < 0.9 * w.b", 2: "w.b < 0.9 * w.s"}
-        where_all = f"m.ts >= ? AND m.kind = ? AND m.ex != '' AND m.sats >= ? AND {{keep}} AND {cond}"
-        # Фильтр по бирже — у списка и итога; список бирж (byEx) — всегда
-        # полный, из него приложение рисует кнопки фильтра.
-        where = where_all + (" AND m.ex = ?" if ex else "")
+        where = (f"m.ts >= ? AND m.kind = ? AND m.ex != '' AND m.sats >= ? AND {keep[kind]} AND {cond}"
+                 + (" AND m.ex = ?" if ex else ""))
         exa = (ex,) if ex else ()
         # Строка — кошелёк и биржа за окно, а не каждая транзакция: кошелёк,
         # который шесть раз завёл по 62 BTC, раньше занимал шесть одинаковых
@@ -293,27 +291,33 @@ def _btc_big_build(win: str, side: str, min_btc: float, ex: str = "") -> Json:
             f"COUNT(*) n, MAX(m.ts) ts, MAX(m.sats) top, "
             f"(SELECT m2.txid FROM btc_moves m2 WHERE m2.wallet = m.wallet AND m2.kind = m.kind "
             f" AND m2.ex = m.ex AND m2.ts >= ? ORDER BY m2.sats DESC LIMIT 1) txid "
-            f"FROM btc_moves m {join}WHERE {where.format(keep=keep[kind])} "
+            f"FROM btc_moves m {join}WHERE {where} "
             f"GROUP BY m.wallet, m.ex ORDER BY sats DESC, ts DESC LIMIT ?",
             (*lead, since, since, kind, floor, *exa, BTC_ROWS)).fetchall()
+        # Итоги обеих сторон и суммы по биржам — одним проходом, а не тремя:
+        # за 30 дней каждый проход — секунды, и первый запрос окна не
+        # укладывался в 15 секунд, которые ждёт приложение.
+        agg = con.execute(
+            flows + f"SELECT m.kind, m.ex, COUNT(*) n, COUNT(DISTINCT m.wallet) w, SUM(m.sats) s, "
+            f"SUM(m.usd_nanos) u FROM btc_moves m {join}"
+            f"WHERE m.ts >= ? AND m.ex != '' AND m.sats >= ? AND {cond} "
+            f"AND ((m.kind = 1 AND {keep[1]}) OR (m.kind = 2 AND {keep[2]})) "
+            f"GROUP BY m.kind, m.ex", (*lead, since, floor)).fetchall()
         tot = {}
         for k, name in ((1, "buy"), (2, "sell")):
-            r = con.execute(
-                flows + f"SELECT COUNT(*) n, SUM(m.sats) s, SUM(m.usd_nanos) u "
-                f"FROM btc_moves m {join}WHERE {where.format(keep=keep[k])}",
-                (*lead, since, k, floor, *exa)).fetchone()
-            tot[name] = {"n": int(r["n"] or 0), "btc": round(int(r["s"] or 0) / 1e8, 4),
-                         "v": round(int(r["u"] or 0) / 1e9, 2)}
+            # Фильтр по бирже — у итога, как у списка.
+            mine = [r for r in agg if r["kind"] == k and (not ex or r["ex"] == ex)]
+            tot[name] = {"n": sum(int(r["n"] or 0) for r in mine),
+                         "btc": round(sum(int(r["s"] or 0) for r in mine) / 1e8, 4),
+                         "v": round(sum(int(r["u"] or 0) for r in mine) / 1e9, 2)}
         # Через какие биржи: сумма по бирже на выбранной стороне — сколько
-        # движений, монет, долларов и сколько разных кошельков.
-        by_ex = [
-            {"ex": r["ex"], "n": int(r["n"] or 0), "w": int(r["w"] or 0),
-             "btc": round(int(r["s"] or 0) / 1e8, 4), "v": round(int(r["u"] or 0) / 1e9, 2)}
-            for r in con.execute(
-                flows + f"SELECT m.ex, COUNT(*) n, COUNT(DISTINCT m.wallet) w, SUM(m.sats) s, "
-                f"SUM(m.usd_nanos) u FROM btc_moves m {join}WHERE {where_all.format(keep=keep[kind])} "
-                f"GROUP BY m.ex ORDER BY s DESC", (*lead, since, kind, floor))
-        ]
+        # движений, монет, долларов и сколько разных кошельков. Всегда полный
+        # список: из него приложение рисует кнопки фильтра.
+        by_ex = sorted(
+            ({"ex": r["ex"], "n": int(r["n"] or 0), "w": int(r["w"] or 0),
+              "btc": round(int(r["s"] or 0) / 1e8, 4), "v": round(int(r["u"] or 0) / 1e9, 2)}
+             for r in agg if r["kind"] == kind),
+            key=lambda e: -e["btc"])
         extra = _btc_extra(con, sorted({r["wallet"] for r in rows}))
         first = con.execute("SELECT MIN(ts) FROM btc_flow").fetchone()[0]
         # Время последнего записанного блока: по нему видно, что сканер
@@ -355,6 +359,12 @@ def _btc_ex_names() -> frozenset[str]:
     return cast("frozenset[str]", cached_small(_BTC, "ex_names", 600.0, build))
 
 
+def btc_big_ttl(win: str) -> float:
+    # Неделя и месяц — раз в пять минут: сборка — секунды, а за пять минут
+    # такой список заметно не меняется. Короткие окна — раз в минуту.
+    return 300.0 if win in ("7d", "30d") else BTC_TTL
+
+
 def btc_big(win: str, side: str, min_btc: float, ex: str = "") -> Json:
     win = win if win in BIG_WINDOWS else "24h"
     side = "sell" if side == "sell" else "buy"
@@ -365,7 +375,7 @@ def btc_big(win: str, side: str, min_btc: float, ex: str = "") -> Json:
     ex = (ex or "").strip()[:40]
     if ex and ex not in _btc_ex_names():
         ex = ""
-    return cached_bg(_BTC, ("big", win, side, min_btc, ex), BTC_TTL,
+    return cached_bg(_BTC, ("big", win, side, min_btc, ex), btc_big_ttl(win),
                      lambda: _btc_big_build(win, side, min_btc, ex))
 
 
@@ -487,6 +497,12 @@ def warm_jobs() -> list[tuple[dict[Any, Any], Any, float, Callable[[], Json]]]:
     и рейтинг за все окна — запрос из приложения не ждёт сборки."""
     jobs: list[tuple[dict[Any, Any], Any, float, Callable[[], Json]]] = [(_BTC, "flow", BTC_TTL, _btc_flow_build)]
     jobs += [(_BTC, ("rank", d), btc_rank_ttl(d), functools.partial(_btc_rank_build, d)) for d in BTC_RANK_DAYS]
+    # Крупные ордера — каждое окно и сторона с порогом по умолчанию: первый
+    # взгляд на вкладку не ждёт сборки (раньше окно «30 дней» не успевало, и
+    # экран писал «пока пусто»). Пороги выше и фильтр биржи — по запросу.
+    jobs += [(_BTC, ("big", w, side, BTC_BIG_MIN[0], ""), btc_big_ttl(w),
+              functools.partial(_btc_big_build, w, side, BTC_BIG_MIN[0], ""))
+             for w in BIG_WINDOWS for side in ("buy", "sell")]
     return jobs
 
 

@@ -9,6 +9,8 @@ import os
 import sqlite3
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from unittest import mock
 
@@ -180,6 +182,8 @@ class BigTest(BtcBase):
         self.move("bc1qkeeper", 2, 8 * SAT, 2000)
         buy = btc._btc_big_build("24h", "buy", 0.2)
         self.assertEqual([x["a"] for x in buy["rows"]], ["bc1qkeeper"])
+        # Итоги — по тем же правилам, что строки: транзит не считается ни там, ни там.
+        self.assertEqual((buy["tot"]["buy"]["n"], buy["tot"]["sell"]["n"]), (1, 0))
         sell = btc._btc_big_build("24h", "sell", 0.2)
         self.assertEqual(sell["rows"], [])
         # Переводы без биржи в транзит и в доску не идут.
@@ -208,6 +212,7 @@ class BigTest(BtcBase):
     def test_exchange_filter_narrows_rows_and_total_but_not_the_exchange_list(self):
         self.move("bc1qa", 1, 2 * SAT, 600)
         self.move("bc1qb", 1, 3 * SAT, 600, ex="OKX")
+        self.move("bc1qc", 2, 4 * SAT, 600, ex="Kraken")   # продажа — не в списке бирж покупок
         r = btc._btc_big_build("24h", "buy", 0.2, "OKX")
         self.assertEqual([x["a"] for x in r["rows"]], ["bc1qb"])
         self.assertEqual(r["tot"]["buy"]["btc"], 3.0)
@@ -296,7 +301,12 @@ class RankTest(BtcBase):
     def test_ttl_and_warm_jobs(self):
         self.assertEqual((btc.btc_rank_ttl(30), btc.btc_rank_ttl(90)), (120.0, 600.0))
         keys = [j[1] for j in btc.warm_jobs()]
-        self.assertEqual(keys, ["flow", ("rank", 30), ("rank", 90), ("rank", 180), ("rank", 365)])
+        self.assertEqual(keys[:5], ["flow", ("rank", 30), ("rank", 90), ("rank", 180), ("rank", 365)])
+        # Крупные ордера готовы заранее: каждое окно и сторона, порог по умолчанию.
+        self.assertEqual(keys[5:], [("big", w, side, 0.2, "") for w in ("1h", "6h", "24h", "7d", "30d")
+                                    for side in ("buy", "sell")])
+        big30 = next(j for j in btc.warm_jobs() if j[1] == ("big", "30d", "sell", 0.2, ""))
+        self.assertEqual((big30[2], big30[3]()["win"], big30[3]()["side"]), (300.0, "30d", "sell"))
         self.move("bc1qa", 1, SAT, 600)
         self.assertEqual(btc.warm_jobs()[2][3]()["days"], 90)
 
@@ -352,7 +362,10 @@ class ParamsTest(BtcBase):
             btc.btc_flow()
         self.assertEqual([k for k, _ in seen], [("big", "24h", "buy", 0.2, ""), ("big", "7d", "sell", 100, "OKX"),
                                                 ("rank", 30), ("rank", 365), "flow"])
-        self.assertEqual([t for _, t in seen], [60.0, 60.0, 120.0, 600.0, 60.0])
+        # Неделя и месяц крупных ордеров — раз в пять минут, короткие окна — раз в минуту.
+        self.assertEqual([t for _, t in seen], [60.0, 300.0, 120.0, 600.0, 60.0])
+        self.assertEqual([btc.btc_big_ttl(w) for w in ("1h", "6h", "24h", "7d", "30d")],
+                         [60.0, 60.0, 60.0, 300.0, 300.0])
 
     def test_wallet_card_is_cached_per_address(self):
         self.move("bc1qa", 1, SAT, 600)
@@ -366,6 +379,27 @@ class ParamsTest(BtcBase):
         self.assertIs(api._BTC, btc._BTC)
         self.assertEqual(btc.BIG_WINDOWS, api.BIG_WINDOWS)
         self.assertEqual(btc.TREND_BUCKETS, api.TREND_BUCKETS)
+
+    def test_concurrent_cold_requests_share_one_build(self):
+        # Тяжёлый список без готового ответа: второй и третий запрос ждут
+        # первую сборку, а не запускают свои (было — по сборке на запрос).
+        calls = []
+
+        def build():
+            calls.append(1)
+            time.sleep(0.3)
+            return {"ok": True, "n": len(calls)}
+
+        store: dict = {}
+        got = []
+        ts = [threading.Thread(target=lambda: got.append(api.cached_bg(store, "k", 60.0, build))) for _ in range(3)]
+        for t in ts:
+            t.start()
+            time.sleep(0.02)
+        for t in ts:
+            t.join()
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(got, [{"ok": True, "n": 1}] * 3)
 
 
 if __name__ == "__main__":
