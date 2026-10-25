@@ -1041,10 +1041,10 @@ _ws_etf = read(os.path.join(BOT, "btc_etf.cpp"))
 _btcv = read(f"{APP}/src/screens/BtcViews.tsx")
 say("bitcoin, жёсткая ревизия: каждая запись блока проверяется (stepW, сбой — откат), разметка ETF не теряется, откат цепочки не падает на кривом JSON, цена старого блока — свеча Kraken, а не сегодняшняя",
     "int stepW(sqlite3_stmt* s)" in _ws_btc and "if (g_txErrs) {" in _ws_btc
-    and "if (etfDrainLabels(g_btcDb) < 0) ++g_txErrs;" in _ws_btc and "if (!q.s) return -1;" in _ws_etf
+    and "if (etfDrainLabels(g_btcDb) < 0) ++g_txErrs;" in _ws_btc and "if (!q.s || !del.s || !unlab.s) return -1;" in _ws_etf
     and "x.is_number_integer(); }))" in _ws_btc and "api.kraken.com/0/public/OHLC?pair=XBTUSD&interval=60" in _ws_btc
     and "if (!(btc > 0 && btc <= 21e6)) btc = defBtc;" in _ws_btc
-    and 'if (!exec(db, "COMMIT") && !sqlite3_get_autocommit(db)) exec(db, "ROLLBACK");' in _ws_etf
+    and '} else if (!refreshLabels(db) || !exec(db, "COMMIT")) {' in _ws_etf
     and "CHECK(otherRc == SQLITE_BUSY);" in read(os.path.join(BOT, "tests/btc_tx_test.cpp")))
 say("bitcoin, жёсткая ревизия: цена сервера по времени блока; фильтр биржи — только из разметки; экраны обновляются раз в минуту и не стирают показанное при сбое",
     'SELECT price_nanos, ts FROM btc_blocks WHERE price_nanos > 0' in btcpy and "if ex and ex not in _btc_ex_names():" in btcpy
@@ -1068,6 +1068,20 @@ say("wt_btc: полные тесты (потоки, крупные ордера,
     and '+ run(f"{ROOT}/wt_btc.py", [sys.executable, "-m", "unittest", "tests.test_btc"' in read(f"{APP}/tools/mutate-etf.py")
     and "len(DMT) + len(BT) - len(EQUIV)" in read(f"{APP}/tools/mutate-etf.py")
     and "wt_btc.py tests/test_btc.py tests/test_btc_stale.py" in _ci)
+_ws_etfh = read(os.path.join(BOT, "btc_etf.h"))
+_ws_tx = read(os.path.join(BOT, "tests/btc_tx_test.cpp"))
+say("метки ETF (btc_etf.cpp), жёсткая ревизия: обновление при запуске — BEGIN IMMEDIATE, каждый шаг проверен, сбой — откат; снятый фондом адрес — не метка; кошелёк фонда — не биржа; /import — тикер проверен, повтор адреса — один, сбой записи — откат и «не записалось»; очередь снимается по строкам; имя фонда в /statsbtc экранировано",
+    'if (!exec(db, "BEGIN IMMEDIATE")) {' in _ws_etf and 'exec(db, "BEGIN");' not in _ws_etf
+    and "bool refreshLabels(sqlite3* db)" in _ws_etf and "if (!BTC_ETF_BOOK.empty()) {" in _ws_etf
+    and "DELETE FROM btc_labels WHERE how != 'seed' \"" in _ws_etf
+    and 'Stmt unlab(db, "DELETE FROM btc_labels WHERE address=? AND how != \'seed\'");' in _ws_etf
+    and 'Stmt del(db, "DELETE FROM btc_etf_import WHERE address=? AND fund=?");' in _ws_etf
+    and 'exec(db, "DELETE FROM btc_etf_import")' not in _ws_etf
+    and "if (!validFund(fund)) {" in _ws_etf and "if (a.empty() || !seen.insert(a).second) continue;" in _ws_etf
+    and '"\\n· <b>" + esc(fund) + "</b>: "' in _ws_etf
+    and "bool failed = false;" in _ws_etfh and "if (r.failed) ++g_txErrs;" in _ws_btc
+    and "if (r.failed)\n        return " in read(os.path.join(BOT, "main.cpp"))
+    and "CHECK(etfFund(\"bc1qstale\").empty());" in _ws_tx and "CHECK(st.find(\"&lt;i&gt;\")" in _ws_tx)
 say("bitcoin, повторная ревизия: алерты только о свежих блоках (догонка простоя не шлёт вчерашние сделки), время блока не из будущего, дробные числа узла без UB; дайджест без раздела биткоина, пока сканер стоит",
     "constexpr long long ALERT_MAX_AGE_SEC = 3600;" in _ws_btc and "nowSec() - alerts_.front().ts > ALERT_MAX_AGE_SEC" in _ws_btc
     and "b.ts > nowSec() + 7200" in _ws_btc and "return d > -9e18 && d < 9e18 ? static_cast<long long>(d) : 0;" in _ws_btc
