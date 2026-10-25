@@ -227,10 +227,35 @@ describe("Страх и жадность", () => {
     await ready(page);
     assert.equal(sp(await page.locator(".fg-val").innerText()), String(last[1]));
     assert.doesNotMatch(sp(await page.locator(".fg-date").innerText()), /BTC/);
-    const ticks = (await page.locator(".fg-plot .fg-tick").allInnerTexts()).map(sp);
+    const ticks = (await page.locator(".fg-plot .fg-tick").allTextContents()).map(sp);
     assert.ok(!ticks.some((x) => x.includes("$")), ticks.join(" "));
     assert.equal(await page.locator(".fg-plot .fg-ptl").count(), 1); // только «Индекс страха и жадности»
     assert.equal(await page.locator(".sect", { hasText: I18N["fi_title"]!["ru"]! }).count(), 0);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("ось цены по-английски и по-немецки — тысячи на месте («$100,000», а не «$100»)", async () => {
+    for (const [lang, sep] of [["en", ","], ["de", "."]] as const) {
+      const { ctx, page, errors } = await open({ lang });
+      await ready(page);
+      const ticks = (await page.locator(".fg-plot .fg-tick").allTextContents()).map(sp).filter((x) => x.startsWith("$"));
+      assert.ok(ticks.length >= 2, ticks.join(" "));
+      for (const x of ticks) {
+        const v = Number(x.slice(1).split(sep).join(""));
+        assert.ok(v >= 1000, `${lang}: ${x}`); // цены BTC в образце — тысячи долларов
+      }
+      assert.deepEqual(errors, []);
+      await ctx.close();
+    }
+  });
+
+  test("цена в окне только за один день — экран не зависает, шкала из одного деления", async () => {
+    const one = { ...REAL, days: REAL.days.map((d, i) => [d[0], d[1], i === REAL.days.length - 1 ? d[2] : 0, d[3] & 2]) };
+    const { ctx, page, errors } = await open({ reply: one, store: { "wt-fg-range": "30" } });
+    await ready(page);
+    const ticks = (await page.locator(".fg-plot .fg-tick").allTextContents()).map(sp).filter((x) => x.startsWith("$"));
+    assert.equal(ticks.length, 1);
     assert.deepEqual(errors, []);
     await ctx.close();
   });

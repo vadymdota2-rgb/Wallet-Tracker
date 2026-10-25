@@ -18,13 +18,14 @@
  * индекса alternative.me. Все расчёты — в lib/fng.ts (их проверяют тесты).
  *
  * Права: индекс — alternative.me (их условие — источник рядом с данными:
- * ссылка под шкалой), цена BTC — mempool.space (тоже ссылкой рядом). Цен
- * бирж здесь нет: их условия запрещают показывать рыночные данные.
+ * ссылка под шкалой), цена BTC — mempool.space (тоже ссылкой рядом), а где
+ * её нет — Hyperliquid (назван там же). Цен бирж здесь нет: их условия
+ * запрещают показывать рыночные данные.
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
-import { num, pct, px } from "../lib/format";
+import { num, pct, px, pxTick } from "../lib/format";
 import { haptic, openExternal } from "../lib/telegram";
 import { fetchFng, peekFng } from "../lib/api";
 import { Card, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
@@ -109,7 +110,10 @@ function ticksOf(lang: Lang, a: number, b: number, pw: number) {
   return all.filter((_, i) => (all.length - 1 - i) % step === 0);
 }
 
+/** Деления шкалы цены. Цена в окне одна (lo = hi — например, сервер знает
+ *  только сегодняшнюю) — одно деление: шаг 0 зациклил бы перебор. */
 function priceTicks(lo: number, hi: number, log: boolean): number[] {
+  if (!(hi > lo)) return [lo];
   if (log) {
     const out: number[] = [];
     for (let e = 2; e <= 7; e++) for (const m of [1, 2, 5]) {
@@ -122,7 +126,7 @@ function priceTicks(lo: number, hi: number, log: boolean): number[] {
   const p = 10 ** Math.floor(Math.log10(raw));
   const step = [1, 2, 2.5, 5, 10].map((m) => m * p).find((s) => s >= raw) ?? raw;
   const out: number[] = [];
-  for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) out.push(v);
+  for (let v = Math.ceil(lo / step) * step; v <= hi && out.length < 20; v += step) out.push(v);
   return out;
 }
 
@@ -243,7 +247,7 @@ function Chart({ days, lang, sel, onSel }: {
       {withPx ? ticks.map((v) => (
         <g key={v}>
           <line x1={0} x2={PW} y1={yPx(v)} y2={yPx(v)} className="fg-grid" />
-          <text x={W - 2} y={yPx(v) + 3.5} textAnchor="end" className="fg-tick">{px(v).replace(/[,.]\d+$/, "")}</text>
+          <text x={W - 2} y={yPx(v) + 3.5} textAnchor="end" className="fg-tick">{pxTick(v)}</text>
         </g>
       )) : null}
       {[25, 50, 75].map((v) => (
@@ -281,6 +285,8 @@ function tableDays(days: readonly Day[]): Day[] {
 /** Дни окна цифрами — для читалки экрана и для тех, кому цифры удобнее линии. */
 function DaysTable({ days, lang }: { days: readonly Day[]; lang: Lang }) {
   const [open, setOpen] = useState(false);
+  const rows = open ? tableDays(days) : [];
+  const filled = rows.some((d) => d[3] & F_FILL);
   return (
     <details className="fg-tbl" onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>
       <summary>{t(lang, "ef_tbl")}</summary>
@@ -296,7 +302,7 @@ function DaysTable({ days, lang }: { days: readonly Day[]; lang: Lang }) {
               </tr>
             </thead>
             <tbody>
-              {tableDays(days).map((d) => (
+              {rows.map((d) => (
                 <tr key={d[0]}>
                   <th scope="row">{dateStr(lang, d[0], { day: "numeric", month: "short", year: "numeric" })}</th>
                   <td>{d[1]}{d[3] & F_FILL ? "*" : ""}</td>
@@ -306,6 +312,8 @@ function DaysTable({ days, lang }: { days: readonly Day[]; lang: Lang }) {
               ))}
             </tbody>
           </table>
+          {/* «*» у индекса — что значит. */}
+          {filled ? <p className="fg-tbl-note">* {t(lang, "fg_fill")}</p> : null}
         </div>
       ) : null}
     </details>
@@ -413,7 +421,10 @@ export function FearGreedScreen() {
       {!reply ? (
         failed ? (
           <Empty text={t(lang, "fg_err")} hint={
-            <button type="button" className="lq-retry" onClick={() => setRetry((n) => n + 1)}>{t(lang, "ui_retry")}</button>
+            <button type="button" className="lq-retry" onClick={() => {
+              setFailed(false); // пока идёт повтор — заглушка загрузки, а не та же ошибка
+              setRetry((n) => n + 1);
+            }}>{t(lang, "ui_retry")}</button>
           } />
         ) : <Card><Skeleton rows={8} /></Card>
       ) : !last ? null : (

@@ -24,7 +24,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
-import { num, pct, px, since, usdWord } from "../lib/format";
+import { num, pct, px, pxTick, since, usdWord } from "../lib/format";
 import { haptic, openExternal } from "../lib/telegram";
 import { etfWatch, etfWatchSet, failKey, fetchEtf, peekEtf } from "../lib/api";
 import { toast } from "../components/Toast";
@@ -239,7 +239,7 @@ function FlowChart({ data, cum, zero, lang, sel, onSel, label }: {
       {priceTicks.map((v) => (
         <g key={v}>
           <line x1={0} x2={PW} y1={yPx(v)} y2={yPx(v)} className="fg-grid" />
-          <text x={W - 2} y={yPx(v) + 3.5} textAnchor="end" className="fg-tick">{px(v).replace(/[,.]\d+$/, (m) => (v < 10 ? m : ""))}</text>
+          <text x={W - 2} y={yPx(v) + 3.5} textAnchor="end" className="fg-tick">{pxTick(v)}</text>
         </g>
       ))}
       {(cum ? cTicks : [top, 0, -top]).map((v) => (

@@ -642,6 +642,15 @@ describe("институциональные потоки", () => {
     }
   });
 
+  test("ось цены по-английски — тысячи на месте («$80,000», а не «$80»)", async () => {
+    const { ctx, page } = await open({ lang: "en" });
+    await ready(page);
+    const ticks = (await page.locator(".fg-tick").allTextContents()).map(sp).filter((x) => /^\$\d[\d,]*$/.test(x)); // цена, а не потоки («$1B»)
+    assert.ok(ticks.length >= 2, ticks.join(" "));
+    for (const x of ticks) assert.ok(Number(x.slice(1).split(",").join("")) >= 1000, x);
+    await ctx.close();
+  });
+
   test("ширины 320–1280 px: ничего не вылезает", async () => {
     for (const width of [320, 375, 414, 768, 1280]) {
       const { ctx, page } = await open({ width });

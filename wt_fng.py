@@ -366,10 +366,10 @@ def _history() -> tuple[list[int], list[float]] | None:
     # недельная — чем подробнее, тем вернее. Цена из будущего (недельная
     # свеча, начатая вчера, или подделка) — не цена.
     top = _now() + MAX_FUTURE
+    moved = [(_when(t, raw), t, p) for t, p in raw.items()]  # _when — один раз на точку
     pts: dict[int, float] = {}
     for span in (0, DAY, WEEK):
-        for t, p in raw.items():
-            w = _when(t, raw)
+        for w, t, p in moved:
             if w - t == span and w <= top:
                 pts.setdefault(w, p)
     ts = sorted(pts)

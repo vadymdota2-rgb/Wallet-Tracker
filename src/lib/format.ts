@@ -94,6 +94,17 @@ export function px(v: unknown): string {
   return `$${nf({ maximumFractionDigits: digits }).format(v)}`;
 }
 
+/**
+ * Подпись деления оси цены: целое число долларов с разрядами по языку —
+ * «$100,000», «$100 000», «$100.000». Деления круглые; копейки остаются
+ * только у делений меньше $10. (Раньше разряды срезали регулярным
+ * выражением по последней «,» или «.» — и по-английски «$100,000»
+ * превращалось в «$100».)
+ */
+export function pxTick(v: number): string {
+  return px(v >= 10 ? Math.round(v) : v);
+}
+
 export function num(v: unknown, digits = 0): string {
   if (!isNum(v)) return "—";
   return nf({ maximumFractionDigits: digits }).format(v);

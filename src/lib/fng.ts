@@ -209,8 +209,7 @@ export function streakLeft(days: readonly FngDay[], cur: { zi: number; len: numb
     if (j + 1 < days.length && z === cur.zi && len >= cur.len) rest.push(len - cur.len);
   }
   if (rest.length < 5) return null;
-  rest.sort((a, b) => a - b);
-  return { n: rest.length, med: rest[rest.length >> 1]!, week: rest.filter((r) => r >= 7).length / rest.length };
+  return { n: rest.length, med: median(rest), week: rest.filter((r) => r >= 7).length / rest.length };
 }
 
 /* --- Что было после (блок «Что скрыто в данных») ------------------------- */

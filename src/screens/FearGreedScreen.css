@@ -24,6 +24,7 @@
 .fg-tbl thead th { position: sticky; top: 0; background: var(--panel); color: var(--dim); font-weight: 600; border-top: 0; }
 .fg-tbl tbody th { font-weight: 500; color: var(--ink); }
 .fg-tbl th:first-child, .fg-tbl td:first-child { text-align: start; }
+.fg-tbl-note { margin: 6px 8px; color: var(--dim); font-size: 11px; }
 
 @media (forced-colors: active) {
   .fg-svg, .fg-gauge, .fg-dist, .fg-legend i { forced-color-adjust: none; }

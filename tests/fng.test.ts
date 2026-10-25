@@ -237,3 +237,33 @@ test("расхождение: цена на дне 60 дней, а настро�
   const z = d.map((x, i): FngDay => (i === 170 ? [x[0], x[1], 0, 0] : x));
   assert.equal(divergence(z)!.kind, "lo");
 });
+
+test("подпись оси цены — с разрядами по языку, без потери тысяч", async () => {
+  const { pxTick, setLocale } = await import("../src/lib/format.ts");
+  const want: Record<string, string[]> = {
+    en: ["$100,000", "$5,000", "$250", "$2.5"],
+    de: ["$100.000", "$5.000", "$250", "$2,5"],
+    ru: ["$100 000", "$5 000", "$250", "$2,5"],
+  };
+  try {
+    for (const [lang, out] of Object.entries(want)) {
+      setLocale(lang as "en");
+      const got = [100_000, 5000, 250, 2.5].map((v) => pxTick(v).replace(/\s/g, " "));
+      assert.deepEqual(got, out, lang);
+    }
+    setLocale("en");
+    assert.equal(pxTick(82_512.5), "$82,513"); // деление ≥ $10 — целое
+  } finally {
+    setLocale("en");
+  }
+});
+
+test("остаток полосы — настоящая медиана и при чётном числе полос", () => {
+  const vs: number[] = [];
+  for (const n of [5, 6, 7, 10, 12, 20]) vs.push(...Array<number>(n).fill(30), 60);
+  vs.push(30, 30, 30, 30);
+  const d = make(vs);
+  const l = streakLeft(d, currentStreak(d)!)!;
+  assert.equal(l.n, 6);
+  assert.equal(l.med, (3 + 6) / 2); // остатки 1, 2, 3, 6, 8, 16
+});
