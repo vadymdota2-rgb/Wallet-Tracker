@@ -10134,10 +10134,15 @@ def cached_bg(store: dict, key, ttl: float, build, wait: bool = False):
             val = build()
             bad = isinstance(val, dict) and val.get("ok") is False
             with _small_lock:
-                if not bad or not hit:
+                if not bad:
                     store[key] = (time.monotonic(), val)
-                else:
+                elif hit:
                     store[key] = (time.monotonic() - ttl + 30.0, hit[1])
+                else:
+                    # Годного ответа ещё не было — неудача тоже живёт полминуты,
+                    # а не весь срок: раньше окно «30 дней» после одного сбоя
+                    # пять минут показывало «что-то пошло не так».
+                    store[key] = (time.monotonic() - max(0.0, ttl - 30.0), val)
                 cap_cache(store, 2048)
             if disk and not bad and val is not None:
                 _disk_save(disk, key, val)

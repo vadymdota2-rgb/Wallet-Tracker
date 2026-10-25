@@ -1101,6 +1101,12 @@ say("доллары в нано — TOTAL, не SUM: месяц крупных �
     and "SUM(in_usd)" not in api and "SUM(out_usd" not in api and "SUM(CASE WHEN is_buy=1 THEN usd_nanos" not in api
     and "SUM(CASE WHEN t.is_buy" not in api and "TOTAL(in_usd) i, TOTAL(out_usd) o" in api
     and os.path.isfile(f"{APP}/tests/test_sum_overflow.py"))
+say("wt_btc, повторная ревизия: рейтинг держит в памяти только лучшие BTC_ROWS каждой доски (не итоги всех кошельков за год); неудачная первая сборка живёт 30 с, а не весь срок кэша; пустой список бирж не кэшируется",
+    "heapq.heapreplace(top, item)" in btcpy and "books: list[Json]" not in btcpy and '"n": n,' in btcpy
+    and "store[key] = (time.monotonic() - max(0.0, ttl - 30.0), val)" in api
+    and '_BTC.pop("ex_names", None)' in btcpy
+    and "test_boards_keep_only_the_best_and_ties_keep_wallet_order" in read(f"{APP}/tests/test_btc.py")
+    and "test_failed_first_build_is_retried_in_half_a_minute" in read(f"{APP}/tests/test_btc.py"))
 say("bitcoin, повторная ревизия: алерты только о свежих блоках (догонка простоя не шлёт вчерашние сделки), время блока не из будущего, дробные числа узла без UB; дайджест без раздела биткоина, пока сканер стоит",
     "constexpr long long ALERT_MAX_AGE_SEC = 3600;" in _ws_btc and "nowSec() - alerts_.front().ts > ALERT_MAX_AGE_SEC" in _ws_btc
     and "b.ts > nowSec() + 7200" in _ws_btc and "return d > -9e18 && d < 9e18 ? static_cast<long long>(d) : 0;" in _ws_btc

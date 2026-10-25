@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 import functools
+import heapq
 import math
 import re
 import sqlite3
@@ -359,7 +360,13 @@ def _btc_ex_names() -> frozenset[str]:
             return frozenset()
         finally:
             con.close()
-    return cast("frozenset[str]", cached_small(_BTC, "ex_names", 600.0, build))
+    names = cast("frozenset[str]", cached_small(_BTC, "ex_names", 600.0, build))
+    # Пустой список — база не прочиталась (разметка бирж пустой не бывает):
+    # его не держим десять минут, иначе фильтр по бирже всё это время молча
+    # не работал бы. Следующий запрос прочитает заново.
+    if not names:
+        _BTC.pop("ex_names", None)
+    return names
 
 
 def btc_big_ttl(win: str) -> float:
@@ -444,7 +451,25 @@ def _btc_rank_build(days: int) -> Json:
     try:
         px = _btc_price(con)
         since = now() - days * 86400
-        books: list[Json] = []
+        # Доски — первые BTC_ROWS по своему ключу. В памяти — только они, а
+        # не итоги всех кошельков: за год это сотни тысяч записей, и сервер
+        # с малой памятью мог её исчерпать. Порядок — как у sorted по
+        # убыванию ключа, при равенстве раньше встреченный выше (-номер).
+        n = 0
+        tops: dict[str, list[tuple[tuple[float, float, int], Json]]] = {"pnl": [], "roi": [], "act": []}
+        order = {"pnl": ("pnl", "btc"), "roi": ("roi", "btc"), "act": ("btc", "pnl")}
+
+        def keep(book: Json) -> None:
+            nonlocal n
+            n += 1
+            for name, (k1, k2) in order.items():
+                item = ((book[k1], book[k2], -n), book)
+                top = tops[name]
+                if len(top) < BTC_ROWS:
+                    heapq.heappush(top, item)
+                elif item[0] > top[0][0]:
+                    heapq.heapreplace(top, item)
+
         cur_w: str | None = None
         moves: list[tuple[int, int, int, int, str]] = []
         # Только движения с биржей. Перевод на свой холодный кошелёк — не
@@ -460,25 +485,21 @@ def _btc_rank_build(days: int) -> Json:
                 if cur_w and moves:
                     b = _btc_book(moves, px)
                     if b:
-                        books.append({"a": cur_w, **b})
+                        keep({"a": cur_w, **b})
                 cur_w, moves = r["wallet"], []
             moves.append((int(r["kind"]), int(r["sats"]), int(r["price_nanos"]), int(r["ts"]), r["ex"] or ""))
         if cur_w and moves:
             b = _btc_book(moves, px)
             if b:
-                books.append({"a": cur_w, **b})
+                keep({"a": cur_w, **b})
         first = con.execute("SELECT MIN(ts) FROM btc_flow").fetchone()[0]
-        boards = {
-            "pnl": sorted(books, key=lambda b: (-b["pnl"], -b["btc"]))[:BTC_ROWS],
-            "roi": sorted(books, key=lambda b: (-b["roi"], -b["btc"]))[:BTC_ROWS],
-            "act": sorted(books, key=lambda b: (-b["btc"], -b["pnl"]))[:BTC_ROWS],
-        }
+        boards = {name: [b for _, b in sorted(top, key=lambda x: x[0], reverse=True)] for name, top in tops.items()}
         extra = _btc_extra(con, sorted({b["a"] for board in boards.values() for b in board}))
         for board in boards.values():
             for b in board:
                 b.update(extra.get(b["a"], {}))
         return {
-            "ok": True, "days": days, "price": round(px, 2), "n": len(books),
+            "ok": True, "days": days, "price": round(px, 2), "n": n,
             "full": bool(first and first <= since + 600), "since": int(first or 0),
             **boards,
         }

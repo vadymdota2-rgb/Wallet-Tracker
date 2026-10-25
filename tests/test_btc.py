@@ -286,6 +286,18 @@ class RankTest(BtcBase):
         self.assertEqual((r["price"], r["days"]), (80_000.0, 30))
         self.assertEqual(btc._btc_rank_build(90)["n"], 4)
 
+    def test_boards_keep_only_the_best_and_ties_keep_wallet_order(self):
+        # Доска на 3 места, кошельков 6: остаются лучшие, при равенстве —
+        # раньше встреченный (порядок адресов) выше.
+        for w, price in (("bc1qa", 70_000), ("bc1qb", 60_000), ("bc1qc", 50_000),
+                         ("bc1qd", 75_000), ("bc1qe", 60_000), ("bc1qf", 90_000)):
+            self.move(w, 1, SAT, 5 * 86400, price=price)
+        with mock.patch.object(btc, "BTC_ROWS", 3):
+            r = btc._btc_rank_build(30)
+        self.assertEqual(r["n"], 6)
+        self.assertEqual([b["a"] for b in r["pnl"]], ["bc1qc", "bc1qb", "bc1qe"])
+        self.assertEqual([b["pnl"] for b in r["pnl"]], [30_000.0, 20_000.0, 20_000.0])
+
     def test_board_rows_carry_balance_and_fund(self):
         self.move("bc1qa", 1, SAT, 600)
         self.con.execute("INSERT INTO btc_addr VALUES('bc1qa', 3, 250000000, ?)", (NOW,))
@@ -400,6 +412,27 @@ class ParamsTest(BtcBase):
             t.join()
         self.assertEqual(len(calls), 1)
         self.assertEqual(got, [{"ok": True, "n": 1}] * 3)
+
+    def test_failed_first_build_is_retried_in_half_a_minute(self):
+        # Годного ответа ещё нет, сборка не удалась: неудача живёт ~30 с,
+        # а не весь срок (у месяца — 5 минут).
+        store: dict = {}
+        r = api.cached_bg(store, "k", 300.0, lambda: {"ok": False, "error": "db"})
+        self.assertEqual(r, {"ok": False, "error": "db"})
+        self.assertGreaterEqual(time.monotonic() - store["k"][0], 269.0)
+        # Удачная — весь срок.
+        api.cached_bg(store, "ok", 300.0, lambda: {"ok": True})
+        self.assertLess(time.monotonic() - store["ok"][0], 5.0)
+
+    def test_empty_exchange_list_is_not_kept(self):
+        self.con.execute("DELETE FROM btc_labels")
+        self.con.commit()
+        self.assertEqual(btc._btc_ex_names(), frozenset())
+        self.assertNotIn("ex_names", btc._BTC)
+        self.con.execute("INSERT INTO btc_labels VALUES('3K', 'Kraken', 'seed', 0)")
+        self.con.commit()
+        self.assertEqual(btc._btc_ex_names(), frozenset({"Kraken"}))
+        self.assertIn("ex_names", btc._BTC)
 
 
 if __name__ == "__main__":
