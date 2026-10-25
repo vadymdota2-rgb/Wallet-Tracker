@@ -652,6 +652,34 @@ describe("институциональные потоки", () => {
     }
   });
 
+  test("таблица по неделям на телефоне — в карточке, неделя переносится после тире", async () => {
+    for (const range of ["365", "all"]) for (const width of [320, 360, 412]) {
+      const { ctx, page } = await open({ width, store: { "wt-etf-range": range } });
+      await ready(page);
+      await page.locator(".ef-tbl summary").click();
+      await page.locator(".ef-tbl tbody tr").first().waitFor();
+      const m = await page.evaluate(() => {
+        const box = (s: string) => document.querySelector(s)!.getBoundingClientRect();
+        const card = document.querySelector(".ef-tbl")!.parentElement!.getBoundingClientRect();
+        const th = document.querySelector<HTMLElement>(".ef-tbl tbody th")!;
+        return { card: card.right, details: box(".ef-tbl").right, wrap: box(".ef-tbl-w").right, table: box(".ef-tbl table").right,
+          head: sp0(document.querySelector(".ef-tbl thead th")!.textContent),
+          // Строк у даты — по разным высотам кусков (тире может рисоваться другим шрифтом — это не перенос).
+          spans: [...th.querySelectorAll("span")].map((x) => new Set([...x.getClientRects()].map((r) => Math.round(r.top))).size) };
+        function sp0(x: string | null) { return (x ?? "").trim(); }
+      });
+      const tag = `${range} ${width}`;
+      assert.equal(m.head, "Неделя", tag);
+      assert.ok(m.details <= m.card + 0.5 && m.wrap <= m.card + 0.5, `${tag}: ${JSON.stringify(m)}`);
+      // От 360 px таблица целиком в рамке; на 320 — листается внутри неё, страница на месте.
+      if (width >= 360) assert.ok(m.table <= m.wrap + 0.5, `${tag}: таблица шире рамки ${JSON.stringify(m)}`);
+      // Дата не рвётся посередине: каждая — одной строкой.
+      assert.deepEqual(m.spans, [1, 1], tag);
+      assert.deepEqual(await overflow(page), [], tag);
+      await ctx.close();
+    }
+  });
+
   test("арабский: справа налево, числа и даты целы", async () => {
     const { ctx, page, errors } = await open({ lang: "ar", width: 320 });
     await ready(page);

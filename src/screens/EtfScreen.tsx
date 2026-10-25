@@ -280,8 +280,9 @@ function FlowChart({ data, cum, zero, lang, sel, onSel, label }: {
 /** Те же столбцы цифрами — для читалки экрана и для тех, кому цифры удобнее полос. */
 function FlowTable({ view, cum, daily, lang }: { view: Bucket[]; cum: number[] | null; daily: boolean; lang: Lang }) {
   const [open, setOpen] = useState(false);
-  const when = (b: Bucket) => (daily ? dateStr(lang, b.a, { day: "numeric", month: "short", year: "numeric" })
-    : `${dateStr(lang, b.a, { day: "numeric", month: "short" })} — ${dateStr(lang, b.b, { day: "numeric", month: "short", year: "numeric" })}`);
+  /* Каждая дата неделимой: на узком экране неделя переносится после тире. */
+  const when = (b: Bucket) => (daily ? <span>{dateStr(lang, b.a, { day: "numeric", month: "short", year: "numeric" })}</span>
+    : <><span>{dateStr(lang, b.a, { day: "numeric", month: "short" })} —</span> <span>{dateStr(lang, b.b, { day: "numeric", month: "short", year: "numeric" })}</span></>);
   return (
     <details className="ef-tbl" onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}>
       <summary>{t(lang, "ef_tbl")}</summary>
