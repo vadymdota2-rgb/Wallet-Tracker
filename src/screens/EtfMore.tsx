@@ -16,7 +16,7 @@ import { num, usdWord } from "../lib/format";
 import { haptic } from "../lib/telegram";
 import { Card, Chips, SectionTitle } from "../components/ui";
 import { type BtcHolder } from "../lib/etf";
-import { dateStr, timeTicks } from "./FearGreedScreen";
+import { dateStr, timeTicks } from "./timeAxis";
 import { DN, UP, coinsShort, dateNb, flagOf, heightK, iso, money, tone, useWidth } from "./etfView";
 
 type Lang = Parameters<typeof t>[0];

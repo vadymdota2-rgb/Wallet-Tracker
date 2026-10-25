@@ -24,8 +24,8 @@ IMPORTS = {"__future__", "bisect", "contextlib", "http.client", "json", "math", 
 BANNED_CALLS = {"eval", "exec", "compile", "__import__", "input", "breakpoint", "globals", "locals", "vars",
                 "setattr", "delattr"}
 # Файлы и os — только у копии ответа на диске и только эти вызовы.
-FILE_FUNCS = {"_file", "_file_save", "_file_load"}
-OS_CALLS = {"path.join", "path.dirname", "makedirs", "replace", "remove", "getpid"}
+FILE_FUNCS = {"_file", "_file_save", "_file_load", "_sweep"}
+OS_CALLS = {"path.join", "path.dirname", "path.split", "path.getmtime", "makedirs", "replace", "remove", "getpid", "listdir"}
 # Источники, чьи условия не разрешают показывать их рыночные данные, и
 # источники, которые владелец проекта исключил.
 BANNED_SOURCES = re.compile(r"(?i)binance|coinbase|coingecko|coinpaprika|coinlore|defillama|kraken|cryptocompare")
@@ -125,7 +125,6 @@ class ServerPolicyTest(unittest.TestCase):
                 self.assertIsNone(BANNED_SOURCES.search(strip_comments(f.read())), path)
 
     def test_endpoint_takes_nothing_from_outside(self):
-        self.assertEqual(inspect.signature(fng.reply).parameters, {})
         self.assertEqual(inspect.signature(fng.fng_data).parameters, {})
 
     def test_opener_is_direct_and_strict(self):

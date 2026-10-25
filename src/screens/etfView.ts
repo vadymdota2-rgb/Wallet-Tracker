@@ -5,7 +5,7 @@
  */
 import { useLayoutEffect, useState, type RefObject } from "react";
 import { num, usdWord } from "../lib/format";
-import { dateStr } from "./FearGreedScreen";
+import { dateStr } from "./timeAxis";
 
 /* Потоки и активы фондов, цена дня — открытый набор TFTC под лицензией CC BY 4.0:
    условие — подпись источника со ссылкой и ссылка на лицензию рядом с

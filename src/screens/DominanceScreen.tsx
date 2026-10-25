@@ -33,7 +33,7 @@ import {
   seasonOf, series, thin, vsBtc, windowOf, type DomReply, type McapDay, type McapRange, type McapReply, type Range,
 } from "../lib/dom";
 import { Frame } from "./Screen";
-import { dateStr, timeTicks } from "./FearGreedScreen";
+import { dateStr, timeTicks } from "./timeAxis";
 import { heightK, useWidth } from "./etfView";
 import "./DominanceScreen.css";
 

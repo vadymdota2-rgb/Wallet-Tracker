@@ -85,7 +85,7 @@ PY = [
     ("    finally:\n        _busy.clear()", "    finally:\n        pass", "флаг фона снимается"),
     ("                _busy.clear()\n                _log(", "                pass\n                _log(", "флаг при сбое запуска потока"),
     ("            _st.err_at = time.monotonic()\n            hit = _st.hit", "            hit = _st.hit", "пауза после падения сборки"),
-    ('"now": _now()', '"now": 0', "now в ответе"),
+    ("born = time.monotonic() if hist else time.monotonic() - TTL + ERR_TTL", "born = time.monotonic()", "без цен — ответ ненадолго"),
     # Защита от атак через источник.
     ("return u.scheme in SCHEMES and u.hostname in HOSTS and", "return True or", "только https и известные адреса"),
     (" and not u.username and not u.password", "", "адрес с логином"),

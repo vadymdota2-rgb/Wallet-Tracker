@@ -36,7 +36,7 @@ import {
 import { Boundary } from "../components/Boundary";
 import { Frame } from "./Screen";
 import { CmeSection, HeldSection, Holders } from "./EtfMore";
-import { dateStr, timeTicks } from "./FearGreedScreen";
+import { dateStr, timeTicks } from "./timeAxis";
 import { CCBY_URL, DN, TFTC_URL, UP, coinsShort, dateNb, flagOf, heightK, iso, money, tone, useWidth } from "./etfView";
 import "./EtfScreen.css";
 

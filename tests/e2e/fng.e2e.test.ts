@@ -180,8 +180,10 @@ describe("Страх и жадность", () => {
     await chart.scrollIntoViewIfNeeded();
     const box = (await chart.boundingBox())!;
     // Начало истории (вся история — по умолчанию): цена там по недельным точкам.
-    const est = REAL.days.findIndex((d) => d[3] & 1);
-    const x = box.x + (est / (REAL.days.length - 1)) * box.width * ((360 - 54) / 360) + 1;
+    // Середина досчитанной недели: соседние дни тоже досчитаны — промах пальца на день не важен.
+    const est = REAL.days.findIndex((_, i) => REAL.days.slice(i - 2, i + 3).length === 5
+      && REAL.days.slice(i - 2, i + 3).every((d) => d[3] & 1));
+    const x = box.x + (est / (REAL.days.length - 1)) * (box.width - 54) + 1; // график в пикселях: справа 54 px под подписи
     await page.mouse.move(x, box.y + 40);
     const pop = page.locator(".fg-pop");
     await pop.waitFor();
@@ -215,6 +217,20 @@ describe("Страх и жадность", () => {
     assert.equal(sp(await pop.innerText()), sp(fmtDay(last[0])));
     await page.keyboard.press("Escape");
     assert.equal(await page.locator(".fg-pop").count(), 0);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("сервер ещё без цен: индекс есть, пустой панели цены и выводов о цене нет", async () => {
+    const bare = { ...REAL, days: REAL.days.map((d) => [d[0], d[1], 0, d[3] & 2]) };
+    const { ctx, page, errors } = await open({ reply: bare });
+    await ready(page);
+    assert.equal(sp(await page.locator(".fg-val").innerText()), String(last[1]));
+    assert.doesNotMatch(sp(await page.locator(".fg-date").innerText()), /BTC/);
+    const ticks = (await page.locator(".fg-plot .fg-tick").allInnerTexts()).map(sp);
+    assert.ok(!ticks.some((x) => x.includes("$")), ticks.join(" "));
+    assert.equal(await page.locator(".fg-plot .fg-ptl").count(), 1); // только «Индекс страха и жадности»
+    assert.equal(await page.locator(".sect", { hasText: I18N["fi_title"]!["ru"]! }).count(), 0);
     assert.deepEqual(errors, []);
     await ctx.close();
   });

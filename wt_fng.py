@@ -26,8 +26,10 @@
 «неделю назад» и «через 30 дней» по порядку дней.
 
 Ответ: {"ok": true, "days": [[день, индекс, цена, флаги], ...], "at": время
-сборки}; reply() добавляет now — время ответа. Тот же договор — FngReply в
-src/lib/fng.ts и образец tests/fixtures/fng.json.
+сборки} — один на всех, поэтому whale_api отдаёт его готовыми байтами с ETag
+(телефону с той же копией — «304 не изменилось»). Тот же договор — FngReply
+в src/lib/fng.ts и образец tests/fixtures/fng.json (в нём ещё now — время
+«сейчас» для тестов).
 
 Как у халвинга: устаревший ответ отдаётся сразу, свежий собирается в фоне
 одним потоком; все источники молчат — ERR_TTL источники не трогаем. После
@@ -121,8 +123,10 @@ HIST_MAX = 8 << 20
 LIVE_MAX = 4096
 # Сколько точек цены и дней индекса принимаем (с запасом на десятилетия).
 ROWS_MAX = 200_000
-# Файл копии ответа в папке кэша.
+# Файл копии ответа в папке кэша; недописанная копия старше TMP_AGE, с, —
+# мусор от прерванной записи.
 SAVED = "fng_days.json"
+TMP_AGE = 3600.0
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -164,7 +168,6 @@ class Reply(TypedDict):
     error: NotRequired[str]
     days: NotRequired[list[Day]]
     at: NotRequired[int]
-    now: NotRequired[int]
 
 
 @dataclass
@@ -447,13 +450,18 @@ def _build() -> Reply:
                 _st.ts, _st.px, _st.px_at = ts, px, time.monotonic()
         else:
             _log("mempool.space: нет истории цен")
+    hist = bool(ts)
     live = _live()
     if live and (not ts or live[0] > ts[-1]):
         ts, px = [*ts, live[0]], [*px, live[1]]
     old = {int(d[0]): (float(d[2]), int(d[3]) & F_EST) for d in old_days if d[2] > 0}
     res: Reply = {"ok": True, "days": _days(idx, ts, px, old), "at": _now()}
+    # Истории цен нет (mempool молчал, а прошлого ответа с ценами нет) —
+    # индекс отдаём, но ответ живёт только ERR_TTL: цены появятся через
+    # пару минут, а не через полчаса.
+    born = time.monotonic() if hist else time.monotonic() - TTL + ERR_TTL
     with _lock:
-        _st.hit = (time.monotonic(), res)
+        _st.hit = (born, res)
     _file_save(res)
     return res
 
@@ -528,10 +536,27 @@ def _bg() -> None:
         _busy.clear()
 
 
+def _sweep() -> None:
+    """Временные файлы копии, оставшиеся от прерванной записи (сервер
+    остановили посреди неё), — удалить: сами они не исчезнут."""
+    path = _file()
+    if not path:
+        return
+    folder, name = os.path.split(path)
+    with contextlib.suppress(OSError):
+        for f in os.listdir(folder or "."):
+            if f.startswith(name + ".") and f.endswith(".tmp"):
+                full = os.path.join(folder, f)
+                if time.time() - os.path.getmtime(full) > TMP_AGE:
+                    os.remove(full)
+
+
 def _warm() -> None:
-    """После перезапуска — копия с диска как устаревший ответ (один раз)."""
+    """После перезапуска — копия с диска как устаревший ответ (один раз);
+    заодно — уборка недописанных копий."""
     if _st.loaded or not _st.dir:
         return
+    _sweep()
     saved = _file_load()
     with _lock:
         _st.loaded = True
@@ -568,7 +593,3 @@ def fng_data() -> Reply:
             return _no_data()
         return build()
 
-
-def reply() -> Reply:
-    """Ответ для HTTP: now — время ответа (at — время сборки, оно до TTL старше)."""
-    return {**fng_data(), "now": _now()}

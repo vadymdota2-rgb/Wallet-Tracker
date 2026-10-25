@@ -638,7 +638,7 @@ _fg = read(f"{APP}/src/screens/FearGreedScreen.tsx")
 _fgl = read(f"{APP}/src/lib/fng.ts")
 _fgpy = read(f"{APP}/wt_fng.py")
 say("страх и жадность: вся история alternative.me с ценой BTC (mempool.space), две панели на одной оси времени",
-    "fng_data = wt_fng.fng_data" in api and "self._json(200, wt_fng.reply())" in api
+    "fng_data = wt_fng.fng_data" in api and 'self._json_public("fng", wt_fng.fng_data())' in api
     and 'FNG_URL = "https://api.alternative.me/fng/?limit=0&format=json"' in _fgpy
     and "function Gauge(" in _fg and "P2 = {" in _fg and '"fg_st_left"' in _fg and '"fg_since_then"' in _fg)
 
@@ -689,7 +689,7 @@ say("доминация и альтсезон — кеш и права: отве
     and "<CmcBy lang={lang} />" in read(f"{APP}/src/screens/DigestMore.tsx")
     and "test_channel_does_not_carry_coinmarketcap_numbers" in read(f"{APP}/tests/test_digest_sources.py")
     and "const NF = new Map<string, Intl.NumberFormat>();" in read(f"{APP}/src/lib/format.ts")
-    and "dtf(lang, { timeZone: \"UTC\", ...opts })" in read(f"{APP}/src/screens/FearGreedScreen.tsx"))
+    and "dtf(lang, { timeZone: \"UTC\", ...opts })" in read(f"{APP}/src/screens/timeAxis.ts"))
 say("доминация и альтсезон — повторная ревизия: ответ источника читается по кускам с общим сроком (не держит сборку часами), копии с диска читаются один раз, полночь не роняет бюджет кредитов, USDT не больше 100 − BTC; графики ставят точки по датам (неделя и день вперемешку не расходятся с подписями лет)",
     _dms.count("r.read1(") == 1 and _mcs.count("r.read1(") == 1 and "if time.monotonic() > end:" in _dms and "if time.monotonic() > end:" in _mcs
     and "_st.loaded = True" in _dms and "_st.loaded = True" in _mcs and "_spent().get(day, 0)" in _mcs

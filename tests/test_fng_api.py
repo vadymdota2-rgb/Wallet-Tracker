@@ -227,6 +227,16 @@ class BuildTest(unittest.TestCase):
         self.assertTrue(r["ok"])
         self.assertTrue(all(d[2] == 0 for d in r["days"]))
 
+    def test_no_price_history_means_a_short_lived_answer(self):
+        r, _ = build({"historical-price": None})
+        self.assertTrue(r["ok"])
+        age = time.monotonic() - fng._st.hit[0]
+        self.assertGreater(age, fng.TTL - fng.ERR_TTL - 5)  # устареет через ERR_TTL
+        self.assertLess(age, fng.TTL - fng.ERR_TTL + 5)
+        fresh()
+        build()
+        self.assertLess(time.monotonic() - fng._st.hit[0], 5)  # с историей — полный TTL
+
     def test_implausible_prices_are_dropped(self):
         good, _ = build()
         fresh()
@@ -263,11 +273,20 @@ class CacheTest(unittest.TestCase):
         self.addCleanup(lambda: [os.unlink(os.path.join(self.tmp, f)) for f in os.listdir(self.tmp)]
                         and os.rmdir(self.tmp))
 
-    def test_reply_adds_now(self):
+    def test_route_serves_ready_bytes_with_etag(self):
+        # /api/fng — один ответ на всех: готовые байты и «304 не изменилось».
+        import whale_api as api  # noqa: PLC0415 — тяжёлый модуль, нужен одному тесту
+        sys.path.insert(0, os.path.join(ROOT, "tests"))
+        from test_dom_http import Fake  # noqa: PLC0415
+        api._PUBLIC.clear()
         with mock.patch.object(fng, "_fetch", fake.network()), mock.patch.object(fng, "_now", lambda: fake.NOW):
-            r = fng.reply()
-        self.assertEqual(r["now"], fake.NOW)
-        self.assertNotIn("now", fng._st.hit[1])
+            obj = fng.fng_data()
+        first = Fake().get("fng", obj)
+        self.assertEqual(json.loads(first.h.wfile.getvalue()), obj)
+        again = Fake(first.hdr["ETag"]).get("fng", fng.fng_data())
+        self.assertEqual((again.code, again.h.wfile.getvalue()), (304, b""))
+        with open(os.path.join(ROOT, "whale_api.py"), encoding="utf-8") as f:
+            self.assertIn('self._json_public("fng", wt_fng.fng_data())', f.read())
 
     def test_fresh_answer_is_served_from_memory(self):
         net = fake.network()
@@ -367,6 +386,24 @@ class CacheTest(unittest.TestCase):
                     break
                 time.sleep(0.01)
         self.assertTrue(any("alternative.me" in c for c in net.calls))  # копия — как устаревшая: свежий в фоне
+
+    def test_old_unfinished_copies_are_swept(self):
+        fng.set_cache_dir(self.tmp)
+        self.addCleanup(fng.set_cache_dir, None)
+        old = os.path.join(self.tmp, fng.SAVED + ".123.456.tmp")
+        new = os.path.join(self.tmp, fng.SAVED + ".789.1.tmp")
+        other = os.path.join(self.tmp, "dom.json.1.tmp")
+        for p in (old, new, other):
+            with open(p, "w", encoding="utf-8") as f:
+                f.write("{")
+        os.utime(old, (time.time() - fng.TMP_AGE - 10,) * 2)
+        os.utime(other, (time.time() - fng.TMP_AGE - 10,) * 2)
+        with mock.patch.object(fng, "_fetch", fake.network({"alternative.me": None})), \
+                mock.patch.object(fng, "_log", lambda m: None):
+            fng.fng_data()
+        self.assertFalse(os.path.exists(old))
+        self.assertTrue(os.path.exists(new))  # может писаться прямо сейчас
+        self.assertTrue(os.path.exists(other))  # чужой файл не трогаем
 
     def test_broken_disk_copy_is_ignored(self):
         fng.set_cache_dir(self.tmp)

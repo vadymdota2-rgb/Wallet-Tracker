@@ -10003,11 +10003,12 @@ etf.set_cache_file(os.path.join(CACHE_DIR, "etf.json"))
 wt_dom.set_cache_dir(CACHE_DIR)
 wt_fng.set_cache_dir(CACHE_DIR)
 wt_mcap.set_cache_dir(CACHE_DIR)
-# Прежняя доминация (CoinMarketCap) держала копию в dom-<ключ>.json — её
-# больше никто не читает: убираем, чтобы не лежала на диске вечно.
+# Прежняя доминация (CoinMarketCap) держала копию в dom-<ключ>.json, прежний
+# «Страх и жадность» (с ценой Binance) — в fng-<ключ>.json; их больше никто
+# не читает: убираем, чтобы не лежали на диске вечно.
 try:
     for _old in os.listdir(CACHE_DIR):
-        if _old.startswith("dom-") and _old.endswith(".json"):
+        if _old.startswith(("dom-", "fng-")) and _old.endswith(".json"):
             os.remove(os.path.join(CACHE_DIR, _old))
 except OSError:
     pass
@@ -15488,7 +15489,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Max-Age", "600")
 
     def _json_public(self, name: str, obj: dict):
-        """Ответ, одинаковый для всех (/api/dom, /api/mcap): тот же объект
+        """Ответ, одинаковый для всех (/api/dom, /api/mcap, /api/fng): тот же объект
         из кэша модуля не кодируется заново на каждый запрос (сотня КБ JSON —
         миллисекунды процессора), а у телефона с той же копией (If-None-Match)
         — «304 не изменилось» без тела. Личных данных в таких ответах нет."""
@@ -15850,7 +15851,8 @@ class Handler(BaseHTTPRequestHandler):
                         pass
                 return
             if path in ("/fng", "/api/fng"):
-                self._json(200, wt_fng.reply())
+                # Один ответ для всех, меняется раз в полчаса: готовые байты и ETag.
+                self._json_public("fng", wt_fng.fng_data())
                 return
             if path in ("/halving", "/api/halving"):
                 self._json(200, halving.reply())

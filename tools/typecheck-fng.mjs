@@ -9,7 +9,7 @@
 import { spawnSync } from "node:child_process";
 
 const MODULE = [
-  "src/lib/fng.ts", "src/screens/FearGreedScreen.tsx", "src/screens/FearGreedInsights.tsx",
+  "src/lib/fng.ts", "src/screens/FearGreedScreen.tsx", "src/screens/FearGreedInsights.tsx", "src/screens/timeAxis.ts",
   "tests/fng.test.ts", "tests/fng.props.test.ts", "tests/e2e/fng.e2e.test.ts",
 ];
 const FLAGS = ["--exactOptionalPropertyTypes", "--noImplicitOverride", "--noPropertyAccessFromIndexSignature", "--noImplicitReturns"];

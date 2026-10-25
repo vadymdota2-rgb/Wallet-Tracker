@@ -24,7 +24,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
-import { dtf, num, pct, px } from "../lib/format";
+import { num, pct, px } from "../lib/format";
 import { haptic, openExternal } from "../lib/telegram";
 import { fetchFng, peekFng } from "../lib/api";
 import { Card, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
@@ -33,6 +33,8 @@ import {
   yearExtremes, zoneKey, zoneOf, type FngDay, type FngReply,
 } from "../lib/fng";
 import { Frame } from "./Screen";
+import { heightK, useWidth } from "./etfView";
+import { dateStr, timeTicks } from "./timeAxis";
 import { FearGreedInsights } from "./FearGreedInsights";
 import "./FearGreedScreen.css";
 
@@ -51,14 +53,6 @@ const DAY = 86_400;
 const iso = (x: string | number) => `\u2066${x}\u2069`;
 /** Цена дня: досчитанная между недельными точками — со знаком «≈». */
 const pxOf = (d: Day) => `${d[3] & F_EST ? "≈ " : ""}${px(d[2])}`;
-
-export function dateStr(lang: Lang, ts: number, opts: Intl.DateTimeFormatOptions): string {
-  try {
-    return dtf(lang, { timeZone: "UTC", ...opts }).format(new Date(ts * 1000));
-  } catch {
-    return new Date(ts * 1000).toISOString().slice(0, 10);
-  }
-}
 
 /** Шкала-полукруг: пять зон, стрелка на значении, число и зона под ней. */
 function Gauge({ v, lang }: { v: number; lang: Lang }) {
@@ -91,12 +85,29 @@ function Gauge({ v, lang }: { v: number; lang: Lang }) {
   );
 }
 
-const W = 360;
+/** Под подписи оси справа, px. */
 const AXIS = 50;
-const PW = W - AXIS - 4;
-const P1 = { y: 6, h: 168 };
-const P2 = { y: 188, h: 92 };
-const H = P2.y + P2.h + 18;
+
+/**
+ * Размеры графика в настоящих пикселях ширины w: подписи одного размера на
+ * телефоне, планшете и компьютере, а высота растёт с шириной, но график
+ * целиком помещается по высоте окна (телефон боком).
+ */
+function geom(w: number, withPx: boolean) {
+  const k = heightK(w, withPx ? 300 : 120);
+  // Цены в окне нет ни за один день (сервер ещё не получил её) — панели
+  // цены нет: пустая шкала «$1–$2» хуже, чем один индекс.
+  const P1 = { y: 6, h: withPx ? Math.round(168 * k) : 0 };
+  const P2 = { y: withPx ? P1.y + P1.h + 14 : 6, h: Math.round(92 * k) };
+  return { W: w, PW: w - AXIS - 4, P1, P2, H: P2.y + P2.h + 18 };
+}
+
+/** Деления времени: не теснее одного на 64 px. */
+function ticksOf(lang: Lang, a: number, b: number, pw: number) {
+  const all = timeTicks(lang, a, b);
+  const step = Math.max(1, Math.ceil(all.length / Math.max(3, Math.floor(pw / 64))));
+  return all.filter((_, i) => (all.length - 1 - i) % step === 0);
+}
 
 function priceTicks(lo: number, hi: number, log: boolean): number[] {
   if (log) {
@@ -115,51 +126,33 @@ function priceTicks(lo: number, hi: number, log: boolean): number[] {
   return out;
 }
 
-export function timeTicks(lang: Lang, a: number, b: number): { t: number; label: string }[] {
-  const span = (b - a) / 86400;
-  const out: { t: number; label: string }[] = [];
-  const d0 = new Date(a * 1000);
-  const y0 = d0.getUTCFullYear();
-  const y1 = new Date(b * 1000).getUTCFullYear();
-  if (span > 800) {
-    for (let y = y0 + 1; y <= y1; y++) out.push({ t: Date.UTC(y, 0, 1) / 1000, label: String(y) });
-  } else if (span > 200) {
-    for (let y = y0; y <= y1; y++) for (const m of [0, 3, 6, 9]) {
-      const ts = Date.UTC(y, m, 1) / 1000;
-      if (ts > a && ts < b) out.push({ t: ts, label: m === 0 ? String(y) : dateStr(lang, ts, { month: "short" }) });
-    }
-  } else if (span > 45) {
-    for (let y = y0; y <= y1; y++) for (let m = 0; m < 12; m++) {
-      const ts = Date.UTC(y, m, 1) / 1000;
-      if (ts > a && ts < b) out.push({ t: ts, label: dateStr(lang, ts, { month: "short" }) });
-    }
-  } else {
-    for (let ts = a + 3 * 86400; ts < b; ts += 7 * 86400) out.push({ t: ts, label: dateStr(lang, ts, { day: "numeric", month: "short" }) });
-  }
-  return out;
-}
-
 /** Линия по дням, разрезанная на куски одного цвета — по зоне дня; у цены
- *  ещё и по точности (досчитанная — бледнее). */
-function runs(days: readonly Day[], xOf: (i: number) => number, yOf: (d: Day) => number, est: boolean) {
+ *  ещё и по точности (досчитанная — бледнее). День, где yOf — null (цены
+ *  нет), рвёт линию: падения в ноль на графике не бывает. */
+function runs(days: readonly Day[], xOf: (i: number) => number, yOf: (d: Day) => number | null, est: boolean) {
   const out: { c: string; e: boolean; pts: string }[] = [];
   let cur: { c: string; e: boolean; pts: string[] } | null = null;
+  const close = () => {
+    if (cur && cur.pts.length > 1) out.push({ c: cur.c, e: cur.e, pts: cur.pts.join(" ") });
+    cur = null;
+  };
   days.forEach((d, i) => {
+    const y = yOf(d);
+    if (y === null) {
+      close();
+      return;
+    }
     const c = colorOf(d[1]);
     const e = est && (d[3] & F_EST) !== 0;
-    const p = `${xOf(i).toFixed(1)},${yOf(d).toFixed(1)}`;
-    if (!cur || cur.c !== c || cur.e !== e) {
-      if (cur) {
-        cur.pts.push(p);
-        out.push({ c: cur.c, e: cur.e, pts: cur.pts.join(" ") });
-      }
-      cur = { c, e, pts: [p] };
-    } else {
+    const p = `${xOf(i).toFixed(1)},${y.toFixed(1)}`;
+    if (cur && (cur.c !== c || cur.e !== e)) {
       cur.pts.push(p);
+      close();
     }
+    if (!cur) cur = { c, e, pts: [] };
+    cur.pts.push(p);
   });
-  const last = cur as { c: string; e: boolean; pts: string[] } | null;
-  if (last) out.push({ c: last.c, e: last.e, pts: last.pts.join(" ") });
+  close();
   return out;
 }
 
@@ -177,10 +170,13 @@ function Chart({ days, lang, sel, onSel }: {
     lo = Math.min(lo, d[2]);
     hi = Math.max(hi, d[2]);
   }
-  if (!hi) {
+  const withPx = hi > 0;
+  if (!withPx) {
     lo = 1;
     hi = 2;
   }
+  const svgRef = useRef<SVGSVGElement>(null);
+  const { W, PW, P1, P2, H } = geom(useWidth(svgRef), withPx);
   const log = hi / Math.max(1, lo) > 4;
   const f = (v: number) => (log ? Math.log(v) : v);
   const pLo = f(lo * (log ? 0.92 : 0.98));
@@ -193,13 +189,12 @@ function Chart({ days, lang, sel, onSel }: {
   const b = days[n - 1]?.[0] ?? 1;
   const xOfT = (ts: number) => ((ts - a) / Math.max(1, b - a)) * PW;
 
-  const priceRuns = useMemo(() => runs(days.filter((d) => d[2] > 0).length ? days : [], xOf,
-    (d) => yPx(d[2] > 0 ? d[2] : lo), true), [days]);
-  const idxRuns = useMemo(() => runs(days, xOf, (d) => yIx(d[1]), false), [days]);
+  /* Линии — один раз на данные и размер, а не на каждое движение пальца. */
+  const priceRuns = useMemo(() => runs(days, xOf, (d) => (d[2] > 0 ? yPx(d[2]) : null), true), [days, W, P1.h]);
+  const idxRuns = useMemo(() => runs(days, xOf, (d) => yIx(d[1]), false), [days, W, P2.y, P2.h]);
   const ticks = useMemo(() => priceTicks(lo, hi, log), [lo, hi, log]);
-  const tt = useMemo(() => timeTicks(lang, a, b), [lang, a, b]);
+  const tt = useMemo(() => ticksOf(lang, a, b, PW), [lang, a, b, PW]);
 
-  const svgRef = useRef<SVGSVGElement>(null);
   const pick = (clientX: number) => {
     const el = svgRef.current;
     if (!el) return;
@@ -220,6 +215,7 @@ function Chart({ days, lang, sel, onSel }: {
       className="fg-svg"
       viewBox={`0 0 ${W} ${H}`}
       width="100%"
+      height={H}
       role="img"
       aria-label={t(lang, "fg_title")}
       onPointerDown={(e) => pick(e.clientX)}
@@ -229,7 +225,7 @@ function Chart({ days, lang, sel, onSel }: {
       onPointerLeave={() => onSel(null)}
       onContextMenu={(e) => e.preventDefault()}
     >
-      <rect x={0} y={P1.y} width={PW} height={P1.h} className="fg-bg" />
+      {withPx ? <rect x={0} y={P1.y} width={PW} height={P1.h} className="fg-bg" /> : null}
       <rect x={0} y={P2.y} width={PW} height={P2.h} className="fg-bg" />
       {/* Зоны индекса — полосами на фоне нижней панели. */}
       {ZONES.map((z) => {
@@ -244,19 +240,19 @@ function Chart({ days, lang, sel, onSel }: {
           <text x={xOfT(x.t)} y={H - 4} textAnchor="middle" className="fg-tick">{x.label}</text>
         </g>
       ))}
-      {ticks.map((v) => (
+      {withPx ? ticks.map((v) => (
         <g key={v}>
           <line x1={0} x2={PW} y1={yPx(v)} y2={yPx(v)} className="fg-grid" />
           <text x={W - 2} y={yPx(v) + 3.5} textAnchor="end" className="fg-tick">{px(v).replace(/[,.]\d+$/, "")}</text>
         </g>
-      ))}
+      )) : null}
       {[25, 50, 75].map((v) => (
         <g key={v}>
           <line x1={0} x2={PW} y1={yIx(v)} y2={yIx(v)} className="fg-grid" />
           <text x={W - 2} y={yIx(v) + 3.5} textAnchor="end" className="fg-tick">{v}</text>
         </g>
       ))}
-      <text x={4} y={P1.y + 11} className="fg-ptl">{t(lang, "fg_price")}{log ? ` · ${t(lang, "fg_log")}` : ""}</text>
+      {withPx ? <text x={4} y={P1.y + 11} className="fg-ptl">{t(lang, "fg_price")}{log ? ` · ${t(lang, "fg_log")}` : ""}</text> : null}
       <text x={4} y={P2.y + 11} className="fg-ptl">{t(lang, "fg_index")}</text>
 
       {priceRuns.map((r, i) => <polyline key={`p${i}`} points={r.pts} stroke={r.c} className={r.e ? "fg-line est" : "fg-line"} />)}
@@ -574,7 +570,8 @@ export function FearGreedScreen() {
             })}
           </Card>
 
-          <FearGreedInsights lang={lang} days={all} />
+          {/* Выводы — про цену после настроения: без цен их нет (а не «×0,00»). */}
+          {all.some((d) => d[2] > 0) ? <FearGreedInsights lang={lang} days={all} /> : null}
 
           <details className="lq-how">
             <summary>{t(lang, "fg_how")}</summary>
