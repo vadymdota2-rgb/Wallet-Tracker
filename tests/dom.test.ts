@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  CLOCK_LAG, MCAP_FROM, MIN_BASKET, byWeek, nearestIdx, PX_FROM, STALE_DAYS, mcapAgo, mcapWindow, rebase, shareDelta, validMcap, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, windowOf,
+  CLOCK_LAG, MCAP_FROM, MIN_BASKET, byWeek, nearestIdx, PX_FROM, STALE_DAYS, mcapAgo, mcapWindow, rebase, shareDelta, validMcap, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, vsBtc, windowOf,
   type DomDay, type McapDay,
 } from "../src/lib/dom.ts";
 
@@ -265,4 +265,14 @@ test("nearestIdx: ближайшая по времени точка, и там, 
   assert.equal(nearestIdx(ts, 99), 4);
   assert.equal(nearestIdx([5], 1), 0);
   assert.equal(nearestIdx([], 1), -1);
+});
+
+test("vsBtc: монета, упавшая почти до нуля (−100 % после округления), не ломает полосы", () => {
+  assert.equal(vsBtc(10, 10), 0);
+  assert.ok(vsBtc(50, 0) > 0 && vsBtc(-50, 0) < 0);
+  const crash = vsBtc(-100, 20);
+  assert.ok(Number.isFinite(crash) && crash < vsBtc(-99, 20));
+  // Ширина полосы — доля от лучшей: числа, а не NaN.
+  const span = Math.max(0.01, ...[-100, 30, 5].map((p) => Math.abs(vsBtc(p, 20))));
+  for (const p of [-100, 30, 5]) assert.ok(Number.isFinite(vsBtc(p, 20) / span));
 });

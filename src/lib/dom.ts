@@ -295,6 +295,17 @@ export function windowOf(s: [number, number][], range: Range): [number, number][
   return s.filter((p) => p[0] > last[0] - Number(range) * DAY);
 }
 
+/**
+ * Рост монеты против биткоина за то же время, в логарифме (0 — как биткоин):
+ * полосы списка «монеты против биткоина». Рост приходит с сервера округлённым
+ * до сотых процента — монета, упавшая на 99,996 % и больше, приходит как
+ * −100 %, и логарифм нуля давал −∞: ширины всех полос становились NaN, и
+ * список рисовался пустым. Остаток не меньше миллионной.
+ */
+export function vsBtc(p: number, btc: number): number {
+  return Math.log(Math.max(1e-6, 1 + p / 100) / Math.max(1e-6, 1 + btc / 100));
+}
+
 /** Монеты против биткоина: обогнали и отстали за 90 дней. */
 export function beat(coins: [string, number][], btc90: number): { up: number; dn: number } {
   const up = coins.filter((c) => c[1] > btc90).length;

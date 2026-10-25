@@ -1115,6 +1115,11 @@ say("альтсезон, ревизия: монета, пропавшая из �
     and "test_coin_gone_from_the_list_keeps_its_past" in read(f"{APP}/tests/test_dom.py")
     and "else timer = window.setTimeout(() => setMcapRetry((n) => n + 1), FAIL_RETRY_MS);" in read(f"{APP}/src/screens/DominanceScreen.tsx")
     and "}, [retry, mcapRetry]);" in read(f"{APP}/src/screens/DominanceScreen.tsx"))
+_dms = read(f"{APP}/src/screens/DominanceScreen.tsx")
+say("альтсезон, повторная ревизия: монета −100 % не ломает полосы «монеты против биткоина» (vsBtc); открытый экран сам берёт ответ свежее часа",
+    "export function vsBtc(p: number, btc: number): number {" in read(f"{APP}/src/lib/dom.ts")
+    and "const rel = (p: number) => vsBtc(p, btc);" in _dms and "const id = window.setInterval(back, 5 * 60_000);" in _dms
+    and "vsBtc: монета, упавшая почти до нуля" in read(f"{APP}/tests/dom.test.ts"))
 say("bitcoin, повторная ревизия: алерты только о свежих блоках (догонка простоя не шлёт вчерашние сделки), время блока не из будущего, дробные числа узла без UB; дайджест без раздела биткоина, пока сканер стоит",
     "constexpr long long ALERT_MAX_AGE_SEC = 3600;" in _ws_btc and "nowSec() - alerts_.front().ts > ALERT_MAX_AGE_SEC" in _ws_btc
     and "b.ts > nowSec() + 7200" in _ws_btc and "return d > -9e18 && d < 9e18 ? static_cast<long long>(d) : 0;" in _ws_btc

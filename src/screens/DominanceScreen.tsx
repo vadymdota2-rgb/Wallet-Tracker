@@ -30,7 +30,7 @@ import { Card, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui
 import { CmcBy } from "../components/CmcBy";
 import {
   DOM_TTL_MS, MCAP_RANGES, RANGES, STALE_DAYS, ago, altStats, beat, byWeek, change, daysOld, ebStats, everyNth, mcapAgo, mcapWindow, nearestIdx, rebase,
-  seasonOf, series, thin, windowOf, type DomReply, type McapDay, type McapRange, type McapReply, type Range,
+  seasonOf, series, thin, vsBtc, windowOf, type DomReply, type McapDay, type McapRange, type McapReply, type Range,
 } from "../lib/dom";
 import { Frame } from "./Screen";
 import { dateStr, timeTicks } from "./FearGreedScreen";
@@ -301,7 +301,7 @@ function Top({ coins, btc, lang }: { coins: [string, number][]; btc: number; lan
   const { up, dn } = beat(coins, btc);
   /* Бары — рост относительно биткоина, в логарифме: +5000% не должны
      сплющить остальных. Центр — сам биткоин. */
-  const rel = (p: number) => Math.log((1 + p / 100) / (1 + btc / 100));
+  const rel = (p: number) => vsBtc(p, btc);
   /* Длина — корень из доли от лучшей: одна монета с +5000% не сжимает
      остальных в точку, а порядок полос всегда совпадает с порядком чисел. */
   const span = useMemo(() => Math.max(0.01, ...coins.map((c) => Math.abs(rel(c[1])))), [coins, btc]);
@@ -768,12 +768,19 @@ export function DominanceScreen() {
       window.clearTimeout(timer);
     };
   }, [retry, mcapRetry]);
+  /* Ответу больше часа — свежий: и когда вернулись в приложение, и когда
+     экран просто открыт дольше часа (Telegram держит его сколько угодно, и
+     раньше там так и стояли старые цифры). */
   useEffect(() => {
     const back = () => {
       if (document.visibilityState === "visible" && got.current && Date.now() - got.current > DOM_TTL_MS) setRetry((n) => n + 1);
     };
     document.addEventListener("visibilitychange", back);
-    return () => document.removeEventListener("visibilitychange", back);
+    const id = window.setInterval(back, 5 * 60_000);
+    return () => {
+      document.removeEventListener("visibilitychange", back);
+      window.clearInterval(id);
+    };
   }, []);
 
   const pickRange = (r: Range) => {
