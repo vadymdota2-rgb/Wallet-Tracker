@@ -1063,6 +1063,11 @@ say("wt_btc, ревизия: цена Coinbase проверяется (не об
     and '/ (int(r["psats"]) / 1e8), 2) if r["psats"] else 0' in btcpy
     and "test_big_order_price_counts_only_moves_that_have_a_price" in read(f"{APP}/tests/test_btc_stale.py")
     and "test_spot_price_answer_is_checked_and_asked_once_a_minute" in read(f"{APP}/tests/test_btc_stale.py"))
+say("wt_btc: полные тесты (потоки, крупные ордера, транзит, чистка, рейтинг, итог кошелька, карточка, написание, параметры) и мутанты — все убиты",
+    os.path.isfile(f"{APP}/tests/test_btc.py") and "BT = [" in read(f"{APP}/tools/mutate-etf.py")
+    and '+ run(f"{ROOT}/wt_btc.py", [sys.executable, "-m", "unittest", "tests.test_btc"' in read(f"{APP}/tools/mutate-etf.py")
+    and "len(DMT) + len(BT) - len(EQUIV)" in read(f"{APP}/tools/mutate-etf.py")
+    and "wt_btc.py tests/test_btc.py tests/test_btc_stale.py" in _ci)
 say("bitcoin, повторная ревизия: алерты только о свежих блоках (догонка простоя не шлёт вчерашние сделки), время блока не из будущего, дробные числа узла без UB; дайджест без раздела биткоина, пока сканер стоит",
     "constexpr long long ALERT_MAX_AGE_SEC = 3600;" in _ws_btc and "nowSec() - alerts_.front().ts > ALERT_MAX_AGE_SEC" in _ws_btc
     and "b.ts > nowSec() + 7200" in _ws_btc and "return d > -9e18 && d < 9e18 ? static_cast<long long>(d) : 0;" in _ws_btc

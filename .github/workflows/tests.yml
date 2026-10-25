@@ -68,7 +68,7 @@ jobs:
         run: >-
           pipx run ruff==0.15.8 check --target-version py310
           --select E,F,W,B,UP,SIM,PL,RUF,S,BLE,I --ignore E501,PLR2004,RUF001,RUF002,RUF003,S310,S603,S607,S608,PLR0913
-          wt_btc.py tests/test_btc_stale.py
+          wt_btc.py tests/test_btc.py tests/test_btc_stale.py
       - name: Строгие типы Python (mypy --strict)
         run: >-
           pipx run mypy==1.11.2 --strict --python-version 3.11 wt_halving.py wt_etf.py wt_treasury.py wt_dom.py wt_mcap.py wt_btc.py

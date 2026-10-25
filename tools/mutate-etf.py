@@ -1,4 +1,4 @@
-"""Мутационная проверка «Институциональных потоков» и «Доминации и альтсезона»: python3 tools/mutate-etf.py
+"""Мутационная проверка «Институциональных потоков», «Доминации и альтсезона» и биткоина (wt_btc): python3 tools/mutate-etf.py
 
 Как у халвинга: портим код по одному месту (граница, знак, константа,
 защита) и гоняем тесты. Убитая мутация — тесты заметили порчу; выжившая —
@@ -13,7 +13,10 @@ from concurrent.futures import ThreadPoolExecutor
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Эквивалентные (не меняют ничего наблюдаемого) — в счёт не идут: «монеты
 # дня без цены» — цена дня либо 0, либо от PX_MIN, отрицательной не бывает.
-EQUIV = {"монеты дня без цены"}
+# «без покупок — не трейдер» (wt_btc): покупка без цены в итог не попадает
+# (рейтинг и кошелёк берут только движения с ценой), так что «нет покупок»
+# и «нет вложенного» — одно и то же; проверка покупок оставлена от деления.
+EQUIV = {"монеты дня без цены", "без покупок — не трейдер"}
 TS = [
     # Проверка ответа.
     ("7 * DAY, now + 2 * DAY) || ts % DAY !== 0 || ts <= prev)", "7 * DAY, now + 2 * DAY) || ts <= prev)", "день — с начала суток"),
@@ -305,6 +308,64 @@ AP = [
 ]
 
 
+# Биткоин-часть сервера (wt_btc.py): потоки бирж, крупные ордера, рейтинг, кошелёк.
+BT = [
+    # Чистка досок.
+    ('parts = ["NOT EXISTS (SELECT 1 FROM btc_labels l WHERE l.address = m.wallet)"]', "parts = [\"1\"]", "адрес биржи — не трейдер"),
+    ("s.txs >= {BTC_SERVICE_TXS})", "s.txs > {BTC_SERVICE_TXS})", "сервис — от тысячи транзакций"),
+    ('            svc = f"({svc} AND NOT EXISTS (SELECT 1 FROM btc_watch w WHERE w.address = m.wallet))"\n', "", "кошелёк базы — не сервис"),
+    ("AND fund NOT LIKE '#%'", "AND 1", "группа без имени — без метки фонда"),
+    ('out[r["address"]]["base"] = True', 'out[r["address"]]["base"] = False', "кошелёк базы помечен"),
+    ('bal=round(int(r["bal_sats"] or 0) / 1e8, 4)', 'bal=round(int(r["bal_sats"] or 0) / 1e9, 4)', "остаток в биткоинах"),
+    # Цена.
+    ("if r and now() - int(r[\"ts\"] or 0) < 7200:", "if r:", "старая цена блока — не цена"),
+    ("if r and now() - int(r[\"ts\"] or 0) < 7200:", "if r and now() - int(r[\"ts\"] or 0) < 7000:", "блок моложе двух часов — свежий"),
+    ("return p if math.isfinite(p) and 1000 < p < 10_000_000 else 0.0", "return p", "цена Coinbase проверяется"),
+    ('cached_small(_BTC, "spot", 60.0, _spot_fetch)', "_spot_fetch()", "Coinbase — раз в минуту"),
+    # Потоки бирж.
+    ("            since = t - sec\n", "            since = t - sec - 3600\n", "окно потока — ровно его длина"),
+    ('"net": round(tout - tin, 4)', '"net": round(tin - tout, 4)', "чистый вывод — вывод минус завод"),
+    ("key=lambda e: -(e[\"in\"] + e[\"out\"]))", "key=lambda e: e[\"in\"] + e[\"out\"])", "крупные биржи первыми"),
+    ("            start = max(since, int(first or since))\n", "            start = since\n", "линия — от первого блока"),
+    ('"full": bool(first and first <= since + 600),\n            }', '"full": True,\n            }', "неполное окно помечено"),
+    ('"labels": int(labels or 0)', '"labels": 0', "число адресов бирж"),
+    # Крупные ордера.
+    ('keep = {1: "w.s < 0.9 * w.b", 2: "w.b < 0.9 * w.s"}', 'keep = {1: "1", 2: "w.b < 0.9 * w.s"}', "транзит — не покупатель"),
+    ('keep = {1: "w.s < 0.9 * w.b", 2: "w.b < 0.9 * w.s"}', 'keep = {1: "w.s < 0.9 * w.b", 2: "1"}', "транзит — не продавец"),
+    ("FROM btc_moves WHERE ts >= ? AND ex != '' GROUP BY wallet) \")", "FROM btc_moves WHERE ts >= ? GROUP BY wallet) \")", "перевод без биржи — не транзит"),
+    ("m.ts >= ? AND m.kind = ? AND m.ex != '' AND m.sats >= ?", "m.ts >= ? AND m.kind = ? AND m.ex != '' AND m.sats > ?", "порог включительно"),
+    ('where = where_all + (" AND m.ex = ?" if ex else "")', "where = where_all", "фильтр биржи"),
+    ("ORDER BY m2.sats DESC LIMIT 1) txid", "ORDER BY m2.sats LIMIT 1) txid", "ссылка — на самую крупную транзакцию"),
+    ("GROUP BY m.wallet, m.ex ORDER BY sats DESC, ts DESC LIMIT ?", "GROUP BY m.wallet, m.ex ORDER BY ts DESC LIMIT ?", "крупнейшие строки первыми"),
+    ("WHERE {where_all.format(keep=keep[kind])} \"", "WHERE {where.format(keep=keep[kind])} \"", "список бирж — без фильтра"),
+    ("COUNT(DISTINCT m.wallet) w", "COUNT(m.wallet) w", "разные кошельки биржи"),
+    ("    if ex and ex not in _btc_ex_names():\n        ex = \"\"\n", "", "фильтр — только биржи разметки"),
+    ('    win = win if win in BIG_WINDOWS else "24h"', "    win = win if win in BIG_WINDOWS else \"7d\"", "окно по умолчанию — сутки"),
+    ("    min_btc = min_btc if min_btc in BTC_BIG_MIN else BTC_BIG_MIN[0]", "    min_btc = min_btc if min_btc else BTC_BIG_MIN[0]", "порог — из списка"),
+    # Итог кошелька.
+    ("            if p and p < px:", "            if p and p <= px:", "в плюсе — строго дешевле"),
+    ("                s = min(q, held)", "                s = q", "продано не больше запаса"),
+    ("                realized += s * (p - avg)", "                realized += s * (p - avg) * 2", "зафиксированный результат"),
+    ("    pnl = realized + (held * px - cost if px else 0.0)", "    pnl = realized + (held * px - cost)", "без цены — без открытого результата"),
+    ("    if not buys or not invested:\n        return None", "    if not invested:\n        return None", "без покупок — не трейдер"),
+    ('"pnl": round(pnl, 2) + 0.0,', '"pnl": round(pnl, 2),', "минус у нуля"),
+    ('"ex": max(exs, key=lambda k: exs[k]) if exs else ""', '"ex": min(exs, key=lambda k: exs[k]) if exs else ""', "главная биржа — по объёму"),
+    # Рейтинг.
+    ("WHERE ts >= ? AND price_nanos > 0 AND m.ex != '' AND {_btc_clean(con)} ", "WHERE ts >= ? AND m.ex != '' AND {_btc_clean(con)} ", "рейтинг: без цены — не сделка"),
+    ("WHERE ts >= ? AND price_nanos > 0 AND m.ex != '' AND {_btc_clean(con)} ", "WHERE ts >= ? AND price_nanos > 0 AND {_btc_clean(con)} ", "рейтинг: перевод — не сделка"),
+    ('"roi": sorted(books, key=lambda b: (-b["roi"], -b["btc"]))', '"roi": sorted(books, key=lambda b: (-b["pnl"], -b["btc"]))', "доска ROI — по ROI"),
+    ('"act": sorted(books, key=lambda b: (-b["btc"], -b["pnl"]))', '"act": sorted(books, key=lambda b: (-b["pnl"], -b["btc"]))', "доска накопления — по запасу"),
+    ("    return 120.0 if days <= 30 else 600.0", "    return 120.0", "длинные окна — раз в десять минут"),
+    ("    days = days if days in BTC_RANK_DAYS else 30", "    days = days if days > 0 else 30", "окно рейтинга — из списка"),
+    # Кошелёк.
+    ('for r in rows if int(r["price_nanos"] or 0) > 0 and r["ex"]], px)', 'for r in rows], px)', "кошелёк: итог — по сделкам с биржей"),
+    ("for r in reversed(rows[-50:])]", "for r in rows[:50]]", "кошелёк: последние движения первыми"),
+    ('cached_small(_BTC, ("wallet", addr), BTC_TTL', 'cached_small(_BTC, ("wallet", ""), BTC_TTL', "кошелёк: кэш по адресу"),
+    ('        con.execute("INSERT OR REPLACE INTO btc_case(lower, addr) VALUES(?,?)", (addr.lower(), addr))',
+     '        con.execute("INSERT OR REPLACE INTO btc_case(lower, addr) VALUES(?,?)", (addr, addr))', "написание — по строчному ключу"),
+]
+
+
 # Байткод испорченного файла — стереть до проверки и после: мутант и исходник
 # часто одной длины и пишутся в одну секунду, и Python брал бы из __pycache__
 # байткод прошлой версии — мутант «выживал» бы ложно, а после проверки там
@@ -378,7 +439,9 @@ def server():
             + run(f"{ROOT}/whale_api.py", [sys.executable, "-m", "unittest", "tests.test_dom_http", "tests.test_digest_sources"], AP)
             + run(f"{ROOT}/wt_dom.py", [sys.executable, "-m", "unittest", "tests.test_dom", "tests.test_dom_fuzz",
                                         "tests.test_dom_policy"], DM)
-            + run(f"{ROOT}/wt_mcap.py", [sys.executable, "-m", "unittest", "tests.test_mcap", "tests.test_mcap_fuzz"], MC))
+            + run(f"{ROOT}/wt_mcap.py", [sys.executable, "-m", "unittest", "tests.test_mcap", "tests.test_mcap_fuzz"], MC)
+            + run(f"{ROOT}/wt_btc.py", [sys.executable, "-m", "unittest", "tests.test_btc", "tests.test_btc_stale",
+                                        "tests.test_btc_etf_labels"], BT))
 
 
 # Приложение и сервер — одновременно: тесты приложения (node) читают только
@@ -388,6 +451,6 @@ with ThreadPoolExecutor(max_workers=2) as pool:
     srv = pool.submit(server)
     dmt = pool.submit(run, f"{ROOT}/src/lib/dom.ts", ["node", "--test", "tests/dom.test.ts", "tests/dom.props.test.ts"], DMT)
     alive = app.result() + srv.result() + dmt.result()
-total = len(TS) + len(PY) + len(TR) + len(AL) + len(AP) + len(DM) + len(MC) + len(DMT) - len(EQUIV)
+total = len(TS) + len(PY) + len(TR) + len(AL) + len(AP) + len(DM) + len(MC) + len(DMT) + len(BT) - len(EQUIV)
 print(f"ИТОГ: убито {total - len(alive)} из {total}; выжили: {alive}")
 sys.exit(1 if alive else 0)
