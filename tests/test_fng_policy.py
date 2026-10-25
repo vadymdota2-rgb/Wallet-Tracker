@@ -187,6 +187,7 @@ class ClientPolicyTest(unittest.TestCase):
         self.assertIn('call<unknown>("/api/fng", { timeout: 30_000 }).then((r) => validFng(r))', part)
         self.assertLess(part.index("fngOnce().then((r) => r ?? fngOnce())"), part.index("writeSaved(FNG_SAVED"))
         self.assertIn("return v;", part)
+        self.assertIn("}), fngKeep);", part)  # ответ без цены — не на полчаса
         saved = api[api.index("function savedFng"):api.index("export const fetchFng")]
         self.assertIn("validFng(hit.v)", saved)
         self.assertIn('const FNG_SAVED = "wt-fng-v2";', api)

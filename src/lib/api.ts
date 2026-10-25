@@ -549,12 +549,16 @@ function savedFng(): FngReply | null {
 }
 /* Вторая попытка — и когда ответ пришёл, но не прошёл проверку (обрезан в пути). */
 const fngOnce = () => call<unknown>("/api/fng", { timeout: 30_000 }).then((r) => validFng(r));
+/* Ответ без сегодняшней цены (сервер ещё не получил её) в памяти не держим:
+   сервер пересоберёт его через пару минут, и следующий заход возьмёт новый,
+   а не тот же полчаса. */
+const fngKeep = (v: FngReply | null) => (v ? (v.days[v.days.length - 1]?.[2] ?? 0) : 0) > 0;
 export const fetchFng = () =>
   remember<FngReply | null>("/api/fng", FNG_TTL_MS, () =>
     fngOnce().then((r) => r ?? fngOnce()).then((v) => {
       if (v) writeSaved(FNG_SAVED, { all: { at: Date.now(), v } });
       return v;
-    }), good);
+    }), fngKeep);
 export const peekFng = () => peek<FngReply | null>("/api/fng", FNG_TTL_MS) ?? savedFng();
 
 /* Альтсезон и сила биткоина: данные меняются за часы, ответ живёт час и

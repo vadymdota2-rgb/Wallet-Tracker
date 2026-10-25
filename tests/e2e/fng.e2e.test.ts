@@ -273,6 +273,20 @@ describe("Страх и жадность", () => {
     await o2.ctx.close();
   });
 
+  test("ответ без цены не держится в памяти: вернулся на экран — цена уже есть", async () => {
+    const bare = { ...REAL, days: REAL.days.map((d) => [d[0], d[1], 0, d[3] & 2]) };
+    const { ctx, page, errors, asked } = await open({ replies: [bare, REAL] });
+    await ready(page);
+    assert.doesNotMatch(sp(await page.locator(".fg-date").innerText()), /BTC/);
+    const before = asked();
+    // Свернул и развернул Telegram — экран спрашивает сервер снова, а не берёт тот же ответ из памяти.
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await page.locator(".fg-date", { hasText: "BTC" }).waitFor();
+    assert.ok(asked() > before);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
   test("день без индекса у alternative.me подписан", async () => {
     const { ctx, page } = await open();
     await ready(page);

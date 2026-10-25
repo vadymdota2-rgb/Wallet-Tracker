@@ -82,6 +82,22 @@ def hist_body(r: random.Random) -> bytes | None:
     return json.dumps({"prices": pts}).encode()
 
 
+def backup(r: random.Random):
+    """Запасные закрытия (Hyperliquid через wt_dom) — годные, мусорные или сломанные."""
+    if r.random() < 0.6:
+        return None
+    if r.random() < 0.05:
+        def boom():
+            raise RuntimeError("запасной источник сломался")
+        return boom
+    out: dict = {}
+    for t in range(fake.START + r.randrange(0, 1500) * DAY, fake.TODAY + 2 * DAY, DAY):
+        out[t] = fake.price(t + DAY) if r.random() > 0.05 else junk(r)
+    if r.random() < 0.1:
+        out[r.choice(["x", 1.5, None])] = 50_000
+    return lambda: out
+
+
 def live_body(r: random.Random) -> bytes | None:
     if r.random() < 0.1:
         return None
@@ -108,7 +124,7 @@ class FuzzTest(unittest.TestCase):
         for _t, v, p, f in days:
             self.assertTrue(isinstance(v, int) and 0 <= v <= 100, m)
             self.assertTrue(p == 0 or (math.isfinite(p) and fng.PX_MIN < p < fng.PX_MAX), m)
-            self.assertTrue(isinstance(f, int) and 0 <= f <= fng.F_EST | fng.F_FILL, m)
+            self.assertTrue(isinstance(f, int) and 0 <= f <= fng.F_ALL, m)
         self.assertEqual(fng.valid_days(days), days, m)
 
     def test_build_never_raises_and_keeps_invariants(self):
@@ -117,6 +133,7 @@ class FuzzTest(unittest.TestCase):
         with mock.patch.object(fng, "_now", lambda: fake.NOW), mock.patch.object(fng, "_log", logs.append):
             for i in range(CASES):
                 fng._st = fng._State()
+                fng.set_backup(backup(r))
                 bodies = {"alternative.me": index_body(r), "historical-price": hist_body(r), "/v1/prices": live_body(r)}
                 with mock.patch.object(fng, "_fetch", fake.network(bodies)):
                     res = fng.build()
@@ -125,6 +142,9 @@ class FuzzTest(unittest.TestCase):
                     good.append(res)
         self.assertEqual([m for m in logs if m.startswith("сборка")], [])
         self.assertGreater(len(good), CASES // 2)
+        # Генератор доходит и до запасной цены (дыра или молчание mempool).
+        self.assertTrue(any(d[3] & fng.F_HL for g in good for d in g["days"]))
+        fng.set_backup(None)
         self.assertLess(len(good), CASES)
         self.__class__.good = good
 
