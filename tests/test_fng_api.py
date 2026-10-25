@@ -37,6 +37,11 @@ def build(over=None, now=fake.NOW):
         return fng.build(), net.calls
 
 
+# Большие ответы (1400 дней) сравниваются через assertTrue(a == b): при
+# расхождении assertEqual строил бы построчную разницу двух огромных списков —
+# минута процессора на каждую порчу в мутационной проверке.
+
+
 class BuildTest(unittest.TestCase):
     def setUp(self):
         fresh()
@@ -48,7 +53,7 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(days[0][0], fake.START)
         self.assertEqual(days[-1][0], fake.TODAY)
         self.assertEqual(len(days), fake.DAYS)
-        self.assertEqual([d[0] for d in days], list(range(fake.START, fake.TODAY + DAY, DAY)))
+        self.assertTrue([d[0] for d in days] == list(range(fake.START, fake.TODAY + DAY, DAY)))
         self.assertEqual(r["at"], fake.NOW)
         self.assertEqual(set(r), {"ok", "days", "at"})
         for t, v, _p, f in days:
@@ -220,7 +225,7 @@ class BuildTest(unittest.TestCase):
         fng._st = fng._State(hit=fng._st.hit)
         r, _ = build({"historical-price": None, "/v1/prices": None})
         self.assertTrue(r["ok"])
-        self.assertEqual([d[2] for d in r["days"]], [d[2] for d in good["days"]])
+        self.assertTrue([d[2] for d in r["days"]] == [d[2] for d in good["days"]], "цены разошлись")
         # Без старых цен и без источника — цена 0, но индекс есть.
         fresh()
         r, _ = build({"historical-price": None, "/v1/prices": None})
@@ -265,12 +270,12 @@ class BuildTest(unittest.TestCase):
         self.addCleanup(fng.set_backup, None)
         fng._st = fng._State(hit=fng._st.hit, backup=fng._st.backup)
         r, _ = build({"historical-price": None, "/v1/prices": None})
-        self.assertEqual([d[2] for d in r["days"]], [d[2] for d in good["days"]])
+        self.assertTrue([d[2] for d in r["days"]] == [d[2] for d in good["days"]], "цены разошлись")
         self.assertFalse(any(d[3] & fng.F_HL for d in r["days"]))
         fresh()
         fng.set_backup(lambda: {t: 12_345.0 for t in range(fake.START, fake.TODAY, DAY)})
         r, _ = build()
-        self.assertEqual(r, good)  # история mempool есть — запасная не нужна
+        self.assertTrue(r == good, "запасная вмешалась")  # история mempool есть — запасная не нужна
 
     def test_backup_fills_a_hole_in_mempool_history(self):
         # В истории mempool месяц без точек (дальше GAP_MAX) — эти дни берут
@@ -326,7 +331,7 @@ class BuildTest(unittest.TestCase):
         r, _ = build()
         with open(FIXTURE, encoding="utf-8") as f:
             saved = json.load(f)
-        self.assertEqual(saved, {**r, "now": fake.NOW})
+        self.assertTrue(saved == {**r, "now": fake.NOW}, "образец устарел: пересоберите tests/fixtures/fng.json")
 
 
 class CacheTest(unittest.TestCase):
@@ -436,7 +441,7 @@ class CacheTest(unittest.TestCase):
                 if not fng._busy.is_set():
                     break
                 time.sleep(0.01)
-        self.assertEqual(r, good)  # сразу копия; источник молчит — она и остаётся
+        self.assertTrue(r == good, "не та копия")  # сразу копия; источник молчит — она и остаётся
 
     def test_disk_copy_is_stale_and_refreshed_at_once(self):
         fng.set_cache_dir(self.tmp)
@@ -488,13 +493,13 @@ class CacheTest(unittest.TestCase):
             self.assertIsNone(fng._file_load(), body[:40])
         with open(path, "w", encoding="utf-8") as f:
             json.dump(good, f)
-        self.assertEqual(fng._file_load(), good)
+        self.assertTrue(fng._file_load() == good, "копия с диска не та")
 
     def test_valid_days_rules(self):
         good, _ = build()
         days = good["days"]
         with mock.patch.object(fng, "_now", lambda: fake.NOW):
-            self.assertEqual(fng.valid_days(days), days)
+            self.assertTrue(fng.valid_days(days) == days, "годные дни отвергнуты")
             self.assertIsNone(fng.valid_days(days[:999]))  # мало дней
             self.assertIsNone(fng.valid_days(days[:500] + days[501:]))  # дыра
             ok_hl = [list(x) for x in days]

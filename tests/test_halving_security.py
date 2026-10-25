@@ -100,7 +100,7 @@ class SecurityTest(unittest.TestCase):
             self.assertFalse(hv._allowed(url), url)
 
     def test_forbidden_url_never_reaches_the_network(self):
-        with mock.patch.object(hv._opener, "open") as op:
+        with mock.patch.object(hv._opener, "open", side_effect=AssertionError("ушло в сеть")) as op:
             for url in ("https://169.254.169.254/", "http://mempool.space/", "https://evil.com/"):
                 self.assertIsNone(hv._fetch(url))
             op.assert_not_called()

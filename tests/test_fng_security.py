@@ -103,7 +103,10 @@ class SecurityTest(unittest.TestCase):
             self.assertFalse(fng._allowed(url), url)
 
     def test_forbidden_url_never_reaches_the_network(self):
-        with mock.patch.object(fng._opener, "open") as op:
+        # Вызов «сети» сразу падает: пустая заглушка крутила бы цикл чтения
+        # до конца срока и копила миллионы записей вызовов — память кончалась,
+        # и CI гасил мутационную проверку.
+        with mock.patch.object(fng._opener, "open", side_effect=AssertionError("ушло в сеть")) as op:
             for url in ("https://169.254.169.254/", "http://mempool.space/", "https://evil.com/"):
                 self.assertIsNone(fng._fetch(url, 100))
             op.assert_not_called()
@@ -154,7 +157,7 @@ class SecurityTest(unittest.TestCase):
         self.assertEqual(fng._dl.at, 0.0)
 
     def test_spent_budget_never_reaches_the_network(self):
-        with mock.patch.object(fng._opener, "open") as op:
+        with mock.patch.object(fng._opener, "open", side_effect=AssertionError("ушло в сеть")) as op:
             fng._dl.at = time.monotonic() + fng.MIN_LEFT / 2
             try:
                 self.assertIsNone(fng._fetch(fng.FNG_URL, 100))
@@ -314,7 +317,7 @@ class SecurityTest(unittest.TestCase):
         with mock.patch.object(fng, "_fetch", fake.network()), mock.patch.object(fng, "_now", lambda: fake.NOW):
             good = fng.build()
             path = os.path.join(tmp, fng.SAVED)
-            self.assertEqual(fng._file_load(), good)
+            self.assertTrue(fng._file_load() == good, "копия с диска не та")
             with open(path, "rb") as f:
                 body = f.read()
             with open(path, "wb") as f:

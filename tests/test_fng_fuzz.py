@@ -125,7 +125,7 @@ class FuzzTest(unittest.TestCase):
             self.assertTrue(isinstance(v, int) and 0 <= v <= 100, m)
             self.assertTrue(p == 0 or (math.isfinite(p) and fng.PX_MIN < p < fng.PX_MAX), m)
             self.assertTrue(isinstance(f, int) and 0 <= f <= fng.F_ALL, m)
-        self.assertEqual(fng.valid_days(days), days, m)
+        self.assertTrue(fng.valid_days(days) == days, m)
 
     def test_build_never_raises_and_keeps_invariants(self):
         r = random.Random(SEED)  # noqa: S311 — нужна повторяемость, а не криптостойкость

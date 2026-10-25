@@ -136,7 +136,7 @@ class PoisonTest(unittest.TestCase):
         res = build({"days": [{"date": "2026-10-10", "netFlowUsd": 5e6, "perEtfUsd": {"IBIT": 5e6}}]})
         for u in res["_urls"]:
             self.assertTrue(etf._allowed(u), u)
-        with mock.patch.object(etf._opener, "open") as op:
+        with mock.patch.object(etf._opener, "open", side_effect=AssertionError("ушло в сеть")) as op:
             for url in ("https://www.tftc.io.evil.com/data.json", "http://www.tftc.io/bitcoin-etf-flows/data.json",
                         "https://user:pw@www.tftc.io/", "https://tftc.io/", "file:///etc/passwd", "https://169.254.169.254/"):
                 self.assertIsNone(etf._fetch(url, 5), url)
