@@ -898,9 +898,9 @@ say("бот: /import — кнопки фондов (IBIT, FBTC…) и «Друг
     "std::string importKeyboard(long long id)" in _wsm and 'callback_data", "imp:" + std::to_string(id) + ":other"' in _wsm
     and "if (handleImportCallback(cq)) continue;" in _wsm and "if (from != OWNER_CHAT_ID) {" in _wsm.split("bool handleImportCallback(")[1][:900]
     and "importCommand(cid, txt);" in _wsm and "tgFileText(m[\"document\"])" in _wsm and "IMPORT_FILE_MAX" in _wsm
-    and "int etfDrainLabels(sqlite3* db)" in _wse and "++r.inBase;" in _wse and "named" not in _wse
+    and "int etfDrainLabels(sqlite3* db, EtfLabels& applied)" in _wse and "++r.inBase;" in _wse and "named" not in _wse
     and "UPDATE btc_watch SET src = 'import' WHERE address = ? AND src = 'auto'" in _wsc and "WHERE btc_etf_addr.how != 'seed'\");" in _wse
-    and "if (etfDrainLabels(g_btcDb) < 0) ++g_txErrs;" in _wsc and "backfillImported" not in _wsc)
+    and "if (etfDrainLabels(g_btcDb, etfNew) < 0) ++g_txErrs;" in _wsc and "backfillImported" not in _wsc)
 say("старых алертов по ETF (по фондам, wt_etfalert) нет: ни модуля, ни экрана, ни адресов API; их таблицы стираются при запуске",
     not os.path.exists(f"{APP}/wt_etfalert.py") and not os.path.exists(f"{APP}/src/screens/EtfAlerts.tsx")
     and "etfalert" not in api and "EtfAlert" not in _ef and "FundBell" not in _ef
@@ -978,7 +978,7 @@ _etfs2 = read(f"{APP}/wt_etf.py")
 # вставали. Осталась разметка: список фонда (BITB) и /import — подпись тикером.
 _btc_loop = _ws_btc[_ws_btc.index("void btcLoop() {"):_ws_btc.index("void startBtcLoop() {")]
 say("BTC как до слежки за фондами: метки — только список фонда (BITB) и /import; цикл блоков за фондами, резервами и государствами в сеть не ходит; сверки нет",
-    "if (etfDrainLabels(g_btcDb) < 0) ++g_txErrs;" in _ws_btc and _ws_btc.count("etfFund(a).empty()") == 2
+    "if (etfDrainLabels(g_btcDb, etfNew) < 0) ++g_txErrs;" in _ws_btc and _ws_btc.count("etfFund(a).empty()") == 2
     and all(w not in _ws_btc for w in ("etfBackfill", "readNewVaults", "refreshEtfBalances", "govBlock", "exBalances",
                                          "refreshGovBalances", "etfLoop", "addrFresh", "etfBlock"))
     and "etfOpen(g_btcDb);" in _ws_btc and "DROP TABLE IF EXISTS btc_ex_bal" in _ws_btc
@@ -1041,7 +1041,7 @@ _ws_etf = read(os.path.join(BOT, "btc_etf.cpp"))
 _btcv = read(f"{APP}/src/screens/BtcViews.tsx")
 say("bitcoin, жёсткая ревизия: каждая запись блока проверяется (stepW, сбой — откат), разметка ETF не теряется, откат цепочки не падает на кривом JSON, цена старого блока — свеча Kraken, а не сегодняшняя",
     "int stepW(sqlite3_stmt* s)" in _ws_btc and "if (g_txErrs) {" in _ws_btc
-    and "if (etfDrainLabels(g_btcDb) < 0) ++g_txErrs;" in _ws_btc and "if (!q.s || !del.s || !unlab.s) return -1;" in _ws_etf
+    and "if (etfDrainLabels(g_btcDb, etfNew) < 0) ++g_txErrs;" in _ws_btc and "if (!q.s || !del.s || !unlab.s) return -1;" in _ws_etf
     and "x.is_number_integer(); }))" in _ws_btc and "api.kraken.com/0/public/OHLC?pair=XBTUSD&interval=60" in _ws_btc
     and "if (!(btc > 0 && btc <= 21e6)) btc = defBtc;" in _ws_btc
     and '} else if (!refreshLabels(db) || !exec(db, "COMMIT")) {' in _ws_etf
@@ -1082,6 +1082,12 @@ say("метки ETF (btc_etf.cpp), жёсткая ревизия: обновле
     and "bool failed = false;" in _ws_etfh and "if (r.failed) ++g_txErrs;" in _ws_btc
     and "if (r.failed)\n        return " in read(os.path.join(BOT, "main.cpp"))
     and "CHECK(etfFund(\"bc1qstale\").empty());" in _ws_tx and "CHECK(st.find(\"&lt;i&gt;\")" in _ws_tx)
+say("метки ETF, повторная ревизия: карта меток в памяти — только после COMMIT блока (откат блока не оставляет в памяти фонд, которого нет в базе); адрес, ждущий в очереди с тем же фондом, — «уже этого фонда»",
+    "int etfDrainLabels(sqlite3* db, EtfLabels& applied);" in _ws_etfh and "void etfRemember(const EtfLabels& applied);" in _ws_etfh
+    and "g_fund[a] = fund;" in _ws_etf.split("void etfRemember(")[1] and _ws_etf.count("g_fund[a] = fund;") == 1
+    and "etfRemember(etfNew);" in _ws_btc and _ws_btc.index("etfRemember(etfNew);") > _ws_btc.index("return Result::FAILED;\n            }\n            // Метки фондов")
+    and "if (pend.row() && pend.str(0) == fund) { ++r.dup; continue; }" in _ws_etf
+    and "CHECK(etfFund(\"bc1qrb\").empty());" in _ws_tx and "CHECK(again.dup == 1 && again.queued == 0);" in _ws_tx)
 say("bitcoin, повторная ревизия: алерты только о свежих блоках (догонка простоя не шлёт вчерашние сделки), время блока не из будущего, дробные числа узла без UB; дайджест без раздела биткоина, пока сканер стоит",
     "constexpr long long ALERT_MAX_AGE_SEC = 3600;" in _ws_btc and "nowSec() - alerts_.front().ts > ALERT_MAX_AGE_SEC" in _ws_btc
     and "b.ts > nowSec() + 7200" in _ws_btc and "return d > -9e18 && d < 9e18 ? static_cast<long long>(d) : 0;" in _ws_btc
