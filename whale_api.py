@@ -33,6 +33,7 @@ import wt_shield as shield  # noqa: E402
 import wt_halving as halving  # noqa: E402
 import wt_etf as etf  # noqa: E402
 import wt_dom  # noqa: E402
+import wt_fng  # noqa: E402
 import wt_btc  # noqa: E402
 import wt_mcap
 import wt_treasury as treasury
@@ -10000,6 +10001,7 @@ DISK_KEEP = 128
 _DISK: dict[int, str] = {}
 etf.set_cache_file(os.path.join(CACHE_DIR, "etf.json"))
 wt_dom.set_cache_dir(CACHE_DIR)
+wt_fng.set_cache_dir(CACHE_DIR)
 wt_mcap.set_cache_dir(CACHE_DIR)
 # Прежняя доминация (CoinMarketCap) держала копию в dom-<ключ>.json — её
 # больше никто не читает: убираем, чтобы не лежала на диске вечно.
@@ -10076,17 +10078,6 @@ def _disk_save(name: str, key, val) -> None:
         sys.stderr.write(f"[api] кеш на диске {name}: {e}\n")
         if os.path.exists(tmp):
             os.remove(tmp)
-
-
-def disk_warm(cache: dict, key, name: str, ttl: float) -> None:
-    """Для кешей со своей сборкой (страх и жадность): после
-    перезапуска — копия с диска как устаревшая, свежую соберёт их фон."""
-    if key in cache:
-        return
-    old = _disk_load(name, key)
-    if old is not None:
-        with _small_lock:
-            cache.setdefault(key, (time.monotonic() - ttl - 1.0, old))
 
 
 def cached_bg(store: dict, key, ttl: float, build, wait: bool = False):
@@ -11518,98 +11509,9 @@ def _liq_build(sym: str, rng: str) -> dict:
 
 
 # --- Страх и жадность ---------------------------------------------------
-# Индекс настроения крипторынка alternative.me (0 — паника, 100 — эйфория) за
-# все дни с 1 февраля 2018 и дневное закрытие биткоина в те же дни. Индекс
-# выходит раз в сутки, поэтому ответ живёт полчаса; устаревший отдаётся сразу,
-# а свежий собирается в фоне. Цена — открытые свечи Binance (data-api.binance.
-# vision отвечает из любой страны), запасной путь — Coinbase.
-FNG_TTL = 1800.0
-_fng_cache: dict = {}
-
-
-def _fng_btc_binance(start_ms: int) -> dict:
-    out: dict = {}
-    cur = start_ms
-    for _ in range(12):
-        rows = get_json(f"https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=1000&startTime={cur}", 20)
-        if not isinstance(rows, list) or not rows:
-            break
-        for k in rows:
-            out[int(k[0]) // 1000] = float(k[4])
-        if len(rows) < 1000:
-            break
-        cur = int(rows[-1][0]) + 86_400_000
-    return out
-
-
-def _fng_btc_coinbase(start: int) -> dict:
-    out: dict = {}
-    t = start
-    end = now()
-    while t < end:
-        t2 = min(end, t + 299 * 86400)
-        a = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))
-        b = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t2))
-        rows = get_json(f"https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=86400&start={a}&end={b}", 20)
-        if not isinstance(rows, list):
-            break
-        for k in rows:
-            out[int(k[0])] = float(k[4])
-        t = t2 + 86400
-    return out
-
-
-def _fng_build() -> dict:
-    raw = (get_json("https://api.alternative.me/fng/?limit=0&format=json", 25) or {}).get("data") or []
-    idx = {}
-    for r in raw:
-        try:
-            idx[int(r["timestamp"]) // 86400 * 86400] = int(r["value"])
-        except (KeyError, TypeError, ValueError):
-            continue
-    if not idx:
-        return {"ok": False, "error": "no_data"}
-    start = min(idx)
-    px = _fng_btc_binance(start * 1000)
-    if len(px) < len(idx) * 0.9:
-        px.update(_fng_btc_coinbase(start))
-    # В истории индекса есть редкие пропуски (4 дня в апреле 2018, 2 — в
-    # октябре 2024). Экран считает «неделю назад» и «через 30 дней» по
-    # порядку дней, поэтому пропуск заполняется значением прошлого дня.
-    days = []
-    for t in range(start, max(idx) + 1, 86400):
-        v = idx.get(t, days[-1][1] if days else 50)
-        days.append([t, v, round(px.get(t, days[-1][2] if days else 0.0), 2)])
-    res = {"ok": True, "days": days, "at": now()}
-    with _liq_lock:
-        _fng_cache["all"] = (time.monotonic(), res)
-    _disk_save("fng", "all", res)
-    return res
-
-
-def _fng_bg() -> None:
-    try:
-        _fng_build()
-    except Exception as e:  # noqa: BLE001
-        print(f"fng: {e}", file=sys.stderr)
-    finally:
-        with _liq_lock:
-            _liq_busy.discard("fng")
-
-
-def fng_data() -> dict:
-    disk_warm(_fng_cache, "all", "fng", FNG_TTL)
-    with _liq_lock:
-        hit = _fng_cache.get("all")
-        if hit and time.monotonic() - hit[0] < FNG_TTL:
-            return hit[1]
-        if hit and "fng" not in _liq_busy:
-            _liq_busy.add("fng")
-            threading.Thread(target=_fng_bg, daemon=True).start()
-    if hit:
-        return hit[1]
-    return _fng_build()
-
+# Отдельный модуль wt_fng.py: индекс alternative.me и цена биткоина
+# mempool.space по дням, кэш, копия на диске, фоновое обновление, тесты.
+fng_data = wt_fng.fng_data
 
 
 # --- Халвинг -----------------------------------------------------------------
@@ -15948,7 +15850,7 @@ class Handler(BaseHTTPRequestHandler):
                         pass
                 return
             if path in ("/fng", "/api/fng"):
-                self._json(200, fng_data())
+                self._json(200, wt_fng.reply())
                 return
             if path in ("/halving", "/api/halving"):
                 self._json(200, halving.reply())

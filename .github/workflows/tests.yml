@@ -4,9 +4,9 @@
 #        в приложении (node --test) и тесты сервера (unittest, сеть подменена).
 # e2e  — карточка халвинга, «Институциональные потоки» и подсказки «?» в
 #        настоящем Chromium на свежесобранном html/.
-# mutation — мутационная проверка модулей халвинга и «Институциональных
-#        потоков»: портит код в десятках мест и требует, чтобы тесты заметили
-#        каждую значимую порчу.
+# mutation — мутационная проверка модулей халвинга, «Институциональных
+#        потоков» и «Страха и жадности»: портит код в десятках мест и требует,
+#        чтобы тесты заметили каждую значимую порчу.
 #
 # tools/guard.py здесь не запускается: он сверяет приложение и с ботом из
 # соседнего репозитория WhaleScanner, которого в этой проверке нет.
@@ -48,10 +48,10 @@ jobs:
       - run: npm ci
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
-      - name: Типы TypeScript (приложение и тесты; модули халвинга, ETF и альтсезона — в строжайшем режиме)
-        run: npm run typecheck && npm run typecheck:tests && npm run typecheck:halving && npm run typecheck:etf && npm run typecheck:dom
+      - name: Типы TypeScript (приложение и тесты; модули халвинга, ETF, альтсезона и страха и жадности — в строжайшем режиме)
+        run: npm run typecheck && npm run typecheck:tests && npm run typecheck:halving && npm run typecheck:etf && npm run typecheck:dom && npm run typecheck:fng
       - name: Синтаксис сервера
-        run: python -m py_compile whale_api.py wt_halving.py wt_etf.py wt_treasury.py wt_dom.py wt_mcap.py wt_btc.py wt_shield.py wt_digest_img.py
+        run: python -m py_compile whale_api.py wt_halving.py wt_etf.py wt_treasury.py wt_dom.py wt_mcap.py wt_btc.py wt_fng.py wt_shield.py wt_digest_img.py
       - name: Анализатор Python (модуль халвинга и его тесты)
         run: >-
           pipx run ruff==0.15.8 check --target-version py310
@@ -61,6 +61,7 @@ jobs:
           tests/test_bootstrap_personal.py tests/test_btc_etf_labels.py
           wt_treasury.py tests/test_treasury.py tests/test_treasury_security.py tests/test_digest_sources.py tests/test_digest_channel.py
           wt_dom.py tests/test_dom.py tests/test_dom_policy.py tests/test_dom_fuzz.py tests/test_dom_http.py wt_mcap.py tests/test_mcap.py tests/test_mcap_fuzz.py
+          wt_fng.py tests/fng_fake.py tests/test_fng_api.py tests/test_fng_fuzz.py tests/test_fng_security.py tests/test_fng_policy.py tools/mutate-fng.py
       # Биткоин: SQL собирается из констант модуля (окна, пороги, условия),
       # всё пришедшее снаружи — только параметрами «?» — поэтому без S608;
       # setup() принимает общие механизмы сервера поимённо — без PLR0913.
@@ -71,7 +72,7 @@ jobs:
           wt_btc.py tests/test_btc.py tests/test_btc_stale.py tests/test_sum_overflow.py
       - name: Строгие типы Python (mypy --strict)
         run: >-
-          pipx run mypy==1.11.2 --strict --python-version 3.11 wt_halving.py wt_etf.py wt_treasury.py wt_dom.py wt_mcap.py wt_btc.py
+          pipx run mypy==1.11.2 --strict --python-version 3.11 wt_halving.py wt_etf.py wt_treasury.py wt_dom.py wt_mcap.py wt_btc.py wt_fng.py
       - name: Тесты расчёта и сервера
         run: npm test
 
@@ -93,7 +94,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Сборка приложения
         run: npm run build
-      - name: Браузерные тесты (халвинг и «Институциональные потоки»)
+      - name: Браузерные тесты (халвинг, «Институциональные потоки», альтсезон, страх и жадность)
         run: npm run test:e2e
 
   # Сервер может стоять на любом Python 3.10–3.13 — модуль обязан работать на всех.
@@ -131,6 +132,24 @@ jobs:
           python-version: "3.11"
       - name: Мутационная проверка модуля халвинга
         run: python tools/mutate-halving.py
+
+  # «Страх и жадность» — своим заданием, параллельно: около 90 мутаций,
+  # ~7 минут.
+  mutation-fng:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version: "22.x"
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: "3.11"
+      - name: Мутационная проверка «Страха и жадности»
+        run: python tools/mutate-fng.py
 
   # «Институциональные потоки» — отдельным заданием (параллельно халвингу):
   # мутаций больше двух сотен (ETF, альтсезон, доминация), вместе с халвингом

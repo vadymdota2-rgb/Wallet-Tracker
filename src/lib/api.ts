@@ -8,11 +8,12 @@
 import { initData } from "./telegram";
 import { forget, peek, peekAny, remember } from "./memo";
 import { HALVING_TTL_MS, clockSkew, pickHalving, validHalving, type HalvingReply } from "./halving";
+import { FNG_TTL_MS, validFng, type FngReply } from "./fng";
 import { ETF_TTL_MS, validEtf, type EtfReply } from "./etf";
 import { DOM_TTL_MS, MCAP_TTL_MS, validDom, validMcap, type DomReply, type McapReply } from "./dom";
 import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
-  LiqCoinsReply, FngReply, FundRow, LsRow, MutationResult,
+  LiqCoinsReply, FundRow, LsRow, MutationResult,
   RotSide, SymbolRow, TokenHist, Trades, UnlocksReply, WalletLive, BscExFlowReply,
   BtcBigReply, BtcFlowReply, BtcRankReply, BtcWalletReply, LsTotals, OptionsReply, LiqsReply, OiHistReply, CalReply,
 } from "./types";
@@ -537,19 +538,24 @@ export const fetchCalendar = () =>
   });
 export const peekCalendar = () => peek<CalReply | null>("/api/calendar", 5 * 60_000) ?? savedCalendar();
 
-/* Страх и жадность: индекс выходит раз в сутки. Последний ответ лежит на
-   устройстве — экран открывается сразу, свежий догружается поверх. */
-const FNG_SAVED = "wt-fng-v1";
+/* Страх и жадность: индекс выходит раз в сутки — ответ живёт полчаса (как на
+   сервере) и лежит на устройстве: экран открывается сразу, свежий
+   догружается поверх. В память и на устройство — только проверенная копия
+   (validFng): прежний ответ с ценой Binance (wt-fng-v1) экран не берёт. */
+const FNG_SAVED = "wt-fng-v2";
 function savedFng(): FngReply | null {
-  const hit = readSaved<FngReply>(FNG_SAVED).all;
-  return hit && hit.v?.days?.length ? hit.v : null;
+  const hit = readSaved<unknown>(FNG_SAVED).all;
+  return hit && Date.now() - hit.at < 30 * 24 * 3600_000 ? validFng(hit.v) : null;
 }
+/* Вторая попытка — и когда ответ пришёл, но не прошёл проверку (обрезан в пути). */
+const fngOnce = () => call<unknown>("/api/fng", { timeout: 30_000 }).then((r) => validFng(r));
 export const fetchFng = () =>
-  remember<FngReply | null>("/api/fng", 30 * 60_000, () => callTwice<FngReply>("/api/fng"), good).then((r) => {
-    if (r?.ok && r.days.length) writeSaved(FNG_SAVED, { all: { at: Date.now(), v: r } });
-    return r;
-  });
-export const peekFng = () => peek<FngReply | null>("/api/fng", 30 * 60_000) ?? savedFng();
+  remember<FngReply | null>("/api/fng", FNG_TTL_MS, () =>
+    fngOnce().then((r) => r ?? fngOnce()).then((v) => {
+      if (v) writeSaved(FNG_SAVED, { all: { at: Date.now(), v } });
+      return v;
+    }), good);
+export const peekFng = () => peek<FngReply | null>("/api/fng", FNG_TTL_MS) ?? savedFng();
 
 /* Альтсезон и сила биткоина: данные меняются за часы, ответ живёт час и
    лежит на устройстве. В память и на устройство — только проверенная копия

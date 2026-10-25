@@ -3400,8 +3400,7 @@ button.cal-row:active { background: rgb(58 130 214 / 0.08); }
 .fi-div.hi { border-color: rgb(234 57 67 / 0.5); background: rgb(234 57 67 / 0.08); }
 .fi-div.lo { border-color: rgb(22 199 132 / 0.5); background: rgb(22 199 132 / 0.08); }
 .fi-edge + .fi-edge { margin-top: 14px; padding-top: 14px; border-top: 1px solid rgb(27 61 104 / 0.4); }
-.fi-edge h3, .fi-h { margin: 0 0 10px; font-size: 15px; font-weight: 800; }
-.fi-h { color: var(--ink); }
+.fi-edge h3 { margin: 0 0 10px; font-size: 15px; font-weight: 800; }
 .fi-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 8px; }
 .fi-tiles > div {
   display: grid;

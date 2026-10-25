@@ -635,17 +635,20 @@ say("экраны бокового меню: «Назад» возвращает
     and "menuOpen: s." not in _store2 and "glyph: <FundLineGlyph />" in appx)
 
 _fg = read(f"{APP}/src/screens/FearGreedScreen.tsx")
-say("страх и жадность: вся история alternative.me с ценой BTC, две панели на одной оси времени",
-    "def fng_data(" in api and '"/api/fng"' in api and "api.alternative.me/fng/?limit=0" in api
+_fgl = read(f"{APP}/src/lib/fng.ts")
+_fgpy = read(f"{APP}/wt_fng.py")
+say("страх и жадность: вся история alternative.me с ценой BTC (mempool.space), две панели на одной оси времени",
+    "fng_data = wt_fng.fng_data" in api and "self._json(200, wt_fng.reply())" in api
+    and 'FNG_URL = "https://api.alternative.me/fng/?limit=0&format=json"' in _fgpy
     and "function Gauge(" in _fg and "P2 = {" in _fg and '"fg_st_left"' in _fg and '"fg_since_then"' in _fg)
 
 say("страх и жадность: сколько подряд держится каждая зона, рекорд, куда уходит дальше, текущая полоса",
-    "function streakStats(" in _fg and '"fg_st_now"' in _fg and '"fg_st_next"' in _fg)
+    "export function streakStats(" in _fgl and "streakStats(days, range !== \"all\")" in _fg and '"fg_st_now"' in _fg and '"fg_st_next"' in _fg)
 
 _fi = read(f"{APP}/src/screens/FearGreedInsights.tsx")
 say("страх и жадность: «что скрыто в данных» — край не разворот, цена после зон, покупки каждый день, похожие дни, оговорка",
-    all(f"function {f}(" in _fi for f in ("afterEntry", "forward", "dca", "analogs", "divergence"))
-    and "const FRESH = 7;" in _fi and "for t in range(start, max(idx) + 1, 86400):" in api
+    all(f"export function {f}(" in _fgl and f"{f}(days" in _fi for f in ("afterEntry", "forward", "dca", "analogs", "divergence"))
+    and "export const FRESH = 7;" in _fgl and "for t in range(min(idx), max(idx) + DAY, DAY):" in _fgpy
     and '"fi_caveat"' in _fi and "<FearGreedInsights" in _fg)
 
 _dm = read(f"{APP}/src/screens/DominanceScreen.tsx")
@@ -865,17 +868,32 @@ _dgm2 = read(f"{APP}/src/screens/DigestMore.tsx")
 _dgi = read(f"{APP}/wt_digest_img.py")
 say("страх и жадность: источник alternative.me рядом с индексом везде, где он показан (условие их API)",
     'export const FNG_URL = "https://alternative.me/crypto/fear-and-greed-index/";' in _fgs
-    and '<p className="fg-by">' in _fgs and 'openExternal(FNG_URL)' in _fgs
+    and '<p className="fg-by">' in _fgs and 'onClick={open(FNG_URL)}>alternative.me</a>' in _fgs
+    and 'onClick={open(PX_URL)}>mempool.space</a>' in _fgs
     and 's.k === "fng" ? <small> · alternative.me</small>' in _dgm2 and "(alternative.me)` : \"—\"" in _dgm2
     and 't(lang, "fg_by")} alternative.me.' in _dgm2
     and "(alternative.me)\" if zone else" in _dgi and '{"fng": " · alternative.me", "etf": " · TFTC"}.get(s["k"], "")' in _dgi)
+_fgt = read(f"{APP}/.github/workflows/tests.yml")
+say("страх и жадность — отдельный модуль, как халвинг: wt_fng (alternative.me + mempool.space, без бирж), lib/fng.ts с проверкой ответа, строгий TS, тесты api/fuzz/security/policy, unit/props/e2e, мутации в CI, «?» у каждого раздела",
+    "import wt_fng" in api and "_fng_btc_binance" not in api and "_fng_btc_coinbase" not in api and "def _fng_build" not in api
+    and 'HOSTS = frozenset({"api.alternative.me", "mempool.space"})' in _fgpy
+    and all(x not in _fgpy.split('"""', 2)[2].lower() for x in ("binance.", "coinbase.com", "kraken.com", "coingecko"))
+    and "export function validFng(" in _fgl and 'const FNG_SAVED = "wt-fng-v2";' in read(f"{APP}/src/lib/api.ts")
+    and '"wt-fng-v2"' in read(f"{APP}/src/lib/storage.ts") and '"wt-fng-v1"' not in read(f"{APP}/src/lib/storage.ts")
+    and all(os.path.isfile(f"{APP}/{f}") for f in (
+        "tests/test_fng_api.py", "tests/test_fng_fuzz.py", "tests/test_fng_security.py", "tests/test_fng_policy.py",
+        "tests/fng.test.ts", "tests/fng.props.test.ts", "tests/e2e/fng.e2e.test.ts", "tests/fixtures/fng.json",
+        "tools/mutate-fng.py", "tools/typecheck-fng.mjs"))
+    and "npm run typecheck:fng" in _fgt and "python tools/mutate-fng.py" in _fgt and "wt_fng.py" in _fgt
+    and "mempool.space" in read(f"{APP}/src/i18n/ru.ts").split("fg_src:")[1].split("\n")[0]
+    and _fg.count("<SectionTitle help=") == 4 and read(f"{APP}/src/screens/FearGreedInsights.tsx").count("<SectionTitle help=") == 5)
 say("защита API: бан за промахи ключом — кроме своей машины (127.0.0.1 — это nginx; проверка curl'ом не закроет приложение)",
     "if _loopback(ip):\n            return" in read(f"{APP}/wt_shield.py")
     and os.path.isfile(f"{APP}/tests/test_shield_bans.py"))
 say("кеш: тяжёлые ответы API — и на диске (после перезапуска сразу, свежий — в фоне); ETF, отчёты SEC и альтсезон (ответ и цены) — тоже; в приложении — дайджест и кошелёк BTC на устройстве",
     "def disk_cache(store: dict, name: str) -> dict:" in api and "def _disk_load(name: str, key):" in api
     and 'disk_cache(_BTC, "btc")' in btcpy and "disk_cache=disk_cache" in api and 'disk_cache({}, "bscx")' in api and 'disk_cache({}, "opt")' in api
-    and 'disk_warm(_fng_cache, "all", "fng", FNG_TTL)' in api and "wt_dom.set_cache_dir(CACHE_DIR)" in api
+    and "wt_fng.set_cache_dir(CACHE_DIR)" in api and "_file_save(res)" in read(f"{APP}/wt_fng.py") and "wt_dom.set_cache_dir(CACHE_DIR)" in api
     and 'etf.set_cache_file(os.path.join(CACHE_DIR, "etf.json"))' in api and "treasury.set_cache_dir(CACHE_DIR)" in api
     and "def _file_load() -> dict[str, Json] | None:" in _etfs and "_file_save(\"sec_funds.json\", out)" in read(f"{APP}/wt_treasury.py")
     and 'const DIGEST_SAVED = "wt-digest-v1";' in read(f"{APP}/src/lib/api.ts")

@@ -15,5 +15,11 @@
   (data.sec.gov), позиции на CME — из отчёта CFTC «Traders in Financial
   Futures» (publicreporting.cftc.gov): открытые данные государственных органов США.
 
+`fng.json` — образец ответа `/api/fng` для тестов «Страха и жадности». Он
+выдуман целиком: индекс и цена — формулы из `tests/fng_fake.py` в формате
+ответов alternative.me и mempool.space, а образец собран нашим же модулем
+`wt_fng.py` (тест `test_fixture_is_this_build` следит, что он не устарел).
+Данных alternative.me и mempool.space в репозитории нет.
+
 Цен и других данных бирж (Coinbase, Binance) в образце нет: их условия не
 разрешают показывать и распространять рыночные данные без письменного согласия.
