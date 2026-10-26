@@ -995,7 +995,7 @@ export const fr: Dict = {
   lang_title: "🌐 Langue",
   legal_btn_forget: "🗑 Supprimer mes données",
   legal_btn_privacy: "🔒 Confidentialité",
-  legal_flags: "Drapeaux sur les appareils qui ne les affichent pas eux-mêmes : Twemoji (© Twitter, Inc. et autres contributeurs), licence CC BY 4.0 — twemoji.twitter.com.",
+  legal_flags: "Drapeaux sur les appareils qui ne les affichent pas eux-mêmes : Twemoji (© Twitter, Inc. et autres contributeurs), licence CC BY 4.0 — github.com/twitter/twemoji.",
   legal_forget_done: "✅ C'est fait. Tout ce que nous détenions sur vous est supprimé. Si vous voulez revenir un jour, rouvrez simplement l'application.",
   legal_forget_failed: "❌ Impossible de supprimer les données. Réessayez plus tard.",
   legal_forget_title: "🗑 Supprimer mes données",

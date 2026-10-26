@@ -995,7 +995,7 @@ export const zh: Dict = {
   lang_title: "🌐 语言",
   legal_btn_forget: "🗑 删除我的数据",
   legal_btn_privacy: "🔒 隐私",
-  legal_flags: "在无法自行显示国旗的设备上，国旗图案来自 Twemoji（© Twitter, Inc. 及其他贡献者），CC BY 4.0 许可 — twemoji.twitter.com。",
+  legal_flags: "在无法自行显示国旗的设备上，国旗图案来自 Twemoji（© Twitter, Inc. 及其他贡献者），CC BY 4.0 许可 — github.com/twitter/twemoji。",
   legal_forget_done: "✅ 已完成。我们持有的关于你的一切都已删除。若想回来，重新打开应用即可。",
   legal_forget_failed: "❌ 数据删除失败，请稍后重试。",
   legal_forget_title: "🗑 删除我的数据",

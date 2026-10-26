@@ -9,7 +9,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  F_EST, F_FILL, FNG_START, ZONES, currentStreak, dca, distribution, forward, streakLeft, streakStats, validFng, windowOf,
+  F_EST, F_FILL, FNG_START, SHOWN_MIN, ZONES, currentStreak, dca, distribution, forward, fromFirstPrice, streakLeft,
+  streakStats, validFng, windowOf,
   yearExtremes, zoneOf, type FngDay, type FngReply,
 } from "../src/lib/fng.ts";
 
@@ -124,6 +125,24 @@ test("что было после: доли 0–1, случаев не больш
     const all = dca(days, 10, 0, () => true);
     const some = dca(days, 10, 0, (z) => z <= 1);
     assert.ok(some.inv <= all.inv && Number.isFinite(all.val) && all.val >= 0, `случай ${c}`);
+  }
+});
+
+test("график с первой цены: конец истории тот же, обрезано только начало без цены, и не слишком много", () => {
+  const r = rng(SEED + 4);
+  for (let c = 0; c < CASES; c++) {
+    const days = history(r, 1 + Math.floor(r() * 600));
+    // Начало без цены — случайной длины (запасная история начинается позже).
+    const gap = Math.floor(r() * days.length);
+    const d: FngDay[] = days.map((x, i) => (i < gap ? [x[0], x[1], 0, x[3]] : x));
+    const s = fromFirstPrice(d);
+    const cut = d.length - s.length;
+    assert.ok(s.length > 0 && s[s.length - 1] === d[d.length - 1], `случай ${c}`);
+    assert.ok(d.slice(0, cut).every((x) => !(x[2] > 0)), `случай ${c}: отрезан день с ценой`);
+    if (cut) {
+      assert.ok(s[0]![2] > 0, `случай ${c}: график начинается не с цены`);
+      assert.ok(s.length >= Math.min(SHOWN_MIN, Math.ceil(d.length / 2)), `случай ${c}: слишком коротко`);
+    }
   }
 });
 

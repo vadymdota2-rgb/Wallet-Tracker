@@ -995,7 +995,7 @@ export const ar: Dict = {
   lang_title: "🌐 اللغة",
   legal_btn_forget: "🗑 احذف بياناتي",
   legal_btn_privacy: "🔒 الخصوصية",
-  legal_flags: "رسوم الأعلام على الأجهزة التي لا تعرضها بنفسها: Twemoji (© Twitter, Inc. ومساهمون آخرون)، بترخيص CC BY 4.0 — twemoji.twitter.com.",
+  legal_flags: "رسوم الأعلام على الأجهزة التي لا تعرضها بنفسها: Twemoji (© Twitter, Inc. ومساهمون آخرون)، بترخيص CC BY 4.0 — github.com/twitter/twemoji.",
   legal_forget_done: "✅ تم. كل ما كنا نحتفظ به عنك محذوف. إن أردت العودة يوماً فافتح التطبيق من جديد.",
   legal_forget_failed: "❌ تعذّر حذف البيانات. حاول مرة أخرى لاحقاً.",
   legal_forget_title: "🗑 حذف بياناتي",

@@ -335,6 +335,9 @@ describe("Страх и жадность", () => {
     const first = String(new Date(REAL.days[0]![0] * 1000).getUTCFullYear() + 1);
     assert.ok(ticks.some((x) => x.includes(first)), JSON.stringify(ticks)); // вся история индекса на месте
     assert.ok((await page.locator(".fg-plot polyline").count()) > 10);
+    // Покупки по дням: цена только за этот год — без пустой строки «С года».
+    assert.equal(await page.locator(".fi-years").count(), 0);
+    assert.equal(await page.locator(".fi-dca-r").count(), 4);
     assert.deepEqual(errors, []);
     await ctx.close();
   });

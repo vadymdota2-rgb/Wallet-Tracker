@@ -995,7 +995,7 @@ export const es: Dict = {
   lang_title: "🌐 Idioma",
   legal_btn_forget: "🗑 Borrar mis datos",
   legal_btn_privacy: "🔒 Privacidad",
-  legal_flags: "Banderas en dispositivos que no las muestran por sí mismos: Twemoji (© Twitter, Inc. y otros colaboradores), licencia CC BY 4.0 — twemoji.twitter.com.",
+  legal_flags: "Banderas en dispositivos que no las muestran por sí mismos: Twemoji (© Twitter, Inc. y otros colaboradores), licencia CC BY 4.0 — github.com/twitter/twemoji.",
   legal_forget_done: "✅ Listo. Todo lo que teníamos sobre ti está borrado. Si alguna vez quieres volver, simplemente abre la app de nuevo.",
   legal_forget_failed: "❌ No se pudieron borrar los datos. Inténtalo de nuevo más tarde.",
   legal_forget_title: "🗑 Borrar mis datos",

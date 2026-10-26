@@ -995,7 +995,7 @@ export const tr: Dict = {
   lang_title: "🌐 Dil",
   legal_btn_forget: "🗑 Verilerimi sil",
   legal_btn_privacy: "🔒 Gizlilik",
-  legal_flags: "Bayrakları kendisi gösteremeyen cihazlarda bayraklar: Twemoji (© Twitter, Inc. ve diğer katkıda bulunanlar), CC BY 4.0 lisansı — twemoji.twitter.com.",
+  legal_flags: "Bayrakları kendisi gösteremeyen cihazlarda bayraklar: Twemoji (© Twitter, Inc. ve diğer katkıda bulunanlar), CC BY 4.0 lisansı — github.com/twitter/twemoji.",
   legal_forget_done: "✅ Tamam. Hakkınızda tuttuğumuz her şey silindi. Bir gün dönmek isterseniz uygulamayı yeniden açmanız yeterli.",
   legal_forget_failed: "❌ Veriler silinemedi. Lütfen daha sonra tekrar deneyin.",
   legal_forget_title: "🗑 Verilerimi sil",

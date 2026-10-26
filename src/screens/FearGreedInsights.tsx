@@ -146,10 +146,13 @@ export function FearGreedInsights({ lang, days }: { lang: Lang; days: readonly F
           options={[10, 50, 100].map((v) => ({ id: v, label: `${usd(v)} / ${t(lang, "fi_day")}` }))}
           onChange={setAmount}
         />
-        <div className="fi-years">
-          <small>{t(lang, "fi_from")}</small>
-          <Chips<number> value={year} options={years.map((y) => ({ id: y, label: String(y) }))} onChange={setYear} />
-        </div>
+        {/* Цены есть только за этот год — выбирать не из чего: без пустой «С года». */}
+        {years.length ? (
+          <div className="fi-years">
+            <small>{t(lang, "fi_from")}</small>
+            <Chips<number> value={year} options={years.map((y) => ({ id: y, label: String(y) }))} onChange={setYear} />
+          </div>
+        ) : null}
         <div className="fi-dca">
           {plans.map((p) => {
             const x = p.inv ? p.val / p.inv : 0;

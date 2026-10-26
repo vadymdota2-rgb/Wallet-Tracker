@@ -995,7 +995,7 @@ export const pt: Dict = {
   lang_title: "🌐 Idioma",
   legal_btn_forget: "🗑 Apagar meus dados",
   legal_btn_privacy: "🔒 Privacidade",
-  legal_flags: "Bandeiras em dispositivos que não as exibem sozinhos: Twemoji (© Twitter, Inc. e outros colaboradores), licença CC BY 4.0 — twemoji.twitter.com.",
+  legal_flags: "Bandeiras em dispositivos que não as exibem sozinhos: Twemoji (© Twitter, Inc. e outros colaboradores), licença CC BY 4.0 — github.com/twitter/twemoji.",
   legal_forget_done: "✅ Pronto. Tudo o que guardávamos sobre você foi apagado. Se um dia quiser voltar, basta abrir o app de novo.",
   legal_forget_failed: "❌ Não foi possível apagar os dados. Tente de novo mais tarde.",
   legal_forget_title: "🗑 Apagar meus dados",

@@ -995,7 +995,7 @@ export const ko: Dict = {
   lang_title: "🌐 언어",
   legal_btn_forget: "🗑 내 데이터 삭제",
   legal_btn_privacy: "🔒 개인정보",
-  legal_flags: "국기를 직접 표시하지 못하는 기기의 국기: Twemoji(© Twitter, Inc. 및 기타 기여자), CC BY 4.0 라이선스 — twemoji.twitter.com.",
+  legal_flags: "국기를 직접 표시하지 못하는 기기의 국기: Twemoji(© Twitter, Inc. 및 기타 기여자), CC BY 4.0 라이선스 — github.com/twitter/twemoji.",
   legal_forget_done: "✅ 완료했습니다. 저희가 가지고 있던 정보는 모두 삭제되었습니다. 다시 오고 싶으시면 앱을 다시 열어 주세요.",
   legal_forget_failed: "❌ 데이터를 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.",
   legal_forget_title: "🗑 내 데이터 삭제",
