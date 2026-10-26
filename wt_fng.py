@@ -281,10 +281,12 @@ def _now() -> int:
 
 
 def _fetch(url: str, limit: int) -> bytes | None:
-    """GET. Любая ошибка сети и ответ больше limit байт — None. Внутри
+    """GET. Любая ошибка сети и ответ больше limit байт — None, причина — в
+    журнал (по «нет истории цен» без причины не понять, что чинить). Внутри
     сборки — не дольше, чем осталось от бюджета."""
     if not _allowed(url):
         return None
+    host = urllib.parse.urlsplit(url).hostname
     dl = getattr(_dl, "at", 0.0)
     left = dl - time.monotonic() if dl else HOP
     if left <= MIN_LEFT:
@@ -296,13 +298,16 @@ def _fetch(url: str, limit: int) -> bytes | None:
             buf = bytearray()
             while len(buf) <= limit:
                 if time.monotonic() > end:
+                    _log(f"{host}: не уложился в {hop:.0f} с")
                     return None
                 chunk: bytes = r.read1(min(CHUNK, limit + 1 - len(buf)))
                 if not chunk:
                     return bytes(buf)
                 buf += chunk
+            _log(f"{host}: ответ больше {limit} байт")
             return None
-    except (OSError, ValueError, http.client.HTTPException):
+    except (OSError, ValueError, http.client.HTTPException) as e:
+        _log(f"{host}: {type(e).__name__}: {e}")
         return None
 
 

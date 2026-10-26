@@ -190,6 +190,37 @@ class SecurityTest(unittest.TestCase):
         with mock.patch.object(fng._opener, "open", lambda req, timeout=0: Resp(b"x" * 140_000)):
             self.assertEqual(len(fng._fetch("https://mempool.space/x", 140_000)), 140_000)
 
+    def test_failed_request_says_why_in_the_log(self):
+        # «нет истории цен» без причины не объясняет, что чинить: причина —
+        # в журнал, одной строкой с хостом.
+        class Resp(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+        cases = [
+            (mock.patch.object(fng._opener, "open", side_effect=TimeoutError("timed out")), "mempool.space: TimeoutError: timed out"),
+            (mock.patch.object(fng._opener, "open", lambda req, timeout=0: Resp(b"x" * 5000)), "mempool.space: ответ больше 4096 байт"),
+        ]
+        for patch, want in cases:
+            logs = []
+            with patch, mock.patch.object(fng, "_log", logs.append):
+                self.assertIsNone(fng._fetch(fng.LIVE_URL, fng.LIVE_MAX))
+            self.assertEqual(logs, [want])
+        # Медленный источник — «не уложился».
+        clock = iter([0.0, 0.0, 100.0])
+        logs = []
+        with mock.patch.object(fng._opener, "open", lambda req, timeout=0: Resp(b"x" * 10)), \
+                mock.patch.object(fng.time, "monotonic", lambda: next(clock, 100.0)), mock.patch.object(fng, "_log", logs.append):
+            self.assertIsNone(fng._fetch(fng.LIVE_URL, fng.LIVE_MAX))
+        self.assertEqual(logs, [f"mempool.space: не уложился в {fng.HOP:.0f} с"])
+        # Удачный запрос журнал не трогает.
+        logs = []
+        with mock.patch.object(fng._opener, "open", lambda req, timeout=0: Resp(b"{}")), mock.patch.object(fng, "_log", logs.append):
+            self.assertEqual(fng._fetch(fng.LIVE_URL, fng.LIVE_MAX), b"{}")
+        self.assertEqual(logs, [])
+
     def test_limits_fit_the_real_answers(self):
         # Настоящие ответы — 0,3 МБ индекса и 1,1 МБ истории: предел с запасом,
         # но не безразмерный.
