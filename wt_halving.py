@@ -60,6 +60,7 @@ import http.client
 import json
 import math
 import re
+import socket
 import ssl
 import sys
 import threading
@@ -122,6 +123,12 @@ INT_MAX = 20
 # Самый большой ответ-JSON, который модуль читает: блок — ~0,5 КБ, данные о
 # сложности — ~0,3 КБ. Больше — не тот ответ.
 JSON_MAX = 4096
+# Соединение с одним адресом источника — не дольше, с. У mempool.space
+# восемь адресов, и часть может молчать с сервера: стандартный urllib ждал
+# первый весь HOP и сдавался. curl в этом случае сразу идёт к следующему —
+# так теперь и здесь (за HOP успевают минимум два адреса).
+CONNECT = 2.5
+ADDRS_MAX = 8
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -135,8 +142,53 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 # подменённый HTTPS_PROXY не уведёт запросы), без перенаправлений, сертификат
 # и имя сервера проверяются, TLS не старше 1.2 (так с Python 3.10 по
 # умолчанию; tests/test_halving_policy.py следит, чтобы так и осталось).
+def _connect(address: tuple[str, int], timeout: object = None, source_address: object = None) -> socket.socket:
+    """Соединение с источником: адреса по очереди (IPv4 первыми), каждый не
+    дольше CONNECT; молчащий адрес не съедает весь запрос. Только HOSTS:
+    сюда приходит хост уже проверенного адреса (_fetch, без перенаправлений),
+    но лишняя проверка дешевле ошибки."""
+    host, port = address
+    if host not in HOSTS:
+        raise OSError(f"чужой хост: {host}")
+    limit = timeout if isinstance(timeout, (int, float)) else HOP
+    end = time.monotonic() + limit
+    infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    infos.sort(key=lambda a: a[0] != socket.AF_INET)
+    err: OSError = OSError(f"нет адреса: {host}")
+    for family, kind, proto, _name, addr in infos[:ADDRS_MAX]:
+        left = end - time.monotonic()
+        if left <= MIN_LEFT:
+            break
+        sock = socket.socket(family, kind, proto)
+        try:
+            sock.settimeout(min(CONNECT, left))
+            sock.connect(addr)
+        except OSError as e:
+            sock.close()
+            err = e
+            continue
+        sock.settimeout(limit)
+        return sock
+    raise err
+
+
+class _Conn(http.client.HTTPSConnection):
+    """HTTPS-соединение через _connect (вместо socket.create_connection)."""
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)  # type: ignore[arg-type]
+        self._create_connection = _connect
+
+
+class _Https(urllib.request.HTTPSHandler):
+    """HTTPS со своим соединением; сертификат проверяется как обычно."""
+
+    def https_open(self, req: urllib.request.Request) -> http.client.HTTPResponse:
+        return self.do_open(_Conn, req, context=self._context)  # type: ignore[attr-defined]
+
+
 _opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect,
-                                      urllib.request.HTTPSHandler(context=ssl.create_default_context()))
+                                      _Https(context=ssl.create_default_context()))
 
 
 def _allowed(url: str) -> bool:
