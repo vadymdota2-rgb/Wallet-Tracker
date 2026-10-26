@@ -19,10 +19,13 @@
   - цен бирж здесь нет: условия Binance и Coinbase запрещают показывать их
     рыночные данные без письменного согласия (раньше цена шла от них).
 
-Запасная цена — Hyperliquid: закрытия BTC по дням с августа 2020, которые
+Запасная цена — Hyperliquid. Текущая цена идущего дня — из цен Hyperliquid,
+которые сервер уже держит для других экранов (whale_api.hl_mids, через
+set_live_backup); закрытия прошлых дней — закрытия BTC с августа 2020, которые
 уже держит модуль «Альтсезона» (wt_dom.btc_closes, подключает whale_api
-через set_backup). Ни одного лишнего запроса к Hyperliquid: только то, что
-уже в памяти или на диске. Берётся в день, где у mempool.space цены нет, а
+через set_backup). Закрытия — без запросов к Hyperliquid (только память и
+диск); текущая — из копии сервера, а если она старше получаса, один лёгкий
+запрос allMids не чаще сборки. Берётся в день, где у mempool.space цены нет, а
 в прошлом ответе — тоже (mempool молчит или в его истории дыра); такой
 день помечен F_HL, и экран называет источник.
 
@@ -201,6 +204,8 @@ class _State:
     loaded: bool = False
     # Запасные закрытия BTC (set_backup); None — запасного источника нет.
     backup: Callable[[], Mapping[int, float]] | None = None
+    # Запасная текущая цена BTC (set_live_backup): (unix с, $) или None.
+    live_backup: Callable[[], tuple[int, float] | None] | None = None
 
 
 _st = _State()
@@ -415,6 +420,28 @@ def set_backup(fn: Callable[[], Mapping[int, float]] | None) -> None:
     _st.backup = fn
 
 
+def set_live_backup(fn: Callable[[], tuple[int, float] | None] | None) -> None:
+    """Откуда брать текущую цену BTC, если mempool.space её не дал."""
+    _st.live_backup = fn
+
+
+def _live_backup() -> tuple[int, float] | None:
+    """Запасная текущая цена: только правдоподобная и не из будущего (что она
+    из идущего дня, проверяет _build)."""
+    fn = _st.live_backup
+    if fn is None:
+        return None
+    try:
+        got = fn()
+    except Exception as e:  # noqa: BLE001 — запасной источник не роняет сборку
+        _log(f"запасная текущая цена: {type(e).__name__}: {e}")
+        return None
+    if not (isinstance(got, tuple) and len(got) == 2):
+        return None
+    t, p = _whole(got[0]), _real(got[1])
+    return (t, p) if 0 < t <= _now() + MAX_FUTURE and PX_MIN < p < PX_MAX else None
+
+
 def _backup() -> dict[int, float]:
     """Запасные закрытия: только правдоподобные и только закрытые дни. Сбой
     запасного источника — просто без него."""
@@ -500,6 +527,13 @@ def _build() -> Reply:
         ts, px = [*ts, live[0]], [*px, live[1]]
     old = {int(d[0]): (float(d[2]), int(d[3]) & (F_EST | F_HL)) for d in old_days if d[2] > 0}
     days = _days(idx, ts, px, old, _backup())
+    # Цены идущего дня нет (mempool молчит) — текущая цена Hyperliquid, если
+    # она из этого дня; флаг F_HL — источник назван на экране.
+    today = days[-1]
+    if not today[2] and today[0] + DAY > _now():
+        hl = _live_backup()
+        if hl and hl[0] >= today[0]:
+            today[2], today[3] = round(hl[1], 2), int(today[3]) | F_HL
     res: Reply = {"ok": True, "days": days, "at": _now()}
     # Цен за последний месяц нет ни от mempool, ни запасных — ответ живёт
     # только ERR_TTL: цена появится через пару минут, а не через полчаса.

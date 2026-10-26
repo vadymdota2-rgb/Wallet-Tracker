@@ -305,6 +305,73 @@ class BuildTest(unittest.TestCase):
         self.assertTrue(any("запасная цена" in m for m in logs))
         self.assertFalse(any(m.startswith("сборка") for m in logs))
 
+    def test_live_backup_gives_today_its_price_only_when_mempool_has_none(self):
+        # mempool не дал текущую цену — идущий день берёт текущую цену
+        # Hyperliquid (копия сервера) с флагом F_HL; закрытые дни она не трогает.
+        calls = []
+        def live():
+            calls.append(1)
+            return fake.NOW - 600, 77_777.777
+        fng.set_live_backup(live)
+        self.addCleanup(fng.set_live_backup, None)
+        r, _ = build({"historical-price": None, "/v1/prices": None})
+        last = r["days"][-1]
+        self.assertEqual((last[0], last[2], last[3] & fng.F_HL), (fake.TODAY, 77_777.78, fng.F_HL))
+        self.assertTrue(all(d[2] == 0 for d in r["days"][:-1]))
+        self.assertEqual(len(calls), 1)
+        # Есть цена от mempool — запасную не зовём вовсе.
+        good, _ = build()
+        fresh()
+        fng.set_live_backup(live)
+        r, _ = build()
+        self.assertTrue(r == good, "запасная вмешалась")
+        self.assertEqual(len(calls), 1)
+
+    def test_live_backup_is_checked_before_use(self):
+        start = fake.TODAY
+        for got in ((fake.NOW, 5.0), (fake.NOW, 2e7), (fake.NOW, float("nan")), (fake.NOW, "80000"),
+                    (fake.NOW - fng.DAY - 1, 80_000.0),          # старше суток
+                    (start - 60, 80_000.0),                      # из прошлого дня
+                    (fake.NOW + fng.MAX_FUTURE + 1, 80_000.0),   # из будущего
+                    (float(fake.NOW), 80_000.0), (True, 80_000.0),
+                    (fake.NOW, 80_000.0, 1), [fake.NOW, 80_000.0], None, "x"):
+            fresh()
+            fng.set_live_backup(lambda got=got: got)
+            r, _ = build({"historical-price": None, "/v1/prices": None})
+            self.assertEqual(r["days"][-1][2], 0, got)
+            self.assertFalse(r["days"][-1][3] & fng.F_HL, got)
+        for t in (start, fake.NOW + fng.MAX_FUTURE, max(start, fake.NOW - fng.DAY)):
+            fresh()
+            fng.set_live_backup(lambda t=t: (t, 80_000.0))
+            r, _ = build({"historical-price": None, "/v1/prices": None})
+            self.assertEqual(r["days"][-1][2], 80_000.0, t)
+        fng.set_live_backup(None)
+
+    def test_live_backup_is_ignored_for_a_closed_last_day(self):
+        fng.set_live_backup(lambda: (fake.NOW, 80_000.0))
+        self.addCleanup(fng.set_live_backup, None)
+        # Индекс ещё не дал сегодняшний день: последний день закрыт, цены
+        # текущего момента ему не положено.
+        rows = [x for x in fake.index_rows() if int(x["timestamp"]) < fake.TODAY]
+        r, _ = build({"historical-price": None, "/v1/prices": None,
+                      "alternative.me": json.dumps({"data": rows}).encode()})
+        self.assertEqual(r["days"][-1][0], fake.TODAY - DAY)
+        self.assertEqual(r["days"][-1][2], 0)
+
+    def test_broken_live_backup_does_not_break_the_build(self):
+        def boom():
+            raise RuntimeError("hl_mids сломался")
+        logs = []
+        fng.set_live_backup(boom)
+        self.addCleanup(fng.set_live_backup, None)
+        with mock.patch.object(fng, "_fetch", fake.network({"historical-price": None, "/v1/prices": None})), \
+                mock.patch.object(fng, "_now", lambda: fake.NOW), mock.patch.object(fng, "_log", logs.append):
+            r = fng.build()
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["days"][-1][2], 0)
+        self.assertTrue(any("запасная текущая цена" in m for m in logs))
+        self.assertFalse(any(m.startswith("сборка") for m in logs))
+
     def test_implausible_prices_are_dropped(self):
         good, _ = build()
         fresh()
@@ -511,6 +578,48 @@ class CacheTest(unittest.TestCase):
                 self.assertIsNone(fng.valid_days(d), (i, bad))
         with mock.patch.object(fng, "_now", lambda: fake.NOW - 30 * DAY):
             self.assertIsNone(fng.valid_days(days))  # из будущего
+
+
+class ServerMidsTest(unittest.TestCase):
+    """whale_api._fng_btc_now — текущая цена BTC из копии цен Hyperliquid."""
+
+    def setUp(self):
+        import whale_api as api  # noqa: PLC0415 — тяжёлый модуль, нужен здесь
+        fresh()
+        self.api = api
+        saved = api._hl_cache.get("_mids")
+        self.addCleanup(lambda: api._hl_cache.__setitem__("_mids", saved) if saved
+                        else api._hl_cache.pop("_mids", None))
+
+    def test_fresh_copy_needs_no_request(self):
+        api = self.api
+        api._hl_cache["_mids"] = (time.monotonic() - 600, {"BTC": 81_000.5, "ETH": 3_000.0})
+        with mock.patch.object(api, "hl_post", side_effect=AssertionError("сеть не нужна")), \
+                mock.patch.object(api, "now", lambda: 2_000_000_000):
+            t, p = api._fng_btc_now()
+        self.assertEqual(p, 81_000.5)
+        self.assertTrue(2_000_000_000 - 602 <= t <= 2_000_000_000 - 599, t)  # время копии, не «сейчас»
+
+    def test_old_copy_is_refreshed_once(self):
+        api = self.api
+        api._hl_cache["_mids"] = (time.monotonic() - api.FNG_MIDS_AGE - 1, {"BTC": 1.0})
+        with mock.patch.object(api, "hl_post", return_value={"BTC": "82000", "ETH": "x"}) as post:
+            got = api._fng_btc_now()
+            self.assertEqual(got[1], 82_000.0)
+            api._fng_btc_now()
+        self.assertEqual(post.call_count, 1)
+        self.assertEqual(post.call_args[0][0], {"type": "allMids"})
+
+    def test_no_btc_or_no_answer_means_none(self):
+        api = self.api
+        for raw in (None, {}, {"ETH": "3000"}, {"BTC": "x"}):
+            api._hl_cache.pop("_mids", None)
+            with mock.patch.object(api, "hl_post", return_value=raw):
+                self.assertIsNone(api._fng_btc_now(), raw)
+
+    def test_is_wired_into_fng(self):
+        with open(os.path.join(ROOT, "whale_api.py"), encoding="utf-8") as f:
+            self.assertIn("wt_fng.set_live_backup(_fng_btc_now)", f.read())
 
 
 class DomBackupTest(unittest.TestCase):

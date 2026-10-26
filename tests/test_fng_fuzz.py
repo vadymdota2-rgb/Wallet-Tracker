@@ -5,7 +5,7 @@
 найденное нарушение воспроизводится, номер случая есть в сообщении.
 
 Источники отвечают то годным, то мусором: строками вместо чисел, NaN,
-огромными и отрицательными ценами, днями не в полночь и из будущего,
+огромными и отрицательными ценами, сломанной запасной ценой, днями не в полночь и из будущего,
 дублями, перепутанным порядком, пустотой, обрезанной историей. Сборка не
 падает никогда, а каждый годный ответ сервера принимает приложение
 (validFng в lib/fng.ts) — сервер и приложение понимают ответ одинаково.
@@ -98,6 +98,20 @@ def backup(r: random.Random):
     return lambda: out
 
 
+def live_backup(r: random.Random):
+    """Текущая цена Hyperliquid (копия сервера) — годная, мусорная или сломанная."""
+    if r.random() < 0.5:
+        return None
+    if r.random() < 0.05:
+        def boom():
+            raise RuntimeError("hl_mids сломался")
+        return boom
+    got = (fake.NOW - r.randrange(0, 2 * DAY), fake.price(fake.NOW))
+    if r.random() < 0.3:
+        got = r.choice([junk(r), (junk(r), got[1]), (got[0], junk(r)), (*got, 1)])
+    return lambda: got
+
+
 def live_body(r: random.Random) -> bytes | None:
     if r.random() < 0.1:
         return None
@@ -134,6 +148,7 @@ class FuzzTest(unittest.TestCase):
             for i in range(CASES):
                 fng._st = fng._State()
                 fng.set_backup(backup(r))
+                fng.set_live_backup(live_backup(r))
                 bodies = {"alternative.me": index_body(r), "historical-price": hist_body(r), "/v1/prices": live_body(r)}
                 with mock.patch.object(fng, "_fetch", fake.network(bodies)):
                     res = fng.build()
@@ -144,7 +159,10 @@ class FuzzTest(unittest.TestCase):
         self.assertGreater(len(good), CASES // 2)
         # Генератор доходит и до запасной цены (дыра или молчание mempool).
         self.assertTrue(any(d[3] & fng.F_HL for g in good for d in g["days"]))
+        # …и до текущей цены Hyperliquid у идущего дня.
+        self.assertTrue(any(g["days"][-1][3] & fng.F_HL and g["days"][-1][0] == fake.TODAY for g in good))
         fng.set_backup(None)
+        fng.set_live_backup(None)
         self.assertLess(len(good), CASES)
         self.__class__.good = good
 
