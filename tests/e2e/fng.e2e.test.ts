@@ -327,6 +327,18 @@ describe("Страх и жадность", () => {
     await ctx.close();
   });
 
+  test("сервер знает только сегодняшнюю цену — график не сжимается до одного дня", async () => {
+    const one = { ...REAL, days: REAL.days.map((d, i) => [d[0], d[1], i === REAL.days.length - 1 ? 60_000 : 0, d[3] & 2]) };
+    const { ctx, page, errors } = await open({ reply: one });
+    await ready(page);
+    const ticks = (await page.locator(".fg-plot .fg-tick").allTextContents()).map(sp);
+    const first = String(new Date(REAL.days[0]![0] * 1000).getUTCFullYear() + 1);
+    assert.ok(ticks.some((x) => x.includes(first)), JSON.stringify(ticks)); // вся история индекса на месте
+    assert.ok((await page.locator(".fg-plot polyline").count()) > 10);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
   test("день без индекса у alternative.me подписан", async () => {
     const { ctx, page } = await open();
     await ready(page);

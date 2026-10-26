@@ -209,9 +209,21 @@ test("похожие дни и расхождение — на образце с
   assert.equal(divergence(days.slice(0, 119)), null);
 });
 
-test("график — с первого дня с ценой; цен нет — все дни", () => {
+test("график — с первого дня с ценой; цен нет или их мало — все дни", () => {
   const d: FngDay[] = make([10, 20, 30, 40]).map((x, i) => [x[0], x[1], i < 2 ? 0 : 50_000, 0]);
-  assert.deepEqual(fromFirstPrice(d), d.slice(2));
+  assert.deepEqual(fromFirstPrice(d), d.slice(2)); // окно 4 дня: 2 с ценой — половина
+  // Вся история, цена — только последние дни: график не сжимается до них.
+  const long = (priced: number): FngDay[] => make(Array.from({ length: 2000 }, () => 50))
+    .map((x, i) => [x[0], x[1], i >= 2000 - priced ? 50_000 : 0, 0]);
+  assert.equal(fromFirstPrice(long(1)).length, 2000);
+  assert.equal(fromFirstPrice(long(29)).length, 2000);
+  assert.equal(fromFirstPrice(long(30)).length, 30);
+  assert.equal(fromFirstPrice(long(1900)).length, 1900);
+  // Окно 30 дней: цена с 16-го дня — 15 из 30, половина — обрезается; с 17-го — нет.
+  const w = (from: number): FngDay[] => make(Array.from({ length: 30 }, () => 50))
+    .map((x, i) => [x[0], x[1], i >= from ? 50_000 : 0, 0]);
+  assert.equal(fromFirstPrice(w(15)).length, 15);
+  assert.equal(fromFirstPrice(w(16)).length, 30);
   const full = make([10, 20]);
   assert.equal(fromFirstPrice(full), full); // цена с первого дня — тот же массив
   const none: FngDay[] = make([10, 20]).map((x) => [x[0], x[1], 0, 0]);
