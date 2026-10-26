@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   F_EST, F_FILL, F_HL, FNG_START, ZONES, afterEntry, analogs, colorOf, currentStreak, dca, distribution, divergence, estUntil,
-  forward, median, streakLeft, streakStats, validFng, windowOf, yearExtremes, zoneKey, zoneOf, type FngDay, type FngReply,
+  forward, lastPrice, median, streakLeft, streakStats, validFng, windowOf, yearExtremes, zoneKey, zoneOf, type FngDay, type FngReply,
 } from "../src/lib/fng.ts";
 
 const DAY = 86_400;
@@ -266,4 +266,29 @@ test("остаток полосы — настоящая медиана и пр�
   const l = streakLeft(d, currentStreak(d)!)!;
   assert.equal(l.n, 6);
   assert.equal(l.med, (3 + 6) / 2); // остатки 1, 2, 3, 6, 8, 16
+});
+
+test("сегодня цены ещё нет — покупки, похожие дни и расхождение считаются по последней известной", () => {
+  const days = ok(REAL)!.days;
+  // Тот же ответ, но цена сегодняшнего дня — 0 (сервер её ещё не получил).
+  const noToday: FngDay[] = days.map((d, i) => (i === days.length - 1 ? [d[0], d[1], 0, d[3]] : d));
+  const upToYday = days.slice(0, -1);
+  assert.equal(lastPrice(noToday), days[days.length - 2]![2]);
+  const all = (z: number) => z >= 0;
+  const a = dca(noToday, 10, 0, all);
+  assert.ok(a.val > 0, "стоимость покупок не обнуляется");
+  assert.equal(a.val, dca(upToYday, 10, 0, all).val);
+  assert.deepEqual(analogs(noToday), analogs(upToYday));
+  assert.deepEqual(divergence(noToday), divergence(upToYday));
+  // Цен нет совсем — нечего и считать.
+  const bare: FngDay[] = days.map((d) => [d[0], d[1], 0, d[3]]);
+  assert.equal(lastPrice(bare), 0);
+  assert.deepEqual(dca(bare, 10, 0, all), { inv: 0, val: 0 });
+  assert.equal(divergence(bare), null);
+});
+
+test("расхождение: окно в 60 дней без цен — не «цена на дне»", () => {
+  const vs = Array.from({ length: 200 }, () => 60);
+  const d: FngDay[] = make(vs).map((x, i) => [x[0], x[1], i >= 130 && i < 199 ? 0 : 10_000 + i, 0]);
+  assert.equal(divergence(d), null);
 });

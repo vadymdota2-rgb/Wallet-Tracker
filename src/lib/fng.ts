@@ -257,7 +257,26 @@ export function forward(days: readonly FngDay[], h: number): { n: number; med: n
   });
 }
 
-/** Покупка на сумму в день с даты from — только в дни, что проходят отбор. */
+/**
+ * Дни до последнего дня с ценой включительно. Цены за сегодня может ещё не
+ * быть (сервер не получил текущую), и «сейчас» для расчётов о цене — это
+ * последний день, где она известна: иначе покупки стоили бы «$0», а сегодня
+ * не было бы ни дна, ни вершины.
+ */
+export function pricedPrefix(days: readonly FngDay[]): readonly FngDay[] {
+  let i = days.length - 1;
+  while (i >= 0 && !(days[i]![2] > 0)) i -= 1;
+  return i === days.length - 1 ? days : days.slice(0, i + 1);
+}
+
+/** Последняя известная цена BTC, $; 0 — цен нет ни за один день. */
+export function lastPrice(days: readonly FngDay[]): number {
+  const p = pricedPrefix(days);
+  return p[p.length - 1]?.[2] ?? 0;
+}
+
+/** Покупка на сумму в день с даты from — только в дни, что проходят отбор;
+ *  стоимость — по последней известной цене. */
 export function dca(days: readonly FngDay[], amount: number, from: number, pick: (z: number) => boolean): { inv: number; val: number } {
   let inv = 0;
   let btc = 0;
@@ -266,14 +285,15 @@ export function dca(days: readonly FngDay[], amount: number, from: number, pick:
     inv += amount;
     btc += amount / d[2];
   }
-  const last = days[days.length - 1]?.[2] ?? 0;
-  return { inv, val: btc * last };
+  return { inv, val: btc * lastPrice(days) };
 }
 
-/** Похожие дни: индекс ±5, его ход за месяц ±10, цена за месяц в ту же сторону. */
-export function analogs(days: readonly FngDay[]): {
+/** Похожие дни: индекс ±5, его ход за месяц ±10, цена за месяц в ту же
+ *  сторону. «Сегодня» — последний день с ценой (см. pricedPrefix). */
+export function analogs(all: readonly FngDay[]): {
   v: number; c: number; up: boolean; n: number; up30: number; med30: number; up90: number; med90: number;
 } | null {
+  const days = pricedPrefix(all);
   const n = days.length;
   const i0 = n - 1;
   if (n < 400) return null;
@@ -298,13 +318,22 @@ export function analogs(days: readonly FngDay[]): {
   return { v, c, up, n: count, up30: share(r30), med30: median(r30), up90: share(r90), med90: median(r90) };
 }
 
-/** Расхождение сейчас: цена на краю 60 дней, а настроение — с другой стороны. */
-export function divergence(days: readonly FngDay[]): { kind: "hi" | "lo"; n: number; med: number } | null {
+/** Расхождение сейчас: цена на краю 60 дней, а настроение — с другой
+ *  стороны. «Сейчас» — последний день с ценой (см. pricedPrefix). */
+export function divergence(all: readonly FngDay[]): { kind: "hi" | "lo"; n: number; med: number } | null {
+  const days = pricedPrefix(all);
   const n = days.length;
   if (n < 120) return null;
   const prices = (i: number) => days.slice(i - 60, i).map((d) => d[2]).filter((p) => p > 0);
-  const high = (i: number) => days[i]![2] > 0 && days[i]![2] >= Math.max(...prices(i));
-  const low = (i: number) => days[i]![2] > 0 && days[i]![2] <= Math.min(...prices(i));
+  /* Окно без единой цены — не край: Math.max() пустого — −∞, Math.min() — +∞. */
+  const high = (i: number) => {
+    const w = prices(i);
+    return days[i]![2] > 0 && w.length > 0 && days[i]![2] >= Math.max(...w);
+  };
+  const low = (i: number) => {
+    const w = prices(i);
+    return days[i]![2] > 0 && w.length > 0 && days[i]![2] <= Math.min(...w);
+  };
   const hist = (test: (i: number) => boolean) => {
     const r: number[] = [];
     for (let i = 60; i < n - 30; i++) {

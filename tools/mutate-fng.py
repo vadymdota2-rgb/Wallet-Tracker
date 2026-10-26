@@ -37,10 +37,13 @@ TS = [
     ("days.slice(-Number(range))", "days.slice(-Number(range) - 1)", "окно — ровно n дней"),
     ("if (d[1] > hi[1]) hi = d;", "if (d[1] >= hi[1]) hi = d;", "максимум за год — первый"),
     ("if (days[i]![3] & F_EST) return days[i]![0];", "if (days[i]![3] & F_FILL) return days[i]![0];", "до какого дня цена досчитана"),
-    ("const low = (i: number) => days[i]![2] > 0 && days[i]![2] <= Math.min(...prices(i));",
-     "const low = (i: number) => days[i]![2] > 0 && days[i]![2] <= Math.min(...days.slice(i - 60, i).map((d) => d[2]));",
+    ("const prices = (i: number) => days.slice(i - 60, i).map((d) => d[2]).filter((p) => p > 0);",
+     "const prices = (i: number) => days.slice(i - 60, i).map((d) => d[2]);",
      "дни без цены в окне расхождения"),
     ("for (const d of days) {\n    cnt[zoneOf(d[1])]! += 1;", "for (const d of days.slice(1)) {\n    cnt[zoneOf(d[1])]! += 1;", "все дни окна по зонам"),
+    ("  while (i >= 0 && !(days[i]![2] > 0)) i -= 1;\n", "", "«сейчас» — последний день с ценой"),
+    ("return days[i]![2] > 0 && w.length > 0 && days[i]![2] <= Math.min(...w);", "return days[i]![2] > 0 && days[i]![2] <= Math.min(...w);", "окно без цен — не дно"),
+    ("  return { inv, val: btc * lastPrice(days) };", "  return { inv, val: btc * (days[days.length - 1]?.[2] ?? 0) };", "покупки — по последней известной цене"),
 ]
 PY = [
     ("if hit and not failed and not _busy.is_set():", "if hit and not _busy.is_set():", "пауза после сбоя"),

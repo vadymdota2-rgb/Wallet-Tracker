@@ -287,6 +287,25 @@ describe("Страх и жадность", () => {
     await ctx.close();
   });
 
+  test("сегодня цены ещё нет — каждый раздел работает: покупки не «×0» и не «$0»", async () => {
+    const noToday = { ...REAL, days: REAL.days.map((d, i) => (i === REAL.days.length - 1 ? [d[0], d[1], 0, d[3]] : d)) };
+    const { ctx, page, errors } = await open({ reply: noToday });
+    await ready(page);
+    // Все девять разделов на месте.
+    assert.equal(await page.locator(".screen:has(.fg-hero) .sect").count(), 9);
+    const dca = (await page.locator(".fi-dca-r").allInnerTexts()).map(sp);
+    assert.equal(dca.length, 4);
+    for (const row of dca) {
+      assert.doesNotMatch(row, /×0(?![,.]\d)/, row); // множитель «×0» — признак обнулённой цены
+      assert.doesNotMatch(row, /\$0(?![\d,.])/, row); // «сейчас $0»
+    }
+    // Что было после и похожие дни — посчитаны, а не пусты.
+    assert.ok((await page.locator(".fi-fwd-r b").allInnerTexts()).some((x) => /\d/.test(x)));
+    assert.equal(await page.locator(".fi-text", { hasText: I18N["fi_sim_none"]!["ru"]! }).count(), 0);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
   test("день без индекса у alternative.me подписан", async () => {
     const { ctx, page } = await open();
     await ready(page);

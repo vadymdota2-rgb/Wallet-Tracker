@@ -30,7 +30,7 @@ import { haptic, openExternal } from "../lib/telegram";
 import { fetchFng, peekFng } from "../lib/api";
 import { Card, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import {
-  F_EST, F_FILL, F_HL, ZONES, colorOf, currentStreak, distribution, estUntil, streakLeft, streakStats, windowOf,
+  F_EST, F_FILL, F_HL, ZONES, colorOf, currentStreak, distribution, estUntil, lastPrice, streakLeft, streakStats, windowOf,
   yearExtremes, zoneKey, zoneOf, type FngDay, type FngReply,
 } from "../lib/fng";
 import { Frame } from "./Screen";
@@ -383,6 +383,8 @@ export function FearGreedScreen() {
   /* Текущая полоса — по всей истории: сколько дней подряд индекс в той же зоне. */
   const cur = useMemo(() => currentStreak(all), [all]);
   const left = useMemo(() => (cur ? streakLeft(all, cur) : null), [all, cur]);
+  /* «BTC с тех пор» — к последней известной цене (за сегодня её может ещё не быть). */
+  const nowPx = useMemo(() => lastPrice(all), [all]);
   /* Есть дни с запасной ценой (mempool.space её не дал) — источник назван. */
   const hl = useMemo(() => all.some((d) => d[3] & F_HL), [all]);
   /* До какого дня цена в окне досчитана по недельным точкам. */
@@ -489,8 +491,8 @@ export function FearGreedScreen() {
                   </b>
                   {selDay[3] & F_FILL ? <small className="fg-note">{t(lang, "fg_fill")}</small> : null}
                   {selDay[2] > 0 ? <span>BTC <bdi dir="ltr">{pxOf(selDay)}</bdi></span> : null}
-                  {selDay[2] > 0 && last[2] > 0 && selDay[0] < last[0] ? (() => {
-                    const ch = (last[2] / selDay[2] - 1) * 100;
+                  {selDay[2] > 0 && nowPx > 0 && selDay[0] < last[0] ? (() => {
+                    const ch = (nowPx / selDay[2] - 1) * 100;
                     return <em className={ch >= 0 ? "up" : "dn"}>{t(lang, "fg_since_then", { p: iso(pct(ch, 0, true)) })}</em>;
                   })() : null}
                 </div>
