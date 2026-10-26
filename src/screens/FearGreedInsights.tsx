@@ -41,9 +41,12 @@ const H_KEY: Record<Horizon, "fi_h7" | "fg_r30" | "fg_r90" | "fi_h180" | "fg_r1y
 export function FearGreedInsights({ lang, days }: { lang: Lang; days: readonly FngDay[] }) {
   const [h, setH] = useState<Horizon>("90");
   const [amount, setAmount] = useState(10);
-  const firstYear = new Date((days[0]?.[0] ?? 0) * 1000).getUTCFullYear();
+  /* Годы покупок — с первого дня с ценой: где цены нет (запасная история
+     Hyperliquid — с августа 2020), год дал бы тот же итог, что следующий. */
+  const firstYear = new Date(((days.find((d) => d[2] > 0) ?? days[0])?.[0] ?? 0) * 1000).getUTCFullYear();
   const lastYear = new Date((days[days.length - 1]?.[0] ?? 0) * 1000).getUTCFullYear();
-  const [year, setYear] = useState(firstYear);
+  const [picked, setYear] = useState(firstYear);
+  const year = Math.max(picked, firstYear);
 
   const ef = useMemo(() => afterEntry(days, 0, true), [days]);
   const eg = useMemo(() => afterEntry(days, 4, false), [days]);

@@ -124,19 +124,39 @@ class BuildTest(unittest.TestCase):
     def test_close_rules(self):
         # Точка у полуночи — цена как есть; между далёкими точками — по
         # логарифму (середина между 100 и 400 — 200, а не 250); дальше
-        # GAP_MAX — не знаем; идущий день — последняя цена, если она из него.
+        # GAP_MAX — не знаем.
         t = fake.START + 10 * DAY
         end = t + DAY
-        self.assertEqual(fng._close([end - fng.EXACT], [5000.0], t, end + DAY), (5000.0, 0))
-        self.assertEqual(fng._close([end - fng.EXACT - 1, end + DAY], [5000.0, 6000.0], t, end + 5 * DAY)[1], fng.F_EST)
-        p, f = fng._close([end - 3 * DAY, end + 3 * DAY], [1000.0, 4000.0], t, end + 9 * DAY)
+        self.assertEqual(fng._close([end - fng.EXACT], [5000.0], t), (5000.0, 0))
+        self.assertEqual(fng._close([end - fng.EXACT - 1, end + DAY], [5000.0, 6000.0], t)[1], fng.F_EST)
+        p, f = fng._close([end - 3 * DAY, end + 3 * DAY], [1000.0, 4000.0], t)
         self.assertAlmostEqual(p, 2000.0)
         self.assertEqual(f, fng.F_EST)
-        self.assertEqual(fng._close([end - 5 * DAY, end + 5 * DAY], [1000.0, 4000.0], t, end + 9 * DAY), (0.0, 0))
-        self.assertEqual(fng._close([], [], t, end), (0.0, 0))
-        # День идёт.
-        self.assertEqual(fng._close([t + 3600], [7000.0], t, t + 7200), (7000.0, 0))
-        self.assertEqual(fng._close([t - 3600], [7000.0], t, t + 7200), (0.0, 0))
+        self.assertEqual(fng._close([end - 5 * DAY, end + 5 * DAY], [1000.0, 4000.0], t), (0.0, 0))
+        self.assertEqual(fng._close([], [], t), (0.0, 0))
+
+    def test_running_day_takes_the_freshest_price_of_that_day(self):
+        t = fake.START + 10 * DAY
+        n = t + 10 * fake.HOUR
+        calls = []
+        def hl(got):
+            def f():
+                calls.append(1)
+                return got
+            return f
+        # Свежая цена mempool — она, Hyperliquid не спрашиваем.
+        self.assertEqual(fng._running([n - int(fng.TTL)], [7000.0], t, n, hl((n, 9000.0))), (7000.0, 0))
+        self.assertEqual(calls, [])
+        # Цена mempool старше TTL — новее у Hyperliquid: она, с флагом F_HL.
+        self.assertEqual(fng._running([n - int(fng.TTL) - 1], [7000.0], t, n, hl((n - 60, 9000.0))), (9000.0, fng.F_HL))
+        # …у Hyperliquid не новее или из прошлого дня — остаётся mempool.
+        self.assertEqual(fng._running([n - 2 * fng.HOUR], [7000.0], t, n, hl((n - 2 * fng.HOUR, 9000.0))), (7000.0, 0))
+        self.assertEqual(fng._running([n - 2 * fng.HOUR], [7000.0], t, n, hl(None)), (7000.0, 0))
+        # Цены mempool из этого дня нет.
+        self.assertEqual(fng._running([t - 60], [7000.0], t, n, hl((t, 9000.0))), (9000.0, fng.F_HL))
+        self.assertEqual(fng._running([t - 60], [7000.0], t, n, hl((t - 1, 9000.0))), (0.0, 0))
+        self.assertEqual(fng._running([], [], t, n, hl(None)), (0.0, 0))
+        self.assertEqual(len(calls), 6)
 
     def test_live_price_older_than_history_is_ignored(self):
         old = json.dumps({"time": fake.NOW - 5 * fake.HOUR, "USD": 1_000_000}).encode()
@@ -326,6 +346,70 @@ class BuildTest(unittest.TestCase):
         r, _ = build()
         self.assertTrue(r == good, "запасная вмешалась")
         self.assertEqual(len(calls), 1)
+
+    def test_today_price_follows_hyperliquid_and_is_not_frozen_by_the_previous_answer(self):
+        price = [70_000.0]
+        fng.set_live_backup(lambda: (fake.NOW - 60, price[0]))
+        self.addCleanup(fng.set_live_backup, None)
+        silent = {"historical-price": None, "/v1/prices": None}
+        build(silent)
+        price[0] = 71_000.0
+        r, _ = build(silent)
+        self.assertEqual(r["days"][-1][2], 71_000.0)
+        # Hyperliquid замолчал — остаётся цена прошлого ответа, а не ноль.
+        fng.set_live_backup(lambda: None)
+        r, _ = build(silent)
+        self.assertEqual((r["days"][-1][2], r["days"][-1][3] & fng.F_HL), (71_000.0, fng.F_HL))
+
+    def test_stale_mempool_price_of_today_gives_way_to_a_fresher_hyperliquid_one(self):
+        # Текущей цены mempool нет, последняя точка истории — часы назад:
+        # идущий день — по Hyperliquid. Свежая текущая mempool — она.
+        pts = [p for p in fake.history_points() if p["time"] <= fake.NOW - 3 * fake.HOUR]
+        fng.set_live_backup(lambda: (fake.NOW - 60, 77_000.0))
+        self.addCleanup(fng.set_live_backup, None)
+        r, _ = build({"historical-price": json.dumps({"prices": pts}).encode(), "/v1/prices": None})
+        self.assertEqual((r["days"][-1][2], r["days"][-1][3]), (77_000.0, fng.F_HL))
+        self.assertFalse(any(d[3] & fng.F_HL for d in r["days"][:-1]))
+        fresh()
+        fng.set_live_backup(lambda: (fake.NOW - 60, 77_000.0))
+        r, _ = build({"historical-price": json.dumps({"prices": pts}).encode()})
+        self.assertEqual(r["days"][-1][3] & fng.F_HL, 0)
+        self.assertNotEqual(r["days"][-1][2], 77_000.0)
+
+    def test_unfinished_day_of_the_previous_answer_is_not_taken_as_its_close(self):
+        # Прошлый ответ собран днём вчера: цена вчерашнего дня в нём — цена
+        # середины дня, не закрытие. Сегодня вчерашний день берёт запасное
+        # закрытие, а без него — остаётся без цены.
+        y = fake.TODAY - DAY
+        silent = {"historical-price": None, "/v1/prices": None}
+        for backup, want in (({y: 66_000.0}, (66_000.0, fng.F_HL)), ({}, (0, 0))):
+            fresh()
+            fng.set_live_backup(lambda: (y + 10 * fake.HOUR, 60_000.0))
+            self.addCleanup(fng.set_live_backup, None)
+            build(silent, now=y + 10 * fake.HOUR)
+            fng.set_backup(lambda backup=backup: backup)
+            self.addCleanup(fng.set_backup, None)
+            fng.set_live_backup(None)
+            r, _ = build(silent)
+            by = {d[0]: d for d in r["days"]}
+            self.assertEqual((by[y][2], by[y][3]), want, backup)
+        # Прошлый ответ собран за час до полуночи — его цена годится как
+        # закрытие (как точка у полуночи), но запасное закрытие — вернее.
+        for backup, want in (({}, 60_000.0), ({y: 66_000.0}, 66_000.0)):
+            fresh()
+            fng.set_live_backup(lambda: (fake.TODAY - fake.HOUR, 60_000.0))
+            build(silent, now=fake.TODAY - fake.HOUR)
+            fng.set_backup(lambda backup=backup: backup)
+            fng.set_live_backup(None)
+            r, _ = build(silent)
+            self.assertEqual({d[0]: d for d in r["days"]}[y][2], want, backup)
+        # Цена mempool прошлого ответа (не Hyperliquid) — выше запасной.
+        fresh()
+        good, _ = build(now=fake.TODAY - fake.HOUR)
+        fng._st.ts, fng._st.px = [], []  # история mempool с тех пор пропала
+        fng.set_backup(lambda: {y: 1_234.0})
+        r, _ = build(silent)
+        self.assertEqual({d[0]: d for d in r["days"]}[y][2], {d[0]: d for d in good["days"]}[y][2])
 
     def test_live_backup_is_checked_before_use(self):
         start = fake.TODAY
@@ -609,6 +693,13 @@ class ServerMidsTest(unittest.TestCase):
             api._fng_btc_now()
         self.assertEqual(post.call_count, 1)
         self.assertEqual(post.call_args[0][0], {"type": "allMids"})
+
+    def test_copy_without_btc_is_asked_again(self):
+        api = self.api
+        api._hl_cache["_mids"] = (time.monotonic() - 60, {})  # прошлый запрос не удался
+        with mock.patch.object(api, "hl_post", return_value={"BTC": "83000"}) as post:
+            self.assertEqual(api._fng_btc_now()[1], 83_000.0)
+        self.assertEqual(post.call_count, 1)
 
     def test_no_btc_or_no_answer_means_none(self):
         api = self.api

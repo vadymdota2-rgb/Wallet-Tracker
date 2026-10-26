@@ -4,7 +4,7 @@
  * зависимостей: тесты (node --test) гоняют его как есть.
  *
  * Индекс — alternative.me, цена BTC — mempool.space, а где её нет —
- * закрытия Hyperliquid (флаг F_HL; сервер — wt_fng.py).
+ * Hyperliquid (флаг F_HL; сервер — wt_fng.py).
  * Ответ проверяется целиком: подменённый, обрезанный или старый (в том числе
  * сохранённый в телефоне ответ прежнего формата, с ценой Binance) экран не
  * роняет — берётся свежий или экран просит повторить.
@@ -29,7 +29,7 @@ export const FNG_TTL_MS = 30 * 60_000;
 export const F_EST = 1;
 /** Индекса за день у alternative.me нет — взят прошлый день. */
 export const F_FILL = 2;
-/** Цена дня — запасная, Hyperliquid (mempool.space её не дал). */
+/** Цена дня — запасная, Hyperliquid (у mempool.space её нет или она устарела). */
 export const F_HL = 4;
 const DAY = 86_400;
 /** Первый день индекса alternative.me — 1 февраля 2018 г. */
@@ -299,6 +299,8 @@ export function analogs(all: readonly FngDay[]): {
   if (n < 400) return null;
   const v = days[i0]![1];
   const c = v - days[i0 - 30]![1];
+  /* Цены месяц назад нет — хода цены не знаем, и сравнивать не с чем. */
+  if (!(days[i0 - 30]![2] > 0)) return null;
   const up = days[i0]![2] >= days[i0 - 30]![2];
   const r30: number[] = [];
   const r90: number[] = [];
@@ -306,7 +308,8 @@ export function analogs(all: readonly FngDay[]): {
   for (let i = 30; i < n - 30; i++) {
     const d = days[i]!;
     if (Math.abs(d[1] - v) > 5 || Math.abs(d[1] - days[i - 30]![1] - c) > 10) continue;
-    if ((d[2] >= days[i - 30]![2]) !== up || !(d[2] > 0)) continue;
+    const pb = days[i - 30]![2];
+    if (!(d[2] > 0) || !(pb > 0) || (d[2] >= pb) !== up) continue;
     const p30 = days[i + 30]![2];
     if (!(p30 > 0)) continue;
     count += 1;

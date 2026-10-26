@@ -306,6 +306,19 @@ describe("Страх и жадность", () => {
     await ctx.close();
   });
 
+  test("покупки — только с года, где есть цена (запасная история — с 2020)", async () => {
+    const y2020 = Date.UTC(2020, 0, 1) / 1000;
+    const late = { ...REAL, days: REAL.days.map((d) => (d[0] < y2020 ? [d[0], d[1], 0, d[3] & 2] : [d[0], d[1], d[2], 4])) };
+    const { ctx, page, errors } = await open({ reply: late });
+    await ready(page);
+    const years = (sp(await page.locator(".fi-years").innerText()).match(/\b20\d\d\b/g) ?? []).map(Number);
+    const lastYear = new Date(last[0] * 1000).getUTCFullYear();
+    assert.deepEqual(years, Array.from({ length: lastYear - 2020 }, (_, i) => 2020 + i));
+    for (const row of (await page.locator(".fi-dca-r").allInnerTexts()).map(sp)) assert.doesNotMatch(row, /×0(?![,.]\d)/, row);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
   test("день без индекса у alternative.me подписан", async () => {
     const { ctx, page } = await open();
     await ready(page);

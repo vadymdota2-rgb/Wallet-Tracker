@@ -11516,15 +11516,16 @@ fng_data = wt_fng.fng_data
 # Запасная цена BTC — закрытия Hyperliquid, которые уже знает «Альтсезон»
 # (без лишних запросов к Hyperliquid).
 wt_fng.set_backup(wt_dom.btc_closes)
-# Текущая цена идущего дня, если mempool молчит, — из цен Hyperliquid, которые
-# сервер и так держит (hl_mids). Свежее FNG_MIDS_AGE — без запроса; старше —
-# один лёгкий allMids (зовётся не чаще сборки «Страха и жадности», раз в 30 мин).
+# Цена идущего дня, если у mempool её нет или она старше получаса, — из цен
+# Hyperliquid, которые сервер и так держит (hl_mids). Копия свежее
+# FNG_MIDS_AGE и с BTC — без запроса; иначе — один лёгкий allMids (зовётся не
+# чаще сборки «Страха и жадности», раз в 30 мин).
 FNG_MIDS_AGE = 1800.0
 
 
 def _fng_btc_now() -> tuple[int, float] | None:
     hit = _hl_cache.get("_mids")
-    if not hit or time.monotonic() - hit[0] > FNG_MIDS_AGE:
+    if not hit or "BTC" not in hit[1] or time.monotonic() - hit[0] > FNG_MIDS_AGE:
         hl_mids()
         hit = _hl_cache.get("_mids")
     if not hit:
