@@ -19,7 +19,7 @@ sys.path.insert(0, ROOT)
 import wt_fng as fng  # noqa: E402 — модуль лежит в корне репозитория
 
 SERVER = os.path.join(ROOT, "wt_fng.py")
-IMPORTS = {"__future__", "bisect", "collections.abc", "contextlib", "http.client", "json", "math", "os", "re", "ssl", "sys", "threading",
+IMPORTS = {"__future__", "bisect", "collections.abc", "contextlib", "http.client", "json", "math", "os", "re", "socket", "ssl", "sys", "threading",
            "time", "urllib.error", "urllib.parse", "urllib.request", "dataclasses", "typing"}
 BANNED_CALLS = {"eval", "exec", "compile", "__import__", "input", "breakpoint", "globals", "locals", "vars",
                 "setattr", "delattr"}
@@ -98,7 +98,8 @@ class ServerPolicyTest(unittest.TestCase):
                     if isinstance(n, ast.Attribute) and n.attr in ("open", "urlopen", "urlretrieve", "create_connection",
                                                                    "socket", "getaddrinfo"):
                         calls.append((fn.name, n.attr))
-        self.assertEqual(calls, [("_fetch", "open")])
+        # Соединение — только в _connect (адреса по очереди), сам запрос — в _fetch.
+        self.assertEqual(set(calls), {("_connect", "getaddrinfo"), ("_connect", "socket"), ("_fetch", "open")})
         body = inspect.getsource(fng._fetch)
         self.assertLess(body.index("if not _allowed(url):"), body.index("_opener.open("))
 
@@ -138,7 +139,8 @@ class ServerPolicyTest(unittest.TestCase):
                 importlib.reload(fng)
         self.assertTrue(any(getattr(h, "proxies", None) for h in default.handlers))
         self.assertFalse(any(getattr(h, "proxies", None) for h in poisoned))
-        https = [h for h in fng._opener.handlers if type(h).__name__ == "HTTPSHandler"]
+        https = [h for h in fng._opener.handlers if isinstance(h, fng.urllib.request.HTTPSHandler)]
+        self.assertEqual(len(https), 1)
         ctx = https[0]._context
         self.assertGreaterEqual(ctx.minimum_version, fng.ssl.TLSVersion.TLSv1_2)
         self.assertEqual(ctx.verify_mode, fng.ssl.CERT_REQUIRED)

@@ -54,7 +54,7 @@ TS = [
 ]
 PY = [
     ("if hit and not failed and not _busy.is_set():", "if hit and not _busy.is_set():", "пауза после сбоя"),
-    ("if left <= MIN_LEFT:", "if left <= -1:", "бюджет исчерпан"),
+    ("    if left <= MIN_LEFT:\n        return None", "    if left <= -1:\n        return None", "бюджет исчерпан"),
     ("hop = min(HOP, left)", "hop = HOP", "таймаут по остатку бюджета"),
     ("        _dl.at = 0.0\n", "        pass\n", "срок сборки сбрасывается"),
     ("    with _cold:\n", "    if True:\n", "один сборщик на холодном старте"),
@@ -137,6 +137,14 @@ PY = [
     ("    with contextlib.suppress(OSError, ValueError):\n        print(", "    if True:\n        print(", "журнал не роняет модуль"),
     ("build_opener(urllib.request.ProxyHandler({}), ", "build_opener(", "прокси из окружения не берётся"),
     (', "Accept-Encoding": "identity"}', "}", "ответ без сжатия"),
+    ("    infos.sort(key=lambda a: a[0] != socket.AF_INET)\n", "", "соединение: IPv4 первыми"),
+    ("sock.settimeout(min(CONNECT, left))", "sock.settimeout(left)", "соединение: адрес — не дольше CONNECT"),
+    ("            err = e\n            continue", "            raise", "соединение: молчащий адрес — к следующему"),
+    ("    if host not in HOSTS:\n        raise OSError", "    if False:\n        raise OSError", "соединение: только HOSTS"),
+    ("        if left <= MIN_LEFT:\n            break\n", "", "соединение: без времени — не пробуем"),
+    ("        sock.settimeout(limit)\n", "", "соединение: дальше — тайм-аут запроса"),
+    ("        self._create_connection = _connect\n", "", "запросы — через _connect"),
+    ("            sock.close()\n", "", "соединение: молчащий сокет закрыт"),
     ("got = _parse(f.read(HIST_MAX + 1))", "got = _parse(f.read())", "копия на диске — не больше предела"),
 ]
 

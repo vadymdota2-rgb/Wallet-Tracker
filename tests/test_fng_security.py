@@ -327,3 +327,73 @@ class SecurityTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ConnectTest(unittest.TestCase):
+    """_connect: адреса источника по очереди, молчащий не съедает запрос."""
+
+    @staticmethod
+    def fake(dead: set[str]):
+        """Подмена socket.socket: соединение с адресом из dead висит (тайм-аут)."""
+        made = []
+
+        class Sock:
+            def __init__(self, family, kind, proto):
+                self.family, self.timeouts, self.closed, self.addr = family, [], False, None
+                made.append(self)
+
+            def settimeout(self, t):
+                self.timeouts.append(t)
+
+            def connect(self, addr):
+                self.addr = addr[0]
+                if addr[0] in dead:
+                    raise TimeoutError("timed out")
+
+            def close(self):
+                self.closed = True
+        return Sock, made
+
+    @staticmethod
+    def infos(*ips):
+        return [(socket.AF_INET6 if ":" in ip else socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 443)) for ip in ips]
+
+    def test_silent_address_is_skipped_quickly_and_ipv4_goes_first(self):
+        Sock, made = self.fake({"10.0.0.1"})
+        with mock.patch.object(fng.socket, "getaddrinfo", return_value=self.infos("2001:db8::1", "10.0.0.1", "10.0.0.2")), \
+                mock.patch.object(fng.socket, "socket", Sock):
+            s = fng._connect(("mempool.space", 443), 15.0)
+        self.assertEqual([m.addr for m in made], ["10.0.0.1", "10.0.0.2"])  # IPv4 первыми, IPv6 не понадобился
+        self.assertIs(s, made[1])
+        self.assertTrue(made[0].closed)
+        self.assertFalse(made[1].closed)
+        # Соединение — не дольше CONNECT; дальше сокет живёт с тайм-аутом запроса.
+        self.assertLessEqual(made[0].timeouts[0], fng.CONNECT)
+        self.assertEqual(made[1].timeouts[-1], 15.0)
+
+    def test_all_silent_raises_and_closes_everything(self):
+        Sock, made = self.fake({"10.0.0.1", "10.0.0.2"})
+        with mock.patch.object(fng.socket, "getaddrinfo", return_value=self.infos("10.0.0.1", "10.0.0.2")), \
+                mock.patch.object(fng.socket, "socket", Sock), self.assertRaises(OSError):
+            fng._connect(("mempool.space", 443), 15.0)
+        self.assertEqual(len(made), 2)
+        self.assertTrue(all(m.closed for m in made))
+
+    def test_no_time_left_no_more_tries(self):
+        Sock, made = self.fake({"10.0.0.1", "10.0.0.2", "10.0.0.3"})
+        clock = iter([0.0, 0.0, 10.0, 10.0])  # конец бюджета, первая попытка, после неё — времени нет
+        with mock.patch.object(fng.socket, "getaddrinfo", return_value=self.infos("10.0.0.1", "10.0.0.2", "10.0.0.3")), \
+                mock.patch.object(fng.socket, "socket", Sock), \
+                mock.patch.object(fng.time, "monotonic", lambda: next(clock, 10.0)), self.assertRaises(OSError):
+            fng._connect(("mempool.space", 443), 5.0)
+        self.assertEqual(len(made), 1)
+
+    def test_only_known_hosts(self):
+        with mock.patch.object(fng.socket, "getaddrinfo", side_effect=AssertionError("в DNS не ходим")), \
+                self.assertRaises(OSError):
+            fng._connect(("evil.example", 443), 5.0)
+
+    def test_requests_connect_through_it(self):
+        with mock.patch.object(fng, "_connect", side_effect=OSError("нет сети")) as c:
+            self.assertIsNone(fng._fetch(fng.LIVE_URL, fng.LIVE_MAX))
+        self.assertEqual(c.call_args[0][0], ("mempool.space", 443))
