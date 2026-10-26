@@ -472,7 +472,7 @@ def _backup() -> dict[int, float]:
 
 
 def _days(idx: dict[int, int], ts: list[int], px: list[float], old: dict[int, tuple[float, int]],
-          backup: Mapping[int, float], now_backup: Callable[[], tuple[int, float] | None]) -> list[Day]:
+          backup: Mapping[int, float]) -> list[Day]:
     """Дни ответа от первого до последнего дня индекса подряд. Цена дня —
     от mempool (идущего — см. _running); нет её — из прошлого ответа, если
     там она от mempool; дальше — запасное закрытие Hyperliquid (флаг F_HL);
@@ -484,7 +484,7 @@ def _days(idx: dict[int, int], ts: list[int], px: list[float], old: dict[int, tu
         v = idx.get(t)
         if v is None:
             v, f = int(out[-1][1]), F_FILL  # первый день есть всегда: t начинается с min(idx)
-        p, e = _running(ts, px, t, n, now_backup) if t + DAY > n else _close(ts, px, t)
+        p, e = _running(ts, px, t, n, _live_backup) if t + DAY > n else _close(ts, px, t)
         o = old.get(t)
         if not p and o and not o[1] & F_HL:
             p, e = o
@@ -548,7 +548,7 @@ def _build() -> Reply:
     old_at = _whole(hit[1].get("at")) if hit else 0
     old = {int(d[0]): (float(d[2]), int(d[3]) & (F_EST | F_HL)) for d in old_days
            if d[2] > 0 and (d[0] + DAY <= old_at + EXACT or d[0] + DAY > n)}
-    days = _days(idx, ts, px, old, _backup(), _live_backup)
+    days = _days(idx, ts, px, old, _backup())
     res: Reply = {"ok": True, "days": days, "at": n}
     # Цен за последний месяц нет ни от mempool, ни запасных — ответ живёт
     # только ERR_TTL: цена появится через пару минут, а не через полчаса.
