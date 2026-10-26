@@ -995,6 +995,7 @@ export const ja: Dict = {
   lang_title: "🌐 言語",
   legal_btn_forget: "🗑 データを削除",
   legal_btn_privacy: "🔒 プライバシー",
+  legal_flags: "国旗を表示できない端末での国旗：Twemoji（© Twitter, Inc. およびその他の貢献者）、ライセンス CC BY 4.0 — twemoji.twitter.com。",
   legal_forget_done: "✅ 完了しました。当方が保持していたあなたに関する情報はすべて削除されました。また戻りたくなったら、アプリをもう一度開いてください。",
   legal_forget_failed: "❌ データを削除できませんでした。しばらくしてからもう一度お試しください。",
   legal_forget_title: "🗑 データを削除",

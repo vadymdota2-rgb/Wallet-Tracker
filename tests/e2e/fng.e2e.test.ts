@@ -306,7 +306,7 @@ describe("Страх и жадность", () => {
     await ctx.close();
   });
 
-  test("покупки — только с года, где есть цена (запасная история — с 2020)", async () => {
+  test("цены только с 2020 (запасная история): покупки и график — с первой цены", async () => {
     const y2020 = Date.UTC(2020, 0, 1) / 1000;
     const late = { ...REAL, days: REAL.days.map((d) => (d[0] < y2020 ? [d[0], d[1], 0, d[3] & 2] : [d[0], d[1], d[2], 4])) };
     const { ctx, page, errors } = await open({ reply: late });
@@ -315,6 +315,14 @@ describe("Страх и жадность", () => {
     const lastYear = new Date(last[0] * 1000).getUTCFullYear();
     assert.deepEqual(years, Array.from({ length: lastYear - 2020 }, (_, i) => 2020 + i));
     for (const row of (await page.locator(".fi-dca-r").allInnerTexts()).map(sp)) assert.doesNotMatch(row, /×0(?![,.]\d)/, row);
+    // График — с первого дня с ценой: подписи времени без 2018–2019, а
+    // первая строка таблицы снизу — день не раньше 2020 года.
+    const ticks = (await page.locator(".fg-plot .fg-tick").allTextContents()).map(sp);
+    assert.ok(ticks.some((x) => /2021|2020/.test(x)), JSON.stringify(ticks));
+    assert.ok(!ticks.some((x) => /2018|2019/.test(x)), JSON.stringify(ticks));
+    await page.locator(".fg-tbl summary").click();
+    const oldest = sp(await page.locator(".fg-tbl tbody tr th").last().innerText());
+    assert.match(oldest, /2020/);
     assert.deepEqual(errors, []);
     await ctx.close();
   });

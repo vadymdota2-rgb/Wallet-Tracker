@@ -995,6 +995,7 @@ export const vi: Dict = {
   lang_title: "🌐 Ngôn ngữ",
   legal_btn_forget: "🗑 Xóa dữ liệu của tôi",
   legal_btn_privacy: "🔒 Quyền riêng tư",
+  legal_flags: "Cờ trên các thiết bị không tự hiển thị được: Twemoji (© Twitter, Inc. và những người đóng góp khác), giấy phép CC BY 4.0 — twemoji.twitter.com.",
   legal_forget_done: "✅ Xong. Mọi thứ chúng tôi giữ về bạn đã bị xóa. Nếu muốn quay lại, chỉ cần mở lại ứng dụng.",
   legal_forget_failed: "❌ Không xóa được dữ liệu. Vui lòng thử lại sau.",
   legal_forget_title: "🗑 Xóa dữ liệu của tôi",

@@ -995,6 +995,7 @@ export const id: Dict = {
   lang_title: "🌐 Bahasa",
   legal_btn_forget: "🗑 Hapus data saya",
   legal_btn_privacy: "🔒 Privasi",
+  legal_flags: "Bendera di perangkat yang tidak bisa menampilkannya sendiri: Twemoji (© Twitter, Inc. dan kontributor lain), lisensi CC BY 4.0 — twemoji.twitter.com.",
   legal_forget_done: "✅ Selesai. Semua yang kami simpan tentang Anda sudah dihapus. Kalau suatu saat ingin kembali, cukup buka aplikasi lagi.",
   legal_forget_failed: "❌ Data gagal dihapus. Coba lagi nanti.",
   legal_forget_title: "🗑 Hapus data saya",

@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   F_EST, F_FILL, F_HL, FNG_START, ZONES, afterEntry, analogs, colorOf, currentStreak, dca, distribution, divergence, estUntil,
-  forward, lastPrice, median, streakLeft, streakStats, validFng, windowOf, yearExtremes, zoneKey, zoneOf, type FngDay, type FngReply,
+  forward, fromFirstPrice, lastPrice, median, streakLeft, streakStats, validFng, windowOf, yearExtremes, zoneKey, zoneOf, type FngDay, type FngReply,
 } from "../src/lib/fng.ts";
 
 const DAY = 86_400;
@@ -207,6 +207,18 @@ test("похожие дни и расхождение — на образце с
   const v = divergence(days);
   assert.ok(v === null || v.kind === "hi" || v.kind === "lo");
   assert.equal(divergence(days.slice(0, 119)), null);
+});
+
+test("график — с первого дня с ценой; цен нет — все дни", () => {
+  const d: FngDay[] = make([10, 20, 30, 40]).map((x, i) => [x[0], x[1], i < 2 ? 0 : 50_000, 0]);
+  assert.deepEqual(fromFirstPrice(d), d.slice(2));
+  const full = make([10, 20]);
+  assert.equal(fromFirstPrice(full), full); // цена с первого дня — тот же массив
+  const none: FngDay[] = make([10, 20]).map((x) => [x[0], x[1], 0, 0]);
+  assert.equal(fromFirstPrice(none), none);
+  // Дыра в цене посреди окна график не режет.
+  const hole: FngDay[] = make([10, 20, 30]).map((x, i) => [x[0], x[1], i === 1 ? 0 : 50_000, 0]);
+  assert.equal(fromFirstPrice(hole), hole);
 });
 
 test("похожие дни: день без цены месяц назад — не «цена выросла»", () => {

@@ -45,6 +45,8 @@ TS = [
     ("return days[i]![2] > 0 && w.length > 0 && days[i]![2] <= Math.min(...w);", "return days[i]![2] > 0 && days[i]![2] <= Math.min(...w);", "окно без цен — не дно"),
     ("  if (!(days[i0 - 30]![2] > 0)) return null;\n", "", "похожие: цена месяц назад есть"),
     ("if (!(d[2] > 0) || !(pb > 0) || (d[2] >= pb) !== up) continue;", "if (!(d[2] > 0) || (d[2] >= pb) !== up) continue;", "похожие: у дня есть ход цены"),
+    ("return i <= 0 ? days : days.slice(i);", "return days;", "график — с первого дня с ценой"),
+    ("return i <= 0 ? days : days.slice(i);", "return i < 0 ? days : days.slice(i + 1);", "график — включая первый день с ценой"),
     ("  return { inv, val: btc * lastPrice(days) };", "  return { inv, val: btc * (days[days.length - 1]?.[2] ?? 0) };", "покупки — по последней известной цене"),
 ]
 PY = [

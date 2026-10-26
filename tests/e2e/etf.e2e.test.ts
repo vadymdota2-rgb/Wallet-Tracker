@@ -89,6 +89,9 @@ interface Opts {
   clock?: number;
   /** Ответ сервера на /api/etfwatch (итоги дня в Telegram). */
   watch?: (r: Route) => Promise<void>;
+  /** Устройство, которое не рисует флаги (Windows): проверка флага в
+   *  lib/flags.ts видит пустой холст. */
+  noFlags?: boolean;
 }
 
 interface Opened { ctx: BrowserContext; page: Page; errors: string[]; asked: () => number }
@@ -122,6 +125,14 @@ async function open(o: Opts = {}): Promise<Opened> {
     if (a.saved) localStorage.setItem("wt-etf-v1", JSON.stringify(a.saved));
     for (const [k, v] of Object.entries(a.store)) localStorage.setItem(k, v);
   }, { lang: o.lang ?? "ru", saved: o.saved ?? null, store: o.store ?? {} });
+  if (o.noFlags) {
+    await page.addInitScript(() => {
+      const get = CanvasRenderingContext2D.prototype.getImageData;
+      CanvasRenderingContext2D.prototype.getImageData = function (x: number, y: number, w: number, h: number) {
+        return w === 24 && h === 24 ? new ImageData(w, h) : get.call(this, x, y, w, h);
+      };
+    });
+  }
   if (o.watch) await ctx.route(`${base}/api/etfwatch`, o.watch);
   if (o.premium) {
     await ctx.route(`${base}/api/bootstrap`, (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, me: { plan: "premium" } }) }));
@@ -252,6 +263,39 @@ describe("институциональные потоки", () => {
     await chip(1).click();
     assert.doesNotMatch(await note(), /GBTC/);
     await ctx.close();
+  });
+
+  test("флаг страны у фонда — картинка, а не буквы «US»; на Windows — наш шрифт флагов", async () => {
+    /** Какими шрифтами браузер на деле нарисовал флаг первого фонда. */
+    const drawnWith = async (ctx: BrowserContext, page: Page) => {
+      const cdp = await ctx.newCDPSession(page);
+      await cdp.send("DOM.enable");
+      await cdp.send("CSS.enable");
+      const { root } = await cdp.send("DOM.getDocument", { depth: -1 });
+      const { nodeId } = await cdp.send("DOM.querySelector", { nodeId: root.nodeId, selector: "button.ef-f .ef-f-id b span[aria-hidden]" });
+      return (await cdp.send("CSS.getPlatformFontsForNode", { nodeId })).fonts.map((f) => f.familyName);
+    };
+    const flagFonts = (page: Page) => page.evaluate(() => [...document.fonts]
+      .filter((f) => f.family.replace(/"/g, "") === "Twemoji Country Flags").map((f) => f.status));
+    // Как есть: система рисует флаги сама (цветной эмодзи-шрифт) — наш шрифт
+    // не подключён и не скачан; нет такого шрифта в системе — подключён.
+    const a = await open();
+    await ready(a.page);
+    await a.page.evaluate(() => document.fonts.ready);
+    const native = await drawnWith(a.ctx, a.page);
+    if (native.some((n) => /Color Emoji/.test(n))) assert.deepEqual(await flagFonts(a.page), []);
+    else assert.ok(native.includes("Twemoji Mozilla") && (await flagFonts(a.page))[0] === "loaded", JSON.stringify(native));
+    await a.ctx.close();
+    // Не рисует (Windows) — флаг нарисован нашим шрифтом, шрифт загружен.
+    const b = await open({ noFlags: true });
+    await ready(b.page);
+    await b.page.evaluate(() => document.fonts.ready);
+    assert.deepEqual(await flagFonts(b.page), ["loaded"]);
+    // Внутреннее имя файла шрифта — «Twemoji Mozilla» (в системе такого нет).
+    const names = await drawnWith(b.ctx, b.page);
+    assert.ok(names.includes("Twemoji Mozilla") && !names.some((n) => /Color Emoji/.test(n)), JSON.stringify(names));
+    assert.deepEqual(b.errors, []);
+    await b.ctx.close();
   });
 
   test("карточка фонда: нажатие раскрывает потоки по дням, итог, запас и рекорды; ещё нажатие — сворачивает", async () => {

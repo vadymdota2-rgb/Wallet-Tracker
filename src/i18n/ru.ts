@@ -995,6 +995,7 @@ export const ru: Dict = {
   lang_title: "🌐 Язык",
   legal_btn_forget: "🗑 Удалить мои данные",
   legal_btn_privacy: "🔒 Конфиденциальность",
+  legal_flags: "Флаги на устройствах, которые не рисуют их сами: Twemoji (© Twitter, Inc. и другие участники), лицензия CC BY 4.0 — twemoji.twitter.com.",
   legal_forget_done: "✅ Готово. Всё, что мы о вас хранили, удалено. Если захотите вернуться — просто откройте приложение снова.",
   legal_forget_failed: "❌ Не удалось удалить данные. Попробуйте позже.",
   legal_forget_title: "🗑 Удалить мои данные",

@@ -1,6 +1,8 @@
 /* Палитра и типографика. Цвета — те же, что были у приложения. */
 :root {
-  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  /* «Twemoji Country Flags» — только флаги и только там, где система их не
+     рисует (lib/flags.ts); на остальных устройствах имя ничего не значит. */
+  --font-sans: "Twemoji Country Flags", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 
   --bg: #01030a;

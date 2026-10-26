@@ -30,7 +30,8 @@ import { haptic, openExternal } from "../lib/telegram";
 import { fetchFng, peekFng } from "../lib/api";
 import { Card, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import {
-  F_EST, F_FILL, F_HL, ZONES, colorOf, currentStreak, distribution, estUntil, lastPrice, streakLeft, streakStats, windowOf,
+  F_EST, F_FILL, F_HL, ZONES, colorOf, currentStreak, distribution, estUntil, fromFirstPrice, lastPrice, streakLeft,
+  streakStats, windowOf,
   yearExtremes, zoneKey, zoneOf, type FngDay, type FngReply,
 } from "../lib/fng";
 import { Frame } from "./Screen";
@@ -372,6 +373,9 @@ export function FearGreedScreen() {
 
   const all = useMemo<readonly Day[]>(() => reply?.days ?? [], [reply]);
   const days = useMemo(() => windowOf(all, range), [all, range]);
+  /* График и таблица — с первого дня окна, где есть цена; счёт по зонам и
+     полосам — по всем дням окна (индекс есть и раньше цены). */
+  const shown = useMemo(() => fromFirstPrice(days), [days]);
   const last = all[all.length - 1];
   const back = (n: number) => all[all.length - 1 - n];
 
@@ -389,14 +393,14 @@ export function FearGreedScreen() {
   /* Есть дни с запасной ценой (mempool.space её не дал) — источник назван. */
   const hl = useMemo(() => all.some((d) => d[3] & F_HL), [all]);
   /* До какого дня цена в окне досчитана по недельным точкам. */
-  const est = useMemo(() => estUntil(days), [days]);
+  const est = useMemo(() => estUntil(shown), [shown]);
   const daysStr = (v: number, digits = 0) => t(lang, "fg_days", { n: num(v, digits) });
 
-  const selDay = sel !== null ? days[sel] : undefined;
-  const tipLeft = sel !== null && sel > days.length / 2;
+  const selDay = sel !== null ? shown[sel] : undefined;
+  const tipLeft = sel !== null && sel > shown.length / 2;
   /* Клавиатура: стрелки — день (с Shift — неделя), Home и End — края, Esc — убрать. */
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    const n = days.length;
+    const n = shown.length;
     if (!n) return;
     const go = (i: number) => {
       e.preventDefault();
@@ -483,7 +487,7 @@ export function FearGreedScreen() {
             />
             <div className="fg-plot fg-keys" tabIndex={0} role="group" aria-label={t(lang, "ef_keys")}
               onKeyDown={onKey} onBlur={() => setSel(null)}>
-              <Chart days={days} lang={lang} sel={sel} onSel={setSel} />
+              <Chart days={shown} lang={lang} sel={sel} onSel={setSel} />
               {selDay ? (
                 <div className={tipLeft ? "fg-pop left" : "fg-pop"} aria-live="polite">
                   <small>{dateStr(lang, selDay[0], { day: "numeric", month: "long", year: "numeric" })}</small>
@@ -506,7 +510,7 @@ export function FearGreedScreen() {
             </div>
             <p className="lq-hint">{t(lang, "fg_hint")}</p>
             {est ? <p className="fg-est">{t(lang, "fg_est", { d: dateStr(lang, est + DAY, { day: "numeric", month: "long", year: "numeric" }) })}</p> : null}
-            <DaysTable days={days} lang={lang} />
+            <DaysTable days={shown} lang={lang} />
           </Card>
 
           <SectionTitle help={["fg_q_dist", "fg_how_3"]}>{t(lang, "fg_dist")}</SectionTitle>

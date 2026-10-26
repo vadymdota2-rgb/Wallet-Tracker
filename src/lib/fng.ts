@@ -269,6 +269,17 @@ export function pricedPrefix(days: readonly FngDay[]): readonly FngDay[] {
   return i === days.length - 1 ? days : days.slice(0, i + 1);
 }
 
+/**
+ * Дни с первого дня с ценой — для графика: панели цены и индекса на одной
+ * оси времени, и начало без цены (запасная история Hyperliquid — только с
+ * августа 2020) не оставляет пустой треть панели цены. Цен нет совсем —
+ * все дни (график — один индекс).
+ */
+export function fromFirstPrice(days: readonly FngDay[]): readonly FngDay[] {
+  const i = days.findIndex((d) => d[2] > 0);
+  return i <= 0 ? days : days.slice(i);
+}
+
 /** Последняя известная цена BTC, $; 0 — цен нет ни за один день. */
 export function lastPrice(days: readonly FngDay[]): number {
   const p = pricedPrefix(days);

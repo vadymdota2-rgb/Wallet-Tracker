@@ -108,6 +108,9 @@ export function LegalScreen({ arg }: ScreenProps) {
         {/* Данные под открытыми лицензиями (CC BY 4.0 у TFTC) нельзя ограничивать
             сверх лицензии — условия прямо говорят, что их не ограничивают. */}
         <p className="note">{t(lang, "legal_terms_data")}</p>
+        {/* Рисунки флагов (lib/flags.ts) — Twemoji под CC BY 4.0: условие
+            лицензии — назвать автора и лицензию. */}
+        <p className="note dim">{t(lang, "legal_flags")}</p>
       </Card>
 
       <Card>

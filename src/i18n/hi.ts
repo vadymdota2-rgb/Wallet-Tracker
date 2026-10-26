@@ -995,6 +995,7 @@ export const hi: Dict = {
   lang_title: "🌐 भाषा",
   legal_btn_forget: "🗑 मेरा डेटा मिटाएँ",
   legal_btn_privacy: "🔒 गोपनीयता",
+  legal_flags: "जिन डिवाइसों पर झंडे अपने-आप नहीं दिखते, वहाँ झंडे: Twemoji (© Twitter, Inc. और अन्य योगदानकर्ता), लाइसेंस CC BY 4.0 — twemoji.twitter.com.",
   legal_forget_done: "✅ हो गया। आपके बारे में हमारे पास जो कुछ था, मिटा दिया गया। कभी लौटना चाहें तो बस ऐप फिर से खोलें।",
   legal_forget_failed: "❌ डेटा नहीं मिटाया जा सका। कृपया बाद में फिर कोशिश करें।",
   legal_forget_title: "🗑 मेरा डेटा मिटाएँ",

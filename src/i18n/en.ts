@@ -994,6 +994,7 @@ export const en = {
   lang_title: "🌐 Language",
   legal_btn_forget: "🗑 Delete my data",
   legal_btn_privacy: "🔒 Privacy",
+  legal_flags: "Flags on devices that cannot draw them: Twemoji (© Twitter, Inc. and other contributors), CC BY 4.0 license — twemoji.twitter.com.",
   legal_forget_done: "✅ Done. Everything we held about you is deleted. If you ever want to come back, just open the app again.",
   legal_forget_failed: "❌ Could not delete the data. Please try again later.",
   legal_forget_title: "🗑 Delete my data",

@@ -995,6 +995,7 @@ export const uk: Dict = {
   lang_title: "🌐 Мова",
   legal_btn_forget: "🗑 Видалити мої дані",
   legal_btn_privacy: "🔒 Конфіденційність",
+  legal_flags: "Прапори на пристроях, які не малюють їх самі: Twemoji (© Twitter, Inc. та інші учасники), ліцензія CC BY 4.0 — twemoji.twitter.com.",
   legal_forget_done: "✅ Готово. Усе, що ми про вас зберігали, видалено. Якщо захочете повернутися — просто відкрийте застосунок знову.",
   legal_forget_failed: "❌ Не вдалося видалити дані. Спробуйте пізніше.",
   legal_forget_title: "🗑 Видалити мої дані",
