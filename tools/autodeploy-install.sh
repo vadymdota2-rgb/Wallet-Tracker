@@ -36,6 +36,9 @@ cat >/etc/systemd/system/wt-autodeploy.timer <<'EOF'
 Description=Wallet Tracker: проверка GitHub раз в минуту
 
 [Timer]
+# OnActiveSec — первый запуск сразу после включения: OnUnitInactiveSec
+# отсчитывает от прошлого запуска, а его ещё не было.
+OnActiveSec=10s
 OnBootSec=2min
 OnUnitInactiveSec=1min
 AccuracySec=5s
