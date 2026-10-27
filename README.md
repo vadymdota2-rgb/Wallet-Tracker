@@ -739,6 +739,7 @@ sudo apt -y install git g++ libboost-dev libcurl4-openssl-dev libsqlite3-dev sql
   python3 python3-pil nginx certbot ufw
 sudo certbot certonly --standalone -d wallet.example.com \
   --pre-hook "systemctl stop nginx" --post-hook "systemctl start nginx"
+sudo mkdir -p /var/cache/nginx   # в Debian 13 этой папки нет, а кэш nginx создаёт только последний уровень
 sudo python3 tools/vps_nginx.py wallet.example.com | sudo tee /etc/nginx/sites-available/wallettracker
 ```
 
