@@ -72,12 +72,17 @@ test("halvingView: высота растёт по среднему, но не д
   assert.equal(halvingView(off, REAL.tip + 9 * 365 * 86400).height, REAL.next - 1);
 });
 
-test("halvingView: халвинг прошёл — ноль, полная полоса, номер блока халвинга", () => {
+test("halvingView: оценка момента прошла — ноль, но блок халвинга не выдумывается", () => {
+  // Сервер ещё не видел блок халвинга (блоки шли медленнее среднего):
+  // отсчёт — ноль, а номер блока и процент — без «1 050 000» и «100 %».
   const v = halvingView(REAL, REAL.eta + 5);
   assert.equal(v.left, 0);
   assert.deepEqual(v.parts, [0, 0, 0, 0]);
-  assert.equal(v.height, REAL.next);
-  assert.equal(v.done, 100);
+  assert.ok(v.height < REAL.next && v.height >= REAL.next - 5, String(v.height));
+  assert.equal(v.donePct, 99.9);
+  assert.ok(v.done > 99.99 && v.done < 100);
+  // Ждём сервер хоть год — выдуманного блока халвинга так и нет.
+  assert.equal(halvingView(REAL, REAL.eta + 365 * 86400).height, REAL.next - 1);
 });
 
 test("halvingView: часы телефона раньше времени ответа — полоса не уходит назад", () => {
@@ -107,7 +112,7 @@ test("halvingView: подпись процента не показывает 100
   const v = halvingView(near, REAL.at);
   assert.ok(v.done > 99.99);
   assert.equal(v.donePct, 99.9);
-  assert.equal(halvingView(REAL, REAL.eta + 1).donePct, 100);
+  assert.equal(halvingView(REAL, REAL.eta + 1).donePct, 99.9);
   // Обычное округление в остальном: 62,485 → 62,5, а не 62,4.
   assert.equal(halvingView(REAL, REAL.tip + 60).donePct, 62.5);
 });

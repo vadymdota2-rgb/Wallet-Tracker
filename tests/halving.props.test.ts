@@ -59,12 +59,11 @@ test(`инварианты отсчёта на ${CASES} случайных от�
     const [d, hh, m, s] = v.parts;
     assert.ok(hh < 24 && m < 60 && s < 60 && [d, hh, m, s].every((x) => Number.isInteger(x) && x >= 0), msg);
     assert.equal(d * 86400 + hh * 3600 + m * 60 + s, v.left, msg);
-    // Высота — внутри эпохи; номер блока халвинга — только когда остаток 0.
-    assert.ok(v.height >= start && v.height <= h.next, msg);
-    assert.equal(v.height === h.next, v.left === 0, msg);
-    // Полоса 0–100; подпись до халвинга не больше 99,9 и не дальше 0,05 от полосы.
+    // Высота — внутри эпохи, без блока халвинга (его подтверждает только сервер).
+    assert.ok(v.height >= start && v.height < h.next, msg);
+    // Полоса 0–100; подпись не больше 99,9 и не дальше 0,05 от полосы.
     assert.ok(v.done >= 0 && v.done <= 100, msg);
-    assert.ok(v.left > 0 ? v.donePct <= 99.9 && Math.abs(v.donePct - v.done) <= 0.05 + 1e-9 || v.donePct === 99.9 : v.donePct === 100, msg);
+    assert.ok(v.donePct <= 99.9 && (Math.abs(v.donePct - v.done) <= 0.05 + 1e-9 || v.donePct === 99.9), msg);
     // Награда — по эпохе, следующая — ровно вдвое меньше (с отбрасыванием, как в сети).
     assert.equal(v.reward, subsidySats(start / h.every), msg);
     assert.equal(v.rewardNext, Math.floor(v.reward / 2), msg);

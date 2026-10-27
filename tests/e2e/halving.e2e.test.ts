@@ -360,6 +360,24 @@ describe("карточка халвинга", () => {
     await ctx.close();
   });
 
+  test("оценка момента прошла, а блока халвинга ещё нет — «наступает», без выдуманного блока", async () => {
+    // Блоки шли медленнее среднего: время по оценке настало, сервер нового
+    // блока ещё не видел. Не «1 050 000 / 1 050 000» и не «100 %».
+    const next = REAL["next"] as number;
+    const avg = REAL["avg"] as number;
+    const tip = T - 3000; // 3 блока до халвинга по оценке вышли бы к T − 1210 с
+    const { ctx, page, errors } = await open({ reply: { ...REAL, height: next - 3, tip, eta: Math.round(tip + 3 * avg) } });
+    await page.locator(".hv:not(.hv-skel)").waitFor();
+    assert.equal(sp(await page.locator(".hv-now").innerText()), "Халвинг наступает");
+    assert.equal(await page.locator(".hv-clock").count(), 0);
+    assert.equal(sp(await page.locator(".hv-meta span").first().innerText()), "99,9% эпохи");
+    assert.equal(sp(await page.locator(".hv-meta bdi").innerText()), "1 049 999 / 1 050 000");
+    assert.equal(await page.locator(".hv-bar").getAttribute("aria-valuenow"), "99.9");
+    assert.equal(await page.locator(".hv-done").count(), 0);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
   test("две недели после халвинга — «состоялся» и отсчёт до следующего", async () => {
     const prev = T - 3 * 86400;
     const { ctx, page } = await open({ reply: { ...AFTER, prev } });
