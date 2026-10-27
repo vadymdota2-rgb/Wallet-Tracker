@@ -6502,35 +6502,39 @@ def perp_margin(hl: sqlite3.Connection, wallets: list[str] | None, since_ms: int
         f"{start} sp, {px} px, {sz} sz, {side} sd "
         f"FROM hl_fills WHERE {where}"
     )
+    # Строки идут из базы по одной, а не fetchall(): закрытий за 30 дней —
+    # сотни тысяч (в октябре 2026 — 893 тысячи), разом они занимали ~400 МБ,
+    # и вместе с остальными кешами служба упиралась в MemoryMax и падала.
+    # Теперь в памяти — по числу кошельков, а не сделок.
     try:
-        rows = hl.execute(sql, args).fetchall()
+        # Среднее плечо кошелька — на случай филов, где его не записали.
+        # Считает база: для него нужен отдельный проход по тем же строкам.
+        avg_lev = {
+            w: max(1, int(round(total / n)))
+            for w, total, n in hl.execute(
+                f"SELECT wallet, SUM(CAST({lev} AS INTEGER)), COUNT(*) FROM hl_fills "
+                f"WHERE {where} AND CAST({lev} AS INTEGER) > 0 GROUP BY wallet",
+                args,
+            )
+        }
+        for r in hl.execute(sql, args):
+            w = r["wallet"]
+            ntl_usd = perp_closed_usd(r["px"], r["sz"], r["sd"], r["sp"], r["n"])
+            if ntl_usd <= 0:
+                # Строка ничего не закрыла — доливка в ту же сторону. Снимок
+                # маржи брать тем более нельзя: он про всю позицию целиком.
+                continue
+            lv = int(r["lv"] or 0)
+            if lv <= 0:
+                lv = avg_lev.get(w, 0)
+            if lv > 0:
+                out[w] = out.get(w, 0.0) + ntl_usd / lv
+            elif int(r["m"] or 0) > 0:
+                # Плеча нет вовсе — остаётся снимок маржи позиции.
+                out[w] = out.get(w, 0.0) + usd(r["m"])
     except sqlite3.Error as e:
         sys.stderr.write(f"[api] perp margin: {e}\n")
         return {}
-    # Среднее плечо кошелька — на случай филов, где его не записали.
-    lev_sum: dict[str, float] = {}
-    lev_n: dict[str, int] = {}
-    for r in rows:
-        lv = int(r["lv"] or 0)
-        if lv > 0:
-            w = r["wallet"]
-            lev_sum[w] = lev_sum.get(w, 0.0) + lv
-            lev_n[w] = lev_n.get(w, 0) + 1
-    for r in rows:
-        w = r["wallet"]
-        ntl_usd = perp_closed_usd(r["px"], r["sz"], r["sd"], r["sp"], r["n"])
-        if ntl_usd <= 0:
-            # Строка ничего не закрыла — доливка в ту же сторону. Снимок
-            # маржи брать тем более нельзя: он про всю позицию целиком.
-            continue
-        lv = int(r["lv"] or 0)
-        if lv <= 0 and lev_n.get(w):
-            lv = max(1, int(round(lev_sum[w] / lev_n[w])))
-        if lv > 0:
-            out[w] = out.get(w, 0.0) + ntl_usd / lv
-        elif int(r["m"] or 0) > 0:
-            # Плеча нет вовсе — остаётся снимок маржи позиции.
-            out[w] = out.get(w, 0.0) + usd(r["m"])
     return out
 
 

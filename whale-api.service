@@ -38,7 +38,7 @@ RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 SystemCallArchitectures=native
 CapabilityBoundingSet=
 LockPersonality=yes
-MemoryMax=768M
+MemoryMax=1536M
 Restart=always
 RestartSec=3
 
