@@ -34,7 +34,7 @@ export default defineConfig({
        "/coins", "/hllogo", "/cglogo", "/pcslogo", "/twlogo"].map((path) => [
         path,
         {
-          target: process.env.WT_PROXY ?? "https://wallet-tracker-git-606699497037.europe-west1.run.app",
+          target: process.env.WT_PROXY ?? "https://wallettracker.pl",
           changeOrigin: true,
           secure: true,
         },

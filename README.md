@@ -619,9 +619,10 @@ noImplicitOverride, noPropertyAccessFromIndexSignature, noImplicitReturns).
 `WHALE_API_ORIGIN` (адрес мини-аппа, иначе браузер получит отказ по CORS) и
 `WHALE_API_KEY` — тот же, что `API_KEY` у контейнера.
 
-nginx и API стоят на разных машинах, между ними интернет. Поэтому
-`WHALE_API_HOST=0.0.0.0`, а порт 8090 закрывают `WHALE_API_KEY` и firewall:
-открой его только адресам Cloud Run.
+Сейчас nginx и API — на одной машине, и `WHALE_API_HOST=127.0.0.1`: порт
+8090 снаружи недоступен. Если nginx окажется на другой машине (как раньше в
+Cloud Run), между ними будет интернет: тогда `WHALE_API_HOST=0.0.0.0`, а порт
+закрывают `WHALE_API_KEY` и firewall, открытый только адресам той машины.
 
 **`API_UPSTREAM` задавай по HTTPS.** По HTTP через интернет уедут открытым
 текстом и `X-Telegram-Init-Data`, и `X-Api-Key`.
@@ -725,7 +726,7 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=whale-api" \
 `WHALE_API_TLS_KEY=/etc/whale-api/key.pem`; у Cloud Run `API_UPSTREAM` —
 `https://…:8090`. Шифрует он так же, как купленный.
 
-### Свой сервер (VPS) вместо Cloud Run
+### Свой сервер (VPS) — сейчас так: https://wallettracker.pl
 
 Всё на одной машине: бот, `whale_api` и nginx со страницами. nginx берёт
 конфиг из того же `nginx.conf`, отличия делает `tools/vps_nginx.py`: https
@@ -746,6 +747,29 @@ sudo python3 tools/vps_nginx.py wallet.example.com | sudo tee /etc/nginx/sites-a
 У службы API на такой машине `WHALE_API_HOST=127.0.0.1` (nginx рядом) и
 `WHALE_API_ORIGIN=https://wallet.example.com`; у бота
 `WHALE_MINIAPP_URL` — тот же адрес.
+
+#### Автовыкат
+
+Как раньше Cloud Run выкатывал каждый push, так здесь раз в минуту
+`tools/autodeploy.sh` смотрит в GitHub и выкатывает новые коммиты обоих
+репозиториев:
+
+- страницы (`html/`) — сразу, nginx отдаёт их из папки;
+- сервер (`*.py`) — проверка синтаксиса и перезапуск `whale-api`;
+- `nginx.conf`, `tools/vps_nginx.py` — новый конфиг nginx, `nginx -t`, reload;
+- бот (`*.cpp`, `*.h`, `build.sh`) — сборка в `whale_bot.new`, подмена и
+  перезапуск `whalescanner`.
+
+Сломанное откатывается само: ошибка синтаксиса, бот не собрался, служба не
+поднялась — прежний коммит и прежняя версия службы. Такой коммит больше не
+выкатывается; следующий — как обычно. Git и сборка идут от владельца папок,
+не от root.
+
+```
+sudo tools/autodeploy-install.sh wallet.example.com   # включить (и после правок autodeploy.sh)
+journalctl -u wt-autodeploy -f                         # что выкатилось
+sudo systemctl disable --now wt-autodeploy.timer       # выключить
+```
 
 ### Автопостинг дайджеста в канал
 
