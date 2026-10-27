@@ -123,6 +123,8 @@ INT_MAX = 20
 # Самый большой ответ-JSON, который модуль читает: блок — ~0,5 КБ, данные о
 # сложности — ~0,3 КБ. Больше — не тот ответ.
 JSON_MAX = 4096
+# Сколько причин сбоя запросов помнит одна сборка (в сборке их до пяти).
+WHY_MAX = 8
 # Соединение с одним адресом источника — не дольше, с. У mempool.space
 # восемь адресов, и часть может молчать с сервера: стандартный urllib ждал
 # первый весь HOP и сдавался. curl в этом случае сразу идёт к следующему —
@@ -254,11 +256,23 @@ def _now() -> int:
     return int(time.time())
 
 
+def _why(msg: str) -> None:
+    """Причина неудачного запроса — в список сборки: в журнал она идёт одной
+    строкой, только если высоту не дал ни один источник (по «нет высоты»
+    без причины не понять, что чинить; каждый сбой отдельно засорял бы
+    журнал — сборка идёт раз в пять минут, запросов в ней до пяти)."""
+    why = getattr(_dl, "why", None)
+    if why is not None and len(why) < WHY_MAX:
+        why.append(msg)
+
+
 def _fetch(url: str, limit: int = 1 << 20) -> bytes | None:
     """GET. Любая ошибка сети и ответ больше limit байт — None (обрезанный
-    ответ — не ответ). Внутри сборки — не дольше, чем осталось от бюджета."""
+    ответ — не ответ), причина — в _why. Внутри сборки — не дольше, чем
+    осталось от бюджета."""
     if not _allowed(url):
         return None
+    host = urllib.parse.urlsplit(url).hostname
     dl = getattr(_dl, "at", 0.0)
     left = dl - time.monotonic() if dl else HOP
     if left <= MIN_LEFT:
@@ -272,13 +286,16 @@ def _fetch(url: str, limit: int = 1 << 20) -> bytes | None:
             buf = bytearray()
             while len(buf) <= limit:
                 if time.monotonic() > end:
+                    _why(f"{host}: не уложился в {hop:.0f} с")
                     return None
                 chunk: bytes = r.read1(min(CHUNK, limit + 1 - len(buf)))
                 if not chunk:
                     return bytes(buf)
                 buf += chunk
+            _why(f"{host}: ответ больше {limit} байт")
             return None
-    except (OSError, ValueError, http.client.HTTPException):  # URLError и таймаут — тоже OSError
+    except (OSError, ValueError, http.client.HTTPException) as e:  # URLError и таймаут — тоже OSError
+        _why(f"{host}: {type(e).__name__}: {e}")
         return None
 
 
@@ -390,6 +407,7 @@ def build() -> Reply:
     источники молчат. Иначе ответ, который роняет разбор, превращал бы
     каждый запрос в новую попытку — и в нагрузку на сервер."""
     _dl.at = time.monotonic() + BUDGET
+    _dl.why = []
     try:
         return _build()
     except Exception as e:  # noqa: BLE001 — граница модуля: наружу ошибка не выходит
@@ -400,6 +418,7 @@ def build() -> Reply:
         return hit[1] if hit else _no_data()
     finally:
         _dl.at = 0.0
+        _dl.why = None
 
 
 def _build() -> Reply:
@@ -407,7 +426,8 @@ def _build() -> Reply:
         hit = _st.hit
     height, tip_ts = _tip()
     if not height:
-        _log("нет высоты блока ни от одного источника")
+        why = getattr(_dl, "why", None) or ["ответы неправдоподобны"]
+        _log("нет высоты блока ни от одного источника: " + "; ".join(why))
         with _lock:
             _st.err_at = time.monotonic()
         return hit[1] if hit else _no_data()

@@ -287,6 +287,41 @@ class SecurityTest(unittest.TestCase):
             self.assertIsNone(hv._fetch(f"http://127.0.0.1:{port}/"))
 
 
+class WhyTest(unittest.TestCase):
+    """Высоту не дал никто — в журнал одна строка с причиной от каждого источника."""
+
+    def setUp(self):
+        hv._st = hv._State()
+
+    def test_all_sources_fail_one_line_with_reasons(self):
+        logs = []
+        with mock.patch.object(hv._opener, "open", side_effect=TimeoutError("timed out")), \
+                mock.patch.object(hv, "_now", lambda: NOW), mock.patch.object(hv, "_log", logs.append):
+            self.assertEqual(hv.build(), {"ok": False, "error": "no_data"})
+        self.assertEqual(len(logs), 1, logs)
+        for host in ("mempool.space", "blockstream.info", "blockchain.info"):
+            self.assertIn(f"{host}: TimeoutError: timed out", logs[0])
+        self.assertIsNone(hv._dl.why)  # после сборки список убран
+
+    def test_plausibility_failure_is_named_too(self):
+        # Источники ответили, но высота неправдоподобна — причина не пустая.
+        logs = []
+        with mock.patch.object(hv, "_fetch", lambda url, limit=0: b"5"), \
+                mock.patch.object(hv, "_now", lambda: NOW), mock.patch.object(hv, "_log", logs.append):
+            hv.build()
+        self.assertEqual(logs, ["нет высоты блока ни от одного источника: ответы неправдоподобны"])
+
+    def test_reasons_are_bounded_and_ignored_outside_a_build(self):
+        hv._why("вне сборки")  # не падает и никуда не пишет
+        hv._dl.why = []
+        try:
+            for i in range(50):
+                hv._why(f"сбой {i}")
+            self.assertEqual(len(hv._dl.why), hv.WHY_MAX)
+        finally:
+            hv._dl.why = None
+
+
 class ConnectTest(unittest.TestCase):
     """_connect: адреса источника по очереди, молчащий не съедает запрос (как в wt_fng)."""
 
