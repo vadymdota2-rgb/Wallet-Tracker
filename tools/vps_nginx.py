@@ -23,6 +23,7 @@ nginx.conf — скрипт остановится с ошибкой, а не в
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import re
 import sys
@@ -33,8 +34,12 @@ KEY = re.compile(r"[A-Za-z0-9_\-.~+/=]{16,200}")
 
 
 def _key(path: str) -> str:
-    """WHALE_API_KEY из файла окружения службы API."""
-    with open(path, encoding="utf-8") as f:
+    """WHALE_API_KEY из файла окружения службы API; «-» — со стандартного ввода.
+
+    «-» нужен автовыкату (tools/autodeploy.sh): файл с ключом открывает root
+    и отдаёт уже открытым на ввод, а скрипт работает от владельца папок —
+    сам открыть этот файл он не может."""
+    with (contextlib.nullcontext(sys.stdin) if path == "-" else open(path, encoding="utf-8")) as f:
         for line in f:
             name, _, val = line.strip().partition("=")
             if name == "WHALE_API_KEY":
@@ -86,7 +91,7 @@ def build(conf: str, domain: str, key: str, html: str) -> str:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("domain", help="домен мини-аппа, например wallet.example.com")
-    ap.add_argument("--env", default="/etc/whale-api.env", help="файл с WHALE_API_KEY")
+    ap.add_argument("--env", default="/etc/whale-api.env", help="файл с WHALE_API_KEY, «-» — стандартный ввод")
     ap.add_argument("--html", default=os.path.join(ROOT, "html"), help="папка со страницами")
     a = ap.parse_args()
     domain = a.domain.strip().lower()

@@ -58,6 +58,11 @@ class VpsNginxTest(unittest.TestCase):
                 r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "vps_nginx.py"), "wt.example.com", "--env", env],
                                    capture_output=True, text=True, check=False)
                 self.assertEqual(r.returncode == 0, ok, (key, r.stderr))
+            # «-» — ключ со стандартного ввода (так его отдаёт автовыкат).
+            r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "vps_nginx.py"), "wt.example.com", "--env", "-"],
+                               input=f"WHALE_API_KEY={KEY}\n", capture_output=True, text=True, check=False)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn(KEY, r.stdout)
             for dom in ("bad domain", "x", "evil.com;\nserver{", "-a.com"):
                 r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "vps_nginx.py"), dom, "--env", env],
                                    capture_output=True, text=True, check=False)

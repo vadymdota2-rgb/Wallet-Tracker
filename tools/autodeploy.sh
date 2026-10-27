@@ -34,8 +34,12 @@ API_ENV=${WT_API_ENV:-/etc/whale-api.env}
 # упавшая при запуске за это время уже успевает упасть.
 SETTLE=${WT_SETTLE:-8}
 
-# HOME — свой: от root git искал бы настройки в /root и падал на правах.
-as_user() { runuser -u "$USER_NAME" -- env HOME="$ROOT_DIR" "$@"; }
+# setpriv, а не runuser: тот открывает сессию PAM и раз в минуту пишет в
+# журнал по две строки на каждую команду. HOME — свой: от root git искал бы
+# настройки в /root и падал на правах.
+as_user() {
+    setpriv --reuid="$USER_NAME" --regid="$USER_NAME" --init-groups -- env HOME="$ROOT_DIR" "$@"
+}
 log() { echo "$*"; }
 
 mkdir -p "$STATE"
@@ -99,9 +103,9 @@ deploy_wt() {
     if [ -n "$DOMAIN" ] && grep -qxE 'nginx\.conf|tools/vps_nginx\.py' <<<"$CHANGED"; then
         local conf backup
         conf=$(mktemp) backup=$(mktemp)
-        # Ключ API читает root и отдаёт трубой: файл с ключом скрипту из
-        # репозитория недоступен, а /dev/stdin у трубы открывается заново.
-        if cat "$API_ENV" | as_user python3 "$WT/tools/vps_nginx.py" "$DOMAIN" --env /dev/stdin >"$conf"; then
+        # Файл с ключом API открывает root и отдаёт уже открытым на ввод:
+        # самому скрипту из репозитория он недоступен.
+        if as_user python3 "$WT/tools/vps_nginx.py" "$DOMAIN" --env - <"$API_ENV" >"$conf"; then
             cp "$NGINX_SITE" "$backup"
             cat "$conf" >"$NGINX_SITE"
             if nginx -t -q && systemctl reload nginx; then

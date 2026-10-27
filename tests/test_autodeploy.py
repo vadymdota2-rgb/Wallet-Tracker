@@ -1,7 +1,7 @@
 """Автовыкат на своём сервере (tools/autodeploy.sh): npm test.
 
 Настоящие git-репозитории во временной папке («GitHub» — голый репозиторий,
-«сервер» — его клон), а root-команды — подставные: runuser просто исполняет
+«сервер» — его клон), а root-команды — подставные: setpriv просто исполняет
 команду, systemctl и nginx пишут, что их вызвали, и отвечают так, как велит
 тест. Проверяем, что выкатывается нужное и что сломанное откатывается само
 и не выкатывается снова раз в минуту.
@@ -18,7 +18,7 @@ INSTALL = os.path.join(ROOT, "tools", "autodeploy-install.sh")
 KEY = "k3y-For-Tests_0123456789"
 
 FAKES = {
-    "runuser": '#!/bin/sh\nshift 3\nexec "$@"\n',
+    "setpriv": '#!/bin/sh\nwhile [ "$1" != -- ]; do shift; done\nshift\nexec "$@"\n',
     "systemctl": (
         '#!/bin/sh\necho "$*" >>"$FAKE_LOG"\n'
         'if [ "$1" = is-active ] && [ -f "$FAKE_DIR/down-$3" ]; then exit 3; fi\nexit 0\n'),
