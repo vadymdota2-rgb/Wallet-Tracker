@@ -500,6 +500,33 @@ describe("институциональные потоки", () => {
     await ctx.close();
   });
 
+  test("держатели: выбранная группа пропала из свежего ответа — показаны все, а не пустота", async () => {
+    const noCo = { ...REAL, holders: (REAL["holders"] as unknown[][]).filter((r) => r[1] !== "COMPANY") };
+    const { ctx, page } = await open({ premium: true, replies: [REAL, noCo] });
+    await ready(page);
+    const rows = page.locator(".ef-hr");
+    await page.locator(".ef-hl").locator("xpath=preceding-sibling::*[1]").locator("button").nth(2).click(); // компании
+    assert.ok(await rows.count() > 0);
+    // Через час — свежий ответ, в нём компаний нет: их кнопки нет, список — все.
+    await page.clock.setFixedTime((T + 2 * 3600) * 1000);
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await page.waitForFunction((n) => document.querySelectorAll(".ef-hr").length === n, noCo.holders.length, { timeout: 5000 });
+    assert.equal(await page.locator(".ef-hl").locator("xpath=preceding-sibling::*[1]").locator("button").count(), 2);
+    await ctx.close();
+  });
+
+  test("рекорды: дней оттока не было — без «0 дней с 1970»", async () => {
+    const r = JSON.parse(JSON.stringify(REAL)) as { coins: { btc: { days: [number, number, number, number, (number | null)[]][] } } };
+    r.coins.btc.days = r.coins.btc.days.map((d) => [d[0], Math.abs(d[1]) || 1, Math.abs(d[2]), d[3], d[4].map((v) => (v === null ? null : Math.abs(v)))]);
+    const { ctx, page, errors } = await open({ replies: [r] });
+    await ready(page);
+    const rec = (await page.locator(".ef-rec .fg-row").allInnerTexts()).map(sp);
+    assert.ok(rec.some((x) => x.startsWith(I18N["ef_r_runup"]!["ru"]!)), JSON.stringify(rec));
+    assert.ok(!rec.some((x) => x.startsWith(I18N["ef_r_rundn"]!["ru"]!) || /1970/.test(x)), JSON.stringify(rec));
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
   test("крупнейшие держатели: группы и «ещё»", async () => {
     const { ctx, page } = await open();
     await ready(page);

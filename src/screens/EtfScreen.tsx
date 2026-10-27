@@ -756,14 +756,13 @@ export function EtfScreen() {
                   <b className={tone(stats.worstM[1])}><bdi dir="ltr">{money(stats.worstM[1] * 1000)}</bdi></b>
                 </div>
               ) : null}
-              <div className="fg-row two">
-                <span>{t(lang, "ef_r_runup")}<small> · {t(lang, "ef_since", { d: dateNb(lang, stats.runs.up.at, { day: "numeric", month: "short", year: "numeric" }) })}</small></span>
-                <b>{t(lang, "ef_days_n", { n: num(stats.runs.up.n) })}</b>
-              </div>
-              <div className="fg-row two">
-                <span>{t(lang, "ef_r_rundn")}<small> · {t(lang, "ef_since", { d: dateNb(lang, stats.runs.dn.at, { day: "numeric", month: "short", year: "numeric" }) })}</small></span>
-                <b>{t(lang, "ef_days_n", { n: num(stats.runs.dn.n) })}</b>
-              </div>
+              {/* Серии не было (ни дня притока или оттока) — без «0 дней · с 1 янв. 1970». */}
+              {([["ef_r_runup", stats.runs.up], ["ef_r_rundn", stats.runs.dn]] as const).map(([k, r]) => r.n > 0 ? (
+                <div key={k} className="fg-row two">
+                  <span>{t(lang, k)}<small> · {t(lang, "ef_since", { d: dateNb(lang, r.at, { day: "numeric", month: "short", year: "numeric" }) })}</small></span>
+                  <b>{t(lang, "ef_days_n", { n: num(r.n) })}</b>
+                </div>
+              ) : null)}
             </div>
             <p className="lq-hint">{t(lang, "ef_r_note", { d: dateStr(lang, days[0]?.[0] ?? 0, { day: "numeric", month: "long", year: "numeric" }) })}</p>
           </Card>

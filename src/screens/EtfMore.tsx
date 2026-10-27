@@ -284,8 +284,11 @@ const GROUPS: { id: Group; key: DictKey }[] = [
 
 /** Крупнейшие держатели: фонды и компании, с выбором группы. */
 export function Holders({ rows, price, lang }: { rows: BtcHolder[]; price: number; lang: Lang }) {
-  const [grp, setGrp] = useState<Group>("all");
+  const [picked, setGrp] = useState<Group>("all");
   const [shown, setShown] = useState(PAGE);
+  /* Свежий ответ без выбранной группы (её кнопка пропала) — показываем всех,
+     а не пустой список без способа вернуться. */
+  const grp: Group = picked === "all" || rows.some((r) => r[1] === picked) ? picked : "all";
   const list = useMemo(() => rows.filter((r) => grp === "all" || r[1] === grp), [rows, grp]);
   /* Хвост до TAIL строк показываем сразу: кнопка «Показать ещё 1» — лишнее нажатие ради одной строки. */
   const lim = list.length - shown <= TAIL ? list.length : shown;
