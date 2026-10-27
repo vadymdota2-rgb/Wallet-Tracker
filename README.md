@@ -735,6 +735,8 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=whale-api" \
 — прямо из `html/` репозитория (`git pull` обновляет и их).
 
 ```
+sudo apt -y install git g++ libboost-dev libcurl4-openssl-dev libsqlite3-dev sqlite3 \
+  python3 python3-pil nginx certbot ufw
 sudo certbot certonly --standalone -d wallet.example.com \
   --pre-hook "systemctl stop nginx" --post-hook "systemctl start nginx"
 sudo python3 tools/vps_nginx.py wallet.example.com | sudo tee /etc/nginx/sites-available/wallettracker
