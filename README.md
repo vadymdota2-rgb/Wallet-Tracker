@@ -725,6 +725,25 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -subj "/CN=whale-api" \
 `WHALE_API_TLS_KEY=/etc/whale-api/key.pem`; у Cloud Run `API_UPSTREAM` —
 `https://…:8090`. Шифрует он так же, как купленный.
 
+### Свой сервер (VPS) вместо Cloud Run
+
+Всё на одной машине: бот, `whale_api` и nginx со страницами. nginx берёт
+конфиг из того же `nginx.conf`, отличия делает `tools/vps_nginx.py`: https
+на 443 (сертификат Let's Encrypt), 80 — только перенаправление, адрес
+человека — `$remote_addr` (на своём сервере `X-Forwarded-For` пишет сам
+человек — брать адрес оттуда нельзя), кэш — в `/var/cache/nginx`, страницы
+— прямо из `html/` репозитория (`git pull` обновляет и их).
+
+```
+sudo certbot certonly --standalone -d wallet.example.com \
+  --pre-hook "systemctl stop nginx" --post-hook "systemctl start nginx"
+sudo python3 tools/vps_nginx.py wallet.example.com | sudo tee /etc/nginx/sites-available/wallettracker
+```
+
+У службы API на такой машине `WHALE_API_HOST=127.0.0.1` (nginx рядом) и
+`WHALE_API_ORIGIN=https://wallet.example.com`; у бота
+`WHALE_MINIAPP_URL` — тот же адрес.
+
 ### Автопостинг дайджеста в канал
 
 Сразу после выхода выпуска (12:00 по Лондону) бот публикует его альбомом из
