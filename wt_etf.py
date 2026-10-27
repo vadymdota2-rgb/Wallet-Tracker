@@ -108,8 +108,9 @@ HOLD_MAX = 5_000_000.0
 # (выходные с праздником и задержка сводки — до 5). Так же считает
 # приложение (STALE_DAYS в src/lib/etf.ts); дайджест такой день не берёт.
 STALE_DAYS = 5
-# Самый большой ответ — отчёт CFTC, ~2 МБ.
+# Самый большой ответ — отчёт CFTC, ~2 МБ; читается кусками по CHUNK.
 BODY_MAX = 8 << 20
+CHUNK = 65_536
 # Самое длинное целое в ответе: активы фондов — 12 цифр, с большим запасом.
 INT_DIGITS = 18
 # Фондов в наборе TFTC — дюжина; больше FUNDS_MAX — набор испорчен или
@@ -155,15 +156,32 @@ def _log(msg: str) -> None:
 
 
 def _fetch(url: str, timeout: float) -> bytes | None:
-    """GET. Любая ошибка сети и ответ больше BODY_MAX — None."""
+    """GET. Любая ошибка сети, ответ больше BODY_MAX или дольше timeout
+    целиком — None, причина — в журнал (сборка раз в час: строк немного, а
+    без причины по пустому экрану не понять, что чинить).
+
+    Срок — на весь ответ, а не на каждый кусок (как таймаут сокета): источник,
+    цедящий по байту, держал бы поток сборки часами."""
     if not _allowed(url):
         return None
+    host = urllib.parse.urlsplit(url).hostname
+    end = time.monotonic() + timeout
     try:
         with _opener.open(urllib.request.Request(url, headers=_HEADERS), timeout=timeout) as r:
-            body: bytes = r.read(BODY_MAX + 1)
-    except (OSError, ValueError, http.client.HTTPException):
+            buf = bytearray()
+            while len(buf) <= BODY_MAX:
+                if time.monotonic() > end:
+                    _log(f"{host}: не уложился в {timeout:.0f} с")
+                    return None
+                chunk: bytes = r.read1(min(CHUNK, BODY_MAX + 1 - len(buf)))
+                if not chunk:
+                    return bytes(buf)
+                buf += chunk
+            _log(f"{host}: ответ больше {BODY_MAX} байт")
+            return None
+    except (OSError, ValueError, http.client.HTTPException) as e:
+        _log(f"{host}: {type(e).__name__}: {e}")
         return None
-    return body if len(body) <= BODY_MAX else None
 
 
 def _no_constant(name: str) -> float:

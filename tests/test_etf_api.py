@@ -538,6 +538,37 @@ class EtfTest(unittest.TestCase):
         with mock.patch.object(etf._opener, "open", lambda req, timeout=0: Resp(b"[1]")):
             self.assertEqual(etf._fetch("https://www.tftc.io/x", 5), b"[1]")
 
+    def test_failed_request_says_why_and_slow_source_is_cut(self):
+        class Resp(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        logs = []
+        with mock.patch.object(etf._opener, "open", side_effect=TimeoutError("timed out")), \
+                mock.patch.object(etf, "_log", logs.append):
+            self.assertIsNone(etf._fetch(etf.TFTC, 5))
+        self.assertEqual(logs, ["www.tftc.io: TimeoutError: timed out"])
+        logs.clear()
+        with mock.patch.object(etf._opener, "open", lambda req, timeout=0: Resp(b"x" * (etf.BODY_MAX + 1))), \
+                mock.patch.object(etf, "_log", logs.append):
+            self.assertIsNone(etf._fetch(etf.TFTC, 5))
+        self.assertEqual(logs, [f"www.tftc.io: ответ больше {etf.BODY_MAX} байт"])
+        # Источник цедит по куску: срок — на весь ответ, а не на каждый кусок.
+        logs.clear()
+        clock = iter([0.0, 0.0, 1.0, 99.0])
+        with mock.patch.object(etf._opener, "open", lambda req, timeout=0: Resp(b"x" * 300_000)), \
+                mock.patch.object(etf.time, "monotonic", lambda: next(clock, 99.0)), mock.patch.object(etf, "_log", logs.append):
+            self.assertIsNone(etf._fetch(etf.TFTC, 30))
+        self.assertEqual(logs, ["www.tftc.io: не уложился в 30 с"])
+        # Удачный запрос журнал не трогает.
+        logs.clear()
+        with mock.patch.object(etf._opener, "open", lambda req, timeout=0: Resp(b"[1]")), mock.patch.object(etf, "_log", logs.append):
+            self.assertEqual(etf._fetch(etf.TFTC, 5), b"[1]")
+        self.assertEqual(logs, [])
+
     def test_log_is_one_short_line(self):
         err = io.StringIO()
         with mock.patch("sys.stderr", err):
