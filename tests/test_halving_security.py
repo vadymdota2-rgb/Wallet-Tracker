@@ -185,25 +185,27 @@ class SecurityTest(unittest.TestCase):
             self.assertLess(time.monotonic() - t0, 1.0)
             self.assertIn("DNS", " ".join(hv._dl.why))
 
-    @unittest.skipUnless(os.path.isdir("/proc/self/fd"), "дескрипторы считаем через /proc")
     def test_watch_is_released_after_a_good_answer(self):
-        fds = len(os.listdir("/proc/self/fd"))
-        watches = []
+        # Проверяем сами сокеты модуля, а не число дескрипторов процесса:
+        # злой сервер теста живёт в том же процессе, закрывает свою сторону
+        # чуть позже, чем клиент дочитал, а поток /drip из другого теста
+        # держит свой сокет до 50 с — счёт «до и после» гулял (9 != 8 в CI).
+        socks, watches = [], []
         real = hv._watch
 
         def spy(sock, end):
             real(sock, end)
+            socks.append(sock)
             watches.append(hv._dl.cuts[-1][1])
         with self.local(), mock.patch.object(hv, "_watch", spy):
             self.assertEqual(hv._fetch(f"{self.base}/ok"), b"secret")
         self.assertIsNone(hv._dl.cuts)
         # Копия сокета для сторожа закрыта явно — не сборщиком мусора, когда
         # повезёт: иначе каждый запрос оставлял бы по дескриптору, раз в пять
-        # минут, пока их не кончится.
-        self.assertEqual(len(watches), 1)
+        # минут, пока их не кончится. И само соединение закрыто.
+        self.assertEqual((len(socks), len(watches)), (1, 1))
         self.assertEqual(watches[0].fileno(), -1)
-        watches.clear()
-        self.assertEqual(len(os.listdir("/proc/self/fd")), fds)
+        self.assertEqual(socks[0].fileno(), -1)
 
     def test_huge_body_is_rejected_not_cut(self):
         # Обрезанный ответ — не ответ: начало длинного числа или списка
