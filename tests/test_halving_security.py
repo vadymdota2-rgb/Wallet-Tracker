@@ -182,7 +182,7 @@ class SecurityTest(unittest.TestCase):
         # минут, пока их не кончится.
         self.assertEqual(len(watches), 1)
         self.assertEqual(watches[0].fileno(), -1)
-        del watches
+        watches.clear()
         self.assertEqual(len(os.listdir("/proc/self/fd")), fds)
 
     def test_huge_body_is_rejected_not_cut(self):
