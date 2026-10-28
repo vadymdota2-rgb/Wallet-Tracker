@@ -986,6 +986,7 @@ export const vi: Dict = {
   hv_now: "Halving ngay bây giờ",
   hv_reward: "Phần thưởng khối",
   hv_s: "giây",
+  hv_stale: "Cập nhật lúc {t}",
   hv_title: "Đến halving Bitcoin",
   in_body: "Giá riêng cho bạn sau thời gian dùng thử Premium. Còn {h} giờ, sau đó là giá thường.",
   in_cta: "Nhận ưu đãi",

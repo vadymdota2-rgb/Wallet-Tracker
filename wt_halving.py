@@ -101,6 +101,11 @@ TTL = 300.0
 # хорошим ответом), не пытаясь снова: иначе каждое открытие меню ждало бы
 # сборку до BUDGET секунд.
 ERR_TTL = 60.0
+# Последний хороший ответ, пока источники молчат, отдаётся не дольше суток:
+# дата за сутки сдвигается на минуты, а пустая карточка хуже. Старше — это
+# уже не оценка, а «нет данных». Приложение после трёх часов пишет под
+# датой «Обновлено …» (STALE_AFTER в src/lib/halving.ts).
+STALE_MAX = 86_400.0
 # Бюджет одной сборки и предел на один запрос, секунды. Меньше MIN_LEFT
 # от бюджета — в сеть уже не идём: не хватит и на соединение.
 BUDGET = 20.0
@@ -324,6 +329,12 @@ def _no_data() -> Reply:
     return {"ok": False, "error": "no_data"}
 
 
+def _live() -> tuple[float, Reply] | None:
+    """Последний хороший ответ, если ему меньше STALE_MAX. Вызывать под _lock."""
+    hit = _st.hit
+    return hit if hit and time.monotonic() - hit[0] < STALE_MAX else None
+
+
 def _failed() -> bool:
     """Источники молчали меньше ERR_TTL назад. Вызывать под _lock."""
     return time.monotonic() - _st.err_at < ERR_TTL
@@ -500,7 +511,7 @@ def build() -> Reply:
         _log(f"сборка: {type(e).__name__}: {e}")
         with _lock:
             _st.err_at = time.monotonic()
-            hit = _st.hit
+            hit = _live()
         return hit[1] if hit else _no_data()
     finally:
         _dl.at = 0.0
@@ -509,7 +520,7 @@ def build() -> Reply:
 
 def _build() -> Reply:
     with _lock:
-        hit = _st.hit
+        hit = _live()
     height, tip_ts = _tip()
     if not height:
         why = getattr(_dl, "why", None) or ["ответы неправдоподобны"]
@@ -555,7 +566,7 @@ def _bg() -> None:
 def halving_data() -> Reply:
     """Ответ /api/halving: из кэша, свежий собирается в фоне."""
     with _lock:
-        hit = _st.hit
+        hit = _live()
         if hit and time.monotonic() - hit[0] < TTL:
             return hit[1]
         failed = _failed()
@@ -577,7 +588,7 @@ def halving_data() -> Reply:
     # Холодный старт: первый собирает, остальные ждут его и берут готовое.
     with _cold:
         with _lock:
-            hit, failed = _st.hit, _failed()
+            hit, failed = _live(), _failed()
         if hit:
             return hit[1]
         if failed:

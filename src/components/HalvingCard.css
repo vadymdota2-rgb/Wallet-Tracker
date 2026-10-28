@@ -51,6 +51,8 @@
 .hv-meta > span:last-child { margin-inline-start: auto; }
 .hv-eta { margin: 8px 0 0; color: var(--ink); font-size: 13px; font-weight: 700; }
 .hv-avg { margin: 2px 0 0; color: var(--dim); font-size: 11px; }
+/* «Обновлено 14:20» — ответу больше трёх часов: заметно, но не тревожно. */
+.hv-old { margin: 2px 0 0; color: #fcd34d; font-size: 11px; }
 .hv-rw { margin: 3px 0 0; color: var(--dim); font-size: 11.5px; }
 /* Награда переносится целиком, а не «1,5625 / BTC» с BTC на отдельной
    строке; при крупном системном шрифте — после «→», а не за край карточки. */

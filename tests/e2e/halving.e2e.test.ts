@@ -195,8 +195,30 @@ describe("карточка халвинга", () => {
     assert.equal(sp(await page.locator(".hv-avg").innerText()), "Среднее за эпоху: 9,95 мин на блок");
     assert.match(sp(await page.locator(".hv-rw").innerText()), /3,125 → 1,5625 BTC/);
     assert.equal(await page.locator(".hv-done").count(), 0);
+    assert.equal(await page.locator(".hv-old").count(), 0); // ответ свежий — без пометки
     assert.deepEqual(errors, []);
     await ctx.close();
+  });
+
+  test("источники молчат часы — та же дата с пометкой «Обновлено», сутки — карточки нет", async () => {
+    // Сервер отдаёт последний хороший ответ, пока источники молчат (до суток).
+    const ago = (h: number) => ({ ...REAL, at: (REAL["at"] as number) - h * 3600,
+      tip: (REAL["tip"] as number) - h * 3600, eta: (REAL["eta"] as number) - h * 3600 });
+    let o = await open({ reply: ago(5) });
+    await o.page.locator(".hv:not(.hv-skel)").waitFor();
+    assert.equal(sp(await o.page.locator(".hv-old").innerText()), "Обновлено 06:47"); // сегодня — только время (Киев)
+    assert.equal(sp(await o.page.locator(".hv-eta").innerText()), "≈ 9 апреля 2028 г.");
+    assert.deepEqual(o.errors, []);
+    await o.ctx.close();
+    o = await open({ reply: ago(20) });
+    await o.page.locator(".hv:not(.hv-skel)").waitFor();
+    assert.match(sp(await o.page.locator(".hv-old").innerText()), /^Обновлено 12 окт.* 15:47$/); // вчера — с датой
+    await o.ctx.close();
+    o = await open({ reply: ago(25) });
+    await o.page.waitForFunction(() => !document.querySelector(".hv"), null, { timeout: 5000 });
+    assert.ok((await o.page.locator(".drawer-row").count()) > 5);
+    assert.deepEqual(o.errors, []);
+    await o.ctx.close();
   });
 
   test("вид: классы только свои (hv-), подписи ячеек одинаковые", async () => {

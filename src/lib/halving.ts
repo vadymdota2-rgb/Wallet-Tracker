@@ -30,6 +30,13 @@ export interface HalvingReply {
 
 /** Сколько ответ живёт в памяти приложения (на сервере — так же, TTL в wt_halving.py). */
 export const HALVING_TTL_MS = 5 * 60_000;
+/** Ответ старше этого (с) — под датой «Обновлено 14:20»: источники молчат,
+ *  а дата за несколько часов почти не сдвигается — лучше старый ответ с
+ *  пометкой, чем пустая карточка. */
+export const STALE_AFTER = 3 * 3600;
+/** Старше суток — не показываем вовсе (на сервере — STALE_MAX в wt_halving.py):
+ *  запас на устройстве живёт до 30 дней. */
+export const STALE_MAX = 86_400;
 /** Награда за блок в эпоху 0 — 50 BTC в сатоши. */
 const SUBSIDY0 = 5_000_000_000;
 /** Сколько после халвинга карточка говорит «состоялся». */
@@ -107,6 +114,16 @@ export function clockSkew(serverNow: number | undefined, localNow: number): numb
   if (typeof serverNow !== "number" || !Number.isFinite(serverNow)) return 0;
   const d = Math.round(serverNow - localNow);
   return Math.abs(d) > SKEW_MIN ? d : 0;
+}
+
+/**
+ * Свежесть ответа на момент now (по часам сервера): «fresh» — как есть,
+ * «old» — показать с пометкой «Обновлено …», «gone» — не показывать.
+ */
+export function halvingAge(h: HalvingReply, now: number): "fresh" | "old" | "gone" {
+  const age = now - h.at;
+  if (age > STALE_MAX) return "gone";
+  return age > STALE_AFTER ? "old" : "fresh";
 }
 
 /** Награда за блок в эпоху n, в сатоши: как в консенсусе, 50 BTC >> n. */

@@ -25919,6 +25919,24 @@
     "ko": "블록당 {m}분 기준",
     "zh": "按每个区块 {m} 分钟计算"
   },
+  "hv_stale": {
+    "ru": "Обновлено {t}",
+    "en": "Updated {t}",
+    "uk": "Оновлено {t}",
+    "de": "Aktualisiert: {t}",
+    "es": "Actualizado: {t}",
+    "fr": "Mis à jour : {t}",
+    "pt": "Atualizado: {t}",
+    "pl": "Zaktualizowano: {t}",
+    "tr": "Güncellendi: {t}",
+    "id": "Diperbarui {t}",
+    "vi": "Cập nhật lúc {t}",
+    "hi": "अपडेट: {t}",
+    "ar": "آخر تحديث: {t}",
+    "ja": "更新: {t}",
+    "ko": "업데이트: {t}",
+    "zh": "更新于 {t}"
+  },
   "hv_happened": {
     "ru": "🎉 Халвинг состоялся {d} — блок {n}",
     "en": "🎉 The halving happened on {d} — block {n}",

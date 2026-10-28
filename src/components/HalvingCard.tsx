@@ -23,7 +23,7 @@ import { t } from "../i18n/t";
 import { num, pct } from "../lib/format";
 import { useNow } from "../lib/tick";
 import { fetchHalving, peekHalving } from "../lib/api";
-import { CLOCK_UNITS, HALVING_TTL_MS, clockSpeech, halvingView, unitLabel, type HalvingReply } from "../lib/halving";
+import { CLOCK_UNITS, HALVING_TTL_MS, clockSpeech, halvingAge, halvingView, unitLabel, type HalvingReply } from "../lib/halving";
 import { BtcGlyph } from "./ui";
 import "./HalvingCard.css";
 
@@ -79,7 +79,10 @@ export function HalvingCard() {
   // цифр в днях; не каждую секунду — цифры моноширинные.
   const clockRef = useRef<HTMLDivElement>(null);
   // Часы телефона могут врать на минуты и часы — считаем по часам сервера.
-  const view = h ? halvingView(h, local + (h.skew ?? 0)) : null;
+  // Ответ старше суток (источники молчат, а на устройстве — старый запас)
+  // не показываем: это уже не оценка.
+  const age = h ? halvingAge(h, local + (h.skew ?? 0)) : "gone";
+  const view = h && age !== "gone" ? halvingView(h, local + (h.skew ?? 0)) : null;
   const shape = `${lang}|${String(view?.parts[0] ?? 0).length}|${view ? view.left > 0 : "-"}`;
   useLayoutEffect(() => {
     const el = clockRef.current;
@@ -129,10 +132,20 @@ export function HalvingCard() {
     };
   }, [shape]);
 
-  // Формат даты — один на язык, а не новый каждую секунду тика.
+  // Форматы даты — по одному на язык, а не новые каждую секунду тика.
   const dateFmt = useMemo(() => {
     try {
       return new Intl.DateTimeFormat(lang, { day: "numeric", month: "long", year: "numeric" });
+    } catch {
+      return null;
+    }
+  }, [lang]);
+  const timeFmt = useMemo(() => {
+    try {
+      return {
+        time: new Intl.DateTimeFormat(lang, { hour: "2-digit", minute: "2-digit" }),
+        day: new Intl.DateTimeFormat(lang, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
+      };
     } catch {
       return null;
     }
@@ -160,6 +173,11 @@ export function HalvingCard() {
     );
   }
   const v = view;
+  // Когда сервер собрал ответ — по часам телефона: время сервера минус поправка.
+  // Сегодня — «14:20», раньше — «27 окт., 14:20».
+  const built = new Date((h.at - (h.skew ?? 0)) * 1000);
+  const sameDay = built.toDateString() === new Date(local * 1000).toDateString();
+  const builtText = timeFmt ? (sameDay ? timeFmt.time : timeFmt.day).format(built) : built.toISOString().slice(11, 16);
   const day = (ts: number) => (dateFmt ? dateFmt.format(new Date(ts * 1000)) : new Date(ts * 1000).toISOString().slice(0, 10));
   const etaText = day(v.eta);
   // Форма слова — по числу и языку (Intl): «1 day» и «2 days», «544 يومًا».
@@ -205,6 +223,9 @@ export function HalvingCard() {
       </div>
       <p className="hv-eta">≈ {etaText}</p>
       <p className="hv-avg">{t(lang, h.src === "epoch" ? "hv_avg_epoch" : "hv_avg", { m: num(h.avg / 60, 2) })}</p>
+      {/* Источники давно молчат — дата почти та же, но человек должен знать,
+          что она не свежая. */}
+      {age === "old" ? <p className="hv-old">{t(lang, "hv_stale", { t: builtText })}</p> : null}
       <p className="hv-rw">
         {/* Перенос — только после «→», а BTC не отрывается от числа. */}
         {t(lang, "hv_reward")} <b><bdi dir="ltr">{btc(v.reward)}{"\u00a0"}→ {btc(v.rewardNext)}{"\u00a0"}BTC</bdi></b>

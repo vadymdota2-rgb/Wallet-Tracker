@@ -2,7 +2,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { clockSkew, clockSpeech, halvingView, pickHalving, subsidySats, unitLabel, validHalving, type HalvingReply } from "../src/lib/halving.ts";
+import {
+  STALE_AFTER, STALE_MAX, clockSkew, clockSpeech, halvingAge, halvingView, pickHalving, subsidySats, unitLabel, validHalving,
+  type HalvingReply,
+} from "../src/lib/halving.ts";
 
 /** Копия ответа без перечисленных полей — «поля нет», а не «поле = undefined». */
 function omit<T extends object, K extends keyof T>(o: T, ...keys: K[]): Omit<T, K> {
@@ -265,4 +268,17 @@ test("validHalving: поля сходятся между собой, как их
   assert.equal(validHalving({ ...REAL, eta: 3_999_999_999 }), false);
   // Без tip (старый ответ) сверять не с чем — eta принимается.
   assert.equal(validHalving({ ...omit(REAL, "tip"), eta: 3_999_999_999 }), true);
+});
+
+test("свежесть ответа: до 3 часов — как есть, до суток — с пометкой, старше — не показываем", () => {
+  assert.equal(STALE_AFTER, 3 * 3600);
+  assert.equal(STALE_MAX, 86_400);
+  const at = REAL.at;
+  assert.equal(halvingAge(REAL, at), "fresh");
+  assert.equal(halvingAge(REAL, at + STALE_AFTER), "fresh");
+  assert.equal(halvingAge(REAL, at + STALE_AFTER + 1), "old");
+  assert.equal(halvingAge(REAL, at + STALE_MAX), "old");
+  assert.equal(halvingAge(REAL, at + STALE_MAX + 1), "gone");
+  // Часы сервера чуть позади ответа — свежий, а не «из будущего» с ошибкой.
+  assert.equal(halvingAge(REAL, at - 120), "fresh");
 });

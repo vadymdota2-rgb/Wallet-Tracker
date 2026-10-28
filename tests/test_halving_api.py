@@ -192,6 +192,26 @@ class HalvingTest(unittest.TestCase):
             time.sleep(0.1)
             self.assertEqual(down.calls, calls, "после сбоя минуту не ходим в сеть повторно")
 
+    def test_outage_serves_last_answer_up_to_a_day_then_no_data(self):
+        first = self.run_with(Net(blocks=[{"height": H, "timestamp": TIP}]))
+        at, res = hv._st.hit
+        down = Net(fail=True)
+        with mock.patch.object(hv, "_fetch", down.fetch), mock.patch("sys.stderr", io.StringIO()):
+            # Почти сутки источники молчат — старый ответ лучше пустой карточки.
+            hv._st.hit = (at - hv.STALE_MAX + 60, res)
+            hv._st.err_at = float("-inf")
+            self.assertEqual(hv.halving_data(), first)
+            self.wait_bg()
+            # Больше суток — это уже не оценка: «нет данных», и сразу.
+            hv._st.hit = (at - hv.STALE_MAX - 1, res)
+            hv._st.err_at = float("-inf")
+            t0 = time.monotonic()
+            self.assertEqual(hv.halving_data(), {"ok": False, "error": "no_data"})
+            self.assertLess(time.monotonic() - t0, 0.5)
+        # Источники ожили — свежий ответ, как обычно.
+        hv._st.err_at = float("-inf")
+        self.assertEqual(self.run_with(Net(blocks=[{"height": H + 1, "timestamp": TIP + 600}]))["height"], H + 1)
+
     def test_reply_adds_response_time(self):
         self.run_with(Net(blocks=[{"height": H, "timestamp": TIP}]))
         with mock.patch.object(hv, "_now", lambda: NOW + 250):

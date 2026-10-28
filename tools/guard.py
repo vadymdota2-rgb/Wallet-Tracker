@@ -772,8 +772,8 @@ _no_browser = "Executable doesn't exist" in _t_e2e.stdout + _t_e2e.stderr or "Ca
 if _no_browser:
     print("--  халвинг: браузерный тест пропущен — нет Playwright/Chromium (npm i; npx playwright install chromium)")
 else:
-    say("халвинг: браузерный тест карточки (27 проверок: отсчёт до секунды, свои классы, часы, заглушка, сбои, подделка, оценка прошла без блока халвинга, свёрнутое приложение, 16 языков, 320–1280 px и ×1–×3, крупный шрифт до 200 %, вырез и полоска iPhone, высокая контрастность, арабский, доступность) зелёный",
-        _t_e2e.returncode == 0 and "# fail 0" in _t_e2e.stdout and "# pass 27" in _t_e2e.stdout)
+    say("халвинг: браузерный тест карточки (28 проверок: отсчёт до секунды, свои классы, часы, заглушка, сбои, старый ответ с пометкой «Обновлено» и без карточки через сутки, подделка, оценка прошла без блока халвинга, свёрнутое приложение, 16 языков, 320–1280 px и ×1–×3, крупный шрифт до 200 %, вырез и полоска iPhone, высокая контрастность, арабский, доступность) зелёный",
+        _t_e2e.returncode == 0 and "# fail 0" in _t_e2e.stdout and "# pass 28" in _t_e2e.stdout)
     if _t_e2e.returncode:
         print(_t_e2e.stdout[-2500:])
 # Модуль халвинга: сервер — wt_halving.py, расчёт и тип — lib/halving.ts,
@@ -788,7 +788,8 @@ say("халвинг — отдельный модуль: сервер, расч�
 say("халвинг: среднее за эпоху, отсчёт от последнего блока, фон и пауза после сбоя, проверка ответа, поправка часов, блок халвинга — только от сервера, доступность",
     'avg, src = t, "epoch"' in _hvs and "mempool.space/api/blocks/tip/hash" in _hvs and "JSON_MAX = 4096" in _hvs and "_DECODER = json.JSONDecoder(" in _hvs and "START_TS = {840_000: 1713571767}" in _hvs
     and "ERR_TTL = 60.0" in _hvs and "if hit and not failed and not _busy.is_set():" in _hvs and 're.fullmatch(r"[0-9a-f]{64}", bh)' in _hvs
-    and 'res["prev"] = start_ts' in _hvs and '"now": _now()' in _hvs
+    and 'res["prev"] = start_ts' in _hvs and '"now": _now()' in _hvs and "STALE_MAX = 86_400.0" in _hvs
+    and "export const STALE_MAX = 86_400;" in _hvl and 'age === "old" ? <p className="hv-old">' in _hv
     and "opt(r.eta, time)" in _hvl and "donePct: Math.min(99.9, Math.round(done * 10) / 10)," in _hvl
     and "const height = Math.min(h.next - 1," in _hvl and "export function subsidySats(" in _hvl
     and "const eta = h.eta ?? h.at + (h.next - h.height) * h.avg;" in _hvl

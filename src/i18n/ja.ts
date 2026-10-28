@@ -986,6 +986,7 @@ export const ja: Dict = {
   hv_now: "半減期です",
   hv_reward: "ブロック報酬",
   hv_s: "秒",
+  hv_stale: "更新: {t}",
   hv_title: "ビットコイン半減期まで",
   in_body: "プレミアム体験後の特別価格。残り{h}時間、その後は通常価格です。",
   in_cta: "割引を受け取る",
