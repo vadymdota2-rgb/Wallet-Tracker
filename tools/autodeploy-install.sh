@@ -7,6 +7,12 @@
 # запускает её раз в минуту. Изменился tools/autodeploy.sh — запустить
 # снова: копия сама не обновляется (иначе push в репозиторий менял бы код,
 # который работает с правами root).
+#
+# Заодно ограничивает срок журнала системы: в нём строки служб с IP-адресом
+# (бан защиты) и Telegram ID (отказ в пробе), а по умолчанию journald
+# чистит только по размеру — записи жили бы месяцами. Политика
+# конфиденциальности обещает 14 дней (RODO, ст. 5: хранить не дольше нужного);
+# журналы nginx Debian и так держит 14 дней (logrotate).
 set -euo pipefail
 
 domain=${1:-}
@@ -46,6 +52,13 @@ AccuracySec=5s
 [Install]
 WantedBy=timers.target
 EOF
+
+mkdir -p /etc/systemd/journald.conf.d
+cat >/etc/systemd/journald.conf.d/wt-retention.conf <<'EOF'
+[Journal]
+MaxRetentionSec=14day
+EOF
+systemctl restart systemd-journald
 
 systemctl daemon-reload
 systemctl enable --now wt-autodeploy.timer

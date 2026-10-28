@@ -18,10 +18,6 @@ import { fileURLToPath } from "node:url";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 
 const HTML = fileURLToPath(new URL("../../html/", import.meta.url));
-const FONTS = fileURLToPath(new URL("../../fonts/", import.meta.url));
-const FACES = (base: string) => [["Regular", 400], ["Medium", 500], ["SemiBold", 600], ["Bold", 700]]
-  .map(([n, w]) => `@font-face{font-family:"IBM Plex Sans";font-weight:${w};font-display:block;src:url(${base}/__fonts/IBMPlexSans-${n}.ttf) format("truetype")}`)
-  .join("");
 const TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml",
   ".png": "image/png", ".webp": "image/webp", ".json": "application/json", ".ttf": "font/ttf", ".ico": "image/x-icon",
@@ -44,10 +40,6 @@ let browser: Browser;
 before(async () => {
   server = createServer(async (req, res) => {
     const path = normalize(decodeURIComponent((req.url ?? "/").split("?")[0]!)).replace(/^(\.\.[/\\])+/, "");
-    if (path.startsWith("/__fonts/")) {
-      const font = join(FONTS, path.slice("/__fonts/".length));
-      if (font.startsWith(FONTS)) return void res.writeHead(200, { "Content-Type": TYPES[".ttf"] }).end(await readFile(font));
-    }
     const file = join(HTML, path.endsWith("/") ? "index.html" : path);
     try {
       const body = await readFile(file.startsWith(HTML) ? file : join(HTML, "index.html"));
@@ -90,8 +82,7 @@ async function open(o: Opts = {}): Promise<Opened> {
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource/.test(m.text())) errors.push(m.text()); });
   await page.clock.setFixedTime(T * 1000);
-  await ctx.route((url) => !url.href.startsWith(base) && !url.href.startsWith("https://fonts.googleapis.com/"), (r) => r.abort());
-  await ctx.route("https://fonts.googleapis.com/**", (r) => r.fulfill({ contentType: "text/css", body: FACES(base) }));
+  await ctx.route((url) => !url.href.startsWith(base), (r) => r.abort());
   await ctx.route(`${base}/api/**`, (r) => r.fulfill({ contentType: "application/json", body: '{"ok":false}' }));
   let n = 0;
   const replies = o.replies ?? [o.reply ?? REAL];

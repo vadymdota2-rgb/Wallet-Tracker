@@ -765,8 +765,12 @@ sudo python3 tools/vps_nginx.py wallet.example.com | sudo tee /etc/nginx/sites-a
 выкатывается; следующий — как обычно. Git и сборка идут от владельца папок,
 не от root.
 
+Установщик заодно ограничивает журнал системы 14 днями
+(`/etc/systemd/journald.conf.d/wt-retention.conf`): в нём бывают IP-адреса и
+Telegram ID, а политика конфиденциальности обещает этот срок (RODO).
+
 ```
-sudo tools/autodeploy-install.sh wallet.example.com   # включить (и после правок autodeploy.sh)
+sudo tools/autodeploy-install.sh wallet.example.com   # включить (и после правок autodeploy.sh или установщика)
 journalctl -u wt-autodeploy -f                         # что выкатилось
 sudo systemctl disable --now wt-autodeploy.timer       # выключить
 ```

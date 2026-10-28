@@ -7,7 +7,7 @@
  * заглушку, сбои, узкий экран, арабский, доступность.
  *
  * Время в браузере закреплено, поэтому отсчёт сверяется до секунды. Шрифт —
- * тот же IBM Plex Sans, что у людей (из fonts/ проекта вместо Google Fonts):
+ * тот же IBM Plex Sans, что у людей (из сборки, как на сервере):
  * с запасным шрифтом строки переносились бы иначе, чем на телефоне.
  * Нужен Chromium для Playwright: npx playwright install chromium.
  */
@@ -20,10 +20,6 @@ import { fileURLToPath } from "node:url";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 
 const HTML = fileURLToPath(new URL("../../html/", import.meta.url));
-const FONTS = fileURLToPath(new URL("../../fonts/", import.meta.url));
-const FACES = (base: string) => [["Regular", 400], ["Medium", 500], ["SemiBold", 600], ["Bold", 700]]
-  .map(([n, w]) => `@font-face{font-family:"IBM Plex Sans";font-weight:${w};font-display:block;src:url(${base}/__fonts/IBMPlexSans-${n}.ttf) format("truetype")}`)
-  .join("");
 const TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml",
   ".png": "image/png", ".webp": "image/webp", ".json": "application/json", ".woff2": "font/woff2", ".ttf": "font/ttf", ".ico": "image/x-icon",
@@ -48,10 +44,6 @@ let browser: Browser;
 before(async () => {
   server = createServer(async (req, res) => {
     const path = normalize(decodeURIComponent((req.url ?? "/").split("?")[0]!)).replace(/^(\.\.[/\\])+/, "");
-    if (path.startsWith("/__fonts/")) {
-      const font = join(FONTS, path.slice("/__fonts/".length));
-      if (font.startsWith(FONTS)) return void res.writeHead(200, { "Content-Type": TYPES[".ttf"] }).end(await readFile(font));
-    }
     const file = join(HTML, path.endsWith("/") ? "index.html" : path);
     try {
       const body = await readFile(file.startsWith(HTML) ? file : join(HTML, "index.html"));
@@ -92,7 +84,7 @@ interface Opts {
   forcedColors?: boolean;
 }
 
-async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; errors: string[]; console: string[] }> {
+async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; errors: string[]; console: string[]; outside: string[]; seen: string[] }> {
   const ctx = await browser.newContext({
     viewport: { width: o.width ?? 360, height: o.height ?? 780 }, deviceScaleFactor: o.dpr ?? 1,
     locale: o.lang === "ar" ? "ar" : "ru-RU", timezoneId: "Europe/Kyiv", forcedColors: o.forcedColors ? "active" : "none",
@@ -104,9 +96,12 @@ async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; er
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => { if (m.type() === "error") logs.push(m.text()); });
   await page.clock.setFixedTime((o.at ?? T) * 1000);
-  // Наружу — ничего: тест не зависит от сети. Google Fonts — подменяем.
-  await ctx.route((url) => !url.href.startsWith(base) && !url.href.startsWith("https://fonts.googleapis.com/"), (r) => r.abort());
-  await ctx.route("https://fonts.googleapis.com/**", (r) => r.fulfill({ contentType: "text/css", body: FACES(base) }));
+  // Наружу — ничего: тест не зависит от сети, шрифт — из сборки. Куда
+  // приложение всё же пыталось сходить — в outside.
+  const outside: string[] = [];
+  const seen: string[] = [];
+  page.on("request", (r) => seen.push(r.url()));
+  await ctx.route((url) => !url.href.startsWith(base), (r) => { outside.push(r.request().url()); return r.abort(); });
   await ctx.route(`${base}/api/**`, (r) => r.fulfill({ contentType: "application/json", body: '{"ok":false}' }));
   await ctx.route(`${base}/api/halving`, async (r) => {
     if (o.delay) await new Promise((ok) => setTimeout(ok, o.delay));
@@ -136,7 +131,7 @@ async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; er
   await page.evaluate(() => document.fonts.ready);
   await page.locator(".burger").click();
   await page.locator(".drawer-row").first().waitFor();
-  return { ctx, page, errors, console: logs };
+  return { ctx, page, errors, console: logs, outside, seen };
 }
 
 /**
@@ -180,6 +175,21 @@ function overflow(page: Page): Promise<string[]> {
 const LANGS = ["ar", "de", "en", "es", "fr", "hi", "id", "ja", "ko", "pl", "pt", "ru", "tr", "uk", "vi", "zh"];
 
 describe("карточка халвинга", () => {
+  test("RODO: шрифт — со своего сервера, телефон не ходит к Google", async () => {
+    const { ctx, page, outside, seen } = await open();
+    await page.locator(".hv:not(.hv-skel)").waitFor();
+    await page.evaluate(() => document.fonts.ready);
+    const fonts = seen.filter((u) => u.endsWith(".woff2"));
+    // Русский экран — латиница и кириллица, обе с нашего адреса.
+    assert.ok(fonts.some((u) => /\/IBMPlexSans-Regular-latin-[\w-]+\.woff2$/.test(u)), fonts.join());
+    assert.ok(fonts.some((u) => /\/IBMPlexSans-Regular-cyrillic-[\w-]+\.woff2$/.test(u)), fonts.join());
+    assert.ok(fonts.every((u) => u.startsWith(base + "/")), fonts.join());
+    assert.equal(await page.evaluate(() => document.fonts.check('700 22px "IBM Plex Sans"', "Аб")), true);
+    // Наружу — только мост Telegram (без него Mini App не работает), и ничего про шрифты.
+    assert.deepEqual(outside.filter((u) => !u.startsWith("https://telegram.org/js/telegram-web-app.js")), []);
+    await ctx.close();
+  });
+
   test("отсчёт, дата, эпоха, блок, награда — до секунды", async () => {
     const { ctx, page, errors } = await open();
     const card = page.locator(".hv:not(.hv-skel)");

@@ -5,17 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <meta name="theme-color" content="#01030A"/>
 <title>Wallet Tracker</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<!-- Шрифт и мост Telegram грузятся, не задерживая отрисовку. Раньше оба
-     стояли в голове обычными тегами: пока Google Fonts и telegram.org не
-     ответят, экран пуст, а ответить они могут и через десять секунд. Теперь
-     таблица стилей приезжает как печатная и включается по загрузке, а мост
-     помечен async; приложение его ждёт само и не дольше двух секунд. -->
-<link rel="stylesheet" media="print" onload="this.media='all'"
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"/>
-<noscript><link rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"/></noscript>
+<!-- Мост Telegram помечен async и не задерживает отрисовку: приложение его
+     ждёт само и не дольше двух секунд. Шрифт — со своего сервера
+     (src/styles/fonts.css), не с Google Fonts: иначе телефон отдавал бы
+     Google свой IP-адрес (RODO). -->
 <script async src="https://telegram.org/js/telegram-web-app.js"></script>
 <!-- Заставка. Целиком здесь, а не в сборке: она рисуется с первым байтом
      страницы, пока приложение ещё едет по сети, и не зависит от него.

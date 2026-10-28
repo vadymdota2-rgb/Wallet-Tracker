@@ -221,6 +221,15 @@ class AutodeployTest(unittest.TestCase):
             r = subprocess.run(["bash", INSTALL, dom], capture_output=True, text=True, check=False)
             self.assertEqual(r.returncode, 2, dom)
 
+    def test_installer_caps_journal_at_14_days(self):
+        # Политика конфиденциальности обещает 14 дней для журналов с IP и
+        # Telegram ID; journald сам чистит только по размеру.
+        with open(INSTALL, encoding="utf-8") as f:
+            src = f.read()
+        conf = src.split("journald.conf.d/wt-retention.conf <<'EOF'\n")[1].split("\nEOF\n")[0]
+        self.assertEqual(conf, "[Journal]\nMaxRetentionSec=14day")
+        self.assertLess(src.index("systemctl restart systemd-journald"), src.index("systemctl enable --now"))
+
 
 if __name__ == "__main__":
     unittest.main()

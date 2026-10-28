@@ -772,8 +772,8 @@ _no_browser = "Executable doesn't exist" in _t_e2e.stdout + _t_e2e.stderr or "Ca
 if _no_browser:
     print("--  халвинг: браузерный тест пропущен — нет Playwright/Chromium (npm i; npx playwright install chromium)")
 else:
-    say("халвинг: браузерный тест карточки (28 проверок: отсчёт до секунды, свои классы, часы, заглушка, сбои, старый ответ с пометкой «Обновлено» и без карточки через сутки, подделка, оценка прошла без блока халвинга, свёрнутое приложение, 16 языков, 320–1280 px и ×1–×3, крупный шрифт до 200 %, вырез и полоска iPhone, высокая контрастность, арабский, доступность) зелёный",
-        _t_e2e.returncode == 0 and "# fail 0" in _t_e2e.stdout and "# pass 28" in _t_e2e.stdout)
+    say("халвинг: браузерный тест карточки (29 проверок: шрифт со своего сервера и ничего наружу, отсчёт до секунды, свои классы, часы, заглушка, сбои, старый ответ с пометкой «Обновлено» и без карточки через сутки, подделка, оценка прошла без блока халвинга, свёрнутое приложение, 16 языков, 320–1280 px и ×1–×3, крупный шрифт до 200 %, вырез и полоска iPhone, высокая контрастность, арабский, доступность) зелёный",
+        _t_e2e.returncode == 0 and "# fail 0" in _t_e2e.stdout and "# pass 29" in _t_e2e.stdout)
     if _t_e2e.returncode:
         print(_t_e2e.stdout[-2500:])
 # Модуль халвинга: сервер — wt_halving.py, расчёт и тип — lib/halving.ts,
@@ -1777,6 +1777,18 @@ say("картинки выпуска для скачивания из прило
     not os.path.exists(f"{APP}/src/lib/digestImage.ts") and "/api/digest/image" not in api
     and "/api/digest/image" not in _ngx and "MAX_UPLOAD" not in _shield
     and "toImage" not in read(f"{APP}/src/screens/DigestTab.tsx") and "def tg_send_document(" in api)
+_fcss = read(f"{APP}/src/styles/fonts.css")
+say("RODO: шрифт со своего сервера — ни Google Fonts, ни других адресов шрифтов наружу",
+    all("googleapis" not in read(f"{APP}/{f}") and "gstatic" not in read(f"{APP}/{f}") for f in ("index.html", "html/index.html"))
+    and '@import "./fonts.css";' in read(f"{APP}/src/styles/index.css") and "https:" not in _fcss
+    and all(f'url("../assets/fonts/IBMPlexSans-{w}-{p}.woff2")' in _fcss and os.path.exists(f"{APP}/src/assets/fonts/IBMPlexSans-{w}-{p}.woff2")
+            for w in ("Regular", "Medium", "SemiBold", "Bold") for p in ("latin", "cyrillic"))
+    and "RODO: шрифт — со своего сервера" in read(f"{APP}/tests/e2e/halving.e2e.test.ts"))
+_priv = json.load(open(f"{APP}/tools/i18n.json"))["legal_privacy_body"]
+say("RODO ст. 13: в политике на 16 языках — администратор и почта, OVH в ЕС, журналы 14 дней, основания, права, жалоба в UODO",
+    len(_priv) == 16 and all(all(x in v for x in ("wallettrackerbot@gmail.com", "@WalletTrackerHelp", "OVH", "14", "UODO", "uodo.gov.pl", "TON Connect"))
+                             and re.search(r"(?<!\d)6(?!\d)", v) for v in _priv.values())
+    and "MaxRetentionSec=14day" in read(f"{APP}/tools/autodeploy-install.sh"))
 _dgi = read(f"{APP}/wt_digest_img.py") if os.path.exists(f"{APP}/wt_digest_img.py") else ""
 say("автопостинг выпуска в канал: картинка на сервере (Pillow + IBM Plex), раз в день, повтор при сбое",
     "def render(it: dict, lang: str = \"ru\", page: str = \"\") -> bytes | None:" in _dgi and "def caption(" in _dgi

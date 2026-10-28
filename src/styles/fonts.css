@@ -1,0 +1,25 @@
+/* IBM Plex Sans — со своего сервера (RODO): с Google Fonts телефон отдавал
+   Google свой IP-адрес. Файлы делает tools/make-fonts.py из fonts/*.ttf;
+   © IBM Corp., SIL Open Font License 1.1. Кириллица — отдельным файлом и
+   качается, только если она есть на экране; латиница — без unicode-range и
+   объявлена первой: для кириллицы браузер берёт более позднее правило. */
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../assets/fonts/IBMPlexSans-Regular-latin.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 400; font-display: swap;
+  src: url("../assets/fonts/IBMPlexSans-Regular-cyrillic.woff2") format("woff2");
+  unicode-range: U+0400-052F, U+20B4, U+2116; }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 500; font-display: swap;
+  src: url("../assets/fonts/IBMPlexSans-Medium-latin.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 500; font-display: swap;
+  src: url("../assets/fonts/IBMPlexSans-Medium-cyrillic.woff2") format("woff2");
+  unicode-range: U+0400-052F, U+20B4, U+2116; }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 600; font-display: swap;
+  src: url("../assets/fonts/IBMPlexSans-SemiBold-latin.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 600; font-display: swap;
+  src: url("../assets/fonts/IBMPlexSans-SemiBold-cyrillic.woff2") format("woff2");
+  unicode-range: U+0400-052F, U+20B4, U+2116; }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url("../assets/fonts/IBMPlexSans-Bold-latin.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 700; font-display: swap;
+  src: url("../assets/fonts/IBMPlexSans-Bold-cyrillic.woff2") format("woff2");
+  unicode-range: U+0400-052F, U+20B4, U+2116; }
