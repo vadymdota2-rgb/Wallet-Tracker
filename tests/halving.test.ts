@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   STALE_AFTER, STALE_MAX, clockSkew, clockSpeech, halvingAge, halvingView, pickHalving, subsidySats, unitLabel, validHalving,
-  type HalvingReply,
+  type HalvingReply, type HalvingSource,
 } from "../src/lib/halving.ts";
 
 /** Копия ответа без перечисленных полей — «поля нет», а не «поле = undefined». */
@@ -286,7 +286,7 @@ test("свежесть ответа: до 3 часов — как есть, до
 test("источник данных: только известные адреса — из него в карточке строка «Данные: …»", () => {
   for (const by of ["mempool.space", "blockstream.info", "blockchain.info"]) {
     assert.equal(validHalving({ ...REAL, by }), true, by);
-    assert.equal(pickHalving({ ...REAL, by: by as HalvingReply["by"] }).by, by);
+    assert.equal(pickHalving({ ...REAL, by: by as HalvingSource }).by, by);
   }
   for (const by of ["evil.com", "mempool.space.evil.com", "javascript:alert(1)", "", 42, ["mempool.space"]]) {
     assert.equal(validHalving({ ...REAL, by }), false, String(by));
