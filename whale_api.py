@@ -1960,16 +1960,17 @@ def load_wallets(cur: sqlite3.Connection, chat: str,
     # Кто из них торгует на Hyperliquid — видно по базе сделок, без сети.
     # Раньше площадку выдавали открытые позиции; теперь их в списке нет, и
     # без этого признака кошелёк с перпами подписывался бы BSC.
+    # По одному кошельку и до первой строки: индекс (wallet, ts) отвечает
+    # сразу. Раньше было lower(wallet) IN (…) — с lower() индекс не
+    # работает, и каждое открытие приложения читало всю таблицу сделок.
+    # Бот пишет адреса строчными (toLower в hyperliquid_core.cpp).
     on_hl: set[str] = set()
-    addrs = [(r["addr"] or "").lower() for r in rows if r["addr"]]
+    addrs = sorted({(r["addr"] or "").lower() for r in rows if r["addr"]})
     if hl and addrs and table_exists(hl, "hl_fills"):
         try:
-            marks = ",".join("?" * len(addrs))
-            for row in hl.execute(
-                f"SELECT DISTINCT lower(wallet) w FROM hl_fills WHERE lower(wallet) IN ({marks})",
-                addrs,
-            ).fetchall():
-                on_hl.add(row["w"])
+            for a in addrs:
+                if hl.execute("SELECT 1 FROM hl_fills WHERE wallet=? LIMIT 1", (a,)).fetchone():
+                    on_hl.add(a)
         except sqlite3.Error as e:
             sys.stderr.write(f"[api] hl wallets: {e}\n")
 
@@ -6744,7 +6745,11 @@ def _perp_deals(hl: sqlite3.Connection | None, key: str, n: int) -> list[dict]:
         rows = hl.execute(
             f"SELECT coin, px, sz, notional_nanos, closed_pnl_nanos pnl, "
             f"{dirc} dirc, {lev} lev, {marg} marg, {sp} sp, {side} sd, ts "
-            f"FROM hl_fills WHERE lower(wallet)=? {close_f} "
+            # wallet=?, а не lower(wallet)=?: с lower() индекс (wallet, ts)
+            # не работает, и каждый запрос читал всю таблицу сделок — десятки
+            # секунд, приложение не дожидалось («клиент ушёл» в журнале).
+            # Бот пишет адреса строчными (toLower в hyperliquid_core.cpp).
+            f"FROM hl_fills WHERE wallet=? {close_f} "
             f"ORDER BY ts DESC LIMIT ?",
             (key, n),
         ).fetchall()
