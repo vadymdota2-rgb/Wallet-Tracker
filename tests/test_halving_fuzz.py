@@ -32,7 +32,7 @@ TIP_HASH = "b" * 64  # хеш последнего блока
 EVIL = [b'[{"height":1e400,"timestamp":1e400}]', b'{"timeAvg":1e400,"timestamp":-1e400}', b"1e400",
         b'[{"height":NaN,"timestamp":Infinity}]', b'{"timeAvg":-Infinity,"timestamp":NaN}', b"Infinity",
         b"[" * 100_000 + b"]" * 100_000, b'{"a":' * 50_000 + b"1" + b"}" * 50_000, b"\x00" * 64,
-        b'[{"height":' + b"9" * 5000 + b"}]", b'"\ud800"', b"\xef\xbb\xbf[]"]
+        b'[{"height":' + b"9" * 5000 + b"}]", b'"\\ud800"', b"\xef\xbb\xbf[]"]
 
 
 def junk(r: random.Random) -> object:

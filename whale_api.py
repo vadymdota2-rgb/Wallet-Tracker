@@ -15495,6 +15495,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def _fail(self, e: Exception, where: str) -> None:
         """Сбой обработчика: подробности — в журнал, наружу — только номер."""
+        if isinstance(e, (BrokenPipeError, ConnectionResetError, ConnectionAbortedError)):
+            # Не сбой сервера: человек закрыл приложение или nginx оборвал
+            # запрос раньше ответа. Писать «fail» и слать ему 500 — некуда и
+            # незачем; в журнал — одна строка: какой адрес не дождались
+            # (долгий ответ — повод посмотреть, почему он долгий). Только путь:
+            # в строке запроса бывает подпись Telegram.
+            self.close_connection = True
+            sys.stderr.write(f"[api] {where}: клиент ушёл, не дождавшись ответа: {urlparse(self.path).path[:120]}\n")
+            return
         eid = shield.error_id()
         sys.stderr.write(f"[api] {where} fail #{eid}: {type(e).__name__}: {shield.redact(str(e))}\n")
         try:
