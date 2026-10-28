@@ -25,6 +25,8 @@ sys.path.insert(0, ROOT)
 import wt_halving as hv  # noqa: E402 — модуль лежит в корне репозитория
 
 NOW = 1_791_881_300
+# Сто блоков новой эпохи (2028): высота 1 050 100 правдоподобна только тогда.
+NOW2 = 1_838_896_000 + 100 * 600 + 60
 
 
 class Evil(BaseHTTPRequestHandler):
@@ -151,6 +153,24 @@ class SecurityTest(unittest.TestCase):
         # Сторож снят, копия сокета закрыта — ничего не висит до следующего запроса.
         self.assertIsNone(hv._dl.cuts)
 
+    def test_address_without_socket_support_moves_to_the_next(self):
+        # Нет IPv6 на машине — socket() бросает сразу. Это сбой адреса, а не
+        # всего запроса: следующий адрес пробуем.
+        real = hv.socket.socket
+        made = []
+
+        def flaky(*a, **k):
+            made.append(a)
+            if len(made) == 1:
+                raise OSError(97, "Address family not supported by protocol")
+            return real(*a, **k)
+
+        addr = (hv.socket.AF_INET, hv.socket.SOCK_STREAM, 6, "", ("127.0.0.1", self.srv.server_address[1]))
+        with self.local(), mock.patch.object(hv.socket, "getaddrinfo", lambda *a, **k: [addr, addr]), \
+                mock.patch.object(hv.socket, "socket", flaky):
+            self.assertEqual(hv._fetch(f"{self.base}/ok"), b"secret")
+        self.assertGreaterEqual(len(made), 2)
+
     def test_silent_dns_is_cut_by_the_deadline(self):
         def hang(*_a, **_k):
             time.sleep(5)
@@ -221,17 +241,17 @@ class SecurityTest(unittest.TestCase):
             self.assertEqual(hv._real(v), want, v)
         logs = []
         tip = "/api/block/" + "b" * 64
-        net = {"tip/hash": b"b" * 64, tip: b'{"height":"1050100","timestamp":1791881000}',
+        net = {"tip/hash": b"b" * 64, tip: b'{"height":"1050100","timestamp":1838955000}',
                "difficulty-adjustment": b'{"timeAvg":"570866"}'}
 
         def fetch(url, limit=1 << 20):
             return next((v for k, v in net.items() if k in url), None)
 
-        with mock.patch.object(hv, "_fetch", fetch), mock.patch.object(hv, "_now", lambda: NOW), \
+        with mock.patch.object(hv, "_fetch", fetch), mock.patch.object(hv, "_now", lambda: NOW2), \
                 mock.patch.object(hv, "_log", logs.append):
             self.assertEqual(hv.build(), {"ok": False, "error": "no_data"})  # высота-строка не годится
             hv._st = hv._State()
-            net[tip] = b'{"height":1050100,"timestamp":1791881000}'
+            net[tip] = b'{"height":1050100,"timestamp":1838955000}'
             hv.START_TS.pop(1_050_000, None)
             r = hv.build()
         self.assertEqual((r["height"], r["src"], r["avg"]), (1_050_100, "nominal", 600.0))  # среднее-строка — нет
@@ -283,12 +303,12 @@ class SecurityTest(unittest.TestCase):
             return b"1050100"
 
         logs = []
-        with mock.patch.object(hv, "_fetch", fetch), mock.patch.object(hv, "_now", lambda: NOW), \
+        with mock.patch.object(hv, "_fetch", fetch), mock.patch.object(hv, "_now", lambda: NOW2), \
                 mock.patch.object(hv, "_log", logs.append):
             hv.START_TS.pop(1_050_000, None)
             r = hv.build()
         self.assertTrue(r["ok"])
-        self.assertEqual((r["height"], r["src"], r["tip"]), (1_050_100, "nominal", NOW))
+        self.assertEqual((r["height"], r["src"], r["tip"]), (1_050_100, "nominal", NOW2))
         self.assertFalse([m for m in logs if m.startswith("сборка")])
 
     def test_height_text_is_ascii_digits_only(self):
@@ -312,7 +332,11 @@ class SecurityTest(unittest.TestCase):
                 self.assertEqual(hv.halving_data(), {"ok": False, "error": "no_data"})
         self.assertEqual(len(calls), 1)  # не по разу на каждый запрос
         self.assertTrue(hv._failed())
-        self.assertEqual(hv._dl.at, 0.0)
+        # Срок и причины сборки сброшены и после падения (сборка шла в фоне —
+        # проверяем на прямом вызове).
+        with mock.patch.object(hv, "_build", boom), mock.patch("sys.stderr", io.StringIO()):
+            hv.build()
+        self.assertEqual((hv._dl.at, hv._dl.why), (0.0, None))
         out = err.getvalue()
         self.assertEqual(out.count("\n"), 1)
         self.assertNotIn("\x1b", out)

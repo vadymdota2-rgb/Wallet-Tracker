@@ -55,14 +55,14 @@ def body(r: random.Random, value: object) -> bytes | None:
 
 def network(r: random.Random):
     """Случайная сеть: правдоподобные ответы вперемешку с мусором."""
-    height = r.choice([971_219, 1_050_000, 1_050_100, 1_051_000, 1_100_000, 2_000_000, 799_999, 99_000_000])
+    height = r.choice([971_219, 972_000, 973_235, 973_236, 971_218, 1_050_000, 1_100_000, 2_000_000, 799_999, 99_000_000])
     tip = NOW - r.randint(-10_000, 200_000)
     blk = {"height": height if r.random() < 0.8 else junk(r), "timestamp": tip if r.random() < 0.8 else junk(r)}
     blocks = [blk] if r.random() < 0.85 else junk(r)
     adj = {"timeAvg": r.choice([570_866, 600_000, 60_000, 2_000_000]) if r.random() < 0.8 else junk(r)}
     start_ts = r.choice([1_713_571_767, NOW - 10**6, NOW + 10**6, 0]) if r.random() < 0.8 else junk(r)
     hsh = r.choice(["0" * 63 + "a", "../evil", "", "f" * 64, "Z" * 64])
-    tip_h = r.choice([971_219, 1_050_100, 99_000_000, 0]) if r.random() < 0.8 else junk(r)
+    tip_h = r.choice([971_219, 973_235, 973_236, 1_050_100, 99_000_000, 0]) if r.random() < 0.8 else junk(r)
 
     tip_blk = blocks[0] if isinstance(blocks, list) and blocks else blocks
     asked = {"h": 0}  # высота, по которой спросили хеш блока начала эпохи
@@ -115,7 +115,7 @@ class FuzzTest(unittest.TestCase):
         h, nxt, every = res["height"], res["next"], res["every"]
         self.assertEqual((every, nxt % every), (hv.EVERY, 0), m)
         self.assertTrue(nxt - every <= h < nxt, m)
-        self.assertTrue(hv.MIN_HEIGHT < h <= (NOW - hv.GENESIS_TS) // hv.FASTEST, m)
+        self.assertTrue(hv.ANCHOR_HEIGHT <= h <= hv.ANCHOR_HEIGHT + (NOW - hv.ANCHOR_TS) // hv.AVG_MIN + hv.RETARGET, m)
         src, avg = res["src"], res["avg"]
         self.assertIn(src, ("epoch", "period", "nominal"), m)
         self.assertTrue(avg == hv.TARGET if src == "nominal" else hv.AVG_MIN <= avg <= hv.AVG_MAX, m)

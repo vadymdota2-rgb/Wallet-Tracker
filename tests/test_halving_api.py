@@ -5,6 +5,7 @@ import http.client
 import io
 import json
 import os
+import re
 import sys
 import threading
 import time
@@ -19,6 +20,11 @@ import wt_halving as hv  # модуль лежит в корне репозит�
 TIP = 1791881177
 NOW = TIP + 78
 H = 971219
+# Новая эпоха: блок 1 050 000 вышел в 1838896000 (его отдаёт подставная сеть),
+# последний блок — 100 блоков спустя. Раньше такой высоты быть не может
+# (_plausible), поэтому и «сейчас» у таких тестов своё.
+TIP2 = 1838896000 + 100 * 600
+NOW2 = TIP2 + 60
 HASH = "0" * 63 + "a"
 TIP_HASH = "b" * 64  # хеш последнего блока
 FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "halving.json")
@@ -87,8 +93,7 @@ class HalvingTest(unittest.TestCase):
     def test_early_epoch_uses_difficulty_period(self):
         # Новая эпоха уже идёт: блок 1 050 000 вышел в 1838896000 (его отдаёт
         # подставная сеть), сейчас — 100 блоков спустя.
-        tip = 1838896000 + 100 * 600
-        r = self.run_with(Net(blocks=[{"height": 1_050_100, "timestamp": tip}], adj={"timeAvg": 570_866}), t=tip + 60)
+        r = self.run_with(Net(blocks=[{"height": 1_050_100, "timestamp": TIP2}], adj={"timeAvg": 570_866}), t=NOW2)
         self.assertEqual((r["next"], r["src"]), (1_260_000, "period"))
         self.assertAlmostEqual(r["avg"], 570.9, places=1)
         self.assertEqual(hv.START_TS[1_050_000], 1838896000)  # время начала эпохи запомнено
@@ -97,9 +102,9 @@ class HalvingTest(unittest.TestCase):
     def test_start_block_of_another_height_is_not_remembered(self):
         # Источник на «блок 1 050 000» прислал другой блок — его время не
         # запоминается (иначе жило бы до перезапуска API).
-        net = Net(blocks=[{"height": 1_050_100, "timestamp": 1838896000 + 100 * 600}], adj={"timeAvg": 570_866})
+        net = Net(blocks=[{"height": 1_050_100, "timestamp": TIP2}], adj={"timeAvg": 570_866})
         net._asked = lambda url: (setattr(net, "start_height", 1_049_999), net.hash.encode())[1]
-        r = self.run_with(net, t=1838896000 + 100 * 600 + 60)
+        r = self.run_with(net, t=NOW2)
         self.assertNotIn(1_050_000, hv.START_TS)
         self.assertNotIn("prev", r)
         self.assertEqual(r["src"], "period")
@@ -120,12 +125,12 @@ class HalvingTest(unittest.TestCase):
     def test_first_days_of_epoch_do_not_trust_epoch_average(self):
         # 100 блоков новой эпохи по 10 минут: среднему по ним не верим (мало),
         # берём период сложности. Найдено мутационной проверкой.
-        hv.START_TS[1_050_000] = TIP - 100 * 600
-        r = self.run_with(Net(blocks=[{"height": 1_050_100, "timestamp": TIP}], adj={"timeAvg": 570_866}))
+        hv.START_TS[1_050_000] = TIP2 - 100 * 600
+        r = self.run_with(Net(blocks=[{"height": 1_050_100, "timestamp": TIP2}], adj={"timeAvg": 570_866}), t=NOW2)
         self.assertEqual(r["src"], "period")
 
     def test_bad_period_average_falls_back_to_600(self):
-        r = self.run_with(Net(blocks=[{"height": 1_050_100, "timestamp": TIP}], adj={"timeAvg": 60_000}))
+        r = self.run_with(Net(blocks=[{"height": 1_050_100, "timestamp": TIP2}], adj={"timeAvg": 60_000}), t=NOW2)
         self.assertEqual((r["avg"], r["src"]), (600.0, "nominal"))
 
     def test_future_tip_time_is_not_trusted(self):
@@ -142,19 +147,51 @@ class HalvingTest(unittest.TestCase):
             r = self.run_with(Net(blocks=[{"height": 99_000_000, "timestamp": TIP}], tip_height=99_000_000))
         self.assertFalse(r["ok"])
 
+    def test_height_bounds_follow_a_real_block(self):
+        # Граница — от настоящего блока: ниже него высоты нет, а выше — не
+        # больше, чем вышло бы с тех пор при блоке раз в AVG_MIN (+ период
+        # сложности). Прежняя граница от генезиса пускала 1,87 млн.
+        a, ts = hv.ANCHOR_HEIGHT, hv.ANCHOR_TS
+        with open(FIXTURE, encoding="utf-8") as f:
+            fix = json.load(f)
+        self.assertEqual((fix["height"], fix["tip"]), (a, ts), "якорь — настоящий ответ сервера")
+        with mock.patch.object(hv, "_now", lambda: ts):
+            self.assertTrue(hv._plausible(a))
+            self.assertFalse(hv._plausible(a - 1))
+            self.assertTrue(hv._plausible(a + hv.RETARGET))
+            self.assertFalse(hv._plausible(a + hv.RETARGET + 1))
+        year = 365 * 86400
+        with mock.patch.object(hv, "_now", lambda: ts + year):
+            top = a + int(year // hv.AVG_MIN) + hv.RETARGET
+            self.assertTrue(hv._plausible(top))
+            self.assertFalse(hv._plausible(top + 1))
+        # Халвинг 1 050 000 «уже сегодня» от взломанного источника не пройдёт.
+        with mock.patch.object(hv, "_now", lambda: NOW):
+            self.assertFalse(hv._plausible(1_050_000))
+        # Часы сервера отстали от якоря — граница не опускается ниже него.
+        with mock.patch.object(hv, "_now", lambda: ts - year):
+            self.assertTrue(hv._plausible(a + hv.RETARGET))
+            self.assertFalse(hv._plausible(a + hv.RETARGET + 1))
+
+    def test_fake_halving_from_a_fallback_is_rejected(self):
+        # mempool молчит, а запасной источник «провёл» халвинг — не верим.
+        with mock.patch("sys.stderr", io.StringIO()):
+            r = self.run_with(Net(blocks="garbage", tip_height=1_050_001))
+        self.assertFalse(r["ok"])
+
     def test_fallback_height_source(self):
         r = self.run_with(Net(blocks="garbage"))
         self.assertTrue(r["ok"])
         self.assertEqual((r["height"], r["tip"]), (H, NOW))
 
     def test_unexpected_json_shapes_do_not_crash(self):
-        r = self.run_with(Net(blocks=[{"height": 1_050_100, "timestamp": TIP}], adj=["not", "a", "dict"]))
+        r = self.run_with(Net(blocks=[{"height": 1_050_100, "timestamp": TIP2}], adj=["not", "a", "dict"]), t=NOW2)
         self.assertTrue(r["ok"])
         self.assertEqual((r["src"], r["avg"]), ("nominal", 600.0))
 
     def test_block_hash_is_validated_before_use(self):
-        net = Net(blocks=[{"height": 1_050_100, "timestamp": TIP}], height_hash="../../evil?x=1")
-        self.assertEqual(self.run_with(net)["src"], "nominal")
+        net = Net(blocks=[{"height": 1_050_100, "timestamp": TIP2}], height_hash="../../evil?x=1")
+        self.assertEqual(self.run_with(net, t=NOW2)["src"], "nominal")
         self.assertFalse([u for u in net.urls if "evil" in u])
 
     def test_all_sources_down_then_quiet_for_a_minute(self):
@@ -283,7 +320,8 @@ class HalvingTest(unittest.TestCase):
 
     def test_start_time_from_the_future_is_not_cached(self):
         net = Net()
-        net._answer = lambda url: HASH.encode() if "block-height" in url else b'{"timestamp": 9000000000}'
+        # Тот же блок (высота сходится) — отсекает именно время из будущего.
+        net._answer = lambda url: HASH.encode() if "block-height" in url else b'{"height": 1050000, "timestamp": 9000000000}'
         with mock.patch.object(hv, "_fetch", net.fetch), mock.patch.object(hv, "_now", lambda: NOW):
             self.assertEqual(hv._start_ts(1_050_000), 0)
         self.assertNotIn(1_050_000, hv.START_TS)
@@ -309,7 +347,7 @@ class HalvingTest(unittest.TestCase):
         self.assertEqual(r["src"], "period")
 
     def test_period_average_of_bad_type_gives_nominal(self):
-        r = self.run_with(Net(blocks=[{"height": 1_050_100, "timestamp": TIP}], adj={"timeAvg": "fast"}))
+        r = self.run_with(Net(blocks=[{"height": 1_050_100, "timestamp": TIP2}], adj={"timeAvg": "fast"}), t=NOW2)
         self.assertEqual((r["src"], r["avg"]), ("nominal", 600.0))
 
     def test_fetch_reads_with_limit_and_budget_timeout(self):
@@ -353,6 +391,35 @@ class HalvingTest(unittest.TestCase):
         hv._busy.set()
         with mock.patch.object(hv, "build", side_effect=RuntimeError("boom")), self.assertRaises(RuntimeError):
             hv._bg()
+        self.assertFalse(hv._busy.is_set())
+
+    def test_cold_start_does_not_outwait_the_app(self):
+        # Сборка дольше COLD_WAIT — «нет данных» сразу, а не через BUDGET
+        # секунд, когда человек уже ушёл; сборка доделывается в фоне.
+        net = Net(blocks=[{"height": H, "timestamp": TIP}])
+
+        def lazy(url, limit=1 << 20):
+            time.sleep(0.3)
+            return net.fetch(url, limit)
+
+        with mock.patch.object(hv, "_fetch", lazy), mock.patch.object(hv, "_now", lambda: NOW), \
+                mock.patch.object(hv, "COLD_WAIT", 0.2):
+            t0 = time.monotonic()
+            self.assertEqual(hv.halving_data(), {"ok": False, "error": "no_data"})
+            self.assertLess(time.monotonic() - t0, 0.5)
+            self.wait_bg()
+            self.assertTrue(hv.halving_data()["ok"])
+        # Ждём меньше, чем приложение ждёт ответ (fetchHalving в src/lib/api.ts).
+        with open(os.path.join(os.path.dirname(FIXTURE), "..", "..", "src", "lib", "api.ts"), encoding="utf-8") as f:
+            app = re.search(r'call<HalvingReply>\("/api/halving", \{ timeout: ([0-9_]+) \}\)', f.read())
+        self.assertIsNotNone(app)
+        self.assertLessEqual(hv.COLD_WAIT + 2, int(app.group(1).replace("_", "")) / 1000)
+
+    def test_cold_start_builds_itself_when_no_thread_starts(self):
+        with mock.patch.object(hv.threading.Thread, "start", side_effect=RuntimeError("can't start new thread")), \
+                mock.patch("sys.stderr", io.StringIO()):
+            r = self.run_with(Net(blocks=[{"height": H, "timestamp": TIP}]))
+        self.assertTrue(r["ok"])
         self.assertFalse(hv._busy.is_set())
 
     def _race(self, net, n=6):

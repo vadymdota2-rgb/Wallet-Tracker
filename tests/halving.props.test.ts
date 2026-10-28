@@ -11,7 +11,9 @@ import { halvingView, subsidySats, validHalving, type HalvingReply } from "../sr
 
 const SEED = 0x5eed_2028;
 const CASES = 20_000;
-const GENESIS = 1_231_006_505;
+// Настоящий блок и предел скорости — как в validHalving (src/lib/halving.ts).
+const ANCHOR_HEIGHT = 971_219;
+const ANCHOR_TS = 1_791_881_177;
 
 /** mulberry32 — маленький детерминированный генератор. */
 function rng(seed: number): () => number {
@@ -30,10 +32,14 @@ function reply(r: () => number): HalvingReply {
   const every = 210_000;
   const epoch = 4 + Math.floor(r() * 6);
   const next = (epoch + 1) * every;
-  const height = next - every + Math.floor(r() * every);
+  const start = next - every;
+  // Высота — не ниже настоящего блока (эпоха 4 началась раньше него).
+  const height = start >= ANCHOR_HEIGHT ? start + Math.floor(r() * every)
+    : ANCHOR_HEIGHT + Math.floor(r() * (next - ANCHOR_HEIGHT));
   const avg = 300 + r() * 900;
-  // at — не раньше, чем высота могла быть достигнута при блоке раз в 5 минут.
-  const at = Math.max(1_700_000_000, GENESIS + height * 300) + Math.floor(r() * 1e8);
+  // at — не раньше, чем высота могла быть достигнута: блок раз в 480 с от
+  // настоящего, с запасом в период сложности (2016 блоков).
+  const at = ANCHOR_TS + Math.max(0, height - ANCHOR_HEIGHT - 2016) * 480 + Math.floor(r() * 1e8);
   const tip = at - Math.floor(r() * 86_400);
   const h: HalvingReply = { ok: true, height, next, every, avg, at, src: (["epoch", "period", "nominal"] as const)[Math.floor(r() * 3)]! };
   if (r() < 0.9) h.tip = tip;

@@ -417,7 +417,9 @@ type Saved<T> = { at: number; v: T };
 function readSaved<T>(key: string): Record<string, Saved<T>> {
   try {
     const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as Record<string, Saved<T>>) : {};
+    // Запись могла испортиться («null», число): .all от null уронил бы экран.
+    const v: unknown = raw ? JSON.parse(raw) : null;
+    return v && typeof v === "object" ? (v as Record<string, Saved<T>>) : {};
   } catch {
     return {};
   }
@@ -632,7 +634,7 @@ function savedHalving(): HalvingReply | null {
   const hit = readSaved<HalvingReply>(HALVING_SAVED).all;
   // Запас старше месяца, битый или с прошедшим халвингом не показываем:
   // отсчёт нарисовал бы «Халвинг наступает» до ответа сервера.
-  if (!hit || !validHalving(hit.v) || Date.now() - hit.at > 30 * 24 * 3600_000) return null;
+  if (!hit || typeof hit.at !== "number" || !validHalving(hit.v) || Date.now() - hit.at > 30 * 24 * 3600_000) return null;
   if (hit.v.eta && hit.v.eta * 1000 < Date.now()) return null;
   return pickHalving(hit.v);
 }

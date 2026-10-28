@@ -151,10 +151,28 @@ test("договор с сервером: образец ответа (tests/fix
 test("validHalving: пограничные высоты (найдены мутационной проверкой)", () => {
   // Нулевая высота — не ответ сети биткоина.
   assert.equal(validHalving({ ...omit(REAL, "eta", "tip"), height: 0, next: 210000 }), false);
-  // 2 млн — больше, чем при блоке раз в 5 минут с 2009 года (~1,87 млн), но
-  // меньше, чем при блоке раз в 30 секунд: граница проверяется точно.
-  assert.equal(validHalving({ ...omit(REAL, "eta"), height: 2_000_000, next: 2_100_000 }), false);
-  assert.equal(validHalving({ ...omit(REAL, "eta"), height: 1_800_000, next: 1_890_000 }), true);
+  // Высота — от настоящего блока 971 219 (13.10.2026): ниже — нет; выше —
+  // не больше, чем вышло бы с тех пор при блоке раз в 480 с, + 2016 блоков.
+  const at = 1_791_881_177;
+  const h = (height: number, t: number) => ({ ...omit(REAL, "eta", "tip"), height, at: t,
+    next: (Math.floor(height / 210_000) + 1) * 210_000 });
+  assert.equal(validHalving(h(971_219, at)), true);
+  assert.equal(validHalving(h(971_218, at)), false);
+  assert.equal(validHalving(h(973_235, at)), true);
+  assert.equal(validHalving(h(973_236, at)), false);
+  // Через год — на 65 700 блоков выше, не больше: «халвинг» 1 050 000
+  // раньше срока от сломанного источника не пройдёт.
+  const year = 365 * 86_400;
+  assert.equal(validHalving(h(1_038_935, at + year)), true);
+  assert.equal(validHalving(h(1_038_936, at + year)), false);
+  assert.equal(validHalving(h(1_050_000, at + 30 * 86_400)), false);
+  // Блок халвинга — уже новая эпоха: «1 050 000 / 1 050 000» не ответ, даже
+  // когда высота по времени возможна.
+  assert.equal(validHalving({ ...h(1_050_000, at + 2 * year), next: 1_050_000 }), false);
+  assert.equal(validHalving(h(1_050_000, at + 2 * year)), true);
+  // Ответ «из прошлого» (at раньше блока-опоры) — граница не опускается ниже него.
+  assert.equal(validHalving(h(973_235, at - year)), true);
+  assert.equal(validHalving(h(973_236, at - year)), false);
 });
 
 test("halvingView: остаток — целые секунды вниз, даже при дробной оценке", () => {

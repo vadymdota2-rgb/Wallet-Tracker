@@ -48,8 +48,9 @@ export function HalvingCard() {
 
   useEffect(() => {
     let alive = true;
+    // Сбой загрузки — как «нет ответа»: иначе заглушка висела бы вечно.
     const load = () =>
-      void fetchHalving().then((r) => {
+      void fetchHalving().catch(() => null).then((r) => {
         if (!alive) return;
         if (r) setH(r);
         setLoading(false);

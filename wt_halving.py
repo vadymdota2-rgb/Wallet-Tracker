@@ -92,12 +92,13 @@ MAX_FUTURE, MAX_AGE = 7200, 86400
 RETARGET = 2016
 # Разумное среднее время блока, с: всё вне — сбой источника, а не сеть.
 AVG_MIN, AVG_MAX = 480.0, 720.0
-# Сеть прошла эту высоту ещё в 2023 году — меньше быть не может.
-MIN_HEIGHT = 800_000
-# Время генезис-блока. Выше, чем блок раз в 5 минут с него, высота быть не
-# может (реальность — раз в ~10): источник, приславший 99 миллионов, врёт.
-GENESIS_TS = 1231006505
-FASTEST = 300
+# Настоящий блок — ответ сервера от 13.10.2026 (tests/fixtures/halving.json).
+# Ниже него высота быть не может, а выше — не больше, чем вышло бы с тех пор
+# при среднем блоке AVG_MIN, плюс период сложности запаса. Раньше граница
+# была «блок раз в 5 минут с генезиса» — 1,87 млн, и взломанный источник
+# мог «провести» халвинг 1 050 000 хоть сегодня; теперь — не раньше, чем это
+# физически возможно.
+ANCHOR_HEIGHT, ANCHOR_TS = 971_219, 1_791_881_177
 # Сколько ответ живёт в кэше, с (приложение держит столько же — HALVING_TTL_MS).
 TTL = 300.0
 # Все источники молчат — минуту отвечаем «нет данных» (или последним
@@ -114,6 +115,13 @@ STALE_MAX = 86_400.0
 BUDGET = 20.0
 HOP = 6.0
 MIN_LEFT = 0.2
+# Сколько первый запрос после запуска API ждёт сборку, с. Приложение ждёт
+# ответ 12 с (fetchHalving), а сборка при зависшем mempool длится до BUDGET:
+# человек уходил, не дождавшись, — в журнале «клиент ушёл, не дождавшись
+# ответа». Не успела — «нет данных» сразу, а сборка доделывается в фоне, и
+# следующее открытие меню берёт готовое. Автовыкат перезапускает API после
+# каждого коммита, так что холодный старт — не редкость.
+COLD_WAIT = 8.0
 # Время блока каждого прошлого халвинга, уже известное (дальше — из сети).
 START_TS = {840_000: 1713571767}
 
@@ -188,7 +196,13 @@ def _connect(address: tuple[str, int], timeout: object = None, source_address: o
         left = end - time.monotonic()
         if left <= MIN_LEFT:
             break
-        sock = socket.socket(family, kind, proto)
+        # На машине без IPv6 бросает уже socket() — это сбой адреса, а не
+        # всего запроса: следующий адрес всё равно пробуем.
+        try:
+            sock = socket.socket(family, kind, proto)
+        except OSError as e:
+            err = e
+            continue
         try:
             sock.settimeout(min(CONNECT, left))
             sock.connect(addr)
@@ -320,11 +334,11 @@ class _State:
 
     hit: tuple[float, Reply] | None = None  # (monotonic, ответ)
     err_at: float = float("-inf")  # когда источники последний раз молчали (monotonic)
+    job: threading.Thread | None = None  # поток фоновой сборки, пока она идёт
 
 
 _st = _State()
 _lock = threading.Lock()
-_cold = threading.Lock()
 _busy = threading.Event()  # идёт фоновая сборка
 _dl = threading.local()  # срок текущей сборки (monotonic) — свой у каждого потока
 
@@ -480,9 +494,9 @@ def _start_ts(h: int) -> int:
 
 
 def _plausible(h: int) -> bool:
-    """Высота в возможных пределах: не меньше уже пройденной и не больше,
-    чем успело бы выйти при блоке раз в 5 минут с генезиса."""
-    return MIN_HEIGHT < h <= (_now() - GENESIS_TS) // FASTEST
+    """Высота в возможных пределах: не ниже уже известного блока и не выше,
+    чем успело бы выйти с тех пор (ANCHOR_HEIGHT)."""
+    return ANCHOR_HEIGHT <= h <= ANCHOR_HEIGHT + int(max(0, _now() - ANCHOR_TS) // AVG_MIN) + RETARGET
 
 
 def _tip() -> tuple[int, int, Source]:
@@ -571,37 +585,46 @@ def _bg() -> None:
         _busy.clear()
 
 
+def _start() -> threading.Thread | None:
+    """Фоновая сборка, если она ещё не идёт. Вызывать под _lock.
+
+    Поток идущей или новой сборки; None — поток не запустился (кончились
+    потоки): флаг тогда снят, иначе «идёт сборка» висело бы вечно и ответ
+    больше не обновлялся."""
+    if _busy.is_set():
+        return _st.job
+    _busy.set()
+    job = threading.Thread(target=_bg, daemon=True)
+    try:
+        job.start()
+    except RuntimeError as e:
+        _busy.clear()
+        _log(f"фон не запущен: {e}")
+        return None
+    _st.job = job
+    return job
+
+
 def halving_data() -> Reply:
     """Ответ /api/halving: из кэша, свежий собирается в фоне."""
     with _lock:
         hit = _live()
         if hit and time.monotonic() - hit[0] < TTL:
             return hit[1]
-        failed = _failed()
         # Источники только что молчали — не дёргаем их снова сразу: иначе при
         # сбое mempool фоновые сборки шли бы одна за другой без перерыва.
-        if hit and not failed and not _busy.is_set():
-            _busy.set()
-            try:
-                threading.Thread(target=_bg, daemon=True).start()
-            except RuntimeError as e:
-                # Поток не запустился (кончились потоки) — флаг снимаем, иначе
-                # «идёт сборка» висело бы вечно и ответ больше не обновлялся.
-                _busy.clear()
-                _log(f"фон не запущен: {e}")
+        if _failed():
+            return hit[1] if hit else _no_data()
+        job = _start()
         if hit:
             return hit[1]
-        if failed:
-            return _no_data()
-    # Холодный старт: первый собирает, остальные ждут его и берут готовое.
-    with _cold:
-        with _lock:
-            hit, failed = _live(), _failed()
-        if hit:
-            return hit[1]
-        if failed:
-            return _no_data()
+    # Холодный старт: все ждут одну и ту же сборку, но не дольше COLD_WAIT.
+    if job is None:
         return build()
+    job.join(COLD_WAIT)
+    with _lock:
+        hit = _live()
+    return hit[1] if hit else _no_data()
 
 
 def reply() -> Reply:

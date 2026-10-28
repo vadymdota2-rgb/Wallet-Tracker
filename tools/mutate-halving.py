@@ -12,8 +12,10 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Эквивалентные: «граница награды» — 50 BTC >> 63 и >> 64 оба ноль;
 # «озвучка неполного отсчёта» — массив частей плотный: после первой
-# пропущенной пропущены и все следующие, break и continue дают одно и то же.
-EQUIV = {"граница награды", "озвучка неполного отсчёта"}
+# пропущенной пропущены и все следующие, break и continue дают одно и то же;
+# «ноль как высота» — высота не ниже настоящего блока (ANCHOR_HEIGHT), а next
+# больше высоты: ноль не проходит ни там, ни там и без v > 0.
+EQUIV = {"граница награды", "озвучка неполного отсчёта", "int: ноль как высота"}
 TS = [
     ("v > 0;", "v >= 0;", "int: ноль как высота"),
     ("r.height < r.next", "r.height <= r.next", "высота равна next"),
@@ -24,7 +26,10 @@ TS = [
     ("Math.min(99.9,", "Math.min(100,", "100 % до халвинга"),
     ("since < JUST_HAPPENED", "since < JUST_HAPPENED * 3", "окно «состоялся»"),
     ("left % 60]", "left % 61]", "секунды"),
-    ("(r.at - GENESIS_TS) / 300", "(r.at - GENESIS_TS) / 30", "правдоподобие высоты"),
+    ("&& r.height >= ANCHOR_HEIGHT\n", "\n", "высота не ниже настоящего блока"),
+    ("Math.max(0, r.at - ANCHOR_TS) / AVG_MIN", "Math.max(0, r.at - ANCHOR_TS) / 300", "высота: скорость блоков с опоры"),
+    ("/ AVG_MIN) + RETARGET", "/ AVG_MIN) + RETARGET + 1", "высота: запас — ровно период сложности"),
+    ("Math.max(0, r.at - ANCHOR_TS)", "(r.at - ANCHOR_TS)", "высота: ответ из прошлого"),
     ("Math.max(0, Math.floor((now - tip) / h.avg))", "Math.floor((now - tip) / h.avg)", "высота назад"),
     ("rewardNext: subsidySats(epoch + 1)", "rewardNext: subsidySats(epoch)", "следующая награда"),
     ("since >= 0 &&", "since >= -1e12 &&", "«состоялся» из будущего"),
@@ -45,12 +50,18 @@ TS = [
     ('if (typeof tip !== "number") return true;', 'if (typeof tip !== "number") return false;', "старый ответ без tip"),
 ]
 PY = [
-    ("if hit and not failed and not _busy.is_set():", "if hit and not _busy.is_set():", "пауза после сбоя"),
+    ("        if _failed():\n            return hit[1] if hit else _no_data()\n", "", "пауза после сбоя"),
+    ("    job.join(COLD_WAIT)\n", "    job.join()\n", "холодный старт ждёт не дольше COLD_WAIT"),
+    ("    if job is None:\n        return build()\n", "    if job is None:\n        return _no_data()\n", "нет потока — собираем сами"),
+    ("    if _busy.is_set():\n        return _st.job\n", "", "один сборщик на холодном старте"),
     ("    return hit if hit and time.monotonic() - hit[0] < STALE_MAX else None", "    return hit", "старый ответ — не дольше суток"),
     ("            return h, 0, by\n", "            return h, 0, \"mempool.space\"\n", "подпись — настоящий источник, а не mempool всегда"),
     ("tip_ts <= t_now + MAX_FUTURE", "tip_ts <= t_now + 10**9", "время блока из будущего"),
     ("height - start >= RETARGET", "height - start >= 0", "среднее в начале эпохи"),
-    ("return MIN_HEIGHT < h <= (_now() - GENESIS_TS) // FASTEST", "return MIN_HEIGHT < h", "правдоподобие высоты"),
+    ("return ANCHOR_HEIGHT <= h <=", "return ANCHOR_HEIGHT - 10**6 <= h <=", "высота не ниже настоящего блока"),
+    ("max(0, _now() - ANCHOR_TS) // AVG_MIN", "max(0, _now() - ANCHOR_TS) // 300", "высота: скорость блоков с опоры"),
+    ("// AVG_MIN) + RETARGET", "// AVG_MIN) + RETARGET + 1", "высота: запас — ровно период сложности"),
+    ("int(max(0, _now() - ANCHOR_TS)", "int((_now() - ANCHOR_TS)", "высота: часы сервера раньше опоры"),
     ('"eta": int(tip_ts + (nxt - height) * avg)', '"eta": int(t_now + (nxt - height) * avg)', "eta от последнего блока"),
     ("    if left <= MIN_LEFT:\n        return None", "    if left <= -1:\n        return None", "бюджет исчерпан"),
     ("    infos.sort(key=lambda a: a[0] != socket.AF_INET)\n", "", "соединение: IPv4 первыми"),
@@ -60,24 +71,25 @@ PY = [
     ("len(why) < WHY_MAX", "len(why) < 10**6", "причин — не больше WHY_MAX"),
     ('or ["ответы неправдоподобны"]', 'or []', "без сбоев сети — названа причина"),
     ("sock.settimeout(min(CONNECT, left))", "sock.settimeout(left)", "соединение: адрес — не дольше CONNECT"),
-    ("            err = e\n            continue", "            raise", "соединение: молчащий адрес — к следующему"),
+    ("            sock.close()\n            err = e\n            continue", "            raise", "соединение: молчащий адрес — к следующему"),
+    ("            sock = socket.socket(family, kind, proto)\n        except OSError as e:\n            err = e\n            continue",
+     "            sock = socket.socket(family, kind, proto)\n        except OSError:\n            raise", "соединение: нет IPv6 — к следующему адресу"),
     ("    if host not in HOSTS:\n        raise OSError", "    if False:\n        raise OSError", "соединение: только HOSTS"),
     ("        if left <= MIN_LEFT:\n            break\n", "", "соединение: без времени — не пробуем"),
     ("        sock.settimeout(limit)\n", "", "соединение: дальше — тайм-аут запроса"),
     ("        self._create_connection = _connect\n\n\nclass _ConnPlain", "\n\n\nclass _ConnPlain", "запросы — через _connect"),
-    ("            sock.close()\n", "", "соединение: молчащий сокет закрыт"),
+    ("            sock.close()\n            err", "            err", "соединение: молчащий сокет закрыт"),
     ("hop = min(HOP, left)", "hop = HOP", "таймаут по остатку бюджета"),
     ('if not re.fullmatch(r"[0-9a-f]{64}", bh):', "if False:", "проверка хеша"),
     ("        _dl.at = 0.0\n", "        pass\n", "срок сборки сбрасывается"),
     ('        res["prev"] = start_ts', "        pass", "prev в ответе"),
-    ("    with _cold:\n", "    if True:\n", "один сборщик на холодном старте"),
     ("            _st.err_at = time.monotonic()\n        return", "            pass\n        return", "запоминание сбоя"),
     ("            _st.err_at = time.monotonic()\n            hit", "            pass\n            hit", "пауза после падения сборки"),
     ("nxt = start + EVERY", "nxt = start + EVERY + 1", "номер блока халвинга"),
     ('"now": _now()', '"now": 0', "now в ответе"),
     ("    finally:\n        _busy.clear()", "    finally:\n        pass", "флаг фона снимается"),
     ("if 1_700_000_000 < ts <= _now():", "if 1_700_000_000 < ts:", "время начала эпохи из будущего"),
-    ("                _busy.clear()\n                _log(", "                pass\n                _log(", "флаг при сбое запуска потока"),
+    ("        _busy.clear()\n        _log(", "        pass\n        _log(", "флаг при сбое запуска потока"),
     # Защита от атак через источник.
     ("return u.scheme in SCHEMES and u.hostname in HOSTS and", "return True or", "только https и известные адреса"),
     (" and not u.username and not u.password", "", "адрес с логином"),

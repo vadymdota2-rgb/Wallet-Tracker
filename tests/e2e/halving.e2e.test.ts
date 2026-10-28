@@ -71,7 +71,9 @@ interface Opts {
   delay?: number;
   /** Время в браузере (unix, с). */
   at?: number;
-  /** Что лежит на устройстве до запуска. */
+  /** Время сервера в ответе (now); по умолчанию T. */
+  now?: number;
+  /** Что лежит на устройстве до запуска; строка — запись как есть. */
   saved?: unknown;
   /** Сломать формат даты карточки — проверить предохранитель. */
   breakDate?: boolean;
@@ -105,7 +107,7 @@ async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; er
   await ctx.route(`${base}/api/**`, (r) => r.fulfill({ contentType: "application/json", body: '{"ok":false}' }));
   await ctx.route(`${base}/api/halving`, async (r) => {
     if (o.delay) await new Promise((ok) => setTimeout(ok, o.delay));
-    const body = o.reply === null ? { ok: false, error: "no_data" } : { ...(o.reply ?? REAL), now: T };
+    const body = o.reply === null ? { ok: false, error: "no_data" } : { ...(o.reply ?? REAL), now: o.now ?? T };
     await r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
   });
   await page.addInitScript((a: { lang: string; saved: unknown; breakDate: boolean }) => {
@@ -125,7 +127,7 @@ async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; er
     sessionStorage.setItem("e2e", "1");
     localStorage.clear();
     localStorage.setItem("wt-miniapp-v7", JSON.stringify({ state: { lang: a.lang, langPinned: true }, version: 9 }));
-    if (a.saved) localStorage.setItem("wt-halving-v1", JSON.stringify(a.saved));
+    if (a.saved !== null) localStorage.setItem("wt-halving-v1", typeof a.saved === "string" ? a.saved : JSON.stringify(a.saved));
   }, { lang: o.lang ?? "ru", saved: o.saved ?? null, breakDate: !!o.breakDate });
   await page.goto(base + "/");
   await page.evaluate(() => document.fonts.ready);
@@ -291,12 +293,17 @@ describe("карточка халвинга", () => {
   });
 
   test("испорченный запас на устройстве — приложение живо, мусор не показан", async () => {
-    const saved = { all: { at: T * 1000, v: { ...REAL, eta: "abc" } } };
-    const { ctx, page, errors } = await open({ saved, reply: null });
-    await page.waitForFunction(() => !document.querySelector(".hv"), null, { timeout: 5000 });
-    assert.ok((await page.locator(".drawer-row").count()) > 5);
-    assert.deepEqual(errors, []);
-    await ctx.close();
+    // Мусор в ответе, запись «null» или число вместо записи (раньше .all от
+    // null ронял карточку), время записи строкой (раньше проходило проверку
+    // срока: NaN ни больше, ни меньше).
+    for (const saved of [{ all: { at: T * 1000, v: { ...REAL, eta: "abc" } } }, "null", "5", "[]",
+      { all: { at: "вчера", v: REAL } }]) {
+      const { ctx, page, errors } = await open({ saved, reply: null });
+      await page.waitForFunction(() => !document.querySelector(".hv"), null, { timeout: 5000 });
+      assert.ok((await page.locator(".drawer-row").count()) > 5, JSON.stringify(saved));
+      assert.deepEqual(errors, [], JSON.stringify(saved));
+      await ctx.close();
+    }
   });
 
   test("поломка внутри карточки — пропадает только она (предохранитель)", async () => {
@@ -311,13 +318,17 @@ describe("карточка халвинга", () => {
 
   // Сразу после халвинга до следующего ~1 457 дней — четыре цифры с
   // разделителем; на 320 px раньше они вылезали из ячейки (68 px в 52).
+  // Время — апрель 2028: раньше блока 1 050 150 быть не может, и приложение
+  // такой ответ не примет (validHalving).
+  const TA = 1_838_896_000 + 3 * 86400;
   const AFTER = { ok: true, height: 1050150, next: 1260000, every: 210000, avg: 600, src: "period",
-    tip: T - 300, eta: T - 300 + (1260000 - 1050150) * 600, at: T, prev: T - 3 * 86400 };
+    tip: TA - 300, eta: TA - 300 + (1260000 - 1050150) * 600, at: TA, prev: TA - 3 * 86400 };
+  const AT_AFTER = { at: TA, now: TA };
   for (const [name, lang, reply] of [
     ["544 дня, русский", "ru", undefined], ["1 457 дней, русский", "ru", AFTER], ["1.457 Tage, немецкий", "de", AFTER],
   ] as const) {
     test(`320 px: ничего не вылезает за свои рамки — ${name}`, async () => {
-      const { ctx, page } = await open({ width: 320, lang, reply });
+      const { ctx, page } = await open({ width: 320, lang, reply, ...(reply ? AT_AFTER : {}) });
       const card = page.locator(".hv:not(.hv-skel)");
       await card.waitFor();
       // Любой элемент, чьё содержимое шире его самого, — вылез (видно или обрезано).
@@ -398,8 +409,10 @@ describe("карточка халвинга", () => {
     // блока ещё не видел. Не «1 050 000 / 1 050 000» и не «100 %».
     const next = REAL["next"] as number;
     const avg = REAL["avg"] as number;
-    const tip = T - 3000; // 3 блока до халвинга по оценке вышли бы к T − 1210 с
-    const { ctx, page, errors } = await open({ reply: { ...REAL, height: next - 3, tip, eta: Math.round(tip + 3 * avg) } });
+    const tb = 1_838_890_000; // апрель 2028, за час с небольшим до оценки
+    const tip = tb - 3000; // 3 блока до халвинга по оценке вышли бы к tb − 1210 с
+    const { ctx, page, errors } = await open({ reply: { ...REAL, height: next - 3, tip, eta: Math.round(tip + 3 * avg), at: tb },
+      at: tb, now: tb });
     await page.locator(".hv:not(.hv-skel)").waitFor();
     assert.equal(sp(await page.locator(".hv-now").innerText()), "Халвинг наступает");
     assert.equal(await page.locator(".hv-clock").count(), 0);
@@ -412,10 +425,10 @@ describe("карточка халвинга", () => {
   });
 
   test("две недели после халвинга — «состоялся» и отсчёт до следующего", async () => {
-    const prev = T - 3 * 86400;
-    const { ctx, page } = await open({ reply: { ...AFTER, prev } });
+    const prev = TA - 3 * 86400;
+    const { ctx, page } = await open({ reply: { ...AFTER, prev }, ...AT_AFTER });
     await page.locator(".hv:not(.hv-skel)").waitFor();
-    assert.match(sp(await page.locator(".hv-done").innerText()), /Халвинг состоялся 10 октября 2026 г\. — блок 1 050 000/);
+    assert.match(sp(await page.locator(".hv-done").innerText()), /Халвинг состоялся 9 апреля 2028 г\. — блок 1 050 000/);
     assert.match(sp(await page.locator(".hv-rw").innerText()), /1,5625 → 0,78125 BTC/);
     assert.equal(sp(await page.locator(".hv-avg").innerText()), "Оценка по 10 мин на блок");
     await ctx.close();
@@ -445,7 +458,7 @@ describe("карточка халвинга", () => {
 
   for (const [z, lang, reply] of [[1.3, "ru", undefined], [2, "de", undefined], [2, "ar", undefined], [1.6, "ru", AFTER]] as const) {
     test(`крупный системный шрифт ${z * 100} % (${lang}${reply ? ", 1 457 дней" : ""}): цифры и подписи в своих ячейках`, async () => {
-      const { ctx, page, errors } = await open({ width: 320, lang, reply });
+      const { ctx, page, errors } = await open({ width: 320, lang, reply, ...(reply ? AT_AFTER : {}) });
       await page.locator(".hv:not(.hv-skel)").waitFor();
       // Ошибки окна — в том числе «ResizeObserver loop», если подгон правит
       // размер прямо в наблюдателе.

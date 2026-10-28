@@ -787,7 +787,7 @@ say("халвинг — отдельный модуль: сервер, расч�
     and '<Boundary name="halving"><HalvingCard /></Boundary>' in appx and "static getDerivedStateFromError()" in read(f"{APP}/src/components/Boundary.tsx"))
 say("халвинг: среднее за эпоху, отсчёт от последнего блока, фон и пауза после сбоя, проверка ответа, поправка часов, блок халвинга — только от сервера, доступность",
     'avg, src = t, "epoch"' in _hvs and "mempool.space/api/blocks/tip/hash" in _hvs and "JSON_MAX = 4096" in _hvs and "_DECODER = json.JSONDecoder(" in _hvs and "START_TS = {840_000: 1713571767}" in _hvs
-    and "ERR_TTL = 60.0" in _hvs and "if hit and not failed and not _busy.is_set():" in _hvs and 're.fullmatch(r"[0-9a-f]{64}", bh)' in _hvs
+    and "ERR_TTL = 60.0" in _hvs and "        if _failed():\n            return hit[1] if hit else _no_data()\n        job = _start()" in _hvs and 're.fullmatch(r"[0-9a-f]{64}", bh)' in _hvs
     and 'res["prev"] = start_ts' in _hvs and '"now": _now()' in _hvs and "STALE_MAX = 86_400.0" in _hvs
     and "export const STALE_MAX = 86_400;" in _hvl and 'age === "old" ? <p className="hv-old">' in _hv
     and '"at": t_now, "by": by}' in _hvs and 'h.by ? <p className="hv-src">' in _hv
@@ -825,7 +825,11 @@ say("халвинг: среднее за эпоху, отсчёт от посл�
     and os.path.exists(f"{APP}/tests/halving.props.test.ts") and os.path.exists(f"{APP}/tests/test_halving_fuzz.py")
     and "typecheck:halving" in read(f"{APP}/package.json") and 'python: ["3.10", "3.11", "3.12", "3.13"]' in read(f"{APP}/.github/workflows/tests.yml") and "const untilNextSecond = " in read(f"{APP}/src/lib/tick.ts")
     and "if 1_700_000_000 < ts <= _now():" in _hvs and "except RuntimeError as e:" in _hvs and os.path.exists(f"{APP}/tools/mutate-halving.py")
-    and "python tools/mutate-halving.py" in read(f"{APP}/.github/workflows/tests.yml") and "r.height <= (r.at - GENESIS_TS) / 300" in _hvl
+    and "python tools/mutate-halving.py" in read(f"{APP}/.github/workflows/tests.yml") and "&& r.height >= ANCHOR_HEIGHT" in _hvl
+    # Высота — от настоящего блока, одинаково на сервере и в приложении; первый запрос не ждёт дольше приложения.
+    and "ANCHOR_HEIGHT, ANCHOR_TS = 971_219, 1_791_881_177" in _hvs and "const ANCHOR_HEIGHT = 971_219;" in _hvl
+    and "const ANCHOR_TS = 1_791_881_177;" in _hvl and "GENESIS_TS" not in _hvs + _hvl
+    and "    job.join(COLD_WAIT)\n" in _hvs and "COLD_WAIT = 8.0" in _hvs and "_cold" not in _hvs
     and '<p className="hv-rw" aria-hidden="true"><span className="hv-ph">' in _hv and ".hv-rw b { color: var(--ink); font-weight: 700; display: inline-block; }" in _hvc and ".hv-meta > .hv-blk { white-space: normal;" in _hvc and "HALVING_TTL_MS + 5_000" in _hv
     and 'remember<HalvingReply | null>("/api/halving", HALVING_TTL_MS' in read(f"{APP}/src/lib/api.ts")
     and 'className="hv hv-skel" aria-busy="true"' in _hv and "prefers-reduced-motion: reduce" in _hvc

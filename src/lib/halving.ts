@@ -49,8 +49,13 @@ const SUBSIDY0 = 5_000_000_000;
 const JUST_HAPPENED = 14 * 86400;
 /** Расхождение часов меньше этого (с) — задержка сети, не неверные часы. */
 const SKEW_MIN = 60;
-/** Время генезис-блока биткоина (3 января 2009). */
-const GENESIS_TS = 1_231_006_505;
+/** Настоящий блок — ответ сервера от 13.10.2026 (как ANCHOR_HEIGHT/ANCHOR_TS
+ *  в wt_halving.py): ниже него высоты нет, а выше — не больше, чем вышло бы
+ *  с тех пор при блоке раз в AVG_MIN секунд, плюс период сложности. */
+const ANCHOR_HEIGHT = 971_219;
+const ANCHOR_TS = 1_791_881_177;
+const AVG_MIN = 480;
+const RETARGET = 2016;
 /** Интервал халвинга — правило консенсуса биткоина, а не настройка сервера. */
 const EVERY = 210_000;
 /** Последний блок старше at на сутки или впереди на 2 часа — так не бывает (как MAX_AGE и MAX_FUTURE на сервере). */
@@ -74,16 +79,18 @@ export function validHalving(h: unknown): h is HalvingReply {
   // «NaN дн», а new Date(NaN) в формате даты роняла всё приложение.
   const opt = (v: unknown, ok: (x: unknown) => boolean) => v === undefined || v === null || ok(v);
   // Среднее — шире, чем пускает сервер (480–720 с): лишь бы не мусор.
-  // Высота — не больше, чем вышло бы при блоке раз в 5 минут с генезиса
-  // (как и на сервере): 99 миллионов от сломанного источника не пройдут.
+  // Высота — как на сервере: от настоящего блока и не больше, чем успело бы
+  // выйти к моменту ответа. Ни 99 миллионов, ни «халвинг 1 050 000» раньше
+  // срока от сломанного источника не пройдут.
   return r.ok === true && int(r.height) && int(r.next) && r.every === EVERY && time(r.at)
-    && r.height <= (r.at - GENESIS_TS) / 300
+    && r.height >= ANCHOR_HEIGHT
+    && r.height <= ANCHOR_HEIGHT + Math.floor(Math.max(0, r.at - ANCHOR_TS) / AVG_MIN) + RETARGET
     && r.next % r.every === 0 && r.next - r.every <= r.height && r.height < r.next
     && typeof r.avg === "number" && r.avg >= 300 && r.avg <= 1200
     && opt(r.eta, time) && opt(r.tip, time) && opt(r.now, time) && opt(r.prev, time)
     && opt(r.skew, (v) => typeof v === "number" && Number.isFinite(v) && Math.abs(v) < 366 * 86400)
     && opt(r.src, (v) => v === "epoch" || v === "period" || v === "nominal")
-    // Источник — только из списка: из него собирается ссылка в карточке.
+    // Источник — только из списка: карточка пишет его как есть.
     && opt(r.by, (v) => (HALVING_SOURCES as readonly unknown[]).includes(v))
     && consistent(r as HalvingReply);
 }
