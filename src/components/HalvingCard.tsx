@@ -169,6 +169,7 @@ export function HalvingCard() {
         <p className="hv-eta" aria-hidden="true"><span className="hv-ph">&nbsp;</span></p>
         <p className="hv-avg" aria-hidden="true"><span className="hv-ph">&nbsp;</span></p>
         <p className="hv-rw" aria-hidden="true"><span className="hv-ph">&nbsp;</span></p>
+        <p className="hv-src" aria-hidden="true"><span className="hv-ph">&nbsp;</span></p>
       </section>
     );
   }
@@ -230,6 +231,10 @@ export function HalvingCard() {
         {/* Перенос — только после «→», а BTC не отрывается от числа. */}
         {t(lang, "hv_reward")} <b><bdi dir="ltr">{btc(v.reward)}{"\u00a0"}→ {btc(v.rewardNext)}{"\u00a0"}BTC</bdi></b>
       </p>
+      {/* Источник рядом с данными — правило проекта. Тот, кто дал высоту
+          блока на самом деле: mempool.space или запасной. Текстом, без
+          ссылки: в карточке ссылок нет вовсе (test_halving_policy). */}
+      {h.by ? <p className="hv-src">{t(lang, "hv_src")} <bdi dir="ltr">{h.by}</bdi></p> : null}
     </section>
   );
 }

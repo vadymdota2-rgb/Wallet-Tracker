@@ -985,6 +985,7 @@ export const en = {
   hv_now: "Halving now",
   hv_reward: "Block reward",
   hv_s: "sec",
+  hv_src: "Data:",
   hv_stale: "Updated {t}",
   hv_title: "Until the Bitcoin halving",
   in_body: "Your price after the Premium trial. {h} h left, then the regular price.",

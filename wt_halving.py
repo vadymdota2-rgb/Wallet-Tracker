@@ -79,6 +79,9 @@ if TYPE_CHECKING:  # pragma: no cover — только для mypy, при за�
     from collections.abc import Callable
     from typing import Literal, NotRequired
 
+    # Чьи высота и время последнего блока — подпись источника в карточке.
+    Source = Literal["mempool.space", "blockstream.info", "blockchain.info"]
+
 EVERY = 210_000
 # Целевое время блока по правилам биткоина, с.
 TARGET = 600.0
@@ -308,6 +311,7 @@ class Reply(TypedDict):
     at: NotRequired[int]
     prev: NotRequired[int]
     now: NotRequired[int]
+    by: NotRequired[Source]
 
 
 @dataclass
@@ -481,20 +485,24 @@ def _plausible(h: int) -> bool:
     return MIN_HEIGHT < h <= (_now() - GENESIS_TS) // FASTEST
 
 
-def _tip() -> tuple[int, int]:
-    """Высота и время последнего блока; время 0 — не знаем."""
+def _tip() -> tuple[int, int, Source]:
+    """Высота и время последнего блока (время 0 — не знаем) и чей это ответ:
+    его карточка подписывает источником данных."""
     blk = _block("https://mempool.space/api/blocks/tip/hash")
     if blk:
         h = _whole(blk.get("height"))
         if _plausible(h):
-            return h, _whole(blk.get("timestamp"))
+            return h, _whole(blk.get("timestamp")), "mempool.space"
     # Запасные — другие источники, а не другой адрес того же mempool: завис
     # mempool — второй запрос к нему съел бы ещё HOP секунд из бюджета.
-    for url in ("https://blockstream.info/api/blocks/tip/height", "https://blockchain.info/q/getblockcount"):
+    fallbacks: tuple[tuple[str, Source], ...] = (
+        ("https://blockstream.info/api/blocks/tip/height", "blockstream.info"),
+        ("https://blockchain.info/q/getblockcount", "blockchain.info"))
+    for url, by in fallbacks:
         h = _int(url)
         if _plausible(h):
-            return h, 0
-    return 0, 0
+            return h, 0, by
+    return 0, 0, "mempool.space"
 
 
 def build() -> Reply:
@@ -521,7 +529,7 @@ def build() -> Reply:
 def _build() -> Reply:
     with _lock:
         hit = _live()
-    height, tip_ts = _tip()
+    height, tip_ts, by = _tip()
     if not height:
         why = getattr(_dl, "why", None) or ["ответы неправдоподобны"]
         _log("нет высоты блока ни от одного источника: " + "; ".join(why))
@@ -548,7 +556,7 @@ def _build() -> Reply:
         if AVG_MIN <= t <= AVG_MAX:
             avg, src = t, "period"
     res: Reply = {"ok": True, "height": height, "next": nxt, "every": EVERY, "avg": round(avg, 1), "src": src,
-           "tip": tip_ts, "eta": int(tip_ts + (nxt - height) * avg), "at": t_now}
+           "tip": tip_ts, "eta": int(tip_ts + (nxt - height) * avg), "at": t_now, "by": by}
     if start_ts:
         res["prev"] = start_ts  # время блока прошлого халвинга
     with _lock:

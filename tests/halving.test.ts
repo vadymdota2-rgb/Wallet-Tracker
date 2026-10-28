@@ -282,3 +282,15 @@ test("свежесть ответа: до 3 часов — как есть, до
   // Часы сервера чуть позади ответа — свежий, а не «из будущего» с ошибкой.
   assert.equal(halvingAge(REAL, at - 120), "fresh");
 });
+
+test("источник данных: только известные адреса — из него в карточке строка «Данные: …»", () => {
+  for (const by of ["mempool.space", "blockstream.info", "blockchain.info"]) {
+    assert.equal(validHalving({ ...REAL, by }), true, by);
+    assert.equal(pickHalving({ ...REAL, by: by as HalvingReply["by"] }).by, by);
+  }
+  for (const by of ["evil.com", "mempool.space.evil.com", "javascript:alert(1)", "", 42, ["mempool.space"]]) {
+    assert.equal(validHalving({ ...REAL, by }), false, String(by));
+  }
+  // Старый ответ без поля — годится, просто без подписи.
+  assert.equal(validHalving(REAL), true);
+});

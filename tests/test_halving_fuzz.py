@@ -26,7 +26,8 @@ CASES = 3000
 NOW = 1_791_881_300
 JUNK = [None, True, False, "", "x", "1e9", -1, 0, 0.5, 10**40, -(10**12), [], {}, [1, 2], {"a": 1}, "∞"]
 KEYS = set(hv.Reply.__annotations__)
-OWN = {"epoch", "period", "nominal", "no_data"}
+# Строки в ответе — только свои: ни одна не приходит из источника как есть.
+OWN = {"epoch", "period", "nominal", "no_data", "mempool.space", "blockstream.info", "blockchain.info"}
 TIP_HASH = "b" * 64  # хеш последнего блока
 # Враждебные тела: числа вне float, NaN/Infinity, глубокая вложенность, нули.
 EVIL = [b'[{"height":1e400,"timestamp":1e400}]', b'{"timeAvg":1e400,"timestamp":-1e400}', b"1e400",

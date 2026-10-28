@@ -986,6 +986,7 @@ export const tr: Dict = {
   hv_now: "Halving şimdi",
   hv_reward: "Blok ödülü",
   hv_s: "sn",
+  hv_src: "Veri:",
   hv_stale: "Güncellendi: {t}",
   hv_title: "Bitcoin halving'ine kalan",
   in_body: "Premium denemesinden sonra sana özel fiyat. {h} sa kaldı, sonra normal fiyat.",

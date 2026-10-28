@@ -26,7 +26,13 @@ export interface HalvingReply {
   skew?: number;
   /** Время блока прошлого халвинга (начала эпохи), если сервер его знает. */
   prev?: number;
+  /** Чьи высота и время последнего блока — подпись источника в карточке. */
+  by?: HalvingSource;
 }
+
+/** Источники высоты блока (на сервере — HOSTS в wt_halving.py). */
+export const HALVING_SOURCES = ["mempool.space", "blockstream.info", "blockchain.info"] as const;
+export type HalvingSource = (typeof HALVING_SOURCES)[number];
 
 /** Сколько ответ живёт в памяти приложения (на сервере — так же, TTL в wt_halving.py). */
 export const HALVING_TTL_MS = 5 * 60_000;
@@ -77,6 +83,8 @@ export function validHalving(h: unknown): h is HalvingReply {
     && opt(r.eta, time) && opt(r.tip, time) && opt(r.now, time) && opt(r.prev, time)
     && opt(r.skew, (v) => typeof v === "number" && Number.isFinite(v) && Math.abs(v) < 366 * 86400)
     && opt(r.src, (v) => v === "epoch" || v === "period" || v === "nominal")
+    // Источник — только из списка: из него собирается ссылка в карточке.
+    && opt(r.by, (v) => (HALVING_SOURCES as readonly unknown[]).includes(v))
     && consistent(r as HalvingReply);
 }
 
@@ -92,7 +100,7 @@ function consistent(r: HalvingReply): boolean {
     && (typeof eta !== "number" || Math.abs(eta - (tip + (r.next - r.height) * r.avg)) <= ETA_SLACK);
 }
 
-const FIELDS = ["ok", "height", "next", "every", "avg", "src", "tip", "eta", "at", "now", "skew", "prev"] as const;
+const FIELDS = ["ok", "height", "next", "every", "avg", "src", "tip", "eta", "at", "now", "skew", "prev", "by"] as const;
 
 /**
  * Только известные поля ответа (уже проверенного validHalving): лишнее от

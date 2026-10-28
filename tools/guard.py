@@ -790,6 +790,7 @@ say("халвинг: среднее за эпоху, отсчёт от посл�
     and "ERR_TTL = 60.0" in _hvs and "if hit and not failed and not _busy.is_set():" in _hvs and 're.fullmatch(r"[0-9a-f]{64}", bh)' in _hvs
     and 'res["prev"] = start_ts' in _hvs and '"now": _now()' in _hvs and "STALE_MAX = 86_400.0" in _hvs
     and "export const STALE_MAX = 86_400;" in _hvl and 'age === "old" ? <p className="hv-old">' in _hv
+    and '"at": t_now, "by": by}' in _hvs and 'h.by ? <p className="hv-src">' in _hv
     and "opt(r.eta, time)" in _hvl and "donePct: Math.min(99.9, Math.round(done * 10) / 10)," in _hvl
     and "const height = Math.min(h.next - 1," in _hvl and "export function subsidySats(" in _hvl
     and "const eta = h.eta ?? h.at + (h.next - h.height) * h.avg;" in _hvl

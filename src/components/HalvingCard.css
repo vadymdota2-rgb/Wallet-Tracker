@@ -57,12 +57,15 @@
 /* Награда переносится целиком, а не «1,5625 / BTC» с BTC на отдельной
    строке; при крупном системном шрифте — после «→», а не за край карточки. */
 .hv-rw b { color: var(--ink); font-weight: 700; display: inline-block; }
+/* Источник данных — мелко, под всем остальным. */
+.hv-src { margin: 6px 0 0; color: var(--dim); font-size: 10.5px; }
 /* Заглушка, пока идёт первый запрос: те же блоки, мягкое мерцание. */
 .hv-ph { display: inline-block; width: 60%; border-radius: 4px; background: rgb(255 255 255 / 0.07); }
 .hv-meta .hv-ph { width: 32%; }
 .hv-eta .hv-ph { width: 46%; }
 .hv-avg .hv-ph { width: 70%; }
 .hv-rw .hv-ph { width: 62%; }
+.hv-src .hv-ph { width: 40%; }
 .hv-skel .hv-cell, .hv-skel .hv-ph { background: linear-gradient(90deg, rgb(255 255 255 / 0.04), rgb(255 255 255 / 0.09), rgb(255 255 255 / 0.04)); background-size: 200% 100%; animation: hv-shimmer 1.4s linear infinite; }
 @keyframes hv-shimmer { to { background-position: -200% 0; } }
 @media (prefers-reduced-motion: reduce) { .hv-skel .hv-cell, .hv-skel .hv-ph { animation: none; } }

@@ -121,6 +121,26 @@ jobs:
       - name: Тесты сервера халвинга (вкл. фаззинг и договор с приложением)
         run: python -m unittest discover -s tests -p 'test_*.py'
 
+  # Боевой сервер — Debian 13 со своими Python и OpenSSL, а setup-python
+  # выше — сборки для Ubuntu. Разница уже проскочила один раз: минимальную
+  # версию TLS Python брал из конфига OpenSSL, на Ubuntu тест проходил, на
+  # сервере — нет. Поэтому серверные тесты — ещё и в той же системе, что в
+  # бою (образ закреплён по хешу, как действия выше).
+  server-debian:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container: debian:trixie@sha256:8c4733a92aacd0bcff3779eadc35a4a5147f36cb20a5fcb56504cbc740212259
+    steps:
+      - name: Python, Pillow и git из Debian — как на сервере
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends python3 python3-pil git ca-certificates tzdata
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Тесты сервера на Debian 13
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_*.py'
+
   mutation:
     runs-on: ubuntu-latest
     timeout-minutes: 10

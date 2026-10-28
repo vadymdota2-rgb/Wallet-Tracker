@@ -986,6 +986,7 @@ export const zh: Dict = {
   hv_now: "减半进行中",
   hv_reward: "区块奖励",
   hv_s: "秒",
+  hv_src: "数据：",
   hv_stale: "更新于 {t}",
   hv_title: "距比特币减半",
   in_body: "高级版试用后的专属价格。还剩 {h} 小时，之后恢复原价。",

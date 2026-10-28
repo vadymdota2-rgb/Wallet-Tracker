@@ -104,6 +104,12 @@ class HalvingTest(unittest.TestCase):
         self.assertNotIn("prev", r)
         self.assertEqual(r["src"], "period")
 
+    def test_answer_names_the_source_of_the_block(self):
+        # Подпись в карточке — тот, кто на самом деле дал высоту блока.
+        self.assertEqual(self.run_with(Net(blocks=[{"height": H, "timestamp": TIP}]))["by"], "mempool.space")
+        hv._st = hv._State()
+        self.assertEqual(self.run_with(Net(blocks="garbage"))["by"], "blockstream.info")
+
     def test_fallbacks_are_other_sources(self):
         # mempool молчит — следующий адрес уже другого источника.
         net = Net(fail=True)

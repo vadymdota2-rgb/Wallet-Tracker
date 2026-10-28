@@ -986,6 +986,7 @@ export const ko: Dict = {
   hv_now: "지금 반감기",
   hv_reward: "블록 보상",
   hv_s: "초",
+  hv_src: "데이터:",
   hv_stale: "업데이트: {t}",
   hv_title: "비트코인 반감기까지",
   in_body: "프리미엄 체험 이후 회원님만의 가격. {h}시간 남았고, 이후 정상가로 돌아갑니다.",

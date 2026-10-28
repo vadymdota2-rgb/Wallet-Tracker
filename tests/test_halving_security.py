@@ -168,11 +168,21 @@ class SecurityTest(unittest.TestCase):
     @unittest.skipUnless(os.path.isdir("/proc/self/fd"), "дескрипторы считаем через /proc")
     def test_watch_is_released_after_a_good_answer(self):
         fds = len(os.listdir("/proc/self/fd"))
-        with self.local():
+        watches = []
+        real = hv._watch
+
+        def spy(sock, end):
+            real(sock, end)
+            watches.append(hv._dl.cuts[-1][1])
+        with self.local(), mock.patch.object(hv, "_watch", spy):
             self.assertEqual(hv._fetch(f"{self.base}/ok"), b"secret")
         self.assertIsNone(hv._dl.cuts)
-        # Копия сокета для сторожа закрыта: иначе каждый запрос оставлял бы
-        # по дескриптору, раз в пять минут, пока их не кончится.
+        # Копия сокета для сторожа закрыта явно — не сборщиком мусора, когда
+        # повезёт: иначе каждый запрос оставлял бы по дескриптору, раз в пять
+        # минут, пока их не кончится.
+        self.assertEqual(len(watches), 1)
+        self.assertEqual(watches[0].fileno(), -1)
+        del watches
         self.assertEqual(len(os.listdir("/proc/self/fd")), fds)
 
     def test_huge_body_is_rejected_not_cut(self):

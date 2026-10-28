@@ -196,6 +196,7 @@ describe("карточка халвинга", () => {
     assert.match(sp(await page.locator(".hv-rw").innerText()), /3,125 → 1,5625 BTC/);
     assert.equal(await page.locator(".hv-done").count(), 0);
     assert.equal(await page.locator(".hv-old").count(), 0); // ответ свежий — без пометки
+    assert.equal(sp(await page.locator(".hv-src").innerText()), "Данные: mempool.space"); // источник рядом с данными
     assert.deepEqual(errors, []);
     await ctx.close();
   });

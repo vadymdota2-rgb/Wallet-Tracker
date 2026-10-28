@@ -25937,6 +25937,24 @@
     "ko": "업데이트: {t}",
     "zh": "更新于 {t}"
   },
+  "hv_src": {
+    "ru": "Данные:",
+    "en": "Data:",
+    "uk": "Дані:",
+    "de": "Daten:",
+    "es": "Datos:",
+    "fr": "Données :",
+    "pt": "Dados:",
+    "pl": "Dane:",
+    "tr": "Veri:",
+    "id": "Data:",
+    "vi": "Dữ liệu:",
+    "hi": "डेटा:",
+    "ar": "البيانات:",
+    "ja": "データ:",
+    "ko": "데이터:",
+    "zh": "数据："
+  },
   "hv_happened": {
     "ru": "🎉 Халвинг состоялся {d} — блок {n}",
     "en": "🎉 The halving happened on {d} — block {n}",

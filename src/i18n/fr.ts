@@ -986,6 +986,7 @@ export const fr: Dict = {
   hv_now: "Halving en cours",
   hv_reward: "Récompense par bloc",
   hv_s: "s",
+  hv_src: "Données :",
   hv_stale: "Mis à jour : {t}",
   hv_title: "Avant le halving du bitcoin",
   in_body: "Votre prix après l'essai Premium. Encore {h} h, ensuite le prix normal.",

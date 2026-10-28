@@ -986,6 +986,7 @@ export const hi: Dict = {
   hv_now: "हॉल्विंग अभी",
   hv_reward: "ब्लॉक इनाम",
   hv_s: "से",
+  hv_src: "डेटा:",
   hv_stale: "अपडेट: {t}",
   hv_title: "बिटकॉइन हॉल्विंग तक",
   in_body: "Premium ट्रायल के बाद आपकी कीमत। {h} घंटे बचे हैं, फिर सामान्य कीमत।",

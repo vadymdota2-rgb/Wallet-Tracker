@@ -36,6 +36,7 @@ TS = [
     ('{ type: "unit", style: "long" }', '{ type: "conjunction", style: "long" }', "озвучка без «и»"),
     ("if (n === undefined) break;", "if (n === undefined) continue;", "озвучка неполного отсчёта"),
     ('if (age > STALE_MAX) return "gone";', 'if (age > STALE_MAX * 2) return "gone";', "ответ старше суток — не показываем"),
+    ("(HALVING_SOURCES as readonly unknown[]).includes(v)", "typeof v === \"string\"", "источник — только из списка"),
     ('return age > STALE_AFTER ? "old" : "fresh";', 'return age >= STALE_AFTER * 2 ? "old" : "fresh";', "пометка «Обновлено» после 3 часов"),
     ("r.every === EVERY", "int(r.every)", "интервал халвинга — правило сети"),
     ("tip > r.at - TIP_AGE", "tip >= r.at - TIP_AGE", "последний блок не старше суток"),
@@ -46,6 +47,7 @@ TS = [
 PY = [
     ("if hit and not failed and not _busy.is_set():", "if hit and not _busy.is_set():", "пауза после сбоя"),
     ("    return hit if hit and time.monotonic() - hit[0] < STALE_MAX else None", "    return hit", "старый ответ — не дольше суток"),
+    ("            return h, 0, by\n", "            return h, 0, \"mempool.space\"\n", "подпись — настоящий источник, а не mempool всегда"),
     ("tip_ts <= t_now + MAX_FUTURE", "tip_ts <= t_now + 10**9", "время блока из будущего"),
     ("height - start >= RETARGET", "height - start >= 0", "среднее в начале эпохи"),
     ("return MIN_HEIGHT < h <= (_now() - GENESIS_TS) // FASTEST", "return MIN_HEIGHT < h", "правдоподобие высоты"),
