@@ -141,13 +141,15 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-# Своя «открывалка»: напрямую (прокси из переменных окружения не берётся —
-# подменённый HTTPS_PROXY не уведёт запросы), без перенаправлений, сертификат
-# и имя сервера проверяются, TLS не старше 1.2 (так с Python 3.10 по
-# умолчанию; tests/test_halving_policy.py следит, чтобы так и осталось).
 # Тип сокета для подписей: проверка «в сеть — одна дверь» (test_halving_policy)
 # ищет socket.socket внутри функций.
 _Sock = socket.socket
+
+
+# Своя «открывалка»: напрямую (прокси из переменных окружения не берётся —
+# подменённый HTTPS_PROXY не уведёт запросы), без перенаправлений, сертификат
+# и имя сервера проверяются, TLS не старше 1.2 (_tls;
+# tests/test_halving_policy.py следит, чтобы так и осталось).
 
 
 def _connect(address: tuple[str, int], timeout: object = None, source_address: object = None) -> socket.socket:
@@ -252,8 +254,20 @@ class _Https(urllib.request.HTTPSHandler):
         return self.do_open(_Conn, req, context=self._context)  # type: ignore[attr-defined]
 
 
+def _tls() -> ssl.SSLContext:
+    """Сертификат и имя сервера проверяются, TLS — не старше 1.2.
+
+    Минимум задан явно: сам Python берёт его из настроек системы, и на
+    Debian 13 (OpenSSL 3.5) это MINIMUM_SUPPORTED — защита держалась бы на
+    чужом конфиге. Нашёл Claude на боевом сервере: в CI на Ubuntu тест
+    проходил, на сервере — нет."""
+    ctx = ssl.create_default_context()
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    return ctx
+
+
 _opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect, _Http(),
-                                      _Https(context=ssl.create_default_context()))
+                                      _Https(context=_tls()))
 
 
 def _allowed(url: str) -> bool:

@@ -117,6 +117,18 @@ class ServerPolicyTest(unittest.TestCase):
         self.assertEqual(hv._HEADERS.get("Accept-Encoding"), "identity")
         self.assertEqual(set(hv.SCHEMES), {"https"})
 
+
+    def test_tls_minimum_does_not_depend_on_the_system(self):
+        # На Debian 13 системный минимум — MINIMUM_SUPPORTED: модуль обязан
+        # задать 1.2 сам, а не полагаться на конфиг OpenSSL.
+        def loose():
+            ctx = hv.ssl.SSLContext(hv.ssl.PROTOCOL_TLS_CLIENT)
+            ctx.minimum_version = hv.ssl.TLSVersion.MINIMUM_SUPPORTED
+            return ctx
+        with unittest.mock.patch.object(hv.ssl, "create_default_context", loose):
+            ctx = hv._tls()
+        self.assertEqual(ctx.minimum_version, hv.ssl.TLSVersion.TLSv1_2)
+        self.assertEqual(ctx.verify_mode, hv.ssl.CERT_REQUIRED)
     def test_reply_strings_are_ours(self):
         # Строки в ответе — только из модуля, ни одной от источника.
         lits = set()

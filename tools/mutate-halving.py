@@ -77,6 +77,7 @@ PY = [
     ("return u.scheme in SCHEMES and u.hostname in HOSTS and", "return True or", "только https и известные адреса"),
     (" and not u.username and not u.password", "", "адрес с логином"),
     ("ProxyHandler({}), _NoRedirect,", "ProxyHandler({}),", "без перенаправлений"),
+    ("    ctx.minimum_version = ssl.TLSVersion.TLSv1_2\n", "", "TLS не старше 1.2 — явно, а не из системы"),
     ("        _watch(sock, end)\n", "", "срок на всё соединение: TLS и заголовки"),
     ("    dns.join(max(0.0, end - time.monotonic()))\n", "    dns.join()\n", "DNS — не дольше срока"),
     ("                    if time.monotonic() < end:\n                        return bytes(buf)\n                    break",

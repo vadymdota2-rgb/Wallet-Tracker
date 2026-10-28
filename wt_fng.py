@@ -207,8 +207,20 @@ class _Https(urllib.request.HTTPSHandler):
         return self.do_open(_Conn, req, context=self._context)  # type: ignore[attr-defined]
 
 
+def _tls() -> ssl.SSLContext:
+    """Сертификат и имя сервера проверяются, TLS — не старше 1.2.
+
+    Минимум задан явно: сам Python берёт его из настроек системы, и на
+    Debian 13 (OpenSSL 3.5) это MINIMUM_SUPPORTED — защита держалась бы на
+    чужом конфиге. Нашёл Claude на боевом сервере: в CI на Ubuntu тест
+    проходил, на сервере — нет."""
+    ctx = ssl.create_default_context()
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    return ctx
+
+
 _opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect,
-                                      _Https(context=ssl.create_default_context()))
+                                      _Https(context=_tls()))
 
 
 def _allowed(url: str) -> bool:

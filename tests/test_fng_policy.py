@@ -148,6 +148,18 @@ class ServerPolicyTest(unittest.TestCase):
         self.assertEqual(fng._HEADERS.get("Accept-Encoding"), "identity")
         self.assertEqual(set(fng.SCHEMES), {"https"})
 
+
+    def test_tls_minimum_does_not_depend_on_the_system(self):
+        # На Debian 13 системный минимум — MINIMUM_SUPPORTED: модуль обязан
+        # задать 1.2 сам, а не полагаться на конфиг OpenSSL.
+        def loose():
+            ctx = fng.ssl.SSLContext(fng.ssl.PROTOCOL_TLS_CLIENT)
+            ctx.minimum_version = fng.ssl.TLSVersion.MINIMUM_SUPPORTED
+            return ctx
+        with unittest.mock.patch.object(fng.ssl, "create_default_context", loose):
+            ctx = fng._tls()
+        self.assertEqual(ctx.minimum_version, fng.ssl.TLSVersion.TLSv1_2)
+        self.assertEqual(ctx.verify_mode, fng.ssl.CERT_REQUIRED)
     def test_reply_strings_are_ours(self):
         lits = set()
         for n in ast.walk(server_tree()):

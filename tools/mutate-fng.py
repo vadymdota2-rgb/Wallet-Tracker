@@ -121,6 +121,7 @@ PY = [
     ("return u.scheme in SCHEMES and u.hostname in HOSTS and", "return True or", "только https и известные адреса"),
     (" and not u.username and not u.password", "", "адрес с логином"),
     ("ProxyHandler({}), _NoRedirect,", "ProxyHandler({}),", "без перенаправлений"),
+    ("    ctx.minimum_version = ssl.TLSVersion.TLSv1_2\n", "", "TLS не старше 1.2 — явно, а не из системы"),
     ("if time.monotonic() > end:", "if False:", "срок чтения целиком"),
     ("r.read1(min(CHUNK, limit + 1 - len(buf)))", "r.read1(CHUNK)", "кусок не больше остатка"),
     ("parse_float=_finite, ", "", "числа без бесконечностей"),
