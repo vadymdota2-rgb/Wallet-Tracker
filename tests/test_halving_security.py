@@ -50,6 +50,14 @@ class Evil(BaseHTTPRequestHandler):
                     self.wfile.write(b"1")
                     self.wfile.flush()
                     time.sleep(0.05)
+        elif self.path == "/slowhead":
+            # Заголовки по байту: тайм-аут сокета — на каждый кусок, и без
+            # срока на всё соединение поток ждал бы сколько угодно.
+            with contextlib.suppress(OSError):
+                for b in b"HTTP/1.1 200 OK\r\nX-Slow: " + b"a" * 1000:
+                    self.wfile.write(bytes([b]))
+                    self.wfile.flush()
+                    time.sleep(0.05)
         elif self.path == "/huge":
             self.send_response(200)
             self.end_headers()
@@ -128,6 +136,44 @@ class SecurityTest(unittest.TestCase):
             self.assertIsNone(hv._fetch(f"{self.base}/drip"))
             # 1000 байт по 0,05 с — это 50 секунд; срок — 0,4 с (+ один кусок).
             self.assertLess(time.monotonic() - t0, 1.5)
+
+    def test_slow_headers_are_cut_by_the_deadline(self):
+        with self.local(), mock.patch.object(hv, "HOP", 0.4):
+            hv._dl.why = []
+            # Список причин — только на этот тест: оставленный, он собирал бы
+            # причины и там, где сборка должна завести его сама.
+            self.addCleanup(setattr, hv._dl, "why", None)
+            t0 = time.monotonic()
+            self.assertIsNone(hv._fetch(f"{self.base}/slowhead"))
+            # Заголовки шли бы 50 секунд; срок — 0,4 с на весь запрос.
+            self.assertLess(time.monotonic() - t0, 1.5)
+            self.assertTrue(hv._dl.why)
+        # Сторож снят, копия сокета закрыта — ничего не висит до следующего запроса.
+        self.assertIsNone(hv._dl.cuts)
+
+    def test_silent_dns_is_cut_by_the_deadline(self):
+        def hang(*_a, **_k):
+            time.sleep(5)
+            raise OSError("поздно")
+        with self.local(), mock.patch.object(hv, "HOP", 0.3), mock.patch.object(hv.socket, "getaddrinfo", hang):
+            hv._dl.why = []
+            # Список причин — только на этот тест: оставленный, он собирал бы
+            # причины и там, где сборка должна завести его сама.
+            self.addCleanup(setattr, hv._dl, "why", None)
+            t0 = time.monotonic()
+            self.assertIsNone(hv._fetch(f"{self.base}/ok"))
+            self.assertLess(time.monotonic() - t0, 1.0)
+            self.assertIn("DNS", " ".join(hv._dl.why))
+
+    @unittest.skipUnless(os.path.isdir("/proc/self/fd"), "дескрипторы считаем через /proc")
+    def test_watch_is_released_after_a_good_answer(self):
+        fds = len(os.listdir("/proc/self/fd"))
+        with self.local():
+            self.assertEqual(hv._fetch(f"{self.base}/ok"), b"secret")
+        self.assertIsNone(hv._dl.cuts)
+        # Копия сокета для сторожа закрыта: иначе каждый запрос оставлял бы
+        # по дескриптору, раз в пять минут, пока их не кончится.
+        self.assertEqual(len(os.listdir("/proc/self/fd")), fds)
 
     def test_huge_body_is_rejected_not_cut(self):
         # Обрезанный ответ — не ответ: начало длинного числа или списка
@@ -374,7 +420,7 @@ class ConnectTest(unittest.TestCase):
 
     def test_no_time_left_no_more_tries(self):
         Sock, made = self.fake({"10.0.0.1", "10.0.0.2", "10.0.0.3"})
-        clock = iter([0.0, 0.0, 10.0, 10.0])  # конец бюджета, первая попытка, после неё — времени нет
+        clock = iter([0.0, 0.0, 0.0, 10.0, 10.0])  # конец бюджета, ожидание DNS, первая попытка, после неё — времени нет
         with mock.patch.object(hv.socket, "getaddrinfo", return_value=self.infos("10.0.0.1", "10.0.0.2", "10.0.0.3")), \
                 mock.patch.object(hv.socket, "socket", Sock), \
                 mock.patch.object(hv.time, "monotonic", lambda: next(clock, 10.0)), self.assertRaises(OSError):

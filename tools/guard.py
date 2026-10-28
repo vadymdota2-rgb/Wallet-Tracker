@@ -801,7 +801,7 @@ say("халвинг: среднее за эпоху, отсчёт от посл�
     and 'HOSTS = frozenset({"mempool.space", "blockstream.info", "blockchain.info"})' in _hvs
     and "build_opener(urllib.request.ProxyHandler({}), _NoRedirect," in _hvs and "if not _allowed(url):" in _hvs and "urlopen" not in _hvs
     and "parse_float=_finite, parse_int=_short_int," in _hvs and "except (ValueError, RecursionError):" in _hvs
-    and "if time.monotonic() > end:" in _hvs and _hvs.count("print(") == 1
+    and "        _watch(sock, end)\n" in _hvs and "watch.shutdown(socket.SHUT_RDWR)" in _hvs and "dns.join(max(0.0, end - time.monotonic()))" in _hvs and _hvs.count("print(") == 1
     and os.path.exists(f"{APP}/tests/test_halving_security.py") and "pickHalving(r)" in read(f"{APP}/src/lib/api.ts")
     # Поля ответа сходятся между собой; свёрнутое приложение сеть не трогает.
     and "r.every === EVERY" in _hvl and "&& consistent(r as HalvingReply);" in _hvl

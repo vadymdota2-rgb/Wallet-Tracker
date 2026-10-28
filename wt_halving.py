@@ -76,6 +76,7 @@ from typing import TYPE_CHECKING, TypedDict
 # Аннотации здесь — строки (from __future__ import annotations), при запуске
 # их никто не читает.
 if TYPE_CHECKING:  # pragma: no cover — только для mypy, при запуске не выполняется
+    from collections.abc import Callable
     from typing import Literal, NotRequired
 
 EVERY = 210_000
@@ -144,6 +145,11 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 # подменённый HTTPS_PROXY не уведёт запросы), без перенаправлений, сертификат
 # и имя сервера проверяются, TLS не старше 1.2 (так с Python 3.10 по
 # умолчанию; tests/test_halving_policy.py следит, чтобы так и осталось).
+# Тип сокета для подписей: проверка «в сеть — одна дверь» (test_halving_policy)
+# ищет socket.socket внутри функций.
+_Sock = socket.socket
+
+
 def _connect(address: tuple[str, int], timeout: object = None, source_address: object = None) -> socket.socket:
     """Соединение с источником: адреса по очереди (IPv4 первыми), каждый не
     дольше CONNECT; молчащий адрес не съедает весь запрос. Только HOSTS:
@@ -154,7 +160,18 @@ def _connect(address: tuple[str, int], timeout: object = None, source_address: o
         raise OSError(f"чужой хост: {host}")
     limit = timeout if isinstance(timeout, (int, float)) else HOP
     end = time.monotonic() + limit
-    infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    # DNS — в своём потоке: у getaddrinfo нет тайм-аута, а ждать его дольше
+    # срока запроса незачем. Не успел — поток доживёт сам, ответ выбросим.
+    box: list[object] = []
+    dns = threading.Thread(target=_call, args=(box, socket.getaddrinfo, host, port, 0, socket.SOCK_STREAM),
+                           daemon=True)
+    dns.start()
+    dns.join(max(0.0, end - time.monotonic()))
+    if not box:
+        raise OSError(f"DNS {host}: не ответил за {limit:.0f} с")
+    if isinstance(box[0], BaseException):
+        raise box[0]
+    infos = list(box[0])  # type: ignore[call-overload]
     infos.sort(key=lambda a: a[0] != socket.AF_INET)
     err: OSError = OSError(f"нет адреса: {host}")
     for family, kind, proto, _name, addr in infos[:ADDRS_MAX]:
@@ -170,8 +187,40 @@ def _connect(address: tuple[str, int], timeout: object = None, source_address: o
             err = e
             continue
         sock.settimeout(limit)
+        _watch(sock, end)
         return sock
     raise err
+
+
+def _call(box: list[object], fn: Callable[..., object], *args: object) -> None:
+    """fn(*args) в чужом потоке: в box — результат или исключение."""
+    try:
+        box.append(fn(*args))
+    except Exception as e:  # noqa: BLE001 — исключение передаётся вызывающему как есть
+        box.append(e)
+
+
+def _cut(watch: _Sock) -> None:
+    with contextlib.suppress(OSError):
+        watch.shutdown(socket.SHUT_RDWR)
+
+
+def _watch(sock: _Sock, end: float) -> None:
+    """Срок на всё соединение целиком — TLS, заголовки, тело.
+
+    Тайм-аут сокета — на каждый кусок: источник, цедящий заголовки по байту
+    раз в пять секунд, держал бы поток сколько угодно. В срок соединение
+    обрывается (shutdown будит и того, кто ждёт в recv). Обрывается копия
+    дескриптора: сам сокет TLS забирает себе и закрывает, и его номер может
+    достаться чужому соединению; копию закрывает только _fetch."""
+    cuts = getattr(_dl, "cuts", None)
+    if cuts is None:  # не из _fetch — сроком управляет вызывающий
+        return
+    watch = sock.dup()
+    timer = threading.Timer(max(0.0, end - time.monotonic()), _cut, (watch,))
+    timer.daemon = True
+    timer.start()
+    cuts.append((timer, watch))
 
 
 class _Conn(http.client.HTTPSConnection):
@@ -182,6 +231,20 @@ class _Conn(http.client.HTTPSConnection):
         self._create_connection = _connect
 
 
+class _ConnPlain(http.client.HTTPConnection):
+    """То же для http: в бою его нет (SCHEMES — только https), а тесты на
+    локальном сервере ходят через тот же _connect, что и бой."""
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)  # type: ignore[arg-type]
+        self._create_connection = _connect
+
+
+class _Http(urllib.request.HTTPHandler):
+    def http_open(self, req: urllib.request.Request) -> http.client.HTTPResponse:
+        return self.do_open(_ConnPlain, req)
+
+
 class _Https(urllib.request.HTTPSHandler):
     """HTTPS со своим соединением; сертификат проверяется как обычно."""
 
@@ -189,7 +252,7 @@ class _Https(urllib.request.HTTPSHandler):
         return self.do_open(_Conn, req, context=self._context)  # type: ignore[attr-defined]
 
 
-_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect,
+_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect, _Http(),
                                       _Https(context=ssl.create_default_context()))
 
 
@@ -279,24 +342,33 @@ def _fetch(url: str, limit: int = 1 << 20) -> bytes | None:
         return None
     hop = min(HOP, left)
     end = time.monotonic() + hop
+    # Срок — на весь запрос: DNS и соединение ждёт _connect, а TLS, заголовки
+    # и тело обрывает в end сторож _watch (его копии сокетов — в _dl.cuts).
+    _dl.cuts = []
     try:
         with _opener.open(urllib.request.Request(url, headers=_HEADERS), timeout=hop) as r:
-            # По кускам и со своим сроком: таймаут сокета — на каждый кусок,
-            # и источник, цедящий по байту, держал бы поток часами.
+            # По кускам: тело больше limit — не ответ. Срок за чтением следит
+            # _watch: источник, цедящий по байту, обрывается в end.
             buf = bytearray()
             while len(buf) <= limit:
-                if time.monotonic() > end:
-                    _why(f"{host}: не уложился в {hop:.0f} с")
-                    return None
                 chunk: bytes = r.read1(min(CHUNK, limit + 1 - len(buf)))
                 if not chunk:
-                    return bytes(buf)
+                    # Конец ответа — или его в срок оборвал _watch: обрезанный
+                    # ответ — не ответ.
+                    if time.monotonic() < end:
+                        return bytes(buf)
+                    break
                 buf += chunk
-            _why(f"{host}: ответ больше {limit} байт")
+            _why(f"{host}: ответ больше {limit} байт" if len(buf) > limit else f"{host}: не уложился в {hop:.0f} с")
             return None
     except (OSError, ValueError, http.client.HTTPException) as e:  # URLError и таймаут — тоже OSError
         _why(f"{host}: {type(e).__name__}: {e}")
         return None
+    finally:
+        for timer, watch in _dl.cuts:
+            timer.cancel()
+            watch.close()
+        _dl.cuts = None
 
 
 def _finite(text: str) -> float:

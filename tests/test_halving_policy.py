@@ -23,7 +23,8 @@ SERVER = os.path.join(ROOT, "wt_halving.py")
 # Только стандартная библиотека и только то, что нужно: ни os, ни subprocess,
 # ни socket напрямую, ни pickle. Сторонних пакетов нет — нечего подменить.
 IMPORTS = {"__future__", "contextlib", "http.client", "json", "math", "re", "socket", "ssl", "sys", "threading", "time",
-           "urllib.error", "urllib.parse", "urllib.request", "dataclasses", "typing"}
+           "urllib.error", "urllib.parse", "urllib.request", "dataclasses", "typing",
+           "collections.abc"}  # collections.abc — только для проверки типов (TYPE_CHECKING)
 # Встроенные функции, которых в модуле быть не должно.
 BANNED_CALLS = {"eval", "exec", "compile", "__import__", "open", "input", "breakpoint", "globals", "locals", "vars",
                 "setattr", "delattr"}
