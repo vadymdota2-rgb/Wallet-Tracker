@@ -1143,8 +1143,10 @@ def symbol_of(cur: sqlite3.Connection, token: str) -> str:
         return hit
     if token.startswith("0x") and len(token) >= 8:
         if table_exists(cur, "token_cache"):
+            # address=?, а не lower(address)=?: с lower() первичный ключ не
+            # работает. Бот пишет адреса строчными (токены — через toLower).
             row = cur.execute(
-                "SELECT symbol FROM token_cache WHERE lower(address)=?", (token.lower(),)
+                "SELECT symbol FROM token_cache WHERE address=?", (token.lower(),)
             ).fetchone()
             if row and row[0]:
                 s = str(row[0]).upper().strip()
@@ -1863,8 +1865,9 @@ def token_decimals(cur: sqlite3.Connection, token: str) -> int:
     if "decimals" not in cols(cur, "token_cache"):
         return 0
     try:
+        # По первичному ключу, как в symbol_of: адреса у бота строчные.
         r = cur.execute(
-            "SELECT decimals FROM token_cache WHERE lower(address)=?", (token.lower(),)
+            "SELECT decimals FROM token_cache WHERE address=?", (token.lower(),)
         ).fetchone()
     except sqlite3.Error:
         return 0

@@ -35,13 +35,13 @@ CREATE INDEX idx_hl_fills_wallet_coin_ts ON hl_fills(wallet, coin, ts);
 
 
 class Spy:
-    """Соединение, которое запоминает каждый запрос к hl_fills."""
+    """Соединение, которое запоминает каждый запрос к таблице table."""
 
-    def __init__(self, con):
-        self.con, self.seen = con, []
+    def __init__(self, con, table="hl_fills"):
+        self.con, self.table, self.seen = con, table, []
 
     def execute(self, sql, params=()):
-        if "hl_fills" in sql and "sqlite_master" not in sql and "PRAGMA" not in sql:
+        if self.table in sql and "sqlite_master" not in sql and "PRAGMA" not in sql:
             self.seen.append((sql, tuple(params)))
         return self.con.execute(sql, params)
 
@@ -101,6 +101,26 @@ class WalletIndexTest(unittest.TestCase):
         # Адрес у человека могли записать в любом регистре — у бота он строчный.
         self.assertEqual(got, {A: True, B: True, c: False})
         self.assert_indexed(con, spy.seen)
+
+
+    def test_token_cache_lookups_use_the_primary_key(self):
+        # Справочник монет бота: адрес — первичный ключ, строчными.
+        cur = sqlite3.connect(":memory:")
+        cur.row_factory = sqlite3.Row
+        cur.executescript(
+            "CREATE TABLE token_cache (address TEXT PRIMARY KEY, symbol TEXT DEFAULT '',"
+            " decimals INTEGER DEFAULT 0, price_nanos INTEGER DEFAULT 0, price_ts INTEGER DEFAULT 0);")
+        tok = "0x" + "d" * 40
+        cur.execute("INSERT INTO token_cache (address, symbol, decimals) VALUES (?, 'cake', 18)", (tok,))
+        spy = Spy(cur, "token_cache")
+        mixed = "0x" + "D" * 40  # пришёл в другом регистре — находится всё равно
+        api._sym_cache.pop(mixed, None)
+        self.assertEqual(api.symbol_of(spy, mixed), "CAKE")
+        self.assertEqual(api.token_decimals(spy, mixed), 18)
+        self.assertEqual(len(spy.seen), 2)
+        for sql, params in spy.seen:
+            self.assertNotIn("lower(", sql.lower())
+            self.assertRegex(plan(cur, sql, params), r"USING (COVERING )?INDEX sqlite_autoindex_token_cache_1", sql)
 
 
 if __name__ == "__main__":
