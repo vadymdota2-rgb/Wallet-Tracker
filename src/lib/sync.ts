@@ -10,6 +10,7 @@ import { fetchBootstrap, fetchMarket, lastStatus } from "./api";
 import { initData } from "./telegram";
 import { useLive } from "../store/live";
 import { prefetchAll } from "./prefetch";
+import { SOON_DELAY, nextSoon } from "./pace";
 
 const OK_DELAY = 180_000;
 /* Первый повтор после сбоя — быстро: при запуске сбой обычно разовый
@@ -18,8 +19,10 @@ const OK_DELAY = 180_000;
 const MIN_DELAY = 3_000;
 const MAX_DELAY = 60_000;
 /* Сервер отдал быструю выгрузку — справочник монет из памяти, полный
-   дособирается. Переспрашиваем через пару секунд, а не через три минуты. */
-const SOON_DELAY = 2_500;
+   дособирается. Переспрашиваем через пару секунд, а не через три минуты, и
+   каждый следующий раз вдвое реже — до 30 секунд (pace.ts): раньше было
+   каждые 2,5 с без конца, и вместе с подгрузкой это пробивало норму nginx. */
+let soonDelay = SOON_DELAY;
 
 let soon = false;
 let fails = 0;
@@ -51,6 +54,17 @@ async function pull(): Promise<boolean> {
   return true;
 }
 
+/** Пауза после удачной выгрузки: неполная — всё реже, полная — три минуты. */
+function okDelay(): number {
+  if (!soon) {
+    soonDelay = SOON_DELAY;
+    return OK_DELAY;
+  }
+  const d = soonDelay;
+  soonDelay = nextSoon(soonDelay);
+  return d;
+}
+
 async function tick(): Promise<void> {
   if (running) return;
   running = true;
@@ -58,8 +72,11 @@ async function tick(): Promise<void> {
     const ok = await pull();
     if (ok) {
       fails = 0;
-      delay = soon ? SOON_DELAY : OK_DELAY;
+      delay = okDelay();
     } else if (lastStatus === 401 || lastStatus === 403) delay = MAX_DELAY;
+    // «Слишком часто» (норма nginx — в минуту): повтор через три секунды
+    // получил бы тот же отказ и снова занял бы норму.
+    else if (lastStatus === 429) delay = MAX_DELAY;
     else {
       // Серия сбоев считается сама по себе: прежде удвоение шло от трёх минут
       // удачного опроса, и первый же сбой откладывал повтор на минуту.
@@ -77,7 +94,7 @@ export async function syncNow(): Promise<boolean> {
   if (timer) clearTimeout(timer);
   const ok = await pull();
   if (ok) fails = 0;
-  delay = ok ? (soon ? SOON_DELAY : OK_DELAY) : MIN_DELAY;
+  delay = ok ? okDelay() : MIN_DELAY;
   timer = setTimeout(() => void tick(), delay);
   return ok;
 }

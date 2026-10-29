@@ -1788,6 +1788,13 @@ say("RODO: шрифт со своего сервера — ни Google Fonts, н
     and all(f'url("../assets/fonts/IBMPlexSans-{w}-{p}.woff2")' in _fcss and os.path.exists(f"{APP}/src/assets/fonts/IBMPlexSans-{w}-{p}.woff2")
             for w in ("Regular", "Medium", "SemiBold", "Bold") for p in ("latin", "cyrillic"))
     and "RODO: шрифт — со своего сервера" in read(f"{APP}/tests/e2e/halving.e2e.test.ts"))
+_pace = read(f"{APP}/src/lib/pace.ts")
+say("частота запросов: неполная выгрузка — всё реже, подгрузка — раз в минуту и стоп по 429, nginx отвечает 429",
+    "export const SOON_MAX = 30_000;" in _pace and "export const PREFETCH_GAP = 60_000;" in _pace
+    and "if (!due(Date.now())) return;" in read(f"{APP}/src/lib/prefetch.ts")
+    and "queue(jobs, PARALLEL, () => lastStatus === 429)" in read(f"{APP}/src/lib/prefetch.ts")
+    and "delay = okDelay();" in sync and "else if (lastStatus === 429) delay = MAX_DELAY;" in sync
+    and "limit_req_status 429;" in _ngx and os.path.exists(f"{APP}/tests/pace.test.ts"))
 _priv = json.load(open(f"{APP}/tools/i18n.json"))["legal_privacy_body"]
 say("RODO ст. 13: в политике на 16 языках — администратор и почта, OVH в ЕС, журналы 14 дней, основания, права, жалоба в UODO",
     len(_priv) == 16 and all(all(x in v for x in ("wallettrackerbot@gmail.com", "@WalletTrackerHelp", "OVH", "14", "UODO", "uodo.gov.pl", "TON Connect"))

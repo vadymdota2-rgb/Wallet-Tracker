@@ -19,8 +19,9 @@
 import { FREE } from "./upsell";
 import {
   fetchBig, fetchBscExFlow, fetchBtcBig, fetchBtcFlow, fetchBtcRank, fetchDeals, fetchDom, fetchEtf, fetchMcap, fetchFlow, fetchLs, fetchSymbols, fetchTokenHist,
-  fetchUnlocks, fetchWallet,
+  fetchUnlocks, fetchWallet, lastStatus,
 } from "./api";
+import { PREFETCH_GAP, drain as queue, gate } from "./pace";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import type { WalletLive } from "./types";
@@ -46,21 +47,12 @@ export function applyWalletLive(addr: string, d: WalletLive | null): void {
   });
 }
 
-/** Очередь с ограничением: телефону и серверу — не больше четырёх сразу. */
-async function drain(jobs: (() => Promise<unknown>)[]): Promise<void> {
-  let next = 0;
-  const worker = async () => {
-    while (next < jobs.length) {
-      const job = jobs[next++];
-      try {
-        if (job) await job();
-      } catch {
-        // Подгрузка — не обязательство: не вышло — экран сходит сам.
-      }
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(PARALLEL, jobs.length) }, worker));
-}
+/** Очередь: телефону и серверу — не больше четырёх сразу; сервер ответил
+ *  «слишком часто» — остальное не шлём (pace.ts). */
+const drain = (jobs: (() => Promise<unknown>)[]) => queue(jobs, PARALLEL, () => lastStatus === 429);
+/** Не чаще раза в минуту: выгрузка при запуске переспрашивается каждые
+ *  несколько секунд, а подгрузка — около 60 запросов (pace.ts). */
+const due = gate(PREFETCH_GAP);
 
 const isAddr = (a: unknown): a is string => typeof a === "string" && /^0x[0-9a-fA-F]{40}$/.test(a);
 
@@ -149,6 +141,7 @@ function holdJobs(): (() => Promise<unknown>)[] {
 export async function prefetchAll(): Promise<void> {
   if (runs > 0) return;
   if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+  if (!due(Date.now())) return;
   runs++;
   try {
     await drain(plan());
