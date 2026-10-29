@@ -34,6 +34,16 @@ export interface HalvingReply {
 export const HALVING_SOURCES = ["mempool.space", "blockstream.info", "blockchain.info"] as const;
 export type HalvingSource = (typeof HALVING_SOURCES)[number];
 
+/**
+ * Подпись источника: кто дал высоту блока, и mempool.space, если среднее
+ * время блока — его период сложности (src «period»): тогда данные из двух
+ * мест. Не из списка — null: подписи нет, чужой текст не показываем.
+ */
+export function sourceText(by: unknown, src?: unknown): string | null {
+  if (!(HALVING_SOURCES as readonly unknown[]).includes(by)) return null;
+  return by !== "mempool.space" && src === "period" ? `${String(by)}, mempool.space` : String(by);
+}
+
 /** Сколько ответ живёт в памяти приложения (на сервере — так же, TTL в wt_halving.py). */
 export const HALVING_TTL_MS = 5 * 60_000;
 /** Ответ старше этого (с) — под датой «Обновлено 14:20»: источники молчат,

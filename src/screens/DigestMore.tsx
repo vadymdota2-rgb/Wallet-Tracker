@@ -22,6 +22,7 @@ import { FLAG, allDay, calTitle } from "./CalendarScreen";
 import { CCBY_URL, TFTC_URL } from "./etfView";
 import { CmcBy } from "../components/CmcBy";
 import { zoneKey } from "../lib/fng";
+import { sourceText } from "../lib/halving";
 
 type Lang = Parameters<typeof t>[0];
 
@@ -384,10 +385,12 @@ export function Leaders({ it, lang }: { it: DigestItem; lang: Lang }) {
 export function HalvingLine({ it, lang }: { it: DigestItem; lang: Lang }) {
   const h = it.halv;
   if (!h) return null;
+  // Источник рядом с числом — правило проекта (как alternative.me и TFTC).
+  const by = sourceText(h.by);
   return (
     <Row icon={<span className="dg-medal" aria-hidden="true"><BtcGlyph /></span>}
       title={t(lang, "hv_title")}
-      sub={`${t(lang, "dg_halv", { n: num(h.left) })} · ≈ ${dateWord(lang, h.eta)}`} />
+      sub={`${t(lang, "dg_halv", { n: num(h.left) })} · ≈ ${dateWord(lang, h.eta)}${by ? ` · ${by}` : ""}`} />
   );
 }
 

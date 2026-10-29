@@ -59,7 +59,7 @@ jobs:
           wt_halving.py tests/test_halving_api.py tests/test_halving_fuzz.py tests/test_halving_security.py tests/test_halving_policy.py tools/mutate-halving.py
           wt_etf.py tests/test_etf_api.py tests/test_etf_day_alert.py tests/test_etf_fuzz.py tests/test_etf_security.py tests/test_etf_policy.py tools/mutate-etf.py
           tests/test_bootstrap_personal.py tests/test_btc_etf_labels.py
-          wt_treasury.py tests/test_treasury.py tests/test_treasury_security.py tests/test_digest_sources.py tests/test_digest_channel.py
+          wt_treasury.py tests/test_treasury.py tests/test_treasury_security.py tests/test_digest_sources.py tests/test_digest_channel.py tests/test_digest_halving.py tests/test_hl_wallet_index.py
           wt_dom.py tests/test_dom.py tests/test_dom_policy.py tests/test_dom_fuzz.py tests/test_dom_http.py wt_mcap.py tests/test_mcap.py tests/test_mcap_fuzz.py
           wt_fng.py tests/fng_fake.py tests/test_fng_api.py tests/test_fng_fuzz.py tests/test_fng_security.py tests/test_fng_policy.py tools/mutate-fng.py
       # Биткоин: SQL собирается из констант модуля (окна, пороги, условия),

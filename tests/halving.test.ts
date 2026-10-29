@@ -3,7 +3,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  STALE_AFTER, STALE_MAX, clockSkew, clockSpeech, halvingAge, halvingView, pickHalving, subsidySats, unitLabel, validHalving,
+  STALE_AFTER, STALE_MAX, clockSkew, clockSpeech, halvingAge, halvingView, pickHalving, sourceText, subsidySats, unitLabel,
+  validHalving,
   type HalvingReply, type HalvingSource,
 } from "../src/lib/halving.ts";
 
@@ -311,4 +312,17 @@ test("источник данных: только известные адрес�
   }
   // Старый ответ без поля — годится, просто без подписи.
   assert.equal(validHalving(REAL), true);
+});
+
+test("подпись источника: кто дал высоту блока, и mempool.space, если среднее — его", () => {
+  assert.equal(sourceText("mempool.space", "epoch"), "mempool.space");
+  assert.equal(sourceText("mempool.space", "period"), "mempool.space");
+  assert.equal(sourceText("blockstream.info", "epoch"), "blockstream.info");
+  assert.equal(sourceText("blockstream.info", "nominal"), "blockstream.info");
+  // Высота — от запасного, среднее — период сложности mempool.space: оба.
+  assert.equal(sourceText("blockchain.info", "period"), "blockchain.info, mempool.space");
+  // Дайджест: среднего нет — только тот, кто дал высоту.
+  assert.equal(sourceText("blockstream.info"), "blockstream.info");
+  // Не из списка — подписи нет вовсе: чужой текст не показываем.
+  for (const by of ["evil.com", "", undefined, null, 5, ["mempool.space"]]) assert.equal(sourceText(by, "period"), null, String(by));
 });

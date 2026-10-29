@@ -23,7 +23,9 @@ import { t } from "../i18n/t";
 import { num, pct } from "../lib/format";
 import { useNow } from "../lib/tick";
 import { fetchHalving, peekHalving } from "../lib/api";
-import { CLOCK_UNITS, HALVING_TTL_MS, clockSpeech, halvingAge, halvingView, unitLabel, type HalvingReply } from "../lib/halving";
+import {
+  CLOCK_UNITS, HALVING_TTL_MS, clockSpeech, halvingAge, halvingView, sourceText, unitLabel, type HalvingReply,
+} from "../lib/halving";
 import { BtcGlyph } from "./ui";
 import "./HalvingCard.css";
 
@@ -186,6 +188,7 @@ export function HalvingCard() {
   const labels = v.parts.map((n, i) => unitLabel(lang, CLOCK_UNITS[i]!, n) ?? t(lang, FALLBACK[i]!));
   const epochText = t(lang, "hv_epoch", { p: pct(v.donePct, 1, false) });
   // Для читалки — словами целиком: «544 дня 3 часа 45 минут 23 секунды».
+  const by = sourceText(h.by, h.src);
   const clock = clockSpeech(lang, v.parts) ?? v.parts.map((n, i) => `${i === 0 ? num(n) : pad(n)} ${labels[i]}`).join(" ");
 
   return (
@@ -233,9 +236,10 @@ export function HalvingCard() {
         {t(lang, "hv_reward")} <b><bdi dir="ltr">{btc(v.reward)}{"\u00a0"}→ {btc(v.rewardNext)}{"\u00a0"}BTC</bdi></b>
       </p>
       {/* Источник рядом с данными — правило проекта. Тот, кто дал высоту
-          блока на самом деле: mempool.space или запасной. Текстом, без
-          ссылки: в карточке ссылок нет вовсе (test_halving_policy). */}
-      {h.by ? <p className="hv-src">{t(lang, "hv_src")} <bdi dir="ltr">{h.by}</bdi></p> : null}
+          блока на самом деле: mempool.space или запасной (и mempool.space,
+          если среднее — его период сложности). Текстом, без ссылки: в
+          карточке ссылок нет вовсе (test_halving_policy). */}
+      {by ? <p className="hv-src">{t(lang, "hv_src")} <bdi dir="ltr">{by}</bdi></p> : null}
     </section>
   );
 }

@@ -14695,6 +14695,26 @@ def _dg_signals(body: dict) -> list:
     return sig
 
 
+def _dg_halving(to: int) -> dict | None:
+    """Халвинг для выпуска: сколько блоков осталось, когда и чьи данные.
+
+    Сразу после перезапуска API ответ ещё собирается: запрос приложения ждёт
+    его не дольше COLD_WAIT и получает «нет данных». Выпуску спешить некуда —
+    собираем сами (до BUDGET секунд), иначе раздел пропал бы из выпуска на
+    весь день: автовыкат перезапускает API на каждый коммит. Источник — в
+    выпуск рядом с числом, как у alternative.me и TFTC."""
+    hv = _dg_safe("halving", halving_data) or {}
+    if not hv.get("ok"):
+        hv = _dg_safe("halving", halving.build) or {}
+    if not (hv.get("ok") and hv.get("height")):
+        return None
+    left = hv["next"] - hv["height"]
+    out = {"left": left, "eta": int(hv.get("eta") or to + left * hv["avg"]), "next": hv["next"]}
+    if hv.get("by") in halving.HOSTS:
+        out["by"] = hv["by"]
+    return out
+
+
 def digest_build(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict:
     """Содержимое выпуска за последние сутки. Раздел без данных — пустой,
     а не выдуманный: приложение так и пишет, что событий не было.
@@ -14777,10 +14797,9 @@ def digest_build(cur: sqlite3.Connection, hl: sqlite3.Connection | None) -> dict
         part = _dg_safe(key, fn)
         if part:
             body[key] = part
-    hv = _dg_safe("halving", halving_data) or {}
-    if hv.get("ok") and hv.get("height"):
-        left = hv["next"] - hv["height"]
-        body["halv"] = {"left": left, "eta": int(hv.get("eta") or to + left * hv["avg"]), "next": hv["next"]}
+    halv = _dg_halving(to)
+    if halv:
+        body["halv"] = halv
     body["sig"] = _dg_signals(body)
     return body
 

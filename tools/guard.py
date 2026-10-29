@@ -790,7 +790,10 @@ say("халвинг: среднее за эпоху, отсчёт от посл�
     and "ERR_TTL = 60.0" in _hvs and "        if _failed():\n            return hit[1] if hit else _no_data()\n        job = _start()" in _hvs and 're.fullmatch(r"[0-9a-f]{64}", bh)' in _hvs
     and 'res["prev"] = start_ts' in _hvs and '"now": _now()' in _hvs and "STALE_MAX = 86_400.0" in _hvs
     and "export const STALE_MAX = 86_400;" in _hvl and 'age === "old" ? <p className="hv-old">' in _hv
-    and '"at": t_now, "by": by}' in _hvs and 'h.by ? <p className="hv-src">' in _hv
+    and '"at": t_now, "by": by}' in _hvs and 'by ? <p className="hv-src">' in _hv and "const by = sourceText(h.by, h.src);" in _hv
+    # Источник и в выпуске дайджеста — в приложении и на картинке канала; выпуск собирает халвинг сам после перезапуска.
+    and "def _dg_halving(to: int) -> dict | None:" in api and 'hv = _dg_safe("halving", halving.build) or {}' in api
+    and "const by = sourceText(h.by);" in read(f"{APP}/src/screens/DigestMore.tsx") and "HALVING_BY = (" in read(f"{APP}/wt_digest_img.py")
     and "opt(r.eta, time)" in _hvl and "donePct: Math.min(99.9, Math.round(done * 10) / 10)," in _hvl
     and "const height = Math.min(h.next - 1," in _hvl and "export function subsidySats(" in _hvl
     and "const eta = h.eta ?? h.at + (h.next - h.height) * h.avg;" in _hvl
@@ -1153,7 +1156,7 @@ say("bitcoin, повторная ревизия: алерты только о с
 
 _dgm = read(f"{APP}/src/screens/DigestMore.tsx")
 say("дайджест v2: сводка сигналов, рынок, институционалы, bitcoin, лидеры, халвинг; старые выпуски как были",
-    "def _dg_signals(body: dict)" in api and 'body: dict = {"v": 3' in api and 'body["halv"] = {' in api
+    "def _dg_signals(body: dict)" in api and 'body: dict = {"v": 3' in api and 'body["halv"] = halv' in api
     and "export function Summary(" in _dgm and "export function Institutions(" in _dgm
     and "export function BitcoinSec(" in _dgm and "export function HalvingLine(" in _dgm
     and "const v2 = (it.v ?? 1) >= 2;" in read(f"{APP}/src/screens/DigestTab.tsx"))

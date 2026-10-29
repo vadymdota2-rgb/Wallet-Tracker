@@ -662,7 +662,8 @@ export interface DigestItem {
     perp?: { a: string; pnl: number; win: number; tr: number };
     btc?: { a: string; pnl: number; btc: number; roi: number };
   };
-  halv?: { left: number; eta: number; next: number };
+  /** by — чьи данные о блоках (подпись источника в строке). */
+  halv?: { left: number; eta: number; next: number; by?: string };
   /** v3: ликвидации за сутки со всех бирж. */
   liq?: { L: number; S: number; n: number; ex: number; coins: { sym: string; L: number; S: number }[];
     big?: { sym: string; ex: string; usd: number; L: boolean } };

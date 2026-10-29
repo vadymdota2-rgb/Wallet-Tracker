@@ -33,6 +33,8 @@ BOT_AT = "@WalletTrackerAppBot"
 # Потоки ETF — открытый набор TFTC (CC BY 4.0): условие — подпись источника со
 # ссылкой и лицензией рядом с цифрами — на картинке и в подписи к посту.
 TFTC_BY = "TFTC — tftc.io/bitcoin-etf-flows (CC BY 4.0)"
+# Чьи данные о блоках в строке халвинга (wt_halving.HOSTS): только эти имена.
+HALVING_BY = ("mempool.space", "blockstream.info", "blockchain.info")
 # В подписи к посту — со ссылкой на текст лицензии: CC BY 4.0 (п. 3(a)(1)(C))
 # требует не только название, но и адрес лицензии. На картинке ссылки не
 # нажимаются — там короткая строка, полная идёт в подписи к тому же посту.
@@ -725,7 +727,9 @@ def _page_week(it: dict, lang: str, n: int, total: int) -> bytes | None:
             break
     h = it.get("halv")
     if h:
-        p.row(tr(lang, "hv_title"), "", None, tr(lang, "dg_halv", n=num(h["left"], lang)))
+        # Источник рядом с числом — правило проекта (как alternative.me и TFTC).
+        by = h.get("by") if h.get("by") in HALVING_BY else ""
+        p.row(tr(lang, "hv_title"), "", None, tr(lang, "dg_halv", n=num(h["left"], lang)) + (f" · {by}" if by else ""))
     return p.png()
 
 
