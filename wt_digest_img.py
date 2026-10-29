@@ -727,10 +727,16 @@ def _page_week(it: dict, lang: str, n: int, total: int) -> bytes | None:
             break
     h = it.get("halv")
     if h:
-        # Источник рядом с числом — правило проекта (как alternative.me и TFTC).
-        by = h.get("by") if h.get("by") in HALVING_BY else ""
-        p.row(tr(lang, "hv_title"), "", None, tr(lang, "dg_halv", n=num(h["left"], lang)) + (f" · {by}" if by else ""))
+        p.row(tr(lang, "hv_title"), "", None, halving_sub(h, lang))
     return p.png()
+
+
+def halving_sub(h: dict, lang: str) -> str:
+    """Строка халвинга под заголовком: «in 78,781 blocks · mempool.space».
+    Источник рядом с числом — правило проекта (как alternative.me и TFTC),
+    и только из списка: чужое имя на картинку не попадает."""
+    by = h.get("by") if h.get("by") in HALVING_BY else ""
+    return tr(lang, "dg_halv", n=num(h["left"], lang)) + (f" · {by}" if by else "")
 
 
 def render_album(it: dict, lang: str = "en") -> list[bytes]:

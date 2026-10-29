@@ -49,6 +49,15 @@ class DigestHalvingTest(unittest.TestCase):
                 mock.patch.object(api.halving, "build", side_effect=AssertionError("лишняя сборка")):
             self.assertIsNotNone(api._dg_halving(TO))
 
+    def test_halving_line_names_the_source(self):
+        h = {"left": 78_781, "eta": 1_838_896_423, "next": 1_050_000, "by": "mempool.space"}
+        self.assertEqual(dgi.halving_sub(h, "en"), "in 78,781 blocks · mempool.space")
+        # Чужое имя или его нет — строка без подписи, а не с чужим текстом.
+        for by in ("evil.com", "", None, 5):
+            self.assertEqual(dgi.halving_sub({**h, "by": by}, "en"), "in 78,781 blocks", by)
+        self.assertEqual(dgi.halving_sub({"left": 5}, "en"), "in 5 blocks")
+
+    @unittest.skipUnless(dgi.Image is not None, "нужен Pillow (в CI — задача server-debian)")
     def test_channel_picture_signs_the_halving_row(self):
         rows = []
         real = dgi._Page.row
