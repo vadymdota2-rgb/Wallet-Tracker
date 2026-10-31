@@ -8,7 +8,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { PREFETCH_GAP, SOON_DELAY, SOON_MAX, drain, gate, nextSoon } from "../src/lib/pace.ts";
+import { PREFETCH_GAP, SOON_DELAY, SOON_MAX, WALLETS_GAP, drain, gate, nextSoon } from "../src/lib/pace.ts";
 
 test("неполная выгрузка: 2,5 → 5 → 10 → 20 → 30 с, дальше не чаще раза в 30 с", () => {
   const seq: number[] = [];
@@ -73,4 +73,11 @@ test("очередь: упавшее задание не останавлива�
   });
   await drain(jobs, 1);
   assert.deepEqual(done, [0, 2]);
+});
+
+test("кошельки — раз в три минуты: при подгрузке раз в минуту — каждый третий круг", () => {
+  assert.equal(WALLETS_GAP, 180_000);
+  const due = gate(WALLETS_GAP);
+  const rounds = [0, 60_000, 120_000, 180_000, 240_000, 300_000, 360_000].map((t) => due(t));
+  assert.deepEqual(rounds, [true, false, false, true, false, false, true]);
 });

@@ -1046,13 +1046,29 @@ def spot_prices() -> dict[int, float]:
     return out
 
 
+# Перпы и спот одного кошелька — двумя запросами разом, а не по очереди:
+# каждый ждёт до 6 с, и по очереди кошелёк отвечал до 12 с, а приложение
+# ждёт 15 с при четырёх кошельках в работе — «клиент ушёл» про /api/wallet.
+_HL_POOL = ThreadPoolExecutor(max_workers=8, thread_name_prefix="hlstate")
+
+
+class HLDown(OSError):
+    """Hyperliquid не ответил про кошелёк — это не «кошелёк пуст»."""
+
+
 def hl_state(addr: str) -> dict:
     key = addr.lower()
     hit = _hl_cache.get(key)
     if hit and time.monotonic() - hit[0] < HL_TTL:
         return hit[1]
-    perp = hl_post({"type": "clearinghouseState", "user": addr}) or {}
-    spot = hl_post({"type": "spotClearinghouseState", "user": addr}) or {}
+    perp_f = _HL_POOL.submit(hl_post, {"type": "clearinghouseState", "user": addr})
+    spot_f = _HL_POOL.submit(hl_post, {"type": "spotClearinghouseState", "user": addr})
+    perp, spot = perp_f.result(), spot_f.result()
+    # Не ответил хоть один — ошибка, и в кэш не кладём. Раньше на его месте
+    # был пустой словарь: кошелёк 20 секунд показывал ноль на балансе и ни
+    # одной позиции, как будто он пуст, — неправда вместо «нет связи».
+    if not isinstance(perp, dict) or not isinstance(spot, dict):
+        raise HLDown(f"Hyperliquid не ответил: {'perp' if not isinstance(perp, dict) else 'spot'}")
     out = {"perp": perp, "spot": spot}
     # Прогрев идёт из нескольких потоков: словарь чистим под замком, иначе
     # обход на удаление спотыкается о чужую вставку.

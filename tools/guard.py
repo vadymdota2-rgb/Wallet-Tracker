@@ -1798,6 +1798,10 @@ say("частота запросов: неполная выгрузка — вс
     and "queue(jobs, PARALLEL, () => lastStatus === 429)" in read(f"{APP}/src/lib/prefetch.ts")
     and "delay = okDelay();" in sync and "else if (lastStatus === 429) delay = MAX_DELAY;" in sync
     and "limit_req_status 429;" in _ngx and os.path.exists(f"{APP}/tests/pace.test.ts"))
+say("живой кошелёк: перпы и спот разом, молчание Hyperliquid — ошибка, а не пустой кошелёк; подгрузка кошельков раз в 3 минуты",
+    "perp_f = _HL_POOL.submit(hl_post" in api and "raise HLDown(" in api and "class HLDown(OSError):" in api
+    and "export const WALLETS_GAP = 180_000;" in _pace and "walletsDue(Date.now()) ? live.wallets : []" in read(f"{APP}/src/lib/prefetch.ts")
+    and os.path.exists(f"{APP}/tests/test_wallet_live.py"))
 _priv = json.load(open(f"{APP}/tools/i18n.json"))["legal_privacy_body"]
 say("RODO ст. 13: в политике на 16 языках — администратор и почта, OVH в ЕС, журналы 14 дней, основания, права, жалоба в UODO",
     len(_priv) == 16 and all(all(x in v for x in ("wallettrackerbot@gmail.com", "@WalletTrackerHelp", "OVH", "14", "UODO", "uodo.gov.pl", "TON Connect"))

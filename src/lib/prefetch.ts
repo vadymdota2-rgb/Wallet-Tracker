@@ -21,7 +21,7 @@ import {
   fetchBig, fetchBscExFlow, fetchBtcBig, fetchBtcFlow, fetchBtcRank, fetchDeals, fetchDom, fetchEtf, fetchMcap, fetchFlow, fetchLs, fetchSymbols, fetchTokenHist,
   fetchUnlocks, fetchWallet, lastStatus,
 } from "./api";
-import { PREFETCH_GAP, drain as queue, gate } from "./pace";
+import { PREFETCH_GAP, WALLETS_GAP, drain as queue, gate } from "./pace";
 import { useApp } from "../store/app";
 import { useLive } from "../store/live";
 import type { WalletLive } from "./types";
@@ -53,6 +53,8 @@ const drain = (jobs: (() => Promise<unknown>)[]) => queue(jobs, PARALLEL, () => 
 /** Не чаще раза в минуту: выгрузка при запуске переспрашивается каждые
  *  несколько секунд, а подгрузка — около 60 запросов (pace.ts). */
 const due = gate(PREFETCH_GAP);
+/** Кошельки — реже остальной подгрузки: раз в три минуты (pace.ts). */
+const walletsDue = gate(WALLETS_GAP);
 
 const isAddr = (a: unknown): a is string => typeof a === "string" && /^0x[0-9a-fA-F]{40}$/.test(a);
 
@@ -67,8 +69,9 @@ function plan(): (() => Promise<unknown>)[] {
   // мгновенно, а в конце очереди экран ждал десятки чужих запросов.
   jobs.push(() => fetchUnlocks());
 
-  // 1. Кошельки — первыми: их открывают чаще всего.
-  for (const w of live.wallets) {
+  // 1. Кошельки — первыми: их открывают чаще всего. Но не на каждом круге:
+  // раз в три минуты (WALLETS_GAP), открытый кошелёк экран спросит сам.
+  for (const w of walletsDue(Date.now()) ? live.wallets : []) {
     // У биткоина позиций Hyperliquid нет — его экран берёт данные сам.
     if (w.chain === "btc") continue;
     jobs.push(() => fetchWallet(w.addr).then((d) => applyWalletLive(w.addr, d)));
