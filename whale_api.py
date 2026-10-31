@@ -15432,6 +15432,8 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
                 "DELETE FROM digest_subs WHERE chat_id=?",
                 "DELETE FROM ref_codes WHERE chat_id=?",
                 "DELETE FROM token_subs WHERE chat_id=?",
+                # Подписка на итоги дня ETF: chat_id и язык сообщений.
+                "DELETE FROM etf_day_subs WHERE chat_id=?",
                 "DELETE FROM bonus_claims WHERE chat_id=?",
                 # Одобренная заявка с биржи остаётся без хозяина: UID уже
                 # получил награду, и после удаления данных его не прислать снова.
@@ -15567,7 +15569,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Max-Age", "600")
 
     def _json_public(self, name: str, obj: dict):
-        """Ответ, одинаковый для всех (/api/dom, /api/mcap, /api/fng): тот же объект
+        """Ответ, одинаковый для всех (/api/dom, /api/mcap, /api/fng, /api/etf): тот же объект
         из кэша модуля не кодируется заново на каждый запрос (сотня КБ JSON —
         миллисекунды процессора), а у телефона с той же копией (If-None-Match)
         — «304 не изменилось» без тела. Личных данных в таких ответах нет."""
@@ -15988,7 +15990,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._json_public("dom" if dom else "mcap", dom_data() if dom else mcap_data())
                 return
             if path in ("/etf", "/api/etf"):
-                self._json(200, etf_data())
+                # Самый большой общий ответ (все дни с января 2024 по каждому
+                # фонду): готовые байты и ETag, как у /api/dom — не кодируется
+                # заново на каждый запрос, телефону с той же копией — 304.
+                self._json_public("etf", etf_data())
                 return
             if path in ("/liqcoins", "/api/liqcoins"):
                 self._json(200, liq_coins())

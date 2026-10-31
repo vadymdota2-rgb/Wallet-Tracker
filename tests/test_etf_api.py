@@ -83,6 +83,11 @@ class EtfTest(unittest.TestCase):
         p = mock.patch.object(etf.wt_treasury, "companies", list)
         p.start()
         self.addCleanup(p.stop)
+        # Прошлые отчёты фондов — только те, что даёт тест: настоящие из
+        # памяти wt_treasury (их мог оставить чужой тест) сюда не попадают.
+        p = mock.patch.object(etf.wt_treasury, "funds_cached", dict)
+        p.start()
+        self.addCleanup(p.stop)
 
     def sec(self, data):
         p = mock.patch.object(etf.wt_treasury, "etf_funds", lambda: data)

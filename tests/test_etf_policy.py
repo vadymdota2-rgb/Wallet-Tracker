@@ -12,6 +12,7 @@ import importlib
 import inspect
 import os
 import re
+import ssl
 import sys
 import unittest
 import unittest.mock
@@ -19,11 +20,12 @@ import unittest.mock
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 import wt_etf as etf  # noqa: E402 — модуль лежит в корне репозитория
+import wt_treasury as tr  # noqa: E402
 
 SERVER = os.path.join(ROOT, "wt_etf.py")
 # Только стандартная библиотека и свой модуль отчётов SEC. Ни базы (sqlite3),
 # ни бота, ни разметки кошельков, ни whale_api: модуль независим.
-IMPORTS = {"__future__", "calendar", "contextlib", "http.client", "json", "math", "os", "re", "sys", "threading",
+IMPORTS = {"__future__", "calendar", "contextlib", "http.client", "json", "math", "os", "re", "ssl", "sys", "threading",
            "time", "urllib.parse", "urllib.request", "collections.abc", "concurrent.futures", "typing", "wt_treasury"}
 BANNED_CALLS = {"eval", "exec", "compile", "__import__", "input", "breakpoint", "globals", "locals", "vars",
                 "setattr", "delattr"}
@@ -127,6 +129,23 @@ class ServerPolicyTest(unittest.TestCase):
         self.assertTrue(any(type(h).__name__ == "_NoRedirect" for h in etf._opener.handlers))
         self.assertTrue(any(type(h).__name__ == "HTTPSHandler" for h in etf._opener.handlers))
         self.assertEqual(etf._HEADERS.get("Accept-Encoding"), "identity")
+
+    def test_tls_minimum_does_not_depend_on_the_system(self):
+        # На Debian 13 системный минимум — MINIMUM_SUPPORTED: и wt_etf (TFTC,
+        # CFTC), и wt_treasury (SEC) задают TLS 1.2 сами. Раньше у обоих
+        # стоял HTTPSHandler() без контекста — минимум брался из системы.
+        def loose():
+            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            ctx.minimum_version = ssl.TLSVersion.MINIMUM_SUPPORTED
+            return ctx
+        for mod in (etf, tr):
+            with unittest.mock.patch.object(mod.ssl, "create_default_context", loose):
+                ctx = mod._tls()
+            self.assertEqual(ctx.minimum_version, ssl.TLSVersion.TLSv1_2, mod.__name__)
+            https = [h for h in mod._opener.handlers if isinstance(h, mod.urllib.request.HTTPSHandler)]
+            self.assertEqual(len(https), 1, mod.__name__)
+            self.assertGreaterEqual(https[0]._context.minimum_version, ssl.TLSVersion.TLSv1_2, mod.__name__)
+            self.assertEqual(https[0]._context.verify_mode, ssl.CERT_REQUIRED, mod.__name__)
 
     def test_independent_of_labels_bot_and_api(self):
         # Модуль ни от чего не зависит: ни разметки кошельков, ни базы бота,

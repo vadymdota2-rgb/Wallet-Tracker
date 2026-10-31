@@ -52,6 +52,7 @@ import json
 import math
 import os
 import re
+import ssl
 import sys
 import threading
 import time
@@ -132,9 +133,19 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def _tls() -> ssl.SSLContext:
+    """Сертификат и имя сервера проверяются, TLS — не старше 1.2 (как _tls в
+    wt_halving). Минимум задан явно: сам Python берёт его из настроек
+    системы, а на Debian 13 (OpenSSL 3.5) там MINIMUM_SUPPORTED."""
+    ctx = ssl.create_default_context()
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    return ctx
+
+
 # Напрямую (прокси из окружения не берётся), без перенаправлений, сертификат
-# проверяется — как у wt_halving.
-_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect, urllib.request.HTTPSHandler())
+# проверяется, TLS не старше 1.2 — как у wt_halving.
+_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect,
+                                      urllib.request.HTTPSHandler(context=_tls()))
 
 
 def _allowed(url: str) -> bool:

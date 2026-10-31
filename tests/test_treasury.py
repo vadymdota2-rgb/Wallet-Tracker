@@ -28,6 +28,11 @@ class TreasuryTest(unittest.TestCase):
     def setUp(self):
         tr._st = tr._State()
         tr._fst = tr._FundState()
+        # И после теста — чисто: оставленные отчёты фондов подхватывал
+        # wt_etf.funds_cached в тестах, идущих следом (test_etf_api падал,
+        # если шёл после этого файла).
+        self.addCleanup(setattr, tr, "_fst", tr._FundState())
+        self.addCleanup(setattr, tr, "_st", tr._State())
         # Копии на диске — только во временной папке теста, не на сервере.
         self.tmp = tempfile.mkdtemp()
         tr.set_cache_dir(self.tmp)

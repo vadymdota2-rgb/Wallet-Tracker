@@ -84,6 +84,8 @@ class PublicJsonTest(unittest.TestCase):
         with open(os.path.join(ROOT, "whale_api.py"), encoding="utf-8") as f:
             src = f.read()
         self.assertIn('self._json_public("dom" if dom else "mcap", dom_data() if dom else mcap_data())', src)
+        # /api/etf — самый большой общий ответ: тоже готовыми байтами.
+        self.assertIn('self._json_public("etf", etf_data())', src)
 
 
 if __name__ == "__main__":

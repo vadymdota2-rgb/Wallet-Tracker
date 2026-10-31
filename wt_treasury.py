@@ -45,6 +45,7 @@ import json
 import math
 import os
 import re
+import ssl
 import sys
 import threading
 import time
@@ -118,7 +119,16 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect, urllib.request.HTTPSHandler())
+def _tls() -> ssl.SSLContext:
+    """TLS не старше 1.2 — явно, как в wt_etf и wt_halving: на Debian 13
+    системный минимум ниже."""
+    ctx = ssl.create_default_context()
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    return ctx
+
+
+_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect,
+                                      urllib.request.HTTPSHandler(context=_tls()))
 
 
 def _log(msg: str) -> None:

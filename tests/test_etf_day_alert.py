@@ -165,6 +165,24 @@ class EtfDayAlertTest(unittest.TestCase):
         self.check()
         self.assertTrue(api.etfd_get("3")["on"])
 
+    def test_forget_me_removes_the_subscription(self):
+        # RODO: «Удалить мои данные» стирает и подписку — chat_id и язык.
+        # Раньше её в списке не было: человек удалял данные, а итоги дня
+        # продолжали приходить в Telegram.
+        api.etfd_set("1", {"on": True, "lang": "ru"})
+        api.etfd_set("2", {"on": True, "lang": "en"})
+        con = sqlite3.connect(self.db)
+        con.executescript(
+            "CREATE TABLE users (chat_id TEXT PRIMARY KEY, language TEXT, threshold_nanos INTEGER, created_at INTEGER);"
+            "CREATE TABLE whale_addresses (id INTEGER PRIMARY KEY, address TEXT);"
+            "CREATE TABLE user_whales (user_id TEXT, whale_id INTEGER);")
+        con.close()
+        self.assertTrue(api.mutate("1", "forget", {})["ok"])
+        self.assertFalse(api.etfd_get("1")["on"])
+        self.assertTrue(api.etfd_get("2")["on"], "чужая подписка остаётся")
+        self.check()
+        self.assertEqual([chat for chat, _ in self.sent], ["2"])
+
     def test_network_failure_is_not_the_persons_fault_and_is_retried(self):
         api.etfd_set("3", {"on": True, "lang": "en"})
         self.down = {"3"}

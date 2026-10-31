@@ -26,7 +26,7 @@ import wt_treasury as tr  # noqa: E402 — модуль лежит в корне
 
 SEED = 0x5EC_5EC
 CASES = 2_000
-IMPORTS = {"__future__", "calendar", "contextlib", "http.client", "json", "math", "os", "re", "sys", "threading",
+IMPORTS = {"__future__", "calendar", "contextlib", "http.client", "json", "math", "os", "re", "ssl", "sys", "threading",
            "time", "urllib.parse", "urllib.request", "typing"}
 JUNK = [None, "", "x", "1", True, [], {}, {"a": 1}, -1, 0, 1e300, -1e300, float("nan"), "２０２６-06-30",
         "2026-06-30<b>", "2026-13-45", 10**30, [1, 2, 3]]
