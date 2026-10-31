@@ -326,3 +326,18 @@ test("подпись источника: кто дал высоту блока, 
   // Не из списка — подписи нет вовсе: чужой текст не показываем.
   for (const by of ["evil.com", "", undefined, null, 5, ["mempool.space"]]) assert.equal(sourceText(by, "period"), null, String(by));
 });
+
+test("число и единица среднего не разрываются переносом — на всех 16 языках", () => {
+  const i18n = JSON.parse(readFileSync(new URL("../tools/i18n.json", import.meta.url), "utf8")) as
+    Record<string, Record<string, string>>;
+  for (const key of ["hv_avg", "hv_avg_epoch"]) {
+    for (const [lang, text] of Object.entries(i18n[key]!)) {
+      // Сразу за числом — неразрывный пробел или «склейка» (U+2060), а не обычный пробел.
+      assert.match(text, /\{m\}[\u00a0\u2060]/, `${key}.${lang}`);
+    }
+    // «分钟» — одно слово: перенос посреди него («分 / 钟») был на узком экране.
+    assert.ok(i18n[key]!["zh"]!.includes("{m}\u00a0分\u2060钟"), `${key}.zh`);
+  }
+  // Французский: перед двоеточием — неразрывный пробел, двоеточие не уходит на новую строку.
+  assert.equal(i18n["hv_src"]!["fr"], "Données\u00a0:");
+});

@@ -434,6 +434,25 @@ describe("карточка халвинга", () => {
     await ctx.close();
   });
 
+  test("320 px, китайский и японский: «9.95 分钟» не рвётся, после «数据：» нет лишнего пробела", async () => {
+    for (const [lang, unit] of [["zh", "分\u2060钟"], ["ja", "\u2060分"]] as const) {
+      const { ctx, page } = await open({ width: 320, lang });
+      await page.locator(".hv:not(.hv-skel)").waitFor();
+      // Сколько строк занимает «9.95 + единица»: прямоугольники диапазона по высоте.
+      const lines = await page.locator(".hv-avg").evaluate((p, u) => {
+        const node = p.firstChild as Text;
+        const i = node.data.indexOf("9.95");
+        const r = document.createRange();
+        r.setStart(node, i);
+        r.setEnd(node, node.data.indexOf(u, i) + u.length);
+        return new Set([...r.getClientRects()].map((x) => Math.round(x.top))).size;
+      }, unit);
+      assert.equal(lines, 1, lang);
+      if (lang === "zh") assert.equal(await page.locator(".hv-src").innerText(), "数据：mempool.space");
+      await ctx.close();
+    }
+  });
+
   test("все 16 языков на 320 px: ничего не вылезает ни за карточку, ни за ячейку", async () => {
     const ctxs = await Promise.all(LANGS.map((lang) => open({ width: 320, lang })));
     try {

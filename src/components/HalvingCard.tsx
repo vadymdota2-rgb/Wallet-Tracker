@@ -189,6 +189,8 @@ export function HalvingCard() {
   const epochText = t(lang, "hv_epoch", { p: pct(v.donePct, 1, false) });
   // Для читалки — словами целиком: «544 дня 3 часа 45 минут 23 секунды».
   const by = sourceText(h.by, h.src);
+  // После широкого двоеточия («数据：») пробел не ставят — оно уже с отступом.
+  const srcLabel = t(lang, "hv_src");
   const clock = clockSpeech(lang, v.parts) ?? v.parts.map((n, i) => `${i === 0 ? num(n) : pad(n)} ${labels[i]}`).join(" ");
 
   return (
@@ -239,7 +241,7 @@ export function HalvingCard() {
           блока на самом деле: mempool.space или запасной (и mempool.space,
           если среднее — его период сложности). Текстом, без ссылки: в
           карточке ссылок нет вовсе (test_halving_policy). */}
-      {by ? <p className="hv-src">{t(lang, "hv_src")} <bdi dir="ltr">{by}</bdi></p> : null}
+      {by ? <p className="hv-src">{srcLabel}{/[\uff1a\u3002]$/.test(srcLabel) ? "" : " "}<bdi dir="ltr">{by}</bdi></p> : null}
     </section>
   );
 }
