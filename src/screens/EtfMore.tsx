@@ -15,9 +15,9 @@ import type { DictKey } from "../i18n/types";
 import { num, usdWord } from "../lib/format";
 import { haptic } from "../lib/telegram";
 import { Card, Chips, SectionTitle } from "../components/ui";
-import { type BtcHolder } from "../lib/etf";
+import { type BtcHolder, xAtTime } from "../lib/etf";
 import { dateStr, timeTicks } from "./timeAxis";
-import { DN, UP, coinsShort, dateNb, flagOf, heightK, iso, money, tone, useWidth } from "./etfView";
+import { DN, UP, coinsShort, dateNb, dateWrap, flagOf, heightK, iso, money, tone, useWidth } from "./etfView";
 
 type Lang = Parameters<typeof t>[0];
 /**
@@ -61,7 +61,9 @@ function LinesChart({ xs, series, lang, fmt, axis = fmt, label, zero = true }: {
   const xOf = (i: number) => (n <= 1 ? 0 : (i / (n - 1)) * PW);
   const a = xs[0] ?? 0;
   const b = xs[n - 1] ?? 1;
-  const xOfT = (ts: number) => ((ts - a) / Math.max(1, b - a)) * PW;
+  /* Деления — на точке своего дня: точки стоят по номеру (торговые дни,
+     недели отчётов CFTC), а не по прямой пропорции времени (xAtTime). */
+  const xOfT = (ts: number) => Math.max(0, Math.min(PW, xAtTime(xs, ts, xOf)));
   const ticksT = (() => {
     const tt = timeTicks(lang, a, b);
     const step = Math.max(1, Math.ceil(tt.length / Math.max(3, Math.floor(PW / 64))));
@@ -156,7 +158,7 @@ export function HeldSection({ series, lang }: { series: [number, number][]; lang
     [t(lang, "ef_hd_now"), last[1], false],
     [t(lang, "ef_hd_30"), last[1] - back[1], true],
     // С полной датой: «С 6 мая 2025 г.» — месяц без дня Intl даёт в именительном («С май»).
-    [t(lang, "ef_hd_since", { d: dateStr(lang, first[0], { day: "numeric", month: "short", year: "numeric" }) }), last[1] - first[1], true],
+    [t(lang, "ef_hd_since", { d: dateWrap(lang, first[0], { day: "numeric", month: "short", year: "numeric" }) }), last[1] - first[1], true],
   ];
   return (
     <>

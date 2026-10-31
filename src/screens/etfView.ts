@@ -28,21 +28,45 @@ export function money(v: number): string {
   return `${v > 0 ? "+" : "−"}${usdWord(Math.abs(v))}`;
 }
 
-/** Монеты коротко: «1,29 млн», «40,4 тыс.»; signed — со знаком «+/−». */
+/** Монеты коротко: «1,29 млн», «40,4 тыс.»; signed — со знаком «+/−». Число
+ *  с «тыс.» — одним куском: в узкой плитке перенос перед «BTC», а не
+ *  «+115,2 / тыс. BTC». */
 export function coinsShort(lang: string, v: number, sym: string, signed = true): string {
   const s = !signed ? "" : v > 0 ? "+" : v < 0 ? "−" : "";
   try {
     const f = new Intl.NumberFormat(lang, { notation: "compact", compactDisplay: "short", maximumFractionDigits: signed ? 1 : 2 })
-      .format(Math.abs(v)).replace(/[\u00a0\u202f]/g, " ");
+      .format(Math.abs(v)).replace(/[ \u202f]/g, "\u00a0");
     return `${s}${f}${sym ? ` ${sym}` : ""}`;
   } catch {
     return `${s}${num(Math.abs(v))}${sym ? ` ${sym}` : ""}`;
   }
 }
 
-/** Дата одним куском: «30 июн. 2026 г.» не рвётся посередине и не оставляет «г.» одно на строке. */
+/** Китайский, японский, корейский: перенос там разрешён между любыми знаками. */
+const CJK = /[\u3000-\u9fff\uac00-\ud7af]/;
+const YEAR = new Set(["年", "년"]);
+
+/** Дата одним куском: «30 июн. 2026 г.» не рвётся посередине и не оставляет «г.» одно на строке.
+ *  В китайском и японском пробелов нет, а перенос разрешён между любыми знаками:
+ *  «2026年6 / 月30日», в корейском — между слогами («6 / 일»): знаки склеены (U+2060). */
 export function dateNb(lang: string, ts: number, opts: Intl.DateTimeFormatOptions): string {
-  return dateStr(lang as Parameters<typeof dateStr>[0], ts, opts).replace(/ /g, "\u00a0");
+  const s = dateStr(lang as Parameters<typeof dateStr>[0], ts, opts).replace(/ /g, "\u00a0");
+  return CJK.test(s) ? [...s].join("\u2060") : s;
+}
+
+/** Дата для узкой плитки: целиком не влезает, поэтому перенос — только перед
+ *  годом («6 мая / 2025 г.», «2025年 / 5月6日»), а не после предлога и не
+ *  посреди числа месяца. */
+export function dateWrap(lang: string, ts: number, opts: Intl.DateTimeFormatOptions): string {
+  const s = dateStr(lang as Parameters<typeof dateStr>[0], ts, opts);
+  if (!CJK.test(s)) return s.replace(/ (?!\d{4})/g, "\u00a0");
+  // После «年»/«년» — можно, в остальных местах — склейка, пробел — неразрывный.
+  return [...s].map((ch, i, all) => {
+    // Свободно сразу после «年»/«년» и после пробела за ним («2025년 / 5월»).
+    const free = i > 0 && (YEAR.has(all[i - 1]!) || (all[i - 1] === " " && i > 1 && YEAR.has(all[i - 2]!)));
+    if (ch === " ") return free ? " " : "\u00a0";
+    return (i && !free ? "\u2060" : "") + ch;
+  }).join("");
 }
 
 /** Флаг страны по коду ISO: «US» → 🇺🇸; не код — пусто. */

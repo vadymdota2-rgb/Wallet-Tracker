@@ -1555,15 +1555,22 @@ say("«Институциональные потоки» — отдельный 
     and "export const ETF_TTL_MS = 60 * 60_000;" in _etl and "TTL = 3600.0" in _etfs
     and "from whale_api" not in _etfs and "wt_etfchain" not in _etfs)
 _efm = read(f"{APP}/src/screens/EtfMore.tsx")
-say("«Институциональные потоки»: сбой сборки не повторяется каждым запросом (пауза FAIL_WAIT, «нет данных» — каждый раз новый ответ); карточка фонда по нажатию (потоки по дням, итог, запас, рекорды); предупреждение о старом наборе; свежий ответ при возврате через час; карточки не слипаются; даты не рвутся; ось CME без «BTC»",
-    "FAIL_WAIT = 120.0" in _etfs and "def _resting() -> bool:" in _etfs and "and not _resting():" in _etfs
-    and "else _no_data() if resting else build()" in _etfs and '"ok": False, "error": "no_data"}' in _etfs.split("def _no_data()")[1][:200]
+say("«Институциональные потоки»: сбой сборки не повторяется каждым запросом (пауза FAIL_WAIT, «нет данных» — каждый раз новый ответ); холодный старт ждёт сборку не дольше COLD_WAIT, а выпуск дайджеста тогда собирает сам; карточка фонда по нажатию (потоки по дням, итог, запас, рекорды); предупреждение о старом наборе; свежий ответ при возврате через час; карточки не слипаются; даты не рвутся; ось CME без «BTC»",
+    "FAIL_WAIT = 120.0" in _etfs and "def _resting() -> bool:" in _etfs
+    and "        if _resting():\n            return hit[1] if hit else _no_data()\n" in _etfs
+    and "COLD_WAIT = 20.0" in _etfs and "    job.join(COLD_WAIT)\n" in _etfs and "_cold" not in _etfs
+    and 'rep = _dg_safe("inst", etf.build) or {}' in read(f"{APP}/whale_api.py") and '"ok": False, "error": "no_data"}' in _etfs.split("def _no_data()")[1][:200]
     and "export function fundDetail(c: EtfCoin, i: number, n = 60): FundDetail" in _etl and "export function staleDays(" in _etl
     and 'aria-expanded={on} aria-controls={`ef-fd-${f.t}`}' in _ef and "<FundCard c={c} i={c.funds.indexOf(f)} lang={lang} />" in _ef
     and 'old > STALE_DAYS ?' in _ef and 'document.addEventListener("visibilitychange", back)' in _ef
     and "Date.now() - got.current > ETF_TTL_MS" in _ef
     and ".ef { max-width: 760px; margin-inline: auto; display: grid; gap: 12px;" in _etcss
     and "export function dateNb(" in read(f"{APP}/src/screens/etfView.ts") and "dateNb(lang, r[5]" in _efm
+    and "export function dateWrap(" in read(f"{APP}/src/screens/etfView.ts")
+    # Число и единица, «≈» и сумма, французское «:» — не рвутся переносом (16 языков).
+    and not any(re.search(r"\{n\} ", _i18n[k][lg]) for k in ("ef_days_n", "ef_streak_in", "ef_streak_out", "ef_old") for lg in _i18n[k])
+    and all(v == "≈\u00a0{v}" for v in _i18n["ef_cme_usd"].values())
+    and not any(re.search(r" [:;?!»]|« ", _i18n[k]["fr"]) for k in _i18n if k.startswith("ef_"))
     and "axis={axis}" in _efm and "const lim = list.length - shown <= TAIL ? list.length : shown;" in _efm
     and all(k in _i18n for k in ("ef_fd_days", "ef_fd_chart", "ef_fd_hold", "ef_fd_tap", "ef_old")))
 _cjk = r"[\u3040-\u30ff\u3400-\u9fff]"

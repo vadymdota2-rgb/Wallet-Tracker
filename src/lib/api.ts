@@ -610,7 +610,9 @@ export const peekMcap = () => peek<McapReply | null>("/api/mcap", MCAP_TTL_MS) ?
 const ETF_SAVED = "wt-etf-v1";
 function savedEtf(): EtfReply | null {
   const hit = readSaved<unknown>(ETF_SAVED).all;
-  return hit && Date.now() - hit.at < 30 * 24 * 3600_000 ? validEtf(hit.v) : null;
+  // Время копии — только число: строка «9e15» после вычитания дала бы
+  // отрицательный возраст, и копия любой давности считалась бы свежей.
+  return hit && typeof hit.at === "number" && Date.now() - hit.at < 30 * 24 * 3600_000 ? validEtf(hit.v) : null;
 }
 export const fetchEtf = () =>
   remember<EtfReply | null>("/api/etf", ETF_TTL_MS, () =>

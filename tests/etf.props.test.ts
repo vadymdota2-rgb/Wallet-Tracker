@@ -9,7 +9,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  ETF_LAUNCH, PERIODS, RANGES, chartView, cumulative, etfStats, fundTotals, validEtf, weekly,
+  ETF_LAUNCH, PERIODS, RANGES, chartView, cumulative, etfStats, fundTotals, validEtf, weekly, xAtTime,
   type EtfDay, type EtfReply,
 } from "../src/lib/etf.ts";
 
@@ -145,5 +145,26 @@ test("серии и рекорды согласованы с днями", () => 
     if (s.sign < 0) assert.ok(s.streak <= s.runs.dn.n, `случай ${i}`);
     if (s.bestM && s.worstM) assert.ok(s.bestM[1] >= s.worstM[1], `случай ${i}`);
     assert.ok(s.mined >= 30 * 225 && s.mined <= 30 * 900, `случай ${i}`);
+  }
+});
+
+test("деления оси: момент точки — на самой точке, позже — правее, внутри графика — в его пределах", () => {
+  const r = rng(SEED + 5);
+  for (let i = 0; i < CASES; i++) {
+    const n = 1 + Math.floor(r() * 80);
+    const times: number[] = [];
+    for (let k = 0, t = ETF_LAUNCH; k < n; k++) times.push((t += DAY * (1 + Math.floor(r() * 4))));
+    const bw = 1 + r() * 20;
+    const xOf = (k: number) => k * bw + bw / 2;
+    times.forEach((t, k) => assert.ok(Math.abs(xAtTime(times, t, xOf) - xOf(k)) < 1e-9, `случай ${i}, точка ${k}`));
+    const a = times[0]!;
+    const b = times[n - 1]!;
+    let prev = -Infinity;
+    for (let k = 0; k <= 50; k++) {
+      const x = xAtTime(times, a + ((b - a) * k) / 50, xOf);
+      assert.ok(x >= prev - 1e-9, `случай ${i}: не по порядку`);
+      assert.ok(x >= xOf(0) - 1e-9 && x <= xOf(n - 1) + 1e-9, `случай ${i}: за краем`);
+      prev = x;
+    }
   }
 });

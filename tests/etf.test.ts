@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   ETF_LAUNCH, STALE_DAYS, assets, chartView, heldSeries, cumulative, daily, etfStats, fundDetail, fundTotals, holderRow, lastDays, minedPerDay,
-  staleDays, topFunds, validEtf, weekly,
+  staleDays, topFunds, validEtf, weekly, xAtTime,
   type EtfCoin, type EtfDay, type EtfReply,
 } from "../src/lib/etf.ts";
 
@@ -262,4 +262,53 @@ test("свежесть набора: полных суток с последне
   assert.ok(staleDays(coin([[fri, 1, 0, 1, [1, 0]]]), MON + DAY + 20 * 3600) <= STALE_DAYS);
   // Настоящий ответ в день образца — свежий.
   assert.ok(staleDays(validEtf(REAL, NOW)!.coins.btc!, NOW) <= STALE_DAYS);
+});
+
+test("деления оси на образце: 1-е число месяца, если торговый, — ровно на его столбце", () => {
+  // Раньше деление ставилось по прямой пропорции времени, а столбцы — по
+  // торговым дням: на 30 днях «1 окт.» уходило на соседний день.
+  const c = validEtf(REAL, NOW)!.coins.btc!;
+  for (const range of ["30", "90"] as const) {
+    const view = chartView(c.days, c.funds.length, range);
+    const starts = view.map((b) => b.a);
+    const bw = 10;
+    const xOf = (i: number) => i * bw + bw / 2;
+    let firsts = 0;
+    view.forEach((b, i) => {
+      if (new Date(b.a * 1000).getUTCDate() !== 1) return;
+      firsts++;
+      assert.equal(xAtTime(starts, b.a, xOf), xOf(i), `${range}: ${new Date(b.a * 1000).toISOString()}`);
+    });
+    assert.ok(range === "30" || firsts >= 1, range);
+    // Выходной между пятницей и понедельником — между их столбцами.
+    const fri = view.findIndex((b, i) => view[i + 1] && view[i + 1]!.a - b.a === 3 * 86_400);
+    assert.ok(fri >= 0);
+    const sat = xAtTime(starts, view[fri]!.a + 86_400, xOf);
+    assert.ok(sat > xOf(fri) && sat < xOf(fri + 1));
+  }
+  // За краями — по крайнему отрезку: неделя на графике «год» кончается позже
+  // начала своего столбца, и деление после него не слипается с ним.
+  const x10 = (i: number) => i * 10;
+  assert.equal(xAtTime([100, 200], 50, x10), -5);
+  assert.equal(xAtTime([100, 200, 300], 350, x10), 25);
+  assert.equal(xAtTime([100], 500, x10), 0);
+});
+
+test("тексты экрана: число не отрывается от единицы, «≈» — от суммы, французское «:» — от слова (16 языков)", () => {
+  const i18n = JSON.parse(readFileSync(new URL("../tools/i18n.json", import.meta.url), "utf8")) as
+    Record<string, Record<string, string>>;
+  for (const key of ["ef_days_n", "ef_streak_in", "ef_streak_out", "ef_old"]) {
+    for (const [lang, text] of Object.entries(i18n[key]!)) {
+      // За числом — неразрывный пробел или сразу единица («{n}天», «{n}일»), не обычный пробел.
+      assert.doesNotMatch(text, /\{n\} /, `${key}.${lang}`);
+    }
+  }
+  for (const [lang, text] of Object.entries(i18n["ef_cme_usd"]!)) assert.equal(text, "≈ {v}", lang);
+  // Китайский и японский — без пробелов вокруг числа, как в соседних строках («连续{n}天»).
+  assert.match(i18n["ef_old"]!["zh"]!, /已\{n\}天/);
+  assert.match(i18n["ef_old"]!["ja"]!, /が\{n\}日間/);
+  for (const [key, all] of Object.entries(i18n)) {
+    if (!key.startsWith("ef_") || !all["fr"]) continue;
+    assert.doesNotMatch(all["fr"], / [:;?!»]|« /, `${key}.fr`);
+  }
 });

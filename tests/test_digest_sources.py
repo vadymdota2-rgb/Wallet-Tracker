@@ -122,6 +122,29 @@ class DigestEtfDayTest(unittest.TestCase):
         self.assertTrue(self.inst(stale)[0]["etf"])
         self.assertEqual(self.inst(stale + 1)[0], {"etf": []})
 
+    def test_cold_server_builds_the_section_itself(self):
+        # Сразу после перезапуска без копии на диске etf_data через COLD_WAIT
+        # отвечает «нет данных»: выпуск собирает сам, а не теряет раздел.
+        last = DAY - DAY % 86_400
+        rep = {"ok": True, "coins": {"btc": {"funds": [{"t": "IBIT"}], "days": [[last, 5060, 61.6, 82_000, [5060]]]}}}
+        built = []
+        with mock.patch.object(api, "etf_data", lambda: {"ok": False, "error": "no_data"}), \
+                mock.patch.object(etf, "build", lambda: (built.append(1), rep)[1]), \
+                mock.patch.object(api, "now", lambda: last + 86_400):
+            self.assertEqual(api._dg_inst()["etf"][0]["v"], 5_060_000)
+        self.assertEqual(built, [1])
+
+    def test_warm_answer_does_not_rebuild_and_no_data_gives_no_section(self):
+        last = DAY - DAY % 86_400
+        rep = {"ok": True, "coins": {"btc": {"funds": [{"t": "IBIT"}], "days": [[last, 1, 0, 1, [1]]]}}}
+        with mock.patch.object(api, "etf_data", lambda: rep), \
+                mock.patch.object(etf, "build", side_effect=AssertionError("лишняя сборка")), \
+                mock.patch.object(api, "now", lambda: last + 86_400):
+            self.assertTrue(api._dg_inst()["etf"])
+        nothing = {"ok": False, "error": "no_data"}
+        with mock.patch.object(api, "etf_data", lambda: nothing), mock.patch.object(etf, "build", lambda: nothing):
+            self.assertEqual(api._dg_inst(), {"etf": []})
+
 
 # Ответ wt_mcap.mcap_data: сейчас и вчера.
 MC = {"ok": True, "btc": [58.1, 57.9], "eth": [11.0, 11.1], "alt": [41.9, 42.1], "alt_ns": 35.0,

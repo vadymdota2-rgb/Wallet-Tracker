@@ -441,3 +441,30 @@ export function staleDays(c: EtfCoin, now: number): number {
   const last = c.days[c.days.length - 1]?.[0] ?? now;
   return Math.max(0, Math.floor((now - last) / DAY));
 }
+
+/**
+ * Где на графике момент ts. Столбцы и точки стоят по номеру — торговые дни
+ * без выходных и праздников, — а деления оси — по календарю. Прямая пропорция
+ * по времени ставила «1 окт.» на 30-дневном графике мимо столбца 1 октября
+ * (до 1,6 столбца на образце). Здесь момент точки — ровно на её месте xOf(i),
+ * между соседними точками — по доле времени, за краями — по крайнему отрезку.
+ * times — моменты точек по возрастанию.
+ */
+export function xAtTime(times: readonly number[], ts: number, xOf: (i: number) => number): number {
+  const n = times.length;
+  if (n < 2) return xOf(0);
+  let lo = 0;
+  let hi = n - 1;
+  if (ts <= times[0]!) hi = 1;
+  else if (ts >= times[n - 1]!) lo = n - 2;
+  else {
+    while (hi - lo > 1) {
+      const m = (lo + hi) >> 1;
+      if (times[m]! <= ts) lo = m;
+      else hi = m;
+    }
+  }
+  const t0 = times[lo]!;
+  const t1 = times[hi]!;
+  return xOf(lo) + ((xOf(hi) - xOf(lo)) * (ts - t0)) / Math.max(1, t1 - t0);
+}

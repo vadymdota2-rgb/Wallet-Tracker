@@ -635,6 +635,61 @@ describe("институциональные потоки", () => {
     await ctx.close();
   });
 
+  test("узкий экран: число не отрывается от единицы, валюта — от суммы, даты — целиком (ru, ja, ko, 320 px)", async () => {
+    /** Сколько строк занимает кусок текста sub внутри элемента (по прямоугольникам Range). */
+    const lines = (page: Page, sel: string, sub: string) => page.locator(sel).first().evaluate((el, sub) => {
+      const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      let text = "";
+      const nodes: [Text, number][] = [];
+      for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+        nodes.push([n as Text, text.length]);
+        text += n.textContent ?? "";
+      }
+      const at = text.replace(/[\u00a0\u2060]/g, (c) => (c === "\u2060" ? "\u2060" : " ")).indexOf(sub);
+      if (at < 0) return -1;
+      const pos = (i: number): [Text, number] => {
+        const hit = [...nodes].reverse().find(([, o]) => o <= i)!;
+        return [hit[0], i - hit[1]];
+      };
+      const r = document.createRange();
+      r.setStart(...pos(at));
+      r.setEnd(...pos(at + sub.length));
+      return new Set([...r.getClientRects()].filter((q) => q.width > 0).map((q) => Math.round(q.top))).size;
+    }, sub);
+    const ru = await open({ width: 320 });
+    await ready(ru.page);
+    // «+2,1 млрд $»: знак валюты не уходит один на строку.
+    assert.equal(await lines(ru.page, ".ef-chs .dm-ch:nth-child(2) b", "млрд $"), 1);
+    // Заголовок раздела: «30 дней» на одной строке.
+    assert.equal(await lines(ru.page, ".ef .sec-t, .ef h2, .ef h3", "30 дней").catch(() => 1), 1);
+    // Плитка запаса: «С 6 мая» вместе, перенос — только перед годом.
+    const held = ru.page.locator(".ef-chs").nth(1).locator(".dm-ch").nth(2);
+    assert.equal(await held.locator("small").evaluate((el) => el.textContent), "С\u00a06\u00a0мая 2025\u00a0г.");
+    await ru.ctx.close();
+    for (const lang of ["ja", "ko"]) {
+      const { ctx, page } = await open({ width: 320, lang });
+      await ready(page);
+      // Даты отчётов компаний: «2026年6月30日» не рвётся посередине.
+      const rep = page.locator(".ef-hr-id small").first();
+      const txt = (await rep.textContent()) ?? "";
+      const date = txt.match(/2[\u2060\d]+[年년][\u2060\s\u00a0\d월月日일]+/)?.[0] ?? "";
+      assert.ok(date.length > 6, `${lang}: ${JSON.stringify(txt)}`);
+      assert.equal(await lines(page, ".ef-hr-id small", date.replace(/\u00a0/g, " ")), 1, `${lang}: ${date}`);
+      await ctx.close();
+    }
+  });
+
+  test("копия с телефона: время строкой или старше месяца — не показывается", async () => {
+    // Строка «9e15» после вычитания давала отрицательный возраст — копия
+    // любой давности считалась свежей.
+    for (const at of ["9e15", T * 1000 - 31 * 86_400_000, null]) {
+      const { ctx, page } = await open({ delay: 5000, saved: { all: { at, v: REAL } } });
+      await page.waitForTimeout(800);
+      assert.equal(await page.locator(".ef-hero > b").count(), 0, String(at));
+      await ctx.close();
+    }
+  });
+
   test("подгрузка при запуске: с Премиумом ответ приходит до открытия экрана, экран — сразу и без второго запроса", async () => {
     const { ctx, page, errors, asked } = await open({ premium: true, stay: true });
     for (let i = 0; i < 50 && asked() === 0; i++) await page.waitForTimeout(100);

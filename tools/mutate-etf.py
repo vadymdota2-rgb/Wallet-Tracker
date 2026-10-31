@@ -60,6 +60,11 @@ TS = [
     ("return Math.max(0, Math.floor((now - last) / DAY));", "return Math.floor((now - last) / DAY);", "свежесть: часы отстают"),
     ("Math.floor((now - last) / DAY))", "Math.ceil((now - last) / DAY))", "свежесть: полные сутки"),
     ("export const STALE_DAYS = 5;", "export const STALE_DAYS = 2;", "свежесть: праздники — не сбой"),
+    # Деления оси по торговым дням.
+    ("      else hi = m;", "      else lo = m;", "ось: поиск соседних точек"),
+    ("  if (ts <= times[0]!) hi = 1;", "  if (ts <= times[0]!) return xOf(0);", "ось: до первой точки — по крайнему отрезку"),
+    ("  return xOf(lo) + ((xOf(hi) - xOf(lo)) * (ts - t0)) / Math.max(1, t1 - t0);",
+     "  return xOf(lo) + ((xOf(hi) - xOf(lo)) * (ts - t0)) / Math.max(1, t1 - t0) / 2;", "ось: между точками — по доле времени"),
 ]
 PY = [
     # Разбор набора TFTC.
@@ -87,8 +92,8 @@ PY = [
     ("pool.shutdown(wait=False, cancel_futures=True)", "pool.shutdown(wait=True)", "зависшую часть не ждём"),
     ("if t not in known and t not in _st.told)", "if t not in known)", "о новом фонде — один раз"),
     ("if t not in known and t not in _st.told)", "if t not in _st.told)", "о знакомом фонде — молчим"),
-    ("if hit and not _busy.is_set() and not _resting():", "if hit and not _busy.is_set():", "после сбоя фон ждёт паузу"),
-    ("else _no_data() if resting else build()", "else build()", "очередь холодного старта не пересобирает"),
+    ("        if _resting():\n            return hit[1] if hit else _no_data()\n", "", "после сбоя фон ждёт паузу"),
+    ("    if _busy.is_set():\n        return _st.job\n", "", "холодный старт — одна сборка на всех"),
     ("        _st.fail = None\n", "", "удачная сборка снимает паузу"),
     ("_st.fail is not None and time.monotonic() - _st.fail < FAIL_WAIT", "_st.fail is not None", "пауза кончается"),
     ('    return {"ok": False, "error": "no_data"}\n', '    return _NO\n_NO = {"ok": False, "error": "no_data"}\n', "«нет данных» каждый раз новый"),
@@ -100,7 +105,10 @@ PY = [
     # Защита.
     ('u.scheme == "https" and u.hostname in HOSTS and', "True or", "только https и известные адреса"),
     (" and not u.username and not u.password", "", "адрес с логином"),
-    ("ProxyHandler({}), _NoRedirect, ", "ProxyHandler({}), ", "без перенаправлений"),
+    ("ProxyHandler({}), _NoRedirect,\n", "ProxyHandler({}),\n", "без перенаправлений"),
+    ("    ctx.minimum_version = ssl.TLSVersion.TLSv1_2\n", "", "TLS не старше 1.2"),
+    ("    job.join(COLD_WAIT)\n", "    job.join()\n", "холодный старт ждёт не дольше COLD_WAIT"),
+    ("    if job is None:\n        return build()\n", "    if job is None:\n        return _no_data()\n", "без потоков — сборка на месте"),
     ("parse_float=_finite, ", "", "числа без бесконечностей"),
     ("while len(buf) <= BODY_MAX:", "while True:", "предел размера ответа"),
     ("                if time.monotonic() > end:\n                    _log(", "                if False:\n                    _log(", "срок на весь ответ"),
@@ -123,6 +131,7 @@ PY = [
     ("not in _st.told)[:NEW_MAX]", "not in _st.told)", "сообщений о новых фондах — не больше NEW_MAX"),
 ]
 TR = [
+    ("    ctx.minimum_version = ssl.TLSVersion.TLSv1_2\n", "", "SEC: TLS не старше 1.2"),
     ("return QUARTER.fullmatch(s) is not None", 'return len(s) == 10 and s[5:] in ("03-31", "06-30", "09-30", "12-31")', "SEC: дата квартала — ASCII"),
     ("if STAMP.fullmatch(str(k)) and _point(v)}", "if STAMP.fullmatch(str(k)) and isinstance(v, list)}", "SEC: копия на диске проверяется"),
     ("if STAMP.fullmatch(str(k)) and", "if str(k).isdigit() and", "SEC: ключ квартала — ASCII-число"),
@@ -303,6 +312,7 @@ DMT = [
 
 # Общие ответы /api/dom и /api/mcap по HTTP и раздел «Рынок» дайджеста (whale_api.py).
 AP = [
+    ('    if not rep.get("ok"):\n        rep = _dg_safe("inst", etf.build) or {}\n', "", "дайджест: ETF после перезапуска собирает сам"),
     ("        if hit is None or hit[0] is not obj:\n", "        if True:\n", "доминация: ответ кодируется раз, а не на каждый запрос"),
     ('        same = tag in [x.strip() for x in (self.headers.get("If-None-Match") or "").split(",")]', "        same = False", "доминация: та же копия — 304"),
     ('        same = tag in [x.strip() for x in (self.headers.get("If-None-Match") or "").split(",")]', "        same = True", "доминация: чужая копия — полный ответ"),

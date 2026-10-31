@@ -353,6 +353,45 @@ class EtfTest(unittest.TestCase):
         self.assertEqual(out, [{"ok": False, "error": "no_data"}] * 4)
         self.assertEqual(sum("tftc.io" in u for u in net.urls), 1)
 
+    def test_cold_request_waits_at_most_cold_wait(self):
+        # Сборка без копии на диске шла до PART_WAIT (SEC — десятки секунд), а
+        # приложение ждёт 30 с: человек уходил, не дождавшись. Теперь — «нет
+        # данных» через COLD_WAIT, сборка доделывается в фоне, следующий
+        # запрос берёт готовое.
+        ready = {"ok": True, "v": 1}
+        go = threading.Event()
+
+        def slow():
+            go.wait(5)
+            with etf._lock:
+                etf._st.hit = (time.monotonic(), ready)
+            return ready
+        with mock.patch.object(etf, "COLD_WAIT", 0.2), mock.patch.object(etf, "build", slow):
+            t0 = time.monotonic()
+            self.assertEqual(etf.etf_data(), {"ok": False, "error": "no_data"})
+            self.assertLess(time.monotonic() - t0, 1.0)
+            self.assertTrue(etf._busy.is_set())  # сборка идёт дальше
+            self.assertEqual(etf.etf_data(), {"ok": False, "error": "no_data"})  # вторая не началась
+            go.set()
+            etf._st.job.join(5)
+            self.assertIs(etf.etf_data(), ready)
+
+    def test_cold_request_gets_a_fast_build_at_once(self):
+        ready = {"ok": True, "v": 2}
+
+        def fast():
+            with etf._lock:
+                etf._st.hit = (time.monotonic(), ready)
+            return ready
+        with mock.patch.object(etf, "build", fast):
+            self.assertIs(etf.etf_data(), ready)
+
+    def test_cold_start_without_threads_builds_in_place(self):
+        with mock.patch.object(etf.threading.Thread, "start", side_effect=RuntimeError("no threads")), \
+                mock.patch.object(etf, "build", lambda: {"ok": True, "v": 3}), mock.patch("sys.stderr", io.StringIO()):
+            self.assertEqual(etf.etf_data(), {"ok": True, "v": 3})
+        self.assertFalse(etf._busy.is_set())
+
     def test_background_crash_pauses_rebuilds(self):
         old = {"ok": True, "v": 1}
         etf._st.hit = (time.monotonic() - etf.TTL - 1, old)

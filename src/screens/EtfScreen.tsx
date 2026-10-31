@@ -30,7 +30,7 @@ import { etfWatch, etfWatchSet, failKey, fetchEtf, peekEtf } from "../lib/api";
 import { toast } from "../components/Toast";
 import { Card, Chips, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import {
-  ETF_TTL_MS, PERIODS, RANGES, STALE_DAYS, chartView, cumulative, etfStats, fundDetail, fundTotals, heldSeries, staleDays, topFunds,
+  ETF_TTL_MS, PERIODS, RANGES, STALE_DAYS, chartView, cumulative, etfStats, fundDetail, fundTotals, heldSeries, staleDays, topFunds, xAtTime,
   type Bucket, type EtfCoin, type EtfFund, type EtfReply, type Period, type Range,
 } from "../lib/etf";
 import { Boundary } from "../components/Boundary";
@@ -65,8 +65,10 @@ function moneyShort(lang: Lang, v: number): string {
       maximumSignificantDigits: 3,
     }).format(Math.abs(v));
     /* Пробелы обычные, а не неразрывные: в узкой плитке «+59.1 مليار US$»
-       должно переноситься между словами, а не вылезать за край. */
-    return `${v > 0 ? "+" : v < 0 ? "−" : ""}${f.replace(/[\u00a0\u202f]/g, " ")}`;
+       должно переноситься между словами, а не вылезать за край. Кроме
+       последнего: знак валюты один на строке («+2,1 млрд / $» на 320 px)
+       держится за слово перед ним. */
+    return `${v > 0 ? "+" : v < 0 ? "−" : ""}${f.replace(/[\u00a0\u202f]/g, " ").replace(/ (?=\S+$)/, "\u00a0")}`;
   } catch {
     return money(v);
   }
@@ -184,7 +186,10 @@ function FlowChart({ data, cum, zero, lang, sel, onSel, label }: {
   const cArea = cum && cum.length ? `${xOf(0).toFixed(1)},${cBase.toFixed(1)} ${cLine} ${xOf(cum.length - 1).toFixed(1)},${cBase.toFixed(1)}` : "";
   const a = data[0]?.a ?? 0;
   const b = data[n - 1]?.b ?? 1;
-  const xOfT = (ts: number) => ((ts - a) / Math.max(1, b - a)) * PW;
+  /* Деления оси — на столбце своего дня, а не по прямой пропорции времени:
+     столбцы идут по торговым дням, без выходных (xAtTime). */
+  const starts = data.map((d) => d.a);
+  const xOfT = (ts: number) => Math.max(0, Math.min(PW, xAtTime(starts, ts, xOf)));
   const line = data.map((d, i) => (d.px > 0 ? `${xOf(i).toFixed(1)},${yPx(d.px).toFixed(1)}` : "")).filter(Boolean).join(" ");
 
   const pick = (clientX: number) => {
@@ -576,7 +581,7 @@ export function EtfScreen() {
 
   /* «Данные по» — как в подписи, которую просит TFTC. */
   const through = c?.through ? Date.parse(`${c.through}T00:00:00Z`) / 1000 || 0 : 0;
-  const thru = through ? t(lang, "ef_through", { d: dateStr(lang, through, { day: "numeric", month: "short", year: "numeric" }) }) : "";
+  const thru = through ? t(lang, "ef_through", { d: dateNb(lang, through, { day: "numeric", month: "short", year: "numeric" }) }) : "";
   const dayTxt = (ts: number) => dateStr(lang, ts, { weekday: "short", day: "numeric", month: "long" });
 
   return (
@@ -764,7 +769,7 @@ export function EtfScreen() {
                 </div>
               ) : null)}
             </div>
-            <p className="lq-hint">{t(lang, "ef_r_note", { d: dateStr(lang, days[0]?.[0] ?? 0, { day: "numeric", month: "long", year: "numeric" }) })}</p>
+            <p className="lq-hint">{t(lang, "ef_r_note", { d: dateNb(lang, days[0]?.[0] ?? 0, { day: "numeric", month: "long", year: "numeric" }) })}</p>
           </Card>
 
           {/* Блок упал (чужой ответ, старый формат) — пропадает только он, а не весь экран. */}

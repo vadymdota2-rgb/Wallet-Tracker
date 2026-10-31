@@ -14,6 +14,7 @@ import os
 import random
 import re
 import shutil
+import ssl
 import sys
 import tempfile
 import unittest
@@ -71,6 +72,18 @@ class PolicyTest(unittest.TestCase):
         kinds = {type(h).__name__ for h in tr._opener.handlers}
         self.assertIn("_NoRedirect", kinds)
         self.assertFalse(any(getattr(h, "proxies", None) for h in tr._opener.handlers))
+
+    def test_tls_minimum_does_not_depend_on_the_system(self):
+        # На Debian 13 системный минимум — MINIMUM_SUPPORTED: SEC — только TLS 1.2+.
+        def loose():
+            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            ctx.minimum_version = ssl.TLSVersion.MINIMUM_SUPPORTED
+            return ctx
+        with mock.patch.object(tr.ssl, "create_default_context", loose):
+            self.assertEqual(tr._tls().minimum_version, ssl.TLSVersion.TLSv1_2)
+        https = [h for h in tr._opener.handlers if isinstance(h, tr.urllib.request.HTTPSHandler)]
+        self.assertEqual(len(https), 1)
+        self.assertGreaterEqual(https[0]._context.minimum_version, ssl.TLSVersion.TLSv1_2)
 
     def test_fetch_refuses_everything_but_sec_https_with_contact(self):
         with mock.patch.object(tr._opener, "open") as op, mock.patch.dict(os.environ, {"WT_SEC_UA": "x a@b.c"}):

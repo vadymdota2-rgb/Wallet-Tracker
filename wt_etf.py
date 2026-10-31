@@ -66,6 +66,12 @@ import wt_treasury
 
 # Сколько ответ живёт в кэше, с: фонды отчитываются раз в сутки.
 TTL = 3600.0
+# Сколько первый запрос после запуска API ждёт сборку, с (как COLD_WAIT
+# в wt_halving). Сборка без копии на диске идёт до PART_WAIT: SEC на холодном
+# старте отвечает десятками секунд, а приложение ждёт ответ 30 с — человек
+# уходил, не дождавшись («клиент ушёл»). Не успела — «нет данных» сразу,
+# сборка доделывается в фоне, и следующий запрос берёт готовое.
+COLD_WAIT = 20.0
 # Позиции на CME: код контракта CFTC → размер контракта в биткоинах (большой
 # и микро складываются в монетах: у них разный размер).
 CME_CODES = (("133741", 5.0), ("133742", 0.1))
@@ -484,6 +490,8 @@ class _State:
     # Когда (monotonic) сборка последний раз не удалась: «нет данных» или
     # падение. До FAIL_WAIT после неё новой сборки нет (см. etf_data).
     fail: float | None = None
+    # Поток идущей фоновой сборки: холодный старт ждёт его (etf_data).
+    job: threading.Thread | None = None
     # Копия последнего ответа на диске (set_cache_file): после перезапуска
     # API экран получает её сразу, свежий ответ собирается в фоне.
     file: str | None = None
@@ -593,7 +601,6 @@ def _no_data() -> dict[str, Json]:
 
 _st = _State()
 _lock = threading.Lock()
-_cold = threading.Lock()
 _busy = threading.Event()  # идёт фоновая сборка
 
 
@@ -669,11 +676,32 @@ def _resting() -> bool:
     return _st.fail is not None and time.monotonic() - _st.fail < FAIL_WAIT
 
 
+def _start() -> threading.Thread | None:
+    """Фоновая сборка, если она ещё не идёт. Вызывать под _lock.
+
+    Поток идущей или новой сборки; None — поток не запустился (кончились
+    потоки): флаг тогда снят, иначе «идёт сборка» висело бы вечно и ответ
+    больше не обновлялся."""
+    if _busy.is_set():
+        return _st.job
+    _busy.set()
+    job = threading.Thread(target=_bg, daemon=True)
+    try:
+        job.start()
+    except RuntimeError as e:
+        _busy.clear()
+        _log(f"фон не запущен: {e}")
+        return None
+    _st.job = job
+    return job
+
+
 def etf_data() -> dict[str, Json]:
     """Ответ /api/etf: из кэша, свежий собирается в фоне одним потоком.
     После перезапуска — копия с диска (как устаревшая), свежий — в фоне.
-    Сборка не удалась — до FAIL_WAIT новой нет: устаревший ответ отдаётся
-    как есть, а без него — «нет данных» без новой сборки."""
+    Без копии первый запрос ждёт сборку не дольше COLD_WAIT. Сборка не
+    удалась — до FAIL_WAIT новой нет: устаревший ответ отдаётся как есть,
+    а без него — «нет данных» без новой сборки."""
     if _st.hit is None and _st.file:
         saved = _file_load()
         with _lock:
@@ -683,19 +711,15 @@ def etf_data() -> dict[str, Json]:
         hit = _st.hit
         if hit and time.monotonic() - hit[0] < TTL:
             return hit[1]
-        if hit and not _busy.is_set() and not _resting():
-            _busy.set()
-            try:
-                threading.Thread(target=_bg, daemon=True).start()
-            except RuntimeError as e:
-                _busy.clear()
-                _log(f"фон не запущен: {e}")
-    if hit:
-        return hit[1]
-    # Холодный старт: первый собирает, остальные ждут его и берут готовое —
-    # или его неудачу, а не собирают заново каждый.
-    with _cold:
-        with _lock:
-            hit = _st.hit
-            resting = _resting()
-        return hit[1] if hit else _no_data() if resting else build()
+        if _resting():
+            return hit[1] if hit else _no_data()
+        job = _start()
+        if hit:
+            return hit[1]
+    # Холодный старт: все ждут одну и ту же сборку, но не дольше COLD_WAIT.
+    if job is None:
+        return build()
+    job.join(COLD_WAIT)
+    with _lock:
+        hit = _st.hit
+    return hit[1] if hit else _no_data()
