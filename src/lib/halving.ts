@@ -112,9 +112,12 @@ export function validHalving(h: unknown): h is HalvingReply {
  */
 function consistent(r: HalvingReply): boolean {
   const { tip, eta } = r;
-  if (typeof tip !== "number") return true;
-  return tip > r.at - TIP_AGE && tip <= r.at + TIP_AHEAD
-    && (typeof eta !== "number" || Math.abs(eta - (tip + (r.next - r.height) * r.avg)) <= ETA_SLACK);
+  if (typeof tip === "number" && !(tip > r.at - TIP_AGE && tip <= r.at + TIP_AHEAD)) return false;
+  // Нет времени последнего блока (старый ответ) — дату сверяем от момента
+  // сборки, как и считает её карточка: без этого eta из 2095 года при
+  // высоте 2026-го проходила, и отсчёт шёл на 70 лет.
+  const base = typeof tip === "number" ? tip : r.at;
+  return typeof eta !== "number" || Math.abs(eta - (base + (r.next - r.height) * r.avg)) <= ETA_SLACK;
 }
 
 const FIELDS = ["ok", "height", "next", "every", "avg", "src", "tip", "eta", "at", "now", "skew", "prev", "by"] as const;

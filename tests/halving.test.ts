@@ -285,8 +285,8 @@ test("validHalving: поля сходятся между собой, как их
   assert.equal(validHalving({ ...REAL, eta: 1_838_811_276 }), false);
   // Отсчёт на 70 лет при высоте 2026 года — подделка.
   assert.equal(validHalving({ ...REAL, eta: 3_999_999_999 }), false);
-  // Без tip (старый ответ) сверять не с чем — eta принимается.
-  assert.equal(validHalving({ ...omit(REAL, "tip"), eta: 3_999_999_999 }), true);
+  // Без tip (старый ответ) — сверяем от момента ответа: те же 70 лет не проходят.
+  assert.equal(validHalving({ ...omit(REAL, "tip"), eta: 3_999_999_999 }), false);
 });
 
 test("свежесть ответа: до 3 часов — как есть, до суток — с пометкой, старше — не показываем", () => {
@@ -340,4 +340,14 @@ test("число и единица среднего не разрываются 
   }
   // Французский: перед двоеточием — неразрывный пробел, двоеточие не уходит на новую строку.
   assert.equal(i18n["hv_src"]!["fr"], "Données\u00a0:");
+});
+
+test("validHalving: без времени последнего блока дата сверяется от момента ответа", () => {
+  const noTip = omit(REAL, "tip");
+  // eta = at + оставшиеся блоки × среднее — годится (так её и считает карточка).
+  assert.equal(validHalving({ ...noTip, eta: REAL.at + (REAL.next - REAL.height) * REAL.avg }), true);
+  // Отсчёт на 70 лет при высоте 2026-го — нет.
+  assert.equal(validHalving({ ...noTip, eta: 3_999_999_999 }), false);
+  // Совсем старый ответ — ни tip, ни eta — по-прежнему годится.
+  assert.equal(validHalving(omit(REAL, "tip", "eta")), true);
 });

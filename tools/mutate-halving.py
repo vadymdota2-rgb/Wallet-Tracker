@@ -50,7 +50,8 @@ TS = [
     ("tip > r.at - TIP_AGE", "tip >= r.at - TIP_AGE", "последний блок не старше суток"),
     ("tip <= r.at + TIP_AHEAD", "tip <= r.at + TIP_AHEAD + 1", "последний блок не из будущего"),
     ("<= ETA_SLACK", "<= ETA_SLACK + 2", "eta сходится с высотой и средним"),
-    ('if (typeof tip !== "number") return true;', 'if (typeof tip !== "number") return false;', "старый ответ без tip"),
+    ('const base = typeof tip === "number" ? tip : r.at;', 'const base = typeof tip === "number" ? tip : 0;', "без tip — дата от момента ответа"),
+    ("  return typeof eta !== \"number\" || Math.abs", "  return true || Math.abs", "без tip — дата всё равно сверяется"),
 ]
 PY = [
     ("        if _failed():\n            return hit[1] if hit else _no_data()\n", "", "пауза после сбоя"),
