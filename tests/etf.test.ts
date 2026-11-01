@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   ETF_LAUNCH, STALE_DAYS, assets, chartView, heldSeries, cumulative, daily, etfStats, fundDetail, fundTotals, holderRow, lastDays, minedPerDay,
-  staleDays, topFunds, validEtf, weekly, xAtTime,
+  barShare, staleDays, topFunds, validEtf, weekly, xAtTime,
   type EtfCoin, type EtfDay, type EtfReply,
 } from "../src/lib/etf.ts";
 
@@ -311,4 +311,15 @@ test("тексты экрана: число не отрывается от ед�
     if (!key.startsWith("ef_") || !all["fr"]) continue;
     assert.doesNotMatch(all["fr"], / [:;?!»]|« /, `${key}.fr`);
   }
+});
+
+test("полоска фонда — прямо пропорционально сумме, а не квадратный корень", () => {
+  // Поток вчетверо меньше — полоска вчетверо короче (корень давал вдвое).
+  assert.equal(barShare(-7130, 7130), 1);
+  assert.equal(barShare(1782.5, 7130), 0.25);
+  assert.equal(barShare(-667, 7130), 667 / 7130);
+  assert.equal(barShare(0, 7130), 0);
+  // Без самой длинной (нет движения) и мусор — пустая полоска, не NaN.
+  for (const [v, span] of [[5, 0], [5, -1], [Number.NaN, 10], [Infinity, 10]] as const) assert.equal(barShare(v, span), 0, `${v}/${span}`);
+  assert.equal(barShare(20, 10), 1); // за краем — не длиннее карточки
 });

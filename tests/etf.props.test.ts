@@ -9,7 +9,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  ETF_LAUNCH, PERIODS, RANGES, chartView, cumulative, etfStats, fundTotals, validEtf, weekly, xAtTime,
+  ETF_LAUNCH, PERIODS, RANGES, chartView, barShare, cumulative, etfStats, fundTotals, validEtf, weekly, xAtTime,
   type EtfDay, type EtfReply,
 } from "../src/lib/etf.ts";
 
@@ -165,6 +165,25 @@ test("деления оси: момент точки — на самой точ�
       assert.ok(x >= prev - 1e-9, `случай ${i}: не по порядку`);
       assert.ok(x >= xOf(0) - 1e-9 && x <= xOf(n - 1) + 1e-9, `случай ${i}: за краем`);
       prev = x;
+    }
+  }
+});
+
+test("полоски фондов: отношение длин равно отношению потоков, самая длинная — во всю ширину", () => {
+  const r = rng(SEED + 6);
+  for (let i = 0; i < CASES / 3; i++) {
+    const c = reply(r).coins.btc!;
+    for (const p of PERIODS) {
+      const t = fundTotals(c, p);
+      const top = t.moving.reduce((m, x) => Math.max(m, Math.abs(x.v)), 0);
+      for (const a of t.moving) {
+        const sa = barShare(a.v, t.span);
+        assert.ok(sa >= 0 && sa <= 1, `случай ${i} ${p}`);
+        if (Math.abs(a.v) === top) assert.ok(Math.abs(sa - 1) < 1e-12, `случай ${i} ${p}: самая длинная`);
+        for (const b of t.moving) {
+          if (b.v) assert.ok(Math.abs(sa / barShare(b.v, t.span) - Math.abs(a.v / b.v)) < 1e-9, `случай ${i} ${p}`);
+        }
+      }
     }
   }
 });

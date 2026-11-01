@@ -60,6 +60,10 @@ TS = [
     ("return Math.max(0, Math.floor((now - last) / DAY));", "return Math.floor((now - last) / DAY);", "свежесть: часы отстают"),
     ("Math.floor((now - last) / DAY))", "Math.ceil((now - last) / DAY))", "свежесть: полные сутки"),
     ("export const STALE_DAYS = 5;", "export const STALE_DAYS = 2;", "свежесть: праздники — не сбой"),
+    # Полоски фондов и CME — прямая пропорция.
+    ("Math.min(1, Math.abs(v) / span)", "Math.min(1, Math.sqrt(Math.abs(v) / span))", "полоска: прямая пропорция, не корень"),
+    ("Math.min(1, Math.abs(v) / span)", "Math.abs(v) / span", "полоска: не длиннее карточки"),
+    ("span > 0 && Number.isFinite(v) ?", "Number.isFinite(v) ?", "полоска: без самой длинной — пусто"),
     # Деления оси по торговым дням.
     ("      else hi = m;", "      else lo = m;", "ось: поиск соседних точек"),
     ("  if (ts <= times[0]!) hi = 1;", "  if (ts <= times[0]!) return xOf(0);", "ось: до первой точки — по крайнему отрезку"),

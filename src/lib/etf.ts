@@ -399,6 +399,17 @@ export function fundTotals(c: EtfCoin, period: Period): FundTotals {
   };
 }
 
+/**
+ * Длина полоски фонда или группы CME — доля самой длинной, прямо
+ * пропорционально сумме. Раньше был квадратный корень: поток вчетверо больше
+ * выглядел лишь вдвое длиннее, и на глаз фонды казались ближе друг к другу,
+ * чем на деле. Мелкий поток не пропадает: у полоски есть минимум в 2 px
+ * (EtfScreen.css), а сумма написана рядом.
+ */
+export function barShare(v: number, span: number): number {
+  return span > 0 && Number.isFinite(v) ? Math.min(1, Math.abs(v) / span) : 0;
+}
+
 /** Самые большие потоки фондов в столбце — для подсказки под пальцем. */
 export function topFunds(funds: EtfFund[], b: Bucket, n = 3): { t: string; v: number }[] {
   return funds.map((f, i) => ({ t: f.t, v: b.per[i] ?? 0 }))

@@ -1555,7 +1555,7 @@ say("«Институциональные потоки» — отдельный 
     and "export const ETF_TTL_MS = 60 * 60_000;" in _etl and "TTL = 3600.0" in _etfs
     and "from whale_api" not in _etfs and "wt_etfchain" not in _etfs)
 _efm = read(f"{APP}/src/screens/EtfMore.tsx")
-say("«Институциональные потоки»: сбой сборки не повторяется каждым запросом (пауза FAIL_WAIT, «нет данных» — каждый раз новый ответ); холодный старт ждёт сборку не дольше COLD_WAIT, а выпуск дайджеста тогда собирает сам; карточка фонда по нажатию (потоки по дням, итог, запас, рекорды); предупреждение о старом наборе; свежий ответ при возврате через час; карточки не слипаются; даты не рвутся; ось CME без «BTC»",
+say("«Институциональные потоки»: сбой сборки не повторяется каждым запросом (пауза FAIL_WAIT, «нет данных» — каждый раз новый ответ); холодный старт ждёт сборку не дольше COLD_WAIT, а выпуск дайджеста тогда собирает сам; полоски фондов и CME — прямая пропорция; карточка фонда по нажатию (потоки по дням, итог, запас, рекорды); предупреждение о старом наборе; свежий ответ при возврате через час; карточки не слипаются; даты не рвутся; ось CME без «BTC»",
     "FAIL_WAIT = 120.0" in _etfs and "def _resting() -> bool:" in _etfs
     and "        if _resting():\n            return hit[1] if hit else _no_data()\n" in _etfs
     and "COLD_WAIT = 20.0" in _etfs and "    job.join(COLD_WAIT)\n" in _etfs and "_cold" not in _etfs
@@ -1567,6 +1567,9 @@ say("«Институциональные потоки»: сбой сборки 
     and ".ef { max-width: 760px; margin-inline: auto; display: grid; gap: 12px;" in _etcss
     and "export function dateNb(" in read(f"{APP}/src/screens/etfView.ts") and "dateNb(lang, r[5]" in _efm
     and "export function dateWrap(" in read(f"{APP}/src/screens/etfView.ts")
+    # Полоски фондов и групп CME — прямо пропорционально сумме, без корня.
+    and "const r = barShare(v, span);" in _ef and "const r = barShare(v, span);" in _efm
+    and "Math.sqrt" not in _ef and "Math.sqrt" not in _efm
     # Число и единица, «≈» и сумма, французское «:» — не рвутся переносом (16 языков).
     and not any(re.search(r"\{n\} ", _i18n[k][lg]) for k in ("ef_days_n", "ef_streak_in", "ef_streak_out", "ef_old") for lg in _i18n[k])
     and all(v == "≈\u00a0{v}" for v in _i18n["ef_cme_usd"].values())

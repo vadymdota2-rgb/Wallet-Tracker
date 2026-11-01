@@ -15,7 +15,7 @@ import type { DictKey } from "../i18n/types";
 import { num, usdWord } from "../lib/format";
 import { haptic } from "../lib/telegram";
 import { Card, Chips, SectionTitle } from "../components/ui";
-import { type BtcHolder, xAtTime } from "../lib/etf";
+import { type BtcHolder, barShare, xAtTime } from "../lib/etf";
 import { dateStr, timeTicks } from "./timeAxis";
 import { DN, UP, coinsShort, dateNb, dateWrap, flagOf, heightK, iso, money, tone, useWidth } from "./etfView";
 
@@ -224,7 +224,7 @@ export function CmeSection({ rows, sym, price, lang }: { rows: number[][]; sym: 
           {groups.map((g) => {
             const v = net(last, g.i);
             const d = v - net(prev, g.i);
-            const r = Math.sqrt(Math.abs(v) / span);
+            const r = barShare(v, span);
             return (
               /* Своя раскладка, а не строка фонда: длинные названия групп и
                  «лонг · шорт» в три столбца не помещались и обрезались. */

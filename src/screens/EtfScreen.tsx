@@ -30,7 +30,7 @@ import { etfWatch, etfWatchSet, failKey, fetchEtf, peekEtf } from "../lib/api";
 import { toast } from "../components/Toast";
 import { Card, Chips, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import {
-  ETF_TTL_MS, PERIODS, RANGES, STALE_DAYS, chartView, cumulative, etfStats, fundDetail, fundTotals, heldSeries, staleDays, topFunds, xAtTime,
+  ETF_TTL_MS, PERIODS, RANGES, STALE_DAYS, chartView, barShare, cumulative, etfStats, fundDetail, fundTotals, heldSeries, staleDays, topFunds, xAtTime,
   type Bucket, type EtfCoin, type EtfFund, type EtfReply, type Period, type Range,
 } from "../lib/etf";
 import { Boundary } from "../components/Boundary";
@@ -404,7 +404,7 @@ function Funds({ c, lang }: { c: EtfCoin; lang: Lang }) {
       </p>
       <div className="ef-funds">
         {moving.map(({ f, v }) => {
-          const r = Math.sqrt(Math.abs(v) / span);
+          const r = barShare(v, span);
           const label = fundLabel(f);
           const on = open === f.t;
           return (

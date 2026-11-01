@@ -20,6 +20,7 @@ import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium, type Browser, type BrowserContext, type Page, type Route } from "playwright";
+import { fundTotals, type EtfReply } from "../../src/lib/etf.ts";
 
 const HTML = fileURLToPath(new URL("../../html/", import.meta.url));
 const TYPES: Record<string, string> = {
@@ -677,6 +678,22 @@ describe("институциональные потоки", () => {
       assert.equal(await lines(page, ".ef-hr-id small", date.replace(/\u00a0/g, " ")), 1, `${lang}: ${date}`);
       await ctx.close();
     }
+  });
+
+  test("полоски фондов на экране — прямо пропорционально потоку, а не корнем", async () => {
+    const { ctx, page } = await open();
+    await ready(page);
+    // По умолчанию — «неделя»: те же числа считаем из образца.
+    const want = fundTotals((REAL as unknown as EtfReply).coins.btc!, "w");
+    const got = await page.locator(".ef-funds .ef-fw .ef-f-fill").evaluateAll((els) => els.map((el) => parseFloat((el as HTMLElement).style.width)));
+    assert.equal(got.length, want.moving.length);
+    want.moving.forEach((m, i) => {
+      const linear = (Math.abs(m.v) / want.span) * 50;
+      assert.ok(Math.abs(got[i]! - linear) < 1e-3, `${m.f.t}: ${got[i]}% вместо ${linear}%`);
+    });
+    // Есть фонды заметно меньше самого крупного: корень их бы «вытянул».
+    assert.ok(want.moving.some((m) => Math.abs(m.v) / want.span < 0.25));
+    await ctx.close();
   });
 
   test("копия с телефона: время строкой или старше месяца — не показывается", async () => {
