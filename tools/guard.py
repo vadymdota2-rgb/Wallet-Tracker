@@ -882,7 +882,7 @@ say("страх и жадность: источник alternative.me рядом 
     and 'onClick={open(PX_URL)}>mempool.space</a>' in _fgs
     and 's.k === "fng" ? <small> · alternative.me</small>' in _dgm2 and "(alternative.me)` : \"—\"" in _dgm2
     and 't(lang, "fg_by")} alternative.me.' in _dgm2
-    and "(alternative.me)\" if zone else" in _dgi and '{"fng": " · alternative.me", "etf": " · TFTC"}.get(s["k"], "")' in _dgi)
+    and "(alternative.me)\" if zone else" in _dgi and '{"fng": " · alternative.me", "etf": etf_sig_by(it, lang)}.get(s["k"], "")' in _dgi)
 _fgt = read(f"{APP}/.github/workflows/tests.yml")
 say("страх и жадность — отдельный модуль, как халвинг: wt_fng (alternative.me + mempool.space, без бирж), lib/fng.ts с проверкой ответа, строгий TS, тесты api/fuzz/security/policy, unit/props/e2e, мутации в CI, «?» у каждого раздела",
     "import wt_fng" in api and "_fng_btc_binance" not in api and "_fng_btc_coinbase" not in api and "def _fng_build" not in api
@@ -1630,9 +1630,9 @@ say("«Институциональные потоки»: подпись TFTC (C
     and 'TFTC_BY = "TFTC — tftc.io/bitcoin-etf-flows (CC BY 4.0)"' in _dgi
     and """p.note(f"{tr(lang, 'dg_etf_by')} {TFTC_BY}")""" in _dgi
     and """parts.append(f"{tr(lang, 'dg_etf_by')} {TFTC_BY_POST}")""" in _dgi
-    and 'TFTC_BY_POST = "TFTC — https://www.tftc.io/bitcoin-etf-flows (CC BY 4.0: https://creativecommons.org/licenses/by/4.0/)"' in _dgi and '"etf": " · TFTC"' in _dgi
+    and 'TFTC_BY_POST = "TFTC — https://www.tftc.io/bitcoin-etf-flows (CC BY 4.0: https://creativecommons.org/licenses/by/4.0/)"' in _dgi and 'return f"{when} · TFTC"' in _dgi and '"etf": etf_sig_by(it, lang)' in _dgi
     and "openExternal(TFTC_URL)" in _dgm3 and "openExternal(CCBY_URL)" in _dgm3
-    and 's.k === "etf" ? <small> · TFTC</small>' in _dgm3
+    and 's.k === "etf" ? <small>{etfDay ? ` · ${etfDayWord(lang, etfDay)}` : ""} · TFTC</small>' in _dgm3
     and '{t(lang, "legal_terms_data")}' in read(f"{APP}/src/screens/LegalScreen.tsx")
     and os.path.isfile(f"{APP}/tests/fixtures/NOTICE.md") and "CC BY 4.0" in read(f"{APP}/tests/fixtures/NOTICE.md")
     and '"cbp"' not in _fx and '"by":"TFTC' in _fx and os.path.isfile(f"{APP}/tests/test_digest_sources.py"))

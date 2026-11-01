@@ -20,6 +20,7 @@ import { BtcGlyph, EtfGlyph, GaugeGlyph, Row, TopGlyph } from "../components/ui"
 import type { CalEv, DigestItem, DigestSignal } from "../lib/types";
 import { FLAG, allDay, calTitle } from "./CalendarScreen";
 import { CCBY_URL, TFTC_URL } from "./etfView";
+import { etfDayTag, etfDayWord } from "../lib/etf";
 import { CmcBy } from "../components/CmcBy";
 import { zoneKey } from "../lib/fng";
 import { sourceText } from "../lib/halving";
@@ -181,6 +182,8 @@ export function verdictOf(it: DigestItem, lang: Lang): { cls: "up" | "dn" | "mix
 
 export function Summary({ it, lang }: { it: DigestItem; lang: Lang }) {
   const sig = sigsOf(it);
+  // Сигнал ETF — с днём торгов: в выходные это пятница, а не сегодня.
+  const etfDay = it.inst?.etf.find((x) => x.c === "btc")?.day;
   const verdict = verdictOf(it, lang);
   if (!sig.length || !verdict) return null;
   return (
@@ -192,7 +195,7 @@ export function Summary({ it, lang }: { it: DigestItem; lang: Lang }) {
             <span className={`dg-sig-d ${s.d > 0 ? "up" : s.d < 0 ? "dn" : "flat"}`} aria-hidden="true">
               {s.d > 0 ? "▲" : s.d < 0 ? "▼" : "●"}
             </span>
-            <span className="dg-sig-k">{t(lang, SIG_KEY[s.k])}{s.k === "fng" ? <small> · alternative.me</small> : s.k === "etf" ? <small> · TFTC</small> : null}</span>
+            <span className="dg-sig-k">{t(lang, SIG_KEY[s.k])}{s.k === "fng" ? <small> · alternative.me</small> : s.k === "etf" ? <small>{etfDay ? ` · ${etfDayWord(lang, etfDay)}` : ""} · TFTC</small> : null}</span>
             <b className={s.d > 0 ? "up" : s.d < 0 ? "dn" : undefined}>{sigValue(s)}</b>
           </li>
         ))}
@@ -265,7 +268,7 @@ export function Institutions({ it, lang }: { it: DigestItem; lang: Lang }) {
   return (
     <Sec icon={<EtfGlyph size={20} />} title={t(lang, "dg_p_inst")} onOpen={() => open("etf")}
       line={il?.text} tone={il?.tone}>
-      {day ? <p className="dg-sum">{t(lang, "dg_etf_day", { d: dateWord(lang, day) })}</p> : null}
+      {day ? <p className="dg-sum">{t(lang, "dg_etf_day", { d: etfDayWord(lang, day) })}</p> : null}
       {inst.etf.map((e) => (
         <Row key={e.c} icon={<CoinIcon sym={e.c.toUpperCase()} size={28} />}
           title={t(lang, "dg_etf_coin", { c: e.c.toUpperCase() })}
@@ -408,9 +411,11 @@ export function marketLine(it: DigestItem, lang: Lang): string | null {
 export function instLine(it: DigestItem, lang: Lang): { text: string; tone?: "up" | "dn" } | null {
   const e = it.inst?.etf.find((x) => x.c === "btc");
   if (!e) return null;
-  if (Math.abs(e.v) < 1e6) return { text: t(lang, "dg_l_etf_flat") };
-  return e.v > 0 ? { text: t(lang, "dg_l_etf_in", { v: pUsd(e.v) }), tone: "up" }
-    : { text: t(lang, "dg_l_etf_out", { v: pUsd(Math.abs(e.v)) }), tone: "dn" };
+  // С днём торгов: в выходные выпуск говорит о пятнице, а не о «сегодня».
+  const tag = etfDayTag(lang, e.day);
+  if (Math.abs(e.v) < 1e6) return { text: t(lang, "dg_l_etf_flat") + tag };
+  return e.v > 0 ? { text: t(lang, "dg_l_etf_in", { v: pUsd(e.v) }) + tag, tone: "up" }
+    : { text: t(lang, "dg_l_etf_out", { v: pUsd(Math.abs(e.v)) }) + tag, tone: "dn" };
 }
 
 export function btcLine(it: DigestItem, lang: Lang): { text: string; tone?: "up" | "dn" } | null {

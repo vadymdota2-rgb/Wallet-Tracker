@@ -146,6 +146,41 @@ class DigestEtfDayTest(unittest.TestCase):
             self.assertEqual(api._dg_inst(), {"etf": []})
 
 
+class DigestEtfDayTagTest(unittest.TestCase):
+    """Выпуск выходит каждый день, а фонды торгуются по будням: в субботу
+    строка «фонды продали биткоин на 643 млн $» без даты читалась как
+    сегодняшние оттоки, хотя это итог пятницы. Теперь у строки вывода и у
+    сигнала на табло — день торгов (картинка и пост в канал)."""
+
+    FRI = 1_793_318_400  # пятница, 30 октября 2026 г., начало суток UTC
+
+    def issue(self, v, day=FRI):
+        e = {"c": "btc", "v": v, "n": 0}
+        if day is not None:
+            e["day"] = day
+        return {"v": 3, "to": self.FRI + 86_400 + 9 * 3600, "inst": {"etf": [e]},
+                "sig": [{"k": "etf", "d": -1 if v < 0 else 1, "v": v}]}
+
+    def etf_line(self, it, lang):
+        # В выпуске — только ETF: строка вывода одна.
+        (text, _), = dgi.lines(it, lang)
+        return text
+
+    def test_line_names_the_trading_day(self):
+        self.assertTrue(self.etf_line(self.issue(-643_000_000), "ru").endswith(" (30 октября)"))
+        self.assertTrue(self.etf_line(self.issue(17_100_000), "en").endswith(" (October 30)"))
+        self.assertTrue(self.etf_line(self.issue(500_000), "ru").endswith(" (30 октября)"))  # почти без движения
+        self.assertTrue(self.etf_line(self.issue(-643_000_000), "zh").endswith("（10月30日）"))
+
+    def test_old_issue_without_day_has_no_tag(self):
+        for day in (None, 0, "30", True):
+            self.assertNotIn("(", self.etf_line(self.issue(-643_000_000, day), "ru"), day)
+
+    def test_signal_label_names_the_trading_day(self):
+        self.assertEqual(dgi.etf_sig_by(self.issue(-643_000_000), "ru"), " · 30 октября · TFTC")
+        self.assertEqual(dgi.etf_sig_by(self.issue(-643_000_000, None), "ru"), " · TFTC")
+
+
 # Ответ wt_mcap.mcap_data: сейчас и вчера.
 MC = {"ok": True, "btc": [58.1, 57.9], "eth": [11.0, 11.1], "alt": [41.9, 42.1], "alt_ns": 35.0,
       "cap": [2_900_000_000_000, 2_877_000_000_000], "usdt": 5.6, "hist": [], "by": "CoinMarketCap", "at": 0}

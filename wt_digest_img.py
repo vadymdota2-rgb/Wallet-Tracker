@@ -199,6 +199,31 @@ def _tone(v: float) -> str | None:
     return "up" if v > 0 else "dn" if v < 0 else None
 
 
+def etf_btc(it: dict) -> dict | None:
+    """Поток ETF на биткоин в выпуске (раздел inst) или None."""
+    return next((x for x in (it.get("inst") or {}).get("etf") or [] if x.get("c") == "btc"), None)
+
+
+def etf_day_tag(lang: str, day: object) -> str:
+    """Пометка дня к строке о потоках ETF: « (30 октября)», в китайском и
+    японском — полноширинные скобки. Выпуск выходит каждый день, а фонды
+    торгуются по будням: в выходные строка без даты читалась как сегодняшние
+    оттоки, хотя это итог пятницы. Нет дня (старый выпуск) — пусто. Копия
+    etfDayTag из lib/etf.ts."""
+    if not isinstance(day, int) or isinstance(day, bool) or day <= 0:
+        return ""
+    d = date_word(lang, day, year=False)
+    return f"（{d}）" if lang in ("zh", "ja") else f" ({d})"
+
+
+def etf_sig_by(it: dict, lang: str) -> str:
+    """Подпись сигнала ETF на табло: день торгов и источник."""
+    e = etf_btc(it)
+    day = e.get("day") if e else None
+    when = f" · {date_word(lang, day, year=False)}" if isinstance(day, int) and not isinstance(day, bool) and day > 0 else ""
+    return f"{when} · TFTC"
+
+
 def lines(it: dict, lang: str) -> list[tuple[str, str | None]]:
     out: list[tuple[str, str | None]] = []
     m = it.get("mkt") or {}
@@ -226,14 +251,16 @@ def lines(it: dict, lang: str) -> list[tuple[str, str | None]]:
         mood = "op_mood_eq" if r is None else "op_mood_up" if r < 0.7 else "op_mood_dn" if r > 1 else "op_mood_eq"
         out.append((tr(lang, "dg_l_opt", n=usd(o["n"], lang), w=tr(lang, mood)),
                     "up" if r is not None and r < 0.7 else "dn" if r is not None and r > 1 else None))
-    e = next((x for x in (it.get("inst") or {}).get("etf") or [] if x["c"] == "btc"), None)
+    e = etf_btc(it)
     if e:
+        # С днём торгов: в выходные выпуск говорит о пятнице, а не о «сегодня».
+        tag = etf_day_tag(lang, e.get("day"))
         if abs(e["v"]) < 1e6:
-            out.append((tr(lang, "dg_l_etf_flat"), None))
+            out.append((tr(lang, "dg_l_etf_flat") + tag, None))
         elif e["v"] > 0:
-            out.append((tr(lang, "dg_l_etf_in", v=usd(e["v"], lang)), "up"))
+            out.append((tr(lang, "dg_l_etf_in", v=usd(e["v"], lang)) + tag, "up"))
         else:
-            out.append((tr(lang, "dg_l_etf_out", v=usd(-e["v"], lang)), "dn"))
+            out.append((tr(lang, "dg_l_etf_out", v=usd(-e["v"], lang)) + tag, "dn"))
     n = (it.get("btc") or {}).get("net")
     if n is not None:
         out.append((tr(lang, "dg_l_btcx_out", v=btc_amt(n, lang)), "up") if n >= 0
@@ -339,7 +366,7 @@ def render(it: dict, lang: str = "ru", page: str = "") -> bytes | None:
         for s in sig:
             col = C["up"] if s["d"] > 0 else C["dn"] if s["d"] < 0 else C["dim"]
             _arrow(d, PAD + 30, ry, "up" if s["d"] > 0 else "dn" if s["d"] < 0 else "dot", col)
-            label = tr(lang, SIG_KEY.get(s["k"], s["k"])) + {"fng": " · alternative.me", "etf": " · TFTC"}.get(s["k"], "")
+            label = tr(lang, SIG_KEY.get(s["k"], s["k"])) + {"fng": " · alternative.me", "etf": etf_sig_by(it, lang)}.get(s["k"], "")
             text(label, PAD + 72, ry, "Regular", 30, C["ink"])
             text(sig_value(s, lang), W - PAD - 30, ry, "Bold", 30, C["ink"] if s["d"] == 0 else col, "rs")
             ry += row_h

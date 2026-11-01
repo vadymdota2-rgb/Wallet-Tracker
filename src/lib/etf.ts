@@ -444,6 +444,32 @@ export function fundDetail(c: EtfCoin, i: number, n = 60): FundDetail {
   return { days, sum: days.reduce((s, x) => s + x[1], 0), best, worst };
 }
 
+/**
+ * День потоков ETF словами — «30 октября», по UTC: день набора — начало суток
+ * UTC, и в часовом поясе телефона западнее Гринвича он показался бы
+ * предыдущим числом («29 октября» в Нью-Йорке).
+ */
+export function etfDayWord(lang: string, day: number): string {
+  try {
+    return new Intl.DateTimeFormat(lang, { day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(day * 1000));
+  } catch {
+    return new Date(day * 1000).toISOString().slice(0, 10);
+  }
+}
+
+/**
+ * Пометка дня к строке о потоках ETF в дайджесте: « (30 октября)», в
+ * китайском и японском — полноширинные скобки. Выпуск выходит каждый день,
+ * а фонды торгуются по будням: в субботу и воскресенье строка «фонды продали
+ * биткоин на 643 млн $» без даты читалась как сегодняшние оттоки, хотя это
+ * итог пятницы. Нет дня (старый выпуск) — пусто.
+ */
+export function etfDayTag(lang: string, day: number | undefined): string {
+  if (!day) return "";
+  const d = etfDayWord(lang, day);
+  return lang === "zh" || lang === "ja" ? `（${d}）` : ` (${d})`;
+}
+
 /** Набор TFTC давно не обновлялся: последний день старше этого (выходные с праздником и задержка сводки — до 5 суток). */
 export const STALE_DAYS = 5;
 

@@ -60,6 +60,10 @@ TS = [
     ("return Math.max(0, Math.floor((now - last) / DAY));", "return Math.floor((now - last) / DAY);", "свежесть: часы отстают"),
     ("Math.floor((now - last) / DAY))", "Math.ceil((now - last) / DAY))", "свежесть: полные сутки"),
     ("export const STALE_DAYS = 5;", "export const STALE_DAYS = 2;", "свежесть: праздники — не сбой"),
+    # День потоков ETF в дайджесте.
+    ('{ day: "numeric", month: "long", timeZone: "UTC" }', '{ day: "numeric", month: "long" }', "дайджест: день ETF — по UTC"),
+    ('  if (!day) return "";\n', "", "дайджест: старый выпуск без дня — без пометки"),
+    ('lang === "zh" || lang === "ja" ? `（${d}）` : ` (${d})`', '` (${d})`', "дайджест: в китайском и японском — полноширинные скобки"),
     # Полоски фондов и CME — прямая пропорция.
     ("Math.min(1, Math.abs(v) / span)", "Math.min(1, Math.sqrt(Math.abs(v) / span))", "полоска: прямая пропорция, не корень"),
     ("Math.min(1, Math.abs(v) / span)", "Math.abs(v) / span", "полоска: не длиннее карточки"),

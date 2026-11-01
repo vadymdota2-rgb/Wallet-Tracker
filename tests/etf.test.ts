@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   ETF_LAUNCH, STALE_DAYS, assets, chartView, heldSeries, cumulative, daily, etfStats, fundDetail, fundTotals, holderRow, lastDays, minedPerDay,
-  barShare, staleDays, topFunds, validEtf, weekly, xAtTime,
+  barShare, etfDayTag, etfDayWord, staleDays, topFunds, validEtf, weekly, xAtTime,
   type EtfCoin, type EtfDay, type EtfReply,
 } from "../src/lib/etf.ts";
 
@@ -322,4 +322,25 @@ test("полоска фонда — прямо пропорционально с
   // Без самой длинной (нет движения) и мусор — пустая полоска, не NaN.
   for (const [v, span] of [[5, 0], [5, -1], [Number.NaN, 10], [Infinity, 10]] as const) assert.equal(barShare(v, span), 0, `${v}/${span}`);
   assert.equal(barShare(20, 10), 1); // за краем — не длиннее карточки
+});
+
+test("дайджест: день потоков ETF подписан, по UTC — и в Нью-Йорке пятница 30 октября, а не 29-е", () => {
+  const FRI = Date.UTC(2026, 9, 30) / 1000; // пятница, начало суток UTC
+  const tz = process.env["TZ"];
+  process.env["TZ"] = "America/New_York";
+  try {
+    // Без UTC тот же момент в Нью-Йорке — ещё 29 октября.
+    assert.equal(new Intl.DateTimeFormat("ru", { day: "numeric", month: "long" }).format(new Date(FRI * 1000)), "29 октября");
+    assert.equal(etfDayWord("ru", FRI), "30 октября");
+    assert.equal(etfDayTag("ru", FRI), " (30 октября)");
+    assert.equal(etfDayTag("en", FRI), " (October 30)");
+    assert.equal(etfDayTag("zh", FRI), "（10月30日）");
+    assert.equal(etfDayTag("ja", FRI), "（10月30日）");
+  } finally {
+    if (tz === undefined) delete process.env["TZ"];
+    else process.env["TZ"] = tz;
+  }
+  // Старый выпуск без дня — без пометки.
+  assert.equal(etfDayTag("ru", undefined), "");
+  assert.equal(etfDayTag("ru", 0), "");
 });
