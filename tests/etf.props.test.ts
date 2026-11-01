@@ -9,7 +9,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  ETF_LAUNCH, PERIODS, RANGES, chartView, barShare, cumulative, etfStats, fundTotals, validEtf, weekly, xAtTime,
+  ETF_LAUNCH, PERIODS, RANGES, chartView, barShare, cumulative, etfStats, fundTotals, periodSpan, validEtf, weekly, xAtTime,
   type EtfDay, type EtfReply,
 } from "../src/lib/etf.ts";
 
@@ -184,6 +184,27 @@ test("полоски фондов: отношение длин равно отн
           if (b.v) assert.ok(Math.abs(sa / barShare(b.v, t.span) - Math.abs(a.v / b.v)) < 1e-9, `случай ${i} ${p}`);
         }
       }
+    }
+  }
+});
+
+test("список фондов: даты срока — ровно те торговые дни, из которых сложены суммы", () => {
+  const r = rng(SEED + 7);
+  for (let i = 0; i < CASES / 3; i++) {
+    const c = reply(r).coins.btc!;
+    const last = c.days[c.days.length - 1]![0];
+    for (const p of PERIODS) {
+      const span = periodSpan(c, p)!;
+      assert.equal(span[1], last, `случай ${i} ${p}: срок кончается последним днём набора`);
+      assert.ok(span[0] <= span[1], `случай ${i} ${p}`);
+      if (p === "d") assert.equal(span[0], last, `случай ${i}: «день» — один день`);
+      if (p === "all") assert.equal(span[0], c.days[0]![0], `случай ${i}`);
+      if (p === "all") continue; // «с запуска» — из итогов фондов
+      // Сумма потоков фондов в днях срока = суммы списка.
+      const inSpan = c.days.filter((d) => d[0] >= span[0] && d[0] <= span[1]);
+      const sums = c.funds.map((_, j) => inSpan.reduce((s, d) => s + (d[4][j] ?? 0), 0));
+      const t = fundTotals(c, p);
+      for (const m of t.moving) assert.ok(Math.abs(sums[c.funds.indexOf(m.f)]! - m.v) < 1e-6, `случай ${i} ${p}`);
     }
   }
 });

@@ -30,7 +30,7 @@ import { etfWatch, etfWatchSet, failKey, fetchEtf, peekEtf } from "../lib/api";
 import { toast } from "../components/Toast";
 import { Card, Chips, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import {
-  ETF_TTL_MS, PERIODS, RANGES, STALE_DAYS, chartView, barShare, cumulative, etfStats, fundDetail, fundTotals, heldSeries, staleDays, topFunds, xAtTime,
+  ETF_TTL_MS, PERIODS, RANGES, STALE_DAYS, chartView, barShare, cumulative, etfStats, fundDetail, fundTotals, heldSeries, periodSpan, staleDays, topFunds, xAtTime,
   type Bucket, type EtfCoin, type EtfFund, type EtfReply, type Period, type Range,
 } from "../lib/etf";
 import { Boundary } from "../components/Boundary";
@@ -390,6 +390,9 @@ function Funds({ c, lang }: { c: EtfCoin; lang: Lang }) {
   const [open, setOpen] = useState<string | null>(null);
   const aumAll = c.funds.reduce((s, f) => s + (f.aum || 0), 0);
   const { moving, still, span, ins, outs } = useMemo(() => fundTotals(c, period), [c, period]);
+  /* За какие дни суммы — датами: в субботу «День» — это пятница. */
+  const when = periodSpan(c, period);
+  const yearOf = (ts: number) => new Date(ts * 1000).getUTCFullYear();
   return (
     <Card>
       <Chips<Period>
@@ -397,6 +400,13 @@ function Funds({ c, lang }: { c: EtfCoin; lang: Lang }) {
         onChange={(p) => { haptic("select"); setPeriod(p); }}
         options={PERIODS.map((id) => ({ id, label: t(lang, PERIOD_KEY[id]) }))}
       />
+      {when ? (
+        <p className="ef-fper">
+          {when[0] === when[1]
+            ? dateNb(lang, when[0], { weekday: "short", day: "numeric", month: "long" })
+            : `${dateNb(lang, when[0], yearOf(when[0]) === yearOf(when[1]) ? { day: "numeric", month: "short" } : { day: "numeric", month: "short", year: "numeric" })} — ${dateNb(lang, when[1], { day: "numeric", month: "short", year: "numeric" })}`}
+        </p>
+      ) : null}
       <p className="ef-fsum">
         {/* Ноль — без цвета: зелёный «Приток 0 $» читался как приток. */}
         <span className={ins ? "up" : "dim"}>{t(lang, "ef_in")} <bdi dir="ltr">{money(ins * 1000)}</bdi></span>

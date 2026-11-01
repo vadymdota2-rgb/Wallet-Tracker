@@ -410,6 +410,19 @@ export function barShare(v: number, span: number): number {
   return span > 0 && Number.isFinite(v) ? Math.min(1, Math.abs(v) / span) : 0;
 }
 
+/**
+ * Какие торговые дни вошли в срок списка фондов: [первый, последний] (начала
+ * суток UTC); дней нет — null. Срок считается от последнего дня набора, а не
+ * от сегодня: в субботу «День» — это пятница. Без дат на экране это не видно,
+ * и пятничные потоки читались бы как сегодняшние.
+ */
+export function periodSpan(c: EtfCoin, period: Period): [number, number] | null {
+  const ds = period === "all" ? c.days : lastDays(c.days, period === "d" ? 1 : period === "w" ? 7 : 30);
+  const a = ds[0]?.[0];
+  const b = ds[ds.length - 1]?.[0];
+  return a !== undefined && b !== undefined ? [a, b] : null;
+}
+
 /** Самые большие потоки фондов в столбце — для подсказки под пальцем. */
 export function topFunds(funds: EtfFund[], b: Bucket, n = 3): { t: string; v: number }[] {
   return funds.map((f, i) => ({ t: f.t, v: b.per[i] ?? 0 }))

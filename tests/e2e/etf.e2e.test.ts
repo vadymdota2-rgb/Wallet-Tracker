@@ -210,7 +210,7 @@ describe("институциональные потоки", () => {
     await ready(sell.page);
     assert.equal(sp(await sell.page.locator(".ef-mine-say").innerText()),
       "За 30 дней ETF больше продали, чем купили: их монеты идут на рынок вместе с новой добычей майнеров.");
-    assert.equal(sp(await sell.page.locator(".ef-mine small").first().innerText()), "Продали ETF");
+    assert.equal(sp(await sell.page.locator(".ef-mine small").first().innerText()), "Чистые продажи ETF");
     await sell.ctx.close();
   });
 
@@ -240,7 +240,7 @@ describe("институциональные потоки", () => {
     const { ctx, page } = await open();
     await ready(page);
     const funds = () => page.locator(".ef-f .ef-f-id b").allInnerTexts().then((x) => x.map(sp));
-    const chip = (i: number) => page.locator(".ef-fsum").locator("xpath=preceding-sibling::*[1]").locator("button").nth(i);
+    const chip = (i: number) => page.locator(".ef-fper").locator("xpath=preceding-sibling::*[1]").locator("button").nth(i);
     assert.deepEqual((await funds()).slice(0, 2), ["🇺🇸 MSBT", "🇺🇸 HODL"]); // неделя — по умолчанию
     await chip(0).click();
     assert.deepEqual(await funds(), ["🇺🇸 IBIT", "🇺🇸 BTCO", "🇺🇸 BTC"]);
@@ -293,7 +293,7 @@ describe("институциональные потоки", () => {
   test("карточка фонда: нажатие раскрывает потоки по дням, итог, запас и рекорды; ещё нажатие — сворачивает", async () => {
     const { ctx, page, errors } = await open();
     await ready(page);
-    await page.locator(".ef-fsum").locator("xpath=preceding-sibling::*[1]").locator("button").nth(3).click(); // с запуска
+    await page.locator(".ef-fper").locator("xpath=preceding-sibling::*[1]").locator("button").nth(3).click(); // с запуска
     const row = page.locator("button.ef-f", { hasText: "IBIT" });
     assert.equal(await row.getAttribute("aria-expanded"), "false");
     assert.equal(await page.locator(".ef-fd").count(), 0);
@@ -693,6 +693,20 @@ describe("институциональные потоки", () => {
     });
     // Есть фонды заметно меньше самого крупного: корень их бы «вытянул».
     assert.ok(want.moving.some((m) => Math.abs(m.v) / want.span < 0.25));
+    await ctx.close();
+  });
+
+  test("список фондов: над суммами — за какие даты, «День» — сам торговый день, а не «сегодня»", async () => {
+    // Образец кончается четвергом 15 октября; часы — на выходных позже.
+    const { ctx, page } = await open({ clock: T + 2 * 86_400 });
+    await ready(page);
+    const per = page.locator(".ef-fper");
+    // По умолчанию — неделя: 7 суток до последнего дня набора.
+    assert.match(sp(await per.innerText()), /^\d{1,2} (сент|окт)\. — 15 окт\. 2026 г\.$/);
+    await page.locator(".ef-fper").locator("xpath=preceding-sibling::*[1]").getByRole("button", { name: "День", exact: true }).click();
+    assert.equal(sp(await per.innerText()), "чт, 15 октября");
+    await page.locator(".ef-fper").locator("xpath=preceding-sibling::*[1]").getByRole("button", { name: "С запуска", exact: true }).click();
+    assert.match(sp(await per.innerText()), /^\d{1,2} янв\. 2024 г\. — 15 окт\. 2026 г\.$/);
     await ctx.close();
   });
 

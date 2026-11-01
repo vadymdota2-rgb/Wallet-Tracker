@@ -64,6 +64,9 @@ TS = [
     ('{ day: "numeric", month: "long", timeZone: "UTC" }', '{ day: "numeric", month: "long" }', "дайджест: день ETF — по UTC"),
     ('  if (!day) return "";\n', "", "дайджест: старый выпуск без дня — без пометки"),
     ('lang === "zh" || lang === "ja" ? `（${d}）` : ` (${d})`', '` (${d})`', "дайджест: в китайском и японском — полноширинные скобки"),
+    # Даты срока списка фондов.
+    ('lastDays(c.days, period === "d" ? 1 : period === "w" ? 7 : 30);\n  const a = ds[0]?.[0];', 'lastDays(c.days, period === "d" ? 2 : period === "w" ? 7 : 30);\n  const a = ds[0]?.[0];', "список фондов: «день» — один день"),
+    ('const ds = period === "all" ? c.days : lastDays(', 'const ds = period === "all" ? c.days.slice(1) : lastDays(', "список фондов: «с запуска» — с первого дня"),
     # Полоски фондов и CME — прямая пропорция.
     ("Math.min(1, Math.abs(v) / span)", "Math.min(1, Math.sqrt(Math.abs(v) / span))", "полоска: прямая пропорция, не корень"),
     ("Math.min(1, Math.abs(v) / span)", "Math.abs(v) / span", "полоска: не длиннее карточки"),
