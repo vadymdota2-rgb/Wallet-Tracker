@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  ETF_LAUNCH, STALE_DAYS, assets, chartView, heldSeries, cumulative, daily, etfStats, fundDetail, fundTotals, holderRow, lastDays, minedPerDay,
+  ETF_LAUNCH, STALE_DAYS, assets, chartView, heldNow, heldSeries, snapToTrading, supplyAt, cumulative, daily, etfStats, fundDetail, fundTotals, holderRow, lastDays, minedPerDay,
   barShare, etfDayTag, etfDayWord, staleDays, topFunds, validEtf, weekly, xAtTime,
   type EtfCoin, type EtfDay, type EtfReply,
 } from "../src/lib/etf.ts";
@@ -195,27 +195,33 @@ test("активы фондов по дням: проверка ряда, све
   const v = validEtf(REAL, NOW)!;
   const c = v.coins.btc!;
   assert.equal(c.tna!.length, 364);
-  // Свежая сводка: активы того дня по цене сейчас, запас — по цене того дня.
-  const a = assets(c);
+  // Свежая сводка: запас сейчас — по сводке (медиана последних дней), активы — по цене сейчас.
+  const a = assets(c, NOW);
   const t = c.tna!.at(-1)!;
-  const px = c.days.find((d) => d[0] === t[0])![3];
   assert.equal(a.src, "tna");
-  assert.equal(a.held, t[1] / px);
-  assert.equal(a.aum, (t[1] * c.px!) / px);
+  assert.equal(a.held, heldNow(c));
+  assert.equal(a.aum, a.held * c.px!);
+  assert.ok(Math.abs(a.share - (a.held / supplyAt(NOW)) * 100) < 1e-9);
+  assert.ok(a.share > 5 && a.share < 8);
   // Сводка старше недели — свои оценки по фондам.
   const old = structuredClone(c);
   old.tna = old.tna!.filter((d) => d[0] < t[0] - 8 * DAY);
   assert.equal(assets(old).src, "funds");
   assert.equal(assets(old).held, old.funds.reduce((s, f) => s + (f.hold ?? 0), 0));
-  // Запас по дням: в монетах, правдоподобный (миллион с лишним).
+  // Запас по дням — с первого дня сводки, кончается запасом сейчас, правдоподобный.
   const h = heldSeries(c);
-  assert.equal(h.length, 364);
+  assert.equal(h[0]![0], c.tna![0]![0]);
+  assert.equal(h.at(-1)![1], heldNow(c));
   assert.ok(h.every(([, b]) => b > 900_000 && b < 1_600_000));
-  // День без цены — в запас по дням не идёт (на ноль не делим).
+  // День без цены — в оценку «сейчас» не идёт (на ноль не делим).
   const nopx = structuredClone(c);
   nopx.days.find((d) => d[0] === t[0])![3] = 0;
-  assert.equal(heldSeries(nopx).length, 363);
-  assert.ok(heldSeries(nopx).every(([, b]) => Number.isFinite(b) && b < 1_600_000));
+  assert.ok(Number.isFinite(heldNow(nopx)!) && heldNow(nopx)! < 1_600_000);
+  // Ни у одного из последних дней сводки нет цены — оценки нет, а не чепуха.
+  const blind = structuredClone(c);
+  const lastTna = new Set(blind.tna!.slice(-20).map(([ts]) => ts));
+  for (const d of blind.days) if (lastTna.has(d[0])) d[3] = 0;
+  assert.equal(heldNow(blind), null);
   // Испорченный ряд пропадает, потоки остаются.
   for (const bad of [[[1, 2]], [[t[0], 1e20]], [[t[0], 5e10], [t[0], 5e10]], "x", [[t[0] + 1, 5e10]]]) {
     const r = structuredClone(REAL) as unknown as { coins: { btc: Record<string, unknown> } };
@@ -343,4 +349,57 @@ test("дайджест: день потоков ETF подписан, по UTC �
   // Старый выпуск без дня — без пометки.
   assert.equal(etfDayTag("ru", undefined), "");
   assert.equal(etfDayTag("ru", 0), "");
+});
+
+test("запас фондов: изменение за любой срок — ровно чистые потоки, шум сводки одного дня не сдвигает «сейчас»", () => {
+  const c = validEtf(REAL, NOW)!.coins.btc!;
+  const h = heldSeries(c);
+  const coin = new Map(c.days.map((d) => [d[0], d[2]]));
+  // День к дню — поток монет этого дня (раньше «активы ÷ цена» прыгал на тысячи BTC).
+  for (let i = 1; i < h.length; i++) assert.ok(Math.abs(h[i]![1] - h[i - 1]![1] - coin.get(h[i]![0])!) < 1e-6, String(h[i]![0]));
+  // «За 30 дней» в разделе запаса = «чистые покупки» в спросе против добычи.
+  const last = h.at(-1)!;
+  const back = [...h].reverse().find(([ts]) => ts <= last[0] - 30 * DAY)!;
+  assert.ok(Math.abs(last[1] - back[1] - etfStats(c, NOW)!.c30) < 1e-6);
+  // Сводка за один день испорчена на 10 % — «сейчас» почти не меняется.
+  const noisy = structuredClone(c);
+  noisy.tna!.at(-1)![1] *= 1.1;
+  assert.ok(Math.abs(heldNow(noisy)! - heldNow(c)!) / heldNow(c)! < 0.005);
+  // Сводки нет — ни «сейчас», ни ряда.
+  const none = structuredClone(c);
+  delete none.tna;
+  assert.equal(heldNow(none), null);
+  assert.deepEqual(heldSeries(none), []);
+});
+
+test("деления дневного графика — на торговых днях: воскресенье — на понедельник", () => {
+  const MON = Date.UTC(2026, 9, 26) / 1000;
+  const days = [MON - 3 * DAY, MON, MON + DAY];
+  assert.equal(snapToTrading(days, MON - DAY), MON); // вс → пн
+  assert.equal(snapToTrading(days, MON - 2 * DAY), MON); // сб → пн
+  assert.equal(snapToTrading(days, MON), MON);
+  // Дальше трёх суток торгов нет (праздники, край графика) — деление на месте.
+  assert.equal(snapToTrading(days, MON + 2 * DAY), MON + 2 * DAY);
+  assert.equal(snapToTrading([MON + 5 * DAY], MON), MON);
+});
+
+test("доля фондов: по расписанию добычи, как на сервере (supply_at)", () => {
+  assert.equal(supplyAt(1_713_571_767), 19_687_500);
+  assert.equal(supplyAt(1_713_571_767 + 600 * 1000), 19_687_500 + 3125);
+  assert.equal(supplyAt(1_713_571_767 + 600 * 220_000), 19_687_500 + 210_000 * 3.125 + 10_000 * 1.5625);
+  assert.equal(supplyAt(0), 19_687_500);
+});
+
+test("запас «сейчас»: каждый день сводки переносится на сегодня потоками после него", () => {
+  // 25 дней по +1 000 BTC при цене $50 000; сводка каждый день точна: 1 млн + накопленное.
+  const D0 = Date.UTC(2026, 0, 5) / 1000;
+  const days: EtfDay[] = Array.from({ length: 25 }, (_, i) => [D0 + i * DAY, 50_000, 1_000, 50_000, []]);
+  const c: EtfCoin = {
+    funds: [], days, share: null,
+    tna: days.map((d, i) => [d[0], (1_000_000 + 1_000 * (i + 1)) * 50_000]),
+  };
+  // Сейчас — ровно 1 025 000; без переноса медиана отстала бы на ~10 дней притока.
+  assert.equal(heldNow(c), 1_025_000);
+  assert.deepEqual(heldSeries(c).at(-1), [days.at(-1)![0], 1_025_000]);
+  assert.deepEqual(heldSeries(c)[0], [D0, 1_001_000]);
 });

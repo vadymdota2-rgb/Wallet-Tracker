@@ -175,7 +175,7 @@ describe("институциональные потоки", () => {
     assert.equal(sp(await page.locator(".ef-hero > b").innerText()), "+5,06 млн $");
     assert.equal(sp(await page.locator(".ef-hero > span").innerText()), "приток в фонды · +61,6 BTC");
     assert.deepEqual((await page.locator(".ef-chs").first().locator(".dm-ch b").allInnerTexts()).map(sp), ["−125 млн $", "+2,1 млрд $", "+57 млрд $"]);
-    assert.match(sp(await page.locator(".ef-held").innerText()), /^Фонды управляют 106 млрд \$ — это ≈1,2\d млн BTC\. Это 6,\d\d% всех монет в обращении\.$/);
+    assert.match(sp(await page.locator(".ef-held").innerText()), /^Фонды управляют 105 млрд \$ — это ≈1,2\d млн BTC\. Это 6,\d\d% всех монет в обращении\.$/);
     // Подпись источника и лицензии — ссылками (условие CC BY 4.0), с датой
     // «данные по», как просит TFTC; цен бирж (Coinbase) на экране нет.
     assert.equal(sp(await page.locator(".fg-by").innerText()),
@@ -460,6 +460,10 @@ describe("институциональные потоки", () => {
     assert.equal(tiles.length, 3);
     assert.match(tiles[0]!, /^Сейчас 1,2\d млн BTC$/);
     assert.match(tiles[1]!, /^За 30 дней [+−][\d,]+ (тыс\. )?BTC$/);
+    // «За 30 дней» — те же чистые покупки, что в «спросе против добычи» (24 087 BTC):
+    // раньше запас «активы ÷ цена» давал +27,5 тыс. — шум цены, а не покупки.
+    assert.equal(tiles[1], "За 30 дней +24,1 тыс. BTC");
+    assert.equal(sp(await page.locator(".ef-mine b").first().innerText()), "24 087 BTC");
     assert.match(tiles[2]!, /^С 6 мая 2025 г\. [+−][\d,]+ (тыс\. )?BTC$/);
     const plot = card.locator(".ef-plot");
     assert.equal(sp(await plot.getAttribute("aria-label")), "График: стрелки влево и вправо выбирают точку");
@@ -471,7 +475,7 @@ describe("институциональные потоки", () => {
     await page.keyboard.press("Escape");
     assert.equal(await plot.locator(".fg-pop").count(), 0);
     // Активы в заголовке — по свежей сводке, запас — тот же, что «Сейчас».
-    assert.match(sp(await page.locator(".ef-held").innerText()), /^Фонды управляют 106 млрд \$ — это ≈1,2\d млн BTC\. Это 6,\d\d% всех монет в обращении\.$/);
+    assert.match(sp(await page.locator(".ef-held").innerText()), /^Фонды управляют 105 млрд \$ — это ≈1,2\d млн BTC\. Это 6,\d\d% всех монет в обращении\.$/);
     assert.deepEqual(errors, []);
     await ctx.close();
   });
@@ -707,6 +711,26 @@ describe("институциональные потоки", () => {
     assert.equal(sp(await per.innerText()), "чт, 15 октября");
     await page.locator(".ef-fper").locator("xpath=preceding-sibling::*[1]").getByRole("button", { name: "С запуска", exact: true }).click();
     assert.match(sp(await per.innerText()), /^\d{1,2} янв\. 2024 г\. — 15 окт\. 2026 г\.$/);
+    await ctx.close();
+  });
+
+  test("30 дней: подписи дат — на столбцах торговых дней; у недель подсказка — про неделю", async () => {
+    const { ctx, page } = await open();
+    await ready(page);
+    const seg = page.locator(".ef-flow").locator("xpath=preceding-sibling::*[1]").locator("button");
+    await seg.nth(0).click(); // 30 дней — по дням
+    const svg = page.locator(".ef-flow svg");
+    const got = await svg.evaluate((el) => {
+      const bars = [...el.querySelectorAll("rect[fill]")].map((r) => +r.getAttribute("x")! + +r.getAttribute("width")! / 2);
+      const ticks = [...el.querySelectorAll("text.fg-tick[text-anchor=middle]")].map((t) => ({ x: +t.getAttribute("x")!, s: t.textContent }));
+      return ticks.map((t) => ({ s: t.s, off: Math.min(...bars.map((b) => Math.abs(b - t.x))) }));
+    });
+    assert.ok(got.length >= 2);
+    // Раньше деление стояло на воскресенье — между столбцами пятницы и понедельника.
+    for (const t of got) assert.ok(t.off < 0.6, `${t.s}: ${t.off}`);
+    assert.match(sp(await page.locator(".ef-flow ~ .lq-hint").first().innerText()), /покажу любой день\.$/);
+    await seg.nth(2).click(); // год — по неделям
+    assert.match(sp(await page.locator(".ef-flow ~ .lq-hint").first().innerText()), /^Столбец — неделя\. .*покажу любую неделю\.$/);
     await ctx.close();
   });
 

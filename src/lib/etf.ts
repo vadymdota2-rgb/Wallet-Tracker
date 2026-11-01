@@ -275,6 +275,8 @@ export interface EtfStats {
   /** Активы фондов, $, и их запас, BTC; откуда — сводка TFTC или свои оценки по фондам. */
   aum: number;
   held: number;
+  /** Доля запаса от монет в обращении, %. */
+  share: number;
   src: "tna" | "funds";
 }
 
@@ -330,41 +332,84 @@ export function etfStats(c: EtfCoin, now: number): EtfStats | null {
   return {
     last, d7: sumU(lastDays(days, 7)), d30: sumU(m30), cum: sumU(days), streak, sign,
     c30: m30.reduce((s, d) => s + d[2], 0), mined, best, worst, runs, bestM, worstM,
-    ...assets(c),
+    ...assets(c, now),
   };
 }
 
 /** Свежие активы по сводке — не старше недели от последнего дня (как на сервере). */
 const TNA_FRESH = 7 * DAY;
 
+/** По скольким последним дням сводки считается запас «сейчас» (медиана). */
+const HELD_ANCHOR = 20;
+
 /**
- * Активы всех фондов, $, и их запас, BTC. По сводке TFTC, если она свежая:
- * активы того дня в пересчёте на цену сейчас (запас в монетах тот же). Иначе
- * — сумма своих оценок по фондам (отчёты SEC плюс потоки после них).
+ * Запас всех фондов сейчас, BTC, по сводке TFTC; сводки нет или нет цены — null.
+ *
+ * «Активы дня ÷ цена дня» шумит: фонды оценивают монеты по цене в 16:00 по
+ * Нью-Йорку, а цена дня в наборе — закрытие по UTC. На 1,3 млн монет разница
+ * цен в пару процентов — десятки тысяч BTC за день, которых никто не покупал
+ * (на образце 15 октября: +5 902 BTC при потоке +62 BTC). Поэтому каждый из
+ * последних HELD_ANCHOR дней сводки переносится на сегодня чистыми потоками
+ * после него, и берётся медиана: шум одного дня её не сдвигает.
  */
-export function assets(c: EtfCoin): { aum: number; held: number; src: "tna" | "funds" } {
-  const lastDay = c.days[c.days.length - 1]?.[0] ?? 0;
-  const t = c.tna?.[c.tna.length - 1];
-  const px = t ? c.days.find((d) => d[0] === t[0])?.[3] ?? 0 : 0;
-  let now = c.px ?? 0;
-  for (let i = c.days.length - 1; i >= 0 && !now; i--) now = c.days[i]![3];
-  if (t && px > 0 && now > 0 && t[0] >= lastDay - TNA_FRESH) {
-    return { aum: (t[1] * now) / px, held: t[1] / px, src: "tna" };
+export function heldNow(c: EtfCoin): number | null {
+  const px = new Map(c.days.map((d) => [d[0], d[3]]));
+  // Монеты после дня ts — хвостовые суммы потоков в монетах.
+  const after = new Map<number, number>();
+  let acc = 0;
+  for (let i = c.days.length - 1; i >= 0; i--) {
+    after.set(c.days[i]![0], acc);
+    acc += c.days[i]![2];
   }
-  return {
-    aum: c.funds.reduce((s, f) => s + f.aum, 0),
-    held: c.funds.reduce((s, f) => s + (f.hold ?? 0), 0),
-    src: "funds",
-  };
+  const est = (c.tna ?? []).slice(-HELD_ANCHOR).flatMap(([ts, usd]): number[] => {
+    const p = px.get(ts) ?? 0;
+    const tail = after.get(ts);
+    return p > 0 && tail !== undefined ? [usd / p + tail] : [];
+  }).sort((x, y) => x - y);
+  const n = est.length;
+  if (!n) return null;
+  return n % 2 ? est[(n - 1) / 2]! : (est[n / 2 - 1]! + est[n / 2]!) / 2;
 }
 
-/** Запас всех фондов по дням, BTC: активы дня (сводка TFTC) по цене того же дня. */
+/** Биткоинов в обращении на момент ts — по расписанию добычи (как supply_at в wt_etf). */
+export function supplyAt(ts: number): number {
+  const blocks = Math.max(0, Math.floor((ts - 1_713_571_767) / 600));
+  return 19_687_500 + Math.min(blocks, 210_000) * 3.125 + Math.max(0, blocks - 210_000) * 1.5625;
+}
+
+/**
+ * Активы всех фондов, $, их запас, BTC, и доля от монет в обращении, %. По
+ * сводке TFTC, если она свежая (heldNow), активы — запас по цене сейчас.
+ * Иначе — сумма своих оценок по фондам (отчёты SEC плюс потоки после них).
+ */
+export function assets(c: EtfCoin, now: number = Date.now() / 1000): { aum: number; held: number; share: number; src: "tna" | "funds" } {
+  const lastDay = c.days[c.days.length - 1]?.[0] ?? 0;
+  const t = c.tna?.[c.tna.length - 1];
+  let price = c.px ?? 0;
+  for (let i = c.days.length - 1; i >= 0 && !price; i--) price = c.days[i]![3];
+  const anchor = t && t[0] >= lastDay - TNA_FRESH ? heldNow(c) : null;
+  const held = anchor ?? c.funds.reduce((s, f) => s + (f.hold ?? 0), 0);
+  const aum = anchor !== null && price > 0 ? anchor * price : c.funds.reduce((s, f) => s + f.aum, 0);
+  return { aum, held, share: held > 0 ? (held / supplyAt(now)) * 100 : 0, src: anchor !== null && price > 0 ? "tna" : "funds" };
+}
+
+/**
+ * Запас всех фондов по дням, BTC: сегодняшний (heldNow) минус чистые потоки
+ * после каждого дня — с первого дня сводки TFTC. Так изменение запаса за
+ * любой срок — ровно чистые потоки фондов за него (как в «спросе против
+ * добычи»), без шума цены, по которой сводка оценивает монеты.
+ */
 export function heldSeries(c: EtfCoin): [number, number][] {
-  const px = new Map(c.days.map((d) => [d[0], d[3]]));
-  return (c.tna ?? []).flatMap(([ts, usd]): [number, number][] => {
-    const p = px.get(ts) ?? 0;
-    return p > 0 ? [[ts, usd / p]] : [];
-  });
+  const first = c.tna?.[0]?.[0];
+  const top = heldNow(c);
+  if (first === undefined || top === null) return [];
+  const out: [number, number][] = [];
+  let h = top;
+  for (let i = c.days.length - 1; i >= 0 && c.days[i]![0] >= first; i--) {
+    out.push([c.days[i]![0], h]);
+    h -= c.days[i]![2];
+  }
+  return out.reverse();
 }
 
 export type Period = "d" | "w" | "m" | "all";
@@ -481,6 +526,18 @@ export function etfDayTag(lang: string, day: number | undefined): string {
   if (!day) return "";
   const d = etfDayWord(lang, day);
   return lang === "zh" || lang === "ja" ? `（${d}）` : ` (${d})`;
+}
+
+/**
+ * Деление «день месяца» на дневном графике — на ближайший торговый день не
+ * раньше его (до 3 суток вперёд): деление на воскресенье стояло между
+ * столбцами пятницы и понедельника, и подпись «25 окт.» читалась как подпись
+ * понедельника. starts — дни столбцов по возрастанию. Рядом торгового дня нет
+ * — деление как было.
+ */
+export function snapToTrading(starts: readonly number[], ts: number): number {
+  const hit = starts.find((s) => s >= ts);
+  return hit !== undefined && hit - ts <= 3 * DAY ? hit : ts;
 }
 
 /** Набор TFTC давно не обновлялся: последний день старше этого (выходные с праздником и задержка сводки — до 5 суток). */

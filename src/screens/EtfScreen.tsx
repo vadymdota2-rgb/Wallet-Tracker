@@ -30,7 +30,7 @@ import { etfWatch, etfWatchSet, failKey, fetchEtf, peekEtf } from "../lib/api";
 import { toast } from "../components/Toast";
 import { Card, Chips, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import {
-  ETF_TTL_MS, PERIODS, RANGES, STALE_DAYS, chartView, barShare, cumulative, etfStats, fundDetail, fundTotals, heldSeries, periodSpan, staleDays, topFunds, xAtTime,
+  ETF_TTL_MS, PERIODS, RANGES, STALE_DAYS, chartView, barShare, cumulative, etfStats, fundDetail, fundTotals, heldSeries, periodSpan, snapToTrading, staleDays, topFunds, xAtTime,
   type Bucket, type EtfCoin, type EtfFund, type EtfReply, type Period, type Range,
 } from "../lib/etf";
 import { Boundary } from "../components/Boundary";
@@ -235,7 +235,8 @@ function FlowChart({ data, cum, zero, lang, sel, onSel, label }: {
     >
       <rect x={0} y={P1.y} width={PW} height={P1.h} className="fg-bg" />
       <rect x={0} y={P2.y} width={PW} height={P2.h} className="fg-bg" />
-      {ticksOf(lang, a, b, PW).map((x) => (
+      {ticksOf(lang, a, b, PW).map((x) => (b - a <= 45 * 86_400 ? { t: snapToTrading(starts, x.t), label: "" } : x))
+        .map((x) => (x.label ? x : { t: x.t, label: dateStr(lang, x.t, { day: "numeric", month: "short" }) })).map((x) => (
         <g key={x.t}>
           <line x1={xOfT(x.t)} x2={xOfT(x.t)} y1={P1.y} y2={P2.y + P2.h} className="fg-grid" />
           <text x={xOfT(x.t)} y={H - 4} textAnchor="middle" className="fg-tick">{x.label}</text>
@@ -253,8 +254,6 @@ function FlowChart({ data, cum, zero, lang, sel, onSel, label }: {
           <text x={W - 2} y={(cum ? yC(v) : yF(v)) + 3.5} textAnchor="end" className="fg-tick">{v === 0 ? "0" : axisMoney(lang, v)}</text>
         </g>
       ))}
-      <text x={4} y={P1.y + 11} className="fg-ptl">{t(lang, "ef_price")}{log ? ` · ${t(lang, "fg_log")}` : ""}</text>
-      <text x={4} y={P2.y + 11} className="fg-ptl">{t(lang, cum ? "ef_cum_chart" : "ef_flows")}</text>
       {cum ? (
         <>
           <polygon points={cArea} fill={UP} opacity={0.12} />
@@ -271,6 +270,10 @@ function FlowChart({ data, cum, zero, lang, sel, onSel, label }: {
         );
       })}
       <polyline points={line} className="fg-line" stroke="#e2e8f0" />
+      {/* Подписи панелей — поверх столбцов и линий, с обводкой цветом фона:
+          высокий столбец у левого края закрывал «Приток / отток». */}
+      <text x={4} y={P1.y + 11} className="fg-ptl ef-ptl">{t(lang, "ef_price")}{log ? ` · ${t(lang, "fg_log")}` : ""}</text>
+      <text x={4} y={P2.y + 11} className="fg-ptl ef-ptl">{t(lang, cum ? "ef_cum_chart" : "ef_flows")}</text>
       {d ? (
         <g className="fg-cross">
           <line x1={xOf(sel!)} x2={xOf(sel!)} y1={P1.y} y2={P2.y + P2.h} />
@@ -647,7 +650,8 @@ export function EtfScreen() {
                 {t(lang, "ef_held", {
                   a: iso(usdWord(stats.aum)), c: iso(`${coinsShort(lang, stats.held, "", false)} ${sym}`),
                 })}
-                {c.share ? ` ${t(lang, "ef_share", { p: iso(pct(c.share, 2, false)) })}` : ""}
+                {/* Доля — от того же запаса, что в строке (сервер считал её по сводке одного дня). */}
+                {stats.share ? ` ${t(lang, "ef_share", { p: iso(pct(stats.share, 2, false)) })}` : ""}
               </p>
             ) : null}
             <p className="fg-by">
@@ -738,7 +742,7 @@ export function EtfScreen() {
             />
             <p className="lq-hint">
               {mode === "c" ? t(lang, "ef_cum_hint")
-                : t(lang, daily ? "ef_chart_d" : "ef_chart_w")} {t(lang, "fg_hint")}
+                : t(lang, daily ? "ef_chart_d" : "ef_chart_w")} {t(lang, daily ? "fg_hint" : "ef_hint_w")}
             </p>
             <FlowTable view={view} cum={mode === "c" ? cumView : null} daily={daily} lang={lang} />
           </Card>

@@ -152,7 +152,9 @@ export function HeldSection({ series, lang }: { series: [number, number][]; lang
   const last = series[series.length - 1];
   const first = series[0];
   if (!last || !first || series.length < 10) return null;
-  const back = series.find(([ts]) => ts >= last[0] - 30 * 86400) ?? first;
+  // Начало окна — последний день не позже 30 суток назад: изменение за 30 дней
+  // — ровно чистые потоки фондов за те же дни, что и в «спросе против добычи».
+  const back = [...series].reverse().find(([ts]) => ts <= last[0] - 30 * 86400) ?? first;
   const fmt = (v: number) => coinsShort(lang, v, "", false);
   const tiles: [string, number, boolean][] = [
     [t(lang, "ef_hd_now"), last[1], false],

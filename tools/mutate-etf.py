@@ -43,7 +43,7 @@ TS = [
     ("Math.max(now, end) * 1000", "end * 1000", "идущий месяц — по часам"),
     ("for (let i = 0; i < 30; i++)", "for (let i = 0; i < 31; i++)", "добыча за 30 суток"),
     ("if (ts < 1_713_571_200) return 900;", "if (ts <= 1_713_571_200) return 900;", "граница халвинга 2024"),
-    ("held: c.funds.reduce((s, f) => s + (f.hold ?? 0), 0)", "held: 0", "запас фондов"),
+    ("const held = anchor ?? c.funds.reduce((s, f) => s + (f.hold ?? 0), 0);", "const held = anchor ?? 0;", "запас фондов"),
     ('const n = period === "d" ? 1 : period === "w" ? 7 : 30;', 'const n = period === "d" ? 1 : period === "w" ? 6 : 30;', "неделя — 7 суток"),
     ("rows.filter((r) => Math.abs(r.v) >= 1)", "rows.filter((r) => Math.abs(r.v) > 1)", "фонд с движением"),
     ("Math.abs(y.v) - Math.abs(x.v)).slice(0, n)", "y.v - x.v).slice(0, n)", "крупнейшие фонды по модулю"),
@@ -51,7 +51,7 @@ TS = [
     ("ts % DAY !== 0 || ts <= prev || !within(v, TNA_MIN, TNA_MAX)", "ts % DAY !== 0 || !within(v, TNA_MIN, TNA_MAX)", "активы: дни по возрастанию"),
     ("|| !within(v, TNA_MIN, TNA_MAX)) return null;", "|| !isNum(v)) return null;", "активы: правдоподобная сумма"),
     ("t[0] >= lastDay - TNA_FRESH", "t[0] >= 0", "активы: только свежая сводка"),
-    ("return p > 0 ? [[ts, usd / p]] : [];", "return [[ts, usd / (p || 1)]];", "запас по дням без цены дня"),
+    ("return p > 0 && tail !== undefined ? [usd / p + tail] : [];", "return tail !== undefined ? [usd / (p || 1) + tail] : [];", "запас без цены дня"),
     # Карточка фонда и свежесть набора.
     ("if (v !== null && v !== undefined) all.push([d[0], v]);", "all.push([d[0], v ?? 0]);", "фонд: дни без торгов — не его"),
     ("const days = all.slice(-n);", "const days = all.slice(0, n);", "фонд: последние дни"),
@@ -67,6 +67,13 @@ TS = [
     # Даты срока списка фондов.
     ('lastDays(c.days, period === "d" ? 1 : period === "w" ? 7 : 30);\n  const a = ds[0]?.[0];', 'lastDays(c.days, period === "d" ? 2 : period === "w" ? 7 : 30);\n  const a = ds[0]?.[0];', "список фондов: «день» — один день"),
     ('const ds = period === "all" ? c.days : lastDays(', 'const ds = period === "all" ? c.days.slice(1) : lastDays(', "список фондов: «с запуска» — с первого дня"),
+    # Запас фондов: сводка «сейчас» по медиане, по дням — минус потоки.
+    ("return p > 0 && tail !== undefined ? [usd / p + tail] : [];", "return p > 0 && tail !== undefined ? [usd / p] : [];", "запас: сводка дня переносится на сегодня потоками"),
+    ("  return n % 2 ? est[(n - 1) / 2]! : (est[n / 2 - 1]! + est[n / 2]!) / 2;", "  return est[n - 1]!;", "запас: медиана, а не последний день сводки"),
+    ("    h -= c.days[i]![2];\n", "", "запас по дням: минус поток дня"),
+    ("i >= 0 && c.days[i]![0] >= first; i--", "i >= 0; i--", "запас по дням: с первого дня сводки"),
+    ("Math.min(blocks, 210_000) * 3.125", "Math.min(blocks, 210_000) * 6.25", "доля: награда за блок по расписанию"),
+    ("hit !== undefined && hit - ts <= 3 * DAY ? hit : ts", "hit !== undefined ? hit : ts", "деления: торговый день не дальше 3 суток"),
     # Полоски фондов и CME — прямая пропорция.
     ("Math.min(1, Math.abs(v) / span)", "Math.min(1, Math.sqrt(Math.abs(v) / span))", "полоска: прямая пропорция, не корень"),
     ("Math.min(1, Math.abs(v) / span)", "Math.abs(v) / span", "полоска: не длиннее карточки"),
