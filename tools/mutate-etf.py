@@ -316,6 +316,10 @@ DMT = [
 
 # Общие ответы /api/dom и /api/mcap по HTTP и раздел «Рынок» дайджеста (whale_api.py).
 AP = [
+    ("    wire()\n    threading.Thread(target=warmup", "    threading.Thread(target=warmup", "служба привязывает кэш и сообщения при запуске"),
+    ("    if not CACHE_DIR:\n        return\n", "", "без каталога кэш не пишется"),
+    ("    if not CACHE_DIR:\n        return None\n", "", "без каталога кэш не читается"),
+    ('    etf.set_new_fund_hook(etf_new_fund)\n', "", "о новом фонде — владельцу (после wire)"),
     ('    if not rep.get("ok"):\n        rep = _dg_safe("inst", etf.build) or {}\n', "", "дайджест: ETF после перезапуска собирает сам"),
     ("        if hit is None or hit[0] is not obj:\n", "        if True:\n", "доминация: ответ кодируется раз, а не на каждый запрос"),
     ('        same = tag in [x.strip() for x in (self.headers.get("If-None-Match") or "").split(",")]', "        same = False", "доминация: та же копия — 304"),
@@ -468,7 +472,7 @@ def server():
             + run(f"{ROOT}/wt_treasury.py", [sys.executable, "-m", "unittest", "tests.test_treasury",
                                              "tests.test_treasury_security", "tests.test_disk_cache"], TR)
             + run(f"{ROOT}/whale_api.py", [sys.executable, "-m", "unittest", "tests.test_etf_day_alert"], AL)
-            + run(f"{ROOT}/whale_api.py", [sys.executable, "-m", "unittest", "tests.test_dom_http", "tests.test_digest_sources"], AP)
+            + run(f"{ROOT}/whale_api.py", [sys.executable, "-m", "unittest", "tests.test_dom_http", "tests.test_digest_sources", "tests.test_disk_cache"], AP)
             + run(f"{ROOT}/wt_dom.py", [sys.executable, "-m", "unittest", "tests.test_dom", "tests.test_dom_fuzz",
                                         "tests.test_dom_policy"], DM)
             + run(f"{ROOT}/wt_mcap.py", [sys.executable, "-m", "unittest", "tests.test_mcap", "tests.test_mcap_fuzz"], MC)

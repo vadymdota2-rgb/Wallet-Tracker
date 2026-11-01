@@ -34,7 +34,10 @@ def build(tftc: object, raw: bytes | None = None, sec: dict | None = None) -> di
     etf._st.on_new = hook
     with mock.patch.object(etf, "_fetch", fetch), mock.patch.object(etf, "_now", lambda: NOW), \
             mock.patch.object(etf.wt_treasury, "etf_funds", lambda: sec or {}), \
+            mock.patch.object(etf.wt_treasury, "funds_cached", dict), \
             mock.patch.object(etf.wt_treasury, "companies", list), mock.patch("sys.stderr", io.StringIO()):
+        # funds_cached — запасной путь, когда SEC молчит: без подмены сборка
+        # брала прошлые отчёты, оставленные другим тестом или лежащие на диске.
         res = etf.build()
     res["_urls"] = urls
     return res

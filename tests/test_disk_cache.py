@@ -1,5 +1,6 @@
 """Кеш ответов на диске: после перезапуска API первый запрос не ждёт сборку
 (npm test). Перезапуск здесь — пустая память при том же каталоге кеша."""
+import inspect
 import io
 import json
 import os
@@ -193,3 +194,49 @@ class TreasuryFileTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WireTest(unittest.TestCase):
+    """Импорт whale_api боевое окружение не трогает: тесты импортируют модуль,
+    и раньше импорт направлял кэш ETF, SEC, доминации и F&G в боевой каталог
+    сервера (тест с подменёнными отчётами SEC читал оттуда настоящие и падал),
+    а сборка в тесте могла записать туда подделку. Привязка — только wire(),
+    её зовёт main() при запуске службы."""
+
+    def test_import_alone_wires_nothing(self):
+        self.assertIsNone(api.CACHE_DIR)
+        self.assertNotEqual(etf._st.on_new, api.etf_new_fund)
+        # Без каталога кэш на диске не читается и не пишется.
+        err = io.StringIO()
+        with mock.patch("sys.stderr", err):
+            api._disk_save("probe", "k", {"ok": True})
+        self.assertEqual(err.getvalue(), "")  # и не шумит в журнал попыткой записи
+        stray = api._disk_file("probe", "k")
+        self.addCleanup(lambda: os.path.exists(stray) and os.remove(stray))
+        self.assertFalse(os.path.exists(stray))  # файла нет нигде, даже в текущем каталоге
+        # И не читается: даже если такой файл где-то лежит.
+        with open(stray, "w", encoding="utf-8") as f:
+            json.dump({"at": time.time(), "k": repr("k"), "v": {"ok": True}}, f)
+        self.assertIsNone(api._disk_load("probe", "k"))
+
+    def test_wire_sets_every_module_and_main_calls_it(self):
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        open(os.path.join(d, "dom-old.json"), "w").close()
+        for undo in (lambda: setattr(api, "CACHE_DIR", None), lambda: etf.set_cache_file(None),
+                     lambda: etf.set_new_fund_hook(None), lambda: tr.set_cache_dir(None),
+                     lambda: api.wt_dom.set_cache_dir(None), lambda: api.wt_fng.set_cache_dir(None),
+                     lambda: api.wt_mcap.set_cache_dir(None)):
+            self.addCleanup(undo)
+        with mock.patch.dict(os.environ, {"WHALE_CACHE_DIR": d}):
+            api.wire()
+        self.assertEqual(api.CACHE_DIR, d)
+        self.assertEqual(etf._st.file, os.path.join(d, "etf.json"))
+        self.assertEqual(etf._st.on_new, api.etf_new_fund)
+        self.assertEqual(api.wt_dom._st.dir, d)
+        self.assertEqual(api.wt_fng._st.dir, d)
+        self.assertFalse(os.path.exists(os.path.join(d, "dom-old.json")))  # старое убрано
+        api._disk_save("probe", "k", {"ok": True})
+        self.assertEqual(api._disk_load("probe", "k"), {"ok": True})
+        src = inspect.getsource(api.main)
+        self.assertLess(src.index("wire()"), src.index("threading.Thread(target=warmup"))

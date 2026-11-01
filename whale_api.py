@@ -10023,23 +10023,17 @@ BG_WAIT = 25.0
 # первый человек ждал бы сборку (экран ETF — десятки секунд). Файл старше
 # DISK_MAX_AGE не берётся; на хранилище — не больше DISK_KEEP файлов (ключи
 # бывают с параметрами запроса, и разрастись каталогу нельзя).
-CACHE_DIR = os.environ.get("WHALE_CACHE_DIR") or os.path.join(os.path.dirname(DB), "api_cache")
+#
+# Каталог задаёт wire() — только при запуске службы (main), а не импорт
+# модуля: тесты импортируют whale_api, и раньше импорт направлял кэш ETF,
+# SEC, доминации и F&G в боевой каталог сервера. Тест с подменёнными
+# отчётами SEC читал оттуда настоящие (13 фондов вместо одного) и падал на
+# сервере, а сборка в тесте могла бы записать туда подделку. Пока wire() не
+# вызвана, кэша на диске нет.
+CACHE_DIR: str | None = None
 DISK_MAX_AGE = 3 * 86400
 DISK_KEEP = 128
 _DISK: dict[int, str] = {}
-etf.set_cache_file(os.path.join(CACHE_DIR, "etf.json"))
-wt_dom.set_cache_dir(CACHE_DIR)
-wt_fng.set_cache_dir(CACHE_DIR)
-wt_mcap.set_cache_dir(CACHE_DIR)
-# Прежняя доминация (CoinMarketCap) держала копию в dom-<ключ>.json, прежний
-# «Страх и жадность» (с ценой Binance) — в fng-<ключ>.json; их больше никто
-# не читает: убираем, чтобы не лежали на диске вечно.
-try:
-    for _old in os.listdir(CACHE_DIR):
-        if _old.startswith(("dom-", "fng-")) and _old.endswith(".json"):
-            os.remove(os.path.join(CACHE_DIR, _old))
-except OSError:
-    pass
 # Новый фонд в наборе TFTC, которого нет в списке фондов SEC, — владельцу:
 # потоки его видны сразу, а имя, комиссию и запас даст только строка в
 # wt_treasury.ETFS (тикер, имя, CIK в SEC). Один раз на тикер — и после
@@ -10061,8 +10055,27 @@ def etf_new_fund(t: str) -> None:
                 f"потоки видны, а имени, комиссии и запаса не будет, пока его не добавить (тикер, имя, CIK в SEC)."})
 
 
-etf.set_new_fund_hook(etf_new_fund)
-treasury.set_cache_dir(CACHE_DIR)
+def wire() -> None:
+    """Привязка к боевому окружению — только из main(): кэш на диске рядом с
+    базой (или WHALE_CACHE_DIR) у всех модулей, уборка старых файлов и
+    сообщение владельцу о новом фонде ETF (пишет в базу и в Telegram)."""
+    global CACHE_DIR
+    CACHE_DIR = os.environ.get("WHALE_CACHE_DIR") or os.path.join(os.path.dirname(DB), "api_cache")
+    etf.set_cache_file(os.path.join(CACHE_DIR, "etf.json"))
+    wt_dom.set_cache_dir(CACHE_DIR)
+    wt_fng.set_cache_dir(CACHE_DIR)
+    wt_mcap.set_cache_dir(CACHE_DIR)
+    treasury.set_cache_dir(CACHE_DIR)
+    etf.set_new_fund_hook(etf_new_fund)
+    # Прежняя доминация (CoinMarketCap) держала копию в dom-<ключ>.json, прежний
+    # «Страх и жадность» (с ценой Binance) — в fng-<ключ>.json; их больше никто
+    # не читает: убираем, чтобы не лежали на диске вечно.
+    try:
+        for old in os.listdir(CACHE_DIR):
+            if old.startswith(("dom-", "fng-")) and old.endswith(".json"):
+                os.remove(os.path.join(CACHE_DIR, old))
+    except OSError:
+        pass
 
 
 def disk_cache(store: dict, name: str) -> dict:
@@ -10072,10 +10085,12 @@ def disk_cache(store: dict, name: str) -> dict:
 
 
 def _disk_file(name: str, key) -> str:
-    return os.path.join(CACHE_DIR, f"{name}-{hashlib.sha256(repr(key).encode()).hexdigest()[:16]}.json")
+    return os.path.join(CACHE_DIR or "", f"{name}-{hashlib.sha256(repr(key).encode()).hexdigest()[:16]}.json")
 
 
 def _disk_load(name: str, key):
+    if not CACHE_DIR:
+        return None
     try:
         with open(_disk_file(name, key), encoding="utf-8") as f:
             got = json.load(f)
@@ -10091,6 +10106,8 @@ def _disk_load(name: str, key):
 
 
 def _disk_save(name: str, key, val) -> None:
+    if not CACHE_DIR:
+        return
     path = _disk_file(name, key)
     tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
     try:
@@ -16247,6 +16264,7 @@ def main():
         f"origins={len(ALLOWED_ORIGINS)} rpm={RATE_LIMIT_RPM} key={'yes' if API_KEY else 'no'}",
         flush=True,
     )
+    wire()
     threading.Thread(target=warmup, daemon=True).start()
     threading.Thread(target=refresher, daemon=True).start()
     threading.Thread(target=_bonus_loop, daemon=True).start()
