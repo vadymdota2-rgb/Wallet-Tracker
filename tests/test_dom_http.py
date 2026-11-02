@@ -4,6 +4,7 @@
 тот же объект из кэша модуля не кодируется на каждый запрос заново, а
 телефон с той же копией получает «304 не изменилось» без тела.
 """
+import gzip
 import io
 import json
 import os
@@ -21,9 +22,9 @@ REPLY = {"ok": True, "rows": [[1_700_000_000, 40, 101.5, 0.05, 60_000.0, 100]], 
 class Fake:
     """Обработчик без сокета: что отправлено — в sent."""
 
-    def __init__(self, inm: str = ""):
+    def __init__(self, inm: str = "", enc: str = ""):
         self.h = api.Handler.__new__(api.Handler)
-        self.h.headers = {"If-None-Match": inm} if inm else {}
+        self.h.headers = {k: v for k, v in (("If-None-Match", inm), ("Accept-Encoding", enc)) if v}
         self.h.wfile = io.BytesIO()
         self.code, self.hdr = 0, {}
         self.h.send_response = lambda c: setattr(self, "code", c)
@@ -79,6 +80,70 @@ class PublicJsonTest(unittest.TestCase):
     def test_nan_never_leaves_the_server(self):
         got = Fake().get("dom", {"ok": True, "v": float("nan"), "w": float("inf")})
         self.assertEqual(json.loads(got.h.wfile.getvalue()), {"ok": True, "v": 0.0, "w": 0.0})
+
+    def test_gzip_is_compressed_once_and_sent_only_to_who_accepts_it(self):
+        big = {**REPLY, "rows": REPLY["rows"] * 400}
+        with mock.patch.object(api.gzip, "compress", wraps=gzip.compress) as comp:
+            z = Fake(enc="br, gzip;q=0.8").get("etf", big)
+            Fake(enc="gzip").get("etf", big)
+            # Сжатие — одно на сводку, не на каждого человека.
+            self.assertEqual(comp.call_count, 1)
+        body = z.h.wfile.getvalue()
+        self.assertEqual(z.hdr["Content-Encoding"], "gzip")
+        self.assertEqual(z.hdr["Content-Length"], str(len(body)))
+        self.assertEqual(z.hdr["Vary"], "Accept-Encoding")
+        self.assertEqual(json.loads(gzip.decompress(body)), big)
+        self.assertLess(len(body), len(json.dumps(big)) // 4)
+        # Без gzip, с gzip;q=0 или с чужим сжатием — обычный JSON.
+        for enc in ("", "identity", "gzip;q=0", "br", "gzip;q=x"):
+            p = Fake(enc=enc).get("etf", big)
+            self.assertNotIn("Content-Encoding", p.hdr, enc)
+            self.assertEqual(p.hdr["Vary"], "Accept-Encoding")
+            self.assertEqual(json.loads(p.h.wfile.getvalue()), big, enc)
+        self.assertIn("Content-Encoding", Fake(enc="*").get("etf", big).hdr)
+        # ETag у обоих один: телефон со сжатой копией тоже получает 304.
+        self.assertEqual(p.hdr["ETag"], z.hdr["ETag"])
+        again = Fake(z.hdr["ETag"], enc="gzip").get("etf", big)
+        self.assertEqual((again.code, again.h.wfile.getvalue()), (304, b""))
+        self.assertNotIn("Content-Encoding", again.hdr)
+        # Те же данные — те же сжатые байты (без даты сжатия внутри).
+        api._PUBLIC.clear()
+        with mock.patch.object(gzip.time, "time", return_value=4_000_000_000.0):
+            self.assertEqual(Fake(enc="gzip").get("etf", big).h.wfile.getvalue(), body)
+
+    def test_good_public_answer_is_not_logged_twice_errors_are(self):
+        # Обращение пишет nginx; строка на каждое открытие экрана в journald —
+        # гигабайты при миллионах людей. Ошибки — по-прежнему в журнал.
+        h = api.Handler.__new__(api.Handler)
+        h.requestline, h.client_address = "GET /api/etf HTTP/1.1", ("127.0.0.1", 1)
+        with mock.patch.object(api.sys, "stderr", io.StringIO()) as err:
+            h._quiet = True
+            h.log_request(200)
+            self.assertEqual(err.getvalue(), "")
+            h.log_request(500)
+            self.assertIn('"GET /api/etf HTTP/1.1" 500', err.getvalue())
+        with open(os.path.join(ROOT, "whale_api.py"), encoding="utf-8") as f:
+            src = f.read()
+        body = src.split("    def _json_public(")[1].split("\n    def ")[0]
+        self.assertLess(body.index("self._quiet = True"), body.index("self.send_response(304 if same else 200)"))
+        self.assertNotIn("_quiet = True", src.replace(body, ""))
+
+    def test_signature_is_checked_once_per_request(self):
+        h = api.Handler.__new__(api.Handler)
+        h.headers = {"X-Telegram-Init-Data": "x"}
+        t = [100]
+        with mock.patch.object(api, "verify_init_data", return_value={"id": "7"}) as v, \
+             mock.patch.object(api, "now", lambda: t[0]):
+            self.assertEqual((h._user({}), h._rate_key({})), ("7", "u:7"))
+            self.assertEqual(v.call_count, 1)
+            # Следующая секунда (тот же keep-alive) — проверка заново: срок подписи по часам.
+            t[0] += 1
+            h._user({})
+            self.assertEqual(v.call_count, 2)
+            # Другая подпись — другой ответ.
+            v.return_value = None
+            h.headers = {"X-Telegram-Init-Data": "y"}
+            self.assertEqual(h._user({}), "")
 
     def test_routes_use_the_shared_bytes(self):
         with open(os.path.join(ROOT, "whale_api.py"), encoding="utf-8") as f:

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import base64
 import calendar
+import gzip
 import hashlib
 import html
 import hmac
@@ -736,19 +737,55 @@ def is_premium(con: sqlite3.Connection, chat: str) -> bool:
     return bool(row and row["is_premium"] and int(row["premium_expire"] or 0) > now())
 
 
+def premium_of(con: sqlite3.Connection, chats: list[str]) -> set[str]:
+    """Кто из chats с действующей подпиской — одним запросом на пачку, те же
+    правила, что is_premium(). Для рассылки: миллион подписчиков — это две
+    тысячи запросов по 500, а не миллион открытий базы."""
+    if not chats or not table_exists(con, "users") or "is_premium" not in cols(con, "users"):
+        return set()
+    marks = ",".join("?" * len(chats))
+    rows = con.execute(
+        f"SELECT chat_id, is_premium, premium_expire FROM users WHERE chat_id IN ({marks})",  # noqa: S608 — только «?»
+        chats).fetchall()
+    t = now()
+    return {str(r[0]) for r in rows if r[1] and int(r[2] or 0) > t and not is_service(str(r[0]))}
+
+
+# Подписка по chat_id — до какого времени её можно не перепроверять в базе.
+# Каждый платный запрос открывал базу заново (~0,13 мс — больше половины
+# стоимости ответа /api/etf). Помним только «да» и не дольше PREMIUM_MEMO
+# секунд и не дольше конца подписки: купил — открывается сразу (на «нет»
+# памяти нет), снятая вручную подписка закрывается не позже чем через
+# PREMIUM_MEMO. Записей не больше PREMIUM_MEMO_MAX — дальше память
+# начинается заново.
+PREMIUM_MEMO = 30
+PREMIUM_MEMO_MAX = 200_000
+_premium_memo: dict[str, int] = {}
+
+
 def chat_premium(chat: str) -> bool:
     """is_premium() для обработчика, у которого своей базы под рукой нет."""
     if not chat:
         return False
+    t = now()
+    if _premium_memo.get(chat, 0) > t:
+        return True
     con = open_db(DB)
     if not con:
         return False
     try:
-        return is_premium(con, chat)
+        if not is_premium(con, chat):
+            _premium_memo.pop(chat, None)
+            return False
+        row = con.execute("SELECT premium_expire FROM users WHERE chat_id=?", (chat,)).fetchone()
     except sqlite3.Error:
         return False
     finally:
         con.close()
+    if len(_premium_memo) >= PREMIUM_MEMO_MAX:
+        _premium_memo.clear()
+    _premium_memo[chat] = min(t + PREMIUM_MEMO, int(row[0] or 0) if row else t)
+    return True
 
 
 # Что из выгрузки нужно закрытому приложению: профиль (план, пробный
@@ -11784,8 +11821,26 @@ def _json_clean(o):
     return str(o)
 
 
-# Готовые ответы для всех: имя → (объект из кэша модуля, байты, ETag).
-_PUBLIC: dict[str, tuple[object, bytes, str]] = {}
+# Готовые ответы для всех: имя → (объект из кэша модуля, байты, ETag, те же
+# байты в gzip). Сжимаем один раз на новую сводку, а не nginx на каждый
+# запрос: 127 КБ JSON ETF — это ~4 мс процессора на каждого человека.
+_PUBLIC: dict[str, tuple[object, bytes, str, bytes]] = {}
+
+
+def _wants_gzip(accept: str) -> bool:
+    """Клиент принимает gzip (Accept-Encoding: gzip или *, без q=0)."""
+    for part in accept.lower().split(","):
+        name, _, params = part.strip().partition(";")
+        if name.strip() not in ("gzip", "*"):
+            continue
+        q = params.strip()
+        if q.startswith("q="):
+            try:
+                return float(q[2:]) > 0
+            except ValueError:
+                return False
+        return True
+    return False
 
 
 # --- ETF и крупные держатели -----------------------------------------------
@@ -13101,10 +13156,24 @@ def pxa_check() -> int:
 # TFTC может дописывать день по мере отчётов. Поэтому рассылка — только когда
 # цифры дня не менялись ETFD_STABLE (etf_day_seen): иначе сообщение ушло бы с
 # неполной суммой, а то и с крупным днём, которого в итоге не было.
+#
+# Много подписчиков: читаем их пачками по ETFD_BATCH (по порядку включения,
+# с места, где остановились), Премиум — одним запросом на пачку, шлём в
+# ETFD_WORKERS потоков, но всего не чаще ETFD_RATE в секунду: у Telegram
+# предел — около 30 сообщений в секунду на бота, выше — ответы 429.
+# Миллион подписчиков — около 11 часов на день; день свежий трое суток.
+# Порции растут 1 → 2 → 4 → 8 и после любого сбоя снова с одного: если
+# Telegram лёг, проход заканчивается на трёх сообщениях, а не на тысячах.
 ETFD_FRESH = 3 * 86400
 ETFD_STABLE = 3 * 3600
 ETFD_EVERY = 900
 ETFD_FAILS = 3
+ETFD_BATCH = 500
+ETFD_WORKERS = 8
+ETFD_RATE = 25.0
+# Разосланные дни: нужен только последний (новому подписчику его не шлём),
+# остальное — счётчик «сколько дошло» за последние ETFD_KEEP.
+ETFD_KEEP = 90 * 86400
 ETFD_SCHEMA = """
 CREATE TABLE IF NOT EXISTS etf_day_subs (
     chat_id TEXT PRIMARY KEY,
@@ -13113,6 +13182,7 @@ CREATE TABLE IF NOT EXISTS etf_day_subs (
     fails INTEGER NOT NULL DEFAULT 0,
     last_day INTEGER NOT NULL DEFAULT 0
 );
+CREATE INDEX IF NOT EXISTS etf_day_subs_at ON etf_day_subs(at, chat_id);
 CREATE TABLE IF NOT EXISTS etf_day_sent (
     day INTEGER PRIMARY KEY,
     v REAL NOT NULL,
@@ -13248,6 +13318,23 @@ def etfd_day() -> tuple | None:
     return ts, v, buy, sell
 
 
+class _Pace:
+    """Не чаще rate раз в секунду на все потоки вместе."""
+
+    def __init__(self, rate: float):
+        self.gap = 1.0 / rate
+        self.next = 0.0
+        self.lock = threading.Lock()
+
+    def wait(self) -> None:
+        with self.lock:
+            t = time.monotonic()
+            at = max(t, self.next)
+            self.next = at + self.gap
+        if at > t:
+            time.sleep(at - t)
+
+
 def etfd_check() -> int:
     """Один проход: свежий день, о котором ещё не писали, — разослать.
     Вернёт, сколько сообщений дошло."""
@@ -13272,32 +13359,62 @@ def etfd_check() -> int:
             return 0
         # День стал рассылаемым: с этой минуты включившие алерт его не получат.
         con.execute("INSERT OR IGNORE INTO etf_day_sent(day, v, at) VALUES(?,?,?)", (ts, v, now()))
+        con.execute("DELETE FROM etf_day_sent WHERE day<?", (ts - ETFD_KEEP,))
         con.commit()
-        subs = con.execute("SELECT chat_id, lang FROM etf_day_subs WHERE last_day<? ORDER BY at", (ts,)).fetchall()
-        sent = down = 0
-        texts: dict = {}
-        for chat, lang in subs:
-            if not chat_premium(chat):
-                continue
-            text = texts.get(lang) or texts.setdefault(lang, etfd_text(lang, ts, v, buy, sell))
-            ok = etfd_send(chat, text)
-            if ok is None:
-                down += 1
-                if down >= 3:
-                    break
-                continue
-            down = 0
-            if ok:
-                sent += 1
-                con.execute("UPDATE etf_day_subs SET last_day=?, fails=0 WHERE chat_id=?", (ts, chat))
-                con.execute("UPDATE etf_day_sent SET n=n+1 WHERE day=?", (ts,))
-            else:
-                con.execute("UPDATE etf_day_subs SET last_day=?, fails=fails+1 WHERE chat_id=?", (ts, chat))
-                con.execute("DELETE FROM etf_day_subs WHERE chat_id=? AND fails>=?", (chat, ETFD_FAILS))
-            con.commit()
-        return sent
+        with ThreadPoolExecutor(max_workers=ETFD_WORKERS, thread_name_prefix="etfd") as pool:
+            return _etfd_deliver(con, pool, ts, lambda lang: etfd_text(lang, ts, v, buy, sell))
     finally:
         con.close()
+
+
+def _etfd_deliver(con: sqlite3.Connection, pool: ThreadPoolExecutor, ts: int, make) -> int:
+    """Разослать день ts всем, кто его ещё не получил. Подписчики — пачками
+    по ETFD_BATCH с места, где остановились (без Премиума остаются с прежним
+    last_day, и без этого места пачка читалась бы снова и снова)."""
+    pace = _Pace(ETFD_RATE)
+    texts: dict[str, str] = {}
+
+    def one(chat: str, lang: str) -> bool | None:
+        pace.wait()
+        return etfd_send(chat, texts[lang])
+
+    sent = down = 0
+    step = 1
+    at, last = -1, ""
+    while down < 3:
+        rows = con.execute(
+            "SELECT chat_id, lang, at FROM etf_day_subs WHERE last_day<? AND (at, chat_id)>(?, ?) "
+            "ORDER BY at, chat_id LIMIT ?", (ts, at, last, ETFD_BATCH)).fetchall()
+        if not rows:
+            break
+        at, last = rows[-1][2], rows[-1][0]
+        prem = premium_of(con, [r[0] for r in rows])
+        todo = [(chat, lang) for chat, lang, _ in rows if chat in prem]
+        i = 0
+        while i < len(todo) and down < 3:
+            part = todo[i:i + step]
+            i += len(part)
+            for _, lang in part:
+                if lang not in texts:
+                    texts[lang] = make(lang)
+            outs = list(pool.map(one, *zip(*part, strict=True)))
+            bad = False
+            for (chat, _), ok in zip(part, outs, strict=True):
+                if ok is None:
+                    down += 1
+                    bad = True
+                    continue
+                down = 0
+                if ok:
+                    sent += 1
+                    con.execute("UPDATE etf_day_subs SET last_day=?, fails=0 WHERE chat_id=?", (ts, chat))
+                    con.execute("UPDATE etf_day_sent SET n=n+1 WHERE day=?", (ts,))
+                else:
+                    con.execute("UPDATE etf_day_subs SET last_day=?, fails=fails+1 WHERE chat_id=?", (ts, chat))
+                    con.execute("DELETE FROM etf_day_subs WHERE chat_id=? AND fails>=?", (chat, ETFD_FAILS))
+            con.commit()
+            step = 1 if bad else min(step * 2, ETFD_WORKERS)
+    return sent
 
 
 def etfd_loop() -> None:
@@ -15476,6 +15593,9 @@ def mutate(chat: str, kind: str, body: dict) -> dict:
                     # Таблицы может не быть на старой базе — это не повод
                     # оборвать удаление остального.
                     pass
+            # Строки users больше нет — и подписки тоже: память chat_premium
+            # не должна пускать ещё PREMIUM_MEMO секунд.
+            _premium_memo.pop(chat, None)
             # Адреса, за которыми больше никто не следит, держать незачем.
             con.execute(
                 "DELETE FROM whale_addresses WHERE NOT EXISTS "
@@ -15549,6 +15669,16 @@ class Handler(BaseHTTPRequestHandler):
         # Без секретов: подпись Telegram и ключи в журнал не попадают.
         sys.stderr.write("[api] " + shield.redact(fmt % args) + "\n")
 
+    def log_request(self, code="-", size="-"):
+        # Удачный общий ответ (_json_public) строкой в журнал не пишем: такие
+        # запросы — самые частые (каждое открытие экрана), обращение и так
+        # записывает nginx, а здесь при миллионах людей это гигабайты
+        # одинаковых строк в journald. Ошибки и всё остальное — как раньше.
+        if getattr(self, "_quiet", False):
+            self._quiet = False
+            return
+        super().log_request(code, size)
+
     def _shield(self) -> bool:
         """Отказы до разбора запроса. True — ответ уже отправлен."""
         ip = self.client_address[0]
@@ -15604,13 +15734,18 @@ class Handler(BaseHTTPRequestHandler):
             except (TypeError, ValueError, RecursionError) as e:
                 self._json(500, {"ok": False, "error": f"json:{type(e).__name__}"})
                 return
-            hit = (obj, raw, f'W/"{hashlib.sha256(raw).hexdigest()[:24]}"')
+            # mtime=0: те же данные — те же байты, без даты сжатия внутри.
+            hit = (obj, raw, f'W/"{hashlib.sha256(raw).hexdigest()[:24]}"', gzip.compress(raw, 6, mtime=0))
             _PUBLIC[name] = hit
-        _, raw, tag = hit
+        _, raw, tag, gz = hit
         same = tag in [x.strip() for x in (self.headers.get("If-None-Match") or "").split(",")]
+        self._quiet = True
         self.send_response(304 if same else 200)
         self._cors()
         self.send_header("ETag", tag)
+        # Ответ зависит от Accept-Encoding — общий кэш по пути не должен
+        # отдать сжатое тому, кто просил без сжатия.
+        self.send_header("Vary", "Accept-Encoding")
         # Копию можно держать, но перед показом — сверить с сервером.
         self.send_header("Cache-Control", "no-cache")
         for k, v in shield.SECURITY_HEADERS:
@@ -15618,6 +15753,10 @@ class Handler(BaseHTTPRequestHandler):
         if same:
             self.end_headers()
             return
+        if _wants_gzip(self.headers.get("Accept-Encoding") or ""):
+            raw = gz
+            # nginx видит готовое сжатие и второй раз не жмёт.
+            self.send_header("Content-Encoding", "gzip")
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(raw)))
         self.end_headers()
@@ -15661,8 +15800,14 @@ class Handler(BaseHTTPRequestHandler):
         адрес оседает в журналах nginx, истории браузера и Referer, а подпись
         сутки работает как ключ от аккаунта."""
         init = self.headers.get("X-Telegram-Init-Data") or ""
-        parsed = verify_init_data(init)
-        return parsed["id"] if parsed else ""
+        # Счётчик запросов и проверка Премиума спрашивают одно и то же — подпись
+        # считается один раз на запрос. Помним в пределах той же секунды:
+        # соединение живёт дольше запроса, а срок подписи — по часам.
+        key = (init, now())
+        if getattr(self, "_who", (None, ""))[0] != key:
+            parsed = verify_init_data(init)
+            self._who = (key, parsed["id"] if parsed else "")
+        return self._who[1]
 
     def _user_full(self, qs: dict) -> dict:
         """Пользователь из подписи целиком: id и имя для комментариев."""

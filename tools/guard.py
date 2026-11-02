@@ -937,14 +937,27 @@ say("старых алертов по ETF (по фондам, wt_etfalert) не�
     and ".ef-bell" not in read(f"{APP}/src/styles/app.css") and "wt_etfalert" not in read(f"{APP}/.github/workflows/tests.yml"))
 say("ETF: итоги каждого дня в Telegram — по желанию, только с Премиумом, любое движение (кто купил и кто продал), один день — одно сообщение, свежий и устоявшийся день (3 ч без изменений), сбой сети — не отписка, дата словами, в каждом сообщении источник TFTC и лицензия",
     "if not v and not buy and not sell:" in api and "ETFD_MIN" not in api and "def etfd_check() -> int:" in api and "INSERT OR IGNORE INTO etf_day_sent" in api
-    and "if not chat_premium(chat):\n                continue" in api and "now() - ts > ETFD_FRESH" in api
+    and "prem = premium_of(con, [r[0] for r in rows])" in api and "if chat in prem]" in api and "now() - ts > ETFD_FRESH" in api
     and 'if body.get("on") is True and not chat_premium(chat):' in api and "dgi.TFTC_BY_POST}\")" in api
     and "ETFD_STABLE = 3 * 3600" in api and "if now() - seen[1] < ETFD_STABLE:" in api
     and "def etfd_send(chat: str, text: str) -> bool | None:" in api and "if e.code == 403 or (" in api
-    and "                if down >= 3:\n                    break" in api and "d=dgi.date_word(lang, day)" in api
+    and "    while down < 3:\n" in api and "        while i < len(todo) and down < 3:" in api and "d=dgi.date_word(lang, day)" in api
     and "INSERT OR IGNORE INTO etf_new_funds" in api
     and "threading.Thread(target=etfd_loop, daemon=True).start()" in api and "<DayAlert lang={lang} />" in _ef
     and 'role="switch"' in _ef and "test_etf_day_alert.py" in read(f"{APP}/.github/workflows/tests.yml"))
+say("ETF под миллионы: итоги дня — подписчики пачками по индексу (не все в память), Премиум запросом на пачку, рассылка в 8 потоков не чаще 25 в секунду (предел Telegram ~30), порции 1→2→4→8 и с одного после сбоя; старые разосланные дни удаляются; /api/etf сжат один раз, а не на каждый запрос; удачный общий ответ — без строки в journald; Премиум помнится 30 с (только «да»), подпись — раз на запрос",
+    "ETFD_BATCH = 500" in api and "ETFD_WORKERS = 8" in api and "ETFD_RATE = 25.0" in api and "ETFD_KEEP = 90 * 86400" in api
+    and "CREATE INDEX IF NOT EXISTS etf_day_subs_at ON etf_day_subs(at, chat_id);" in api
+    and '"ORDER BY at, chat_id LIMIT ?", (ts, at, last, ETFD_BATCH)' in api
+    and 'con.execute("DELETE FROM etf_day_sent WHERE day<?", (ts - ETFD_KEEP,))' in api
+    and "step = 1 if bad else min(step * 2, ETFD_WORKERS)" in api and "        pace.wait()\n        return etfd_send(" in api
+    and "fetchall()\n        sent = down = 0" not in api
+    and "gzip.compress(raw, 6, mtime=0)" in api and 'self.send_header("Content-Encoding", "gzip")' in api
+    and 'self.send_header("Vary", "Accept-Encoding")' in api
+    and "        self._quiet = True\n        self.send_response(304 if same else 200)" in api
+    and "PREMIUM_MEMO = 30" in api and "_premium_memo.pop(chat, None)" in api
+    and "class EtfDayScaleTest(" in read(f"{APP}/tests/test_etf_day_alert.py")
+    and "test_gzip_is_compressed_once_and_sent_only_to_who_accepts_it" in read(f"{APP}/tests/test_dom_http.py"))
 _tre1 = read(f"{APP}/wt_treasury.py")
 say("ETF: защита от подменённого источника — целые не длиннее 18 цифр (огромное целое не роняет разбор), не больше 60 фондов в наборе, не больше трёх сообщений о новых фондах за сборку",
     "parse_int=_int" in _etfs and "parse_int=_int" in _tre1 and "INT_DIGITS = 18" in _etfs and "INT_DIGITS = 18" in _tre1
