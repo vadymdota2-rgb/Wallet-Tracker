@@ -162,7 +162,15 @@ a3 = run(f"{ROOT}/src/lib/tick.ts", ["node", "--test", "tests/tick.test.ts"], TI
 # проверяет): весь набор тестов проекта на каждую мутацию не укладывался в
 # срок проверки CI.
 a2 = run(f"{ROOT}/wt_halving.py", [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_halving*.py"], PY)
-alive = a1 + a2 + a3
-total = len(TS) + len(PY) + len(TICK) - len(EQUIV)
+# Маршрут /api/halving в whale_api: удачный ответ — без строки в journald.
+AP = [
+    ('                self._quiet = rep.get("ok") is True\n', "", "маршрут: удачный ответ не пишется в журнал"),
+    ('                self._quiet = rep.get("ok") is True\n', "                self._quiet = True\n", "маршрут: «нет данных» — в журнал"),
+    ("            if code in (200, 304):\n                return\n", "            return\n", "журнал: сбой пишется и после тихого ответа"),
+    ("            self._quiet = False\n            # Тихо", "            # Тихо", "журнал: тихо — только один ответ"),
+]
+a4 = run(f"{ROOT}/whale_api.py", [sys.executable, "-m", "unittest", "tests.test_halving_route"], AP)
+alive = a1 + a2 + a3 + a4
+total = len(TS) + len(PY) + len(TICK) + len(AP) - len(EQUIV)
 print(f"ИТОГ: убито {total - len(alive)} из {total}; выжили: {alive}")
 sys.exit(1 if alive else 0)

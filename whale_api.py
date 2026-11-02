@@ -15676,7 +15676,9 @@ class Handler(BaseHTTPRequestHandler):
         # одинаковых строк в journald. Ошибки и всё остальное — как раньше.
         if getattr(self, "_quiet", False):
             self._quiet = False
-            return
+            # Тихо — только удачное: сбой кодирования (500) всё равно в журнал.
+            if code in (200, 304):
+                return
         super().log_request(code, size)
 
     def _shield(self) -> bool:
@@ -16104,7 +16106,12 @@ class Handler(BaseHTTPRequestHandler):
                 self._json_public("fng", wt_fng.fng_data())
                 return
             if path in ("/halving", "/api/halving"):
-                self._json(200, halving.reply())
+                # Карточка внизу меню у всех — самый частый запрос приложения.
+                # Удачный ответ строкой в journald не пишем (обращение пишет
+                # nginx); «нет данных» — в журнал, как и раньше.
+                rep = halving.reply()
+                self._quiet = rep.get("ok") is True
+                self._json(200, rep)
                 return
             if path.startswith("/api/logo/bsc/"):
                 url, ttl = bsc_logo(path[len("/api/logo/bsc/"):])

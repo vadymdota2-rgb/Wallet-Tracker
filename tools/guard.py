@@ -780,7 +780,9 @@ else:
 # вид — HalvingCard.tsx + .css. В общих файлах — только подключение.
 say("халвинг — отдельный модуль: сервер, расчёт, тип, вид и стили в своих файлах, в общих — только подключение",
     "import wt_halving as halving" in api and "halving_data = halving.halving_data" in api
-    and 'self._json(200, halving.reply())' in api and "mempool" not in api.split("# --- Халвинг")[1].split("# --- Bitcoin")[0]
+    and "rep = halving.reply()\n                self._quiet = rep.get(\"ok\") is True\n                self._json(200, rep)" in api
+    and "            if code in (200, 304):\n                return" in api and os.path.isfile(f"{APP}/tests/test_halving_route.py")
+    and "mempool" not in api.split("# --- Халвинг")[1].split("# --- Bitcoin")[0]
     and "export interface HalvingReply" in _hvl and "HalvingReply" not in read(f"{APP}/src/lib/types.ts")
     and 'import "./HalvingCard.css";' in _hv and ".hv" not in read(f"{APP}/src/styles/app.css").replace("HalvingCard.css", "")
     and "from whale_api" not in _hvs and "import whale_api" not in _hvs
