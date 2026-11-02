@@ -122,6 +122,13 @@ class PublicJsonTest(unittest.TestCase):
             self.assertEqual(err.getvalue(), "")
             h.log_request(500)
             self.assertIn('"GET /api/etf HTTP/1.1" 500', err.getvalue())
+            # Флаг — на один ответ: следующий удачный пишется как обычно.
+            h.log_request(200)
+            self.assertIn('"GET /api/etf HTTP/1.1" 200', err.getvalue())
+            # Сбой при тихом флаге — всё равно в журнал.
+            h._quiet = True
+            h.log_request(500)
+            self.assertEqual(err.getvalue().count('" 500'), 2)
         with open(os.path.join(ROOT, "whale_api.py"), encoding="utf-8") as f:
             src = f.read()
         body = src.split("    def _json_public(")[1].split("\n    def ")[0]

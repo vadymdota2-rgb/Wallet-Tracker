@@ -368,8 +368,9 @@ AP = [
     ('        self.send_header("Vary", "Accept-Encoding")\n', "", "общий ответ: Vary: Accept-Encoding"),
     ('            self.send_header("Content-Encoding", "gzip")\n', "", "общий ответ: сжатое помечено"),
     ("        self._quiet = True\n        self.send_response(304", "        self.send_response(304", "общий ответ: без строки в journald"),
-    ('        if getattr(self, "_quiet", False):\n            self._quiet = False\n            return\n', "", "журнал: удачный общий ответ не пишется"),
-    ("            self._quiet = False\n            return\n        super()", "            return\n        super()", "журнал: ошибки после общего ответа пишутся"),
+    ('        if getattr(self, "_quiet", False):\n', "        if False:\n", "журнал: удачный общий ответ не пишется"),
+    ("            self._quiet = False\n            # Тихо", "            # Тихо", "журнал: тихо — только один ответ"),
+    ("            if code in (200, 304):\n                return\n", "            return\n", "журнал: сбой пишется и после тихого флага"),
     ('        if getattr(self, "_who", (None, ""))[0] != key:', "        if True:", "подпись: одна проверка на запрос"),
     ("        key = (init, now())\n", "        key = (init, 0)\n", "подпись: в следующую секунду — проверка заново"),
 ]
