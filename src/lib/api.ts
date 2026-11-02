@@ -10,7 +10,7 @@ import { forget, peek, peekAny, remember } from "./memo";
 import { HALVING_TTL_MS, clockSkew, pickHalving, validHalving, type HalvingReply } from "./halving";
 import { FNG_TTL_MS, validFng, type FngReply } from "./fng";
 import { ETF_TTL_MS, validEtf, type EtfReply } from "./etf";
-import { DOM_TTL_MS, MCAP_TTL_MS, validDom, validMcap, type DomReply, type McapReply } from "./dom";
+import { DOM_TTL_MS, MCAP_MAX_AGE, MCAP_TTL_MS, validDom, validMcap, type DomReply, type McapReply } from "./dom";
 import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
   LiqCoinsReply, FundRow, LsRow, MutationResult,
@@ -590,7 +590,9 @@ export const peekDom = () => {
 const MCAP_SAVED = "wt-mcap-v1";
 function savedMcap(): McapReply | null {
   const hit = readSaved<unknown>(MCAP_SAVED).all;
-  return hit && Date.now() - hit.at < 7 * 24 * 3600_000 ? validMcap(hit.v) : null;
+  // Копия моложе MCAP_MAX_AGE по времени самого ответа, а не записи на устройство.
+  const v = hit && Date.now() - hit.at < MCAP_MAX_AGE * 1000 ? validMcap(hit.v) : null;
+  return v && Date.now() / 1000 - v.at < MCAP_MAX_AGE ? v : null;
 }
 export const fetchMcap = () =>
   remember<McapReply | null>("/api/mcap", MCAP_TTL_MS, () =>

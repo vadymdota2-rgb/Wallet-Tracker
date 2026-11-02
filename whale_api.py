@@ -14622,6 +14622,13 @@ def _dg_safe(name: str, fn):
         return None
 
 
+# Сколько выпуск ждёт холодную сборку альтсезона и доминации, с: сразу после
+# перезапуска API ответа ещё нет, а человеку модули ждут лишь секунды
+# (COLD_WAIT). Выпуску спешить некуда — без ожидания раздел пропал бы из
+# выпуска на весь день (как _dg_inst для ETF).
+DG_COLD_WAIT = 90.0
+
+
 def _dg_market() -> dict:
     """Рынок целиком: настроение, две главные монеты и индекс альтсезона —
     то, с чего читают любой обзор."""
@@ -14635,12 +14642,12 @@ def _dg_market() -> dict:
         if px:
             out[sym] = px
     # Индекс альтсезона — свой расчёт (wt_dom): сейчас и на сутки раньше.
-    rows = (dom_data() or {}).get("rows") or []
+    rows = (dom_data(wait=DG_COLD_WAIT) or {}).get("rows") or []
     if len(rows) >= 2 and rows[-1][1] is not None and rows[-2][1] is not None:
         out["alt"] = {"v": int(rows[-1][1]), "d1": int(rows[-1][1]) - int(rows[-2][1])}
     # Капитализация и доминация — из кэша вкладки (wt_mcap): тот же ответ,
     # что видят люди, лишних кредитов CoinMarketCap выпуск не тратит.
-    mc = mcap_data()
+    mc = mcap_data(wait=DG_COLD_WAIT)
     if mc.get("ok"):
         (cap, cap_y), (btc, btc_y) = mc["cap"], mc["btc"]
         if cap_y:

@@ -7,8 +7,10 @@ import io
 import json
 import math
 import os
+import ssl
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from unittest import mock
@@ -485,6 +487,52 @@ class DataTest(Base):
             self.assertEqual(dom.dom_data(), {"ok": False, "error": "building"})
         self.assertEqual(len(started), 1)
 
+    def test_cold_start_waits_for_a_quick_build(self):
+        # Свечи на диске — пересчёт за секунды: человек сразу видит индекс, а не «собираем».
+        res = {"ok": True, "rows": [], "tiers": [], "n": dom.TOP}
+        calls = []
+
+        def build(sleep=None):
+            calls.append(1)
+            time.sleep(0.05)
+            with dom._lock:
+                dom._st.hit = (time.monotonic(), res)
+            return res
+        with mock.patch.object(dom, "build", build):
+            got = []
+            ths = [threading.Thread(target=lambda: got.append(dom.dom_data())) for _ in range(4)]
+            for t in ths:
+                t.start()
+            for t in ths:
+                t.join()
+        self.assertEqual(got, [res] * 4)
+        # Все ждали одну и ту же сборку.
+        self.assertEqual(calls, [1])
+
+    def test_cold_start_waits_no_longer_than_wait(self):
+        res = {"ok": True, "rows": [], "tiers": [], "n": dom.TOP}
+        gate = threading.Event()
+
+        def build(sleep=None):
+            gate.wait(5)
+            with dom._lock:
+                dom._st.hit = (time.monotonic(), res)
+            return res
+        with mock.patch.object(dom, "build", build):
+            t = time.monotonic()
+            self.assertEqual(dom.dom_data(wait=0.05), {"ok": False, "error": "building"})
+            self.assertLess(time.monotonic() - t, 1.0)
+            gate.set()
+            dom._st.job.join(5)
+            self.assertIs(dom.dom_data(), res)
+        self.assertFalse(dom._busy.is_set())
+
+    def test_digest_waits_longer_than_a_person(self):
+        with open(os.path.join(ROOT, "whale_api.py"), encoding="utf-8") as f:
+            api = f.read()
+        self.assertIn("dom_data(wait=DG_COLD_WAIT)", api)
+        self.assertIn("mcap_data(wait=DG_COLD_WAIT)", api)
+
     def test_fresh_answer_from_cache_and_disk_copy_after_restart(self):
         res = self.run_build(market())
         self.assertIs(dom.dom_data(), res)
@@ -618,6 +666,24 @@ class LogTest(unittest.TestCase):
         self.assertNotIn("\x1b", out)
         self.assertNotIn("b\nc", out)
         self.assertLess(len(out), 320)
+
+
+class TlsTest(unittest.TestCase):
+    """Hyperliquid: TLS не старше 1.2 при любых настройках системы (как wt_halving)."""
+
+    def test_tls_minimum_does_not_depend_on_the_system(self):
+        # На Debian 13 системный минимум — MINIMUM_SUPPORTED.
+        def loose():
+            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            ctx.minimum_version = ssl.TLSVersion.MINIMUM_SUPPORTED
+            return ctx
+        with mock.patch.object(dom.ssl, "create_default_context", loose):
+            self.assertEqual(dom._tls().minimum_version, ssl.TLSVersion.TLSv1_2)
+        https = [h for h in dom._opener.handlers if isinstance(h, dom.urllib.request.HTTPSHandler)]
+        self.assertEqual(len(https), 1)
+        self.assertGreaterEqual(https[0]._context.minimum_version, ssl.TLSVersion.TLSv1_2)
+        self.assertEqual(https[0]._context.verify_mode, ssl.CERT_REQUIRED)
+        self.assertTrue(https[0]._context.check_hostname)
 
 
 if __name__ == "__main__":

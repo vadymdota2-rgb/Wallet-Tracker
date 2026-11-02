@@ -29,7 +29,7 @@ import { fetchDom, fetchMcap, peekDom, peekMcap } from "../lib/api";
 import { Card, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import { CmcBy } from "../components/CmcBy";
 import {
-  DOM_TTL_MS, MCAP_RANGES, RANGES, STALE_DAYS, ago, altStats, beat, byWeek, change, daysOld, ebStats, everyNth, mcapAgo, mcapWindow, nearestIdx, rebase,
+  DOM_TTL_MS, MCAP_RANGES, RANGES, STALE_DAYS, ago, altStats, beat, byWeek, change, daysOld, ebStats, everyNth, mcapAgo, mcapOld, mcapWindow, nearestIdx, rebase,
   seasonOf, series, thin, vsBtc, windowOf, type DomReply, type McapDay, type McapRange, type McapReply, type Range,
 } from "../lib/dom";
 import { Frame } from "./Screen";
@@ -628,6 +628,9 @@ function McapBlock({ m, lang }: { m: McapReply; lang: Lang }) {
   ];
   return (
     <>
+      {mcapOld(m.at, Date.now() / 1000) ? (
+        <p className="lq-stale" role="status">{t(lang, "dm_cmc_old", { t: stamp(lang, m.at) })}</p>
+      ) : null}
       <Card>
         <div className="dm-cap">
           <small>{t(lang, "dm_total")}</small>

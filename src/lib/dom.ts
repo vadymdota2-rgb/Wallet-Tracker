@@ -130,6 +130,18 @@ export interface McapReply {
 /** Ответ живёт столько же, сколько на сервере (wt_mcap.TTL). */
 export const MCAP_TTL_MS = 60 * 60_000;
 
+/** CoinMarketCap отвечает раз в час: ответ старше этого (с) — экран говорит,
+ *  от какого он времени (как «Обновлено …» у халвинга, STALE_AFTER). */
+export const MCAP_STALE = 3 * 3600;
+/** Старше этого (с) сервер ответ не отдаёт (wt_mcap.STALE_MAX), и копия с
+ *  устройства тоже не берётся: доминация недельной давности — уже не «сейчас». */
+export const MCAP_MAX_AGE = 3 * 86_400;
+
+/** Ответ CoinMarketCap устарел (now и at — unix с). */
+export function mcapOld(at: number, now: number): boolean {
+  return now - at > MCAP_STALE;
+}
+
 function share(v: unknown, lo: number): Share | null {
   if (!Array.isArray(v) || v.length !== 2 || !within(v[0], lo, 100)) return null;
   return [v[0], within(v[1], lo, 100) ? v[1] : null];

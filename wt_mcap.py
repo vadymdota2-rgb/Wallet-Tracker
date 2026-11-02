@@ -45,6 +45,7 @@ import http.client
 import json
 import math
 import os
+import ssl
 import sys
 import threading
 import time
@@ -92,7 +93,19 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect, urllib.request.HTTPSHandler())
+def _tls() -> ssl.SSLContext:
+    """Сертификат и имя сервера проверяются, TLS — не старше 1.2 (как _tls в
+    wt_halving). Минимум задан явно: сам Python берёт его из настроек
+    системы, а на Debian 13 (OpenSSL 3.5) там MINIMUM_SUPPORTED."""
+    ctx = ssl.create_default_context()
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    return ctx
+
+
+# CoinMarketCap: напрямую (прокси из окружения не берётся), без перенаправлений,
+# сертификат проверяется, TLS не старше 1.2 — как у wt_halving.
+_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect,
+                                      urllib.request.HTTPSHandler(context=_tls()))
 
 
 def _allowed(url: str) -> bool:
@@ -299,11 +312,31 @@ class _State:
     # Копии с диска уже читались (один раз: без годной копии запросы диск
     # не трогают — история с диска весит до мегабайта).
     loaded: bool = False
+    # Поток идущей фоновой сборки (холодный старт его ждёт).
+    job: threading.Thread | None = None
 
 
 _st = _State()
 _lock = threading.Lock()
 _busy = threading.Event()
+# Сколько запрос без готового ответа ждёт сборку, с (как COLD_WAIT в
+# wt_halving): два запроса к CoinMarketCap — секунды, и человек сразу видит
+# доминацию, а не «нет данных». Не успела — «нет данных», сборка доделывается
+# в фоне. Приложение ждёт ответ 30 с (callTwice).
+COLD_WAIT = 10.0
+# Ответ старше этого (по его at, с) не отдаётся: доминация трёхдневной
+# давности — уже не «сейчас» (CoinMarketCap молчит, ключ кончился). Так же
+# копия на устройстве (MCAP_MAX_AGE в src/lib/dom.ts); после 3 ч экран и так
+# говорит, от какого ответ времени (MCAP_STALE).
+STALE_MAX = 3 * 86400
+
+
+def _live(hit: tuple[float, dict[str, Json]] | None) -> tuple[float, dict[str, Json]] | None:
+    """Ответ из кэша, если он не старше STALE_MAX."""
+    if hit is None:
+        return None
+    at = hit[1].get("at")
+    return hit if isinstance(at, int) and time.time() - at <= STALE_MAX else None
 
 
 def set_cache_dir(path: str | None) -> None:
@@ -499,9 +532,30 @@ def _bg() -> None:
         _busy.clear()
 
 
-def mcap_data() -> dict[str, Json]:
+def _start() -> threading.Thread | None:
+    """Фоновая сборка, если она ещё не идёт и не отдыхает после сбоя. Звать
+    под _lock. Поток идущей или новой сборки; None — сборки нет (отдых или
+    кончились потоки: флаг тогда снят, иначе ответ больше не обновлялся)."""
+    if _busy.is_set():
+        return _st.job
+    if _st.fail is not None and time.monotonic() - _st.fail < FAIL_WAIT:
+        return None
+    _busy.set()
+    job = threading.Thread(target=_bg, daemon=True)
+    try:
+        job.start()
+    except RuntimeError as e:
+        _busy.clear()
+        _log(f"фон не запущен: {e}")
+        return None
+    _st.job = job
+    return job
+
+
+def mcap_data(wait: float = COLD_WAIT) -> dict[str, Json]:
     """Ответ /api/mcap: из кэша; свежий собирается в фоне одним потоком.
-    Пока свежего нет — прошлый; нет и прошлого — «нет данных»."""
+    Пока свежего нет — прошлый; нет и прошлого — запрос ждёт сборку не
+    дольше wait (выпуск дайджеста — дольше), а не успела — «нет данных»."""
     if not _key():
         return {"ok": False, "error": "no_key"}
     if not _st.loaded and _st.dir:
@@ -515,15 +569,15 @@ def mcap_data() -> dict[str, Json]:
                 if _st.hist is None:
                     _st.hist = hist
     with _lock:
-        hit = _st.hit
+        hit = _live(_st.hit)
         if hit and time.monotonic() - hit[0] < TTL:
             return hit[1]
-        resting = _st.fail is not None and time.monotonic() - _st.fail < FAIL_WAIT
-        if not _busy.is_set() and not resting:
-            _busy.set()
-            try:
-                threading.Thread(target=_bg, daemon=True).start()
-            except RuntimeError as e:
-                _busy.clear()
-                _log(f"фон не запущен: {e}")
+        job = _start()
+        if hit:
+            return hit[1]
+    # Холодный старт: все ждут одну и ту же сборку.
+    if job is not None:
+        job.join(wait)
+    with _lock:
+        hit = _live(_st.hit)
     return hit[1] if hit else {"ok": False, "error": "no_data"}

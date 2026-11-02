@@ -1,8 +1,9 @@
 /* Альтсезон — проверка ответа и расчёты: npm test (node --test). */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
-  CLOCK_LAG, MCAP_FROM, MIN_BASKET, byWeek, nearestIdx, PX_FROM, STALE_DAYS, mcapAgo, mcapWindow, rebase, shareDelta, validMcap, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, vsBtc, windowOf,
+  CLOCK_LAG, MCAP_FROM, MCAP_MAX_AGE, MCAP_STALE, MIN_BASKET, mcapOld, byWeek, nearestIdx, PX_FROM, STALE_DAYS, mcapAgo, mcapWindow, rebase, shareDelta, validMcap, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, vsBtc, windowOf,
   type DomDay, type McapDay,
 } from "../src/lib/dom.ts";
 
@@ -275,4 +276,36 @@ test("vsBtc: монета, упавшая почти до нуля (−100 % п�
   // Ширина полосы — доля от лучшей: числа, а не NaN.
   const span = Math.max(0.01, ...[-100, 30, 5].map((p) => Math.abs(vsBtc(p, 20))));
   for (const p of [-100, 30, 5]) assert.ok(Number.isFinite(vsBtc(p, 20) / span));
+});
+
+test("доминация: старше 3 ч — экран говорит, от какого она времени; предел возраста — тот же, что у сервера", () => {
+  const at = 1_800_000_000;
+  assert.equal(mcapOld(at, at + MCAP_STALE), false);
+  assert.equal(mcapOld(at, at + MCAP_STALE + 1), true);
+  assert.equal(mcapOld(at, at), false);
+  assert.equal(MCAP_STALE, 3 * 3600);
+  // Сервер не отдаёт ответ старше STALE_MAX, устройство — копию старше MCAP_MAX_AGE: одно и то же.
+  const py = readFileSync(new URL("../wt_mcap.py", import.meta.url), "utf8");
+  assert.match(py, /^STALE_MAX = 3 \* 86400$/m);
+  assert.equal(MCAP_MAX_AGE, 3 * 86_400);
+});
+
+test("тексты экрана: число не отрывается от слова, французские «:» и «;» — от слова, у китайского и японского — без пробелов у числа (16 языков)", () => {
+  const i18n = JSON.parse(readFileSync(new URL("../tools/i18n.json", import.meta.url), "utf8")) as
+    Record<string, Record<string, string>>;
+  const keys = Object.keys(i18n).filter((k) => k.startsWith("dm_"));
+  assert.ok(keys.length > 70);
+  for (const key of keys) {
+    for (const [lang, text] of Object.entries(i18n[key]!)) {
+      // За числом — неразрывный пробел («{n} дн.»), а не обычный: перенос не разрывает их.
+      assert.doesNotMatch(text, /\{[nabpkm]\} (?=[\p{L}%])/u, `${key}.${lang}`);
+      if (lang === "fr") assert.doesNotMatch(text, / [:;?!»]|« /, `${key}.fr`);
+      if (lang === "zh" || lang === "ja") {
+        assert.doesNotMatch(text, /[\u3040-\u30ff\u4e00-\u9fff][ \u00a0]\{[nabpkm]\}|\{[nabpkm]\}[ \u00a0][\u3040-\u30ff\u4e00-\u9fff]/u, `${key}.${lang}`);
+        assert.doesNotMatch(text, /[。，：；！？] /, `${key}.${lang}`);
+      }
+    }
+  }
+  assert.match(i18n["dm_old"]!["zh"]!, /已\{n\}天/);
+  assert.equal(i18n["dm_old"]!["ru"]!.includes("{n}\u00a0дн."), true);
 });

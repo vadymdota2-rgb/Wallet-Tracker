@@ -190,11 +190,26 @@ class DigestMarketTest(unittest.TestCase):
     """Капитализация и доминация в разделе «Рынок» — из кэша вкладки
     (wt_mcap.mcap_data): выпуск сам в CoinMarketCap не ходит."""
 
-    def market(self, mc):
+    def market(self, mc, waits=None):
+        def dom(wait=None):
+            (waits if waits is not None else []).append(("dom", wait))
+            return {}
+
+        def mcap(wait=None):
+            (waits if waits is not None else []).append(("mcap", wait))
+            return mc
         with mock.patch.object(api, "fng_data", lambda: {}), mock.patch.object(api, "_dg_px", lambda p: None), \
-                mock.patch.object(api, "dom_data", lambda: {}), mock.patch.object(api, "mcap_data", lambda: mc), \
+                mock.patch.object(api, "dom_data", dom), mock.patch.object(api, "mcap_data", mcap), \
                 mock.patch.object(api.wt_mcap, "_fetch", side_effect=AssertionError("сеть")):
             return api._dg_market()
+
+    def test_issue_waits_for_a_cold_build_longer_than_a_person(self):
+        # Сразу после перезапуска ответа нет: человеку модули ждут секунды
+        # (COLD_WAIT), выпуск — дольше, иначе раздел пропал бы на весь день.
+        waits: list = []
+        self.market(MC, waits)
+        self.assertEqual(waits, [("dom", api.DG_COLD_WAIT), ("mcap", api.DG_COLD_WAIT)])
+        self.assertGreater(api.DG_COLD_WAIT, max(api.wt_dom.COLD_WAIT, api.wt_mcap.COLD_WAIT))
 
     def test_cap_and_dominance_come_from_the_tab_cache(self):
         got = self.market(MC)

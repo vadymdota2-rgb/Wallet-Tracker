@@ -258,8 +258,7 @@ DM = [
     ("        if asked % SAVE_EVERY == 0:\n            _px_save({**old, **out})", "        if asked % SAVE_EVERY == 0:\n            _px_save(out)", "альтсезон: промежуточная запись не теряет ещё не спрошенные монеты"),
     ("            if ts % DAY == 0 and PX_FROM <= ts < _today() and 0 < px < PX_MAX and 0 <= dv < VOL_MAX:", "            if True:", "альтсезон: копия цен на диске проверяется"),
     ("            if ts % DAY == 0 and PX_FROM <= ts < _today() and 0 < px < PX_MAX and 0 <= dv < VOL_MAX:", "            if ts % DAY == 0 and 0 < px < PX_MAX and 0 <= dv < VOL_MAX:", "альтсезон: даты копии цен — с 2020 г. и не идущий день"),
-    ('    return {"ok": False, "error": "building"} if building else _no_data()', "    return _no_data()", "альтсезон: «собираем» на холодном старте"),
-    ("        if not _busy.is_set() and not _resting():", "        if not _busy.is_set():", "альтсезон: пауза после сбоя"),
+    ('    return {"ok": False, "error": "building"} if _busy.is_set() else _no_data()', "    return _no_data()", "альтсезон: «собираем» на холодном старте"),
     ("    return len(xs) >= 10 and max(xs) / min(xs) < PEG", "    return False", "альтсезон: привязанная монета видна по ценам"),
     ("eb = float(f\"{eth[t] / btc[t]:.6g}\")", "eb = float(f\"{eth[t]:.6g}\")", "альтсезон: ETH/BTC — отношение цен"),
     ("                if time.monotonic() > end:\n                    return None\n", "", "альтсезон: весь ответ — не дольше срока"),
@@ -269,6 +268,11 @@ DM = [
     ("                if tries == LIMIT_TRIES:", "                if tries == 0:", "альтсезон: на 429 — несколько повторов"),
     ("                    _px_save({**old, **out})\n                    with _lock:", "                    with _lock:", "альтсезон: прерванный обход сохраняет полученное"),
     ("    return (_st.fail is not None and now - _st.fail < FAIL_WAIT) or now < _st.rest", "    return _st.fail is not None and now - _st.fail < FAIL_WAIT", "альтсезон: после 429 — долгий отдых"),
+    ("    ctx.minimum_version = ssl.TLSVersion.TLSv1_2\n", "", "альтсезон: TLS не старше 1.2"),
+    ("urllib.request.HTTPSHandler(context=_tls()))", "urllib.request.HTTPSHandler())", "альтсезон: настройки TLS — в запросах к Hyperliquid"),
+    ("    if job is not None:\n        job.join(wait)\n", "", "альтсезон: холодный старт ждёт сборку"),
+    ("    if _busy.is_set():\n        return _st.job\n", "", "альтсезон: холодная сборка — одна на всех"),
+    ("    if _resting():\n        return None\n    _busy.set()", "    _busy.set()", "альтсезон: после сбоя — отдых, без новой сборки"),
 ]
 # Доминация (wt_mcap): официальный API CoinMarketCap, бюджет кредитов, история.
 MC = [
@@ -298,7 +302,6 @@ MC = [
     ('    _file_save("mcap.json", {"ok": True, **got, "at": at})\n', "", "доминация: ответ — на диске"),
     ("                _st.hit = (time.monotonic() - age, {**last[1], \"hist\": hist[1] if hist else []})", "                pass", "доминация: после перезапуска — копия с диска"),
     ("                and HIST_FROM <= r[0] <= time.time() and (not rows or r[0] > rows[-1][0])):", "                ):", "доминация: копия истории проверяется"),
-    ("        resting = _st.fail is not None and time.monotonic() - _st.fail < FAIL_WAIT", "        resting = False", "доминация: пауза после сбоя"),
     ('        return {"ok": False, "error": "no_key"}\n    if not _st.loaded and _st.dir:', '        pass\n    if not _st.loaded and _st.dir:', "доминация: без ключа — «нет ключа»"),
     ("    return f\"{HIST}&time_end={time.strftime('%Y-%m-%d', time.gmtime(now))}\"", "    return HIST", "доминация: история до сегодня, а не 10 дней"),
     ("\n                    and (cap[1] is None or _num(cap[1], CAP_MIN, CAP_MAX) is not None))", ")", "доминация: вчерашняя капитализация в копии — годная"),
@@ -306,6 +309,13 @@ MC = [
     ("        _st.loaded = True\n        # Перезапуск", "        # Перезапуск", "доминация: копии с диска — один раз, а не на каждый запрос"),
     ("    out[\"usdt\"] = u if u is None or u <= 100 - _pct(btc) else None", "    out[\"usdt\"] = u", "доминация: USDT — не больше 100 − BTC"),
     ("        return _spent().get(day, 0) + cost <= DAY_BUDGET", "        return _spent()[_today()] + cost <= DAY_BUDGET", "доминация: полночь между проверками не роняет сборку"),
+    ("    ctx.minimum_version = ssl.TLSVersion.TLSv1_2\n", "", "доминация: TLS не старше 1.2"),
+    ("urllib.request.HTTPSHandler(context=_tls()))", "urllib.request.HTTPSHandler())", "доминация: настройки TLS — в запросах к CoinMarketCap"),
+    ("    if job is not None:\n        job.join(wait)\n", "", "доминация: холодный старт ждёт сборку"),
+    ("    if _busy.is_set():\n        return _st.job\n", "", "доминация: холодная сборка — одна на всех"),
+    ("    if _st.fail is not None and time.monotonic() - _st.fail < FAIL_WAIT:\n        return None\n", "", "доминация: после сбоя — отдых, без новой сборки"),
+    ("    return hit if isinstance(at, int) and time.time() - at <= STALE_MAX else None", "    return hit", "доминация: ответ старше STALE_MAX не отдаётся"),
+    ("        hit = _live(_st.hit)\n        if hit and time.monotonic()", "        hit = _st.hit\n        if hit and time.monotonic()", "доминация: старый ответ из кэша не отдаётся"),
 ]
 
 DMT = [
@@ -344,6 +354,9 @@ DMT = [
     ("!within(ts, PX_FROM, at + 2 * DAY)", "!within(ts, PX_FROM, Infinity)", "альтсезон: день не позже времени ответа"),
     ("!within(ts, MCAP_FROM, at + DAY)", "!within(ts, MCAP_FROM, Infinity)", "доминация: день истории не позже времени ответа"),
     ('raw["ok"] !== true || !within(raw["at"], PX_FROM, now + CLOCK_LAG)) return null;\n  const rows', 'raw["ok"] !== true) return null;\n  const rows', "альтсезон: время ответа правдоподобно"),
+    ("  return now - at > MCAP_STALE;", "  return now - at >= MCAP_STALE;", "доминация: ровно 3 ч — ещё свежая"),
+    ("  return now - at > MCAP_STALE;", "  return false;", "доминация: старше 3 ч — с пометкой"),
+    ("export const MCAP_MAX_AGE = 3 * 86_400;", "export const MCAP_MAX_AGE = 7 * 86_400;", "доминация: предел копии — как у сервера"),
 ]
 
 # Общие ответы /api/dom и /api/mcap по HTTP и раздел «Рынок» дайджеста (whale_api.py).
@@ -360,6 +373,8 @@ AP = [
     ('        self.send_header("Cache-Control", "no-cache")\n', '        self.send_header("Cache-Control", "no-store")\n', "доминация: копию можно держать и сверять"),
     ("        if cap_y:\n", "        if True:\n", "дайджест: без вчерашней капитализации — без изменения"),
     ('"d1": round(btc - btc_y, 2)', '"d1": round(btc_y - btc, 2)', "дайджест: изменение доминации за сутки со знаком"),
+    ("    rows = (dom_data(wait=DG_COLD_WAIT) or {})", "    rows = (dom_data() or {})", "дайджест: альтсезон после перезапуска ждёт сборку"),
+    ("    mc = mcap_data(wait=DG_COLD_WAIT)\n", "    mc = mcap_data()\n", "дайджест: доминация после перезапуска ждёт сборку"),
     ('        if _wants_gzip(self.headers.get("Accept-Encoding") or ""):', "        if True:", "общий ответ: без gzip у клиента — обычный JSON"),
     ('        if _wants_gzip(self.headers.get("Accept-Encoding") or ""):', "        if False:", "общий ответ: готовое сжатие"),
     ("                return float(q[2:]) > 0", "                return True", "общий ответ: gzip;q=0 — без сжатия"),

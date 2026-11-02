@@ -8,8 +8,10 @@ import io
 import json
 import os
 import re
+import ssl
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from unittest import mock
@@ -468,7 +470,7 @@ class PolicyTest(unittest.TestCase):
                 found |= {a.name for a in n.names}
             elif isinstance(n, ast.ImportFrom):
                 found.add(n.module or "")
-        self.assertLessEqual(found, {"__future__", "contextlib", "http.client", "json", "math", "os", "sys", "threading",
+        self.assertLessEqual(found, {"__future__", "contextlib", "http.client", "json", "math", "os", "ssl", "sys", "threading",
                                      "time", "urllib.error", "urllib.parse", "urllib.request", "typing", "datetime"})
         bad = [n.func.id for n in ast.walk(self.tree()) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
                and n.func.id in {"eval", "exec", "compile", "__import__", "setattr"}]
@@ -493,7 +495,11 @@ class PolicyTest(unittest.TestCase):
         self.assertTrue(any(isinstance(h, mc._NoRedirect) for h in mc._opener.handlers))
 
     def test_endpoint_takes_nothing_and_credits_are_few(self):
-        self.assertEqual(inspect.signature(mc.mcap_data).parameters, {})
+        # Единственный параметр — сколько ждать холодную сборку; его задаёт
+        # сервер (выпуск дайджеста), из запроса маршрут не передаёт ничего.
+        params = inspect.signature(mc.mcap_data).parameters
+        self.assertEqual(list(params), ["wait"])
+        self.assertEqual(params["wait"].default, mc.COLD_WAIT)
         # Два запроса по кредиту раз в час и история (~50 кредитов) раз в
         # HIST_TTL — меньше трети из 15 000 бесплатных в месяц.
         month = 31 * 24 * 3600
@@ -507,6 +513,93 @@ class PolicyTest(unittest.TestCase):
         with open(os.path.join(ROOT, "src/lib/dom.ts"), encoding="utf-8") as f:
             self.assertIn("export const MCAP_TTL_MS = 60 * 60_000;", f.read())
         self.assertEqual(mc.TTL, 3600.0)
+
+
+class ColdStartTest(Base):
+    """Без ответа и копии запрос ждёт сборку не дольше wait (как wt_halving)."""
+
+    def setUp(self):
+        super().setUp()
+        p = mock.patch.object(mc, "_key", lambda: "k")
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_cold_start_waits_for_the_build_all_share_one(self):
+        res = {"ok": True, "btc": [58.0, None], "by": "CoinMarketCap", "at": int(time.time())}
+        calls = []
+
+        def build():
+            calls.append(1)
+            time.sleep(0.05)
+            with mc._lock:
+                mc._st.hit = (time.monotonic(), res)
+            return res
+        with mock.patch.object(mc, "build", build):
+            got: list = []
+            ths = [threading.Thread(target=lambda: got.append(mc.mcap_data())) for _ in range(4)]
+            for t in ths:
+                t.start()
+            for t in ths:
+                t.join()
+        self.assertEqual(got, [res] * 4)
+        self.assertEqual(calls, [1])
+
+    def test_cold_start_waits_no_longer_than_wait(self):
+        res = {"ok": True, "btc": [58.0, None], "by": "CoinMarketCap", "at": int(time.time())}
+        gate = threading.Event()
+
+        def build():
+            gate.wait(5)
+            with mc._lock:
+                mc._st.hit = (time.monotonic(), res)
+            return res
+        with mock.patch.object(mc, "build", build):
+            t = time.monotonic()
+            self.assertEqual(mc.mcap_data(wait=0.05), {"ok": False, "error": "no_data"})
+            self.assertLess(time.monotonic() - t, 1.0)
+            gate.set()
+            mc._st.job.join(5)
+            self.assertIs(mc.mcap_data(), res)
+        self.assertFalse(mc._busy.is_set())
+
+    def test_answer_older_than_stale_max_is_not_served(self):
+        # CoinMarketCap молчит трое суток (кончился ключ): старые цифры — не «сейчас».
+        old = {"ok": True, "btc": [58.0, None], "by": "CoinMarketCap", "at": int(time.time()) - mc.STALE_MAX - 60}
+        mc._st.hit = (time.monotonic(), old)
+        with mock.patch.object(mc.threading, "Thread") as th:
+            self.assertEqual(mc.mcap_data(wait=0), {"ok": False, "error": "no_data"})
+        th.return_value.start.assert_called_once()
+        # Чуть моложе — отдаётся (экран сам помечает, от какого он времени).
+        ok = {**old, "at": int(time.time()) - mc.STALE_MAX + 60}
+        mc._st.hit = (time.monotonic(), ok)
+        self.assertIs(mc.mcap_data(), ok)
+        self.assertIsNone(mc._live((0.0, {**ok, "at": "1"})))
+
+    def test_failed_build_rests_and_nobody_waits(self):
+        mc._st.fail = time.monotonic()
+        with mock.patch.object(mc.threading, "Thread") as th:
+            t = time.monotonic()
+            self.assertEqual(mc.mcap_data(), {"ok": False, "error": "no_data"})
+            self.assertLess(time.monotonic() - t, 0.5)
+        th.assert_not_called()
+
+
+class TlsTest(unittest.TestCase):
+    """CoinMarketCap: TLS не старше 1.2 при любых настройках системы (как wt_halving)."""
+
+    def test_tls_minimum_does_not_depend_on_the_system(self):
+        # На Debian 13 системный минимум — MINIMUM_SUPPORTED.
+        def loose():
+            ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            ctx.minimum_version = ssl.TLSVersion.MINIMUM_SUPPORTED
+            return ctx
+        with mock.patch.object(mc.ssl, "create_default_context", loose):
+            self.assertEqual(mc._tls().minimum_version, ssl.TLSVersion.TLSv1_2)
+        https = [h for h in mc._opener.handlers if isinstance(h, mc.urllib.request.HTTPSHandler)]
+        self.assertEqual(len(https), 1)
+        self.assertGreaterEqual(https[0]._context.minimum_version, ssl.TLSVersion.TLSv1_2)
+        self.assertEqual(https[0]._context.verify_mode, ssl.CERT_REQUIRED)
+        self.assertTrue(https[0]._context.check_hostname)
 
 
 if __name__ == "__main__":

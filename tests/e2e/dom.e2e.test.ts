@@ -258,6 +258,24 @@ describe("Альтсезон", () => {
     }
   });
 
+  test("доминация старше 3 ч — сказано, от какого она времени; свежая — без пометки", async () => {
+    const head = I18N["dm_cmc_old"]!["ru"]!.split("{t}")[0]!;
+    const fresh = await open({ mcap: { ...MCAP, at: T - 2 * 3600 } });
+    await fresh.page.locator(".dm-cap").waitFor();
+    assert.equal(await fresh.page.locator(".lq-stale", { hasText: head }).count(), 0);
+    await fresh.ctx.close();
+    const { ctx, page, errors } = await open({ mcap: { ...MCAP, at: T - 5 * 3600 } });
+    await page.locator(".dm-cap").waitFor();
+    const note = page.locator(".lq-stale[role=status]", { hasText: head });
+    await note.waitFor();
+    // Время — то же, что в подписи источника внизу (часовой пояс телефона — UTC).
+    const when = new Intl.DateTimeFormat("ru", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", timeZone: "UTC" })
+      .format(new Date((T - 5 * 3600) * 1000));
+    assert.equal(sp(await note.innerText()), sp(I18N["dm_cmc_old"]!["ru"]!.replace("{t}", when)));
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
   test("сервер ещё собирает цены — так и сказано, и через 30 с спросит снова", async () => {
     const { ctx, page, asked } = await open({ reply: { ok: false, error: "building" } });
     await page.locator("[role=status]", { hasText: I18N["dm_building"]!["ru"]! }).waitFor();

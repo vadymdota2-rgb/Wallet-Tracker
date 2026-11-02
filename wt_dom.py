@@ -51,6 +51,7 @@ import json
 import math
 import os
 import re
+import ssl
 import sys
 import threading
 import time
@@ -133,7 +134,19 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect, urllib.request.HTTPSHandler())
+def _tls() -> ssl.SSLContext:
+    """Сертификат и имя сервера проверяются, TLS — не старше 1.2 (как _tls в
+    wt_halving). Минимум задан явно: сам Python берёт его из настроек
+    системы, а на Debian 13 (OpenSSL 3.5) там MINIMUM_SUPPORTED."""
+    ctx = ssl.create_default_context()
+    ctx.minimum_version = ssl.TLSVersion.TLSv1_2
+    return ctx
+
+
+# Hyperliquid: напрямую (прокси из окружения не берётся), без перенаправлений,
+# сертификат проверяется, TLS не старше 1.2 — как у wt_halving.
+_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect,
+                                      urllib.request.HTTPSHandler(context=_tls()))
 
 
 def _allowed(url: str) -> bool:
@@ -292,12 +305,20 @@ class _State:
     # (читается один раз: без годной копии запросы диск не трогают).
     dir: str | None = None
     loaded: bool = False
+    # Поток идущей фоновой сборки (холодный старт его ждёт).
+    job: threading.Thread | None = None
 
 
 _st = _State()
 _lock = threading.Lock()
 _busy = threading.Event()
 FAIL_WAIT = 120.0
+# Сколько запрос без готового ответа ждёт сборку, с (как COLD_WAIT в
+# wt_halving). Со свечами на диске пересчёт идёт секунды — человек сразу
+# видит индекс, а не «собираем». Самая первая сборка (без свечей, ~15 мин)
+# не успевает — «собираем», она доделывается в фоне. Приложение ждёт ответ
+# 30 с (callTwice), автовыкат перезапускает API после каждого коммита.
+COLD_WAIT = 8.0
 # Сколько монет между промежуточными записями свечей на диск: перезапуск
 # посреди первой сборки (она идёт ~15 мин) не начинает её с нуля.
 SAVE_EVERY = 25
@@ -578,10 +599,31 @@ def _resting() -> bool:
     return (_st.fail is not None and now - _st.fail < FAIL_WAIT) or now < _st.rest
 
 
-def dom_data() -> dict[str, Json]:
+def _start() -> threading.Thread | None:
+    """Фоновая сборка, если она ещё не идёт и не отдыхает после сбоя. Звать
+    под _lock. Поток идущей или новой сборки; None — сборки нет (отдых или
+    кончились потоки: флаг тогда снят, иначе «собираем» висело бы вечно)."""
+    if _busy.is_set():
+        return _st.job
+    if _resting():
+        return None
+    _busy.set()
+    job = threading.Thread(target=_bg, daemon=True)
+    try:
+        job.start()
+    except RuntimeError as e:
+        _busy.clear()
+        _log(f"фон не запущен: {e}")
+        return None
+    _st.job = job
+    return job
+
+
+def dom_data(wait: float = COLD_WAIT) -> dict[str, Json]:
     """Ответ /api/dom: из кэша; свежий собирается в фоне одним потоком.
-    После перезапуска — копия с диска (как устаревшая). Без кэша и копии —
-    «собираем» (первая сборка — пара минут), сборка идёт в фоне."""
+    После перезапуска — копия с диска (как устаревшая). Без кэша и копии
+    запрос ждёт сборку не дольше wait (выпуск дайджеста — дольше); не
+    успела — «собираем», сборка идёт в фоне."""
     if not _st.loaded and _st.dir:
         _st.loaded = True
         saved = _file_load("dom.json")
@@ -594,14 +636,14 @@ def dom_data() -> dict[str, Json]:
         hit = _st.hit
         if hit and time.monotonic() - hit[0] < TTL:
             return hit[1]
-        if not _busy.is_set() and not _resting():
-            _busy.set()
-            try:
-                threading.Thread(target=_bg, daemon=True).start()
-            except RuntimeError as e:
-                _busy.clear()
-                _log(f"фон не запущен: {e}")
-        building = _busy.is_set()
+        job = _start()
+        if hit:
+            return hit[1]
+    # Холодный старт: все ждут одну и ту же сборку.
+    if job is not None:
+        job.join(wait)
+    with _lock:
+        hit = _st.hit
     if hit:
         return hit[1]
-    return {"ok": False, "error": "building"} if building else _no_data()
+    return {"ok": False, "error": "building"} if _busy.is_set() else _no_data()

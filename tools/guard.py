@@ -721,6 +721,16 @@ say("альтсезон на уровне халвинга и ETF: правил�
     and '"op_stale"' not in _dm and "FAIL_RETRY_MS" in _dm and '"dm_old"' in _dm and '"visibilitychange"' in _dm
     and "jobs.push(() => fetchDom());" in read(f"{APP}/src/lib/prefetch.ts")
     and "EB_MIN, EB_MAX = 1e-6, 10.0" in _dms and "STR_LOG = math.log(1e3)" in _dms)
+say("доминация и альтсезон как халвинг: TLS не старше 1.2 к Hyperliquid и CoinMarketCap; холодный старт ждёт сборку (COLD_WAIT), одна сборка на всех, после сбоя — отдых; выпуск дайджеста ждёт дольше (DG_COLD_WAIT); доминация старше 3 ч — с пометкой времени, старше 3 сут — не отдаётся и не берётся с устройства; число не отрывается от слова, французские «:» — тоже (16 языков)",
+    all("ctx.minimum_version = ssl.TLSVersion.TLSv1_2" in x and "HTTPSHandler(context=_tls())" in x for x in (_dms, _mcs))
+    and "COLD_WAIT = 8.0" in _dms and "COLD_WAIT = 10.0" in _mcs
+    and all("    if job is not None:\n        job.join(wait)\n" in x and "    if _busy.is_set():\n        return _st.job\n" in x for x in (_dms, _mcs))
+    and "STALE_MAX = 3 * 86400" in _mcs and "hit = _live(_st.hit)" in _mcs
+    and "dom_data(wait=DG_COLD_WAIT)" in api and "mcap_data(wait=DG_COLD_WAIT)" in api and "DG_COLD_WAIT = 90.0" in api
+    and "export const MCAP_STALE = 3 * 3600;" in read(f"{APP}/src/lib/dom.ts") and "MCAP_MAX_AGE * 1000" in read(f"{APP}/src/lib/api.ts")
+    and '{mcapOld(m.at, Date.now() / 1000) ? (' in _dm and '"dm_cmc_old"' in _dm
+    and "тексты экрана: число не отрывается от слова" in read(f"{APP}/tests/dom.test.ts")
+    and "class TlsTest(" in read(f"{APP}/tests/test_dom.py") and "class TlsTest(" in read(f"{APP}/tests/test_mcap.py"))
 
 _fs = read(f"{APP}/src/screens/FundingScreen.tsx")
 say("фандинг не пропадает: собирается первым, при сбое — прошлый; пока ставок нет — загрузка с переспросом, а не «нет аномалий»",

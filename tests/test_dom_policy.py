@@ -22,7 +22,7 @@ import wt_dom as dom  # noqa: E402 — модуль лежит в корне р�
 
 SERVER = os.path.join(ROOT, "wt_dom.py")
 # Только стандартная библиотека: ни базы, ни бота, ни whale_api.
-IMPORTS = {"__future__", "contextlib", "http.client", "json", "math", "os", "re", "sys", "threading", "time",
+IMPORTS = {"__future__", "contextlib", "http.client", "json", "math", "os", "re", "ssl", "sys", "threading", "time",
            "urllib.error", "urllib.parse", "urllib.request", "typing"}
 BANNED_CALLS = {"eval", "exec", "compile", "__import__", "input", "breakpoint", "globals", "locals", "vars",
                 "setattr", "delattr"}
@@ -104,7 +104,13 @@ class ServerPolicyTest(unittest.TestCase):
             self.assertNotIn(word, code, word)
 
     def test_endpoint_takes_nothing_from_outside(self):
-        self.assertEqual(inspect.signature(dom.dom_data).parameters, {})
+        # Единственный параметр — сколько ждать холодную сборку; его задаёт
+        # сервер (выпуск дайджеста), из запроса маршрут не передаёт ничего.
+        params = inspect.signature(dom.dom_data).parameters
+        self.assertEqual(list(params), ["wait"])
+        self.assertEqual(params["wait"].default, dom.COLD_WAIT)
+        api = read("whale_api.py")
+        self.assertIn('self._json_public("dom" if dom else "mcap", dom_data() if dom else mcap_data())', api)
         self.assertEqual(list(inspect.signature(dom.build).parameters), ["sleep"])
 
     def test_opener_is_direct_and_strict(self):
