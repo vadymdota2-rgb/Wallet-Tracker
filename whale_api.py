@@ -10059,7 +10059,7 @@ def wire() -> None:
     """Привязка к боевому окружению — только из main(): кэш на диске рядом с
     базой (или WHALE_CACHE_DIR) у всех модулей, уборка старых файлов и
     сообщение владельцу о новом фонде ETF (пишет в базу и в Telegram)."""
-    global CACHE_DIR
+    global CACHE_DIR  # noqa: PLW0603 — каталог задаётся один раз, при запуске службы
     CACHE_DIR = os.environ.get("WHALE_CACHE_DIR") or os.path.join(os.path.dirname(DB), "api_cache")
     etf.set_cache_file(os.path.join(CACHE_DIR, "etf.json"))
     wt_dom.set_cache_dir(CACHE_DIR)

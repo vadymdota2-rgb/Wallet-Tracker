@@ -331,7 +331,8 @@ def supply_at(ts: int) -> float:
 
 def _share(aum: float, price: float) -> dict[str, Json]:
     """Доля фондов в биткоинах в обращении: их активы в монетах — к добытому
-    по расписанию."""
+    по расписанию. Экран приложения считает долю сам (assets в lib/etf.ts) —
+    от запаса, сглаженного по потокам; поле остаётся для старых копий ответа."""
     if aum <= 0 or price <= 0:
         return {"share": None}
     return {"share": round(aum / price / supply_at(_now()) * 100, 3)}
