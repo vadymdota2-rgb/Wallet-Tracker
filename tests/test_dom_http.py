@@ -47,7 +47,7 @@ class PublicJsonTest(unittest.TestCase):
         self.assertEqual(json.loads(first.h.wfile.getvalue()), REPLY)
         tag = first.hdr["ETag"]
         self.assertRegex(tag, r'^W/"[0-9a-f]{24}"$')
-        self.assertEqual(first.hdr["Cache-Control"], "no-cache")
+        self.assertEqual(first.hdr["Cache-Control"], "private, no-cache")
         self.assertEqual(first.hdr["Content-Length"], str(len(first.h.wfile.getvalue())))
         # Та же копия у телефона — 304 без тела (и без длины тела).
         again = Fake(f'"x", {tag}').get("dom", REPLY)

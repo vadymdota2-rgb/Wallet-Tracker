@@ -167,6 +167,16 @@ class ClientPolicyTest(unittest.TestCase):
             for pat in CLIENT_BANNED:
                 self.assertIsNone(re.search(pat, code), f"{path}: {pat}")
 
+    def test_source_link_is_fixed_and_opens_outside(self):
+        # Подпись CoinMarketCap — единственная ссылка модуля: адрес — константа,
+        # открывается снаружи (openExternal), без доступа страницы к приложению.
+        src = strip_comments(read("src/components/CmcBy.tsx"))
+        self.assertEqual(re.findall(r"https?://[^\s\"'`]+", src), ["https://coinmarketcap.com/"])
+        self.assertIn('rel="noopener noreferrer"', src)
+        self.assertIn("openExternal(CMC_URL)", src)
+        for pat in CLIENT_BANNED[:-1]:
+            self.assertIsNone(re.search(pat, src), pat)
+
     def test_calculation_is_pure(self):
         self.assertIsNone(re.search(r"^\s*import\b|\brequire\s*\(", strip_comments(read("src/lib/dom.ts")), re.M))
         self.assertNotIn("localStorage", strip_comments(read("src/lib/dom.ts")))

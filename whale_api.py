@@ -15795,8 +15795,10 @@ class Handler(BaseHTTPRequestHandler):
         # Ответ зависит от Accept-Encoding — общий кэш по пути не должен
         # отдать сжатое тому, кто просил без сжатия.
         self.send_header("Vary", "Accept-Encoding")
-        # Копию можно держать, но перед показом — сверить с сервером.
-        self.send_header("Cache-Control", "no-cache")
+        # Копию можно держать, но перед показом — сверить с сервером. Только
+        # на телефоне подписчика (private): ответ — для Премиума, и общий
+        # кэш по пути (прокси, CDN) не должен хранить его и отдавать другим.
+        self.send_header("Cache-Control", "private, no-cache")
         for k, v in shield.SECURITY_HEADERS:
             self.send_header(k, v)
         if same:

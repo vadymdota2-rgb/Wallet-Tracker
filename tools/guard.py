@@ -766,6 +766,13 @@ say("доминация и альтсезон — ревизия строк: с�
     and "test_coin_delisted_between_passes_keeps_its_last_days" in read(f"{APP}/tests/test_dom.py")
     and "test_altseason_index_only_while_its_last_day_is_recent" in read(f"{APP}/tests/test_digest_sources.py")
     and "сеть не ответила, а сохранённая копия старая" in _dme)
+say("доминация и альтсезон — защита: платный ответ не хранится в общих кэшах (private); у wt_mcap, как у wt_dom, проверки по дереву разбора — сеть одной дверью после проверки адреса, прокси из окружения не берётся, ни базы, ни бота, ни других агрегаторов, свои строки ошибок; перевод строки в ключе отвергается; ссылка CoinMarketCap — константа и открывается снаружи",
+    'self.send_header("Cache-Control", "private, no-cache")' in api
+    and "test_network_goes_through_one_door" in read(f"{APP}/tests/test_mcap.py")
+    and "test_opener_ignores_proxy_from_the_environment" in read(f"{APP}/tests/test_mcap.py")
+    and "test_independent_of_bot_database_and_other_sources" in read(f"{APP}/tests/test_mcap.py")
+    and "abcdefgh\\r\\nX-Evil: 1" in read(f"{APP}/tests/test_mcap.py")
+    and "test_source_link_is_fixed_and_opens_outside" in read(f"{APP}/tests/test_dom_policy.py"))
 say("авторские права: LICENSE «все права защищены» (Wallet Tracker) с оговоркой о сторонних лицензиях (IBM Plex — OFL, Twemoji — CC BY 4.0, данные источников); package.json — UNLICENSED; на экране «Документы» — «© 2026 Wallet Tracker» на 16 языках",
     os.path.isfile(f"{APP}/LICENSE") and "Copyright (c) 2026 Wallet Tracker. All rights reserved." in read(f"{APP}/LICENSE")
     and "SIL Open Font" in read(f"{APP}/LICENSE") and "CC BY 4.0" in read(f"{APP}/LICENSE")

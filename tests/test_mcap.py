@@ -3,6 +3,7 @@
 Сеть подменена: CoinMarketCap отвечает из словарей теста.
 """
 import ast
+import importlib
 import inspect
 import io
 import json
@@ -153,7 +154,9 @@ class BuildTest(Base):
             self.assertEqual(mc.mcap_data(), {"ok": False, "error": "no_key"})
             self.assertEqual(mc.build(), {"ok": False, "error": "no_key"})
         op.assert_not_called()
-        for junk in ("short", "a b c d e f g h", "k" * 200, "ключ-ключ-ключ"):
+        # В том числе подстановка заголовка: перевод строки в ключе дописал
+        # бы в запрос к CoinMarketCap свой заголовок.
+        for junk in ("short", "a b c d e f g h", "k" * 200, "ключ-ключ-ключ", "abcdefgh\r\nX-Evil: 1", "abcdefgh\nHost: evil"):
             with mock.patch.dict(os.environ, {"CMC_API_KEY": junk}):
                 self.assertEqual(mc._key(), "", junk)
 
@@ -504,6 +507,45 @@ class PolicyTest(unittest.TestCase):
         # HIST_TTL — меньше трети из 15 000 бесплатных в месяц.
         month = 31 * 24 * 3600
         self.assertLess(2 * month / mc.TTL + 50 * month / mc.HIST_TTL, 5000)
+
+    def test_network_goes_through_one_door(self):
+        # Сеть — только в _fetch и только после проверки адреса.
+        calls = [(fn.name, n.attr) for fn in ast.walk(self.tree()) if isinstance(fn, ast.FunctionDef)
+                 for n in ast.walk(fn) if isinstance(n, ast.Attribute)
+                 and n.attr in ("open", "urlopen", "urlretrieve", "create_connection", "socket", "getaddrinfo")]
+        self.assertEqual(calls, [("_fetch", "open")])
+        body = inspect.getsource(mc._fetch)
+        self.assertLess(body.index("if not key or not _allowed(url):"), body.index("_opener.open("))
+
+    def test_opener_ignores_proxy_from_the_environment(self):
+        # Прокси из окружения увёл бы ключ CoinMarketCap через чужой узел.
+        evil = {"HTTPS_PROXY": "http://evil.example:1", "https_proxy": "http://evil.example:1", "NO_PROXY": "", "no_proxy": ""}
+        with mock.patch.dict(os.environ, evil):
+            default = mc.urllib.request.build_opener()
+            try:
+                importlib.reload(mc)
+                poisoned = list(mc._opener.handlers)
+            finally:
+                importlib.reload(mc)
+        self.assertTrue(any(getattr(h, "proxies", None) for h in default.handlers))
+        self.assertFalse(any(getattr(h, "proxies", None) for h in poisoned))
+        self.assertTrue(any(type(h).__name__ == "HTTPSHandler" for h in mc._opener.handlers))
+        self.assertEqual(mc._HEADERS.get("Accept-Encoding"), "identity")
+
+    def test_independent_of_bot_database_and_other_sources(self):
+        with open(os.path.join(ROOT, "wt_mcap.py"), encoding="utf-8") as f:
+            code = re.sub(r'"""[\s\S]*?"""|#[^\n]*', "", f.read())
+        for word in ("sqlite3", "whale_api", "wt_dom", "wt_etf", "subprocess", "socket", "pickle", "shell"):
+            self.assertNotIn(word, code, word)
+        # Других агрегаторов нет: их условия запрещают такое использование.
+        for word in ("coingecko", "binance", "llama", "coinbase", "cryptocompare", "messari", "paprika", "coinlore"):
+            self.assertNotIn(word, code.lower(), word)
+
+    def test_error_strings_are_ours(self):
+        lits = {v.value for n in ast.walk(self.tree()) if isinstance(n, ast.Dict)
+                for k, v in zip(n.keys, n.values, strict=True)
+                if isinstance(k, ast.Constant) and k.value == "error" and isinstance(v, ast.Constant)}
+        self.assertEqual(lits, {"no_key", "no_data"})
 
     def test_app_side(self):
         with open(os.path.join(ROOT, "src/lib/api.ts"), encoding="utf-8") as f:
