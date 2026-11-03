@@ -738,6 +738,16 @@ say("доминация и альтсезон — подача: минус в и
     and "включая стейблкоины" in read(f"{APP}/src/i18n/ru.ts").split("dm_chart_hint:")[1].split("\n")[0]
     and "Всё остальное" not in read(f"{APP}/src/i18n/ru.ts").split("dm_src:")[1].split("\n")[0]
     and "подача: минус — настоящий «−»" in read(f"{APP}/tests/e2e/dom.e2e.test.ts"))
+_dmc = read(f"{APP}/src/screens/DominanceScreen.css")
+_dme = read(f"{APP}/tests/e2e/dom.e2e.test.ts")
+say("доминация и альтсезон — картинка и устройства: сетка графиков по пиксельной решётке (на экране ×1 не мутная), подписи осей не налезают и не выходят за край и на поле графика (16 языков, 320 и 1280 px), ось денег — сокращениями языка, названия панелей над ними, места для пальца не меньше 40/32 px, шрифт до 200 %, экраны ×1–×3, без логических inset-свойств (старые WebView)",
+    ".dm-svg .fg-grid, .dm-svg .dm-grid-hi { shape-rendering: crispEdges; }" in _dmc
+    and ".dm .dm-tbl > summary, .dm .lq-how > summary { padding-block: 11px; margin-block: -11px; }" in _dmc
+    and ".dm .fg-cmp-c small, .dm .fg-cmp-c span { overflow-wrap: anywhere;" in _dmc and ".dm-svg .dm-ptl { stroke: none; }" in _dmc
+    and "insetInline" not in _dm and "function labelX(x: number, pw: number): number {" in _dm
+    and 'notation: "compact", compactDisplay: "short"' in _dm and "const MCAP_AXIS = 62;" in _dm
+    and "подписи графиков не налезают друг на друга" in _dme and "экраны ×1, ×2, ×3" in _dme
+    and "крупный шрифт (до 200 %" in _dme and "старые WebView" in _dme and "deviceScaleFactor: o.scale ?? 1" in _dme)
 
 _fs = read(f"{APP}/src/screens/FundingScreen.tsx")
 say("фандинг не пропадает: собирается первым, при сбое — прошлый; пока ставок нет — загрузка с переспросом, а не «нет аномалий»",

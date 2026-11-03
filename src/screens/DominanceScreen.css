@@ -66,7 +66,14 @@
 /* Графики экрана — в настоящих пикселях ширины (useWidth): подписи одного
    размера на любом экране; линии не толстеют при масштабе. */
 .dm-svg .fg-tick { font-size: 10.5px; }
+/* Название панели — над ней, на фоне карточки: обводка не нужна. */
+.dm-svg .dm-ptl { stroke: none; }
 .dm-svg .fg-line, .dm-svg .fg-grid, .dm-svg .dm-grid-hi { vector-effect: non-scaling-stroke; }
+/* Сетка стоит на дробных координатах (деления — по значениям), и на экране
+   ×1 (Telegram на компьютере, часть планшетов) линия в 1 px размазывалась на
+   две строки пикселей — мутная. Сетка — по пиксельной решётке; линии данных
+   остаются сглаженными. */
+.dm-svg .fg-grid, .dm-svg .dm-grid-hi { shape-rendering: crispEdges; }
 
 /* График с клавиатуры: фокус виден, стрелки ведут по дням. */
 .dm-plot:focus { outline: none; }
@@ -75,6 +82,10 @@
 /* Таблица под графиком индекса — те же точки цифрами. */
 .dm-tbl { margin: 10px 0 0; min-width: 0; max-width: 100%; }
 .dm-tbl > summary { cursor: pointer; color: var(--dim); font-size: 12.5px; font-weight: 600; }
+/* «Таблица» и «Как читать» — строки по 18–20 px, пальцем мимо. Место для
+   нажатия — не меньше 40 px по высоте, а вид и отступы прежние: лишняя
+   высота — внутренним отступом, который съедает такой же внешний. */
+.dm .dm-tbl > summary, .dm .lq-how > summary { padding-block: 11px; margin-block: -11px; }
 .dm-tbl-w { max-height: 320px; max-width: 100%; overflow: auto; margin-top: 8px; border-radius: 10px; border: 1px solid rgb(27 61 104 / 0.3); }
 .dm-tbl table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
 .dm-tbl th, .dm-tbl td { padding: 5px 8px; text-align: end; white-space: nowrap; border-top: 1px solid rgb(27 61 104 / 0.3); }
@@ -97,7 +108,11 @@
    биткоина, из чего состоит рынок, двухэтажный график. */
 .dm-cap { display: grid; justify-items: center; gap: 2px; text-align: center; }
 .dm-cap > small, .dm-hero > small { color: var(--dim); font-size: 12.5px; }
-.dm-cap > b { font-size: 32px; line-height: 1.1; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+.dm-cap > b { font-size: 32px; line-height: 1.1; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; max-width: 100%; }
+/* Плитки «Вчера / Неделю назад / Месяц назад» и «Топ 25/50/100»: при шрифте
+   200 % слово шире трети карточки — переносится внутри плитки (с дефисом,
+   где язык его знает), а не вылезает за экран. */
+.dm .fg-cmp-c small, .dm .fg-cmp-c span { overflow-wrap: anywhere; hyphens: auto; max-width: 100%; }
 .dm-cap-ch { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 12px; margin-top: 6px; font-size: 12px; color: var(--dim); }
 .dm-cap-ch span { white-space: nowrap; }
 .dm-cap-ch em { font-style: normal; font-weight: 700; font-variant-numeric: tabular-nums; }

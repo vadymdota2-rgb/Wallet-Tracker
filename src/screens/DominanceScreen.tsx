@@ -216,7 +216,7 @@ function MiniChart({ pts, lang, color, ink, bands, fmt, fixed, label, log }: {
         {xTicks.map((x) => (
           <g key={x.t}>
             <line x1={xOfT(x.t)} x2={xOfT(x.t)} y1={6} y2={6 + MH} className="fg-grid" />
-            <text x={xOfT(x.t)} y={H2 - 4} textAnchor="middle" className="fg-tick">{x.label}</text>
+            <text x={labelX(xOfT(x.t), PW)} y={H2 - 4} textAnchor="middle" className="fg-tick">{x.label}</text>
           </g>
         ))}
         {ticks.map((v) => (
@@ -285,7 +285,9 @@ function AltBar({ v, lang }: { v: number; lang: Lang }) {
         <i style={{ width: "25%", background: C.btc }} />
         <i style={{ width: "50%", background: C.mid }} />
         <i style={{ width: "25%", background: C.alt }} />
-        <b style={{ insetInlineStart: `${v}%` }} />
+        {/* left, а не inset-inline-start: шкала всегда слева направо (direction: ltr),
+            а логические свойства не знают WebView iOS до 14.5 и Chromium до 87. */}
+        <b style={{ left: `${v}%` }} />
       </div>
       <div className="dm-abar-ends">
         <span style={{ color: INK.btc }}>{t(lang, "dm_s_btc")}</span>
@@ -324,8 +326,8 @@ function Top({ coins, btc, lang }: { coins: [string, number][]; btc: number; lan
               <span className="dm-top-bar">
                 <i className="dm-top-mid" />
                 <i className="dm-top-fill" style={r >= 0
-                  ? { insetInlineStart: "50%", width: `${r * 50}%`, background: C.alt }
-                  : { insetInlineEnd: "50%", width: `${-r * 50}%`, background: C.mid }} />
+                  ? { left: "50%", width: `${r * 50}%`, background: C.alt }
+                  : { right: "50%", width: `${-r * 50}%`, background: C.mid }} />
               </span>
               <b className={c[1] > btc ? "dm-beat" : ""}><bdi dir="ltr">{chg(c[1])}</bdi></b>
             </div>
@@ -391,12 +393,27 @@ function sig3(v: number): string {
   return num(Number(v.toFixed(d)), d, d);
 }
 
-/** Короткая шкала денег для оси: $2T, $500B, $20M. */
-function axisUsd(v: number): string {
-  const f = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(1));
-  if (v >= 1e12) return `$${f(v / 1e12)}T`;
-  if (v >= 1e9) return `$${f(v / 1e9)}B`;
-  return `$${f(v / 1e6)}M`;
+const MCAP_AXIS = 62;
+/** Подпись деления времени по центру деления, но не за краем поля: деление у
+ *  самого края («2024» в начале срока) иначе выходило за экран наполовину. */
+function labelX(x: number, pw: number): number {
+  return Math.min(Math.max(x, 16), pw - 16);
+}
+const AX_NF = new Map<string, Intl.NumberFormat>();
+/** Деление оси денег сокращением языка: «1,5 трлн», «700 млрд», «1.5T». Знак
+ *  доллара — в названии панели: раньше стояло «$1.5T» с точкой рядом с
+ *  «2,6 трлн $» с запятой. */
+function axisUsd(v: number, lang: Lang): string {
+  let f = AX_NF.get(lang);
+  if (!f) {
+    try {
+      f = new Intl.NumberFormat(lang, { notation: "compact", compactDisplay: "short", maximumFractionDigits: 1 });
+    } catch {
+      f = new Intl.NumberFormat("en", { notation: "compact", compactDisplay: "short", maximumFractionDigits: 1 });
+    }
+    AX_NF.set(lang, f);
+  }
+  return f.format(v);
 }
 
 /** Деления шкалы денег (лог.): 1, 2, 5 × 10ⁿ; узкий срок, где из них попадает
@@ -424,11 +441,14 @@ function McapChart({ days, lang }: { days: McapDay[]; lang: Lang }) {
   const [picked, setSel] = useState<number | null>(null);
   const ref = useRef<SVGSVGElement>(null);
   const W = useWidth(ref);
-  const PW = W - AXIS - 4;
-  /* Высота — по ширине, но график целиком помещается в окно (телефон боком). */
-  const k = heightK(W, 300);
-  const P1 = { y: 6, h: Math.round(150 * k) };
-  const P2 = { y: P1.y + P1.h + 14, h: Math.round(112 * k) };
+  /* Ось денег шире общей: деления — сокращениями языка («700 млрд», «700 mil M»). */
+  const PW = W - MCAP_AXIS - 4;
+  /* Высота — по ширине, но график целиком помещается в окно (телефон боком).
+     Названия панелей — над панелями, в зазоре: на цветной полосе долей
+     подпись с обводкой читалась плохо и выглядела грубо. */
+  const k = heightK(W, 316);
+  const P1 = { y: 16, h: Math.round(150 * k) };
+  const P2 = { y: P1.y + P1.h + 20, h: Math.round(112 * k) };
   const MH2 = P2.y + P2.h + 18;
   const n = days.length;
   const sel = picked !== null && picked < n ? picked : null;
@@ -515,13 +535,13 @@ function McapChart({ days, lang }: { days: McapDay[]; lang: Lang }) {
         {xTicks.map((x) => (
           <g key={x.t}>
             <line x1={xOfT(x.t)} x2={xOfT(x.t)} y1={P1.y} y2={P2.y + P2.h} className="fg-grid" />
-            <text x={xOfT(x.t)} y={MH2 - 4} textAnchor="middle" className="fg-tick">{x.label}</text>
+            <text x={labelX(xOfT(x.t), PW)} y={MH2 - 4} textAnchor="middle" className="fg-tick">{x.label}</text>
           </g>
         ))}
         {yTicks.map((v) => (
           <g key={v}>
             <line x1={0} x2={PW} y1={yUsd(v)} y2={yUsd(v)} className="fg-grid" />
-            <text x={W - 2} y={yUsd(v) + 3.5} textAnchor="end" className="fg-tick">{axisUsd(v)}</text>
+            <text x={W - 2} y={yUsd(v) + 3.5} textAnchor="end" className="fg-tick">{axisUsd(v, lang)}</text>
           </g>
         ))}
         {[25, 50, 75].map((v) => (
@@ -530,8 +550,8 @@ function McapChart({ days, lang }: { days: McapDay[]; lang: Lang }) {
             <text x={W - 2} y={yPct(v) + 3.5} textAnchor="end" className="fg-tick">{v}%</text>
           </g>
         ))}
-        <text x={4} y={P1.y + 11} className="fg-ptl">{t(lang, "dm_p1")} · {t(lang, "fg_log")}</text>
-        <text x={4} y={P2.y + 11} className="fg-ptl">{t(lang, "dm_p2")}</text>
+        <text x={2} y={P1.y - 5} className="fg-ptl dm-ptl">{t(lang, "dm_p1")}, $ · {t(lang, "fg_log")}</text>
+        <text x={2} y={P2.y - 5} className="fg-ptl dm-ptl">{t(lang, "dm_p2")}</text>
         <polyline points={paths.alt} className="fg-line" stroke={C.alt} />
         <polyline points={paths.btc} className="fg-line" stroke={C.btc} />
         {d ? (
@@ -657,7 +677,10 @@ function McapBlock({ m, lang }: { m: McapReply; lang: Lang }) {
       <Card>
         <div className="dm-cap">
           <small>{t(lang, "dm_total")}</small>
-          <b><bdi dir="ltr">{usdWord(cap)}</bdi></b>
+          {/* Обычный пробел вместо неразрывного: при крупном системном шрифте
+              (до 200 %) сумма переносится по словам, а не вылезает за экран;
+              при обычном — и так в одну строку. */}
+          <b><bdi dir="ltr">{usdWord(cap).replace(/\u00a0|\u202f/g, " ")}</bdi></b>
           <div className="dm-cap-ch">
             {capCh.map(([k, v]) => v === null ? null : (
               <span key={k}>{t(lang, k)} <em className={tone(v)}><bdi dir="ltr">{chg(v)}</bdi></em></span>

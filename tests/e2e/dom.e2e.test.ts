@@ -74,6 +74,8 @@ interface Opts {
   mcap?: unknown;
   /** Часы телефона, unix с (по умолчанию — T, как у ответов). */
   clock?: number;
+  /** Плотность экрана: 1 — компьютер, 2–3 — телефоны. */
+  scale?: number;
 }
 
 /** Сервер без ключа CoinMarketCap: блока капитализации нет — графики альтсезона первые. */
@@ -96,7 +98,7 @@ interface Opened { ctx: BrowserContext; page: Page; errors: string[]; asked: () 
 async function open(o: Opts = {}): Promise<Opened> {
   const lang = o.lang ?? "ru";
   const ctx = await browser.newContext({
-    viewport: { width: o.width ?? 360, height: o.height ?? 780 }, locale: lang === "ar" ? "ar" : "ru-RU", timezoneId: "UTC",
+    viewport: { width: o.width ?? 360, height: o.height ?? 780 }, deviceScaleFactor: o.scale ?? 1, locale: lang === "ar" ? "ar" : "ru-RU", timezoneId: "UTC",
     forcedColors: o.forcedColors ? "active" : "none",
   });
   const page = await ctx.newPage();
@@ -291,6 +293,69 @@ describe("Альтсезон", () => {
     await ctx.close();
   });
 
+  test("подписи графиков не налезают друг на друга и не вылезают за край: 16 языков на 320 px, русский на 1280 px", async () => {
+    for (const [lang, width] of [...LANGS.map((l) => [l, 320] as const), ["ru", 1280] as const]) {
+      const { ctx, page, errors } = await open({ lang, width });
+      await page.locator(".dm-ahero").waitFor();
+      await page.locator(".dm-cap").waitFor();
+      await page.waitForTimeout(150);
+      const bad = await page.evaluate(() => {
+        const out: string[] = [];
+        for (const svg of document.querySelectorAll<SVGSVGElement>(".dm svg")) {
+          const sb = svg.getBoundingClientRect();
+          // Поле графика: подпись оси справа на него не заходит.
+          const plot = Math.max(sb.left, ...[...svg.querySelectorAll("rect.fg-bg")].map((r) => r.getBoundingClientRect().right));
+          const ts = [...svg.querySelectorAll<SVGTextElement>("text")].map((t) => ({ t: t.textContent, b: t.getBoundingClientRect(), end: t.getAttribute("text-anchor") === "end" }));
+          ts.forEach((x, i) => {
+            if (x.b.left < sb.left - 0.5 || x.b.right > sb.right + 0.5) out.push(`за краем «${x.t}»`);
+            if (x.end && x.b.left < plot - 0.5) out.push(`на поле графика «${x.t}» (${x.b.left.toFixed(1)} < ${plot.toFixed(1)})`);
+            for (const y of ts.slice(i + 1)) {
+              if (x.b.left < y.b.right - 1 && y.b.left < x.b.right - 1 && x.b.top < y.b.bottom - 1 && y.b.top < x.b.bottom - 1) out.push(`«${x.t}» на «${y.t}»`);
+            }
+          });
+        }
+        return out;
+      });
+      assert.deepEqual(bad, [], `${lang} ${width}`);
+      assert.deepEqual(errors, []);
+      await ctx.close();
+    }
+  });
+
+  test("экраны ×1, ×2, ×3: место для пальца не меньше 40 px, сетка по пикселям, ничего не вылезает", async () => {
+    for (const scale of [1, 2, 3]) {
+      const { ctx, page, errors } = await open({ width: 360, scale });
+      await page.locator(".dm-cap").waitFor();
+      await page.waitForTimeout(150);
+      assert.equal(await page.evaluate(() => devicePixelRatio), scale);
+      // Пальцем, а не стилусом: «Таблица» и «Как читать» — не ниже 40 px (были 18–20),
+      // кнопки (сроки, «?», «Показать все») — не меньше 32 × 32 (WCAG 2.5.8 требует 24).
+      const small = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".dm button, .dm summary")]
+        .map((el) => ({ el, b: el.getBoundingClientRect() }))
+        .filter(({ el, b }) => b.width > 0 && (b.height < (el.tagName === "SUMMARY" ? 40 : 32) || b.width < 32))
+        .map(({ el, b }) => `${el.tagName}.${el.className} «${(el.textContent ?? "").trim().slice(0, 14)}» ${b.width.toFixed(0)}×${b.height.toFixed(0)}`));
+      assert.deepEqual([...new Set(small)], [], `×${scale}`);
+      // Сетка — по пиксельной решётке (на ×1 линия в 1 px не размазывается на две строки).
+      const grid = await page.locator(".dm svg line.fg-grid").evaluateAll((ls) => [...new Set(ls.map((l) => getComputedStyle(l).shapeRendering))]);
+      assert.deepEqual(grid, ["crispedges"]);
+      assert.deepEqual(await overflow(page), [], `×${scale}`);
+      assert.deepEqual(errors, []);
+      await ctx.close();
+    }
+  });
+
+  test("отметка шкалы и полосы монет — обычными left/right: их понимают и старые WebView (iOS до 14.5, Chromium до 87)", async () => {
+    const { ctx, page } = await open({ width: 360 });
+    await page.locator(".dm-ahero").waitFor();
+    const styles = await page.locator(".dm-abar-track b, .dm-top-fill").evaluateAll((els) => els.map((e) => e.getAttribute("style") ?? ""));
+    assert.ok(styles.length > 5);
+    for (const st of styles) {
+      assert.doesNotMatch(st, /inset-inline/, st);
+      assert.match(st, /(^|; )(left|right): /, st);
+    }
+    await ctx.close();
+  });
+
   test("доминация старше 3 ч — сказано, от какого она времени; свежая — без пометки", async () => {
     const head = I18N["dm_cmc_old"]!["ru"]!.split("{t}")[0]!;
     const fresh = await open({ mcap: { ...MCAP, at: T - 2 * 3600 } });
@@ -417,12 +482,13 @@ describe("Альтсезон", () => {
     }
   });
 
-  test("крупный шрифт (до 160 %): текст переносится, а не вылезает", async () => {
+  test("крупный шрифт (до 200 %, как Android на максимуме): текст переносится, а не вылезает", async () => {
     const { ctx, page } = await open({ width: 360 });
     await ready(page);
+    await page.locator(".dm-cap").waitFor();
     await page.evaluate(() => {
       const els = [...document.querySelectorAll<HTMLElement>(".sheet *")];
-      const px = els.map((el) => parseFloat(getComputedStyle(el).fontSize) * 1.6);
+      const px = els.map((el) => parseFloat(getComputedStyle(el).fontSize) * 2);
       els.forEach((el, i) => { el.style.fontSize = `${px[i]}px`; });
     });
     await page.waitForTimeout(100);
@@ -553,9 +619,12 @@ describe("Альтсезон", () => {
     await ready(page);
     const plot = page.locator(".dm-plot").filter({ has: page.locator("svg.dm-mc") });
     assert.equal(await plot.getAttribute("tabindex"), "0");
-    // Шкала денег: даже на узком сроке — не меньше двух подписей.
-    const usd = (await plot.locator(".fg-tick").allTextContents()).filter((x) => x.startsWith("$"));
+    // Шкала денег: даже на узком сроке — не меньше двух подписей, сокращениями
+    // языка («1,5 трлн», «700 млрд»), а знак доллара — в названии панели.
+    const usd = (await plot.locator(".fg-tick").allTextContents()).filter((x) => /трлн|млрд|млн/.test(x));
     assert.ok(usd.length >= 2, usd.join(" "));
+    assert.ok(usd.every((x) => !x.includes("$") && !/\d\.\d/.test(x)), usd.join(" "));
+    assert.ok((await plot.locator(".dm-ptl").first().textContent())!.startsWith(`${I18N["dm_p1"]!["ru"]}, $`));
     assert.equal(sp(await plot.getAttribute("aria-label")), sp(I18N["ef_keys"]!["ru"]!));
     await plot.focus();
     await page.keyboard.press("End");
