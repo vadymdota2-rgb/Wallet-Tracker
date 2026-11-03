@@ -273,6 +273,8 @@ DM = [
     ("    if job is not None:\n        job.join(wait)\n", "", "альтсезон: холодный старт ждёт сборку"),
     ("    if _busy.is_set():\n        return _st.job\n", "", "альтсезон: холодная сборка — одна на всех"),
     ("    if _resting():\n        return None\n    _busy.set()", "    _busy.set()", "альтсезон: после сбоя — отдых, без новой сборки"),
+    ("        if coin in EXCLUDE:\n            continue\n", "", "альтсезон: золото и индексы не спрашиваем и не храним"),
+    (" or not isinstance(days, dict) or coin in EXCLUDE:", " or not isinstance(days, dict):", "альтсезон: из прежней копии EXCLUDE не берём"),
 ]
 # Доминация (wt_mcap): официальный API CoinMarketCap, бюджет кредитов, история.
 MC = [
@@ -375,6 +377,9 @@ AP = [
     ('"d1": round(btc - btc_y, 2)', '"d1": round(btc_y - btc, 2)', "дайджест: изменение доминации за сутки со знаком"),
     ("    rows = (dom_data(wait=DG_COLD_WAIT) or {})", "    rows = (dom_data() or {})", "дайджест: альтсезон после перезапуска ждёт сборку"),
     ("    mc = mcap_data(wait=DG_COLD_WAIT)\n", "    mc = mcap_data()\n", "дайджест: доминация после перезапуска ждёт сборку"),
+    ("    tmp_sweep(CACHE_DIR)\n", "", "кэш: брошенные временные файлы убираются при запуске"),
+    ("time.time() - os.path.getmtime(path) >= TMP_KEEP", "time.time() - os.path.getmtime(path) >= 0", "кэш: свежий временный файл не трогаем"),
+    ("        if not _TMP_RE.search(name) or not name.endswith(\".tmp\"):", "        if not name.endswith(\".tmp\"):", "кэш: только временные копии, не чужие .tmp"),
     ('        if _wants_gzip(self.headers.get("Accept-Encoding") or ""):', "        if True:", "общий ответ: без gzip у клиента — обычный JSON"),
     ('        if _wants_gzip(self.headers.get("Accept-Encoding") or ""):', "        if False:", "общий ответ: готовое сжатие"),
     ("                return float(q[2:]) > 0", "                return True", "общий ответ: gzip;q=0 — без сжатия"),

@@ -748,6 +748,13 @@ say("доминация и альтсезон — картинка и устро
     and 'notation: "compact", compactDisplay: "short"' in _dm and "const MCAP_AXIS = 62;" in _dm
     and "подписи графиков не налезают друг на друга" in _dme and "экраны ×1, ×2, ×3" in _dme
     and "крупный шрифт (до 200 %" in _dme and "старые WebView" in _dme and "deviceScaleFactor: o.scale ?? 1" in _dme)
+say("доминация и альтсезон — авточистка: брошенные при падении временные копии (*.json.<pid>.tmp) убираются при запуске; свечи золота, бывших стейблкоинов и индексов (EXCLUDE) не спрашиваются и не хранятся; на телефоне доминация старше 3 суток и негодная копия альтсезона стираются (а не лежат месяц)",
+    "def tmp_sweep(folder: str) -> int:" in api and "    tmp_sweep(CACHE_DIR)\n" in api and "TMP_KEEP = 300" in api
+    and "        if coin in EXCLUDE:\n            continue\n" in _dms and " or coin in EXCLUDE:" in _dms
+    and "if (hit && !v) dropSaved(DOM_SAVED);" in read(f"{APP}/src/lib/api.ts") and "if (hit && !ok) dropSaved(MCAP_SAVED);" in read(f"{APP}/src/lib/api.ts")
+    and '{ "wt-mcap-v1": 3 * 24 * 3600_000 }' in read(f"{APP}/src/lib/storage.ts") and os.path.isfile(f"{APP}/tests/storage.test.ts")
+    and "test_abandoned_temp_copies_are_swept_at_start" in read(f"{APP}/tests/test_disk_cache.py")
+    and "test_excluded_coins_are_neither_asked_nor_kept" in read(f"{APP}/tests/test_dom.py"))
 
 _fs = read(f"{APP}/src/screens/FundingScreen.tsx")
 say("фандинг не пропадает: собирается первым, при сбое — прошлый; пока ставок нет — загрузка с переспросом, а не «нет аномалий»",

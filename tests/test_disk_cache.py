@@ -240,3 +240,23 @@ class WireTest(unittest.TestCase):
         self.assertEqual(api._disk_load("probe", "k"), {"ok": True})
         src = inspect.getsource(api.main)
         self.assertLess(src.index("wire()"), src.index("threading.Thread(target=warmup"))
+
+    def test_abandoned_temp_copies_are_swept_at_start(self):
+        # Сервер, убитый посреди записи копии, оставляет «файл.json.<pid>.tmp»
+        # навсегда (у следующего процесса другой pid); у свечей это мегабайты.
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        old = time.time() - api.TMP_KEEP - 60
+        names = {"dom_px.json.4242.tmp": old, "fng.json.77.123456.tmp": old, "dom_px.json.9.tmp": time.time(),
+                 "dom.json": old, "notes.tmp": old, "dom_px.json.tmp": old}
+        for n, t in names.items():
+            with open(os.path.join(d, n), "w", encoding="utf-8") as f:
+                f.write("x")
+            os.utime(os.path.join(d, n), (t, t))
+        os.mkdir(os.path.join(d, "x.json.1.tmp"))  # каталог с таким именем не трогаем
+        os.utime(os.path.join(d, "x.json.1.tmp"), (old, old))
+        self.assertEqual(api.tmp_sweep(d), 2)
+        # Брошенные — убраны; свежий (вдруг пишет живой процесс), копии и чужие файлы — на месте.
+        self.assertEqual(sorted(os.listdir(d)), sorted(["dom_px.json.9.tmp", "dom.json", "notes.tmp", "dom_px.json.tmp", "x.json.1.tmp"]))
+        self.assertEqual(api.tmp_sweep(os.path.join(d, "нет такого")), 0)
+        self.assertIn("    tmp_sweep(CACHE_DIR)\n", inspect.getsource(api.wire))

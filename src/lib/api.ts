@@ -425,6 +425,14 @@ function readSaved<T>(key: string): Record<string, Saved<T>> {
   }
 }
 
+function dropSaved(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // хранилище закрыто — нечего и стирать
+  }
+}
+
 function writeSaved<T>(key: string, all: Record<string, Saved<T>>): void {
   try {
     localStorage.setItem(key, JSON.stringify(all));
@@ -570,7 +578,10 @@ export const peekFng = () => peek<FngReply | null>("/api/fng", FNG_TTL_MS) ?? sa
 const DOM_SAVED = "wt-dom-v2";
 function savedDom(): DomReply | null {
   const hit = readSaved<unknown>(DOM_SAVED).all;
-  return hit && Date.now() - hit.at < 30 * 24 * 3600_000 ? validDom(hit.v) : null;
+  const v = hit && Date.now() - hit.at < 30 * 24 * 3600_000 ? validDom(hit.v) : null;
+  // Просроченная или негодная копия больше не пригодится — не держим её на устройстве.
+  if (hit && !v) dropSaved(DOM_SAVED);
+  return v;
 }
 export const fetchDom = () =>
   remember<DomReply | "building" | null>("/api/dom", DOM_TTL_MS, () =>
@@ -592,7 +603,9 @@ function savedMcap(): McapReply | null {
   const hit = readSaved<unknown>(MCAP_SAVED).all;
   // Копия моложе MCAP_MAX_AGE по времени самого ответа, а не записи на устройство.
   const v = hit && Date.now() - hit.at < MCAP_MAX_AGE * 1000 ? validMcap(hit.v) : null;
-  return v && Date.now() / 1000 - v.at < MCAP_MAX_AGE ? v : null;
+  const ok = v && Date.now() / 1000 - v.at < MCAP_MAX_AGE ? v : null;
+  if (hit && !ok) dropSaved(MCAP_SAVED);
+  return ok;
 }
 export const fetchMcap = () =>
   remember<McapReply | null>("/api/mcap", MCAP_TTL_MS, () =>

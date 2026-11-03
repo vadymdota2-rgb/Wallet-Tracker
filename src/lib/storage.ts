@@ -34,6 +34,9 @@ const SAVED_MAPS = [
   "wt-exflows-v1", "wt-etf-v1", "wt-dom-v2", "wt-mcap-v1", "wt-calendar-v1", "wt-digest-v1", "wt-btcw-v1",
 ];
 const SAVED_MAX_AGE = 30 * 24 * 3600_000;
+/** Запасы короче общего срока: доминация старше трёх суток уже не «сейчас»
+ *  (MCAP_MAX_AGE в lib/dom.ts) — и на устройстве её не держим. */
+const MAX_AGE: Record<string, number> = { "wt-mcap-v1": 3 * 24 * 3600_000 };
 const DRAW_AT_MAX_AGE = 90 * 24 * 3600_000;
 
 function json(key: string): unknown {
@@ -70,7 +73,7 @@ export function sweepStorage(): void {
         const at = Number(e?.at) || 0;
         // 3. Халвинг, который уже прошёл, — тоже в мусор.
         const gone = key === "wt-halving-v1" && Number(e?.v?.eta) > 0 && Number(e?.v?.eta) * 1000 < now;
-        if (!at || now - at > SAVED_MAX_AGE || gone) {
+        if (!at || now - at > (MAX_AGE[key] ?? SAVED_MAX_AGE) || gone) {
           delete map[k];
           changed = true;
         }

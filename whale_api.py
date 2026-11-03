@@ -10113,6 +10113,37 @@ def wire() -> None:
                 os.remove(os.path.join(CACHE_DIR, old))
     except OSError:
         pass
+    tmp_sweep(CACHE_DIR)
+
+
+# Копии пишутся во «файл.json.<pid>[.<поток>].tmp» и подменяют настоящий
+# файл целиком. Сервер, убитый посреди записи (перезапуск, нехватка памяти),
+# оставляет такой файл навсегда: у следующего процесса другой pid, и его
+# никто не тронет, а у свечей альтсезона это мегабайты. При запуске их
+# убираем; моложе TMP_KEEP — не трогаем (вдруг пишет живой процесс).
+TMP_KEEP = 300
+_TMP_RE = re.compile(r"\.json\.\d+(?:\.\d+)?\.tmp")
+
+
+def tmp_sweep(folder: str) -> int:
+    """Убрать брошенные временные файлы копий. Вернёт, сколько убрано."""
+    n = 0
+    try:
+        names = os.listdir(folder)
+    except OSError:
+        return 0
+    for name in names:
+        path = os.path.join(folder, name)
+        if not _TMP_RE.search(name) or not name.endswith(".tmp"):
+            continue
+        try:
+            # Каталог с таким именем os.remove не тронет (ошибка — пропускаем).
+            if time.time() - os.path.getmtime(path) >= TMP_KEEP:
+                os.remove(path)
+                n += 1
+        except OSError:
+            pass
+    return n
 
 
 def disk_cache(store: dict, name: str) -> dict:

@@ -371,7 +371,8 @@ def _px_load() -> dict[str, dict[int, Candle]]:
     if not isinstance(got, dict):
         return out
     for coin, days in list(got.items())[:COINS_MAX]:
-        if not isinstance(coin, str) or not COIN.fullmatch(coin) or not isinstance(days, dict):
+        # EXCLUDE в расчёт не входят: их свечи из прежних копий не держим.
+        if not isinstance(coin, str) or not COIN.fullmatch(coin) or not isinstance(days, dict) or coin in EXCLUDE:
             continue
         ok: dict[int, Candle] = {}
         for t, v in days.items():
@@ -416,6 +417,10 @@ def _refresh(coins: dict[str, bool], sleep: Any = time.sleep) -> dict[str, dict[
     out: dict[str, dict[int, Candle]] = {c: d for c, d in old.items() if c not in coins}
     asked = 0
     for coin, gone in coins.items():
+        # Золото, бывшие стейблкоины и индексы в расчёт не входят: их свечи
+        # не нужны — ни запроса (пауза PACE на каждый), ни места на диске.
+        if coin in EXCLUDE:
+            continue
         have = old.get(coin) or {}
         if gone and have:
             out[coin] = have

@@ -414,6 +414,27 @@ describe("Альтсезон", () => {
     await ctx.close();
   });
 
+  test("уборка на телефоне: доминация старше 3 суток и негодная копия альтсезона стираются, а не лежат месяц", async () => {
+    // Сервер без ключа (свежая доминация не придёт) и молчит про альтсезон: на
+    // устройстве — только старые копии. Доминации 4 дня — на экране её нет и
+    // на устройстве тоже; копия альтсезона, которую не принимает проверка, — стёрта.
+    const mcapOld = JSON.stringify({ all: { at: T * 1000 - 4 * 86_400_000, v: { ...MCAP, at: T - 4 * 86_400 } } });
+    const domBad = JSON.stringify({ all: { at: T * 1000 - 3600_000, v: { ok: true, rows: "мусор" } } });
+    const { ctx, page, errors } = await open({ mcap: NO_KEY, reply: { ok: false }, store: { "wt-mcap-v1": mcapOld, "wt-dom-v2": domBad } });
+    await page.locator("[role=alert], .lq-err, .dm-err").first().waitFor({ timeout: 8000 }).catch(() => undefined);
+    await page.waitForFunction(() => localStorage.getItem("wt-mcap-v1") === null && localStorage.getItem("wt-dom-v2") === null, null, { timeout: 8000 });
+    assert.equal(await page.locator(".dm-cap").count(), 0);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+    // Свежая копия доминации (2 дня) — остаётся и видна без сети.
+    const fresh = JSON.stringify({ all: { at: T * 1000 - 2 * 86_400_000, v: { ...MCAP, at: T - 2 * 86_400 } } });
+    const o = await open({ mcap: NO_KEY, store: { "wt-mcap-v1": fresh } });
+    await o.page.locator(".dm-ahero").waitFor();
+    await o.page.waitForTimeout(4500); // уборка хранилища — через 4 с после запуска
+    assert.notEqual(await o.page.evaluate(() => localStorage.getItem("wt-mcap-v1")), null);
+    await o.ctx.close();
+  });
+
   test("узкий экран и арабский — ничего не вылезает вбок", async () => {
     for (const [lang, width] of [["ru", 320], ["ar", 320], ["de", 360]] as const) {
       const { ctx, page, errors } = await open({ lang, width });

@@ -388,21 +388,42 @@ class BuildTest(Base):
         with mock.patch.object(dom, "_file_save", lambda name, v: (saved.append((name, len(v))), real(name, v))):
             self.run_build(market())
         px = [n for name, n in saved if name == "dom_px.json"]
-        # 45 монет спрошено: запись после 25-й и в конце.
-        self.assertEqual(px, [dom.SAVE_EVERY, 45])
+        # 44 монеты спрошено (PAXG из EXCLUDE — нет): запись после 25-й и в конце.
+        self.assertEqual(px, [dom.SAVE_EVERY, 44])
         # Следующий день: промежуточная запись держит и ещё не спрошенные
         # монеты — остановка сервера посреди обновления их не теряет.
         saved.clear()
         self.now += DAY
         with mock.patch.object(dom, "_file_save", lambda name, v: (saved.append((name, len(v))), real(name, v))):
             self.run_build(market(days=201))
-        self.assertEqual([n for name, n in saved if name == "dom_px.json"], [45, 45])
+        self.assertEqual([n for name, n in saved if name == "dom_px.json"], [44, 44])
+
+    def test_excluded_coins_are_neither_asked_nor_kept(self):
+        # Золото, бывшие стейблкоины и индексы в расчёт не входят: ни запроса
+        # (пауза PACE на каждый), ни свечей на диске — и из прежней копии тоже.
+        asked = []
+        net = market()
+
+        def spy(url, body, timeout):
+            if body.get("type") == "candleSnapshot":
+                asked.append(body["req"]["coin"])
+            return net(url, body, timeout)
+        with open(os.path.join(self.tmp, "dom_px.json"), "w", encoding="utf-8") as f:
+            json.dump({"at": NOW, "v": {"PAXG": {str(T0): [2000.0, 1e9]}, "USTC": {str(T0): [0.02, 1e9]}}}, f)
+        self.assertNotIn("PAXG", dom._px_load())
+        with mock.patch.object(dom, "_fetch", spy):
+            dom.build(sleep=lambda s: None)
+        self.assertNotIn("PAXG", asked)
+        self.assertTrue(asked)
+        self.assertFalse(dom.EXCLUDE & set(dom._st.px))
+        self.assertFalse(dom.EXCLUDE & set(dom._px_load()))
 
     def test_pace_between_requests(self):
         slept = []
         with mock.patch.object(dom, "_fetch", market()):
             dom.build(sleep=slept.append)
-        self.assertEqual(len(slept), 40 + 5 - 1)
+        # 40 альтов и 4 своих (BTC, ETH, USDE, OLD без свечей); PAXG не спрашиваем.
+        self.assertEqual(len(slept), 40 + 4 - 1)
         self.assertTrue(all(s == dom.PACE for s in slept))
 
     def test_429_once_waits_and_asks_again(self):
