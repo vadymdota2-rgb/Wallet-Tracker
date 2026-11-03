@@ -190,10 +190,10 @@ class DigestMarketTest(unittest.TestCase):
     """Капитализация и доминация в разделе «Рынок» — из кэша вкладки
     (wt_mcap.mcap_data): выпуск сам в CoinMarketCap не ходит."""
 
-    def market(self, mc, waits=None):
+    def market(self, mc, waits=None, rows=None):
         def dom(wait=None):
             (waits if waits is not None else []).append(("dom", wait))
-            return {}
+            return {"ok": True, "rows": rows} if rows else {}
 
         def mcap(wait=None):
             (waits if waits is not None else []).append(("mcap", wait))
@@ -210,6 +210,17 @@ class DigestMarketTest(unittest.TestCase):
         self.market(MC, waits)
         self.assertEqual(waits, [("dom", api.DG_COLD_WAIT), ("mcap", api.DG_COLD_WAIT)])
         self.assertGreater(api.DG_COLD_WAIT, max(api.wt_dom.COLD_WAIT, api.wt_mcap.COLD_WAIT))
+
+    def test_altseason_index_only_while_its_last_day_is_recent(self):
+        today = api.now() // 86400 * 86400
+        for age, shown in ((1, True), (api.DG_ALT_DAYS, True), (api.DG_ALT_DAYS + 1, False)):
+            last = today - age * 86400
+            rows = [[last - 86400, 40, 1.0, 0.03, 80_000, 100], [last, 47, 1.0, 0.03, 80_000, 100]]
+            got = self.market({"ok": False}, rows=rows)
+            if shown:
+                self.assertEqual(got["alt"], {"v": 47, "d1": 7}, age)
+            else:
+                self.assertNotIn("alt", got, age)
 
     def test_cap_and_dominance_come_from_the_tab_cache(self):
         got = self.market(MC)

@@ -14660,6 +14660,9 @@ def _dg_safe(name: str, fn):
 # (COLD_WAIT). Выпуску спешить некуда — без ожидания раздел пропал бы из
 # выпуска на весь день (как _dg_inst для ETF).
 DG_COLD_WAIT = 90.0
+# Индекс альтсезона в выпуске — если его последний день не старше стольких
+# полных суток (как STALE_DAYS у экрана, lib/dom.ts).
+DG_ALT_DAYS = 2
 
 
 def _dg_market() -> dict:
@@ -14675,8 +14678,12 @@ def _dg_market() -> dict:
         if px:
             out[sym] = px
     # Индекс альтсезона — свой расчёт (wt_dom): сейчас и на сутки раньше.
+    # Последний день старше DG_ALT_DAYS суток (Hyperliquid не присылал цен) —
+    # не берём: выпуск за выпуском повторял бы его как сегодняшний (экран в
+    # этом случае тоже говорит, от какого он дня, — lib/dom.ts STALE_DAYS).
     rows = (dom_data(wait=DG_COLD_WAIT) or {}).get("rows") or []
-    if len(rows) >= 2 and rows[-1][1] is not None and rows[-2][1] is not None:
+    if (len(rows) >= 2 and rows[-1][1] is not None and rows[-2][1] is not None
+            and (now() - int(rows[-1][0])) // 86400 <= DG_ALT_DAYS):
         out["alt"] = {"v": int(rows[-1][1]), "d1": int(rows[-1][1]) - int(rows[-2][1])}
     # Капитализация и доминация — из кэша вкладки (wt_mcap): тот же ответ,
     # что видят люди, лишних кредитов CoinMarketCap выпуск не тратит.

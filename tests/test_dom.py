@@ -366,6 +366,67 @@ class BuildTest(Base):
         self.assertIn("OLD", dom._st.px)
         self.assertEqual(day(res["rows"], T0 + 100 * DAY), day(first["rows"], T0 + 100 * DAY))
 
+    def test_coin_delisted_between_passes_keeps_its_last_days(self):
+        # A1 торговалась при прошлом обходе, а к следующему её сняли: её
+        # последние дни (уже после прошлого обхода) не теряются — хвост
+        # спрашивается ещё GONE_DAYS суток после последней свечи, потом — нет.
+        net = market(days=201)
+        self.run_build(net)
+        net.uni["A1"] = True
+        net.px["A1"] = flat(202, 1, 1.02, 1e9)
+        net.calls.clear()
+        self.now += DAY
+        self.run_build(net)
+        self.assertIn("A1", net.asked())
+        self.assertIn(LAST + DAY, dom._st.px["A1"])
+        # Новых свечей у снятой нет, и через GONE_DAYS суток её больше не спрашивают.
+        net.calls.clear()
+        self.now += (dom.GONE_DAYS + 1) * DAY
+        self.run_build(net)
+        self.assertNotIn("A1", net.asked())
+        self.assertIn(LAST + DAY, dom._st.px["A1"])
+
+    def test_pass_cut_by_429_is_finished_the_same_day(self):
+        # Лимит прервал обход нового дня после BTC и пары монет: у биткоина
+        # день есть, у остальных — нет. Следующая сборка в тот же день идёт
+        # в сеть и дописывает их, а не держит корзину без них до завтра.
+        net = market(days=201)
+        first = self.run_build(net)
+        self.now += DAY
+        asked = []
+
+        def limited(url, body, timeout):
+            if body["type"] == "candleSnapshot":
+                asked.append(body["req"]["coin"])
+                if len(asked) > 3:
+                    raise dom._Limited
+            return net(url, body, timeout)
+        with mock.patch.object(dom, "_fetch", limited):
+            self.assertEqual(dom.build(sleep=lambda s: None), {"ok": False, "error": "no_data"})
+        self.assertIn(LAST + DAY, dom._st.px["BTC"])
+        self.assertFalse(dom._fresh(dom._st.px, LAST + DAY))
+        net.calls.clear()
+        res = self.run_build(net)
+        self.assertIn("A30", net.asked())
+        self.assertEqual(res["rows"][-1][0], LAST + DAY)
+        self.assertEqual(len(res["coins"]), len(first["coins"]))
+        self.assertTrue(dom._fresh(dom._st.px, LAST + DAY))
+
+    def test_day_is_fresh_when_almost_every_coin_has_it(self):
+        day0, day1 = T0 + 10 * DAY, T0 + 11 * DAY
+        both = {day0: (1.0, 1.0), day1: (1.0, 1.0)}
+        px = {f"C{i}": dict(both) for i in range(40)}
+        # Снятая давно (нет и вчерашнего дня) в счёт не идёт.
+        px["GONE"] = {T0: (1.0, 1.0)}
+        self.assertTrue(dom._fresh(px, day1))
+        # Без нового дня 2 из 40 (5 %) — ещё свежо, 3 из 40 — уже нет.
+        for i in range(2):
+            del px[f"C{i}"][day1]
+        self.assertTrue(dom._fresh(px, day1))
+        del px["C2"][day1]
+        self.assertFalse(dom._fresh(px, day1))
+        self.assertFalse(dom._fresh({}, day1))
+
     def test_coin_without_answer_keeps_old_prices(self):
         net = market(days=201)
         first = self.run_build(net)

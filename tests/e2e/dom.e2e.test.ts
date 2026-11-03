@@ -698,6 +698,20 @@ describe("Альтсезон", () => {
     await o.ctx.close();
   });
 
+  test("сеть не ответила, а сохранённая копия старая — экран говорит, от какого она дня", async () => {
+    // Копия на устройстве живёт до 30 суток: при сбое сети она остаётся на
+    // экране, и без пометки позавчерашний индекс выглядел бы сегодняшним.
+    const old = { ...REAL, rows: REAL.rows.slice(0, -5) };
+    const { ctx, page, errors } = await open({ reply: { ok: false }, store: saved(old, 5 * 86_400_000) });
+    await ready(page);
+    const note = page.locator(".lq-stale");
+    await note.waitFor({ timeout: 8000 });
+    const n = Math.floor((T - old.rows[old.rows.length - 1]![0]) / 86_400);
+    assert.equal(sp(await note.innerText()), sp(I18N["dm_old"]!["ru"]!.replace("{n}", String(n))));
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
   test("вернулся в приложение через час и больше — экран сам берёт свежий ответ", async () => {
     const { ctx, page, asked } = await open({ premium: true });
     await ready(page);

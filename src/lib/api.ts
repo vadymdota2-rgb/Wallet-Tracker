@@ -601,7 +601,8 @@ export const peekDom = () => {
 const MCAP_SAVED = "wt-mcap-v1";
 function savedMcap(): McapReply | null {
   const hit = readSaved<unknown>(MCAP_SAVED).all;
-  // Копия моложе MCAP_MAX_AGE по времени самого ответа, а не записи на устройство.
+  // Копия моложе MCAP_MAX_AGE и по времени записи на устройство, и по времени
+  // самого ответа (сервер мог отдать ответ, которому уже двое суток).
   const v = hit && Date.now() - hit.at < MCAP_MAX_AGE * 1000 ? validMcap(hit.v) : null;
   const ok = v && Date.now() / 1000 - v.at < MCAP_MAX_AGE ? v : null;
   if (hit && !ok) dropSaved(MCAP_SAVED);

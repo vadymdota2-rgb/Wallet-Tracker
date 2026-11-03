@@ -184,11 +184,14 @@ export function validMcap(raw: unknown, now: number = Date.now() / 1000): McapRe
   };
 }
 
-/** День истории не позже чем за n суток до последнего; нет — null. */
-export function mcapAgo(h: McapDay[], n: number): McapDay | null {
+/** День истории не позже чем за n суток до at (unix с; по умолчанию — до
+ *  последнего дня истории); нет — null. История обновляется раз в 12 ч, и её
+ *  последний день — обычно вчерашний: «за 7 дней» от него было бы за 8 дней
+ *  от нынешней суммы. Поэтому экран считает от времени ответа (McapReply.at). */
+export function mcapAgo(h: McapDay[], n: number, at?: number): McapDay | null {
   const last = h[h.length - 1];
   if (!last) return null;
-  const t = last[0] - n * DAY;
+  const t = (at ?? last[0]) - n * DAY;
   for (let i = h.length - 1; i >= 0; i--) if (h[i]![0] <= t) return h[i]!;
   return null;
 }
@@ -324,8 +327,10 @@ export function beat(coins: [string, number][], btc90: number): { up: number; dn
   return { up, dn: coins.length - up };
 }
 
-/** Hyperliquid давно не присылал цен: последний день старше этого (день у
- *  Hyperliquid — и сегодняшний, ещё идущий, так что даже выходные не в счёт). */
+/** Hyperliquid давно не присылал цен: прошло больше стольких полных суток
+ *  от начала последнего дня ответа (в ответе — только закрытые дни, так что
+ *  обычно это вчерашний: 1 сутки; больше двух — пропущен день). Биржа
+ *  работает и в выходные — они не в счёт. */
 export const STALE_DAYS = 2;
 
 /** Сколько полных суток прошло с последнего дня ответа до now (unix с). */

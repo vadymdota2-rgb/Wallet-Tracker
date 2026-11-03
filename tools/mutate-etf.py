@@ -233,9 +233,13 @@ DM = [
     ("        live.sort(key=lambda a: (-trail[a][i], a))\n", "", "альтсезон: корзина — самые торгуемые"),
     ("live = [a for a in alts if trail[a][i] > 0 and", "live = [a for a in alts if", "альтсезон: без торгов — не в корзине"),
     ("        return live[:n]", "        return live", "альтсезон: не больше n монет в корзине"),
-    ("        if gone and have:\n            out[coin] = have\n            continue\n", "", "альтсезон: снятые с торгов не спрашиваем снова"),
+    ("        if gone and have and max(have) < _today() - GONE_DAYS * DAY:\n            out[coin] = have\n            continue\n", "", "альтсезон: снятые с торгов не спрашиваем снова"),
+    ("        if gone and have and max(have) < _today() - GONE_DAYS * DAY:", "        if gone and have:", "альтсезон: последние дни снятой между обходами монеты не теряются"),
     ("            out[name] = bool(u.get(\"isDelisted\"))", "            out[name] = False", "альтсезон: снятые с торгов видны"),
-    ("    if last >= _today() - DAY:", "    if False:", "альтсезон: новый день не закрылся — сеть не трогаем"),
+    ("    if last >= _today() - DAY and _fresh(have, last):", "    if False:", "альтсезон: новый день не закрылся — сеть не трогаем"),
+    ("    if last >= _today() - DAY and _fresh(have, last):", "    if last >= _today() - DAY:", "альтсезон: обход, прерванный лимитом, дописывается в тот же день"),
+    ("    return bool(had) and sum(1 for d in had if day in d) >= FRESH_SHARE * len(had)", "    return bool(had)", "альтсезон: новый день — почти у всех монет"),
+    ("    had = [d for d in px.values() if day - DAY in d]", "    had = list(px.values())", "альтсезон: снятые раньше в счёт свежести не идут"),
     ('        if hit and hit[1].get("n") == TOP:', "        if hit:", "альтсезон: ответ по старому размеру корзины пересчитывается"),
     ("                    and isinstance(saved.get(\"tiers\"), list):", "                    :", "альтсезон: копия прежнего расчёта не годится"),
     ("max(-CLIP, min(CLIP, math.log", "max(-9e9, min(9e9, math.log", "альтсезон: сбой цены урезан"),
@@ -321,6 +325,7 @@ MC = [
 ]
 
 DMT = [
+    ("  const t = (at ?? last[0]) - n * DAY;", "  const t = last[0] - n * DAY;", "доминация: изменения за 7/30/365 дней — от времени ответа"),
     ("Math.log(Math.max(1e-6, 1 + p / 100) / Math.max(1e-6, 1 + btc / 100))", "Math.log((1 + p / 100) / Math.max(1e-6, 1 + btc / 100))", "монета −100 % — полосы не NaN"),
     ("(v >= 75 ? 2 : v <= 25 ? 0 : 1)", "(v > 75 ? 2 : v <= 25 ? 0 : 1)", "альтсезон: 75 — уже альтсезон"),
     ("(v >= 75 ? 2 : v <= 25 ? 0 : 1)", "(v >= 75 ? 2 : v < 25 ? 0 : 1)", "альтсезон: 25 — уже сезон биткоина"),
@@ -374,6 +379,7 @@ AP = [
     ('        self.send_header("ETag", tag)\n', "", "доминация: ETag в ответе"),
     ('        self.send_header("Cache-Control", "no-cache")\n', '        self.send_header("Cache-Control", "no-store")\n', "доминация: копию можно держать и сверять"),
     ("        if cap_y:\n", "        if True:\n", "дайджест: без вчерашней капитализации — без изменения"),
+    ("            and (now() - int(rows[-1][0])) // 86400 <= DG_ALT_DAYS):", "            and True):", "дайджест: старый индекс альтсезона не выдаётся за сегодняшний"),
     ('"d1": round(btc - btc_y, 2)', '"d1": round(btc_y - btc, 2)', "дайджест: изменение доминации за сутки со знаком"),
     ("    rows = (dom_data(wait=DG_COLD_WAIT) or {})", "    rows = (dom_data() or {})", "дайджест: альтсезон после перезапуска ждёт сборку"),
     ("    mc = mcap_data(wait=DG_COLD_WAIT)\n", "    mc = mcap_data()\n", "дайджест: доминация после перезапуска ждёт сборку"),

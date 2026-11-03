@@ -90,6 +90,8 @@ function ticksOf(lang: Lang, a: number, b: number, pw: number) {
 /** Ровные деления: 0,02 / 0,04 / 0,06, а не 0,033 / 0,067. */
 function niceTicks(lo: number, hi: number): number[] {
   const raw = (hi - lo) / 4;
+  /* Ровная линия (или нет точек): шаг 0 — цикл ниже не кончился бы. */
+  if (!(raw > 0) || !Number.isFinite(raw)) return [];
   const p = 10 ** Math.floor(Math.log10(raw));
   const step = [1, 2, 2.5, 5, 10].map((m) => m * p).find((x) => x >= raw) ?? raw;
   const out: number[] = [];
@@ -645,19 +647,19 @@ function McapBlock({ m, lang }: { m: McapReply; lang: Lang }) {
   const capCh: [DictKey, number | null][] = [
     ["dm_24h", m.cap[1] ? (cap / m.cap[1] - 1) * 100 : null],
     ...([["dm_7d", 7], ["dm_30d", 30], ["dm_year", 365]] as const).map(([k, n]): [DictKey, number | null] => {
-      const p = mcapAgo(h, n);
+      const p = mcapAgo(h, n, m.at);
       return [k, p ? (cap / p[1] - 1) * 100 : null];
     }),
   ];
   const domCh: [DictKey, number | null][] = [
     ["dm_24h", m.btc[1] !== null ? m.btc[0] - m.btc[1] : null],
     ...([["dm_7d", 7], ["dm_30d", 30], ["dm_year", 365]] as const).map(([k, n]): [DictKey, number | null] => {
-      const p = mcapAgo(h, n);
+      const p = mcapAgo(h, n, m.at);
       return [k, p ? m.btc[0] - p[2] : null];
     }),
   ];
   /* Куда шли деньги за 30 дней: капитализация биткоина и всех остальных монет. */
-  const p30 = mcapAgo(h, 30);
+  const p30 = mcapAgo(h, 30, m.at);
   const flow = p30 && p30[2] < 100 && m.btc[0] < 100 ? {
     b: ((cap * m.btc[0]) / (p30[1] * p30[2]) - 1) * 100,
     a: ((cap * (100 - m.btc[0])) / (p30[1] * (100 - p30[2])) - 1) * 100,
@@ -899,10 +901,11 @@ export function DominanceScreen() {
         ) : <div aria-busy="true"><Card><Skeleton rows={8} /></Card></div>
       ) : (
         <>
-          {/* Сеть не ответила, а на экране — сохранённая копия: показываем её молча,
-              обновление повторится само (FAIL_RETRY_MS). Hyperliquid давно не присылал
-              цен — говорим прямо, иначе вчерашний индекс выглядел бы сегодняшним. */}
-          {got.current && old > STALE_DAYS ? (
+          {/* Пока свежий ответ в пути, сохранённая копия — молча (пометка мигнула бы).
+              Ответ пришёл — или сеть не ответила, и на экране так и осталась копия
+              (до 30 суток), — а последний день старый: говорим прямо, иначе
+              позавчерашний индекс выглядел бы сегодняшним. */}
+          {(got.current || state === "failed") && old > STALE_DAYS ? (
             <p className="lq-stale" role="status">{t(lang, "dm_old", { n: iso(num(old)) })}</p>
           ) : null}
           {now && stats ? (

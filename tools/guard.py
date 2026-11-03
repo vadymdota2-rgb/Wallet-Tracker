@@ -755,6 +755,17 @@ say("доминация и альтсезон — авточистка: брош
     and '{ "wt-mcap-v1": 3 * 24 * 3600_000 }' in read(f"{APP}/src/lib/storage.ts") and os.path.isfile(f"{APP}/tests/storage.test.ts")
     and "test_abandoned_temp_copies_are_swept_at_start" in read(f"{APP}/tests/test_disk_cache.py")
     and "test_excluded_coins_are_neither_asked_nor_kept" in read(f"{APP}/tests/test_dom.py"))
+say("доминация и альтсезон — ревизия строк: снятая с торгов между обходами монета не теряет последних дней (хвост — ещё GONE_DAYS суток); новый день получен, только если он есть почти у всех монет (FRESH_SHARE), — обход, прерванный лимитом, дописывается в тот же день; изменения капитализации и доминации за 7/30/365 дней — от времени ответа; старая копия при сбое сети — с пометкой дня; дайджест не выдаёт старый индекс за сегодняшний",
+    "        if gone and have and max(have) < _today() - GONE_DAYS * DAY:" in _dms and "GONE_DAYS = 7" in _dms
+    and "    if last >= _today() - DAY and _fresh(have, last):" in _dms and "FRESH_SHARE = 0.95" in _dms
+    and "mcapAgo(h, n: number, at?: number)" not in _dml and "export function mcapAgo(h: McapDay[], n: number, at?: number): McapDay | null {" in _dml
+    and _dm.count("mcapAgo(h, n, m.at)") == 2 and "mcapAgo(h, 30, m.at)" in _dm and "mcapAgo(h, n)" not in _dm and "(got.current || state === \"failed\") && old > STALE_DAYS" in _dm
+    and "if (!(raw > 0) || !Number.isFinite(raw)) return [];" in _dm
+    and "and (now() - int(rows[-1][0])) // 86400 <= DG_ALT_DAYS):" in api and "DG_ALT_DAYS = 2\n" in api
+    and "test_pass_cut_by_429_is_finished_the_same_day" in read(f"{APP}/tests/test_dom.py")
+    and "test_coin_delisted_between_passes_keeps_its_last_days" in read(f"{APP}/tests/test_dom.py")
+    and "test_altseason_index_only_while_its_last_day_is_recent" in read(f"{APP}/tests/test_digest_sources.py")
+    and "сеть не ответила, а сохранённая копия старая" in _dme)
 say("авторские права: LICENSE «все права защищены» (Wallet Tracker) с оговоркой о сторонних лицензиях (IBM Plex — OFL, Twemoji — CC BY 4.0, данные источников); package.json — UNLICENSED; на экране «Документы» — «© 2026 Wallet Tracker» на 16 языках",
     os.path.isfile(f"{APP}/LICENSE") and "Copyright (c) 2026 Wallet Tracker. All rights reserved." in read(f"{APP}/LICENSE")
     and "SIL Open Font" in read(f"{APP}/LICENSE") and "CC BY 4.0" in read(f"{APP}/LICENSE")

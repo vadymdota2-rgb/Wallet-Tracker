@@ -250,6 +250,12 @@ test("mcapAgo и mcapWindow: точка n суток назад и окно ис
   assert.equal(mcapAgo(h, 365)![0], T0 + 434 * DAY);
   assert.equal(mcapAgo(h, 1000), null);
   assert.equal(mcapAgo([], 1), null);
+  // От времени ответа, а не от последнего дня истории: история — по вчерашний
+  // день (последний — T0 + 799), ответ — сегодня днём; «7 дней» — за 7 суток
+  // от ответа (день 793), а не за 8 (792).
+  const at = T0 + 800 * DAY + 12 * 3600;
+  assert.equal(mcapAgo(h, 7, at)![0], T0 + 793 * DAY);
+  assert.equal(mcapAgo(h, 365, at)![0], T0 + 435 * DAY);
   assert.equal(mcapWindow(h, "365").length, 365);
   assert.equal(mcapWindow(h, "all").length, 800);
   assert.deepEqual(mcapWindow([], "1095"), []);
