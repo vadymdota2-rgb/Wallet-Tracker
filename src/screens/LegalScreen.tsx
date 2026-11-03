@@ -111,6 +111,9 @@ export function LegalScreen({ arg }: ScreenProps) {
         {/* Рисунки флагов (lib/flags.ts) — Twemoji под CC BY 4.0: условие
             лицензии — назвать автора и лицензию. */}
         <p className="note dim">{t(lang, "legal_flags")}</p>
+        {/* Наши права: код, тексты, оформление и свои расчёты — без разрешения не
+            копировать (полный текст — LICENSE в репозитории). */}
+        <p className="note dim">{t(lang, "legal_copy")}</p>
       </Card>
 
       <Card>

@@ -999,6 +999,7 @@ export const fr: Dict = {
   lang_title: "🌐 Langue",
   legal_btn_forget: "🗑 Supprimer mes données",
   legal_btn_privacy: "🔒 Confidentialité",
+  legal_copy: "© 2026 Wallet Tracker. Tous droits réservés : le code, les textes, le design et nos propres calculs (comme l’indice d’altseason) ne peuvent être copiés ni utilisés sans notre autorisation écrite. Les données de tiers relèvent de leurs propres licences, comme indiqué ci-dessus.",
   legal_flags: "Drapeaux sur les appareils qui ne les affichent pas eux-mêmes : Twemoji (© Twitter, Inc. et autres contributeurs), licence CC BY 4.0 — github.com/twitter/twemoji.",
   legal_forget_done: "✅ C'est fait. Tout ce que nous détenions sur vous est supprimé. Si vous voulez revenir un jour, rouvrez simplement l'application.",
   legal_forget_failed: "❌ Impossible de supprimer les données. Réessayez plus tard.",

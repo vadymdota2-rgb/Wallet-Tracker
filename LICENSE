@@ -1,0 +1,44 @@
+Copyright (c) 2026 Wallet Tracker. All rights reserved.
+
+This repository and everything in it — source code, texts and translations,
+interface design, graphics, data files and the methodology of our own
+calculations (for example, the altseason index and altcoin strength) — is
+proprietary to Wallet Tracker.
+
+No license is granted. You may not use, copy, modify, merge, publish,
+distribute, sublicense, sell or create derivative works from any part of this
+repository, in whole or in part, without prior written permission from
+Wallet Tracker. The fact that the repository can be viewed on GitHub does not
+grant any license; GitHub's Terms of Service allow only viewing and forking
+within GitHub.
+
+Third-party components remain under their own licenses, which this notice
+does not change:
+  - IBM Plex Sans (fonts/, src/assets/fonts/) — © IBM Corp., SIL Open Font
+    License 1.1 (https://openfontlicense.org);
+  - Twemoji country flags (src/assets/TwemojiCountryFlags.woff2) — © Twitter,
+    Inc. and other contributors, CC BY 4.0;
+  - npm and Python dependencies — under their respective licenses.
+
+Data from third parties (CoinMarketCap, Hyperliquid, TFTC, alternative.me,
+mempool.space, SEC, CFTC and others) belongs to its owners and is used under
+their terms; TFTC's ETF flows dataset is CC BY 4.0.
+
+Contact for permissions: @WalletTrackerHelp (Telegram).
+
+-------------------------------------------------------------------------------
+
+© 2026 Wallet Tracker. Все права защищены.
+
+Этот репозиторий и всё его содержимое — исходный код, тексты и переводы,
+оформление, графика, файлы данных и методика собственных расчётов (например,
+индекса альтсезона и силы альткоинов) — принадлежит Wallet Tracker.
+
+Лицензия не предоставляется. Использовать, копировать, изменять, публиковать,
+распространять, продавать или создавать производные работы на основе любой
+части репозитория без предварительного письменного разрешения Wallet Tracker
+запрещено. То, что репозиторий можно открыть на GitHub, лицензией не является.
+
+Сторонние компоненты (шрифт IBM Plex Sans — SIL OFL 1.1, флаги Twemoji —
+CC BY 4.0, библиотеки npm и Python) и данные третьих лиц остаются под своими
+лицензиями и условиями. Разрешения — через поддержку: @WalletTrackerHelp.

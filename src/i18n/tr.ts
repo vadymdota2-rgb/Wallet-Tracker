@@ -999,6 +999,7 @@ export const tr: Dict = {
   lang_title: "🌐 Dil",
   legal_btn_forget: "🗑 Verilerimi sil",
   legal_btn_privacy: "🔒 Gizlilik",
+  legal_copy: "© 2026 Wallet Tracker. Tüm hakları saklıdır: kod, metinler, tasarım ve kendi hesaplamalarımız (ör. altseason endeksi) yazılı iznimiz olmadan kopyalanamaz ve kullanılamaz. Üçüncü tarafların verileri, yukarıda belirtildiği gibi kendi lisanslarına tabidir.",
   legal_flags: "Bayrakları kendisi gösteremeyen cihazlarda bayraklar: Twemoji (© Twitter, Inc. ve diğer katkıda bulunanlar), CC BY 4.0 lisansı — github.com/twitter/twemoji.",
   legal_forget_done: "✅ Tamam. Hakkınızda tuttuğumuz her şey silindi. Bir gün dönmek isterseniz uygulamayı yeniden açmanız yeterli.",
   legal_forget_failed: "❌ Veriler silinemedi. Lütfen daha sonra tekrar deneyin.",

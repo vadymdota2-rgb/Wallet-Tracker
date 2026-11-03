@@ -998,6 +998,7 @@ export const en = {
   lang_title: "🌐 Language",
   legal_btn_forget: "🗑 Delete my data",
   legal_btn_privacy: "🔒 Privacy",
+  legal_copy: "© 2026 Wallet Tracker. All rights reserved: the code, texts, design and our own calculations (such as the altseason index) may not be copied or used without our written permission. Third-party data is used under its own licenses, as described above.",
   legal_flags: "Flags on devices that cannot draw them: Twemoji (© Twitter, Inc. and other contributors), CC BY 4.0 license — github.com/twitter/twemoji.",
   legal_forget_done: "✅ Done. Everything we held about you is deleted. If you ever want to come back, just open the app again.",
   legal_forget_failed: "❌ Could not delete the data. Please try again later.",

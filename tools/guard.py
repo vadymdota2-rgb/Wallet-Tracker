@@ -755,6 +755,12 @@ say("доминация и альтсезон — авточистка: брош
     and '{ "wt-mcap-v1": 3 * 24 * 3600_000 }' in read(f"{APP}/src/lib/storage.ts") and os.path.isfile(f"{APP}/tests/storage.test.ts")
     and "test_abandoned_temp_copies_are_swept_at_start" in read(f"{APP}/tests/test_disk_cache.py")
     and "test_excluded_coins_are_neither_asked_nor_kept" in read(f"{APP}/tests/test_dom.py"))
+say("авторские права: LICENSE «все права защищены» (Wallet Tracker) с оговоркой о сторонних лицензиях (IBM Plex — OFL, Twemoji — CC BY 4.0, данные источников); package.json — UNLICENSED; на экране «Документы» — «© 2026 Wallet Tracker» на 16 языках",
+    os.path.isfile(f"{APP}/LICENSE") and "Copyright (c) 2026 Wallet Tracker. All rights reserved." in read(f"{APP}/LICENSE")
+    and "SIL Open Font" in read(f"{APP}/LICENSE") and "CC BY 4.0" in read(f"{APP}/LICENSE")
+    and '"license": "UNLICENSED"' in read(f"{APP}/package.json")
+    and '{t(lang, "legal_copy")}' in read(f"{APP}/src/screens/LegalScreen.tsx")
+    and "© 2026 Wallet Tracker" in read(f"{APP}/src/i18n/ru.ts").split("legal_copy:")[1].split("\n")[0])
 say("доминация и альтсезон — только подписчикам: и /api/dom, и /api/mcap (данные CoinMarketCap — внутри продукта, а не открытой выдачей для сборщиков)",
     '"btc/wallet", "dom", "mcap", "etf",' in api
     and "test_dominance_and_altseason_are_for_subscribers_only" in read(f"{APP}/tests/test_dom_http.py"))

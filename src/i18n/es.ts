@@ -999,6 +999,7 @@ export const es: Dict = {
   lang_title: "🌐 Idioma",
   legal_btn_forget: "🗑 Borrar mis datos",
   legal_btn_privacy: "🔒 Privacidad",
+  legal_copy: "© 2026 Wallet Tracker. Todos los derechos reservados: el código, los textos, el diseño y nuestros propios cálculos (como el índice de altseason) no pueden copiarse ni usarse sin nuestro permiso por escrito. Los datos de terceros se rigen por sus propias licencias, como se indica arriba.",
   legal_flags: "Banderas en dispositivos que no las muestran por sí mismos: Twemoji (© Twitter, Inc. y otros colaboradores), licencia CC BY 4.0 — github.com/twitter/twemoji.",
   legal_forget_done: "✅ Listo. Todo lo que teníamos sobre ti está borrado. Si alguna vez quieres volver, simplemente abre la app de nuevo.",
   legal_forget_failed: "❌ No se pudieron borrar los datos. Inténtalo de nuevo más tarde.",

@@ -999,6 +999,7 @@ export const vi: Dict = {
   lang_title: "🌐 Ngôn ngữ",
   legal_btn_forget: "🗑 Xóa dữ liệu của tôi",
   legal_btn_privacy: "🔒 Quyền riêng tư",
+  legal_copy: "© 2026 Wallet Tracker. Bảo lưu mọi quyền: mã nguồn, nội dung, thiết kế và các phép tính của riêng chúng tôi (ví dụ chỉ số altseason) không được sao chép hay sử dụng khi chưa có sự cho phép bằng văn bản của chúng tôi. Dữ liệu của bên thứ ba tuân theo giấy phép riêng của họ, như đã nêu ở trên.",
   legal_flags: "Cờ trên các thiết bị không tự hiển thị được: Twemoji (© Twitter, Inc. và những người đóng góp khác), giấy phép CC BY 4.0 — github.com/twitter/twemoji.",
   legal_forget_done: "✅ Xong. Mọi thứ chúng tôi giữ về bạn đã bị xóa. Nếu muốn quay lại, chỉ cần mở lại ứng dụng.",
   legal_forget_failed: "❌ Không xóa được dữ liệu. Vui lòng thử lại sau.",

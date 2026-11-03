@@ -999,6 +999,7 @@ export const id: Dict = {
   lang_title: "🌐 Bahasa",
   legal_btn_forget: "🗑 Hapus data saya",
   legal_btn_privacy: "🔒 Privasi",
+  legal_copy: "© 2026 Wallet Tracker. Hak cipta dilindungi: kode, teks, desain, dan perhitungan kami sendiri (misalnya indeks altseason) tidak boleh disalin atau digunakan tanpa izin tertulis dari kami. Data pihak ketiga tunduk pada lisensinya masing-masing, seperti dijelaskan di atas.",
   legal_flags: "Bendera di perangkat yang tidak bisa menampilkannya sendiri: Twemoji (© Twitter, Inc. dan kontributor lain), lisensi CC BY 4.0 — github.com/twitter/twemoji.",
   legal_forget_done: "✅ Selesai. Semua yang kami simpan tentang Anda sudah dihapus. Kalau suatu saat ingin kembali, cukup buka aplikasi lagi.",
   legal_forget_failed: "❌ Data gagal dihapus. Coba lagi nanti.",

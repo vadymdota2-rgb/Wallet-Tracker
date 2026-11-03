@@ -27574,5 +27574,23 @@
     "ja": "CoinMarketCapが現在応答していません。以下のドミナンスと時価総額は{t}時点のものです。",
     "hi": "CoinMarketCap अभी जवाब नहीं दे रहा: नीचे का प्रभुत्व और मार्केट कैप {t} तक का है।",
     "ar": "CoinMarketCap لا يستجيب حاليًا: الهيمنة والقيمة السوقية أدناه حتى {t}."
+  },
+  "legal_copy": {
+    "ar": "© 2026 Wallet Tracker. جميع الحقوق محفوظة: لا يجوز نسخ الشيفرة أو النصوص أو التصميم أو حساباتنا الخاصة (مثل مؤشر موسم العملات البديلة) أو استخدامها دون إذن كتابي منا. وتخضع بيانات الأطراف الثالثة لتراخيصها الخاصة كما هو موضح أعلاه.",
+    "de": "© 2026 Wallet Tracker. Alle Rechte vorbehalten: Code, Texte, Gestaltung und unsere eigenen Berechnungen (etwa der Altseason-Index) dürfen ohne unsere schriftliche Genehmigung weder kopiert noch verwendet werden. Daten Dritter gelten unter deren Lizenzen, wie oben beschrieben.",
+    "en": "© 2026 Wallet Tracker. All rights reserved: the code, texts, design and our own calculations (such as the altseason index) may not be copied or used without our written permission. Third-party data is used under its own licenses, as described above.",
+    "es": "© 2026 Wallet Tracker. Todos los derechos reservados: el código, los textos, el diseño y nuestros propios cálculos (como el índice de altseason) no pueden copiarse ni usarse sin nuestro permiso por escrito. Los datos de terceros se rigen por sus propias licencias, como se indica arriba.",
+    "fr": "© 2026 Wallet Tracker. Tous droits réservés : le code, les textes, le design et nos propres calculs (comme l’indice d’altseason) ne peuvent être copiés ni utilisés sans notre autorisation écrite. Les données de tiers relèvent de leurs propres licences, comme indiqué ci-dessus.",
+    "hi": "© 2026 Wallet Tracker. सर्वाधिकार सुरक्षित: कोड, पाठ, डिज़ाइन और हमारी अपनी गणनाएँ (जैसे ऑल्टसीज़न इंडेक्स) हमारी लिखित अनुमति के बिना कॉपी या इस्तेमाल नहीं की जा सकतीं। तीसरे पक्ष का डेटा, जैसा ऊपर बताया गया है, उनके अपने लाइसेंस के तहत है।",
+    "id": "© 2026 Wallet Tracker. Hak cipta dilindungi: kode, teks, desain, dan perhitungan kami sendiri (misalnya indeks altseason) tidak boleh disalin atau digunakan tanpa izin tertulis dari kami. Data pihak ketiga tunduk pada lisensinya masing-masing, seperti dijelaskan di atas.",
+    "ja": "© 2026 Wallet Tracker。無断転載を禁じます。コード、文章、デザイン、および独自の計算（アルトシーズン指数など）は、当社の書面による許可なく複製・使用することはできません。第三者のデータは、上記のとおりそれぞれのライセンスに従います。",
+    "ko": "© 2026 Wallet Tracker. 모든 권리 보유: 코드, 텍스트, 디자인과 자체 계산(예: 알트시즌 지수)은 당사의 서면 허가 없이 복사하거나 사용할 수 없습니다. 제3자 데이터는 위에 설명한 대로 각자의 라이선스를 따릅니다.",
+    "pl": "© 2026 Wallet Tracker. Wszelkie prawa zastrzeżone: kodu, tekstów, wyglądu i naszych własnych obliczeń (np. indeksu altseason) nie wolno kopiować ani wykorzystywać bez naszej pisemnej zgody. Dane osób trzecich — na ich licencjach, jak opisano wyżej.",
+    "pt": "© 2026 Wallet Tracker. Todos os direitos reservados: o código, os textos, o design e os nossos próprios cálculos (como o índice de altseason) não podem ser copiados nem usados sem a nossa autorização por escrito. Os dados de terceiros seguem as próprias licenças, como descrito acima.",
+    "ru": "© 2026 Wallet Tracker. Все права защищены: код, тексты, оформление и наши собственные расчёты (например, индекс альтсезона) нельзя копировать и использовать без нашего письменного разрешения. Данные третьих лиц — по их лицензиям, как сказано выше.",
+    "tr": "© 2026 Wallet Tracker. Tüm hakları saklıdır: kod, metinler, tasarım ve kendi hesaplamalarımız (ör. altseason endeksi) yazılı iznimiz olmadan kopyalanamaz ve kullanılamaz. Üçüncü tarafların verileri, yukarıda belirtildiği gibi kendi lisanslarına tabidir.",
+    "uk": "© 2026 Wallet Tracker. Усі права захищено: код, тексти, оформлення та наші власні розрахунки (наприклад, індекс альтсезону) не можна копіювати й використовувати без нашого письмового дозволу. Дані третіх осіб — за їхніми ліцензіями, як сказано вище.",
+    "vi": "© 2026 Wallet Tracker. Bảo lưu mọi quyền: mã nguồn, nội dung, thiết kế và các phép tính của riêng chúng tôi (ví dụ chỉ số altseason) không được sao chép hay sử dụng khi chưa có sự cho phép bằng văn bản của chúng tôi. Dữ liệu của bên thứ ba tuân theo giấy phép riêng của họ, như đã nêu ở trên.",
+    "zh": "© 2026 Wallet Tracker。保留所有权利：未经我们书面许可，不得复制或使用代码、文字、设计以及我们自己的计算（例如山寨季指数）。第三方数据按其各自的许可使用，如上所述。"
   }
 }

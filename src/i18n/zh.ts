@@ -999,6 +999,7 @@ export const zh: Dict = {
   lang_title: "🌐 语言",
   legal_btn_forget: "🗑 删除我的数据",
   legal_btn_privacy: "🔒 隐私",
+  legal_copy: "© 2026 Wallet Tracker。保留所有权利：未经我们书面许可，不得复制或使用代码、文字、设计以及我们自己的计算（例如山寨季指数）。第三方数据按其各自的许可使用，如上所述。",
   legal_flags: "在无法自行显示国旗的设备上，国旗图案来自 Twemoji（© Twitter, Inc. 及其他贡献者），CC BY 4.0 许可 — github.com/twitter/twemoji。",
   legal_forget_done: "✅ 已完成。我们持有的关于你的一切都已删除。若想回来，重新打开应用即可。",
   legal_forget_failed: "❌ 数据删除失败，请稍后重试。",
