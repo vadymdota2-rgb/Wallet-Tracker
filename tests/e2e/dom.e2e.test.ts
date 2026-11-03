@@ -209,7 +209,7 @@ describe("Альтсезон", () => {
     // Изменения капитализации: сутки (от вчерашней CMC), неделя, месяц, год (по истории).
     const capCh = (await page.locator(".dm-cap-ch span").allInnerTexts()).map(sp);
     assert.equal(capCh.length, 4);
-    assert.ok(capCh[0]!.startsWith(I18N["dm_24h"]!["ru"]!) && capCh[0]!.includes("-1,7%"), String(capCh[0]));
+    assert.ok(capCh[0]!.startsWith(I18N["dm_24h"]!["ru"]!) && capCh[0]!.includes("\u22121,7%"), String(capCh[0]));
     // Доминация биткоина и она же без стейблкоинов: 57,49 / (100 − 9,12).
     assert.equal(sp(await page.locator(".dm-hero > b").innerText()), "57,5%");
     assert.equal(sp(await page.locator(".dm-x b").innerText()), "63,3%");
@@ -256,6 +256,39 @@ describe("Альтсезон", () => {
       assert.deepEqual(o.errors, []);
       await o.ctx.close();
     }
+  });
+
+  test("подача: минус — настоящий «−», ноль — «0,0%» без цвета, полосы монет — прямо пропорционально, «остальные монеты» — со стейблкоинами, ETH/BTC одной точности", async () => {
+    // Капитализация за сутки почти не изменилась: +0,02% показывается нулём, а не «+0,0%» зелёным.
+    const { ctx, page, errors } = await open({ mcap: { ...MCAP, at: T, cap: [2_900_000_000_000 * 1.0002, 2_900_000_000_000] } });
+    await page.locator(".dm-cap").waitFor();
+    const day = page.locator(".dm-cap-ch span").first().locator("em");
+    assert.equal(sp(await day.innerText()), "0,0%");
+    assert.equal(await day.getAttribute("class"), "");
+    // Ни одного дефиса вместо минуса в изменениях — везде «−», как у п.п.
+    const signed = (await page.locator(".dm-cap-ch em, .dm-ch b, .dm-flow, .dm-top-r b, .dm-top-h").allInnerTexts()).map(sp);
+    assert.ok(signed.some((x) => x.includes("\u2212")), signed.join(" | "));
+    for (const x of signed) assert.doesNotMatch(x, /(^|[^\p{L}])-\d/u, x);
+    // Линия и полоса графика — все остальные монеты, вместе со стейблкоинами; так и подписано.
+    const legends = (await page.locator(".fg-legend span").allInnerTexts()).map(sp);
+    assert.equal(legends.filter((x) => x === sp(I18N["dm_alts"]!["ru"]!)).length, 2);
+    assert.ok(!legends.includes(sp(I18N["dm_other"]!["ru"]!)));
+    assert.ok(sp(await page.locator(".lq-hint", { hasText: "Фиолетовая" }).innerText()).includes("стейблкоинами"));
+    // В разбивке рынка «Остальные альты» — без стейблкоинов, отдельной строкой от них.
+    assert.ok((await page.locator(".fg-rows .fg-row").allInnerTexts()).map(sp).some((x) => x.startsWith(sp(I18N["dm_other"]!["ru"]!))));
+    // Полосы монет: длина прямо пропорциональна росту к биткоину (в логарифме), без корня сверху.
+    const rel = (p: number) => Math.log(Math.max(1e-6, 1 + p / 100) / Math.max(1e-6, 1 + REAL.btc90 / 100));
+    const span = Math.max(...REAL.coins.map((c) => Math.abs(rel(c[1]))));
+    const widths = await page.locator(".dm-top-fill").evaluateAll((els) => els.map((e) => (e as HTMLElement).style.width));
+    REAL.coins.slice(0, widths.length).forEach((c, i) => {
+      assert.ok(Math.abs(parseFloat(widths[i]!) - (Math.abs(rel(c[1])) / span) * 50) < 0.01, `${c[0]} ${widths[i]}`);
+    });
+    // ETH/BTC: максимум и минимум — три значащие цифры, нули на конце не теряются.
+    const eb = sp(await page.locator(".dm-share", { hasText: "ETH/BTC" }).innerText());
+    const both = [...eb.matchAll(/0,0\d+/g)].map((m) => m[0]);
+    assert.ok(both.length >= 2 && both.slice(-2).every((x) => /^0,0\d{3}$/.test(x)), eb);
+    assert.deepEqual(errors, []);
+    await ctx.close();
   });
 
   test("доминация старше 3 ч — сказано, от какого она времени; свежая — без пометки", async () => {

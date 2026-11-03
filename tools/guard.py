@@ -731,6 +731,13 @@ say("доминация и альтсезон как халвинг: TLS не с
     and '{mcapOld(m.at, Date.now() / 1000) ? (' in _dm and '"dm_cmc_old"' in _dm
     and "тексты экрана: число не отрывается от слова" in read(f"{APP}/tests/dom.test.ts")
     and "class TlsTest(" in read(f"{APP}/tests/test_dom.py") and "class TlsTest(" in read(f"{APP}/tests/test_mcap.py"))
+say("доминация и альтсезон — подача: минус в изменениях настоящий «−», ноль — «0,0%» без цвета; полосы монет прямо пропорциональны росту к биткоину (в логарифме, без корня); на графике рынка «остальные монеты» — вместе со стейблкоинами, и это сказано; ETH/BTC — максимум и минимум одной точности; подпись источника не говорит «всё остальное считаем сами» рядом с данными CoinMarketCap",
+    'pct(v, 1, true).replace("-", "\\u2212")' in _dm and "<b className={tone(v)}>" in _dm and "<em className={tone(v)}>" in _dm
+    and "const r = rel(c[1]) / span;" in _dm and "Math.sqrt" not in _dm
+    and _dm.count('{t(lang, "dm_alts")}</span>') == 2 and 'hi: iso(sig3(ebS.hi[1]))' in _dm and 'lo: iso(sig3(ebS.lo[1]))' in _dm
+    and "стейблкоинами" in read(f"{APP}/src/i18n/ru.ts").split("dm_chart_hint:")[1].split("\n")[0]
+    and "Всё остальное" not in read(f"{APP}/src/i18n/ru.ts").split("dm_src:")[1].split("\n")[0]
+    and "подача: минус — настоящий «−»" in read(f"{APP}/tests/e2e/dom.e2e.test.ts"))
 
 _fs = read(f"{APP}/src/screens/FundingScreen.tsx")
 say("фандинг не пропадает: собирается первым, при сбое — прошлый; пока ставок нет — загрузка с переспросом, а не «нет аномалий»",

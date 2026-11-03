@@ -302,20 +302,21 @@ function Top({ coins, btc, lang }: { coins: [string, number][]; btc: number; lan
   /* Бары — рост относительно биткоина, в логарифме: +5000% не должны
      сплющить остальных. Центр — сам биткоин. */
   const rel = (p: number) => vsBtc(p, btc);
-  /* Длина — корень из доли от лучшей: одна монета с +5000% не сжимает
-     остальных в точку, а порядок полос всегда совпадает с порядком чисел. */
+  /* Длина — прямо пропорциональна (в том же логарифме) доле от лучшей: вдвое
+     больший рост к биткоину в логарифме — вдвое длиннее полоса. Логарифм уже
+     не даёт одной монете с +5000% сжать остальных в точку; корень сверху
+     сплющивал разницу ещё раз (+172% и +84% выглядели почти одинаково). */
   const span = useMemo(() => Math.max(0.01, ...coins.map((c) => Math.abs(rel(c[1])))), [coins, btc]);
   const shown = all ? coins : coins.slice(0, 10);
   return (
     <Card>
       <p className="dm-top-h">
         {t(lang, "dm_top_n", { n: iso(num(up)), m: iso(num(dn)) })}
-        <span> · BTC <bdi dir="ltr">{pct(btc, 1, true)}</bdi></span>
+        <span> · BTC <bdi dir="ltr">{chg(btc)}</bdi></span>
       </p>
       <div className="dm-top">
         {shown.map((c, i) => {
-          const x = rel(c[1]) / span;
-          const r = Math.sign(x) * Math.sqrt(Math.abs(x));
+          const r = rel(c[1]) / span;
           return (
             <div key={c[0]} className="dm-top-r">
               <span className="dm-top-rank">{i + 1}</span>
@@ -326,7 +327,7 @@ function Top({ coins, btc, lang }: { coins: [string, number][]; btc: number; lan
                   ? { insetInlineStart: "50%", width: `${r * 50}%`, background: C.alt }
                   : { insetInlineEnd: "50%", width: `${-r * 50}%`, background: C.mid }} />
               </span>
-              <b className={c[1] > btc ? "dm-beat" : ""}><bdi dir="ltr">{pct(c[1], 1, true)}</bdi></b>
+              <b className={c[1] > btc ? "dm-beat" : ""}><bdi dir="ltr">{chg(c[1])}</bdi></b>
             </div>
           );
         })}
@@ -350,7 +351,7 @@ function Changes({ ch, lang }: { ch: (number | null)[]; lang: Lang }) {
         return v === null || v === undefined ? null : (
           <div key={k} className="dm-ch">
             <small>{t(lang, k)}</small>
-            <b className={v >= 0 ? "up" : "dn"}><bdi dir="ltr">{pct(v, 1, true)}</bdi></b>
+            <b className={tone(v)}><bdi dir="ltr">{chg(v)}</bdi></b>
           </div>
         );
       })}
@@ -360,12 +361,34 @@ function Changes({ ch, lang }: { ch: (number | null)[]; lang: Lang }) {
 
 /* ---------------------------------------------------------------------- */
 
+/** Изменение в процентах со знаком. Минус — настоящий «−», как у п.п. (Pp), а
+ *  не дефис из Intl; округлилось до нуля — «0,0%» без знака и без цвета, а не
+ *  «+0,0%» зелёным, как будто рост. */
+function chg(v: number): string {
+  return zero(v) ? pct(0, 1, false) : pct(v, 1, true).replace("-", "\u2212");
+}
+/** Изменение, которое на экране видно как ноль (одна цифра после запятой). */
+function zero(v: number): boolean {
+  return Math.abs(v) < 0.05;
+}
+/** Цвет изменения: рост, падение или ничего. */
+function tone(v: number): string {
+  return zero(v) ? "" : v > 0 ? "up" : "dn";
+}
+
 /** Изменение доли в процентных пунктах со знаком: «+0,28 п.п.». Число — отдельным
  *  куском слева направо, иначе в арабском знак уезжает на другую сторону. */
 function Pp({ d, lang }: { d: number; lang: Lang }) {
   const [before = "", after = ""] = t(lang, "dm_pp", { v: "\u0000" }).split("\u0000");
   const v = `${d > 0.005 ? "+" : d < -0.005 ? "−" : ""}${num(Math.abs(d), Math.abs(d) >= 10 ? 1 : 2)}`;
   return <>{before}<bdi dir="ltr">{v}</bdi>{after}</>;
+}
+
+/** ETH/BTC тремя значащими цифрами и с нулями на конце: максимум «0,0879» и
+ *  минимум «0,0180», а не «0,018» — рядом стоящие числа одной точности. */
+function sig3(v: number): string {
+  const d = Math.max(0, Math.min(8, 2 - Math.floor(Math.log10(Math.abs(v) || 1))));
+  return num(Number(v.toFixed(d)), d, d);
 }
 
 /** Короткая шкала денег для оси: $2T, $500B, $20M. */
@@ -637,7 +660,7 @@ function McapBlock({ m, lang }: { m: McapReply; lang: Lang }) {
           <b><bdi dir="ltr">{usdWord(cap)}</bdi></b>
           <div className="dm-cap-ch">
             {capCh.map(([k, v]) => v === null ? null : (
-              <span key={k}>{t(lang, k)} <em className={v >= 0 ? "up" : "dn"}><bdi dir="ltr">{pct(v, 1, true)}</bdi></em></span>
+              <span key={k}>{t(lang, k)} <em className={tone(v)}><bdi dir="ltr">{chg(v)}</bdi></em></span>
             ))}
           </div>
         </div>
@@ -661,7 +684,7 @@ function McapBlock({ m, lang }: { m: McapReply; lang: Lang }) {
         </div>
         {flow ? (
           <p className="dm-flow">
-            {t(lang, "dm_say_flow", { b: iso(pct(flow.b, 1, true)), a: iso(pct(flow.a, 1, true)) })}{" "}
+            {t(lang, "dm_say_flow", { b: iso(chg(flow.b)), a: iso(chg(flow.a)) })}{" "}
             <b>{t(lang, Math.abs(flow.a - flow.b) < 2 ? "dm_flow_eq" : flow.a > flow.b ? "dm_flow_alt" : "dm_flow_btc")}</b>
           </p>
         ) : null}
@@ -698,7 +721,7 @@ function McapBlock({ m, lang }: { m: McapReply; lang: Lang }) {
             <div className="fg-legend">
               <span><i style={{ background: C.btc }} />{t(lang, "dm_btc")}</span>
               <span><i style={{ background: C.eth }} />{t(lang, "dm_eth")}</span>
-              <span><i style={{ background: C.alt }} />{t(lang, "dm_other")}</span>
+              <span><i style={{ background: C.alt }} />{t(lang, "dm_alts")}</span>
             </div>
             <p className="lq-hint">{t(lang, "dm_chart_hint")}</p>
             <McapTable days={win} lang={lang} />
@@ -987,8 +1010,8 @@ export function DominanceScreen() {
                     p: iso(pct(ebS.above * 100, 0, false)), d: dateStr(lang, eb[0]![0], { day: "numeric", month: "long", year: "numeric" }),
                   })}{" "}
                   {t(lang, "dm_eb_range", {
-                    hi: iso(num(ebS.hi[1], 4)), hd: dateStr(lang, ebS.hi[0], { month: "short", year: "numeric" }),
-                    lo: iso(num(ebS.lo[1], 4)), ld: dateStr(lang, ebS.lo[0], { month: "short", year: "numeric" }),
+                    hi: iso(sig3(ebS.hi[1])), hd: dateStr(lang, ebS.hi[0], { month: "short", year: "numeric" }),
+                    lo: iso(sig3(ebS.lo[1])), ld: dateStr(lang, ebS.lo[0], { month: "short", year: "numeric" }),
                   })}
                 </p>
               </Card>

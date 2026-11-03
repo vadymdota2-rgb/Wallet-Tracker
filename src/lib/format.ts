@@ -105,9 +105,12 @@ export function pxTick(v: number): string {
   return px(v >= 10 ? Math.round(v) : v);
 }
 
-export function num(v: unknown, digits = 0): string {
+/** Число по языку: не больше digits знаков после запятой и не меньше minDigits
+ *  (нули на конце — когда рядом числа одной точности: «0,0879» и «0,0180»). */
+export function num(v: unknown, digits = 0, minDigits = 0): string {
   if (!isNum(v)) return "—";
-  return nf({ maximumFractionDigits: digits }).format(v);
+  return nf(minDigits ? { minimumFractionDigits: minDigits, maximumFractionDigits: Math.max(digits, minDigits) }
+    : { maximumFractionDigits: digits }).format(v);
 }
 
 export function signed(v: unknown): string {
