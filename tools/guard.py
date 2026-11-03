@@ -735,7 +735,7 @@ say("доминация и альтсезон — подача: минус в и
     'pct(v, 1, true).replace("-", "\\u2212")' in _dm and "<b className={tone(v)}>" in _dm and "<em className={tone(v)}>" in _dm
     and "const r = rel(c[1]) / span;" in _dm and "Math.sqrt" not in _dm
     and _dm.count('{t(lang, "dm_alts")}</span>') == 2 and 'hi: iso(sig3(ebS.hi[1]))' in _dm and 'lo: iso(sig3(ebS.lo[1]))' in _dm
-    and "стейблкоинами" in read(f"{APP}/src/i18n/ru.ts").split("dm_chart_hint:")[1].split("\n")[0]
+    and "включая стейблкоины" in read(f"{APP}/src/i18n/ru.ts").split("dm_chart_hint:")[1].split("\n")[0]
     and "Всё остальное" not in read(f"{APP}/src/i18n/ru.ts").split("dm_src:")[1].split("\n")[0]
     and "подача: минус — настоящий «−»" in read(f"{APP}/tests/e2e/dom.e2e.test.ts"))
 

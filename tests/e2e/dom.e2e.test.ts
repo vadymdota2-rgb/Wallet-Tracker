@@ -273,7 +273,7 @@ describe("Альтсезон", () => {
     const legends = (await page.locator(".fg-legend span").allInnerTexts()).map(sp);
     assert.equal(legends.filter((x) => x === sp(I18N["dm_alts"]!["ru"]!)).length, 2);
     assert.ok(!legends.includes(sp(I18N["dm_other"]!["ru"]!)));
-    assert.ok(sp(await page.locator(".lq-hint", { hasText: "Фиолетовая" }).innerText()).includes("стейблкоинами"));
+    assert.ok(sp(await page.locator(".lq-hint", { hasText: "фиолетовая" }).innerText()).includes("включая стейблкоины"));
     // В разбивке рынка «Остальные альты» — без стейблкоинов, отдельной строкой от них.
     assert.ok((await page.locator(".fg-rows .fg-row").allInnerTexts()).map(sp).some((x) => x.startsWith(sp(I18N["dm_other"]!["ru"]!))));
     // Полосы монет: длина прямо пропорциональна росту к биткоину (в логарифме), без корня сверху.
