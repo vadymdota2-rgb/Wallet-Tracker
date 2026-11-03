@@ -27592,5 +27592,23 @@
     "uk": "© 2026 Wallet Tracker. Усі права захищено: код, тексти, оформлення та наші власні розрахунки (наприклад, індекс альтсезону) не можна копіювати й використовувати без нашого письмового дозволу. Дані третіх осіб — за їхніми ліцензіями, як сказано вище.",
     "vi": "© 2026 Wallet Tracker. Bảo lưu mọi quyền: mã nguồn, nội dung, thiết kế và các phép tính của riêng chúng tôi (ví dụ chỉ số altseason) không được sao chép hay sử dụng khi chưa có sự cho phép bằng văn bản của chúng tôi. Dữ liệu của bên thứ ba tuân theo giấy phép riêng của họ, như đã nêu ở trên.",
     "zh": "© 2026 Wallet Tracker。保留所有权利：未经我们书面许可，不得复制或使用代码、文字、设计以及我们自己的计算（例如山寨季指数）。第三方数据按其各自的许可使用，如上所述。"
+  },
+  "dm_dprev": {
+    "ar": "اليوم السابق",
+    "de": "Tag davor",
+    "en": "Day before",
+    "es": "El día anterior",
+    "fr": "La veille",
+    "hi": "एक दिन पहले",
+    "id": "Sehari sebelumnya",
+    "ja": "前日",
+    "ko": "전날",
+    "pl": "Dzień wcześniej",
+    "pt": "Dia anterior",
+    "ru": "Днём раньше",
+    "tr": "Bir gün önce",
+    "uk": "Днем раніше",
+    "vi": "Ngày trước đó",
+    "zh": "前一天"
   }
 }

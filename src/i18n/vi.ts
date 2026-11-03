@@ -577,6 +577,7 @@ export const vi: Dict = {
   dm_d_what: "Thống trị là tỷ phần của một đồng coin trong vốn hóa toàn thị trường crypto. Tỷ phần Bitcoin tăng — tiền chảy vào Bitcoin; tỷ phần altcoin tăng — vào altcoin; tỷ phần USDT tăng — thị trường trú ẩn vào đô la, thường khi giảm giá.",
   dm_day: "Đóng cửa ngày {d} (UTC)",
   dm_dom: "Tỷ lệ thống trị của Bitcoin",
+  dm_dprev: "Ngày trước đó",
   dm_eb_pos: "Từ {d}, ETH/BTC cao hơn hiện tại trong {p} số ngày.",
   dm_eb_range: "Cao nhất {hi} ({hd}), thấp nhất {lo} ({ld}).",
   dm_eb_what: "BTC cho 1 ETH",

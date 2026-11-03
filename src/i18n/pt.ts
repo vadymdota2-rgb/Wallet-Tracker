@@ -577,6 +577,7 @@ export const pt: Dict = {
   dm_d_what: "Dominância é a participação de uma moeda na capitalização de todo o mercado cripto. Se a do bitcoin sobe, o dinheiro vai para o bitcoin; se a das altcoins sobe, para as altcoins; se a do USDT sobe, o mercado se refugia no dólar, geralmente em quedas.",
   dm_day: "Fechamento de {d} (UTC)",
   dm_dom: "Dominância do bitcoin",
+  dm_dprev: "Dia anterior",
   dm_eb_pos: "Desde {d}, o ETH/BTC ficou acima do nível atual em {p} dos dias.",
   dm_eb_range: "Máxima {hi} ({hd}), mínima {lo} ({ld}).",
   dm_eb_what: "BTC por 1 ETH",

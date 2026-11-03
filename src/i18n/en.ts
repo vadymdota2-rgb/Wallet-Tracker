@@ -576,6 +576,7 @@ export const en = {
   dm_d_what: "Dominance is a coin's share of the whole crypto market cap. A rising Bitcoin share means money is flowing into Bitcoin; a rising altcoin share — into altcoins; a rising USDT share — investors are moving into dollars, usually during a drop.",
   dm_day: "Close of {d} (UTC)",
   dm_dom: "Bitcoin dominance",
+  dm_dprev: "Day before",
   dm_eb_pos: "Since {d}, ETH/BTC was higher than now on {p} of days.",
   dm_eb_range: "High {hi} ({hd}), low {lo} ({ld}).",
   dm_eb_what: "BTC per 1 ETH",

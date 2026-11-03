@@ -577,6 +577,7 @@ export const tr: Dict = {
   dm_d_what: "Dominans, bir coin'in tüm kripto piyasa değerindeki payıdır. Bitcoin'in payı artıyorsa para Bitcoin'e, altcoin'lerin payı artıyorsa altcoin'lere akıyor; USDT'nin payı artıyorsa piyasa dolara kaçıyor, genelde düşüşte.",
   dm_day: "{d} gün kapanışı (UTC)",
   dm_dom: "Bitcoin dominansı",
+  dm_dprev: "Bir gün önce",
   dm_eb_pos: "{d} tarihinden beri ETH/BTC günlerin {p}'inde bugünkünden yüksekti.",
   dm_eb_range: "En yüksek {hi} ({hd}), en düşük {lo} ({ld}).",
   dm_eb_what: "1 ETH başına BTC",

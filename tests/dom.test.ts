@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  CLOCK_LAG, MCAP_FROM, MCAP_MAX_AGE, MCAP_STALE, MIN_BASKET, mcapOld, byWeek, nearestIdx, PX_FROM, STALE_DAYS, mcapAgo, mcapWindow, rebase, shareDelta, validMcap, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, vsBtc, windowOf,
+  CLOCK_LAG, MCAP_FROM, MCAP_MAX_AGE, MCAP_STALE, MIN_BASKET, mcapOld, byWeek, nearestIdx, PX_FROM, STALE_DAYS, mcapAgo, mcapWindow, rebase, validMcap, ago, altStats, beat, change, daysOld, ebStats, everyNth, seasonOf, series, thin, validDom, vsBtc, windowOf,
   type DomDay, type McapDay,
 } from "../src/lib/dom.ts";
 
@@ -203,8 +203,6 @@ test("validMcap: доминация — годная копия, подделк�
     cap: [2.85e12, 2.9e12], by: "CoinMarketCap", at: NOW, key: "x" };
   const v = validMcap(ok, NOW);
   assert.deepEqual(v, { ok: true, btc: [57.49, 57.21], eth: [11.2, 11.4], alt: [42.51, 42.79], altNs: 33.39, usdt: 6.32, cap: [2.85e12, 2.9e12], hist: [], at: NOW });
-  assert.equal(shareDelta(v!.btc), 0.28);
-  assert.equal(shareDelta([50, null]), null);
   for (const bad of [null, { ok: false, error: "no_key" }, { ...ok, ok: "true" }, { ...ok, at: NOW + 400 * DAY },
     { ...ok, btc: [0, 1] }, { ...ok, btc: [101, 1] }, { ...ok, btc: ["57", 1] }, { ...ok, alt: [10, null] },
     { ...ok, btc: [80, null], alt: [20, null], eth: [30, null] }, { ...ok, cap: [5, null] }, { ...ok, cap: "x" }, { ...ok, eth: [11] }]) {

@@ -197,6 +197,12 @@ describe("Альтсезон", () => {
     // Индекс — на последний закрытый день, и это сказано.
     const day = new Intl.DateTimeFormat("ru", { timeZone: "UTC", day: "numeric", month: "long", year: "numeric" }).format(new Date(last[0] * 1000));
     assert.ok(sp(await page.locator(".fg-date").first().innerText()).startsWith(sp(I18N["dm_day"]!["ru"]!.replace("{d}", day))));
+    // Соседние ячейки — от того же закрытого дня: «днём раньше», а не «вчера»
+    // (индекс и так вчерашний), и значение — предыдущего дня ответа.
+    const near = page.locator(".dm-ahero ~ .fg-cmp .fg-cmp-c").first();
+    assert.equal(sp(await near.locator("small").innerText()), I18N["dm_dprev"]!["ru"]);
+    const prevIdx = REAL.rows.filter((r) => r[1] !== null && r[0] <= last[0] - 86_400).pop()![1];
+    assert.equal(sp(await near.locator("b").innerText()), String(prevIdx));
     // Три графика: индекс, сила альтов, ETH/BTC.
     // Четыре графика: биткоин против альтов, индекс, сила альтов, ETH/BTC.
     assert.equal(await page.locator(".fg-svg[role=img]").count(), 4);

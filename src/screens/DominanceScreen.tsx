@@ -920,7 +920,9 @@ export function DominanceScreen() {
               <AltBar v={now[1]} lang={lang} />
               {coins.length ? <p className="dm-ahint">{t(lang, "dm_alt_what", { k: iso(num(k)), n: iso(num(coins.length)) })}</p> : null}
               <div className="fg-cmp">
-                {altCell("fg_yday", ago(alt, 1))}
+                {/* Индекс — за последний закрытый день (обычно вчерашний), так
+                    что его сосед — «днём раньше», а не «вчера». */}
+                {altCell("dm_dprev", ago(alt, 1))}
                 {altCell("fg_week", ago(alt, 7))}
                 {altCell("fg_month", ago(alt, 30))}
               </div>

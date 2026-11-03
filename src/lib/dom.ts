@@ -206,9 +206,6 @@ export function mcapWindow(h: McapDay[], range: McapRange): McapDay[] {
   return h.filter((d) => d[0] > last[0] - Number(range) * DAY);
 }
 
-/** Изменение доли за сутки, процентных пунктов; нет вчерашней — null. */
-export const shareDelta = (s: Share): number | null => (s[1] === null ? null : Math.round((s[0] - s[1]) * 100) / 100);
-
 /* --------------------------------------------------------------------- */
 
 /** Зона индекса: 0 — сезон биткоина (25 и ниже), 1 — нейтрально, 2 — альтсезон (75 и выше). */

@@ -577,6 +577,7 @@ export const zh: Dict = {
   dm_d_what: "市占率是某个币在整个加密市场总市值中的占比。比特币占比上升，资金流向比特币；山寨币占比上升，流向山寨币；USDT 占比上升，市场转向美元避险，通常出现在下跌时。",
   dm_day: "{d} 收盘（UTC）",
   dm_dom: "比特币主导率",
+  dm_dprev: "前一天",
   dm_eb_pos: "自{d}以来,ETH/BTC有{p}的日子高于当前水平。",
   dm_eb_range: "最高{hi}({hd}),最低{lo}({ld})。",
   dm_eb_what: "1 ETH 值多少 BTC",

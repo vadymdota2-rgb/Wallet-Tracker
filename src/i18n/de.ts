@@ -577,6 +577,7 @@ export const de: Dict = {
   dm_d_what: "Dominanz ist der Anteil eines Coins an der gesamten Krypto-Marktkapitalisierung. Steigt der Bitcoin-Anteil, fließt Geld in Bitcoin; steigt der Altcoin-Anteil, in Altcoins; steigt der USDT-Anteil, flüchtet der Markt in den Dollar – meist bei fallenden Kursen.",
   dm_day: "Tagesschluss {d} (UTC)",
   dm_dom: "Bitcoin-Dominanz",
+  dm_dprev: "Tag davor",
   dm_eb_pos: "Seit dem {d} lag ETH/BTC an {p} der Tage höher als heute.",
   dm_eb_range: "Hoch {hi} ({hd}), Tief {lo} ({ld}).",
   dm_eb_what: "so viel BTC kostet 1 ETH",

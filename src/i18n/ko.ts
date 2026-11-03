@@ -577,6 +577,7 @@ export const ko: Dict = {
   dm_d_what: "도미넌스는 전체 암호화폐 시가총액에서 한 코인이 차지하는 비중입니다. 비트코인 비중이 오르면 돈이 비트코인으로, 알트코인 비중이 오르면 알트코인으로 갑니다. USDT 비중이 오르면 시장이 달러로 피하는 것으로, 보통 하락장에서 나타납니다.",
   dm_day: "{d} 마감 (UTC)",
   dm_dom: "비트코인 도미넌스",
+  dm_dprev: "전날",
   dm_eb_pos: "{d} 이후 ETH/BTC가 지금보다 높았던 날은 {p}입니다.",
   dm_eb_range: "최고 {hi}({hd}), 최저 {lo}({ld}).",
   dm_eb_what: "1 ETH당 BTC",

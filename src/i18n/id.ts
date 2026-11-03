@@ -577,6 +577,7 @@ export const id: Dict = {
   dm_d_what: "Dominasi adalah pangsa sebuah koin dalam kapitalisasi seluruh pasar kripto. Pangsa Bitcoin naik — uang mengalir ke Bitcoin; pangsa altcoin naik — ke altcoin; pangsa USDT naik — pasar berlindung ke dolar, biasanya saat turun.",
   dm_day: "Penutupan {d} (UTC)",
   dm_dom: "Dominasi Bitcoin",
+  dm_dprev: "Sehari sebelumnya",
   dm_eb_pos: "Sejak {d}, ETH/BTC lebih tinggi dari sekarang pada {p} hari.",
   dm_eb_range: "Tertinggi {hi} ({hd}), terendah {lo} ({ld}).",
   dm_eb_what: "BTC per 1 ETH",

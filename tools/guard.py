@@ -773,6 +773,9 @@ say("доминация и альтсезон — защита: платный �
     and "test_independent_of_bot_database_and_other_sources" in read(f"{APP}/tests/test_mcap.py")
     and "abcdefgh\\r\\nX-Evil: 1" in read(f"{APP}/tests/test_mcap.py")
     and "test_source_link_is_fixed_and_opens_outside" in read(f"{APP}/tests/test_dom_policy.py"))
+say("доминация и альтсезон — ревизия №2: без мёртвого кода (shareDelta убрана); соседняя с индексом ячейка — «днём раньше» (индекс — за вчерашний закрытый день), 16 языков",
+    "shareDelta" not in _dml and 'altCell("dm_dprev", ago(alt, 1))' in _dm and 'altCell("fg_yday"' not in _dm
+    and 'I18N["dm_dprev"]' in _dme)
 say("авторские права: LICENSE «все права защищены» (Wallet Tracker) с оговоркой о сторонних лицензиях (IBM Plex — OFL, Twemoji — CC BY 4.0, данные источников); package.json — UNLICENSED; на экране «Документы» — «© 2026 Wallet Tracker» на 16 языках",
     os.path.isfile(f"{APP}/LICENSE") and "Copyright (c) 2026 Wallet Tracker. All rights reserved." in read(f"{APP}/LICENSE")
     and "SIL Open Font" in read(f"{APP}/LICENSE") and "CC BY 4.0" in read(f"{APP}/LICENSE")
