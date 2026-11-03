@@ -755,6 +755,9 @@ say("доминация и альтсезон — авточистка: брош
     and '{ "wt-mcap-v1": 3 * 24 * 3600_000 }' in read(f"{APP}/src/lib/storage.ts") and os.path.isfile(f"{APP}/tests/storage.test.ts")
     and "test_abandoned_temp_copies_are_swept_at_start" in read(f"{APP}/tests/test_disk_cache.py")
     and "test_excluded_coins_are_neither_asked_nor_kept" in read(f"{APP}/tests/test_dom.py"))
+say("доминация и альтсезон — только подписчикам: и /api/dom, и /api/mcap (данные CoinMarketCap — внутри продукта, а не открытой выдачей для сборщиков)",
+    '"btc/wallet", "dom", "mcap", "etf",' in api
+    and "test_dominance_and_altseason_are_for_subscribers_only" in read(f"{APP}/tests/test_dom_http.py"))
 
 _fs = read(f"{APP}/src/screens/FundingScreen.tsx")
 say("фандинг не пропадает: собирается первым, при сбое — прошлый; пока ставок нет — загрузка с переспросом, а не «нет аномалий»",

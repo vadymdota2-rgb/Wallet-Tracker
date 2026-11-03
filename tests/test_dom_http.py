@@ -152,6 +152,28 @@ class PublicJsonTest(unittest.TestCase):
             h.headers = {"X-Telegram-Init-Data": "y"}
             self.assertEqual(h._user({}), "")
 
+    def test_dominance_and_altseason_are_for_subscribers_only(self):
+        # Экран без Премиума закрыт, а доминация CoinMarketCap — данные внутри
+        # продукта: без подписки ни /api/dom, ни /api/mcap не отдаются.
+        def get(path, prem):
+            h = api.Handler.__new__(api.Handler)
+            req = f"GET {path} HTTP/1.1\r\nHost: x\r\nX-Api-Key: k\r\n\r\n".encode()
+            h.rfile, h.wfile = io.BytesIO(req), io.BytesIO()
+            h.client_address, h.request, h.close_connection = ("127.0.0.1", 1), None, True
+            h.server = mock.Mock()
+            with mock.patch.object(api, "API_KEY", "k"), mock.patch.object(api, "chat_premium", lambda chat: prem), \
+                 mock.patch.object(api, "dom_data", lambda: REPLY), mock.patch.object(api, "mcap_data", lambda: REPLY), \
+                 mock.patch.object(api.sys, "stderr", io.StringIO()):
+                h.handle_one_request()
+            head, _, body = h.wfile.getvalue().partition(b"\r\n\r\n")
+            return int(head.split()[1]), body
+        for path in ("/api/dom", "/api/mcap", "/dom", "/mcap"):
+            self.assertIn(path, api.PAID_PATHS)
+            code, body = get(path, False)
+            self.assertEqual((code, json.loads(body)), (403, {"ok": False, "error": "premium"}), path)
+            code, body = get(path, True)
+            self.assertEqual((code, json.loads(body)), (200, REPLY), path)
+
     def test_routes_use_the_shared_bytes(self):
         with open(os.path.join(ROOT, "whale_api.py"), encoding="utf-8") as f:
             src = f.read()

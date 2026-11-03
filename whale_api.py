@@ -107,7 +107,9 @@ PAID_PATHS = frozenset(
     p for name in (
     "flow", "fund", "rot", "ls", "deals", "token",
     "wallet", "fng", "btc/flow", "btc/big", "btc/rank", "bsc/exflow",
-    "btc/wallet", "dom", "etf", "liqcoins", "liqmap", "options", "liqs", "oihist", "calendar", "digest",
+    # mcap — доминация CoinMarketCap: тоже только подписчикам (их данные — внутри
+    # продукта, не открытой выдачей для сборщиков).
+    "btc/wallet", "dom", "mcap", "etf", "liqcoins", "liqmap", "options", "liqs", "oihist", "calendar", "digest",
     "digest/translate", "digest/comments", "unlocks", "symbols", "big", "chart/liqs", "chart/whales",
     ) for p in ("/" + name, "/api/" + name)
 )
