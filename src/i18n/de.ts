@@ -771,6 +771,7 @@ export const de: Dict = {
   fg_log: "log. Skala",
   fg_month: "Vor einem Monat",
   fg_now_t: "Index heute",
+  fg_old: "alternative.me hat seit {n} Tagen keinen neuen Index veröffentlicht: Die Zahlen unten gelten für den letzten veröffentlichten Tag.",
   fg_price: "BTC-Kurs",
   fg_px_by: "BTC-Kurs von",
   fg_q_chart: "Der Kurs ist der Tagesschluss in UTC. Über lange Zeiträume ist die Preisskala logarithmisch: gleicher Abstand nach oben bedeutet gleiches Wachstum in Prozent. Eine blasse Linie und das Zeichen ≈ markieren zwischen Wochenkursen interpolierte Preise.",

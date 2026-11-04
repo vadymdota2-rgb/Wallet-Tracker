@@ -782,6 +782,17 @@ say("ETF — проверка: итоги дня свежие 5 суток, ка
     and "ответ открыт, его может взять кто угодно" not in read(f"{APP}/wt_etf.py")
     and "test_disk_copy_is_read_once_not_on_every_request" in read(f"{APP}/tests/test_disk_cache.py")
     and "ETFD_FRESH = etf.STALE_DAYS * 86400\n" in api)
+say("страх и жадность как халвинг, ETF и доминация: холодный старт — сборка в фоне, человек ждёт не дольше COLD_WAIT (8 с), выпуск — DG_COLD_WAIT; дайджест не берёт индекс старше DG_FNG_DAYS; на экране — пометка, если alternative.me давно не публиковал индекс; копия на телефоне старше месяца или негодная — стирается; открытый экран обновляется сам; место для пальца ≥ 40 px, сетка по пикселям, ×1/×2/×3 и шрифт 200 %",
+    "COLD_WAIT = 8.0" in _fgpy and "        job.join(wait)\n" in _fgpy and "_cold" not in _fgpy
+    and "fng_data(wait=DG_COLD_WAIT)" in api and "DG_FNG_DAYS = 2\n" in api and "<= DG_FNG_DAYS:" in api
+    and "export const STALE_DAYS = 2;" in _fgl and "export function daysOld(" in _fgl
+    and 'old > STALE_DAYS ? <p className="lq-stale" role="status">' in read(f"{APP}/src/screens/FearGreedScreen.tsx")
+    and "if (hit && !v) dropSaved(FNG_SAVED);" in read(f"{APP}/src/lib/api.ts")
+    and "window.setInterval(onShow, 5 * 60_000)" in read(f"{APP}/src/screens/FearGreedScreen.tsx")
+    and ".fg-scr .fg-svg .fg-grid { shape-rendering: crispEdges; }" in read(f"{APP}/src/screens/FearGreedScreen.css")
+    and "экраны ×1, ×2, ×3" in read(f"{APP}/tests/e2e/fng.e2e.test.ts") and "крупный шрифт (до 200 %" in read(f"{APP}/tests/e2e/fng.e2e.test.ts")
+    and "test_fear_and_greed_only_while_its_last_day_is_recent" in read(f"{APP}/tests/test_digest_sources.py")
+    and "test_cold_request_waits_at_most_wait_and_the_build_goes_on" in read(f"{APP}/tests/test_fng_api.py"))
 say("авторские права: LICENSE «все права защищены» (Wallet Tracker) с оговоркой о сторонних лицензиях (IBM Plex — OFL, Twemoji — CC BY 4.0, данные источников); package.json — UNLICENSED; на экране «Документы» — «© 2026 Wallet Tracker» на 16 языках",
     os.path.isfile(f"{APP}/LICENSE") and "Copyright (c) 2026 Wallet Tracker. All rights reserved." in read(f"{APP}/LICENSE")
     and "SIL Open Font" in read(f"{APP}/LICENSE") and "CC BY 4.0" in read(f"{APP}/LICENSE")

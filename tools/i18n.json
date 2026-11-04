@@ -27610,5 +27610,23 @@
     "uk": "Днем раніше",
     "vi": "Ngày trước đó",
     "zh": "前一天"
+  },
+  "fg_old": {
+    "ar": "لم ينشر alternative.me مؤشرًا جديدًا منذ {n} يوم: الأرقام أدناه حتى آخر يوم منشور.",
+    "de": "alternative.me hat seit {n} Tagen keinen neuen Index veröffentlicht: Die Zahlen unten gelten für den letzten veröffentlichten Tag.",
+    "en": "alternative.me hasn't published a new index for {n} days: the figures below are as of the last published day.",
+    "es": "alternative.me no ha publicado un índice nuevo en {n} días: las cifras de abajo son del último día publicado.",
+    "fr": "alternative.me n’a pas publié de nouvel indice depuis {n} jours : les chiffres ci-dessous datent du dernier jour publié.",
+    "hi": "alternative.me ने {n} दिनों से नया इंडेक्स प्रकाशित नहीं किया: नीचे के आँकड़े आख़िरी प्रकाशित दिन के हैं।",
+    "id": "alternative.me belum menerbitkan indeks baru selama {n} hari: angka di bawah per hari terakhir yang diterbitkan.",
+    "ja": "alternative.meから{n}日間新しい指数が公表されていません。以下の数値は最後に公表された日のものです。",
+    "ko": "alternative.me가 {n}일 동안 새 지수를 발표하지 않았습니다. 아래 수치는 마지막으로 발표된 날 기준입니다.",
+    "pl": "alternative.me nie opublikował nowego indeksu od {n} dni: dane poniżej są z ostatniego opublikowanego dnia.",
+    "pt": "O alternative.me não publica um novo índice há {n} dias: os números abaixo são do último dia publicado.",
+    "ru": "alternative.me не публиковал новый индекс {n} дн.: ниже — данные на последний опубликованный день.",
+    "tr": "alternative.me {n} gündür yeni endeks yayımlamadı: aşağıdaki rakamlar yayımlanan son güne aittir.",
+    "uk": "alternative.me не публікував нового індексу {n} дн.: нижче — дані на останній опублікований день.",
+    "vi": "alternative.me chưa công bố chỉ số mới trong {n} ngày: số liệu bên dưới tính đến ngày công bố gần nhất.",
+    "zh": "alternative.me 已{n}天未发布新指数：以下数据截至最后发布的一天。"
   }
 }

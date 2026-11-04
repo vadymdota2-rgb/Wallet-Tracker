@@ -30,7 +30,7 @@ import { haptic, openExternal } from "../lib/telegram";
 import { fetchFng, peekFng } from "../lib/api";
 import { Card, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import {
-  F_EST, F_FILL, F_HL, ZONES, colorOf, currentStreak, distribution, estUntil, fromFirstPrice, lastPrice, streakLeft,
+  F_EST, F_FILL, F_HL, STALE_DAYS, ZONES, colorOf, currentStreak, daysOld, distribution, estUntil, fromFirstPrice, lastPrice, streakLeft,
   streakStats, windowOf,
   yearExtremes, zoneKey, zoneOf, type FngDay, type FngReply,
 } from "../lib/fng";
@@ -355,9 +355,13 @@ export function FearGreedScreen() {
       if (document.visibilityState === "visible") load();
     };
     document.addEventListener("visibilitychange", onShow);
+    /* И когда экран просто открыт дольше получаса (Telegram держит его сколько
+       угодно): раз в 5 минут — внутри получаса из памяти, без сети. */
+    const id = window.setInterval(onShow, 5 * 60_000);
     return () => {
       alive = false;
       document.removeEventListener("visibilitychange", onShow);
+      window.clearInterval(id);
     };
   }, [retry]);
 
@@ -378,6 +382,10 @@ export function FearGreedScreen() {
   const shown = useMemo(() => fromFirstPrice(days), [days]);
   const last = all[all.length - 1];
   const back = (n: number) => all[all.length - 1 - n];
+  /* alternative.me давно не публиковал индекс (или на экране — старая копия с
+     устройства, а сеть молчит): говорим прямо, иначе старый индекс выглядел бы
+     сегодняшним. */
+  const old = daysOld(all, Date.now() / 1000);
 
   const yearly = useMemo(() => yearExtremes(all), [all]);
   /* Дни по зонам. Что было с ценой после — в блоке ниже, по медиане и по
@@ -423,6 +431,9 @@ export function FearGreedScreen() {
 
   return (
     <Frame title={t(lang, "fg_title")}>
+      {/* Своя обёртка: стили касаний и сетки — только этого экрана (общие .fg-* —
+          и у «Альтсезона»). */}
+      <div className="fg-scr">
       <p className="lq-lead">{t(lang, "fg_sub")}</p>
 
       {!reply ? (
@@ -436,6 +447,7 @@ export function FearGreedScreen() {
         ) : <Card><Skeleton rows={8} /></Card>
       ) : !last ? null : (
         <>
+          {old > STALE_DAYS ? <p className="lq-stale" role="status">{t(lang, "fg_old", { n: iso(num(old)) })}</p> : null}
           <SectionTitle help={["fg_how_1", "fg_q_zones"]}>{t(lang, "fg_now_t")}</SectionTitle>
           <Card>
             <div className="fg-hero">
@@ -605,6 +617,7 @@ export function FearGreedScreen() {
           <p className="lq-src">{t(lang, "fg_src")}</p>
         </>
       )}
+      </div>
     </Frame>
   );
 }

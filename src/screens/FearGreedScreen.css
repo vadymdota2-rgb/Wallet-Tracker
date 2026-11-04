@@ -26,6 +26,14 @@
 .fg-tbl th:first-child, .fg-tbl td:first-child { text-align: start; }
 .fg-tbl-note { margin: 6px 8px; color: var(--dim); font-size: 11px; }
 
+/* Сетка — по пиксельной решётке: на ×1 линия в 1 px не размазывается на две
+   строки (график рисуется в настоящих пикселях ширины). */
+.fg-scr .fg-svg .fg-grid { shape-rendering: crispEdges; }
+
+/* «Таблица» и «Как читать» — место для пальца не меньше 40 px (было ~18): поле
+   нажатия выше, а строка на экране — на прежнем месте. */
+.fg-scr .fg-tbl > summary, .fg-scr .lq-how > summary { padding-block: 11px; margin-block: -11px; }
+
 @media (forced-colors: active) {
   .fg-svg, .fg-gauge, .fg-dist, .fg-legend i { forced-color-adjust: none; }
   .fg-plot.fg-keys:focus-visible { outline-color: Highlight; }

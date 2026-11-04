@@ -559,6 +559,29 @@ class CacheTest(unittest.TestCase):
         self.assertTrue(all(r is out[0] for r in out))
         self.assertEqual(sum("alternative.me" in c for c in calls), 1)
 
+    def test_cold_request_waits_at_most_wait_and_the_build_goes_on(self):
+        # Сборка — до BUDGET (25 с): человек ждёт не дольше wait, а не стоит
+        # в очереди за первым; сборка доделывается в фоне, следующий запрос
+        # берёт готовое.
+        gate = threading.Event()
+        real = fake.network()
+
+        def slow(url, limit):
+            gate.wait(5)
+            return real(url, limit)
+        with mock.patch.object(fng, "_fetch", slow), mock.patch.object(fng, "_now", lambda: fake.NOW):
+            t0 = time.monotonic()
+            self.assertEqual(fng.fng_data(wait=0.2), {"ok": False, "error": "no_data"})
+            self.assertLess(time.monotonic() - t0, 2)
+            self.assertTrue(fng._busy.is_set())
+            gate.set()
+            for _ in range(500):
+                if not fng._busy.is_set():
+                    break
+                time.sleep(0.01)
+            self.assertTrue(fng.fng_data()["ok"])
+        self.assertEqual(fng.COLD_WAIT, 8.0)
+
     def test_stale_answer_is_not_rebuilt_right_after_a_failure(self):
         good = {"ok": True, "days": [], "at": 1}
         fng._st.hit = (time.monotonic() - fng.TTL - 1, good)

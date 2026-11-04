@@ -387,6 +387,8 @@ AP = [
     ('        self.send_header("Cache-Control", "private, no-cache")\n', '        self.send_header("Cache-Control", "no-cache")\n', "доминация: платный ответ не хранится в общем кэше"),
     ("        if cap_y:\n", "        if True:\n", "дайджест: без вчерашней капитализации — без изменения"),
     ("            and (now() - int(rows[-1][0])) // 86400 <= DG_ALT_DAYS):", "            and True):", "дайджест: старый индекс альтсезона не выдаётся за сегодняшний"),
+    ("    if len(days) >= 8 and (now() - int(days[-1][0])) // 86400 <= DG_FNG_DAYS:", "    if len(days) >= 8:", "дайджест: старый индекс страха и жадности не выдаётся за сегодняшний"),
+    ("fng_data(wait=DG_COLD_WAIT)", "fng_data()", "дайджест: страх и жадность ждёт холодную сборку дольше человека"),
     ('"d1": round(btc - btc_y, 2)', '"d1": round(btc_y - btc, 2)', "дайджест: изменение доминации за сутки со знаком"),
     ("    rows = (dom_data(wait=DG_COLD_WAIT) or {})", "    rows = (dom_data() or {})", "дайджест: альтсезон после перезапуска ждёт сборку"),
     ("    mc = mcap_data(wait=DG_COLD_WAIT)\n", "    mc = mcap_data()\n", "дайджест: доминация после перезапуска ждёт сборку"),

@@ -266,6 +266,8 @@ class _State:
     # Где держать копию ответа (set_cache_dir); копия уже читалась.
     dir: str | None = None
     loaded: bool = False
+    # Поток идущей фоновой сборки: холодный старт ждёт его (fng_data).
+    job: threading.Thread | None = None
     # Запасные закрытия BTC (set_backup); None — запасного источника нет.
     backup: Callable[[], Mapping[int, float]] | None = None
     # Запасная текущая цена BTC (set_live_backup): (unix с, $) или None.
@@ -274,7 +276,6 @@ class _State:
 
 _st = _State()
 _lock = threading.Lock()
-_cold = threading.Lock()
 _busy = threading.Event()
 _dl = threading.local()
 
@@ -728,32 +729,53 @@ def _warm() -> None:
             _st.hit = (time.monotonic() - TTL - 1.0, saved)
 
 
-def fng_data() -> Reply:
-    """Ответ /api/fng: из кэша, свежий собирается в фоне."""
+# Сколько запрос без готового ответа ждёт сборку, с (как COLD_WAIT в
+# wt_halving и wt_dom). Сборка — до BUDGET (25 с), и раньше первый запрос
+# после перезапуска собирал её сам, а остальные стояли за ним в очереди: на
+# экране — пустота до полуминуты. Теперь сборка всегда в фоне, человек ждёт
+# не дольше COLD_WAIT (не успела — «нет данных», следующий запрос возьмёт
+# готовое); выпуск дайджеста ждёт дольше (whale_api.DG_COLD_WAIT).
+COLD_WAIT = 8.0
+
+
+def _start() -> threading.Thread | None:
+    """Фоновая сборка, если она ещё не идёт. Звать под _lock. Поток идущей
+    или новой сборки; None — поток не запустился (кончились потоки): флаг
+    тогда снят, иначе ответ больше не обновлялся бы."""
+    if _busy.is_set():
+        return _st.job
+    _busy.set()
+    job = threading.Thread(target=_bg, daemon=True)
+    try:
+        job.start()
+    except RuntimeError as e:
+        _busy.clear()
+        _log(f"фон не запущен: {e}")
+        return None
+    _st.job = job
+    return job
+
+
+def fng_data(wait: float = COLD_WAIT) -> Reply:
+    """Ответ /api/fng: из кэша, свежий собирается в фоне одним потоком. Пока
+    свежего нет — прошлый; нет и прошлого — запрос ждёт сборку не дольше
+    wait (выпуск дайджеста — дольше), не успела — «нет данных». Источники
+    молчали меньше ERR_TTL назад — новой сборки нет."""
     _warm()
     with _lock:
         hit = _st.hit
         if hit and time.monotonic() - hit[0] < TTL:
             return hit[1]
         failed = _failed()
-        if hit and not failed and not _busy.is_set():
-            _busy.set()
-            try:
-                threading.Thread(target=_bg, daemon=True).start()
-            except RuntimeError as e:
-                _busy.clear()
-                _log(f"фон не запущен: {e}")
+        job = None if failed else _start()
         if hit:
             return hit[1]
         if failed:
             return _no_data()
-    # Холодный старт: первый собирает, остальные ждут его и берут готовое.
-    with _cold:
-        with _lock:
-            hit, failed = _st.hit, _failed()
-        if hit:
-            return hit[1]
-        if failed:
-            return _no_data()
-        return build()
+    # Холодный старт: все ждут одну и ту же сборку.
+    if job is not None:
+        job.join(wait)
+    with _lock:
+        hit = _st.hit
+    return hit[1] if hit else _no_data()
 

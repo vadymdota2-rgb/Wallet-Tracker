@@ -8,7 +8,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  F_EST, F_FILL, F_HL, FNG_START, ZONES, afterEntry, analogs, colorOf, currentStreak, dca, distribution, divergence, estUntil,
+  F_EST, F_FILL, F_HL, FNG_SAVED_MAX_MS, FNG_START, STALE_DAYS, ZONES, afterEntry, daysOld, analogs, colorOf, currentStreak, dca, distribution, divergence, estUntil,
   forward, fromFirstPrice, lastPrice, median, streakLeft, streakStats, validFng, windowOf, yearExtremes, zoneKey, zoneOf, type FngDay, type FngReply,
 } from "../src/lib/fng.ts";
 
@@ -329,4 +329,23 @@ test("расхождение: окно в 60 дней без цен — не «�
   const vs = Array.from({ length: 200 }, () => 60);
   const d: FngDay[] = make(vs).map((x, i) => [x[0], x[1], i >= 130 && i < 199 ? 0 : 10_000 + i, 0]);
   assert.equal(divergence(d), null);
+});
+
+test("daysOld и STALE_DAYS: сколько полных суток с последнего дня индекса", () => {
+  const D = 86_400;
+  const t0 = 1_760_000_000 - (1_760_000_000 % D);
+  const days: FngDay[] = [[t0 - D, 40, 0, 0], [t0, 41, 0, 0]];
+  // Последний день — сегодняшний (идёт): свежо в любой час суток.
+  assert.equal(daysOld(days, t0 + 1), 0);
+  assert.equal(daysOld(days, t0 + D - 1), 0);
+  // Новый день начался, а индекса за него ещё нет — сутки, ещё не «старый».
+  assert.equal(daysOld(days, t0 + D + 60), 1);
+  assert.equal(daysOld(days, t0 + 3 * D + 60), 3);
+  assert.ok(daysOld(days, t0 + 3 * D + 60) > STALE_DAYS);
+  assert.ok(!(daysOld(days, t0 + 2 * D + 60) > STALE_DAYS));
+  // Часы телефона отстали — не «минус дни».
+  assert.equal(daysOld(days, t0 - 10 * D), 0);
+  assert.equal(daysOld([], t0), 0);
+  assert.equal(STALE_DAYS, 2);
+  assert.equal(FNG_SAVED_MAX_MS, 30 * 24 * 3600_000);
 });

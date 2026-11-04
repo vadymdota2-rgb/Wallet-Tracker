@@ -25,6 +25,14 @@ export interface FngReply {
 
 /** Ответ живёт столько же, сколько на сервере (wt_fng.TTL). */
 export const FNG_TTL_MS = 30 * 60_000;
+/** Копия ответа на устройстве старше этого (мс) не берётся и стирается: индекс
+ *  месячной давности — уже не «сейчас». */
+export const FNG_SAVED_MAX_MS = 30 * 24 * 3600_000;
+
+/** alternative.me давно не публиковал индекс: последний день ответа старше
+ *  стольких полных суток (последний — сегодняшний: новый выходит в 00:00 UTC).
+ *  Тот же предел у выпуска дайджеста (whale_api.DG_FNG_DAYS). */
+export const STALE_DAYS = 2;
 /** Цена дня досчитана между недельными точками (до середины 2022 года). */
 export const F_EST = 1;
 /** Индекса за день у alternative.me нет — взят прошлый день. */
@@ -372,4 +380,10 @@ export function divergence(all: readonly FngDay[]): { kind: "hi" | "lo"; n: numb
 export function estUntil(days: readonly FngDay[]): number {
   for (let i = days.length - 1; i >= 0; i--) if (days[i]![3] & F_EST) return days[i]![0];
   return 0;
+}
+
+/** Сколько полных суток прошло с последнего дня ответа до now (unix с). */
+export function daysOld(days: readonly FngDay[], now: number): number {
+  const last = days[days.length - 1]?.[0] ?? now;
+  return Math.max(0, Math.floor((now - last) / DAY));
 }

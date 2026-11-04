@@ -771,6 +771,7 @@ export const ko: Dict = {
   fg_log: "로그 눈금",
   fg_month: "1달 전",
   fg_now_t: "오늘의 지수",
+  fg_old: "alternative.me가 {n}일 동안 새 지수를 발표하지 않았습니다. 아래 수치는 마지막으로 발표된 날 기준입니다.",
   fg_price: "BTC 가격",
   fg_px_by: "BTC 가격 출처:",
   fg_q_chart: "가격은 UTC 기준 일일 종가입니다. 긴 기간에서는 가격 축이 로그 눈금이라 같은 높이만큼 오르면 같은 비율로 오른 것입니다. 흐린 선과 ≈ 표시는 주간 가격 사이를 보간한 가격입니다.",

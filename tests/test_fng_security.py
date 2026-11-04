@@ -295,6 +295,10 @@ class SecurityTest(unittest.TestCase):
                 self.assertEqual(fng.fng_data(), {"ok": False, "error": "no_data"})
         self.assertEqual(len(calls), 1)
         self.assertTrue(fng._failed())
+        # Срок сборки — свой у каждого потока и снимается после неё (сборка
+        # сама — здесь, в этом потоке; в fng_data она шла в фоне).
+        with mock.patch.object(fng, "_build", boom), mock.patch("sys.stderr", io.StringIO()):
+            fng.build()
         self.assertEqual(fng._dl.at, 0.0)
         out = err.getvalue()
         self.assertEqual(out.count("\n"), 1)

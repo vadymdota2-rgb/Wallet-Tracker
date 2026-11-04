@@ -68,20 +68,24 @@ interface Opts {
   replies?: unknown[];
   store?: Record<string, string>;
   forcedColors?: boolean;
+  /** Плотность пикселей экрана (×1, ×2, ×3). */
+  scale?: number;
+  /** Часы телефона, unix с (по умолчанию — «сейчас» образца). */
+  clock?: number;
 }
 interface Opened { ctx: BrowserContext; page: Page; errors: string[]; asked: () => number }
 
 async function open(o: Opts = {}): Promise<Opened> {
   const lang = o.lang ?? "ru";
   const ctx = await browser.newContext({
-    viewport: { width: o.width ?? 360, height: o.height ?? 780 }, locale: lang === "ar" ? "ar" : "ru-RU", timezoneId: "UTC",
+    viewport: { width: o.width ?? 360, height: o.height ?? 780 }, deviceScaleFactor: o.scale ?? 1, locale: lang === "ar" ? "ar" : "ru-RU", timezoneId: "UTC",
     forcedColors: o.forcedColors ? "active" : "none",
   });
   const page = await ctx.newPage();
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource/.test(m.text())) errors.push(m.text()); });
-  await page.clock.setFixedTime(T * 1000);
+  await page.clock.setFixedTime((o.clock ?? T) * 1000);
   await ctx.route((url) => !url.href.startsWith(base), (r) => r.abort());
   await ctx.route(`${base}/api/**`, (r) => r.fulfill({ contentType: "application/json", body: '{"ok":false}' }));
   let n = 0;
@@ -424,5 +428,81 @@ describe("Страх и жадность", () => {
     assert.equal(adj, "none");
     assert.deepEqual(errors, []);
     await ctx.close();
+  });
+  test("экраны ×1, ×2, ×3: место для пальца не меньше 40 px, сетка по пикселям, ничего не вылезает", async () => {
+    for (const scale of [1, 2, 3]) {
+      const { ctx, page, errors } = await open({ width: 360, scale });
+      await ready(page);
+      await page.waitForTimeout(150);
+      assert.equal(await page.evaluate(() => devicePixelRatio), scale);
+      // Пальцем, а не стилусом: «Таблица» и «Как читать» — не ниже 40 px,
+      // кнопки (сроки, «?») — не меньше 32 × 32 (WCAG 2.5.8 требует 24).
+      const small = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".fg-scr button, .fg-scr summary")]
+        .map((el) => ({ el, b: el.getBoundingClientRect() }))
+        // Допуск в полпикселя: дробная раскладка даёт 31,99 вместо 32.
+        .filter(({ el, b }) => b.width > 0 && (b.height < (el.tagName === "SUMMARY" ? 39.5 : 31.5) || b.width < 31.5))
+        .map(({ el, b }) => `${el.tagName}.${el.className} «${(el.textContent ?? "").trim().slice(0, 14)}» ${b.width.toFixed(0)}×${b.height.toFixed(0)}`));
+      assert.deepEqual([...new Set(small)], [], `×${scale}`);
+      const grid = await page.locator(".fg-scr svg line.fg-grid").evaluateAll((ls) => [...new Set(ls.map((l) => getComputedStyle(l).shapeRendering))]);
+      assert.deepEqual(grid, ["crispedges"]);
+      assert.deepEqual(await overflow(page), [], `×${scale}`);
+      assert.deepEqual(errors, []);
+      await ctx.close();
+    }
+  });
+
+  test("крупный шрифт (до 200 %, как Android на максимуме): текст переносится, а не вылезает", async () => {
+    const { ctx, page, errors } = await open({ width: 360 });
+    await ready(page);
+    await page.evaluate(() => {
+      const els = [...document.querySelectorAll<HTMLElement>(".sheet *")];
+      const px = els.map((el) => parseFloat(getComputedStyle(el).fontSize) * 2);
+      els.forEach((el, i) => { el.style.fontSize = `${px[i]}px`; });
+    });
+    await page.waitForTimeout(100);
+    assert.deepEqual(await overflow(page), []);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("alternative.me давно не публиковал индекс — экран говорит, сколько дней; свежий — молчит", async () => {
+    const old = { ...REAL, days: REAL.days.slice(0, -5) };
+    let o = await open({ reply: old });
+    await ready(o.page);
+    const note = o.page.locator(".lq-stale[role=status]");
+    await note.waitFor();
+    const n = Math.floor((T - old.days[old.days.length - 1]![0]) / 86_400);
+    assert.ok(n > 2, String(n));
+    assert.equal(sp(await note.innerText()), sp(I18N["fg_old"]!["ru"]!.replace("{n}", String(n))));
+    assert.deepEqual(o.errors, []);
+    await o.ctx.close();
+    o = await open();
+    await ready(o.page);
+    await o.page.waitForTimeout(300);
+    assert.equal(await o.page.locator(".lq-stale").count(), 0);
+    await o.ctx.close();
+  });
+
+  test("часы телефона отстают на 10 дней: индекс на месте, ложной пометки о старых данных нет", async () => {
+    const { ctx, page, errors } = await open({ clock: T - 10 * 86_400 });
+    await ready(page);
+    assert.equal(sp(await page.locator(".fg-val").innerText()), String(last[1]));
+    assert.equal(await page.locator(".lq-stale").count(), 0);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("сеть не ответила, а копия на телефоне старая — пометка дня; просроченная копия стирается", async () => {
+    const old = { ...REAL, days: REAL.days.slice(0, -5) };
+    const copy = (v: unknown, agoMs: number) => ({ "wt-fng-v2": JSON.stringify({ all: { at: T * 1000 - agoMs, v } }) });
+    let o = await open({ reply: { ok: false }, store: copy(old, 5 * 86_400_000) });
+    await ready(o.page);
+    await o.page.locator(".lq-stale").waitFor({ timeout: 8000 });
+    await o.ctx.close();
+    // Копия старше месяца не берётся и не лежит на устройстве.
+    o = await open({ reply: { ok: false }, store: copy(REAL, 31 * 86_400_000) });
+    await o.page.waitForFunction(() => localStorage.getItem("wt-fng-v2") === null, null, { timeout: 8000 });
+    assert.equal(await o.page.locator(".fg-hero").count(), 0);
+    await o.ctx.close();
   });
 });

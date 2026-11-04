@@ -126,7 +126,11 @@ class ServerPolicyTest(unittest.TestCase):
                 self.assertIsNone(BANNED_SOURCES.search(strip_comments(f.read())), path)
 
     def test_endpoint_takes_nothing_from_outside(self):
-        self.assertEqual(inspect.signature(fng.fng_data).parameters, {})
+        # Единственный параметр — сколько ждать холодную сборку; его задаёт
+        # сервер (выпуск дайджеста), из запроса маршрут не передаёт ничего.
+        params = inspect.signature(fng.fng_data).parameters
+        self.assertEqual(list(params), ["wait"])
+        self.assertEqual(params["wait"].default, fng.COLD_WAIT)
 
     def test_opener_is_direct_and_strict(self):
         evil = {"HTTPS_PROXY": "http://evil.example:1", "https_proxy": "http://evil.example:1", "NO_PROXY": "", "no_proxy": ""}

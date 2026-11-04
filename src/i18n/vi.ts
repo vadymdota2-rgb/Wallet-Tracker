@@ -771,6 +771,7 @@ export const vi: Dict = {
   fg_log: "thang log",
   fg_month: "Tháng trước",
   fg_now_t: "Chỉ số hôm nay",
+  fg_old: "alternative.me chưa công bố chỉ số mới trong {n} ngày: số liệu bên dưới tính đến ngày công bố gần nhất.",
   fg_price: "Giá BTC",
   fg_px_by: "Giá BTC từ",
   fg_q_chart: "Giá là giá đóng cửa ngày theo UTC. Ở khoảng thời gian dài, thang giá là logarit: mỗi bước lên bằng nhau nghĩa là tăng cùng một tỷ lệ phần trăm. Đường mờ và dấu ≈ là giá nội suy giữa các mức giá theo tuần.",

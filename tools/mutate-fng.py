@@ -15,6 +15,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # а при дубле любой из двух одинаково правдоподобен.
 EQUIV = {"дубль дня индекса"}
 TS = [
+    ("  return Math.max(0, Math.floor((now - last) / DAY));", "  return Math.floor((now - last) / DAY);", "свежесть: отставшие часы — не минус дни"),
+    ("  return Math.max(0, Math.floor((now - last) / DAY));", "  return Math.max(0, Math.ceil((now - last) / DAY));", "свежесть: полные сутки"),
+    ("export const STALE_DAYS = 2;", "export const STALE_DAYS = 5;", "свежесть: предел — как у дайджеста"),
     ("v < 0 || v > 100", "v < 0 || v > 101", "индекс не больше 100"),
     ("(px !== 0 && (px <= PX_MIN || px >= PX_MAX))", "(px < 0)", "правдоподобие цены"),
     ("f > (F_EST | F_FILL | F_HL)", "f > 8", "известные флаги"),
@@ -53,11 +56,12 @@ TS = [
     ("  return { inv, val: btc * lastPrice(days) };", "  return { inv, val: btc * (days[days.length - 1]?.[2] ?? 0) };", "покупки — по последней известной цене"),
 ]
 PY = [
-    ("if hit and not failed and not _busy.is_set():", "if hit and not _busy.is_set():", "пауза после сбоя"),
+    ("        job = None if failed else _start()", "        job = _start()", "пауза после сбоя"),
+    ("    if _busy.is_set():\n        return _st.job\n", "", "одна сборка на всех"),
+    ("        job.join(wait)", "        job.join(0)", "холодный старт ждёт сборку"),
     ("    if left <= MIN_LEFT:\n        return None", "    if left <= -1:\n        return None", "бюджет исчерпан"),
     ("hop = min(HOP, left)", "hop = HOP", "таймаут по остатку бюджета"),
     ("        _dl.at = 0.0\n", "        pass\n", "срок сборки сбрасывается"),
-    ("    with _cold:\n", "    if True:\n", "один сборщик на холодном старте"),
     ("if t % DAY == 0 and START <= t <= top and 0 <= v <= 100:", "if START <= t <= top and 0 <= v <= 100:", "индекс — только полночь"),
     ("if t % DAY == 0 and START <= t <= top and 0 <= v <= 100:", "if t % DAY == 0 and START <= t <= top and 0 <= v <= 101:", "индекс не больше 100"),
     ("if t % DAY == 0 and START <= t <= top and 0 <= v <= 100:", "if t % DAY == 0 and START <= t and 0 <= v <= 100:", "индекс не из будущего"),
@@ -114,7 +118,7 @@ PY = [
     ("got.get(\"ok\") is not True", "False", "копия: только годный ответ"),
     ("_st.hit = (time.monotonic() - TTL - 1.0, saved)", "_st.hit = (time.monotonic(), saved)", "копия — как устаревшая"),
     ("    finally:\n        _busy.clear()", "    finally:\n        pass", "флаг фона снимается"),
-    ("                _busy.clear()\n                _log(", "                pass\n                _log(", "флаг при сбое запуска потока"),
+    ("        _busy.clear()\n        _log(f\"фон не запущен", "        pass\n        _log(f\"фон не запущен", "флаг при сбое запуска потока"),
     ("            _st.err_at = time.monotonic()\n            hit = _st.hit", "            hit = _st.hit", "пауза после падения сборки"),
     ("born = time.monotonic() if priced else time.monotonic() - TTL + ERR_TTL", "born = time.monotonic()", "без цен — ответ ненадолго"),
     # Защита от атак через источник.

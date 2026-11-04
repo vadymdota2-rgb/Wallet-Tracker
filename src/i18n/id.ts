@@ -771,6 +771,7 @@ export const id: Dict = {
   fg_log: "skala log",
   fg_month: "Sebulan lalu",
   fg_now_t: "Indeks hari ini",
+  fg_old: "alternative.me belum menerbitkan indeks baru selama {n} hari: angka di bawah per hari terakhir yang diterbitkan.",
   fg_price: "Harga BTC",
   fg_px_by: "Harga BTC dari",
   fg_q_chart: "Harga adalah penutupan harian UTC. Pada periode panjang skala harga bersifat logaritmik: langkah naik yang sama berarti kenaikan persentase yang sama. Garis pudar dan tanda ≈ menandai harga yang diinterpolasi di antara harga mingguan.",

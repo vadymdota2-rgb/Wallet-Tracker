@@ -770,6 +770,7 @@ export const en = {
   fg_log: "log scale",
   fg_month: "A month ago",
   fg_now_t: "Index today",
+  fg_old: "alternative.me hasn't published a new index for {n} days: the figures below are as of the last published day.",
   fg_price: "BTC price",
   fg_px_by: "BTC price by",
   fg_q_chart: "The price is the daily close in UTC. Over long periods the price scale is logarithmic: an equal step up means equal growth in percent. A faded line and the ≈ sign mark prices interpolated between weekly quotes.",

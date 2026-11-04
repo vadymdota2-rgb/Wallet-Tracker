@@ -8,7 +8,7 @@
 import { initData } from "./telegram";
 import { forget, peek, peekAny, remember } from "./memo";
 import { HALVING_TTL_MS, clockSkew, pickHalving, validHalving, type HalvingReply } from "./halving";
-import { FNG_TTL_MS, validFng, type FngReply } from "./fng";
+import { FNG_SAVED_MAX_MS, FNG_TTL_MS, validFng, type FngReply } from "./fng";
 import { ETF_TTL_MS, validEtf, type EtfReply } from "./etf";
 import { DOM_TTL_MS, MCAP_MAX_AGE, MCAP_TTL_MS, validDom, validMcap, type DomReply, type McapReply } from "./dom";
 import type {
@@ -555,7 +555,10 @@ export const peekCalendar = () => peek<CalReply | null>("/api/calendar", 5 * 60_
 const FNG_SAVED = "wt-fng-v2";
 function savedFng(): FngReply | null {
   const hit = readSaved<unknown>(FNG_SAVED).all;
-  return hit && Date.now() - hit.at < 30 * 24 * 3600_000 ? validFng(hit.v) : null;
+  const v = hit && Date.now() - hit.at < FNG_SAVED_MAX_MS ? validFng(hit.v) : null;
+  // Просроченная или негодная копия больше не пригодится — не держим её на устройстве.
+  if (hit && !v) dropSaved(FNG_SAVED);
+  return v;
 }
 /* Вторая попытка — и когда ответ пришёл, но не прошёл проверку (обрезан в пути). */
 const fngOnce = () => call<unknown>("/api/fng", { timeout: 30_000 }).then((r) => validFng(r));

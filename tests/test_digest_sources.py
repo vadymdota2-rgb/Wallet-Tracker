@@ -190,7 +190,11 @@ class DigestMarketTest(unittest.TestCase):
     """Капитализация и доминация в разделе «Рынок» — из кэша вкладки
     (wt_mcap.mcap_data): выпуск сам в CoinMarketCap не ходит."""
 
-    def market(self, mc, waits=None, rows=None):
+    def market(self, mc, waits=None, rows=None, fdays=None):
+        def fg(wait=None):
+            (waits if waits is not None else []).append(("fng", wait))
+            return {"ok": True, "days": fdays} if fdays else {}
+
         def dom(wait=None):
             (waits if waits is not None else []).append(("dom", wait))
             return {"ok": True, "rows": rows} if rows else {}
@@ -198,7 +202,7 @@ class DigestMarketTest(unittest.TestCase):
         def mcap(wait=None):
             (waits if waits is not None else []).append(("mcap", wait))
             return mc
-        with mock.patch.object(api, "fng_data", lambda: {}), mock.patch.object(api, "_dg_px", lambda p: None), \
+        with mock.patch.object(api, "fng_data", fg), mock.patch.object(api, "_dg_px", lambda p: None), \
                 mock.patch.object(api, "dom_data", dom), mock.patch.object(api, "mcap_data", mcap), \
                 mock.patch.object(api.wt_mcap, "_fetch", side_effect=AssertionError("сеть")):
             return api._dg_market()
@@ -208,8 +212,21 @@ class DigestMarketTest(unittest.TestCase):
         # (COLD_WAIT), выпуск — дольше, иначе раздел пропал бы на весь день.
         waits: list = []
         self.market(MC, waits)
-        self.assertEqual(waits, [("dom", api.DG_COLD_WAIT), ("mcap", api.DG_COLD_WAIT)])
-        self.assertGreater(api.DG_COLD_WAIT, max(api.wt_dom.COLD_WAIT, api.wt_mcap.COLD_WAIT))
+        self.assertEqual(waits, [("fng", api.DG_COLD_WAIT), ("dom", api.DG_COLD_WAIT), ("mcap", api.DG_COLD_WAIT)])
+        self.assertGreater(api.DG_COLD_WAIT, max(api.wt_dom.COLD_WAIT, api.wt_mcap.COLD_WAIT, api.wt_fng.COLD_WAIT))
+
+    def test_fear_and_greed_only_while_its_last_day_is_recent(self):
+        # alternative.me замолчал — выпуск за выпуском не повторяет старый
+        # индекс как сегодняшний. Последний день индекса — сегодняшний.
+        today = api.now() // 86400 * 86400
+        for age, shown in ((0, True), (api.DG_FNG_DAYS, True), (api.DG_FNG_DAYS + 1, False)):
+            last = today - age * 86400
+            fdays = [[last - (9 - i) * 86400, 40 + i, 0, 0] for i in range(10)]
+            got = self.market({"ok": False}, fdays=fdays)
+            if shown:
+                self.assertEqual(got["fng"], {"v": 49, "d1": 1, "d7": 7}, age)
+            else:
+                self.assertNotIn("fng", got, age)
 
     def test_altseason_index_only_while_its_last_day_is_recent(self):
         today = api.now() // 86400 * 86400

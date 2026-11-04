@@ -771,6 +771,7 @@ export const fr: Dict = {
   fg_log: "échelle log",
   fg_month: "Il y a un mois",
   fg_now_t: "L'indice aujourd'hui",
+  fg_old: "alternative.me n’a pas publié de nouvel indice depuis {n} jours : les chiffres ci-dessous datent du dernier jour publié.",
   fg_price: "Prix du BTC",
   fg_px_by: "Prix du BTC par",
   fg_q_chart: "Le prix est la clôture du jour en UTC. Sur les longues périodes, l'échelle des prix est logarithmique : un même pas vers le haut correspond à une même hausse en pourcentage. Une ligne pâle et le signe ≈ indiquent des prix interpolés entre cotations hebdomadaires.",

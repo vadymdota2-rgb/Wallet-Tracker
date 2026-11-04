@@ -771,6 +771,7 @@ export const tr: Dict = {
   fg_log: "log ölçek",
   fg_month: "Bir ay önce",
   fg_now_t: "Bugünkü endeks",
+  fg_old: "alternative.me {n} gündür yeni endeks yayımlamadı: aşağıdaki rakamlar yayımlanan son güne aittir.",
   fg_price: "BTC fiyatı",
   fg_px_by: "BTC fiyatı:",
   fg_q_chart: "Fiyat, UTC'ye göre günlük kapanıştır. Uzun dönemlerde fiyat ölçeği logaritmiktir: yukarı doğru eşit adım, yüzde olarak eşit artış demektir. Soluk çizgi ve ≈ işareti, haftalık fiyatlar arasında hesaplanan fiyatları gösterir.",

@@ -14667,14 +14667,18 @@ DG_COLD_WAIT = 90.0
 # Индекс альтсезона в выпуске — если его последний день не старше стольких
 # полных суток (как STALE_DAYS у экрана, lib/dom.ts).
 DG_ALT_DAYS = 2
+# Индекс страха и жадности в выпуске — если его последний день не старше
+# стольких полных суток (как STALE_DAYS у экрана, lib/fng.ts): alternative.me
+# замолчал — выпуск не повторяет старый индекс как сегодняшний.
+DG_FNG_DAYS = 2
 
 
 def _dg_market() -> dict:
     """Рынок целиком: настроение, две главные монеты и индекс альтсезона —
     то, с чего читают любой обзор."""
     out: dict = {}
-    days = (fng_data() or {}).get("days") or []
-    if len(days) >= 8:
+    days = (fng_data(wait=DG_COLD_WAIT) or {}).get("days") or []
+    if len(days) >= 8 and (now() - int(days[-1][0])) // 86400 <= DG_FNG_DAYS:
         v = int(days[-1][1])
         out["fng"] = {"v": v, "d1": v - int(days[-2][1]), "d7": v - int(days[-8][1])}
     for sym, product in (("btc", "BTC-USD"), ("eth", "ETH-USD")):

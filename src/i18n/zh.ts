@@ -771,6 +771,7 @@ export const zh: Dict = {
   fg_log: "对数刻度",
   fg_month: "一个月前",
   fg_now_t: "今日指数",
+  fg_old: "alternative.me 已{n}天未发布新指数：以下数据截至最后发布的一天。",
   fg_price: "BTC 价格",
   fg_px_by: "BTC 价格来源：",
   fg_q_chart: "价格为 UTC 日收盘价。时间跨度较长时价格轴为对数刻度：向上相同的距离代表相同的百分比涨幅。淡色线和 ≈ 表示在周价格之间插值得到的价格。",
