@@ -46,10 +46,16 @@ type Lang = Parameters<typeof t>[0];
 /** Плечи 10× / 25× / 50× / 100× — как на Coinglass: фиолетовый, голубой, жёлтый,
  * оранжевый. Пары различимы и при дальтонизме (проверено валидатором). */
 const LEV_C = ["#7b61ff", "#38bdf8", "#facc15", "#f97316"];
+/** Группы плеч модели (wt_liqmap.LEVS): 3–10×, 20–25×, 50×, 75–100×. Сервер
+ *  шлёт верхнюю границу группы (levs), подпись — диапазон. */
+const LEV_NAME = ["3–10×", "20–25×", "50×", "75–100×"];
+const levName = (levs: number[], j: number) => LEV_NAME[j] ?? `${levs[j] ?? ""}×`;
 /** Тот же оттенок ярче — для крупных скоплений. */
 const LEV_HOT = ["#a594ff", "#7dd3fc", "#fde047", "#fb923c"];
 /** Доля от самого большого уровня, с которой скопление считается крупным. */
 const HOT = 0.5;
+/** Подписи сумм у полос — не ближе этого друг к другу, px. */
+const LABEL_GAP = 18;
 const COINS = ["BTC", "ETH", "SOL", "XRP", "DOGE", "BNB", "HYPE", "SUI", "ADA", "LINK"];
 type Span = "5" | "10" | "15";
 const SPANS: Span[] = ["5", "10", "15"];
@@ -253,12 +259,23 @@ function Chart({ r, lang, span, sel, onSel, on, win }: {
   /* Крайние риски не подписываем: у края подпись наползала на соседнюю. */
   for (let p = -spanN + step; p < spanN - 1e-9; p += step) if (Math.abs(p) > 1e-9) ticks.push(p);
 
-  /* Подписи — у двух крупнейших строк каждой стороны, не у всех. */
+  /* Подписи — у двух крупнейших уровней каждой стороны, не у всех, и не
+     соседних: у карты плотности крупнейшие строки идут подряд, и две подписи
+     налезали одна на другую («$11,2M» поверх «$11,44M»). Следующая — не
+     ближе LABEL_GAP пикселей от уже подписанной. */
   const labelled = useMemo(() => {
     const idx = rows.map((w, i) => ({ i, up: w.mid > r.px, v: sumOn(side(w, r.px), on) })).filter((x) => x.v > 0);
-    const pick = (up: boolean) => idx.filter((x) => x.up === up).sort((a, b) => b.v - a.v).slice(0, 2).map((x) => x.i);
+    const gap = Math.ceil(LABEL_GAP / rowH);
+    const pick = (up: boolean) => {
+      const out: number[] = [];
+      for (const x of idx.filter((y) => y.up === up).sort((a, b) => b.v - a.v)) {
+        if (out.length >= 2) break;
+        if (out.every((i) => Math.abs(i - x.i) >= gap)) out.push(x.i);
+      }
+      return out;
+    };
     return [...pick(true), ...pick(false)];
-  }, [rows, r.px, on]);
+  }, [rows, rowH, r.px, on]);
 
   /* Площадь «накоплено»: от линии цены наружу, по серединам строк. */
   const area = (up: boolean) => {
@@ -523,6 +540,11 @@ function CoinPicker({ lang, sym, onPick }: { lang: Lang; sym: string; onPick: (s
 
 /** Как часто открытый экран спрашивает свежую карту. */
 const LIVE_EVERY = 60_000;
+/* Карты этой монеты на сервере ещё нет: он собирает её в фоне и отвечает
+   «собираем» (building) или «все сборщики заняты» (busy). Экран не пугает
+   ошибкой, а переспрашивает сам — BUILD_TRIES раз через BUILD_RETRY. */
+const BUILD_RETRY = 3_000;
+const BUILD_TRIES = 8;
 
 /** «Обновляется сама · 40 сек назад» — тикает каждую секунду отдельно от карты. */
 function LiveAge({ lang, at }: { lang: Lang; at: number }) {
@@ -554,12 +576,17 @@ export function LiqMapScreen() {
   const [staleAt, setStaleAt] = useState<number | null>(null);
   const [retry, setRetry] = useState(0);
   const plotRef = useRef<HTMLDivElement>(null);
+  /* Сколько раз подряд сервер ответил «собираем» по этой карте. */
+  const tries = useRef({ key: "", n: 0 });
 
   /* Сразу — то, что есть: из памяти или с устройства (прошлая карта этой
      монеты и окна). Свежая догружается поверх, и экран не пустеет. Не
      пришла — остаётся прежняя с пометкой, когда она снята. */
   useEffect(() => {
     let alive = true;
+    let timer = 0;
+    const key = `${sym}|${range}`;
+    if (tries.current.key !== key) tries.current = { key, n: 0 };
     setSel(null);
     const cached = peekLiqMap(sym, range);
     const saved = cached ? null : savedLiqMap(sym, range);
@@ -568,6 +595,11 @@ export function LiqMapScreen() {
     setStaleAt(null);
     void fetchLiqMap(sym, range).then((r) => {
       if (!alive) return;
+      if ((r?.error === "building" || r?.error === "busy") && tries.current.n < BUILD_TRIES) {
+        tries.current.n += 1;
+        timer = window.setTimeout(() => setRetry((n) => n + 1), BUILD_RETRY);
+        return;
+      }
       setBusy(false);
       if (r?.ok || r?.error === "no_data") {
         setReply(r);
@@ -580,6 +612,7 @@ export function LiqMapScreen() {
     setLiq(sym, range);
     return () => {
       alive = false;
+      window.clearTimeout(timer);
     };
   }, [sym, range, setLiq, retry]);
 
@@ -603,6 +636,7 @@ export function LiqMapScreen() {
 
   const again = () => {
     haptic("select");
+    tries.current.n = 0;
     setRetry((n) => n + 1);
   };
 
@@ -627,12 +661,33 @@ export function LiqMapScreen() {
 
   const near = useMemo(() => (reply?.ok ? { up: nearest(reply, true), dn: nearest(reply, false) } : null), [reply]);
 
+  /* Крупнейшие уровни — скопления, а не корзины: корзины по 0,25 % одного
+     скопления шли подряд («$77 369», «$77 168», «$76 967» — одно и то же
+     место трижды). Корзины собираются по 0,5 % (как «ближайшее скопление»),
+     и три крупнейших — не ближе 1 % друг к другу. */
   const top = useMemo(() => {
     if (!reply?.ok) return { up: [], dn: [] };
-    const all = reply.buckets.map((b) => ({ p: b.p, up: b.p > reply.px, v: b.p > reply.px ? sum(b.S) : sum(b.L) }))
-      .filter((b) => b.v > 0)
-      .sort((a, b) => b.v - a.v);
-    return { up: all.filter((b) => b.up).slice(0, 3), dn: all.filter((b) => !b.up).slice(0, 3) };
+    const pick = (up: boolean) => {
+      const groups = new Map<number, { v: number; pv: number }>();
+      for (const b of reply.buckets) {
+        const d = (b.p - reply.px) / reply.px;
+        if (up ? d <= 0 : d >= 0) continue;
+        const v = sum(up ? b.S : b.L);
+        if (v <= 0) continue;
+        const k = Math.floor(Math.abs(d) / 0.005);
+        const g = groups.get(k) ?? { v: 0, pv: 0 };
+        g.v += v;
+        g.pv += v * b.p;
+        groups.set(k, g);
+      }
+      const out: { k: number; p: number; v: number }[] = [];
+      for (const [k, g] of [...groups.entries()].sort((a, b) => b[1].v - a[1].v)) {
+        if (out.length >= 3) break;
+        if (out.every((x) => Math.abs(x.k - k) >= 2)) out.push({ k, p: g.pv / g.v, v: g.v });
+      }
+      return out;
+    };
+    return { up: pick(true), dn: pick(false) };
   }, [reply]);
   const topMax = Math.max(1, ...top.up.map((b) => b.v), ...top.dn.map((b) => b.v));
 
@@ -740,6 +795,10 @@ export function LiqMapScreen() {
 
   return (
     <Frame title={t(lang, "lq_title")}>
+      {/* Своя сетка в одну колонку minmax(0, 1fr): общая сетка экрана берёт
+          ширину по самому широкому ряду, и при крупном шрифте (200 %) кнопки
+          окна раздвигали весь экран шире телефона. */}
+      <div className="lq-scr">
       <p className="lq-lead">{t(lang, "lq_sub")}</p>
 
       <CoinPicker lang={lang} sym={sym} onPick={setSym} />
@@ -804,7 +863,7 @@ export function LiqMapScreen() {
                     {side(row, reply.px).map((v, j) => (
                       <span key={j} className={on[j] ? "" : "off"}>
                         <i style={{ background: LEV_C[j] }} />
-                        {levs[j]}× <b>{v > 0 ? usd(v) : "—"}</b>
+                        <bdi dir="ltr">{levName(levs, j)}</bdi> <b>{v > 0 ? usd(v) : "—"}</b>
                       </span>
                     ))}
                   </div>
@@ -821,7 +880,7 @@ export function LiqMapScreen() {
                 <button key={l} type="button" aria-pressed={on[j]} className={on[j] ? "lq-lev" : "lq-lev off"}
                   onClick={() => toggle(j)}>
                   <i style={{ background: LEV_C[j] }} />
-                  {l}×
+                  <bdi dir="ltr">{levName(levs, j)}</bdi>
                 </button>
               ))}
             </div>
@@ -895,6 +954,7 @@ export function LiqMapScreen() {
           </p>
         </>
       )}
+      </div>
     </Frame>
   );
 }

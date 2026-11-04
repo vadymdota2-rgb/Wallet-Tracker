@@ -398,7 +398,7 @@ export const translateComment = (cid: number, lang: string) =>
 export const uncommentDigest = (cid: number, mute = false) =>
   call<DigestActReply>("/api/digest/uncomment", { method: "POST", body: { cid, mute } });
 
-/* Карта ликвидаций: сервер пересчитывает раз в пять минут — чаще спрашивать
+/* Карта ликвидаций: сервер пересчитывает раз в две минуты — чаще спрашивать
    незачем. */
 const liqPath = (sym: string, range: string) =>
   `/api/liqmap?sym=${encodeURIComponent(sym)}&range=${encodeURIComponent(range)}`;

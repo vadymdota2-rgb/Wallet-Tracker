@@ -35,6 +35,7 @@ import wt_halving as halving  # noqa: E402
 import wt_etf as etf  # noqa: E402
 import wt_dom  # noqa: E402
 import wt_fng  # noqa: E402
+import wt_liqmap  # noqa: E402
 import wt_btc  # noqa: E402
 import wt_mcap
 import wt_treasury as treasury
@@ -10586,22 +10587,10 @@ def bootstrap(chat: str, fast: bool = False) -> dict:
 
 
 # --- Карта ликвидаций ----------------------------------------------------
-# Оценка, где лежат ликвидации открытых позиций, — та же модель, что у
-# Coinglass: за свечу открытый интерес вырос — на её цене открылись позиции;
-# лонги и шорты делятся по доле агрессивных покупок; объём раскладывается по
-# плечам, и у каждого плеча своя цена ликвидации. Интерес упал — позиции
-# закрываются пропорционально. Уровень, который цена уже прошла, снят: там
-# ликвидация случилась. Суммируются все биржи, что ответили, — Binance, OKX и
-# Gate, открытые API без ключей. Это модель, а не список чужих позиций:
-# настоящих цен ликвидации биржи не публикуют.
-LIQ_RANGES = {"1d": ("15m", 96), "7d": ("1h", 168), "30d": ("4h", 180)}
-LIQ_LEVS = (10, 25, 50, 100)
-LIQ_LEV_W = (0.3, 0.3, 0.25, 0.15)
-LIQ_MMR = 0.005
-LIQ_SPAN = 0.15      # окно карты: ±15% от цены
-LIQ_BUCKETS = 120    # по 0,25%
-LIQ_TTL = 120.0   # карта живая: открытый экран спрашивает раз в минуту
-_liq_cache: dict = {}
+# Модель и кэш — отдельный модуль wt_liqmap.py (см. его описание); здесь —
+# только сбор открытых данных бирж (свечи, открытый интерес, доля покупок):
+# тот же сбор нужен истории открытого интереса. Окна карты — из модуля.
+LIQ_RANGES = wt_liqmap.RANGES
 _liq_lock = threading.Lock()
 
 
@@ -11264,48 +11253,6 @@ LIQ_SOURCES = (("Binance", _liq_mult(_liq_binance)), ("OKX", _liq_okx), ("Bybit"
                ("Gate", _liq_gate), ("HTX", _liq_htx), ("dYdX", _liq_dydx))
 
 
-def _liq_model(rows: list) -> list:
-    """Открытые позиции окна: (цена ликвидации, лонг?, № плеча, $)."""
-    open_: list[list] = []
-    for i in range(1, len(rows)):
-        t, h, lo, c, oi, bs = rows[i]
-        # Сначала — ликвидации свечой: цена прошла уровень, позиции нет.
-        open_ = [e for e in open_ if (e[0] < lo if e[1] else e[0] > h)]
-        prev = rows[i - 1][4]
-        d = oi - prev
-        if d < 0 and prev > 0:
-            # Интерес биржи упал на долю — на ту же долю закрываются и наши
-            # позиции. Делить надо на весь интерес биржи, а не на то, что
-            # модель успела набрать за окно: иначе падение на 2% стирало
-            # всё набранное разом, и на 7 и 30 днях от карты почти ничего
-            # не оставалось.
-            k = max(0.0, oi / prev)
-            for e in open_:
-                e[3] *= k
-        elif d > 0:
-            p = (h + lo + c) / 3
-            for j, (lev, w) in enumerate(zip(LIQ_LEVS, LIQ_LEV_W)):
-                open_.append([p * (1 - 1 / lev + LIQ_MMR), True, j, d * bs * w])
-                open_.append([p * (1 + 1 / lev - LIQ_MMR), False, j, d * (1 - bs) * w])
-    return open_
-
-
-def _liq_candles(rows: list, n: int = 48) -> list:
-    """Свечи окна для графика цены на карте: ≤n штук, [откр, макс, мин, закр].
-
-    Свечи бирж склеиваются по несколько, открытие — закрытие предыдущей: у
-    источников модели открытия нет, а на графике разрыв в долю процента не
-    виден."""
-    k = max(1, -(-len(rows) // n))
-    out, prev = [], rows[0][3]
-    for i in range(0, len(rows), k):
-        part = rows[i:i + k]
-        hi, lo, c = max(r[1] for r in part), min(r[2] for r in part), part[-1][3]
-        out.append([round(x, 10) for x in (prev, max(hi, prev, c), min(lo, prev, c), c)])
-        prev = c
-    return out
-
-
 # Монеты, по которым строится карта: бессрочные фьючерсы на Binance, OKX,
 # Bybit, Gate, HTX, dYdX и Hyperliquid, по обороту за сутки; метки бирж со
 # своей историей интереса — по мере того, как она копится. Список раз в час, из открытых тикеров.
@@ -11437,13 +11384,8 @@ def _liq_coins_build() -> dict:
     return res
 
 
-# Карту человек ждать не должен. Свежая (до пяти минут) отдаётся из памяти;
-# постарше, но не старше шести часов, — тоже сразу, а пересчёт уходит в фон и
-# следующему достанется новая. Считается с нуля только то, чего в памяти нет
-# вовсе, — и то не дольше LIQ_BUDGET: биржа, что не ответила за это время,
-# в этот раз просто не участвует. Популярные монеты фоновый поток держит
-# тёплыми заранее.
-LIQ_STALE = 6 * 3600.0
+# Бюджет сбора бирж для одной карты, с: биржа, что не ответила за это время,
+# в этот раз просто не участвует. Кэш и фоновый пересчёт — в wt_liqmap.
 LIQ_BUDGET = 12.0
 # Прогрев — раз в пять минут и шесть монет: карта стоит около секунды
 # процессора, и тридцать карт каждые сто секунд отнимали треть ядра у общей
@@ -11454,33 +11396,7 @@ LIQ_WARM_COINS = 6
 _liq_busy: set = set()
 
 
-def liq_map(sym: str, rng: str) -> dict:
-    sym = re.sub(r"[^A-Z0-9]", "", (sym or "").upper())[:12]
-    if not sym or rng not in LIQ_RANGES:
-        return {"ok": False, "error": "bad_args"}
-    key = (sym, rng)
-    with _liq_lock:
-        hit = _liq_cache.get(key)
-        age = time.monotonic() - hit[0] if hit else None
-        if hit and age < LIQ_TTL:
-            return hit[1]
-        stale = hit and hit[1].get("ok") and age < LIQ_STALE
-        if stale and key not in _liq_busy:
-            _liq_busy.add(key)
-            threading.Thread(target=_liq_build_bg, args=(sym, rng), daemon=True).start()
-    if stale:
-        return hit[1]
-    return _liq_build(sym, rng)
-
-
-def _liq_build_bg(sym: str, rng: str) -> None:
-    try:
-        _liq_build(sym, rng)
-    except Exception as e:  # noqa: BLE001 — фоновый пересчёт не должен падать громко
-        print(f"liq map {sym} {rng}: {e}", file=sys.stderr)
-    finally:
-        with _liq_lock:
-            _liq_busy.discard((sym, rng))
+liq_map = wt_liqmap.liq_map
 
 
 # Свои разделы — халвинг, страх и жадность, альтсезон, доминация, ETF —
@@ -11541,12 +11457,8 @@ def liq_warm_refresher() -> None:
         for sym in listed or ["BTC", "ETH", "SOL", "XRP", "HYPE", "DOGE"]:
             for rng in LIQ_RANGES:
                 time.sleep(1.0)  # между картами — дать поработать остальным
-                with _liq_lock:
-                    hit = _liq_cache.get((sym, rng))
-                if hit and time.monotonic() - hit[0] < LIQ_TTL - 60:
-                    continue
                 try:
-                    _liq_build(sym, rng)
+                    wt_liqmap.warm(sym, rng)  # свежая — ничего, иначе собирает здесь
                 except Exception as e:  # noqa: BLE001
                     print(f"liq warm {sym} {rng}: {e}", file=sys.stderr)
         time.sleep(LIQ_WARM_EVERY)
@@ -11592,58 +11504,7 @@ def _liq_gather(sym: str, period: str, n: int) -> tuple[dict, list | None]:
     return got, ref
 
 
-def _liq_build(sym: str, rng: str) -> dict:
-    key = (sym, rng)
-    period, n = LIQ_RANGES[rng]
-    got, ref = _liq_gather(sym, period, n)
-    if not got:
-        res = {"ok": False, "error": "no_data", "sym": sym}
-        with _liq_lock:
-            _liq_cache[key] = (time.monotonic(), res)
-        return res
-    # Цена сейчас — закрытие последней свечи опорной биржи.
-    px = ref[-1][3]
-    lo_px, step = px * (1 - LIQ_SPAN), px * LIQ_SPAN * 2 / LIQ_BUCKETS
-    long_b = [[0.0] * 4 for _ in range(LIQ_BUCKETS)]
-    short_b = [[0.0] * 4 for _ in range(LIQ_BUCKETS)]
-    for rows in got.values():
-        for price, is_long, j, amt in _liq_model(rows):
-            if amt <= 0:
-                continue
-            # Позиции, уже бывшие бы ликвидированными текущей ценой, не в счёт.
-            if (is_long and price >= px) or (not is_long and price <= px):
-                continue
-            b = int((price - lo_px) / step)
-            if 0 <= b < LIQ_BUCKETS:
-                (long_b if is_long else short_b)[b][j] += amt
-    buckets = []
-    for b in range(LIQ_BUCKETS):
-        L, S = long_b[b], short_b[b]
-        if sum(L) + sum(S) >= 1:
-            buckets.append({"p": round(lo_px + step * (b + 0.5), 8),
-                            "L": [round(x) for x in L], "S": [round(x) for x in S]})
-
-    def cum(side: str, pct: float) -> float:
-        edge = px * (1 - pct / 100) if side == "L" else px * (1 + pct / 100)
-        return round(sum(sum(r[side]) for r in buckets
-                         if (side == "L" and edge <= r["p"] < px) or (side == "S" and px < r["p"] <= edge)))
-
-    # Путь цены за окно — у той же биржи, по ≤60 точкам: в шапке видно,
-    # откуда цена пришла к нынешним уровням. Открытый интерес — сумма бирж.
-    main = ref
-    stride = max(1, len(main) // 60)
-    path = [r[3] for r in main[::stride]]
-    if path[-1] != main[-1][3]:
-        path.append(main[-1][3])
-    res = {"ok": True, "sym": sym, "range": rng, "px": px, "step": step, "lo": lo_px,
-           "ex": sorted(got), "levs": list(LIQ_LEVS), "buckets": buckets,
-           "cum": {k: {"L": cum("L", k), "S": cum("S", k)} for k in (2, 5, 10)},
-           "path": [round(x, 10) for x in path], "oi": round(sum(r[-1][4] for r in got.values())),
-           "ohlc": _liq_candles(main), "at": now()}
-    with _liq_lock:
-        _liq_cache[key] = (time.monotonic(), res)
-        cap_cache(_liq_cache, 150)
-    return res
+wt_liqmap.set_gather(_liq_gather)
 
 
 # --- Страх и жадность ---------------------------------------------------

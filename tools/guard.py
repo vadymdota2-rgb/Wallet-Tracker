@@ -567,16 +567,16 @@ say("«Карта ликвидаций» в меню сразу под «Ток�
     '{ name: "unlocks", key: "unl_title", glyph: <UnlockGlyph /> },\n  { name: "liqmap", key: "lq_title", glyph: <LiqGlyph /> },' in _appx
     and "liqmap: LiqMapScreen" in read(f"{APP}/src/screens/registry.ts"))
 say("карта ликвидаций считается на сервере из открытых данных бирж, без ключей",
-    "def liq_map(" in api and '"/api/liqmap"' in api and "LIQ_SOURCES" in api
-    and "apikey" not in pybody(api, "def liq_map(").lower())
+    "liq_map = wt_liqmap.liq_map" in api and "def liq_map(" in read(f"{APP}/wt_liqmap.py") and '"/api/liqmap"' in api
+    and "LIQ_SOURCES" in api and "apikey" not in read(f"{APP}/wt_liqmap.py").lower())
 
 _lq = read(f"{APP}/src/screens/LiqMapScreen.tsx")
 say("карта ликвидаций: плечо — своим оттенком, крупные скопления — ярче и с подсветкой, накопленное — своей колонкой",
     "LEV_C" in _lq and "LEV_HOT" in _lq and 'filter={hot ? "url(#lq-glow)"' in _lq and "function cumOf(" in _lq and "CX0 + ((cum[i]" in _lq
-    and "function nearest(" in _lq and '"path": [round(x, 10) for x in path]' in api)
+    and "function nearest(" in _lq and '"path": [round(x, 10) for x in path]' in read(f"{APP}/wt_liqmap.py"))
 
 say("карта ликвидаций: свечи цены на той же оси и список всех монет с фьючерсами",
-    "def liq_coins(" in api and '"/api/liqcoins"' in api and '"ohlc": _liq_candles(main)' in api
+    "def liq_coins(" in api and '"/api/liqcoins"' in api and '"ohlc": candles(ref)' in read(f"{APP}/wt_liqmap.py")
     and "function Candles(" in _lq and "function CoinPicker(" in _lq and "useLiqCoins()" in _lq
     and "fetchLiqCoins" in read(f"{APP}/src/components/CoinFind.tsx"))
 
@@ -597,7 +597,7 @@ say("карта ликвидаций: шесть бирж с историей и
     and "DROP TABLE hl_oi" in api)
 
 say("карта ликвидаций: отдаётся из памяти сразу, старая — с пересчётом в фоне, тёплые монеты заранее",
-    "def _liq_build_bg(" in api and "def liq_warm_refresher(" in api and "target=liq_warm_refresher" in api
+    "def _bg(" in read(f"{APP}/wt_liqmap.py") and "wt_liqmap.warm(sym, rng)" in api and "def liq_warm_refresher(" in api and "target=liq_warm_refresher" in api
     and "wait(futures, timeout=LIQ_BUDGET)" in api and 'sorted(ex.get(k, ()))' in api
     and "savedLiqMap(sym, range)" in _lq and "callTwice<LiqMapReply>" in read(f"{APP}/src/lib/api.ts"))
 
@@ -620,14 +620,14 @@ say("карта ликвидаций в гамме Coinglass: плечи фио�
     and ".lq-now { stroke: #f6465d;" in read(f"{APP}/src/styles/app.css"))
 
 say("карта ликвидаций живая: сервер раз в две минуты, открытый экран спрашивает раз в минуту",
-    "LIQ_TTL = 120.0" in api and "LIQ_WARM_EVERY = 300" in api and "LIQ_WARM_COINS = 6" in api
+    "TTL = 120.0" in read(f"{APP}/wt_liqmap.py") and "LIQ_WARM_EVERY = 300" in api and "LIQ_WARM_COINS = 6" in api
     and "refreshLiqMap(sym, range)" in _lq and "const LIVE_EVERY = 60_000;" in _lq)
 
 say("на колонке «Накоплено» — перевес в процентах и деньги сверху и снизу",
     'className="lq-share up"' in _lq and 'className="lq-share dn"' in _lq and '"lq_share_s"' in _lq)
 
 say("модель ликвидаций: падение интереса закрывает позиции долей от всего интереса биржи",
-    "k = max(0.0, oi / prev)" in api and "k = max(0.0, 1 + d / total)" not in api)
+    "k = max(0.0, oi / prev)" in read(f"{APP}/wt_liqmap.py") and "k = max(0.0, 1 + d / total)" not in read(f"{APP}/wt_liqmap.py"))
 
 _store2 = read(f"{APP}/src/store/app.ts")
 say("экраны бокового меню: «Назад» возвращает в меню, значок фандинга одноцветный",
@@ -801,6 +801,12 @@ say("страх и жадность — ревизия: границы зон с
     "{ max: 25, key: \"fg_z0\"" in _fgl and "{ max: 46, key: \"fg_z1\"" in _fgl and "{ max: 54, key: \"fg_z2\"" in _fgl
     and "{ max: 75, key: \"fg_z3\"" in _fgl
     and "тексты экрана: число не отрывается от слова" in read(f"{APP}/tests/fng.test.ts"))
+say("карта ликвидаций — отдельный модуль wt_liqmap: восемь плеч (3–100×) с долями, как их держат, четыре группы на экране; цена входа — по диапазону свечи (карта плотности, а не «гребёнка»); счёт по сетке цен; сборка в фоне, человек ждёт не дольше COLD_WAIT, сборок одновременно — не больше JOBS_MAX; крупнейшие уровни — скопления, подписи не налезают",
+    os.path.isfile(f"{APP}/wt_liqmap.py") and "ENTRY = 5" in read(f"{APP}/wt_liqmap.py") and "JOBS_MAX = 4" in read(f"{APP}/wt_liqmap.py")
+    and "COLD_WAIT = 8.0" in read(f"{APP}/wt_liqmap.py") and "(100, 0.10, 3)" in read(f"{APP}/wt_liqmap.py")
+    and "def _liq_model(" not in api and "def _liq_build(" not in api
+    and 'const LEV_NAME = ["3–10×", "20–25×", "50×", "75–100×"];' in _lq and "const LABEL_GAP = 18;" in _lq
+    and "Math.abs(x.k - k) >= 2" in _lq and os.path.isfile(f"{APP}/tests/test_liqmap.py"))
 say("авторские права: LICENSE «все права защищены» (Wallet Tracker) с оговоркой о сторонних лицензиях (IBM Plex — OFL, Twemoji — CC BY 4.0, данные источников); package.json — UNLICENSED; на экране «Документы» — «© 2026 Wallet Tracker» на 16 языках",
     os.path.isfile(f"{APP}/LICENSE") and "Copyright (c) 2026 Wallet Tracker. All rights reserved." in read(f"{APP}/LICENSE")
     and "SIL Open Font" in read(f"{APP}/LICENSE") and "CC BY 4.0" in read(f"{APP}/LICENSE")
@@ -1847,7 +1853,7 @@ say("ликвидации, история интереса и фандинга, 
     "class _WS:" in api and "def _liqs_binance(" in api and "def _liqs_bybit(" in api and "def _liqs_okx(" in api
     and "def _liqs_gate_loop(" in api and "def _liqs_htx_loop(" in api and "def liqs_data(" in api
     and "LIQS_KEEP = 7 * 86400" in api and "liqs_start()" in pybody(api, "def warmup(")
-    and "def _liq_gather(" in api and "got, ref = _liq_gather(sym, period, n)" in pybody(api, "def _liq_build(")
+    and "def _liq_gather(" in api and "wt_liqmap.set_gather(_liq_gather)" in api
     and "def oi_hist(" in api and "def _fund_hist(" in api and 'FUND_HIST_EX = ("Binance", "Bybit", "OKX", "Hyperliquid", "Gate", "Bitget", "Deribit",' in api
     and "def calendar_data(" in api and "ff_calendar_thisweek.json" in api and '("2026-10-28", 18)' in api
     and all(f'"{x}"' in api.split("PAID_PATHS = frozenset(")[1][:900] for x in ("liqs", "oihist", "calendar"))
