@@ -109,6 +109,11 @@ class EtfDayAlertTest(unittest.TestCase):
         for per in ([None, None, None, None], [0, 0, None, None]):
             self.rep = reply(0, per)
             self.assertIsNone(api.etfd_day(), per)
+        # Пятница, которую TFTC выложил только в понедельник днём, — ещё свежая:
+        # её итоги приходят (при трёх сутках от начала дня — терялись).
+        self.rep = reply(2_000_000, [2_000_000, None, None, None], day=NOW - 3 * 86400 - 13 * 3600)
+        self.assertIsNotNone(api.etfd_day())
+        self.assertEqual(api.ETFD_FRESH, api.etf.STALE_DAYS * 86400)
         # День старше ETFD_FRESH (простой сервера, долгие праздники) — не рассылаем.
         self.rep = reply(2_000_000, [2_000_000, None, None, None], day=NOW - api.ETFD_FRESH - 1)
         self.assertIsNone(api.etfd_day())

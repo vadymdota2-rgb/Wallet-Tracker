@@ -127,6 +127,8 @@ PY = [
     ("    ctx.minimum_version = ssl.TLSVersion.TLSv1_2\n", "", "TLS не старше 1.2"),
     ("    job.join(COLD_WAIT)\n", "    job.join()\n", "холодный старт ждёт не дольше COLD_WAIT"),
     ("    if job is None:\n        return build()\n", "    if job is None:\n        return _no_data()\n", "без потоков — сборка на месте"),
+    ("    if _st.hit is None and _st.file and not _st.loaded:", "    if _st.hit is None and _st.file:", "копия с диска читается один раз, а не на каждый запрос"),
+    ("    _st.file = path\n    _st.loaded = False\n", "    _st.file = path\n", "новый путь к копии — читается снова"),
     ("parse_float=_finite, ", "", "числа без бесконечностей"),
     ("while len(buf) <= BODY_MAX:", "while True:", "предел размера ответа"),
     ("                if time.monotonic() > end:\n                    _log(", "                if False:\n                    _log(", "срок на весь ответ"),
@@ -175,6 +177,7 @@ TR = [
 # Итоги дня ETF в Telegram (whale_api: etfd_*).
 AL = [
     ("    if now() - ts > ETFD_FRESH:\n        return None\n", "", "алерт: только свежий день"),
+    ("ETFD_FRESH = etf.STALE_DAYS * 86400\n", "ETFD_FRESH = 3 * 86400\n", "алерт: пятница, выложенная в понедельник, ещё приходит"),
     ("    if not v and not buy and not sell:", "    if False:", "алерт: день без движения — без сообщения"),
     ("if p[1] > 0), key=lambda p: -p[1])[:3]", "if p[1] > 0), key=lambda p: p[1])[:3]", "алерт: купившие — от самого большого"),
     ("if p[1] > 0), key=lambda p: -p[1])[:3]", "if p[1] > 0), key=lambda p: -p[1])", "алерт: купивших не больше трёх"),

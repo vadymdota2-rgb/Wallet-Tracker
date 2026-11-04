@@ -90,7 +90,8 @@ HOSTS = frozenset({"publicreporting.cftc.gov", "www.tftc.io"})
 # Обновляется вечером и утром: раз в час (TTL) — с запасом.
 TFTC = "https://www.tftc.io/bitcoin-etf-flows/data.json"
 # Подпись, которую просит набор (поле attribution) и условие лицензии: она
-# идёт в каждом ответе /api/etf — ответ открыт, его может взять кто угодно.
+# идёт в каждом ответе /api/etf — рядом с цифрами, куда бы они ни попали
+# (экран, дайджест, копия на телефоне).
 TFTC_BY = "TFTC — tftc.io/bitcoin-etf-flows (CC BY 4.0: creativecommons.org/licenses/by/4.0/)"
 # Тикер фонда в наборе — заглавные буквы и цифры; дата — ГГГГ-ММ-ДД. Цифры —
 # только ASCII: \d в Python пропустил бы и «２０２６» (полноширинные), а
@@ -494,8 +495,11 @@ class _State:
     # Поток идущей фоновой сборки: холодный старт ждёт его (etf_data).
     job: threading.Thread | None = None
     # Копия последнего ответа на диске (set_cache_file): после перезапуска
-    # API экран получает её сразу, свежий ответ собирается в фоне.
+    # API экран получает её сразу, свежий ответ собирается в фоне. Читается
+    # один раз (loaded): без годной копии запросы диск не трогают — иначе
+    # каждый, пока источник лежит, заново разбирал бы файл в сотни КБ.
     file: str | None = None
+    loaded: bool = False
 
 
 # Копия с диска старше этого не берётся.
@@ -530,6 +534,7 @@ def _new_funds(tickers: set[str]) -> None:
 def set_cache_file(path: str | None) -> None:
     """Где держать копию последнего ответа (None — нигде)."""
     _st.file = path
+    _st.loaded = False
 
 
 def _file_load() -> dict[str, Json] | None:
@@ -703,7 +708,8 @@ def etf_data() -> dict[str, Json]:
     Без копии первый запрос ждёт сборку не дольше COLD_WAIT. Сборка не
     удалась — до FAIL_WAIT новой нет: устаревший ответ отдаётся как есть,
     а без него — «нет данных» без новой сборки."""
-    if _st.hit is None and _st.file:
+    if _st.hit is None and _st.file and not _st.loaded:
+        _st.loaded = True
         saved = _file_load()
         with _lock:
             if _st.hit is None and saved is not None:

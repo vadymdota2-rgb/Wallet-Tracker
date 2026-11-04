@@ -127,6 +127,23 @@ class EtfFileTest(unittest.TestCase):
         self.assertEqual(got["coins"], {"btc": {"funds": []}})
         self.assertEqual(calls, [1])  # свежий — в фоне
 
+    def test_disk_copy_is_read_once_not_on_every_request(self):
+        # Копии нет (или она старая), а источник лежит: каждый запрос заново
+        # читал и разбирал бы файл — лёгкий способ нагрузить сервер. Копия
+        # читается один раз на запуск.
+        with open(etf._st.file, "w", encoding="utf-8") as f:
+            json.dump({"at": 1, "v": {"ok": True, "coins": {}}}, f)
+        etf._st.fail = time.monotonic()  # сборка только что упала — отдых
+        with mock.patch.object(etf, "_file_load", wraps=etf._file_load) as load:
+            for _ in range(5):
+                self.assertEqual(etf.etf_data(), {"ok": False, "error": "no_data"})
+        self.assertEqual(load.call_count, 1)
+        # Новый путь к копии (перезапуск с другим каталогом) — читается снова.
+        etf.set_cache_file(etf._st.file)
+        with mock.patch.object(etf, "_file_load", wraps=etf._file_load) as load:
+            etf.etf_data()
+        self.assertEqual(load.call_count, 1)
+
     def test_disk_failure_is_logged_and_leaves_no_temp_file(self):
         blocker = os.path.join(self.dir, "file")
         with open(blocker, "w", encoding="utf-8") as f:

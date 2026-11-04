@@ -776,6 +776,12 @@ say("доминация и альтсезон — защита: платный �
 say("доминация и альтсезон — ревизия №2: без мёртвого кода (shareDelta убрана); соседняя с индексом ячейка — «днём раньше» (индекс — за вчерашний закрытый день), 16 языков",
     "shareDelta" not in _dml and 'altCell("dm_dprev", ago(alt, 1))' in _dm and 'altCell("fg_yday"' not in _dm
     and 'I18N["dm_dprev"]' in _dme)
+say("ETF — проверка: итоги дня свежие 5 суток, как на экране (пятница, выложенная в понедельник, приходит); копия ответа с диска читается один раз на запуск (а не каждым запросом, пока источник лежит); подпись TFTC — при цифрах, куда бы они ни попали",
+    "    if _st.hit is None and _st.file and not _st.loaded:" in read(f"{APP}/wt_etf.py")
+    and "    _st.file = path\n    _st.loaded = False\n" in read(f"{APP}/wt_etf.py")
+    and "ответ открыт, его может взять кто угодно" not in read(f"{APP}/wt_etf.py")
+    and "test_disk_copy_is_read_once_not_on_every_request" in read(f"{APP}/tests/test_disk_cache.py")
+    and "ETFD_FRESH = etf.STALE_DAYS * 86400\n" in api)
 say("авторские права: LICENSE «все права защищены» (Wallet Tracker) с оговоркой о сторонних лицензиях (IBM Plex — OFL, Twemoji — CC BY 4.0, данные источников); package.json — UNLICENSED; на экране «Документы» — «© 2026 Wallet Tracker» на 16 языках",
     os.path.isfile(f"{APP}/LICENSE") and "Copyright (c) 2026 Wallet Tracker. All rights reserved." in read(f"{APP}/LICENSE")
     and "SIL Open Font" in read(f"{APP}/LICENSE") and "CC BY 4.0" in read(f"{APP}/LICENSE")
