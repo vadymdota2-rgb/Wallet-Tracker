@@ -797,6 +797,10 @@ say("кэш разделов обновляется сам: свой поток 
     "def cache_refresher() -> None:" in api and 'threading.Thread(target=cache_refresher, daemon=True, name="cache").start()' in api
     and "CACHE_TICK = 60.0" in api and '("halving", halving_data),' in api and '("etf", etf_data),' in api
     and 'fng_data()  # заодно' not in api and os.path.isfile(f"{APP}/tests/test_cache_refresher.py"))
+say("страх и жадность — ревизия: границы зон сверены с alternative.me (0–25, 26–46, 47–54, 55–75, 76–100); тексты 16 языков — число не отрывается от слова, французские «:» и «;» — с неразрывным пробелом, у китайского и японского — без пробелов у числа (тест словаря)",
+    "{ max: 25, key: \"fg_z0\"" in _fgl and "{ max: 46, key: \"fg_z1\"" in _fgl and "{ max: 54, key: \"fg_z2\"" in _fgl
+    and "{ max: 75, key: \"fg_z3\"" in _fgl
+    and "тексты экрана: число не отрывается от слова" in read(f"{APP}/tests/fng.test.ts"))
 say("авторские права: LICENSE «все права защищены» (Wallet Tracker) с оговоркой о сторонних лицензиях (IBM Plex — OFL, Twemoji — CC BY 4.0, данные источников); package.json — UNLICENSED; на экране «Документы» — «© 2026 Wallet Tracker» на 16 языках",
     os.path.isfile(f"{APP}/LICENSE") and "Copyright (c) 2026 Wallet Tracker. All rights reserved." in read(f"{APP}/LICENSE")
     and "SIL Open Font" in read(f"{APP}/LICENSE") and "CC BY 4.0" in read(f"{APP}/LICENSE")

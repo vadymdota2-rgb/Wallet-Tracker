@@ -349,3 +349,24 @@ test("daysOld и STALE_DAYS: сколько полных суток с посл�
   assert.equal(STALE_DAYS, 2);
   assert.equal(FNG_SAVED_MAX_MS, 30 * 24 * 3600_000);
 });
+
+test("тексты экрана: число не отрывается от слова, французские «:» и «;» — от слова, у китайского и японского — без пробелов у числа (16 языков)", () => {
+  const i18n = JSON.parse(readFileSync(new URL("../tools/i18n.json", import.meta.url), "utf8")) as
+    Record<string, Record<string, string>>;
+  const keys = Object.keys(i18n).filter((k) => k.startsWith("fg_") || k.startsWith("fi_"));
+  assert.ok(keys.length > 80, String(keys.length));
+  for (const key of keys) {
+    for (const [lang, text] of Object.entries(i18n[key]!)) {
+      // За числом — неразрывный пробел («{n} дн.»), а не обычный: перенос не разрывает их.
+      assert.doesNotMatch(text, /\{[nabpkm]\} (?=[\p{L}%])/u, `${key}.${lang}`);
+      if (lang === "fr") assert.doesNotMatch(text, / [:;?!»]|« /, `${key}.fr`);
+      if (lang === "zh" || lang === "ja") {
+        assert.doesNotMatch(text, /[\u3040-\u30ff\u4e00-\u9fff][ \u00a0]\{[nabpkm]\}|\{[nabpkm]\}[ \u00a0][\u3040-\u30ff\u4e00-\u9fff]/u, `${key}.${lang}`);
+        assert.doesNotMatch(text, /[。，：；！？] /, `${key}.${lang}`);
+      }
+    }
+  }
+  assert.equal(i18n["fg_days"]!["ru"]!.includes("{n}\u00a0"), true);
+  assert.equal(i18n["fg_old"]!["fr"]!.includes("jours\u00a0:"), true);
+});
+
