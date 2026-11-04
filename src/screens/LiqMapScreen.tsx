@@ -31,6 +31,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp, type LiqRange } from "../store/app";
 import { t } from "../i18n/t";
+import type { DictKey } from "../i18n/types";
 import { num, pct, px, since, usd } from "../lib/format";
 import { haptic } from "../lib/telegram";
 import { fetchLiqMap, peekLiqMap, refreshLiqMap, savedLiqMap } from "../lib/api";
@@ -43,15 +44,16 @@ import { Frame } from "./Screen";
 
 type Lang = Parameters<typeof t>[0];
 
-/** Плечи 10× / 25× / 50× / 100× — как на Coinglass: фиолетовый, голубой, жёлтый,
- * оранжевый. Пары различимы и при дальтонизме (проверено валидатором). */
-const LEV_C = ["#7b61ff", "#38bdf8", "#facc15", "#f97316"];
-/** Группы плеч модели (wt_liqmap.LEVS): 3–10×, 20–25×, 50×, 75–100×. Сервер
- *  шлёт верхнюю границу группы (levs), подпись — диапазон. */
-const LEV_NAME = ["3–10×", "20–25×", "50×", "75–100×"];
+/** Плечи: фиолетовый, голубой, жёлтый, оранжевый, почти белый — самые
+ * рискованные 125–500×. Пары различимы и при дальтонизме (OKLab, ΔE ≥ 12 у
+ * белого со всеми). */
+const LEV_C = ["#7b61ff", "#38bdf8", "#facc15", "#f97316", "#e2e8f0"];
+/** Группы плеч модели (wt_liqmap.LEVS): 3–10×, 20–25×, 50×, 75–100×, 125–500×.
+ *  Сервер шлёт верхнюю границу группы (levs), подпись — диапазон. */
+const LEV_NAME = ["3–10×", "20–25×", "50×", "75–100×", "125–500×"];
 const levName = (levs: number[], j: number) => LEV_NAME[j] ?? `${levs[j] ?? ""}×`;
 /** Тот же оттенок ярче — для крупных скоплений. */
-const LEV_HOT = ["#a594ff", "#7dd3fc", "#fde047", "#fb923c"];
+const LEV_HOT = ["#a594ff", "#7dd3fc", "#fde047", "#fb923c", "#ffffff"];
 /** Доля от самого большого уровня, с которой скопление считается крупным. */
 const HOT = 0.5;
 /** Подписи сумм у полос — не ближе этого друг к другу, px. */
@@ -107,14 +109,14 @@ function rowsOf(r: LiqMapReply, span: number): { rows: ViewRow[]; rowH: number }
     lo: lo + i * size,
     hi: lo + (i + 1) * size,
     mid: lo + (i + 0.5) * size,
-    L: [0, 0, 0, 0],
-    S: [0, 0, 0, 0],
+    L: r.levs.map(() => 0),
+    S: r.levs.map(() => 0),
   }));
   for (const b of r.buckets) {
     const i = Math.floor((b.p - lo) / size);
     const row = rows[i];
     if (!row) continue;
-    for (let j = 0; j < 4; j++) {
+    for (let j = 0; j < r.levs.length; j++) {
       row.L[j] = (row.L[j] ?? 0) + (b.L[j] ?? 0);
       row.S[j] = (row.S[j] ?? 0) + (b.S[j] ?? 0);
     }
@@ -538,8 +540,14 @@ function CoinPicker({ lang, sym, onPick }: { lang: Lang; sym: string; onPick: (s
   );
 }
 
-/** Как часто открытый экран спрашивает свежую карту. */
-const LIVE_EVERY = 60_000;
+/** Как часто открытый экран спрашивает свежую карту: сервер на каждый
+ *  запрос снимает уровни, до которых дошла текущая цена, — карта живая. */
+const LIVE_EVERY = 20_000;
+/** Окна карты и их подписи (длинные — дневными свечами на сервере). */
+const RANGES: readonly { id: LiqRange; key: DictKey }[] = [
+  { id: "1d", key: "big_win_24h" }, { id: "7d", key: "big_win_7d" }, { id: "30d", key: "big_win_30d" },
+  { id: "90d", key: "lq_win_90d" }, { id: "180d", key: "lq_win_180d" }, { id: "365d", key: "lq_win_365d" },
+];
 /* Карты этой монеты на сервере ещё нет: он собирает её в фоне и отвечает
    «собираем» (building) или «все сборщики заняты» (busy). Экран не пугает
    ошибкой, а переспрашивает сам — BUILD_TRIES раз через BUILD_RETRY. */
@@ -564,10 +572,10 @@ export function LiqMapScreen() {
   const setLiq = useApp((s) => s.setLiq);
   const open = useApp((s) => s.open);
   const [sym, setSym] = useState(saved || "BTC");
-  const [range, setRange] = useState<LiqRange>(savedRange || "1d");
+  const [range, setRange] = useState<LiqRange>(RANGES.some((x) => x.id === savedRange) ? savedRange : "1d");
   const [span, setSpan] = useState<Span>("10");
   const [sel, setSel] = useState<number | null>(null);
-  const [on, setOn] = useState<boolean[]>([true, true, true, true]);
+  const [on, setOn] = useState<boolean[]>(LEV_NAME.map(() => true));
   const [reply, setReply] = useState<LiqMapReply | null>(
     () => peekLiqMap(sym, range) ?? savedLiqMap(sym, range)?.v ?? null,
   );
@@ -712,7 +720,7 @@ export function LiqMapScreen() {
   };
 
   const levs = reply?.levs ?? [10, 25, 50, 100];
-  const winLabel = t(lang, range === "1d" ? "big_win_24h" : range === "7d" ? "big_win_7d" : "big_win_30d");
+  const winLabel = t(lang, RANGES.find((x) => x.id === range)?.key ?? "big_win_24h");
 
   let hero = null;
   if (reply?.ok) {
@@ -743,6 +751,9 @@ export function LiqMapScreen() {
           {busy ? <span className="lq-busy" aria-hidden="true" /> : null}
         </div>
         {path.length > 1 ? <Spark path={path} up={(chg ?? 0) >= 0} /> : null}
+        {reply.seen && reply.oi ? (
+          <p className="lq-seen">{t(lang, "lq_seen", { a: usd(reply.seen), p: pct((reply.seen / reply.oi) * 100, 1, false) })}</p>
+        ) : null}
 
         <div className="lq-mag">
           {([["up", near?.up], ["dn", near?.dn]] as const).map(([k, c]) => (
@@ -804,13 +815,10 @@ export function LiqMapScreen() {
       <CoinPicker lang={lang} sym={sym} onPick={setSym} />
       <div className="lq-ctl">
         <Segmented<LiqRange>
+          tight
           value={range}
           onChange={setRange}
-          options={[
-            { id: "1d", label: t(lang, "big_win_24h") },
-            { id: "7d", label: t(lang, "big_win_7d") },
-            { id: "30d", label: t(lang, "big_win_30d") },
-          ]}
+          options={RANGES.map((x) => ({ id: x.id, label: t(lang, x.key) }))}
         />
       </div>
 
@@ -942,6 +950,7 @@ export function LiqMapScreen() {
               <li>{t(lang, "lq_how_4")}</li>
               <li>{t(lang, "lq_how_5")}</li>
               <li>{t(lang, "lq_how_6")}</li>
+              <li>{t(lang, "lq_how_7")}</li>
             </ul>
           </details>
 

@@ -15,7 +15,7 @@ sys.path.insert(0, ROOT)
 import wt_liqmap  # noqa: E402
 
 AT = 1_793_000_000  # «сейчас» образца (ноябрь 2026)
-SEC = {"15m": 900, "1h": 3600, "4h": 14400}
+SEC = {"15m": 900, "1h": 3600, "4h": 14400, "1d": 86400}
 
 
 def market(seed: int, n: int, period: str, oi0: float, vol: float) -> list[wt_liqmap.Row]:
@@ -34,7 +34,7 @@ def market(seed: int, n: int, period: str, oi0: float, vol: float) -> list[wt_li
 def main() -> None:
     res = {}
     for rng, (period, n) in wt_liqmap.RANGES.items():
-        vol = {"1d": 0.0015, "7d": 0.003, "30d": 0.006}[rng]
+        vol = {"1d": 0.0015, "7d": 0.003, "30d": 0.006, "90d": 0.02, "180d": 0.02, "365d": 0.02}[rng]
         got = {ex: market(seed + n, n, period, oi0, vol)
                for seed, (ex, oi0) in enumerate((("Alpha", 6e9), ("Beta", 4e9), ("Gamma", 2e9)))}
         # Опора — первая «биржа»; у всех одна цена, как у настоящих бирж.

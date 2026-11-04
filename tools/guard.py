@@ -615,19 +615,21 @@ say("Binance и Bybit — через nginx в Европе, если отсюд�
     and 'location /xr/binance-o/' in _ngx and '"https://eapi.binance.com/": "/xr/binance-o/"' in api
     and "def _geo_refused(" in api and '"https://fapi.binance.com/": "/xr/binance-f/"' in api)
 
-say("карта ликвидаций в гамме Coinglass: плечи фиолетовый/голубой/жёлтый/оранжевый, чёрное поле, красная линия цены",
-    'const LEV_C = ["#7b61ff", "#38bdf8", "#facc15", "#f97316"];' in _lq and 'className="lq-bg"' in _lq
+say("карта ликвидаций: плечи фиолетовый/голубой/жёлтый/оранжевый/белый (125–500×), чёрное поле, красная линия цены",
+    'const LEV_C = ["#7b61ff", "#38bdf8", "#facc15", "#f97316", "#e2e8f0"];' in _lq and 'className="lq-bg"' in _lq
     and ".lq-now { stroke: #f6465d;" in read(f"{APP}/src/styles/app.css"))
 
-say("карта ликвидаций живая: сервер раз в две минуты, открытый экран спрашивает раз в минуту",
-    "TTL = 120.0" in read(f"{APP}/wt_liqmap.py") and "LIQ_WARM_EVERY = 300" in api and "LIQ_WARM_COINS = 6" in api
-    and "refreshLiqMap(sym, range)" in _lq and "const LIVE_EVERY = 60_000;" in _lq)
+say("карта ликвидаций живая: цена одна на все окна (set_price), уровни, до которых она дошла, сгорают на каждом запросе; сборка суток — раз в две минуты, открытый экран спрашивает раз в 20 с",
+    '"1d": 120.0' in read(f"{APP}/wt_liqmap.py") and "wt_liqmap.set_price(_liq_price)" in api and "def _fresh(" in read(f"{APP}/wt_liqmap.py")
+    and "LIQ_WARM_EVERY = 300" in api and "LIQ_WARM_COINS = 6" in api
+    and "refreshLiqMap(sym, range)" in _lq and "const LIVE_EVERY = 20_000;" in _lq)
 
 say("на колонке «Накоплено» — перевес в процентах и деньги сверху и снизу",
     'className="lq-share up"' in _lq and 'className="lq-share dn"' in _lq and '"lq_share_s"' in _lq)
 
-say("модель ликвидаций: падение интереса закрывает позиции долей от всего интереса биржи",
-    "k = max(0.0, oi / prev)" in read(f"{APP}/wt_liqmap.py") and "k = max(0.0, 1 + d / total)" not in read(f"{APP}/wt_liqmap.py"))
+say("модель ликвидаций: интерес в монетах (не в долларах), прирост — в свече между снимками, падение закрывает самые свежие позиции (не зависит от размера свечи), сгоревшее замещается; окна до года — дневными свечами с мелким хвостом",
+    "q_prev, q_now = rows[i - 1][4] / p_prev, rows[i][4] / p_now" in read(f"{APP}/wt_liqmap.py") and "c = cohorts[-1]" in read(f"{APP}/wt_liqmap.py")
+    and "k = max(0.0, oi / prev)" not in read(f"{APP}/wt_liqmap.py") and '"365d": ("1d", 365)' in read(f"{APP}/wt_liqmap.py") and "def splice(" in read(f"{APP}/wt_liqmap.py"))
 
 _store2 = read(f"{APP}/src/store/app.ts")
 say("экраны бокового меню: «Назад» возвращает в меню, значок фандинга одноцветный",
@@ -801,11 +803,11 @@ say("страх и жадность — ревизия: границы зон с
     "{ max: 25, key: \"fg_z0\"" in _fgl and "{ max: 46, key: \"fg_z1\"" in _fgl and "{ max: 54, key: \"fg_z2\"" in _fgl
     and "{ max: 75, key: \"fg_z3\"" in _fgl
     and "тексты экрана: число не отрывается от слова" in read(f"{APP}/tests/fng.test.ts"))
-say("карта ликвидаций — отдельный модуль wt_liqmap: восемь плеч (3–100×) с долями, как их держат, четыре группы на экране; цена входа — по диапазону свечи (карта плотности, а не «гребёнка»); счёт по сетке цен; сборка в фоне, человек ждёт не дольше COLD_WAIT, сборок одновременно — не больше JOBS_MAX; крупнейшие уровни — скопления, подписи не налезают",
+say("карта ликвидаций — отдельный модуль wt_liqmap: одиннадцать плеч (3–500×) с долями, как их держат, пять групп на экране, поддерживающая маржа меньше начальной; цена входа — по диапазону свечи (карта плотности, а не «гребёнка»); счёт по сетке цен; сборка в фоне, человек ждёт не дольше COLD_WAIT, сборок одновременно — не больше JOBS_MAX; крупнейшие уровни — скопления, подписи не налезают",
     os.path.isfile(f"{APP}/wt_liqmap.py") and "ENTRY = 5" in read(f"{APP}/wt_liqmap.py") and "JOBS_MAX = 4" in read(f"{APP}/wt_liqmap.py")
-    and "COLD_WAIT = 8.0" in read(f"{APP}/wt_liqmap.py") and "(100, 0.10, 3)" in read(f"{APP}/wt_liqmap.py")
+    and "COLD_WAIT = 8.0" in read(f"{APP}/wt_liqmap.py") and "(125, 0.03, 4), (200, 0.02, 4), (500, 0.01, 4)," in read(f"{APP}/wt_liqmap.py") and "return min(MMR, 0.5 / lev)" in read(f"{APP}/wt_liqmap.py")
     and "def _liq_model(" not in api and "def _liq_build(" not in api
-    and 'const LEV_NAME = ["3–10×", "20–25×", "50×", "75–100×"];' in _lq and "const LABEL_GAP = 18;" in _lq
+    and 'const LEV_NAME = ["3–10×", "20–25×", "50×", "75–100×", "125–500×"];' in _lq and "const LABEL_GAP = 18;" in _lq
     and "Math.abs(x.k - k) >= 2" in _lq and os.path.isfile(f"{APP}/tests/test_liqmap.py"))
 say("авторские права: LICENSE «все права защищены» (Wallet Tracker) с оговоркой о сторонних лицензиях (IBM Plex — OFL, Twemoji — CC BY 4.0, данные источников); package.json — UNLICENSED; на экране «Документы» — «© 2026 Wallet Tracker» на 16 языках",
     os.path.isfile(f"{APP}/LICENSE") and "Copyright (c) 2026 Wallet Tracker. All rights reserved." in read(f"{APP}/LICENSE")

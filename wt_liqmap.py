@@ -1,35 +1,41 @@
 """Карта ликвидаций — отдельный модуль (/api/liqmap).
 
-Где лежат ликвидации открытых позиций с плечом — оценка по открытому
-интересу бирж (та же идея, что у Coinglass): за свечу интерес вырос — на
-ценах этой свечи открылись позиции; лонги и шорты делятся по доле
-агрессивных покупок; объём раскладывается по плечам, у каждого плеча своя
-цена ликвидации. Интерес упал — позиции закрываются на ту же долю. Уровень,
-который цена уже прошла, снят: там ликвидация случилась. Это модель, а не
-список чужих позиций: настоящих цен ликвидации биржи не публикуют.
+Карту строим сами — только из открытых данных бирж (свечи, открытый интерес,
+доля агрессивных покупок), со всеми плечами. Настоящих цен ликвидации биржи
+не публикуют: это модель, как у всех подобных карт.
 
-Почему карта была «гребёнкой» и как теперь:
-  - плеч было четыре (10×, 25×, 50×, 100×), и уровни ложились не облаком, а
-    зубцами ровно на −9,5 %, −3,5 %, −1,5 %, −0,5 % от цены входа: самый
-    крупный «уровень» BTC за сутки оказывался на −12 % — артефакт 10×.
-    Теперь — восемь плеч (LEVS) с долями, как их держат на деле, а на экране
-    — четыре группы: до 10×, 20–25×, 50×, 75–100× (GROUPS);
-  - цена входа была одной точкой на свечу; теперь интерес свечи раскладывается
-    по её диапазону от минимума до максимума (ENTRY точек) — карта плотности,
-    а не редкие пики;
-  - позиции считаются не списком, а по сетке цен ликвидации (BUCKETS корзин
-    окна ±SPAN): точек входа в двадцать раз больше, а работы меньше.
+Как считается (model):
+  - интерес — в монетах, а не в долларах: доллары растут вместе с ценой, и
+    рост цены на 2 % без единой новой сделки раньше «открывал» позиции, а
+    падение — «закрывало» их. Доллары биржи делим на цену в момент снимка;
+  - снимок интереса — на момент t, поэтому прирост между снимками t₁ и t₂
+    случился в свече [t₁, t₂): на её ценах позиции и открылись (раньше их
+    клали на следующую свечу — для окна в 4 часа это сдвиг на 4 часа);
+  - прирост раскладывается по диапазону этой свечи (ENTRY точек) и по
+    одиннадцати плечам 3–500× с долями, как их держат (LEVS); на экране — пять
+    групп (GROUPS); лонги и шорты делятся по доле агрессивных покупок;
+  - свеча сжигает уровни, через которые прошла: лонги с ценой ликвидации не
+    ниже её минимума, шорты — не выше максимума;
+  - интерес упал — часть падения объясняют ликвидации этой свечи, на
+    остаток закрываются (сами) остальные позиции — поровну по всем: какие
+    именно закрыли, биржи не говорят. Открыли и закрыли за одну свечу —
+    интерес не изменился, и модель этого не видит;
+  - после последнего снимка — текущая свеча: её ход тоже сжигает уровни.
 
-Сбор данных бирж (свечи, открытый интерес, доля покупок) — в whale_api: он же
-нужен истории открытого интереса. Сюда он приходит через set_gather: модуль
-сам в сеть не ходит, файлов не пишет — только считает и держит кэш.
+Живая цена: цена карты — одна на все окна, а не закрытие свечи своего окна
+(у «30 дней» последняя свеча 4-часовая, и цена отставала на часы). Между
+пересборками каждый запрос берёт текущую цену (set_price) и снимает уровни,
+до которых она дошла после сборки: дошли до цены — позиции ликвидированы, и
+карта показывает это сразу, а не через TTL.
 
-Кэш — как у остальных разделов: свежая карта (до TTL) — из памяти;
-постарше, но не старше STALE, — тоже сразу, а пересчёт уходит в фон одним
-потоком на карту. Карты нет вовсе — запрос ждёт сборку не дольше COLD_WAIT
-(а не собирает сам до бюджета бирж), не успела — «собираем». Сборок
-одновременно — не больше JOBS_MAX: сотня запросов с разными монетами не
-запускает сотню обходов бирж.
+Сбор данных бирж — в whale_api (он же нужен истории открытого интереса);
+сюда он приходит через set_gather, цена — через set_price. Модуль сам в
+сеть не ходит и файлов не пишет — только считает и держит кэш.
+
+Кэш: свежая сборка (до TTL окна) — из памяти, с живой ценой; постарше, но
+не старше STALE, — тоже сразу, а пересборка уходит в фон одним потоком на
+карту. Сборки нет вовсе — запрос ждёт её не дольше COLD_WAIT, не успела —
+«собираем». Сборок одновременно — не больше JOBS_MAX.
 """
 from __future__ import annotations
 
@@ -41,25 +47,48 @@ from collections.abc import Callable
 from typing import Any
 
 Json = Any
-# Ряд биржи: (начало свечи unix с, максимум, минимум, закрытие, интерес $, доля покупок 0–1).
+# Ряд биржи: (начало свечи unix с, максимум, минимум, закрытие,
+# интерес $ на момент начала свечи, доля агрессивных покупок 0–1).
 Row = tuple[int, float, float, float, float, float]
 Gather = Callable[[str, str, int], tuple[dict[str, list[Row]], list[Row] | None]]
+Price = Callable[[str], float | None]
 
-# Окно карты: свеча и сколько их.
-RANGES = {"1d": ("15m", 96), "7d": ("1h", 168), "30d": ("4h", 180)}
+# Окно карты: свеча и сколько их. Длинные окна — дневными свечами: историю
+# интереса за год биржи отдают только по дням (Binance — лишь за 30 дней,
+# HTX — за ~200: такие биржи дают свою часть окна).
+RANGES = {"1d": ("15m", 96), "7d": ("1h", 168), "30d": ("4h", 180),
+          "90d": ("1d", 90), "180d": ("1d", 180), "365d": ("1d", 365)}
+# Хвост окна — мелкими свечами: снимок интереса окна в 4 часа или сутки —
+# на начало свечи, и всё, что открыли за идущую свечу (до суток!), без хвоста
+# не видно до следующего снимка: рядом с ценой карта пустела. Старую часть
+# окна считаем крупными свечами, идущую — мелкими (splice).
+TAIL = {"7d": ("15m", 12), "30d": ("15m", 24), "90d": ("1h", 30), "180d": ("1h", 30), "365d": ("1h", 30)}
+# Сколько живёт сборка окна, с. Цена и ликвидации между сборками — живые;
+# дневные свечи длинных окон за полчаса почти не меняются.
+TTL = {"1d": 120.0, "7d": 120.0, "30d": 300.0, "90d": 1800.0, "180d": 1800.0, "365d": 1800.0}
 # Плечи, их доли в открытом интересе и группа экрана (0 — до 10×, 1 — 20–25×,
-# 2 — 50×, 3 — 75–100×). Доли — как их держат на деле: больше всего 5–25×,
-# сотое плечо — у немногих. Сумма долей — 1.
+# 2 — 50×, 3 — 75–100×, 4 — 125–500×: столько дают Binance (125×), Bybit и
+# MEXC (200×), а некоторые биржи — до 500×). Доли — как их держат на деле:
+# больше всего 5–25×, сотое плечо и выше — у немногих. Сумма долей — 1.
 LEVS: tuple[tuple[int, float, int], ...] = (
-    (3, 0.06, 0), (5, 0.12, 0), (10, 0.20, 0),
+    (3, 0.05, 0), (5, 0.11, 0), (10, 0.19, 0),
     (20, 0.14, 1), (25, 0.14, 1),
     (50, 0.16, 2),
-    (75, 0.08, 3), (100, 0.10, 3),
+    (75, 0.07, 3), (100, 0.08, 3),
+    (125, 0.03, 4), (200, 0.02, 4), (500, 0.01, 4),
 )
 # Верхняя граница плеча каждой группы — подпись на экране («до 10×» …).
-GROUPS = (10, 25, 50, 100)
-# Поддерживающая маржа: ликвидация лонга — на (1 − 1/плечо + MMR) от входа.
+GROUPS = (10, 25, 50, 100, 500)
+# Поддерживающая маржа: ликвидация лонга — на (1 − 1/плечо + маржа) от входа.
+# У бирж она ступенями: чем больше плечо, тем меньше, и всегда меньше
+# начальной (1/плечо) — иначе 200× ликвидировалось бы на цене входа. Берём
+# MMR, но не больше половины начальной: 100× — 0,5 %, 200× — 0,25 %, 500× — 0,1 %.
 MMR = 0.005
+
+
+def mmr(lev: int) -> float:
+    """Поддерживающая маржа плеча lev (доля позиции)."""
+    return min(MMR, 0.5 / lev)
 # Окно карты: ±SPAN от цены, BUCKETS корзин (по 0,25 %).
 SPAN = 0.15
 BUCKETS = 120
@@ -67,9 +96,11 @@ BUCKETS = 120
 ENTRY = 5
 # Сглаживание соседних корзин (1-2-1): цена входа и плечо — оценки.
 SMOOTH = (0.25, 0.5, 0.25)
+# Текущая цена дальше этого от цены сборки — не та монета (другой тикер у
+# источника цены) или сбой: берём цену сборки.
+PX_GAP = 0.03
 
-TTL = 120.0  # карта живая: открытый экран спрашивает раз в минуту
-STALE = 6 * 3600.0  # старше — не отдаётся даже на время пересчёта
+STALE = 3600.0  # сборка старше — не отдаётся даже на время пересборки (биржи молчат)
 COLD_WAIT = 8.0  # сколько запрос без карты ждёт сборку, с
 FAIL_WAIT = 120.0  # биржи не дали ничего — столько не спрашиваем снова, с
 JOBS_MAX = 4  # сборок одновременно
@@ -83,45 +114,124 @@ def _no(error: str) -> dict[str, Json]:
 
 # --- Модель -------------------------------------------------------------------
 
-def model(rows: list[Row], lo: float, step: float) -> tuple[list[list[float]], list[list[float]]]:
-    """Открытые позиции окна по сетке цен ликвидации: (лонги, шорты), каждое —
-    [группа][корзина] → $. Корзина b — цены [lo + b·step, lo + (b+1)·step)."""
+def _opened(x: float, hi: float, low: float, bs: float, lo: float,  # noqa: PLR0913 — свеча и сетка целиком
+            step: float) -> tuple[list[tuple[int, int, int, float]], float]:
+    """Новые позиции на x монет в свече [low, hi]: по ENTRY точкам входа и по
+    плечам LEVS, лонги — доля покупок bs. Вернёт ([(сторона, группа, корзина,
+    монеты)], монеты с ликвидацией за краем окна)."""
+    share = min(1.0, max(0.0, bs))
+    entries: list[tuple[int, int, int, float]] = []
+    out = 0.0
+    for e in range(ENTRY):
+        p = low + (hi - low) * (e + 0.5) / ENTRY
+        for lev, w, g in LEVS:
+            part = x * w / ENTRY
+            keep = 1 / lev - mmr(lev)  # на сколько цена уходит до ликвидации
+            bl = int((p * (1 - keep) - lo) // step)
+            bsh = int((p * (1 + keep) - lo) // step)
+            if 0 <= bl < BUCKETS:
+                entries.append((0, g, bl, part * share))
+            else:
+                out += part * share
+            if 0 <= bsh < BUCKETS:
+                entries.append((1, g, bsh, part * (1 - share)))
+            else:
+                out += part * (1 - share)
+    return entries, out
+
+
+def model(rows: list[Row], lo: float, step: float) -> tuple[list[list[float]], list[list[float]], float]:
+    """Открытые позиции окна по сетке цен ликвидации, в монетах: (лонги, шорты,
+    всего), лонги и шорты — [группа][корзина]; «всего» — все живые позиции,
+    открытые за окно, и с ликвидацией за краем окна тоже. Корзина b — цены
+    [lo + b·step, lo + (b+1)·step).
+
+    Позиции хранятся пачками по свечам открытия (cohorts): закрываются первыми
+    самые свежие — кто последним вошёл, тот первым и вышел. Так шум «открыли —
+    закрыли» внутри часа гасится и на 15-минутных свечах, и на часовых, и
+    карта не зависит от того, какой мелкой свечой её считали."""
     g_n = len(GROUPS)
-    longs = [[0.0] * BUCKETS for _ in range(g_n)]
-    shorts = [[0.0] * BUCKETS for _ in range(g_n)]
+    agg = ([[0.0] * BUCKETS for _ in range(g_n)], [[0.0] * BUCKETS for _ in range(g_n)])
     mids = [lo + step * (b + 0.5) for b in range(BUCKETS)]
-    for i in range(1, len(rows)):
-        _, hi, low, _c, oi, bs = rows[i]
-        # Сначала — ликвидации этой свечой: лонг с ценой ликвидации не ниже
-        # её минимума и шорт — не выше максимума уже сгорели.
-        cut_l = bisect.bisect_left(mids, low)
-        cut_s = bisect.bisect_right(mids, hi)
+    # Когда корзина сгорела в последний раз (номер шага): позиция пачки шага
+    # s в ней жива, пока корзина не сгорела позже s.
+    burnt = ([[-1] * BUCKETS for _ in range(g_n)], [[-1] * BUCKETS for _ in range(g_n)])
+    # Пачка: [шаг открытия, какая доля осталась после закрытий,
+    # [(сторона, группа, корзина, монеты)], монеты с ликвидацией за краем окна].
+    # Те, что за краем (3× — на −33 %), на карту не попадают, но закрываются
+    # наравне со всеми: иначе их закрытия съедали бы видимые уровни.
+    cohorts: list[list[Any]] = []
+
+    def burn(at: int, hi: float, low: float) -> float:
+        """Свеча прошла уровни: лонг с ценой ликвидации не ниже её минимума и
+        шорт — не выше максимума сгорели. Вернёт, сколько монет сгорело."""
+        cut_l, cut_s = bisect.bisect_left(mids, low), bisect.bisect_right(mids, hi)
+        gone = 0.0
         for g in range(g_n):
-            longs[g][cut_l:] = [0.0] * (BUCKETS - cut_l)
-            shorts[g][:cut_s] = [0.0] * cut_s
-        prev = rows[i - 1][4]
-        d = oi - prev
-        if d < 0 < prev:
-            # Интерес биржи упал на долю — на ту же долю закрываются и наши
-            # позиции (доля — от всего интереса биржи, а не от набранного
-            # моделью за окно: иначе падение на 2 % стирало бы всё).
-            k = max(0.0, oi / prev)
-            for g in range(g_n):
-                longs[g] = [x * k for x in longs[g]]
-                shorts[g] = [x * k for x in shorts[g]]
-        elif d > 0:
-            share = min(1.0, max(0.0, bs))
-            for e in range(ENTRY):
-                p = low + (hi - low) * (e + 0.5) / ENTRY
-                for lev, w, g in LEVS:
-                    part = d * w / ENTRY
-                    bl = int((p * (1 - 1 / lev + MMR) - lo) // step)
-                    bsh = int((p * (1 + 1 / lev - MMR) - lo) // step)
-                    if 0 <= bl < BUCKETS:
-                        longs[g][bl] += part * share
-                    if 0 <= bsh < BUCKETS:
-                        shorts[g][bsh] += part * (1 - share)
-    return longs, shorts
+            for side, rng_b in ((0, range(cut_l, BUCKETS)), (1, range(cut_s))):
+                arr, mark = agg[side][g], burnt[side][g]
+                for b in rng_b:
+                    if arr[b]:
+                        gone += arr[b]
+                        arr[b] = 0.0
+                    mark[b] = at
+        return gone
+
+    def alive(c: list[Any]) -> list[tuple[int, int, int, float]]:
+        return [x for x in c[2] if burnt[x[0]][x[1]][x[2]] <= c[0]]
+
+    def close(amount: float) -> None:
+        """Закрыть amount монет — с самых свежих пачек."""
+        while amount > 0 and cohorts:
+            c = cohorts[-1]
+            live = alive(c)
+            mass = c[1] * (sum(x[3] for x in live) + c[3])
+            if mass <= amount:
+                for side, g, b, q in live:
+                    agg[side][g][b] = max(0.0, agg[side][g][b] - q * c[1])
+                cohorts.pop()
+                amount -= mass
+                continue
+            keep = 1 - amount / mass
+            for side, g, b, q in live:
+                agg[side][g][b] = max(0.0, agg[side][g][b] - q * c[1] * (1 - keep))
+            c[1] *= keep
+            return
+
+    # Шаг i: от снимка i−1 до снимка i прошла свеча i−1; цена на момент
+    # снимка i — её закрытие, на момент снимка i−1 — закрытие свечи i−2.
+    for i in range(2, len(rows)):
+        _, hi, low, p_now, _oi, bs = rows[i - 1]
+        p_prev = rows[i - 2][3]
+        if p_now <= 0 or p_prev <= 0:
+            continue
+        q_prev, q_now = rows[i - 1][4] / p_prev, rows[i][4] / p_now
+        # Чистый прирост интереса плюс сгоревшее этой свечой: интерес стоит, а
+        # уровни сгорели — значит, на их место открылись новые.
+        x = q_now - q_prev + burn(i, hi, low)
+        if x < 0:
+            close(-x)
+        elif x > 0:
+            entries, out = _opened(x, hi, low, bs, lo, step)
+            for side, g, b, q in entries:
+                agg[side][g][b] += q
+            cohorts.append([i, 1.0, entries, out])
+    # После последнего снимка — текущая свеча: её ход тоже сжигает уровни.
+    if rows:
+        burn(len(rows), rows[-1][1], rows[-1][2])
+    total = sum(c[1] * (sum(x[3] for x in alive(c)) + c[3]) for c in cohorts)
+    return agg[0], agg[1], total
+
+
+def splice(main: list[Row], tail: list[Row] | None) -> list[Row]:
+    """Ряд окна: крупные свечи до начала идущей, дальше — мелкие свечи хвоста.
+    Хвост не дотягивается до начала идущей свечи — ряд как был."""
+    if not main or not tail:
+        return main
+    cut = main[-1][0]
+    if tail[0][0] > cut:
+        return main
+    return [r for r in main if r[0] < cut] + [r for r in tail if r[0] >= cut]
 
 
 def _smooth(a: list[float]) -> list[float]:
@@ -147,66 +257,92 @@ def candles(rows: list[Row], n: int = 48) -> list[list[float]]:
     return out
 
 
-def build_map(sym: str, rng: str, got: dict[str, list[Row]], ref: list[Row], at: int) -> dict[str, Json]:
-    """Ответ /api/liqmap по рядам бирж (got) и опорной бирже (ref): корзины
-    уровней по группам плеч, накопленное до ±2/±5/±10 %, путь цены, свечи."""
-    px = ref[-1][3]
+def make_state(sym: str, rng: str, got: dict[str, list[Row]], ref: list[Row], px: float,  # noqa: PLR0913 — сборка целиком
+               at: int) -> dict[str, Json]:
+    """Сборка карты: позиции всех бирж по сетке вокруг цены px (в монетах,
+    сглаженные), свечи и путь цены опорной биржи. Ответ из неё — render()."""
     lo, step = px * (1 - SPAN), px * SPAN * 2 / BUCKETS
     g_n = len(GROUPS)
     long_b = [[0.0] * BUCKETS for _ in range(g_n)]
     short_b = [[0.0] * BUCKETS for _ in range(g_n)]
+    seen = 0.0
     for rows in got.values():
-        lg, sg = model(rows, lo, step)
+        lg, sg, mass = model(rows, lo, step)
+        seen += mass
         for g in range(g_n):
             long_b[g] = [a + b for a, b in zip(long_b[g], lg[g], strict=True)]
             short_b[g] = [a + b for a, b in zip(short_b[g], sg[g], strict=True)]
-    # Лонги — только ниже цены, шорты — только выше: что по ту сторону, уже
-    # сгорело бы нынешней ценой. После сглаживания — снова (оно размывает край).
-    mids = [lo + step * (b + 0.5) for b in range(BUCKETS)]
-    cut_l, cut_s = bisect.bisect_left(mids, px), bisect.bisect_right(mids, px)
-    for g in range(g_n):
-        for side in (long_b, short_b):
-            side[g] = _smooth(side[g])
-        long_b[g][cut_l:] = [0.0] * (BUCKETS - cut_l)
-        short_b[g][:cut_s] = [0.0] * cut_s
-    # (цена середины корзины, лонги по группам, шорты по группам), $ целыми.
-    rows_out: list[tuple[float, list[int], list[int]]] = []
-    for b in range(BUCKETS):
-        lv = [long_b[g][b] for g in range(g_n)]
-        sv = [short_b[g][b] for g in range(g_n)]
-        if sum(lv) + sum(sv) >= 1:
-            rows_out.append((round(lo + step * (b + 0.5), 8), [round(x) for x in lv], [round(x) for x in sv]))
-
-    def cum(side: str, pct: float) -> int:
-        far = px * (1 - pct / 100) if side == "L" else px * (1 + pct / 100)
-        if side == "L":
-            return sum(sum(lv) for p, lv, _ in rows_out if far <= p < px)
-        return sum(sum(sv) for p, _, sv in rows_out if px < p <= far)
-
-    buckets = [{"p": p, "L": lv, "S": sv} for p, lv, sv in rows_out]
-
     # Путь цены за окно — у опорной биржи, ≤60 точек: видно, откуда цена пришла.
     stride = max(1, len(ref) // 60)
-    path = [r[3] for r in ref[::stride]]
+    return {"sym": sym, "range": rng, "px": px, "lo": lo, "step": step, "at": at, "ex": sorted(got),
+            "L": [_smooth(x) for x in long_b], "S": [_smooth(x) for x in short_b],
+            "path": [r[3] for r in ref[::stride]], "ohlc": candles(ref),
+            "oi": round(sum(r[-1][4] for r in got.values())),
+            # Сколько из открытого интереса модель видит — позиции, открытые
+            # за окно и ещё живые, $; остальное открыто раньше окна.
+            "seen": round(seen * px),
+            # Где цена побывала после последнего снимка: всё за этими краями сгорело.
+            "low": min(px, ref[-1][2]), "high": max(px, ref[-1][1])}
+
+
+def render(st: dict[str, Json], px: float) -> dict[str, Json]:
+    """Ответ /api/liqmap: уровни сборки st без сгоревших — тех, до которых
+    цена дошла после последнего снимка (st low/high и px), — при цене px."""
+    lo, step, g_n = st["lo"], st["step"], len(GROUPS)
+    low, high = min(st["low"], px), max(st["high"], px)
+    mids = [lo + step * (b + 0.5) for b in range(BUCKETS)]
+    cut_l, cut_s = bisect.bisect_left(mids, low), bisect.bisect_right(mids, high)
+    # (цена середины корзины, лонги по группам, шорты по группам), $ целыми:
+    # монеты × цена ликвидации — столько денег сгорит на этом уровне.
+    rows_out: list[tuple[float, list[int], list[int]]] = []
+    for b in range(BUCKETS):
+        m = mids[b]
+        lv = [round(st["L"][g][b] * m) if b < cut_l else 0 for g in range(g_n)]
+        sv = [round(st["S"][g][b] * m) if b >= cut_s else 0 for g in range(g_n)]
+        if sum(lv) + sum(sv) >= 1:
+            rows_out.append((round(m, 8), lv, sv))
+
+    def cum(side: str, pct: float) -> int:
+        if side == "L":
+            far = px * (1 - pct / 100)
+            return sum(sum(lv) for p, lv, _ in rows_out if far <= p < px)
+        far = px * (1 + pct / 100)
+        return sum(sum(sv) for p, _, sv in rows_out if px < p <= far)
+
+    path = list(st["path"])
     if path[-1] != px:
         path.append(px)
-    return {"ok": True, "sym": sym, "range": rng, "px": px, "step": step, "lo": lo,
-            "ex": sorted(got), "levs": list(GROUPS), "buckets": buckets,
+    # Последняя свеча — до текущей цены.
+    ohlc = [list(c) for c in st["ohlc"]]
+    o, h, lw, _c = ohlc[-1]
+    ohlc[-1] = [o, round(max(h, px), 10), round(min(lw, px), 10), round(px, 10)]
+    return {"ok": True, "sym": st["sym"], "range": st["range"], "px": px, "step": step, "lo": lo,
+            "ex": st["ex"], "levs": list(GROUPS), "buckets": [{"p": p, "L": lv, "S": sv} for p, lv, sv in rows_out],
             "cum": {k: {"L": cum("L", k), "S": cum("S", k)} for k in (2, 5, 10)},
-            "path": [round(x, 10) for x in path], "oi": round(sum(r[-1][4] for r in got.values())),
-            "ohlc": candles(ref), "at": at}
+            "path": [round(x, 10) for x in path], "oi": st["oi"], "seen": min(st["seen"], st["oi"]),
+            "ohlc": ohlc, "at": st["at"]}
+
+
+def build_map(sym: str, rng: str, got: dict[str, list[Row]], ref: list[Row], at: int,  # noqa: PLR0913 — сборка целиком
+              px: float | None = None) -> dict[str, Json]:
+    """Ответ сразу по рядам бирж (got) и опорной бирже (ref) при цене px
+    (нет — закрытие последней свечи опорной)."""
+    p = px if px is not None else ref[-1][3]
+    return render(make_state(sym, rng, got, ref, p, at), p)
 
 
 # --- Кэш и сборка -------------------------------------------------------------
 
 class _State:
-    """Кэш модуля; меняется только под _lock."""
+    """Кэш модуля; меняется только под _lock. hits: ключ → (когда собрана,
+    сборка, последний ответ)."""
 
     def __init__(self) -> None:
-        self.hits: dict[tuple[str, str], tuple[float, dict[str, Json]]] = {}
+        self.hits: dict[tuple[str, str], tuple[float, dict[str, Json], dict[str, Json]]] = {}
         self.jobs: dict[tuple[str, str], threading.Thread] = {}
         self.fails: dict[tuple[str, str], float] = {}
         self.gather: Gather | None = None
+        self.price: Price | None = None
 
 
 _st = _State()
@@ -218,6 +354,11 @@ def set_gather(fn: Gather | None) -> None:
     _st.gather = fn
 
 
+def set_price(fn: Price | None) -> None:
+    """Откуда брать текущую цену: fn(монета) → цена или None."""
+    _st.price = fn
+
+
 def _now() -> int:
     return int(time.time())
 
@@ -227,23 +368,81 @@ def _clean(sym: object) -> str:
     return s if SYM.fullmatch(s) else ""
 
 
+def _live(sym: str, base: float) -> float:
+    """Текущая цена монеты; источник молчит, сбоит или далеко от base — base."""
+    fn = _st.price
+    try:
+        p = fn(sym) if fn else None
+    except Exception:  # noqa: BLE001 — сбой источника цены не ломает карту: цена сборки
+        p = None
+    # Ноль и минус отсекает и PX_GAP; True — не цена, хоть и равна 1.
+    if isinstance(p, (int, float)) and not isinstance(p, bool) and abs(p / base - 1) <= PX_GAP:
+        return float(p)
+    return base
+
+
 def build(sym: str, rng: str) -> dict[str, Json]:
-    """Собрать карту (ряды — через set_gather) и положить в кэш."""
+    """Собрать карту (ряды — через set_gather, цена — через set_price) и положить в кэш."""
     key = (sym, rng)
     period, n = RANGES[rng]
     gather = _st.gather
+    tail: dict[str, list[Row]] = {}
+    job = None
+    if gather is not None and rng in TAIL:
+        fn = gather
+
+        # Хвост — параллельно с окном: две сборки по бюджету бирж, а не подряд.
+        def fetch_tail() -> None:
+            try:
+                tail.update(fn(sym, *TAIL[rng])[0])
+            except Exception:  # noqa: BLE001 — хвоста нет — окно без него, как раньше
+                tail.clear()
+        job = threading.Thread(target=fetch_tail, daemon=True)
+        job.start()
     got, ref = gather(sym, period, n) if gather else ({}, None)
+    if job is not None:
+        job.join()
+    got = {ex: splice(rows, tail.get(ex)) for ex, rows in got.items()}
     if not got or not ref:
         with _lock:
             _st.fails[key] = time.monotonic()
         return _no("no_data")
-    res = build_map(sym, rng, got, ref, _now())
+    px = _live(sym, ref[-1][3])
+    st = make_state(sym, rng, got, ref, px, _now())
+    res = render(st, px)
     with _lock:
-        _st.hits[key] = (time.monotonic(), res)
+        _st.hits[key] = (time.monotonic(), st, res)
         _st.fails.pop(key, None)
         while len(_st.hits) > CACHE_MAX:
             del _st.hits[min(_st.hits, key=lambda k: _st.hits[k][0])]
     return res
+
+
+def _fresh(key: tuple[str, str], px: float) -> dict[str, Json] | None:
+    """Ответ по сборке key при текущей цене px (звать под _lock): цена ушла
+    с прошлого ответа — уровни, до которых она дошла, сгорают насовсем."""
+    hit = _st.hits.get(key)
+    if hit is None:
+        return None
+    born, st, res = hit
+    if res["px"] == px:
+        return res
+    st["low"], st["high"] = min(st["low"], px), max(st["high"], px)
+    res = render(st, px)
+    _st.hits[key] = (born, st, res)
+    return res
+
+
+def _served(key: tuple[str, str]) -> dict[str, Json] | None:
+    """Ответ из кэша с текущей ценой, если сборка не старше STALE."""
+    with _lock:
+        hit = _st.hits.get(key)
+        if not hit or time.monotonic() - hit[0] >= STALE:
+            return None
+        base = hit[1]["px"]
+    px = _live(key[0], base)  # источник цены — вне _lock: может сходить в сеть
+    with _lock:
+        return _fresh(key, px)
 
 
 def _bg(key: tuple[str, str]) -> None:
@@ -278,40 +477,39 @@ def _start(key: tuple[str, str]) -> threading.Thread | None:
 
 
 def liq_map(sym: object, rng: object, wait: float = COLD_WAIT) -> dict[str, Json]:
-    """Ответ /api/liqmap: из кэша; устаревшая — сразу, пересчёт в фоне; карты
-    нет — ждём сборку не дольше wait, не успела — «собираем» (building)."""
+    """Ответ /api/liqmap: из кэша с текущей ценой; сборка старше TTL окна —
+    пересборка в фоне; карты нет — ждём сборку не дольше wait, не успела —
+    «собираем» (building)."""
     s = _clean(sym)
     if not s or rng not in RANGES:
         return _no("bad_args")
     key = (s, str(rng))
     with _lock:
         hit = _st.hits.get(key)
-        age = time.monotonic() - hit[0] if hit else None
-        if hit and age is not None and age < TTL:
-            return hit[1]
-        job = _start(key)
-        if hit and age is not None and age < STALE:
-            return hit[1]
-        resting = key in _st.fails and job is None
+        job = _start(key) if hit is None or time.monotonic() - hit[0] >= TTL[key[1]] else None
+        resting = hit is None and key in _st.fails and job is None
+    res = _served(key)
+    if res is not None:
+        return res
     if resting:
         return _no("no_data")
     if job is not None:
         job.join(wait)
+    res = _served(key)
+    if res is not None:
+        return res
     with _lock:
-        hit = _st.hits.get(key)
         busy = key in _st.jobs
         failed = key in _st.fails
-    if hit and time.monotonic() - hit[0] < STALE:
-        return hit[1]
     return _no("building" if busy else "no_data" if failed else "busy")
 
 
 def warm(sym: str, rng: str) -> None:
-    """Прогрев (фоновый поток сервера): карта старше TTL − минута — собрать
-    сейчас, в этом потоке; свежая — ничего."""
+    """Прогрев (фоновый поток сервера): сборка старше TTL окна − минута —
+    собрать сейчас, в этом потоке; свежая — ничего."""
     key = (sym, rng)
     with _lock:
         hit = _st.hits.get(key)
-        if (hit and time.monotonic() - hit[0] < TTL - 60) or key in _st.jobs:
+        if (hit and time.monotonic() - hit[0] < TTL[rng] - 60) or key in _st.jobs:
             return
     build(sym, rng)

@@ -23,12 +23,12 @@ const TYPES: Record<string, string> = {
   ".png": "image/png", ".webp": "image/webp", ".json": "application/json", ".ttf": "font/ttf", ".ico": "image/x-icon",
 };
 
-interface Map { ok: true; sym: string; px: number; ex: string[]; levs: number[]; buckets: { p: number; L: number[]; S: number[] }[] }
-const FIX = JSON.parse(await readFile(new URL("../fixtures/liqmap.json", import.meta.url), "utf8")) as Record<"1d" | "7d" | "30d", Map> & { now: number };
+interface Map { ok: true; sym: string; px: number; seen: number; ex: string[]; levs: number[]; buckets: { p: number; L: number[]; S: number[] }[] }
+const FIX = JSON.parse(await readFile(new URL("../fixtures/liqmap.json", import.meta.url), "utf8")) as Record<"1d" | "7d" | "30d" | "90d" | "180d" | "365d", Map> & { now: number };
 const T = FIX.now;
 const I18N = JSON.parse(await readFile(new URL("../../tools/i18n.json", import.meta.url), "utf8")) as Record<string, Record<string, string>>;
 const LANGS = ["ar", "de", "en", "es", "fr", "hi", "id", "ja", "ko", "pl", "pt", "ru", "tr", "uk", "vi", "zh"];
-const LEV_NAME = ["3–10×", "20–25×", "50×", "75–100×"];
+const LEV_NAME = ["3–10×", "20–25×", "50×", "75–100×", "125–500×"];
 const sp = (s: string | null) => (s ?? "").replace(/[⁦-⁩]/g, "").replace(/[\s  ]+/g, " ").trim();
 
 let server: Server;
@@ -84,7 +84,7 @@ async function open(o: Opts = {}): Promise<Opened> {
   await ctx.route(`${base}/api/liqcoins**`, (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, coins: [{ s: "BTC", v: 1e10, ex: [] }, { s: "ETH", v: 5e9, ex: [] }] }) }));
   const asked: string[] = [];
   await ctx.route(`${base}/api/liqmap**`, async (r) => {
-    const rng = (new URL(r.request().url()).searchParams.get("range") ?? "1d") as "1d" | "7d" | "30d";
+    const rng = (new URL(r.request().url()).searchParams.get("range") ?? "1d") as keyof typeof FIX & string;
     const body = o.replies ? o.replies[Math.min(asked.length, o.replies.length - 1)] : FIX[rng];
     asked.push(rng);
     await r.fulfill({ contentType: "application/json", body: typeof body === "string" ? body : JSON.stringify(body) });
@@ -138,7 +138,7 @@ function clashes(page: Page): Promise<string[]> {
 const pctOf = (s: string) => Number(sp(s).replace(/[−–]/g, "-").replace(",", ".").replace(/[^0-9.+-]/g, ""));
 
 describe("Карта ликвидаций", () => {
-  test("монета, легенда из четырёх групп плеч, источники и подписи без наложений", async () => {
+  test("монета, легенда из пяти групп плеч, источники и подписи без наложений", async () => {
     const { ctx, page, errors, asked } = await open();
     await ready(page);
     assert.equal(sp(await page.locator(".lq-hero-n b").innerText()), "BTC");
@@ -155,7 +155,7 @@ describe("Карта ликвидаций", () => {
   });
 
   test("крупнейшие уровни — разные места: не в одной и не в соседних полосах по 0,5 %, по своей стороне цены", async () => {
-    for (const rng of ["1d", "7d", "30d"] as const) {
+    for (const rng of ["1d", "7d", "30d", "90d", "180d", "365d"] as const) {
       const { ctx, page, errors } = await open({ replies: [FIX[rng]] });
       await ready(page);
       for (const [k, sign] of [["up", 1], ["dn", -1]] as const) {
@@ -175,10 +175,10 @@ describe("Карта ликвидаций", () => {
     const { ctx, page, errors } = await open();
     await ready(page);
     const btn = page.locator(".lq-legend button");
-    for (let j = 0; j < 3; j++) await btn.nth(j).click();
-    assert.deepEqual(await btn.evaluateAll((els) => els.map((el) => el.getAttribute("aria-pressed"))), ["false", "false", "false", "true"]);
-    await btn.nth(3).click();
-    assert.equal(await btn.nth(3).getAttribute("aria-pressed"), "true");
+    for (let j = 0; j < 4; j++) await btn.nth(j).click();
+    assert.deepEqual(await btn.evaluateAll((els) => els.map((el) => el.getAttribute("aria-pressed"))), ["false", "false", "false", "false", "true"]);
+    await btn.nth(4).click();
+    assert.equal(await btn.nth(4).getAttribute("aria-pressed"), "true");
     assert.deepEqual(await clashes(page), []);
     await btn.nth(0).click();
     assert.equal(await btn.nth(0).getAttribute("aria-pressed"), "true");
@@ -186,14 +186,34 @@ describe("Карта ликвидаций", () => {
     await ctx.close();
   });
 
-  test("окно 7 дней — свой запрос и своя карта", async () => {
-    const { ctx, page, errors, asked } = await open();
+  test("шесть окон — от суток до года: свой запрос, своя карта, кнопки в одну строку на 320 px", async () => {
+    const wins = [["7d", "big_win_7d"], ["30d", "big_win_30d"], ["90d", "lq_win_90d"], ["180d", "lq_win_180d"],
+      ["365d", "lq_win_365d"], ["1d", "big_win_24h"]] as const;
+    const { ctx, page, errors, asked } = await open({ width: 320 });
     await ready(page);
-    await page.locator(".lq-ctl .seg button", { hasText: I18N["big_win_7d"]!["ru"]! }).click();
-    await page.waitForFunction(() => document.querySelectorAll(".lq-svg .lq-row").length > 0);
-    await page.waitForTimeout(300);
-    assert.ok(asked.includes("7d"), String(asked));
-    assert.deepEqual(await clashes(page), []);
+    const seg = page.locator(".lq-ctl .seg button");
+    assert.equal(await seg.count(), 6);
+    const tops = await seg.evaluateAll((els) => [...new Set(els.map((el) => Math.round(el.getBoundingClientRect().top)))]);
+    assert.equal(tops.length, 1, String(tops));
+    for (const [rng, key] of wins) {
+      await page.locator(".lq-ctl .seg button", { hasText: I18N[key]!["ru"]! }).click();
+      await page.waitForFunction((n) => document.querySelectorAll(".lq-svg .lq-row").length > 0 && n, asked.length);
+      await page.waitForTimeout(250);
+      assert.ok(asked.includes(rng), `${rng}: ${asked}`);
+      assert.equal(sp(await page.locator(".lq-hero-p b").innerText()).replace(/[^0-9]/g, ""), String(Math.round(FIX[rng].px)));
+      assert.deepEqual(await clashes(page), [], rng);
+      assert.deepEqual(await overflow(page), [], rng);
+    }
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("сколько интереса видит модель — подписано", async () => {
+    const { ctx, page, errors } = await open();
+    await ready(page);
+    const seen = sp(await page.locator(".lq-seen").innerText());
+    assert.ok(seen.startsWith(sp(I18N["lq_seen"]!["ru"]!.split("{a}")[0]!)), seen);
+    assert.match(seen, /\$[0-9]/);
     assert.deepEqual(errors, []);
     await ctx.close();
   });

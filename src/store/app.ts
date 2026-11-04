@@ -12,7 +12,7 @@ import type { Timeframe } from "../lib/klines";
 
 export type Tab = "wallets" | "top" | "analytics" | "digest" | "more";
 /** Окно карты ликвидаций: сутки, неделя, месяц. */
-export type LiqRange = "1d" | "7d" | "30d";
+export type LiqRange = "1d" | "7d" | "30d" | "90d" | "180d" | "365d";
 
 export type ScreenName =
   | "wallet" | "position" | "coin" | "deals"

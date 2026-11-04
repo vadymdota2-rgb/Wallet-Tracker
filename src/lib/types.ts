@@ -775,6 +775,8 @@ export interface LiqMapReply {
   path?: number[];
   /** Открытый интерес всех ответивших бирж, $. */
   oi?: number;
+  /** Сколько из него модель видит, $: позиции, открытые за окно и ещё живые. */
+  seen?: number;
   /** Свечи окна для графика цены на карте: [откр, макс, мин, закр]. */
   ohlc?: [number, number, number, number][];
   at: number;

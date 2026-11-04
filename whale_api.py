@@ -10591,6 +10591,9 @@ def bootstrap(chat: str, fast: bool = False) -> dict:
 # только сбор открытых данных бирж (свечи, открытый интерес, доля покупок):
 # тот же сбор нужен истории открытого интереса. Окна карты — из модуля.
 LIQ_RANGES = wt_liqmap.RANGES
+# История открытого интереса — свои окна (сутки, неделя, месяц): длинные
+# окна карты ей не нужны.
+OIH_RANGES = {k: wt_liqmap.RANGES[k] for k in ("1d", "7d", "30d")}
 _liq_lock = threading.Lock()
 
 
@@ -10616,7 +10619,7 @@ def _liq_binance(sym: str, period: str, n: int) -> list | None:
 
 def _liq_okx(sym: str, period: str, n: int) -> list | None:
     inst = f"{sym}-USDT-SWAP"
-    per = {"15m": "15m", "1h": "1H", "4h": "4H"}[period]
+    per = {"15m": "15m", "1h": "1H", "4h": "4H", "1d": "1D"}[period]
 
     def pages(url: str, key: str) -> list:
         rows, cursor = [], ""
@@ -10654,8 +10657,8 @@ def _liq_okx(sym: str, period: str, n: int) -> list | None:
 
 def _liq_gate(sym: str, period: str, n: int) -> list | None:
     c = f"{sym}_USDT"
-    st = get_json(f"https://api.gateio.ws/api/v4/futures/usdt/contract_stats?contract={c}&interval={period}&limit={min(n, 200)}", 15)
-    kl = get_json(f"https://api.gateio.ws/api/v4/futures/usdt/candlesticks?contract={c}&interval={period}&limit={min(n, 200)}", 15)
+    st = get_json(f"https://api.gateio.ws/api/v4/futures/usdt/contract_stats?contract={c}&interval={period}&limit={min(n, 400)}", 15)
+    kl = get_json(f"https://api.gateio.ws/api/v4/futures/usdt/candlesticks?contract={c}&interval={period}&limit={min(n, 400)}", 15)
     if not isinstance(st, list) or not isinstance(kl, list) or not st or not kl:
         return None
     kmap = {int(k["t"]): k for k in kl}
@@ -10675,15 +10678,24 @@ def _liq_gate(sym: str, period: str, n: int) -> list | None:
     return sorted(out)
 
 
-_LIQ_SEC = {"15m": 900, "1h": 3600, "4h": 14400}
+_LIQ_SEC = {"15m": 900, "1h": 3600, "4h": 14400, "1d": 86400}
 
 
 def _liq_bybit(sym: str, period: str, n: int) -> list | None:
     s = f"{sym}USDT"
-    oi_iv = {"15m": "15min", "1h": "1h", "4h": "4h"}[period]
-    kl_iv = {"15m": "15", "1h": "60", "4h": "240"}[period]
+    oi_iv = {"15m": "15min", "1h": "1h", "4h": "4h", "1d": "1d"}[period]
+    kl_iv = {"15m": "15", "1h": "60", "4h": "240", "1d": "D"}[period]
     base = "https://api.bybit.com/v5/market"
-    oi = (get_json(f"{base}/open-interest?category=linear&symbol={s}&intervalTime={oi_iv}&limit={min(n, 200)}", 15) or {}).get("result", {}).get("list") or []
+    # Интерес — страницами по 200 (год по дням — две страницы).
+    oi: list = []
+    cursor = ""
+    while len(oi) < n:
+        res = (get_json(f"{base}/open-interest?category=linear&symbol={s}&intervalTime={oi_iv}&limit=200"
+                        + (f"&cursor={urllib.parse.quote(cursor)}" if cursor else ""), 15) or {}).get("result") or {}
+        oi += res.get("list") or []
+        cursor = res.get("nextPageCursor") or ""
+        if not cursor or not res.get("list"):
+            break
     kl = (get_json(f"{base}/kline?category=linear&symbol={s}&interval={kl_iv}&limit={min(n, 1000)}", 15) or {}).get("result", {}).get("list") or []
     rt = (get_json(f"{base}/account-ratio?category=linear&symbol={s}&period={oi_iv}&limit={min(n, 500)}", 15) or {}).get("result", {}).get("list") or []
     if not oi or not kl:
@@ -10704,7 +10716,7 @@ def _liq_bybit(sym: str, period: str, n: int) -> list | None:
 
 def _liq_htx(sym: str, period: str, n: int) -> list | None:
     c = f"{sym}-USDT"
-    per = {"15m": "15min", "1h": "60min", "4h": "4hour"}[period]
+    per = {"15m": "15min", "1h": "60min", "4h": "4hour", "1d": "1day"}[period]
     oi = ((get_json(f"https://api.hbdm.com/linear-swap-api/v1/swap_his_open_interest?contract_code={c}&period={per}&amount_type=2&size={min(n, 200)}", 15) or {}).get("data") or {}).get("tick") or []
     kl = (get_json(f"https://api.hbdm.com/linear-swap-ex/market/history/kline?contract_code={c}&period={per}&size={min(n, 2000)}", 15) or {}).get("data") or []
     rt = ((get_json(f"https://api.hbdm.com/linear-swap-api/v1/swap_elite_position_ratio?contract_code={c}&period={per}", 15) or {}).get("data") or {}).get("list") or []
@@ -10724,8 +10736,8 @@ def _liq_htx(sym: str, period: str, n: int) -> list | None:
 
 def _liq_dydx(sym: str, period: str, n: int) -> list | None:
     """dYdX — децентрализованная биржа: открытый интерес лежит прямо в свече."""
-    res = {"15m": "15MINS", "1h": "1HOUR", "4h": "4HOURS"}[period]
-    r = get_json(f"https://indexer.dydx.trade/v4/candles/perpetualMarkets/{sym}-USD?resolution={res}&limit={min(n, 200)}", 15) or {}
+    res = {"15m": "15MINS", "1h": "1HOUR", "4h": "4HOURS", "1d": "1DAY"}[period]
+    r = get_json(f"https://indexer.dydx.trade/v4/candles/perpetualMarkets/{sym}-USD?resolution={res}&limit={min(n, 400)}", 15) or {}
     out = []
     for k in r.get("candles") or []:
         try:
@@ -11507,6 +11519,20 @@ def _liq_gather(sym: str, period: str, n: int) -> tuple[dict, list | None]:
 wt_liqmap.set_gather(_liq_gather)
 
 
+def _liq_price(sym: str) -> float | None:
+    """Текущая цена для карты — одна на все окна: средняя Hyperliquid (allMids,
+    один запрос на все монеты, копия на 20 с). Под тем же тикером у Hyperliquid
+    бывает другая монета: модуль сверяет цену с ценой сборки и чужую не берёт."""
+    mids = hl_mids()
+    v = mids.get(sym)
+    if v is None and f"K{sym}" in mids:
+        v = mids[f"K{sym}"] / 1000  # kPEPE — цена тысячи PEPE
+    return v
+
+
+wt_liqmap.set_price(_liq_price)
+
+
 # --- Страх и жадность ---------------------------------------------------
 # Отдельный модуль wt_fng.py: индекс alternative.me и цена биткоина
 # mempool.space по дням, кэш, копия на диске, фоновое обновление, тесты.
@@ -12022,7 +12048,7 @@ def _fund_hist(sym: str, days: int) -> dict:
 
 
 def _oih_build(sym: str, rng: str) -> dict:
-    period, n = LIQ_RANGES[rng]
+    period, n = OIH_RANGES[rng]
     with ThreadPoolExecutor(max_workers=2) as pool:
         f_fund = pool.submit(_fund_hist, sym, OIH_FUND_DAYS[rng])
         got, ref = _liq_gather(sym, period, n)
@@ -12067,7 +12093,7 @@ def _oih_build(sym: str, rng: str) -> dict:
 
 def oi_hist(sym: str, rng: str) -> dict:
     sym = re.sub(r"[^A-Z0-9]", "", (sym or "BTC").upper())[:12] or "BTC"
-    rng = rng if rng in LIQ_RANGES else "7d"
+    rng = rng if rng in OIH_RANGES else "7d"
     return cached_bg(_OIH, (sym, rng), OIH_TTL, lambda: _oih_build(sym, rng))
 
 
