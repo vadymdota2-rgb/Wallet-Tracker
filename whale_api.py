@@ -9992,6 +9992,7 @@ def warmup() -> None:
     threading.Thread(target=digest_refresher, daemon=True, name="digest").start()
     threading.Thread(target=liq_oi_refresher, daemon=True, name="liq-oi").start()
     threading.Thread(target=liq_warm_refresher, daemon=True, name="liq-warm").start()
+    threading.Thread(target=cache_refresher, daemon=True, name="cache").start()
     liqs_start()
     cur = open_db(DB)
     hl = open_db(HL_DB)
@@ -11482,23 +11483,44 @@ def _liq_build_bg(sym: str, rng: str) -> None:
             _liq_busy.discard((sym, rng))
 
 
+# Свои разделы — халвинг, страх и жадность, альтсезон, доминация, ETF —
+# обновляются сами, а не запросом человека: раз в CACHE_TICK секунд сервер
+# спрашивает каждый модуль, и ответ старше своего TTL модуль пересобирает в
+# фоне одним потоком. Человек всегда берёт готовый кэш — и утром, когда ночью
+# экран никто не открывал (раньше первый видел вчерашний ответ, а халвинг
+# вообще обновлялся только запросами). Лимиты источников — те же: модуль
+# идёт в сеть не чаще своего TTL (TFTC — раз в час, CoinMarketCap — по
+# бюджету кредитов). Свой поток, а не круг карт ликвидаций: тот длится минуты.
+CACHE_TICK = 60.0
+
+
+def _cache_modules() -> tuple:
+    """(имя, как спросить) — по модулю; wait=0: поток не ждёт сборку, она идёт в фоне."""
+    return (
+        ("halving", halving_data),
+        ("fng", lambda: fng_data(wait=0)),
+        ("dom", lambda: dom_data(wait=0)),
+        ("mcap", lambda: mcap_data(wait=0)),
+        ("etf", etf_data),
+    )
+
+
+def cache_refresher() -> None:
+    """Держит свежими общие ответы разделов (см. CACHE_TICK)."""
+    time.sleep(5)
+    while True:
+        for name, ask in _cache_modules():
+            try:
+                ask()
+            except Exception as e:  # noqa: BLE001 — один раздел не останавливает остальные
+                sys.stderr.write(f"[api] обновление кэша {name}: {type(e).__name__}: {e}\n")
+        time.sleep(CACHE_TICK)
+
+
 def liq_warm_refresher() -> None:
     """Держит тёплыми карты самых торгуемых монет по всем трём окнам."""
     time.sleep(20)
     while True:
-        try:
-            fng_data()  # заодно — индекс страха и жадности
-        except Exception:  # noqa: BLE001
-            pass
-        try:
-            dom_data()  # и альтсезон с силой биткоина,
-            mcap_data()  # и доминацию (оба модуля сами не бросают)
-        except Exception:  # noqa: BLE001
-            pass
-        try:
-            etf_data()  # и потоки ETF с крупными держателями
-        except Exception:  # noqa: BLE001
-            pass
         try:
             # Календарь — после опционов прошлого круга: в нём их экспирации;
             # первая сборка (отчёты компаний по дню за запрос) идёт здесь,

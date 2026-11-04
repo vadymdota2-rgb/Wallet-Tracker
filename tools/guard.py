@@ -793,6 +793,10 @@ say("страх и жадность как халвинг, ETF и доминац
     and "экраны ×1, ×2, ×3" in read(f"{APP}/tests/e2e/fng.e2e.test.ts") and "крупный шрифт (до 200 %" in read(f"{APP}/tests/e2e/fng.e2e.test.ts")
     and "test_fear_and_greed_only_while_its_last_day_is_recent" in read(f"{APP}/tests/test_digest_sources.py")
     and "test_cold_request_waits_at_most_wait_and_the_build_goes_on" in read(f"{APP}/tests/test_fng_api.py"))
+say("кэш разделов обновляется сам: свой поток раз в CACHE_TICK спрашивает халвинг, страх и жадность, альтсезон, доминацию и ETF — устаревший ответ пересобирается в фоне, человек всегда берёт готовый кэш (и утром, когда ночью никто не заходил); лимиты источников — TTL модулей",
+    "def cache_refresher() -> None:" in api and 'threading.Thread(target=cache_refresher, daemon=True, name="cache").start()' in api
+    and "CACHE_TICK = 60.0" in api and '("halving", halving_data),' in api and '("etf", etf_data),' in api
+    and 'fng_data()  # заодно' not in api and os.path.isfile(f"{APP}/tests/test_cache_refresher.py"))
 say("авторские права: LICENSE «все права защищены» (Wallet Tracker) с оговоркой о сторонних лицензиях (IBM Plex — OFL, Twemoji — CC BY 4.0, данные источников); package.json — UNLICENSED; на экране «Документы» — «© 2026 Wallet Tracker» на 16 языках",
     os.path.isfile(f"{APP}/LICENSE") and "Copyright (c) 2026 Wallet Tracker. All rights reserved." in read(f"{APP}/LICENSE")
     and "SIL Open Font" in read(f"{APP}/LICENSE") and "CC BY 4.0" in read(f"{APP}/LICENSE")
@@ -827,7 +831,7 @@ say("институциональные потоки — только битко
     and "etf_data = etf.etf_data" in api and "import wt_etf as etf" in api and '"/api/etf"' in api
     and "def etf_data(" in _etfs and "coinmarketcap" not in _etfs.lower() and "def _base(" not in _etfs
     and "coingecko.com/api/v3/governments" not in api
-    and "etf_data()  # и потоки ETF" in api
+    and '("etf", etf_data),' in api
     and "from whale_api" not in _etfs and "import whale_api" not in _etfs
     and "function FlowChart(" in _ef and "function Funds(" in _ef and "movers" not in _ef + _etfs
     and '"ef_src"' not in _ef and '"ef_m_title"' not in _ef

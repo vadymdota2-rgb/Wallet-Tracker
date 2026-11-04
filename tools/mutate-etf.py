@@ -389,6 +389,11 @@ AP = [
     ("            and (now() - int(rows[-1][0])) // 86400 <= DG_ALT_DAYS):", "            and True):", "дайджест: старый индекс альтсезона не выдаётся за сегодняшний"),
     ("    if len(days) >= 8 and (now() - int(days[-1][0])) // 86400 <= DG_FNG_DAYS:", "    if len(days) >= 8:", "дайджест: старый индекс страха и жадности не выдаётся за сегодняшний"),
     ("fng_data(wait=DG_COLD_WAIT)", "fng_data()", "дайджест: страх и жадность ждёт холодную сборку дольше человека"),
+    ('    threading.Thread(target=cache_refresher, daemon=True, name="cache").start()\n', "", "кэш разделов обновляется сам"),
+    ('        ("halving", halving_data),\n', "", "кэш халвинга обновляется сам"),
+    ('        ("etf", etf_data),\n', "", "кэш ETF обновляется сам"),
+    ('        ("dom", lambda: dom_data(wait=0)),\n', '        ("dom", dom_data),\n', "обновление кэша не ждёт сборку"),
+    ("            except Exception as e:  # noqa: BLE001 — один раздел не останавливает остальные\n", "            except ZeroDivisionError as e:\n", "сбой раздела не останавливает остальные"),
     ('"d1": round(btc - btc_y, 2)', '"d1": round(btc_y - btc, 2)', "дайджест: изменение доминации за сутки со знаком"),
     ("    rows = (dom_data(wait=DG_COLD_WAIT) or {})", "    rows = (dom_data() or {})", "дайджест: альтсезон после перезапуска ждёт сборку"),
     ("    mc = mcap_data(wait=DG_COLD_WAIT)\n", "    mc = mcap_data()\n", "дайджест: доминация после перезапуска ждёт сборку"),
@@ -552,7 +557,7 @@ def server():
             + run(f"{ROOT}/wt_treasury.py", [sys.executable, "-m", "unittest", "tests.test_treasury",
                                              "tests.test_treasury_security", "tests.test_disk_cache"], TR)
             + run(f"{ROOT}/whale_api.py", [sys.executable, "-m", "unittest", "tests.test_etf_day_alert"], AL)
-            + run(f"{ROOT}/whale_api.py", [sys.executable, "-m", "unittest", "tests.test_dom_http", "tests.test_digest_sources", "tests.test_disk_cache"], AP)
+            + run(f"{ROOT}/whale_api.py", [sys.executable, "-m", "unittest", "tests.test_dom_http", "tests.test_digest_sources", "tests.test_disk_cache", "tests.test_cache_refresher"], AP)
             + run(f"{ROOT}/wt_dom.py", [sys.executable, "-m", "unittest", "tests.test_dom", "tests.test_dom_fuzz",
                                         "tests.test_dom_policy"], DM)
             + run(f"{ROOT}/wt_mcap.py", [sys.executable, "-m", "unittest", "tests.test_mcap", "tests.test_mcap_fuzz"], MC)
