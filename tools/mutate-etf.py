@@ -375,7 +375,7 @@ DMT = [
 # Общие ответы /api/dom и /api/mcap по HTTP и раздел «Рынок» дайджеста (whale_api.py).
 AP = [
     ("    wire()\n    threading.Thread(target=warmup", "    threading.Thread(target=warmup", "служба привязывает кэш и сообщения при запуске"),
-    ("    if not CACHE_DIR:\n        return\n", "", "без каталога кэш не пишется"),
+    ("def _disk_save(name: str, key, val) -> None:\n    if not CACHE_DIR:\n        return\n", "def _disk_save(name: str, key, val) -> None:\n", "без каталога кэш не пишется"),
     ("    if not CACHE_DIR:\n        return None\n", "", "без каталога кэш не читается"),
     ('    etf.set_new_fund_hook(etf_new_fund)\n', "", "о новом фонде — владельцу (после wire)"),
     ('    if not rep.get("ok"):\n        rep = _dg_safe("inst", etf.build) or {}\n', "", "дайджест: ETF после перезапуска собирает сам"),
