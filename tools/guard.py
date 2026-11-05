@@ -571,9 +571,10 @@ say("карта ликвидаций считается на сервере из
     and "LIQ_SOURCES" in api and "apikey" not in read(f"{APP}/wt_liqmap.py").lower())
 
 _lq = read(f"{APP}/src/screens/LiqMapScreen.tsx")
+_lqlib = read(f"{APP}/src/lib/liqmap.ts") if os.path.isfile(f"{APP}/src/lib/liqmap.ts") else ""
 say("карта ликвидаций: плечо — своим оттенком, крупные скопления — ярче и с подсветкой, накопленное — своей колонкой",
-    "LEV_C" in _lq and "LEV_HOT" in _lq and 'filter={hot ? "url(#lq-glow)"' in _lq and "function cumOf(" in _lq and "CX0 + ((cum[i]" in _lq
-    and "function nearest(" in _lq and '"path": [round(x, 10) for x in path]' in read(f"{APP}/wt_liqmap.py"))
+    "LEV_C" in _lq and "LEV_HOT" in _lq and 'filter={hot ? "url(#lq-glow)"' in _lq and "export function cumOf(" in _lqlib and "CX0 + ((cum[i]" in _lq
+    and "export function nearest(" in _lqlib and '"path": [round(x, 10) for x in path]' in read(f"{APP}/wt_liqmap.py"))
 
 say("карта ликвидаций: свечи цены на той же оси и список всех монет с фьючерсами",
     "def liq_coins(" in api and '"/api/liqcoins"' in api and '"ohlc": candles(ref)' in read(f"{APP}/wt_liqmap.py")
@@ -599,7 +600,7 @@ say("карта ликвидаций: шесть бирж с историей и
 say("карта ликвидаций: отдаётся из памяти сразу, старая — с пересчётом в фоне, тёплые монеты заранее",
     "def _bg(" in read(f"{APP}/wt_liqmap.py") and "wt_liqmap.warm(sym, rng)" in api and "def liq_warm_refresher(" in api and "target=liq_warm_refresher" in api
     and "wait(futures, timeout=LIQ_BUDGET)" in api and 'sorted(ex.get(k, ()))' in api
-    and "savedLiqMap(sym, range)" in _lq and "callTwice<LiqMapReply>" in read(f"{APP}/src/lib/api.ts"))
+    and "savedLiqMap(sym, range)" in _lq and "callTwice<unknown>(liqPath(sym, range))" in read(f"{APP}/src/lib/api.ts"))
 
 _ngx = read(f"{APP}/nginx.conf")
 say("Binance и Bybit — через nginx в Европе, если отсюда закрыты; ретранслятор только с ключом",
@@ -684,7 +685,7 @@ say("доминация укладывается в бесплатный пла�
     and "TTL = 3600.0" in _mcs and "HIST_TTL = 12 * 3600.0" in _mcs)
 _cmc = read(f"{APP}/src/components/CmcBy.tsx") if os.path.isfile(f"{APP}/src/components/CmcBy.tsx") else ""
 say("доминация и альтсезон — кеш и права: ответы /api/dom и /api/mcap кодируются раз на ответ, с ETag и «304 не изменилось»; копия доминации на телефоне — исходный ответ сервера (не теряет долю стейблкоинов); источник — ссылкой на CoinMarketCap и на экране, и в дайджесте; в канал цифры CoinMarketCap не уходят; форматтеры Intl — из кэша",
-    "def _json_public(self, name: str, obj: dict):" in api and 'self._json_public("dom" if dom else "mcap"' in api
+    "def _json_public(self, name: str, obj: dict, store: dict | None = None, keep: int = 0):" in api and 'self._json_public("dom" if dom else "mcap"' in api
     and '"If-None-Match"' in api and os.path.isfile(f"{APP}/tests/test_dom_http.py")
     and "writeSaved(MCAP_SAVED, { all: { at: Date.now(), v: r } })" in read(f"{APP}/src/lib/api.ts")
     and 'CMC_URL = "https://coinmarketcap.com/"' in _cmc and "<CmcBy lang={lang} />" in _dm
@@ -808,7 +809,14 @@ say("карта ликвидаций — отдельный модуль wt_liqm
     and "COLD_WAIT = 8.0" in read(f"{APP}/wt_liqmap.py") and "(125, 0.03, 4), (200, 0.02, 4), (500, 0.01, 4)," in read(f"{APP}/wt_liqmap.py") and "return min(MMR, 0.5 / lev)" in read(f"{APP}/wt_liqmap.py")
     and "def _liq_model(" not in api and "def _liq_build(" not in api
     and 'const LEV_NAME = ["3–10×", "20–25×", "50×", "75–100×", "125–500×"];' in _lq and "const LABEL_GAP = 18;" in _lq
-    and "Math.abs(x.k - k) >= 2" in _lq and os.path.isfile(f"{APP}/tests/test_liqmap.py"))
+    and "Math.abs(x.k - g.k) >= 2" in _lqlib and os.path.isfile(f"{APP}/tests/test_liqmap.py"))
+say("карта ликвидаций на уровне ETF/доминации: ряды бирж чистятся (мусор, выбросы, отставшие биржи), ответ — готовыми байтами с ETag и «304» в ограниченном запасе; в приложении — lib/liqmap.ts с проверкой ответа и сохранённой копии, строгий TS, клавиатура, таблица уровней, пометка старых данных",
+    "def clean_rows(" in read(f"{APP}/wt_liqmap.py") and "def fresh(" in read(f"{APP}/wt_liqmap.py") and "SPIKE = 0.3" in read(f"{APP}/wt_liqmap.py")
+    and "self._json_public(f\"liqmap:{res['sym']}:{res['range']}\", res, _PUBLIC_LIQ, PUBLIC_LIQ_MAX)" in api and "PUBLIC_LIQ_MAX = 200" in api
+    and "export function validLiqMap(" in _lqlib and "validLiqMap(r)" in read(f"{APP}/src/lib/api.ts") and "validLiqMap(raw.v)" in read(f"{APP}/src/lib/api.ts")
+    and os.path.isfile(f"{APP}/tools/typecheck-liqmap.mjs") and "npm run typecheck:liqmap" in read(f"{APP}/.github/workflows/tests.yml")
+    and 'aria-label={t(lang, "lq_keys")}' in _lq and 'className="lq-tbl"' in _lq and '"lq_old"' in _lq
+    and all(os.path.isfile(f"{APP}/tests/{f}") for f in ("liqmap.test.ts", "liqmap.props.test.ts", "test_liqmap_fuzz.py", "test_liqmap_http.py")))
 say("авторские права: LICENSE «все права защищены» (Wallet Tracker) с оговоркой о сторонних лицензиях (IBM Plex — OFL, Twemoji — CC BY 4.0, данные источников); package.json — UNLICENSED; на экране «Документы» — «© 2026 Wallet Tracker» на 16 языках",
     os.path.isfile(f"{APP}/LICENSE") and "Copyright (c) 2026 Wallet Tracker. All rights reserved." in read(f"{APP}/LICENSE")
     and "SIL Open Font" in read(f"{APP}/LICENSE") and "CC BY 4.0" in read(f"{APP}/LICENSE")

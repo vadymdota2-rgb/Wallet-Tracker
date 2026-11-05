@@ -18,7 +18,7 @@
  */
 import { FREE } from "./upsell";
 import {
-  fetchBig, fetchBscExFlow, fetchBtcBig, fetchBtcFlow, fetchBtcRank, fetchDeals, fetchDom, fetchEtf, fetchMcap, fetchFlow, fetchLs, fetchSymbols, fetchTokenHist,
+  fetchBig, fetchBscExFlow, fetchBtcBig, fetchBtcFlow, fetchBtcRank, fetchDeals, fetchDom, fetchEtf, fetchLiqMap, fetchMcap, fetchFlow, fetchLs, fetchSymbols, fetchTokenHist,
   fetchUnlocks, fetchWallet, lastStatus,
 } from "./api";
 import { PREFETCH_GAP, WALLETS_GAP, drain as queue, gate } from "./pace";
@@ -109,6 +109,12 @@ function plan(): (() => Promise<unknown>)[] {
   // ещё собирает цены («building») — экран спросит сам, повтор не нужен.
   jobs.push(() => fetchDom());
   jobs.push(() => fetchMcap());
+
+  // 5д. Карта ликвидаций — та монета и то окно, что человек смотрел последними:
+  // ответ ложится в память и на устройство (проверенная копия), и экран из
+  // меню открывается сразу с картой. Сервер держит её тёплой сам; пока она
+  // свежа в памяти (две минуты), повторный опрос сеть не трогает.
+  jobs.push(() => fetchLiqMap(app.liqSym || "BTC", app.liqRange || "1d"));
 
   // 6. Справочник монет для поиска на графике.
   jobs.push(() => fetchSymbols());

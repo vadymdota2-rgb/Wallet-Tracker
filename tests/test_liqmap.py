@@ -463,8 +463,8 @@ class CacheTest(Base):
 
     def test_tail_rows_go_into_the_model(self):
         # Окно: интерес стоит; хвост (идущая свеча мелко): вырос втрое.
-        main = series([100, 100, 100], [0, 10, 10])
-        tail = [row(1800, 100, 100, 100, 1000), row(2700, 100, 100, 100, 3000)]
+        main = series([100] * 10, [0] + [10] * 9)
+        tail = [row(8100, 100, 100, 100, 1000), row(9000, 100, 100, 100, 3000)]
         seen = {}
 
         def fn(sym, period, n):
@@ -682,7 +682,7 @@ class PolicyTest(unittest.TestCase):
                 found |= {a.name for a in n.names}
             elif isinstance(n, ast.ImportFrom):
                 found.add(n.module or "")
-        self.assertLessEqual(found, {"__future__", "bisect", "re", "threading", "time", "collections.abc", "typing"})
+        self.assertLessEqual(found, {"__future__", "bisect", "math", "re", "threading", "time", "collections.abc", "typing"})
         bad = [n.func.id for n in ast.walk(self.tree()) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
                and n.func.id in {"eval", "exec", "compile", "__import__", "open", "setattr"}]
         self.assertEqual(bad, [])

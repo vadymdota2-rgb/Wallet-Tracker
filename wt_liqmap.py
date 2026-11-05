@@ -17,9 +17,11 @@
   - свеча сжигает уровни, через которые прошла: лонги с ценой ликвидации не
     ниже её минимума, шорты — не выше максимума;
   - интерес упал — часть падения объясняют ликвидации этой свечи, на
-    остаток закрываются (сами) остальные позиции — поровну по всем: какие
-    именно закрыли, биржи не говорят. Открыли и закрыли за одну свечу —
-    интерес не изменился, и модель этого не видит;
+    остаток закрываются (сами) самые свежие позиции: кто последним вошёл,
+    тот первым и вышел (_Book). Какие именно закрыли, биржи не говорят.
+    Открыли и закрыли за одну свечу — интерес не изменился, и модель этого
+    не видит; стоит интерес, а свеча сожгла уровни — на их место открылись
+    новые позиции;
   - после последнего снимка — текущая свеча: её ход тоже сжигает уровни.
 
 Живая цена: цена карты — одна на все окна, а не закрытие свечи своего окна
@@ -94,11 +96,6 @@ ALT_CAP = 75
 # начальной (1/плечо) — иначе 200× ликвидировалось бы на цене входа. Берём
 # MMR, но не больше половины начальной: 100× — 0,5 %, 200× — 0,25 %, 500× — 0,1 %.
 MMR = 0.005
-
-
-def mmr(lev: int) -> float:
-    """Поддерживающая маржа плеча lev (доля позиции)."""
-    return min(MMR, 0.5 / lev)
 # Окно карты: ±SPAN от цены, BUCKETS корзин (по 0,25 %): до нуля вниз и до
 # удвоения вверх — экран приближает от ±5 до ±100 %.
 SPAN = 1.0
@@ -117,6 +114,71 @@ FAIL_WAIT = 120.0  # биржи не дали ничего — столько н
 JOBS_MAX = 4  # сборок одновременно
 CACHE_MAX = 150  # карт в памяти (монета × окно)
 SYM = re.compile(r"[A-Z0-9]{1,12}")
+
+
+# Правдоподобие рядов бирж (clean_rows): выброс интереса — точка, которая
+# отличается от обеих соседних больше чем на SPIKE, а соседи между собой — не
+# больше чем на SPIKE_PAIR (биржа на один снимок отдала ноль или мусор);
+# STALE_ROWS — биржа отстала от опоры больше чем на столько свечей окна.
+SPIKE = 0.3
+SPIKE_PAIR = 0.05
+STALE_ROWS = 3
+ROWS_MAX = 2000
+# Правдоподобные пределы: цена монеты, интерес одной биржи ($), размах свечи.
+PX_MAX = 1e9
+OI_MAX = 1e13
+RANGE_MAX = 10.0
+
+
+def _num(v: object) -> float | None:
+    """Число (не bool) — как float; иначе None. NaN и бесконечности отсекают
+    пределы правдоподобия в clean_rows: с ними любое сравнение ложно."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return None
+    return float(v)
+
+
+def clean_rows(rows: object) -> list[Row]:
+    """Ряды биржи без мусора: только конечные числа, цена в (0, PX_MAX),
+    максимум ≥ минимума и не больше чем в RANGE_MAX раз (закрытие — внутри
+    свечи), интерес 0–OI_MAX, доля покупок 0–1;
+    по времени, без повторов; выбросы интереса — заменены соседями."""
+    out: dict[int, Row] = {}
+    for r in rows if isinstance(rows, (list, tuple)) else []:
+        if not isinstance(r, (list, tuple)) or len(r) != 6 or isinstance(r[0], bool) or not isinstance(r[0], int):
+            continue
+        t = r[0]
+        hi, low, c, oi, bs = (_num(x) for x in r[1:])
+        if t <= 0 or hi is None or low is None or c is None or oi is None:
+            continue
+        if not (0 < low <= hi < PX_MAX and 0 < c < PX_MAX and hi <= low * RANGE_MAX and 0 <= oi <= OI_MAX):
+            continue
+        share = bs if bs is not None and 0 <= bs <= 1 else 0.5
+        out[t] = (t, max(hi, c), min(low, c), c, oi, share)
+    ok = [out[t] for t in sorted(out)][-ROWS_MAX:]
+    # Выбросы интереса — в монетах (иначе ход цены похож на выброс) и по цене
+    # на момент снимка: закрытие прошлой свечи, как в model.
+    px = [ok[max(0, j - 1)][3] for j in range(len(ok))]
+    for i in range(1, len(ok) - 1):
+        a, m, b = (ok[j][4] / px[j] for j in (i - 1, i, i + 1))
+        if a > 0 and b > 0 and abs(b / a - 1) <= SPIKE_PAIR and abs(m / a - 1) > SPIKE and abs(m / b - 1) > SPIKE:
+            ok[i] = (*ok[i][:4], (a * b) ** 0.5 * px[i], ok[i][5])
+    return ok
+
+
+def fresh(got: dict[str, list[Row]], ref: list[Row]) -> dict[str, list[Row]]:
+    """Биржи, чей ряд не отстал от опоры: последняя свеча — не старше
+    STALE_ROWS свечей окна (замершая биржа отдаёт старые снимки, и её
+    позиции считались бы по ценам часовой давности)."""
+    if len(ref) < 2:
+        return got
+    span = (ref[-1][0] - ref[0][0]) / (len(ref) - 1)
+    return {ex: rows for ex, rows in got.items() if rows and ref[-1][0] - rows[-1][0] <= STALE_ROWS * span}
+
+
+def mmr(lev: int) -> float:
+    """Поддерживающая маржа плеча lev (доля позиции)."""
+    return min(MMR, 0.5 / lev)
 
 
 def _no(error: str) -> dict[str, Json]:
@@ -309,9 +371,13 @@ def candles(rows: list[Row], n: int = 48) -> list[list[float]]:
 
 
 def make_state(sym: str, rng: str, got: dict[str, list[Row]], ref: list[Row], px: float,  # noqa: PLR0913 — сборка целиком
-               at: int) -> dict[str, Json]:
+               at: int, last: Row | None = None) -> dict[str, Json]:
     """Сборка карты: позиции всех бирж по сетке вокруг цены px (в монетах,
-    сглаженные), свечи и путь цены опорной биржи. Ответ из неё — render()."""
+    сглаженные), свечи и путь цены опорной биржи. Ответ из неё — render().
+
+    last — идущая свеча хвоста (мелкая): где цена побывала после последнего
+    снимка. Без хвоста — идущая свеча окна. Крупная свеча тут не годится: её
+    минимум за сутки сжёг бы позиции, открытые уже после него."""
     lo, step = px * (1 - SPAN), px * SPAN * 2 / BUCKETS
     g_n = len(GROUPS)
     long_b = [[0.0] * BUCKETS for _ in range(g_n)]
@@ -333,7 +399,7 @@ def make_state(sym: str, rng: str, got: dict[str, list[Row]], ref: list[Row], px
             # за окно и ещё живые, $; остальное открыто раньше окна.
             "seen": round(seen * px),
             # Где цена побывала после последнего снимка: всё за этими краями сгорело.
-            "low": min(px, ref[-1][2]), "high": max(px, ref[-1][1])}
+            "low": min(px, (last or ref[-1])[2]), "high": max(px, (last or ref[-1])[1])}
 
 
 def render(st: dict[str, Json], px: float) -> dict[str, Json]:
@@ -448,6 +514,7 @@ def build(sym: str, rng: str) -> dict[str, Json]:
     period, n = RANGES[rng]
     gather = _st.gather
     tail: dict[str, list[Row]] = {}
+    tail_ref: list[Row] = []
     job = None
     if gather is not None and rng in TAIL:
         fn = gather
@@ -455,21 +522,29 @@ def build(sym: str, rng: str) -> dict[str, Json]:
         # Хвост — параллельно с окном: две сборки по бюджету бирж, а не подряд.
         def fetch_tail() -> None:
             try:
-                tail.update(fn(sym, *TAIL[rng])[0])
+                t_got, t_ref = fn(sym, *TAIL[rng])
+                tail.update(t_got)
+                if t_ref:
+                    tail_ref.extend(t_ref)
             except Exception:  # noqa: BLE001 — хвоста нет — окно без него, как раньше
                 tail.clear()
+                tail_ref.clear()
         job = threading.Thread(target=fetch_tail, daemon=True)
         job.start()
     got, ref = gather(sym, period, n) if gather else ({}, None)
     if job is not None:
         job.join()
-    got = {ex: splice(rows, tail.get(ex)) for ex, rows in got.items()}
+    ref = clean_rows(ref) if ref else None
+    got = {ex: splice(c, clean_rows(tail.get(ex))) for ex, rows in got.items() if len(c := clean_rows(rows)) >= 8}
+    if ref:
+        got = fresh(got, ref)
     if not got or not ref:
         with _lock:
             _st.fails[key] = time.monotonic()
         return _no("no_data")
     px = _live(sym, ref[-1][3])
-    st = make_state(sym, rng, got, ref, px, _now())
+    fine = splice(ref, clean_rows(tail_ref))
+    st = make_state(sym, rng, got, ref, px, _now(), fine[-1] if fine is not ref else None)
     res = render(st, px)
     with _lock:
         _st.hits[key] = (time.monotonic(), st, res)

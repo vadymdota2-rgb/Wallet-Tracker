@@ -28,7 +28,7 @@
  * превратило бы карту в ребус, поэтому у него своя узкая колонка справа с той
  * же ценовой осью.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useApp, type LiqRange } from "../store/app";
 import { t } from "../i18n/t";
 import type { DictKey } from "../i18n/types";
@@ -40,7 +40,9 @@ import { useNow } from "../lib/tick";
 import { CoinIcon } from "../components/CoinIcon";
 import { Card, Chips, Empty, SectionTitle, Segmented, Skeleton } from "../components/ui";
 import type { LiqMapReply } from "../lib/types";
+import { LIQ_OLD_MIN, ageMin, cumOf, nearest, rowAt, rowsOf, side, sumOn, topLevels } from "../lib/liqmap";
 import { Frame } from "./Screen";
+import { useWidth } from "./etfView";
 
 type Lang = Parameters<typeof t>[0];
 
@@ -64,17 +66,24 @@ type Span = "5" | "10" | "15" | "30" | "50" | "100";
 const SPANS: Span[] = ["5", "10", "15", "30", "50", "100"];
 const TICK: Record<Span, number> = { "5": 1, "10": 2, "15": 3, "30": 5, "50": 10, "100": 20 };
 
-const W = 360;
 const AXIS = 58;
 const CUMW = 38;
 const GAP = 5;
-const PLOT = W - AXIS - CUMW - GAP * 2;
-/** Панель свечей слева, полосы уровней — от BX0 до PLOT. */
-const CAND = 96;
-const BX0 = CAND + GAP;
-const BW = PLOT - BX0;
-const CX0 = PLOT + GAP;
-const CX1 = CX0 + CUMW;
+/** Карта рисуется в настоящих пикселях своей ширины (как графики ETF):
+ *  подписи — своего размера, линии — чёткие на телефоне, планшете и
+ *  компьютере. Раньше рисунок в 360 точек растягивался на всю ширину, и на
+ *  компьютере подписи были в три раза крупнее, а карта — на несколько
+ *  экранов. Ширина — от 300 до 1100; панель свечей — четверть ширины. */
+interface Geom { W: number; PLOT: number; CAND: number; BX0: number; BW: number; CX0: number; CX1: number }
+function geom(width: number): Geom {
+  const W = Math.round(Math.max(300, Math.min(1100, width)));
+  const PLOT = W - AXIS - CUMW - GAP * 2;
+  /* Панель свечей слева, полосы уровней — от BX0 до PLOT. */
+  const CAND = Math.round(Math.max(96, Math.min(260, W * 0.27)));
+  const BX0 = CAND + GAP;
+  const CX0 = PLOT + GAP;
+  return { W, PLOT, CAND, BX0, BW: PLOT - BX0, CX0, CX1: CX0 + CUMW };
+}
 
 const SUB = "₀₁₂₃₄₅₆₇₈₉";
 /**
@@ -89,103 +98,6 @@ function pxAxis(v: number): string {
   if (!m) return s;
   const z = String(m[2]!.length).split("").map((d) => SUB[Number(d)]).join("");
   return `${m[1]}0${z}${m[3]!.slice(0, 4)}`;
-}
-
-interface ViewRow {
-  lo: number;
-  hi: number;
-  mid: number;
-  L: number[];
-  S: number[];
-}
-
-/** Корзины сервера (по 0,25%) — в строки экрана: не больше шестидесяти. */
-function rowsOf(r: LiqMapReply, span: number): { rows: ViewRow[]; rowH: number } {
-  const lo = r.px * (1 - span / 100);
-  const hi = r.px * (1 + span / 100);
-  const base = Math.max(1, Math.round(((hi - lo) / r.step) / 60));
-  const size = r.step * base;
-  const n = Math.max(1, Math.ceil((hi - lo) / size));
-  const rows: ViewRow[] = Array.from({ length: n }, (_, i) => ({
-    lo: lo + i * size,
-    hi: lo + (i + 1) * size,
-    mid: lo + (i + 0.5) * size,
-    L: r.levs.map(() => 0),
-    S: r.levs.map(() => 0),
-  }));
-  for (const b of r.buckets) {
-    const i = Math.floor((b.p - lo) / size);
-    const row = rows[i];
-    if (!row) continue;
-    for (let j = 0; j < r.levs.length; j++) {
-      row.L[j] = (row.L[j] ?? 0) + (b.L[j] ?? 0);
-      row.S[j] = (row.S[j] ?? 0) + (b.S[j] ?? 0);
-    }
-  }
-  const rowH = Math.max(7, Math.min(14, 520 / n));
-  return { rows: rows.reverse(), rowH };
-}
-
-const sum = (a: number[]) => a.reduce((x, y) => x + y, 0);
-const sumOn = (a: number[], on: boolean[]) => a.reduce((x, y, j) => x + (on[j] ? y : 0), 0);
-const side = (w: ViewRow, p: number) => (w.mid > p ? w.S : w.L);
-
-/** Накопленное от цены до каждой строки — на её стороне. */
-function cumOf(rows: ViewRow[], p: number, on: boolean[]): number[] {
-  const out = rows.map(() => 0);
-  let acc = 0;
-  for (let i = rows.length - 1; i >= 0; i--) {
-    const w = rows[i];
-    if (w && w.mid > p) {
-      acc += sumOn(w.S, on);
-      out[i] = acc;
-    }
-  }
-  acc = 0;
-  for (let i = 0; i < rows.length; i++) {
-    const w = rows[i];
-    if (w && w.mid < p) {
-      acc += sumOn(w.L, on);
-      out[i] = acc;
-    }
-  }
-  return out;
-}
-
-/** Строка экрана, в которую попадает цена, — для касания по списку. */
-function rowAt(r: LiqMapReply, span: number, price: number): number {
-  return rowsOf(r, span).rows.findIndex((w) => price >= w.lo && price < w.hi);
-}
-
-interface Cluster {
-  p: number;
-  v: number;
-  d: number;
-}
-
-/**
- * Ближайшее крупное скопление на стороне: корзины по 0,5% в пределах ±10%,
- * «крупное» — не меньше половины самого большого на этой стороне. Самое
- * большое часто далеко, а до ближайшего крупного цена доходит первой.
- */
-function nearest(r: LiqMapReply, up: boolean): Cluster | null {
-  const groups = new Map<number, { v: number; pv: number }>();
-  for (const b of r.buckets) {
-    const d = (b.p - r.px) / r.px;
-    if (up ? d <= 0 || d > 0.1 : d >= 0 || d < -0.1) continue;
-    const v = sum(up ? b.S : b.L);
-    if (v <= 0) continue;
-    const k = Math.floor(Math.abs(d) / 0.005);
-    const g = groups.get(k) ?? { v: 0, pv: 0 };
-    g.v += v;
-    g.pv += v * b.p;
-    groups.set(k, g);
-  }
-  const list = [...groups.entries()].map(([k, g]) => ({ k, p: g.pv / g.v, v: g.v }));
-  const max = Math.max(0, ...list.map((g) => g.v));
-  if (max <= 0) return null;
-  const hit = list.filter((g) => g.v >= max * 0.5).sort((a, b) => a.k - b.k)[0];
-  return hit ? { p: hit.p, v: hit.v, d: ((hit.p - r.px) / r.px) * 100 } : null;
 }
 
 function Spark({ path, up }: { path: number[]; up: boolean }) {
@@ -210,7 +122,7 @@ function Spark({ path, up }: { path: number[]; up: boolean }) {
  * Свечи окна на той же оси цены, что и уровни. Что выходит за окно карты,
  * обрезается по краю — цена за месяц бывает дальше ±5%.
  */
-function Candles({ r, yOf, H }: { r: LiqMapReply; yOf: (p: number) => number; H: number }) {
+function Candles({ r, yOf, H, CAND }: { r: LiqMapReply; yOf: (p: number) => number; H: number; CAND: number }) {
   const list = r.ohlc ?? [];
   if (list.length < 2) return null;
   const cw = (CAND - 6) / list.length;
@@ -238,7 +150,8 @@ function Candles({ r, yOf, H }: { r: LiqMapReply; yOf: (p: number) => number; H:
   );
 }
 
-function Chart({ r, lang, span, sel, onSel, on, win }: {
+function Chart({ r, lang, span, sel, onSel, on, win, g }: {
+  g: Geom;
   r: LiqMapReply;
   lang: Lang;
   span: Span;
@@ -247,6 +160,7 @@ function Chart({ r, lang, span, sel, onSel, on, win }: {
   on: boolean[];
   win: string;
 }) {
+  const { W, CAND, BX0, BW, CX0, CX1 } = g;
   const spanN = Number(span);
   const { rows, rowH } = useMemo(() => rowsOf(r, spanN), [r, spanN]);
   const H = rows.length * rowH;
@@ -428,7 +342,7 @@ function Chart({ r, lang, span, sel, onSel, on, win }: {
 
       {sel !== null ? <rect x={0} y={sel * rowH} width={CX1} height={rowH} className="lq-hl" /> : null}
 
-      <Candles r={r} yOf={yOf} H={H} />
+      <Candles r={r} yOf={yOf} H={H} CAND={CAND} />
       <text x={4} y={11} className="lq-cp-t">{t(lang, "lq_price_w", { w: win })}</text>
 
       <defs>
@@ -585,6 +499,9 @@ export function LiqMapScreen() {
   const [staleAt, setStaleAt] = useState<number | null>(null);
   const [retry, setRetry] = useState(0);
   const plotRef = useRef<HTMLDivElement>(null);
+  /* Ширина экрана карты (без полей карточки) — для рисунка в настоящих пикселях. */
+  const scrRef = useRef<HTMLDivElement>(null);
+  const g = geom(useWidth(scrRef, 392) - 32);
   /* Сколько раз подряд сервер ответил «собираем» по этой карте. */
   const tries = useRef({ key: "", n: 0 });
 
@@ -667,39 +584,43 @@ export function LiqMapScreen() {
   const view = useMemo(() => (reply?.ok ? rowsOf(reply, spanN) : { rows: [], rowH: 1 }), [reply, spanN]);
   const row = sel !== null ? view.rows[sel] : undefined;
   const cum = useMemo(() => (reply?.ok ? cumOf(view.rows, reply.px, on) : []), [reply, view, on]);
+  /* С клавиатуры: стрелки вверх и вниз — соседний уровень (первый раз — у
+     цены), Home и End — края окна, Escape — убрать подсказку. */
+  const onKey = (e: KeyboardEvent) => {
+    const n = view.rows.length;
+    if (!reply?.ok || !n) return;
+    const go = (i: number) => {
+      e.preventDefault();
+      setSel(Math.max(0, Math.min(n - 1, i)));
+    };
+    const start = Math.max(0, rowAt(reply, spanN, reply.px));
+    if (e.key === "ArrowUp") go(sel === null ? start : sel - 1);
+    else if (e.key === "ArrowDown") go(sel === null ? start : sel + 1);
+    else if (e.key === "Home") go(0);
+    else if (e.key === "End") go(n - 1);
+    else if (e.key === "Escape" && sel !== null) {
+      e.preventDefault();
+      setSel(null);
+    }
+  };
+  /* Таблица уровней — то же, что на карте, словами: строки окна с деньгами. */
+  const table = useMemo(() => {
+    if (!reply?.ok) return [];
+    return view.rows
+      .map((w, i) => ({ p: w.mid, up: w.mid > reply.px, v: sumOn(side(w, reply.px), on), c: cum[i] ?? 0 }))
+      .filter((x) => x.v > 0);
+  }, [reply, view, on, cum]);
+  const old = reply?.ok && ageMin(reply.at) >= LIQ_OLD_MIN
+    ? new Intl.DateTimeFormat(lang, { hour: "2-digit", minute: "2-digit" }).format(new Date(reply.at * 1000))
+    : null;
 
   const near = useMemo(() => (reply?.ok ? { up: nearest(reply, true), dn: nearest(reply, false) } : null), [reply]);
 
-  /* Крупнейшие уровни — скопления, а не корзины: корзины по 0,25 % одного
-     скопления шли подряд («$77 369», «$77 168», «$76 967» — одно и то же
-     место трижды). Корзины собираются полосами (0,5 %, на крупном
-     приближении — шире: 1/30 окна), и три крупнейших — не в соседних полосах.
-     Только в видимом окне: на ±5 % не нужен уровень с −40 %. */
-  const top = useMemo(() => {
-    if (!reply?.ok) return { up: [], dn: [] };
-    const band = Math.max(0.005, spanN / 3000);
-    const pick = (up: boolean) => {
-      const groups = new Map<number, { v: number; pv: number }>();
-      for (const b of reply.buckets) {
-        const d = (b.p - reply.px) / reply.px;
-        if ((up ? d <= 0 : d >= 0) || Math.abs(d) > spanN / 100) continue;
-        const v = sum(up ? b.S : b.L);
-        if (v <= 0) continue;
-        const k = Math.floor(Math.abs(d) / band);
-        const g = groups.get(k) ?? { v: 0, pv: 0 };
-        g.v += v;
-        g.pv += v * b.p;
-        groups.set(k, g);
-      }
-      const out: { k: number; p: number; v: number }[] = [];
-      for (const [k, g] of [...groups.entries()].sort((a, b) => b[1].v - a[1].v)) {
-        if (out.length >= 3) break;
-        if (out.every((x) => Math.abs(x.k - k) >= 2)) out.push({ k, p: g.pv / g.v, v: g.v });
-      }
-      return out;
-    };
-    return { up: pick(true), dn: pick(false) };
-  }, [reply, spanN]);
+  /* Крупнейшие уровни — скопления в видимом окне (topLevels). */
+  const top = useMemo(
+    () => (reply?.ok ? { up: topLevels(reply, true, spanN), dn: topLevels(reply, false, spanN) } : { up: [], dn: [] }),
+    [reply, spanN],
+  );
   const topMax = Math.max(1, ...top.up.map((b) => b.v), ...top.dn.map((b) => b.v));
 
 
@@ -812,7 +733,7 @@ export function LiqMapScreen() {
       {/* Своя сетка в одну колонку minmax(0, 1fr): общая сетка экрана берёт
           ширину по самому широкому ряду, и при крупном шрифте (200 %) кнопки
           окна раздвигали весь экран шире телефона. */}
-      <div className="lq-scr">
+      <div className="lq-scr" ref={scrRef}>
       <p className="lq-lead">{t(lang, "lq_sub")}</p>
 
       <CoinPicker lang={lang} sym={sym} onPick={setSym} />
@@ -843,6 +764,7 @@ export function LiqMapScreen() {
         />
       ) : (
         <>
+          {old ? <p className="lq-stale" role="status">{t(lang, "lq_old", { t: old })}</p> : null}
           {hero}
 
           <Card>
@@ -853,13 +775,14 @@ export function LiqMapScreen() {
               options={SPANS.map((s) => ({ id: s, label: `±${s}%` }))}
             />
             <div className="lq-zone-h up">
-              <span style={{ maxWidth: `calc(${(CX0 / W) * 100}% - 12px)` }}>▲ {t(lang, "lq_zone_up")}</span>
-              <small style={{ right: `${(AXIS / W) * 100}%` }}>
+              <span style={{ maxWidth: `calc(${(g.CX0 / g.W) * 100}% - 12px)` }}>▲ {t(lang, "lq_zone_up")}</span>
+              <small style={{ right: `${(AXIS / g.W) * 100}%` }}>
                 {t(lang, "lq_cum_axis")}
               </small>
             </div>
-            <div className="lq-plot" ref={plotRef}>
-              <Chart r={reply} lang={lang} span={span} sel={sel} onSel={setSel} on={on} win={winLabel} />
+            <div className="lq-plot" ref={plotRef} tabIndex={0} role="group" aria-label={t(lang, "lq_keys")}
+              onKeyDown={onKey}>
+              <Chart r={reply} lang={lang} span={span} sel={sel} onSel={setSel} on={on} win={winLabel} g={g} />
               {row ? (
                 <div
                   className={`lq-pop ${rowUp ? "up" : "dn"}${tipBelow ? " below" : ""}`}
@@ -900,6 +823,31 @@ export function LiqMapScreen() {
               <span className="lq-hot-k" aria-hidden="true"><i /><i /><i /></span>
               {t(lang, "lq_hot")} {t(lang, "lq_hint")}
             </p>
+            {table.length ? (
+              <details className="lq-tbl">
+                <summary>{t(lang, "ef_tbl")}</summary>
+                <div className="lq-tbl-w">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th scope="col">{t(lang, "lq_tbl_px")}</th>
+                        <th scope="col">{t(lang, "lq_tbl_v")}</th>
+                        <th scope="col">{t(lang, "lq_cum_axis")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {table.map((x) => (
+                        <tr key={x.p} className={x.up ? "up" : "dn"}>
+                          <th scope="row"><bdi dir="ltr">{px(x.p)}</bdi> <small>{x.up ? "▲" : "▼"} {t(lang, x.up ? "lq_shorts" : "lq_longs")}</small></th>
+                          <td><bdi dir="ltr">{usd(x.v)}</bdi></td>
+                          <td><bdi dir="ltr">{usd(x.c)}</bdi></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            ) : null}
           </Card>
 
           <SectionTitle help={["lq_how_1", "lq_how_2", "lq_how_4"]}>{t(lang, "lq_cum_title")}</SectionTitle>
@@ -924,7 +872,7 @@ export function LiqMapScreen() {
 
           {top.up.length || top.dn.length ? (
             <>
-              <SectionTitle>{t(lang, "lq_top")}</SectionTitle>
+              <SectionTitle help={["lq_how_5", "lq_how_7"]}>{t(lang, "lq_top")}</SectionTitle>
               <div className="lq-top">
                 {([["up", top.up], ["dn", top.dn]] as const).map(([k, list]) => (
                   <div key={k} className={`lq-top-c ${k}`}>

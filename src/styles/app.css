@@ -2493,6 +2493,18 @@ html.ch-full .screen.full {
   animation: lq-pulse 1s ease-in-out infinite;
 }
 @keyframes lq-pulse { 50% { opacity: 0.25; } }
+.lq-plot:focus-visible { outline: 2px solid var(--glow); outline-offset: 3px; border-radius: var(--r-md); }
+.lq-tbl { margin-top: 10px; }
+.lq-tbl > summary { min-height: 40px; display: flex; align-items: center; cursor: pointer; color: var(--glow); font-weight: 600; font-size: 13px; }
+.lq-tbl-w { max-height: 360px; overflow: auto; overscroll-behavior: contain; border: 1px solid rgb(27 61 104 / 0.55); border-radius: var(--r-md); }
+.lq-tbl table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.lq-tbl th, .lq-tbl td { padding: 6px 8px; text-align: end; white-space: nowrap; border-bottom: 1px solid rgb(27 61 104 / 0.3); }
+.lq-tbl thead th { white-space: normal; }
+.lq-tbl thead th { position: sticky; top: 0; background: rgb(3 7 18 / 0.96); color: var(--dim); font-weight: 600; }
+.lq-tbl tbody th { text-align: start; font-weight: 600; color: var(--ink); }
+.lq-tbl tbody th small { display: block; font-weight: 500; font-size: 11px; }
+.lq-tbl tr.up small { color: var(--up); }
+.lq-tbl tr.dn small { color: var(--dn); }
 .lq-seen { margin: -4px 0 12px; color: var(--dim); font-size: 11.5px; line-height: 1.4; }
 .lq-spark { display: block; width: 100%; height: 34px; margin: 10px 0 12px; direction: ltr; }
 .lq-spark-l { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }

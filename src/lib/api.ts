@@ -10,6 +10,7 @@ import { forget, peek, peekAny, remember } from "./memo";
 import { HALVING_TTL_MS, clockSkew, pickHalving, validHalving, type HalvingReply } from "./halving";
 import { FNG_SAVED_MAX_MS, FNG_TTL_MS, validFng, type FngReply } from "./fng";
 import { ETF_TTL_MS, validEtf, type EtfReply } from "./etf";
+import { validLiqMap } from "./liqmap";
 import { DOM_TTL_MS, MCAP_MAX_AGE, MCAP_TTL_MS, validDom, validMcap, type DomReply, type McapReply } from "./dom";
 import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
@@ -451,8 +452,10 @@ async function callTwice<T>(path: string): Promise<T | null> {
 export function savedLiqMap(sym: string, range: string): { at: number; v: LiqMapReply } | null {
   const all = readSaved<LiqMapReply>(LIQ_SAVED);
   const key = `${sym}|${range}`;
-  const hit = all[key];
-  if (hit && !(Date.now() - hit.at < LIQ_SAVED_MAX_AGE && hit.v?.ok)) {
+  const raw = all[key];
+  const v = raw && Date.now() - raw.at < LIQ_SAVED_MAX_AGE ? validLiqMap(raw.v) : null;
+  const hit = raw && v?.ok ? { at: raw.at, v } : null;
+  if (raw && !hit) {
     // Просроченная или испорченная карта — стираем, а не храним впустую.
     delete all[key];
     if (Object.keys(all).length) writeSaved(LIQ_SAVED, all);
@@ -462,8 +465,11 @@ export function savedLiqMap(sym: string, range: string): { at: number; v: LiqMap
   return hit ?? null;
 }
 
+/* Ответ сервера — через validLiqMap: подменённый, обрезанный или чужой
+   ответ экран не роняет и на устройство не ложится (null — как сбой сети). */
 export const fetchLiqMap = (sym: string, range: string) =>
-  remember<LiqMapReply | null>(liqPath(sym, range), LIQ_TTL, () => callTwice<LiqMapReply>(liqPath(sym, range)), good)
+  remember<LiqMapReply | null>(liqPath(sym, range), LIQ_TTL,
+    () => callTwice<unknown>(liqPath(sym, range)).then((r) => (r == null ? null : validLiqMap(r))), good)
     .then((r) => {
       if (r?.ok) {
         const all = readSaved<LiqMapReply>(LIQ_SAVED);

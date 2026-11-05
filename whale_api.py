@@ -11771,6 +11771,10 @@ def _json_clean(o):
 # байты в gzip). Сжимаем один раз на новую сводку, а не nginx на каждый
 # запрос: 127 КБ JSON ETF — это ~4 мс процессора на каждого человека.
 _PUBLIC: dict[str, tuple[object, bytes, str, bytes]] = {}
+# Карты ликвидаций — свой, ограниченный запас готовых байтов: монет сотни, и
+# общий _PUBLIC рос бы без конца. Старейшая карта уходит первой.
+_PUBLIC_LIQ: dict[str, tuple[object, bytes, str, bytes]] = {}
+PUBLIC_LIQ_MAX = 200
 
 
 def _wants_gzip(accept: str) -> bool:
@@ -15692,12 +15696,13 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
             self.send_header("Access-Control-Max-Age", "600")
 
-    def _json_public(self, name: str, obj: dict):
+    def _json_public(self, name: str, obj: dict, store: dict | None = None, keep: int = 0):
         """Ответ, одинаковый для всех (/api/dom, /api/mcap, /api/fng, /api/etf): тот же объект
         из кэша модуля не кодируется заново на каждый запрос (сотня КБ JSON —
         миллисекунды процессора), а у телефона с той же копией (If-None-Match)
         — «304 не изменилось» без тела. Личных данных в таких ответах нет."""
-        hit = _PUBLIC.get(name)
+        store = _PUBLIC if store is None else store
+        hit = store.get(name)
         if hit is None or hit[0] is not obj:
             try:
                 raw = json.dumps(_json_clean(obj), ensure_ascii=False, allow_nan=False).encode()
@@ -15706,7 +15711,10 @@ class Handler(BaseHTTPRequestHandler):
                 return
             # mtime=0: те же данные — те же байты, без даты сжатия внутри.
             hit = (obj, raw, f'W/"{hashlib.sha256(raw).hexdigest()[:24]}"', gzip.compress(raw, 6, mtime=0))
-            _PUBLIC[name] = hit
+            store.pop(name, None)  # свежая — в конец очереди
+            store[name] = hit
+            while keep and len(store) > keep:
+                store.pop(next(iter(store)), None)
         _, raw, tag, gz = hit
         same = tag in [x.strip() for x in (self.headers.get("If-None-Match") or "").split(",")]
         self._quiet = True
@@ -16180,7 +16188,13 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, options_data(qs.get("sym", ["BTC"])[0]))
                 return
             if path in ("/liqmap", "/api/liqmap"):
-                self._json(200, liq_map(qs.get("sym", ["BTC"])[0], (qs.get("range", ["1d"])[0] or "1d")))
+                # Карта одна для всех (монета × окно), меняется с ценой: готовые
+                # байты, ETag и «304», как у ETF и доминации. Ошибки — обычным ответом.
+                res = liq_map(qs.get("sym", ["BTC"])[0], (qs.get("range", ["1d"])[0] or "1d"))
+                if res.get("ok"):
+                    self._json_public(f"liqmap:{res['sym']}:{res['range']}", res, _PUBLIC_LIQ, PUBLIC_LIQ_MAX)
+                else:
+                    self._json(200, res)
                 return
             # Не «/api/token»: этот адрес давно занят историей цены монеты, и
             # проверка подписки попадала туда — после перезахода подписка

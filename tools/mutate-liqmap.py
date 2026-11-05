@@ -1,7 +1,7 @@
 """Мутационная проверка карты ликвидаций: python3 tools/mutate-liqmap.py
 
-Как у остальных модулей: портим wt_liqmap.py по одному месту (граница,
-знак, константа, защита кэша) и гоняем tests.test_liqmap. Убитая мутация —
+Как у остальных модулей: портим src/lib/liqmap.ts и wt_liqmap.py по одному
+месту (граница, знак, константа, защита кэша) и гоняем их тесты. Убитая мутация —
 тесты заметили порчу; выжившая — дыра в тестах. Файл после каждой мутации
 возвращается как был.
 """
@@ -12,7 +12,44 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Эквивалентные: сужение полосы после сгорания — только скорость: без него
 # свеча снова проходит уже пустые корзины, результат тот же.
-EQUIV = {"сгоревшая полоса лонгов не горит дважды", "сгоревшая полоса шортов не горит дважды"}
+# «Цена больше нуля» перекрыта проверкой нижнего края (0 ≤ lo < px): цена
+# не больше нуля и так не ответ.
+EQUIV = {"сгоревшая полоса лонгов не горит дважды", "сгоревшая полоса шортов не горит дважды", "цена больше нуля"}
+TS = [
+    ('return typeof e === "string" && (LIQ_ERRORS as readonly string[]).includes(e)', 'return typeof e === "string"', "ошибки — только известные"),
+    ('if (raw["ok"] !== true) return null;', "", "карта — только ok: true"),
+    ("if (typeof sym !== \"string\" || !SYM.test(sym)) return null;", "if (typeof sym !== \"string\") return null;", "тикер — буквы и цифры"),
+    ("!(LIQ_RANGES as readonly string[]).includes(range)) return null;", "false) return null;", "окно — только известное"),
+    ("if (!pos(px) || !pos(step) || !nonNeg(lo) || lo >= px) return null;", "if (!pos(px) || !pos(step)) return null;", "нижний край сетки"),
+    ("if (!pos(px) || !pos(step) || !nonNeg(lo) || lo >= px) return null;", "if (!fin(px) || !pos(step) || !nonNeg(lo) || lo >= px) return null;", "цена больше нуля"),
+    ("ex.length > 64 ||", "", "бирж не больше 64"),
+    ("if (!Array.isArray(levs) || levs.length < 1 || levs.length > LEVS_MAX) return null;", "if (!Array.isArray(levs)) return null;", "групп плеч 1–8"),
+    ("(i === 0 || l > (levs[i - 1] as number))", "true", "плечи по возрастанию"),
+    ("buckets.length > BUCKETS_MAX", "false", "корзин не больше предела"),
+    ("if (!isObj(b) || !pos(b[\"p\"])) return null;", "if (!isObj(b)) return null;", "цена корзины"),
+    ("if (!Array.isArray(v) || v.length !== n || !v.every(money)) return null;", "if (!Array.isArray(v) || !v.every(money)) return null;", "группы корзины — как плечи"),
+    ("const money = (v: unknown): v is number => nonNeg(v) && Number.isInteger(v);", "const money = (v: unknown): v is number => fin(v);", "деньги — целые ≥ 0"),
+    ("if (!isObj(c) || !money(c[\"L\"]) || !money(c[\"S\"])) return null;", "if (!isObj(c)) return null;", "накопленное — деньги"),
+    ("path.length < 1 || path.length > PATH_MAX || !path.every(pos)", "!path.every(pos)", "путь цены — 1–200 точек"),
+    ("if (!Array.isArray(ohlc) || ohlc.length > OHLC_MAX) return null;", "if (!Array.isArray(ohlc)) return null;", "свечей не больше предела"),
+    ("if (h < l || o > h || o < l || c > h || c < l) return null;", "", "свеча — открытие и закрытие внутри"),
+    ("if (!money(oi) || (seen !== undefined && !money(seen))) return null;", "if (!money(oi)) return null;", "«видно» — деньги"),
+    ("(at as number) > now + AHEAD_MAX", "false", "сборка не из будущего"),
+    ("{ seen: Math.min(seen as number, oi) }", "{ seen: seen as number }", "«видно» не больше интереса"),
+    ("ex: ex.slice() as string[],", "ex: ex as string[], evil: 1,", "только известные поля"),
+    ("const base = Math.max(1, Math.round((hi - lo) / r.step / 60));", "const base = Math.max(1, Math.floor((hi - lo) / r.step / 30));", "строк около шестидесяти"),
+    ("const row = rows[Math.floor((b.p - lo) / size)];", "const row = rows[Math.round((b.p - lo) / size)];", "корзина — в свою строку"),
+    ("  return { rows: rows.reverse(), rowH };", "  return { rows, rowH };", "строки сверху вниз"),
+    ("    if (w && w.mid > p) {\n      acc += sumOn(w.S, on);", "    if (w) {\n      acc += sumOn(w.S, on);", "накопленное шортов — выше цены"),
+    ("acc += sumOn(w.L, on);", "acc += sum(w.L);", "выключенная группа не считается"),
+    ("if ((up ? d <= 0 : d >= 0) || Math.abs(d) > within) continue;", "if (Math.abs(d) > within) continue;", "скопление — на своей стороне"),
+    ("if ((up ? d <= 0 : d >= 0) || Math.abs(d) > within) continue;", "if (up ? d <= 0 : d >= 0) continue;", "скопление — в окне"),
+    ("const hit = list.filter((g) => g.v >= max * 0.5).sort((a, b) => a.k - b.k)[0];", "const hit = list.sort((a, b) => a.k - b.k)[0];", "ближайшее — крупное"),
+    ("if (out.every((x) => Math.abs(x.k - g.k) >= 2)) out.push(g);", "out.push(g);", "крупнейшие — не соседние"),
+    ("const list = bands(r, up, Math.max(0.005, span / 3000), span / 100).sort((a, b) => b.v - a.v);", "const list = bands(r, up, Math.max(0.005, span / 3000), span / 100);", "крупнейшие — по убыванию"),
+    ("  return Math.max(0, Math.floor((now - at) / 60));", "  return Math.floor((now - at) / 60);", "возраст — не минус"),
+    ("export const LIQ_OLD_MIN = 40;", "export const LIQ_OLD_MIN = 400;", "пометка старых данных"),
+]
 PY = [
     # Модель.
     ("    (75, 0.07, 3), (100, 0.08, 3),", "    (75, 0.07, 3), (100, 0.18, 3),", "доли плеч — в сумме 1"),
@@ -72,6 +109,25 @@ PY = [
     ("    for k in [k for k, v in _st.hits.items() if t - v[0] >= STALE]:", "    for k in [k for k, v in _st.hits.items() if t - v[0] >= STALE * 100]:", "старые карты — вон"),
     ("    for k in [k for k, v in _st.fails.items() if t - v >= FAIL_WAIT]:", "    for k in [k for k, v in _st.fails.items() if t - v >= 0]:", "свежая пауза остаётся"),
     ("    for k in [k for k, v in _st.fails.items() if t - v >= FAIL_WAIT]:", "    for k in [k for k, v in _st.fails.items() if t - v >= FAIL_WAIT * 100]:", "старые паузы — вон"),
+    # Чистка рядов бирж.
+    ("    if isinstance(v, bool) or not isinstance(v, (int, float)):", "    if not isinstance(v, (int, float)):", "bool — не число"),
+    ("if not (0 < low <= hi < PX_MAX and 0 < c < PX_MAX and hi <= low * RANGE_MAX and 0 <= oi <= OI_MAX):", "if not (0 < low <= hi and 0 < c and 0 <= oi):", "пределы правдоподобия"),
+    ("if not (0 < low <= hi < PX_MAX and 0 < c < PX_MAX and hi <= low * RANGE_MAX and 0 <= oi <= OI_MAX):", "if not (0 < low and 0 < c < PX_MAX and hi <= low * RANGE_MAX and 0 <= oi <= OI_MAX):", "максимум не ниже минимума"),
+    ("        share = bs if bs is not None and 0 <= bs <= 1 else 0.5", "        share = bs if bs is not None else 0.5", "доля покупок 0–1"),
+    ("        out[t] = (t, max(hi, c), min(low, c), c, oi, share)", "        out[t] = (t, hi, low, c, oi, share)", "закрытие — внутри свечи"),
+    ("    ok = [out[t] for t in sorted(out)][-ROWS_MAX:]", "    ok = list(out.values())[-ROWS_MAX:]", "свечи — по времени"),
+    ("    ok = [out[t] for t in sorted(out)][-ROWS_MAX:]", "    ok = [out[t] for t in sorted(out)]", "свечей не больше ROWS_MAX"),
+    ("isinstance(r[0], bool) or not isinstance(r[0], int)", "not isinstance(r[0], int)", "время — не bool"),
+    ("abs(b / a - 1) <= SPIKE_PAIR and abs(m / a - 1) > SPIKE and abs(m / b - 1) > SPIKE", "abs(m / a - 1) > SPIKE", "выброс — соседи согласны"),
+    ("abs(b / a - 1) <= SPIKE_PAIR and abs(m / a - 1) > SPIKE and abs(m / b - 1) > SPIKE", "False", "выброс заменяется"),
+    ("            ok[i] = (*ok[i][:4], (a * b) ** 0.5 * px[i], ok[i][5])", "            ok[i] = (*ok[i][:4], 0.0, ok[i][5])", "выброс — средним соседей"),
+    ("    px = [ok[max(0, j - 1)][3] for j in range(len(ok))]", "    px = [ok[j][3] for j in range(len(ok))]", "выброс — по цене снимка"),
+    ('"low": min(px, (last or ref[-1])[2]), "high": max(px, (last or ref[-1])[1])}', '"low": min(px, ref[-1][2]), "high": max(px, ref[-1][1])}', "край сгорания — мелкая свеча"),
+    ("                if t_ref:\n                    tail_ref.extend(t_ref)\n", "", "опора хвоста — в край сгорания"),
+    ("ref[-1][0] - rows[-1][0] <= STALE_ROWS * span}", "True}", "отставшая биржа не берётся"),
+    ("ref[-1][0] - rows[-1][0] <= STALE_ROWS * span}", "ref[-1][0] - rows[-1][0] <= span}", "отставание — до STALE_ROWS свечей"),
+    ("    got = {ex: splice(c, clean_rows(tail.get(ex))) for ex, rows in got.items() if len(c := clean_rows(rows)) >= 8}", "    got = {ex: splice(rows, tail.get(ex)) for ex, rows in got.items()}", "ряды бирж — чистые"),
+    ("        got = fresh(got, ref)\n", "        pass\n", "отставшие биржи — вон"),
     # Ответ.
     ("lv = [round(st[\"L\"][g][b] * m) if b < cut_l else 0 for g in range(g_n)]", "lv = [round(st[\"L\"][g][b] * m) for g in range(g_n)]", "лонги ниже цены"),
     ("sv = [round(st[\"S\"][g][b] * m) if b >= cut_s else 0 for g in range(g_n)]", "sv = [round(st[\"S\"][g][b] * m) for g in range(g_n)]", "шорты выше цены"),
@@ -145,7 +201,9 @@ def run(path, cmd, muts):
     return alive
 
 
-alive = run(f"{ROOT}/wt_liqmap.py", [sys.executable, "-m", "unittest", "tests.test_liqmap"], PY)
-total = len(PY) - len(EQUIV)
+a1 = run(f"{ROOT}/src/lib/liqmap.ts", ["node", "--test", "tests/liqmap.test.ts", "tests/liqmap.props.test.ts"], TS)
+a2 = run(f"{ROOT}/wt_liqmap.py", [sys.executable, "-m", "unittest", "tests.test_liqmap", "tests.test_liqmap_fuzz"], PY)
+alive = a1 + a2
+total = len(TS) + len(PY) - len(EQUIV)
 print(f"ИТОГ: убито {total - len(alive)} из {total}; выжили: {alive}")
 sys.exit(1 if alive else 0)

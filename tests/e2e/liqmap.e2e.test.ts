@@ -59,6 +59,7 @@ after(async () => {
 
 interface Opts {
   lang?: string;
+  forcedColors?: boolean;
   width?: number;
   height?: number;
   scale?: number;
@@ -71,7 +72,7 @@ async function open(o: Opts = {}): Promise<Opened> {
   const lang = o.lang ?? "ru";
   const ctx = await browser.newContext({
     viewport: { width: o.width ?? 360, height: o.height ?? 780 }, deviceScaleFactor: o.scale ?? 1,
-    locale: lang === "ar" ? "ar" : "ru-RU", timezoneId: "UTC",
+    locale: lang === "ar" ? "ar" : "ru-RU", timezoneId: "UTC", forcedColors: o.forcedColors ? "active" : "none",
   });
   const page = await ctx.newPage();
   const errors: string[] = [];
@@ -112,7 +113,7 @@ function overflow(page: Page): Promise<string[]> {
     if (document.scrollingElement!.scrollWidth > W + 1) out.push(`страница шире экрана: ${document.scrollingElement!.scrollWidth} > ${W}`);
     for (const el of document.querySelectorAll<HTMLElement>(".sheet *")) {
       const r = el.getBoundingClientRect();
-      if (!r.width || el.closest(".chips, .seg, svg")) continue;
+      if (!r.width || el.closest(".chips, .seg, svg, .lq-tbl-w")) continue;
       if (r.left < -0.5 || r.right > W + 0.5) out.push(`${el.tagName}.${el.className} «${(el.textContent ?? "").slice(0, 40)}» ${r.left.toFixed(0)}–${r.right.toFixed(0)}`);
     }
     return out.slice(0, 8);
@@ -245,6 +246,82 @@ describe("Карта ликвидаций", () => {
     await ready(page);
     assert.equal(await page.locator(".lq-retry").count(), 0);
     assert.ok(asked.length >= 4, String(asked.length));
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("клавиатура: стрелки выбирают уровень у цены и соседние, Escape убирает подсказку", async () => {
+    const { ctx, page, errors } = await open();
+    await ready(page);
+    const plot = page.locator(".lq-plot");
+    assert.equal(await plot.getAttribute("aria-label"), I18N["lq_keys"]!["ru"]);
+    await plot.focus();
+    await page.keyboard.press("ArrowUp");
+    await page.locator(".lq-pop").waitFor();
+    const first = sp(await page.locator(".lq-pop-h").innerText());
+    await page.keyboard.press("ArrowUp");
+    await page.keyboard.press("ArrowUp");
+    assert.notEqual(sp(await page.locator(".lq-pop-h").innerText()), first);
+    await page.keyboard.press("End");
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(100);
+    assert.equal(await page.locator(".lq-pop").count(), 0);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("таблица уровней: то же, что на карте, словами; не вылезает за экран", async () => {
+    const { ctx, page, errors } = await open({ width: 320 });
+    await ready(page);
+    const tbl = page.locator("details.lq-tbl");
+    assert.equal(sp(await tbl.locator("summary").innerText()), I18N["ef_tbl"]!["ru"]);
+    await tbl.locator("summary").click();
+    const rows = tbl.locator("tbody tr");
+    assert.ok(await rows.count() > 10, String(await rows.count()));
+    const heads = (await tbl.locator("thead th").allInnerTexts()).map(sp);
+    assert.deepEqual(heads, [I18N["lq_tbl_px"]!["ru"], I18N["lq_tbl_v"]!["ru"], I18N["lq_cum_axis"]!["ru"]].map((x) => sp(x!)));
+    // Сверху — шорты (выше цены), снизу — лонги.
+    assert.ok(sp(await rows.first().innerText()).includes(I18N["lq_shorts"]!["ru"]!));
+    assert.ok(sp(await rows.last().innerText()).includes(I18N["lq_longs"]!["ru"]!));
+    assert.deepEqual(await overflow(page), []);
+    // Таблица листается внутри своей рамки, а не всей страницей; на 320 px — без листания.
+    const box = await tbl.locator(".lq-tbl-w").evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth }));
+    assert.ok(box.sw <= box.cw + 1, JSON.stringify(box));
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("биржи давно молчат — пометка «карта от ЧЧ:ММ»; свежая — без пометки", async () => {
+    const old = { ...FIX["1d"], at: T - 2 * 3600 };
+    let o = await open({ replies: [old] });
+    await ready(o.page);
+    const note = sp(await o.page.locator(".lq-stale[role=status]").innerText());
+    assert.ok(note.startsWith(sp(I18N["lq_old"]!["ru"]!.split("{t}")[0]!)), note);
+    assert.match(note, /\d{2}:\d{2}/);
+    await o.ctx.close();
+    o = await open();
+    await ready(o.page);
+    assert.equal(await o.page.locator(".lq-stale").count(), 0);
+    await o.ctx.close();
+  });
+
+  test("подменённый или испорченный ответ — не карта: «Повторить», без ошибок страницы", async () => {
+    const bad = [{ ...FIX["1d"], px: -1 }, { ...FIX["1d"], buckets: "x" }, { ...FIX["1d"], levs: [1] }, { ok: false, error: "<b>" }];
+    for (const reply of bad) {
+      const { ctx, page, errors } = await open({ replies: [reply] });
+      await page.locator(".lq-retry").waitFor({ timeout: 15_000 });
+      assert.equal(await page.locator(".lq-hero").count(), 0);
+      assert.deepEqual(errors, []);
+      await ctx.close();
+    }
+  });
+
+  test("высокая контрастность: карта, легенда и таблица на месте", async () => {
+    const { ctx, page, errors } = await open({ forcedColors: true });
+    await ready(page);
+    assert.ok(await page.locator(".lq-svg .lq-row").count() > 10);
+    assert.equal(await page.locator(".lq-legend button").count(), 5);
+    assert.deepEqual(await overflow(page), []);
     assert.deepEqual(errors, []);
     await ctx.close();
   });
