@@ -28,7 +28,7 @@
  * превратило бы карту в ребус, поэтому у него своя узкая колонка справа с той
  * же ценовой осью.
  */
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useApp, type LiqRange } from "../store/app";
 import { t } from "../i18n/t";
 import type { DictKey } from "../i18n/types";
@@ -497,6 +497,19 @@ export function LiqMapScreen() {
   const [busy, setBusy] = useState(false);
   /* Когда показана карта с устройства, а свежая не пришла, — её время. */
   const [staleAt, setStaleAt] = useState<number | null>(null);
+  /* Когда карта на экране пришла с сервера (часы телефона, мс); null — на
+     экране копия с устройства или из памяти. Пометка «биржи давно не
+     отвечают» — только если сервер сам прислал старую карту: копия,
+     пролежавшая в телефоне, о биржах ничего не говорит. */
+  const [gotAt, setGotAt] = useState<number | null>(null);
+  const gotRef = useRef<number | null>(null);
+  const got = useCallback((r: LiqMapReply) => {
+    const t = Date.now();
+    gotRef.current = t;
+    setGotAt(t);
+    setReply(r);
+    setStaleAt(null);
+  }, []);
   const [retry, setRetry] = useState(0);
   const plotRef = useRef<HTMLDivElement>(null);
   /* Ширина экрана карты (без полей карточки) — для рисунка в настоящих пикселях. */
@@ -519,6 +532,8 @@ export function LiqMapScreen() {
     setReply(cached ?? saved?.v ?? null);
     setBusy(!cached);
     setStaleAt(null);
+    setGotAt(null);
+    gotRef.current = null;
     void fetchLiqMap(sym, range).then((r) => {
       if (!alive) return;
       if ((r?.error === "building" || r?.error === "busy") && tries.current.n < BUILD_TRIES) {
@@ -527,7 +542,9 @@ export function LiqMapScreen() {
         return;
       }
       setBusy(false);
-      if (r?.ok || r?.error === "no_data") {
+      if (r?.ok) {
+        got(r);
+      } else if (r?.error === "no_data") {
         setReply(r);
       } else if (saved) {
         setStaleAt(saved.at);
@@ -540,26 +557,37 @@ export function LiqMapScreen() {
       alive = false;
       window.clearTimeout(timer);
     };
-  }, [sym, range, setLiq, retry]);
+  }, [sym, range, setLiq, retry, got]);
 
-  /* Пока экран открыт, карта обновляется сама каждые 20 секунд: сервер
-     сводит её с живой ценой при каждом запросе (уровни, которые цена уже
-     прошла, — ликвидированы и уходят), а позиции, закрытые за это время, —
-     при пересборке раз в 2–30 минут, по окну.
-     Выбранный уровень и масштаб при этом не сбрасываются. Скрытое
-     приложение не спрашивает. */
+  /* Пока экран открыт, карта обновляется сама каждые 20 секунд и сразу при
+     возврате в приложение (в фоне таймеры WebView стоят, и на экране
+     оставалась бы карта часовой давности): сервер сводит её с живой ценой
+     при каждом запросе (уровни, которые цена уже прошла, — ликвидированы и
+     уходят), а позиции, закрытые за это время, — при пересборке раз в 2–30
+     минут, по окну. Выбранный уровень и масштаб при этом не сбрасываются.
+     Не обновилась — пометка «не удалось обновить» со временем последней
+     карты с сервера. Скрытое приложение не спрашивает. */
   useEffect(() => {
-    const id = window.setInterval(() => {
-      if (document.visibilityState !== "visible") return;
+    let alive = true;
+    let asking = false;
+    const pull = () => {
+      if (asking || document.visibilityState !== "visible") return;
+      asking = true;
       void refreshLiqMap(sym, range).then((r) => {
-        if (r?.ok) {
-          setReply(r);
-          setStaleAt(null);
-        }
+        asking = false;
+        if (!alive) return;
+        if (r?.ok) got(r);
+        else if (gotRef.current !== null) setStaleAt((s) => s ?? gotRef.current);
       });
-    }, LIVE_EVERY);
-    return () => window.clearInterval(id);
-  }, [sym, range]);
+    };
+    const id = window.setInterval(pull, LIVE_EVERY);
+    document.addEventListener("visibilitychange", pull);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", pull);
+    };
+  }, [sym, range, got]);
 
   const again = () => {
     haptic("select");
@@ -611,7 +639,7 @@ export function LiqMapScreen() {
       .map((w, i) => ({ p: w.mid, up: w.mid > reply.px, v: sumOn(side(w, reply.px), on), c: cum[i] ?? 0 }))
       .filter((x) => x.v > 0);
   }, [reply, view, on, cum]);
-  const old = reply?.ok && ageMin(reply.at) >= LIQ_OLD_MIN
+  const old = reply?.ok && gotAt !== null && ageMin(reply.at, gotAt / 1000) >= LIQ_OLD_MIN
     ? new Intl.DateTimeFormat(lang, { hour: "2-digit", minute: "2-digit" }).format(new Date(reply.at * 1000))
     : null;
 

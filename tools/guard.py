@@ -824,6 +824,10 @@ say("карта ликвидаций — копия на диске, как у �
     and "liq_disk_save()" in api.split("def liq_warm_refresher() -> None:")[1].split("\ndef ")[0]
     and "os.replace(tmp, path)" in api.split("def liq_disk_save(")[1].split("\ndef ")[0] and "LIQ_DISK_MAX = 16 * 2 ** 20" in api
     and os.path.isfile(f"{APP}/tests/test_liqmap_disk.py") and "tests.test_liqmap_disk" in read(f"{APP}/tools/mutate-liqmap.py"))
+say("карта ликвидаций: «биржи давно не отвечают» — только если сервер сам прислал старую карту (копия с устройства или из памяти о биржах ничего не говорит); при возврате в приложение карта обновляется сразу; не обновилась — «не удалось обновить»",
+    "ageMin(reply.at, gotAt / 1000) >= LIQ_OLD_MIN" in _lq and 'document.addEventListener("visibilitychange", pull);' in _lq
+    and "setStaleAt((s) => s ?? gotRef.current)" in _lq
+    and "копия с устройства — без пометки «биржи молчат»" in read(f"{APP}/tests/e2e/liqmap.e2e.test.ts"))
 say("авторские права: LICENSE «все права защищены» (Wallet Tracker) с оговоркой о сторонних лицензиях (IBM Plex — OFL, Twemoji — CC BY 4.0, данные источников); package.json — UNLICENSED; на экране «Документы» — «© 2026 Wallet Tracker» на 16 языках",
     os.path.isfile(f"{APP}/LICENSE") and "Copyright (c) 2026 Wallet Tracker. All rights reserved." in read(f"{APP}/LICENSE")
     and "SIL Open Font" in read(f"{APP}/LICENSE") and "CC BY 4.0" in read(f"{APP}/LICENSE")

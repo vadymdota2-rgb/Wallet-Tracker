@@ -399,8 +399,10 @@ export const translateComment = (cid: number, lang: string) =>
 export const uncommentDigest = (cid: number, mute = false) =>
   call<DigestActReply>("/api/digest/uncomment", { method: "POST", body: { cid, mute } });
 
-/* Карта ликвидаций: сервер пересчитывает раз в две минуты — чаще спрашивать
-   незачем. */
+/* Карта ликвидаций: сервер пересобирает её раз в 2–30 минут (по окну), а
+   на каждый запрос сводит с живой ценой. Память — на две минуты (вернуться
+   к той же монете без запроса); открытый экран сам спрашивает свежую мимо
+   памяти (refreshLiqMap). */
 const liqPath = (sym: string, range: string) =>
   `/api/liqmap?sym=${encodeURIComponent(sym)}&range=${encodeURIComponent(range)}`;
 /* Карта и список монет лежат и на устройстве: открыть экран нужно сразу, с

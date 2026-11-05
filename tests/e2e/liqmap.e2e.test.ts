@@ -65,6 +65,10 @@ interface Opts {
   scale?: number;
   /** Ответы /api/liqmap по очереди (последний — дальше всегда); по умолчанию — образец окна. */
   replies?: unknown[];
+  /** Карта BTC·1d на устройстве (прошлый показ) — до открытия экрана. */
+  saved?: unknown;
+  /** Ответ /api/liqmap ждёт, пока не выполнится это обещание. */
+  hold?: Promise<void>;
 }
 interface Opened { ctx: BrowserContext; page: Page; errors: string[]; asked: string[] }
 
@@ -88,14 +92,16 @@ async function open(o: Opts = {}): Promise<Opened> {
     const rng = (new URL(r.request().url()).searchParams.get("range") ?? "1d") as keyof typeof FIX & string;
     const body = o.replies ? o.replies[Math.min(asked.length, o.replies.length - 1)] : FIX[rng];
     asked.push(rng);
+    if (o.hold) await o.hold;
     await r.fulfill({ contentType: "application/json", body: typeof body === "string" ? body : JSON.stringify(body) });
   });
-  await page.addInitScript((l: string) => {
+  await page.addInitScript(([l, saved, at]: [string, string | null, number]) => {
     if (sessionStorage.getItem("e2e")) return;
     sessionStorage.setItem("e2e", "1");
     localStorage.clear();
     localStorage.setItem("wt-miniapp-v7", JSON.stringify({ state: { lang: l, langPinned: true }, version: 9 }));
-  }, lang);
+    if (saved) localStorage.setItem("wt-liqmap-v1", JSON.stringify({ "BTC|1d": { at, v: JSON.parse(saved) } }));
+  }, [lang, o.saved === undefined ? null : JSON.stringify(o.saved), T * 1000] as [string, string | null, number]);
   await page.goto(`${base}/#tgWebAppData=${encodeURIComponent(`user=${encodeURIComponent('{"id":1}')}&hash=x`)}`);
   await page.evaluate(() => document.fonts.ready);
   await page.locator(".burger").click();
@@ -302,6 +308,40 @@ describe("Карта ликвидаций", () => {
     o = await open();
     await ready(o.page);
     assert.equal(await o.page.locator(".lq-stale").count(), 0);
+    await o.ctx.close();
+  });
+
+  test("копия с устройства — без пометки «биржи молчат», пока сервер не ответил", async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((ok) => { release = ok; });
+    const o = await open({ saved: { ...FIX["1d"], at: T - 3 * 3600 }, hold });
+    await ready(o.page); // прошлая карта видна сразу
+    await o.page.waitForTimeout(300);
+    assert.equal(await o.page.locator(".lq-stale").count(), 0);
+    const done = o.page.waitForResponse((r) => r.url().includes("/api/liqmap"));
+    release();
+    await done;
+    await o.page.waitForTimeout(300);
+    assert.equal(await o.page.locator(".lq-stale").count(), 0);
+    assert.deepEqual(o.errors, []);
+    await o.ctx.close();
+  });
+
+  test("возврат в приложение — карта сразу свежая; не обновилась — «не удалось обновить»", async () => {
+    const old = { ...FIX["1d"], at: T - 2 * 3600 };
+    const o = await open({ replies: [old, FIX["1d"], '{"ok":false}'] });
+    await ready(o.page);
+    await o.page.locator(".lq-stale[role=status]").waitFor();
+    const show = () => o.page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await show();
+    await o.page.locator(".lq-stale").waitFor({ state: "detached" });
+    assert.equal(o.asked.length, 2);
+    await show();
+    const note = o.page.locator(".lq-stale:not([role=status])");
+    await note.waitFor();
+    assert.ok(sp(await note.innerText()).startsWith(sp(I18N["lq_stale"]!["ru"]!.split("(")[0]!)), await note.innerText());
+    assert.equal(await o.page.locator(".lq-hero").count(), 1); // карта осталась
+    assert.deepEqual(o.errors, []);
     await o.ctx.close();
   });
 
