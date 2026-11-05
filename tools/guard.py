@@ -599,7 +599,7 @@ say("карта ликвидаций: шесть бирж с историей и
 
 say("карта ликвидаций: отдаётся из памяти сразу, старая — с пересчётом в фоне, тёплые монеты заранее",
     "def _bg(" in read(f"{APP}/wt_liqmap.py") and "wt_liqmap.warm(sym, rng)" in api and "def liq_warm_refresher(" in api and "target=liq_warm_refresher" in api
-    and "wait(futures, timeout=LIQ_BUDGET)" in api and 'sorted(ex.get(k, ()))' in api
+    and "wait(futures, timeout=LIQ_BUDGET if n <= 400 else LIQ_PRE_BUDGET)" in api and 'sorted(ex.get(k, ()))' in api
     and "savedLiqMap(sym, range)" in _lq and "callTwice<unknown>(liqPath(sym, range))" in read(f"{APP}/src/lib/api.ts"))
 
 _ngx = read(f"{APP}/nginx.conf")
@@ -828,6 +828,11 @@ say("карта ликвидаций: «биржи давно не отвеча�
     "ageMin(reply.at, gotAt / 1000) >= LIQ_OLD_MIN" in _lq and 'document.addEventListener("visibilitychange", pull);' in _lq
     and "setStaleAt((s) => s ?? gotRef.current)" in _lq
     and "копия с устройства — без пометки «биржи молчат»" in read(f"{APP}/tests/e2e/liqmap.e2e.test.ts"))
+say("карта ликвидаций — предыстория: каждое окно начинается с дневных рядов бирж за ~три года до своего начала (иначе видны только позиции, открытые за окно); одна на монету для всех окон, в фоне раз в PRE_TTL, кэш ограничен; Kraken Futures — биржа с историей интереса; снимки не заменяют настоящие ряды",
+    'PRE = ("1d", 1000)' in read(f"{APP}/wt_liqmap.py") and "got = {ex: prepend(pre.get(ex), rows) for ex, rows in got.items()}" in read(f"{APP}/wt_liqmap.py")
+    and "PRE_MAX = 12" in read(f"{APP}/wt_liqmap.py") and '("Kraken", _liq_kraken))' in api and "got.setdefault(ex, rows)" in api
+    and "LIQ_BUDGET if n <= 400 else LIQ_PRE_BUDGET" in api and os.path.isfile(f"{APP}/tests/test_liqmap_pre.py")
+    and "tests.test_liqmap_pre" in read(f"{APP}/tools/mutate-liqmap.py"))
 say("авторские права: LICENSE «все права защищены» (Wallet Tracker) с оговоркой о сторонних лицензиях (IBM Plex — OFL, Twemoji — CC BY 4.0, данные источников); package.json — UNLICENSED; на экране «Документы» — «© 2026 Wallet Tracker» на 16 языках",
     os.path.isfile(f"{APP}/LICENSE") and "Copyright (c) 2026 Wallet Tracker. All rights reserved." in read(f"{APP}/LICENSE")
     and "SIL Open Font" in read(f"{APP}/LICENSE") and "CC BY 4.0" in read(f"{APP}/LICENSE")

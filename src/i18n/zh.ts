@@ -1055,7 +1055,7 @@ export const zh: Dict = {
   lq_open_chart: "打开图表",
   lq_price_w: "价格 · {w}",
   lq_search: "搜索币种，如 PEPE",
-  lq_seen: "模型看到{a}的未平仓量（{p}）：本期间内开立且尚未平仓的仓位。期间越长，看到的越多。",
+  lq_seen: "模型看到{a}的未平仓量（{p}）：可从交易所历史（最长三年）追溯且尚未平仓的仓位。其余仓位开立于交易所保存历史之前。",
   lq_share_l: "多单{p} · {v}",
   lq_share_s: "空单{p} · {v}",
   lq_shorts: "空头",

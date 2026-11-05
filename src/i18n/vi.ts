@@ -1055,7 +1055,7 @@ export const vi: Dict = {
   lq_open_chart: "Mở biểu đồ",
   lq_price_w: "Giá · {w}",
   lq_search: "Tìm coin, ví dụ PEPE",
-  lq_seen: "Mô hình thấy {a} trong open interest ({p}): các vị thế mở trong giai đoạn này và chưa đóng. Giai đoạn càng dài, thấy càng nhiều.",
+  lq_seen: "Mô hình thấy {a} trong open interest ({p}): các vị thế lần theo được qua lịch sử sàn (tối đa ba năm) và vẫn còn mở. Phần còn lại được mở trước khi sàn lưu lịch sử.",
   lq_share_l: "{p} long · {v}",
   lq_share_s: "{p} short · {v}",
   lq_shorts: "Short",

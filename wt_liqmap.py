@@ -22,7 +22,13 @@
     Открыли и закрыли за одну свечу — интерес не изменился, и модель этого
     не видит; стоит интерес, а свеча сожгла уровни — на их место открылись
     новые позиции;
-  - после последнего снимка — текущая свеча: её ход тоже сжигает уровни.
+  - после последнего снимка — текущая свеча: её ход тоже сжигает уровни;
+  - предыстория (PRE): позиции, открытые до начала окна, иначе были бы
+    невидимы — модель видела бы лишь то, что открыто за окно (у суток —
+    десятую часть интереса). Поэтому каждое окно начинается с дневных свечей
+    бирж за ~три года до своего начала (сколько биржа хранит), а дальше идёт
+    свечами окна. Окна различаются детальностью недавнего хода, а не тем,
+    сколько позиций видно.
 
 Живая цена: цена карты — одна на все окна, а не закрытие свечи своего окна
 (у «30 дней» последняя свеча 4-часовая, и цена отставала на часы). Между
@@ -128,6 +134,17 @@ SYM = re.compile(r"[A-Z0-9]{1,12}")
 SPIKE = 0.3
 SPIKE_PAIR = 0.05
 STALE_ROWS = 3
+# Предыстория: дневные ряды бирж (сколько дней), один кэш на монету для всех
+# окон. Пересобирается в фоне раз в PRE_TTL; старше PRE_STALE не берётся.
+# Первая сборка монеты ждёт её не дольше PRE_WAIT (сборка и так в фоне);
+# не пришла — окно без неё, как раньше. Монет в кэше — не больше PRE_MAX.
+PRE = ("1d", 1000)
+PRE_SEC = 86400
+PRE_TTL = 6 * 3600.0
+PRE_STALE = 2 * 86400.0
+PRE_WAIT = 50.0
+PRE_RETRY = 600.0  # предыстория не пришла — снова спросить через столько, с
+PRE_MAX = 12  # до ~7 МБ на монету (31 ряд × 1000 дней)
 ROWS_MAX = 2000
 # Правдоподобные пределы: цена монеты, интерес одной биржи ($), размах свечи.
 PX_MAX = 1e9
@@ -352,6 +369,16 @@ def splice(main: list[Row], tail: list[Row] | None) -> list[Row]:
     return [r for r in main if r[0] < cut] + [r for r in tail if r[0] >= cut]
 
 
+def prepend(pre: list[Row] | None, rows: list[Row]) -> list[Row]:
+    """Ряд окна с предысторией: дневные свечи, закончившиеся до начала окна, и
+    дальше свечи окна. Свеча, что заходит в окно, не берётся: её ход и
+    интерес окно уже знает точнее."""
+    if not pre or not rows:
+        return rows
+    cut = rows[0][0]
+    return [r for r in pre if r[0] + PRE_SEC <= cut] + rows
+
+
 def _smooth(a: list[float]) -> list[float]:
     """Соседние корзины 1-2-1; края — без потерь (недостающий сосед — сама корзина)."""
     n = len(a)
@@ -463,6 +490,9 @@ class _State:
         self.hits: dict[tuple[str, str], tuple[float, dict[str, Json], dict[str, Json]]] = {}
         self.jobs: dict[tuple[str, str], threading.Thread] = {}
         self.fails: dict[tuple[str, str], float] = {}
+        # Предыстория: монета → (когда собрана, {биржа: дневной ряд}).
+        self.pre: dict[str, tuple[float, dict[str, list[Row]]]] = {}
+        self.pre_jobs: dict[str, threading.Thread] = {}
         self.gather: Gather | None = None
         self.price: Price | None = None
 
@@ -513,6 +543,54 @@ def _sweep() -> None:
         del _st.fails[k]
 
 
+def _pre_fetch(sym: str) -> None:
+    """Собрать предысторию монеты (фоновый поток) и положить в кэш."""
+    gather = _st.gather
+    try:
+        got, _ref = gather(sym, *PRE) if gather else ({}, None)
+        rows: dict[str, list[Row]] | None = {ex: c for ex, r in got.items() if len(c := clean_rows(r)) >= 8}
+    except Exception:  # noqa: BLE001 — биржи молчат: окна без предыстории, спросим позже
+        rows = None
+    with _lock:
+        t = time.monotonic()
+        if rows:
+            _st.pre.pop(sym, None)  # свежая — в конец очереди
+            _st.pre[sym] = (t, rows)
+        else:
+            # Ничего не пришло: прежнюю (если есть) держим, а спросим снова через PRE_RETRY.
+            old = _st.pre.get(sym)
+            _st.pre[sym] = (t - PRE_TTL + PRE_RETRY, old[1] if old else {})
+        while len(_st.pre) > PRE_MAX:
+            del _st.pre[min(_st.pre, key=lambda k: _st.pre[k][0])]
+        _st.pre_jobs.pop(sym, None)
+
+
+def _pre(sym: str, wait: float) -> dict[str, list[Row]]:
+    """Предыстория монеты: свежая — из кэша; постарше — тоже (а свежая
+    собирается в фоне); нет вовсе — ждём сборку не дольше wait."""
+    with _lock:
+        t = time.monotonic()
+        hit = _st.pre.get(sym)
+        if hit and t - hit[0] < PRE_TTL:
+            return hit[1]
+        job = _st.pre_jobs.get(sym)
+        if job is None and _st.gather is not None:
+            job = threading.Thread(target=_pre_fetch, args=(sym,), daemon=True)
+            try:
+                job.start()
+            except RuntimeError:
+                job = None
+            else:
+                _st.pre_jobs[sym] = job
+    if hit and t - hit[0] < PRE_STALE:
+        return hit[1]
+    if job is not None and wait > 0:
+        job.join(wait)
+    with _lock:
+        hit = _st.pre.get(sym)
+        return hit[1] if hit and time.monotonic() - hit[0] < PRE_STALE else {}
+
+
 def build(sym: str, rng: str) -> dict[str, Json]:
     """Собрать карту (ряды — через set_gather, цена — через set_price) и положить в кэш."""
     key = (sym, rng)
@@ -536,6 +614,7 @@ def build(sym: str, rng: str) -> dict[str, Json]:
                 tail_ref.clear()
         job = threading.Thread(target=fetch_tail, daemon=True)
         job.start()
+    _pre(sym, 0)  # предыстория — параллельно с окном
     got, ref = gather(sym, period, n) if gather else ({}, None)
     if job is not None:
         job.join()
@@ -543,6 +622,9 @@ def build(sym: str, rng: str) -> dict[str, Json]:
     got = {ex: splice(c, clean_rows(tail.get(ex))) for ex, rows in got.items() if len(c := clean_rows(rows)) >= 8}
     if ref:
         got = fresh(got, ref)
+    if got and ref:
+        pre = _pre(sym, PRE_WAIT)
+        got = {ex: prepend(pre.get(ex), rows) for ex, rows in got.items()}
     if not got or not ref:
         with _lock:
             _st.fails[key] = time.monotonic()

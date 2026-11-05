@@ -410,6 +410,8 @@ class LiveTest(unittest.TestCase):
 class CacheTest(Base):
     def gather(self, calls, rows=None, delay=0.0):
         def fn(sym, period, n):
+            if (period, n) == lm.PRE:
+                return {}, None  # предыстория — свои тесты (PreTest), здесь — только окно
             calls.append((sym, period, n))
             if delay:
                 time.sleep(delay)
@@ -603,7 +605,8 @@ class CacheTest(Base):
         started = []
 
         def slow(sym, period, n):
-            started.append(sym)
+            if (period, n) != lm.PRE:  # предыстория — отдельный поток, не сборка
+                started.append(sym)
             gate.wait(5)
             return {}, None
         lm.set_gather(slow)
@@ -622,7 +625,8 @@ class CacheTest(Base):
         started = []
 
         def slow(sym, period, n):
-            started.append(sym)
+            if (period, n) != lm.PRE:  # предыстория — отдельный поток, не сборка
+                started.append(sym)
             gate.wait(5)
             return {}, None
         lm.set_gather(slow)

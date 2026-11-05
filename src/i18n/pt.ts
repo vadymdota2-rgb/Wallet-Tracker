@@ -1055,7 +1055,7 @@ export const pt: Dict = {
   lq_open_chart: "Abrir gráfico",
   lq_price_w: "Preço · {w}",
   lq_search: "Buscar moeda, ex.: PEPE",
-  lq_seen: "O modelo vê {a} do interesse aberto ({p}): posições abertas neste período e ainda não fechadas. Quanto mais longo o período, mais se vê.",
+  lq_seen: "O modelo vê {a} do interesse aberto ({p}): posições que acompanhou no histórico das corretoras (até três anos) e que ainda estão abertas. O resto foi aberto antes de as corretoras guardarem histórico.",
   lq_share_l: "{p} longs · {v}",
   lq_share_s: "{p} shorts · {v}",
   lq_shorts: "Shorts",

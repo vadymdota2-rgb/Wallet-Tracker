@@ -162,7 +162,7 @@ PY = [
     ("if hit is None or time.monotonic() - hit[0] >= TTL[key[1]] else None", "if True else None", "свежая сборка — без пересборки"),
     ("if hit is None or time.monotonic() - hit[0] >= TTL[key[1]] else None", "if hit is None or time.monotonic() - hit[0] >= 120 else None", "срок — своего окна"),
     ("        if not hit or time.monotonic() - hit[0] >= STALE:\n", "        if not hit:\n", "слишком старая — не отдаётся"),
-    ("        job.join(wait)", "        job.join(0)", "холодный старт ждёт сборку"),
+    ("    if job is not None:\n        job.join(wait)", "    if job is not None:\n        job.join(0)", "холодный старт ждёт сборку"),
     ("    if fail is not None and time.monotonic() - fail < FAIL_WAIT:\n        return None\n", "", "пауза после сбоя"),
     ("    if len(_st.jobs) >= JOBS_MAX:\n        return None\n", "", "сборок одновременно — не больше JOBS_MAX"),
     ("    if job is not None:\n        return job\n    fail", "    fail", "одна сборка на карту"),
@@ -174,6 +174,22 @@ PY = [
     ('    return _no("building" if busy else "no_data" if failed else "busy")', '    return _no("building")', "ответ без карты — по причине"),
     ("        if (hit and time.monotonic() - hit[0] < TTL[rng] - 60) or key in _st.jobs:", "        if key in _st.jobs:", "прогрев не трогает свежую"),
     ("        if (hit and time.monotonic() - hit[0] < TTL[rng] - 60) or key in _st.jobs:", "        if hit and time.monotonic() - hit[0] < TTL[rng] - 60:", "прогрев не дублирует сборку"),
+    # Предыстория.
+    ("    return [r for r in pre if r[0] + PRE_SEC <= cut] + rows", "    return [r for r in pre if r[0] < cut] + rows", "предыстория — только дни, кончившиеся до окна"),
+    ("        got = {ex: prepend(pre.get(ex), rows) for ex, rows in got.items()}", "        got = dict(got)", "окно начинается с предыстории"),
+    ("{ex: c for ex, r in got.items() if len(c := clean_rows(r)) >= 8}", "{ex: r for ex, r in got.items()}", "предыстория — чистые ряды"),
+    ("        if rows:\n            _st.pre.pop(sym, None)", "        if True:\n            _st.pre.pop(sym, None)", "пустая предыстория — не замена"),
+    ("_st.pre[sym] = (t - PRE_TTL + PRE_RETRY, old[1] if old else {})", "_st.pre[sym] = (t, old[1] if old else {})", "предыстория: снова спросить через PRE_RETRY"),
+    ("_st.pre[sym] = (t - PRE_TTL + PRE_RETRY, old[1] if old else {})", "_st.pre[sym] = (t - PRE_TTL + PRE_RETRY, {})", "сбой не стирает прежнюю предысторию"),
+    ("        while len(_st.pre) > PRE_MAX:\n", "        while False:\n", "кэш предыстории ограничен"),
+    ("min(_st.pre, key=lambda k: _st.pre[k][0])", "max(_st.pre, key=lambda k: _st.pre[k][0])", "вытесняется самая старая предыстория"),
+    ("        _st.pre_jobs.pop(sym, None)\n", "", "сборка предыстории снимается из списка"),
+    ("        if hit and t - hit[0] < PRE_TTL:\n            return hit[1]\n", "", "свежая предыстория — из кэша"),
+    ("        job = _st.pre_jobs.get(sym)\n        if job is None and _st.gather", "        job = None\n        if job is None and _st.gather", "одна сборка предыстории на монету"),
+    ("    if hit and t - hit[0] < PRE_STALE:\n        return hit[1]\n", "    if hit:\n        return hit[1]\n", "протухшая предыстория не берётся"),
+    ("    if hit and t - hit[0] < PRE_STALE:\n        return hit[1]\n", "", "постарше — сразу, без ожидания"),
+    ("        return hit[1] if hit and time.monotonic() - hit[0] < PRE_STALE else {}", "        return hit[1] if hit else {}", "не дождались — пусто, а не протухшая"),
+    ('PRE = ("1d", 1000)', 'PRE = ("1d", 365)', "предыстория — три года"),
     # Копия на диске.
     ("        out[side] = [[[b, round(v, 9)] for b, v in enumerate(g) if v > 0] for g in st[side]]", "        out[side] = [[[b, round(v, 9)] for b, v in enumerate(g)] for g in st[side]]", "в копии — только непустые корзины"),
     ("    return isinstance(v, (int, float)) and not isinstance(v, bool) and 0 < v < PX_MAX * OI_MAX", "    return isinstance(v, (int, float)) and 0 < v < PX_MAX * OI_MAX", "копия: bool — не число"),
@@ -222,7 +238,7 @@ def run(path, cmd, muts):
 
 
 a1 = run(f"{ROOT}/src/lib/liqmap.ts", ["node", "--test", "tests/liqmap.test.ts", "tests/liqmap.props.test.ts"], TS)
-a2 = run(f"{ROOT}/wt_liqmap.py", [sys.executable, "-m", "unittest", "tests.test_liqmap", "tests.test_liqmap_fuzz", "tests.test_liqmap_disk"], PY)
+a2 = run(f"{ROOT}/wt_liqmap.py", [sys.executable, "-m", "unittest", "tests.test_liqmap", "tests.test_liqmap_fuzz", "tests.test_liqmap_disk", "tests.test_liqmap_pre"], PY)
 alive = a1 + a2
 total = len(TS) + len(PY) - len(EQUIV)
 print(f"ИТОГ: убито {total - len(alive)} из {total}; выжили: {alive}")

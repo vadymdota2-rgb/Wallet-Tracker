@@ -1055,7 +1055,7 @@ export const de: Dict = {
   lq_open_chart: "Chart öffnen",
   lq_price_w: "Kurs · {w}",
   lq_search: "Coin suchen, z. B. PEPE",
-  lq_seen: "Das Modell sieht {a} des Open Interest ({p}): Positionen, die in diesem Zeitraum eröffnet wurden und noch offen sind. Je länger der Zeitraum, desto mehr ist sichtbar.",
+  lq_seen: "Das Modell sieht {a} des Open Interest ({p}): Positionen, die es über die Börsenhistorie (bis zu drei Jahre) zurückverfolgt hat und die noch offen sind. Der Rest wurde eröffnet, bevor die Börsen Daten speichern.",
   lq_share_l: "{p} Longs · {v}",
   lq_share_s: "{p} Shorts · {v}",
   lq_shorts: "Shorts",

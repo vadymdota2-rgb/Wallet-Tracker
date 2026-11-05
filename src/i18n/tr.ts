@@ -1055,7 +1055,7 @@ export const tr: Dict = {
   lq_open_chart: "Grafiği aç",
   lq_price_w: "Fiyat · {w}",
   lq_search: "Coin ara, ör. PEPE",
-  lq_seen: "Model açık pozisyonların {a} kısmını görüyor ({p}): bu dönemde açılıp henüz kapanmamış pozisyonlar. Dönem uzadıkça daha fazlası görünür.",
+  lq_seen: "Model açık pozisyonların {a} kısmını görüyor ({p}): borsa geçmişinde (üç yıla kadar) izleyebildiği ve henüz kapanmamış pozisyonlar. Gerisi, borsaların geçmiş tuttuğu dönemden önce açıldı.",
   lq_share_l: "{p} long · {v}",
   lq_share_s: "{p} short · {v}",
   lq_shorts: "Short'lar",

@@ -1055,7 +1055,7 @@ export const id: Dict = {
   lq_open_chart: "Buka grafik",
   lq_price_w: "Harga · {w}",
   lq_search: "Cari koin, mis. PEPE",
-  lq_seen: "Model melihat {a} dari open interest ({p}): posisi yang dibuka pada periode ini dan belum ditutup. Makin panjang periodenya, makin banyak yang terlihat.",
+  lq_seen: "Model melihat {a} dari open interest ({p}): posisi yang bisa dilacak dari riwayat bursa (hingga tiga tahun) dan masih terbuka. Sisanya dibuka sebelum bursa mulai menyimpan riwayat.",
   lq_share_l: "{p} long · {v}",
   lq_share_s: "{p} short · {v}",
   lq_shorts: "Short",

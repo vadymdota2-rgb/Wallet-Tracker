@@ -10751,6 +10751,42 @@ def _liq_dydx(sym: str, period: str, n: int) -> list | None:
     return sorted(out) or None
 
 
+def _liq_kraken(sym: str, period: str, n: int) -> list | None:
+    """Kraken Futures: свечи, интерес (в монетах, на начало каждого шага) и
+    разница агрессивных покупок и продаж — открытой аналитикой, по дням за
+    три года. Интерес в долларах — монеты × цена открытия свечи."""
+    sec = _LIQ_SEC[period]
+    prod = f"PF_{'XBT' if sym == 'BTC' else sym}USD"
+    base = "https://futures.kraken.com/api/charts/v1"
+    end = now()
+    start = end - sec * (n + 1)
+    kl = (get_json(f"{base}/trade/{prod}/{period}?from={start}&to={end}", 15) or {}).get("candles")
+    oi = (get_json(f"{base}/analytics/{prod}/open-interest?interval={sec}&since={start}", 15) or {}).get("result") or {}
+    ad = (get_json(f"{base}/analytics/{prod}/aggressor-differential?interval={sec}&since={start}", 15) or {}).get("result") or {}
+    if not isinstance(kl, list) or not isinstance(oi.get("timestamp"), list) or not isinstance(oi.get("data"), list):
+        return None
+    coins = {}
+    for t, v in zip(oi["timestamp"], oi["data"], strict=False):
+        if isinstance(v, list) and v:
+            coins[int(t)] = _fnum(v[0])
+    diff = {}
+    if isinstance(ad.get("timestamp"), list) and isinstance(ad.get("data"), list):
+        diff = {int(t): _fnum(v) for t, v in zip(ad["timestamp"], ad["data"], strict=False)}
+    out = []
+    for k in kl:
+        if not isinstance(k, dict):
+            continue
+        t = int(_fnum(k.get("time")) // 1000)
+        q = coins.get(t)
+        if not q:
+            continue
+        o, vol = _fnum(k.get("open")), _fnum(k.get("volume"))
+        # Разница покупок и продаж за шаг (в монетах) против объёма: доля покупок.
+        bs = min(1.0, max(0.0, 0.5 + diff.get(t, 0.0) / (2 * vol))) if vol > 0 else 0.5
+        out.append((t, _fnum(k.get("high")), _fnum(k.get("low")), _fnum(k.get("close")), q * o, bs))
+    return sorted(out) or None
+
+
 # Истории открытого интереса многие биржи не публикуют — только то, что
 # есть сейчас, зато по всем монетам одним запросом. Для них сервер пишет
 # историю сам: раз в 15 минут снимок в свою маленькую базу. Свежие двое
@@ -11267,7 +11303,7 @@ def _liq_mult(fn):
 
 
 LIQ_SOURCES = (("Binance", _liq_mult(_liq_binance)), ("OKX", _liq_okx), ("Bybit", _liq_mult(_liq_bybit)),
-               ("Gate", _liq_gate), ("HTX", _liq_htx), ("dYdX", _liq_dydx))
+               ("Gate", _liq_gate), ("HTX", _liq_htx), ("dYdX", _liq_dydx), ("Kraken", _liq_kraken))
 
 
 # Монеты, по которым строится карта: бессрочные фьючерсы на Binance, OKX,
@@ -11404,6 +11440,9 @@ def _liq_coins_build() -> dict:
 # Бюджет сбора бирж для одной карты, с: биржа, что не ответила за это время,
 # в этот раз просто не участвует. Кэш и фоновый пересчёт — в wt_liqmap.
 LIQ_BUDGET = 12.0
+# Предыстория карты (дневные ряды за ~три года, wt_liqmap.PRE) — длиннее:
+# OKX отдаёт её страницами по сто дней. Собирается в фоне, раз в несколько часов.
+LIQ_PRE_BUDGET = 45.0
 # Прогрев — раз в пять минут и шесть монет: карта стоит около секунды
 # процессора, и тридцать карт каждые сто секунд отнимали треть ядра у общей
 # сборки — та не укладывалась в бюджет и теряла фандинг. Открытая карта и так
@@ -11548,7 +11587,7 @@ def _liq_gather(sym: str, period: str, n: int) -> tuple[dict, list | None]:
 
     pool = ThreadPoolExecutor(max_workers=len(LIQ_SOURCES))
     futures = [pool.submit(one, src) for src in LIQ_SOURCES]
-    wait(futures, timeout=LIQ_BUDGET)
+    wait(futures, timeout=LIQ_BUDGET if n <= 400 else LIQ_PRE_BUDGET)
     pool.shutdown(wait=False, cancel_futures=True)
     got = dict(found)
     # Под одним тикером у разных бирж бывают разные монеты — и цены у них
@@ -11562,7 +11601,10 @@ def _liq_gather(sym: str, period: str, n: int) -> tuple[dict, list | None]:
     ref = max(got.values(), key=lambda r: r[-1][4]) if got else _liq_hl_candles(sym, period, n)
     if ref:
         try:
-            got.update(_liq_sampled(sym, period, n, ref, ref[-1][3]))
+            # Снимки — только у бирж без своей истории: Kraken есть и там и
+            # там, и снимок раз в 15 минут не должен заменять его настоящий ряд.
+            for ex, rows in _liq_sampled(sym, period, n, ref, ref[-1][3]).items():
+                got.setdefault(ex, rows)
         except (sqlite3.Error, OSError) as e:  # своя база недоступна — карта по биржам с историей
             print(f"liq sampled: {e}", file=sys.stderr)
     return got, ref

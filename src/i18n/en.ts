@@ -1054,7 +1054,7 @@ export const en = {
   lq_open_chart: "Open chart",
   lq_price_w: "Price · {w}",
   lq_search: "Find a coin, e.g. PEPE",
-  lq_seen: "The model sees {a} of open interest ({p}): positions opened in this period and still open. The longer the period, the more it sees.",
+  lq_seen: "The model sees {a} of open interest ({p}): positions it has traced through exchange history (up to three years) that are still open. The rest was opened before exchanges started keeping history.",
   lq_share_l: "{p} longs · {v}",
   lq_share_s: "{p} shorts · {v}",
   lq_shorts: "Shorts",
