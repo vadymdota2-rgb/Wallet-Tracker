@@ -59,9 +59,10 @@ const HOT = 0.5;
 /** Подписи сумм у полос — не ближе этого друг к другу, px. */
 const LABEL_GAP = 18;
 const COINS = ["BTC", "ETH", "SOL", "XRP", "DOGE", "BNB", "HYPE", "SUI", "ADA", "LINK"];
-type Span = "5" | "10" | "15";
-const SPANS: Span[] = ["5", "10", "15"];
-const TICK: Record<Span, number> = { "5": 1, "10": 2, "15": 3 };
+type Span = "5" | "10" | "15" | "30" | "50" | "100";
+/** Приближение карты: сервер считает уровни до ±100 % от цены. */
+const SPANS: Span[] = ["5", "10", "15", "30", "50", "100"];
+const TICK: Record<Span, number> = { "5": 1, "10": 2, "15": 3, "30": 5, "50": 10, "100": 20 };
 
 const W = 360;
 const AXIS = 58;
@@ -658,7 +659,7 @@ export function LiqMapScreen() {
     if (autoKey.current === key) return;
     autoKey.current = key;
     const d = Math.max(0, ...(reply.ohlc ?? []).flatMap(([, h, l]) => [h, l]).map((p) => Math.abs(p / reply.px - 1) * 100));
-    setSpan(SPANS.find((s) => d < Number(s) * 0.92) ?? "15");
+    setSpan(SPANS.find((s) => d < Number(s) * 0.92) ?? "100");
     setSel(null);
   }, [reply]);
 
@@ -671,18 +672,20 @@ export function LiqMapScreen() {
 
   /* Крупнейшие уровни — скопления, а не корзины: корзины по 0,25 % одного
      скопления шли подряд («$77 369», «$77 168», «$76 967» — одно и то же
-     место трижды). Корзины собираются по 0,5 % (как «ближайшее скопление»),
-     и три крупнейших — не ближе 1 % друг к другу. */
+     место трижды). Корзины собираются полосами (0,5 %, на крупном
+     приближении — шире: 1/30 окна), и три крупнейших — не в соседних полосах.
+     Только в видимом окне: на ±5 % не нужен уровень с −40 %. */
   const top = useMemo(() => {
     if (!reply?.ok) return { up: [], dn: [] };
+    const band = Math.max(0.005, spanN / 3000);
     const pick = (up: boolean) => {
       const groups = new Map<number, { v: number; pv: number }>();
       for (const b of reply.buckets) {
         const d = (b.p - reply.px) / reply.px;
-        if (up ? d <= 0 : d >= 0) continue;
+        if ((up ? d <= 0 : d >= 0) || Math.abs(d) > spanN / 100) continue;
         const v = sum(up ? b.S : b.L);
         if (v <= 0) continue;
-        const k = Math.floor(Math.abs(d) / 0.005);
+        const k = Math.floor(Math.abs(d) / band);
         const g = groups.get(k) ?? { v: 0, pv: 0 };
         g.v += v;
         g.pv += v * b.p;
@@ -696,7 +699,7 @@ export function LiqMapScreen() {
       return out;
     };
     return { up: pick(true), dn: pick(false) };
-  }, [reply]);
+  }, [reply, spanN]);
   const topMax = Math.max(1, ...top.up.map((b) => b.v), ...top.dn.map((b) => b.v));
 
 
@@ -704,7 +707,7 @@ export function LiqMapScreen() {
   const focus = (p: number) => {
     if (!reply?.ok) return;
     const d = Math.abs((p - reply.px) / reply.px) * 100;
-    const fit = d < spanN ? span : SPANS.find((s) => d < Number(s)) ?? "15";
+    const fit = d < spanN ? span : SPANS.find((s) => d < Number(s)) ?? "100";
     const i = rowAt(reply, Number(fit), p);
     haptic("select");
     setSpan(fit);
@@ -846,6 +849,7 @@ export function LiqMapScreen() {
             <Segmented<Span>
               value={span}
               onChange={(v) => { setSpan(v); setSel(null); }}
+              tight
               options={SPANS.map((s) => ({ id: s, label: `±${s}%` }))}
             />
             <div className="lq-zone-h up">

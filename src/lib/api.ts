@@ -449,8 +449,17 @@ async function callTwice<T>(path: string): Promise<T | null> {
 
 /** Последняя карта этой монеты и окна с устройства — любой свежести до трёх суток. */
 export function savedLiqMap(sym: string, range: string): { at: number; v: LiqMapReply } | null {
-  const hit = readSaved<LiqMapReply>(LIQ_SAVED)[`${sym}|${range}`];
-  return hit && Date.now() - hit.at < LIQ_SAVED_MAX_AGE && hit.v?.ok ? hit : null;
+  const all = readSaved<LiqMapReply>(LIQ_SAVED);
+  const key = `${sym}|${range}`;
+  const hit = all[key];
+  if (hit && !(Date.now() - hit.at < LIQ_SAVED_MAX_AGE && hit.v?.ok)) {
+    // Просроченная или испорченная карта — стираем, а не храним впустую.
+    delete all[key];
+    if (Object.keys(all).length) writeSaved(LIQ_SAVED, all);
+    else dropSaved(LIQ_SAVED);
+    return null;
+  }
+  return hit ?? null;
 }
 
 export const fetchLiqMap = (sym: string, range: string) =>
@@ -460,7 +469,9 @@ export const fetchLiqMap = (sym: string, range: string) =>
         const all = readSaved<LiqMapReply>(LIQ_SAVED);
         all[`${sym}|${range}`] = { at: Date.now(), v: r };
         const keys = Object.keys(all).sort((a, b) => (all[b]?.at ?? 0) - (all[a]?.at ?? 0));
+        // Самочистка: не больше LIQ_SAVED_KEEP карт и ни одной старше трёх суток.
         for (const k of keys.slice(LIQ_SAVED_KEEP)) delete all[k];
+        for (const k of keys) if (Date.now() - (all[k]?.at ?? 0) >= LIQ_SAVED_MAX_AGE) delete all[k];
         writeSaved(LIQ_SAVED, all);
       }
       return r;

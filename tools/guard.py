@@ -628,7 +628,7 @@ say("на колонке «Накоплено» — перевес в проце
     'className="lq-share up"' in _lq and 'className="lq-share dn"' in _lq and '"lq_share_s"' in _lq)
 
 say("модель ликвидаций: интерес в монетах (не в долларах), прирост — в свече между снимками, падение закрывает самые свежие позиции (не зависит от размера свечи), сгоревшее замещается; окна до года — дневными свечами с мелким хвостом",
-    "q_prev, q_now = rows[i - 1][4] / p_prev, rows[i][4] / p_now" in read(f"{APP}/wt_liqmap.py") and "c = cohorts[-1]" in read(f"{APP}/wt_liqmap.py")
+    "q_prev, q_now = rows[i - 1][4] / p_prev, rows[i][4] / p_now" in read(f"{APP}/wt_liqmap.py") and "c = self.cohorts[-1]" in read(f"{APP}/wt_liqmap.py")
     and "k = max(0.0, oi / prev)" not in read(f"{APP}/wt_liqmap.py") and '"365d": ("1d", 365)' in read(f"{APP}/wt_liqmap.py") and "def splice(" in read(f"{APP}/wt_liqmap.py"))
 
 _store2 = read(f"{APP}/src/store/app.ts")

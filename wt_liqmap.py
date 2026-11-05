@@ -79,6 +79,16 @@ LEVS: tuple[tuple[int, float, int], ...] = (
 )
 # Верхняя граница плеча каждой группы — подпись на экране («до 10×» …).
 GROUPS = (10, 25, 50, 100, 500)
+# Наибольшее плечо BTC и ETH на бирже: плечо выше на ней не открыть, и его
+# доля уходит остальным (levs_upto). Пределы бирж — по их правилам торговли
+# на 2026 год, с запасом вниз. У прочих монет плечо меньше — ALT_CAP.
+CAPS = {"Binance": 125, "Bybit": 100, "OKX": 100, "Gate": 100, "HTX": 200, "dYdX": 20, "Hyperliquid": 40,
+        "Bitget": 125, "MEXC": 500, "KuCoin": 100, "Kraken": 50, "Phemex": 100, "WOO X": 50, "WhiteBIT": 100,
+        "Bitfinex": 100, "Deribit": 50, "CoinEx": 100, "Coinbase Intl": 50, "Crypto.com": 100, "Paradex": 50,
+        "Lighter": 50, "Backpack": 50, "Orderly": 50, "GMX": 100, "Aster": 500, "BingX": 150, "BloFin": 150, "XT.com": 125}
+CAP_OTHER = 50  # биржа не из списка
+MAJORS = frozenset({"BTC", "ETH"})
+ALT_CAP = 75
 # Поддерживающая маржа: ликвидация лонга — на (1 − 1/плечо + маржа) от входа.
 # У бирж она ступенями: чем больше плечо, тем меньше, и всегда меньше
 # начальной (1/плечо) — иначе 200× ликвидировалось бы на цене входа. Берём
@@ -89,9 +99,10 @@ MMR = 0.005
 def mmr(lev: int) -> float:
     """Поддерживающая маржа плеча lev (доля позиции)."""
     return min(MMR, 0.5 / lev)
-# Окно карты: ±SPAN от цены, BUCKETS корзин (по 0,25 %).
-SPAN = 0.15
-BUCKETS = 120
+# Окно карты: ±SPAN от цены, BUCKETS корзин (по 0,25 %): до нуля вниз и до
+# удвоения вверх — экран приближает от ±5 до ±100 %.
+SPAN = 1.0
+BUCKETS = 800
 # По скольким точкам диапазона свечи раскладывается её прирост интереса.
 ENTRY = 5
 # Сглаживание соседних корзин (1-2-1): цена входа и плечо — оценки.
@@ -115,7 +126,7 @@ def _no(error: str) -> dict[str, Json]:
 # --- Модель -------------------------------------------------------------------
 
 def _opened(x: float, hi: float, low: float, bs: float, lo: float,  # noqa: PLR0913 — свеча и сетка целиком
-            step: float) -> tuple[list[tuple[int, int, int, float]], float]:
+            step: float, levs: tuple[tuple[int, float, int], ...]) -> tuple[list[tuple[int, int, int, float]], float]:
     """Новые позиции на x монет в свече [low, hi]: по ENTRY точкам входа и по
     плечам LEVS, лонги — доля покупок bs. Вернёт ([(сторона, группа, корзина,
     монеты)], монеты с ликвидацией за краем окна)."""
@@ -124,7 +135,7 @@ def _opened(x: float, hi: float, low: float, bs: float, lo: float,  # noqa: PLR0
     out = 0.0
     for e in range(ENTRY):
         p = low + (hi - low) * (e + 0.5) / ENTRY
-        for lev, w, g in LEVS:
+        for lev, w, g in levs:
             part = x * w / ENTRY
             keep = 1 / lev - mmr(lev)  # на сколько цена уходит до ликвидации
             bl = int((p * (1 - keep) - lo) // step)
@@ -140,56 +151,78 @@ def _opened(x: float, hi: float, low: float, bs: float, lo: float,  # noqa: PLR0
     return entries, out
 
 
-def model(rows: list[Row], lo: float, step: float) -> tuple[list[list[float]], list[list[float]], float]:
-    """Открытые позиции окна по сетке цен ликвидации, в монетах: (лонги, шорты,
-    всего), лонги и шорты — [группа][корзина]; «всего» — все живые позиции,
-    открытые за окно, и с ликвидацией за краем окна тоже. Корзина b — цены
-    [lo + b·step, lo + (b+1)·step).
+def levs_upto(cap: int) -> tuple[tuple[int, float, int], ...]:
+    """Плечи LEVS не выше cap; доли остальных — пропорционально, сумма снова 1."""
+    kept = [x for x in LEVS if x[0] <= cap] or [LEVS[0]]
+    total = sum(w for _, w, _ in kept)
+    return tuple((lev, w / total, g) for lev, w, g in kept)
+
+
+def max_lev(ex: str, sym: str) -> int:
+    """Наибольшее плечо монеты на бирже: у BTC и ETH — предел биржи (CAPS), у
+    остальных монет биржи дают меньше — не больше ALT_CAP."""
+    cap = CAPS.get(ex, CAP_OTHER)
+    return cap if sym in MAJORS else min(cap, ALT_CAP)
+
+
+class _Book:
+    """Открытые позиции модели по сетке цен ликвидации, в монетах.
 
     Позиции хранятся пачками по свечам открытия (cohorts): закрываются первыми
     самые свежие — кто последним вошёл, тот первым и вышел. Так шум «открыли —
     закрыли» внутри часа гасится и на 15-минутных свечах, и на часовых, и
     карта не зависит от того, какой мелкой свечой её считали."""
-    g_n = len(GROUPS)
-    agg = ([[0.0] * BUCKETS for _ in range(g_n)], [[0.0] * BUCKETS for _ in range(g_n)])
-    mids = [lo + step * (b + 0.5) for b in range(BUCKETS)]
-    # Когда корзина сгорела в последний раз (номер шага): позиция пачки шага
-    # s в ней жива, пока корзина не сгорела позже s.
-    burnt = ([[-1] * BUCKETS for _ in range(g_n)], [[-1] * BUCKETS for _ in range(g_n)])
-    # Пачка: [шаг открытия, какая доля осталась после закрытий,
-    # [(сторона, группа, корзина, монеты)], монеты с ликвидацией за краем окна].
-    # Те, что за краем (3× — на −33 %), на карту не попадают, но закрываются
-    # наравне со всеми: иначе их закрытия съедали бы видимые уровни.
-    cohorts: list[list[Any]] = []
 
-    def burn(at: int, hi: float, low: float) -> float:
+    def __init__(self, lo: float, step: float) -> None:
+        g_n = len(GROUPS)
+        self.g_n = g_n
+        self.agg = ([[0.0] * BUCKETS for _ in range(g_n)], [[0.0] * BUCKETS for _ in range(g_n)])
+        self.mids = [lo + step * (b + 0.5) for b in range(BUCKETS)]
+        # Когда корзина сгорела в последний раз (номер шага): позиция пачки
+        # шага s в ней жива, пока корзина не сгорела позже s.
+        self.burnt = ([[-1] * BUCKETS for _ in range(g_n)], [[-1] * BUCKETS for _ in range(g_n)])
+        # Пачка: [шаг открытия, какая доля осталась после закрытий,
+        # [(сторона, группа, корзина, монеты)], монеты с ликвидацией за краем окна].
+        # Те, что за краем, на карту не попадают, но закрываются наравне со
+        # всеми: иначе их закрытия съедали бы видимые уровни.
+        self.cohorts: list[list[Any]] = []
+        # Докуда по группе лежали лонги (самая верхняя корзина) и шорты (самая
+        # нижняя): свеча сжигает только эту полосу, а не всю сетку в 800 корзин.
+        self.top_l = [-1] * g_n
+        self.bot_s = [BUCKETS] * g_n
+
+    def burn(self, at: int, hi: float, low: float) -> float:
         """Свеча прошла уровни: лонг с ценой ликвидации не ниже её минимума и
         шорт — не выше максимума сгорели. Вернёт, сколько монет сгорело."""
-        cut_l, cut_s = bisect.bisect_left(mids, low), bisect.bisect_right(mids, hi)
+        cut_l, cut_s = bisect.bisect_left(self.mids, low), bisect.bisect_right(self.mids, hi)
         gone = 0.0
-        for g in range(g_n):
-            for side, rng_b in ((0, range(cut_l, BUCKETS)), (1, range(cut_s))):
-                arr, mark = agg[side][g], burnt[side][g]
+        for g in range(self.g_n):
+            for side, rng_b in ((0, range(cut_l, self.top_l[g] + 1)), (1, range(self.bot_s[g], cut_s))):
+                arr, mark = self.agg[side][g], self.burnt[side][g]
                 for b in rng_b:
                     if arr[b]:
                         gone += arr[b]
                         arr[b] = 0.0
                     mark[b] = at
+            # Выше cut_l живых лонгов больше нет, ниже cut_s — шортов.
+            self.top_l[g] = min(self.top_l[g], cut_l - 1)
+            self.bot_s[g] = max(self.bot_s[g], cut_s)
         return gone
 
-    def alive(c: list[Any]) -> list[tuple[int, int, int, float]]:
-        return [x for x in c[2] if burnt[x[0]][x[1]][x[2]] <= c[0]]
+    def alive(self, c: list[Any]) -> list[tuple[int, int, int, float]]:
+        return [x for x in c[2] if self.burnt[x[0]][x[1]][x[2]] <= c[0]]
 
-    def close(amount: float) -> None:
+    def close(self, amount: float) -> None:
         """Закрыть amount монет — с самых свежих пачек."""
-        while amount > 0 and cohorts:
-            c = cohorts[-1]
-            live = alive(c)
+        agg = self.agg
+        while amount > 0 and self.cohorts:
+            c = self.cohorts[-1]
+            live = self.alive(c)
             mass = c[1] * (sum(x[3] for x in live) + c[3])
             if mass <= amount:
                 for side, g, b, q in live:
                     agg[side][g][b] = max(0.0, agg[side][g][b] - q * c[1])
-                cohorts.pop()
+                self.cohorts.pop()
                 amount -= mass
                 continue
             keep = 1 - amount / mass
@@ -198,6 +231,28 @@ def model(rows: list[Row], lo: float, step: float) -> tuple[list[list[float]], l
             c[1] *= keep
             return
 
+    def add(self, at: int, entries: list[tuple[int, int, int, float]], out: float) -> None:
+        """Новая пачка позиций шага at: в сетку и в стопку пачек."""
+        for side, g, b, q in entries:
+            self.agg[side][g][b] += q
+            if side:
+                self.bot_s[g] = min(self.bot_s[g], b)
+            else:
+                self.top_l[g] = max(self.top_l[g], b)
+        self.cohorts.append([at, 1.0, entries, out])
+
+    def total(self) -> float:
+        """Все живые позиции, и с ликвидацией за краем окна тоже, в монетах."""
+        return float(sum(c[1] * (sum(x[3] for x in self.alive(c)) + c[3]) for c in self.cohorts))
+
+
+def model(rows: list[Row], lo: float, step: float,
+          levs: tuple[tuple[int, float, int], ...] = LEVS) -> tuple[list[list[float]], list[list[float]], float]:
+    """Открытые позиции окна по сетке цен ликвидации, в монетах: (лонги, шорты,
+    всего), лонги и шорты — [группа][корзина]; «всего» — все живые позиции,
+    открытые за окно, и с ликвидацией за краем окна тоже. Корзина b — цены
+    [lo + b·step, lo + (b+1)·step). Как закрываются позиции — _Book."""
+    book = _Book(lo, step)
     # Шаг i: от снимка i−1 до снимка i прошла свеча i−1; цена на момент
     # снимка i — её закрытие, на момент снимка i−1 — закрытие свечи i−2.
     for i in range(2, len(rows)):
@@ -208,19 +263,15 @@ def model(rows: list[Row], lo: float, step: float) -> tuple[list[list[float]], l
         q_prev, q_now = rows[i - 1][4] / p_prev, rows[i][4] / p_now
         # Чистый прирост интереса плюс сгоревшее этой свечой: интерес стоит, а
         # уровни сгорели — значит, на их место открылись новые.
-        x = q_now - q_prev + burn(i, hi, low)
+        x = q_now - q_prev + book.burn(i, hi, low)
         if x < 0:
-            close(-x)
+            book.close(-x)
         elif x > 0:
-            entries, out = _opened(x, hi, low, bs, lo, step)
-            for side, g, b, q in entries:
-                agg[side][g][b] += q
-            cohorts.append([i, 1.0, entries, out])
+            book.add(i, *_opened(x, hi, low, bs, lo, step, levs))
     # После последнего снимка — текущая свеча: её ход тоже сжигает уровни.
     if rows:
-        burn(len(rows), rows[-1][1], rows[-1][2])
-    total = sum(c[1] * (sum(x[3] for x in alive(c)) + c[3]) for c in cohorts)
-    return agg[0], agg[1], total
+        book.burn(len(rows), rows[-1][1], rows[-1][2])
+    return book.agg[0], book.agg[1], book.total()
 
 
 def splice(main: list[Row], tail: list[Row] | None) -> list[Row]:
@@ -266,8 +317,8 @@ def make_state(sym: str, rng: str, got: dict[str, list[Row]], ref: list[Row], px
     long_b = [[0.0] * BUCKETS for _ in range(g_n)]
     short_b = [[0.0] * BUCKETS for _ in range(g_n)]
     seen = 0.0
-    for rows in got.values():
-        lg, sg, mass = model(rows, lo, step)
+    for ex, rows in got.items():
+        lg, sg, mass = model(rows, lo, step, levs_upto(max_lev(ex, sym)))
         seen += mass
         for g in range(g_n):
             long_b[g] = [a + b for a, b in zip(long_b[g], lg[g], strict=True)]
@@ -381,6 +432,16 @@ def _live(sym: str, base: float) -> float:
     return base
 
 
+def _sweep() -> None:
+    """Самочистка кэша (звать под _lock): сборки старше STALE больше не
+    отдаются — их нет и в памяти; паузы после сбоя старше FAIL_WAIT — тоже."""
+    t = time.monotonic()
+    for k in [k for k, v in _st.hits.items() if t - v[0] >= STALE]:
+        del _st.hits[k]
+    for k in [k for k, v in _st.fails.items() if t - v >= FAIL_WAIT]:
+        del _st.fails[k]
+
+
 def build(sym: str, rng: str) -> dict[str, Json]:
     """Собрать карту (ряды — через set_gather, цена — через set_price) и положить в кэш."""
     key = (sym, rng)
@@ -413,6 +474,7 @@ def build(sym: str, rng: str) -> dict[str, Json]:
     with _lock:
         _st.hits[key] = (time.monotonic(), st, res)
         _st.fails.pop(key, None)
+        _sweep()
         while len(_st.hits) > CACHE_MAX:
             del _st.hits[min(_st.hits, key=lambda k: _st.hits[k][0])]
     return res
@@ -509,6 +571,7 @@ def warm(sym: str, rng: str) -> None:
     собрать сейчас, в этом потоке; свежая — ничего."""
     key = (sym, rng)
     with _lock:
+        _sweep()
         hit = _st.hits.get(key)
         if (hit and time.monotonic() - hit[0] < TTL[rng] - 60) or key in _st.jobs:
             return

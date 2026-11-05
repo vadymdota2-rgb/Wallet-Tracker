@@ -65,6 +65,49 @@ class ModelTest(unittest.TestCase):
         self.assertAlmostEqual(sum(lm.SMOOTH), 1.0)
         self.assertEqual((lm.MMR, lm.ENTRY), (0.005, 5))
 
+    def test_grid_reaches_zero_and_double(self):
+        self.assertEqual((lm.SPAN, lm.BUCKETS), (1.0, 800))
+        self.assertAlmostEqual(STEP, 0.25)  # шаг — 0,25 % цены, как и был
+        self.assertEqual(LO, 0.0)
+
+    def test_burn_touches_only_the_filled_band_and_is_fast(self):
+        rnd = random.Random(3)  # noqa: S311 — выдуманный рынок, не тайна
+        px, q, closes, coins, ranges = 100.0, 100.0, [], [], []
+        for _ in range(400):
+            px *= 1 + rnd.gauss(0, 0.01)
+            q = max(1.0, q * (1 + rnd.gauss(0.002, 0.02)))
+            closes.append(px)
+            coins.append(q)
+            ranges.append((px * 1.01, px * 0.99))
+        rows = series(closes, coins, ranges=ranges)
+        t0 = time.monotonic()
+        longs, shorts, _ = lm.model(rows, LO, STEP)
+        self.assertLess(time.monotonic() - t0, 2.0)
+        self.assertTrue(where(longs) and where(shorts))
+        self.assertTrue(all(p < rows[-1][2] for p in where(longs)))
+        self.assertTrue(all(p > rows[-1][1] for p in where(shorts)))
+        self.assertTrue(all(v >= 0 for side in (longs, shorts) for g in side for v in g))
+
+    def test_leverage_is_capped_by_the_exchange(self):
+        self.assertEqual(lm.max_lev("dYdX", "BTC"), 20)
+        self.assertEqual(lm.max_lev("MEXC", "BTC"), 500)
+        self.assertEqual(lm.max_lev("MEXC", "PEPE"), lm.ALT_CAP)
+        self.assertEqual(lm.max_lev("Нет такой", "BTC"), lm.CAP_OTHER)
+        levs = lm.levs_upto(20)
+        self.assertEqual([lev for lev, _, _ in levs], [3, 5, 10, 20])
+        self.assertAlmostEqual(sum(w for _, w, _ in levs), 1.0)
+        # Доли оставшихся — в той же пропорции.
+        self.assertAlmostEqual(levs[0][1] / levs[1][1], 0.05 / 0.11)
+        self.assertEqual(lm.levs_upto(500), lm.LEVS)
+        self.assertEqual([lev for lev, _, _ in lm.levs_upto(1)], [3])
+        # На dYdX нет 50× и выше: на карте их полос нет.
+        rows = series([100, 100, 100], [0, 10, 20])
+        r = lm.build_map("BTC", "1d", {"dYdX": rows}, rows, 1)
+        self.assertTrue(r["buckets"])
+        self.assertTrue(all(b["L"][2] == b["L"][3] == b["L"][4] == 0 for b in r["buckets"]))
+        r = lm.build_map("BTC", "1d", {"MEXC": rows}, rows, 1)
+        self.assertTrue(any(b["L"][4] > 0 for b in r["buckets"]))
+
     def test_maintenance_margin_is_below_the_initial_one(self):
         # Иначе 200× ликвидировалось бы на самой цене входа.
         for lev, _, _ in lm.LEVS:
@@ -129,18 +172,26 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(total(longs), 0.0)
 
     def test_the_lowest_bucket_of_the_window_counts(self):
-        p = 85.1 / 0.905  # лонг 10× ликвидируется на 85,1 — корзина 0
+        p = 0.3  # лонг 3× ликвидируется на ~0,2 — корзина 0 (сетка от нуля, шаг 0,25)
         longs, _, _ = lm.model(series([p, p, p], [0, 10, 20]), LO, STEP)
         self.assertGreater(longs[0][0], 0)
 
     def test_out_of_window_positions_count_in_the_total(self):
-        rows = series([100, 100, 100], [0, 10, 20])
+        # Вход на 160: шорт 3× ликвидируется на ~212 — выше края окна (200).
+        rows = series([160, 160, 160], [0, 10, 20])
         longs, shorts, seen = lm.model(rows, LO, STEP)
         self.assertAlmostEqual(seen, 10.0)
-        self.assertLess(total(longs) + total(shorts), 10.0)  # 3× — за краем
+        self.assertLess(total(longs) + total(shorts), 10.0)
         # Закрыли половину — половина и тех, что за краем, и видимых.
-        _, _, half = lm.model([*rows, row(3 * 900, 100, 100, 100, 1500)], LO, STEP)
+        _, _, half = lm.model([*rows, row(3 * 900, 160, 160, 160, 2400)], LO, STEP)
         self.assertAlmostEqual(half, 5.0, places=9)
+
+    def test_longs_far_above_the_window_still_count(self):
+        # Вход на 300, а сетка — до 200: лонги ликвидируются на 201–299 — за
+        # краем, на карте их нет, но в «видно» и в закрытиях они есть.
+        longs, _, seen = lm.model(series([300, 300, 300], [0, 10, 20], bs=1.0), LO, STEP)
+        self.assertEqual(total(longs), 0.0)
+        self.assertAlmostEqual(seen, 10.0)
 
     def test_a_candle_down_through_the_level_burns_longs(self):
         # Лонги открыты на 100; свеча 3 сходила до 97. На место сгоревших
@@ -366,6 +417,23 @@ class CacheTest(Base):
             return ({"OKX": r}, r) if r else ({}, None)
         return fn
 
+    def test_old_cache_cleans_itself(self):
+        lm.set_gather(self.gather([]))
+        lm.build("OLD", "1d")
+        _, st, res = lm._st.hits[("OLD", "1d")]
+        lm._st.hits[("OLD", "1d")] = (time.monotonic() - lm.STALE - 1, st, res)
+        lm._st.fails[("GONE", "1d")] = time.monotonic() - lm.FAIL_WAIT - 1
+        lm._st.fails[("RECENT", "1d")] = time.monotonic()
+        lm.build("BTC", "1d")
+        self.assertNotIn(("OLD", "1d"), lm._st.hits)
+        self.assertNotIn(("GONE", "1d"), lm._st.fails)
+        self.assertIn(("RECENT", "1d"), lm._st.fails)
+        self.assertIn(("BTC", "1d"), lm._st.hits)
+        # И прогрев чистит, даже если ничего не собирает.
+        lm._st.hits[("OLD", "7d")] = (time.monotonic() - lm.STALE - 1, st, res)
+        lm.warm("BTC", "1d")
+        self.assertNotIn(("OLD", "7d"), lm._st.hits)
+
     def test_bad_args(self):
         for sym, rng in (("", "1d"), ("BTC", "2d"), ("!!!", "1d"), (None, "1d")):
             self.assertEqual(lm.liq_map(sym, rng), {"ok": False, "error": "bad_args"})
@@ -458,6 +526,7 @@ class CacheTest(Base):
         r = lm.liq_map("BTC", "1d")
         self.assertEqual(r["px"], 100.5)
         self.assertAlmostEqual(r["lo"], 100.5 * (1 - lm.SPAN))
+        self.assertAlmostEqual(r["step"], 100.5 * lm.SPAN * 2 / lm.BUCKETS)
 
     def test_failing_tail_is_caught_not_left_to_the_thread(self):
         caught = []

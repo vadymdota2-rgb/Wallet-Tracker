@@ -208,6 +208,27 @@ describe("Карта ликвидаций", () => {
     await ctx.close();
   });
 
+  test("приближение ±5 … ±100 %: кнопки в одну строку, крупнейшие уровни — в видимом окне", async () => {
+    const { ctx, page, errors } = await open({ width: 320, replies: [FIX["365d"]] });
+    await ready(page);
+    const seg = page.locator(".lq-plot").locator("xpath=..").locator(".seg button");
+    assert.deepEqual((await seg.allInnerTexts()).map(sp), ["±5%", "±10%", "±15%", "±30%", "±50%", "±100%"]);
+    const tops = await seg.evaluateAll((els) => [...new Set(els.map((el) => Math.round(el.getBoundingClientRect().top)))]);
+    assert.equal(tops.length, 1, String(tops));
+    for (const span of [5, 30, 100]) {
+      await seg.filter({ hasText: new RegExp(`^±${span}%$`) }).click();
+      await page.waitForTimeout(200);
+      for (const t of await page.locator(".lq-top-c button small").allInnerTexts()) {
+        assert.ok(Math.abs(pctOf(t)) <= span, `±${span}: ${t}`);
+      }
+      assert.ok(await page.locator(".lq-svg .lq-row").count() > 10, String(span));
+      assert.deepEqual(await clashes(page), [], String(span));
+      assert.deepEqual(await overflow(page), [], String(span));
+    }
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
   test("сколько интереса видит модель — подписано", async () => {
     const { ctx, page, errors } = await open();
     await ready(page);

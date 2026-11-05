@@ -10,7 +10,9 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EQUIV: set[str] = set()
+# Эквивалентные: сужение полосы после сгорания — только скорость: без него
+# свеча снова проходит уже пустые корзины, результат тот же.
+EQUIV = {"сгоревшая полоса лонгов не горит дважды", "сгоревшая полоса шортов не горит дважды"}
 PY = [
     # Модель.
     ("    (75, 0.07, 3), (100, 0.08, 3),", "    (75, 0.07, 3), (100, 0.18, 3),", "доли плеч — в сумме 1"),
@@ -32,25 +34,44 @@ PY = [
     ("                out += part * share\n", "                pass\n", "лонги за краем окна — в счёт"),
     ("                out += part * (1 - share)\n", "                pass\n", "шорты за краем окна — в счёт"),
     ("mass = c[1] * (sum(x[3] for x in live) + c[3])", "mass = c[1] * sum(x[3] for x in live)", "закрытия — и тех, что за краем"),
-    ("cut_l, cut_s = bisect.bisect_left(mids, low), bisect.bisect_right(mids, hi)\n        gone", "cut_l, cut_s = BUCKETS, bisect.bisect_right(mids, hi)\n        gone", "свеча сжигает лонги"),
-    ("cut_l, cut_s = bisect.bisect_left(mids, low), bisect.bisect_right(mids, hi)\n        gone", "cut_l, cut_s = bisect.bisect_left(mids, low), 0\n        gone", "свеча сжигает шорты"),
+    ("cut_l, cut_s = bisect.bisect_left(self.mids, low), bisect.bisect_right(self.mids, hi)", "cut_l, cut_s = BUCKETS, bisect.bisect_right(self.mids, hi)", "свеча сжигает лонги"),
+    ("cut_l, cut_s = bisect.bisect_left(self.mids, low), bisect.bisect_right(self.mids, hi)", "cut_l, cut_s = bisect.bisect_left(self.mids, low), 0", "свеча сжигает шорты"),
     ("                    mark[b] = at\n", "", "сгоревшие пачки не живы"),
-    ("        return [x for x in c[2] if burnt[x[0]][x[1]][x[2]] <= c[0]]", "        return list(c[2])", "живые — только не сгоревшие позже"),
-    ("        return [x for x in c[2] if burnt[x[0]][x[1]][x[2]] <= c[0]]", "        return [x for x in c[2] if burnt[x[0]][x[1]][x[2]] < c[0]]", "сгорело до открытия — пачка жива"),
+    ("        return [x for x in c[2] if self.burnt[x[0]][x[1]][x[2]] <= c[0]]", "        return list(c[2])", "живые — только не сгоревшие позже"),
+    ("        return [x for x in c[2] if self.burnt[x[0]][x[1]][x[2]] <= c[0]]", "        return [x for x in c[2] if self.burnt[x[0]][x[1]][x[2]] < c[0]]", "сгорело до открытия — пачка жива"),
     ("_, hi, low, p_now, _oi, bs = rows[i - 1]", "_, hi, low, p_now, _oi, bs = rows[i]", "прирост — в свече между снимками"),
     ("        p_prev = rows[i - 2][3]\n", "        p_prev = p_now\n", "интерес — в монетах по цене снимка"),
     ("q_prev, q_now = rows[i - 1][4] / p_prev, rows[i][4] / p_now", "q_prev, q_now = rows[i - 1][4], rows[i][4]", "интерес — в монетах, а не в долларах"),
-    ("        x = q_now - q_prev + burn(i, hi, low)", "        burn(i, hi, low)\n        x = q_now - q_prev", "сгоревшее замещается новыми"),
-    ("            close(-x)\n", "            pass\n", "падение интереса закрывает позиции"),
-    ("            c = cohorts[-1]\n", "            c = cohorts[0]\n", "закрываются самые свежие"),
+    ("        x = q_now - q_prev + book.burn(i, hi, low)", "        book.burn(i, hi, low)\n        x = q_now - q_prev", "сгоревшее замещается новыми"),
+    ("            book.close(-x)\n", "            pass\n", "падение интереса закрывает позиции"),
+    ("            c = self.cohorts[-1]\n", "            c = self.cohorts[0]\n", "закрываются самые свежие"),
     ("            keep = 1 - amount / mass\n", "            keep = 0.0\n", "пачка закрывается на долю"),
     ("            c[1] *= keep\n", "", "доля пачки запоминается"),
     ("    for i in range(2, len(rows)):", "    for i in range(3, len(rows)):", "первый шаг — со второго снимка"),
-    ("        burn(len(rows), rows[-1][1], rows[-1][2])", "        pass", "идущая свеча сжигает уровни"),
+    ("        book.burn(len(rows), rows[-1][1], rows[-1][2])", "        pass", "идущая свеча сжигает уровни"),
     ("SMOOTH = (0.25, 0.5, 0.25)", "SMOOTH = (0.0, 1.0, 0.0)", "сглаживание соседей"),
     ("a[max(0, i - 1)]", "a[i - 1]", "сглаживание: левый край без потерь"),
     ("    if tail[0][0] > cut:\n        return main\n", "", "хвост дотягивается до идущей свечи"),
     ("[r for r in main if r[0] < cut] + [r for r in tail if r[0] >= cut]", "main + [r for r in tail if r[0] > cut]", "хвост заменяет идущую свечу"),
+    ("            self.top_l[g] = min(self.top_l[g], cut_l - 1)\n", "", "сгоревшая полоса лонгов не горит дважды"),
+    ("            self.bot_s[g] = max(self.bot_s[g], cut_s)\n", "", "сгоревшая полоса шортов не горит дважды"),
+    ("                self.top_l[g] = max(self.top_l[g], b)\n", "                pass\n", "полоса лонгов растёт с новыми"),
+    ("                self.bot_s[g] = min(self.bot_s[g], b)\n", "                pass\n", "полоса шортов растёт с новыми"),
+    ("SPAN = 1.0\nBUCKETS = 800", "SPAN = 0.15\nBUCKETS = 120", "сетка до ±100 %"),
+    # Плечи по биржам.
+    ('"dYdX": 20,', '"dYdX": 200,', "предел плеча биржи"),
+    ("    return cap if sym in MAJORS else min(cap, ALT_CAP)", "    return cap", "у альтов плечо меньше"),
+    ("    cap = CAPS.get(ex, CAP_OTHER)", "    cap = CAPS.get(ex, 500)", "незнакомая биржа — осторожный предел"),
+    ("    kept = [x for x in LEVS if x[0] <= cap] or [LEVS[0]]", "    kept = list(LEVS)", "плечи выше предела не открыть"),
+    ("    kept = [x for x in LEVS if x[0] <= cap] or [LEVS[0]]", "    kept = [x for x in LEVS if x[0] <= cap]", "предел ниже 3× — хотя бы 3×"),
+    ("    return tuple((lev, w / total, g) for lev, w, g in kept)", "    return tuple(kept)", "доли — снова в сумме 1"),
+    ("        lg, sg, mass = model(rows, lo, step, levs_upto(max_lev(ex, sym)))", "        lg, sg, mass = model(rows, lo, step)", "у каждой биржи — свои плечи"),
+    # Самочистка.
+    ("        _sweep()\n        while len(_st.hits) > CACHE_MAX:", "        while len(_st.hits) > CACHE_MAX:", "сборка чистит старое"),
+    ("    with _lock:\n        _sweep()\n        hit = _st.hits.get(key)", "    with _lock:\n        hit = _st.hits.get(key)", "прогрев чистит старое"),
+    ("    for k in [k for k, v in _st.hits.items() if t - v[0] >= STALE]:", "    for k in [k for k, v in _st.hits.items() if t - v[0] >= STALE * 100]:", "старые карты — вон"),
+    ("    for k in [k for k, v in _st.fails.items() if t - v >= FAIL_WAIT]:", "    for k in [k for k, v in _st.fails.items() if t - v >= 0]:", "свежая пауза остаётся"),
+    ("    for k in [k for k, v in _st.fails.items() if t - v >= FAIL_WAIT]:", "    for k in [k for k, v in _st.fails.items() if t - v >= FAIL_WAIT * 100]:", "старые паузы — вон"),
     # Ответ.
     ("lv = [round(st[\"L\"][g][b] * m) if b < cut_l else 0 for g in range(g_n)]", "lv = [round(st[\"L\"][g][b] * m) for g in range(g_n)]", "лонги ниже цены"),
     ("sv = [round(st[\"S\"][g][b] * m) if b >= cut_s else 0 for g in range(g_n)]", "sv = [round(st[\"S\"][g][b] * m) for g in range(g_n)]", "шорты выше цены"),
