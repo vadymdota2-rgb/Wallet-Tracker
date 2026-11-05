@@ -10107,6 +10107,7 @@ def wire() -> None:
     wt_fng.set_cache_dir(CACHE_DIR)
     wt_mcap.set_cache_dir(CACHE_DIR)
     treasury.set_cache_dir(CACHE_DIR)
+    liq_disk_load()
     etf.set_new_fund_hook(etf_new_fund)
     # Прежняя доминация (CoinMarketCap) держала копию в dom-<ключ>.json, прежний
     # «Страх и жадность» (с ценой Binance) — в fng-<ключ>.json; их больше никто
@@ -11449,6 +11450,52 @@ def cache_refresher() -> None:
         time.sleep(CACHE_TICK)
 
 
+# Копия карт ликвидаций на диске (как у халвинга): после перезапуска тёплые
+# карты отдаются сразу, а не через минуту сборки. Читается один раз при
+# запуске (wire), пишется целиком после каждого круга прогрева — во временный
+# файл и подменой; файл больше LIQ_DISK_MAX не читается (подложенный или
+# испорченный), каждое поле проверяет wt_liqmap.restore.
+LIQ_DISK = "liqmap.json"
+LIQ_DISK_MAX = 16 * 2 ** 20
+
+
+def liq_disk_load() -> int:
+    """Карты из копии на диске — в кэш модуля. Вернёт, сколько принято."""
+    if not CACHE_DIR:
+        return 0
+    path = os.path.join(CACHE_DIR, LIQ_DISK)
+    try:
+        if os.path.getsize(path) > LIQ_DISK_MAX:
+            return 0
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError, RecursionError):
+        return 0
+    return wt_liqmap.restore(data)
+
+
+def liq_disk_save() -> None:
+    """Все карты кэша — на диск одним файлом (временный файл и подмена)."""
+    if not CACHE_DIR:
+        return
+    path = os.path.join(CACHE_DIR, LIQ_DISK)
+    tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
+    try:
+        raw = json.dumps(wt_liqmap.dump(), separators=(",", ":"), allow_nan=False)
+        if len(raw) > LIQ_DISK_MAX:
+            return
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(raw)
+        os.replace(tmp, path)
+    except (OSError, TypeError, ValueError) as e:
+        sys.stderr.write(f"[api] копия карт ликвидаций: {e}\n")
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+
+
 def liq_warm_refresher() -> None:
     """Держит тёплыми карты самых торгуемых монет по всем трём окнам."""
     time.sleep(20)
@@ -11477,6 +11524,7 @@ def liq_warm_refresher() -> None:
                     wt_liqmap.warm(sym, rng)  # свежая — ничего, иначе собирает здесь
                 except Exception as e:  # noqa: BLE001
                     print(f"liq warm {sym} {rng}: {e}", file=sys.stderr)
+        liq_disk_save()
         time.sleep(LIQ_WARM_EVERY)
 
 

@@ -38,6 +38,11 @@
 не старше STALE, — тоже сразу, а пересборка уходит в фон одним потоком на
 карту. Сборки нет вовсе — запрос ждёт её не дольше COLD_WAIT, не успела —
 «собираем». Сборок одновременно — не больше JOBS_MAX.
+
+Копия на диске (как у халвинга): после перезапуска сервера тёплые карты
+отдаются сразу, а не через минуту сборки. Модуль только выгружает сборки
+(dump) и принимает их обратно (restore) — каждое поле проверяется, как
+ответ чужого сервера; файл пишет и читает whale_api.
 """
 from __future__ import annotations
 
@@ -46,7 +51,7 @@ import re
 import threading
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import Any, TypeGuard
 
 Json = Any
 # Ряд биржи: (начало свечи unix с, максимум, минимум, закрытие,
@@ -639,6 +644,117 @@ def liq_map(sym: object, rng: object, wait: float = COLD_WAIT) -> dict[str, Json
         busy = key in _st.jobs
         failed = key in _st.fails
     return _no("building" if busy else "no_data" if failed else "busy")
+
+
+# --- Копия на диске ----------------------------------------------------------
+
+DUMP_VERSION = 1
+
+
+def _pack(st: dict[str, Json]) -> dict[str, Json]:
+    """Сборка для файла: корзины позиций — только непустые, [корзина, монеты]."""
+    out = {k: v for k, v in st.items() if k not in ("L", "S")}
+    for side in ("L", "S"):
+        out[side] = [[[b, round(v, 9)] for b, v in enumerate(g) if v > 0] for g in st[side]]
+    return out
+
+
+def _pos(v: object) -> TypeGuard[float]:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and 0 < v < PX_MAX * OI_MAX
+
+
+def _fields_ok(d: dict[str, object]) -> bool:
+    """Поля сборки из файла правдоподобны, а сетка — та же, что у этого выката."""
+    sym, rng, px, lo, step, at = (d.get(k) for k in ("sym", "range", "px", "lo", "step", "at"))
+    ex, path, ohlc = d.get("ex"), d.get("path"), d.get("ohlc")
+    oi, seen, low, high = (d.get(k) for k in ("oi", "seen", "low", "high"))
+    return bool(
+        isinstance(sym, str) and SYM.fullmatch(sym) and isinstance(rng, str) and rng in RANGES and _pos(px) and _pos(step)
+        and isinstance(lo, (int, float)) and not isinstance(lo, bool) and lo >= 0 and type(at) is int and at > 0
+        and abs(lo - px * (1 - SPAN)) <= px * 1e-9 and abs(step - px * SPAN * 2 / BUCKETS) <= px * 1e-12
+        and isinstance(ex, list) and len(ex) <= 64 and all(isinstance(e, str) and 0 < len(e) <= 40 for e in ex)
+        and isinstance(path, list) and 0 < len(path) <= 200 and all(_pos(x) for x in path)
+        and isinstance(ohlc, list) and 0 < len(ohlc) <= 100
+        and all(isinstance(c, list) and len(c) == 4 and all(_pos(x) for x in c) for c in ohlc)
+        and type(oi) is int and type(seen) is int and seen >= 0 and oi >= 0 and _pos(low) and _pos(high))
+
+
+def _dense(groups: object) -> list[list[float]] | None:
+    """Корзины стороны из файла ([корзина, монеты] по группам) — в полный ряд."""
+    if not (isinstance(groups, list) and len(groups) == len(GROUPS)):
+        return None
+    dense = [[0.0] * BUCKETS for _ in GROUPS]
+    for g, cells in enumerate(groups):
+        if not isinstance(cells, list):
+            return None
+        for cell in cells:
+            if not (isinstance(cell, list) and len(cell) == 2 and type(cell[0]) is int
+                    and 0 <= cell[0] < BUCKETS and _pos(cell[1])):
+                return None
+            dense[g][cell[0]] = float(cell[1])
+    return dense
+
+
+def _unpack(d: object) -> dict[str, Json] | None:
+    """Сборка из файла — или None, если хоть что-то не так: копия могла
+    испортиться, а сетка (SPAN, BUCKETS, группы) — смениться с выкатом."""
+    if not isinstance(d, dict) or not _fields_ok(d):
+        return None
+    st: dict[str, Json] = {k: d[k] for k in ("sym", "range", "at", "oi", "seen")}
+    st |= {k: float(d[k]) for k in ("px", "lo", "step", "low", "high")}
+    st["ex"] = list(d["ex"])
+    st["path"] = [float(x) for x in d["path"]]
+    st["ohlc"] = [[float(x) for x in c] for c in d["ohlc"]]
+    for side in ("L", "S"):
+        dense = _dense(d.get(side))
+        if dense is None:
+            return None
+        st[side] = dense
+    return st
+
+
+def dump() -> dict[str, Json]:
+    """Все сборки кэша — для копии на диске: возраст каждой, с, и сама сборка."""
+    with _lock:
+        t = time.monotonic()
+        items = [(t - born, st) for born, st, _ in _st.hits.values()]
+    return {"v": DUMP_VERSION, "at": time.time(), "maps": [{"age": round(a, 1), "st": _pack(st)} for a, st in items]}
+
+
+def restore(data: object) -> int:
+    """Сборки из копии на диске — в кэш (при запуске сервера): только
+    правдоподобные, не старше STALE и не поверх уже собранных. Вернёт, сколько
+    принято."""
+    if not isinstance(data, dict) or data.get("v") != DUMP_VERSION or not isinstance(data.get("maps"), list):
+        return 0
+    saved = data.get("at")
+    if not (isinstance(saved, (int, float)) and not isinstance(saved, bool)):
+        return 0
+    since = time.time() - saved
+    if since < 0:
+        return 0  # копия из будущего — часы сервера сбиты или файл подложен
+    n = 0
+    for m in data["maps"][:CACHE_MAX]:
+        if not isinstance(m, dict):
+            continue
+        age = m.get("age")
+        st = _unpack(m.get("st"))
+        if st is None or not (isinstance(age, (int, float)) and not isinstance(age, bool) and age >= 0):
+            continue
+        total = since + age
+        if total >= STALE:
+            continue
+        try:
+            res = render(st, st["px"])
+        except (ArithmeticError, IndexError, KeyError, TypeError, ValueError):
+            continue
+        key = (st["sym"], st["range"])
+        with _lock:
+            if key in _st.hits:
+                continue
+            _st.hits[key] = (time.monotonic() - total, st, res)
+        n += 1
+    return n
 
 
 def warm(sym: str, rng: str) -> None:

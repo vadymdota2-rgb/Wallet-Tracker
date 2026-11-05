@@ -817,6 +817,13 @@ say("карта ликвидаций на уровне ETF/доминации: �
     and os.path.isfile(f"{APP}/tools/typecheck-liqmap.mjs") and "npm run typecheck:liqmap" in read(f"{APP}/.github/workflows/tests.yml")
     and 'aria-label={t(lang, "lq_keys")}' in _lq and 'className="lq-tbl"' in _lq and '"lq_old"' in _lq
     and all(os.path.isfile(f"{APP}/tests/{f}") for f in ("liqmap.test.ts", "liqmap.props.test.ts", "test_liqmap_fuzz.py", "test_liqmap_http.py")))
+say("карта ликвидаций — копия на диске, как у халвинга: после перезапуска сервера тёплые карты отдаются сразу; копия проверяется поле за полем (сетка, группы плеч, возраст не старше STALE, не из будущего), пишется через временный файл и rename, размер ограничен",
+    "def restore(data: object) -> int:" in read(f"{APP}/wt_liqmap.py") and "def _unpack(d: object)" in read(f"{APP}/wt_liqmap.py")
+    and "if total >= STALE:" in read(f"{APP}/wt_liqmap.py") and "if key in _st.hits:" in read(f"{APP}/wt_liqmap.py")
+    and "liq_disk_load()" in api.split("def wire() -> None:")[1].split("\ndef ")[0]
+    and "liq_disk_save()" in api.split("def liq_warm_refresher() -> None:")[1].split("\ndef ")[0]
+    and "os.replace(tmp, path)" in api.split("def liq_disk_save(")[1].split("\ndef ")[0] and "LIQ_DISK_MAX = 16 * 2 ** 20" in api
+    and os.path.isfile(f"{APP}/tests/test_liqmap_disk.py") and "tests.test_liqmap_disk" in read(f"{APP}/tools/mutate-liqmap.py"))
 say("авторские права: LICENSE «все права защищены» (Wallet Tracker) с оговоркой о сторонних лицензиях (IBM Plex — OFL, Twemoji — CC BY 4.0, данные источников); package.json — UNLICENSED; на экране «Документы» — «© 2026 Wallet Tracker» на 16 языках",
     os.path.isfile(f"{APP}/LICENSE") and "Copyright (c) 2026 Wallet Tracker. All rights reserved." in read(f"{APP}/LICENSE")
     and "SIL Open Font" in read(f"{APP}/LICENSE") and "CC BY 4.0" in read(f"{APP}/LICENSE")

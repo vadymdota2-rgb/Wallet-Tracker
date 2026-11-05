@@ -154,7 +154,7 @@ PY = [
     ("    px = _live(key[0], base)", "    px = base", "между сборками — текущая цена"),
     # Хвост.
     ("    if gather is not None and rng in TAIL:", "    if False:", "длинные окна — с хвостом"),
-    ("                tail.update(fn(sym, *TAIL[rng])[0])", "                tail.update(fn(sym, *TAIL[rng])[0]) if False else None", "хвост — в модель"),
+    ("                tail.update(t_got)\n", "", "хвост — в модель"),
     ("            except Exception:  # noqa: BLE001 — хвоста нет — окно без него, как раньше", "            except ZeroDivisionError:  # noqa: BLE001 — хвоста нет — окно без него, как раньше", "сбой хвоста не ломает карту"),
     # Кэш и сборка.
     ('SYM = re.compile(r"[A-Z0-9]{1,12}")', 'SYM = re.compile(r".{1,12}")', "монета — только буквы и цифры"),
@@ -174,6 +174,26 @@ PY = [
     ('    return _no("building" if busy else "no_data" if failed else "busy")', '    return _no("building")', "ответ без карты — по причине"),
     ("        if (hit and time.monotonic() - hit[0] < TTL[rng] - 60) or key in _st.jobs:", "        if key in _st.jobs:", "прогрев не трогает свежую"),
     ("        if (hit and time.monotonic() - hit[0] < TTL[rng] - 60) or key in _st.jobs:", "        if hit and time.monotonic() - hit[0] < TTL[rng] - 60:", "прогрев не дублирует сборку"),
+    # Копия на диске.
+    ("        out[side] = [[[b, round(v, 9)] for b, v in enumerate(g) if v > 0] for g in st[side]]", "        out[side] = [[[b, round(v, 9)] for b, v in enumerate(g)] for g in st[side]]", "в копии — только непустые корзины"),
+    ("    return isinstance(v, (int, float)) and not isinstance(v, bool) and 0 < v < PX_MAX * OI_MAX", "    return isinstance(v, (int, float)) and 0 < v < PX_MAX * OI_MAX", "копия: bool — не число"),
+    ("    return isinstance(v, (int, float)) and not isinstance(v, bool) and 0 < v < PX_MAX * OI_MAX", "    return isinstance(v, (int, float)) and not isinstance(v, bool) and 0 < v", "копия: пределы чисел"),
+    ("lo >= 0 and type(at) is int and at > 0\n", "lo >= 0 and isinstance(at, int)\n", "копия: время сборки"),
+    ("        and abs(lo - px * (1 - SPAN)) <= px * 1e-9 and abs(step - px * SPAN * 2 / BUCKETS) <= px * 1e-12\n", "", "копия: та же сетка"),
+    ("and isinstance(ex, list) and len(ex) <= 64 and all(", "and isinstance(ex, list) and all(", "копия: бирж не больше 64"),
+    ("isinstance(path, list) and 0 < len(path) <= 200 and", "isinstance(path, list) and", "копия: путь цены"),
+    ("isinstance(ohlc, list) and 0 < len(ohlc) <= 100", "isinstance(ohlc, list)", "копия: свечи"),
+    ("and len(c) == 4 and all(_pos(x) for x in c) for c in ohlc)", "and all(_pos(x) for x in c) for c in ohlc)", "копия: свеча из четырёх чисел"),
+    ("and type(oi) is int and type(seen) is int and seen >= 0 and oi >= 0 and", "and isinstance(oi, int) and isinstance(seen, int) and", "копия: интерес"),
+    ("    if not (isinstance(groups, list) and len(groups) == len(GROUPS)):", "    if not isinstance(groups, list):", "копия: те же группы плеч"),
+    ("isinstance(cell, list) and len(cell) == 2 and type(cell[0]) is int", "isinstance(cell, list) and type(cell[0]) is int", "копия: клетка — пара"),
+    ("data.get(\"v\") != DUMP_VERSION or ", "", "копия: версия"),
+    ("    if since < 0:\n        return 0  #", "    if False:\n        return 0  #", "копия из будущего не берётся"),
+    ("    for m in data[\"maps\"][:CACHE_MAX]:", "    for m in data[\"maps\"]:", "копия: не больше кэша"),
+    ("not isinstance(age, bool) and age >= 0):", "not isinstance(age, bool)):", "копия: возраст не меньше нуля"),
+    ("        if total >= STALE:\n", "        if age >= STALE:\n", "копия: возраст — с записи файла"),
+    ("            if key in _st.hits:\n                continue\n", "", "копия не поверх свежей сборки"),
+    ("            _st.hits[key] = (time.monotonic() - total, st, res)", "            _st.hits[key] = (time.monotonic(), st, res)", "копия: возраст сохраняется"),
 ]
 
 
@@ -202,7 +222,7 @@ def run(path, cmd, muts):
 
 
 a1 = run(f"{ROOT}/src/lib/liqmap.ts", ["node", "--test", "tests/liqmap.test.ts", "tests/liqmap.props.test.ts"], TS)
-a2 = run(f"{ROOT}/wt_liqmap.py", [sys.executable, "-m", "unittest", "tests.test_liqmap", "tests.test_liqmap_fuzz"], PY)
+a2 = run(f"{ROOT}/wt_liqmap.py", [sys.executable, "-m", "unittest", "tests.test_liqmap", "tests.test_liqmap_fuzz", "tests.test_liqmap_disk"], PY)
 alive = a1 + a2
 total = len(TS) + len(PY) - len(EQUIV)
 print(f"ИТОГ: убито {total - len(alive)} из {total}; выжили: {alive}")
