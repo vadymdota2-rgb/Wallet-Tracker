@@ -65,9 +65,10 @@ class CleanTest(unittest.TestCase):
     def test_spike_is_replaced_at_the_snapshot_price(self):
         # Цена скачет, монет — 100 у всех снимков, у третьего — ноль.
         cl = [100.0, 120.0, 90.0, 130.0, 110.0]
-        rows = [(i, c * 1.001, c * 0.999, c, 100 * (cl[i - 1] if i else c), 0.5) for i, c in enumerate(cl)]
+        rows = [(i + 1, c * 1.001, c * 0.999, c, 100 * (cl[i - 1] if i else c), 0.5) for i, c in enumerate(cl)]
         rows[2] = (*rows[2][:4], 0.0, 0.5)
         out = lm.clean_rows(rows)
+        self.assertEqual(len(out), 5)
         # В монетах по цене снимка (закрытие прошлой свечи) — снова 100.
         self.assertAlmostEqual(out[2][4] / out[1][3], 100.0, places=6)
 
