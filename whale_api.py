@@ -10844,10 +10844,34 @@ def _liq_oi_con() -> sqlite3.Connection:
     return con
 
 
+# Акции и фонды на фьючерсных биржах — под разными именами: TSLA (OKX, Gate,
+# Bitget), TSLAX — токенизированные xStocks (Kraken, HTX, dYdX), TSLASTOCK
+# (MEXC). Для карты это одна бумага. Хвост снимаем только у тикеров отсюда:
+# иначе TRX, SNX или IMX стали бы чужими монетами.
+LIQ_STOCKS = frozenset({
+    "AAPL", "ABBV", "ABT", "ACN", "AMD", "AMZN", "ASML", "AVGO", "BABA", "BAC", "COIN", "CRCL", "CRM", "CRWD", "CSCO",
+    "CVX", "DIA", "GLD", "GME", "GOOG", "GOOGL", "GS", "HD", "HOOD", "IBM", "INTC", "IWM", "JNJ", "JPM", "KO", "LLY",
+    "MA", "MCD", "META", "MRK", "MRVL", "MSFT", "MSTR", "MU", "NFLX", "NKE", "NVDA", "NVO", "ORCL", "PEP", "PFE", "PG",
+    "PLTR", "PYPL", "QCOM", "QQQ", "RDDT", "SBUX", "SHOP", "SLV", "SMCI", "SOXL", "SPY", "TQQQ", "TSLA", "TSM", "UBER",
+    "UNH", "USO", "V", "VOO", "VTI", "WMT", "XOM",
+})
+
+
+def _stock_base(s: str) -> str:
+    """Имя акции у биржи → наше: TSLAX и TSLASTOCK → TSLA; не акция — как есть.
+    Хвост X — только у тикеров от трёх букв: MUX, HDX и MAX — криптовалюты, а
+    не Micron, Home Depot и Mastercard."""
+    if s.endswith("STOCK") and s[:-5] in LIQ_STOCKS:
+        return s[:-5]
+    if s.endswith("X") and len(s) >= 4 and s[:-1] in LIQ_STOCKS:
+        return s[:-1]
+    return s
+
+
 def _snap_sym(raw: str) -> str:
     """Тикер биржи → наш. «1000PEPE» не приводим: цена у него в тысячу раз
-    больше, и снимок лёг бы на чужую ось."""
-    s = str(raw or "").upper()
+    больше, и снимок лёг бы на чужую ось. Акции — к одному имени (_stock_base)."""
+    s = _stock_base(str(raw or "").upper())
     s = "BTC" if s == "XBT" else s
     return s if re.fullmatch(r"[A-Z][A-Z0-9]{1,11}", s) else ""
 
@@ -11083,6 +11107,41 @@ def _snap_bitstamp() -> dict:
     return out
 
 
+def _snap_bitmex() -> dict:
+    """BitMEX: все бессрочные одним запросом. Интерес — openValue в валюте
+    расчёта: сатоши у XBt (и у квантовых ETHUSD), миллионные доли у USDt."""
+    rows = [r for r in get_json("https://www.bitmex.com/api/v1/instrument/active", 20) or [] if isinstance(r, dict)]
+    xbt = next((_fnum(r.get("markPrice")) for r in rows if r.get("symbol") == "XBTUSD"), 0.0)
+    out: dict = {}
+    for r in rows:
+        if r.get("typ") != "FFWCSX" or r.get("state") != "Open" or r.get("quoteCurrency") not in ("USD", "USDT"):
+            continue
+        settl, ov, px = r.get("settlCurrency"), _fnum(r.get("openValue")), _fnum(r.get("markPrice"))
+        usd = ov / 1e8 * xbt if settl == "XBt" else ov / 1e6 if settl == "USDt" else 0.0
+        if (sym := _snap_sym(str(r.get("underlying") or ""))) and usd > 0 and px > 0:
+            old = out.get(sym, (0.0, px))
+            out[sym] = (old[0] + usd, old[1])
+    return out
+
+
+# ApeX отдаёт интерес только по одной монете — берём крупнейшие.
+LIQ_APEX = ("BTC", "ETH", "SOL", "XRP", "DOGE", "BNB", "HYPE", "SUI", "ADA", "LINK",
+            "AVAX", "LTC", "TON", "TAO", "ENA", "TRX", "NEAR", "AAVE", "WLD", "ZEC")
+
+
+def _snap_apex() -> dict:
+    out: dict = {}
+
+    def one(sym: str) -> None:
+        r = ((get_json(f"https://pro.apex.exchange/api/v3/ticker?symbol={sym}USDT", 15) or {}).get("data") or [{}])[0]
+        px = _fnum(r.get("markPrice")) if isinstance(r, dict) else 0.0
+        if px > 0:
+            out[sym] = (_fnum(r.get("openInterest")) * px, px)
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        list(pool.map(lambda s: _safe(one, s), LIQ_APEX))
+    return out
+
+
 def _snap_top(tick_url: str, key: str, n: int, one) -> dict:
     """Биржи, что отдают интерес только по одной монете: берём n самых
     торгуемых — дальше интерес мал, а запросов было бы сотни."""
@@ -11210,7 +11269,8 @@ LIQ_SNAPS = (("Hyperliquid", _snap_hl), ("Bitget", _snap_bitget), ("MEXC", _snap
              ("Lighter", _snap_lighter), ("Backpack", _snap_backpack), ("Orderly", _snap_orderly),
              ("GMX", _snap_gmx), ("Aster", _snap_aster), ("BingX", _snap_bingx),
              ("Bitstamp", _snap_bitstamp), ("BloFin", _snap_blofin), ("XT.com", _snap_xt),
-             ("Bullish", _snap_bullish), ("Delta", lambda: _snap_delta("api.delta.exchange")),
+             ("Bullish", _snap_bullish), ("BitMEX", _snap_bitmex), ("ApeX", _snap_apex),
+             ("Delta", lambda: _snap_delta("api.delta.exchange")),
              ("Delta India", lambda: _snap_delta("api.india.delta.exchange")))
 
 
@@ -11318,6 +11378,17 @@ def _liq_sampled(sym: str, period: str, n: int, ref: list, px: float) -> dict:
     return out
 
 
+def _liq_stock(fn):
+    """Kraken, HTX и dYdX держат часть акций как токенизированные xStocks
+    (TSLAX): под своим именем ряда нет — берём под этим."""
+    def wrapped(sym: str, period: str, n: int):
+        rows = fn(sym, period, n)
+        if (not rows or len(rows) < 8) and sym in LIQ_STOCKS and len(sym) >= 3:
+            return fn(f"{sym}X", period, n) or rows
+        return rows
+    return wrapped
+
+
 def _liq_mult(fn):
     """Binance и Bybit держат дешёвые монеты как 1000PEPE: цена в свече —
     за тысячу монет, интерес в долларах — тот же. Не нашлось под своим
@@ -11336,7 +11407,8 @@ def _liq_mult(fn):
 
 
 LIQ_SOURCES = (("Binance", _liq_mult(_liq_binance)), ("OKX", _liq_okx), ("Bybit", _liq_mult(_liq_bybit)),
-               ("Gate", _liq_gate), ("HTX", _liq_htx), ("dYdX", _liq_dydx), ("Kraken", _liq_kraken))
+               ("Gate", _liq_gate), ("HTX", _liq_stock(_liq_htx)), ("dYdX", _liq_stock(_liq_dydx)),
+               ("Kraken", _liq_stock(_liq_kraken)))
 
 
 # Монеты, по которым строится карта: бессрочные фьючерсы на Binance, OKX,
@@ -11349,7 +11421,7 @@ _liq_coins_cache: dict = {}
 
 def _liq_sym(raw: str) -> str:
     """«1000PEPE» → «PEPE»: у Binance дробные монеты идут тысячами."""
-    s = re.sub(r"^(1000000|100000|10000|1000)(?=[A-Z])", "", raw.upper())
+    s = _stock_base(re.sub(r"^(1000000|100000|10000|1000)(?=[A-Z])", "", raw.upper()))
     return s if re.fullmatch(r"[A-Z0-9]{2,12}", s) else ""
 
 

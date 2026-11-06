@@ -830,12 +830,17 @@ say("карта ликвидаций: «биржи давно не отвеча�
     and "копия с устройства — без пометки «биржи молчат»" in read(f"{APP}/tests/e2e/liqmap.e2e.test.ts"))
 say("карта ликвидаций — предыстория: каждое окно начинается с дневных рядов бирж за ~три года до своего начала (иначе видны только позиции, открытые за окно); одна на монету для всех окон, в фоне раз в PRE_TTL, кэш ограничен; Kraken Futures — биржа с историей интереса; снимки не заменяют настоящие ряды",
     'PRE = ("1d", 1000)' in read(f"{APP}/wt_liqmap.py") and "got = {ex: prepend(pre.get(ex), rows) for ex, rows in got.items()}" in read(f"{APP}/wt_liqmap.py")
-    and "PRE_MAX = 12" in read(f"{APP}/wt_liqmap.py") and '("Kraken", _liq_kraken))' in api and "got.setdefault(ex, rows)" in api
+    and "PRE_MAX = 12" in read(f"{APP}/wt_liqmap.py") and '("Kraken", _liq_stock(_liq_kraken)))' in api and "got.setdefault(ex, rows)" in api
     and "LIQ_BUDGET if n <= 400 else LIQ_PRE_BUDGET" in api and os.path.isfile(f"{APP}/tests/test_liqmap_pre.py")
     and "tests.test_liqmap_pre" in read(f"{APP}/tools/mutate-liqmap.py"))
 say("карта ликвидаций: у OKX — и бессрочный контракт с расчётом в монете (BTC-USD-SWAP, у BTC — четверть интереса OKX), склейка только по общим отметкам времени",
     'instId={sym}-USD-SWAP&period={per}&limit=100", "end")}' in api and "if oi and len(inv) >= 0.95 * len(oi):" in api
     and "test_short_coin_margined_series_is_not_glued" in read(f"{APP}/tests/test_liqmap_pre.py"))
+say("карта ликвидаций: акции — одним именем на всех биржах (TSLAX у Kraken, HTX, dYdX и TSLASTOCK у MEXC → TSLA; хвост X — только у тикеров от трёх букв из списка акций), BitMEX и ApeX — в снимках интереса",
+    "def _stock_base(s: str) -> str:" in api and "LIQ_STOCKS = frozenset({" in api and '("HTX", _liq_stock(_liq_htx))' in api
+    and 'if s.endswith("X") and len(s) >= 4 and s[:-1] in LIQ_STOCKS:' in api
+    and '("BitMEX", _snap_bitmex), ("ApeX", _snap_apex)' in api and '"BitMEX": 100, "ApeX": 100' in read(f"{APP}/wt_liqmap.py")
+    and "class StockTest(unittest.TestCase):" in read(f"{APP}/tests/test_liqmap_pre.py"))
 say("авторские права: LICENSE «все права защищены» (Wallet Tracker) с оговоркой о сторонних лицензиях (IBM Plex — OFL, Twemoji — CC BY 4.0, данные источников); package.json — UNLICENSED; на экране «Документы» — «© 2026 Wallet Tracker» на 16 языках",
     os.path.isfile(f"{APP}/LICENSE") and "Copyright (c) 2026 Wallet Tracker. All rights reserved." in read(f"{APP}/LICENSE")
     and "SIL Open Font" in read(f"{APP}/LICENSE") and "CC BY 4.0" in read(f"{APP}/LICENSE")

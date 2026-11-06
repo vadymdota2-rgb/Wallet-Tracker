@@ -103,7 +103,8 @@ GROUPS = (10, 25, 50, 100, 500)
 CAPS = {"Binance": 125, "Bybit": 100, "OKX": 100, "Gate": 100, "HTX": 200, "dYdX": 20, "Hyperliquid": 40,
         "Bitget": 125, "MEXC": 500, "KuCoin": 100, "Kraken": 50, "Phemex": 100, "WOO X": 50, "WhiteBIT": 100,
         "Bitfinex": 100, "Deribit": 50, "CoinEx": 100, "Coinbase Intl": 50, "Crypto.com": 100, "Paradex": 50,
-        "Lighter": 50, "Backpack": 50, "Orderly": 50, "GMX": 100, "Aster": 500, "BingX": 150, "BloFin": 150, "XT.com": 125}
+        "Lighter": 50, "Backpack": 50, "Orderly": 50, "GMX": 100, "Aster": 500, "BingX": 150, "BloFin": 150, "XT.com": 125,
+        "BitMEX": 100, "ApeX": 100}
 CAP_OTHER = 50  # биржа не из списка
 MAJORS = frozenset({"BTC", "ETH"})
 ALT_CAP = 75

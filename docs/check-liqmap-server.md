@@ -14,15 +14,17 @@ grep -c "wt_liqmap.set_price(_liq_price)" whale_api.py
 grep -c "def restore(data: object) -> int:" wt_liqmap.py
 grep -c "    liq_disk_load()" whale_api.py
 grep -c 'PRE = ("1d", 1000)' wt_liqmap.py
-grep -c '("Kraken", _liq_kraken))' whale_api.py
+grep -c '("Kraken", _liq_stock(_liq_kraken)))' whale_api.py
 grep -c 'if oi and len(inv) >= 0.95 \* len(oi):' whale_api.py
 grep -c "x = d + min(gone, max(0.0, -d))" wt_liqmap.py
 grep -c "def _glue_inverse(" whale_api.py
 grep -c 'float(f"{v:.9g}")' wt_liqmap.py
+grep -c '("BitMEX", _snap_bitmex), ("ApeX", _snap_apex)' whale_api.py
+grep -c "def _stock_base(s: str) -> str:" whale_api.py
 ```
 Ожидаю: коммит «Карта ликвидаций: калибровка по настоящим ликвидациям…»
-или новее, служба active и запущена ПОСЛЕ этого коммита, все одиннадцать
-счётчиков — 1. Если выкат не пришёл — так и напиши и остальное не делай.
+или новее, служба active и запущена ПОСЛЕ этого коммита, все тринадцать
+счётчиков — 1 (коммит «…акции одним именем, BitMEX и ApeX» или новее). Если выкат не пришёл — так и напиши и остальное не делай.
 
 ## 2. BTC по всем шести окнам — та же сборка, что у службы (отдельным процессом)
 ```
@@ -208,6 +210,31 @@ PY
 Ожидаю: отношение 0,95–1,05 везде (интерес меняется за минуты — немного
 расходится). Сильно больше или меньше — неверные единицы: напиши первым
 пунктом отчёта, по какой бирже и монете.
+
+## 8. Акции и новые биржи (BitMEX, ApeX)
+```
+cd ~/WalletTracker && PYTHONDONTWRITEBYTECODE=1 timeout 300 python3 - <<'PY'
+import whale_api as api
+import wt_liqmap as lm
+b = api._snap_bitmex()
+inst = api.get_json("https://www.bitmex.com/api/v1/instrument?symbol=XBTUSD&count=1&reverse=true") or [{}]
+print("BitMEX: монет в снимке", len(b), "| BTC в карте $%.0fM" % (b.get("BTC", (0,))[0] / 1e6),
+      "| сама биржа, XBTUSD openInterest (контракты по $1): $%.0fM" % (float((inst[0] if inst else {}).get("openInterest") or 0) / 1e6))
+a = api._snap_apex()
+print("ApeX: монет", len(a), "| BTC $%.0fM" % (a.get("BTC", (0,))[0] / 1e6))
+coins = {c["s"]: c for c in api.liq_coins().get("coins") or []}
+for s in ("TSLA", "NVDA", "MSTR", "QQQ", "TSLAX", "TSLASTOCK"):
+    c = coins.get(s)
+    print(f"{s:10} в списке монет:", (round(c["v"] / 1e6, 1), c["ex"]) if c else "нет")
+for s in ("TSLA", "NVDA"):
+    r = lm.build(s, "7d")
+    print(s, "карта 7d:", r.get("ok"), r.get("ex"), "видно $%.1fM из $%.1fM" % (r.get("seen", 0) / 1e6, r.get("oi", 0) / 1e6) if r.get("ok") else r)
+PY
+```
+Ожидаю: BitMEX в карте по BTC — не меньше XBTUSD (к нему прибавлен
+XBTUSDT); если BitMEX отсюда закрыт — так и напиши. TSLAX и TSLASTOCK в
+списке монет — «нет» (они склеены в TSLA); у TSLA и NVDA в карте больше
+бирж, чем OKX и Gate.
 
 ## Отчёт
 По каждому пункту — «ок» или что не так, с цифрами. Отдельно: одна ли цена

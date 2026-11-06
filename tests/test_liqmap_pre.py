@@ -325,6 +325,91 @@ class InverseTest(unittest.TestCase):
         self.assertIs(api._glue_inverse(many, {t: 1.0 for t in range(37)}), many)  # 92,5 % — нет
 
 
+class StockTest(unittest.TestCase):
+    """Акции под разными именами бирж — одна бумага на карте."""
+
+    def test_names(self):
+        for raw, want in (("TSLAX", "TSLA"), ("TSLASTOCK", "TSLA"), ("TSLA", "TSLA"), ("AAPLSTOCK", "AAPL"),
+                          ("NFLX", "NFLX"), ("NFLXX", "NFLX"), ("COINX", "COIN"), ("SPYX", "SPY")):
+            self.assertEqual(api._stock_base(raw), want, raw)
+        # Криптовалюты с хвостом X — не акции (MUX — не Micron, HDX — не Home Depot).
+        for raw in ("MUX", "HDX", "MAX", "VX", "TRX", "SNX", "IMX", "BTCX", "XSTOCK"):
+            self.assertEqual(api._stock_base(raw), raw, raw)
+        self.assertEqual(api._liq_sym("TSLAX"), "TSLA")
+        self.assertEqual(api._liq_sym("1000PEPE"), "PEPE")
+        self.assertEqual(api._snap_sym("tslastock"), "TSLA")
+        self.assertEqual(api._snap_sym("XBT"), "BTC")
+
+    def test_xstocks_asked_when_the_plain_name_is_empty(self):
+        rows = [(i * 900, 1.0, 1.0, 1.0, 5.0, 0.5) for i in range(10)]
+        asked = []
+
+        def fn(sym, period, n):
+            asked.append(sym)
+            return rows if sym.endswith("X") else None
+        wrapped = api._liq_stock(fn)
+        self.assertEqual(wrapped("TSLA", "1h", 10), rows)
+        self.assertEqual(asked, ["TSLA", "TSLAX"])
+        asked.clear()
+        self.assertIsNone(wrapped("BTC", "1h", 10))  # не акция — без второго запроса
+        self.assertIsNone(wrapped("MU", "1h", 10))  # короткий тикер — MUX чужая монета
+        self.assertEqual(asked, ["BTC", "MU"])
+        # Под своим именем есть — второго запроса нет.
+        asked.clear()
+        self.assertEqual(api._liq_stock(lambda s, p, n: asked.append(s) or rows)("TSLA", "1h", 10), rows)
+        self.assertEqual(asked, ["TSLA"])
+        names = dict(api.LIQ_SOURCES)
+        for ex in ("HTX", "Kraken", "dYdX"):
+            self.assertIn("_liq_stock", names[ex].__qualname__, ex)
+
+
+class NewSnapTest(unittest.TestCase):
+    def test_bitmex(self):
+        inst = [
+            {"symbol": "XBTUSD", "typ": "FFWCSX", "state": "Open", "underlying": "XBT", "quoteCurrency": "USD",
+             "settlCurrency": "XBt", "openValue": 2e8, "markPrice": 50000},  # 2 BTC — $100 000
+            {"symbol": "XBTUSDT", "typ": "FFWCSX", "state": "Open", "underlying": "XBT", "quoteCurrency": "USDT",
+             "settlCurrency": "USDt", "openValue": 3e10, "markPrice": 50010},  # $30 000
+            {"symbol": "ETHUSD", "typ": "FFWCSX", "state": "Open", "underlying": "ETH", "quoteCurrency": "USD",
+             "settlCurrency": "XBt", "openValue": 1e8, "markPrice": 3000},  # квантовый: 1 BTC — $50 000
+            {"symbol": "XBTZ26", "typ": "FFCCSX", "state": "Open", "underlying": "XBT", "quoteCurrency": "USD",
+             "settlCurrency": "XBt", "openValue": 9e9, "markPrice": 51000},  # срочный — не бессрочный
+            {"symbol": "SOLUSD", "typ": "FFWCSX", "state": "Unlisted", "underlying": "SOL", "quoteCurrency": "USD",
+             "settlCurrency": "XBt", "openValue": 9e9, "markPrice": 100},
+            {"symbol": "XBTEUR", "typ": "FFWCSX", "state": "Open", "underlying": "XBT", "quoteCurrency": "EUR",
+             "settlCurrency": "XBt", "openValue": 9e9, "markPrice": 46000},
+            "мусор",
+        ]
+        with mock.patch.object(api, "get_json", return_value=inst):
+            out = api._snap_bitmex()
+        self.assertEqual(set(out), {"BTC", "ETH"})
+        self.assertAlmostEqual(out["BTC"][0], 130000.0)
+        self.assertEqual(out["BTC"][1], 50000)
+        self.assertAlmostEqual(out["ETH"][0], 50000.0)
+        with mock.patch.object(api, "get_json", return_value=None):
+            self.assertEqual(api._snap_bitmex(), {})
+
+    def test_apex(self):
+        def fake(url, timeout=10.0):
+            sym = url.split("symbol=")[1].removesuffix("USDT")
+            if sym == "BTC":
+                return {"data": [{"openInterest": "2", "markPrice": "50000"}]}
+            if sym == "ETH":
+                raise OSError("сеть")
+            return {"data": []}
+        with mock.patch.object(api, "get_json", side_effect=fake) as get:
+            out = api._snap_apex()
+        self.assertEqual(out, {"BTC": (100000.0, 50000.0)})
+        self.assertEqual(get.call_count, len(api.LIQ_APEX))
+        self.assertLessEqual(len(api.LIQ_APEX), 20)
+
+    def test_listed_with_caps(self):
+        names = dict(api.LIQ_SNAPS)
+        self.assertIs(names["BitMEX"], api._snap_bitmex)
+        self.assertIs(names["ApeX"], api._snap_apex)
+        self.assertEqual((lm.CAPS["BitMEX"], lm.CAPS["ApeX"]), (100, 100))
+
+
 class GatherTest(unittest.TestCase):
     def test_snapshot_does_not_replace_a_history_source(self):
         mine = [(i * 900, 1.0, 1.0, 1.0, 5.0, 0.5) for i in range(10)]

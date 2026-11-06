@@ -245,6 +245,19 @@ class ModelTest(unittest.TestCase):
         more = lm.model([*base, burn, row(4 * 900, 100, 100, 100, 2000 - gone * 200, 1.0)], LO, STEP)[2]
         self.assertAlmostEqual(more, after_burn - gone, places=6)
 
+    def test_positions_opened_after_the_burn_in_the_same_candle_live(self):
+        # Свеча 3 сходила со 100 до 98 и сожгла старые лонги 500× (ликвидация
+        # у 99,9); к снимку 4 интерес вырос на 10 монет — новые лонги 500×
+        # открылись в этой же свече на 98,2–99,8 с ликвидацией 98,1–99,7, то
+        # есть в только что сгоревших корзинах. Сгорание — до открытия: они живы.
+        only500 = ((500, 1.0, 4),)
+        rows = [row(0, 100, 100, 100, 0, 1.0), row(900, 100, 100, 100, 0, 1.0), row(1800, 100, 100, 100, 1000, 1.0),
+                row(2700, 100, 98, 100, 1000, 1.0), row(3600, 100, 100, 100, 2000, 1.0)]
+        longs, _, seen = lm.model(rows, LO, STEP, only500)
+        self.assertAlmostEqual(seen, 10.0, places=9)
+        self.assertAlmostEqual(total(longs), 10.0, places=9)
+        self.assertTrue(all(98 < p < 99.8 for p in where(longs)))
+
     def test_falling_interest_closes_the_newest_positions_first(self):
         # A — 10 монет на 100, B — 10 монет на 110; интерес падает на 10 —
         # закрывается B, A цела.
