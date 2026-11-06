@@ -103,17 +103,17 @@ class BuildCleanTest(unittest.TestCase):
 
     def test_burnt_edge_is_the_fine_running_candle_not_the_whole_day(self):
         # Окно — дневные свечи; сегодня цена падала до 90, потом вернулась к
-        # 100, и после этого открылись лонги (хвост — часовые свечи). Край
-        # сгорания — по последней часовой свече, а не по всему дню: лонги,
+        # 100, и после этого открылись лонги (хвост — 4-часовые свечи). Край
+        # сгорания — по последней 4-часовой свече, а не по всему дню: лонги,
         # открытые после минимума, на карте есть.
         day = 86_400
         main = [(i * day, 100.5, 99.5, 100.0, 1e6, 0.9) for i in range(20)]
         main[-1] = (19 * day, 101.0, 90.0, 100.0, 1e6, 0.9)
-        tail = [(19 * day + h * 3600, 100.2, 99.8, 100.0, 1e6 * (1 + 0.2 * h), 0.9) for h in range(10)]
+        tail = [(19 * day + h * 14400, 100.2, 99.8, 100.0, 1e6 * (1 + 0.2 * h), 0.9) for h in range(6)]
         tail[0] = (19 * day, 100.2, 90.0, 95.0, 1e6, 0.9)
 
         def gather(sym, period, n):
-            rows = tail if period == "1h" else main
+            rows = tail if period == "4h" else main
             return {"OKX": rows}, rows
         lm.set_gather(gather)
         r = lm.build("BTC", "90d")

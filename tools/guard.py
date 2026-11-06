@@ -841,6 +841,9 @@ say("карта ликвидаций: акции — одним именем н�
     and 'if s.endswith("X") and len(s) >= 4 and s[:-1] in LIQ_STOCKS:' in api
     and '("BitMEX", _snap_bitmex), ("ApeX", _snap_apex)' in api and '"BitMEX": 100, "ApeX": 100' in read(f"{APP}/wt_liqmap.py")
     and "class StockTest(unittest.TestCase):" in read(f"{APP}/tests/test_liqmap_pre.py"))
+say("карта ликвидаций: окно — позиции, открытые за этот период (учёт закрытий и ликвидаций — по всей истории), окна от 90 дней берут последние 30 дней 4-часовыми свечами; под картой — сколько цены в одной полосе и докуда «Накоплено»",
+    "levs_upto(max_lev(ex, sym)), since=ref[0][0])" in read(f"{APP}/wt_liqmap.py") and '"90d": ("4h", 180)' in read(f"{APP}/wt_liqmap.py")
+    and 'className="lq-rows"' in _lq and '"lq_rows"' in _lq and "test_history_still_explains_the_fall_of_interest" in read(f"{APP}/tests/test_liqmap_pre.py"))
 say("авторские права: LICENSE «все права защищены» (Wallet Tracker) с оговоркой о сторонних лицензиях (IBM Plex — OFL, Twemoji — CC BY 4.0, данные источников); package.json — UNLICENSED; на экране «Документы» — «© 2026 Wallet Tracker» на 16 языках",
     os.path.isfile(f"{APP}/LICENSE") and "Copyright (c) 2026 Wallet Tracker. All rights reserved." in read(f"{APP}/LICENSE")
     and "SIL Open Font" in read(f"{APP}/LICENSE") and "CC BY 4.0" in read(f"{APP}/LICENSE")

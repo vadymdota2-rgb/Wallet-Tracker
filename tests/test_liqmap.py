@@ -317,12 +317,31 @@ class ModelTest(unittest.TestCase):
 class SpliceTest(unittest.TestCase):
     def test_tail_replaces_the_running_candle(self):
         main = [row(t, 1, 1, 1, 1) for t in (0, 3600, 7200)]
-        tail = [row(t, 2, 2, 2, 2) for t in range(3600, 9000, 900)]
+        # Хвост с начала идущей свечи — заменяет только её.
+        tail = [row(t, 2, 2, 2, 2) for t in range(7200, 9000, 900)]
         out = lm.splice(main, tail)
         self.assertEqual([r[0] for r in out], [0, 3600, 7200, 8100])
+        self.assertEqual(out[:2], main[:2])
+        self.assertEqual(out[2], tail[0])
+
+    def test_longer_tail_replaces_all_candles_it_covers(self):
+        # Хвост с 3600 — мелкие свечи вместо крупных с этого места (у окон от
+        # 90 дней — 30 дней 4-часовыми вместо дневных).
+        main = [row(t, 1, 1, 1, 1) for t in (0, 3600, 7200)]
+        tail = [row(t, 2, 2, 2, 2) for t in range(3600, 9000, 900)]
+        out = lm.splice(main, tail)
+        self.assertEqual([r[0] for r in out], [0, 3600, 4500, 5400, 6300, 7200, 8100])
         self.assertEqual(out[0], main[0])
-        self.assertEqual(out[1], main[1])
-        self.assertEqual(out[2], tail[4])
+        self.assertEqual(out[1:], tail)
+        # Хвост начался внутри крупной свечи — она не берётся, хвост — с её начала.
+        mid = [row(t, 2, 2, 2, 2) for t in range(4500, 9000, 900)]
+        out = lm.splice(main, mid)
+        self.assertEqual([r[0] for r in out], [0, 4500, 5400, 6300, 7200, 8100])
+        # Хвост с середины первой свечи — весь хвост, без крупных.
+        early = [row(t, 2, 2, 2, 2) for t in range(1800, 9000, 900)]
+        self.assertEqual(lm.splice(main, early), early)
+        # Одна крупная свеча — она и идущая: вместо неё хвост.
+        self.assertEqual(lm.splice(main[-1:], tail[-2:]), tail[-2:])
 
     def test_tail_that_does_not_reach_back_is_ignored(self):
         main = [row(t, 1, 1, 1, 1) for t in (0, 3600, 7200)]
@@ -490,7 +509,7 @@ class CacheTest(Base):
         calls: list = []
         lm.set_gather(self.gather(calls))
         self.assertTrue(lm.liq_map("BTC", "90d")["ok"])
-        self.assertEqual(sorted(calls), sorted([("BTC", "1d", 90), ("BTC", "1h", 30)]))
+        self.assertEqual(sorted(calls), sorted([("BTC", "1d", 90), ("BTC", "4h", 180)]))
 
     def test_tail_rows_go_into_the_model(self):
         # Окно: интерес стоит; хвост (идущая свеча мелко): вырос втрое.

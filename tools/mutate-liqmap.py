@@ -90,8 +90,10 @@ PY = [
     ("        book.burn(len(rows), rows[-1][1], rows[-1][2])", "        pass", "идущая свеча сжигает уровни"),
     ("SMOOTH = (0.25, 0.5, 0.25)", "SMOOTH = (0.0, 1.0, 0.0)", "сглаживание соседей"),
     ("a[max(0, i - 1)]", "a[i - 1]", "сглаживание: левый край без потерь"),
-    ("    if tail[0][0] > cut:\n        return main\n", "", "хвост дотягивается до идущей свечи"),
-    ("[r for r in main if r[0] < cut] + [r for r in tail if r[0] >= cut]", "main + [r for r in tail if r[0] > cut]", "хвост заменяет идущую свечу"),
+    ("    if tail[0][0] > main[-1][0]:\n        return main\n", "", "хвост дотягивается до идущей свечи"),
+    ("    return [r for r in main if span > 0 and r[0] + span <= tail[0][0]] + tail", "    return [r for r in main if span > 0 and r[0] <= tail[0][0]] + tail", "крупная свеча — только закончившаяся до хвоста"),
+    ("    return [r for r in main if span > 0 and r[0] + span <= tail[0][0]] + tail", "    return [r for r in main if r[0] + span <= tail[0][0]] + tail", "одна крупная свеча — идущая"),
+    ('TAIL = {"7d": ("15m", 12), "30d": ("15m", 24), "90d": ("4h", 180),', 'TAIL = {"7d": ("15m", 12), "30d": ("15m", 24), "90d": ("1h", 30),', "длинные окна — последние 30 дней 4-часовыми"),
     ("            self.top_l[g] = min(self.top_l[g], cut_l - 1)\n", "", "сгоревшая полоса лонгов не горит дважды"),
     ("            self.bot_s[g] = max(self.bot_s[g], cut_s)\n", "", "сгоревшая полоса шортов не горит дважды"),
     ("                self.top_l[g] = max(self.top_l[g], b)\n", "                pass\n", "полоса лонгов растёт с новыми"),
@@ -104,7 +106,7 @@ PY = [
     ("    kept = [x for x in LEVS if x[0] <= cap] or [LEVS[0]]", "    kept = list(LEVS)", "плечи выше предела не открыть"),
     ("    kept = [x for x in LEVS if x[0] <= cap] or [LEVS[0]]", "    kept = [x for x in LEVS if x[0] <= cap]", "предел ниже 3× — хотя бы 3×"),
     ("    return tuple((lev, w / total, g) for lev, w, g in kept)", "    return tuple(kept)", "доли — снова в сумме 1"),
-    ("        lg, sg, mass = model(rows, lo, step, levs_upto(max_lev(ex, sym)))", "        lg, sg, mass = model(rows, lo, step)", "у каждой биржи — свои плечи"),
+    ("        lg, sg, mass = model(rows, lo, step, levs_upto(max_lev(ex, sym)), since=ref[0][0])", "        lg, sg, mass = model(rows, lo, step, since=ref[0][0])", "у каждой биржи — свои плечи"),
     # Самочистка.
     ("        _sweep()\n        while len(_st.hits) > CACHE_MAX:", "        while len(_st.hits) > CACHE_MAX:", "сборка чистит старое"),
     ("    with _lock:\n        _sweep()\n        hit = _st.hits.get(key)", "    with _lock:\n        hit = _st.hits.get(key)", "прогрев чистит старое"),
@@ -192,6 +194,11 @@ PY = [
     ("    if hit and t - hit[0] < PRE_STALE:\n        return hit[1]\n", "", "постарше — сразу, без ожидания"),
     ("        return hit[1] if hit and time.monotonic() - hit[0] < PRE_STALE else {}", "        return hit[1] if hit else {}", "не дождались — пусто, а не протухшая"),
     ('PRE = ("1d", 1000)', 'PRE = ("1d", 365)', "предыстория — три года"),
+    # Окно — только позиции, открытые за него.
+    ("    if since is None:\n        return book.agg[0], book.agg[1], book.total()", "    if True:\n        return book.agg[0], book.agg[1], book.total()", "окно — только открытые за него"),
+    ("        if rows[c[0] - 1][0] < since:", "        if rows[c[0] - 1][0] <= since:", "первая свеча окна — в окне"),
+    ("            (out_s if side else out_l)[g][b] += q * c[1]", "            (out_l if side else out_s)[g][b] += q * c[1]", "окно: лонги и шорты — по своим сторонам"),
+    ("levs_upto(max_lev(ex, sym)), since=ref[0][0])", "levs_upto(max_lev(ex, sym)))", "карта окна — с отсечкой по его началу"),
     # Копия на диске.
     ("        out[side] = [[[b, float(f\"{v:.9g}\")] for b, v in enumerate(g) if v > 0] for g in st[side]]", "        out[side] = [[[b, float(f\"{v:.9g}\")] for b, v in enumerate(g)] for g in st[side]]", "в копии — только непустые корзины"),
     ("        out[side] = [[[b, float(f\"{v:.9g}\")] for b, v in enumerate(g) if v > 0] for g in st[side]]", "        out[side] = [[[b, round(v, 9)] for b, v in enumerate(g) if v > 0] for g in st[side]]", "в копии — значащие цифры, а не знаки после запятой"),

@@ -27684,22 +27684,22 @@
     "zh": "1年"
   },
   "lq_seen": {
-    "ru": "Модель видит {a} открытого интереса ({p}) — позиции, которые она проследила по истории бирж (до трёх лет) и которые ещё не закрыты. Остальное открыто раньше, чем биржи хранят историю.",
-    "en": "The model sees {a} of open interest ({p}): positions it has traced through exchange history (up to three years) that are still open. The rest was opened before exchanges started keeping history.",
-    "uk": "Модель бачить {a} відкритого інтересу ({p}) — позиції, які вона простежила за історією бірж (до трьох років) і які ще не закриті. Решту відкрито раніше, ніж біржі зберігають історію.",
-    "de": "Das Modell sieht {a} des Open Interest ({p}): Positionen, die es über die Börsenhistorie (bis zu drei Jahre) zurückverfolgt hat und die noch offen sind. Der Rest wurde eröffnet, bevor die Börsen Daten speichern.",
-    "es": "El modelo ve {a} del interés abierto ({p}): posiciones que ha seguido en el historial de los exchanges (hasta tres años) y que siguen abiertas. El resto se abrió antes de que los exchanges guarden historial.",
-    "fr": "Le modèle voit {a} de l'intérêt ouvert ({p}) : les positions qu'il a suivies dans l'historique des plateformes (jusqu'à trois ans) et toujours ouvertes. Le reste a été ouvert avant le début de l'historique des plateformes.",
-    "pt": "O modelo vê {a} do interesse aberto ({p}): posições que acompanhou no histórico das corretoras (até três anos) e que ainda estão abertas. O resto foi aberto antes de as corretoras guardarem histórico.",
-    "pl": "Model widzi {a} otwartych pozycji ({p}): te, które prześledził w historii giełd (do trzech lat) i które wciąż są otwarte. Reszta została otwarta wcześniej, niż giełdy przechowują historię.",
-    "tr": "Model açık pozisyonların {a} kısmını görüyor ({p}): borsa geçmişinde (üç yıla kadar) izleyebildiği ve henüz kapanmamış pozisyonlar. Gerisi, borsaların geçmiş tuttuğu dönemden önce açıldı.",
-    "id": "Model melihat {a} dari open interest ({p}): posisi yang bisa dilacak dari riwayat bursa (hingga tiga tahun) dan masih terbuka. Sisanya dibuka sebelum bursa mulai menyimpan riwayat.",
-    "vi": "Mô hình thấy {a} trong open interest ({p}): các vị thế lần theo được qua lịch sử sàn (tối đa ba năm) và vẫn còn mở. Phần còn lại được mở trước khi sàn lưu lịch sử.",
-    "hi": "मॉडल ओपन इंटरेस्ट का {a} देखता है ({p}): वे पोज़िशन जिन्हें वह एक्सचेंजों के इतिहास (तीन साल तक) में ढूँढ पाया और जो अभी खुली हैं। बाकी उससे पहले खुली थीं, जब से एक्सचेंज इतिहास रखते हैं।",
-    "ar": "يرى النموذج {a} من الفائدة المفتوحة ({p}): مراكز تتبّعها في سجل المنصات (حتى ثلاث سنوات) وما زالت مفتوحة. أما الباقي فقد فُتح قبل أن تبدأ المنصات بحفظ السجل.",
-    "ja": "モデルが捉えている建玉は{a}（{p}）：取引所の履歴（最長3年）から追跡でき、まだ決済されていないポジションです。残りは、取引所が履歴を保存し始める前に建てられたものです。",
-    "ko": "모델이 보는 미결제약정은 {a}({p})입니다. 거래소 기록(최대 3년)으로 추적할 수 있고 아직 닫히지 않은 포지션이며, 나머지는 거래소가 기록을 보관하기 전에 열린 것입니다.",
-    "zh": "模型看到{a}的未平仓量（{p}）：可从交易所历史（最长三年）追溯且尚未平仓的仓位。其余仓位开立于交易所保存历史之前。"
+    "ru": "Модель видит {a} открытого интереса ({p}) — позиции, открытые за этот период и ещё не закрытые. Чем длиннее период, тем больше видно. Закрытия и ликвидации она считает по всей истории бирж (до трёх лет).",
+    "en": "The model sees {a} of open interest ({p}): positions opened in this period and still open. The longer the period, the more it sees. Closes and liquidations are tracked over the full exchange history (up to three years).",
+    "uk": "Модель бачить {a} відкритого інтересу ({p}) — позиції, відкриті за цей період і ще не закриті. Що довший період, то більше видно. Закриття й ліквідації вона рахує за всією історією бірж (до трьох років).",
+    "de": "Das Modell sieht {a} des Open Interest ({p}): Positionen, die in diesem Zeitraum eröffnet wurden und noch offen sind. Je länger der Zeitraum, desto mehr ist sichtbar. Schließungen und Liquidationen verfolgt es über die gesamte Börsenhistorie (bis zu drei Jahre).",
+    "es": "El modelo ve {a} del interés abierto ({p}): posiciones abiertas en este periodo y aún sin cerrar. Cuanto más largo el periodo, más se ve. Los cierres y liquidaciones se siguen en todo el historial de los exchanges (hasta tres años).",
+    "fr": "Le modèle voit {a} de l'intérêt ouvert ({p}) : les positions ouvertes sur cette période et toujours ouvertes. Plus la période est longue, plus on en voit. Les fermetures et liquidations sont suivies sur tout l'historique des plateformes (jusqu'à trois ans).",
+    "pt": "O modelo vê {a} do interesse aberto ({p}): posições abertas neste período e ainda não fechadas. Quanto mais longo o período, mais se vê. Fechamentos e liquidações são acompanhados em todo o histórico das corretoras (até três anos).",
+    "pl": "Model widzi {a} otwartych pozycji ({p}): otwarte w tym okresie i jeszcze niezamknięte. Im dłuższy okres, tym więcej widać. Zamknięcia i likwidacje liczy na całej historii giełd (do trzech lat).",
+    "tr": "Model açık pozisyonların {a} kısmını görüyor ({p}): bu dönemde açılıp henüz kapanmamış pozisyonlar. Dönem uzadıkça daha fazlası görünür. Kapanışları ve tasfiyeleri borsaların tüm geçmişi (üç yıla kadar) üzerinden izler.",
+    "id": "Model melihat {a} dari open interest ({p}): posisi yang dibuka pada periode ini dan belum ditutup. Makin panjang periodenya, makin banyak yang terlihat. Penutupan dan likuidasi dihitung dari seluruh riwayat bursa (hingga tiga tahun).",
+    "vi": "Mô hình thấy {a} trong open interest ({p}): các vị thế mở trong giai đoạn này và chưa đóng. Giai đoạn càng dài, thấy càng nhiều. Việc đóng và thanh lý được tính theo toàn bộ lịch sử sàn (tối đa ba năm).",
+    "hi": "मॉडल ओपन इंटरेस्ट का {a} देखता है ({p}): इस अवधि में खुली और अभी तक बंद न हुई पोज़िशन। अवधि जितनी लंबी, उतना ज़्यादा दिखता है। बंद होना और लिक्विडेशन वह एक्सचेंजों के पूरे इतिहास (तीन साल तक) से गिनता है।",
+    "ar": "يرى النموذج {a} من الفائدة المفتوحة ({p}): مراكز فُتحت في هذه الفترة ولم تُغلق بعد. كلما طالت الفترة، ظهر المزيد. أما الإغلاقات والتصفيات فيحسبها على كامل سجل المنصات (حتى ثلاث سنوات).",
+    "ja": "モデルが捉えている建玉は{a}（{p}）：この期間に建てられ、まだ決済されていないポジションです。期間が長いほど多く見えます。決済と清算は取引所の全履歴（最長3年）で追跡しています。",
+    "ko": "모델이 보는 미결제약정은 {a}({p})입니다. 이 기간에 열리고 아직 닫히지 않은 포지션이며, 기간이 길수록 더 많이 보입니다. 청산과 종료는 거래소 전체 기록(최대 3년)으로 계산합니다.",
+    "zh": "模型看到{a}的未平仓量（{p}）：本期间内开立且尚未平仓的仓位。期间越长，看到的越多。平仓与强平按交易所全部历史（最长三年）计算。"
   },
   "lq_how_7": {
     "ru": "Когда интерес падает, первыми закрываются самые свежие позиции. Цена дошла до уровня — он сгорает сразу: карта обновляется вместе с ценой.",
@@ -27790,5 +27790,23 @@
     "ja": "取引所からしばらく応答がありません。{t}時点のマップです。",
     "ko": "거래소가 한동안 응답하지 않습니다. {t} 기준 지도입니다.",
     "zh": "交易所已有一段时间没有响应——显示的是{t}的地图。"
+  },
+  "lq_rows": {
+    "ru": "Полоса — сумма за {p} цены, «Накоплено» — до края окна ±{s}. Приблизьте, чтобы увидеть уровни подробнее.",
+    "en": "Each bar adds up {p} of price; “Total” runs to the edge of the ±{s} window. Zoom in to see levels in more detail.",
+    "uk": "Смуга — сума за {p} ціни, «Разом» — до краю вікна ±{s}. Наблизьте, щоб побачити рівні детальніше.",
+    "de": "Ein Balken fasst {p} des Preises zusammen, „Summe“ reicht bis zum Rand des Fensters ±{s}. Vergrößern Sie, um die Niveaus genauer zu sehen.",
+    "es": "Cada barra suma un {p} del precio; «Total» llega hasta el borde de la ventana ±{s}. Acerque para ver los niveles con más detalle.",
+    "fr": "Chaque barre regroupe {p} du prix, « Cumul » va jusqu'au bord de la fenêtre ±{s}. Zoomez pour voir les niveaux plus en détail.",
+    "pt": "Cada barra soma {p} do preço; «Total» vai até a borda da janela ±{s}. Aproxime para ver os níveis com mais detalhe.",
+    "pl": "Pasek to suma z {p} ceny, „Suma” — do krawędzi okna ±{s}. Przybliż, aby zobaczyć poziomy dokładniej.",
+    "tr": "Her çubuk fiyatın {p} aralığını toplar; “Toplam” ±{s} penceresinin kenarına kadar gider. Seviyeleri ayrıntılı görmek için yakınlaştırın.",
+    "id": "Setiap batang menjumlahkan {p} dari harga; “Total” sampai tepi jendela ±{s}. Perbesar untuk melihat level lebih rinci.",
+    "vi": "Mỗi thanh cộng gộp {p} giá; “Cộng dồn” tính tới mép khung ±{s}. Phóng to để xem các mức chi tiết hơn.",
+    "hi": "हर पट्टी कीमत के {p} हिस्से का जोड़ है; “कुल” ±{s} खिड़की के किनारे तक गिना जाता है। स्तर बारीकी से देखने के लिए ज़ूम करें।",
+    "ar": "كل شريط يجمع {p} من السعر، و«الإجمالي» حتى حافة النافذة ±{s}. قرّب العرض لرؤية المستويات بتفصيل أكبر.",
+    "ja": "各バーは価格の{p}分の合計で、「累計」は表示範囲±{s}の端までです。拡大すると価格帯をより細かく確認できます。",
+    "ko": "막대 하나는 가격 {p} 구간의 합계이며, ‘누적’은 ±{s} 범위 끝까지입니다. 확대하면 수준을 더 자세히 볼 수 있습니다.",
+    "zh": "每根柱子汇总价格{p}区间的金额，“累计”统计到±{s}范围边缘。放大可更细致地查看价位。"
   }
 }

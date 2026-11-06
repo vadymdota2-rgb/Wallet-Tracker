@@ -236,6 +236,25 @@ describe("Карта ликвидаций", () => {
     await ctx.close();
   });
 
+  test("масштаб меняет ширину полосы — под картой сказано, сколько цены в полосе и докуда «Накоплено»", async () => {
+    const { ctx, page, errors } = await open({ width: 320 });
+    await ready(page);
+    const seg = page.locator(".lq-plot").locator("xpath=..").locator(".seg button");
+    const note = page.locator(".lq-rows");
+    // Сервер — корзины по 0,25 %, экран — ~60 полос: при ±100 % в полосе 13 корзин — 3,25 %.
+    const want: Record<number, string> = { 5: "0,25%", 30: "1%", 100: "3,2%" };
+    for (const span of [5, 30, 100]) {
+      await seg.filter({ hasText: new RegExp(`^±${span}%$`) }).click();
+      await page.waitForTimeout(150);
+      const text = sp(await note.innerText());
+      assert.ok(text.includes(`за ${want[span]} цены`), `±${span}: ${text}`);
+      assert.ok(text.includes(`±${span}%`), `±${span}: ${text}`);
+    }
+    assert.deepEqual(await overflow(page), []);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
   test("сколько интереса видит модель — подписано", async () => {
     const { ctx, page, errors } = await open();
     await ready(page);

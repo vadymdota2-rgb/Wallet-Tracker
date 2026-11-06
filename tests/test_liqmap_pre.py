@@ -68,24 +68,50 @@ class PrependTest(unittest.TestCase):
 
 
 class PreBuildTest(Base):
-    def test_history_makes_older_positions_visible(self):
+    def test_window_shows_only_positions_opened_in_it(self):
         self.use(pre={})
         bare = lm.build("BTC", "1d")
         lm._st = lm._State()
         self.use()
         full = lm.build("BTC", "1d")
         self.assertTrue(bare["ok"] and full["ok"])
-        self.assertGreater(full["seen"], bare["seen"] * 5)
-        self.assertLessEqual(full["seen"], full["oi"] * 1.01)
-        # Позиции предыстории открыты у 80: лонги 10× ликвидируются около 72,
-        # шорты — около 88; у окна (цена 100) их не было бы.
-        lows = [b for b in full["buckets"] if 70 <= b["p"] <= 74 and sum(b["L"])]
-        self.assertTrue(lows)
-        self.assertFalse([b for b in bare["buckets"] if 70 <= b["p"] <= 74 and sum(b["L"])])
-        # Интерес, биржи и путь цены — по окну, не по предыстории.
+        # Предыстория (позиции у 80, лонги 10× — около 72) на карту окна не идёт.
+        self.assertFalse([b for b in full["buckets"] if 70 <= b["p"] <= 74 and sum(b["L"])])
+        self.assertAlmostEqual(full["seen"] / bare["seen"], 1.0, delta=0.05)
+        # Интерес, биржи и путь цены — по окну.
         self.assertEqual(full["oi"], bare["oi"])
         self.assertEqual(full["ex"], ["OKX"])
         self.assertEqual(full["path"], bare["path"])
+
+    def test_history_still_explains_the_fall_of_interest(self):
+        # До окна — лонги 500× на 100 (ликвидация у 99,9); в окне открылись
+        # шорты 500× на 100 (ликвидация у 100,1); свеча сходила до 99,5 и
+        # сожгла старые лонги, интерес упал на столько же. С историей падение
+        # объяснено ликвидациями — шорты окна живы; без неё модель закрыла бы их.
+        only500 = ((500, 1.0, 4),)
+        lo, step = 0.0, 0.25
+        rows = [(0, 100, 100, 100, 0, 1.0), (900, 100, 100, 100, 0, 1.0), (1800, 100, 100, 100, 1000, 0.0),
+                (2700, 100, 100, 100, 2000, 0.0), (3600, 100, 99.5, 100, 2000, 0.0), (4500, 100, 100, 100, 1000, 0.0)]
+        since = 1800  # окно: шаги со свечи 1800 — шорты; лонги шага 2 (свеча 900) — история
+        _, shorts, seen = lm.model(rows, lo, step, only500, since=since)
+        self.assertAlmostEqual(seen, 10.0, places=6)
+        self.assertAlmostEqual(sum(map(sum, shorts)), 10.0, places=6)
+        _, shorts_bare, seen_bare = lm.model(rows[2:], lo, step, only500, since=since)
+        self.assertLess(seen_bare, 0.5)
+        self.assertLess(sum(map(sum, shorts_bare)), 0.5)
+
+    def test_without_cutoff_everything_counts(self):
+        rows = [(i * 900, 100, 99, 100, 1000 + 100 * i, 0.6) for i in range(20)]
+        a = lm.model(rows, 0.0, 0.25)
+        b = lm.model(rows, 0.0, 0.25, since=0)
+        self.assertAlmostEqual(a[2], b[2], places=6)
+        for side in (0, 1):
+            for g in range(len(lm.GROUPS)):
+                for k in range(lm.BUCKETS):
+                    self.assertAlmostEqual(a[side][g][k], b[side][g][k], places=6)
+        late = lm.model(rows, 0.0, 0.25, since=rows[10][0])
+        self.assertLess(late[2], a[2])
+        self.assertGreater(late[2], 0)
 
     def test_exchange_only_in_history_is_not_on_the_map(self):
         self.use(pre={"OKX": history(), "Gone": history()})

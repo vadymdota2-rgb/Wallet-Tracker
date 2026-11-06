@@ -611,6 +611,10 @@ export function LiqMapScreen() {
 
   const spanN = Number(span);
   const view = useMemo(() => (reply?.ok ? rowsOf(reply, spanN) : { rows: [], rowH: 1 }), [reply, spanN]);
+  /* Ширина полосы в процентах цены — для подписи под картой. */
+  const row0 = view.rows[0];
+  const rowW = reply?.ok && row0 ? ((row0.hi - row0.lo) / reply.px) * 100 : 0;
+  const rowPct = `${new Intl.NumberFormat(lang, { maximumFractionDigits: rowW < 0.995 ? 2 : 1 }).format(rowW)}%`;
   const row = sel !== null ? view.rows[sel] : undefined;
   const cum = useMemo(() => (reply?.ok ? cumOf(view.rows, reply.px, on) : []), [reply, view, on]);
   /* С клавиатуры: стрелки вверх и вниз — соседний уровень (первый раз — у
@@ -848,6 +852,9 @@ export function LiqMapScreen() {
                 </button>
               ))}
             </div>
+            {/* Сколько цены в одной полосе: при ±100 % — около 3 %, при ±5 % —
+                0,25 %, и суммы полос при этом разные, хотя данные те же. */}
+            <p className="lq-rows">{t(lang, "lq_rows", { p: rowPct, s: pct(spanN, 0, false) })}</p>
             <p className="lq-hint">
               <span className="lq-hot-k" aria-hidden="true"><i /><i /><i /></span>
               {t(lang, "lq_hot")} {t(lang, "lq_hint")}
