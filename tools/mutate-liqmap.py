@@ -52,11 +52,11 @@ TS = [
 ]
 PY = [
     # Модель.
-    ("    (75, 0.07, 3), (100, 0.08, 3),", "    (75, 0.07, 3), (100, 0.18, 3),", "доли плеч — в сумме 1"),
-    ("    (125, 0.03, 4), (200, 0.02, 4), (500, 0.01, 4),", "    (125, 0.03, 3), (200, 0.02, 4), (500, 0.01, 4),", "125× — в группе 125–500×"),
+    ("    (75, 0.04, 3), (100, 0.04, 3),", "    (75, 0.04, 3), (100, 0.14, 3),", "доли плеч — в сумме 1"),
+    ("    (125, 0.01, 4), (200, 0.005, 4), (500, 0.005, 4),", "    (125, 0.01, 3), (200, 0.005, 4), (500, 0.005, 4),", "125× — в группе 125–500×"),
     ("    return min(MMR, 0.5 / lev)", "    return MMR", "маржа меньше начальной"),
     ("    return min(MMR, 0.5 / lev)", "    return min(MMR, 1 / lev)", "маржа — половина начальной"),
-    ("    (20, 0.14, 1), (25, 0.14, 1),", "    (20, 0.14, 0), (25, 0.14, 1),", "плечо — в своей группе"),
+    ("    (20, 0.15, 1), (25, 0.10, 1),", "    (20, 0.15, 0), (25, 0.10, 1),", "плечо — в своей группе"),
     ("MMR = 0.005", "MMR = 0.05", "поддерживающая маржа"),
     ("ENTRY = 5", "ENTRY = 1", "вход — по диапазону свечи"),
     ("p = low + (hi - low) * (e + 0.5) / ENTRY", "p = low + (hi - low) * e / ENTRY", "точки входа — по середине долей"),
@@ -79,7 +79,9 @@ PY = [
     ("_, hi, low, p_now, _oi, bs = rows[i - 1]", "_, hi, low, p_now, _oi, bs = rows[i]", "прирост — в свече между снимками"),
     ("        p_prev = rows[i - 2][3]\n", "        p_prev = p_now\n", "интерес — в монетах по цене снимка"),
     ("q_prev, q_now = rows[i - 1][4] / p_prev, rows[i][4] / p_now", "q_prev, q_now = rows[i - 1][4], rows[i][4]", "интерес — в монетах, а не в долларах"),
-    ("        x = q_now - q_prev + book.burn(i, hi, low)", "        book.burn(i, hi, low)\n        x = q_now - q_prev", "сгоревшее замещается новыми"),
+    ("        x = d + min(gone, max(0.0, -d))", "        x = d + gone", "сгоревшее новыми не замещается"),
+    ("        x = d + min(gone, max(0.0, -d))", "        x = d", "ликвидации объясняют падение интереса"),
+    ("        x = d + min(gone, max(0.0, -d))", "        x = d + max(0.0, -d)", "объясняют не больше сгоревшего"),
     ("            book.close(-x)\n", "            pass\n", "падение интереса закрывает позиции"),
     ("            c = self.cohorts[-1]\n", "            c = self.cohorts[0]\n", "закрываются самые свежие"),
     ("            keep = 1 - amount / mass\n", "            keep = 0.0\n", "пачка закрывается на долю"),
@@ -191,7 +193,8 @@ PY = [
     ("        return hit[1] if hit and time.monotonic() - hit[0] < PRE_STALE else {}", "        return hit[1] if hit else {}", "не дождались — пусто, а не протухшая"),
     ('PRE = ("1d", 1000)', 'PRE = ("1d", 365)', "предыстория — три года"),
     # Копия на диске.
-    ("        out[side] = [[[b, round(v, 9)] for b, v in enumerate(g) if v > 0] for g in st[side]]", "        out[side] = [[[b, round(v, 9)] for b, v in enumerate(g)] for g in st[side]]", "в копии — только непустые корзины"),
+    ("        out[side] = [[[b, float(f\"{v:.9g}\")] for b, v in enumerate(g) if v > 0] for g in st[side]]", "        out[side] = [[[b, float(f\"{v:.9g}\")] for b, v in enumerate(g)] for g in st[side]]", "в копии — только непустые корзины"),
+    ("        out[side] = [[[b, float(f\"{v:.9g}\")] for b, v in enumerate(g) if v > 0] for g in st[side]]", "        out[side] = [[[b, round(v, 9)] for b, v in enumerate(g) if v > 0] for g in st[side]]", "в копии — значащие цифры, а не знаки после запятой"),
     ("    return isinstance(v, (int, float)) and not isinstance(v, bool) and 0 < v < PX_MAX * OI_MAX", "    return isinstance(v, (int, float)) and 0 < v < PX_MAX * OI_MAX", "копия: bool — не число"),
     ("    return isinstance(v, (int, float)) and not isinstance(v, bool) and 0 < v < PX_MAX * OI_MAX", "    return isinstance(v, (int, float)) and not isinstance(v, bool) and 0 < v", "копия: пределы чисел"),
     ("lo >= 0 and type(at) is int and at > 0\n", "lo >= 0 and isinstance(at, int)\n", "копия: время сборки"),

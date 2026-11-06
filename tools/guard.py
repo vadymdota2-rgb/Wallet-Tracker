@@ -806,7 +806,7 @@ say("страх и жадность — ревизия: границы зон с
     and "тексты экрана: число не отрывается от слова" in read(f"{APP}/tests/fng.test.ts"))
 say("карта ликвидаций — отдельный модуль wt_liqmap: одиннадцать плеч (3–500×) с долями, как их держат, пять групп на экране, поддерживающая маржа меньше начальной; цена входа — по диапазону свечи (карта плотности, а не «гребёнка»); счёт по сетке цен; сборка в фоне, человек ждёт не дольше COLD_WAIT, сборок одновременно — не больше JOBS_MAX; крупнейшие уровни — скопления, подписи не налезают",
     os.path.isfile(f"{APP}/wt_liqmap.py") and "ENTRY = 5" in read(f"{APP}/wt_liqmap.py") and "JOBS_MAX = 4" in read(f"{APP}/wt_liqmap.py")
-    and "COLD_WAIT = 8.0" in read(f"{APP}/wt_liqmap.py") and "(125, 0.03, 4), (200, 0.02, 4), (500, 0.01, 4)," in read(f"{APP}/wt_liqmap.py") and "return min(MMR, 0.5 / lev)" in read(f"{APP}/wt_liqmap.py")
+    and "COLD_WAIT = 8.0" in read(f"{APP}/wt_liqmap.py") and "(125, 0.01, 4), (200, 0.005, 4), (500, 0.005, 4)," in read(f"{APP}/wt_liqmap.py") and "x = d + min(gone, max(0.0, -d))" in read(f"{APP}/wt_liqmap.py") and "return min(MMR, 0.5 / lev)" in read(f"{APP}/wt_liqmap.py")
     and "def _liq_model(" not in api and "def _liq_build(" not in api
     and 'const LEV_NAME = ["3–10×", "20–25×", "50×", "75–100×", "125–500×"];' in _lq and "const LABEL_GAP = 18;" in _lq
     and "Math.abs(x.k - g.k) >= 2" in _lqlib and os.path.isfile(f"{APP}/tests/test_liqmap.py"))

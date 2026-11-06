@@ -268,6 +268,63 @@ class OkxTest(unittest.TestCase):
         self.assertEqual([r[4] for r in rows], [100.0, 100.0, 100.0])
 
 
+class InverseTest(unittest.TestCase):
+    """Binance COIN-M и Bybit inverse — к основному контракту, по общим отметкам."""
+
+    TS = (900, 1800, 2700)
+
+    def binance(self, cm_ts):
+        def fake(url, timeout=10.0):
+            if "fapi.binance.com/futures/data/openInterestHist" in url:
+                return [{"timestamp": t * 1000, "sumOpenInterestValue": "1000"} for t in self.TS]
+            if "dapi.binance.com/futures/data/openInterestHist" in url:
+                return [{"timestamp": t * 1000, "sumOpenInterestValue": "2"} for t in cm_ts]  # в монетах
+            if "klines" in url:
+                return [[t * 1000, "50", "60", "40", "55"] for t in self.TS]
+            if "takerlongshortRatio" in url:
+                return [{"timestamp": t * 1000, "buySellRatio": "3"} for t in self.TS]
+            raise AssertionError(url)
+        with mock.patch.object(api, "get_json", side_effect=fake):
+            return api._liq_binance("BTC", "15m", 3)
+
+    def test_binance_coin_m_in_dollars_at_the_snapshot_price(self):
+        rows = self.binance(self.TS)
+        self.assertEqual(rows[0], (900, 60.0, 40.0, 55.0, 1100.0, 0.75))  # 1000 + 2 монеты × открытие 50
+        self.assertEqual(len(rows), 3)
+        self.assertEqual([r[4] for r in self.binance((2700,))], [1000.0] * 3)  # короткий ряд — не клеим
+        self.assertEqual([r[4] for r in self.binance(())], [1000.0] * 3)
+
+    def bybit(self, inv_ts):
+        def fake(url, timeout=10.0):
+            if "cursor=" in url:
+                return {"result": {"list": []}}
+            if "open-interest?category=linear" in url:
+                return {"result": {"list": [{"timestamp": str(t * 1000), "openInterest": "10"} for t in self.TS]}}
+            if "open-interest?category=inverse" in url:
+                self.assertIn("symbol=BTCUSD&", url)
+                return {"result": {"list": [{"timestamp": str(t * 1000), "openInterest": "300"} for t in inv_ts]}}  # в долларах
+            if "kline" in url:
+                return {"result": {"list": [[str(t * 1000), "50", "60", "40", "55"] for t in self.TS]}}
+            if "account-ratio" in url:
+                return {"result": {"list": [{"timestamp": str(t * 1000), "buyRatio": "0.6"} for t in self.TS]}}
+            raise AssertionError(url)
+        with mock.patch.object(api, "get_json", side_effect=fake):
+            return api._liq_bybit("BTC", "15m", 3)
+
+    def test_bybit_inverse_already_in_dollars(self):
+        rows = self.bybit(self.TS)
+        self.assertEqual(rows[0], (900, 60.0, 40.0, 55.0, 850.0, 0.6))  # 10 монет × 55 + $300
+        self.assertEqual([r[4] for r in self.bybit((900,))], [550.0] * 3)
+        self.assertEqual([r[4] for r in self.bybit(())], [550.0] * 3)
+
+    def test_glue(self):
+        self.assertEqual(api._glue_inverse({1: 1.0, 2: 1.0}, {1: 5.0, 2: 5.0}), {1: 6.0, 2: 6.0})
+        self.assertEqual(api._glue_inverse({}, {1: 5.0}), {})
+        many = {t: 1.0 for t in range(40)}
+        self.assertEqual(len(api._glue_inverse(many, {t: 1.0 for t in range(39)})), 39)  # 97,5 % — клеим общие
+        self.assertIs(api._glue_inverse(many, {t: 1.0 for t in range(37)}), many)  # 92,5 % — нет
+
+
 class GatherTest(unittest.TestCase):
     def test_snapshot_does_not_replace_a_history_source(self):
         mine = [(i * 900, 1.0, 1.0, 1.0, 5.0, 0.5) for i in range(10)]

@@ -97,7 +97,7 @@ class ModelTest(unittest.TestCase):
         self.assertEqual([lev for lev, _, _ in levs], [3, 5, 10, 20])
         self.assertAlmostEqual(sum(w for _, w, _ in levs), 1.0)
         # Доли оставшихся — в той же пропорции.
-        self.assertAlmostEqual(levs[0][1] / levs[1][1], 0.05 / 0.11)
+        self.assertAlmostEqual(levs[0][1] / levs[1][1], 0.10 / 0.20)
         self.assertEqual(lm.levs_upto(500), lm.LEVS)
         self.assertEqual([lev for lev, _, _ in lm.levs_upto(1)], [3])
         # На dYdX нет 50× и выше: на карте их полос нет.
@@ -194,16 +194,15 @@ class ModelTest(unittest.TestCase):
         self.assertAlmostEqual(seen, 10.0)
 
     def test_a_candle_down_through_the_level_burns_longs(self):
-        # Лонги открыты на 100; свеча 3 сходила до 97. На место сгоревших
-        # открылись новые — в этой свече одни шорты (доля покупок 0), так что
-        # все оставшиеся лонги — старые, и все — ниже 97.
+        # Лонги открыты на 100; свеча 3 сходила до 97 — все оставшиеся лонги
+        # ниже 97. Интерес стоит — новых позиций нет (сгоревшее не замещается).
         rows = series([100, 100, 100, 98, 98], [0, 10, 20, 20, 20], bs=1.0,
                       ranges=[(100, 100), (100, 100), (100, 100), (100, 97), (98, 98)])
         rows[3] = (*rows[3][:5], 0.0)
         longs, shorts, _ = lm.model(rows, LO, STEP)
         self.assertTrue(where(longs))
         self.assertTrue(all(p < 97 for p in where(longs)))
-        self.assertGreater(total(shorts), 0)  # сгоревшее заменили новые позиции
+        self.assertEqual(total(shorts), 0.0)
 
     def test_a_candle_up_through_the_level_burns_shorts(self):
         rows = series([100, 100, 100, 102, 102], [0, 10, 20, 20, 20], bs=0.0,
@@ -212,7 +211,7 @@ class ModelTest(unittest.TestCase):
         longs, shorts, _ = lm.model(rows, LO, STEP)
         self.assertTrue(where(shorts))
         self.assertTrue(all(p > 103 for p in where(shorts)))
-        self.assertGreater(total(longs), 0)
+        self.assertEqual(total(longs), 0.0)
 
     def test_the_running_candle_burns_too(self):
         rows = series([100, 100, 100], [0, 10, 20], ranges=[(100, 100), (100, 100), (100, 96)])
@@ -220,14 +219,31 @@ class ModelTest(unittest.TestCase):
         self.assertTrue(where(longs))
         self.assertTrue(all(p < 96 for p in where(longs)))
 
-    def test_burnt_levels_are_replaced_when_interest_stands(self):
+    def test_burnt_levels_are_not_replaced_when_interest_stands(self):
         rows = series([100, 100, 100, 100], [0, 10, 20, 20], bs=1.0,
                       ranges=[(100, 100), (100, 100), (100, 100), (100, 95)])
         before = lm.model(rows[:3], LO, STEP)[2]
+        burnt = lm.model([*rows[:3], row(3 * 900, 100, 95, 100, 2000, 1.0)], LO, STEP)
         _, _, seen = lm.model([*rows, row(4 * 900, 100, 100, 100, 2000, 1.0)], LO, STEP)
-        # Свеча до 95 сожгла часть лонгов, интерес не изменился — на их месте
-        # открылись новые: всего столько же, сколько было.
-        self.assertAlmostEqual(seen, before, places=9)
+        # Свеча до 95 сожгла часть лонгов, интерес не изменился — новых
+        # позиций нет: открылись бы — интерес вырос бы. Видно меньше, чем было.
+        self.assertLess(seen, before - 0.5)
+        self.assertAlmostEqual(seen, burnt[2], places=9)
+
+    def test_liquidations_explain_the_fall_only_up_to_the_fall(self):
+        # Свеча 3 сходила до 95 и сожгла лонги от 20× и выше; к снимку 4
+        # интерес упал ровно на столько же — это и были ликвидации: свежие
+        # позиции сверх того не закрываются. (Шаг i — свеча i−1 и интерес на i.)
+        base = series([100, 100, 100], [0, 10, 20], bs=1.0)
+        burn = row(3 * 900, 100, 95, 100, 2000, 1.0)
+        after_burn = lm.model([*base, burn], LO, STEP)[2]
+        gone = lm.model(base, LO, STEP)[2] - after_burn
+        self.assertGreater(gone, 0.5)
+        fell = lm.model([*base, burn, row(4 * 900, 100, 100, 100, 2000 - gone * 100, 1.0)], LO, STEP)[2]
+        self.assertAlmostEqual(fell, after_burn, places=6)
+        # Упал вдвое больше сгоревшего — остаток закрывают свежие позиции.
+        more = lm.model([*base, burn, row(4 * 900, 100, 100, 100, 2000 - gone * 200, 1.0)], LO, STEP)[2]
+        self.assertAlmostEqual(more, after_burn - gone, places=6)
 
     def test_falling_interest_closes_the_newest_positions_first(self):
         # A — 10 монет на 100, B — 10 монет на 110; интерес падает на 10 —

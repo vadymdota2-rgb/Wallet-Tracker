@@ -10598,23 +10598,40 @@ OIH_RANGES = {k: wt_liqmap.RANGES[k] for k in ("1d", "7d", "30d")}
 _liq_lock = threading.Lock()
 
 
+def _glue_inverse(main: dict, inv: dict) -> dict:
+    """Интерес основного контракта ({время: $}) плюс бессрочного с расчётом в
+    монете — только по общим отметкам. Ряд второго короче 95 % — не клеим:
+    его начало модель приняла бы за открытие позиций."""
+    if not main or len(inv) < 0.95 * len(main):
+        return main
+    return {t: v + inv[t] for t, v in main.items() if t in inv}
+
+
 def _liq_binance(sym: str, period: str, n: int) -> list | None:
     s = f"{sym}USDT"
     oi = get_json(f"https://fapi.binance.com/futures/data/openInterestHist?symbol={s}&period={period}&limit={min(n, 500)}", 15)
+    # COIN-M (BTCUSD_PERP): у BTC — ещё ~$1,5 млрд. Интерес там в монетах.
+    cm = get_json(f"https://dapi.binance.com/futures/data/openInterestHist?pair={sym}USD&contractType=PERPETUAL"
+                  f"&period={period}&limit={min(n, 500)}", 15)
     kl = get_json(f"https://fapi.binance.com/fapi/v1/klines?symbol={s}&interval={period}&limit={min(n, 500)}", 15)
     tk = get_json(f"https://fapi.binance.com/futures/data/takerlongshortRatio?symbol={s}&period={period}&limit={min(n, 500)}", 15)
     if not isinstance(oi, list) or not isinstance(kl, list) or not oi or not kl:
         return None
     kmap = {int(k[0]) // 1000: k for k in kl}
     tmap = {int(r["timestamp"]) // 1000: _fnum(r.get("buySellRatio")) for r in (tk if isinstance(tk, list) else [])}
+    usd = {int(r["timestamp"]) // 1000: _fnum(r.get("sumOpenInterestValue")) for r in oi if isinstance(r, dict)}
+    # Монеты COIN-M — в доллары по цене на момент снимка (открытие свечи).
+    inv = {t: _fnum(r.get("sumOpenInterestValue")) * float(kmap[t][1])
+           for r in (cm if isinstance(cm, list) else []) if isinstance(r, dict)
+           if (t := int(_fnum(r.get("timestamp"))) // 1000) in kmap}
+    usd = _glue_inverse(usd, inv)
     out = []
-    for r in oi:
-        t = int(r["timestamp"]) // 1000
+    for t, v in sorted(usd.items()):
         k = kmap.get(t)
         if not k:
             continue
         ratio = tmap.get(t) or 1.0
-        out.append((t, float(k[2]), float(k[3]), float(k[4]), _fnum(r.get("sumOpenInterestValue")), ratio / (1 + ratio)))
+        out.append((t, float(k[2]), float(k[3]), float(k[4]), v, ratio / (1 + ratio)))
     return out
 
 
@@ -10695,16 +10712,22 @@ def _liq_bybit(sym: str, period: str, n: int) -> list | None:
     oi_iv = {"15m": "15min", "1h": "1h", "4h": "4h", "1d": "1d"}[period]
     kl_iv = {"15m": "15", "1h": "60", "4h": "240", "1d": "D"}[period]
     base = "https://api.bybit.com/v5/market"
-    # Интерес — страницами по 200 (год по дням — две страницы).
-    oi: list = []
-    cursor = ""
-    while len(oi) < n:
-        res = (get_json(f"{base}/open-interest?category=linear&symbol={s}&intervalTime={oi_iv}&limit=200"
-                        + (f"&cursor={urllib.parse.quote(cursor)}" if cursor else ""), 15) or {}).get("result") or {}
-        oi += res.get("list") or []
-        cursor = res.get("nextPageCursor") or ""
-        if not cursor or not res.get("list"):
-            break
+
+    def pages(cat: str, symbol: str) -> list:
+        """Интерес — страницами по 200 (год по дням — две страницы)."""
+        got: list = []
+        cursor = ""
+        while len(got) < n:
+            res = (get_json(f"{base}/open-interest?category={cat}&symbol={symbol}&intervalTime={oi_iv}&limit=200"
+                            + (f"&cursor={urllib.parse.quote(cursor)}" if cursor else ""), 15) or {}).get("result") or {}
+            got += [x for x in res.get("list") or [] if isinstance(x, dict)]
+            cursor = res.get("nextPageCursor") or ""
+            if not cursor or not res.get("list"):
+                break
+        return got
+    oi = pages("linear", s)
+    # Inverse (BTCUSD): у BTC — ещё ~$0,8 млрд; интерес там уже в долларах.
+    inv = {int(_fnum(r.get("timestamp"))) // 1000: _fnum(r.get("openInterest")) for r in pages("inverse", f"{sym}USD")}
     kl = (get_json(f"{base}/kline?category=linear&symbol={s}&interval={kl_iv}&limit={min(n, 1000)}", 15) or {}).get("result", {}).get("list") or []
     rt = (get_json(f"{base}/account-ratio?category=linear&symbol={s}&period={oi_iv}&limit={min(n, 500)}", 15) or {}).get("result", {}).get("list") or []
     if not oi or not kl:
@@ -10712,15 +10735,17 @@ def _liq_bybit(sym: str, period: str, n: int) -> list | None:
     kmap = {int(k[0]) // 1000: k for k in kl}
     # Доли агрессивных покупок Bybit не отдаёт — берём долю счетов в лонге.
     rmap = {int(r["timestamp"]) // 1000: _fnum(r.get("buyRatio")) for r in rt}
-    out = []
+    usd = {}
     for r in oi:
-        t = int(r["timestamp"]) // 1000
-        k = kmap.get(t)
-        if not k:
-            continue
-        c = float(k[4])
-        out.append((t, float(k[2]), float(k[3]), c, _fnum(r.get("openInterest")) * c, rmap.get(t) or 0.5))
-    return sorted(out)
+        t = int(_fnum(r.get("timestamp"))) // 1000
+        if k := kmap.get(t):
+            usd[t] = _fnum(r.get("openInterest")) * float(k[4])  # у USDT-контракта интерес — в монетах
+    usd = _glue_inverse(usd, inv)
+    out = []
+    for t, v in sorted(usd.items()):
+        k = kmap[t]
+        out.append((t, float(k[2]), float(k[3]), float(k[4]), v, rmap.get(t) or 0.5))
+    return out
 
 
 def _liq_htx(sym: str, period: str, n: int) -> list | None:

@@ -64,6 +64,32 @@ class DumpRestoreTest(Base):
         # Старше TTL окна — пересоберётся на первом же запросе, как и без перезапуска.
         self.assertGreater(age, lm.TTL["1d"])
 
+    def test_tiny_cells_do_not_spoil_the_copy(self):
+        # Сервер: из 37 карт копии принимались 3 — монеты меньше 5·10⁻¹⁰
+        # проходили отбор «больше нуля», а в файл ложились нулём после
+        # округления, и вся карта браковалась при чтении.
+        self.built(("BTC", "1d"), ("ETH", "7d"))
+        for _born, st, _res in lm._st.hits.values():
+            st["L"][0][3] = 1e-12
+            st["S"][-1][lm.BUCKETS - 5] = 4e-10
+        data = json.loads(json.dumps(lm.dump(), allow_nan=False))
+        cells = [v for m in data["maps"] for side in ("L", "S") for g in m["st"][side] for _, v in g]
+        self.assertTrue(all(v > 0 for v in cells))
+        lm._st = lm._State()
+        self.assertEqual(lm.restore(data), 2)
+
+    def test_every_build_survives_the_copy(self):
+        rnd = random.Random(7)  # noqa: S311 — разные рынки, не тайна
+        for i in range(30):
+            px = 10 ** rnd.uniform(-6, 5)
+            rows = [(1_000_000 + j * 900, px * (1 + rnd.uniform(0, 0.02)), px * (1 - rnd.uniform(0, 0.02)),
+                     px * (1 + rnd.uniform(-0.01, 0.01)), 10 ** rnd.uniform(2, 10) * (1 + 0.01 * j), rnd.random()) for j in range(60)]
+            lm.set_gather(lambda s, p, n, r=rows: ({"OKX": r, "Gate": r[::-1][::-1]}, r))
+            self.assertTrue(lm.build(f"C{i}", "1d")["ok"])
+        data = json.loads(json.dumps(lm.dump(), allow_nan=False))
+        lm._st = lm._State()
+        self.assertEqual(lm.restore(data), 30)
+
     def test_sparse_cells_only(self):
         data = self.built(("BTC", "1d"))
         st = data["maps"][0]["st"]

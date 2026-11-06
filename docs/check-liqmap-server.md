@@ -9,16 +9,19 @@
 cd ~/WalletTracker && git log --oneline -1 && systemctl is-active whale-api \
   && systemctl show whale-api -p ActiveEnterTimestamp
 grep -c '"365d": ("1d", 365)' wt_liqmap.py
-grep -c "(500, 0.01, 4)" wt_liqmap.py
+grep -c "(500, 0.005, 4)" wt_liqmap.py
 grep -c "wt_liqmap.set_price(_liq_price)" whale_api.py
 grep -c "def restore(data: object) -> int:" wt_liqmap.py
 grep -c "    liq_disk_load()" whale_api.py
 grep -c 'PRE = ("1d", 1000)' wt_liqmap.py
 grep -c '("Kraken", _liq_kraken))' whale_api.py
 grep -c 'if oi and len(inv) >= 0.95 \* len(oi):' whale_api.py
+grep -c "x = d + min(gone, max(0.0, -d))" wt_liqmap.py
+grep -c "def _glue_inverse(" whale_api.py
+grep -c 'float(f"{v:.9g}")' wt_liqmap.py
 ```
-Ожидаю: коммит «Карта ликвидаций: у OKX — и контракт с расчётом в монете»
-или новее, служба active и запущена ПОСЛЕ этого коммита, все восемь
+Ожидаю: коммит «Карта ликвидаций: калибровка по настоящим ликвидациям…»
+или новее, служба active и запущена ПОСЛЕ этого коммита, все одиннадцать
 счётчиков — 1. Если выкат не пришёл — так и напиши и остальное не делай.
 
 ## 2. BTC по всем шести окнам — та же сборка, что у службы (отдельным процессом)
@@ -42,8 +45,10 @@ PY
 все окна), остальные — меньше 15 с. Цена одна во всех окнах. Среди бирж —
 Binance, Bybit и Kraken (в окнах от 90 дней Binance может не быть: его
 история — 30 дней). «Не на своей стороне» — 0 везде. «Видно» почти одно и
-то же во всех окнах; из песочницы без Binance и Bybit было 41 % — напиши,
-сколько с ними. Перепиши вывод целиком.
+то же во всех окнах. После калибровки (сгоревшее не замещается) видно
+меньше прежнего: из песочницы без Binance и Bybit — ~16 % у BTC, до неё
+было 41 %; на сервере было 26 % — напиши, сколько сейчас. Перепиши вывод
+целиком.
 
 ## 3. Живая цена между сборками
 ```
@@ -92,16 +97,18 @@ PY
 ```
 Ожидаю: файл есть, записан не дольше ~6 минут назад (пишется после каждого
 круга прогрева), временных .tmp — 0, карт около 36, почти все «приняты
-бы». Размер файла — напиши. Если файл записан давно — прогрев встал:
+бы» (до исправления принималось 3 из 37). Размер файла — напиши. Если файл записан давно — прогрев встал:
 напиши это первым пунктом отчёта.
 
 ## 6. Точность: модель против настоящих ликвидаций за неделю
 Сервер хранит настоящие ликвидации бирж за 7 дней (liq_ev в liq_oi.db).
 Скрипт открывает базу ТОЛЬКО на чтение и сравнивает, сколько и где модель
 «сжигает» позиций за последние 6 дней, с тем, что биржи ликвидировали на
-самом деле. Варианты модели: A — как сейчас; B — без «замещения
-сгоревших» (прирост позиций = изменение интереса, без «+ сгоревшее»);
-C — доли плеч сдвинуты к низким; B+C. L×/S× — во сколько раз модель
+самом деле. Варианты модели: «сейчас» — с этого выката (сгоревшее не
+замещается, падение интереса объясняют ликвидации не больше самого
+падения, доли плеч — к низким: B′+C); «было» — до него (сгоревшее
+замещалось, больше 50–100×); B+C — прошлый лучший (прирост позиций =
+изменение интереса). L×/S× — во сколько раз модель
 больше настоящего (1,00 — точно), r — совпадение по ценам (полосы 0,5 %).
 Займёт ~5–15 минут.
 ```
@@ -110,7 +117,11 @@ import math, sqlite3, time
 import whale_api as api
 import wt_liqmap as lm
 con = sqlite3.connect(f"file:{api.LIQ_OI_DB}?mode=ro", uri=True)
-LOW = ((3, .10, 0), (5, .20, 0), (10, .25, 0), (20, .15, 1), (25, .10, 1), (50, .10, 2), (75, .04, 3), (100, .04, 3), (125, .01, 4), (200, .005, 4), (500, .005, 4))
+OLD = ((3, .05, 0), (5, .11, 0), (10, .19, 0), (20, .14, 1), (25, .14, 1), (50, .16, 2), (75, .07, 3), (100, .08, 3), (125, .03, 4), (200, .02, 4), (500, .01, 4))
+def upto(levs, cap):
+    kept = [x for x in levs if x[0] <= cap] or [levs[0]]
+    w = sum(x[1] for x in kept)
+    return tuple((lev, s / w, g) for lev, s, g in kept)
 def burns(rows, lo, step, levs, t0, replace):
     book, log = lm._Book(lo, step), {}
     def burn(at, hi, low):
@@ -126,7 +137,8 @@ def burns(rows, lo, step, levs, t0, replace):
         return gone
     for i in range(2, len(rows)):
         _, hi, low, p_now, _oi, bs = rows[i - 1]
-        x = rows[i][4] / p_now - rows[i - 1][4] / rows[i - 2][3] + burn(i, hi, low) * (1 if replace else 0)
+        gone = burn(i, hi, low); d = rows[i][4] / p_now - rows[i - 1][4] / rows[i - 2][3]
+        x = d + gone if replace == "old" else d if replace == "B" else d + min(gone, max(0.0, -d))
         if x < 0:
             book.close(-x)
         elif x > 0:
@@ -151,8 +163,7 @@ for sym in ("BTC", "ETH", "SOL", "XRP", "DOGE"):
         rows = lm.prepend(lm.clean_rows(pre.get(ex)), lm.clean_rows(raw))
         cap = lm.max_lev(ex, sym)
         line = []
-        for name, levs, rep in (("A", lm.levs_upto(cap), True), ("B", lm.levs_upto(cap), False),
-                                ("C", tuple(x for x in LOW if x[0] <= cap), True), ("B+C", tuple(x for x in LOW if x[0] <= cap), False)):
+        for name, levs, rep in (("сейчас", lm.levs_upto(cap), "now"), ("было", upto(OLD, cap), "old"), ("B+C", lm.levs_upto(cap), "B")):
             hp = {}
             for (s, b), u in burns(rows, lo, step, levs, t0, rep).items():
                 k = (s, band(lo + step * (b + 0.5))); hp[k] = hp.get(k, 0) + u
@@ -170,22 +181,33 @@ PY
 Перепиши вывод целиком. Лента Binance — снимок (не больше одной ликвидации
 в секунду на монету), его «настоящие» занижены: в итог он не входит.
 
-## 7. Сколько интереса у Binance и Bybit в контрактах с расчётом в монете
-(Их в карте пока нет. Нужно, чтобы решить, стоит ли добавлять.)
+## 7. Binance и Bybit: интерес в карте против счётчиков бирж
+С этого выката к Binance добавлен COIN-M (BTCUSD_PERP), к Bybit — inverse
+(BTCUSD). Единицы взяты из документации бирж; здесь — сверка с живыми
+счётчиками: последний ряд карты против «USDT-контракт + контракт в монете»
+прямо с биржи.
 ```
-cd ~/WalletTracker && PYTHONDONTWRITEBYTECODE=1 timeout 60 python3 - <<'PY'
+cd ~/WalletTracker && PYTHONDONTWRITEBYTECODE=1 timeout 120 python3 - <<'PY'
 import whale_api as api
-for sym in ("BTC", "ETH", "SOL"):
-    b = api.get_json(f"https://dapi.binance.com/dapi/v1/openInterest?symbol={sym}USD_PERP") or {}
-    p = api.get_json(f"https://dapi.binance.com/dapi/v1/premiumIndex?symbol={sym}USD_PERP") or [{}]
-    y = (((api.get_json(f"https://api.bybit.com/v5/market/tickers?category=inverse&symbol={sym}USD") or {}).get("result") or {}).get("list") or [{}])[0]
-    print(sym, "Binance COIN-M:", b.get("openInterest"), "контрактов,", (p[0] if isinstance(p, list) else p).get("markPrice"),
-          "| Bybit inverse:", y.get("openInterestValue") or y.get("openInterest"))
-r = api.get_json("https://dapi.binance.com/futures/data/openInterestHist?pair=BTCUSD&contractType=PERPETUAL&period=1d&limit=3")
-print("история Binance COIN-M:", str(r)[:300])
+g = api.get_json
+for sym in ("BTC", "ETH", "SOL", "DOGE"):
+    rb = api._liq_binance(sym, "15m", 96); ry = api._liq_bybit(sym, "15m", 96)
+    fu = g(f"https://fapi.binance.com/fapi/v1/openInterest?symbol={sym}USDT") or {}
+    fm = g(f"https://fapi.binance.com/fapi/v1/premiumIndex?symbol={sym}USDT") or {}
+    cm = g(f"https://dapi.binance.com/dapi/v1/openInterest?symbol={sym}USD_PERP") or {}
+    size = 100 if sym == "BTC" else 10  # доллары в контракте COIN-M
+    b_now = float(fu.get("openInterest", 0)) * float(fm.get("markPrice", 0)) + float(cm.get("openInterest", 0) or 0) * size
+    lin = (((g(f"https://api.bybit.com/v5/market/tickers?category=linear&symbol={sym}USDT") or {}).get("result") or {}).get("list") or [{}])[0]
+    inv = (((g(f"https://api.bybit.com/v5/market/tickers?category=inverse&symbol={sym}USD") or {}).get("result") or {}).get("list") or [{}])[0]
+    y_now = float(lin.get("openInterestValue") or 0) + float(inv.get("openInterest") or 0)
+    for name, rows, ref in (("Binance", rb, b_now), ("Bybit", ry, y_now)):
+        ours = rows[-1][4] if rows else 0
+        print(f"{sym:5}{name:8} в карте ${ours / 1e6:9.1f}M | на бирже ${ref / 1e6:9.1f}M | отношение {ours / ref if ref else float('nan'):.3f}")
 PY
 ```
-Перепиши вывод (если Binance/Bybit отсюда закрыты — так и напиши).
+Ожидаю: отношение 0,95–1,05 везде (интерес меняется за минуты — немного
+расходится). Сильно больше или меньше — неверные единицы: напиши первым
+пунктом отчёта, по какой бирже и монете.
 
 ## Отчёт
 По каждому пункту — «ок» или что не так, с цифрами. Отдельно: одна ли цена
