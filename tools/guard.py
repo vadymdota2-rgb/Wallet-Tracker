@@ -833,6 +833,9 @@ say("карта ликвидаций — предыстория: каждое о
     and "PRE_MAX = 12" in read(f"{APP}/wt_liqmap.py") and '("Kraken", _liq_kraken))' in api and "got.setdefault(ex, rows)" in api
     and "LIQ_BUDGET if n <= 400 else LIQ_PRE_BUDGET" in api and os.path.isfile(f"{APP}/tests/test_liqmap_pre.py")
     and "tests.test_liqmap_pre" in read(f"{APP}/tools/mutate-liqmap.py"))
+say("карта ликвидаций: у OKX — и бессрочный контракт с расчётом в монете (BTC-USD-SWAP, у BTC — четверть интереса OKX), склейка только по общим отметкам времени",
+    'instId={sym}-USD-SWAP&period={per}&limit=100", "end")}' in api and "if oi and len(inv) >= 0.95 * len(oi):" in api
+    and "test_short_coin_margined_series_is_not_glued" in read(f"{APP}/tests/test_liqmap_pre.py"))
 say("авторские права: LICENSE «все права защищены» (Wallet Tracker) с оговоркой о сторонних лицензиях (IBM Plex — OFL, Twemoji — CC BY 4.0, данные источников); package.json — UNLICENSED; на экране «Документы» — «© 2026 Wallet Tracker» на 16 языках",
     os.path.isfile(f"{APP}/LICENSE") and "Copyright (c) 2026 Wallet Tracker. All rights reserved." in read(f"{APP}/LICENSE")
     and "SIL Open Font" in read(f"{APP}/LICENSE") and "CC BY 4.0" in read(f"{APP}/LICENSE")

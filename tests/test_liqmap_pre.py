@@ -234,6 +234,40 @@ class KrakenTest(unittest.TestCase):
         self.assertEqual(lm.CAPS["Kraken"], 50)
 
 
+class OkxTest(unittest.TestCase):
+    """OKX: интерес USDT-контракта и бессрочного с расчётом в монете (BTC-USD-SWAP) — вместе."""
+
+    def run_okx(self, inv_ts):
+        ts = [str(t * 900_000) for t in (3, 2, 1)]  # OKX отдаёт от новых к старым
+
+        def fake(url, timeout=10.0):
+            if "end=" in url or "after=" in url:
+                return {"data": []}
+            if "open-interest-history" in url and "-USDT-SWAP" in url:
+                return {"data": [[t, "0", "0", "100"] for t in ts]}
+            if "open-interest-history" in url and "-USD-SWAP" in url:
+                return {"data": [[t, "0", "0", "40"] for t in ts if int(t) // 900_000 in inv_ts]}
+            if "history-candles" in url:
+                return {"data": [[t, "1", "2", "0.5", "1.5"] for t in ts]}
+            if "taker-volume" in url:
+                return {"data": [[t, "1", "3"] for t in ts]}
+            raise AssertionError(url)
+        with mock.patch.object(api, "get_json", side_effect=fake):
+            return api._liq_okx("BTC", "15m", 3)
+
+    def test_coin_margined_added_on_common_times(self):
+        rows = self.run_okx({1, 2, 3})
+        self.assertEqual([r[4] for r in rows], [140.0, 140.0, 140.0])
+        self.assertEqual(rows[0], (900, 2.0, 0.5, 1.5, 140.0, 0.75))
+
+    def test_short_coin_margined_series_is_not_glued(self):
+        # Ряд с расчётом в монете короче — его начало стало бы ложным «открытием позиций».
+        rows = self.run_okx({3})
+        self.assertEqual([r[4] for r in rows], [100.0, 100.0, 100.0])
+        rows = self.run_okx(set())
+        self.assertEqual([r[4] for r in rows], [100.0, 100.0, 100.0])
+
+
 class GatherTest(unittest.TestCase):
     def test_snapshot_does_not_replace_a_history_source(self):
         mine = [(i * 900, 1.0, 1.0, 1.0, 5.0, 0.5) for i in range(10)]

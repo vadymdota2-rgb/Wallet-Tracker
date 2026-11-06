@@ -10636,6 +10636,14 @@ def _liq_okx(sym: str, period: str, n: int) -> list | None:
         return rows
 
     oi = pages(f"https://www.okx.com/api/v5/rubik/stat/contracts/open-interest-history?instId={inst}&period={per}&limit=100", "end")
+    # И бессрочный контракт с расчётом в монете (BTC-USD-SWAP): у BTC это
+    # четверть интереса OKX. Сетка времени и глубина у него те же; складываем
+    # только общие отметки — иначе начало его ряда модель приняла бы за
+    # открытие позиций.
+    inv = {r[0]: _fnum(r[3]) for r in pages(
+        f"https://www.okx.com/api/v5/rubik/stat/contracts/open-interest-history?instId={sym}-USD-SWAP&period={per}&limit=100", "end")}
+    if oi and len(inv) >= 0.95 * len(oi):
+        oi = [[r[0], r[1], r[2], _fnum(r[3]) + inv[r[0]]] for r in oi if r[0] in inv]
     kl = pages(f"https://www.okx.com/api/v5/market/history-candles?instId={inst}&bar={per}&limit=100", "after")
     tk = pages(f"https://www.okx.com/api/v5/rubik/stat/taker-volume-contract?instId={inst}&period={per}&limit=100", "end")
     if not oi or not kl:
