@@ -175,14 +175,18 @@ for sym in ("BTC", "ETH", "SOL", "XRP", "DOGE"):
             ma, mc = sum(a) / len(a), sum(c) / len(c)
             corr = sum((x - ma) * (y - mc) for x, y in zip(a, c)) / (math.sqrt(sum((x - ma) ** 2 for x in a) * sum((y - mc) ** 2 for y in c)) or 1)
             P = [sum(u for (s, _), u in hp.items() if s == k) for k in (0, 1)]
+            # Поймано: доля настоящих ликвидаций ($) там, где карта ждала свою сторону.
+            got = sum(u for k, u in hr.items() if hp.get(k, 0) > 0)
             if ex != "Binance":
-                t = tot.setdefault(name, [0, 0, 0, 0]); t[0] += P[0]; t[1] += P[1]; t[2] += R[0]; t[3] += R[1]
-            line.append(f"{name}: L×{P[0] / max(R[0], 1):.2f} S×{P[1] / max(R[1], 1):.2f} r={corr:.2f}")
+                t = tot.setdefault(name, [0, 0, 0, 0, 0]); t[0] += P[0]; t[1] += P[1]; t[2] += R[0]; t[3] += R[1]; t[4] += got
+            line.append(f"{name}: L×{P[0] / max(R[0], 1):.2f} S×{P[1] / max(R[1], 1):.2f} r={corr:.2f} поймано {got / max(sum(R), 1) * 100:.0f}%")
         print(f"{sym:5}{ex:8} настоящие L ${R[0] / 1e6:6.1f}M S ${R[1] / 1e6:6.1f}M | " + " | ".join(line), flush=True)
-print("ИТОГО без Binance (модель/настоящие):", {k: f"L×{v[0] / max(v[2], 1):.2f} S×{v[1] / max(v[3], 1):.2f}" for k, v in tot.items()})
+print("ИТОГО без Binance (модель/настоящие, поймано):", {k: f"L×{v[0] / max(v[2], 1):.2f} S×{v[1] / max(v[3], 1):.2f} поймано {v[4] / max(v[2] + v[3], 1) * 100:.0f}%" for k, v in tot.items()})
 PY
 ```
-Перепиши вывод целиком. Лента Binance — снимок (не больше одной ликвидации
+«Поймано» — доля настоящих ликвидаций (в долларах), случившихся в полосе
+0,5 %, где карта ждала ликвидации той же стороны. Цель — не меньше 95 % у
+«сейчас» в итоге. Перепиши вывод целиком. Лента Binance — снимок (не больше одной ликвидации
 в секунду на монету), его «настоящие» занижены: в итог он не входит.
 
 ## 7. Binance и Bybit: интерес в карте против счётчиков бирж
