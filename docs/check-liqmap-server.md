@@ -247,6 +247,36 @@ XBTUSDT); если BitMEX отсюда закрыт — так и напиши. 
 списке монет — «нет» (они склеены в TSLA); у TSLA и NVDA в карте больше
 бирж, чем OKX и Gate.
 
+## 9. Bybit: интерес считается с обеих сторон или с одной?
+С 11 июня 2026 Bybit перешёл с «обе стороны» на «одна сторона» и добавил
+в API поля singleOpenInterest / singleOpenInterestValue. Карта берёт
+старое openInterest. Если оно всё ещё считает обе стороны — интерес Bybit в
+карте вдвое больше настоящего (модель на неделе завышала Bybit ×1,2–3,2 на
+всех монетах); если перешло на одну сторону 11 июня — в истории в этот
+день ложное падение вдвое. Нужны сырые ответы, ничего не меняй.
+```
+cd ~/WalletTracker && PYTHONDONTWRITEBYTECODE=1 timeout 120 python3 - <<'PY'
+import calendar, time
+import whale_api as api
+g = api.get_json
+B = "https://api.bybit.com/v5/market"
+t = (g(f"{B}/tickers?category=linear&symbol=BTCUSDT") or {}).get("result", {}).get("list") or [{}]
+print("tickers BTCUSDT, поля про интерес:", {k: v for k, v in t[0].items() if "nterest" in k})
+now = (g(f"{B}/open-interest?category=linear&symbol=BTCUSDT&intervalTime=1d&limit=2") or {}).get("result", {}).get("list") or []
+print("open-interest сейчас (сырые строки):", now)
+june = calendar.timegm((2026, 6, 11, 0, 0, 0)) * 1000
+old = (g(f"{B}/open-interest?category=linear&symbol=BTCUSDT&intervalTime=1d&startTime={june - 6 * 86400000}&endTime={june + 6 * 86400000}&limit=20") or {}).get("result", {}).get("list") or []
+for r in sorted(old, key=lambda r: int(r["timestamp"])):
+    print(time.strftime("%Y-%m-%d", time.gmtime(int(r["timestamp"]) // 1000)), {k: v for k, v in r.items() if k != "timestamp"})
+rb = api._liq_binance("BTC", "1d", 3); ro = api._liq_okx("BTC", "1d", 3); ry = api._liq_bybit("BTC", "1d", 3)
+print("BTC в карте: Binance $%.2f млрд, OKX $%.2f млрд, Bybit $%.2f млрд" % (rb[-1][4] / 1e9, ro[-1][4] / 1e9, ry[-1][4] / 1e9))
+PY
+```
+Перепиши вывод целиком. Ожидаю одно из двух: (а) в строках есть поле
+single… и оно вдвое меньше openInterest — значит, openInterest по-прежнему
+«обе стороны»; (б) около 11 июня openInterest скачком падает вдвое — значит,
+поле перешло на «одну сторону».
+
 ## Отчёт
 По каждому пункту — «ок» или что не так, с цифрами. Отдельно: одна ли цена
 во всех окнах, какие биржи дали данные, сколько интереса «видно»; итог
