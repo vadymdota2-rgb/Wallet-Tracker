@@ -830,7 +830,7 @@ class PolicyTest(unittest.TestCase):
     def test_wired_into_the_server(self):
         with open(os.path.join(ROOT, "whale_api.py"), encoding="utf-8") as f:
             api = f.read()
-        for s in ("wt_liqmap.set_gather(_liq_gather)", "wt_liqmap.set_price(_liq_price)", "liq_map = wt_liqmap.liq_map",
+        for s in ("wt_liqmap.set_gather(_liq_gather)", "wt_liqmap.set_price(_liq_price)", "res = wt_liqmap.liq_map(sym, rng, wait)",
                   "wt_liqmap.warm(sym, rng)", "LIQ_RANGES = wt_liqmap.RANGES",
                   'OIH_RANGES = {k: wt_liqmap.RANGES[k] for k in ("1d", "7d", "30d")}'):
             self.assertIn(s, api)

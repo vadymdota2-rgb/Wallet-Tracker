@@ -567,7 +567,7 @@ say("«Карта ликвидаций» в меню сразу под «Ток�
     '{ name: "unlocks", key: "unl_title", glyph: <UnlockGlyph /> },\n  { name: "liqmap", key: "lq_title", glyph: <LiqGlyph /> },' in _appx
     and "liqmap: LiqMapScreen" in read(f"{APP}/src/screens/registry.ts"))
 say("карта ликвидаций считается на сервере из открытых данных бирж, без ключей",
-    "liq_map = wt_liqmap.liq_map" in api and "def liq_map(" in read(f"{APP}/wt_liqmap.py") and '"/api/liqmap"' in api
+    "res = wt_liqmap.liq_map(sym, rng, wait)" in api and "def liq_map(" in read(f"{APP}/wt_liqmap.py") and '"/api/liqmap"' in api
     and "LIQ_SOURCES" in api and "apikey" not in read(f"{APP}/wt_liqmap.py").lower())
 
 _lq = read(f"{APP}/src/screens/LiqMapScreen.tsx")
@@ -1924,6 +1924,14 @@ say("карта ликвидаций: доля покупок — знак Krake
     "0.5 - diff.get(t, 0.0) / (2 * vol)" in pybody(api, "def _liq_kraken(")
     and 'LIQ_TAKER = frozenset({"Binance", "OKX", "Gate", "Kraken"})' in api
     and "mk = _liq_share(got)" in pybody(api, "def _liq_gather("))
+
+# Настоящие ликвидации бирж на свечах карты: модуль отдаёт границы свечей
+# (ohlc_t), сервер — суммы по ним из ленты liq_ev (минуту из кэша, индекс по
+# монете и времени), экран — точки и подпись; битое поле не роняет карту.
+say("карта ликвидаций: настоящие ликвидации бирж на свечах",
+    '"ohlc_t": candle_edges(ref)' in _lmpy and "res = wt_liqmap.liq_map(sym, rng, wait)" in api
+    and "liq_ev_st ON liq_ev (sym, t)" in api and 'className="lq-real"' in _lqs
+    and 'raw["real"]' in read(f"{APP}/src/lib/liqmap.ts"))
 
 # «Добавить кошелёк» больше не отвечает общей ошибкой: причина отказа доходит
 # до экрана («уже добавлен» — обновить список), а норма запросов считается

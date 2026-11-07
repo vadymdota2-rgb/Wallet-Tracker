@@ -27844,5 +27844,41 @@
     "id": "Zoom, ±%",
     "ar": "التكبير، ±%",
     "pl": "Powiększenie, ±%"
+  },
+  "lq_real": {
+    "ru": "Точки на свечах — настоящие ликвидации бирж за период: лонги {l} (под свечой), шорты {s} (над свечой). Сверьте с уровнями карты.",
+    "uk": "Точки на свічках — справжні ліквідації бірж за період: лонги {l} (під свічкою), шорти {s} (над свічкою). Звірте з рівнями карти.",
+    "en": "Dots on candles are real exchange liquidations for the period: longs {l} (below the candle), shorts {s} (above it). Compare them with the map's levels.",
+    "vi": "Chấm trên nến là các vụ thanh lý thực tế trên sàn trong kỳ: long {l} (dưới nến), short {s} (trên nến). Hãy so với các mức trên bản đồ.",
+    "ko": "캔들 위 점은 기간 중 실제 거래소 청산입니다: 롱 {l}(캔들 아래), 숏 {s}(캔들 위). 지도의 레벨과 비교해 보세요.",
+    "zh": "K线上的圆点是期间交易所的真实爆仓：多头{l}（K线下方），空头{s}（K线上方）。可与地图上的价位对照。",
+    "ja": "ローソク足の点は期間中の取引所の実際の清算です：ロング{l}（足の下）、ショート{s}（足の上）。マップの水準と照らし合わせてください。",
+    "es": "Los puntos en las velas son liquidaciones reales de los exchanges en el periodo: largos {l} (bajo la vela), cortos {s} (sobre ella). Compárelas con los niveles del mapa.",
+    "pt": "Os pontos nas velas são liquidações reais das corretoras no período: longs {l} (abaixo da vela), shorts {s} (acima dela). Compare com os níveis do mapa.",
+    "fr": "Les points sur les bougies sont les liquidations réelles des plateformes sur la période : longs {l} (sous la bougie), shorts {s} (au-dessus). Comparez-les aux niveaux de la carte.",
+    "de": "Punkte an den Kerzen sind echte Börsenliquidationen im Zeitraum: Longs {l} (unter der Kerze), Shorts {s} (darüber). Vergleichen Sie sie mit den Niveaus der Karte.",
+    "tr": "Mumlardaki noktalar dönemdeki gerçek borsa tasfiyeleridir: long {l} (mumun altında), short {s} (mumun üstünde). Haritadaki seviyelerle karşılaştırın.",
+    "hi": "कैंडल पर बिंदु अवधि के असली एक्सचेंज लिक्विडेशन हैं: लॉन्ग {l} (कैंडल के नीचे), शॉर्ट {s} (ऊपर)। इन्हें नक्शे के स्तरों से मिलाइए।",
+    "id": "Titik pada candle adalah likuidasi bursa yang nyata selama periode: long {l} (di bawah candle), short {s} (di atasnya). Bandingkan dengan level di peta.",
+    "ar": "النقاط على الشموع هي تصفيات حقيقية في المنصات خلال الفترة: مراكز الشراء {l} (أسفل الشمعة) ومراكز البيع {s} (أعلاها). قارِنها بمستويات الخريطة.",
+    "pl": "Kropki na świecach to prawdziwe likwidacje giełd w okresie: longi {l} (pod świecą), shorty {s} (nad nią). Porównaj je z poziomami mapy."
+  },
+  "lq_real_part": {
+    "ru": "Точки на свечах — настоящие ликвидации бирж (лента хранит 7 дней — у этого периода только конец): лонги {l}, шорты {s}.",
+    "uk": "Точки на свічках — справжні ліквідації бірж (стрічка зберігає 7 днів — у цього періоду лише кінець): лонги {l}, шорти {s}.",
+    "en": "Dots on candles are real exchange liquidations (the feed keeps 7 days — only the end of this period): longs {l}, shorts {s}.",
+    "vi": "Chấm trên nến là thanh lý thực tế trên sàn (dữ liệu lưu 7 ngày — chỉ phần cuối của kỳ này): long {l}, short {s}.",
+    "ko": "캔들 위 점은 실제 거래소 청산입니다(피드는 7일 보관 — 이 기간의 끝부분만): 롱 {l}, 숏 {s}.",
+    "zh": "K线上的圆点是交易所的真实爆仓（数据保留7天——仅为本期的末段）：多头{l}，空头{s}。",
+    "ja": "ローソク足の点は取引所の実際の清算です（データは7日分のみ — この期間の終盤だけ）：ロング{l}、ショート{s}。",
+    "es": "Los puntos en las velas son liquidaciones reales (el registro guarda 7 días — solo el final de este periodo): largos {l}, cortos {s}.",
+    "pt": "Os pontos nas velas são liquidações reais (o registro guarda 7 dias — só o fim deste período): longs {l}, shorts {s}.",
+    "fr": "Les points sur les bougies sont des liquidations réelles (le flux garde 7 jours — seulement la fin de cette période) : longs {l}, shorts {s}.",
+    "de": "Punkte an den Kerzen sind echte Liquidationen (der Feed speichert 7 Tage — nur das Ende dieses Zeitraums): Longs {l}, Shorts {s}.",
+    "tr": "Mumlardaki noktalar gerçek borsa tasfiyeleridir (akış 7 gün tutar — bu dönemin yalnızca sonu): long {l}, short {s}.",
+    "hi": "कैंडल पर बिंदु असली एक्सचेंज लिक्विडेशन हैं (फ़ीड 7 दिन रखती है — इस अवधि का केवल अंत): लॉन्ग {l}, शॉर्ट {s}।",
+    "id": "Titik pada candle adalah likuidasi bursa yang nyata (data disimpan 7 hari — hanya akhir periode ini): long {l}, short {s}.",
+    "ar": "النقاط على الشموع تصفيات حقيقية في المنصات (السجل يحفظ 7 أيام — نهاية هذه الفترة فقط): مراكز الشراء {l} ومراكز البيع {s}.",
+    "pl": "Kropki na świecach to prawdziwe likwidacje giełd (zapis obejmuje 7 dni — tylko koniec tego okresu): longi {l}, shorty {s}."
   }
 }

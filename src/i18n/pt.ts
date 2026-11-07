@@ -1056,6 +1056,8 @@ export const pt: Dict = {
   lq_old: "As corretoras não respondem há algum tempo: o mapa é das {t}.",
   lq_open_chart: "Abrir gráfico",
   lq_price_w: "Preço · {w}",
+  lq_real: "Os pontos nas velas são liquidações reais das corretoras no período: longs {l} (abaixo da vela), shorts {s} (acima dela). Compare com os níveis do mapa.",
+  lq_real_part: "Os pontos nas velas são liquidações reais (o registro guarda 7 dias — só o fim deste período): longs {l}, shorts {s}.",
   lq_rows: "Cada barra soma {p} do preço; «Total» vai até a borda da janela ±{s}. Aproxime para ver os níveis com mais detalhe.",
   lq_search: "Buscar moeda, ex.: PEPE",
   lq_seen: "O modelo vê {a} do interesse aberto ({p}): posições abertas neste período e ainda não fechadas. Quanto mais longo o período, mais se vê. Fechamentos e liquidações são acompanhados em todo o histórico das corretoras (até três anos).",

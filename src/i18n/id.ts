@@ -1056,6 +1056,8 @@ export const id: Dict = {
   lq_old: "Bursa sudah lama tidak merespons — peta ini dari {t}.",
   lq_open_chart: "Buka grafik",
   lq_price_w: "Harga · {w}",
+  lq_real: "Titik pada candle adalah likuidasi bursa yang nyata selama periode: long {l} (di bawah candle), short {s} (di atasnya). Bandingkan dengan level di peta.",
+  lq_real_part: "Titik pada candle adalah likuidasi bursa yang nyata (data disimpan 7 hari — hanya akhir periode ini): long {l}, short {s}.",
   lq_rows: "Setiap batang menjumlahkan {p} dari harga; “Total” sampai tepi jendela ±{s}. Perbesar untuk melihat level lebih rinci.",
   lq_search: "Cari koin, mis. PEPE",
   lq_seen: "Model melihat {a} dari open interest ({p}): posisi yang dibuka pada periode ini dan belum ditutup. Makin panjang periodenya, makin banyak yang terlihat. Penutupan dan likuidasi dihitung dari seluruh riwayat bursa (hingga tiga tahun).",

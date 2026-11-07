@@ -23,7 +23,7 @@ const TYPES: Record<string, string> = {
   ".png": "image/png", ".webp": "image/webp", ".json": "application/json", ".ttf": "font/ttf", ".ico": "image/x-icon",
 };
 
-interface Map { ok: true; sym: string; px: number; seen: number; ex: string[]; levs: number[]; buckets: { p: number; L: number[]; S: number[] }[] }
+interface Map { ok: true; sym: string; px: number; seen: number; at: number; ex: string[]; levs: number[]; ohlc: number[][]; buckets: { p: number; L: number[]; S: number[] }[] }
 const FIX = JSON.parse(await readFile(new URL("../fixtures/liqmap.json", import.meta.url), "utf8")) as Record<"1d" | "7d" | "30d" | "90d" | "180d" | "365d", Map> & { now: number };
 const T = FIX.now;
 const I18N = JSON.parse(await readFile(new URL("../../tools/i18n.json", import.meta.url), "utf8")) as Record<string, Record<string, string>>;
@@ -210,6 +210,29 @@ describe("Карта ликвидаций", () => {
     assert.deepEqual(await overflow(page), []);
     assert.deepEqual(errors, []);
     await ctx.close();
+  });
+
+  test("настоящие ликвидации — точками на свечах и подписью под картой; у длинного окна — что это только хвост", async () => {
+    const n = FIX["1d"].ohlc.length;
+    const real = Array.from({ length: n }, (_, i) => (i % 5 === 0 ? [2_000_000 + i * 1000, i % 10 === 0 ? 900_000 : 0] : [0, 0]));
+    const with1d = { ...FIX["1d"], real, real_from: FIX["1d"].at - 7 * 86_400 };
+    const { ctx, page, errors } = await open({ replies: [with1d] });
+    await ready(page);
+    const dots = page.locator(".lq-real circle");
+    assert.equal(await dots.count(), real.filter(([l]) => (l ?? 0) > 0).length + real.filter(([, s]) => (s ?? 0) > 0).length);
+    assert.ok(await page.locator(".lq-real circle.dn").count() > 0);
+    const cap = sp(await page.locator(".lq-real-t").innerText());
+    assert.ok(cap.startsWith(sp(I18N["lq_real"]!["ru"]!.split("{l}")[0]!)), cap);
+    assert.deepEqual(await overflow(page), []);
+    await ctx.close();
+    const n365 = FIX["365d"].ohlc.length;
+    const long = { ...FIX["365d"], real: Array.from({ length: n365 }, () => [1000, 0]), real_from: FIX["365d"].at - 7 * 86_400 };
+    const b = await open({ replies: [long] });
+    await ready(b.page);
+    assert.ok(sp(await b.page.locator(".lq-real-t").innerText()).startsWith(sp(I18N["lq_real_part"]!["ru"]!.split("(")[0]!)));
+    assert.deepEqual(errors, []);
+    assert.deepEqual(b.errors, []);
+    await b.ctx.close();
   });
 
   test("нет данных — период всё равно можно сменить, масштаба без карты нет", async () => {

@@ -1056,6 +1056,8 @@ export const pl: Dict = {
   lq_old: "Giełdy od dłuższego czasu nie odpowiadają — mapa z {t}.",
   lq_open_chart: "Otwórz wykres",
   lq_price_w: "Cena · {w}",
+  lq_real: "Kropki na świecach to prawdziwe likwidacje giełd w okresie: longi {l} (pod świecą), shorty {s} (nad nią). Porównaj je z poziomami mapy.",
+  lq_real_part: "Kropki na świecach to prawdziwe likwidacje giełd (zapis obejmuje 7 dni — tylko koniec tego okresu): longi {l}, shorty {s}.",
   lq_rows: "Pasek to suma z {p} ceny, „Suma” — do krawędzi okna ±{s}. Przybliż, aby zobaczyć poziomy dokładniej.",
   lq_search: "Szukaj monety, np. PEPE",
   lq_seen: "Model widzi {a} otwartych pozycji ({p}): otwarte w tym okresie i jeszcze niezamknięte. Im dłuższy okres, tym więcej widać. Zamknięcia i likwidacje liczy na całej historii giełd (do trzech lat).",

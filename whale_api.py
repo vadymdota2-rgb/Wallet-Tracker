@@ -4,6 +4,7 @@ Stdlib only. Run from WhaleScanner working directory on the VPS."""
 from __future__ import annotations
 
 import base64
+import bisect
 import calendar
 import gzip
 import hashlib
@@ -11668,7 +11669,66 @@ LIQ_WARM_COINS = 6
 _liq_busy: set = set()
 
 
-liq_map = wt_liqmap.liq_map
+# Настоящие ликвидации бирж (лента liq_ev, 7 дней) — к свечам карты: на
+# графике видно, где они случились на самом деле, и модель можно сверить с
+# ними глазами. Модуль карты в базу не ходит — границы свечей (ohlc_t) он
+# отдаёт, суммы по ним кладёт сервер. Минуту — из кэша.
+LIQ_REAL_TTL = 60.0
+_liq_real: dict = {}
+_liq_comp: dict = {}
+
+
+def _liq_real_rows(sym: str, edges: list) -> tuple | None:
+    """([[лонги $, шорты $] по свечам], с какого времени есть лента) или None."""
+    key = (sym, edges[0], edges[-1], len(edges))
+    t = time.monotonic()
+    with _liq_lock:
+        hit = _liq_real.get(key)
+        if hit and t - hit[0] < LIQ_REAL_TTL:
+            return hit[1]
+    try:
+        con = _liq_oi_ro()
+        try:
+            ev = con.execute("SELECT t, side, usd FROM liq_ev WHERE sym=? AND t>=? AND t<?",
+                             (sym, edges[0] * 1000, edges[-1] * 1000)).fetchall()
+            first = con.execute("SELECT MIN(t) FROM liq_ev").fetchone()[0]
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return None  # ленты ещё нет
+    real = [[0.0, 0.0] for _ in range(len(edges) - 1)]
+    for ts, side, usd in ev:
+        i = bisect.bisect_right(edges, ts / 1000) - 1
+        if 0 <= i < len(real):
+            real[i][0 if side else 1] += usd  # side 1 — ликвидирован лонг
+    got = ([[round(a), round(b)] for a, b in real], int(first // 1000) if first else None)
+    with _liq_lock:
+        if len(_liq_real) > 500:
+            _liq_real.clear()
+        _liq_real[key] = (t, got)
+    return got
+
+
+def liq_map(sym: object, rng: object, wait: float = wt_liqmap.COLD_WAIT) -> dict:
+    """Ответ /api/liqmap: карта модуля и настоящие ликвидации по её свечам
+    (real, real_from). Пока ни карта, ни лента не сменились — тот же объект:
+    маршрут не кодирует его заново (_json_public)."""
+    res = wt_liqmap.liq_map(sym, rng, wait)
+    edges = res.get("ohlc_t") if res.get("ok") else None
+    got = _liq_real_rows(res["sym"], edges) if edges else None
+    if got is None:
+        return res
+    key = (res["sym"], res["range"])
+    with _liq_lock:
+        c = _liq_comp.get(key)
+        if c and c[0] is res and c[1] is got:
+            return c[2]
+        out = {**res, "real": got[0], "real_from": got[1]}
+        _liq_comp.pop(key, None)
+        _liq_comp[key] = (res, got, out)
+        while len(_liq_comp) > 300:
+            _liq_comp.pop(next(iter(_liq_comp)))
+    return out
 
 
 # Свои разделы — халвинг, страх и жадность, альтсезон, доминация, ETF —
@@ -12605,6 +12665,8 @@ def _liqs_con() -> sqlite3.Connection:
                 "side INTEGER NOT NULL, px REAL NOT NULL, usd REAL NOT NULL)")
     con.execute("CREATE UNIQUE INDEX IF NOT EXISTS liq_ev_u ON liq_ev (ex, t, sym, side, px, usd)")
     con.execute("CREATE INDEX IF NOT EXISTS liq_ev_t ON liq_ev (t)")
+    # Карта берёт ленту по одной монете (liq_map, real) — по монете и времени.
+    con.execute("CREATE INDEX IF NOT EXISTS liq_ev_st ON liq_ev (sym, t)")
     return con
 
 

@@ -81,11 +81,19 @@ export function validLiqMap(raw: unknown, now: number = Date.now() / 1000): LiqM
     outO.push([o, h, l, c]);
   }
   if (!money(oi) || (seen !== undefined && !money(seen))) return null;
+  /* Настоящие ликвидации — дополнение: битые или не той длины — отбрасываются
+     сами, карта остаётся. */
+  const realRaw = raw["real"];
+  const real = Array.isArray(realRaw) && realRaw.length === outO.length
+    && realRaw.every((x) => Array.isArray(x) && x.length === 2 && x.every(money))
+    ? (realRaw as [number, number][]).map(([l, s]) => [l, s] as [number, number]) : undefined;
+  const realFrom = raw["real_from"];
   if (!Number.isInteger(at) || (at as number) <= 0 || (at as number) > now + AHEAD_MAX) return null;
   return {
     ok: true, sym, range, px, step, lo, ex: ex.slice() as string[], levs: levs.slice() as number[], buckets: outB, cum: outC,
     path: path.slice() as number[], oi, ...(seen !== undefined ? { seen: Math.min(seen as number, oi) } : {}),
     ohlc: outO, at: at as number,
+    ...(real ? { real, ...(Number.isInteger(realFrom) && (realFrom as number) > 0 ? { realFrom: realFrom as number } : {}) } : {}),
   };
 }
 

@@ -1056,6 +1056,8 @@ export const vi: Dict = {
   lq_old: "Các sàn đã lâu không phản hồi — bản đồ từ {t}.",
   lq_open_chart: "Mở biểu đồ",
   lq_price_w: "Giá · {w}",
+  lq_real: "Chấm trên nến là các vụ thanh lý thực tế trên sàn trong kỳ: long {l} (dưới nến), short {s} (trên nến). Hãy so với các mức trên bản đồ.",
+  lq_real_part: "Chấm trên nến là thanh lý thực tế trên sàn (dữ liệu lưu 7 ngày — chỉ phần cuối của kỳ này): long {l}, short {s}.",
   lq_rows: "Mỗi thanh cộng gộp {p} giá; “Cộng dồn” tính tới mép khung ±{s}. Phóng to để xem các mức chi tiết hơn.",
   lq_search: "Tìm coin, ví dụ PEPE",
   lq_seen: "Mô hình thấy {a} trong open interest ({p}): các vị thế mở trong giai đoạn này và chưa đóng. Giai đoạn càng dài, thấy càng nhiều. Việc đóng và thanh lý được tính theo toàn bộ lịch sử sàn (tối đa ba năm).",

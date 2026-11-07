@@ -1055,6 +1055,8 @@ export const en = {
   lq_old: "Exchanges have not answered for a while — the map is from {t}.",
   lq_open_chart: "Open chart",
   lq_price_w: "Price · {w}",
+  lq_real: "Dots on candles are real exchange liquidations for the period: longs {l} (below the candle), shorts {s} (above it). Compare them with the map's levels.",
+  lq_real_part: "Dots on candles are real exchange liquidations (the feed keeps 7 days — only the end of this period): longs {l}, shorts {s}.",
   lq_rows: "Each bar adds up {p} of price; “Total” runs to the edge of the ±{s} window. Zoom in to see levels in more detail.",
   lq_search: "Find a coin, e.g. PEPE",
   lq_seen: "The model sees {a} of open interest ({p}): positions opened in this period and still open. The longer the period, the more it sees. Closes and liquidations are tracked over the full exchange history (up to three years).",

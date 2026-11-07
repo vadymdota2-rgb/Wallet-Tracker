@@ -779,6 +779,10 @@ export interface LiqMapReply {
   seen?: number;
   /** Свечи окна для графика цены на карте: [откр, макс, мин, закр]. */
   ohlc?: [number, number, number, number][];
+  /** Настоящие ликвидации бирж по тем же свечам: [лонги $, шорты $]. */
+  real?: [number, number][];
+  /** С какого времени есть лента ликвидаций (unix, с): у окон длиннее — только хвост. */
+  realFrom?: number;
   at: number;
 }
 

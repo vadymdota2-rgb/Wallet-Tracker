@@ -148,6 +148,27 @@ function Candles({ r, yOf, H, CAND }: { r: LiqMapReply; yOf: (p: number) => numb
           );
         })}
       </g>
+      {/* Настоящие ликвидации бирж: лонги — точкой под свечой, шорты — над ней;
+          размер — по сумме (площадь), самая крупная — 4,5 точки радиусом. */}
+      {r.real ? (() => {
+        const real = r.real;
+        const top = Math.max(1, ...real.flatMap(([l, s]) => [l, s]));
+        const rad = (v: number) => 1.2 + 3.3 * Math.sqrt(v / top);
+        return (
+          <g className="lq-real" clipPath="url(#lq-cclip)">
+            {list.map(([, h, l], i) => {
+              const [lv, sv] = real[i] ?? [0, 0];
+              const x = 2 + i * cw + cw / 2;
+              return (
+                <g key={`r${i}`}>
+                  {lv > 0 ? <circle cx={x} cy={cy(l) + rad(lv) + 2} r={rad(lv)} className="dn" /> : null}
+                  {sv > 0 ? <circle cx={x} cy={cy(h) - rad(sv) - 2} r={rad(sv)} className="up" /> : null}
+                </g>
+              );
+            })}
+          </g>
+        );
+      })() : null}
       <circle cx={2 + (list.length - 0.5) * cw} cy={yOf(r.px)} r={2.6} className="lq-cp-now" />
     </g>
   );
@@ -476,6 +497,8 @@ const RANGES: readonly { id: LiqRange; key: DictKey }[] = [
    «собираем» (building) или «все сборщики заняты» (busy). Экран не пугает
    ошибкой, а переспрашивает сам — BUILD_TRIES раз через BUILD_RETRY. */
 const BUILD_RETRY = 3_000;
+/** Длина окна, с — понять, вся ли она покрыта лентой настоящих ликвидаций. */
+const WIN_SEC: Record<string, number> = { "1d": 86_400, "7d": 604_800, "30d": 2_592_000, "90d": 7_776_000, "180d": 15_552_000, "365d": 31_536_000 };
 const BUILD_TRIES = 8;
 
 /** «Обновляется сама · 40 сек назад» — тикает каждую секунду отдельно от карты. */
@@ -686,6 +709,15 @@ export function LiqMapScreen() {
   };
 
   const levs = reply?.ok ? reply.levs : [];
+  /* Настоящие ликвидации за окно (лента бирж хранит 7 дней — у длинных окон
+     только их хвост, и подпись это говорит). */
+  const realTot = reply?.ok && reply.real
+    ? {
+        L: reply.real.reduce((a, x) => a + x[0], 0),
+        S: reply.real.reduce((a, x) => a + x[1], 0),
+        part: (reply.realFrom ?? 0) > (reply.at - (WIN_SEC[reply.range] ?? 0)),
+      }
+    : null;
   const winLabel = t(lang, RANGES.find((x) => x.id === range)?.key ?? "big_win_24h");
 
   let hero = null;
@@ -878,6 +910,12 @@ export function LiqMapScreen() {
             {/* Сколько цены в одной полосе: при ±100 % — около 3 %, при ±5 % —
                 0,25 %, и суммы полос при этом разные, хотя данные те же. */}
             <p className="lq-rows">{t(lang, "lq_rows", { p: rowPct, s: pct(spanN, 0, false) })}</p>
+            {realTot && realTot.L + realTot.S > 0 ? (
+              <p className="lq-real-t">
+                <span className="lq-real-k" aria-hidden="true"><i className="dn" /><i className="up" /></span>
+                {t(lang, realTot.part ? "lq_real_part" : "lq_real", { l: usd(realTot.L), s: usd(realTot.S) })}
+              </p>
+            ) : null}
             <p className="lq-hint">
               <span className="lq-hot-k" aria-hidden="true"><i /><i /><i /></span>
               {t(lang, "lq_hot")} {t(lang, "lq_hint")}

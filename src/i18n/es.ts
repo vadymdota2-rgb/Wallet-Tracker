@@ -1056,6 +1056,8 @@ export const es: Dict = {
   lq_old: "Los exchanges no responden desde hace rato: el mapa es de las {t}.",
   lq_open_chart: "Abrir gráfico",
   lq_price_w: "Precio · {w}",
+  lq_real: "Los puntos en las velas son liquidaciones reales de los exchanges en el periodo: largos {l} (bajo la vela), cortos {s} (sobre ella). Compárelas con los niveles del mapa.",
+  lq_real_part: "Los puntos en las velas son liquidaciones reales (el registro guarda 7 días — solo el final de este periodo): largos {l}, cortos {s}.",
   lq_rows: "Cada barra suma un {p} del precio; «Total» llega hasta el borde de la ventana ±{s}. Acerque para ver los niveles con más detalle.",
   lq_search: "Buscar moneda, p. ej. PEPE",
   lq_seen: "El modelo ve {a} del interés abierto ({p}): posiciones abiertas en este periodo y aún sin cerrar. Cuanto más largo el periodo, más se ve. Los cierres y liquidaciones se siguen en todo el historial de los exchanges (hasta tres años).",

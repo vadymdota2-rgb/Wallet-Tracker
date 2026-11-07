@@ -1056,6 +1056,8 @@ export const fr: Dict = {
   lq_old: "Les plateformes ne répondent plus depuis un moment : la carte date de {t}.",
   lq_open_chart: "Ouvrir le graphique",
   lq_price_w: "Prix · {w}",
+  lq_real: "Les points sur les bougies sont les liquidations réelles des plateformes sur la période : longs {l} (sous la bougie), shorts {s} (au-dessus). Comparez-les aux niveaux de la carte.",
+  lq_real_part: "Les points sur les bougies sont des liquidations réelles (le flux garde 7 jours — seulement la fin de cette période) : longs {l}, shorts {s}.",
   lq_rows: "Chaque barre regroupe {p} du prix, « Cumul » va jusqu'au bord de la fenêtre ±{s}. Zoomez pour voir les niveaux plus en détail.",
   lq_search: "Chercher une crypto, ex. PEPE",
   lq_seen: "Le modèle voit {a} de l'intérêt ouvert ({p}) : les positions ouvertes sur cette période et toujours ouvertes. Plus la période est longue, plus on en voit. Les fermetures et liquidations sont suivies sur tout l'historique des plateformes (jusqu'à trois ans).",

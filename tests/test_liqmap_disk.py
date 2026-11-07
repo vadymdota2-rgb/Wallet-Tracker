@@ -67,6 +67,27 @@ class DumpRestoreTest(Base):
             self.assertEqual(lm.restore(copy.deepcopy(data)), 1)
             self.assertIs(lm._st.hits[("BTC", "1d")][1]["live"], False)  # не True — не «та же монета»
 
+    def test_candle_edges_survive_the_copy(self):
+        data = json.loads(json.dumps(self.built(("BTC", "1d")), allow_nan=False))
+        res = lm._st.hits[("BTC", "1d")][2]
+        edges = res["ohlc_t"]
+        self.assertEqual(len(edges), len(res["ohlc"]) + 1)
+        self.assertEqual(edges, sorted(set(edges)))
+        lm._st = lm._State()
+        self.assertEqual(lm.restore(copy.deepcopy(data)), 1)
+        self.assertEqual(lm._st.hits[("BTC", "1d")][2]["ohlc_t"], edges)
+        # Старая копия без границ — принимается, карта без них.
+        old = copy.deepcopy(data)
+        del old["maps"][0]["st"]["ohlc_t"]
+        lm._st = lm._State()
+        self.assertEqual(lm.restore(old), 1)
+        self.assertNotIn("ohlc_t", lm._st.hits[("BTC", "1d")][2])
+        for bad in ([], edges[:-1], [*edges[:-1], edges[-2]], [True] * len(edges), [float(x) for x in edges], "x", [-1, *edges[1:]]):
+            d = copy.deepcopy(data)
+            d["maps"][0]["st"]["ohlc_t"] = bad
+            lm._st = lm._State()
+            self.assertEqual(lm.restore(d), 0, repr(bad)[:40])
+
     def test_age_survives_restart(self):
         data = self.built(("BTC", "1d"))
         data["maps"][0]["age"] = 1000.0

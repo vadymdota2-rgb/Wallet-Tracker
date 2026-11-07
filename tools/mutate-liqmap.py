@@ -228,6 +228,10 @@ PY = [
     ("data.get(\"v\") != DUMP_VERSION or ", "", "копия: версия"),
     ("    if since < 0:\n        return 0  #", "    if False:\n        return 0  #", "копия из будущего не берётся"),
     ("    for m in data[\"maps\"][:CACHE_MAX]:", "    for m in data[\"maps\"]:", "копия: не больше кэша"),
+    # Границы свечей — к ним сервер кладёт настоящие ликвидации бирж.
+    ("    return [rows[i][0] for i in range(0, len(rows), k)] + [rows[-1][0] + step]", "    return [rows[i][0] for i in range(0, len(rows), k)]", "границы: конец последней свечи"),
+    ("all(edges[i] < edges[i + 1] for i in range(n))", "True", "копия: границы по возрастанию"),
+    ("    if d.get(\"ohlc_t\") is not None:\n        st[\"ohlc_t\"] = list(d[\"ohlc_t\"])\n", "", "копия: границы сохраняются"),
     ("not isinstance(age, bool) and age >= 0):", "not isinstance(age, bool)):", "копия: возраст не меньше нуля"),
     ("        if total >= STALE:\n", "        if age >= STALE:\n", "копия: возраст — с записи файла"),
     ("            if key in _st.hits:\n                continue\n", "", "копия не поверх свежей сборки"),

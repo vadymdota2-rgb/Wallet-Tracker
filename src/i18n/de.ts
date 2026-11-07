@@ -1056,6 +1056,8 @@ export const de: Dict = {
   lq_old: "Die Börsen antworten seit Längerem nicht — die Karte ist von {t}.",
   lq_open_chart: "Chart öffnen",
   lq_price_w: "Kurs · {w}",
+  lq_real: "Punkte an den Kerzen sind echte Börsenliquidationen im Zeitraum: Longs {l} (unter der Kerze), Shorts {s} (darüber). Vergleichen Sie sie mit den Niveaus der Karte.",
+  lq_real_part: "Punkte an den Kerzen sind echte Liquidationen (der Feed speichert 7 Tage — nur das Ende dieses Zeitraums): Longs {l}, Shorts {s}.",
   lq_rows: "Ein Balken fasst {p} des Preises zusammen, „Summe“ reicht bis zum Rand des Fensters ±{s}. Vergrößern Sie, um die Niveaus genauer zu sehen.",
   lq_search: "Coin suchen, z. B. PEPE",
   lq_seen: "Das Modell sieht {a} des Open Interest ({p}): Positionen, die in diesem Zeitraum eröffnet wurden und noch offen sind. Je länger der Zeitraum, desto mehr ist sichtbar. Schließungen und Liquidationen verfolgt es über die gesamte Börsenhistorie (bis zu drei Jahre).",

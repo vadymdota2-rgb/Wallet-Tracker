@@ -2589,6 +2589,16 @@ html.ch-full .screen.full {
 .lq-candles line { stroke-width: 0.8; }
 .lq-candles rect { stroke-width: 0; }
 .lq-cp-now { fill: #fff; stroke: #f6465d; stroke-width: 1.5; }
+/* Настоящие ликвидации на свечах: полупрозрачные точки с обводкой фона — не
+   сливаются со свечами и между собой. */
+.lq-real circle { stroke: #030712; stroke-width: 0.8; fill-opacity: 0.85; }
+.lq-real .dn { fill: #f6465d; }
+.lq-real .up { fill: #0ecb81; }
+.lq-real-t { display: flex; align-items: flex-start; gap: 8px; margin: 6px 2px 0; color: var(--dim); font-size: 12px; line-height: 1.4; }
+.lq-real-k { display: inline-flex; gap: 3px; padding-top: 4px; }
+.lq-real-k i { width: 7px; height: 7px; border-radius: 50%; }
+.lq-real-k .dn { background: #f6465d; }
+.lq-real-k .up { background: #0ecb81; }
 .lq-cp-t {
   fill: var(--dim);
   font-size: 9px;

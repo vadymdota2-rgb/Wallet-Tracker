@@ -741,6 +741,62 @@ class GmxTest(unittest.TestCase):
         self.assertEqual(api.LIQ_SNAP_VER["GMX"], 2)  # старая история — пересчитать по стыку
 
 
+class RealTest(unittest.TestCase):
+    """Настоящие ликвидации бирж — к свечам карты (liq_map, real)."""
+
+    def setUp(self):
+        d = tempfile.mkdtemp()
+        patcher = mock.patch.object(api, "LIQ_OI_DB", os.path.join(d, "liq_oi.db"))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        for cache in (api._liq_real, api._liq_comp):
+            cache.clear()
+            self.addCleanup(cache.clear)
+        self.res = {"ok": True, "sym": "BTC", "range": "1d", "ohlc": [[1, 1, 1, 1]] * 3, "ohlc_t": [1000, 2000, 3000, 4000]}
+        patcher = mock.patch.object(api.wt_liqmap, "liq_map", side_effect=lambda *a, **k: self.res)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def put(self, rows):
+        con = api._liqs_con()
+        con.executemany("INSERT INTO liq_ev VALUES (?,?,?,?,?,?)", rows)
+        con.commit()
+        con.close()
+
+    def test_events_go_to_their_candles(self):
+        self.put([("OKX", "BTC", 1500_000, 1, 99.0, 100.0), ("Gate", "BTC", 1999_000, 1, 99.0, 50.0),
+                  ("OKX", "BTC", 2000_000, 0, 101.0, 70.0), ("OKX", "BTC", 3999_000, 0, 101.0, 30.0),
+                  ("OKX", "BTC", 4000_000, 1, 99.0, 999.0),  # после последней свечи — нет
+                  ("OKX", "BTC", 500_000, 1, 99.0, 999.0),  # до первой — нет
+                  ("OKX", "ETH", 1500_000, 1, 99.0, 999.0)])  # чужая монета — нет
+        r = api.liq_map("BTC", "1d")
+        self.assertEqual(r["real"], [[150, 0], [0, 70], [0, 30]])  # side 1 — ликвидирован лонг
+        self.assertEqual(r["real_from"], 500)
+        self.assertIsNot(r, self.res)
+        self.assertEqual({k: v for k, v in r.items() if k not in ("real", "real_from")}, self.res)
+
+    def test_same_map_same_object_until_it_changes(self):
+        self.put([("OKX", "BTC", 1500_000, 1, 99.0, 100.0)])
+        a = api.liq_map("BTC", "1d")
+        self.assertIs(api.liq_map("BTC", "1d"), a)  # маршрут не кодирует заново
+        self.res = {**self.res}
+        self.assertIsNot(api.liq_map("BTC", "1d"), a)  # карта сменилась — новый ответ
+
+    def test_no_feed_or_no_edges_map_as_is(self):
+        self.assertIs(api.liq_map("BTC", "1d"), self.res)  # базы нет
+        self.res = {"ok": True, "sym": "BTC", "range": "1d"}
+        self.put([("OKX", "BTC", 1500_000, 1, 99.0, 100.0)])
+        self.assertIs(api.liq_map("BTC", "1d"), self.res)  # старая сборка без границ
+        self.res = {"ok": False, "error": "building"}
+        self.assertIs(api.liq_map("BTC", "1d"), self.res)
+
+    def test_feed_has_index_by_coin_and_time(self):
+        con = api._liqs_con()
+        idx = {r[1] for r in con.execute("PRAGMA index_list(liq_ev)")}
+        con.close()
+        self.assertIn("liq_ev_st", idx)
+
+
 class DayKeepTest(unittest.TestCase):
     """Дневные ряды бирж копятся у нас: история Binance (30 дней у биржи)
     растёт на день в день."""

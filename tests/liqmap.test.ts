@@ -128,6 +128,25 @@ test("ближайшее скопление — первое крупное, а 
   assert.equal(n.v, 100);
 });
 
+test("настоящие ликвидации: по свече на каждую, битые — отбрасываются сами, карта остаётся", () => {
+  const base = FIX["7d"]!;
+  const n = base.ohlc!.length;
+  const real = Array.from({ length: n }, (_, i) => [i * 10, i] as [number, number]);
+  const ok = validLiqMap({ ...base, real, real_from: 1_700_000_000 }, NOW)!;
+  assert.deepEqual(ok.real, real);
+  assert.equal(ok.realFrom, 1_700_000_000);
+  for (const bad of [real.slice(1), [...real, [1, 1]], real.map(([l]) => [l]), real.map(([l, s]) => [l, -s]),
+    real.map(([l, s]) => [l + 0.5, s]), "x", null, real.map(() => ["1", "2"])]) {
+    const v = validLiqMap({ ...base, real: bad, real_from: 1 }, NOW)!;
+    assert.ok(v.ok, String(bad));
+    assert.equal(v.real, undefined);
+    assert.equal(v.realFrom, undefined);
+  }
+  const noFrom = validLiqMap({ ...base, real, real_from: -5 }, NOW)!;
+  assert.deepEqual(noFrom.real, real);
+  assert.equal(noFrom.realFrom, undefined);
+});
+
 test("строки экрана: деньги окна не теряются и не берутся из-за края", () => {
   const r = FIX["7d"]!;
   for (const span of [5, 10, 15, 30, 50, 100, 500]) {

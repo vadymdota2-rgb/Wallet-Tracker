@@ -1056,6 +1056,8 @@ export const tr: Dict = {
   lq_old: "Borsalar bir süredir yanıt vermiyor; harita {t} tarihli.",
   lq_open_chart: "Grafiği aç",
   lq_price_w: "Fiyat · {w}",
+  lq_real: "Mumlardaki noktalar dönemdeki gerçek borsa tasfiyeleridir: long {l} (mumun altında), short {s} (mumun üstünde). Haritadaki seviyelerle karşılaştırın.",
+  lq_real_part: "Mumlardaki noktalar gerçek borsa tasfiyeleridir (akış 7 gün tutar — bu dönemin yalnızca sonu): long {l}, short {s}.",
   lq_rows: "Her çubuk fiyatın {p} aralığını toplar; “Toplam” ±{s} penceresinin kenarına kadar gider. Seviyeleri ayrıntılı görmek için yakınlaştırın.",
   lq_search: "Coin ara, ör. PEPE",
   lq_seen: "Model açık pozisyonların {a} kısmını görüyor ({p}): bu dönemde açılıp henüz kapanmamış pozisyonlar. Dönem uzadıkça daha fazlası görünür. Kapanışları ve tasfiyeleri borsaların tüm geçmişi (üç yıla kadar) üzerinden izler.",

@@ -462,6 +462,14 @@ def candles(rows: list[Row], n: int = 48) -> list[list[float]]:
     return out
 
 
+def candle_edges(rows: list[Row], n: int = 48) -> list[int]:
+    """Границы свечей графика (candles) по времени: начало каждой и конец
+    последней — к ним сервер подкладывает настоящие ликвидации бирж."""
+    k = max(1, -(-len(rows) // n))
+    step = rows[-1][0] - rows[-2][0] if len(rows) > 1 else 0
+    return [rows[i][0] for i in range(0, len(rows), k)] + [rows[-1][0] + step]
+
+
 def make_state(sym: str, rng: str, got: dict[str, list[Row]], ref: list[Row], px: float,  # noqa: PLR0913 — сборка целиком
                at: int, last: Row | None = None) -> dict[str, Json]:
     """Сборка карты: позиции всех бирж по сетке вокруг цены px (в монетах,
@@ -485,7 +493,7 @@ def make_state(sym: str, rng: str, got: dict[str, list[Row]], ref: list[Row], px
     stride = max(1, len(ref) // 60)
     return {"sym": sym, "range": rng, "px": px, "lo": lo, "step": step, "at": at, "ex": sorted(got),
             "L": [_smooth(x) for x in long_b], "S": [_smooth(x) for x in short_b],
-            "path": [r[3] for r in ref[::stride]], "ohlc": candles(ref),
+            "path": [r[3] for r in ref[::stride]], "ohlc": candles(ref), "ohlc_t": candle_edges(ref),
             "oi": round(sum(r[-1][4] for r in got.values())),
             # Сколько из открытого интереса модель видит — позиции, открытые
             # за окно и ещё живые, $; остальное открыто раньше окна.
@@ -529,7 +537,7 @@ def render(st: dict[str, Json], px: float) -> dict[str, Json]:
             "ex": st["ex"], "levs": list(GROUPS), "buckets": [{"p": p, "L": lv, "S": sv} for p, lv, sv in rows_out],
             "cum": {k: {"L": cum("L", k), "S": cum("S", k)} for k in (2, 5, 10)},
             "path": [round(x, 10) for x in path], "oi": st["oi"], "seen": min(st["seen"], st["oi"]),
-            "ohlc": ohlc, "at": st["at"]}
+            "ohlc": ohlc, "at": st["at"], **({"ohlc_t": list(st["ohlc_t"])} if st.get("ohlc_t") else {})}
 
 
 def build_map(sym: str, rng: str, got: dict[str, list[Row]], ref: list[Row], at: int,  # noqa: PLR0913 — сборка целиком
@@ -844,7 +852,16 @@ def _fields_ok(d: dict[str, object]) -> bool:
         and isinstance(path, list) and 0 < len(path) <= 200 and all(_pos(x) for x in path)
         and isinstance(ohlc, list) and 0 < len(ohlc) <= 100
         and all(isinstance(c, list) and len(c) == 4 and all(_pos(x) for x in c) for c in ohlc)
-        and type(oi) is int and type(seen) is int and seen >= 0 and oi >= 0 and _pos(low) and _pos(high))
+        and type(oi) is int and type(seen) is int and seen >= 0 and oi >= 0 and _pos(low) and _pos(high)
+        and _edges_ok(d.get("ohlc_t"), len(ohlc)))
+
+
+def _edges_ok(edges: object, n: int) -> bool:
+    """Границы свечей из копии: нет (старая копия) — можно; есть — целые
+    секунды по возрастанию, на одну больше свечей."""
+    return edges is None or (isinstance(edges, list) and len(edges) == n + 1
+                             and all(type(x) is int and x > 0 for x in edges)
+                             and all(edges[i] < edges[i + 1] for i in range(n)))
 
 
 def _dense(groups: object) -> list[list[float]] | None:
@@ -874,6 +891,8 @@ def _unpack(d: object) -> dict[str, Json] | None:
     st["live"] = d.get("live") is True
     st["path"] = [float(x) for x in d["path"]]
     st["ohlc"] = [[float(x) for x in c] for c in d["ohlc"]]
+    if d.get("ohlc_t") is not None:
+        st["ohlc_t"] = list(d["ohlc_t"])
     for side in ("L", "S"):
         dense = _dense(d.get(side))
         if dense is None:
