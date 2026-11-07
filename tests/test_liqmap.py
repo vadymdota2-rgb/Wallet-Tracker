@@ -9,6 +9,7 @@ import sys
 import threading
 import time
 import unittest
+from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -523,6 +524,16 @@ class LiveTest(unittest.TestCase):
 
 
 class CacheTest(Base):
+    def setUp(self):
+        super().setUp()
+        # Предыстория — свои тесты (test_liqmap_pre). Здесь её фоновая сборка
+        # давала гонку: пустая предыстория, ещё в пути, помечала карту
+        # «без предыстории», и следующий запрос её пересобирал (так и
+        # задумано на сервере) — под нагрузкой «одна сборка» становилась двумя.
+        patcher = mock.patch.object(lm, "_pre", lambda _sym, _wait: {})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def gather(self, calls, rows=None, delay=0.0):
         def fn(sym, period, n):
             if (period, n) == lm.PRE:

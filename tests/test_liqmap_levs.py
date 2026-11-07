@@ -93,10 +93,10 @@ class LookupTest(unittest.TestCase):
         started = threading.Event()
 
         def slow():
-            started.set()
-            api._liq_levs_cache["all"] = (time.monotonic(), {"OKX": {"BEAT": 10}})
             with api._liq_lock:
+                api._liq_levs_cache["all"] = (time.monotonic(), {"OKX": {"BEAT": 10}})
                 api._liq_busy.discard("levs")
+            started.set()  # последним: дальше тест ждёт и таблицу, и снятый флаг
 
         with mock.patch.object(api, "_liq_levs_bg", slow):
             self.assertEqual(api._liq_levs("BEAT"), {})  # таблицы нет — сразу пусто
