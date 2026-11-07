@@ -1962,6 +1962,11 @@ say("карта ликвидаций: плечо монеты — из спра�
     and "levs_upto(max_lev(ex, sym, caps))" in _lmpy and "extra = sum(w for lev, w, _ in LEVS if lev > top)" in _lmpy
     and "[[[b, float(v)] for b, v in enumerate(g) if v > 0]" in _lmpy
     and os.path.exists(f"{APP}/tests/test_liqmap_levs.py") and "## 13. Плечо монеты по биржам" in read(f"{APP}/docs/check-liqmap-server.md"))
+_ci = read(f"{APP}/.github/workflows/tests.yml")
+say("CI: мутации карты ликвидаций — своим заданием с лимитом 75 минут (вместе со «Страхом и жадностью» не укладывались в 45)",
+    "  mutation-liqmap:\n    runs-on: ubuntu-latest\n    timeout-minutes: 75" in _ci
+    and _ci.count("run: python tools/mutate-liqmap.py") == 1
+    and "run: python tools/mutate-liqmap.py" in _ci.split("  mutation-liqmap:")[1].split("\n  mutation-")[0])
 
 # «Добавить кошелёк» больше не отвечает общей ошибкой: причина отказа доходит
 # до экрана («уже добавлен» — обновить список), а норма запросов считается
