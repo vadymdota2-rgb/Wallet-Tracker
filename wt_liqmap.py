@@ -26,6 +26,10 @@
     ликвидациям бирж за неделю (сервер: Bybit, OKX, Gate, HTX, Kraken, dYdX ×
     BTC, ETH, SOL, XRP, DOGE). Прежняя модель (сгоревшее замещалось, больше
     50–100×) завышала ликвидации в 2,5–2,8 раза; эта — почти в размер;
+  - плечо монеты на бирже — из справочников бирж (set_levs): у альткоинов
+    оно обычно 10–25×, и уровней 50–75× у самой цены там нет. Сверка с
+    настоящими ликвидациями OKX за сутки (22 альткоина, $3 млн): совпадение
+    по полосам 0,5 % (F) — 40,7 % против 31,0 % с прежним «до 75× всем»;
   - после последнего снимка — текущая свеча: её ход тоже сжигает уровни;
   - фандинг (FUND_HOLD): платящая сторона каждый час отдаёт «цена × ставка»
     с монеты позиции — из маржи, и её ликвидация подходит к цене: у лонгов
@@ -84,6 +88,8 @@ Price = Callable[[str], float | None]
 # по биржам; положительная — лонги платят шортам.
 FundPoint = tuple[int, float]
 Funding = Callable[[str], object]
+# Наибольшее плечо монеты по биржам: fn(монета) → {биржа: плечо}.
+Levs = Callable[[str], object]
 
 # Окно карты: свеча и сколько их. Длинные окна — дневными свечами: историю
 # интереса за год биржи отдают только по дням (Binance — лишь за 30 дней,
@@ -126,6 +132,10 @@ CAPS = {"Binance": 125, "Bybit": 100, "OKX": 100, "Gate": 100, "HTX": 200, "dYdX
 CAP_OTHER = 50  # биржа не из списка
 MAJORS = frozenset({"BTC", "ETH"})
 ALT_CAP = 75
+# Плечо монеты на бирже — из справочников бирж (set_levs), не больше CAPS
+# биржи: у альткоинов обычно 10–25×. Биржа справочник не отдаёт (Binance) —
+# медиана известных пределов этой монеты на других, не больше ALT_CAP у
+# альткоинов. Справочника нет вовсе — как раньше: CAPS, у альткоинов ≤ ALT_CAP.
 # Поддерживающая маржа: ликвидация лонга — на (1 − 1/плечо + маржа) от входа.
 # У бирж она ступенями: чем больше плечо, тем меньше, и всегда меньше
 # начальной (1/плечо) — иначе 200× ликвидировалось бы на цене входа. Берём
@@ -298,16 +308,26 @@ def _opened(x: float, hi: float, low: float, bs: float, lo: float,  # noqa: PLR0
 
 
 def levs_upto(cap: int) -> tuple[tuple[int, float, int], ...]:
-    """Плечи LEVS не выше cap; доли остальных — пропорционально, сумма снова 1."""
+    """Плечи LEVS не выше cap; доли тех, что выше, — самому большому из
+    оставшихся: кто хотел 50×, на бирже с пределом 20× берёт 20×. Сверка с
+    ликвидациями OKX (22 монеты): так точнее, чем делить пропорционально
+    (F 40,7 % против 38,8 %), сумма — 1."""
     kept = [x for x in LEVS if x[0] <= cap] or [LEVS[0]]
-    total = sum(w for _, w, _ in kept)
-    return tuple((lev, w / total, g) for lev, w, g in kept)
+    top = kept[-1][0]
+    extra = sum(w for lev, w, _ in LEVS if lev > top)
+    return tuple((lev, w + (extra if lev == top else 0.0), g) for lev, w, g in kept)
 
 
-def max_lev(ex: str, sym: str) -> int:
-    """Наибольшее плечо монеты на бирже: у BTC и ETH — предел биржи (CAPS), у
-    остальных монет биржи дают меньше — не больше ALT_CAP."""
+def max_lev(ex: str, sym: str, caps: dict[str, int] | None = None) -> int:
+    """Наибольшее плечо монеты на бирже: из справочника биржи (caps), нет его —
+    медиана известных пределов монеты; не больше предела биржи (CAPS). Нет
+    ничего — у BTC и ETH предел биржи, у остальных не больше ALT_CAP."""
     cap = CAPS.get(ex, CAP_OTHER)
+    if caps and ex in caps:
+        return min(cap, caps[ex])
+    if caps:
+        known = sorted(caps.values())
+        cap = min(cap, known[len(known) // 2])
     return cap if sym in MAJORS else min(cap, ALT_CAP)
 
 
@@ -587,7 +607,8 @@ def candle_edges(rows: list[Row], n: int = 48) -> list[int]:
 
 
 def make_state(sym: str, rng: str, got: dict[str, list[Row]], ref: list[Row], px: float,  # noqa: PLR0913 — сборка целиком
-               at: int, last: Row | None = None, fund: list[FundPoint] | None = None) -> dict[str, Json]:
+               at: int, last: Row | None = None, fund: list[FundPoint] | None = None,
+               caps: dict[str, int] | None = None) -> dict[str, Json]:
     """Сборка карты: позиции всех бирж по сетке вокруг цены px (в монетах,
     сглаженные), свечи и путь цены опорной биржи. Ответ из неё — render().
 
@@ -596,14 +617,15 @@ def make_state(sym: str, rng: str, got: dict[str, list[Row]], ref: list[Row], px
     минимум за сутки сжёг бы позиции, открытые уже после него.
 
     fund — ставки фандинга монеты (clean_fund): уровни платящей стороны
-    сдвигаются на заплаченное к моменту at."""
+    сдвигаются на заплаченное к моменту at. caps — наибольшее плечо монеты
+    по биржам (max_lev)."""
     lo, step = px * (1 - SPAN), px * SPAN * 2 / FINE
     g_n = len(GROUPS)
     long_b = [[0.0] * BUCKETS for _ in range(g_n)]
     short_b = [[0.0] * BUCKETS for _ in range(g_n)]
     seen = 0.0
     for ex, rows in got.items():
-        lg, sg, mass = model(rows, lo, step, levs_upto(max_lev(ex, sym)), since=ref[0][0],
+        lg, sg, mass = model(rows, lo, step, levs_upto(max_lev(ex, sym, caps)), since=ref[0][0],
                              fund=(fund, at) if fund else None)
         seen += mass
         for g in range(g_n):
@@ -688,6 +710,7 @@ class _State:
         self.price: Price | None = None
         # Фандинг: монета → (когда собран, ставки); идущие сборки; не ответили — когда.
         self.funding: Funding | None = None
+        self.levs: Levs | None = None
         self.fund: dict[str, tuple[float, list[FundPoint]]] = {}
         self.fund_jobs: dict[str, threading.Thread] = {}
         self.fund_retry: dict[str, float] = {}
@@ -705,6 +728,23 @@ def set_gather(fn: Gather | None) -> None:
 def set_price(fn: Price | None) -> None:
     """Откуда брать текущую цену: fn(монета) → цена или None."""
     _st.price = fn
+
+
+def set_levs(fn: Levs | None) -> None:
+    """Откуда брать наибольшее плечо монеты: fn(монета) → {биржа: плечо}."""
+    _st.levs = fn
+
+
+def _caps(sym: str) -> dict[str, int]:
+    """Наибольшее плечо монеты по биржам; источник молчит или сбоит — {}."""
+    fn = _st.levs
+    try:
+        raw = fn(sym) if fn else None
+    except Exception:  # noqa: BLE001 — нет справочника — плечи как раньше
+        raw = None
+    if not isinstance(raw, dict):
+        return {}
+    return {ex: v for ex, v in raw.items() if isinstance(ex, str) and type(v) is int and 1 <= v <= 1000}
 
 
 def set_funding(fn: Funding | None) -> None:
@@ -911,7 +951,8 @@ def build(sym: str, rng: str, pre_wait: float = PRE_WAIT) -> dict[str, Json]:
     quote = _quote(sym, ref[-1][3])
     px = ref[-1][3] if quote is None else quote
     fine = splice(ref, clean_rows(tail_ref))
-    st = make_state(sym, rng, got, ref, px, _now(), fine[-1] if fine is not ref else None, _fund(sym, FUND_WAIT))
+    st = make_state(sym, rng, got, ref, px, _now(), fine[-1] if fine is not ref else None,
+                    _fund(sym, FUND_WAIT), _caps(sym))
     # Цена источника совпала с биржами — это та же монета (см. PX_MOVE).
     st["live"] = quote is not None
     if partial:
@@ -1027,13 +1068,14 @@ DUMP_VERSION = 1
 def _pack(st: dict[str, Json]) -> dict[str, Json]:
     """Сборка для файла: корзины позиций — только непустые, [корзина, монеты].
 
-    Монеты — девять значащих цифр, а не знаков после запятой: у дешёвых
-    монет их миллионы, у BTC в корзине бывают миллиардные доли, и округление
-    до 9 знаков превращало такие в ноль — а ноль при чтении бракует всю карту
-    (на сервере из 37 карт копии принимались 3)."""
+    Монеты — как есть, без округления: JSON хранит число точно. Округление
+    до 9 знаков после запятой превращало миллиардные доли BTC в ноль (а ноль
+    бракует всю карту — на сервере из 37 копий принимались 3), а до 9
+    значащих цифр сдвигало доллары ответа на единицу: копия отдавала не ту
+    карту, что была собрана."""
     out = {k: v for k, v in st.items() if k not in ("L", "S")}
     for side in ("L", "S"):
-        out[side] = [[[b, float(f"{v:.9g}")] for b, v in enumerate(g) if v > 0] for g in st[side]]
+        out[side] = [[[b, float(v)] for b, v in enumerate(g) if v > 0] for g in st[side]]
     return out
 
 

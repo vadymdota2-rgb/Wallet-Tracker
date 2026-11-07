@@ -11619,6 +11619,126 @@ def _liq_coins_bg() -> None:
             _liq_busy.discard("coins")
 
 
+# Наибольшее плечо монеты на каждой бирже — из открытых справочников бирж.
+# У альткоинов оно обычно 10–25× (медиана — 20×), а модель без него давала
+# всем до 75×: уровни 50–75× в 1–2 % от цены, которых на бирже нет.
+LIQ_LEVS_TTL = 6 * 3600.0
+_liq_levs_cache: dict = {}
+
+
+def _lev_num(v) -> int:
+    """Плечо из справочника: целое 1–1000, иначе 0."""
+    f = _fnum(v)
+    return int(f) if 1 <= f <= 1000 else 0
+
+
+def _liq_levs_build() -> dict:
+    """{биржа: {монета: наибольшее плечо}} по открытым справочникам бирж."""
+    out: dict = {}
+
+    def put(ex: str, raw, lev) -> None:
+        sym, v = _snap_sym(str(raw or "")), _lev_num(lev)
+        if sym and v:
+            book = out.setdefault(ex, {})
+            book[sym] = max(book.get(sym, 0), v)
+
+    def okx() -> None:
+        for d in _jrows(get_json("https://www.okx.com/api/v5/public/instruments?instType=SWAP", 20), "data"):
+            if (base := _quote_cut(str(d.get("instId") or ""), ("-USDT-SWAP",))):
+                put("OKX", base, d.get("lever"))
+
+    def gate() -> None:
+        for d in _jrows(get_json("https://api.gateio.ws/api/v4/futures/usdt/contracts", 20)):
+            if (base := _quote_cut(str(d.get("name") or ""), ("_USDT",))):
+                put("Gate", base, d.get("leverage_max"))
+
+    def bitget() -> None:
+        for d in _jrows(get_json("https://api.bitget.com/api/v2/mix/market/contracts?productType=usdt-futures", 20), "data"):
+            put("Bitget", d.get("baseCoin"), d.get("maxLever"))
+
+    def mexc() -> None:
+        for d in _jrows(get_json("https://contract.mexc.com/api/v1/contract/detail", 30), "data"):
+            if (base := _quote_cut(str(d.get("symbol") or ""), ("_USDT",))):
+                put("MEXC", base, d.get("maxLeverage"))
+
+    def kucoin() -> None:
+        for d in _jrows(get_json("https://api-futures.kucoin.com/api/v1/contracts/active", 20), "data"):
+            if d.get("quoteCurrency") == "USDT":
+                put("KuCoin", d.get("baseCurrency"), d.get("maxLeverage"))
+
+    def hyper() -> None:
+        for u in _jl(_jd(hl_post({"type": "meta"}, 15)).get("universe")):
+            if isinstance(u, dict):
+                put("Hyperliquid", u.get("name"), u.get("maxLeverage"))
+
+    def dydx() -> None:
+        for k, m in _jd(_jd(get_json("https://indexer.dydx.trade/v4/perpetualMarkets?limit=1000", 20)).get("markets")).items():
+            imf = _fnum(_jd(m).get("initialMarginFraction"))
+            if (base := _quote_cut(str(k), ("-USD",))) and imf > 0:
+                put("dYdX", base, round(1 / imf))
+
+    def blofin() -> None:
+        for d in _jrows(get_json("https://openapi.blofin.com/api/v1/market/instruments", 20), "data"):
+            if (base := _quote_cut(str(d.get("instId") or ""), ("-USDT",))):
+                put("BloFin", base, d.get("maxLeverage"))
+
+    def orangex() -> None:
+        for d in _jrows(get_json("https://api.orangex.com/api/v1/public/get_instruments?currency=PERPETUAL&kind=perpetual", 20), "result"):
+            if (base := _quote_cut(str(d.get("instrument_name") or ""), ("-USDT-PERPETUAL",))):
+                put("OrangeX", base, d.get("leverage"))
+
+    def phemex() -> None:
+        for d in _jrows(_jd(get_json("https://api.phemex.com/public/products", 30)).get("data"), "perpProductsV2"):
+            if d.get("settleCurrency") == "USDT" and (base := _quote_cut(str(d.get("symbol") or ""), ("USDT",))):
+                put("Phemex", base, d.get("maxLeverage"))
+
+    def bybit() -> None:
+        cursor = ""
+        for _ in range(5):
+            got = _jd(_jd(get_json("https://api.bybit.com/v5/market/instruments-info?category=linear&limit=1000"
+                                   + (f"&cursor={urllib.parse.quote(cursor)}" if cursor else ""), 20)).get("result"))
+            for d in _jl(got.get("list")):
+                if isinstance(d, dict) and d.get("quoteCoin") == "USDT" and d.get("contractType") == "LinearPerpetual":
+                    put("Bybit", d.get("baseCoin"), _jd(d.get("leverageFilter")).get("maxLeverage"))
+            cursor = str(got.get("nextPageCursor") or "")
+            if not cursor:
+                break
+
+    def safe(fn) -> None:
+        try:
+            fn()
+        except Exception:  # noqa: BLE001 — биржа не ответила: её плечи — по остальным
+            pass
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        list(pool.map(safe, (okx, gate, bitget, mexc, kucoin, hyper, dydx, blofin, orangex, phemex, bybit)))
+    if out:
+        with _liq_lock:
+            _liq_levs_cache["all"] = (time.monotonic(), out)
+    return out
+
+
+def _liq_levs_bg() -> None:
+    try:
+        _liq_levs_build()
+    except Exception as e:  # noqa: BLE001
+        print(f"liq levs: {e}", file=sys.stderr)
+    finally:
+        with _liq_lock:
+            _liq_busy.discard("levs")
+
+
+def _liq_levs(sym: str) -> dict:
+    """Наибольшее плечо монеты по биржам: {биржа: плечо}. Таблицы ещё нет
+    или она старше LIQ_LEVS_TTL — собирается в фоне, карта её не ждёт."""
+    with _liq_lock:
+        hit = _liq_levs_cache.get("all")
+        if (not hit or time.monotonic() - hit[0] >= LIQ_LEVS_TTL) and "levs" not in _liq_busy:
+            _liq_busy.add("levs")
+            threading.Thread(target=_liq_levs_bg, daemon=True).start()
+    return {ex: book[sym] for ex, book in (hit[1] if hit else {}).items() if sym in book}
+
+
 def _liq_coins_build() -> dict:
     vol: dict[str, float] = {}
     ex: dict[str, set] = {}
@@ -12656,6 +12776,7 @@ def _liq_funding(sym: str) -> list:
 
 
 wt_liqmap.set_funding(_liq_funding)
+wt_liqmap.set_levs(_liq_levs)
 
 
 def _oih_build(sym: str, rng: str) -> dict:

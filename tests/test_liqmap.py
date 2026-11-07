@@ -145,13 +145,28 @@ class ModelTest(unittest.TestCase):
         self.assertEqual(lm.max_lev("MEXC", "BTC"), 500)
         self.assertEqual(lm.max_lev("MEXC", "PEPE"), lm.ALT_CAP)
         self.assertEqual(lm.max_lev("Нет такой", "BTC"), lm.CAP_OTHER)
+        # Справочник бирж: свой предел, не выше CAPS; биржи без справочника —
+        # медиана известных, у альткоинов не выше ALT_CAP.
+        caps = {"OKX": 10, "Gate": 20, "MEXC": 300, "KuCoin": 25}
+        self.assertEqual(lm.max_lev("OKX", "BEAT", caps), 10)
+        self.assertEqual(lm.max_lev("MEXC", "BEAT", caps), 300)
+        self.assertEqual(lm.max_lev("Gate", "BEAT", {"Gate": 900}), lm.CAPS["Gate"])
+        self.assertEqual(lm.max_lev("Binance", "BEAT", caps), 25)
+        self.assertEqual(lm.max_lev("Binance", "BEAT", {"MEXC": 300}), lm.ALT_CAP)
+        self.assertEqual(lm.max_lev("Binance", "BTC", {"MEXC": 500, "OKX": 100}), lm.CAPS["Binance"])
+        self.assertEqual(lm.max_lev("dYdX", "BTC", {"OKX": 100}), 20)
+        self.assertEqual(lm.max_lev("OKX", "SOL", {"OKX": 100}), 100)
+        self.assertEqual(lm.max_lev("OKX", "SOL", {}), lm.ALT_CAP)
         levs = lm.levs_upto(20)
         self.assertEqual([lev for lev, _, _ in levs], [3, 5, 10, 20])
         self.assertAlmostEqual(sum(w for _, w, _ in levs), 1.0)
-        # Доли оставшихся — в той же пропорции.
-        self.assertAlmostEqual(levs[0][1] / levs[1][1], 0.10 / 0.20)
+        # Доли плеч выше предела — самому большому оставшемуся, прочие — как были.
+        self.assertEqual([w for _, w, _ in levs[:3]], [0.10, 0.20, 0.25])
+        self.assertAlmostEqual(levs[3][1], 0.15 + 0.10 + 0.10 + 0.04 + 0.04 + 0.01 + 0.005 + 0.005)
+        self.assertEqual([lev for lev, _, _ in lm.levs_upto(30)], [3, 5, 10, 20, 25])
+        self.assertAlmostEqual(lm.levs_upto(30)[-1][1], 1 - 0.10 - 0.20 - 0.25 - 0.15)
         self.assertEqual(lm.levs_upto(500), lm.LEVS)
-        self.assertEqual([lev for lev, _, _ in lm.levs_upto(1)], [3])
+        self.assertEqual(lm.levs_upto(1), ((3, 1.0, 0),))
         # На dYdX нет 50× и выше: на карте их полос нет.
         rows = series([100, 100, 100], [0, 10, 20])
         r = lm.build_map("BTC", "1d", {"dYdX": rows}, rows, 1)
