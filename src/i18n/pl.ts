@@ -1055,6 +1055,7 @@ export const pl: Dict = {
   lq_oi: "OI",
   lq_old: "Giełdy od dłuższego czasu nie odpowiadają — mapa z {t}.",
   lq_open_chart: "Otwórz wykres",
+  lq_partial: "Doprecyzowujemy mapę: wczytujemy trzy lata historii giełd — odświeży się sama za kilka sekund.",
   lq_price_w: "Cena · {w}",
   lq_real: "Kropki na świecach to prawdziwe likwidacje giełd w okresie: longi {l} (pod świecą), shorty {s} (nad nią). Porównaj je z poziomami mapy.",
   lq_real_part: "Kropki na świecach to prawdziwe likwidacje giełd (zapis obejmuje 7 dni — tylko koniec tego okresu): longi {l}, shorty {s}.",

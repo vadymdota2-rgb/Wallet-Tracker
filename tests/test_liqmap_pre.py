@@ -58,6 +58,60 @@ class Base(unittest.TestCase):
         return [c for c in self.calls if (c[1], c[2]) == lm.PRE]
 
 
+class FastFirstTest(Base):
+    """Первое открытие монеты: карта по окну сразу, предыстория — в фоне."""
+
+    def wait_pre(self):
+        for _ in range(300):
+            if "BTC" not in lm._st.pre_jobs:
+                return
+            time.sleep(0.01)
+        self.fail("предыстория не пришла")
+
+    def test_first_request_does_not_wait_for_history(self):
+        self.use(delay=0.6)
+        t = time.monotonic()
+        r = lm.liq_map("BTC", "1d", wait=5)
+        self.assertLess(time.monotonic() - t, 0.5)  # не ждали 0,6 с предыстории
+        self.assertTrue(r["ok"])
+        self.assertIs(r["partial"], True)
+        self.assertEqual(lm.dump()["maps"], [])  # временная — не в копию
+        # Пока предыстория в пути — без лишних пересборок окна.
+        n = len([c for c in self.calls if (c[1], c[2]) != lm.PRE])
+        self.assertIs(lm.liq_map("BTC", "1d", wait=5)["partial"], True)
+        self.assertNotIn(("BTC", "1d"), lm._st.jobs)
+        self.assertEqual(len([c for c in self.calls if (c[1], c[2]) != lm.PRE]), n)
+        self.wait_pre()
+        # Предыстория пришла — следующий запрос пересобирает карту с ней.
+        lm.liq_map("BTC", "1d", wait=5)
+        job = lm._st.jobs.get(("BTC", "1d"))
+        if job is not None:
+            job.join(5)
+        r2 = lm.liq_map("BTC", "1d", wait=5)
+        self.assertNotIn("partial", r2)
+        self.assertNotIn("partial", lm._st.hits[("BTC", "1d")][1])
+        self.assertEqual(len(lm.dump()["maps"]), 1)
+
+    def test_history_fetch_failed_partial_goes_away(self):
+        self.use(delay=0.3, fail=True)
+        self.assertIs(lm.liq_map("BTC", "1d", wait=5)["partial"], True)
+        self.wait_pre()
+        lm.liq_map("BTC", "1d", wait=5)
+        job = lm._st.jobs.get(("BTC", "1d"))
+        if job is not None:
+            job.join(5)
+        self.assertNotIn("partial", lm.liq_map("BTC", "1d", wait=5))  # не придёт — и не ждём
+
+    def test_cached_history_no_partial_and_warm_waits(self):
+        self.use()
+        lm.build("BTC", "1d")  # прямой вызов и прогрев ждут предысторию
+        self.assertNotIn("partial", lm._st.hits[("BTC", "1d")][1])
+        self.assertNotIn("partial", lm.liq_map("BTC", "7d", wait=5))  # есть в кэше — сразу с ней
+        src = Path(ROOT, "wt_liqmap.py").read_text(encoding="utf-8")
+        self.assertIn("build(*key, pre_wait=0.0)", src.split("def _bg(")[1].split("\ndef ")[0])
+        self.assertIn("    build(sym, rng)\n", src.split("def warm(")[1])
+
+
 class PrependTest(unittest.TestCase):
     def test_only_days_that_ended_before_the_window(self):
         rows = window(4)

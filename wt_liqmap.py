@@ -543,7 +543,8 @@ def render(st: dict[str, Json], px: float) -> dict[str, Json]:
             "ex": st["ex"], "levs": list(GROUPS), "buckets": [{"p": p, "L": lv, "S": sv} for p, lv, sv in rows_out],
             "cum": {k: {"L": cum("L", k), "S": cum("S", k)} for k in (2, 5, 10)},
             "path": [round(x, 10) for x in path], "oi": st["oi"], "seen": min(st["seen"], st["oi"]),
-            "ohlc": ohlc, "at": st["at"], **({"ohlc_t": list(st["ohlc_t"])} if st.get("ohlc_t") else {})}
+            "ohlc": ohlc, "at": st["at"], **({"ohlc_t": list(st["ohlc_t"])} if st.get("ohlc_t") else {}),
+            **({"partial": True} if st.get("partial") else {})}
 
 
 def build_map(sym: str, rng: str, got: dict[str, list[Row]], ref: list[Row], at: int,  # noqa: PLR0913 — сборка целиком
@@ -679,8 +680,23 @@ def _pre(sym: str, wait: float) -> dict[str, list[Row]]:
         return hit[1] if hit and time.monotonic() - hit[0] < PRE_STALE else {}
 
 
-def build(sym: str, rng: str) -> dict[str, Json]:
-    """Собрать карту (ряды — через set_gather, цена — через set_price) и положить в кэш."""
+def _with_pre(sym: str, got: dict[str, list[Row]], wait: float) -> tuple[dict[str, list[Row]], bool]:
+    """Ряды окна с предысторией (ждём её не дольше wait) и пометка: собрано
+    без неё, а она в пути — карту пересоберёт следующий запрос."""
+    pre = _pre(sym, wait)
+    got = {ex: prepend(pre.get(ex), rows) for ex, rows in got.items()}
+    with _lock:
+        # Предыстория ещё в пути — или пришла, пока собиралось окно.
+        partial = not pre and (sym in _st.pre_jobs or bool(_st.pre.get(sym, (0.0, {}))[1]))
+    return got, partial
+
+
+def build(sym: str, rng: str, pre_wait: float = PRE_WAIT) -> dict[str, Json]:
+    """Собрать карту (ряды — через set_gather, цена — через set_price) и положить в кэш.
+
+    pre_wait — сколько ждать предысторию монеты, если её ещё нет. Запрос
+    человека (liq_map) не ждёт: карта по окну — за ~5 с вместо ~15 с, с
+    пометкой partial, а с предысторией её пересоберёт следующий запрос."""
     key = (sym, rng)
     period, n = RANGES[rng]
     gather = _st.gather
@@ -710,9 +726,9 @@ def build(sym: str, rng: str) -> dict[str, Json]:
     got = {ex: splice(c, clean_rows(tail.get(ex))) for ex, rows in got.items() if len(c := clean_rows(rows)) >= 8}
     if ref:
         got = fresh(got, ref)
+    partial = False
     if got and ref:
-        pre = _pre(sym, PRE_WAIT)
-        got = {ex: prepend(pre.get(ex), rows) for ex, rows in got.items()}
+        got, partial = _with_pre(sym, got, pre_wait)
     if not got or not ref:
         with _lock:
             _st.fails[key] = time.monotonic()
@@ -723,6 +739,8 @@ def build(sym: str, rng: str) -> dict[str, Json]:
     st = make_state(sym, rng, got, ref, px, _now(), fine[-1] if fine is not ref else None)
     # Цена источника совпала с биржами — это та же монета (см. PX_MOVE).
     st["live"] = quote is not None
+    if partial:
+        st["partial"] = True
     res = render(st, px)
     with _lock:
         _st.hits[key] = (time.monotonic(), st, res)
@@ -766,7 +784,7 @@ def _served(key: tuple[str, str]) -> dict[str, Json] | None:
 
 def _bg(key: tuple[str, str]) -> None:
     try:
-        build(*key)
+        build(*key, pre_wait=0.0)  # запрос человека — не ждёт предысторию
     except Exception:  # noqa: BLE001 — фоновая сборка не роняет сервер; биржи и так часто молчат
         with _lock:
             _st.fails[key] = time.monotonic()
@@ -805,7 +823,10 @@ def liq_map(sym: object, rng: object, wait: float = COLD_WAIT) -> dict[str, Json
     key = (s, str(rng))
     with _lock:
         hit = _st.hits.get(key)
-        job = _start(key) if hit is None or time.monotonic() - hit[0] >= TTL[key[1]] else None
+        # Карта без предыстории (partial) — пересобрать, как только та
+        # пришла (или сборка предыстории кончилась ничем).
+        early = hit is not None and hit[1].get("partial") is True and s not in _st.pre_jobs
+        job = _start(key) if hit is None or early or time.monotonic() - hit[0] >= TTL[key[1]] else None
         resting = hit is None and key in _st.fails and job is None
     res = _served(key)
     if res is not None:
@@ -911,7 +932,8 @@ def dump() -> dict[str, Json]:
     """Все сборки кэша — для копии на диске: возраст каждой, с, и сама сборка."""
     with _lock:
         t = time.monotonic()
-        items = [(t - born, st) for born, st, _ in _st.hits.values()]
+        # Карта без предыстории — временная: в копию не идёт.
+        items = [(t - born, st) for born, st, _ in _st.hits.values() if not st.get("partial")]
     return {"v": DUMP_VERSION, "at": time.time(), "maps": [{"age": round(a, 1), "st": _pack(st)} for a, st in items]}
 
 

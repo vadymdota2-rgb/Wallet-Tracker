@@ -173,8 +173,8 @@ PY = [
     # Кэш и сборка.
     ('SYM = re.compile(r"[A-Z0-9]{1,12}")', 'SYM = re.compile(r".{1,12}")', "монета — только буквы и цифры"),
     ("    if not s or rng not in RANGES:\n", "    if not s:\n", "окно — только известное"),
-    ("if hit is None or time.monotonic() - hit[0] >= TTL[key[1]] else None", "if True else None", "свежая сборка — без пересборки"),
-    ("if hit is None or time.monotonic() - hit[0] >= TTL[key[1]] else None", "if hit is None or time.monotonic() - hit[0] >= 120 else None", "срок — своего окна"),
+    ("if hit is None or early or time.monotonic() - hit[0] >= TTL[key[1]] else None", "if True else None", "свежая сборка — без пересборки"),
+    ("if hit is None or early or time.monotonic() - hit[0] >= TTL[key[1]] else None", "if hit is None or early or time.monotonic() - hit[0] >= 120 else None", "срок — своего окна"),
     ("        if not hit or time.monotonic() - hit[0] >= STALE:\n", "        if not hit:\n", "слишком старая — не отдаётся"),
     ("    if job is not None:\n        job.join(wait)", "    if job is not None:\n        job.join(0)", "холодный старт ждёт сборку"),
     ("    if fail is not None and time.monotonic() - fail < FAIL_WAIT:\n        return None\n", "", "пауза после сбоя"),
@@ -190,7 +190,7 @@ PY = [
     ("        if (hit and time.monotonic() - hit[0] < TTL[rng] - 60) or key in _st.jobs:", "        if hit and time.monotonic() - hit[0] < TTL[rng] - 60:", "прогрев не дублирует сборку"),
     # Предыстория.
     ("    return [r for r in pre if r[0] + PRE_SEC <= cut] + rows", "    return [r for r in pre if r[0] < cut] + rows", "предыстория — только дни, кончившиеся до окна"),
-    ("        got = {ex: prepend(pre.get(ex), rows) for ex, rows in got.items()}", "        got = dict(got)", "окно начинается с предыстории"),
+    ("    got = {ex: prepend(pre.get(ex), rows) for ex, rows in got.items()}", "    got = dict(got)", "окно начинается с предыстории"),
     ("{ex: c for ex, r in got.items() if len(c := clean_rows(r)) >= 8}", "{ex: r for ex, r in got.items()}", "предыстория — чистые ряды"),
     ("        if rows:\n            _st.pre.pop(sym, None)", "        if True:\n            _st.pre.pop(sym, None)", "пустая предыстория — не замена"),
     ("(tried is None or t - tried >= PRE_RETRY)", "True", "предыстория: снова спросить через PRE_RETRY"),
@@ -228,6 +228,12 @@ PY = [
     ("data.get(\"v\") != DUMP_VERSION or ", "", "копия: версия"),
     ("    if since < 0:\n        return 0  #", "    if False:\n        return 0  #", "копия из будущего не берётся"),
     ("    for m in data[\"maps\"][:CACHE_MAX]:", "    for m in data[\"maps\"]:", "копия: не больше кэша"),
+    # Первое открытие монеты — без ожидания предыстории, с пометкой partial.
+    ("        build(*key, pre_wait=0.0)  # запрос человека", "        build(*key)  # запрос человека", "запрос человека не ждёт предысторию"),
+    ("        partial = not pre and (sym in _st.pre_jobs or bool(_st.pre.get(sym, (0.0, {}))[1]))", "        partial = False", "карта без предыстории — помечена"),
+    ("        early = hit is not None and hit[1].get(\"partial\") is True and s not in _st.pre_jobs\n", "        early = False\n", "предыстория пришла — пересборка"),
+    ("        early = hit is not None and hit[1].get(\"partial\") is True and s not in _st.pre_jobs\n", "        early = hit is not None and hit[1].get(\"partial\") is True\n", "пересборка — когда предыстория готова"),
+    ("_st.hits.values() if not st.get(\"partial\")]", "_st.hits.values()]", "временная карта — не в копию"),
     # Границы свечей — к ним сервер кладёт настоящие ликвидации бирж.
     ("    return [rows[i][0] for i in range(0, len(rows), k)] + [rows[-1][0] + step]", "    return [rows[i][0] for i in range(0, len(rows), k)]", "границы: конец последней свечи"),
     ("all(edges[i] < edges[i + 1] for i in range(n))", "True", "копия: границы по возрастанию"),

@@ -27880,5 +27880,23 @@
     "id": "Titik pada candle adalah likuidasi bursa yang nyata (data disimpan 7 hari — hanya akhir periode ini): long {l}, short {s}.",
     "ar": "النقاط على الشموع تصفيات حقيقية في المنصات (السجل يحفظ 7 أيام — نهاية هذه الفترة فقط): مراكز الشراء {l} ومراكز البيع {s}.",
     "pl": "Kropki na świecach to prawdziwe likwidacje giełd (zapis obejmuje 7 dni — tylko koniec tego okresu): longi {l}, shorty {s}."
+  },
+  "lq_partial": {
+    "ru": "Карта уточняется: догружаем историю бирж за три года — обновится сама через несколько секунд.",
+    "uk": "Карта уточнюється: догружаємо історію бірж за три роки — оновиться сама за кілька секунд.",
+    "en": "Refining the map: loading three years of exchange history — it will update by itself in a few seconds.",
+    "vi": "Đang tinh chỉnh bản đồ: tải lịch sử sàn ba năm — sẽ tự cập nhật sau vài giây.",
+    "ko": "지도 보정 중: 거래소 3년 기록을 불러오는 중 — 몇 초 뒤 자동으로 갱신됩니다.",
+    "zh": "正在完善地图：加载交易所三年历史——几秒后自动更新。",
+    "ja": "マップを精緻化中：取引所の3年分の履歴を読み込んでいます — 数秒で自動更新されます。",
+    "es": "Afinando el mapa: cargando tres años de historial de los exchanges; se actualizará solo en unos segundos.",
+    "pt": "Refinando o mapa: carregando três anos de histórico das corretoras — vai se atualizar sozinho em alguns segundos.",
+    "fr": "Affinage de la carte : chargement de trois ans d’historique des plateformes — elle se mettra à jour d’elle-même dans quelques secondes.",
+    "de": "Karte wird verfeinert: Drei Jahre Börsenhistorie werden geladen — sie aktualisiert sich in wenigen Sekunden von selbst.",
+    "tr": "Harita iyileştiriliyor: borsaların üç yıllık geçmişi yükleniyor — birkaç saniye içinde kendiliğinden güncellenecek.",
+    "hi": "नक्शा सटीक किया जा रहा है: एक्सचेंजों का तीन साल का इतिहास लोड हो रहा है — कुछ सेकंड में अपने आप अपडेट होगा।",
+    "id": "Memperhalus peta: memuat riwayat bursa tiga tahun — akan diperbarui sendiri dalam beberapa detik.",
+    "ar": "يجري تحسين الخريطة: تحميل سجل المنصات لثلاث سنوات — ستتحدّث تلقائياً خلال ثوانٍ.",
+    "pl": "Doprecyzowujemy mapę: wczytujemy trzy lata historii giełd — odświeży się sama za kilka sekund."
   }
 }

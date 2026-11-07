@@ -1055,6 +1055,7 @@ export const de: Dict = {
   lq_oi: "OI",
   lq_old: "Die Börsen antworten seit Längerem nicht — die Karte ist von {t}.",
   lq_open_chart: "Chart öffnen",
+  lq_partial: "Karte wird verfeinert: Drei Jahre Börsenhistorie werden geladen — sie aktualisiert sich in wenigen Sekunden von selbst.",
   lq_price_w: "Kurs · {w}",
   lq_real: "Punkte an den Kerzen sind echte Börsenliquidationen im Zeitraum: Longs {l} (unter der Kerze), Shorts {s} (darüber). Vergleichen Sie sie mit den Niveaus der Karte.",
   lq_real_part: "Punkte an den Kerzen sind echte Liquidationen (der Feed speichert 7 Tage — nur das Ende dieses Zeitraums): Longs {l}, Shorts {s}.",

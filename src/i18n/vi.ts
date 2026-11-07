@@ -1055,6 +1055,7 @@ export const vi: Dict = {
   lq_oi: "OI",
   lq_old: "Các sàn đã lâu không phản hồi — bản đồ từ {t}.",
   lq_open_chart: "Mở biểu đồ",
+  lq_partial: "Đang tinh chỉnh bản đồ: tải lịch sử sàn ba năm — sẽ tự cập nhật sau vài giây.",
   lq_price_w: "Giá · {w}",
   lq_real: "Chấm trên nến là các vụ thanh lý thực tế trên sàn trong kỳ: long {l} (dưới nến), short {s} (trên nến). Hãy so với các mức trên bản đồ.",
   lq_real_part: "Chấm trên nến là thanh lý thực tế trên sàn (dữ liệu lưu 7 ngày — chỉ phần cuối của kỳ này): long {l}, short {s}.",

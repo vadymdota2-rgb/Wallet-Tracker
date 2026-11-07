@@ -1054,6 +1054,7 @@ export const en = {
   lq_oi: "OI",
   lq_old: "Exchanges have not answered for a while — the map is from {t}.",
   lq_open_chart: "Open chart",
+  lq_partial: "Refining the map: loading three years of exchange history — it will update by itself in a few seconds.",
   lq_price_w: "Price · {w}",
   lq_real: "Dots on candles are real exchange liquidations for the period: longs {l} (below the candle), shorts {s} (above it). Compare them with the map's levels.",
   lq_real_part: "Dots on candles are real exchange liquidations (the feed keeps 7 days — only the end of this period): longs {l}, shorts {s}.",

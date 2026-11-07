@@ -1055,6 +1055,7 @@ export const tr: Dict = {
   lq_oi: "AP",
   lq_old: "Borsalar bir süredir yanıt vermiyor; harita {t} tarihli.",
   lq_open_chart: "Grafiği aç",
+  lq_partial: "Harita iyileştiriliyor: borsaların üç yıllık geçmişi yükleniyor — birkaç saniye içinde kendiliğinden güncellenecek.",
   lq_price_w: "Fiyat · {w}",
   lq_real: "Mumlardaki noktalar dönemdeki gerçek borsa tasfiyeleridir: long {l} (mumun altında), short {s} (mumun üstünde). Haritadaki seviyelerle karşılaştırın.",
   lq_real_part: "Mumlardaki noktalar gerçek borsa tasfiyeleridir (akış 7 gün tutar — bu dönemin yalnızca sonu): long {l}, short {s}.",

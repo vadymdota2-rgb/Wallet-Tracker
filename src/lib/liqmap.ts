@@ -94,6 +94,7 @@ export function validLiqMap(raw: unknown, now: number = Date.now() / 1000): LiqM
     path: path.slice() as number[], oi, ...(seen !== undefined ? { seen: Math.min(seen as number, oi) } : {}),
     ohlc: outO, at: at as number,
     ...(real ? { real, ...(Number.isInteger(realFrom) && (realFrom as number) > 0 ? { realFrom: realFrom as number } : {}) } : {}),
+    ...(raw["partial"] === true ? { partial: true } : {}),
   };
 }
 

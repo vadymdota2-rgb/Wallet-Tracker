@@ -783,6 +783,8 @@ export interface LiqMapReply {
   real?: [number, number][];
   /** С какого времени есть лента ликвидаций (unix, с): у окон длиннее — только хвост. */
   realFrom?: number;
+  /** Первая сборка монеты — без предыстории (догружается); сервер скоро пересоберёт. */
+  partial?: boolean;
   at: number;
 }
 

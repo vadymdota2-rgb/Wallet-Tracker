@@ -235,6 +235,18 @@ describe("Карта ликвидаций", () => {
     await b.ctx.close();
   });
 
+  test("первое открытие монеты: карта сразу, пометка «уточняется» и полная карта следом сама", async () => {
+    const { ctx, page, errors, asked } = await open({ replies: [{ ...FIX["1d"], partial: true }, FIX["1d"]] });
+    await ready(page);
+    const note = page.locator(".lq-partial");
+    assert.equal(sp(await note.innerText()), sp(I18N["lq_partial"]!["ru"]!));
+    assert.ok(await page.locator(".lq-svg .lq-row").count() > 10);  // карта уже есть
+    await note.waitFor({ state: "detached", timeout: 12_000 });  // переспросили через 6 с — полная
+    assert.ok(asked.length >= 2, String(asked.length));
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
   test("нет данных — период всё равно можно сменить, масштаба без карты нет", async () => {
     const { ctx, page, errors } = await open({ replies: [{ ok: false, error: "no_data" }] });
     await page.waitForSelector(".lq-ctl-p .seg button");

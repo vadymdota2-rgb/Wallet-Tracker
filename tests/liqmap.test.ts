@@ -147,6 +147,13 @@ test("настоящие ликвидации: по свече на каждую
   assert.equal(noFrom.realFrom, undefined);
 });
 
+test("карта без предыстории — пометка partial только при true", () => {
+  const base = FIX["1d"]!;
+  assert.equal(validLiqMap({ ...base, partial: true }, NOW)!.partial, true);
+  for (const v of [false, 1, "true", null]) assert.equal(validLiqMap({ ...base, partial: v }, NOW)!.partial, undefined, String(v));
+  assert.equal(validLiqMap(base, NOW)!.partial, undefined);
+});
+
 test("строки экрана: деньги окна не теряются и не берутся из-за края", () => {
   const r = FIX["7d"]!;
   for (const span of [5, 10, 15, 30, 50, 100, 500]) {

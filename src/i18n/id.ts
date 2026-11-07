@@ -1055,6 +1055,7 @@ export const id: Dict = {
   lq_oi: "OI",
   lq_old: "Bursa sudah lama tidak merespons — peta ini dari {t}.",
   lq_open_chart: "Buka grafik",
+  lq_partial: "Memperhalus peta: memuat riwayat bursa tiga tahun — akan diperbarui sendiri dalam beberapa detik.",
   lq_price_w: "Harga · {w}",
   lq_real: "Titik pada candle adalah likuidasi bursa yang nyata selama periode: long {l} (di bawah candle), short {s} (di atasnya). Bandingkan dengan level di peta.",
   lq_real_part: "Titik pada candle adalah likuidasi bursa yang nyata (data disimpan 7 hari — hanya akhir periode ini): long {l}, short {s}.",

@@ -1055,6 +1055,7 @@ export const es: Dict = {
   lq_oi: "OI",
   lq_old: "Los exchanges no responden desde hace rato: el mapa es de las {t}.",
   lq_open_chart: "Abrir gráfico",
+  lq_partial: "Afinando el mapa: cargando tres años de historial de los exchanges; se actualizará solo en unos segundos.",
   lq_price_w: "Precio · {w}",
   lq_real: "Los puntos en las velas son liquidaciones reales de los exchanges en el periodo: largos {l} (bajo la vela), cortos {s} (sobre ella). Compárelas con los niveles del mapa.",
   lq_real_part: "Los puntos en las velas son liquidaciones reales (el registro guarda 7 días — solo el final de este periodo): largos {l}, cortos {s}.",

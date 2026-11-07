@@ -488,6 +488,9 @@ function CoinPicker({ lang, sym, onPick }: { lang: Lang; sym: string; onPick: (s
 /** Как часто открытый экран спрашивает свежую карту: сервер на каждый
  *  запрос снимает уровни, до которых дошла текущая цена, — карта живая. */
 const LIVE_EVERY = 20_000;
+/** Карта собрана без предыстории (первое открытие монеты) — переспросить
+ *  так скоро: сервер досчитает её за несколько секунд. */
+const PARTIAL_EVERY = 6_000;
 /** Окна карты и их подписи (длинные — дневными свечами на сервере). */
 const RANGES: readonly { id: LiqRange; key: DictKey }[] = [
   { id: "1d", key: "big_win_24h" }, { id: "7d", key: "big_win_7d" }, { id: "30d", key: "big_win_30d" },
@@ -620,6 +623,23 @@ export function LiqMapScreen() {
       document.removeEventListener("visibilitychange", pull);
     };
   }, [sym, range, got]);
+
+  /* Первая сборка монеты — без предыстории: пока она догружается, спрашиваем
+     чаще, и карта уточняется сама. */
+  const partial = reply?.ok === true && reply.partial === true;
+  useEffect(() => {
+    if (!partial) return;
+    let alive = true;
+    const id = window.setTimeout(() => {
+      void refreshLiqMap(sym, range).then((r) => {
+        if (alive && r?.ok) got(r);
+      });
+    }, PARTIAL_EVERY);
+    return () => {
+      alive = false;
+      window.clearTimeout(id);
+    };
+  }, [partial, reply, sym, range, got]);
 
   const again = () => {
     haptic("select");
@@ -845,6 +865,9 @@ export function LiqMapScreen() {
       ) : (
         <>
           {old ? <p className="lq-stale" role="status">{t(lang, "lq_old", { t: old })}</p> : null}
+          {partial ? (
+            <p className="lq-partial" role="status"><span className="lq-busy" aria-hidden="true" />{t(lang, "lq_partial")}</p>
+          ) : null}
           {hero}
 
           <Card>

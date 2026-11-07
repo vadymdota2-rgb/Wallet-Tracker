@@ -1055,6 +1055,7 @@ export const fr: Dict = {
   lq_oi: "OI",
   lq_old: "Les plateformes ne répondent plus depuis un moment : la carte date de {t}.",
   lq_open_chart: "Ouvrir le graphique",
+  lq_partial: "Affinage de la carte : chargement de trois ans d’historique des plateformes — elle se mettra à jour d’elle-même dans quelques secondes.",
   lq_price_w: "Prix · {w}",
   lq_real: "Les points sur les bougies sont les liquidations réelles des plateformes sur la période : longs {l} (sous la bougie), shorts {s} (au-dessus). Comparez-les aux niveaux de la carte.",
   lq_real_part: "Les points sur les bougies sont des liquidations réelles (le flux garde 7 jours — seulement la fin de cette période) : longs {l}, shorts {s}.",

@@ -2476,6 +2476,7 @@ html.ch-full .screen.full {
 .lq-ctl-r { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; }
 .lq-ctl-k { color: var(--dim); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 .lq-seen.lq-note { margin: 4px 2px 12px; }
+.lq-partial { display: flex; align-items: center; gap: 8px; margin: 0 2px 10px; color: var(--dim); font-size: 12.5px; line-height: 1.4; }
 
 /* Шапка: монета, цена, путь цены за окно. */
 .lq-hero { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
