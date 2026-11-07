@@ -1026,6 +1026,8 @@ export const zh: Dict = {
   lq_bias_eq: "价格上下方的清算大致相当",
   lq_bias_up: "价格上方的清算是下方的{x}倍",
   lq_bias_up_only: "价格附近只有上方有清算",
+  lq_ctl_period: "周期",
+  lq_ctl_zoom: "缩放 ±%",
   lq_cum_axis: "累计",
   lq_cum_title: "价格附近的清算",
   lq_err: "无法加载地图——请重试。",

@@ -1026,6 +1026,8 @@ export const de: Dict = {
   lq_bias_eq: "Über und unter dem Kurs liegen etwa gleich viele Liquidationen",
   lq_bias_up: "Über dem Kurs liegen {x}-mal mehr Liquidationen als darunter",
   lq_bias_up_only: "Nahe am Kurs liegen Liquidationen nur darüber",
+  lq_ctl_period: "Zeitraum",
+  lq_ctl_zoom: "Zoom, ±%",
   lq_cum_axis: "Summe",
   lq_cum_title: "Liquidationen nahe dem Preis",
   lq_err: "Karte konnte nicht geladen werden — versuch es erneut.",

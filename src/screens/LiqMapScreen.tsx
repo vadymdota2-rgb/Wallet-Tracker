@@ -6,10 +6,11 @@
  * групп), у каждого своя цена ликвидации; то, что цена уже прошла, снято. Настоящих цен
  * ликвидации биржи не публикуют, и экран так и говорит.
  *
- * Экран отвечает на три вопроса по порядку. Сначала — главное словами и
- * цифрами: где ближайшее крупное скопление сверху и снизу и на какой стороне
- * ликвидаций больше. Потом — сама карта. Потом — итоги и крупнейшие уровни,
- * которые по касанию показываются на карте.
+ * Экран сверху вниз: монета; главное словами и цифрами — цена, где
+ * ближайшее крупное скопление сверху и снизу и на какой стороне ликвидаций
+ * больше; карта одним блоком — период и масштаб прямо над ней, плечи прямо
+ * под ней; крупнейшие уровни (по касанию — на карте); итоги ±2/5/10 %;
+ * пояснения — сколько видит модель, как читать, откуда данные.
  *
  * Цена идёт по вертикали — телефон держат стоя, и уровни читаются сверху
  * вниз, как стакан: шорты над текущей ценой, лонги под ней. Сторону говорит
@@ -716,9 +717,6 @@ export function LiqMapScreen() {
           {busy ? <span className="lq-busy" aria-hidden="true" /> : null}
         </div>
         {path.length > 1 ? <Spark path={path} up={(chg ?? 0) >= 0} /> : null}
-        {reply.seen && reply.oi ? (
-          <p className="lq-seen">{t(lang, "lq_seen", { a: usd(reply.seen), p: pct((reply.seen / reply.oi) * 100, 1, false) })}</p>
-        ) : null}
 
         <div className="lq-mag">
           {([["up", near?.up], ["dn", near?.dn]] as const).map(([k, c]) => (
@@ -769,6 +767,22 @@ export function LiqMapScreen() {
   const rowUp = row && reply?.ok ? row.mid > reply.px : false;
   const tipBelow = sel !== null && view.rows.length ? (sel + 0.5) / view.rows.length < 0.34 : false;
 
+  /* Период и масштаб — рядом и прямо над картой: оба меняют то, что на ней
+     видно (раньше период стоял над шапкой, а масштаб — внутри карты, через
+     экран от него). Пока карты нет, — только период: его можно сменить и из
+     «нет данных». */
+  const periodRow = (
+    <div className="lq-ctl-r lq-ctl-p">
+      <span className="lq-ctl-k">{t(lang, "lq_ctl_period")}</span>
+      <Segmented<LiqRange>
+        tight
+        value={range}
+        onChange={setRange}
+        options={RANGES.map((x) => ({ id: x.id, label: t(lang, x.key) }))}
+      />
+    </div>
+  );
+
   return (
     <Frame title={t(lang, "lq_title")}>
       {/* Своя сетка в одну колонку minmax(0, 1fr): общая сетка экрана берёт
@@ -778,14 +792,6 @@ export function LiqMapScreen() {
       <p className="lq-lead">{t(lang, "lq_sub")}</p>
 
       <CoinPicker lang={lang} sym={sym} onPick={setSym} />
-      <div className="lq-ctl">
-        <Segmented<LiqRange>
-          tight
-          value={range}
-          onChange={setRange}
-          options={RANGES.map((x) => ({ id: x.id, label: t(lang, x.key) }))}
-        />
-      </div>
 
       {staleAt ? (
         <p className="lq-stale">
@@ -794,6 +800,7 @@ export function LiqMapScreen() {
         </p>
       ) : null}
 
+      {!reply?.ok ? <div className="lq-ctl">{periodRow}</div> : null}
       {!reply ? (
         <Card><Skeleton rows={10} /></Card>
       ) : !reply.ok ? (
@@ -809,12 +816,20 @@ export function LiqMapScreen() {
           {hero}
 
           <Card>
-            <Segmented<Span>
-              value={span}
-              onChange={(v) => { setSpan(v); setSel(null); }}
-              tight
-              options={SPANS.map((s) => ({ id: s, label: `±${s}%` }))}
-            />
+            <div className="lq-ctl">
+              {periodRow}
+              <div className="lq-ctl-r lq-ctl-z">
+                {/* «±%» — в подписи, на кнопках только числа: семь кнопок «±500%»
+                    не влезали в 320 точек, и последняя уезжала за край. */}
+                <span className="lq-ctl-k">{t(lang, "lq_ctl_zoom")}</span>
+                <Segmented<Span>
+                  value={span}
+                  onChange={(v) => { setSpan(v); setSel(null); }}
+                  tight
+                  options={SPANS.map((s) => ({ id: s, label: s }))}
+                />
+              </div>
+            </div>
             <div className="lq-zone-h up">
               <span style={{ maxWidth: `calc(${(g.CX0 / g.W) * 100}% - 12px)` }}>▲ {t(lang, "lq_zone_up")}</span>
               <small style={{ right: `${(AXIS / g.W) * 100}%` }}>
@@ -894,26 +909,6 @@ export function LiqMapScreen() {
             ) : null}
           </Card>
 
-          <SectionTitle help={["lq_how_1", "lq_how_2", "lq_how_4"]}>{t(lang, "lq_cum_title")}</SectionTitle>
-          <Card>
-            <div className="lq-div-h">
-              <span className="dn">▼ {t(lang, "lq_longs")}</span>
-              <span className="up">{t(lang, "lq_shorts")} ▲</span>
-            </div>
-            {["2", "5", "10"].map((k) => {
-              const c = reply.cum[k] ?? { L: 0, S: 0 };
-              return (
-                <div key={k} className="lq-div">
-                  <span className="lq-div-v">{usd(c.L)}</span>
-                  <div className="lq-div-b l"><i style={{ width: `${(c.L / cumMax) * 100}%` }} /></div>
-                  <b>±{k}%</b>
-                  <div className="lq-div-b r"><i style={{ width: `${(c.S / cumMax) * 100}%` }} /></div>
-                  <span className="lq-div-v">{usd(c.S)}</span>
-                </div>
-              );
-            })}
-          </Card>
-
           {top.up.length || top.dn.length ? (
             <>
               <SectionTitle help={["lq_how_5", "lq_how_7"]}>{t(lang, "lq_top")}</SectionTitle>
@@ -937,6 +932,29 @@ export function LiqMapScreen() {
             </>
           ) : null}
 
+          <SectionTitle help={["lq_how_1", "lq_how_2", "lq_how_4"]}>{t(lang, "lq_cum_title")}</SectionTitle>
+          <Card>
+            <div className="lq-div-h">
+              <span className="dn">▼ {t(lang, "lq_longs")}</span>
+              <span className="up">{t(lang, "lq_shorts")} ▲</span>
+            </div>
+            {["2", "5", "10"].map((k) => {
+              const c = reply.cum[k] ?? { L: 0, S: 0 };
+              return (
+                <div key={k} className="lq-div">
+                  <span className="lq-div-v">{usd(c.L)}</span>
+                  <div className="lq-div-b l"><i style={{ width: `${(c.L / cumMax) * 100}%` }} /></div>
+                  <b>±{k}%</b>
+                  <div className="lq-div-b r"><i style={{ width: `${(c.S / cumMax) * 100}%` }} /></div>
+                  <span className="lq-div-v">{usd(c.S)}</span>
+                </div>
+              );
+            })}
+          </Card>
+
+          {reply.seen && reply.oi ? (
+            <p className="lq-seen lq-note">{t(lang, "lq_seen", { a: usd(reply.seen), p: pct((reply.seen / reply.oi) * 100, 1, false) })}</p>
+          ) : null}
           <details className="lq-how">
             <summary>{t(lang, "lq_how")}</summary>
             <ul>

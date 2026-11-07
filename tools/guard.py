@@ -1907,6 +1907,16 @@ say("карта ликвидаций: ревизия — снимки на на�
     and "PX_MOVE = 0.3" in _lmpy and "_start(key)" in _lmpy.split("def _served(")[1].split("\ndef ")[0]
     and "_st.pre_retry[sym] = t" in _lmpy)
 
+# Экран карты: период и масштаб — одним блоком прямо над картой (раньше их
+# разделял экран), плечи — под картой, крупнейшие уровни — перед итогами,
+# пояснения — внизу; на кнопках масштаба только числа — семь влезают в 320 точек.
+_lqs = read(f"{APP}/src/screens/LiqMapScreen.tsx")
+say("карта ликвидаций: период и масштаб рядом над картой, уровни перед итогами, пояснения внизу",
+    _lqs.find('className="lq-ctl-r lq-ctl-p"') < _lqs.find('className="lq-ctl-r lq-ctl-z"') < _lqs.find('className="lq-plot"')
+    < _lqs.find('className="lq-legend"') < _lqs.find('t(lang, "lq_top")') < _lqs.find('t(lang, "lq_cum_title")')
+    < _lqs.find('className="lq-seen lq-note"') < _lqs.find('className="lq-how"')
+    and "label: s }))" in _lqs)
+
 # «Добавить кошелёк» больше не отвечает общей ошибкой: причина отказа доходит
 # до экрана («уже добавлен» — обновить список), а норма запросов считается
 # на человека — на Cloud Run адрес у всех один, и норма делилась на всех.

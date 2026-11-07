@@ -1026,6 +1026,8 @@ export const tr: Dict = {
   lq_bias_eq: "Fiyatın üstünde ve altında tasfiyeler aşağı yukarı eşit",
   lq_bias_up: "Fiyatın üstünde altına göre {x} kat fazla tasfiye var",
   lq_bias_up_only: "Fiyatın yakınında tasfiye yalnızca üstte var",
+  lq_ctl_period: "Dönem",
+  lq_ctl_zoom: "Yakınlaştırma, ±%",
   lq_cum_axis: "Toplam",
   lq_cum_title: "Fiyata yakın likidasyonlar",
   lq_err: "Harita yüklenemedi — tekrar dene.",

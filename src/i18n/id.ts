@@ -1026,6 +1026,8 @@ export const id: Dict = {
   lq_bias_eq: "Likuidasi di atas dan di bawah harga kurang lebih seimbang",
   lq_bias_up: "Likuidasi di atas harga {x} kali lebih banyak daripada di bawah",
   lq_bias_up_only: "Di dekat harga, likuidasi hanya ada di atas",
+  lq_ctl_period: "Periode",
+  lq_ctl_zoom: "Zoom, ±%",
   lq_cum_axis: "Total",
   lq_cum_title: "Likuidasi dekat harga",
   lq_err: "Gagal memuat peta — coba lagi.",

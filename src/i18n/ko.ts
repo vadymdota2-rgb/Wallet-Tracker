@@ -1026,6 +1026,8 @@ export const ko: Dict = {
   lq_bias_eq: "가격 위아래 청산 규모가 거의 비슷합니다",
   lq_bias_up: "가격 위쪽 청산이 아래쪽보다 {x}배 많습니다",
   lq_bias_up_only: "가격 근처의 청산은 위쪽에만 있습니다",
+  lq_ctl_period: "기간",
+  lq_ctl_zoom: "확대, ±%",
   lq_cum_axis: "누적",
   lq_cum_title: "가격 근처 청산",
   lq_err: "지도를 불러오지 못했습니다. 다시 시도하세요.",

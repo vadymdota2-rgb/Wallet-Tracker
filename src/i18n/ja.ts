@@ -1026,6 +1026,8 @@ export const ja: Dict = {
   lq_bias_eq: "価格の上下で清算はほぼ同じ",
   lq_bias_up: "価格より上の清算は下の{x}倍",
   lq_bias_up_only: "価格付近の清算は上側だけです",
+  lq_ctl_period: "期間",
+  lq_ctl_zoom: "表示範囲 ±%",
   lq_cum_axis: "累計",
   lq_cum_title: "価格付近の清算",
   lq_err: "マップを読み込めませんでした。もう一度お試しください。",

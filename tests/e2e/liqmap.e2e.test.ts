@@ -193,17 +193,50 @@ describe("Карта ликвидаций", () => {
     await ctx.close();
   });
 
+  test("порядок экрана: период и масштаб рядом прямо над картой, плечи под ней, уровни перед итогами, пояснения внизу", async () => {
+    const { ctx, page, errors } = await open({ width: 360 });
+    await ready(page);
+    const box = async (sel: string) => (await page.locator(sel).first().boundingBox())!;
+    const order = [".lq-hero", ".lq-ctl-p", ".lq-ctl-z", ".lq-plot", ".lq-legend", ".lq-top", ".lq-div", ".lq-seen", ".lq-how", ".lq-src"];
+    const ys: number[] = [];
+    for (const sel of order) ys.push((await box(sel)).y);
+    for (let i = 1; i < ys.length; i++) assert.ok(ys[i]! > ys[i - 1]!, `${order[i - 1]} → ${order[i]}: ${ys.join(", ")}`);
+    const p = await box(".lq-ctl-p");
+    const z = await box(".lq-ctl-z");
+    const plot = await box(".lq-plot");
+    assert.ok(z.y - (p.y + p.height) < 20, "масштаб — сразу под периодом");
+    // Между ними — только заголовок зоны шортов над картой.
+    assert.ok(plot.y - (z.y + z.height) < 80, `карта — сразу под масштабом: ${plot.y - (z.y + z.height)}`);
+    assert.deepEqual(await overflow(page), []);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("нет данных — период всё равно можно сменить, масштаба без карты нет", async () => {
+    const { ctx, page, errors } = await open({ replies: [{ ok: false, error: "no_data" }] });
+    await page.waitForSelector(".lq-ctl-p .seg button");
+    assert.equal(await page.locator(".lq-ctl-p .seg button").count(), 6);
+    assert.equal(await page.locator(".lq-ctl-z").count(), 0);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
   test("шесть окон — от суток до года: свой запрос, своя карта, кнопки в одну строку на 320 px", async () => {
     const wins = [["7d", "big_win_7d"], ["30d", "big_win_30d"], ["90d", "lq_win_90d"], ["180d", "lq_win_180d"],
       ["365d", "lq_win_365d"], ["1d", "big_win_24h"]] as const;
     const { ctx, page, errors, asked } = await open({ width: 320 });
     await ready(page);
-    const seg = page.locator(".lq-ctl .seg button");
+    const seg = page.locator(".lq-ctl-p .seg button");
     assert.equal(await seg.count(), 6);
+    // Оба переключателя влезают целиком — без прокрутки вбок.
+    for (const sel of [".lq-ctl-p .seg", ".lq-ctl-z .seg"]) {
+      const [sw, cw] = await page.locator(sel).evaluate((el) => [el.scrollWidth, el.clientWidth]);
+      assert.ok(sw! <= cw!, `${sel}: ${sw} > ${cw}`);
+    }
     const tops = await seg.evaluateAll((els) => [...new Set(els.map((el) => Math.round(el.getBoundingClientRect().top)))]);
     assert.equal(tops.length, 1, String(tops));
     for (const [rng, key] of wins) {
-      await page.locator(".lq-ctl .seg button", { hasText: I18N[key]!["ru"]! }).click();
+      await page.locator(".lq-ctl-p .seg button", { hasText: I18N[key]!["ru"]! }).click();
       await page.waitForFunction((n) => document.querySelectorAll(".lq-svg .lq-row").length > 0 && n, asked.length);
       await page.waitForTimeout(250);
       assert.ok(asked.includes(rng), `${rng}: ${asked}`);
@@ -218,12 +251,12 @@ describe("Карта ликвидаций", () => {
   test("приближение ±5 … ±500 %: кнопки в одну строку, крупнейшие уровни — в видимом окне", async () => {
     const { ctx, page, errors } = await open({ width: 320, replies: [FIX["365d"]] });
     await ready(page);
-    const seg = page.locator(".lq-plot").locator("xpath=..").locator(".seg button");
-    assert.deepEqual((await seg.allInnerTexts()).map(sp), ["±5%", "±10%", "±15%", "±30%", "±50%", "±100%", "±500%"]);
+    const seg = page.locator(".lq-ctl-z .seg button");
+    assert.deepEqual((await seg.allInnerTexts()).map(sp), ["5", "10", "15", "30", "50", "100", "500"]);
     const tops = await seg.evaluateAll((els) => [...new Set(els.map((el) => Math.round(el.getBoundingClientRect().top)))]);
     assert.equal(tops.length, 1, String(tops));
     for (const span of [5, 30, 100, 500]) {
-      await seg.filter({ hasText: new RegExp(`^±${span}%$`) }).click();
+      await seg.filter({ hasText: new RegExp(`^${span}$`) }).click();
       await page.waitForTimeout(200);
       for (const t of await page.locator(".lq-top-c button small").allInnerTexts()) {
         assert.ok(Math.abs(pctOf(t)) <= span, `±${span}: ${t}`);
@@ -239,13 +272,13 @@ describe("Карта ликвидаций", () => {
   test("масштаб меняет ширину полосы — под картой сказано, сколько цены в полосе и докуда «Накоплено»", async () => {
     const { ctx, page, errors } = await open({ width: 320 });
     await ready(page);
-    const seg = page.locator(".lq-plot").locator("xpath=..").locator(".seg button");
+    const seg = page.locator(".lq-ctl-z .seg button");
     const note = page.locator(".lq-rows");
     // Сервер — корзины по 0,25 %, экран — ~60 полос: при ±100 % в полосе 13 корзин — 3,25 %,
     // при ±500 % (от нуля до шести цен) — 40 корзин, 10 %.
     const want: Record<number, string> = { 5: "0,25%", 30: "1%", 100: "3,2%", 500: "10%" };
     for (const span of [5, 30, 100, 500]) {
-      await seg.filter({ hasText: new RegExp(`^±${span}%$`) }).click();
+      await seg.filter({ hasText: new RegExp(`^${span}$`) }).click();
       await page.waitForTimeout(150);
       const text = sp(await note.innerText());
       assert.ok(text.includes(`за ${want[span]} цены`), `±${span}: ${text}`);

@@ -1025,6 +1025,8 @@ export const en = {
   lq_bias_eq: "Liquidations above and below the price are roughly even",
   lq_bias_up: "{x}× more liquidations above the price than below",
   lq_bias_up_only: "Near the price, liquidations are only above it",
+  lq_ctl_period: "Period",
+  lq_ctl_zoom: "Zoom, ±%",
   lq_cum_axis: "Total",
   lq_cum_title: "Liquidations near the price",
   lq_err: "Couldn't load the map — try again.",

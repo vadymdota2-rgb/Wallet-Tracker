@@ -1026,6 +1026,8 @@ export const pl: Dict = {
   lq_bias_eq: "Likwidacji nad i pod ceną jest mniej więcej po równo",
   lq_bias_up: "Nad ceną jest {x} razy więcej likwidacji niż pod nią",
   lq_bias_up_only: "Blisko ceny likwidacje są tylko nad nią",
+  lq_ctl_period: "Okres",
+  lq_ctl_zoom: "Powiększenie, ±%",
   lq_cum_axis: "Suma",
   lq_cum_title: "Likwidacje blisko ceny",
   lq_err: "Nie udało się wczytać mapy — spróbuj ponownie.",

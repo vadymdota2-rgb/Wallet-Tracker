@@ -1026,6 +1026,8 @@ export const pt: Dict = {
   lq_bias_eq: "As liquidações acima e abaixo do preço estão quase iguais",
   lq_bias_up: "Há {x} vezes mais liquidações acima do preço do que abaixo",
   lq_bias_up_only: "Perto do preço só há liquidações acima",
+  lq_ctl_period: "Período",
+  lq_ctl_zoom: "Zoom, ±%",
   lq_cum_axis: "Total",
   lq_cum_title: "Liquidações perto do preço",
   lq_err: "Não foi possível carregar o mapa — tente de novo.",

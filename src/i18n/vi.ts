@@ -1026,6 +1026,8 @@ export const vi: Dict = {
   lq_bias_eq: "Thanh lý phía trên và dưới giá gần như ngang nhau",
   lq_bias_up: "Thanh lý phía trên giá nhiều gấp {x} lần phía dưới",
   lq_bias_up_only: "Gần giá, thanh lý chỉ nằm phía trên",
+  lq_ctl_period: "Khoảng thời gian",
+  lq_ctl_zoom: "Thu phóng, ±%",
   lq_cum_axis: "Cộng dồn",
   lq_cum_title: "Thanh lý gần giá",
   lq_err: "Không tải được bản đồ — thử lại.",

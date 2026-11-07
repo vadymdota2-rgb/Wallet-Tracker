@@ -2471,7 +2471,11 @@ html.ch-full .screen.full {
 .lq-more { width: 100%; padding: 10px; color: var(--glow); font-weight: 600; font-size: 13px; }
 .lq-none { margin: 0; padding: 12px; color: var(--dim); font-size: 13px; }
 .lq-none button { color: var(--glow); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
-.lq-ctl { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-bottom: 12px; }
+.lq-ctl { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-bottom: 12px; }
+/* Строка управления картой: подпись над переключателем (на 320 точках рядом не помещается). */
+.lq-ctl-r { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; }
+.lq-ctl-k { color: var(--dim); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.lq-seen.lq-note { margin: 4px 2px 12px; }
 
 /* Шапка: монета, цена, путь цены за окно. */
 .lq-hero { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }

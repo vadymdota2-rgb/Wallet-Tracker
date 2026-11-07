@@ -1026,6 +1026,8 @@ export const fr: Dict = {
   lq_bias_eq: "Les liquidations au-dessus et en dessous du prix sont à peu près égales",
   lq_bias_up: "{x} fois plus de liquidations au-dessus du prix qu'en dessous",
   lq_bias_up_only: "Près du prix, il n'y a de liquidations qu'au-dessus",
+  lq_ctl_period: "Période",
+  lq_ctl_zoom: "Zoom, ±%",
   lq_cum_axis: "Cumul",
   lq_cum_title: "Liquidations près du prix",
   lq_err: "Impossible de charger la carte — réessayez.",
