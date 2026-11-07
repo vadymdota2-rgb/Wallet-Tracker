@@ -22,10 +22,11 @@ grep -c 'float(f"{v:.9g}")' wt_liqmap.py
 grep -c '("BitMEX", _snap_bitmex), ("ApeX", _snap_apex)' whale_api.py
 grep -c "def _stock_base(s: str) -> str:" whale_api.py
 grep -c "since=ref\[0\]\[0\])" wt_liqmap.py
+grep -c "def _bybit_oi(r: dict) -> float:" whale_api.py
 ```
 Ожидаю: коммит «Карта ликвидаций: калибровка по настоящим ликвидациям…»
-или новее, служба active и запущена ПОСЛЕ этого коммита, все четырнадцать
-счётчиков — 1 (коммит «…окно — позиции, открытые за период» или новее). Если выкат не пришёл — так и напиши и остальное не делай.
+или новее, служба active и запущена ПОСЛЕ этого коммита, все пятнадцать
+счётчиков — 1 (коммит «…Bybit — интерес с одной стороны» или новее). Если выкат не пришёл — так и напиши и остальное не делай.
 
 ## 2. BTC по всем шести окнам — та же сборка, что у службы (отдельным процессом)
 ```
@@ -212,7 +213,8 @@ for sym in ("BTC", "ETH", "SOL", "DOGE"):
     b_now = float(fu.get("openInterest", 0)) * float(fm.get("markPrice", 0)) + float(cm.get("openInterest", 0) or 0) * size
     lin = (((g(f"https://api.bybit.com/v5/market/tickers?category=linear&symbol={sym}USDT") or {}).get("result") or {}).get("list") or [{}])[0]
     inv = (((g(f"https://api.bybit.com/v5/market/tickers?category=inverse&symbol={sym}USD") or {}).get("result") or {}).get("list") or [{}])[0]
-    y_now = float(lin.get("openInterestValue") or 0) + float(inv.get("openInterest") or 0)
+    # Одна сторона, как у всех бирж (openInterest у Bybit — обе стороны, пункт 9).
+    y_now = float(lin.get("singleOpenInterestValue") or 0) + float(inv.get("singleOpenInterest") or 0)
     for name, rows, ref in (("Binance", rb, b_now), ("Bybit", ry, y_now)):
         ours = rows[-1][4] if rows else 0
         print(f"{sym:5}{name:8} в карте ${ours / 1e6:9.1f}M | на бирже ${ref / 1e6:9.1f}M | отношение {ours / ref if ref else float('nan'):.3f}")

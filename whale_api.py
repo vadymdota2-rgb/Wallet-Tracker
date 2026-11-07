@@ -10707,6 +10707,15 @@ def _liq_gate(sym: str, period: str, n: int) -> list | None:
 _LIQ_SEC = {"15m": 900, "1h": 3600, "4h": 14400, "1d": 86400}
 
 
+def _bybit_oi(r: dict) -> float:
+    """Открытый интерес Bybit с одной стороны, как у всех бирж. Поле
+    openInterest у Bybit — сумма обеих сторон (ровно вдвое больше; сверено
+    на сервере по USDT- и инверсным контрактам, сейчас и в истории); с июня
+    2026 рядом есть singleOpenInterest — берём его, а нет — половину."""
+    one = _fnum(r.get("singleOpenInterest"))
+    return one if one > 0 else _fnum(r.get("openInterest")) / 2
+
+
 def _liq_bybit(sym: str, period: str, n: int) -> list | None:
     s = f"{sym}USDT"
     oi_iv = {"15m": "15min", "1h": "1h", "4h": "4h", "1d": "1d"}[period]
@@ -10726,8 +10735,8 @@ def _liq_bybit(sym: str, period: str, n: int) -> list | None:
                 break
         return got
     oi = pages("linear", s)
-    # Inverse (BTCUSD): у BTC — ещё ~$0,8 млрд; интерес там уже в долларах.
-    inv = {int(_fnum(r.get("timestamp"))) // 1000: _fnum(r.get("openInterest")) for r in pages("inverse", f"{sym}USD")}
+    # Inverse (BTCUSD): у BTC — ещё ~$0,4 млрд; интерес там уже в долларах.
+    inv = {int(_fnum(r.get("timestamp"))) // 1000: _bybit_oi(r) for r in pages("inverse", f"{sym}USD")}
     kl = (get_json(f"{base}/kline?category=linear&symbol={s}&interval={kl_iv}&limit={min(n, 1000)}", 15) or {}).get("result", {}).get("list") or []
     rt = (get_json(f"{base}/account-ratio?category=linear&symbol={s}&period={oi_iv}&limit={min(n, 500)}", 15) or {}).get("result", {}).get("list") or []
     if not oi or not kl:
@@ -10739,7 +10748,7 @@ def _liq_bybit(sym: str, period: str, n: int) -> list | None:
     for r in oi:
         t = int(_fnum(r.get("timestamp"))) // 1000
         if k := kmap.get(t):
-            usd[t] = _fnum(r.get("openInterest")) * float(k[4])  # у USDT-контракта интерес — в монетах
+            usd[t] = _bybit_oi(r) * float(k[4])  # у USDT-контракта интерес — в монетах
     usd = _glue_inverse(usd, inv)
     out = []
     for t, v in sorted(usd.items()):

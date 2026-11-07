@@ -346,10 +346,11 @@ class InverseTest(unittest.TestCase):
             if "cursor=" in url:
                 return {"result": {"list": []}}
             if "open-interest?category=linear" in url:
-                return {"result": {"list": [{"timestamp": str(t * 1000), "openInterest": "10"} for t in self.TS]}}
+                # Как отвечает Bybit: openInterest — обе стороны, single… — одна.
+                return {"result": {"list": [{"timestamp": str(t * 1000), "openInterest": "20", "singleOpenInterest": "10"} for t in self.TS]}}
             if "open-interest?category=inverse" in url:
                 self.assertIn("symbol=BTCUSD&", url)
-                return {"result": {"list": [{"timestamp": str(t * 1000), "openInterest": "300"} for t in inv_ts]}}  # в долларах
+                return {"result": {"list": [{"timestamp": str(t * 1000), "openInterest": "600", "singleOpenInterest": "300"} for t in inv_ts]}}  # в долларах
             if "kline" in url:
                 return {"result": {"list": [[str(t * 1000), "50", "60", "40", "55"] for t in self.TS]}}
             if "account-ratio" in url:
@@ -363,6 +364,14 @@ class InverseTest(unittest.TestCase):
         self.assertEqual(rows[0], (900, 60.0, 40.0, 55.0, 850.0, 0.6))  # 10 монет × 55 + $300
         self.assertEqual([r[4] for r in self.bybit((900,))], [550.0] * 3)
         self.assertEqual([r[4] for r in self.bybit(())], [550.0] * 3)
+
+    def test_bybit_open_interest_is_one_side(self):
+        # Сервер: singleOpenInterest ровно вдвое меньше openInterest — и сейчас,
+        # и в истории, у USDT- и у инверсных контрактов.
+        self.assertEqual(api._bybit_oi({"openInterest": "70608.123", "singleOpenInterest": "35304.062"}), 35304.062)
+        self.assertEqual(api._bybit_oi({"openInterest": "100"}), 50.0)  # поля нет — половина
+        self.assertEqual(api._bybit_oi({"openInterest": "100", "singleOpenInterest": "0"}), 50.0)
+        self.assertEqual(api._bybit_oi({}), 0.0)
 
     def test_glue(self):
         self.assertEqual(api._glue_inverse({1: 1.0, 2: 1.0}, {1: 5.0, 2: 5.0}), {1: 6.0, 2: 6.0})
