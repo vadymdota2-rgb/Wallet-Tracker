@@ -10831,8 +10831,11 @@ def _liq_kraken(sym: str, period: str, n: int) -> list | None:
         if not q:
             continue
         o, vol = _fnum(k.get("open")), _fnum(k.get("volume"))
-        # Разница покупок и продаж за шаг (в монетах) против объёма: доля покупок.
-        bs = min(1.0, max(0.0, 0.5 + diff.get(t, 0.0) / (2 * vol))) if vol > 0 else 0.5
+        # «Aggressor differential» Kraken — продажи агрессоров минус покупки
+        # (в монетах): на растущих свечах он отрицательный (корреляция с ходом
+        # свечи −0,2…−0,3 на BTC, ETH, SOL, XRP; у доли покупок OKX — +0,4).
+        # Раньше знак брался наоборот, и новые лонги Kraken шли в шорты.
+        bs = min(1.0, max(0.0, 0.5 - diff.get(t, 0.0) / (2 * vol))) if vol > 0 else 0.5
         out.append((t, _fnum(k.get("high")), _fnum(k.get("low")), _fnum(k.get("close")), q * o, bs))
     return sorted(out) or None
 
@@ -11898,6 +11901,27 @@ def _liq_scale(px: float, mid: float) -> float:
     return 10.0 ** k if 1 <= abs(k) <= 6 and abs(mid / (px * 10.0 ** k) - 1) <= 0.03 else 0.0
 
 
+# Биржи с настоящей долей агрессивных покупок за свечу (по ней модель делит
+# новые позиции на лонги и шорты). Остальные её не отдают: Bybit — доля
+# счетов в лонге, HTX — позиции крупных трейдеров (с ходом свечи не связана
+# никак: корреляция ~0 против +0,4 у OKX), dYdX — ничего. Им — рыночная доля:
+# средняя по этим биржам на той же свече, по интересу.
+LIQ_TAKER = frozenset({"Binance", "OKX", "Gate", "Kraken"})
+
+
+def _liq_share(got: dict) -> dict:
+    """Рыночная доля агрессивных покупок по свечам: {время: доля}."""
+    w: dict = {}
+    for name, rows in got.items():
+        if name in LIQ_TAKER:
+            for t, _h, _lo, _c, oi, bs in rows:
+                if oi > 0:
+                    a = w.setdefault(t, [0.0, 0.0])
+                    a[0] += oi * bs
+                    a[1] += oi
+    return {t: a[0] / a[1] for t, a in w.items() if a[1] > 0}
+
+
 def _liq_gather(sym: str, period: str, n: int) -> tuple[dict, list | None]:
     """Ряды бирж за окно: (t, макс, мин, закрытие, интерес $, доля покупок).
     Биржи со своей историей — запросом, остальные — из снимков liq_oi.db,
@@ -11939,6 +11963,14 @@ def _liq_gather(sym: str, period: str, n: int) -> tuple[dict, list | None]:
         # Опора на своих же свечах не меняется — её не исключаем.
         for name in [k for k, r in got.items() if _liq_thin(r, ref)]:
             got[name] = _liq_on_ref(got[name], ref)
+        # Доля покупок — рыночная у бирж, что своей не отдают (и у снимков —
+        # они берут её у опоры, а опорой бывает Bybit или HTX).
+        mk = _liq_share(got)
+        for name in [k for k in got if k not in LIQ_TAKER]:  # без бирж с долей mk пуст — свои
+            was_ref = got[name] is ref
+            got[name] = [(t, h, lo, c, oi, mk.get(t, bs)) for t, h, lo, c, oi, bs in got[name]]
+            if was_ref:
+                ref = got[name]
         try:
             # Снимки — только у бирж без своей истории: Kraken есть и там и
             # там, и снимок раз в 15 минут не должен заменять его настоящий ряд.

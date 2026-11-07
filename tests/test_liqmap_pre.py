@@ -278,15 +278,24 @@ class KrakenTest(unittest.TestCase):
               {"time": 2_700_000, "open": "105", "high": "106", "low": "104", "close": "105", "volume": "4"},
               {"time": 3_600_000, "open": "1", "high": "1", "low": "1", "close": "1", "volume": "1"}]
         oi = {"timestamp": [900, 1800, 2700], "data": [["2", "3", "1", "2.5"], ["3", "3", "3", "3"], ["4", "4", "4", "4"]]}
-        ad = {"timestamp": [900, 2700], "data": ["4", "100"]}
+        ad = {"timestamp": [900, 2700], "data": ["-4", "-100"]}  # продажи минус покупки: покупали больше
         with self.reply(kl, oi, ad) as get:
             rows = api._liq_kraken("BTC", "15m", 3)
         self.assertIn("PF_XBTUSD", get.call_args_list[0].args[0])
         self.assertEqual(rows, [
-            (900, 110.0, 90.0, 105.0, 200.0, 0.7),  # интерес — монеты на начало × открытие; покупки 0,5 + 4/20
+            (900, 110.0, 90.0, 105.0, 200.0, 0.7),  # интерес — монеты на начало × открытие; покупки 0,5 − (−4)/20
             (1800, 106.0, 104.0, 105.0, 315.0, 0.5),  # без объёма — поровну
             (2700, 106.0, 104.0, 105.0, 420.0, 1.0),  # доля не больше единицы
         ])  # свеча без интереса — не строка
+
+    def test_differential_is_sells_minus_buys(self):
+        # Kraken: на растущей свече «aggressor differential» отрицательный.
+        kl = [{"time": 900_000, "open": "100", "high": "110", "low": "99", "close": "109", "volume": "10"},
+              {"time": 1_800_000, "open": "109", "high": "110", "low": "95", "close": "96", "volume": "10"}]
+        oi = {"timestamp": [900, 1800], "data": [["2"], ["2"]]}
+        with self.reply(kl, oi, {"timestamp": [900, 1800], "data": ["-6", "6"]}):
+            rows = api._liq_kraken("BTC", "15m", 2)
+        self.assertEqual([r[5] for r in rows], [0.8, 0.2])  # рост — покупали, падение — продавали
 
     def test_alt_symbol_and_bad_replies(self):
         with self.reply([], {"timestamp": [], "data": []}, None) as get:
@@ -949,13 +958,14 @@ class GatherTest(unittest.TestCase):
         thin = [(i * 900, 1.015, 1.015, 1.015, 5.0 + i, 0.3) for i in range(20)]
         got, ref = self.gather_thin(thin)
         self.assertEqual([r[1:4] for r in got["dYdX"]], [r[1:4] for r in ref])
-        self.assertEqual([r[4:] for r in got["dYdX"]], [r[4:] for r in thin])  # интерес и доля покупок — свои
+        self.assertEqual([r[4] for r in got["dYdX"]], [r[4] for r in thin])  # интерес — свой
+        self.assertTrue(all(r[5] == 0.6 for r in got["dYdX"]))  # доля покупок — рыночная (своей у dYdX нет)
         self.assertEqual(got["OKX"], ref)
 
     def test_live_market_keeps_its_own_candles(self):
         live = [(i * 900, 1.012 + 0.001 * i, 0.991, 1.0005 + 0.001 * i, 5.0, 0.3) for i in range(20)]
         got, _ = self.gather_thin(live)
-        self.assertEqual(got["dYdX"], live)
+        self.assertEqual([r[:5] for r in got["dYdX"]], [r[:5] for r in live])
 
     def test_thin_by_empty_candles_or_by_distance(self):
         ref = [(i * 900, 1.01, 0.99, 1.0, 100.0, 0.5) for i in range(20)]
@@ -991,6 +1001,34 @@ class GatherTest(unittest.TestCase):
         self.assertEqual(api._liq_scale(130.0, 1372.0), 0.0)  # ×10,55 — не ровно 10ᵏ
         self.assertEqual(api._liq_scale(1.372e-5, 1372.0), 0.0)  # дальше 10⁶ — не берём
         self.assertEqual(api._liq_scale(0.0, 1372.0), 0.0)
+
+    def test_exchanges_without_taker_share_get_the_market_one(self):
+        # Bybit, HTX, dYdX своей доли агрессивных покупок не отдают — им
+        # рыночная (по интересу) у Binance/OKX/Gate/Kraken; снимки — через опору.
+        ts = range(0, 9000, 900)
+        okx = [(t, 101.0, 99.0, 100.0, 300.0, 0.8) for t in ts]
+        gate = [(t, 101.0, 99.0, 100.0, 100.0, 0.4) for t in ts]
+        htx = [(t, 101.0, 99.0, 100.0, 900.0, 0.2) for t in ts]  # больше всех интереса — опора
+        bybit = [(t, 101.0, 99.0, 100.0, 50.0, 0.65) for t in ts]
+        src = (("OKX", lambda s, p, n: okx), ("Gate", lambda s, p, n: gate), ("HTX", lambda s, p, n: htx), ("Bybit", lambda s, p, n: bybit))
+        seen = {}
+
+        def sampled(sym, period, n, ref, px):
+            seen["ref"] = ref
+            return {}
+        with mock.patch.object(api, "LIQ_SOURCES", src), mock.patch.object(api, "_liq_sampled", side_effect=sampled):
+            got, ref = api._liq_gather("BTC", "15m", 10)
+        self.assertEqual({r[5] for r in got["OKX"]}, {0.8})  # свои — как были
+        self.assertEqual({r[5] for r in got["Gate"]}, {0.4})
+        for name in ("HTX", "Bybit"):
+            self.assertTrue(all(abs(r[5] - 0.7) < 1e-12 for r in got[name]), name)  # (300·0,8 + 100·0,4) / 400
+        self.assertIs(ref, got["HTX"])
+        self.assertIs(seen["ref"], ref)
+        # Нет ни одной биржи с настоящей долей — свои остаются.
+        with mock.patch.object(api, "LIQ_SOURCES", (("HTX", lambda s, p, n: htx),)), mock.patch.object(api, "_liq_sampled", return_value={}):
+            got, _ = api._liq_gather("BTC", "15m", 10)
+        self.assertEqual({r[5] for r in got["HTX"]}, {0.2})
+        self.assertEqual(api.LIQ_TAKER, {"Binance", "OKX", "Gate", "Kraken"})
 
     def test_long_history_gets_a_longer_budget(self):
         seen = []

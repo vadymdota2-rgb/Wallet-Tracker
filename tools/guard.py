@@ -1917,6 +1917,14 @@ say("карта ликвидаций: период и масштаб рядом 
     < _lqs.find('className="lq-seen lq-note"') < _lqs.find('className="lq-how"')
     and "label: s }))" in _lqs)
 
+# Доля агрессивных покупок: у Kraken «aggressor differential» — продажи минус
+# покупки (знак был наоборот); Bybit, HTX, dYdX своей не отдают — им рыночная
+# по Binance/OKX/Gate/Kraken, снимкам — через опору.
+say("карта ликвидаций: доля покупок — знак Kraken, рыночная у Bybit/HTX/dYdX",
+    "0.5 - diff.get(t, 0.0) / (2 * vol)" in pybody(api, "def _liq_kraken(")
+    and 'LIQ_TAKER = frozenset({"Binance", "OKX", "Gate", "Kraken"})' in api
+    and "mk = _liq_share(got)" in pybody(api, "def _liq_gather("))
+
 # «Добавить кошелёк» больше не отвечает общей ошибкой: причина отказа доходит
 # до экрана («уже добавлен» — обновить список), а норма запросов считается
 # на человека — на Cloud Run адрес у всех один, и норма делилась на всех.
