@@ -10844,6 +10844,13 @@ LIQ_OI_MIN = 50_000
 LIQ_OI_KEEP = 370 * 86400  # дольше года снимки не нужны ни одному окну
 
 
+def _liq_oi_ro() -> sqlite3.Connection:
+    """База снимков только на чтение: сборка карты, список монет и копилка
+    в отдельном процессе ничего не пишут и таблиц не создают. Базы нет —
+    sqlite3.Error, как и при любом сбое чтения."""
+    return sqlite3.connect(f"file:{LIQ_OI_DB}?mode=ro", uri=True, timeout=8, check_same_thread=False)
+
+
 def _liq_oi_con() -> sqlite3.Connection:
     con = sqlite3.connect(LIQ_OI_DB, timeout=8, check_same_thread=False)
     con.execute("CREATE TABLE IF NOT EXISTS oi_snap (ex TEXT NOT NULL, coin TEXT NOT NULL, t INTEGER NOT NULL, "
@@ -11366,7 +11373,7 @@ def _liq_sampled(sym: str, period: str, n: int, ref: list, px: float) -> dict:
     снимке дальше 3% от опорной, не берём: под тем же тикером у неё другая
     монета."""
     sec = _LIQ_SEC[period]
-    con = _liq_oi_con()
+    con = _liq_oi_ro()
     try:
         snaps = con.execute("SELECT ex, t, oi, px FROM oi_snap WHERE coin=? AND t >= ? ORDER BY ex, t",
                             (sym, now() - sec * (n + 2))).fetchall()
@@ -11532,7 +11539,7 @@ def _liq_coins_build() -> dict:
         list(pool.map(safe, (binance, okx, bybit, gate, htx, hyper, dydx)))
     # Биржи со своей историей — меткой у монеты, когда точек уже хватает.
     try:
-        con = _liq_oi_con()
+        con = _liq_oi_ro()
         try:
             for coin, name in con.execute("SELECT coin, ex FROM oi_snap WHERE t >= ? GROUP BY coin, ex "
                                           "HAVING COUNT(*) >= 8", (now() - 3 * 86400,)):
@@ -11699,7 +11706,7 @@ LIQ_DAY_WRITE = False
 def _liq_day_read(sym: str, got: dict) -> dict:
     """Ряды бирж с подклеенными сохранёнными днями — только чтение."""
     try:
-        con = sqlite3.connect(f"file:{LIQ_OI_DB}?mode=ro", uri=True, timeout=8)
+        con = _liq_oi_ro()
         try:
             out = {}
             for ex, rows in got.items():

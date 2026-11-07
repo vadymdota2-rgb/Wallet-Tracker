@@ -555,6 +555,74 @@ class DayKeepTest(unittest.TestCase):
         self.assertEqual(len(got["Binance"]), 31)
 
 
+class ReadOnlyTest(unittest.TestCase):
+    """Сторож, как у проверки на сервере: отдельный процесс собирает ряды
+    бирж, снимки, копилку и список монет — и открывает боевую базу только
+    на чтение (mode=ro), ничего в ней не меняя."""
+
+    def setUp(self):
+        d = tempfile.mkdtemp()
+        self.db = os.path.join(d, "liq_oi.db")
+        for name, value in (("LIQ_OI_DB", self.db), ("LIQ_DAY_WRITE", False)):
+            patcher = mock.patch.object(api, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        con = api._liq_oi_con()  # база, как у службы: снимки Lighter по BTC
+        con.executemany("INSERT INTO oi_snap VALUES (?,?,?,?,?)",
+                        [("Lighter", "BTC", T0 + i * 900, 1e6 + i, 100.0) for i in range(-2, 60)])
+        con.commit()
+        con.close()
+
+    def test_gather_and_snapshots_only_read(self):
+        before = Path(self.db).read_bytes()
+        real = sqlite3.connect
+        opened = []
+
+        def guard(target, *a, **kw):
+            opened.append(str(target))
+            return real(target, *a, **kw)
+        rows = window(60)
+        with mock.patch.object(api, "LIQ_SOURCES", (("OKX", lambda s, p, n: rows),)), \
+             mock.patch.object(api, "_liq_hl_candles", return_value=None), \
+             mock.patch("sqlite3.connect", side_effect=guard), mock.patch.object(api, "now", return_value=T0 + 60 * 900):
+            got, _ = api._liq_gather("BTC", "15m", 60)  # окно: ряды + снимки
+            api._liq_gather("BTC", *lm.PRE)  # предыстория: копилка
+        self.assertIn("Lighter", got)  # снимки прочитаны
+        self.assertTrue(opened)
+        self.assertTrue(all("mode=ro" in u for u in opened), opened)
+        self.assertEqual(Path(self.db).read_bytes(), before)
+
+    def test_coin_list_only_reads(self):
+        before = Path(self.db).read_bytes()
+        real = sqlite3.connect
+        opened = []
+
+        def guard(target, *a, **kw):
+            opened.append(str(target))
+            return real(target, *a, **kw)
+
+        def fake(url, timeout=10.0):
+            if "fapi.binance.com/fapi/v1/ticker/24hr" in url:
+                return [{"symbol": "BTCUSDT", "quoteVolume": "5e9"}]
+            return None
+        with mock.patch.object(api, "get_json", side_effect=fake), mock.patch.object(api, "hl_post", return_value=None), \
+             mock.patch("sqlite3.connect", side_effect=guard), mock.patch.object(api, "now", return_value=T0 + 60 * 900):
+            res = api._liq_coins_build()
+        btc = next(c for c in res["coins"] if c["s"] == "BTC")
+        self.assertIn("Lighter", btc["ex"])  # метка из снимков прочитана
+        self.assertTrue(opened)
+        self.assertTrue(all("mode=ro" in u for u in opened), opened)
+        self.assertEqual(Path(self.db).read_bytes(), before)
+
+    def test_no_database_no_file(self):
+        missing = self.db + ".none"
+        with mock.patch.object(api, "LIQ_OI_DB", missing), \
+             mock.patch.object(api, "LIQ_SOURCES", (("OKX", lambda s, p, n: window(60)),)):
+            got, _ = api._liq_gather("BTC", "15m", 60)
+        self.assertEqual(sorted(got), ["OKX"])
+        self.assertFalse(os.path.exists(missing))
+
+
 class GatherTest(unittest.TestCase):
     def test_snapshot_does_not_replace_a_history_source(self):
         mine = [(i * 900, 1.0, 1.0, 1.0, 5.0, 0.5) for i in range(10)]

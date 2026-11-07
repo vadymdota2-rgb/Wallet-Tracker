@@ -851,7 +851,7 @@ say("интерес Bybit — с одной стороны (singleOpenInterest; 
     and "test_bybit_open_interest_is_one_side" in read(f"{APP}/tests/test_liqmap_pre.py"))
 say("карта ликвидаций: дневные ряды бирж копятся у себя (liq_day) — история Binance (30 дней у биржи) растёт на день в день; только при загрузке предыстории, пишет только служба (проверки и бэктесты базу только читают), идущий день не хранится, старше 1100 дней — вон",
     "def _liq_day_keep(sym: str, got: dict) -> dict:" in api and 'if period == "1d" and n > 400:' in api
-    and "LIQ_DAY_WRITE = False" in api and 'sqlite3.connect(f"file:{LIQ_OI_DB}?mode=ro", uri=True, timeout=8)' in api
+    and "LIQ_DAY_WRITE = False" in api and "def _liq_oi_ro() -> sqlite3.Connection:" in api and "con = _liq_oi_ro()" in api.split("def _liq_sampled(")[1].split("\ndef ")[0]
     and "LIQ_DAY_WRITE = True" in api.split("def wire() -> None:")[1].split("\ndef ")[0]
     and "LIQ_DAY_KEEP = 1100 * 86400" in api and "class DayKeepTest(unittest.TestCase):" in read(f"{APP}/tests/test_liqmap_pre.py"))
 say("авторские права: LICENSE «все права защищены» (Wallet Tracker) с оговоркой о сторонних лицензиях (IBM Plex — OFL, Twemoji — CC BY 4.0, данные источников); package.json — UNLICENSED; на экране «Документы» — «© 2026 Wallet Tracker» на 16 языках",
