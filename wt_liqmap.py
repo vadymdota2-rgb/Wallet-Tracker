@@ -27,6 +27,15 @@
     BTC, ETH, SOL, XRP, DOGE). Прежняя модель (сгоревшее замещалось, больше
     50–100×) завышала ликвидации в 2,5–2,8 раза; эта — почти в размер;
   - после последнего снимка — текущая свеча: её ход тоже сжигает уровни;
+  - фандинг (FUND_HOLD): платящая сторона каждый час отдаёт «цена × ставка»
+    с монеты позиции — из маржи, и её ликвидация подходит к цене: у лонгов
+    уровень растёт, у шортов — опускается, на всё, что заплачено. Цена, что
+    прошла сдвинутый уровень, ликвидировала позицию, хотя исходный не
+    задела. Ставка — средняя по биржам (set_funding), за последние
+    FUND_HOLD: кто держит дольше, обычно доливает маржу. Получающая сторона
+    не сдвигается: на многих биржах полученное идёт на баланс, а не в
+    маржу позиции. На падении интереса это не сказывается — только на
+    уровнях;
   - предыстория (PRE): позиции, открытые до начала окна, иначе были бы
     невидимы — модель видела бы лишь то, что открыто за окно (у суток —
     десятую часть интереса). Поэтому каждое окно начинается с дневных свечей
@@ -71,6 +80,10 @@ Json = Any
 Row = tuple[int, float, float, float, float, float]
 Gather = Callable[[str, str, int], tuple[dict[str, list[Row]], list[Row] | None]]
 Price = Callable[[str], float | None]
+# Фандинг монеты: [(начало периода unix с, ставка за 8 часов, доля)] — средняя
+# по биржам; положительная — лонги платят шортам.
+FundPoint = tuple[int, float]
+Funding = Callable[[str], object]
 
 # Окно карты: свеча и сколько их. Длинные окна — дневными свечами: историю
 # интереса за год биржи отдают только по дням (Binance — лишь за 30 дней,
@@ -169,6 +182,19 @@ PRE_WAIT = 50.0
 PRE_RETRY = 600.0  # предыстория не пришла — снова спросить через столько, с
 PRE_MAX = 12  # до ~7 МБ на монету (31 ряд × 1000 дней)
 ROWS_MAX = 2000
+# Фандинг: учитываем заплаченное за последние FUND_HOLD (дольше держат —
+# доливают маржу); ставка — за FUND_PERIOD; |ставка| больше FUND_MAX за 8 ч
+# — не ставка (биржи ограничивают её 2 % в час). Ставки монеты — кэш на
+# FUND_TTL, собираются в фоне; сборка ждёт их не дольше FUND_WAIT, не
+# пришли — уровни без сдвига. Не ответили — снова спросим через FUND_RETRY.
+FUND_HOLD = 7 * 86400
+FUND_PERIOD = 28800
+FUND_MAX = 0.2
+FUND_TTL = 1800.0
+FUND_STALE = 4 * 3600.0
+FUND_WAIT = 3.0
+FUND_RETRY = 300.0
+FUND_KEEP = 64
 # Правдоподобные пределы: цена монеты, интерес одной биржи ($), размах свечи.
 PX_MAX = 1e9
 OI_MAX = 1e13
@@ -297,6 +323,7 @@ class _Book:
         g_n = len(GROUPS)
         self.g_n = g_n
         self.agg = ([[0.0] * BUCKETS for _ in range(g_n)], [[0.0] * BUCKETS for _ in range(g_n)])
+        self.lo, self.step = lo, step
         self.mids = mids(lo, step)
         # Когда корзина сгорела в последний раз (номер шага): позиция пачки
         # шага s в ней жива, пока корзина не сгорела позже s.
@@ -366,13 +393,63 @@ class _Book:
         return float(sum(c[1] * (sum(x[3] for x in self.alive(c)) + c[3]) for c in self.cohorts))
 
 
-def model(rows: list[Row], lo: float, step: float,
+def clean_fund(points: object) -> list[FundPoint]:
+    """Ставки фандинга без мусора: время — целое > 0, ставка — конечное
+    число не больше FUND_MAX по модулю; по времени, без повторов."""
+    out: dict[int, float] = {}
+    for x in points if isinstance(points, (list, tuple)) else []:
+        if not isinstance(x, (list, tuple)) or len(x) != 2 or type(x[0]) is not int or x[0] <= 0:
+            continue
+        r = _num(x[1])
+        if r is not None and -FUND_MAX <= r <= FUND_MAX:
+            out[x[0]] = r
+    return [(t, out[t]) for t in sorted(out)]
+
+
+def _fund_paid(points: list[FundPoint], a: float, b: float, end: int) -> tuple[float, float]:
+    """Сколько за [a, b) заплатили лонги и шорты, доля позиции: ставка точки
+    действует до следующей, но не дольше своего периода (FUND_PERIOD) и не
+    позже end: источник отстал — старая ставка не тянется до сейчас.
+    Считаются только последние FUND_HOLD до end."""
+    a, b = max(a, end - FUND_HOLD), min(b, end)
+    long_p = short_p = 0.0
+    if b <= a:
+        return long_p, short_p
+    for k, (t, r) in enumerate(points):
+        nxt = min(points[k + 1][0] if k + 1 < len(points) else end, t + FUND_PERIOD)
+        span = min(b, nxt) - max(a, t)
+        if span > 0:
+            if r > 0:
+                long_p += r * span / FUND_PERIOD
+            else:
+                short_p -= r * span / FUND_PERIOD
+    return long_p, short_p
+
+
+def _fund_marks(rows: list[Row], fund: tuple[list[FundPoint], int]) -> tuple[list[float], list[float]]:
+    """Заплаченное к началу каждой свечи (и к концу ряда — последний элемент),
+    в цене монеты: лонги и шорты. Свеча j платит по своему закрытию."""
+    points, end = fund
+    gl, gs = [0.0], [0.0]
+    for j, r in enumerate(rows):
+        b = rows[j + 1][0] if j + 1 < len(rows) else end
+        pl, ps = _fund_paid(points, r[0], b, end) if points else (0.0, 0.0)
+        gl.append(gl[-1] + r[3] * pl)
+        gs.append(gs[-1] + r[3] * ps)
+    return gl, gs
+
+
+def model(rows: list[Row], lo: float, step: float,  # noqa: PLR0913 — ряд, сетка, плечи, окно и фандинг
           levs: tuple[tuple[int, float, int], ...] = LEVS,
-          since: int | None = None) -> tuple[list[list[float]], list[list[float]], float]:
+          since: int | None = None,
+          fund: tuple[list[FundPoint], int] | None = None) -> tuple[list[list[float]], list[list[float]], float]:
     """Открытые позиции окна по сетке цен ликвидации, в монетах: (лонги, шорты,
     всего), лонги и шорты — [группа][корзина]; «всего» — все живые позиции,
     открытые за окно, и с ликвидацией за краем окна тоже. Корзина b — цены
-    [lo + b·step, lo + (b+1)·step). Как закрываются позиции — _Book."""
+    [lo + b·step, lo + (b+1)·step). Как закрываются позиции — _Book.
+
+    fund — (ставки, сейчас): уровни платящей стороны сдвигаются на
+    заплаченное (см. описание модуля); только для окна (since)."""
     book = _Book(lo, step)
     # Шаг i: от снимка i−1 до снимка i прошла свеча i−1; цена на момент
     # снимка i — её закрытие, на момент снимка i−1 — закрытие свечи i−2.
@@ -397,20 +474,53 @@ def model(rows: list[Row], lo: float, step: float,
         book.burn(len(rows), rows[-1][1], rows[-1][2])
     if since is None:
         return book.agg[0], book.agg[1], book.total()
-    # Окно — только позиции, открытые с его начала (пачка шага i открыта в
-    # свече i−1). Учёт — по всей истории: и старые позиции горят и
-    # объясняют падение интереса, но на карту окна не идут.
+    return _window(book, rows, since, fund)
+
+
+def _window(book: _Book, rows: list[Row], since: int,
+            fund: tuple[list[FundPoint], int] | None) -> tuple[list[list[float]], list[list[float]], float]:
+    """Окно — только позиции, открытые с его начала (пачка шага i открыта в
+    свече i−1). Учёт — по всей истории: и старые позиции горят и
+    объясняют падение интереса, но на карту окна не идут. Уровни платящей
+    фандинг стороны — со сдвигом (fund)."""
+    lo, step = book.lo, book.step
     g_n = book.g_n
     out_l = [[0.0] * BUCKETS for _ in range(g_n)]
     out_s = [[0.0] * BUCKETS for _ in range(g_n)]
+    n = len(rows)
+    gl, gs = _fund_marks(rows, fund) if fund else ([0.0] * (n + 1), [0.0] * (n + 1))
+    # Пачка шага i открыта в свече i−1 и платит с начала свечи i; свеча t
+    # ликвидирует лонг, если её минимум дошёл до уровня, сдвинутого
+    # заплаченным к её началу: L + gl[t] − gl[i] ≥ low_t, то есть
+    # L ≥ min(low_t − gl[t]) + gl[i] по t ≥ i (шорт — зеркально).
+    inf = float("inf")
+    low_m, high_m = [inf] * (n + 1), [-inf] * (n + 1)
+    for t in range(n - 1, -1, -1):
+        low_m[t] = min(low_m[t + 1], rows[t][2] - gl[t])
+        high_m[t] = max(high_m[t + 1], rows[t][1] + gs[t])
     mass = 0.0
     for c in book.cohorts:
-        if rows[c[0] - 1][0] < since:
+        i = c[0]
+        if rows[i - 1][0] < since:
             continue
         live = book.alive(c)
+        sh_l, sh_s = gl[n] - gl[i], gs[n] - gs[i]
         for side, g, b, q in live:
-            (out_s if side else out_l)[g][b] += q * c[1]
-        mass += c[1] * (sum(x[3] for x in live) + c[3])
+            nb = b
+            if side == 0 and sh_l > 0:
+                m = book.mids[b]
+                if m >= low_m[i] + gl[i]:
+                    continue  # маржу съел фандинг — ликвидирован
+                nb = bucket(m + sh_l, lo, step)
+            elif side == 1 and sh_s > 0:
+                m = book.mids[b]
+                if m <= high_m[i] - gs[i]:
+                    continue
+                nb = bucket(m - sh_s, lo, step)
+            mass += q * c[1]
+            if 0 <= nb < BUCKETS:
+                (out_s if side else out_l)[g][nb] += q * c[1]
+        mass += c[1] * c[3]
     return out_l, out_s, float(mass)
 
 
@@ -477,20 +587,24 @@ def candle_edges(rows: list[Row], n: int = 48) -> list[int]:
 
 
 def make_state(sym: str, rng: str, got: dict[str, list[Row]], ref: list[Row], px: float,  # noqa: PLR0913 — сборка целиком
-               at: int, last: Row | None = None) -> dict[str, Json]:
+               at: int, last: Row | None = None, fund: list[FundPoint] | None = None) -> dict[str, Json]:
     """Сборка карты: позиции всех бирж по сетке вокруг цены px (в монетах,
     сглаженные), свечи и путь цены опорной биржи. Ответ из неё — render().
 
     last — идущая свеча хвоста (мелкая): где цена побывала после последнего
     снимка. Без хвоста — идущая свеча окна. Крупная свеча тут не годится: её
-    минимум за сутки сжёг бы позиции, открытые уже после него."""
+    минимум за сутки сжёг бы позиции, открытые уже после него.
+
+    fund — ставки фандинга монеты (clean_fund): уровни платящей стороны
+    сдвигаются на заплаченное к моменту at."""
     lo, step = px * (1 - SPAN), px * SPAN * 2 / FINE
     g_n = len(GROUPS)
     long_b = [[0.0] * BUCKETS for _ in range(g_n)]
     short_b = [[0.0] * BUCKETS for _ in range(g_n)]
     seen = 0.0
     for ex, rows in got.items():
-        lg, sg, mass = model(rows, lo, step, levs_upto(max_lev(ex, sym)), since=ref[0][0])
+        lg, sg, mass = model(rows, lo, step, levs_upto(max_lev(ex, sym)), since=ref[0][0],
+                             fund=(fund, at) if fund else None)
         seen += mass
         for g in range(g_n):
             long_b[g] = [a + b for a, b in zip(long_b[g], lg[g], strict=True)]
@@ -572,6 +686,11 @@ class _State:
         self.pre_retry: dict[str, float] = {}
         self.gather: Gather | None = None
         self.price: Price | None = None
+        # Фандинг: монета → (когда собран, ставки); идущие сборки; не ответили — когда.
+        self.funding: Funding | None = None
+        self.fund: dict[str, tuple[float, list[FundPoint]]] = {}
+        self.fund_jobs: dict[str, threading.Thread] = {}
+        self.fund_retry: dict[str, float] = {}
 
 
 _st = _State()
@@ -586,6 +705,11 @@ def set_gather(fn: Gather | None) -> None:
 def set_price(fn: Price | None) -> None:
     """Откуда брать текущую цену: fn(монета) → цена или None."""
     _st.price = fn
+
+
+def set_funding(fn: Funding | None) -> None:
+    """Откуда брать фандинг: fn(монета) → [(начало периода, ставка за 8 ч)]."""
+    _st.funding = fn
 
 
 def _now() -> int:
@@ -624,6 +748,56 @@ def _sweep() -> None:
         del _st.hits[k]
     for k in [k for k, v in _st.fails.items() if t - v >= FAIL_WAIT]:
         del _st.fails[k]
+
+
+def _fund_fetch(sym: str) -> None:
+    """Собрать ставки фандинга монеты (фоновый поток) и положить в кэш."""
+    fn = _st.funding
+    try:
+        raw = fn(sym) if fn else None
+        points: list[FundPoint] | None = clean_fund(raw) if isinstance(raw, (list, tuple)) else None
+    except Exception:  # noqa: BLE001 — биржи молчат: уровни без сдвига, спросим позже
+        points = None
+    with _lock:
+        t = time.monotonic()
+        if points is not None:
+            _st.fund.pop(sym, None)  # свежие — в конец очереди
+            _st.fund[sym] = (t, points)
+            _st.fund_retry.pop(sym, None)
+        else:
+            _st.fund_retry[sym] = t
+            for k in [k for k, v in _st.fund_retry.items() if t - v >= FUND_RETRY]:
+                del _st.fund_retry[k]
+        while len(_st.fund) > FUND_KEEP:
+            del _st.fund[min(_st.fund, key=lambda k: _st.fund[k][0])]
+        _st.fund_jobs.pop(sym, None)
+
+
+def _fund(sym: str, wait: float) -> list[FundPoint]:
+    """Ставки фандинга монеты: свежие — из кэша; постарше, но не старше
+    FUND_STALE, — тоже (а свежие собираются в фоне); нет — ждём не дольше wait."""
+    with _lock:
+        t = time.monotonic()
+        hit = _st.fund.get(sym)
+        if hit and t - hit[0] < FUND_TTL:
+            return hit[1]
+        job = _st.fund_jobs.get(sym)
+        tried = _st.fund_retry.get(sym)
+        if job is None and _st.funding is not None and (tried is None or t - tried >= FUND_RETRY):
+            job = threading.Thread(target=_fund_fetch, args=(sym,), daemon=True)
+            try:
+                job.start()
+            except RuntimeError:
+                job = None
+            else:
+                _st.fund_jobs[sym] = job
+    if hit and t - hit[0] < FUND_STALE:
+        return hit[1]
+    if job is not None and wait > 0:
+        job.join(wait)
+    with _lock:
+        hit = _st.fund.get(sym)
+        return hit[1] if hit and time.monotonic() - hit[0] < FUND_STALE else []
 
 
 def _pre_fetch(sym: str) -> None:
@@ -719,6 +893,7 @@ def build(sym: str, rng: str, pre_wait: float = PRE_WAIT) -> dict[str, Json]:
         job = threading.Thread(target=fetch_tail, daemon=True)
         job.start()
     _pre(sym, 0)  # предыстория — параллельно с окном
+    _fund(sym, 0)  # и фандинг
     got, ref = gather(sym, period, n) if gather else ({}, None)
     if job is not None:
         job.join()
@@ -736,7 +911,7 @@ def build(sym: str, rng: str, pre_wait: float = PRE_WAIT) -> dict[str, Json]:
     quote = _quote(sym, ref[-1][3])
     px = ref[-1][3] if quote is None else quote
     fine = splice(ref, clean_rows(tail_ref))
-    st = make_state(sym, rng, got, ref, px, _now(), fine[-1] if fine is not ref else None)
+    st = make_state(sym, rng, got, ref, px, _now(), fine[-1] if fine is not ref else None, _fund(sym, FUND_WAIT))
     # Цена источника совпала с биржами — это та же монета (см. PX_MOVE).
     st["live"] = quote is not None
     if partial:

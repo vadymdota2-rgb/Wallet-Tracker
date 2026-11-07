@@ -1026,6 +1026,7 @@ export function LiqMapScreen() {
               <li>{t(lang, "lq_how_5")}</li>
               <li>{t(lang, "lq_how_6")}</li>
               <li>{t(lang, "lq_how_7")}</li>
+              <li>{t(lang, "lq_how_8")}</li>
             </ul>
           </details>
 

@@ -111,7 +111,7 @@ PY = [
     ("    kept = [x for x in LEVS if x[0] <= cap] or [LEVS[0]]", "    kept = list(LEVS)", "плечи выше предела не открыть"),
     ("    kept = [x for x in LEVS if x[0] <= cap] or [LEVS[0]]", "    kept = [x for x in LEVS if x[0] <= cap]", "предел ниже 3× — хотя бы 3×"),
     ("    return tuple((lev, w / total, g) for lev, w, g in kept)", "    return tuple(kept)", "доли — снова в сумме 1"),
-    ("        lg, sg, mass = model(rows, lo, step, levs_upto(max_lev(ex, sym)), since=ref[0][0])", "        lg, sg, mass = model(rows, lo, step, since=ref[0][0])", "у каждой биржи — свои плечи"),
+    ("        lg, sg, mass = model(rows, lo, step, levs_upto(max_lev(ex, sym)), since=ref[0][0],", "        lg, sg, mass = model(rows, lo, step, since=ref[0][0],", "у каждой биржи — свои плечи"),
     # Самочистка.
     ("        _sweep()\n        while len(_st.hits) > CACHE_MAX:", "        while len(_st.hits) > CACHE_MAX:", "сборка чистит старое"),
     ("    with _lock:\n        _sweep()\n        hit = _st.hits.get(key)", "    with _lock:\n        hit = _st.hits.get(key)", "прогрев чистит старое"),
@@ -208,9 +208,9 @@ PY = [
     ('PRE = ("1d", 1000)', 'PRE = ("1d", 365)', "предыстория — три года"),
     # Окно — только позиции, открытые за него.
     ("    if since is None:\n        return book.agg[0], book.agg[1], book.total()", "    if True:\n        return book.agg[0], book.agg[1], book.total()", "окно — только открытые за него"),
-    ("        if rows[c[0] - 1][0] < since:", "        if rows[c[0] - 1][0] <= since:", "первая свеча окна — в окне"),
-    ("            (out_s if side else out_l)[g][b] += q * c[1]", "            (out_l if side else out_s)[g][b] += q * c[1]", "окно: лонги и шорты — по своим сторонам"),
-    ("levs_upto(max_lev(ex, sym)), since=ref[0][0])", "levs_upto(max_lev(ex, sym)))", "карта окна — с отсечкой по его началу"),
+    ("        if rows[i - 1][0] < since:", "        if rows[i - 1][0] <= since:", "первая свеча окна — в окне"),
+    ("                (out_s if side else out_l)[g][nb] += q * c[1]", "                (out_l if side else out_s)[g][nb] += q * c[1]", "окно: лонги и шорты — по своим сторонам"),
+    ("levs_upto(max_lev(ex, sym)), since=ref[0][0],", "levs_upto(max_lev(ex, sym)), since=None,", "карта окна — с отсечкой по его началу"),
     # Копия на диске.
     ("        out[side] = [[[b, float(f\"{v:.9g}\")] for b, v in enumerate(g) if v > 0] for g in st[side]]", "        out[side] = [[[b, float(f\"{v:.9g}\")] for b, v in enumerate(g)] for g in st[side]]", "в копии — только непустые корзины"),
     ("        out[side] = [[[b, float(f\"{v:.9g}\")] for b, v in enumerate(g) if v > 0] for g in st[side]]", "        out[side] = [[[b, round(v, 9)] for b, v in enumerate(g) if v > 0] for g in st[side]]", "в копии — значащие цифры, а не знаки после запятой"),
@@ -242,6 +242,21 @@ PY = [
     ("        if total >= STALE:\n", "        if age >= STALE:\n", "копия: возраст — с записи файла"),
     ("            if key in _st.hits:\n                continue\n", "", "копия не поверх свежей сборки"),
     ("            _st.hits[key] = (time.monotonic() - total, st, res)", "            _st.hits[key] = (time.monotonic(), st, res)", "копия: возраст сохраняется"),
+    # Фандинг.
+    ("                nb = bucket(m + sh_l, lo, step)", "                nb = b", "фандинг: уровни платящих лонгов — вверх"),
+    ("                nb = bucket(m - sh_s, lo, step)", "                nb = b", "фандинг: уровни платящих шортов — вниз"),
+    ("                if m >= low_m[i] + gl[i]:", "                if False:", "фандинг: съел маржу лонга — ликвидирован"),
+    ("                if m <= high_m[i] - gs[i]:", "                if False:", "фандинг: съел маржу шорта — ликвидирован"),
+    ("        high_m[t] = max(high_m[t + 1], rows[t][1] + gs[t])", "        high_m[t] = max(high_m[t + 1], rows[t][1] + gs[n])", "фандинг: сгорание — по уже заплаченному"),
+    ("    a, b = max(a, end - FUND_HOLD), min(b, end)", "    a, b = a, min(b, end)", "фандинг: только за FUND_HOLD"),
+    (", t + FUND_PERIOD)", ", end)", "фандинг: ставка — не дольше периода"),
+    ("                short_p -= r * span / FUND_PERIOD", "                short_p += r * span / FUND_PERIOD", "фандинг: шорты платят при минусе"),
+    ("        gl.append(gl[-1] + r[3] * pl)", "        gl.append(gl[-1] + pl)", "фандинг: платят с цены монеты"),
+    ("        if r is not None and -FUND_MAX <= r <= FUND_MAX:", "        if r is not None:", "фандинг: ставка правдоподобна"),
+    ("_fund(sym, FUND_WAIT))", "[])", "фандинг: сборка берёт ставки"),
+    ("        if hit and t - hit[0] < FUND_TTL:", "        if False:", "фандинг: свежие — из кэша"),
+    ("(tried is None or t - tried >= FUND_RETRY)", "True", "фандинг: сбой — пауза до повтора"),
+    ("        while len(_st.fund) > FUND_KEEP:", "        while False:", "фандинг: кэш ограничен"),
 ]
 
 # Источники карты в сервере (whale_api.py): ворота перед моделью и базой,
@@ -259,6 +274,7 @@ API = [
     ('if m.get("marketType") == "PERPETUAL" and _snap_mkt(m.get("symbol"))]', 'if m.get("marketType") == "PERPETUAL"]', "Bullish: имя рынка в адресе"),
     ("0 < px < 1e12 and 0 < t_ms < 1e14)", "0 < px < 1e12)", "лента: время ликвидации"),
     ("if not sym or not (0 < usd < 1e13", "if not sym or not (0 <= usd", "лента: сумма правдоподобна"),
+    ("[(int(b), float(v) / 100) for b, v in", "[(int(b), float(v)) for b, v in", "фандинг сервера: проценты — в доли"),
     ('_snap_add(out, sym, _fnum(r.get("open_interest")) * px, px)', '_snap_add(out, sym, _fnum(r.get("open_interest")), px)', "OrangeX: интерес в долларах"),
     ('px = _fnum(r.get("mark_price")) or _fnum(r.get("last_price"))', 'px = _fnum(r.get("mark_price"))', "OrangeX: цена без mark — последняя сделка"),
     ('_quote_cut(str(r.get("instrument_name") or ""), ("-USDT-PERPETUAL",))', 'str(r.get("instrument_name") or "").split("-")[0]', "OrangeX: только USDT"),
@@ -290,8 +306,8 @@ def run(path, cmd, muts):
 
 
 a1 = run(f"{ROOT}/src/lib/liqmap.ts", ["node", "--test", "tests/liqmap.test.ts", "tests/liqmap.props.test.ts"], TS)
-a2 = run(f"{ROOT}/wt_liqmap.py", [sys.executable, "-m", "unittest", "tests.test_liqmap", "tests.test_liqmap_fuzz", "tests.test_liqmap_disk", "tests.test_liqmap_pre"], PY)
-a3 = run(f"{ROOT}/whale_api.py", [sys.executable, "-m", "unittest", "tests.test_liqmap_security", "tests.test_liqmap_policy", "tests.test_liqmap_pre"], API)
+a2 = run(f"{ROOT}/wt_liqmap.py", [sys.executable, "-m", "unittest", "tests.test_liqmap", "tests.test_liqmap_fuzz", "tests.test_liqmap_disk", "tests.test_liqmap_pre", "tests.test_liqmap_fund"], PY)
+a3 = run(f"{ROOT}/whale_api.py", [sys.executable, "-m", "unittest", "tests.test_liqmap_security", "tests.test_liqmap_policy", "tests.test_liqmap_pre", "tests.test_liqmap_fund"], API)
 alive = a1 + a2 + a3
 total = len(TS) + len(PY) + len(API) - len(EQUIV)
 print(f"ИТОГ: убито {total - len(alive)} из {total}; выжили: {alive}")

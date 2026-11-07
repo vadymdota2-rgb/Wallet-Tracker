@@ -1042,6 +1042,7 @@ export const de: Dict = {
   lq_how_5: "Große Häufungen wirken oft wie ein Magnet: Der Kurs strebt dorthin, und die Liquidationen beschleunigen die Bewegung. Eine Tendenz, keine Garantie.",
   lq_how_6: "Links ist der Kursverlauf des gewählten Zeitraums auf derselben Skala: Man sieht, woher der Kurs kam und wo die Positionen hinter diesen Levels eröffnet wurden.",
   lq_how_7: "Sinkt das Open Interest, schließen zuerst die neuesten Positionen. Erreicht der Preis ein Level, verbrennt es sofort: Die Karte aktualisiert sich mit dem Preis.",
+  lq_how_8: "Das Funding ist berücksichtigt: Wer es zahlt, verliert Margin, und seine Liquidation rückt jede Stunde näher an den Preis. Die Levels der zahlenden Seite sind um alles verschoben, was sie in den letzten 7 Tagen gezahlt hat.",
   lq_keys: "Karte: Pfeiltasten hoch und runter wählen ein Level",
   lq_lev: "Hebel",
   lq_live: "Aktualisiert sich selbst · {t}",

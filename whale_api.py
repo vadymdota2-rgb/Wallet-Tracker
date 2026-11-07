@@ -12647,6 +12647,17 @@ def _fund_hist(sym: str, days: int) -> dict:
     return {"ex": ex, "bars": bars, "avg": round(avg, 5), "apr": round(avg * 3 * 365, 2), "days": days}
 
 
+def _liq_funding(sym: str) -> list:
+    """Фандинг монеты для карты ликвидаций: средняя ставка бирж за 8 часов
+    (доля) по периодам за FUND_HOLD с запасом в сутки."""
+    got = _fund_hist(sym, wt_liqmap.FUND_HOLD // 86400 + 1)
+    return [(int(b), float(v) / 100) for b, v in got.get("bars") or []
+            if isinstance(b, int) and isinstance(v, (int, float)) and not isinstance(v, bool)]
+
+
+wt_liqmap.set_funding(_liq_funding)
+
+
 def _oih_build(sym: str, rng: str) -> dict:
     period, n = OIH_RANGES[rng]
     with ThreadPoolExecutor(max_workers=2) as pool:

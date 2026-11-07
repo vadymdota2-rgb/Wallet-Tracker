@@ -1042,6 +1042,7 @@ export const pl: Dict = {
   lq_how_5: "Duże skupiska często działają jak magnes: cena ciąży ku nim, a likwidacje przyspieszają ruch. To skłonność, nie gwarancja.",
   lq_how_6: "Po lewej wykres ceny z wybranego okresu w tej samej skali: widać, skąd przyszła cena i gdzie otwierano pozycje stojące za tymi likwidacjami.",
   lq_how_7: "Gdy otwartych pozycji ubywa, najpierw zamykają się najnowsze. Gdy cena dojdzie do poziomu, ten od razu znika: mapa aktualizuje się razem z ceną.",
+  lq_how_8: "Funding jest uwzględniony: kto go płaci, traci depozyt, a jego likwidacja co godzinę zbliża się do ceny. Poziomy strony płacącej są przesunięte o wszystko, co zapłaciła w ostatnich 7 dniach.",
   lq_keys: "Mapa: strzałki w górę i w dół wybierają poziom",
   lq_lev: "Dźwignia",
   lq_live: "Odświeża się sama · {t}",

@@ -842,7 +842,7 @@ say("карта ликвидаций: акции — одним именем н�
     and '("BitMEX", _snap_bitmex), ("ApeX", _snap_apex)' in api and '"BitMEX": 100, "ApeX": 100' in read(f"{APP}/wt_liqmap.py")
     and "class StockTest(unittest.TestCase):" in read(f"{APP}/tests/test_liqmap_pre.py"))
 say("карта ликвидаций: окно — позиции, открытые за этот период (учёт закрытий и ликвидаций — по всей истории), окна от 90 дней берут последние 30 дней 4-часовыми свечами; под картой — сколько цены в одной полосе и докуда «Накоплено»",
-    "levs_upto(max_lev(ex, sym)), since=ref[0][0])" in read(f"{APP}/wt_liqmap.py") and '"90d": ("4h", 180)' in read(f"{APP}/wt_liqmap.py")
+    "levs_upto(max_lev(ex, sym)), since=ref[0][0]," in read(f"{APP}/wt_liqmap.py") and '"90d": ("4h", 180)' in read(f"{APP}/wt_liqmap.py")
     and 'className="lq-rows"' in _lq and '"lq_rows"' in _lq and "test_history_still_explains_the_fall_of_interest" in read(f"{APP}/tests/test_liqmap_pre.py"))
 say("интерес Bybit — с одной стороны (singleOpenInterest; openInterest у Bybit — обе стороны, вдвое больше): карта ликвидаций и доска фандинга",
     "def _bybit_oi(r: dict, value: bool = False) -> float:" in api and "_bybit_oi(it, value=True)" in api
@@ -1952,6 +1952,11 @@ say("карта ликвидаций: OrangeX в снимках интереса
     and '"OrangeX": 200}' in read(f"{APP}/wt_liqmap.py") and "def test_orangex(self):" in read(f"{APP}/tests/test_liqmap_pre.py")
     and '"api.orangex.com"' in read(f"{APP}/tests/test_liqmap_policy.py")
     and "## 11. BEAT: полнота по биржам" in read(f"{APP}/docs/check-liqmap-server.md"))
+say("карта ликвидаций: фандинг сдвигает уровни платящей стороны (7 дней, сгорание по уже заплаченному), пояснение на 16 языках",
+    "def _fund_paid(" in _lmpy and "FUND_HOLD = 7 * 86400" in _lmpy and "nb = bucket(m - sh_s, lo, step)" in _lmpy
+    and "_fund(sym, FUND_WAIT))" in _lmpy and "wt_liqmap.set_funding(_liq_funding)" in api
+    and '<li>{t(lang, "lq_how_8")}</li>' in read(f"{APP}/src/screens/LiqMapScreen.tsx") and "lq_how_8" in _i18n
+    and os.path.exists(f"{APP}/tests/test_liqmap_fund.py") and '"фандинг: сгорание — по уже заплаченному"' in read(f"{APP}/tools/mutate-liqmap.py"))
 
 # «Добавить кошелёк» больше не отвечает общей ошибкой: причина отказа доходит
 # до экрана («уже добавлен» — обновить список), а норма запросов считается

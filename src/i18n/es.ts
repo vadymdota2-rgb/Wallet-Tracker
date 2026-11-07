@@ -1042,6 +1042,7 @@ export const es: Dict = {
   lq_how_5: "Los grupos grandes suelen actuar como imán: el precio tiende hacia ellos y las liquidaciones aceleran el movimiento. Es una tendencia, no una garantía.",
   lq_how_6: "A la izquierda está el gráfico del precio del periodo elegido en la misma escala: se ve de dónde vino el precio y dónde se abrieron las posiciones de esas liquidaciones.",
   lq_how_7: "Cuando el interés abierto cae, se cierran primero las posiciones más recientes. Si el precio llega a un nivel, este se quema al instante: el mapa se actualiza con el precio.",
+  lq_how_8: "El funding está incluido: quien lo paga pierde margen y su liquidación se acerca al precio cada hora. Los niveles del lado que paga están desplazados por todo lo pagado en los últimos 7 días.",
   lq_keys: "Mapa: las flechas arriba y abajo eligen un nivel",
   lq_lev: "Apalancamiento",
   lq_live: "Se actualiza sola · {t}",

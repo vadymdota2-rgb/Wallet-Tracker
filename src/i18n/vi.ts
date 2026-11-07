@@ -1042,6 +1042,7 @@ export const vi: Dict = {
   lq_how_5: "Các cụm lớn thường như nam châm: giá bị kéo về phía chúng và thanh lý làm biến động nhanh hơn. Đây là xu hướng, không phải cam kết.",
   lq_how_6: "Bên trái là biểu đồ giá trong kỳ đã chọn trên cùng thang: thấy giá đến từ đâu và các vị thế sau những mức này được mở ở đâu.",
   lq_how_7: "Khi open interest giảm, các vị thế mới nhất đóng trước. Giá chạm mức nào, mức đó cháy ngay: bản đồ cập nhật theo giá.",
+  lq_how_8: "Đã tính funding: bên trả funding mất ký quỹ, và mức thanh lý của họ tiến gần giá hơn mỗi giờ. Các mức của bên trả được dịch theo toàn bộ số đã trả trong 7 ngày qua.",
   lq_keys: "Bản đồ: phím mũi tên lên và xuống chọn mức",
   lq_lev: "Đòn bẩy",
   lq_live: "Tự cập nhật · {t}",

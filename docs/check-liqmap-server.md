@@ -391,6 +391,40 @@ BloFin, Delta India, HTX (и OrangeX, когда у него накопится 
 у всех в пределах ±3 %. Если Binance или Bybit пусты — напиши, что
 отвечает биржа (через relay).
 
+## 12. Фандинг в модели
+Уровни платящей фандинг стороны сдвинуты на заплаченное за 7 дней
+(средняя ставка бирж, `_liq_funding`). Проверь, что ставки приходят, и
+сверь модель с настоящими ликвидациями (liq_ev) с фандингом и без: у монет
+с сильным перекосом фандинга (выбери 3–5 с |ставкой| > 0,1 % за 8 ч из
+доски фандинга) совпадение должно не ухудшиться.
+```
+cd ~/WalletTracker && PYTHONDONTWRITEBYTECODE=1 timeout 600 python3 - <<'PY'
+import time
+import whale_api as api, wt_liqmap as lm
+for sym in ("BTC", "HUMA", "BEAT"):
+    f = api._liq_funding(sym)
+    avg = sum(r for _, r in f) / len(f) * 100 if f else float("nan")
+    print(f"{sym}: ставок {len(f)}, средняя за 8 ч {avg:+.3f} %, последняя {f[-1][1] * 100 if f else float('nan'):+.3f} %")
+    for use in (False, True):
+        lm._st.fund.clear()
+        lm.set_funding(api._liq_funding if use else None)
+        if use:
+            lm._fund(sym, 60)
+        m = lm.build(sym, "7d")
+        if not m.get("ok"):
+            print("  ", m); continue
+        px = m["px"]
+        band = lambda lo, hi, side: sum(sum(b[side]) for b in m["buckets"] if lo <= b["p"] / px - 1 < hi)
+        print(f"  {'с фандингом ' if use else 'без фандинга'}: шорты +0–5 % ${band(0, .05, 'S') / 1e6:.2f}M, +5–20 % ${band(.05, .2, 'S') / 1e6:.2f}M;"
+              f" лонги −5–0 % ${band(-.05, 0, 'L') / 1e6:.2f}M, −20…−5 % ${band(-.2, -.05, 'L') / 1e6:.2f}M; видно ${m['seen'] / 1e6:.1f}M")
+lm.set_funding(api._liq_funding)
+PY
+```
+Ожидаю: у BTC (фандинг около нуля) — почти без разницы; у HUMA (шорты
+платят ~1 %/8 ч) шорты ближе к цене (+0–5 % больше, +5–20 % меньше), лонги
+без изменений. Если есть время — прогон калибровки из пункта 6 с
+фандингом и без (метрика «совпадение»): напиши обе цифры.
+
 ## Отчёт
 По каждому пункту — «ок» или что не так, с цифрами. Отдельно: одна ли цена
 во всех окнах, какие биржи дали данные, сколько интереса «видно»; итог

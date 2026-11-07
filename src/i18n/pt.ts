@@ -1042,6 +1042,7 @@ export const pt: Dict = {
   lq_how_5: "Aglomerados grandes costumam agir como ímã: o preço tende a ir até eles e as liquidações aceleram o movimento. É uma tendência, não uma garantia.",
   lq_how_6: "À esquerda fica o gráfico do preço do período escolhido na mesma escala: dá para ver de onde veio o preço e onde foram abertas as posições dessas liquidações.",
   lq_how_7: "Quando o interesse aberto cai, as posições mais recentes fecham primeiro. Quando o preço chega a um nível, ele é liquidado na hora: o mapa acompanha o preço.",
+  lq_how_8: "O funding está incluído: quem o paga perde margem e sua liquidação se aproxima do preço a cada hora. Os níveis do lado pagador estão deslocados por tudo o que ele pagou nos últimos 7 dias.",
   lq_keys: "Mapa: as setas para cima e para baixo escolhem um nível",
   lq_lev: "Alavancagem",
   lq_live: "Atualiza sozinho · {t}",

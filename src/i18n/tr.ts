@@ -1042,6 +1042,7 @@ export const tr: Dict = {
   lq_how_5: "Büyük yoğunluklar çoğu zaman mıknatıs gibi çalışır: fiyat onlara çekilir, tasfiyeler hareketi hızlandırır. Bu bir eğilim, garanti değil.",
   lq_how_6: "Solda aynı ölçekte seçilen dönemin fiyat grafiği var: fiyatın nereden geldiği ve bu tasfiyelerin pozisyonlarının nerede açıldığı görülür.",
   lq_how_7: "Açık pozisyonlar düştüğünde önce en yeni pozisyonlar kapanır. Fiyat bir seviyeye ulaşınca o seviye hemen yanar: harita fiyatla birlikte güncellenir.",
+  lq_how_8: "Fonlama dahil edildi: onu ödeyen marj kaybeder ve tasfiyesi her saat fiyata yaklaşır. Ödeyen tarafın seviyeleri son 7 günde ödediği her şey kadar kaydırıldı.",
   lq_keys: "Harita: yukarı ve aşağı oklar bir seviye seçer",
   lq_lev: "Kaldıraç",
   lq_live: "Kendiliğinden güncellenir · {t}",

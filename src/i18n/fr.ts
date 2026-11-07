@@ -1042,6 +1042,7 @@ export const fr: Dict = {
   lq_how_5: "Les gros amas agissent souvent comme un aimant : le prix tend vers eux et les liquidations accélèrent le mouvement. C'est une tendance, pas une garantie.",
   lq_how_6: "À gauche, le graphique du prix sur la période choisie, à la même échelle : on voit d'où vient le prix et où ont été ouvertes les positions de ces liquidations.",
   lq_how_7: "Quand l'intérêt ouvert baisse, les positions les plus récentes ferment en premier. Dès que le prix atteint un niveau, celui-ci est liquidé aussitôt : la carte suit le prix.",
+  lq_how_8: "Le funding est pris en compte : qui le paie perd de la marge, et sa liquidation se rapproche du prix chaque heure. Les niveaux du côté payeur sont décalés de tout ce qu'il a payé sur les 7 derniers jours.",
   lq_keys: "Carte : les flèches haut et bas choisissent un niveau",
   lq_lev: "Levier",
   lq_live: "Mise à jour auto · {t}",

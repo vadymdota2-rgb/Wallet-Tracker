@@ -1042,6 +1042,7 @@ export const id: Dict = {
   lq_how_5: "Klaster besar sering bekerja seperti magnet: harga tertarik ke sana dan likuidasi mempercepat pergerakan. Ini kecenderungan, bukan jaminan.",
   lq_how_6: "Di kiri ada grafik harga periode terpilih dengan skala yang sama: terlihat dari mana harga datang dan di mana posisi di balik likuidasi itu dibuka.",
   lq_how_7: "Saat open interest turun, posisi terbaru ditutup lebih dulu. Begitu harga mencapai suatu level, level itu langsung terlikuidasi: peta diperbarui bersama harga.",
+  lq_how_8: "Funding sudah diperhitungkan: yang membayarnya kehilangan margin, dan likuidasinya mendekati harga setiap jam. Level sisi yang membayar digeser sebesar semua yang dibayarnya dalam 7 hari terakhir.",
   lq_keys: "Peta: panah atas dan bawah memilih level",
   lq_lev: "Leverage",
   lq_live: "Diperbarui otomatis · {t}",

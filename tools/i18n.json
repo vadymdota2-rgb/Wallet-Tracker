@@ -27719,6 +27719,24 @@
     "ko": "미결제약정이 줄면 가장 최근 포지션부터 닫힙니다. 가격이 레벨에 닿으면 즉시 청산되고, 지도는 가격과 함께 갱신됩니다.",
     "zh": "未平仓量下降时，最新的仓位最先平仓。价格一触及某个水平，该水平立即被清算，地图随价格更新。"
   },
+  "lq_how_8": {
+    "ru": "Фандинг учтён: кто его платит, теряет маржу, и его ликвидация каждый час подходит к цене. Уровни платящей стороны сдвинуты на всё, что она заплатила за последние 7 дней.",
+    "en": "Funding is included: whoever pays it loses margin, and their liquidation moves closer to the price every hour. The paying side's levels are shifted by everything it paid over the last 7 days.",
+    "uk": "Фандинг враховано: хто його платить, втрачає маржу, і його ліквідація щогодини наближається до ціни. Рівні сторони, що платить, зсунуто на все, що вона заплатила за останні 7 днів.",
+    "de": "Das Funding ist berücksichtigt: Wer es zahlt, verliert Margin, und seine Liquidation rückt jede Stunde näher an den Preis. Die Levels der zahlenden Seite sind um alles verschoben, was sie in den letzten 7 Tagen gezahlt hat.",
+    "es": "El funding está incluido: quien lo paga pierde margen y su liquidación se acerca al precio cada hora. Los niveles del lado que paga están desplazados por todo lo pagado en los últimos 7 días.",
+    "fr": "Le funding est pris en compte : qui le paie perd de la marge, et sa liquidation se rapproche du prix chaque heure. Les niveaux du côté payeur sont décalés de tout ce qu'il a payé sur les 7 derniers jours.",
+    "pt": "O funding está incluído: quem o paga perde margem e sua liquidação se aproxima do preço a cada hora. Os níveis do lado pagador estão deslocados por tudo o que ele pagou nos últimos 7 dias.",
+    "pl": "Funding jest uwzględniony: kto go płaci, traci depozyt, a jego likwidacja co godzinę zbliża się do ceny. Poziomy strony płacącej są przesunięte o wszystko, co zapłaciła w ostatnich 7 dniach.",
+    "tr": "Fonlama dahil edildi: onu ödeyen marj kaybeder ve tasfiyesi her saat fiyata yaklaşır. Ödeyen tarafın seviyeleri son 7 günde ödediği her şey kadar kaydırıldı.",
+    "id": "Funding sudah diperhitungkan: yang membayarnya kehilangan margin, dan likuidasinya mendekati harga setiap jam. Level sisi yang membayar digeser sebesar semua yang dibayarnya dalam 7 hari terakhir.",
+    "vi": "Đã tính funding: bên trả funding mất ký quỹ, và mức thanh lý của họ tiến gần giá hơn mỗi giờ. Các mức của bên trả được dịch theo toàn bộ số đã trả trong 7 ngày qua.",
+    "hi": "फ़ंडिंग शामिल है: जो इसे चुकाता है उसका मार्जिन घटता है, और उसका लिक्विडेशन हर घंटे कीमत के करीब आता है। चुकाने वाले पक्ष के स्तर पिछले 7 दिनों में चुकाई गई पूरी राशि जितने खिसकाए गए हैं।",
+    "ar": "التمويل مُحتسب: من يدفعه يخسر من هامشه، ويقترب مستوى تصفيته من السعر كل ساعة. مستويات الجانب الدافع مُزاحة بكل ما دفعه خلال آخر 7 أيام.",
+    "ja": "資金調達率を反映済み：支払う側は証拠金が減り、清算価格が1時間ごとに価格へ近づきます。支払う側の水準は、直近7日間に支払った分だけずらしています。",
+    "ko": "펀딩비가 반영되었습니다. 펀딩비를 내는 쪽은 증거금이 줄어 청산가가 매시간 가격에 가까워집니다. 내는 쪽의 레벨은 최근 7일간 낸 만큼 이동했습니다.",
+    "zh": "已计入资金费率：支付方的保证金减少，其清算价每小时向现价靠近。支付方的水平已按最近 7 天支付的全部金额移动。"
+  },
   "lq_keys": {
     "ru": "Карта: стрелки вверх и вниз выбирают уровень",
     "en": "Map: up and down arrows pick a level",
