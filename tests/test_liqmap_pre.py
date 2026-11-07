@@ -462,6 +462,92 @@ class NewSnapTest(unittest.TestCase):
         self.assertEqual(get.call_count, len(api.LIQ_APEX))
         self.assertLessEqual(len(api.LIQ_APEX), 20)
 
+    def test_phemex_counts_inverse_and_usdc(self):
+        # Сверка с CoinGecko: у Phemex BTC брался только USDT ($178M из $1209M) —
+        # инверсный BTCUSD (контракт $1) держит больше половины интереса.
+        v3 = {"result": [
+            {"symbol": "BTCUSDT", "markRp": "50000", "openInterestRv": "2"},
+            {"symbol": "BTCUSDC", "markRp": "50010", "openInterestRv": "1"},
+            {"symbol": "ETHUSDT", "markRp": "3000", "openInterestRv": "10"},
+            {"symbol": "1000PEPEUSDT", "markRp": "0.01", "openInterestRv": "9e9"},
+        ]}
+        v1 = {"result": [
+            {"symbol": "BTCUSD", "markPrice": 500000000, "openInterest": 400000},
+            {"symbol": "cETHUSD", "markPrice": 30000000, "openInterest": 7000},
+            {"symbol": "cSOLUSD", "markPrice": 0, "openInterest": 5},  # без цены — нет
+        ]}
+        with mock.patch.object(api, "get_json", side_effect=lambda url, t=10: v3 if "/v3/" in url else v1):
+            out = api._snap_phemex()
+        self.assertEqual(set(out), {"BTC", "ETH"})
+        self.assertAlmostEqual(out["BTC"][0], 100000 + 50010 + 400000)
+        self.assertEqual(out["BTC"][1], 50000)
+        self.assertAlmostEqual(out["ETH"][0], 37000)
+
+    def test_top_slots_go_only_to_mapped_markets(self):
+        # Места в «60 самых торгуемых» занимали 1000PEPE, обёртки и
+        # мёртвые рынки — настоящие монеты в снимок не попадали.
+        rows = [{"s": f"junk{i}", "v": 1e9 - i, "c": 1} for i in range(5)]
+        rows += [{"s": f"C{i}USDT", "v": 1e6 - i, "c": 2} for i in range(5)] + ["мусор"]
+        rows.append({"s": "C9USDT", "v": 2e6, "c": 0})  # без цены — места не занимает
+        rows.append({"s": "C0USDC", "v": 5e5, "c": 2.01})
+
+        def pick(r):
+            sym = api._snap_sym(api._quote_cut(r["s"], ("USDT", "USDC")))
+            return (sym, r["s"], r["c"]) if sym else None
+
+        def oi(s, px):
+            if s == "C3USDT":
+                raise OSError("сеть")
+            return 10.0 * px
+
+        out = api._snap_top(rows, "v", 5, pick, oi)
+        self.assertEqual(set(out), {"C0", "C1", "C2", "C4"})
+        self.assertEqual(out["C0"], (20.0, 2))  # C0USDC — шестой, за пределом
+        both = api._snap_top(rows, "v", 6, pick, oi)["C0"]
+        self.assertAlmostEqual(both[0], 20.0 + 20.1)
+        self.assertEqual(both[1], 2)
+        self.assertEqual(api._snap_top(None, "v", 6, pick, oi), {})
+
+    def test_xt_skips_dead_markets(self):
+        now_ms = time.time() * 1000
+        ticks = {"result": [
+            {"s": "alpaca_usdt", "v": "9e9", "c": "1", "t": now_ms - 500 * 86_400_000},
+            {"s": "btc_usdt_230331", "v": "8e9", "c": "1", "t": now_ms},
+            {"s": "btc_usdt", "v": "1e9", "c": "50000", "t": now_ms - 1000},
+        ]}
+        asked = []
+
+        def fake(url, timeout=10.0):
+            if "agg-tickers" in url:
+                return ticks
+            asked.append(url.split("symbol=")[1])
+            return {"result": {"openInterestUsd": "123"}}
+
+        with mock.patch.object(api, "get_json", side_effect=fake):
+            self.assertEqual(api._snap_xt(), {"BTC": (123.0, 50000.0)})
+        self.assertEqual(asked, ["btc_usdt"])
+
+    def test_aster_and_bingx_sum_quotes(self):
+        aster = [{"symbol": "BTCUSDT", "quoteVolume": "9", "lastPrice": "50000"},
+                 {"symbol": "BTCUSD1", "quoteVolume": "5", "lastPrice": "50020"},
+                 {"symbol": "NVDAUSD1", "quoteVolume": "4", "lastPrice": "200"},
+                 {"symbol": "BTCU", "quoteVolume": "8", "lastPrice": "50000"}]
+
+        def fa(url, timeout=10.0):
+            return aster if "ticker" in url else {"openInterest": "2"}
+
+        with mock.patch.object(api, "get_json", side_effect=fa):
+            self.assertEqual(api._snap_aster(), {"BTC": (200040.0, 50000.0), "NVDA": (400.0, 200.0)})
+        bingx = {"data": [{"symbol": "BTC-USDT", "quoteVolume": "9", "lastPrice": "50000"},
+                          {"symbol": "BTC-USDC", "quoteVolume": "1", "lastPrice": "50010"},
+                          {"symbol": "NCCO1OILWTI2USD-USDT", "quoteVolume": "99", "lastPrice": "60"}]}
+
+        def fb(url, timeout=10.0):
+            return bingx if "ticker" in url else {"data": {"openInterest": "700" if "USDT" in url else "30"}}
+
+        with mock.patch.object(api, "get_json", side_effect=fb):
+            self.assertEqual(api._snap_bingx(), {"BTC": (730.0, 50000.0)})
+
     def test_listed_with_caps(self):
         names = dict(api.LIQ_SNAPS)
         self.assertIs(names["BitMEX"], api._snap_bitmex)

@@ -1857,6 +1857,15 @@ say("карта ликвидаций: интерес Gate без удвоени�
     # Ещё биржи в снимках интереса: BloFin и XT.com; Zoomex — нет (отдаёт Bybit).
     and '("BloFin", _snap_blofin), ("XT.com", _snap_xt),' in api and "_snap_zoomex" not in api)
 
+# Сверка снимков с CoinGecko: у Phemex брался только USDT (у BTC — 15% интереса,
+# остальное в инверсном BTCUSD и USDC); места в «60 самых торгуемых» у XT,
+# BingX и Aster занимали мёртвые рынки, 1000PEPE и токены-обёртки.
+say("карта ликвидаций: снимки Phemex с инверсными и USDC, топ бирж — только из живых рынков",
+    'api.phemex.com/md/ticker/24hr/all' in pybody(api, "def _snap_phemex(")
+    and '("USDT", "USDC")' in pybody(api, "def _snap_phemex(")
+    and "picked = picked[:n]" in pybody(api, "def _snap_top(")
+    and '_fnum(r.get("t")) > fresh' in pybody(api, "def _snap_xt("))
+
 # «Добавить кошелёк» больше не отвечает общей ошибкой: причина отказа доходит
 # до экрана («уже добавлен» — обновить список), а норма запросов считается
 # на человека — на Cloud Run адрес у всех один, и норма делилась на всех.

@@ -10962,12 +10962,24 @@ def _snap_kraken() -> dict:
 
 
 def _snap_phemex() -> dict:
-    out = {}
+    """Phemex: USDT и USDC — интерес в монетах; инверсные BTCUSD и cXXXUSD —
+    в контрактах по $1 (у BTC это больше половины всего интереса)."""
+    out: dict = {}
+
+    def add(sym: str, usd: float, px: float) -> None:
+        if sym and px > 0 and usd > 0:
+            prev = out.get(sym)
+            out[sym] = (prev[0] + usd, prev[1]) if prev else (usd, px)
+
     for r in (get_json("https://api.phemex.com/md/v3/ticker/24hr/all", 20) or {}).get("result") or []:
         s = str(r.get("symbol") or "")
         px = _fnum(r.get("markRp"))
-        if s.endswith("USDT") and (sym := _snap_sym(s[:-4])):
-            out[sym] = (_fnum(r.get("openInterestRv")) * px, px)
+        add(_snap_sym(_quote_cut(s, ("USDT", "USDC"))), _fnum(r.get("openInterestRv")) * px, px)
+    for r in (get_json("https://api.phemex.com/md/ticker/24hr/all", 20) or {}).get("result") or []:
+        s = str(r.get("symbol") or "")
+        base = s[1:-3] if s.startswith("c") else s[:-3]
+        if s.endswith("USD") and (sym := _snap_sym(base)):
+            add(sym, _fnum(r.get("openInterest")), _fnum(r.get("markPrice")) / 1e4)
     return out
 
 
@@ -11161,38 +11173,55 @@ def _snap_apex() -> dict:
     return out
 
 
-def _snap_top(tick_url: str, key: str, n: int, one) -> dict:
-    """Биржи, что отдают интерес только по одной монете: берём n самых
-    торгуемых — дальше интерес мал, а запросов было бы сотни."""
-    ticks = get_json(tick_url, 20)
-    rows = ticks if isinstance(ticks, list) else (ticks or {}).get("data") or []
-    rows = [r for r in rows if isinstance(r, dict)]
-    rows.sort(key=lambda r: -_fnum(r.get(key)))
-    out: dict = {}
+def _snap_top(rows, key: str, n: int, pick, oi) -> dict:
+    """Биржи, что отдают интерес только по одному рынку: берём n самых
+    торгуемых — дальше интерес мал, а запросов было бы сотни. Места в n —
+    только рынкам, что попадут на карту (pick): истёкшие срочные, 1000PEPE
+    и токены-обёртки не вытесняют настоящие монеты. Рынки одной монеты
+    (USDT, USDC, USD1) складываются; цена — у самого торгуемого."""
+    picked = []
+    for r in rows if isinstance(rows, list) else []:
+        got = pick(r) if isinstance(r, dict) else None
+        if got and got[2] > 0:
+            picked.append((_fnum(r.get(key)), *got))
+    picked.sort(key=lambda x: -x[0])
+    picked = picked[:n]
+    usd = [0.0] * len(picked)
 
-    def take(r) -> None:
+    def take(i: int) -> None:
         try:
-            got = one(r)
-        except Exception:  # noqa: BLE001 — одна монета не ответила
-            got = None
-        if got:
-            out[got[0]] = got[1]
+            usd[i] = oi(picked[i][2], picked[i][3])
+        except Exception:  # noqa: BLE001 — один рынок не ответил
+            usd[i] = 0.0
 
     with ThreadPoolExecutor(max_workers=6) as pool:
-        list(pool.map(take, rows[:n]))
+        list(pool.map(take, range(len(picked))))
+    out: dict = {}
+    for (_v, sym, _m, px), u in zip(picked, usd):
+        if u > 0:
+            prev = out.get(sym)
+            out[sym] = (prev[0] + u, prev[1]) if prev else (u, px)
     return out
 
 
+def _quote_cut(s: str, quotes: tuple) -> str:
+    """Тикер без котируемой валюты из списка; пусто — котировка не та."""
+    for q in quotes:
+        if s.endswith(q):
+            return s[: -len(q)]
+    return ""
+
+
 def _snap_aster() -> dict:
-    def one(r):
+    def pick(r):
         s = str(r.get("symbol") or "")
-        sym = _snap_sym(s[:-4]) if s.endswith("USDT") else ""
-        px = _fnum(r.get("lastPrice"))
-        if not sym or px <= 0:
-            return None
-        oi = _fnum((get_json(f"https://fapi.asterdex.com/fapi/v1/openInterest?symbol={s}", 10) or {}).get("openInterest"))
-        return sym, (oi * px, px)
-    return _snap_top("https://fapi.asterdex.com/fapi/v1/ticker/24hr", "quoteVolume", 60, one)
+        sym = _snap_sym(_quote_cut(s, ("USDT", "USDC", "USD1")))
+        return (sym, s, _fnum(r.get("lastPrice"))) if sym else None
+
+    def oi(s: str, px: float) -> float:
+        return _fnum((get_json(f"https://fapi.asterdex.com/fapi/v1/openInterest?symbol={s}", 10) or {}).get("openInterest")) * px
+
+    return _snap_top(get_json("https://fapi.asterdex.com/fapi/v1/ticker/24hr", 20), "quoteVolume", 60, pick, oi)
 
 
 def _snap_delta(host: str) -> dict:
@@ -11225,15 +11254,17 @@ def _snap_bullish() -> dict:
 
 
 def _snap_bingx() -> dict:
-    def one(r):
+    def pick(r):
         s = str(r.get("symbol") or "")
-        sym = _snap_sym(s[:-5]) if s.endswith("-USDT") else ""
-        px = _fnum(r.get("lastPrice"))
-        if not sym or px <= 0:
-            return None
-        got = (get_json(f"https://open-api.bingx.com/openApi/swap/v2/quote/openInterest?symbol={s}", 10) or {}).get("data") or {}
-        return sym, (_fnum(got.get("openInterest")), px)
-    return _snap_top("https://open-api.bingx.com/openApi/swap/v2/quote/ticker", "quoteVolume", 60, one)
+        sym = _snap_sym(_quote_cut(s, ("-USDT", "-USDC")))
+        return (sym, s, _fnum(r.get("lastPrice"))) if sym else None
+
+    def oi(s: str, _px: float) -> float:
+        # BingX отдаёт интерес сразу в долларах.
+        return _fnum(((get_json(f"https://open-api.bingx.com/openApi/swap/v2/quote/openInterest?symbol={s}", 10) or {}).get("data") or {}).get("openInterest"))
+
+    ticks = (get_json("https://open-api.bingx.com/openApi/swap/v2/quote/ticker", 20) or {}).get("data")
+    return _snap_top(ticks, "quoteVolume", 60, pick, oi)
 
 
 def _snap_blofin() -> dict:
@@ -11253,25 +11284,23 @@ def _snap_blofin() -> dict:
 # $4,86 млрд — ровно Bybit), а запрос по одной монете — свой ($12 млн).
 # С Bybit на карте это был бы двойной счёт.
 def _snap_xt() -> dict:
-    """XT.com отдаёт интерес по одной монете — берём 60 самых торгуемых."""
-    ticks = (get_json("https://fapi.xt.com/future/market/v1/public/q/agg-tickers", 20) or {}).get("result") or []
+    """XT.com отдаёт интерес по одному рынку — берём 60 самых торгуемых
+    бессрочных. В тикерах лежат и давно закрытые рынки со старым объёмом
+    (alpaca_usdt — тикер полуторагодовой давности): их отсекаем по времени
+    тикера, как и истёкшие срочные вроде btc_usdt_230331."""
+    fresh = time.time() * 1000 - 86_400_000
 
-    def one(r):
+    def pick(r):
         s = str(r.get("s") or "")
-        sym = _snap_sym(s[:-5]) if s.endswith("_usdt") else ""
-        p = _fnum(r.get("c"))
-        if not sym or p <= 0:
-            return None
-        got = (get_json(f"https://fapi.xt.com/future/market/v1/public/contract/open-interest?symbol={s}", 10) or {}).get("result") or {}
-        return sym, (_fnum(got.get("openInterestUsd")), p)
+        sym = _snap_sym(_quote_cut(s, ("_usdt",))) if _fnum(r.get("t")) > fresh else ""
+        return (sym, s, _fnum(r.get("c"))) if sym else None
 
-    rows = sorted((r for r in ticks if isinstance(r, dict)), key=lambda r: -_fnum(r.get("v")))[:60]
-    out: dict = {}
-    with ThreadPoolExecutor(max_workers=6) as pool:
-        for got in pool.map(lambda r: _safe(one, r), rows):
-            if got:
-                out[got[0]] = got[1]
-    return out
+    def oi(s: str, _px: float) -> float:
+        got = (get_json(f"https://fapi.xt.com/future/market/v1/public/contract/open-interest?symbol={s}", 10) or {}).get("result") or {}
+        return _fnum(got.get("openInterestUsd"))
+
+    ticks = (get_json("https://fapi.xt.com/future/market/v1/public/q/agg-tickers", 20) or {}).get("result")
+    return _snap_top(ticks, "v", 60, pick, oi)
 
 
 def _safe(fn, *a):
