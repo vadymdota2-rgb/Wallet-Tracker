@@ -10100,8 +10100,9 @@ def wire() -> None:
     """Привязка к боевому окружению — только из main(): кэш на диске рядом с
     базой (или WHALE_CACHE_DIR) у всех модулей, уборка старых файлов и
     сообщение владельцу о новом фонде ETF (пишет в базу и в Telegram)."""
-    global CACHE_DIR  # noqa: PLW0603 — каталог задаётся один раз, при запуске службы
+    global CACHE_DIR, LIQ_DAY_WRITE  # noqa: PLW0603 — задаются один раз, при запуске службы
     CACHE_DIR = os.environ.get("WHALE_CACHE_DIR") or os.path.join(os.path.dirname(DB), "api_cache")
+    LIQ_DAY_WRITE = True  # копилку дневных рядов карты ликвидаций пишет только служба
     etf.set_cache_file(os.path.join(CACHE_DIR, "etf.json"))
     wt_dom.set_cache_dir(CACHE_DIR)
     wt_fng.set_cache_dir(CACHE_DIR)
@@ -11689,11 +11690,34 @@ def liq_warm_refresher() -> None:
 # сохранённые дни перед тем, что отдала биржа: история растёт на день в
 # день. Запросов к биржам не прибавляется. Старше LIQ_DAY_KEEP — вон.
 LIQ_DAY_KEEP = 1100 * 86400
+# Писать в копилку — только сама служба (флаг ставит wire() при запуске).
+# Отдельный процесс (проверка, бэктест, разовый скрипт) только читает, и
+# базу открывает только на чтение: боевую базу он не трогает.
+LIQ_DAY_WRITE = False
+
+
+def _liq_day_read(sym: str, got: dict) -> dict:
+    """Ряды бирж с подклеенными сохранёнными днями — только чтение."""
+    try:
+        con = sqlite3.connect(f"file:{LIQ_OI_DB}?mode=ro", uri=True, timeout=8)
+        try:
+            out = {}
+            for ex, rows in got.items():
+                old = con.execute("SELECT t, hi, lo, c, oi, bs FROM liq_day WHERE coin=? AND ex=? AND t<? ORDER BY t",
+                                  (sym, ex, rows[0][0])).fetchall()
+                out[ex] = [tuple(r) for r in old] + list(rows)
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return got  # базы или копилки ещё нет
+    return out
 
 
 def _liq_day_keep(sym: str, got: dict) -> dict:
-    """Ряды бирж с подклеенными сохранёнными днями; закрытые дни — в базу.
-    База недоступна — ряды как были."""
+    """Ряды бирж с подклеенными сохранёнными днями; закрытые дни — в базу
+    (только у службы, LIQ_DAY_WRITE). База недоступна — ряды как были."""
+    if not LIQ_DAY_WRITE:
+        return _liq_day_read(sym, got)
     try:
         con = _liq_oi_con()
         try:

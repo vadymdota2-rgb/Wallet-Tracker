@@ -13,6 +13,7 @@ import tempfile
 import threading
 import time
 import unittest
+from pathlib import Path
 from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -474,7 +475,7 @@ class DayKeepTest(unittest.TestCase):
 
     def setUp(self):
         d = tempfile.mkdtemp()
-        for name, value in (("LIQ_OI_DB", os.path.join(d, "liq_oi.db")),
+        for name, value in (("LIQ_OI_DB", os.path.join(d, "liq_oi.db")), ("LIQ_DAY_WRITE", True),
                             ("_liq_sampled", lambda *a: {}), ("_liq_hl_candles", lambda *a: None)):
             patcher = mock.patch.object(api, name, value)
             patcher.start()
@@ -524,6 +525,29 @@ class DayKeepTest(unittest.TestCase):
             self.assertEqual(con.execute("SELECT COUNT(*) FROM liq_day").fetchone()[0], 0)
         finally:
             con.close()
+
+    def test_other_processes_only_read(self):
+        # Проверка или бэктест на сервере — отдельный процесс: копилку
+        # читает (дни подклеиваются), но в боевую базу не пишет ничего.
+        self.gather()  # служба
+        self.days = range(120, 151)
+        db = api.LIQ_OI_DB
+        before = Path(db).read_bytes()
+        with mock.patch.object(api, "LIQ_DAY_WRITE", False):
+            got = self.gather()["Binance"]
+        self.assertEqual([r[0] // DAY - self.base for r in got], list(range(100, 151)))
+        self.assertEqual(Path(db).read_bytes(), before)
+        # Базы нет вовсе — ряды как были, файл не создаётся.
+        with mock.patch.object(api, "LIQ_DAY_WRITE", False), mock.patch.object(api, "LIQ_OI_DB", db + ".none"):
+            self.assertEqual(len(self.gather()["Binance"]), 31)
+        self.assertFalse(os.path.exists(db + ".none"))
+
+    def test_only_the_service_writes(self):
+        self.assertIsInstance(api.LIQ_DAY_WRITE, bool)
+        src = Path(ROOT, "whale_api.py").read_text(encoding="utf-8")
+        self.assertIn("LIQ_DAY_WRITE = False", src)
+        wire = src.split("def wire() -> None:")[1].split("\ndef ")[0]
+        self.assertIn("LIQ_DAY_WRITE = True", wire)
 
     def test_broken_database_keeps_the_rows(self):
         with mock.patch.object(api, "_liq_oi_con", side_effect=sqlite3.OperationalError("locked")):
