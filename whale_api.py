@@ -10600,6 +10600,39 @@ OIH_RANGES = {k: wt_liqmap.RANGES[k] for k in ("1d", "7d", "30d")}
 _liq_lock = threading.Lock()
 
 
+def _jd(v) -> dict:
+    """Ответ биржи — словарь, иначе пусто (не тот тип не роняет разбор)."""
+    return v if isinstance(v, dict) else {}
+
+
+def _jl(v) -> list:
+    """Ответ биржи — список, иначе пусто."""
+    return v if isinstance(v, list) else []
+
+
+def _jrows(v, *path) -> list:
+    """Словари-строки по пути ключей в ответе JSON: где-то не тот тип — пусто;
+    чужие элементы списка (None, числа, строки) — мимо. Один битый элемент
+    не выкидывает из карты всю биржу."""
+    for k in path:
+        v = _jd(v).get(k)
+    return [r for r in v if isinstance(r, dict)] if isinstance(v, list) else []
+
+
+def _jlists(v, n: int, *path) -> list:
+    """То же для строк-списков (свечи): только списки не короче n, и первое
+    поле (время) — число или строка: им строки сводятся друг с другом."""
+    for k in path:
+        v = _jd(v).get(k)
+    return [r for r in v if isinstance(r, list) and len(r) >= n and isinstance(r[0], (str, int, float))
+            and not isinstance(r[0], bool)] if isinstance(v, list) else []
+
+
+def _jt(v) -> int:
+    """Время из ответа (число или строка) — целое; мусор — 0."""
+    return int(_fnum(v))
+
+
 def _glue_inverse(main: dict, inv: dict) -> dict:
     """Интерес основного контракта ({время: $}) плюс другого бессрочного той
     же монеты (с расчётом в монете или в USDC) — только по общим отметкам. Ряд второго короче 95 % — не клеим:
@@ -10611,34 +10644,32 @@ def _glue_inverse(main: dict, inv: dict) -> dict:
 
 def _liq_binance(sym: str, period: str, n: int) -> list | None:
     s = f"{sym}USDT"
-    oi = get_json(f"https://fapi.binance.com/futures/data/openInterestHist?symbol={s}&period={period}&limit={min(n, 500)}", 15)
+    oi = _jrows(get_json(f"https://fapi.binance.com/futures/data/openInterestHist?symbol={s}&period={period}&limit={min(n, 500)}", 15))
     # COIN-M (BTCUSD_PERP): у BTC — ещё ~$1,5 млрд. Интерес там в монетах.
-    cm = get_json(f"https://dapi.binance.com/futures/data/openInterestHist?pair={sym}USD&contractType=PERPETUAL"
-                  f"&period={period}&limit={min(n, 500)}", 15)
+    cm = _jrows(get_json(f"https://dapi.binance.com/futures/data/openInterestHist?pair={sym}USD&contractType=PERPETUAL"
+                         f"&period={period}&limit={min(n, 500)}", 15))
     # USDⓈ-M с расчётом в USDC (BTCUSDC, ETHUSDC): по CoinGecko у ETH это
     # треть интереса Binance ($2,8 млрд из $8,7 млрд), у BTC — $1,7 млрд.
-    uc = get_json(f"https://fapi.binance.com/futures/data/openInterestHist?symbol={sym}USDC&period={period}&limit={min(n, 500)}", 15)
-    kl = get_json(f"https://fapi.binance.com/fapi/v1/klines?symbol={s}&interval={period}&limit={min(n, 500)}", 15)
-    tk = get_json(f"https://fapi.binance.com/futures/data/takerlongshortRatio?symbol={s}&period={period}&limit={min(n, 500)}", 15)
-    if not isinstance(oi, list) or not isinstance(kl, list) or not oi or not kl:
+    uc = _jrows(get_json(f"https://fapi.binance.com/futures/data/openInterestHist?symbol={sym}USDC&period={period}&limit={min(n, 500)}", 15))
+    kl = _jlists(get_json(f"https://fapi.binance.com/fapi/v1/klines?symbol={s}&interval={period}&limit={min(n, 500)}", 15), 5)
+    tk = _jrows(get_json(f"https://fapi.binance.com/futures/data/takerlongshortRatio?symbol={s}&period={period}&limit={min(n, 500)}", 15))
+    if not oi or not kl:
         return None
-    kmap = {int(k[0]) // 1000: k for k in kl}
-    tmap = {int(r["timestamp"]) // 1000: _fnum(r.get("buySellRatio")) for r in (tk if isinstance(tk, list) else [])}
-    usd = {int(r["timestamp"]) // 1000: _fnum(r.get("sumOpenInterestValue")) for r in oi if isinstance(r, dict)}
+    kmap = {_jt(k[0]) // 1000: k for k in kl}
+    tmap = {_jt(r.get("timestamp")) // 1000: _fnum(r.get("buySellRatio")) for r in tk}
+    usd = {_jt(r.get("timestamp")) // 1000: _fnum(r.get("sumOpenInterestValue")) for r in oi}
     # Монеты COIN-M — в доллары по цене на момент снимка (открытие свечи).
-    inv = {t: _fnum(r.get("sumOpenInterestValue")) * float(kmap[t][1])
-           for r in (cm if isinstance(cm, list) else []) if isinstance(r, dict)
-           if (t := int(_fnum(r.get("timestamp"))) // 1000) in kmap}
+    inv = {t: _fnum(r.get("sumOpenInterestValue")) * _fnum(kmap[t][1])
+           for r in cm if (t := _jt(r.get("timestamp")) // 1000) in kmap}
     usd = _glue_inverse(usd, inv)
-    usd = _glue_inverse(usd, {int(r["timestamp"]) // 1000: _fnum(r.get("sumOpenInterestValue"))
-                              for r in (uc if isinstance(uc, list) else []) if isinstance(r, dict) and "timestamp" in r})
+    usd = _glue_inverse(usd, {_jt(r.get("timestamp")) // 1000: _fnum(r.get("sumOpenInterestValue")) for r in uc})
     out = []
     for t, v in sorted(usd.items()):
         k = kmap.get(t)
         if not k:
             continue
         ratio = tmap.get(t) or 1.0
-        out.append((t, float(k[2]), float(k[3]), float(k[4]), v, ratio / (1 + ratio)))
+        out.append((t, _fnum(k[2]), _fnum(k[3]), _fnum(k[4]), v, ratio / (1 + ratio)))
     return out
 
 
@@ -10646,58 +10677,58 @@ def _liq_okx(sym: str, period: str, n: int) -> list | None:
     inst = f"{sym}-USDT-SWAP"
     per = {"15m": "15m", "1h": "1H", "4h": "4H", "1d": "1D"}[period]
 
-    def pages(url: str, key: str) -> list:
-        rows, cursor = [], ""
+    def pages(url: str, key: str, width: int) -> list:
+        rows: list = []
+        cursor = ""
         while len(rows) < n:
-            r = get_json(url + (f"&{key}={cursor}" if cursor else ""), 15) or {}
-            data = r.get("data") or []
+            data = _jlists(get_json(url + (f"&{key}={cursor}" if cursor else ""), 15), width, "data")
             if not data:
                 break
             rows += data
-            cursor = data[-1][0]
+            cursor = str(data[-1][0])
             if len(data) < 100:
                 break
         return rows
 
-    oi = pages(f"https://www.okx.com/api/v5/rubik/stat/contracts/open-interest-history?instId={inst}&period={per}&limit=100", "end")
+    oi = pages(f"https://www.okx.com/api/v5/rubik/stat/contracts/open-interest-history?instId={inst}&period={per}&limit=100", "end", 4)
     # И бессрочный контракт с расчётом в монете (BTC-USD-SWAP): у BTC это
     # четверть интереса OKX. Сетка времени и глубина у него те же; складываем
     # только общие отметки — иначе начало его ряда модель приняла бы за
     # открытие позиций.
     inv = {r[0]: _fnum(r[3]) for r in pages(
-        f"https://www.okx.com/api/v5/rubik/stat/contracts/open-interest-history?instId={sym}-USD-SWAP&period={per}&limit=100", "end")}
+        f"https://www.okx.com/api/v5/rubik/stat/contracts/open-interest-history?instId={sym}-USD-SWAP&period={per}&limit=100", "end", 4)}
     if oi and len(inv) >= 0.95 * len(oi):
         oi = [[r[0], r[1], r[2], _fnum(r[3]) + inv[r[0]]] for r in oi if r[0] in inv]
-    kl = pages(f"https://www.okx.com/api/v5/market/history-candles?instId={inst}&bar={per}&limit=100", "after")
-    tk = pages(f"https://www.okx.com/api/v5/rubik/stat/taker-volume-contract?instId={inst}&period={per}&limit=100", "end")
+    kl = pages(f"https://www.okx.com/api/v5/market/history-candles?instId={inst}&bar={per}&limit=100", "after", 5)
+    tk = pages(f"https://www.okx.com/api/v5/rubik/stat/taker-volume-contract?instId={inst}&period={per}&limit=100", "end", 3)
     if not oi or not kl:
         return None
-    kmap = {int(k[0]) // 1000: k for k in kl}
+    kmap = {_jt(k[0]) // 1000: k for k in kl}
     tmap = {}
     for r in tk:
         sell, buy = _fnum(r[1]), _fnum(r[2])
         if sell + buy > 0:
-            tmap[int(r[0]) // 1000] = buy / (sell + buy)
+            tmap[_jt(r[0]) // 1000] = buy / (sell + buy)
     out = []
     for r in oi:
-        t = int(r[0]) // 1000
+        t = _jt(r[0]) // 1000
         k = kmap.get(t)
         if not k:
             continue
-        out.append((t, float(k[2]), float(k[3]), float(k[4]), _fnum(r[3]), tmap.get(t, 0.5)))
+        out.append((t, _fnum(k[2]), _fnum(k[3]), _fnum(k[4]), _fnum(r[3]), tmap.get(t, 0.5)))
     return sorted(out)
 
 
 def _liq_gate(sym: str, period: str, n: int) -> list | None:
     c = f"{sym}_USDT"
-    st = get_json(f"https://api.gateio.ws/api/v4/futures/usdt/contract_stats?contract={c}&interval={period}&limit={min(n, 400)}", 15)
-    kl = get_json(f"https://api.gateio.ws/api/v4/futures/usdt/candlesticks?contract={c}&interval={period}&limit={min(n, 400)}", 15)
-    if not isinstance(st, list) or not isinstance(kl, list) or not st or not kl:
+    st = _jrows(get_json(f"https://api.gateio.ws/api/v4/futures/usdt/contract_stats?contract={c}&interval={period}&limit={min(n, 400)}", 15))
+    kl = _jrows(get_json(f"https://api.gateio.ws/api/v4/futures/usdt/candlesticks?contract={c}&interval={period}&limit={min(n, 400)}", 15))
+    if not st or not kl:
         return None
-    kmap = {int(k["t"]): k for k in kl}
+    kmap = {_jt(k.get("t")): k for k in kl}
     out = []
     for r in st:
-        t = int(r.get("time") or 0)
+        t = _jt(r.get("time"))
         k = kmap.get(t)
         if not k:
             continue
@@ -10706,7 +10737,7 @@ def _liq_gate(sym: str, period: str, n: int) -> list | None:
         # открытого интереса: справочник контракта (position_size — все лонги)
         # даёт по BTC $2,15 млрд против $4,30 млрд здесь. Без деления Gate
         # весил на карте вдвое и ещё становился опорной биржей.
-        out.append((t, float(k["h"]), float(k["l"]), float(k["c"]), _fnum(r.get("open_interest_usd")) / 2,
+        out.append((t, _fnum(k.get("h")), _fnum(k.get("l")), _fnum(k.get("c")), _fnum(r.get("open_interest_usd")) / 2,
                     lt / (lt + stk) if lt + stk > 0 else 0.5))
     return sorted(out)
 
@@ -10736,65 +10767,65 @@ def _liq_bybit(sym: str, period: str, n: int) -> list | None:
         got: list = []
         cursor = ""
         while len(got) < n:
-            res = (get_json(f"{base}/open-interest?category={cat}&symbol={symbol}&intervalTime={oi_iv}&limit=200"
-                            + (f"&cursor={urllib.parse.quote(cursor)}" if cursor else ""), 15) or {}).get("result") or {}
-            got += [x for x in res.get("list") or [] if isinstance(x, dict)]
-            cursor = res.get("nextPageCursor") or ""
-            if not cursor or not res.get("list"):
+            res = _jd(_jd(get_json(f"{base}/open-interest?category={cat}&symbol={symbol}&intervalTime={oi_iv}&limit=200"
+                                   + (f"&cursor={urllib.parse.quote(cursor)}" if cursor else ""), 15)).get("result"))
+            page = _jrows(res, "list")
+            got += page
+            cursor = str(res.get("nextPageCursor") or "")
+            if not cursor or not page:
                 break
         return got
     oi = pages("linear", s)
     # Inverse (BTCUSD): у BTC — ещё ~$0,4 млрд; интерес там уже в долларах.
-    inv = {int(_fnum(r.get("timestamp"))) // 1000: _bybit_oi(r) for r in pages("inverse", f"{sym}USD")}
-    kl = (get_json(f"{base}/kline?category=linear&symbol={s}&interval={kl_iv}&limit={min(n, 1000)}", 15) or {}).get("result", {}).get("list") or []
-    rt = (get_json(f"{base}/account-ratio?category=linear&symbol={s}&period={oi_iv}&limit={min(n, 500)}", 15) or {}).get("result", {}).get("list") or []
+    inv = {_jt(r.get("timestamp")) // 1000: _bybit_oi(r) for r in pages("inverse", f"{sym}USD")}
+    kl = _jlists(get_json(f"{base}/kline?category=linear&symbol={s}&interval={kl_iv}&limit={min(n, 1000)}", 15), 5, "result", "list")
+    rt = _jrows(get_json(f"{base}/account-ratio?category=linear&symbol={s}&period={oi_iv}&limit={min(n, 500)}", 15), "result", "list")
     if not oi or not kl:
         return None
-    kmap = {int(k[0]) // 1000: k for k in kl}
+    kmap = {_jt(k[0]) // 1000: k for k in kl}
     # Доли агрессивных покупок Bybit не отдаёт — берём долю счетов в лонге.
-    rmap = {int(r["timestamp"]) // 1000: _fnum(r.get("buyRatio")) for r in rt}
+    rmap = {_jt(r.get("timestamp")) // 1000: _fnum(r.get("buyRatio")) for r in rt}
     usd = {}
     for r in oi:
-        t = int(_fnum(r.get("timestamp"))) // 1000
+        t = _jt(r.get("timestamp")) // 1000
         if k := kmap.get(t):
-            usd[t] = _bybit_oi(r) * float(k[4])  # у USDT-контракта интерес — в монетах
+            usd[t] = _bybit_oi(r) * _fnum(k[4])  # у USDT-контракта интерес — в монетах
     usd = _glue_inverse(usd, inv)
     out = []
     for t, v in sorted(usd.items()):
         k = kmap[t]
-        out.append((t, float(k[2]), float(k[3]), float(k[4]), v, rmap.get(t) or 0.5))
+        out.append((t, _fnum(k[2]), _fnum(k[3]), _fnum(k[4]), v, rmap.get(t) or 0.5))
     return out
 
 
 def _liq_htx(sym: str, period: str, n: int) -> list | None:
     c = f"{sym}-USDT"
     per = {"15m": "15min", "1h": "60min", "4h": "4hour", "1d": "1day"}[period]
-    oi = ((get_json(f"https://api.hbdm.com/linear-swap-api/v1/swap_his_open_interest?contract_code={c}&period={per}&amount_type=2&size={min(n, 200)}", 15) or {}).get("data") or {}).get("tick") or []
-    kl = (get_json(f"https://api.hbdm.com/linear-swap-ex/market/history/kline?contract_code={c}&period={per}&size={min(n, 2000)}", 15) or {}).get("data") or []
-    rt = ((get_json(f"https://api.hbdm.com/linear-swap-api/v1/swap_elite_position_ratio?contract_code={c}&period={per}", 15) or {}).get("data") or {}).get("list") or []
+    oi = _jrows(get_json(f"https://api.hbdm.com/linear-swap-api/v1/swap_his_open_interest?contract_code={c}&period={per}&amount_type=2&size={min(n, 200)}", 15), "data", "tick")
+    kl = _jrows(get_json(f"https://api.hbdm.com/linear-swap-ex/market/history/kline?contract_code={c}&period={per}&size={min(n, 2000)}", 15), "data")
+    rt = _jrows(get_json(f"https://api.hbdm.com/linear-swap-api/v1/swap_elite_position_ratio?contract_code={c}&period={per}", 15), "data", "list")
     if not oi or not kl:
         return None
-    kmap = {int(k["id"]): k for k in kl}
-    rmap = {int(r["ts"]) // 1000: _fnum(r.get("buy_ratio")) for r in rt}
+    kmap = {_jt(k.get("id")): k for k in kl}
+    rmap = {_jt(r.get("ts")) // 1000: _fnum(r.get("buy_ratio")) for r in rt}
     out = []
     for r in oi:
-        t = int(r["ts"]) // 1000
+        t = _jt(r.get("ts")) // 1000
         k = kmap.get(t)
         if not k:
             continue
-        out.append((t, float(k["high"]), float(k["low"]), float(k["close"]), _fnum(r.get("value")), rmap.get(t) or 0.5))
+        out.append((t, _fnum(k.get("high")), _fnum(k.get("low")), _fnum(k.get("close")), _fnum(r.get("value")), rmap.get(t) or 0.5))
     return sorted(out)
 
 
 def _liq_dydx(sym: str, period: str, n: int) -> list | None:
     """dYdX — децентрализованная биржа: открытый интерес лежит прямо в свече."""
     res = {"15m": "15MINS", "1h": "1HOUR", "4h": "4HOURS", "1d": "1DAY"}[period]
-    r = get_json(f"https://indexer.dydx.trade/v4/candles/perpetualMarkets/{sym}-USD?resolution={res}&limit={min(n, 400)}", 15) or {}
     out = []
-    for k in r.get("candles") or []:
+    for k in _jrows(get_json(f"https://indexer.dydx.trade/v4/candles/perpetualMarkets/{sym}-USD?resolution={res}&limit={min(n, 400)}", 15), "candles"):
         try:
-            t = calendar.timegm(time.strptime(k["startedAt"][:19], "%Y-%m-%dT%H:%M:%S"))
-        except (KeyError, ValueError, TypeError):
+            t = calendar.timegm(time.strptime(str(k.get("startedAt"))[:19], "%Y-%m-%dT%H:%M:%S"))
+        except ValueError:
             continue
         o = _fnum(k.get("open"))
         out.append((t, _fnum(k.get("high")), _fnum(k.get("low")), _fnum(k.get("close")),
@@ -10811,23 +10842,22 @@ def _liq_kraken(sym: str, period: str, n: int) -> list | None:
     base = "https://futures.kraken.com/api/charts/v1"
     end = now()
     start = end - sec * (n + 1)
-    kl = (get_json(f"{base}/trade/{prod}/{period}?from={start}&to={end}", 15) or {}).get("candles")
-    oi = (get_json(f"{base}/analytics/{prod}/open-interest?interval={sec}&since={start}", 15) or {}).get("result") or {}
-    ad = (get_json(f"{base}/analytics/{prod}/aggressor-differential?interval={sec}&since={start}", 15) or {}).get("result") or {}
-    if not isinstance(kl, list) or not isinstance(oi.get("timestamp"), list) or not isinstance(oi.get("data"), list):
+    raw = _jd(get_json(f"{base}/trade/{prod}/{period}?from={start}&to={end}", 15)).get("candles")
+    kl = _jrows(raw)
+    oi = _jd(_jd(get_json(f"{base}/analytics/{prod}/open-interest?interval={sec}&since={start}", 15)).get("result"))
+    ad = _jd(_jd(get_json(f"{base}/analytics/{prod}/aggressor-differential?interval={sec}&since={start}", 15)).get("result"))
+    if not isinstance(raw, list) or not isinstance(oi.get("timestamp"), list) or not isinstance(oi.get("data"), list):
         return None
     coins = {}
     for t, v in zip(oi["timestamp"], oi["data"], strict=False):
         if isinstance(v, list) and v:
-            coins[int(t)] = _fnum(v[0])
+            coins[_jt(t)] = _fnum(v[0])
     diff = {}
     if isinstance(ad.get("timestamp"), list) and isinstance(ad.get("data"), list):
-        diff = {int(t): _fnum(v) for t, v in zip(ad["timestamp"], ad["data"], strict=False)}
+        diff = {_jt(t): _fnum(v) for t, v in zip(ad["timestamp"], ad["data"], strict=False)}
     out = []
     for k in kl:
-        if not isinstance(k, dict):
-            continue
-        t = int(_fnum(k.get("time")) // 1000)
+        t = _jt(k.get("time")) // 1000
         q = coins.get(t)
         if not q:
             continue
@@ -10908,7 +10938,9 @@ def _snap_hl() -> dict:
     got = hl_post({"type": "metaAndAssetCtxs"}, 15)
     out = {}
     if isinstance(got, list) and len(got) == 2:
-        for m, c in zip(got[0].get("universe") or [], got[1] or []):
+        for m, c in zip(_jl(_jd(got[0]).get("universe")), _jl(got[1])):
+            if not isinstance(m, dict) or not isinstance(c, dict):
+                continue  # пара по номеру: чужой элемент — мимо, соседи не сдвигаются
             name = str(m.get("name") or "")
             px = _fnum(c.get("markPx"))
             if not m.get("isDelisted") and re.fullmatch(r"[A-Z0-9]{2,12}", name):
@@ -10929,7 +10961,7 @@ def _snap_bitget() -> dict:
     публичный API сейчас не отдаёт (у BTC это ~4 % интереса Bitget)."""
     out: dict = {}
     for kind, quote in (("usdt-futures", "USDT"), ("usdc-futures", "PERP")):
-        for r in (get_json(f"https://api.bitget.com/api/v2/mix/market/tickers?productType={kind}", 20) or {}).get("data") or []:
+        for r in _jrows(get_json(f"https://api.bitget.com/api/v2/mix/market/tickers?productType={kind}", 20), "data"):
             px = _fnum(r.get("markPrice")) or _fnum(r.get("lastPr"))
             _snap_add(out, _snap_sym(_quote_cut(str(r.get("symbol") or ""), (quote,))), _fnum(r.get("holdingAmount")) * px, px)
     return out
@@ -10942,15 +10974,15 @@ def _snap_mexc() -> dict:
     # Размер контракта меняется редко, а справочник весит два мегабайта —
     # берём его раз в шесть часов и держим прошлый, если биржа не ответила.
     if not _mexc_size["map"] or time.monotonic() - _mexc_size["at"] > 6 * 3600:
-        got = {d.get("symbol"): _fnum(d.get("contractSize"))
-               for d in (get_json("https://contract.mexc.com/api/v1/contract/detail", 30) or {}).get("data") or []}
+        got = {str(d.get("symbol") or ""): _fnum(d.get("contractSize"))
+               for d in _jrows(get_json("https://contract.mexc.com/api/v1/contract/detail", 30), "data")}
         if got:
             _mexc_size.update(at=time.monotonic(), map=got)
     size = _mexc_size["map"]
     out: dict = {}
     # USDT первым — его цена в снимке; затем USDC, USD1 (контракт в монетах)
     # и инверсные BTC_USD (контракт в долларах: у BTC — $100).
-    ticks = [r for r in (get_json("https://contract.mexc.com/api/v1/contract/ticker", 20) or {}).get("data") or [] if isinstance(r, dict)]
+    ticks = _jrows(get_json("https://contract.mexc.com/api/v1/contract/ticker", 20), "data")
     ticks.sort(key=lambda r: not str(r.get("symbol") or "").endswith("_USDT"))
     for r in ticks:
         s = str(r.get("symbol") or "")
@@ -10967,8 +10999,7 @@ def _snap_kucoin() -> dict:
     """KuCoin: USDTM и USDCM — контракт в монетах (multiplier); инверсные
     XBTUSDM — контракт $1. Срочные (XBTMZ26) не берём."""
     out: dict = {}
-    rows = [r for r in (get_json("https://api-futures.kucoin.com/api/v1/contracts/active", 25) or {}).get("data") or []
-            if isinstance(r, dict) and r.get("status") == "Open"]
+    rows = [r for r in _jrows(get_json("https://api-futures.kucoin.com/api/v1/contracts/active", 25), "data") if r.get("status") == "Open"]
     rows.sort(key=lambda r: not str(r.get("symbol") or "").endswith("USDTM"))
     for r in rows:
         s, px = str(r.get("symbol") or ""), _fnum(r.get("markPrice"))
@@ -10982,7 +11013,7 @@ def _snap_kucoin() -> dict:
 
 def _snap_kraken() -> dict:
     out = {}
-    for r in (get_json("https://futures.kraken.com/derivatives/api/v3/tickers", 20) or {}).get("tickers") or []:
+    for r in _jrows(get_json("https://futures.kraken.com/derivatives/api/v3/tickers", 20), "tickers"):
         pair = str(r.get("pair") or "")
         if not str(r.get("symbol") or "").startswith("PF_") or not pair.endswith(":USD"):
             continue
@@ -10996,11 +11027,11 @@ def _snap_phemex() -> dict:
     """Phemex: USDT и USDC — интерес в монетах; инверсные BTCUSD и cXXXUSD —
     в контрактах по $1 (у BTC это больше половины всего интереса)."""
     out: dict = {}
-    for r in (get_json("https://api.phemex.com/md/v3/ticker/24hr/all", 20) or {}).get("result") or []:
+    for r in _jrows(get_json("https://api.phemex.com/md/v3/ticker/24hr/all", 20), "result"):
         s = str(r.get("symbol") or "")
         px = _fnum(r.get("markRp"))
         _snap_add(out, _snap_sym(_quote_cut(s, ("USDT", "USDC"))), _fnum(r.get("openInterestRv")) * px, px)
-    for r in (get_json("https://api.phemex.com/md/ticker/24hr/all", 20) or {}).get("result") or []:
+    for r in _jrows(get_json("https://api.phemex.com/md/ticker/24hr/all", 20), "result"):
         s = str(r.get("symbol") or "")
         base = s[1:-3] if s.startswith("c") else s[:-3]
         if s.endswith("USD") and (sym := _snap_sym(base)):
@@ -11010,7 +11041,7 @@ def _snap_phemex() -> dict:
 
 def _snap_woo() -> dict:
     out = {}
-    for r in (get_json("https://api.woox.io/v1/public/futures", 20) or {}).get("rows") or []:
+    for r in _jrows(get_json("https://api.woox.io/v1/public/futures", 20), "rows"):
         s = str(r.get("symbol") or "")
         px = _fnum(r.get("mark_price"))
         if s.startswith("PERP_") and s.endswith("_USDT") and (sym := _snap_sym(s[5:-5])):
@@ -11020,7 +11051,7 @@ def _snap_woo() -> dict:
 
 def _snap_whitebit() -> dict:
     out = {}
-    for r in (get_json("https://whitebit.com/api/v4/public/futures", 20) or {}).get("result") or []:
+    for r in _jrows(get_json("https://whitebit.com/api/v4/public/futures", 20), "result"):
         if r.get("product_type") != "Perpetual" or r.get("money_currency") != "USDT":
             continue
         px = _fnum(r.get("last_price"))
@@ -11031,7 +11062,7 @@ def _snap_whitebit() -> dict:
 
 def _snap_bitfinex() -> dict:
     out = {}
-    for r in get_json("https://api-pub.bitfinex.com/v2/status/deriv?keys=ALL", 20) or []:
+    for r in _jl(get_json("https://api-pub.bitfinex.com/v2/status/deriv?keys=ALL", 20)):
         key = str(r[0]) if isinstance(r, list) and len(r) > 18 else ""
         if key.startswith("t") and key.endswith("F0:USTF0"):
             px = _fnum(r[15]) or _fnum(r[3])
@@ -11044,7 +11075,7 @@ def _snap_deribit() -> dict:
     out: dict = {}
     base = "https://www.deribit.com/api/v2/public/get_book_summary_by_currency?kind=future&currency="
     for cur in ("BTC", "ETH", "USDC"):
-        for r in (get_json(base + cur, 20) or {}).get("result") or []:
+        for r in _jrows(get_json(base + cur, 20), "result"):
             name = str(r.get("instrument_name") or "")
             if not name.endswith("-PERPETUAL"):
                 continue
@@ -11064,7 +11095,7 @@ def _snap_deribit() -> dict:
 
 def _snap_coinex() -> dict:
     out = {}
-    for r in (get_json("https://api.coinex.com/v2/futures/ticker", 20) or {}).get("data") or []:
+    for r in _jrows(get_json("https://api.coinex.com/v2/futures/ticker", 20), "data"):
         m = str(r.get("market") or "")
         px = _fnum(r.get("mark_price"))
         if m.endswith("USDT") and (sym := _snap_sym(m[:-4])):
@@ -11076,8 +11107,8 @@ def _snap_cbintl() -> dict:
     # Цены в справочнике Coinbase International нет — интерес в монетах,
     # в доллары его переводит liq_oi_sample по ценам других бирж.
     out = {}
-    for r in get_json("https://api.international.coinbase.com/api/v1/instruments", 20) or []:
-        if isinstance(r, dict) and r.get("type") == "PERP" and r.get("trading_state") == "TRADING":
+    for r in _jrows(get_json("https://api.international.coinbase.com/api/v1/instruments", 20)):
+        if r.get("type") == "PERP" and r.get("trading_state") == "TRADING":
             if sym := _snap_sym(r.get("base_asset_name")):
                 out[sym] = (_fnum(r.get("open_interest")), 0.0, True)
     return out
@@ -11085,8 +11116,7 @@ def _snap_cbintl() -> dict:
 
 def _snap_cryptocom() -> dict:
     out = {}
-    got = (get_json("https://api.crypto.com/exchange/v1/public/get-tickers", 20) or {}).get("result") or {}
-    for r in got.get("data") or []:
+    for r in _jrows(get_json("https://api.crypto.com/exchange/v1/public/get-tickers", 20), "result", "data"):
         i = str(r.get("i") or "")
         px = _fnum(r.get("a"))
         if i.endswith("USD-PERP") and (sym := _snap_sym(i[:-8])):
@@ -11096,7 +11126,7 @@ def _snap_cryptocom() -> dict:
 
 def _snap_paradex() -> dict:
     out = {}
-    for r in (get_json("https://api.prod.paradex.trade/v1/markets/summary?market=ALL", 30) or {}).get("results") or []:
+    for r in _jrows(get_json("https://api.prod.paradex.trade/v1/markets/summary?market=ALL", 30), "results"):
         m = str(r.get("symbol") or "")
         px = _fnum(r.get("mark_price"))
         if m.endswith("-USD-PERP") and (sym := _snap_sym(m[:-9])):
@@ -11106,7 +11136,7 @@ def _snap_paradex() -> dict:
 
 def _snap_lighter() -> dict:
     out = {}
-    for r in (get_json("https://mainnet.zklighter.elliot.ai/api/v1/orderBookDetails", 25) or {}).get("order_book_details") or []:
+    for r in _jrows(get_json("https://mainnet.zklighter.elliot.ai/api/v1/orderBookDetails", 25), "order_book_details"):
         px = _fnum(r.get("mark_price")) or _fnum(r.get("last_trade_price"))
         if r.get("market_type") == "perp" and r.get("status") == "active" and (sym := _snap_sym(r.get("symbol"))):
             out[sym] = (_fnum(r.get("open_interest")) * px, px)
@@ -11114,11 +11144,11 @@ def _snap_lighter() -> dict:
 
 
 def _snap_backpack() -> dict:
-    marks = {r.get("symbol"): _fnum(r.get("markPrice"))
-             for r in get_json("https://api.backpack.exchange/api/v1/markPrices", 20) or [] if isinstance(r, dict)}
+    marks = {str(r.get("symbol") or ""): _fnum(r.get("markPrice"))
+             for r in _jrows(get_json("https://api.backpack.exchange/api/v1/markPrices", 20))}
     out = {}
-    for r in get_json("https://api.backpack.exchange/api/v1/openInterest", 20) or []:
-        m = str(r.get("symbol") or "") if isinstance(r, dict) else ""
+    for r in _jrows(get_json("https://api.backpack.exchange/api/v1/openInterest", 20)):
+        m = str(r.get("symbol") or "")
         px = marks.get(m, 0.0)
         if m.endswith("_USDC_PERP") and px > 0 and (sym := _snap_sym(m[:-10])):
             out[sym] = (_fnum(r.get("openInterest")) * px, px)
@@ -11127,7 +11157,7 @@ def _snap_backpack() -> dict:
 
 def _snap_orderly() -> dict:
     out = {}
-    for r in ((get_json("https://api.orderly.org/v1/public/futures", 20) or {}).get("data") or {}).get("rows") or []:
+    for r in _jrows(get_json("https://api.orderly.org/v1/public/futures", 20), "data", "rows"):
         m = str(r.get("symbol") or "")
         px = _fnum(r.get("mark_price"))
         if m.startswith("PERP_") and m.endswith("_USDC") and (sym := _snap_sym(m[5:-5])):
@@ -11139,7 +11169,7 @@ def _snap_gmx() -> dict:
     """GMX: интерес лонгов и шортов в долларах с точностью 1e30; у одной
     монеты бывает несколько пулов — складываем."""
     out: dict = {}
-    for r in (get_json("https://arbitrum-api.gmxinfra.io/markets/info", 25) or {}).get("markets") or []:
+    for r in _jrows(get_json("https://arbitrum-api.gmxinfra.io/markets/info", 25), "markets"):
         name = str(r.get("name") or "")
         if not r.get("isListed") or "/USD" not in name:
             continue
@@ -11158,9 +11188,9 @@ def _snap_bitstamp() -> dict:
     """Bitstamp — биржа Robinhood: фьючерсы Robinhood идут через неё, а своих
     открытых данных по ним у Robinhood нет."""
     out = {}
-    for r in get_json("https://www.bitstamp.net/api/v2/ticker/", 20) or []:
-        pair = str(r.get("pair") or "") if isinstance(r, dict) else ""
-        if r and r.get("market_type") == "PERPETUAL" and pair.endswith("/USD-PERP"):
+    for r in _jrows(get_json("https://www.bitstamp.net/api/v2/ticker/", 20)):
+        pair = str(r.get("pair") or "")
+        if r.get("market_type") == "PERPETUAL" and pair.endswith("/USD-PERP"):
             px = _fnum(r.get("mark_price")) or _fnum(r.get("last"))
             if sym := _snap_sym(pair[:-9]):
                 out[sym] = (_fnum(r.get("open_interest")) * px, px)
@@ -11170,7 +11200,7 @@ def _snap_bitstamp() -> dict:
 def _snap_bitmex() -> dict:
     """BitMEX: все бессрочные одним запросом. Интерес — openValue в валюте
     расчёта: сатоши у XBt (и у квантовых ETHUSD), миллионные доли у USDt."""
-    rows = [r for r in get_json("https://www.bitmex.com/api/v1/instrument/active", 20) or [] if isinstance(r, dict)]
+    rows = _jrows(get_json("https://www.bitmex.com/api/v1/instrument/active", 20))
     xbt = next((_fnum(r.get("markPrice")) for r in rows if r.get("symbol") == "XBTUSD"), 0.0)
     out: dict = {}
     for r in rows:
@@ -11193,8 +11223,8 @@ def _snap_apex() -> dict:
     out: dict = {}
 
     def one(sym: str) -> None:
-        r = ((get_json(f"https://pro.apex.exchange/api/v3/ticker?symbol={sym}USDT", 15) or {}).get("data") or [{}])[0]
-        px = _fnum(r.get("markPrice")) if isinstance(r, dict) else 0.0
+        r = (_jrows(get_json(f"https://pro.apex.exchange/api/v3/ticker?symbol={sym}USDT", 15), "data") or [{}])[0]
+        px = _fnum(r.get("markPrice"))
         if px > 0:
             out[sym] = (_fnum(r.get("openInterest")) * px, px)
     with ThreadPoolExecutor(max_workers=5) as pool:
@@ -11211,7 +11241,7 @@ def _snap_top(rows, key: str, n: int, pick, oi) -> dict:
     picked = []
     for r in rows if isinstance(rows, list) else []:
         got = pick(r) if isinstance(r, dict) else None
-        if got and got[2] > 0:
+        if got and got[2] > 0 and _snap_mkt(got[1]):
             picked.append((_fnum(r.get(key)), *got))
     picked.sort(key=lambda x: -x[0])
     picked = picked[:n]
@@ -11233,6 +11263,11 @@ def _snap_top(rows, key: str, n: int, pick, oi) -> dict:
     return out
 
 
+def _snap_mkt(v: object) -> bool:
+    """Имя рынка биржи, что ложится в адрес запроса: буквы, цифры, «-» и «_»."""
+    return isinstance(v, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,40}", v) is not None
+
+
 def _quote_cut(s: str, quotes: tuple) -> str:
     """Тикер без котируемой валюты из списка; пусто — котировка не та."""
     for q in quotes:
@@ -11248,15 +11283,15 @@ def _snap_aster() -> dict:
         return (sym, s, _fnum(r.get("lastPrice"))) if sym else None
 
     def oi(s: str, px: float) -> float:
-        return _fnum((get_json(f"https://fapi.asterdex.com/fapi/v1/openInterest?symbol={s}", 10) or {}).get("openInterest")) * px
+        return _fnum(_jd(get_json(f"https://fapi.asterdex.com/fapi/v1/openInterest?symbol={s}", 10)).get("openInterest")) * px
 
-    return _snap_top(get_json("https://fapi.asterdex.com/fapi/v1/ticker/24hr", 20), "quoteVolume", 60, pick, oi)
+    return _snap_top(_jrows(get_json("https://fapi.asterdex.com/fapi/v1/ticker/24hr", 20)), "quoteVolume", 60, pick, oi)
 
 
 def _snap_delta(host: str) -> dict:
     """Delta Exchange и Delta Exchange India: интерес в долларах сразу, одним запросом."""
     out: dict = {}
-    for r in (get_json(f"https://{host}/v2/tickers?contract_types=perpetual_futures", 25) or {}).get("result") or []:
+    for r in _jrows(get_json(f"https://{host}/v2/tickers?contract_types=perpetual_futures", 25), "result"):
         px = _fnum(r.get("mark_price"))
         if (sym := _snap_sym(r.get("underlying_asset_symbol"))) and px > 0:
             prev = out.get(sym, (0.0, px))
@@ -11267,12 +11302,13 @@ def _snap_delta(host: str) -> dict:
 def _snap_bullish() -> dict:
     """Bullish: интерес только по одному рынку за запрос — бессрочных у него
     около полусотни, спрашиваем все."""
-    mk = get_json("https://api.exchange.bullish.com/trading-api/v1/markets", 20)
-    perps = [m.get("symbol") for m in (mk if isinstance(mk, list) else []) if m.get("marketType") == "PERPETUAL"]
+    # Имя рынка ложится в адрес запроса — только буквы, цифры и дефис.
+    perps = [m["symbol"] for m in _jrows(get_json("https://api.exchange.bullish.com/trading-api/v1/markets", 20))
+             if m.get("marketType") == "PERPETUAL" and _snap_mkt(m.get("symbol"))]
     out: dict = {}
 
     def one(m) -> None:
-        r = get_json(f"https://api.exchange.bullish.com/trading-api/v1/markets/{m}/tick", 10) or {}
+        r = _jd(get_json(f"https://api.exchange.bullish.com/trading-api/v1/markets/{m}/tick", 10))
         px = _fnum(r.get("markPrice")) or _fnum(r.get("last"))
         if (sym := _snap_sym(str(m).split("-")[0])) and px > 0:
             out[sym] = (_fnum(r.get("openInterestUSD")), px)
@@ -11290,18 +11326,18 @@ def _snap_bingx() -> dict:
 
     def oi(s: str, _px: float) -> float:
         # BingX отдаёт интерес сразу в долларах.
-        return _fnum(((get_json(f"https://open-api.bingx.com/openApi/swap/v2/quote/openInterest?symbol={s}", 10) or {}).get("data") or {}).get("openInterest"))
+        return _fnum(_jd(_jd(get_json(f"https://open-api.bingx.com/openApi/swap/v2/quote/openInterest?symbol={s}", 10)).get("data")).get("openInterest"))
 
-    ticks = (get_json("https://open-api.bingx.com/openApi/swap/v2/quote/ticker", 20) or {}).get("data")
+    ticks = _jrows(get_json("https://open-api.bingx.com/openApi/swap/v2/quote/ticker", 20), "data")
     return _snap_top(ticks, "quoteVolume", 60, pick, oi)
 
 
 def _snap_blofin() -> dict:
     """BloFin: интерес всех монет одним запросом, в монетах; цена — тикеры."""
     px = {str(r.get("instId") or ""): _fnum(r.get("last"))
-          for r in (get_json("https://openapi.blofin.com/api/v1/market/tickers", 20) or {}).get("data") or []}
+          for r in _jrows(get_json("https://openapi.blofin.com/api/v1/market/tickers", 20), "data")}
     out = {}
-    for r in (get_json("https://openapi.blofin.com/api/v1/market/open-interest", 20) or {}).get("data") or []:
+    for r in _jrows(get_json("https://openapi.blofin.com/api/v1/market/open-interest", 20), "data"):
         inst = str(r.get("instId") or "")
         p = px.get(inst, 0.0)
         if inst.endswith("-USDT") and p > 0 and (sym := _snap_sym(inst[:-5])):
@@ -11325,10 +11361,10 @@ def _snap_xt() -> dict:
         return (sym, s, _fnum(r.get("c"))) if sym else None
 
     def oi(s: str, _px: float) -> float:
-        got = (get_json(f"https://fapi.xt.com/future/market/v1/public/contract/open-interest?symbol={s}", 10) or {}).get("result") or {}
+        got = _jd(_jd(get_json(f"https://fapi.xt.com/future/market/v1/public/contract/open-interest?symbol={s}", 10)).get("result"))
         return _fnum(got.get("openInterestUsd"))
 
-    ticks = (get_json("https://fapi.xt.com/future/market/v1/public/q/agg-tickers", 20) or {}).get("result")
+    ticks = _jrows(get_json("https://fapi.xt.com/future/market/v1/public/q/agg-tickers", 20), "result")
     return _snap_top(ticks, "v", 60, pick, oi)
 
 
@@ -11390,9 +11426,15 @@ def liq_oi_sample() -> dict:
     def one(src) -> None:
         name, fn = src
         try:
-            raw[name] = fn() or {}
+            got = fn() or {}
         except Exception:  # noqa: BLE001 — биржа не ответила: снимок без неё
-            raw[name] = {}
+            got = {}
+        # Кривой ответ одной биржи не роняет снимок остальных: только
+        # (монета → (интерес, цена[, в монетах])) с числами.
+        raw[name] = {k: v for k, v in got.items() if isinstance(k, str) and wt_liqmap.SYM.fullmatch(k)
+                     and isinstance(v, tuple) and 2 <= len(v) <= 3
+                     and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in v[:2])} \
+            if isinstance(got, dict) else {}
 
     with ThreadPoolExecutor(max_workers=len(LIQ_SNAPS)) as pool:
         list(pool.map(one, LIQ_SNAPS))
@@ -11412,8 +11454,10 @@ def liq_oi_sample() -> dict:
                 px = mid.get(sym, 0.0)
                 if len(v) > 2 and v[2]:
                     oi *= px
-            if oi >= LIQ_OI_MIN and px > 0:
-                part.append((name, sym, t, oi, px))
+            # Последние ворота перед базой: бесконечность (NaN отсекает и
+            # сравнение) и неправдоподобные суммы — не снимок.
+            if LIQ_OI_MIN <= oi < 1e13 and 0 < px < 1e9:
+                part.append((name, sym, t, float(oi), float(px)))
         counts[name] = len(part)
         rows.extend(part)
     con = _liq_oi_con()
@@ -11448,9 +11492,10 @@ def _liq_hl_candles(sym: str, period: str, n: int) -> list | None:
     end = now() * 1000
     kl = hl_post({"type": "candleSnapshot", "req": {"coin": sym, "interval": period,
                                                     "startTime": end - sec * n * 1000, "endTime": end}}, 15)
-    if not isinstance(kl, list) or len(kl) < 8:
+    rows = _jrows(kl)
+    if len(rows) < 8:
         return None
-    return [(int(k["t"]) // 1000, _fnum(k.get("h")), _fnum(k.get("l")), _fnum(k.get("c")), 0.0, 0.5) for k in kl]
+    return [(_jt(k.get("t")) // 1000, _fnum(k.get("h")), _fnum(k.get("l")), _fnum(k.get("c")), 0.0, 0.5) for k in rows]
 
 
 def _liq_sampled(sym: str, period: str, n: int, ref: list, px: float) -> dict:
@@ -11573,19 +11618,19 @@ def _liq_coins_build() -> dict:
         ex.setdefault(sym, set()).add(name)
 
     def binance() -> None:
-        for r in get_json("https://fapi.binance.com/fapi/v1/ticker/24hr", 20) or []:
+        for r in _jrows(get_json("https://fapi.binance.com/fapi/v1/ticker/24hr", 20)):
             s = str(r.get("symbol") or "")
             if s.endswith("USDT"):
                 add(s[:-4], _fnum(r.get("quoteVolume")), "Binance")
 
     def okx() -> None:
-        for r in (get_json("https://www.okx.com/api/v5/market/tickers?instType=SWAP", 20) or {}).get("data") or []:
+        for r in _jrows(get_json("https://www.okx.com/api/v5/market/tickers?instType=SWAP", 20), "data"):
             inst = str(r.get("instId") or "")
             if inst.endswith("-USDT-SWAP"):
                 add(inst.split("-")[0], _fnum(r.get("volCcy24h")) * _fnum(r.get("last")), "OKX")
 
     def gate() -> None:
-        for r in get_json("https://api.gateio.ws/api/v4/futures/usdt/tickers", 20) or []:
+        for r in _jrows(get_json("https://api.gateio.ws/api/v4/futures/usdt/tickers", 20)):
             c = str(r.get("contract") or "")
             if c.endswith("_USDT"):
                 add(c[:-5], _fnum(r.get("volume_24h_quote")), "Gate")
@@ -11597,23 +11642,20 @@ def _liq_coins_build() -> dict:
             pass
 
     def bybit() -> None:
-        r = get_json("https://api.bybit.com/v5/market/tickers?category=linear", 20) or {}
-        for t in (r.get("result") or {}).get("list") or []:
+        for t in _jrows(get_json("https://api.bybit.com/v5/market/tickers?category=linear", 20), "result", "list"):
             s = str(t.get("symbol") or "")
             if s.endswith("USDT"):
                 add(s[:-4], _fnum(t.get("turnover24h")), "Bybit")
 
     def htx() -> None:
-        r = get_json("https://api.hbdm.com/linear-swap-ex/market/detail/batch_merged?business_type=swap", 20) or {}
-        for t in r.get("ticks") or []:
+        for t in _jrows(get_json("https://api.hbdm.com/linear-swap-ex/market/detail/batch_merged?business_type=swap", 20), "ticks"):
             c = str(t.get("contract_code") or "")
             if c.endswith("-USDT"):
                 add(c[:-5], _fnum(t.get("trade_turnover")), "HTX")
 
     def dydx() -> None:
-        r = get_json("https://indexer.dydx.trade/v4/perpetualMarkets?limit=1000", 20) or {}
-        for k, m in (r.get("markets") or {}).items():
-            if str(k).endswith("-USD") and m.get("status") == "ACTIVE":
+        for k, m in _jd(_jd(get_json("https://indexer.dydx.trade/v4/perpetualMarkets?limit=1000", 20)).get("markets")).items():
+            if str(k).endswith("-USD") and isinstance(m, dict) and m.get("status") == "ACTIVE":
                 add(str(k)[:-4], _fnum(m.get("volume24H")), "dYdX")
 
     def hyper() -> None:
@@ -11622,7 +11664,9 @@ def _liq_coins_build() -> dict:
         got = hl_post({"type": "metaAndAssetCtxs"}, 15)
         if not isinstance(got, list) or len(got) < 2:
             return
-        for m, c in zip(got[0].get("universe") or [], got[1] or []):
+        for m, c in zip(_jl(_jd(got[0]).get("universe")), _jl(got[1])):
+            if not isinstance(m, dict) or not isinstance(c, dict):
+                continue
             name = str(m.get("name") or "")
             if not m.get("isDelisted") and re.fullmatch(r"[A-Z0-9]{2,12}", name):
                 vol[name] = vol.get(name, 0.0) + _fnum(c.get("dayNtlVlm"))
@@ -11699,7 +11743,7 @@ def _liq_real_rows(sym: str, edges: list) -> tuple | None:
     real = [[0.0, 0.0] for _ in range(len(edges) - 1)]
     for ts, side, usd in ev:
         i = bisect.bisect_right(edges, ts / 1000) - 1
-        if 0 <= i < len(real):
+        if 0 <= i < len(real) and isinstance(usd, (int, float)) and 0 < usd < 1e13:  # NaN в базе — мимо
             real[i][0 if side else 1] += usd  # side 1 — ликвидирован лонг
     got = ([[round(a), round(b)] for a, b in real], int(first // 1000) if first else None)
     with _liq_lock:
@@ -11982,6 +12026,20 @@ def _liq_share(got: dict) -> dict:
     return {t: a[0] / a[1] for t, a in w.items() if a[1] > 0}
 
 
+def _liq_fin(v: object) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _liq_valid(rows: object) -> list:
+    """Ворота рядов источника: (время, макс, мин, закрытие, интерес, доля
+    покупок) — время целое, цены и интерес конечные, цены > 0, интерес ≥ 0,
+    доля 0–1. Кривая строка выпадает одна, а не роняет всю карту монеты."""
+    return [tuple(r) for r in rows if isinstance(r, (list, tuple)) and len(r) == 6
+            and isinstance(r[0], int) and not isinstance(r[0], bool) and r[0] >= 0
+            and all(_liq_fin(x) for x in r[1:]) and min(r[1:4]) > 0 and r[4] >= 0 and 0 <= r[5] <= 1] \
+        if isinstance(rows, list) else []
+
+
 def _liq_gather(sym: str, period: str, n: int) -> tuple[dict, list | None]:
     """Ряды бирж за окно: (t, макс, мин, закрытие, интерес $, доля покупок).
     Биржи со своей историей — запросом, остальные — из снимков liq_oi.db,
@@ -11992,7 +12050,7 @@ def _liq_gather(sym: str, period: str, n: int) -> tuple[dict, list | None]:
     def one(src):
         name, fn = src
         try:
-            rows = fn(sym, period, n)
+            rows = _liq_valid(fn(sym, period, n))
         except Exception:  # noqa: BLE001 — биржа недоступна: карта без неё
             rows = None
         if rows and len(rows) >= 8:
@@ -12018,7 +12076,7 @@ def _liq_gather(sym: str, period: str, n: int) -> tuple[dict, list | None]:
         for name in [k for k, r in got.items() if mid <= 0 or abs(r[-1][3] / mid - 1) > 0.03]:
             got.pop(name)
     # Опора — биржа с наибольшим интересом; нет ни одной — свечи Hyperliquid.
-    ref = max(got.values(), key=lambda r: r[-1][4]) if got else _liq_hl_candles(sym, period, n)
+    ref = max(got.values(), key=lambda r: r[-1][4]) if got else (_liq_valid(_liq_hl_candles(sym, period, n)) or None)
     if ref:
         # Опора на своих же свечах не меняется — её не исключаем.
         for name in [k for k, r in got.items() if _liq_thin(r, ref)]:
@@ -12684,7 +12742,9 @@ def _liqs_sym(raw: str) -> tuple[str, float]:
 
 def _liqs_put(ex: str, raw_sym: str, t_ms: int, long_liq: bool, px: float, usd: float) -> None:
     sym, div = _liqs_sym(raw_sym)
-    if not sym or usd <= 0 or px <= 0 or not re.fullmatch(r"[A-Z][A-Z0-9]{0,14}", sym):
+    # NaN и бесконечность — не сумма и не цена (NaN <= 0 ложно и проходил):
+    # одна такая запись роняла подсчёт ликвидаций на карте по монете.
+    if not sym or not (0 < usd < 1e13 and 0 < px < 1e12 and 0 < t_ms < 1e14) or not re.fullmatch(r"[A-Z][A-Z0-9]{0,14}", sym):
         return
     with _liqs_q_lock:
         _liqs_q.append((ex, sym, int(t_ms), 1 if long_liq else 0, px / div, round(usd, 2)))

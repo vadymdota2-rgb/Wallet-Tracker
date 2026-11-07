@@ -46,10 +46,26 @@ def where(side):
     return [m[b] for g in side for b, v in enumerate(g) if v > 1e-12]
 
 
+def drain() -> None:
+    """Дождаться фоновых сборок карт и предысторий модуля."""
+    for _ in range(3):
+        jobs = list(lm._st.jobs.values()) + list(lm._st.pre_jobs.values())
+        if not jobs:
+            return
+        for job in jobs:
+            # Подменённый в тесте поток бывает текущим — его не ждать.
+            if isinstance(job, threading.Thread) and job is not threading.current_thread() and job.ident is not None:
+                job.join(5)
+
+
 class Base(unittest.TestCase):
     def setUp(self):
         lm._st = lm._State()
         self.addCleanup(setattr, lm, "_st", lm._State())
+        # Сначала (очистки — в обратном порядке) дождаться фоновых сборок
+        # этого теста: иначе поздняя сборка допишет карту в состояние
+        # следующего, и тот изредка увидит чужую карту.
+        self.addCleanup(drain)
 
 
 class ModelTest(unittest.TestCase):

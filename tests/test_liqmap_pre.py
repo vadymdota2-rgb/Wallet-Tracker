@@ -35,10 +35,26 @@ def history(days=300, px=80.0, oi0=2e8, oi1=1e9):
     return [(T0 - (days - d) * DAY, px * 1.01, px * 0.99, px, oi0 + (oi1 - oi0) * d / days, 0.6) for d in range(days)]
 
 
+def drain() -> None:
+    """Дождаться фоновых сборок карт и предысторий модуля."""
+    for _ in range(3):
+        jobs = list(lm._st.jobs.values()) + list(lm._st.pre_jobs.values())
+        if not jobs:
+            return
+        for job in jobs:
+            # Подменённый в тесте поток бывает текущим — его не ждать.
+            if isinstance(job, threading.Thread) and job is not threading.current_thread() and job.ident is not None:
+                job.join(5)
+
+
 class Base(unittest.TestCase):
     def setUp(self):
         lm._st = lm._State()
         self.addCleanup(setattr, lm, "_st", lm._State())
+        # Сначала (очистки — в обратном порядке) дождаться фоновых сборок
+        # этого теста: иначе поздняя сборка допишет карту в состояние
+        # следующего, и тот изредка увидит чужую карту.
+        self.addCleanup(drain)
         self.calls = []
 
     def use(self, pre=None, win=None, delay=0.0, fail=False):

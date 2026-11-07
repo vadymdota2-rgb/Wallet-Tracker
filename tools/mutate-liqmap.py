@@ -244,6 +244,23 @@ PY = [
     ("            _st.hits[key] = (time.monotonic() - total, st, res)", "            _st.hits[key] = (time.monotonic(), st, res)", "копия: возраст сохраняется"),
 ]
 
+# Источники карты в сервере (whale_api.py): ворота перед моделью и базой,
+# безопасный разбор ответов бирж, лента настоящих ликвидаций.
+API = [
+    ("            rows = _liq_valid(fn(sym, period, n))", "            rows = fn(sym, period, n)", "ворота: ряды источника"),
+    ("and all(_liq_fin(x) for x in r[1:]) and min(r[1:4]) > 0 and r[4] >= 0 and 0 <= r[5] <= 1]",
+     "and min(r[1:4]) > 0 and r[4] >= 0 and 0 <= r[5] <= 1]", "ворота: числа конечные"),
+    ("and isinstance(r[0], int) and not isinstance(r[0], bool) and r[0] > 0", "and True", "ворота: время целое"),
+    ("_liq_valid(_liq_hl_candles(sym, period, n)) or None", "_liq_hl_candles(sym, period, n)", "ворота: свечи Hyperliquid"),
+    ("if LIQ_OI_MIN <= oi < 1e13 and 0 < px < 1e9:", "if oi >= LIQ_OI_MIN and px > 0:", "снимок: только правдоподобные числа"),
+    ("isinstance(k, str) and wt_liqmap.SYM.fullmatch(k)", "isinstance(k, str)", "снимок: только наши тикеры"),
+    ("and isinstance(v, tuple) and 2 <= len(v) <= 3", "", "снимок: значение — (интерес, цена)"),
+    ("        if got and got[2] > 0 and _snap_mkt(got[1]):", "        if got and got[2] > 0:", "имя рынка в адресе — проверено"),
+    ('if m.get("marketType") == "PERPETUAL" and _snap_mkt(m.get("symbol"))]', 'if m.get("marketType") == "PERPETUAL"]', "Bullish: имя рынка в адресе"),
+    ("0 < px < 1e12 and 0 < t_ms < 1e14)", "0 < px < 1e12)", "лента: время ликвидации"),
+    ("if not sym or not (0 < usd < 1e13", "if not sym or not (0 <= usd", "лента: сумма правдоподобна"),
+]
+
 
 def run(path, cmd, muts):
     with open(path, encoding="utf-8") as f:
@@ -271,7 +288,8 @@ def run(path, cmd, muts):
 
 a1 = run(f"{ROOT}/src/lib/liqmap.ts", ["node", "--test", "tests/liqmap.test.ts", "tests/liqmap.props.test.ts"], TS)
 a2 = run(f"{ROOT}/wt_liqmap.py", [sys.executable, "-m", "unittest", "tests.test_liqmap", "tests.test_liqmap_fuzz", "tests.test_liqmap_disk", "tests.test_liqmap_pre"], PY)
-alive = a1 + a2
-total = len(TS) + len(PY) - len(EQUIV)
+a3 = run(f"{ROOT}/whale_api.py", [sys.executable, "-m", "unittest", "tests.test_liqmap_security", "tests.test_liqmap_policy", "tests.test_liqmap_pre"], API)
+alive = a1 + a2 + a3
+total = len(TS) + len(PY) + len(API) - len(EQUIV)
 print(f"ИТОГ: убито {total - len(alive)} из {total}; выжили: {alive}")
 sys.exit(1 if alive else 0)

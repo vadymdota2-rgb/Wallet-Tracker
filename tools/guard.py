@@ -834,7 +834,7 @@ say("карта ликвидаций — предыстория: каждое о
     and "LIQ_BUDGET if n <= 400 else LIQ_PRE_BUDGET" in api and os.path.isfile(f"{APP}/tests/test_liqmap_pre.py")
     and "tests.test_liqmap_pre" in read(f"{APP}/tools/mutate-liqmap.py"))
 say("карта ликвидаций: у OKX — и бессрочный контракт с расчётом в монете (BTC-USD-SWAP, у BTC — четверть интереса OKX), склейка только по общим отметкам времени",
-    'instId={sym}-USD-SWAP&period={per}&limit=100", "end")}' in api and "if oi and len(inv) >= 0.95 * len(oi):" in api
+    'instId={sym}-USD-SWAP&period={per}&limit=100", "end", 4)}' in api and "if oi and len(inv) >= 0.95 * len(oi):" in api
     and "test_short_coin_margined_series_is_not_glued" in read(f"{APP}/tests/test_liqmap_pre.py"))
 say("карта ликвидаций: акции — одним именем на всех биржах (TSLAX у Kraken, HTX, dYdX и TSLASTOCK у MEXC → TSLA; хвост X — только у тикеров от трёх букв из списка акций), BitMEX и ApeX — в снимках интереса",
     "def _stock_base(s: str) -> str:" in api and "LIQ_STOCKS = frozenset({" in api and '("HTX", _liq_stock(_liq_htx))' in api
@@ -846,8 +846,8 @@ say("карта ликвидаций: окно — позиции, открыт�
     and 'className="lq-rows"' in _lq and '"lq_rows"' in _lq and "test_history_still_explains_the_fall_of_interest" in read(f"{APP}/tests/test_liqmap_pre.py"))
 say("интерес Bybit — с одной стороны (singleOpenInterest; openInterest у Bybit — обе стороны, вдвое больше): карта ликвидаций и доска фандинга",
     "def _bybit_oi(r: dict, value: bool = False) -> float:" in api and "_bybit_oi(it, value=True)" in api
-    and os.path.isfile(f"{APP}/tests/test_fund_bybit.py") and 'usd[t] = _bybit_oi(r) * float(k[4])' in api
-    and '_bybit_oi(r) for r in pages("inverse", f"{sym}USD")}' in api
+    and os.path.isfile(f"{APP}/tests/test_fund_bybit.py") and 'usd[t] = _bybit_oi(r) * _fnum(k[4])' in api
+    and '_jt(r.get("timestamp")) // 1000: _bybit_oi(r) for r in pages("inverse", f"{sym}USD")}' in api
     and "test_bybit_open_interest_is_one_side" in read(f"{APP}/tests/test_liqmap_pre.py"))
 say("карта ликвидаций: дневные ряды бирж копятся у себя (liq_day) — история Binance (30 дней у биржи) растёт на день в день; только при загрузке предыстории, пишет только служба (проверки и бэктесты базу только читают), идущий день не хранится, старше 1100 дней — вон",
     "def _liq_day_keep(sym: str, got: dict) -> dict:" in api and 'if period == "1d" and n > 400:' in api
@@ -1939,6 +1939,14 @@ say("карта ликвидаций: настоящие ликвидации б
 say("карта ликвидаций: первое открытие монеты не ждёт предысторию",
     "build(*key, pre_wait=0.0)" in _lmpy and 'hit[1].get("partial") is True and s not in _st.pre_jobs' in _lmpy
     and 'if not st.get("partial")' in _lmpy and "PARTIAL_EVERY = 6_000" in _lqs)
+_lqyml = read(f"{APP}/.github/workflows/tests.yml")
+say("карта ликвидаций: правила кода и отравленные ответы бирж — ворота перед моделью и базой",
+    os.path.exists(f"{APP}/tests/test_liqmap_policy.py") and os.path.exists(f"{APP}/tests/test_liqmap_security.py")
+    and "tests/test_liqmap_policy.py tests/test_liqmap_security.py" in _lqyml
+    and "rows = _liq_valid(fn(sym, period, n))" in pybody(api, "def _liq_gather(")
+    and "if LIQ_OI_MIN <= oi < 1e13 and 0 < px < 1e9:" in pybody(api, "def liq_oi_sample(")
+    and "_snap_mkt(got[1])" in pybody(api, "def _snap_top(") and "0 < t_ms < 1e14" in pybody(api, "def _liqs_put(")
+    and '"ворота: ряды источника"' in read(f"{APP}/tools/mutate-liqmap.py"))
 
 # «Добавить кошелёк» больше не отвечает общей ошибкой: причина отказа доходит
 # до экрана («уже добавлен» — обновить список), а норма запросов считается
