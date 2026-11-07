@@ -105,11 +105,17 @@ class LookupTest(unittest.TestCase):
         self.assertEqual(api._liq_levs("XYZ"), {})
         # Старая таблица — отдаётся, а свежая собирается в фоне.
         api._liq_levs_cache["all"] = (time.monotonic() - api.LIQ_LEVS_TTL - 1, {"OKX": {"BEAT": 20}})
-        calls = []
-        with mock.patch.object(api, "_liq_levs_bg", lambda: calls.append(1) or api._liq_busy.discard("levs")):
+        refreshed = threading.Event()
+
+        def bg():
+            with api._liq_lock:
+                api._liq_busy.discard("levs")
+            refreshed.set()
+
+        with mock.patch.object(api, "_liq_levs_bg", bg):
             self.assertEqual(api._liq_levs("BEAT"), {"OKX": 20})
-            time.sleep(0.2)
-        self.assertEqual(calls, [1])
+            # Поток — фоновый: на занятой машине CI он стартует не сразу.
+            self.assertTrue(refreshed.wait(5))
 
     def test_wired(self):
         with open(os.path.join(ROOT, "whale_api.py"), encoding="utf-8") as f:
