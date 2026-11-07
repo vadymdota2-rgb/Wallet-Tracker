@@ -117,10 +117,17 @@ ALT_CAP = 75
 # начальной (1/плечо) — иначе 200× ликвидировалось бы на цене входа. Берём
 # MMR, но не больше половины начальной: 100× — 0,5 %, 200× — 0,25 %, 500× — 0,1 %.
 MMR = 0.005
-# Окно карты: ±SPAN от цены, BUCKETS корзин (по 0,25 %): до нуля вниз и до
-# удвоения вверх — экран приближает от ±5 до ±100 %.
+# Окно карты: ±SPAN от цены — FINE корзин по 0,25 %, от нуля до удвоения;
+# выше, до +UP (×6 от цены), — WIDE грубых корзин по COARSE мелких (2,5 %):
+# там шорты монет, что упали в разы (открыты у вершины, ликвидация — в
+# сотнях процентов выше), а строка экрана на ±500 % — около 10 %. Экран
+# приближает от ±5 до ±500 %.
 SPAN = 1.0
-BUCKETS = 800
+FINE = 800
+COARSE = 10
+UP = 5.0
+WIDE = round((UP - SPAN) / (SPAN * 2 / FINE) / COARSE)
+BUCKETS = FINE + WIDE
 # По скольким точкам диапазона свечи раскладывается её прирост интереса.
 ENTRY = 5
 # Сглаживание соседних корзин (1-2-1): цена входа и плечо — оценки.
@@ -219,6 +226,19 @@ def _no(error: str) -> dict[str, Json]:
 
 # --- Модель -------------------------------------------------------------------
 
+def bucket(p: float, lo: float, step: float) -> int:
+    """Корзина цены p: мелкие — по step от lo, выше удвоения — по COARSE
+    мелких. Ниже lo — отрицательная, выше верха — не меньше BUCKETS."""
+    f = (p - lo) // step
+    return int(f) if f < FINE else FINE + int((f - FINE) // COARSE)
+
+
+def mids(lo: float, step: float) -> list[float]:
+    """Середины корзин сетки (по возрастанию)."""
+    fine = [lo + step * (b + 0.5) for b in range(FINE)]
+    return fine + [lo + step * (FINE + COARSE * (j + 0.5)) for j in range(WIDE)]
+
+
 def _opened(x: float, hi: float, low: float, bs: float, lo: float,  # noqa: PLR0913 — свеча и сетка целиком
             step: float, levs: tuple[tuple[int, float, int], ...]) -> tuple[list[tuple[int, int, int, float]], float]:
     """Новые позиции на x монет в свече [low, hi]: по ENTRY точкам входа и по
@@ -232,8 +252,8 @@ def _opened(x: float, hi: float, low: float, bs: float, lo: float,  # noqa: PLR0
         for lev, w, g in levs:
             part = x * w / ENTRY
             keep = 1 / lev - mmr(lev)  # на сколько цена уходит до ликвидации
-            bl = int((p * (1 - keep) - lo) // step)
-            bsh = int((p * (1 + keep) - lo) // step)
+            bl = bucket(p * (1 - keep), lo, step)
+            bsh = bucket(p * (1 + keep), lo, step)
             if 0 <= bl < BUCKETS:
                 entries.append((0, g, bl, part * share))
             else:
@@ -271,7 +291,7 @@ class _Book:
         g_n = len(GROUPS)
         self.g_n = g_n
         self.agg = ([[0.0] * BUCKETS for _ in range(g_n)], [[0.0] * BUCKETS for _ in range(g_n)])
-        self.mids = [lo + step * (b + 0.5) for b in range(BUCKETS)]
+        self.mids = mids(lo, step)
         # Когда корзина сгорела в последний раз (номер шага): позиция пачки
         # шага s в ней жива, пока корзина не сгорела позже s.
         self.burnt = ([[-1] * BUCKETS for _ in range(g_n)], [[-1] * BUCKETS for _ in range(g_n)])
@@ -412,10 +432,12 @@ def prepend(pre: list[Row] | None, rows: list[Row]) -> list[Row]:
 
 
 def _smooth(a: list[float]) -> list[float]:
-    """Соседние корзины 1-2-1; края — без потерь (недостающий сосед — сама корзина)."""
-    n = len(a)
+    """Соседние мелкие корзины 1-2-1; края — без потерь (недостающий сосед —
+    сама корзина). Грубые (выше удвоения) — как есть: сосед там в 2,5 %, а
+    не в 0,25 %, и сглаживание двигало бы уровни в десять раз дальше."""
+    n = min(len(a), FINE)
     k0, k1, k2 = SMOOTH
-    return [k0 * a[max(0, i - 1)] + k1 * a[i] + k2 * a[min(n - 1, i + 1)] for i in range(n)]
+    return [k0 * a[max(0, i - 1)] + k1 * a[i] + k2 * a[min(n - 1, i + 1)] for i in range(n)] + a[n:]
 
 
 def candles(rows: list[Row], n: int = 48) -> list[list[float]]:
@@ -442,7 +464,7 @@ def make_state(sym: str, rng: str, got: dict[str, list[Row]], ref: list[Row], px
     last — идущая свеча хвоста (мелкая): где цена побывала после последнего
     снимка. Без хвоста — идущая свеча окна. Крупная свеча тут не годится: её
     минимум за сутки сжёг бы позиции, открытые уже после него."""
-    lo, step = px * (1 - SPAN), px * SPAN * 2 / BUCKETS
+    lo, step = px * (1 - SPAN), px * SPAN * 2 / FINE
     g_n = len(GROUPS)
     long_b = [[0.0] * BUCKETS for _ in range(g_n)]
     short_b = [[0.0] * BUCKETS for _ in range(g_n)]
@@ -471,13 +493,13 @@ def render(st: dict[str, Json], px: float) -> dict[str, Json]:
     цена дошла после последнего снимка (st low/high и px), — при цене px."""
     lo, step, g_n = st["lo"], st["step"], len(GROUPS)
     low, high = min(st["low"], px), max(st["high"], px)
-    mids = [lo + step * (b + 0.5) for b in range(BUCKETS)]
-    cut_l, cut_s = bisect.bisect_left(mids, low), bisect.bisect_right(mids, high)
+    mid = mids(lo, step)
+    cut_l, cut_s = bisect.bisect_left(mid, low), bisect.bisect_right(mid, high)
     # (цена середины корзины, лонги по группам, шорты по группам), $ целыми:
     # монеты × цена ликвидации — столько денег сгорит на этом уровне.
     rows_out: list[tuple[float, list[int], list[int]]] = []
     for b in range(BUCKETS):
-        m = mids[b]
+        m = mid[b]
         lv = [round(st["L"][g][b] * m) if b < cut_l else 0 for g in range(g_n)]
         sv = [round(st["S"][g][b] * m) if b >= cut_s else 0 for g in range(g_n)]
         if sum(lv) + sum(sv) >= 1:
@@ -790,7 +812,7 @@ def _fields_ok(d: dict[str, object]) -> bool:
     return bool(
         isinstance(sym, str) and SYM.fullmatch(sym) and isinstance(rng, str) and rng in RANGES and _pos(px) and _pos(step)
         and isinstance(lo, (int, float)) and not isinstance(lo, bool) and lo >= 0 and type(at) is int and at > 0
-        and abs(lo - px * (1 - SPAN)) <= px * 1e-9 and abs(step - px * SPAN * 2 / BUCKETS) <= px * 1e-12
+        and abs(lo - px * (1 - SPAN)) <= px * 1e-9 and abs(step - px * SPAN * 2 / FINE) <= px * 1e-12
         and isinstance(ex, list) and len(ex) <= 64 and all(isinstance(e, str) and 0 < len(e) <= 40 for e in ex)
         and isinstance(path, list) and 0 < len(path) <= 200 and all(_pos(x) for x in path)
         and isinstance(ohlc, list) and 0 < len(ohlc) <= 100

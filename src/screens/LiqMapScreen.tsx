@@ -61,10 +61,12 @@ const HOT = 0.5;
 /** Подписи сумм у полос — не ближе этого друг к другу, px. */
 const LABEL_GAP = 18;
 const COINS = ["BTC", "ETH", "SOL", "XRP", "DOGE", "BNB", "HYPE", "SUI", "ADA", "LINK"];
-type Span = "5" | "10" | "15" | "30" | "50" | "100";
-/** Приближение карты: сервер считает уровни до ±100 % от цены. */
-const SPANS: Span[] = ["5", "10", "15", "30", "50", "100"];
-const TICK: Record<Span, number> = { "5": 1, "10": 2, "15": 3, "30": 5, "50": 10, "100": 20 };
+type Span = "5" | "10" | "15" | "30" | "50" | "100" | "500";
+/** Приближение карты: сервер считает уровни от нуля до +500 % от цены (выше
+ *  удвоения — шорты монет, что упали в разы). Вниз окно упирается в ноль. */
+const SPANS: Span[] = ["5", "10", "15", "30", "50", "100", "500"];
+const SPAN_MAX = SPANS[SPANS.length - 1] as Span;
+const TICK: Record<Span, number> = { "5": 1, "10": 2, "15": 3, "30": 5, "50": 10, "100": 20, "500": 100 };
 
 const AXIS = 58;
 const CUMW = 38;
@@ -169,12 +171,18 @@ function Chart({ r, lang, span, sel, onSel, on, win, g }: {
   const max = top * (BW / (BW - 42));
   const cum = useMemo(() => cumOf(rows, r.px, on), [rows, r.px, on]);
   const cmax = Math.max(1, ...cum);
-  const yOf = (price: number) => ((r.px * (1 + spanN / 100) - price) / (r.px * spanN * 2 / 100)) * H;
+  /* Окно — от цены вниз до нуля, не ниже: на ±500 % цена у нижней шестой. */
+  const pTop = r.px * (1 + spanN / 100);
+  const pBot = Math.max(0, r.px * (1 - spanN / 100));
+  const yOf = (price: number) => ((pTop - price) / (pTop - pBot)) * H;
   const yNow = yOf(r.px);
   const step = TICK[span];
   const ticks: number[] = [];
-  /* Крайние риски не подписываем: у края подпись наползала на соседнюю. */
-  for (let p = -spanN + step; p < spanN - 1e-9; p += step) if (Math.abs(p) > 1e-9) ticks.push(p);
+  /* Крайние риски не подписываем: у края подпись наползала на соседнюю.
+     Вниз дальше −100 % цены нет; на ±500 % там риски через 25 %. */
+  const dStep = spanN > 100 ? 25 : step;
+  for (let p = step; p < spanN - 1e-9; p += step) ticks.push(p);
+  for (let p = -dStep; p > -Math.min(spanN, 100) + 1e-9; p -= dStep) ticks.push(p);
 
   /* Подписи — у двух крупнейших уровней каждой стороны, не у всех, и не
      соседних: у карты плотности крупнейшие строки идут подряд, и две подписи
@@ -605,7 +613,7 @@ export function LiqMapScreen() {
     if (autoKey.current === key) return;
     autoKey.current = key;
     const d = Math.max(0, ...(reply.ohlc ?? []).flatMap(([, h, l]) => [h, l]).map((p) => Math.abs(p / reply.px - 1) * 100));
-    setSpan(SPANS.find((s) => d < Number(s) * 0.92) ?? "100");
+    setSpan(SPANS.find((s) => d < Number(s) * 0.92) ?? SPAN_MAX);
     setSel(null);
   }, [reply]);
 
@@ -661,7 +669,7 @@ export function LiqMapScreen() {
   const focus = (p: number) => {
     if (!reply?.ok) return;
     const d = Math.abs((p - reply.px) / reply.px) * 100;
-    const fit = d < spanN ? span : SPANS.find((s) => d < Number(s)) ?? "100";
+    const fit = d < spanN ? span : SPANS.find((s) => d < Number(s)) ?? SPAN_MAX;
     const i = rowAt(reply, Number(fit), p);
     haptic("select");
     setSpan(fit);

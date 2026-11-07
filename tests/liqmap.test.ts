@@ -130,11 +130,11 @@ test("ближайшее скопление — первое крупное, а 
 
 test("строки экрана: деньги окна не теряются и не берутся из-за края", () => {
   const r = FIX["7d"]!;
-  for (const span of [5, 10, 15, 30, 50, 100]) {
+  for (const span of [5, 10, 15, 30, 50, 100, 500]) {
     const { rows, rowH } = rowsOf(r, span);
     assert.ok(rows.length <= 81 && rows.length >= 40, `${span}: ${rows.length}`);
     assert.ok(rowH >= 7 && rowH <= 14);
-    const lo = r.px * (1 - span / 100);
+    const lo = Math.max(0, r.px * (1 - span / 100)); // вниз — не ниже нуля
     const hi = r.px * (1 + span / 100);
     const inside = r.buckets.filter((b) => b.p >= lo && b.p < rows[0]!.hi);
     const want = inside.reduce((a, b) => a + sum(b.L) + sum(b.S), 0);

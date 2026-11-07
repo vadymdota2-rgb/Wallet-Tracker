@@ -103,11 +103,12 @@ export const sumOn = (a: readonly number[], on: readonly boolean[]): number => a
 /** Выше цены на строке — шорты, ниже — лонги. */
 export const side = (w: ViewRow, p: number): number[] => (w.mid > p ? w.S : w.L);
 
-/** Корзины сервера (по 0,25 %) — в строки экрана окна ±span %: строка — целое
- *  число корзин, строк около шестидесяти (от 40 до 81), сверху вниз (от
- *  дорогой цены к дешёвой). */
+/** Корзины сервера (по 0,25 % до удвоения цены, выше — по 2,5 %) — в строки
+ *  экрана окна ±span %: строка — целое число мелких корзин, строк около
+ *  шестидесяти (от 40 до 81), сверху вниз (от дорогой цены к дешёвой). Вниз
+ *  окно — не ниже нуля: на ±500 % оно от нуля до шести цен. */
 export function rowsOf(r: LiqMapReply, span: number): { rows: ViewRow[]; rowH: number } {
-  const lo = r.px * (1 - span / 100);
+  const lo = Math.max(0, r.px * (1 - span / 100));
   const hi = r.px * (1 + span / 100);
   const base = Math.max(1, Math.round((hi - lo) / r.step / 60));
   const size = r.step * base;

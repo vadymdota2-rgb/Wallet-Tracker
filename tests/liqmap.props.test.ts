@@ -81,7 +81,7 @@ test("строки экрана: те же деньги, что в корзин�
   const r = rng(SEED + 2);
   for (let i = 0; i < CASES / 10; i++) {
     const m = reply(r);
-    const span = [5, 10, 15, 30, 50, 100][Math.floor(r() * 6)]!;
+    const span = [5, 10, 15, 30, 50, 100, 500][Math.floor(r() * 7)]!;
     const { rows } = rowsOf(m, span);
     const top = rows[0]!.hi;
     const bottom = rows[rows.length - 1]!.lo;
@@ -104,7 +104,7 @@ test("скопления: на своей стороне, в окне, не со
     for (const up of [true, false]) {
       const n = nearest(m, up);
       if (n) assert.ok(up ? n.p > m.px && n.d <= 10.5 : n.p < m.px && n.d >= -10.5, `случай ${i}`);
-      const span = [5, 10, 15, 30, 50, 100][Math.floor(r() * 6)]!;
+      const span = [5, 10, 15, 30, 50, 100, 500][Math.floor(r() * 7)]!;
       const t = topLevels(m, up, span);
       assert.ok(t.length <= 3);
       for (const x of t) assert.ok((up ? x.p > m.px : x.p < m.px) && Math.abs(x.p / m.px - 1) <= span / 100 + 1e-9, `случай ${i}`);

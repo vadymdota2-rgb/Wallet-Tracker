@@ -16,7 +16,7 @@ import wt_liqmap as lm  # noqa: E402 — модуль лежит в корне �
 
 PX = 100.0
 LO = PX * (1 - lm.SPAN)
-STEP = PX * lm.SPAN * 2 / lm.BUCKETS
+STEP = PX * lm.SPAN * 2 / lm.FINE
 
 
 def row(t, hi, low, c, oi, bs=0.5):  # noqa: PLR0913 — ряд биржи целиком
@@ -34,7 +34,7 @@ def series(closes, coins, bs=0.5, ranges=None):
 
 
 def mids():
-    return [LO + STEP * (b + 0.5) for b in range(lm.BUCKETS)]
+    return lm.mids(LO, STEP)
 
 
 def total(side):
@@ -65,10 +65,46 @@ class ModelTest(unittest.TestCase):
         self.assertAlmostEqual(sum(lm.SMOOTH), 1.0)
         self.assertEqual((lm.MMR, lm.ENTRY), (0.005, 5))
 
-    def test_grid_reaches_zero_and_double(self):
-        self.assertEqual((lm.SPAN, lm.BUCKETS), (1.0, 800))
-        self.assertAlmostEqual(STEP, 0.25)  # шаг — 0,25 % цены, как и был
+    def test_grid_reaches_zero_and_six_times_the_price(self):
+        self.assertEqual((lm.SPAN, lm.FINE, lm.COARSE, lm.UP, lm.BUCKETS), (1.0, 800, 10, 5.0, 960))
+        self.assertAlmostEqual(STEP, 0.25)  # до удвоения — по 0,25 % цены, как и было
         self.assertEqual(LO, 0.0)
+        m = lm.mids(LO, STEP)
+        self.assertEqual(len(m), lm.BUCKETS)
+        self.assertAlmostEqual(m[lm.FINE - 1], 199.875)
+        self.assertAlmostEqual(m[lm.FINE], 201.25)  # дальше — по 2,5 %
+        self.assertAlmostEqual(m[-1] + STEP * lm.COARSE / 2, PX * (1 + lm.UP))  # верх — ×6
+        self.assertEqual(m, sorted(set(m)))  # по возрастанию, без повторов
+        # Каждая середина — в своей корзине; края — снаружи.
+        self.assertEqual([lm.bucket(p, LO, STEP) for p in m], list(range(lm.BUCKETS)))
+        self.assertEqual(lm.bucket(-0.01, LO, STEP), -1)
+        self.assertEqual(lm.bucket(PX * (1 + lm.UP), LO, STEP), lm.BUCKETS)
+        self.assertEqual(lm.bucket(199.99, LO, STEP), lm.FINE - 1)
+        self.assertEqual(lm.bucket(200.0, LO, STEP), lm.FINE)
+        self.assertEqual(lm.bucket(202.49, LO, STEP), lm.FINE)
+        self.assertEqual(lm.bucket(202.5, LO, STEP), lm.FINE + 1)
+
+    def test_shorts_far_above_double_are_on_the_map(self):
+        # Монета упала втрое: шорты 3×, открытые у вершины (300), ликвидируются
+        # около 400 — вдвое выше нынешних 100; раньше сетка кончалась на 200.
+        rows = series([300, 300, 300], [0, 10, 20], bs=0.0)
+        _, shorts, seen = lm.model(rows, LO, STEP, ((3, 1.0, 0),))
+        self.assertAlmostEqual(total(shorts), 10.0, places=9)
+        self.assertTrue(all(390 < p < 410 for p in where(shorts)))
+        self.assertAlmostEqual(seen, 10.0, places=9)
+        # Свеча до 450 сжигает их и в грубых корзинах.
+        up = [*rows, row(3 * 900, 450, 300, 300, 20 * 300)]
+        _, shorts, _ = lm.model(up, LO, STEP, ((3, 1.0, 0),))
+        self.assertEqual(total(shorts), 0.0)
+
+    def test_smoothing_stays_in_the_fine_part(self):
+        a = [0.0] * lm.BUCKETS
+        a[lm.FINE - 1], a[lm.FINE + 3] = 4.0, 7.0
+        out = lm._smooth(a)
+        self.assertAlmostEqual(sum(out), 11.0)
+        self.assertEqual(out[lm.FINE:], a[lm.FINE:])  # грубые — как есть
+        self.assertAlmostEqual(out[lm.FINE - 1], 3.0)  # край мелких — без потерь
+        self.assertAlmostEqual(out[lm.FINE - 2], 1.0)
 
     def test_burn_touches_only_the_filled_band_and_is_fast(self):
         rnd = random.Random(3)  # noqa: S311 — выдуманный рынок, не тайна
@@ -177,19 +213,19 @@ class ModelTest(unittest.TestCase):
         self.assertGreater(longs[0][0], 0)
 
     def test_out_of_window_positions_count_in_the_total(self):
-        # Вход на 160: шорт 3× ликвидируется на ~212 — выше края окна (200).
-        rows = series([160, 160, 160], [0, 10, 20])
+        # Вход на 520: шорт 3× ликвидируется на ~690 — выше края окна (600).
+        rows = series([520, 520, 520], [0, 10, 20])
         longs, shorts, seen = lm.model(rows, LO, STEP)
         self.assertAlmostEqual(seen, 10.0)
         self.assertLess(total(longs) + total(shorts), 10.0)
         # Закрыли половину — половина и тех, что за краем, и видимых.
-        _, _, half = lm.model([*rows, row(3 * 900, 160, 160, 160, 2400)], LO, STEP)
+        _, _, half = lm.model([*rows, row(3 * 900, 520, 520, 520, 7800)], LO, STEP)
         self.assertAlmostEqual(half, 5.0, places=9)
 
     def test_longs_far_above_the_window_still_count(self):
-        # Вход на 300, а сетка — до 200: лонги ликвидируются на 201–299 — за
+        # Вход на 900, а сетка — до 600: лонги ликвидируются на 601–899 — за
         # краем, на карте их нет, но в «видно» и в закрытиях они есть.
-        longs, _, seen = lm.model(series([300, 300, 300], [0, 10, 20], bs=1.0), LO, STEP)
+        longs, _, seen = lm.model(series([900, 900, 900], [0, 10, 20], bs=1.0), LO, STEP)
         self.assertEqual(total(longs), 0.0)
         self.assertAlmostEqual(seen, 10.0)
 
@@ -383,7 +419,7 @@ class BuildMapTest(unittest.TestCase):
         self.assertTrue(r["buckets"])
         for b in r["buckets"]:
             self.assertEqual((len(b["L"]), len(b["S"])), (5, 5))
-            self.assertTrue(LO <= b["p"] <= PX * (1 + lm.SPAN))
+            self.assertTrue(LO <= b["p"] <= PX * (1 + lm.UP))
             self.assertGreaterEqual(sum(b["L"]) + sum(b["S"]), 1)
             if sum(b["L"]):
                 self.assertLess(b["p"], 99.7)  # ниже минимума идущей свечи
@@ -576,7 +612,7 @@ class CacheTest(Base):
         r = lm.liq_map("BTC", "1d")
         self.assertEqual(r["px"], 100.5)
         self.assertAlmostEqual(r["lo"], 100.5 * (1 - lm.SPAN))
-        self.assertAlmostEqual(r["step"], 100.5 * lm.SPAN * 2 / lm.BUCKETS)
+        self.assertAlmostEqual(r["step"], 100.5 * lm.SPAN * 2 / lm.FINE)
 
     def test_failing_tail_is_caught_not_left_to_the_thread(self):
         caught = []

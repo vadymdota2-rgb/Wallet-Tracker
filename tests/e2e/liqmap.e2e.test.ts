@@ -215,14 +215,14 @@ describe("Карта ликвидаций", () => {
     await ctx.close();
   });
 
-  test("приближение ±5 … ±100 %: кнопки в одну строку, крупнейшие уровни — в видимом окне", async () => {
+  test("приближение ±5 … ±500 %: кнопки в одну строку, крупнейшие уровни — в видимом окне", async () => {
     const { ctx, page, errors } = await open({ width: 320, replies: [FIX["365d"]] });
     await ready(page);
     const seg = page.locator(".lq-plot").locator("xpath=..").locator(".seg button");
-    assert.deepEqual((await seg.allInnerTexts()).map(sp), ["±5%", "±10%", "±15%", "±30%", "±50%", "±100%"]);
+    assert.deepEqual((await seg.allInnerTexts()).map(sp), ["±5%", "±10%", "±15%", "±30%", "±50%", "±100%", "±500%"]);
     const tops = await seg.evaluateAll((els) => [...new Set(els.map((el) => Math.round(el.getBoundingClientRect().top)))]);
     assert.equal(tops.length, 1, String(tops));
-    for (const span of [5, 30, 100]) {
+    for (const span of [5, 30, 100, 500]) {
       await seg.filter({ hasText: new RegExp(`^±${span}%$`) }).click();
       await page.waitForTimeout(200);
       for (const t of await page.locator(".lq-top-c button small").allInnerTexts()) {
@@ -241,9 +241,10 @@ describe("Карта ликвидаций", () => {
     await ready(page);
     const seg = page.locator(".lq-plot").locator("xpath=..").locator(".seg button");
     const note = page.locator(".lq-rows");
-    // Сервер — корзины по 0,25 %, экран — ~60 полос: при ±100 % в полосе 13 корзин — 3,25 %.
-    const want: Record<number, string> = { 5: "0,25%", 30: "1%", 100: "3,2%" };
-    for (const span of [5, 30, 100]) {
+    // Сервер — корзины по 0,25 %, экран — ~60 полос: при ±100 % в полосе 13 корзин — 3,25 %,
+    // при ±500 % (от нуля до шести цен) — 40 корзин, 10 %.
+    const want: Record<number, string> = { 5: "0,25%", 30: "1%", 100: "3,2%", 500: "10%" };
+    for (const span of [5, 30, 100, 500]) {
       await seg.filter({ hasText: new RegExp(`^±${span}%$`) }).click();
       await page.waitForTimeout(150);
       const text = sp(await note.innerText());
