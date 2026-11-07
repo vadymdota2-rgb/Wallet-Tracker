@@ -887,6 +887,29 @@ class GatherTest(unittest.TestCase):
         # Свеча без пары у опоры остаётся своей.
         self.assertEqual(api._liq_on_ref([(5, 2.0, 1.0, 1.5, 7.0, 0.4)], ref), [(5, 2.0, 1.0, 1.5, 7.0, 0.4)])
 
+    def test_same_coin_in_another_price_scale_is_kept(self):
+        # OKX котирует ANTHROPIC в десять раз дешевле — и держит 81 % его интереса.
+        okx = [(i * 900, 13.8, 13.6, 13.7, 7e6, 0.6) for i in range(10)]
+        gate = [(i * 900, 1385.0, 1360.0, 1372.0, 1.7e6, 0.5) for i in range(10)]
+        htx = [(i * 900, 1380.0, 1365.0, 1371.0, 6e4, 0.5) for i in range(10)]
+        other = [(i * 900, 5.0, 4.9, 4.95, 9e6, 0.5) for i in range(10)]  # чужая монета под тем же тикером
+        src = (("OKX", lambda s, p, n: okx), ("Gate", lambda s, p, n: gate), ("HTX", lambda s, p, n: htx), ("dYdX", lambda s, p, n: other))
+        with mock.patch.object(api, "LIQ_SOURCES", src), mock.patch.object(api, "_liq_sampled", return_value={}):
+            got, ref = api._liq_gather("ANTHROPIC", "15m", 10)
+        self.assertEqual(set(got), {"OKX", "Gate", "HTX"})
+        self.assertAlmostEqual(got["OKX"][-1][3], 1370.0)
+        self.assertEqual(got["OKX"][-1][4], 7e6)  # интерес в долларах — как был
+        self.assertEqual(ref[-1][4], 7e6)
+
+    def test_price_scale(self):
+        self.assertEqual(api._liq_scale(137.0, 1372.0), 10.0)
+        self.assertEqual(api._liq_scale(1372.0, 137.0), 0.1)
+        self.assertEqual(api._liq_scale(0.00137, 1372.0), 1e6)
+        self.assertEqual(api._liq_scale(1372.0, 1372.0), 0.0)  # тот же масштаб — нечего менять
+        self.assertEqual(api._liq_scale(130.0, 1372.0), 0.0)  # ×10,55 — не ровно 10ᵏ
+        self.assertEqual(api._liq_scale(1.372e-5, 1372.0), 0.0)  # дальше 10⁶ — не берём
+        self.assertEqual(api._liq_scale(0.0, 1372.0), 0.0)
+
     def test_long_history_gets_a_longer_budget(self):
         seen = []
 

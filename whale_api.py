@@ -11872,6 +11872,18 @@ def _liq_on_ref(rows: list, ref: list) -> list:
             for t, h, lo, c, oi, bs in rows]
 
 
+def _liq_scale(px: float, mid: float) -> float:
+    """Та же монета в другом масштабе цены: OKX котирует ANTHROPIC и OPENAI
+    в десять раз дешевле остальных ($137 против $1 370) — и держит 81 %
+    интереса ANTHROPIC, а карта его выбрасывала как чужую монету. Цена
+    ровно в 10ᵏ раз (±3 %) — множитель для свечей (интерес в долларах тот
+    же); иначе 0."""
+    if px <= 0 or mid <= 0:
+        return 0.0
+    k = round(math.log10(mid / px))
+    return 10.0 ** k if 1 <= abs(k) <= 6 and abs(mid / (px * 10.0 ** k) - 1) <= 0.03 else 0.0
+
+
 def _liq_gather(sym: str, period: str, n: int) -> tuple[dict, list | None]:
     """Ряды бирж за окно: (t, макс, мин, закрытие, интерес $, доля покупок).
     Биржи со своей историей — запросом, остальные — из снимков liq_oi.db,
@@ -11902,6 +11914,9 @@ def _liq_gather(sym: str, period: str, n: int) -> tuple[dict, list | None]:
     # не берём: её уровни легли бы на чужую ось.
     if len(got) > 1:
         mid = sorted(r[-1][3] for r in got.values())[len(got) // 2]
+        for name, rows in list(got.items()):
+            if k := _liq_scale(rows[-1][3], mid):
+                got[name] = [(t, h * k, lo * k, c * k, oi, bs) for t, h, lo, c, oi, bs in rows]
         for name in [k for k, r in got.items() if mid <= 0 or abs(r[-1][3] / mid - 1) > 0.03]:
             got.pop(name)
     # Опора — биржа с наибольшим интересом; нет ни одной — свечи Hyperliquid.
