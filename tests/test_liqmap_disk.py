@@ -53,6 +53,20 @@ class DumpRestoreTest(Base):
         lm.set_gather(None)
         self.assertTrue(lm.liq_map("BTC", "1d")["ok"])
 
+    def test_same_coin_mark_survives_the_copy(self):
+        lm.set_price(lambda s: 100.0)
+        self.addCleanup(lm.set_price, None)
+        data = json.loads(json.dumps(self.built(("BTC", "1d")), allow_nan=False))
+        self.assertIs(lm._st.hits[("BTC", "1d")][1]["live"], True)
+        lm._st = lm._State()
+        self.assertEqual(lm.restore(data), 1)
+        self.assertIs(lm._st.hits[("BTC", "1d")][1]["live"], True)
+        for bad in (1, "true", None):
+            data["maps"][0]["st"]["live"] = bad
+            lm._st = lm._State()
+            self.assertEqual(lm.restore(copy.deepcopy(data)), 1)
+            self.assertIs(lm._st.hits[("BTC", "1d")][1]["live"], False)  # не True — не «та же монета»
+
     def test_age_survives_restart(self):
         data = self.built(("BTC", "1d"))
         data["maps"][0]["age"] = 1000.0

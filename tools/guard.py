@@ -1895,6 +1895,18 @@ say("карта ликвидаций: масштаб ±500 % — сетка до
     and '"100", "500"]' in read(f"{APP}/src/screens/LiqMapScreen.tsx")
     and "Math.max(0, r.px * (1 - span / 100))" in read(f"{APP}/src/lib/liqmap.ts"))
 
+# Ревизия модуля: снимки — интерес на начало свечи (раньше — на конец, рост
+# ложился на свечу раньше) и доля покупок опоры; GMX — пул, интерес пополам;
+# копилка — медиана общих дней; живая цена той же монеты — до PX_MOVE, ход
+# дальше PX_GAP — пересборка сразу; сбой предыстории не молодит старую.
+_lmpy = read(f"{APP}/wt_liqmap.py")
+say("карта ликвидаций: ревизия — снимки на начало свечи, GMX пополам, медиана копилки, живая цена, предыстория",
+    "sn[j + 1][0] <= t:" in pybody(api, "def _liq_sampled(") and "rows.append((t, h, lo, c, sn[j][1], bs))" in pybody(api, "def _liq_sampled(")
+    and "/ 2 / 1e30" in pybody(api, "def _snap_gmx(") and '"GMX": 2' in api
+    and "k[len(k) // 2]" in pybody(api, "def _liq_day_k(")
+    and "PX_MOVE = 0.3" in _lmpy and "_start(key)" in _lmpy.split("def _served(")[1].split("\ndef ")[0]
+    and "_st.pre_retry[sym] = t" in _lmpy)
+
 # «Добавить кошелёк» больше не отвечает общей ошибкой: причина отказа доходит
 # до экрана («уже добавлен» — обновить список), а норма запросов считается
 # на человека — на Cloud Run адрес у всех один, и норма делилась на всех.

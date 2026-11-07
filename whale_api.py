@@ -11140,7 +11140,11 @@ def _snap_gmx() -> dict:
         if not r.get("isListed") or "/USD" not in name:
             continue
         sym = _snap_sym(name.split("/")[0])
-        oi = (_fnum(r.get("openInterestLong")) + _fnum(r.get("openInterestShort"))) / 1e30
+        # Пул, а не стакан: лонги и шорты — отдельные позиции против пула, и
+        # их сумма — все позиции. У бирж со стаканом интерес — одна сторона
+        # (на столько же лонгов, сколько шортов), и модель откалибрована на
+        # неё: GMX без деления весил бы вдвое, как Gate и Bybit до исправления.
+        oi = (_fnum(r.get("openInterestLong")) + _fnum(r.get("openInterestShort"))) / 2 / 1e30
         if sym and oi > 0:
             out[sym] = (out.get(sym, (0.0,))[0] + oi, 0.0)
     return out
@@ -11347,7 +11351,7 @@ LIQ_SNAPS = (("Hyperliquid", _snap_hl), ("Bitget", _snap_bitget), ("MEXC", _snap
 # инверсные). Без пересчёта старой истории скачок интереса в момент выката
 # (Phemex по BTC: $178M → $1209M за 15 минут) модель приняла бы за миллиард
 # новых позиций по текущей цене.
-LIQ_SNAP_VER = {"Phemex": 2, "MEXC": 2, "KuCoin": 2, "Bitget": 2, "Aster": 2, "BingX": 2}
+LIQ_SNAP_VER = {"Phemex": 2, "MEXC": 2, "KuCoin": 2, "Bitget": 2, "Aster": 2, "BingX": 2, "GMX": 2}
 
 
 def _liq_snap_rescale(con: sqlite3.Connection, rows: list, t: int) -> None:
@@ -11466,12 +11470,17 @@ def _liq_sampled(sym: str, period: str, n: int, ref: list, px: float) -> dict:
     for ex, sn in by.items():
         if len(sn) < 8 or (sn[-1][2] > 0 and px > 0 and abs(sn[-1][2] / px - 1) > 0.03):
             continue
-        rows, j = [], 0
-        for t, h, lo, c, _oi, _bs in ref:
-            while j + 1 < len(sn) and sn[j + 1][0] <= t + sec:
+        # Интерес строки — на начало её свечи, как у бирж со своей историей:
+        # последний снимок не позже t (и не старше свечи). Раньше брался снимок
+        # на конец свечи, и рост интереса ложился на свечу раньше — у окон по
+        # дням на цены прошлых суток. Доля покупок — опорной биржи: своей у
+        # снимка нет, а у опоры она лучше, чем «поровну».
+        rows, j = [], -1
+        for t, h, lo, c, _oi, bs in ref:
+            while j + 1 < len(sn) and sn[j + 1][0] <= t:
                 j += 1
-            if t - sec <= sn[j][0] <= t + sec:
-                rows.append((t, h, lo, c, sn[j][1], 0.5))
+            if j >= 0 and t - sn[j][0] < sec:
+                rows.append((t, h, lo, c, sn[j][1], bs))
         if len(rows) >= 8:
             out[ex] = rows
     return out
@@ -11740,7 +11749,7 @@ def liq_disk_save() -> None:
 
 
 def liq_warm_refresher() -> None:
-    """Держит тёплыми карты самых торгуемых монет по всем трём окнам."""
+    """Держит тёплыми карты самых торгуемых монет по всем окнам."""
     time.sleep(20)
     while True:
         try:
@@ -11784,14 +11793,19 @@ LIQ_DAY_WRITE = False
 
 
 def _liq_day_k(con: sqlite3.Connection, sym: str, ex: str, rows: list) -> float:
-    """Множитель сохранённых дней к свежему ряду — по первому свежему дню,
-    который есть и в копилке. Тот же день у той же биржи — то же число,
+    """Множитель сохранённых дней к свежему ряду — по дням, что есть и в
+    свежем ряду, и в копилке. Тот же день у той же биржи — то же число,
     множитель 1. Иначе поменялось, что считается интересом (добавились
     USDC-рынки Binance; Bybit — с одной стороны вместо двух): без пересчёта
     на стыке была бы ступенька, и модель приняла бы её за открытие или
     закрытие позиций."""
-    r = con.execute("SELECT oi FROM liq_day WHERE coin=? AND ex=? AND t=?", (sym, ex, rows[0][0])).fetchone()
-    return rows[0][4] / r[0] if r and r[0] > 0 and rows[0][4] > 0 else 1.0
+    # По всем общим дням — медиана: самый старый день, что отдала биржа,
+    # бывает выбросом, и по нему одному вся сохранённая история уехала бы.
+    fresh = {r[0]: r[4] for r in rows}
+    k = sorted(fresh[t] / oi for t, oi in con.execute(
+        "SELECT t, oi FROM liq_day WHERE coin=? AND ex=? AND t>=?", (sym, ex, rows[0][0])).fetchall()
+        if oi > 0 and fresh.get(t, 0) > 0)
+    return k[len(k) // 2] if k else 1.0
 
 
 def _liq_day_old(con: sqlite3.Connection, sym: str, ex: str, rows: list, k: float) -> list:

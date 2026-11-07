@@ -161,13 +161,31 @@ class PreBuildTest(Base):
         self.use(fail=True)
         r = lm.build("BTC", "1d")
         self.assertTrue(r["ok"])
-        born, rows = lm._st.pre["BTC"]
-        self.assertEqual(rows, {})
+        self.assertNotIn("BTC", lm._st.pre)
         # Снова спросим через PRE_RETRY, а не через PRE_TTL и не на каждой сборке.
-        age = time.monotonic() - born
-        self.assertAlmostEqual(age, lm.PRE_TTL - lm.PRE_RETRY, delta=5)
+        self.assertLess(time.monotonic() - lm._st.pre_retry["BTC"], 5)
         lm.build("BTC", "7d")
         self.assertEqual(len(self.pre_calls()), 1)
+        lm._st.pre_retry["BTC"] -= lm.PRE_RETRY
+        self.use()
+        lm.build("BTC", "30d")
+        self.assertEqual(len(self.pre_calls()), 2)  # пауза прошла — спросили снова
+        self.assertIn("BTC", lm._st.pre)
+        self.assertNotIn("BTC", lm._st.pre_retry)
+
+    def test_silent_exchanges_do_not_make_old_history_young(self):
+        # Сбой не обновляет время прежней предыстории: старше PRE_STALE она не
+        # берётся, сколько бы биржи ни молчали (раньше «молодела» с каждым сбоем).
+        self.use()
+        lm.build("BTC", "1d")
+        born, rows = lm._st.pre["BTC"]
+        lm._st.pre["BTC"] = (born - lm.PRE_TTL - 1, rows)
+        self.use(fail=True)
+        lm._pre_fetch("BTC")
+        self.assertEqual(lm._st.pre["BTC"], (born - lm.PRE_TTL - 1, rows))
+        lm._st.pre["BTC"] = (time.monotonic() - lm.PRE_STALE - 1, rows)
+        lm._pre_fetch("BTC")
+        self.assertEqual(lm._pre("BTC", 0), {})  # слишком старая — окно без неё
 
     def test_failure_keeps_the_previous_history(self):
         self.use()
@@ -661,6 +679,59 @@ class RescaleTest(unittest.TestCase):
         api.liq_oi_sample()
         self.assertEqual(self.series("Phemex", "BTC"), [700e6] * 6)
 
+class SampledTest(unittest.TestCase):
+    """Снимки бирж без своей истории — к свечам опоры."""
+
+    T = 1_800_000_000 // 3600 * 3600
+
+    def setUp(self):
+        d = tempfile.mkdtemp()
+        for name, value in (("LIQ_OI_DB", os.path.join(d, "liq_oi.db")), ("now", lambda: self.T + 3 * 3600 + 120)):
+            patcher = mock.patch.object(api, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        con = api._liq_oi_con()
+        # Снимок каждые 15 минут, интерес = номер снимка × $1 млн.
+        con.executemany("INSERT INTO oi_snap VALUES (?,?,?,?,?)",
+                        [("Bitget", "BTC", self.T - 10 * 3600 + k * 900, (k + 1) * 1e6, 100.0) for k in range(13 * 4 + 1)])
+        con.commit()
+        con.close()
+        self.ref = [(self.T - 9 * 3600 + h * 3600, 101.0, 99.0, 100.0, 5e9, 0.7) for h in range(13)]
+
+    def test_interest_is_at_the_start_of_the_candle(self):
+        # Свеча t — снимок на её начало (t), как у бирж со своей историей; раньше
+        # брался снимок на конец свечи, и рост ложился на свечу раньше.
+        got = api._liq_sampled("BTC", "1h", 13, self.ref, 100.0)["Bitget"]
+        self.assertEqual([r[0] for r in got], [r[0] for r in self.ref])
+        start = self.T - 10 * 3600
+        for r in got:
+            self.assertEqual(r[4], ((r[0] - start) // 900 + 1) * 1e6, r[0])
+        # Доля покупок — опорной биржи, а не «поровну».
+        self.assertTrue(all(r[5] == 0.7 for r in got))
+
+    def test_no_snapshot_yet_or_too_old_is_skipped(self):
+        early = [(self.T - 20 * 3600 + h * 3600, 101.0, 99.0, 100.0, 5e9, 0.5) for h in range(13)]
+        got = api._liq_sampled("BTC", "1h", 13, early, 100.0)
+        rows = got.get("Bitget", [])
+        self.assertTrue(all(r[0] >= self.T - 10 * 3600 for r in rows))  # до первого снимка — нет строк
+        con = api._liq_oi_con()
+        con.execute("DELETE FROM oi_snap WHERE t > ?", (self.T - 3600,))
+        con.commit()
+        con.close()
+        got = api._liq_sampled("BTC", "1h", 13, self.ref, 100.0)["Bitget"]
+        self.assertEqual(max(r[0] for r in got), self.T - 3600)  # снимок старше свечи — не берётся
+
+
+class GmxTest(unittest.TestCase):
+    def test_pool_interest_is_halved_like_one_side(self):
+        m = {"markets": [{"name": "BTC/USD [BTC-USDC]", "isListed": True, "openInterestLong": 6e37, "openInterestShort": 4e37},
+                         {"name": "BTC/USD [WBTC]", "isListed": True, "openInterestLong": 1e37, "openInterestShort": 1e37},
+                         {"name": "ETH/USD", "isListed": False, "openInterestLong": 9e37, "openInterestShort": 0}]}
+        with mock.patch.object(api, "get_json", return_value=m):
+            self.assertEqual(api._snap_gmx(), {"BTC": (6e7, 0.0)})  # ($60M + $40M + $10M + $10M) / 2
+        self.assertEqual(api.LIQ_SNAP_VER["GMX"], 2)  # старая история — пересчитать по стыку
+
+
 class DayKeepTest(unittest.TestCase):
     """Дневные ряды бирж копятся у нас: история Binance (30 дней у биржи)
     растёт на день в день."""
@@ -706,6 +777,17 @@ class DayKeepTest(unittest.TestCase):
             got = api._liq_gather("BTC", "1d", 1000)[0]["Binance"]
         for d, r in zip(range(100, 152), got, strict=True):
             self.assertAlmostEqual(r[4], 2 * (1e6 + d), delta=1e-3)
+
+    def test_seam_uses_the_median_of_common_days(self):
+        # Самый старый день биржи — выброс: по нему одному копилка уехала бы
+        # вдесятеро; и выброс вниз — по самому малому уехала бы вдесятеро вниз.
+        self.gather()
+        self.days = range(120, 151)
+        odd = {120: 10.0, 121: 0.1}
+        rows = [((self.base + d) * DAY, 101.0, 99.0, 100.0, (1e6 + d) * odd.get(d, 1.0), 0.5) for d in self.days]
+        with mock.patch.object(api, "LIQ_SOURCES", (("Binance", lambda s, p, k: rows),)):
+            got = api._liq_gather("BTC", "1d", 1000)[0]["Binance"]
+        self.assertAlmostEqual(got[0][4], 1e6 + 100, delta=1e-3)  # сохранённые дни — как были
 
     def test_reader_rescales_only_in_memory(self):
         self.gather()

@@ -586,6 +586,50 @@ class CacheTest(Base):
         r2 = lm.liq_map("BTC", "1d")
         self.assertTrue(all(b["p"] < 98 for b in r2["buckets"] if sum(b["L"])))
 
+    def test_big_move_between_builds_is_live_and_rebuilds(self):
+        # Окно 90 дней живёт полчаса. Цена упала на 5 % — карта сразу на новой
+        # цене (лонги выше неё сгорели) и пересобирается, не дожидаясь TTL.
+        # Раньше выше PX_GAP цена не бралась, и карта стояла на старой.
+        calls: list = []
+        lm.set_gather(self.gather(calls))
+        price = {"v": 100.0}
+        lm.set_price(lambda s: price["v"])
+        self.assertEqual(lm.liq_map("BTC", "90d")["px"], 100.0)
+        self.assertIs(lm._st.hits[("BTC", "90d")][1]["live"], True)
+        n = len(calls)
+        price["v"] = 95.0
+        r = lm.liq_map("BTC", "90d")
+        self.assertEqual(r["px"], 95.0)
+        self.assertTrue(all(b["p"] < 95 for b in r["buckets"] if sum(b["L"])))
+        job = lm._st.jobs.get(("BTC", "90d"))
+        if job is not None:
+            job.join(10)
+        self.assertGreater(len(calls), n)  # пересобрали сразу
+        # Мелкий ход — без пересборки.
+        lm.set_gather(self.gather(calls, rows=[(*x[:3], 99.0, *x[4:]) for x in market()]))
+        lm._st.hits.clear()
+        price["v"] = 99.0
+        lm.liq_map("BTC", "90d")
+        n = len(calls)
+        price["v"] = 98.0
+        self.assertEqual(lm.liq_map("BTC", "90d")["px"], 98.0)
+        self.assertEqual(len(calls), n)
+        self.assertNotIn(("BTC", "90d"), lm._st.jobs)
+        self.assertEqual((lm.PX_GAP, lm.PX_MOVE), (0.03, 0.3))
+
+    def test_other_coin_at_the_price_source_is_still_not_taken(self):
+        # Источник цены при сборке не совпал с биржами (под тем же тикером у
+        # него другая монета) — его цена не берётся и между сборками.
+        lm.set_gather(self.gather([]))
+        lm.set_price(lambda s: 150.0)
+        self.assertEqual(lm.liq_map("BTC", "1d")["px"], 100.0)
+        self.assertIs(lm._st.hits[("BTC", "1d")][1]["live"], False)
+        lm.set_price(lambda s: 104.0)  # 4 % — не больше PX_MOVE, но источник «чужой»
+        self.assertEqual(lm.liq_map("BTC", "1d")["px"], 100.0)
+        lm.set_price(lambda s: 160.0)
+        lm._st.hits[("BTC", "1d")][1]["live"] = True
+        self.assertEqual(lm.liq_map("BTC", "1d")["px"], 100.0)  # дальше PX_MOVE — не цена
+
     def test_price_far_off_or_broken_is_not_taken(self):
         lm.set_gather(self.gather([]))
         for bad in (150.0, 0.0, -1.0, True, "100", None):

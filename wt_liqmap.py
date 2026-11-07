@@ -39,7 +39,8 @@
 (у «30 дней» последняя свеча 4-часовая, и цена отставала на часы). Между
 пересборками каждый запрос берёт текущую цену (set_price) и снимает уровни,
 до которых она дошла после сборки: дошли до цены — позиции ликвидированы, и
-карта показывает это сразу, а не через TTL.
+карта показывает это сразу, а не через TTL. Ушла цена от сборки дальше
+PX_GAP — карта ещё и пересобирается сразу (PX_MOVE).
 
 Сбор данных бирж — в whale_api (он же нужен истории открытого интереса);
 сюда он приходит через set_gather, цена — через set_price. Модуль сам в
@@ -135,6 +136,11 @@ SMOOTH = (0.25, 0.5, 0.25)
 # Текущая цена дальше этого от цены сборки — не та монета (другой тикер у
 # источника цены) или сбой: берём цену сборки.
 PX_GAP = 0.03
+# Источник цены совпал с биржами при сборке (та же монета) — между сборками
+# его цена берётся и дальше PX_GAP, до PX_MOVE: у окон от 90 дней сборка живёт
+# полчаса, и на обвале в 5 % карта стояла бы на старой цене, показывая живыми
+# уровни, которые уже ликвидированы. Ушла дальше PX_GAP — сразу пересборка.
+PX_MOVE = 0.3
 
 STALE = 3600.0  # сборка старше — не отдаётся даже на время пересборки (биржи молчат)
 COLD_WAIT = 8.0  # сколько запрос без карты ждёт сборку, с
@@ -301,7 +307,7 @@ class _Book:
         # всеми: иначе их закрытия съедали бы видимые уровни.
         self.cohorts: list[list[Any]] = []
         # Докуда по группе лежали лонги (самая верхняя корзина) и шорты (самая
-        # нижняя): свеча сжигает только эту полосу, а не всю сетку в 800 корзин.
+        # нижняя): свеча сжигает только эту полосу, а не всю сетку (BUCKETS корзин).
         self.top_l = [-1] * g_n
         self.bot_s = [BUCKETS] * g_n
 
@@ -475,7 +481,7 @@ def make_state(sym: str, rng: str, got: dict[str, list[Row]], ref: list[Row], px
         for g in range(g_n):
             long_b[g] = [a + b for a, b in zip(long_b[g], lg[g], strict=True)]
             short_b[g] = [a + b for a, b in zip(short_b[g], sg[g], strict=True)]
-    # Путь цены за окно — у опорной биржи, ≤60 точек: видно, откуда цена пришла.
+    # Путь цены за окно — у опорной биржи, 60–120 точек: видно, откуда цена пришла.
     stride = max(1, len(ref) // 60)
     return {"sym": sym, "range": rng, "px": px, "lo": lo, "step": step, "at": at, "ex": sorted(got),
             "L": [_smooth(x) for x in long_b], "S": [_smooth(x) for x in short_b],
@@ -547,6 +553,8 @@ class _State:
         # Предыстория: монета → (когда собрана, {биржа: дневной ряд}).
         self.pre: dict[str, tuple[float, dict[str, list[Row]]]] = {}
         self.pre_jobs: dict[str, threading.Thread] = {}
+        # Предыстория не пришла: монета → когда; снова спросим через PRE_RETRY.
+        self.pre_retry: dict[str, float] = {}
         self.gather: Gather | None = None
         self.price: Price | None = None
 
@@ -574,17 +582,23 @@ def _clean(sym: object) -> str:
     return s if SYM.fullmatch(s) else ""
 
 
-def _live(sym: str, base: float) -> float:
-    """Текущая цена монеты; источник молчит, сбоит или далеко от base — base."""
+def _quote(sym: str, base: float, gap: float = PX_GAP) -> float | None:
+    """Текущая цена монеты; источник молчит, сбоит или дальше gap от base — None."""
     fn = _st.price
     try:
         p = fn(sym) if fn else None
     except Exception:  # noqa: BLE001 — сбой источника цены не ломает карту: цена сборки
         p = None
-    # Ноль и минус отсекает и PX_GAP; True — не цена, хоть и равна 1.
-    if isinstance(p, (int, float)) and not isinstance(p, bool) and abs(p / base - 1) <= PX_GAP:
+    # Ноль и минус отсекает и gap; True — не цена, хоть и равна 1.
+    if isinstance(p, (int, float)) and not isinstance(p, bool) and abs(p / base - 1) <= gap:
         return float(p)
-    return base
+    return None
+
+
+def _live(sym: str, base: float, gap: float = PX_GAP) -> float:
+    """Текущая цена монеты, а нет её (см. _quote) — base."""
+    p = _quote(sym, base, gap)
+    return base if p is None else p
 
 
 def _sweep() -> None:
@@ -610,10 +624,15 @@ def _pre_fetch(sym: str) -> None:
         if rows:
             _st.pre.pop(sym, None)  # свежая — в конец очереди
             _st.pre[sym] = (t, rows)
+            _st.pre_retry.pop(sym, None)
         else:
-            # Ничего не пришло: прежнюю (если есть) держим, а спросим снова через PRE_RETRY.
-            old = _st.pre.get(sym)
-            _st.pre[sym] = (t - PRE_TTL + PRE_RETRY, old[1] if old else {})
+            # Ничего не пришло: прежняя (если есть) остаётся со своим временем —
+            # старше PRE_STALE она не берётся, — а спросим снова через PRE_RETRY.
+            # Раньше сбой ставил ей свежее время, и при долгом молчании бирж
+            # предыстория неделями «молодела», оставляя дыру до начала окна.
+            _st.pre_retry[sym] = t
+            for k in [k for k, v in _st.pre_retry.items() if t - v >= PRE_RETRY]:
+                del _st.pre_retry[k]
         while len(_st.pre) > PRE_MAX:
             del _st.pre[min(_st.pre, key=lambda k: _st.pre[k][0])]
         _st.pre_jobs.pop(sym, None)
@@ -628,7 +647,8 @@ def _pre(sym: str, wait: float) -> dict[str, list[Row]]:
         if hit and t - hit[0] < PRE_TTL:
             return hit[1]
         job = _st.pre_jobs.get(sym)
-        if job is None and _st.gather is not None:
+        tried = _st.pre_retry.get(sym)
+        if job is None and _st.gather is not None and (tried is None or t - tried >= PRE_RETRY):
             job = threading.Thread(target=_pre_fetch, args=(sym,), daemon=True)
             try:
                 job.start()
@@ -683,9 +703,12 @@ def build(sym: str, rng: str) -> dict[str, Json]:
         with _lock:
             _st.fails[key] = time.monotonic()
         return _no("no_data")
-    px = _live(sym, ref[-1][3])
+    quote = _quote(sym, ref[-1][3])
+    px = ref[-1][3] if quote is None else quote
     fine = splice(ref, clean_rows(tail_ref))
     st = make_state(sym, rng, got, ref, px, _now(), fine[-1] if fine is not ref else None)
+    # Цена источника совпала с биржами — это та же монета (см. PX_MOVE).
+    st["live"] = quote is not None
     res = render(st, px)
     with _lock:
         _st.hits[key] = (time.monotonic(), st, res)
@@ -712,14 +735,18 @@ def _fresh(key: tuple[str, str], px: float) -> dict[str, Json] | None:
 
 
 def _served(key: tuple[str, str]) -> dict[str, Json] | None:
-    """Ответ из кэша с текущей ценой, если сборка не старше STALE."""
+    """Ответ из кэша с текущей ценой, если сборка не старше STALE. Цена ушла
+    от сборки дальше PX_GAP — пересборка сразу, не дожидаясь TTL окна."""
     with _lock:
         hit = _st.hits.get(key)
         if not hit or time.monotonic() - hit[0] >= STALE:
             return None
         base = hit[1]["px"]
-    px = _live(key[0], base)  # источник цены — вне _lock: может сходить в сеть
+        gap = PX_MOVE if hit[1].get("live") is True else PX_GAP
+    px = _live(key[0], base, gap)  # источник цены — вне _lock: может сходить в сеть
     with _lock:
+        if abs(px / base - 1) > PX_GAP:
+            _start(key)
         return _fresh(key, px)
 
 
@@ -844,6 +871,7 @@ def _unpack(d: object) -> dict[str, Json] | None:
     st: dict[str, Json] = {k: d[k] for k in ("sym", "range", "at", "oi", "seen")}
     st |= {k: float(d[k]) for k in ("px", "lo", "step", "low", "high")}
     st["ex"] = list(d["ex"])
+    st["live"] = d.get("live") is True
     st["path"] = [float(x) for x in d["path"]]
     st["ohlc"] = [[float(x) for x in c] for c in d["ohlc"]]
     for side in ("L", "S"):
