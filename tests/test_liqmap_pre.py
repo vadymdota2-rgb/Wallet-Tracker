@@ -855,6 +855,38 @@ class GatherTest(unittest.TestCase):
         self.assertEqual(got["Bitget"], snap)
         self.assertEqual(ref, mine)
 
+    def gather_thin(self, thin):
+        # Опора (больше интереса) — живой рынок; второй ряд — как dYdX на DOT.
+        ref = [(i * 900, 1.01 + 0.001 * i, 0.99, 1.0 + 0.001 * i, 100.0, 0.6) for i in range(20)]
+        with mock.patch.object(api, "LIQ_SOURCES", (("OKX", lambda s, p, n: ref), ("dYdX", lambda s, p, n: thin))), \
+             mock.patch.object(api, "_liq_sampled", return_value={}):
+            return api._liq_gather("DOT", "15m", 20)
+
+    def test_thin_market_rides_on_the_reference_candles(self):
+        # Сделок почти нет: свеча — одна цена, и та на 1,5 % в стороне.
+        thin = [(i * 900, 1.015, 1.015, 1.015, 5.0 + i, 0.3) for i in range(20)]
+        got, ref = self.gather_thin(thin)
+        self.assertEqual([r[1:4] for r in got["dYdX"]], [r[1:4] for r in ref])
+        self.assertEqual([r[4:] for r in got["dYdX"]], [r[4:] for r in thin])  # интерес и доля покупок — свои
+        self.assertEqual(got["OKX"], ref)
+
+    def test_live_market_keeps_its_own_candles(self):
+        live = [(i * 900, 1.012 + 0.001 * i, 0.991, 1.0005 + 0.001 * i, 5.0, 0.3) for i in range(20)]
+        got, _ = self.gather_thin(live)
+        self.assertEqual(got["dYdX"], live)
+
+    def test_thin_by_empty_candles_or_by_distance(self):
+        ref = [(i * 900, 1.01, 0.99, 1.0, 100.0, 0.5) for i in range(20)]
+        empty = [(t, 1.0, 1.0, 1.0, 5.0, 0.5) if i % 4 == 0 else (t, 1.01, 0.99, 1.0, 5.0, 0.5) for i, (t, *_r) in enumerate(ref)]
+        self.assertTrue(api._liq_thin(empty, ref))  # 25 % пустых
+        away = [(t, 1.01, 0.99, 1.004, 5.0, 0.5) for t, *_r in ref]
+        self.assertTrue(api._liq_thin(away, ref))  # медиана 0,4 %
+        near = [(t, 1.01, 0.99, 1.002, 5.0, 0.5) for t, *_r in ref]
+        self.assertFalse(api._liq_thin(near, ref))
+        self.assertFalse(api._liq_thin(away[:7], ref))  # общих свечей мало — не судим
+        # Свеча без пары у опоры остаётся своей.
+        self.assertEqual(api._liq_on_ref([(5, 2.0, 1.0, 1.5, 7.0, 0.4)], ref), [(5, 2.0, 1.0, 1.5, 7.0, 0.4)])
+
     def test_long_history_gets_a_longer_budget(self):
         seen = []
 

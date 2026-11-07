@@ -131,7 +131,8 @@ S×0,79, совпадение 42 %; «доля 0,1»: ×0,80/×0,98, 46 %; «д�
   0,1 (0,2) в сутки, закрытое открывается по текущей свече;
 - «две группы» — 40 % новых позиций краткосрочные (живут ~полсуток,
   переоткрываются у цены), остальные держатся.
-Займёт ~10–25 минут.
+DOT — отдельно, по просьбе: у него порог настоящих ликвидаций за неделю
+$50 тыс. вместо $0,2 млн (рынок меньше). Займёт ~10–25 минут.
 ```
 cd ~/WalletTracker && PYTHONDONTWRITEBYTECODE=1 timeout 3000 python3 - <<'PY'
 import math, sqlite3, time
@@ -189,7 +190,7 @@ def burns(rows, lo, step, levs, t0, share, rate):
 VARIANTS = (("сейчас", 0, 0), ("доля 0,1", 1, 0.1), ("доля 0,2", 1, 0.2), ("две группы", 0.4, 2.0))
 t0 = time.time() - 6 * 86400
 tot = {}
-for sym in ("BTC", "ETH", "SOL", "XRP", "DOGE"):
+for sym in ("BTC", "ETH", "SOL", "XRP", "DOGE", "DOT"):
     got, ref = api._liq_gather(sym, "1h", 168)
     pre = api._liq_gather(sym, *lm.PRE)[0]
     px = ref[-1][3]; lo, step = px * (1 - lm.SPAN), px * lm.SPAN * 2 / lm.BUCKETS
@@ -197,7 +198,7 @@ for sym in ("BTC", "ETH", "SOL", "XRP", "DOGE"):
     for ex, raw in sorted(got.items()):
         real = con.execute("SELECT side, px, usd FROM liq_ev WHERE ex=? AND sym=? AND t>=?", (ex, sym, int(t0 * 1000))).fetchall()
         R = [sum(u for s, _, u in real if s == 1), sum(u for s, _, u in real if s == 0)]  # side 1 — ликвидирован лонг
-        if sum(R) < 2e5:
+        if sum(R) < (5e4 if sym == "DOT" else 2e5):
             continue  # меньше $0,2 млн за неделю — не мерило
         hr = {}
         for s, p, u in real:

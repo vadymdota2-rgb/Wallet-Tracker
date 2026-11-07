@@ -11845,6 +11845,33 @@ def _liq_day_keep(sym: str, got: dict) -> dict:
     return out
 
 
+# Неликвидная пара: свечей без сделок больше LIQ_THIN_FLAT или закрытие в
+# середине (медиана) дальше LIQ_THIN_DEV от опорной. Сверка по 7 монетам и
+# трём шагам: у ликвидных рядов медиана ≤ 0,27 % и почти нет пустых свечей;
+# dYdX на DOT, APT, AAVE, TIA — 54–99 % пустых свечей и медиана 0,3–1,7 %.
+LIQ_THIN_FLAT = 0.2
+LIQ_THIN_DEV = 0.003
+
+
+def _liq_thin(rows: list, ref: list) -> bool:
+    rm = {r[0]: r[3] for r in ref}
+    dev = sorted(abs(r[3] / rm[r[0]] - 1) for r in rows if rm.get(r[0], 0) > 0 and r[3] > 0)
+    if len(dev) < 8:
+        return False
+    flat = sum(1 for r in rows if r[1] <= r[2]) / len(rows)
+    return flat > LIQ_THIN_FLAT or dev[len(dev) // 2] > LIQ_THIN_DEV
+
+
+def _liq_on_ref(rows: list, ref: list) -> list:
+    """Ряд неликвидной пары на свечах опорной биржи: интерес и доля покупок —
+    свои, цены — опорной. Ликвидирует биржа по оракулу или индексу, а не по
+    редким сделкам: у dYdX DOT 35 свечей из 48 без сделок, а сделки — на
+    1–1,5 % в стороне; по ним модель жгла уровни, где рынка не было."""
+    rm = {r[0]: r for r in ref}
+    return [(t, rm[t][1], rm[t][2], rm[t][3], oi, bs) if t in rm else (t, h, lo, c, oi, bs)
+            for t, h, lo, c, oi, bs in rows]
+
+
 def _liq_gather(sym: str, period: str, n: int) -> tuple[dict, list | None]:
     """Ряды бирж за окно: (t, макс, мин, закрытие, интерес $, доля покупок).
     Биржи со своей историей — запросом, остальные — из снимков liq_oi.db,
@@ -11880,6 +11907,9 @@ def _liq_gather(sym: str, period: str, n: int) -> tuple[dict, list | None]:
     # Опора — биржа с наибольшим интересом; нет ни одной — свечи Hyperliquid.
     ref = max(got.values(), key=lambda r: r[-1][4]) if got else _liq_hl_candles(sym, period, n)
     if ref:
+        # Опора на своих же свечах не меняется — её не исключаем.
+        for name in [k for k, r in got.items() if _liq_thin(r, ref)]:
+            got[name] = _liq_on_ref(got[name], ref)
         try:
             # Снимки — только у бирж без своей истории: Kraken есть и там и
             # там, и снимок раз в 15 минут не должен заменять его настоящий ряд.
