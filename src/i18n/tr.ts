@@ -370,7 +370,7 @@ export const tr: Dict = {
   chart_i_wt_fund: "Fonlama · borsa ortalaması",
   chart_i_wt_liq: "Likidasyon seviyeleri",
   chart_i_wt_liqx: "Mumlarda likidasyonlar · 11 borsa",
-  chart_i_wt_oi: "Açık pozisyon · 32 borsa",
+  chart_i_wt_oi: "Açık pozisyon · 35 borsa",
   chart_i_wt_whale: "Balina işlemleri · Hyperliquid",
   chart_i_zz: "ZigZag",
   chart_in_app: "Uygulamadan",

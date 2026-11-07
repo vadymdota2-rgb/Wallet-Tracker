@@ -370,7 +370,7 @@ export const hi: Dict = {
   chart_i_wt_fund: "फंडिंग · एक्सचेंज औसत",
   chart_i_wt_liq: "लिक्विडेशन लेवल",
   chart_i_wt_liqx: "कैंडल पर लिक्विडेशन · 11 एक्सचेंज",
-  chart_i_wt_oi: "ओपन इंटरेस्ट · 32 एक्सचेंज",
+  chart_i_wt_oi: "ओपन इंटरेस्ट · 35 एक्सचेंज",
   chart_i_wt_whale: "व्हेल ट्रेड · Hyperliquid",
   chart_i_zz: "ज़िगज़ैग",
   chart_in_app: "ऐप से",

@@ -11368,6 +11368,19 @@ def _snap_xt() -> dict:
     return _snap_top(ticks, "v", 60, pick, oi)
 
 
+def _snap_orangex() -> dict:
+    """OrangeX: интерес всех бессрочных одним запросом, в монетах — одна
+    сторона (CoinGecko показывает вдвое больше: медиана 2,03 по 544 рынкам
+    — он складывает лонги и шорты). У BEAT — шестая биржа по интересу."""
+    out: dict = {}
+    for r in _jrows(get_json("https://api.orangex.com/api/v1/public/tickers?currency=PERPETUAL", 20), "result"):
+        px = _fnum(r.get("mark_price")) or _fnum(r.get("last_price"))
+        base = _quote_cut(str(r.get("instrument_name") or ""), ("-USDT-PERPETUAL",))
+        if (sym := _snap_sym(base)) and px > 0:
+            _snap_add(out, sym, _fnum(r.get("open_interest")) * px, px)
+    return out
+
+
 def _safe(fn, *a):
     try:
         return fn(*a)
@@ -11382,7 +11395,7 @@ LIQ_SNAPS = (("Hyperliquid", _snap_hl), ("Bitget", _snap_bitget), ("MEXC", _snap
              ("Lighter", _snap_lighter), ("Backpack", _snap_backpack), ("Orderly", _snap_orderly),
              ("GMX", _snap_gmx), ("Aster", _snap_aster), ("BingX", _snap_bingx),
              ("Bitstamp", _snap_bitstamp), ("BloFin", _snap_blofin), ("XT.com", _snap_xt),
-             ("Bullish", _snap_bullish), ("BitMEX", _snap_bitmex), ("ApeX", _snap_apex),
+             ("Bullish", _snap_bullish), ("BitMEX", _snap_bitmex), ("ApeX", _snap_apex), ("OrangeX", _snap_orangex),
              ("Delta", lambda: _snap_delta("api.delta.exchange")),
              ("Delta India", lambda: _snap_delta("api.india.delta.exchange")))
 

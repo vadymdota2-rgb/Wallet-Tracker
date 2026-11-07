@@ -370,7 +370,7 @@ export const de: Dict = {
   chart_i_wt_fund: "Funding · Mittel über Börsen",
   chart_i_wt_liq: "Liquidationsniveaus",
   chart_i_wt_liqx: "Liquidationen auf Kerzen · 11 Börsen",
-  chart_i_wt_oi: "Open Interest · 32 Börsen",
+  chart_i_wt_oi: "Open Interest · 35 Börsen",
   chart_i_wt_whale: "Wal-Trades · Hyperliquid",
   chart_i_zz: "ZigZag",
   chart_in_app: "Aus der App",

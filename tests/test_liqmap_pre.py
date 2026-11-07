@@ -530,6 +530,31 @@ class StockTest(unittest.TestCase):
 
 
 class NewSnapTest(unittest.TestCase):
+    def test_orangex(self):
+        # Интерес — в монетах, одна сторона; цена — mark; 1000LUNC и не USDT — мимо.
+        reply = {"jsonrpc": "2.0", "result": [
+            {"instrument_name": "BEAT-USDT-PERPETUAL", "mark_price": "0.1074", "last_price": "0.1075", "open_interest": "24856770"},
+            {"instrument_name": "BTC-USDT-PERPETUAL", "mark_price": "0", "last_price": "75000", "open_interest": "2"},
+            {"instrument_name": "1000LUNC-USDT-PERPETUAL", "mark_price": "0.04", "open_interest": "1e9"},
+            {"instrument_name": "ETH-USDC-PERPETUAL", "mark_price": "2000", "open_interest": "5"},
+            {"instrument_name": "DOT-USDT-PERPETUAL", "mark_price": "NaN", "last_price": "-1", "open_interest": "5"},
+            {"instrument_name": None, "mark_price": "1", "open_interest": "5"},
+            "мусор",
+        ]}
+        urls = []
+        with mock.patch.object(api, "get_json", lambda url, timeout=10.0: urls.append(url) or reply):
+            out = api._snap_orangex()
+        self.assertEqual(urls, ["https://api.orangex.com/api/v1/public/tickers?currency=PERPETUAL"])
+        self.assertEqual(set(out), {"BEAT", "BTC"})
+        self.assertAlmostEqual(out["BEAT"][0], 24856770 * 0.1074)
+        self.assertEqual(out["BEAT"][1], 0.1074)
+        self.assertEqual(out["BTC"], (150000.0, 75000.0))  # mark нет — последняя сделка
+        for bad in (None, {"result": "x"}, {"error": {"code": 1000}}, []):
+            with mock.patch.object(api, "get_json", return_value=bad):
+                self.assertEqual(api._snap_orangex(), {})
+        self.assertIn(("OrangeX", api._snap_orangex), api.LIQ_SNAPS)
+        self.assertEqual(lm.CAPS["OrangeX"], 200)
+
     def test_bitmex(self):
         inst = [
             {"symbol": "XBTUSD", "typ": "FFWCSX", "state": "Open", "underlying": "XBT", "quoteCurrency": "USD",

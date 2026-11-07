@@ -370,7 +370,7 @@ export const ja: Dict = {
   chart_i_wt_fund: "資金調達率 · 取引所平均",
   chart_i_wt_liq: "清算レベル",
   chart_i_wt_liqx: "ローソク足上の清算 · 11取引所",
-  chart_i_wt_oi: "建玉 · 32取引所",
+  chart_i_wt_oi: "建玉 · 35取引所",
   chart_i_wt_whale: "クジラの取引 · Hyperliquid",
   chart_i_zz: "ジグザグ",
   chart_in_app: "アプリから",

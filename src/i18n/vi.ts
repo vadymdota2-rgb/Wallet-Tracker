@@ -370,7 +370,7 @@ export const vi: Dict = {
   chart_i_wt_fund: "Funding · trung bình các sàn",
   chart_i_wt_liq: "Mức thanh lý",
   chart_i_wt_liqx: "Thanh lý trên nến · 11 sàn",
-  chart_i_wt_oi: "Hợp đồng mở · 32 sàn",
+  chart_i_wt_oi: "Hợp đồng mở · 35 sàn",
   chart_i_wt_whale: "Giao dịch cá voi · Hyperliquid",
   chart_i_zz: "ZigZag",
   chart_in_app: "Từ ứng dụng",

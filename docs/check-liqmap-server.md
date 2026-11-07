@@ -363,6 +363,34 @@ contractSize × fairPrice — сравни с OKX и Binance по BTC (если 
 больше, чем ждёшь от его доли рынка, — напиши). Копилка: через сутки после
 выката у Binance по BTC дней — около 31 и растёт на день в день.
 
+## 11. BEAT: полнота по биржам
+Из песочницы закрыты Binance и Bybit — у BEAT это треть интереса. Сверка
+с CoinGecko (7 ноября): Binance ~$8,2M, Bybit ~$4,4M (у CoinGecko обе
+стороны у части бирж), OKX $4,46M, OrangeX $2,7M (одна сторона; новый
+снимок — ряд копится с выката, сутки — через ~2 ч), Gate $2,1M (пополам),
+BingX $1,86M, KuCoin $1,49M, Bitget $1,02M, MEXC $7,5M (CoinGecko MEXC не
+показывает — сверить нечем), BloFin $0,48M, Delta India $0,43M, HTX $0,07M.
+```
+cd ~/WalletTracker && PYTHONDONTWRITEBYTECODE=1 timeout 300 python3 - <<'PY'
+import whale_api as api
+for name, fn in api.LIQ_SOURCES:
+    try:
+        r = fn("BEAT", "1h", 168) or []
+    except Exception as e:
+        r = []; print(name, "сбой:", type(e).__name__)
+    print(f"{name:10} свечей {len(r):4}" + (f" цена {r[-1][3]} интерес ${r[-1][4] / 1e6:.2f}M" if r else ""))
+for w in ("1d", "7d", "30d"):
+    m = api.liq_map("BEAT", w, 60)
+    print(w, m.get("ok"), m.get("error"), "биржи:", m.get("ex"), "ОИ $%.1fM" % (m.get("oi", 0) / 1e6),
+          "видно $%.1fM" % (m.get("seen", 0) / 1e6), "partial" if m.get("partial") else "")
+PY
+```
+Ожидаю: Binance и Bybit — свечи есть (168), интерес — порядка цифр выше;
+в «биржи» окна 7d — Binance, Bybit, OKX, Gate, MEXC, BingX, KuCoin, Bitget,
+BloFin, Delta India, HTX (и OrangeX, когда у него накопится ряд); цена
+у всех в пределах ±3 %. Если Binance или Bybit пусты — напиши, что
+отвечает биржа (через relay).
+
 ## Отчёт
 По каждому пункту — «ок» или что не так, с цифрами. Отдельно: одна ли цена
 во всех окнах, какие биржи дали данные, сколько интереса «видно»; итог

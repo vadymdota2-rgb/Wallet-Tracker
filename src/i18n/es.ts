@@ -370,7 +370,7 @@ export const es: Dict = {
   chart_i_wt_fund: "Funding · promedio de exchanges",
   chart_i_wt_liq: "Niveles de liquidación",
   chart_i_wt_liqx: "Liquidaciones en velas · 11 exchanges",
-  chart_i_wt_oi: "Interés abierto · 32 exchanges",
+  chart_i_wt_oi: "Interés abierto · 35 exchanges",
   chart_i_wt_whale: "Operaciones de ballenas · Hyperliquid",
   chart_i_zz: "ZigZag",
   chart_in_app: "Desde la app",

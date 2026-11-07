@@ -370,7 +370,7 @@ export const ko: Dict = {
   chart_i_wt_fund: "펀딩비 · 거래소 평균",
   chart_i_wt_liq: "청산 레벨",
   chart_i_wt_liqx: "캔들 위 청산 · 11개 거래소",
-  chart_i_wt_oi: "미결제약정 · 32개 거래소",
+  chart_i_wt_oi: "미결제약정 · 35개 거래소",
   chart_i_wt_whale: "고래 거래 · Hyperliquid",
   chart_i_zz: "지그재그",
   chart_in_app: "앱에서",

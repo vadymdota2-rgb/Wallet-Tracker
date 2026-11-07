@@ -370,7 +370,7 @@ export const ar: Dict = {
   chart_i_wt_fund: "التمويل · متوسط المنصات",
   chart_i_wt_liq: "مستويات التصفية",
   chart_i_wt_liqx: "التصفيات على الشموع · 11 منصة",
-  chart_i_wt_oi: "الفائدة المفتوحة · 32 منصة",
+  chart_i_wt_oi: "الفائدة المفتوحة · 35 منصة",
   chart_i_wt_whale: "صفقات الحيتان · Hyperliquid",
   chart_i_zz: "زيجزاج",
   chart_in_app: "من التطبيق",

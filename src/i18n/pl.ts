@@ -370,7 +370,7 @@ export const pl: Dict = {
   chart_i_wt_fund: "Funding · średnia z giełd",
   chart_i_wt_liq: "Poziomy likwidacji",
   chart_i_wt_liqx: "Likwidacje na świecach · 11 giełd",
-  chart_i_wt_oi: "Otwarte pozycje · 32 giełdy",
+  chart_i_wt_oi: "Otwarte pozycje · 35 giełd",
   chart_i_wt_whale: "Transakcje wielorybów · Hyperliquid",
   chart_i_zz: "ZigZag",
   chart_in_app: "Z aplikacji",

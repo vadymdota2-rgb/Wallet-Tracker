@@ -40,7 +40,7 @@ HOSTS = {
     "arbitrum-api.gmxinfra.io", "contract.mexc.com", "dapi.binance.com", "fapi.asterdex.com", "fapi.binance.com",
     "fapi.xt.com", "futures.kraken.com", "indexer.dydx.trade", "mainnet.zklighter.elliot.ai", "open-api.bingx.com",
     "openapi.blofin.com", "pro.apex.exchange", "whitebit.com", "www.bitmex.com", "www.bitstamp.net",
-    "www.deribit.com", "www.okx.com",
+    "www.deribit.com", "www.okx.com", "api.orangex.com",
     # Delta Exchange — адрес собирается из имени хоста (_snap_delta).
     "api.delta.exchange", "api.india.delta.exchange",
 }
@@ -221,6 +221,19 @@ class ContractTest(unittest.TestCase):
         self.assertLessEqual(len(res["path"]), 121)
         self.assertLessEqual(len(res["ohlc"]), 48)
         self.assertEqual(res["levs"], list(lm.GROUPS))
+
+
+class ExchangeCountTest(unittest.TestCase):
+    def test_open_interest_label_counts_the_exchanges(self):
+        # Подпись графика интереса — сколько бирж на самом деле (истории и снимки,
+        # Kraken в обоих — один раз); на всех 16 языках число одно.
+        n = len({name for name, _ in api.LIQ_SOURCES} | {name for name, _ in api.LIQ_SNAPS})
+        langs = [f for f in os.listdir(os.path.join(ROOT, "src/i18n")) if re.fullmatch(r"[a-z]{2}\.ts", f)]
+        self.assertEqual(len(langs), 16)
+        for f in langs:
+            m = re.search(r"chart_i_wt_oi: \"[^\"]*?(\d+)", read(f"src/i18n/{f}"))
+            self.assertIsNotNone(m, f)
+            self.assertEqual(int(m.group(1)) if m else 0, n, f)
 
 
 class ClientPolicyTest(unittest.TestCase):

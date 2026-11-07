@@ -250,7 +250,7 @@ API = [
     ("            rows = _liq_valid(fn(sym, period, n))", "            rows = fn(sym, period, n)", "ворота: ряды источника"),
     ("and all(_liq_fin(x) for x in r[1:]) and min(r[1:4]) > 0 and r[4] >= 0 and 0 <= r[5] <= 1]",
      "and min(r[1:4]) > 0 and r[4] >= 0 and 0 <= r[5] <= 1]", "ворота: числа конечные"),
-    ("and isinstance(r[0], int) and not isinstance(r[0], bool) and r[0] > 0", "and True", "ворота: время целое"),
+    ("and isinstance(r[0], int) and not isinstance(r[0], bool) and r[0] >= 0", "and True", "ворота: время целое"),
     ("_liq_valid(_liq_hl_candles(sym, period, n)) or None", "_liq_hl_candles(sym, period, n)", "ворота: свечи Hyperliquid"),
     ("if LIQ_OI_MIN <= oi < 1e13 and 0 < px < 1e9:", "if oi >= LIQ_OI_MIN and px > 0:", "снимок: только правдоподобные числа"),
     ("isinstance(k, str) and wt_liqmap.SYM.fullmatch(k)", "isinstance(k, str)", "снимок: только наши тикеры"),
@@ -259,6 +259,9 @@ API = [
     ('if m.get("marketType") == "PERPETUAL" and _snap_mkt(m.get("symbol"))]', 'if m.get("marketType") == "PERPETUAL"]', "Bullish: имя рынка в адресе"),
     ("0 < px < 1e12 and 0 < t_ms < 1e14)", "0 < px < 1e12)", "лента: время ликвидации"),
     ("if not sym or not (0 < usd < 1e13", "if not sym or not (0 <= usd", "лента: сумма правдоподобна"),
+    ('_snap_add(out, sym, _fnum(r.get("open_interest")) * px, px)', '_snap_add(out, sym, _fnum(r.get("open_interest")), px)', "OrangeX: интерес в долларах"),
+    ('px = _fnum(r.get("mark_price")) or _fnum(r.get("last_price"))', 'px = _fnum(r.get("mark_price"))', "OrangeX: цена без mark — последняя сделка"),
+    ('_quote_cut(str(r.get("instrument_name") or ""), ("-USDT-PERPETUAL",))', 'str(r.get("instrument_name") or "").split("-")[0]', "OrangeX: только USDT"),
 ]
 
 

@@ -370,7 +370,7 @@ export const fr: Dict = {
   chart_i_wt_fund: "Funding · moyenne des plateformes",
   chart_i_wt_liq: "Niveaux de liquidation",
   chart_i_wt_liqx: "Liquidations sur les bougies · 11 plateformes",
-  chart_i_wt_oi: "Intérêt ouvert · 32 plateformes",
+  chart_i_wt_oi: "Intérêt ouvert · 35 plateformes",
   chart_i_wt_whale: "Trades des baleines · Hyperliquid",
   chart_i_zz: "ZigZag",
   chart_in_app: "Depuis l'app",

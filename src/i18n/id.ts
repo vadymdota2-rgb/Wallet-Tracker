@@ -370,7 +370,7 @@ export const id: Dict = {
   chart_i_wt_fund: "Funding · rata-rata bursa",
   chart_i_wt_liq: "Level likuidasi",
   chart_i_wt_liqx: "Likuidasi di lilin · 11 bursa",
-  chart_i_wt_oi: "Open interest · 32 bursa",
+  chart_i_wt_oi: "Open interest · 35 bursa",
   chart_i_wt_whale: "Transaksi paus · Hyperliquid",
   chart_i_zz: "ZigZag",
   chart_in_app: "Dari aplikasi",

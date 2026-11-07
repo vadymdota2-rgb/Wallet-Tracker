@@ -1947,6 +1947,11 @@ say("карта ликвидаций: правила кода и отравле�
     and "if LIQ_OI_MIN <= oi < 1e13 and 0 < px < 1e9:" in pybody(api, "def liq_oi_sample(")
     and "_snap_mkt(got[1])" in pybody(api, "def _snap_top(") and "0 < t_ms < 1e14" in pybody(api, "def _liqs_put(")
     and '"ворота: ряды источника"' in read(f"{APP}/tools/mutate-liqmap.py"))
+say("карта ликвидаций: OrangeX в снимках интереса (одна сторона, все рынки одним запросом); проверка полноты BEAT на сервере",
+    "def _snap_orangex() -> dict:" in api and '("OrangeX", _snap_orangex)' in api
+    and '"OrangeX": 200}' in read(f"{APP}/wt_liqmap.py") and "def test_orangex(self):" in read(f"{APP}/tests/test_liqmap_pre.py")
+    and '"api.orangex.com"' in read(f"{APP}/tests/test_liqmap_policy.py")
+    and "## 11. BEAT: полнота по биржам" in read(f"{APP}/docs/check-liqmap-server.md"))
 
 # «Добавить кошелёк» больше не отвечает общей ошибкой: причина отказа доходит
 # до экрана («уже добавлен» — обновить список), а норма запросов считается

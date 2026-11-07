@@ -370,7 +370,7 @@ export const zh: Dict = {
   chart_i_wt_fund: "资金费率 · 交易所均值",
   chart_i_wt_liq: "清算价位",
   chart_i_wt_liqx: "K线上的清算 · 11 家交易所",
-  chart_i_wt_oi: "持仓量 · 32 家交易所",
+  chart_i_wt_oi: "持仓量 · 35 家交易所",
   chart_i_wt_whale: "巨鲸交易 · Hyperliquid",
   chart_i_zz: "之字形",
   chart_in_app: "来自应用",

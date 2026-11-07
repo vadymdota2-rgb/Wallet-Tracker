@@ -370,7 +370,7 @@ export const pt: Dict = {
   chart_i_wt_fund: "Funding · média das corretoras",
   chart_i_wt_liq: "Níveis de liquidação",
   chart_i_wt_liqx: "Liquidações nas velas · 11 corretoras",
-  chart_i_wt_oi: "Interesse aberto · 32 corretoras",
+  chart_i_wt_oi: "Interesse aberto · 35 corretoras",
   chart_i_wt_whale: "Trades de baleias · Hyperliquid",
   chart_i_zz: "ZigZag",
   chart_in_app: "Do app",

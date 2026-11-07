@@ -370,7 +370,7 @@ export const ru: Dict = {
   chart_i_wt_fund: "Фандинг · средний по биржам",
   chart_i_wt_liq: "Уровни ликвидаций",
   chart_i_wt_liqx: "Ликвидации на свечах · 11 бирж",
-  chart_i_wt_oi: "Открытый интерес · 32 биржи",
+  chart_i_wt_oi: "Открытый интерес · 35 бирж",
   chart_i_wt_whale: "Сделки китов · Hyperliquid",
   chart_i_zz: "ZigZag",
   chart_in_app: "Из приложения",

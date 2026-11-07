@@ -369,7 +369,7 @@ export const en = {
   chart_i_wt_fund: "Funding · average across exchanges",
   chart_i_wt_liq: "Liquidation levels",
   chart_i_wt_liqx: "Liquidations on candles · 11 exchanges",
-  chart_i_wt_oi: "Open interest · 32 exchanges",
+  chart_i_wt_oi: "Open interest · 35 exchanges",
   chart_i_wt_whale: "Whale trades · Hyperliquid",
   chart_i_zz: "ZigZag",
   chart_in_app: "From the app",

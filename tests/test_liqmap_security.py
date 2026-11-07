@@ -244,6 +244,28 @@ class GateTest(Fuzz):
                 if ref:
                     self.assertEqual(api._liq_valid(ref), [tuple(r) for r in ref])
 
+    def test_hyperliquid_fallback_candles_pass_the_gate(self):
+        # Бирж с историей нет — опора по свечам Hyperliquid: и они через ворота.
+        rnd = random.Random(3)  # noqa: S311 — повторяемая отрава, не тайна
+        nan = float("nan")
+        crafted = [(NOW - 3600 * (20 - i), 1.01, 0.99, 1.0, 0.0, 0.5) for i in range(20)]
+        crafted[5] = (crafted[5][0], nan, 0.99, 1.0, 0.0, 0.5)
+        crafted[6] = ("t", 1.01, 0.99, 1.0, 0.0, 0.5)
+        for rows in [crafted, *(junk_rows(rnd) for _ in range(30))]:
+            with mock.patch.object(api, "LIQ_SOURCES", (("OKX", const(None)),)), \
+                    mock.patch.object(api, "_liq_sampled", return_value={}), \
+                    mock.patch.object(api, "_liq_hl_candles", const(rows)):
+                got, ref = api._liq_gather("BTC", "1h", 48)
+            self.assertEqual(got, {})
+            if ref is not None:
+                self.assertTrue(ref)
+                self.assertEqual(api._liq_valid(ref), [tuple(r) for r in ref])
+        with mock.patch.object(api, "LIQ_SOURCES", (("OKX", const(None)),)), \
+                mock.patch.object(api, "_liq_sampled", return_value={}), \
+                mock.patch.object(api, "_liq_hl_candles", const(crafted)):
+            _, ref = api._liq_gather("BTC", "1h", 48)
+        self.assertEqual(len(ref or []), 18)
+
     def test_snapshot_writer_stores_only_sane_numbers(self):
         nan, inf = float("nan"), float("inf")
         bad = {"BTC": (inf, 1e5), "ETH": (1e9, inf), "SOL": (nan, 150.0), "XRP": (1e9, nan), "ADA": (1e14, 0.5),
