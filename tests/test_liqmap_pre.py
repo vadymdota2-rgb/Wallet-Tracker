@@ -7,7 +7,9 @@
 и разбор ответов Kraken.
 """
 import os
+import sqlite3
 import sys
+import tempfile
 import threading
 import time
 import unittest
@@ -464,6 +466,69 @@ class NewSnapTest(unittest.TestCase):
         self.assertIs(names["BitMEX"], api._snap_bitmex)
         self.assertIs(names["ApeX"], api._snap_apex)
         self.assertEqual((lm.CAPS["BitMEX"], lm.CAPS["ApeX"]), (100, 100))
+
+
+class DayKeepTest(unittest.TestCase):
+    """Дневные ряды бирж копятся у нас: история Binance (30 дней у биржи)
+    растёт на день в день."""
+
+    def setUp(self):
+        d = tempfile.mkdtemp()
+        for name, value in (("LIQ_OI_DB", os.path.join(d, "liq_oi.db")),
+                            ("_liq_sampled", lambda *a: {}), ("_liq_hl_candles", lambda *a: None)):
+            patcher = mock.patch.object(api, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.days = range(100, 131)
+        self.base = int(time.time()) // DAY - 200  # день 100 — сто дней назад
+
+    def gather(self, n=1000, period="1d"):
+        rows = [((self.base + d) * DAY, 101.0, 99.0, 100.0, 1e6 + d, 0.5) for d in self.days]
+        with mock.patch.object(api, "LIQ_SOURCES", (("Binance", lambda s, p, k: rows),)):
+            return api._liq_gather("BTC", period, n)[0]
+
+    def test_kept_days_are_glued_before_what_the_exchange_gives(self):
+        first = self.gather()["Binance"]
+        self.assertEqual([r[0] // DAY - self.base for r in first], list(range(100, 131)))
+        self.days = range(120, 151)  # биржа отдаёт уже только последние 30 дней
+        second = self.gather()["Binance"]
+        self.assertEqual([r[0] // DAY - self.base for r in second], list(range(100, 151)))
+        self.assertEqual(second[0], ((self.base + 100) * DAY, 101.0, 99.0, 100.0, 1e6 + 100, 0.5))
+
+    def test_running_day_is_not_kept(self):
+        self.gather()
+        con = api._liq_oi_con()
+        try:
+            kept = [t // DAY - self.base for (t,) in con.execute("SELECT t FROM liq_day ORDER BY t")]
+        finally:
+            con.close()
+        self.assertEqual(kept, list(range(100, 130)))  # день 130 — идущий
+
+    def test_only_the_history_load_not_the_windows(self):
+        self.gather(n=365)  # окно «год» — без базы и без удлинения
+        con = api._liq_oi_con()
+        try:
+            self.assertFalse(con.execute("SELECT 1 FROM sqlite_master WHERE name='liq_day'").fetchone())
+        finally:
+            con.close()
+        self.gather()
+        self.days = range(120, 151)
+        self.assertEqual(len(self.gather(n=365)["Binance"]), 31)
+        self.assertEqual(len(self.gather(period="4h")["Binance"]), 31)
+
+    def test_old_days_are_cleaned(self):
+        with mock.patch.object(api, "LIQ_DAY_KEEP", 0):
+            self.gather()
+        con = api._liq_oi_con()
+        try:
+            self.assertEqual(con.execute("SELECT COUNT(*) FROM liq_day").fetchone()[0], 0)
+        finally:
+            con.close()
+
+    def test_broken_database_keeps_the_rows(self):
+        with mock.patch.object(api, "_liq_oi_con", side_effect=sqlite3.OperationalError("locked")):
+            got = self.gather()
+        self.assertEqual(len(got["Binance"]), 31)
 
 
 class GatherTest(unittest.TestCase):

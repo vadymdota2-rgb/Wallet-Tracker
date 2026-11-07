@@ -279,6 +279,42 @@ single… и оно вдвое меньше openInterest — значит, openI
 «обе стороны»; (б) около 11 июня openInterest скачком падает вдвое — значит,
 поле перешло на «одну сторону».
 
+## 10. Снимки 26 бирж и копилка дневной истории
+Из песочницы закрыты CoinEx, Coinbase International и BitMEX — здесь их
+видно. MEXC: по BTC в снимке ~$4,7 млрд — больше OKX; документация не
+говорит, holdVol — одна сторона или обе (как было у Bybit). Копилка: сервер
+сохраняет дневные ряды бирж при каждой загрузке предыстории — история
+Binance (у биржи 30 дней) должна расти на день в день.
+```
+cd ~/WalletTracker && PYTHONDONTWRITEBYTECODE=1 timeout 300 python3 - <<'PY'
+import sqlite3, time
+import whale_api as api
+mids = api.hl_mids()
+for name, fn in api.LIQ_SNAPS:
+    try:
+        out = fn() or {}
+    except Exception as e:
+        out = {}; print(name, "сбой:", type(e).__name__, str(e)[:80])
+    b = out.get("BTC")
+    dev = (b[1] / mids["BTC"] - 1) * 100 if b and b[1] > 0 else float("nan")
+    print(f"{name:14} монет {len(out):4} | BTC ${(b[0] if b else 0) / 1e6:8.1f}M, цена {dev:+.2f}% от Hyperliquid")
+m = (api.get_json("https://contract.mexc.com/api/v1/contract/ticker?symbol=BTC_USDT") or {}).get("data") or {}
+d = [x for x in (api.get_json("https://contract.mexc.com/api/v1/contract/detail?symbol=BTC_USDT") or {}).get("data") or [] if isinstance(x, dict)] or [(api.get_json("https://contract.mexc.com/api/v1/contract/detail?symbol=BTC_USDT") or {}).get("data") or {}]
+print("MEXC BTC_USDT: holdVol", m.get("holdVol"), "contractSize", (d[0] or {}).get("contractSize"), "fairPrice", m.get("fairPrice"))
+con = sqlite3.connect(f"file:{api.LIQ_OI_DB}?mode=ro", uri=True)
+try:
+    for ex, coin, n, a, z in con.execute("SELECT ex, coin, COUNT(*), MIN(t), MAX(t) FROM liq_day WHERE coin IN ('BTC','ETH') GROUP BY ex, coin ORDER BY coin, ex"):
+        print(f"копилка {coin:4} {ex:8} дней {n:5}: {time.strftime('%Y-%m-%d', time.gmtime(a))} — {time.strftime('%Y-%m-%d', time.gmtime(z))}")
+except sqlite3.Error as e:
+    print("копилки ещё нет:", e)
+PY
+```
+Ожидаю: у всех бирж цена в пределах ±1 %; CoinEx, Coinbase Intl, BitMEX —
+монеты есть (если 0 — напиши, что отвечает биржа). MEXC: holdVol ×
+contractSize × fairPrice — сравни с OKX и Binance по BTC (если MEXC вдвое
+больше, чем ждёшь от его доли рынка, — напиши). Копилка: через сутки после
+выката у Binance по BTC дней — около 31 и растёт на день в день.
+
 ## Отчёт
 По каждому пункту — «ок» или что не так, с цифрами. Отдельно: одна ли цена
 во всех окнах, какие биржи дали данные, сколько интереса «видно»; итог

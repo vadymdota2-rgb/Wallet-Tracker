@@ -11683,6 +11683,41 @@ def liq_warm_refresher() -> None:
         time.sleep(LIQ_WARM_EVERY)
 
 
+# Дневные ряды бирж — копим у себя: Binance отдаёт историю интереса только
+# за 30 дней, HTX — за 180, Gate и dYdX — за 400. Каждая загрузка предыстории
+# (раз в 6 ч на монету) кладёт закрытые дни в базу, а следующая подклеивает
+# сохранённые дни перед тем, что отдала биржа: история растёт на день в
+# день. Запросов к биржам не прибавляется. Старше LIQ_DAY_KEEP — вон.
+LIQ_DAY_KEEP = 1100 * 86400
+
+
+def _liq_day_keep(sym: str, got: dict) -> dict:
+    """Ряды бирж с подклеенными сохранёнными днями; закрытые дни — в базу.
+    База недоступна — ряды как были."""
+    try:
+        con = _liq_oi_con()
+        try:
+            con.execute("CREATE TABLE IF NOT EXISTS liq_day (ex TEXT NOT NULL, coin TEXT NOT NULL, t INTEGER NOT NULL, "
+                        "hi REAL NOT NULL, lo REAL NOT NULL, c REAL NOT NULL, oi REAL NOT NULL, bs REAL NOT NULL, "
+                        "PRIMARY KEY (coin, ex, t)) WITHOUT ROWID")
+            out = {}
+            for ex, rows in got.items():
+                old = con.execute("SELECT t, hi, lo, c, oi, bs FROM liq_day WHERE coin=? AND ex=? AND t<? ORDER BY t",
+                                  (sym, ex, rows[0][0])).fetchall()
+                out[ex] = [tuple(r) for r in old] + list(rows)
+                # Последняя строка — идущий день: свеча не закрыта, не храним.
+                con.executemany("INSERT OR REPLACE INTO liq_day VALUES (?,?,?,?,?,?,?,?)",
+                                [(ex, sym, *r) for r in rows[:-1]])
+            con.execute("DELETE FROM liq_day WHERE t < ?", (now() - LIQ_DAY_KEEP,))
+            con.commit()
+        finally:
+            con.close()
+    except sqlite3.Error as e:
+        print(f"liq day: {e}", file=sys.stderr)
+        return got
+    return out
+
+
 def _liq_gather(sym: str, period: str, n: int) -> tuple[dict, list | None]:
     """Ряды бирж за окно: (t, макс, мин, закрытие, интерес $, доля покупок).
     Биржи со своей историей — запросом, остальные — из снимков liq_oi.db,
@@ -11706,6 +11741,8 @@ def _liq_gather(sym: str, period: str, n: int) -> tuple[dict, list | None]:
     wait(futures, timeout=LIQ_BUDGET if n <= 400 else LIQ_PRE_BUDGET)
     pool.shutdown(wait=False, cancel_futures=True)
     got = dict(found)
+    if period == "1d" and n > 400:  # предыстория карты — с сохранёнными днями
+        got = _liq_day_keep(sym, got)
     # Под одним тикером у разных бирж бывают разные монеты — и цены у них
     # расходятся в разы. Биржу, чья цена дальше 3% от средней по остальным,
     # не берём: её уровни легли бы на чужую ось.
