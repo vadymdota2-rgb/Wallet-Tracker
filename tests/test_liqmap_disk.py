@@ -164,7 +164,8 @@ class DumpRestoreTest(Base):
             "sym": ["btc", "", 1, "B" * 13], "range": ["2d", None, []], "px": [0, -1, True, "1", float("nan")],
             "lo": [-1, True, None], "step": [0, None], "at": [0, 1.5, True, None], "ex": ["OKX", [1], [""], ["A"] * 65],
             "path": [[], [0], "x", [1] * 201, [True]],
-            "ohlc": [[], [[1, 2, 3]], [[0, 1, 1, 1]], [[1, 1, 1, 1]] * 101, [[1.0, 1.0, 1.0], *st["ohlc"][-1:]]],
+            "ohlc": [[], [[1, 2, 3]], [[0, 1, 1, 1]], [[1, 1, 1, 1]] * 101, [[1.0, 1.0, 1.0], *st["ohlc"][-1:]],
+                     [[1.0, 1.0, 1.0, 1.0, 1.0], *st["ohlc"][1:]]],
             "oi": [-1, 1.5, None, True], "seen": [-1, None, True], "low": [0, None], "high": [0, None],
             "L": [[], [[]] * 4, None, [[[0, -1.0]]] * 5, [[[lm.BUCKETS, 1.0]]] * 5, [[[True, 1.0]]] * 5, [[[0, 1.0, 2]]] * 5],
             "S": [[[["0", 1.0]]] * 5, [[[0, float("inf")]]] * 5],
@@ -173,6 +174,10 @@ class DumpRestoreTest(Base):
             for v in values:
                 d = copy.deepcopy(data)
                 d["maps"][0]["st"][field] = v
+                if field == "ohlc":
+                    # Границы свечей (ohlc_t) по длине выдали бы порчу сами —
+                    # проверяем саму проверку свечей, как у старой копии без них.
+                    d["maps"][0]["st"].pop("ohlc_t", None)
                 lm._st = lm._State()
                 self.assertEqual(lm.restore(d), 0, f"{field} = {v!r}")
         for junk in (None, [], "x", {"v": 1}, {"v": 1, "at": "x", "maps": []}, {"v": 1, "at": 1, "maps": "x"}):
