@@ -22,7 +22,7 @@ grep -c 'float(f"{v:.9g}")' wt_liqmap.py
 grep -c '("BitMEX", _snap_bitmex), ("ApeX", _snap_apex)' whale_api.py
 grep -c "def _stock_base(s: str) -> str:" whale_api.py
 grep -c "since=ref\[0\]\[0\])" wt_liqmap.py
-grep -c "def _bybit_oi(r: dict) -> float:" whale_api.py
+grep -c "def _bybit_oi(r: dict, value: bool = False) -> float:" whale_api.py
 ```
 Ожидаю: коммит «Карта ликвидаций: калибровка по настоящим ликвидациям…»
 или новее, служба active и запущена ПОСЛЕ этого коммита, все пятнадцать

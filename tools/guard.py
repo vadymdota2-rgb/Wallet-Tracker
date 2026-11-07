@@ -844,8 +844,9 @@ say("карта ликвидаций: акции — одним именем н�
 say("карта ликвидаций: окно — позиции, открытые за этот период (учёт закрытий и ликвидаций — по всей истории), окна от 90 дней берут последние 30 дней 4-часовыми свечами; под картой — сколько цены в одной полосе и докуда «Накоплено»",
     "levs_upto(max_lev(ex, sym)), since=ref[0][0])" in read(f"{APP}/wt_liqmap.py") and '"90d": ("4h", 180)' in read(f"{APP}/wt_liqmap.py")
     and 'className="lq-rows"' in _lq and '"lq_rows"' in _lq and "test_history_still_explains_the_fall_of_interest" in read(f"{APP}/tests/test_liqmap_pre.py"))
-say("карта ликвидаций: интерес Bybit — с одной стороны (singleOpenInterest; openInterest у Bybit — обе стороны, вдвое больше)",
-    "def _bybit_oi(r: dict) -> float:" in api and 'usd[t] = _bybit_oi(r) * float(k[4])' in api
+say("интерес Bybit — с одной стороны (singleOpenInterest; openInterest у Bybit — обе стороны, вдвое больше): карта ликвидаций и доска фандинга",
+    "def _bybit_oi(r: dict, value: bool = False) -> float:" in api and "_bybit_oi(it, value=True)" in api
+    and os.path.isfile(f"{APP}/tests/test_fund_bybit.py") and 'usd[t] = _bybit_oi(r) * float(k[4])' in api
     and '_bybit_oi(r) for r in pages("inverse", f"{sym}USD")}' in api
     and "test_bybit_open_interest_is_one_side" in read(f"{APP}/tests/test_liqmap_pre.py"))
 say("авторские права: LICENSE «все права защищены» (Wallet Tracker) с оговоркой о сторонних лицензиях (IBM Plex — OFL, Twemoji — CC BY 4.0, данные источников); package.json — UNLICENSED; на экране «Документы» — «© 2026 Wallet Tracker» на 16 языках",

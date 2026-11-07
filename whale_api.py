@@ -7683,7 +7683,7 @@ def fund_bybit() -> list:
         raw = str(it.get("symbol") or "")
         row = fund_row(fund_sym(raw), _fnum(it.get("fundingRate")),
                        24.0 / steps.get(raw, 8.0),
-                       _fnum(it.get("openInterestValue")), _fnum(it.get("turnover24h")),
+                       _bybit_oi(it, value=True), _fnum(it.get("turnover24h")),
                        "bybit", nxt=_fnum(it.get("nextFundingTime")) / 1000.0)
         if row:
             out.append(row)
@@ -10707,13 +10707,15 @@ def _liq_gate(sym: str, period: str, n: int) -> list | None:
 _LIQ_SEC = {"15m": 900, "1h": 3600, "4h": 14400, "1d": 86400}
 
 
-def _bybit_oi(r: dict) -> float:
+def _bybit_oi(r: dict, value: bool = False) -> float:
     """Открытый интерес Bybit с одной стороны, как у всех бирж. Поле
     openInterest у Bybit — сумма обеих сторон (ровно вдвое больше; сверено
     на сервере по USDT- и инверсным контрактам, сейчас и в истории); с июня
-    2026 рядом есть singleOpenInterest — берём его, а нет — половину."""
-    one = _fnum(r.get("singleOpenInterest"))
-    return one if one > 0 else _fnum(r.get("openInterest")) / 2
+    2026 рядом есть singleOpenInterest — берём его, а нет — половину.
+    value — то же в долларах (openInterestValue у тикеров)."""
+    key = "OpenInterestValue" if value else "OpenInterest"
+    one = _fnum(r.get(f"single{key}"))
+    return one if one > 0 else _fnum(r.get(key[0].lower() + key[1:])) / 2
 
 
 def _liq_bybit(sym: str, period: str, n: int) -> list | None:
