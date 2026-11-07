@@ -526,7 +526,7 @@ class CacheTest(Base):
 
     def test_failing_tail_does_not_break_the_map(self):
         def fn(sym, period, n):
-            if period == "1h":
+            if (period, n) == lm.TAIL["90d"]:
                 raise RuntimeError("boom")
             r = market()
             return {"OKX": r}, r
@@ -585,7 +585,7 @@ class CacheTest(Base):
         self.addCleanup(setattr, threading, "excepthook", old)
 
         def fn(sym, period, n):
-            if period == "1h":
+            if (period, n) == lm.TAIL["90d"]:
                 raise RuntimeError("boom")
             r = market()
             return {"OKX": r}, r

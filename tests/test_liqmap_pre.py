@@ -113,6 +113,27 @@ class PreBuildTest(Base):
         self.assertLess(late[2], a[2])
         self.assertGreater(late[2], 0)
 
+    def test_history_keeps_window_positions_when_old_ones_are_liquidated(self):
+        # Сборка целиком: до окна — лонги у 100 (интерес растёт до $50 млн); в
+        # окне открылись шорты, потом свеча сходила до 95 и сожгла старые
+        # лонги, а интерес упал меньше сгоревшего. С историей падение
+        # объяснено ликвидациями — шорты окна живы; без истории модель
+        # закрыла бы их (самые свежие — первыми).
+        pre = {"OKX": history(days=300, px=100.0, oi0=1e7, oi1=5e7)}
+        win = [(T0 + i * 900, 100.1, 99.9, 100.0, 5e7 + 2.5e4 * min(i, 40), 0.0) for i in range(60)]
+        win[40] = (T0 + 40 * 900, 100.0, 95.0, 100.0, 5.1e7, 0.0)
+        for i in range(41, 60):
+            win[i] = (T0 + i * 900, 100.1, 99.9, 100.0, 5.1e7 - 5e5, 0.0)
+        self.use(pre={}, win=win)
+        bare = lm.build("BTC", "1d")
+        lm._st = lm._State()
+        self.use(pre=pre, win=win)
+        full = lm.build("BTC", "1d")
+        self.assertTrue(bare["ok"] and full["ok"])
+        self.assertGreater(full["seen"], bare["seen"] * 1.5)
+        shorts = sum(sum(b["S"]) for b in full["buckets"])
+        self.assertGreater(shorts, sum(sum(b["S"]) for b in bare["buckets"]) * 1.5)
+
     def test_exchange_only_in_history_is_not_on_the_map(self):
         self.use(pre={"OKX": history(), "Gone": history()})
         self.assertEqual(lm.build("BTC", "1d")["ex"], ["OKX"])
