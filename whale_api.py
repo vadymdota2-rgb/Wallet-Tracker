@@ -10600,8 +10600,8 @@ _liq_lock = threading.Lock()
 
 
 def _glue_inverse(main: dict, inv: dict) -> dict:
-    """Интерес основного контракта ({время: $}) плюс бессрочного с расчётом в
-    монете — только по общим отметкам. Ряд второго короче 95 % — не клеим:
+    """Интерес основного контракта ({время: $}) плюс другого бессрочного той
+    же монеты (с расчётом в монете или в USDC) — только по общим отметкам. Ряд второго короче 95 % — не клеим:
     его начало модель приняла бы за открытие позиций."""
     if not main or len(inv) < 0.95 * len(main):
         return main
@@ -10614,6 +10614,9 @@ def _liq_binance(sym: str, period: str, n: int) -> list | None:
     # COIN-M (BTCUSD_PERP): у BTC — ещё ~$1,5 млрд. Интерес там в монетах.
     cm = get_json(f"https://dapi.binance.com/futures/data/openInterestHist?pair={sym}USD&contractType=PERPETUAL"
                   f"&period={period}&limit={min(n, 500)}", 15)
+    # USDⓈ-M с расчётом в USDC (BTCUSDC, ETHUSDC): по CoinGecko у ETH это
+    # треть интереса Binance ($2,8 млрд из $8,7 млрд), у BTC — $1,7 млрд.
+    uc = get_json(f"https://fapi.binance.com/futures/data/openInterestHist?symbol={sym}USDC&period={period}&limit={min(n, 500)}", 15)
     kl = get_json(f"https://fapi.binance.com/fapi/v1/klines?symbol={s}&interval={period}&limit={min(n, 500)}", 15)
     tk = get_json(f"https://fapi.binance.com/futures/data/takerlongshortRatio?symbol={s}&period={period}&limit={min(n, 500)}", 15)
     if not isinstance(oi, list) or not isinstance(kl, list) or not oi or not kl:
@@ -10626,6 +10629,8 @@ def _liq_binance(sym: str, period: str, n: int) -> list | None:
            for r in (cm if isinstance(cm, list) else []) if isinstance(r, dict)
            if (t := int(_fnum(r.get("timestamp"))) // 1000) in kmap}
     usd = _glue_inverse(usd, inv)
+    usd = _glue_inverse(usd, {int(r["timestamp"]) // 1000: _fnum(r.get("sumOpenInterestValue"))
+                              for r in (uc if isinstance(uc, list) else []) if isinstance(r, dict) and "timestamp" in r})
     out = []
     for t, v in sorted(usd.items()):
         k = kmap.get(t)
@@ -10907,13 +10912,22 @@ def _snap_hl() -> dict:
     return out
 
 
+def _snap_add(out: dict, sym: str, usd: float, px: float) -> None:
+    """Ещё один рынок монеты в снимок: интерес складывается, цена — первого
+    рынка (основного, USDT), он идёт первым."""
+    if sym and px > 0 and usd > 0:
+        prev = out.get(sym)
+        out[sym] = (prev[0] + usd, prev[1]) if prev else (usd, px)
+
+
 def _snap_bitget() -> dict:
-    out = {}
-    for r in (get_json("https://api.bitget.com/api/v2/mix/market/tickers?productType=usdt-futures", 20) or {}).get("data") or []:
-        s = str(r.get("symbol") or "")
-        px = _fnum(r.get("markPrice")) or _fnum(r.get("lastPr"))
-        if s.endswith("USDT") and (sym := _snap_sym(s[:-4])):
-            out[sym] = (_fnum(r.get("holdingAmount")) * px, px)
+    """Bitget: USDT (BTCUSDT) и USDC (BTCPERP) — интерес в монетах. Инверсные
+    публичный API сейчас не отдаёт (у BTC это ~4 % интереса Bitget)."""
+    out: dict = {}
+    for kind, quote in (("usdt-futures", "USDT"), ("usdc-futures", "PERP")):
+        for r in (get_json(f"https://api.bitget.com/api/v2/mix/market/tickers?productType={kind}", 20) or {}).get("data") or []:
+            px = _fnum(r.get("markPrice")) or _fnum(r.get("lastPr"))
+            _snap_add(out, _snap_sym(_quote_cut(str(r.get("symbol") or ""), (quote,))), _fnum(r.get("holdingAmount")) * px, px)
     return out
 
 
@@ -10929,23 +10943,36 @@ def _snap_mexc() -> dict:
         if got:
             _mexc_size.update(at=time.monotonic(), map=got)
     size = _mexc_size["map"]
-    out = {}
-    for r in (get_json("https://contract.mexc.com/api/v1/contract/ticker", 20) or {}).get("data") or []:
+    out: dict = {}
+    # USDT первым — его цена в снимке; затем USDC, USD1 (контракт в монетах)
+    # и инверсные BTC_USD (контракт в долларах: у BTC — $100).
+    ticks = [r for r in (get_json("https://contract.mexc.com/api/v1/contract/ticker", 20) or {}).get("data") or [] if isinstance(r, dict)]
+    ticks.sort(key=lambda r: not str(r.get("symbol") or "").endswith("_USDT"))
+    for r in ticks:
         s = str(r.get("symbol") or "")
         px = _fnum(r.get("fairPrice")) or _fnum(r.get("lastPrice"))
-        if s.endswith("_USDT") and (sym := _snap_sym(s[:-5])) and size.get(s):
-            out[sym] = (_fnum(r.get("holdVol")) * size[s] * px, px)
+        k = size.get(s, 0.0)
+        if base := _quote_cut(s, ("_USDT", "_USDC", "_USD1")):
+            _snap_add(out, _snap_sym(base), _fnum(r.get("holdVol")) * k * px, px)
+        elif base := _quote_cut(s, ("_USD",)):
+            _snap_add(out, _snap_sym(base), _fnum(r.get("holdVol")) * k, px)
     return out
 
 
 def _snap_kucoin() -> dict:
-    out = {}
-    for r in (get_json("https://api-futures.kucoin.com/api/v1/contracts/active", 25) or {}).get("data") or []:
-        if not str(r.get("symbol") or "").endswith("USDTM") or r.get("isInverse") or r.get("status") != "Open":
-            continue
-        px = _fnum(r.get("markPrice"))
-        if sym := _snap_sym(r.get("baseCurrency")):
-            out[sym] = (_fnum(r.get("openInterest")) * _fnum(r.get("multiplier")) * px, px)
+    """KuCoin: USDTM и USDCM — контракт в монетах (multiplier); инверсные
+    XBTUSDM — контракт $1. Срочные (XBTMZ26) не берём."""
+    out: dict = {}
+    rows = [r for r in (get_json("https://api-futures.kucoin.com/api/v1/contracts/active", 25) or {}).get("data") or []
+            if isinstance(r, dict) and r.get("status") == "Open"]
+    rows.sort(key=lambda r: not str(r.get("symbol") or "").endswith("USDTM"))
+    for r in rows:
+        s, px = str(r.get("symbol") or ""), _fnum(r.get("markPrice"))
+        sym = _snap_sym(r.get("baseCurrency"))
+        if s.endswith(("USDTM", "USDCM")) and not r.get("isInverse"):
+            _snap_add(out, sym, _fnum(r.get("openInterest")) * _fnum(r.get("multiplier")) * px, px)
+        elif s.endswith("USDM") and r.get("isInverse"):
+            _snap_add(out, sym, _fnum(r.get("openInterest")) * abs(_fnum(r.get("multiplier"))), px)
     return out
 
 
@@ -10965,21 +10992,15 @@ def _snap_phemex() -> dict:
     """Phemex: USDT и USDC — интерес в монетах; инверсные BTCUSD и cXXXUSD —
     в контрактах по $1 (у BTC это больше половины всего интереса)."""
     out: dict = {}
-
-    def add(sym: str, usd: float, px: float) -> None:
-        if sym and px > 0 and usd > 0:
-            prev = out.get(sym)
-            out[sym] = (prev[0] + usd, prev[1]) if prev else (usd, px)
-
     for r in (get_json("https://api.phemex.com/md/v3/ticker/24hr/all", 20) or {}).get("result") or []:
         s = str(r.get("symbol") or "")
         px = _fnum(r.get("markRp"))
-        add(_snap_sym(_quote_cut(s, ("USDT", "USDC"))), _fnum(r.get("openInterestRv")) * px, px)
+        _snap_add(out, _snap_sym(_quote_cut(s, ("USDT", "USDC"))), _fnum(r.get("openInterestRv")) * px, px)
     for r in (get_json("https://api.phemex.com/md/ticker/24hr/all", 20) or {}).get("result") or []:
         s = str(r.get("symbol") or "")
         base = s[1:-3] if s.startswith("c") else s[:-3]
         if s.endswith("USD") and (sym := _snap_sym(base)):
-            add(sym, _fnum(r.get("openInterest")), _fnum(r.get("markPrice")) / 1e4)
+            _snap_add(out, sym, _fnum(r.get("openInterest")), _fnum(r.get("markPrice")) / 1e4)
     return out
 
 
@@ -11322,6 +11343,35 @@ LIQ_SNAPS = (("Hyperliquid", _snap_hl), ("Bitget", _snap_bitget), ("MEXC", _snap
              ("Delta India", lambda: _snap_delta("api.india.delta.exchange")))
 
 
+# Версия снимка биржи: растёт, когда в снимок добавились рынки (USDC,
+# инверсные). Без пересчёта старой истории скачок интереса в момент выката
+# (Phemex по BTC: $178M → $1209M за 15 минут) модель приняла бы за миллиард
+# новых позиций по текущей цене.
+LIQ_SNAP_VER = {"Phemex": 2, "MEXC": 2, "KuCoin": 2, "Bitget": 2, "Aster": 2, "BingX": 2}
+
+
+def _liq_snap_rescale(con: sqlite3.Connection, rows: list, t: int) -> None:
+    """Первый снимок новой версии биржи: её прошлый ряд по каждой монете
+    умножается на «новый интерес / последний старый» — рынки, что добавились,
+    были и раньше, просто не считались. Последний старый снимок старше двух
+    шагов (служба стояла) — за это время рынок мог сдвинуться сам: такой ряд
+    не пересчитываем, а убираем, он начнётся заново."""
+    con.execute("CREATE TABLE IF NOT EXISTS oi_ver (ex TEXT PRIMARY KEY, ver INTEGER NOT NULL)")
+    have = dict(con.execute("SELECT ex, ver FROM oi_ver").fetchall())
+    for ex, ver in LIQ_SNAP_VER.items():
+        new = {coin: oi for name, coin, _t, oi, _px in rows if name == ex}
+        if have.get(ex, 1) >= ver or not new:
+            continue  # уже пересчитана — или не ответила: пересчёт в следующий снимок
+        for coin, oi in new.items():
+            last = con.execute("SELECT t, oi FROM oi_snap WHERE ex=? AND coin=? AND t<? ORDER BY t DESC LIMIT 1",
+                               (ex, coin, t)).fetchone()
+            if last and last[1] > 0 and t - last[0] <= 2 * LIQ_OI_EVERY:
+                con.execute("UPDATE oi_snap SET oi = oi * ? WHERE ex=? AND coin=? AND t<?", (oi / last[1], ex, coin, t))
+            elif last:
+                con.execute("DELETE FROM oi_snap WHERE ex=? AND coin=? AND t<?", (ex, coin, t))
+        con.execute("INSERT OR REPLACE INTO oi_ver VALUES (?, ?)", (ex, ver))
+
+
 def liq_oi_sample() -> dict:
     t = now() // LIQ_OI_EVERY * LIQ_OI_EVERY
     rows: list = []
@@ -11360,6 +11410,7 @@ def liq_oi_sample() -> dict:
         rows.extend(part)
     con = _liq_oi_con()
     try:
+        _liq_snap_rescale(con, rows, t)
         con.executemany("INSERT OR REPLACE INTO oi_snap VALUES (?,?,?,?,?)", rows)
         # Прореживание: чем старше, тем реже — под шаг свечей карты.
         con.execute("DELETE FROM oi_snap WHERE t < ? AND t % 3600 != 0", (t - 2 * 86400,))
@@ -11732,6 +11783,23 @@ LIQ_DAY_KEEP = 1100 * 86400
 LIQ_DAY_WRITE = False
 
 
+def _liq_day_k(con: sqlite3.Connection, sym: str, ex: str, rows: list) -> float:
+    """Множитель сохранённых дней к свежему ряду — по первому свежему дню,
+    который есть и в копилке. Тот же день у той же биржи — то же число,
+    множитель 1. Иначе поменялось, что считается интересом (добавились
+    USDC-рынки Binance; Bybit — с одной стороны вместо двух): без пересчёта
+    на стыке была бы ступенька, и модель приняла бы её за открытие или
+    закрытие позиций."""
+    r = con.execute("SELECT oi FROM liq_day WHERE coin=? AND ex=? AND t=?", (sym, ex, rows[0][0])).fetchone()
+    return rows[0][4] / r[0] if r and r[0] > 0 and rows[0][4] > 0 else 1.0
+
+
+def _liq_day_old(con: sqlite3.Connection, sym: str, ex: str, rows: list, k: float) -> list:
+    old = con.execute("SELECT t, hi, lo, c, oi, bs FROM liq_day WHERE coin=? AND ex=? AND t<? ORDER BY t",
+                      (sym, ex, rows[0][0])).fetchall()
+    return [(t, hi, lo, c, oi * k, bs) for t, hi, lo, c, oi, bs in old]
+
+
 def _liq_day_read(sym: str, got: dict) -> dict:
     """Ряды бирж с подклеенными сохранёнными днями — только чтение."""
     try:
@@ -11739,9 +11807,7 @@ def _liq_day_read(sym: str, got: dict) -> dict:
         try:
             out = {}
             for ex, rows in got.items():
-                old = con.execute("SELECT t, hi, lo, c, oi, bs FROM liq_day WHERE coin=? AND ex=? AND t<? ORDER BY t",
-                                  (sym, ex, rows[0][0])).fetchall()
-                out[ex] = [tuple(r) for r in old] + list(rows)
+                out[ex] = _liq_day_old(con, sym, ex, rows, _liq_day_k(con, sym, ex, rows)) + list(rows)
         finally:
             con.close()
     except sqlite3.Error:
@@ -11762,9 +11828,10 @@ def _liq_day_keep(sym: str, got: dict) -> dict:
                         "PRIMARY KEY (coin, ex, t)) WITHOUT ROWID")
             out = {}
             for ex, rows in got.items():
-                old = con.execute("SELECT t, hi, lo, c, oi, bs FROM liq_day WHERE coin=? AND ex=? AND t<? ORDER BY t",
-                                  (sym, ex, rows[0][0])).fetchall()
-                out[ex] = [tuple(r) for r in old] + list(rows)
+                k = _liq_day_k(con, sym, ex, rows)
+                if k != 1.0:  # пересчёт — в базу, чтобы стык не вернулся завтра
+                    con.execute("UPDATE liq_day SET oi = oi * ? WHERE coin=? AND ex=? AND t<?", (k, sym, ex, rows[0][0]))
+                out[ex] = _liq_day_old(con, sym, ex, rows, 1.0) + list(rows)
                 # Последняя строка — идущий день: свеча не закрыта, не храним.
                 con.executemany("INSERT OR REPLACE INTO liq_day VALUES (?,?,?,?,?,?,?,?)",
                                 [(ex, sym, *r) for r in rows[:-1]])

@@ -1866,6 +1866,18 @@ say("карта ликвидаций: снимки Phemex с инверсным�
     and "picked = picked[:n]" in pybody(api, "def _snap_top(")
     and '_fnum(r.get("t")) > fresh' in pybody(api, "def _snap_xt("))
 
+# Binance USDC-M (у ETH — треть интереса Binance), USDC и инверсные у Bitget,
+# MEXC, KuCoin; смена определения интереса не даёт ступеньки: снимки старой
+# версии и сохранённые дни пересчитываются по стыку.
+say("карта ликвидаций: Binance с USDC-рынками, снимки с USDC и инверсными, без ступенек на стыке",
+    "openInterestHist?symbol={sym}USDC" in pybody(api, "def _liq_binance(")
+    and '("usdc-futures", "PERP")' in pybody(api, "def _snap_bitget(")
+    and '("_USD",)' in pybody(api, "def _snap_mexc(")
+    and 'r.get("isInverse")' in pybody(api, "def _snap_kucoin(")
+    and "_liq_snap_rescale(con, rows, t)" in pybody(api, "def liq_oi_sample(")
+    and "_liq_day_k(con, sym, ex, rows)" in pybody(api, "def _liq_day_keep(")
+    and "_liq_day_k(con, sym, ex, rows)" in pybody(api, "def _liq_day_read("))
+
 # «Добавить кошелёк» больше не отвечает общей ошибкой: причина отказа доходит
 # до экрана («уже добавлен» — обновить список), а норма запросов считается
 # на человека — на Cloud Run адрес у всех один, и норма делилась на всех.

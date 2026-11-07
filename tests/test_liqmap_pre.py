@@ -323,9 +323,13 @@ class InverseTest(unittest.TestCase):
 
     TS = (900, 1800, 2700)
 
-    def binance(self, cm_ts):
+    def binance(self, cm_ts, usdc_ts=()):
         def fake(url, timeout=10.0):
-            if "fapi.binance.com/futures/data/openInterestHist" in url:
+            if "fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDC&" in url:
+                if not usdc_ts:
+                    return {"code": -1121, "msg": "Invalid symbol."}
+                return [{"timestamp": t * 1000, "sumOpenInterestValue": "400"} for t in usdc_ts]
+            if "fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&" in url:
                 return [{"timestamp": t * 1000, "sumOpenInterestValue": "1000"} for t in self.TS]
             if "dapi.binance.com/futures/data/openInterestHist" in url:
                 return [{"timestamp": t * 1000, "sumOpenInterestValue": "2"} for t in cm_ts]  # в монетах
@@ -343,6 +347,12 @@ class InverseTest(unittest.TestCase):
         self.assertEqual(len(rows), 3)
         self.assertEqual([r[4] for r in self.binance((2700,))], [1000.0] * 3)  # короткий ряд — не клеим
         self.assertEqual([r[4] for r in self.binance(())], [1000.0] * 3)
+
+    def test_binance_usdc_margined_added(self):
+        # BTCUSDC и ETHUSDC — отдельные рынки Binance: у ETH треть интереса.
+        self.assertEqual([r[4] for r in self.binance(self.TS, self.TS)], [1500.0] * 3)
+        self.assertEqual([r[4] for r in self.binance((), self.TS)], [1400.0] * 3)
+        self.assertEqual([r[4] for r in self.binance((), (2700,))], [1000.0] * 3)  # короткий ряд — не клеим
 
     def bybit(self, inv_ts):
         def fake(url, timeout=10.0):
@@ -548,12 +558,108 @@ class NewSnapTest(unittest.TestCase):
         with mock.patch.object(api, "get_json", side_effect=fb):
             self.assertEqual(api._snap_bingx(), {"BTC": (730.0, 50000.0)})
 
+    def test_bitget_usdt_and_usdc(self):
+        data = {"usdt-futures": [{"symbol": "BTCUSDT", "holdingAmount": "2", "markPrice": "50000"}],
+                "usdc-futures": [{"symbol": "BTCPERP", "holdingAmount": "1", "markPrice": "50010"},
+                                 {"symbol": "ETHPERP", "holdingAmount": "3", "markPrice": "3000"},
+                                 {"symbol": "BTCUSDC", "holdingAmount": "9", "markPrice": "50000"}]}
+
+        def fake(url, timeout=10.0):
+            return {"data": data[url.split("productType=")[1]]}
+
+        with mock.patch.object(api, "get_json", side_effect=fake):
+            self.assertEqual(api._snap_bitget(), {"BTC": (150010.0, 50000.0), "ETH": (9000.0, 3000.0)})
+
+    def test_mexc_all_quotes_and_inverse(self):
+        # Сверка с CoinGecko: у MEXC брался только _USDT; инверсный BTC_USD —
+        # контракт в долларах ($100), USDC и USD1 — в монетах.
+        ticks = {"data": [
+            {"symbol": "BTC_USDC", "holdVol": "1000", "fairPrice": "50010"},
+            {"symbol": "BTC_USD", "holdVol": "30", "fairPrice": "49990"},
+            {"symbol": "BTC_USDT", "holdVol": "20000", "fairPrice": "50000"},
+            {"symbol": "BTC_USD1", "holdVol": "100", "fairPrice": "50020"},
+            {"symbol": "ETH_USDT", "holdVol": "5", "fairPrice": "3000"},  # размера нет — нет
+        ]}
+        sizes = {"BTC_USDT": 0.0001, "BTC_USDC": 0.0001, "BTC_USD1": 0.0001, "BTC_USD": 100}
+        with mock.patch.object(api, "get_json", return_value=ticks), \
+             mock.patch.dict(api._mexc_size, {"at": time.monotonic(), "map": sizes}):
+            out = api._snap_mexc()
+        self.assertEqual(set(out), {"BTC"})
+        self.assertAlmostEqual(out["BTC"][0], 100000 + 5001 + 3000 + 500.2)
+        self.assertEqual(out["BTC"][1], 50000.0)  # цена — с USDT
+
+    def test_kucoin_usdc_and_inverse_not_dated(self):
+        rows = [
+            {"symbol": "XBTUSDCM", "status": "Open", "isInverse": False, "openInterest": "100", "multiplier": 0.0001, "markPrice": 50010, "baseCurrency": "XBT"},
+            {"symbol": "XBTUSDTM", "status": "Open", "isInverse": False, "openInterest": "1000", "multiplier": 0.001, "markPrice": 50000, "baseCurrency": "XBT"},
+            {"symbol": "XBTUSDM", "status": "Open", "isInverse": True, "openInterest": "7000", "multiplier": -1.0, "markPrice": 49990, "baseCurrency": "XBT"},
+            {"symbol": "XBTMZ26", "status": "Open", "isInverse": True, "openInterest": "9e9", "multiplier": -1.0, "markPrice": 51000, "baseCurrency": "XBT"},
+            {"symbol": "ETHUSDTM", "status": "Paused", "isInverse": False, "openInterest": "1", "multiplier": 0.01, "markPrice": 3000, "baseCurrency": "ETH"},
+        ]
+        with mock.patch.object(api, "get_json", return_value={"data": rows}):
+            out = api._snap_kucoin()
+        self.assertEqual(set(out), {"BTC"})
+        self.assertAlmostEqual(out["BTC"][0], 50000 + 500.1 + 7000)
+        self.assertEqual(out["BTC"][1], 50000)
+
+    def test_versions_cover_changed_snapshots(self):
+        self.assertTrue({"Phemex", "MEXC", "KuCoin", "Bitget", "Aster", "BingX"} <= set(api.LIQ_SNAP_VER))
+        self.assertTrue(set(api.LIQ_SNAP_VER) <= set(dict(api.LIQ_SNAPS)))
+
     def test_listed_with_caps(self):
         names = dict(api.LIQ_SNAPS)
         self.assertIs(names["BitMEX"], api._snap_bitmex)
         self.assertIs(names["ApeX"], api._snap_apex)
         self.assertEqual((lm.CAPS["BitMEX"], lm.CAPS["ApeX"]), (100, 100))
 
+
+class RescaleTest(unittest.TestCase):
+    """В снимок биржи добавились рынки — её прошлый ряд пересчитывается,
+    иначе скачок интереса в момент выката стал бы «открытием позиций»."""
+
+    T = 1_800_000_000 // 900 * 900
+
+    def setUp(self):
+        d = tempfile.mkdtemp()
+        self.snap = {"Phemex": {"BTC": (700e6, 50000.0), "ETH": (90e6, 3000.0)}, "OKX": {"BTC": (5e8, 50000.0)}}
+        for name, value in (("LIQ_OI_DB", os.path.join(d, "liq_oi.db")), ("now", lambda: self.T),
+                            ("LIQ_SNAPS", (("Phemex", lambda: self.snap["Phemex"]), ("OKX", lambda: self.snap["OKX"])))):
+            patcher = mock.patch.object(api, name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        con = api._liq_oi_con()
+        rows = [("Phemex", "BTC", self.T - k * 900, 100e6, 50000.0) for k in range(1, 6)]
+        rows += [("Phemex", "ETH", self.T - 86400 - k * 900, 30e6, 3000.0) for k in range(5)]  # служба стояла сутки
+        rows += [("OKX", "BTC", self.T - k * 900, 4e8, 50000.0) for k in range(1, 6)]
+        con.executemany("INSERT INTO oi_snap VALUES (?,?,?,?,?)", rows)
+        con.commit()
+        con.close()
+
+    def series(self, ex, coin):
+        con = sqlite3.connect(api.LIQ_OI_DB)
+        try:
+            return [oi for (oi,) in con.execute("SELECT oi FROM oi_snap WHERE ex=? AND coin=? ORDER BY t", (ex, coin))]
+        finally:
+            con.close()
+
+    def test_old_history_is_rescaled_once(self):
+        api.liq_oi_sample()
+        self.assertEqual(self.series("Phemex", "BTC"), [700e6] * 6)  # без скачка в момент выката
+        self.assertEqual(self.series("Phemex", "ETH"), [90e6])  # старый ряд не стыкуется — начат заново
+        self.assertEqual(self.series("OKX", "BTC"), [4e8] * 5 + [5e8])  # версия не менялась — не трогаем
+        self.T += 900
+        self.snap["Phemex"]["BTC"] = (1400e6, 50000.0)
+        api.liq_oi_sample()  # второй раз — уже не пересчитывается
+        self.assertEqual(self.series("Phemex", "BTC"), [700e6] * 6 + [1400e6])
+
+    def test_silent_exchange_waits_for_next_sample(self):
+        self.snap["Phemex"] = {}
+        api.liq_oi_sample()
+        self.assertEqual(self.series("Phemex", "BTC"), [100e6] * 5)
+        self.T += 900
+        self.snap["Phemex"] = {"BTC": (700e6, 50000.0)}
+        api.liq_oi_sample()
+        self.assertEqual(self.series("Phemex", "BTC"), [700e6] * 6)
 
 class DayKeepTest(unittest.TestCase):
     """Дневные ряды бирж копятся у нас: история Binance (30 дней у биржи)
@@ -581,6 +687,35 @@ class DayKeepTest(unittest.TestCase):
         second = self.gather()["Binance"]
         self.assertEqual([r[0] // DAY - self.base for r in second], list(range(100, 151)))
         self.assertEqual(second[0], ((self.base + 100) * DAY, 101.0, 99.0, 100.0, 1e6 + 100, 0.5))
+
+    def test_changed_definition_leaves_no_step(self):
+        # Интерес Binance стал больше (добавились USDC-рынки): сохранённые дни
+        # пересчитываются по общему дню, на стыке нет ступеньки.
+        self.gather()
+        self.days = range(120, 151)
+        rows = [((self.base + d) * DAY, 101.0, 99.0, 100.0, 2 * (1e6 + d), 0.5) for d in self.days]
+        with mock.patch.object(api, "LIQ_SOURCES", (("Binance", lambda s, p, k: rows),)):
+            got = api._liq_gather("BTC", "1d", 1000)[0]["Binance"]
+        self.assertEqual([r[0] // DAY - self.base for r in got], list(range(100, 151)))
+        for d, r in zip(range(100, 151), got, strict=True):
+            self.assertAlmostEqual(r[4], 2 * (1e6 + d), delta=1e-3)
+        # В базе — уже пересчитанные дни: назавтра стык не возвращается.
+        self.days = range(121, 152)
+        rows = [((self.base + d) * DAY, 101.0, 99.0, 100.0, 2 * (1e6 + d), 0.5) for d in self.days]
+        with mock.patch.object(api, "LIQ_SOURCES", (("Binance", lambda s, p, k: rows),)):
+            got = api._liq_gather("BTC", "1d", 1000)[0]["Binance"]
+        for d, r in zip(range(100, 152), got, strict=True):
+            self.assertAlmostEqual(r[4], 2 * (1e6 + d), delta=1e-3)
+
+    def test_reader_rescales_only_in_memory(self):
+        self.gather()
+        before = Path(api.LIQ_OI_DB).read_bytes()
+        rows = [((self.base + d) * DAY, 101.0, 99.0, 100.0, 3 * (1e6 + d), 0.5) for d in range(120, 151)]
+        with mock.patch.object(api, "LIQ_DAY_WRITE", False), \
+             mock.patch.object(api, "LIQ_SOURCES", (("Binance", lambda s, p, k: rows),)):
+            got = api._liq_gather("BTC", "1d", 1000)[0]["Binance"]
+        self.assertAlmostEqual(got[0][4], 3 * (1e6 + 100), delta=1e-3)
+        self.assertEqual(Path(api.LIQ_OI_DB).read_bytes(), before)
 
     def test_running_day_is_not_kept(self):
         self.gather()

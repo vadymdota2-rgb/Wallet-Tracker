@@ -203,8 +203,8 @@ PY
 в секунду на монету), его «настоящие» занижены: в итог он не входит.
 
 ## 7. Binance и Bybit: интерес в карте против счётчиков бирж
-С этого выката к Binance добавлен COIN-M (BTCUSD_PERP), к Bybit — inverse
-(BTCUSD). Единицы взяты из документации бирж; здесь — сверка с живыми
+К Binance добавлены COIN-M (BTCUSD_PERP) и USDC-M (BTCUSDC, ETHUSDC — по
+CoinGecko у ETH это треть интереса Binance), к Bybit — inverse (BTCUSD). Единицы взяты из документации бирж; здесь — сверка с живыми
 счётчиками: последний ряд карты против «USDT-контракт + контракт в монете»
 прямо с биржи.
 ```
@@ -217,7 +217,10 @@ for sym in ("BTC", "ETH", "SOL", "DOGE"):
     fm = g(f"https://fapi.binance.com/fapi/v1/premiumIndex?symbol={sym}USDT") or {}
     cm = g(f"https://dapi.binance.com/dapi/v1/openInterest?symbol={sym}USD_PERP") or {}
     size = 100 if sym == "BTC" else 10  # доллары в контракте COIN-M
-    b_now = float(fu.get("openInterest", 0)) * float(fm.get("markPrice", 0)) + float(cm.get("openInterest", 0) or 0) * size
+    fc = g(f"https://fapi.binance.com/fapi/v1/openInterest?symbol={sym}USDC") or {}
+    mc = g(f"https://fapi.binance.com/fapi/v1/premiumIndex?symbol={sym}USDC") or {}
+    b_now = (float(fu.get("openInterest", 0)) * float(fm.get("markPrice", 0)) + float(cm.get("openInterest", 0) or 0) * size
+             + float(fc.get("openInterest", 0) or 0) * float(mc.get("markPrice", 0) or 0))
     lin = (((g(f"https://api.bybit.com/v5/market/tickers?category=linear&symbol={sym}USDT") or {}).get("result") or {}).get("list") or [{}])[0]
     inv = (((g(f"https://api.bybit.com/v5/market/tickers?category=inverse&symbol={sym}USD") or {}).get("result") or {}).get("list") or [{}])[0]
     # Одна сторона, как у всех бирж (openInterest у Bybit — обе стороны, пункт 9).
@@ -319,7 +322,11 @@ PY
 Ожидаю: у всех бирж цена в пределах ±1 %; CoinEx, Coinbase Intl, BitMEX —
 монеты есть (если 0 — напиши, что отвечает биржа). Phemex по BTC — около
 $1,2 млрд (с инверсным BTCUSD и USDC; раньше был только USDT, ~$0,18 млрд),
-XT.com — 60 монет (раньше ~40: места занимали закрытые рынки). MEXC: holdVol ×
+XT.com — 60 монет (раньше ~40: места занимали закрытые рынки). Bitget,
+MEXC, KuCoin — с USDC и инверсными (MEXC по BTC ~$5 млрд, KuCoin ~$0,9 млрд).
+После выката: `SELECT * FROM oi_ver` — у Phemex, MEXC, KuCoin, Bitget, Aster,
+BingX версия 2 (старая история пересчитана по первому новому снимку, без
+скачка). MEXC: holdVol ×
 contractSize × fairPrice — сравни с OKX и Binance по BTC (если MEXC вдвое
 больше, чем ждёшь от его доли рынка, — напиши). Копилка: через сутки после
 выката у Binance по BTC дней — около 31 и растёт на день в день.
