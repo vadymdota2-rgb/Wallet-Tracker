@@ -112,51 +112,81 @@ PY
 бы» (до исправления принималось 3 из 37). Размер файла — напиши. Если файл записан давно — прогрев встал:
 напиши это первым пунктом отчёта.
 
-## 6. Точность: модель против настоящих ликвидаций за неделю
+## 6. Точность: модель против настоящих ликвидаций за неделю (и калибровка оборота)
 Сервер хранит настоящие ликвидации бирж за 7 дней (liq_ev в liq_oi.db).
 Скрипт открывает базу ТОЛЬКО на чтение и сравнивает, сколько и где модель
 «сжигает» позиций за последние 6 дней, с тем, что биржи ликвидировали на
-самом деле. Варианты модели: «сейчас» — с этого выката (сгоревшее не
-замещается, падение интереса объясняют ликвидации не больше самого
-падения, доли плеч — к низким: B′+C); «было» — до него (сгоревшее
-замещалось, больше 50–100×); B+C — прошлый лучший (прирост позиций =
-изменение интереса). L×/S× — во сколько раз модель
-больше настоящего (1,00 — точно), r — совпадение по ценам (полосы 0,5 %).
-Займёт ~5–15 минут.
+самом деле. L×/S× — во сколько раз модель больше настоящего (1,00 —
+точно). Полосы — по 0,5 %.
+
+Варианты — оборот позиций. Модель открывает позиции только на чистый
+прирост интереса, а у цены ликвидируются свежие позиции с большим
+плечом, которые трейдеры весь день открывают и закрывают при том же
+интересе. Бэктест в песочнице (OKX, сутки, 10 монет) — «сейчас»: L×0,73
+S×0,79, совпадение 42 %; «доля 0,1»: ×0,80/×0,98, 46 %; «доля 0,2»:
+×0,86/×1,15, 47 %; «две группы»: ×1,17/×1,43, 45 %. Суток мало — решаем
+по этой неделе:
+- «сейчас» — без оборота;
+- «доля 0,1» / «доля 0,2» — каждая позиция закрывается с интенсивностью
+  0,1 (0,2) в сутки, закрытое открывается по текущей свече;
+- «две группы» — 40 % новых позиций краткосрочные (живут ~полсуток,
+  переоткрываются у цены), остальные держатся.
+Займёт ~10–25 минут.
 ```
-cd ~/WalletTracker && PYTHONDONTWRITEBYTECODE=1 timeout 2400 python3 - <<'PY'
+cd ~/WalletTracker && PYTHONDONTWRITEBYTECODE=1 timeout 3000 python3 - <<'PY'
 import math, sqlite3, time
 import whale_api as api
 import wt_liqmap as lm
 con = sqlite3.connect(f"file:{api.LIQ_OI_DB}?mode=ro", uri=True)
-OLD = ((3, .05, 0), (5, .11, 0), (10, .19, 0), (20, .14, 1), (25, .14, 1), (50, .16, 2), (75, .07, 3), (100, .08, 3), (125, .03, 4), (200, .02, 4), (500, .01, 4))
-def upto(levs, cap):
-    kept = [x for x in levs if x[0] <= cap] or [levs[0]]
-    w = sum(x[1] for x in kept)
-    return tuple((lev, s / w, g) for lev, s, g in kept)
-def burns(rows, lo, step, levs, t0, replace):
-    book, log = lm._Book(lo, step), {}
-    def burn(at, hi, low):
-        before = [[a[:] for a in s] for s in book.agg]
-        gone = book.burn(at, hi, low)
-        if (rows[at - 1][0] if at <= len(rows) else rows[-1][0]) >= t0:
-            for s in (0, 1):
-                for g in range(book.g_n):
-                    for b in range(lm.BUCKETS):
-                        q = before[s][g][b] - book.agg[s][g][b]
-                        if q > 0:
-                            log[(s, b)] = log.get((s, b), 0) + q * book.mids[b]
-        return gone
-    for i in range(2, len(rows)):
+def scale(book, k):
+    for c in book.cohorts:
+        c[1] *= k
+    for sd in book.agg:
+        for arr in sd:
+            for b in range(len(arr)):
+                arr[b] *= k
+def close(book, amount):
+    # Сколько закрылось: _Book.close ничего не возвращает — меряем по total().
+    before = book.total()
+    book.close(amount)
+    return before - book.total()
+def burns(rows, lo, step, levs, t0, share, rate):
+    # share — доля новых позиций в обороте (1 — все), rate — интенсивность в сутки.
+    books, log = (lm._Book(lo, step), lm._Book(lo, step)), {}
+    for i in range(2, len(rows) + 1):
         _, hi, low, p_now, _oi, bs = rows[i - 1]
-        gone = burn(i, hi, low); d = rows[i][4] / p_now - rows[i - 1][4] / rows[i - 2][3]
-        x = d + gone if replace == "old" else d if replace == "B" else d + min(gone, max(0.0, -d))
+        gone = 0.0
+        for book in books:
+            before = [[a[:] for a in s] for s in book.agg] if rows[i - 1][0] >= t0 else None
+            gone += book.burn(i, hi, low)
+            if before:
+                for s in (0, 1):
+                    for g in range(book.g_n):
+                        for b in range(lm.BUCKETS):
+                            q = before[s][g][b] - book.agg[s][g][b]
+                            if q > 0:
+                                log[(s, b)] = log.get((s, b), 0) + q * book.mids[b]
+        if i == len(rows):
+            break
+        d = rows[i][4] / p_now - rows[i - 1][4] / rows[i - 2][3]
+        x = d + min(gone, max(0.0, -d))
         if x < 0:
-            book.close(-x)
+            rest = -x - close(books[1], -x) if share > 0 else -x
+            if rest > 0:
+                books[0].close(rest)
         elif x > 0:
-            book.add(i, *lm._opened(x, hi, low, bs, lo, step, levs))
-    burn(len(rows), rows[-1][1], rows[-1][2])
+            if share < 1:
+                books[0].add(i, *lm._opened(x * (1 - share), hi, low, bs, lo, step, levs))
+            if share > 0:
+                books[1].add(i, *lm._opened(x * share, hi, low, bs, lo, step, levs))
+        if share > 0 and rate > 0:
+            f = 1 - math.exp(-rate * max(0, rows[i][0] - rows[i - 1][0]) / 86400)
+            ch = books[1].total() * f
+            if ch > 0:
+                scale(books[1], 1 - f)
+                books[1].add(i, *lm._opened(ch, hi, low, bs, lo, step, levs))
     return log
+VARIANTS = (("сейчас", 0, 0), ("доля 0,1", 1, 0.1), ("доля 0,2", 1, 0.2), ("две группы", 0.4, 2.0))
 t0 = time.time() - 6 * 86400
 tot = {}
 for sym in ("BTC", "ETH", "SOL", "XRP", "DOGE"):
@@ -173,34 +203,34 @@ for sym in ("BTC", "ETH", "SOL", "XRP", "DOGE"):
         for s, p, u in real:
             k = (0 if s == 1 else 1, band(p)); hr[k] = hr.get(k, 0) + u
         rows = lm.prepend(lm.clean_rows(pre.get(ex)), lm.clean_rows(raw))
-        cap = lm.max_lev(ex, sym)
+        levs = lm.levs_upto(lm.max_lev(ex, sym))
         line = []
-        for name, levs, rep in (("сейчас", lm.levs_upto(cap), "now"), ("было", upto(OLD, cap), "old"), ("B+C", lm.levs_upto(cap), "B")):
+        for name, share, rate in VARIANTS:
             hp = {}
-            for (s, b), u in burns(rows, lo, step, levs, t0, rep).items():
+            for (s, b), u in burns(rows, lo, step, levs, t0, share, rate).items():
                 k = (s, band(lo + step * (b + 0.5))); hp[k] = hp.get(k, 0) + u
-            keys = sorted(set(hr) | set(hp)); a = [hr.get(k, 0) for k in keys]; c = [hp.get(k, 0) for k in keys]
-            ma, mc = sum(a) / len(a), sum(c) / len(c)
-            corr = sum((x - ma) * (y - mc) for x, y in zip(a, c)) / (math.sqrt(sum((x - ma) ** 2 for x in a) * sum((y - mc) ** 2 for y in c)) or 1)
             P = [sum(u for (s, _), u in hp.items() if s == k) for k in (0, 1)]
-            # Поймано: доля настоящих ликвидаций ($) там, где карта ждала свою сторону.
-            got = sum(u for k, u in hr.items() if hp.get(k, 0) > 0)
-            # Строже: в полосе засчитано не больше, чем модель ждала, и не
-            # больше, чем случилось, — и место, и сумма разом.
+            caught = sum(u for k, u in hr.items() if hp.get(k, 0) > 0)
             vol = sum(min(u, hp.get(k, 0)) for k, u in hr.items())
+            both = sum(max(hr.get(k, 0), hp.get(k, 0)) for k in set(hr) | set(hp))
             if ex != "Binance":
-                t = tot.setdefault(name, [0, 0, 0, 0, 0, 0]); t[0] += P[0]; t[1] += P[1]; t[2] += R[0]; t[3] += R[1]; t[4] += got; t[5] += vol
-            line.append(f"{name}: L×{P[0] / max(R[0], 1):.2f} S×{P[1] / max(R[1], 1):.2f} r={corr:.2f} поймано {got / max(sum(R), 1) * 100:.0f}% по объёму {vol / max(sum(R), 1) * 100:.0f}%")
+                t = tot.setdefault(name, [0] * 7); t[0] += P[0]; t[1] += P[1]; t[2] += R[0]; t[3] += R[1]; t[4] += caught; t[5] += vol; t[6] += both
+            line.append(f"{name}: L×{P[0] / max(R[0], 1):.2f} S×{P[1] / max(R[1], 1):.2f} поймано {caught / max(sum(R), 1) * 100:.0f}% "
+                        f"по объёму {vol / max(sum(R), 1) * 100:.0f}% совпадение {vol / max(both, 1) * 100:.0f}%")
         print(f"{sym:5}{ex:8} настоящие L ${R[0] / 1e6:6.1f}M S ${R[1] / 1e6:6.1f}M | " + " | ".join(line), flush=True)
-print("ИТОГО без Binance (модель/настоящие, поймано, по объёму):", {k: f"L×{v[0] / max(v[2], 1):.2f} S×{v[1] / max(v[3], 1):.2f} поймано {v[4] / max(v[2] + v[3], 1) * 100:.0f}% по объёму {v[5] / max(v[2] + v[3], 1) * 100:.0f}%" for k, v in tot.items()})
+for k, v in tot.items():
+    print(f"ИТОГО без Binance, {k:10}: L×{v[0] / max(v[2], 1):.2f} S×{v[1] / max(v[3], 1):.2f} поймано {v[4] / max(v[2] + v[3], 1) * 100:.0f}% "
+          f"по объёму {v[5] / max(v[2] + v[3], 1) * 100:.0f}% совпадение {v[5] / max(v[6], 1) * 100:.0f}%")
 PY
 ```
-«Поймано» — доля настоящих ликвидаций (в долларах), случившихся в полосе
-0,5 %, где карта ждала ликвидации той же стороны. Цель — не меньше 95 % у
-«сейчас» в итоге. «По объёму» — строже: в каждой полосе засчитано не
-больше, чем модель ждала, и не больше, чем случилось (завышение и
-занижение не прощаются); его и поднимать. Перепиши вывод целиком. Лента Binance — снимок (не больше одной ликвидации
-в секунду на монету), его «настоящие» занижены: в итог он не входит.
+«Поймано» — доля настоящих ликвидаций (в долларах), случившихся в полосе,
+где карта ждала ликвидации той же стороны (цель — не меньше 95 %). «По
+объёму» — в каждой полосе засчитано не больше, чем модель ждала, и не
+больше, чем случилось. «Совпадение» — Σmin / Σmax по полосам: завышение
+наказывается так же, как занижение, — по нему и выбираем вариант (при
+L×/S× в пределах 0,8–1,25). Перепиши вывод целиком. Лента Binance —
+снимок (не больше одной ликвидации в секунду на монету), его «настоящие»
+занижены: в итог он не входит.
 
 ## 7. Binance и Bybit: интерес в карте против счётчиков бирж
 К Binance добавлены COIN-M (BTCUSD_PERP) и USDC-M (BTCUSDC, ETHUSDC — по
@@ -334,4 +364,4 @@ contractSize × fairPrice — сравни с OKX и Binance по BTC (если 
 ## Отчёт
 По каждому пункту — «ок» или что не так, с цифрами. Отдельно: одна ли цена
 во всех окнах, какие биржи дали данные, сколько интереса «видно»; итог
-пункта 6 по вариантам A/B/C/B+C. Всё, что вне модуля, — одной строкой в конце.
+пункта 6 по вариантам оборота (сейчас, доля 0,1, доля 0,2, две группы). Всё, что вне модуля, — одной строкой в конце.
