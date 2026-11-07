@@ -151,7 +151,7 @@ PY = [
     ("\"seen\": min(st[\"seen\"], st[\"oi\"])", "\"seen\": st[\"oi\"]", "сколько видно — по модели"),
     ("\"seen\": round(seen * px)", "\"seen\": round(seen)", "видно — в долларах"),
     ("prev = rows[0][3]", "prev = rows[0][1]", "свеча: открытие — закрытие прошлой"),
-    ("k = max(1, -(-len(rows) // n))", "k = max(1, len(rows) // n)", "свечей не больше n"),
+    ("    return max(1, -(-count // n))", "    return max(1, count // n)", "свечей не больше n"),
     ('"low": min(px, (last or ref[-1])[2]), "high": max(px, (last or ref[-1])[1])}', '"low": px, "high": px}', "ход идущей свечи — сгорел"),
     # Живая цена.
     ("abs(p / base - 1) <= gap:", "abs(p / base - 1) <= 1:", "чужая цена не берётся"),

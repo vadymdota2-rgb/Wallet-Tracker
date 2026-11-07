@@ -446,12 +446,18 @@ def _smooth(a: list[float]) -> list[float]:
     return [k0 * a[max(0, i - 1)] + k1 * a[i] + k2 * a[min(n - 1, i + 1)] for i in range(n)] + a[n:]
 
 
+def _group(count: int, n: int) -> int:
+    """По сколько свечей бирж склеивается одна свеча графика (их не больше n);
+    одно место и для свечей (candles), и для их границ (candle_edges)."""
+    return max(1, -(-count // n))
+
+
 def candles(rows: list[Row], n: int = 48) -> list[list[float]]:
     """Свечи окна для графика цены на карте: ≤n штук, [откр, макс, мин, закр].
 
     Свечи бирж склеиваются по несколько, открытие — закрытие предыдущей: у
     источников модели открытия нет, а разрыв в долю процента на графике не виден."""
-    k = max(1, -(-len(rows) // n))
+    k = _group(len(rows), n)
     out: list[list[float]] = []
     prev = rows[0][3]
     for i in range(0, len(rows), k):
@@ -465,7 +471,7 @@ def candles(rows: list[Row], n: int = 48) -> list[list[float]]:
 def candle_edges(rows: list[Row], n: int = 48) -> list[int]:
     """Границы свечей графика (candles) по времени: начало каждой и конец
     последней — к ним сервер подкладывает настоящие ликвидации бирж."""
-    k = max(1, -(-len(rows) // n))
+    k = _group(len(rows), n)
     step = rows[-1][0] - rows[-2][0] if len(rows) > 1 else 0
     return [rows[i][0] for i in range(0, len(rows), k)] + [rows[-1][0] + step]
 
