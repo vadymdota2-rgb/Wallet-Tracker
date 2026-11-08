@@ -149,10 +149,16 @@ class PolicyTest(unittest.TestCase):
                     self.assertIsNone(re.search(r" [:;?!»]|« ", v), (k, v))  # французские знаки — с неразрывным
                 if lang in ("zh", "ja"):
                     self.assertNotIn(" ：", v, (k, lang))
-        # Пояснение — у каждого пункта, где оно нужно по правам.
-        for key, hint in (("SP500", "mk_sp_hint"), ("XYZ100", "mk_xyz_hint"), ("DXY", "mk_dxy_hint"),
-                          ("BVIV", "mk_bviv_hint"), ("US10Y", "mk_10y_hint")):
+        # Пояснение — у каждого из девяти пунктов: любую ячейку можно коснуться
+        # и прочитать, что это (и оговорки о правах — у тех, где они нужны).
+        hints = {"SP500": "mk_sp_hint", "XYZ100": "mk_xyz_hint", "DXY": "mk_dxy_hint", "GOLD": "mk_gold_hint",
+                 "OIL": "mk_oil_hint", "US10Y": "mk_10y_hint", "BVIV": "mk_bviv_hint", "BTCD": "mk_btcd_hint",
+                 "USDTD": "mk_usdtd_hint"}
+        self.assertEqual(set(hints), set(mk.KEYS))
+        for key, hint in hints.items():
             self.assertIn(f"{key}: \"{hint}\"", tsx, key)
+        self.assertIn("const HINT: Record<MarketKey, DictKey> = {", tsx)  # тип требует все девять
+        self.assertIn("CoinMarketCap", tr["mk_btcd_hint"]["ru"])
 
     def test_no_dead_texts_or_exports(self):
         # Каждый текст модуля (mk_…) показывается экраном, каждый экспорт

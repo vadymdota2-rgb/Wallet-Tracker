@@ -124,7 +124,7 @@ test("сверху меню — девять рынков вместо заго�
   await page.locator(".mk-i").click();
   assert.equal(await page.locator(".mk-i").getAttribute("aria-expanded"), "true");
   const notes = (await page.locator(".mk-notes li").allTextContents()).map(sp);
-  assert.deepEqual(notes, ["mk_sp_hint", "mk_xyz_hint", "mk_dxy_hint", "mk_oil_hint", "mk_10y_hint", "mk_bviv_hint", "mk_usdtd_hint"].map((k) => sp(I18N[k]!["ru"]!)));
+  assert.deepEqual(notes, ["mk_sp_hint", "mk_xyz_hint", "mk_dxy_hint", "mk_gold_hint", "mk_oil_hint", "mk_10y_hint", "mk_bviv_hint", "mk_btcd_hint", "mk_usdtd_hint"].map((k) => sp(I18N[k]!["ru"]!)));
   await page.locator(".mk-i").click();
   assert.equal(await page.locator(".mk-notes").count(), 0);
   // Мелко: цифры рынков меньше пунктов меню, сетка — ровные три столбца и три ряда.
@@ -317,7 +317,7 @@ test("текст читается: контраст не ниже 4,5:1 (WCAG AA
   await ctx.close();
 });
 
-test("касание ячейки — её пояснение; ещё раз — свернуть; у DXY своё, у золота и BTC.D нет кнопки", async () => {
+test("касание ячейки — её пояснение; ещё раз — свернуть; пояснение есть у всех девяти", async () => {
   const { ctx, page, errors } = await open();
   await page.locator(".drawer .mk-cell").first().waitFor();
   assert.equal(await page.locator(".mk-note").count(), 0);
@@ -331,13 +331,23 @@ test("касание ячейки — её пояснение; ещё раз —
   assert.equal(sp(await page.locator(".mk-note").textContent()), sp(I18N["mk_dxy_hint"]!["ru"]!));
   await page.locator('.mk-cell[data-k="DXY"]').click();
   assert.equal(await page.locator(".mk-note").count(), 0);
-  // Без пояснения (золото, BTC.D) — не кнопка: касание ничего не обещает.
-  for (const k of ["GOLD", "BTCD"]) assert.equal(await page.locator(`.mk-cell[data-k="${k}"]`).evaluate((el) => el.tagName), "DIV");
+  // Каждую из девяти можно коснуться — и у каждой своё пояснение.
+  const seen = new Set<string>();
+  for (const cell of await page.locator(".drawer .mk-cell").all()) {
+    assert.equal(await cell.evaluate((el) => el.tagName), "BUTTON");
+    await cell.click();
+    const text = sp(await page.locator(".mk-note").textContent());
+    assert.ok(text.length > 20, text);
+    seen.add(text);
+    await cell.click();
+    assert.equal(await page.locator(".mk-note").count(), 0);
+  }
+  assert.equal(seen.size, 9);
   // «ⓘ» — все пояснения; выбранная ячейка тогда не дублирует своё.
   await bviv.click();
   await page.locator(".mk-i").click();
   assert.equal(await page.locator(".mk-note").count(), 0);
-  assert.equal(await page.locator(".mk-notes li").count(), 7);
+  assert.equal(await page.locator(".mk-notes li").count(), 9);
   assert.deepEqual(errors, []);
   await ctx.close();
 });

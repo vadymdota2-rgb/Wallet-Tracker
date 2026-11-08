@@ -52,10 +52,11 @@ const label = (k: MarketKey, lang: LangCode): string => {
   const l = LABEL[k];
   return isKey(l) ? t(lang, l) : l;
 };
-/** Пояснения по пунктам — в порядке экрана. */
-const HINT: Partial<Record<MarketKey, DictKey>> = {
-  SP500: "mk_sp_hint", XYZ100: "mk_xyz_hint", DXY: "mk_dxy_hint", OIL: "mk_oil_hint", US10Y: "mk_10y_hint",
-  BVIV: "mk_bviv_hint", USDTD: "mk_usdtd_hint",
+/** Пояснения — у каждого пункта (тип требует все девять), в порядке экрана:
+ *  любую ячейку можно коснуться и прочитать, что это. */
+const HINT: Record<MarketKey, DictKey> = {
+  SP500: "mk_sp_hint", XYZ100: "mk_xyz_hint", DXY: "mk_dxy_hint", GOLD: "mk_gold_hint", OIL: "mk_oil_hint",
+  US10Y: "mk_10y_hint", BVIV: "mk_bviv_hint", BTCD: "mk_btcd_hint", USDTD: "mk_usdtd_hint",
 };
 
 interface CellProps {
@@ -83,7 +84,6 @@ const Cell = memo(function Cell({ it, lang, on, flash, note, pick }: CellProps) 
     </>
   );
   const cls = `mk-cell${flash ? ` mk-flash-${flash}` : ""}`;
-  if (!hint) return <div className={cls} data-k={it.k}>{body}</div>;
   return (
     <button type="button" className={cls} data-k={it.k} title={t(lang, hint)} aria-expanded={on} aria-controls={note}
       onClick={() => pick(it.k)}>{body}</button>
@@ -196,10 +196,7 @@ export function MarketsStrip({ fallback }: { fallback: ReactNode }) {
     };
   }, []);
   if (!m) return waiting ? <Skeleton lang={lang} /> : <>{fallback}</>;
-  const notes = m.items.flatMap((it) => {
-    const h = HINT[it.k];
-    return h ? [h] : [];
-  });
+  const notes = m.items.map((it) => HINT[it.k]);
   const byKey = new Map(m.items.map((x) => [x.k, x]));
   const age = ageMin(m.at, now);
   // Пояснение выбранной ячейки — пока она на экране и не открыт список всех.

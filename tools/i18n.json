@@ -28222,5 +28222,41 @@
     "ja": "データなし",
     "ko": "데이터 없음",
     "zh": "暂无数据"
+  },
+  "mk_gold_hint": {
+    "ru": "Золото — бессрочный рынок trade.xyz на Hyperliquid, торгуется круглые сутки. Защитный актив: растёт, когда рынок боится или слабеет доллар. Если Hyperliquid не ответил — цена с рынка XAU на Aster",
+    "en": "Gold — trade.xyz’s perpetual on Hyperliquid, traded around the clock. A safe haven: it rises when markets are fearful or the dollar weakens. If Hyperliquid doesn’t respond, the price comes from the XAU market on Aster",
+    "uk": "Золото — безстроковий ринок trade.xyz на Hyperliquid, торгується цілодобово. Захисний актив: зростає, коли ринок боїться або слабшає долар. Якщо Hyperliquid не відповів — ціна з ринку XAU на Aster",
+    "de": "Gold — Perpetual von trade.xyz auf Hyperliquid, rund um die Uhr gehandelt. Sicherer Hafen: steigt, wenn der Markt Angst hat oder der Dollar schwächelt. Antwortet Hyperliquid nicht, kommt der Preis vom Markt XAU auf Aster",
+    "es": "Oro: perpetuo de trade.xyz en Hyperliquid, cotiza las 24 horas. Activo refugio: sube cuando el mercado tiene miedo o el dólar se debilita. Si Hyperliquid no responde, el precio sale del mercado XAU de Aster",
+    "fr": "Or : perpétuel de trade.xyz sur Hyperliquid, négocié 24 h/24. Valeur refuge : il monte quand le marché a peur ou que le dollar faiblit. Si Hyperliquid ne répond pas, le prix vient du marché XAU d’Aster",
+    "pt": "Ouro: perpétuo da trade.xyz na Hyperliquid, negociado 24 horas por dia. Ativo de refúgio: sobe quando o mercado tem medo ou o dólar enfraquece. Se a Hyperliquid não responder, o preço vem do mercado XAU da Aster",
+    "pl": "Złoto — kontrakt wieczysty trade.xyz na Hyperliquid, notowany całą dobę. Bezpieczna przystań: rośnie, gdy rynek się boi lub słabnie dolar. Gdy Hyperliquid nie odpowiada, cena pochodzi z rynku XAU na Aster",
+    "tr": "Altın — trade.xyz’in Hyperliquid’deki sürekli vadeli kontratı, 7/24 işlem görür. Güvenli liman: piyasa korktuğunda veya dolar zayıfladığında yükselir. Hyperliquid yanıt vermezse fiyat Aster’daki XAU piyasasından alınır",
+    "id": "Emas — perpetual trade.xyz di Hyperliquid, diperdagangkan 24 jam. Aset lindung nilai: naik saat pasar takut atau dolar melemah. Jika Hyperliquid tidak merespons, harga diambil dari pasar XAU di Aster",
+    "vi": "Vàng — hợp đồng vĩnh cửu của trade.xyz trên Hyperliquid, giao dịch suốt ngày đêm. Tài sản trú ẩn: tăng khi thị trường sợ hãi hoặc đồng đô la yếu đi. Nếu Hyperliquid không phản hồi, giá lấy từ thị trường XAU trên Aster",
+    "hi": "सोना — Hyperliquid पर trade.xyz का परपेचुअल, चौबीसों घंटे ट्रेड होता है। सुरक्षित निवेश: बाज़ार में डर हो या डॉलर कमज़ोर हो तो बढ़ता है। Hyperliquid जवाब न दे तो कीमत Aster के XAU बाज़ार से ली जाती है",
+    "ar": "الذهب — عقد trade.xyz الدائم على Hyperliquid، يُتداول على مدار الساعة. ملاذ آمن: يرتفع عندما يخاف السوق أو يضعف الدولار. إذا لم يستجب Hyperliquid، يُؤخذ السعر من سوق XAU على Aster",
+    "ja": "金 — Hyperliquidのtrade.xyz無期限先物、24時間取引。安全資産：市場が不安なときやドルが弱いときに上昇します。Hyperliquidが応答しない場合、価格はAsterのXAU市場から取得します",
+    "ko": "금 — Hyperliquid의 trade.xyz 무기한 계약, 24시간 거래. 안전자산: 시장이 불안하거나 달러가 약해지면 오릅니다. Hyperliquid가 응답하지 않으면 가격은 Aster의 XAU 시장에서 가져옵니다",
+    "zh": "黄金 — trade.xyz 在 Hyperliquid 上的永续合约，全天候交易。避险资产：市场恐慌或美元走弱时上涨。若 Hyperliquid 无响应，价格取自 Aster 的 XAU 市场"
+  },
+  "mk_btcd_hint": {
+    "ru": "Доля биткоина в капитализации всего крипторынка (CoinMarketCap). Растёт — деньги идут из альткоинов в BTC; падает — в альткоины",
+    "en": "Bitcoin’s share of total crypto market cap (CoinMarketCap). Rising means money moving from altcoins into BTC; falling means into altcoins",
+    "uk": "Частка біткоїна в капіталізації всього крипторинку (CoinMarketCap). Зростає — гроші йдуть з альткоїнів у BTC; падає — в альткоїни",
+    "de": "Anteil von Bitcoin an der Marktkapitalisierung aller Kryptowährungen (CoinMarketCap). Steigt er, fließt Geld aus Altcoins in BTC; sinkt er, in Altcoins",
+    "es": "Cuota de bitcoin en la capitalización de todo el mercado cripto (CoinMarketCap). Si sube, el dinero pasa de las altcoins a BTC; si baja, a las altcoins",
+    "fr": "Part du bitcoin dans la capitalisation de tout le marché crypto (CoinMarketCap). Si elle monte, l’argent passe des altcoins au BTC ; si elle baisse, vers les altcoins",
+    "pt": "Participação do bitcoin na capitalização de todo o mercado cripto (CoinMarketCap). Se sobe, o dinheiro sai das altcoins para o BTC; se cai, vai para as altcoins",
+    "pl": "Udział bitcoina w kapitalizacji całego rynku krypto (CoinMarketCap). Rośnie — pieniądze przechodzą z altcoinów do BTC; spada — do altcoinów",
+    "tr": "Bitcoin’in tüm kripto piyasa değerindeki payı (CoinMarketCap). Yükselmesi paranın altcoinlerden BTC’ye, düşmesi altcoinlere geçtiğini gösterir",
+    "id": "Porsi bitcoin dalam kapitalisasi seluruh pasar kripto (CoinMarketCap). Naik berarti uang berpindah dari altcoin ke BTC; turun berarti ke altcoin",
+    "vi": "Tỷ trọng bitcoin trong vốn hóa toàn thị trường crypto (CoinMarketCap). Tăng nghĩa là tiền rời altcoin sang BTC; giảm nghĩa là sang altcoin",
+    "hi": "पूरे क्रिप्टो मार्केट कैप में बिटकॉइन का हिस्सा (CoinMarketCap)। बढ़ने का मतलब है पैसा ऑल्टकॉइन से BTC में जा रहा है; घटने का मतलब ऑल्टकॉइन में",
+    "ar": "حصة البيتكوين من القيمة السوقية لسوق العملات المشفرة كله (CoinMarketCap). ارتفاعها يعني انتقال المال من العملات البديلة إلى BTC، وانخفاضها يعني العكس",
+    "ja": "暗号資産市場全体の時価総額に占めるビットコインの割合（CoinMarketCap）。上昇はアルトコインからBTCへ、低下はアルトコインへの資金移動を示します",
+    "ko": "전체 암호화폐 시가총액에서 비트코인이 차지하는 비중(CoinMarketCap). 오르면 자금이 알트코인에서 BTC로, 내리면 알트코인으로 이동 중",
+    "zh": "比特币占整个加密市场总市值的比例（CoinMarketCap）。上升意味着资金从山寨币流向 BTC，下降意味着流向山寨币"
   }
 }
