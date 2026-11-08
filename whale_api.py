@@ -1027,7 +1027,18 @@ def wallet_limit(con: sqlite3.Connection, chat: str) -> int:
     return PREMIUM_MAX_WALLETS if is_premium(con, chat) else FREE_MAX_WALLETS
 
 
-def hl_post(payload: dict, timeout: float = 6.0):
+def read_capped(r, max_bytes: int = 0) -> bytes:
+    """Тело ответа; max_bytes > 0 — не больше стольких байт: длиннее — ValueError
+    (источник, отдавший гигабайт, не съест память сервера)."""
+    if max_bytes <= 0:
+        return r.read()
+    raw = r.read(max_bytes + 1)
+    if len(raw) > max_bytes:
+        raise ValueError(f"ответ длиннее {max_bytes} байт")
+    return raw
+
+
+def hl_post(payload: dict, timeout: float = 6.0, max_bytes: int = 0):
     req = urllib.request.Request(
         HL_INFO,
         data=json.dumps(payload).encode(),
@@ -1036,7 +1047,7 @@ def hl_post(payload: dict, timeout: float = 6.0):
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            return json.loads(r.read().decode())
+            return json.loads(read_capped(r, max_bytes).decode())
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError):
         return None
 
@@ -7285,29 +7296,30 @@ def _geo_refused(got) -> bool:
     return any(w in msg for w in ("restricted", "country", "region", "location"))
 
 
-def _get_json_raw(url: str, timeout: float, headers: dict | None = None):
+def _get_json_raw(url: str, timeout: float, headers: dict | None = None, max_bytes: int = 0):
     req = urllib.request.Request(url, headers={"User-Agent": "wallet-tracker/1.0", **(headers or {})})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            return json.loads(r.read().decode())
+            return json.loads(read_capped(r, max_bytes).decode())
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError, OSError):
         return None
 
 
-def get_json(url: str, timeout: float = 10.0):
-    """GET с разбором JSON. Ошибка сети — это None, а не исключение."""
+def get_json(url: str, timeout: float = 10.0, max_bytes: int = 0):
+    """GET с разбором JSON. Ошибка сети — это None, а не исключение;
+    max_bytes > 0 — ответ длиннее тоже None."""
     host = next((h for h in RELAY_HOSTS if url.startswith(h)), "")
     if not host or not RELAY or not API_KEY:
-        return _get_json_raw(url, timeout)
+        return _get_json_raw(url, timeout, max_bytes=max_bytes)
     via = RELAY + RELAY_HOSTS[host] + url[len(host):]
     if time.monotonic() < _relay_first.get(host, 0.0):
-        got = _get_json_raw(via, timeout, {"X-Api-Key": API_KEY})
-        return got if got is not None else _get_json_raw(url, timeout)
-    got = _get_json_raw(url, timeout)
+        got = _get_json_raw(via, timeout, {"X-Api-Key": API_KEY}, max_bytes)
+        return got if got is not None else _get_json_raw(url, timeout, max_bytes=max_bytes)
+    got = _get_json_raw(url, timeout, max_bytes=max_bytes)
     if got is not None and not _geo_refused(got):
         return got
     _relay_first[host] = time.monotonic() + 1800
-    return _get_json_raw(via, timeout, {"X-Api-Key": API_KEY})
+    return _get_json_raw(via, timeout, {"X-Api-Key": API_KEY}, max_bytes)
 
 
 def _fnum(v) -> float:
@@ -9993,6 +10005,10 @@ def warmup() -> None:
     # продержится до следующего обновления. Одиннадцать запросов к бирже
     # занимают пару секунд и идут в стороне от чьего-либо экрана.
     _hl_markets_load()
+    # Рынки в меню — одна сборка при запуске (в фоне): иначе в первую минуту
+    # после перезапуска каждый открывший меню держал бы поток до COLD_WAIT.
+    # Это не опрос: дальше рынки собираются только по запросам подписчиков.
+    wt_markets.markets_data(0)
     # Ставки бирж — своим потоком: первый круг успевает до первой сборки, а
     # дальше он обновляет их сам и в бюджет сборки не лезет.
     threading.Thread(target=fund_refresher, daemon=True, name="funding").start()
@@ -15212,7 +15228,8 @@ def _mkt_fx():
     t = now()
     start = (t - wt_markets.FX_DAYS * 86400) * 1000
     return {c: hl_post({"type": "candleSnapshot", "req": {"coin": f"xyz:{c}", "interval": "1h",
-                                                          "startTime": start, "endTime": t * 1000}}, 15)
+                                                          "startTime": start, "endTime": t * 1000}},
+                       15, max_bytes=wt_markets.RESP_MAX)
             for c in wt_markets.FX_HL}
 
 
@@ -15220,7 +15237,7 @@ def _mkt_ecb():
     """Курсы ЕЦБ (Frankfurter, база USD) за последние дни — по валютам DXY."""
     start = time.strftime("%Y-%m-%d", time.gmtime(now() - wt_markets.ECB_DAYS * 86400))
     cur = ",".join(c for c, _ in wt_markets.DXY_W)
-    return get_json(f"https://api.frankfurter.dev/v1/{start}..?base=USD&symbols={cur}", 15)
+    return get_json(f"https://api.frankfurter.dev/v1/{start}..?base=USD&symbols={cur}", 15, max_bytes=wt_markets.RESP_MAX)
 
 
 def _mkt_aster():
@@ -15230,9 +15247,9 @@ def _mkt_aster():
 
 
 wt_markets.set_sources({
-    "xyz": lambda: hl_post({"type": "metaAndAssetCtxs", "dex": "xyz"}, 15),
-    "para": lambda: hl_post({"type": "metaAndAssetCtxs", "dex": "para"}, 15),
-    "mkts": lambda: hl_post({"type": "metaAndAssetCtxs", "dex": "mkts"}, 15),
+    "xyz": lambda: hl_post({"type": "metaAndAssetCtxs", "dex": "xyz"}, 15, max_bytes=wt_markets.RESP_MAX),
+    "para": lambda: hl_post({"type": "metaAndAssetCtxs", "dex": "para"}, 15, max_bytes=wt_markets.RESP_MAX),
+    "mkts": lambda: hl_post({"type": "metaAndAssetCtxs", "dex": "mkts"}, 15, max_bytes=wt_markets.RESP_MAX),
     "fx": _mkt_fx,
     "ecb": _mkt_ecb,
     "mcap": lambda: wt_mcap.mcap_data(0),

@@ -102,6 +102,39 @@ class HostileSourceTest(unittest.TestCase):
         self.assertLess(time.process_time() - t0, 1.0)
 
 
+class HugeBodyTest(unittest.TestCase):
+    """Источник отдаёт гигабайт: сервер читает не больше RESP_MAX байт и
+    бросает ответ, а не держит его в памяти целиком."""
+
+    def test_body_over_the_limit_is_not_read(self):
+        import whale_api as api  # noqa: PLC0415 — сервер нужен только здесь
+
+        class Body:
+            def __init__(self, size: int):
+                self.size, self.asked = size, []
+
+            def read(self, n: int = -1) -> bytes:
+                self.asked.append(n)
+                k = self.size if n < 0 else min(n, self.size)
+                return b"[" + b" " * (k - 2) + b"]" if k >= 2 else b"[]"
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+        big = Body(1 << 30)
+        with mock.patch.object(api.urllib.request, "urlopen", lambda *a, **k: big):
+            self.assertIsNone(api.hl_post({"type": "metaAndAssetCtxs", "dex": "xyz"}, 15, max_bytes=mk.RESP_MAX))
+            self.assertIsNone(api.get_json("https://api.frankfurter.dev/v1/x", 15, max_bytes=mk.RESP_MAX))
+        self.assertEqual(big.asked, [mk.RESP_MAX + 1] * 2)  # не гигабайт, а предел и байт сверху
+        ok = Body(64 * 1024)
+        with mock.patch.object(api.urllib.request, "urlopen", lambda *a, **k: ok):
+            self.assertEqual(api.hl_post({"type": "x"}, 15, max_bytes=mk.RESP_MAX), [])
+        self.assertGreater(mk.RESP_MAX, 10 * 64 * 1024)  # у самых больших ответов (~60 КБ) запас вдесятеро
+
+
 class HostileTimingTest(unittest.TestCase):
     def setUp(self):
         self.addCleanup(setattr, mk, "_st", mk._st)

@@ -2015,6 +2015,12 @@ say("рынки в меню как халвинг — кэш и хранение
     and os.path.isfile(f"{APP}/tests/test_markets_route.py") and "tests/test_markets_route.py" in read(f"{APP}/.github/workflows/tests.yml")
     and "def test_no_dead_texts_or_exports(self):" in read(f"{APP}/tests/test_markets_policy.py")
     and "### Рынки в меню" in read(f"{APP}/README.md") and "рынки в меню живут на устройстве шесть часов" in read(f"{APP}/tests/storage.test.ts"))
+say("рынки в меню — нагрузка и защита: каждый запрос к источнику — с пределом размера ответа (RESP_MAX), одна сборка при запуске вместо очереди ждущих, фонового опроса нет; «ⓘ» — рисунок, а не знак шрифта, место под палец ≥ 24 точек; проверено на экранах от 280 точек до компьютера",
+    api.count("max_bytes=wt_markets.RESP_MAX") == 5 and "def read_capped(" in api
+    and "    wt_markets.markets_data(0)\n" in api.split("def warmup() -> None:")[1].split("\ndef ")[0]
+    and "function InfoIcon()" in _mk_tsx and ">ⓘ<" not in _mk_tsx and "padding: 7px; margin-block: -7px;" in _mk_css
+    and "Galaxy Fold снаружи" in read(f"{APP}/tests/e2e/markets.e2e.test.ts")
+    and "class HugeBodyTest(" in read(f"{APP}/tests/test_markets_security.py"))
 _ci = read(f"{APP}/.github/workflows/tests.yml")
 say("CI: мутации карты ликвидаций — своим заданием с лимитом 75 минут (вместе со «Страхом и жадностью» не укладывались в 45)",
     "  mutation-liqmap:\n    runs-on: ubuntu-latest\n    timeout-minutes: 75" in _ci

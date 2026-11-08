@@ -57,7 +57,7 @@ after(async () => {
 });
 
 interface Opts {
-  lang?: string; width?: number; reply?: unknown; scale?: number;
+  lang?: string; width?: number; height?: number; reply?: unknown; scale?: number;
   /** Ответы по очереди (последний — дальше всегда); задержка первого ответа, мс. */
   replies?: unknown[]; delay?: number;
   /** Копия на устройстве (wt-markets-v1): когда записана (мс) и что. */
@@ -66,7 +66,7 @@ interface Opts {
 
 async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; errors: string[] }> {
   const lang = o.lang ?? "ru";
-  const ctx = await browser.newContext({ viewport: { width: o.width ?? 360, height: 780 }, deviceScaleFactor: o.scale ?? 1, timezoneId: "UTC" });
+  const ctx = await browser.newContext({ viewport: { width: o.width ?? 360, height: o.height ?? 780 }, deviceScaleFactor: o.scale ?? 1, timezoneId: "UTC" });
   const page = await ctx.newPage();
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -112,7 +112,7 @@ test("сверху меню — девять рынков вместо заго�
   assert.match(text[8]!, /^USDT\.D 4,10% −2,84%$/);
   assert.equal(await page.locator('.mk-cell[data-k="DXY"] .mk-ch.up').count(), 1);
   assert.equal(await page.locator('.mk-cell[data-k="SP500"] .mk-ch.dn').count(), 1);
-  assert.equal(sp(await page.locator(".mk-src").textContent()), `${I18N["mk_src"]!["ru"]}ⓘ`);
+  assert.equal(sp(await page.locator(".mk-src").textContent()), I18N["mk_src"]!["ru"]);
   assert.equal(await page.locator('.mk-src a[href="https://coinmarketcap.com/"]').textContent(), "CoinMarketCap");
   assert.ok((await page.locator('.mk-cell[data-k="DXY"]').getAttribute("title"))?.includes("ICE"));
   assert.ok(!(await page.locator(".drawer").textContent())?.includes("Deribit"));
@@ -169,6 +169,33 @@ test("влезает в 320 точек на всех 16 языках", async () 
     const xs = await page.locator(".drawer .mk-cell").evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().x)));
     assert.equal(new Set(xs).size, 3, `${lang}: обычный шрифт — три столбца, ${xs}`);
     assert.deepEqual(errors, [], lang);
+    await ctx.close();
+  }
+});
+
+test("любое устройство: от 280 точек (Galaxy Fold снаружи) до планшета и компьютера, плотность 1–3 — ничего не обрезано, «ⓘ» — чёткий рисунок", async () => {
+  const devices = [
+    { name: "Galaxy Fold снаружи", width: 280, height: 653, scale: 3 },
+    { name: "iPhone SE", width: 320, height: 568, scale: 2 },
+    { name: "Android", width: 360, height: 800, scale: 3 },
+    { name: "iPhone Pro Max", width: 430, height: 932, scale: 3 },
+    { name: "телефон лёжа", width: 740, height: 360, scale: 3 },
+    { name: "планшет", width: 820, height: 1180, scale: 2 },
+    { name: "компьютер", width: 1440, height: 900, scale: 1 },
+  ];
+  for (const d of devices) {
+    const { ctx, page, errors } = await open(d);
+    await page.locator(".drawer .mk-cell").first().waitFor();
+    assert.deepEqual(await overflow(page), [], d.name);
+    assert.equal(await page.locator(".drawer .mk-cell").count(), 9, d.name);
+    // Значок «ⓘ» — рисунок с размером, а не знак шрифта (его нет в части шрифтов).
+    const ico = await page.locator(".mk-i svg").boundingBox();
+    assert.ok(ico && ico.width >= 10 && ico.height >= 10, `${d.name}: ${JSON.stringify(ico)}`);
+    assert.ok(!(await page.locator(".mk-i").textContent())?.trim(), d.name);
+    // Место под палец у «ⓘ» — не меньше 24 точек (WCAG 2.2, 2.5.8).
+    const btn = await page.locator(".mk-i").boundingBox();
+    assert.ok(btn && btn.width >= 24 && btn.height >= 24, `${d.name}: ${JSON.stringify(btn)}`);
+    assert.deepEqual(errors, [], d.name);
     await ctx.close();
   }
 });

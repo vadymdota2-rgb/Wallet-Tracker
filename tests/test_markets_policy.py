@@ -92,6 +92,12 @@ class PolicyTest(unittest.TestCase):
         for bad in ("self.", "path", "query", "headers", "environ"):
             self.assertNotIn(bad, block, bad)
         self.assertIn("for c in wt_markets.FX_HL}", block)
+        # Каждый запрос — с пределом размера ответа (гигабайт не съест память).
+        self.assertEqual(block.count("max_bytes=wt_markets.RESP_MAX"), block.count("hl_post(") + block.count("get_json("))
+        # Одна сборка при запуске — и никакого фонового опроса.
+        src = read("whale_api.py")
+        self.assertIn("    wt_markets.markets_data(0)\n", src.split("def warmup() -> None:")[1].split("\ndef ")[0])
+        self.assertNotIn("markets", src.split("def _cache_modules() -> tuple:")[1].split("\ndef ")[0])
         # Aster — без своих запросов: только память модуля фандинга.
         self.assertNotIn("asterdex", block)
         self.assertIn('    "aster": _mkt_aster,\n', block)

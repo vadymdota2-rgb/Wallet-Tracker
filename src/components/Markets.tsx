@@ -94,6 +94,18 @@ function Sources({ lang, tail }: { lang: LangCode; tail: ReactNode }) {
   );
 }
 
+/** «ⓘ» рисунком, а не знаком шрифта: знака U+24D8 нет в части системных
+ *  шрифтов (вместо него — пустой квадрат), а рисунок одинаково чёткий на
+ *  любом экране и любой плотности точек. */
+function InfoIcon() {
+  return (
+    <svg className="mk-ico" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <circle cx="8" cy="8" r="6.75" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M8 7.25v4M8 4.75v.01" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 /** Скелет сетки, пока ждём первый ответ: меню не прыгает. */
 function Skeleton({ lang }: { lang: LangCode }) {
   return (
@@ -181,7 +193,7 @@ export function MarketsStrip({ fallback }: { fallback: ReactNode }) {
       <p className="mk-src">
         <Sources lang={lang} tail={notes.length ? (
           <button type="button" className="mk-i" aria-expanded={open} aria-label={t(lang, "mk_about")}
-            onClick={() => setOpen((o) => !o)}>ⓘ</button>
+            onClick={() => setOpen((o) => !o)}><InfoIcon /></button>
         ) : null} />
       </p>
       {open && notes.length ? (

@@ -88,11 +88,13 @@ button.mk-cell:focus-visible { outline: 2px solid var(--glow); outline-offset: 1
 .mk-src { margin-top: 5px; font-size: 8.5px; color: var(--dim); opacity: 0.85; text-align: center; }
 .mk-src a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .mk-nw { white-space: nowrap; }
-/* «ⓘ»: все пояснения сразу; кнопка мелкая, но место под палец — с запасом. */
+/* «ⓘ»: все пояснения сразу; значок мелкий, но место под палец — не меньше
+   24 точек (WCAG 2.2, 2.5.8), а строку источников оно не раздвигает. */
 .mk-i {
-  margin-inline-start: 4px; padding: 6px; margin-block: -6px;
+  margin-inline-start: 2px; padding: 7px; margin-block: -7px;
   background: none; border: 0; color: inherit; font: inherit; font-size: 10px; line-height: 1; cursor: pointer;
 }
+.mk-ico { display: inline-block; inline-size: 1.1em; block-size: 1.1em; vertical-align: -0.2em; }
 .mk-notes {
   margin: 6px 0 0; padding: 0 4px; list-style: none;
   font-size: 9px; line-height: 1.4; color: var(--dim); opacity: 0.85;
