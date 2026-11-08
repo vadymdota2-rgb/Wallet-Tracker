@@ -1954,7 +1954,7 @@ say("карта ликвидаций: OrangeX в снимках интереса
     and "## 11. BEAT: полнота по биржам" in read(f"{APP}/docs/check-liqmap-server.md"))
 say("карта ликвидаций: фандинг сдвигает уровни платящей стороны (7 дней, сгорание по уже заплаченному), пояснение на 16 языках",
     "def _fund_paid(" in _lmpy and "FUND_HOLD = 7 * 86400" in _lmpy and "nb = bucket(m - sh_s, lo, step)" in _lmpy
-    and "_fund(sym, FUND_WAIT), _caps(sym))" in _lmpy and "wt_liqmap.set_funding(_liq_funding)" in api
+    and "funds = _fund(sym, FUND_WAIT)" in _lmpy and "wt_liqmap.set_funding(_liq_funding)" in api
     and '<li>{t(lang, "lq_how_8")}</li>' in read(f"{APP}/src/screens/LiqMapScreen.tsx") and "lq_how_8" in _i18n
     and os.path.exists(f"{APP}/tests/test_liqmap_fund.py") and '"фандинг: сгорание — по уже заплаченному"' in read(f"{APP}/tools/mutate-liqmap.py"))
 say("карта ликвидаций: плечо монеты — из справочников 11 бирж (у альткоинов 10–25×), доли выше предела — на предел; копия на диске — числа без округления",
@@ -1962,6 +1962,10 @@ say("карта ликвидаций: плечо монеты — из спра�
     and "levs_upto(max_lev(ex, sym, caps))" in _lmpy and "extra = sum(w for lev, w, _ in LEVS if lev > top)" in _lmpy
     and "[[[b, float(v)] for b, v in enumerate(g) if v > 0]" in _lmpy
     and os.path.exists(f"{APP}/tests/test_liqmap_levs.py") and "## 13. Плечо монеты по биржам" in read(f"{APP}/docs/check-liqmap-server.md"))
+say("карта ликвидаций: фандинг — по ставке своей биржи (нет её — средняя), карта без ставок в пути — «уточняется»",
+    'pts = (fund or {}).get(ex) or (fund or {}).get("*")' in _lmpy and "def clean_funds(" in _lmpy
+    and "return funds, not funds and sym in _st.fund_jobs" in _lmpy and "s not in _st.fund_jobs" in _lmpy
+    and "_fund_hist(sym, wt_liqmap.FUND_HOLD // 86400 + 1, series=True)" in api and 'LIQ_FUND_NAMES = {"XT": "XT.com"}' in api)
 _ci = read(f"{APP}/.github/workflows/tests.yml")
 say("CI: мутации карты ликвидаций — своим заданием с лимитом 75 минут (вместе со «Страхом и жадностью» не укладывались в 45)",
     "  mutation-liqmap:\n    runs-on: ubuntu-latest\n    timeout-minutes: 75" in _ci

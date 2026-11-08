@@ -392,8 +392,9 @@ BloFin, Delta India, HTX (и OrangeX, когда у него накопится 
 отвечает биржа (через relay).
 
 ## 12. Фандинг в модели
-Уровни платящей фандинг стороны сдвинуты на заплаченное за 7 дней
-(средняя ставка бирж, `_liq_funding`). Проверь, что ставки приходят, и
+Уровни платящей фандинг стороны сдвинуты на заплаченное за 7 дней — по
+ставке своей биржи, у бирж без своего ряда — по средней (`_liq_funding`:
+{биржа: ряд, "*": средняя}). Проверь, что ставки приходят, и
 сверь модель с настоящими ликвидациями (liq_ev) с фандингом и без: у монет
 с сильным перекосом фандинга (выбери 3–5 с |ставкой| > 0,1 % за 8 ч из
 доски фандинга) совпадение должно не ухудшиться.
@@ -402,9 +403,11 @@ cd ~/WalletTracker && PYTHONDONTWRITEBYTECODE=1 timeout 600 python3 - <<'PY'
 import time
 import whale_api as api, wt_liqmap as lm
 for sym in ("BTC", "HUMA", "BEAT"):
-    f = api._liq_funding(sym)
+    funds = api._liq_funding(sym)
+    f = funds.get("*") or []
     avg = sum(r for _, r in f) / len(f) * 100 if f else float("nan")
-    print(f"{sym}: ставок {len(f)}, средняя за 8 ч {avg:+.3f} %, последняя {f[-1][1] * 100 if f else float('nan'):+.3f} %")
+    own = {ex: round(p[-1][1] * 100, 4) for ex, p in funds.items() if ex != "*" and p}
+    print(f"{sym}: средняя за 8 ч {avg:+.3f} %, последние по биржам {own}")
     for use in (False, True):
         lm._st.fund.clear()
         lm.set_funding(api._liq_funding if use else None)

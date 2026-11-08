@@ -12727,7 +12727,11 @@ def _fund_aliases(name: str, sym: str) -> list:
     return [sym, f"k{sym}"] if name == "Hyperliquid" else [sym, f"1000{sym}", f"1000000{sym}"]
 
 
-def _fund_hist(sym: str, days: int) -> dict:
+def _fund_hist(sym: str, days: int, series: bool = False) -> dict:
+    """История фандинга монеты по биржам: средняя по 8-часовым периодам
+    (bars), последняя ставка каждой биржи (ex). series — ещё и ряд каждой
+    биржи [(время с, ставка за 8 ч, доля)] — для карты ликвидаций, в ответ
+    экрана интереса он не идёт."""
     start = (now() - days * 86400) * 1000
     raw: dict = {}
 
@@ -12749,6 +12753,7 @@ def _fund_hist(sym: str, days: int) -> dict:
         list(pool.map(one, FUND_HIST_EX))
     per: dict = {}
     ex = []
+    own: dict = {}
     for name, rows in raw.items():
         gaps = sorted(rows[i + 1][0] - rows[i][0] for i in range(len(rows) - 1))
         step_h = max(1.0, round(gaps[len(gaps) // 2] / 3.6e6))
@@ -12756,6 +12761,7 @@ def _fund_hist(sym: str, days: int) -> dict:
         for t, r in rows:
             b = t // 28_800_000 * 28800
             per.setdefault(b, {}).setdefault(name, []).append(r * k)
+        own[name] = [(int(t // 1000), r * k) for t, r in rows]
         last = rows[-1][1] * k
         ex.append([name, round(last * 100, 5), round(last * 3 * 365 * 100, 2), int(step_h)])
     bars = []
@@ -12764,15 +12770,27 @@ def _fund_hist(sym: str, days: int) -> dict:
         bars.append([b, round(sum(vals) / len(vals) * 100, 5)])
     ex.sort(key=lambda x: -abs(x[1]))
     avg = sum(x[1] for x in ex) / len(ex) if ex else 0.0
-    return {"ex": ex, "bars": bars, "avg": round(avg, 5), "apr": round(avg * 3 * 365, 2), "days": days}
+    out = {"ex": ex, "bars": bars, "avg": round(avg, 5), "apr": round(avg * 3 * 365, 2), "days": days}
+    if series:
+        out["series"] = own
+    return out
 
 
-def _liq_funding(sym: str) -> list:
-    """Фандинг монеты для карты ликвидаций: средняя ставка бирж за 8 часов
-    (доля) по периодам за FUND_HOLD с запасом в сутки."""
-    got = _fund_hist(sym, wt_liqmap.FUND_HOLD // 86400 + 1)
-    return [(int(b), float(v) / 100) for b, v in got.get("bars") or []
-            if isinstance(b, int) and isinstance(v, (int, float)) and not isinstance(v, bool)]
+# Имена бирж в истории фандинга, что пишутся на карте иначе.
+LIQ_FUND_NAMES = {"XT": "XT.com"}
+
+
+def _liq_funding(sym: str) -> dict:
+    """Фандинг монеты для карты ликвидаций, ставка за 8 часов (доля), за
+    FUND_HOLD с запасом в сутки: {биржа: ряд} — позиции каждой биржи платят
+    свою ставку (у HUMA шорты OKX платили −0,33 % за 8 ч при средней −0,77 %);
+    "*" — средняя по биржам, для бирж без своего ряда."""
+    got = _fund_hist(sym, wt_liqmap.FUND_HOLD // 86400 + 1, series=True)
+    out: dict = {"*": [(int(b), float(v) / 100) for b, v in got.get("bars") or []
+                       if isinstance(b, int) and isinstance(v, (int, float)) and not isinstance(v, bool)]}
+    for name, rows in (got.get("series") or {}).items():
+        out[LIQ_FUND_NAMES.get(name, name)] = rows
+    return out
 
 
 wt_liqmap.set_funding(_liq_funding)

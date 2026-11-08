@@ -35,8 +35,9 @@
     с монеты позиции — из маржи, и её ликвидация подходит к цене: у лонгов
     уровень растёт, у шортов — опускается, на всё, что заплачено. Цена, что
     прошла сдвинутый уровень, ликвидировала позицию, хотя исходный не
-    задела. Ставка — средняя по биржам (set_funding), за последние
-    FUND_HOLD: кто держит дольше, обычно доливает маржу. Получающая сторона
+    задела. Ставка — своя у каждой биржи (set_funding), нет своей — средняя
+    по биржам; за последние FUND_HOLD: кто держит дольше, обычно доливает
+    маржу. Получающая сторона
     не сдвигается: на многих биржах полученное идёт на баланс, а не в
     маржу позиции. На падении интереса это не сказывается — только на
     уровнях;
@@ -84,9 +85,11 @@ Json = Any
 Row = tuple[int, float, float, float, float, float]
 Gather = Callable[[str, str, int], tuple[dict[str, list[Row]], list[Row] | None]]
 Price = Callable[[str], float | None]
-# Фандинг монеты: [(начало периода unix с, ставка за 8 часов, доля)] — средняя
-# по биржам; положительная — лонги платят шортам.
+# Фандинг монеты: [(начало периода unix с, ставка за 8 часов, доля)];
+# положительная — лонги платят шортам. По биржам: {биржа: ряд}, "*" — средняя
+# для бирж без своего ряда.
 FundPoint = tuple[int, float]
+Funds = dict[str, list[FundPoint]]
 Funding = Callable[[str], object]
 # Наибольшее плечо монеты по биржам: fn(монета) → {биржа: плечо}.
 Levs = Callable[[str], object]
@@ -426,6 +429,17 @@ def clean_fund(points: object) -> list[FundPoint]:
     return [(t, out[t]) for t in sorted(out)]
 
 
+def clean_funds(raw: object) -> Funds | None:
+    """Ставки по биржам ({биржа: ряд}, "*" — средняя) без мусора; ряд без
+    единой годной ставки выпадает. Просто ряд — это средняя. Не то — None."""
+    if isinstance(raw, (list, tuple)):
+        raw = {"*": raw}
+    if not isinstance(raw, dict):
+        return None
+    out = {ex: pts for ex, v in raw.items() if isinstance(ex, str) and 0 < len(ex) <= 40 and (pts := clean_fund(v))}
+    return out
+
+
 def _fund_paid(points: list[FundPoint], a: float, b: float, end: int) -> tuple[float, float]:
     """Сколько за [a, b) заплатили лонги и шорты, доля позиции: ставка точки
     действует до следующей, но не дольше своего периода (FUND_PERIOD) и не
@@ -607,7 +621,7 @@ def candle_edges(rows: list[Row], n: int = 48) -> list[int]:
 
 
 def make_state(sym: str, rng: str, got: dict[str, list[Row]], ref: list[Row], px: float,  # noqa: PLR0913 — сборка целиком
-               at: int, last: Row | None = None, fund: list[FundPoint] | None = None,
+               at: int, last: Row | None = None, fund: Funds | None = None,
                caps: dict[str, int] | None = None) -> dict[str, Json]:
     """Сборка карты: позиции всех бирж по сетке вокруг цены px (в монетах,
     сглаженные), свечи и путь цены опорной биржи. Ответ из неё — render().
@@ -616,8 +630,9 @@ def make_state(sym: str, rng: str, got: dict[str, list[Row]], ref: list[Row], px
     снимка. Без хвоста — идущая свеча окна. Крупная свеча тут не годится: её
     минимум за сутки сжёг бы позиции, открытые уже после него.
 
-    fund — ставки фандинга монеты (clean_fund): уровни платящей стороны
-    сдвигаются на заплаченное к моменту at. caps — наибольшее плечо монеты
+    fund — ставки фандинга монеты по биржам (clean_funds): уровни платящей
+    стороны сдвигаются на заплаченное к моменту at, по ставке своей биржи
+    (нет её — средней "*"). caps — наибольшее плечо монеты
     по биржам (max_lev)."""
     lo, step = px * (1 - SPAN), px * SPAN * 2 / FINE
     g_n = len(GROUPS)
@@ -625,8 +640,9 @@ def make_state(sym: str, rng: str, got: dict[str, list[Row]], ref: list[Row], px
     short_b = [[0.0] * BUCKETS for _ in range(g_n)]
     seen = 0.0
     for ex, rows in got.items():
+        pts = (fund or {}).get(ex) or (fund or {}).get("*")
         lg, sg, mass = model(rows, lo, step, levs_upto(max_lev(ex, sym, caps)), since=ref[0][0],
-                             fund=(fund, at) if fund else None)
+                             fund=(pts, at) if pts else None)
         seen += mass
         for g in range(g_n):
             long_b[g] = [a + b for a, b in zip(long_b[g], lg[g], strict=True)]
@@ -711,7 +727,7 @@ class _State:
         # Фандинг: монета → (когда собран, ставки); идущие сборки; не ответили — когда.
         self.funding: Funding | None = None
         self.levs: Levs | None = None
-        self.fund: dict[str, tuple[float, list[FundPoint]]] = {}
+        self.fund: dict[str, tuple[float, Funds]] = {}
         self.fund_jobs: dict[str, threading.Thread] = {}
         self.fund_retry: dict[str, float] = {}
 
@@ -748,7 +764,8 @@ def _caps(sym: str) -> dict[str, int]:
 
 
 def set_funding(fn: Funding | None) -> None:
-    """Откуда брать фандинг: fn(монета) → [(начало периода, ставка за 8 ч)]."""
+    """Откуда брать фандинг: fn(монета) → {биржа: [(начало периода, ставка за
+    8 ч)]}, "*" — средняя (просто ряд — тоже средняя)."""
     _st.funding = fn
 
 
@@ -794,8 +811,7 @@ def _fund_fetch(sym: str) -> None:
     """Собрать ставки фандинга монеты (фоновый поток) и положить в кэш."""
     fn = _st.funding
     try:
-        raw = fn(sym) if fn else None
-        points: list[FundPoint] | None = clean_fund(raw) if isinstance(raw, (list, tuple)) else None
+        points = clean_funds(fn(sym) if fn else None)
     except Exception:  # noqa: BLE001 — биржи молчат: уровни без сдвига, спросим позже
         points = None
     with _lock:
@@ -813,7 +829,7 @@ def _fund_fetch(sym: str) -> None:
         _st.fund_jobs.pop(sym, None)
 
 
-def _fund(sym: str, wait: float) -> list[FundPoint]:
+def _fund(sym: str, wait: float) -> Funds:
     """Ставки фандинга монеты: свежие — из кэша; постарше, но не старше
     FUND_STALE, — тоже (а свежие собираются в фоне); нет — ждём не дольше wait."""
     with _lock:
@@ -837,7 +853,16 @@ def _fund(sym: str, wait: float) -> list[FundPoint]:
         job.join(wait)
     with _lock:
         hit = _st.fund.get(sym)
-        return hit[1] if hit and time.monotonic() - hit[0] < FUND_STALE else []
+        return hit[1] if hit and time.monotonic() - hit[0] < FUND_STALE else {}
+
+
+def _funds_now(sym: str) -> tuple[Funds, bool]:
+    """Ставки для сборки (ждём не дольше FUND_WAIT) и пометка: ставок ещё
+    нет, а их сбор в пути — карта без сдвига временная, следующий запрос
+    пересоберёт её, как только они придут."""
+    funds = _fund(sym, FUND_WAIT)
+    with _lock:
+        return funds, not funds and sym in _st.fund_jobs
 
 
 def _pre_fetch(sym: str) -> None:
@@ -944,6 +969,7 @@ def build(sym: str, rng: str, pre_wait: float = PRE_WAIT) -> dict[str, Json]:
     partial = False
     if got and ref:
         got, partial = _with_pre(sym, got, pre_wait)
+    funds, pending = _funds_now(sym)
     if not got or not ref:
         with _lock:
             _st.fails[key] = time.monotonic()
@@ -952,10 +978,10 @@ def build(sym: str, rng: str, pre_wait: float = PRE_WAIT) -> dict[str, Json]:
     px = ref[-1][3] if quote is None else quote
     fine = splice(ref, clean_rows(tail_ref))
     st = make_state(sym, rng, got, ref, px, _now(), fine[-1] if fine is not ref else None,
-                    _fund(sym, FUND_WAIT), _caps(sym))
+                    funds, _caps(sym))
     # Цена источника совпала с биржами — это та же монета (см. PX_MOVE).
     st["live"] = quote is not None
-    if partial:
+    if partial or pending:
         st["partial"] = True
     res = render(st, px)
     with _lock:
@@ -1041,7 +1067,7 @@ def liq_map(sym: object, rng: object, wait: float = COLD_WAIT) -> dict[str, Json
         hit = _st.hits.get(key)
         # Карта без предыстории (partial) — пересобрать, как только та
         # пришла (или сборка предыстории кончилась ничем).
-        early = hit is not None and hit[1].get("partial") is True and s not in _st.pre_jobs
+        early = hit is not None and hit[1].get("partial") is True and s not in _st.pre_jobs and s not in _st.fund_jobs
         job = _start(key) if hit is None or early or time.monotonic() - hit[0] >= TTL[key[1]] else None
         resting = hit is None and key in _st.fails and job is None
     res = _served(key)

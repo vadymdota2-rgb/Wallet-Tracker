@@ -131,12 +131,39 @@ class ModelTest(unittest.TestCase):
     def test_state_and_reply_carry_the_shift(self):
         data = rows()
         st0 = lm.make_state("BTC", "7d", {"OKX": data}, data, 100.0, END)
-        st1 = lm.make_state("BTC", "7d", {"OKX": data}, data, 100.0, END, None, every_hour(-0.01))
+        st1 = lm.make_state("BTC", "7d", {"OKX": data}, data, 100.0, END, None, {"*": every_hour(-0.01)})
         self.assertEqual(st0["L"], st1["L"])
         self.assertLess(sum(map(sum, st1["S"])), sum(map(sum, st0["S"])))
         self.assertLess(st1["seen"], st0["seen"])
         res = lm.render(st1, 100.0)
         self.assertTrue(res["ok"])
+
+    def test_each_exchange_pays_its_own_rate(self):
+        # OKX — своя ставка (−1 %), Gate — своей нет: средняя "*" (0 — сдвига нет).
+        data = rows()
+        funds = {"OKX": every_hour(-0.01), "*": every_hour(0.0)}
+        st = lm.make_state("BTC", "7d", {"OKX": data, "Gate": data}, data, 100.0, END, None, funds)
+        only_okx = lm.make_state("BTC", "7d", {"OKX": data}, data, 100.0, END, None, funds)
+        only_gate = lm.make_state("BTC", "7d", {"Gate": data}, data, 100.0, END, None, funds)
+        plain = lm.make_state("BTC", "7d", {"Gate": data}, data, 100.0, END)
+        self.assertEqual(only_gate["S"], plain["S"])  # средняя 0 — Gate без сдвига
+        self.assertLess(sum(map(sum, only_okx["S"])), sum(map(sum, plain["S"])))
+        both = [[a + b for a, b in zip(x, y, strict=True)] for x, y in zip(only_okx["S"], only_gate["S"], strict=True)]
+        for g in range(len(both)):
+            for b in range(len(both[g])):
+                self.assertAlmostEqual(st["S"][g][b], both[g][b], places=6)
+        # Своей нет и средней нет — без сдвига.
+        self.assertEqual(lm.make_state("BTC", "7d", {"Gate": data}, data, 100.0, END, None, {"OKX": every_hour(-0.01)})["S"],
+                         plain["S"])
+
+    def test_clean_funds(self):
+        self.assertEqual(lm.clean_funds([(T0, 0.01)]), {"*": [(T0, 0.01)]})
+        got = lm.clean_funds({"OKX": [(T0, -0.01), (T0 + 1, "x")], "Gate": [], "": [(T0, 0.01)], 5: [(T0, 0.01)],
+                              "A" * 41: [(T0, 0.01)], "Bad": "x", "*": [(T0, 0.002)]})
+        self.assertEqual(got, {"OKX": [(T0, -0.01)], "*": [(T0, 0.002)]})
+        for junk in (None, "x", 5, True):
+            self.assertIsNone(lm.clean_funds(junk))
+        self.assertEqual(lm.clean_funds({}), {})
 
 
 class CacheTest(unittest.TestCase):
@@ -154,38 +181,39 @@ class CacheTest(unittest.TestCase):
 
         def fn(sym):
             calls.append(sym)
-            return [(T0, -0.01), (T0 + 8 * H, "x")]
+            return {"OKX": [(T0, -0.01), (T0 + 8 * H, "x")], "*": [(T0, 0.001)]}
 
         lm.set_funding(fn)
-        self.assertEqual(lm._fund("BTC", 5), [(T0, -0.01)])
-        self.assertEqual(lm._fund("BTC", 5), [(T0, -0.01)])
+        want = {"OKX": [(T0, -0.01)], "*": [(T0, 0.001)]}
+        self.assertEqual(lm._fund("BTC", 5), want)
+        self.assertEqual(lm._fund("BTC", 5), want)
         self.assertEqual(calls, ["BTC"])  # свежие — из кэша
         # Сбой источника: уровни без сдвига, повтор не раньше FUND_RETRY.
         lm.set_funding(lambda _s: 1 / 0)
-        self.assertEqual(lm._fund("ETH", 5), [])
+        self.assertEqual(lm._fund("ETH", 5), {})
         self.wait_jobs()
         self.assertIn("ETH", lm._st.fund_retry)
-        self.assertEqual(lm._fund("ETH", 0), [])
+        self.assertEqual(lm._fund("ETH", 0), {})
         self.assertNotIn("ETH", lm._st.fund_jobs)
-        # Не список — тоже сбой, а пустой список — «ставок нет».
-        lm.set_funding(lambda _s: {"bars": []})
-        self.assertEqual(lm._fund("SOL", 5), [])
+        # Не ставки (строка) — тоже сбой, а пусто — «ставок нет».
+        lm.set_funding(lambda _s: "x")
+        self.assertEqual(lm._fund("SOL", 5), {})
         self.assertIn("SOL", lm._st.fund_retry)
-        lm.set_funding(lambda _s: [])
-        self.assertEqual(lm._fund("XRP", 5), [])
+        lm.set_funding(lambda _s: {})
+        self.assertEqual(lm._fund("XRP", 5), {})
         self.assertIn("XRP", lm._st.fund)
         lm.set_funding(None)
-        self.assertEqual(lm._fund("ADA", 5), [])
+        self.assertEqual(lm._fund("ADA", 5), {})
 
     def test_stale_is_served_while_refreshing_and_dropped_when_too_old(self):
         lm.set_funding(lambda _s: [(T0, 0.01)])
-        lm._st.fund["BTC"] = (time.monotonic() - lm.FUND_TTL - 1, [(T0, -0.02)])
-        self.assertEqual(lm._fund("BTC", 0), [(T0, -0.02)])  # старая — сразу
+        lm._st.fund["BTC"] = (time.monotonic() - lm.FUND_TTL - 1, {"*": [(T0, -0.02)]})
+        self.assertEqual(lm._fund("BTC", 0), {"*": [(T0, -0.02)]})  # старая — сразу
         self.wait_jobs()
-        self.assertEqual(lm._fund("BTC", 0), [(T0, 0.01)])  # а свежая уже в кэше
+        self.assertEqual(lm._fund("BTC", 0), {"*": [(T0, 0.01)]})  # а свежая уже в кэше
         lm.set_funding(lambda _s: 1 / 0)
-        lm._st.fund["ETH"] = (time.monotonic() - lm.FUND_STALE - 1, [(T0, -0.02)])
-        self.assertEqual(lm._fund("ETH", 5), [])
+        lm._st.fund["ETH"] = (time.monotonic() - lm.FUND_STALE - 1, {"*": [(T0, -0.02)]})
+        self.assertEqual(lm._fund("ETH", 5), {})
 
     def test_cache_is_bounded(self):
         lm.set_funding(lambda _s: [(T0, 0.001)])
@@ -213,17 +241,73 @@ class CacheTest(unittest.TestCase):
         s1 = sum(sum(b["S"]) for b in shifted["buckets"])
         self.assertLess(s1, s0)
         self.assertEqual(sum(sum(b["L"]) for b in plain["buckets"]), sum(sum(b["L"]) for b in shifted["buckets"]))
+        self.assertNotIn("partial", shifted)
+
+    def test_map_without_rates_in_flight_is_temporary(self):
+        # Ставки ещё собираются — карта без сдвига помечена «уточняется», а
+        # как только они пришли, следующий запрос её пересобирает.
+        now = lm._now() // H * H
+        data = [(now - (N - 1 - i) * H, r[1], r[2], r[3], r[4], r[5]) for i, r in enumerate(rows())]
+        lm.set_gather(lambda _s, period, _n: ({"OKX": data}, data) if period == "1h" else ({}, None))
+        self.addCleanup(lm.set_gather, None)
+        gate = threading.Event()
+
+        def slow(_sym):
+            gate.wait(10)
+            return {"*": every_hour(-0.01, now - 10 * 86400, now + H)}
+
+        lm.set_funding(slow)
+        self.addCleanup(lm.set_funding, None)
+        with mock.patch.object(lm, "FUND_WAIT", 0.05):
+            first = lm.build("BTC", "7d", pre_wait=0.0)
+        self.assertIs(first.get("partial"), True)
+        lm._st.hits[("BTC", "7d")] = (time.monotonic(), *lm._st.hits[("BTC", "7d")][1:])
+        # Пока ставки в пути — без пересборки.
+        with mock.patch.object(lm, "_start", wraps=lm._start) as start:
+            lm.liq_map("BTC", "7d", 0)
+            self.assertEqual(start.call_count, 0)
+        gate.set()
+        self.wait_jobs()
+        lm.liq_map("BTC", "7d", 0)  # отдаёт прежнюю, пересборка — в фоне
+        for job in list(lm._st.jobs.values()):
+            job.join(10)
+        later = lm.liq_map("BTC", "7d", 0)
+        self.assertTrue(later["ok"])
+        self.assertNotIn("partial", later)
+        self.assertLess(sum(sum(b["S"]) for b in later["buckets"]), sum(sum(b["S"]) for b in first["buckets"]))
 
 
 class ServerTest(unittest.TestCase):
     def test_server_rates_are_fractions_per_8h(self):
-        bars = {"bars": [[T0, -1.5], [T0 + 28800, 0.01], [T0 + 57600, None], ["x", 1], [T0 + 86400, True]]}
-        with mock.patch.object(api, "_fund_hist", return_value=bars) as fh:
+        hist = {"bars": [[T0, -1.5], [T0 + 28800, 0.01], [T0 + 57600, None], ["x", 1], [T0 + 86400, True]],
+                "series": {"OKX": [(T0, -0.0033)], "XT": [(T0, -0.009)]}}
+        with mock.patch.object(api, "_fund_hist", return_value=hist) as fh:
             got = api._liq_funding("HUMA")
-        fh.assert_called_once_with("HUMA", lm.FUND_HOLD // 86400 + 1)
-        self.assertEqual(got, [(T0, -0.015), (T0 + 28800, 0.0001)])
+        fh.assert_called_once_with("HUMA", lm.FUND_HOLD // 86400 + 1, series=True)
+        self.assertEqual(got, {"*": [(T0, -0.015), (T0 + 28800, 0.0001)], "OKX": [(T0, -0.0033)],
+                               "XT.com": [(T0, -0.009)]})  # имя биржи — как на карте
         with mock.patch.object(api, "_fund_hist", return_value={}):
-            self.assertEqual(api._liq_funding("HUMA"), [])
+            self.assertEqual(api._liq_funding("HUMA"), {"*": []})
+
+    def test_series_per_exchange_and_not_in_the_screen_reply(self):
+        def rows_of(name, alias, start):
+            if name == "OKX" and alias == "HUMA":
+                return [(start + h * 3_600_000, -0.0033) for h in range(1, 6)]  # раз в час
+            if name == "Gate" and alias == "HUMA":
+                return [(start + h * 28_800_000, -0.01) for h in range(1, 3)]  # раз в 8 часов
+            return []
+
+        with mock.patch.object(api, "_fund_rows", rows_of), mock.patch.object(api, "now", return_value=END):
+            plain = api._fund_hist("HUMA", 8)
+            full = api._fund_hist("HUMA", 8, series=True)
+        self.assertNotIn("series", plain)  # ответ экрана интереса — как был
+        self.assertEqual({k: v for k, v in full.items() if k != "series"}, plain)
+        okx = full["series"]["OKX"]
+        self.assertEqual(len(okx), 5)
+        self.assertAlmostEqual(okx[0][1], -0.0033 * 8)  # часовая — к ставке за 8 часов
+        self.assertAlmostEqual(full["series"]["Gate"][0][1], -0.01)
+        self.assertEqual(type(okx[0][0]), int)
+
 
     def test_wired(self):
         with open(os.path.join(ROOT, "whale_api.py"), encoding="utf-8") as f:
