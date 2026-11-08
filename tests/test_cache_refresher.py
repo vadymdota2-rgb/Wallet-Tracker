@@ -1,6 +1,6 @@
 """Кэш разделов обновляется сам (whale_api.cache_refresher), а не запросом человека.
 
-Халвинг, страх и жадность, альтсезон, доминация и ETF: раз в CACHE_TICK
+Халвинг, страх и жадность, альтсезон, доминация, ETF и рынки в меню: раз в CACHE_TICK
 сервер спрашивает каждый модуль, и ответ старше своего TTL модуль
 пересобирает в фоне. Человек всегда берёт готовый кэш.
 """
@@ -40,7 +40,8 @@ def one_tick(asked: dict, raising: str = "") -> str:
     err = io.StringIO()
     with mock.patch.object(api, "halving_data", make("halving")), mock.patch.object(api, "fng_data", make("fng")), \
             mock.patch.object(api, "dom_data", make("dom")), mock.patch.object(api, "mcap_data", make("mcap")), \
-            mock.patch.object(api, "etf_data", make("etf")), mock.patch.object(api.time, "sleep", sleep), \
+            mock.patch.object(api, "etf_data", make("etf")), mock.patch.object(api, "markets_refresh", make("markets")), \
+            mock.patch.object(api.time, "sleep", sleep), \
             mock.patch("sys.stderr", err), unittest.TestCase().assertRaises(_Stop):
         api.cache_refresher()
     if sleeps != [5, api.CACHE_TICK]:
@@ -52,7 +53,7 @@ class CacheRefresherTest(unittest.TestCase):
     def test_every_section_is_asked_each_tick_without_waiting_for_the_build(self):
         asked: dict = {}
         self.assertEqual(one_tick(asked), "")
-        self.assertEqual(set(asked), {"halving", "fng", "dom", "mcap", "etf"})
+        self.assertEqual(set(asked), {"halving", "fng", "dom", "mcap", "etf", "markets"})
         # Модули с ожиданием холодной сборки — без ожидания: поток сам не
         # ждёт, сборка идёт в фоне.
         self.assertEqual((asked["fng"], asked["dom"], asked["mcap"]), (0, 0, 0))
@@ -61,14 +62,14 @@ class CacheRefresherTest(unittest.TestCase):
     def test_one_failing_section_does_not_stop_the_others(self):
         asked: dict = {}
         log = one_tick(asked, raising="dom")
-        self.assertEqual(set(asked), {"halving", "fng", "dom", "mcap", "etf"})
+        self.assertEqual(set(asked), {"halving", "fng", "dom", "mcap", "etf", "markets"})
         self.assertIn("обновление кэша dom: RuntimeError: boom", log)
 
     def test_runs_in_its_own_thread_not_in_the_long_liquidation_round(self):
         warm = inspect.getsource(api.warmup)
         self.assertIn('threading.Thread(target=cache_refresher, daemon=True, name="cache").start()', warm)
         liq = inspect.getsource(api.liq_warm_refresher)
-        for fn in ("fng_data", "dom_data", "mcap_data", "etf_data", "halving_data"):
+        for fn in ("fng_data", "dom_data", "mcap_data", "etf_data", "halving_data", "markets_refresh"):
             self.assertNotIn(fn, liq, fn)
 
     def test_stale_halving_is_rebuilt_by_the_refresher_not_by_a_person(self):

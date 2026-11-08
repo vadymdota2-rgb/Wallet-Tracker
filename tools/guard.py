@@ -2015,14 +2015,16 @@ say("рынки в меню как халвинг — кэш и хранение
     and os.path.isfile(f"{APP}/tests/test_markets_route.py") and "tests/test_markets_route.py" in read(f"{APP}/.github/workflows/tests.yml")
     and "def test_no_dead_texts_or_exports(self):" in read(f"{APP}/tests/test_markets_policy.py")
     and "### Рынки в меню" in read(f"{APP}/README.md") and "рынки в меню живут на устройстве шесть часов" in read(f"{APP}/tests/storage.test.ts"))
-say("рынки в меню — нагрузка и защита: каждый запрос к источнику — с пределом размера ответа (RESP_MAX), одна сборка при запуске вместо очереди ждущих, фонового опроса нет; «ⓘ» — рисунок, а не знак шрифта, место под палец ≥ 24 точек; проверено на экранах от 280 точек до компьютера",
+say("рынки в меню — нагрузка и защита: каждый запрос к источнику — с пределом размера ответа (RESP_MAX), сборка при запуске и раз в минуту сервером, запрос человека только читает кэш; «ⓘ» — рисунок, а не знак шрифта, место под палец ≥ 24 точек; проверено на экранах от 280 точек до компьютера",
     api.count("max_bytes=wt_markets.RESP_MAX") == 5 and "def read_capped(" in api
-    and "    wt_markets.markets_data(0)\n" in api.split("def warmup() -> None:")[1].split("\ndef ")[0]
+    and "    markets_refresh()\n" in api.split("def warmup() -> None:")[1].split("\ndef ")[0]
+    and '        ("markets", lambda: markets_refresh()),\n' in api.split("def _cache_modules() -> tuple:")[1].split("\ndef ")[0]
+    and "def test_people_only_read_the_cache(" in read(f"{APP}/tests/test_markets.py")
     and "function InfoIcon()" in _mk_tsx and ">ⓘ<" not in _mk_tsx and "padding: 7px; margin-block: -7px;" in _mk_css
     and "Galaxy Fold снаружи" in read(f"{APP}/tests/e2e/markets.e2e.test.ts")
     and "class HugeBodyTest(" in read(f"{APP}/tests/test_markets_security.py"))
 say("рынки в меню как халвинг — максимальная нагрузка: время ответа — время цен, приложение спрашивает только когда могли появиться новые (marketsDue), те же цифры — тот же объект («304»), все на холодном сервере ждут одну сборку, без потоков — сборка в том же потоке, память и потоки не растут; замер нагрузки — tools/load-markets.py и в CI",
-    "res = _st.hit[1]  # те же цифры — тот же объект" in read(f"{APP}/wt_markets.py") and "    if job is None:\n        return build()\n" in read(f"{APP}/wt_markets.py")
+    "res = _st.hit[1]  # те же цифры — тот же объект" in read(f"{APP}/wt_markets.py") and "    if job is None and not rest:\n        build()\n" in read(f"{APP}/wt_markets.py")
     and "marketsDue(last.current?.at" in _mk_tsx and "export function marketsDue(" in read(f"{APP}/src/lib/markets.ts")
     and all(t in read(f"{APP}/tests/test_markets.py") for t in ("def test_cold_start_race_builds_once(", "def test_memory_and_threads_do_not_grow(", "def test_answer_time_is_when_prices_were_taken("))
     and os.path.isfile(f"{APP}/tools/load-markets.py") and "python tools/load-markets.py 2 3 304" in read(f"{APP}/.github/workflows/tests.yml"))

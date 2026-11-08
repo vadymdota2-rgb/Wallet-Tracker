@@ -93,7 +93,7 @@ PY = [
     ("and all(_candles(raw.get(c)) for c in FX_HL)", "and any(_candles(raw.get(c)) for c in FX_HL)", "свечи — все валюты"),
     ("isinstance(c, dict) and _num(c.get(\"t\")) > 0 and 0 < _num(c.get(\"c\")) < PX_MAX for c in", "isinstance(c, dict) for c in", "свеча — со временем и ценой"),
     ("            if time.monotonic() < end:\n                one(*item)\n", "            pass\n", "нет потоков — спрашиваем сами"),
-    ("    if job is None:\n        return build()\n", "    if job is None:\n        return {\"ok\": False, \"error\": \"no_data\"}\n", "нет потоков — сборка в том же потоке"),
+    ("    if job is None and not rest:\n        build()\n", "    if False:\n        build()\n", "нет потоков — сборка в том же потоке"),
     ("            if _st.hit and _st.hit[1] == res:\n                res = _st.hit[1]", "            if False:\n                res = _st.hit[1]", "те же цифры — тот же объект"),
     ("    res = compute(parts, _now(), min(dex_at) if dex_at else None)", "    res = compute(parts, _now())", "время ответа — время цен"),
     ("    res = compute(parts, _now(), min(dex_at) if dex_at else None)", "    res = compute(parts, _now(), max(dex_at) if dex_at else None)", "время ответа — самые старые цены"),
@@ -111,9 +111,11 @@ PY = [
     ("elif (old := slow.get(name)) and time.monotonic() - old[0] < SLOW[name][1]:", "elif False:", "источник молчит — прошлый годный"),
     ("            if _good(name, v):", "            if v is not None:", "мусор не запоминается"),
     ("    with got:  # опоздавший источник — уже без него\n        return dict(parts), dict(since)\n", "    return parts, since\n", "опоздавший источник не меняет ответ"),
-    ("if hit and time.monotonic() - hit[0] < TTL:", "if hit:", "свежий ответ — TTL"),
+    ("        hit, job = _live(_st.hit), _st.job\n", "        hit, job = _live(_st.hit), _start()\n", "запрос человека сборку не начинает"),
+    ("    if hit is None and job is not None and wait > 0:", "    if False:", "сервер только запущен — ждём идущую сборку"),
+    ("    elif job is not None and wait > 0:\n        job.join(wait)", "    elif False:\n        job.join(wait)", "обновление ждёт сборку, когда просят"),
     ("return hit if hit and time.monotonic() - hit[0] < STALE_MAX else None", "return hit", "старый ответ не отдаётся"),
-    ("        if time.monotonic() - _st.fail < FAIL_WAIT:\n", "        if False:\n", "после сбоя — пауза"),
+    ("        rest = time.monotonic() - _st.fail < FAIL_WAIT\n", "        rest = False\n", "после сбоя — пауза"),
 ]
 TS = [
     ('if (!isObj(raw) || raw["ok"] !== true ||', 'if (!isObj(raw) ||', "ok — только true"),

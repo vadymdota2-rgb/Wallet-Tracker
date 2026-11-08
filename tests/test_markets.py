@@ -280,7 +280,7 @@ class CacheTest(unittest.TestCase):
         # остаётся без ответа — источники спрашиваются по очереди в том же потоке.
         mk.set_sources({name: (lambda v=v: v) for name, v in PARTS.items()})
         with mock.patch.object(mk.threading.Thread, "start", side_effect=RuntimeError("can't start new thread")):
-            res = mk.markets_data(0)
+            res = mk.refresh()
         self.assertTrue(res["ok"])
         self.assertEqual(len(res["items"]), len(mk.KEYS))
         self.assertIsNone(mk._st.job)
@@ -299,7 +299,9 @@ class CacheTest(unittest.TestCase):
 
         mk.set_sources({name: slow(name, v) for name, v in PARTS.items()})
         out: list = []
+        mk.refresh()  # запуск сервера: сборка в фоне
         ts = [threading.Thread(target=lambda: out.append(mk.markets_data(5))) for _ in range(100)]
+        ts += [threading.Thread(target=mk.refresh) for _ in range(20)]  # и круги обновления разом
         for t in ts:
             t.start()
         for t in ts:
@@ -367,18 +369,35 @@ class CacheTest(unittest.TestCase):
         self.assertLessEqual(threading.active_count(), threads)
         self.assertLessEqual(set(mk._st.slow), set(mk.SLOW))
 
+    def test_people_only_read_the_cache(self):
+        # Все видят кэш: запросы людей — даже тысяча, даже со старым ответом
+        # — сборку не начинают и к источникам не ходят. Обновляет только сервер.
+        calls: list = []
+        mk.set_sources({name: (lambda v=v, n=name: calls.append(n) or v) for name, v in PARTS.items()})
+        self.assertEqual(mk.markets_data(0), {"ok": False, "error": "no_data"})  # кэша нет — сборку не начинает
+        self.assertIsNone(mk._st.job)
+        self.assertEqual(calls, [])
+        with mock.patch.object(mk, "_now", return_value=NOW):
+            first = mk.refresh(5)
+            self.assertTrue(first["ok"])
+            self.assertEqual(len(calls), len(PARTS))
+            mk._st.hit = (time.monotonic() - 20 * 60, first)  # двадцать минут без обновления
+            for _ in range(1000):
+                self.assertIs(mk.markets_data(), first)
+            self.assertIsNone(mk._st.job)
+            self.assertEqual(len(calls), len(PARTS))
+
     def test_cold_then_cached_then_background(self):
         calls: list = []
         mk.set_sources({name: (lambda v=v, n=name: calls.append(n) or v) for name, v in PARTS.items()})
         with mock.patch.object(mk, "_now", return_value=NOW):
-            first = mk.markets_data(5)
+            first = mk.refresh(5)
             self.assertTrue(first["ok"])
             self.assertEqual(len(calls), len(PARTS))
-            self.assertIs(mk.markets_data(5), first)  # свежий — из кэша
+            self.assertIs(mk.markets_data(5), first)  # из кэша
             self.assertEqual(len(calls), len(PARTS))
-            # Старый — сразу, а свежий собирается в фоне.
-            mk._st.hit = (time.monotonic() - mk.TTL - 1, first)
-            self.assertIs(mk.markets_data(0), first)
+            # Круг обновления: старый ответ — сразу, свежий собирается в фоне.
+            self.assertIs(mk.refresh(), first)
             self.wait()
             # Источники из памяти (площадки Hyperliquid, ЕЦБ, свечи) свежи — их не спрашиваем.
             self.assertEqual(len(calls), 2 * len(PARTS) - len(mk.SLOW))
@@ -513,17 +532,17 @@ class CacheTest(unittest.TestCase):
             raise OSError("нет сети")
 
         mk.set_sources({name: boom for name in PARTS})
-        self.assertEqual(mk.markets_data(5), {"ok": False, "error": "no_data"})
+        self.assertEqual(mk.refresh(5), {"ok": False, "error": "no_data"})
         self.wait()
         # После сбоя — пауза FAIL_WAIT: новая сборка не начинается, источники не трогаем.
         calls: list = []
         mk.set_sources({name: (lambda: calls.append(1)) for name in PARTS})
-        self.assertEqual(mk.markets_data(0), {"ok": False, "error": "no_data"})
+        self.assertEqual(mk.refresh(5), {"ok": False, "error": "no_data"})
         self.assertIsNone(mk._st.job)
         self.assertEqual(calls, [])
         mk._st.fail = time.monotonic() - mk.FAIL_WAIT - 1
         mk.set_sources({})
-        self.assertEqual(mk.markets_data(5), {"ok": False, "error": "no_data"})
+        self.assertEqual(mk.refresh(5), {"ok": False, "error": "no_data"})
 
     def test_old_answer_is_not_served(self):
         # Источники молчат дольше STALE_MAX — меню возвращается к заголовку,
@@ -563,6 +582,7 @@ class CacheTest(unittest.TestCase):
         mk.set_sources({"xyz": lambda: XYZ, "para": lambda: gate.wait(10) and PARA})
         with mock.patch.object(mk, "_now", return_value=NOW):
             t0 = time.monotonic()
+            mk.refresh()
             self.assertEqual(mk.markets_data(0.2), {"ok": False, "error": "no_data"})
             self.assertLess(time.monotonic() - t0, 2)
             gate.set()

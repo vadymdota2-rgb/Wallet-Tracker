@@ -147,6 +147,7 @@ class HostileTimingTest(unittest.TestCase):
         mk.set_sources({**{n: (lambda v=v: v) for n, v in PARTS.items()}, "ecb": lambda: gate.wait(30) and PARTS["ecb"]})
         with mock.patch.object(mk, "_now", return_value=NOW):
             t0 = time.monotonic()
+            mk.refresh()
             first = mk.markets_data(0.3)
             self.assertLess(time.monotonic() - t0, 2)
             self.assertEqual(first, {"ok": False, "error": "no_data"})
@@ -164,12 +165,13 @@ class HostileTimingTest(unittest.TestCase):
             raise OSError("нет сети")
 
         mk.set_sources(dict.fromkeys(PARTS, boom))
-        mk.markets_data(5)
+        mk.refresh(5)
         job = mk._st.job
         if job is not None:
             job.join(5)
         n = len(calls)
         for _ in range(50):
+            mk.refresh()
             mk.markets_data(0)
         self.assertEqual(len(calls), n)  # после сбоя — пауза FAIL_WAIT, а не запрос на каждый вызов
 

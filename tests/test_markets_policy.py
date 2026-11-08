@@ -9,6 +9,7 @@
 оговорки о товарных знаках и источники — на месте.
 """
 import ast
+import inspect
 import json
 import os
 import re
@@ -94,10 +95,18 @@ class PolicyTest(unittest.TestCase):
         self.assertIn("for c in wt_markets.FX_HL}", block)
         # Каждый запрос — с пределом размера ответа (гигабайт не съест память).
         self.assertEqual(block.count("max_bytes=wt_markets.RESP_MAX"), block.count("hl_post(") + block.count("get_json("))
-        # Одна сборка при запуске — и никакого фонового опроса.
+        # Все видят кэш: обновляет его только сервер — при запуске и раз в
+        # минуту (cache_refresher); запрос человека только читает.
         src = read("whale_api.py")
-        self.assertIn("    wt_markets.markets_data(0)\n", src.split("def warmup() -> None:")[1].split("\ndef ")[0])
-        self.assertNotIn("markets", src.split("def _cache_modules() -> tuple:")[1].split("\ndef ")[0])
+        self.assertIn("    markets_refresh()\n", src.split("def warmup() -> None:")[1].split("\ndef ")[0])
+        self.assertIn('        ("markets", lambda: markets_refresh()),\n', src.split("def _cache_modules() -> tuple:")[1].split("\ndef ")[0])
+        self.assertIs(api.markets_refresh, mk.refresh)
+        route = src.split('if path in ("/markets", "/api/markets"):')[1].split("return\n")[0]
+        self.assertNotIn("refresh", route)
+        self.assertNotIn("build", route)
+        reader = inspect.getsource(mk.markets_data)
+        for bad in ("_start(", "build(", "refresh("):
+            self.assertNotIn(bad, reader.split('"""')[2], bad)
         # Aster — без своих запросов: только память модуля фандинга.
         self.assertNotIn("asterdex", block)
         self.assertIn('    "aster": _mkt_aster,\n', block)
