@@ -15199,6 +15199,13 @@ def calendar_data() -> dict:
 # --- Рынки в меню (wt_markets.py) -------------------------------------------
 # Модуль сам в сеть не ходит: ответы источников отдаёт ему сервер. Deribit
 # здесь нет: их данные (и индекс DVOL) — только для личного пользования.
+def _mkt_fx():
+    t = now()
+    return {c: hl_post({"type": "candleSnapshot", "req": {"coin": f"xyz:{c}", "interval": "1h",
+                                                          "startTime": (t - 5 * 86400) * 1000, "endTime": t * 1000}}, 15)
+            for c in wt_markets.FX_HL}
+
+
 def _mkt_ecb():
     start = time.strftime("%Y-%m-%d", time.gmtime(now() - 10 * 86400))
     return get_json(f"https://api.frankfurter.dev/v1/{start}..?base=USD&symbols=EUR,JPY,GBP,CAD,SEK,CHF", 15)
@@ -15207,6 +15214,7 @@ def _mkt_ecb():
 wt_markets.set_sources({
     "xyz": lambda: hl_post({"type": "metaAndAssetCtxs", "dex": "xyz"}, 15),
     "para": lambda: hl_post({"type": "metaAndAssetCtxs", "dex": "para"}, 15),
+    "fx": _mkt_fx,
     "ecb": _mkt_ecb,
 })
 markets_data = wt_markets.markets_data

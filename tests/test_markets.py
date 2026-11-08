@@ -11,6 +11,7 @@ US 10Y, нефть WTI.
 что маршрут — для подписчиков.
 """
 import ast
+import calendar
 import json
 import math
 import os
@@ -36,13 +37,32 @@ def hl(markets: dict, delisted: tuple = ()) -> list:
 
 
 XYZ_M = {"xyz:SP500": (7373.1, 7392.9), "xyz:XYZ100": (26925, 26996), "xyz:GOLD": (4066.2, 4079.9),
-         "xyz:CL": (90.205, 89.617), "xyz:EUR": (1.1157, 1.1156), "xyz:JPY": (158.36, 158.29),
+         "xyz:CL": (90.205, 89.617), "xyz:EUR": (1.1157, 1.1156), "xyz:JPY": (158.36, 158.29), "xyz:GBP": (1.3349, 1.3338),
          "xyz:SILVER": (52, 52), "xyz:DXY": (97.15, 97.15), "xyz:VIX": (20, 20)}
 XYZ = hl(XYZ_M, delisted=("DXY", "VIX"))
 PARA = hl({"para:10Y": (4.875, 4.8777), "para:BTCD": (60.4, 60.3)})
 ECB = {"rates": {"2026-11-05": {"EUR": 0.89095, "JPY": 158.46, "GBP": 0.74299, "CAD": 1.3966, "SEK": 9.7866, "CHF": 0.81789},
                  "2026-11-06": {"EUR": 0.89566, "JPY": 158.33, "GBP": 0.74711, "CAD": 1.4066, "SEK": 9.8755, "CHF": 0.8189}}}
-PARTS = {"xyz": XYZ, "para": PARA, "ecb": ECB}
+# NOW — воскресенье 01:06 UTC: валютный рынок закрыт. Закрытия (17:00 по
+# Нью-Йорку, зимой — 22:00 UTC): пятница и четверг.
+FRI, THU = 1_794_002_400, 1_793_916_000
+WD = FRI - 7 * 3600  # пятница 15:00 UTC — рынок открыт
+CLOSE = {FRI: {"EUR": 1.115, "JPY": 158.35, "GBP": 1.3349}, THU: {"EUR": 1.1227, "JPY": 157.65, "GBP": 1.345}}
+DRIFT = {"EUR": 1.1301, "JPY": 157.1, "GBP": 1.3401}  # прочие часы, в том числе выходные
+
+
+def candles(cur: str, close: dict | None = None) -> list:
+    close = CLOSE if close is None else close
+    return [{"t": (end - 3600) * 1000, "c": str(close.get(end, {}).get(cur, DRIFT[cur]))}
+            for end in range(THU - 30 * 3600, NOW, 3600)]
+
+
+FX = {c: candles(c) for c in ("EUR", "JPY", "GBP")}
+PARTS = {"xyz": XYZ, "para": PARA, "fx": FX, "ecb": ECB}
+
+
+def want_dxy(day: str, eur: float, jpy: float, gbp: float) -> float:
+    return round(mk.dxy(dict(ECB["rates"][day], EUR=1 / eur, JPY=jpy, GBP=1 / gbp)), 3)
 
 
 def items(res: dict) -> dict:
@@ -70,21 +90,70 @@ class ComputeTest(unittest.TestCase):
             * 9.8755 ** 0.042 * 0.8189 ** 0.036
         self.assertAlmostEqual(mk.dxy(r), want, places=9)
         self.assertAlmostEqual(sum(abs(w) for _, w in mk.DXY_W), 1.0, places=9)
+
+
+    def test_dxy_weekend_is_friday_close_against_thursday(self):
+        # Как у TradingView: в выходные — закрытие пятницы и изменение за
+        # пятницу; выходные цены Hyperliquid (DRIFT) не берутся. EUR, JPY, GBP —
+        # свечи закрытия, CAD, SEK, CHF — фиксация ЕЦБ того же дня.
         px, prev = items(mk.compute(PARTS, NOW))["DXY"]
-        self.assertAlmostEqual(px, round(want, 3), places=6)
-        # Сутки назад: EUR и JPY — у Hyperliquid сутки назад, остальное — прошлый день ЕЦБ.
-        self.assertAlmostEqual(prev, round(mk.dxy(dict(ECB["rates"]["2026-11-05"], EUR=1 / 1.1156, JPY=158.29)), 3), places=6)
-        self.assertTrue(95 < px < 110)
+        self.assertEqual(px, want_dxy("2026-11-06", 1.115, 158.35, 1.3349))
+        self.assertEqual(prev, want_dxy("2026-11-05", 1.1227, 157.65, 1.345))
+        self.assertTrue(101 < prev < px < 103)
+
+    def test_dxy_weekday_is_live_against_last_close(self):
+        # Рынок открыт: сейчас — живые цены Hyperliquid и последняя фиксация ЕЦБ,
+        # против прошлого закрытия (четверг 17:00 по Нью-Йорку).
+        px, prev = items(mk.compute(PARTS, WD))["DXY"]
+        self.assertEqual(px, want_dxy("2026-11-06", 1.1157, 158.36, 1.3349))
+        self.assertEqual(prev, want_dxy("2026-11-05", 1.1227, 157.65, 1.345))
+        # Утром, до фиксации ЕЦБ, — фиксация прошлого дня.
+        early = {**ECB, "rates": {"2026-11-05": ECB["rates"]["2026-11-05"]}}
+        px, _ = items(mk.compute({**PARTS, "ecb": early}, WD))["DXY"]
+        self.assertEqual(px, want_dxy("2026-11-05", 1.1157, 158.36, 1.3349))
+
+    def test_fx_session(self):
+        cases = {  # UTC → (открыт, последнее закрытие, прошлое)
+            "2026-11-06 15:00": (True, "Thu 05 22:00", "Wed 04 22:00"),
+            "2026-11-06 22:00": (False, "Fri 06 22:00", "Thu 05 22:00"),
+            "2026-11-08 21:59": (False, "Fri 06 22:00", "Thu 05 22:00"),
+            "2026-11-08 22:00": (True, "Fri 06 22:00", "Thu 05 22:00"),  # воскресенье 17:00 — открытие
+            "2026-11-09 23:00": (True, "Mon 09 22:00", "Fri 06 22:00"),
+            "2026-07-10 20:30": (True, "Thu 09 21:00", "Wed 08 21:00"),  # летом — 21:00 UTC
+            "2026-07-10 21:00": (False, "Fri 10 21:00", "Thu 09 21:00"),
+            "2026-03-09 12:00": (True, "Fri 06 22:00", "Thu 05 22:00"),  # первый день летнего времени
+        }
+        fmt = "%a %d %H:%M"
+        for when, (is_open, close, prev) in cases.items():
+            t = calendar.timegm(time.strptime(when, "%Y-%m-%d %H:%M"))
+            o, c, p = mk.fx_session(t)
+            self.assertEqual((o, time.strftime(fmt, time.gmtime(c)), time.strftime(fmt, time.gmtime(p))),
+                             (is_open, close, prev), when)
+
+    def test_candle_close(self):
+        self.assertEqual(mk.candle_close(FX["EUR"], FRI), 1.115)
+        self.assertEqual(mk.candle_close(FX["EUR"], FRI + 1800), 1.115)  # свеча ещё не закрылась
+        old = [c for c in FX["EUR"] if c["t"] < (FRI - 4 * 3600) * 1000]
+        self.assertEqual(mk.candle_close(old, FRI), 0.0)  # последняя — старше трёх часов
+        for bad in (None, "x", [None, {"t": "x"}, {"t": (FRI - 3600) * 1000, "c": "nan"}], {}):
+            self.assertEqual(mk.candle_close(bad, FRI), 0.0)
 
     def test_hyperliquid_fx_must_agree_with_ecb(self):
         # Hyperliquid перевернул котировку (иены за доллар → доллары за иену) или
-        # курс сорвался — DXY не считаем, остальное на месте.
-        for name, px in (("xyz:JPY", (1 / 158.36, 1 / 158.29)), ("xyz:EUR", (0.8963, 0.8962)), ("xyz:EUR", (1.2, 1.2))):
+        # курс сорвался — DXY не считаем, остальное на месте. В выходные — по
+        # свечам закрытия, в будни — по живым ценам.
+        for cur, v in (("JPY", 1 / 158.35), ("EUR", 0.8963), ("EUR", 1.2), ("GBP", 0.749)):
+            fx = {**FX, cur: candles(cur, {FRI: {cur: v}, THU: CLOSE[THU]})}
+            got = items(mk.compute({**PARTS, "fx": fx}, NOW))
+            self.assertNotIn("DXY", got, cur)
+            self.assertIn("SP500", got)
+        for name, px in (("xyz:JPY", (1 / 158.36, 1 / 158.29)), ("xyz:EUR", (0.8963, 0.8962)), ("xyz:GBP", (0.749, 0.749))):
             xyz = hl({**XYZ_M, name: px}, delisted=("DXY", "VIX"))
-            got = items(mk.compute({**PARTS, "xyz": xyz}, NOW))
+            got = items(mk.compute({**PARTS, "xyz": xyz}, WD))
             self.assertNotIn("DXY", got, name)
             self.assertIn("SP500", got)
         self.assertIn("DXY", items(mk.compute(PARTS, NOW)))
+        self.assertIn("DXY", items(mk.compute(PARTS, WD)))
 
     def test_ranges_and_daily_jump(self):
         self.assertTrue(mk.sane("SP500", (7373.1, 7392.9)))
@@ -105,7 +174,7 @@ class ComputeTest(unittest.TestCase):
         self.assertNotIn("SILVER", got)  # не из набора
 
     def test_one_silent_source_drops_only_its_items(self):
-        cases = {"ecb": {"DXY"}, "para": {"US10Y"}, "xyz": {"SP500", "XYZ100", "GOLD", "OIL", "DXY"}}
+        cases = {"ecb": {"DXY"}, "fx": {"DXY"}, "para": {"US10Y"}, "xyz": {"SP500", "XYZ100", "GOLD", "OIL"}}
         for name, gone in cases.items():
             self.assertEqual(set(items(mk.compute({**PARTS, name: None}, NOW))), set(mk.KEYS) - gone, name)
         self.assertEqual(mk.compute({}, NOW), {"ok": False, "error": "no_data"})
@@ -225,7 +294,7 @@ class PolicyTest(unittest.TestCase):
                 found |= {a.name for a in n.names}
             elif isinstance(n, ast.ImportFrom):
                 found.add(n.module or "")
-        self.assertLessEqual(found, {"__future__", "math", "re", "threading", "time", "collections.abc", "typing"})
+        self.assertLessEqual(found, {"__future__", "calendar", "math", "re", "threading", "time", "collections.abc", "typing"})
         bad = [n.func.id for n in ast.walk(self.tree()) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
                and n.func.id in {"eval", "exec", "compile", "__import__", "open", "getattr", "setattr"}]
         self.assertEqual(bad, [])

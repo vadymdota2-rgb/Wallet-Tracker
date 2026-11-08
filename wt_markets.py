@@ -18,10 +18,17 @@
     и JPY; площадка Paragon («para») — доходность 10Y. Торгуются круглые
     сутки. Рынки, снятые с торгов, не берутся: их цена застыла (DXY и VIX
     на «xyz»);
-  - DXY нигде не торгуется — считаем сами по открытой формуле ICE: EUR и
-    JPY с Hyperliquid, GBP, CAD, SEK, CHF — курсы ЕЦБ (Европейского
-    центрального банка) за последний рабочий день. EUR и JPY Hyperliquid
-    сверяются с ЕЦБ: расходятся больше чем на EUR_JPY_GAP — DXY нет.
+  - DXY нигде не торгуется — считаем сами по открытой формуле ICE: EUR, JPY
+    и GBP с Hyperliquid (trade.xyz), CAD, SEK, CHF — курсы ЕЦБ
+    (Европейского центрального банка, фиксация в 14:15 по Франкфурту) за
+    тот же день. Курсы Hyperliquid сверяются с ЕЦБ: расходятся больше чем
+    на FX_GAP — DXY нет. Как у TradingView и ICE, DXY живёт по валютному
+    дню: день закрывается в 17:00 по Нью-Йорку, с пятницы 17:00 до
+    воскресенья 17:00 рынок закрыт. Пока открыт — цена сейчас против
+    прошлого закрытия; закрыт — закрытие пятницы против закрытия четверга
+    (закрытия — по часовым свечам Hyperliquid). Выходные цены бессрочных
+    рынков в DXY не идут. Остаток расхождения с ICE — около 0,1 %: CAD, SEK
+    и CHF — по фиксации ЕЦБ, а не по закрытию.
 
 Права — почему набор такой:
   - котировки TradingView брать нельзя (их виджеты показывают данные
@@ -50,6 +57,7 @@
 """
 from __future__ import annotations
 
+import calendar
 import math
 import re
 import threading
@@ -75,7 +83,10 @@ PX_MAX = 1e7  # правдоподобная цена пункта
 MOVE_MAX = 2.0  # за сутки цена не меняется больше чем вдвое (в любую сторону)
 # Свои рамки: DXY за полвека не выходил из 70…165, доходность 10Y — из 0…16 %.
 RANGE = {"DXY": (50.0, 250.0), "US10Y": (0.01, 30.0)}
-EUR_JPY_GAP = 0.03  # EUR и JPY Hyperliquid против ЕЦБ: расхождение больше — DXY нет
+FX_GAP = 0.03  # курс Hyperliquid против ЕЦБ: расхождение больше — DXY нет
+FX_HL = ("EUR", "JPY", "GBP")  # валюты DXY с Hyperliquid; EUR и GBP — долларов за единицу
+HOUR = 3600
+CANDLE_AGE = 3 * HOUR  # свеча закрытия старше этого — закрытия нет
 TTL = 60.0
 STALE_MAX = 1800.0  # старше — не отдаётся
 COLD_WAIT = 6.0
@@ -117,19 +128,92 @@ def hl_markets(raw: object) -> dict[str, Pair]:
     return out
 
 
-def ecb_rates(raw: object) -> tuple[dict[str, float], dict[str, float]] | None:
-    """Ответ Frankfurter (курсы ЕЦБ, база USD) → (последний рабочий день,
-    предыдущий): {валюта: единиц за доллар}. Меньше двух полных дней — None."""
+def ecb_rates(raw: object) -> dict[str, dict[str, float]]:
+    """Ответ Frankfurter (курсы ЕЦБ, база USD) → {день «ГГГГ-ММ-ДД»: {валюта:
+    единиц за доллар}} — только полные дни."""
     rates = raw.get("rates") if isinstance(raw, dict) else None
-    if not isinstance(rates, dict):
-        return None
-    full = []
-    for day in sorted(d for d in rates if isinstance(d, str) and DATE.fullmatch(d)):
-        r = rates[day]
+    out: dict[str, dict[str, float]] = {}
+    for day, r in (rates.items() if isinstance(rates, dict) else ()):
+        if not (isinstance(day, str) and DATE.fullmatch(day)):
+            continue
         got = {c: _num(r.get(c)) if isinstance(r, dict) else 0.0 for c, _ in DXY_W}
         if all(0 < v < PX_MAX for v in got.values()):
-            full.append(got)
-    return (full[-1], full[-2]) if len(full) >= 2 else None
+            out[day] = got
+    return out
+
+
+def ecb_on(ecb: dict[str, dict[str, float]], t: int) -> dict[str, float] | None:
+    """Фиксация ЕЦБ, действующая в момент t: последний день не позже даты t (UTC)."""
+    day = time.strftime("%Y-%m-%d", time.gmtime(t))
+    days = [d for d in ecb if d <= day]
+    return ecb[max(days)] if days else None
+
+
+def _sunday(y: int, month: int, n: int) -> int:
+    """Число месяца n-го воскресенья."""
+    return 1 + (6 - calendar.weekday(y, month, 1)) % 7 + 7 * (n - 1)
+
+
+def ny_offset(t: int) -> int:
+    """Смещение Нью-Йорка от UTC в момент t, секунд: летнее время — со второго
+    воскресенья марта 2:00 до первого воскресенья ноября 2:00 (местных)."""
+    y = time.gmtime(t).tm_year
+    start = calendar.timegm((y, 3, _sunday(y, 3, 2), 7, 0, 0))
+    end = calendar.timegm((y, 11, _sunday(y, 11, 1), 6, 0, 0))
+    return -4 * HOUR if start <= t < end else -5 * HOUR
+
+
+def fx_session(t: int) -> tuple[bool, int, int]:
+    """Валютный день в момент t: (рынок открыт, последнее закрытие, прошлое
+    закрытие) — закрытия в 17:00 по Нью-Йорку с понедельника по пятницу, UTC."""
+    off = ny_offset(t)
+    loc = t + off
+    day = loc - loc % 86400
+    wd = time.gmtime(loc).tm_wday
+    close = day + 17 * HOUR if loc >= day + 17 * HOUR else day - 7 * HOUR
+    while time.gmtime(close).tm_wday > 4:
+        close -= 86400
+    prev = close - 86400
+    while time.gmtime(prev).tm_wday > 4:
+        prev -= 86400
+    shut = (wd == 4 and loc >= day + 17 * HOUR) or wd == 5 or (wd == 6 and loc < day + 17 * HOUR)
+    return not shut, close - ny_offset(close - off), prev - ny_offset(prev - off)
+
+
+def candle_close(raw: object, t: int) -> float:
+    """Часовые свечи Hyperliquid (candleSnapshot) → цена закрытия в момент t:
+    последняя свеча, закрывшаяся не позже t и не раньше t − CANDLE_AGE; иначе 0."""
+    best, px = -1, 0.0
+    for c in raw if isinstance(raw, list) else ():
+        if not isinstance(c, dict):
+            continue
+        end = int(_num(c.get("t")) / 1000) + HOUR
+        v = _num(c.get("c"))
+        if t - CANDLE_AGE <= end <= t and end > best and 0 < v < PX_MAX:
+            best, px = end, v
+    return px
+
+
+def fx_dxy(live: dict[str, Pair], candles: object, ecb: dict[str, dict[str, float]], t: int) -> Pair | None:
+    """DXY (сейчас или закрытие пятницы, прошлое закрытие) по валютному дню."""
+    is_open, close, prev = fx_session(t)
+    cs = candles if isinstance(candles, dict) else {}
+
+    def at(when: int, now: bool) -> float:
+        base = ecb_on(ecb, when)
+        if base is None:
+            return 0.0
+        r = dict(base)
+        for c in FX_HL:
+            v = live[c][0] if now and c in live else candle_close(cs.get(c), when)
+            if v <= 0:
+                return 0.0
+            r[c] = 1 / v if c in ("EUR", "GBP") else v
+            if abs(r[c] / base[c] - 1) > FX_GAP:  # курс Hyperliquid сорвался или перевёрнут
+                return 0.0
+        return round(dxy(r), 3)
+
+    return pair(at(t, True) if is_open else at(close, False), at(close if is_open else prev, False))
 
 
 def dxy(r: dict[str, float]) -> float:
@@ -147,26 +231,17 @@ def sane(key: str, p: Pair) -> bool:
     return lo <= a <= hi and lo <= b <= hi and max(a, b) <= MOVE_MAX * min(a, b)
 
 
-def _near(a: float, b: float) -> bool:
-    return abs(a / b - 1) <= EUR_JPY_GAP
-
-
 def compute(parts: dict[str, object], at: int) -> dict[str, Json]:
-    """Ответ по ответам источников: xyz, para (Hyperliquid), ecb."""
+    """Ответ по ответам источников: xyz, para, fx — часовые свечи EUR, JPY,
+    GBP (Hyperliquid), ecb."""
     dex_mk = {d: hl_markets(parts.get(d)) for d in DEXES}
     xyz = dex_mk["xyz"]
     got: dict[str, Pair] = {}
     for key, (dex, name) in HL.items():
         if p := dex_mk[dex].get(name):
             got[key] = p
-    ecb = ecb_rates(parts.get("ecb"))
-    eur, jpy = xyz.get("EUR"), xyz.get("JPY")
-    # EUR на Hyperliquid — долларов за евро, у ЕЦБ (база USD) — евро за доллар.
-    if ecb and eur and jpy and _near(1 / eur[0], ecb[0]["EUR"]) and _near(jpy[0], ecb[0]["JPY"]):
-        p = pair(round(dxy({**ecb[0], "EUR": 1 / eur[0], "JPY": jpy[0]}), 3),
-                 round(dxy({**ecb[1], "EUR": 1 / eur[1], "JPY": jpy[1]}), 3))
-        if p:
-            got["DXY"] = p
+    if p := fx_dxy(xyz, parts.get("fx"), ecb_rates(parts.get("ecb")), at):
+        got["DXY"] = p
     items = [{"k": k, "px": got[k][0], "prev": got[k][1]} for k in KEYS if k in got and sane(k, got[k])]
     return {"ok": True, "at": at, "items": items} if items else {"ok": False, "error": "no_data"}
 
@@ -186,7 +261,7 @@ _lock = threading.Lock()
 
 
 def set_sources(sources: dict[str, Source]) -> None:
-    """Откуда брать ответы источников: имя (xyz, para, ecb) → fn()."""
+    """Откуда брать ответы источников: имя (xyz, para, fx, ecb) → fn()."""
     _st.sources = dict(sources)
 
 
