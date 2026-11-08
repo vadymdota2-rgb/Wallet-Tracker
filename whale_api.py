@@ -15197,16 +15197,11 @@ def calendar_data() -> dict:
 
 
 # --- Рынки в меню (wt_markets.py) -------------------------------------------
-# Модуль сам в сеть не ходит: ответы источников отдаёт ему сервер.
+# Модуль сам в сеть не ходит: ответы источников отдаёт ему сервер. Deribit
+# здесь нет: их данные (и индекс DVOL) — только для личного пользования.
 def _mkt_ecb():
     start = time.strftime("%Y-%m-%d", time.gmtime(now() - 10 * 86400))
     return get_json(f"https://api.frankfurter.dev/v1/{start}..?base=USD&symbols=EUR,JPY,GBP,CAD,SEK,CHF", 15)
-
-
-def _mkt_dvol():
-    t = now() * 1000
-    return get_json("https://www.deribit.com/api/v2/public/get_volatility_index_data?currency=BTC"
-                    f"&start_timestamp={t - 26 * 3_600_000}&end_timestamp={t}&resolution=3600", 15)
 
 
 wt_markets.set_sources({
@@ -15214,7 +15209,6 @@ wt_markets.set_sources({
     "para": lambda: hl_post({"type": "metaAndAssetCtxs", "dex": "para"}, 15),
     "main": lambda: hl_post({"type": "metaAndAssetCtxs"}, 15),
     "ecb": _mkt_ecb,
-    "dvol": _mkt_dvol,
     "mcap": lambda: wt_mcap.mcap_data(0),
 })
 markets_data = wt_markets.markets_data

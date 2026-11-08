@@ -1,6 +1,7 @@
 /*
- * Рынки для криптотрейдера в боковом меню: S&P 500, Nasdaq 100, DXY, золото,
- * доходность 10Y, DVOL, BTC.D, USDT.D, ETH/BTC (сервер — wt_markets.py).
+ * Рынки для криптотрейдера в боковом меню: S&P 500, XYZ100, DXY, золото,
+ * доходность 10Y, нефть WTI, BTC.D, USDT.D, ETH/BTC (сервер — wt_markets.py:
+ * там же — почему набор такой и что с правами).
  * Проверка ответа сервера (/api/markets) и подписи — без React и без сети:
  * всё проверяется тестами (tests/markets.test.ts).
  *
@@ -11,7 +12,7 @@
  */
 
 /** Пункты — в порядке экрана (сетка 3 × 3). */
-export const MARKET_KEYS = ["SP500", "NDX", "DXY", "GOLD", "US10Y", "DVOL", "BTCD", "USDTD", "ETHBTC"] as const;
+export const MARKET_KEYS = ["SP500", "XYZ100", "DXY", "GOLD", "US10Y", "OIL", "BTCD", "USDTD", "ETHBTC"] as const;
 export type MarketKey = (typeof MARKET_KEYS)[number];
 export interface MarketItem {
   k: MarketKey;
@@ -26,6 +27,9 @@ export interface MarketsReply {
 export const MARKET_PX_MAX = 1e7;
 /** Время сборки впереди часов телефона больше чем на сутки — не ответ. */
 const AHEAD_MAX = 86_400;
+/** Сборка старше шести часов — не ответ: вчерашние цены не показываем (сервер
+ *  старше получаса и так не отдаёт; запас — на неточные часы телефона). */
+const AGE_MAX = 6 * 3_600;
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const price = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0 && v < MARKET_PX_MAX;
@@ -35,7 +39,7 @@ const price = (v: unknown): v is number => typeof v === "number" && Number.isFin
 export function validMarkets(raw: unknown, now: number = Date.now() / 1000): MarketsReply | null {
   if (!isObj(raw) || raw["ok"] !== true || !Array.isArray(raw["items"])) return null;
   const at = raw["at"];
-  if (typeof at !== "number" || !Number.isInteger(at) || at <= 0 || at > now + AHEAD_MAX) return null;
+  if (typeof at !== "number" || !Number.isInteger(at) || at < now - AGE_MAX || at > now + AHEAD_MAX) return null;
   const seen = new Map<MarketKey, MarketItem>();
   for (const it of raw["items"].slice(0, 64)) {
     if (!isObj(it)) continue;
@@ -54,7 +58,7 @@ export function change(it: MarketItem): { v: number; unit: "bp" | "pct" } {
 }
 
 /** Сколько знаков после запятой у цены пункта: индексы — без копеек,
- *  доходность и доли — две, ETH/BTC — пять. */
+ *  доходность, доли и нефть — две, ETH/BTC — пять. */
 export function digits(it: MarketItem): number {
   if (it.k === "US10Y" || it.k === "BTCD" || it.k === "USDTD") return 2;
   return it.px >= 1000 ? 0 : it.px >= 10 ? 2 : it.px >= 1 ? 3 : 5;

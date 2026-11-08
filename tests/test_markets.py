@@ -1,10 +1,12 @@
 """Рынки для криптотрейдера в меню (wt_markets.py, /api/markets).
 
-Проверяем: разбор каждого источника (Hyperliquid, курсы ЕЦБ, DVOL Deribit,
-доминация CoinMarketCap), формулу DXY, что снятые с торгов рынки не
-берутся, что сбой или мусор одного источника не роняет остальные, что в
-ответе — только наши ключи и правдоподобные числа, кэш и сборку в фоне,
-правила модуля (без сети, без опасного) и что маршрут — для подписчиков.
+Проверяем: разбор каждого источника (Hyperliquid, курсы ЕЦБ, доминация
+CoinMarketCap), формулу DXY и сверку EUR и JPY с ЕЦБ, что снятые с торгов
+рынки не берутся, что сбой или мусор одного источника не роняет остальные,
+что в ответе — только наши ключи и правдоподобные числа (рамки, скачок за
+сутки), кэш, сборку в фоне и что старый ответ не отдаётся, правила модуля
+(без сети, без опасного), права (ни Deribit, ни VIX, ни имени Nasdaq-100) и
+что маршрут — для подписчиков.
 """
 import ast
 import json
@@ -31,16 +33,16 @@ def hl(markets: dict, delisted: tuple = ()) -> list:
     return [{"universe": uni}, [{"markPx": str(a), "prevDayPx": str(b)} for a, b in markets.values()]]
 
 
-XYZ = hl({"xyz:SP500": (7373.1, 7392.9), "xyz:XYZ100": (26925, 26996), "xyz:GOLD": (4066.2, 4079.9),
-          "xyz:EUR": (1.1157, 1.1156), "xyz:JPY": (158.36, 158.29), "xyz:SILVER": (52, 52),
-          "xyz:DXY": (97.15, 97.15), "xyz:VIX": (20, 20)}, delisted=("DXY", "VIX"))
+XYZ_M = {"xyz:SP500": (7373.1, 7392.9), "xyz:XYZ100": (26925, 26996), "xyz:GOLD": (4066.2, 4079.9),
+         "xyz:CL": (90.205, 89.617), "xyz:EUR": (1.1157, 1.1156), "xyz:JPY": (158.36, 158.29),
+         "xyz:SILVER": (52, 52), "xyz:DXY": (97.15, 97.15), "xyz:VIX": (20, 20)}
+XYZ = hl(XYZ_M, delisted=("DXY", "VIX"))
 PARA = hl({"para:10Y": (4.875, 4.8777), "para:BTCD": (60.4, 60.3)})
 MAIN = hl({"BTC": (100_000, 99_000), "ETH": (3300, 3200)})
 ECB = {"rates": {"2026-11-05": {"EUR": 0.89095, "JPY": 158.46, "GBP": 0.74299, "CAD": 1.3966, "SEK": 9.7866, "CHF": 0.81789},
                  "2026-11-06": {"EUR": 0.89566, "JPY": 158.33, "GBP": 0.74711, "CAD": 1.4066, "SEK": 9.8755, "CHF": 0.8189}}}
-DVOL = {"result": {"data": [[T - h * 3_600_000, 0, 0, 0, 40 - h * 0.05] for h in range(26, -1, -1)]}}
 MCAP = {"ok": True, "btc": [60.44, 60.35], "usdt": 4.1, "cap": [3.4e12, 3.3e12]}
-PARTS = {"xyz": XYZ, "para": PARA, "main": MAIN, "ecb": ECB, "dvol": DVOL, "mcap": MCAP}
+PARTS = {"xyz": XYZ, "para": PARA, "main": MAIN, "ecb": ECB, "mcap": MCAP}
 
 
 def items(res: dict) -> dict:
@@ -55,10 +57,10 @@ class ComputeTest(unittest.TestCase):
         self.assertEqual([it["k"] for it in res["items"]], list(mk.KEYS))
         got = items(res)
         self.assertEqual(got["SP500"], (7373.1, 7392.9))
-        self.assertEqual(got["NDX"], (26925, 26996))
+        self.assertEqual(got["XYZ100"], (26925, 26996))
         self.assertEqual(got["GOLD"], (4066.2, 4079.9))
         self.assertEqual(got["US10Y"], (4.875, 4.8777))
-        self.assertEqual(got["DVOL"], (40.0, 38.8))  # сейчас и ровно сутки назад
+        self.assertEqual(got["OIL"], (90.205, 89.617))  # WTI — рынок CL
         self.assertEqual(got["BTCD"], (60.44, 60.35))
         self.assertEqual(got["ETHBTC"], (0.033, round(3200 / 99_000, 8)))
         json.dumps(res, allow_nan=False)
@@ -86,6 +88,30 @@ class ComputeTest(unittest.TestCase):
             self.assertNotIn("USDTD", items(mk.compute({**PARTS, "mcap": bad}, NOW)), bad)
         for bad in ({**MCAP, "btc": [120, 60]}, {**MCAP, "btc": [60, None]}, {**MCAP, "btc": "x"}, {"ok": False}):
             self.assertNotIn("BTCD", items(mk.compute({**PARTS, "mcap": bad}, NOW)), bad)
+        # Капитализация рынка за сутки «упала» в десять раз — USDT.D за 40 % не пишем.
+        self.assertNotIn("USDTD", items(mk.compute({**PARTS, "mcap": {**MCAP, "cap": [3.4e11, 3.3e12]}}, NOW)))
+
+    def test_hyperliquid_fx_must_agree_with_ecb(self):
+        # Hyperliquid перевернул котировку (иены за доллар → доллары за иену) или
+        # курс сорвался — DXY не считаем, остальное на месте.
+        for name, px in (("xyz:JPY", (1 / 158.36, 1 / 158.29)), ("xyz:EUR", (0.8963, 0.8962)), ("xyz:EUR", (1.2, 1.2))):
+            xyz = hl({**XYZ_M, name: px}, delisted=("DXY", "VIX"))
+            got = items(mk.compute({**PARTS, "xyz": xyz}, NOW))
+            self.assertNotIn("DXY", got, name)
+            self.assertIn("SP500", got)
+        self.assertIn("DXY", items(mk.compute(PARTS, NOW)))
+
+    def test_ranges_and_daily_jump(self):
+        self.assertTrue(mk.sane("SP500", (7373.1, 7392.9)))
+        self.assertFalse(mk.sane("SP500", (7373.1, 3000)))  # больше чем вдвое за сутки — сбой
+        self.assertFalse(mk.sane("GOLD", (4000, 9000)))
+        self.assertFalse(mk.sane("US10Y", (48.75, 48.77)))  # процент не в тех единицах
+        self.assertFalse(mk.sane("DXY", (9.7, 9.7)))
+        self.assertFalse(mk.sane("BTCD", (100.5, 99)))
+        para = hl({"para:10Y": (487.5, 487.77)})
+        self.assertNotIn("US10Y", items(mk.compute({**PARTS, "para": para}, NOW)))
+        main = hl({"BTC": (100_000, 99_000), "ETH": (3300, 1200)})
+        self.assertNotIn("ETHBTC", items(mk.compute({**PARTS, "main": main}, NOW)))
 
     def test_delisted_markets_are_not_taken(self):
         got = items(mk.compute(PARTS, NOW))
@@ -94,8 +120,8 @@ class ComputeTest(unittest.TestCase):
         self.assertNotIn("SILVER", got)  # не из набора
 
     def test_one_silent_source_drops_only_its_items(self):
-        cases = {"ecb": {"DXY"}, "dvol": {"DVOL"}, "mcap": {"BTCD", "USDTD"}, "main": {"ETHBTC"}, "para": {"US10Y"},
-                 "xyz": {"SP500", "NDX", "GOLD", "DXY"}}
+        cases = {"ecb": {"DXY"}, "mcap": {"BTCD", "USDTD"}, "main": {"ETHBTC"}, "para": {"US10Y"},
+                 "xyz": {"SP500", "XYZ100", "GOLD", "OIL", "DXY"}}
         for name, gone in cases.items():
             self.assertEqual(set(items(mk.compute({**PARTS, name: None}, NOW))), set(mk.KEYS) - gone, name)
         self.assertEqual(mk.compute({}, NOW), {"ok": False, "error": "no_data"})
@@ -161,10 +187,39 @@ class CacheTest(unittest.TestCase):
         mk.set_sources({})
         self.assertEqual(mk.markets_data(5), {"ok": False, "error": "no_data"})
 
+    def test_old_answer_is_not_served(self):
+        # Источники молчат дольше STALE_MAX — меню возвращается к заголовку,
+        # а не показывает вчерашние цены.
+        mk.set_sources({})
+        with mock.patch.object(mk, "_now", return_value=NOW):
+            res = mk.compute(PARTS, NOW)
+        mk._st.hit = (time.monotonic() - mk.STALE_MAX - 1, res)
+        mk._st.fail = time.monotonic()  # и новая сборка пока не начнётся
+        self.assertEqual(mk.markets_data(0), {"ok": False, "error": "no_data"})
+        mk._st.hit = (time.monotonic() - mk.STALE_MAX + 60, res)
+        self.assertIs(mk.markets_data(0), res)
+
+    def test_late_source_does_not_change_built_answer(self):
+        gate, late = threading.Event(), threading.Event()
+        self.addCleanup(gate.set)
+
+        def slow():
+            gate.wait(10)
+            late.set()
+            return MAIN
+
+        mk.set_sources({"xyz": lambda: XYZ, "main": slow})
+        with mock.patch.object(mk, "SOURCE_WAIT", 0.2), mock.patch.object(mk, "_now", return_value=NOW):
+            res = mk.build()
+        self.assertNotIn("ETHBTC", items(res))
+        gate.set()
+        late.wait(5)
+        self.assertNotIn("ETHBTC", items(res))
+
     def test_slow_source_waits_no_longer_than_asked(self):
         gate = threading.Event()
         self.addCleanup(gate.set)
-        mk.set_sources({"xyz": lambda: XYZ, "dvol": lambda: gate.wait(10) and DVOL})
+        mk.set_sources({"xyz": lambda: XYZ, "para": lambda: gate.wait(10) and PARA})
         with mock.patch.object(mk, "_now", return_value=NOW):
             t0 = time.monotonic()
             self.assertEqual(mk.markets_data(0.2), {"ok": False, "error": "no_data"})
@@ -203,3 +258,23 @@ class PolicyTest(unittest.TestCase):
         for name in PARTS:
             self.assertIn(f'    "{name}": ', src.split("wt_markets.set_sources({")[1].split("})")[0])
         self.assertIn('"mcap": lambda: wt_mcap.mcap_data(0),', src)  # доминация — из кэша, без ожидания
+
+    def test_rights(self):
+        # Deribit (DVOL) — только для личного пользования; VIX — индекс Cboe по
+        # лицензии; XYZ100 — не Nasdaq-100: ни в источниках, ни в ключах.
+        with open(os.path.join(ROOT, "whale_api.py"), encoding="utf-8") as f:
+            block = f.read().split("# --- Рынки в меню (wt_markets.py)")[1].split("markets_data = wt_markets")[0]
+        self.assertNotIn("deribit.com", block)
+        self.assertNotIn("cboe", block.lower())
+        self.assertEqual(set(mk.KEYS) & {"DVOL", "VIX", "NDX"}, set())
+        self.assertNotIn("dvol", "".join(mk.KEYS).lower())
+        with open(os.path.join(ROOT, "tools", "i18n.json"), encoding="utf-8") as f:
+            tr = json.load(f)
+        for lang, v in tr["mk_src"].items():
+            self.assertNotIn("Deribit", v, lang)
+            self.assertIn("CoinMarketCap", v, lang)  # ссылку ставит экран — по этому слову
+        for lang in tr["mk_sp_hint"]:
+            self.assertIn("S&P Dow Jones Indices", tr["mk_sp_hint"][lang], lang)
+            self.assertIn("Standard & Poor’s Financial Services LLC", tr["mk_sp_hint"][lang], lang)
+            self.assertIn("Nasdaq-100", tr["mk_xyz_hint"][lang], lang)
+            self.assertIn("ICE", tr["mk_dxy_hint"][lang], lang)
