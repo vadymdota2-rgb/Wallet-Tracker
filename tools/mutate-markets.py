@@ -151,7 +151,10 @@ def run(path, cmd, muts):
     ORIG[path] = src
     drop_pyc(path)
     # Без порчи тесты обязаны проходить: иначе любая мутация «убита» ложно.
-    if subprocess.run(cmd, cwd=ROOT, capture_output=True, timeout=300, check=False).returncode != 0:
+    base = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=300, check=False)
+    if base.returncode != 0:
+        # Что именно упало — в журнал CI, а не только «красные».
+        print("\n".join((base.stdout + base.stderr).splitlines()[-60:]), flush=True)
         sys.exit(f"тесты красные и без мутаций: {' '.join(cmd)}")
     alive = []
     try:

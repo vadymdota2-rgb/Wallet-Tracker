@@ -221,9 +221,19 @@ class ComputeTest(unittest.TestCase):
                     self.assertTrue(isinstance(v, float) and math.isfinite(v) and 0 < v < mk.PX_MAX, it)
 
 
+def join_new_threads(before: set) -> None:
+    """Дождаться потоков, начатых тестом: опоздавший источник пишет в память
+    модуля и после ответа сборки — без этого запись попадала в состояние
+    следующего теста (гонка, ловилась только на медленной машине CI)."""
+    for th in threading.enumerate():
+        if th not in before and th is not threading.current_thread():
+            th.join(5)
+
+
 class CacheTest(unittest.TestCase):
     def setUp(self):
         self.addCleanup(setattr, mk, "_st", mk._st)
+        self.addCleanup(join_new_threads, set(threading.enumerate()))
         mk._st = mk._State()
 
     def wait(self):
@@ -388,6 +398,7 @@ class CacheTest(unittest.TestCase):
         self.assertIs(mk.markets_data(0), res)
 
     def test_late_source_does_not_change_built_answer(self):
+        before = set(threading.enumerate())
         gate, late = threading.Event(), threading.Event()
         self.addCleanup(gate.set)
 
@@ -402,7 +413,9 @@ class CacheTest(unittest.TestCase):
         self.assertNotIn("US10Y", items(res))
         gate.set()
         late.wait(5)
+        join_new_threads(before)
         self.assertNotIn("US10Y", items(res))
+        self.assertIn("para", mk._st.slow)  # опоздавший ответ запомнен — для следующей сборки
 
     def test_slow_source_waits_no_longer_than_asked(self):
         gate = threading.Event()

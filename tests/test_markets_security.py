@@ -27,6 +27,7 @@ from test_markets import (  # noqa: E402 — общие данные тесто�
     WD,
     hl,
     items,
+    join_new_threads,
 )
 
 import wt_markets as mk  # noqa: E402 — модуль лежит в корне репозитория
@@ -100,6 +101,7 @@ class HostileSourceTest(unittest.TestCase):
 class HostileTimingTest(unittest.TestCase):
     def setUp(self):
         self.addCleanup(setattr, mk, "_st", mk._st)
+        self.addCleanup(join_new_threads, set(threading.enumerate()))
         mk._st = mk._State()
 
     def test_hanging_source_does_not_hold_the_person(self):
