@@ -91,3 +91,13 @@ export function ageMin(at: number, now: number = Date.now() / 1000): number {
 
 /** Старше этого — время обновления подсвечено: цены не свежие. */
 export const MARKETS_STALE_MIN = 15;
+
+/** Цены площадок сервер берёт не чаще раза в столько секунд (wt_markets.SLOW),
+ *  а время ответа — когда они получены: раньше новых цен быть не может. */
+export const MARKETS_REFRESH = 600;
+/** Пора ли спросить сервер: ответа нет, цены старше MARKETS_REFRESH — или по
+ *  часам телефона с прошлого вопроса прошло столько же (часы телефона могут
+ *  отставать от сервера, и тогда цены казались бы моложе, чем они есть). */
+export function marketsDue(at: number | undefined, now: number, askedAgo: number): boolean {
+  return at === undefined || now - at >= MARKETS_REFRESH || askedAgo >= MARKETS_REFRESH;
+}

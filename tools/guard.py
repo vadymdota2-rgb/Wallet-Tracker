@@ -2004,7 +2004,7 @@ say("рынки в меню на уровне халвинга: свой мод�
 _mk_css = read(f"{APP}/src/components/Markets.css")
 say("рынки в меню — вид: заголовок «Рынки» и время обновления (старше 15 минут — жёлтым), полоска величины изменения в ячейке, касание ячейки — её пояснение, скелет вместо прыжка, вспышка изменившейся цены (без движения по просьбе системы), свёрнутое приложение сеть не трогает; цифры — цветом --ink",
     "function Skeleton(" in _mk_tsx and 'className={`mk-bar ${dir}`}' in _mk_tsx and 'aria-expanded={on} aria-controls={note}' in _mk_tsx
-    and 'document.addEventListener("visibilitychange", back)' in _mk_tsx and "if (!document.hidden)" in _mk_tsx
+    and 'document.addEventListener("visibilitychange", back)' in _mk_tsx and "if (document.hidden) return;" in _mk_tsx
     and "age >= MARKETS_STALE_MIN" in _mk_tsx and "export function barShare(" in read(f"{APP}/src/lib/markets.ts")
     and "@media (prefers-reduced-motion: reduce)" in _mk_css and "var(--fg)" not in _mk_css and "color: var(--ink)" in _mk_css
     and all(k in _i18n for k in ("mk_now", "mk_ago")))
@@ -2021,6 +2021,11 @@ say("рынки в меню — нагрузка и защита: каждый �
     and "function InfoIcon()" in _mk_tsx and ">ⓘ<" not in _mk_tsx and "padding: 7px; margin-block: -7px;" in _mk_css
     and "Galaxy Fold снаружи" in read(f"{APP}/tests/e2e/markets.e2e.test.ts")
     and "class HugeBodyTest(" in read(f"{APP}/tests/test_markets_security.py"))
+say("рынки в меню как халвинг — максимальная нагрузка: время ответа — время цен, приложение спрашивает только когда могли появиться новые (marketsDue), те же цифры — тот же объект («304»), все на холодном сервере ждут одну сборку, без потоков — сборка в том же потоке, память и потоки не растут; замер нагрузки — tools/load-markets.py и в CI",
+    "res = _st.hit[1]  # те же цифры — тот же объект" in read(f"{APP}/wt_markets.py") and "    if job is None:\n        return build()\n" in read(f"{APP}/wt_markets.py")
+    and "marketsDue(last.current?.at" in _mk_tsx and "export function marketsDue(" in read(f"{APP}/src/lib/markets.ts")
+    and all(t in read(f"{APP}/tests/test_markets.py") for t in ("def test_cold_start_race_builds_once(", "def test_memory_and_threads_do_not_grow(", "def test_answer_time_is_when_prices_were_taken("))
+    and os.path.isfile(f"{APP}/tools/load-markets.py") and "python tools/load-markets.py 2 3 304" in read(f"{APP}/.github/workflows/tests.yml"))
 _ci = read(f"{APP}/.github/workflows/tests.yml")
 say("CI: мутации карты ликвидаций — своим заданием с лимитом 75 минут (вместе со «Страхом и жадностью» не укладывались в 45)",
     "  mutation-liqmap:\n    runs-on: ubuntu-latest\n    timeout-minutes: 75" in _ci

@@ -1,7 +1,9 @@
 /* Рынки в меню: проверка ответа сервера и подписи изменений (node --test). */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { BAR_MIN, MARKET_KEYS, MARKET_PX_MAX, MARKETS_STALE_MIN, ageMin, barShare, change, digits, isPercent, validMarkets } from "../src/lib/markets.ts";
+import {
+  BAR_MIN, MARKET_KEYS, MARKET_PX_MAX, MARKETS_REFRESH, MARKETS_STALE_MIN, ageMin, barShare, change, digits, isPercent, marketsDue, validMarkets,
+} from "../src/lib/markets.ts";
 
 const NOW = 1_794_100_000;
 const good = {
@@ -94,4 +96,19 @@ test("возраст ответа — целые минуты, часы теле
   assert.equal(ageMin(1000, 1000 + 20 * 60 + 30), 20);
   assert.equal(ageMin(1000, 500), 0);
   assert.equal(MARKETS_STALE_MIN, 15);
+});
+
+test("спрашивать сервер — только когда могли появиться новые цены (как карточка халвинга)", () => {
+  assert.equal(MARKETS_REFRESH, 600);
+  // Ответа нет — спрашиваем каждую минуту.
+  assert.equal(marketsDue(undefined, 1000, 0), true);
+  // Цены моложе десяти минут — новых ещё нет, сеть не трогаем.
+  assert.equal(marketsDue(1000, 1000 + 599, 60), false);
+  assert.equal(marketsDue(1000, 1000, 0), false);
+  // Десять минут — пора.
+  assert.equal(marketsDue(1000, 1000 + 600, 60), true);
+  // Часы телефона отстают на час: цены кажутся «из будущего», но с прошлого
+  // вопроса по часам телефона прошло десять минут — спрашиваем.
+  assert.equal(marketsDue(1000 + 3600, 1000 + 600, 599), false);
+  assert.equal(marketsDue(1000 + 3600, 1000 + 600, 600), true);
 });

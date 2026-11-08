@@ -92,7 +92,12 @@ PY = [
     ("    cand += aster_markets(parts.get(\"aster\"), at).items()\n", "", "запас Aster в ответе"),
     ("and all(_candles(raw.get(c)) for c in FX_HL)", "and any(_candles(raw.get(c)) for c in FX_HL)", "свечи — все валюты"),
     ("isinstance(c, dict) and _num(c.get(\"t\")) > 0 and 0 < _num(c.get(\"c\")) < PX_MAX for c in", "isinstance(c, dict) for c in", "свеча — со временем и ценой"),
-    ("        except RuntimeError:  # потоков не хватило — источник без ответа\n            continue\n", "        except RuntimeError:  # потоков не хватило — источник без ответа\n            raise\n", "нет потоков — без источника"),
+    ("            if time.monotonic() < end:\n                one(*item)\n", "            pass\n", "нет потоков — спрашиваем сами"),
+    ("    if job is None:\n        return build()\n", "    if job is None:\n        return {\"ok\": False, \"error\": \"no_data\"}\n", "нет потоков — сборка в том же потоке"),
+    ("            if _st.hit and _st.hit[1] == res:\n                res = _st.hit[1]", "            if False:\n                res = _st.hit[1]", "те же цифры — тот же объект"),
+    ("    res = compute(parts, _now(), min(dex_at) if dex_at else None)", "    res = compute(parts, _now())", "время ответа — время цен"),
+    ("    res = compute(parts, _now(), min(dex_at) if dex_at else None)", "    res = compute(parts, _now(), max(dex_at) if dex_at else None)", "время ответа — самые старые цены"),
+    ("                v, at = old[1], old[2]", "                v = old[1]", "прошлые цены — прошлое время"),
     ("if not (at - ASTER_AGE <= got_at <= at + 60) or", "if not (got_at <= at + 60) or", "Aster — не старше ASTER_AGE"),
     ("if not (at - ASTER_AGE <= got_at <= at + 60) or", "if not (at - ASTER_AGE <= got_at) or", "Aster из будущего — мимо"),
     ("and key not in out \\", "\\", "Aster: повтор рынка — первый"),
@@ -105,10 +110,10 @@ PY = [
     ("elif (old := slow.get(name)) and time.monotonic() - old[0] < SLOW[name][1]:", "elif (old := slow.get(name)):", "запас — не старше SLOW[1]"),
     ("elif (old := slow.get(name)) and time.monotonic() - old[0] < SLOW[name][1]:", "elif False:", "источник молчит — прошлый годный"),
     ("            if _good(name, v):", "            if v is not None:", "мусор не запоминается"),
-    ("    with got:  # опоздавший источник — уже без него\n        now_parts = dict(parts)\n", "    now_parts = parts\n", "опоздавший источник не меняет ответ"),
+    ("    with got:  # опоздавший источник — уже без него\n        return dict(parts), dict(since)\n", "    return parts, since\n", "опоздавший источник не меняет ответ"),
     ("if hit and time.monotonic() - hit[0] < TTL:", "if hit:", "свежий ответ — TTL"),
     ("return hit if hit and time.monotonic() - hit[0] < STALE_MAX else None", "return hit", "старый ответ не отдаётся"),
-    ("if _st.job is not None or time.monotonic() - _st.fail < FAIL_WAIT:", "if _st.job is not None:", "после сбоя — пауза"),
+    ("        if time.monotonic() - _st.fail < FAIL_WAIT:\n", "        if False:\n", "после сбоя — пауза"),
 ]
 TS = [
     ('if (!isObj(raw) || raw["ok"] !== true ||', 'if (!isObj(raw) ||', "ok — только true"),
@@ -137,6 +142,10 @@ TS = [
     ("return Math.max(0, Math.floor((now - at) / 60));", "return Math.floor((now - at) / 60);", "возраст — не минус"),
     ("return Math.max(0, Math.floor((now - at) / 60));", "return Math.max(0, Math.round((now - at) / 60));", "возраст — целые минуты"),
     ("export const MARKETS_STALE_MIN = 15;", "export const MARKETS_STALE_MIN = 30;", "старые — с 15 минут"),
+    ("export const MARKETS_REFRESH = 600;", "export const MARKETS_REFRESH = 60;", "спрашивать — раз в 10 минут"),
+    ("return at === undefined || now - at >= MARKETS_REFRESH || askedAgo >= MARKETS_REFRESH;", "return at === undefined || now - at >= MARKETS_REFRESH;", "часы телефона отстают — всё равно спрашиваем"),
+    ("return at === undefined || now - at >= MARKETS_REFRESH || askedAgo >= MARKETS_REFRESH;", "return now - at! >= MARKETS_REFRESH || askedAgo >= MARKETS_REFRESH;", "нет ответа — спрашиваем"),
+    ("return at === undefined || now - at >= MARKETS_REFRESH || askedAgo >= MARKETS_REFRESH;", "return at === undefined || now - at > MARKETS_REFRESH || askedAgo >= MARKETS_REFRESH;", "ровно десять минут — пора"),
 ]
 
 

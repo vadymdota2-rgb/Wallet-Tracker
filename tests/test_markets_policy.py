@@ -120,6 +120,9 @@ class PolicyTest(unittest.TestCase):
         self.assertEqual(tuple(re.findall(r'"([A-Z0-9]+)"', keys.group(1))), mk.KEYS)
         self.assertIn(f"export const MARKET_PX_MAX = {mk.PX_MAX:.0e}".replace("e+0", "e").replace("e+", "e"), ts)
         self.assertIsNone(re.search(r"^\s*import\b", ts, re.M))  # проверка ответа — без импортов
+        # Приложение спрашивает раз в столько, сколько живут цены площадок на сервере.
+        self.assertIn(f"export const MARKETS_REFRESH = {int(mk.SLOW['xyz'][0])};", ts)
+        self.assertEqual({mk.SLOW[d][0] for d in mk.DEXES}, {mk.SLOW["xyz"][0]})
         self.assertIn('if (it.k === "US10Y" || it.k === "BTCD" || it.k === "USDTD") return 2;'
                       if "isPercent(it.k)" not in ts else "if (isPercent(it.k)) return 2;", ts)
 

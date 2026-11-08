@@ -10,6 +10,7 @@ CoinMarketCap), формулу DXY по валютному дню и сверк�
 приложением — test_markets_fuzz.py, атаки — test_markets_security.py.
 """
 import calendar
+import gc
 import json
 import math
 import os
@@ -17,6 +18,7 @@ import random
 import sys
 import threading
 import time
+import tracemalloc
 import unittest
 from unittest import mock
 
@@ -273,13 +275,97 @@ class CacheTest(unittest.TestCase):
         if job is not None:
             job.join(5)
 
-    def test_no_threads_left_means_no_data_not_a_crash(self):
-        # Потоков не хватило: источник без ответа — сборка не падает, а
-        # отдыхает FAIL_WAIT, как после любого пустого ответа.
+    def test_no_threads_left_builds_itself(self):
+        # Потоков не хватило (как у карточки халвинга): сборка не падает и не
+        # остаётся без ответа — источники спрашиваются по очереди в том же потоке.
         mk.set_sources({name: (lambda v=v: v) for name, v in PARTS.items()})
         with mock.patch.object(mk.threading.Thread, "start", side_effect=RuntimeError("can't start new thread")):
-            self.assertEqual(mk.build(), {"ok": False, "error": "no_data"})
-        self.assertGreater(mk._st.fail, 0)
+            res = mk.markets_data(0)
+        self.assertTrue(res["ok"])
+        self.assertEqual(len(res["items"]), len(mk.KEYS))
+        self.assertIsNone(mk._st.job)
+
+    def test_cold_start_race_builds_once(self):
+        # Сотня человек открывает меню на холодном сервере: одна сборка,
+        # каждый источник спрошен один раз, у всех — один и тот же ответ.
+        calls: list = []
+
+        def slow(name, v):
+            def fn():
+                calls.append(name)
+                time.sleep(0.2)
+                return v
+            return fn
+
+        mk.set_sources({name: slow(name, v) for name, v in PARTS.items()})
+        out: list = []
+        ts = [threading.Thread(target=lambda: out.append(mk.markets_data(5))) for _ in range(100)]
+        for t in ts:
+            t.start()
+        for t in ts:
+            t.join(10)
+        self.assertEqual(len(out), 100)
+        self.assertTrue(out[0]["ok"])
+        self.assertTrue(all(r is out[0] for r in out))
+        self.assertEqual(sorted(calls), sorted(PARTS))
+
+    def test_answer_time_is_when_prices_were_taken(self):
+        # Время ответа — когда получены цены площадок, а не когда собран ответ:
+        # из памяти — то же время и тот же объект (те же байты, «304»).
+        mk.set_sources({name: (lambda v=v: v) for name, v in PARTS.items()})
+        t, mono = [NOW], [1000.0]
+        with mock.patch.object(mk, "_now", side_effect=lambda: t[0]), \
+             mock.patch.object(mk.time, "monotonic", side_effect=lambda: mono[0]):
+            first = mk.build()
+            self.assertEqual(first["at"], NOW)
+            t[0] += 300
+            mono[0] += 300
+            self.assertIs(mk.build(), first)  # цены из памяти — ответ тот же
+            # Сменилась только доминация — новые цифры, но время цен прежнее.
+            mk.set_sources({**{n: (lambda v=v: v) for n, v in PARTS.items()},
+                            "mcap": lambda: {**PARTS["mcap"], "btc": [61.0, 60.35]}})
+            second = mk.build()
+            self.assertIsNot(second, first)
+            self.assertEqual(second["at"], NOW)
+            # Срок памяти площадок прошёл — цены спрошены заново: время новое.
+            t[0] += 301
+            mono[0] += 301
+            self.assertEqual(mk.build()["at"], NOW + 601)
+            # Площадка молчит — её прошлые цены, и время ответа честно прошлое
+            # (самые старые из взятых), хотя другие площадки свежие.
+            t[0] += 700
+            mono[0] += 700
+            mk.set_sources({**{n: (lambda v=v: v) for n, v in PARTS.items()}, "para": lambda: None})
+            res = mk.build()
+            self.assertEqual(res["at"], NOW + 601)
+            self.assertEqual(mk._st.slow["xyz"][2], NOW + 1301)
+            self.assertEqual(len(res["items"]), len(mk.KEYS))
+            # Нет ни одной площадки — только доминация: время — сейчас.
+            mk._st.slow.clear()
+            only = mk.build()
+            self.assertEqual(only["at"], t[0])
+
+    def test_memory_and_threads_do_not_grow(self):
+        # Тысячи ответов и сотни сборок (как у карточки халвинга): память и
+        # потоки — те же. Растёт — значит модуль что-то копит.
+        mk.set_sources({name: (lambda v=v: v) for name, v in PARTS.items()})
+        threads = threading.active_count()
+        for _ in range(100):  # разогрев: кэши самого Python
+            mk.build()
+        gc.collect()
+        tracemalloc.start()
+        before = tracemalloc.get_traced_memory()[0]
+        for i in range(20_000):
+            mk.markets_data(0)
+            if i % 50 == 0:
+                mk.build()
+        gc.collect()
+        grown = tracemalloc.get_traced_memory()[0] - before
+        tracemalloc.stop()
+        self.wait()
+        self.assertLess(grown, 64 * 1024, f"память выросла на {grown} байт")
+        self.assertLessEqual(threading.active_count(), threads)
+        self.assertLessEqual(set(mk._st.slow), set(mk.SLOW))
 
     def test_cold_then_cached_then_background(self):
         calls: list = []
@@ -297,7 +383,8 @@ class CacheTest(unittest.TestCase):
             # Источники из памяти (площадки Hyperliquid, ЕЦБ, свечи) свежи — их не спрашиваем.
             self.assertEqual(len(calls), 2 * len(PARTS) - len(mk.SLOW))
             self.assertEqual(sorted(calls[len(PARTS):]), sorted(set(PARTS) - set(mk.SLOW)))
-            self.assertIsNot(mk._st.hit[1], first)
+            # Цифры те же — тот же объект: сервер отдаёт те же байты (и «304»).
+            self.assertIs(mk._st.hit[1], first)
 
     def test_slow_sources_cached_then_kept_on_failure(self):
         calls: list = []
@@ -317,8 +404,8 @@ class CacheTest(unittest.TestCase):
             # есть нужные закрытия), а источники молчат — берём прошлые годные
             # ответы, все пункты на месте.
             for name in mk.SLOW:
-                at, raw = mk._st.slow[name]
-                mk._st.slow[name] = (at - mk.SLOW[name][0] - 1, raw)
+                at, raw, wall = mk._st.slow[name]
+                mk._st.slow[name] = (at - mk.SLOW[name][0] - 1, raw, wall)
             live["ok"] = False
             calls.clear()
             res = mk.build()
@@ -328,8 +415,8 @@ class CacheTest(unittest.TestCase):
             # Прошлый ответ старше запаса — пунктов без него нет (свечи с нужными
             # закрытиями годны в любом возрасте, но без курсов ЕЦБ DXY нет).
             for name in mk.SLOW:
-                at, raw = mk._st.slow[name]
-                mk._st.slow[name] = (at - mk.SLOW[name][1], raw)
+                at, raw, wall = mk._st.slow[name]
+                mk._st.slow[name] = (at - mk.SLOW[name][1], raw, wall)
             self.assertEqual(mk.build(), {"ok": False, "error": "no_data"})
             # Мусор вместо ответа не запоминается.
             live["ok"] = True
@@ -428,7 +515,12 @@ class CacheTest(unittest.TestCase):
         mk.set_sources({name: boom for name in PARTS})
         self.assertEqual(mk.markets_data(5), {"ok": False, "error": "no_data"})
         self.wait()
-        self.assertIsNone(mk._start())  # после сбоя — пауза FAIL_WAIT
+        # После сбоя — пауза FAIL_WAIT: новая сборка не начинается, источники не трогаем.
+        calls: list = []
+        mk.set_sources({name: (lambda: calls.append(1)) for name in PARTS})
+        self.assertEqual(mk.markets_data(0), {"ok": False, "error": "no_data"})
+        self.assertIsNone(mk._st.job)
+        self.assertEqual(calls, [])
         mk._st.fail = time.monotonic() - mk.FAIL_WAIT - 1
         mk.set_sources({})
         self.assertEqual(mk.markets_data(5), {"ok": False, "error": "no_data"})

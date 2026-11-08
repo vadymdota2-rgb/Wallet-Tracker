@@ -15,8 +15,11 @@
  * шести часов, с «N мин назад»), свежий догружается. Ни копии, ни ответа —
  * скелет сетки (меню не прыгает); нет данных совсем (без подписки, сервер
  * молчит, ответ битый или старый) — прежний заголовок меню.
- * Открытое меню обновляет рынки раз в минуту, свёрнутое приложение — не
- * трогает сеть, а вернулись — сразу (если прошлый ответ старше минуты). Цена изменилась — ячейка коротко
+ * Открытое меню раз в минуту проверяет, могли ли появиться новые цены
+ * (marketsDue: сервер берёт их раз в 10 минут, время ответа — когда взяты),
+ * и только тогда спрашивает сервер — как карточка халвинга, не чаще, чем
+ * меняются данные. Свёрнутое приложение сеть не трогает, вернулись — сразу
+ * (если прошлый ответ старше минуты). Цена изменилась — ячейка коротко
  * вспыхивает цветом (без движения, если система просит меньше анимации).
  */
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
@@ -29,7 +32,7 @@ import { openExternal } from "../lib/telegram";
 import { CMC_URL } from "./CmcBy";
 import "./Markets.css";
 import {
-  MARKETS_STALE_MIN, MARKET_KEYS, ageMin, barShare, change, digits, isPercent,
+  MARKETS_STALE_MIN, MARKET_KEYS, ageMin, barShare, change, digits, isPercent, marketsDue,
   type MarketItem, type MarketKey, type MarketsReply,
 } from "../lib/markets";
 
@@ -125,6 +128,7 @@ export function MarketsStrip({ fallback }: { fallback: ReactNode }) {
   const [now, setNow] = useState(() => Date.now() / 1000);
   const [flash, setFlash] = useState<Partial<Record<MarketKey, "up" | "dn">>>({});
   const last = useRef<MarketsReply | null>(m);
+  const asked = useRef(Date.now());
   const noteId = useId();
   useEffect(() => {
     let alive = true;
@@ -153,10 +157,14 @@ export function MarketsStrip({ fallback }: { fallback: ReactNode }) {
     // Свёрнутое приложение сеть не трогает; вернулись — ответ из памяти, если
     // он моложе минуты, иначе свежий.
     const tick = () => {
-      if (!document.hidden) void refreshMarkets().then(put);
+      if (document.hidden || !marketsDue(last.current?.at, Date.now() / 1000, (Date.now() - asked.current) / 1000)) return;
+      asked.current = Date.now();
+      void refreshMarkets().then(put);
     };
     const back = () => {
-      if (!document.hidden) void fetchMarkets().then(put);
+      if (document.hidden) return;
+      asked.current = Date.now();
+      void fetchMarkets().then(put);
     };
     const id = window.setInterval(tick, EVERY);
     document.addEventListener("visibilitychange", back);

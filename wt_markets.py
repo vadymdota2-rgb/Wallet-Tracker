@@ -63,7 +63,10 @@
 Hyperliquid уступает запасу Aster (золото, нефть).
 
 Кэш: ответ живёт TTL; постарше — отдаётся сразу, а свежий собирается в фоне
-одним потоком; ответа нет вовсе — запрос ждёт сборку не дольше COLD_WAIT.
+одним потоком; ответа нет вовсе — все запросы ждут одну сборку не дольше
+COLD_WAIT. Время ответа — когда получены цены (они меняются раз в
+SLOW[площадка][0]), и те же цифры — тот же объект: приложение спрашивает,
+только когда могли появиться новые, а сервер отдаёт готовые байты или «304».
 Ответ старше STALE_MAX (источники долго молчат) не отдаётся: в меню —
 прежний заголовок, а не вчерашние цены. Сбой одного источника не роняет
 остальные: пункт без данных просто не показывается.
@@ -303,10 +306,11 @@ def sane(key: str, p: Pair) -> bool:
     return lo <= a <= hi and lo <= b <= hi and max(a, b) <= MOVE_MAX * min(a, b)
 
 
-def compute(parts: dict[str, object], at: int) -> dict[str, Json]:
+def compute(parts: dict[str, object], at: int, since: int | None = None) -> dict[str, Json]:
     """Ответ по ответам источников: xyz, para, mkts, fx — часовые свечи EUR,
     JPY, GBP (Hyperliquid), ecb, mcap (доминация CoinMarketCap), aster (запас
-    золота и нефти)."""
+    золота и нефти). at — сейчас; since — когда получены цены (в ответ,
+    «обновлено N мин назад»; нет — at)."""
     dex_mk = {d: hl_markets(parts.get(d)) for d in DEXES}
     # Кандидаты по старшинству: Aster — после Hyperliquid, то есть запас.
     cand: list[tuple[str, Pair | None]] = [(key, dex_mk[dex].get(name)) for key, (dex, name) in HL.items()]
@@ -318,7 +322,9 @@ def compute(parts: dict[str, object], at: int) -> dict[str, Json]:
         if p and key not in got and sane(key, p):  # первый правдоподобный
             got[key] = p
     items = [{"k": k, "px": got[k][0], "prev": got[k][1]} for k in KEYS if k in got]
-    return {"ok": True, "at": at, "items": items} if items else {"ok": False, "error": "no_data"}
+    if not items:
+        return {"ok": False, "error": "no_data"}
+    return {"ok": True, "at": at if since is None else min(since, at), "items": items}
 
 
 # --- Сборка и кэш -------------------------------------------------------------
@@ -329,8 +335,9 @@ class _State:
         self.hit: tuple[float, dict[str, Json]] | None = None
         self.job: threading.Thread | None = None
         self.fail = 0.0
-        # Медленные источники: имя → (когда получен, годный ответ).
-        self.slow: dict[str, tuple[float, object]] = {}
+        # Медленные источники: имя → (когда получен — по монотонным часам,
+        # годный ответ, когда получен — время Unix).
+        self.slow: dict[str, tuple[float, object, int]] = {}
 
 
 _st = _State()
@@ -370,16 +377,18 @@ def fx_covers(raw: object, t: int) -> bool:
     return all(candle_close(raw.get(c), w) > 0 for c in FX_HL for w in ((close,) if is_open else (close, prev)))
 
 
-def _fresh(name: str, hit: tuple[float, object], t0: float) -> bool:
+def _fresh(name: str, hit: tuple[float, object, int], t0: float) -> bool:
     """Ответ источника из памяти ещё годится — сеть не нужна (в памяти — только
     источники SLOW)."""
     return t0 - hit[0] < SLOW[name][0] or (name == "fx" and fx_covers(hit[1], _now()))
 
 
-def build() -> dict[str, Json]:
-    """Опросить источники (параллельно, сбой одного — без него) и собрать ответ.
-    Источники SLOW — из памяти, пока свежи; молчат — прошлый годный ответ."""
+def _gather() -> tuple[dict[str, object], dict[str, int]]:
+    """Ответы источников (параллельно, сбой одного — без него) и когда
+    получены ответы SLOW (Unix). SLOW — из памяти, пока свежи; молчат —
+    прошлый годный ответ не старше SLOW[имя][1]."""
     parts: dict[str, object] = {}
+    since: dict[str, int] = {}
     got = threading.Lock()
     t0 = time.monotonic()
     with _lock:
@@ -388,7 +397,7 @@ def build() -> dict[str, Json]:
     for name, fn in _st.sources.items():
         hit = slow.get(name)
         if hit and _fresh(name, hit, t0):
-            parts[name] = hit[1]
+            parts[name], since[name] = hit[1], hit[2]
         else:
             ask[name] = fn
 
@@ -397,31 +406,51 @@ def build() -> dict[str, Json]:
             v = fn()
         except Exception:  # noqa: BLE001 — источник молчит: пункты без него
             v = None
+        at = None
         if name in SLOW:
             if _good(name, v):
+                at = _now()
                 with _lock:
-                    _st.slow[name] = (time.monotonic(), v)
+                    _st.slow[name] = (time.monotonic(), v, at)
             elif (old := slow.get(name)) and time.monotonic() - old[0] < SLOW[name][1]:
-                v = old[1]
+                v, at = old[1], old[2]
         with got:
             parts[name] = v
+            if at is not None:
+                since[name] = at
 
     threads = []
+    end = time.monotonic() + SOURCE_WAIT
     for item in ask.items():
         th = threading.Thread(target=one, args=item, daemon=True)
         try:
             th.start()
-        except RuntimeError:  # потоков не хватило — источник без ответа
+        except RuntimeError:  # потоков не хватило — спрашиваем сами, пока есть время
+            if time.monotonic() < end:
+                one(*item)
             continue
         threads.append(th)
-    end = time.monotonic() + SOURCE_WAIT
     for th in threads:
         th.join(max(0.0, end - time.monotonic()))
     with got:  # опоздавший источник — уже без него
-        now_parts = dict(parts)
-    res = compute(now_parts, _now())
+        return dict(parts), dict(since)
+
+
+def build() -> dict[str, Json]:
+    """Собрать ответ по ответам источников и положить в кэш.
+
+    Время ответа (at) — когда получены цены площадок Hyperliquid (самые
+    старые из взятых), а не когда собран ответ: цены из памяти не выдаются
+    за свежие, а «обновлено N мин назад» — правда. Те же цифры, что в
+    прошлом ответе, — тот же объект: сервер отдаёт те же байты, телефону —
+    «304» (как у карточки халвинга)."""
+    parts, since = _gather()
+    dex_at = [since[d] for d in DEXES if d in since]
+    res = compute(parts, _now(), min(dex_at) if dex_at else None)
     with _lock:
         if res.get("ok"):
+            if _st.hit and _st.hit[1] == res:
+                res = _st.hit[1]  # те же цифры — тот же объект (те же байты и ETag)
             _st.hit = (time.monotonic(), res)
         else:
             _st.fail = time.monotonic()
@@ -437,8 +466,9 @@ def _bg() -> None:
 
 
 def _start() -> threading.Thread | None:
-    """Фоновая сборка, если не идёт и не отдыхает после сбоя (звать под _lock)."""
-    if _st.job is not None or time.monotonic() - _st.fail < FAIL_WAIT:
+    """Фоновая сборка, если ещё не идёт (звать под _lock); потоков не хватило —
+    None."""
+    if _st.job is not None:
         return _st.job
     job = threading.Thread(target=_bg, daemon=True)
     try:
@@ -456,17 +486,22 @@ def _live(hit: tuple[float, dict[str, Json]] | None) -> tuple[float, dict[str, J
 
 def markets_data(wait: float = COLD_WAIT) -> dict[str, Json]:
     """Ответ /api/markets: свежий — из кэша; постарше — тоже, а новый
-    собирается в фоне; нет никакого (или он старше STALE_MAX) — ждём сборку
-    не дольше wait."""
+    собирается в фоне; нет никакого (или он старше STALE_MAX) — все ждут
+    одну и ту же сборку не дольше wait. Сборка только что ничего не дала —
+    следующая не раньше FAIL_WAIT (источники не долбим). Потоков не
+    хватило — собираем сами, как карточка халвинга."""
     with _lock:
         hit = _live(_st.hit)
         if hit and time.monotonic() - hit[0] < TTL:
             return hit[1]
+        if time.monotonic() - _st.fail < FAIL_WAIT:
+            return hit[1] if hit else {"ok": False, "error": "no_data"}
         job = _start()
         if hit:
             return hit[1]
-    if job is not None:
-        job.join(wait)
+    if job is None:
+        return build()
+    job.join(wait)
     with _lock:
         hit = _live(_st.hit)
     return hit[1] if hit else {"ok": False, "error": "no_data"}
