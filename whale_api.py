@@ -16963,7 +16963,14 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, calendar_data())
                 return
             if path in ("/markets", "/api/markets"):
-                self._json(200, markets_data())
+                # Одинаковый для всех подписчиков: кодируется раз на ответ, ETag и
+                # «304», только на телефоне подписчика (private); удачный — без
+                # строки в журнале. «Нет данных» — в журнал: источники молчат.
+                rep = markets_data()
+                if rep.get("ok") is True:
+                    self._json_public("markets", rep)
+                else:
+                    self._json(200, rep)
                 return
             if path in ("/liqs", "/api/liqs"):
                 self._json(200, liqs_data(qs.get("win", ["24h"])[0], qs.get("sym", [""])[0],

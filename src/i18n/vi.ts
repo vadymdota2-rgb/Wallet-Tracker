@@ -1140,6 +1140,7 @@ export const vi: Dict = {
   mk_10y_hint: "US 10Y là lợi suất trái phiếu kho bạc Mỹ 10 năm, thước đo lãi suất chủ chốt: tăng nghĩa là tiền đắt hơn, gây áp lực lên cổ phiếu và crypto; giảm thì ngược lại. Hợp đồng vĩnh cửu của Paragon trên Hyperliquid; thay đổi tính bằng điểm cơ bản (phần trăm của một phần trăm)",
   mk_about: "Nguồn và lưu ý",
   mk_ago: "{n} phút trước",
+  mk_ago_h: "{n} giờ trước",
   mk_bp: "bp",
   mk_bviv_hint: "BVIV là biến động ngụ ý 30 ngày của Bitcoin theo chỉ số Volmex, “VIX của Bitcoin”: tăng nghĩa là thị trường chờ biến động mạnh. Giá hợp đồng vĩnh cửu của Markets by Kinetiq trên Hyperliquid, không phải giá trị chỉ số. Ứng dụng này không liên kết với Volmex",
   mk_dxy_hint: "DXY là phép tính của chúng tôi theo công thức công khai của chỉ số đô la từ tỷ giá EUR, JPY, GBP (Hyperliquid) cùng CAD, SEK, CHF (ECB), không phải giá trị chính thức: có thể lệch khoảng 0,1%. Thay đổi tính từ lúc đóng cửa ngày ngoại hối (17:00 New York); cuối tuần là giá đóng cửa thứ Sáu. U.S. Dollar Index® là nhãn hiệu của ICE",

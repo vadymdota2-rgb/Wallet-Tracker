@@ -1140,6 +1140,7 @@ export const zh: Dict = {
   mk_10y_hint: "US 10Y 是美国 10 年期国债收益率，利率的核心基准：上升意味着资金变贵，压制股票和加密资产；下降则相反。Paragon 在 Hyperliquid 上的永续合约；变动以基点计（百分之一个百分点）",
   mk_about: "来源与声明",
   mk_ago: "{n}分钟前",
+  mk_ago_h: "{n}小时前",
   mk_bp: "基点",
   mk_bviv_hint: "BVIV 是按 Volmex 指数计算的比特币 30 天隐含波动率，即“比特币的 VIX”：上升意味着市场预期剧烈波动。此为 Markets by Kinetiq 在 Hyperliquid 上永续合约的价格，并非指数数值。本应用与 Volmex 无关联",
   mk_dxy_hint: "DXY 为我们按公开的美元指数公式，由 EUR、JPY、GBP（Hyperliquid）与 CAD、SEK、CHF（欧洲央行）汇率自行计算，并非官方数值，可能相差约 0.1%。涨跌以外汇交易日收盘（纽约 17:00）为基准，周末显示周五收盘。U.S. Dollar Index® 是 ICE 的商标",

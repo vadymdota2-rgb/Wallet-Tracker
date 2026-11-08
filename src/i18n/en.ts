@@ -1139,6 +1139,7 @@ export const en = {
   mk_10y_hint: "US 10Y is the 10-year US Treasury yield, the key benchmark for rates: rising means money gets more expensive, pressuring stocks and crypto; falling means the opposite. Paragon’s perpetual on Hyperliquid; change in basis points (hundredths of a percent)",
   mk_about: "Sources and disclaimers",
   mk_ago: "{n} min ago",
+  mk_ago_h: "{n} h ago",
   mk_bp: "bp",
   mk_bviv_hint: "BVIV is Bitcoin’s 30-day implied volatility per the Volmex index, the “VIX of Bitcoin”: rising means the market expects sharp moves. Price of the Markets by Kinetiq perpetual on Hyperliquid, not the index value. This app is not affiliated with Volmex",
   mk_dxy_hint: "DXY is our own calculation using the public US Dollar Index formula from EUR, JPY, GBP (Hyperliquid) and CAD, SEK, CHF (ECB) rates, not the official value: it may differ by about 0.1%. Change is from the FX day close (5 pm New York); on weekends, Friday’s close. U.S. Dollar Index® is a trademark of ICE",

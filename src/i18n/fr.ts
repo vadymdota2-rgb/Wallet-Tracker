@@ -1140,6 +1140,7 @@ export const fr: Dict = {
   mk_10y_hint: "US 10Y est le rendement du Trésor américain à 10 ans, la référence clé des taux : s’il monte, l’argent coûte plus cher et pèse sur les actions et la crypto ; s’il baisse, l’inverse. Perpétuel de Paragon sur Hyperliquid ; variation en points de base (centièmes de pour cent)",
   mk_about: "Sources et mentions",
   mk_ago: "il y a {n} min",
+  mk_ago_h: "il y a {n} h",
   mk_bp: "pb",
   mk_bviv_hint: "BVIV est la volatilité implicite à 30 jours du bitcoin selon l’indice Volmex, le « VIX du bitcoin » : si elle monte, le marché s’attend à de fortes variations. Prix du perpétuel de Markets by Kinetiq sur Hyperliquid, pas la valeur de l’indice. Cette app n’est pas affiliée à Volmex",
   mk_dxy_hint: "DXY est notre propre calcul selon la formule publique de l’indice du dollar, à partir d’EUR, JPY, GBP (Hyperliquid) et de CAD, SEK, CHF (BCE), et non la valeur officielle : écart possible d’environ 0,1 %. Variation depuis la clôture de la journée de change (17 h à New York) ; le week-end, clôture du vendredi. U.S. Dollar Index® est une marque d’ICE",

@@ -25,18 +25,20 @@ const KEEP = new Set([
   "wt-exflows-v1", "wt-etf-v1", "wt-etf-range", "wt-etf-mode", "wt-dom-v2", "wt-dom-range", "wt-mcap-v1", "wt-mcap-range",
   "wt-dg-seen", "wt-dg-anon", "wt-calendar-v1", "wt-btc-ex-open", "wt-bscx-ex-open",
   "wt-chart-v1", "wt-chart-draw-v1", "wt-chart-draw-at-v1", "wt-chart-gest",
-  "wt-digest-v1", "wt-btcw-v1",
+  "wt-digest-v1", "wt-btcw-v1", "wt-markets-v1",
 ]);
 
 /** Запасы ответов: { ключ запроса: { at, v } }. */
 const SAVED_MAPS = [
   "wt-options-v1", "wt-oihist-v1", "wt-liqmap-v1", "wt-liqcoins-v1", "wt-halving-v1", "wt-fng-v2",
   "wt-exflows-v1", "wt-etf-v1", "wt-dom-v2", "wt-mcap-v1", "wt-calendar-v1", "wt-digest-v1", "wt-btcw-v1",
+  "wt-markets-v1",
 ];
 const SAVED_MAX_AGE = 30 * 24 * 3600_000;
 /** Запасы короче общего срока: доминация старше трёх суток уже не «сейчас»
- *  (MCAP_MAX_AGE в lib/dom.ts) — и на устройстве её не держим. */
-const MAX_AGE: Record<string, number> = { "wt-mcap-v1": 3 * 24 * 3600_000 };
+ *  (MCAP_MAX_AGE в lib/dom.ts), рынки в меню старше шести часов — тоже
+ *  (MARKETS_AGE_MAX в lib/markets.ts) — и на устройстве их не держим. */
+const MAX_AGE: Record<string, number> = { "wt-mcap-v1": 3 * 24 * 3600_000, "wt-markets-v1": 6 * 3600_000 };
 const DRAW_AT_MAX_AGE = 90 * 24 * 3600_000;
 
 function json(key: string): unknown {

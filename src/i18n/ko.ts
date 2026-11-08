@@ -1140,6 +1140,7 @@ export const ko: Dict = {
   mk_10y_hint: "US 10Y는 미국 10년물 국채 수익률로 금리의 핵심 기준입니다. 오르면 돈이 비싸져 주식과 크립토에 부담, 내리면 그 반대입니다. Hyperliquid의 Paragon 무기한 계약. 변동은 베이시스 포인트(0.01%p) 단위",
   mk_about: "출처 및 고지",
   mk_ago: "{n}분 전",
+  mk_ago_h: "{n}시간 전",
   mk_bp: "bp",
   mk_bviv_hint: "BVIV는 Volmex 지수 기준 비트코인 30일 내재 변동성으로 ‘비트코인의 VIX’입니다. 오르면 시장이 급격한 움직임을 예상한다는 뜻입니다. Hyperliquid의 Markets by Kinetiq 무기한 계약 가격이며 지수 값이 아닙니다. 이 앱은 Volmex와 제휴하지 않았습니다",
   mk_dxy_hint: "DXY는 EUR·JPY·GBP(Hyperliquid)와 CAD·SEK·CHF(ECB) 환율로 공개된 달러 인덱스 공식에 따라 자체 계산한 값이며 공식 값이 아닙니다(약 0.1% 차이가 날 수 있음). 변동은 외환 거래일 종가(뉴욕 17시) 기준이며, 주말에는 금요일 종가입니다. U.S. Dollar Index®는 ICE의 상표입니다",

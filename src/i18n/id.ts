@@ -1140,6 +1140,7 @@ export const id: Dict = {
   mk_10y_hint: "US 10Y adalah imbal hasil obligasi AS 10 tahun, acuan utama suku bunga: naik berarti uang makin mahal dan menekan saham serta kripto; turun berarti sebaliknya. Perpetual Paragon di Hyperliquid; perubahan dalam basis poin (seperseratus persen)",
   mk_about: "Sumber dan catatan",
   mk_ago: "{n} mnt lalu",
+  mk_ago_h: "{n} jam lalu",
   mk_bp: "bp",
   mk_bviv_hint: "BVIV adalah volatilitas tersirat Bitcoin 30 hari menurut indeks Volmex, “VIX-nya Bitcoin”: naik berarti pasar memperkirakan pergerakan tajam. Harga perpetual Markets by Kinetiq di Hyperliquid, bukan nilai indeks. Aplikasi ini tidak berafiliasi dengan Volmex",
   mk_dxy_hint: "DXY adalah perhitungan kami sendiri dengan rumus publik indeks dolar dari kurs EUR, JPY, GBP (Hyperliquid) serta CAD, SEK, CHF (ECB), bukan nilai resmi: bisa berbeda sekitar 0,1%. Perubahan dihitung dari penutupan hari valas (17.00 New York); pada akhir pekan, penutupan Jumat. U.S. Dollar Index® adalah merek dagang ICE",

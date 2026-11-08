@@ -28186,5 +28186,23 @@
     "ja": "{n}分前",
     "ko": "{n}분 전",
     "zh": "{n}分钟前"
+  },
+  "mk_ago_h": {
+    "ru": "{n} ч назад",
+    "en": "{n} h ago",
+    "uk": "{n} год тому",
+    "de": "vor {n} Std.",
+    "es": "hace {n} h",
+    "fr": "il y a {n} h",
+    "pt": "há {n} h",
+    "pl": "{n} godz. temu",
+    "tr": "{n} sa önce",
+    "id": "{n} jam lalu",
+    "vi": "{n} giờ trước",
+    "hi": "{n} घंटे पहले",
+    "ar": "قبل {n} س",
+    "ja": "{n}時間前",
+    "ko": "{n}시간 전",
+    "zh": "{n}小时前"
   }
 }

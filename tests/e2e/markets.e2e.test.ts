@@ -60,6 +60,8 @@ interface Opts {
   lang?: string; width?: number; reply?: unknown; scale?: number;
   /** Ответы по очереди (последний — дальше всегда); задержка первого ответа, мс. */
   replies?: unknown[]; delay?: number;
+  /** Копия на устройстве (wt-markets-v1): когда записана (мс) и что. */
+  saved?: { at: number; v: unknown };
 }
 
 async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; errors: string[] }> {
@@ -78,12 +80,14 @@ async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; er
     if (o.delay && n <= 1) await new Promise((ok) => setTimeout(ok, o.delay));
     await r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
   });
-  await page.addInitScript((a: { lang: string }) => {
+  await page.addInitScript((a: { lang: string; saved: string }) => {
+    if (window !== window.top) return;
     if (sessionStorage.getItem("e2e")) return;
     sessionStorage.setItem("e2e", "1");
     localStorage.clear();
     localStorage.setItem("wt-miniapp-v7", JSON.stringify({ state: { lang: a.lang, langPinned: true }, version: 9 }));
-  }, { lang });
+    if (a.saved) localStorage.setItem("wt-markets-v1", a.saved);
+  }, { lang, saved: o.saved ? JSON.stringify({ all: o.saved }) : "" });
   await page.goto(`${base}/#tgWebAppData=${encodeURIComponent(`user=${encodeURIComponent('{"id":1}')}&hash=x`)}`);
   await page.evaluate(() => document.fonts.ready);
   await page.addStyleTag({ content: "#sp{display:none!important}" });
@@ -284,6 +288,38 @@ test("заголовок: «сейчас», через 20 минут — «20 м
     assert.equal(await page.locator(".mk-age.old").count(), old ? 1 : 0);
     await ctx.close();
   }
+});
+
+test("копия на устройстве: меню сразу с ней (без скелета), свежая — поверх; ответ сохраняется", async () => {
+  const old = { ...MARKETS, at: T - 40 * 60, items: MARKETS.items.map((x) => (x.k === "SP500" ? { ...x, px: 7000 } : x)) };
+  const { ctx, page } = await open({ saved: { at: T * 1000 - 40 * 60_000, v: old }, delay: 1500 });
+  await page.locator(".drawer .mk-cell").first().waitFor();
+  assert.equal(await page.locator(".mk-skel").count(), 0);
+  assert.match(sp(await page.locator('.mk-cell[data-k="SP500"] .mk-px').textContent()), /^7 000$/);
+  assert.equal(sp(await page.locator(".mk-age").textContent()), "40 мин назад");
+  assert.equal(await page.locator(".mk-age.old").count(), 1);
+  await page.locator('.mk-cell[data-k="SP500"] .mk-px', { hasText: "7 373" }).waitFor();
+  assert.equal(sp(await page.locator(".mk-age").textContent()), I18N["mk_now"]!["ru"]);
+  const kept = await page.evaluate(() => JSON.parse(localStorage.getItem("wt-markets-v1") ?? "null"));
+  assert.equal(kept?.all?.v?.at, MARKETS.at);
+  await ctx.close();
+});
+
+test("копия старше шести часов не показывается и стирается; битая — тоже", async () => {
+  for (const saved of [{ at: T * 1000 - 7 * 3_600_000, v: { ...MARKETS, at: T - 7 * 3_600 } },
+    { at: T * 1000 - 60_000, v: { ...MARKETS, at: T - 7 * 3_600 } }, { at: T * 1000, v: "мусор" }]) {
+    const { ctx, page } = await open({ saved, delay: 1500 });
+    await page.locator(".drawer .mk-skel").waitFor();
+    assert.equal(await page.evaluate(() => localStorage.getItem("wt-markets-v1")), null);
+    await ctx.close();
+  }
+});
+
+test("через два часа — «2 ч назад»", async () => {
+  const { ctx, page } = await open({ reply: { ...MARKETS, at: T - 2 * 3_600 - 120 } });
+  await page.locator(".drawer .mk-cell").first().waitFor();
+  assert.equal(sp(await page.locator(".mk-age").textContent()), "2 ч назад");
+  await ctx.close();
 });
 
 test("пока ответа нет — скелет сетки, не прыжок заголовка; пришёл — цифры", async () => {

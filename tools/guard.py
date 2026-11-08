@@ -755,7 +755,7 @@ say("доминация и альтсезон — авточистка: брош
     "def tmp_sweep(folder: str) -> int:" in api and "    tmp_sweep(CACHE_DIR)\n" in api and "TMP_KEEP = 300" in api
     and "        if coin in EXCLUDE:\n            continue\n" in _dms and " or coin in EXCLUDE:" in _dms
     and "if (hit && !v) dropSaved(DOM_SAVED);" in read(f"{APP}/src/lib/api.ts") and "if (hit && !ok) dropSaved(MCAP_SAVED);" in read(f"{APP}/src/lib/api.ts")
-    and '{ "wt-mcap-v1": 3 * 24 * 3600_000 }' in read(f"{APP}/src/lib/storage.ts") and os.path.isfile(f"{APP}/tests/storage.test.ts")
+    and '"wt-mcap-v1": 3 * 24 * 3600_000' in read(f"{APP}/src/lib/storage.ts") and os.path.isfile(f"{APP}/tests/storage.test.ts")
     and "test_abandoned_temp_copies_are_swept_at_start" in read(f"{APP}/tests/test_disk_cache.py")
     and "test_excluded_coins_are_neither_asked_nor_kept" in read(f"{APP}/tests/test_dom.py"))
 say("доминация и альтсезон — ревизия строк: снятая с торгов между обходами монета не теряет последних дней (хвост — ещё GONE_DAYS суток); новый день получен, только если он есть почти у всех монет (FRESH_SHARE), — обход, прерванный лимитом, дописывается в тот же день; изменения капитализации и доминации за 7/30/365 дней — от времени ответа; старая копия при сбое сети — с пометкой дня; дайджест не выдаёт старый индекс за сегодняшний",
@@ -2008,6 +2008,13 @@ say("рынки в меню — вид: заголовок «Рынки» и в�
     and "age >= MARKETS_STALE_MIN" in _mk_tsx and "export function barShare(" in read(f"{APP}/src/lib/markets.ts")
     and "@media (prefers-reduced-motion: reduce)" in _mk_css and "var(--fg)" not in _mk_css and "color: var(--ink)" in _mk_css
     and all(k in _i18n for k in ("mk_now", "mk_ago")))
+say("рынки в меню как халвинг — кэш и хранение: удачный ответ кодируется раз (ETag, «304», private), без строки в журнале, «нет данных» — в журнал; копия на устройстве (wt-markets-v1) — меню сразу с ней, старше 6 часов не берётся и стирается (и уборкой хранилища); без мёртвых текстов и экспортов; раздел в README",
+    '                rep = markets_data()\n                if rep.get("ok") is True:\n                    self._json_public("markets", rep)\n' in api
+    and 'const MARKETS_SAVED = "wt-markets-v1";' in read(f"{APP}/src/lib/api.ts") and "if (hit && !v) dropSaved(MARKETS_SAVED);" in read(f"{APP}/src/lib/api.ts")
+    and '"wt-markets-v1": 6 * 3600_000' in _st and "export const MARKETS_AGE_MAX = 6 * 3_600;" in read(f"{APP}/src/lib/markets.ts")
+    and os.path.isfile(f"{APP}/tests/test_markets_route.py") and "tests/test_markets_route.py" in read(f"{APP}/.github/workflows/tests.yml")
+    and "def test_no_dead_texts_or_exports(self):" in read(f"{APP}/tests/test_markets_policy.py")
+    and "### Рынки в меню" in read(f"{APP}/README.md") and "рынки в меню живут на устройстве шесть часов" in read(f"{APP}/tests/storage.test.ts"))
 _ci = read(f"{APP}/.github/workflows/tests.yml")
 say("CI: мутации карты ликвидаций — своим заданием с лимитом 75 минут (вместе со «Страхом и жадностью» не укладывались в 45)",
     "  mutation-liqmap:\n    runs-on: ubuntu-latest\n    timeout-minutes: 75" in _ci

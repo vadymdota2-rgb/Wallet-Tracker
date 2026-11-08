@@ -1140,6 +1140,7 @@ export const ja: Dict = {
   mk_10y_hint: "US 10Yは米国10年債利回りで、金利の最重要指標。上昇はお金が高くなり株や暗号資産の重しに、低下はその逆。HyperliquidのParagon無期限先物。変化はベーシスポイント（0.01%）単位",
   mk_about: "出典と注意事項",
   mk_ago: "{n}分前",
+  mk_ago_h: "{n}時間前",
   mk_bp: "bp",
   mk_bviv_hint: "BVIVはVolmex指数によるビットコインの30日インプライド・ボラティリティで、「ビットコインのVIX」。上昇は相場が大きな値動きを予想していることを示します。HyperliquidのMarkets by Kinetiq無期限先物の価格で、指数の値ではありません。本アプリはVolmexと提携関係にありません",
   mk_dxy_hint: "DXYは、EUR・JPY・GBP（Hyperliquid）とCAD・SEK・CHF（ECB）の為替から公開されたドル指数の式で当社が算出した値で、公式値ではありません（約0.1%の差が出ることがあります）。変化は為替取引日の終値（ニューヨーク17時）から、週末は金曜の終値です。U.S. Dollar Index®はICEの商標です",

@@ -51,7 +51,7 @@ class PolicyTest(unittest.TestCase):
         self.assertIn("/markets", api.PAID_PATHS)
         self.assertIs(api.markets_data, mk.markets_data)
         src = read("whale_api.py")
-        self.assertIn('if path in ("/markets", "/api/markets"):\n                self._json(200, markets_data())', src)
+        self.assertIn('                rep = markets_data()\n                if rep.get("ok") is True:\n                    self._json_public("markets", rep)\n', src)
         for name in SOURCES:
             self.assertIn(f'    "{name}": ', src.split("wt_markets.set_sources({")[1].split("})")[0])
         self.assertEqual(src.split("wt_markets.set_sources({")[1].split("})")[0].count('\n    "'), len(SOURCES))
@@ -131,6 +131,25 @@ class PolicyTest(unittest.TestCase):
         for key, hint in (("SP500", "mk_sp_hint"), ("XYZ100", "mk_xyz_hint"), ("DXY", "mk_dxy_hint"),
                           ("BVIV", "mk_bviv_hint"), ("US10Y", "mk_10y_hint")):
             self.assertIn(f"{key}: \"{hint}\"", tsx, key)
+
+    def test_no_dead_texts_or_exports(self):
+        # Каждый текст модуля (mk_…) показывается экраном, каждый экспорт
+        # lib/markets.ts кому-то нужен (приложению или тестам).
+        tr = json.loads(read("tools", "i18n.json"))
+        tsx = read("src", "components", "Markets.tsx")
+        self.assertEqual([k for k in tr if k.startswith("mk_") and f'"{k}"' not in tsx], [])
+        lib = read("src", "lib", "markets.ts")
+        others = ""
+        for folder in ("src", "tests"):
+            for base, _, files in os.walk(os.path.join(ROOT, folder)):
+                for f in files:
+                    path = os.path.join(base, f)
+                    if f.endswith((".ts", ".tsx")) and not path.endswith(os.path.join("lib", "markets.ts")):
+                        with open(path, encoding="utf-8") as fh:
+                            others += fh.read()
+        dead = [e for e in re.findall(r"export (?:const|function|type|interface) (\w+)", lib)
+                if not re.search(rf"\b{e}\b", others)]
+        self.assertEqual(dead, [])
 
     def test_styles_in_own_file(self):
         self.assertIn('import "./Markets.css";', read("src", "components", "Markets.tsx"))

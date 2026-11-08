@@ -42,6 +42,16 @@ test("доминация живёт на устройстве трое суто�
   assert.equal(mem.getItem("wt-fng-v2"), null, "31 день — стёрт");
 });
 
+test("рынки в меню живут на устройстве шесть часов (MARKETS_AGE_MAX), не 30 дней", () => {
+  mem.m.clear();
+  mem.setItem("wt-markets-v1", copy(7 * 3_600_000));
+  sweepStorage();
+  assert.equal(mem.getItem("wt-markets-v1"), null, "7 часов — стёрта");
+  mem.setItem("wt-markets-v1", copy(5 * 3_600_000));
+  sweepStorage();
+  assert.notEqual(mem.getItem("wt-markets-v1"), null, "5 часов — остаётся");
+});
+
 test("доминация моложе трёх суток остаётся", () => {
   mem.m.clear();
   mem.setItem("wt-mcap-v1", copy(2 * DAY));

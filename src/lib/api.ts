@@ -11,7 +11,7 @@ import { HALVING_TTL_MS, clockSkew, pickHalving, validHalving, type HalvingReply
 import { FNG_SAVED_MAX_MS, FNG_TTL_MS, validFng, type FngReply } from "./fng";
 import { ETF_TTL_MS, validEtf, type EtfReply } from "./etf";
 import { validLiqMap } from "./liqmap";
-import { validMarkets, type MarketsReply } from "./markets";
+import { MARKETS_AGE_MAX, validMarkets, type MarketsReply } from "./markets";
 import { DOM_TTL_MS, MCAP_MAX_AGE, MCAP_TTL_MS, validDom, validMcap, type DomReply, type McapReply } from "./dom";
 import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
@@ -563,12 +563,31 @@ export function savedCalendar(): CalReply | null {
 }
 /* Рынки в меню: сервер пересобирает их раз в минуту, приложение — не чаще.
    Ответ — через validMarkets: битый или чужой ответ меню не роняет (null —
-   и вместо сетки остаётся прежний заголовок). */
+   и вместо сетки остаётся прежний заголовок). Последний годный ответ лежит на
+   устройстве: открытое меню показывает его сразу (с «N мин назад»), а свежий
+   догружается. Копия старше MARKETS_AGE_MAX — не берётся и стирается (и
+   уборкой хранилища, storage.ts). */
 const MARKETS_TTL = 60_000;
+const MARKETS_SAVED = "wt-markets-v1";
+function savedMarkets(): MarketsReply | null {
+  const hit = readSaved<unknown>(MARKETS_SAVED).all;
+  // Моложе MARKETS_AGE_MAX и по времени записи на устройство, и по времени
+  // самой сборки (её проверяет validMarkets).
+  const at = Number(hit?.at);
+  const v = hit && Number.isFinite(at) && Date.now() - at < MARKETS_AGE_MAX * 1000 ? validMarkets(hit.v) : null;
+  if (hit && !v) dropSaved(MARKETS_SAVED);
+  return v;
+}
 export const fetchMarkets = () =>
   remember<MarketsReply | null>("/api/markets", MARKETS_TTL,
-    () => call<unknown>("/api/markets", { timeout: 15_000 }).then((r) => validMarkets(r)), (v) => v !== null);
-export const peekMarkets = () => peek<MarketsReply | null>("/api/markets", MARKETS_TTL);
+    () => call<unknown>("/api/markets", { timeout: 15_000 }).then((r) => {
+      const v = validMarkets(r);
+      // На устройство — сам ответ сервера (он прошёл проверку): при чтении его
+      // снова проверит validMarkets — и по времени сборки тоже.
+      if (v) writeSaved(MARKETS_SAVED, { all: { at: Date.now(), v: r } });
+      return v;
+    }), (v) => v !== null);
+export const peekMarkets = () => peek<MarketsReply | null>("/api/markets", MARKETS_TTL) ?? savedMarkets();
 /** Свежие рынки мимо памяти — для самообновления открытого меню. */
 export function refreshMarkets(): Promise<MarketsReply | null> {
   forget("/api/markets");

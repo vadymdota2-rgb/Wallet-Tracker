@@ -28,8 +28,9 @@ export const MARKET_PX_MAX = 1e7;
 /** Время сборки впереди часов телефона больше чем на сутки — не ответ. */
 const AHEAD_MAX = 86_400;
 /** Сборка старше шести часов — не ответ: вчерашние цены не показываем (сервер
- *  старше получаса и так не отдаёт; запас — на неточные часы телефона). */
-const AGE_MAX = 6 * 3_600;
+ *  старше получаса и так не отдаёт; запас — на неточные часы телефона и на
+ *  копию на устройстве: её тоже не держим дольше, см. storage.ts). */
+export const MARKETS_AGE_MAX = 6 * 3_600;
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const price = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0 && v < MARKET_PX_MAX;
@@ -39,7 +40,7 @@ const price = (v: unknown): v is number => typeof v === "number" && Number.isFin
 export function validMarkets(raw: unknown, now: number = Date.now() / 1000): MarketsReply | null {
   if (!isObj(raw) || raw["ok"] !== true || !Array.isArray(raw["items"])) return null;
   const at = raw["at"];
-  if (typeof at !== "number" || !Number.isInteger(at) || at < now - AGE_MAX || at > now + AHEAD_MAX) return null;
+  if (typeof at !== "number" || !Number.isInteger(at) || at < now - MARKETS_AGE_MAX || at > now + AHEAD_MAX) return null;
   const seen = new Map<MarketKey, MarketItem>();
   for (const it of raw["items"].slice(0, 64)) {
     if (!isObj(it)) continue;
@@ -70,8 +71,8 @@ export const isPercent = (k: MarketKey): boolean => k === "US10Y" || k === "BTCD
 
 /** Полоска под ячейкой — величина изменения за сутки, 0…1: полная — 2 % (у
  *  доходности — 10 б. п.); ненулевое изменение видно всегда (не меньше BAR_MIN). */
-export const BAR_PCT = 2;
-export const BAR_BP = 10;
+const BAR_PCT = 2;
+const BAR_BP = 10;
 export const BAR_MIN = 0.06;
 export function barShare(it: MarketItem): number {
   const c = change(it);

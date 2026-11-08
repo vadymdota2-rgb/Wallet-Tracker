@@ -63,7 +63,7 @@ jobs:
           wt_dom.py tests/test_dom.py tests/test_dom_policy.py tests/test_dom_fuzz.py tests/test_dom_http.py tests/test_cache_refresher.py wt_mcap.py tests/test_mcap.py tests/test_mcap_fuzz.py
           wt_fng.py tests/fng_fake.py tests/test_fng_api.py tests/test_fng_fuzz.py tests/test_fng_security.py tests/test_fng_policy.py tools/mutate-fng.py
           wt_liqmap.py tests/test_liqmap.py tests/test_liqmap_fuzz.py tests/test_liqmap_disk.py tests/test_liqmap_pre.py tests/test_liqmap_http.py tests/test_liqmap_policy.py tests/test_liqmap_security.py tests/test_liqmap_fund.py tests/test_liqmap_levs.py tools/mutate-liqmap.py tools/liqmap-fixture.py
-          wt_markets.py tests/test_markets.py tests/test_markets_fuzz.py tests/test_markets_security.py tests/test_markets_policy.py tools/mutate-markets.py
+          wt_markets.py tests/test_markets.py tests/test_markets_fuzz.py tests/test_markets_security.py tests/test_markets_policy.py tests/test_markets_route.py tools/mutate-markets.py
       # Биткоин: SQL собирается из констант модуля (окна, пороги, условия),
       # всё пришедшее снаружи — только параметрами «?» — поэтому без S608;
       # setup() принимает общие механизмы сервера поимённо — без PLR0913.

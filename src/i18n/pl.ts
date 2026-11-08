@@ -1140,6 +1140,7 @@ export const pl: Dict = {
   mk_10y_hint: "US 10Y to rentowność 10-letnich obligacji USA, główny punkt odniesienia dla stóp: rośnie — pieniądz drożeje, presja na akcje i krypto; spada — odwrotnie. Kontrakt wieczysty Paragon na Hyperliquid; zmiana w punktach bazowych (setnych częściach procenta)",
   mk_about: "Źródła i zastrzeżenia",
   mk_ago: "{n} min temu",
+  mk_ago_h: "{n} godz. temu",
   mk_bp: "pb",
   mk_bviv_hint: "BVIV to implikowana 30-dniowa zmienność bitcoina według indeksu Volmex, „VIX bitcoina”: rośnie — rynek spodziewa się gwałtownych ruchów. Cena kontraktu wieczystego Markets by Kinetiq na Hyperliquid, a nie wartość indeksu. Aplikacja nie jest powiązana z Volmex",
   mk_dxy_hint: "DXY to nasze własne wyliczenie według jawnego wzoru indeksu dolara z kursów EUR, JPY, GBP (Hyperliquid) oraz CAD, SEK, CHF (EBC), a nie wartość oficjalna: może się różnić o około 0,1%. Zmiana — od zamknięcia dnia walutowego (17:00 w Nowym Jorku), w weekend — zamknięcie piątku. U.S. Dollar Index® to znak towarowy ICE",
