@@ -2,16 +2,13 @@
 нефть WTI, US 10Y, BVIV, BTC.D, USDT.D.
 
 Проверяем: разбор каждого источника (Hyperliquid, курсы ЕЦБ, доминация
-CoinMarketCap), формулу DXY
-и сверку EUR и JPY с ЕЦБ, что снятые с торгов
-рынки не берутся, что сбой или мусор одного источника не роняет остальные,
-что в ответе — только наши ключи и правдоподобные числа (рамки, скачок за
-сутки), кэш, сборку в фоне и что старый ответ не отдаётся, правила модуля
-(без сети, без опасного), права (ни Deribit, ни VIX, ни TradingView, ни
-имени Nasdaq-100) и
-что маршрут — для подписчиков.
+CoinMarketCap), формулу DXY по валютному дню и сверку курсов с ЕЦБ, что
+снятые с торгов рынки не берутся, что сбой или мусор одного источника не
+роняет остальные, правдоподобие (рамки, скачок за сутки), кэш, сборку в фоне,
+память источников с запасом на сбой и бюджет запросов Hyperliquid. Правила
+кода и права — test_markets_policy.py, случайные входы и договор с
+приложением — test_markets_fuzz.py, атаки — test_markets_security.py.
 """
-import ast
 import calendar
 import json
 import math
@@ -25,7 +22,6 @@ from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-import whale_api as api  # noqa: E402 — модули лежат в корне репозитория
 import wt_markets as mk  # noqa: E402
 
 NOW = 1_794_100_000
@@ -179,6 +175,8 @@ class ComputeTest(unittest.TestCase):
         self.assertFalse(mk.sane("GOLD", (4000, 9000)))
         self.assertFalse(mk.sane("US10Y", (48.75, 48.77)))  # процент не в тех единицах
         self.assertFalse(mk.sane("DXY", (9.7, 9.7)))
+        self.assertFalse(mk.sane("BTCD", (60, 100.5)))  # вчера — тоже в рамках
+        self.assertFalse(mk.sane("US10Y", (4.8, 31)))
         self.assertFalse(mk.sane("BTCD", (100.5, 99)))
         self.assertFalse(mk.sane("BVIV", (0.42, 0.41)))  # доля вместо процентов
 
@@ -246,8 +244,124 @@ class CacheTest(unittest.TestCase):
             mk._st.hit = (time.monotonic() - mk.TTL - 1, first)
             self.assertIs(mk.markets_data(0), first)
             self.wait()
-            self.assertEqual(len(calls), 2 * len(PARTS))
+            # Источники из памяти (площадки Hyperliquid, ЕЦБ, свечи) свежи — их не спрашиваем.
+            self.assertEqual(len(calls), 2 * len(PARTS) - len(mk.SLOW))
+            self.assertEqual(sorted(calls[len(PARTS):]), sorted(set(PARTS) - set(mk.SLOW)))
             self.assertIsNot(mk._st.hit[1], first)
+
+    def test_slow_sources_cached_then_kept_on_failure(self):
+        calls: list = []
+        live = {"ok": True}
+
+        def src(name):
+            def fn():
+                calls.append(name)
+                return PARTS[name] if live["ok"] else None
+            return fn
+
+        mk.set_sources({name: src(name) for name in PARTS})
+        with mock.patch.object(mk, "_now", return_value=NOW):
+            self.assertIn("DXY", items(mk.build()))
+            self.assertEqual(set(mk._st.slow), set(mk.SLOW))
+            # Срок свежести прошёл: спрашиваем снова (кроме свечей — в памяти
+            # есть нужные закрытия), а источники молчат — берём прошлые годные
+            # ответы, все пункты на месте.
+            for name in mk.SLOW:
+                at, raw = mk._st.slow[name]
+                mk._st.slow[name] = (at - mk.SLOW[name][0] - 1, raw)
+            live["ok"] = False
+            calls.clear()
+            res = mk.build()
+            self.assertEqual(set(calls), set(PARTS) - {"fx"})
+            # Все пункты на месте, кроме доминации: у неё свой кэш в модуле доминации.
+            self.assertEqual(set(items(res)), set(mk.KEYS) - {"BTCD", "USDTD"})
+            # Прошлый ответ старше запаса — пунктов без него нет (свечи с нужными
+            # закрытиями годны в любом возрасте, но без курсов ЕЦБ DXY нет).
+            for name in mk.SLOW:
+                at, raw = mk._st.slow[name]
+                mk._st.slow[name] = (at - mk.SLOW[name][1], raw)
+            self.assertEqual(mk.build(), {"ok": False, "error": "no_data"})
+            # Мусор вместо ответа не запоминается.
+            live["ok"] = True
+            mk._st.slow.clear()
+            mk.set_sources({**{n: src(n) for n in PARTS}, "ecb": lambda: {"rates": "x"}, "fx": lambda: {"EUR": []},
+                            "xyz": lambda: [{"universe": []}, []], "para": lambda: "x", "mkts": lambda: None})
+            mk.build()
+            self.assertEqual(mk._st.slow, {})
+
+    def test_hyperliquid_budget(self):
+        # Бюджет Hyperliquid общий для сервера: цены площадок — не чаще раза в
+        # 5 минут, свечи — только когда в памяти нет нужного закрытия.
+        calls: list = []
+        mk.set_sources({name: (lambda v=v, n=name: calls.append(n) or v) for name, v in PARTS.items()})
+        hl_names = {"xyz", "para", "mkts", "fx"}
+        t, mono = [NOW], [1000.0]
+        with mock.patch.object(mk, "_now", side_effect=lambda: t[0]), \
+             mock.patch.object(mk.time, "monotonic", side_effect=lambda: mono[0]):
+            for _ in range(60):  # час, раз в минуту
+                mk.build()
+                t[0] += 60
+                mono[0] += 60
+        asked = [c for c in calls if c in hl_names]
+        self.assertEqual(asked.count("fx"), 1)  # выходные: закрытия пятницы и четверга уже в памяти
+        for dex in ("xyz", "para", "mkts"):
+            self.assertEqual(asked.count(dex), 12, dex)  # раз в 5 минут
+        self.assertEqual(mk.SLOW["xyz"][0], 300.0)
+        # Вес запросов Hyperliquid в минуту — около 1 % от 1200.
+        self.assertLessEqual((3 * 12 * 20 + 22) / 60, 13)
+
+    def test_fx_candles_asked_again_only_after_new_close(self):
+        self.assertTrue(mk.fx_covers(FX, NOW))
+        self.assertTrue(mk.fx_covers(FX, WD))  # будни: нужно только прошлое закрытие (четверг)
+        self.assertFalse(mk.fx_covers(FX, FRI + 7 * 86400))  # неделя прошла — закрытий нет
+        self.assertFalse(mk.fx_covers({**FX, "GBP": []}, NOW))
+        self.assertFalse(mk.fx_covers(None, NOW))
+        # Выходные: нужны оба закрытия — пятницы и четверга; в будни — только
+        # последнее (вчерашнее), позавчерашнего может и не быть.
+        only_fri = {c: [x for x in v if x["t"] >= (FRI - 3600) * 1000] for c, v in FX.items()}
+        self.assertFalse(mk.fx_covers(only_fri, NOW))
+        since_thu = {c: [x for x in v if x["t"] >= (THU - 3600) * 1000] for c, v in FX.items()}
+        self.assertTrue(mk.fx_covers(since_thu, WD))
+        self.assertTrue(mk.fx_covers(since_thu, NOW))
+        # Понедельник после закрытия (22:00 UTC): нужно закрытие понедельника — его нет.
+        self.assertFalse(mk.fx_covers(FX, FRI + 3 * 86400 + 60))
+
+    def test_parse_edges(self):
+        # Логическое — не число (JSON true), цена за пределом — не цена.
+        self.assertIsNone(mk.pair(True, True))
+        self.assertIsNone(mk.pair(mk.PX_MAX, 1))
+        self.assertEqual(mk.pair("7373.1", 7392.9), (7373.1, 7392.9))
+        self.assertEqual(mk.hl_markets(hl({"xyz:SP500": (mk.PX_MAX * 2, 7000), "xyz:GOLD": (4066, 4079)})), {"GOLD": (4066.0, 4079.0)})
+        bad = hl({"xyz:SP500": (7373, 7392)})
+        bad[1][0] = {"markPx": True, "prevDayPx": True}
+        self.assertEqual(mk.hl_markets(bad), {})
+        # День ЕЦБ — только дата «ГГГГ-ММ-ДД».
+        day = ECB["rates"]["2026-11-06"]
+        self.assertEqual(set(mk.ecb_rates({"rates": {"x": day, "2026-11-06T00": day, " 2026-11-06": day, "2026-11-06": day}})),
+                         {"2026-11-06"})
+        # Доминация — только из годного ответа модуля.
+        for ok in (False, None, "true", 1):
+            self.assertEqual(mk.dominance({**MCAP, "ok": ok}), {}, ok)
+
+    def test_ny_offset_edges(self):
+        # Летнее время Нью-Йорка: с 2:00 второго воскресенья марта до 2:00
+        # первого воскресенья ноября (местных) — и ни днём раньше.
+        def at(s):
+            return calendar.timegm(time.strptime(s, "%Y-%m-%d %H:%M"))
+        for when, off in (("2026-03-07 12:00", -5), ("2026-03-08 06:59", -5), ("2026-03-08 07:00", -4),
+                          ("2026-10-31 12:00", -4), ("2026-11-01 05:59", -4), ("2026-11-01 06:00", -5),
+                          ("2027-03-14 07:00", -4), ("2027-03-13 12:00", -5), ("2027-11-06 12:00", -4)):
+            self.assertEqual(mk.ny_offset(at(when)), off * 3600, when)
+
+    def test_parse_limits(self):
+        # Огромные ответы: хвост за пределом не смотрим — и не падаем.
+        big = [{"universe": [{"name": f"xyz:M{i}"} for i in range(mk.UNI_MAX)] + [{"name": "xyz:SP500"}]},
+               [{"markPx": "1", "prevDayPx": "1"}] * mk.UNI_MAX + [{"markPx": "7000", "prevDayPx": "7000"}]]
+        self.assertNotIn("SP500", mk.hl_markets(big))
+        many = {"rates": {f"2026-{m:02d}-{d:02d}": ECB["rates"]["2026-11-06"] for m in range(1, 13) for d in range(1, 29)}}
+        self.assertEqual(len(mk.ecb_rates(many)), mk.DAYS_MAX)
+        tail = FX["EUR"] + [{"t": 0, "c": "1"}] * mk.CANDLES_MAX
+        self.assertEqual(mk.candle_close(tail, FRI), 0.0)
 
     def test_failing_sources(self):
         def boom():
@@ -301,60 +415,3 @@ class CacheTest(unittest.TestCase):
             gate.set()
             self.wait()
             self.assertTrue(mk.markets_data(0)["ok"])
-
-
-class PolicyTest(unittest.TestCase):
-    def tree(self) -> ast.Module:
-        with open(os.path.join(ROOT, "wt_markets.py"), encoding="utf-8") as f:
-            return ast.parse(f.read())
-
-    def test_module_has_no_network_files_or_eval(self):
-        found = set()
-        for n in ast.walk(self.tree()):
-            if isinstance(n, ast.Import):
-                found |= {a.name for a in n.names}
-            elif isinstance(n, ast.ImportFrom):
-                found.add(n.module or "")
-        self.assertLessEqual(found, {"__future__", "calendar", "math", "re", "threading", "time", "collections.abc", "typing"})
-        bad = [n.func.id for n in ast.walk(self.tree()) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
-               and n.func.id in {"eval", "exec", "compile", "__import__", "open", "getattr", "setattr"}]
-        self.assertEqual(bad, [])
-        self.assertEqual([n.value for n in ast.walk(self.tree()) if isinstance(n, ast.Constant)
-                          and isinstance(n.value, str) and "://" in n.value], [])
-
-    def test_server_wiring_and_paid_route(self):
-        self.assertIn("/api/markets", api.PAID_PATHS)
-        self.assertIn("/markets", api.PAID_PATHS)
-        self.assertIs(api.markets_data, mk.markets_data)
-        with open(os.path.join(ROOT, "whale_api.py"), encoding="utf-8") as f:
-            src = f.read()
-        self.assertIn('if path in ("/markets", "/api/markets"):\n                self._json(200, markets_data())', src)
-        for name in PARTS:
-            self.assertIn(f'    "{name}": ', src.split("wt_markets.set_sources({")[1].split("})")[0])
-        self.assertEqual(src.split("wt_markets.set_sources({")[1].split("})")[0].count('\n    "'), len(PARTS))
-        self.assertIn('"mcap": lambda: wt_mcap.mcap_data(0),', src)  # доминация — из кэша, без ожидания
-
-    def test_rights(self):
-        # Deribit (DVOL) — только для личного пользования; VIX — индекс Cboe по
-        # лицензии; XYZ100 — не Nasdaq-100; котировки TradingView брать нельзя
-        # (только их окна): ни в источниках, ни в ключах.
-        with open(os.path.join(ROOT, "whale_api.py"), encoding="utf-8") as f:
-            block = f.read().split("# --- Рынки в меню (wt_markets.py)")[1].split("markets_data = wt_markets")[0]
-        self.assertNotIn("deribit.com", block)
-        self.assertNotIn("cboe", block.lower())
-        self.assertNotIn("tradingview", block.lower())
-        self.assertEqual(set(mk.KEYS) & {"DVOL", "VIX", "NDX"}, set())
-        self.assertNotIn("dvol", "".join(mk.KEYS).lower())
-        with open(os.path.join(ROOT, "tools", "i18n.json"), encoding="utf-8") as f:
-            tr = json.load(f)
-        for lang, v in tr["mk_src"].items():
-            self.assertNotIn("Deribit", v, lang)
-            self.assertIn("CoinMarketCap", v, lang)  # ссылку ставит экран — по этому слову
-        for lang in tr["mk_sp_hint"]:
-            self.assertIn("S&P Dow Jones Indices", tr["mk_sp_hint"][lang], lang)
-            self.assertIn("Standard & Poor’s Financial Services LLC", tr["mk_sp_hint"][lang], lang)
-            self.assertIn("Nasdaq-100", tr["mk_xyz_hint"][lang], lang)
-            self.assertIn("ICE", tr["mk_dxy_hint"][lang], lang)
-            self.assertIn("WTI", tr["mk_oil_hint"][lang], lang)
-            self.assertIn("Volmex", tr["mk_bviv_hint"][lang], lang)
-            self.assertIn("Kinetiq", tr["mk_bviv_hint"][lang], lang)

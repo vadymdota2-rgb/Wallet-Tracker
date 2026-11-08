@@ -68,6 +68,8 @@ test("знаки после запятой — по масштабу", () => {
   assert.equal(digits({ k: "XYZ100", px: 26925, prev: 1 }), 0);
   assert.equal(digits({ k: "US10Y", px: 4.875, prev: 1 }), 2);
   assert.equal(digits({ k: "GOLD", px: 4066.2, prev: 1 }), 0);
+  assert.equal(digits({ k: "GOLD", px: 1000, prev: 1 }), 0);
+  assert.equal(digits({ k: "GOLD", px: 999.9, prev: 1 }), 2);
   assert.equal(digits({ k: "BVIV", px: 42.4, prev: 1 }), 2);
   assert.equal(digits({ k: "BTCD", px: 60.44, prev: 1 }), 2);
   assert.equal(digits({ k: "USDTD", px: 4.1, prev: 1 }), 2);

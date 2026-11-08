@@ -13,6 +13,7 @@
     "typecheck:dom": "node tools/typecheck-dom.mjs",
     "typecheck:fng": "node tools/typecheck-fng.mjs",
     "typecheck:liqmap": "node tools/typecheck-liqmap.mjs",
+    "typecheck:markets": "node tools/typecheck-markets.mjs",
     "clean": "node tools/clean-build.mjs",
     "build": "tsc -p . && npm run clean && vite build",
     "preview": "vite preview",

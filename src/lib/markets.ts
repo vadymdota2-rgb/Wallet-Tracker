@@ -52,7 +52,8 @@ export function validMarkets(raw: unknown, now: number = Date.now() / 1000): Mar
   return items.length ? { at, items } : null;
 }
 
-/** Изменение за сутки: у доходности — базисные пункты, у остальных — проценты. */
+/** Изменение (за сутки; у DXY — от закрытия валютного дня): у доходности — базисные
+ *  пункты, у остальных — проценты. */
 export function change(it: MarketItem): { v: number; unit: "bp" | "pct" } {
   return it.k === "US10Y" ? { v: (it.px - it.prev) * 100, unit: "bp" } : { v: (it.px / it.prev - 1) * 100, unit: "pct" };
 }

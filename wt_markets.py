@@ -102,6 +102,24 @@ STALE_MAX = 1800.0  # старше — не отдаётся
 COLD_WAIT = 6.0
 FAIL_WAIT = 30.0  # сборка ничего не дала — следующая не раньше
 SOURCE_WAIT = 30.0  # все источники вместе ждём не дольше
+# Источники из памяти: свежий ответ живёт SLOW[имя][0] — сеть не нужна;
+# источник молчит — берём прошлый годный ответ не старше SLOW[имя][1].
+# Бюджет запросов Hyperliquid (1200 единиц веса в минуту на адрес) — общий
+# для всего сервера, рынки в меню его почти не тратят:
+#   - цены площадок (metaAndAssetCtxs, вес 20) — раз в 5 минут на всех, а не
+#     раз в минуту: 3 × 20 / 5 = 12 единиц в минуту в худшем случае (~1 %);
+#   - свечи валют (candleSnapshot, вес ~22) нужны только ради закрытий
+#     валютного дня: пока нужные закрытия в памяти (fx_covers), Hyperliquid
+#     не спрашиваем — запросы раз в сутки после закрытия, а не раз в 10 минут;
+#   - фоновых опросов нет: сборка — только по запросу подписчика с открытым
+#     меню.
+# Фиксация ЕЦБ — раз в день, а бесплатный Frankfurter просит не долбить его.
+SLOW = {"xyz": (300.0, STALE_MAX), "para": (300.0, STALE_MAX), "mkts": (300.0, STALE_MAX),
+        "ecb": (3600.0, 4 * 86400.0), "fx": (600.0, 4 * 86400.0)}
+# Пределы разбора: ответ больше — хвост не смотрим (процессор не жжём).
+UNI_MAX = 5000  # рынков на площадке Hyperliquid
+CANDLES_MAX = 1000  # часовых свечей на валюту (берём пять суток — 120)
+DAYS_MAX = 60  # дней ЕЦБ (берём десять)
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
@@ -111,7 +129,7 @@ def _num(v: object) -> float:
         return 0.0
     try:
         f = float(v)
-    except ValueError:
+    except (ValueError, OverflowError):  # не число; целое больше float (10**400)
         return 0.0
     return f if math.isfinite(f) else 0.0
 
@@ -129,7 +147,7 @@ def hl_markets(raw: object) -> dict[str, Pair]:
     if not isinstance(raw, list) or len(raw) < 2 or not isinstance(raw[0], dict) or not isinstance(raw[1], list):
         return out
     uni = raw[0].get("universe")
-    for u, c in zip(uni if isinstance(uni, list) else [], raw[1]):  # noqa: B905 — длины не обязаны совпадать
+    for u, c in zip(uni[:UNI_MAX] if isinstance(uni, list) else [], raw[1]):  # noqa: B905 — длины не обязаны совпадать
         if not isinstance(u, dict) or not isinstance(c, dict) or u.get("isDelisted"):
             continue
         name = str(u.get("name") or "").split(":")[-1]
@@ -143,7 +161,7 @@ def ecb_rates(raw: object) -> dict[str, dict[str, float]]:
     единиц за доллар}} — только полные дни."""
     rates = raw.get("rates") if isinstance(raw, dict) else None
     out: dict[str, dict[str, float]] = {}
-    for day, r in (rates.items() if isinstance(rates, dict) else ()):
+    for day, r in list(rates.items())[-DAYS_MAX:] if isinstance(rates, dict) else ():
         if not (isinstance(day, str) and DATE.fullmatch(day)):
             continue
         got = {c: _num(r.get(c)) if isinstance(r, dict) else 0.0 for c, _ in DXY_W}
@@ -194,7 +212,7 @@ def candle_close(raw: object, t: int) -> float:
     """Часовые свечи Hyperliquid (candleSnapshot) → цена закрытия в момент t:
     последняя свеча, закрывшаяся не позже t и не раньше t − CANDLE_AGE; иначе 0."""
     best, px = -1, 0.0
-    for c in raw if isinstance(raw, list) else ():
+    for c in raw[-CANDLES_MAX:] if isinstance(raw, list) else ():
         if not isinstance(c, dict):
             continue
         end = int(_num(c.get("t")) / 1000) + HOUR
@@ -280,6 +298,8 @@ class _State:
         self.hit: tuple[float, dict[str, Json]] | None = None
         self.job: threading.Thread | None = None
         self.fail = 0.0
+        # Медленные источники: имя → (когда получен, годный ответ).
+        self.slow: dict[str, tuple[float, object]] = {}
 
 
 _st = _State()
@@ -295,20 +315,63 @@ def _now() -> int:
     return int(time.time())
 
 
+def _good(name: str, raw: object) -> bool:
+    """Годен ли ответ источника, чтобы его помнить."""
+    if name == "ecb":
+        return bool(ecb_rates(raw))
+    if name == "fx":
+        return isinstance(raw, dict) and any(isinstance(v, list) and v for v in raw.values())
+    return bool(hl_markets(raw))
+
+
+def fx_covers(raw: object, t: int) -> bool:
+    """Есть ли в свечах все закрытия, нужные DXY в момент t: открыт — последнее
+    закрытие, закрыт — последнее и прошлое. Есть — Hyperliquid не спрашиваем."""
+    is_open, close, prev = fx_session(t)
+    if not isinstance(raw, dict):
+        return False
+    return all(candle_close(raw.get(c), w) > 0 for c in FX_HL for w in ((close,) if is_open else (close, prev)))
+
+
+def _fresh(name: str, hit: tuple[float, object] | None, t0: float) -> bool:
+    """Ответ источника из памяти ещё годится — сеть не нужна (в памяти — только
+    источники SLOW)."""
+    if not hit:
+        return False
+    return t0 - hit[0] < SLOW[name][0] or (name == "fx" and fx_covers(hit[1], _now()))
+
+
 def build() -> dict[str, Json]:
-    """Опросить источники (параллельно, сбой одного — без него) и собрать ответ."""
+    """Опросить источники (параллельно, сбой одного — без него) и собрать ответ.
+    Источники SLOW — из памяти, пока свежи; молчат — прошлый годный ответ."""
     parts: dict[str, object] = {}
     got = threading.Lock()
+    t0 = time.monotonic()
+    with _lock:
+        slow = dict(_st.slow)
+    ask = {}
+    for name, fn in _st.sources.items():
+        hit = slow.get(name)
+        if _fresh(name, hit, t0) and hit:
+            parts[name] = hit[1]
+        else:
+            ask[name] = fn
 
     def one(name: str, fn: Source) -> None:
         try:
             v = fn()
         except Exception:  # noqa: BLE001 — источник молчит: пункты без него
             v = None
+        if name in SLOW:
+            if _good(name, v):
+                with _lock:
+                    _st.slow[name] = (time.monotonic(), v)
+            elif (old := slow.get(name)) and time.monotonic() - old[0] < SLOW[name][1]:
+                v = old[1]
         with got:
             parts[name] = v
 
-    threads = [threading.Thread(target=one, args=item, daemon=True) for item in _st.sources.items()]
+    threads = [threading.Thread(target=one, args=item, daemon=True) for item in ask.items()]
     for th in threads:
         th.start()
     end = time.monotonic() + SOURCE_WAIT

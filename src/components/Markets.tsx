@@ -17,6 +17,7 @@ import { num } from "../lib/format";
 import { fetchMarkets, peekMarkets, refreshMarkets } from "../lib/api";
 import { openExternal } from "../lib/telegram";
 import { CMC_URL } from "./CmcBy";
+import "./Markets.css";
 import { change, digits, isPercent, type MarketItem, type MarketKey, type MarketsReply } from "../lib/markets";
 
 const EVERY = 60_000;

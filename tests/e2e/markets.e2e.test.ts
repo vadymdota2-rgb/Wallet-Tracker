@@ -127,15 +127,100 @@ test("сверху меню — девять рынков вместо заго�
   await ctx.close();
 });
 
-test("влезает в 320 точек на всех языках", async () => {
-  for (const lang of ["ru", "en", "de", "ar", "hi", "ja"]) {
-    const { ctx, page } = await open({ lang, width: 320 });
+const LANGS = ["ru", "en", "uk", "de", "es", "fr", "pt", "pl", "tr", "id", "vi", "hi", "ar", "ja", "ko", "zh"];
+
+/** Что не влезло: цифры и изменения обрезаны, сетка шире меню, текст — за краем экрана. */
+function overflow(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const out: string[] = [];
+    for (const el of document.querySelectorAll<HTMLElement>(".mk-px, .mk-ch")) {
+      if (el.scrollWidth > el.clientWidth + 1) out.push(`обрезано «${el.textContent}»`);
+    }
+    const drawer = document.querySelector(".drawer")!.getBoundingClientRect();
+    const grid = document.querySelector(".mk-grid")!.getBoundingClientRect();
+    if (grid.left < drawer.left - 1 || grid.right > drawer.right + 1) out.push("сетка шире меню");
+    for (const el of document.querySelectorAll<HTMLElement>(".mk *")) {
+      const r = el.getBoundingClientRect();
+      if (r.width && (r.left < -1 || r.right > innerWidth + 1)) out.push(`за краем: ${el.className}`);
+    }
+    return out;
+  });
+}
+
+test("влезает в 320 точек на всех 16 языках", async () => {
+  for (const lang of LANGS) {
+    const { ctx, page, errors } = await open({ lang, width: 320 });
     await page.locator(".drawer .mk-cell").first().waitFor();
-    const over = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".mk-px, .mk-ch")]
-      .filter((el) => el.scrollWidth > el.clientWidth + 1).map((el) => el.textContent));
-    assert.deepEqual(over, [], lang);
+    assert.deepEqual(await overflow(page), [], lang);
+    assert.equal(await page.locator(".drawer .mk-cell").count(), 9, lang);
+    const xs = await page.locator(".drawer .mk-cell").evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().x)));
+    assert.equal(new Set(xs).size, 3, `${lang}: обычный шрифт — три столбца, ${xs}`);
+    assert.deepEqual(errors, [], lang);
     await ctx.close();
   }
+});
+
+test("арабский: сетка справа налево, цифры и знаки — как у всех", async () => {
+  const { ctx, page } = await open({ lang: "ar" });
+  const cells = page.locator(".drawer .mk-cell");
+  await cells.first().waitFor();
+  const xs = await cells.evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().x)));
+  assert.ok(xs[0]! > xs[1]! && xs[1]! > xs[2]!, String(xs)); // S&P 500 — справа
+  assert.match(sp(await page.locator('.mk-cell[data-k="SP500"] .mk-ch').textContent()), /^[−+]?\d/);
+  assert.deepEqual(await overflow(page), []);
+  await ctx.close();
+});
+
+test("крупный системный шрифт (до 200 %, как Android на максимуме): цифры не обрезаны", async () => {
+  for (const z of [1.3, 1.6, 2]) {
+    const { ctx, page } = await open({ width: 360 });
+    await page.locator(".drawer .mk-cell").first().waitFor();
+    await page.evaluate((k) => {
+      const els = [...document.querySelectorAll<HTMLElement>(".mk, .mk *")];
+      const px = els.map((el) => parseFloat(getComputedStyle(el).fontSize) * k);
+      els.forEach((el, i) => { el.style.fontSize = `${px[i]}px`; });
+    }, z);
+    await page.waitForTimeout(100);
+    assert.deepEqual(await overflow(page), [], String(z));
+    await ctx.close();
+  }
+});
+
+test("текст читается: контраст не ниже 4,5:1 (WCAG AA) с учётом приглушения", async () => {
+  const { ctx, page } = await open();
+  await page.locator(".drawer .mk-cell").first().waitFor();
+  const low = await page.evaluate(() => {
+    const rgba = (s: string) => (s.match(/[\d.]+/g) ?? ["0", "0", "0", "0"]).map(Number) as number[];
+    const lum = (c: number[]) => {
+      const f = (v: number) => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * f(c[0]!) + 0.7152 * f(c[1]!) + 0.0722 * f(c[2]!);
+    };
+    const over = (top: number[], a: number, bottom: number[]) => top.slice(0, 3).map((v, i) => v * a + bottom[i]! * (1 - a));
+    // Фон под текстом: верх меню — самый светлый цвет его градиента (--panel),
+    // поверх — полупрозрачная заливка ячейки.
+    const hex = getComputedStyle(document.documentElement).getPropertyValue("--panel").trim();
+    const drawer = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    const out: string[] = [];
+    for (const el of document.querySelectorAll<HTMLElement>(".mk-k, .mk-px, .mk-ch, .mk-src")) {
+      let bg = drawer.slice(0, 3);
+      const cell = el.closest(".mk-cell");
+      if (cell) {
+        const c = rgba(getComputedStyle(cell).backgroundColor);
+        bg = over(c, c[3] ?? 1, bg);
+      }
+      let a = 1;
+      for (let e: HTMLElement | null = el; e && !e.classList.contains("drawer"); e = e.parentElement) a *= Number(getComputedStyle(e).opacity);
+      const fg = rgba(getComputedStyle(el).color);
+      const shown = over(fg, a * (fg[3] ?? 1), bg);
+      const l1 = lum(shown);
+      const l2 = lum(bg);
+      const k = (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+      if (k < 4.5) out.push(`${el.className} «${(el.textContent ?? "").slice(0, 16)}» ${k.toFixed(2)}`);
+    }
+    return out;
+  });
+  assert.deepEqual(low, []);
+  await ctx.close();
 });
 
 test("нет данных — прежний заголовок меню", async () => {
