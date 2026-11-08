@@ -114,13 +114,25 @@ def mcap(r: random.Random) -> object:
             "usdt": num(r, 4.1), "cap": [num(r, 3.4e12), num(r, 3.3e12)] if r.random() > 0.05 else junk(r)}
 
 
+def aster(r: random.Random, t: int) -> object:
+    if r.random() < 0.05:
+        return junk(r)
+    rows = [{"symbol": sym, "lastPrice": num(r, v), "openPrice": num(r, v)} if r.random() > 0.03 else junk(r)
+            for sym, v in (("XAUUSDT", 4072.0), ("CLUSDT", 90.6), ("SPXUSDT", 0.35), ("BTCUSDT", 1e5))]
+    return {"at": t - r.choice([0, 300, 1700, 1900, -120, 86400]) if r.random() > 0.03 else junk(r),
+            "rows": rows if r.random() > 0.03 else junk(r)}
+
+
 def parts(r: random.Random, t: int) -> dict:
     out = {"xyz": hl(r, "xyz"), "para": hl(r, "para"), "mkts": hl(r, "mkts"), "ecb": ecb(r, t), "mcap": mcap(r),
+           "aster": aster(r, t),
            "fx": {c: candles(r, t, v) for c, v in (("EUR", 1.1157), ("JPY", 158.36), ("GBP", 1.3349))}
            if r.random() > 0.05 else junk(r)}
     for k in list(out):
         if r.random() < 0.05:
             del out[k]  # источник промолчал
+    if r.random() < 0.04:
+        out = {k: junk(r) for k in out}  # молчат все — сеть пропала
     return out
 
 

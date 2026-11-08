@@ -1986,7 +1986,7 @@ say("рынки в меню — права: без Deribit (их данные и
     and "ICE" in _i18n.get("mk_dxy_hint", {}).get("ru", "") and "tradingview" not in _mk_api.lower()
     and "Volmex" in _i18n.get("mk_bviv_hint", {}).get("ru", "") and "openExternal(CMC_URL)" in _mk_tsx and "Nasdaq-100" in _i18n.get("mk_xyz_hint", {}).get("ru", "")
     and 'className="mk-i" aria-expanded={open}' in _mk_tsx and "tradingview" not in _mk_tsx.lower())
-say("рынки в меню на уровне халвинга: свой модуль (сервер, проверка ответа без импортов, вид, свои стили), тесты всех видов — расчёт, свойства, fuzz с договором «сервер ↔ приложение», безопасность, правила кода и права, браузер (16 языков, арабский, крупный шрифт, контраст), мутации и строгий TS — в CI; бюджет Hyperliquid почти не тратится: цены площадок — раз в 5 минут на всех (~1 % лимита), свечи — только после нового закрытия, ЕЦБ — раз в час; источник молчит — прошлый годный ответ; крупный шрифт — сетка перестраивается, контраст текста не ниже 4,5:1",
+say("рынки в меню на уровне халвинга: свой модуль (сервер, проверка ответа без импортов, вид, свои стили), тесты всех видов — расчёт, свойства, fuzz с договором «сервер ↔ приложение», безопасность, правила кода и права, браузер (16 языков, арабский, крупный шрифт, контраст), мутации и строгий TS — в CI; бюджет Hyperliquid почти не тратится: цены площадок — раз в 10 минут на всех (~0,5 % лимита), золото и нефть в запасе — с Aster из ответа фандинга, без своих запросов, свечи — только после нового закрытия, ЕЦБ — раз в час; источник молчит — прошлый годный ответ; крупный шрифт — сетка перестраивается, контраст текста не ниже 4,5:1",
     all(os.path.isfile(f"{APP}/tests/{f}") for f in ("markets.test.ts", "markets.props.test.ts", "e2e/markets.e2e.test.ts",
         "test_markets.py", "test_markets_fuzz.py", "test_markets_security.py", "test_markets_policy.py"))
     and os.path.isfile(f"{APP}/tools/mutate-markets.py") and "python tools/mutate-markets.py" in read(f"{APP}/.github/workflows/tests.yml")
@@ -1995,7 +1995,9 @@ say("рынки в меню на уровне халвинга: свой мод�
     and '"typecheck:markets": "node tools/typecheck-markets.mjs"' in read(f"{APP}/package.json")
     and 'import "./Markets.css";' in _mk_tsx and ".mk-" not in read(f"{APP}/src/styles/app.css")
     and not re.search(r"^\s*import\b", read(f"{APP}/src/lib/markets.ts"), re.M)
-    and 'SLOW = {"xyz": (300.0, STALE_MAX), "para": (300.0, STALE_MAX), "mkts": (300.0, STALE_MAX),' in read(f"{APP}/wt_markets.py")
+    and 'SLOW = {"xyz": (600.0, STALE_MAX), "para": (600.0, STALE_MAX), "mkts": (600.0, STALE_MAX),' in read(f"{APP}/wt_markets.py")
+    and 'ASTER = {"GOLD": "XAUUSDT", "OIL": "CLUSDT"}' in read(f"{APP}/wt_markets.py") and "_ASTER_TICK = (now(), tick)" in api
+    and "asterdex" not in _mk_api
     and "def fx_covers(" in read(f"{APP}/wt_markets.py") and "def test_hyperliquid_budget(self):" in read(f"{APP}/tests/test_markets.py")
     and "except (ValueError, OverflowError):" in read(f"{APP}/wt_markets.py")
     and "test_markets_fuzz.py tests/test_markets_security.py tests/test_markets_policy.py" in read(f"{APP}/.github/workflows/tests.yml"))

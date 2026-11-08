@@ -50,6 +50,10 @@ class HostileSourceTest(unittest.TestCase):
             self.assertEqual(mk.ecb_rates(ecb), {})
             mcap = {"ok": True, "btc": [v, 60], "usdt": v, "cap": [v, 3e12]}
             self.assertEqual(mk.dominance(mcap), {})
+            aster = {"at": v, "rows": [{"symbol": "XAUUSDT", "lastPrice": "4000", "openPrice": "4010"}]}
+            self.assertEqual(mk.aster_markets(aster, NOW), {})
+            aster = {"at": NOW, "rows": [{"symbol": "XAUUSDT", "lastPrice": v, "openPrice": v}]}
+            self.assertEqual(mk.aster_markets(aster, NOW), {})
 
     def test_deep_nesting_and_wrong_types(self):
         deep: object = []

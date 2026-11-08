@@ -13,6 +13,9 @@
 Источники — те, что проект уже берёт; модуль сам в сеть не ходит: ответы
 источников ему отдаёт сервер (set_sources), здесь — только разбор, расчёт
 и кэш:
+  - Aster — запасной источник золота (XAUUSDT) и нефти WTI (CLUSDT): только
+    когда Hyperliquid их не дал. Своих запросов нет — ответ ticker/24hr, который
+    модуль фандинга и так берёт у Aster раз в 10 минут; старше ASTER_AGE — мимо;
   - Hyperliquid, бессрочные рынки HIP-3 (открытые данные сети): площадка
     trade.xyz («xyz») — S&P 500, XYZ100, золото, нефть WTI (CL), курсы EUR
     и JPY; площадка Paragon («para») — доходность 10Y; площадка Markets by
@@ -84,6 +87,10 @@ KEYS = ("SP500", "XYZ100", "DXY", "GOLD", "OIL", "US10Y", "BVIV", "BTCD", "USDTD
 HL = {"SP500": ("xyz", "SP500"), "XYZ100": ("xyz", "XYZ100"), "GOLD": ("xyz", "GOLD"), "US10Y": ("para", "10Y"),
       "OIL": ("xyz", "CL"), "BVIV": ("mkts", "BVIV")}
 DEXES = ("xyz", "para", "mkts")  # площадки Hyperliquid
+# Запасной источник (Aster): пункт → рынок; цена — последняя, вчера — открытие
+# скользящих суток (ticker/24hr). Ответ старше ASTER_AGE не берём.
+ASTER = {"GOLD": "XAUUSDT", "OIL": "CLUSDT"}
+ASTER_AGE = 1800.0
 # DXY = 50,14348112 × ∏ курс^вес (ICE): EUR и GBP — в долларах за единицу
 # (вес со знаком минус), остальные — единиц за доллар.
 DXY_K = 50.14348112
@@ -106,15 +113,15 @@ SOURCE_WAIT = 30.0  # все источники вместе ждём не до�
 # источник молчит — берём прошлый годный ответ не старше SLOW[имя][1].
 # Бюджет запросов Hyperliquid (1200 единиц веса в минуту на адрес) — общий
 # для всего сервера, рынки в меню его почти не тратят:
-#   - цены площадок (metaAndAssetCtxs, вес 20) — раз в 5 минут на всех, а не
-#     раз в минуту: 3 × 20 / 5 = 12 единиц в минуту в худшем случае (~1 %);
+#   - цены площадок (metaAndAssetCtxs, вес 20) — раз в 10 минут на всех, а не
+#     раз в минуту: 3 × 20 / 10 = 6 единиц в минуту в худшем случае (~0,5 %);
 #   - свечи валют (candleSnapshot, вес ~22) нужны только ради закрытий
 #     валютного дня: пока нужные закрытия в памяти (fx_covers), Hyperliquid
 #     не спрашиваем — запросы раз в сутки после закрытия, а не раз в 10 минут;
 #   - фоновых опросов нет: сборка — только по запросу подписчика с открытым
 #     меню.
 # Фиксация ЕЦБ — раз в день, а бесплатный Frankfurter просит не долбить его.
-SLOW = {"xyz": (300.0, STALE_MAX), "para": (300.0, STALE_MAX), "mkts": (300.0, STALE_MAX),
+SLOW = {"xyz": (600.0, STALE_MAX), "para": (600.0, STALE_MAX), "mkts": (600.0, STALE_MAX),
         "ecb": (3600.0, 4 * 86400.0), "fx": (600.0, 4 * 86400.0)}
 # Пределы разбора: ответ больше — хвост не смотрим (процессор не жжём).
 UNI_MAX = 5000  # рынков на площадке Hyperliquid
@@ -267,6 +274,23 @@ def dominance(mcap: object) -> dict[str, Pair]:
     return out
 
 
+def aster_markets(raw: object, at: int) -> dict[str, Pair]:
+    """Запасной ответ Aster ({"at": когда получен, "rows": ticker/24hr}) →
+    золото и нефть, (сейчас, сутки назад); старый или кривой — пусто."""
+    out: dict[str, Pair] = {}
+    if not isinstance(raw, dict):
+        return out
+    got_at, rows = _num(raw.get("at")), raw.get("rows")
+    if not (at - ASTER_AGE <= got_at <= at + 60) or not isinstance(rows, list):
+        return out
+    want = {sym: key for key, sym in ASTER.items()}
+    for r in rows[:UNI_MAX]:
+        if isinstance(r, dict) and (key := want.get(str(r.get("symbol")))) and key not in out \
+                and (p := pair(r.get("lastPrice"), r.get("openPrice"))):
+            out[key] = p
+    return out
+
+
 def sane(key: str, p: Pair) -> bool:
     """Пункт правдоподобен: в своих рамках и за сутки не больше MOVE_MAX раз."""
     lo, hi = RANGE.get(key, (0.0, PX_MAX))
@@ -276,7 +300,8 @@ def sane(key: str, p: Pair) -> bool:
 
 def compute(parts: dict[str, object], at: int) -> dict[str, Json]:
     """Ответ по ответам источников: xyz, para, mkts, fx — часовые свечи EUR,
-    JPY, GBP (Hyperliquid), ecb, mcap (доминация CoinMarketCap)."""
+    JPY, GBP (Hyperliquid), ecb, mcap (доминация CoinMarketCap), aster (запас
+    золота и нефти)."""
     dex_mk = {d: hl_markets(parts.get(d)) for d in DEXES}
     xyz = dex_mk["xyz"]
     got: dict[str, Pair] = {}
@@ -285,6 +310,8 @@ def compute(parts: dict[str, object], at: int) -> dict[str, Json]:
             got[key] = p
     if p := fx_dxy(xyz, parts.get("fx"), ecb_rates(parts.get("ecb")), at):
         got["DXY"] = p
+    for key, p in aster_markets(parts.get("aster"), at).items():
+        got.setdefault(key, p)  # Aster — только если Hyperliquid не дал
     got.update(dominance(parts.get("mcap")))
     items = [{"k": k, "px": got[k][0], "prev": got[k][1]} for k in KEYS if k in got and sane(k, got[k])]
     return {"ok": True, "at": at, "items": items} if items else {"ok": False, "error": "no_data"}
@@ -307,7 +334,7 @@ _lock = threading.Lock()
 
 
 def set_sources(sources: dict[str, Source]) -> None:
-    """Откуда брать ответы источников: имя (xyz, para, mkts, fx, ecb, mcap) → fn()."""
+    """Откуда брать ответы источников: имя (xyz, para, mkts, fx, ecb, mcap, aster) → fn()."""
     _st.sources = dict(sources)
 
 

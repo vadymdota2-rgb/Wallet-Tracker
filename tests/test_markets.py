@@ -40,6 +40,10 @@ XYZ = hl(XYZ_M, delisted=("DXY", "VIX"))
 PARA = hl({"para:10Y": (4.875, 4.8777), "para:BTCD": (60.4, 60.3)})
 MKTS = hl({"mkts:BVIV": (42.399, 41.0), "mkts:OLD": (5, 5)}, delisted=("OLD",))
 MCAP = {"ok": True, "btc": [60.44, 60.35], "usdt": 4.1, "cap": [3.4e12, 3.3e12]}
+# Запас золота и нефти — ответ Aster ticker/24hr, который берёт модуль фандинга.
+ASTER = {"at": NOW - 300, "rows": [{"symbol": "BTCUSDT", "lastPrice": "100000", "openPrice": "99000"},
+                                   {"symbol": "XAUUSDT", "lastPrice": "4072.07", "openPrice": "4081.61"},
+                                   {"symbol": "CLUSDT", "lastPrice": "90.62", "openPrice": "90.02"}]}
 ECB = {"rates": {"2026-11-05": {"EUR": 0.89095, "JPY": 158.46, "GBP": 0.74299, "CAD": 1.3966, "SEK": 9.7866, "CHF": 0.81789},
                  "2026-11-06": {"EUR": 0.89566, "JPY": 158.33, "GBP": 0.74711, "CAD": 1.4066, "SEK": 9.8755, "CHF": 0.8189}}}
 # NOW — воскресенье 01:06 UTC: валютный рынок закрыт. Закрытия (17:00 по
@@ -57,7 +61,7 @@ def candles(cur: str, close: dict | None = None) -> list:
 
 
 FX = {c: candles(c) for c in ("EUR", "JPY", "GBP")}
-PARTS = {"xyz": XYZ, "para": PARA, "mkts": MKTS, "fx": FX, "ecb": ECB, "mcap": MCAP}
+PARTS = {"xyz": XYZ, "para": PARA, "mkts": MKTS, "fx": FX, "ecb": ECB, "mcap": MCAP, "aster": ASTER}
 
 
 def want_dxy(day: str, eur: float, jpy: float, gbp: float) -> float:
@@ -91,6 +95,27 @@ class ComputeTest(unittest.TestCase):
         self.assertAlmostEqual(mk.dxy(r), want, places=9)
         self.assertAlmostEqual(sum(abs(w) for _, w in mk.DXY_W), 1.0, places=9)
 
+
+    def test_aster_is_only_a_backup_for_gold_and_oil(self):
+        # Hyperliquid дал золото и нефть — берём его, Aster не смотрим.
+        got = items(mk.compute(PARTS, NOW))
+        self.assertEqual((got["GOLD"], got["OIL"]), ((4066.2, 4079.9), (90.205, 89.617)))
+        # Hyperliquid молчит — золото и нефть с Aster (цена и открытие суток).
+        got = items(mk.compute({**PARTS, "xyz": None}, NOW))
+        self.assertEqual((got["GOLD"], got["OIL"]), ((4072.07, 4081.61), (90.62, 90.02)))
+        self.assertNotIn("SP500", got)  # остальное Aster не заменяет
+        # Снятое с торгов на Hyperliquid — тоже с Aster.
+        xyz = hl(XYZ_M, delisted=("DXY", "VIX", "GOLD"))
+        self.assertEqual(items(mk.compute({**PARTS, "xyz": xyz}, NOW))["GOLD"], (4072.07, 4081.61))
+        # Ответ Aster старше получаса, из будущего, кривой — мимо.
+        for bad in ({**ASTER, "at": NOW - mk.ASTER_AGE - 1}, {**ASTER, "at": NOW + 3600}, {**ASTER, "rows": "x"},
+                    {"rows": ASTER["rows"]}, [ASTER], None, "x"):
+            self.assertEqual(mk.aster_markets(bad, NOW), {}, bad)
+        self.assertEqual(set(mk.aster_markets({**ASTER, "at": NOW - mk.ASTER_AGE}, NOW)), {"GOLD", "OIL"})
+        # Повтор рынка — первый; чужие рынки и битые цены — мимо.
+        rows = [{"symbol": "XAUUSDT", "lastPrice": "x", "openPrice": "1"}, {"symbol": "XAUUSDT", "lastPrice": "4000", "openPrice": "4010"},
+                {"symbol": "XAUUSDT", "lastPrice": "1", "openPrice": "1"}, {"symbol": "SPXUSDT", "lastPrice": "0.35", "openPrice": "0.36"}]
+        self.assertEqual(mk.aster_markets({"at": NOW, "rows": rows}, NOW), {"GOLD": (4000.0, 4010.0)})
 
     def test_usdt_dominance_yesterday_by_market_cap(self):
         # Вчерашней доли USDT CoinMarketCap не отдаёт: та же капитализация USDT
@@ -192,8 +217,8 @@ class ComputeTest(unittest.TestCase):
         self.assertNotIn("SILVER", got)  # не из набора
 
     def test_one_silent_source_drops_only_its_items(self):
-        cases = {"ecb": {"DXY"}, "fx": {"DXY"}, "para": {"US10Y"}, "xyz": {"SP500", "XYZ100", "GOLD", "OIL"},
-                 "mkts": {"BVIV"}, "mcap": {"BTCD", "USDTD"}}
+        cases = {"ecb": {"DXY"}, "fx": {"DXY"}, "para": {"US10Y"}, "xyz": {"SP500", "XYZ100"},  # золото и нефть — с Aster
+                 "mkts": {"BVIV"}, "mcap": {"BTCD", "USDTD"}, "aster": set()}
         for name, gone in cases.items():
             self.assertEqual(set(items(mk.compute({**PARTS, name: None}, NOW))), set(mk.KEYS) - gone, name)
         self.assertEqual(mk.compute({}, NOW), {"ok": False, "error": "no_data"})
@@ -301,7 +326,7 @@ class CacheTest(unittest.TestCase):
 
     def test_hyperliquid_budget(self):
         # Бюджет Hyperliquid общий для сервера: цены площадок — не чаще раза в
-        # 5 минут, свечи — только когда в памяти нет нужного закрытия.
+        # 10 минут, свечи — только когда в памяти нет нужного закрытия.
         calls: list = []
         mk.set_sources({name: (lambda v=v, n=name: calls.append(n) or v) for name, v in PARTS.items()})
         hl_names = {"xyz", "para", "mkts", "fx"}
@@ -315,10 +340,10 @@ class CacheTest(unittest.TestCase):
         asked = [c for c in calls if c in hl_names]
         self.assertEqual(asked.count("fx"), 1)  # выходные: закрытия пятницы и четверга уже в памяти
         for dex in ("xyz", "para", "mkts"):
-            self.assertEqual(asked.count(dex), 12, dex)  # раз в 5 минут
-        self.assertEqual(mk.SLOW["xyz"][0], 300.0)
-        # Вес запросов Hyperliquid в минуту — около 1 % от 1200.
-        self.assertLessEqual((3 * 12 * 20 + 22) / 60, 13)
+            self.assertEqual(asked.count(dex), 6, dex)  # раз в 10 минут
+        self.assertEqual(mk.SLOW["xyz"][0], 600.0)
+        # Вес запросов Hyperliquid в минуту — около 0,5 % от 1200.
+        self.assertLessEqual((3 * 6 * 20 + 22) / 60, 7)
 
     def test_fx_candles_asked_again_only_after_new_close(self):
         self.assertTrue(mk.fx_covers(FX, NOW))

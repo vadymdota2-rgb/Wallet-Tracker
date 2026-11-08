@@ -20,7 +20,7 @@ sys.path.insert(0, ROOT)
 import whale_api as api  # noqa: E402 — модули лежат в корне репозитория
 import wt_markets as mk  # noqa: E402
 
-SOURCES = ("xyz", "para", "mkts", "fx", "ecb", "mcap")
+SOURCES = ("xyz", "para", "mkts", "fx", "ecb", "mcap", "aster")
 
 
 def read(*path: str) -> str:
@@ -92,6 +92,11 @@ class PolicyTest(unittest.TestCase):
         for bad in ("self.", "path", "query", "headers", "environ"):
             self.assertNotIn(bad, block, bad)
         self.assertIn("for c in wt_markets.FX_HL}", block)
+        # Aster — без своих запросов: только память модуля фандинга.
+        self.assertNotIn("asterdex", block)
+        self.assertIn('"aster": lambda: {"at": _ASTER_TICK[0], "rows": _ASTER_TICK[1]} if _ASTER_TICK else None,', block)
+        src = read("whale_api.py")
+        self.assertIn("        _ASTER_TICK = (now(), tick)", src.split("def fund_aster() -> list:")[1].split("\ndef ")[0])
 
     def test_paid_route_is_not_cached_on_the_way(self):
         src = read("whale_api.py")

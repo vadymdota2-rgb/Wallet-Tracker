@@ -7908,12 +7908,20 @@ def fund_kucoin() -> list:
     return out
 
 
+# Последний ответ Aster ticker/24hr (время, строки): его берут рынки в меню
+# как запасной источник золота и нефти (wt_markets.ASTER) — без своих запросов.
+_ASTER_TICK: tuple[int, list] | None = None
+
+
 def fund_aster() -> list:
     """Aster: порядок тот же, что у Binance, — её API построен по образцу."""
+    global _ASTER_TICK
     prem = get_json("https://fapi.asterdex.com/fapi/v1/premiumIndex", timeout=20.0)
     if not isinstance(prem, list):
         return []
     tick = get_json("https://fapi.asterdex.com/fapi/v1/ticker/24hr", timeout=20.0)
+    if isinstance(tick, list):
+        _ASTER_TICK = (now(), tick)  # запас золота и нефти для рынков в меню — без своего запроса
     vols: dict[str, float] = {}
     for it in (tick if isinstance(tick, list) else []):
         if isinstance(it, dict):
@@ -15218,6 +15226,7 @@ wt_markets.set_sources({
     "fx": _mkt_fx,
     "ecb": _mkt_ecb,
     "mcap": lambda: wt_mcap.mcap_data(0),
+    "aster": lambda: {"at": _ASTER_TICK[0], "rows": _ASTER_TICK[1]} if _ASTER_TICK else None,
 })
 markets_data = wt_markets.markets_data
 
