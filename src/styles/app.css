@@ -171,6 +171,26 @@
   color: var(--glow);
   padding: 0 6px 10px;
 }
+/* Рынки сверху меню: сетка 3 × 3 — название, цена, изменение за сутки. */
+.mk { padding: 0 4px 12px; margin-bottom: 6px; border-bottom: 1px solid var(--line, rgb(255 255 255 / 0.08)); }
+.mk-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.mk-cell {
+  min-width: 0;
+  padding: 6px 7px;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.mk-k, .mk-px, .mk-ch { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mk-k { font-size: 10.5px; font-weight: 600; letter-spacing: 0.02em; color: var(--dim-2); }
+.mk-px { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--fg); }
+.mk-ch { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--dim); }
+.mk-ch.up { color: var(--up); }
+.mk-ch.dn { color: var(--dn); }
+.mk-src { margin-top: 7px; font-size: 10px; color: var(--dim-2); text-align: center; }
+
 .drawer-row {
   display: flex;
   align-items: center;

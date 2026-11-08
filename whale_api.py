@@ -112,7 +112,7 @@ PAID_PATHS = frozenset(
     # mcap — доминация CoinMarketCap: тоже только подписчикам (их данные — внутри
     # продукта, не открытой выдачей для сборщиков).
     "btc/wallet", "dom", "mcap", "etf", "liqcoins", "liqmap", "options", "liqs", "oihist", "calendar", "digest",
-    "digest/translate", "digest/comments", "unlocks", "symbols", "big", "chart/liqs", "chart/whales",
+    "digest/translate", "digest/comments", "unlocks", "symbols", "big", "chart/liqs", "chart/whales", "markets",
     ) for p in ("/" + name, "/api/" + name)
 )
 # Цена и срок — те же, что в premium.cpp: бот и приложение обязаны продавать
@@ -15195,6 +15195,113 @@ def calendar_data() -> dict:
     return cached_bg(_CAL, "all", CAL_TTL, _cal_build)
 
 
+# --- Рынки в меню: индексы, товары, доходность, доллар, волатильность ------
+# Сверху бокового меню — то, на что трейдер смотрит первым: S&P 500,
+# Nasdaq-100, DXY, золото, серебро, нефть WTI и Brent, доходность 10-летних
+# облигаций США и волатильность. Источники — те, что проект уже берёт:
+#   - бессрочные рынки Hyperliquid (площадки HIP-3 «xyz» и «para»): индексы,
+#     металлы, нефть, курсы EUR и JPY, доходность 10Y — круглые сутки;
+#   - DXY на биржах снят с торгов (у Hyperliquid цена застыла на 97,15), и
+#     считаем его по формуле ICE: EUR и JPY — с Hyperliquid, GBP, CAD, SEK,
+#     CHF — курсы ЕЦБ за последний рабочий день (Frankfurter);
+#   - VIX нигде не торгуется (Hyperliquid и Phemex сняли), а показывать
+#     индекс Cboe без лицензии нельзя — вместо него DVOL Deribit, индекс
+#     волатильности BTC.
+# Каждый пункт — цена сейчас и сутки назад; изменение считает приложение.
+MKT_TTL = 60.0
+_MKT: dict = {}
+MKT_HL = (("SP500", "xyz", "SP500"), ("NDX", "xyz", "XYZ100"), ("GOLD", "xyz", "GOLD"), ("SILVER", "xyz", "SILVER"),
+          ("WTI", "xyz", "CL"), ("BRENT", "xyz", "BRENTOIL"), ("US10Y", "para", "10Y"))
+# DXY = 50,14348112 × ∏ курс^вес (ICE): EUR и GBP — в долларах за единицу
+# (вес со знаком минус), остальные — единиц за доллар.
+DXY_K = 50.14348112
+DXY_W = (("EUR", -0.576), ("JPY", 0.136), ("GBP", -0.119), ("CAD", 0.091), ("SEK", 0.042), ("CHF", 0.036))
+MKT_PX_MAX = 1e7
+
+
+def _mkt_pair(px, prev) -> tuple | None:
+    """(сейчас, сутки назад) — оба конечные, больше нуля и правдоподобные."""
+    a, b = _fnum(px), _fnum(prev)
+    return (a, b) if 0 < a < MKT_PX_MAX and 0 < b < MKT_PX_MAX else None
+
+
+def _mkt_hl(dex: str) -> dict:
+    """Рынки площадки HIP-3: {имя без приставки: (сейчас, сутки назад)}; снятые с торгов — мимо."""
+    got = _jl(hl_post({"type": "metaAndAssetCtxs", "dex": dex}, 15))
+    out: dict = {}
+    if len(got) < 2:
+        return out
+    for u, c in zip(_jl(_jd(got[0]).get("universe")), _jl(got[1])):
+        if not isinstance(u, dict) or not isinstance(c, dict) or u.get("isDelisted"):
+            continue
+        name = str(u.get("name") or "").split(":")[-1]
+        if (pair := _mkt_pair(c.get("markPx"), c.get("prevDayPx"))) and name:
+            out[name] = pair
+    return out
+
+
+def _mkt_ecb() -> tuple | None:
+    """Курсы ЕЦБ за два последних рабочих дня: (вчера, позавчера) — {валюта: единиц за доллар}."""
+    start = time.strftime("%Y-%m-%d", time.gmtime(now() - 10 * 86400))
+    rates = _jd(_jd(get_json(f"https://api.frankfurter.dev/v1/{start}..?base=USD&symbols=EUR,JPY,GBP,CAD,SEK,CHF", 15)).get("rates"))
+    days = sorted(d for d in rates if isinstance(d, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", d))
+    full = [r for d in days if len(r := {c: _fnum(_jd(rates[d]).get(c)) for c, _ in DXY_W}) == len(DXY_W) and all(r.values())]
+    return (full[-1], full[-2]) if len(full) >= 2 else None
+
+
+def _dxy(r: dict) -> float:
+    """DXY по курсам {валюта: единиц за доллар}."""
+    v = DXY_K
+    for c, w in DXY_W:
+        v *= (1 / r[c] if w < 0 else r[c]) ** w
+    return v
+
+
+def _mkt_dvol() -> tuple | None:
+    """DVOL Deribit (волатильность BTC): (сейчас, сутки назад) по часовым свечам."""
+    t = now() * 1000
+    got = _jlists(_jd(_jd(get_json("https://www.deribit.com/api/v2/public/get_volatility_index_data?currency=BTC"
+                                   f"&start_timestamp={t - 26 * 3_600_000}&end_timestamp={t}&resolution=3600", 15)).get("result")), 5, "data")
+    rows = sorted((int(r[0]), _fnum(r[4])) for r in got if _fnum(r[4]) > 0)
+    if len(rows) < 2:
+        return None
+    back = [v for ts, v in rows if ts <= rows[-1][0] - 24 * 3_600_000]
+    return _mkt_pair(rows[-1][1], back[-1] if back else rows[0][1])
+
+
+def _mkt_build() -> dict:
+    parts: dict = {}
+
+    def one(name, fn) -> None:
+        try:
+            parts[name] = fn()
+        except Exception as e:  # noqa: BLE001 — источник молчит: пункт без него
+            print(f"markets {name}: {e}", file=sys.stderr)
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(lambda a: one(*a), (("xyz", lambda: _mkt_hl("xyz")), ("para", lambda: _mkt_hl("para")),
+                                          ("ecb", _mkt_ecb), ("dvol", _mkt_dvol))))
+    items = []
+    for key, dex, name in MKT_HL:
+        if pair := (parts.get(dex) or {}).get(name):
+            items.append({"k": key, "px": pair[0], "prev": pair[1]})
+    fx, ecb = parts.get("xyz") or {}, parts.get("ecb")
+    if ecb and fx.get("EUR") and fx.get("JPY"):
+        now_r = {**ecb[0], "EUR": 1 / fx["EUR"][0], "JPY": fx["JPY"][0]}
+        prev_r = {**ecb[1], "EUR": 1 / fx["EUR"][1], "JPY": fx["JPY"][1]}
+        if pair := _mkt_pair(round(_dxy(now_r), 3), round(_dxy(prev_r), 3)):
+            items.append({"k": "DXY", "px": pair[0], "prev": pair[1]})
+    if pair := parts.get("dvol"):
+        items.append({"k": "DVOL", "px": pair[0], "prev": pair[1]})
+    if not items:
+        return {"ok": False, "error": "no_data"}
+    return {"ok": True, "at": now(), "items": items}
+
+
+def markets_data() -> dict:
+    return cached_bg(_MKT, "all", MKT_TTL, _mkt_build)
+
+
 # --- Дайджест ------------------------------------------------------------
 # Раз в сутки, в 12:00 по Лондону, сервер собирает выпуск: самое крупное из каждой
 # вкладки аналитики за прошедшие 24 часа и ближайшие разлоки. Хранятся
@@ -16925,6 +17032,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path in ("/calendar", "/api/calendar"):
                 self._json(200, calendar_data())
+                return
+            if path in ("/markets", "/api/markets"):
+                self._json(200, markets_data())
                 return
             if path in ("/liqs", "/api/liqs"):
                 self._json(200, liqs_data(qs.get("win", ["24h"])[0], qs.get("sym", [""])[0],

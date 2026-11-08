@@ -11,6 +11,7 @@ import { HALVING_TTL_MS, clockSkew, pickHalving, validHalving, type HalvingReply
 import { FNG_SAVED_MAX_MS, FNG_TTL_MS, validFng, type FngReply } from "./fng";
 import { ETF_TTL_MS, validEtf, type EtfReply } from "./etf";
 import { validLiqMap } from "./liqmap";
+import { validMarkets, type MarketsReply } from "./markets";
 import { DOM_TTL_MS, MCAP_MAX_AGE, MCAP_TTL_MS, validDom, validMcap, type DomReply, type McapReply } from "./dom";
 import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
@@ -560,6 +561,20 @@ export function savedCalendar(): CalReply | null {
   const hit = readSaved<CalReply>(CAL_SAVED).all;
   return hit && hit.v?.items ? hit.v : null;
 }
+/* Рынки в меню: сервер пересобирает их раз в минуту, приложение — не чаще.
+   Ответ — через validMarkets: битый или чужой ответ меню не роняет (null —
+   и вместо сетки остаётся прежний заголовок). */
+const MARKETS_TTL = 60_000;
+export const fetchMarkets = () =>
+  remember<MarketsReply | null>("/api/markets", MARKETS_TTL,
+    () => call<unknown>("/api/markets", { timeout: 15_000 }).then((r) => validMarkets(r)), (v) => v !== null);
+export const peekMarkets = () => peek<MarketsReply | null>("/api/markets", MARKETS_TTL);
+/** Свежие рынки мимо памяти — для самообновления открытого меню. */
+export function refreshMarkets(): Promise<MarketsReply | null> {
+  forget("/api/markets");
+  return fetchMarkets();
+}
+
 export const fetchCalendar = () =>
   remember<CalReply | null>("/api/calendar", 5 * 60_000, () => callTwice<CalReply>("/api/calendar"), good).then((r) => {
     if (r?.ok) writeSaved(CAL_SAVED, { all: { at: Date.now(), v: r } });

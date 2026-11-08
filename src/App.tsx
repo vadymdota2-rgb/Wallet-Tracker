@@ -13,6 +13,7 @@ import { PremBadge } from "./components/PremBadge";
 import { LockScreen, LockSheet, useLocked } from "./components/LockScreen";
 import { LOCK_OPEN_SCREENS } from "./lib/upsell";
 import { HalvingCard } from "./components/HalvingCard";
+import { MarketsStrip } from "./components/Markets";
 import { Boundary } from "./components/Boundary";
 import { t, bare } from "./i18n/t";
 import { ensureLang, isRtl, normalizeLang } from "./i18n";
@@ -315,7 +316,11 @@ export default function App() {
       {menuOpen ? (
         <div className="drawer-wrap" onClick={() => setMenu(false)}>
           <Drawer label={t(lang, "menu_title")}>
-            <p className="drawer-ttl">{bare(t(lang, "menu_title"))}</p>
+            {/* Сверху — рынки (индексы, металлы, нефть, доллар, доходность,
+                волатильность); пока их нет — прежний заголовок. */}
+            <Boundary name="markets">
+              <MarketsStrip fallback={<p className="drawer-ttl">{bare(t(lang, "menu_title"))}</p>} />
+            </Boundary>
             {MENU.map((m) => (
               <button key={m.name} type="button" className="drawer-row"
                       onClick={() => { haptic("select"); openFromMenu(m.name); }}>
