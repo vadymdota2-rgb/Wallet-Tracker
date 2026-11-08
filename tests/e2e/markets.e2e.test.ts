@@ -56,7 +56,11 @@ after(async () => {
   await new Promise((ok) => server?.close(ok));
 });
 
-interface Opts { lang?: string; width?: number; reply?: unknown; scale?: number }
+interface Opts {
+  lang?: string; width?: number; reply?: unknown; scale?: number;
+  /** Ответы по очереди (последний — дальше всегда); задержка первого ответа, мс. */
+  replies?: unknown[]; delay?: number;
+}
 
 async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; errors: string[] }> {
   const lang = o.lang ?? "ru";
@@ -68,7 +72,12 @@ async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; er
   await ctx.route((url) => !url.href.startsWith(base), (r) => r.abort());
   await ctx.route(`${base}/api/**`, (r) => r.fulfill({ contentType: "application/json", body: '{"ok":false}' }));
   await ctx.route(`${base}/api/bootstrap`, (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, me: { plan: "premium" } }) }));
-  await ctx.route(`${base}/api/markets`, (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify(o.reply ?? MARKETS) }));
+  let n = 0;
+  await ctx.route(`${base}/api/markets`, async (r) => {
+    const body = o.replies ? o.replies[Math.min(n++, o.replies.length - 1)] : (o.reply ?? MARKETS);
+    if (o.delay && n <= 1) await new Promise((ok) => setTimeout(ok, o.delay));
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
   await page.addInitScript((a: { lang: string }) => {
     if (sessionStorage.getItem("e2e")) return;
     sessionStorage.setItem("e2e", "1");
@@ -189,6 +198,7 @@ test("крупный системный шрифт (до 200 %, как Android �
 test("текст читается: контраст не ниже 4,5:1 (WCAG AA) с учётом приглушения", async () => {
   const { ctx, page } = await open();
   await page.locator(".drawer .mk-cell").first().waitFor();
+  await page.locator('.mk-cell[data-k="BVIV"]').click(); // и пояснение под сеткой
   const low = await page.evaluate(() => {
     const rgba = (s: string) => (s.match(/[\d.]+/g) ?? ["0", "0", "0", "0"]).map(Number) as number[];
     const lum = (c: number[]) => {
@@ -201,10 +211,12 @@ test("текст читается: контраст не ниже 4,5:1 (WCAG AA
     const hex = getComputedStyle(document.documentElement).getPropertyValue("--panel").trim();
     const drawer = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
     const out: string[] = [];
-    for (const el of document.querySelectorAll<HTMLElement>(".mk-k, .mk-px, .mk-ch, .mk-src")) {
+    for (const el of document.querySelectorAll<HTMLElement>(".mk-k, .mk-px, .mk-ch, .mk-src, .mk-ttl, .mk-age, .mk-note")) {
       let bg = drawer.slice(0, 3);
-      const cell = el.closest(".mk-cell");
+      // Блик ячейки сверху — самое светлое место её градиента (белый 3,5 %).
+      const cell = el.closest(".mk-cell, .mk-note");
       if (cell) {
+        if (cell.classList.contains("mk-cell")) bg = over([255, 255, 255], 0.035, bg);
         const c = rgba(getComputedStyle(cell).backgroundColor);
         bg = over(c, c[3] ?? 1, bg);
       }
@@ -220,6 +232,83 @@ test("текст читается: контраст не ниже 4,5:1 (WCAG AA
     return out;
   });
   assert.deepEqual(low, []);
+  await ctx.close();
+});
+
+test("касание ячейки — её пояснение; ещё раз — свернуть; у DXY своё, у золота и BTC.D нет кнопки", async () => {
+  const { ctx, page, errors } = await open();
+  await page.locator(".drawer .mk-cell").first().waitFor();
+  assert.equal(await page.locator(".mk-note").count(), 0);
+  const bviv = page.locator('.mk-cell[data-k="BVIV"]');
+  assert.equal(await bviv.evaluate((el) => el.tagName), "BUTTON");
+  await bviv.click();
+  assert.equal(await bviv.getAttribute("aria-expanded"), "true");
+  assert.equal(sp(await page.locator(".mk-note").textContent()), sp(I18N["mk_bviv_hint"]!["ru"]!));
+  await page.locator('.mk-cell[data-k="DXY"]').click();
+  assert.equal(await bviv.getAttribute("aria-expanded"), "false");
+  assert.equal(sp(await page.locator(".mk-note").textContent()), sp(I18N["mk_dxy_hint"]!["ru"]!));
+  await page.locator('.mk-cell[data-k="DXY"]').click();
+  assert.equal(await page.locator(".mk-note").count(), 0);
+  // Без пояснения (золото, BTC.D) — не кнопка: касание ничего не обещает.
+  for (const k of ["GOLD", "BTCD"]) assert.equal(await page.locator(`.mk-cell[data-k="${k}"]`).evaluate((el) => el.tagName), "DIV");
+  // «ⓘ» — все пояснения; выбранная ячейка тогда не дублирует своё.
+  await bviv.click();
+  await page.locator(".mk-i").click();
+  assert.equal(await page.locator(".mk-note").count(), 0);
+  assert.equal(await page.locator(".mk-notes li").count(), 7);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test("полоска — величина изменения: больше изменение — длиннее, ноль — без полоски, цвет — направление", async () => {
+  const flat = { ...MARKETS, items: MARKETS.items.map((x) => (x.k === "GOLD" ? { ...x, prev: x.px } : x)) };
+  const { ctx, page } = await open({ reply: flat });
+  await page.locator(".drawer .mk-cell").first().waitFor();
+  const w = (k: string) => page.locator(`.mk-cell[data-k="${k}"] .mk-bar`).evaluate((el) => el.getBoundingClientRect().width);
+  assert.ok((await w("BVIV")) > (await w("OIL")) && (await w("OIL")) > (await w("SP500")), "BVIV 3,41 % > нефть 0,66 % > S&P 0,27 %");
+  assert.equal(await w("GOLD"), 0);
+  assert.equal(await page.locator('.mk-cell[data-k="USDTD"] .mk-bar.dn').count(), 1);
+  assert.equal(await page.locator('.mk-cell[data-k="BVIV"] .mk-bar.up').count(), 1);
+  // Полная полоска — не шире ячейки.
+  const cell = await page.locator('.mk-cell[data-k="BVIV"]').evaluate((el) => el.getBoundingClientRect().width);
+  assert.ok((await w("BVIV")) <= cell - 14 + 0.5);
+  await ctx.close();
+});
+
+test("заголовок: «сейчас», через 20 минут — «20 мин назад» жёлтым", async () => {
+  for (const [at, txt, old] of [[T - 20, I18N["mk_now"]!["ru"]!, false], [T - 20 * 60, "20 мин назад", true]] as const) {
+    const { ctx, page } = await open({ reply: { ...MARKETS, at } });
+    await page.locator(".drawer .mk-cell").first().waitFor();
+    assert.equal(sp(await page.locator(".mk-ttl").textContent()), I18N["mk_title"]!["ru"]);
+    assert.equal(sp(await page.locator(".mk-age").textContent()), txt);
+    assert.equal(await page.locator(".mk-age.old").count(), old ? 1 : 0);
+    await ctx.close();
+  }
+});
+
+test("пока ответа нет — скелет сетки, не прыжок заголовка; пришёл — цифры", async () => {
+  const { ctx, page, errors } = await open({ delay: 1500 });
+  await page.locator(".drawer .mk-skel").waitFor();
+  assert.equal(await page.locator(".drawer .mk-skel .mk-cell").count(), 9);
+  assert.equal(await page.locator(".drawer .drawer-ttl").count(), 0);
+  const skel = await page.locator(".mk-skel .mk-grid").boundingBox();
+  await page.locator(".drawer .mk-px").first().waitFor();
+  assert.equal(await page.locator(".mk-skel").count(), 0);
+  const grid = await page.locator(".mk-grid").boundingBox();
+  assert.ok(skel && grid && Math.abs(skel.y - grid.y) <= 1, "сетка на месте скелета");
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test("обновление: изменившаяся цена коротко вспыхивает своим цветом; вернулись в приложение — сразу свежие", async () => {
+  const next = { ...MARKETS, items: MARKETS.items.map((x) => (x.k === "SP500" ? { ...x, px: 7400 } : x.k === "GOLD" ? { ...x, px: 4000 } : x)) };
+  const { ctx, page } = await open({ replies: [MARKETS, next] });
+  await page.locator(".drawer .mk-cell").first().waitFor();
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await page.locator('.mk-cell[data-k="SP500"].mk-flash-up').waitFor();
+  assert.equal(await page.locator('.mk-cell[data-k="GOLD"].mk-flash-dn').count(), 1);
+  assert.equal(await page.locator('.mk-cell[data-k="DXY"][class*="mk-flash"]').count(), 0);
+  assert.match(sp(await page.locator('.mk-cell[data-k="SP500"] .mk-px').textContent()), /^7 400$/);
   await ctx.close();
 });
 
@@ -241,6 +330,8 @@ test("снимок меню", async () => {
   const { ctx, page } = await open({ scale: 2 });
   await page.locator(".drawer .mk-cell").first().waitFor();
   if (process.env["MK_NOTES"]) await page.locator(".mk-i").click();
+  const pick = process.env["MK_PICK"];
+  if (pick) await page.locator(`.mk-cell[data-k="${pick}"]`).click();
   await page.waitForTimeout(800); // меню выезжает с анимацией
   await page.screenshot({ path: shot });
   await ctx.close();

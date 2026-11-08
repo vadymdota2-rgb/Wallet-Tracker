@@ -2001,6 +2001,13 @@ say("рынки в меню на уровне халвинга: свой мод�
     and "def fx_covers(" in read(f"{APP}/wt_markets.py") and "def test_hyperliquid_budget(self):" in read(f"{APP}/tests/test_markets.py")
     and "except (ValueError, OverflowError):" in read(f"{APP}/wt_markets.py")
     and "test_markets_fuzz.py tests/test_markets_security.py tests/test_markets_policy.py" in read(f"{APP}/.github/workflows/tests.yml"))
+_mk_css = read(f"{APP}/src/components/Markets.css")
+say("рынки в меню — вид: заголовок «Рынки» и время обновления (старше 15 минут — жёлтым), полоска величины изменения в ячейке, касание ячейки — её пояснение, скелет вместо прыжка, вспышка изменившейся цены (без движения по просьбе системы), свёрнутое приложение сеть не трогает; цифры — цветом --ink",
+    "function Skeleton(" in _mk_tsx and 'className={`mk-bar ${dir}`}' in _mk_tsx and 'aria-expanded={on} aria-controls="mk-note"' in _mk_tsx
+    and 'document.addEventListener("visibilitychange", tick)' in _mk_tsx and "if (!document.hidden)" in _mk_tsx
+    and "age >= MARKETS_STALE_MIN" in _mk_tsx and "export function barShare(" in read(f"{APP}/src/lib/markets.ts")
+    and "@media (prefers-reduced-motion: reduce)" in _mk_css and "var(--fg)" not in _mk_css and "color: var(--ink)" in _mk_css
+    and all(k in _i18n for k in ("mk_now", "mk_ago")))
 _ci = read(f"{APP}/.github/workflows/tests.yml")
 say("CI: мутации карты ликвидаций — своим заданием с лимитом 75 минут (вместе со «Страхом и жадностью» не укладывались в 45)",
     "  mutation-liqmap:\n    runs-on: ubuntu-latest\n    timeout-minutes: 75" in _ci

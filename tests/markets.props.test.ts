@@ -8,7 +8,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MARKET_KEYS, MARKET_PX_MAX, change, digits, isPercent, validMarkets, type MarketItem } from "../src/lib/markets.ts";
+import { BAR_MIN, MARKET_KEYS, MARKET_PX_MAX, barShare, change, digits, isPercent, validMarkets, type MarketItem } from "../src/lib/markets.ts";
 
 const SEED = 0x3a_4e75;
 const CASES = 20_000;
@@ -108,5 +108,21 @@ test("знаки после запятой: доли и доходность —
     assert.ok([0, 2, 3, 5].includes(d), m);
     if (isPercent(k)) assert.equal(d, 2, m);
     else if (px >= 0.01) assert.ok(Math.floor(Math.log10(px)) + 1 + d >= 4, m); // 7 373, 90,21, 4,066, 0,02947
+  }
+});
+
+test("полоска: 0…1, растёт с величиной изменения, ноль — только без изменения", () => {
+  const r = rng(SEED + 3);
+  for (let i = 0; i < CASES; i++) {
+    const k = pick(r, MARKET_KEYS);
+    const prev = 10 ** (r() * 6 - 1);
+    const a = prev * (1 + (r() - 0.5) * 0.1);
+    const b = prev * (1 + (r() - 0.5) * 0.1);
+    const m = `случай ${i}: ${k} ${prev} ${a} ${b}`;
+    const sa = barShare({ k, px: a, prev });
+    const sb = barShare({ k, px: b, prev });
+    for (const x of [sa, sb]) assert.ok(x === 0 || (x >= BAR_MIN && x <= 1), m);
+    assert.equal(sa === 0, change({ k, px: a, prev }).v === 0, m);
+    if (Math.abs(change({ k, px: a, prev }).v) < Math.abs(change({ k, px: b, prev }).v)) assert.ok(sa <= sb, m);
   }
 });

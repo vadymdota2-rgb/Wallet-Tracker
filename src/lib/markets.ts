@@ -67,3 +67,23 @@ export function digits(it: MarketItem): number {
 
 /** Пункт — доходность или доля (BTC.D, USDT.D): число со знаком «%». */
 export const isPercent = (k: MarketKey): boolean => k === "US10Y" || k === "BTCD" || k === "USDTD";
+
+/** Полоска под ячейкой — величина изменения за сутки, 0…1: полная — 2 % (у
+ *  доходности — 10 б. п.); ненулевое изменение видно всегда (не меньше BAR_MIN). */
+export const BAR_PCT = 2;
+export const BAR_BP = 10;
+export const BAR_MIN = 0.06;
+export function barShare(it: MarketItem): number {
+  const c = change(it);
+  const a = Math.abs(c.v) / (c.unit === "bp" ? BAR_BP : BAR_PCT);
+  if (!Number.isFinite(a) || a === 0) return 0;
+  return Math.min(1, Math.max(BAR_MIN, a));
+}
+
+/** Сколько минут назад собран ответ (часы телефона отстают — не минус). */
+export function ageMin(at: number, now: number = Date.now() / 1000): number {
+  return Math.max(0, Math.floor((now - at) / 60));
+}
+
+/** Старше этого — время обновления подсвечено: цены не свежие. */
+export const MARKETS_STALE_MIN = 15;

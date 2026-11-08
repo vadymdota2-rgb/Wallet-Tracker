@@ -2,14 +2,22 @@
  * Рынки сверху бокового меню, сетка 3 × 3: S&P 500, XYZ100, DXY · золото,
  * нефть WTI, US 10Y · BVIV, BTC.D, USDT.D. Мелко и приглушённо: видно, но в
  * глаза не бросается.
- * Под сеткой — источники (CoinMarketCap — ссылкой, как требуют его условия)
- * и «ⓘ»: оговорки о товарных знаках и о том, что это
- * цены контрактов, а не значения индексов. Раскрываются касанием —
- * всплывающих подсказок на телефоне нет.
- * Пока данных нет (без подписки, сервер молчит, ответ битый или старый) —
- * прежний заголовок меню. Открытое меню обновляет рынки раз в минуту.
+ *
+ * Ячейка: подпись, цена, изменение и тонкая полоска внизу — её длина —
+ * величина изменения за сутки (barShare), цвет — направление: что двигалось
+ * сильно, видно, не читая цифр. Касание ячейки раскрывает её пояснение (что
+ * это за рынок, оговорки о правах); «ⓘ» под сеткой — все пояснения сразу.
+ * Всплывающих подсказок на телефоне нет — поэтому касанием.
+ * Сверху — «Рынки» и когда обновлено; старше MARKETS_STALE_MIN — жёлтым.
+ * Под сеткой — источники (CoinMarketCap — ссылкой, как требуют его условия).
+ *
+ * Пока ответа нет — скелет сетки (меню не прыгает); нет данных совсем (без
+ * подписки, сервер молчит, ответ битый или старый) — прежний заголовок меню.
+ * Открытое меню обновляет рынки раз в минуту, свёрнутое приложение — не
+ * трогает сеть, а вернулись — сразу. Цена изменилась — ячейка коротко
+ * вспыхивает цветом (без движения, если система просит меньше анимации).
  */
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
 import type { DictKey, LangCode } from "../i18n/types";
@@ -18,9 +26,13 @@ import { fetchMarkets, peekMarkets, refreshMarkets } from "../lib/api";
 import { openExternal } from "../lib/telegram";
 import { CMC_URL } from "./CmcBy";
 import "./Markets.css";
-import { change, digits, isPercent, type MarketItem, type MarketKey, type MarketsReply } from "../lib/markets";
+import {
+  MARKETS_STALE_MIN, MARKET_KEYS, ageMin, barShare, change, digits, isPercent,
+  type MarketItem, type MarketKey, type MarketsReply,
+} from "../lib/markets";
 
 const EVERY = 60_000;
+const FLASH_MS = 900;
 
 /** Подписи: имена индексов и тикеры — как есть на всех языках, золото и нефть — переводом. */
 const LABEL: Record<MarketKey, string | DictKey> = {
@@ -28,13 +40,15 @@ const LABEL: Record<MarketKey, string | DictKey> = {
   BVIV: "BVIV", BTCD: "BTC.D", USDTD: "USDT.D",
 };
 const isKey = (l: string): l is DictKey => l.startsWith("mk_");
-/** Оговорки по пунктам — в порядке экрана. */
+/** Пояснения по пунктам — в порядке экрана. */
 const HINT: Partial<Record<MarketKey, DictKey>> = {
   SP500: "mk_sp_hint", XYZ100: "mk_xyz_hint", DXY: "mk_dxy_hint", OIL: "mk_oil_hint", US10Y: "mk_10y_hint",
   BVIV: "mk_bviv_hint", USDTD: "mk_usdtd_hint",
 };
 
-function Cell({ it, lang }: { it: MarketItem; lang: LangCode }) {
+interface CellProps { it: MarketItem; lang: LangCode; on: boolean; flash: "" | "up" | "dn"; pick: (k: MarketKey) => void }
+
+function Cell({ it, lang, on, flash, pick }: CellProps) {
   const l = LABEL[it.k];
   const name = isKey(l) ? t(lang, l) : l;
   const ch = change(it);
@@ -45,12 +59,19 @@ function Cell({ it, lang }: { it: MarketItem; lang: LangCode }) {
   const txt = ch.unit === "bp" ? `${sign}${num(Math.abs(v), 1)} ${t(lang, "mk_bp")}` : `${sign}${num(Math.abs(v), 2, 2)}%`;
   const hint = HINT[it.k];
   const p = digits(it);
-  return (
-    <div className="mk-cell" title={hint ? t(lang, hint) : undefined} data-k={it.k}>
+  const body = (
+    <>
       <span className="mk-k">{name}</span>
       <b className="mk-px">{num(it.px, p, p)}{isPercent(it.k) ? "%" : ""}</b>
       <span className={`mk-ch ${dir}`}>{txt}</span>
-    </div>
+      <i className={`mk-bar ${dir}`} style={{ inlineSize: `calc((100% - 14px) * ${v ? barShare(it) : 0})` }} aria-hidden="true" />
+    </>
+  );
+  const cls = `mk-cell${flash ? ` mk-flash-${flash}` : ""}`;
+  if (!hint) return <div className={cls} data-k={it.k}>{body}</div>;
+  return (
+    <button type="button" className={cls} data-k={it.k} title={t(lang, hint)} aria-expanded={on} aria-controls="mk-note"
+      onClick={() => pick(it.k)}>{body}</button>
   );
 }
 
@@ -69,32 +90,84 @@ function Sources({ lang, tail }: { lang: LangCode; tail: ReactNode }) {
   );
 }
 
+/** Скелет сетки, пока ждём первый ответ: меню не прыгает. */
+function Skeleton({ lang }: { lang: LangCode }) {
+  return (
+    <section className="mk mk-skel" aria-label={t(lang, "mk_title")} aria-busy="true">
+      <div className="mk-head"><span className="mk-ttl">{t(lang, "mk_title")}</span></div>
+      <div className="mk-grid">{MARKET_KEYS.map((k) => <div key={k} className="mk-cell"><i /><i /><i /></div>)}</div>
+    </section>
+  );
+}
+
 export function MarketsStrip({ fallback }: { fallback: ReactNode }) {
   const lang = useApp((s) => s.lang);
   const [m, setM] = useState<MarketsReply | null>(() => peekMarkets() ?? null);
+  const [waiting, setWaiting] = useState(() => !peekMarkets());
   const [open, setOpen] = useState(false);
+  const [sel, setSel] = useState<MarketKey | null>(null);
+  const [now, setNow] = useState(() => Date.now() / 1000);
+  const [flash, setFlash] = useState<Partial<Record<MarketKey, "up" | "dn">>>({});
+  const last = useRef<MarketsReply | null>(m);
   useEffect(() => {
     let alive = true;
+    let timer = 0;
     const put = (r: MarketsReply | null) => {
-      if (alive && r) setM(r);
+      if (!alive) return;
+      setWaiting(false);
+      setNow(Date.now() / 1000);
+      if (!r) return;
+      // Что изменилось с прошлого ответа — коротко вспыхивает своим цветом.
+      const before = new Map((last.current?.items ?? []).map((x) => [x.k, x.px]));
+      const lit: Partial<Record<MarketKey, "up" | "dn">> = {};
+      for (const x of r.items) {
+        const b = before.get(x.k);
+        if (b !== undefined && b !== x.px) lit[x.k] = x.px > b ? "up" : "dn";
+      }
+      last.current = r;
+      setM(r);
+      if (Object.keys(lit).length) {
+        setFlash(lit);
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => alive && setFlash({}), FLASH_MS);
+      }
     };
     void fetchMarkets().then(put);
-    const id = window.setInterval(() => void refreshMarkets().then(put), EVERY);
+    // Свёрнутое приложение сеть не трогает; вернулись — сразу свежий ответ.
+    const tick = () => {
+      if (!document.hidden) void refreshMarkets().then(put);
+    };
+    const id = window.setInterval(tick, EVERY);
+    document.addEventListener("visibilitychange", tick);
     return () => {
       alive = false;
       window.clearInterval(id);
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", tick);
     };
   }, []);
-  if (!m) return <>{fallback}</>;
+  if (!m) return waiting ? <Skeleton lang={lang} /> : <>{fallback}</>;
   const notes = m.items.flatMap((it) => {
     const h = HINT[it.k];
     return h ? [h] : [];
   });
+  const age = ageMin(m.at, now);
+  const note = sel && !open ? HINT[sel] : undefined;
   return (
     <section className="mk" aria-label={t(lang, "mk_title")}>
-      <div className="mk-grid">
-        {m.items.map((it) => <Cell key={it.k} it={it} lang={lang} />)}
+      <div className="mk-head">
+        <span className="mk-ttl">{t(lang, "mk_title")}</span>
+        <span className={`mk-age${age >= MARKETS_STALE_MIN ? " old" : ""}`}>
+          {age < 1 ? t(lang, "mk_now") : t(lang, "mk_ago", { n: age })}
+        </span>
       </div>
+      <div className="mk-grid">
+        {m.items.map((it) => (
+          <Cell key={it.k} it={it} lang={lang} on={sel === it.k && !open} flash={flash[it.k] ?? ""}
+            pick={(k) => setSel((s) => (s === k ? null : k))} />
+        ))}
+      </div>
+      {note ? <p id="mk-note" className="mk-note" role="note">{t(lang, note)}</p> : null}
       <p className="mk-src">
         <Sources lang={lang} tail={notes.length ? (
           <button type="button" className="mk-i" aria-expanded={open} aria-label={t(lang, "mk_about")}

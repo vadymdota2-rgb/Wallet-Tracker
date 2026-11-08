@@ -127,6 +127,14 @@ TS = [
     ("return it.px >= 1000 ? 0 :", "return it.px > 1000 ? 0 :", "тысяча — без копеек"),
     ("it.px >= 10 ? 2 : it.px >= 1 ? 3 : 5;", "it.px >= 10 ? 2 : 5;", "единицы — три знака"),
     ('k === "US10Y" || k === "BTCD" || k === "USDTD"', 'k === "US10Y" || k === "BTCD"', "USDT.D — со знаком «%»"),
+    ('const a = Math.abs(c.v) / (c.unit === "bp" ? BAR_BP : BAR_PCT);', 'const a = Math.abs(c.v) / BAR_PCT;', "полоска доходности — по базисным пунктам"),
+    ("export const BAR_PCT = 2;", "export const BAR_PCT = 3;", "полная полоска — 2 %"),
+    ("if (!Number.isFinite(a) || a === 0) return 0;", "if (!Number.isFinite(a)) return 0;", "ноль — без полоски"),
+    ("return Math.min(1, Math.max(BAR_MIN, a));", "return Math.min(1, a);", "мелочь — видна"),
+    ("return Math.min(1, Math.max(BAR_MIN, a));", "return Math.max(BAR_MIN, a);", "полоска — не длиннее ячейки"),
+    ("return Math.max(0, Math.floor((now - at) / 60));", "return Math.floor((now - at) / 60);", "возраст — не минус"),
+    ("return Math.max(0, Math.floor((now - at) / 60));", "return Math.max(0, Math.round((now - at) / 60));", "возраст — целые минуты"),
+    ("export const MARKETS_STALE_MIN = 15;", "export const MARKETS_STALE_MIN = 30;", "старые — с 15 минут"),
 ]
 
 

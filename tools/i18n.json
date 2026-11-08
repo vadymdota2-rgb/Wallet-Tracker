@@ -28150,5 +28150,41 @@
     "ja": "時価総額に占めるUSDTの割合（CoinMarketCap）。上昇はコインからステーブルコインへの資金移動を示します",
     "ko": "시가총액에서 USDT가 차지하는 비중(CoinMarketCap). 오르면 자금이 코인에서 스테이블코인으로 이동 중",
     "zh": "USDT 占市场总市值的比例（CoinMarketCap）。上升意味着资金从币种流向稳定币"
+  },
+  "mk_now": {
+    "ru": "сейчас",
+    "en": "now",
+    "uk": "зараз",
+    "de": "jetzt",
+    "es": "ahora",
+    "fr": "maintenant",
+    "pt": "agora",
+    "pl": "teraz",
+    "tr": "şimdi",
+    "id": "sekarang",
+    "vi": "vừa xong",
+    "hi": "अभी",
+    "ar": "الآن",
+    "ja": "たった今",
+    "ko": "방금",
+    "zh": "刚刚"
+  },
+  "mk_ago": {
+    "ru": "{n} мин назад",
+    "en": "{n} min ago",
+    "uk": "{n} хв тому",
+    "de": "vor {n} Min.",
+    "es": "hace {n} min",
+    "fr": "il y a {n} min",
+    "pt": "há {n} min",
+    "pl": "{n} min temu",
+    "tr": "{n} dk önce",
+    "id": "{n} mnt lalu",
+    "vi": "{n} phút trước",
+    "hi": "{n} मिनट पहले",
+    "ar": "قبل {n} د",
+    "ja": "{n}分前",
+    "ko": "{n}분 전",
+    "zh": "{n}分钟前"
   }
 }

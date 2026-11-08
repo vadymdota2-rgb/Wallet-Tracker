@@ -1,7 +1,7 @@
 /* Рынки в меню: проверка ответа сервера и подписи изменений (node --test). */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MARKET_KEYS, MARKET_PX_MAX, change, digits, isPercent, validMarkets } from "../src/lib/markets.ts";
+import { BAR_MIN, MARKET_KEYS, MARKET_PX_MAX, MARKETS_STALE_MIN, ageMin, barShare, change, digits, isPercent, validMarkets } from "../src/lib/markets.ts";
 
 const NOW = 1_794_100_000;
 const good = {
@@ -74,4 +74,24 @@ test("знаки после запятой — по масштабу", () => {
   assert.equal(digits({ k: "BTCD", px: 60.44, prev: 1 }), 2);
   assert.equal(digits({ k: "USDTD", px: 4.1, prev: 1 }), 2);
   assert.deepEqual(MARKET_KEYS.filter(isPercent), ["US10Y", "BTCD", "USDTD"]);
+});
+
+test("полоска: 2 % (10 б. п. у доходности) — полная, ноль — без полоски, мелочь — видна", () => {
+  assert.ok(barShare({ k: "SP500", px: 102, prev: 100 }) > 0.999999);
+  assert.equal(barShare({ k: "SP500", px: 110, prev: 100 }), 1);
+  assert.ok(Math.abs(barShare({ k: "SP500", px: 101, prev: 100 }) - 0.5) < 1e-9);
+  assert.equal(barShare({ k: "SP500", px: 100, prev: 100 }), 0);
+  assert.equal(barShare({ k: "SP500", px: 100.001, prev: 100 }), BAR_MIN);
+  assert.ok(Math.abs(barShare({ k: "US10Y", px: 4.85, prev: 4.8 }) - 0.5) < 1e-9); // 5 б. п.
+  assert.equal(barShare({ k: "US10Y", px: 4.6, prev: 4.8 }), 1); // 20 б. п. — больше полной
+  assert.ok(Math.abs(barShare({ k: "BTCD", px: 60.6, prev: 60 }) - 0.5) < 1e-9); // доля — в процентах изменения
+});
+
+test("возраст ответа — целые минуты, часы телефона отстают — не минус; старые — с 15 минут", () => {
+  assert.equal(ageMin(1000, 1000), 0);
+  assert.equal(ageMin(1000, 1059), 0);
+  assert.equal(ageMin(1000, 1060), 1);
+  assert.equal(ageMin(1000, 1000 + 20 * 60 + 30), 20);
+  assert.equal(ageMin(1000, 500), 0);
+  assert.equal(MARKETS_STALE_MIN, 15);
 });

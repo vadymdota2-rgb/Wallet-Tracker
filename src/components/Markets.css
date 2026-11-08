@@ -1,36 +1,94 @@
 /* Рынки сверху меню: сетка 3 × 3, мелко и приглушённо — видно, но в глаза
-   не бросается: тонкие ячейки, цифры светлее фона, изменение — бледным
-   зелёным и красным. Приглушение — не ниже контраста 4,5:1 (WCAG AA для
-   мелкого текста; проверяет браузерный тест).
+   не бросается: тонкие ячейки с мягким бликом сверху, цифры светлее фона,
+   изменение — бледным зелёным и красным, под ним — тонкая полоска величины
+   изменения. Приглушение — не ниже контраста 4,5:1 (WCAG AA для мелкого
+   текста; проверяет браузерный тест).
    Крупный системный шрифт (Android до 200 %): столбец не уже 5,6em шрифта
    сетки — когда три не влезают, сетка сама перестраивается в два или один,
    а цифры не обрезаются. */
 .mk { padding: 0 2px 10px; margin-bottom: 6px; border-bottom: 1px solid var(--line, rgb(255 255 255 / 0.06)); }
+
+/* Заголовок: «Рынки» и когда обновлено — капителью, совсем мелко. */
+.mk-head {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+  margin: 0 2px 5px; font-size: 8.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--dim); opacity: 0.85;
+}
+.mk-age { font-weight: 500; letter-spacing: 0.02em; text-transform: none; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mk-age.old { color: var(--warn); opacity: 1; }
+
 .mk-grid {
   display: grid; gap: 4px; font-size: 11.5px;
   grid-template-columns: repeat(auto-fit, minmax(max(5.6em, calc((100% - 8px) / 3)), 1fr));
 }
 .mk-cell {
+  position: relative;
   min-width: 0;
-  padding: 4px 6px 5px;
-  border-radius: 7px;
-  background: rgb(255 255 255 / 0.025);
-  border: 1px solid rgb(255 255 255 / 0.04);
+  margin: 0;
+  padding: 5px 7px 7px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.035), rgb(255 255 255 / 0.012));
+  border: 1px solid rgb(255 255 255 / 0.05);
   display: flex;
   flex-direction: column;
   line-height: 1.25;
+  overflow: hidden;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  transition: border-color 0.2s, background-color 0.2s;
 }
+/* Ячейка с пояснением — кнопка: касание раскрывает пояснение под сеткой. */
+button.mk-cell { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+button.mk-cell[aria-expanded="true"] { border-color: rgb(127 216 255 / 0.32); background-color: rgb(127 216 255 / 0.04); }
+button.mk-cell:focus-visible { outline: 2px solid var(--glow); outline-offset: 1px; }
+
 .mk-k, .mk-px, .mk-ch { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mk-k { font-size: 9px; font-weight: 600; letter-spacing: 0.03em; color: var(--dim); opacity: 0.85; }
-.mk-px { font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--fg); opacity: 0.82; }
+.mk-px { font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); opacity: 0.86; }
 .mk-ch { font-size: 9.5px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--dim); opacity: 0.85; }
 .mk-ch.up { color: var(--up); opacity: 0.7; }
 .mk-ch.dn { color: var(--dn); opacity: 0.85; }
+
+/* Полоска величины изменения: от начала строки (и справа налево — на арабском). */
+.mk-bar {
+  position: absolute; inset-block-end: 2px; inset-inline-start: 7px;
+  block-size: 2px; border-radius: 1px; background: var(--dim); opacity: 0.45;
+  transition: inline-size 0.4s var(--ease, ease);
+}
+.mk-bar.up { background: var(--up); }
+.mk-bar.dn { background: var(--dn); }
+
+/* Цена изменилась при обновлении — ячейка коротко вспыхивает своим цветом. */
+.mk-flash-up { animation: mk-up 0.9s ease-out; }
+.mk-flash-dn { animation: mk-dn 0.9s ease-out; }
+@keyframes mk-up { from { background-color: rgb(61 220 151 / 0.16); } }
+@keyframes mk-dn { from { background-color: rgb(255 92 119 / 0.16); } }
+
+/* Скелет, пока ждём первый ответ: та же сетка, мягкое мерцание. */
+.mk-skel .mk-cell { gap: 4px; padding: 7px 7px 8px; }
+.mk-skel .mk-cell i { display: block; block-size: 7px; border-radius: 3px; background: rgb(255 255 255 / 0.06); animation: mk-pulse 1.4s ease-in-out infinite; }
+.mk-skel .mk-cell i:nth-child(1) { inline-size: 55%; }
+.mk-skel .mk-cell i:nth-child(2) { inline-size: 80%; block-size: 9px; }
+.mk-skel .mk-cell i:nth-child(3) { inline-size: 45%; }
+@keyframes mk-pulse { 50% { opacity: 0.45; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-flash-up, .mk-flash-dn, .mk-skel .mk-cell i { animation: none; }
+  .mk-bar, .mk-cell { transition: none; }
+}
+
+/* Пояснение выбранной ячейки — под сеткой. */
+.mk-note {
+  margin: 6px 0 0; padding: 6px 8px; border-radius: 8px;
+  background: rgb(127 216 255 / 0.04); border: 1px solid rgb(127 216 255 / 0.12);
+  font-size: 9px; line-height: 1.4; color: var(--dim);
+}
+
 .mk-src { margin-top: 5px; font-size: 8.5px; color: var(--dim); opacity: 0.85; text-align: center; }
 .mk-src a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .mk-nw { white-space: nowrap; }
-/* «ⓘ»: оговорки раскрываются касанием (на телефоне всплывающих подсказок нет);
-   кнопка мелкая, но место под палец — с запасом. */
+/* «ⓘ»: все пояснения сразу; кнопка мелкая, но место под палец — с запасом. */
 .mk-i {
   margin-inline-start: 4px; padding: 6px 6px; margin-block: -6px;
   background: none; border: 0; color: inherit; font: inherit; font-size: 10px; line-height: 1; cursor: pointer;
