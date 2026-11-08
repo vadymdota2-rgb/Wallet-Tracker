@@ -77,8 +77,10 @@ SLOW[площадка][0]), и те же цифры — тот же объект
 from __future__ import annotations
 
 import calendar
+import contextlib
 import math
 import re
+import sys
 import threading
 import time
 from collections.abc import Callable
@@ -138,6 +140,7 @@ UNI_MAX = 5000  # рынков на площадке Hyperliquid
 CANDLES_MAX = 1000  # часовых свечей на валюту (берём FX_DAYS суток — 120)
 DAYS_MAX = 60  # дней ЕЦБ (берём ECB_DAYS)
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+LOG_MAX = 300  # строка журнала — не длиннее
 
 
 def _num(v: object) -> float:
@@ -337,6 +340,10 @@ class _State:
         self.hit: tuple[float, dict[str, Json]] | None = None
         self.job: threading.Thread | None = None
         self.fail = 0.0
+        # Журнал — только смены состояния: какие источники молчат (с какого
+        # момента, monotonic) и пуст ли последний ответ.
+        self.down: dict[str, float] = {}
+        self.empty = False
         # Медленные источники: имя → (когда получен — по монотонным часам,
         # годный ответ, когда получен — время Unix).
         self.slow: dict[str, tuple[float, object, int]] = {}
@@ -349,6 +356,45 @@ _lock = threading.Lock()
 def set_sources(sources: dict[str, Source]) -> None:
     """Откуда брать ответы источников: имя (xyz, para, mkts, fx, ecb, mcap, aster) → fn()."""
     _st.sources = dict(sources)
+
+
+def _log(msg: str) -> None:
+    """В журнал сервера — одной строкой, без управляющих символов и не длиннее
+    LOG_MAX (как у карточки халвинга)."""
+    clean = "".join(c if c.isprintable() else "?" for c in msg)
+    out = sys.stderr
+    if out is None:  # журнала нет (pythonw, закрыт) — print ушёл бы в stdout
+        return
+    # Журнал закрыт или сломан — работа модуля важнее записи о ней.
+    with contextlib.suppress(OSError, ValueError):
+        print(f"markets: {clean[:LOG_MAX]}", file=out)
+
+
+def _health(name: str, ok: bool, why: str = "") -> None:
+    """Источник замолчал или снова отвечает — строка в журнал только при смене
+    состояния: сборка раз в минуту, и каждый сбой отдельно засорял бы журнал.
+    Причина — только тип ошибки: текст ошибки может нести адрес запроса."""
+    t = time.monotonic()
+    with _lock:
+        since = _st.down.get(name)
+        if ok == (since is None):
+            return
+        if ok:
+            del _st.down[name]
+        else:
+            _st.down[name] = t
+    if since is not None:
+        _log(f"источник {name} снова отвечает (молчал {int(t - since) // 60} мин)")
+    else:
+        _log(f"источник {name} молчит" + (f" ({why})" if why else ""))
+
+
+def _answered(name: str, v: object) -> bool:
+    """Источник ответил по делу: SLOW — годным ответом, остальные — не пустым и
+    не «нет данных» своего модуля."""
+    if name in SLOW:
+        return _good(name, v)
+    return v is not None and not (isinstance(v, dict) and v.get("ok") is False)
 
 
 def _now() -> int:
@@ -404,13 +450,16 @@ def _gather() -> tuple[dict[str, object], dict[str, int]]:
             ask[name] = fn
 
     def one(name: str, fn: Source) -> None:
+        why = ""
         try:
             v = fn()
-        except Exception:  # noqa: BLE001 — источник молчит: пункты без него
-            v = None
+        except Exception as e:  # noqa: BLE001 — источник молчит: пункты без него
+            v, why = None, type(e).__name__
+        good = _answered(name, v)
+        _health(name, good, why)
         at = None
         if name in SLOW:
-            if _good(name, v):
+            if good:
                 at = _now()
                 with _lock:
                     _st.slow[name] = (time.monotonic(), v, at)
@@ -450,12 +499,16 @@ def build() -> dict[str, Json]:
     dex_at = [since[d] for d in DEXES if d in since]
     res = compute(parts, _now(), min(dex_at) if dex_at else None)
     with _lock:
-        if res.get("ok"):
+        empty, was = not res.get("ok"), _st.empty
+        _st.empty = empty
+        if not empty:
             if _st.hit and _st.hit[1] == res:
                 res = _st.hit[1]  # те же цифры — тот же объект (те же байты и ETag)
             _st.hit = (time.monotonic(), res)
         else:
             _st.fail = time.monotonic()
+    if empty != was:
+        _log("ответа нет: ни одного пункта" if empty else "ответ снова есть")
     return res
 
 

@@ -3,6 +3,9 @@
  * нефть WTI, US 10Y · BVIV, BTC.D, USDT.D. Мелко и приглушённо: видно, но в
  * глаза не бросается.
  *
+ * Сетка всегда 3 × 3: пункта нет в ответе (источник молчит) — на его месте
+ * «—» и «нет данных» для чтения с экрана, а не сдвиг остальных ячеек.
+ *
  * Ячейка: подпись, цена, изменение и тонкая полоска внизу — её длина —
  * величина изменения за сутки (barShare), цвет — направление: что двигалось
  * сильно, видно, не читая цифр. Касание ячейки раскрывает её пояснение (что
@@ -22,7 +25,7 @@
  * (если прошлый ответ старше минуты). Цена изменилась — ячейка коротко
  * вспыхивает цветом (без движения, если система просит меньше анимации).
  */
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
 import type { DictKey, LangCode } from "../i18n/types";
@@ -45,6 +48,10 @@ const LABEL: Record<MarketKey, string | DictKey> = {
   BVIV: "BVIV", BTCD: "BTC.D", USDTD: "USDT.D",
 };
 const isKey = (l: string): l is DictKey => l.startsWith("mk_");
+const label = (k: MarketKey, lang: LangCode): string => {
+  const l = LABEL[k];
+  return isKey(l) ? t(lang, l) : l;
+};
 /** Пояснения по пунктам — в порядке экрана. */
 const HINT: Partial<Record<MarketKey, DictKey>> = {
   SP500: "mk_sp_hint", XYZ100: "mk_xyz_hint", DXY: "mk_dxy_hint", OIL: "mk_oil_hint", US10Y: "mk_10y_hint",
@@ -55,9 +62,10 @@ interface CellProps {
   it: MarketItem; lang: LangCode; on: boolean; flash: "" | "up" | "dn"; note: string; pick: (k: MarketKey) => void;
 }
 
-function Cell({ it, lang, on, flash, note, pick }: CellProps) {
-  const l = LABEL[it.k];
-  const name = isKey(l) ? t(lang, l) : l;
+/** Ячейка пункта; перерисовывается, только когда меняются её данные (memo):
+ *  вспышка одной цены не трогает остальные восемь. */
+const Cell = memo(function Cell({ it, lang, on, flash, note, pick }: CellProps) {
+  const name = label(it.k, lang);
   const ch = change(it);
   const d = ch.unit === "bp" ? 1 : 2;
   const v = Number(ch.v.toFixed(d));
@@ -79,6 +87,17 @@ function Cell({ it, lang, on, flash, note, pick }: CellProps) {
   return (
     <button type="button" className={cls} data-k={it.k} title={t(lang, hint)} aria-expanded={on} aria-controls={note}
       onClick={() => pick(it.k)}>{body}</button>
+  );
+});
+
+/** Пункта нет в ответе — ячейка на своём месте: «—», а чтению с экрана —
+ *  «нет данных». */
+function Empty({ k, lang }: { k: MarketKey; lang: LangCode }) {
+  return (
+    <div className="mk-cell mk-empty" data-k={k}>
+      <span className="mk-k">{label(k, lang)}</span>
+      <b className="mk-px"><span aria-hidden="true">—</span><span className="mk-sr">{t(lang, "mk_none")}</span></b>
+    </div>
   );
 }
 
@@ -128,6 +147,7 @@ export function MarketsStrip({ fallback }: { fallback: ReactNode }) {
   const [now, setNow] = useState(() => Date.now() / 1000);
   const [flash, setFlash] = useState<Partial<Record<MarketKey, "up" | "dn">>>({});
   const last = useRef<MarketsReply | null>(m);
+  const pick = useCallback((k: MarketKey) => setSel((s) => (s === k ? null : k)), []);
   const asked = useRef(Date.now());
   const noteId = useId();
   useEffect(() => {
@@ -180,9 +200,10 @@ export function MarketsStrip({ fallback }: { fallback: ReactNode }) {
     const h = HINT[it.k];
     return h ? [h] : [];
   });
+  const byKey = new Map(m.items.map((x) => [x.k, x]));
   const age = ageMin(m.at, now);
   // Пояснение выбранной ячейки — пока она на экране и не открыт список всех.
-  const note = sel && !open && m.items.some((x) => x.k === sel) ? HINT[sel] : undefined;
+  const note = sel && !open && byKey.has(sel) ? HINT[sel] : undefined;
   return (
     <section className="mk" aria-label={t(lang, "mk_title")}>
       <div className="mk-head">
@@ -192,10 +213,12 @@ export function MarketsStrip({ fallback }: { fallback: ReactNode }) {
         </span>
       </div>
       <div className="mk-grid">
-        {m.items.map((it) => (
-          <Cell key={it.k} it={it} lang={lang} on={sel === it.k && !open} flash={flash[it.k] ?? ""} note={noteId}
-            pick={(k) => setSel((s) => (s === k ? null : k))} />
-        ))}
+        {MARKET_KEYS.map((k) => {
+          const it = byKey.get(k);
+          return it ? (
+            <Cell key={k} it={it} lang={lang} on={sel === k && !open} flash={flash[k] ?? ""} note={noteId} pick={pick} />
+          ) : <Empty key={k} k={k} lang={lang} />;
+        })}
       </div>
       {note ? <p id={noteId} className="mk-note" role="note">{t(lang, note)}</p> : null}
       <p className="mk-src">

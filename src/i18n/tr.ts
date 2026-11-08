@@ -1145,6 +1145,7 @@ export const tr: Dict = {
   mk_bviv_hint: "BVIV, Volmex endeksine göre Bitcoin’in 30 günlük örtük volatilitesidir, “Bitcoin’in VIX’i”: yükselmesi piyasanın sert hareket beklediğini gösterir. Markets by Kinetiq’in Hyperliquid’deki sürekli vadeli kontratının fiyatıdır, endeks değeri değildir. Bu uygulama Volmex ile bağlantılı değildir",
   mk_dxy_hint: "DXY, EUR, JPY, GBP (Hyperliquid) ile CAD, SEK, CHF (AMB) kurlarından açık dolar endeksi formülüyle yaptığımız kendi hesabımızdır, resmî değer değildir: yaklaşık %0,1 fark olabilir. Değişim, döviz gününün kapanışından (New York 17:00) itibarendir; hafta sonu cuma kapanışı. U.S. Dollar Index®, ICE’nin ticari markasıdır",
   mk_gold: "Altın",
+  mk_none: "veri yok",
   mk_now: "şimdi",
   mk_oil: "WTI petrol",
   mk_oil_hint: "WTI ham petrol — trade.xyz’in Hyperliquid’deki sürekli vadeli kontratı, 7/24 işlem görür. Hyperliquid yanıt vermezse altın ve petrol Aster’daki XAU ve CL piyasalarından alınır",

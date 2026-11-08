@@ -40,7 +40,7 @@ class PolicyTest(unittest.TestCase):
                 found |= {a.name for a in n.names}
             elif isinstance(n, ast.ImportFrom):
                 found.add(n.module or "")
-        self.assertLessEqual(found, {"__future__", "calendar", "math", "re", "threading", "time", "collections.abc", "typing"})
+        self.assertLessEqual(found, {"__future__", "calendar", "contextlib", "math", "re", "sys", "threading", "time", "collections.abc", "typing"})
         bad = [n.func.id for n in ast.walk(self.tree()) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
                and n.func.id in {"eval", "exec", "compile", "__import__", "open", "getattr", "setattr"}]
         self.assertEqual(bad, [])

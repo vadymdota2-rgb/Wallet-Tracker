@@ -1145,6 +1145,7 @@ export const vi: Dict = {
   mk_bviv_hint: "BVIV là biến động ngụ ý 30 ngày của Bitcoin theo chỉ số Volmex, “VIX của Bitcoin”: tăng nghĩa là thị trường chờ biến động mạnh. Giá hợp đồng vĩnh cửu của Markets by Kinetiq trên Hyperliquid, không phải giá trị chỉ số. Ứng dụng này không liên kết với Volmex",
   mk_dxy_hint: "DXY là phép tính của chúng tôi theo công thức công khai của chỉ số đô la từ tỷ giá EUR, JPY, GBP (Hyperliquid) cùng CAD, SEK, CHF (ECB), không phải giá trị chính thức: có thể lệch khoảng 0,1%. Thay đổi tính từ lúc đóng cửa ngày ngoại hối (17:00 New York); cuối tuần là giá đóng cửa thứ Sáu. U.S. Dollar Index® là nhãn hiệu của ICE",
   mk_gold: "Vàng",
+  mk_none: "không có dữ liệu",
   mk_now: "vừa xong",
   mk_oil: "Dầu WTI",
   mk_oil_hint: "Dầu thô WTI — hợp đồng vĩnh cửu của trade.xyz trên Hyperliquid, giao dịch suốt ngày đêm. Nếu Hyperliquid không phản hồi, vàng và dầu lấy từ thị trường XAU và CL trên Aster",

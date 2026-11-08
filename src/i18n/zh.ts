@@ -1145,6 +1145,7 @@ export const zh: Dict = {
   mk_bviv_hint: "BVIV 是按 Volmex 指数计算的比特币 30 天隐含波动率，即“比特币的 VIX”：上升意味着市场预期剧烈波动。此为 Markets by Kinetiq 在 Hyperliquid 上永续合约的价格，并非指数数值。本应用与 Volmex 无关联",
   mk_dxy_hint: "DXY 为我们按公开的美元指数公式，由 EUR、JPY、GBP（Hyperliquid）与 CAD、SEK、CHF（欧洲央行）汇率自行计算，并非官方数值，可能相差约 0.1%。涨跌以外汇交易日收盘（纽约 17:00）为基准，周末显示周五收盘。U.S. Dollar Index® 是 ICE 的商标",
   mk_gold: "黄金",
+  mk_none: "暂无数据",
   mk_now: "刚刚",
   mk_oil: "WTI 原油",
   mk_oil_hint: "WTI 原油 — trade.xyz 在 Hyperliquid 上的永续合约，全天候交易。若 Hyperliquid 无响应，黄金和原油取自 Aster 的 XAU 和 CL 市场",

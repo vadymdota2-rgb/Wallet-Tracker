@@ -58,6 +58,8 @@ after(async () => {
 
 interface Opts {
   lang?: string; width?: number; height?: number; reply?: unknown; scale?: number;
+  /** Высокая контрастность Windows (forced-colors). */
+  forced?: boolean;
   /** Ответы по очереди (последний — дальше всегда); задержка первого ответа, мс. */
   replies?: unknown[]; delay?: number;
   /** Копия на устройстве (wt-markets-v1): когда записана (мс) и что. */
@@ -66,7 +68,8 @@ interface Opts {
 
 async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; errors: string[] }> {
   const lang = o.lang ?? "ru";
-  const ctx = await browser.newContext({ viewport: { width: o.width ?? 360, height: o.height ?? 780 }, deviceScaleFactor: o.scale ?? 1, timezoneId: "UTC" });
+  const ctx = await browser.newContext({ viewport: { width: o.width ?? 360, height: o.height ?? 780 }, deviceScaleFactor: o.scale ?? 1, timezoneId: "UTC",
+    forcedColors: o.forced ? "active" : "none" });
   const page = await ctx.newPage();
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -198,6 +201,54 @@ test("любое устройство: от 280 точек (Galaxy Fold снар
     assert.deepEqual(errors, [], d.name);
     await ctx.close();
   }
+});
+
+test("пункта нет в ответе — ячейка на своём месте: «—» и «нет данных» для чтения с экрана, сетка не сдвигается", async () => {
+  const at = async (reply: unknown) => {
+    const { ctx, page, errors } = await open({ reply, width: 320 });
+    await page.locator(".drawer .mk-cell").first().waitFor();
+    // От начала сетки: меню ещё может выезжать.
+    const pos = await page.locator(".drawer .mk-cell").evaluateAll((els) => els.map((el) => {
+      const r = el.getBoundingClientRect();
+      const g = el.parentElement!.getBoundingClientRect();
+      return `${(el as HTMLElement).dataset["k"]}:${Math.round(r.x - g.x)},${Math.round(r.y - g.y)},${Math.round(r.width)}x${Math.round(r.height)}`;
+    }));
+    return { ctx, page, errors, pos };
+  };
+  const full = await at(MARKETS);
+  await full.ctx.close();
+  const part = await at({ ...MARKETS, items: MARKETS.items.filter((x) => x.k !== "DXY" && x.k !== "BVIV") });
+  assert.deepEqual(part.pos, full.pos);
+  assert.equal(await part.page.locator(".mk-empty").count(), 2);
+  const dxy = part.page.locator('.mk-cell[data-k="DXY"]');
+  assert.equal(sp(await dxy.locator(".mk-k").textContent()), "DXY");
+  assert.equal(await dxy.locator('.mk-px [aria-hidden="true"]').textContent(), "—");
+  assert.equal(await dxy.locator(".mk-sr").textContent(), I18N["mk_none"]!["ru"]);
+  // «нет данных» не видно глазом, но и не обрезает ячейку.
+  const sr = await dxy.locator(".mk-sr").boundingBox();
+  assert.ok(sr && sr.width <= 1 && sr.height <= 1, JSON.stringify(sr));
+  assert.deepEqual(await overflow(part.page), []);
+  assert.equal(await dxy.locator("button, .mk-bar").count(), 0);
+  // Пояснения «ⓘ» — только у показанных пунктов.
+  await part.page.locator(".mk-i").click();
+  const notes = (await part.page.locator(".mk-notes li").allTextContents()).map(sp);
+  assert.ok(!notes.includes(sp(I18N["mk_dxy_hint"]!["ru"]!)));
+  assert.deepEqual(part.errors, []);
+  await part.ctx.close();
+});
+
+test("высокая контрастность Windows: полоска и рамки — цветом системы, а не пропадают", async () => {
+  const { ctx, page, errors } = await open({ forced: true });
+  await page.locator(".drawer .mk-cell").first().waitFor();
+  const bar = await page.locator('.mk-cell[data-k="BVIV"] .mk-bar').evaluate((el) => {
+    const cs = getComputedStyle(el);
+    return { bg: cs.backgroundColor, op: cs.opacity, w: el.getBoundingClientRect().width };
+  });
+  assert.notEqual(bar.bg, "rgba(0, 0, 0, 0)");
+  assert.equal(bar.op, "1");
+  assert.ok(bar.w > 10, JSON.stringify(bar));
+  assert.deepEqual(errors, []);
+  await ctx.close();
 });
 
 test("арабский: сетка справа налево, цифры и знаки — как у всех", async () => {

@@ -1145,6 +1145,7 @@ export const ja: Dict = {
   mk_bviv_hint: "BVIVはVolmex指数によるビットコインの30日インプライド・ボラティリティで、「ビットコインのVIX」。上昇は相場が大きな値動きを予想していることを示します。HyperliquidのMarkets by Kinetiq無期限先物の価格で、指数の値ではありません。本アプリはVolmexと提携関係にありません",
   mk_dxy_hint: "DXYは、EUR・JPY・GBP（Hyperliquid）とCAD・SEK・CHF（ECB）の為替から公開されたドル指数の式で当社が算出した値で、公式値ではありません（約0.1%の差が出ることがあります）。変化は為替取引日の終値（ニューヨーク17時）から、週末は金曜の終値です。U.S. Dollar Index®はICEの商標です",
   mk_gold: "金",
+  mk_none: "データなし",
   mk_now: "たった今",
   mk_oil: "WTI原油",
   mk_oil_hint: "WTI原油 — Hyperliquidのtrade.xyz無期限先物、24時間取引。Hyperliquidが応答しない場合、金と原油はAsterのXAU・CL市場から取得します",

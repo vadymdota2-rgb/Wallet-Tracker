@@ -109,13 +109,20 @@ PY = [
     ("    return bool(hl_markets(raw))", "    return raw is not None", "мусор площадки не запоминается"),
     ("elif (old := slow.get(name)) and time.monotonic() - old[0] < SLOW[name][1]:", "elif (old := slow.get(name)):", "запас — не старше SLOW[1]"),
     ("elif (old := slow.get(name)) and time.monotonic() - old[0] < SLOW[name][1]:", "elif False:", "источник молчит — прошлый годный"),
-    ("            if _good(name, v):", "            if v is not None:", "мусор не запоминается"),
+    ("        good = _answered(name, v)\n", "        good = v is not None\n", "мусор не запоминается"),
     ("    with got:  # опоздавший источник — уже без него\n        return dict(parts), dict(since)\n", "    return parts, since\n", "опоздавший источник не меняет ответ"),
     ("        hit, job = _live(_st.hit), _st.job\n", "        hit, job = _live(_st.hit), _start()\n", "запрос человека сборку не начинает"),
     ("    if hit is None and job is not None and wait > 0:", "    if False:", "сервер только запущен — ждём идущую сборку"),
     ("    elif job is not None and wait > 0:\n        job.join(wait)", "    elif False:\n        job.join(wait)", "обновление ждёт сборку, когда просят"),
     ("return hit if hit and time.monotonic() - hit[0] < STALE_MAX else None", "return hit", "старый ответ не отдаётся"),
     ("        rest = time.monotonic() - _st.fail < FAIL_WAIT\n", "        rest = False\n", "после сбоя — пауза"),
+    # Журнал.
+    ("        if ok == (since is None):\n            return\n", "", "журнал — только смена состояния"),
+    ("            v, why = None, type(e).__name__", "            v, why = None, str(e)", "в журнал — тип ошибки, не её текст"),
+    ('    return v is not None and not (isinstance(v, dict) and v.get("ok") is False)', "    return v is not None", "«нет данных» модуля — тоже молчание"),
+    ("    if empty != was:\n", "    if empty:\n", "пустой ответ — одна строка"),
+    ('    clean = "".join(c if c.isprintable() else "?" for c in msg)', "    clean = msg", "журнал — одной чистой строкой"),
+    ('print(f"markets: {clean[:LOG_MAX]}", file=out)', 'print(f"markets: {clean}", file=out)', "строка журнала — не длиннее LOG_MAX"),
 ]
 TS = [
     ('if (!isObj(raw) || raw["ok"] !== true ||', 'if (!isObj(raw) ||', "ok — только true"),

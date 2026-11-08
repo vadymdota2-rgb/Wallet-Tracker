@@ -8,6 +8,7 @@
 запрос. Сам модуль в сеть не ходит (это проверяют правила кода), поэтому
 здесь — только то, что приходит из чужих ответов.
 """
+import io
 import json
 import os
 import sys
@@ -137,6 +138,9 @@ class HugeBodyTest(unittest.TestCase):
 
 class HostileTimingTest(unittest.TestCase):
     def setUp(self):
+        quiet = mock.patch.object(mk.sys, "stderr", io.StringIO())  # журнал модуля — не в вывод тестов
+        quiet.start()
+        self.addCleanup(quiet.stop)
         self.addCleanup(setattr, mk, "_st", mk._st)
         self.addCleanup(join_new_threads, set(threading.enumerate()))
         mk._st = mk._State()

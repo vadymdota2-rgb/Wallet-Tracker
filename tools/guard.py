@@ -2028,6 +2028,11 @@ say("рынки в меню как халвинг — максимальная �
     and "marketsDue(last.current?.at" in _mk_tsx and "export function marketsDue(" in read(f"{APP}/src/lib/markets.ts")
     and all(t in read(f"{APP}/tests/test_markets.py") for t in ("def test_cold_start_race_builds_once(", "def test_memory_and_threads_do_not_grow(", "def test_answer_time_is_when_prices_were_taken("))
     and os.path.isfile(f"{APP}/tools/load-markets.py") and "python tools/load-markets.py 2 3 304" in read(f"{APP}/.github/workflows/tests.yml"))
+say("рынки в меню — уровень зрелых проектов: журнал сервера только при смене состояния источников (молчит / снова отвечает, тип ошибки без текста, одна чистая строка); сетка всегда 3 × 3 — пропавший пункт «—» на своём месте («нет данных» для чтения с экрана); ячейки перерисовываются по отдельности; высокая контрастность Windows",
+    "def _health(" in read(f"{APP}/wt_markets.py") and "v, why = None, type(e).__name__" in read(f"{APP}/wt_markets.py")
+    and "def test_journal_only_on_state_changes(" in read(f"{APP}/tests/test_markets.py")
+    and "function Empty(" in _mk_tsx and "const Cell = memo(" in _mk_tsx and "@media (forced-colors: active)" in _mk_css
+    and "сетка не сдвигается" in read(f"{APP}/tests/e2e/markets.e2e.test.ts") and all(k in _i18n for k in ("mk_none",)))
 _ci = read(f"{APP}/.github/workflows/tests.yml")
 say("CI: мутации карты ликвидаций — своим заданием с лимитом 75 минут (вместе со «Страхом и жадностью» не укладывались в 45)",
     "  mutation-liqmap:\n    runs-on: ubuntu-latest\n    timeout-minutes: 75" in _ci

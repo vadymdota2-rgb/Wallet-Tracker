@@ -28204,5 +28204,23 @@
     "ja": "{n}時間前",
     "ko": "{n}시간 전",
     "zh": "{n}小时前"
+  },
+  "mk_none": {
+    "ru": "нет данных",
+    "en": "no data",
+    "uk": "немає даних",
+    "de": "keine Daten",
+    "es": "sin datos",
+    "fr": "pas de données",
+    "pt": "sem dados",
+    "pl": "brak danych",
+    "tr": "veri yok",
+    "id": "tidak ada data",
+    "vi": "không có dữ liệu",
+    "hi": "डेटा नहीं",
+    "ar": "لا توجد بيانات",
+    "ja": "データなし",
+    "ko": "데이터 없음",
+    "zh": "暂无数据"
   }
 }

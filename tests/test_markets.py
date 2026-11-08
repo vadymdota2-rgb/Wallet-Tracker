@@ -11,6 +11,7 @@ CoinMarketCap), формулу DXY по валютному дню и сверк�
 """
 import calendar
 import gc
+import io
 import json
 import math
 import os
@@ -266,6 +267,9 @@ def join_new_threads(before: set) -> None:
 
 class CacheTest(unittest.TestCase):
     def setUp(self):
+        quiet = mock.patch.object(mk.sys, "stderr", io.StringIO())  # журнал модуля — не в вывод тестов
+        quiet.start()
+        self.addCleanup(quiet.stop)
         self.addCleanup(setattr, mk, "_st", mk._st)
         self.addCleanup(join_new_threads, set(threading.enumerate()))
         mk._st = mk._State()
@@ -368,6 +372,56 @@ class CacheTest(unittest.TestCase):
         self.assertLess(grown, 64 * 1024, f"память выросла на {grown} байт")
         self.assertLessEqual(threading.active_count(), threads)
         self.assertLessEqual(set(mk._st.slow), set(mk.SLOW))
+
+    def test_journal_only_on_state_changes(self):
+        # Источник замолчал — одна строка (с типом ошибки, без её текста: в
+        # нём бывает адрес запроса), сколько бы сборок он ни молчал; ответил —
+        # одна строка «снова отвечает». Пустой ответ — тоже одна строка.
+        state = {"down": True}
+
+        def ecb():
+            if state["down"]:
+                raise TimeoutError("https://secret.example/?key=SECRET\nподделка")
+            return PARTS["ecb"]
+
+        mk.set_sources({**{n: (lambda v=v: v) for n, v in PARTS.items()}, "ecb": ecb})
+        err = io.StringIO()
+        with mock.patch.object(mk.sys, "stderr", err), mock.patch.object(mk, "_now", return_value=NOW):
+            for _ in range(5):
+                mk._st.slow.pop("ecb", None)
+                mk.build()
+            state["down"] = False
+            for _ in range(3):
+                mk._st.slow.pop("ecb", None)
+                mk.build()
+            mk.set_sources({})
+            mk._st.slow.clear()
+            for _ in range(3):
+                mk.build()
+            mk.set_sources({n: (lambda v=v: v) for n, v in PARTS.items()})
+            mk.build()
+        lines = err.getvalue().splitlines()
+        self.assertEqual(lines, ["markets: источник ecb молчит (TimeoutError)",
+                                 "markets: источник ecb снова отвечает (молчал 0 мин)",
+                                 "markets: ответа нет: ни одного пункта",
+                                 "markets: ответ снова есть"])
+        self.assertNotIn("SECRET", err.getvalue())
+        # Ответил по делу: модуль доминации — не своим «нет данных», Aster — не пустотой.
+        self.assertFalse(mk._answered("mcap", {"ok": False, "error": "no_key"}))
+        self.assertTrue(mk._answered("mcap", PARTS["mcap"]))
+        self.assertFalse(mk._answered("aster", None))
+        self.assertFalse(mk._answered("xyz", [{"universe": []}, []]))
+
+    def test_journal_line_is_one_clean_short_line(self):
+        err = io.StringIO()
+        with mock.patch.object(mk.sys, "stderr", err):
+            mk._log("строка\nподделка\x1b[31m" + "я" * 1000)
+        out = err.getvalue()
+        self.assertEqual(out.count("\n"), 1)
+        self.assertNotIn("\x1b", out)
+        self.assertLessEqual(len(out), len("markets: ") + mk.LOG_MAX + 1)
+        with mock.patch.object(mk.sys, "stderr", None):
+            mk._log("журнал закрыт")  # не падает
 
     def test_people_only_read_the_cache(self):
         # Все видят кэш: запросы людей — даже тысяча, даже со старым ответом

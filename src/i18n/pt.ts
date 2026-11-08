@@ -1145,6 +1145,7 @@ export const pt: Dict = {
   mk_bviv_hint: "BVIV é a volatilidade implícita de 30 dias do bitcoin pelo índice da Volmex, o “VIX do bitcoin”: se sobe, o mercado espera movimentos bruscos. Preço do perpétuo da Markets by Kinetiq na Hyperliquid, não o valor do índice. Este app não é afiliado à Volmex",
   mk_dxy_hint: "DXY é nosso próprio cálculo pela fórmula pública do índice do dólar com EUR, JPY, GBP (Hyperliquid) e CAD, SEK, CHF (BCE), não o valor oficial: pode diferir cerca de 0,1%. A variação é desde o fechamento do dia cambial (17h de Nova York); no fim de semana, o fechamento de sexta. U.S. Dollar Index® é marca da ICE",
   mk_gold: "Ouro",
+  mk_none: "sem dados",
   mk_now: "agora",
   mk_oil: "Petróleo WTI",
   mk_oil_hint: "Petróleo WTI: perpétuo da trade.xyz na Hyperliquid, negociado 24 horas por dia. Se a Hyperliquid não responder, ouro e petróleo vêm dos mercados XAU e CL da Aster",
