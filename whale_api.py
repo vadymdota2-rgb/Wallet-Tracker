@@ -15214,8 +15214,10 @@ def _mkt_ecb():
 wt_markets.set_sources({
     "xyz": lambda: hl_post({"type": "metaAndAssetCtxs", "dex": "xyz"}, 15),
     "para": lambda: hl_post({"type": "metaAndAssetCtxs", "dex": "para"}, 15),
+    "mkts": lambda: hl_post({"type": "metaAndAssetCtxs", "dex": "mkts"}, 15),
     "fx": _mkt_fx,
     "ecb": _mkt_ecb,
+    "mcap": lambda: wt_mcap.mcap_data(0),
 })
 markets_data = wt_markets.markets_data
 

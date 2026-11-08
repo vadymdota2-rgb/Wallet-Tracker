@@ -1,11 +1,11 @@
 """Рынки для трейдера — сверху бокового меню (/api/markets).
 
-Шесть чисел, на которые смотрят рядом с графиком биткоина, сетка — три
-ряда по два:
+Девять чисел, на которые смотрят рядом с графиком биткоина, сетка 3 × 3:
 
-    S&P 500   XYZ100   — аппетит к риску;
-    DXY       Золото   — доллар и «убежище»;
-    US 10Y    Нефть    — ставки и инфляция.
+    S&P 500   XYZ100    DXY      — аппетит к риску и доллар;
+    Золото    Нефть     US 10Y   — «убежище», инфляция, ставки;
+    BVIV      BTC.D     USDT.D   — ждёт ли рынок шторма, куда течёт капитал
+                                   в крипте.
 
 По каждому пункту — цена сейчас и сутки назад; изменение считает
 приложение (у доходности — в базисных пунктах).
@@ -15,9 +15,16 @@
 и кэш:
   - Hyperliquid, бессрочные рынки HIP-3 (открытые данные сети): площадка
     trade.xyz («xyz») — S&P 500, XYZ100, золото, нефть WTI (CL), курсы EUR
-    и JPY; площадка Paragon («para») — доходность 10Y. Торгуются круглые
-    сутки. Рынки, снятые с торгов, не берутся: их цена застыла (DXY и VIX
-    на «xyz»);
+    и JPY; площадка Paragon («para») — доходность 10Y; площадка Markets by
+    Kinetiq («mkts») — BVIV, подразумеваемая волатильность BTC на 30 дней
+    по индексу Volmex («VIX крипты»; рынок открыт вместе с Volmex). Торгуются
+    круглые сутки. Рынки, снятые с торгов, не берутся: их цена застыла (DXY
+    и VIX на «xyz»);
+  - BTC.D и USDT.D — доли в капитализации рынка по CoinMarketCap (модуль
+    доминации, wt_mcap: его данные и его условия — подпись источника со
+    ссылкой рядом). Вчерашней доли USDT CoinMarketCap не отдаёт: сутки
+    назад — та же капитализация USDT к вчерашней капитализации рынка
+    (выпуск USDT за сутки меняется на доли процента, доля — от рынка);
   - DXY нигде не торгуется — считаем сами по открытой формуле ICE: EUR, JPY
     и GBP с Hyperliquid (trade.xyz), CAD, SEK, CHF — курсы ЕЦБ
     (Европейского центрального банка, фиксация в 14:15 по Франкфурту) за
@@ -33,7 +40,9 @@
 Права — почему набор такой:
   - котировки TradingView брать нельзя (их виджеты показывают данные
     только в своих окнах, выгрузки нет); VIX — индекс Cboe по лицензии;
-    DVOL Deribit — их данные только для личного пользования;
+    DVOL Deribit — их данные только для личного пользования. Волатильность —
+    BVIV: цена рынка Hyperliquid (открытые данные сети), а не значение
+    индекса Volmex, с оговоркой рядом;
   - S&P 500 — рынок trade.xyz по лицензии S&P Dow Jones Indices; показываем
     цену контракта, а не значение индекса, с оговоркой о товарных знаках;
   - XYZ100 — собственный индекс trade.xyz (100 крупнейших нефинансовых
@@ -70,11 +79,11 @@ Pair = tuple[float, float]
 Source = Callable[[], object]
 
 # Пункты — в порядке экрана.
-KEYS = ("SP500", "XYZ100", "DXY", "GOLD", "US10Y", "OIL")
+KEYS = ("SP500", "XYZ100", "DXY", "GOLD", "OIL", "US10Y", "BVIV", "BTCD", "USDTD")
 # Рынки Hyperliquid: пункт → (площадка, имя рынка без приставки).
 HL = {"SP500": ("xyz", "SP500"), "XYZ100": ("xyz", "XYZ100"), "GOLD": ("xyz", "GOLD"), "US10Y": ("para", "10Y"),
-      "OIL": ("xyz", "CL")}
-DEXES = ("xyz", "para")  # площадки Hyperliquid
+      "OIL": ("xyz", "CL"), "BVIV": ("mkts", "BVIV")}
+DEXES = ("xyz", "para", "mkts")  # площадки Hyperliquid
 # DXY = 50,14348112 × ∏ курс^вес (ICE): EUR и GBP — в долларах за единицу
 # (вес со знаком минус), остальные — единиц за доллар.
 DXY_K = 50.14348112
@@ -82,7 +91,8 @@ DXY_W = (("EUR", -0.576), ("JPY", 0.136), ("GBP", -0.119), ("CAD", 0.091), ("SEK
 PX_MAX = 1e7  # правдоподобная цена пункта
 MOVE_MAX = 2.0  # за сутки цена не меняется больше чем вдвое (в любую сторону)
 # Свои рамки: DXY за полвека не выходил из 70…165, доходность 10Y — из 0…16 %.
-RANGE = {"DXY": (50.0, 250.0), "US10Y": (0.01, 30.0)}
+RANGE = {"DXY": (50.0, 250.0), "US10Y": (0.01, 30.0), "BVIV": (1.0, 500.0), "BTCD": (0.01, 100.0),
+         "USDTD": (0.01, 100.0)}
 FX_GAP = 0.03  # курс Hyperliquid против ЕЦБ: расхождение больше — DXY нет
 FX_HL = ("EUR", "JPY", "GBP")  # валюты DXY с Hyperliquid; EUR и GBP — долларов за единицу
 HOUR = 3600
@@ -224,6 +234,21 @@ def dxy(r: dict[str, float]) -> float:
     return v
 
 
+def dominance(mcap: object) -> dict[str, Pair]:
+    """Ответ модуля доминации (wt_mcap) → BTC.D и USDT.D, (сейчас, вчера)."""
+    out: dict[str, Pair] = {}
+    if not isinstance(mcap, dict) or mcap.get("ok") is not True:
+        return out
+    btc, cap, usdt = mcap.get("btc"), mcap.get("cap"), _num(mcap.get("usdt"))
+    if isinstance(btc, list) and len(btc) == 2 and (p := pair(btc[0], btc[1])):
+        out["BTCD"] = p
+    if isinstance(cap, list) and len(cap) == 2 and usdt > 0:
+        now_c, prev_c = _num(cap[0]), _num(cap[1])
+        if now_c > 0 and prev_c > 0 and (p := pair(usdt, usdt * now_c / prev_c)):
+            out["USDTD"] = p
+    return out
+
+
 def sane(key: str, p: Pair) -> bool:
     """Пункт правдоподобен: в своих рамках и за сутки не больше MOVE_MAX раз."""
     lo, hi = RANGE.get(key, (0.0, PX_MAX))
@@ -232,8 +257,8 @@ def sane(key: str, p: Pair) -> bool:
 
 
 def compute(parts: dict[str, object], at: int) -> dict[str, Json]:
-    """Ответ по ответам источников: xyz, para, fx — часовые свечи EUR, JPY,
-    GBP (Hyperliquid), ecb."""
+    """Ответ по ответам источников: xyz, para, mkts, fx — часовые свечи EUR,
+    JPY, GBP (Hyperliquid), ecb, mcap (доминация CoinMarketCap)."""
     dex_mk = {d: hl_markets(parts.get(d)) for d in DEXES}
     xyz = dex_mk["xyz"]
     got: dict[str, Pair] = {}
@@ -242,6 +267,7 @@ def compute(parts: dict[str, object], at: int) -> dict[str, Json]:
             got[key] = p
     if p := fx_dxy(xyz, parts.get("fx"), ecb_rates(parts.get("ecb")), at):
         got["DXY"] = p
+    got.update(dominance(parts.get("mcap")))
     items = [{"k": k, "px": got[k][0], "prev": got[k][1]} for k in KEYS if k in got and sane(k, got[k])]
     return {"ok": True, "at": at, "items": items} if items else {"ok": False, "error": "no_data"}
 
@@ -261,7 +287,7 @@ _lock = threading.Lock()
 
 
 def set_sources(sources: dict[str, Source]) -> None:
-    """Откуда брать ответы источников: имя (xyz, para, fx, ecb) → fn()."""
+    """Откуда брать ответы источников: имя (xyz, para, mkts, fx, ecb, mcap) → fn()."""
     _st.sources = dict(sources)
 
 

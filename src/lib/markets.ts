@@ -1,6 +1,6 @@
 /*
  * Рынки для криптотрейдера в боковом меню: S&P 500, XYZ100, DXY, золото,
- * доходность 10Y, нефть WTI (сервер — wt_markets.py:
+ * нефть WTI, доходность 10Y, BVIV (волатильность BTC), BTC.D, USDT.D (сервер — wt_markets.py:
  * там же — почему набор такой и что с правами).
  * Проверка ответа сервера (/api/markets) и подписи — без React и без сети:
  * всё проверяется тестами (tests/markets.test.ts).
@@ -11,8 +11,8 @@
  * «+0,6 %» от 4,8 %.
  */
 
-/** Пункты — в порядке экрана (три ряда по два). */
-export const MARKET_KEYS = ["SP500", "XYZ100", "DXY", "GOLD", "US10Y", "OIL"] as const;
+/** Пункты — в порядке экрана (сетка 3 × 3). */
+export const MARKET_KEYS = ["SP500", "XYZ100", "DXY", "GOLD", "OIL", "US10Y", "BVIV", "BTCD", "USDTD"] as const;
 export type MarketKey = (typeof MARKET_KEYS)[number];
 export interface MarketItem {
   k: MarketKey;
@@ -58,11 +58,11 @@ export function change(it: MarketItem): { v: number; unit: "bp" | "pct" } {
 }
 
 /** Сколько знаков после запятой у цены пункта: индексы — без копеек,
- *  доходность — две, нефть и золото — по масштабу. */
+ *  доходность и доли — две, остальные — по масштабу. */
 export function digits(it: MarketItem): number {
-  if (it.k === "US10Y") return 2;
+  if (isPercent(it.k)) return 2;
   return it.px >= 1000 ? 0 : it.px >= 10 ? 2 : it.px >= 1 ? 3 : 5;
 }
 
-/** Пункт — доходность: число со знаком «%». */
-export const isPercent = (k: MarketKey): boolean => k === "US10Y";
+/** Пункт — доходность или доля (BTC.D, USDT.D): число со знаком «%». */
+export const isPercent = (k: MarketKey): boolean => k === "US10Y" || k === "BTCD" || k === "USDTD";

@@ -171,11 +171,11 @@
   color: var(--glow);
   padding: 0 6px 10px;
 }
-/* Рынки сверху меню: три ряда по два, мелко и приглушённо — видно, но в глаза
+/* Рынки сверху меню: сетка 3 × 3, мелко и приглушённо — видно, но в глаза
    не бросается: тонкие ячейки, цифры светлее фона, изменение — бледным
    зелёным и красным. */
 .mk { padding: 0 2px 10px; margin-bottom: 6px; border-bottom: 1px solid var(--line, rgb(255 255 255 / 0.06)); }
-.mk-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.mk-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
 .mk-cell {
   min-width: 0;
   padding: 4px 6px 5px;
@@ -194,6 +194,7 @@
 .mk-ch.dn { color: var(--dn); opacity: 0.7; }
 .mk-src { margin-top: 5px; font-size: 8.5px; color: var(--dim-2); opacity: 0.7; text-align: center; }
 .mk-src a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.mk-nw { white-space: nowrap; }
 /* «ⓘ»: оговорки раскрываются касанием (на телефоне всплывающих подсказок нет);
    кнопка мелкая, но место под палец — с запасом. */
 .mk-i {

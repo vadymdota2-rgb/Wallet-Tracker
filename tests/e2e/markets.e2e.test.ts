@@ -3,7 +3,8 @@
  * собранное приложение из html/): сетка 3 × 3 вместо заголовка, подписи и
  * изменения, мелко (не крупнее пунктов меню), влезает в 320 точек, нет
  * данных — прежний заголовок «Wallet Tracker»; источники и оговорки о
- * товарных знаках видны на телефоне (касанием «ⓘ»). Сетка — три ряда по два.
+ * товарных знаках видны на телефоне (касанием «ⓘ»), CoinMarketCap — ссылкой.
+ * Сетка 3 × 3.
  */
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
@@ -24,6 +25,7 @@ const MARKETS = {
   ok: true, at: T - 20, items: [
     { k: "SP500", px: 7373.1, prev: 7392.9 }, { k: "XYZ100", px: 26925, prev: 26996 }, { k: "DXY", px: 102.115, prev: 101.92 },
     { k: "GOLD", px: 4066.2, prev: 4079.9 }, { k: "US10Y", px: 4.875, prev: 4.8777 }, { k: "OIL", px: 90.205, prev: 89.617 },
+    { k: "BVIV", px: 42.399, prev: 41 }, { k: "BTCD", px: 60.44, prev: 60.35 }, { k: "USDTD", px: 4.1, prev: 4.22 },
   ],
 };
 const sp = (s: string | null) => (s ?? "").replace(/[\s  ]+/g, " ").trim();
@@ -80,22 +82,25 @@ async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; er
   return { ctx, page, errors };
 }
 
-test("сверху меню — шесть рынков вместо заголовка, три ряда по два", async () => {
+test("сверху меню — девять рынков вместо заголовка, сетка 3 × 3", async () => {
   const { ctx, page, errors } = await open();
   const cells = page.locator(".drawer .mk-cell");
   await cells.first().waitFor();
-  assert.equal(await cells.count(), 6);
+  assert.equal(await cells.count(), 9);
   assert.equal(await page.locator(".drawer .drawer-ttl").count(), 0);
   const text = (await cells.evaluateAll((els) => els.map((el) => [...el.children].map((c) => c.textContent).join(" ")))).map(sp);
   assert.match(text[0]!, /^S&P 500 7 373 −0,27%$/);
   assert.match(text[3]!, /^Золото 4 066 −0,34%$/);
   assert.match(text[1]!, /^XYZ100 26 925 −0,26%$/);
-  assert.match(text[4]!, /^US 10Y 4,88% −0,3 б\. п\.$/);
-  assert.match(text[5]!, /^Нефть WTI 90,2[01] \+0,66%$/);
+  assert.match(text[4]!, /^Нефть WTI 90,2[01] \+0,66%$/);
+  assert.match(text[5]!, /^US 10Y 4,88% −0,3 б\. п\.$/);
+  assert.match(text[6]!, /^BVIV 42,40 \+3,41%$/);
+  assert.match(text[7]!, /^BTC\.D 60,44% \+0,15%$/);
+  assert.match(text[8]!, /^USDT\.D 4,10% −2,84%$/);
   assert.equal(await page.locator('.mk-cell[data-k="DXY"] .mk-ch.up').count(), 1);
   assert.equal(await page.locator('.mk-cell[data-k="SP500"] .mk-ch.dn').count(), 1);
   assert.equal(sp(await page.locator(".mk-src").textContent()), `${I18N["mk_src"]!["ru"]}ⓘ`);
-  assert.equal(await page.locator(".mk-src a").count(), 0);
+  assert.equal(await page.locator('.mk-src a[href="https://coinmarketcap.com/"]').textContent(), "CoinMarketCap");
   assert.ok((await page.locator('.mk-cell[data-k="DXY"]').getAttribute("title"))?.includes("ICE"));
   assert.ok(!(await page.locator(".drawer").textContent())?.includes("Deribit"));
   // Оговорки — касанием «ⓘ»: товарные знаки S&P, XYZ100 — не Nasdaq-100, DXY — наш расчёт.
@@ -103,16 +108,16 @@ test("сверху меню — шесть рынков вместо загол�
   await page.locator(".mk-i").click();
   assert.equal(await page.locator(".mk-i").getAttribute("aria-expanded"), "true");
   const notes = (await page.locator(".mk-notes li").allTextContents()).map(sp);
-  assert.deepEqual(notes, ["mk_sp_hint", "mk_xyz_hint", "mk_dxy_hint", "mk_10y_hint", "mk_oil_hint"].map((k) => sp(I18N[k]!["ru"]!)));
+  assert.deepEqual(notes, ["mk_sp_hint", "mk_xyz_hint", "mk_dxy_hint", "mk_oil_hint", "mk_10y_hint", "mk_bviv_hint", "mk_usdtd_hint"].map((k) => sp(I18N[k]!["ru"]!)));
   await page.locator(".mk-i").click();
   assert.equal(await page.locator(".mk-notes").count(), 0);
-  // Мелко: цифры рынков меньше пунктов меню, сетка — ровные два столбца, три ряда.
+  // Мелко: цифры рынков меньше пунктов меню, сетка — ровные три столбца и три ряда.
   const fs = await page.evaluate(() => [".mk-px", ".drawer-row"].map((q) => parseFloat(getComputedStyle(document.querySelector(q)!).fontSize)));
   assert.ok(fs[0]! < fs[1]!, String(fs));
   const xs = await cells.evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().width)));
   assert.equal(new Set(xs).size, 1, String(xs));
   const pos = await cells.evaluateAll((els) => els.map((el) => { const r = el.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y)]; }));
-  assert.equal(new Set(pos.map((p) => p[0])).size, 2, String(pos));
+  assert.equal(new Set(pos.map((p) => p[0])).size, 3, String(pos));
   assert.equal(new Set(pos.map((p) => p[1])).size, 3, String(pos));
   // Пункты меню на месте, под рынками.
   const row = await page.locator(".drawer-row").first().boundingBox();

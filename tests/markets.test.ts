@@ -18,16 +18,16 @@ const good = {
 test("рынки — в порядке экрана, только известные", () => {
   const r = validMarkets(good, NOW);
   assert.ok(r);
-  assert.deepEqual(r.items.map((x) => x.k), ["SP500", "DXY", "US10Y", "OIL"]);
+  assert.deepEqual(r.items.map((x) => x.k), ["SP500", "DXY", "OIL", "US10Y"]);
   assert.equal(r.at, NOW - 30);
-  assert.equal(MARKET_KEYS.length, 6);
+  assert.equal(MARKET_KEYS.length, 9);
 });
 
 test("битые пункты выпадают, повторы — первый", () => {
   const bad = [
     { k: "VIX", px: 20, prev: 20 }, { k: "DVOL", px: 40, prev: 39 }, { k: "NDX", px: 1, prev: 1 }, { k: "SILVER", px: 52, prev: 52 }, { k: "GOLD", px: 0, prev: 1 }, { k: "GOLD", px: -1, prev: 1 },
     { k: "GOLD", px: Number.NaN, prev: 1 }, { k: "OIL", px: 40, prev: Number.POSITIVE_INFINITY },
-    { k: "ETHBTC", px: 0.03, prev: 0.03 }, { k: "BTCD", px: 60, prev: 60 }, { k: "OIL", px: "90", prev: 90 }, { k: "XYZ100", px: MARKET_PX_MAX, prev: 1 }, { k: "<b>x</b>", px: 1, prev: 1 },
+    { k: "ETHBTC", px: 0.03, prev: 0.03 }, { k: "BTCD", px: Number.NaN, prev: 60 }, { k: "OIL", px: "90", prev: 90 }, { k: "XYZ100", px: MARKET_PX_MAX, prev: 1 }, { k: "<b>x</b>", px: 1, prev: 1 },
     null, "SP500", [1, 2], { k: "SP500", px: 1, prev: 2 }, { k: "SP500", px: 3, prev: 4 },
   ];
   const r = validMarkets({ ok: true, at: NOW, items: bad }, NOW);
@@ -68,5 +68,8 @@ test("знаки после запятой — по масштабу", () => {
   assert.equal(digits({ k: "XYZ100", px: 26925, prev: 1 }), 0);
   assert.equal(digits({ k: "US10Y", px: 4.875, prev: 1 }), 2);
   assert.equal(digits({ k: "GOLD", px: 4066.2, prev: 1 }), 0);
-  assert.deepEqual(MARKET_KEYS.filter(isPercent), ["US10Y"]);
+  assert.equal(digits({ k: "BVIV", px: 42.4, prev: 1 }), 2);
+  assert.equal(digits({ k: "BTCD", px: 60.44, prev: 1 }), 2);
+  assert.equal(digits({ k: "USDTD", px: 4.1, prev: 1 }), 2);
+  assert.deepEqual(MARKET_KEYS.filter(isPercent), ["US10Y", "BTCD", "USDTD"]);
 });

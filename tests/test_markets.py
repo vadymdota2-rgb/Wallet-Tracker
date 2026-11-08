@@ -1,7 +1,8 @@
 """Рынки в меню (wt_markets.py, /api/markets): S&P 500, XYZ100, DXY, золото,
-US 10Y, нефть WTI.
+нефть WTI, US 10Y, BVIV, BTC.D, USDT.D.
 
-Проверяем: разбор каждого источника (Hyperliquid, курсы ЕЦБ), формулу DXY
+Проверяем: разбор каждого источника (Hyperliquid, курсы ЕЦБ, доминация
+CoinMarketCap), формулу DXY
 и сверку EUR и JPY с ЕЦБ, что снятые с торгов
 рынки не берутся, что сбой или мусор одного источника не роняет остальные,
 что в ответе — только наши ключи и правдоподобные числа (рамки, скачок за
@@ -41,6 +42,8 @@ XYZ_M = {"xyz:SP500": (7373.1, 7392.9), "xyz:XYZ100": (26925, 26996), "xyz:GOLD"
          "xyz:SILVER": (52, 52), "xyz:DXY": (97.15, 97.15), "xyz:VIX": (20, 20)}
 XYZ = hl(XYZ_M, delisted=("DXY", "VIX"))
 PARA = hl({"para:10Y": (4.875, 4.8777), "para:BTCD": (60.4, 60.3)})
+MKTS = hl({"mkts:BVIV": (42.399, 41.0), "mkts:OLD": (5, 5)}, delisted=("OLD",))
+MCAP = {"ok": True, "btc": [60.44, 60.35], "usdt": 4.1, "cap": [3.4e12, 3.3e12]}
 ECB = {"rates": {"2026-11-05": {"EUR": 0.89095, "JPY": 158.46, "GBP": 0.74299, "CAD": 1.3966, "SEK": 9.7866, "CHF": 0.81789},
                  "2026-11-06": {"EUR": 0.89566, "JPY": 158.33, "GBP": 0.74711, "CAD": 1.4066, "SEK": 9.8755, "CHF": 0.8189}}}
 # NOW — воскресенье 01:06 UTC: валютный рынок закрыт. Закрытия (17:00 по
@@ -58,7 +61,7 @@ def candles(cur: str, close: dict | None = None) -> list:
 
 
 FX = {c: candles(c) for c in ("EUR", "JPY", "GBP")}
-PARTS = {"xyz": XYZ, "para": PARA, "fx": FX, "ecb": ECB}
+PARTS = {"xyz": XYZ, "para": PARA, "mkts": MKTS, "fx": FX, "ecb": ECB, "mcap": MCAP}
 
 
 def want_dxy(day: str, eur: float, jpy: float, gbp: float) -> float:
@@ -70,7 +73,7 @@ def items(res: dict) -> dict:
 
 
 class ComputeTest(unittest.TestCase):
-    def test_all_nine_in_screen_order(self):
+    def test_all_in_screen_order(self):
         res = mk.compute(PARTS, NOW)
         self.assertTrue(res["ok"])
         self.assertEqual(res["at"], NOW)
@@ -81,7 +84,8 @@ class ComputeTest(unittest.TestCase):
         self.assertEqual(got["GOLD"], (4066.2, 4079.9))
         self.assertEqual(got["US10Y"], (4.875, 4.8777))
         self.assertEqual(got["OIL"], (90.205, 89.617))  # WTI — рынок CL
-        self.assertNotIn("BTCD", got)  # BTCD на Paragon — не из набора
+        self.assertEqual(got["BVIV"], (42.399, 41.0))  # волатильность BTC — рынок Kinetiq
+        self.assertEqual(got["BTCD"], (60.44, 60.35))  # CoinMarketCap, не рынок BTCD Paragon
         json.dumps(res, allow_nan=False)
 
     def test_dxy_by_ice_formula(self):
@@ -91,6 +95,20 @@ class ComputeTest(unittest.TestCase):
         self.assertAlmostEqual(mk.dxy(r), want, places=9)
         self.assertAlmostEqual(sum(abs(w) for _, w in mk.DXY_W), 1.0, places=9)
 
+
+    def test_usdt_dominance_yesterday_by_market_cap(self):
+        # Вчерашней доли USDT CoinMarketCap не отдаёт: та же капитализация USDT
+        # к вчерашней капитализации рынка.
+        px, prev = items(mk.compute(PARTS, NOW))["USDTD"]
+        self.assertEqual(px, 4.1)
+        self.assertAlmostEqual(prev, 4.1 * 3.4e12 / 3.3e12)
+        for bad in ({"ok": False}, {**MCAP, "usdt": None}, {**MCAP, "usdt": 150}, {**MCAP, "cap": [3.4e12, None]},
+                    {**MCAP, "cap": "x"}, "x", None):
+            self.assertNotIn("USDTD", items(mk.compute({**PARTS, "mcap": bad}, NOW)), bad)
+        for bad in ({**MCAP, "btc": [120, 60]}, {**MCAP, "btc": [60, None]}, {**MCAP, "btc": "x"}, {"ok": False}):
+            self.assertNotIn("BTCD", items(mk.compute({**PARTS, "mcap": bad}, NOW)), bad)
+        # Капитализация рынка за сутки «упала» в десять раз — USDT.D за 40 % не пишем.
+        self.assertNotIn("USDTD", items(mk.compute({**PARTS, "mcap": {**MCAP, "cap": [3.4e11, 3.3e12]}}, NOW)))
 
     def test_dxy_weekend_is_friday_close_against_thursday(self):
         # Как у TradingView: в выходные — закрытие пятницы и изменение за
@@ -161,6 +179,8 @@ class ComputeTest(unittest.TestCase):
         self.assertFalse(mk.sane("GOLD", (4000, 9000)))
         self.assertFalse(mk.sane("US10Y", (48.75, 48.77)))  # процент не в тех единицах
         self.assertFalse(mk.sane("DXY", (9.7, 9.7)))
+        self.assertFalse(mk.sane("BTCD", (100.5, 99)))
+        self.assertFalse(mk.sane("BVIV", (0.42, 0.41)))  # доля вместо процентов
 
         para = hl({"para:10Y": (487.5, 487.77)})
         self.assertNotIn("US10Y", items(mk.compute({**PARTS, "para": para}, NOW)))
@@ -174,7 +194,8 @@ class ComputeTest(unittest.TestCase):
         self.assertNotIn("SILVER", got)  # не из набора
 
     def test_one_silent_source_drops_only_its_items(self):
-        cases = {"ecb": {"DXY"}, "fx": {"DXY"}, "para": {"US10Y"}, "xyz": {"SP500", "XYZ100", "GOLD", "OIL"}}
+        cases = {"ecb": {"DXY"}, "fx": {"DXY"}, "para": {"US10Y"}, "xyz": {"SP500", "XYZ100", "GOLD", "OIL"},
+                 "mkts": {"BVIV"}, "mcap": {"BTCD", "USDTD"}}
         for name, gone in cases.items():
             self.assertEqual(set(items(mk.compute({**PARTS, name: None}, NOW))), set(mk.KEYS) - gone, name)
         self.assertEqual(mk.compute({}, NOW), {"ok": False, "error": "no_data"})
@@ -311,6 +332,7 @@ class PolicyTest(unittest.TestCase):
         for name in PARTS:
             self.assertIn(f'    "{name}": ', src.split("wt_markets.set_sources({")[1].split("})")[0])
         self.assertEqual(src.split("wt_markets.set_sources({")[1].split("})")[0].count('\n    "'), len(PARTS))
+        self.assertIn('"mcap": lambda: wt_mcap.mcap_data(0),', src)  # доминация — из кэша, без ожидания
 
     def test_rights(self):
         # Deribit (DVOL) — только для личного пользования; VIX — индекс Cboe по
@@ -327,10 +349,12 @@ class PolicyTest(unittest.TestCase):
             tr = json.load(f)
         for lang, v in tr["mk_src"].items():
             self.assertNotIn("Deribit", v, lang)
-            self.assertIn("ЕЦБ" if lang == "ru" else "Hyperliquid", v, lang)
+            self.assertIn("CoinMarketCap", v, lang)  # ссылку ставит экран — по этому слову
         for lang in tr["mk_sp_hint"]:
             self.assertIn("S&P Dow Jones Indices", tr["mk_sp_hint"][lang], lang)
             self.assertIn("Standard & Poor’s Financial Services LLC", tr["mk_sp_hint"][lang], lang)
             self.assertIn("Nasdaq-100", tr["mk_xyz_hint"][lang], lang)
             self.assertIn("ICE", tr["mk_dxy_hint"][lang], lang)
             self.assertIn("WTI", tr["mk_oil_hint"][lang], lang)
+            self.assertIn("Volmex", tr["mk_bviv_hint"][lang], lang)
+            self.assertIn("Kinetiq", tr["mk_bviv_hint"][lang], lang)
