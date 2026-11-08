@@ -1,6 +1,6 @@
 /*
  * Рынки для криптотрейдера сверху бокового меню, сетка 3 × 3: S&P 500,
- * XYZ100, DXY · золото, US 10Y, нефть WTI · BTC.D, USDT.D, ETH/BTC. Мелко и
+ * XYZ100, DXY · золото, US 10Y, BVIV · BTC.D, USDT.D, ETH/BTC. Мелко и
  * приглушённо: видно, но в глаза не бросается.
  * Под сеткой — источники (CoinMarketCap — ссылкой, как требуют его условия)
  * и «ⓘ»: оговорки о товарных знаках и о том, что это цены контрактов, а не
@@ -21,15 +21,15 @@ import { change, digits, isPercent, type MarketItem, type MarketKey, type Market
 
 const EVERY = 60_000;
 
-/** Подписи: имена индексов и тикеры — как есть на всех языках, золото и нефть — переводом. */
+/** Подписи: имена индексов и тикеры — как есть на всех языках, золото — переводом. */
 const LABEL: Record<MarketKey, string | DictKey> = {
-  SP500: "S&P 500", XYZ100: "XYZ100", DXY: "DXY", GOLD: "mk_gold", US10Y: "US 10Y", OIL: "mk_oil",
+  SP500: "S&P 500", XYZ100: "XYZ100", DXY: "DXY", GOLD: "mk_gold", US10Y: "US 10Y", BVIV: "BVIV",
   BTCD: "BTC.D", USDTD: "USDT.D", ETHBTC: "ETH/BTC",
 };
 const isKey = (l: string): l is DictKey => l.startsWith("mk_");
 /** Оговорки по пунктам — в порядке экрана. */
 const HINT: Partial<Record<MarketKey, DictKey>> = {
-  SP500: "mk_sp_hint", XYZ100: "mk_xyz_hint", DXY: "mk_dxy_hint", US10Y: "mk_10y_hint", OIL: "mk_oil_hint",
+  SP500: "mk_sp_hint", XYZ100: "mk_xyz_hint", DXY: "mk_dxy_hint", US10Y: "mk_10y_hint", BVIV: "mk_bviv_hint",
   USDTD: "mk_usdtd_hint",
 };
 
@@ -53,14 +53,17 @@ function Cell({ it, lang }: { it: MarketItem; lang: LangCode }) {
   );
 }
 
-/** Источники; CoinMarketCap — ссылкой на сайт. */
-function Sources({ lang }: { lang: LangCode }) {
+/** Источники; CoinMarketCap — ссылкой на сайт. tail («ⓘ») не отрывается от
+ *  последнего слова на перенос. */
+function Sources({ lang, tail }: { lang: LangCode; tail: ReactNode }) {
   const [before = "", after = ""] = t(lang, "mk_src").split("CoinMarketCap");
   return (
     <>
       {before}
-      <a href={CMC_URL} rel="noopener noreferrer" onClick={(e) => { e.preventDefault(); openExternal(CMC_URL); }}>CoinMarketCap</a>
-      {after}
+      <span className="mk-nw">
+        <a href={CMC_URL} rel="noopener noreferrer" onClick={(e) => { e.preventDefault(); openExternal(CMC_URL); }}>CoinMarketCap</a>
+        {after}{tail}
+      </span>
     </>
   );
 }
@@ -92,11 +95,10 @@ export function MarketsStrip({ fallback }: { fallback: ReactNode }) {
         {m.items.map((it) => <Cell key={it.k} it={it} lang={lang} />)}
       </div>
       <p className="mk-src">
-        <Sources lang={lang} />
-        {notes.length ? (
+        <Sources lang={lang} tail={notes.length ? (
           <button type="button" className="mk-i" aria-expanded={open} aria-label={t(lang, "mk_about")}
             onClick={() => setOpen((o) => !o)}>ⓘ</button>
-        ) : null}
+        ) : null} />
       </p>
       {open && notes.length ? (
         <ul className="mk-notes">{notes.map((h) => <li key={h}>{t(lang, h)}</li>)}</ul>

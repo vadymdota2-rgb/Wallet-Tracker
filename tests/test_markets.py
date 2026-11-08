@@ -34,15 +34,16 @@ def hl(markets: dict, delisted: tuple = ()) -> list:
 
 
 XYZ_M = {"xyz:SP500": (7373.1, 7392.9), "xyz:XYZ100": (26925, 26996), "xyz:GOLD": (4066.2, 4079.9),
-         "xyz:CL": (90.205, 89.617), "xyz:EUR": (1.1157, 1.1156), "xyz:JPY": (158.36, 158.29),
+         "xyz:EUR": (1.1157, 1.1156), "xyz:JPY": (158.36, 158.29),
          "xyz:SILVER": (52, 52), "xyz:DXY": (97.15, 97.15), "xyz:VIX": (20, 20)}
 XYZ = hl(XYZ_M, delisted=("DXY", "VIX"))
 PARA = hl({"para:10Y": (4.875, 4.8777), "para:BTCD": (60.4, 60.3)})
+MKTS = hl({"mkts:BVIV": (42.399, 41.0), "mkts:OLD": (5, 5)}, delisted=("OLD",))
 MAIN = hl({"BTC": (100_000, 99_000), "ETH": (3300, 3200)})
 ECB = {"rates": {"2026-11-05": {"EUR": 0.89095, "JPY": 158.46, "GBP": 0.74299, "CAD": 1.3966, "SEK": 9.7866, "CHF": 0.81789},
                  "2026-11-06": {"EUR": 0.89566, "JPY": 158.33, "GBP": 0.74711, "CAD": 1.4066, "SEK": 9.8755, "CHF": 0.8189}}}
 MCAP = {"ok": True, "btc": [60.44, 60.35], "usdt": 4.1, "cap": [3.4e12, 3.3e12]}
-PARTS = {"xyz": XYZ, "para": PARA, "main": MAIN, "ecb": ECB, "mcap": MCAP}
+PARTS = {"xyz": XYZ, "para": PARA, "mkts": MKTS, "main": MAIN, "ecb": ECB, "mcap": MCAP}
 
 
 def items(res: dict) -> dict:
@@ -60,7 +61,7 @@ class ComputeTest(unittest.TestCase):
         self.assertEqual(got["XYZ100"], (26925, 26996))
         self.assertEqual(got["GOLD"], (4066.2, 4079.9))
         self.assertEqual(got["US10Y"], (4.875, 4.8777))
-        self.assertEqual(got["OIL"], (90.205, 89.617))  # WTI — рынок CL
+        self.assertEqual(got["BVIV"], (42.399, 41.0))  # волатильность BTC — рынок Kinetiq
         self.assertEqual(got["BTCD"], (60.44, 60.35))
         self.assertEqual(got["ETHBTC"], (0.033, round(3200 / 99_000, 8)))
         json.dumps(res, allow_nan=False)
@@ -108,6 +109,7 @@ class ComputeTest(unittest.TestCase):
         self.assertFalse(mk.sane("US10Y", (48.75, 48.77)))  # процент не в тех единицах
         self.assertFalse(mk.sane("DXY", (9.7, 9.7)))
         self.assertFalse(mk.sane("BTCD", (100.5, 99)))
+        self.assertFalse(mk.sane("BVIV", (0.42, 0.41)))  # доля вместо процентов
         para = hl({"para:10Y": (487.5, 487.77)})
         self.assertNotIn("US10Y", items(mk.compute({**PARTS, "para": para}, NOW)))
         main = hl({"BTC": (100_000, 99_000), "ETH": (3300, 1200)})
@@ -120,8 +122,8 @@ class ComputeTest(unittest.TestCase):
         self.assertNotIn("SILVER", got)  # не из набора
 
     def test_one_silent_source_drops_only_its_items(self):
-        cases = {"ecb": {"DXY"}, "mcap": {"BTCD", "USDTD"}, "main": {"ETHBTC"}, "para": {"US10Y"},
-                 "xyz": {"SP500", "XYZ100", "GOLD", "OIL", "DXY"}}
+        cases = {"ecb": {"DXY"}, "mkts": {"BVIV"}, "mcap": {"BTCD", "USDTD"}, "main": {"ETHBTC"}, "para": {"US10Y"},
+                 "xyz": {"SP500", "XYZ100", "GOLD", "DXY"}}
         for name, gone in cases.items():
             self.assertEqual(set(items(mk.compute({**PARTS, name: None}, NOW))), set(mk.KEYS) - gone, name)
         self.assertEqual(mk.compute({}, NOW), {"ok": False, "error": "no_data"})
@@ -261,7 +263,8 @@ class PolicyTest(unittest.TestCase):
 
     def test_rights(self):
         # Deribit (DVOL) — только для личного пользования; VIX — индекс Cboe по
-        # лицензии; XYZ100 — не Nasdaq-100: ни в источниках, ни в ключах.
+        # лицензии; XYZ100 — не Nasdaq-100: ни в источниках, ни в ключах. BVIV —
+        # цена рынка Hyperliquid с оговоркой, что это не значение индекса Volmex.
         with open(os.path.join(ROOT, "whale_api.py"), encoding="utf-8") as f:
             block = f.read().split("# --- Рынки в меню (wt_markets.py)")[1].split("markets_data = wt_markets")[0]
         self.assertNotIn("deribit.com", block)
@@ -278,3 +281,5 @@ class PolicyTest(unittest.TestCase):
             self.assertIn("Standard & Poor’s Financial Services LLC", tr["mk_sp_hint"][lang], lang)
             self.assertIn("Nasdaq-100", tr["mk_xyz_hint"][lang], lang)
             self.assertIn("ICE", tr["mk_dxy_hint"][lang], lang)
+            self.assertIn("Volmex", tr["mk_bviv_hint"][lang], lang)
+            self.assertIn("Kinetiq", tr["mk_bviv_hint"][lang], lang)

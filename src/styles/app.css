@@ -194,6 +194,7 @@
 .mk-ch.dn { color: var(--dn); opacity: 0.7; }
 .mk-src { margin-top: 5px; font-size: 8.5px; color: var(--dim-2); opacity: 0.7; text-align: center; }
 .mk-src a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.mk-nw { white-space: nowrap; }
 /* «ⓘ»: оговорки раскрываются касанием (на телефоне всплывающих подсказок нет);
    кнопка мелкая, но место под палец — с запасом. */
 .mk-i {

@@ -23,7 +23,7 @@ const T = 1_794_100_000;
 const MARKETS = {
   ok: true, at: T - 20, items: [
     { k: "SP500", px: 7373.1, prev: 7392.9 }, { k: "XYZ100", px: 26925, prev: 26996 }, { k: "DXY", px: 102.115, prev: 101.92 },
-    { k: "GOLD", px: 4066.2, prev: 4079.9 }, { k: "US10Y", px: 4.875, prev: 4.8777 }, { k: "OIL", px: 90.205, prev: 89.617 },
+    { k: "GOLD", px: 4066.2, prev: 4079.9 }, { k: "US10Y", px: 4.875, prev: 4.8777 }, { k: "BVIV", px: 42.399, prev: 41 },
     { k: "BTCD", px: 60.44, prev: 60.35 }, { k: "USDTD", px: 4.1, prev: 4.22 }, { k: "ETHBTC", px: 0.0294677, prev: 0.02957938 },
   ],
 };
@@ -92,7 +92,7 @@ test("сверху меню — девять рынков вместо заго�
   assert.match(text[3]!, /^Золото 4 066 −0,34%$/);
   assert.match(text[1]!, /^XYZ100 26 925 −0,26%$/);
   assert.match(text[4]!, /^US 10Y 4,88% −0,3 б\. п\.$/);
-  assert.match(text[5]!, /^Нефть WTI 90,2[01] \+0,66%$/);
+  assert.match(text[5]!, /^BVIV 42,40 \+3,41%$/);
   assert.match(text[6]!, /^BTC\.D 60,44% \+0,15%$/);
   assert.match(text[8]!, /^ETH\/BTC 0,02947 −0,38%$/);
   assert.equal(await page.locator('.mk-cell[data-k="DXY"] .mk-ch.up').count(), 1);
@@ -106,7 +106,7 @@ test("сверху меню — девять рынков вместо заго�
   await page.locator(".mk-i").click();
   assert.equal(await page.locator(".mk-i").getAttribute("aria-expanded"), "true");
   const notes = (await page.locator(".mk-notes li").allTextContents()).map(sp);
-  assert.deepEqual(notes, ["mk_sp_hint", "mk_xyz_hint", "mk_dxy_hint", "mk_10y_hint", "mk_oil_hint", "mk_usdtd_hint"].map((k) => sp(I18N[k]!["ru"]!)));
+  assert.deepEqual(notes, ["mk_sp_hint", "mk_xyz_hint", "mk_dxy_hint", "mk_10y_hint", "mk_bviv_hint", "mk_usdtd_hint"].map((k) => sp(I18N[k]!["ru"]!)));
   await page.locator(".mk-i").click();
   assert.equal(await page.locator(".mk-notes").count(), 0);
   // Мелко: цифры рынков меньше пунктов меню, сетка — ровные три столбца.

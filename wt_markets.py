@@ -4,7 +4,7 @@
 сетка 3 × 3:
 
     S&P 500   XYZ100      DXY      — аппетит к риску и доллар;
-    Золото    US 10Y      Нефть    — «убежище», ставки, инфляция;
+    Золото    US 10Y      BVIV     — «убежище», ставки, ждёт ли рынок шторма;
     BTC.D     USDT.D      ETH/BTC  — куда течёт капитал внутри крипты.
 
 По каждому пункту — цена сейчас и сутки назад; изменение считает
@@ -14,10 +14,12 @@
 источников ему отдаёт сервер (set_sources), здесь — только разбор, расчёт
 и кэш:
   - Hyperliquid, бессрочные рынки HIP-3: площадка trade.xyz («xyz») —
-    S&P 500, XYZ100, золото, нефть WTI (CL), курсы EUR и JPY; площадка
-    Paragon («para») — доходность 10Y; основная — BTC и ETH для ETH/BTC.
-    Торгуются круглые сутки. Рынки, снятые с торгов, не берутся: их цена
-    застыла (DXY и VIX на «xyz»);
+    S&P 500, XYZ100, золото, курсы EUR и JPY; площадка Paragon («para») —
+    доходность 10Y; площадка Markets by Kinetiq («mkts») — BVIV, индекс
+    подразумеваемой волатильности BTC на 30 дней Volmex (рынок открыт
+    вместе с Volmex, цена — по их индексу); основная — BTC и ETH для
+    ETH/BTC. Торгуются круглые сутки. Рынки, снятые с торгов, не берутся:
+    их цена застыла (DXY и VIX на «xyz»);
   - DXY нигде не торгуется — считаем сами по открытой формуле ICE: EUR и
     JPY с Hyperliquid, GBP, CAD, SEK, CHF — курсы ЕЦБ (Европейского
     центрального банка) за последний рабочий день. EUR и JPY Hyperliquid
@@ -32,8 +34,9 @@
   - VIX нигде не торгуется (рынок на «xyz» снят), а индекс Cboe без
     лицензии показывать нельзя; DVOL Deribit — тоже нельзя: условия Deribit
     разрешают их рыночные и производные данные (индексы тоже) только для
-    личного пользования, публиковать — по письменному разрешению. Вместо
-    волатильности — нефть;
+    личного пользования, публиковать — по письменному разрешению. Волатильность
+    BTC — BVIV: цена рынка Hyperliquid (открытые данные сети), а не
+    значение индекса Volmex, с оговоркой рядом;
   - S&P 500 — рынок trade.xyz по лицензии S&P Dow Jones Indices; показываем
     цену контракта, а не значение индекса, с оговоркой о товарных знаках;
   - XYZ100 — собственный индекс trade.xyz (100 крупнейших нефинансовых
@@ -69,10 +72,11 @@ Pair = tuple[float, float]
 Source = Callable[[], object]
 
 # Пункты — в порядке экрана.
-KEYS = ("SP500", "XYZ100", "DXY", "GOLD", "US10Y", "OIL", "BTCD", "USDTD", "ETHBTC")
+KEYS = ("SP500", "XYZ100", "DXY", "GOLD", "US10Y", "BVIV", "BTCD", "USDTD", "ETHBTC")
 # Рынки Hyperliquid: пункт → (площадка, имя рынка без приставки).
-HL = {"SP500": ("xyz", "SP500"), "XYZ100": ("xyz", "XYZ100"), "GOLD": ("xyz", "GOLD"), "OIL": ("xyz", "CL"),
-      "US10Y": ("para", "10Y")}
+HL = {"SP500": ("xyz", "SP500"), "XYZ100": ("xyz", "XYZ100"), "GOLD": ("xyz", "GOLD"), "US10Y": ("para", "10Y"),
+      "BVIV": ("mkts", "BVIV")}
+DEXES = ("xyz", "para", "mkts", "main")  # площадки Hyperliquid; main — основная
 # DXY = 50,14348112 × ∏ курс^вес (ICE): EUR и GBP — в долларах за единицу
 # (вес со знаком минус), остальные — единиц за доллар.
 DXY_K = 50.14348112
@@ -80,7 +84,8 @@ DXY_W = (("EUR", -0.576), ("JPY", 0.136), ("GBP", -0.119), ("CAD", 0.091), ("SEK
 PX_MAX = 1e7  # правдоподобная цена пункта
 MOVE_MAX = 2.0  # за сутки цена не меняется больше чем вдвое (в любую сторону)
 # Свои рамки: DXY за полвека не выходил из 70…165, доходность 10Y — из 0…16 %.
-RANGE = {"DXY": (50.0, 250.0), "US10Y": (0.01, 30.0), "BTCD": (0.01, 100.0), "USDTD": (0.01, 100.0)}
+RANGE = {"DXY": (50.0, 250.0), "US10Y": (0.01, 30.0), "BVIV": (1.0, 500.0), "BTCD": (0.01, 100.0),
+         "USDTD": (0.01, 100.0)}
 EUR_JPY_GAP = 0.03  # EUR и JPY Hyperliquid против ЕЦБ: расхождение больше — DXY нет
 TTL = 60.0
 STALE_MAX = 1800.0  # старше — не отдаётся
@@ -173,11 +178,12 @@ def _near(a: float, b: float) -> bool:
 
 
 def compute(parts: dict[str, object], at: int) -> dict[str, Json]:
-    """Ответ по ответам источников: xyz, para, main (Hyperliquid), ecb, mcap."""
-    xyz, para, main = (hl_markets(parts.get(k)) for k in ("xyz", "para", "main"))
+    """Ответ по ответам источников: xyz, para, mkts, main (Hyperliquid), ecb, mcap."""
+    dex_mk = {d: hl_markets(parts.get(d)) for d in DEXES}
+    xyz, main = dex_mk["xyz"], dex_mk["main"]
     got: dict[str, Pair] = {}
     for key, (dex, name) in HL.items():
-        if p := (xyz if dex == "xyz" else para).get(name):
+        if p := dex_mk[dex].get(name):
             got[key] = p
     ecb = ecb_rates(parts.get("ecb"))
     eur, jpy = xyz.get("EUR"), xyz.get("JPY")
@@ -211,7 +217,7 @@ _lock = threading.Lock()
 
 
 def set_sources(sources: dict[str, Source]) -> None:
-    """Откуда брать ответы источников: имя (xyz, para, main, ecb, mcap) → fn()."""
+    """Откуда брать ответы источников: имя (xyz, para, mkts, main, ecb, mcap) → fn()."""
     _st.sources = dict(sources)
 
 
