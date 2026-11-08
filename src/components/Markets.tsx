@@ -1,6 +1,7 @@
 /*
- * Рынки сверху бокового меню: S&P 500, Nasdaq-100, DXY, золото, серебро,
- * нефть WTI и Brent, доходность 10-летних облигаций США, DVOL — сетка 3 × 3.
+ * Рынки для криптотрейдера сверху бокового меню, сетка 3 × 3: S&P 500,
+ * Nasdaq 100, DXY · золото, US 10Y, DVOL · BTC.D, USDT.D, ETH/BTC. Мелко и
+ * приглушённо: видно, но в глаза не бросается.
  * Пока данных нет (без подписки, сервер молчит, ответ битый) — прежний
  * заголовок меню. Открытое меню обновляет рынки раз в минуту.
  */
@@ -10,17 +11,17 @@ import { t } from "../i18n/t";
 import type { DictKey, LangCode } from "../i18n/types";
 import { num } from "../lib/format";
 import { fetchMarkets, peekMarkets, refreshMarkets } from "../lib/api";
-import { change, digits, type MarketItem, type MarketKey, type MarketsReply } from "../lib/markets";
+import { change, digits, isPercent, type MarketItem, type MarketKey, type MarketsReply } from "../lib/markets";
 
 const EVERY = 60_000;
 
 /** Подписи: имена индексов и бирж — как есть на всех языках, металлы — переводом. */
 const LABEL: Record<MarketKey, string | DictKey> = {
-  SP500: "S&P 500", NDX: "Nasdaq 100", DXY: "DXY", GOLD: "mk_gold", SILVER: "mk_silver",
-  WTI: "WTI", BRENT: "Brent", US10Y: "US 10Y", DVOL: "DVOL",
+  SP500: "S&P 500", NDX: "Nasdaq 100", DXY: "DXY", GOLD: "mk_gold", US10Y: "US 10Y", DVOL: "DVOL",
+  BTCD: "BTC.D", USDTD: "USDT.D", ETHBTC: "ETH/BTC",
 };
 const isKey = (l: string): l is DictKey => l.startsWith("mk_");
-const HINT: Partial<Record<MarketKey, DictKey>> = { DXY: "mk_dxy_hint", DVOL: "mk_dvol_hint", NDX: "mk_ndx_hint" };
+const HINT: Partial<Record<MarketKey, DictKey>> = { DXY: "mk_dxy_hint", DVOL: "mk_dvol_hint", NDX: "mk_ndx_hint", USDTD: "mk_usdtd_hint" };
 
 function Cell({ it, lang }: { it: MarketItem; lang: LangCode }) {
   const l = LABEL[it.k];
@@ -36,7 +37,7 @@ function Cell({ it, lang }: { it: MarketItem; lang: LangCode }) {
   return (
     <div className="mk-cell" title={hint ? t(lang, hint) : undefined} data-k={it.k}>
       <span className="mk-k">{name}</span>
-      <b className="mk-px">{num(it.px, p, p)}{it.k === "US10Y" ? "%" : ""}</b>
+      <b className="mk-px">{num(it.px, p, p)}{isPercent(it.k) ? "%" : ""}</b>
       <span className={`mk-ch ${dir}`}>{txt}</span>
     </div>
   );

@@ -1,7 +1,8 @@
 /*
- * Рынки сверху бокового меню (node --test, Playwright, собранное приложение
- * из html/): сетка 3 × 3 вместо заголовка, подписи и изменения, влезает в
- * 320 точек, нет данных — прежний заголовок «Wallet Tracker».
+ * Рынки для криптотрейдера сверху бокового меню (node --test, Playwright,
+ * собранное приложение из html/): сетка 3 × 3 вместо заголовка, подписи и
+ * изменения, мелко (не крупнее пунктов меню), влезает в 320 точек, нет
+ * данных — прежний заголовок «Wallet Tracker».
  */
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
@@ -21,8 +22,8 @@ const T = 1_794_100_000;
 const MARKETS = {
   ok: true, at: T - 20, items: [
     { k: "SP500", px: 7373.1, prev: 7392.9 }, { k: "NDX", px: 26925, prev: 26996 }, { k: "DXY", px: 102.115, prev: 101.92 },
-    { k: "GOLD", px: 4066.2, prev: 4079.9 }, { k: "SILVER", px: 52.013, prev: 52.016 }, { k: "WTI", px: 90.135, prev: 89.633 },
-    { k: "BRENT", px: 97.134, prev: 96.83 }, { k: "US10Y", px: 4.875, prev: 4.8777 }, { k: "DVOL", px: 40.26, prev: 39.24 },
+    { k: "GOLD", px: 4066.2, prev: 4079.9 }, { k: "US10Y", px: 4.875, prev: 4.8777 }, { k: "DVOL", px: 40.26, prev: 39.24 },
+    { k: "BTCD", px: 60.44, prev: 60.35 }, { k: "USDTD", px: 4.1, prev: 4.22 }, { k: "ETHBTC", px: 0.0294677, prev: 0.02957938 },
   ],
 };
 const sp = (s: string | null) => (s ?? "").replace(/[\s  ]+/g, " ").trim();
@@ -88,11 +89,18 @@ test("сверху меню — девять рынков вместо заго�
   const text = (await cells.evaluateAll((els) => els.map((el) => [...el.children].map((c) => c.textContent).join(" ")))).map(sp);
   assert.match(text[0]!, /^S&P 500 7 373 −0,27%$/);
   assert.match(text[3]!, /^Золото 4 066 −0,34%$/);
-  assert.match(text[7]!, /^US 10Y 4,88% −0,3 б\. п\.$/);
-  assert.equal(await page.locator('.mk-cell[data-k="WTI"] .mk-ch.up').count(), 1);
+  assert.match(text[4]!, /^US 10Y 4,88% −0,3 б\. п\.$/);
+  assert.match(text[6]!, /^BTC\.D 60,44% \+0,15%$/);
+  assert.match(text[8]!, /^ETH\/BTC 0,02947 −0,38%$/);
+  assert.equal(await page.locator('.mk-cell[data-k="DXY"] .mk-ch.up').count(), 1);
   assert.equal(await page.locator('.mk-cell[data-k="SP500"] .mk-ch.dn').count(), 1);
   assert.equal(sp(await page.locator(".mk-src").textContent()), I18N["mk_src"]!["ru"]);
   assert.ok((await page.locator('.mk-cell[data-k="DVOL"]').getAttribute("title"))?.includes("VIX"));
+  // Мелко: цифры рынков меньше пунктов меню, сетка — ровные три столбца.
+  const fs = await page.evaluate(() => [".mk-px", ".drawer-row"].map((q) => parseFloat(getComputedStyle(document.querySelector(q)!).fontSize)));
+  assert.ok(fs[0]! < fs[1]!, String(fs));
+  const xs = await cells.evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().width)));
+  assert.equal(new Set(xs).size, 1, String(xs));
   // Пункты меню на месте, под рынками.
   const row = await page.locator(".drawer-row").first().boundingBox();
   const grid = await page.locator(".mk-grid").boundingBox();

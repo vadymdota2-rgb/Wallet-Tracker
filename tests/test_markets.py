@@ -1,158 +1,205 @@
-"""Рынки в боковом меню (/api/markets): сборка, DXY по формуле ICE, сбои источников.
+"""Рынки для криптотрейдера в меню (wt_markets.py, /api/markets).
 
-Источники — Hyperliquid (площадки HIP-3 «xyz» и «para»), курсы ЕЦБ
-(Frankfurter) и DVOL Deribit. Проверяем: какие рынки берутся и какие нет
-(снятые с торгов), формулу DXY, что сбой или мусор одного источника не
-роняет остальные, что ответ — только числа и наши ключи, и что маршрут —
-для подписчиков.
+Проверяем: разбор каждого источника (Hyperliquid, курсы ЕЦБ, DVOL Deribit,
+доминация CoinMarketCap), формулу DXY, что снятые с торгов рынки не
+берутся, что сбой или мусор одного источника не роняет остальные, что в
+ответе — только наши ключи и правдоподобные числа, кэш и сборку в фоне,
+правила модуля (без сети, без опасного) и что маршрут — для подписчиков.
 """
+import ast
 import json
 import math
 import os
 import random
 import sys
+import threading
+import time
 import unittest
 from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-import whale_api as api  # noqa: E402 — модуль лежит в корне репозитория
+import whale_api as api  # noqa: E402 — модули лежат в корне репозитория
+import wt_markets as mk  # noqa: E402
 
 NOW = 1_794_100_000
-KEYS = {"SP500", "NDX", "DXY", "GOLD", "SILVER", "WTI", "BRENT", "US10Y", "DVOL"}
+T = NOW * 1000
 
 
-def hl_dex(markets: dict, delisted: tuple = ()) -> list:
-    uni = [{"name": f"xyz:{n}", **({"isDelisted": True} if n in delisted else {})} for n in markets]
-    ctx = [{"markPx": str(px), "prevDayPx": str(prev)} for px, prev in markets.values()]
-    return [{"universe": uni}, ctx]
+def hl(markets: dict, delisted: tuple = ()) -> list:
+    uni = [{"name": n, **({"isDelisted": True} if n.split(":")[-1] in delisted else {})} for n in markets]
+    return [{"universe": uni}, [{"markPx": str(a), "prevDayPx": str(b)} for a, b in markets.values()]]
 
 
-XYZ = {"SP500": (7373.1, 7392.9), "XYZ100": (26925, 26996), "GOLD": (4066.2, 4079.9), "SILVER": (52.013, 52.016),
-       "CL": (90.135, 89.633), "BRENTOIL": (97.134, 96.83), "EUR": (1.1157, 1.1156), "JPY": (158.36, 158.29),
-       "DXY": (97.15, 97.15), "VIX": (20, 20)}
-PARA = {"10Y": (4.875, 4.8777)}
+XYZ = hl({"xyz:SP500": (7373.1, 7392.9), "xyz:XYZ100": (26925, 26996), "xyz:GOLD": (4066.2, 4079.9),
+          "xyz:EUR": (1.1157, 1.1156), "xyz:JPY": (158.36, 158.29), "xyz:SILVER": (52, 52),
+          "xyz:DXY": (97.15, 97.15), "xyz:VIX": (20, 20)}, delisted=("DXY", "VIX"))
+PARA = hl({"para:10Y": (4.875, 4.8777), "para:BTCD": (60.4, 60.3)})
+MAIN = hl({"BTC": (100_000, 99_000), "ETH": (3300, 3200)})
 ECB = {"rates": {"2026-11-05": {"EUR": 0.89095, "JPY": 158.46, "GBP": 0.74299, "CAD": 1.3966, "SEK": 9.7866, "CHF": 0.81789},
                  "2026-11-06": {"EUR": 0.89566, "JPY": 158.33, "GBP": 0.74711, "CAD": 1.4066, "SEK": 9.8755, "CHF": 0.8189}}}
-T = NOW * 1000
 DVOL = {"result": {"data": [[T - h * 3_600_000, 0, 0, 0, 40 - h * 0.05] for h in range(26, -1, -1)]}}
+MCAP = {"ok": True, "btc": [60.44, 60.35], "usdt": 4.1, "cap": [3.4e12, 3.3e12]}
+PARTS = {"xyz": XYZ, "para": PARA, "main": MAIN, "ecb": ECB, "dvol": DVOL, "mcap": MCAP}
 
 
-def fake_post(body, *_a, **_k):
-    if body.get("dex") == "xyz":
-        return hl_dex(XYZ, delisted=("DXY", "VIX"))
-    if body.get("dex") == "para":
-        return hl_dex(PARA)
-    return None
+def items(res: dict) -> dict:
+    return {it["k"]: (it["px"], it["prev"]) for it in res["items"]} if res.get("ok") else {}
 
 
-def fake_get(url, *_a, **_k):
-    if "frankfurter" in url:
-        return ECB
-    if "deribit" in url:
-        return DVOL
-    return None
-
-
-def build(post=fake_post, get=fake_get) -> dict:
-    with mock.patch.object(api, "hl_post", post), mock.patch.object(api, "get_json", get), \
-            mock.patch.object(api, "now", return_value=NOW), mock.patch("sys.stderr"):
-        return api._mkt_build()
-
-
-class BuildTest(unittest.TestCase):
-    def test_all_nine(self):
-        r = build()
-        self.assertTrue(r["ok"])
-        self.assertEqual(r["at"], NOW)
-        got = {it["k"]: (it["px"], it["prev"]) for it in r["items"]}
-        self.assertEqual(set(got), KEYS)
+class ComputeTest(unittest.TestCase):
+    def test_all_nine_in_screen_order(self):
+        res = mk.compute(PARTS, NOW)
+        self.assertTrue(res["ok"])
+        self.assertEqual(res["at"], NOW)
+        self.assertEqual([it["k"] for it in res["items"]], list(mk.KEYS))
+        got = items(res)
         self.assertEqual(got["SP500"], (7373.1, 7392.9))
         self.assertEqual(got["NDX"], (26925, 26996))
-        self.assertEqual(got["WTI"], (90.135, 89.633))
+        self.assertEqual(got["GOLD"], (4066.2, 4079.9))
         self.assertEqual(got["US10Y"], (4.875, 4.8777))
         self.assertEqual(got["DVOL"], (40.0, 38.8))  # сейчас и ровно сутки назад
-        json.dumps(r, allow_nan=False)
+        self.assertEqual(got["BTCD"], (60.44, 60.35))
+        self.assertEqual(got["ETHBTC"], (0.033, round(3200 / 99_000, 8)))
+        json.dumps(res, allow_nan=False)
 
     def test_dxy_by_ice_formula(self):
         r = {"EUR": 1 / 1.1157, "JPY": 158.36, "GBP": 0.74711, "CAD": 1.4066, "SEK": 9.8755, "CHF": 0.8189}
         want = 50.14348112 * 1.1157 ** -0.576 * 158.36 ** 0.136 * (1 / 0.74711) ** -0.119 * 1.4066 ** 0.091 \
             * 9.8755 ** 0.042 * 0.8189 ** 0.036
-        self.assertAlmostEqual(api._dxy(r), want, places=9)
-        self.assertAlmostEqual(sum(abs(w) for _, w in api.DXY_W), 1.0, places=9)
-        got = {it["k"]: it for it in build()["items"]}["DXY"]
-        self.assertAlmostEqual(got["px"], round(want, 3), places=6)
-        # Сутки назад: EUR и JPY — сутки назад у Hyperliquid, остальное — прошлый день ЕЦБ.
-        prev = dict(ECB["rates"]["2026-11-05"], EUR=1 / 1.1156, JPY=158.29)
-        self.assertAlmostEqual(got["prev"], round(api._dxy(prev), 3), places=6)
-        self.assertTrue(95 < got["px"] < 110)
+        self.assertAlmostEqual(mk.dxy(r), want, places=9)
+        self.assertAlmostEqual(sum(abs(w) for _, w in mk.DXY_W), 1.0, places=9)
+        px, prev = items(mk.compute(PARTS, NOW))["DXY"]
+        self.assertAlmostEqual(px, round(want, 3), places=6)
+        # Сутки назад: EUR и JPY — у Hyperliquid сутки назад, остальное — прошлый день ЕЦБ.
+        self.assertAlmostEqual(prev, round(mk.dxy(dict(ECB["rates"]["2026-11-05"], EUR=1 / 1.1156, JPY=158.29)), 3), places=6)
+        self.assertTrue(95 < px < 110)
 
-    def test_delisted_markets_are_not_shown(self):
-        # DXY и VIX у Hyperliquid сняты с торгов — их застывшие цены не берём.
-        items = build()["items"]
-        dxy = next(it for it in items if it["k"] == "DXY")
-        self.assertNotAlmostEqual(dxy["px"], 97.15, places=1)
-        self.assertNotIn("VIX", {it["k"] for it in items})
+    def test_usdt_dominance_yesterday_by_market_cap(self):
+        # Вчерашней доли USDT CoinMarketCap не отдаёт: та же капитализация USDT
+        # к вчерашней капитализации рынка.
+        px, prev = items(mk.compute(PARTS, NOW))["USDTD"]
+        self.assertEqual(px, 4.1)
+        self.assertAlmostEqual(prev, 4.1 * 3.4e12 / 3.3e12)
+        for bad in ({"ok": False}, {**MCAP, "usdt": None}, {**MCAP, "usdt": 150}, {**MCAP, "cap": [3.4e12, None]},
+                    {**MCAP, "cap": "x"}, "x", None):
+            self.assertNotIn("USDTD", items(mk.compute({**PARTS, "mcap": bad}, NOW)), bad)
+        for bad in ({**MCAP, "btc": [120, 60]}, {**MCAP, "btc": [60, None]}, {**MCAP, "btc": "x"}, {"ok": False}):
+            self.assertNotIn("BTCD", items(mk.compute({**PARTS, "mcap": bad}, NOW)), bad)
 
-    def test_one_silent_source_does_not_drop_the_rest(self):
-        def no_ecb(url, *a, **k):
-            return None if "frankfurter" in url else fake_get(url, *a, **k)
+    def test_delisted_markets_are_not_taken(self):
+        got = items(mk.compute(PARTS, NOW))
+        self.assertNotAlmostEqual(got["DXY"][0], 97.15, places=1)  # застывший DXY Hyperliquid — мимо
+        self.assertEqual(set(mk.hl_markets(XYZ)) & {"DXY", "VIX"}, set())
+        self.assertNotIn("SILVER", got)  # не из набора
 
-        keys = {it["k"] for it in build(get=no_ecb)["items"]}
-        self.assertNotIn("DXY", keys)
-        self.assertIn("SP500", keys)
-
-        def boom_post(body, *a, **k):
-            if body.get("dex") == "xyz":
-                raise OSError("нет сети")
-            return fake_post(body, *a, **k)
-
-        keys = {it["k"] for it in build(post=boom_post)["items"]}
-        self.assertEqual(keys, {"US10Y", "DVOL"})  # без xyz нет ни индексов, ни EUR/JPY для DXY
-        self.assertEqual(build(post=lambda *a, **k: None, get=lambda *a, **k: None), {"ok": False, "error": "no_data"})
+    def test_one_silent_source_drops_only_its_items(self):
+        cases = {"ecb": {"DXY"}, "dvol": {"DVOL"}, "mcap": {"BTCD", "USDTD"}, "main": {"ETHBTC"}, "para": {"US10Y"},
+                 "xyz": {"SP500", "NDX", "GOLD", "DXY"}}
+        for name, gone in cases.items():
+            self.assertEqual(set(items(mk.compute({**PARTS, name: None}, NOW))), set(mk.KEYS) - gone, name)
+        self.assertEqual(mk.compute({}, NOW), {"ok": False, "error": "no_data"})
 
     def test_poisoned_sources(self):
         rnd = random.Random(7)  # noqa: S311 — повторяемая отрава, не тайна
-        junk = [None, "x", 0, -1, 1e400, float("nan"), float("inf"), [], {}, "1e999", True, "<b>", 1e8, 2**70]
-        for _ in range(300):
-            def post(body, *_a, **_k):
-                if rnd.random() < 0.3:
-                    return rnd.choice(junk)
-                m = {n: (rnd.choice([*junk, 1.5, 100.0]), rnd.choice([*junk, 1.4, 99.0])) for n in rnd.sample(list(XYZ), 5)}
-                return [{"universe": [{"name": f"xyz:{n}"} for n in m] + [rnd.choice(junk)]},
-                        [{"markPx": a, "prevDayPx": b} for a, b in m.values()]]
+        junk = [None, "x", 0, -1, 1e400, float("nan"), float("inf"), [], {}, "1e999", True, "<b>", 1e8, 2**70, "NaN"]
 
-            def get(url, *_a, **_k):
-                if rnd.random() < 0.5:
-                    return rnd.choice(junk)
-                if "frankfurter" in url:
-                    return {"rates": {rnd.choice(["2026-11-05", "x", "<b>"]): {c: rnd.choice([*junk, 1.2]) for c in ("EUR", "JPY", "GBP", "CAD", "SEK", "CHF")}}}
-                return {"result": {"data": [[rnd.choice([*junk, T]), 0, 0, 0, rnd.choice([*junk, 40.0])] for _ in range(5)]}}
+        def poison(v: object, depth: int = 0) -> object:
+            if rnd.random() < 0.15 or depth > 5:
+                return rnd.choice(junk)
+            if isinstance(v, dict):
+                return {k: poison(x, depth + 1) for k, x in v.items() if rnd.random() < 0.9}
+            if isinstance(v, list):
+                return [poison(x, depth + 1) for x in v if rnd.random() < 0.9]
+            return v
 
-            r = build(post, get)
-            json.dumps(r, allow_nan=False)
-            if r["ok"]:
-                for it in r["items"]:
-                    self.assertIn(it["k"], KEYS)
-                    self.assertEqual(set(it), {"k", "px", "prev"})
-                    for v in (it["px"], it["prev"]):
-                        self.assertTrue(isinstance(v, float) and math.isfinite(v) and 0 < v < api.MKT_PX_MAX, it)
+        for _ in range(500):
+            res = mk.compute({k: poison(v) for k, v in PARTS.items()}, NOW)
+            json.dumps(res, allow_nan=False)
+            for it in res.get("items", []):
+                self.assertIn(it["k"], mk.KEYS)
+                self.assertEqual(set(it), {"k", "px", "prev"})
+                for v in (it["px"], it["prev"]):
+                    self.assertTrue(isinstance(v, float) and math.isfinite(v) and 0 < v < mk.PX_MAX, it)
 
 
-class RouteTest(unittest.TestCase):
-    def test_paid_and_routed(self):
+class CacheTest(unittest.TestCase):
+    def setUp(self):
+        self.addCleanup(setattr, mk, "_st", mk._st)
+        mk._st = mk._State()
+
+    def wait(self):
+        job = mk._st.job
+        if job is not None:
+            job.join(5)
+
+    def test_cold_then_cached_then_background(self):
+        calls: list = []
+        mk.set_sources({name: (lambda v=v, n=name: calls.append(n) or v) for name, v in PARTS.items()})
+        with mock.patch.object(mk, "_now", return_value=NOW):
+            first = mk.markets_data(5)
+            self.assertTrue(first["ok"])
+            self.assertEqual(len(calls), len(PARTS))
+            self.assertIs(mk.markets_data(5), first)  # свежий — из кэша
+            self.assertEqual(len(calls), len(PARTS))
+            # Старый — сразу, а свежий собирается в фоне.
+            mk._st.hit = (time.monotonic() - mk.TTL - 1, first)
+            self.assertIs(mk.markets_data(0), first)
+            self.wait()
+            self.assertEqual(len(calls), 2 * len(PARTS))
+            self.assertIsNot(mk._st.hit[1], first)
+
+    def test_failing_sources(self):
+        def boom():
+            raise OSError("нет сети")
+
+        mk.set_sources({name: boom for name in PARTS})
+        self.assertEqual(mk.markets_data(5), {"ok": False, "error": "no_data"})
+        self.wait()
+        self.assertIsNone(mk._start())  # после сбоя — пауза FAIL_WAIT
+        mk._st.fail = time.monotonic() - mk.FAIL_WAIT - 1
+        mk.set_sources({})
+        self.assertEqual(mk.markets_data(5), {"ok": False, "error": "no_data"})
+
+    def test_slow_source_waits_no_longer_than_asked(self):
+        gate = threading.Event()
+        self.addCleanup(gate.set)
+        mk.set_sources({"xyz": lambda: XYZ, "dvol": lambda: gate.wait(10) and DVOL})
+        with mock.patch.object(mk, "_now", return_value=NOW):
+            t0 = time.monotonic()
+            self.assertEqual(mk.markets_data(0.2), {"ok": False, "error": "no_data"})
+            self.assertLess(time.monotonic() - t0, 2)
+            gate.set()
+            self.wait()
+            self.assertTrue(mk.markets_data(0)["ok"])
+
+
+class PolicyTest(unittest.TestCase):
+    def tree(self) -> ast.Module:
+        with open(os.path.join(ROOT, "wt_markets.py"), encoding="utf-8") as f:
+            return ast.parse(f.read())
+
+    def test_module_has_no_network_files_or_eval(self):
+        found = set()
+        for n in ast.walk(self.tree()):
+            if isinstance(n, ast.Import):
+                found |= {a.name for a in n.names}
+            elif isinstance(n, ast.ImportFrom):
+                found.add(n.module or "")
+        self.assertLessEqual(found, {"__future__", "math", "re", "threading", "time", "collections.abc", "typing"})
+        bad = [n.func.id for n in ast.walk(self.tree()) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
+               and n.func.id in {"eval", "exec", "compile", "__import__", "open", "getattr", "setattr"}]
+        self.assertEqual(bad, [])
+        self.assertEqual([n.value for n in ast.walk(self.tree()) if isinstance(n, ast.Constant)
+                          and isinstance(n.value, str) and "://" in n.value], [])
+
+    def test_server_wiring_and_paid_route(self):
         self.assertIn("/api/markets", api.PAID_PATHS)
         self.assertIn("/markets", api.PAID_PATHS)
+        self.assertIs(api.markets_data, mk.markets_data)
         with open(os.path.join(ROOT, "whale_api.py"), encoding="utf-8") as f:
             src = f.read()
         self.assertIn('if path in ("/markets", "/api/markets"):\n                self._json(200, markets_data())', src)
-
-    def test_cached_for_a_minute(self):
-        self.assertEqual(api.MKT_TTL, 60.0)
-        calls = []
-        api._MKT.clear()
-        self.addCleanup(api._MKT.clear)
-        with mock.patch.object(api, "_mkt_build", lambda: calls.append(1) or {"ok": True, "at": NOW, "items": []}):
-            api.markets_data()
-            api.markets_data()
-        self.assertEqual(len(calls), 1)
+        for name in PARTS:
+            self.assertIn(f'    "{name}": ', src.split("wt_markets.set_sources({")[1].split("})")[0])
+        self.assertIn('"mcap": lambda: wt_mcap.mcap_data(0),', src)  # доминация — из кэша, без ожидания

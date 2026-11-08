@@ -1,5 +1,6 @@
 /*
- * Рынки в боковом меню: индексы, товары, доходность, доллар, волатильность.
+ * Рынки для криптотрейдера в боковом меню: S&P 500, Nasdaq 100, DXY, золото,
+ * доходность 10Y, DVOL, BTC.D, USDT.D, ETH/BTC (сервер — wt_markets.py).
  * Проверка ответа сервера (/api/markets) и подписи — без React и без сети:
  * всё проверяется тестами (tests/markets.test.ts).
  *
@@ -10,7 +11,7 @@
  */
 
 /** Пункты — в порядке экрана (сетка 3 × 3). */
-export const MARKET_KEYS = ["SP500", "NDX", "DXY", "GOLD", "SILVER", "WTI", "BRENT", "US10Y", "DVOL"] as const;
+export const MARKET_KEYS = ["SP500", "NDX", "DXY", "GOLD", "US10Y", "DVOL", "BTCD", "USDTD", "ETHBTC"] as const;
 export type MarketKey = (typeof MARKET_KEYS)[number];
 export interface MarketItem {
   k: MarketKey;
@@ -21,7 +22,7 @@ export interface MarketsReply {
   at: number;
   items: MarketItem[];
 }
-/** Цена правдоподобна до этого (сервер — так же, MKT_PX_MAX). */
+/** Цена правдоподобна до этого (сервер — так же, wt_markets.PX_MAX). */
 export const MARKET_PX_MAX = 1e7;
 /** Время сборки впереди часов телефона больше чем на сутки — не ответ. */
 const AHEAD_MAX = 86_400;
@@ -52,9 +53,12 @@ export function change(it: MarketItem): { v: number; unit: "bp" | "pct" } {
   return it.k === "US10Y" ? { v: (it.px - it.prev) * 100, unit: "bp" } : { v: (it.px / it.prev - 1) * 100, unit: "pct" };
 }
 
-/** Сколько знаков после запятой у цены пункта: индексы — без копеек, курсы и
- *  доходность — точнее. */
+/** Сколько знаков после запятой у цены пункта: индексы — без копеек,
+ *  доходность и доли — две, ETH/BTC — пять. */
 export function digits(it: MarketItem): number {
-  if (it.k === "US10Y") return 2;
-  return it.px >= 1000 ? 0 : it.px >= 10 ? 2 : 3;
+  if (it.k === "US10Y" || it.k === "BTCD" || it.k === "USDTD") return 2;
+  return it.px >= 1000 ? 0 : it.px >= 10 ? 2 : it.px >= 1 ? 3 : 5;
 }
+
+/** Пункт — доля (BTC.D, USDT.D) или доходность: число со знаком «%». */
+export const isPercent = (k: MarketKey): boolean => k === "US10Y" || k === "BTCD" || k === "USDTD";

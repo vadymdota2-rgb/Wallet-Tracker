@@ -27953,24 +27953,6 @@
     "ko": "금",
     "zh": "黄金"
   },
-  "mk_silver": {
-    "ru": "Серебро",
-    "en": "Silver",
-    "uk": "Срібло",
-    "de": "Silber",
-    "es": "Plata",
-    "fr": "Argent",
-    "pt": "Prata",
-    "pl": "Srebro",
-    "tr": "Gümüş",
-    "id": "Perak",
-    "vi": "Bạc",
-    "hi": "चाँदी",
-    "ar": "الفضة",
-    "ja": "銀",
-    "ko": "은",
-    "zh": "白银"
-  },
   "mk_bp": {
     "ru": "б. п.",
     "en": "bp",
@@ -27990,22 +27972,22 @@
     "zh": "基点"
   },
   "mk_src": {
-    "ru": "Hyperliquid · ЕЦБ · Deribit",
-    "en": "Hyperliquid · ECB · Deribit",
-    "uk": "Hyperliquid · ЄЦБ · Deribit",
-    "de": "Hyperliquid · EZB · Deribit",
-    "es": "Hyperliquid · BCE · Deribit",
-    "fr": "Hyperliquid · BCE · Deribit",
-    "pt": "Hyperliquid · BCE · Deribit",
-    "pl": "Hyperliquid · EBC · Deribit",
-    "tr": "Hyperliquid · AMB · Deribit",
-    "id": "Hyperliquid · ECB · Deribit",
-    "vi": "Hyperliquid · ECB · Deribit",
-    "hi": "Hyperliquid · ECB · Deribit",
-    "ar": "Hyperliquid · المركزي الأوروبي · Deribit",
-    "ja": "Hyperliquid · ECB · Deribit",
-    "ko": "Hyperliquid · ECB · Deribit",
-    "zh": "Hyperliquid · 欧洲央行 · Deribit"
+    "ru": "Hyperliquid · ЕЦБ · Deribit · CoinMarketCap",
+    "en": "Hyperliquid · ECB · Deribit · CoinMarketCap",
+    "uk": "Hyperliquid · ЄЦБ · Deribit · CoinMarketCap",
+    "de": "Hyperliquid · EZB · Deribit · CoinMarketCap",
+    "es": "Hyperliquid · BCE · Deribit · CoinMarketCap",
+    "fr": "Hyperliquid · BCE · Deribit · CoinMarketCap",
+    "pt": "Hyperliquid · BCE · Deribit · CoinMarketCap",
+    "pl": "Hyperliquid · EBC · Deribit · CoinMarketCap",
+    "tr": "Hyperliquid · AMB · Deribit · CoinMarketCap",
+    "id": "Hyperliquid · ECB · Deribit · CoinMarketCap",
+    "vi": "Hyperliquid · ECB · Deribit · CoinMarketCap",
+    "hi": "Hyperliquid · ECB · Deribit · CoinMarketCap",
+    "ar": "Hyperliquid · المركزي الأوروبي · Deribit · CoinMarketCap",
+    "ja": "Hyperliquid · ECB · Deribit · CoinMarketCap",
+    "ko": "Hyperliquid · ECB · Deribit · CoinMarketCap",
+    "zh": "Hyperliquid · 欧洲央行 · Deribit · CoinMarketCap"
   },
   "mk_dxy_hint": {
     "ru": "Индекс доллара: по формуле ICE из курсов EUR и JPY (Hyperliquid) и GBP, CAD, SEK, CHF (ЕЦБ)",
@@ -28060,5 +28042,23 @@
     "ja": "Nasdaq-100：HyperliquidのXYZ100無期限先物、24時間取引",
     "ko": "Nasdaq-100 — Hyperliquid의 XYZ100 무기한 선물, 24시간 거래",
     "zh": "纳斯达克 100：Hyperliquid 上的 XYZ100 永续合约，全天候交易"
+  },
+  "mk_usdtd_hint": {
+    "ru": "Доля USDT в капитализации рынка (CoinMarketCap). Растёт — деньги уходят из монет в стейблкоин",
+    "en": "USDT's share of total market cap (CoinMarketCap). Rising means money moving from coins into the stablecoin",
+    "uk": "Частка USDT у капіталізації ринку (CoinMarketCap). Зростає — гроші йдуть із монет у стейблкоїн",
+    "de": "Anteil von USDT an der Marktkapitalisierung (CoinMarketCap). Steigt er, fließt Geld aus Coins in den Stablecoin",
+    "es": "Cuota de USDT en la capitalización del mercado (CoinMarketCap). Si sube, el dinero pasa de las monedas a la stablecoin",
+    "fr": "Part de l'USDT dans la capitalisation du marché (CoinMarketCap). Si elle monte, l'argent quitte les cryptos pour le stablecoin",
+    "pt": "Participação do USDT na capitalização do mercado (CoinMarketCap). Se sobe, o dinheiro sai das moedas para a stablecoin",
+    "pl": "Udział USDT w kapitalizacji rynku (CoinMarketCap). Rośnie — pieniądze przechodzą z monet do stablecoina",
+    "tr": "USDT'nin piyasa değerindeki payı (CoinMarketCap). Yükselmesi, paranın coinlerden stablecoin'e geçtiğini gösterir",
+    "id": "Porsi USDT dalam kapitalisasi pasar (CoinMarketCap). Naik berarti uang berpindah dari koin ke stablecoin",
+    "vi": "Tỷ trọng USDT trong vốn hóa thị trường (CoinMarketCap). Tăng nghĩa là tiền rời coin sang stablecoin",
+    "hi": "मार्केट कैप में USDT का हिस्सा (CoinMarketCap)। बढ़ने का मतलब है पैसा कॉइन से स्टेबलकॉइन में जा रहा है",
+    "ar": "حصة USDT من القيمة السوقية (CoinMarketCap). ارتفاعها يعني انتقال المال من العملات إلى العملة المستقرة",
+    "ja": "時価総額に占めるUSDTの割合（CoinMarketCap）。上昇はコインからステーブルコインへの資金移動を示します",
+    "ko": "시가총액에서 USDT가 차지하는 비중(CoinMarketCap). 오르면 자금이 코인에서 스테이블코인으로 이동 중",
+    "zh": "USDT 占市场总市值的比例（CoinMarketCap）。上升意味着资金从币种流向稳定币"
   }
 }

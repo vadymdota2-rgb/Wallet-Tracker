@@ -1966,13 +1966,15 @@ say("карта ликвидаций: фандинг — по ставке св�
     'pts = (fund or {}).get(ex) or (fund or {}).get("*")' in _lmpy and "def clean_funds(" in _lmpy
     and "return funds, not funds and sym in _st.fund_jobs" in _lmpy and "s not in _st.fund_jobs" in _lmpy
     and "_fund_hist(sym, wt_liqmap.FUND_HOLD // 86400 + 1, series=True)" in api and 'LIQ_FUND_NAMES = {"XT": "XT.com"}' in api)
-say("меню: сверху — рынки (S&P 500, Nasdaq-100, DXY по формуле ICE, золото, серебро, WTI, Brent, US 10Y, DVOL), нет данных — прежний заголовок",
-    "def markets_data() -> dict:" in api and '"markets",' in api.split("PAID_PATHS = frozenset(")[1][:1200]
-    and 'if path in ("/markets", "/api/markets"):' in api and "DXY_K = 50.14348112" in api
+say("меню: сверху — рынки для криптотрейдера (S&P 500, Nasdaq 100, DXY · золото, US 10Y, DVOL · BTC.D, USDT.D, ETH/BTC) — модуль wt_markets, мелко; нет данных — прежний заголовок",
+    os.path.exists(f"{APP}/wt_markets.py") and 'KEYS = ("SP500", "NDX", "DXY", "GOLD", "US10Y", "DVOL", "BTCD", "USDTD", "ETHBTC")' in read(f"{APP}/wt_markets.py")
+    and "markets_data = wt_markets.markets_data" in api and '"markets",' in api.split("PAID_PATHS = frozenset(")[1][:1200]
+    and 'if path in ("/markets", "/api/markets"):' in api
     and '<MarketsStrip fallback={<p className="drawer-ttl">' in read(f"{APP}/src/App.tsx")
-    and "export function validMarkets(" in read(f"{APP}/src/lib/markets.ts")
+    and 'export const MARKET_KEYS = ["SP500", "NDX", "DXY", "GOLD", "US10Y", "DVOL", "BTCD", "USDTD", "ETHBTC"]' in read(f"{APP}/src/lib/markets.ts")
     and os.path.exists(f"{APP}/tests/test_markets.py") and os.path.exists(f"{APP}/tests/e2e/markets.e2e.test.ts")
-    and all(k in _i18n for k in ("mk_title", "mk_gold", "mk_silver", "mk_bp", "mk_src", "mk_dxy_hint", "mk_dvol_hint")))
+    and "wt_markets.py tests/test_markets.py" in read(f"{APP}/.github/workflows/tests.yml")
+    and all(k in _i18n for k in ("mk_title", "mk_gold", "mk_bp", "mk_src", "mk_dxy_hint", "mk_dvol_hint", "mk_usdtd_hint")))
 _ci = read(f"{APP}/.github/workflows/tests.yml")
 say("CI: мутации карты ликвидаций — своим заданием с лимитом 75 минут (вместе со «Страхом и жадностью» не укладывались в 45)",
     "  mutation-liqmap:\n    runs-on: ubuntu-latest\n    timeout-minutes: 75" in _ci
