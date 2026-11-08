@@ -1,10 +1,9 @@
 /*
- * Рынки сверху бокового меню — окна TradingView (node --test, Playwright,
- * собранное приложение из html/): шесть окон сеткой 2 × 3, в песочнице,
- * адрес — без данных входа Telegram, под сеткой ссылка на TradingView и
- * «ⓘ» с пояснением; влезает в 320 точек; к нашему серверу за рынками не
- * ходит. Сеть наружу в тестах закрыта — окна пустые; со снимком (MK_SHOT)
- * TradingView настоящий.
+ * Рынки для криптотрейдера сверху бокового меню (node --test, Playwright,
+ * собранное приложение из html/): сетка 3 × 3 вместо заголовка, подписи и
+ * изменения, мелко (не крупнее пунктов меню), влезает в 320 точек, нет
+ * данных — прежний заголовок «Wallet Tracker»; источники и оговорки о
+ * товарных знаках видны на телефоне (касанием «ⓘ»). Сетка — три ряда по два.
  */
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
@@ -21,6 +20,12 @@ const TYPES: Record<string, string> = {
 };
 const I18N = JSON.parse(await readFile(new URL("../../tools/i18n.json", import.meta.url), "utf8")) as Record<string, Record<string, string>>;
 const T = 1_794_100_000;
+const MARKETS = {
+  ok: true, at: T - 20, items: [
+    { k: "SP500", px: 7373.1, prev: 7392.9 }, { k: "XYZ100", px: 26925, prev: 26996 }, { k: "DXY", px: 102.115, prev: 101.92 },
+    { k: "GOLD", px: 4066.2, prev: 4079.9 }, { k: "US10Y", px: 4.875, prev: 4.8777 }, { k: "OIL", px: 90.205, prev: 89.617 },
+  ],
+};
 const sp = (s: string | null) => (s ?? "").replace(/[\s  ]+/g, " ").trim();
 
 let server: Server;
@@ -49,22 +54,20 @@ after(async () => {
   await new Promise((ok) => server?.close(ok));
 });
 
-interface Opts { lang?: string; width?: number; scale?: number; live?: boolean }
+interface Opts { lang?: string; width?: number; reply?: unknown; scale?: number }
 
-async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; errors: string[]; asked: string[] }> {
+async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; errors: string[] }> {
   const lang = o.lang ?? "ru";
   const ctx = await browser.newContext({ viewport: { width: o.width ?? 360, height: 780 }, deviceScaleFactor: o.scale ?? 1, timezoneId: "UTC" });
   const page = await ctx.newPage();
   const errors: string[] = [];
-  const asked: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
-  page.on("request", (r) => asked.push(r.url()));
-  if (!o.live) await page.clock.setFixedTime(T * 1000);
-  await ctx.route((url) => !url.href.startsWith(base) && !(o.live && url.hostname.endsWith("tradingview-widget.com")), (r) => r.abort());
+  await page.clock.setFixedTime(T * 1000);
+  await ctx.route((url) => !url.href.startsWith(base), (r) => r.abort());
   await ctx.route(`${base}/api/**`, (r) => r.fulfill({ contentType: "application/json", body: '{"ok":false}' }));
   await ctx.route(`${base}/api/bootstrap`, (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, me: { plan: "premium" } }) }));
+  await ctx.route(`${base}/api/markets`, (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify(o.reply ?? MARKETS) }));
   await page.addInitScript((a: { lang: string }) => {
-    if (window !== window.top) return; // окна TradingView — не наше приложение
     if (sessionStorage.getItem("e2e")) return;
     sessionStorage.setItem("e2e", "1");
     localStorage.clear();
@@ -74,73 +77,70 @@ async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; er
   await page.evaluate(() => document.fonts.ready);
   await page.addStyleTag({ content: "#sp{display:none!important}" });
   await page.locator(".burger").click();
-  return { ctx, page, errors, asked };
+  return { ctx, page, errors };
 }
 
-const WIDGET = "https://www.tradingview-widget.com/embed-widget/tickers/";
-const hash = (src: string) => JSON.parse(decodeURIComponent(src.split("#")[1]!)) as { symbols: { proName: string; title: string }[]; "page-uri": string };
-
-test("сверху меню — шесть окон TradingView, сетка 2 × 3", async () => {
-  const { ctx, page, errors, asked } = await open();
-  const frames = page.locator(".drawer .mk-tv");
-  await frames.first().waitFor();
-  assert.equal(await frames.count(), 6);
-  const srcs = await frames.evaluateAll((els) => els.map((el) => el.getAttribute("src") ?? ""));
-  for (const src of srcs) assert.ok(src.startsWith(`${WIDGET}?locale=ru#`), src);
-  assert.deepEqual(srcs.map((x) => hash(x).symbols),
-    [["CAPITALCOM:US500", "US 500"], ["CAPITALCOM:US100", "US 100"], ["CAPITALCOM:DXY", "DXY"], ["TVC:GOLD", "Золото"],
-      ["FRED:DGS10", "US 10Y"], ["DERIBIT:DVOL", "DVOL"]].map(([proName, title]) => [{ proName, title }]));
-  // Данные входа Telegram (в адресе после «#») TradingView не уходят.
-  for (const src of srcs) {
-    assert.ok(!decodeURIComponent(src).includes("tgWebAppData"), src);
-    assert.equal(hash(src)["page-uri"], new URL(base).host + "/");
-  }
-  // Песочница и заголовки окон.
-  for (const f of await frames.all()) {
-    assert.equal(await f.getAttribute("sandbox"), "allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox");
-    assert.match((await f.getAttribute("title")) ?? "", / — TradingView$/);
-  }
-  // Сетка: два равных столбца, три ряда; пункты меню — ниже. Окно — своих
-  // 172 точек, уменьшено ровно до ячейки.
-  const boxes = await page.locator(".drawer .mk-cell").evaluateAll((els) => els.map((el) => { const r = el.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y), Math.round(r.width)]; }));
-  const fit = await frames.evaluateAll((els) => els.map((el) => [(el as HTMLElement).offsetWidth, Math.round(el.getBoundingClientRect().width), Math.round(el.parentElement!.getBoundingClientRect().width)]));
-  for (const [w, seen, cell] of fit) {
-    assert.equal(w, 172);
-    assert.ok(Math.abs(seen! - cell!) <= 1, String(fit));
-  }
-  assert.equal(new Set(boxes.map((b) => b[0])).size, 2, String(boxes));
-  assert.equal(new Set(boxes.map((b) => b[1])).size, 3, String(boxes));
-  assert.equal(new Set(boxes.map((b) => b[2])).size, 1, String(boxes));
+test("сверху меню — шесть рынков вместо заголовка, три ряда по два", async () => {
+  const { ctx, page, errors } = await open();
+  const cells = page.locator(".drawer .mk-cell");
+  await cells.first().waitFor();
+  assert.equal(await cells.count(), 6);
+  assert.equal(await page.locator(".drawer .drawer-ttl").count(), 0);
+  const text = (await cells.evaluateAll((els) => els.map((el) => [...el.children].map((c) => c.textContent).join(" ")))).map(sp);
+  assert.match(text[0]!, /^S&P 500 7 373 −0,27%$/);
+  assert.match(text[3]!, /^Золото 4 066 −0,34%$/);
+  assert.match(text[1]!, /^XYZ100 26 925 −0,26%$/);
+  assert.match(text[4]!, /^US 10Y 4,88% −0,3 б\. п\.$/);
+  assert.match(text[5]!, /^Нефть WTI 90,2[01] \+0,66%$/);
+  assert.equal(await page.locator('.mk-cell[data-k="DXY"] .mk-ch.up').count(), 1);
+  assert.equal(await page.locator('.mk-cell[data-k="SP500"] .mk-ch.dn').count(), 1);
+  assert.equal(sp(await page.locator(".mk-src").textContent()), `${I18N["mk_src"]!["ru"]}ⓘ`);
+  assert.equal(await page.locator(".mk-src a").count(), 0);
+  assert.ok((await page.locator('.mk-cell[data-k="DXY"]').getAttribute("title"))?.includes("ICE"));
+  assert.ok(!(await page.locator(".drawer").textContent())?.includes("Deribit"));
+  // Оговорки — касанием «ⓘ»: товарные знаки S&P, XYZ100 — не Nasdaq-100, DXY — наш расчёт.
+  assert.equal(await page.locator(".mk-notes").count(), 0);
+  await page.locator(".mk-i").click();
+  assert.equal(await page.locator(".mk-i").getAttribute("aria-expanded"), "true");
+  const notes = (await page.locator(".mk-notes li").allTextContents()).map(sp);
+  assert.deepEqual(notes, ["mk_sp_hint", "mk_xyz_hint", "mk_dxy_hint", "mk_10y_hint", "mk_oil_hint"].map((k) => sp(I18N[k]!["ru"]!)));
+  await page.locator(".mk-i").click();
+  assert.equal(await page.locator(".mk-notes").count(), 0);
+  // Мелко: цифры рынков меньше пунктов меню, сетка — ровные два столбца, три ряда.
+  const fs = await page.evaluate(() => [".mk-px", ".drawer-row"].map((q) => parseFloat(getComputedStyle(document.querySelector(q)!).fontSize)));
+  assert.ok(fs[0]! < fs[1]!, String(fs));
+  const xs = await cells.evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().width)));
+  assert.equal(new Set(xs).size, 1, String(xs));
+  const pos = await cells.evaluateAll((els) => els.map((el) => { const r = el.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y)]; }));
+  assert.equal(new Set(pos.map((p) => p[0])).size, 2, String(pos));
+  assert.equal(new Set(pos.map((p) => p[1])).size, 3, String(pos));
+  // Пункты меню на месте, под рынками.
   const row = await page.locator(".drawer-row").first().boundingBox();
   const grid = await page.locator(".mk-grid").boundingBox();
   assert.ok(row && grid && row.y > grid.y + grid.height);
-  // Ссылка на TradingView — как требуют их условия; «ⓘ» — пояснение.
-  const link = page.locator(".mk-src a");
-  assert.equal(sp(await link.textContent()), I18N["mk_tv"]!["ru"]);
-  assert.match((await link.getAttribute("href")) ?? "", /^https:\/\/www\.tradingview\.com\/\?utm_source=/);
-  assert.equal(await page.locator(".mk-notes").count(), 0);
-  await page.locator(".mk-i").click();
-  assert.equal(sp(await page.locator(".mk-notes").textContent()), sp(I18N["mk_tv_note"]!["ru"]!));
-  await page.locator(".mk-i").click();
-  assert.equal(await page.locator(".mk-notes").count(), 0);
-  // К нашему серверу за рынками не ходит; заголовка «Wallet Tracker» нет.
-  assert.ok(!asked.some((u) => u.includes("/api/markets")), String(asked));
-  assert.equal(await page.locator(".drawer .drawer-ttl").count(), 0);
   assert.deepEqual(errors, []);
   await ctx.close();
 });
 
 test("влезает в 320 точек на всех языках", async () => {
-  for (const lang of ["ru", "en", "de", "ar", "hi", "ja", "uk"]) {
+  for (const lang of ["ru", "en", "de", "ar", "hi", "ja"]) {
     const { ctx, page } = await open({ lang, width: 320 });
-    await page.locator(".drawer .mk-tv").first().waitFor();
-    // Окно не уже своих 172 точек (уже TradingView обрезает цифры), а на
-    // экране — по ячейке, не мельче 0,55 (подписи ещё читаются).
-    const k = await page.locator(".drawer .mk-tv").evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width / (el as HTMLElement).offsetWidth));
-    assert.ok(k.every((x) => x >= 0.55 && x <= 1), `${lang} ${k}`);
-    const over = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".mk, .mk-src")]
-      .filter((el) => el.scrollWidth > el.clientWidth + 1).map((el) => el.className));
+    await page.locator(".drawer .mk-cell").first().waitFor();
+    const over = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".mk-px, .mk-ch")]
+      .filter((el) => el.scrollWidth > el.clientWidth + 1).map((el) => el.textContent));
     assert.deepEqual(over, [], lang);
+    await ctx.close();
+  }
+});
+
+test("нет данных — прежний заголовок меню", async () => {
+  for (const reply of [{ ok: false, error: "no_data" }, { ok: true, at: T, items: [{ k: "VIX", px: 20, prev: 20 }] }, "мусор"]) {
+    const { ctx, page, errors } = await open({ reply });
+    await page.locator(".drawer-row").first().waitFor();
+    await page.waitForTimeout(300);
+    assert.equal(await page.locator(".drawer .mk").count(), 0);
+    assert.equal(sp(await page.locator(".drawer .drawer-ttl").textContent()), "Wallet Tracker");
+    assert.deepEqual(errors, []);
     await ctx.close();
   }
 });
@@ -148,10 +148,10 @@ test("влезает в 320 точек на всех языках", async () => 
 test("снимок меню", async () => {
   const shot = process.env["MK_SHOT"];
   if (!shot) return;
-  const { ctx, page } = await open({ scale: 2, live: true });
-  await page.locator(".drawer .mk-tv").first().waitFor();
+  const { ctx, page } = await open({ scale: 2 });
+  await page.locator(".drawer .mk-cell").first().waitFor();
   if (process.env["MK_NOTES"]) await page.locator(".mk-i").click();
-  await page.waitForTimeout(9000); // TradingView грузит котировки
+  await page.waitForTimeout(800); // меню выезжает с анимацией
   await page.screenshot({ path: shot });
   await ctx.close();
 });
