@@ -17,8 +17,8 @@
     когда Hyperliquid их не дал. Своих запросов нет — ответ ticker/24hr, который
     модуль фандинга и так берёт у Aster раз в 10 минут; старше ASTER_AGE — мимо;
   - Hyperliquid, бессрочные рынки HIP-3 (открытые данные сети): площадка
-    trade.xyz («xyz») — S&P 500, XYZ100, золото, нефть WTI (CL), курсы EUR
-    и JPY; площадка Paragon («para») — доходность 10Y; площадка Markets by
+    trade.xyz («xyz») — S&P 500, XYZ100, золото, нефть WTI (CL), курсы EUR,
+    JPY и GBP; площадка Paragon («para») — доходность 10Y; площадка Markets by
     Kinetiq («mkts») — BVIV, подразумеваемая волатильность BTC на 30 дней
     по индексу Volmex («VIX крипты»; рынок открыт вместе с Volmex). Торгуются
     круглые сутки. Рынки, снятые с торгов, не берутся: их цена застыла (DXY
@@ -59,7 +59,8 @@
 
 Проверки: цена конечная, больше нуля и правдоподобная; за сутки не
 меняется больше чем вдвое (MOVE_MAX) — иначе сбой источника, пункта нет;
-у DXY и доходности — свои рамки (RANGE).
+у DXY, доходности, BVIV и долей — свои рамки (RANGE). Неправдоподобная цена
+Hyperliquid уступает запасу Aster (золото, нефть).
 
 Кэш: ответ живёт TTL; постарше — отдаётся сразу, а свежий собирается в фоне
 одним потоком; ответа нет вовсе — запрос ждёт сборку не дольше COLD_WAIT.
@@ -84,8 +85,8 @@ Source = Callable[[], object]
 # Пункты — в порядке экрана.
 KEYS = ("SP500", "XYZ100", "DXY", "GOLD", "OIL", "US10Y", "BVIV", "BTCD", "USDTD")
 # Рынки Hyperliquid: пункт → (площадка, имя рынка без приставки).
-HL = {"SP500": ("xyz", "SP500"), "XYZ100": ("xyz", "XYZ100"), "GOLD": ("xyz", "GOLD"), "US10Y": ("para", "10Y"),
-      "OIL": ("xyz", "CL"), "BVIV": ("mkts", "BVIV")}
+HL = {"SP500": ("xyz", "SP500"), "XYZ100": ("xyz", "XYZ100"), "GOLD": ("xyz", "GOLD"), "OIL": ("xyz", "CL"),
+      "US10Y": ("para", "10Y"), "BVIV": ("mkts", "BVIV")}
 DEXES = ("xyz", "para", "mkts")  # площадки Hyperliquid
 # Запасной источник (Aster): пункт → рынок; цена — последняя, вчера — открытие
 # скользящих суток (ticker/24hr). Ответ старше ASTER_AGE не берём.
@@ -97,16 +98,19 @@ DXY_K = 50.14348112
 DXY_W = (("EUR", -0.576), ("JPY", 0.136), ("GBP", -0.119), ("CAD", 0.091), ("SEK", 0.042), ("CHF", 0.036))
 PX_MAX = 1e7  # правдоподобная цена пункта
 MOVE_MAX = 2.0  # за сутки цена не меняется больше чем вдвое (в любую сторону)
-# Свои рамки: DXY за полвека не выходил из 70…165, доходность 10Y — из 0…16 %.
+# Свои рамки (с запасом): DXY за полвека не выходил из 70…165, доходность
+# 10Y — из 0…16 %; BVIV (годовая волатильность, %) обычно 30…150; доли — проценты.
 RANGE = {"DXY": (50.0, 250.0), "US10Y": (0.01, 30.0), "BVIV": (1.0, 500.0), "BTCD": (0.01, 100.0),
          "USDTD": (0.01, 100.0)}
 FX_GAP = 0.03  # курс Hyperliquid против ЕЦБ: расхождение больше — DXY нет
 FX_HL = ("EUR", "JPY", "GBP")  # валюты DXY с Hyperliquid; EUR и GBP — долларов за единицу
+FX_DAYS = 5  # часовые свечи валют — за столько суток (прошлое закрытие — не дальше трёх)
+ECB_DAYS = 10  # курсы ЕЦБ — за столько дней (праздники и выходные — без фиксации)
 HOUR = 3600
 CANDLE_AGE = 3 * HOUR  # свеча закрытия старше этого — закрытия нет
-TTL = 60.0
+TTL = 60.0  # ответ свежий — не пересобирается
 STALE_MAX = 1800.0  # старше — не отдаётся
-COLD_WAIT = 6.0
+COLD_WAIT = 6.0  # ответа нет вовсе — запрос ждёт сборку не дольше
 FAIL_WAIT = 30.0  # сборка ничего не дала — следующая не раньше
 SOURCE_WAIT = 30.0  # все источники вместе ждём не дольше
 # Источники из памяти: свежий ответ живёт SLOW[имя][0] — сеть не нужна;
@@ -125,8 +129,8 @@ SLOW = {"xyz": (600.0, STALE_MAX), "para": (600.0, STALE_MAX), "mkts": (600.0, S
         "ecb": (3600.0, 4 * 86400.0), "fx": (600.0, 4 * 86400.0)}
 # Пределы разбора: ответ больше — хвост не смотрим (процессор не жжём).
 UNI_MAX = 5000  # рынков на площадке Hyperliquid
-CANDLES_MAX = 1000  # часовых свечей на валюту (берём пять суток — 120)
-DAYS_MAX = 60  # дней ЕЦБ (берём десять)
+CANDLES_MAX = 1000  # часовых свечей на валюту (берём FX_DAYS суток — 120)
+DAYS_MAX = 60  # дней ЕЦБ (берём ECB_DAYS)
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
@@ -303,17 +307,16 @@ def compute(parts: dict[str, object], at: int) -> dict[str, Json]:
     JPY, GBP (Hyperliquid), ecb, mcap (доминация CoinMarketCap), aster (запас
     золота и нефти)."""
     dex_mk = {d: hl_markets(parts.get(d)) for d in DEXES}
-    xyz = dex_mk["xyz"]
+    # Кандидаты по старшинству: Aster — после Hyperliquid, то есть запас.
+    cand: list[tuple[str, Pair | None]] = [(key, dex_mk[dex].get(name)) for key, (dex, name) in HL.items()]
+    cand.append(("DXY", fx_dxy(dex_mk["xyz"], parts.get("fx"), ecb_rates(parts.get("ecb")), at)))
+    cand += aster_markets(parts.get("aster"), at).items()
+    cand += dominance(parts.get("mcap")).items()
     got: dict[str, Pair] = {}
-    for key, (dex, name) in HL.items():
-        if p := dex_mk[dex].get(name):
+    for key, p in cand:
+        if p and key not in got and sane(key, p):  # первый правдоподобный
             got[key] = p
-    if p := fx_dxy(xyz, parts.get("fx"), ecb_rates(parts.get("ecb")), at):
-        got["DXY"] = p
-    for key, p in aster_markets(parts.get("aster"), at).items():
-        got.setdefault(key, p)  # Aster — только если Hyperliquid не дал
-    got.update(dominance(parts.get("mcap")))
-    items = [{"k": k, "px": got[k][0], "prev": got[k][1]} for k in KEYS if k in got and sane(k, got[k])]
+    items = [{"k": k, "px": got[k][0], "prev": got[k][1]} for k in KEYS if k in got]
     return {"ok": True, "at": at, "items": items} if items else {"ok": False, "error": "no_data"}
 
 
@@ -347,8 +350,14 @@ def _good(name: str, raw: object) -> bool:
     if name == "ecb":
         return bool(ecb_rates(raw))
     if name == "fx":
-        return isinstance(raw, dict) and any(isinstance(v, list) and v for v in raw.values())
+        return isinstance(raw, dict) and all(_candles(raw.get(c)) for c in FX_HL)
     return bool(hl_markets(raw))
+
+
+def _candles(raw: object) -> bool:
+    """Есть хоть одна годная часовая свеча (время и цена закрытия)."""
+    return isinstance(raw, list) and any(
+        isinstance(c, dict) and _num(c.get("t")) > 0 and 0 < _num(c.get("c")) < PX_MAX for c in raw[-CANDLES_MAX:])
 
 
 def fx_covers(raw: object, t: int) -> bool:
@@ -360,11 +369,9 @@ def fx_covers(raw: object, t: int) -> bool:
     return all(candle_close(raw.get(c), w) > 0 for c in FX_HL for w in ((close,) if is_open else (close, prev)))
 
 
-def _fresh(name: str, hit: tuple[float, object] | None, t0: float) -> bool:
+def _fresh(name: str, hit: tuple[float, object], t0: float) -> bool:
     """Ответ источника из памяти ещё годится — сеть не нужна (в памяти — только
     источники SLOW)."""
-    if not hit:
-        return False
     return t0 - hit[0] < SLOW[name][0] or (name == "fx" and fx_covers(hit[1], _now()))
 
 
@@ -379,7 +386,7 @@ def build() -> dict[str, Json]:
     ask = {}
     for name, fn in _st.sources.items():
         hit = slow.get(name)
-        if _fresh(name, hit, t0) and hit:
+        if hit and _fresh(name, hit, t0):
             parts[name] = hit[1]
         else:
             ask[name] = fn
@@ -398,9 +405,14 @@ def build() -> dict[str, Json]:
         with got:
             parts[name] = v
 
-    threads = [threading.Thread(target=one, args=item, daemon=True) for item in ask.items()]
-    for th in threads:
-        th.start()
+    threads = []
+    for item in ask.items():
+        th = threading.Thread(target=one, args=item, daemon=True)
+        try:
+            th.start()
+        except RuntimeError:  # потоков не хватило — источник без ответа
+            continue
+        threads.append(th)
     end = time.monotonic() + SOURCE_WAIT
     for th in threads:
         th.join(max(0.0, end - time.monotonic()))

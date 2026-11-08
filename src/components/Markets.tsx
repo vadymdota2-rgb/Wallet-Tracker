@@ -16,10 +16,10 @@
  * скелет сетки (меню не прыгает); нет данных совсем (без подписки, сервер
  * молчит, ответ битый или старый) — прежний заголовок меню.
  * Открытое меню обновляет рынки раз в минуту, свёрнутое приложение — не
- * трогает сеть, а вернулись — сразу. Цена изменилась — ячейка коротко
+ * трогает сеть, а вернулись — сразу (если прошлый ответ старше минуты). Цена изменилась — ячейка коротко
  * вспыхивает цветом (без движения, если система просит меньше анимации).
  */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
 import type { DictKey, LangCode } from "../i18n/types";
@@ -48,9 +48,11 @@ const HINT: Partial<Record<MarketKey, DictKey>> = {
   BVIV: "mk_bviv_hint", USDTD: "mk_usdtd_hint",
 };
 
-interface CellProps { it: MarketItem; lang: LangCode; on: boolean; flash: "" | "up" | "dn"; pick: (k: MarketKey) => void }
+interface CellProps {
+  it: MarketItem; lang: LangCode; on: boolean; flash: "" | "up" | "dn"; note: string; pick: (k: MarketKey) => void;
+}
 
-function Cell({ it, lang, on, flash, pick }: CellProps) {
+function Cell({ it, lang, on, flash, note, pick }: CellProps) {
   const l = LABEL[it.k];
   const name = isKey(l) ? t(lang, l) : l;
   const ch = change(it);
@@ -72,7 +74,7 @@ function Cell({ it, lang, on, flash, pick }: CellProps) {
   const cls = `mk-cell${flash ? ` mk-flash-${flash}` : ""}`;
   if (!hint) return <div className={cls} data-k={it.k}>{body}</div>;
   return (
-    <button type="button" className={cls} data-k={it.k} title={t(lang, hint)} aria-expanded={on} aria-controls="mk-note"
+    <button type="button" className={cls} data-k={it.k} title={t(lang, hint)} aria-expanded={on} aria-controls={note}
       onClick={() => pick(it.k)}>{body}</button>
   );
 }
@@ -105,12 +107,13 @@ function Skeleton({ lang }: { lang: LangCode }) {
 export function MarketsStrip({ fallback }: { fallback: ReactNode }) {
   const lang = useApp((s) => s.lang);
   const [m, setM] = useState<MarketsReply | null>(() => peekMarkets() ?? null);
-  const [waiting, setWaiting] = useState(() => !peekMarkets());
+  const [waiting, setWaiting] = useState(() => m === null);
   const [open, setOpen] = useState(false);
   const [sel, setSel] = useState<MarketKey | null>(null);
   const [now, setNow] = useState(() => Date.now() / 1000);
   const [flash, setFlash] = useState<Partial<Record<MarketKey, "up" | "dn">>>({});
   const last = useRef<MarketsReply | null>(m);
+  const noteId = useId();
   useEffect(() => {
     let alive = true;
     let timer = 0;
@@ -135,17 +138,21 @@ export function MarketsStrip({ fallback }: { fallback: ReactNode }) {
       }
     };
     void fetchMarkets().then(put);
-    // Свёрнутое приложение сеть не трогает; вернулись — сразу свежий ответ.
+    // Свёрнутое приложение сеть не трогает; вернулись — ответ из памяти, если
+    // он моложе минуты, иначе свежий.
     const tick = () => {
       if (!document.hidden) void refreshMarkets().then(put);
     };
+    const back = () => {
+      if (!document.hidden) void fetchMarkets().then(put);
+    };
     const id = window.setInterval(tick, EVERY);
-    document.addEventListener("visibilitychange", tick);
+    document.addEventListener("visibilitychange", back);
     return () => {
       alive = false;
       window.clearInterval(id);
       window.clearTimeout(timer);
-      document.removeEventListener("visibilitychange", tick);
+      document.removeEventListener("visibilitychange", back);
     };
   }, []);
   if (!m) return waiting ? <Skeleton lang={lang} /> : <>{fallback}</>;
@@ -154,7 +161,8 @@ export function MarketsStrip({ fallback }: { fallback: ReactNode }) {
     return h ? [h] : [];
   });
   const age = ageMin(m.at, now);
-  const note = sel && !open ? HINT[sel] : undefined;
+  // Пояснение выбранной ячейки — пока она на экране и не открыт список всех.
+  const note = sel && !open && m.items.some((x) => x.k === sel) ? HINT[sel] : undefined;
   return (
     <section className="mk" aria-label={t(lang, "mk_title")}>
       <div className="mk-head">
@@ -165,11 +173,11 @@ export function MarketsStrip({ fallback }: { fallback: ReactNode }) {
       </div>
       <div className="mk-grid">
         {m.items.map((it) => (
-          <Cell key={it.k} it={it} lang={lang} on={sel === it.k && !open} flash={flash[it.k] ?? ""}
+          <Cell key={it.k} it={it} lang={lang} on={sel === it.k && !open} flash={flash[it.k] ?? ""} note={noteId}
             pick={(k) => setSel((s) => (s === k ? null : k))} />
         ))}
       </div>
-      {note ? <p id="mk-note" className="mk-note" role="note">{t(lang, note)}</p> : null}
+      {note ? <p id={noteId} className="mk-note" role="note">{t(lang, note)}</p> : null}
       <p className="mk-src">
         <Sources lang={lang} tail={notes.length ? (
           <button type="button" className="mk-i" aria-expanded={open} aria-label={t(lang, "mk_about")}

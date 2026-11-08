@@ -15208,15 +15208,25 @@ def calendar_data() -> dict:
 # Модуль сам в сеть не ходит: ответы источников отдаёт ему сервер. Deribit
 # здесь нет: их данные (и индекс DVOL) — только для личного пользования.
 def _mkt_fx():
+    """Часовые свечи валют DXY с trade.xyz — ради закрытий валютного дня."""
     t = now()
+    start = (t - wt_markets.FX_DAYS * 86400) * 1000
     return {c: hl_post({"type": "candleSnapshot", "req": {"coin": f"xyz:{c}", "interval": "1h",
-                                                          "startTime": (t - 5 * 86400) * 1000, "endTime": t * 1000}}, 15)
+                                                          "startTime": start, "endTime": t * 1000}}, 15)
             for c in wt_markets.FX_HL}
 
 
 def _mkt_ecb():
-    start = time.strftime("%Y-%m-%d", time.gmtime(now() - 10 * 86400))
-    return get_json(f"https://api.frankfurter.dev/v1/{start}..?base=USD&symbols=EUR,JPY,GBP,CAD,SEK,CHF", 15)
+    """Курсы ЕЦБ (Frankfurter, база USD) за последние дни — по валютам DXY."""
+    start = time.strftime("%Y-%m-%d", time.gmtime(now() - wt_markets.ECB_DAYS * 86400))
+    cur = ",".join(c for c, _ in wt_markets.DXY_W)
+    return get_json(f"https://api.frankfurter.dev/v1/{start}..?base=USD&symbols={cur}", 15)
+
+
+def _mkt_aster():
+    """Запас золота и нефти — последний ответ Aster модуля фандинга, без запроса."""
+    tick = _ASTER_TICK  # один раз: фандинг может заменить его в другом потоке
+    return {"at": tick[0], "rows": tick[1]} if tick else None
 
 
 wt_markets.set_sources({
@@ -15226,7 +15236,7 @@ wt_markets.set_sources({
     "fx": _mkt_fx,
     "ecb": _mkt_ecb,
     "mcap": lambda: wt_mcap.mcap_data(0),
-    "aster": lambda: {"at": _ASTER_TICK[0], "rows": _ASTER_TICK[1]} if _ASTER_TICK else None,
+    "aster": _mkt_aster,
 })
 markets_data = wt_markets.markets_data
 

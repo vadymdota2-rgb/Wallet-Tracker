@@ -336,10 +336,16 @@ test("пока ответа нет — скелет сетки, не прыжо�
   await ctx.close();
 });
 
-test("обновление: изменившаяся цена коротко вспыхивает своим цветом; вернулись в приложение — сразу свежие", async () => {
+test("обновление: изменившаяся цена коротко вспыхивает своим цветом; вернулись в приложение — свежие, если прошла минута", async () => {
   const next = { ...MARKETS, items: MARKETS.items.map((x) => (x.k === "SP500" ? { ...x, px: 7400 } : x.k === "GOLD" ? { ...x, px: 4000 } : x)) };
   const { ctx, page } = await open({ replies: [MARKETS, next] });
   await page.locator(".drawer .mk-cell").first().waitFor();
+  // Вернулись быстрее минуты — ответ из памяти, сеть не трогаем.
+  await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+  await page.waitForTimeout(300);
+  assert.match(sp(await page.locator('.mk-cell[data-k="SP500"] .mk-px').textContent()), /^7 373$/);
+  // Прошла минута — сразу свежий ответ.
+  await page.clock.setFixedTime((T + 61) * 1000);
   await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
   await page.locator('.mk-cell[data-k="SP500"].mk-flash-up').waitFor();
   assert.equal(await page.locator('.mk-cell[data-k="GOLD"].mk-flash-dn').count(), 1);

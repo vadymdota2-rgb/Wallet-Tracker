@@ -90,7 +90,7 @@ button.mk-cell:focus-visible { outline: 2px solid var(--glow); outline-offset: 1
 .mk-nw { white-space: nowrap; }
 /* «ⓘ»: все пояснения сразу; кнопка мелкая, но место под палец — с запасом. */
 .mk-i {
-  margin-inline-start: 4px; padding: 6px 6px; margin-block: -6px;
+  margin-inline-start: 4px; padding: 6px; margin-block: -6px;
   background: none; border: 0; color: inherit; font: inherit; font-size: 10px; line-height: 1; cursor: pointer;
 }
 .mk-notes {

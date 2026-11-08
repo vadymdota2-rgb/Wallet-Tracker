@@ -94,7 +94,11 @@ class PolicyTest(unittest.TestCase):
         self.assertIn("for c in wt_markets.FX_HL}", block)
         # Aster — без своих запросов: только память модуля фандинга.
         self.assertNotIn("asterdex", block)
-        self.assertIn('"aster": lambda: {"at": _ASTER_TICK[0], "rows": _ASTER_TICK[1]} if _ASTER_TICK else None,', block)
+        self.assertIn('    "aster": _mkt_aster,\n', block)
+        aster = block.split("def _mkt_aster():")[1].split("wt_markets.set_sources")[0]
+        for bad in ("hl_post(", "get_json(", "http"):
+            self.assertNotIn(bad, aster, bad)
+        self.assertIn("    tick = _ASTER_TICK  #", aster)
         src = read("whale_api.py")
         self.assertIn("        _ASTER_TICK = (now(), tick)", src.split("def fund_aster() -> list:")[1].split("\ndef ")[0])
 

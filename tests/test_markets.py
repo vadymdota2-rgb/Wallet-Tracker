@@ -107,6 +107,13 @@ class ComputeTest(unittest.TestCase):
         # Снятое с торгов на Hyperliquid — тоже с Aster.
         xyz = hl(XYZ_M, delisted=("DXY", "VIX", "GOLD"))
         self.assertEqual(items(mk.compute({**PARTS, "xyz": xyz}, NOW))["GOLD"], (4072.07, 4081.61))
+        # Неправдоподобная цена Hyperliquid (втрое за сутки) уступает Aster;
+        # неправдоподобный Aster — не замена, пункта нет.
+        xyz = hl({**XYZ_M, "xyz:GOLD": (12000, 4000), "xyz:CL": (90.2, 30.1)}, delisted=("DXY", "VIX"))
+        got = items(mk.compute({**PARTS, "xyz": xyz}, NOW))
+        self.assertEqual((got["GOLD"], got["OIL"]), ((4072.07, 4081.61), (90.62, 90.02)))
+        wild = {**ASTER, "rows": [{"symbol": "XAUUSDT", "lastPrice": "12000", "openPrice": "4000"}]}
+        self.assertNotIn("GOLD", items(mk.compute({**PARTS, "xyz": xyz, "aster": wild}, NOW)))
         # Ответ Aster старше получаса, из будущего, кривой — мимо.
         for bad in ({**ASTER, "at": NOW - mk.ASTER_AGE - 1}, {**ASTER, "at": NOW + 3600}, {**ASTER, "rows": "x"},
                     {"rows": ASTER["rows"]}, [ASTER], None, "x"):
@@ -208,7 +215,7 @@ class ComputeTest(unittest.TestCase):
         para = hl({"para:10Y": (487.5, 487.77)})
         self.assertNotIn("US10Y", items(mk.compute({**PARTS, "para": para}, NOW)))
         xyz = hl({**XYZ_M, "xyz:CL": (90.2, 30.1)}, delisted=("DXY", "VIX"))
-        self.assertNotIn("OIL", items(mk.compute({**PARTS, "xyz": xyz}, NOW)))
+        self.assertNotIn("OIL", items(mk.compute({**PARTS, "xyz": xyz, "aster": None}, NOW)))
 
     def test_delisted_markets_are_not_taken(self):
         got = items(mk.compute(PARTS, NOW))
@@ -266,6 +273,14 @@ class CacheTest(unittest.TestCase):
         if job is not None:
             job.join(5)
 
+    def test_no_threads_left_means_no_data_not_a_crash(self):
+        # Потоков не хватило: источник без ответа — сборка не падает, а
+        # отдыхает FAIL_WAIT, как после любого пустого ответа.
+        mk.set_sources({name: (lambda v=v: v) for name, v in PARTS.items()})
+        with mock.patch.object(mk.threading.Thread, "start", side_effect=RuntimeError("can't start new thread")):
+            self.assertEqual(mk.build(), {"ok": False, "error": "no_data"})
+        self.assertGreater(mk._st.fail, 0)
+
     def test_cold_then_cached_then_background(self):
         calls: list = []
         mk.set_sources({name: (lambda v=v, n=name: calls.append(n) or v) for name, v in PARTS.items()})
@@ -319,10 +334,18 @@ class CacheTest(unittest.TestCase):
             # Мусор вместо ответа не запоминается.
             live["ok"] = True
             mk._st.slow.clear()
-            mk.set_sources({**{n: src(n) for n in PARTS}, "ecb": lambda: {"rates": "x"}, "fx": lambda: {"EUR": []},
+            mk.set_sources({**{n: src(n) for n in PARTS}, "ecb": lambda: {"rates": "x"}, "fx": lambda: {"EUR": [1, {"t": "x", "c": "1"}], "JPY": [{"t": T}], "GBP": "x"},
                             "xyz": lambda: [{"universe": []}, []], "para": lambda: "x", "mkts": lambda: None})
             mk.build()
             self.assertEqual(mk._st.slow, {})
+            # Свечи без одной из валют — тоже не запоминаются (а с ней — да).
+            for bad in ({**FX, "GBP": []}, {c: [{"t": "x", "c": "1"}, {"t": T}, {"t": T, "c": "-1"}] for c in mk.FX_HL}):
+                mk.set_sources({**{n: src(n) for n in PARTS}, "fx": lambda bad=bad: bad})
+                mk.build()
+                self.assertNotIn("fx", mk._st.slow)
+            mk.set_sources({n: src(n) for n in PARTS})
+            mk.build()
+            self.assertIn("fx", mk._st.slow)
 
     def test_hyperliquid_budget(self):
         # Бюджет Hyperliquid общий для сервера: цены площадок — не чаще раза в

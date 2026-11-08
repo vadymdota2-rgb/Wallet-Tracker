@@ -32,6 +32,9 @@ const AHEAD_MAX = 86_400;
  *  копию на устройстве: её тоже не держим дольше, см. storage.ts). */
 export const MARKETS_AGE_MAX = 6 * 3_600;
 
+/** Пунктов в ответе смотрим не больше (их девять; хвост мусора не перебираем). */
+const ITEMS_MAX = 64;
+
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const price = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0 && v < MARKET_PX_MAX;
 
@@ -42,14 +45,14 @@ export function validMarkets(raw: unknown, now: number = Date.now() / 1000): Mar
   const at = raw["at"];
   if (typeof at !== "number" || !Number.isInteger(at) || at < now - MARKETS_AGE_MAX || at > now + AHEAD_MAX) return null;
   const seen = new Map<MarketKey, MarketItem>();
-  for (const it of raw["items"].slice(0, 64)) {
+  for (const it of raw["items"].slice(0, ITEMS_MAX)) {
     if (!isObj(it)) continue;
     const k = it["k"];
     if (typeof k !== "string" || !(MARKET_KEYS as readonly string[]).includes(k) || seen.has(k as MarketKey)) continue;
     if (!price(it["px"]) || !price(it["prev"])) continue;
     seen.set(k as MarketKey, { k: k as MarketKey, px: it["px"], prev: it["prev"] });
   }
-  const items = MARKET_KEYS.flatMap((k) => (seen.has(k) ? [seen.get(k) as MarketItem] : []));
+  const items = MARKET_KEYS.flatMap((k) => seen.get(k) ?? []);
   return items.length ? { at, items } : null;
 }
 
