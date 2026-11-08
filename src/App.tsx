@@ -319,7 +319,7 @@ export default function App() {
             {/* Сверху — рынки (индексы, металлы, нефть, доллар, доходность,
                 волатильность); пока их нет — прежний заголовок. */}
             <Boundary name="markets">
-              <MarketsStrip fallback={<p className="drawer-ttl">{bare(t(lang, "menu_title"))}</p>} />
+              <MarketsStrip />
             </Boundary>
             {MENU.map((m) => (
               <button key={m.name} type="button" className="drawer-row"

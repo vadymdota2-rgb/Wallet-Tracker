@@ -1966,25 +1966,21 @@ say("карта ликвидаций: фандинг — по ставке св�
     'pts = (fund or {}).get(ex) or (fund or {}).get("*")' in _lmpy and "def clean_funds(" in _lmpy
     and "return funds, not funds and sym in _st.fund_jobs" in _lmpy and "s not in _st.fund_jobs" in _lmpy
     and "_fund_hist(sym, wt_liqmap.FUND_HOLD // 86400 + 1, series=True)" in api and 'LIQ_FUND_NAMES = {"XT": "XT.com"}' in api)
-say("меню: сверху — рынки для криптотрейдера (S&P 500, XYZ100, DXY · золото, US 10Y, BVIV · BTC.D, USDT.D, ETH/BTC) — модуль wt_markets, мелко; нет данных или ответ старый — прежний заголовок",
-    os.path.exists(f"{APP}/wt_markets.py") and 'KEYS = ("SP500", "XYZ100", "DXY", "GOLD", "US10Y", "BVIV", "BTCD", "USDTD", "ETHBTC")' in read(f"{APP}/wt_markets.py")
-    and "def _live(" in read(f"{APP}/wt_markets.py") and "def sane(" in read(f"{APP}/wt_markets.py")
-    and "markets_data = wt_markets.markets_data" in api and '"markets",' in api.split("PAID_PATHS = frozenset(")[1][:1200]
-    and 'if path in ("/markets", "/api/markets"):' in api
-    and '<MarketsStrip fallback={<p className="drawer-ttl">' in read(f"{APP}/src/App.tsx")
-    and 'export const MARKET_KEYS = ["SP500", "XYZ100", "DXY", "GOLD", "US10Y", "BVIV", "BTCD", "USDTD", "ETHBTC"]' in read(f"{APP}/src/lib/markets.ts")
-    and os.path.exists(f"{APP}/tests/test_markets.py") and os.path.exists(f"{APP}/tests/e2e/markets.e2e.test.ts")
-    and "wt_markets.py tests/test_markets.py" in read(f"{APP}/.github/workflows/tests.yml")
-    and all(k in _i18n for k in ("mk_title", "mk_gold", "mk_bp", "mk_src", "mk_about", "mk_sp_hint", "mk_xyz_hint",
-                                 "mk_dxy_hint", "mk_10y_hint", "mk_bviv_hint", "mk_usdtd_hint")))
-_mk_api = api.split("# --- Рынки в меню (wt_markets.py)")[1].split("markets_data = wt_markets")[0] if "# --- Рынки в меню (wt_markets.py)" in api else ""
 _mk_tsx = read(f"{APP}/src/components/Markets.tsx")
-say("рынки в меню — права: без Deribit (их данные и DVOL — только для личного пользования) и без VIX (индекс Cboe по лицензии); XYZ100 не называется Nasdaq-100; S&P 500 — цена контракта trade.xyz с оговоркой о товарных знаках; DXY — наш расчёт, не значение ICE; BVIV — цена рынка Hyperliquid, не значение индекса Volmex; оговорки видны на телефоне (ⓘ), CoinMarketCap — ссылкой",
-    bool(_mk_api) and "deribit.com" not in _mk_api.lower() and "cboe.com" not in _mk_api.lower()
-    and "Deribit" not in json.dumps(_i18n.get("mk_src", {}), ensure_ascii=False) and "Nasdaq" not in _mk_tsx.split("const HINT")[0]
-    and "Standard & Poor’s Financial Services LLC" in _i18n.get("mk_sp_hint", {}).get("ru", "")
-    and "ICE" in _i18n.get("mk_dxy_hint", {}).get("ru", "") and "Volmex" in _i18n.get("mk_bviv_hint", {}).get("ru", "") and "Nasdaq-100" in _i18n.get("mk_xyz_hint", {}).get("ru", "")
-    and 'className="mk-i" aria-expanded={open}' in _mk_tsx and "openExternal(CMC_URL)" in _mk_tsx)
+_mk_tv = read(f"{APP}/src/lib/tv.ts") if os.path.exists(f"{APP}/src/lib/tv.ts") else ""
+say("меню: сверху — рынки окнами TradingView (US 500, US 100 · DXY, золото · US 10Y, DVOL), сетка 2 × 3, мелко; данных рынков у нас нет — ни модуля, ни /api/markets",
+    not os.path.exists(f"{APP}/wt_markets.py") and "/api/markets" not in api and "markets_data" not in api
+    and '"CAPITALCOM:US500"' in _mk_tv and '"DERIBIT:DVOL"' in _mk_tv and "<MarketsStrip />" in read(f"{APP}/src/App.tsx")
+    and "grid-template-columns: repeat(2, minmax(0, 1fr))" in read(f"{APP}/src/styles/app.css")
+    and os.path.exists(f"{APP}/tests/tv.test.ts") and os.path.exists(f"{APP}/tests/e2e/markets.e2e.test.ts")
+    and "wt_markets" not in read(f"{APP}/.github/workflows/tests.yml")
+    and all(k in _i18n for k in ("mk_title", "mk_gold", "mk_tv", "mk_tv_note", "mk_about")))
+say("рынки в меню — права и защита: котировки показывает TradingView по своим лицензиям; только символы, разрешённые в их виджетах (без SP:SPX, NASDAQ:NDX, CBOE:VIX, TVC:DXY), имена — как у CFD, без чужих товарных знаков; ссылка на TradingView и их значок — на месте; их скрипт в приложение не грузится — свои окна в песочнице; данные входа Telegram (#tgWebAppData) TradingView не уходят",
+    "embed-widget" in _mk_tv and "s3.tradingview.com" not in (_mk_tsx + _mk_tv + read(f"{APP}/index.html"))
+    and 'export const TV_SANDBOX = "allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"' in _mk_tv
+    and "sandbox={TV_SANDBOX}" in _mk_tsx and '"page-uri": `${host}${path}`' in _mk_tv and "location.href" not in (_mk_tsx + _mk_tv)
+    and not any(x in _mk_tv for x in ('"SP:SPX"', '"NASDAQ:NDX"', '"CBOE:VIX"', '"TVC:DXY"', "S&P", "Nasdaq"))
+    and "{t(lang, \"mk_tv\")}" in _mk_tsx and "TradingView" in _i18n.get("mk_tv", {}).get("ru", ""))
 _ci = read(f"{APP}/.github/workflows/tests.yml")
 say("CI: мутации карты ликвидаций — своим заданием с лимитом 75 минут (вместе со «Страхом и жадностью» не укладывались в 45)",
     "  mutation-liqmap:\n    runs-on: ubuntu-latest\n    timeout-minutes: 75" in _ci

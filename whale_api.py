@@ -37,7 +37,6 @@ import wt_etf as etf  # noqa: E402
 import wt_dom  # noqa: E402
 import wt_fng  # noqa: E402
 import wt_liqmap  # noqa: E402
-import wt_markets  # noqa: E402
 import wt_btc  # noqa: E402
 import wt_mcap
 import wt_treasury as treasury
@@ -113,7 +112,7 @@ PAID_PATHS = frozenset(
     # mcap — доминация CoinMarketCap: тоже только подписчикам (их данные — внутри
     # продукта, не открытой выдачей для сборщиков).
     "btc/wallet", "dom", "mcap", "etf", "liqcoins", "liqmap", "options", "liqs", "oihist", "calendar", "digest",
-    "digest/translate", "digest/comments", "unlocks", "symbols", "big", "chart/liqs", "chart/whales", "markets",
+    "digest/translate", "digest/comments", "unlocks", "symbols", "big", "chart/liqs", "chart/whales",
     ) for p in ("/" + name, "/api/" + name)
 )
 # Цена и срок — те же, что в premium.cpp: бот и приложение обязаны продавать
@@ -15196,25 +15195,6 @@ def calendar_data() -> dict:
     return cached_bg(_CAL, "all", CAL_TTL, _cal_build)
 
 
-# --- Рынки в меню (wt_markets.py) -------------------------------------------
-# Модуль сам в сеть не ходит: ответы источников отдаёт ему сервер. Deribit
-# здесь нет: их данные (и индекс DVOL) — только для личного пользования.
-def _mkt_ecb():
-    start = time.strftime("%Y-%m-%d", time.gmtime(now() - 10 * 86400))
-    return get_json(f"https://api.frankfurter.dev/v1/{start}..?base=USD&symbols=EUR,JPY,GBP,CAD,SEK,CHF", 15)
-
-
-wt_markets.set_sources({
-    "xyz": lambda: hl_post({"type": "metaAndAssetCtxs", "dex": "xyz"}, 15),
-    "para": lambda: hl_post({"type": "metaAndAssetCtxs", "dex": "para"}, 15),
-    "mkts": lambda: hl_post({"type": "metaAndAssetCtxs", "dex": "mkts"}, 15),
-    "main": lambda: hl_post({"type": "metaAndAssetCtxs"}, 15),
-    "ecb": _mkt_ecb,
-    "mcap": lambda: wt_mcap.mcap_data(0),
-})
-markets_data = wt_markets.markets_data
-
-
 # --- Дайджест ------------------------------------------------------------
 # Раз в сутки, в 12:00 по Лондону, сервер собирает выпуск: самое крупное из каждой
 # вкладки аналитики за прошедшие 24 часа и ближайшие разлоки. Хранятся
@@ -16945,9 +16925,6 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path in ("/calendar", "/api/calendar"):
                 self._json(200, calendar_data())
-                return
-            if path in ("/markets", "/api/markets"):
-                self._json(200, markets_data())
                 return
             if path in ("/liqs", "/api/liqs"):
                 self._json(200, liqs_data(qs.get("win", ["24h"])[0], qs.get("sym", [""])[0],
