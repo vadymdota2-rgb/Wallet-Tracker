@@ -477,7 +477,7 @@ BT = [
     ("f\"TOTAL(m.usd_nanos) u FROM btc_moves m {join}\"", "f\"SUM(m.usd_nanos) u FROM btc_moves m {join}\"", "доллары итога — без переполнения"),
     ("    days = days if days in BTC_RANK_DAYS else 30", "    days = days if days > 0 else 30", "окно рейтинга — из списка"),
     # Кошелёк.
-    ('for r in rows if int(r["price_nanos"] or 0) > 0 and r["ex"]], px)', 'for r in rows], px)', "кошелёк: итог — по сделкам с биржей"),
+    ('for r in rows if int(r["price_nanos"] or 0) > 0 and r["ex"]]\n        book = _btc_book(priced, px)', 'for r in rows]\n        book = _btc_book(priced, px)', "кошелёк: итог — по сделкам с биржей"),
     ("for r in reversed(rows[-50:])]", "for r in rows[:50]]", "кошелёк: последние движения первыми"),
     ("ORDER BY ts DESC, id DESC LIMIT ?\", (addr, WALLET_MOVES_MAX))", "ORDER BY ts, id LIMIT ?\", (addr, WALLET_MOVES_MAX))", "кошелёк: предел — по последним движениям"),
     ("        rows.reverse()\n", "", "кошелёк: история по времени"),

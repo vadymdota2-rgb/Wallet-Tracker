@@ -79,7 +79,10 @@ jobs:
         run: npm test
 
   e2e:
-    runs-on: ubuntu-latest
+    # Не ubuntu-latest: GitHub перевёл его на Ubuntu 26.04, а Playwright 1.56
+    # ставит Chromium только на поддерживаемые системы («does not support
+    # chromium on ubuntu26.04-x64»). Остальным заданиям браузер не нужен.
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
