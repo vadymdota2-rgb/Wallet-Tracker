@@ -1175,7 +1175,12 @@ def parse_positions(addr: str) -> tuple[list, dict, float]:
             pnl = float(p.get("unrealizedPnl") or 0)
             margin = float(p.get("marginUsed") or 0)
             liq = float(p.get("liquidationPx") or 0) if p.get("liquidationPx") not in (None, "") else 0
-        except (TypeError, ValueError):
+            # cumFunding у Hyperliquid — сколько позиция заплатила: плюс —
+            # заплатила, минус — получила (сверено с живыми позициями: лонг
+            # при положительной ставке — плюс). Наружу — влияние на результат:
+            # плюс — получила, минус — заплатила.
+            fund = -float((p.get("cumFunding") or {}).get("sinceOpen") or 0)
+        except (TypeError, ValueError, AttributeError):
             continue
         pos.append(
             {
@@ -1189,7 +1194,7 @@ def parse_positions(addr: str) -> tuple[list, dict, float]:
                 "liq": liq,
                 "pnl": pnl,
                 "pct": (pnl / margin * 100.0) if margin else 0.0,
-                "funding": 0.0,
+                "funding": fund if math.isfinite(fund) else 0.0,
                 "held": "",
                 "isolated": str(lev.get("type") or "") == "isolated",
                 "hist": [],
@@ -1975,12 +1980,109 @@ def token_px_atom(cur: sqlite3.Connection, token: str, n: int = 25) -> float:
     return px[len(px) // 2]
 
 
-def wallet_live(cur: sqlite3.Connection, chat: str, addr: str) -> dict:
+def hl_account(addr: str) -> dict:
+    """Счёт кошелька на Hyperliquid — из того же ответа clearinghouseState,
+    что и позиции (hl_state: память, без нового запроса): маржа в работе,
+    свободно для вывода, объём позиций, поддерживающая маржа."""
+    perp = (hl_state(addr).get("perp") or {})
+    ms = perp.get("marginSummary") or {}
+
+    def f(v: object) -> float:
+        try:
+            x = float(v or 0)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return 0.0
+        return x if math.isfinite(x) else 0.0
+
+    return {"equity": f(ms.get("accountValue")), "margin": f(ms.get("totalMarginUsed")),
+            "free": f(perp.get("withdrawable")), "ntl": f(ms.get("totalNtlPos")),
+            "maint": f(perp.get("crossMaintenanceMarginUsed"))}
+
+
+# Результат закрытых сделок кошелька — за эти окна (дней) и не больше
+# PERF_ROWS закрытий в окне: у самых активных роботов их десятки тысяч, а
+# графику и итогам хватает и этого (последние — самые важные).
+PERF_DAYS = (7, 30)
+PERF_ROWS = 20_000
+
+
+def wallet_perf(hl: sqlite3.Connection | None, addr: str, t: int | None = None) -> dict:
+    """Результат закрытых сделок кошелька на Hyperliquid — из нашей базы
+    (hl_fills), без единого запроса к Hyperliquid.
+
+    Те же правила, что у доски рейтинга (load_perp_rank), чтобы цифры
+    сходились: закрытие — perp_close_sql, прибыль — closed_pnl минус
+    комиссия, выигрыш — закрытие с closed_pnl > 0. По каждому окну: итог,
+    сделки, винрейт, профит-фактор, средний выигрыш и проигрыш, лучшая и
+    худшая, наибольшая просадка накопленного результата и сама кривая по
+    дням (для графика). В базе нет сделок — пустой словарь.
+    """
+    key = (addr or "").strip().lower()
+    if not hl or not ADDR_RE.match(key) or not table_exists(hl, "hl_fills"):
+        return {}
+    cset = cols(hl, "hl_fills")
+    if "closed_pnl_nanos" not in cset:
+        return {}
+    fee = "COALESCE(fee_nanos,0)" if "fee_nanos" in cset else "0"
+    t = int(t if t is not None else now())
+    since_ms = (t - max(PERF_DAYS) * 86400) * 1000
+    try:
+        rows = hl.execute(
+            # wallet=? и ts — индекс (wallet, ts); последние PERF_ROWS.
+            f"SELECT ts, closed_pnl_nanos p, {fee} f FROM hl_fills "
+            f"WHERE wallet=? AND ts>=? AND {perp_close_sql(cset)} ORDER BY ts DESC LIMIT ?",
+            (key, since_ms, PERF_ROWS),
+        ).fetchall()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] perf {key[:10]}: {e}\n")
+        return {}
+    rows = sorted(((int(r[0] or 0), usd(r[1]), usd(r[2])) for r in rows), key=lambda x: x[0])
+    out: dict = {}
+    for days in PERF_DAYS:
+        start = (t - days * 86400) * 1000
+        part = [r for r in rows if r[0] >= start]
+        if not part:
+            continue
+        nets = [p - f for _, p, f in part]
+        wins = [n for (_, p, _f), n in zip(part, nets) if p > 0]  # noqa: B905
+        gain = sum(n for n in nets if n > 0)
+        loss = -sum(n for n in nets if n < 0)
+        # Кривая по дням (UTC): накопленный результат на конец дня; первая
+        # точка — ноль в начале окна, чтобы график начинался с нуля.
+        day0 = t - days * 86400
+        cum, peak, dd, by_day = 0.0, 0.0, 0.0, {}
+        for (ts, _p, _f), n in zip(part, nets):  # noqa: B905
+            cum += n
+            peak = max(peak, cum)
+            dd = max(dd, peak - cum)
+            by_day[min(days - 1, max(0, (ts // 1000 - day0) // 86400))] = cum
+        pts, last = [[day0, 0.0]], 0.0
+        for d in range(days):
+            last = by_day.get(d, last)
+            pts.append([day0 + (d + 1) * 86400, round(last, 2)])
+        out[str(days)] = {
+            "pnl": round(cum, 2), "trades": len(part), "wins": len(wins),
+            "win": round(100.0 * len(wins) / len(part), 1),
+            "pf": round(gain / loss, 2) if loss > 0 else None,
+            "avg_w": round(gain / max(1, sum(1 for n in nets if n > 0)), 2),
+            "avg_l": round(-loss / max(1, sum(1 for n in nets if n < 0)), 2),
+            "best": round(max(nets), 2), "worst": round(min(nets), 2),
+            "dd": round(dd, 2), "pts": pts,
+        }
+    return out
+
+
+def wallet_live(cur: sqlite3.Connection, chat: str, addr: str,
+                hl: sqlite3.Connection | None = None) -> dict:
     """
     Позиции и остаток одного кошелька — живьём из Hyperliquid.
 
     Отдаём только свой: адрес сверяется со списком пользователя, иначе по
     чужому адресу можно было бы смотреть чей угодно счёт.
+
+    Счёт (acct) — из того же ответа Hyperliquid, что и позиции; результат
+    закрытых сделок (perf) — из нашей базы. Новых запросов к Hyperliquid
+    это не добавляет.
     """
     key = (addr or "").strip().lower()
     if not re.fullmatch(r"0x[0-9a-f]{40}", key):
@@ -2001,6 +2103,10 @@ def wallet_live(cur: sqlite3.Connection, chat: str, addr: str) -> dict:
         return {"ok": False, "error": "upstream"}
     stats = wallet_stats(cur, key)
     bal = equity.get("total") or stats["bal"] or 0
+    try:
+        acct = hl_account(key)
+    except Exception:  # noqa: BLE001 — счёт не разобрался: экран без него
+        acct = None
     return {
         "ok": True,
         "addr": key,
@@ -2009,6 +2115,8 @@ def wallet_live(cur: sqlite3.Connection, chat: str, addr: str) -> dict:
         "equity": equity,
         "bal": bal,
         "d1": (stats["net"] / bal * 100.0) if bal else 0.0,
+        "acct": acct,
+        "perf": wallet_perf(hl, key),
     }
 
 
@@ -16877,17 +16985,20 @@ class Handler(BaseHTTPRequestHandler):
                 if not cur:
                     self._json(200, {"ok": False, "error": "db"})
                     return
+                hl = open_db(HL_DB)  # результат сделок — из нашей базы, не из Hyperliquid
                 try:
                     w_addr = (qs.get("addr", [""])[0] or "")
                     self._json(200, cached_small(
                         _WALLET, (chat, w_addr.strip().lower()), WALLET_TTL,
-                        lambda: wallet_live(cur, chat, w_addr),
+                        lambda: wallet_live(cur, chat, w_addr, hl),
                     ))
                 finally:
-                    try:
-                        cur.close()
-                    except Exception:
-                        pass
+                    for c in (cur, hl):
+                        if c:
+                            try:
+                                c.close()
+                            except Exception:
+                                pass
                 return
             if path in ("/fng", "/api/fng"):
                 # Один ответ для всех, меняется раз в полчаса: готовые байты и ETag.

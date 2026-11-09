@@ -44,6 +44,8 @@ export function applyWalletLive(addr: string, d: WalletLive | null): void {
     equity: d.equity,
     bal: d.bal ?? 0,
     d1: d.d1 ?? 0,
+    acct: d.acct ?? null,
+    perf: d.perf ?? {},
   });
 }
 

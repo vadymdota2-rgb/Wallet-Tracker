@@ -2212,5 +2212,13 @@ say("календарь: подписан часовой пояс, у каждо
     all(x in read(f"{APP}/src/screens/CalendarScreen.tsx") for x in
         ("function zoneLabel()", 't(lang, "cal_tz", { z: zoneLabel() })', "function rowCountdown(", 't(lang, "cal_in_ms"')))
 
+say("кошелёк Hyperliquid как у терминалов: счёт (кольца), направление, результат сделок с кривой, подробные позиции — без новых запросов к Hyperliquid (счёт из того же ответа, результат из нашей базы)",
+    "def hl_account(" in api and "def wallet_perf(" in api and '"perf": wallet_perf(hl, key),' in api
+    and "hl_post(" not in pybody(api, "def hl_account(") and "hl_post(" not in pybody(api, "def wallet_perf(")
+    and 'fund = -float((p.get("cumFunding") or {}).get("sinceOpen") or 0)' in api
+    and os.path.isfile(f"{APP}/src/lib/walletDash.ts") and "function HlPerf(" in read(f"{APP}/src/components/WalletDash.tsx")
+    and "validAccount(w.acct)" in read(f"{APP}/src/screens/WalletScreen.tsx")
+    and all(os.path.isfile(f"{APP}/{f}") for f in ("tests/test_wallet_perf.py", "tests/walletDash.test.ts", "tests/e2e/wallet.e2e.test.ts"))
+    and "### Кошелёк Hyperliquid «как у терминалов»" in read(f"{APP}/README.md"))
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

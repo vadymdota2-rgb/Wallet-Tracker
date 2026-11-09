@@ -19,6 +19,8 @@ import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
 import { CoinIcon } from "../components/CoinIcon";
 import { Action, AddrBar, Card, Empty, EyeGlyph, Row, SectionTitle, Tiles, VenueMark } from "../components/ui";
+import { HlAccount, HlExposure, HlPerf, HlPositions } from "../components/WalletDash";
+import { validAccount } from "../lib/walletDash";
 
 export function WalletScreen({ arg }: ScreenProps) {
   const lang = useApp((s) => s.lang);
@@ -64,6 +66,10 @@ export function WalletScreen({ arg }: ScreenProps) {
   // не говорит, а прибыль, доходность и винрейт за окно — говорят.
   const top = place.best?.row;
   const hold = holdTime(top?.hold, lang);
+  // Счёт Hyperliquid пришёл — экран «как у терминалов» (WalletDash): счёт,
+  // направление, результат сделок, подробные позиции. Нет (кошелёк BSC,
+  // старый ответ) — прежний вид.
+  const acct = validAccount(w.acct);
 
   return (
     <Frame title={w.name} sub={shortAddr(w.addr)}>
@@ -128,6 +134,19 @@ export function WalletScreen({ arg }: ScreenProps) {
         ) : null}
       </Card>
 
+      {acct ? (
+        <>
+          <HlAccount acct={acct} lang={lang} />
+          <HlExposure pos={w.pos} lang={lang} />
+          <HlPerf perf={w.perf} lang={lang} />
+          <Card>
+            <SectionTitle note={w.pos.length ? `${w.pos.length}` : undefined}>{t(lang, "hl_open_positions")}</SectionTitle>
+            {w.pos.length === 0 ? <Empty text={t(lang, "hl_no_open_positions")} />
+              : <HlPositions pos={w.pos} lang={lang} open={(i) => open("position", w.addr, String(i))} />}
+          </Card>
+        </>
+      ) : (
+      <>
       <Card>
         {/* Как в боте: одна цифра, общий баланс счёта. Разбивку по споту,
             перпам и акциям убрали — спот приходил количеством токенов, и
@@ -174,6 +193,8 @@ export function WalletScreen({ arg }: ScreenProps) {
           ))
         )}
       </Card>
+      </>
+      )}
 
       {w.holds?.length ? (
         <Card>

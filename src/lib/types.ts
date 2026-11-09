@@ -27,6 +27,35 @@ export interface Position {
   isolated: boolean;
 }
 
+/** Счёт на Hyperliquid — из того же ответа, что и позиции (без нового
+ *  запроса к бирже): маржа в работе, свободно для вывода, объём позиций,
+ *  поддерживающая маржа. */
+export interface Account {
+  equity: number;
+  margin: number;
+  free: number;
+  ntl: number;
+  maint: number;
+}
+
+/** Результат закрытых сделок за окно — из базы Wallet Tracker (как доска
+ *  рейтинга): итог, сделки, винрейт, профит-фактор, просадка и кривая по
+ *  дням `[конец дня, накоплено]`. */
+export interface PerfWindow {
+  pnl: number;
+  trades: number;
+  wins: number;
+  win: number;
+  pf: number | null;
+  avg_w: number;
+  avg_l: number;
+  best: number;
+  worst: number;
+  dd: number;
+  pts: [number, number][];
+}
+export type Perf = Partial<Record<"7" | "30", PerfWindow>>;
+
 export interface Equity {
   total: number;
   spot: number;
@@ -58,6 +87,9 @@ export interface Wallet {
    *  Не `spot` — так уже названо место кошелька в спотовом рейтинге. */
   holds?: SpotHold[];
   pos: Position[];
+  /** Счёт Hyperliquid и результат сделок — приходят с открытием кошелька. */
+  acct?: Account | null;
+  perf?: Perf;
   /** Кошелёк биткоина: позиций и сделок BSC у него нет, свой экран. */
   chain?: "btc";
   /** Адрес как пишется: `addr` строчными, а base58 без регистра не найти. */
@@ -197,6 +229,8 @@ export interface WalletLive {
   equity?: Equity;
   bal?: number;
   d1?: number;
+  acct?: Account | null;
+  perf?: Perf;
   error?: string;
 }
 
