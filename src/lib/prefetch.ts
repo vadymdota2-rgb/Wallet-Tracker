@@ -46,6 +46,8 @@ export function applyWalletLive(addr: string, d: WalletLive | null): void {
     d1: d.d1 ?? 0,
     acct: d.acct ?? null,
     perf: d.perf ?? {},
+    sperf: d.sperf ?? {},
+    sflow: d.sflow ?? null,
   });
 }
 

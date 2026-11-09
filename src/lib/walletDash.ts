@@ -6,7 +6,7 @@
  * из того же ответа Hyperliquid (clearinghouseState), результат закрытых
  * сделок — из базы Wallet Tracker. Новых запросов к бирже экран не делает.
  */
-import type { Account, Perf, PerfWindow, Position } from "./types";
+import type { Account, Perf, PerfWindow, Position, SpotFlow, SpotHold } from "./types";
 
 const fin = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 /** Доля part в whole, 0…1; whole не больше нуля — 0. */
@@ -131,4 +131,69 @@ export function nearest(xs: readonly number[], w: number, f: number): number {
   let best = 0;
   for (let i = 1; i < xs.length; i++) if (Math.abs(xs[i]! - target) < Math.abs(xs[best]! - target)) best = i;
   return best;
+}
+
+/** Перевес двух сторон (покупки и продажи, выводы и заводы): доля первой от
+ *  BIAS_EDGE — «a», до 1 − BIAS_EDGE — «b», между или пусто — «flat». */
+export function lean(a: number, b: number): "a" | "b" | "flat" {
+  const f = share(a, (fin(a) ? a : 0) + (fin(b) ? b : 0));
+  if (!(a > 0 || b > 0)) return "flat";
+  return f >= BIAS_EDGE ? "a" : f <= 1 - BIAS_EDGE ? "b" : "flat";
+}
+
+/** Поток BSC годен: конечные неотрицательные числа, хоть одна сделка. */
+export function validFlow(f: unknown): SpotFlow | null {
+  if (!f || typeof f !== "object") return null;
+  const r = f as Record<string, unknown>;
+  const out = { buy: r["buy"], sell: r["sell"], nb: r["nb"], ns: r["ns"], days: r["days"] };
+  for (const v of Object.values(out)) if (!fin(v) || v < 0) return null;
+  if ((out.nb as number) + (out.ns as number) < 1) return null;
+  return out as SpotFlow;
+}
+
+/** Кривая годна: 2…PTS_MAX пар [время, значение] по возрастанию времени. */
+export function validCurve(pts: unknown): [number, number][] | null {
+  if (!Array.isArray(pts) || pts.length < 2 || pts.length > PTS_MAX) return null;
+  let prev = -Infinity;
+  for (const p of pts) {
+    if (!Array.isArray(p) || p.length !== 2 || !fin(p[0]) || !fin(p[1]) || p[0] < prev) return null;
+    prev = p[0];
+  }
+  return pts as [number, number][];
+}
+
+export interface Portfolio {
+  n: number;
+  value: number;
+  cost: number;
+  pnl: number;
+  /** PnL к вложенному, %; вложенного нет — null. */
+  pct: number | null;
+  /** Доля стоимости в монетах, что сейчас в плюсе, 0…1. */
+  inProfit: number;
+  /** Сколько монет в плюсе. */
+  goodN: number;
+  /** Доля крупнейшей монеты в стоимости, 0…1. */
+  top: number;
+  topSym: string;
+}
+
+/** Сводка по монетам на руках (покупки BSC, ещё не проданные). */
+export function portfolio(holds: readonly SpotHold[]): Portfolio {
+  let value = 0, cost = 0, good = 0, goodN = 0, top = 0, topSym = "";
+  for (const h of holds) {
+    const v = fin(h.value) ? Math.max(0, h.value) : 0;
+    value += v;
+    if (fin(h.cost)) cost += Math.max(0, h.cost);
+    if (fin(h.pnl) && h.pnl > 0) {
+      good += v;
+      goodN += 1;
+    }
+    if (v > top) {
+      top = v;
+      topSym = h.sym;
+    }
+  }
+  return { n: holds.length, value, cost, pnl: value - cost, pct: cost > 0 ? ((value - cost) / cost) * 100 : null,
+    inProfit: share(good, value), goodN, top: share(top, value), topSym };
 }

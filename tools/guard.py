@@ -2216,9 +2216,15 @@ say("кошелёк Hyperliquid как у терминалов: счёт (кол
     "def hl_account(" in api and "def wallet_perf(" in api and '"perf": wallet_perf(hl, key),' in api
     and "hl_post(" not in pybody(api, "def hl_account(") and "hl_post(" not in pybody(api, "def wallet_perf(")
     and 'fund = -float((p.get("cumFunding") or {}).get("sinceOpen") or 0)' in api
-    and os.path.isfile(f"{APP}/src/lib/walletDash.ts") and "function HlPerf(" in read(f"{APP}/src/components/WalletDash.tsx")
+    and os.path.isfile(f"{APP}/src/lib/walletDash.ts") and "function PerfCard(" in read(f"{APP}/src/components/WalletDash.tsx")
     and "validAccount(w.acct)" in read(f"{APP}/src/screens/WalletScreen.tsx")
     and all(os.path.isfile(f"{APP}/{f}") for f in ("tests/test_wallet_perf.py", "tests/walletDash.test.ts", "tests/e2e/wallet.e2e.test.ts"))
     and "### Кошелёк Hyperliquid «как у терминалов»" in read(f"{APP}/README.md"))
+say("кошельки BSC и биткоина — тот же вид из нашей базы: портфель, покупки и продажи, результат продаж (BSC); запас, выводы и заводы, кривая результата, биржи (биткоин)",
+    "def spot_perf(" in api and "def spot_flow(" in api and "def perf_windows(" in api and '"sperf": spot_perf(cur, key),' in api
+    and "def _btc_curve(" in read(f"{APP}/wt_btc.py") and '"curve": _btc_curve(priced, px, now()) if book else [],' in read(f"{APP}/wt_btc.py")
+    and all(f"function {c}(" in read(f"{APP}/src/components/WalletDash.tsx") for c in ("SpotPortfolio", "SpotFlowCard", "SpotHolds", "BtcStack", "BtcWalletFlow", "BtcResult", "BtcExchanges"))
+    and "<BtcStack data={data} lang={lang} />" in read(f"{APP}/src/screens/BtcViews.tsx")
+    and 'src="wd_src_bsc"' in read(f"{APP}/src/screens/WalletScreen.tsx"))
 print("ПРОВАЛОВ:", bad)
 sys.exit(1 if bad else 0)

@@ -2036,35 +2036,43 @@ def wallet_perf(hl: sqlite3.Connection | None, addr: str, t: int | None = None) 
     except sqlite3.Error as e:
         sys.stderr.write(f"[api] perf {key[:10]}: {e}\n")
         return {}
-    rows = sorted(((int(r[0] or 0), usd(r[1]), usd(r[2])) for r in rows), key=lambda x: x[0])
+    return perf_windows(sorted((int(r[0] or 0) // 1000, usd(r[1]) - usd(r[2])) for r in rows), t)
+
+
+def perf_windows(events: list[tuple[int, float]], t: int) -> dict:
+    """Итоги закрытых сделок по окнам PERF_DAYS — общие для Hyperliquid
+    (wallet_perf), BSC (spot_perf) и одинаковые на экране: итог, сделки,
+    винрейт, профит-фактор, средний выигрыш и проигрыш, лучшая и худшая,
+    наибольшая просадка накопленного результата и кривая по дням
+    `[конец дня, накоплено]`, первая точка — ноль в начале окна.
+
+    events — (время в секундах, результат сделки) по возрастанию времени.
+    В окне нет сделок — окна нет."""
     out: dict = {}
     for days in PERF_DAYS:
-        start = (t - days * 86400) * 1000
-        part = [r for r in rows if r[0] >= start]
+        day0 = t - days * 86400
+        part = [(ts, n) for ts, n in events if ts >= day0]
         if not part:
             continue
-        nets = [p - f for _, p, f in part]
-        wins = [n for (_, p, _f), n in zip(part, nets) if p > 0]  # noqa: B905
+        nets = [n for _, n in part]
+        wins = sum(1 for n in nets if n > 0)
         gain = sum(n for n in nets if n > 0)
         loss = -sum(n for n in nets if n < 0)
-        # Кривая по дням (UTC): накопленный результат на конец дня; первая
-        # точка — ноль в начале окна, чтобы график начинался с нуля.
-        day0 = t - days * 86400
         cum, peak, dd, by_day = 0.0, 0.0, 0.0, {}
-        for (ts, _p, _f), n in zip(part, nets):  # noqa: B905
+        for ts, n in part:
             cum += n
             peak = max(peak, cum)
             dd = max(dd, peak - cum)
-            by_day[min(days - 1, max(0, (ts // 1000 - day0) // 86400))] = cum
+            by_day[min(days - 1, max(0, (ts - day0) // 86400))] = cum
         pts, last = [[day0, 0.0]], 0.0
         for d in range(days):
             last = by_day.get(d, last)
             pts.append([day0 + (d + 1) * 86400, round(last, 2)])
         out[str(days)] = {
-            "pnl": round(cum, 2), "trades": len(part), "wins": len(wins),
-            "win": round(100.0 * len(wins) / len(part), 1),
+            "pnl": round(cum, 2), "trades": len(part), "wins": wins,
+            "win": round(100.0 * wins / len(part), 1),
             "pf": round(gain / loss, 2) if loss > 0 else None,
-            "avg_w": round(gain / max(1, sum(1 for n in nets if n > 0)), 2),
+            "avg_w": round(gain / max(1, wins), 2),
             "avg_l": round(-loss / max(1, sum(1 for n in nets if n < 0)), 2),
             "best": round(max(nets), 2), "worst": round(min(nets), 2),
             "dd": round(dd, 2), "pts": pts,
@@ -2117,6 +2125,9 @@ def wallet_live(cur: sqlite3.Connection, chat: str, addr: str,
         "d1": (stats["net"] / bal * 100.0) if bal else 0.0,
         "acct": acct,
         "perf": wallet_perf(hl, key),
+        # BSC — из нашей базы: результат продаж и поток покупок и продаж.
+        "sperf": spot_perf(cur, key),
+        "sflow": spot_flow(cur, key),
     }
 
 
@@ -6981,23 +6992,12 @@ def _perp_deals(hl: sqlite3.Connection | None, key: str, n: int) -> list[dict]:
     return out
 
 
-def _spot_deals(cur: sqlite3.Connection, key: str, n: int) -> list[dict]:
-    """Продажи на BSC со средней ценой покупки.
-
-    Учёт тот же, что в ranking.cpp и в spot_open: покупка добавляет
-    количество и стоимость, продажа списывает их пропорционально. Поэтому
-    пройти нужно всю историю кошелька, а не последние десять строк — без
-    покупок не из чего считать цену входа.
-
-    Количество лежит в атомах. Для прибыли это неважно — она считается в
-    долларах, — а для цены нужны знаки после запятой. Нет их в token_cache —
-    показываем сделку без цен, но с результатом: врать про цену хуже, чем
-    её не показать.
-
-    ROI по споту не отдаём. Знаменатель — вложенное — восстанавливается из
-    цен DEX на момент покупки и для старых монет недостоверен; ровно по этой
-    причине доску ROI по BSC сняли и в боте, и в приложении.
-    """
+def _spot_closed(cur: sqlite3.Connection, key: str) -> list[dict]:
+    """Продажи кошелька на BSC со стоимостью проданного по средней цене
+    покупки (учёт как в ranking.cpp и spot_open): {tok, take, cost,
+    proceeds, ts} — по порядку токенов и времени. Продажа без покупки в
+    нашей истории пропускается: цены входа нет, а выдуманная — выдуманная
+    прибыль."""
     if not table_exists(cur, "trades"):
         return []
     try:
@@ -7045,7 +7045,63 @@ def _spot_deals(cur: sqlite3.Connection, key: str, n: int) -> list[dict]:
             "proceeds": usd(proceeds),
             "ts": int(r["timestamp"] or 0),
         })
+    return closed
 
+
+def spot_perf(cur: sqlite3.Connection, addr: str, t: int | None = None) -> dict:
+    """Результат продаж кошелька на BSC за окна PERF_DAYS — как у
+    Hyperliquid (perf_windows): сделка — продажа, результат — выручка минус
+    стоимость проданного по средней цене покупки. Из нашей базы."""
+    key = (addr or "").strip().lower()
+    if not ADDR_RE.match(key):
+        return {}
+    t = int(t if t is not None else now())
+    ev = sorted((d["ts"], d["proceeds"] - d["cost"]) for d in _spot_closed(cur, key))
+    return perf_windows(ev, t)
+
+
+SPOT_FLOW_DAYS = 30
+
+
+def spot_flow(cur: sqlite3.Connection, addr: str, t: int | None = None) -> dict | None:
+    """Покупки и продажи кошелька на BSC за SPOT_FLOW_DAYS дней, $ и число —
+    куда он двигает деньги: копит или фиксирует. Из нашей базы."""
+    key = (addr or "").strip().lower()
+    if not ADDR_RE.match(key) or not table_exists(cur, "trades"):
+        return None
+    since = int(t if t is not None else now()) - SPOT_FLOW_DAYS * 86400
+    try:
+        r = cur.execute(
+            "SELECT TOTAL(CASE WHEN is_buy=1 THEN usd_nanos END) b, TOTAL(CASE WHEN is_buy=0 THEN usd_nanos END) s, "
+            "SUM(is_buy=1) nb, SUM(is_buy=0) ns FROM trades WHERE wallet=? AND timestamp>=? AND usd_nanos BETWEEN ? AND ?",
+            (key, since, MIN_TRADE_USD_NANOS, MAX_SPOT_USD_NANOS)).fetchone()
+    except sqlite3.Error as e:
+        sys.stderr.write(f"[api] flow spot {key[:10]}: {e}\n")
+        return None
+    if not r or not (r[2] or r[3]):
+        return None
+    return {"buy": round(usd(r[0]), 2), "sell": round(usd(r[1]), 2), "nb": int(r[2] or 0), "ns": int(r[3] or 0),
+            "days": SPOT_FLOW_DAYS}
+
+
+def _spot_deals(cur: sqlite3.Connection, key: str, n: int) -> list[dict]:
+    """Продажи на BSC со средней ценой покупки.
+
+    Учёт тот же, что в ranking.cpp и в spot_open: покупка добавляет
+    количество и стоимость, продажа списывает их пропорционально. Поэтому
+    пройти нужно всю историю кошелька, а не последние десять строк — без
+    покупок не из чего считать цену входа.
+
+    Количество лежит в атомах. Для прибыли это неважно — она считается в
+    долларах, — а для цены нужны знаки после запятой. Нет их в token_cache —
+    показываем сделку без цен, но с результатом: врать про цену хуже, чем
+    её не показать.
+
+    ROI по споту не отдаём. Знаменатель — вложенное — восстанавливается из
+    цен DEX на момент покупки и для старых монет недостоверен; ровно по этой
+    причине доску ROI по BSC сняли и в боте, и в приложении.
+    """
+    closed = _spot_closed(cur, key)
     closed.sort(key=lambda d: d["ts"], reverse=True)
     out: list[dict] = []
     for d in closed[:n]:

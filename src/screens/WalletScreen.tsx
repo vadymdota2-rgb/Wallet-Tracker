@@ -19,8 +19,8 @@ import { syncNow } from "../lib/sync";
 import { toast } from "../components/Toast";
 import { CoinIcon } from "../components/CoinIcon";
 import { Action, AddrBar, Card, Empty, EyeGlyph, Row, SectionTitle, Tiles, VenueMark } from "../components/ui";
-import { HlAccount, HlExposure, HlPerf, HlPositions } from "../components/WalletDash";
-import { validAccount } from "../lib/walletDash";
+import { HlAccount, HlExposure, HlPositions, PerfCard, SpotFlowCard, SpotHolds, SpotPortfolio } from "../components/WalletDash";
+import { validAccount, validFlow, validPerf } from "../lib/walletDash";
 
 export function WalletScreen({ arg }: ScreenProps) {
   const lang = useApp((s) => s.lang);
@@ -70,6 +70,13 @@ export function WalletScreen({ arg }: ScreenProps) {
   // направление, результат сделок, подробные позиции. Нет (кошелёк BSC,
   // старый ответ) — прежний вид.
   const acct = validAccount(w.acct);
+  // Счёт Hyperliquid есть у любого EVM-адреса (пустой — у того, кто там не
+  // торгует): раздел — только если на Hyperliquid что-то есть.
+  const hl = acct !== null && (acct.equity > 0 || w.pos.length > 0 || w.hlActive === true
+    || Object.keys(validPerf(w.perf)).length > 0);
+  const holds = w.holds ?? [];
+  // BSC: есть монеты на руках, покупки или продажи за 30 дней, результат продаж.
+  const bsc = holds.length > 0 || validFlow(w.sflow) !== null || Object.keys(validPerf(w.sperf)).length > 0;
 
   return (
     <Frame title={w.name} sub={shortAddr(w.addr)}>
@@ -134,19 +141,37 @@ export function WalletScreen({ arg }: ScreenProps) {
         ) : null}
       </Card>
 
-      {acct ? (
+      {hl && acct ? (
         <>
           <HlAccount acct={acct} lang={lang} />
           <HlExposure pos={w.pos} lang={lang} />
-          <HlPerf perf={w.perf} lang={lang} />
+          <PerfCard perf={w.perf} lang={lang} src="wd_src" />
           <Card>
             <SectionTitle note={w.pos.length ? `${w.pos.length}` : undefined}>{t(lang, "hl_open_positions")}</SectionTitle>
             {w.pos.length === 0 ? <Empty text={t(lang, "hl_no_open_positions")} />
               : <HlPositions pos={w.pos} lang={lang} open={(i) => open("position", w.addr, String(i))} />}
           </Card>
         </>
-      ) : (
-      <>
+      ) : null}
+
+      {/* BSC — тот же вид из базы Wallet Tracker: портфель монет на руках,
+          покупки и продажи за 30 дней, результат продаж, монеты подробно. */}
+      {bsc ? (
+        <>
+          <SpotPortfolio holds={holds} lang={lang} />
+          <SpotFlowCard flow={w.sflow} lang={lang} />
+          <PerfCard perf={w.sperf} lang={lang} src="wd_src_bsc" />
+          {holds.length ? (
+            <Card>
+              <SectionTitle note={String(holds.length)}>{t(lang, "ui_spot_open")}</SectionTitle>
+              <SpotHolds holds={holds} lang={lang} open={(i) => open("spot", w.addr, String(i))} />
+            </Card>
+          ) : null}
+        </>
+      ) : null}
+
+      {!hl && !bsc ? (
+        <>
       <Card>
         {/* Как в боте: одна цифра, общий баланс счёта. Разбивку по споту,
             перпам и акциям убрали — спот приходил количеством токенов, и
@@ -193,30 +218,7 @@ export function WalletScreen({ arg }: ScreenProps) {
           ))
         )}
       </Card>
-      </>
-      )}
-
-      {w.holds?.length ? (
-        <Card>
-          <SectionTitle note={String(w.holds.length)}>{t(lang, "ui_spot_open")}</SectionTitle>
-          {w.holds.map((h, i) => (
-            <Row
-              key={h.token}
-              icon={<CoinIcon sym={h.sym} icon={h.icon} size={30} />}
-              title={h.sym}
-              // Метка неполной истории: цена входа и вложенное занижены, и
-              // это видно сразу, а не после вопроса «почему так».
-              badge={h.partial ? t(lang, "ui_partial_tag") : undefined}
-              sub={`${t(lang, "ui_invested")} ${h.partial ? "≈ " : ""}${usd(h.cost)}`}
-              sub2={`${t(lang, "hl_entry_price")} ${h.partial ? "≈ " : ""}${px(h.entry)} → ${px(h.price)}`}
-              value={signed(h.pnl)}
-              tone={h.pnl >= 0 ? "up" : "dn"}
-              valueSub={pct(h.pct)}
-              after={<EyeGlyph size={18} />}
-              onClick={() => open("spot", w.addr, String(i))}
-            />
-          ))}
-        </Card>
+        </>
       ) : null}
 
       <Card>

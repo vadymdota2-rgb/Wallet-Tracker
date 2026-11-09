@@ -13,15 +13,21 @@
  * Только данные, что уже приходят с открытием кошелька: счёт и позиции — из
  * того же ответа Hyperliquid, результат — из базы Wallet Tracker. Новых
  * запросов к бирже нет. Расчёты — lib/walletDash.ts.
+ *
+ * Тот же вид — у кошельков BSC (портфель монет на руках, покупки и продажи
+ * за 30 дней, результат продаж, монеты подробно) и биткоина (запас, выводы
+ * и заводы на биржи, кривая результата по истории, биржи) — всё из базы
+ * Wallet Tracker.
  */
 import { useId, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { t } from "../i18n/t";
 import type { LangCode } from "../i18n/types";
 import { dayMonth, lev as levFmt, num, pct, px, signed, usd, usdFull } from "../lib/format";
-import type { Account, Perf, Position } from "../lib/types";
-import { acctLev, exposure, geom, nearest, share, validPerf } from "../lib/walletDash";
+import type { Account, BtcWalletReply, Perf, Position, SpotFlow, SpotHold } from "../lib/types";
+import { acctLev, exposure, geom, lean, nearest, portfolio, share, validCurve, validFlow, validPerf } from "../lib/walletDash";
 import { CoinIcon } from "./CoinIcon";
 import { Card, EyeGlyph, SectionTitle, Segmented, Tiles } from "./ui";
+import type { DictKey } from "../i18n/types";
 import "./WalletDash.css";
 
 const tone = (v: number) => (v > 0 ? "up" : v < 0 ? "dn" : undefined);
@@ -63,23 +69,38 @@ export function HlAccount({ acct, lang }: { acct: Account; lang: LangCode }) {
   );
 }
 
+/** Перевес — плашкой: зелёной (лонг, накопление), красной (шорт,
+ *  распределение) или серой (нейтрально). */
+function Bias({ kind, label }: { kind: "long" | "short" | "flat"; label: string }) {
+  return <span className={`wd-bias ${kind}`}>{label}</span>;
+}
+
+/** Две стороны полосами на подложке: подпись, сумма, доля. */
+function Bars({ rows }: { rows: { k: "long" | "short"; label: string; text: string; v: number }[] }) {
+  const total = rows.reduce((a, r) => a + (Number.isFinite(r.v) ? Math.max(0, r.v) : 0), 0);
+  return (
+    <div className="wd-exp">
+      {rows.map((r) => (
+        <div key={r.k + r.label} className={`wd-exp-row ${r.k}`}>
+          <span>{r.label}</span>
+          <b>{r.text}</b>
+          <i>{pct(share(r.v, total) * 100, 0, false)}</i>
+          <span className="wd-track" aria-hidden="true"><span style={{ inlineSize: `${(share(r.v, total) * 100).toFixed(1)}%` }} /></span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function HlExposure({ pos, lang }: { pos: readonly Position[]; lang: LangCode }) {
   if (!pos.length) return null;
   const e = exposure(pos);
   const bias = e.bias === "long" ? "wd_bias_long" : e.bias === "short" ? "wd_bias_short" : "wd_bias_flat";
   return (
     <Card>
-      <SectionTitle note={<span className={`wd-bias ${e.bias}`}>{t(lang, bias)}</span>}>{t(lang, "wd_dir")}</SectionTitle>
-      <div className="wd-exp">
-        {([["long", "wd_longs", e.long], ["short", "wd_shorts", e.short]] as const).map(([k, label, v]) => (
-          <div key={k} className={`wd-exp-row ${k}`}>
-            <span>{t(lang, label)}</span>
-            <b>{usd(v)}</b>
-            <i>{pct(share(v, e.total) * 100, 0, false)}</i>
-            <span className="wd-track" aria-hidden="true"><span style={{ inlineSize: `${(share(v, e.total) * 100).toFixed(1)}%` }} /></span>
-          </div>
-        ))}
-      </div>
+      <SectionTitle note={<Bias kind={e.bias} label={t(lang, bias)} />}>{t(lang, "wd_dir")}</SectionTitle>
+      <Bars rows={[{ k: "long", label: t(lang, "wd_longs"), text: usd(e.long), v: e.long },
+        { k: "short", label: t(lang, "wd_shorts"), text: usd(e.short), v: e.short }]} />
       <Tiles cols={3} size="sm" items={[
         { label: t(lang, "wd_upnl"), value: signed(e.upnl), tone: tone(e.upnl) },
         { label: "ROE", value: e.roe === null ? "—" : pct(e.roe), tone: e.roe === null ? undefined : tone(e.roe) },
@@ -150,7 +171,9 @@ function PnlChart({ pts, label }: { pts: [number, number][]; label: string }) {
   );
 }
 
-export function HlPerf({ perf, lang }: { perf: Perf | undefined; lang: LangCode }) {
+/** Результат закрытых сделок за неделю и месяц: итог, кривая, плитки.
+ *  src — откуда цифры (Hyperliquid или BSC). */
+export function PerfCard({ perf, lang, src }: { perf: Perf | undefined; lang: LangCode; src: DictKey }) {
   const ok = validPerf(perf);
   const wins = (["7", "30"] as const).filter((k) => ok[k]);
   const [win, setWin] = useState<"7" | "30">(wins[0] ?? "30");
@@ -178,7 +201,7 @@ export function HlPerf({ perf, lang }: { perf: Perf | undefined; lang: LangCode 
             { label: t(lang, "wd_worst"), value: signed(w.worst), tone: tone(w.worst) },
             { label: t(lang, "rk_trades"), value: `${num(w.wins)}/${num(w.trades)}` },
           ]} />
-          <small className="hint">{t(lang, "wd_src")}</small>
+          <small className="hint">{t(lang, src)}</small>
         </>
       )}
     </Card>
@@ -214,5 +237,180 @@ export function HlPositions({ pos, lang, open }: { pos: readonly Position[]; lan
         </button>
       ))}
     </div>
+  );
+}
+
+/* --- BSC ---------------------------------------------------------------- */
+
+/** Портфель монет на руках: стоимость, PnL, доля монет в плюсе и
+ *  крупнейшей монеты (кольца). */
+export function SpotPortfolio({ holds, lang }: { holds: readonly SpotHold[]; lang: LangCode }) {
+  if (!holds.length) return null;
+  const p = portfolio(holds);
+  return (
+    <Card>
+      <SectionTitle note={`${t(lang, "wd_coins")} · ${num(p.n)}`}>{t(lang, "wd_portfolio")}</SectionTitle>
+      <p className="big wd-equity">{usdFull(Math.round(p.value))}</p>
+      <div className="wd-meters">
+        <div className="wd-meter">
+          <Ring f={p.inProfit} kind="glow" />
+          <div><small>{t(lang, "wd_in_profit")}</small><b>{pct(p.inProfit * 100, 0, false)}</b><i>{num(p.goodN)}/{num(p.n)}</i></div>
+        </div>
+        <div className="wd-meter">
+          <Ring f={p.top} kind="warn" />
+          <div><small>{t(lang, "wd_top_share")}</small><b>{pct(p.top * 100, 0, false)}</b><i>{p.topSym}</i></div>
+        </div>
+      </div>
+      <Tiles items={[
+        { label: t(lang, "ui_invested"), value: usd(p.cost) },
+        { label: "PnL", value: `${signed(p.pnl)}${p.pct === null ? "" : ` · ${pct(p.pct)}`}`, tone: tone(p.pnl) },
+      ]} />
+    </Card>
+  );
+}
+
+/** Покупки и продажи за 30 дней: накопление или распределение. */
+export function SpotFlowCard({ flow, lang }: { flow: SpotFlow | null | undefined; lang: LangCode }) {
+  const f = validFlow(flow);
+  if (!f) return null;
+  const l = lean(f.buy, f.sell);
+  return (
+    <Card>
+      <SectionTitle note={<Bias kind={l === "a" ? "long" : l === "b" ? "short" : "flat"}
+        label={t(lang, l === "a" ? "wd_bias_acc" : l === "b" ? "wd_bias_dist" : "wd_bias_flat")} />}>{t(lang, "wd_flow")}</SectionTitle>
+      <Bars rows={[{ k: "long", label: `${t(lang, "wd_buys")} · ${num(f.nb)}`, text: usd(f.buy), v: f.buy },
+        { k: "short", label: `${t(lang, "wd_sells")} · ${num(f.ns)}`, text: usd(f.sell), v: f.sell }]} />
+    </Card>
+  );
+}
+
+/** Монеты на руках подробно — как позиции: вложено, стоимость, вход, цена
+ *  сейчас, доля портфеля, PnL и %. */
+export function SpotHolds({ holds, lang, open }: { holds: readonly SpotHold[]; lang: LangCode; open: (i: number) => void }) {
+  const total = portfolio(holds).value;
+  return (
+    <div className="wd-pos">
+      {holds.map((h, i) => (
+        <button type="button" key={h.token} className={`wd-pcard ${h.pnl >= 0 ? "long" : "short"}`} onClick={() => open(i)}>
+          <span className="wd-ph">
+            <CoinIcon sym={h.sym} icon={h.icon} size={26} />
+            <span className="wd-pt">
+              <span><b>{h.sym}</b>{h.partial ? <span className="wd-side flat">{t(lang, "ui_partial_tag")}</span> : null}</span>
+              <small>{t(lang, "wd_buys")} · {num(h.buys)}</small>
+            </span>
+            <span className="wd-pnl">
+              <b className={tone(h.pnl)}>{signed(h.pnl)}</b>
+              <small className={tone(h.pct)}>{pct(h.pct)}</small>
+            </span>
+            <EyeGlyph size={16} />
+          </span>
+          <span className="wd-pg">
+            <span><small>{t(lang, "ui_invested")}</small><b>{h.partial ? "≈ " : ""}{usd(h.cost)}</b></span>
+            <span><small>{t(lang, "wd_value")}</small><b>{usd(h.value)}</b></span>
+            <span><small>{t(lang, "wd_share")}</small><b>{pct(share(h.value, total) * 100, 0, false)}</b></span>
+            <span><small>{t(lang, "hl_entry_price")}</small><b>{h.partial ? "≈ " : ""}{px(h.entry)}</b></span>
+            <span><small>{t(lang, "wd_price_now")}</small><b>{px(h.price)}</b></span>
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* --- Биткоин ------------------------------------------------------------- */
+
+const btcFmt = (v: number) => `${num(v, v >= 100 ? 2 : 4)}\u00a0BTC`;
+
+/** Запас: накоплено BTC и его стоимость; кольца — выводы в плюсе и
+ *  удержанная доля выведенного; средняя цена против нынешней, баланс. */
+export function BtcStack({ data, lang }: { data: BtcWalletReply; lang: LangCode }) {
+  const b = data.book;
+  if (!b) return null;
+  const held = share(b.btc, b.bought);
+  const vsAvg = b.avg > 0 && data.price > 0 ? (data.price / b.avg - 1) * 100 : null;
+  return (
+    <Card>
+      <SectionTitle note={usd(b.btc * data.price)}>{t(lang, "btc_hold")}</SectionTitle>
+      <p className="big wd-equity">{btcFmt(b.btc)}</p>
+      <div className="wd-meters">
+        <div className="wd-meter">
+          <Ring f={share(b.win, 100)} kind="glow" />
+          <div><small>{t(lang, "btc_in_profit")}</small><b>{num(b.win)}%</b><i>{num(b.buys)}</i></div>
+        </div>
+        <div className="wd-meter">
+          <Ring f={held} kind="warn" />
+          <div><small>{t(lang, "wd_held")}</small><b>{pct(held * 100, 0, false)}</b><i>{btcFmt(b.bought)}</i></div>
+        </div>
+      </div>
+      <Tiles items={[
+        { label: t(lang, "btc_avg"), value: `${px(b.avg)}${vsAvg === null ? "" : ` · ${pct(vsAvg, 0)}`}`, tone: vsAvg === null ? undefined : tone(vsAvg) },
+        { label: t(lang, "btc_bal"), value: data.bal !== undefined ? btcFmt(data.bal) : "—" },
+      ]} />
+    </Card>
+  );
+}
+
+/** Выводы с бирж против заводов на биржи: накопление или распределение. */
+export function BtcWalletFlow({ data, lang }: { data: BtcWalletReply; lang: LangCode }) {
+  const b = data.book;
+  if (!b) return null;
+  const l = lean(b.bought, b.sold);
+  return (
+    <Card>
+      <SectionTitle note={<Bias kind={l === "a" ? "long" : l === "b" ? "short" : "flat"}
+        label={t(lang, l === "a" ? "wd_bias_acc" : l === "b" ? "wd_bias_dist" : "wd_bias_flat")} />}>{t(lang, "wd_btc_flow")}</SectionTitle>
+      <Bars rows={[{ k: "long", label: `${t(lang, "wd_btc_out")} · ${num(b.buys)}`, text: btcFmt(b.bought), v: b.bought },
+        { k: "short", label: `${t(lang, "wd_btc_in")} · ${num(b.sells)}`, text: btcFmt(b.sold), v: b.sold }]} />
+    </Card>
+  );
+}
+
+/** Результат: итог и ROI, кривая после каждого движения, из чего итог. */
+export function BtcResult({ data, lang }: { data: BtcWalletReply; lang: LangCode }) {
+  const b = data.book;
+  if (!b) return null;
+  const curve = validCurve(data.curve);
+  return (
+    <Card>
+      <SectionTitle>{t(lang, "wd_btc_res")}</SectionTitle>
+      <div className="wd-head">
+        <b className={`big ${tone(b.pnl) ?? ""}`}>{signed(b.pnl)}</b>
+      </div>
+      {curve ? <PnlChart pts={curve} label={`${t(lang, "wd_btc_chart")}: ${signed(b.pnl)}`} /> : null}
+      <Tiles cols={3} size="sm" items={[
+        { label: t(lang, "wd_real"), value: b.real === undefined ? "—" : signed(b.real), tone: b.real === undefined ? undefined : tone(b.real) },
+        { label: t(lang, "wd_unreal"), value: b.unreal === undefined ? "—" : signed(b.unreal), tone: b.unreal === undefined ? undefined : tone(b.unreal) },
+        { label: t(lang, "ui_invested"), value: usd(b.inv) },
+        { label: "ROI", value: pct(b.roi), tone: tone(b.roi) },
+        { label: t(lang, "rk_trades"), value: num(b.tr) },
+        { label: t(lang, "rk_days"), value: num(b.days) },
+      ]} />
+      <small className="hint">{t(lang, "wd_src_btc")}</small>
+    </Card>
+  );
+}
+
+/** Биржи кошелька: выведено и заведено по каждой. */
+export function BtcExchanges({ data, lang }: { data: BtcWalletReply; lang: LangCode }) {
+  const exs = (data.exs ?? []).filter((e) => Array.isArray(e) && typeof e[0] === "string" && Number.isFinite(e[1]) && Number.isFinite(e[2]));
+  if (!exs.length) return null;
+  const total = exs.reduce((a, e) => a + e[1] + e[2], 0);
+  return (
+    <Card>
+      <SectionTitle>{t(lang, "wd_exs")}</SectionTitle>
+      <div className="wd-exp">
+        {exs.map(([ex, out, inn]) => (
+          <div key={ex} className="wd-exp-row ex">
+            <span>{ex}</span>
+            <b><span className="up">+{btcFmt(out)}</span> <span className="dn">−{btcFmt(inn)}</span></b>
+            <i>{pct(share(out + inn, total) * 100, 0, false)}</i>
+            <span className="wd-track two" aria-hidden="true">
+              <span className="o" style={{ inlineSize: `${(share(out, total) * 100).toFixed(1)}%` }} />
+              <span className="i" style={{ inlineSize: `${(share(inn, total) * 100).toFixed(1)}%` }} />
+            </span>
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }

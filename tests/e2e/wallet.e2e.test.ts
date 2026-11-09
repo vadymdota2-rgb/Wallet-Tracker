@@ -24,6 +24,8 @@ const DAY = 86_400;
 const sp = (s: string | null | undefined) => (s ?? "").replace(/[\s\u00a0\u202f]+/g, " ").trim();
 const A = "0x" + "a".repeat(40);
 const B = "0x" + "b".repeat(40);
+const C = "0x" + "c".repeat(40);
+const BTC = "bc1q" + "x".repeat(38);
 const W = (addr: string, name: string) => ({
   id: name, name, addr, short: addr.slice(0, 6), primary: addr === A, score: 0, bal: 0, trades: 0, win: 0, pf: 0, net: 0,
   dd: 0, spot: "", perp: "", d1: 0, equity: { total: 0, spot: 0, perp: 0, hip3: 0, vaults: 0 }, pos: [], hlActive: addr === A,
@@ -32,6 +34,25 @@ const curve = (days: number, vals: number[]) => vals.map((v, i) => [T - days * D
 const W7 = { pnl: 346523.97, trades: 154, wins: 98, win: 63.6, pf: 1.84, avg_w: 8200, avg_l: -6100, best: 120400, worst: -98000,
   dd: 412000, pts: curve(7, [0, 180000, 260000, -120000, -410000, -380000, -200000, 346523.97]) };
 const W30 = { ...W7, pnl: 1250000, trades: 610, pts: curve(30, Array.from({ length: 31 }, (_, i) => i * 41000 - (i % 5) * 30000)) };
+const HOLD = (sym: string, cost: number, value: number, o: Record<string, unknown> = {}) => ({
+  token: "0x" + sym.toLowerCase().padEnd(40, "0").slice(0, 40), sym, cost, value, pnl: value - cost,
+  pct: (value / cost - 1) * 100, entry: 0.012, price: 0.012 * value / cost, buys: 3, since: T - 9 * DAY, ...o,
+});
+export const BSC_LIVE = {
+  ok: true, addr: C, bal: 0, d1: 0, pos: [], equity: { total: 0, spot: 0, perp: 0, hip3: 0, vaults: 0 },
+  acct: { equity: 0, margin: 0, free: 0, ntl: 0, maint: 0 }, perf: {},
+  holds: [HOLD("CAKE", 40000, 52000), HOLD("PEPE", 20000, 15000, { partial: true }), HOLD("BNB", 8000, 9000)],
+  sflow: { buy: 180000, sell: 60000, nb: 42, ns: 17, days: 30 },
+  sperf: { "30": { ...W30, pnl: 23400, trades: 17, wins: 11, win: 64.7 } },
+};
+export const BTC_LIVE = {
+  ok: true, addr: BTC, price: 74783, ex: "", bal: 812.5, txs: 40,
+  book: { pnl: 18_400_000, roi: 61.2, win: 83, tr: 31, buys: 24, sells: 7, btc: 812.5, bought: 1030, sold: 217.5,
+    avg: 46200, inv: 47_586_000, ex: "Binance", days: 29, first: T - 400 * DAY, last: T - 2 * DAY, real: 3_100_000, unreal: 15_300_000 },
+  curve: Array.from({ length: 31 }, (_, i) => [T - 400 * DAY + i * 13 * DAY, i < 8 ? -i * 300000 : (i - 8) * 800000]),
+  exs: [["Binance", 700, 120], ["Coinbase", 250, 90.5], ["Kraken", 80, 7]],
+  moves: [{ tx: "aa", buy: true, btc: 120, v: 8_974_000, px: 74783, t: T - 2 * DAY, ex: "Binance" }],
+};
 export const LIVE = {
   ok: true, addr: A, bal: 20580262.69, d1: 0, holds: [],
   equity: { total: 20580262.69, spot: 0, perp: 20580262.69, hip3: 0, vaults: 0 },
@@ -71,7 +92,7 @@ after(async () => {
   await new Promise((ok) => server?.close(ok));
 });
 
-interface Opts { lang?: string; width?: number; live?: unknown; wallet?: string }
+interface Opts { lang?: string; width?: number; live?: unknown; wallet?: string; btc?: unknown }
 
 async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; errors: string[]; asked: string[] }> {
   const ctx = await browser.newContext({ viewport: { width: o.width ?? 360, height: 1400 }, timezoneId: "UTC" });
@@ -83,9 +104,14 @@ async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; er
   await ctx.route((url) => !url.href.startsWith(base), (r) => { asked.push(r.request().url()); return r.abort(); });
   await ctx.route(`${base}/api/**`, (r) => r.fulfill({ contentType: "application/json", body: '{"ok":false}' }));
   await ctx.route(`${base}/api/bootstrap`, (r) => r.fulfill({ contentType: "application/json",
-    body: JSON.stringify({ ok: true, live: true, me: { plan: "premium" }, wallets: [W(A, "Кит"), W(B, "BSC")] }) }));
-  await ctx.route(`${base}/api/wallet?**`, (r) => r.fulfill({ contentType: "application/json",
-    body: JSON.stringify(r.request().url().includes(B) ? { ok: true, addr: B, pos: [], holds: [], bal: 5, d1: 0 } : (o.live ?? LIVE)) }));
+    body: JSON.stringify({ ok: true, live: true, me: { plan: "premium" },
+      wallets: [W(A, "Кит"), W(B, "BSC"), W(C, "BSC-кит"), { ...W(BTC, "Биткоин-кит"), chain: "btc", btc: BTC }] }) }));
+  await ctx.route(`${base}/api/wallet?**`, (r) => {
+    const u = r.request().url();
+    const body = u.includes(B) ? { ok: true, addr: B, pos: [], holds: [], bal: 5, d1: 0 } : u.includes(C) ? BSC_LIVE : (o.live ?? LIVE);
+    return r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await ctx.route(`${base}/api/btc/wallet?**`, (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify(o.btc ?? BTC_LIVE) }));
   await page.addInitScript((lang: string) => {
     if (window !== window.top || sessionStorage.getItem("e2e")) return;
     sessionStorage.setItem("e2e", "1");
@@ -223,6 +249,43 @@ test("битый результат с сервера экран не роняе
   await ctx.close();
 });
 
+test("BSC: портфель (кольца — в плюсе и крупнейшая доля), покупки и продажи, результат продаж, монеты подробно", async () => {
+  const { ctx, page, errors } = await open({ wallet: "BSC-кит" });
+  await page.locator(".wd-meter").first().waitFor();
+  // Счёт Hyperliquid пустой — раздела Hyperliquid нет.
+  assert.equal(await page.locator(".wd-pcard.long, .wd-pcard.short").filter({ has: page.locator(".wd-side.long, .wd-side.short") }).count(), 0);
+  const port = page.locator(".card", { hasText: "Портфель на BSC" });
+  assert.equal(sp(await port.locator(".wd-equity").innerText()), "$76 000");
+  const meters = (await port.locator(".wd-meter").evaluateAll((els) => els.map((el) => (el as HTMLElement).innerText))).map(sp);
+  assert.deepEqual(meters, ["В плюсе 80% 2/3", "Крупнейшая доля 68% CAKE"]);
+  assert.equal(sp(await page.locator(".card", { hasText: "Покупки и продажи за 30 дней" }).locator(".wd-bias").innerText()), "Накопление");
+  assert.equal(sp(await page.locator(".card", { hasText: "Результат сделок" }).locator(".wd-head .big").innerText()), "+$23,4K");
+  assert.equal(await page.locator(".wd-chart").count(), 1);
+  assert.equal(await page.locator(".wd-pcard").count(), 3);
+  const pepe = page.locator(".wd-pcard", { hasText: "PEPE" });
+  assert.equal(sp(await pepe.locator(".wd-side").innerText()), "неполная");
+  assert.equal(sp(await pepe.locator(".wd-pnl").innerText()), "-$5K -25,0%");
+  assert.deepEqual(await overflow(page), []);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test("биткоин: запас, выводы и заводы на биржи, кривая результата, биржи", async () => {
+  const { ctx, page, errors } = await open({ wallet: "Биткоин-кит", width: 320 });
+  await page.locator(".wd-meter").first().waitFor();
+  assert.equal(sp(await page.locator(".wd-equity").innerText()), "812,5 BTC");
+  assert.equal(sp(await page.locator(".card", { hasText: "Выводы и заводы на биржи" }).locator(".wd-bias").innerText()), "Накопление");
+  const res = page.locator(".card", { has: page.locator(".wd-chart") });
+  assert.equal(sp(await res.locator(".wd-head .big").innerText()), "+$18,4M");
+  const box = (await page.locator(".wd-chart").boundingBox())!;
+  await page.mouse.click(box.x + box.width * 0.25, box.y + 40);
+  assert.equal(await page.locator(".wd-tip b.dn").count(), 1); // начало истории — в минусе
+  assert.equal(await page.locator(".wd-exp-row.ex").count(), 3);
+  assert.deepEqual(await overflow(page), []);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
 test("снимок кошелька", async () => {
   const shot = process.env["WD_SHOT"];
   if (!shot) return;
@@ -231,6 +294,15 @@ test("снимок кошелька", async () => {
   const box = (await page.locator(".wd-chart").boundingBox())!;
   await page.mouse.click(box.x + box.width * (4 / 7), box.y + 40);
   await page.screenshot({ path: shot, fullPage: true });
+  for (const [env, name] of [["WD_SHOT_BSC", "BSC-кит"], ["WD_SHOT_BTC", "Биткоин-кит"]] as const) {
+    const path = process.env[env];
+    if (!path) continue;
+    const o = await open({ wallet: name });
+    await o.page.locator(".wd-meter").first().waitFor();
+    await o.page.waitForTimeout(600);
+    await o.page.screenshot({ path, fullPage: true });
+    await o.ctx.close();
+  }
   const pos = process.env["WD_SHOT_POS"];
   if (pos) {
     await page.locator(".wd-pos").scrollIntoViewIfNeeded();

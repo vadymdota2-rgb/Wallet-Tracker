@@ -444,7 +444,53 @@ def _btc_book(moves: list[tuple[int, int, int, int, str]], px: float) -> Json | 
         "btc": round(held, 4), "bought": round(bought, 4), "sold": round(sold, 4),
         "avg": round(invested / bought, 2) if bought else 0, "inv": round(invested, 2),
         "ex": max(exs, key=lambda k: exs[k]) if exs else "", "days": len(days), "first": first, "last": last,
+        # Из чего итог: зафиксировано продажами и на руках по нынешней цене.
+        "real": round(realized, 2) + 0.0, "unreal": round(held * px - cost if px else 0.0, 2) + 0.0,
     }
+
+
+CURVE_PTS = 39  # точек кривой кошелька (и ещё одна — «сейчас»)
+
+
+def _btc_curve(moves: list[tuple[int, int, int, int, str]], px: float, t: int) -> list[list[float]]:
+    """Кривая результата кошелька по его истории: после каждого движения —
+    зафиксированное плюс запас по цене того блока минус его стоимость (тот
+    же учёт, что _btc_book); последняя точка — сейчас по нынешней цене.
+    Не больше CURVE_PTS точек истории — равномерно, последние всегда в
+    кадре. Движений нет — пусто."""
+    held = cost = realized = 0.0
+    pts: list[list[float]] = []
+    for kind, sats, price, ts, _ex in moves:
+        q, p = sats / 1e8, price / 1e9
+        if kind == 1:
+            held += q
+            cost += q * p
+        elif held > 0:
+            s = min(q, held)
+            avg = cost / held
+            realized += s * (p - avg)
+            cost -= s * avg
+            held -= s
+        pts.append([float(ts), round(realized + held * p - cost, 2)])
+    if not pts:
+        return []
+    if len(pts) > CURVE_PTS:
+        step = (len(pts) - 1) / (CURVE_PTS - 1)
+        pts = [pts[round(i * step)] for i in range(CURVE_PTS)]
+    if px and t > pts[-1][0]:
+        pts.append([float(t), round(realized + held * px - cost, 2)])
+    return pts
+
+
+def _btc_exchanges(moves: list[tuple[int, int, int, int, str]], top: int = 4) -> list[list[Any]]:
+    """Биржи кошелька по объёму движений, BTC: [биржа, выведено, заведено],
+    первые top."""
+    by: dict[str, list[float]] = {}
+    for kind, sats, _p, _ts, ex in moves:
+        row = by.setdefault(ex, [0.0, 0.0])
+        row[0 if kind == 1 else 1] += sats / 1e8
+    order = sorted(by, key=lambda k: -(by[k][0] + by[k][1]))[:top]
+    return [[k, round(by[k][0], 4), round(by[k][1], 4)] for k in order]
 
 
 def _btc_rank_build(days: int) -> Json:
@@ -554,11 +600,16 @@ def _btc_wallet_build(addr: str) -> Json:
         rows.reverse()
         # Итог — по движениям с биржей, как в рейтинге; переводы видны в
         # списке ниже, но сделками не считаются.
-        book = _btc_book([(int(r["kind"]), int(r["sats"]), int(r["price_nanos"]), int(r["ts"]), r["ex"] or "")
-                          for r in rows if int(r["price_nanos"] or 0) > 0 and r["ex"]], px)
+        priced = [(int(r["kind"]), int(r["sats"]), int(r["price_nanos"]), int(r["ts"]), r["ex"] or "")
+                  for r in rows if int(r["price_nanos"] or 0) > 0 and r["ex"]]
+        book = _btc_book(priced, px)
         return {
             "ok": True, "addr": addr, "price": round(px, 2), "ex": lab["ex"] if lab else "",
             "book": book, **_btc_extra(con, [addr])[addr],
+            # Для экрана «как у терминалов»: кривая результата по истории и
+            # биржи кошелька — из тех же движений, без новых запросов.
+            "curve": _btc_curve(priced, px, now()) if book else [],
+            "exs": _btc_exchanges(priced),
             "moves": [{"tx": r["txid"], "buy": int(r["kind"]) == 1, "btc": round(int(r["sats"]) / 1e8, 4),
                        "v": round(int(r["usd_nanos"]) / 1e9, 2), "px": round(int(r["price_nanos"]) / 1e9, 2),
                        "t": int(r["ts"]), "ex": r["ex"]} for r in reversed(rows[-50:])],

@@ -1,8 +1,10 @@
 /* Расчёты экрана кошелька Hyperliquid (src/lib/walletDash.ts): npm test. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { BIAS_EDGE, PTS_MAX, acctLev, exposure, geom, nearest, share, validAccount, validPerf, validWindow } from "../src/lib/walletDash.ts";
-import type { Position } from "../src/lib/types.ts";
+import {
+  BIAS_EDGE, PTS_MAX, acctLev, exposure, geom, lean, nearest, portfolio, share, validAccount, validCurve, validFlow, validPerf, validWindow,
+} from "../src/lib/walletDash.ts";
+import type { Position, SpotHold } from "../src/lib/types.ts";
 
 const P = (o: Partial<Position>): Position => ({
   sym: "BTC", long: true, lev: 10, size: 0, entry: 1, now: 1, margin: 0, liq: 0, pnl: 0, pct: 0, funding: 0, isolated: false, ...o,
@@ -74,4 +76,38 @@ test("кривая: ноль всегда в кадре, концы — края
   assert.equal(nearest([0, 150, 300], 300, 0.55), 1);
   assert.equal(nearest([0, 150, 300], 300, 2), 2);
   assert.equal(nearest([], 300, 0.5), -1);
+});
+
+test("перевес двух сторон: накопление от 60 % покупок, распределение до 40 %, пусто — нейтрально", () => {
+  assert.equal(lean(180, 60), "a");
+  assert.equal(lean(60, 40), "a");
+  assert.equal(lean(59, 41), "flat");
+  assert.equal(lean(40, 60), "b");
+  assert.equal(lean(0, 0), "flat");
+  assert.equal(lean(Number.NaN, 5), "b");
+});
+
+test("поток BSC и кривая биткоина с сервера: только годные", () => {
+  const f = { buy: 1, sell: 2, nb: 1, ns: 1, days: 30 };
+  assert.deepEqual(validFlow(f), f);
+  assert.equal(validFlow({ ...f, nb: 0, ns: 0 }), null);
+  assert.equal(validFlow({ ...f, buy: -1 }), null);
+  assert.equal(validFlow(null), null);
+  assert.ok(validCurve([[1, -5], [2, 5]]));
+  assert.equal(validCurve([[1, 0]]), null);
+  assert.equal(validCurve([[2, 0], [1, 0]]), null);
+  assert.equal(validCurve([[1, 0], [2, Number.POSITIVE_INFINITY]]), null);
+  assert.equal(validCurve(Array.from({ length: PTS_MAX + 1 }, (_, i) => [i, 0])), null);
+});
+
+test("портфель BSC: стоимость, вложено, PnL, доля в плюсе и крупнейшая монета", () => {
+  const H = (sym: string, cost: number, value: number): SpotHold => ({
+    token: sym, sym, cost, value, pnl: value - cost, pct: 0, entry: 1, price: 1, buys: 1, since: 0 });
+  const p = portfolio([H("CAKE", 40000, 52000), H("PEPE", 20000, 15000), H("BNB", 8000, 9000)]);
+  assert.deepEqual([p.n, p.value, p.cost, p.pnl, p.goodN, p.topSym], [3, 76000, 68000, 8000, 2, "CAKE"]);
+  assert.ok(Math.abs(p.inProfit - 61000 / 76000) < 1e-12);
+  assert.ok(Math.abs(p.top - 52000 / 76000) < 1e-12);
+  assert.ok(Math.abs(p.pct! - (8000 / 68000) * 100) < 1e-9);
+  const none = portfolio([]);
+  assert.deepEqual([none.value, none.pct, none.inProfit, none.top], [0, null, 0, 0]);
 });

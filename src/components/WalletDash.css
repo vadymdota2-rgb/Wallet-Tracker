@@ -37,6 +37,14 @@
 .wd-exp-row.long .wd-track > span { background: var(--up); box-shadow: 0 0 10px rgb(61 220 151 / 0.55); }
 .wd-exp-row.short .wd-track > span { background: var(--dn); box-shadow: 0 0 10px rgb(255 92 119 / 0.55); }
 
+/* Биржи кошелька биткоина: выведено (зелёным) и заведено (красным) одной
+   полосой, с зазором между частями. */
+.wd-exp-row.ex b { display: inline-flex; gap: 8px; font-size: 12px; }
+.wd-track.two { display: flex; gap: 2px; }
+.wd-track.two > .o { background: var(--up); box-shadow: 0 0 10px rgb(61 220 151 / 0.5); }
+.wd-track.two > .i { background: var(--dn); box-shadow: 0 0 10px rgb(255 92 119 / 0.5); }
+.wd-side.flat { color: var(--warn); background: rgb(255 194 77 / 0.12); }
+
 /* Результат сделок: итог крупно, кривая, плитки. */
 .wd-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .wd-head .big { font-variant-numeric: tabular-nums; }

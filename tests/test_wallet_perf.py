@@ -137,6 +137,8 @@ class PerfTest(unittest.TestCase):
         self.assertIn("idx_hl_fills_wallet", plan(con, sql, params))
 
     def test_wallet_answer_has_account_and_perf(self):
+        api._table_ok.clear()
+        self.addCleanup(api._table_ok.clear)
         cur = sqlite3.connect(":memory:")
         cur.row_factory = sqlite3.Row
         cur.executescript(
@@ -154,6 +156,49 @@ class PerfTest(unittest.TestCase):
         self.assertTrue(rep["ok"])
         self.assertEqual(rep["acct"]["free"], 10924545.9)
         self.assertEqual(rep["perf"]["7"]["trades"], 1)
+
+
+class SpotTest(unittest.TestCase):
+    """BSC: результат продаж по средней цене покупки и поток покупок и
+    продаж — из нашей базы (таблица trades бота)."""
+
+    def setUp(self):
+        # Кэш «есть ли таблица» — по пути базы; у баз в памяти путь пустой, и
+        # ответ другого теста («trades нет») прилипал бы к этому.
+        api._table_ok.clear()
+        self.addCleanup(api._table_ok.clear)
+
+    def db(self, rows):
+        cur = sqlite3.connect(":memory:")
+        cur.row_factory = sqlite3.Row
+        cur.execute("CREATE TABLE trades (id INTEGER PRIMARY KEY, wallet TEXT, token TEXT, is_buy INTEGER,"
+                    " usd_nanos INTEGER, token_amount TEXT, timestamp INTEGER)")
+        cur.executemany("INSERT INTO trades (wallet, token, is_buy, usd_nanos, token_amount, timestamp) VALUES (?,?,?,?,?,?)", rows)
+        return cur
+
+    def test_sells_are_trades_at_average_buy_price(self):
+        tok = "0x" + "1" * 40
+        rows = [(A, tok, 1, 1000 * N, "100", T - 10 * DAY), (A, tok, 1, 3000 * N, "100", T - 9 * DAY),  # средняя 20/шт
+                (A, tok, 0, 1500 * N, "50", T - 2 * DAY),  # +500
+                (A, tok, 0, 600 * N, "50", T - DAY),  # −400
+                (A, "0x" + "2" * 40, 0, 900 * N, "10", T - DAY),  # продажа без покупки — не сделка
+                (B, tok, 0, 9000 * N, "1", T - DAY)]
+        cur = self.db(rows)
+        perf = api.spot_perf(cur, A, T)
+        w7 = perf["7"]
+        self.assertEqual((w7["trades"], w7["wins"], w7["pnl"], w7["best"], w7["worst"]), (2, 1, 100.0, 500.0, -400.0))
+        self.assertEqual(w7["pf"], 1.25)
+        flow = api.spot_flow(cur, A, T)
+        self.assertEqual(flow, {"buy": 4000.0, "sell": 3000.0, "nb": 2, "ns": 3, "days": 30})
+
+    def test_empty_and_bad(self):
+        cur = self.db([])
+        self.assertEqual(api.spot_perf(cur, A, T), {})
+        self.assertIsNone(api.spot_flow(cur, A, T))
+        self.assertIsNone(api.spot_flow(cur, "не адрес", T))
+        # Пыль ниже порога рейтинга не считается.
+        cur = self.db([(A, "0x" + "1" * 40, 1, 1, "1", T - DAY)])
+        self.assertIsNone(api.spot_flow(cur, A, T))
 
 
 if __name__ == "__main__":

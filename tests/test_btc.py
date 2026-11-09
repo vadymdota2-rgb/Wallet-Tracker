@@ -242,6 +242,33 @@ class BookTest(unittest.TestCase):
         self.assertEqual(b["win"], 100)
         self.assertEqual((b["ex"], b["days"], b["first"], b["last"]), ("Binance", 2, 100, 86_700))
 
+    def test_realized_and_open_parts_add_up(self):
+        moves = [(1, SAT, 50_000 * NANO, 100, "Binance"), (1, SAT, 70_000 * NANO, 200, "Binance"),
+                 (2, SAT, 90_000 * NANO, 86_400 + 300, "OKX")]
+        b = btc._btc_book(moves, 80_000.0)
+        self.assertEqual((b["real"], b["unreal"]), (30_000.0, 20_000.0))
+        self.assertEqual(b["real"] + b["unreal"], b["pnl"])
+
+    def test_curve_is_the_result_after_each_move_and_now(self):
+        # После покупки по 50k — ноль; вторая по 70k: запас 2 по средней 60k
+        # при цене 70k — +20k; продажа по 90k: +30k зафиксировано и 1 по 60k
+        # при 90k — +30k; сейчас 80k: +30k и +20k.
+        moves = [(1, SAT, 50_000 * NANO, 100, "Binance"), (1, SAT, 70_000 * NANO, 200, "Binance"),
+                 (2, SAT, 90_000 * NANO, 300, "OKX")]
+        self.assertEqual(btc._btc_curve(moves, 80_000.0, 400),
+                         [[100.0, 0.0], [200.0, 20_000.0], [300.0, 60_000.0], [400.0, 50_000.0]])
+        self.assertEqual(btc._btc_curve([], 80_000.0, 400), [])
+        many = [(1, SAT, (50_000 + i) * NANO, 100 + i, "B") for i in range(500)]
+        pts = btc._btc_curve(many, 80_000.0, 10_000)
+        self.assertEqual(len(pts), btc.CURVE_PTS + 1)  # история — не больше CURVE_PTS, и «сейчас»
+        self.assertEqual((pts[0][0], pts[-2][0], pts[-1][0]), (100.0, 599.0, 10_000.0))
+        self.assertEqual([p[0] for p in pts], sorted(p[0] for p in pts))
+
+    def test_exchanges_by_volume(self):
+        moves = [(1, 3 * SAT, 1, 1, "A"), (2, SAT, 1, 2, "A"), (1, 10 * SAT, 1, 3, "B"), (1, SAT // 10, 1, 4, "C"),
+                 (1, SAT // 100, 1, 5, "D"), (1, SAT // 1000, 1, 6, "E")]
+        self.assertEqual(btc._btc_exchanges(moves), [["B", 10.0, 0.0], ["A", 3.0, 1.0], ["C", 0.1, 0.0], ["D", 0.01, 0.0]])
+
     def test_selling_more_than_seen_bought_does_not_invent_profit(self):
         moves = [(1, SAT, 60_000 * NANO, 100, "Binance"), (2, 3 * SAT, 90_000 * NANO, 200, "Binance")]
         b = btc._btc_book(moves, 90_000.0)

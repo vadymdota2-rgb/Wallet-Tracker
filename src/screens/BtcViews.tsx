@@ -32,6 +32,7 @@ import {
 } from "../lib/api";
 import { BuySellBar, TrendChart } from "../components/Chart";
 import { CoinIcon } from "../components/CoinIcon";
+import { BtcExchanges, BtcResult, BtcStack, BtcWalletFlow } from "../components/WalletDash";
 import {
   Card, DealsGlyph, Empty, MinusGlyph, PlusGlyph, Row, SectionTitle, Segmented, Tiles,
 } from "../components/ui";
@@ -528,20 +529,7 @@ export function BtcWalletScreen({ arg }: ScreenProps) {
         {data?.ex ? <p className="note warn">{t(lang, "btc_is_exchange", { ex: data.ex })}</p> : null}
         {data?.etf ? <p className="note warn">{t(lang, "btc_is_etf", { f: data.etf })}</p> : null}
 
-        {b ? (
-          <Tiles
-            cols={3}
-            size="sm"
-            items={[
-              { label: "PnL", value: iso(signed(b.pnl)), tone: b.pnl >= 0 ? "up" : "dn" },
-              { label: "ROI", value: iso(pct(b.roi, 1)) },
-              { label: t(lang, "btc_hold"), value: btc(b.btc) },
-              { label: t(lang, "btc_avg"), value: px(b.avg) },
-              { label: t(lang, "btc_in_profit"), value: `${num(b.win)}%` },
-              { label: t(lang, "btc_bal"), value: data?.bal !== undefined ? btc(data.bal) : "—" },
-            ]}
-          />
-        ) : null}
+
         <div className="unl-act">
           <BtcFollowWide addr={addr} />
           <button
@@ -556,6 +544,17 @@ export function BtcWalletScreen({ arg }: ScreenProps) {
           </button>
         </div>
       </Card>
+      {/* Тот же вид, что у кошельков Hyperliquid и BSC (WalletDash): запас,
+          выводы и заводы на биржи, кривая результата, биржи — из базы
+          Wallet Tracker. */}
+      {b && data?.ok ? (
+        <>
+          <BtcStack data={data} lang={lang} />
+          <BtcWalletFlow data={data} lang={lang} />
+          <BtcResult data={data} lang={lang} />
+          <BtcExchanges data={data} lang={lang} />
+        </>
+      ) : null}
       <Card>
         <SectionTitle>{t(lang, "btc_moves")}</SectionTitle>
         {data === null ? (

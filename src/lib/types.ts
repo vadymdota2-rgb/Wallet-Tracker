@@ -56,6 +56,15 @@ export interface PerfWindow {
 }
 export type Perf = Partial<Record<"7" | "30", PerfWindow>>;
 
+/** Покупки и продажи кошелька на BSC за days дней: $ и число сделок. */
+export interface SpotFlow {
+  buy: number;
+  sell: number;
+  nb: number;
+  ns: number;
+  days: number;
+}
+
 export interface Equity {
   total: number;
   spot: number;
@@ -90,6 +99,9 @@ export interface Wallet {
   /** Счёт Hyperliquid и результат сделок — приходят с открытием кошелька. */
   acct?: Account | null;
   perf?: Perf;
+  /** BSC: результат продаж и поток покупок и продаж — из базы Wallet Tracker. */
+  sperf?: Perf;
+  sflow?: SpotFlow | null;
   /** Кошелёк биткоина: позиций и сделок BSC у него нет, свой экран. */
   chain?: "btc";
   /** Адрес как пишется: `addr` строчными, а base58 без регистра не найти. */
@@ -231,6 +243,8 @@ export interface WalletLive {
   d1?: number;
   acct?: Account | null;
   perf?: Perf;
+  sperf?: Perf;
+  sflow?: SpotFlow | null;
   error?: string;
 }
 
@@ -1024,6 +1038,9 @@ export interface BtcTrader extends BtcExtra {
   days: number;
   first: number;
   last: number;
+  /** Зафиксировано продажами и на руках по нынешней цене, $. */
+  real?: number;
+  unreal?: number;
 }
 
 export type BtcRankKind = "pnl" | "roi" | "act";
@@ -1049,6 +1066,10 @@ export interface BtcWalletReply extends BtcExtra {
   /** Адрес сам принадлежит бирже. */
   ex: string;
   book: Omit<BtcTrader, "a"> | null;
+  /** Кривая результата после каждого движения `[секунды, $]`, последняя — сейчас. */
+  curve?: [number, number][];
+  /** Биржи кошелька: [биржа, выведено BTC, заведено BTC]. */
+  exs?: [string, number, number][];
   moves: { tx: string; buy: boolean; btc: number; v: number; px: number; t: number; ex: string }[];
 }
 
