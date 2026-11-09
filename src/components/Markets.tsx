@@ -83,7 +83,7 @@ const Cell = memo(function Cell({ it, lang, on, flash, note, pick }: CellProps) 
       <i className={`mk-bar ${dir}`} style={{ inlineSize: `calc((100% - 14px) * ${v ? barShare(it) : 0})` }} aria-hidden="true" />
     </>
   );
-  const cls = `mk-cell${flash ? ` mk-flash-${flash}` : ""}`;
+  const cls = `mk-cell${dir ? ` is-${dir}` : ""}${flash ? ` mk-flash-${flash}` : ""}`;
   return (
     <button type="button" className={cls} data-k={it.k} title={t(lang, hint)} aria-expanded={on} aria-controls={note}
       onClick={() => pick(it.k)}>{body}</button>
@@ -128,11 +128,20 @@ function InfoIcon() {
   );
 }
 
+/** Значок заголовка — линия графика в кружке, как монета у карточки халвинга. */
+function Mark() {
+  return (
+    <svg className="mk-mark" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <path d="M3 10.5 6.2 7.3l2.3 2.3L13 5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 /** Скелет сетки, пока ждём первый ответ: меню не прыгает. */
 function Skeleton({ lang }: { lang: LangCode }) {
   return (
     <section className="mk mk-skel" aria-label={t(lang, "mk_title")} aria-busy="true">
-      <div className="mk-head"><span className="mk-ttl">{t(lang, "mk_title")}</span></div>
+      <div className="mk-head"><span className="mk-ttl"><Mark />{t(lang, "mk_title")}</span></div>
       <div className="mk-grid">{MARKET_KEYS.map((k) => <div key={k} className="mk-cell"><i /><i /><i /></div>)}</div>
     </section>
   );
@@ -204,8 +213,9 @@ export function MarketsStrip({ fallback }: { fallback: ReactNode }) {
   return (
     <section className="mk" aria-label={t(lang, "mk_title")}>
       <div className="mk-head">
-        <span className="mk-ttl">{t(lang, "mk_title")}</span>
+        <span className="mk-ttl"><Mark />{t(lang, "mk_title")}</span>
         <span className={`mk-age${age >= MARKETS_STALE_MIN ? " old" : ""}`}>
+          <i className="mk-dot" aria-hidden="true" />
           {age < 1 ? t(lang, "mk_now") : age < 60 ? t(lang, "mk_ago", { n: age }) : t(lang, "mk_ago_h", { n: Math.floor(age / 60) })}
         </span>
       </div>
