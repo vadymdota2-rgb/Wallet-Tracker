@@ -187,6 +187,8 @@ jobs:
         run: |
           python tools/load-markets.py 2 3 | tee load.txt
           python tools/load-markets.py 2 3 304 | tee -a load.txt
+          python tools/load-markets.py 2 3 hist | tee -a load.txt
+          python tools/load-markets.py 2 3 304 hist | tee -a load.txt
           if grep -q "сбой\|ни одного" load.txt; then exit 1; fi
           grep -q "'200'" load.txt
           grep -q "'304'" load.txt

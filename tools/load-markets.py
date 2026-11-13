@@ -7,10 +7,11 @@
 (готовый, как из кэша) и проверка подписки (как из памяти _premium_memo):
 базы и сеть не трогаются.
 
-    python3 tools/load-markets.py [соединений=3] [секунд=5] [304]
+    python3 tools/load-markets.py [соединений=3] [секунд=5] [304] [hist]
 
-«304» — у каждого телефона та же копия (If-None-Match). Печатает запросы в
-секунду и задержку (медиана и худший 1 %). Клиенты работают на той же
+«304» — у каждого телефона та же копия (If-None-Match); «hist» — история для
+мини-графика (/api/markets/hist: 9 пунктов × 145 точек, как за сутки).
+Печатает запросы в секунду и задержку (медиана и худший 1 %). Клиенты работают на той же
 машине и отнимают у сервера ядра — на сервере цифры выше.
 """
 from __future__ import annotations
@@ -36,6 +37,9 @@ import wt_shield as shield  # noqa: E402
 
 USERS = 3000  # разных подписчиков — каждый в своём лимите запросов
 REPLY = {"ok": True, "at": int(time.time()), "items": [{"k": k, "px": 1234.5678, "prev": 1230.1} for k in mk.KEYS]}
+_T = int(time.time())
+HIST = {"ok": True, "at": _T, "series": {k: [[_T - 86_400 + i * 600, round(1234.5 + (i % 17) * 0.37, 2)] for i in range(145)]
+                                        for k in mk.KEYS}}
 
 
 def init_data(uid: int) -> str:
@@ -47,7 +51,7 @@ def init_data(uid: int) -> str:
     return "&".join(f"{k}={quote(v)}" for k, v in parts.items()) + f"&hash={sign}"
 
 
-def client(port: int, users: list[str], secs: float, q: mp.Queue, inm: str) -> None:
+def client(port: int, users: list[str], secs: float, q: mp.Queue, inm: str, path: str) -> None:  # noqa: PLR0913 — параметры процесса-клиента
     lat: list[float] = []
     codes: dict[str, int] = {}
     conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
@@ -59,7 +63,7 @@ def client(port: int, users: list[str], secs: float, q: mp.Queue, inm: str) -> N
             head["If-None-Match"] = inm
         t = time.perf_counter()
         try:
-            conn.request("GET", "/api/markets", headers=head)
+            conn.request("GET", path, headers=head)
             r = conn.getresponse()
             r.read()
             codes[str(r.status)] = codes.get(str(r.status), 0) + 1
@@ -76,6 +80,8 @@ def main() -> None:
     secs = float(sys.argv[2]) if len(sys.argv) > 2 else 5.0
     api.BOT_TOKEN, api.API_KEY = TOKEN, "k"
     api.markets_data = lambda: REPLY
+    api.markets_hist = lambda: HIST
+    path = "/api/markets/hist" if "hist" in sys.argv[3:] else "/api/markets"
     api.chat_premium = lambda chat: True
     api.sys.stderr = open(os.devnull, "w")  # noqa: SIM115 — журнал сервера не нужен
     httpd = shield.ShieldServer(("127.0.0.1", 0), api.Handler)
@@ -84,13 +90,13 @@ def main() -> None:
     inm = ""
     if "304" in sys.argv[3:]:
         c = http.client.HTTPConnection("127.0.0.1", port)
-        c.request("GET", "/api/markets", headers={"X-Api-Key": "k", "X-Telegram-Init-Data": init_data(1)})
+        c.request("GET", path, headers={"X-Api-Key": "k", "X-Telegram-Init-Data": init_data(1)})
         r = c.getresponse()
         r.read()
         inm = r.getheader("ETag") or ""
     users = [init_data(10_000 + i) for i in range(USERS)]
     q: mp.Queue = mp.Queue()
-    ps = [mp.Process(target=client, args=(port, users[i::n], secs, q, inm)) for i in range(n)]
+    ps = [mp.Process(target=client, args=(port, users[i::n], secs, q, inm, path)) for i in range(n)]
     for p in ps:
         p.start()
     res = [q.get() for _ in ps]
@@ -108,7 +114,7 @@ def main() -> None:
     def pct(f: float) -> float:
         return lat[int(f * (len(lat) - 1))] * 1000
     rps = f"{len(lat) / secs:,.0f}".replace(",", " ")
-    print(f"соединений {n}: {rps} запросов/с; задержка — медиана {pct(0.5):.1f} мс, "
+    print(f"{path} · соединений {n}: {rps} запросов/с; задержка — медиана {pct(0.5):.1f} мс, "
           f"худший 1 % {pct(0.99):.1f} мс; ответы {codes}")
 
 

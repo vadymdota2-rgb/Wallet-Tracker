@@ -103,6 +103,58 @@ class HostileSourceTest(unittest.TestCase):
         self.assertLess(time.process_time() - t0, 1.0)
 
 
+class HostileHistoryFileTest(unittest.TestCase):
+    """Копия истории на диске подменена или испорчена: сервер не падает, не
+    зависает, не берёт чужое и не отдаёт его подписчикам."""
+
+    def setUp(self):
+        self.addCleanup(setattr, mk, "_st", mk._st)
+        mk._st = mk._State()
+
+    def load(self, body: str | bytes) -> int:
+        import tempfile  # noqa: PLC0415
+
+        import whale_api as api  # noqa: PLC0415
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(api, "CACHE_DIR", d), \
+                mock.patch.object(mk, "_now", return_value=NOW):
+            mode = "wb" if isinstance(body, bytes) else "w"
+            with open(os.path.join(d, api.MARKETS_DISK), mode) as f:
+                f.write(body)
+            return api.markets_disk_load()
+
+    def test_broken_and_hostile_files_are_ignored(self):
+        for body in ("", "{", "null", "[]", '"x"', b"\xff\xfe", "{" * 100_000 + "}" * 100_000,  # вложенность
+                     json.dumps({"series": {"GOLD": [[NOW, 10**400], [NOW, "NaN"], [True, 4000], [NOW, float("inf")]]}}).replace("Infinity", "1e999"),
+                     json.dumps({"series": {"GOLD": [[NOW - 60, 4000.0, "лишнее"]], "<script>": [[NOW, 1.0]]}})):
+            self.assertEqual(self.load(body), 0, str(body)[:60])
+        self.assertEqual(mk._st.hist, {})
+        self.assertEqual(mk.history(), {"ok": False, "error": "no_data"})
+
+    def test_huge_file_costs_little(self):
+        # Миллион точек в пределах MARKETS_DISK_MAX не влезет — а то, что
+        # влезло, читается быстро и обрезается до HIST_MAX на пункт.
+        pts = [[NOW - 86_000 + i, 4000.0] for i in range(20_000)]
+        body = json.dumps({"series": {"GOLD": pts}}, separators=(",", ":"))
+        t0 = time.monotonic()
+        n = self.load(body)
+        self.assertLess(time.monotonic() - t0, 2)
+        self.assertEqual(n, mk.HIST_MAX)
+        self.assertEqual(len(mk._st.hist["GOLD"]), mk.HIST_MAX)
+
+    def test_only_our_numbers_go_out(self):
+        self.load(json.dumps({"series": {"GOLD": [[NOW - 60, 4000.0]], "evil": [[NOW, 1.0]]}, "x": "<img onerror>"}))
+        out = json.dumps(mk.history())
+        self.assertNotIn("evil", out)
+        self.assertNotIn("<img", out)
+        self.assertEqual(mk.history()["series"], {"GOLD": [[NOW - 60, 4000.0]]})
+
+    def test_stale_tmp_copy_name_is_cleaned_by_the_server(self):
+        # Временный файл копии — «markets_hist.json.<pid>.<поток>.tmp»: его
+        # узнаёт уборка брошенных копий сервера.
+        import whale_api as api  # noqa: PLC0415
+        self.assertTrue(api._TMP_RE.search(f"{api.MARKETS_DISK}.123.456.tmp"))
+
+
 class HugeBodyTest(unittest.TestCase):
     """Источник отдаёт гигабайт: сервер читает не больше RESP_MAX байт и
     бросает ответ, а не держит его в памяти целиком."""

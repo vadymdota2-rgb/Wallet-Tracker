@@ -165,6 +165,10 @@ button.mk-cell:focus-visible { outline: 2px solid var(--glow); outline-offset: 1
   padding: 3px 6px; border-radius: 6px; font-size: 10px; background: rgb(7 14 30 / 0.95); border: 1px solid var(--line-2);
 }
 [dir="rtl"] .mk-spark-tip { transform: translate(50%, -100%); }
+/* У краёв подпись прижата к точке изнутри, а не по центру: иначе половина
+   уходит за меню. */
+.mk-spark-tip.start { transform: translate(0, -100%); }
+[dir="rtl"] .mk-spark-tip.start { transform: translate(0, -100%); }
 .mk-spark-tip.end { transform: translate(-100%, -100%); }
 [dir="rtl"] .mk-spark-tip.end { transform: translate(100%, -100%); }
 .mk-spark-tip b { color: var(--ink); font-variant-numeric: tabular-nums; }

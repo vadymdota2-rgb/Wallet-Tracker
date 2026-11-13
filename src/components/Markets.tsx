@@ -113,7 +113,7 @@ function MiniChart({ it, pts, lang, now }: { it: MarketItem; pts: [number, numbe
         {p ? (
           <>
             <i className="mk-spark-dot" style={{ insetInlineStart: `${left}%`, insetBlockStart: `${(g.ys[at]! / SH) * 100}%` }} />
-            <span className={`mk-spark-tip${left > 60 ? " end" : ""}`} style={{ insetInlineStart: `${left}%` }}>
+            <span className={`mk-spark-tip${left < 25 ? " start" : left > 75 ? " end" : ""}`} style={{ insetInlineStart: `${left}%` }}>
               <b>{fmtPx(it.k, p[1], it)}</b> <small>{agoText(lang, ageMin(p[0], now))}</small>
             </span>
           </>

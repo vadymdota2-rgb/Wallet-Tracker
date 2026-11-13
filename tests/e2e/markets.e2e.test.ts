@@ -402,6 +402,86 @@ test("касание ячейки — мини-график за сутки: ц�
   await ctx.close();
 });
 
+/** Мини-график и его подписи не вылезают за меню и не обрезаны. */
+function sparkOverflow(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const out: string[] = [];
+    const drawer = document.querySelector(".drawer")!.getBoundingClientRect();
+    for (const el of document.querySelectorAll<HTMLElement>(".mk-spark, .mk-spark *, .mk-note-t")) {
+      const r = el.getBoundingClientRect();
+      if (r.width && (r.left < drawer.left - 1 || r.right > drawer.right + 1)) out.push(`за меню: ${el.className.toString()}`);
+    }
+    for (const el of document.querySelectorAll<HTMLElement>(".mk-spark-ax span")) {
+      if (el.scrollWidth > el.clientWidth + 1) out.push(`обрезано «${el.textContent}»`);
+    }
+    return out;
+  });
+}
+
+test("мини-график на 16 языках при 320 точках: подписи времени переведены, ничего не вылезает", async () => {
+  for (const lang of LANGS) {
+    const { ctx, page, errors } = await open({ lang, width: 320 });
+    await page.locator(".drawer .mk-px").first().waitFor();
+    await page.locator('.mk-cell[data-k="DXY"]').click();
+    await page.locator(".mk-spark").waitFor();
+    const ax = (await page.locator(".mk-spark-ax span").allTextContents()).map(sp);
+    assert.equal(ax[1], sp(I18N["mk_now"]![lang]!), lang);
+    assert.equal(ax[0], sp(I18N["mk_ago_h"]![lang]!.replace("{n}", "24")), lang);
+    // Подпись точки — у края графика тоже внутри меню.
+    const box = (await page.locator(".mk-spark").boundingBox())!;
+    for (const f of [0.01, 0.5, 0.99]) {
+      await page.mouse.click(box.x + box.width * f, box.y + 20);
+      assert.deepEqual(await sparkOverflow(page), [], `${lang} ${f}`);
+    }
+    assert.deepEqual(errors, [], lang);
+    await ctx.close();
+  }
+});
+
+test("мини-график справа налево (арабский): старое — справа, касание у правого края — сутки назад", async () => {
+  const { ctx, page, errors } = await open({ lang: "ar" });
+  await page.locator(".drawer .mk-px").first().waitFor();
+  await page.locator('.mk-cell[data-k="GOLD"]').click();
+  const chart = page.locator(".mk-spark");
+  await chart.waitFor();
+  const ax = page.locator(".mk-spark-ax span");
+  const [a0, a1] = [(await ax.nth(0).boundingBox())!, (await ax.nth(1).boundingBox())!];
+  assert.ok(a0.x > a1.x, "«24 ч назад» — справа");
+  const box = (await chart.boundingBox())!;
+  await page.mouse.click(box.x + box.width - 1, box.y + 20);
+  assert.match(sp(await page.locator(".mk-spark-tip small").textContent()), /2[34]/); // первые точки суток
+  const dot = (await page.locator(".mk-spark-dot").boundingBox())!;
+  assert.ok(dot.x > box.x + box.width * 0.9, "точка — у правого края, где касались");
+  assert.deepEqual(await sparkOverflow(page), []);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test("мини-график при крупном шрифте (до 200 %) и в высокой контрастности", async () => {
+  for (const z of [1.3, 2]) {
+    const { ctx, page } = await open({ width: 360 });
+    await page.locator(".drawer .mk-px").first().waitFor();
+    await page.locator('.mk-cell[data-k="GOLD"]').click();
+    await page.locator(".mk-spark").waitFor();
+    await page.evaluate((k) => {
+      const els = [...document.querySelectorAll<HTMLElement>(".mk, .mk *")];
+      const px = els.map((el) => parseFloat(getComputedStyle(el).fontSize) * k);
+      els.forEach((el, i) => { el.style.fontSize = `${px[i]}px`; });
+    }, z);
+    await page.waitForTimeout(100);
+    assert.deepEqual(await sparkOverflow(page), [], String(z));
+    await ctx.close();
+  }
+  const { ctx, page, errors } = await open({ forced: true });
+  await page.locator(".drawer .mk-px").first().waitFor();
+  await page.locator('.mk-cell[data-k="GOLD"]').click();
+  await page.locator(".mk-spark").waitFor();
+  const stroke = await page.locator(".mk-spark-line").evaluate((el) => getComputedStyle(el).stroke);
+  assert.notEqual(stroke, "none");
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
 test("истории нет или она битая — пояснение без графика, без ошибок", async () => {
   for (const hist of [{ ok: false, error: "no_data" }, { ok: true, series: { GOLD: [[1, "x"]] } }, "мусор"]) {
     const { ctx, page, errors } = await open({ hist });

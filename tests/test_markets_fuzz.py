@@ -13,6 +13,7 @@ SEED) — найденное нарушение воспроизводится, 
 приложение понимают ответ одинаково.
 """
 import calendar
+import itertools
 import json
 import math
 import os
@@ -192,6 +193,108 @@ class MarketsFuzzTest(unittest.TestCase):
             got = json.loads(out.stdout)
             self.assertEqual(got["n"], len(good))
             self.assertEqual(got["bad"], [], "приложение отвергло ответ сервера")
+        finally:
+            os.unlink(f.name)
+
+
+class HistoryFuzzTest(unittest.TestCase):
+    """История мини-графика на мусоре: копия с диска — чужая и испорченная,
+    сборки — в любом порядке времени. История всегда: только наши пункты,
+    точки по возрастанию времени, в пределах суток, не больше HIST_MAX,
+    правдоподобные цены; ответ — честный JSON, и приложение (validHist)
+    принимает его целиком."""
+
+    def setUp(self):
+        self.addCleanup(setattr, mk, "_st", mk._st)
+        mk._st = mk._State()
+
+    def check(self, m: str, t: int) -> None:
+        for k, pts in mk._st.hist.items():
+            self.assertIn(k, mk.KEYS, m)
+            self.assertLessEqual(len(pts), mk.HIST_MAX, m)
+            lo, hi = mk.RANGE.get(k, (0.0, mk.PX_MAX))
+            for (a, _), (b, _) in itertools.pairwise(pts):
+                self.assertLess(a, b, (m, k))
+            for ts, px in pts:
+                self.assertIsInstance(ts, int, m)
+                self.assertLessEqual(ts, t + mk.HIST_AHEAD, (m, k, ts))
+                self.assertTrue(math.isfinite(px) and 0 < px < mk.PX_MAX and lo <= px <= hi, (m, k, px))
+        json.dumps(mk.history(), allow_nan=False)
+
+    def junk_series(self, r: random.Random, t: int) -> object:
+        if r.random() < 0.05:
+            return r.choice(JUNK)
+        out: dict = {}
+        for k in [*mk.KEYS, "VIX", "<b>", ""]:
+            if r.random() < 0.3:
+                continue
+            if r.random() < 0.05:
+                out[k] = r.choice(JUNK)
+                continue
+            n = r.randrange(0, 400)
+            base = r.choice([4000.0, 4.8, 42.0, 60.0, 102.0])
+            out[k] = [r.choice(JUNK) if r.random() < 0.05 else
+                      [r.choice([t - r.randrange(-500, 2 * mk.HIST_SEC), r.choice(JUNK), float(t), True]),
+                       r.choice([base * (0.5 + r.random()), r.choice(JUNK), str(base)])]
+                      for _ in range(n)]
+        return {"series": out} if r.random() < 0.95 else out
+
+    def test_restore_from_any_file_keeps_invariants(self):
+        r = random.Random(SEED + 1)  # noqa: S311 — повторяемость, а не криптостойкость
+        took = 0
+        for i in range(400):
+            mk._st = mk._State()
+            t = utc(r.choice(TIMES))
+            n = mk.history_restore(self.junk_series(r, t), t)
+            took += n
+            self.assertEqual(n, sum(len(v) for v in mk._st.hist.values()), i)
+            self.check(f"случай {i}", t)
+        self.assertGreater(took, 1000)  # генератор даёт и годные точки — иначе он ничего не проверяет
+
+    def test_builds_in_any_time_order_keep_invariants(self):
+        r = random.Random(SEED + 2)  # noqa: S311
+        t = top = utc("2026-11-06 15:00")
+        for i in range(3000):
+            t += r.choice([600, 600, 600, 0, -600, 60, 3 * 3600])
+            top = max(top, t)  # время назад — старый ответ: история его не берёт
+            items = [{"k": k, "px": round(4000.0 * (0.9 + r.random() / 5), 2), "prev": 4000.0}
+                     for k in ("GOLD", "SP500") if r.random() < 0.9]
+            with mk._lock:
+                mk._record({"ok": True, "at": t, "items": items})
+            self.check(f"сборка {i}", top)
+        last = max(p[-1][0] for p in mk._st.hist.values())
+        for pts in mk._st.hist.values():
+            self.assertGreaterEqual(pts[0][0], last - mk.HIST_SEC - 3 * 3600)
+
+    @unittest.skipUnless(shutil.which("node"), "нужен Node 22.18+")
+    def test_every_history_is_accepted_by_the_app(self):
+        r = random.Random(SEED + 3)  # noqa: S311
+        got = []
+        for _ in range(60):
+            mk._st = mk._State()
+            t = utc(r.choice(TIMES))
+            mk.history_restore(self.junk_series(r, t), t)
+            h = mk.history()
+            if h["ok"]:
+                got.append((t, h))
+        self.assertGreater(len(got), 30)
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
+            json.dump(got, f)
+        try:
+            script = (
+                "import { readFileSync } from 'node:fs';"
+                f"import {{ validHist }} from {json.dumps(os.path.join(ROOT, 'src/lib/markets.ts'))};"
+                "const all = JSON.parse(readFileSync(process.argv[1], 'utf8'));"
+                "const bad = all.filter(([t, h]) => { const v = validHist(h, t);"
+                " const want = Object.fromEntries(Object.entries(h.series).filter(([, p]) => p.length >= 2));"
+                " return JSON.stringify(v) !== JSON.stringify(want); });"
+                "console.log(JSON.stringify({ n: all.length, bad: bad.slice(0, 1) }));"
+            )
+            out = subprocess.run(["node", "--input-type=module", "-e", script, f.name],
+                                 capture_output=True, text=True, timeout=120, check=True)
+            res = json.loads(out.stdout)
+            self.assertEqual(res["n"], len(got))
+            self.assertEqual(res["bad"], [], "приложение отвергло историю сервера")
         finally:
             os.unlink(f.name)
 

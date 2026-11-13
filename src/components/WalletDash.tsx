@@ -157,7 +157,7 @@ function PnlChart({ pts, label }: { pts: [number, number][]; label: string }) {
       {p ? (
         <>
           <i className={`wd-dot ${p[1] >= 0 ? "up" : "dn"}`} style={{ insetInlineStart: `${left}%`, insetBlockStart: `${(g.ys[at]! / H) * 100}%` }} />
-          <div className={`wd-tip${left > 60 ? " end" : ""}`} style={{ insetInlineStart: `${left}%` }}>
+          <div className={`wd-tip${left < 25 ? " start" : left > 75 ? " end" : ""}`} style={{ insetInlineStart: `${left}%` }}>
             <b className={p[1] > 0 ? "up" : p[1] < 0 ? "dn" : undefined}>{signed(p[1])}</b>
             <small>{dayMonth(p[0], now)}</small>
           </div>

@@ -188,6 +188,14 @@ test("результат сделок: итог, кривая выше нуля 
   await chart.focus();
   await page.keyboard.press("ArrowRight");
   assert.equal(sp(await page.locator(".wd-tip b").textContent()), "-$380K");
+  // У краёв подпись не уходит за карточку.
+  const card = (await page.locator(".card", { has: chart }).boundingBox())!;
+  for (const key of ["Home", "ArrowLeft", "End"]) {
+    for (let i = 0; i < (key === "ArrowLeft" ? 10 : 0); i++) await page.keyboard.press(key);
+    if (key === "End") for (let i = 0; i < 10; i++) await page.keyboard.press("ArrowRight");
+    const tip = (await page.locator(".wd-tip").boundingBox())!;
+    assert.ok(tip.x >= card.x && tip.x + tip.width <= card.x + card.width, `${key}: ${JSON.stringify(tip)}`);
+  }
   const tiles = (await page.locator(".card").filter({ has: chart }).locator(".tile").evaluateAll((els) => els.map((el) => (el as HTMLElement).innerText))).map(sp);
   assert.deepEqual(tiles, ["Винрейт 63,6%", "Профит-фактор 1,84", "Макс. просадка -$412K", "Лучшая сделка +$120,4K",
     "Худшая сделка -$98K", "Сделки 98/154"]);

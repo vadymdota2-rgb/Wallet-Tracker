@@ -451,6 +451,33 @@ class CacheTest(unittest.TestCase):
                 mk._record({**r1, "at": NOW + mk.HIST_SEC + 10 + i})
         self.assertEqual(len(mk.history()["series"]["GOLD"]), 3)
 
+    def test_history_memory_is_bounded_over_days(self):
+        # Трое суток сборок раз в 10 минут: истории — не больше суток на
+        # пункт, память после первых суток не растёт (как у халвинга).
+        mk.set_sources({name: (lambda v=v: v) for name, v in PARTS.items()})
+        t, mono = [NOW], [1000.0]
+
+        def run(n):
+            for _ in range(n):
+                with mock.patch.object(mk, "_now", return_value=t[0]), \
+                        mock.patch.object(mk.time, "monotonic", side_effect=lambda: mono[0]):
+                    mk.build()
+                t[0] += 600
+                mono[0] += 600
+
+        run(144)  # первые сутки: история набирается
+        gc.collect()
+        tracemalloc.start()
+        before = tracemalloc.get_traced_memory()[0]
+        run(288)
+        gc.collect()
+        grown = tracemalloc.get_traced_memory()[0] - before
+        tracemalloc.stop()
+        self.assertLess(grown, 256 * 1024, f"память выросла на {grown} байт")
+        for k, pts in mk._st.hist.items():
+            self.assertLessEqual(len(pts), mk.HIST_SEC // 600 + 1, k)
+            self.assertGreaterEqual(pts[0][0], pts[-1][0] - mk.HIST_SEC, k)
+
     def test_history_is_handed_to_the_server_only_when_it_changes(self):
         got: list = []
         mk.set_sink(got.append)

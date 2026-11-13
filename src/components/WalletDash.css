@@ -75,6 +75,9 @@
   background: rgb(7 14 30 / 0.94); border: 1px solid var(--line-2); box-shadow: 0 6px 18px rgb(0 0 0 / 0.45);
 }
 [dir="rtl"] .wd-tip { transform: translateX(50%); }
+/* У краёв подпись прижата к точке изнутри — не уходит за карточку. */
+.wd-tip.start { transform: none; }
+[dir="rtl"] .wd-tip.start { transform: none; }
 .wd-tip.end { transform: translateX(-100%); }
 [dir="rtl"] .wd-tip.end { transform: translateX(100%); }
 .wd-tip b { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--ink); }

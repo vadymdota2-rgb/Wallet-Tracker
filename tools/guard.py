@@ -2033,7 +2033,12 @@ say("рынки в меню — мини-график за сутки по ка�
     and "markets_disk_load()" in api.split("def wire(")[1][:3000] and "wt_markets.set_sink(markets_disk_save)" in api
     and '"markets/hist",' in api and "function MiniChart(" in _mk_tsx and "export function validHist(" in read(f"{APP}/src/lib/markets.ts")
     and "def test_history_restore_checks_every_point(" in read(f"{APP}/tests/test_markets.py")
-    and "мини-график за сутки" in read(f"{APP}/tests/e2e/markets.e2e.test.ts"))
+    and "мини-график за сутки" in read(f"{APP}/tests/e2e/markets.e2e.test.ts")
+    and "class HistoryFuzzTest(" in read(f"{APP}/tests/test_markets_fuzz.py")
+    and "class HostileHistoryFileTest(" in read(f"{APP}/tests/test_markets_security.py")
+    and "def test_history_memory_is_bounded_over_days(" in read(f"{APP}/tests/test_markets.py")
+    and "мини-график на 16 языках" in read(f"{APP}/tests/e2e/markets.e2e.test.ts")
+    and "python tools/load-markets.py 2 3 hist" in read(f"{APP}/.github/workflows/tests.yml"))
 say("рынки в меню — уровень зрелых проектов: журнал сервера только при смене состояния источников (молчит / снова отвечает, тип ошибки без текста, одна чистая строка); сетка всегда 3 × 3 — пропавший пункт «—» на своём месте («нет данных» для чтения с экрана); ячейки перерисовываются по отдельности; высокая контрастность Windows",
     "def _health(" in read(f"{APP}/wt_markets.py") and "v, why = None, type(e).__name__" in read(f"{APP}/wt_markets.py")
     and "def test_journal_only_on_state_changes(" in read(f"{APP}/tests/test_markets.py")
