@@ -1147,6 +1147,7 @@ export const ko: Dict = {
   mk_dxy_hint: "DXY는 EUR·JPY·GBP(Hyperliquid)와 CAD·SEK·CHF(ECB) 환율로 공개된 달러 인덱스 공식에 따라 자체 계산한 값이며 공식 값이 아닙니다(약 0.1% 차이가 날 수 있음). 변동은 외환 거래일 종가(뉴욕 17시) 기준이며, 주말에는 금요일 종가입니다. U.S. Dollar Index®는 ICE의 상표입니다",
   mk_gold: "금",
   mk_gold_hint: "금 — Hyperliquid의 trade.xyz 무기한 계약, 24시간 거래. 안전자산: 시장이 불안하거나 달러가 약해지면 오릅니다. Hyperliquid가 응답하지 않으면 가격은 Aster의 XAU 시장에서 가져옵니다",
+  mk_hist_short: "기록을 모으는 중 — 24시간 차트가 자동으로 채워집니다",
   mk_none: "데이터 없음",
   mk_now: "방금",
   mk_oil: "WTI 원유",

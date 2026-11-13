@@ -29104,5 +29104,23 @@
     "ja": "各移動後のウォレット損益",
     "ko": "각 이동 후 지갑 결과",
     "zh": "每次转移后的钱包收益"
+  },
+  "mk_hist_short": {
+    "ru": "История копится — график за сутки заполнится сам",
+    "en": "History is building up — the 24h chart fills in on its own",
+    "uk": "Історія збирається — графік за добу заповниться сам",
+    "de": "Verlauf wird aufgebaut — der 24-h-Chart füllt sich von selbst",
+    "es": "El historial se está acumulando — el gráfico de 24 h se completará solo",
+    "fr": "Historique en cours de collecte — le graphique sur 24 h se remplira tout seul",
+    "pt": "O histórico está sendo coletado — o gráfico de 24 h se completa sozinho",
+    "pl": "Historia się zbiera — wykres z doby uzupełni się sam",
+    "tr": "Geçmiş birikiyor — 24 saatlik grafik kendiliğinden dolacak",
+    "id": "Riwayat sedang dikumpulkan — grafik 24 jam akan terisi sendiri",
+    "vi": "Lịch sử đang được thu thập — biểu đồ 24 giờ sẽ tự đầy dần",
+    "hi": "इतिहास जुट रहा है — 24 घंटे का चार्ट अपने आप भर जाएगा",
+    "ar": "يجري جمع السجل — سيكتمل رسم 24 ساعة تلقائيًا",
+    "ja": "履歴を収集中 — 24時間のチャートは自動で埋まります",
+    "ko": "기록을 모으는 중 — 24시간 차트가 자동으로 채워집니다",
+    "zh": "正在积累历史数据 — 24 小时图表会自动填满"
   }
 }

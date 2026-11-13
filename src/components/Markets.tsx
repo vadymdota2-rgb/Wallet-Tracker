@@ -35,7 +35,8 @@ import { openExternal } from "../lib/telegram";
 import { CMC_URL } from "./CmcBy";
 import "./Markets.css";
 import {
-  MARKETS_STALE_MIN, MARKET_KEYS, ageMin, barShare, change, digits, isPercent, marketsDue, spark, sparkSeries,
+  MARKETS_STALE_MIN, MARKET_KEYS, SPARK_FULL_SEC, ageMin, barShare, change, digits, isPercent, marketsDue, spark, sparkFrom,
+  sparkCover, sparkSeries,
   type MarketItem, type MarketKey, type MarketsHist, type MarketsReply,
 } from "../lib/markets";
 
@@ -71,13 +72,18 @@ const agoText = (lang: LangCode, min: number) =>
 
 const SW = 240, SH = 56;
 
-/** Мини-график цены за сутки — в раскрытом пояснении ячейки: линия цветом
- *  изменения, пунктир — цена суточной давности; касание или стрелки — цена
- *  и время точки. Ряд — из своей же истории сервера, без запросов к
- *  источникам. */
-function MiniChart({ it, pts, lang, now }: { it: MarketItem; pts: [number, number][]; lang: LangCode; now: number }) {
+/** Мини-график цены за сутки — в раскрытом пояснении ячейки: ось времени —
+ *  сутки до ответа (история короче — до целого часа, см. sparkFrom), линия
+ *  цветом изменения с мягкой заливкой, пунктир — цена суточной давности;
+ *  касание или стрелки — цена и время точки. Истории меньше SPARK_FULL_SEC
+ *  (сервер недавно запущен) — строка под осью, что график заполняется. Ряд —
+ *  из своей же истории сервера, без запросов к источникам. */
+function MiniChart({ it, pts, lang, now, end }: { it: MarketItem; pts: [number, number][]; lang: LangCode; now: number; end: number }) {
   const [at, setAt] = useState(-1);
-  const g = spark(pts, it.prev, SW, SH);
+  const gid = useId().replace(/:/g, "");
+  const from = sparkFrom(pts, end);
+  const g = spark(pts, it.prev, SW, SH, 3, from, end);
+  const short = sparkCover(pts) < SPARK_FULL_SEC;
   const ch = change(it).v;
   const dir = ch > 0 ? "up" : ch < 0 ? "dn" : "";
   const pick = (e: PointerEvent<HTMLDivElement>) => {
@@ -105,7 +111,12 @@ function MiniChart({ it, pts, lang, now }: { it: MarketItem; pts: [number, numbe
       onPointerLeave={() => setAt(-1)} onKeyDown={key} onBlur={() => setAt(-1)}>
       <div className="mk-spark-plot">
         <svg viewBox={`0 0 ${SW} ${SH}`} preserveAspectRatio="none" aria-hidden="true" focusable="false">
-          <path d={g.area} className="mk-spark-area" />
+          <defs>
+            <linearGradient id={`${gid}f`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" className="mk-spark-s0" /><stop offset="1" className="mk-spark-s1" />
+            </linearGradient>
+          </defs>
+          <path d={g.area} className="mk-spark-area" fill={`url(#${gid}f)`} />
           <line x1="0" x2={SW} y1={g.base} y2={g.base} className="mk-spark-base" vectorEffect="non-scaling-stroke" />
           <path d={g.line} className="mk-spark-line" vectorEffect="non-scaling-stroke" />
           {at >= 0 ? <line x1={g.xs[at]} x2={g.xs[at]} y1="0" y2={SH} className="mk-spark-cross" vectorEffect="non-scaling-stroke" /> : null}
@@ -119,7 +130,8 @@ function MiniChart({ it, pts, lang, now }: { it: MarketItem; pts: [number, numbe
           </>
         ) : null}
       </div>
-      <div className="mk-spark-ax" aria-hidden="true"><span>{agoText(lang, first)}</span><span>{t(lang, "mk_now")}</span></div>
+      <div className="mk-spark-ax" aria-hidden="true"><span>{agoText(lang, ageMin(from, now))}</span><span>{t(lang, "mk_now")}</span></div>
+      {short ? <span className="mk-spark-wait-t">{t(lang, "mk_hist_short")}</span> : null}
     </div>
   );
 }
@@ -308,7 +320,7 @@ export function MarketsStrip({ fallback }: { fallback: ReactNode }) {
             : (() => {
               const it = byKey.get(sel)!;
               const pts = sparkSeries(hist[sel], it, m.at);
-              return pts.length >= 2 ? <MiniChart key={sel} it={it} pts={pts} lang={lang} now={now} /> : null;
+              return pts.length >= 2 ? <MiniChart key={sel} it={it} pts={pts} lang={lang} now={now} end={m.at} /> : null;
             })()}
           <p className="mk-note-t">{t(lang, note)}</p>
         </div>

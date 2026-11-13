@@ -1147,6 +1147,7 @@ export const tr: Dict = {
   mk_dxy_hint: "DXY, EUR, JPY, GBP (Hyperliquid) ile CAD, SEK, CHF (AMB) kurlarından açık dolar endeksi formülüyle yaptığımız kendi hesabımızdır, resmî değer değildir: yaklaşık %0,1 fark olabilir. Değişim, döviz gününün kapanışından (New York 17:00) itibarendir; hafta sonu cuma kapanışı. U.S. Dollar Index®, ICE’nin ticari markasıdır",
   mk_gold: "Altın",
   mk_gold_hint: "Altın — trade.xyz’in Hyperliquid’deki sürekli vadeli kontratı, 7/24 işlem görür. Güvenli liman: piyasa korktuğunda veya dolar zayıfladığında yükselir. Hyperliquid yanıt vermezse fiyat Aster’daki XAU piyasasından alınır",
+  mk_hist_short: "Geçmiş birikiyor — 24 saatlik grafik kendiliğinden dolacak",
   mk_none: "veri yok",
   mk_now: "şimdi",
   mk_oil: "WTI petrol",

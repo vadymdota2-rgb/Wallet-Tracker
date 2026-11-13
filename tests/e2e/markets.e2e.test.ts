@@ -482,6 +482,47 @@ test("мини-график при крупном шрифте (до 200 %) и �
   await ctx.close();
 });
 
+/** Сервер перезапущен 24 минуты назад: истории — три точки. */
+const SHORT = { ok: true, at: T - 20, series: Object.fromEntries(MARKETS.items.map((x) => [x.k,
+  [[T - 20 - 1440, x.px * 0.999], [T - 20 - 840, x.px * 0.9995], [T - 20, x.px]]])) };
+
+test("короткая история (сервер только что запущен): ось — час, линия справа на 40 %, подпись «история копится» под осью", async () => {
+  const { ctx, page, errors } = await open({ hist: SHORT });
+  await page.locator(".drawer .mk-px").first().waitFor();
+  await page.locator('.mk-cell[data-k="DXY"]').click();
+  const chart = page.locator(".mk-spark");
+  await chart.waitFor();
+  assert.deepEqual((await page.locator(".mk-spark-ax span").allTextContents()).map(sp), ["1 ч назад", "сейчас"]);
+  assert.equal(sp(await page.locator(".mk-spark-wait-t").textContent()), sp(I18N["mk_hist_short"]!["ru"]!));
+  // 24 минуты из часа — линия справа, ~40 % ширины: не чёрточка у края и не на всю ширину.
+  const line = (await page.locator(".mk-spark-line").boundingBox())!;
+  const box = (await page.locator(".mk-spark-plot").boundingBox())!;
+  assert.ok(Math.abs(line.x - (box.x + box.width * 0.6)) < box.width * 0.03, `${line.x} ${box.x} ${box.width}`);
+  assert.ok(Math.abs(line.x + line.width - (box.x + box.width)) < 3, `${line.x} ${line.width}`);
+  // Подпись — под осью, не поверх графика.
+  const cap = (await page.locator(".mk-spark-wait-t").boundingBox())!;
+  assert.ok(cap.y >= box.y + box.height, `${cap.y} ${box.y + box.height}`);
+  // Пунктир и линия не прилипают к краям поля.
+  const plot = (await page.locator(".mk-spark-plot").boundingBox())!;
+  const base = (await page.locator(".mk-spark-base").boundingBox())!;
+  assert.ok(base.y > plot.y + 2 && base.y < plot.y + plot.height - 2, JSON.stringify([base, plot]));
+  // Касание — цена точки; подпись под осью остаётся.
+  await page.mouse.click(box.x + box.width - 2, box.y + 20);
+  assert.equal(await page.locator(".mk-spark-wait-t").count(), 1);
+  assert.match(sp(await page.locator(".mk-spark-tip small").textContent()), /сейчас|мин назад/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test("полная история — без подписи «история копится»", async () => {
+  const { ctx, page } = await open();
+  await page.locator(".drawer .mk-px").first().waitFor();
+  await page.locator('.mk-cell[data-k="DXY"]').click();
+  await page.locator(".mk-spark").waitFor();
+  assert.equal(await page.locator(".mk-spark-wait-t").count(), 0);
+  await ctx.close();
+});
+
 test("истории нет или она битая — пояснение без графика, без ошибок", async () => {
   for (const hist of [{ ok: false, error: "no_data" }, { ok: true, series: { GOLD: [[1, "x"]] } }, "мусор"]) {
     const { ctx, page, errors } = await open({ hist });
@@ -600,7 +641,7 @@ test("нет данных — прежний заголовок меню", async
 test("снимок меню", async () => {
   const shot = process.env["MK_SHOT"];
   if (!shot) return;
-  const { ctx, page } = await open({ scale: 2 });
+  const { ctx, page } = await open({ scale: 2, ...(process.env["MK_SHORT"] ? { hist: SHORT } : {}) });
   await page.locator(".drawer .mk-px").first().waitFor();
   if (process.env["MK_NOTES"]) await page.locator(".mk-i").click();
   const pick = process.env["MK_PICK"];

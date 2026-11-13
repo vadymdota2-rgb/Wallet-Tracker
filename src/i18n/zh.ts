@@ -1147,6 +1147,7 @@ export const zh: Dict = {
   mk_dxy_hint: "DXY 为我们按公开的美元指数公式，由 EUR、JPY、GBP（Hyperliquid）与 CAD、SEK、CHF（欧洲央行）汇率自行计算，并非官方数值，可能相差约 0.1%。涨跌以外汇交易日收盘（纽约 17:00）为基准，周末显示周五收盘。U.S. Dollar Index® 是 ICE 的商标",
   mk_gold: "黄金",
   mk_gold_hint: "黄金 — trade.xyz 在 Hyperliquid 上的永续合约，全天候交易。避险资产：市场恐慌或美元走弱时上涨。若 Hyperliquid 无响应，价格取自 Aster 的 XAU 市场",
+  mk_hist_short: "正在积累历史数据 — 24 小时图表会自动填满",
   mk_none: "暂无数据",
   mk_now: "刚刚",
   mk_oil: "WTI 原油",

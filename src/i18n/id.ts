@@ -1147,6 +1147,7 @@ export const id: Dict = {
   mk_dxy_hint: "DXY adalah perhitungan kami sendiri dengan rumus publik indeks dolar dari kurs EUR, JPY, GBP (Hyperliquid) serta CAD, SEK, CHF (ECB), bukan nilai resmi: bisa berbeda sekitar 0,1%. Perubahan dihitung dari penutupan hari valas (17.00 New York); pada akhir pekan, penutupan Jumat. U.S. Dollar Index® adalah merek dagang ICE",
   mk_gold: "Emas",
   mk_gold_hint: "Emas — perpetual trade.xyz di Hyperliquid, diperdagangkan 24 jam. Aset lindung nilai: naik saat pasar takut atau dolar melemah. Jika Hyperliquid tidak merespons, harga diambil dari pasar XAU di Aster",
+  mk_hist_short: "Riwayat sedang dikumpulkan — grafik 24 jam akan terisi sendiri",
   mk_none: "tidak ada data",
   mk_now: "sekarang",
   mk_oil: "Minyak WTI",

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   BAR_MIN, HIST_MAX, HIST_SEC, MARKET_KEYS, MARKET_PX_MAX, MARKETS_REFRESH, MARKETS_STALE_MIN, ageMin, barShare, change, digits,
-  isPercent, marketsDue, spark, sparkSeries, validHist, validMarkets,
+  isPercent, marketsDue, SPARK_FULL_SEC, SPARK_HEADROOM, spark, sparkCover, sparkFrom, sparkSeries, validHist, validMarkets,
 } from "../src/lib/markets.ts";
 
 const NOW = 1_794_100_000;
@@ -142,13 +142,29 @@ test("ряд ячейки: сутки до ответа, последняя то
   assert.deepEqual(sparkSeries(undefined, it, NOW), [[NOW, 4066]]);
 });
 
-test("геометрия мини-графика: цена суточной давности всегда в кадре, концы — края", () => {
+test("геометрия мини-графика: цена суточной давности в кадре, запас по высоте, окно времени — до целого часа", () => {
   const g = spark([[0, 10], [5, 12], [10, 11]], 8, 240, 56, 3);
   assert.deepEqual(g.xs, [0, 120, 240]);
-  assert.equal(g.lo, 8);
-  assert.equal(g.hi, 12);
-  assert.equal(g.base, 53); // 8 — нижний край (с отступом)
-  assert.equal(g.ys[1], 3); // 12 — верхний
+  // Размах 8…12 и запас SPARK_HEADROOM сверху и снизу.
+  assert.ok(Math.abs(g.lo - (8 - 4 * SPARK_HEADROOM)) < 1e-9 && Math.abs(g.hi - (12 + 4 * SPARK_HEADROOM)) < 1e-9);
+  assert.ok(g.base > g.ys[1]! && g.base < 53 && g.ys[1]! > 3); // ни пунктир, ни линия не прилипают к краям
+  // Короткая история (сервер только что запущен) — справа, на своём месте во времени.
+  const late = spark([[NOW - 1800, 10], [NOW, 11]], 10, 240, 56, 3, NOW - HIST_SEC, NOW);
+  assert.deepEqual(late.xs, [235, 240]); // полчаса из суток — последние 5 точек ширины из 240
+  // Точка раньше окна — на левом краю, а не за ним.
+  assert.equal(spark([[NOW - 2 * HIST_SEC, 10], [NOW, 11]], 10, 240, 56, 3, NOW - HIST_SEC, NOW).xs[0], 0);
+  assert.equal(sparkCover([[1, 1], [SPARK_FULL_SEC + 1, 1]]), SPARK_FULL_SEC);
+  assert.equal(sparkCover([[1, 1]]), 0);
+  // Окно: история до целого часа вверх, от часа до суток.
+  assert.equal(sparkFrom([[NOW - 1440, 1], [NOW, 1]], NOW), NOW - 3_600);
+  assert.equal(sparkFrom([[NOW, 1]], NOW), NOW - 3_600);
+  assert.equal(sparkFrom([[NOW - 3_600, 1], [NOW, 1]], NOW), NOW - 3_600);
+  assert.equal(sparkFrom([[NOW - 3_601, 1], [NOW, 1]], NOW), NOW - 7_200);
+  assert.equal(sparkFrom([[NOW - HIST_SEC + 600, 1], [NOW, 1]], NOW), NOW - HIST_SEC);
+  assert.equal(sparkFrom([[NOW - 3 * HIST_SEC, 1], [NOW, 1]], NOW), NOW - HIST_SEC);
+  // 24 минуты в часовом окне — справа, 40 % ширины, а не чёрточка и не вся ширина.
+  const short: [number, number][] = [[NOW - 1440, 10], [NOW, 11]];
+  assert.deepEqual(spark(short, 10, 240, 56, 3, sparkFrom(short, NOW), NOW).xs, [144, 240]);
   assert.ok(g.line.startsWith("M0,") && g.area.endsWith("Z"));
   const flat = spark([[0, 5], [1, 5]], 5, 240, 56);
   assert.ok(flat.ys.every(Number.isFinite) && Number.isFinite(flat.base));

@@ -152,22 +152,48 @@ export interface Spark {
   hi: number;
 }
 
-/** Мини-график в прямоугольнике w × h: время — по ширине, цена — по высоте;
- *  цена суточной давности (base) всегда в кадре — видно, выше ли сейчас. */
-export function spark(pts: readonly [number, number][], base: number, w: number, h: number, pad = 3): Spark {
-  const t0 = pts[0]?.[0] ?? 0;
-  const t1 = pts[pts.length - 1]?.[0] ?? 1;
+/** Запас по высоте мини-графика сверху и снизу — доля размаха цен: линия
+ *  и пунктир не прилипают к краям. */
+export const SPARK_HEADROOM = 0.15;
+
+/** Мини-график в прямоугольнике w × h. Время — по ширине, окно [from, to]
+ *  (см. sparkFrom; без окна — от первой точки до последней). Цена — по
+ *  высоте, с запасом SPARK_HEADROOM; цена суточной давности (base) всегда
+ *  в кадре — видно, выше ли сейчас. */
+export function spark(pts: readonly [number, number][], base: number, w: number, h: number, pad = 3,
+  from?: number, to?: number): Spark {
+  const t0 = from ?? pts[0]?.[0] ?? 0;
+  const t1 = to ?? pts[pts.length - 1]?.[0] ?? 1;
   let lo = Math.min(base, ...pts.map((p) => p[1]));
   let hi = Math.max(base, ...pts.map((p) => p[1]));
   if (hi === lo) {
     hi += Math.abs(hi) * 0.001 || 1;
     lo -= Math.abs(lo) * 0.001 || 1;
   }
-  const x = (t: number) => (t1 > t0 ? ((t - t0) / (t1 - t0)) * w : w);
+  const room = (hi - lo) * SPARK_HEADROOM;
+  lo -= room;
+  hi += room;
+  const x = (t: number) => (t1 > t0 ? Math.min(w, Math.max(0, ((t - t0) / (t1 - t0)) * w)) : w);
   const y = (v: number) => pad + ((hi - v) / (hi - lo)) * (h - 2 * pad);
   const xs = pts.map((p) => +x(p[0]).toFixed(2));
   const ys = pts.map((p) => +y(p[1]).toFixed(2));
   const line = xs.map((xv, i) => `${i ? "L" : "M"}${xv},${ys[i]}`).join("");
   const area = xs.length ? `${line}L${xs[xs.length - 1]},${h}L${xs[0]},${h}Z` : "";
   return { line, area, base: +y(base).toFixed(2), xs, ys, lo, hi };
+}
+
+/** Истории меньше этого (сервер недавно запущен) — под графиком подпись,
+ *  что он заполняется. */
+export const SPARK_FULL_SEC = 3 * 3_600;
+/** Сколько секунд покрывает ряд. */
+export const sparkCover = (pts: readonly [number, number][]): number =>
+  pts.length >= 2 ? pts[pts.length - 1]![0] - pts[0]![0] : 0;
+/** Начало окна графика: история, округлённая вверх до целого часа (не
+ *  меньше часа, не больше суток). Полная история — ровно сутки; короткая
+ *  (сервер только что запущен) не растягивается на всю ширину из пары
+ *  точек и не сжимается в чёрточку у края суток — подпись оси честная:
+ *  «1 ч назад», «3 ч назад», «24 ч назад». */
+export function sparkFrom(pts: readonly [number, number][], end: number): number {
+  const h = Math.min(HIST_SEC / 3_600, Math.max(1, Math.ceil(sparkCover(pts) / 3_600)));
+  return end - h * 3_600;
 }

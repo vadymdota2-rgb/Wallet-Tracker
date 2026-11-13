@@ -1147,6 +1147,7 @@ export const pl: Dict = {
   mk_dxy_hint: "DXY to nasze własne wyliczenie według jawnego wzoru indeksu dolara z kursów EUR, JPY, GBP (Hyperliquid) oraz CAD, SEK, CHF (EBC), a nie wartość oficjalna: może się różnić o około 0,1%. Zmiana — od zamknięcia dnia walutowego (17:00 w Nowym Jorku), w weekend — zamknięcie piątku. U.S. Dollar Index® to znak towarowy ICE",
   mk_gold: "Złoto",
   mk_gold_hint: "Złoto — kontrakt wieczysty trade.xyz na Hyperliquid, notowany całą dobę. Bezpieczna przystań: rośnie, gdy rynek się boi lub słabnie dolar. Gdy Hyperliquid nie odpowiada, cena pochodzi z rynku XAU na Aster",
+  mk_hist_short: "Historia się zbiera — wykres z doby uzupełni się sam",
   mk_none: "brak danych",
   mk_now: "teraz",
   mk_oil: "Ropa WTI",

@@ -1146,6 +1146,7 @@ export const en = {
   mk_dxy_hint: "DXY is our own calculation using the public US Dollar Index formula from EUR, JPY, GBP (Hyperliquid) and CAD, SEK, CHF (ECB) rates, not the official value: it may differ by about 0.1%. Change is from the FX day close (5 pm New York); on weekends, Friday’s close. U.S. Dollar Index® is a trademark of ICE",
   mk_gold: "Gold",
   mk_gold_hint: "Gold — trade.xyz’s perpetual on Hyperliquid, traded around the clock. A safe haven: it rises when markets are fearful or the dollar weakens. If Hyperliquid doesn’t respond, the price comes from the XAU market on Aster",
+  mk_hist_short: "History is building up — the 24h chart fills in on its own",
   mk_none: "no data",
   mk_now: "now",
   mk_oil: "WTI crude",

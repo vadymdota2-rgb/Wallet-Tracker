@@ -1147,6 +1147,7 @@ export const ja: Dict = {
   mk_dxy_hint: "DXYは、EUR・JPY・GBP（Hyperliquid）とCAD・SEK・CHF（ECB）の為替から公開されたドル指数の式で当社が算出した値で、公式値ではありません（約0.1%の差が出ることがあります）。変化は為替取引日の終値（ニューヨーク17時）から、週末は金曜の終値です。U.S. Dollar Index®はICEの商標です",
   mk_gold: "金",
   mk_gold_hint: "金 — Hyperliquidのtrade.xyz無期限先物、24時間取引。安全資産：市場が不安なときやドルが弱いときに上昇します。Hyperliquidが応答しない場合、価格はAsterのXAU市場から取得します",
+  mk_hist_short: "履歴を収集中 — 24時間のチャートは自動で埋まります",
   mk_none: "データなし",
   mk_now: "たった今",
   mk_oil: "WTI原油",
