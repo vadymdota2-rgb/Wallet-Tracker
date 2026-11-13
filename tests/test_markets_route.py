@@ -65,39 +65,43 @@ class MarketsRouteTest(unittest.TestCase):
         self.assertEqual((code, json.loads(body)), (200, {"ok": False, "error": "no_data"}))
         self.assertIn('"GET /api/markets HTTP/1.1" 200', log)
 
-    def test_history_route_shared_bytes_and_disk_copy(self):
-        # /api/markets/hist — из памяти модуля, готовые байты и ETag; копия
-        # на диске переживает перезапуск, чужой файл не принимается.
+    def test_candles_route_shared_bytes_and_disk_copy(self):
+        # /api/markets/candles — из памяти модуля, готовые байты и ETag; копия
+        # своих свечей на диске переживает перезапуск, чужой файл не принимается.
         import tempfile  # noqa: PLC0415 — нужен только здесь
 
         import wt_markets as mk  # noqa: PLC0415
-        hist = {"ok": True, "at": 1_794_100_000, "series": {"GOLD": [[1_794_099_400, 4000.0], [1_794_100_000, 4010.0]]}}
-        self.addCleanup(api._PUBLIC.pop, "markets_hist", None)
+        day = 1_794_100_000 - 1_794_100_000 % 86400
+        cand = {"ok": True, "at": 1_794_100_000, "days": {"GOLD": [[day - 86400, 4000.0, 4010.0, 3990.0, 4005.0],
+                                                                  [day, 4005.0, 4020.0, 4000.0, 4010.0]]}}
+        self.addCleanup(api._PUBLIC.pop, "markets_candles", None)
         h = api.Handler.__new__(api.Handler)
-        req = b"GET /api/markets/hist HTTP/1.1\r\nHost: x\r\nX-Api-Key: k\r\n\r\n"
+        req = b"GET /api/markets/candles HTTP/1.1\r\nHost: x\r\nX-Api-Key: k\r\n\r\n"
         h.rfile, h.wfile = io.BytesIO(req), io.BytesIO()
         h.client_address, h.request, h.close_connection = ("127.0.0.1", 1), None, True
         h.server = mock.Mock()
-        with mock.patch.object(api, "markets_hist", lambda: hist), mock.patch.object(api, "API_KEY", "k"), \
+        with mock.patch.object(api, "markets_candles", lambda: cand), mock.patch.object(api, "API_KEY", "k"), \
              mock.patch.object(api, "chat_premium", lambda chat: True), mock.patch.object(api.sys, "stderr", io.StringIO()):
             h.handle_one_request()
         head, _, body = h.wfile.getvalue().partition(b"\r\n\r\n")
         self.assertIn(b" 200 ", head.split(b"\r\n")[0])
         self.assertIn(b"ETag: W/", head)
-        self.assertEqual(json.loads(body), hist)
-        for path in ("/api/markets/hist", "/markets/hist"):
+        self.assertEqual(json.loads(body), cand)
+        for path in ("/api/markets/candles", "/markets/candles"):
             self.assertIn(path, api.PAID_PATHS)
+        self.assertIs(api.markets_candles, mk.candles)
+        own = {"ok": True, "days": cand["days"]}
         with tempfile.TemporaryDirectory() as d, mock.patch.object(api, "CACHE_DIR", d), \
                 mock.patch.object(mk, "_st", mk._State()), mock.patch.object(mk, "_now", return_value=1_794_100_000):
-            api.markets_disk_save(hist)
+            api.markets_disk_save(own)
             self.assertEqual(api.markets_disk_load(), 2)
-            self.assertEqual(mk.history(), hist)
+            self.assertEqual(mk.days_snapshot(), own)
             api.markets_disk_save({"ok": False, "error": "no_data"})  # пустую не пишет поверх
-            mk._st.hist.clear()
+            mk._st.days.clear()
             self.assertEqual(api.markets_disk_load(), 2)
             with open(os.path.join(d, api.MARKETS_DISK), "w", encoding="utf-8") as f:
                 f.write("x" * (api.MARKETS_DISK_MAX + 1))
-            mk._st.hist.clear()
+            mk._st.days.clear()
             self.assertEqual(api.markets_disk_load(), 0)  # чужой огромный файл — мимо
         with open(os.path.join(ROOT, "whale_api.py"), encoding="utf-8") as f:
             self.assertIn("markets_disk_load()", f.read().split("def wire(")[1][:3000])  # при запуске службы

@@ -103,9 +103,9 @@ class HostileSourceTest(unittest.TestCase):
         self.assertLess(time.process_time() - t0, 1.0)
 
 
-class HostileHistoryFileTest(unittest.TestCase):
-    """Копия истории на диске подменена или испорчена: сервер не падает, не
-    зависает, не берёт чужое и не отдаёт его подписчикам."""
+class HostileCandleFileTest(unittest.TestCase):
+    """Копия своих свечей на диске подменена или испорчена: сервер не падает,
+    не зависает, не берёт чужое и не отдаёт его подписчикам."""
 
     def setUp(self):
         self.addCleanup(setattr, mk, "_st", mk._st)
@@ -123,36 +123,75 @@ class HostileHistoryFileTest(unittest.TestCase):
             return api.markets_disk_load()
 
     def test_broken_and_hostile_files_are_ignored(self):
+        day = NOW - NOW % 86400
         for body in ("", "{", "null", "[]", '"x"', b"\xff\xfe", "{" * 100_000 + "}" * 100_000,  # вложенность
-                     json.dumps({"series": {"GOLD": [[NOW, 10**400], [NOW, "NaN"], [True, 4000], [NOW, float("inf")]]}}).replace("Infinity", "1e999"),
-                     json.dumps({"series": {"GOLD": [[NOW - 60, 4000.0, "лишнее"]], "<script>": [[NOW, 1.0]]}})):
+                     json.dumps({"days": {"GOLD": [[day, 10**400, 1, 1, 1], [day, "NaN", 1, 1, 1], [True, 4000, 4000, 4000, 4000],
+                                                   [day, float("inf"), 1, 1, 1]]}}).replace("Infinity", "1e999"),
+                     json.dumps({"days": {"GOLD": [[day, 4000.0, 4000.0, 4000.0, 4000.0, "лишнее"]], "<script>": [[day, 1.0, 1.0, 1.0, 1.0]]}})):
             self.assertEqual(self.load(body), 0, str(body)[:60])
-        self.assertEqual(mk._st.hist, {})
-        self.assertEqual(mk.history(), {"ok": False, "error": "no_data"})
+        self.assertEqual(mk._st.days, {})
+        self.assertEqual(mk.candles(), {"ok": False, "error": "no_data"})
 
     def test_huge_file_costs_little(self):
-        # Миллион точек в пределах MARKETS_DISK_MAX не влезет — а то, что
-        # влезло, читается быстро и обрезается до HIST_MAX на пункт.
-        pts = [[NOW - 86_000 + i, 4000.0] for i in range(20_000)]
-        body = json.dumps({"series": {"GOLD": pts}}, separators=(",", ":"))
+        # Что влезло в MARKETS_DISK_MAX, читается быстро и обрезается до
+        # DAYS_KEEP свечей на пункт.
+        day = NOW - NOW % 86400
+        rows = [[day - (19_999 - i) * 86400, 4000.0, 4000.0, 4000.0, 4000.0] for i in range(20_000)]
+        body = json.dumps({"days": {"GOLD": rows}}, separators=(",", ":"))
         t0 = time.monotonic()
         n = self.load(body)
         self.assertLess(time.monotonic() - t0, 2)
-        self.assertEqual(n, mk.HIST_MAX)
-        self.assertEqual(len(mk._st.hist["GOLD"]), mk.HIST_MAX)
+        self.assertEqual(n, mk.DAYS_KEEP)
+        self.assertEqual(max(mk._st.days["GOLD"]), day)
 
     def test_only_our_numbers_go_out(self):
-        self.load(json.dumps({"series": {"GOLD": [[NOW - 60, 4000.0]], "evil": [[NOW, 1.0]]}, "x": "<img onerror>"}))
-        out = json.dumps(mk.history())
+        day = NOW - NOW % 86400
+        self.load(json.dumps({"days": {"GOLD": [[day, 4000.0, 4010.0, 3990.0, 4005.0]], "evil": [[day, 1.0, 1.0, 1.0, 1.0]]},
+                              "x": "<img onerror>"}))
+        out = json.dumps(mk.days_snapshot())
         self.assertNotIn("evil", out)
         self.assertNotIn("<img", out)
-        self.assertEqual(mk.history()["series"], {"GOLD": [[NOW - 60, 4000.0]]})
+        self.assertEqual(mk.days_snapshot()["days"], {"GOLD": [[day, 4000.0, 4010.0, 3990.0, 4005.0]]})
+
+    def test_hostile_candle_sources_do_not_leak(self):
+        # Источник свечей подменён: строки, огромные числа, вложенность —
+        # в ответ уходят только наши числа.
+        day = NOW - NOW % 86400
+        evil = [{"t": day * 1000, "o": EVIL, "h": "1e999", "l": 10**400, "c": "4000", "s": EVIL},
+                {"t": day * 1000, "o": "4000", "h": "4010", "l": "3990", "c": "4005", "s": EVIL, "x": EVIL}]
+        ext = mk.ext_days({"d1": {"GOLD": evil, EVIL: evil}, "mcap": {"ok": True, "hist": [[day, EVIL, 60.0, EVIL]]}})
+        out = json.dumps(mk.merge_days(ext, {}, NOW))
+        self.assertNotIn("<img", out)
+        self.assertEqual(mk.merge_days(ext, {}, NOW)["days"]["GOLD"], [[day, 4000.0, 4010.0, 3990.0, 4005.0]])
 
     def test_stale_tmp_copy_name_is_cleaned_by_the_server(self):
-        # Временный файл копии — «markets_hist.json.<pid>.<поток>.tmp»: его
+        # Временный файл копии — «markets_days.json.<pid>.<поток>.tmp»: его
         # узнаёт уборка брошенных копий сервера.
         import whale_api as api  # noqa: PLC0415
         self.assertTrue(api._TMP_RE.search(f"{api.MARKETS_DISK}.123.456.tmp"))
+
+
+class HugeCandleSourcesTest(unittest.TestCase):
+    """Источник свечей отдаёт годы свечей: разбираются только последние
+    (CANDLES_MAX свечей, DAYS_KEEP + 1 дней истории доминации) — быстро и с
+    ограниченным ответом."""
+
+    def test_only_the_tail_is_parsed(self):
+        day = NOW - NOW % 86400
+        n = 100_000
+        d1 = [{"t": (day - (n - 1 - i) * 86400) * 1000, "o": "10", "h": "11", "l": "9", "c": "10"} for i in range(n)]
+        t0 = time.process_time()
+        got = mk.d1_days(d1)
+        self.assertEqual(len(got), mk.CANDLES_MAX)
+        self.assertEqual(max(got), day)
+        hours = {c: [{"t": (day - (n - i) * 3600) * 1000, "o": str(v), "c": str(v)} for i in range(n)]
+                 for c, v in (("EUR", 1.1), ("JPY", 150.0), ("GBP", 1.3))}
+        ecb = {"2000-01-03": {"EUR": 1 / 1.1, "JPY": 150.0, "GBP": 1 / 1.3, "CAD": 1.4, "SEK": 9.8, "CHF": 0.8}}
+        dxy = mk.dxy_days(hours, ecb)
+        self.assertTrue(0 < len(dxy) <= mk.CANDLES_MAX // 24 + 2, len(dxy))
+        hist = [[day - (n - 1 - i) * 86400, 3e12, 60.0, 12.0] for i in range(n)]
+        self.assertEqual(len(mk.btcd_days({"ok": True, "hist": hist})), mk.DAYS_KEEP + 1)
+        self.assertLess(time.process_time() - t0, 3.0)
 
 
 class HugeBodyTest(unittest.TestCase):

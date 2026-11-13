@@ -114,7 +114,7 @@ PAID_PATHS = frozenset(
     # продукта, не открытой выдачей для сборщиков).
     "btc/wallet", "dom", "mcap", "etf", "liqcoins", "liqmap", "options", "liqs", "oihist", "calendar", "digest",
     "digest/translate", "digest/comments", "unlocks", "symbols", "big", "chart/liqs", "chart/whales", "markets",
-    "markets/hist",
+    "markets/candles",
     ) for p in ("/" + name, "/api/" + name)
 )
 # Цена и срок — те же, что в premium.cpp: бот и приложение обязаны продавать
@@ -15400,6 +15400,17 @@ def _mkt_fx():
             for c in wt_markets.FX_HL}
 
 
+def _mkt_d1():
+    """Дневные свечи рынков Hyperliquid — для свечного мини-графика (модуль
+    спрашивает раз в сутки: шесть запросов на весь сервер)."""
+    t = now()
+    start = (t - wt_markets.D1_DAYS * 86400) * 1000
+    return {k: hl_post({"type": "candleSnapshot", "req": {"coin": coin, "interval": "1d",
+                                                          "startTime": start, "endTime": t * 1000}},
+                       15, max_bytes=wt_markets.RESP_MAX)
+            for k, coin in wt_markets.D1.items()}
+
+
 def _mkt_ecb():
     """Курсы ЕЦБ (Frankfurter, база USD) за последние дни — по валютам DXY."""
     start = time.strftime("%Y-%m-%d", time.gmtime(now() - wt_markets.ECB_DAYS * 86400))
@@ -15419,23 +15430,25 @@ wt_markets.set_sources({
     "mkts": lambda: hl_post({"type": "metaAndAssetCtxs", "dex": "mkts"}, 15, max_bytes=wt_markets.RESP_MAX),
     "fx": _mkt_fx,
     "ecb": _mkt_ecb,
+    "d1": _mkt_d1,
     "mcap": lambda: wt_mcap.mcap_data(0),
     "aster": _mkt_aster,
 })
 markets_data = wt_markets.markets_data  # запрос человека: только кэш
-markets_hist = wt_markets.history  # история для мини-графика: только память
+markets_candles = wt_markets.candles  # дневные свечи для мини-графика: только память
 markets_refresh = wt_markets.refresh  # обновление кэша: cache_refresher и запуск
 
-# История рынков за сутки (мини-график в ячейке) — копией на диске: после
-# перезапуска график не начинается с пустого места. Модуль сам файлов не
-# трогает: пишет и читает сервер (как копию карт ликвидаций).
-MARKETS_DISK = "markets_hist.json"
-MARKETS_DISK_MAX = 1 << 20  # 9 пунктов × 300 точек — ~60 КБ; больше — не наш файл
+# Свои дневные свечи рынков (мини-график в ячейке) — копией на диске: после
+# перезапуска они не начинаются с пустого места (у USDT.D других нет).
+# Модуль сам файлов не трогает: пишет и читает сервер (как копию карт
+# ликвидаций).
+MARKETS_DISK = "markets_days.json"
+MARKETS_DISK_MAX = 1 << 20  # 9 пунктов × 40 свечей — ~25 КБ; больше — не наш файл
 
 
 def markets_disk_load() -> int:
-    """История рынков с диска — в память модуля (каждую точку проверяет
-    wt_markets.history_restore). Вернёт, сколько точек принято."""
+    """Свои свечи рынков с диска — в память модуля (каждую свечу проверяет
+    wt_markets.days_restore). Вернёт, сколько свечей принято."""
     if not CACHE_DIR:
         return 0
     path = os.path.join(CACHE_DIR, MARKETS_DISK)
@@ -15446,18 +15459,18 @@ def markets_disk_load() -> int:
             data = json.load(f)
     except (OSError, ValueError, RecursionError):
         return 0
-    return wt_markets.history_restore(data)
+    return wt_markets.days_restore(data)
 
 
-def markets_disk_save(hist: dict) -> None:
-    """История рынков — на диск (временный файл и подмена); зовёт модуль,
-    когда история поменялась (раз в ~10 минут)."""
-    if not CACHE_DIR or hist.get("ok") is not True:
+def markets_disk_save(days: dict) -> None:
+    """Свои свечи рынков — на диск (временный файл и подмена); зовёт модуль,
+    когда они поменялись (раз в ~10 минут)."""
+    if not CACHE_DIR or days.get("ok") is not True:
         return
     path = os.path.join(CACHE_DIR, MARKETS_DISK)
     tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
     try:
-        raw = json.dumps(hist, separators=(",", ":"), allow_nan=False)
+        raw = json.dumps(days, separators=(",", ":"), allow_nan=False)
         if len(raw) > MARKETS_DISK_MAX:
             return
         os.makedirs(CACHE_DIR, exist_ok=True)
@@ -15465,7 +15478,7 @@ def markets_disk_save(hist: dict) -> None:
             f.write(raw)
         os.replace(tmp, path)
     except (OSError, TypeError, ValueError) as e:
-        sys.stderr.write(f"[api] копия истории рынков: {e}\n")
+        sys.stderr.write(f"[api] копия свечей рынков: {e}\n")
         try:
             os.remove(tmp)
         except OSError:
@@ -17216,14 +17229,14 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     self._json(200, rep)
                 return
-            if path in ("/markets/hist", "/api/markets/hist"):
-                # История за сутки для мини-графика — из памяти модуля, один
-                # объект, пока не поменялась: готовые байты, ETag и «304».
-                hist = markets_hist()
-                if hist.get("ok") is True:
-                    self._json_public("markets_hist", hist)
+            if path in ("/markets/candles", "/api/markets/candles"):
+                # Дневные свечи для мини-графика — из памяти модуля, один
+                # объект, пока не поменялись: готовые байты, ETag и «304».
+                cand = markets_candles()
+                if cand.get("ok") is True:
+                    self._json_public("markets_candles", cand)
                 else:
-                    self._json(200, hist)
+                    self._json(200, cand)
                 return
             if path in ("/liqs", "/api/liqs"):
                 self._json(200, liqs_data(qs.get("win", ["24h"])[0], qs.get("sym", [""])[0],

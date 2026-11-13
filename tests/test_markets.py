@@ -42,7 +42,10 @@ XYZ_M = {"xyz:SP500": (7373.1, 7392.9), "xyz:XYZ100": (26925, 26996), "xyz:GOLD"
 XYZ = hl(XYZ_M, delisted=("DXY", "VIX"))
 PARA = hl({"para:10Y": (4.875, 4.8777), "para:BTCD": (60.4, 60.3)})
 MKTS = hl({"mkts:BVIV": (42.399, 41.0), "mkts:OLD": (5, 5)}, delisted=("OLD",))
-MCAP = {"ok": True, "btc": [60.44, 60.35], "usdt": 4.1, "cap": [3.4e12, 3.3e12]}
+DAY0 = NOW - NOW % 86400  # начало воскресенья UTC
+# История доминации по дням (модуль доминации): [день, капитализация, доля BTC, доля ETH].
+MCAP_HIST = [[DAY0 - (5 - i) * 86400, 3.3e12, 60.0 + i / 10, 12.0] for i in range(5)]
+MCAP = {"ok": True, "btc": [60.44, 60.35], "usdt": 4.1, "cap": [3.4e12, 3.3e12], "hist": MCAP_HIST}
 # Запас золота и нефти — ответ Aster ticker/24hr, который берёт модуль фандинга.
 ASTER = {"at": NOW - 300, "rows": [{"symbol": "BTCUSDT", "lastPrice": "100000", "openPrice": "99000"},
                                    {"symbol": "XAUUSDT", "lastPrice": "4072.07", "openPrice": "4081.61"},
@@ -59,12 +62,28 @@ DRIFT = {"EUR": 1.1301, "JPY": 157.1, "GBP": 1.3401}  # прочие часы, �
 
 def candles(cur: str, close: dict | None = None) -> list:
     close = CLOSE if close is None else close
-    return [{"t": (end - 3600) * 1000, "c": str(close.get(end, {}).get(cur, DRIFT[cur]))}
-            for end in range(THU - 30 * 3600, NOW, 3600)]
+    px = [str(close.get(end, {}).get(cur, DRIFT[cur])) for end in range(THU - 30 * 3600, NOW, 3600)]
+    return [{"t": (end - 3600) * 1000, "o": px[max(0, i - 1)], "c": px[i]}
+            for i, end in enumerate(range(THU - 30 * 3600, NOW, 3600))]
 
 
 FX = {c: candles(c) for c in ("EUR", "JPY", "GBP")}
-PARTS = {"xyz": XYZ, "para": PARA, "mkts": MKTS, "fx": FX, "ecb": ECB, "mcap": MCAP, "aster": ASTER}
+# Дневные свечи Hyperliquid (candleSnapshot 1d) за 32 дня до сегодняшнего.
+D1_BASE = {"SP500": 7373.1, "XYZ100": 26925.0, "GOLD": 4066.2, "OIL": 90.205, "US10Y": 4.875, "BVIV": 42.399}
+
+
+def d1(k: str, n: int = 32) -> list:
+    out = []
+    for i in range(n):
+        d = DAY0 - (n - 1 - i) * 86400
+        o, c = D1_BASE[k] * (1 + 0.002 * (i % 5 - 2)), D1_BASE[k] * (1 + 0.002 * ((i + 1) % 5 - 2))
+        out.append({"t": d * 1000, "T": (d + 86400) * 1000 - 1, "s": k, "i": "1d", "o": str(o),
+                    "h": str(max(o, c) * 1.003), "l": str(min(o, c) * 0.997), "c": str(c), "v": "1", "n": 1})
+    return out
+
+
+D1C = {k: d1(k) for k in mk.D1}
+PARTS = {"xyz": XYZ, "para": PARA, "mkts": MKTS, "fx": FX, "ecb": ECB, "d1": D1C, "mcap": MCAP, "aster": ASTER}
 
 
 def want_dxy(day: str, eur: float, jpy: float, gbp: float) -> float:
@@ -426,33 +445,159 @@ class CacheTest(unittest.TestCase):
         with mock.patch.object(mk.sys, "stderr", None):
             mk._log("журнал закрыт")  # не падает
 
-    def test_history_from_own_builds_for_a_day(self):
-        # История для мини-графика — из своих же сборок: точка на новое время
-        # ответа, то же время — замена (доминация обновилась), старше суток и
-        # сверх HIST_MAX — прочь; ответ — один объект, пока не менялась.
-        self.assertEqual(mk.history(), {"ok": False, "error": "no_data"})
+    def test_own_daily_candles_from_builds(self):
+        # Свои свечи — из своих же сборок: первая цена дня — открытие, дальше
+        # максимум, минимум и закрытие; старее записанной — мимо; новый день
+        # UTC — новая свеча; DXY в выходные — мимо; не больше DAYS_KEEP.
         r1 = {"ok": True, "at": NOW, "items": [{"k": "GOLD", "px": 4000.0, "prev": 3990.0}]}
         with mk._lock:
             self.assertTrue(mk._record(r1))
             self.assertFalse(mk._record(r1))  # то же — без изменений
-            self.assertTrue(mk._record({**r1, "items": [{"k": "GOLD", "px": 4001.0, "prev": 3990.0}]}))
-            self.assertTrue(mk._record({**r1, "at": NOW + 600}))
-            self.assertFalse(mk._record({**r1, "at": NOW - 600}))  # старое время — мимо
+            self.assertTrue(mk._record({**r1, "items": [{"k": "GOLD", "px": 4010.0, "prev": 3990.0}]}))
+            self.assertTrue(mk._record({**r1, "at": NOW + 600, "items": [{"k": "GOLD", "px": 3995.0, "prev": 3990.0}]}))
+            self.assertFalse(mk._record({**r1, "at": NOW - 600, "items": [{"k": "GOLD", "px": 1.0, "prev": 3990.0}]}))
             self.assertFalse(mk._record({"ok": True, "at": "x", "items": []}))
-        h = mk.history()
-        self.assertIs(mk.history(), h)
-        self.assertEqual(h, {"ok": True, "at": NOW + 600, "series": {"GOLD": [[NOW, 4001.0], [NOW + 600, 4000.0]]}})
-        with mk._lock:
-            mk._record({**r1, "at": NOW + mk.HIST_SEC + 1})
-        self.assertIsNot(mk.history(), h)
-        self.assertEqual(mk.history()["series"]["GOLD"], [[NOW + 600, 4000.0], [NOW + mk.HIST_SEC + 1, 4000.0]])
-        with mk._lock, mock.patch.object(mk, "HIST_MAX", 3):
-            for i in range(10):
-                mk._record({**r1, "at": NOW + mk.HIST_SEC + 10 + i})
-        self.assertEqual(len(mk.history()["series"]["GOLD"]), 3)
+            self.assertFalse(mk._record({"ok": True, "at": True, "items": []}))
+            self.assertEqual(mk._st.days["GOLD"], {DAY0: (4000.0, 4010.0, 3995.0, 3995.0)})
+            self.assertTrue(mk._record({**r1, "at": DAY0 + 86400 + 60}))
+            self.assertEqual(mk._st.days["GOLD"][DAY0 + 86400], (4000.0, 4000.0, 4000.0, 4000.0))
+            # Воскресенье 01:06 UTC — валютный рынок закрыт: у DXY свечи нет.
+            self.assertFalse(mk._record({"ok": True, "at": NOW, "items": [{"k": "DXY", "px": 99.0, "prev": 99.0}]}))
+            self.assertNotIn("DXY", mk._st.days)
+            self.assertTrue(mk._record({"ok": True, "at": WD, "items": [{"k": "DXY", "px": 99.0, "prev": 99.0}]}))
+            self.assertEqual(list(mk._st.days["DXY"]), [FRI - FRI % 86400])
+            for i in range(mk.DAYS_KEEP + 5):
+                mk._record({**r1, "at": NOW + (i + 2) * 86400})
+            self.assertEqual(len(mk._st.days["GOLD"]), mk.DAYS_KEEP)
+            self.assertEqual(max(mk._st.days["GOLD"]), DAY0 + (mk.DAYS_KEEP + 6) * 86400)
+        snap = mk.days_snapshot()
+        self.assertEqual(snap["ok"], True)
+        self.assertEqual(snap["days"]["DXY"], [[FRI - FRI % 86400, 99.0, 99.0, 99.0, 99.0]])
 
-    def test_history_memory_is_bounded_over_days(self):
-        # Трое суток сборок раз в 10 минут: истории — не больше суток на
+    def test_candles_reply_sources_then_own(self):
+        # Ответ свечей: у рынков Hyperliquid — их дневные свечи (DAYS_SHOW
+        # последних), у DXY — из часовых свечей валют, у BTC.D — из истории
+        # доминации, у USDT.D — только свои; у последней свечи закрытие — цена
+        # ответа. Те же свечи — тот же объект (те же байты и «304»).
+        self.assertEqual(mk.candles(), {"ok": False, "error": "no_data"})
+        mk.set_sources({name: (lambda v=v: v) for name, v in PARTS.items()})
+        with mock.patch.object(mk, "_now", return_value=NOW):
+            res = mk.build()
+        c = mk.candles()
+        self.assertTrue(c["ok"])
+        self.assertEqual(c["at"], res["at"])
+        self.assertEqual(set(c["days"]), set(mk.KEYS))
+        live = {it["k"]: it["px"] for it in res["items"]}
+        for k in mk.D1:
+            rows = c["days"][k]
+            self.assertEqual(len(rows), mk.DAYS_SHOW, k)
+            self.assertEqual(rows[-1][0], DAY0, k)
+            self.assertEqual(rows[-1][4], live[k], k)
+            self.assertEqual([r[0] for r in rows], list(range(DAY0 - 29 * 86400, DAY0 + 1, 86400)), k)
+            src = D1C[k][-2]
+            self.assertEqual(rows[-2], [DAY0 - 86400, float(src["o"]), float(src["h"]), float(src["l"]), float(src["c"])], k)
+            last = rows[-1]
+            self.assertEqual(last[1], float(D1C[k][-1]["o"]), k)  # открытие — источника
+            self.assertGreaterEqual(last[2], max(last[1], last[4]), k)
+            self.assertLessEqual(last[3], min(last[1], last[4]), k)
+        # DXY: последняя — пятница (воскресенье: рынок закрыт), закрытие пятницы — как у ответа.
+        dxy = c["days"]["DXY"]
+        self.assertEqual(dxy[-1][0], FRI - FRI % 86400)
+        self.assertEqual(dxy[-1][4], want_dxy("2026-11-06", 1.115, 158.35, 1.3349))
+        self.assertTrue(all(time.gmtime(r[0]).tm_wday < 5 for r in dxy))
+        # BTC.D: история доминации — закрытия дня, открытие — закрытие прошлого.
+        btcd = c["days"]["BTCD"]
+        self.assertEqual([r[0] for r in btcd], [r[0] for r in MCAP_HIST] + [DAY0])
+        self.assertEqual(btcd[1], [MCAP_HIST[1][0], 60.0, 60.1, 60.0, 60.1])
+        self.assertEqual(btcd[-1][4], live["BTCD"])
+        self.assertEqual(c["days"]["USDTD"], [[DAY0, 4.1, 4.1, 4.1, 4.1]])
+        with mock.patch.object(mk, "_now", return_value=NOW):
+            mk.build()
+        self.assertIs(mk.candles(), c)
+
+    def test_own_candles_fill_days_the_source_lacks(self):
+        # Источник дня не дал (Hyperliquid молчит о рынке) — своя свеча; у
+        # последней свечи тени — с учётом своих сборок.
+        own = {"GOLD": {DAY0 - 86400: (4000.0, 4100.0, 3900.0, 4050.0), DAY0: (4050.0, 4300.0, 4040.0, 4066.2)}}
+        ext = {"GOLD": ({DAY0 - 2 * 86400: (3990.0, 4010.0, 3980.0, 4000.0), DAY0: (4049.0, 4070.0, 4045.0, 4060.0)}, True)}
+        rep = mk.merge_days(ext, own, NOW)
+        self.assertEqual(rep["days"]["GOLD"], [[DAY0 - 2 * 86400, 3990.0, 4010.0, 3980.0, 4000.0],
+                                               [DAY0 - 86400, 4000.0, 4100.0, 3900.0, 4050.0],
+                                               [DAY0, 4049.0, 4300.0, 4040.0, 4066.2]])
+        # Полные тени источника за прошлые дни своими не расширяются; только
+        # закрытия (BTC.D) — расширяются.
+        own2 = {"GOLD": {DAY0 - 86400: (4000.0, 4500.0, 3500.0, 4050.0)}, "BTCD": {DAY0 - 86400: (60.0, 61.0, 59.0, 60.2)}}
+        ext2 = {"GOLD": ({DAY0 - 86400: (4000.0, 4100.0, 3900.0, 4050.0), DAY0: (4050.0, 4060.0, 4040.0, 4055.0)}, True),
+                "BTCD": ({DAY0 - 86400: (60.0, 60.3, 60.0, 60.3), DAY0: (60.3, 60.4, 60.3, 60.4)}, False)}
+        rep = mk.merge_days(ext2, own2, NOW)["days"]
+        self.assertEqual(rep["GOLD"][0], [DAY0 - 86400, 4000.0, 4100.0, 3900.0, 4050.0])
+        self.assertEqual(rep["BTCD"][0], [DAY0 - 86400, 60.0, 61.0, 59.0, 60.3])
+        # Не в рамках пункта, старше DAYS_KEEP, больше DAYS_SHOW — мимо.
+        own3 = {"US10Y": {DAY0: (48.0, 48.0, 48.0, 48.0)},
+                "SP500": {DAY0 - (mk.DAYS_KEEP + 1) * 86400: (7000.0, 7000.0, 7000.0, 7000.0)},
+                "OIL": {DAY0 - i * 86400: (90.0, 91.0, 89.0, 90.0) for i in range(mk.DAYS_KEEP)}}
+        rep = mk.merge_days({}, own3, NOW)["days"]
+        self.assertEqual(set(rep), {"OIL"})
+        self.assertEqual(len(rep["OIL"]), mk.DAYS_SHOW)
+        self.assertEqual(rep["OIL"][-1][0], DAY0)
+        self.assertEqual(mk.merge_days({}, {}, NOW), {"ok": False, "error": "no_data"})
+
+    def test_daily_candles_parse(self):
+        good = {"t": DAY0 * 1000, "o": "10", "h": "12", "l": "9", "c": "11"}
+        bad = [{**good, "t": DAY0 * 1000 + 1}, {**good, "h": "10.5"}, {**good, "l": "10.5"}, {**good, "o": "-1"},
+               {**good, "c": 1e400}, {**good, "h": "100"}, {**good, "t": "x"}, "x", None, 1]
+        self.assertEqual(mk.d1_days([good, *bad]), {DAY0: (10.0, 12.0, 9.0, 11.0)})
+        for raw in (None, "x", {}, [[1, 2]]):
+            self.assertEqual(mk.d1_days(raw), {}, raw)
+        self.assertEqual(mk.ohlc(10, 10, 10, 10), (10.0, 10.0, 10.0, 10.0))
+        self.assertIsNone(mk.ohlc(10, 30, 10, 10))  # внутри дня — больше чем вдвое
+        self.assertIsNone(mk.ohlc(mk.PX_MAX, mk.PX_MAX, mk.PX_MAX, mk.PX_MAX))  # неправдоподобная цена
+        # Валютный день: до 17:00 по Нью-Йорку — сегодняшний, после — завтрашний,
+        # с пятницы 17:00 до воскресенья 17:00 — рынок закрыт.
+        self.assertEqual(mk.fx_day(WD), FRI - FRI % 86400)
+        self.assertIsNone(mk.fx_day(FRI))  # пятница 17:00 — закрыт
+        self.assertEqual(mk.fx_day(FRI - 1), FRI - FRI % 86400)
+        self.assertIsNone(mk.fx_day(NOW))  # воскресенье 01:06 UTC
+        self.assertEqual(mk.fx_day(FRI + 2 * 86400), FRI - FRI % 86400 + 3 * 86400)  # воскресенье 17:00 — понедельник
+        self.assertEqual(mk.day_of("GOLD", NOW), DAY0)
+        # BTC.D: открытие — закрытие прошлого дня, только если он вчерашний.
+        self.assertEqual(mk.btcd_days({"ok": True, "hist": [[DAY0 - 2 * 86400, 1, 60.0, 12.0], [DAY0, 1, 61.0, 12.0],
+                                                             [DAY0 + 1, 1, 62.0, 1], [True, 1, 60.0], ["x"], [DAY0, 1, 101.0]]}),
+                         {DAY0 - 2 * 86400: (60.0, 60.0, 60.0, 60.0), DAY0: (61.0, 61.0, 61.0, 61.0)})
+        for raw in (None, {"ok": False, "hist": MCAP_HIST}, {"ok": True, "hist": "x"}):
+            self.assertEqual(mk.btcd_days(raw), {}, raw)
+        # У BTC.D — только закрытия: тени не полные (свои сборки их расширяют).
+        self.assertIs(mk.ext_days({"mcap": MCAP})["BTCD"][1], False)
+        self.assertIs(mk.ext_days({"d1": D1C})["GOLD"][1], True)
+
+    def test_dxy_daily_candles_from_hourly(self):
+        days = mk.dxy_days(FX, mk.ecb_rates(ECB))
+        fri, thu = FRI - FRI % 86400, THU - THU % 86400
+        self.assertEqual(sorted(days), [thu, fri])
+        self.assertEqual(days[fri][3], want_dxy("2026-11-06", 1.115, 158.35, 1.3349))
+        self.assertEqual(days[thu][3], want_dxy("2026-11-05", 1.1227, 157.65, 1.345))
+        for o, h, lo, c in days.values():
+            self.assertTrue(lo <= min(o, c) <= max(o, c) <= h)
+        # Без валюты, без фиксации ЕЦБ, курс сорвался — часа нет.
+        self.assertEqual(mk.dxy_days({**FX, "GBP": []}, mk.ecb_rates(ECB)), {})
+        self.assertEqual(mk.dxy_days(FX, {}), {})
+        self.assertEqual(mk.dxy_days({c: [{**x, "o": "5", "c": "5"} for x in v] for c, v in FX.items()}, mk.ecb_rates(ECB)), {})
+        self.assertEqual(mk.dxy_days(None, mk.ecb_rates(ECB)), {})
+        # Свеча дня: открытие — на открытии первого часа, дальше — закрытия
+        # часов; час не с начала часа — мимо.
+        h0 = WD - WD % 3600
+        fx = {"EUR": [{"t": h0 * 1000, "o": "1.12", "c": "1.121"}, {"t": (h0 + 3600) * 1000, "o": "1.121", "c": "1.119"},
+                      {"t": (h0 + 1800) * 1000, "o": "1.13", "c": "1.13"}],
+              "JPY": [{"t": h0 * 1000, "o": "157.5", "c": "157.6"}, {"t": (h0 + 3600) * 1000, "o": "157.6", "c": "157.4"},
+                      {"t": (h0 + 1800) * 1000, "o": "155", "c": "155"}],
+              "GBP": [{"t": h0 * 1000, "o": "1.34", "c": "1.341"}, {"t": (h0 + 3600) * 1000, "o": "1.341", "c": "1.339"},
+                      {"t": (h0 + 1800) * 1000, "o": "1.35", "c": "1.35"}]}
+        v = [want_dxy("2026-11-06", 1.12, 157.5, 1.34), want_dxy("2026-11-06", 1.121, 157.6, 1.341),
+             want_dxy("2026-11-06", 1.119, 157.4, 1.339)]
+        self.assertEqual(mk.dxy_days(fx, mk.ecb_rates(ECB)), {FRI - FRI % 86400: (v[0], max(v), min(v), v[2])})
+
+    def test_candle_memory_is_bounded_over_days(self):
+        # Трое суток сборок раз в 10 минут: свечей — не больше DAYS_KEEP на
         # пункт, память после первых суток не растёт (как у халвинга).
         mk.set_sources({name: (lambda v=v: v) for name, v in PARTS.items()})
         t, mono = [NOW], [1000.0]
@@ -465,7 +610,7 @@ class CacheTest(unittest.TestCase):
                 t[0] += 600
                 mono[0] += 600
 
-        run(144)  # первые сутки: история набирается
+        run(144)
         gc.collect()
         tracemalloc.start()
         before = tracemalloc.get_traced_memory()[0]
@@ -474,48 +619,51 @@ class CacheTest(unittest.TestCase):
         grown = tracemalloc.get_traced_memory()[0] - before
         tracemalloc.stop()
         self.assertLess(grown, 256 * 1024, f"память выросла на {grown} байт")
-        for k, pts in mk._st.hist.items():
-            self.assertLessEqual(len(pts), mk.HIST_SEC // 600 + 1, k)
-            self.assertGreaterEqual(pts[0][0], pts[-1][0] - mk.HIST_SEC, k)
+        for k, days in mk._st.days.items():
+            self.assertLessEqual(len(days), 4, k)
 
-    def test_history_is_handed_to_the_server_only_when_it_changes(self):
+    def test_candles_are_handed_to_the_server_only_when_they_change(self):
         got: list = []
         mk.set_sink(got.append)
         self.addCleanup(mk.set_sink, None)
         mk.set_sources({name: (lambda v=v: v) for name, v in PARTS.items()})
         with mock.patch.object(mk, "_now", return_value=NOW):
             mk.build()
-            mk.build()  # те же цены и время — истории не прибавилось
+            mk.build()  # те же цены и время — свечи не менялись
         self.assertEqual(len(got), 1)
-        self.assertEqual(set(got[0]["series"]), set(mk.KEYS))
+        self.assertEqual(set(got[0]["days"]), set(mk.KEYS) - {"DXY"})  # воскресенье: у DXY своей свечи нет
         # Сломанная запись копии сборку не роняет.
         mk.set_sink(lambda h: 1 / 0)
-        mk._st.hist.clear()
+        mk._st.days.clear()
+        mk._st.seen.clear()
         err = io.StringIO()
         with mock.patch.object(mk, "_now", return_value=NOW), mock.patch.object(mk.sys, "stderr", err):
             self.assertTrue(mk.build()["ok"])
-        self.assertIn("история не записана (ZeroDivisionError)", err.getvalue())
+        self.assertIn("свечи не записаны (ZeroDivisionError)", err.getvalue())
 
-    def test_history_restore_checks_every_point(self):
-        raw = {"series": {
-            "GOLD": [[NOW - 600, 4000.0], [NOW - 300, "4001"], [NOW - 300, 4002.0], [NOW + mk.HIST_AHEAD + 1, 4003.0],
-                     [NOW - mk.HIST_SEC - 1, 3999.0], [True, 1.0], [NOW - 100, 1e9], ["x", 1], [NOW - 50]],
-            "SP500": [[NOW - mk.HIST_SEC - 1, 7000.0], [NOW - 10, 7001.0]],  # старше суток — мимо, даже первой
-            "US10Y": [[NOW - 60, 48.7]],  # не в своих рамках (доля вместо процента)
-            "EVIL": [[NOW, 1.0]],
+    def test_days_restore_checks_every_candle(self):
+        raw = {"days": {
+            "GOLD": [[DAY0 - 86400, 4000.0, 4010.0, 3990.0, 4005.0], [DAY0, "4005", 4020, 4000, 4010],
+                     [DAY0, 1.0, 1.0, 1.0, 1.0], [DAY0 + 2 * 86400, 1.0, 1.0, 1.0, 1.0], [DAY0 + 5, 1.0, 1.0, 1.0, 1.0],
+                     [True, 1.0, 1.0, 1.0, 1.0], [DAY0, 10**400, 1, 1, 1], ["x", 1, 1, 1, 1], [DAY0 - 50]],
+            "SP500": [[DAY0 - (mk.DAYS_KEEP + 1) * 86400, 7000.0, 7000.0, 7000.0, 7000.0], [DAY0, 7000.0, 7100.0, 6900.0, 7050.0]],
+            "US10Y": [[DAY0, 48.7, 48.7, 48.7, 48.7]],  # не в своих рамках (доля вместо процента)
+            "SILVER": [[DAY0, 1.0, 1.0, 1.0, 1.0]],
             "BVIV": "x",
+            "OIL": [[DAY0, 90.0, 89.0, 91.0, 90.0]],  # максимум ниже минимума
         }}
-        self.assertEqual(mk.history_restore(raw, NOW), 3)
-        self.assertEqual(mk._st.hist, {"GOLD": [(NOW - 600, 4000.0), (NOW - 300, 4001.0)], "SP500": [(NOW - 10, 7001.0)]})
-        # Своя история есть — с диска её не перетирают.
-        self.assertEqual(mk.history_restore({"series": {"GOLD": [[NOW - 10, 1.0]]}}, NOW), 0)
-        for bad in (None, [], "x", {"series": []}, {"series": {"GOLD": None}}):
-            self.assertEqual(mk.history_restore(bad, NOW), 0, bad)
-        with mock.patch.object(mk, "HIST_MAX", 2):
-            mk._st.hist.clear()
-            pts = [[NOW - 50 + i, 4000.0 + i] for i in range(5)]
-            self.assertEqual(mk.history_restore({"series": {"GOLD": pts}}, NOW), 2)
-        self.assertEqual(mk._st.hist["GOLD"], [(NOW - 47, 4003.0), (NOW - 46, 4004.0)])
+        self.assertEqual(mk.days_restore(raw, NOW), 3)
+        self.assertEqual(mk._st.days, {"GOLD": {DAY0 - 86400: (4000.0, 4010.0, 3990.0, 4005.0), DAY0: (4005.0, 4020.0, 4000.0, 4010.0)},
+                                       "SP500": {DAY0: (7000.0, 7100.0, 6900.0, 7050.0)}})
+        # Свои свечи есть — с диска их не перетирают.
+        self.assertEqual(mk.days_restore({"days": {"GOLD": [[DAY0, 1.0, 1.0, 1.0, 1.0]]}}, NOW), 0)
+        for bad in (None, [], "x", {"days": []}, {"days": {"GOLD": None}}):
+            self.assertEqual(mk.days_restore(bad, NOW), 0, bad)
+        with mock.patch.object(mk, "DAYS_KEEP", 2):
+            mk._st.days.clear()
+            rows = [[DAY0 - (3 - i) * 86400, 4000.0, 4000.0, 4000.0, 4000.0] for i in range(5)]
+            self.assertEqual(mk.days_restore({"days": {"GOLD": rows}}, NOW), 2)
+        self.assertEqual(sorted(mk._st.days["GOLD"]), [DAY0, DAY0 + 86400])  # последние DAYS_KEEP
 
     def test_people_only_read_the_cache(self):
         # Все видят кэш: запросы людей — даже тысяча, даже со старым ответом
@@ -576,7 +724,7 @@ class CacheTest(unittest.TestCase):
             live["ok"] = False
             calls.clear()
             res = mk.build()
-            self.assertEqual(set(calls), set(PARTS) - {"fx"})
+            self.assertEqual(set(calls), set(PARTS) - {"fx", "d1"})  # дневные свечи — до новых суток
             # Все пункты на месте, кроме доминации: у неё свой кэш в модуле доминации.
             self.assertEqual(set(items(res)), set(mk.KEYS) - {"BTCD", "USDTD"})
             # Прошлый ответ старше запаса — пунктов без него нет (свечи с нужными
@@ -588,7 +736,9 @@ class CacheTest(unittest.TestCase):
             # Мусор вместо ответа не запоминается.
             live["ok"] = True
             mk._st.slow.clear()
+            mk._st.tried.clear()
             mk.set_sources({**{n: src(n) for n in PARTS}, "ecb": lambda: {"rates": "x"}, "fx": lambda: {"EUR": [1, {"t": "x", "c": "1"}], "JPY": [{"t": T}], "GBP": "x"},
+                            "d1": lambda: {"SP500": [{"t": T, "o": "1", "h": "0.5", "l": "1", "c": "1"}], "GOLD": "x"},
                             "xyz": lambda: [{"universe": []}, []], "para": lambda: "x", "mkts": lambda: None})
             mk.build()
             self.assertEqual(mk._st.slow, {})
@@ -606,7 +756,7 @@ class CacheTest(unittest.TestCase):
         # 10 минут, свечи — только когда в памяти нет нужного закрытия.
         calls: list = []
         mk.set_sources({name: (lambda v=v, n=name: calls.append(n) or v) for name, v in PARTS.items()})
-        hl_names = {"xyz", "para", "mkts", "fx"}
+        hl_names = {"xyz", "para", "mkts", "fx", "d1"}
         t, mono = [NOW], [1000.0]
         with mock.patch.object(mk, "_now", side_effect=lambda: t[0]), \
              mock.patch.object(mk.time, "monotonic", side_effect=lambda: mono[0]):
@@ -616,11 +766,50 @@ class CacheTest(unittest.TestCase):
                 mono[0] += 60
         asked = [c for c in calls if c in hl_names]
         self.assertEqual(asked.count("fx"), 1)  # выходные: закрытия пятницы и четверга уже в памяти
+        self.assertEqual(asked.count("d1"), 1)  # дневные свечи — раз в сутки
         for dex in ("xyz", "para", "mkts"):
             self.assertEqual(asked.count(dex), 6, dex)  # раз в 10 минут
         self.assertEqual(mk.SLOW["xyz"][0], 600.0)
-        # Вес запросов Hyperliquid в минуту — около 0,5 % от 1200.
-        self.assertLessEqual((3 * 6 * 20 + 22) / 60, 7)
+        # Вес запросов Hyperliquid в минуту — около 0,5 % от 1200 (свечи валют
+        # и дневные свечи — раз в сутки: 3 × 33 и 6 × 21).
+        self.assertLessEqual((3 * 6 * 20 + 3 * 33 + 6 * 21) / 60, 10)
+
+    def test_daily_candles_asked_once_a_day_and_not_hammered_on_failure(self):
+        # Дневные свечи — раз в сутки UTC; не ответили — снова не раньше чем
+        # через RETRY, а пока — прошлый годный ответ.
+        calls: list = []
+        ok = [False]
+
+        def d1():
+            calls.append(1)
+            return D1C if ok[0] else None
+
+        mk.set_sources({**{n: (lambda v=v: v) for n, v in PARTS.items()}, "d1": d1})
+        t, mono = [NOW], [1000.0]
+        with mock.patch.object(mk, "_now", side_effect=lambda: t[0]), \
+                mock.patch.object(mk.time, "monotonic", side_effect=lambda: mono[0]):
+            for _ in range(30):  # полчаса молчит: спрошен трижды (раз в 10 минут)
+                mk.build()
+                t[0] += 60
+                mono[0] += 60
+            self.assertEqual(len(calls), 3)
+            ok[0] = True
+            mono[0] += mk.RETRY["d1"]
+            for _ in range(60):  # ответил — до новых суток не спрашиваем
+                mk.build()
+                t[0] += 60
+                mono[0] += 60
+            self.assertEqual(len(calls), 4)
+            self.assertEqual(len(mk.candles()["days"]["GOLD"]), mk.DAYS_SHOW)
+            ok[0] = False
+            t[0] = DAY0 + 86400 + 60  # новые сутки — спрашиваем; молчит — прошлый годный ответ
+            mono[0] += 600
+            mk.build()
+            self.assertEqual(len(calls), 5)
+            self.assertEqual(len(mk.candles()["days"]["GOLD"]), mk.DAYS_SHOW)
+            mk.build()
+            self.assertEqual(len(calls), 5)
+            self.assertEqual(len(mk.candles()["days"]["GOLD"]), mk.DAYS_SHOW)  # пока ждём — прошлый годный
 
     def test_fx_candles_asked_again_only_after_new_close(self):
         self.assertTrue(mk.fx_covers(FX, NOW))

@@ -29,15 +29,15 @@ import { memo, useCallback, useEffect, useId, useRef, useState, type KeyboardEve
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
 import type { DictKey, LangCode } from "../i18n/types";
-import { num } from "../lib/format";
-import { fetchMarkets, fetchMarketsHist, peekMarkets, refreshMarkets } from "../lib/api";
+import { dtf, num } from "../lib/format";
+import { fetchMarkets, fetchMarketsCandles, peekMarkets, refreshMarkets } from "../lib/api";
 import { openExternal } from "../lib/telegram";
 import { CMC_URL } from "./CmcBy";
 import "./Markets.css";
 import {
-  MARKETS_STALE_MIN, MARKET_KEYS, SPARK_FULL_SEC, ageMin, barShare, change, digits, isPercent, marketsDue, spark, sparkFrom,
-  sparkCover, sparkSeries,
-  type MarketItem, type MarketKey, type MarketsHist, type MarketsReply,
+  CANDLES_FULL, MARKETS_STALE_MIN, MARKET_KEYS, ageMin, barShare, candleChart, candleSeries, change, digits, isPercent,
+  marketsDue,
+  type Candle, type MarketItem, type MarketKey, type MarketsCandles, type MarketsReply,
 } from "../lib/markets";
 
 const EVERY = 60_000;
@@ -70,68 +70,82 @@ const fmtPx = (k: MarketKey, v: number, it: MarketItem) => {
 const agoText = (lang: LangCode, min: number) =>
   min < 1 ? t(lang, "mk_now") : min < 60 ? t(lang, "mk_ago", { n: min }) : t(lang, "mk_ago_h", { n: Math.floor(min / 60) });
 
-const SW = 240, SH = 56;
+const SW = 240, SH = 64;
 
-/** Мини-график цены за сутки — в раскрытом пояснении ячейки: ось времени —
- *  сутки до ответа (история короче — до целого часа, см. sparkFrom), линия
- *  цветом изменения с мягкой заливкой, пунктир — цена суточной давности;
- *  касание или стрелки — цена и время точки. Истории меньше SPARK_FULL_SEC
- *  (сервер недавно запущен) — строка под осью, что график заполняется. Ряд —
- *  из своей же истории сервера, без запросов к источникам. */
-function MiniChart({ it, pts, lang, now, end }: { it: MarketItem; pts: [number, number][]; lang: LangCode; now: number; end: number }) {
+/** День свечи: «12 нояб.» — на языке приложения, по UTC (как день свечи). */
+const dayText = (lang: LangCode, d: number) => {
+  try {
+    return dtf(lang, { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(d * 1000));
+  } catch {
+    return new Date(d * 1000).toISOString().slice(5, 10);
+  }
+};
+
+/** Мини-график — дневные свечи за месяц — в раскрытом пояснении ячейки:
+ *  рост — зелёным, падение — красным, пунктир — последняя цена; касание или
+ *  стрелки — день, открытие, максимум, минимум, закрытие и изменение к
+ *  прошлому закрытию. Свечей меньше CANDLES_FULL (своя история только
+ *  копится) — строка под осью. Свечи — от сервера, без запросов к
+ *  источникам. */
+function CandleChart({ it, cs, lang }: { it: MarketItem; cs: Candle[]; lang: LangCode }) {
   const [at, setAt] = useState(-1);
-  const gid = useId().replace(/:/g, "");
-  const from = sparkFrom(pts, end);
-  const g = spark(pts, it.prev, SW, SH, 3, from, end);
-  const short = sparkCover(pts) < SPARK_FULL_SEC;
-  const ch = change(it).v;
-  const dir = ch > 0 ? "up" : ch < 0 ? "dn" : "";
+  const g = candleChart(cs, SW, SH, 3);
   const pick = (e: PointerEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     const f = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
     const rtl = getComputedStyle(e.currentTarget).direction === "rtl";
     const target = (rtl ? 1 - f : f) * SW;
     let best = 0;
-    for (let i = 1; i < g.xs.length; i++) if (Math.abs(g.xs[i]! - target) < Math.abs(g.xs[best]! - target)) best = i;
+    for (let i = 1; i < g.bars.length; i++) if (Math.abs(g.bars[i]!.x - target) < Math.abs(g.bars[best]!.x - target)) best = i;
     setAt(best);
   };
   const key = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
     e.preventDefault();
-    const i = at < 0 ? pts.length - 1 : at + (e.key === "ArrowRight" ? 1 : -1);
-    setAt(Math.max(0, Math.min(pts.length - 1, i)));
+    const i = at < 0 ? cs.length - 1 : at + (e.key === "ArrowRight" ? 1 : -1);
+    setAt(Math.max(0, Math.min(cs.length - 1, i)));
   };
-  const p = at >= 0 ? pts[at] : undefined;
-  const left = at >= 0 ? (g.xs[at]! / SW) * 100 : 0;
-  const first = ageMin(pts[0]![0], now);
+  const c = at >= 0 ? cs[at] : undefined;
+  const prev = at > 0 ? cs[at - 1]![4] : undefined;
+  const left = at >= 0 ? (g.bars[at]!.x / SW) * 100 : 0;
+  const pct = c && prev ? (c[4] / prev - 1) * 100 : undefined;
+  const first = cs[0]!, tail = cs[cs.length - 1]!;
+  const fmt = (v: number) => fmtPx(it.k, v, it);
+  const firstAt = +(((g.bars[0]!.x - g.bw / 2) / SW) * 100).toFixed(2);
+  const roomy = firstAt < 70;
   return (
-    <div className={`mk-spark ${dir}`} role="img" tabIndex={0}
-      aria-label={`${label(it.k, lang)}: ${agoText(lang, first)} ${fmtPx(it.k, pts[0]![1], it)} → ${fmtPx(it.k, it.px, it)}`}
+    <div className="mk-spark" role="img" tabIndex={0}
+      aria-label={`${label(it.k, lang)}: ${dayText(lang, first[0])} ${fmt(first[1])} → ${dayText(lang, tail[0])} ${fmt(tail[4])}`}
       onPointerDown={pick} onPointerMove={(e) => (e.pointerType === "mouse" || e.buttons ? pick(e) : undefined)}
       onPointerLeave={() => setAt(-1)} onKeyDown={key} onBlur={() => setAt(-1)}>
-      <div className="mk-spark-plot">
+      <div className={`mk-spark-plot${c ? " pick" : ""}`}>
         <svg viewBox={`0 0 ${SW} ${SH}`} preserveAspectRatio="none" aria-hidden="true" focusable="false">
-          <defs>
-            <linearGradient id={`${gid}f`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" className="mk-spark-s0" /><stop offset="1" className="mk-spark-s1" />
-            </linearGradient>
-          </defs>
-          <path d={g.area} className="mk-spark-area" fill={`url(#${gid}f)`} />
-          <line x1="0" x2={SW} y1={g.base} y2={g.base} className="mk-spark-base" vectorEffect="non-scaling-stroke" />
-          <path d={g.line} className="mk-spark-line" vectorEffect="non-scaling-stroke" />
-          {at >= 0 ? <line x1={g.xs[at]} x2={g.xs[at]} y1="0" y2={SH} className="mk-spark-cross" vectorEffect="non-scaling-stroke" /> : null}
+          <line x1="0" x2={SW} y1={g.last} y2={g.last} className="mk-spark-base" vectorEffect="non-scaling-stroke" />
+          {g.bars.map((b, i) => (
+            <g key={cs[i]![0]} className={`mk-cdl ${b.up ? "up" : "dn"}${i === at ? " on" : ""}`}>
+              <line x1={b.x} x2={b.x} y1={b.hi} y2={b.lo} vectorEffect="non-scaling-stroke" />
+              <rect x={+(b.x - g.bw / 2).toFixed(2)} y={b.top} width={g.bw} height={+(b.bot - b.top).toFixed(2)} />
+            </g>
+          ))}
         </svg>
-        {p ? (
-          <>
-            <i className="mk-spark-dot" style={{ insetInlineStart: `${left}%`, insetBlockStart: `${(g.ys[at]! / SH) * 100}%` }} />
-            <span className={`mk-spark-tip${left < 25 ? " start" : left > 75 ? " end" : ""}`} style={{ insetInlineStart: `${left}%` }}>
-              <b>{fmtPx(it.k, p[1], it)}</b> <small>{agoText(lang, ageMin(p[0], now))}</small>
+        {c ? (
+          <span className={`mk-spark-tip${left < 25 ? " start" : left > 75 ? " end" : ""}`} style={{ insetInlineStart: `${left}%` }}>
+            <span className="mk-tip-l1">
+              <b>{fmt(c[4])}</b>
+              {pct !== undefined ? <em className={pct > 0 ? "up" : pct < 0 ? "dn" : ""}>{`${pct > 0 ? "+" : pct < 0 ? "−" : ""}${num(Math.abs(pct), 2, 2)}%`}</em> : null}
+              <small>{dayText(lang, c[0])}</small>
             </span>
-          </>
+            <small className="mk-tip-l2">{t(lang, "mk_ohlc", { o: fmt(c[1]), h: fmt(c[2]), l: fmt(c[3]) })}</small>
+          </span>
         ) : null}
       </div>
-      <div className="mk-spark-ax" aria-hidden="true"><span>{agoText(lang, ageMin(from, now))}</span><span>{t(lang, "mk_now")}</span></div>
-      {short ? <span className="mk-spark-wait-t">{t(lang, "mk_hist_short")}</span> : null}
+      <div className="mk-spark-ax" aria-hidden="true">
+        {/* Первый день — под первой свечой (свечей мало — она не у края); у
+            правого края места на две подписи нет — обе справа, через тире. */}
+        <span style={{ marginInlineStart: `${firstAt}%` }}>{roomy ? dayText(lang, first[0]) : ""}</span>
+        <span>{roomy || cs.length < 2 ? dayText(lang, tail[0]) : `${dayText(lang, first[0])} – ${dayText(lang, tail[0])}`}</span>
+      </div>
+      {cs.length < CANDLES_FULL ? <span className="mk-spark-wait-t">{t(lang, "mk_hist_short")}</span> : null}
     </div>
   );
 }
@@ -236,16 +250,16 @@ export function MarketsStrip({ fallback }: { fallback: ReactNode }) {
   const pick = useCallback((k: MarketKey) => setSel((s) => (s === k ? null : k)), []);
   const asked = useRef(Date.now());
   const noteId = useId();
-  // История за сутки — один запрос на все пункты при первом касании ячейки.
-  const [hist, setHist] = useState<MarketsHist | null>(null);
+  // Дневные свечи — один запрос на все пункты при первом касании ячейки.
+  const [cands, setCands] = useState<MarketsCandles | null>(null);
   useEffect(() => {
-    if (!sel || hist) return;
+    if (!sel || cands) return;
     let alive = true;
-    fetchMarketsHist().then((h) => alive && setHist(h), () => alive && setHist({}));
+    fetchMarketsCandles().then((h) => alive && setCands(h), () => alive && setCands({}));
     return () => {
       alive = false;
     };
-  }, [sel, hist]);
+  }, [sel, cands]);
   useEffect(() => {
     let alive = true;
     let timer = 0;
@@ -303,7 +317,7 @@ export function MarketsStrip({ fallback }: { fallback: ReactNode }) {
         <span className="mk-ttl"><Mark />{t(lang, "mk_title")}</span>
         <span className={`mk-age${age >= MARKETS_STALE_MIN ? " old" : ""}`}>
           <i className="mk-dot" aria-hidden="true" />
-          {age < 1 ? t(lang, "mk_now") : age < 60 ? t(lang, "mk_ago", { n: age }) : t(lang, "mk_ago_h", { n: Math.floor(age / 60) })}
+          {agoText(lang, age)}
         </span>
       </div>
       <div className="mk-grid">
@@ -316,11 +330,11 @@ export function MarketsStrip({ fallback }: { fallback: ReactNode }) {
       </div>
       {note && sel ? (
         <div id={noteId} className="mk-note" role="note">
-          {hist === null ? <div className="mk-spark-wait" aria-hidden="true" />
+          {cands === null ? <div className="mk-spark-wait" aria-hidden="true" />
             : (() => {
               const it = byKey.get(sel)!;
-              const pts = sparkSeries(hist[sel], it, m.at);
-              return pts.length >= 2 ? <MiniChart key={sel} it={it} pts={pts} lang={lang} now={now} end={m.at} /> : null;
+              const cs = candleSeries(cands[sel], it);
+              return cs.length ? <CandleChart key={sel} it={it} cs={cs} lang={lang} /> : null;
             })()}
           <p className="mk-note-t">{t(lang, note)}</p>
         </div>

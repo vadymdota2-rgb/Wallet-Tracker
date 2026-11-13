@@ -197,31 +197,45 @@ class MarketsFuzzTest(unittest.TestCase):
             os.unlink(f.name)
 
 
-class HistoryFuzzTest(unittest.TestCase):
-    """История мини-графика на мусоре: копия с диска — чужая и испорченная,
-    сборки — в любом порядке времени. История всегда: только наши пункты,
-    точки по возрастанию времени, в пределах суток, не больше HIST_MAX,
-    правдоподобные цены; ответ — честный JSON, и приложение (validHist)
-    принимает его целиком."""
+class CandleFuzzTest(unittest.TestCase):
+    """Дневные свечи на мусоре: копия с диска — чужая и испорченная, сборки —
+    в любом порядке времени, источники свечей — мусор. Свечи всегда: только
+    наши пункты, день — начало суток UTC, не больше DAYS_KEEP, правдоподобные
+    и в рамках пункта, тени охватывают тело; ответ — честный JSON, и
+    приложение (validCandles) принимает его целиком."""
 
     def setUp(self):
         self.addCleanup(setattr, mk, "_st", mk._st)
         mk._st = mk._State()
 
-    def check(self, m: str, t: int) -> None:
-        for k, pts in mk._st.hist.items():
+    def check(self, m: str) -> None:
+        for k, days in mk._st.days.items():
             self.assertIn(k, mk.KEYS, m)
-            self.assertLessEqual(len(pts), mk.HIST_MAX, m)
+            self.assertLessEqual(len(days), mk.DAYS_KEEP, m)
             lo, hi = mk.RANGE.get(k, (0.0, mk.PX_MAX))
-            for (a, _), (b, _) in itertools.pairwise(pts):
-                self.assertLess(a, b, (m, k))
-            for ts, px in pts:
-                self.assertIsInstance(ts, int, m)
-                self.assertLessEqual(ts, t + mk.HIST_AHEAD, (m, k, ts))
-                self.assertTrue(math.isfinite(px) and 0 < px < mk.PX_MAX and lo <= px <= hi, (m, k, px))
-        json.dumps(mk.history(), allow_nan=False)
+            for d, (o, h, low, c) in days.items():
+                self.assertIsInstance(d, int, m)
+                self.assertEqual(d % mk.DAY, 0, (m, k, d))
+                for v in (o, h, low, c):
+                    self.assertTrue(math.isfinite(v) and 0 < v < mk.PX_MAX and lo <= v <= hi, (m, k, v))
+                self.assertTrue(low <= min(o, c) <= max(o, c) <= h, (m, k))
+        json.dumps(mk.days_snapshot(), allow_nan=False)
 
-    def junk_series(self, r: random.Random, t: int) -> object:
+    def check_reply(self, m: str, rep: dict, at: int) -> None:
+        json.dumps(rep, allow_nan=False)
+        if not rep["ok"]:
+            return
+        for k, rows in rep["days"].items():
+            self.assertIn(k, mk.KEYS, m)
+            self.assertLessEqual(len(rows), mk.DAYS_SHOW, m)
+            lo, hi = mk.RANGE.get(k, (0.0, mk.PX_MAX))
+            for (a, *_), (b, *_) in itertools.pairwise(rows):
+                self.assertLess(a, b, (m, k))
+            for d, o, h, low, c in rows:
+                self.assertTrue(d % mk.DAY == 0 and at - mk.DAYS_KEEP * mk.DAY <= d <= at + mk.DAY, (m, k, d))
+                self.assertTrue(lo <= low <= min(o, c) <= max(o, c) <= h <= hi, (m, k, o, h, low, c))
+
+    def junk_days(self, r: random.Random, t: int) -> object:
         if r.random() < 0.05:
             return r.choice(JUNK)
         out: dict = {}
@@ -231,13 +245,19 @@ class HistoryFuzzTest(unittest.TestCase):
             if r.random() < 0.05:
                 out[k] = r.choice(JUNK)
                 continue
-            n = r.randrange(0, 400)
             base = r.choice([4000.0, 4.8, 42.0, 60.0, 102.0])
-            out[k] = [r.choice(JUNK) if r.random() < 0.05 else
-                      [r.choice([t - r.randrange(-500, 2 * mk.HIST_SEC), r.choice(JUNK), float(t), True]),
-                       r.choice([base * (0.5 + r.random()), r.choice(JUNK), str(base)])]
-                      for _ in range(n)]
-        return {"series": out} if r.random() < 0.95 else out
+            rows = []
+            for _ in range(r.randrange(0, 60)):
+                o, c = base * (0.8 + r.random() / 2.5), base * (0.8 + r.random() / 2.5)
+                row = [r.choice([t - t % mk.DAY - r.randrange(-2, 50) * mk.DAY, t, r.choice(JUNK)]),
+                       o, max(o, c) * (1 + r.random() / 50), min(o, c) * (1 - r.random() / 50), c]
+                if r.random() < 0.1:
+                    row[r.randrange(5)] = r.choice(JUNK)
+                if r.random() < 0.03:
+                    row.pop()
+                rows.append(r.choice(JUNK) if r.random() < 0.05 else row)
+            out[k] = rows
+        return {"days": out} if r.random() < 0.95 else out
 
     def test_restore_from_any_file_keeps_invariants(self):
         r = random.Random(SEED + 1)  # noqa: S311 — повторяемость, а не криптостойкость
@@ -245,56 +265,77 @@ class HistoryFuzzTest(unittest.TestCase):
         for i in range(400):
             mk._st = mk._State()
             t = utc(r.choice(TIMES))
-            n = mk.history_restore(self.junk_series(r, t), t)
+            n = mk.days_restore(self.junk_days(r, t), t)
             took += n
-            self.assertEqual(n, sum(len(v) for v in mk._st.hist.values()), i)
-            self.check(f"случай {i}", t)
-        self.assertGreater(took, 1000)  # генератор даёт и годные точки — иначе он ничего не проверяет
+            self.assertEqual(n, sum(len(v) for v in mk._st.days.values()), i)
+            self.check(f"случай {i}")
+            self.check_reply(f"ответ {i}", mk.merge_days({}, mk._st.days, t), t)
+        self.assertGreater(took, 1000)  # генератор даёт и годные свечи — иначе он ничего не проверяет
 
     def test_builds_in_any_time_order_keep_invariants(self):
         r = random.Random(SEED + 2)  # noqa: S311
-        t = top = utc("2026-11-06 15:00")
+        t = utc("2026-11-06 15:00")
         for i in range(3000):
-            t += r.choice([600, 600, 600, 0, -600, 60, 3 * 3600])
-            top = max(top, t)  # время назад — старый ответ: история его не берёт
-            items = [{"k": k, "px": round(4000.0 * (0.9 + r.random() / 5), 2), "prev": 4000.0}
-                     for k in ("GOLD", "SP500") if r.random() < 0.9]
+            t += r.choice([600, 600, 600, 0, -600, 60, 3 * 3600, 86400])
+            items = [{"k": k, "px": round(base * (0.9 + r.random() / 5), 2), "prev": base}
+                     for k, base in (("GOLD", 4000.0), ("SP500", 7000.0), ("DXY", 99.0)) if r.random() < 0.9]
             with mk._lock:
                 mk._record({"ok": True, "at": t, "items": items})
-            self.check(f"сборка {i}", top)
-        last = max(p[-1][0] for p in mk._st.hist.values())
-        for pts in mk._st.hist.values():
-            self.assertGreaterEqual(pts[0][0], last - mk.HIST_SEC - 3 * 3600)
+            self.check(f"сборка {i}")
+
+    def test_junk_candle_sources_keep_invariants(self):
+        r = random.Random(SEED + 4)  # noqa: S311
+        for i in range(400):
+            t = utc(r.choice(TIMES))
+            d0 = t - t % mk.DAY
+
+            def rows(base: float, d0: int = d0) -> object:
+                if r.random() < 0.05:
+                    return r.choice(JUNK)
+                out = []
+                for j in range(r.randrange(0, 40)):
+                    o, c = base * (0.8 + r.random() / 2.5), base * (0.8 + r.random() / 2.5)
+                    row = {"t": (d0 - j * mk.DAY) * 1000 + r.choice([0, 0, 0, 1, 3_600_000]), "o": str(o),
+                           "h": str(max(o, c) * 1.01), "l": str(min(o, c) * 0.99), "c": c}
+                    if r.random() < 0.1:
+                        row[r.choice(["t", "o", "h", "l", "c"])] = r.choice(JUNK)
+                    out.append(row if r.random() > 0.05 else r.choice(JUNK))
+                return out[::-1]
+
+            d1 = {k: rows(b) for k, b in (("SP500", 7000.0), ("GOLD", 4000.0), ("US10Y", 4.8), ("BVIV", 42.0))}
+            hist = [[d0 - j * mk.DAY, 3e12, r.choice([60.0, r.choice(JUNK)]), 12.0] for j in range(r.randrange(0, 40))][::-1]
+            ext = mk.ext_days({"d1": d1 if r.random() < 0.95 else r.choice(JUNK),
+                               "mcap": {"ok": True, "hist": hist if r.random() < 0.95 else r.choice(JUNK)}})
+            own = {"GOLD": {d0: (4000.0, 4100.0, 3900.0, 4050.0)}} if r.random() < 0.5 else {}
+            self.check_reply(f"случай {i}", mk.merge_days(ext, own, t), t)
 
     @unittest.skipUnless(shutil.which("node"), "нужен Node 22.18+")
-    def test_every_history_is_accepted_by_the_app(self):
+    def test_every_candle_reply_is_accepted_by_the_app(self):
         r = random.Random(SEED + 3)  # noqa: S311
         got = []
         for _ in range(60):
             mk._st = mk._State()
             t = utc(r.choice(TIMES))
-            mk.history_restore(self.junk_series(r, t), t)
-            h = mk.history()
-            if h["ok"]:
-                got.append((t, h))
+            mk.days_restore(self.junk_days(r, t), t)
+            rep = mk.merge_days({}, mk._st.days, t)
+            if rep["ok"]:
+                got.append((t, rep))
         self.assertGreater(len(got), 30)
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
             json.dump(got, f)
         try:
             script = (
                 "import { readFileSync } from 'node:fs';"
-                f"import {{ validHist }} from {json.dumps(os.path.join(ROOT, 'src/lib/markets.ts'))};"
+                f"import {{ validCandles }} from {json.dumps(os.path.join(ROOT, 'src/lib/markets.ts'))};"
                 "const all = JSON.parse(readFileSync(process.argv[1], 'utf8'));"
-                "const bad = all.filter(([t, h]) => { const v = validHist(h, t);"
-                " const want = Object.fromEntries(Object.entries(h.series).filter(([, p]) => p.length >= 2));"
-                " return JSON.stringify(v) !== JSON.stringify(want); });"
+                "const bad = all.filter(([t, h]) => JSON.stringify(validCandles(h, t)) !== JSON.stringify(h.days));"
                 "console.log(JSON.stringify({ n: all.length, bad: bad.slice(0, 1) }));"
             )
             out = subprocess.run(["node", "--input-type=module", "-e", script, f.name],
                                  capture_output=True, text=True, timeout=120, check=True)
             res = json.loads(out.stdout)
             self.assertEqual(res["n"], len(got))
-            self.assertEqual(res["bad"], [], "приложение отвергло историю сервера")
+            self.assertEqual(res["bad"], [], "приложение отвергло свечи сервера")
         finally:
             os.unlink(f.name)
 

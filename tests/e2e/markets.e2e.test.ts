@@ -28,15 +28,16 @@ const MARKETS = {
     { k: "BVIV", px: 42.399, prev: 41 }, { k: "BTCD", px: 60.44, prev: 60.35 }, { k: "USDTD", px: 4.1, prev: 4.22 },
   ],
 };
-/** История за сутки для мини-графика: раз в 10 минут от цены суточной
- *  давности к нынешней, с покачиванием. */
-const HIST = {
-  ok: true, at: T - 20, series: Object.fromEntries(MARKETS.items.map((x) => [x.k,
-    Array.from({ length: 145 }, (_, i) => {
-      const f = i / 144;
-      return [T - 20 - 86_400 + i * 600, +(x.prev + (x.px - x.prev) * f + Math.sin(i / 9) * Math.abs(x.px - x.prev) * 0.4).toFixed(4)];
-    })])),
-};
+/** Дневные свечи за 30 дней: от цены месяц назад к нынешней, с покачиванием. */
+const D = 86_400;
+const DAY0 = T - (T % D);
+const candlesOf = (prev: number, px: number, n: number) => Array.from({ length: n }, (_, i) => {
+  const at = (j: number) => +(prev + (px - prev) * (j / 30) + Math.sin(j / 3) * Math.abs(px - prev) * 0.6).toFixed(4);
+  const o = at(i + 30 - n), c = at(i + 31 - n);
+  const w = Math.abs(px - prev) * 0.15;
+  return [DAY0 - (n - 1 - i) * D, o, +(Math.max(o, c) + w).toFixed(4), +(Math.min(o, c) - w).toFixed(4), c];
+});
+const CANDLES = { ok: true, at: T - 20, days: Object.fromEntries(MARKETS.items.map((x) => [x.k, candlesOf(x.prev * 0.98, x.px, 30)])) };
 const sp = (s: string | null) => (s ?? "").replace(/[\s  ]+/g, " ").trim();
 
 let server: Server;
@@ -69,8 +70,8 @@ interface Opts {
   lang?: string; width?: number; height?: number; reply?: unknown; scale?: number;
   /** Высокая контрастность Windows (forced-colors). */
   forced?: boolean;
-  /** Ответ /api/markets/hist; счётчик запросов к нему. */
-  hist?: unknown; histAsked?: { n: number };
+  /** Ответ /api/markets/candles; счётчик запросов к нему. */
+  cand?: unknown; candAsked?: { n: number };
   /** Ответы по очереди (последний — дальше всегда); задержка первого ответа, мс. */
   replies?: unknown[]; delay?: number;
   /** Копия на устройстве (wt-markets-v1): когда записана (мс) и что. */
@@ -89,9 +90,9 @@ async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; er
   await ctx.route(`${base}/api/**`, (r) => r.fulfill({ contentType: "application/json", body: '{"ok":false}' }));
   await ctx.route(`${base}/api/bootstrap`, (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, me: { plan: "premium" } }) }));
   let n = 0;
-  await ctx.route(`${base}/api/markets/hist`, async (r) => {
-    if (o.histAsked) o.histAsked.n += 1;
-    await r.fulfill({ contentType: "application/json", body: JSON.stringify(o.hist ?? HIST) });
+  await ctx.route(`${base}/api/markets/candles`, async (r) => {
+    if (o.candAsked) o.candAsked.n += 1;
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify(o.cand ?? CANDLES) });
   });
   await ctx.route(`${base}/api/markets`, async (r) => {
     const body = o.replies ? o.replies[Math.min(n++, o.replies.length - 1)] : (o.reply ?? MARKETS);
@@ -369,35 +370,46 @@ test("касание ячейки — её пояснение; ещё раз —
   await ctx.close();
 });
 
-test("касание ячейки — мини-график за сутки: цвет изменения, пунктир — сутки назад, касание графика — цена и время", async () => {
-  const histAsked = { n: 0 };
-  const { ctx, page, errors } = await open({ histAsked });
+/** День свечи так, как его пишет браузер на этом языке (как в приложении). */
+const dayIn = (page: Page, lang: string, d: number) => page.evaluate(([l, t]) =>
+  new Intl.DateTimeFormat(l as string, { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date((t as number) * 1000)), [lang, d]);
+
+test("касание ячейки — дневные свечи за месяц: рост и падение, пунктир — цена, касание — день и OHLC", async () => {
+  const candAsked = { n: 0 };
+  const { ctx, page, errors } = await open({ candAsked });
   await page.locator(".drawer .mk-px").first().waitFor();
   await page.locator('.mk-cell[data-k="GOLD"]').click();
   const chart = page.locator(".mk-spark");
   await chart.waitFor();
-  assert.match(await chart.getAttribute("class") ?? "", /\bdn\b/); // золото за сутки упало — красным
+  assert.equal(await page.locator(".mk-cdl").count(), 30);
+  assert.ok(await page.locator(".mk-cdl.up").count() > 0 && await page.locator(".mk-cdl.dn").count() > 0);
   assert.equal(await page.locator(".mk-spark-base").count(), 1);
-  assert.deepEqual((await page.locator(".mk-spark-ax span").allTextContents()).map(sp), ["24 ч назад", "сейчас"]);
-  assert.equal(sp(await chart.getAttribute("aria-label")), "Золото: 24 ч назад 4 080 → 4 066");
-  // Касание у начала графика — цена суточной давности и «24 ч назад».
+  const first = await dayIn(page, "ru", DAY0 - 29 * D), last = await dayIn(page, "ru", DAY0);
+  assert.deepEqual((await page.locator(".mk-spark-ax span").allTextContents()).map(sp), [sp(first), sp(last)]);
+  assert.match(sp(await chart.getAttribute("aria-label")), new RegExp(`^Золото: ${sp(first)} 3 9\\d\\d → ${sp(last)} 4 066$`));
+  assert.equal(await page.locator(".mk-spark-wait-t").count(), 0);
+  // Стрелками — к первой свече: день, закрытие, OHLC; изменения нет (прошлой нет).
+  await chart.focus();
+  for (let i = 0; i < 40; i++) await page.keyboard.press("ArrowLeft");
+  const tip = page.locator(".mk-spark-tip");
+  assert.match(sp(await tip.innerText()), new RegExp(`^4 0\\d\\d ${sp(first)} откр\\. [\\d ]+ · макс\\. [\\d ]+ · мин\\. [\\d ]+$`));
+  assert.equal(await tip.locator("em").count(), 0);
+  assert.equal(await page.locator(".mk-cdl.on").count(), 1);
+  // К последней: закрытие — цена ответа, изменение к прошлому закрытию.
+  for (let i = 0; i < 40; i++) await page.keyboard.press("ArrowRight");
+  assert.match(sp(await tip.innerText()), new RegExp(`^4 066 [+−]\\d+,\\d\\d% ${sp(last)} `));
+  // Касание середины — свеча середины месяца.
   const box = (await chart.boundingBox())!;
   await page.mouse.click(box.x + box.width / 2, box.y + 20);
-  assert.match(sp(await page.locator(".mk-spark-tip").innerText()), /^4 0\d\d 1[12] ч назад$/); // середина суток
-  for (let i = 0; i < 200; i++) await page.keyboard.press("ArrowLeft");
-  assert.equal(sp(await page.locator(".mk-spark-tip").innerText()), "4 080 24 ч назад");
-  // Стрелками — к нынешней цене.
-  await chart.focus();
-  for (let i = 0; i < 200; i++) await page.keyboard.press("ArrowRight");
-  assert.equal(sp(await page.locator(".mk-spark-tip").innerText()), "4 066 сейчас");
-  // Пояснение — под графиком, как раньше.
+  assert.match(sp(await tip.locator("small").first().textContent()), new RegExp(sp(await dayIn(page, "ru", DAY0 - 15 * D)) + "|" + sp(await dayIn(page, "ru", DAY0 - 14 * D))));
+  // Пояснение — под графиком.
   assert.equal(sp(await page.locator(".mk-note-t").textContent()), sp(I18N["mk_gold_hint"]!["ru"]!));
-  // Другие ячейки — из той же истории: один запрос на все.
+  // Другие ячейки — из того же ответа: один запрос на все.
   await page.locator('.mk-cell[data-k="BVIV"]').click();
-  await page.locator(".mk-spark.up").waitFor();
+  await page.locator(".mk-spark").waitFor();
   await page.locator('.mk-cell[data-k="US10Y"]').click();
   await page.locator(".mk-spark").waitFor();
-  assert.equal(histAsked.n, 1);
+  assert.equal(candAsked.n, 1);
   assert.deepEqual(errors, []);
   await ctx.close();
 });
@@ -418,27 +430,28 @@ function sparkOverflow(page: Page): Promise<string[]> {
   });
 }
 
-test("мини-график на 16 языках при 320 точках: подписи времени переведены, ничего не вылезает", async () => {
+test("свечи на 16 языках при 320 точках: даты и OHLC переведены, ничего не вылезает", async () => {
   for (const lang of LANGS) {
     const { ctx, page, errors } = await open({ lang, width: 320 });
     await page.locator(".drawer .mk-px").first().waitFor();
     await page.locator('.mk-cell[data-k="DXY"]').click();
     await page.locator(".mk-spark").waitFor();
     const ax = (await page.locator(".mk-spark-ax span").allTextContents()).map(sp);
-    assert.equal(ax[1], sp(I18N["mk_now"]![lang]!), lang);
-    assert.equal(ax[0], sp(I18N["mk_ago_h"]![lang]!.replace("{n}", "24")), lang);
-    // Подпись точки — у края графика тоже внутри меню.
+    assert.deepEqual(ax, [sp(await dayIn(page, lang, DAY0 - 29 * D)), sp(await dayIn(page, lang, DAY0))], lang);
+    // Подпись свечи — у краёв графика тоже внутри меню.
     const box = (await page.locator(".mk-spark").boundingBox())!;
     for (const f of [0.01, 0.5, 0.99]) {
       await page.mouse.click(box.x + box.width * f, box.y + 20);
       assert.deepEqual(await sparkOverflow(page), [], `${lang} ${f}`);
     }
+    const l2 = sp(await page.locator(".mk-tip-l2").textContent());
+    assert.ok(l2.startsWith(sp(I18N["mk_ohlc"]![lang]!.split("{o}")[0]!)), `${lang}: ${l2}`);
     assert.deepEqual(errors, [], lang);
     await ctx.close();
   }
 });
 
-test("мини-график справа налево (арабский): старое — справа, касание у правого края — сутки назад", async () => {
+test("свечи справа налево (арабский): старое — справа, касание у правого края — первая свеча", async () => {
   const { ctx, page, errors } = await open({ lang: "ar" });
   await page.locator(".drawer .mk-px").first().waitFor();
   await page.locator('.mk-cell[data-k="GOLD"]').click();
@@ -446,18 +459,18 @@ test("мини-график справа налево (арабский): ста
   await chart.waitFor();
   const ax = page.locator(".mk-spark-ax span");
   const [a0, a1] = [(await ax.nth(0).boundingBox())!, (await ax.nth(1).boundingBox())!];
-  assert.ok(a0.x > a1.x, "«24 ч назад» — справа");
+  assert.ok(a0.x > a1.x, "первый день — справа");
   const box = (await chart.boundingBox())!;
   await page.mouse.click(box.x + box.width - 1, box.y + 20);
-  assert.match(sp(await page.locator(".mk-spark-tip small").textContent()), /2[34]/); // первые точки суток
-  const dot = (await page.locator(".mk-spark-dot").boundingBox())!;
-  assert.ok(dot.x > box.x + box.width * 0.9, "точка — у правого края, где касались");
+  assert.equal(sp(await page.locator(".mk-spark-tip small").first().textContent()), sp(await dayIn(page, "ar", DAY0 - 29 * D)));
+  const on = (await page.locator(".mk-cdl.on rect").boundingBox())!;
+  assert.ok(on.x > box.x + box.width * 0.9, "свеча — у правого края, где касались");
   assert.deepEqual(await sparkOverflow(page), []);
   assert.deepEqual(errors, []);
   await ctx.close();
 });
 
-test("мини-график при крупном шрифте (до 200 %) и в высокой контрастности", async () => {
+test("свечи при крупном шрифте (до 200 %) и в высокой контрастности", async () => {
   for (const z of [1.3, 2]) {
     const { ctx, page } = await open({ width: 360 });
     await page.locator(".drawer .mk-px").first().waitFor();
@@ -476,45 +489,62 @@ test("мини-график при крупном шрифте (до 200 %) и �
   await page.locator(".drawer .mk-px").first().waitFor();
   await page.locator('.mk-cell[data-k="GOLD"]').click();
   await page.locator(".mk-spark").waitFor();
-  const stroke = await page.locator(".mk-spark-line").evaluate((el) => getComputedStyle(el).stroke);
-  assert.notEqual(stroke, "none");
+  const fill = await page.locator(".mk-cdl rect").first().evaluate((el) => getComputedStyle(el).fill);
+  assert.ok(fill !== "none" && !fill.includes("0, 0, 0, 0"), fill);
   assert.deepEqual(errors, []);
   await ctx.close();
 });
 
-/** Сервер перезапущен 24 минуты назад: истории — три точки. */
-const SHORT = { ok: true, at: T - 20, series: Object.fromEntries(MARKETS.items.map((x) => [x.k,
-  [[T - 20 - 1440, x.px * 0.999], [T - 20 - 840, x.px * 0.9995], [T - 20, x.px]]])) };
+/** Своя история только копится (USDT.D после запуска): две свечи. */
+const SHORT = { ok: true, at: T - 20, days: Object.fromEntries(MARKETS.items.map((x) => [x.k, candlesOf(x.prev, x.px, 2)])) };
 
-test("короткая история (сервер только что запущен): ось — час, линия справа на 40 %, подпись «история копится» под осью", async () => {
-  const { ctx, page, errors } = await open({ hist: SHORT });
+test("свечей мало (история копится): справа, той же ширины, подпись под осью", async () => {
+  const { ctx, page, errors } = await open({ cand: SHORT });
   await page.locator(".drawer .mk-px").first().waitFor();
-  await page.locator('.mk-cell[data-k="DXY"]').click();
+  await page.locator('.mk-cell[data-k="USDTD"]').click();
   const chart = page.locator(".mk-spark");
   await chart.waitFor();
-  assert.deepEqual((await page.locator(".mk-spark-ax span").allTextContents()).map(sp), ["1 ч назад", "сейчас"]);
+  assert.equal(await page.locator(".mk-cdl").count(), 2);
   assert.equal(sp(await page.locator(".mk-spark-wait-t").textContent()), sp(I18N["mk_hist_short"]!["ru"]!));
-  // 24 минуты из часа — линия справа, ~40 % ширины: не чёрточка у края и не на всю ширину.
-  const line = (await page.locator(".mk-spark-line").boundingBox())!;
   const box = (await page.locator(".mk-spark-plot").boundingBox())!;
-  assert.ok(Math.abs(line.x - (box.x + box.width * 0.6)) < box.width * 0.03, `${line.x} ${box.x} ${box.width}`);
-  assert.ok(Math.abs(line.x + line.width - (box.x + box.width)) < 3, `${line.x} ${line.width}`);
+  const bars = await page.locator(".mk-cdl rect").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON()));
+  // Две последние из 30 мест: справа, ширина — как у полного месяца.
+  assert.ok(Math.abs(bars[1].x + bars[1].width / 2 - (box.x + box.width * (29.5 / 30))) < 2, JSON.stringify([bars, box]));
+  assert.ok(Math.abs(bars[1].width - box.width / 30 * 0.64) < 1, JSON.stringify(bars));
+  // Даты — не у пустого левого края: у двух свечей у края места нет — обе справа.
+  assert.deepEqual((await page.locator(".mk-spark-ax span").allTextContents()).map(sp),
+    ["", `${sp(await dayIn(page, "ru", DAY0 - D))} – ${sp(await dayIn(page, "ru", DAY0))}`]);
   // Подпись — под осью, не поверх графика.
   const cap = (await page.locator(".mk-spark-wait-t").boundingBox())!;
   assert.ok(cap.y >= box.y + box.height, `${cap.y} ${box.y + box.height}`);
-  // Пунктир и линия не прилипают к краям поля.
-  const plot = (await page.locator(".mk-spark-plot").boundingBox())!;
+  // Тени и пунктир не прилипают к краям поля.
   const base = (await page.locator(".mk-spark-base").boundingBox())!;
-  assert.ok(base.y > plot.y + 2 && base.y < plot.y + plot.height - 2, JSON.stringify([base, plot]));
-  // Касание — цена точки; подпись под осью остаётся.
+  assert.ok(base.y > box.y + 2 && base.y < box.y + box.height - 2, JSON.stringify([base, box]));
   await page.mouse.click(box.x + box.width - 2, box.y + 20);
   assert.equal(await page.locator(".mk-spark-wait-t").count(), 1);
-  assert.match(sp(await page.locator(".mk-spark-tip small").textContent()), /сейчас|мин назад/);
+  assert.match(sp(await page.locator(".mk-spark-tip b").textContent()), /^4,10%$/);
   assert.deepEqual(errors, []);
   await ctx.close();
 });
 
-test("полная история — без подписи «история копится»", async () => {
+test("свечей полмесяца: первый день — под первой свечой", async () => {
+  const half = { ok: true, at: T - 20, days: Object.fromEntries(MARKETS.items.map((x) => [x.k, candlesOf(x.prev, x.px, 15)])) };
+  const { ctx, page, errors } = await open({ cand: half });
+  await page.locator(".drawer .mk-px").first().waitFor();
+  await page.locator('.mk-cell[data-k="USDTD"]').click();
+  await page.locator(".mk-spark").waitFor();
+  const ax = page.locator(".mk-spark-ax span");
+  assert.equal(sp(await ax.first().textContent()), sp(await dayIn(page, "ru", DAY0 - 14 * D)));
+  const day1 = (await ax.first().boundingBox())!;
+  const bar1 = (await page.locator(".mk-cdl rect").first().boundingBox())!;
+  assert.ok(Math.abs(day1.x - bar1.x) < 2, JSON.stringify([day1, bar1]));
+  assert.equal(await page.locator(".mk-spark-wait-t").count(), 0);
+  assert.deepEqual(await sparkOverflow(page), []);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test("свечей за месяц — без подписи «история копится»", async () => {
   const { ctx, page } = await open();
   await page.locator(".drawer .mk-px").first().waitFor();
   await page.locator('.mk-cell[data-k="DXY"]').click();
@@ -523,9 +553,9 @@ test("полная история — без подписи «история к�
   await ctx.close();
 });
 
-test("истории нет или она битая — пояснение без графика, без ошибок", async () => {
-  for (const hist of [{ ok: false, error: "no_data" }, { ok: true, series: { GOLD: [[1, "x"]] } }, "мусор"]) {
-    const { ctx, page, errors } = await open({ hist });
+test("свечей нет или они битые — пояснение без графика, без ошибок", async () => {
+  for (const cand of [{ ok: false, error: "no_data" }, { ok: true, days: { GOLD: [[1, "x"]] } }, "мусор"]) {
+    const { ctx, page, errors } = await open({ cand });
     await page.locator(".drawer .mk-px").first().waitFor();
     await page.locator('.mk-cell[data-k="GOLD"]').click();
     await page.locator(".mk-note-t").waitFor();
@@ -641,7 +671,7 @@ test("нет данных — прежний заголовок меню", async
 test("снимок меню", async () => {
   const shot = process.env["MK_SHOT"];
   if (!shot) return;
-  const { ctx, page } = await open({ scale: 2, ...(process.env["MK_SHORT"] ? { hist: SHORT } : {}) });
+  const { ctx, page } = await open({ scale: 2, ...(process.env["MK_SHORT"] ? { cand: SHORT } : {}) });
   await page.locator(".drawer .mk-px").first().waitFor();
   if (process.env["MK_NOTES"]) await page.locator(".mk-i").click();
   const pick = process.env["MK_PICK"];

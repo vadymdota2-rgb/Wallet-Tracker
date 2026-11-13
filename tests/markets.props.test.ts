@@ -9,8 +9,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  BAR_MIN, HIST_MAX, HIST_SEC, MARKET_KEYS, MARKET_PX_MAX, barShare, change, digits, isPercent, spark, sparkSeries, validHist, validMarkets,
-  type MarketItem,
+  BAR_MIN, CANDLES_SHOW, MARKET_KEYS, MARKET_PX_MAX, barShare, candleChart, candleSeries, change, digits, isPercent, validCandles,
+  validMarkets, type Candle, type MarketItem,
 } from "../src/lib/markets.ts";
 
 const SEED = 0x3a_4e75;
@@ -130,71 +130,80 @@ test("полоска: 0…1, растёт с величиной изменени
   }
 });
 
-/** История с сервера: чаще годная, иногда с мусором в любом месте. */
-function hist(r: () => number): unknown {
+const D = 86_400;
+
+/** Свечи с сервера: чаще годные, иногда с мусором в любом месте. */
+function days(r: () => number): unknown {
   if (r() < 0.03) return pick(r, JUNK);
-  const series: Record<string, unknown> = {};
+  const out: Record<string, unknown> = {};
   for (const k of [...MARKET_KEYS, "VIX", "<b>"]) {
     if (r() < 0.3) continue;
     if (r() < 0.04) {
-      series[k] = pick(r, JUNK);
+      out[k] = pick(r, JUNK);
       continue;
     }
-    const n = Math.floor(r() * (HIST_MAX + 60));
-    let t = NOW - Math.floor(r() * 3 * HIST_SEC);
+    const n = Math.floor(r() * 50);
+    let d = NOW - (NOW % D) - Math.floor(r() * 45) * D;
     const base = 10 ** (r() * 6 - 1);
-    series[k] = Array.from({ length: n }, () => {
+    out[k] = Array.from({ length: n }, () => {
       if (r() < 0.03) return pick(r, JUNK);
-      t += pick(r, [600, 600, 0, -300, 1.5]);
-      return [r() < 0.97 ? t : pick(r, JUNK), r() < 0.97 ? base * (0.5 + r()) : pick(r, JUNK)];
+      d += pick(r, [D, D, D, 0, -D, 1.5, 7]);
+      const o = base * (0.8 + r() * 0.4), c = base * (0.8 + r() * 0.4);
+      const row: unknown[] = [d, o, Math.max(o, c) * (1 + r() * 0.02), Math.min(o, c) * (1 - r() * 0.02), c];
+      if (r() < 0.05) row[Math.floor(r() * 5)] = pick(r, JUNK);
+      if (r() < 0.02) row.pop();
+      return row;
     });
   }
-  return { ok: r() < 0.97 ? true : pick(r, JUNK), at: NOW, series: r() < 0.97 ? series : pick(r, JUNK) };
+  return { ok: r() < 0.97 ? true : pick(r, JUNK), at: NOW, days: r() < 0.97 ? out : pick(r, JUNK) };
 }
 
-test("история: только наши пункты, от двух точек, целое время по возрастанию, не больше HIST_MAX, правдоподобные цены", () => {
+test("свечи: только наши пункты, день — начало суток по возрастанию, не больше CANDLES_SHOW, тени охватывают тело", () => {
   const r = rng(SEED + 7);
   let rows = 0;
   for (let i = 0; i < 3000; i++) {
-    const h = validHist(hist(r), NOW);
-    for (const [k, pts] of Object.entries(h)) {
+    const h = validCandles(days(r), NOW);
+    for (const [k, cs] of Object.entries(h)) {
       const m = `случай ${i}, ${k}`;
       assert.ok((MARKET_KEYS as readonly string[]).includes(k), m);
-      assert.ok(pts.length >= 2 && pts.length <= HIST_MAX, m);
-      for (let j = 0; j < pts.length; j++) {
-        const [t, v] = pts[j]!;
-        assert.ok(Number.isInteger(t) && t >= NOW - 2 * HIST_SEC && t <= NOW + 86_400, m);
-        assert.ok(Number.isFinite(v) && v > 0 && v < MARKET_PX_MAX, m);
-        if (j) assert.ok(t > pts[j - 1]![0], m);
+      assert.ok(cs.length >= 1 && cs.length <= CANDLES_SHOW, m);
+      for (let j = 0; j < cs.length; j++) {
+        const [d, o, hi, lo, c] = cs[j]!;
+        assert.ok(Number.isInteger(d) && d % D === 0 && d >= NOW - 40 * D && d <= NOW + D, m);
+        for (const v of [o, hi, lo, c]) assert.ok(Number.isFinite(v) && v > 0 && v < MARKET_PX_MAX, m);
+        assert.ok(lo <= Math.min(o, c) && Math.max(o, c) <= hi, m);
+        if (j) assert.ok(d > cs[j - 1]![0], m);
       }
       rows += 1;
       // Принятое принимается снова тем же — проверка устойчива.
-      assert.deepEqual(validHist({ ok: true, series: { [k]: pts } }, NOW)[k as "GOLD"], pts, m);
+      assert.deepEqual(validCandles({ ok: true, days: { [k]: cs } }, NOW)[k as "GOLD"], cs, m);
     }
   }
   assert.ok(rows > 3000, `годных рядов слишком мало: ${rows}`);
 });
 
-test("мини-график: точки внутри поля, слева направо, цена суточной давности — в кадре", () => {
+test("свечной график: свечи внутри поля, слева направо, тени охватывают тело, последняя — с ценой ответа", () => {
   const r = rng(SEED + 8);
   for (let i = 0; i < 5000; i++) {
-    const n = 2 + Math.floor(r() * 200);
-    let t = NOW - HIST_SEC;
+    const n = 1 + Math.floor(r() * 45);
     const base = 10 ** (r() * 6 - 2);
-    const pts: [number, number][] = Array.from({ length: n }, () => {
-      t += 1 + Math.floor(r() * 900);
-      return [t, base * (0.8 + r() * 0.4)];
+    const cs: Candle[] = Array.from({ length: n }, (_, j) => {
+      const o = base * (0.8 + r() * 0.4), c = r() < 0.1 ? o : base * (0.8 + r() * 0.4);
+      return [NOW - (NOW % D) - (n - 1 - j) * D, o, Math.max(o, c) * (1 + r() * 0.03), Math.min(o, c) * (1 - r() * 0.03), c];
     });
-    const it: MarketItem = { k: pick(r, MARKET_KEYS), px: pts[pts.length - 1]![1], prev: base * (0.8 + r() * 0.4) };
-    const ser = sparkSeries(pts, it, t);
+    const it: MarketItem = { k: pick(r, MARKET_KEYS), px: base * (0.7 + r() * 0.6), prev: base };
+    const ser = candleSeries(cs, it);
     const m = `случай ${i}`;
-    assert.deepEqual(ser[ser.length - 1], [t, it.px], m);
-    for (let j = 1; j < ser.length; j++) assert.ok(ser[j]![0] > ser[j - 1]![0], m);
-    const g = spark(ser, it.prev, 240, 56, 3);
-    assert.equal(g.xs[0], 0, m);
-    assert.equal(g.xs[g.xs.length - 1], 240, m);
-    for (let j = 1; j < g.xs.length; j++) assert.ok(g.xs[j]! >= g.xs[j - 1]!, m);
-    for (const y of [...g.ys, g.base]) assert.ok(y >= 3 - 1e-6 && y <= 53 + 1e-6, `${m}: ${y}`);
-    assert.ok(g.lo <= it.prev && it.prev <= g.hi, m);
+    assert.equal(ser[ser.length - 1]![4], it.px, m);
+    const g = candleChart(ser, 240, 64, 3);
+    assert.equal(g.bars.length, Math.min(n, CANDLES_SHOW), m);
+    assert.ok(Math.abs(g.bars[g.bars.length - 1]!.x - 236) < 1e-6, m);
+    for (let j = 1; j < g.bars.length; j++) assert.ok(g.bars[j]!.x > g.bars[j - 1]!.x, m);
+    for (const b of g.bars) {
+      assert.ok(b.x - g.bw / 2 >= 0 && b.x + g.bw / 2 <= 240, m);
+      assert.ok(b.hi <= b.top + 1e-6 && b.top < b.bot && b.bot <= b.lo + 0.61, `${m}: ${JSON.stringify(b)}`);
+      for (const y of [b.hi, b.top, b.bot, b.lo]) assert.ok(y >= 3 - 1e-6 && y <= 61 + 0.61, `${m}: ${y}`);
+    }
+    assert.ok(g.last >= 3 - 1e-6 && g.last <= 61 + 1e-6, m);
   }
 });

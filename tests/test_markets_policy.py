@@ -21,7 +21,7 @@ sys.path.insert(0, ROOT)
 import whale_api as api  # noqa: E402 — модули лежат в корне репозитория
 import wt_markets as mk  # noqa: E402
 
-SOURCES = ("xyz", "para", "mkts", "fx", "ecb", "mcap", "aster")
+SOURCES = ("xyz", "para", "mkts", "fx", "ecb", "d1", "mcap", "aster")
 
 
 def read(*path: str) -> str:
@@ -87,9 +87,13 @@ class PolicyTest(unittest.TestCase):
         block = read("whale_api.py").split("# --- Рынки в меню (wt_markets.py)")[1].split("markets_data = wt_markets")[0]
         hosts = set(re.findall(r"https://([a-z0-9.-]+)/", block))
         self.assertEqual(hosts, {"api.frankfurter.dev"})
-        self.assertEqual(block.count("hl_post("), 4)  # три площадки и свечи валют
+        self.assertEqual(block.count("hl_post("), 5)  # три площадки, свечи валют и дневные свечи рынков
         self.assertEqual(set(re.findall(r'"dex": "([a-z]+)"', block)), {"xyz", "para", "mkts"})
-        self.assertEqual(block.count('"candleSnapshot"'), 1)
+        self.assertEqual(block.count('"candleSnapshot"'), 2)
+        self.assertEqual(re.findall(r'"interval": "([0-9a-z]+)"', block), ["1h", "1d"])
+        self.assertIn("for k, coin in wt_markets.D1.items()}", block)
+        # Дневные свечи — только рынки пунктов (площадка:имя из HL), не чужие.
+        self.assertEqual(mk.D1, {k: f"{d}:{n}" for k, (d, n) in mk.HL.items()})
         for bad in ("self.", "path", "query", "headers", "environ"):
             self.assertNotIn(bad, block, bad)
         self.assertIn("for c in wt_markets.FX_HL}", block)
@@ -129,9 +133,11 @@ class PolicyTest(unittest.TestCase):
         self.assertEqual(tuple(re.findall(r'"([A-Z0-9]+)"', keys.group(1))), mk.KEYS)
         self.assertIn(f"export const MARKET_PX_MAX = {mk.PX_MAX:.0e}".replace("e+0", "e").replace("e+", "e"), ts)
         self.assertIsNone(re.search(r"^\s*import\b", ts, re.M))  # проверка ответа — без импортов
-        # История мини-графика: те же сутки и тот же предел точек, что у сервера.
-        self.assertIn(f"export const HIST_MAX = {mk.HIST_MAX};", ts)
-        self.assertIn(f"export const HIST_SEC = {mk.HIST_SEC:_};", ts)
+        # Свечи мини-графика: столько же, сколько отдаёт сервер, и не старше,
+        # чем он держит.
+        self.assertIn(f"export const CANDLES_SHOW = {mk.DAYS_SHOW};", ts)
+        self.assertIn(f"const CANDLES_AGE_DAYS = {mk.DAYS_KEEP};", ts)
+        self.assertIn(f"const DAY = {mk.DAY:_};", ts)
         # Приложение спрашивает раз в столько, сколько живут цены площадок на сервере.
         self.assertIn(f"export const MARKETS_REFRESH = {int(mk.SLOW['xyz'][0])};", ts)
         self.assertEqual({mk.SLOW[d][0] for d in mk.DEXES}, {mk.SLOW["xyz"][0]})

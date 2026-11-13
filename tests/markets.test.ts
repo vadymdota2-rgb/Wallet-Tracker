@@ -2,8 +2,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  BAR_MIN, HIST_MAX, HIST_SEC, MARKET_KEYS, MARKET_PX_MAX, MARKETS_REFRESH, MARKETS_STALE_MIN, ageMin, barShare, change, digits,
-  isPercent, marketsDue, SPARK_FULL_SEC, SPARK_HEADROOM, spark, sparkCover, sparkFrom, sparkSeries, validHist, validMarkets,
+  BAR_MIN, CANDLE_HEADROOM, CANDLES_SHOW, MARKET_KEYS, MARKET_PX_MAX, MARKETS_REFRESH, MARKETS_STALE_MIN, ageMin, barShare,
+  candleChart, candleSeries, change, digits, isPercent, marketsDue, validCandles, validMarkets, type Candle,
 } from "../src/lib/markets.ts";
 
 const NOW = 1_794_100_000;
@@ -114,60 +114,54 @@ test("спрашивать сервер — только когда могли �
   assert.equal(marketsDue(1000 + 3600, 1000 + 600, 600), true);
 });
 
-test("история мини-графика с сервера: известные пункты, целое время по возрастанию, правдоподобная цена", () => {
-  const ok = { ok: true, at: NOW, series: {
-    GOLD: [[NOW - 600, 4000], [NOW - 300, 4001], [NOW - 300, 4002], [NOW - 200, -1], [NOW - 100, "x"], [NOW - 50.5, 4003], [NOW, 4004]],
-    VIX: [[NOW - 600, 20], [NOW, 21]],
-    BVIV: [[NOW, 42]], // одна точка — не ряд
-    OIL: [[NOW - 3 * HIST_SEC, 80], [NOW + 2 * 86_400, 81], [NOW - 10, 82]], // старое и из будущего — мимо
+const D = 86_400;
+const DAY0 = NOW - (NOW % D);
+
+test("дневные свечи с сервера: известные пункты, день — начало суток UTC по возрастанию, правдоподобные цены", () => {
+  const ok = { ok: true, at: NOW, days: {
+    GOLD: [[DAY0 - 2 * D, 4000, 4010, 3990, 4005], [DAY0 - D, 4005, 4020, 4000, 4010], [DAY0 - D, 1, 1, 1, 1],
+      [DAY0 - D + 5, 4000, 4000, 4000, 4000], [DAY0, 4010, 4000, 3990, 4005], [DAY0, 4010, 4030, 4020, 4005],
+      [DAY0, "4010", 4030, 4000, 4020], [DAY0, -1, 4030, 4000, 4020], [DAY0, 4010, 4030, 4000]],
+    VIX: [[DAY0, 20, 21, 19, 20]],
+    OIL: [[DAY0 - 41 * D, 80, 81, 79, 80], [DAY0 + 2 * D, 80, 81, 79, 80]], // старая и из будущего — мимо
+    BVIV: [[DAY0, 42, 43, 41, 42.5]],
   } };
-  const h = validHist(ok, NOW);
-  assert.deepEqual(Object.keys(h), ["GOLD"]);
-  assert.deepEqual(h.GOLD, [[NOW - 600, 4000], [NOW - 300, 4001], [NOW, 4004]]);
-  for (const bad of [null, "x", { ok: false }, { ok: false, series: ok.series }, { ok: true, series: [] }, { ok: true }]) {
-    assert.deepEqual(validHist(bad, NOW), {});
+  const c = validCandles(ok, NOW);
+  assert.deepEqual(Object.keys(c), ["GOLD", "BVIV"]);
+  assert.deepEqual(c.GOLD, [[DAY0 - 2 * D, 4000, 4010, 3990, 4005], [DAY0 - D, 4005, 4020, 4000, 4010]]);
+  for (const bad of [null, "x", { ok: false }, { ok: false, days: ok.days }, { ok: true, days: [] }, { ok: true }]) {
+    assert.deepEqual(validCandles(bad, NOW), {});
   }
-  const many = { ok: true, series: { GOLD: Array.from({ length: HIST_MAX + 50 }, (_, i) => [NOW - 1000 + i, 4000 + i]) } };
-  assert.equal(validHist(many, NOW).GOLD!.length, HIST_MAX); // хвост — последние
+  const many = { ok: true, days: { GOLD: Array.from({ length: 39 }, (_, i) => [DAY0 - (38 - i) * D, 4000, 4001, 3999, 4000]) } };
+  const g = validCandles(many, NOW).GOLD!;
+  assert.equal(g.length, CANDLES_SHOW); // хвост — последние
+  assert.equal(g[g.length - 1]![0], DAY0);
 });
 
-test("ряд ячейки: сутки до ответа, последняя точка — нынешняя цена", () => {
+test("свечи ячейки: последняя — с ценой из ответа", () => {
   const it = { k: "GOLD" as const, px: 4066, prev: 4080 };
-  assert.deepEqual(sparkSeries([[NOW - HIST_SEC - 1, 1], [NOW - 600, 4070], [NOW - 300, 4068]], it, NOW),
-    [[NOW - 600, 4070], [NOW - 300, 4068], [NOW, 4066]]);
-  // Последняя точка истории — то же время: цена — из ответа.
-  assert.deepEqual(sparkSeries([[NOW - 600, 4070], [NOW, 4060]], it, NOW), [[NOW - 600, 4070], [NOW, 4066]]);
-  // Точки новее ответа (часы) — мимо; истории нет — одна точка, графика не будет.
-  assert.deepEqual(sparkSeries([[NOW + 60, 1]], it, NOW), [[NOW, 4066]]);
-  assert.deepEqual(sparkSeries(undefined, it, NOW), [[NOW, 4066]]);
+  const cs: Candle[] = [[DAY0 - D, 4000, 4010, 3990, 4005], [DAY0, 4005, 4020, 4000, 4010]];
+  assert.deepEqual(candleSeries(cs, it), [[DAY0 - D, 4000, 4010, 3990, 4005], [DAY0, 4005, 4066, 4000, 4066]]);
+  assert.deepEqual(candleSeries(cs, { ...it, px: 3900 })[1], [DAY0, 4005, 4020, 3900, 3900]);
+  assert.deepEqual(cs[1], [DAY0, 4005, 4020, 4000, 4010]); // исходные не меняются
+  assert.deepEqual(candleSeries(undefined, it), []);
 });
 
-test("геометрия мини-графика: цена суточной давности в кадре, запас по высоте, окно времени — до целого часа", () => {
-  const g = spark([[0, 10], [5, 12], [10, 11]], 8, 240, 56, 3);
-  assert.deepEqual(g.xs, [0, 120, 240]);
-  // Размах 8…12 и запас SPARK_HEADROOM сверху и снизу.
-  assert.ok(Math.abs(g.lo - (8 - 4 * SPARK_HEADROOM)) < 1e-9 && Math.abs(g.hi - (12 + 4 * SPARK_HEADROOM)) < 1e-9);
-  assert.ok(g.base > g.ys[1]! && g.base < 53 && g.ys[1]! > 3); // ни пунктир, ни линия не прилипают к краям
-  // Короткая история (сервер только что запущен) — справа, на своём месте во времени.
-  const late = spark([[NOW - 1800, 10], [NOW, 11]], 10, 240, 56, 3, NOW - HIST_SEC, NOW);
-  assert.deepEqual(late.xs, [235, 240]); // полчаса из суток — последние 5 точек ширины из 240
-  // Точка раньше окна — на левом краю, а не за ним.
-  assert.equal(spark([[NOW - 2 * HIST_SEC, 10], [NOW, 11]], 10, 240, 56, 3, NOW - HIST_SEC, NOW).xs[0], 0);
-  assert.equal(sparkCover([[1, 1], [SPARK_FULL_SEC + 1, 1]]), SPARK_FULL_SEC);
-  assert.equal(sparkCover([[1, 1]]), 0);
-  // Окно: история до целого часа вверх, от часа до суток.
-  assert.equal(sparkFrom([[NOW - 1440, 1], [NOW, 1]], NOW), NOW - 3_600);
-  assert.equal(sparkFrom([[NOW, 1]], NOW), NOW - 3_600);
-  assert.equal(sparkFrom([[NOW - 3_600, 1], [NOW, 1]], NOW), NOW - 3_600);
-  assert.equal(sparkFrom([[NOW - 3_601, 1], [NOW, 1]], NOW), NOW - 7_200);
-  assert.equal(sparkFrom([[NOW - HIST_SEC + 600, 1], [NOW, 1]], NOW), NOW - HIST_SEC);
-  assert.equal(sparkFrom([[NOW - 3 * HIST_SEC, 1], [NOW, 1]], NOW), NOW - HIST_SEC);
-  // 24 минуты в часовом окне — справа, 40 % ширины, а не чёрточка и не вся ширина.
-  const short: [number, number][] = [[NOW - 1440, 10], [NOW, 11]];
-  assert.deepEqual(spark(short, 10, 240, 56, 3, sparkFrom(short, NOW), NOW).xs, [144, 240]);
-  assert.ok(g.line.startsWith("M0,") && g.area.endsWith("Z"));
-  const flat = spark([[0, 5], [1, 5]], 5, 240, 56);
-  assert.ok(flat.ys.every(Number.isFinite) && Number.isFinite(flat.base));
-  const zero = spark([[0, 0.000001], [1, 0.000001]], 0.000001, 240, 56);
-  assert.ok(zero.hi > zero.lo);
+test("геометрия свечей: места справа налево, тени — в кадре с запасом, рост и падение, тело не тоньше пункта", () => {
+  const cs: Candle[] = [[DAY0 - D, 10, 12, 8, 11], [DAY0, 11, 11.5, 10, 10]];
+  const g = candleChart(cs, 240, 64, 3);
+  assert.equal(g.bars.length, 2);
+  // 30 мест по 8: свечи — в двух последних, тело — 64 % места.
+  assert.deepEqual(g.bars.map((b) => b.x), [228, 236]);
+  assert.equal(g.bw, 5.12);
+  assert.deepEqual(g.bars.map((b) => b.up), [true, false]);
+  assert.ok(Math.abs(g.lo - (8 - 4 * CANDLE_HEADROOM)) < 1e-9 && Math.abs(g.hi - (12 + 4 * CANDLE_HEADROOM)) < 1e-9);
+  for (const b of g.bars) assert.ok(b.hi <= b.top && b.top < b.bot && b.bot <= b.lo && b.hi > 3 && b.lo < 61);
+  assert.equal(g.last, g.bars[1]!.bot); // пунктир — на закрытии последней (у падения — низ тела)
+  const flat = candleChart([[DAY0, 5, 5, 5, 5]], 240, 64);
+  assert.ok(flat.bars[0]!.bot - flat.bars[0]!.top >= 0.6 && Number.isFinite(flat.last));
+  assert.equal(flat.bars[0]!.up, true); // без изменения — как рост (зелёным)
+  const full = candleChart(Array.from({ length: 40 }, (_, i): Candle => [DAY0 - (39 - i) * D, 10, 11, 9, 10]), 240, 64);
+  assert.equal(full.bars.length, CANDLES_SHOW);
+  assert.equal(full.bars[0]!.x, 4);
 });

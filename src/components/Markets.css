@@ -122,7 +122,7 @@ button.mk-cell:focus-visible { outline: 2px solid var(--glow); outline-offset: 1
   .mk-bar { forced-color-adjust: none; background: CanvasText; opacity: 1; }
   .mk, .mk-cell { border-color: CanvasText; }
   .mk-dot { forced-color-adjust: none; background: CanvasText; }
-  .mk-spark-line { forced-color-adjust: none; stroke: CanvasText; }
+  .mk-cdl { forced-color-adjust: none; color: CanvasText; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -144,26 +144,18 @@ button.mk-cell:focus-visible { outline: 2px solid var(--glow); outline-offset: 1
    заливка, пунктир — цена суточной давности; касание — цена и время точки. */
 .mk-spark { display: grid; gap: 2px; margin-block-end: 6px; touch-action: pan-y; outline: none; cursor: crosshair; }
 .mk-spark:focus-visible { box-shadow: 0 0 0 2px var(--glow); border-radius: 6px; }
-.mk-spark-plot { position: relative; block-size: 56px; }
+.mk-spark-plot { position: relative; block-size: 64px; }
 .mk-spark svg { display: block; inline-size: 100%; block-size: 100%; overflow: visible; }
 [dir="rtl"] .mk-spark svg { transform: scaleX(-1); }
-.mk-spark-line { fill: none; stroke: var(--dim); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
-/* Заливка под линией — мягким градиентом цвета изменения, к низу — в ноль. */
-.mk-spark-s0 { stop-color: var(--dim); stop-opacity: 0.22; }
-.mk-spark-s1 { stop-color: var(--dim); stop-opacity: 0; }
-.mk-spark.up .mk-spark-line { stroke: var(--up); filter: drop-shadow(0 0 3px rgb(61 220 151 / 0.45)); }
-.mk-spark.up .mk-spark-s0, .mk-spark.up .mk-spark-s1 { stop-color: var(--up); }
-.mk-spark.dn .mk-spark-line { stroke: var(--dn); filter: drop-shadow(0 0 3px rgb(255 92 119 / 0.45)); }
-.mk-spark.dn .mk-spark-s0, .mk-spark.dn .mk-spark-s1 { stop-color: var(--dn); }
-/* История короче трёх часов — строка под осью, что график заполняется. */
+/* Свеча: тень — тонкой линией, тело — заливкой; рост — зелёным, падение — красным. */
+.mk-cdl line { stroke: currentColor; stroke-width: 1; }
+.mk-cdl rect { fill: currentColor; }
+.mk-cdl.up { color: var(--up); }
+.mk-cdl.dn { color: var(--dn); }
+.mk-spark-plot.pick .mk-cdl:not(.on) { opacity: 0.38; }
+/* Своя история короче недели — строка под осью, что свечи появятся сами. */
 .mk-spark-wait-t { font-size: 9px; line-height: 1.3; color: var(--dim); opacity: 0.9; }
 .mk-spark-base { stroke: var(--dim-2); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.8; }
-.mk-spark-cross { stroke: var(--ink); stroke-width: 1; opacity: 0.35; }
-.mk-spark-dot {
-  position: absolute; inline-size: 7px; block-size: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%;
-  background: var(--ink); border: 1.5px solid var(--bg); pointer-events: none;
-}
-[dir="rtl"] .mk-spark-dot { margin: -3.5px -3.5px 0 0; }
 .mk-spark-tip {
   position: absolute; inset-block-start: -4px; transform: translate(-50%, -100%); pointer-events: none; white-space: nowrap;
   padding: 3px 6px; border-radius: 6px; font-size: 10px; background: rgb(7 14 30 / 0.95); border: 1px solid var(--line-2);
@@ -177,10 +169,15 @@ button.mk-cell:focus-visible { outline: 2px solid var(--glow); outline-offset: 1
 [dir="rtl"] .mk-spark-tip.end { transform: translate(100%, -100%); }
 .mk-spark-tip b { color: var(--ink); font-variant-numeric: tabular-nums; }
 .mk-spark-tip small { color: var(--dim); font-size: 9.5px; }
+.mk-tip-l1 { display: flex; gap: 6px; align-items: baseline; }
+.mk-tip-l1 em { font-style: normal; font-size: 9.5px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.mk-tip-l1 em.up { color: var(--up); }
+.mk-tip-l1 em.dn { color: var(--dn); }
+.mk-tip-l2 { display: block; margin-block-start: 1px; font-variant-numeric: tabular-nums; }
 .mk-spark-ax { display: flex; justify-content: space-between; font-size: 8.5px; color: var(--dim); opacity: 0.9; }
 /* Пока история грузится — место под график, чтобы пояснение не прыгало. */
 .mk-spark-wait {
-  block-size: 56px; margin-block-end: 20px; border-radius: 6px;
+  block-size: 64px; margin-block-end: 20px; border-radius: 6px;
   background: rgb(255 255 255 / 0.04); animation: mk-pulse 1.4s ease-in-out infinite;
 }
 

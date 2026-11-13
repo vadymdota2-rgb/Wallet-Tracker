@@ -2016,7 +2016,7 @@ say("рынки в меню как халвинг — кэш и хранение
     and "def test_no_dead_texts_or_exports(self):" in read(f"{APP}/tests/test_markets_policy.py")
     and "### Рынки в меню" in read(f"{APP}/README.md") and "рынки в меню живут на устройстве шесть часов" in read(f"{APP}/tests/storage.test.ts"))
 say("рынки в меню — нагрузка и защита: каждый запрос к источнику — с пределом размера ответа (RESP_MAX), сборка при запуске и раз в минуту сервером, запрос человека только читает кэш; «ⓘ» — рисунок, а не знак шрифта, место под палец ≥ 24 точек; проверено на экранах от 280 точек до компьютера",
-    api.count("max_bytes=wt_markets.RESP_MAX") == 5 and "def read_capped(" in api
+    api.count("max_bytes=wt_markets.RESP_MAX") == 6 and "def read_capped(" in api
     and "    markets_refresh()\n" in api.split("def warmup() -> None:")[1].split("\ndef ")[0]
     and '        ("markets", lambda: markets_refresh()),\n' in api.split("def _cache_modules() -> tuple:")[1].split("\ndef ")[0]
     and "def test_people_only_read_the_cache(" in read(f"{APP}/tests/test_markets.py")
@@ -2028,17 +2028,18 @@ say("рынки в меню как халвинг — максимальная �
     and "marketsDue(last.current?.at" in _mk_tsx and "export function marketsDue(" in read(f"{APP}/src/lib/markets.ts")
     and all(t in read(f"{APP}/tests/test_markets.py") for t in ("def test_cold_start_race_builds_once(", "def test_memory_and_threads_do_not_grow(", "def test_answer_time_is_when_prices_were_taken("))
     and os.path.isfile(f"{APP}/tools/load-markets.py") and "python tools/load-markets.py 2 3 304" in read(f"{APP}/.github/workflows/tests.yml"))
-say("рынки в меню — мини-график за сутки по касанию ячейки: история из своих сборок (без запросов к источникам), копия на диске с проверкой каждой точки, один ответ на все пункты",
-    "def history_restore(" in read(f"{APP}/wt_markets.py") and "def _record(" in read(f"{APP}/wt_markets.py")
+say("рынки в меню — дневные свечи за месяц по касанию ячейки: рынки Hyperliquid — их дневные свечи раз в сутки (сбой — не чаще RETRY), DXY — из часовых свечей валют и ЕЦБ по валютному дню, BTC.D — из истории CoinMarketCap, USDT.D и сегодняшняя свеча — свои сборки с копией на диске (проверка каждой свечи), один ответ на все пункты",
+    all(f in read(f"{APP}/wt_markets.py") for f in ("def days_restore(", "def _record(", "def d1_days(", "def dxy_days(", "def btcd_days(", "def merge_days(", 'RETRY = {"d1": 600.0}'))
     and "markets_disk_load()" in api.split("def wire(")[1][:3000] and "wt_markets.set_sink(markets_disk_save)" in api
-    and '"markets/hist",' in api and "function MiniChart(" in _mk_tsx and "export function validHist(" in read(f"{APP}/src/lib/markets.ts")
-    and "def test_history_restore_checks_every_point(" in read(f"{APP}/tests/test_markets.py")
-    and "мини-график за сутки" in read(f"{APP}/tests/e2e/markets.e2e.test.ts")
-    and "class HistoryFuzzTest(" in read(f"{APP}/tests/test_markets_fuzz.py")
-    and "class HostileHistoryFileTest(" in read(f"{APP}/tests/test_markets_security.py")
-    and "def test_history_memory_is_bounded_over_days(" in read(f"{APP}/tests/test_markets.py")
-    and "мини-график на 16 языках" in read(f"{APP}/tests/e2e/markets.e2e.test.ts")
-    and "python tools/load-markets.py 2 3 hist" in read(f"{APP}/.github/workflows/tests.yml"))
+    and '"markets/candles",' in api and '"interval": "1d"' in api and "function CandleChart(" in _mk_tsx
+    and "export function validCandles(" in read(f"{APP}/src/lib/markets.ts")
+    and all(t in read(f"{APP}/tests/test_markets.py") for t in ("def test_days_restore_checks_every_candle(", "def test_candle_memory_is_bounded_over_days(",
+                                                               "def test_daily_candles_asked_once_a_day_and_not_hammered_on_failure(", "def test_dxy_daily_candles_from_hourly("))
+    and "дневные свечи за месяц" in read(f"{APP}/tests/e2e/markets.e2e.test.ts")
+    and "свечи на 16 языках" in read(f"{APP}/tests/e2e/markets.e2e.test.ts")
+    and "class CandleFuzzTest(" in read(f"{APP}/tests/test_markets_fuzz.py")
+    and "class HostileCandleFileTest(" in read(f"{APP}/tests/test_markets_security.py")
+    and "python tools/load-markets.py 2 3 candles" in read(f"{APP}/.github/workflows/tests.yml"))
 say("рынки в меню — уровень зрелых проектов: журнал сервера только при смене состояния источников (молчит / снова отвечает, тип ошибки без текста, одна чистая строка); сетка всегда 3 × 3 — пропавший пункт «—» на своём месте («нет данных» для чтения с экрана); ячейки перерисовываются по отдельности; высокая контрастность Windows",
     "def _health(" in read(f"{APP}/wt_markets.py") and "v, why = None, type(e).__name__" in read(f"{APP}/wt_markets.py")
     and "def test_journal_only_on_state_changes(" in read(f"{APP}/tests/test_markets.py")

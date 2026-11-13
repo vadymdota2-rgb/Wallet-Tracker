@@ -102,98 +102,104 @@ export function marketsDue(at: number | undefined, now: number, askedAgo: number
   return at === undefined || now - at >= MARKETS_REFRESH || askedAgo >= MARKETS_REFRESH;
 }
 
-/** История для мини-графика (касание ячейки): точек на пункт не больше
- *  (сервер — wt_markets.HIST_MAX), окно — сутки. */
-export const HIST_MAX = 300;
-export const HIST_SEC = 86_400;
-export type MarketsHist = Partial<Record<MarketKey, [number, number][]>>;
+/** Дневные свечи для мини-графика (касание ячейки): на пункт — не больше
+ *  CANDLES_SHOW (сервер — wt_markets.DAYS_SHOW); принимаем дни не старше
+ *  CANDLES_AGE_DAYS (сервер держит DAYS_KEEP). */
+export const CANDLES_SHOW = 30;
+const CANDLES_AGE_DAYS = 40;
+const DAY = 86_400;
+/** [начало суток UTC, открытие, максимум, минимум, закрытие]. */
+export type Candle = [number, number, number, number, number];
+export type MarketsCandles = Partial<Record<MarketKey, Candle[]>>;
 
-/** Ответ /api/markets/hist → ряды по пунктам: только известные пункты, точки
- *  [целое время, правдоподобная цена] по возрастанию времени, за последние
- *  двое суток и не из будущего; меньше двух точек — ряда нет. */
-export function validHist(raw: unknown, now: number = Date.now() / 1000): MarketsHist {
-  const out: MarketsHist = {};
-  if (!isObj(raw) || !isObj(raw["series"]) || raw["ok"] !== true) return out;
-  const series = raw["series"];
+/** Ответ /api/markets/candles → свечи по пунктам: только известные пункты,
+ *  день — целое начало суток UTC, по возрастанию, не старше CANDLES_AGE_DAYS и
+ *  не дальше суток вперёд; цены правдоподобные, максимум не ниже открытия и
+ *  закрытия, минимум не выше. */
+export function validCandles(raw: unknown, now: number = Date.now() / 1000): MarketsCandles {
+  const out: MarketsCandles = {};
+  if (!isObj(raw) || !isObj(raw["days"]) || raw["ok"] !== true) return out;
+  const days = raw["days"];
   for (const k of MARKET_KEYS) {
-    const pts = series[k];
-    if (!Array.isArray(pts)) continue;
-    const good: [number, number][] = [];
-    for (const p of pts.slice(-HIST_MAX)) {
-      if (!Array.isArray(p) || p.length !== 2) continue;
-      const [t, v] = p as unknown[];
-      if (typeof t !== "number" || !Number.isInteger(t) || t < now - 2 * HIST_SEC || t > now + AHEAD_MAX || !price(v)) continue;
-      if (good.length && t <= good[good.length - 1]![0]) continue;
-      good.push([t, v]);
+    const rows = days[k];
+    if (!Array.isArray(rows)) continue;
+    const good: Candle[] = [];
+    for (const r of rows.slice(-CANDLES_SHOW)) {
+      if (!Array.isArray(r) || r.length !== 5) continue;
+      const [d, o, h, l, c] = r as unknown[];
+      if (typeof d !== "number" || !Number.isInteger(d) || d % DAY !== 0 || d < now - CANDLES_AGE_DAYS * DAY || d > now + DAY) continue;
+      if (!price(o) || !price(h) || !price(l) || !price(c) || h < Math.max(o, c) || l > Math.min(o, c)) continue;
+      if (good.length && d <= good[good.length - 1]![0]) continue;
+      good.push([d, o, h, l, c]);
     }
-    if (good.length >= 2) out[k] = good;
+    if (good.length) out[k] = good;
   }
   return out;
 }
 
-/** Ряд для графика ячейки: история за сутки до времени ответа, последняя
- *  точка — цена из ответа (свежее истории — дописывается). */
-export function sparkSeries(hist: readonly [number, number][] | undefined, it: MarketItem, at: number): [number, number][] {
-  const pts = (hist ?? []).filter(([t]) => t >= at - HIST_SEC && t <= at);
-  const last = pts[pts.length - 1];
-  if (!last || last[0] < at) pts.push([at, it.px]);
-  else pts[pts.length - 1] = [last[0], it.px];
-  return pts;
+/** Свечи для графика ячейки: последняя — с ценой из ответа (свежее свечей:
+ *  закрытие — она, тени — с её учётом). */
+export function candleSeries(cs: readonly Candle[] | undefined, it: MarketItem): Candle[] {
+  const out = (cs ?? []).map((c) => [...c] as Candle);
+  const last = out[out.length - 1];
+  if (last) out[out.length - 1] = [last[0], last[1], Math.max(last[2], it.px), Math.min(last[3], it.px), it.px];
+  return out;
 }
 
-export interface Spark {
-  line: string;
-  area: string;
-  /** Где по высоте цена суточной давности (prev) — пунктир. */
-  base: number;
-  xs: number[];
-  ys: number[];
+interface CandleBar {
+  /** Середина свечи по ширине. */
+  x: number;
+  /** Верх и низ тела, тени. */
+  top: number;
+  bot: number;
+  hi: number;
+  lo: number;
+  up: boolean;
+}
+export interface CandleChart {
+  bars: CandleBar[];
+  /** Ширина тела. */
+  bw: number;
+  /** Где по высоте последнее закрытие — пунктир цены. */
+  last: number;
   lo: number;
   hi: number;
 }
 
-/** Запас по высоте мини-графика сверху и снизу — доля размаха цен: линия
- *  и пунктир не прилипают к краям. */
-export const SPARK_HEADROOM = 0.15;
+/** Запас по высоте графика сверху и снизу — доля размаха цен: тени не
+ *  прилипают к краям. */
+export const CANDLE_HEADROOM = 0.08;
+/** Тело свечи — такая доля места свечи (остальное — промежуток). */
+const BODY = 0.64;
 
-/** Мини-график в прямоугольнике w × h. Время — по ширине, окно [from, to]
- *  (см. sparkFrom; без окна — от первой точки до последней). Цена — по
- *  высоте, с запасом SPARK_HEADROOM; цена суточной давности (base) всегда
- *  в кадре — видно, выше ли сейчас. */
-export function spark(pts: readonly [number, number][], base: number, w: number, h: number, pad = 3,
-  from?: number, to?: number): Spark {
-  const t0 = from ?? pts[0]?.[0] ?? 0;
-  const t1 = to ?? pts[pts.length - 1]?.[0] ?? 1;
-  let lo = Math.min(base, ...pts.map((p) => p[1]));
-  let hi = Math.max(base, ...pts.map((p) => p[1]));
+/** Свечной график в прямоугольнике w × h: CANDLES_SHOW мест слева направо,
+ *  свечи — справа (свечей меньше — слева пусто, ширина свечи та же); цена —
+ *  по высоте от минимума до максимума теней, с запасом CANDLE_HEADROOM. Тело
+ *  — не тоньше одного пункта (открытие = закрытию). Рост — закрытие не ниже
+ *  открытия. */
+export function candleChart(cs: readonly Candle[], w: number, h: number, pad = 3): CandleChart {
+  const shown = cs.slice(-CANDLES_SHOW);
+  let lo = Math.min(...shown.map((c) => c[3]));
+  let hi = Math.max(...shown.map((c) => c[2]));
+  if (!shown.length) [lo, hi] = [0, 1];
   if (hi === lo) {
     hi += Math.abs(hi) * 0.001 || 1;
     lo -= Math.abs(lo) * 0.001 || 1;
   }
-  const room = (hi - lo) * SPARK_HEADROOM;
+  const room = (hi - lo) * CANDLE_HEADROOM;
   lo -= room;
   hi += room;
-  const x = (t: number) => (t1 > t0 ? Math.min(w, Math.max(0, ((t - t0) / (t1 - t0)) * w)) : w);
-  const y = (v: number) => pad + ((hi - v) / (hi - lo)) * (h - 2 * pad);
-  const xs = pts.map((p) => +x(p[0]).toFixed(2));
-  const ys = pts.map((p) => +y(p[1]).toFixed(2));
-  const line = xs.map((xv, i) => `${i ? "L" : "M"}${xv},${ys[i]}`).join("");
-  const area = xs.length ? `${line}L${xs[xs.length - 1]},${h}L${xs[0]},${h}Z` : "";
-  return { line, area, base: +y(base).toFixed(2), xs, ys, lo, hi };
+  const slot = w / CANDLES_SHOW;
+  const y = (v: number) => +(pad + ((hi - v) / (hi - lo)) * (h - 2 * pad)).toFixed(2);
+  const first = CANDLES_SHOW - shown.length;
+  const bars = shown.map(([, o, ch, cl, c], i) => {
+    const top = y(Math.max(o, c));
+    const bot = Math.max(y(Math.min(o, c)), top + 0.6);
+    return { x: +((first + i + 0.5) * slot).toFixed(2), top, bot: +bot.toFixed(2), hi: y(ch), lo: y(cl), up: c >= o };
+  });
+  const tail = shown[shown.length - 1];
+  return { bars, bw: +(slot * BODY).toFixed(2), last: tail ? y(tail[4]) : h / 2, lo, hi };
 }
 
-/** Истории меньше этого (сервер недавно запущен) — под графиком подпись,
- *  что он заполняется. */
-export const SPARK_FULL_SEC = 3 * 3_600;
-/** Сколько секунд покрывает ряд. */
-export const sparkCover = (pts: readonly [number, number][]): number =>
-  pts.length >= 2 ? pts[pts.length - 1]![0] - pts[0]![0] : 0;
-/** Начало окна графика: история, округлённая вверх до целого часа (не
- *  меньше часа, не больше суток). Полная история — ровно сутки; короткая
- *  (сервер только что запущен) не растягивается на всю ширину из пары
- *  точек и не сжимается в чёрточку у края суток — подпись оси честная:
- *  «1 ч назад», «3 ч назад», «24 ч назад». */
-export function sparkFrom(pts: readonly [number, number][], end: number): number {
-  const h = Math.min(HIST_SEC / 3_600, Math.max(1, Math.ceil(sparkCover(pts) / 3_600)));
-  return end - h * 3_600;
-}
+/** Свечей меньше этого (своя история только копится) — под графиком подпись. */
+export const CANDLES_FULL = 7;
