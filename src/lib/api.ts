@@ -11,7 +11,7 @@ import { HALVING_TTL_MS, clockSkew, pickHalving, validHalving, type HalvingReply
 import { FNG_SAVED_MAX_MS, FNG_TTL_MS, validFng, type FngReply } from "./fng";
 import { ETF_TTL_MS, validEtf, type EtfReply } from "./etf";
 import { validLiqMap } from "./liqmap";
-import { MARKETS_AGE_MAX, validMarkets, type MarketsReply } from "./markets";
+import { MARKETS_AGE_MAX, validHist, validMarkets, type MarketsHist, type MarketsReply } from "./markets";
 import { DOM_TTL_MS, MCAP_MAX_AGE, MCAP_TTL_MS, validDom, validMcap, type DomReply, type McapReply } from "./dom";
 import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
@@ -588,6 +588,14 @@ export const fetchMarkets = () =>
       return v;
     }), (v) => v !== null);
 export const peekMarkets = () => peek<MarketsReply | null>("/api/markets", MARKETS_TTL) ?? savedMarkets();
+/** История рынков за сутки — для мини-графика при касании ячейки: один
+ *  запрос на все девять пунктов, в памяти на 10 минут (столько живут цены
+ *  площадок на сервере). Битый ответ — пусто, график просто не рисуется. */
+const MARKETS_HIST_TTL = 10 * 60_000;
+export const fetchMarketsHist = () =>
+  remember<MarketsHist>("/api/markets/hist", MARKETS_HIST_TTL,
+    () => call<unknown>("/api/markets/hist", { timeout: 15_000 }).then((r) => validHist(r)),
+    (v) => Object.keys(v).length > 0);
 /** Свежие рынки мимо памяти — для самообновления открытого меню. */
 export function refreshMarkets(): Promise<MarketsReply | null> {
   forget("/api/markets");

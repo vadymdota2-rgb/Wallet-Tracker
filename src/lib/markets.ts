@@ -101,3 +101,73 @@ export const MARKETS_REFRESH = 600;
 export function marketsDue(at: number | undefined, now: number, askedAgo: number): boolean {
   return at === undefined || now - at >= MARKETS_REFRESH || askedAgo >= MARKETS_REFRESH;
 }
+
+/** История для мини-графика (касание ячейки): точек на пункт не больше
+ *  (сервер — wt_markets.HIST_MAX), окно — сутки. */
+export const HIST_MAX = 300;
+export const HIST_SEC = 86_400;
+export type MarketsHist = Partial<Record<MarketKey, [number, number][]>>;
+
+/** Ответ /api/markets/hist → ряды по пунктам: только известные пункты, точки
+ *  [целое время, правдоподобная цена] по возрастанию времени, за последние
+ *  двое суток и не из будущего; меньше двух точек — ряда нет. */
+export function validHist(raw: unknown, now: number = Date.now() / 1000): MarketsHist {
+  const out: MarketsHist = {};
+  if (!isObj(raw) || !isObj(raw["series"]) || raw["ok"] !== true) return out;
+  const series = raw["series"];
+  for (const k of MARKET_KEYS) {
+    const pts = series[k];
+    if (!Array.isArray(pts)) continue;
+    const good: [number, number][] = [];
+    for (const p of pts.slice(-HIST_MAX)) {
+      if (!Array.isArray(p) || p.length !== 2) continue;
+      const [t, v] = p as unknown[];
+      if (typeof t !== "number" || !Number.isInteger(t) || t < now - 2 * HIST_SEC || t > now + AHEAD_MAX || !price(v)) continue;
+      if (good.length && t <= good[good.length - 1]![0]) continue;
+      good.push([t, v]);
+    }
+    if (good.length >= 2) out[k] = good;
+  }
+  return out;
+}
+
+/** Ряд для графика ячейки: история за сутки до времени ответа, последняя
+ *  точка — цена из ответа (свежее истории — дописывается). */
+export function sparkSeries(hist: readonly [number, number][] | undefined, it: MarketItem, at: number): [number, number][] {
+  const pts = (hist ?? []).filter(([t]) => t >= at - HIST_SEC && t <= at);
+  const last = pts[pts.length - 1];
+  if (!last || last[0] < at) pts.push([at, it.px]);
+  else pts[pts.length - 1] = [last[0], it.px];
+  return pts;
+}
+
+export interface Spark {
+  line: string;
+  area: string;
+  /** Где по высоте цена суточной давности (prev) — пунктир. */
+  base: number;
+  xs: number[];
+  ys: number[];
+  lo: number;
+  hi: number;
+}
+
+/** Мини-график в прямоугольнике w × h: время — по ширине, цена — по высоте;
+ *  цена суточной давности (base) всегда в кадре — видно, выше ли сейчас. */
+export function spark(pts: readonly [number, number][], base: number, w: number, h: number, pad = 3): Spark {
+  const t0 = pts[0]?.[0] ?? 0;
+  const t1 = pts[pts.length - 1]?.[0] ?? 1;
+  let lo = Math.min(base, ...pts.map((p) => p[1]));
+  let hi = Math.max(base, ...pts.map((p) => p[1]));
+  if (hi === lo) {
+    hi += Math.abs(hi) * 0.001 || 1;
+    lo -= Math.abs(lo) * 0.001 || 1;
+  }
+  const x = (t: number) => (t1 > t0 ? ((t - t0) / (t1 - t0)) * w : w);
+  const y = (v: number) => pad + ((hi - v) / (hi - lo)) * (h - 2 * pad);
+  const xs = pts.map((p) => +x(p[0]).toFixed(2));
+  const ys = pts.map((p) => +y(p[1]).toFixed(2));
+  const line = xs.map((xv, i) => `${i ? "L" : "M"}${xv},${ys[i]}`).join("");
+  const area = xs.length ? `${line}L${xs[xs.length - 1]},${h}L${xs[0]},${h}Z` : "";
+  return { line, area, base: +y(base).toFixed(2), xs, ys, lo, hi };
+}

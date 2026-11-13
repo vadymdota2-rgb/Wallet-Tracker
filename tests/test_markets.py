@@ -283,7 +283,10 @@ class CacheTest(unittest.TestCase):
         # Потоков не хватило (как у карточки халвинга): сборка не падает и не
         # остаётся без ответа — источники спрашиваются по очереди в том же потоке.
         mk.set_sources({name: (lambda v=v: v) for name, v in PARTS.items()})
-        with mock.patch.object(mk.threading.Thread, "start", side_effect=RuntimeError("can't start new thread")):
+        # Время — тестовое: по настоящему часы уходят от свечей валют в
+        # данных теста, и DXY через неделю пропадал бы.
+        with mock.patch.object(mk.threading.Thread, "start", side_effect=RuntimeError("can't start new thread")), \
+                mock.patch.object(mk, "_now", return_value=NOW):
             res = mk.refresh()
         self.assertTrue(res["ok"])
         self.assertEqual(len(res["items"]), len(mk.KEYS))
@@ -422,6 +425,70 @@ class CacheTest(unittest.TestCase):
         self.assertLessEqual(len(out), len("markets: ") + mk.LOG_MAX + 1)
         with mock.patch.object(mk.sys, "stderr", None):
             mk._log("журнал закрыт")  # не падает
+
+    def test_history_from_own_builds_for_a_day(self):
+        # История для мини-графика — из своих же сборок: точка на новое время
+        # ответа, то же время — замена (доминация обновилась), старше суток и
+        # сверх HIST_MAX — прочь; ответ — один объект, пока не менялась.
+        self.assertEqual(mk.history(), {"ok": False, "error": "no_data"})
+        r1 = {"ok": True, "at": NOW, "items": [{"k": "GOLD", "px": 4000.0, "prev": 3990.0}]}
+        with mk._lock:
+            self.assertTrue(mk._record(r1))
+            self.assertFalse(mk._record(r1))  # то же — без изменений
+            self.assertTrue(mk._record({**r1, "items": [{"k": "GOLD", "px": 4001.0, "prev": 3990.0}]}))
+            self.assertTrue(mk._record({**r1, "at": NOW + 600}))
+            self.assertFalse(mk._record({**r1, "at": NOW - 600}))  # старое время — мимо
+            self.assertFalse(mk._record({"ok": True, "at": "x", "items": []}))
+        h = mk.history()
+        self.assertIs(mk.history(), h)
+        self.assertEqual(h, {"ok": True, "at": NOW + 600, "series": {"GOLD": [[NOW, 4001.0], [NOW + 600, 4000.0]]}})
+        with mk._lock:
+            mk._record({**r1, "at": NOW + mk.HIST_SEC + 1})
+        self.assertIsNot(mk.history(), h)
+        self.assertEqual(mk.history()["series"]["GOLD"], [[NOW + 600, 4000.0], [NOW + mk.HIST_SEC + 1, 4000.0]])
+        with mk._lock, mock.patch.object(mk, "HIST_MAX", 3):
+            for i in range(10):
+                mk._record({**r1, "at": NOW + mk.HIST_SEC + 10 + i})
+        self.assertEqual(len(mk.history()["series"]["GOLD"]), 3)
+
+    def test_history_is_handed_to_the_server_only_when_it_changes(self):
+        got: list = []
+        mk.set_sink(got.append)
+        self.addCleanup(mk.set_sink, None)
+        mk.set_sources({name: (lambda v=v: v) for name, v in PARTS.items()})
+        with mock.patch.object(mk, "_now", return_value=NOW):
+            mk.build()
+            mk.build()  # те же цены и время — истории не прибавилось
+        self.assertEqual(len(got), 1)
+        self.assertEqual(set(got[0]["series"]), set(mk.KEYS))
+        # Сломанная запись копии сборку не роняет.
+        mk.set_sink(lambda h: 1 / 0)
+        mk._st.hist.clear()
+        err = io.StringIO()
+        with mock.patch.object(mk, "_now", return_value=NOW), mock.patch.object(mk.sys, "stderr", err):
+            self.assertTrue(mk.build()["ok"])
+        self.assertIn("история не записана (ZeroDivisionError)", err.getvalue())
+
+    def test_history_restore_checks_every_point(self):
+        raw = {"series": {
+            "GOLD": [[NOW - 600, 4000.0], [NOW - 300, "4001"], [NOW - 300, 4002.0], [NOW + mk.HIST_AHEAD + 1, 4003.0],
+                     [NOW - mk.HIST_SEC - 1, 3999.0], [True, 1.0], [NOW - 100, 1e9], ["x", 1], [NOW - 50]],
+            "SP500": [[NOW - mk.HIST_SEC - 1, 7000.0], [NOW - 10, 7001.0]],  # старше суток — мимо, даже первой
+            "US10Y": [[NOW - 60, 48.7]],  # не в своих рамках (доля вместо процента)
+            "EVIL": [[NOW, 1.0]],
+            "BVIV": "x",
+        }}
+        self.assertEqual(mk.history_restore(raw, NOW), 3)
+        self.assertEqual(mk._st.hist, {"GOLD": [(NOW - 600, 4000.0), (NOW - 300, 4001.0)], "SP500": [(NOW - 10, 7001.0)]})
+        # Своя история есть — с диска её не перетирают.
+        self.assertEqual(mk.history_restore({"series": {"GOLD": [[NOW - 10, 1.0]]}}, NOW), 0)
+        for bad in (None, [], "x", {"series": []}, {"series": {"GOLD": None}}):
+            self.assertEqual(mk.history_restore(bad, NOW), 0, bad)
+        with mock.patch.object(mk, "HIST_MAX", 2):
+            mk._st.hist.clear()
+            pts = [[NOW - 50 + i, 4000.0 + i] for i in range(5)]
+            self.assertEqual(mk.history_restore({"series": {"GOLD": pts}}, NOW), 2)
+        self.assertEqual(mk._st.hist["GOLD"], [(NOW - 47, 4003.0), (NOW - 46, 4004.0)])
 
     def test_people_only_read_the_cache(self):
         # Все видят кэш: запросы людей — даже тысяча, даже со старым ответом

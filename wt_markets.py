@@ -141,6 +141,12 @@ CANDLES_MAX = 1000  # часовых свечей на валюту (берём 
 DAYS_MAX = 60  # дней ЕЦБ (берём ECB_DAYS)
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 LOG_MAX = 300  # строка журнала — не длиннее
+# История цен для мини-графика в ячейке (касание): за сутки, из своих же
+# сборок — новых запросов к источникам нет. Точка — на каждое новое время
+# ответа (цены площадок обновляются раз в 10 минут: ~144 точки за сутки).
+HIST_SEC = 86_400
+HIST_MAX = 300  # точек на пункт, не больше
+HIST_AHEAD = 120  # точка из будущего (часы сервера, подложенный файл) — мимо
 
 
 def _num(v: object) -> float:
@@ -347,6 +353,11 @@ class _State:
         # Медленные источники: имя → (когда получен — по монотонным часам,
         # годный ответ, когда получен — время Unix).
         self.slow: dict[str, tuple[float, object, int]] = {}
+        # История: пункт → [(время ответа, цена)] по возрастанию; готовый
+        # ответ /api/markets/hist — один объект, пока история не менялась.
+        self.hist: dict[str, list[tuple[int, float]]] = {}
+        self.hist_rep: dict[str, Json] | None = None
+        self.sink: Callable[[dict[str, Json]], None] | None = None
 
 
 _st = _State()
@@ -505,11 +516,96 @@ def build() -> dict[str, Json]:
             if _st.hit and _st.hit[1] == res:
                 res = _st.hit[1]  # те же цифры — тот же объект (те же байты и ETag)
             _st.hit = (time.monotonic(), res)
+            grew, sink = _record(res), _st.sink
         else:
             _st.fail = time.monotonic()
+            grew, sink = False, None
     if empty != was:
         _log("ответа нет: ни одного пункта" if empty else "ответ снова есть")
+    if grew and sink is not None:
+        try:
+            sink(history())
+        except Exception as e:  # noqa: BLE001 — запись копии не роняет сборку
+            _log(f"история не записана ({type(e).__name__})")
     return res
+
+
+def _record(res: dict[str, Json]) -> bool:
+    """Цены ответа — в историю (звать под _lock). То же время — заменить
+    точку (доминация обновилась при тех же ценах площадок), новее — добавить;
+    старше суток и сверх HIST_MAX — отрезать. Вернёт, менялась ли история."""
+    at = res.get("at")
+    if not isinstance(at, int):
+        return False
+    changed = False
+    for it in res.get("items") or ():
+        k, px = it["k"], float(it["px"])
+        pts = _st.hist.setdefault(k, [])
+        if pts and pts[-1][0] == at:
+            if pts[-1][1] != px:
+                pts[-1] = (at, px)
+                changed = True
+        elif not pts or at > pts[-1][0]:
+            pts.append((at, px))
+            changed = True
+        cut = at - HIST_SEC
+        while pts and (pts[0][0] < cut or len(pts) > HIST_MAX):
+            pts.pop(0)
+            changed = True
+    if changed:
+        _st.hist_rep = None
+    return changed
+
+
+def history() -> dict[str, Json]:
+    """Ответ /api/markets/hist: {"ok", "at", "series": {пункт: [[время,
+    цена], …]}} за сутки — из памяти; пока история не менялась — тот же
+    объект (сервер отдаёт те же байты и «304»). Истории нет — «нет данных»."""
+    with _lock:
+        if _st.hist_rep is None:
+            series = {k: [[t, p] for t, p in _st.hist[k]] for k in KEYS if _st.hist.get(k)}
+            last = max((v[-1][0] for v in series.values()), default=0)
+            _st.hist_rep = ({"ok": True, "at": last, "series": series} if series
+                            else {"ok": False, "error": "no_data"})
+        return _st.hist_rep
+
+
+def history_restore(raw: object, t: int | None = None) -> int:
+    """История с диска (после перезапуска) — в память, только для пунктов,
+    у которых своей ещё нет. Каждая точка проверяется: известный пункт,
+    целое время в пределах суток и не из будущего, правдоподобная цена; по
+    возрастанию времени, не больше HIST_MAX. Вернёт, сколько точек принято."""
+    t = int(t if t is not None else _now())
+    series = raw.get("series") if isinstance(raw, dict) else None
+    if not isinstance(series, dict):
+        return 0
+    n = 0
+    with _lock:
+        for k in KEYS:
+            pts = series.get(k)
+            if _st.hist.get(k) or not isinstance(pts, list):
+                continue
+            lo, hi = RANGE.get(k, (0.0, PX_MAX))
+            good: list[tuple[int, float]] = []
+            for p in pts[-HIST_MAX:]:
+                if not (isinstance(p, list) and len(p) == 2 and isinstance(p[0], int) and not isinstance(p[0], bool)):
+                    continue
+                px = _num(p[1])
+                if t - HIST_SEC <= p[0] <= t + HIST_AHEAD and 0 < px < PX_MAX and lo <= px <= hi \
+                        and (not good or p[0] > good[-1][0]):
+                    good.append((p[0], px))
+            if good:
+                _st.hist[k] = good
+                n += len(good)
+        if n:
+            _st.hist_rep = None
+    return n
+
+
+def set_sink(fn: Callable[[dict[str, Json]], None] | None) -> None:
+    """Куда отдавать историю, когда она поменялась (сервер пишет её на диск,
+    модуль сам файлов не трогает)."""
+    _st.sink = fn
 
 
 def _bg() -> None:

@@ -2,7 +2,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  BAR_MIN, MARKET_KEYS, MARKET_PX_MAX, MARKETS_REFRESH, MARKETS_STALE_MIN, ageMin, barShare, change, digits, isPercent, marketsDue, validMarkets,
+  BAR_MIN, HIST_MAX, HIST_SEC, MARKET_KEYS, MARKET_PX_MAX, MARKETS_REFRESH, MARKETS_STALE_MIN, ageMin, barShare, change, digits,
+  isPercent, marketsDue, spark, sparkSeries, validHist, validMarkets,
 } from "../src/lib/markets.ts";
 
 const NOW = 1_794_100_000;
@@ -111,4 +112,46 @@ test("спрашивать сервер — только когда могли �
   // вопроса по часам телефона прошло десять минут — спрашиваем.
   assert.equal(marketsDue(1000 + 3600, 1000 + 600, 599), false);
   assert.equal(marketsDue(1000 + 3600, 1000 + 600, 600), true);
+});
+
+test("история мини-графика с сервера: известные пункты, целое время по возрастанию, правдоподобная цена", () => {
+  const ok = { ok: true, at: NOW, series: {
+    GOLD: [[NOW - 600, 4000], [NOW - 300, 4001], [NOW - 300, 4002], [NOW - 200, -1], [NOW - 100, "x"], [NOW - 50.5, 4003], [NOW, 4004]],
+    VIX: [[NOW - 600, 20], [NOW, 21]],
+    BVIV: [[NOW, 42]], // одна точка — не ряд
+    OIL: [[NOW - 3 * HIST_SEC, 80], [NOW + 2 * 86_400, 81], [NOW - 10, 82]], // старое и из будущего — мимо
+  } };
+  const h = validHist(ok, NOW);
+  assert.deepEqual(Object.keys(h), ["GOLD"]);
+  assert.deepEqual(h.GOLD, [[NOW - 600, 4000], [NOW - 300, 4001], [NOW, 4004]]);
+  for (const bad of [null, "x", { ok: false }, { ok: false, series: ok.series }, { ok: true, series: [] }, { ok: true }]) {
+    assert.deepEqual(validHist(bad, NOW), {});
+  }
+  const many = { ok: true, series: { GOLD: Array.from({ length: HIST_MAX + 50 }, (_, i) => [NOW - 1000 + i, 4000 + i]) } };
+  assert.equal(validHist(many, NOW).GOLD!.length, HIST_MAX); // хвост — последние
+});
+
+test("ряд ячейки: сутки до ответа, последняя точка — нынешняя цена", () => {
+  const it = { k: "GOLD" as const, px: 4066, prev: 4080 };
+  assert.deepEqual(sparkSeries([[NOW - HIST_SEC - 1, 1], [NOW - 600, 4070], [NOW - 300, 4068]], it, NOW),
+    [[NOW - 600, 4070], [NOW - 300, 4068], [NOW, 4066]]);
+  // Последняя точка истории — то же время: цена — из ответа.
+  assert.deepEqual(sparkSeries([[NOW - 600, 4070], [NOW, 4060]], it, NOW), [[NOW - 600, 4070], [NOW, 4066]]);
+  // Точки новее ответа (часы) — мимо; истории нет — одна точка, графика не будет.
+  assert.deepEqual(sparkSeries([[NOW + 60, 1]], it, NOW), [[NOW, 4066]]);
+  assert.deepEqual(sparkSeries(undefined, it, NOW), [[NOW, 4066]]);
+});
+
+test("геометрия мини-графика: цена суточной давности всегда в кадре, концы — края", () => {
+  const g = spark([[0, 10], [5, 12], [10, 11]], 8, 240, 56, 3);
+  assert.deepEqual(g.xs, [0, 120, 240]);
+  assert.equal(g.lo, 8);
+  assert.equal(g.hi, 12);
+  assert.equal(g.base, 53); // 8 — нижний край (с отступом)
+  assert.equal(g.ys[1], 3); // 12 — верхний
+  assert.ok(g.line.startsWith("M0,") && g.area.endsWith("Z"));
+  const flat = spark([[0, 5], [1, 5]], 5, 240, 56);
+  assert.ok(flat.ys.every(Number.isFinite) && Number.isFinite(flat.base));
+  const zero = spark([[0, 0.000001], [1, 0.000001]], 0.000001, 240, 56);
+  assert.ok(zero.hi > zero.lo);
 });

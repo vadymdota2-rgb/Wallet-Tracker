@@ -122,10 +122,11 @@ button.mk-cell:focus-visible { outline: 2px solid var(--glow); outline-offset: 1
   .mk-bar { forced-color-adjust: none; background: CanvasText; opacity: 1; }
   .mk, .mk-cell { border-color: CanvasText; }
   .mk-dot { forced-color-adjust: none; background: CanvasText; }
+  .mk-spark-line { forced-color-adjust: none; stroke: CanvasText; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mk-flash-up, .mk-flash-dn, .mk-skel .mk-cell i, .mk-dot { animation: none; }
+  .mk-flash-up, .mk-flash-dn, .mk-skel .mk-cell i, .mk-dot, .mk-spark-wait { animation: none; }
   .mk-bar, .mk-cell { transition: none; }
   button.mk-cell:active { transform: none; }
 }
@@ -135,6 +136,44 @@ button.mk-cell:focus-visible { outline: 2px solid var(--glow); outline-offset: 1
   margin: 6px 0 0; padding: 6px 8px; border-radius: 10px;
   background: rgb(127 216 255 / 0.04); border: 1px solid rgb(127 216 255 / 0.12);
   font-size: 9px; line-height: 1.4; color: var(--dim);
+}
+
+.mk-note-t { margin: 0; }
+
+/* Мини-график за сутки в раскрытом пояснении: линия цветом изменения, мягкая
+   заливка, пунктир — цена суточной давности; касание — цена и время точки. */
+.mk-spark { display: grid; gap: 2px; margin-block-end: 6px; touch-action: pan-y; outline: none; cursor: crosshair; }
+.mk-spark:focus-visible { box-shadow: 0 0 0 2px var(--glow); border-radius: 6px; }
+.mk-spark-plot { position: relative; block-size: 56px; }
+.mk-spark svg { display: block; inline-size: 100%; block-size: 100%; overflow: visible; }
+[dir="rtl"] .mk-spark svg { transform: scaleX(-1); }
+.mk-spark-line { fill: none; stroke: var(--dim); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+.mk-spark-area { fill: rgb(124 151 188 / 0.12); }
+.mk-spark.up .mk-spark-line { stroke: var(--up); filter: drop-shadow(0 0 3px rgb(61 220 151 / 0.45)); }
+.mk-spark.up .mk-spark-area { fill: rgb(61 220 151 / 0.1); }
+.mk-spark.dn .mk-spark-line { stroke: var(--dn); filter: drop-shadow(0 0 3px rgb(255 92 119 / 0.45)); }
+.mk-spark.dn .mk-spark-area { fill: rgb(255 92 119 / 0.1); }
+.mk-spark-base { stroke: var(--dim-2); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.8; }
+.mk-spark-cross { stroke: var(--ink); stroke-width: 1; opacity: 0.35; }
+.mk-spark-dot {
+  position: absolute; inline-size: 7px; block-size: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%;
+  background: var(--ink); border: 1.5px solid var(--bg); pointer-events: none;
+}
+[dir="rtl"] .mk-spark-dot { margin: -3.5px -3.5px 0 0; }
+.mk-spark-tip {
+  position: absolute; inset-block-start: -4px; transform: translate(-50%, -100%); pointer-events: none; white-space: nowrap;
+  padding: 3px 6px; border-radius: 6px; font-size: 10px; background: rgb(7 14 30 / 0.95); border: 1px solid var(--line-2);
+}
+[dir="rtl"] .mk-spark-tip { transform: translate(50%, -100%); }
+.mk-spark-tip.end { transform: translate(-100%, -100%); }
+[dir="rtl"] .mk-spark-tip.end { transform: translate(100%, -100%); }
+.mk-spark-tip b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.mk-spark-tip small { color: var(--dim); font-size: 9.5px; }
+.mk-spark-ax { display: flex; justify-content: space-between; font-size: 8.5px; color: var(--dim); opacity: 0.9; }
+/* Пока история грузится — место под график, чтобы пояснение не прыгало. */
+.mk-spark-wait {
+  block-size: 56px; margin-block-end: 20px; border-radius: 6px;
+  background: rgb(255 255 255 / 0.04); animation: mk-pulse 1.4s ease-in-out infinite;
 }
 
 .mk-src { margin-top: 5px; font-size: 8.5px; color: var(--dim); opacity: 0.85; text-align: center; }

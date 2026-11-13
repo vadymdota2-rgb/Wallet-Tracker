@@ -28,6 +28,15 @@ const MARKETS = {
     { k: "BVIV", px: 42.399, prev: 41 }, { k: "BTCD", px: 60.44, prev: 60.35 }, { k: "USDTD", px: 4.1, prev: 4.22 },
   ],
 };
+/** История за сутки для мини-графика: раз в 10 минут от цены суточной
+ *  давности к нынешней, с покачиванием. */
+const HIST = {
+  ok: true, at: T - 20, series: Object.fromEntries(MARKETS.items.map((x) => [x.k,
+    Array.from({ length: 145 }, (_, i) => {
+      const f = i / 144;
+      return [T - 20 - 86_400 + i * 600, +(x.prev + (x.px - x.prev) * f + Math.sin(i / 9) * Math.abs(x.px - x.prev) * 0.4).toFixed(4)];
+    })])),
+};
 const sp = (s: string | null) => (s ?? "").replace(/[\s  ]+/g, " ").trim();
 
 let server: Server;
@@ -60,6 +69,8 @@ interface Opts {
   lang?: string; width?: number; height?: number; reply?: unknown; scale?: number;
   /** Высокая контрастность Windows (forced-colors). */
   forced?: boolean;
+  /** Ответ /api/markets/hist; счётчик запросов к нему. */
+  hist?: unknown; histAsked?: { n: number };
   /** Ответы по очереди (последний — дальше всегда); задержка первого ответа, мс. */
   replies?: unknown[]; delay?: number;
   /** Копия на устройстве (wt-markets-v1): когда записана (мс) и что. */
@@ -78,6 +89,10 @@ async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; er
   await ctx.route(`${base}/api/**`, (r) => r.fulfill({ contentType: "application/json", body: '{"ok":false}' }));
   await ctx.route(`${base}/api/bootstrap`, (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, me: { plan: "premium" } }) }));
   let n = 0;
+  await ctx.route(`${base}/api/markets/hist`, async (r) => {
+    if (o.histAsked) o.histAsked.n += 1;
+    await r.fulfill({ contentType: "application/json", body: JSON.stringify(o.hist ?? HIST) });
+  });
   await ctx.route(`${base}/api/markets`, async (r) => {
     const body = o.replies ? o.replies[Math.min(n++, o.replies.length - 1)] : (o.reply ?? MARKETS);
     if (o.delay && n <= 1) await new Promise((ok) => setTimeout(ok, o.delay));
@@ -101,7 +116,8 @@ async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; er
 test("сверху меню — девять рынков вместо заголовка, сетка 3 × 3", async () => {
   const { ctx, page, errors } = await open();
   const cells = page.locator(".drawer .mk-cell");
-  await cells.first().waitFor();
+  // Ячейки скелета — тоже .mk-cell: ждём ячейки с ценой, а не скелет.
+  await page.locator(".drawer .mk-px").first().waitFor();
   assert.equal(await cells.count(), 9);
   assert.equal(await page.locator(".drawer .drawer-ttl").count(), 0);
   const text = (await cells.evaluateAll((els) => els.map((el) => [...el.children].map((c) => c.textContent).join(" ")))).map(sp);
@@ -166,7 +182,7 @@ function overflow(page: Page): Promise<string[]> {
 test("влезает в 320 точек на всех 16 языках", async () => {
   for (const lang of LANGS) {
     const { ctx, page, errors } = await open({ lang, width: 320 });
-    await page.locator(".drawer .mk-cell").first().waitFor();
+    await page.locator(".drawer .mk-px").first().waitFor();
     assert.deepEqual(await overflow(page), [], lang);
     assert.equal(await page.locator(".drawer .mk-cell").count(), 9, lang);
     const xs = await page.locator(".drawer .mk-cell").evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().x)));
@@ -188,7 +204,7 @@ test("любое устройство: от 280 точек (Galaxy Fold снар
   ];
   for (const d of devices) {
     const { ctx, page, errors } = await open(d);
-    await page.locator(".drawer .mk-cell").first().waitFor();
+    await page.locator(".drawer .mk-px").first().waitFor();
     assert.deepEqual(await overflow(page), [], d.name);
     assert.equal(await page.locator(".drawer .mk-cell").count(), 9, d.name);
     // Значок «ⓘ» — рисунок с размером, а не знак шрифта (его нет в части шрифтов).
@@ -206,7 +222,7 @@ test("любое устройство: от 280 точек (Galaxy Fold снар
 test("пункта нет в ответе — ячейка на своём месте: «—» и «нет данных» для чтения с экрана, сетка не сдвигается", async () => {
   const at = async (reply: unknown) => {
     const { ctx, page, errors } = await open({ reply, width: 320 });
-    await page.locator(".drawer .mk-cell").first().waitFor();
+    await page.locator(".drawer .mk-px").first().waitFor();
     // От начала сетки: меню ещё может выезжать.
     const pos = await page.locator(".drawer .mk-cell").evaluateAll((els) => els.map((el) => {
       const r = el.getBoundingClientRect();
@@ -239,7 +255,7 @@ test("пункта нет в ответе — ячейка на своём ме�
 
 test("высокая контрастность Windows: полоска и рамки — цветом системы, а не пропадают", async () => {
   const { ctx, page, errors } = await open({ forced: true });
-  await page.locator(".drawer .mk-cell").first().waitFor();
+  await page.locator(".drawer .mk-px").first().waitFor();
   const bar = await page.locator('.mk-cell[data-k="BVIV"] .mk-bar').evaluate((el) => {
     const cs = getComputedStyle(el);
     return { bg: cs.backgroundColor, op: cs.opacity, w: el.getBoundingClientRect().width };
@@ -254,7 +270,8 @@ test("высокая контрастность Windows: полоска и ра�
 test("арабский: сетка справа налево, цифры и знаки — как у всех", async () => {
   const { ctx, page } = await open({ lang: "ar" });
   const cells = page.locator(".drawer .mk-cell");
-  await cells.first().waitFor();
+  // Ячейки скелета — тоже .mk-cell: ждём ячейки с ценой, а не скелет.
+  await page.locator(".drawer .mk-px").first().waitFor();
   const xs = await cells.evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().x)));
   assert.ok(xs[0]! > xs[1]! && xs[1]! > xs[2]!, String(xs)); // S&P 500 — справа
   assert.match(sp(await page.locator('.mk-cell[data-k="SP500"] .mk-ch').textContent()), /^[−+]?\d/);
@@ -265,7 +282,7 @@ test("арабский: сетка справа налево, цифры и зн
 test("крупный системный шрифт (до 200 %, как Android на максимуме): цифры не обрезаны", async () => {
   for (const z of [1.3, 1.6, 2]) {
     const { ctx, page } = await open({ width: 360 });
-    await page.locator(".drawer .mk-cell").first().waitFor();
+    await page.locator(".drawer .mk-px").first().waitFor();
     await page.evaluate((k) => {
       const els = [...document.querySelectorAll<HTMLElement>(".mk, .mk *")];
       const px = els.map((el) => parseFloat(getComputedStyle(el).fontSize) * k);
@@ -279,7 +296,7 @@ test("крупный системный шрифт (до 200 %, как Android �
 
 test("текст читается: контраст не ниже 4,5:1 (WCAG AA) с учётом приглушения", async () => {
   const { ctx, page } = await open();
-  await page.locator(".drawer .mk-cell").first().waitFor();
+  await page.locator(".drawer .mk-px").first().waitFor();
   await page.locator('.mk-cell[data-k="BVIV"]').click(); // и пояснение под сеткой
   const low = await page.evaluate(() => {
     const rgba = (s: string) => (s.match(/[\d.]+/g) ?? ["0", "0", "0", "0"]).map(Number) as number[];
@@ -293,7 +310,7 @@ test("текст читается: контраст не ниже 4,5:1 (WCAG AA
     const hex = getComputedStyle(document.documentElement).getPropertyValue("--panel").trim();
     const drawer = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
     const out: string[] = [];
-    for (const el of document.querySelectorAll<HTMLElement>(".mk-k, .mk-px, .mk-ch, .mk-src, .mk-ttl, .mk-age, .mk-note")) {
+    for (const el of document.querySelectorAll<HTMLElement>(".mk-k, .mk-px, .mk-ch, .mk-src, .mk-ttl, .mk-age, .mk-note-t, .mk-spark-ax span")) {
       let bg = drawer.slice(0, 3);
       // Блик ячейки сверху — самое светлое место её градиента (белый 3,5 %).
       const cell = el.closest(".mk-cell, .mk-note");
@@ -319,16 +336,16 @@ test("текст читается: контраст не ниже 4,5:1 (WCAG AA
 
 test("касание ячейки — её пояснение; ещё раз — свернуть; пояснение есть у всех девяти", async () => {
   const { ctx, page, errors } = await open();
-  await page.locator(".drawer .mk-cell").first().waitFor();
+  await page.locator(".drawer .mk-px").first().waitFor();
   assert.equal(await page.locator(".mk-note").count(), 0);
   const bviv = page.locator('.mk-cell[data-k="BVIV"]');
   assert.equal(await bviv.evaluate((el) => el.tagName), "BUTTON");
   await bviv.click();
   assert.equal(await bviv.getAttribute("aria-expanded"), "true");
-  assert.equal(sp(await page.locator(".mk-note").textContent()), sp(I18N["mk_bviv_hint"]!["ru"]!));
+  assert.equal(sp(await page.locator(".mk-note-t").textContent()), sp(I18N["mk_bviv_hint"]!["ru"]!));
   await page.locator('.mk-cell[data-k="DXY"]').click();
   assert.equal(await bviv.getAttribute("aria-expanded"), "false");
-  assert.equal(sp(await page.locator(".mk-note").textContent()), sp(I18N["mk_dxy_hint"]!["ru"]!));
+  assert.equal(sp(await page.locator(".mk-note-t").textContent()), sp(I18N["mk_dxy_hint"]!["ru"]!));
   await page.locator('.mk-cell[data-k="DXY"]').click();
   assert.equal(await page.locator(".mk-note").count(), 0);
   // Каждую из девяти можно коснуться — и у каждой своё пояснение.
@@ -336,7 +353,7 @@ test("касание ячейки — её пояснение; ещё раз —
   for (const cell of await page.locator(".drawer .mk-cell").all()) {
     assert.equal(await cell.evaluate((el) => el.tagName), "BUTTON");
     await cell.click();
-    const text = sp(await page.locator(".mk-note").textContent());
+    const text = sp(await page.locator(".mk-note-t").textContent());
     assert.ok(text.length > 20, text);
     seen.add(text);
     await cell.click();
@@ -352,10 +369,56 @@ test("касание ячейки — её пояснение; ещё раз —
   await ctx.close();
 });
 
+test("касание ячейки — мини-график за сутки: цвет изменения, пунктир — сутки назад, касание графика — цена и время", async () => {
+  const histAsked = { n: 0 };
+  const { ctx, page, errors } = await open({ histAsked });
+  await page.locator(".drawer .mk-px").first().waitFor();
+  await page.locator('.mk-cell[data-k="GOLD"]').click();
+  const chart = page.locator(".mk-spark");
+  await chart.waitFor();
+  assert.match(await chart.getAttribute("class") ?? "", /\bdn\b/); // золото за сутки упало — красным
+  assert.equal(await page.locator(".mk-spark-base").count(), 1);
+  assert.deepEqual((await page.locator(".mk-spark-ax span").allTextContents()).map(sp), ["24 ч назад", "сейчас"]);
+  assert.equal(sp(await chart.getAttribute("aria-label")), "Золото: 24 ч назад 4 080 → 4 066");
+  // Касание у начала графика — цена суточной давности и «24 ч назад».
+  const box = (await chart.boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2, box.y + 20);
+  assert.match(sp(await page.locator(".mk-spark-tip").innerText()), /^4 0\d\d 1[12] ч назад$/); // середина суток
+  for (let i = 0; i < 200; i++) await page.keyboard.press("ArrowLeft");
+  assert.equal(sp(await page.locator(".mk-spark-tip").innerText()), "4 080 24 ч назад");
+  // Стрелками — к нынешней цене.
+  await chart.focus();
+  for (let i = 0; i < 200; i++) await page.keyboard.press("ArrowRight");
+  assert.equal(sp(await page.locator(".mk-spark-tip").innerText()), "4 066 сейчас");
+  // Пояснение — под графиком, как раньше.
+  assert.equal(sp(await page.locator(".mk-note-t").textContent()), sp(I18N["mk_gold_hint"]!["ru"]!));
+  // Другие ячейки — из той же истории: один запрос на все.
+  await page.locator('.mk-cell[data-k="BVIV"]').click();
+  await page.locator(".mk-spark.up").waitFor();
+  await page.locator('.mk-cell[data-k="US10Y"]').click();
+  await page.locator(".mk-spark").waitFor();
+  assert.equal(histAsked.n, 1);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test("истории нет или она битая — пояснение без графика, без ошибок", async () => {
+  for (const hist of [{ ok: false, error: "no_data" }, { ok: true, series: { GOLD: [[1, "x"]] } }, "мусор"]) {
+    const { ctx, page, errors } = await open({ hist });
+    await page.locator(".drawer .mk-px").first().waitFor();
+    await page.locator('.mk-cell[data-k="GOLD"]').click();
+    await page.locator(".mk-note-t").waitFor();
+    await page.waitForTimeout(300);
+    assert.equal(await page.locator(".mk-spark, .mk-spark-wait").count(), 0);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
 test("полоска — величина изменения: больше изменение — длиннее, ноль — без полоски, цвет — направление", async () => {
   const flat = { ...MARKETS, items: MARKETS.items.map((x) => (x.k === "GOLD" ? { ...x, prev: x.px } : x)) };
   const { ctx, page } = await open({ reply: flat });
-  await page.locator(".drawer .mk-cell").first().waitFor();
+  await page.locator(".drawer .mk-px").first().waitFor();
   const w = (k: string) => page.locator(`.mk-cell[data-k="${k}"] .mk-bar`).evaluate((el) => el.getBoundingClientRect().width);
   assert.ok((await w("BVIV")) > (await w("OIL")) && (await w("OIL")) > (await w("SP500")), "BVIV 3,41 % > нефть 0,66 % > S&P 0,27 %");
   assert.equal(await w("GOLD"), 0);
@@ -370,7 +433,7 @@ test("полоска — величина изменения: больше из�
 test("заголовок: «сейчас», через 20 минут — «20 мин назад» жёлтым", async () => {
   for (const [at, txt, old] of [[T - 20, I18N["mk_now"]!["ru"]!, false], [T - 20 * 60, "20 мин назад", true]] as const) {
     const { ctx, page } = await open({ reply: { ...MARKETS, at } });
-    await page.locator(".drawer .mk-cell").first().waitFor();
+    await page.locator(".drawer .mk-px").first().waitFor();
     assert.equal(sp(await page.locator(".mk-ttl").textContent()), I18N["mk_title"]!["ru"]);
     assert.equal(sp(await page.locator(".mk-age").textContent()), txt);
     assert.equal(await page.locator(".mk-age.old").count(), old ? 1 : 0);
@@ -381,7 +444,7 @@ test("заголовок: «сейчас», через 20 минут — «20 м
 test("копия на устройстве: меню сразу с ней (без скелета), свежая — поверх; ответ сохраняется", async () => {
   const old = { ...MARKETS, at: T - 40 * 60, items: MARKETS.items.map((x) => (x.k === "SP500" ? { ...x, px: 7000 } : x)) };
   const { ctx, page } = await open({ saved: { at: T * 1000 - 40 * 60_000, v: old }, delay: 1500 });
-  await page.locator(".drawer .mk-cell").first().waitFor();
+  await page.locator(".drawer .mk-px").first().waitFor();
   assert.equal(await page.locator(".mk-skel").count(), 0);
   assert.match(sp(await page.locator('.mk-cell[data-k="SP500"] .mk-px').textContent()), /^7 000$/);
   assert.equal(sp(await page.locator(".mk-age").textContent()), "40 мин назад");
@@ -405,7 +468,7 @@ test("копия старше шести часов не показываетс�
 
 test("через два часа — «2 ч назад»", async () => {
   const { ctx, page } = await open({ reply: { ...MARKETS, at: T - 2 * 3_600 - 120 } });
-  await page.locator(".drawer .mk-cell").first().waitFor();
+  await page.locator(".drawer .mk-px").first().waitFor();
   assert.equal(sp(await page.locator(".mk-age").textContent()), "2 ч назад");
   await ctx.close();
 });
@@ -427,7 +490,7 @@ test("пока ответа нет — скелет сетки, не прыжо�
 test("обновление: изменившаяся цена коротко вспыхивает своим цветом; вернулись в приложение — свежие, если прошла минута", async () => {
   const next = { ...MARKETS, items: MARKETS.items.map((x) => (x.k === "SP500" ? { ...x, px: 7400 } : x.k === "GOLD" ? { ...x, px: 4000 } : x)) };
   const { ctx, page } = await open({ replies: [MARKETS, next] });
-  await page.locator(".drawer .mk-cell").first().waitFor();
+  await page.locator(".drawer .mk-px").first().waitFor();
   // Вернулись быстрее минуты — ответ из памяти, сеть не трогаем.
   await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
   await page.waitForTimeout(300);
@@ -458,7 +521,7 @@ test("снимок меню", async () => {
   const shot = process.env["MK_SHOT"];
   if (!shot) return;
   const { ctx, page } = await open({ scale: 2 });
-  await page.locator(".drawer .mk-cell").first().waitFor();
+  await page.locator(".drawer .mk-px").first().waitFor();
   if (process.env["MK_NOTES"]) await page.locator(".mk-i").click();
   const pick = process.env["MK_PICK"];
   if (pick) await page.locator(`.mk-cell[data-k="${pick}"]`).click();

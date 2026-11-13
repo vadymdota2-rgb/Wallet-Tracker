@@ -25,18 +25,18 @@
  * (если прошлый ответ старше минуты). Цена изменилась — ячейка коротко
  * вспыхивает цветом (без движения, если система просит меньше анимации).
  */
-import { memo, useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { useApp } from "../store/app";
 import { t } from "../i18n/t";
 import type { DictKey, LangCode } from "../i18n/types";
 import { num } from "../lib/format";
-import { fetchMarkets, peekMarkets, refreshMarkets } from "../lib/api";
+import { fetchMarkets, fetchMarketsHist, peekMarkets, refreshMarkets } from "../lib/api";
 import { openExternal } from "../lib/telegram";
 import { CMC_URL } from "./CmcBy";
 import "./Markets.css";
 import {
-  MARKETS_STALE_MIN, MARKET_KEYS, ageMin, barShare, change, digits, isPercent, marketsDue,
-  type MarketItem, type MarketKey, type MarketsReply,
+  MARKETS_STALE_MIN, MARKET_KEYS, ageMin, barShare, change, digits, isPercent, marketsDue, spark, sparkSeries,
+  type MarketItem, type MarketKey, type MarketsHist, type MarketsReply,
 } from "../lib/markets";
 
 const EVERY = 60_000;
@@ -58,6 +58,71 @@ const HINT: Record<MarketKey, DictKey> = {
   SP500: "mk_sp_hint", XYZ100: "mk_xyz_hint", DXY: "mk_dxy_hint", GOLD: "mk_gold_hint", OIL: "mk_oil_hint",
   US10Y: "mk_10y_hint", BVIV: "mk_bviv_hint", BTCD: "mk_btcd_hint", USDTD: "mk_usdtd_hint",
 };
+
+/** Цена пункта по-людски: знаков — по масштабу, у доходности и долей — «%». */
+const fmtPx = (k: MarketKey, v: number, it: MarketItem) => {
+  const p = digits({ ...it, px: v });
+  return `${num(v, p, p)}${isPercent(k) ? "%" : ""}`;
+};
+
+/** «Сейчас», «N мин назад», «N ч назад». */
+const agoText = (lang: LangCode, min: number) =>
+  min < 1 ? t(lang, "mk_now") : min < 60 ? t(lang, "mk_ago", { n: min }) : t(lang, "mk_ago_h", { n: Math.floor(min / 60) });
+
+const SW = 240, SH = 56;
+
+/** Мини-график цены за сутки — в раскрытом пояснении ячейки: линия цветом
+ *  изменения, пунктир — цена суточной давности; касание или стрелки — цена
+ *  и время точки. Ряд — из своей же истории сервера, без запросов к
+ *  источникам. */
+function MiniChart({ it, pts, lang, now }: { it: MarketItem; pts: [number, number][]; lang: LangCode; now: number }) {
+  const [at, setAt] = useState(-1);
+  const g = spark(pts, it.prev, SW, SH);
+  const ch = change(it).v;
+  const dir = ch > 0 ? "up" : ch < 0 ? "dn" : "";
+  const pick = (e: PointerEvent<HTMLDivElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const f = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    const rtl = getComputedStyle(e.currentTarget).direction === "rtl";
+    const target = (rtl ? 1 - f : f) * SW;
+    let best = 0;
+    for (let i = 1; i < g.xs.length; i++) if (Math.abs(g.xs[i]! - target) < Math.abs(g.xs[best]! - target)) best = i;
+    setAt(best);
+  };
+  const key = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const i = at < 0 ? pts.length - 1 : at + (e.key === "ArrowRight" ? 1 : -1);
+    setAt(Math.max(0, Math.min(pts.length - 1, i)));
+  };
+  const p = at >= 0 ? pts[at] : undefined;
+  const left = at >= 0 ? (g.xs[at]! / SW) * 100 : 0;
+  const first = ageMin(pts[0]![0], now);
+  return (
+    <div className={`mk-spark ${dir}`} role="img" tabIndex={0}
+      aria-label={`${label(it.k, lang)}: ${agoText(lang, first)} ${fmtPx(it.k, pts[0]![1], it)} → ${fmtPx(it.k, it.px, it)}`}
+      onPointerDown={pick} onPointerMove={(e) => (e.pointerType === "mouse" || e.buttons ? pick(e) : undefined)}
+      onPointerLeave={() => setAt(-1)} onKeyDown={key} onBlur={() => setAt(-1)}>
+      <div className="mk-spark-plot">
+        <svg viewBox={`0 0 ${SW} ${SH}`} preserveAspectRatio="none" aria-hidden="true" focusable="false">
+          <path d={g.area} className="mk-spark-area" />
+          <line x1="0" x2={SW} y1={g.base} y2={g.base} className="mk-spark-base" vectorEffect="non-scaling-stroke" />
+          <path d={g.line} className="mk-spark-line" vectorEffect="non-scaling-stroke" />
+          {at >= 0 ? <line x1={g.xs[at]} x2={g.xs[at]} y1="0" y2={SH} className="mk-spark-cross" vectorEffect="non-scaling-stroke" /> : null}
+        </svg>
+        {p ? (
+          <>
+            <i className="mk-spark-dot" style={{ insetInlineStart: `${left}%`, insetBlockStart: `${(g.ys[at]! / SH) * 100}%` }} />
+            <span className={`mk-spark-tip${left > 60 ? " end" : ""}`} style={{ insetInlineStart: `${left}%` }}>
+              <b>{fmtPx(it.k, p[1], it)}</b> <small>{agoText(lang, ageMin(p[0], now))}</small>
+            </span>
+          </>
+        ) : null}
+      </div>
+      <div className="mk-spark-ax" aria-hidden="true"><span>{agoText(lang, first)}</span><span>{t(lang, "mk_now")}</span></div>
+    </div>
+  );
+}
 
 interface CellProps {
   it: MarketItem; lang: LangCode; on: boolean; flash: "" | "up" | "dn"; note: string; pick: (k: MarketKey) => void;
@@ -159,6 +224,16 @@ export function MarketsStrip({ fallback }: { fallback: ReactNode }) {
   const pick = useCallback((k: MarketKey) => setSel((s) => (s === k ? null : k)), []);
   const asked = useRef(Date.now());
   const noteId = useId();
+  // История за сутки — один запрос на все пункты при первом касании ячейки.
+  const [hist, setHist] = useState<MarketsHist | null>(null);
+  useEffect(() => {
+    if (!sel || hist) return;
+    let alive = true;
+    fetchMarketsHist().then((h) => alive && setHist(h), () => alive && setHist({}));
+    return () => {
+      alive = false;
+    };
+  }, [sel, hist]);
   useEffect(() => {
     let alive = true;
     let timer = 0;
@@ -227,7 +302,17 @@ export function MarketsStrip({ fallback }: { fallback: ReactNode }) {
           ) : <Empty key={k} k={k} lang={lang} />;
         })}
       </div>
-      {note ? <p id={noteId} className="mk-note" role="note">{t(lang, note)}</p> : null}
+      {note && sel ? (
+        <div id={noteId} className="mk-note" role="note">
+          {hist === null ? <div className="mk-spark-wait" aria-hidden="true" />
+            : (() => {
+              const it = byKey.get(sel)!;
+              const pts = sparkSeries(hist[sel], it, m.at);
+              return pts.length >= 2 ? <MiniChart key={sel} it={it} pts={pts} lang={lang} now={now} /> : null;
+            })()}
+          <p className="mk-note-t">{t(lang, note)}</p>
+        </div>
+      ) : null}
       <p className="mk-src">
         <Sources lang={lang} tail={notes.length ? (
           <button type="button" className="mk-i" aria-expanded={open} aria-label={t(lang, "mk_about")}

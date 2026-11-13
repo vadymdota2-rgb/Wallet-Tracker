@@ -129,6 +129,9 @@ class PolicyTest(unittest.TestCase):
         self.assertEqual(tuple(re.findall(r'"([A-Z0-9]+)"', keys.group(1))), mk.KEYS)
         self.assertIn(f"export const MARKET_PX_MAX = {mk.PX_MAX:.0e}".replace("e+0", "e").replace("e+", "e"), ts)
         self.assertIsNone(re.search(r"^\s*import\b", ts, re.M))  # проверка ответа — без импортов
+        # История мини-графика: те же сутки и тот же предел точек, что у сервера.
+        self.assertIn(f"export const HIST_MAX = {mk.HIST_MAX};", ts)
+        self.assertIn(f"export const HIST_SEC = {mk.HIST_SEC:_};", ts)
         # Приложение спрашивает раз в столько, сколько живут цены площадок на сервере.
         self.assertIn(f"export const MARKETS_REFRESH = {int(mk.SLOW['xyz'][0])};", ts)
         self.assertEqual({mk.SLOW[d][0] for d in mk.DEXES}, {mk.SLOW["xyz"][0]})

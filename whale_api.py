@@ -114,6 +114,7 @@ PAID_PATHS = frozenset(
     # продукта, не открытой выдачей для сборщиков).
     "btc/wallet", "dom", "mcap", "etf", "liqcoins", "liqmap", "options", "liqs", "oihist", "calendar", "digest",
     "digest/translate", "digest/comments", "unlocks", "symbols", "big", "chart/liqs", "chart/whales", "markets",
+    "markets/hist",
     ) for p in ("/" + name, "/api/" + name)
 )
 # Цена и срок — те же, что в premium.cpp: бот и приложение обязаны продавать
@@ -10298,6 +10299,8 @@ def wire() -> None:
     wt_mcap.set_cache_dir(CACHE_DIR)
     treasury.set_cache_dir(CACHE_DIR)
     liq_disk_load()
+    markets_disk_load()
+    wt_markets.set_sink(markets_disk_save)
     etf.set_new_fund_hook(etf_new_fund)
     # Прежняя доминация (CoinMarketCap) держала копию в dom-<ключ>.json, прежний
     # «Страх и жадность» (с ценой Binance) — в fng-<ключ>.json; их больше никто
@@ -15420,7 +15423,53 @@ wt_markets.set_sources({
     "aster": _mkt_aster,
 })
 markets_data = wt_markets.markets_data  # запрос человека: только кэш
+markets_hist = wt_markets.history  # история для мини-графика: только память
 markets_refresh = wt_markets.refresh  # обновление кэша: cache_refresher и запуск
+
+# История рынков за сутки (мини-график в ячейке) — копией на диске: после
+# перезапуска график не начинается с пустого места. Модуль сам файлов не
+# трогает: пишет и читает сервер (как копию карт ликвидаций).
+MARKETS_DISK = "markets_hist.json"
+MARKETS_DISK_MAX = 1 << 20  # 9 пунктов × 300 точек — ~60 КБ; больше — не наш файл
+
+
+def markets_disk_load() -> int:
+    """История рынков с диска — в память модуля (каждую точку проверяет
+    wt_markets.history_restore). Вернёт, сколько точек принято."""
+    if not CACHE_DIR:
+        return 0
+    path = os.path.join(CACHE_DIR, MARKETS_DISK)
+    try:
+        if os.path.getsize(path) > MARKETS_DISK_MAX:
+            return 0
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError, RecursionError):
+        return 0
+    return wt_markets.history_restore(data)
+
+
+def markets_disk_save(hist: dict) -> None:
+    """История рынков — на диск (временный файл и подмена); зовёт модуль,
+    когда история поменялась (раз в ~10 минут)."""
+    if not CACHE_DIR or hist.get("ok") is not True:
+        return
+    path = os.path.join(CACHE_DIR, MARKETS_DISK)
+    tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
+    try:
+        raw = json.dumps(hist, separators=(",", ":"), allow_nan=False)
+        if len(raw) > MARKETS_DISK_MAX:
+            return
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(raw)
+        os.replace(tmp, path)
+    except (OSError, TypeError, ValueError) as e:
+        sys.stderr.write(f"[api] копия истории рынков: {e}\n")
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
 
 
 # --- Дайджест ------------------------------------------------------------
@@ -17166,6 +17215,15 @@ class Handler(BaseHTTPRequestHandler):
                     self._json_public("markets", rep)
                 else:
                     self._json(200, rep)
+                return
+            if path in ("/markets/hist", "/api/markets/hist"):
+                # История за сутки для мини-графика — из памяти модуля, один
+                # объект, пока не поменялась: готовые байты, ETag и «304».
+                hist = markets_hist()
+                if hist.get("ok") is True:
+                    self._json_public("markets_hist", hist)
+                else:
+                    self._json(200, hist)
                 return
             if path in ("/liqs", "/api/liqs"):
                 self._json(200, liqs_data(qs.get("win", ["24h"])[0], qs.get("sym", [""])[0],

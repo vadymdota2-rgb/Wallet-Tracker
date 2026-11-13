@@ -2028,6 +2028,12 @@ say("рынки в меню как халвинг — максимальная �
     and "marketsDue(last.current?.at" in _mk_tsx and "export function marketsDue(" in read(f"{APP}/src/lib/markets.ts")
     and all(t in read(f"{APP}/tests/test_markets.py") for t in ("def test_cold_start_race_builds_once(", "def test_memory_and_threads_do_not_grow(", "def test_answer_time_is_when_prices_were_taken("))
     and os.path.isfile(f"{APP}/tools/load-markets.py") and "python tools/load-markets.py 2 3 304" in read(f"{APP}/.github/workflows/tests.yml"))
+say("рынки в меню — мини-график за сутки по касанию ячейки: история из своих сборок (без запросов к источникам), копия на диске с проверкой каждой точки, один ответ на все пункты",
+    "def history_restore(" in read(f"{APP}/wt_markets.py") and "def _record(" in read(f"{APP}/wt_markets.py")
+    and "markets_disk_load()" in api.split("def wire(")[1][:3000] and "wt_markets.set_sink(markets_disk_save)" in api
+    and '"markets/hist",' in api and "function MiniChart(" in _mk_tsx and "export function validHist(" in read(f"{APP}/src/lib/markets.ts")
+    and "def test_history_restore_checks_every_point(" in read(f"{APP}/tests/test_markets.py")
+    and "мини-график за сутки" in read(f"{APP}/tests/e2e/markets.e2e.test.ts"))
 say("рынки в меню — уровень зрелых проектов: журнал сервера только при смене состояния источников (молчит / снова отвечает, тип ошибки без текста, одна чистая строка); сетка всегда 3 × 3 — пропавший пункт «—» на своём месте («нет данных» для чтения с экрана); ячейки перерисовываются по отдельности; высокая контрастность Windows",
     "def _health(" in read(f"{APP}/wt_markets.py") and "v, why = None, type(e).__name__" in read(f"{APP}/wt_markets.py")
     and "def test_journal_only_on_state_changes(" in read(f"{APP}/tests/test_markets.py")
