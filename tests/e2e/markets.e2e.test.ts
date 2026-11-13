@@ -451,6 +451,24 @@ test("свечи на 16 языках при 320 точках: даты и OHLC 
   }
 });
 
+test("длинная подпись свечи (турецкий, хинди, вьетнамский) на 280 точках — не шире графика, у краёв внутри меню", async () => {
+  for (const lang of ["tr", "hi", "vi", "de"]) {
+    const { ctx, page, errors } = await open({ lang, width: 280 });
+    await page.locator(".drawer .mk-px").first().waitFor();
+    await page.locator('.mk-cell[data-k="SP500"]').click();
+    await page.locator(".mk-spark").waitFor();
+    const plot = (await page.locator(".mk-spark-plot").boundingBox())!;
+    for (const f of [0.01, 0.5, 0.99]) {
+      await page.mouse.click(plot.x + plot.width * f, plot.y + 20);
+      const tip = (await page.locator(".mk-spark-tip").boundingBox())!;
+      assert.ok(tip.width <= plot.width + 1, `${lang} ${f}: ${tip.width} > ${plot.width}`);
+      assert.deepEqual(await sparkOverflow(page), [], `${lang} ${f}`);
+    }
+    assert.deepEqual(errors, [], lang);
+    await ctx.close();
+  }
+});
+
 test("свечи справа налево (арабский): старое — справа, касание у правого края — первая свеча", async () => {
   const { ctx, page, errors } = await open({ lang: "ar" });
   await page.locator(".drawer .mk-px").first().waitFor();

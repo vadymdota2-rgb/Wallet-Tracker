@@ -173,6 +173,10 @@ button.mk-cell:focus-visible { outline: 2px solid var(--glow); outline-offset: 1
 .mk-tip-l1 em { font-style: normal; font-size: 9.5px; color: var(--dim); font-variant-numeric: tabular-nums; }
 .mk-tip-l1 em.up { color: var(--up); }
 .mk-tip-l1 em.dn { color: var(--dn); }
+/* Подпись свечи не шире графика: длинные «откр. · макс. · мин.» (турецкий,
+   хинди) переносятся, а не уходят за меню. */
+.mk-spark-tip:has(.mk-tip-l2) { inline-size: max-content; max-inline-size: 100%; white-space: normal; }
+.mk-tip-l1 { white-space: nowrap; }
 .mk-tip-l2 { display: block; margin-block-start: 1px; font-variant-numeric: tabular-nums; }
 .mk-spark-ax { display: flex; justify-content: space-between; font-size: 8.5px; color: var(--dim); opacity: 0.9; }
 /* Пока история грузится — место под график, чтобы пояснение не прыгало. */
