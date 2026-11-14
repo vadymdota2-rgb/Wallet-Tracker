@@ -1399,6 +1399,7 @@ export const hi: Dict = {
   scr_found: "मिले: {n}/{total}",
   scr_fut: "केवल Binance फ़्यूचर्स",
   scr_how: "टाइमफ़्रेम दबाएँ: कोई भी → ▲ खरीद → ▼ बिक्री",
+  scr_late: "कीमत पहले ही काफ़ी बढ़ चुकी है",
   scr_more: "{n} और दिखाएँ",
   scr_none: "फ़िल्टर से कुछ नहीं मिला — शर्तें ढीली करें",
   scr_note: "संकेतकों की रेटिंग, चार्ट की Technical Ratings जैसी — निवेश सलाह नहीं। Binance डेटा, अपडेट {age}",

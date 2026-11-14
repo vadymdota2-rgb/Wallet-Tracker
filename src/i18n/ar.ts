@@ -1399,6 +1399,7 @@ export const ar: Dict = {
   scr_found: "وُجد: {n} من {total}",
   scr_fut: "عقود Binance الآجلة فقط",
   scr_how: "اضغط على الإطار: أي → ▲ شراء → ▼ بيع",
+  scr_late: "السعر تحرّك كثيرًا بالفعل",
   scr_more: "عرض {n} أخرى",
   scr_none: "لا شيء يطابق المرشح — خفّف الشروط",
   scr_note: "تقييم المؤشرات مثل Technical Ratings على الرسم — ليس نصيحة استثمارية. بيانات Binance، حُدّث {age}",

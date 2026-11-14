@@ -1399,6 +1399,7 @@ export const de: Dict = {
   scr_found: "Gefunden: {n} von {total}",
   scr_fut: "Nur Binance-Futures",
   scr_how: "Zeitraum antippen: egal → ▲ Kauf → ▼ Verkauf",
+  scr_late: "Preis ist schon weit gelaufen",
   scr_more: "{n} weitere zeigen",
   scr_none: "Nichts passt zum Filter — Bedingungen lockern",
   scr_note: "Indikator-Rating wie Technical Ratings im Chart — keine Anlageberatung. Daten von Binance, aktualisiert {age}",

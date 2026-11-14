@@ -49,7 +49,7 @@ jobs:
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
       - name: Типы TypeScript (приложение и тесты; модули халвинга, ETF, альтсезона и страха и жадности — в строжайшем режиме)
-        run: npm run typecheck && npm run typecheck:tests && npm run typecheck:halving && npm run typecheck:etf && npm run typecheck:dom && npm run typecheck:fng && npm run typecheck:liqmap && npm run typecheck:markets
+        run: npm run typecheck && npm run typecheck:tests && npm run typecheck:halving && npm run typecheck:etf && npm run typecheck:dom && npm run typecheck:fng && npm run typecheck:liqmap && npm run typecheck:markets && npm run typecheck:screen
       - name: Синтаксис сервера
         run: python -m py_compile whale_api.py wt_halving.py wt_etf.py wt_treasury.py wt_dom.py wt_mcap.py wt_btc.py wt_fng.py wt_liqmap.py wt_markets.py wt_screen.py wt_shield.py wt_digest_img.py
       - name: Анализатор Python (модуль халвинга и его тесты)
@@ -64,6 +64,7 @@ jobs:
           wt_fng.py tests/fng_fake.py tests/test_fng_api.py tests/test_fng_fuzz.py tests/test_fng_security.py tests/test_fng_policy.py tools/mutate-fng.py
           wt_liqmap.py tests/test_liqmap.py tests/test_liqmap_fuzz.py tests/test_liqmap_disk.py tests/test_liqmap_pre.py tests/test_liqmap_http.py tests/test_liqmap_policy.py tests/test_liqmap_security.py tests/test_liqmap_fund.py tests/test_liqmap_levs.py tools/mutate-liqmap.py tools/liqmap-fixture.py
           wt_markets.py tests/test_markets.py tests/test_markets_fuzz.py tests/test_markets_security.py tests/test_markets_policy.py tests/test_markets_route.py tools/mutate-markets.py tools/load-markets.py wt_screen.py tests/test_screen.py tests/test_screen_contract.py
+          tests/test_screen_fuzz.py tests/test_screen_security.py tools/mutate-screen.py
       # Биткоин: SQL собирается из констант модуля (окна, пороги, условия),
       # всё пришедшее снаружи — только параметрами «?» — поэтому без S608;
       # setup() принимает общие механизмы сервера поимённо — без PLR0913.
@@ -165,6 +166,24 @@ jobs:
         run: python tools/mutate-halving.py
 
   # Рынки в меню (~80 мутаций, ~4 минуты) — своим заданием, параллельно.
+  # Мутационная проверка скринера: порча рейтинга, начала сигнала, рамок,
+  # бюджета Binance и журнала обязана ронять тесты (договор с графиком —
+  # через Node, поэтому дольше остальных Python-мутаций).
+  mutation-screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
+        with:
+          node-version: "22.x"
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+        with:
+          python-version: "3.11"
+      - name: Мутационная проверка скринера
+        run: python tools/mutate-screen.py
   mutation-markets:
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -189,6 +208,8 @@ jobs:
           python tools/load-markets.py 2 3 304 | tee -a load.txt
           python tools/load-markets.py 2 3 candles | tee -a load.txt
           python tools/load-markets.py 2 3 304 candles | tee -a load.txt
+          python tools/load-markets.py 2 3 screener | tee -a load.txt
+          python tools/load-markets.py 2 3 304 screener | tee -a load.txt
           if grep -q "сбой\|ни одного" load.txt; then exit 1; fi
           grep -q "'200'" load.txt
           grep -q "'304'" load.txt

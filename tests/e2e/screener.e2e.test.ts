@@ -82,11 +82,11 @@ after(async () => {
   await new Promise((ok) => server?.close(ok));
 });
 
-interface Opts { lang?: string; width?: number; screen?: unknown; screenFor?: (url: string, n: number) => unknown }
+interface Opts { lang?: string; width?: number; screen?: unknown; screenFor?: (url: string, n: number) => unknown; forced?: boolean }
 
 async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; errors: string[]; asked: string[] }> {
   const lang = o.lang ?? "ru";
-  const ctx = await browser.newContext({ viewport: { width: o.width ?? 360, height: 760 }, timezoneId: "UTC" });
+  const ctx = await browser.newContext({ viewport: { width: o.width ?? 360, height: 760 }, timezoneId: "UTC", forcedColors: o.forced ? "active" : "none" });
   const page = await ctx.newPage();
   const errors: string[] = [];
   const asked: string[] = [];
@@ -258,7 +258,10 @@ test("подтверждения и детали: объём, ADX, RSI, риск
   const btc = page.locator(".scr-row").first();
   assert.equal(sp(await btc.locator(".scr-det").textContent()),
     "▲3 ▼1 /4 15m Сигнал 1 ч назад, цена +1,20% RSI 62 ADX 31 Об. ×2,4 ATR 1,2% TP +4,0% SL −2,0% R:R 2,0");
-  assert.equal(sp(await page.locator(".scr-row", { hasText: "ETH" }).locator(".scr-since").textContent()), "Сигнал 30 мин назад, цена −4,00%");
+  // «Поздно» — и словами для чтения с экрана (цвет — не единственный признак).
+  assert.equal(sp(await page.locator(".scr-row", { hasText: "ETH" }).locator(".scr-since").textContent()),
+    "Сигнал 30 мин назад, цена −4,00% — цена уже далеко ушла");
+  assert.match(await page.locator(".scr-row", { hasText: "ETH" }).locator(".scr-sig i").first().getAttribute("aria-label") ?? "", / — цена уже далеко ушла$/);
   assert.match(await page.locator(".scr-row", { hasText: "ETH" }).locator(".scr-since").getAttribute("class") ?? "", /\blate\b/);
   assert.equal(await btc.locator(".scr-agree").getAttribute("aria-label"), "Таймфреймов за покупку: 3, за продажу: 1 из 4");
   assert.equal(await btc.locator(".scr-det .hot").count(), 3); // ADX ≥ 25, объём ≥ ×2, R:R ≥ 2
@@ -379,6 +382,24 @@ test("столбцы: любой таймфрейм можно добавить 
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("wt-chart-v1") || "{}"));
   assert.deepEqual(saved.scrc, []);
   assert.deepEqual(await overflow(page), []);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test("высокая контрастность Windows: выбранное, столбцы и «поздно» — рамкой, а не только фоном и цветом", async () => {
+  const { ctx, page, errors } = await open({ forced: true });
+  await scrBtn(page).click();
+  await page.locator(".scr-row").first().waitFor();
+  await chip(page, "4h").click();
+  await chip(page, "4h").click(); // продажа: остаётся ETH — у него «поздно»
+  const style = (sel: string) => page.locator(sel).first().evaluate((el) => {
+    const c = getComputedStyle(el);
+    return `${c.borderTopStyle} ${c.borderTopWidth}`;
+  });
+  assert.equal(await style(".ch-sheet.scr > .scr-tfs .scr-chip.sell"), "solid 2px");
+  assert.equal(await style(".scr-sig i.late"), "dashed 2px");
+  await page.locator(".scr-cols summary").click();
+  assert.equal(await style(".scr-chip.col.on"), "solid 2px");
   assert.deepEqual(errors, []);
   await ctx.close();
 });

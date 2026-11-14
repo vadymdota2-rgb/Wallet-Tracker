@@ -1399,6 +1399,7 @@ export const tr: Dict = {
   scr_found: "Bulunan: {n}/{total}",
   scr_fut: "Yalnızca Binance vadeli",
   scr_how: "Zaman dilimine dokunun: hepsi → ▲ al → ▼ sat",
+  scr_late: "fiyat zaten çok ilerledi",
   scr_more: "{n} tane daha göster",
   scr_none: "Filtreye uyan yok — koşulları gevşetin",
   scr_note: "Grafikteki Technical Ratings gibi gösterge puanı — yatırım tavsiyesi değildir. Binance verileri, güncelleme: {age}",

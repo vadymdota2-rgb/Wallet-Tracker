@@ -104,6 +104,48 @@ class ParseTest(unittest.TestCase):
         self.assertIsNone(sc.change_24h(bars[:96]))
 
 
+class EdgeTest(unittest.TestCase):
+    """Границы, которые легко сломать незаметно (каждую ловит мутационная проверка)."""
+
+    def test_numbers_and_tickers(self):
+        self.assertTrue(math.isnan(sc._num(True)))  # логическое — не число
+        self.assertEqual(sc.parse_bars([[1, True, True, True, True, True]]), [])
+        tick = [{"symbol": s, "quoteVolume": "1e9"} for s in ("ВТСUSDT", "<B>USDT", "B-TUSDT", "B TUSDT", "ÉTHUSDT")]
+        self.assertEqual(sc.parse_universe(tick), [])  # только латиница и цифры
+        dup = [{"symbol": "BTCUSDT", "quoteVolume": "2e9"}, {"symbol": "BTCUSDT", "quoteVolume": "9e9"}]
+        self.assertEqual(sc.parse_universe(dup), [("BTC", 2e9, "s")])  # повтор — первый
+        low = [{"symbol": "AAAUSDT", "quoteVolume": str(sc.VOL_MIN - 1)}, {"symbol": "BBBUSDT", "quoteVolume": str(sc.VOL_MIN)}]
+        self.assertEqual([c[0] for c in sc.parse_universe(low)], ["BBB"])  # оборот — от VOL_MIN
+        self.assertEqual(sc.VOL_MIN, 1e4)
+
+    def test_volume_spike_is_the_closed_candle_against_20_before(self):
+        bars = [(float(i + 1), 10.0, 11.0, 9.0, 10.0, 1.0) for i in range(80)]
+        bars[-2] = (*bars[-2][:5], 3.0)  # закрытая свеча — втрое больше
+        bars[-1] = (*bars[-1][:5], 500.0)  # текущая (не закрыта) — не считается
+        m = sc.metrics(bars)
+        self.assertEqual(m[5], 3.0)  # type: ignore[index]
+
+    def test_swing_floor_fresh_edge_change_and_journal(self):
+        calm = [(float(i + 1), 100.0, 100.01, 99.99, 100.0, 1.0) for i in range(100)]
+        self.assertEqual(sc.swing_dev(calm), 1.0)  # порог разворота — не меньше 1 %
+        self.assertTrue(sc.fresh("15m", NOW - 3 * 600, NOW))  # ровно три интервала — ещё годен
+        self.assertFalse(sc.fresh("15m", NOW - 3 * 600 - 1, NOW))
+        flat = [(float(i + 1), 1.0, 1.0, 1.0, 1.0, 1.0) for i in range(97)]
+        flat[0] = (1.0, 1.0, 1.0, 1.0, 0.0, 1.0)  # цена 0 сутки назад — изменения нет, а не деление на ноль
+        self.assertIsNone(sc.change_24h(flat))
+        err = io.StringIO()
+        with mock.patch.object(sc.sys, "stderr", err):
+            sc._log("a\nb\x1bc")
+        self.assertEqual(err.getvalue(), "screener: a?b?c\n")  # одной чистой строкой
+
+    def test_most_overdue_timeframe_first(self):
+        st = sc._State()
+        t0 = 100_000.0
+        st.done = {"15m": t0 - 600 * 1.1, "1h": t0 - 1200 * 3, "4h": t0, "1d": t0}
+        with mock.patch.object(sc, "_st", st):
+            self.assertEqual(sc._due(t0)[1], "1h")  # просрочен втрое — раньше, чем 15m на 10 %
+
+
 class SinceTest(unittest.TestCase):
     """Начало сигнала: рейтинг на прошлой свече — тот же, что techRating на
     свечах до неё; ход цены — от закрытия свечи, где сигнал появился."""
@@ -310,27 +352,80 @@ class CacheTest(unittest.TestCase):
             mono[0] += sc.FAIL_WAIT
             sc.build()
             self.assertEqual(self.calls.count("universe"), 2)
-        # Binance недоступен: ABORT_FAILS сбоев подряд — проход прерван, а не 700 запросов.
+        # Binance недоступен: ABORT_FAILS сбоев подряд — проход прерван, а не 700
+        # запросов, и свечи не просим PAUSE секунд (бан 418 растёт, если стучаться).
         sc._st = sc._State()
         many = [{"symbol": f"C{i}USDT", "quoteVolume": "1e8"} for i in range(200)]
         n = [0]
+        alive = [False]
 
         def dead(b, tf, v="s"):
             n[0] += 1
-            raise TimeoutError
+            if not alive[0]:
+                raise TimeoutError("секрет из текста ошибки")
+            return kl(300)
 
+        err = io.StringIO()
         sc.set_sources(universe=lambda: many, klines=dead)
-        with mock.patch.object(sc, "_now", return_value=NOW), mock.patch.object(sc.sys, "stderr", err):
+        mono = [5000.0]
+        with mock.patch.object(sc, "_now", return_value=NOW), mock.patch.object(sc.time, "monotonic", side_effect=lambda: mono[0]), \
+                mock.patch.object(sc.sys, "stderr", err):
             sc.build()
-        self.assertLess(n[0], sc.ABORT_FAILS + sc.WORKERS * 4 + 1)
-        self.assertIn("проход прерван", err.getvalue())
-        # Свечи одной монеты не пришли — остальные на месте; сбой — в журнал типом ошибки.
+            self.assertLess(n[0], sc.ABORT_FAILS + sc.WORKERS * 4 + 1)
+            asked = n[0]
+            for _ in range(int(sc.PAUSE // 60) - 1):  # пауза: каждую минуту — ни одного запроса свечей
+                mono[0] += 60
+                sc._st.done.clear()
+                sc.build()
+            self.assertEqual(n[0], asked)
+            mono[0] += 60  # пауза кончилась
+            sc._st.done.clear()
+            sc.build()
+            self.assertGreater(n[0], asked)
+            for _ in range(5):  # молчит дальше — в журнале по-прежнему одна строка
+                mono[0] += sc.PAUSE
+                sc._st.done.clear()
+                sc.build()
+            alive[0] = True
+            mono[0] += sc.PAUSE
+            sc._st.done.clear()
+            sc.build()
+        self.assertEqual(err.getvalue(), "screener: источник klines не отвечает (TimeoutError)\nscreener: источник klines снова отвечает\n")
+        # Свечи одной монеты не пришли — остальные на месте, журнал молчит (источник жив).
         sc._st = sc._State()
+        err = io.StringIO()
         sc.set_sources(universe=lambda: TICKER, klines=lambda b, tf, v="s": (1 / 0) if b == "ETH" else kl(300))
         with mock.patch.object(sc, "_now", return_value=NOW), mock.patch.object(sc.sys, "stderr", err):
             res = sc.build()
         self.assertEqual([r["s"] for r in res["rows"]], ["BTC", "SOL"])
-        self.assertIn("screener: источник klines не ответил (ZeroDivisionError)", err.getvalue())
+        self.assertEqual(err.getvalue(), "")
+
+    def test_futures_list_missing_keeps_futures_coins(self):
+        spot = TICKER
+        fut = [{"symbol": "NEWUSDT", "quoteVolume": "5e8"}, {"symbol": "BTCUSDT", "quoteVolume": "9e9"}]
+        answer = [fut]
+        sc.set_sources(universe=lambda: spot, futures=lambda: answer[0], klines=lambda b, tf, v="s": kl(300))
+        err = io.StringIO()
+        mono = [1000.0]
+        with mock.patch.object(sc, "_now", return_value=NOW), mock.patch.object(sc.time, "monotonic", side_effect=lambda: mono[0]), \
+                mock.patch.object(sc.sys, "stderr", err):
+            sc.build()
+            self.assertIn(("NEW", 5e8, "f"), sc._st.universe)
+            answer[0] = None  # фьючерсы не ответили на часовом обновлении — NEW остаётся
+            mono[0] += sc.UNIVERSE_EVERY
+            sc.build()
+            self.assertIn(("NEW", 5e8, "f"), sc._st.universe)
+            self.assertEqual([c[0] for c in sc._st.universe if c[2] == "f"], ["NEW"])
+            answer[0] = []  # ответили: фьючерсов только с фьючерсов больше нет — NEW уходит
+            mono[0] += sc.UNIVERSE_EVERY
+            sc.build()
+            self.assertNotIn("NEW", [c[0] for c in sc._st.universe])
+        self.assertIn("screener: источник futures не отвечает (нет ответа)", err.getvalue())
+        # Монета перешла на спот — из запаса фьючерсов не дублируется.
+        old = [("NEW", 5e8, "f")]
+        got = sc.merge_universe(old, [*spot, {"symbol": "NEWUSDT", "quoteVolume": "1"}], None, True)
+        self.assertEqual([c[0] for c in got], ["BTC", "ETH", "SOL"])
+        self.assertEqual(sc.merge_universe(old, None, None, True), [])  # спота нет — нет и списка
 
     def test_dropped_coins_leave_memory(self):
         with mock.patch.object(sc, "_now", return_value=NOW):

@@ -1399,6 +1399,7 @@ export const vi: Dict = {
   scr_found: "Tìm thấy: {n}/{total}",
   scr_fut: "Chỉ có hợp đồng tương lai Binance",
   scr_how: "Chạm khung: bất kỳ → ▲ mua → ▼ bán",
+  scr_late: "giá đã đi xa",
   scr_more: "Xem thêm {n}",
   scr_none: "Không có kết quả — hãy nới điều kiện",
   scr_note: "Xếp hạng chỉ báo như Technical Ratings trên biểu đồ — không phải lời khuyên đầu tư. Dữ liệu Binance, cập nhật {age}",

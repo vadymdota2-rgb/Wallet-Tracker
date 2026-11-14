@@ -30004,5 +30004,23 @@
     "ja": "シグナルは以前から",
     "ko": "오래된 신호",
     "zh": "信号已久"
+  },
+  "scr_late": {
+    "ru": "цена уже далеко ушла",
+    "en": "price has already moved far",
+    "uk": "ціна вже далеко пішла",
+    "de": "Preis ist schon weit gelaufen",
+    "es": "el precio ya se movió mucho",
+    "fr": "le prix a déjà beaucoup bougé",
+    "pt": "o preço já se moveu muito",
+    "pl": "cena już daleko odeszła",
+    "tr": "fiyat zaten çok ilerledi",
+    "id": "harga sudah bergerak jauh",
+    "vi": "giá đã đi xa",
+    "hi": "कीमत पहले ही काफ़ी बढ़ चुकी है",
+    "ar": "السعر تحرّك كثيرًا بالفعل",
+    "ja": "価格はすでに大きく動いた",
+    "ko": "가격이 이미 많이 움직임",
+    "zh": "价格已大幅偏离"
   }
 }

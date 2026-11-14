@@ -336,6 +336,7 @@ function ScrDetails({ row, tf, lang }: { row: ScreenRow; tf: (typeof SCREEN_TFS)
       ? <span key="since" className="scr-since">{t(lang, "scr_since_old")}</span>
       : <span key="since" className={late(row, tf) ? "scr-since late" : "scr-since"}>
         {t(lang, "scr_since", { ago: candlesAgo(lang, tf, k.age), pct: signed(k.mv) })}
+        {late(row, tf) ? <span className="sr-only">{` — ${t(lang, "scr_late")}`}</span> : null}
       </span>);
   }
   return (
@@ -554,7 +555,7 @@ export function ChartScreen({ arg }: ScreenProps) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrOpen, wantKey, waitKey]);
-  useEffect(() => setScrN(SCR_PAGE), [scrQ, filter]);
+  useEffect(() => setScrN(SCR_PAGE), [scrQ, filter, extra, cols]);
   const [fib, setFib] = useState<Fibo | null>(null);
   /** Монету открыли из скринера — Фибо натянуть, как только придут свечи. */
   const fibWant = useRef(false);
@@ -1679,7 +1680,7 @@ export function ChartScreen({ arg }: ScreenProps) {
                             ? t(lang, "scr_since", { ago: candlesAgo(lang, tf, k.age), pct: signed(mv) }) : "") : "";
                           return (
                             <i key={tf} className={`${sg === null ? "na" : `s${sg + 2}`}${late(r, tf) ? " late" : ""}`}
-                              aria-label={`${TF_LABEL[tf]}: ${sg === null ? "—" : t(lang, SIG_KEY[sg + 2]!)}${ago ? `. ${ago}` : ""}`}>
+                              aria-label={`${TF_LABEL[tf]}: ${sg === null ? "—" : t(lang, SIG_KEY[sg + 2]!)}${ago ? `. ${ago}` : ""}${late(r, tf) ? ` — ${t(lang, "scr_late")}` : ""}`}>
                               <small>{TF_LABEL[tf]}</small>{sg === null ? "—" : SIG_MARK[sg + 2]}
                               <em>{mv !== null ? `${mv > 0 ? "+" : mv < 0 ? "−" : ""}${num(Math.abs(mv), Math.abs(mv) < 10 ? 1 : 0, Math.abs(mv) < 10 ? 1 : 0)}%` : ""}</em>
                             </i>

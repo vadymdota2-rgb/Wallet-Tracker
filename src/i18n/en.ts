@@ -1398,6 +1398,7 @@ export const en = {
   scr_found: "Found: {n} of {total}",
   scr_fut: "Binance futures only",
   scr_how: "Tap a timeframe: any → ▲ buy → ▼ sell",
+  scr_late: "price has already moved far",
   scr_more: "Show {n} more",
   scr_none: "Nothing matches the filter — loosen the conditions",
   scr_note: "Indicator rating, like Technical Ratings on the chart, and Fib levels — not investment advice. Binance data, updated {age}",

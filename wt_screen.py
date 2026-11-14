@@ -35,8 +35,10 @@
     + 40; в среднем, когда фильтруют все таймфреймы сразу, — меньше 20 %
     предела, обычно — около 3 %;
   - свечи монет таймфрейма — WORKERS запросами разом; ABORT_FAILS сбоев
-    подряд (Binance недоступен или ограничил) — проход прерывается до
-    следующего срока;
+    подряд (Binance недоступен или ограничил) — проход прерывается, и свечи
+    не просим PAUSE секунд (бан 418 растёт, если стучаться дальше);
+  - список фьючерсов не пришёл — монеты фьючерсов из прошлого списка
+    остаются (иначе пропали бы из скринера на час);
   - запрос человека — screener_data() — только читает готовый ответ; want()
     лишь отмечает, какие таймфреймы нужны (известные, без запросов к сети);
   - те же цифры — тот же объект (сервер отдаёт те же байты и «304»).
@@ -44,6 +46,10 @@
 Рейтинг таймфрейма старше STALE_X его интервалов не отдаётся; монета без
 единого рейтинга — тоже; ничего не пересчитывалось дольше STALE_ALL (Binance
 долго молчит) — «нет данных». Сбой одной монеты не роняет остальные.
+
+Журнал — только смена состояния источника («не отвечает (тип ошибки)» /
+«снова отвечает»), одной чистой строкой не длиннее LOG_MAX: тысяча монет при
+недоступном Binance — одна строка, а не тысяча.
 """
 from __future__ import annotations
 
@@ -80,6 +86,7 @@ MIN_BARS = 60  # меньше — рейтинга нет (как у графи�
 SINCE_MAX = 100  # насколько свечей назад искать начало сигнала (больше — «давно»)
 UNIVERSE_EVERY = 3600.0
 FAIL_WAIT = 60.0  # список монет не получен — снова не раньше
+PAUSE = 300.0  # проход прерван (Binance молчит или ограничил: 429/418) — свечи не просим столько секунд
 PX_MAX = 1e9
 VOL_MIN = 1e4  # оборот за сутки, $: меньше — не берём (мёртвые пары: рейтинг по пустым свечам — шум)
 RESP_MAX = 4 << 20  # байт ответа источника (ticker/24hr — ~1 МБ)
@@ -114,7 +121,9 @@ def parse_bars(raw: object) -> list[Bar]:
         if not isinstance(r, list) or len(r) < 6:
             continue
         t, o, h, lo, c, v = (_num(x) for x in r[:6])
-        if not (t > 0 and 0 < lo <= min(o, c) and max(o, c) <= h < PX_MAX and v >= 0):
+        # Сравнения с NaN ложны, но min/max Python его молча пропускают: «не
+        # число» в цене — мимо явно (иначе NaN дошёл бы до рейтинга и ответа).
+        if _isnan(o) or _isnan(c) or not (t > 0 and 0 < lo <= min(o, c) and max(o, c) <= h < PX_MAX and v >= 0):
             continue
         if out and t <= out[-1][0]:
             continue
@@ -745,6 +754,9 @@ class _State:
         self.px: dict[str, tuple[float, float | None]] = {}
         self.hit: dict[str, Json] | None = None
         self.job: threading.Thread | None = None
+        self.pause = -math.inf  # свечи не просим до (монотонные часы)
+        self.down: dict[str, str] = {}  # источник → тип ошибки, пока молчит
+        self.why: dict[str, str] = {}  # источник → тип последней ошибки
 
 
 _st = _State()
@@ -787,6 +799,20 @@ def want(tfs: object) -> None:
                 _st.want[tf] = t0
 
 
+def _health(name: str, ok: bool) -> None:
+    """Журнал — только когда источник замолчал или снова отвечает."""
+    with _lock:
+        was = _st.down.get(name)
+        if ok:
+            _st.down.pop(name, None)
+        else:
+            _st.down[name] = _st.why.get(name, "нет ответа")
+    if ok and was is not None:
+        _log(f"источник {name} снова отвечает")
+    elif not ok and was is None:
+        _log(f"источник {name} не отвечает ({_st.down.get(name, '?')})")
+
+
 def _active(tf: str, t0: float) -> bool:
     return tf in WARM or t0 - _st.want.get(tf, -math.inf) < ACTIVE_FOR
 
@@ -798,6 +824,8 @@ def _due(t0: float) -> tuple[bool, str | None]:
     with _lock:
         uni = (not _st.universe or t0 - _st.uni_at >= UNIVERSE_EVERY) and t0 - _st.uni_fail >= FAIL_WAIT
         due = [tf for tf in TFS if _active(tf, t0) and t0 - _st.done.get(tf, -math.inf) >= EVERY[tf]]
+        if t0 < _st.pause:
+            return uni, None
         never = [tf for tf in due if tf not in _st.done]
         if never:
             return uni, never[0]
@@ -811,10 +839,15 @@ def _ask(name: str, *args: object) -> object:
     if fn is None:
         return None
     try:
-        return fn(*args)
-    except Exception as e:  # noqa: BLE001 — источник молчит: без него
-        _log(f"источник {name} не ответил ({type(e).__name__})")
+        got = fn(*args)
+    except Exception as e:  # noqa: BLE001 — источник молчит: без него (в журнал — тип, не текст)
+        with _lock:
+            _st.why[name] = type(e).__name__
         return None
+    if got is None:
+        with _lock:
+            _st.why[name] = "нет ответа"
+    return got
 
 
 def _one(coin: tuple[str, str], tf: str) -> tuple[str, list[Bar] | None]:
@@ -826,8 +859,9 @@ def _one(coin: tuple[str, str], tf: str) -> tuple[str, list[Bar] | None]:
 
 def _pass(tf: str, coins: list[tuple[str, str]]) -> int:
     """Пересчитать таймфрейм по всем монетам; вернёт, сколько посчитано.
-    ABORT_FAILS сбоев подряд — прерывается (Binance недоступен)."""
-    ok = fails = 0
+    ABORT_FAILS сбоев подряд — прерывается (Binance недоступен или
+    ограничил), и свечи не просим PAUSE секунд."""
+    ok = fails = got = 0
     step = WORKERS * 4
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
         for k in range(0, len(coins), step):
@@ -836,6 +870,7 @@ def _pass(tf: str, coins: list[tuple[str, str]]) -> int:
                     fails += 1
                     continue
                 fails = 0
+                got += 1
                 m = metrics(bars)
                 if m is None:
                     continue
@@ -845,9 +880,22 @@ def _pass(tf: str, coins: list[tuple[str, str]]) -> int:
                     if tf == "15m":
                         _st.px[base] = (bars[-1][4], change_24h(bars))
             if fails >= ABORT_FAILS:
-                _log(f"{tf}: {fails} сбоев подряд — проход прерван")
+                with _lock:
+                    _st.pause = time.monotonic() + PAUSE
                 break
+    _health("klines", fails < ABORT_FAILS and got > 0)
     return ok
+
+
+def merge_universe(old: list[Coin], spot: object, fut: object, fut_failed: bool) -> list[Coin]:
+    """Новый список монет; фьючерсы не пришли — монеты фьючерсов из прошлого
+    списка остаются (кроме тех, что теперь есть на споте); по обороту."""
+    got = parse_universe(spot, fut)
+    if not got or not fut_failed:
+        return got
+    have = {b for b, _ in _tickers(spot, 0.0)} | {b for b, _, _ in got}
+    keep = [c for c in old if c[2] == "f" and c[0] not in have][:FUT_MAX]
+    return sorted(got + keep, key=lambda x: -x[1])
 
 
 def build() -> dict[str, Json]:
@@ -856,7 +904,15 @@ def build() -> dict[str, Json]:
     t0 = time.monotonic()
     uni_due, tf = _due(t0)
     if uni_due:
-        got = parse_universe(_ask("universe"), _ask("futures") if "futures" in _src else None)
+        spot = _ask("universe")
+        fut = _ask("futures") if "futures" in _src else None
+        with _lock:
+            old = list(_st.universe)
+        fut_failed = "futures" in _src and not isinstance(fut, list)  # не список — не ответ (пустой — ответ)
+        got = merge_universe(old, spot, fut, fut_failed)
+        _health("universe", bool(got))
+        if "futures" in _src:
+            _health("futures", not fut_failed)
         with _lock:
             if got:
                 _st.universe, _st.uni_at = got, t0
@@ -865,8 +921,7 @@ def build() -> dict[str, Json]:
     with _lock:
         coins = [(b, venue) for b, _, venue in _st.universe]
     if tf and coins:
-        if not _pass(tf, coins):
-            _log(f"{tf}: ни одной монеты")
+        _pass(tf, coins)
         with _lock:
             _st.done[tf] = t0
     with _lock:

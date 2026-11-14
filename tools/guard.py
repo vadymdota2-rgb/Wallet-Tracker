@@ -2064,6 +2064,16 @@ say("скринер — не заходить поздно: у каждого т
     and 'className="scr-cols"' in read(f"{APP}/src/screens/ChartScreen.tsx")
     and "столбцы: любой таймфрейм можно добавить или убрать" in read(f"{APP}/tests/e2e/screener.e2e.test.ts")
     and all(k in _i18n for k in ("scr_since", "scr_since_old", "scr_x_late", "scr_cols", "scr_sort_fresh", "scr_ago_d")))
+_ci_all = read(f"{APP}/.github/workflows/tests.yml")
+say("скринер — уровень зрелых проектов: фаззинг сервера и свойства приложения, атаки на маршрут и источники, мутационная проверка в CI, строгий TypeScript, нагрузка; журнал — только смена состояния источника; после прерванного прохода — пауза (бан 418 не растёт); список фьючерсов не пришёл — прошлые остаются; NaN в цене — не свеча",
+    os.path.isfile(f"{APP}/tests/test_screen_fuzz.py") and os.path.isfile(f"{APP}/tests/test_screen_security.py")
+    and os.path.isfile(f"{APP}/tests/screener.props.test.ts") and os.path.isfile(f"{APP}/tools/mutate-screen.py")
+    and os.path.isfile(f"{APP}/tools/typecheck-screen.mjs") and "npm run typecheck:screen" in _ci_all
+    and "  mutation-screen:\n" in _ci_all and "python tools/load-markets.py 2 3 screener" in _ci_all
+    and "def _health(" in read(f"{APP}/wt_screen.py") and "PAUSE = " in read(f"{APP}/wt_screen.py")
+    and "def merge_universe(" in read(f"{APP}/wt_screen.py") and "if _isnan(o) or _isnan(c) or not (" in read(f"{APP}/wt_screen.py")
+    and "@media (forced-colors: active)" in read(f"{APP}/src/styles/app.css").split(".scr-det .scr-since.late")[1][:1500]
+    and "scr_late" in _i18n)
 say("рынки в меню — уровень зрелых проектов: журнал сервера только при смене состояния источников (молчит / снова отвечает, тип ошибки без текста, одна чистая строка); сетка всегда 3 × 3 — пропавший пункт «—» на своём месте («нет данных» для чтения с экрана); ячейки перерисовываются по отдельности; высокая контрастность Windows",
     "def _health(" in read(f"{APP}/wt_markets.py") and "v, why = None, type(e).__name__" in read(f"{APP}/wt_markets.py")
     and "def test_journal_only_on_state_changes(" in read(f"{APP}/tests/test_markets.py")

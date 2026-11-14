@@ -7,10 +7,12 @@
 (готовый, как из кэша) и проверка подписки (как из памяти _premium_memo):
 базы и сеть не трогаются.
 
-    python3 tools/load-markets.py [соединений=3] [секунд=5] [304] [candles]
+    python3 tools/load-markets.py [соединений=3] [секунд=5] [304] [candles | screener]
 
 «304» — у каждого телефона та же копия (If-None-Match); «candles» — дневные
-свечи для мини-графика (/api/markets/candles: 9 пунктов × 30 свечей).
+свечи для мини-графика (/api/markets/candles: 9 пунктов × 30 свечей);
+«screener» — скринер графика (/api/screener?tf=1m: 950 монет × 4
+таймфрейма со всеми метриками — самый тяжёлый общий ответ).
 Печатает запросы в секунду и задержку (медиана и худший 1 %). Клиенты работают на той же
 машине и отнимают у сервера ядра — на сервере цифры выше.
 """
@@ -41,6 +43,12 @@ _T = int(time.time())
 _D0 = _T - _T % 86_400
 CANDLES = {"ok": True, "at": _T, "days": {k: [[_D0 - (29 - i) * 86_400, 1234.5, 1240.25, 1228.75, round(1234.5 + (i % 17) * 0.37, 2)]
                                               for i in range(30)] for k in mk.KEYS}}
+
+
+SCREENER = {"ok": True, "at": _T, "tfs": ["15m", "1h", "4h", "1d"], "by": "Binance", "rows": [
+    {"s": f"C{i}", "px": 1234.5678, "ch": -1.23, "vol": 10**9 - i, "r": {
+        tf: [0.345, 0.27, 0.42, 55.4, 27.1, 1.35, 2.13, 3.47, -2.81, 1.23, 7] for tf in ("15m", "1h", "4h", "1d")},
+     **({"f": 1} if i % 4 == 0 else {})} for i in range(950)]}
 
 
 def init_data(uid: int) -> str:
@@ -82,7 +90,10 @@ def main() -> None:
     api.BOT_TOKEN, api.API_KEY = TOKEN, "k"
     api.markets_data = lambda: REPLY
     api.markets_candles = lambda: CANDLES
-    path = "/api/markets/candles" if "candles" in sys.argv[3:] else "/api/markets"
+    api.screener_data = lambda: SCREENER
+    api.screener_want = lambda tfs: None
+    path = ("/api/markets/candles" if "candles" in sys.argv[3:] else "/api/screener?tf=1m" if "screener" in sys.argv[3:]
+            else "/api/markets")
     api.chat_premium = lambda chat: True
     api.sys.stderr = open(os.devnull, "w")  # noqa: SIM115 — журнал сервера не нужен
     httpd = shield.ShieldServer(("127.0.0.1", 0), api.Handler)

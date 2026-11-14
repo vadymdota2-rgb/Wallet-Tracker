@@ -1399,6 +1399,7 @@ export const es: Dict = {
   scr_found: "Encontradas: {n} de {total}",
   scr_fut: "Solo futuros de Binance",
   scr_how: "Toca un marco: cualquiera → ▲ compra → ▼ venta",
+  scr_late: "el precio ya se movió mucho",
   scr_more: "Mostrar {n} más",
   scr_none: "Nada coincide con el filtro — relaja las condiciones",
   scr_note: "Calificación de indicadores, como Technical Ratings del gráfico; no es asesoramiento de inversión. Datos de Binance, actualizado {age}",

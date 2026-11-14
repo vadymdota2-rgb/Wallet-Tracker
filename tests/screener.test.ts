@@ -24,7 +24,7 @@ test("ответ скринера: только годные строки, ре�
     ok: true, at: NOW - 60, tfs: ["15m", "1h", "1m", "evil"], rows: [
       { s: "BTC", px: 100000, ch: 1.5, r: { "15m": 0.6, "1h": -0.3, "4h": 2, "1d": "x", "1m": 0.2, "2m": 0.5 } },
       { s: "BTC", px: 1, ch: 0, r: { "15m": 0.1 } }, // повтор — первый
-      { s: "<b>", px: 1, ch: 0, r: { "15m": 0.1 } },
+      { s: "<B>", px: 1, ch: 0, r: { "15m": 0.1 } },
       { s: "ETH", px: -1, ch: 1e9, r: { "15m": -0.2 } },
       { s: "SOL", r: { "15m": null } }, // ни одного рейтинга — мимо
       { s: "DOGE", r: "x" },
@@ -39,7 +39,8 @@ test("ответ скринера: только годные строки, ре�
   assert.deepEqual(v.warm, ["1m", "15m", "1h"]); // только известные таймфреймы, по порядку
   assert.equal(SCREEN_TFS.length, 14);
   for (const bad of [null, "x", { ok: false }, { ok: true, at: NOW, rows: [] }, { ok: true, at: NOW - 4 * 86_400, rows: raw.rows },
-    { ok: true, at: NOW + 2 * 86_400, rows: raw.rows }, { ok: true, at: 1.5, rows: raw.rows }]) {
+    { ok: true, at: NOW + 2 * 86_400, rows: raw.rows }, { ok: true, at: 1.5, rows: raw.rows }, { ok: false, at: NOW, rows: raw.rows },
+    { ok: "true", at: NOW, rows: raw.rows }, { ok: 1, at: NOW, rows: raw.rows }, { ok: true, at: NOW - 60.5, rows: raw.rows }]) {
     assert.equal(validScreener(bad, NOW), null, JSON.stringify(bad).slice(0, 60));
   }
 });
@@ -180,6 +181,10 @@ test("метрики в ответе: массив [рейтинг, MA, осц.,
   const [a, b] = v.rows as [ScreenRow, ScreenRow];
   assert.equal(a.fut, true);
   assert.equal(b.fut, false);
+  // Фьючерсы — только «f»: 1 (не «1», не true).
+  for (const f of ["1", true, 2]) {
+    assert.equal(validScreener({ ok: true, at: NOW, rows: [{ s: "Z", f, r: { "15m": 0.2 } }] }, NOW)!.rows[0]!.fut, false, String(f));
+  }
   assert.deepEqual(a.m["15m"], { ma: 0.5, osc: 0.3, rsi: 61.2, adx: 27.5, volx: 2.4, atrp: 1.1, tp: 3.5, sl: -1.75, mv: null, age: null });
   assert.equal(a.r["15m"], 0.4);
   assert.equal(a.r["1h"], -0.2);
@@ -207,6 +212,8 @@ test("подтверждения на основном таймфрейме: о�
   assert.equal(confirms(mrow("M", { rsi: 30 }), tf, { ...EXTRA_ANY, rsi: "mid" }), true);
   assert.equal(confirms(mrow("M", { rsi: 70 }), tf, { ...EXTRA_ANY, rsi: "mid" }), true);
   assert.equal(confirms(mrow("M", { rsi: 70.1 }), tf, { ...EXTRA_ANY, rsi: "ob" }), true);
+  assert.equal(confirms(mrow("M", { rsi: 70.1 }), tf, { ...EXTRA_ANY, rsi: "mid" }), false);
+  assert.equal(confirms(mrow("M", { rsi: 29.9 }), tf, { ...EXTRA_ANY, rsi: "mid" }), false);
   assert.equal(confirms(r, tf, { ...EXTRA_ANY, rr: 2 }), true);
   assert.equal(confirms(r, tf, { ...EXTRA_ANY, rr: 3 }), false);
   for (const x of [{ vol: 1.5 }, { adx: 20 }, { rsi: "os" as const }, { rr: 1.5 }]) {
@@ -268,6 +275,9 @@ test("ход с сигнала: со знаком сигнала, давно и 
   assert.equal(chase(by("A"), "1h"), null);
   assert.equal(late(by("A"), "15m"), true); // 2,5 % > 2 × ATR 1 %
   assert.equal(late(by("E"), "15m"), false);
+  // Между одним и двумя ATR — ещё не поздно.
+  assert.equal(late(mrow("L", { mv: 1.5, age: 2, atrp: 1 }), "15m"), false);
+  assert.equal(late(mrow("L", { mv: 2.01, age: 2, atrp: 1 }), "15m"), true);
   assert.equal(late(by("C"), "15m"), false);
 });
 

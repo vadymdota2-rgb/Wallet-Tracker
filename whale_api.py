@@ -15523,7 +15523,7 @@ def _screen_get(path: str, timeout: float = 15.0):
             if r.status != 200:
                 return None  # 429/418 — Binance ограничил: модуль прервёт проход
             return json.loads(body)
-        except (http.client.HTTPException, OSError, ValueError):
+        except (http.client.HTTPException, OSError, ValueError, RecursionError):  # RecursionError — вложенность-бомба в JSON
             conn.close()
             _screen_tls.conn = None
             if attempt:

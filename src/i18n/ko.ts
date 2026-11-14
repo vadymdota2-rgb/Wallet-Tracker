@@ -1399,6 +1399,7 @@ export const ko: Dict = {
   scr_found: "찾음: {n}/{total}",
   scr_fut: "Binance 선물만",
   scr_how: "시간대를 누르세요: 전체 → ▲ 매수 → ▼ 매도",
+  scr_late: "가격이 이미 많이 움직임",
   scr_more: "{n}개 더 보기",
   scr_none: "조건에 맞는 코인이 없습니다 — 조건을 완화하세요",
   scr_note: "차트의 Technical Ratings와 같은 지표 평가이며 투자 조언이 아닙니다. Binance 데이터, 업데이트 {age}",

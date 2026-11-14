@@ -1399,6 +1399,7 @@ export const ja: Dict = {
   scr_found: "該当：{n}/{total}",
   scr_fut: "Binance先物のみ",
   scr_how: "時間足をタップ：すべて → ▲ 買い → ▼ 売り",
+  scr_late: "価格はすでに大きく動いた",
   scr_more: "さらに{n}件表示",
   scr_none: "条件に合う銘柄がありません。条件を緩めてください",
   scr_note: "チャートのTechnical Ratingsと同じ指標の評価で、投資助言ではありません。Binanceのデータ、更新{age}",

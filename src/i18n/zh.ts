@@ -1399,6 +1399,7 @@ export const zh: Dict = {
   scr_found: "找到：{n}/{total}",
   scr_fut: "仅Binance合约",
   scr_how: "点击周期：任意 → ▲ 买入 → ▼ 卖出",
+  scr_late: "价格已大幅偏离",
   scr_more: "再显示{n}个",
   scr_none: "没有符合条件的币 — 请放宽条件",
   scr_note: "与图表Technical Ratings相同的指标评级，并非投资建议。数据来自Binance，更新于{age}",

@@ -1946,6 +1946,18 @@ html.ch-full .screen.full {
 .scr-chip.col.on { color: var(--glow); background: rgb(31 142 255 / 0.16); border-color: rgb(31 142 255 / 0.6); }
 .scr-det .scr-since { color: var(--ink); }
 .scr-det .scr-since.late { color: var(--warn); font-weight: 600; }
+.scr-det .sr-only {
+  position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+/* Высокая контрастность (Windows): фоны убирает система — выбранное в фильтре,
+   столбцы, точка «считается» и «поздно» видны рамкой и цветом системы. */
+@media (forced-colors: active) {
+  .scr-chip.buy, .scr-chip.sell, .scr-chip.col.on, .scr-presets button.on { border: 2px solid Highlight; }
+  .scr-chip.wait::after { forced-color-adjust: none; background: CanvasText; }
+  .scr-sig i { border: 1px solid CanvasText; }
+  .scr-sig i.late { border: 2px dashed Highlight; }
+  .scr-det .scr-since.late { text-decoration: underline wavy; }
+}
 /* Подтверждения по основному таймфрейму: объём, сила тренда, RSI, риск/прибыль, порядок. */
 .scr-x { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .scr-x-ttl { grid-column: 1 / -1; margin: 2px 0 0; color: var(--dim); font-size: 12px; font-weight: 600; }

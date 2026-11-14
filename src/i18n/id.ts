@@ -1399,6 +1399,7 @@ export const id: Dict = {
   scr_found: "Ditemukan: {n} dari {total}",
   scr_fut: "Hanya futures Binance",
   scr_how: "Ketuk timeframe: semua → ▲ beli → ▼ jual",
+  scr_late: "harga sudah bergerak jauh",
   scr_more: "Tampilkan {n} lagi",
   scr_none: "Tidak ada yang cocok — longgarkan syarat",
   scr_note: "Peringkat indikator seperti Technical Ratings di grafik — bukan saran investasi. Data Binance, diperbarui {age}",

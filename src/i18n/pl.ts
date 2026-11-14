@@ -1399,6 +1399,7 @@ export const pl: Dict = {
   scr_found: "Znaleziono: {n} z {total}",
   scr_fut: "Tylko kontrakty futures Binance",
   scr_how: "Dotknij interwału: dowolny → ▲ kupno → ▼ sprzedaż",
+  scr_late: "cena już daleko odeszła",
   scr_more: "Pokaż jeszcze {n}",
   scr_none: "Nic nie pasuje do filtra — złagodź warunki",
   scr_note: "Ocena wskaźników jak Technical Ratings na wykresie — nie jest poradą inwestycyjną. Dane Binance, zaktualizowano {age}",
