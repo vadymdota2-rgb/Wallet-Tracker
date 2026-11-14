@@ -104,7 +104,12 @@ class MarketsRouteTest(unittest.TestCase):
             mk._st.days.clear()
             self.assertEqual(api.markets_disk_load(), 0)  # чужой огромный файл — мимо
         with open(os.path.join(ROOT, "whale_api.py"), encoding="utf-8") as f:
-            self.assertIn("markets_disk_load()", f.read().split("def wire(")[1][:3000])  # при запуске службы
+            wire = f.read().split("def wire(")[1][:3000]
+        self.assertIn("markets_disk_load()", wire)  # при запуске службы
+        # Файл прежнего мини-графика (точки за сутки) при запуске стирается.
+        self.assertIn("markets_hist.json", api.OLD_CACHE_FILES)
+        self.assertIn("or old in OLD_CACHE_FILES:", wire)
+        self.assertNotIn(api.MARKETS_DISK, api.OLD_CACHE_FILES)
 
     def test_for_subscribers_only(self):
         code, _, body, _ = get(GOOD, prem=False)

@@ -5,6 +5,7 @@
  * показывал публичные данные, будто всё в порядке.
  */
 import { forgetAll } from "../lib/memo";
+import { dropPaidCopies } from "../lib/storage";
 import { create } from "zustand";
 import type {
   AlertRow, Bootstrap, Coins, FeedRow, Flow, Fund, FundN, Ls, Me, Rank, RotSums, Trades,
@@ -185,6 +186,8 @@ export const useLive = create<LiveState>((set, get) => ({
        сервер данных не отдаёт. Забываем, подгрузка соберёт заново. */
     const was = get().me.plan;
     if (d.me?.plan && was !== d.me.plan) forgetAll();
+    // Премиум закончился — и копии платных ответов на устройстве долой.
+    if (was === "premium" && d.me?.plan && d.me.plan !== "premium") dropPaidCopies();
     // Сервер не успел собрать профиль (холодный старт) — это не «не вошёл»:
     // оставляем показанное, а сервер скоро переспросим (lib/sync.ts).
     const meLate = Array.isArray(d.partial) && d.partial.some((p) => p.startsWith("me:"));

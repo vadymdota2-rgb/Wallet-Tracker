@@ -474,6 +474,28 @@ class CacheTest(unittest.TestCase):
         self.assertEqual(snap["ok"], True)
         self.assertEqual(snap["days"]["DXY"], [[FRI - FRI % 86400, 99.0, 99.0, 99.0, 99.0]])
 
+    def test_hard_cleanup_of_candles(self):
+        # Источники молчат дольше STALE_MAX — свечи, как и цены, не отдаются;
+        # сервер стоял неделями — свои свечи старше DAYS_KEEP дней уходят
+        # сразу при первой новой цене, а не по одной в день.
+        mk.set_sources({name: (lambda v=v: v) for name, v in PARTS.items()})
+        mono = [1000.0]
+        with mock.patch.object(mk, "_now", return_value=NOW), mock.patch.object(mk.time, "monotonic", side_effect=lambda: mono[0]):
+            mk.build()
+            self.assertTrue(mk.candles()["ok"])
+            mono[0] += mk.STALE_MAX - 1
+            self.assertTrue(mk.candles()["ok"])
+            mono[0] += 2
+            self.assertEqual(mk.candles(), {"ok": False, "error": "no_data"})
+            self.assertEqual(mk.markets_data(0), {"ok": False, "error": "no_data"})
+        with mk._lock:
+            mk._st.days["GOLD"] = {DAY0 - i * 86400: (4000.0, 4000.0, 4000.0, 4000.0) for i in range(10)}
+            mk._st.seen.clear()
+            mk._record({"ok": True, "at": NOW + 60 * 86400, "items": [{"k": "GOLD", "px": 4100.0, "prev": 4000.0}]})
+            self.assertEqual(list(mk._st.days["GOLD"]), [DAY0 + 60 * 86400])
+            mk._record({"ok": True, "at": NOW + 61 * 86400, "items": [{"k": "GOLD", "px": 4100.0, "prev": 4000.0}]})
+            self.assertEqual(len(mk._st.days["GOLD"]), 2)  # свежие дни не трогаются
+
     def test_candles_reply_sources_then_own(self):
         # Ответ свечей: у рынков Hyperliquid — их дневные свечи (DAYS_SHOW
         # последних), у DXY — из часовых свечей валют, у BTC.D — из истории

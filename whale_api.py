@@ -10303,15 +10303,20 @@ def wire() -> None:
     wt_markets.set_sink(markets_disk_save)
     etf.set_new_fund_hook(etf_new_fund)
     # Прежняя доминация (CoinMarketCap) держала копию в dom-<ключ>.json, прежний
-    # «Страх и жадность» (с ценой Binance) — в fng-<ключ>.json; их больше никто
+    # «Страх и жадность» (с ценой Binance) — в fng-<ключ>.json, прежний
+    # мини-график рынков — точки за сутки в markets_hist.json; их больше никто
     # не читает: убираем, чтобы не лежали на диске вечно.
     try:
         for old in os.listdir(CACHE_DIR):
-            if old.startswith(("dom-", "fng-")) and old.endswith(".json"):
+            if (old.startswith(("dom-", "fng-")) and old.endswith(".json")) or old in OLD_CACHE_FILES:
                 os.remove(os.path.join(CACHE_DIR, old))
     except OSError:
         pass
     tmp_sweep(CACHE_DIR)
+
+
+# Файлы прежних версий в CACHE_DIR, которые больше никто не читает.
+OLD_CACHE_FILES = frozenset({"markets_hist.json"})
 
 
 # Копии пишутся во «файл.json.<pid>[.<поток>].tmp» и подменяют настоящий

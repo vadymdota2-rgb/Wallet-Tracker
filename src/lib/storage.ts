@@ -54,6 +54,17 @@ function put(key: string, v: object): void {
   else localStorage.removeItem(key);
 }
 
+/** Подписка закончилась — копии платных ответов на устройстве стираются
+ *  сразу, а не по сроку: данные источников (CoinMarketCap и др.) — только
+ *  для подписчиков, и показывать их из запаса бывшему подписчику нельзя. */
+export function dropPaidCopies(): void {
+  try {
+    for (const key of [...SAVED_MAPS, "wt-unlocks-v1"]) localStorage.removeItem(key);
+  } catch {
+    // Хранилище закрыто — копий там и нет.
+  }
+}
+
 export function sweepStorage(): void {
   try {
     const now = Date.now();

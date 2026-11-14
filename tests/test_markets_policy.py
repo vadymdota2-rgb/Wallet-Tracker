@@ -121,6 +121,17 @@ class PolicyTest(unittest.TestCase):
         src = read("whale_api.py")
         self.assertIn("        _ASTER_TICK = (now(), tick)", src.split("def fund_aster() -> list:")[1].split("\ndef ")[0])
 
+    def test_paid_copies_dropped_when_premium_ends(self):
+        # Права: данные рынков (CoinMarketCap и др.) — только подписчикам.
+        # Подписка закончилась — копии на устройстве стираются сразу, а не
+        # через шесть часов; память ответов — тоже.
+        live = read("src", "store", "live.ts")
+        self.assertIn('    if (was === "premium" && d.me?.plan && d.me.plan !== "premium") dropPaidCopies();', live)
+        self.assertIn("    if (d.me?.plan && was !== d.me.plan) forgetAll();", live)
+        storage = read("src", "lib", "storage.ts")
+        self.assertIn('for (const key of [...SAVED_MAPS, "wt-unlocks-v1"]) localStorage.removeItem(key);', storage)
+        self.assertIn('"wt-markets-v1",\n];', storage)  # рынки — среди платных копий
+
     def test_paid_route_is_not_cached_on_the_way(self):
         src = read("whale_api.py")
         handler = src.split("    def _json(self, code: int, obj: dict):")[1][:1600]

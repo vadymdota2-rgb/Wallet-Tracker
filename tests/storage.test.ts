@@ -24,7 +24,7 @@ class Mem {
 
 const mem = new Mem();
 (globalThis as { localStorage?: unknown }).localStorage = mem;
-const { sweepStorage } = await import("../src/lib/storage.ts");
+const { dropPaidCopies, sweepStorage } = await import("../src/lib/storage.ts");
 
 const DAY = 86_400_000;
 const copy = (agoMs: number) => JSON.stringify({ all: { at: Date.now() - agoMs, v: { ok: true } } });
@@ -66,4 +66,17 @@ test("чужие для приложения «wt-…» ключи стираю�
   sweepStorage();
   assert.equal(mem.getItem("wt-dom-v1"), null);
   assert.equal(mem.getItem("tg-web-app"), "x");
+});
+
+test("подписка закончилась — копии платных ответов стираются сразу, настройки и чужие ключи остаются", () => {
+  mem.m.clear();
+  for (const k of ["wt-markets-v1", "wt-mcap-v1", "wt-etf-v1", "wt-unlocks-v1", "wt-digest-v1"]) mem.setItem(k, copy(60_000));
+  mem.setItem("wt-etf-range", '"1y"');
+  mem.setItem("wt-miniapp-v7", "{}");
+  mem.setItem("tg-key", "x");
+  dropPaidCopies();
+  for (const k of ["wt-markets-v1", "wt-mcap-v1", "wt-etf-v1", "wt-unlocks-v1", "wt-digest-v1"]) assert.equal(mem.getItem(k), null, k);
+  assert.equal(mem.getItem("wt-etf-range"), '"1y"');
+  assert.equal(mem.getItem("wt-miniapp-v7"), "{}");
+  assert.equal(mem.getItem("tg-key"), "x");
 });

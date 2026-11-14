@@ -530,7 +530,7 @@ class _State:
         # источники из RETRY (по монотонным часам).
         self.days: dict[str, dict[int, Candle]] = {}
         self.seen: dict[str, int] = {}
-        self.cand: dict[str, Json] | None = None
+        self.cand: tuple[float, dict[str, Json]] | None = None
         self.tried: dict[str, float] = {}
         self.sink: Callable[[dict[str, Json]], None] | None = None
 
@@ -715,8 +715,9 @@ def build() -> dict[str, Json]:
             _st.hit = (time.monotonic(), res)
             grew, sink = _record(res), _st.sink
             cand = merge_days(ext, _st.days, res["at"])
-            if cand != _st.cand:  # те же свечи — тот же объект (те же байты и ETag)
-                _st.cand = cand
+            if _st.cand and cand == _st.cand[1]:  # те же свечи — тот же объект (те же байты и ETag)
+                cand = _st.cand[1]
+            _st.cand = (time.monotonic(), cand)
         else:
             _st.fail = time.monotonic()
             grew, sink = False, None
@@ -750,7 +751,9 @@ def _record(res: dict[str, Json]) -> bool:
         if new != c:
             days[d] = new
             changed = True
-        while len(days) > DAYS_KEEP:
+        # Не больше DAYS_KEEP свечей и не старше DAYS_KEEP дней (сервер
+        # стоял неделями — старые дни уходят сразу, а не по одному в день).
+        while days and (len(days) > DAYS_KEEP or min(days) < d - DAYS_KEEP * DAY):
             del days[min(days)]
     return changed
 
@@ -758,10 +761,11 @@ def _record(res: dict[str, Json]) -> bool:
 def candles() -> dict[str, Json]:
     """Ответ /api/markets/candles: {"ok", "at", "days": {пункт: [[день,
     открытие, максимум, минимум, закрытие], …]}} — из памяти; пока свечи не
-    менялись — тот же объект (сервер отдаёт те же байты и «304»). Нет —
-    «нет данных»."""
+    менялись — тот же объект (сервер отдаёт те же байты и «304»). Нет или
+    старше STALE_MAX (источники долго молчат, как у цен) — «нет данных»."""
     with _lock:
-        return _st.cand or {"ok": False, "error": "no_data"}
+        hit = _live(_st.cand)
+        return hit[1] if hit else {"ok": False, "error": "no_data"}
 
 
 def days_snapshot() -> dict[str, Json]:
