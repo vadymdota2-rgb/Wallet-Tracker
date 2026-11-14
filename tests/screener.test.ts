@@ -2,8 +2,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  ANY, badgeTfs, chartTf, find, matches, nextWant, pending, picked, PRESETS, SCREEN_TFS, SCREEN_WARM, screen, signal,
-  validFilter, validScreener, wanted, type ScreenRow,
+  ANY, badgeTfs, chartTf, confirms, consensus, EXTRA_ANY, find, mainTf, matches, nextWant, pending, picked, PRESETS, rr,
+  SCREEN_TFS, SCREEN_WARM, screen, signal, validExtra, validFilter, validScreener, wanted, type Metrics, type ScreenRow,
 } from "../src/lib/screener.ts";
 import { FIBO_LEVELS, fiboFromLow, fiboPlan, swingDev } from "../src/lib/fibo.ts";
 import { rateKey } from "../src/chart/indicators.ts";
@@ -12,7 +12,11 @@ import type { Bar } from "../src/chart/data.ts";
 const NOW = 1_794_100_000;
 const NONE = Object.fromEntries(SCREEN_TFS.map((tf) => [tf, null])) as ScreenRow["r"];
 const row = (s: string, r: Partial<Record<(typeof SCREEN_TFS)[number], number | null>>): ScreenRow =>
-  ({ s, px: 1, ch: 0, r: { ...NONE, ...r } });
+  ({ s, px: 1, ch: 0, fut: false, r: { ...NONE, ...r }, m: {} });
+const NOM: Metrics = { ma: null, osc: null, rsi: null, adx: null, volx: null, atrp: null, tp: null, sl: null };
+/** Строка с метриками на 15m. */
+const mrow = (s: string, k: Partial<Metrics>, ch: number | null = 0, r15 = 0.3): ScreenRow =>
+  ({ s, px: 1, ch, fut: false, r: { ...NONE, "15m": r15 }, m: { "15m": { ...NOM, ...k } } });
 
 test("ответ скринера: только годные строки, рейтинг от −1 до +1, повторы и мусор — мимо", () => {
   const raw = {
@@ -28,8 +32,8 @@ test("ответ скринера: только годные строки, ре�
   };
   const v = validScreener(raw, NOW)!;
   assert.deepEqual(v.rows, [
-    { s: "BTC", px: 100000, ch: 1.5, r: { ...NONE, "15m": 0.6, "1h": -0.3, "1m": 0.2 } },
-    { s: "ETH", px: null, ch: null, r: { ...NONE, "15m": -0.2 } },
+    { s: "BTC", px: 100000, ch: 1.5, fut: false, r: { ...NONE, "15m": 0.6, "1h": -0.3, "1m": 0.2 }, m: {} },
+    { s: "ETH", px: null, ch: null, fut: false, r: { ...NONE, "15m": -0.2 }, m: {} },
   ]);
   assert.deepEqual(v.warm, ["1m", "15m", "1h"]); // только известные таймфреймы, по порядку
   assert.equal(SCREEN_TFS.length, 14);
@@ -155,4 +159,81 @@ test("порог разворота — три ATR к цене, от 1 до 20 %
   const wild: Bar[] = Array.from({ length: 100 }, (_, i) => ({ t: i, o: 100, h: 160, l: 50, c: 100, v: 1 }));
   assert.equal(swingDev(wild), 20);
   assert.equal(swingDev(calm.slice(0, 10)), 5);
+});
+
+test("метрики в ответе: массив [рейтинг, MA, осц., RSI, ADX, объём ×, ATR %, тейк %, стоп %], каждое — в рамках, «f»: 1 — фьючерсы", () => {
+  const raw = {
+    ok: true, at: NOW, rows: [
+      { s: "AAA", px: 2, ch: 1, f: 1, r: { "15m": [0.4, 0.5, 0.3, 61.2, 27.5, 2.4, 1.1, 3.5, -1.75], "1h": -0.2 } },
+      { s: "BBB", px: 2, ch: 1, r: { "15m": [0.2, 7, "x", 101, -1, -2, 1e9, -3, 5], "4h": [2, 0.1] } },
+      { s: "CCC", px: 2, ch: 1, r: { "15m": [] } }, // рейтинга нет — строки нет
+    ],
+  };
+  const v = validScreener(raw, NOW)!;
+  assert.deepEqual(v.rows.map((r) => r.s), ["AAA", "BBB"]);
+  const [a, b] = v.rows as [ScreenRow, ScreenRow];
+  assert.equal(a.fut, true);
+  assert.equal(b.fut, false);
+  assert.deepEqual(a.m["15m"], { ma: 0.5, osc: 0.3, rsi: 61.2, adx: 27.5, volx: 2.4, atrp: 1.1, tp: 3.5, sl: -1.75 });
+  assert.equal(a.r["15m"], 0.4);
+  assert.equal(a.r["1h"], -0.2);
+  assert.equal(a.m["1h"], undefined); // старый вид — только рейтинг
+  assert.deepEqual(b.m["15m"], NOM); // всё вне рамок — null
+  assert.equal(b.r["4h"], null); // рейтинг вне −1…+1 — нет рейтинга и метрик
+  assert.equal(b.m["4h"], undefined);
+  assert.equal(rr(a.m["15m"]), 2);
+  assert.equal(rr(b.m["15m"]), null);
+  assert.equal(rr(undefined), null);
+});
+
+test("подтверждения на основном таймфрейме: объём, ADX, зона RSI, риск/прибыль; нет значения — не проходит", () => {
+  const tf = "15m";
+  const r = mrow("A", { volx: 2, adx: 25, rsi: 29.9, tp: 4, sl: -2 });
+  assert.equal(confirms(r, tf, EXTRA_ANY), true);
+  assert.equal(confirms(mrow("Z", {}), tf, EXTRA_ANY), true); // без подтверждений метрики не нужны
+  assert.equal(confirms(r, tf, { ...EXTRA_ANY, vol: 2 }), true);
+  assert.equal(confirms(r, tf, { ...EXTRA_ANY, vol: 3 }), false);
+  assert.equal(confirms(r, tf, { ...EXTRA_ANY, adx: 25 }), true);
+  assert.equal(confirms(r, tf, { ...EXTRA_ANY, adx: 40 }), false);
+  assert.equal(confirms(r, tf, { ...EXTRA_ANY, rsi: "os" }), true);
+  assert.equal(confirms(r, tf, { ...EXTRA_ANY, rsi: "mid" }), false);
+  assert.equal(confirms(r, tf, { ...EXTRA_ANY, rsi: "ob" }), false);
+  assert.equal(confirms(mrow("M", { rsi: 30 }), tf, { ...EXTRA_ANY, rsi: "mid" }), true);
+  assert.equal(confirms(mrow("M", { rsi: 70 }), tf, { ...EXTRA_ANY, rsi: "mid" }), true);
+  assert.equal(confirms(mrow("M", { rsi: 70.1 }), tf, { ...EXTRA_ANY, rsi: "ob" }), true);
+  assert.equal(confirms(r, tf, { ...EXTRA_ANY, rr: 2 }), true);
+  assert.equal(confirms(r, tf, { ...EXTRA_ANY, rr: 3 }), false);
+  for (const x of [{ vol: 1.5 }, { adx: 20 }, { rsi: "os" as const }, { rr: 1.5 }]) {
+    assert.equal(confirms(mrow("Z", {}), tf, { ...EXTRA_ANY, ...x }), false, JSON.stringify(x));
+  }
+  assert.equal(confirms(r, "1h", { ...EXTRA_ANY, vol: 1.5 }), false); // на 1h метрик нет
+  assert.equal(mainTf(ANY), "15m");
+  assert.equal(mainTf({ ...ANY, "4h": "buy", "1h": "sell" }), "1h");
+});
+
+test("порядок: риск/прибыль, объём, ADX, сутки — по убыванию, без значения — в конце, равные — порядок сервера", () => {
+  const rows = [
+    mrow("A", { tp: 2, sl: -2, volx: 1, adx: 10 }, 5),
+    mrow("B", { tp: 6, sl: -2, volx: 3 }, -1),
+    mrow("C", {}, null),
+    mrow("D", { tp: 3, sl: -1, volx: 3, adx: 30 }, 5),
+  ];
+  const by = (sort: "rr" | "vol" | "adx" | "ch") => screen(rows, ANY, { ...EXTRA_ANY, sort }).map((r) => r.s);
+  assert.deepEqual(by("rr"), ["B", "D", "A", "C"]);
+  assert.deepEqual(by("vol"), ["B", "D", "A", "C"]);
+  assert.deepEqual(by("adx"), ["D", "A", "B", "C"]);
+  assert.deepEqual(by("ch"), ["A", "D", "B", "C"]);
+  assert.deepEqual(screen(rows, ANY).map((r) => r.s), ["A", "B", "C", "D"]);
+  // Подтверждение вместе с фильтром по знаку.
+  const f = { ...ANY, "15m": "buy" as const };
+  assert.deepEqual(screen([...rows, mrow("E", { volx: 9 }, 0, -0.4)], f, { ...EXTRA_ANY, vol: 2, sort: "vol" }).map((r) => r.s), ["B", "D"]);
+});
+
+test("согласие таймфреймов и подтверждения с устройства", () => {
+  assert.deepEqual(consensus(row("A", { "1m": 0.6, "15m": 0.2, "1h": 0, "4h": -0.3, "1d": 0.11 })), { up: 3, dn: 1, of: 5 });
+  assert.deepEqual(consensus(row("B", {})), { up: 0, dn: 0, of: 0 });
+  assert.deepEqual(validExtra({ vol: 2, adx: 25, rsi: "os", rr: 3, sort: "adx" }), { vol: 2, adx: 25, rsi: "os", rr: 3, sort: "adx" });
+  assert.deepEqual(validExtra({ vol: 2.5, adx: "25", rsi: "x", rr: -1, sort: "evil" }), EXTRA_ANY);
+  assert.deepEqual(validExtra(null), EXTRA_ANY);
+  assert.deepEqual(validExtra([1]), EXTRA_ANY);
 });

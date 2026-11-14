@@ -8,6 +8,7 @@
 скользящие и осцилляторы обязаны совпасть до 1e-9 (npm test).
 """
 import json
+import math
 import os
 import random
 import shutil
@@ -87,6 +88,62 @@ class RatingContractTest(unittest.TestCase):
             for x, y in zip(a, b, strict=True):
                 self.assertAlmostEqual(x, y, delta=1e-9, msg=f"случай {i}: сервер {a}, график {b}")
         self.assertGreater(rated, 250)  # большинство рядов — с рейтингом, иначе проверять нечего
+
+
+@unittest.skipUnless(shutil.which("node"), "нужен Node 22.18+")
+class MetricsContractTest(unittest.TestCase):
+    """RSI 14, ADX 14, ATR 14 и Фибо от лоя (тейк и стоп) скринера — те же,
+    что у индикаторов и Фибо графика: человек видит в скринере «тейк +3 %»,
+    открывает график — и там тот же уровень."""
+
+    def test_metrics_match_the_chart(self):
+        r = random.Random(SEED + 1)  # noqa: S311
+        cases = [series(r) for _ in range(300)]
+        want = []
+        for bars in cases:
+            b = [tuple(x) for x in bars]
+            m = sc.metrics(b)  # type: ignore[arg-type]
+            atr = None
+            if len(b) >= 15:
+                a = sc.rma(sc._true_range(b), 14)[-1]  # type: ignore[arg-type]
+                atr = None if math.isnan(a) else a
+            want.append(None if m is None else [m[3], m[4], atr, m[7], m[8]])
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
+            json.dump(cases, f)
+        try:
+            script = (
+                "import { readFileSync } from 'node:fs';"
+                f"import {{ IND, techRating }} from {json.dumps(os.path.join(ROOT, 'src/chart/indicators.ts'))};"
+                f"import {{ fiboFromLow, fiboPlan }} from {json.dumps(os.path.join(ROOT, 'src/lib/fibo.ts'))};"
+                "const all = JSON.parse(readFileSync(process.argv[1], 'utf8'));"
+                "const fin = (v) => (Number.isFinite(v) ? v : null);"
+                "const out = all.map((rows) => { const b = rows.map(([t, o, h, l, c, v]) => ({ t, o, h, l, c, v }));"
+                " if (!techRating(b)) return null; const n = b.length;"
+                " const rsi = IND.rsi.calc(b, [14], '1h')[0][n - 1]; const adx = IND.adx.calc(b, [14], '1h')[0][n - 1];"
+                " const atr = IND.atr.calc(b, [14], '1h')[0][n - 1]; const f = fiboFromLow(b);"
+                " const plan = f ? fiboPlan(f) : null;"
+                " return [fin(rsi), fin(adx), fin(atr), plan && plan.tp.length ? plan.tp[0].pct : null, plan ? plan.stop.pct : null]; });"
+                "console.log(JSON.stringify(out));"
+            )
+            res = subprocess.run(["node", "--import", os.path.join(ROOT, "tests", "ts-resolve.mjs"), "--input-type=module", "-e", script, f.name],
+                                 capture_output=True, text=True, timeout=300, check=True)
+        finally:
+            os.unlink(f.name)
+        got_ts = json.loads(res.stdout)
+        checked = fibs = 0
+        for i, (a, b) in enumerate(zip(want, got_ts, strict=True)):
+            if a is None or b is None:
+                self.assertEqual(a, b, f"случай {i}")
+                continue
+            checked += 1
+            fibs += a[3] is not None
+            for k, (x, y) in enumerate(zip(a, b, strict=True)):
+                if x is None or y is None:
+                    self.assertEqual(x, y, f"случай {i}, поле {k}: сервер {a}, график {b}")
+                else:
+                    self.assertAlmostEqual(x, y, delta=1e-9 * max(1.0, abs(y)), msg=f"случай {i}, поле {k}: сервер {a}, график {b}")
+        self.assertGreater(checked, 150)
+        self.assertGreater(fibs, 100)  # у большинства — Фибо с тейком, иначе проверять нечего
 
 
 if __name__ == "__main__":

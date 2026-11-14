@@ -52,16 +52,24 @@ TICKER = [
 
 class ParseTest(unittest.TestCase):
     def test_universe(self):
-        self.assertEqual(sc.parse_universe(TICKER), [("BTC", 1.5e9), ("ETH", 6e8), ("SOL", 3e8)])
+        self.assertEqual(sc.parse_universe(TICKER), [("BTC", 1.5e9, "s"), ("ETH", 6e8, "s"), ("SOL", 3e8, "s")])
+        # Монеты только с фьючерсов — добавляются (по обороту, от FUT_VOL_MIN);
+        # те, что есть на споте, — нет (свечи — со спота, как у графика).
+        fut = [{"symbol": "BTCUSDT", "quoteVolume": "9e10"}, {"symbol": "NEWUSDT", "quoteVolume": "7e8"},
+               {"symbol": "DEADUSDT", "quoteVolume": str(sc.FUT_VOL_MIN - 1)}, {"symbol": "BTCUSDT_261225", "quoteVolume": "1e9"},
+               {"symbol": "USDCUSDT", "quoteVolume": "1e9"}]
+        self.assertEqual(sc.parse_universe(TICKER, fut), [("BTC", 1.5e9, "s"), ("NEW", 7e8, "f"), ("ETH", 6e8, "s"), ("SOL", 3e8, "s")])
+        many_f = [{"symbol": f"F{i}USDT", "quoteVolume": "1e7"} for i in range(500)]
+        self.assertEqual(sum(1 for c in sc.parse_universe(TICKER, many_f) if c[2] == "f"), sc.FUT_MAX)
         for bad in (None, "x", {}, [1, None, {"symbol": 5}], [{"symbol": "XUSDT", "quoteVolume": "NaN"}]):
             self.assertEqual(sc.parse_universe(bad), [], bad)
         many = [{"symbol": f"C{i}USDT", "quoteVolume": str(1e7 + i)} for i in range(1000)]
         got = sc.parse_universe(many)
         self.assertEqual(len(got), sc.COINS_MAX)
         self.assertEqual(got[0][0], "C999")  # крупнейшие — первыми
-        # Все монеты с оборотом от VOL_MIN, а не топ: $100 тыс. — да, $99 тыс. — нет.
+        # Все монеты с оборотом от VOL_MIN, а не топ: ровно VOL_MIN — да, на доллар меньше — нет.
         edge = [{"symbol": "AUSDT", "quoteVolume": str(sc.VOL_MIN)}, {"symbol": "BUSDT", "quoteVolume": str(sc.VOL_MIN - 1)}]
-        self.assertEqual([b for b, _ in sc.parse_universe(edge)], ["A"])
+        self.assertEqual([b for b, _, _ in sc.parse_universe(edge)], ["A"])
 
     def test_bars(self):
         bars = sc.parse_bars(kl(10))
@@ -97,20 +105,27 @@ class ParseTest(unittest.TestCase):
 
 class ReplyTest(unittest.TestCase):
     def test_order_stale_and_empty(self):
-        uni = [("BTC", 2e9), ("ETH", 1e9), ("SOL", 5e8)]
-        rates = {"15m": {"BTC": (0.6, NOW - 30), "ETH": (-0.2, NOW - 3 * 600 - 1)},
-                 "1h": {"BTC": (-0.4, NOW - 60), "ETH": (0.31234, NOW - 60)},
-                 "1m": {"BTC": (0.9, NOW - 3 * 360 - 1)}}  # старый — мимо
+        uni = [("BTC", 2e9, "s"), ("NEW", 1.5e9, "f"), ("ETH", 1e9, "s"), ("SOL", 5e8, "s")]
+        m = (0.6, 0.7333, 0.4666, 31.234, 27.06, 2.345, 1.2345, 3.456, -1.234)
+        rates = {"15m": {"BTC": (m, NOW - 30), "ETH": ((-0.2, *m[1:]), NOW - 3 * 600 - 1), "NEW": ((0.2, *m[1:7], None, None), NOW - 30)},
+                 "1h": {"BTC": ((-0.4, *m[1:]), NOW - 60), "ETH": ((0.31234, *m[1:]), NOW - 60)},
+                 "1m": {"BTC": ((0.9, *m[1:]), NOW - 3 * 360 - 1)}}  # старый — мимо
         px = {"BTC": (100000.0, 1.25)}
         rep = sc.reply(uni, rates, px, NOW)
         self.assertEqual(rep["tfs"], ["15m", "1h"])  # по каким таймфреймам рейтинг есть
         self.assertEqual(rep["at"], NOW - 30)  # время — самого свежего рейтинга
         self.assertEqual(rep["by"], "Binance")
-        self.assertEqual([r["s"] for r in rep["rows"]], ["BTC", "ETH"])  # у SOL рейтингов нет — мимо
+        self.assertEqual([r["s"] for r in rep["rows"]], ["BTC", "NEW", "ETH"])  # у SOL рейтингов нет — мимо
+        # По таймфрейму — рейтинг, скользящие, осцилляторы, RSI, ADX, объём ×,
+        # ATR %, тейк %, стоп % — округлённые.
+        packed = [0.6, 0.73, 0.47, 31.2, 27.1, 2.35, 1.23, 3.46, -1.23]
         self.assertEqual(rep["rows"][0], {"s": "BTC", "px": 100000.0, "ch": 1.25, "vol": 2000000000,
-                                          "r": {"15m": 0.6, "1h": -0.4}})
-        self.assertEqual(rep["rows"][1]["r"], {"1h": 0.312})  # старый 15m — мимо
-        self.assertIsNone(rep["rows"][1]["px"])
+                                          "r": {"15m": packed, "1h": [-0.4, *packed[1:]]}})
+        self.assertEqual(rep["rows"][1]["f"], 1)  # только фьючерсы — помечено
+        self.assertEqual(rep["rows"][1]["r"]["15m"][7:], [None, None])  # Фибо нет — так и есть
+        self.assertNotIn("f", rep["rows"][0])
+        self.assertEqual(rep["rows"][2]["r"], {"1h": [0.312, *packed[1:]]})  # старый 15m — мимо
+        self.assertIsNone(rep["rows"][2]["px"])
         self.assertEqual(sc.reply(uni, {}, {}, NOW), {"ok": False, "error": "no_data"})
         json.dumps(rep, allow_nan=False)
 
@@ -126,7 +141,7 @@ class CacheTest(unittest.TestCase):
             self.calls.append("universe")
             return TICKER
 
-        def klines(base, tf):
+        def klines(base, tf, venue="s"):
             self.calls.append((base, tf))
             return kl(300, step=0.002 if base == "BTC" else -0.002)
 
@@ -191,6 +206,10 @@ class CacheTest(unittest.TestCase):
         # Вес Binance: в минуту не больше COINS_MAX × 2 + 80 (меньше 25 % от 6000),
         # в среднем при всех нужных — меньше 20 %, без спроса — меньше 5 %.
         self.assertLessEqual(sc.COINS_MAX * 2 + 80, 0.25 * 6000)
+        # Фьючерсы — свой предел 2400 в минуту: монет только с фьючерсов — не
+        # больше FUT_MAX, свечей — FUT_BARS (до 500 — вес 2), список — вес 40.
+        self.assertLess(sc.FUT_BARS, 500)
+        self.assertLessEqual(sc.FUT_MAX * 2 + 40, 0.25 * 2400)
         avg_all = sum(sc.COINS_MAX * 2 * 60 / sc.EVERY[tf] for tf in sc.TFS) + 80 / 60
         avg_warm = sum(sc.COINS_MAX * 2 * 60 / sc.EVERY[tf] for tf in sc.WARM) + 80 / 60
         self.assertLess(avg_all, 0.2 * 6000)
@@ -224,7 +243,7 @@ class CacheTest(unittest.TestCase):
     def test_failures(self):
         err = io.StringIO()
         # Список монет не получен — пауза FAIL_WAIT, а не запрос каждую минуту.
-        sc.set_sources(universe=lambda: (self.calls.append("universe"), None)[1], klines=lambda b, tf: 1 / 0)
+        sc.set_sources(universe=lambda: (self.calls.append("universe"), None)[1], klines=lambda b, tf, v="s": 1 / 0)
         mono = [1000.0]
         with mock.patch.object(sc, "_now", return_value=NOW), mock.patch.object(sc.time, "monotonic", side_effect=lambda: mono[0]), \
                 mock.patch.object(sc.sys, "stderr", err):
@@ -240,7 +259,7 @@ class CacheTest(unittest.TestCase):
         many = [{"symbol": f"C{i}USDT", "quoteVolume": "1e8"} for i in range(200)]
         n = [0]
 
-        def dead(b, tf):
+        def dead(b, tf, v="s"):
             n[0] += 1
             raise TimeoutError
 
@@ -251,7 +270,7 @@ class CacheTest(unittest.TestCase):
         self.assertIn("проход прерван", err.getvalue())
         # Свечи одной монеты не пришли — остальные на месте; сбой — в журнал типом ошибки.
         sc._st = sc._State()
-        sc.set_sources(universe=lambda: TICKER, klines=lambda b, tf: (1 / 0) if b == "ETH" else kl(300))
+        sc.set_sources(universe=lambda: TICKER, klines=lambda b, tf, v="s": (1 / 0) if b == "ETH" else kl(300))
         with mock.patch.object(sc, "_now", return_value=NOW), mock.patch.object(sc.sys, "stderr", err):
             res = sc.build()
         self.assertEqual([r["s"] for r in res["rows"]], ["BTC", "SOL"])
@@ -260,7 +279,7 @@ class CacheTest(unittest.TestCase):
     def test_dropped_coins_leave_memory(self):
         with mock.patch.object(sc, "_now", return_value=NOW):
             sc.build()
-            sc.set_sources(universe=lambda: TICKER[:2], klines=lambda b, tf: kl(300))
+            sc.set_sources(universe=lambda: TICKER[:2], klines=lambda b, tf, v="s": kl(300))
             sc._st.done.clear()
             sc._st.uni_at = -math.inf
             res = sc.build()
@@ -272,7 +291,7 @@ class CacheTest(unittest.TestCase):
     def test_refresh_runs_in_background_once(self):
         gate = threading.Event()
 
-        def slow(b, tf):
+        def slow(b, tf, v="s"):
             gate.wait(5)
             return kl(300)
 
@@ -293,7 +312,7 @@ class CacheTest(unittest.TestCase):
         evil = '<img src=x onerror=alert(1)>'
         sc.set_sources(universe=lambda: [{"symbol": evil + "USDT", "quoteVolume": "1e12"}, {"symbol": "BTCUSDT", "quoteVolume": 10**400},
                                          {"symbol": "ETHUSDT", "quoteVolume": "2e9", "x": evil}],
-                       klines=lambda b, tf: [[1, evil, "1e999", 10**400, "nan", "1"], *kl(300)])
+                       klines=lambda b, tf, v="s": [[1, evil, "1e999", 10**400, "nan", "1"], *kl(300)])
         with mock.patch.object(sc, "_now", return_value=NOW):
             res = sc.build()
         out = json.dumps(res, allow_nan=False)
@@ -317,8 +336,8 @@ class PolicyTest(unittest.TestCase):
                 found |= {a.name for a in n.names}
             elif isinstance(n, ast.ImportFrom):
                 found.add(n.module or "")
-        self.assertLessEqual(found, {"__future__", "concurrent.futures", "contextlib", "math", "sys", "threading", "time",
-                                     "collections.abc", "typing"})
+        self.assertLessEqual(found, {"__future__", "concurrent.futures", "contextlib", "decimal", "math", "sys", "threading",
+                                     "time", "collections.abc", "typing"})
         self.assertEqual([n.value for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str) and "://" in n.value], [])
 
     def test_server_wiring(self):
@@ -329,12 +348,17 @@ class PolicyTest(unittest.TestCase):
         self.assertNotIn("hl_post", block)
         self.assertNotIn("hyperliquid.xyz", block)
         self.assertIn('SCREEN_NAME = "data-api.binance.vision"', block)
-        self.assertEqual(set(__import__("re").findall(r"https://([a-z0-9.-]+)", block)), set())  # других адресов нет
+        self.assertEqual(set(__import__("re").findall(r"https://([a-z0-9.-]+)", block)), {"fapi.binance.com"})  # других адресов нет
         self.assertEqual(block.count("max_bytes=wt_screen.RESP_MAX"), block.count("get_json("))
         self.assertIn("body = read_capped(r, wt_screen.RESP_MAX)", block)
         self.assertIn('if tf not in wt_screen.TFS or not (base.isascii() and base.isalnum() and len(base) <= 16):', block)
         self.assertIsNone(api._screen_klines("BTC/../x", "15m"))
         self.assertIsNone(api._screen_klines("BTC", "2m"))
+        asked: list = []
+        with mock.patch.object(api, "get_json", lambda url, *a, **k: asked.append((url, k)) or []):
+            api._screen_klines("NEW", "1h", "f")
+        self.assertEqual(asked, [("https://fapi.binance.com/fapi/v1/klines?symbol=NEWUSDT&interval=1h&limit=499",
+                                  {"max_bytes": sc.RESP_MAX})])
         self.assertIs(api.screener_want, sc.want)
         for p in ("/api/screener", "/screener"):
             self.assertIn(p, api.PAID_PATHS)

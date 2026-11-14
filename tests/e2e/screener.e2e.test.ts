@@ -46,9 +46,10 @@ function bars(interval: string, n = 300): unknown[] {
 
 const SCREEN = {
   ok: true, at: T - 120, tfs: ["15m", "1h", "4h", "1d"], by: "Binance", rows: [
-    { s: "BTC", px: 103250.5, ch: 1.25, vol: 2e9, r: { "15m": 0.6, "1h": -0.3, "4h": 0.2, "1d": 0.7 } },
-    { s: "ETH", px: 3820.1, ch: -2.4, vol: 1e9, r: { "15m": -0.4, "1h": 0.5, "4h": -0.6, "1d": null } },
-    { s: "SOL", px: 182.3, ch: 0.5, vol: 5e8, r: { "15m": 0.35, "1h": -0.6, "4h": 0.05, "1d": -0.2 } },
+    // 15m — с метриками: [рейтинг, MA, осц., RSI, ADX, объём ×, ATR %, тейк %, стоп %].
+    { s: "BTC", px: 103250.5, ch: 1.25, vol: 2e9, r: { "15m": [0.6, 0.5, 0.7, 62, 31, 2.4, 1.2, 4, -2], "1h": -0.3, "4h": 0.2, "1d": 0.7 } },
+    { s: "ETH", px: 3820.1, ch: -2.4, vol: 1e9, r: { "15m": [-0.4, -0.5, -0.3, 28, 18, 0.8, 1.5, 6, -1.5], "1h": 0.5, "4h": -0.6, "1d": null } },
+    { s: "SOL", px: 182.3, ch: 0.5, vol: 5e8, f: 1, r: { "15m": [0.35, 0.3, 0.4, 55, 26, 3.1, 2, 2.5, -2.5], "1h": -0.6, "4h": 0.05, "1d": -0.2 } },
     { s: "DOGE", px: 0.18234, ch: 0, vol: 3e8, r: { "15m": null, "1h": 0.12, "4h": null, "1d": null } },
   ],
 };
@@ -120,7 +121,7 @@ async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; er
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const scrBtn = (page: Page, _lang = "ru") => page.locator(".ch-foot .scr-open");
-const names = (page: Page) => page.locator(".scr-row .scr-name b").allTextContents();
+const names = (page: Page) => page.locator(".scr-row .scr-name b").evaluateAll((els) => els.map((el) => el.firstChild?.textContent ?? ""));
 const TFS = ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d", "3d", "1w", "1M"];
 const chip = (page: Page, tf: string) => page.locator(".scr-chip").nth(TFS.indexOf(tf));
 
@@ -132,7 +133,7 @@ function overflow(page: Page): Promise<string[]> {
       const r = el.getBoundingClientRect();
       if (r.width && (r.left < -1 || r.right > innerWidth + 1)) out.push(`за краем: ${el.className || el.tagName} «${(el.textContent ?? "").slice(0, 20)}»`);
     }
-    for (const el of document.querySelectorAll<HTMLElement>(".scr-presets button, .scr-name b, .ch-fib-row b, .ch-fib-row em, .scr-sig i, .ch-foot-btn span")) {
+    for (const el of document.querySelectorAll<HTMLElement>(".scr-presets button, .scr-name b, .ch-fib-row b, .ch-fib-row em, .scr-sig i, .ch-foot-btn span, .scr-x label > span, .scr-x-ttl")) {
       if (el.scrollWidth > el.clientWidth + 1) out.push(`обрезано «${el.textContent}»`);
     }
     return out;
@@ -226,6 +227,10 @@ test("скринер и Фибо на 16 языках при 320 точках: �
     await page.locator(".scr-wait").waitFor();
     await chip(page, "1m").click();
     await chip(page, "1m").click();
+    assert.equal(sp(await page.locator(".scr-x-ttl").textContent()), sp(I18N["scr_x_title"]![lang]!.replace("{tf}", "15m")), lang);
+    await page.locator(".scr-x select").nth(4).selectOption("rr");
+    assert.equal(await page.locator(".scr-row .scr-det").count(), 4, lang);
+    assert.equal(await page.locator(".scr-row .scr-fut").count(), 1, lang);
     assert.deepEqual(await overflow(page), [], lang);
     await page.locator(".scr-row", { hasText: "ETH" }).click();
     await page.locator(".ch-fibcard").waitFor();
@@ -234,6 +239,52 @@ test("скринер и Фибо на 16 языках при 320 точках: �
     assert.deepEqual(errors, [], lang);
     await ctx.close();
   }
+});
+
+test("подтверждения и детали: объём, ADX, RSI, риск/прибыль на основном таймфрейме, порядок, согласие таймфреймов, фьючерсы", async () => {
+  const { ctx, page, errors } = await open();
+  await scrBtn(page).click();
+  await page.locator(".scr-row").first().waitFor();
+  assert.equal(sp(await page.locator(".scr-x-ttl").textContent()), "Подтверждения по 15m");
+  const btc = page.locator(".scr-row").first();
+  assert.equal(sp(await btc.locator(".scr-det").textContent()), "▲3 ▼1 /4 15m RSI 62 ADX 31 Об. ×2,4 ATR 1,2% TP +4,0% SL −2,0% R:R 2,0");
+  assert.equal(await btc.locator(".scr-agree").getAttribute("aria-label"), "Таймфреймов за покупку: 3, за продажу: 1 из 4");
+  assert.equal(await btc.locator(".scr-det .hot").count(), 3); // ADX ≥ 25, объём ≥ ×2, R:R ≥ 2
+  // Фьючерсы — значком с подсказкой.
+  const sol = page.locator(".scr-row", { hasText: "SOL" });
+  assert.equal(await sol.locator(".scr-fut").getAttribute("title"), "Только фьючерсы Binance");
+  // DOGE: на 15m рейтинга нет — только согласие таймфреймов.
+  assert.equal(sp(await page.locator(".scr-row", { hasText: "DOGE" }).locator(".scr-det").textContent()), "▲1 ▼0 /1 15m");
+  const sel = (i: number) => page.locator(".scr-x select").nth(i);
+  await sel(0).selectOption("2");
+  assert.deepEqual(await names(page), ["BTC", "SOL"]);
+  await sel(1).selectOption("40");
+  assert.deepEqual(await names(page), []);
+  await sel(1).selectOption("0");
+  await sel(0).selectOption("0");
+  await sel(2).selectOption("os");
+  assert.deepEqual(await names(page), ["ETH"]);
+  await sel(2).selectOption("any");
+  await sel(3).selectOption("2");
+  assert.deepEqual(await names(page), ["BTC", "ETH"]);
+  await sel(4).selectOption("rr");
+  assert.deepEqual(await names(page), ["ETH", "BTC"]);
+  await sel(3).selectOption("0");
+  assert.deepEqual(await names(page), ["ETH", "BTC", "SOL", "DOGE"]); // у DOGE нет R:R — в конце
+  await sel(4).selectOption("ch");
+  assert.deepEqual(await names(page), ["BTC", "SOL", "DOGE", "ETH"]);
+  // Подтверждения запоминаются: после повторного открытия — тот же порядок.
+  await page.locator(".ch-sheet.scr .ch-close").click();
+  await scrBtn(page).click();
+  assert.equal(await sel(4).inputValue(), "ch");
+  // Основной таймфрейм — младший выбранный: по 1H метрик нет, подтверждение не проходит никто.
+  await chip(page, "1h").click();
+  assert.equal(sp(await page.locator(".scr-x-ttl").textContent()), "Подтверждения по 1H");
+  await sel(0).selectOption("1.5");
+  assert.deepEqual(await names(page), []);
+  assert.deepEqual(await overflow(page), []);
+  assert.deepEqual(errors, []);
+  await ctx.close();
 });
 
 test("все таймфреймы: минутный фильтр — сервер получает его в запросе, пока считается — так и сказано, посчитал — монеты", async () => {

@@ -15495,7 +15495,8 @@ def markets_disk_save(days: dict) -> None:
 
 
 # --- Скринер графика (wt_screen.py) -------------------------------------------
-# Рейтинг индикаторов всех монет Binance к USDT на всех таймфреймах графика.
+# Рейтинг индикаторов всех монет Binance к USDT (спот и монеты только с
+# фьючерсов) на всех таймфреймах графика.
 # Hyperliquid не трогаем (его бюджет — общий); Binance spot — через то же
 # публичное зеркало, что у графика приложения. Модуль сам в сеть не ходит.
 SCREEN_NAME = "data-api.binance.vision"
@@ -15530,16 +15531,25 @@ def _screen_get(path: str, timeout: float = 15.0):
     return None
 
 
-def _screen_klines(base: str, tf: str):
+SCREEN_FUT = "https://fapi.binance.com/fapi/v1/"
+
+
+def _screen_klines(base: str, tf: str, venue: str = "s"):
     """Свечи монеты к USDT — только известные таймфреймы и тикеры из списка
-    модуля (буквы и цифры), ничего снаружи в адрес не попадает."""
+    модуля (буквы и цифры), ничего снаружи в адрес не попадает. Монеты только
+    с фьючерсов — с фьючерсов Binance (FUT_BARS свечей, вес 2; закрыто по
+    стране — через RELAY, как у остальных запросов к фьючерсам)."""
     if tf not in wt_screen.TFS or not (base.isascii() and base.isalnum() and len(base) <= 16):
         return None
+    if venue == "f":
+        return get_json(f"{SCREEN_FUT}klines?symbol={base}USDT&interval={tf}&limit={wt_screen.FUT_BARS}", 15,
+                        max_bytes=wt_screen.RESP_MAX)
     return _screen_get(f"/api/v3/klines?symbol={base}USDT&interval={tf}&limit={wt_screen.BARS}")
 
 
 wt_screen.set_sources(
     universe=lambda: _screen_get("/api/v3/ticker/24hr?type=MINI", 25),
+    futures=lambda: get_json(f"{SCREEN_FUT}ticker/24hr", 25, max_bytes=wt_screen.RESP_MAX),
     klines=_screen_klines,
 )
 screener_data = wt_screen.screener_data  # запрос человека: только кэш

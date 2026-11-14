@@ -2050,6 +2050,13 @@ say("график — скринер внизу: рейтинг индикато
     and "export function fiboFromLow(" in read(f"{APP}/src/lib/fibo.ts") and "export function screen(" in read(f"{APP}/src/lib/screener.ts")
     and 'className="ch-foot"' in read(f"{APP}/src/screens/ChartScreen.tsx")
     and "wt_screen.py tests/test_screen.py" in read(f"{APP}/.github/workflows/tests.yml"))
+say("скринер для сделок: у каждой монеты по основному таймфрейму — RSI, ADX, всплеск объёма, ATR %, тейк и стоп по Фибо от лоя, риск/прибыль и согласие таймфреймов; подтверждения (объём, тренд, зона RSI, R:R) и порядок; монеты спота от $10 тыс. оборота и только с фьючерсов Binance; метрики сервера = индикаторам графика (тест-договор)",
+    "def metrics(" in read(f"{APP}/wt_screen.py") and "def parse_universe(" in read(f"{APP}/wt_screen.py")
+    and "class MetricsContractTest(" in read(f"{APP}/tests/test_screen_contract.py")
+    and "export function confirms(" in read(f"{APP}/src/lib/screener.ts") and "export function consensus(" in read(f"{APP}/src/lib/screener.ts")
+    and "function ScrDetails(" in read(f"{APP}/src/screens/ChartScreen.tsx")
+    and "подтверждения и детали" in read(f"{APP}/tests/e2e/screener.e2e.test.ts")
+    and "SCREEN_FUT" in api and all(k in _i18n for k in ("scr_x_title", "scr_agree", "scr_fut", "scr_sort_rr")))
 say("рынки в меню — уровень зрелых проектов: журнал сервера только при смене состояния источников (молчит / снова отвечает, тип ошибки без текста, одна чистая строка); сетка всегда 3 × 3 — пропавший пункт «—» на своём месте («нет данных» для чтения с экрана); ячейки перерисовываются по отдельности; высокая контрастность Windows",
     "def _health(" in read(f"{APP}/wt_markets.py") and "v, why = None, type(e).__name__" in read(f"{APP}/wt_markets.py")
     and "def test_journal_only_on_state_changes(" in read(f"{APP}/tests/test_markets.py")

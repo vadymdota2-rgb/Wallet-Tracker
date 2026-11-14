@@ -1,6 +1,7 @@
 """Скринер монет по техническому рейтингу (/api/screener) — снизу графика.
 
-Все монеты Binance к USDT (оборот за сутки от VOL_MIN) с рейтингом
+Все монеты Binance к USDT — спот (оборот за сутки от VOL_MIN) и монеты,
+что торгуются только на фьючерсах (от FUT_VOL_MIN), — с рейтингом
 индикаторов на всех таймфреймах графика — от минуты до месяца: фильтром
 находят, например, монеты, где на 15 минутах индикаторы «за покупку», а на
 часе — «за продажу». Рейтинг — тот же, что у графика приложения (techRating
@@ -9,7 +10,12 @@
 от −1 до +1. Расчёт перенесён сюда один в один; что сервер и приложение
 считают одинаково, проверяет тест-договор (test_screen_contract.py).
 
-Это рейтинг индикаторов, а не совет: подпись на экране так и говорит.
+К рейтингу на каждом таймфрейме — то, что нужно для решения о сделке, из тех
+же свечей (новых запросов нет): RSI 14, ADX 14 (сила тренда), объём
+последней закрытой свечи к среднему за 20, ATR 14 в процентах цены и Фибо от
+последнего лоя (как fibo.ts графика): до ближайшего уровня выше цены (тейк)
+и до лоя (стоп), в процентах. Это рейтинг индикаторов и уровни, а не совет:
+подпись на экране так и говорит.
 
 Источник — Binance spot через публичное зеркало data-api.binance.vision (то
 же, откуда график приложения берёт свечи): Hyperliquid скринер не трогает
@@ -24,9 +30,10 @@
     остальные — пока их кто-то фильтрует (want) и ещё ACTIVE_FOR после:
     минутные рейтинги для всех монет без спроса никто не считает;
   - за одну сборку (раз в минуту, cache_refresher) — не больше одного
-    таймфрейма: в минуту не больше COINS_MAX × 2 + 80 единиц веса при пределе
-    Binance 6000; в среднем, когда фильтруют все таймфреймы сразу, —
-    меньше 20 % предела, обычно — около 3 %;
+    таймфрейма: в минуту на споте не больше COINS_MAX × 2 + 80 единиц веса
+    при пределе Binance 6000, на фьючерсах (свои пределы, 2400) — FUT_MAX × 2
+    + 40; в среднем, когда фильтруют все таймфреймы сразу, — меньше 20 %
+    предела, обычно — около 3 %;
   - свечи монет таймфрейма — WORKERS запросами разом; ABORT_FAILS сбоев
     подряд (Binance недоступен или ограничил) — проход прерывается до
     следующего срока;
@@ -47,6 +54,7 @@ import threading
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 Json = Any
@@ -61,7 +69,10 @@ EVERY = {"1m": 360.0, "3m": 480.0, "5m": 480.0, "15m": 600.0, "30m": 900.0, "1h"
 ACTIVE_FOR = 1800.0  # таймфрейм, который фильтровали, считается ещё столько секунд
 STALE_X = 3  # рейтинг старше стольких интервалов пересчёта — не отдаётся
 STALE_ALL = 3 * 3600  # ничего не пересчитывалось дольше — «нет данных»
-COINS_MAX = 700  # монет не больше (оборот от VOL_MIN — сейчас ~560)
+COINS_MAX = 700  # монет спота не больше (оборот от VOL_MIN — сейчас ~630)
+FUT_MAX = 250  # монет только с фьючерсов не больше
+FUT_BARS = 499  # свечей фьючерсов: до 500 — вес 2 (больше — 5)
+FUT_VOL_MIN = 1e5
 WORKERS = 8  # запросов свечей разом (у каждого потока — своё соединение)
 ABORT_FAILS = 25  # сбоев подряд — проход таймфрейма прерывается
 BARS = 600  # столько свечей берёт рейтинг графика (bars.slice(-600))
@@ -69,7 +80,7 @@ MIN_BARS = 60  # меньше — рейтинга нет (как у графи�
 UNIVERSE_EVERY = 3600.0
 FAIL_WAIT = 60.0  # список монет не получен — снова не раньше
 PX_MAX = 1e9
-VOL_MIN = 1e5  # оборот за сутки, $: меньше — не берём (мёртвые пары: рейтинг по пустым свечам — шум)
+VOL_MIN = 1e4  # оборот за сутки, $: меньше — не берём (мёртвые пары: рейтинг по пустым свечам — шум)
 RESP_MAX = 4 << 20  # байт ответа источника (ticker/24hr — ~1 МБ)
 # Стейблкоины, фиатные и обёрнутые монеты: рейтинг у них бессмыслен.
 SKIP = frozenset({
@@ -110,10 +121,23 @@ def parse_bars(raw: object) -> list[Bar]:
     return out
 
 
-def parse_universe(raw: object) -> list[tuple[str, float]]:
-    """Ответ ticker/24hr → [(монета, оборот $)]: пары к USDT, без
-    стейблкоинов и обёрнутых, оборот не меньше VOL_MIN; по обороту, не больше
-    COINS_MAX."""
+Coin = tuple[str, float, str]  # монета, оборот $, площадка: s — спот, f — фьючерсы
+
+
+def parse_universe(raw: object, fut: object = None) -> list[Coin]:
+    """Ответы ticker/24hr спота и фьючерсов → [(монета, оборот $, площадка)]:
+    пары к USDT, без стейблкоинов и обёрнутых; спот — с оборотом от VOL_MIN
+    (не больше COINS_MAX), фьючерсы — только монеты, которых нет на споте, с
+    оборотом от FUT_VOL_MIN (не больше FUT_MAX); по обороту."""
+    spot = _tickers(raw, VOL_MIN)[:COINS_MAX]
+    have = {b for b, _ in _tickers(raw, 0.0)}
+    only = [(b, v) for b, v in _tickers(fut, FUT_VOL_MIN) if b not in have][:FUT_MAX]
+    out = [(b, v, "s") for b, v in spot] + [(b, v, "f") for b, v in only]
+    return sorted(out, key=lambda x: -x[1])
+
+
+def _tickers(raw: object, vol_min: float) -> list[tuple[str, float]]:
+    """Пары к USDT из ticker/24hr: [(монета, оборот $)] по обороту."""
     got: dict[str, float] = {}
     for r in raw if isinstance(raw, list) else ():
         if not isinstance(r, dict):
@@ -127,9 +151,9 @@ def parse_universe(raw: object) -> list[tuple[str, float]]:
         if base.endswith(("UP", "DOWN", "BULL", "BEAR")) and len(base) > 4:
             continue
         vol = _num(r.get("quoteVolume"))
-        if vol >= VOL_MIN and base not in got:
+        if vol >= vol_min and base not in got:
             got[base] = vol
-    return sorted(got.items(), key=lambda x: -x[1])[:COINS_MAX]
+    return sorted(got.items(), key=lambda x: -x[1])
 
 
 # --- Технический рейтинг (как techRating в src/chart/indicators.ts) ------------
@@ -482,6 +506,135 @@ def _osc_votes(bars: list[Bar], c: Ser) -> list[int]:
     return osc
 
 
+# --- Фибо от лоя (как fiboFromLow в src/lib/fibo.ts) ----------------------------
+
+FIBO_LEVELS = (0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618, 2, 2.618)
+
+
+def _zz_turn(b: Bar, i: int, up: bool, ext: tuple[int, float, bool], dev: float) -> tuple[bool, tuple[int, float, bool], bool]:
+    """Шаг ZigZag после первого разворота: (вверх ли, экстремум, был ли разворот)."""
+    if up:
+        if b[2] >= ext[1]:
+            return True, (i, b[2], True), False
+        if b[3] <= ext[1] * (1 - dev / 100):
+            return False, (i, b[3], False), True
+        return True, ext, False
+    if b[3] <= ext[1]:
+        return False, (i, b[3], False), False
+    if b[2] >= ext[1] * (1 + dev / 100):
+        return True, (i, b[2], True), True
+    return False, ext, False
+
+
+def zigzag(bars: list[Bar], dev: float) -> list[tuple[int, float, bool]]:
+    """Вершины ZigZag (индекс, цена, вершина ли): разворот, когда цена ушла
+    от экстремума на dev % (как zigzag в src/chart/indicators.ts)."""
+    pts: list[tuple[int, float, bool]] = []
+    if len(bars) < 3:
+        return pts
+    up: bool | None = None
+    ext = (0, bars[0][4], True)
+    lo = (0, bars[0][3])
+    hi = (0, bars[0][2])
+    for i in range(1, len(bars)):
+        b = bars[i]
+        if up is None:
+            if b[2] > hi[1]:
+                hi = (i, b[2])
+            if b[3] < lo[1]:
+                lo = (i, b[3])
+            if hi[1] >= lo[1] * (1 + dev / 100):
+                up = hi[0] > lo[0]
+                pts.append((lo[0], lo[1], False) if up else (hi[0], hi[1], True))
+                ext = (hi[0], hi[1], True) if up else (lo[0], lo[1], False)
+            continue
+        prev = ext
+        up, ext, turned = _zz_turn(b, i, up, ext, dev)
+        if turned:
+            pts.append(prev)
+    if up is not None:
+        pts.append(ext)
+    return pts
+
+
+def swing_dev(bars: list[Bar]) -> float:
+    """Порог разворота, %: три ATR 14 к цене, от 1 до 20 (как swingDev)."""
+    n = len(bars)
+    if n < 15:
+        return 5.0
+    a = _at(rma(_true_range(bars), 14), n - 1)
+    d = _div(3 * a, bars[-1][4]) * 100
+    if not math.isfinite(d):
+        return 5.0
+    d2 = float(Decimal(d).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))  # toFixed(2) JavaScript
+    return min(20.0, max(1.0, d2))
+
+
+def fibo(bars: list[Bar]) -> tuple[float | None, float | None]:
+    """Фибо от последнего лоя: (до ближайшего уровня выше цены — тейк, до лоя
+    — стоп), % от цены; нет Фибо — (None, None)."""
+    n = len(bars)
+    if n < 20:
+        return None, None
+    dev = swing_dev(bars)
+    px = bars[-1][4]
+    pts = zigzag(bars, dev)
+    lows = [q for q in pts if not q[2]]
+    if lows:
+        lo = (lows[-1][0], lows[-1][1])
+    else:
+        k = 0
+        for i in range(1, n):
+            if bars[i][3] < bars[k][3]:
+                k = i
+        lo = (k, bars[k][3])
+    hi: tuple[int, float] | None = None
+    for i in range(lo[0] + 1, n):
+        if hi is None or bars[i][2] > hi[1]:
+            hi = (i, bars[i][2])
+    if hi is None or hi[1] < lo[1] * (1 + dev / 100):
+        before = [q for q in pts if q[2] and q[0] < lo[0]]
+        hi = (before[-1][0], before[-1][1]) if before else None
+        if hi is None:
+            for i in range(lo[0]):
+                if hi is None or bars[i][2] > hi[1]:
+                    hi = (i, bars[i][2])
+    if hi is None or not hi[1] > lo[1] or not lo[1] > 0 or not px > 0:
+        return None, None
+    span = hi[1] - lo[1]
+    above = sorted(p for p in (lo[1] + span * lv for lv in FIBO_LEVELS) if p > px)
+    tp = (above[0] / px - 1) * 100 if above else None
+    return tp, (lo[1] / px - 1) * 100
+
+
+Metrics = tuple[float, float, float, float | None, float | None, float | None, float | None, float | None, float | None]
+
+
+def metrics(all_bars: list[Bar]) -> Metrics | None:
+    """Всё по таймфрейму монеты: (рейтинг, скользящие, осцилляторы, RSI 14,
+    ADX 14, объём закрытой свечи к среднему за 20, ATR 14 % цены, тейк %,
+    стоп %); рейтинга нет — None."""
+    r = rating(all_bars)
+    if r is None:
+        return None
+    bars = all_bars[-BARS:]
+    n = len(bars)
+    c = _col(bars, 4)
+    px = c[-1]
+
+    def fin(v: float) -> float | None:
+        return v if math.isfinite(v) else None
+
+    rsi = fin(_at(_rsi(c, 14), n - 1))
+    adx = fin(_at(_adx(bars, 14)[0], n - 1))
+    vols = [b[5] for b in bars[-22:-2]]
+    avg = sum(vols) / len(vols) if len(vols) == 20 else 0.0
+    volx = bars[-2][5] / avg if avg > 0 else None
+    atrp = fin(_div(_at(rma(_true_range(bars), 14), n - 1), px) * 100)
+    tp, sl = fibo(bars)
+    return (r[0], r[1], r[2], rsi, adx, volx, atrp, tp, sl)
+
+
 # --- Ответ ----------------------------------------------------------------------
 
 def change_24h(bars: list[Bar]) -> float | None:
@@ -497,7 +650,18 @@ def fresh(tf: str, at: int, now: int) -> bool:
     return now - at <= STALE_X * EVERY[tf]
 
 
-def reply(universe: list[tuple[str, float]], rates: dict[str, dict[str, tuple[float, int]]],
+def _r(v: float | None, nd: int) -> float | None:
+    return None if v is None else round(v, nd)
+
+
+def pack(m: Metrics) -> list[float | None]:
+    """Метрики — компактно для ответа: [рейтинг, скользящие, осцилляторы, RSI,
+    ADX, объём ×, ATR %, тейк %, стоп %], округлённые по смыслу."""
+    t, ma, osc, rsi, adx, volx, atrp, tp, sl = m
+    return [round(t, 3), round(ma, 2), round(osc, 2), _r(rsi, 1), _r(adx, 1), _r(volx, 2), _r(atrp, 2), _r(tp, 2), _r(sl, 2)]
+
+
+def reply(universe: list[Coin], rates: dict[str, dict[str, tuple[Metrics, int]]],
           px: dict[str, tuple[float, float | None]], now: int) -> dict[str, Json]:
     """Ответ /api/screener: монеты в порядке оборота, у каждой — рейтинги
     готовых таймфреймов (старые — мимо); монета без рейтингов — мимо. Время
@@ -506,18 +670,21 @@ def reply(universe: list[tuple[str, float]], rates: dict[str, dict[str, tuple[fl
     rows = []
     warm: set[str] = set()
     last = 0
-    for base, vol in universe:
-        r: dict[str, float] = {}
+    for base, vol, venue in universe:
+        r: dict[str, list[float | None]] = {}
         for tf in TFS:
             got = rates.get(tf, {}).get(base)
             if got and fresh(tf, got[1], now):
-                r[tf] = round(got[0], 3)
+                r[tf] = pack(got[0])
                 warm.add(tf)
                 last = max(last, got[1])
         if not r:
             continue
         p, ch = px.get(base, (0.0, None))
-        rows.append({"s": base, "px": p if p > 0 else None, "ch": ch, "vol": round(vol), "r": r})
+        row: dict[str, Json] = {"s": base, "px": p if p > 0 else None, "ch": ch, "vol": round(vol), "r": r}
+        if venue == "f":
+            row["f"] = 1  # только фьючерсы
+        rows.append(row)
     if not rows:
         return {"ok": False, "error": "no_data"}
     return {"ok": True, "at": last, "tfs": [tf for tf in TFS if tf in warm], "by": "Binance", "rows": rows}
@@ -527,12 +694,12 @@ def reply(universe: list[tuple[str, float]], rates: dict[str, dict[str, tuple[fl
 
 class _State:
     def __init__(self) -> None:
-        self.universe: list[tuple[str, float]] = []
+        self.universe: list[Coin] = []
         self.uni_at = -math.inf  # монотонные часы
         self.uni_fail = -math.inf
         self.done: dict[str, float] = {}  # таймфрейм → когда пересчитан (монотонные часы)
         self.want: dict[str, float] = {}  # таймфрейм → когда его последний раз фильтровали
-        self.rates: dict[str, dict[str, tuple[float, int]]] = {}
+        self.rates: dict[str, dict[str, tuple[Metrics, int]]] = {}
         self.px: dict[str, tuple[float, float | None]] = {}
         self.hit: dict[str, Json] | None = None
         self.job: threading.Thread | None = None
@@ -543,10 +710,14 @@ _lock = threading.Lock()
 _src: dict[str, Source] = {}
 
 
-def set_sources(universe: Source, klines: Source) -> None:
-    """universe() → ответ ticker/24hr; klines(монета, таймфрейм) → свечи."""
+def set_sources(universe: Source, klines: Source, futures: Source | None = None) -> None:
+    """universe() → ticker/24hr спота; futures() → ticker/24hr фьючерсов;
+    klines(монета, таймфрейм, площадка) → свечи."""
+    _src.clear()
     _src["universe"] = universe
     _src["klines"] = klines
+    if futures is not None:
+        _src["futures"] = futures
 
 
 def _now() -> int:
@@ -604,13 +775,14 @@ def _ask(name: str, *args: object) -> object:
         return None
 
 
-def _one(base: str, tf: str) -> tuple[str, list[Bar] | None]:
+def _one(coin: tuple[str, str], tf: str) -> tuple[str, list[Bar] | None]:
     """Свечи одной монеты (None — источник не ответил)."""
-    raw = _ask("klines", base, tf)
+    base, venue = coin
+    raw = _ask("klines", base, tf, venue)
     return base, (parse_bars(raw) if raw is not None else None)
 
 
-def _pass(tf: str, coins: list[str]) -> int:
+def _pass(tf: str, coins: list[tuple[str, str]]) -> int:
     """Пересчитать таймфрейм по всем монетам; вернёт, сколько посчитано.
     ABORT_FAILS сбоев подряд — прерывается (Binance недоступен)."""
     ok = fails = 0
@@ -622,12 +794,12 @@ def _pass(tf: str, coins: list[str]) -> int:
                     fails += 1
                     continue
                 fails = 0
-                r = rating(bars)
-                if r is None:
+                m = metrics(bars)
+                if m is None:
                     continue
                 ok += 1
                 with _lock:
-                    _st.rates.setdefault(tf, {})[base] = (r[0], _now())
+                    _st.rates.setdefault(tf, {})[base] = (m, _now())
                     if tf == "15m":
                         _st.px[base] = (bars[-1][4], change_24h(bars))
             if fails >= ABORT_FAILS:
@@ -642,14 +814,14 @@ def build() -> dict[str, Json]:
     t0 = time.monotonic()
     uni_due, tf = _due(t0)
     if uni_due:
-        got = parse_universe(_ask("universe"))
+        got = parse_universe(_ask("universe"), _ask("futures") if "futures" in _src else None)
         with _lock:
             if got:
                 _st.universe, _st.uni_at = got, t0
             else:
                 _st.uni_fail = t0
     with _lock:
-        coins = [b for b, _ in _st.universe]
+        coins = [(b, venue) for b, _, venue in _st.universe]
     if tf and coins:
         if not _pass(tf, coins):
             _log(f"{tf}: ни одной монеты")
@@ -657,7 +829,7 @@ def build() -> dict[str, Json]:
             _st.done[tf] = t0
     with _lock:
         now = _now()
-        keep = set(coins)
+        keep = {b for b, _ in coins}
         # Монеты, выпавшие из списка, и старые рейтинги ненужных таймфреймов — из памяти прочь.
         for t in list(_st.rates):
             d = _st.rates[t]

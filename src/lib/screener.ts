@@ -22,11 +22,28 @@ export const SCREEN_WARM: readonly ScreenTf[] = ["15m", "1h", "4h", "1d"];
 export type Want = "any" | "buy" | "sell";
 export type ScreenFilter = Record<ScreenTf, Want>;
 
+/** Что ещё сервер считает по таймфрейму (из тех же свечей): скользящие и
+ *  осцилляторы рейтинга (−1…+1), RSI 14, ADX 14, объём последней закрытой
+ *  свечи к среднему за 20 (×), ATR 14 в % цены, Фибо от лоя — до тейка и до
+ *  стопа, % от цены. Нет значения — null. */
+export interface Metrics {
+  ma: number | null;
+  osc: number | null;
+  rsi: number | null;
+  adx: number | null;
+  volx: number | null;
+  atrp: number | null;
+  tp: number | null;
+  sl: number | null;
+}
 export interface ScreenRow {
   s: string;
   px: number | null;
   ch: number | null;
+  /** Только на фьючерсах Binance. */
+  fut: boolean;
   r: Record<ScreenTf, number | null>;
+  m: Partial<Record<ScreenTf, Metrics>>;
 }
 export interface ScreenReply {
   at: number;
@@ -56,21 +73,104 @@ export function validScreener(raw: unknown, now: number = Date.now() / 1000): Sc
     if (!isObj(x) || typeof x["s"] !== "string" || !SYM.test(x["s"]) || seen.has(x["s"]) || !isObj(x["r"])) continue;
     const src = x["r"];
     const r = {} as Record<ScreenTf, number | null>;
+    const m: Partial<Record<ScreenTf, Metrics>> = {};
     let any = false;
     for (const tf of SCREEN_TFS) {
       const v = src[tf];
-      r[tf] = fin(v) && v >= -1 && v <= 1 ? v : null;
+      const t = Array.isArray(v) ? v[0] : v;
+      r[tf] = fin(t) && t >= -1 && t <= 1 ? t : null;
+      if (r[tf] !== null && Array.isArray(v)) m[tf] = metricsOf(v);
       any ||= r[tf] !== null;
     }
     if (!any) continue;
     seen.add(x["s"]);
     const px = fin(x["px"]) && x["px"] > 0 && x["px"] < 1e9 ? x["px"] : null;
     const ch = fin(x["ch"]) && Math.abs(x["ch"]) < 1e4 ? x["ch"] : null;
-    rows.push({ s: x["s"], px, ch, r });
+    rows.push({ s: x["s"], px, ch, fut: x["f"] === 1, r, m });
   }
   const warmRaw = Array.isArray(raw["tfs"]) ? raw["tfs"] : [];
   const warm = SCREEN_TFS.filter((tf) => warmRaw.includes(tf) || rows.some((r) => r.r[tf] !== null));
   return rows.length ? { at, rows, warm } : null;
+}
+
+/** Число в рамках или null. */
+const within = (v: unknown, lo: number, hi: number): number | null => (fin(v) && v >= lo && v <= hi ? v : null);
+
+/** [рейтинг, скользящие, осцилляторы, RSI, ADX, объём ×, ATR %, тейк %, стоп %]
+ *  → метрики: каждое значение — в своих рамках, иначе null. */
+function metricsOf(v: unknown[]): Metrics {
+  return {
+    ma: within(v[1], -1, 1), osc: within(v[2], -1, 1), rsi: within(v[3], 0, 100), adx: within(v[4], 0, 100),
+    volx: within(v[5], 0, 1e4), atrp: within(v[6], 0, 1e3), tp: within(v[7], 0, 1e4), sl: within(v[8], -100, 0),
+  };
+}
+
+/** Риск/прибыль по Фибо: до тейка к расстоянию до стопа; нет — null. */
+export function rr(x: Metrics | undefined): number | null {
+  if (!x || x.tp === null || x.sl === null || x.sl >= 0) return null;
+  return x.tp / -x.sl;
+}
+
+/** Фильтры подтверждения — по основному таймфрейму (младшему выбранному,
+ *  без фильтра — 15m): всплеск объёма, сила тренда, зона RSI, риск/прибыль. */
+export interface Extra {
+  vol: number;
+  adx: number;
+  rsi: "any" | "os" | "mid" | "ob";
+  rr: number;
+  sort: "sig" | "rr" | "vol" | "adx" | "ch";
+}
+export const EXTRA_ANY: Extra = { vol: 0, adx: 0, rsi: "any", rr: 0, sort: "sig" };
+export const VOL_STEPS = [0, 1.5, 2, 3] as const;
+export const ADX_STEPS = [0, 20, 25, 40] as const;
+export const RR_STEPS = [0, 1.5, 2, 3] as const;
+export const RSI_ZONES = ["any", "os", "mid", "ob"] as const;
+export const SORTS = ["sig", "rr", "vol", "adx", "ch"] as const;
+
+/** Фильтры подтверждения с устройства — только известные значения. */
+export function validExtra(raw: unknown): Extra {
+  const x = isObj(raw) ? raw : {};
+  const pick = <T,>(v: unknown, list: readonly T[], def: T): T => (list.includes(v as T) ? (v as T) : def);
+  return {
+    vol: pick(x["vol"], VOL_STEPS, 0), adx: pick(x["adx"], ADX_STEPS, 0), rsi: pick(x["rsi"], RSI_ZONES, "any"),
+    rr: pick(x["rr"], RR_STEPS, 0), sort: pick(x["sort"], SORTS, "sig"),
+  };
+}
+
+/** Основной таймфрейм: по нему — подтверждения, детали и сортировка. */
+export const mainTf = (f: ScreenFilter): ScreenTf => SCREEN_TFS.find((tf) => f[tf] !== "any") ?? "15m";
+
+/** Монета проходит подтверждения на основном таймфрейме (нет значения — не
+ *  проходит, если подтверждение выбрано). */
+export function confirms(row: ScreenRow, tf: ScreenTf, x: Extra): boolean {
+  const k = row.m[tf];
+  if (x.vol && !(k?.volx != null && k.volx >= x.vol)) return false;
+  if (x.adx && !(k?.adx != null && k.adx >= x.adx)) return false;
+  if (x.rsi !== "any") {
+    const v = k?.rsi;
+    if (v == null) return false;
+    if (x.rsi === "os" ? v >= 30 : x.rsi === "ob" ? v <= 70 : v < 30 || v > 70) return false;
+  }
+  if (x.rr) {
+    const q = rr(k);
+    if (q === null || q < x.rr) return false;
+  }
+  return true;
+}
+
+/** Согласие таймфреймов: сколько посчитанных «за покупку», «за продажу» и всего. */
+export function consensus(row: ScreenRow): { up: number; dn: number; of: number } {
+  let up = 0;
+  let dn = 0;
+  let of = 0;
+  for (const tf of SCREEN_TFS) {
+    const v = row.r[tf];
+    if (v === null) continue;
+    of++;
+    if (signal(v) > 0) up++;
+    else if (signal(v) < 0) dn++;
+  }
+  return { up, dn, of };
 }
 
 /** Слово рейтинга: −2 активно продавать … +2 активно покупать (пороги rateKey). */
@@ -98,14 +198,25 @@ export function matches(row: ScreenRow, f: ScreenFilter): boolean {
   });
 }
 
-/** Отфильтровать и упорядочить: сильнее сигнал на выбранных таймфреймах —
- *  выше; фильтра нет — как прислал сервер (по обороту). */
-export function screen(rows: readonly ScreenRow[], f: ScreenFilter): ScreenRow[] {
+/** Отфильтровать и упорядочить. Порядок: сила сигнала на выбранных
+ *  таймфреймах (фильтра нет — как прислал сервер, по обороту), риск/прибыль,
+ *  всплеск объёма, сила тренда (ADX) или изменение за сутки — по основному
+ *  таймфрейму; у кого значения нет — в конце; равные — порядок сервера. */
+export function screen(rows: readonly ScreenRow[], f: ScreenFilter, x: Extra = EXTRA_ANY): ScreenRow[] {
   const used = SCREEN_TFS.filter((tf) => f[tf] !== "any");
-  const got = rows.filter((r) => matches(r, f));
-  if (!used.length) return got;
-  const score = (r: ScreenRow) => used.reduce((s, tf) => s + Math.abs(r.r[tf] ?? 0), 0);
-  return got.map((r, i) => ({ r, i, k: score(r) })).sort((a, b) => b.k - a.k || a.i - b.i).map((x) => x.r);
+  const tf = mainTf(f);
+  const got = rows.filter((r) => matches(r, f) && confirms(r, tf, x));
+  const key = (r: ScreenRow): number | null => {
+    if (x.sort === "rr") return rr(r.m[tf]);
+    if (x.sort === "vol") return r.m[tf]?.volx ?? null;
+    if (x.sort === "adx") return r.m[tf]?.adx ?? null;
+    if (x.sort === "ch") return r.ch;
+    return used.length ? used.reduce((s, t) => s + Math.abs(r.r[t] ?? 0), 0) : null;
+  };
+  if (x.sort === "sig" && !used.length) return got;
+  return got.map((r, i) => ({ r, i, k: key(r) }))
+    .sort((a, b) => (a.k === null ? (b.k === null ? a.i - b.i : 1) : b.k === null ? -1 : b.k - a.k || a.i - b.i))
+    .map((q) => q.r);
 }
 
 /** Таймфрейм, на котором открыть график после касания монеты: младший из

@@ -23,8 +23,9 @@ import {
   chartSnap, chartStateGet, chartStatePut, fetchScreener, pxAlertAdd, pxAlertDel, pxAlertList, pxAlertMove, type PxAlert, type PxLevel,
 } from "../lib/api";
 import {
-  ANY, badgeTfs, chartTf, find, nextWant, pending, PRESETS, SCREEN_TFS, screen, signal, validFilter, wanted,
-  type ScreenFilter, type ScreenReply,
+  ADX_STEPS, ANY, badgeTfs, chartTf, consensus, EXTRA_ANY, find, mainTf, nextWant, pending, PRESETS, rr, RR_STEPS, RSI_ZONES,
+  SCREEN_TFS, screen, signal, SORTS, validExtra, validFilter, VOL_STEPS, wanted,
+  type Extra, type ScreenFilter, type ScreenReply, type ScreenRow,
 } from "../lib/screener";
 import { FIBO_LEVELS, fiboFromLow, fiboPlan, type Fibo } from "../lib/fibo";
 import { toast } from "../components/Toast";
@@ -88,6 +89,8 @@ interface Prefs {
   sym?: string;
   /** Фильтр скринера по таймфреймам. */
   scr?: ScreenFilter;
+  /** Подтверждения и порядок скринера. */
+  scrx?: Extra;
   /** Когда меняли (мс) — для сверки с сервером: новее тот, кто позже. */
   at?: number;
 }
@@ -116,6 +119,7 @@ function loadPrefs(): Prefs {
       log: !!raw.log,
       sym: typeof raw.sym === "string" && raw.sym ? raw.sym : undefined,
       scr: validFilter(raw.scr),
+      scrx: validExtra(raw.scrx),
       at: Number(raw.at) || 0,
     };
   } catch {
@@ -298,6 +302,32 @@ function FibCard({ f, lang, close }: { f: Fibo; lang: Parameters<typeof t>[0]; c
   );
 }
 
+/** Строка деталей монеты по основному таймфрейму: RSI, ADX, объём, ATR,
+ *  тейк и стоп по Фибо от лоя, риск/прибыль; согласие всех таймфреймов. */
+function ScrDetails({ row, tf, lang }: { row: ScreenRow; tf: (typeof SCREEN_TFS)[number]; lang: Parameters<typeof t>[0] }) {
+  const k = row.m[tf];
+  const c = consensus(row);
+  const q = rr(k);
+  const n1 = (v: number) => num(v, 1, 1);
+  const parts: ReactNode[] = [];
+  if (k?.rsi != null) parts.push(<span key="rsi" className={k.rsi < 30 ? "up" : k.rsi > 70 ? "dn" : undefined}>RSI {Math.round(k.rsi)}</span>);
+  if (k?.adx != null) parts.push(<span key="adx" className={k.adx >= 25 ? "hot" : undefined}>ADX {Math.round(k.adx)}</span>);
+  if (k?.volx != null) parts.push(<span key="vol" className={k.volx >= 2 ? "hot" : undefined}>{t(lang, "scr_d_vol")} ×{n1(k.volx)}</span>);
+  if (k?.atrp != null) parts.push(<span key="atr">ATR {n1(k.atrp)}%</span>);
+  if (k?.tp != null) parts.push(<span key="tp" className="up">TP +{n1(k.tp)}%</span>);
+  if (k?.sl != null) parts.push(<span key="sl" className="dn">SL −{n1(Math.abs(k.sl))}%</span>);
+  if (q !== null) parts.push(<span key="rr" className={q >= 2 ? "hot" : undefined}>R:R {n1(q)}</span>);
+  return (
+    <span className="scr-det">
+      <span className="scr-agree" aria-label={t(lang, "scr_agree", { up: c.up, dn: c.dn, n: c.of })}>
+        <b className="up">▲{c.up}</b> <b className="dn">▼{c.dn}</b> /{c.of}
+      </span>
+      {" "}<span className="scr-tf-l">{TF_LABEL[tf]}</span>
+      {parts.flatMap((x) => [" ", x])}
+    </span>
+  );
+}
+
 export function ChartScreen({ arg }: ScreenProps) {
   const lang = useApp((s) => s.lang);
   const saved = useApp((s) => s.tvSym);
@@ -473,7 +503,9 @@ export function ChartScreen({ arg }: ScreenProps) {
   const filter = prefs.scr ?? ANY;
   const [scrQ, setScrQ] = useState("");
   const [scrN, setScrN] = useState(SCR_PAGE);
-  const found = useMemo(() => (scr ? find(screen(scr.rows, filter), scrQ) : []), [scr, filter, scrQ]);
+  const extra = prefs.scrx ?? EXTRA_ANY;
+  const tfMain = mainTf(filter);
+  const found = useMemo(() => (scr ? find(screen(scr.rows, filter, extra), scrQ) : []), [scr, filter, extra, scrQ]);
   const wait = pending(filter, scr);
   const waitKey = wait.join(",");
   const wantKey = wanted(filter).join(",");
@@ -1548,6 +1580,39 @@ export function ChartScreen({ arg }: ScreenProps) {
               ))}
             </div>
             <p className="scr-how">{t(lang, "scr_how")}</p>
+            <div className="scr-x" role="group" aria-label={t(lang, "scr_x_title", { tf: TF_LABEL[tfMain] })}>
+              <p className="scr-x-ttl">{t(lang, "scr_x_title", { tf: TF_LABEL[tfMain] })}</p>
+              <label>
+                <span>{t(lang, "scr_x_vol")}</span>
+                <select value={extra.vol} onChange={(e) => setP({ scrx: { ...extra, vol: Number(e.target.value) } })}>
+                  {VOL_STEPS.map((v) => <option key={v} value={v}>{v ? `≥ ×${num(v, 1)}` : t(lang, "scr_any")}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>{t(lang, "scr_x_adx")}</span>
+                <select value={extra.adx} onChange={(e) => setP({ scrx: { ...extra, adx: Number(e.target.value) } })}>
+                  {ADX_STEPS.map((v) => <option key={v} value={v}>{v ? `≥ ${v}` : t(lang, "scr_any")}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>RSI</span>
+                <select value={extra.rsi} onChange={(e) => setP({ scrx: { ...extra, rsi: e.target.value as Extra["rsi"] } })}>
+                  {RSI_ZONES.map((v) => <option key={v} value={v}>{t(lang, `scr_rsi_${v}`)}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>{t(lang, "scr_x_rr")}</span>
+                <select value={extra.rr} onChange={(e) => setP({ scrx: { ...extra, rr: Number(e.target.value) } })}>
+                  {RR_STEPS.map((v) => <option key={v} value={v}>{v ? `≥ ${num(v, 1)}` : t(lang, "scr_any")}</option>)}
+                </select>
+              </label>
+              <label className="wide">
+                <span>{t(lang, "scr_sort")}</span>
+                <select value={extra.sort} onChange={(e) => setP({ scrx: { ...extra, sort: e.target.value as Extra["sort"] } })}>
+                  {SORTS.map((v) => <option key={v} value={v}>{t(lang, `scr_sort_${v}`)}</option>)}
+                </select>
+              </label>
+            </div>
             {wait.length ? <p className="scr-wait" role="status">{t(lang, "scr_pending", { tfs: wait.map((tf) => TF_LABEL[tf]).join(", ") })}</p> : null}
             <input className="find scr-find" value={scrQ} onChange={(e) => setScrQ(e.target.value)} inputMode="search"
               autoCapitalize="characters" placeholder={t(lang, "scr_search")} aria-label={t(lang, "scr_search")} />
@@ -1559,7 +1624,7 @@ export function ChartScreen({ arg }: ScreenProps) {
                     <button key={r.s} type="button" className={r.s === sym ? "scr-row on" : "scr-row"} onClick={() => pickScreen(r.s)}>
                       <CoinIcon sym={r.s} size={22} />
                       <span className="scr-name">
-                        <b>{r.s}</b>
+                        <b>{r.s}{r.fut ? <sup className="scr-fut" title={t(lang, "scr_fut")}>F</sup> : null}</b>
                         <small>
                           {r.px !== null ? fmtPrice(r.px, priceDecimals(r.px)) : "—"}{" "}
                           {r.ch !== null ? <em className={r.ch > 0 ? "up" : r.ch < 0 ? "dn" : undefined}>{`${r.ch > 0 ? "+" : r.ch < 0 ? "−" : ""}${num(Math.abs(r.ch), 2, 2)}%`}</em> : null}
@@ -1577,6 +1642,7 @@ export function ChartScreen({ arg }: ScreenProps) {
                           );
                         })}
                       </span>
+                      <ScrDetails row={r} tf={tfMain} lang={lang} />
                     </button>
                   ))}
                   {found.length > scrN ? (
