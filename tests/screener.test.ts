@@ -2,8 +2,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  ANY, badgeTfs, chartTf, confirms, consensus, EXTRA_ANY, find, mainTf, matches, nextWant, pending, picked, PRESETS, rr,
-  SCREEN_TFS, SCREEN_WARM, screen, signal, validExtra, validFilter, validScreener, wanted, type Metrics, type ScreenRow,
+  ANY, badgeTfs, chartTf, chase, confirms, consensus, EXTRA_ANY, find, late, mainTf, matches, nextWant, pending, picked, PRESETS, rr,
+  SCREEN_TFS, SCREEN_WARM, screen, signal, SINCE_MAX, toggleCol, validCols, validExtra, validFilter, validScreener, wanted,
+  type Metrics, type ScreenRow,
 } from "../src/lib/screener.ts";
 import { FIBO_LEVELS, fiboFromLow, fiboPlan, swingDev } from "../src/lib/fibo.ts";
 import { rateKey } from "../src/chart/indicators.ts";
@@ -13,7 +14,7 @@ const NOW = 1_794_100_000;
 const NONE = Object.fromEntries(SCREEN_TFS.map((tf) => [tf, null])) as ScreenRow["r"];
 const row = (s: string, r: Partial<Record<(typeof SCREEN_TFS)[number], number | null>>): ScreenRow =>
   ({ s, px: 1, ch: 0, fut: false, r: { ...NONE, ...r }, m: {} });
-const NOM: Metrics = { ma: null, osc: null, rsi: null, adx: null, volx: null, atrp: null, tp: null, sl: null };
+const NOM: Metrics = { ma: null, osc: null, rsi: null, adx: null, volx: null, atrp: null, tp: null, sl: null, mv: null, age: null };
 /** Строка с метриками на 15m. */
 const mrow = (s: string, k: Partial<Metrics>, ch: number | null = 0, r15 = 0.3): ScreenRow =>
   ({ s, px: 1, ch, fut: false, r: { ...NONE, "15m": r15 }, m: { "15m": { ...NOM, ...k } } });
@@ -80,9 +81,14 @@ test("все таймфреймы: касание — любой → покуп�
   assert.deepEqual(wanted(ANY), []);
   const reply = { at: NOW, rows: [], warm: [...SCREEN_WARM, "1m" as const] };
   assert.deepEqual(pending(f, reply), ["1w"]);
-  assert.deepEqual(pending(f, null), ["1m", "15m", "1w"]);
+  assert.deepEqual(pending(f, null), ["1m", "15m", "1h", "4h", "1d", "1w"]); // ответа нет — ждём и столбцы
+  assert.deepEqual(pending(f, null, []), ["1m", "15m", "1w"]);
   assert.deepEqual(badgeTfs(ANY), [...SCREEN_WARM]);
-  assert.deepEqual(badgeTfs({ ...ANY, "1m": "buy", "3m": "buy", "5m": "sell", "30m": "buy", "2h": "sell" }), ["1m", "3m", "5m", "30m"]);
+  // Значки — все столбцы и все таймфреймы фильтра, по порядку.
+  assert.deepEqual(badgeTfs({ ...ANY, "1m": "buy", "3m": "buy", "5m": "sell", "30m": "buy", "2h": "sell" }),
+    ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "1d"]);
+  assert.deepEqual(badgeTfs({ ...ANY, "1w": "buy" }, ["5m", "1h"]), ["5m", "1h", "1w"]);
+  assert.deepEqual(badgeTfs(ANY, []), []);
   // Фильтр по минутному таймфрейму работает так же, как по основным.
   assert.deepEqual(screen([row("A", { "1m": 0.6 }), row("B", { "1m": -0.6 }), row("C", {})], { ...ANY, "1m": "buy" }).map((r) => r.s), ["A"]);
 });
@@ -174,7 +180,7 @@ test("метрики в ответе: массив [рейтинг, MA, осц.,
   const [a, b] = v.rows as [ScreenRow, ScreenRow];
   assert.equal(a.fut, true);
   assert.equal(b.fut, false);
-  assert.deepEqual(a.m["15m"], { ma: 0.5, osc: 0.3, rsi: 61.2, adx: 27.5, volx: 2.4, atrp: 1.1, tp: 3.5, sl: -1.75 });
+  assert.deepEqual(a.m["15m"], { ma: 0.5, osc: 0.3, rsi: 61.2, adx: 27.5, volx: 2.4, atrp: 1.1, tp: 3.5, sl: -1.75, mv: null, age: null });
   assert.equal(a.r["15m"], 0.4);
   assert.equal(a.r["1h"], -0.2);
   assert.equal(a.m["1h"], undefined); // старый вид — только рейтинг
@@ -232,8 +238,61 @@ test("порядок: риск/прибыль, объём, ADX, сутки — �
 test("согласие таймфреймов и подтверждения с устройства", () => {
   assert.deepEqual(consensus(row("A", { "1m": 0.6, "15m": 0.2, "1h": 0, "4h": -0.3, "1d": 0.11 })), { up: 3, dn: 1, of: 5 });
   assert.deepEqual(consensus(row("B", {})), { up: 0, dn: 0, of: 0 });
-  assert.deepEqual(validExtra({ vol: 2, adx: 25, rsi: "os", rr: 3, sort: "adx" }), { vol: 2, adx: 25, rsi: "os", rr: 3, sort: "adx" });
-  assert.deepEqual(validExtra({ vol: 2.5, adx: "25", rsi: "x", rr: -1, sort: "evil" }), EXTRA_ANY);
+  assert.deepEqual(validExtra({ vol: 2, adx: 25, rsi: "os", rr: 3, late: 1, sort: "fresh" }), { vol: 2, adx: 25, rsi: "os", rr: 3, late: 1, sort: "fresh" });
+  assert.deepEqual(validExtra({ vol: 2.5, adx: "25", rsi: "x", rr: -1, late: 4, sort: "evil" }), EXTRA_ANY);
   assert.deepEqual(validExtra(null), EXTRA_ANY);
   assert.deepEqual(validExtra([1]), EXTRA_ANY);
+});
+
+test("ход с сигнала: со знаком сигнала, давно и нейтрально — нет; «далеко ушло» — больше двух ATR", () => {
+  const raw = {
+    ok: true, at: NOW, rows: [
+      { s: "A", r: { "15m": [0.4, 0, 0, 50, 20, 1, 1, 2, -1, 2.5, 6] } },
+      { s: "B", r: { "15m": [-0.4, 0, 0, 50, 20, 1, 1, 2, -1, -3, 2] } },
+      { s: "C", r: { "15m": [0.4, 0, 0, 50, 20, 1, 1, 2, -1, null, SINCE_MAX + 1] } }, // давно
+      { s: "D", r: { "15m": [0.05, 0, 0, 50, 20, 1, 1, 2, -1, null, null] } }, // нейтрально
+      { s: "E", r: { "15m": [0.4, 0, 0, 50, 20, 1, 1, 2, -1, 1, 2.5] } }, // свечей — не целое
+      { s: "F", r: { "15m": [0.4, 0, 0, 50, 20, 1, 1, 2, -1, 1, SINCE_MAX + 2] } }, // вне рамок
+    ],
+  };
+  const v = validScreener(raw, NOW)!;
+  const by = (s: string) => v.rows.find((r) => r.s === s)!;
+  assert.deepEqual([by("A").m["15m"]!.mv, by("A").m["15m"]!.age], [2.5, 6]);
+  assert.equal(chase(by("A"), "15m"), 2.5);
+  assert.equal(chase(by("B"), "15m"), 3); // продажа: цена упала на 3 % — ушла на 3 % в сторону сигнала
+  assert.equal(chase(by("C"), "15m"), null);
+  assert.equal(by("C").m["15m"]!.age, SINCE_MAX + 1);
+  assert.equal(chase(by("D"), "15m"), null);
+  assert.equal(by("E").m["15m"]!.age, null);
+  assert.equal(by("F").m["15m"]!.age, null);
+  assert.equal(chase(by("A"), "1h"), null);
+  assert.equal(late(by("A"), "15m"), true); // 2,5 % > 2 × ATR 1 %
+  assert.equal(late(by("E"), "15m"), false);
+  assert.equal(late(by("C"), "15m"), false);
+});
+
+test("фильтр «ход с сигнала» и порядок «свежесть»: давно и без сигнала — не проходят и в конце", () => {
+  const rows = [
+    mrow("A", { mv: 2.5, age: 6, atrp: 1 }),
+    mrow("B", { mv: 0.4, age: 1 }),
+    mrow("C", { mv: null, age: SINCE_MAX + 1 }),
+    mrow("D", { mv: -1, age: 3 }), // против сигнала — подходит
+    mrow("E", { mv: 0.2, age: 0 }, 0, 0.05), // нейтрально
+  ];
+  assert.deepEqual(screen(rows, ANY, { ...EXTRA_ANY, late: 1 }).map((r) => r.s), ["B", "D"]);
+  assert.deepEqual(screen(rows, ANY, { ...EXTRA_ANY, late: 3 }).map((r) => r.s), ["A", "B", "D"]);
+  assert.deepEqual(screen(rows, ANY, { ...EXTRA_ANY, sort: "fresh" }).map((r) => r.s), ["B", "D", "A", "C", "E"]);
+});
+
+test("столбцы: с устройства — только известные, по порядку; касание — добавить или убрать; серверу — и столбцы", () => {
+  assert.deepEqual(validCols(["1d", "1m", "evil", "1m"]), ["1m", "1d"]);
+  assert.deepEqual(validCols([]), []);
+  assert.deepEqual(validCols(undefined), [...SCREEN_WARM]);
+  assert.deepEqual(validCols("1m"), [...SCREEN_WARM]);
+  assert.deepEqual(toggleCol(SCREEN_WARM, "1m"), ["1m", "15m", "1h", "4h", "1d"]);
+  assert.deepEqual(toggleCol(SCREEN_WARM, "1h"), ["15m", "4h", "1d"]);
+  const cols = ["5m", "15m", "1w"] as const;
+  assert.deepEqual(wanted(ANY, cols), ["5m", "1w"]);
+  assert.deepEqual(wanted({ ...ANY, "1m": "buy" }, cols), ["1m", "5m", "1w"]);
+  assert.deepEqual(pending(ANY, { at: NOW, rows: [], warm: [...SCREEN_WARM, "5m"] }, cols), ["1w"]);
 });

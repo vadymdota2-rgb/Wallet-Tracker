@@ -35,7 +35,15 @@ export interface Metrics {
   atrp: number | null;
   tp: number | null;
   sl: number | null;
+  /** Сколько цена прошла с закрытия свечи, где нынешний сигнал (покупка или
+   *  продажа) появился, % со знаком; нейтрально или давно — null. */
+  mv: number | null;
+  /** Свечей назад появился сигнал (0 — на этой); больше SINCE_MAX — давно;
+   *  нейтрально — null. */
+  age: number | null;
 }
+/** Глубже сервер начало сигнала не ищет (wt_screen.SINCE_MAX). */
+export const SINCE_MAX = 100;
 export interface ScreenRow {
   s: string;
   px: number | null;
@@ -96,13 +104,34 @@ export function validScreener(raw: unknown, now: number = Date.now() / 1000): Sc
 /** Число в рамках или null. */
 const within = (v: unknown, lo: number, hi: number): number | null => (fin(v) && v >= lo && v <= hi ? v : null);
 
-/** [рейтинг, скользящие, осцилляторы, RSI, ADX, объём ×, ATR %, тейк %, стоп %]
- *  → метрики: каждое значение — в своих рамках, иначе null. */
+/** [рейтинг, скользящие, осцилляторы, RSI, ADX, объём ×, ATR %, тейк %, стоп %,
+ *  ход с сигнала %, свечей с сигнала] → метрики: каждое значение — в своих
+ *  рамках, иначе null. */
 function metricsOf(v: unknown[]): Metrics {
+  const age = within(v[10], 0, SINCE_MAX + 1);
   return {
     ma: within(v[1], -1, 1), osc: within(v[2], -1, 1), rsi: within(v[3], 0, 100), adx: within(v[4], 0, 100),
     volx: within(v[5], 0, 1e4), atrp: within(v[6], 0, 1e3), tp: within(v[7], 0, 1e4), sl: within(v[8], -100, 0),
+    mv: within(v[9], -100, 1e5), age: age !== null && Number.isInteger(age) ? age : null,
   };
+}
+
+/** Сколько цена уже прошла в сторону сигнала таймфрейма, % (против — меньше
+ *  нуля): покупка — рост, продажа — падение. Нейтрально, давно или нет
+ *  данных — null. */
+export function chase(row: ScreenRow, tf: ScreenTf): number | null {
+  const v = row.r[tf];
+  const k = row.m[tf];
+  if (v === null || !k || k.mv === null || k.age === null || k.age > SINCE_MAX) return null;
+  const s = Math.sign(signal(v));
+  return s ? s * k.mv : null;
+}
+
+/** Ушло далеко: в сторону сигнала — больше двух ATR этого таймфрейма. */
+export function late(row: ScreenRow, tf: ScreenTf): boolean {
+  const q = chase(row, tf);
+  const a = row.m[tf]?.atrp ?? null;
+  return q !== null && a !== null && a > 0 && q > 2 * a;
 }
 
 /** Риск/прибыль по Фибо: до тейка к расстоянию до стопа; нет — null. */
@@ -118,14 +147,17 @@ export interface Extra {
   adx: number;
   rsi: "any" | "os" | "mid" | "ob";
   rr: number;
-  sort: "sig" | "rr" | "vol" | "adx" | "ch";
+  /** Цена прошла в сторону сигнала не больше, % (0 — не важно). */
+  late: number;
+  sort: "sig" | "fresh" | "rr" | "vol" | "adx" | "ch";
 }
-export const EXTRA_ANY: Extra = { vol: 0, adx: 0, rsi: "any", rr: 0, sort: "sig" };
+export const EXTRA_ANY: Extra = { vol: 0, adx: 0, rsi: "any", rr: 0, late: 0, sort: "sig" };
 export const VOL_STEPS = [0, 1.5, 2, 3] as const;
 export const ADX_STEPS = [0, 20, 25, 40] as const;
 export const RR_STEPS = [0, 1.5, 2, 3] as const;
 export const RSI_ZONES = ["any", "os", "mid", "ob"] as const;
-export const SORTS = ["sig", "rr", "vol", "adx", "ch"] as const;
+export const LATE_STEPS = [0, 0.5, 1, 2, 3, 5] as const;
+export const SORTS = ["sig", "fresh", "rr", "vol", "adx", "ch"] as const;
 
 /** Фильтры подтверждения с устройства — только известные значения. */
 export function validExtra(raw: unknown): Extra {
@@ -133,7 +165,7 @@ export function validExtra(raw: unknown): Extra {
   const pick = <T,>(v: unknown, list: readonly T[], def: T): T => (list.includes(v as T) ? (v as T) : def);
   return {
     vol: pick(x["vol"], VOL_STEPS, 0), adx: pick(x["adx"], ADX_STEPS, 0), rsi: pick(x["rsi"], RSI_ZONES, "any"),
-    rr: pick(x["rr"], RR_STEPS, 0), sort: pick(x["sort"], SORTS, "sig"),
+    rr: pick(x["rr"], RR_STEPS, 0), late: pick(x["late"], LATE_STEPS, 0), sort: pick(x["sort"], SORTS, "sig"),
   };
 }
 
@@ -154,6 +186,10 @@ export function confirms(row: ScreenRow, tf: ScreenTf, x: Extra): boolean {
   if (x.rr) {
     const q = rr(k);
     if (q === null || q < x.rr) return false;
+  }
+  if (x.late) {
+    const q = chase(row, tf);
+    if (q === null || q > x.late) return false;
   }
   return true;
 }
@@ -208,6 +244,7 @@ export function screen(rows: readonly ScreenRow[], f: ScreenFilter, x: Extra = E
   const got = rows.filter((r) => matches(r, f) && confirms(r, tf, x));
   const key = (r: ScreenRow): number | null => {
     if (x.sort === "rr") return rr(r.m[tf]);
+    if (x.sort === "fresh") return chase(r, tf) === null ? null : -(r.m[tf]?.age ?? 0);
     if (x.sort === "vol") return r.m[tf]?.volx ?? null;
     if (x.sort === "adx") return r.m[tf]?.adx ?? null;
     if (x.sort === "ch") return r.ch;
@@ -242,20 +279,28 @@ export const nextWant = (w: Want): Want => (w === "any" ? "buy" : w === "buy" ? 
 /** Выбранные в фильтре таймфреймы, по порядку. */
 export const picked = (f: ScreenFilter): ScreenTf[] => SCREEN_TFS.filter((tf) => f[tf] !== "any");
 
-/** Что назвать серверу (?tf=): выбранные, кроме тех, что он считает всегда. */
-export const wanted = (f: ScreenFilter): ScreenTf[] => picked(f).filter((tf) => !SCREEN_WARM.includes(tf));
+/** Какие таймфреймы показать значками у монеты: выбранные человеком
+ *  столбцы и те, что в фильтре, — по порядку. */
+export const badgeTfs = (f: ScreenFilter, cols: readonly ScreenTf[] = SCREEN_WARM): ScreenTf[] =>
+  SCREEN_TFS.filter((tf) => f[tf] !== "any" || cols.includes(tf));
 
-/** Выбранные таймфреймы, рейтинга по которым у сервера ещё нет (считаются). */
-export const pending = (f: ScreenFilter, r: ScreenReply | null): ScreenTf[] =>
-  r ? picked(f).filter((tf) => !r.warm.includes(tf)) : picked(f);
+/** Что назвать серверу (?tf=): фильтр и столбцы, кроме тех, что он считает всегда. */
+export const wanted = (f: ScreenFilter, cols: readonly ScreenTf[] = SCREEN_WARM): ScreenTf[] =>
+  badgeTfs(f, cols).filter((tf) => !SCREEN_WARM.includes(tf));
 
-/** Какие таймфреймы показать значками у монеты: выбранные (до BADGES), а
- *  без фильтра — четыре основных. */
-export const BADGES = 4;
-export function badgeTfs(f: ScreenFilter): ScreenTf[] {
-  const p = picked(f);
-  return p.length ? p.slice(0, BADGES) : [...SCREEN_WARM];
+/** Таймфреймы фильтра и столбцов, рейтинга по которым у сервера ещё нет (считаются). */
+export const pending = (f: ScreenFilter, r: ScreenReply | null, cols: readonly ScreenTf[] = SCREEN_WARM): ScreenTf[] =>
+  r ? badgeTfs(f, cols).filter((tf) => !r.warm.includes(tf)) : badgeTfs(f, cols);
+
+/** Столбцы с устройства: известные таймфреймы без повторов, по порядку;
+ *  не список — четыре основных. Пустой — можно (тогда — только фильтр). */
+export function validCols(raw: unknown): ScreenTf[] {
+  return Array.isArray(raw) ? SCREEN_TFS.filter((tf) => raw.includes(tf)) : [...SCREEN_WARM];
 }
+
+/** Касание столбца: был — убрать, не было — добавить. */
+export const toggleCol = (cols: readonly ScreenTf[], tf: ScreenTf): ScreenTf[] =>
+  SCREEN_TFS.filter((x) => (x === tf ? !cols.includes(tf) : cols.includes(x)));
 
 /** Поиск монеты в списке: тикер начинается с запроса (прописными). */
 export function find(rows: readonly ScreenRow[], q: string): ScreenRow[] {

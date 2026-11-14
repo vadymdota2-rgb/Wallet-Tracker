@@ -77,6 +77,7 @@ WORKERS = 8  # запросов свечей разом (у каждого по�
 ABORT_FAILS = 25  # сбоев подряд — проход таймфрейма прерывается
 BARS = 600  # столько свечей берёт рейтинг графика (bars.slice(-600))
 MIN_BARS = 60  # меньше — рейтинга нет (как у графика)
+SINCE_MAX = 100  # насколько свечей назад искать начало сигнала (больше — «давно»)
 UNIVERSE_EVERY = 3600.0
 FAIL_WAIT = 60.0  # список монет не получен — снова не раньше
 PX_MAX = 1e9
@@ -425,85 +426,120 @@ def _uo(bars: list[Bar], a: int, b: int, c: int) -> Ser:
     return [_div(100 * (4 * v + 2 * bv[i] + cv[i]), 7) for i, v in enumerate(av)]
 
 
-def rating(all_bars: list[Bar]) -> tuple[float, float, float] | None:
+Rate = tuple[float, float, float]
+
+
+def _rater(bars: list[Bar]) -> Callable[[int], Rate]:
+    """Рейтинг на любой свече j этих свечей (как techRating на bars[:j + 1],
+    пока ряд не обрезан окном BARS): все ряды индикаторов считаются один раз,
+    голоса — на свече j. Скользящая длины ln голосует, когда свечей больше ln."""
+    c = _col(bars, 4)
+    mas: list[tuple[int, Ser]] = []
+    for ln in (10, 20, 30, 50, 100, 200):
+        if len(bars) > ln:
+            mas += [(ln, ema(c, ln)), (ln, sma(c, ln))]
+    tail = [_kijun(bars, 26), vwma(bars, 20), hma(c, 9)]
+    osc = _osc_rater(bars, c)
+
+    def at(j: int) -> Rate:
+        px = c[j]
+        votes: list[int] = []
+        for v in [s_[j] for ln, s_ in mas if j + 1 > ln] + [_at(s_, j) for s_ in tail]:
+            if math.isfinite(v):
+                votes.append(1 if v < px else -1 if v > px else 0)
+        o = osc(j)
+        ma = sum(votes) / len(votes) if votes else 0.0
+        os_ = sum(o) / len(o) if o else 0.0
+        return (ma + os_) / 2, ma, os_
+
+    return at
+
+
+def rating(all_bars: list[Bar]) -> Rate | None:
     """Технический рейтинг последней свечи: (итог, скользящие, осцилляторы),
     каждое от −1 до +1; свечей меньше MIN_BARS — None."""
     bars = all_bars[-BARS:]
-    n = len(bars)
-    if n < MIN_BARS:
+    if len(bars) < MIN_BARS:
         return None
-    c = _col(bars, 4)
-    last = n - 1
-    px = bars[last][4]
-
-    def lv(s: Ser, k: int = 0) -> float:
-        return _at(s, last - k)
-
-    ma_votes: list[int] = []
-
-    def add_ma(v: float) -> None:
-        if math.isfinite(v):
-            ma_votes.append(1 if v < px else -1 if v > px else 0)
-
-    for ln in (10, 20, 30, 50, 100, 200):
-        if n > ln:
-            add_ma(lv(ema(c, ln)))
-            add_ma(lv(sma(c, ln)))
-    add_ma(lv(_kijun(bars, 26)))
-    add_ma(lv(vwma(bars, 20)))
-    add_ma(lv(hma(c, 9)))
-
-    osc = _osc_votes(bars, c)
-    ma = sum(ma_votes) / len(ma_votes) if ma_votes else 0.0
-    os_ = sum(osc) / len(osc) if osc else 0.0
-    return (ma + os_) / 2, ma, os_
+    return _rater(bars)(len(bars) - 1)
 
 
-def _osc_votes(bars: list[Bar], c: Ser) -> list[int]:
-    """Голоса 11 осцилляторов последней свечи (как у techRating)."""
-    last = len(bars) - 1
+def _vote(lo: bool, hi: bool) -> int:
+    return 1 if lo else -1 if hi else 0
 
-    def lv(s: Ser, k: int = 0) -> float:
-        return _at(s, last - k)
 
-    osc: list[int] = []
-
-    def add(value: float, vote: int) -> None:
-        if math.isfinite(value):
-            osc.append(vote)
-
+def _osc_rater(bars: list[Bar], c: Ser) -> Callable[[int], list[int]]:
+    """Голоса 11 осцилляторов на свече j (как у techRating)."""
     r = _rsi(c, 14)
-    add(lv(r), 1 if lv(r) < 30 and lv(r) > lv(r, 1) else -1 if lv(r) > 70 and lv(r) < lv(r, 1) else 0)
     k = sma(_stoch_of(c, _col(bars, 2), _col(bars, 3), 14), 3)
     d = sma(k, 3)
-    add(lv(k), 1 if lv(k) < 20 and lv(k) > lv(d) else -1 if lv(k) > 80 and lv(k) < lv(d) else 0)
     cci = _cci(bars, 20)
-    add(lv(cci), 1 if lv(cci) < -100 and lv(cci) > lv(cci, 1) else -1 if lv(cci) > 100 and lv(cci) < lv(cci, 1) else 0)
     adx, pdi, ndi = _adx(bars, 14)
-    add(lv(adx), 1 if lv(adx) > 20 and lv(pdi) > lv(ndi) and lv(adx) > lv(adx, 1)
-        else -1 if lv(adx) > 20 and lv(pdi) < lv(ndi) and lv(adx) > lv(adx, 1) else 0)
     ao = _ao(bars)
-    add(lv(ao), 1 if lv(ao) > 0 and lv(ao) > lv(ao, 1) else -1 if lv(ao) < 0 and lv(ao) < lv(ao, 1) else 0)
     mom = [v - c[i - 10] if i >= 10 else NAN for i, v in enumerate(c)]
-    add(lv(mom), 1 if lv(mom) > lv(mom, 1) else -1 if lv(mom) < lv(mom, 1) else 0)
     ef, es = ema(c, 12), ema(c, 26)
     macd = [v - es[i] for i, v in enumerate(ef)]
     sig = ema(macd, 9)
-    add(lv(macd), 1 if lv(macd) > lv(sig) else -1 if lv(macd) < lv(sig) else 0)
-    rs = _rsi(c, 14)
-    sk = sma(_stoch_of(rs, rs, rs, 14), 3)
+    sk = sma(_stoch_of(r, r, r, 14), 3)
     sd = sma(sk, 3)
-    add(lv(sk), 1 if lv(sk) < 20 and lv(sk) > lv(sd) else -1 if lv(sk) > 80 and lv(sk) < lv(sd) else 0)
     hh = _highest(_col(bars, 2), 14)
     ll = _lowest(_col(bars, 3), 14)
     wr = [-50.0 if hh[i] - ll[i] == 0 else _div(-100 * (hh[i] - x), hh[i] - ll[i]) for i, x in enumerate(c)]
-    add(lv(wr), 1 if lv(wr) < -80 and lv(wr) > lv(wr, 1) else -1 if lv(wr) > -20 and lv(wr) < lv(wr, 1) else 0)
     e13 = ema(c, 13)
     bbp = [b[2] - e13[i] + (b[3] - e13[i]) for i, b in enumerate(bars)]
-    add(lv(bbp), 1 if lv(bbp) > 0 and lv(bbp) > lv(bbp, 1) else -1 if lv(bbp) < 0 and lv(bbp) < lv(bbp, 1) else 0)
     uo = _uo(bars, 7, 14, 28)
-    add(lv(uo), 1 if lv(uo) > 70 else -1 if lv(uo) < 30 else 0)
-    return osc
+
+    def at(j: int) -> list[int]:
+        def lv(s_: Ser, back: int = 0) -> float:
+            return _at(s_, j - back)
+
+        out: list[int] = []
+        rows = (
+            (lv(r), _vote(lv(r) < 30 and lv(r) > lv(r, 1), lv(r) > 70 and lv(r) < lv(r, 1))),
+            (lv(k), _vote(lv(k) < 20 and lv(k) > lv(d), lv(k) > 80 and lv(k) < lv(d))),
+            (lv(cci), _vote(lv(cci) < -100 and lv(cci) > lv(cci, 1), lv(cci) > 100 and lv(cci) < lv(cci, 1))),
+            (lv(adx), _vote(lv(adx) > 20 and lv(pdi) > lv(ndi) and lv(adx) > lv(adx, 1),
+                            lv(adx) > 20 and lv(pdi) < lv(ndi) and lv(adx) > lv(adx, 1))),
+            (lv(ao), _vote(lv(ao) > 0 and lv(ao) > lv(ao, 1), lv(ao) < 0 and lv(ao) < lv(ao, 1))),
+            (lv(mom), _vote(lv(mom) > lv(mom, 1), lv(mom) < lv(mom, 1))),
+            (lv(macd), _vote(lv(macd) > lv(sig), lv(macd) < lv(sig))),
+            (lv(sk), _vote(lv(sk) < 20 and lv(sk) > lv(sd), lv(sk) > 80 and lv(sk) < lv(sd))),
+            (lv(wr), _vote(lv(wr) < -80 and lv(wr) > lv(wr, 1), lv(wr) > -20 and lv(wr) < lv(wr, 1))),
+            (lv(bbp), _vote(lv(bbp) > 0 and lv(bbp) > lv(bbp, 1), lv(bbp) < 0 and lv(bbp) < lv(bbp, 1))),
+            (lv(uo), _vote(lv(uo) > 70, lv(uo) < 30)),
+        )
+        for value, vote in rows:
+            if math.isfinite(value):
+                out.append(vote)
+        return out
+
+    return at
+
+
+def side(v: float) -> int:
+    """Сторона сигнала по порогам слов рейтинга: +1 покупка, −1 продажа, 0 — нейтрально."""
+    return 1 if v > 0.1 else -1 if v < -0.1 else 0
+
+
+def since(bars: list[Bar], at: Callable[[int], Rate]) -> tuple[float | None, int | None]:
+    """С какой свечи держится нынешний сигнал (покупка или продажа) и сколько
+    цена прошла с закрытия той свечи, %: (ход %, свечей назад). Нейтрально —
+    (None, None); сигнал старше SINCE_MAX свечей или с начала данных —
+    (None, SINCE_MAX + 1), «давно»."""
+    last = len(bars) - 1
+    now = side(at(last)[0])
+    if not now:
+        return None, None
+    start = last
+    while last - start < SINCE_MAX + 1:
+        j = start - 1
+        if j + 1 < MIN_BARS or side(at(j)[0]) != now:
+            break
+        start = j
+    if last - start > SINCE_MAX or start + 1 <= MIN_BARS:
+        return None, SINCE_MAX + 1
+    p0 = bars[start][4]
+    return ((bars[last][4] / p0 - 1) * 100 if p0 > 0 else None), last - start
 
 
 # --- Фибо от лоя (как fiboFromLow в src/lib/fibo.ts) ----------------------------
@@ -607,18 +643,21 @@ def fibo(bars: list[Bar]) -> tuple[float | None, float | None]:
     return tp, (lo[1] / px - 1) * 100
 
 
-Metrics = tuple[float, float, float, float | None, float | None, float | None, float | None, float | None, float | None]
+Metrics = tuple[float, float, float, float | None, float | None, float | None, float | None, float | None, float | None,
+                float | None, int | None]
 
 
 def metrics(all_bars: list[Bar]) -> Metrics | None:
     """Всё по таймфрейму монеты: (рейтинг, скользящие, осцилляторы, RSI 14,
     ADX 14, объём закрытой свечи к среднему за 20, ATR 14 % цены, тейк %,
-    стоп %); рейтинга нет — None."""
-    r = rating(all_bars)
-    if r is None:
-        return None
+    стоп %, ход цены с начала сигнала %, свечей с начала сигнала); рейтинга
+    нет — None."""
     bars = all_bars[-BARS:]
     n = len(bars)
+    if n < MIN_BARS:
+        return None
+    at = _rater(bars)
+    r = at(n - 1)
     c = _col(bars, 4)
     px = c[-1]
 
@@ -632,7 +671,8 @@ def metrics(all_bars: list[Bar]) -> Metrics | None:
     volx = bars[-2][5] / avg if avg > 0 else None
     atrp = fin(_div(_at(rma(_true_range(bars), 14), n - 1), px) * 100)
     tp, sl = fibo(bars)
-    return (r[0], r[1], r[2], rsi, adx, volx, atrp, tp, sl)
+    mv, age = since(bars, at)
+    return (r[0], r[1], r[2], rsi, adx, volx, atrp, tp, sl, mv, age)
 
 
 # --- Ответ ----------------------------------------------------------------------
@@ -656,9 +696,11 @@ def _r(v: float | None, nd: int) -> float | None:
 
 def pack(m: Metrics) -> list[float | None]:
     """Метрики — компактно для ответа: [рейтинг, скользящие, осцилляторы, RSI,
-    ADX, объём ×, ATR %, тейк %, стоп %], округлённые по смыслу."""
-    t, ma, osc, rsi, adx, volx, atrp, tp, sl = m
-    return [round(t, 3), round(ma, 2), round(osc, 2), _r(rsi, 1), _r(adx, 1), _r(volx, 2), _r(atrp, 2), _r(tp, 2), _r(sl, 2)]
+    ADX, объём ×, ATR %, тейк %, стоп %, ход с сигнала %, свечей с сигнала],
+    округлённые по смыслу."""
+    t, ma, osc, rsi, adx, volx, atrp, tp, sl, mv, age = m
+    return [round(t, 3), round(ma, 2), round(osc, 2), _r(rsi, 1), _r(adx, 1), _r(volx, 2), _r(atrp, 2), _r(tp, 2), _r(sl, 2),
+            _r(mv, 2), age]
 
 
 def reply(universe: list[Coin], rates: dict[str, dict[str, tuple[Metrics, int]]],

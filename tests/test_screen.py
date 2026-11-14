@@ -12,6 +12,7 @@ import io
 import json
 import math
 import os
+import random
 import sys
 import threading
 import time
@@ -103,11 +104,66 @@ class ParseTest(unittest.TestCase):
         self.assertIsNone(sc.change_24h(bars[:96]))
 
 
+class SinceTest(unittest.TestCase):
+    """Начало сигнала: рейтинг на прошлой свече — тот же, что techRating на
+    свечах до неё; ход цены — от закрытия свечи, где сигнал появился."""
+
+    def test_rating_at_past_candle_equals_rating_of_prefix(self):
+        r = random.Random(7)  # noqa: S311
+        bars, px = [], 50.0
+        for i in range(420):
+            o = px
+            px = max(px * (1 + r.gauss(0.0005, 0.012)), 1e-6)
+            bars.append((i * 900_000.0, o, max(o, px) * 1.003, min(o, px) * 0.997, px, r.uniform(0, 1e5)))
+        at = sc._rater(bars)
+        for j in [59, 60, 99, 100, 101, 199, 200, 201, 250, 333, 419]:
+            want = sc.rating(bars[:j + 1])
+            self.assertIsNotNone(want)
+            for x, y in zip(at(j), want, strict=True):  # type: ignore[arg-type]
+                self.assertAlmostEqual(x, y, delta=1e-12, msg=f"свеча {j}")
+
+    def test_since(self):
+        # Рейтинг подменён: продажа до свечи 190, покупка — с неё.
+        bars = [(float(i), 1.0, 1.0, 1.0, 100.0 + i, 1.0) for i in range(200)]
+        seq = {j: (-0.4 if j < 190 else 0.3) for j in range(200)}
+
+        def at(j):
+            return (seq[j], 0.0, 0.0)
+
+        mv, age = sc.since(bars, at)
+        self.assertEqual(age, 9)
+        self.assertAlmostEqual(mv, (299 / 290 - 1) * 100)
+        seq[199] = 0.05  # сейчас нейтрально — сигнала нет
+        self.assertEqual(sc.since(bars, at), (None, None))
+        seq[199] = 0.3
+        seq.update({j: 0.3 for j in range(200)})  # покупка с самого начала данных — «давно»
+        self.assertEqual(sc.since(bars, at), (None, sc.SINCE_MAX + 1))
+        seq.update({j: (0.3 if j >= 199 - sc.SINCE_MAX else -0.3) for j in range(200)})  # ровно SINCE_MAX свечей
+        self.assertEqual(sc.since(bars, at)[1], sc.SINCE_MAX)
+        seq[199 - sc.SINCE_MAX] = -0.3
+        seq[198 - sc.SINCE_MAX] = 0.3
+        self.assertEqual(sc.since(bars, at)[1], sc.SINCE_MAX - 1)
+        seq.update({j: (0.3 if j >= 198 - sc.SINCE_MAX else -0.3) for j in range(200)})  # на свечу старше — «давно»
+        self.assertEqual(sc.since(bars, at), (None, sc.SINCE_MAX + 1))
+        # Продажа: ход — вниз, со знаком.
+        seq.update({j: (-0.6 if j >= 195 else 0.0) for j in range(200)})
+        mv, age = sc.since(bars, at)
+        self.assertEqual(age, 4)
+        self.assertGreater(mv, 0)  # цена росла — ход против продажи
+        self.assertEqual([sc.side(v) for v in (0.11, 0.1, -0.1, -0.11, 0.0)], [1, 0, 0, -1, 0])
+
+    def test_metrics_has_since(self):
+        m = sc.metrics(sc.parse_bars(kl(300, step=0.01)))
+        self.assertIsNotNone(m)
+        self.assertEqual(len(m), 11)  # type: ignore[arg-type]
+
+
 class ReplyTest(unittest.TestCase):
     def test_order_stale_and_empty(self):
         uni = [("BTC", 2e9, "s"), ("NEW", 1.5e9, "f"), ("ETH", 1e9, "s"), ("SOL", 5e8, "s")]
-        m = (0.6, 0.7333, 0.4666, 31.234, 27.06, 2.345, 1.2345, 3.456, -1.234)
-        rates = {"15m": {"BTC": (m, NOW - 30), "ETH": ((-0.2, *m[1:]), NOW - 3 * 600 - 1), "NEW": ((0.2, *m[1:7], None, None), NOW - 30)},
+        m = (0.6, 0.7333, 0.4666, 31.234, 27.06, 2.345, 1.2345, 3.456, -1.234, 2.3456, 7)
+        rates = {"15m": {"BTC": (m, NOW - 30), "ETH": ((-0.2, *m[1:]), NOW - 3 * 600 - 1),
+                         "NEW": ((0.2, *m[1:7], None, None, None, sc.SINCE_MAX + 1), NOW - 30)},
                  "1h": {"BTC": ((-0.4, *m[1:]), NOW - 60), "ETH": ((0.31234, *m[1:]), NOW - 60)},
                  "1m": {"BTC": ((0.9, *m[1:]), NOW - 3 * 360 - 1)}}  # старый — мимо
         px = {"BTC": (100000.0, 1.25)}
@@ -117,12 +173,12 @@ class ReplyTest(unittest.TestCase):
         self.assertEqual(rep["by"], "Binance")
         self.assertEqual([r["s"] for r in rep["rows"]], ["BTC", "NEW", "ETH"])  # у SOL рейтингов нет — мимо
         # По таймфрейму — рейтинг, скользящие, осцилляторы, RSI, ADX, объём ×,
-        # ATR %, тейк %, стоп % — округлённые.
-        packed = [0.6, 0.73, 0.47, 31.2, 27.1, 2.35, 1.23, 3.46, -1.23]
+        # ATR %, тейк %, стоп %, ход с сигнала %, свечей с сигнала — округлённые.
+        packed = [0.6, 0.73, 0.47, 31.2, 27.1, 2.35, 1.23, 3.46, -1.23, 2.35, 7]
         self.assertEqual(rep["rows"][0], {"s": "BTC", "px": 100000.0, "ch": 1.25, "vol": 2000000000,
                                           "r": {"15m": packed, "1h": [-0.4, *packed[1:]]}})
         self.assertEqual(rep["rows"][1]["f"], 1)  # только фьючерсы — помечено
-        self.assertEqual(rep["rows"][1]["r"]["15m"][7:], [None, None])  # Фибо нет — так и есть
+        self.assertEqual(rep["rows"][1]["r"]["15m"][7:], [None, None, None, sc.SINCE_MAX + 1])  # Фибо нет, сигнал давно
         self.assertNotIn("f", rep["rows"][0])
         self.assertEqual(rep["rows"][2]["r"], {"1h": [0.312, *packed[1:]]})  # старый 15m — мимо
         self.assertIsNone(rep["rows"][2]["px"])

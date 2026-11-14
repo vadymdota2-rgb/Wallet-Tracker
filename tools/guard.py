@@ -2057,6 +2057,13 @@ say("скринер для сделок: у каждой монеты по ос�
     and "function ScrDetails(" in read(f"{APP}/src/screens/ChartScreen.tsx")
     and "подтверждения и детали" in read(f"{APP}/tests/e2e/screener.e2e.test.ts")
     and "SCREEN_FUT" in api and all(k in _i18n for k in ("scr_x_title", "scr_agree", "scr_fut", "scr_sort_rr")))
+say("скринер — не заходить поздно: у каждого таймфрейма — когда появился нынешний сигнал и сколько цена прошла с тех пор (рейтинг прошлой свечи = techRating на свечах до неё), «поздно» — больше двух ATR, фильтр «ход с сигнала» и порядок «свежесть»; таймфреймы-столбцы в списке выбираются и убираются, новые — по спросу",
+    "def since(" in read(f"{APP}/wt_screen.py") and "def _rater(" in read(f"{APP}/wt_screen.py")
+    and "def test_rating_at_past_candle_equals_rating_of_prefix(" in read(f"{APP}/tests/test_screen.py")
+    and "export function chase(" in read(f"{APP}/src/lib/screener.ts") and "export function validCols(" in read(f"{APP}/src/lib/screener.ts")
+    and 'className="scr-cols"' in read(f"{APP}/src/screens/ChartScreen.tsx")
+    and "столбцы: любой таймфрейм можно добавить или убрать" in read(f"{APP}/tests/e2e/screener.e2e.test.ts")
+    and all(k in _i18n for k in ("scr_since", "scr_since_old", "scr_x_late", "scr_cols", "scr_sort_fresh", "scr_ago_d")))
 say("рынки в меню — уровень зрелых проектов: журнал сервера только при смене состояния источников (молчит / снова отвечает, тип ошибки без текста, одна чистая строка); сетка всегда 3 × 3 — пропавший пункт «—» на своём месте («нет данных» для чтения с экрана); ячейки перерисовываются по отдельности; высокая контрастность Windows",
     "def _health(" in read(f"{APP}/wt_markets.py") and "v, why = None, type(e).__name__" in read(f"{APP}/wt_markets.py")
     and "def test_journal_only_on_state_changes(" in read(f"{APP}/tests/test_markets.py")

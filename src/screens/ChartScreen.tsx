@@ -23,9 +23,9 @@ import {
   chartSnap, chartStateGet, chartStatePut, fetchScreener, pxAlertAdd, pxAlertDel, pxAlertList, pxAlertMove, type PxAlert, type PxLevel,
 } from "../lib/api";
 import {
-  ADX_STEPS, ANY, badgeTfs, chartTf, consensus, EXTRA_ANY, find, mainTf, nextWant, pending, PRESETS, rr, RR_STEPS, RSI_ZONES,
-  SCREEN_TFS, screen, signal, SORTS, validExtra, validFilter, VOL_STEPS, wanted,
-  type Extra, type ScreenFilter, type ScreenReply, type ScreenRow,
+  ADX_STEPS, ANY, badgeTfs, chartTf, chase, consensus, EXTRA_ANY, find, late, LATE_STEPS, mainTf, nextWant, pending, PRESETS, rr,
+  RR_STEPS, RSI_ZONES, SCREEN_TFS, SCREEN_WARM, screen, signal, SINCE_MAX, SORTS, toggleCol, validCols, validExtra, validFilter,
+  VOL_STEPS, wanted, type Extra, type ScreenFilter, type ScreenReply, type ScreenRow, type ScreenTf,
 } from "../lib/screener";
 import { FIBO_LEVELS, fiboFromLow, fiboPlan, type Fibo } from "../lib/fibo";
 import { toast } from "../components/Toast";
@@ -91,6 +91,8 @@ interface Prefs {
   scr?: ScreenFilter;
   /** Подтверждения и порядок скринера. */
   scrx?: Extra;
+  /** Таймфреймы-столбцы у монет в списке скринера. */
+  scrc?: ScreenTf[];
   /** Когда меняли (мс) — для сверки с сервером: новее тот, кто позже. */
   at?: number;
 }
@@ -120,6 +122,7 @@ function loadPrefs(): Prefs {
       sym: typeof raw.sym === "string" && raw.sym ? raw.sym : undefined,
       scr: validFilter(raw.scr),
       scrx: validExtra(raw.scrx),
+      scrc: validCols(raw.scrc),
       at: Number(raw.at) || 0,
     };
   } catch {
@@ -268,6 +271,15 @@ const SCR_WAIT_MS = 15_000;
 const SIG_KEY = ["chart_r_ss", "chart_r_s", "chart_r_n", "chart_r_b", "chart_r_sb"] as const;
 const SIG_MARK = ["▼▼", "▼", "•", "▲", "▲▲"];
 
+/** Сколько назад: свечей таймфрейма → «5 мин назад», «3 ч назад», «2 дн. назад». */
+function candlesAgo(lang: Parameters<typeof t>[0], tf: ScreenTf, n: number): string {
+  const min = Math.round((n * TF_MS[tf]) / 60_000);
+  if (min < 1) return t(lang, "mk_now");
+  if (min < 60) return t(lang, "mk_ago", { n: min });
+  if (min < 48 * 60) return t(lang, "mk_ago_h", { n: Math.round(min / 60) });
+  return t(lang, "scr_ago_d", { n: Math.round(min / 1440) });
+}
+
 function agoMin(lang: Parameters<typeof t>[0], at: number): string {
   const min = Math.max(0, Math.floor((Date.now() / 1000 - at) / 60));
   return min < 1 ? t(lang, "mk_now") : min < 60 ? t(lang, "mk_ago", { n: min }) : t(lang, "mk_ago_h", { n: Math.floor(min / 60) });
@@ -317,6 +329,15 @@ function ScrDetails({ row, tf, lang }: { row: ScreenRow; tf: (typeof SCREEN_TFS)
   if (k?.tp != null) parts.push(<span key="tp" className="up">TP +{n1(k.tp)}%</span>);
   if (k?.sl != null) parts.push(<span key="sl" className="dn">SL −{n1(Math.abs(k.sl))}%</span>);
   if (q !== null) parts.push(<span key="rr" className={q >= 2 ? "hot" : undefined}>R:R {n1(q)}</span>);
+  const sv = row.r[tf] === null ? 0 : signal(row.r[tf]!);
+  if (sv && k?.age != null) {
+    const mv = chase(row, tf);
+    parts.unshift(k.age > SINCE_MAX || k.mv === null || mv === null
+      ? <span key="since" className="scr-since">{t(lang, "scr_since_old")}</span>
+      : <span key="since" className={late(row, tf) ? "scr-since late" : "scr-since"}>
+        {t(lang, "scr_since", { ago: candlesAgo(lang, tf, k.age), pct: signed(k.mv) })}
+      </span>);
+  }
   return (
     <span className="scr-det">
       <span className="scr-agree" aria-label={t(lang, "scr_agree", { up: c.up, dn: c.dn, n: c.of })}>
@@ -506,9 +527,10 @@ export function ChartScreen({ arg }: ScreenProps) {
   const extra = prefs.scrx ?? EXTRA_ANY;
   const tfMain = mainTf(filter);
   const found = useMemo(() => (scr ? find(screen(scr.rows, filter, extra), scrQ) : []), [scr, filter, extra, scrQ]);
-  const wait = pending(filter, scr);
+  const cols = prefs.scrc ?? SCREEN_WARM;
+  const wait = pending(filter, scr, cols);
   const waitKey = wait.join(",");
-  const wantKey = wanted(filter).join(",");
+  const wantKey = wanted(filter, cols).join(",");
   // Пока открыт — свежий ответ раз в минуту (сервер — из кэша, не к бирже);
   // выбранные таймфреймы ещё считаются — раз в 20 секунд. Таймфреймы фильтра
   // называем серверу: он посчитает их в фоне.
@@ -1572,7 +1594,7 @@ export function ChartScreen({ arg }: ScreenProps) {
             </div>
             <div className="scr-tfs" role="group" aria-label={t(lang, "scr_tfs")}>
               {SCREEN_TFS.map((tf) => (
-                <button key={tf} type="button" className={`scr-chip ${filter[tf]}${wait.includes(tf) ? " wait" : ""}`}
+                <button key={tf} type="button" className={`scr-chip ${filter[tf]}${filter[tf] !== "any" && wait.includes(tf) ? " wait" : ""}`}
                   aria-label={`${TF_LABEL[tf]}: ${t(lang, `scr_${filter[tf]}`)}`}
                   onClick={() => { haptic("select"); setP({ scr: { ...filter, [tf]: nextWant(filter[tf]) } }); }}>
                   {TF_LABEL[tf]}<i aria-hidden="true">{filter[tf] === "buy" ? "▲" : filter[tf] === "sell" ? "▼" : ""}</i>
@@ -1580,6 +1602,17 @@ export function ChartScreen({ arg }: ScreenProps) {
               ))}
             </div>
             <p className="scr-how">{t(lang, "scr_how")}</p>
+            <details className="scr-cols">
+              <summary>{t(lang, "scr_cols")}: <b>{cols.length ? cols.map((tf) => TF_LABEL[tf]).join(", ") : "—"}</b></summary>
+              <div className="scr-tfs" role="group" aria-label={t(lang, "scr_cols")}>
+                {SCREEN_TFS.map((tf) => (
+                  <button key={tf} type="button" className={`scr-chip col${cols.includes(tf) ? " on" : ""}${cols.includes(tf) && wait.includes(tf) ? " wait" : ""}`} aria-pressed={cols.includes(tf)}
+                    onClick={() => { haptic("select"); setP({ scrc: toggleCol(cols, tf) }); }}>
+                    {TF_LABEL[tf]}<i aria-hidden="true">{cols.includes(tf) ? "✓" : ""}</i>
+                  </button>
+                ))}
+              </div>
+            </details>
             <div className="scr-x" role="group" aria-label={t(lang, "scr_x_title", { tf: TF_LABEL[tfMain] })}>
               <p className="scr-x-ttl">{t(lang, "scr_x_title", { tf: TF_LABEL[tfMain] })}</p>
               <label>
@@ -1606,7 +1639,13 @@ export function ChartScreen({ arg }: ScreenProps) {
                   {RR_STEPS.map((v) => <option key={v} value={v}>{v ? `≥ ${num(v, 1)}` : t(lang, "scr_any")}</option>)}
                 </select>
               </label>
-              <label className="wide">
+              <label>
+                <span>{t(lang, "scr_x_late")}</span>
+                <select value={extra.late} onChange={(e) => setP({ scrx: { ...extra, late: Number(e.target.value) } })}>
+                  {LATE_STEPS.map((v) => <option key={v} value={v}>{v ? `≤ ${num(v, 1)}%` : t(lang, "scr_any")}</option>)}
+                </select>
+              </label>
+              <label>
                 <span>{t(lang, "scr_sort")}</span>
                 <select value={extra.sort} onChange={(e) => setP({ scrx: { ...extra, sort: e.target.value as Extra["sort"] } })}>
                   {SORTS.map((v) => <option key={v} value={v}>{t(lang, `scr_sort_${v}`)}</option>)}
@@ -1631,13 +1670,18 @@ export function ChartScreen({ arg }: ScreenProps) {
                         </small>
                       </span>
                       <span className="scr-sig">
-                        {badgeTfs(filter).map((tf) => {
+                        {badgeTfs(filter, cols).map((tf) => {
                           const v = r.r[tf];
                           const sg = v === null ? null : signal(v);
+                          const k = r.m[tf];
+                          const mv = sg && k?.age != null && k.age <= SINCE_MAX && k.mv !== null ? k.mv : null;
+                          const ago = sg && k?.age != null ? (k.age > SINCE_MAX ? t(lang, "scr_since_old") : mv !== null
+                            ? t(lang, "scr_since", { ago: candlesAgo(lang, tf, k.age), pct: signed(mv) }) : "") : "";
                           return (
-                            <i key={tf} className={sg === null ? "na" : `s${sg + 2}`}
-                              aria-label={`${TF_LABEL[tf]}: ${sg === null ? "—" : t(lang, SIG_KEY[sg + 2]!)}`}>
+                            <i key={tf} className={`${sg === null ? "na" : `s${sg + 2}`}${late(r, tf) ? " late" : ""}`}
+                              aria-label={`${TF_LABEL[tf]}: ${sg === null ? "—" : t(lang, SIG_KEY[sg + 2]!)}${ago ? `. ${ago}` : ""}`}>
                               <small>{TF_LABEL[tf]}</small>{sg === null ? "—" : SIG_MARK[sg + 2]}
+                              <em>{mv !== null ? `${mv > 0 ? "+" : mv < 0 ? "−" : ""}${num(Math.abs(mv), Math.abs(mv) < 10 ? 1 : 0, Math.abs(mv) < 10 ? 1 : 0)}%` : ""}</em>
                             </i>
                           );
                         })}
