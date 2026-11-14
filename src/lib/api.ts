@@ -12,6 +12,7 @@ import { FNG_SAVED_MAX_MS, FNG_TTL_MS, validFng, type FngReply } from "./fng";
 import { ETF_TTL_MS, validEtf, type EtfReply } from "./etf";
 import { validLiqMap } from "./liqmap";
 import { MARKETS_AGE_MAX, validCandles, validMarkets, type MarketsCandles, type MarketsReply } from "./markets";
+import { validScreener, type ScreenReply } from "./screener";
 import { DOM_TTL_MS, MCAP_MAX_AGE, MCAP_TTL_MS, validDom, validMcap, type DomReply, type McapReply } from "./dom";
 import type {
   Bootstrap, Deal, DigestActReply, DigestCommentsReply, DigestReply, DigestTranslation, FlowRow, LiqMapReply,
@@ -596,6 +597,14 @@ export const fetchMarketsCandles = () =>
   remember<MarketsCandles>("/api/markets/candles", MARKETS_CANDLES_TTL,
     () => call<unknown>("/api/markets/candles", { timeout: 15_000 }).then((r) => validCandles(r)),
     (v) => Object.keys(v).length > 0);
+/** Скринер графика — рейтинг индикаторов топ-монет Binance на 15 минутах,
+ *  часе, 4 часах и дне: один ответ на всех, в памяти на минуту (сервер
+ *  пересчитывает 15 минут раз в 5 минут). Битый ответ — null. */
+const SCREENER_TTL = 60_000;
+export const fetchScreener = () =>
+  remember<ScreenReply | null>("/api/screener", SCREENER_TTL,
+    () => call<unknown>("/api/screener", { timeout: 15_000 }).then((r) => validScreener(r)),
+    (v) => v !== null);
 /** Свежие рынки мимо памяти — для самообновления открытого меню. */
 export function refreshMarkets(): Promise<MarketsReply | null> {
   forget("/api/markets");

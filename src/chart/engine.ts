@@ -654,6 +654,19 @@ export class Engine {
     this.invalidate();
   }
 
+  /** Поставить рисунок (тот же id — заменить) — одним шагом, который можно отменить. */
+  putDrawing(d: Drawing) {
+    this.snap();
+    this.drawings = [...this.drawings.filter((x) => x.id !== d.id), d];
+    this.ev.drawings(this.drawings);
+    this.invalidate();
+  }
+
+  /** Свечи на графике сейчас (последняя — живая). */
+  get barsNow(): readonly Bar[] {
+    return this.bars;
+  }
+
   get allDrawings(): Drawing[] {
     return this.drawings;
   }

@@ -20,12 +20,17 @@ import type { DictKey } from "../i18n/types";
 import { haptic, webApp } from "../lib/telegram";
 import {
   fetchChartLiqs, fetchChartWhales, fetchLiqMap, fetchOiHist, fetchSymbols, peekSymbols,
-  chartSnap, chartStateGet, chartStatePut, pxAlertAdd, pxAlertDel, pxAlertList, pxAlertMove, type PxAlert, type PxLevel,
+  chartSnap, chartStateGet, chartStatePut, fetchScreener, pxAlertAdd, pxAlertDel, pxAlertList, pxAlertMove, type PxAlert, type PxLevel,
 } from "../lib/api";
+import {
+  ANY, chartTf, PRESETS, SCREEN_TFS, screen, signal, validFilter, type ScreenFilter, type ScreenReply, type Want,
+} from "../lib/screener";
+import { FIBO_LEVELS, fiboFromLow, fiboPlan, type Fibo } from "../lib/fibo";
 import { toast } from "../components/Toast";
 import type { SymbolRow } from "../lib/types";
 import { CoinIcon } from "../components/CoinIcon";
-import { loadHistory, loadOlder, market, SOURCE_NAME, subscribe, TF_MS, TFS, type Source, type Tf } from "../chart/data";
+import { loadHistory, loadOlder, market, SOURCE_NAME, subscribe, TF_MS, TFS, type Bar, type Source, type Tf } from "../chart/data";
+import { num } from "../lib/format";
 import { Engine, fmtPrice, fmtShort, priceDecimals, type ChartType, type Hover, type Tool } from "../chart/engine";
 import {
   AUTO_KINDS, IND, indTitle, newInd, OVERLAY_KINDS, OWN_KINDS, PANE_KINDS, rateKey, type IndInst, type IndKind, type Rating,
@@ -80,6 +85,8 @@ interface Prefs {
   log?: boolean;
   /** Последняя открытая монета — чтобы вернуться к ней и с другого устройства. */
   sym?: string;
+  /** Фильтр скринера по таймфреймам. */
+  scr?: ScreenFilter;
   /** Когда меняли (мс) — для сверки с сервером: новее тот, кто позже. */
   at?: number;
 }
@@ -107,6 +114,7 @@ function loadPrefs(): Prefs {
       cmp: Array.isArray(raw.cmp) ? raw.cmp.filter((x) => typeof x === "string").slice(0, CMP_MAX) : [],
       log: !!raw.log,
       sym: typeof raw.sym === "string" && raw.sym ? raw.sym : undefined,
+      scr: validFilter(raw.scr),
       at: Number(raw.at) || 0,
     };
   } catch {
@@ -193,7 +201,7 @@ const indName = (k: IndKind) => `chart_i_${k}` as DictKey;
    круглее, полупрозрачная заливка фигур, а опорные точки — голубые кольца
    (ровно так точки рисунков выглядят и на самом графике). */
 type IconKey = DrawType | "cursor" | "magnet" | "eye" | "trash" | "undo" | "redo" | ChartType
-  | "bell" | "camera" | "expand" | "shrink" | "vs";
+  | "bell" | "camera" | "expand" | "shrink" | "vs" | "filter";
 
 function ToolIcon({ k }: { k: IconKey }) {
   const p = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -234,6 +242,7 @@ function ToolIcon({ k }: { k: IconKey }) {
     bars: <path {...p} d="M8 4v16M5 8h3M8 16h3M16 6v12M13 9h3M16 15h3" />,
     line: <><path {...p} d="M3 17l5-6 4 3 5-8 4 4" />{N(17, 6)}</>,
     area: <><path d="M3 17l5-6 4 3 5-8 4 4v10H3z" {...f} /><path {...p} d="M3 17l5-6 4 3 5-8 4 4" />{N(17, 6)}</>,
+    filter: <><path d="M4 5h16l-6 7.5V18l-4 2v-7.5z" {...f} /><path {...p} d="M4 5h16l-6 7.5V18l-4 2v-7.5z" /></>,
     bell: <><path d="M6 16V11a6 6 0 0112 0v5l1.5 2h-15z" {...f} /><path {...p} d="M6 16V11a6 6 0 0112 0v5l1.5 2h-15zM10 20.5a2.2 2.2 0 004 0" /><circle cx="18" cy="5.5" r="2.4" fill="#7fd8ff" /></>,
     camera: <><rect x="3" y="7" width="18" height="13" rx="4" {...f} /><path {...p} d="M3 11a4 4 0 014-4h1.5l1.5-2.5h4L15.5 7H17a4 4 0 014 4v5a4 4 0 01-4 4H7a4 4 0 01-4-4z" /><circle cx="12" cy="13.5" r="3.2" fill="none" stroke="#7fd8ff" strokeWidth="1.8" /></>,
     expand: <path {...p} d="M4 9V6a2 2 0 012-2h3M15 4h3a2 2 0 012 2v3M20 15v3a2 2 0 01-2 2h-3M9 20H6a2 2 0 01-2-2v-3" />,
@@ -241,6 +250,48 @@ function ToolIcon({ k }: { k: IconKey }) {
     vs: <><path {...p} d="M3 16l5-5 4 3 9-8" /><path {...p} opacity=".55" strokeDasharray="0.5 3.2" d="M3 8l6 5 5-2 7 6" />{N(21, 6)}</>,
   };
   return <svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true">{body[k]}</svg>;
+}
+
+/* ── Скринер и Фибо: подписи ─────────────────────────────────────────── */
+
+const FIB_ID = "fib-low";
+const WANTS: Want[] = ["any", "buy", "sell"];
+/** Слово рейтинга −2…+2 → ключ словаря и значок. */
+const SIG_KEY = ["chart_r_ss", "chart_r_s", "chart_r_n", "chart_r_b", "chart_r_sb"] as const;
+const SIG_MARK = ["▼▼", "▼", "•", "▲", "▲▲"];
+
+function agoMin(lang: Parameters<typeof t>[0], at: number): string {
+  const min = Math.max(0, Math.floor((Date.now() / 1000 - at) / 60));
+  return min < 1 ? t(lang, "mk_now") : min < 60 ? t(lang, "mk_ago", { n: min }) : t(lang, "mk_ago_h", { n: Math.floor(min / 60) });
+}
+
+const signed = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${num(Math.abs(v), 2, 2)}%`;
+const fpx = (v: number) => fmtPrice(v, priceDecimals(v));
+
+/** Уровни Фибо от лоя: тейки выше цены, поддержки ниже, стоп — сам лой;
+ *  у каждого — сколько процентов от нынешней цены. */
+function FibCard({ f, lang, close }: { f: Fibo; lang: Parameters<typeof t>[0]; close: () => void }) {
+  const plan = fiboPlan(f);
+  return (
+    <div className="ch-fibcard" role="region" aria-label={t(lang, "fib_title")}>
+      <div className="ch-fib-hd">
+        <b>{t(lang, "fib_title")}</b>
+        {f.mode === "bounce" ? <small>{t(lang, "fib_bounce")}</small> : null}
+        <button type="button" className="ch-lg-x" aria-label={t(lang, "chart_hide")} onClick={close}>×</button>
+      </div>
+      {plan.tp.slice().reverse().map((x, i) => (
+        <div key={x.lv} className="ch-fib-row tp">
+          <span>{t(lang, "fib_tp", { n: plan.tp.length - i })} · {x.lv}</span><b>{fpx(x.p)}</b><em>{signed(x.pct)}</em>
+        </div>
+      ))}
+      <div className="ch-fib-row now"><span>{t(lang, "fib_now")}</span><b>{fpx(f.px)}</b><em /></div>
+      {plan.sup.map((x) => (
+        <div key={x.lv} className="ch-fib-row sup"><span>{x.lv}</span><b>{fpx(x.p)}</b><em>{signed(x.pct)}</em></div>
+      ))}
+      <div className="ch-fib-row stop"><span>{t(lang, "fib_stop")}</span><b>{fpx(plan.stop.p)}</b><em>{signed(plan.stop.pct)}</em></div>
+      <p className="ch-fib-note">{t(lang, "fib_note")}</p>
+    </div>
+  );
 }
 
 export function ChartScreen({ arg }: ScreenProps) {
@@ -410,6 +461,60 @@ export function ChartScreen({ arg }: ScreenProps) {
      удалили — снимается. */
   const [alerts, setAlerts] = useState<PxAlert[]>([]);
   const [alertsOpen, setAlertsOpen] = useState(false);
+
+  /* ── Скринер и Фибо от лоя ───────────────────────────────────────────── */
+  const [scrOpen, setScrOpen] = useState(false);
+  const [scr, setScr] = useState<ScreenReply | null>(null);
+  const [scrWait, setScrWait] = useState(false);
+  const filter = prefs.scr ?? ANY;
+  const found = useMemo(() => (scr ? screen(scr.rows, filter) : []), [scr, filter]);
+  // Пока открыт — раз в минуту свежий ответ (сервер — из кэша, не к бирже).
+  useEffect(() => {
+    if (!scrOpen) return;
+    let alive = true;
+    const load = () => {
+      setScrWait(true);
+      void fetchScreener().then((r) => {
+        if (!alive) return;
+        setScrWait(false);
+        if (r) setScr(r);
+      });
+    };
+    load();
+    const id = setInterval(load, 60_000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [scrOpen]);
+  const [fib, setFib] = useState<Fibo | null>(null);
+  /** Монету открыли из скринера — Фибо натянуть, как только придут свечи. */
+  const fibWant = useRef(false);
+  const putFib = (bars: readonly Bar[]) => {
+    const f = fiboFromLow(bars);
+    setFib(f);
+    if (!f) {
+      toast(t(lang, "fib_none"));
+      return;
+    }
+    eng.current?.putDrawing({
+      id: FIB_ID, type: "fib", color: "#f0b90b", levels: FIBO_LEVELS, extend: true,
+      pts: [{ t: f.hi.t, p: f.hi.p }, { t: f.lo.t, p: f.lo.p }],
+    });
+  };
+  const pickScreen = (s: string) => {
+    haptic("select");
+    const tf = chartTf(filter);
+    setScrOpen(false);
+    if (s === sym && (!tf || tf === prefs.tf)) {
+      putFib(eng.current?.barsNow ?? []);
+      return;
+    }
+    fibWant.current = true;
+    setSym(s);
+    setSaved(s);
+    setP({ sym: s, ...(tf ? { tf } : {}) });
+  };
   /** Подпись уровня каждого алерта: изменилась — значит, рисунок двигали. */
   const alertSig = useRef(new Map<number, string>());
   const levelOf = (d: Drawing, second = false): PxLevel | null => {
@@ -581,6 +686,7 @@ export function ChartScreen({ arg }: ScreenProps) {
     setStatus("load");
     setSrc(null);
     live.current.src = null;
+    if (!fibWant.current) setFib(null);
     e.setData([], prefs.tf);
     e.setWatermark(`${m.label} · ${TF_LABEL[prefs.tf]}`);
     void loadHistory(sym, prefs.tf, ctrl.signal).then((h) => {
@@ -593,6 +699,10 @@ export function ChartScreen({ arg }: ScreenProps) {
       setSrc(h.src);
       e.setData(h.bars, prefs.tf);
       setStatus("ok");
+      if (fibWant.current) {
+        fibWant.current = false;
+        putFib(h.bars);
+      }
       setAtLatest(true);
       unsub = subscribe(sym, prefs.tf, h.src, (b) => e.update(b));
     });
@@ -1123,6 +1233,7 @@ export function ChartScreen({ arg }: ScreenProps) {
 
             {status === "load" ? <div className="ch-note">{t(lang, "ui_loading")}…</div> : null}
             {status === "none" ? <div className="ch-note">{t(lang, "chart_no_data", { s: m.label })}</div> : null}
+            {fib && status === "ok" ? <FibCard f={fib} lang={lang} close={() => setFib(null)} /> : null}
 
             {!atLatest && status === "ok" ? (
               <button type="button" className="ch-latest" aria-label={t(lang, "chart_latest")}
@@ -1163,6 +1274,20 @@ export function ChartScreen({ arg }: ScreenProps) {
             {tool !== "cursor" ? <div className="ch-toolhint">{toolLabel(tool)}</div> : null}
           </div>
         </div>
+
+        {/* Снизу: скринер монет по рейтингу индикаторов и Фибо от последнего лоя. */}
+        {!full ? (
+          <div className="ch-foot">
+            <button type="button" className={scrOpen ? "ch-foot-btn scr-open on" : "ch-foot-btn scr-open"} aria-expanded={scrOpen}
+              onClick={() => { haptic("select"); setScrOpen(!scrOpen); }}>
+              <ToolIcon k="filter" /><span>{t(lang, "scr_title")}</span>
+            </button>
+            <button type="button" className={fib ? "ch-foot-btn fib-open on" : "ch-foot-btn fib-open"} aria-pressed={!!fib} disabled={status !== "ok"}
+              onClick={() => { haptic("select"); if (fib) setFib(null); else putFib(eng.current?.barsNow ?? []); }}>
+              <ToolIcon k="fib" /><span>{t(lang, "fib_btn")}</span>
+            </button>
+          </div>
+        ) : null}
 
         {/* Меню: таймфреймы, вид графика. */}
         {menu === "tf" ? (
@@ -1381,6 +1506,71 @@ export function ChartScreen({ arg }: ScreenProps) {
                 }}>×</button>
               </div>
             )) : <p className="ch-hint">{t(lang, "chart_alert_none")}</p>}
+          </div>
+        ) : null}
+
+        {scrOpen ? (
+          <div className="ch-sheet scr" role="dialog" aria-label={t(lang, "scr_title")}>
+            <div className="ch-sheet-hd">
+              <b>{t(lang, "scr_title")}</b>
+              <button type="button" className="ch-close" onClick={() => setScrOpen(false)}>{t(lang, "chart_ok")}</button>
+            </div>
+            <div className="scr-presets">
+              {PRESETS.map((p) => {
+                const on = SCREEN_TFS.every((tf) => filter[tf] === p.f[tf]);
+                return (
+                  <button key={p.key} type="button" className={on ? "on" : undefined} aria-pressed={on}
+                    onClick={() => { haptic("select"); setP({ scr: on ? ANY : p.f }); }}>{t(lang, p.key)}</button>
+                );
+              })}
+            </div>
+            <div className="scr-filter">
+              {SCREEN_TFS.map((tf) => (
+                <div key={tf} className="scr-frow">
+                  <span className="scr-tf">{TF_LABEL[tf]}</span>
+                  <div className="scr-seg" role="radiogroup" aria-label={TF_LABEL[tf]}>
+                    {WANTS.map((w) => (
+                      <button key={w} type="button" role="radio" aria-checked={filter[tf] === w}
+                        className={`${w}${filter[tf] === w ? " on" : ""}`}
+                        onClick={() => { haptic("select"); setP({ scr: { ...filter, [tf]: w } }); }}>{t(lang, `scr_${w}`)}</button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {scr ? (
+              <>
+                <p className="scr-count">{t(lang, "scr_found", { n: found.length, total: scr.rows.length })}</p>
+                <div className="scr-list">
+                  {found.map((r) => (
+                    <button key={r.s} type="button" className={r.s === sym ? "scr-row on" : "scr-row"} onClick={() => pickScreen(r.s)}>
+                      <CoinIcon sym={r.s} size={22} />
+                      <span className="scr-name">
+                        <b>{r.s}</b>
+                        <small>
+                          {r.px !== null ? fmtPrice(r.px, priceDecimals(r.px)) : "—"}{" "}
+                          {r.ch !== null ? <em className={r.ch > 0 ? "up" : r.ch < 0 ? "dn" : undefined}>{`${r.ch > 0 ? "+" : r.ch < 0 ? "−" : ""}${num(Math.abs(r.ch), 2, 2)}%`}</em> : null}
+                        </small>
+                      </span>
+                      <span className="scr-sig">
+                        {SCREEN_TFS.map((tf) => {
+                          const v = r.r[tf];
+                          const sg = v === null ? null : signal(v);
+                          return (
+                            <i key={tf} className={sg === null ? "na" : `s${sg + 2}`}
+                              aria-label={`${TF_LABEL[tf]}: ${sg === null ? "—" : t(lang, SIG_KEY[sg + 2]!)}`}>
+                              <small>{TF_LABEL[tf]}</small>{sg === null ? "—" : SIG_MARK[sg + 2]}
+                            </i>
+                          );
+                        })}
+                      </span>
+                    </button>
+                  ))}
+                  {!found.length ? <p className="ch-hint">{t(lang, "scr_none")}</p> : null}
+                </div>
+                <p className="ch-hint">{t(lang, "scr_note", { age: agoMin(lang, scr.at) })}</p>
+              </>
+            ) : <p className="ch-hint">{scrWait ? `${t(lang, "ui_loading")}…` : t(lang, "scr_wait")}</p>}
           </div>
         ) : null}
 

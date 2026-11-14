@@ -18,7 +18,7 @@
     "build": "tsc -p . && npm run clean && vite build",
     "preview": "vite preview",
     "i18n": "python3 tools/sync-i18n.py",
-    "test": "node --test tests/*.test.ts && python3 -m unittest discover -s tests -p 'test_*.py'",
+    "test": "node --import ./tests/ts-resolve.mjs --test tests/*.test.ts && python3 -m unittest discover -s tests -p 'test_*.py'",
     "test:e2e": "node --test tests/e2e/*.test.ts"
   },
   "dependencies": {

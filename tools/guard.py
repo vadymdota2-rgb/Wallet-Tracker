@@ -2040,6 +2040,14 @@ say("рынки в меню — дневные свечи за месяц по �
     and "class CandleFuzzTest(" in read(f"{APP}/tests/test_markets_fuzz.py")
     and "class HostileCandleFileTest(" in read(f"{APP}/tests/test_markets_security.py")
     and "python tools/load-markets.py 2 3 candles" in read(f"{APP}/.github/workflows/tests.yml"))
+say("график — скринер внизу: рейтинг индикаторов топ-монет Binance на 15m/1H/4H/1D считает сервер для всех (тот же techRating — тест-договор), фильтр «покупка/продажа» по таймфреймам, касание — график и Фибо от последнего лоя с тейками и стопом; Hyperliquid не трогается",
+    os.path.exists(f"{APP}/wt_screen.py") and "def rating(" in read(f"{APP}/wt_screen.py")
+    and "screener_data = wt_screen.screener_data" in api and '"screener",' in api.split("PAID_PATHS = frozenset(")[1][:1200]
+    and "hl_post" not in api.split("# --- Скринер графика (wt_screen.py)")[1].split("# --- Дайджест")[0]
+    and os.path.isfile(f"{APP}/tests/test_screen_contract.py") and os.path.isfile(f"{APP}/tests/e2e/screener.e2e.test.ts")
+    and "export function fiboFromLow(" in read(f"{APP}/src/lib/fibo.ts") and "export function screen(" in read(f"{APP}/src/lib/screener.ts")
+    and 'className="ch-foot"' in read(f"{APP}/src/screens/ChartScreen.tsx")
+    and "wt_screen.py tests/test_screen.py" in read(f"{APP}/.github/workflows/tests.yml"))
 say("рынки в меню — уровень зрелых проектов: журнал сервера только при смене состояния источников (молчит / снова отвечает, тип ошибки без текста, одна чистая строка); сетка всегда 3 × 3 — пропавший пункт «—» на своём месте («нет данных» для чтения с экрана); ячейки перерисовываются по отдельности; высокая контрастность Windows",
     "def _health(" in read(f"{APP}/wt_markets.py") and "v, why = None, type(e).__name__" in read(f"{APP}/wt_markets.py")
     and "def test_journal_only_on_state_changes(" in read(f"{APP}/tests/test_markets.py")

@@ -38,6 +38,7 @@ import wt_dom  # noqa: E402
 import wt_fng  # noqa: E402
 import wt_liqmap  # noqa: E402
 import wt_markets  # noqa: E402
+import wt_screen  # noqa: E402
 import wt_btc  # noqa: E402
 import wt_mcap
 import wt_treasury as treasury
@@ -114,7 +115,7 @@ PAID_PATHS = frozenset(
     # продукта, не открытой выдачей для сборщиков).
     "btc/wallet", "dom", "mcap", "etf", "liqcoins", "liqmap", "options", "liqs", "oihist", "calendar", "digest",
     "digest/translate", "digest/comments", "unlocks", "symbols", "big", "chart/liqs", "chart/whales", "markets",
-    "markets/candles",
+    "markets/candles", "screener",
     ) for p in ("/" + name, "/api/" + name)
 )
 # Цена и срок — те же, что в premium.cpp: бот и приложение обязаны продавать
@@ -10173,6 +10174,7 @@ def warmup() -> None:
     # Рынки в меню — сборка сразу при запуске (в фоне), не через 5 секунд
     # cache_refresher: запросы людей только читают кэш и ждут лишь её.
     markets_refresh()
+    screener_refresh()  # скринер графика — тоже в фоне, люди только читают кэш
     # Ставки бирж — своим потоком: первый круг успевает до первой сборки, а
     # дальше он обновляет их сам и в бюджет сборки не лезет.
     threading.Thread(target=fund_refresher, daemon=True, name="funding").start()
@@ -12124,6 +12126,7 @@ def _cache_modules() -> tuple:
         ("mcap", lambda: mcap_data(wait=0)),
         ("etf", etf_data),
         ("markets", lambda: markets_refresh()),
+        ("screener", lambda: screener_refresh()),
     )
 
 
@@ -15490,6 +15493,30 @@ def markets_disk_save(days: dict) -> None:
             pass
 
 
+# --- Скринер графика (wt_screen.py) -------------------------------------------
+# Рейтинг индикаторов топ-монет Binance на 15 минутах, часе, 4 часах и дне.
+# Hyperliquid не трогаем (его бюджет — общий); Binance spot — через то же
+# публичное зеркало, что у графика приложения. Модуль сам в сеть не ходит.
+SCREEN_HOST = "https://data-api.binance.vision/api/v3/"
+
+
+def _screen_klines(base: str, tf: str):
+    """Свечи монеты к USDT — только известные таймфреймы и тикеры из списка
+    модуля (буквы и цифры), ничего снаружи в адрес не попадает."""
+    if tf not in wt_screen.TFS or not (base.isascii() and base.isalnum() and len(base) <= 16):
+        return None
+    return get_json(f"{SCREEN_HOST}klines?symbol={base}USDT&interval={tf}&limit={wt_screen.BARS}", 15,
+                    max_bytes=wt_screen.RESP_MAX)
+
+
+wt_screen.set_sources(
+    universe=lambda: get_json(f"{SCREEN_HOST}ticker/24hr?type=MINI", 25, max_bytes=wt_screen.RESP_MAX),
+    klines=_screen_klines,
+)
+screener_data = wt_screen.screener_data  # запрос человека: только кэш
+screener_refresh = wt_screen.refresh  # обновление: cache_refresher и запуск
+
+
 # --- Дайджест ------------------------------------------------------------
 # Раз в сутки, в 12:00 по Лондону, сервер собирает выпуск: самое крупное из каждой
 # вкладки аналитики за прошедшие 24 часа и ближайшие разлоки. Хранятся
@@ -17233,6 +17260,15 @@ class Handler(BaseHTTPRequestHandler):
                     self._json_public("markets", rep)
                 else:
                     self._json(200, rep)
+                return
+            if path in ("/screener", "/api/screener"):
+                # Скринер — один ответ на всех подписчиков: готовые байты, ETag
+                # и «304»; сборку запрос не начинает.
+                scr = screener_data()
+                if scr.get("ok") is True:
+                    self._json_public("screener", scr)
+                else:
+                    self._json(200, scr)
                 return
             if path in ("/markets/candles", "/api/markets/candles"):
                 # Дневные свечи для мини-графика — из памяти модуля, один
