@@ -2,20 +2,22 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  ANY, chartTf, matches, PRESETS, SCREEN_TFS, screen, signal, validFilter, validScreener, type ScreenRow,
+  ANY, badgeTfs, chartTf, find, matches, nextWant, pending, picked, PRESETS, SCREEN_TFS, SCREEN_WARM, screen, signal,
+  validFilter, validScreener, wanted, type ScreenRow,
 } from "../src/lib/screener.ts";
 import { FIBO_LEVELS, fiboFromLow, fiboPlan, swingDev } from "../src/lib/fibo.ts";
 import { rateKey } from "../src/chart/indicators.ts";
 import type { Bar } from "../src/chart/data.ts";
 
 const NOW = 1_794_100_000;
+const NONE = Object.fromEntries(SCREEN_TFS.map((tf) => [tf, null])) as ScreenRow["r"];
 const row = (s: string, r: Partial<Record<(typeof SCREEN_TFS)[number], number | null>>): ScreenRow =>
-  ({ s, px: 1, ch: 0, r: { "15m": null, "1h": null, "4h": null, "1d": null, ...r } });
+  ({ s, px: 1, ch: 0, r: { ...NONE, ...r } });
 
 test("ответ скринера: только годные строки, рейтинг от −1 до +1, повторы и мусор — мимо", () => {
   const raw = {
-    ok: true, at: NOW - 60, rows: [
-      { s: "BTC", px: 100000, ch: 1.5, r: { "15m": 0.6, "1h": -0.3, "4h": 2, "1d": "x" } },
+    ok: true, at: NOW - 60, tfs: ["15m", "1h", "1m", "evil"], rows: [
+      { s: "BTC", px: 100000, ch: 1.5, r: { "15m": 0.6, "1h": -0.3, "4h": 2, "1d": "x", "1m": 0.2, "2m": 0.5 } },
       { s: "BTC", px: 1, ch: 0, r: { "15m": 0.1 } }, // повтор — первый
       { s: "<b>", px: 1, ch: 0, r: { "15m": 0.1 } },
       { s: "ETH", px: -1, ch: 1e9, r: { "15m": -0.2 } },
@@ -26,9 +28,11 @@ test("ответ скринера: только годные строки, ре�
   };
   const v = validScreener(raw, NOW)!;
   assert.deepEqual(v.rows, [
-    { s: "BTC", px: 100000, ch: 1.5, r: { "15m": 0.6, "1h": -0.3, "4h": null, "1d": null } },
-    { s: "ETH", px: null, ch: null, r: { "15m": -0.2, "1h": null, "4h": null, "1d": null } },
+    { s: "BTC", px: 100000, ch: 1.5, r: { ...NONE, "15m": 0.6, "1h": -0.3, "1m": 0.2 } },
+    { s: "ETH", px: null, ch: null, r: { ...NONE, "15m": -0.2 } },
   ]);
+  assert.deepEqual(v.warm, ["1m", "15m", "1h"]); // только известные таймфреймы, по порядку
+  assert.equal(SCREEN_TFS.length, 14);
   for (const bad of [null, "x", { ok: false }, { ok: true, at: NOW, rows: [] }, { ok: true, at: NOW - 4 * 86_400, rows: raw.rows },
     { ok: true, at: NOW + 2 * 86_400, rows: raw.rows }, { ok: true, at: 1.5, rows: raw.rows }]) {
     assert.equal(validScreener(bad, NOW), null, JSON.stringify(bad).slice(0, 60));
@@ -64,11 +68,34 @@ test("фильтр: на выбранных таймфреймах — нужн�
   assert.deepEqual(screen([row("P", { "4h": 0.3 }), row("Q", { "4h": 0.3 })], { ...ANY, "4h": "buy" }).map((r) => r.s), ["P", "Q"]);
 });
 
+test("все таймфреймы: касание — любой → покупка → продажа; серверу — только не основные; ждём — выбранные без рейтинга", () => {
+  assert.deepEqual([nextWant("any"), nextWant("buy"), nextWant("sell")], ["buy", "sell", "any"]);
+  const f = { ...ANY, "1m": "buy" as const, "15m": "sell" as const, "1w": "buy" as const };
+  assert.deepEqual(picked(f), ["1m", "15m", "1w"]);
+  assert.deepEqual(wanted(f), ["1m", "1w"]); // 15m сервер считает всегда
+  assert.deepEqual(wanted(ANY), []);
+  const reply = { at: NOW, rows: [], warm: [...SCREEN_WARM, "1m" as const] };
+  assert.deepEqual(pending(f, reply), ["1w"]);
+  assert.deepEqual(pending(f, null), ["1m", "15m", "1w"]);
+  assert.deepEqual(badgeTfs(ANY), [...SCREEN_WARM]);
+  assert.deepEqual(badgeTfs({ ...ANY, "1m": "buy", "3m": "buy", "5m": "sell", "30m": "buy", "2h": "sell" }), ["1m", "3m", "5m", "30m"]);
+  // Фильтр по минутному таймфрейму работает так же, как по основным.
+  assert.deepEqual(screen([row("A", { "1m": 0.6 }), row("B", { "1m": -0.6 }), row("C", {})], { ...ANY, "1m": "buy" }).map((r) => r.s), ["A"]);
+});
+
+test("поиск монеты в списке — по началу тикера, без учёта регистра и мусора", () => {
+  const rows = [row("BTC", { "15m": 0.2 }), row("BNB", { "15m": 0.2 }), row("WBTC", { "15m": 0.2 })];
+  assert.deepEqual(find(rows, "b").map((r) => r.s), ["BTC", "BNB"]);
+  assert.deepEqual(find(rows, " bt<c ").map((r) => r.s), ["BTC"]);
+  assert.deepEqual(find(rows, "").map((r) => r.s), ["BTC", "BNB", "WBTC"]);
+});
+
 test("таймфрейм графика после касания — младший из выбранных; фильтр с устройства — только известные значения", () => {
   assert.equal(chartTf(ANY), null);
   assert.equal(chartTf({ ...ANY, "4h": "sell", "1h": "buy" }), "1h");
+  assert.equal(chartTf({ ...ANY, "1M": "sell", "5m": "buy" }), "5m");
   assert.equal(chartTf(PRESETS[0]!.f), "15m");
-  assert.deepEqual(validFilter({ "15m": "buy", "1h": "x", "4h": "sell", evil: "buy" }), { ...ANY, "15m": "buy", "4h": "sell" });
+  assert.deepEqual(validFilter({ "15m": "buy", "1h": "x", "4h": "sell", "1m": "sell", evil: "buy" }), { ...ANY, "15m": "buy", "4h": "sell", "1m": "sell" });
   assert.deepEqual(validFilter(null), ANY);
 });
 

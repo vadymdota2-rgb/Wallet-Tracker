@@ -55,10 +55,13 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(sc.parse_universe(TICKER), [("BTC", 1.5e9), ("ETH", 6e8), ("SOL", 3e8)])
         for bad in (None, "x", {}, [1, None, {"symbol": 5}], [{"symbol": "XUSDT", "quoteVolume": "NaN"}]):
             self.assertEqual(sc.parse_universe(bad), [], bad)
-        many = [{"symbol": f"C{i}USDT", "quoteVolume": str(1e7 + i)} for i in range(500)]
+        many = [{"symbol": f"C{i}USDT", "quoteVolume": str(1e7 + i)} for i in range(1000)]
         got = sc.parse_universe(many)
-        self.assertEqual(len(got), sc.TOP)
-        self.assertEqual(got[0][0], "C499")  # крупнейшие — первыми
+        self.assertEqual(len(got), sc.COINS_MAX)
+        self.assertEqual(got[0][0], "C999")  # крупнейшие — первыми
+        # Все монеты с оборотом от VOL_MIN, а не топ: $100 тыс. — да, $99 тыс. — нет.
+        edge = [{"symbol": "AUSDT", "quoteVolume": str(sc.VOL_MIN)}, {"symbol": "BUSDT", "quoteVolume": str(sc.VOL_MIN - 1)}]
+        self.assertEqual([b for b, _ in sc.parse_universe(edge)], ["A"])
 
     def test_bars(self):
         bars = sc.parse_bars(kl(10))
@@ -95,16 +98,18 @@ class ParseTest(unittest.TestCase):
 class ReplyTest(unittest.TestCase):
     def test_order_stale_and_empty(self):
         uni = [("BTC", 2e9), ("ETH", 1e9), ("SOL", 5e8)]
-        rates = {"15m": {"BTC": (0.6, NOW), "ETH": (-0.2, NOW - 3 * 300 - 1)},
-                 "1h": {"BTC": (-0.4, NOW), "ETH": (0.31234, NOW)}}
+        rates = {"15m": {"BTC": (0.6, NOW - 30), "ETH": (-0.2, NOW - 3 * 600 - 1)},
+                 "1h": {"BTC": (-0.4, NOW - 60), "ETH": (0.31234, NOW - 60)},
+                 "1m": {"BTC": (0.9, NOW - 3 * 360 - 1)}}  # старый — мимо
         px = {"BTC": (100000.0, 1.25)}
         rep = sc.reply(uni, rates, px, NOW)
-        self.assertEqual(rep["tfs"], list(sc.TFS))
+        self.assertEqual(rep["tfs"], ["15m", "1h"])  # по каким таймфреймам рейтинг есть
+        self.assertEqual(rep["at"], NOW - 30)  # время — самого свежего рейтинга
         self.assertEqual(rep["by"], "Binance")
         self.assertEqual([r["s"] for r in rep["rows"]], ["BTC", "ETH"])  # у SOL рейтингов нет — мимо
         self.assertEqual(rep["rows"][0], {"s": "BTC", "px": 100000.0, "ch": 1.25, "vol": 2000000000,
-                                          "r": {"15m": 0.6, "1h": -0.4, "4h": None, "1d": None}})
-        self.assertEqual(rep["rows"][1]["r"], {"15m": None, "1h": 0.312, "4h": None, "1d": None})  # старый 15m — None
+                                          "r": {"15m": 0.6, "1h": -0.4}})
+        self.assertEqual(rep["rows"][1]["r"], {"1h": 0.312})  # старый 15m — мимо
         self.assertIsNone(rep["rows"][1]["px"])
         self.assertEqual(sc.reply(uni, {}, {}, NOW), {"ok": False, "error": "no_data"})
         json.dumps(rep, allow_nan=False)
@@ -135,27 +140,76 @@ class CacheTest(unittest.TestCase):
             self.assertTrue(res["ok"])
             self.assertEqual([r["s"] for r in res["rows"]], ["BTC", "ETH", "SOL"])
             for _ in range(1000):
+                sc.want(["1m", "5m"])  # человек фильтрует — только отметка, без сети
                 self.assertIs(sc.screener_data(), res)
-        self.assertEqual(len(self.calls), 1 + 3 * len(sc.TFS))
+        self.assertEqual(len(self.calls), 1 + 3)  # список и один таймфрейм за сборку
 
-    def test_schedule_and_budget(self):
-        # Час работы сервера, сборка раз в минуту: список монет — раз, 15 минут —
-        # раз в 5 минут, час — раз в 15, 4 часа — раз в 30, день — раз в час.
-        t, mono = [NOW], [1000.0]
+    def run_for(self, minutes: int, t: list, mono: list, every_min=None) -> None:
         with mock.patch.object(sc, "_now", side_effect=lambda: t[0]), \
                 mock.patch.object(sc.time, "monotonic", side_effect=lambda: mono[0]):
-            for _ in range(60):
+            for i in range(minutes):
+                if every_min:
+                    every_min(i)
                 sc.build()
                 t[0] += 60
                 mono[0] += 60
-        by_tf = {tf: sum(1 for c in self.calls if isinstance(c, tuple) and c[1] == tf) for tf in sc.TFS}
-        self.assertEqual(self.calls.count("universe"), 1)
-        self.assertEqual(by_tf, {"15m": 3 * 12, "1h": 3 * 4, "4h": 3 * 2, "1d": 3 * 1})
-        # На 80 монетах: запросов в минуту в среднем ~25, вес Binance (2 за
-        # свечи, 80 за список) — меньше 1 % от 6000.
-        per_min = sum(sc.TOP * 60 / sc.EVERY[tf] for tf in sc.TFS) / 60
-        self.assertLess(per_min, 30)
-        self.assertLess(per_min * 2 + 80 / 60, 0.01 * 6000)
+
+    def by_tf(self) -> dict:
+        return {tf: sum(1 for c in self.calls if isinstance(c, tuple) and c[1] == tf) // 3 for tf in sc.TFS}
+
+    def test_schedule_warm_only_without_demand(self):
+        # Без спроса — только WARM: 15m раз в 10 минут, 1H — в 20, 4H — в час,
+        # 1D — в 3 часа; минутные никто не считает.
+        t, mono = [NOW], [1000.0]
+        self.run_for(180, t, mono)
+        got = self.by_tf()
+        self.assertEqual({tf: n for tf, n in got.items() if n}, {"15m": 18, "1h": 9, "4h": 3, "1d": 1})
+        self.assertEqual(self.calls.count("universe"), 3)
+
+    def test_demand_wakes_a_timeframe_then_it_sleeps(self):
+        # Кто-то фильтрует 1m — считается сразу (раньше просроченных) и раз в
+        # EVERY; перестали — через ACTIVE_FOR снова не считается.
+        t, mono = [NOW], [1000.0]
+        self.run_for(5, t, mono)  # прогрев WARM
+        self.calls.clear()
+        self.run_for(30, t, mono, every_min=lambda i: sc.want(["1m", "1m", "bad", 5, "15m"]))
+        self.assertEqual(self.by_tf()["1m"], 5)  # 30 минут / 6
+        self.assertEqual(self.calls[1][1], "1m")  # первым — нужный и ещё не посчитанный
+        self.calls.clear()
+        self.run_for(int(sc.ACTIVE_FOR / 60) + 30, t, mono)
+        n = self.by_tf()["1m"]
+        self.assertLessEqual(n, int(sc.ACTIVE_FOR / sc.EVERY["1m"]))
+        self.calls.clear()
+        self.run_for(60, t, mono)
+        self.assertEqual(self.by_tf()["1m"], 0)
+        self.assertNotIn("1m", sc._st.rates)  # старые рейтинги ненужного — из памяти прочь
+
+    def test_budget(self):
+        # Все таймфреймы нужны сразу: за сборку — не больше одного, и графику
+        # хватает: сумма проходов в минуту меньше одного.
+        self.assertLess(sum(60 / sc.EVERY[tf] for tf in sc.TFS), 1)
+        # Вес Binance: в минуту не больше COINS_MAX × 2 + 80 (меньше 25 % от 6000),
+        # в среднем при всех нужных — меньше 20 %, без спроса — меньше 5 %.
+        self.assertLessEqual(sc.COINS_MAX * 2 + 80, 0.25 * 6000)
+        avg_all = sum(sc.COINS_MAX * 2 * 60 / sc.EVERY[tf] for tf in sc.TFS) + 80 / 60
+        avg_warm = sum(sc.COINS_MAX * 2 * 60 / sc.EVERY[tf] for tf in sc.WARM) + 80 / 60
+        self.assertLess(avg_all, 0.2 * 6000)
+        self.assertLess(avg_warm, 0.05 * 6000)
+        # Проверка на деле: все 14 таймфреймов нужны три часа — один проход за сборку.
+        t, mono = [NOW], [1000.0]
+        before = 0
+        tfs_per_build = []
+
+        def tick(i):
+            nonlocal before
+            sc.want(list(sc.TFS))
+            n = sum(1 for c in self.calls if isinstance(c, tuple))
+            tfs_per_build.append((n - before) // 3)
+            before = n
+
+        self.run_for(180, t, mono, every_min=tick)
+        self.assertLessEqual(max(tfs_per_build), 1)
+        self.assertTrue(all(self.by_tf()[tf] for tf in sc.TFS))  # до каждого дошла очередь
 
     def test_same_numbers_same_object_and_stale(self):
         with mock.patch.object(sc, "_now", return_value=NOW):
@@ -163,8 +217,8 @@ class CacheTest(unittest.TestCase):
             sc._st.done.clear()
             b = sc.build()
         self.assertIs(a, b)
-        # Binance молчит дольше STALE_X дней — ответа нет.
-        with mock.patch.object(sc, "_now", return_value=NOW + sc.STALE_X * 86400 + 1):
+        # Ничего не пересчитывалось дольше STALE_ALL — ответа нет.
+        with mock.patch.object(sc, "_now", return_value=NOW + sc.STALE_ALL + 1):
             self.assertEqual(sc.screener_data(), {"ok": False, "error": "no_data"})
 
     def test_failures(self):
@@ -181,6 +235,20 @@ class CacheTest(unittest.TestCase):
             mono[0] += sc.FAIL_WAIT
             sc.build()
             self.assertEqual(self.calls.count("universe"), 2)
+        # Binance недоступен: ABORT_FAILS сбоев подряд — проход прерван, а не 700 запросов.
+        sc._st = sc._State()
+        many = [{"symbol": f"C{i}USDT", "quoteVolume": "1e8"} for i in range(200)]
+        n = [0]
+
+        def dead(b, tf):
+            n[0] += 1
+            raise TimeoutError
+
+        sc.set_sources(universe=lambda: many, klines=dead)
+        with mock.patch.object(sc, "_now", return_value=NOW), mock.patch.object(sc.sys, "stderr", err):
+            sc.build()
+        self.assertLess(n[0], sc.ABORT_FAILS + sc.WORKERS * 4 + 1)
+        self.assertIn("проход прерван", err.getvalue())
         # Свечи одной монеты не пришли — остальные на месте; сбой — в журнал типом ошибки.
         sc._st = sc._State()
         sc.set_sources(universe=lambda: TICKER, klines=lambda b, tf: (1 / 0) if b == "ETH" else kl(300))
@@ -197,8 +265,8 @@ class CacheTest(unittest.TestCase):
             sc._st.uni_at = -math.inf
             res = sc.build()
         self.assertEqual([r["s"] for r in res["rows"]], ["BTC", "ETH"])
-        for tf in sc.TFS:
-            self.assertNotIn("SOL", sc._st.rates[tf])
+        for d in sc._st.rates.values():
+            self.assertNotIn("SOL", d)
         self.assertNotIn("SOL", sc._st.px)
 
     def test_refresh_runs_in_background_once(self):
@@ -249,7 +317,8 @@ class PolicyTest(unittest.TestCase):
                 found |= {a.name for a in n.names}
             elif isinstance(n, ast.ImportFrom):
                 found.add(n.module or "")
-        self.assertLessEqual(found, {"__future__", "contextlib", "math", "sys", "threading", "time", "collections.abc", "typing"})
+        self.assertLessEqual(found, {"__future__", "concurrent.futures", "contextlib", "math", "sys", "threading", "time",
+                                     "collections.abc", "typing"})
         self.assertEqual([n.value for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str) and "://" in n.value], [])
 
     def test_server_wiring(self):
@@ -259,22 +328,74 @@ class PolicyTest(unittest.TestCase):
         # Только Binance spot через публичное зеркало; Hyperliquid — ни запроса.
         self.assertNotIn("hl_post", block)
         self.assertNotIn("hyperliquid.xyz", block)
-        self.assertEqual(set(__import__("re").findall(r"https://([a-z0-9.-]+)/", block)), {"data-api.binance.vision"})
+        self.assertIn('SCREEN_NAME = "data-api.binance.vision"', block)
+        self.assertEqual(set(__import__("re").findall(r"https://([a-z0-9.-]+)", block)), set())  # других адресов нет
         self.assertEqual(block.count("max_bytes=wt_screen.RESP_MAX"), block.count("get_json("))
+        self.assertIn("body = read_capped(r, wt_screen.RESP_MAX)", block)
         self.assertIn('if tf not in wt_screen.TFS or not (base.isascii() and base.isalnum() and len(base) <= 16):', block)
         self.assertIsNone(api._screen_klines("BTC/../x", "15m"))
-        self.assertIsNone(api._screen_klines("BTC", "1m"))
+        self.assertIsNone(api._screen_klines("BTC", "2m"))
+        self.assertIs(api.screener_want, sc.want)
         for p in ("/api/screener", "/screener"):
             self.assertIn(p, api.PAID_PATHS)
         self.assertIs(api.screener_data, sc.screener_data)
         self.assertIn('        ("screener", lambda: screener_refresh()),\n', src.split("def _cache_modules() -> tuple:")[1].split("\ndef ")[0])
         route = src.split('if path in ("/screener", "/api/screener"):')[1].split("return\n")[0]
         self.assertNotIn("refresh", route)
+        self.assertIn('screener_want(qs.get("tf", [""])[0][:120].split(","))', route)
         self.assertIn('self._json_public("screener", scr)', route)
+
+    def test_keep_alive_fetch(self):
+        # Сотни запросов за проход — по одному соединению на поток: открыто
+        # один раз, не 200 — None, сбой — соединение заново.
+        import whale_api as api  # noqa: PLC0415
+        made: list = []
+
+        class Resp:
+            def __init__(self, status, body):
+                self.status, self.body = status, body
+
+            def read(self, n=-1):
+                return self.body[:n] if n >= 0 else self.body
+
+        class Conn:
+            def __init__(self, host, timeout, context):
+                self.host, self.n, self.closed = host, 0, False
+                made.append(self)
+
+            def request(self, method, path, headers):
+                self.n += 1
+                self.path = path
+                if "boom" in path:
+                    raise OSError("сброс")
+
+            def getresponse(self):
+                if "/banned" in self.path:
+                    return Resp(429, b'{"code":-1003}')
+                if "huge" in self.path:
+                    return Resp(200, b"[" + b"1," * (sc.RESP_MAX // 2) + b"1]")
+                return Resp(200, b'[[1,"1","1","1","1","1"]]')
+
+            def close(self):
+                self.closed = True
+
+        api._screen_tls.__dict__.clear()
+        with mock.patch.object(api.urllib.request, "getproxies", return_value={}), \
+                mock.patch.object(api.http.client, "HTTPSConnection", Conn):
+            for _ in range(5):
+                self.assertEqual(api._screen_klines("BTC", "15m"), [[1, "1", "1", "1", "1", "1"]])
+            self.assertEqual((len(made), made[0].n, made[0].host), (1, 5, "data-api.binance.vision"))
+            self.assertIsNone(api._screen_get("/banned"))  # Binance ограничил — None, без исключения
+            self.assertIsNone(api._screen_get("/boom"))  # сбой — соединение закрыто, со второй попытки тоже
+            self.assertTrue(made[0].closed)
+            self.assertIsNone(api._screen_get("/huge"))  # больше RESP_MAX — None
+            self.assertIsNotNone(api._screen_get("/ok"))
+        api._screen_tls.__dict__.clear()
 
     def test_app_and_server_agree(self):
         ts = self.read("src", "lib", "screener.ts")
-        self.assertIn(f"export const SCREEN_TFS = {json.dumps(list(sc.TFS)).replace(', ', ', ')} as const;".replace('", "', '", "'), ts)
+        self.assertIn(f"export const SCREEN_TFS = {json.dumps(list(sc.TFS))} as const;", ts)
+        self.assertIn(f"export const SCREEN_WARM: readonly ScreenTf[] = {json.dumps(list(sc.WARM))};", ts)
 
 
 if __name__ == "__main__":

@@ -597,14 +597,20 @@ export const fetchMarketsCandles = () =>
   remember<MarketsCandles>("/api/markets/candles", MARKETS_CANDLES_TTL,
     () => call<unknown>("/api/markets/candles", { timeout: 15_000 }).then((r) => validCandles(r)),
     (v) => Object.keys(v).length > 0);
-/** Скринер графика — рейтинг индикаторов топ-монет Binance на 15 минутах,
- *  часе, 4 часах и дне: один ответ на всех, в памяти на минуту (сервер
- *  пересчитывает 15 минут раз в 5 минут). Битый ответ — null. */
+/** Скринер графика — рейтинг индикаторов всех монет Binance на всех
+ *  таймфреймах графика: один ответ на всех, в памяти на минуту. Битый ответ —
+ *  null. */
 const SCREENER_TTL = 60_000;
-export const fetchScreener = () =>
-  remember<ScreenReply | null>("/api/screener", SCREENER_TTL,
-    () => call<unknown>("/api/screener", { timeout: 15_000 }).then((r) => validScreener(r)),
+/** tfs — таймфреймы, которые сейчас фильтруют (кроме тех, что сервер считает
+ *  всегда): сервер отметит их нужными и посчитает в фоне. */
+export const fetchScreener = (tfs: readonly string[] = [], fresh = false) => {
+  const url = tfs.length ? `/api/screener?tf=${tfs.join(",")}` : "/api/screener";
+  // Выбранные таймфреймы ещё считаются — мимо памяти: ждём новый ответ.
+  if (fresh) forget(url);
+  return remember<ScreenReply | null>(url, SCREENER_TTL,
+    () => call<unknown>(url, { timeout: 15_000 }).then((r) => validScreener(r)),
     (v) => v !== null);
+};
 /** Свежие рынки мимо памяти — для самообновления открытого меню. */
 export function refreshMarkets(): Promise<MarketsReply | null> {
   forget("/api/markets");

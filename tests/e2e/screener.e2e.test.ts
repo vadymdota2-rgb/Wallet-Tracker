@@ -79,7 +79,7 @@ after(async () => {
   await new Promise((ok) => server?.close(ok));
 });
 
-interface Opts { lang?: string; width?: number; screen?: unknown }
+interface Opts { lang?: string; width?: number; screen?: unknown; screenFor?: (url: string, n: number) => unknown }
 
 async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; errors: string[]; asked: string[] }> {
   const lang = o.lang ?? "ru";
@@ -93,7 +93,12 @@ async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; er
   await ctx.route((url) => !url.href.startsWith(base), (r) => r.abort());
   await ctx.route(`${base}/api/**`, (r) => r.fulfill({ contentType: "application/json", body: '{"ok":false}' }));
   await ctx.route(`${base}/api/bootstrap`, (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify({ ok: true, me: { plan: "premium" } }) }));
-  await ctx.route(`${base}/api/screener`, (r) => r.fulfill({ contentType: "application/json", body: JSON.stringify(o.screen ?? SCREEN) }));
+  let n = 0;
+  await ctx.route(`${base}/api/screener**`, (r) => {
+    const url = r.request().url();
+    const body = o.screenFor ? o.screenFor(url, n++) : (o.screen ?? SCREEN);
+    return r.fulfill({ contentType: "application/json", body: JSON.stringify(body) });
+  });
   await ctx.route(`${base}/klines-vision**`, (r) => {
     const u = new URL(r.request().url());
     return r.fulfill({ contentType: "application/json", body: JSON.stringify(bars(u.searchParams.get("interval") ?? "15m")) });
@@ -116,6 +121,8 @@ async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; er
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const scrBtn = (page: Page, _lang = "ru") => page.locator(".ch-foot .scr-open");
 const names = (page: Page) => page.locator(".scr-row .scr-name b").allTextContents();
+const TFS = ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d", "3d", "1w", "1M"];
+const chip = (page: Page, tf: string) => page.locator(".scr-chip").nth(TFS.indexOf(tf));
 
 /** Что не влезло: за краем экрана или обрезано. */
 function overflow(page: Page): Promise<string[]> {
@@ -147,10 +154,14 @@ test("скринер: все монеты, готовый фильтр «15m ↑
   assert.deepEqual(await names(page), ["SOL", "BTC"]); // 0,35 + 0,6 сильнее, чем 0,6 + 0,3
   await page.getByRole("button", { name: "15m ↓ · 1H ↑" }).click();
   assert.deepEqual(await names(page), ["ETH"]);
-  // Свой фильтр: 4H — продажа поверх «15m ↓ · 1H ↑».
-  await page.locator(".scr-frow").nth(2).getByRole("radio", { name: "Продажа" }).click();
+  // Свой фильтр — касанием таймфрейма: 4H — продажа поверх «15m ↓ · 1H ↑».
+  await chip(page, "4h").click();
+  assert.equal(await chip(page, "4h").getAttribute("aria-label"), "4H: Покупка");
+  await chip(page, "4h").click();
+  assert.equal(sp(await chip(page, "4h").textContent()), "4H▼");
   assert.deepEqual(await names(page), ["ETH"]);
-  await page.locator(".scr-frow").nth(0).getByRole("radio", { name: "Покупка" }).click();
+  await chip(page, "15m").click(); // продажа → любой
+  await chip(page, "15m").click(); // → покупка
   assert.deepEqual(await names(page), []);
   assert.equal(sp(await page.locator(".scr-list .ch-hint").textContent()), sp(I18N["scr_none"]!["ru"]!));
   // Готовый фильтр снимается повторным касанием.
@@ -208,9 +219,13 @@ test("скринер и Фибо на 16 языках при 320 точках: �
     await scrBtn(page, lang).click();
     await page.locator(".scr-row").first().waitFor();
     assert.equal(sp(await page.locator(".ch-sheet.scr .ch-sheet-hd b").textContent()), sp(I18N["scr_title"]![lang]!), lang);
-    for (const w of ["any", "buy", "sell"]) {
-      assert.equal(await page.locator(".scr-frow").first().getByRole("radio", { name: I18N[`scr_${w}`]![lang]!, exact: true }).count(), 1, `${lang} ${w}`);
-    }
+    assert.equal(await page.locator(".scr-chip").count(), 14, lang);
+    assert.equal(sp(await page.locator(".scr-how").textContent()), sp(I18N["scr_how"]![lang]!), lang);
+    await chip(page, "1m").click();
+    assert.match(await chip(page, "1m").getAttribute("aria-label") ?? "", new RegExp(`: ${I18N["scr_buy"]![lang]!}$`), lang);
+    await page.locator(".scr-wait").waitFor();
+    await chip(page, "1m").click();
+    await chip(page, "1m").click();
     assert.deepEqual(await overflow(page), [], lang);
     await page.locator(".scr-row", { hasText: "ETH" }).click();
     await page.locator(".ch-fibcard").waitFor();
@@ -219,6 +234,54 @@ test("скринер и Фибо на 16 языках при 320 точках: �
     assert.deepEqual(errors, [], lang);
     await ctx.close();
   }
+});
+
+test("все таймфреймы: минутный фильтр — сервер получает его в запросе, пока считается — так и сказано, посчитал — монеты", async () => {
+  const withMin = { ...SCREEN, tfs: [...SCREEN.tfs, "1m"], rows: SCREEN.rows.map((r, i) => ({ ...r, r: { ...r.r, "1m": [0.7, -0.5, 0.3, null][i] } })) };
+  const urls: string[] = [];
+  const { ctx, page, errors } = await open({
+    screenFor: (url) => {
+      urls.push(url);
+      return url.includes("tf=1m") && urls.filter((u) => u.includes("tf=1m")).length > 1 ? withMin : SCREEN;
+    },
+  });
+  await scrBtn(page).click();
+  await page.locator(".scr-row").first().waitFor();
+  await chip(page, "1m").click();
+  // Сервер ещё не считал 1m — сообщение, точка на фишке, монет нет (а не «ничего не подошло»).
+  await page.locator(".scr-wait").waitFor();
+  assert.equal(sp(await page.locator(".scr-wait").textContent()), "Считается: 1m — около минуты");
+  assert.match(await chip(page, "1m").getAttribute("class") ?? "", /\bwait\b/);
+  assert.ok(urls.some((u) => u.endsWith("/api/screener?tf=1m")), urls.join(" "));
+  assert.equal(await page.locator(".scr-list .ch-hint").count(), 0);
+  // Через 15 секунд приложение спрашивает снова — 1m посчитан.
+  await page.locator(".scr-row").first().waitFor({ timeout: 30_000 });
+  assert.deepEqual(await names(page), ["BTC", "SOL"]);
+  assert.equal(await page.locator(".scr-wait").count(), 0);
+  // Значки у монеты — по выбранным таймфреймам.
+  assert.deepEqual((await page.locator(".scr-row").first().locator(".scr-sig i").allTextContents()).map(sp), ["1m▲▲"]);
+  // Касание монеты — график на 1m.
+  await page.locator(".scr-row", { hasText: "SOL" }).click();
+  await page.locator(".ch-fibcard").waitFor();
+  assert.equal(sp(await page.locator(".ch-tf.on").first().textContent()), "1m");
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test("поиск и «показать ещё»: сотни монет — по 60, поиск по тикеру", async () => {
+  const many = { ...SCREEN, rows: Array.from({ length: 150 }, (_, i) => ({ s: `C${i}`, px: 1 + i, ch: 0, vol: 1e6, r: { "15m": 0.3 } })) };
+  const { ctx, page, errors } = await open({ screen: many });
+  await scrBtn(page).click();
+  await page.locator(".scr-row").first().waitFor();
+  assert.equal(await page.locator(".scr-row").count(), 60);
+  assert.equal(sp(await page.locator(".scr-count").textContent()), "Найдено: 150 из 150");
+  await page.locator(".scr-more").click();
+  assert.equal(await page.locator(".scr-row").count(), 120);
+  assert.equal(sp(await page.locator(".scr-more").textContent()), "Показать ещё 30");
+  await page.locator(".scr-find").fill("c14");
+  assert.deepEqual(await names(page), ["C14", "C140", "C141", "C142", "C143", "C144", "C145", "C146", "C147", "C148", "C149"]);
+  assert.deepEqual(errors, []);
+  await ctx.close();
 });
 
 test("скринер ещё не собран или ответ битый — так и сказано, без ошибок", async () => {

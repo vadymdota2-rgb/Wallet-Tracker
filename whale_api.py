@@ -17,6 +17,7 @@ import re
 import secrets
 import socket
 import sqlite3
+import http.client
 import ssl
 import statistics
 import struct
@@ -15494,10 +15495,39 @@ def markets_disk_save(days: dict) -> None:
 
 
 # --- Скринер графика (wt_screen.py) -------------------------------------------
-# Рейтинг индикаторов топ-монет Binance на 15 минутах, часе, 4 часах и дне.
+# Рейтинг индикаторов всех монет Binance к USDT на всех таймфреймах графика.
 # Hyperliquid не трогаем (его бюджет — общий); Binance spot — через то же
 # публичное зеркало, что у графика приложения. Модуль сам в сеть не ходит.
-SCREEN_HOST = "https://data-api.binance.vision/api/v3/"
+SCREEN_NAME = "data-api.binance.vision"
+# Сотни монет за проход: соединение держим открытым (по одному на поток
+# сборки) — без нового рукопожатия TLS на каждый запрос: в разы быстрее и
+# дешевле для процессора. Через прокси окружения — обычным get_json.
+_screen_tls = threading.local()
+
+
+def _screen_get(path: str, timeout: float = 15.0):
+    """GET JSON с SCREEN_NAME по постоянному соединению потока; сбой — None
+    (соединение — заново со следующим запросом). Ответ — не больше RESP_MAX."""
+    if urllib.request.getproxies().get("https"):
+        return get_json(f"https://{SCREEN_NAME}{path}", timeout, max_bytes=wt_screen.RESP_MAX)
+    for attempt in (0, 1):
+        conn = getattr(_screen_tls, "conn", None)
+        if conn is None:
+            conn = http.client.HTTPSConnection(SCREEN_NAME, timeout=timeout, context=ssl.create_default_context())
+            _screen_tls.conn = conn
+        try:
+            conn.request("GET", path, headers={"User-Agent": "wallet-tracker/1.0"})
+            r = conn.getresponse()
+            body = read_capped(r, wt_screen.RESP_MAX)
+            if r.status != 200:
+                return None  # 429/418 — Binance ограничил: модуль прервёт проход
+            return json.loads(body)
+        except (http.client.HTTPException, OSError, ValueError):
+            conn.close()
+            _screen_tls.conn = None
+            if attempt:
+                return None
+    return None
 
 
 def _screen_klines(base: str, tf: str):
@@ -15505,16 +15535,16 @@ def _screen_klines(base: str, tf: str):
     модуля (буквы и цифры), ничего снаружи в адрес не попадает."""
     if tf not in wt_screen.TFS or not (base.isascii() and base.isalnum() and len(base) <= 16):
         return None
-    return get_json(f"{SCREEN_HOST}klines?symbol={base}USDT&interval={tf}&limit={wt_screen.BARS}", 15,
-                    max_bytes=wt_screen.RESP_MAX)
+    return _screen_get(f"/api/v3/klines?symbol={base}USDT&interval={tf}&limit={wt_screen.BARS}")
 
 
 wt_screen.set_sources(
-    universe=lambda: get_json(f"{SCREEN_HOST}ticker/24hr?type=MINI", 25, max_bytes=wt_screen.RESP_MAX),
+    universe=lambda: _screen_get("/api/v3/ticker/24hr?type=MINI", 25),
     klines=_screen_klines,
 )
 screener_data = wt_screen.screener_data  # запрос человека: только кэш
 screener_refresh = wt_screen.refresh  # обновление: cache_refresher и запуск
+screener_want = wt_screen.want  # запрос человека: «эти таймфреймы нужны», без сети
 
 
 # --- Дайджест ------------------------------------------------------------
@@ -17264,6 +17294,9 @@ class Handler(BaseHTTPRequestHandler):
             if path in ("/screener", "/api/screener"):
                 # Скринер — один ответ на всех подписчиков: готовые байты, ETag
                 # и «304»; сборку запрос не начинает.
+                # ?tf=1m,5m — какие таймфреймы фильтруют: модуль только отмечает
+                # их нужными (известные), считать их будет фоновая сборка.
+                screener_want(qs.get("tf", [""])[0][:120].split(","))
                 scr = screener_data()
                 if scr.get("ok") is True:
                     self._json_public("screener", scr)

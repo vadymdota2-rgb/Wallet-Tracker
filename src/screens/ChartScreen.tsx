@@ -23,7 +23,8 @@ import {
   chartSnap, chartStateGet, chartStatePut, fetchScreener, pxAlertAdd, pxAlertDel, pxAlertList, pxAlertMove, type PxAlert, type PxLevel,
 } from "../lib/api";
 import {
-  ANY, chartTf, PRESETS, SCREEN_TFS, screen, signal, validFilter, type ScreenFilter, type ScreenReply, type Want,
+  ANY, badgeTfs, chartTf, find, nextWant, pending, PRESETS, SCREEN_TFS, screen, signal, validFilter, wanted,
+  type ScreenFilter, type ScreenReply,
 } from "../lib/screener";
 import { FIBO_LEVELS, fiboFromLow, fiboPlan, type Fibo } from "../lib/fibo";
 import { toast } from "../components/Toast";
@@ -255,7 +256,10 @@ function ToolIcon({ k }: { k: IconKey }) {
 /* ── Скринер и Фибо: подписи ─────────────────────────────────────────── */
 
 const FIB_ID = "fib-low";
-const WANTS: Want[] = ["any", "buy", "sell"];
+/** Монет в списке сразу (дальше — «показать ещё»): сотни строк телефону ни к чему. */
+const SCR_PAGE = 60;
+/** Выбранные таймфреймы ещё считаются — спрашивать так часто. */
+const SCR_WAIT_MS = 15_000;
 /** Слово рейтинга −2…+2 → ключ словаря и значок. */
 const SIG_KEY = ["chart_r_ss", "chart_r_s", "chart_r_n", "chart_r_b", "chart_r_sb"] as const;
 const SIG_MARK = ["▼▼", "▼", "•", "▲", "▲▲"];
@@ -467,26 +471,36 @@ export function ChartScreen({ arg }: ScreenProps) {
   const [scr, setScr] = useState<ScreenReply | null>(null);
   const [scrWait, setScrWait] = useState(false);
   const filter = prefs.scr ?? ANY;
-  const found = useMemo(() => (scr ? screen(scr.rows, filter) : []), [scr, filter]);
-  // Пока открыт — раз в минуту свежий ответ (сервер — из кэша, не к бирже).
+  const [scrQ, setScrQ] = useState("");
+  const [scrN, setScrN] = useState(SCR_PAGE);
+  const found = useMemo(() => (scr ? find(screen(scr.rows, filter), scrQ) : []), [scr, filter, scrQ]);
+  const wait = pending(filter, scr);
+  const waitKey = wait.join(",");
+  const wantKey = wanted(filter).join(",");
+  // Пока открыт — свежий ответ раз в минуту (сервер — из кэша, не к бирже);
+  // выбранные таймфреймы ещё считаются — раз в 20 секунд. Таймфреймы фильтра
+  // называем серверу: он посчитает их в фоне.
   useEffect(() => {
     if (!scrOpen) return;
     let alive = true;
+    const tfs = wantKey ? wantKey.split(",") : [];
     const load = () => {
       setScrWait(true);
-      void fetchScreener().then((r) => {
+      void fetchScreener(tfs, !!waitKey).then((r) => {
         if (!alive) return;
         setScrWait(false);
         if (r) setScr(r);
       });
     };
     load();
-    const id = setInterval(load, 60_000);
+    const id = setInterval(load, waitKey ? SCR_WAIT_MS : 60_000);
     return () => {
       alive = false;
       clearInterval(id);
     };
-  }, [scrOpen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scrOpen, wantKey, waitKey]);
+  useEffect(() => setScrN(SCR_PAGE), [scrQ, filter]);
   const [fib, setFib] = useState<Fibo | null>(null);
   /** Монету открыли из скринера — Фибо натянуть, как только придут свечи. */
   const fibWant = useRef(false);
@@ -1524,25 +1538,24 @@ export function ChartScreen({ arg }: ScreenProps) {
                 );
               })}
             </div>
-            <div className="scr-filter">
+            <div className="scr-tfs" role="group" aria-label={t(lang, "scr_tfs")}>
               {SCREEN_TFS.map((tf) => (
-                <div key={tf} className="scr-frow">
-                  <span className="scr-tf">{TF_LABEL[tf]}</span>
-                  <div className="scr-seg" role="radiogroup" aria-label={TF_LABEL[tf]}>
-                    {WANTS.map((w) => (
-                      <button key={w} type="button" role="radio" aria-checked={filter[tf] === w}
-                        className={`${w}${filter[tf] === w ? " on" : ""}`}
-                        onClick={() => { haptic("select"); setP({ scr: { ...filter, [tf]: w } }); }}>{t(lang, `scr_${w}`)}</button>
-                    ))}
-                  </div>
-                </div>
+                <button key={tf} type="button" className={`scr-chip ${filter[tf]}${wait.includes(tf) ? " wait" : ""}`}
+                  aria-label={`${TF_LABEL[tf]}: ${t(lang, `scr_${filter[tf]}`)}`}
+                  onClick={() => { haptic("select"); setP({ scr: { ...filter, [tf]: nextWant(filter[tf]) } }); }}>
+                  {TF_LABEL[tf]}<i aria-hidden="true">{filter[tf] === "buy" ? "▲" : filter[tf] === "sell" ? "▼" : ""}</i>
+                </button>
               ))}
             </div>
+            <p className="scr-how">{t(lang, "scr_how")}</p>
+            {wait.length ? <p className="scr-wait" role="status">{t(lang, "scr_pending", { tfs: wait.map((tf) => TF_LABEL[tf]).join(", ") })}</p> : null}
+            <input className="find scr-find" value={scrQ} onChange={(e) => setScrQ(e.target.value)} inputMode="search"
+              autoCapitalize="characters" placeholder={t(lang, "scr_search")} aria-label={t(lang, "scr_search")} />
             {scr ? (
               <>
                 <p className="scr-count">{t(lang, "scr_found", { n: found.length, total: scr.rows.length })}</p>
                 <div className="scr-list">
-                  {found.map((r) => (
+                  {found.slice(0, scrN).map((r) => (
                     <button key={r.s} type="button" className={r.s === sym ? "scr-row on" : "scr-row"} onClick={() => pickScreen(r.s)}>
                       <CoinIcon sym={r.s} size={22} />
                       <span className="scr-name">
@@ -1553,7 +1566,7 @@ export function ChartScreen({ arg }: ScreenProps) {
                         </small>
                       </span>
                       <span className="scr-sig">
-                        {SCREEN_TFS.map((tf) => {
+                        {badgeTfs(filter).map((tf) => {
                           const v = r.r[tf];
                           const sg = v === null ? null : signal(v);
                           return (
@@ -1566,7 +1579,12 @@ export function ChartScreen({ arg }: ScreenProps) {
                       </span>
                     </button>
                   ))}
-                  {!found.length ? <p className="ch-hint">{t(lang, "scr_none")}</p> : null}
+                  {found.length > scrN ? (
+                    <button type="button" className="scr-more" onClick={() => setScrN((n) => n + SCR_PAGE)}>
+                      {t(lang, "scr_more", { n: Math.min(SCR_PAGE, found.length - scrN) })}
+                    </button>
+                  ) : null}
+                  {!found.length && !wait.length ? <p className="ch-hint">{t(lang, "scr_none")}</p> : null}
                 </div>
                 <p className="ch-hint">{t(lang, "scr_note", { age: agoMin(lang, scr.at) })}</p>
               </>

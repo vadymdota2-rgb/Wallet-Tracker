@@ -1,8 +1,12 @@
 /*
- * Скринер под графиком: монеты Binance с рейтингом индикаторов на четырёх
- * таймфреймах (сервер — wt_screen.py, рейтинг — тот же techRating, что у
- * графика). Здесь — проверка ответа и фильтр без React и без сети: всё
- * проверяется тестами (tests/screener.test.ts).
+ * Скринер под графиком: все монеты Binance к USDT с рейтингом индикаторов на
+ * всех таймфреймах графика (сервер — wt_screen.py, рейтинг — тот же
+ * techRating, что у графика). Здесь — проверка ответа и фильтр без React и
+ * без сети: всё проверяется тестами (tests/screener.test.ts).
+ *
+ * Четыре таймфрейма (SCREEN_WARM) сервер считает всегда, остальные — пока их
+ * кто-то фильтрует: приложение называет их в запросе (wanted), первый раз
+ * они считаются около минуты (pending).
  *
  * Фильтр — по каждому таймфрейму «любой / покупка / продажа»: например,
  * «15 минут — покупка, час — продажа» находит монеты, где на младшем
@@ -11,8 +15,10 @@
  * и «продавать» на графике (rateKey).
  */
 
-export const SCREEN_TFS = ["15m", "1h", "4h", "1d"] as const;
+export const SCREEN_TFS = ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d", "3d", "1w", "1M"] as const;
 export type ScreenTf = (typeof SCREEN_TFS)[number];
+/** Считаются сервером всегда (wt_screen.WARM). */
+export const SCREEN_WARM: readonly ScreenTf[] = ["15m", "1h", "4h", "1d"];
 export type Want = "any" | "buy" | "sell";
 export type ScreenFilter = Record<ScreenTf, Want>;
 
@@ -25,12 +31,14 @@ export interface ScreenRow {
 export interface ScreenReply {
   at: number;
   rows: ScreenRow[];
+  /** Таймфреймы, по которым у сервера есть рейтинг. */
+  warm: ScreenTf[];
 }
 
 /** Ответ старше этого — не ответ (сервер дневной рейтинг держит трое суток). */
 const AGE_MAX = 3 * 86_400;
 const AHEAD_MAX = 86_400;
-const ROWS_MAX = 200;
+const ROWS_MAX = 1000;
 const SYM = /^[A-Z0-9]{1,16}$/;
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -60,7 +68,9 @@ export function validScreener(raw: unknown, now: number = Date.now() / 1000): Sc
     const ch = fin(x["ch"]) && Math.abs(x["ch"]) < 1e4 ? x["ch"] : null;
     rows.push({ s: x["s"], px, ch, r });
   }
-  return rows.length ? { at, rows } : null;
+  const warmRaw = Array.isArray(raw["tfs"]) ? raw["tfs"] : [];
+  const warm = SCREEN_TFS.filter((tf) => warmRaw.includes(tf) || rows.some((r) => r.r[tf] !== null));
+  return rows.length ? { at, rows, warm } : null;
 }
 
 /** Слово рейтинга: −2 активно продавать … +2 активно покупать (пороги rateKey). */
@@ -68,14 +78,14 @@ export function signal(v: number): -2 | -1 | 0 | 1 | 2 {
   return v < -0.5 ? -2 : v < -0.1 ? -1 : v <= 0.1 ? 0 : v <= 0.5 ? 1 : 2;
 }
 
-export const ANY: ScreenFilter = { "15m": "any", "1h": "any", "4h": "any", "1d": "any" };
+export const ANY: ScreenFilter = Object.fromEntries(SCREEN_TFS.map((tf) => [tf, "any"])) as ScreenFilter;
 
 /** Готовые фильтры: младший вверх, старший вниз — и наоборот; все вверх и все вниз. */
 export const PRESETS: { key: "scr_p_ub" | "scr_p_bu" | "scr_p_up" | "scr_p_dn"; f: ScreenFilter }[] = [
   { key: "scr_p_ub", f: { ...ANY, "15m": "buy", "1h": "sell" } },
   { key: "scr_p_bu", f: { ...ANY, "15m": "sell", "1h": "buy" } },
-  { key: "scr_p_up", f: { "15m": "buy", "1h": "buy", "4h": "buy", "1d": "buy" } },
-  { key: "scr_p_dn", f: { "15m": "sell", "1h": "sell", "4h": "sell", "1d": "sell" } },
+  { key: "scr_p_up", f: { ...ANY, "15m": "buy", "1h": "buy", "4h": "buy", "1d": "buy" } },
+  { key: "scr_p_dn", f: { ...ANY, "15m": "sell", "1h": "sell", "4h": "sell", "1d": "sell" } },
 ];
 
 /** Монета подходит: на каждом выбранном таймфрейме рейтинг есть и он нужного знака. */
@@ -113,4 +123,31 @@ export function validFilter(raw: unknown): ScreenFilter {
     if (v === "buy" || v === "sell" || v === "any") out[tf] = v;
   }
   return out;
+}
+
+/** Касание таймфрейма в фильтре: любой → покупка → продажа → любой. */
+export const nextWant = (w: Want): Want => (w === "any" ? "buy" : w === "buy" ? "sell" : "any");
+
+/** Выбранные в фильтре таймфреймы, по порядку. */
+export const picked = (f: ScreenFilter): ScreenTf[] => SCREEN_TFS.filter((tf) => f[tf] !== "any");
+
+/** Что назвать серверу (?tf=): выбранные, кроме тех, что он считает всегда. */
+export const wanted = (f: ScreenFilter): ScreenTf[] => picked(f).filter((tf) => !SCREEN_WARM.includes(tf));
+
+/** Выбранные таймфреймы, рейтинга по которым у сервера ещё нет (считаются). */
+export const pending = (f: ScreenFilter, r: ScreenReply | null): ScreenTf[] =>
+  r ? picked(f).filter((tf) => !r.warm.includes(tf)) : picked(f);
+
+/** Какие таймфреймы показать значками у монеты: выбранные (до BADGES), а
+ *  без фильтра — четыре основных. */
+export const BADGES = 4;
+export function badgeTfs(f: ScreenFilter): ScreenTf[] {
+  const p = picked(f);
+  return p.length ? p.slice(0, BADGES) : [...SCREEN_WARM];
+}
+
+/** Поиск монеты в списке: тикер начинается с запроса (прописными). */
+export function find(rows: readonly ScreenRow[], q: string): ScreenRow[] {
+  const k = q.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return k ? rows.filter((r) => r.s.startsWith(k)) : rows.slice();
 }

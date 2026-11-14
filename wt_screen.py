@@ -1,10 +1,10 @@
 """Скринер монет по техническому рейтингу (/api/screener) — снизу графика.
 
-Список крупнейших монет Binance с рейтингом индикаторов на четырёх
-таймфреймах (15 минут, час, 4 часа, день): фильтром находят, например,
-монеты, где на 15 минутах индикаторы «за покупку», а на часе — «за продажу».
-Рейтинг — тот же, что у графика приложения (techRating в
-src/chart/indicators.ts, как «Technical Ratings» TradingView): 15
+Все монеты Binance к USDT (оборот за сутки от VOL_MIN) с рейтингом
+индикаторов на всех таймфреймах графика — от минуты до месяца: фильтром
+находят, например, монеты, где на 15 минутах индикаторы «за покупку», а на
+часе — «за продажу». Рейтинг — тот же, что у графика приложения (techRating
+в src/chart/indicators.ts, как «Technical Ratings» TradingView): 15
 скользящих и 11 осцилляторов голосуют −1/0/+1, итог — среднее двух групп
 от −1 до +1. Расчёт перенесён сюда один в один; что сервер и приложение
 считают одинаково, проверяет тест-договор (test_screen_contract.py).
@@ -16,21 +16,27 @@ src/chart/indicators.ts, как «Technical Ratings» TradingView): 15
 вовсе — его бюджет запросов общий для сервера. Сам модуль в сеть не ходит:
 ответы источников отдаёт сервер (set_sources).
 
-Нагрузка (как у карточки халвинга: все видят кэш):
-  - монеты — топ TOP по обороту за сутки, список обновляется раз в
-    UNIVERSE_EVERY (один запрос ticker/24hr, вес 80);
-  - свечи — BARS последних на монету (вес 2 за запрос), таймфрейм
-    пересчитывается раз в EVERY[tf]: 15 минут — раз в 5 минут, час — раз в
-    15, 4 часа — раз в 30, день — раз в час. В среднем ~25 запросов (~50
-    единиц веса) в минуту на весь сервер при пределе Binance 6000 — меньше
-    1 %; от числа людей не зависит;
-  - сборка — одним фоновым потоком из cache_refresher; запрос человека —
-    screener_data() — только читает готовый ответ;
+Нагрузка (как у карточки халвинга: все видят кэш, от числа людей не
+зависит):
+  - монеты — список раз в UNIVERSE_EVERY (один ticker/24hr, вес 80);
+  - свечи — BARS последних на монету (вес 2 за запрос); таймфрейм
+    пересчитывается раз в EVERY[tf]. WARM (15m, 1H, 4H, 1D) — всегда,
+    остальные — пока их кто-то фильтрует (want) и ещё ACTIVE_FOR после:
+    минутные рейтинги для всех монет без спроса никто не считает;
+  - за одну сборку (раз в минуту, cache_refresher) — не больше одного
+    таймфрейма: в минуту не больше COINS_MAX × 2 + 80 единиц веса при пределе
+    Binance 6000; в среднем, когда фильтруют все таймфреймы сразу, —
+    меньше 20 % предела, обычно — около 3 %;
+  - свечи монет таймфрейма — WORKERS запросами разом; ABORT_FAILS сбоев
+    подряд (Binance недоступен или ограничил) — проход прерывается до
+    следующего срока;
+  - запрос человека — screener_data() — только читает готовый ответ; want()
+    лишь отмечает, какие таймфреймы нужны (известные, без запросов к сети);
   - те же цифры — тот же объект (сервер отдаёт те же байты и «304»).
 
-Рейтинг таймфрейма старше STALE_X его интервалов (Binance долго молчит) не
-отдаётся; монета без единого рейтинга — тоже. Сбой одной монеты не роняет
-остальные.
+Рейтинг таймфрейма старше STALE_X его интервалов не отдаётся; монета без
+единого рейтинга — тоже; ничего не пересчитывалось дольше STALE_ALL (Binance
+долго молчит) — «нет данных». Сбой одной монеты не роняет остальные.
 """
 from __future__ import annotations
 
@@ -40,21 +46,30 @@ import sys
 import threading
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 Json = Any
 Bar = tuple[float, float, float, float, float, float]  # время (мс), открытие, максимум, минимум, закрытие, объём
 
-TFS = ("15m", "1h", "4h", "1d")
-EVERY = {"15m": 300.0, "1h": 900.0, "4h": 1800.0, "1d": 3600.0}
+# Все таймфреймы графика (src/chart/data.ts TFS) — их же понимает Binance.
+TFS = ("1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d", "3d", "1w", "1M")
+WARM = ("15m", "1h", "4h", "1d")  # считаются всегда
+# Как часто пересчитывать, секунд: чем крупнее свеча, тем реже.
+EVERY = {"1m": 360.0, "3m": 480.0, "5m": 480.0, "15m": 600.0, "30m": 900.0, "1h": 1200.0, "2h": 1800.0,
+         "4h": 3600.0, "6h": 3600.0, "12h": 7200.0, "1d": 10800.0, "3d": 21600.0, "1w": 21600.0, "1M": 21600.0}
+ACTIVE_FOR = 1800.0  # таймфрейм, который фильтровали, считается ещё столько секунд
 STALE_X = 3  # рейтинг старше стольких интервалов пересчёта — не отдаётся
-TOP = 80
+STALE_ALL = 3 * 3600  # ничего не пересчитывалось дольше — «нет данных»
+COINS_MAX = 700  # монет не больше (оборот от VOL_MIN — сейчас ~560)
+WORKERS = 8  # запросов свечей разом (у каждого потока — своё соединение)
+ABORT_FAILS = 25  # сбоев подряд — проход таймфрейма прерывается
 BARS = 600  # столько свечей берёт рейтинг графика (bars.slice(-600))
 MIN_BARS = 60  # меньше — рейтинга нет (как у графика)
 UNIVERSE_EVERY = 3600.0
 FAIL_WAIT = 60.0  # список монет не получен — снова не раньше
 PX_MAX = 1e9
-VOL_MIN = 1e6  # оборот за сутки, $: меньше — не берём (мёртвые пары)
+VOL_MIN = 1e5  # оборот за сутки, $: меньше — не берём (мёртвые пары: рейтинг по пустым свечам — шум)
 RESP_MAX = 4 << 20  # байт ответа источника (ticker/24hr — ~1 МБ)
 # Стейблкоины, фиатные и обёрнутые монеты: рейтинг у них бессмыслен.
 SKIP = frozenset({
@@ -97,7 +112,8 @@ def parse_bars(raw: object) -> list[Bar]:
 
 def parse_universe(raw: object) -> list[tuple[str, float]]:
     """Ответ ticker/24hr → [(монета, оборот $)]: пары к USDT, без
-    стейблкоинов и обёрнутых, оборот не меньше VOL_MIN; топ TOP по обороту."""
+    стейблкоинов и обёрнутых, оборот не меньше VOL_MIN; по обороту, не больше
+    COINS_MAX."""
     got: dict[str, float] = {}
     for r in raw if isinstance(raw, list) else ():
         if not isinstance(r, dict):
@@ -113,7 +129,7 @@ def parse_universe(raw: object) -> list[tuple[str, float]]:
         vol = _num(r.get("quoteVolume"))
         if vol >= VOL_MIN and base not in got:
             got[base] = vol
-    return sorted(got.items(), key=lambda x: -x[1])[:TOP]
+    return sorted(got.items(), key=lambda x: -x[1])[:COINS_MAX]
 
 
 # --- Технический рейтинг (как techRating в src/chart/indicators.ts) ------------
@@ -124,8 +140,7 @@ NAN = math.nan
 Ser = list[float]
 
 
-def _isnan(v: float) -> bool:
-    return math.isnan(v)
+_isnan = math.isnan
 
 
 def _div(a: float, b: float) -> float:
@@ -135,14 +150,6 @@ def _div(a: float, b: float) -> float:
             return NAN
         return math.copysign(math.inf, a) * (math.copysign(1.0, b))
     return a / b
-
-
-def _jmax(a: float, b: float) -> float:
-    return NAN if _isnan(a) or _isnan(b) else max(a, b)
-
-
-def _jmin(a: float, b: float) -> float:
-    return NAN if _isnan(a) or _isnan(b) else min(a, b)
 
 
 def _truthy(v: float) -> bool:
@@ -170,7 +177,7 @@ def sma(src: Ser, ln: int) -> Ser:
         total += v
         cnt += 1
         if cnt > ln:
-            total -= _at(src, i - ln)
+            total -= src[i - ln]
             cnt = ln
         if cnt == ln:
             out[i] = total / ln
@@ -225,7 +232,7 @@ def wma(src: Ser, ln: int) -> Ser:
         s = 0.0
         bad = False
         for j in range(ln):
-            v = _at(src, i - j)
+            v = src[i - j]
             if _isnan(v):
                 bad = True
                 break
@@ -235,24 +242,27 @@ def wma(src: Ser, ln: int) -> Ser:
     return out
 
 
-def _highest(src: Ser, ln: int) -> Ser:
-    out = [NAN] * len(src)
-    for i in range(ln - 1, len(src)):
-        m = -math.inf
-        for j in range(ln):
-            m = _jmax(m, _at(src, i - j))
-        out[i] = m
+def _window(src: Ser, ln: int, pick: Callable[[Ser], float]) -> Ser:
+    """Максимум или минимум окна ln как у графика: NaN в окне — NaN (Math.max
+    JavaScript), иначе — встроенный max/min по срезу (быстро, и результат тот
+    же: max и min точны)."""
+    n = len(src)
+    out = [NAN] * n
+    bad = [0] * (n + 1)  # сколько NaN до позиции
+    for i, v in enumerate(src):
+        bad[i + 1] = bad[i] + (1 if _isnan(v) else 0)
+    for i in range(ln - 1, n):
+        lo = i - ln + 1
+        out[i] = NAN if bad[i + 1] - bad[lo] else pick(src[lo:i + 1])
     return out
+
+
+def _highest(src: Ser, ln: int) -> Ser:
+    return _window(src, ln, max)
 
 
 def _lowest(src: Ser, ln: int) -> Ser:
-    out = [NAN] * len(src)
-    for i in range(ln - 1, len(src)):
-        m = math.inf
-        for j in range(ln):
-            m = _jmin(m, _at(src, i - j))
-        out[i] = m
-    return out
+    return _window(src, ln, min)
 
 
 def _true_range(bars: list[Bar]) -> Ser:
@@ -270,11 +280,13 @@ def _sum_n(src: Ser, ln: int) -> Ser:
     out = [NAN] * len(src)
     total = 0.0
     for i in range(len(src)):
-        v = _at(src, i)
-        total += v if _truthy(v) else 0.0
+        v = src[i]
+        if v and not _isnan(v):
+            total += v
         if i >= ln:
-            w = _at(src, i - ln)
-            total -= w if _truthy(w) else 0.0
+            w = src[i - ln]
+            if w and not _isnan(w):
+                total -= w
         if i >= ln - 1:
             out[i] = total
     return out
@@ -340,7 +352,7 @@ def _cci(bars: list[Bar], ln: int) -> Ser:
         mv = m[i]
         dev = 0.0
         for j in range(ln):
-            dev += abs(_at(tp, i - j) - mv)
+            dev += abs(tp[i - j] - mv)
         dev /= ln
         out[i] = 0.0 if dev == 0 else _div(tp[i] - mv, 0.015 * dev)
     return out
@@ -480,23 +492,35 @@ def change_24h(bars: list[Bar]) -> float | None:
     return round((b / a - 1) * 100, 2) if a > 0 else None
 
 
+def fresh(tf: str, at: int, now: int) -> bool:
+    """Рейтинг таймфрейма ещё годен: не старше STALE_X интервалов пересчёта."""
+    return now - at <= STALE_X * EVERY[tf]
+
+
 def reply(universe: list[tuple[str, float]], rates: dict[str, dict[str, tuple[float, int]]],
           px: dict[str, tuple[float, float | None]], now: int) -> dict[str, Json]:
-    """Ответ /api/screener: монеты в порядке оборота, рейтинг по таймфреймам
-    (старше STALE_X интервалов — None); монета без рейтингов — мимо."""
+    """Ответ /api/screener: монеты в порядке оборота, у каждой — рейтинги
+    готовых таймфреймов (старые — мимо); монета без рейтингов — мимо. Время
+    ответа — когда посчитан самый свежий рейтинг (те же цифры — тот же ответ);
+    warm — таймфреймы, по которым рейтинг есть."""
     rows = []
+    warm: set[str] = set()
+    last = 0
     for base, vol in universe:
-        r: dict[str, float | None] = {}
+        r: dict[str, float] = {}
         for tf in TFS:
             got = rates.get(tf, {}).get(base)
-            r[tf] = round(got[0], 3) if got and now - got[1] <= STALE_X * EVERY[tf] else None
-        if all(v is None for v in r.values()):
+            if got and fresh(tf, got[1], now):
+                r[tf] = round(got[0], 3)
+                warm.add(tf)
+                last = max(last, got[1])
+        if not r:
             continue
         p, ch = px.get(base, (0.0, None))
         rows.append({"s": base, "px": p if p > 0 else None, "ch": ch, "vol": round(vol), "r": r})
     if not rows:
         return {"ok": False, "error": "no_data"}
-    return {"ok": True, "at": now, "tfs": list(TFS), "by": "Binance", "rows": rows}
+    return {"ok": True, "at": last, "tfs": [tf for tf in TFS if tf in warm], "by": "Binance", "rows": rows}
 
 
 # --- Сборка и кэш ---------------------------------------------------------------
@@ -507,11 +531,11 @@ class _State:
         self.uni_at = -math.inf  # монотонные часы
         self.uni_fail = -math.inf
         self.done: dict[str, float] = {}  # таймфрейм → когда пересчитан (монотонные часы)
+        self.want: dict[str, float] = {}  # таймфрейм → когда его последний раз фильтровали
         self.rates: dict[str, dict[str, tuple[float, int]]] = {}
         self.px: dict[str, tuple[float, float | None]] = {}
         self.hit: dict[str, Json] | None = None
         self.job: threading.Thread | None = None
-        self.down = False
 
 
 _st = _State()
@@ -538,12 +562,35 @@ def _log(msg: str) -> None:
         print(f"screener: {clean[:LOG_MAX]}", file=out)
 
 
-def _due(t0: float) -> tuple[bool, list[str]]:
-    """Нужен ли новый список монет и какие таймфреймы пора пересчитать."""
+def want(tfs: object) -> None:
+    """Таймфреймы, которые сейчас фильтруют (из запроса человека): только
+    известные — отметка «нужен»; сеть и сборку не трогает."""
+    if not isinstance(tfs, (list, tuple)):
+        return
+    t0 = time.monotonic()
+    with _lock:
+        for tf in tfs[: len(TFS)]:
+            if isinstance(tf, str) and tf in EVERY and tf not in WARM:
+                _st.want[tf] = t0
+
+
+def _active(tf: str, t0: float) -> bool:
+    return tf in WARM or t0 - _st.want.get(tf, -math.inf) < ACTIVE_FOR
+
+
+def _due(t0: float) -> tuple[bool, str | None]:
+    """Нужен ли новый список монет и какой таймфрейм пересчитать (один за
+    сборку): сначала нужные, но ещё ни разу не посчитанные, потом — сильнее
+    всех просроченный по своему интервалу."""
     with _lock:
         uni = (not _st.universe or t0 - _st.uni_at >= UNIVERSE_EVERY) and t0 - _st.uni_fail >= FAIL_WAIT
-        tfs = [tf for tf in TFS if t0 - _st.done.get(tf, -math.inf) >= EVERY[tf]]
-    return uni, tfs
+        due = [tf for tf in TFS if _active(tf, t0) and t0 - _st.done.get(tf, -math.inf) >= EVERY[tf]]
+        never = [tf for tf in due if tf not in _st.done]
+        if never:
+            return uni, never[0]
+        if not due:
+            return uni, None
+        return uni, max(due, key=lambda tf: (t0 - _st.done[tf]) / EVERY[tf])
 
 
 def _ask(name: str, *args: object) -> object:
@@ -557,11 +604,43 @@ def _ask(name: str, *args: object) -> object:
         return None
 
 
+def _one(base: str, tf: str) -> tuple[str, list[Bar] | None]:
+    """Свечи одной монеты (None — источник не ответил)."""
+    raw = _ask("klines", base, tf)
+    return base, (parse_bars(raw) if raw is not None else None)
+
+
+def _pass(tf: str, coins: list[str]) -> int:
+    """Пересчитать таймфрейм по всем монетам; вернёт, сколько посчитано.
+    ABORT_FAILS сбоев подряд — прерывается (Binance недоступен)."""
+    ok = fails = 0
+    step = WORKERS * 4
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        for k in range(0, len(coins), step):
+            for base, bars in pool.map(lambda b: _one(b, tf), coins[k:k + step]):
+                if bars is None:
+                    fails += 1
+                    continue
+                fails = 0
+                r = rating(bars)
+                if r is None:
+                    continue
+                ok += 1
+                with _lock:
+                    _st.rates.setdefault(tf, {})[base] = (r[0], _now())
+                    if tf == "15m":
+                        _st.px[base] = (bars[-1][4], change_24h(bars))
+            if fails >= ABORT_FAILS:
+                _log(f"{tf}: {fails} сбоев подряд — проход прерван")
+                break
+    return ok
+
+
 def build() -> dict[str, Json]:
-    """Пересчитать то, что пора, и положить ответ в кэш (зовёт только фоновый
-    поток сервера)."""
+    """Пересчитать то, что пора (не больше одного таймфрейма), и положить
+    ответ в кэш (зовёт только фоновый поток сервера)."""
     t0 = time.monotonic()
-    uni_due, tfs = _due(t0)
+    uni_due, tf = _due(t0)
     if uni_due:
         got = parse_universe(_ask("universe"))
         with _lock:
@@ -571,29 +650,24 @@ def build() -> dict[str, Json]:
                 _st.uni_fail = t0
     with _lock:
         coins = [b for b, _ in _st.universe]
-    for tf in tfs:
-        ok = 0
-        for base in coins:
-            bars = parse_bars(_ask("klines", base, tf))
-            r = rating(bars)
-            if r is None:
-                continue
-            ok += 1
-            with _lock:
-                _st.rates.setdefault(tf, {})[base] = (r[0], _now())
-                if tf == "15m":
-                    _st.px[base] = (bars[-1][4], change_24h(bars))
+    if tf and coins:
+        if not _pass(tf, coins):
+            _log(f"{tf}: ни одной монеты")
         with _lock:
             _st.done[tf] = t0
-            # Монеты, выпавшие из списка, — из памяти прочь.
-            keep = set(coins)
-            for d in (_st.rates.get(tf, {}), _st.px if tf == "15m" else {}):
-                for k in [k for k in d if k not in keep]:
-                    del d[k]
-        if coins and not ok:
-            _log(f"{tf}: ни одной монеты")
     with _lock:
-        res = reply(_st.universe, _st.rates, _st.px, _now())
+        now = _now()
+        keep = set(coins)
+        # Монеты, выпавшие из списка, и старые рейтинги ненужных таймфреймов — из памяти прочь.
+        for t in list(_st.rates):
+            d = _st.rates[t]
+            for k in [k for k, v in d.items() if k not in keep or not fresh(t, v[1], now)]:
+                del d[k]
+            if not d:
+                del _st.rates[t]
+        for k in [k for k in _st.px if k not in keep]:
+            del _st.px[k]
+        res = reply(_st.universe, _st.rates, _st.px, now)
         if _st.hit is not None and res == _st.hit:
             res = _st.hit  # те же цифры — тот же объект (те же байты и ETag)
         _st.hit = res
@@ -611,9 +685,9 @@ def _bg() -> None:
 def refresh() -> dict[str, Json]:
     """Обновить кэш — зовёт только сервер (cache_refresher раз в минуту и
     запуск): сборка в фоне, если не идёт и есть что пересчитать."""
-    uni, tfs = _due(time.monotonic())
+    uni, tf = _due(time.monotonic())
     with _lock:
-        if _st.job is None and (uni or tfs):
+        if _st.job is None and (uni or tf):
             job = threading.Thread(target=_bg, daemon=True)
             try:
                 job.start()
@@ -625,12 +699,10 @@ def refresh() -> dict[str, Json]:
 
 def screener_data() -> dict[str, Json]:
     """Ответ /api/screener — только из кэша: запрос человека сборку не
-    начинает и к источникам не ходит. Рейтинги старше STALE_X интервалов
-    отбрасываются при чтении тоже."""
+    начинает и к источникам не ходит. Ничего не пересчитывалось дольше
+    STALE_ALL — «нет данных»."""
     with _lock:
         hit = _st.hit
-        if hit is None or not hit.get("ok"):
-            return {"ok": False, "error": "no_data"}
-        if _now() - int(hit["at"]) > STALE_X * EVERY["1d"]:
+        if hit is None or not hit.get("ok") or _now() - int(hit["at"]) > STALE_ALL:
             return {"ok": False, "error": "no_data"}
         return hit
