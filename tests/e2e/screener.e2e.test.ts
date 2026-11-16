@@ -124,7 +124,7 @@ async function open(o: Opts = {}): Promise<{ ctx: BrowserContext; page: Page; er
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const scrBtn = (page: Page, _lang = "ru") => page.locator(".ch-foot .scr-open");
 const names = (page: Page) => page.locator(".scr-row .scr-name b").evaluateAll((els) => els.map((el) => el.firstChild?.textContent ?? ""));
-const TFS = ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d", "3d", "1w", "1M"];
+const TFS = ["5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d", "3d", "1w"];
 const chip = (page: Page, tf: string) => page.locator(".ch-sheet.scr > .scr-tfs .scr-chip").nth(TFS.indexOf(tf));
 
 /** Что не влезло: за краем экрана или обрезано. */
@@ -226,18 +226,18 @@ test("скринер и Фибо на 16 языках при 320 точках: �
     await scrBtn(page, lang).click();
     await page.locator(".scr-row").first().waitFor();
     assert.equal(sp(await page.locator(".ch-sheet.scr .ch-sheet-hd b").textContent()), sp(I18N["scr_title"]![lang]!), lang);
-    assert.equal(await page.locator(".ch-sheet.scr > .scr-tfs .scr-chip").count(), 14, lang);
+    assert.equal(await page.locator(".ch-sheet.scr > .scr-tfs .scr-chip").count(), 11, lang);
     assert.equal(sp(await page.locator(".scr-how").textContent()), sp(I18N["scr_how"]![lang]!), lang);
-    await chip(page, "1m").click();
-    assert.match(await chip(page, "1m").getAttribute("aria-label") ?? "", new RegExp(`: ${I18N["scr_buy"]![lang]!}$`), lang);
+    await chip(page, "5m").click();
+    assert.match(await chip(page, "5m").getAttribute("aria-label") ?? "", new RegExp(`: ${I18N["scr_buy"]![lang]!}$`), lang);
     await page.locator(".scr-wait").waitFor();
-    await chip(page, "1m").click();
-    await chip(page, "1m").click();
+    await chip(page, "5m").click();
+    await chip(page, "5m").click();
     assert.equal(sp(await page.locator(".scr-x-ttl").textContent()), sp(I18N["scr_x_title"]![lang]!.replace("{tf}", "15m")), lang);
     await page.locator(".scr-x select").nth(5).selectOption("fresh");
     await page.locator(".scr-cols summary").click();
-    await page.locator(".scr-cols .scr-chip").nth(0).click(); // + 1m
-    await page.locator(".scr-cols .scr-chip").nth(13).click(); // + 1M
+    await page.locator(".scr-cols .scr-chip").nth(0).click(); // + 5m
+    await page.locator(".scr-cols .scr-chip").nth(10).click(); // + 1W
     assert.equal(await page.locator(".scr-row .scr-det").count(), 4, lang);
     assert.equal(await page.locator(".scr-row .scr-fut").count(), 1, lang);
     assert.deepEqual(await overflow(page), [], lang);
@@ -311,34 +311,34 @@ test("подтверждения и детали: объём, ADX, RSI, риск
   await ctx.close();
 });
 
-test("все таймфреймы: минутный фильтр — сервер получает его в запросе, пока считается — так и сказано, посчитал — монеты", async () => {
-  const withMin = { ...SCREEN, tfs: [...SCREEN.tfs, "1m"], rows: SCREEN.rows.map((r, i) => ({ ...r, r: { ...r.r, "1m": [0.7, -0.5, 0.3, null][i] } })) };
+test("редкий таймфрейм (30m) в фильтре — сервер получает его в запросе, пока считается — так и сказано, посчитал — монеты", async () => {
+  const withMin = { ...SCREEN, tfs: [...SCREEN.tfs, "30m"], rows: SCREEN.rows.map((r, i) => ({ ...r, r: { ...r.r, "30m": [0.7, -0.5, 0.3, null][i] } })) };
   const urls: string[] = [];
   const { ctx, page, errors } = await open({
     screenFor: (url) => {
       urls.push(url);
-      return url.includes("tf=1m") && urls.filter((u) => u.includes("tf=1m")).length > 1 ? withMin : SCREEN;
+      return url.includes("tf=30m") && urls.filter((u) => u.includes("tf=30m")).length > 1 ? withMin : SCREEN;
     },
   });
   await scrBtn(page).click();
   await page.locator(".scr-row").first().waitFor();
-  await chip(page, "1m").click();
-  // Сервер ещё не считал 1m — сообщение, точка на фишке, монет нет (а не «ничего не подошло»).
+  await chip(page, "30m").click();
+  // Сервер ещё не считал 30m — сообщение, точка на фишке, монет нет (а не «ничего не подошло»).
   await page.locator(".scr-wait").waitFor();
-  assert.equal(sp(await page.locator(".scr-wait").textContent()), "Считается: 1m — около минуты");
-  assert.match(await chip(page, "1m").getAttribute("class") ?? "", /\bwait\b/);
-  assert.ok(urls.some((u) => u.endsWith("/api/screener?tf=1m")), urls.join(" "));
+  assert.equal(sp(await page.locator(".scr-wait").textContent()), "Считается: 30m — около минуты");
+  assert.match(await chip(page, "30m").getAttribute("class") ?? "", /\bwait\b/);
+  assert.ok(urls.some((u) => u.endsWith("/api/screener?tf=30m")), urls.join(" "));
   assert.equal(await page.locator(".scr-list .ch-hint").count(), 0);
-  // Через 15 секунд приложение спрашивает снова — 1m посчитан.
+  // Через 15 секунд приложение спрашивает снова — 30m посчитан.
   await page.locator(".scr-row").first().waitFor({ timeout: 30_000 });
   assert.deepEqual(await names(page), ["BTC", "SOL"]);
   assert.equal(await page.locator(".scr-wait").count(), 0);
   // Значки у монеты — таймфрейм фильтра и столбцы.
-  assert.deepEqual((await page.locator(".scr-row").first().locator(".scr-sig i").allTextContents()).map(sp), ["1m▲▲", "15m▲▲+1,2%", "1H▼", "4H▲", "1D▲▲"]);
-  // Касание монеты — график на 1m.
+  assert.deepEqual((await page.locator(".scr-row").first().locator(".scr-sig i").allTextContents()).map(sp), ["15m▲▲+1,2%", "30m▲▲", "1H▼", "4H▲", "1D▲▲"]);
+  // Касание монеты — график на 30m.
   await page.locator(".scr-row", { hasText: "SOL" }).click();
   await page.locator(".ch-fibcard").waitFor();
-  assert.equal(sp(await page.locator(".ch-tf.on").first().textContent()), "1m");
+  assert.equal(sp(await page.locator(".ch-tf.on").first().textContent()), "30m");
   assert.deepEqual(errors, []);
   await ctx.close();
 });

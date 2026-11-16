@@ -80,7 +80,7 @@ class RouteTest(unittest.TestCase):
     def test_subscribers_only(self):
         code, _, body, _ = get(prem=False)
         self.assertEqual((code, json.loads(body)), (403, {"ok": False, "error": "premium"}))
-        self.assertNotIn("1m", sc._st.want)
+        self.assertNotIn("5m", sc._st.want)
         for path in ("/api/screener", "/screener"):
             self.assertIn(path, api.PAID_PATHS)
 
@@ -91,13 +91,14 @@ class RouteTest(unittest.TestCase):
         self.assertIn('"GET /api/screener HTTP/1.1" 200', log)
 
     def test_tf_param_only_marks_known_timeframes(self):
-        evil = ",".join(["1m", "../x", "<b>", "1M", "15m", "1h"] + ["x" * 50] * 1000)
-        for q in (f"?tf={evil}", "?tf=" + "1m," * 10_000, "?tf=%00%ff", "?tf=1m&tf=1w", "?tf=" + "1w" + "," * 500 + "3d"):
+        evil = ",".join(["5m", "../x", "<b>", "12h", "15m", "1h"] + ["x" * 50] * 1000)
+        for q in (f"?tf={evil}", "?tf=" + "5m," * 10_000, "?tf=%00%ff", "?tf=5m&tf=1w", "?tf=" + "1w" + "," * 500 + "3d"):
             code, _, _, _ = get(q)
             self.assertIn(code, (200, 400, 414))  # слишком длинный адрес сервер отклоняет сам
-        self.assertEqual(get("?tf=1m,zz,%3Cb%3E,1M,15m,1h," + ",".join(["x" * 10] * 5))[0], 200)
-        # WARM не отмечаются, мусор — мимо, второй ?tf — мимо, дальше 120 знаков (3d) — мимо.
-        self.assertEqual(set(sc._st.want), {"1m", "1M", "1w"})
+        self.assertEqual(get("?tf=5m,zz,%3Cb%3E,12h,1m,3m,1M,15m,1h," + ",".join(["x" * 10] * 5))[0], 200)
+        # WARM не отмечаются, мусор и убранные (1m, 3m, 1M) — мимо, второй ?tf — мимо,
+        # дальше 120 знаков (3d) — мимо.
+        self.assertEqual(set(sc._st.want), {"5m", "12h", "1w"})
         self.assertEqual(self.asked, [])
         for _ in range(2000):
             sc.want([f"{i}m" for i in range(100)])
@@ -118,9 +119,9 @@ class SourceTest(unittest.TestCase):
                 self.assertIsNone(api._screen_klines(base, tf))
                 self.assertIsNone(api._screen_klines(base, tf, "f"))
             self.assertEqual(urls, [])
-            api._screen_klines("1000SATS", "1M")
+            api._screen_klines("1000SATS", "1w")
             api._screen_klines("NEW", "3d", "f")
-        self.assertEqual(urls, [f"/api/v3/klines?symbol=1000SATSUSDT&interval=1M&limit={sc.BARS}",
+        self.assertEqual(urls, [f"/api/v3/klines?symbol=1000SATSUSDT&interval=1w&limit={sc.BARS}",
                                 f"{api.SCREEN_FUT}klines?symbol=NEWUSDT&interval=3d&limit={sc.FUT_BARS}"])
         self.assertLess(sc.FUT_BARS, 500)  # до 500 свечей — вес 2
 

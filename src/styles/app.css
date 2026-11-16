@@ -1887,7 +1887,7 @@ html.ch-full .screen.full {
 }
 .scr-presets button.on { background: rgb(31 142 255 / 0.25); border-color: var(--glow); }
 /* Все таймфреймы графика — фишками: касание — любой → ▲ покупка → ▼ продажа. */
-.scr-tfs { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.scr-tfs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
 .scr-chip {
   position: relative; display: grid; justify-items: center; align-content: center; min-width: 0; height: 40px; padding: 0 2px;
   border-radius: 8px; border: 1px solid rgb(58 130 214 / 0.25); background: transparent; color: var(--dim);

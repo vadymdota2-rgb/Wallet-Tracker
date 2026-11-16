@@ -2040,9 +2040,9 @@ say("рынки в меню — дневные свечи за месяц по �
     and "class CandleFuzzTest(" in read(f"{APP}/tests/test_markets_fuzz.py")
     and "class HostileCandleFileTest(" in read(f"{APP}/tests/test_markets_security.py")
     and "python tools/load-markets.py 2 3 candles" in read(f"{APP}/.github/workflows/tests.yml"))
-say("график — скринер внизу: рейтинг индикаторов всех монет Binance на всех 14 таймфреймах считает сервер для всех (тот же techRating — тест-договор; редкие таймфреймы — по спросу, не больше одного за сборку), фильтр «покупка/продажа» фишками таймфреймов, касание — график и Фибо от последнего лоя с тейками и стопом; Hyperliquid не трогается",
+say("график — скринер внизу: рейтинг индикаторов всех монет Binance на 11 таймфреймах (5m–1W; 1m, 3m и 1M убраны — не работали) считает сервер для всех (тот же techRating — тест-договор; редкие таймфреймы — по спросу, не больше одного за сборку), фильтр «покупка/продажа» фишками таймфреймов, касание — график и Фибо от последнего лоя с тейками и стопом; Hyperliquid не трогается",
     os.path.exists(f"{APP}/wt_screen.py") and "def rating(" in read(f"{APP}/wt_screen.py")
-    and 'TFS = ("1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d", "3d", "1w", "1M")' in read(f"{APP}/wt_screen.py")
+    and 'TFS = ("5m", "15m", "30m", "1h", "2h", "4h", "6h", "12h", "1d", "3d", "1w")' in read(f"{APP}/wt_screen.py")
     and "def want(" in read(f"{APP}/wt_screen.py") and "def test_budget(self):" in read(f"{APP}/tests/test_screen.py")
     and "screener_data = wt_screen.screener_data" in api and '"screener",' in api.split("PAID_PATHS = frozenset(")[1][:1200]
     and "hl_post" not in api.split("# --- Скринер графика (wt_screen.py)")[1].split("# --- Дайджест")[0]

@@ -207,7 +207,7 @@ class ReplyTest(unittest.TestCase):
         rates = {"15m": {"BTC": (m, NOW - 30), "ETH": ((-0.2, *m[1:]), NOW - 3 * 600 - 1),
                          "NEW": ((0.2, *m[1:7], None, None, None, sc.SINCE_MAX + 1), NOW - 30)},
                  "1h": {"BTC": ((-0.4, *m[1:]), NOW - 60), "ETH": ((0.31234, *m[1:]), NOW - 60)},
-                 "1m": {"BTC": ((0.9, *m[1:]), NOW - 3 * 360 - 1)}}  # старый — мимо
+                 "5m": {"BTC": ((0.9, *m[1:]), NOW - 3 * 300 - 1)}}  # старый — мимо
         px = {"BTC": (100000.0, 1.25)}
         rep = sc.reply(uni, rates, px, NOW)
         self.assertEqual(rep["tfs"], ["15m", "1h"])  # по каким таймфреймам рейтинг есть
@@ -253,7 +253,7 @@ class CacheTest(unittest.TestCase):
             self.assertTrue(res["ok"])
             self.assertEqual([r["s"] for r in res["rows"]], ["BTC", "ETH", "SOL"])
             for _ in range(1000):
-                sc.want(["1m", "5m"])  # человек фильтрует — только отметка, без сети
+                sc.want(["5m", "30m"])  # человек фильтрует — только отметка, без сети
                 self.assertIs(sc.screener_data(), res)
         self.assertEqual(len(self.calls), 1 + 3)  # список и один таймфрейм за сборку
 
@@ -280,22 +280,24 @@ class CacheTest(unittest.TestCase):
         self.assertEqual(self.calls.count("universe"), 3)
 
     def test_demand_wakes_a_timeframe_then_it_sleeps(self):
-        # Кто-то фильтрует 1m — считается сразу (раньше просроченных) и раз в
+        # Кто-то фильтрует 5m — считается сразу (раньше просроченных) и раз в
         # EVERY; перестали — через ACTIVE_FOR снова не считается.
         t, mono = [NOW], [1000.0]
         self.run_for(5, t, mono)  # прогрев WARM
         self.calls.clear()
-        self.run_for(30, t, mono, every_min=lambda i: sc.want(["1m", "1m", "bad", 5, "15m"]))
-        self.assertEqual(self.by_tf()["1m"], 5)  # 30 минут / 6
-        self.assertEqual(self.calls[1][1], "1m")  # первым — нужный и ещё не посчитанный
+        self.run_for(30, t, mono, every_min=lambda i: sc.want(["5m", "5m", "bad", 5, "15m", "1m", "1M"]))
+        self.assertEqual(self.by_tf()["5m"], 6)  # 30 минут / 5
+        self.assertEqual(self.calls[1][1], "5m")  # первым — нужный и ещё не посчитанный
+        self.assertNotIn("1m", sc._st.want)  # убранные таймфреймы (1m, 3m, 1M) — не считаются
+        self.assertNotIn("1M", sc._st.want)
         self.calls.clear()
         self.run_for(int(sc.ACTIVE_FOR / 60) + 30, t, mono)
-        n = self.by_tf()["1m"]
-        self.assertLessEqual(n, int(sc.ACTIVE_FOR / sc.EVERY["1m"]))
+        n = self.by_tf()["5m"]
+        self.assertLessEqual(n, int(sc.ACTIVE_FOR / sc.EVERY["5m"]))
         self.calls.clear()
         self.run_for(60, t, mono)
-        self.assertEqual(self.by_tf()["1m"], 0)
-        self.assertNotIn("1m", sc._st.rates)  # старые рейтинги ненужного — из памяти прочь
+        self.assertEqual(self.by_tf()["5m"], 0)
+        self.assertNotIn("5m", sc._st.rates)  # старые рейтинги ненужного — из памяти прочь
 
     def test_budget(self):
         # Все таймфреймы нужны сразу: за сборку — не больше одного, и графику
@@ -312,7 +314,7 @@ class CacheTest(unittest.TestCase):
         avg_warm = sum(sc.COINS_MAX * 2 * 60 / sc.EVERY[tf] for tf in sc.WARM) + 80 / 60
         self.assertLess(avg_all, 0.2 * 6000)
         self.assertLess(avg_warm, 0.05 * 6000)
-        # Проверка на деле: все 14 таймфреймов нужны три часа — один проход за сборку.
+        # Проверка на деле: все 11 таймфреймов нужны три часа — один проход за сборку.
         t, mono = [NOW], [1000.0]
         before = 0
         tfs_per_build = []
