@@ -10,7 +10,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  ANY, badgeTfs, chase, confirms, consensus, EXTRA_ANY, LATE_STEPS, late, mainTf, matches, pending, RR_STEPS, RSI_ZONES, rr,
+  ANY, badgeTfs, chase, confirms, consensus, EXTRA_ANY, LATE_STEPS, late, mainTf, matches, pending, RSI_ZONES, timing,
   SCREEN_TFS, SCREEN_WARM, SINCE_MAX, SORTS, screen, signal, toggleCol, validCols, validExtra, validFilter, validScreener,
   VOL_STEPS, ADX_STEPS, wanted, type Extra, type ScreenFilter, type ScreenTf,
 } from "../src/lib/screener.ts";
@@ -65,7 +65,7 @@ function filter(r: () => number): ScreenFilter {
 function extra(r: () => number): Extra {
   return {
     vol: r() < 0.3 ? pick(r, VOL_STEPS) : 0, adx: r() < 0.3 ? pick(r, ADX_STEPS) : 0, rsi: r() < 0.3 ? pick(r, RSI_ZONES) : "any",
-    rr: r() < 0.3 ? pick(r, RR_STEPS) : 0, late: r() < 0.3 ? pick(r, LATE_STEPS) : 0, sort: pick(r, SORTS),
+    late: r() < 0.3 ? pick(r, LATE_STEPS) : 0, sort: pick(r, SORTS),
   };
 }
 const within = (v: number | null, lo: number, hi: number) => v === null || (Number.isFinite(v) && v >= lo && v <= hi);
@@ -90,8 +90,6 @@ test("ответ: мусор не роняет, проходит только г
         assert.notEqual(row.r[tf], null, `случай ${i}: метрики без рейтинга`);
         assert.ok(within(m.rsi, 0, 100) && within(m.adx, 0, 100) && within(m.sl, -100, 0) && within(m.tp, 0, 1e4), `случай ${i}`);
         assert.ok(m.age === null || (Number.isInteger(m.age) && m.age >= 0 && m.age <= SINCE_MAX + 1), `случай ${i}`);
-        const q = rr(m);
-        assert.ok(q === null || (Number.isFinite(q) && q >= 0), `случай ${i}`);
       }
       const c = consensus(row);
       assert.ok(c.up + c.dn <= c.of && c.of <= SCREEN_TFS.length, `случай ${i}`);
@@ -148,6 +146,9 @@ test("ход с сигнала: знак — по сигналу, «давно»
           assert.equal(q, s * m.mv!, `случай ${i}`);
         }
         if (late(row, tf)) assert.ok(q !== null && q > 0, `случай ${i}`);
+        const w = timing(row, tf);
+        assert.ok(w === null || q !== null, `случай ${i}: вердикт без хода`);
+        assert.equal(late(row, tf), w === "late", `случай ${i}`);
       }
     }
   }

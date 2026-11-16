@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  ANY, badgeTfs, chartTf, chase, confirms, consensus, EXTRA_ANY, find, late, mainTf, matches, nextWant, pending, picked, PRESETS, rr,
+  ANY, badgeTfs, chartTf, chase, confirms, consensus, EXTRA_ANY, find, late, mainTf, matches, nextWant, pending, picked, PRESETS, timing,
   SCREEN_TFS, SCREEN_WARM, screen, signal, SINCE_MAX, toggleCol, validCols, validExtra, validFilter, validScreener, wanted,
   type Metrics, type ScreenRow,
 } from "../src/lib/screener.ts";
@@ -194,9 +194,7 @@ test("метрики в ответе: массив [рейтинг, MA, осц.,
   assert.deepEqual(b.m["15m"], NOM); // всё вне рамок — null
   assert.equal(b.r["4h"], null); // рейтинг вне −1…+1 — нет рейтинга и метрик
   assert.equal(b.m["4h"], undefined);
-  assert.equal(rr(a.m["15m"]), 2);
-  assert.equal(rr(b.m["15m"]), null);
-  assert.equal(rr(undefined), null);
+  assert.deepEqual([a.m["15m"]!.tp, a.m["15m"]!.sl], [3.5, -1.75]); // тейк и стоп приходят (показывает их карточка Фибо, не список)
 });
 
 test("подтверждения на основном таймфрейме: объём, ADX, зона RSI, риск/прибыль; нет значения — не проходит", () => {
@@ -216,9 +214,7 @@ test("подтверждения на основном таймфрейме: о�
   assert.equal(confirms(mrow("M", { rsi: 70.1 }), tf, { ...EXTRA_ANY, rsi: "ob" }), true);
   assert.equal(confirms(mrow("M", { rsi: 70.1 }), tf, { ...EXTRA_ANY, rsi: "mid" }), false);
   assert.equal(confirms(mrow("M", { rsi: 29.9 }), tf, { ...EXTRA_ANY, rsi: "mid" }), false);
-  assert.equal(confirms(r, tf, { ...EXTRA_ANY, rr: 2 }), true);
-  assert.equal(confirms(r, tf, { ...EXTRA_ANY, rr: 3 }), false);
-  for (const x of [{ vol: 1.5 }, { adx: 20 }, { rsi: "os" as const }, { rr: 1.5 }]) {
+  for (const x of [{ vol: 1.5 }, { adx: 20 }, { rsi: "os" as const }, { late: 1 }]) {
     assert.equal(confirms(mrow("Z", {}), tf, { ...EXTRA_ANY, ...x }), false, JSON.stringify(x));
   }
   assert.equal(confirms(r, "1h", { ...EXTRA_ANY, vol: 1.5 }), false); // на 1h метрик нет
@@ -226,15 +222,14 @@ test("подтверждения на основном таймфрейме: о�
   assert.equal(mainTf({ ...ANY, "4h": "buy", "1h": "sell" }), "1h");
 });
 
-test("порядок: риск/прибыль, объём, ADX, сутки — по убыванию, без значения — в конце, равные — порядок сервера", () => {
+test("порядок: объём, ADX, сутки — по убыванию, без значения — в конце, равные — порядок сервера", () => {
   const rows = [
     mrow("A", { tp: 2, sl: -2, volx: 1, adx: 10 }, 5),
     mrow("B", { tp: 6, sl: -2, volx: 3 }, -1),
     mrow("C", {}, null),
     mrow("D", { tp: 3, sl: -1, volx: 3, adx: 30 }, 5),
   ];
-  const by = (sort: "rr" | "vol" | "adx" | "ch") => screen(rows, ANY, { ...EXTRA_ANY, sort }).map((r) => r.s);
-  assert.deepEqual(by("rr"), ["B", "D", "A", "C"]);
+  const by = (sort: "vol" | "adx" | "ch") => screen(rows, ANY, { ...EXTRA_ANY, sort }).map((r) => r.s);
   assert.deepEqual(by("vol"), ["B", "D", "A", "C"]);
   assert.deepEqual(by("adx"), ["D", "A", "B", "C"]);
   assert.deepEqual(by("ch"), ["A", "D", "B", "C"]);
@@ -247,8 +242,10 @@ test("порядок: риск/прибыль, объём, ADX, сутки — �
 test("согласие таймфреймов и подтверждения с устройства", () => {
   assert.deepEqual(consensus(row("A", { "5m": 0.6, "15m": 0.2, "1h": 0, "4h": -0.3, "1d": 0.11 })), { up: 3, dn: 1, of: 5 });
   assert.deepEqual(consensus(row("B", {})), { up: 0, dn: 0, of: 0 });
-  assert.deepEqual(validExtra({ vol: 2, adx: 25, rsi: "os", rr: 3, late: 1, sort: "fresh" }), { vol: 2, adx: 25, rsi: "os", rr: 3, late: 1, sort: "fresh" });
-  assert.deepEqual(validExtra({ vol: 2.5, adx: "25", rsi: "x", rr: -1, late: 4, sort: "evil" }), EXTRA_ANY);
+  assert.deepEqual(validExtra({ vol: 2, adx: 25, rsi: "os", late: 1, sort: "fresh" }), { vol: 2, adx: 25, rsi: "os", late: 1, sort: "fresh" });
+  assert.deepEqual(validExtra({ vol: 2.5, adx: "25", rsi: "x", late: 4, sort: "evil" }), EXTRA_ANY);
+  // Сохранённые раньше риск/прибыль (убраны) не фильтруют невидимо: фильтр и порядок — без них.
+  assert.deepEqual(validExtra({ rr: 3, sort: "rr" }), EXTRA_ANY);
   assert.deepEqual(validExtra(null), EXTRA_ANY);
   assert.deepEqual(validExtra([1]), EXTRA_ANY);
 });
@@ -281,6 +278,14 @@ test("ход с сигнала: со знаком сигнала, давно и 
   assert.equal(late(mrow("L", { mv: 1.5, age: 2, atrp: 1 }), "15m"), false);
   assert.equal(late(mrow("L", { mv: 2.01, age: 2, atrp: 1 }), "15m"), true);
   assert.equal(late(by("C"), "15m"), false);
+  // Вердикт: «вовремя» — до двух ATR (и против сигнала), «поздно» — дальше; нет хода или ATR — нет вердикта.
+  assert.equal(timing(by("A"), "15m"), "late");
+  assert.equal(timing(mrow("L", { mv: 2, age: 2, atrp: 1 }), "15m"), "ok");
+  assert.equal(timing(mrow("L", { mv: -3, age: 2, atrp: 1 }), "15m"), "ok");
+  assert.equal(timing(mrow("L", { mv: 1, age: 2 }), "15m"), null);
+  assert.equal(timing(mrow("L", { mv: 1, age: 2, atrp: 0 }), "15m"), null);
+  assert.equal(timing(by("C"), "15m"), null);
+  assert.equal(timing(by("D"), "15m"), null);
 });
 
 test("фильтр «ход с сигнала» и порядок «свежесть»: давно и без сигнала — не проходят и в конце", () => {

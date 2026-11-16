@@ -2050,13 +2050,15 @@ say("график — скринер внизу: рейтинг индикато
     and "export function fiboFromLow(" in read(f"{APP}/src/lib/fibo.ts") and "export function screen(" in read(f"{APP}/src/lib/screener.ts")
     and 'className="ch-foot"' in read(f"{APP}/src/screens/ChartScreen.tsx")
     and "wt_screen.py tests/test_screen.py" in read(f"{APP}/.github/workflows/tests.yml"))
-say("скринер для сделок: у каждой монеты по основному таймфрейму — RSI, ADX, всплеск объёма, ATR %, тейк и стоп по Фибо от лоя, риск/прибыль и согласие таймфреймов; подтверждения (объём, тренд, зона RSI, R:R) и порядок; монеты спота от $10 тыс. оборота и только с фьючерсов Binance; метрики сервера = индикаторам графика (тест-договор)",
+say("скринер для сделок — чисто: у монеты значки таймфреймов (только стрелки) и одна строка сигнала основного таймфрейма — когда появился, сколько прошла цена, «вовремя» или «поздно» словом; тейки и стоп — на графике (карточка Фибо), не в списке; подтверждения (объём, тренд, зона RSI, ход с сигнала) и порядок; монеты спота от $10 тыс. оборота и только с фьючерсов Binance; метрики сервера = индикаторам графика (тест-договор)",
     "def metrics(" in read(f"{APP}/wt_screen.py") and "def parse_universe(" in read(f"{APP}/wt_screen.py")
     and "class MetricsContractTest(" in read(f"{APP}/tests/test_screen_contract.py")
-    and "export function confirms(" in read(f"{APP}/src/lib/screener.ts") and "export function consensus(" in read(f"{APP}/src/lib/screener.ts")
-    and "function ScrDetails(" in read(f"{APP}/src/screens/ChartScreen.tsx")
-    and "подтверждения и детали" in read(f"{APP}/tests/e2e/screener.e2e.test.ts")
-    and "SCREEN_FUT" in api and all(k in _i18n for k in ("scr_x_title", "scr_agree", "scr_fut", "scr_sort_rr")))
+    and "export function confirms(" in read(f"{APP}/src/lib/screener.ts") and "export function timing(" in read(f"{APP}/src/lib/screener.ts")
+    and "function ScrSignal(" in read(f"{APP}/src/screens/ChartScreen.tsx") and "function ScrDetails(" not in read(f"{APP}/src/screens/ChartScreen.tsx")
+    and "RR_STEPS" not in read(f"{APP}/src/lib/screener.ts")
+    and "Ни тейков, ни стопов" in read(f"{APP}/tests/e2e/screener.e2e.test.ts")
+    and "SCREEN_FUT" in api and all(k in _i18n for k in ("scr_x_title", "scr_late_tag", "scr_ok_tag", "scr_fut"))
+    and not any(k in _i18n for k in ("scr_agree", "scr_sort_rr", "scr_x_rr", "scr_d_vol")))
 say("скринер — не заходить поздно: у каждого таймфрейма — когда появился нынешний сигнал и сколько цена прошла с тех пор (рейтинг прошлой свечи = techRating на свечах до неё), «поздно» — больше двух ATR, фильтр «ход с сигнала» и порядок «свежесть»; таймфреймы-столбцы в списке выбираются и убираются, новые — по спросу",
     "def since(" in read(f"{APP}/wt_screen.py") and "def _rater(" in read(f"{APP}/wt_screen.py")
     and "def test_rating_at_past_candle_equals_rating_of_prefix(" in read(f"{APP}/tests/test_screen.py")
@@ -2072,8 +2074,8 @@ say("скринер — уровень зрелых проектов: фаззи
     and "  mutation-screen:\n" in _ci_all and "python tools/load-markets.py 2 3 screener" in _ci_all
     and "def _health(" in read(f"{APP}/wt_screen.py") and "PAUSE = " in read(f"{APP}/wt_screen.py")
     and "def merge_universe(" in read(f"{APP}/wt_screen.py") and "if _isnan(o) or _isnan(c) or not (" in read(f"{APP}/wt_screen.py")
-    and "@media (forced-colors: active)" in read(f"{APP}/src/styles/app.css").split(".scr-det .scr-since.late")[1][:1500]
-    and "scr_late" in _i18n)
+    and ".scr-when.late { border: 2px dashed Highlight; }" in read(f"{APP}/src/styles/app.css")
+    and "scr_late_tag" in _i18n)
 say("рынки в меню — уровень зрелых проектов: журнал сервера только при смене состояния источников (молчит / снова отвечает, тип ошибки без текста, одна чистая строка); сетка всегда 3 × 3 — пропавший пункт «—» на своём месте («нет данных» для чтения с экрана); ячейки перерисовываются по отдельности; высокая контрастность Windows",
     "def _health(" in read(f"{APP}/wt_markets.py") and "v, why = None, type(e).__name__" in read(f"{APP}/wt_markets.py")
     and "def test_journal_only_on_state_changes(" in read(f"{APP}/tests/test_markets.py")

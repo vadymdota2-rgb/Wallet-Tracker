@@ -23,9 +23,9 @@ import {
   chartSnap, chartStateGet, chartStatePut, fetchScreener, pxAlertAdd, pxAlertDel, pxAlertList, pxAlertMove, type PxAlert, type PxLevel,
 } from "../lib/api";
 import {
-  ADX_STEPS, ANY, badgeTfs, chartTf, chase, consensus, EXTRA_ANY, find, late, LATE_STEPS, mainTf, nextWant, pending, PRESETS, rr,
-  RR_STEPS, RSI_ZONES, SCREEN_TFS, SCREEN_WARM, screen, signal, SINCE_MAX, SORTS, toggleCol, validCols, validExtra, validFilter,
-  VOL_STEPS, wanted, type Extra, type ScreenFilter, type ScreenReply, type ScreenRow, type ScreenTf,
+  ADX_STEPS, ANY, badgeTfs, chartTf, chase, EXTRA_ANY, find, LATE_STEPS, mainTf, nextWant, pending, PRESETS, RSI_ZONES, SCREEN_TFS,
+  SCREEN_WARM, screen, signal, SINCE_MAX, SORTS, timing, toggleCol, validCols, validExtra, validFilter, VOL_STEPS, wanted,
+  type Extra, type ScreenFilter, type ScreenReply, type ScreenRow, type ScreenTf,
 } from "../lib/screener";
 import { FIBO_LEVELS, fiboFromLow, fiboPlan, type Fibo } from "../lib/fibo";
 import { toast } from "../components/Toast";
@@ -314,38 +314,20 @@ function FibCard({ f, lang, close }: { f: Fibo; lang: Parameters<typeof t>[0]; c
   );
 }
 
-/** Строка деталей монеты по основному таймфрейму: RSI, ADX, объём, ATR,
- *  тейк и стоп по Фибо от лоя, риск/прибыль; согласие всех таймфреймов. */
-function ScrDetails({ row, tf, lang }: { row: ScreenRow; tf: (typeof SCREEN_TFS)[number]; lang: Parameters<typeof t>[0] }) {
+/** Одна строка под значками: когда на основном таймфрейме появился сигнал,
+ *  сколько цена с тех пор прошла и успеваем ли — «вовремя» или «поздно»
+ *  (ушла больше чем на два ATR). Сигнала нет — строки нет. */
+function ScrSignal({ row, tf, lang }: { row: ScreenRow; tf: ScreenTf; lang: Parameters<typeof t>[0] }) {
   const k = row.m[tf];
-  const c = consensus(row);
-  const q = rr(k);
-  const n1 = (v: number) => num(v, 1, 1);
-  const parts: ReactNode[] = [];
-  if (k?.rsi != null) parts.push(<span key="rsi" className={k.rsi < 30 ? "up" : k.rsi > 70 ? "dn" : undefined}>RSI {Math.round(k.rsi)}</span>);
-  if (k?.adx != null) parts.push(<span key="adx" className={k.adx >= 25 ? "hot" : undefined}>ADX {Math.round(k.adx)}</span>);
-  if (k?.volx != null) parts.push(<span key="vol" className={k.volx >= 2 ? "hot" : undefined}>{t(lang, "scr_d_vol")} ×{n1(k.volx)}</span>);
-  if (k?.atrp != null) parts.push(<span key="atr">ATR {n1(k.atrp)}%</span>);
-  if (k?.tp != null) parts.push(<span key="tp" className="up">TP +{n1(k.tp)}%</span>);
-  if (k?.sl != null) parts.push(<span key="sl" className="dn">SL −{n1(Math.abs(k.sl))}%</span>);
-  if (q !== null) parts.push(<span key="rr" className={q >= 2 ? "hot" : undefined}>R:R {n1(q)}</span>);
-  const sv = row.r[tf] === null ? 0 : signal(row.r[tf]!);
-  if (sv && k?.age != null) {
-    const mv = chase(row, tf);
-    parts.unshift(k.age > SINCE_MAX || k.mv === null || mv === null
-      ? <span key="since" className="scr-since">{t(lang, "scr_since_old")}</span>
-      : <span key="since" className={late(row, tf) ? "scr-since late" : "scr-since"}>
-        {t(lang, "scr_since", { ago: candlesAgo(lang, tf, k.age), pct: signed(k.mv) })}
-        {late(row, tf) ? <span className="sr-only">{` — ${t(lang, "scr_late")}`}</span> : null}
-      </span>);
-  }
+  const v = row.r[tf];
+  if (v === null || !signal(v) || !k || k.age === null) return null;
+  const old = k.age > SINCE_MAX || k.mv === null || chase(row, tf) === null;
+  const when = timing(row, tf);
   return (
     <span className="scr-det">
-      <span className="scr-agree" aria-label={t(lang, "scr_agree", { up: c.up, dn: c.dn, n: c.of })}>
-        <b className="up">▲{c.up}</b> <b className="dn">▼{c.dn}</b> /{c.of}
-      </span>
-      {" "}<span className="scr-tf-l">{TF_LABEL[tf]}</span>
-      {parts.flatMap((x) => [" ", x])}
+      <span className="scr-tf-l">{TF_LABEL[tf]}</span>{" "}
+      <span className="scr-since">{old ? t(lang, "scr_since_old") : t(lang, "scr_since", { ago: candlesAgo(lang, tf, k.age), pct: signed(k.mv!) })}</span>
+      {!old && when ? <>{" "}<b className={`scr-when ${when}`}>{t(lang, when === "late" ? "scr_late_tag" : "scr_ok_tag")}</b></> : null}
     </span>
   );
 }
@@ -1635,18 +1617,12 @@ export function ChartScreen({ arg }: ScreenProps) {
                 </select>
               </label>
               <label>
-                <span>{t(lang, "scr_x_rr")}</span>
-                <select value={extra.rr} onChange={(e) => setP({ scrx: { ...extra, rr: Number(e.target.value) } })}>
-                  {RR_STEPS.map((v) => <option key={v} value={v}>{v ? `≥ ${num(v, 1)}` : t(lang, "scr_any")}</option>)}
-                </select>
-              </label>
-              <label>
                 <span>{t(lang, "scr_x_late")}</span>
                 <select value={extra.late} onChange={(e) => setP({ scrx: { ...extra, late: Number(e.target.value) } })}>
                   {LATE_STEPS.map((v) => <option key={v} value={v}>{v ? `≤ ${num(v, 1)}%` : t(lang, "scr_any")}</option>)}
                 </select>
               </label>
-              <label>
+              <label className="wide">
                 <span>{t(lang, "scr_sort")}</span>
                 <select value={extra.sort} onChange={(e) => setP({ scrx: { ...extra, sort: e.target.value as Extra["sort"] } })}>
                   {SORTS.map((v) => <option key={v} value={v}>{t(lang, `scr_sort_${v}`)}</option>)}
@@ -1674,20 +1650,15 @@ export function ChartScreen({ arg }: ScreenProps) {
                         {badgeTfs(filter, cols).map((tf) => {
                           const v = r.r[tf];
                           const sg = v === null ? null : signal(v);
-                          const k = r.m[tf];
-                          const mv = sg && k?.age != null && k.age <= SINCE_MAX && k.mv !== null ? k.mv : null;
-                          const ago = sg && k?.age != null ? (k.age > SINCE_MAX ? t(lang, "scr_since_old") : mv !== null
-                            ? t(lang, "scr_since", { ago: candlesAgo(lang, tf, k.age), pct: signed(mv) }) : "") : "";
                           return (
-                            <i key={tf} className={`${sg === null ? "na" : `s${sg + 2}`}${late(r, tf) ? " late" : ""}`}
-                              aria-label={`${TF_LABEL[tf]}: ${sg === null ? "—" : t(lang, SIG_KEY[sg + 2]!)}${ago ? `. ${ago}` : ""}${late(r, tf) ? ` — ${t(lang, "scr_late")}` : ""}`}>
+                            <i key={tf} className={sg === null ? "na" : `s${sg + 2}`}
+                              aria-label={`${TF_LABEL[tf]}: ${sg === null ? "—" : t(lang, SIG_KEY[sg + 2]!)}`}>
                               <small>{TF_LABEL[tf]}</small>{sg === null ? "—" : SIG_MARK[sg + 2]}
-                              <em>{mv !== null ? `${mv > 0 ? "+" : mv < 0 ? "−" : ""}${num(Math.abs(mv), Math.abs(mv) < 10 ? 1 : 0, Math.abs(mv) < 10 ? 1 : 0)}%` : ""}</em>
                             </i>
                           );
                         })}
                       </span>
-                      <ScrDetails row={r} tf={tfMain} lang={lang} />
+                      <ScrSignal row={r} tf={tfMain} lang={lang} />
                     </button>
                   ))}
                   {found.length > scrN ? (

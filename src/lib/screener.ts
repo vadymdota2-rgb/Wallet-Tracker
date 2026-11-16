@@ -28,7 +28,8 @@ export type ScreenFilter = Record<ScreenTf, Want>;
 /** Что ещё сервер считает по таймфрейму (из тех же свечей): скользящие и
  *  осцилляторы рейтинга (−1…+1), RSI 14, ADX 14, объём последней закрытой
  *  свечи к среднему за 20 (×), ATR 14 в % цены, Фибо от лоя — до тейка и до
- *  стопа, % от цены. Нет значения — null. */
+ *  стопа, % от цены (в списке не показываются — тейки и стоп на графике, в
+ *  карточке Фибо). Нет значения — null. */
 export interface Metrics {
   ma: number | null;
   osc: number | null;
@@ -130,37 +131,33 @@ export function chase(row: ScreenRow, tf: ScreenTf): number | null {
   return s ? s * k.mv : null;
 }
 
-/** Ушло далеко: в сторону сигнала — больше двух ATR этого таймфрейма. */
-export function late(row: ScreenRow, tf: ScreenTf): boolean {
+/** Вход по сигналу таймфрейма: «поздно» — цена уже ушла в сторону сигнала
+ *  больше чем на два ATR этого таймфрейма, иначе «вовремя»; сигнала, хода или
+ *  ATR нет — null. */
+export function timing(row: ScreenRow, tf: ScreenTf): "late" | "ok" | null {
   const q = chase(row, tf);
   const a = row.m[tf]?.atrp ?? null;
-  return q !== null && a !== null && a > 0 && q > 2 * a;
+  if (q === null || a === null || !(a > 0)) return null;
+  return q > 2 * a ? "late" : "ok";
 }
-
-/** Риск/прибыль по Фибо: до тейка к расстоянию до стопа; нет — null. */
-export function rr(x: Metrics | undefined): number | null {
-  if (!x || x.tp === null || x.sl === null || x.sl >= 0) return null;
-  return x.tp / -x.sl;
-}
+export const late = (row: ScreenRow, tf: ScreenTf): boolean => timing(row, tf) === "late";
 
 /** Фильтры подтверждения — по основному таймфрейму (младшему выбранному,
- *  без фильтра — 15m): всплеск объёма, сила тренда, зона RSI, риск/прибыль. */
+ *  без фильтра — 15m): всплеск объёма, сила тренда, зона RSI, ход с сигнала. */
 export interface Extra {
   vol: number;
   adx: number;
   rsi: "any" | "os" | "mid" | "ob";
-  rr: number;
   /** Цена прошла в сторону сигнала не больше, % (0 — не важно). */
   late: number;
-  sort: "sig" | "fresh" | "rr" | "vol" | "adx" | "ch";
+  sort: "sig" | "fresh" | "vol" | "adx" | "ch";
 }
-export const EXTRA_ANY: Extra = { vol: 0, adx: 0, rsi: "any", rr: 0, late: 0, sort: "sig" };
+export const EXTRA_ANY: Extra = { vol: 0, adx: 0, rsi: "any", late: 0, sort: "sig" };
 export const VOL_STEPS = [0, 1.5, 2, 3] as const;
 export const ADX_STEPS = [0, 20, 25, 40] as const;
-export const RR_STEPS = [0, 1.5, 2, 3] as const;
 export const RSI_ZONES = ["any", "os", "mid", "ob"] as const;
 export const LATE_STEPS = [0, 0.5, 1, 2, 3, 5] as const;
-export const SORTS = ["sig", "fresh", "rr", "vol", "adx", "ch"] as const;
+export const SORTS = ["sig", "fresh", "vol", "adx", "ch"] as const;
 
 /** Фильтры подтверждения с устройства — только известные значения. */
 export function validExtra(raw: unknown): Extra {
@@ -168,7 +165,7 @@ export function validExtra(raw: unknown): Extra {
   const pick = <T,>(v: unknown, list: readonly T[], def: T): T => (list.includes(v as T) ? (v as T) : def);
   return {
     vol: pick(x["vol"], VOL_STEPS, 0), adx: pick(x["adx"], ADX_STEPS, 0), rsi: pick(x["rsi"], RSI_ZONES, "any"),
-    rr: pick(x["rr"], RR_STEPS, 0), late: pick(x["late"], LATE_STEPS, 0), sort: pick(x["sort"], SORTS, "sig"),
+    late: pick(x["late"], LATE_STEPS, 0), sort: pick(x["sort"], SORTS, "sig"),
   };
 }
 
@@ -185,10 +182,6 @@ export function confirms(row: ScreenRow, tf: ScreenTf, x: Extra): boolean {
     const v = k?.rsi;
     if (v == null) return false;
     if (x.rsi === "os" ? v >= 30 : x.rsi === "ob" ? v <= 70 : v < 30 || v > 70) return false;
-  }
-  if (x.rr) {
-    const q = rr(k);
-    if (q === null || q < x.rr) return false;
   }
   if (x.late) {
     const q = chase(row, tf);
@@ -238,15 +231,14 @@ export function matches(row: ScreenRow, f: ScreenFilter): boolean {
 }
 
 /** Отфильтровать и упорядочить. Порядок: сила сигнала на выбранных
- *  таймфреймах (фильтра нет — как прислал сервер, по обороту), риск/прибыль,
- *  всплеск объёма, сила тренда (ADX) или изменение за сутки — по основному
+ *  таймфреймах (фильтра нет — как прислал сервер, по обороту), свежесть
+ *  сигнала, всплеск объёма, сила тренда (ADX) или изменение за сутки — по основному
  *  таймфрейму; у кого значения нет — в конце; равные — порядок сервера. */
 export function screen(rows: readonly ScreenRow[], f: ScreenFilter, x: Extra = EXTRA_ANY): ScreenRow[] {
   const used = SCREEN_TFS.filter((tf) => f[tf] !== "any");
   const tf = mainTf(f);
   const got = rows.filter((r) => matches(r, f) && confirms(r, tf, x));
   const key = (r: ScreenRow): number | null => {
-    if (x.sort === "rr") return rr(r.m[tf]);
     if (x.sort === "fresh") return chase(r, tf) === null ? null : -(r.m[tf]?.age ?? 0);
     if (x.sort === "vol") return r.m[tf]?.volx ?? null;
     if (x.sort === "adx") return r.m[tf]?.adx ?? null;

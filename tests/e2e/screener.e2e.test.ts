@@ -135,7 +135,7 @@ function overflow(page: Page): Promise<string[]> {
       const r = el.getBoundingClientRect();
       if (r.width && (r.left < -1 || r.right > innerWidth + 1)) out.push(`за краем: ${el.className || el.tagName} «${(el.textContent ?? "").slice(0, 20)}»`);
     }
-    for (const el of document.querySelectorAll<HTMLElement>(".scr-presets button, .scr-name b, .ch-fib-row b, .ch-fib-row em, .scr-sig i, .ch-foot-btn span, .scr-x label > span, .scr-x-ttl")) {
+    for (const el of document.querySelectorAll<HTMLElement>(".scr-presets button, .scr-name b, .ch-fib-row b, .ch-fib-row em, .scr-sig i, .ch-foot-btn span, .scr-x label > span, .scr-x-ttl, .scr-when")) {
       if (el.scrollWidth > el.clientWidth + 1) out.push(`обрезано «${el.textContent}»`);
     }
     return out;
@@ -150,12 +150,18 @@ test("скринер: все монеты, готовый фильтр «15m ↑
   assert.equal(sp(await page.locator(".scr-count").textContent()), "Найдено: 4 из 4");
   // Рейтинг на каждом таймфрейме — значком и словом для чтения с экрана.
   const btc = page.locator(".scr-row").first();
-  assert.deepEqual((await btc.locator(".scr-sig i").allTextContents()).map(sp), ["15m▲▲+1,2%", "1H▼", "4H▲", "1D▲▲"]);
-  assert.equal(sp(await btc.locator(".scr-sig i").first().getAttribute("aria-label")), `15m: ${I18N["chart_r_sb"]!["ru"]}. Сигнал 1 ч назад, цена +1,20%`);
-  // ETH: продажа полчаса назад, цена уже −4 % — больше двух ATR, подсвечено «поздно».
+  // Значок — только таймфрейм и стрелки (без процентов и рамок): чисто.
+  assert.deepEqual((await btc.locator(".scr-sig i").allTextContents()).map(sp), ["15m▲▲", "1H▼", "4H▲", "1D▲▲"]);
+  assert.equal(sp(await btc.locator(".scr-sig i").first().getAttribute("aria-label")), `15m: ${I18N["chart_r_sb"]!["ru"]}`);
+  // Под значками — одна строка: когда появился сигнал, сколько прошла цена и успеваем ли.
+  assert.equal(sp(await btc.locator(".scr-det").textContent()), "15m Сигнал 1 ч назад, цена +1,20% вовремя");
+  // ETH: продажа полчаса назад, цена уже −4 % — больше двух ATR: «поздно» словом.
   const eth = page.locator(".scr-row", { hasText: "ETH" });
-  assert.equal(sp(await eth.locator(".scr-sig i").first().textContent()), "15m▼−4,0%");
-  assert.match(await eth.locator(".scr-sig i").first().getAttribute("class") ?? "", /\blate\b/);
+  assert.equal(sp(await eth.locator(".scr-det").textContent()), "15m Сигнал 30 мин назад, цена −4,00% поздно");
+  assert.match(await eth.locator(".scr-when").getAttribute("class") ?? "", /\blate\b/);
+  // Ни тейков, ни стопов, ни RSI/ADX/ATR, ни «▲3 ▼1 /4» в списке — они на графике.
+  const list = sp(await page.locator(".scr-list").textContent());
+  for (const junk of ["TP", "SL", "R:R", "ATR", "RSI", "ADX", "/4"]) assert.ok(!list.includes(junk), junk);
   assert.equal(sp(await btc.locator(".scr-name small").textContent()), "103,250.50 +1,25%");
   await page.getByRole("button", { name: "15m ↑ · 1H ↓" }).click();
   assert.deepEqual(await names(page), ["SOL", "BTC"]); // 0,35 + 0,6 сильнее, чем 0,6 + 0,3
@@ -234,11 +240,12 @@ test("скринер и Фибо на 16 языках при 320 точках: �
     await chip(page, "5m").click();
     await chip(page, "5m").click();
     assert.equal(sp(await page.locator(".scr-x-ttl").textContent()), sp(I18N["scr_x_title"]![lang]!.replace("{tf}", "15m")), lang);
-    await page.locator(".scr-x select").nth(5).selectOption("fresh");
+    await page.locator(".scr-x select").nth(4).selectOption("fresh");
     await page.locator(".scr-cols summary").click();
     await page.locator(".scr-cols .scr-chip").nth(0).click(); // + 5m
     await page.locator(".scr-cols .scr-chip").nth(10).click(); // + 1W
-    assert.equal(await page.locator(".scr-row .scr-det").count(), 4, lang);
+    assert.equal(await page.locator(".scr-row .scr-det").count(), 3, lang); // у DOGE сигнала на 15m нет — строки нет
+    assert.equal(sp(await page.locator(".scr-row", { hasText: "ETH" }).locator(".scr-when").textContent()), sp(I18N["scr_late_tag"]![lang]!), lang);
     assert.equal(await page.locator(".scr-row .scr-fut").count(), 1, lang);
     assert.deepEqual(await overflow(page), [], lang);
     await page.locator(".scr-row", { hasText: "ETH" }).click();
@@ -250,27 +257,20 @@ test("скринер и Фибо на 16 языках при 320 точках: �
   }
 });
 
-test("подтверждения и детали: объём, ADX, RSI, риск/прибыль на основном таймфрейме, порядок, согласие таймфреймов, фьючерсы", async () => {
+test("подтверждения: объём, ADX, RSI, ход с сигнала на основном таймфрейме, порядок; строка сигнала; фьючерсы", async () => {
   const { ctx, page, errors } = await open();
   await scrBtn(page).click();
   await page.locator(".scr-row").first().waitFor();
   assert.equal(sp(await page.locator(".scr-x-ttl").textContent()), "Подтверждения по 15m");
-  const btc = page.locator(".scr-row").first();
-  assert.equal(sp(await btc.locator(".scr-det").textContent()),
-    "▲3 ▼1 /4 15m Сигнал 1 ч назад, цена +1,20% RSI 62 ADX 31 Об. ×2,4 ATR 1,2% TP +4,0% SL −2,0% R:R 2,0");
-  // «Поздно» — и словами для чтения с экрана (цвет — не единственный признак).
-  assert.equal(sp(await page.locator(".scr-row", { hasText: "ETH" }).locator(".scr-since").textContent()),
-    "Сигнал 30 мин назад, цена −4,00% — цена уже далеко ушла");
-  assert.match(await page.locator(".scr-row", { hasText: "ETH" }).locator(".scr-sig i").first().getAttribute("aria-label") ?? "", / — цена уже далеко ушла$/);
-  assert.match(await page.locator(".scr-row", { hasText: "ETH" }).locator(".scr-since").getAttribute("class") ?? "", /\blate\b/);
-  assert.equal(await btc.locator(".scr-agree").getAttribute("aria-label"), "Таймфреймов за покупку: 3, за продажу: 1 из 4");
-  assert.equal(await btc.locator(".scr-det .hot").count(), 3); // ADX ≥ 25, объём ≥ ×2, R:R ≥ 2
-  // Фьючерсы — значком с подсказкой.
+  // Подтверждений пять: объём, тренд, RSI, ход с сигнала, порядок (риск/прибыль убран).
+  assert.equal(await page.locator(".scr-x select").count(), 5);
+  assert.deepEqual((await page.locator(".scr-x label > span").allTextContents()).map(sp), ["Объём", "Тренд (ADX)", "RSI", "Ход с сигнала", "Порядок"]);
+  // Фьючерсы — значком с подсказкой; сигнал старше 100 свечей — «давно», без вердикта.
   const sol = page.locator(".scr-row", { hasText: "SOL" });
   assert.equal(await sol.locator(".scr-fut").getAttribute("title"), "Только фьючерсы Binance");
-  assert.equal(sp(await sol.locator(".scr-since").textContent()), "Сигнал давно");
-  // DOGE: на 15m рейтинга нет — только согласие таймфреймов.
-  assert.equal(sp(await page.locator(".scr-row", { hasText: "DOGE" }).locator(".scr-det").textContent()), "▲1 ▼0 /1 15m");
+  assert.equal(sp(await sol.locator(".scr-det").textContent()), "15m Сигнал давно");
+  // DOGE: на 15m сигнала нет — строки нет.
+  assert.equal(await page.locator(".scr-row", { hasText: "DOGE" }).locator(".scr-det").count(), 0);
   const sel = (i: number) => page.locator(".scr-x select").nth(i);
   await sel(0).selectOption("2");
   assert.deepEqual(await names(page), ["BTC", "SOL"]);
@@ -281,26 +281,20 @@ test("подтверждения и детали: объём, ADX, RSI, риск
   await sel(2).selectOption("os");
   assert.deepEqual(await names(page), ["ETH"]);
   await sel(2).selectOption("any");
-  await sel(3).selectOption("2");
-  assert.deepEqual(await names(page), ["BTC", "ETH"]);
-  await sel(5).selectOption("rr");
-  assert.deepEqual(await names(page), ["ETH", "BTC"]);
-  await sel(3).selectOption("0");
-  assert.deepEqual(await names(page), ["ETH", "BTC", "SOL", "DOGE"]); // у DOGE нет R:R — в конце
   // Не заходить поздно: цена с сигнала прошла не больше 2 % — только BTC (ETH ушла на 4 %, у SOL сигнал давно).
-  await sel(4).selectOption("2");
+  await sel(3).selectOption("2");
   assert.deepEqual(await names(page), ["BTC"]);
-  await sel(4).selectOption("5");
-  assert.deepEqual(await names(page), ["ETH", "BTC"]);
-  await sel(4).selectOption("0");
-  await sel(5).selectOption("fresh");
+  await sel(3).selectOption("5");
+  assert.deepEqual(await names(page), ["BTC", "ETH"]);
+  await sel(3).selectOption("0");
+  await sel(4).selectOption("fresh");
   assert.deepEqual(await names(page), ["ETH", "BTC", "SOL", "DOGE"]); // полчаса, час, давно, без сигнала
-  await sel(5).selectOption("ch");
+  await sel(4).selectOption("ch");
   assert.deepEqual(await names(page), ["BTC", "SOL", "DOGE", "ETH"]);
   // Подтверждения запоминаются: после повторного открытия — тот же порядок.
   await page.locator(".ch-sheet.scr .ch-close").click();
   await scrBtn(page).click();
-  assert.equal(await sel(5).inputValue(), "ch");
+  assert.equal(await sel(4).inputValue(), "ch");
   // Основной таймфрейм — младший выбранный: по 1H метрик нет, подтверждение не проходит никто.
   await chip(page, "1h").click();
   assert.equal(sp(await page.locator(".scr-x-ttl").textContent()), "Подтверждения по 1H");
@@ -334,7 +328,7 @@ test("редкий таймфрейм (30m) в фильтре — сервер �
   assert.deepEqual(await names(page), ["BTC", "SOL"]);
   assert.equal(await page.locator(".scr-wait").count(), 0);
   // Значки у монеты — таймфрейм фильтра и столбцы.
-  assert.deepEqual((await page.locator(".scr-row").first().locator(".scr-sig i").allTextContents()).map(sp), ["15m▲▲+1,2%", "30m▲▲", "1H▼", "4H▲", "1D▲▲"]);
+  assert.deepEqual((await page.locator(".scr-row").first().locator(".scr-sig i").allTextContents()).map(sp), ["15m▲▲", "30m▲▲", "1H▼", "4H▲", "1D▲▲"]);
   // Касание монеты — график на 30m.
   await page.locator(".scr-row", { hasText: "SOL" }).click();
   await page.locator(".ch-fibcard").waitFor();
@@ -370,9 +364,9 @@ test("столбцы: любой таймфрейм можно добавить 
   assert.ok(urls.some((u) => u.endsWith("/api/screener?tf=5m")), urls.join(" "));
   assert.match(await col("5m").getAttribute("class") ?? "", /\bwait\b/); // точка — на столбце,
   assert.doesNotMatch(await chip(page, "5m").getAttribute("class") ?? "", /\bwait\b/); // а не на фильтре
-  assert.deepEqual((await page.locator(".scr-row").first().locator(".scr-sig i").allTextContents()).map(sp), ["5m—", "15m▲▲+1,2%", "1H▼"]);
+  assert.deepEqual((await page.locator(".scr-row").first().locator(".scr-sig i").allTextContents()).map(sp), ["5m—", "15m▲▲", "1H▼"]);
   await page.locator(".scr-wait").waitFor({ state: "detached", timeout: 30_000 });
-  assert.deepEqual((await page.locator(".scr-row").first().locator(".scr-sig i").allTextContents()).map(sp), ["5m▼▼", "15m▲▲+1,2%", "1H▼"]);
+  assert.deepEqual((await page.locator(".scr-row").first().locator(".scr-sig i").allTextContents()).map(sp), ["5m▼▼", "15m▲▲", "1H▼"]);
   // Убрать все — значков нет (кроме тех, что в фильтре).
   for (const tf of ["5m", "15m", "1h"]) await col(tf).click();
   assert.equal(sp(await page.locator(".scr-cols summary").textContent()), "Таймфреймы в списке: —");
@@ -390,14 +384,14 @@ test("высокая контрастность Windows: выбранное, с�
   const { ctx, page, errors } = await open({ forced: true });
   await scrBtn(page).click();
   await page.locator(".scr-row").first().waitFor();
-  await chip(page, "4h").click();
-  await chip(page, "4h").click(); // продажа: остаётся ETH — у него «поздно»
+  await chip(page, "15m").click();
+  await chip(page, "15m").click(); // 15m — продажа: остаётся ETH — у него «поздно»
   const style = (sel: string) => page.locator(sel).first().evaluate((el) => {
     const c = getComputedStyle(el);
     return `${c.borderTopStyle} ${c.borderTopWidth}`;
   });
   assert.equal(await style(".ch-sheet.scr > .scr-tfs .scr-chip.sell"), "solid 2px");
-  assert.equal(await style(".scr-sig i.late"), "dashed 2px");
+  assert.equal(await style(".scr-when.late"), "dashed 2px");
   await page.locator(".scr-cols summary").click();
   assert.equal(await style(".scr-chip.col.on"), "solid 2px");
   assert.deepEqual(errors, []);
