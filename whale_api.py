@@ -152,12 +152,12 @@ USDT_PLANS = {"m": {"usdt": PREMIUM_USDT, "days": 30}, "y": {"usdt": PREMIUM_USD
 TON_WALLET = (os.environ.get("TON_WALLET_ADDRESS", "").strip()
               or "UQDAiNYvy2KUIwjEcgD1ZxPVw-CPwdk4WbBQwpVsQQ5jsO6o")
 # USD₮ в сети TON: мастер-контракт и шесть знаков после запятой. Сверяет
-# контракт при приёме перевода бот (USDT_MASTER в telegram.h).
+# контракт при приёме перевода бот (USDT_MASTER в premium_logic.h).
 USDT_MASTER_UI = "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs"
 USDT_DECIMALS = 6
-# Счёт живёт час — столько же, сколько у бота. Оплату по нему бот принимает
-# сутки (pollUsdtPayments): человек, заплативший с опозданием, не должен
-# терять деньги.
+# Счёт показываем час. Оплату по нему бот принимает сутки (pollUsdtPayments):
+# человек, заплативший с опозданием, не должен терять деньги. Тарифы, памятка,
+# кошелёк и столбцы счёта — договор с ботом: tests/fixtures/premium_contract.json.
 PAY_TTL = 3600
 TONCENTER = "https://toncenter.com/api/v3/"
 TONCENTER_KEY = os.environ.get("TONCENTER_API_KEY", "")

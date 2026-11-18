@@ -131,7 +131,7 @@ say("старых срезов бесплатного тарифа на серв
 say("числа: 3 кошелька и алерты с 1 у бота, проба 14 дней — одни у API, бота и приложения",
     "FREE_MAX_WALLETS = 3" in api and "TRIAL_DAYS = 14" in api
     and "constexpr size_t FREE_ALERT_WALLETS = 1;" in read(f"{BOT}/telegram.h")
-    and "constexpr size_t FREE_MAX_WALLETS    = 3;" in read(f"{BOT}/premium.cpp")
+    and re.search(r"constexpr size_t FREE_MAX_WALLETS\s*= 3;", read(f"{BOT}/premium.cpp")) is not None
     and "loadedForUser >= FREE_ALERT_WALLETS" in read(f"{BOT}/main.cpp")
     and "wallets: 3," in read(f"{APP}/src/lib/upsell.ts") and "trialDays: 14," in read(f"{APP}/src/lib/upsell.ts"))
 say("срез не трогает Cortex", "cortex" not in code_only(fp).lower() and "sonar" not in fp)
@@ -208,7 +208,8 @@ say("сервисный — без Премиума нигде и никогда
     and 'plan, prem_until = "free", 0' in api and "if is_service(chat):\n        return False" in api
     and 'if is_service(chat) and (path.startswith("/api/pay/") or path.startswith("/api/bonus/")):' in api
     and "return SERVICE_MAX_WALLETS" in api and '"service": service,' in api
-    and "chatId == g_serviceChatId) return false;" in _prem_cpp and "out.erase(g_serviceChatId);" in _prem_cpp
+    and "return !g_serviceChatId.empty() && chatId == g_serviceChatId;" in _prem_cpp
+    and "if (isService(chatId)) return false;" in _prem_cpp and "out.erase(g_serviceChatId);" in _prem_cpp
     and "UPDATE users SET is_premium=0, premium_expire=0 WHERE chat_id=?" in _prem_cpp
     and "uid != SERVICE_CHAT_ID && loadedForUser >= FREE_ALERT_WALLETS" in read(f"{BOT}/main.cpp")
     and "(chatId != SERVICE_CHAT_ID)\n                            ? premiumMaxWallets(chatId) : 0;" in read(f"{BOT}/wallets.cpp"))
@@ -1345,7 +1346,9 @@ say("бот: на новой базе таблицы создаются рань
     and "priority DESC" not in _sch[:_sch.index('    )";')]
     and "idx_deliveries_prio" in _sch)
 say("бот: все вызовы Bot API идут через tgApi()",
-    _bot_src.count("api.telegram.org") == 2 and 'return tgApi(method);' in read(os.path.join(BOT, "premium.cpp")))
+    _bot_src.count("api.telegram.org") == 2 and "api.telegram.org" not in read(os.path.join(BOT, "premium.cpp"))
+    and 'httpsCapped(tgApi("answerPreCheckoutQuery")' in read(os.path.join(BOT, "premium.cpp"))
+    and 'httpsCapped(tgApi("editUserStarSubscription")' in read(os.path.join(BOT, "premium.cpp")))
 _legal = json.load(open(f"{APP}/tools/i18n.json", encoding="utf-8"))
 say("тексты приложения не посылают в чат бота: нет /forgetme и /start, вопросы — в поддержку",
     all("/forgetme" not in v and "/start" not in v for k in ("legal_privacy_body", "legal_terms_body", "legal_forget_done")
@@ -1353,7 +1356,9 @@ say("тексты приложения не посылают в чат бота:
     and all("@WalletTrackerHelp" in _legal["legal_terms_body"][l] for l in _legal["legal_terms_body"]))
 
 _prem_cpp = read(os.path.join(BOT, "premium.cpp"))
-_bot_plans = set(re.findall(r'\{"(premium_[a-z0-9_]+)", (\d+), (\d+)\}', _prem_cpp))
+# Правила оплаты (тарифы, вводная цена) — в premium_logic.h, база и сеть — в premium.cpp.
+_prem_logic = read(os.path.join(BOT, "premium_logic.h"))
+_bot_plans = set(re.findall(r'\{"(premium_[a-z0-9_]+)", (\d+), (\d+)\}', _prem_logic))
 _api_plans = {("premium_30_days", "250", "30"), ("premium_365_days", "1990", "365"), ("premium_30_intro", "150", "30")}
 say("тарифы: месяц, год и вводная цена — одинаковые у бота и API, все разовые (автопродления нет, старые подписки бот отменяет)",
     _bot_plans == _api_plans and '"payload": "premium_365_days", "stars": 1990, "days": 365' in api
@@ -1361,11 +1366,12 @@ say("тарифы: месяц, год и вводная цена — одина�
     and "subscription_period" not in api and "STAR_SUB_PERIOD" not in api and '"auto"' not in api
     and "editUserStarSubscription" in _prem_cpp and "cancelStarSubscriptions(OWNER_CHAT_ID, false)" in read(f"{BOT}/main.cpp")
     and 'txt == "/autorenew"' in read(f"{BOT}/main.cpp") and "p.sub_until >=" not in read(f"{BOT}/lifecycle.cpp")
-    and "grantPremiumDays(chatId, days)" in _prem_cpp and "until = intro_until(con, chat)" in api, str(_bot_plans))
+    and "grantDays(chatId, days)" in _prem_cpp and "until = intro_until(con, chat)" in api, str(_bot_plans))
 _pay_ts = read(f"{APP}/src/lib/pay.ts")
 say("вводная цена привязана к покупателю и сроку: сервер вшивает их в счёт, бот сверяет перед оплатой",
-    'payload = f"{payload}:{chat}:{until}"' in api and "bool introBinding(" in _prem_cpp
-    and "introChat != buyerChatId" in _prem_cpp and "now > introUntil + INTRO_GRACE_SEC" in _prem_cpp)
+    'payload = f"{payload}:{chat}:{until}"' in api and "bool introBinding(" in _prem_logic
+    and "chat != buyer || now > until + INTRO_GRACE_SEC" in _prem_logic
+    and "premium::checkStars(payload, currency, amount, buyerChatId, nowSec())" in _prem_cpp)
 say("оплата: успех — только по закрытому счёту или выросшему сроку, возврат из кошелька — в мини-приложение, ручного перевода нет",
     'r.status === "paid" || (r.premUntil ?? 0) > before' in _pay_ts and "WalletTrackerOfficial" not in _pay_ts
     and '"app": app_link(),' in api and '"pay_manual"' not in read(f"{APP}/src/screens/PremiumScreen.tsx"))
