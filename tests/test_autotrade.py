@@ -39,10 +39,13 @@ def request(method: str, path: str, chat: str) -> tuple[int, dict, str]:
             mock.patch.object(api.Handler, "_user", lambda _self, _qs: chat), \
             mock.patch.object(api.autotrade, "status", return_value={"ok": True, "backtest": SUMMARY}), \
             mock.patch.object(api.autotrade, "trigger", return_value={"ok": True, "started": True}) as trig, \
+            mock.patch.object(api.autotrade, "start_cmd", return_value={"ok": True, "on": True}) as on, \
+            mock.patch.object(api.autotrade, "stop_cmd", return_value={"ok": True, "on": False}) as off, \
             mock.patch.object(api.sys, "stderr", io.StringIO()), mock.patch("sys.stdout", out):
         h.handle_one_request()
     head, _, raw = h.wfile.getvalue().partition(b"\r\n\r\n")
     request.triggered = trig.call_count  # type: ignore[attr-defined]
+    request.switched = (on.call_count, off.call_count)  # type: ignore[attr-defined]
     return int(head.split()[1]), json.loads(raw), out.getvalue()
 
 
@@ -69,6 +72,16 @@ class OwnerOnlyTest(unittest.TestCase):
         code, body, _ = request("POST", "/api/owner/autotrade/run", OWNER)
         self.assertEqual((code, body["started"], request.triggered), (200, True, 1))  # type: ignore[attr-defined]
 
+    def test_start_stop_only_for_owner(self):
+        for path in ("/api/owner/autotrade/start", "/api/owner/autotrade/stop"):
+            code, body, log = request("POST", path, "123")
+            self.assertEqual((code, body, request.switched), (404, {"ok": False, "error": "not_found"}, (0, 0)))  # type: ignore[attr-defined]
+            self.assertIn("[AUTO] чужой запрос", log)
+        code, body, _ = request("POST", "/api/owner/autotrade/start", OWNER)
+        self.assertEqual((code, body["on"], request.switched), (200, True, (1, 0)))  # type: ignore[attr-defined]
+        code, body, _ = request("POST", "/api/owner/autotrade/stop", OWNER)
+        self.assertEqual((code, body["on"], request.switched), (200, False, (0, 1)))  # type: ignore[attr-defined]
+
     def test_owner_flag_only_for_owner(self):
         with mock.patch.object(api, "OWNER_CHAT_ID", OWNER):
             self.assertTrue(api.is_owner(OWNER))
@@ -87,6 +100,7 @@ class NightlyRunTest(unittest.TestCase):
         self.db = os.path.join(self.ws, "hyperliquid.db")
         open(self.db, "w").close()
         self.data = os.path.join(self.tmp.name, "data")
+        at._set_on(True, self.data)
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -153,6 +167,63 @@ class NightlyRunTest(unittest.TestCase):
             with open(os.path.join(self.data, "latest", "summary.json"), "w") as f:
                 f.write(raw)
             self.assertIsNone(at.latest(self.data))
+
+    def test_switch_is_off_by_default_and_persists(self):
+        other = os.path.join(self.tmp.name, "fresh")
+        self.assertFalse(at.is_on(other))
+        self.assertFalse(at.status(other)["on"])
+        self.assertEqual(at.trigger(self.ws, self.db, other), {"ok": False, "error": "stopped"})
+        os.makedirs(other)
+        with open(os.path.join(other, "switch.json"), "w") as f:
+            f.write("{bad")
+        self.assertFalse(at.is_on(other))
+        with mock.patch("sys.stdout", io.StringIO()):
+            at.stop_cmd(self.data)
+        self.assertFalse(at.is_on(self.data))
+        with mock.patch.object(at, "trigger") as trig, mock.patch("sys.stdout", io.StringIO()):
+            self.assertTrue(at.start_cmd(self.ws, self.db, self.data)["on"])
+            trig.assert_called_once()  # итога ещё нет — сразу пересчёт
+        self.assertTrue(at.is_on(self.data))
+
+    def test_stop_interrupts_a_running_backtest(self):
+        """«Стоп» посреди пересчёта: процесс прерван, итог не подменён,
+        причина — «остановлено»."""
+        runner, _ = self.fake(True)
+        self.assertTrue(at.run_once(self.ws, self.db, self.data, runner))
+        killed = []
+
+        class Proc:
+            def terminate(self):
+                killed.append(True)
+
+        def slow(cmd, **kw):
+            with at._lock:
+                at._state["proc"] = Proc()
+            with mock.patch("sys.stdout", io.StringIO()):
+                at.stop_cmd(self.data)
+            with at._lock:
+                at._state["proc"] = None
+            out = cmd[cmd.index("--out") + 1]
+            os.makedirs(out, exist_ok=True)
+            with open(os.path.join(out, "summary.json"), "w", encoding="utf-8") as f:
+                json.dump({**SUMMARY, "verdict": False}, f)
+            return subprocess.CompletedProcess(cmd, -15)
+
+        with mock.patch("sys.stdout", io.StringIO()):
+            self.assertFalse(at.run_once(self.ws, self.db, self.data, slow))
+        self.assertEqual(killed, [True])
+        self.assertTrue(at.latest(self.data)["verdict"])
+        self.assertIn("Стоп", at.status(self.data)["error"])
+
+    def test_real_process_runner(self):
+        """_popen — настоящий процесс: код возврата и тайм-аут."""
+        r = at._popen([sys.executable, "-c", "raise SystemExit(3)"], stdout=subprocess.DEVNULL,
+                      stderr=subprocess.DEVNULL, timeout=30, check=False)
+        self.assertEqual(r.returncode, 3)
+        with self.assertRaises(subprocess.TimeoutExpired):
+            at._popen([sys.executable, "-c", "import time; time.sleep(30)"], stdout=subprocess.DEVNULL,
+                      stderr=subprocess.DEVNULL, timeout=0.5, check=False)
+        self.assertIsNone(at._state["proc"])
 
     def test_next_run_is_nightly_utc(self):
         day = 1_800_000_000 // 86400 * 86400

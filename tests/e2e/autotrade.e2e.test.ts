@@ -49,7 +49,7 @@ after(async () => {
   await new Promise((ok) => server?.close(ok));
 });
 
-interface Opts { owner: boolean; reply?: "ok" | "404"; width?: number }
+interface Opts { owner: boolean; reply?: "ok" | "404"; width?: number; on?: boolean }
 
 async function open(o: Opts): Promise<{ ctx: BrowserContext; page: Page; errors: string[]; asked: string[] }> {
   const ctx = await browser.newContext({ viewport: { width: o.width ?? 360, height: 1400 }, timezoneId: "UTC" });
@@ -63,11 +63,20 @@ async function open(o: Opts): Promise<{ ctx: BrowserContext; page: Page; errors:
   await ctx.route(`${base}/api/**`, (r) => r.fulfill({ contentType: "application/json", body: '{"ok":false}' }));
   await ctx.route(`${base}/api/bootstrap`, (r) => r.fulfill({ contentType: "application/json",
     body: JSON.stringify({ ok: true, live: true, me: { plan: "premium", ...(o.owner ? { owner: true } : {}) }, wallets: [] }) }));
+  let on = o.on ?? true;
+  const reply = () => JSON.stringify({
+    ok: true, stage: "backtest", on, backtest: SUMMARY, running: false, started: T - 7200, finished: T - 3600,
+    error: "", next: T + 40_000, paper: null, live: null });
   await ctx.route(`${base}/api/owner/autotrade`, (r) => o.reply === "404"
     ? r.fulfill({ status: 404, contentType: "application/json", body: '{"ok":false,"error":"not_found"}' })
-    : r.fulfill({ contentType: "application/json", body: JSON.stringify({
-      ok: true, stage: "backtest", backtest: SUMMARY, running: false, started: T - 7200, finished: T - 3600,
-      error: "", next: T + 40_000, paper: null, live: null }) }));
+    : r.fulfill({ contentType: "application/json", body: reply() }));
+  for (const [path, value] of [["start", true], ["stop", false]] as const) {
+    await ctx.route(`${base}/api/owner/autotrade/${path}`, (r) => {
+      asked.push(`POST ${path}`);
+      on = value;
+      return r.fulfill({ contentType: "application/json", body: reply() });
+    });
+  }
   await page.addInitScript(() => {
     if (window !== window.top || sessionStorage.getItem("e2e")) return;
     sessionStorage.setItem("e2e", "1");
@@ -104,6 +113,28 @@ describe("закрытая вкладка «Автоторговля»", () => {
     // Ничего не вылезает за правый край узкого экрана.
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     assert.ok(wide <= 0, `шире экрана на ${wide}px`);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("«Старт» и «Стоп» переключают модуль", async () => {
+    const { ctx, page, errors, asked } = await open({ owner: true, on: false });
+    await page.locator(".drawer-row", { hasText: "Автоторговля" }).click();
+    const screen = page.locator(".sheet .screen");
+    await screen.getByText("Остановлен", { exact: true }).waitFor();
+    const start = screen.getByRole("button", { name: "Старт", exact: true });
+    const stop = screen.getByRole("button", { name: "Стоп", exact: true });
+    assert.ok(await stop.isDisabled());
+    assert.ok(await screen.getByRole("button", { name: "Пересчитать сейчас" }).isDisabled());
+    await start.click();
+    await screen.getByText("Включён", { exact: true }).waitFor();
+    assert.ok(await start.isDisabled());
+    await stop.click();
+    await screen.getByText("Остановлен", { exact: true }).waitFor();
+    assert.deepEqual(asked.filter((u) => u.startsWith("POST")), ["POST start", "POST stop"]);
+    // Кнопки рядом и целиком на узком экране.
+    const [a, b] = [await start.boundingBox(), await stop.boundingBox()];
+    assert.ok(a && b && Math.abs(a.y - b.y) < 1 && a.x + a.width <= b.x && b.x + b.width <= 360, JSON.stringify([a, b]));
     assert.deepEqual(errors, []);
     await ctx.close();
   });

@@ -17449,6 +17449,11 @@ class Handler(BaseHTTPRequestHandler):
                 if _owner_or_404(self, chat, path):
                     self._json(200, autotrade.trigger(WS_DIR, HL_DB))
                 return
+            if path in ("/api/owner/autotrade/start", "/api/owner/autotrade/stop"):
+                if _owner_or_404(self, chat, path):
+                    self._json(200, autotrade.start_cmd(WS_DIR, HL_DB) if path.endswith("/start")
+                               else autotrade.stop_cmd())
+                return
             dg = {"/api/digest/like": "like", "/api/digest/comment": "comment",
                   "/api/digest/uncomment": "uncomment", "/api/digest/view": "view",
                   "/api/digest/notify": "notify"}.get(path)

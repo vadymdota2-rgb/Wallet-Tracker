@@ -17,7 +17,7 @@ import { useEffect, useState } from "react";
 import { Frame } from "./Screen";
 import { Action, Card, Empty, Row, SectionTitle, Skeleton } from "../components/ui";
 import { TrendChart } from "../components/Chart";
-import { autotradeRun, fetchAutotrade } from "../lib/api";
+import { autotradeRun, autotradeStart, autotradeStop, fetchAutotrade } from "../lib/api";
 import { pct, usd } from "../lib/format";
 import { toast } from "../components/Toast";
 import type { AtGroup, AtParams, AtStats, AtSummary, AutotradeReply } from "../lib/types";
@@ -124,10 +124,24 @@ export function AutotradeScreen() {
     return () => clearInterval(id);
   }, [st?.running]);
 
+  const [busy, setBusy] = useState(false);
+  const flip = (on: boolean) => {
+    setBusy(true);
+    void (on ? autotradeStart() : autotradeStop()).then((r) => {
+      setBusy(false);
+      if (!r?.ok) {
+        toast("Нет связи с сервером", "err");
+        return;
+      }
+      setSt(r);
+      toast(on ? "Включено" : "Остановлено");
+    });
+  };
+
   const run = () => {
     void autotradeRun().then((r) => {
       if (!r?.ok) {
-        toast("Не вышло запустить");
+        toast(st?.on === false ? "Модуль остановлен — сначала «Старт»" : "Не вышло запустить", "err");
         return;
       }
       toast(r.started ? "Пересчёт запущен — займёт до часа" : "Уже считается");
@@ -141,13 +155,19 @@ export function AutotradeScreen() {
   const b = st.backtest;
   const best = b?.top[0];
   return (
-    <Frame title="Автоторговля" sub="Копирование китов · акции Hyperliquid">
+    <Frame title="Автоторговля" sub="Копирование китов · фьючерсы Hyperliquid">
       <Card>
+        <Row title="Модуль" value={st.on ? "Включён" : "Остановлен"} tone={st.on ? "up" : "dn"}
+             sub={st.on ? "Ночной пересчёт идёт" : "Ничего не считается и не торгуется"} wrap />
+        <div className="at-switch">
+          <Action kind="primary" disabled={busy || st.on} onClick={() => flip(true)}>Старт</Action>
+          <Action kind="danger" disabled={busy || !st.on} onClick={() => flip(false)}>Стоп</Action>
+        </div>
         <Row title="Этап 1 — бэктест" sub="Бумажная и реальная торговля — только после вашего «да»" wrap />
         <Row title="Пересчёт" sub={st.running ? `идёт с ${when(st.started * 1000)}` : `следующий ${when(st.next * 1000)}`}
              value={b ? when(b.generated_at * 1000) : "ещё не было"} valueSub="последний" wrap />
         {st.error ? <Row title="Сбой прошлого пересчёта" sub={st.error} tone="dn" wrap /> : null}
-        <Action kind="ghost" disabled={st.running} onClick={run}>
+        <Action kind="ghost" disabled={st.running || !st.on} onClick={run}>
           {st.running ? "Считается…" : "Пересчитать сейчас"}
         </Action>
       </Card>

@@ -1265,6 +1265,8 @@ export interface AtOkx {
 export interface AutotradeReply {
   ok: boolean;
   stage: "backtest" | "paper" | "live";
+  /** Модуль включён кнопкой «Старт» (по умолчанию — выключен). */
+  on: boolean;
   backtest: AtSummary | null;
   running: boolean;
   started: number;

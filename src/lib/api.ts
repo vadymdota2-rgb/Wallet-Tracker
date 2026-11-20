@@ -270,6 +270,9 @@ export const fetchBonus = () => call<BonusReply>("/api/bonus");
 /** Закрытая вкладка владельца: итог бэктеста автокопирования (позже —
  *  бумажная и реальная торговля). Не владельцу сервер отвечает 404. */
 export const fetchAutotrade = () => call<AutotradeReply>("/api/owner/autotrade");
+/** «Старт» и «Стоп» модуля: ответ — новое состояние вкладки. */
+export const autotradeStart = () => call<AutotradeReply>("/api/owner/autotrade/start", { method: "POST", body: {} });
+export const autotradeStop = () => call<AutotradeReply>("/api/owner/autotrade/stop", { method: "POST", body: {} });
 /** «Пересчитать сейчас» — бэктест в фоне на сервере, если не идёт. */
 export const autotradeRun = () =>
   call<{ ok: boolean; running?: boolean; started?: boolean }>("/api/owner/autotrade/run", { method: "POST", body: {} });
