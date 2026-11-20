@@ -42,6 +42,7 @@ export const ru: Dict = {
   alerts_sub: "Всё, что бот присылал за 2 дня",
   alerts_title: "История алертов",
   already_tracking: "⚠️ Вы уже отслеживаете этот кошелёк.",
+  at_title: "Автоторговля",
   back_button: "← Назад",
   big_empty: "За этот период сделок пока нет.",
   big_perp_title: "Крупнейшие позиции",

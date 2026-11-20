@@ -42,6 +42,7 @@ export const uk: Dict = {
   alerts_sub: "Усе, що бот надсилав за 2 дні",
   alerts_title: "Історія алертів",
   already_tracking: "⚠️ Ви вже відстежуєте цей гаманець.",
+  at_title: "Автоторгівля",
   back_button: "← Назад",
   big_empty: "За цей період угод поки немає.",
   big_perp_title: "Найбільші позиції",

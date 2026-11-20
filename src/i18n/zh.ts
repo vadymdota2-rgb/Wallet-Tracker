@@ -42,6 +42,7 @@ export const zh: Dict = {
   alerts_sub: "机器人最近 2 天发给你的全部提醒",
   alerts_title: "提醒记录",
   already_tracking: "⚠️ 您已在跟踪该钱包。",
+  at_title: "自动交易",
   back_button: "← 返回",
   big_empty: "该时段暂无交易。",
   big_perp_title: "最大持仓",

@@ -42,6 +42,7 @@ export const hi: Dict = {
   alerts_sub: "पिछले 2 दिनों में बॉट ने जो कुछ भेजा",
   alerts_title: "अलर्ट इतिहास",
   already_tracking: "⚠️ आप पहले से यह वॉलेट ट्रैक कर रहे हैं।",
+  at_title: "ऑटो-ट्रेडिंग",
   back_button: "← वापस",
   big_empty: "इस अवधि में अभी कोई ट्रेड नहीं।",
   big_perp_title: "सबसे बड़ी पोजीशन",

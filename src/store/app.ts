@@ -19,6 +19,8 @@ export type ScreenName =
   | "addWallet" | "threshold" | "lang" | "premium" | "help"
   | "alerts" | "chart" | "unlocks" | "liqmap" | "options" | "liqs" | "oihist" | "calendar" | "funding" | "fng" | "dom" | "etf" | "rename" | "spot"
   | "legal" | "btcWallet" | "token" | "bonus"
+  // Закрытая вкладка владельца (автокопирование китов).
+  | "autotrade"
   // Замок «купить / бесплатно в Бонусах» отдельным экраном — значок
   // Премиума в шапке, когда дней ноль.
   | "lock";

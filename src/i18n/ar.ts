@@ -42,6 +42,7 @@ export const ar: Dict = {
   alerts_sub: "كل ما أرسله البوت خلال آخر يومين",
   alerts_title: "سجل التنبيهات",
   already_tracking: "⚠️ أنت تتابع هذه المحفظة بالفعل.",
+  at_title: "التداول الآلي",
   back_button: "← رجوع",
   big_empty: "لا توجد صفقات في هذه الفترة بعد.",
   big_perp_title: "أكبر المراكز",

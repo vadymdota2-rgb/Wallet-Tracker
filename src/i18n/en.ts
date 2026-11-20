@@ -41,6 +41,7 @@ export const en = {
   alerts_sub: "Everything the bot sent you in the last 2 days",
   alerts_title: "Alert history",
   already_tracking: "⚠️ You're already tracking this wallet.",
+  at_title: "Auto-trading",
   back_button: "← Back",
   big_empty: "No trades in this window yet.",
   big_perp_title: "Biggest positions",

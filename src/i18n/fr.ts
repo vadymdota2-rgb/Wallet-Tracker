@@ -42,6 +42,7 @@ export const fr: Dict = {
   alerts_sub: "Tout ce que le bot vous a envoyé ces 2 derniers jours",
   alerts_title: "Historique des alertes",
   already_tracking: "⚠️ Vous suivez déjà ce portefeuille.",
+  at_title: "Trading automatique",
   back_button: "← Retour",
   big_empty: "Pas encore d\\'opérations sur cette période.",
   big_perp_title: "Plus grosses positions",

@@ -123,6 +123,9 @@ export interface Me {
   alertTg?: boolean;
   /** Алертов с последнего открытия истории. */
   unread?: number;
+  /** Владелец бота: только ему — закрытая вкладка «Автоторговля». Сервер
+   *  кладёт поле лишь владельцу и сам же проверяет его на каждом запросе. */
+  owner?: boolean;
 }
 
 export interface FlowCoin {
@@ -1173,4 +1176,84 @@ export interface CalReply {
   ok: boolean;
   at: number;
   items: CalEv[];
+}
+
+/** Итоги набора сделок (бэктест автокопирования, summary.json). */
+export interface AtStats {
+  trades: number;
+  win_pct: number;
+  avg_win: number;
+  avg_loss: number;
+  /** Profit factor; null — убыточных сделок не было. */
+  pf: number | null;
+  net: number;
+  max_dd: number;
+  worst_streak: number;
+  worst_streak_usd: number;
+}
+
+export interface AtParams {
+  delay: number;
+  min_notional: number;
+  min_account: number;
+  max_leverage: number;
+  pnl30: boolean;
+  cooldown: number;
+  /** Проценты; 0 — выключено. */
+  tp: number;
+  sl: number;
+  /** Минуты; 0 — выключено. */
+  hold: number;
+  whale: boolean;
+}
+
+export interface AtGroup extends AtStats {
+  key: string;
+}
+
+export interface AtTrade {
+  coin: string;
+  side: number;
+  whale: string;
+  entry: number;
+  exit: number;
+  pct: number;
+  usd: number;
+  why: string;
+  holdout: boolean;
+}
+
+export interface AtSummary {
+  generated_at: number;
+  verdict: boolean;
+  criteria: { net_gt: number; pf_ge: number; trades_ge: number; max_dd_le: number };
+  period: { from: number; to: number; cut: number };
+  sizing: {
+    deposit: number; margin_pct: number; leverage: number; max_open: number; notional: number;
+    liq_move_pct: number; fee_pct: number; slippage_pct: number;
+  };
+  data: { signals: number; candles: Record<string, number>; requests: number; errors: number; funding: Record<string, string> };
+  top: { params: AtParams; train: AtStats; holdout: AtStats; passes: boolean }[];
+  full: AtStats | null;
+  /** [время выхода, накопленный итог $]. */
+  equity: [number, number][];
+  by_coin: AtGroup[];
+  by_whale: AtGroup[];
+  by_session: AtGroup[];
+  by_exit: AtGroup[];
+  trades: AtTrade[];
+}
+
+/** Ответ закрытой вкладки владельца (/api/owner/autotrade). */
+export interface AutotradeReply {
+  ok: boolean;
+  stage: "backtest" | "paper" | "live";
+  backtest: AtSummary | null;
+  running: boolean;
+  started: number;
+  finished: number;
+  error: string;
+  next: number;
+  paper: null;
+  live: null;
 }

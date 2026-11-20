@@ -42,6 +42,7 @@ export const id: Dict = {
   alerts_sub: "Semua yang dikirim bot dalam 2 hari terakhir",
   alerts_title: "Riwayat notifikasi",
   already_tracking: "⚠️ Anda sudah melacak dompet ini.",
+  at_title: "Trading otomatis",
   back_button: "← Kembali",
   big_empty: "Belum ada transaksi di periode ini.",
   big_perp_title: "Posisi terbesar",

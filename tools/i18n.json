@@ -29968,5 +29968,23 @@
     "ja": "間に合う",
     "ko": "제때",
     "zh": "及时"
+  },
+  "at_title": {
+    "en": "Auto-trading",
+    "ru": "Автоторговля",
+    "uk": "Автоторгівля",
+    "vi": "Giao dịch tự động",
+    "ko": "자동매매",
+    "zh": "自动交易",
+    "ja": "自動売買",
+    "es": "Trading automático",
+    "pt": "Trading automático",
+    "fr": "Trading automatique",
+    "de": "Autotrading",
+    "tr": "Otomatik işlem",
+    "hi": "ऑटो-ट्रेडिंग",
+    "id": "Trading otomatis",
+    "ar": "التداول الآلي",
+    "pl": "Autotrading"
   }
 }

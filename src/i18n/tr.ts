@@ -42,6 +42,7 @@ export const tr: Dict = {
   alerts_sub: "Botun son 2 günde gönderdiği her şey",
   alerts_title: "Uyarı geçmişi",
   already_tracking: "⚠️ Bu cüzdanı zaten takip ediyorsun.",
+  at_title: "Otomatik işlem",
   back_button: "← Geri",
   big_empty: "Bu dönemde henüz işlem yok.",
   big_perp_title: "En büyük pozisyonlar",

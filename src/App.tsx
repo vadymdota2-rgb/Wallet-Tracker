@@ -72,6 +72,7 @@ const SCREEN_TITLE: Record<ScreenName, DictKey> = {
   btcWallet: "btc_wallet_title",
   token: "tk_title",
   bonus: "bn_title",
+  autotrade: "at_title",
   lock: "menu_premium",
 };
 
@@ -151,6 +152,7 @@ export default function App() {
   const tab = useApp((s) => s.tab);
   const unread = useLive((s) => s.me.unread ?? 0);
   const goTab = useApp((s) => s.goTab);
+  const owner = useLive((s) => s.me.owner === true);
   const stack = useApp((s) => s.stack);
   const back = useApp((s) => s.back);
   const open = useApp((s) => s.open);
@@ -329,6 +331,15 @@ export default function App() {
                 {locked ? <em className="drawer-lock" aria-hidden="true">🔒</em> : null}
               </button>
             ))}
+            {/* Только владельцу (поле owner сервер кладёт лишь ему; данные
+                вкладки сервер отдаёт тоже только ему). */}
+            {owner ? (
+              <button type="button" className="drawer-row"
+                      onClick={() => { haptic("select"); openFromMenu("autotrade"); }}>
+                <span aria-hidden="true">🤖</span>
+                {bare(t(lang, "at_title"))}
+              </button>
+            ) : null}
             {/* Внизу меню — отсчёт до халвинга; дата сборки здесь была
                 служебной и человеку ничего не говорила. */}
             <Boundary name="halving"><HalvingCard /></Boundary>

@@ -42,6 +42,7 @@ export const ja: Dict = {
   alerts_sub: "ボットが直近2日間に送ったすべて",
   alerts_title: "アラート履歴",
   already_tracking: "⚠️ このウォレットは既に追跡中です。",
+  at_title: "自動売買",
   back_button: "← 戻る",
   big_empty: "この期間の取引はまだありません。",
   big_perp_title: "最大のポジション",

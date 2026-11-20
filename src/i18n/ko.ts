@@ -42,6 +42,7 @@ export const ko: Dict = {
   alerts_sub: "최근 2일 동안 봇이 보낸 모든 알림",
   alerts_title: "알림 기록",
   already_tracking: "⚠️ 이미 이 지갑을 추적 중입니다.",
+  at_title: "자동매매",
   back_button: "← 뒤로",
   big_empty: "이 기간에는 아직 거래가 없습니다.",
   big_perp_title: "최대 포지션",

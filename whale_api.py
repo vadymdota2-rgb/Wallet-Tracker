@@ -42,6 +42,7 @@ import wt_markets  # noqa: E402
 import wt_screen  # noqa: E402
 import wt_btc  # noqa: E402
 import wt_mcap
+import wt_autotrade as autotrade
 import wt_treasury as treasury
 import wt_digest_img as dgi
 from urllib.parse import parse_qs, unquote, urlparse, urlsplit
@@ -1803,6 +1804,9 @@ def load_me(cur: sqlite3.Connection, chat: str) -> dict:
             "SELECT 1 FROM ton_invoices WHERE chat_id=? AND status='paid' LIMIT 1", (chat,)).fetchone())
         trial = not paid
     return {
+        # Владелец — закрытая вкладка «Автоторговля». Остальным поля нет
+        # вовсе: о вкладке из ответа не узнать.
+        **({"owner": True} if is_owner(chat) else {}),
         "plan": plan,
         "limit": SERVICE_MAX_WALLETS if service else (PREMIUM_MAX_WALLETS if plan == "premium" else FREE_MAX_WALLETS),
         "service": service,
@@ -10187,6 +10191,7 @@ def warmup() -> None:
     threading.Thread(target=liq_oi_refresher, daemon=True, name="liq-oi").start()
     threading.Thread(target=liq_warm_refresher, daemon=True, name="liq-warm").start()
     threading.Thread(target=cache_refresher, daemon=True, name="cache").start()
+    autotrade.start(WS_DIR, HL_DB)  # бэктест автокопирования — раз в сутки, только чтение базы бота
     liqs_start()
     cur = open_db(DB)
     hl = open_db(HL_DB)
@@ -15579,6 +15584,23 @@ DIGEST_COMMENTS_PAGE = 30
 # Владелец бота — тот же chat_id, что OWNER_CHAT_ID в main.cpp: удаляет любые
 # комментарии и может закрыть автору комментирование.
 OWNER_CHAT_ID = os.environ.get("WHALE_OWNER_CHAT", "546348566").strip()
+
+
+def is_owner(chat: str) -> bool:
+    """Владелец — только по сошедшейся подписи Telegram (chat из _user) и
+    только этот номер; пустой номер владельцем не бывает."""
+    return bool(chat) and bool(OWNER_CHAT_ID) and chat == OWNER_CHAT_ID
+
+
+def _owner_or_404(handler, chat: str, path: str) -> bool:
+    """Закрытые маршруты владельца: чужим — тот же 404, что у несуществующего
+    адреса (о модуле не узнать), и строка в журнал."""
+    if is_owner(chat):
+        return True
+    if chat:
+        print(f"[AUTO] чужой запрос {path}: chat {chat}", flush=True)
+    handler._json(404, {"ok": False, "error": "not_found"})
+    return False
 _LINK_RE = re.compile(r"(https?://|www\.|t\.me/|telegram\.me/|\b[\w-]+\.(?:com|io|xyz|net|org|me|app|ru)\b)", re.I)
 _digest_lock = threading.Lock()
 
@@ -16986,6 +17008,10 @@ class Handler(BaseHTTPRequestHandler):
                     "hl": os.path.isfile(HL_DB),
                 })
                 return
+            if path == "/api/owner/autotrade":
+                if _owner_or_404(self, self._user(qs), path):
+                    self._json(200, autotrade.status())
+                return
             if path in ("/bootstrap", "/api/bootstrap", "/api/me"):
                 who = verify_init_data(self.headers.get("X-Telegram-Init-Data") or "")
                 chat = who["id"] if who else ""
@@ -17418,6 +17444,10 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path == "/api/chart/snap":
                 self._json(200, chart_snap(chat, body))
+                return
+            if path == "/api/owner/autotrade/run":
+                if _owner_or_404(self, chat, path):
+                    self._json(200, autotrade.trigger(WS_DIR, HL_DB))
                 return
             dg = {"/api/digest/like": "like", "/api/digest/comment": "comment",
                   "/api/digest/uncomment": "uncomment", "/api/digest/view": "view",

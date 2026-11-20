@@ -19,6 +19,7 @@ import type {
   LiqCoinsReply, FundRow, LsRow, MutationResult,
   RotSide, SymbolRow, TokenHist, Trades, UnlocksReply, WalletLive, BscExFlowReply,
   BtcBigReply, BtcFlowReply, BtcRankReply, BtcWalletReply, LsTotals, OptionsReply, LiqsReply, OiHistReply, CalReply,
+  AutotradeReply,
 } from "./types";
 
 const TIMEOUT_MS = 15000;
@@ -265,6 +266,13 @@ export interface ExchClaim {
   days?: number;
 }
 export const fetchBonus = () => call<BonusReply>("/api/bonus");
+
+/** Закрытая вкладка владельца: итог бэктеста автокопирования (позже —
+ *  бумажная и реальная торговля). Не владельцу сервер отвечает 404. */
+export const fetchAutotrade = () => call<AutotradeReply>("/api/owner/autotrade");
+/** «Пересчитать сейчас» — бэктест в фоне на сервере, если не идёт. */
+export const autotradeRun = () =>
+  call<{ ok: boolean; running?: boolean; started?: boolean }>("/api/owner/autotrade/run", { method: "POST", body: {} });
 export const bonusAct = (kind: string, act: "open" | "claim") =>
   call<{ ok: boolean; days?: number; error?: string; left?: number; due?: number }>(`/api/bonus/${act}`, { method: "POST", body: { kind } });
 export const partnerJoin = (handle: string) =>

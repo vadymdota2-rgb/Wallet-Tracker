@@ -52,4 +52,4 @@ export function isPaySrc(v: unknown): v is PaySrc {
 }
 
 /** Экраны, открытые и без Премиума: где его получают, и служебные. */
-export const LOCK_OPEN_SCREENS = ["premium", "bonus", "token", "lang", "help", "legal"] as const;
+export const LOCK_OPEN_SCREENS = ["premium", "bonus", "token", "lang", "help", "legal", "autotrade"] as const;

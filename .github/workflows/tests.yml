@@ -51,7 +51,7 @@ jobs:
       - name: Типы TypeScript (приложение и тесты; модули халвинга, ETF, альтсезона и страха и жадности — в строжайшем режиме)
         run: npm run typecheck && npm run typecheck:tests && npm run typecheck:halving && npm run typecheck:etf && npm run typecheck:dom && npm run typecheck:fng && npm run typecheck:liqmap && npm run typecheck:markets && npm run typecheck:screen
       - name: Синтаксис сервера
-        run: python -m py_compile whale_api.py wt_halving.py wt_etf.py wt_treasury.py wt_dom.py wt_mcap.py wt_btc.py wt_fng.py wt_liqmap.py wt_markets.py wt_screen.py wt_shield.py wt_digest_img.py
+        run: python -m py_compile whale_api.py wt_autotrade.py wt_halving.py wt_etf.py wt_treasury.py wt_dom.py wt_mcap.py wt_btc.py wt_fng.py wt_liqmap.py wt_markets.py wt_screen.py wt_shield.py wt_digest_img.py
       - name: Анализатор Python (модуль халвинга и его тесты)
         run: >-
           pipx run ruff==0.15.8 check --target-version py310
@@ -75,7 +75,7 @@ jobs:
           wt_btc.py tests/test_btc.py tests/test_btc_stale.py tests/test_sum_overflow.py
       - name: Строгие типы Python (mypy --strict)
         run: >-
-          pipx run mypy==1.11.2 --strict --python-version 3.11 wt_halving.py wt_etf.py wt_treasury.py wt_dom.py wt_mcap.py wt_btc.py wt_fng.py wt_liqmap.py wt_markets.py wt_screen.py
+          pipx run mypy==1.11.2 --strict --python-version 3.11 wt_autotrade.py wt_halving.py wt_etf.py wt_treasury.py wt_dom.py wt_mcap.py wt_btc.py wt_fng.py wt_liqmap.py wt_markets.py wt_screen.py
       - name: Тесты расчёта и сервера
         run: npm test
 

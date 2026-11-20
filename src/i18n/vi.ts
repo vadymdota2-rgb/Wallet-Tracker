@@ -42,6 +42,7 @@ export const vi: Dict = {
   alerts_sub: "Mọi thứ bot đã gửi trong 2 ngày qua",
   alerts_title: "Lịch sử cảnh báo",
   already_tracking: "⚠️ Bạn đã theo dõi ví này.",
+  at_title: "Giao dịch tự động",
   back_button: "← Quay lại",
   big_empty: "Chưa có giao dịch trong khoảng này.",
   big_perp_title: "Vị thế lớn nhất",

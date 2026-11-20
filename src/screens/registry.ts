@@ -29,6 +29,7 @@ import { EtfScreen } from "./EtfScreen";
 import { BtcWalletScreen } from "./BtcViews";
 import { TokenScreen } from "./TokenScreen";
 import { BonusScreen } from "./BonusScreen";
+import { AutotradeScreen } from "./AutotradeScreen";
 import { LockPage } from "../components/LockScreen";
 
 export const SCREENS: Record<ScreenName, ComponentType<ScreenProps>> = {
@@ -58,6 +59,7 @@ export const SCREENS: Record<ScreenName, ComponentType<ScreenProps>> = {
   etf: EtfScreen,
   btcWallet: BtcWalletScreen,
   token: TokenScreen,
+  autotrade: AutotradeScreen,
   bonus: BonusScreen,
   lock: LockPage,
 };
