@@ -129,6 +129,7 @@ class NightlyRunTest(unittest.TestCase):
         cache = cmd[cmd.index("--cache") + 1]
         self.assertFalse(os.path.realpath(cache).startswith(os.path.realpath(self.ws)))
         self.assertEqual(kw["timeout"], at.RUN_TIMEOUT_SEC)
+        self.assertEqual(cmd[cmd.index("--max-mem-mb") + 1], str(at.MAX_MEM_MB))
         # Следующий — неудачный: прежний итог на месте, причина — в состоянии.
         runner, _ = self.fake(False, code=2)
         with mock.patch("sys.stdout", io.StringIO()):
@@ -141,6 +142,12 @@ class NightlyRunTest(unittest.TestCase):
         self.assertFalse(at.latest(self.data)["verdict"])
         self.assertTrue(os.path.isfile(os.path.join(self.data, "prev", "summary.json")))
         self.assertEqual(at.status(self.data)["error"], "")
+
+    def test_memory_cap_is_reported(self):
+        runner, _ = self.fake(True, code=3)
+        with mock.patch("sys.stdout", io.StringIO()):
+            self.assertFalse(at.run_once(self.ws, self.db, self.data, runner))
+        self.assertIn("предела памяти", at.status(self.data)["error"])
 
     def test_no_script_or_db_is_an_error_not_a_crash(self):
         os.remove(at.script_path(self.ws))

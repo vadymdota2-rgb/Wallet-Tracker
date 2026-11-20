@@ -43,6 +43,9 @@ RUN_HOUR_UTC = 3
 RUN_MINUTE = 17
 PAUSE_SEC = 15          # между запросами к Hyperliquid
 RUN_TIMEOUT_SEC = 6 * 3600
+# Предел памяти бэктеста: на сервере 7,7 ГБ, бот и API держат ~2,4 ГБ.
+# Дальше бэктест останавливается сам (RLIMIT_AS, код 3), сервер не трогает.
+MAX_MEM_MB = 2048
 FIRST_RUN_DELAY_SEC = 15 * 60  # итога ещё нет — первый прогон вскоре после запуска API
 
 _lock = threading.Lock()
@@ -70,7 +73,9 @@ def _set_on(on: bool, data_dir: str) -> None:
 def _popen(cmd: list[str], *, stdout: Any, stderr: Any, timeout: float, check: bool) -> subprocess.CompletedProcess[Any]:
     """Как subprocess.run, но процесс виден кнопке «Стоп» (_state["proc"])."""
     del check
-    p = subprocess.Popen(cmd, stdout=stdout, stderr=stderr)  # свой скрипт, аргументы списком — без оболочки
+    # Низший приоритет процессора: бот и API отвечают людям первыми.
+    p = subprocess.Popen(cmd, stdout=stdout, stderr=stderr,  # свой скрипт, аргументы списком — без оболочки
+                         preexec_fn=lambda: os.nice(19))  # noqa: PLW1509 — только nice, без потоков и замков
     with _lock:
         _state["proc"] = p
     try:
@@ -119,10 +124,13 @@ def run_once(ws_dir: str, hl_db: str, data_dir: str = DATA_DIR,
         shutil.rmtree(out, ignore_errors=True)
         with open(os.path.join(data_dir, "last_run.log"), "w", encoding="utf-8") as log:
             r = runner([sys.executable, "-I", script, "--db", hl_db, "--out", out,
-                        "--cache", os.path.join(data_dir, "cache"), "--pause", str(PAUSE_SEC)],
+                        "--cache", os.path.join(data_dir, "cache"), "--pause", str(PAUSE_SEC),
+                        "--max-mem-mb", str(MAX_MEM_MB)],
                        stdout=log, stderr=subprocess.STDOUT, timeout=RUN_TIMEOUT_SEC, check=False)
         if not is_on(data_dir):
             raise RuntimeError("остановлено кнопкой «Стоп»")
+        if r.returncode == 3:
+            raise RuntimeError(f"бэктесту не хватило предела памяти {MAX_MEM_MB} МБ — остановлен сам, сервер не тронут")
         if r.returncode != 0 or not os.path.isfile(os.path.join(out, "summary.json")):
             raise RuntimeError(f"бэктест завершился с кодом {r.returncode} (last_run.log)")
         prev, cur = os.path.join(data_dir, "prev"), os.path.join(data_dir, "latest")
