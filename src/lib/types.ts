@@ -1230,16 +1230,19 @@ export interface AtTrade {
 export interface AtSummary {
   generated_at: number;
   verdict: boolean;
-  criteria: { net_gt: number; pf_ge: number; trades_ge: number; max_dd_le: number };
+  criteria: { net_gt: number; pf_ge: number; trades_ge: number; max_dd_le: number; beats_fade?: boolean };
   period: { from: number; to: number; cut: number };
   sizing: {
     deposit: number; margin_pct: number; leverage: number; max_open: number; notional: number;
-    cross: boolean; markets: "all" | "stocks"; cluster_hours: number;
+    cross: boolean; markets: "all" | "stocks"; cluster_hours: number; min_whale?: number;
     liq_move_pct: number; fee_pct: number; slippage_pct: number;
   };
   data: { signals: number; candles: Record<string, number>; requests: number; errors: number; funding: Record<string, string> };
   top: { params: AtParams; train: AtStats; holdout: AtStats; passes: boolean }[];
   full: AtStats | null;
+  /** Тот же набор в обратную сторону от китов на отложенных: преимущество
+   *  есть, только если за китами лучше. */
+  fade?: AtStats | null;
   /** [время выхода, накопленный итог $]. */
   equity: [number, number][];
   by_coin: AtGroup[];

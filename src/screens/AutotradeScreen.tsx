@@ -183,11 +183,11 @@ export function AutotradeScreen() {
                    : "На отложенных данных критерий не пройден — копирование не окупает комиссии и риск."}
                  tone={b.verdict ? "up" : "dn"} wrap />
             <Row title="Критерий" wrap
-                 sub={`итог > 0, PF ≥ ${b.criteria.pf_ge}, сделок ≥ ${b.criteria.trades_ge}, просадка ≤ ${usd(b.criteria.max_dd_le)}`} />
+                 sub={`итог > 0, PF ≥ ${b.criteria.pf_ge}, сделок ≥ ${b.criteria.trades_ge}, просадка ≤ ${usd(b.criteria.max_dd_le)}${b.criteria.beats_fade ? "; за китами лучше, чем против них" : ""}`} />
             <Row title="Размер" wrap
                  sub={`${b.sizing.cross ? "кросс-маржа" : "изолированная маржа"}; депозит ${usd(b.sizing.deposit)}, маржа ${b.sizing.margin_pct}% × ${b.sizing.leverage}× = позиция ${usd(b.sizing.notional)}; позиций сразу: ${b.sizing.max_open || "без предела"}; ликвидация при ходе против ${b.sizing.liq_move_pct}%; стопа нет — пересиживаем`} />
             <Row title="Сигнал" wrap
-                 sub={`открытие лонга или шорта на фьючерсах (${b.sizing.markets === "all" ? "крипта, акции, металлы" : "акции"}); китов считаем за ${b.sizing.cluster_hours} ч; цена ниже средней китов (для шорта — выше) — входим, ушла в другую сторону дальше предела — пропуск`} />
+                 sub={`открытие лонга или шорта на фьючерсах (${b.sizing.markets === "all" ? "крипта, акции, металлы" : "акции"}); китов считаем за ${b.sizing.cluster_hours} ч${b.sizing.min_whale ? `, у каждого позиция от ${usd(b.sizing.min_whale)}` : ""}; цена ниже средней китов (для шорта — выше) — входим, ушла в другую сторону дальше предела — пропуск`} />
             <Row title="Данные" wrap
                  sub={`${b.data.signals} сигналов, ${when(b.period.from)} — ${when(b.period.to)}; отложенные — после ${when(b.period.cut)}; свечи: ${Object.entries(b.data.candles).map(([k, v]) => `${k} ${v}`).join(", ")}`} />
           </Card>
@@ -200,6 +200,11 @@ export function AutotradeScreen() {
               <Card>
                 <Row title="Параметры" sub={paramsLine(best.params)} wrap />
                 <StatsRows s={best.holdout} />
+                {b.fade ? (
+                  <Row title="Против китов (наоборот)" wrap
+                       sub={`${b.fade.trades} сделок · ${pct(b.fade.win_pct, 0, false)} в плюс · ${b.fade.net < best.holdout.net ? "за китами лучше" : "за китами НЕ лучше — преимущества нет, только форма стратегии"}`}
+                       value={usd(b.fade.net, true)} tone={b.fade.net < best.holdout.net ? "up" : "dn"} />
+                ) : null}
               </Card>
               <SectionTitle>Тот же набор на подборе</SectionTitle>
               <Card><StatsRows s={best.train} /></Card>
