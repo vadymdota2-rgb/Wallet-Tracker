@@ -54,6 +54,12 @@ function StatsRows({ s }: { s: AtStats }) {
       <Row title="Profit factor" value={pf(s.pf)} />
       <Row title="Макс. просадка" value={usd(-s.max_dd)} tone="dn"
            valueSub={`худшая серия: ${s.worst_streak} (${usd(s.worst_streak_usd, true)})`} />
+      {s.max_mae !== undefined ? (
+        <Row title="Пересиживание" wrap
+             sub={`дольше всех — ${Math.round(s.longest_h ?? 0)} ч; провал внутри сделки — до ${usd(-s.max_mae)}`}
+             value={s.open ? `открыто ${s.open}` : "все закрыты"} tone={s.open ? "dn" : "up"}
+             valueSub={s.open ? usd(s.unrealized, true) : "по тейку"} />
+      ) : null}
     </>
   );
 }
@@ -185,7 +191,7 @@ export function AutotradeScreen() {
             <Row title="Критерий" wrap
                  sub={`итог > 0, PF ≥ ${b.criteria.pf_ge}, сделок ≥ ${b.criteria.trades_ge}, просадка ≤ ${usd(b.criteria.max_dd_le)}${b.criteria.beats_fade ? "; за китами лучше, чем против них" : ""}`} />
             <Row title="Размер" wrap
-                 sub={`${b.sizing.cross ? "кросс-маржа" : "изолированная маржа"}; депозит ${usd(b.sizing.deposit)}, маржа ${b.sizing.margin_pct}% × ${b.sizing.leverage}× = позиция ${usd(b.sizing.notional)}; позиций сразу: ${b.sizing.max_open || "без предела"}; ликвидация при ходе против ${b.sizing.liq_move_pct}%; стопа нет — пересиживаем`} />
+                 sub={`${b.sizing.cross ? "кросс-маржа" : "изолированная маржа"}; депозит ${usd(b.sizing.deposit)}, маржа ${b.sizing.margin_pct}% × ${b.sizing.leverage}× = позиция ${usd(b.sizing.notional)}; позиций сразу: ${b.sizing.max_open || "без предела"}; ликвидация при ходе против ${b.sizing.liq_move_pct}%; выход — только тейк, пересиживаем всегда (пока позиция открыта, новых сделок нет)`} />
             <Row title="Сигнал" wrap
                  sub={`открытие лонга или шорта на фьючерсах (${b.sizing.markets === "all" ? "крипта, акции, металлы" : "акции"}); китов считаем за ${b.sizing.cluster_hours} ч${b.sizing.min_whale ? `, у каждого позиция от ${usd(b.sizing.min_whale)}` : ""}; цена ниже средней китов (для шорта — выше) — входим, ушла в другую сторону дальше предела — пропуск`} />
             <Row title="Данные" wrap

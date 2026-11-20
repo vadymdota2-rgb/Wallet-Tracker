@@ -1190,6 +1190,13 @@ export interface AtStats {
   max_dd: number;
   worst_streak: number;
   worst_streak_usd: number;
+  /** Пересиживаем: не дошли до тейка — открыты на конец данных (по рынку, входит в net). */
+  open?: number;
+  unrealized?: number;
+  /** Самая глубокая просадка внутри одной сделки, $. */
+  max_mae?: number;
+  /** Самая долгая сделка, ч. */
+  longest_h?: number;
 }
 
 export interface AtParams {
