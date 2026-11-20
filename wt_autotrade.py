@@ -37,15 +37,20 @@ from collections.abc import Callable
 from typing import Any
 
 # Где лежит итог и кеш. Не в каталоге бота: бэктест туда писать отказывается.
+# По умолчанию — рядом с API (в git не попадает, .gitignore): служба
+# whale-api видит домашний каталог только на чтение (ProtectHome=read-only),
+# писать ей можно лишь в каталоги из ReadWritePaths — а каталог API из них.
 DATA_DIR = os.path.abspath(os.path.expanduser(
-    os.environ.get("WT_AUTOTRADE_DIR") or "~/.local/share/whale-autotrade"))
+    os.environ.get("WT_AUTOTRADE_DIR")
+    or os.path.join(os.path.dirname(os.path.abspath(__file__)), "autotrade_data")))
 RUN_HOUR_UTC = 3
 RUN_MINUTE = 17
 PAUSE_SEC = 15          # между запросами к Hyperliquid
 RUN_TIMEOUT_SEC = 6 * 3600
-# Предел памяти бэктеста: на сервере 7,7 ГБ, бот и API держат ~2,4 ГБ.
-# Дальше бэктест останавливается сам (RLIMIT_AS, код 3), сервер не трогает.
-MAX_MEM_MB = 2048
+# Предел памяти бэктеста. Бэктест — дочерний процесс API и живёт в её
+# cgroup: у whale-api MemoryMax=1536M на всё вместе. Больше предела —
+# бэктест останавливается сам (RLIMIT_AS, код 3), а не ядро убивает API.
+MAX_MEM_MB = 1024
 FIRST_RUN_DELAY_SEC = 15 * 60  # итога ещё нет — первый прогон вскоре после запуска API
 
 _lock = threading.Lock()
@@ -68,6 +73,17 @@ def _set_on(on: bool, data_dir: str) -> None:
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump({"on": on, "at": int(time.time())}, f)
     os.replace(tmp, os.path.join(data_dir, "switch.json"))
+
+
+def _try_set(on: bool, data_dir: str) -> dict[str, Any] | None:
+    """Записать выбор владельца; не вышло — ответ с причиной (а не 500,
+    которое приложение показало бы как «нет связи»)."""
+    try:
+        _set_on(on, data_dir)
+    except OSError as e:
+        print(f"[AUTO] {'старт' if on else 'стоп'}: не записать {data_dir}: {e.strerror or e}", flush=True)
+        return {"ok": False, "error": "no_write", "dir": data_dir}
+    return None
 
 
 def _popen(cmd: list[str], *, stdout: Any, stderr: Any, timeout: float, check: bool) -> subprocess.CompletedProcess[Any]:
@@ -197,7 +213,9 @@ def trigger(ws_dir: str, hl_db: str, data_dir: str = DATA_DIR) -> dict[str, Any]
 
 def start_cmd(ws_dir: str, hl_db: str, data_dir: str = DATA_DIR) -> dict[str, Any]:
     """Кнопка «Старт»: включить; итога ещё нет — сразу и пересчитать."""
-    _set_on(True, data_dir)
+    why = _try_set(True, data_dir)
+    if why:
+        return why
     print("[AUTO] старт (владелец)", flush=True)
     if latest(data_dir) is None:
         trigger(ws_dir, hl_db, data_dir)
@@ -206,7 +224,9 @@ def start_cmd(ws_dir: str, hl_db: str, data_dir: str = DATA_DIR) -> dict[str, An
 
 def stop_cmd(data_dir: str = DATA_DIR) -> dict[str, Any]:
     """Кнопка «Стоп»: выключить и прервать идущий пересчёт."""
-    _set_on(False, data_dir)
+    why = _try_set(False, data_dir)
+    if why:
+        return why
     with _lock:
         proc = _state["proc"]
     if proc is not None:

@@ -138,7 +138,8 @@ export function AutotradeScreen() {
     void (on ? autotradeStart() : autotradeStop()).then((r) => {
       setBusy(false);
       if (!r?.ok) {
-        toast("Нет связи с сервером", "err");
+        const why = (r as { error?: string } | null)?.error;
+        toast(why === "no_write" ? "Сервер не может сохранить выбор: нет записи в каталог модуля" : "Нет связи с сервером", "err");
         return;
       }
       setSt(r);

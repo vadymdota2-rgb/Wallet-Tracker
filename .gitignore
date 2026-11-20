@@ -36,3 +36,6 @@ Thumbs.db
 
 # Кеш ответов API на диске (whale_api: CACHE_DIR) — данные сервера, не код
 api_cache/
+
+# Итог и кеш автокопирования (wt_autotrade: DATA_DIR) — данные сервера
+autotrade_data/

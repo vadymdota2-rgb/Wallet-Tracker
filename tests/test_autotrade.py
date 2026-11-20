@@ -192,6 +192,26 @@ class NightlyRunTest(unittest.TestCase):
             trig.assert_called_once()  # итога ещё нет — сразу пересчёт
         self.assertTrue(at.is_on(self.data))
 
+    def test_unwritable_dir_is_a_reason_not_a_crash(self):
+        # На сервере у whale-api домашний каталог только на чтение: кнопка
+        # должна получить причину, а не 500 («нет связи» в приложении).
+        out = io.StringIO()
+        with mock.patch.object(at, "_set_on", side_effect=PermissionError(13, "Read-only file system")), \
+                mock.patch("sys.stdout", out):
+            for got in (at.start_cmd(self.ws, self.db, self.data), at.stop_cmd(self.data)):
+                self.assertEqual((got["ok"], got["error"]), (False, "no_write"))
+        self.assertIn("[AUTO] старт: не записать", out.getvalue())
+
+    def test_default_dir_is_next_to_api_not_home(self):
+        # whale-api может писать только в ReadWritePaths — каталог API среди них.
+        self.assertTrue(os.environ.get("WT_AUTOTRADE_DIR") or at.DATA_DIR.startswith(ROOT + os.sep))
+        with open(os.path.join(ROOT, "whale-api.service"), encoding="utf-8") as f:
+            unit = f.read()
+        rw = next(ln for ln in unit.splitlines() if ln.startswith("ReadWritePaths="))
+        self.assertIn("/WalletTracker", rw)
+        mem = next(ln for ln in unit.splitlines() if ln.startswith("MemoryMax="))
+        self.assertLess(at.MAX_MEM_MB, int(mem.split("=")[1].rstrip("M")))
+
     def test_stop_interrupts_a_running_backtest(self):
         """«Стоп» посреди пересчёта: процесс прерван, итог не подменён,
         причина — «остановлено»."""
