@@ -1199,6 +1199,10 @@ export interface AtParams {
   max_leverage: number;
   pnl30: boolean;
   cooldown: number;
+  /** Китов в одну сторону за окно, от. */
+  wallets: number;
+  /** На сколько % вход может быть хуже средней цены китов; 0 — без предела. */
+  chase: number;
   /** Проценты; 0 — выключено. */
   tp: number;
   sl: number;
@@ -1230,6 +1234,7 @@ export interface AtSummary {
   period: { from: number; to: number; cut: number };
   sizing: {
     deposit: number; margin_pct: number; leverage: number; max_open: number; notional: number;
+    cross: boolean; markets: "all" | "stocks"; cluster_hours: number;
     liq_move_pct: number; fee_pct: number; slippage_pct: number;
   };
   data: { signals: number; candles: Record<string, number>; requests: number; errors: number; funding: Record<string, string> };

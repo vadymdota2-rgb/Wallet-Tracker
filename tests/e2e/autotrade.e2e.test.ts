@@ -95,8 +95,8 @@ describe("закрытая вкладка «Автоторговля»", () => {
     const { ctx, page, errors } = await open({ owner: true });
     await page.locator(".drawer-row", { hasText: "Автоторговля" }).click();
     const screen = page.locator(".sheet .screen");
-    await screen.getByText("Вердикт: можно дальше").waitFor();
-    for (const s of ["Лучший набор на отложенных данных", "Капитал на всём периоде", "По бумагам", "Последние сделки",
+    await screen.getByText(SUMMARY.verdict ? "Вердикт: можно дальше" : "Вердикт: нет").waitFor();
+    for (const s of ["Лучший набор на отложенных данных", "кросс-маржа", "Сигнал", "Капитал на всём периоде", "По бумагам", "Последние сделки",
       "Пересчитать сейчас"]) {
       assert.ok(await screen.getByText(s).first().isVisible(), s);
     }

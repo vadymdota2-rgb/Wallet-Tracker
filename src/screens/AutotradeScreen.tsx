@@ -35,10 +35,12 @@ function paramsLine(p: AtParams): string {
     p.whale ? "когда кит закрыл" : "",
   ].filter(Boolean);
   return [
+    p.wallets > 1 ? `китов в одну сторону от ${p.wallets}` : "",
     `вход через ${p.delay} с`,
-    `объём кита от ${usd(p.min_notional)}`,
+    `объём от ${usd(p.min_notional)}`,
+    p.chase ? `не дороже китов больше чем на ${p.chase}%` : "",
     p.pnl30 ? "кит в плюсе за 30 дн." : "",
-    exits.length ? exits.join(", ") : "выход по пределу удержания",
+    exits.length ? exits.join(", ") : "без выхода — до предела удержания",
   ].filter(Boolean).join(" · ");
 }
 
@@ -136,7 +138,9 @@ export function AutotradeScreen() {
             <Row title="Критерий" wrap
                  sub={`итог > 0, PF ≥ ${b.criteria.pf_ge}, сделок ≥ ${b.criteria.trades_ge}, просадка ≤ ${usd(b.criteria.max_dd_le)}`} />
             <Row title="Размер" wrap
-                 sub={`депозит ${usd(b.sizing.deposit)}, маржа ${b.sizing.margin_pct}% × ${b.sizing.leverage}× = позиция ${usd(b.sizing.notional)}; позиций сразу: ${b.sizing.max_open || "без предела"}; ликвидация при ходе против ${b.sizing.liq_move_pct}%`} />
+                 sub={`${b.sizing.cross ? "кросс-маржа" : "изолированная маржа"}; депозит ${usd(b.sizing.deposit)}, маржа ${b.sizing.margin_pct}% × ${b.sizing.leverage}× = позиция ${usd(b.sizing.notional)}; позиций сразу: ${b.sizing.max_open || "без предела"}; ликвидация при ходе против ${b.sizing.liq_move_pct}%; стопа нет — пересиживаем`} />
+            <Row title="Сигнал" wrap
+                 sub={`открытие лонга или шорта на фьючерсах (${b.sizing.markets === "all" ? "крипта, акции, металлы" : "акции"}); китов считаем за ${b.sizing.cluster_hours} ч; цена ниже средней китов (для шорта — выше) — входим, ушла в другую сторону дальше предела — пропуск`} />
             <Row title="Данные" wrap
                  sub={`${b.data.signals} сигналов, ${when(b.period.from)} — ${when(b.period.to)}; отложенные — после ${when(b.period.cut)}; свечи: ${Object.entries(b.data.candles).map(([k, v]) => `${k} ${v}`).join(", ")}`} />
           </Card>
