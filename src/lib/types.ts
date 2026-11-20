@@ -1252,6 +1252,8 @@ export interface AtSummary {
   trades: AtTrade[];
   /** Где торговать и какие бумаги китов есть на OKX (сверено по цене). */
   okx?: { venue: "hl" | "okx"; map: Record<string, AtOkx> };
+  /** Лучший набор подбора для каждого предела догона (%): подбор и отложенные. */
+  by_chase?: { chase: number; train: AtStats; holdout: AtStats }[];
 }
 
 /** Бумага Hyperliquid на OKX: ok — есть (inst, масштаб), mismatch — под тем

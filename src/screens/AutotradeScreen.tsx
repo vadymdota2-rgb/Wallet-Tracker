@@ -235,6 +235,19 @@ export function AutotradeScreen() {
             </>
           ) : null}
 
+          {b.by_chase?.length ? (
+            <>
+              <SectionTitle>По пределу догона</SectionTitle>
+              <Card pad={false}>
+                {b.by_chase.map((c) => (
+                  <Row key={c.chase} title={`Не дороже китов на ${c.chase}%`}
+                       sub={`подбор ${usd(c.train.net, true)} · отложенные: ${c.holdout.trades} сделок, PF ${pf(c.holdout.pf)}`}
+                       value={usd(c.holdout.net, true)} tone={c.holdout.net >= 0 ? "up" : "dn"} valueSub="отложенные" />
+                ))}
+              </Card>
+            </>
+          ) : null}
+
           <Groups title="По бумагам" rows={b.by_coin} />
           <Groups title="По времени суток" rows={b.by_session}
                   label={(k) => (k === "open" ? "Рынок США открыт" : "Рынок США закрыт")} />
