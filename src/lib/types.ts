@@ -1261,6 +1261,11 @@ export interface AtSummary {
   okx?: { venue: "hl" | "okx"; map: Record<string, AtOkx> };
   /** Лучший набор подбора для каждого предела догона (%): подбор и отложенные. */
   by_chase?: { chase: number; train: AtStats; holdout: AtStats }[];
+  /** Возможностей входа по правилу китов в день (верхняя граница сделок). */
+  entries_per_day?: number;
+  /** Темп при 1, 3 и 10 позициях сразу: сделок в день, итог, когда кончился депозит. */
+  pace?: { max_open: number; trades: number; per_day: number; median_tp_h: number; open: number; net: number;
+           max_dd: number; bust: number }[];
 }
 
 /** Бумага Hyperliquid на OKX: ok — есть (inst, масштаб), mismatch — под тем

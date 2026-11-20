@@ -241,6 +241,24 @@ export function AutotradeScreen() {
             </>
           ) : null}
 
+          {b.pace?.length ? (
+            <>
+              <SectionTitle>Сколько сделок в день</SectionTitle>
+              <Card pad={false}>
+                {b.entries_per_day !== undefined ? (
+                  <Row title="Возможностей входа" wrap value={`${b.entries_per_day} в день`}
+                       sub="по правилу китов — верхняя граница: пока позиция не дошла до тейка, новые не открываются" />
+                ) : null}
+                {b.pace.map((x) => (
+                  <Row key={x.max_open} wrap
+                       title={`Позиций сразу: ${x.max_open} (маржа ${x.max_open * b.sizing.margin_pct}%)`}
+                       sub={`${x.trades} сделок · до тейка обычно ${x.median_tp_h} ч · открыто на конец ${x.open} · просадка ${usd(x.max_dd)}${x.bust ? ` · депозит кончился ${when(x.bust)}` : ""}`}
+                       value={`${x.per_day} в день`} valueSub={usd(x.net, true)} tone={x.bust || x.net < 0 ? "dn" : "up"} />
+                ))}
+              </Card>
+            </>
+          ) : null}
+
           {b.by_chase?.length ? (
             <>
               <SectionTitle>По пределу догона</SectionTitle>
