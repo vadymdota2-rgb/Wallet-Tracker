@@ -37,6 +37,7 @@ function paramsLine(p: AtParams): string {
   return [
     p.wallets > 1 ? `китов в одну сторону от ${p.wallets}${p.min_whale ? `, каждый от ${usd(p.min_whale)}` : ""}` : "",
     p.no_conflict ? "киты не спорят" : "",
+    p.cooldown ? `в одну бумагу — раз в ${p.cooldown % 60 ? `${p.cooldown} мин` : `${p.cooldown / 60} ч`}` : "",
     p.rest ? `после выхода ${p.rest / 60} ч в бумагу не входим` : "",
     `вход через ${p.delay} с`,
     `объём от ${usd(p.min_notional)}`,
@@ -61,6 +62,11 @@ function StatsRows({ s }: { s: AtStats }) {
              sub={`дольше всех — ${Math.round(s.longest_h ?? 0)} ч; провал внутри сделки — до ${usd(-s.max_mae)}`}
              value={s.open ? `открыто ${s.open}` : "все закрыты"} tone={s.open ? "dn" : "up"}
              valueSub={s.open ? usd(s.unrealized, true) : "по тейку"} />
+      ) : null}
+      {s.max_overlap_mae !== undefined ? (
+        <Row title="Все открытые сразу" wrap
+             sub={`бывало позиций сразу: ${s.max_open_at_once ?? 0}; их худшие провалы вместе — до ${usd(-s.max_overlap_mae)} (верхняя граница: на кроссе их держит один счёт)`}
+             value={usd(-s.max_overlap_mae)} tone="dn" />
       ) : null}
     </>
   );
@@ -195,7 +201,7 @@ export function AutotradeScreen() {
             <Row title="Критерий" wrap
                  sub={`итог > 0, PF ≥ ${b.criteria.pf_ge}, сделок ≥ ${b.criteria.trades_ge}, просадка ≤ ${usd(b.criteria.max_dd_le)}${b.criteria.beats_fade ? "; за китами лучше, чем против них" : ""}`} />
             <Row title="Размер" wrap
-                 sub={`${b.sizing.cross ? "кросс-маржа" : "изолированная маржа"}; депозит ${usd(b.sizing.deposit)}, маржа ${b.sizing.margin_pct}% × ${b.sizing.leverage}× = позиция ${usd(b.sizing.notional)}; позиций сразу: ${b.sizing.max_open || "без предела"}; ликвидация при ходе против ${b.sizing.liq_move_pct}%; выход — только тейк, пересиживаем всегда (пока позиция открыта, новых сделок нет)`} />
+                 sub={`${b.sizing.cross ? "кросс-маржа" : "изолированная маржа"}; депозит ${usd(b.sizing.deposit)}, маржа ${b.sizing.margin_pct}% × ${b.sizing.leverage}× = позиция ${usd(b.sizing.notional)}; позиций сразу: до ${b.sizing.max_open || "без предела"} (нон-стоп: пока одни пересиживают, входим в другие бумаги); ликвидация одной позиции — при ходе против ${b.sizing.liq_move_pct}%, риск — все открытые вместе; выход — только тейк, пересиживаем всегда`} />
             <Row title="Сигнал" wrap
                  sub={`открытие лонга или шорта на фьючерсах (${b.sizing.markets === "all" ? "крипта, акции, металлы" : "акции"}); китов считаем за ${b.sizing.cluster_hours} ч${b.sizing.min_whale ? `, у каждого позиция от ${usd(b.sizing.min_whale)}` : ""}; цена ниже средней китов (для шорта — выше) — входим, ушла в другую сторону дальше предела — пропуск`} />
             <Row title="Данные" wrap

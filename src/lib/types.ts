@@ -1197,6 +1197,10 @@ export interface AtStats {
   max_mae?: number;
   /** Самая долгая сделка, ч. */
   longest_h?: number;
+  /** Больше всего позиций сразу. */
+  max_open_at_once?: number;
+  /** Худшие провалы одновременно открытых вместе, $ — верхняя граница риска кросса. */
+  max_overlap_mae?: number;
 }
 
 export interface AtParams {
