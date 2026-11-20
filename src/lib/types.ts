@@ -1242,6 +1242,28 @@ export interface AtTrade {
   usd: number;
   why: string;
   holdout: boolean;
+  /** Цена входа и выхода (у открытой — рынок на конец данных). */
+  px_in?: number;
+  px_out?: number;
+}
+
+/** Активная позиция модели: не дошла до тейка к концу данных. */
+export interface AtActive {
+  coin: string;
+  side: number;
+  whales: number;
+  entry: number;
+  px_in: number;
+  px_now: number;
+  tp: number;
+  /** На какой момент цена px_now. */
+  at: number;
+  usd: number;
+  pct: number;
+  /** Сколько ещё % цены до тейка (null — тейка нет). */
+  to_tp_pct: number | null;
+  mae: number;
+  held_h: number;
 }
 
 export interface AtSummary {
@@ -1267,6 +1289,9 @@ export interface AtSummary {
   by_session: AtGroup[];
   by_exit: AtGroup[];
   trades: AtTrade[];
+  active?: AtActive[];
+  /** Сделок в день (лучший набор, весь период). */
+  per_day?: number;
   /** Где торговать и какие бумаги китов есть на OKX (сверено по цене). */
   okx?: { venue: "hl" | "okx"; map: Record<string, AtOkx> };
   /** Лучший набор подбора для каждого предела догона (%): подбор и отложенные. */

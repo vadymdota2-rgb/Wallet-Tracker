@@ -20,7 +20,7 @@ import { TrendChart } from "../components/Chart";
 import { autotradeRun, autotradeStart, autotradeStop, fetchAutotrade } from "../lib/api";
 import { pct, usd } from "../lib/format";
 import { toast } from "../components/Toast";
-import type { AtGroup, AtParams, AtStats, AtSummary, AutotradeReply } from "../lib/types";
+import type { AtActive, AtGroup, AtParams, AtStats, AtSummary, AutotradeReply } from "../lib/types";
 
 const when = (ms: number) =>
   ms > 0 ? new Date(ms).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
@@ -82,6 +82,64 @@ function Groups({ title, rows, label }: { title: string; rows: AtGroup[]; label?
           <Row key={g.key} title={label ? label(g.key) : g.key} sub={`${g.trades} сделок · ${pct(g.win_pct, 0, false)} в плюс`}
                value={usd(g.net, true)} tone={g.net >= 0 ? "up" : "dn"} valueSub={`PF ${pf(g.pf)}`} />
         ))}
+      </Card>
+    </>
+  );
+}
+
+const price = (v: number) => (v >= 1000 ? v.toLocaleString("ru-RU", { maximumFractionDigits: 2 })
+  : v.toPrecision(5).replace(/\.?0+$/, ""));
+
+/** Общая статистика — то, на что смотреть в первую очередь: лучший набор
+ *  на всём периоде. Доля от депозита — рядом с долларами. */
+function Overview({ s }: { s: AtSummary }) {
+  const f = s.full;
+  if (!f) return null;
+  const dep = s.sizing.deposit || 1;
+  const share = (v: number) => `${v >= 0 ? "+" : ""}${((v / dep) * 100).toFixed(1)}% депозита`;
+  return (
+    <>
+      <SectionTitle>Общая статистика</SectionTitle>
+      <Card pad={false}>
+        <Row title="Итог" value={usd(f.net, true)} tone={f.net >= 0 ? "up" : "dn"} valueSub={share(f.net)}
+             sub={`${when(s.period.from)} — ${when(s.period.to)}`} />
+        <Row title="Винрейт" value={pct(f.win_pct, 1, false)}
+             sub={`${f.trades} сделок${s.per_day !== undefined ? ` · ${s.per_day} в день` : ""}`}
+             tone={f.win_pct >= 50 ? "up" : "dn"} />
+        <Row title="Средняя сделка" value={usd(f.trades ? f.net / f.trades : 0, true)}
+             sub={`прибыль ${usd(f.avg_win, true)} · убыток ${usd(f.avg_loss, true)}`} />
+        <Row title="Profit factor" value={pf(f.pf)} tone={f.pf === null || f.pf >= 1.3 ? "up" : "dn"}
+             sub="сумма прибылей / сумма убытков" />
+        <Row title="Макс. просадка" value={usd(-f.max_dd)} tone="dn" valueSub={share(-f.max_dd)}
+             sub="с провалами внутри сделок" />
+        <Row title="Худшая серия" value={`${f.worst_streak} подряд`} tone={f.worst_streak ? "dn" : undefined}
+             valueSub={usd(f.worst_streak_usd, true)} />
+        {f.longest_h !== undefined ? (
+          <Row title="Самая долгая сделка" value={`${Math.round(f.longest_h)} ч`}
+               sub={`провал внутри сделки — до ${usd(-(f.max_mae ?? 0))}`} />
+        ) : null}
+      </Card>
+    </>
+  );
+}
+
+/** Активные позиции модели: вошли и ещё не дошли до тейка. Это бэктест —
+ *  реальных денег здесь нет; настоящие позиции появятся на этапах 2–3. */
+function Active({ s }: { s: AtSummary }) {
+  const list: AtActive[] = s.active ?? [];
+  return (
+    <>
+      <SectionTitle>Активные позиции</SectionTitle>
+      <Card pad={false}>
+        {list.length ? list.map((a, i) => (
+          <Row key={i} wrap
+               title={`${a.coin} · ${a.side > 0 ? "лонг" : "шорт"}`}
+               sub={`вход ${when(a.entry)} по ${price(a.px_in)} · сейчас ${price(a.px_now)} · тейк ${a.tp ? price(a.tp) : "—"}`
+                 + `${a.to_tp_pct !== null ? ` (ещё ${a.to_tp_pct.toFixed(2)}%)` : ""} · держим ${Math.round(a.held_h)} ч`
+                 + ` · провал до ${usd(-a.mae)} · цена на ${when(a.at)}`}
+               value={usd(a.usd, true)} tone={a.usd >= 0 ? "up" : "dn"} valueSub={pct(a.pct, 2)} />
+        )) : <Row title="Открытых позиций нет" sub="Ждём сигнала: от 2 китов в одну сторону за 2 часа" wrap />}
+        <Row title="Это модель (бэктест)" sub="Реальных денег нет. Настоящие позиции — на этапах 2–3, после вашего «да»." wrap />
       </Card>
     </>
   );
@@ -192,6 +250,8 @@ export function AutotradeScreen() {
                hint={st.on ? "Первый пересчёт идёт после «Старт»; до часа." : "Нажмите «Старт» — сразу начнётся первый пересчёт (до часа)."} />
       ) : (
         <>
+          <Overview s={b} />
+          <Active s={b} />
           <Card>
             <Row title={b.verdict ? "Вердикт: можно дальше" : "Вердикт: нет"}
                  sub={b.verdict
@@ -294,7 +354,7 @@ export function AutotradeScreen() {
               <Card pad={false}>
                 {[...b.trades].reverse().slice(0, 30).map((t, i) => (
                   <Row key={i} title={`${t.coin} · ${t.side > 0 ? "лонг" : "шорт"}`}
-                       sub={`${when(t.entry)} → ${t.why === "открыта" ? "ещё открыта" : `${when(t.exit)} · ${t.why}`}${t.holdout ? " · отложенные" : ""}`}
+                       sub={`${when(t.entry)}${t.px_in ? ` по ${price(t.px_in)}` : ""} → ${t.why === "открыта" ? "ещё открыта" : `${when(t.exit)}${t.px_out ? ` по ${price(t.px_out)}` : ""} · ${t.why}`}${t.holdout ? " · отложенные" : ""}`}
                        value={usd(t.usd, true)} tone={t.usd >= 0 ? "up" : "dn"} valueSub={pct(t.pct, 2)} />
                 ))}
               </Card>

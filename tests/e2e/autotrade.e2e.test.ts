@@ -106,10 +106,16 @@ describe("закрытая вкладка «Автоторговля»", () => {
     const screen = page.locator(".sheet .screen");
     await screen.getByText(SUMMARY.verdict ? "Вердикт: можно дальше" : "Вердикт: нет").waitFor();
     for (const s of ["Лучший набор на отложенных данных", "кросс-маржа", "Сигнал", "Торгуем на Hyperliquid", "То же имя — другой актив", "Нет на OKX", "Против китов (наоборот)", "По пределу догона", "Пересиживание", "Сколько сделок в день", "депозит кончился", "Капитал на всём периоде", "По бумагам", "Последние сделки",
-      "Пересчитать сейчас"]) {
+      "Пересчитать сейчас", "Общая статистика", "Винрейт", "Макс. просадка", "Худшая серия",
+      "Активные позиции", "xyz:S14 · шорт", "Это модель (бэктест)"]) {
       assert.ok(await screen.getByText(s).first().isVisible(), s);
     }
     assert.ok(await screen.locator(".trend-svg").isVisible());
+    const wr = await screen.getByText("Винрейт").first().locator("xpath=ancestor::*[@class='row'][1]").innerText();
+    assert.match(wr, /87[.,]5/, wr);
+    // Активная позиция: вход, цена сейчас, тейк и сколько до него.
+    const act = await screen.getByText("xyz:S14 · шорт").first().locator("xpath=ancestor::*[@class='row'][1]").innerText();
+    for (const s of ["по 100", "сейчас 124.38", "тейк 99", "ещё 20.41%", "держим 630 ч"]) assert.ok(act.includes(s), `${s} в «${act}»`);
     // Ничего не вылезает за правый край узкого экрана.
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     assert.ok(wide <= 0, `шире экрана на ${wide}px`);
