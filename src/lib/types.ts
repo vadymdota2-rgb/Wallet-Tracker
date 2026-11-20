@@ -1247,6 +1247,18 @@ export interface AtSummary {
   by_session: AtGroup[];
   by_exit: AtGroup[];
   trades: AtTrade[];
+  /** Где торговать и какие бумаги китов есть на OKX (сверено по цене). */
+  okx?: { venue: "hl" | "okx"; map: Record<string, AtOkx> };
+}
+
+/** Бумага Hyperliquid на OKX: ok — есть (inst, масштаб), mismatch — под тем
+ *  же именем другой актив (цены не сходятся), missing — нет, unverified —
+ *  не удалось проверить. */
+export interface AtOkx {
+  status: "ok" | "mismatch" | "missing" | "unverified";
+  inst?: string;
+  scale?: number;
+  ratio?: number;
 }
 
 /** Ответ закрытой вкладки владельца (/api/owner/autotrade). */

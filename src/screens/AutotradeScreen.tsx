@@ -20,7 +20,7 @@ import { TrendChart } from "../components/Chart";
 import { autotradeRun, fetchAutotrade } from "../lib/api";
 import { pct, usd } from "../lib/format";
 import { toast } from "../components/Toast";
-import type { AtGroup, AtParams, AtStats, AutotradeReply } from "../lib/types";
+import type { AtGroup, AtParams, AtStats, AtSummary, AutotradeReply } from "../lib/types";
 
 const when = (ms: number) =>
   ms > 0 ? new Date(ms).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
@@ -68,6 +68,33 @@ function Groups({ title, rows, label }: { title: string; rows: AtGroup[]; label?
           <Row key={g.key} title={label ? label(g.key) : g.key} sub={`${g.trades} сделок · ${pct(g.win_pct, 0, false)} в плюс`}
                value={usd(g.net, true)} tone={g.net >= 0 ? "up" : "dn"} valueSub={`PF ${pf(g.pf)}`} />
         ))}
+      </Card>
+    </>
+  );
+}
+
+/** Какие бумаги китов можно торговать на OKX: имя на Hyperliquid и на OKX
+ *  может не совпадать, а одно имя — означать разные активы. */
+function OkxCard({ s }: { s: AtSummary }) {
+  const map = s.okx?.map;
+  if (!map) return null;
+  const all = Object.entries(map);
+  const short = (inst = "") => inst.replace(/-USDT-SWAP$/, "");
+  const ok = all.filter(([, m]) => m.status === "ok");
+  const renamed = ok.filter(([c, m]) => short(m.inst) !== c.split(":").pop())
+    .map(([c, m]) => `${c} → ${short(m.inst)}${m.scale && m.scale !== 1 ? ` (×${m.scale})` : ""}`);
+  const other = all.filter(([, m]) => m.status === "mismatch").map(([c, m]) => `${c} ≠ ${short(m.inst)}`);
+  const none = all.filter(([, m]) => m.status === "missing" || m.status === "unverified").map(([c]) => c);
+  const list = (xs: string[], n = 40) => xs.slice(0, n).join(", ") + (xs.length > n ? ` … ещё ${xs.length - n}` : "");
+  return (
+    <>
+      <SectionTitle>OKX</SectionTitle>
+      <Card>
+        <Row title={s.okx?.venue === "okx" ? "Торгуем на OKX" : "Торгуем на Hyperliquid"}
+             sub={`На OKX есть ${ok.length} из ${all.length} бумаг китов (сверено по цене, ±2 %)`} wrap />
+        {renamed.length ? <Row title="На OKX под другим именем" sub={list(renamed)} wrap /> : null}
+        {other.length ? <Row title="То же имя — другой актив" sub={list(other)} tone="dn" wrap /> : null}
+        {none.length ? <Row title="Нет на OKX" sub={list(none)} wrap /> : null}
       </Card>
     </>
   );
@@ -144,6 +171,8 @@ export function AutotradeScreen() {
             <Row title="Данные" wrap
                  sub={`${b.data.signals} сигналов, ${when(b.period.from)} — ${when(b.period.to)}; отложенные — после ${when(b.period.cut)}; свечи: ${Object.entries(b.data.candles).map(([k, v]) => `${k} ${v}`).join(", ")}`} />
           </Card>
+
+          <OkxCard s={b} />
 
           {best ? (
             <>
