@@ -175,6 +175,37 @@ class NightlyRunTest(unittest.TestCase):
                 f.write(raw)
             self.assertIsNone(at.latest(self.data))
 
+    def test_live_trading_state_and_stats(self):
+        # Службы реальной торговли нет — live нет, этап — бэктест.
+        self.assertIsNone(at.live(self.data))
+        self.assertEqual(at.status(self.data)["stage"], "backtest")
+        d = os.path.join(self.data, "live")
+        os.makedirs(d, exist_ok=True)
+        now = 1_800_000_000
+        st = {"heartbeat": now * 1000 - 30_000, "simulated": False, "equity": 10_088.5, "error": "",
+              "open": {"inst": "ETH-USDT-SWAP", "side": -1, "px": 3000, "tp": 2970, "upl": -12.0},
+              "positions": [{"instId": "ETH-USDT-SWAP", "pos": "-3"}], "events": [f"e{i}" for i in range(30)]}
+        with open(os.path.join(d, "state.json"), "w") as f:
+            json.dump(st, f)
+        with open(os.path.join(d, "trades.jsonl"), "w") as f:
+            f.writelines(json.dumps({"coin": "BTC", "pnl": p, "opened": (now - 86_400 * 2) * 1000 + i,
+                                     "closed": (now - 86_400) * 1000 + i, "fee": -9, "funding": -1}) + "\n"
+                         for i, p in enumerate([77.0, 77.0, -270.0, 77.0]))
+            f.write("испорчено\n")
+        lv = at.live(self.data, now=now)
+        self.assertTrue(lv["alive"])
+        self.assertFalse(lv["simulated"])
+        s = lv["stats"]
+        self.assertEqual((s["trades"], s["wins"], s["win_pct"], s["net"], s["max_dd"]), (4, 3, 75.0, -39.0, 270.0))
+        self.assertAlmostEqual(s["pf"], 231 / 270, places=3)
+        self.assertEqual((s["per_day"], s["fees"], s["funding"]), (2.0, -36.0, -4.0))
+        self.assertEqual(len(lv["events"]), 20)
+        self.assertEqual(lv["open"]["inst"], "ETH-USDT-SWAP")
+        self.assertEqual(at.status(self.data)["stage"], "live")
+        self.assertFalse(at.live(self.data, now=now + 600)["alive"])  # служба молчит 10 минут — не жива
+        # В ответе — ни одного ключа: их в каталоге модуля нет по устройству.
+        self.assertNotIn("OKX_API", json.dumps(at.status(self.data)))
+
     def test_switch_is_off_by_default_and_persists(self):
         other = os.path.join(self.tmp.name, "fresh")
         self.assertFalse(at.is_on(other))

@@ -49,7 +49,22 @@ after(async () => {
   await new Promise((ok) => server?.close(ok));
 });
 
-interface Opts { owner: boolean; reply?: "ok" | "404"; width?: number; on?: boolean }
+interface Opts { owner: boolean; reply?: "ok" | "404"; width?: number; on?: boolean; live?: Record<string, unknown> }
+
+/** Реальная торговля — выдуманное состояние службы (ключей в нём нет по устройству). */
+const LIVE = {
+  alive: true, heartbeat: (T - 20) * 1000, simulated: false, error: "", equity: 10_154.5,
+  open: { coin: "ETH", inst: "ETH-USDT-SWAP", side: -1, opened: (T - 7200) * 1000, px: 3000, size: 33.3,
+    notional: 9990, tp: 2970, whales: 3, mark: 3012, upl: -39.96 },
+  positions: [{ instId: "ETH-USDT-SWAP", pos: "-33.3", upl: "-39.96" }, { instId: "SOL-USDT-SWAP", pos: "5", upl: "12.5" }],
+  last_skip: { coin: "BTC", side: 1, why: "на счёте уже есть позиция", at: (T - 600) * 1000 },
+  events: ["2026-11-20 20:00:00 вход ETH-USDT-SWAP шорт"],
+  stats: { trades: 4, wins: 3, win_pct: 75, net: -39, avg_win: 77, avg_loss: -270, pf: 0.856, max_dd: 270, per_day: 2,
+    fees: -36, funding: -4 },
+  equity_curve: [[(T - 90_000) * 1000, 77], [(T - 80_000) * 1000, 154], [(T - 70_000) * 1000, -116], [(T - 60_000) * 1000, -39]],
+  trades: [{ coin: "BTC", inst: "BTC-USDT-SWAP", side: 1, opened: (T - 95_000) * 1000, closed: (T - 90_000) * 1000,
+    px_in: 100000, px_out: 101000, pnl: 77, why: "тейк" }],
+};
 
 async function open(o: Opts): Promise<{ ctx: BrowserContext; page: Page; errors: string[]; asked: string[] }> {
   const ctx = await browser.newContext({ viewport: { width: o.width ?? 360, height: 1400 }, timezoneId: "UTC" });
@@ -66,7 +81,7 @@ async function open(o: Opts): Promise<{ ctx: BrowserContext; page: Page; errors:
   let on = o.on ?? true;
   const reply = () => JSON.stringify({
     ok: true, stage: "backtest", on, backtest: SUMMARY, running: false, started: T - 7200, finished: T - 3600,
-    error: "", next: T + 40_000, paper: null, live: null });
+    error: "", next: T + 40_000, paper: null, live: o.live ?? null });
   await ctx.route(`${base}/api/owner/autotrade`, (r) => o.reply === "404"
     ? r.fulfill({ status: 404, contentType: "application/json", body: '{"ok":false,"error":"not_found"}' })
     : r.fulfill({ contentType: "application/json", body: reply() }));
@@ -141,6 +156,24 @@ describe("закрытая вкладка «Автоторговля»", () => {
     // Кнопки рядом и целиком на узком экране.
     const [a, b] = [await start.boundingBox(), await stop.boundingBox()];
     assert.ok(a && b && Math.abs(a.y - b.y) < 1 && a.x + a.width <= b.x && b.x + b.width <= 360, JSON.stringify([a, b]));
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("реальная торговля: бот, позиция, чужая позиция, статистика, сделки", async () => {
+    const { ctx, page, errors } = await open({ owner: true, live: LIVE });
+    await page.locator(".drawer-row", { hasText: "Автоторговля" }).click();
+    const screen = page.locator(".sheet .screen");
+    await screen.getByRole("heading", { name: "Реальная торговля на OKX" }).waitFor();
+    for (const s of ["торгует", "Капитал счёта", "Открытая позиция", "ETH · шорт", "SOL · не бота",
+      "Последний пропуск", "на счёте уже есть позиция", "Статистика реальной торговли", "Винрейт", "Макс. просадка",
+      "Сделки бота", "BTC · лонг", "Журнал бота"]) {
+      assert.ok(await screen.getByText(s).first().isVisible(), s);
+    }
+    assert.ok(await screen.getByText(/тейк 2\s?970/).first().isVisible(), "тейк 2 970");
+    assert.equal(await screen.getByText("Реальная торговля не установлена").count(), 0);
+    const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    assert.ok(wide <= 0, `шире экрана на ${wide}px`);
     assert.deepEqual(errors, []);
     await ctx.close();
   });

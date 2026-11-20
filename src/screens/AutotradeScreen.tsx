@@ -20,7 +20,7 @@ import { TrendChart } from "../components/Chart";
 import { autotradeRun, autotradeStart, autotradeStop, fetchAutotrade } from "../lib/api";
 import { pct, usd } from "../lib/format";
 import { toast } from "../components/Toast";
-import type { AtActive, AtGroup, AtParams, AtStats, AtSummary, AutotradeReply } from "../lib/types";
+import type { AtActive, AtGroup, AtLive, AtParams, AtStats, AtSummary, AutotradeReply } from "../lib/types";
 
 const when = (ms: number) =>
   ms > 0 ? new Date(ms).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
@@ -139,8 +139,85 @@ function Active({ s }: { s: AtSummary }) {
                  + ` · провал до ${usd(-a.mae)} · цена на ${when(a.at)}`}
                value={usd(a.usd, true)} tone={a.usd >= 0 ? "up" : "dn"} valueSub={pct(a.pct, 2)} />
         )) : <Row title="Открытых позиций нет" sub="Ждём сигнала: от 2 китов в одну сторону за 2 часа" wrap />}
-        <Row title="Это модель (бэктест)" sub="Реальных денег нет. Настоящие позиции — на этапах 2–3, после вашего «да»." wrap />
+        <Row title="Это модель (бэктест)" sub="Реальных денег нет. Настоящие позиции бота — в блоке «Реальная торговля на OKX»." wrap />
       </Card>
+    </>
+  );
+}
+
+/** Реальная торговля на OKX: счёт, открытая позиция, статистика, сделки. */
+function Live({ l, on }: { l: AtLive; on: boolean }) {
+  const s = l.stats;
+  const op = l.open;
+  const manual = l.positions.filter((p) => !op || p.instId !== op.inst);
+  return (
+    <>
+      <SectionTitle>{l.simulated ? "Торговля на OKX — демо-счёт" : "Реальная торговля на OKX"}</SectionTitle>
+      <Card pad={false}>
+        <Row title="Бот" wrap
+             value={!l.alive ? "не отвечает" : on ? "торгует" : "остановлен"}
+             tone={l.alive && on ? "up" : "dn"}
+             sub={l.alive ? `на связи ${when(l.heartbeat)}${on ? "" : " · «Старт» — чтобы входил в сделки"}`
+               : `последний сигнал жизни ${when(l.heartbeat)} — служба whale-autotrade не работает`} />
+        {l.error ? <Row title="Ошибка" sub={l.error} tone="dn" wrap /> : null}
+        <Row title="Капитал счёта" value={l.equity != null ? usd(l.equity) : "—"}
+             sub={`маржа на сделку 10% × 10× = ${l.equity != null ? usd(l.equity) : "—"}`} />
+      </Card>
+
+      <SectionTitle>Открытая позиция</SectionTitle>
+      <Card pad={false}>
+        {op ? (
+          <Row wrap title={`${op.inst.replace(/-USDT-SWAP$/, "")} · ${op.side > 0 ? "лонг" : "шорт"}`}
+               sub={`вход ${when(op.opened)} по ${price(op.px)} · сейчас ${op.mark ? price(op.mark) : "—"} · тейк ${price(op.tp)}`
+                 + `${op.mark ? ` (ещё ${(op.side * (op.tp / op.mark - 1) * 100).toFixed(2)}%)` : ""} · ${usd(op.notional)}`
+                 + `${op.whales ? ` · китов ${op.whales}` : ""}`}
+               value={op.upl !== undefined ? usd(op.upl, true) : "—"} tone={(op.upl ?? 0) >= 0 ? "up" : "dn"} />
+        ) : <Row title="Позиции бота нет" sub="Ждём: от 2 китов в одну сторону за 2 часа" wrap />}
+        {manual.map((p) => (
+          <Row key={p.instId} wrap title={`${p.instId.replace(/-USDT-SWAP$/, "")} · не бота`}
+               sub="Позиция на счёте открыта не ботом — пока она есть, бот не входит (одна позиция за раз)"
+               value={p.upl ? usd(Number(p.upl), true) : ""} />
+        ))}
+        {l.last_skip ? (
+          <Row title="Последний пропуск" wrap
+               sub={`${l.last_skip.coin} ${l.last_skip.side > 0 ? "лонг" : "шорт"} · ${when(l.last_skip.at)} — ${l.last_skip.why}`} />
+        ) : null}
+      </Card>
+
+      <SectionTitle>Статистика реальной торговли</SectionTitle>
+      <Card pad={false}>
+        <Row title="Итог" value={usd(s.net, true)} tone={s.net >= 0 ? "up" : "dn"}
+             sub={`${s.trades} сделок · ${s.per_day} в день`} valueSub={`комиссии ${usd(s.fees, true)} · фандинг ${usd(s.funding, true)}`} />
+        <Row title="Винрейт" value={pct(s.win_pct, 1, false)} tone={s.win_pct >= 50 ? "up" : "dn"}
+             sub={`прибыль ${usd(s.avg_win, true)} · убыток ${usd(s.avg_loss, true)}`} />
+        <Row title="Profit factor" value={pf(s.pf)} />
+        <Row title="Макс. просадка" value={usd(-s.max_dd)} tone="dn" sub="по закрытым сделкам" />
+      </Card>
+      {l.equity_curve.length > 1 ? (
+        <Card><TrendChart values={l.equity_curve.map((p) => p[1])} /></Card>
+      ) : null}
+
+      {l.trades.length ? (
+        <>
+          <SectionTitle>Сделки бота</SectionTitle>
+          <Card pad={false}>
+            {[...l.trades].reverse().slice(0, 30).map((t, i) => (
+              <Row key={i} wrap title={`${t.inst.replace(/-USDT-SWAP$/, "")} · ${t.side > 0 ? "лонг" : "шорт"}`}
+                   sub={`${when(t.opened)} по ${price(t.px_in)} → ${when(t.closed)}${t.px_out ? ` по ${price(t.px_out)}` : ""} · ${t.why}`}
+                   value={usd(t.pnl, true)} tone={t.pnl >= 0 ? "up" : "dn"} />
+            ))}
+          </Card>
+        </>
+      ) : null}
+
+      {l.events.length ? (
+        <>
+          <SectionTitle>Журнал бота</SectionTitle>
+          <Card pad={false}>
+            {[...l.events].reverse().slice(0, 10).map((e, i) => <Row key={i} title={e} wrap />)}
+          </Card>
+        </>
+      ) : null}
     </>
   );
 }
@@ -231,12 +308,16 @@ export function AutotradeScreen() {
     <Frame title="Автоторговля" sub="Копирование китов · фьючерсы Hyperliquid">
       <Card>
         <Row title="Модуль" value={st.on ? "Включён" : "Остановлен"} tone={st.on ? "up" : "dn"}
-             sub={st.on ? "Ночной пересчёт идёт" : "Ничего не считается и не торгуется"} wrap />
+             sub={st.on ? (st.live ? "Бот входит в сделки; ночью — пересчёт бэктеста" : "Ночной пересчёт идёт")
+               : "Новых сделок нет; открытая позиция остаётся с тейком"} wrap />
         <div className="at-switch">
           <Action kind="primary" disabled={busy || st.on} onClick={() => flip(true)}>Старт</Action>
           <Action kind="danger" disabled={busy || !st.on} onClick={() => flip(false)}>Стоп</Action>
         </div>
-        <Row title="Этап 1 — бэктест" sub="Бумажная и реальная торговля — только после вашего «да»" wrap />
+        {st.live ? null : (
+          <Row title="Реальная торговля не установлена" wrap
+               sub="На сервере: sudo bash ~/WhaleScanner/tools/autotrade-install.sh, затем ключ OKX в /etc/whale-autotrade.env" />
+        )}
         <Row title="Пересчёт" sub={st.running ? `идёт с ${when(st.started * 1000)}` : `следующий ${when(st.next * 1000)}`}
              value={b ? when(b.generated_at * 1000) : "ещё не было"} valueSub="последний" wrap />
         {st.error ? <Row title="Сбой прошлого пересчёта" sub={st.error} tone="dn" wrap /> : null}
@@ -244,6 +325,8 @@ export function AutotradeScreen() {
           {st.running ? "Считается…" : "Пересчитать сейчас"}
         </Action>
       </Card>
+
+      {st.live ? <Live l={st.live} on={st.on} /> : null}
 
       {!b ? (
         <Empty text="Итога бэктеста ещё нет"

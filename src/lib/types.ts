@@ -1326,5 +1326,52 @@ export interface AutotradeReply {
   error: string;
   next: number;
   paper: null;
-  live: null;
+  live: AtLive | null;
+}
+
+/** Открытая позиция бота на OKX. */
+export interface AtLiveOpen {
+  coin: string;
+  inst: string;
+  side: number;
+  opened: number;
+  px: number;
+  size: number;
+  notional: number;
+  tp: number;
+  whales?: number;
+  mark?: number;
+  upl?: number;
+}
+
+/** Закрытая сделка бота на OKX. */
+export interface AtLiveTrade {
+  coin: string;
+  inst: string;
+  side: number;
+  opened: number;
+  closed: number;
+  px_in: number;
+  px_out: number;
+  pnl: number;
+  fee?: number;
+  funding?: number;
+  why: string;
+}
+
+/** Реальная торговля (служба whale-autotrade). */
+export interface AtLive {
+  alive: boolean;
+  heartbeat: number;
+  simulated: boolean;
+  error: string;
+  equity: number | null;
+  open: AtLiveOpen | null;
+  positions: { instId: string; pos: string; avgPx?: string; upl?: string }[];
+  last_skip?: { coin: string; side: number; why: string; at: number } | null;
+  events: string[];
+  stats: { trades: number; wins: number; win_pct: number; net: number; avg_win: number; avg_loss: number;
+    pf: number | null; max_dd: number; per_day: number; fees: number; funding: number };
+  equity_curve: [number, number][];
+  trades: AtLiveTrade[];
 }

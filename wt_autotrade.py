@@ -190,14 +190,69 @@ def start(ws_dir: str, hl_db: str) -> None:
     threading.Thread(target=refresher, args=(ws_dir, hl_db), daemon=True, name="autotrade").start()
 
 
+def live(data_dir: str = DATA_DIR, now: float | None = None) -> dict[str, Any] | None:
+    """Реальная торговля (служба whale-autotrade, WhaleScanner/tools/autotrade_live.py):
+    её состояние и закрытые сделки — из каталога модуля. Ключей там нет.
+    Службы нет (не ставили) — None."""
+    d = os.path.join(data_dir, "live")
+    try:
+        with open(os.path.join(d, "state.json"), encoding="utf-8") as f:
+            st = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(st, dict):
+        return None
+    trades: list[dict[str, Any]] = []
+    try:
+        with open(os.path.join(d, "trades.jsonl"), encoding="utf-8") as f:
+            for line in f:
+                try:
+                    t = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(t, dict) and isinstance(t.get("pnl"), (int, float)):
+                    trades.append(t)
+    except OSError:
+        pass
+    pnl = [float(t["pnl"]) for t in trades]
+    wins, losses = [x for x in pnl if x > 0], [x for x in pnl if x <= 0]
+    eq = peak = dd = 0.0
+    curve = []
+    for t in sorted(trades, key=lambda x: x.get("closed", 0)):
+        eq += float(t["pnl"])
+        peak = max(peak, eq)
+        dd = max(dd, peak - eq)
+        curve.append([int(t.get("closed", 0)), round(eq, 2)])
+    first = min((int(t.get("opened", 0)) for t in trades), default=0)
+    now_ms = int((now if now is not None else time.time()) * 1000)
+    days = max(1.0, (now_ms - first) / 86_400_000) if first else 1.0
+    beat = int(st.get("heartbeat") or 0)
+    return {
+        "alive": bool(beat) and now_ms - beat < 120_000, "heartbeat": beat, "simulated": bool(st.get("simulated")),
+        "error": str(st.get("error") or ""), "equity": st.get("equity"), "open": st.get("open"),
+        "positions": st.get("positions") or [], "last_skip": st.get("last_skip"), "rules": st.get("rules"),
+        "events": (st.get("events") or [])[-20:],
+        "stats": {"trades": len(pnl), "wins": len(wins), "win_pct": round(100 * len(wins) / len(pnl), 1) if pnl else 0.0,
+                  "net": round(sum(pnl), 2), "avg_win": round(sum(wins) / len(wins), 2) if wins else 0.0,
+                  "avg_loss": round(sum(losses) / len(losses), 2) if losses else 0.0,
+                  "pf": round(sum(wins) / -sum(losses), 3) if losses and sum(losses) < 0 else None,
+                  "max_dd": round(dd, 2), "per_day": round(len(pnl) / days, 2) if pnl else 0.0,
+                  "fees": round(sum(float(t.get("fee") or 0) for t in trades), 2),
+                  "funding": round(sum(float(t.get("funding") or 0) for t in trades), 2)},
+        "equity_curve": curve[-500:],
+        "trades": sorted(trades, key=lambda x: x.get("closed", 0))[-50:],
+    }
+
+
 def status(data_dir: str = DATA_DIR) -> dict[str, Any]:
-    """Ответ вкладке владельца: итог бэктеста и состояние прогона."""
+    """Ответ вкладке владельца: реальная торговля, итог бэктеста и состояние прогона."""
     with _lock:
         st = dict(_state)
-    return {"ok": True, "stage": "backtest", "on": is_on(data_dir), "backtest": latest(data_dir),
-            "running": st["running"],
+    lv = live(data_dir)
+    return {"ok": True, "stage": "live" if lv is not None else "backtest", "on": is_on(data_dir),
+            "backtest": latest(data_dir), "running": st["running"],
             "started": st["started"], "finished": st["finished"], "error": st["error"], "next": st["next"],
-            "paper": None, "live": None}
+            "paper": None, "live": lv}
 
 
 def trigger(ws_dir: str, hl_db: str, data_dir: str = DATA_DIR) -> dict[str, Any]:
