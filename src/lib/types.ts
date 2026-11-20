@@ -1214,6 +1214,8 @@ export interface AtParams {
   min_whale?: number;
   /** Пропуск, если за окно по бумаге есть встречный сигнал по тому же правилу. */
   no_conflict?: boolean;
+  /** После выхода из бумаги — столько минут в неё снова не входим. */
+  rest?: number;
   /** Проценты; 0 — выключено. */
   tp: number;
   sl: number;

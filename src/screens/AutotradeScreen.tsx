@@ -37,6 +37,7 @@ function paramsLine(p: AtParams): string {
   return [
     p.wallets > 1 ? `китов в одну сторону от ${p.wallets}${p.min_whale ? `, каждый от ${usd(p.min_whale)}` : ""}` : "",
     p.no_conflict ? "киты не спорят" : "",
+    p.rest ? `после выхода ${p.rest / 60} ч в бумагу не входим` : "",
     `вход через ${p.delay} с`,
     `объём от ${usd(p.min_notional)}`,
     p.chase ? `не дороже китов больше чем на ${p.chase}%` : "",
