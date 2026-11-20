@@ -1,6 +1,6 @@
 /**
  * «Автоторговля» — закрытая вкладка владельца: автокопирование китов
- * Hyperliquid по акциям (xyz:, io:, para:).
+ * Hyperliquid на фьючерсах (крипта, акции, металлы).
  *
  * Видит её только владелец: пункт меню показывается по `me.owner`, а данные
  * сервер отдаёт лишь по подписи Telegram владельца — остальным 404, как у
@@ -42,7 +42,7 @@ function paramsLine(p: AtParams): string {
     `объём от ${usd(p.min_notional)}`,
     p.chase ? `не дороже китов больше чем на ${p.chase}%` : "",
     p.pnl30 ? "кит в плюсе за 30 дн." : "",
-    exits.length ? exits.join(", ") : "без выхода — до предела удержания",
+    exits.length ? exits.join(", ") : "без выхода — пересиживаем",
   ].filter(Boolean).join(" · ");
 }
 
@@ -182,7 +182,8 @@ export function AutotradeScreen() {
       </Card>
 
       {!b ? (
-        <Empty text="Итога бэктеста ещё нет" hint="Первый пересчёт идёт после запуска сервера; до часа." />
+        <Empty text="Итога бэктеста ещё нет"
+               hint={st.on ? "Первый пересчёт идёт после «Старт»; до часа." : "Нажмите «Старт» — сразу начнётся первый пересчёт (до часа)."} />
       ) : (
         <>
           <Card>
@@ -287,7 +288,7 @@ export function AutotradeScreen() {
               <Card pad={false}>
                 {[...b.trades].reverse().slice(0, 30).map((t, i) => (
                   <Row key={i} title={`${t.coin} · ${t.side > 0 ? "лонг" : "шорт"}`}
-                       sub={`${when(t.entry)} → ${when(t.exit)} · ${t.why}${t.holdout ? " · отложенные" : ""}`}
+                       sub={`${when(t.entry)} → ${t.why === "открыта" ? "ещё открыта" : `${when(t.exit)} · ${t.why}`}${t.holdout ? " · отложенные" : ""}`}
                        value={usd(t.usd, true)} tone={t.usd >= 0 ? "up" : "dn"} valueSub={pct(t.pct, 2)} />
                 ))}
               </Card>
