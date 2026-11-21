@@ -192,6 +192,20 @@ class ModuleFilesTest(unittest.TestCase):
         self.assertEqual(list(lv["blocked"]), ["STX-USDT-SWAP"])  # 15-минутная пауза — не «исключена»
         self.assertEqual(at.live(self.data, now=now + 8 * 86_400)["blocked"], {}, "неделя прошла — не исключена")
 
+    def test_open_position_shows_whale_exit(self):
+        """Кит сигнала закрыл в убыток — у открытой позиции причина выхода."""
+        d = os.path.join(self.data, "live")
+        os.makedirs(d, exist_ok=True)
+        op = {"coin": "BTC", "inst": "BTC-USDT-SWAP", "side": 1, "opened": 1, "px": 100.0, "size": 1.0, "notional": 100.0,
+              "tp": 101.0, "tp_s": "101", "wallets": {"0xa": 1}}
+        for ex, want in (({"at": 1, "why": "кит 0xa… закрыл в убыток -120 $"}, "кит 0xa… закрыл в убыток -120 $"),
+                         ("мусор", None), ({"why": 5}, None), (None, None)):
+            with open(os.path.join(d, "state.json"), "w") as f:
+                json.dump({"heartbeat": 1, "open": {**op, **({"exit": ex} if ex is not None else {})}}, f)
+            got = at.live(self.data, now=1)["open"]
+            self.assertEqual(got.get("exit_why"), want, ex)
+            self.assertNotIn("wallets", got, "кошельки китов во вкладку не уходят")
+
     def test_key_problem_and_skips_of_the_day(self):
         """Запрет ключу (50124) — строкой во вкладку; пропуски по причинам —
         сумма часов за последние сутки, мусор и старше суток — не считаются."""

@@ -180,6 +180,11 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
                  + `${op.whales ? ` · китов ${op.whales}` : ""}${op.margin_pct ? ` · маржа ${op.margin_pct}%` : ""}`}
                value={op.upl !== undefined ? usd(op.upl, true) : "—"} tone={(op.upl ?? 0) >= 0 ? "up" : "dn"} />
         ) : <Row title="Позиции бота нет" sub="Ждём: от 2 китов в одну сторону за 2 часа" wrap />}
+        {op ? (
+          <Row title={op.exit_why ? "Закрываем вслед за китом" : "Выход"} wrap {...(op.exit_why ? { tone: "dn" as const } : {})}
+               sub={op.exit_why ? `${op.exit_why} — бот снял тейк и закрывает позицию рыночным ордером`
+                 : "тейк +1 % — или по рынку, если кто-то из китов сигнала закроет свою сделку в убытке"} />
+        ) : null}
         {manual.map((p) => (
           <Row key={p.instId} wrap title={`${shortInst(p.instId)} · не бота`}
                sub="Открыта вами — бот входит маржой 5 % вместо 10 %, на эту бумагу — не входит"

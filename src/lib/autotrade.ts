@@ -74,7 +74,8 @@ function summary(v: unknown): boolean {
 
 const liveOpen = (v: unknown): boolean =>
   isObj(v) && str(v["coin"]) && str(v["inst"]) && side(v["side"])
-  && nums(v, ["opened", "px", "size", "notional", "tp"]) && opt(v["whales"], num) && opt(v["mark"], num) && opt(v["upl"], num) && opt(v["margin_pct"], num);
+  && nums(v, ["opened", "px", "size", "notional", "tp"]) && opt(v["whales"], num) && opt(v["mark"], num) && opt(v["upl"], num) && opt(v["margin_pct"], num)
+  && opt(v["exit_why"], str);
 
 const liveTrade = (v: unknown): boolean =>
   isObj(v) && str(v["coin"]) && str(v["inst"]) && side(v["side"])
@@ -144,6 +145,7 @@ export const SKIP_LABELS: Record<string, string> = {
   rejected: "ордер отклонён",
   unconfirmed: "исполнение не подтверждено",
   canceled: "ордер отменён биржей",
+  whale_exit: "кит уже вышел в убыток",
 };
 
 /** Пропуски за сутки строкой: «ключу OKX закрыт рынок — 7 · цена ушла от китов — 2». */

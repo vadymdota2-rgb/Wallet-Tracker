@@ -29,6 +29,7 @@ TS = [
     ("    && opt(v[\"key_problem\"], str) && opt(v[\"skips_24h\"], (k) => isObj(k) && Object.values(k).every(num))", "",
      "запрет ключу и пропуски — по договору"),
     ("Object.entries(k).sort((a, b) => b[1] - a[1])", "Object.entries(k)", "пропуски — по убыванию"),
+    ("\n  && opt(v[\"exit_why\"], str);", ";", "причина выхода вслед за китом — строка"),
 ]
 PY = [
     ("    return x if math.isfinite(x) else None\n", "    return x\n", "сервер: NaN и бесконечность — не числа"),
@@ -43,6 +44,7 @@ PY = [
      "сервер: пропуски — только числа"),
     ("key_problem = kp[\"why\"] if isinstance(kp, dict) and isinstance(kp.get(\"why\"), str) else \"\"",
      "key_problem = \"\"", "сервер: запрет ключу — во вкладку"),
+    ("    if isinstance(ex, dict) and isinstance(ex.get(\"why\"), str):", "    if isinstance(ex, dict):", "сервер: причина выхода — только строка"),
     ("and v.get(\"permanent\") is True", "", "сервер: исключённые — только на неделю (не 15-минутные паузы)"),
     ("               and now_ms - (_f(v.get(\"at\")) or 0) < BLOCK_MS}", "               }", "сервер: неделя прошла — бумага не исключена"),
     ("    return int(x) if x is not None and abs(x) < 1e15 else 0\n", "    return int(x) if x is not None else 0\n", "сервер: время — разумное число"),

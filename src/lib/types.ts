@@ -1331,6 +1331,8 @@ export interface AutotradeReply {
 
 /** Открытая позиция бота на OKX. */
 export interface AtLiveOpen {
+  /** Кит сигнала закрыл в убыток — бот закрывает позицию по рынку (причина). */
+  exit_why?: string;
   coin: string;
   inst: string;
   side: number;

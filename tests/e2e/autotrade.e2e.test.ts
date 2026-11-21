@@ -164,6 +164,8 @@ describe("закрытая вкладка «Автоторговля»", () => {
       assert.ok(await screen.getByText(s).first().isVisible(), s);
     }
     assert.equal(await screen.getByText("OKX не принимает ордера бота").count(), 0, "ключ в порядке — плашки нет");
+    assert.ok(await screen.getByText(/по рынку, если кто-то из китов сигнала закроет свою сделку в убытке/).isVisible());
+    assert.equal(await screen.getByText("Закрываем вслед за китом").count(), 0);
     assert.ok(await screen.getByText(/тейк 2\s?970/).first().isVisible(), "тейк 2 970");
     assert.equal(await screen.getByText("Реальная торговля не установлена").count(), 0);
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -183,6 +185,18 @@ describe("закрытая вкладка «Автоторговля»", () => {
     assert.ok(await screen.getByText("ключу OKX закрыт рынок — 7 · цена ушла от китов — 1").isVisible());
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     assert.ok(wide <= 0, `шире экрана на ${wide}px`);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("кит сигнала закрыл в убыток — вкладка говорит, что бот выходит", async () => {
+    const open0 = LIVE["open"] as Record<string, unknown>;
+    const { ctx, page, errors } = await open({ owner: true, live: { ...LIVE,
+      open: { ...open0, exit_why: "кит 0xabcdef12… закрыл в убыток -120 $" } } });
+    await page.locator(".drawer-row", { hasText: "Автоторговля" }).click();
+    const screen = page.locator(".sheet .screen");
+    await screen.getByText("Закрываем вслед за китом").waitFor();
+    assert.ok(await screen.getByText(/закрыл в убыток -120 \$ — бот снял тейк и закрывает позицию рыночным ордером/).isVisible());
     assert.deepEqual(errors, []);
     await ctx.close();
   });
