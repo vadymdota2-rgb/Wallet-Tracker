@@ -159,11 +159,28 @@ describe("закрытая вкладка «Автоторговля»", () => {
       "OKX не даёт торговать", "STX — исключены на 7 дней",
       "Последний пропуск", "у бота уже есть своя позиция", "маржа 5%", "бот входит маржой 5% × 10×",
       "бот входит маржой 5 % вместо 10 %", "Статистика реальной торговли", "Винрейт", "Макс. просадка",
-      "Сделки бота", "BTC · лонг", "Журнал бота"]) {
+      "Сделки бота", "BTC · лонг", "Журнал бота", "Пропуски сигналов за сутки",
+      "у бота уже есть позиция — 4 · цена ушла от китов — 3 · бумаги нет на OKX — 3"]) {
       assert.ok(await screen.getByText(s).first().isVisible(), s);
     }
+    assert.equal(await screen.getByText("OKX не принимает ордера бота").count(), 0, "ключ в порядке — плашки нет");
     assert.ok(await screen.getByText(/тейк 2\s?970/).first().isVisible(), "тейк 2 970");
     assert.equal(await screen.getByText("Реальная торговля не установлена").count(), 0);
+    const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    assert.ok(wide <= 0, `шире экрана на ${wide}px`);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("ключу OKX закрыт рынок — вкладка говорит об этом прямо", async () => {
+    const why = "OKX 50124: This API Key does not have trading permission for the market — ключу API закрыт этот рынок";
+    const { ctx, page, errors } = await open({ owner: true, live: { ...LIVE, open: null, key_problem: why,
+      skips_24h: { market: 7, chase: 1 } } });
+    await page.locator(".drawer-row", { hasText: "Автоторговля" }).click();
+    const screen = page.locator(".sheet .screen");
+    await screen.getByText("OKX не принимает ордера бота").waitFor();
+    assert.ok(await screen.getByText(/ключу API закрыт этот рынок.*бумаги не исключаются/).first().isVisible());
+    assert.ok(await screen.getByText("ключу OKX закрыт рынок — 7 · цена ушла от китов — 1").isVisible());
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     assert.ok(wide <= 0, `шире экрана на ${wide}px`);
     assert.deepEqual(errors, []);

@@ -18,7 +18,7 @@ import { Frame } from "./Screen";
 import { Action, Card, Empty, Row, SectionTitle, Skeleton } from "../components/ui";
 import { TrendChart } from "../components/Chart";
 import { autotradeRun, autotradeStart, autotradeStop, fetchAutotrade } from "../lib/api";
-import { shortInst } from "../lib/autotrade";
+import { shortInst, skipsLine } from "../lib/autotrade";
 import { pct, usd } from "../lib/format";
 import { toast } from "../components/Toast";
 import type { AtActive, AtGroup, AtLive, AtParams, AtStats, AtSummary, AutotradeReply } from "../lib/types";
@@ -161,6 +161,10 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
              sub={l.alive ? `на связи ${when(l.heartbeat)}${on ? "" : " · «Старт» — чтобы входил в сделки"}`
                : `последний сигнал жизни ${when(l.heartbeat)} — служба whale-autotrade не работает`} />
         {l.error ? <Row title="Ошибка" sub={l.error} tone="dn" wrap /> : null}
+        {l.key_problem ? (
+          <Row title="OKX не принимает ордера бота" tone="dn" wrap
+               sub={`${l.key_problem}. Сигналы есть — дело в правах ключа; бумаги не исключаются, бот проверяет снова раз в 30 минут.`} />
+        ) : null}
         <Row title="Капитал счёта" value={l.equity != null ? usd(l.equity) : "—"}
              sub={manual.length
                ? `на счёте ваша сделка — бот входит маржой 5% × 10× = ${l.equity != null ? usd(l.equity / 2) : "—"}`
@@ -184,6 +188,9 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
         {l.blocked && Object.keys(l.blocked).length ? (
           <Row title="OKX не даёт торговать" wrap
                sub={`${Object.keys(l.blocked).map(shortInst).join(", ")} — исключены на 7 дней; бот берёт другие сигналы`} />
+        ) : null}
+        {l.skips_24h && Object.keys(l.skips_24h).length ? (
+          <Row title="Пропуски сигналов за сутки" wrap sub={skipsLine(l.skips_24h)} />
         ) : null}
         {l.last_skip ? (
           <Row title="Последний пропуск" wrap

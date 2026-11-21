@@ -26,6 +26,9 @@ TS = [
     ("&& arr(v[\"events\"], str)", "", "журнал — строки"),
     ("-USDT-SWAP$|", "", "короткое имя — USDT-SWAP"),
     ("|-USD[CT]?_UM_XPERP-\\d+$", "", "короткое имя — европейский бессрочный"),
+    ("    && opt(v[\"key_problem\"], str) && opt(v[\"skips_24h\"], (k) => isObj(k) && Object.values(k).every(num))", "",
+     "запрет ключу и пропуски — по договору"),
+    ("Object.entries(k).sort((a, b) => b[1] - a[1])", "Object.entries(k)", "пропуски — по убыванию"),
 ]
 PY = [
     ("    return x if math.isfinite(x) else None\n", "    return x\n", "сервер: NaN и бесконечность — не числа"),
@@ -35,6 +38,11 @@ PY = [
     ("\"equity\": _f(st.get(\"equity\")),", "\"equity\": st.get(\"equity\"),", "сервер: капитал — число или null"),
     ("if isinstance(e, str)][-20:],", "if isinstance(e, str)],", "сервер: журнал — 20 строк"),
     ("        \"trades\": trades[-50:],", "        \"trades\": trades,", "сервер: сделки — 50 последних"),
+    ("not now_ms - 24 * 3_600_000 < hour + 3_600_000", "False", "сервер: пропуски — только за сутки"),
+    ("            if isinstance(code, str) and x is not None and x > 0:", "            if isinstance(code, str):",
+     "сервер: пропуски — только числа"),
+    ("key_problem = kp[\"why\"] if isinstance(kp, dict) and isinstance(kp.get(\"why\"), str) else \"\"",
+     "key_problem = \"\"", "сервер: запрет ключу — во вкладку"),
     ("and v.get(\"permanent\") is True", "", "сервер: исключённые — только на неделю (не 15-минутные паузы)"),
     ("               and now_ms - (_f(v.get(\"at\")) or 0) < BLOCK_MS}", "               }", "сервер: неделя прошла — бумага не исключена"),
     ("    return int(x) if x is not None and abs(x) < 1e15 else 0\n", "    return int(x) if x is not None else 0\n", "сервер: время — разумное число"),

@@ -1373,6 +1373,10 @@ export interface AtLive {
   last_skip?: { coin: string; side: number; why: string; at: number } | null;
   /** Бумаги, которыми OKX не даёт торговать этому счёту (исключены на неделю). */
   blocked?: Record<string, { at: number; why: string; permanent: boolean }>;
+  /** Запрет ключу OKX (например, 50124 — рынок фьючерсов закрыт ключу): ордера не проходят. */
+  key_problem?: string;
+  /** Пропуски сигналов за сутки по причинам: код → сколько (см. SKIP_LABELS). */
+  skips_24h?: Record<string, number>;
   events: string[];
   stats: { trades: number; wins: number; win_pct: number; net: number; avg_win: number; avg_loss: number;
     pf: number | null; max_dd: number; per_day: number; fees: number; funding: number };

@@ -41,9 +41,15 @@
  "blocked": {
   "STX-USDT-SWAP": {
    "at": 1794982000000.0,
-   "why": "OKX 50124: This API Key does not have trading permission for the market",
+   "why": "OKX 51155: Trading of this instrument is restricted in your region",
    "permanent": true
   }
+ },
+ "key_problem": "",
+ "skips_24h": {
+  "own_open": 4,
+  "chase": 3,
+  "no_inst": 3
  },
  "events": [
   "2026-11-20 20:00:00 вход ETH-USD_UM_XPERP-310404 шорт 4995 по 3000.0 (≈4995 $, маржа 5 % — на счёте ваша позиция, китов 3), тейк 2970",

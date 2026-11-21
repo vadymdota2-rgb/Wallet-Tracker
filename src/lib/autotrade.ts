@@ -89,6 +89,7 @@ function live(v: unknown): boolean {
     && arr(v["positions"], (p) => isObj(p) && str(p["instId"]) && str(p["pos"]) && opt(p["upl"], str) && opt(p["avgPx"], str))
     && opt(skip, (k) => isObj(k) && str(k["coin"]) && side(k["side"]) && str(k["why"]) && num(k["at"]))
     && opt(blocked, (b) => isObj(b) && Object.values(b).every((x) => isObj(x) && num(x["at"]) && str(x["why"])))
+    && opt(v["key_problem"], str) && opt(v["skips_24h"], (k) => isObj(k) && Object.values(k).every(num))
     && arr(v["events"], str)
     && isObj(s) && nums(s, ["trades", "wins", "win_pct", "net", "avg_win", "avg_loss", "max_dd", "per_day", "fees", "funding"])
     && (s["pf"] === null || num(s["pf"]))
@@ -121,3 +122,30 @@ export function checkAutotrade<T extends { ok?: unknown }>(r: T | null): T | nul
 
 /** Короткое имя контракта: «BTC-USDT-SWAP», «BTC-USD_UM_XPERP-310404» → «BTC». */
 export const shortInst = (inst: string): string => inst.replace(/-USDT-SWAP$|-USD[CT]?_UM_XPERP-\d+$/, "");
+
+/** Причины пропуска сигналов (коды службы whale-autotrade) — по-русски. */
+export const SKIP_LABELS: Record<string, string> = {
+  own_open: "у бота уже есть позиция",
+  entering: "прошлый вход ждёт подтверждения",
+  unverified: "позиции на счёте не проверены",
+  own_unknown: "своя позиция без записи",
+  coin_pause: "в бумагу входили < 3 ч назад",
+  blocked: "OKX не даёт торговать бумагой",
+  market: "ключу OKX закрыт рынок",
+  manual_same: "на бумаге ваша позиция",
+  no_inst: "бумаги нет на OKX",
+  no_price: "нет цены OKX",
+  other_asset: "другой актив на OKX",
+  chase: "цена ушла от китов",
+  no_equity: "капитал 0",
+  bad_params: "неверные параметры бумаги",
+  tick: "шаг цены слишком крупный",
+  min_size: "меньше минимального ордера",
+  rejected: "ордер отклонён",
+  unconfirmed: "исполнение не подтверждено",
+  canceled: "ордер отменён биржей",
+};
+
+/** Пропуски за сутки строкой: «ключу OKX закрыт рынок — 7 · цена ушла от китов — 2». */
+export const skipsLine = (k: Record<string, number>): string =>
+  Object.entries(k).sort((a, b) => b[1] - a[1]).map(([c, n]) => `${SKIP_LABELS[c] ?? c} — ${n}`).join(" · ");

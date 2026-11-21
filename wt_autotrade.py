@@ -222,12 +222,30 @@ def live(data_dir: str = DATA_DIR, now: float | None = None) -> dict[str, Any] |
                if isinstance(k, str) and isinstance(v, dict) and v.get("permanent") is True
                and isinstance(v.get("why"), str) and _f(v.get("at")) is not None
                and now_ms - (_f(v.get("at")) or 0) < BLOCK_MS} if isinstance(st.get("blocked"), dict) else {}
+    # Запрет ключу (OKX 50124 и т.п.): ордера на рынок не проходят — вкладка
+    # показывает это сразу, а не как «нет сигналов».
+    kp = st.get("key_problem")
+    key_problem = kp["why"] if isinstance(kp, dict) and isinstance(kp.get("why"), str) else ""
+    # Пропуски сигналов по причинам за сутки (служба считает по часам).
+    skips: dict[str, int] = {}
+    for h, bucket in (st.get("skips") or {}).items() if isinstance(st.get("skips"), dict) else ():
+        try:
+            hour = int(h)
+        except ValueError:
+            continue
+        if not isinstance(bucket, dict) or not now_ms - 24 * 3_600_000 < hour + 3_600_000:
+            continue
+        for code, n in bucket.items():
+            x = _f(n)
+            if isinstance(code, str) and x is not None and x > 0:
+                skips[code] = skips.get(code, 0) + int(x)
     fees = sum(t.get("fee", 0.0) for t in trades)
     funding = sum(t.get("funding", 0.0) for t in trades)
     return {
         "alive": bool(beat) and now_ms - beat < 120_000, "heartbeat": beat, "simulated": st.get("simulated") is True,
         "error": str(st.get("error") or ""), "equity": _f(st.get("equity")), "open": _open(st.get("open")),
-        "positions": positions, "last_skip": skip, "blocked": blocked,
+        "positions": positions, "last_skip": skip, "blocked": blocked, "key_problem": key_problem,
+        "skips_24h": dict(sorted(skips.items(), key=lambda kv: -kv[1])),
         "events": [e for e in _list(st.get("events")) if isinstance(e, str)][-20:],
         "stats": {"trades": len(pnl), "wins": len(wins), "win_pct": round(100 * len(wins) / len(pnl), 1) if pnl else 0.0,
                   "net": round(sum(pnl), 2), "avg_win": round(sum(wins) / len(wins), 2) if wins else 0.0,

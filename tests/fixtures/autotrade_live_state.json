@@ -59,7 +59,7 @@
  "blocked": {
   "STX-USDT-SWAP": {
    "at": 1794982000000,
-   "why": "OKX 50124: This API Key does not have trading permission for the market",
+   "why": "OKX 51155: Trading of this instrument is restricted in your region",
    "permanent": true
   }
  },
@@ -77,5 +77,18 @@
   "tp_pct": 1.0,
   "coin_pause_h": 3,
   "margin_shared_pct": 5.0
+ },
+ "skips": {
+  "1794999600000": {
+   "own_open": 4,
+   "chase": 1
+  },
+  "1794996000000": {
+   "no_inst": 3,
+   "chase": 2
+  },
+  "1794891600000": {
+   "no_inst": 99
+  }
  }
 }

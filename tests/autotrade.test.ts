@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { checkAutotrade, shortInst, validAutotrade } from "../src/lib/autotrade.ts";
+import { checkAutotrade, shortInst, skipsLine, validAutotrade } from "../src/lib/autotrade.ts";
 
 const SUMMARY = JSON.parse(readFileSync(new URL("./fixtures/autotrade_summary.json", import.meta.url), "utf8")) as Record<string, unknown>;
 const LIVE = JSON.parse(readFileSync(new URL("./fixtures/autotrade_live.json", import.meta.url), "utf8")) as Record<string, unknown>;
@@ -27,6 +27,8 @@ test("любое рисуемое поле не того типа — отказ
     { ...GOOD, backtest: { ...SUMMARY, equity: [[1, "x"]] } }, { ...GOOD, backtest: { ...SUMMARY, verdict: "no" } },
     { ...GOOD, backtest: { ...SUMMARY, full: { ...(SUMMARY["full"] as Record<string, unknown>), pf: "1" } } },
     { ...GOOD, live: { ...LIVE, stats: { ...stats, pf: "0.8" } } },
+    { ...GOOD, live: { ...LIVE, key_problem: 50124 } }, { ...GOOD, live: { ...LIVE, skips_24h: { market: "7" } } },
+    { ...GOOD, live: { ...LIVE, skips_24h: [7] } },
     null, [], "ok", 1,
   ]) {
     assert.equal(validAutotrade(bad), false, JSON.stringify(bad).slice(0, 120));
@@ -49,4 +51,10 @@ test("короткое имя контракта", () => {
     ["H-USD_UM_XPERP-310815", "H"], ["XAU-USDT-SWAP", "XAU"], ["ETH-USDC-SWAP", "ETH-USDC-SWAP"]] as const) {
     assert.equal(shortInst(inst), want);
   }
+});
+
+test("пропуски за сутки — по убыванию, по-русски; неизвестный код — как есть", () => {
+  assert.equal(skipsLine({ chase: 2, market: 7, new_code: 1 }),
+    "ключу OKX закрыт рынок — 7 · цена ушла от китов — 2 · new_code — 1");
+  assert.equal(skipsLine({}), "");
 });

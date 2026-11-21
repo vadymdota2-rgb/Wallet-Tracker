@@ -192,6 +192,26 @@ class ModuleFilesTest(unittest.TestCase):
         self.assertEqual(list(lv["blocked"]), ["STX-USDT-SWAP"])  # 15-минутная пауза — не «исключена»
         self.assertEqual(at.live(self.data, now=now + 8 * 86_400)["blocked"], {}, "неделя прошла — не исключена")
 
+    def test_key_problem_and_skips_of_the_day(self):
+        """Запрет ключу (50124) — строкой во вкладку; пропуски по причинам —
+        сумма часов за последние сутки, мусор и старше суток — не считаются."""
+        d = os.path.join(self.data, "live")
+        os.makedirs(d, exist_ok=True)
+        now = 1_800_000_000
+        h = now * 1000 // 3_600_000 * 3_600_000
+        with open(os.path.join(d, "state.json"), "w") as f:
+            json.dump({"heartbeat": now * 1000, "key_problem": {"at": now * 1000, "why": "OKX 50124: закрыт рынок"},
+                       "skips": {str(h): {"market": 5, "chase": 1}, str(h - 3_600_000): {"market": 2, "bad": "x"},
+                                 str(h - 30 * 3_600_000): {"market": 50}, "мусор": {"market": 9}, str(h - 1): 5}}, f)
+        lv = at.live(self.data, now=now)
+        self.assertEqual(lv["key_problem"], "OKX 50124: закрыт рынок")
+        self.assertEqual(lv["skips_24h"], {"market": 7, "chase": 1})
+        self.assertEqual(list(lv["skips_24h"]), ["market", "chase"], "по убыванию")
+        with open(os.path.join(d, "state.json"), "w") as f:
+            json.dump({"heartbeat": now * 1000, "key_problem": "строка", "skips": [1]}, f)
+        lv = at.live(self.data, now=now)
+        self.assertEqual((lv["key_problem"], lv["skips_24h"]), ("", {}))
+
     def test_corrupted_service_files_are_not_500(self):
         """Файлы службы испорчены (обрыв записи, правка руками): ответ —
         по договору, без 500 («нет связи» во вкладке)."""
