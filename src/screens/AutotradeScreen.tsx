@@ -316,7 +316,7 @@ export function AutotradeScreen() {
         </div>
         {st.live ? null : (
           <Row title="Реальная торговля не установлена" wrap
-               sub="На сервере: sudo bash ~/WhaleScanner/tools/autotrade-install.sh, затем ключ OKX в /etc/whale-autotrade.env" />
+               sub="На сервере: sudo bash /home/vadymdota2/WhaleScanner/tools/autotrade-install.sh, затем ключ OKX в /etc/whale-autotrade.env" />
         )}
         <Row title="Пересчёт" sub={st.running ? `идёт с ${when(st.started * 1000)}` : `следующий ${when(st.next * 1000)}`}
              value={b ? when(b.generated_at * 1000) : "ещё не было"} valueSub="последний" wrap />
