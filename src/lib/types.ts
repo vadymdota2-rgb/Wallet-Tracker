@@ -1369,6 +1369,8 @@ export interface AtLive {
   open: AtLiveOpen | null;
   positions: { instId: string; pos: string; avgPx?: string; upl?: string }[];
   last_skip?: { coin: string; side: number; why: string; at: number } | null;
+  /** Бумаги, которыми OKX не даёт торговать этому счёту (исключены на неделю). */
+  blocked?: Record<string, { at: number; why: string; permanent: boolean }>;
   events: string[];
   stats: { trades: number; wins: number; win_pct: number; net: number; avg_win: number; avg_loss: number;
     pf: number | null; max_dd: number; per_day: number; fees: number; funding: number };

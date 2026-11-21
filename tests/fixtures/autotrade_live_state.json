@@ -1,0 +1,79 @@
+{
+ "heartbeat": 1794999980000,
+ "simulated": false,
+ "equity": 10154.5,
+ "error": "",
+ "base": "https://eea.okx.com",
+ "open": {
+  "coin": "ETH",
+  "inst": "ETH-USD_UM_XPERP-310404",
+  "side": -1,
+  "opened": 1794992800000,
+  "px": 3000.0,
+  "size": 9990.0,
+  "notional": 9990.0,
+  "tp": 2970.0,
+  "tp_s": "2970",
+  "whales": 3,
+  "ref_px": 3001.5,
+  "signal_ts": 1794992740000,
+  "in_id": "1",
+  "tp_id": "2",
+  "mark": 3012.0,
+  "upl": -39.96
+ },
+ "entered": {
+  "ETH": 1794992800000
+ },
+ "positions": [
+  {
+   "instId": "ETH-USD_UM_XPERP-310404",
+   "pos": "-9990",
+   "posSide": "short",
+   "avgPx": "3000",
+   "markPx": "3012",
+   "upl": "-39.96",
+   "lever": "10",
+   "mgnMode": "cross",
+   "cTime": "1"
+  },
+  {
+   "instId": "H-USD_UM_XPERP-310815",
+   "pos": "5",
+   "posSide": "long",
+   "avgPx": "0.2",
+   "markPx": "0.21",
+   "upl": "12.5",
+   "lever": "5",
+   "mgnMode": "cross",
+   "cTime": "1"
+  }
+ ],
+ "last_skip": {
+  "coin": "BTC",
+  "side": 1,
+  "why": "на счёте уже есть позиция (ETH-USD_UM_XPERP-310404, H-USD_UM_XPERP-310815)",
+  "at": 1794999400000
+ },
+ "blocked": {
+  "STX-USDT-SWAP": {
+   "at": 1794982000000,
+   "why": "OKX 50124: This API Key does not have trading permission for the market",
+   "permanent": true
+  }
+ },
+ "events": [
+  "2026-11-20 20:00:00 вход ETH-USD_UM_XPERP-310404 шорт 9990 по 3000.0 (≈9990 $, китов 3), тейк 2970",
+  "2026-11-20 20:00:01 тейк ETH-USD_UM_XPERP-310404 2970 × 9990"
+ ],
+ "rules": {
+  "whales": 2,
+  "whale_usd": 1000,
+  "window_h": 2,
+  "chase_pct": 0.3,
+  "margin_pct": 10.0,
+  "leverage": 10,
+  "tp_pct": 1.0,
+  "coin_pause_h": 3
+ }
+}

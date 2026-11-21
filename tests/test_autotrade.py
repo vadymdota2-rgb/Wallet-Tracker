@@ -17,8 +17,8 @@ from unittest import mock
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-import whale_api as api
-import wt_autotrade as at
+import whale_api as api  # noqa: E402 — после sys.path
+import wt_autotrade as at  # noqa: E402
 
 OWNER = "546348566"
 SUMMARY = {"verdict": False, "top": [], "full": None, "equity": [], "trades": []}
@@ -147,14 +147,19 @@ class ModuleFilesTest(unittest.TestCase):
         os.makedirs(d, exist_ok=True)
         now = 1_800_000_000
         st = {"heartbeat": now * 1000 - 30_000, "simulated": False, "equity": 10_088.5, "error": "",
-              "open": {"inst": "ETH-USDT-SWAP", "side": -1, "px": 3000, "tp": 2970, "upl": -12.0},
+              "open": {"coin": "ETH", "inst": "ETH-USDT-SWAP", "side": -1, "opened": now * 1000 - 3_600_000, "px": 3000,
+                       "size": 33.3, "notional": 9990, "tp": 2970, "tp_s": "2970", "whales": 2, "upl": -12.0},
               "positions": [{"instId": "ETH-USDT-SWAP", "pos": "-3"}], "events": [f"e{i}" for i in range(30)]}
         with open(os.path.join(d, "state.json"), "w") as f:
             json.dump(st, f)
         with open(os.path.join(d, "trades.jsonl"), "w") as f:
-            f.writelines(json.dumps({"coin": "BTC", "pnl": p, "opened": (now - 86_400 * 2) * 1000 + i,
-                                     "closed": (now - 86_400) * 1000 + i, "fee": -9, "funding": -1}) + "\n"
+            # Как пишет служба (autotrade_live._track_open).
+            f.writelines(json.dumps({"coin": "BTC", "inst": "BTC-USDT-SWAP", "side": 1, "pnl": p,
+                                     "opened": (now - 86_400 * 2) * 1000 + i, "closed": (now - 86_400) * 1000 + i,
+                                     "px_in": 100_000.0, "px_out": 101_000.0, "tp": 101_000.0, "size": 10, "notional": 10_000,
+                                     "fee": -9, "funding": -1, "why": "тейк"}) + "\n"
                          for i, p in enumerate([77.0, 77.0, -270.0, 77.0]))
+            f.write(json.dumps({"coin": "BTC", "pnl": "77"}) + "\n")  # не по договору — пропускается
             f.write("испорчено\n")
         lv = at.live(self.data, now=now)
         self.assertTrue(lv["alive"])
@@ -169,6 +174,22 @@ class ModuleFilesTest(unittest.TestCase):
         self.assertFalse(at.live(self.data, now=now + 600)["alive"])  # служба молчит 10 минут — не жива
         # В ответе — ни одного ключа: их в каталоге модуля нет по устройству.
         self.assertNotIn("OKX_API", json.dumps(at.status(self.data)))
+
+    def test_live_keeps_last_50_trades_and_only_week_long_exclusions(self):
+        d = os.path.join(self.data, "live")
+        os.makedirs(d, exist_ok=True)
+        now = 1_800_000_000
+        st = {"heartbeat": now * 1000, "blocked": {
+            "STX-USDT-SWAP": {"at": now * 1000, "why": "50124", "permanent": True},
+            "BTC-USDT-SWAP": {"at": now * 1000, "why": "51008 мало маржи", "permanent": False}}}
+        with open(os.path.join(d, "state.json"), "w") as f:
+            json.dump(st, f)
+        with open(os.path.join(d, "trades.jsonl"), "w") as f:
+            f.writelines(json.dumps({"coin": "BTC", "inst": "BTC-USDT-SWAP", "side": 1, "pnl": 1.0, "opened": i,
+                                     "closed": i + 1, "px_in": 1.0, "px_out": 1.01, "why": "тейк"}) + "\n" for i in range(60))
+        lv = at.live(self.data, now=now)
+        self.assertEqual((len(lv["trades"]), lv["trades"][-1]["opened"], lv["stats"]["trades"]), (50, 59, 60))
+        self.assertEqual(list(lv["blocked"]), ["STX-USDT-SWAP"])  # 15-минутная пауза — не «исключена»
 
     def test_switch_is_off_by_default_and_persists(self):
         other = os.path.join(self.tmp.name, "fresh")

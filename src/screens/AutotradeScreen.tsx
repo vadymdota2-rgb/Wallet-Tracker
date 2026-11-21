@@ -18,6 +18,7 @@ import { Frame } from "./Screen";
 import { Action, Card, Empty, Row, SectionTitle, Skeleton } from "../components/ui";
 import { TrendChart } from "../components/Chart";
 import { autotradeRun, autotradeStart, autotradeStop, fetchAutotrade } from "../lib/api";
+import { shortInst } from "../lib/autotrade";
 import { pct, usd } from "../lib/format";
 import { toast } from "../components/Toast";
 import type { AtActive, AtGroup, AtLive, AtParams, AtStats, AtSummary, AutotradeReply } from "../lib/types";
@@ -112,7 +113,7 @@ function Overview({ s }: { s: AtSummary }) {
              sub="сумма прибылей / сумма убытков" />
         <Row title="Макс. просадка" value={usd(-f.max_dd)} tone="dn" valueSub={share(-f.max_dd)}
              sub="с провалами внутри сделок" />
-        <Row title="Худшая серия" value={`${f.worst_streak} подряд`} tone={f.worst_streak ? "dn" : undefined}
+        <Row title="Худшая серия" value={`${f.worst_streak} подряд`} {...(f.worst_streak ? { tone: "dn" as const } : {})}
              valueSub={usd(f.worst_streak_usd, true)} />
         {f.longest_h !== undefined ? (
           <Row title="Самая долгая сделка" value={`${Math.round(f.longest_h)} ч`}
@@ -167,17 +168,21 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
       <SectionTitle>Открытая позиция</SectionTitle>
       <Card pad={false}>
         {op ? (
-          <Row wrap title={`${op.inst.replace(/-USDT-SWAP$/, "")} · ${op.side > 0 ? "лонг" : "шорт"}`}
+          <Row wrap title={`${shortInst(op.inst)} · ${op.side > 0 ? "лонг" : "шорт"}`}
                sub={`вход ${when(op.opened)} по ${price(op.px)} · сейчас ${op.mark ? price(op.mark) : "—"} · тейк ${price(op.tp)}`
                  + `${op.mark ? ` (ещё ${(op.side * (op.tp / op.mark - 1) * 100).toFixed(2)}%)` : ""} · ${usd(op.notional)}`
                  + `${op.whales ? ` · китов ${op.whales}` : ""}`}
                value={op.upl !== undefined ? usd(op.upl, true) : "—"} tone={(op.upl ?? 0) >= 0 ? "up" : "dn"} />
         ) : <Row title="Позиции бота нет" sub="Ждём: от 2 китов в одну сторону за 2 часа" wrap />}
         {manual.map((p) => (
-          <Row key={p.instId} wrap title={`${p.instId.replace(/-USDT-SWAP$/, "")} · не бота`}
+          <Row key={p.instId} wrap title={`${shortInst(p.instId)} · не бота`}
                sub="Позиция на счёте открыта не ботом — пока она есть, бот не входит (одна позиция за раз)"
                value={p.upl ? usd(Number(p.upl), true) : ""} />
         ))}
+        {l.blocked && Object.keys(l.blocked).length ? (
+          <Row title="OKX не даёт торговать" wrap
+               sub={`${Object.keys(l.blocked).map(shortInst).join(", ")} — исключены на 7 дней; бот берёт другие сигналы`} />
+        ) : null}
         {l.last_skip ? (
           <Row title="Последний пропуск" wrap
                sub={`${l.last_skip.coin} ${l.last_skip.side > 0 ? "лонг" : "шорт"} · ${when(l.last_skip.at)} — ${l.last_skip.why}`} />
@@ -202,7 +207,7 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
           <SectionTitle>Сделки бота</SectionTitle>
           <Card pad={false}>
             {[...l.trades].reverse().slice(0, 30).map((t, i) => (
-              <Row key={i} wrap title={`${t.inst.replace(/-USDT-SWAP$/, "")} · ${t.side > 0 ? "лонг" : "шорт"}`}
+              <Row key={i} wrap title={`${shortInst(t.inst)} · ${t.side > 0 ? "лонг" : "шорт"}`}
                    sub={`${when(t.opened)} по ${price(t.px_in)} → ${when(t.closed)}${t.px_out ? ` по ${price(t.px_out)}` : ""} · ${t.why}`}
                    value={usd(t.pnl, true)} tone={t.pnl >= 0 ? "up" : "dn"} />
             ))}
@@ -228,7 +233,7 @@ function OkxCard({ s }: { s: AtSummary }) {
   const map = s.okx?.map;
   if (!map) return null;
   const all = Object.entries(map);
-  const short = (inst = "") => inst.replace(/-USDT-SWAP$/, "");
+  const short = (inst = "") => shortInst(inst);
   const ok = all.filter(([, m]) => m.status === "ok");
   const renamed = ok.filter(([c, m]) => short(m.inst) !== c.split(":").pop())
     .map(([c, m]) => `${c} → ${short(m.inst)}${m.scale && m.scale !== 1 ? ` (×${m.scale})` : ""}`);

@@ -15,6 +15,7 @@
     "typecheck:liqmap": "node tools/typecheck-liqmap.mjs",
     "typecheck:markets": "node tools/typecheck-markets.mjs",
     "typecheck:screen": "node tools/typecheck-screen.mjs",
+    "typecheck:autotrade": "node tools/typecheck-autotrade.mjs",
     "clean": "node tools/clean-build.mjs",
     "build": "tsc -p . && npm run clean && vite build",
     "preview": "vite preview",

@@ -1,0 +1,136 @@
+{
+ "alive": true,
+ "heartbeat": 1794999980000,
+ "simulated": false,
+ "error": "",
+ "equity": 10154.5,
+ "open": {
+  "coin": "ETH",
+  "inst": "ETH-USD_UM_XPERP-310404",
+  "side": -1,
+  "opened": 1794992800000.0,
+  "px": 3000.0,
+  "size": 9990.0,
+  "notional": 9990.0,
+  "tp": 2970.0,
+  "whales": 3.0,
+  "mark": 3012.0,
+  "upl": -39.96
+ },
+ "positions": [
+  {
+   "instId": "ETH-USD_UM_XPERP-310404",
+   "pos": "-9990",
+   "upl": "-39.96",
+   "avgPx": "3000"
+  },
+  {
+   "instId": "H-USD_UM_XPERP-310815",
+   "pos": "5",
+   "upl": "12.5",
+   "avgPx": "0.2"
+  }
+ ],
+ "last_skip": {
+  "coin": "BTC",
+  "side": 1,
+  "why": "на счёте уже есть позиция (ETH-USD_UM_XPERP-310404, H-USD_UM_XPERP-310815)",
+  "at": 1794999400000.0
+ },
+ "blocked": {
+  "STX-USDT-SWAP": {
+   "at": 1794982000000.0,
+   "why": "OKX 50124: This API Key does not have trading permission for the market",
+   "permanent": true
+  }
+ },
+ "events": [
+  "2026-11-20 20:00:00 вход ETH-USD_UM_XPERP-310404 шорт 9990 по 3000.0 (≈9990 $, китов 3), тейк 2970",
+  "2026-11-20 20:00:01 тейк ETH-USD_UM_XPERP-310404 2970 × 9990"
+ ],
+ "stats": {
+  "trades": 4,
+  "wins": 3,
+  "win_pct": 75.0,
+  "net": -39.0,
+  "avg_win": 77.0,
+  "avg_loss": -270.0,
+  "pf": 0.856,
+  "max_dd": 270.0,
+  "per_day": 1.01,
+  "fees": -36.0,
+  "funding": -4.0
+ },
+ "equity_curve": [
+  [
+   1794676000000,
+   77.0
+  ],
+  [
+   1794712000000,
+   154.0
+  ],
+  [
+   1794748000000,
+   -116.0
+  ],
+  [
+   1794784000000,
+   -39.0
+  ]
+ ],
+ "trades": [
+  {
+   "coin": "BTC",
+   "inst": "BTC-USD_UM_XPERP-310404",
+   "side": 1,
+   "why": "тейк",
+   "opened": 1794658000000.0,
+   "closed": 1794676000000.0,
+   "px_in": 100000.0,
+   "px_out": 101000.0,
+   "pnl": 77.0,
+   "fee": -9.0,
+   "funding": -1.0
+  },
+  {
+   "coin": "BTC",
+   "inst": "BTC-USD_UM_XPERP-310404",
+   "side": 1,
+   "why": "тейк",
+   "opened": 1794694000000.0,
+   "closed": 1794712000000.0,
+   "px_in": 100000.0,
+   "px_out": 101000.0,
+   "pnl": 77.0,
+   "fee": -9.0,
+   "funding": -1.0
+  },
+  {
+   "coin": "BTC",
+   "inst": "BTC-USD_UM_XPERP-310404",
+   "side": 1,
+   "why": "закрыта",
+   "opened": 1794730000000.0,
+   "closed": 1794748000000.0,
+   "px_in": 100000.0,
+   "px_out": 97300.0,
+   "pnl": -270.0,
+   "fee": -9.0,
+   "funding": -1.0
+  },
+  {
+   "coin": "BTC",
+   "inst": "BTC-USD_UM_XPERP-310404",
+   "side": 1,
+   "why": "тейк",
+   "opened": 1794766000000.0,
+   "closed": 1794784000000.0,
+   "px_in": 100000.0,
+   "px_out": 101000.0,
+   "pnl": 77.0,
+   "fee": -9.0,
+   "funding": -1.0
+  }
+ ]
+}

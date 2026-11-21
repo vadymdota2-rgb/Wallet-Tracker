@@ -5,6 +5,7 @@
  * `?tg=<id>` здесь нет и быть не должно: сервер её больше не принимает, а
  * когда принимал — по одному номеру в адресе открывался чужой аккаунт.
  */
+import { checkAutotrade } from "./autotrade";
 import { initData } from "./telegram";
 import { forget, peek, peekAny, remember } from "./memo";
 import { HALVING_TTL_MS, clockSkew, pickHalving, validHalving, type HalvingReply } from "./halving";
@@ -269,10 +270,13 @@ export const fetchBonus = () => call<BonusReply>("/api/bonus");
 
 /** Закрытая вкладка владельца: итог бэктеста автокопирования (позже —
  *  бумажная и реальная торговля). Не владельцу сервер отвечает 404. */
-export const fetchAutotrade = () => call<AutotradeReply>("/api/owner/autotrade");
+// Ответ проверяется до показа (src/lib/autotrade.ts): мусор — «нет связи», а не упавшая вкладка.
+export const fetchAutotrade = () => call<AutotradeReply>("/api/owner/autotrade").then(checkAutotrade);
 /** «Старт» и «Стоп» модуля: ответ — новое состояние вкладки. */
-export const autotradeStart = () => call<AutotradeReply>("/api/owner/autotrade/start", { method: "POST", body: {} });
-export const autotradeStop = () => call<AutotradeReply>("/api/owner/autotrade/stop", { method: "POST", body: {} });
+export const autotradeStart = () =>
+  call<AutotradeReply>("/api/owner/autotrade/start", { method: "POST", body: {} }).then(checkAutotrade);
+export const autotradeStop = () =>
+  call<AutotradeReply>("/api/owner/autotrade/stop", { method: "POST", body: {} }).then(checkAutotrade);
 /** «Пересчитать сейчас» — бэктест в фоне на сервере, если не идёт. */
 export const autotradeRun = () =>
   call<{ ok: boolean; running?: boolean; started?: boolean }>("/api/owner/autotrade/run", { method: "POST", body: {} });
