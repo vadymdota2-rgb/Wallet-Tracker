@@ -35,6 +35,9 @@ DATA_DIR = os.path.abspath(os.path.expanduser(
     or os.path.join(os.path.dirname(os.path.abspath(__file__)), "autotrade_data")))
 
 
+BLOCK_MS = 7 * 86_400_000  # как в службе (autotrade_live.BLOCK_MS): бумага исключена на неделю
+
+
 def is_on(data_dir: str = DATA_DIR) -> bool:
     """Включён ли модуль. Нет файла или он испорчен — выключен."""
     try:
@@ -93,9 +96,12 @@ def backtest_status(data_dir: str = DATA_DIR) -> dict[str, Any]:
     except (OSError, ValueError):
         got = {}
     got = got if isinstance(got, dict) else {}
-    return {"running": bool(got.get("running")), "started": int(got.get("started") or 0),
-            "finished": int(got.get("finished") or 0), "error": str(got.get("error") or ""),
-            "next": int(got.get("next") or 0),
+    # Файл мог испортиться (обрыв записи, правка руками): строка или NaN в
+    # поле времени не должны давать 500 — только числа, иначе 0.
+    err = got.get("error")
+    return {"running": got.get("running") is True, "started": _i(got.get("started")),
+            "finished": _i(got.get("finished")), "error": err if isinstance(err, str) else "",
+            "next": _i(got.get("next")),
             "requested": os.path.exists(os.path.join(data_dir, "run.request"))}
 
 
@@ -105,6 +111,20 @@ def _f(v: Any) -> float | None:
         return None
     x = float(v)
     return x if math.isfinite(x) else None
+
+
+def _i(v: Any) -> int:
+    """Время (мс или с) из файла службы — целое; мусор — 0."""
+    x = _f(v)
+    return int(x) if x is not None and abs(x) < 1e15 else 0
+
+
+def _s(v: Any) -> str | None:
+    """Поле позиции OKX (строка с числом) — строкой; число — строкой; прочее — None."""
+    if isinstance(v, str):
+        return v
+    x = _f(v)
+    return repr(x) if x is not None else None
 
 
 def _list(v: Any) -> list[Any]:
@@ -186,19 +206,22 @@ def live(data_dir: str = DATA_DIR, now: float | None = None) -> dict[str, Any] |
     first = min((int(t["opened"]) for t in trades), default=0)
     now_ms = int((now if now is not None else time.time()) * 1000)
     days = max(1.0, (now_ms - first) / 86_400_000) if first else 1.0
-    beat = int(_f(st.get("heartbeat")) or 0)
-    positions = [{"instId": p["instId"], "pos": str(p.get("pos")),
-                  **({"upl": str(p["upl"])} if p.get("upl") not in (None, "") else {}),
-                  **({"avgPx": str(p["avgPx"])} if p.get("avgPx") not in (None, "") else {})}
-                 for p in _list(st.get("positions")) if isinstance(p, dict) and isinstance(p.get("instId"), str)]
+    beat = _i(st.get("heartbeat"))
+    positions = [{"instId": p["instId"], "pos": _s(p.get("pos")),
+                  **({"upl": _s(p["upl"])} if _s(p.get("upl")) not in (None, "") else {}),
+                  **({"avgPx": _s(p["avgPx"])} if _s(p.get("avgPx")) not in (None, "") else {})}
+                 for p in _list(st.get("positions"))
+                 if isinstance(p, dict) and isinstance(p.get("instId"), str) and _s(p.get("pos")) is not None]
     sk = st.get("last_skip")
     skip = ({"coin": sk["coin"], "side": sk["side"], "why": sk["why"], "at": _f(sk.get("at"))}
             if isinstance(sk, dict) and isinstance(sk.get("coin"), str) and _side(sk.get("side")) is not None
             and isinstance(sk.get("why"), str) and _f(sk.get("at")) is not None else None)
+    # Исключённые бумаги — на неделю (служба убирает истёкшие раз в 10 минут).
     blocked = {k: {"at": _f(v.get("at")), "why": v["why"], "permanent": True}
                for k, v in (st.get("blocked") or {}).items()
                if isinstance(k, str) and isinstance(v, dict) and v.get("permanent") is True
-               and isinstance(v.get("why"), str) and _f(v.get("at")) is not None} if isinstance(st.get("blocked"), dict) else {}
+               and isinstance(v.get("why"), str) and _f(v.get("at")) is not None
+               and now_ms - (_f(v.get("at")) or 0) < BLOCK_MS} if isinstance(st.get("blocked"), dict) else {}
     fees = sum(t.get("fee", 0.0) for t in trades)
     funding = sum(t.get("funding", 0.0) for t in trades)
     return {

@@ -36,6 +36,10 @@ PY = [
     ("if isinstance(e, str)][-20:],", "if isinstance(e, str)],", "сервер: журнал — 20 строк"),
     ("        \"trades\": trades[-50:],", "        \"trades\": trades,", "сервер: сделки — 50 последних"),
     ("and v.get(\"permanent\") is True", "", "сервер: исключённые — только на неделю (не 15-минутные паузы)"),
+    ("               and now_ms - (_f(v.get(\"at\")) or 0) < BLOCK_MS}", "               }", "сервер: неделя прошла — бумага не исключена"),
+    ("    return int(x) if x is not None and abs(x) < 1e15 else 0\n", "    return int(x) if x is not None else 0\n", "сервер: время — разумное число"),
+    ("\"running\": got.get(\"running\") is True,", "\"running\": bool(got.get(\"running\")),", "сервер: «считается» — только true"),
+    (" and _s(p.get(\"pos\")) is not None]", "]", "сервер: позиция без объёма — не позиция"),
 ]
 
 

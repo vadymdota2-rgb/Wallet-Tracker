@@ -190,6 +190,25 @@ class ModuleFilesTest(unittest.TestCase):
         lv = at.live(self.data, now=now)
         self.assertEqual((len(lv["trades"]), lv["trades"][-1]["opened"], lv["stats"]["trades"]), (50, 59, 60))
         self.assertEqual(list(lv["blocked"]), ["STX-USDT-SWAP"])  # 15-минутная пауза — не «исключена»
+        self.assertEqual(at.live(self.data, now=now + 8 * 86_400)["blocked"], {}, "неделя прошла — не исключена")
+
+    def test_corrupted_service_files_are_not_500(self):
+        """Файлы службы испорчены (обрыв записи, правка руками): ответ —
+        по договору, без 500 («нет связи» во вкладке)."""
+        with open(os.path.join(self.data, "backtest_status.json"), "w") as f:
+            json.dump({"running": "yes", "started": "вчера", "finished": 1e300,
+                       "next": [1], "error": 5}, f)
+        bs = at.backtest_status(self.data)
+        self.assertEqual((bs["running"], bs["started"], bs["finished"], bs["next"], bs["error"]), (False, 0, 0, 0, ""))
+        d = os.path.join(self.data, "live")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "state.json"), "w") as f:
+            json.dump({"heartbeat": "x", "positions": [{"instId": "BTC-USDT-SWAP", "pos": None},
+                                                       {"instId": "ETH-USDT-SWAP", "pos": -3, "upl": 1.5, "avgPx": None}]}, f)
+        lv = at.live(self.data, now=1_800_000_000)
+        self.assertEqual(lv["heartbeat"], 0)
+        self.assertEqual(lv["positions"], [{"instId": "ETH-USDT-SWAP", "pos": "-3.0", "upl": "1.5"}])
+        at.status(self.data)
 
     def test_switch_is_off_by_default_and_persists(self):
         other = os.path.join(self.tmp.name, "fresh")
