@@ -177,7 +177,9 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
           <Row wrap title={`${shortInst(op.inst)} · ${op.side > 0 ? "лонг" : "шорт"}`}
                sub={`вход ${when(op.opened)} по ${price(op.px)} · сейчас ${op.mark ? price(op.mark) : "—"} · тейк ${price(op.tp)}`
                  + `${op.mark ? ` (ещё ${(op.side * (op.tp / op.mark - 1) * 100).toFixed(2)}%)` : ""} · ${usd(op.notional)}`
-                 + `${op.whales ? ` · китов ${op.whales}` : ""}${op.margin_pct ? ` · маржа ${op.margin_pct}%` : ""}`}
+                 + `${op.whales ? ` · китов ${op.whales}` : ""}`
+                 + `${op.usd !== undefined ? ` (${usd(op.usd)}${op.usd_against ? `, против ${usd(op.usd_against)}` : ", против никого"})` : ""}`
+                 + `${op.margin_pct ? ` · маржа ${op.margin_pct}%` : ""}`}
                value={op.upl !== undefined ? usd(op.upl, true) : "—"} tone={(op.upl ?? 0) >= 0 ? "up" : "dn"} />
         ) : <Row title="Позиции бота нет" sub="Ждём: от 2 китов в одну сторону за 2 часа" wrap />}
         {op ? (

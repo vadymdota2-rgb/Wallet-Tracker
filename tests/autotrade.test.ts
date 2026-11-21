@@ -29,6 +29,7 @@ test("любое рисуемое поле не того типа — отказ
     { ...GOOD, live: { ...LIVE, stats: { ...stats, pf: "0.8" } } },
     { ...GOOD, live: { ...LIVE, key_problem: 50124 } }, { ...GOOD, live: { ...LIVE, skips_24h: { market: "7" } } },
     { ...GOOD, live: { ...LIVE, skips_24h: [7] } }, { ...GOOD, live: { ...LIVE, open: { ...open, exit_why: 1 } } },
+    { ...GOOD, live: { ...LIVE, open: { ...open, usd_against: "9000" } } },
     null, [], "ok", 1,
   ]) {
     assert.equal(validAutotrade(bad), false, JSON.stringify(bad).slice(0, 120));
@@ -57,4 +58,5 @@ test("пропуски за сутки — по убыванию, по-русс�
   assert.equal(skipsLine({ chase: 2, market: 7, new_code: 1 }),
     "ключу OKX закрыт рынок — 7 · цена ушла от китов — 2 · new_code — 1");
   assert.equal(skipsLine({}), "");
+  assert.equal(skipsLine({ bigger_against: 4 }), "против — киты крупнее — 4");
 });

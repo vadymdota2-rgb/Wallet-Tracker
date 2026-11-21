@@ -21,7 +21,9 @@
   "tp_id": "2",
   "mark": 3012.0,
   "upl": -39.96,
-  "margin_pct": 5.0
+  "margin_pct": 5.0,
+  "usd": 42000.0,
+  "usd_against": 9000.0
  },
  "entered": {
   "ETH": 1794992800000

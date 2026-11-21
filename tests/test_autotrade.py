@@ -205,6 +205,10 @@ class ModuleFilesTest(unittest.TestCase):
             got = at.live(self.data, now=1)["open"]
             self.assertEqual(got.get("exit_why"), want, ex)
             self.assertNotIn("wallets", got, "кошельки китов во вкладку не уходят")
+        with open(os.path.join(d, "state.json"), "w") as f:
+            json.dump({"heartbeat": 1, "open": {**op, "usd": 42000, "usd_against": "мусор"}}, f)
+        got = at.live(self.data, now=1)["open"]
+        self.assertEqual((got["usd"], "usd_against" in got), (42000.0, False))
 
     def test_key_problem_and_skips_of_the_day(self):
         """Запрет ключу (50124) — строкой во вкладку; пропуски по причинам —

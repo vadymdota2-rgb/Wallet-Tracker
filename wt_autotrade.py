@@ -144,7 +144,7 @@ def _open(v: Any) -> dict[str, Any] | None:
     if side is None or any(x is None for x in req.values()):
         return None
     out: dict[str, Any] = {"coin": v["coin"], "inst": v["inst"], "side": side, **req}
-    for k in ("whales", "mark", "upl", "margin_pct"):
+    for k in ("whales", "mark", "upl", "margin_pct", "usd", "usd_against"):
         x = _f(v.get(k))
         if x is not None:
             out[k] = x

@@ -16,7 +16,9 @@
   "whales": 3.0,
   "mark": 3012.0,
   "upl": -39.96,
-  "margin_pct": 5.0
+  "margin_pct": 5.0,
+  "usd": 42000.0,
+  "usd_against": 9000.0
  },
  "positions": [
   {
