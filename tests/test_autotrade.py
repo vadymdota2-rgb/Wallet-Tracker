@@ -10,7 +10,6 @@
 import io
 import json
 import os
-import subprocess
 import sys
 import tempfile
 import unittest
@@ -91,82 +90,47 @@ class OwnerOnlyTest(unittest.TestCase):
             self.assertFalse(api.is_owner(""))
 
 
-class NightlyRunTest(unittest.TestCase):
+class ModuleFilesTest(unittest.TestCase):
+    """API сам ничего не считает: «Пересчитать» — запрос службе
+    whale-autotrade (run.request), ход пересчёта — из её backtest_status.json."""
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.ws = os.path.join(self.tmp.name, "WhaleScanner")
-        os.makedirs(os.path.join(self.ws, "tools"))
-        open(at.script_path(self.ws), "w").close()
-        self.db = os.path.join(self.ws, "hyperliquid.db")
-        open(self.db, "w").close()
+        self.ws, self.db = "", ""
         self.data = os.path.join(self.tmp.name, "data")
         at._set_on(True, self.data)
 
     def tearDown(self):
         self.tmp.cleanup()
 
-    def fake(self, verdict: bool, code: int = 0):
-        calls = []
-
-        def runner(cmd, **kw):
-            calls.append((cmd, kw))
-            out = cmd[cmd.index("--out") + 1]
-            if code == 0:
-                os.makedirs(out, exist_ok=True)
-                with open(os.path.join(out, "summary.json"), "w", encoding="utf-8") as f:
-                    json.dump({**SUMMARY, "verdict": verdict}, f)
-            return subprocess.CompletedProcess(cmd, code)
-
-        return runner, calls
-
-    def test_success_becomes_latest_failure_keeps_it(self):
-        runner, calls = self.fake(True)
-        self.assertTrue(at.run_once(self.ws, self.db, self.data, runner))
-        self.assertTrue(at.latest(self.data)["verdict"])
-        cmd, kw = calls[0]
-        self.assertIn("-I", cmd)
-        self.assertEqual(cmd[cmd.index("--pause") + 1], str(at.PAUSE_SEC))
-        cache = cmd[cmd.index("--cache") + 1]
-        self.assertFalse(os.path.realpath(cache).startswith(os.path.realpath(self.ws)))
-        self.assertEqual(kw["timeout"], at.RUN_TIMEOUT_SEC)
-        self.assertEqual(cmd[cmd.index("--max-mem-mb") + 1], str(at.MAX_MEM_MB))
-        # Следующий — неудачный: прежний итог на месте, причина — в состоянии.
-        runner, _ = self.fake(False, code=2)
+    def test_run_now_is_a_request_to_the_service(self):
+        req = os.path.join(self.data, "run.request")
         with mock.patch("sys.stdout", io.StringIO()):
-            self.assertFalse(at.run_once(self.ws, self.db, self.data, runner))
-        self.assertTrue(at.latest(self.data)["verdict"])
-        self.assertIn("кодом 2", at.status(self.data)["error"])
-        # Удачный — становится latest, прежний уходит в prev.
-        runner, _ = self.fake(False)
-        self.assertTrue(at.run_once(self.ws, self.db, self.data, runner))
-        self.assertFalse(at.latest(self.data)["verdict"])
-        self.assertTrue(os.path.isfile(os.path.join(self.data, "prev", "summary.json")))
-        self.assertEqual(at.status(self.data)["error"], "")
-
-    def test_memory_cap_is_reported(self):
-        runner, _ = self.fake(True, code=3)
+            self.assertEqual(at.trigger(data_dir=self.data), {"ok": True, "running": True, "started": True})
+        self.assertTrue(os.path.isfile(req))
+        self.assertTrue(at.status(self.data)["running"])  # запрос подан — вкладка видит «считается»
+        os.remove(req)
+        with open(os.path.join(self.data, "backtest_status.json"), "w") as f:
+            json.dump({"running": True, "started": 100, "next": 200, "error": ""}, f)
+        self.assertFalse(at.trigger(data_dir=self.data)["started"])  # уже идёт — второго нет
+        st = at.status(self.data)
+        self.assertEqual((st["running"], st["started"], st["next"]), (True, 100, 200))
+        with open(os.path.join(self.data, "backtest_status.json"), "w") as f:
+            json.dump({"running": False, "finished": 300, "error": "бэктесту не хватило памяти"}, f)
+        self.assertIn("памяти", at.status(self.data)["error"])
         with mock.patch("sys.stdout", io.StringIO()):
-            self.assertFalse(at.run_once(self.ws, self.db, self.data, runner))
-        self.assertIn("предела памяти", at.status(self.data)["error"])
+            at.stop_cmd(self.data)
+        self.assertEqual(at.trigger(data_dir=self.data), {"ok": False, "error": "stopped"})
 
-    def test_no_script_or_db_is_an_error_not_a_crash(self):
-        os.remove(at.script_path(self.ws))
+    def test_api_never_starts_processes(self):
+        # Бэктест в API ронял её по памяти (oom-kill): в модуле API нет ни
+        # процессов, ни потоков — только файлы.
+        with open(at.__file__, encoding="utf-8") as f:
+            code = f.read()
+        for word in ("subprocess", "threading", "Popen"):
+            self.assertNotIn(word, code)
         with mock.patch("sys.stdout", io.StringIO()):
-            self.assertFalse(at.run_once(self.ws, self.db, self.data, self.fake(True)[0]))
-        self.assertIsNone(at.latest(self.data))
-        self.assertIn("нет скрипта", at.status(self.data)["error"])
-
-    def test_one_run_at_a_time(self):
-        with at._lock:
-            at._state["running"] = True
-        try:
-            runner, calls = self.fake(True)
-            self.assertFalse(at.run_once(self.ws, self.db, self.data, runner))
-            self.assertEqual(calls, [])
-            self.assertFalse(at.trigger(self.ws, self.db, self.data)["started"])
-        finally:
-            with at._lock:
-                at._state["running"] = False
+            at.start()
 
     def test_garbage_summary_is_none(self):
         os.makedirs(os.path.join(self.data, "latest"))
@@ -240,55 +204,6 @@ class NightlyRunTest(unittest.TestCase):
             unit = f.read()
         rw = next(ln for ln in unit.splitlines() if ln.startswith("ReadWritePaths="))
         self.assertIn("/WalletTracker", rw)
-        mem = next(ln for ln in unit.splitlines() if ln.startswith("MemoryMax="))
-        self.assertLess(at.MAX_MEM_MB, int(mem.split("=")[1].rstrip("M")))
-
-    def test_stop_interrupts_a_running_backtest(self):
-        """«Стоп» посреди пересчёта: процесс прерван, итог не подменён,
-        причина — «остановлено»."""
-        runner, _ = self.fake(True)
-        self.assertTrue(at.run_once(self.ws, self.db, self.data, runner))
-        killed = []
-
-        class Proc:
-            def terminate(self):
-                killed.append(True)
-
-        def slow(cmd, **kw):
-            with at._lock:
-                at._state["proc"] = Proc()
-            with mock.patch("sys.stdout", io.StringIO()):
-                at.stop_cmd(self.data)
-            with at._lock:
-                at._state["proc"] = None
-            out = cmd[cmd.index("--out") + 1]
-            os.makedirs(out, exist_ok=True)
-            with open(os.path.join(out, "summary.json"), "w", encoding="utf-8") as f:
-                json.dump({**SUMMARY, "verdict": False}, f)
-            return subprocess.CompletedProcess(cmd, -15)
-
-        with mock.patch("sys.stdout", io.StringIO()):
-            self.assertFalse(at.run_once(self.ws, self.db, self.data, slow))
-        self.assertEqual(killed, [True])
-        self.assertTrue(at.latest(self.data)["verdict"])
-        self.assertIn("Стоп", at.status(self.data)["error"])
-
-    def test_real_process_runner(self):
-        """_popen — настоящий процесс: код возврата и тайм-аут."""
-        r = at._popen([sys.executable, "-c", "raise SystemExit(3)"], stdout=subprocess.DEVNULL,
-                      stderr=subprocess.DEVNULL, timeout=30, check=False)
-        self.assertEqual(r.returncode, 3)
-        with self.assertRaises(subprocess.TimeoutExpired):
-            at._popen([sys.executable, "-c", "import time; time.sleep(30)"], stdout=subprocess.DEVNULL,
-                      stderr=subprocess.DEVNULL, timeout=0.5, check=False)
-        self.assertIsNone(at._state["proc"])
-
-    def test_next_run_is_nightly_utc(self):
-        day = 1_800_000_000 // 86400 * 86400
-        at_ = day + at.RUN_HOUR_UTC * 3600 + at.RUN_MINUTE * 60
-        self.assertEqual(at.next_run(day), at_)
-        self.assertEqual(at.next_run(at_), at_ + 86400)
-        self.assertEqual(at.next_run(at_ - 1), at_)
 
 
 if __name__ == "__main__":
