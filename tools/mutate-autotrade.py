@@ -66,6 +66,11 @@ def run(path: str, cmd: list[str], muts: list[tuple[str, str, str]]) -> list[str
 def main() -> int:
     env_py = [sys.executable, "-m", "unittest", "tests.test_autotrade", "tests.test_autotrade_contract"]
     both = ["sh", "-c", "node --test tests/autotrade.test.ts && " + " ".join(env_py)]
+    # Контроль: на чистом коде тесты обязаны проходить — иначе каждая мутация
+    # «убита» падением, которое было и без неё.
+    if subprocess.run(both, cwd=ROOT, capture_output=True, timeout=300, check=False).returncode:
+        print("тесты падают и без мутаций — проверка недействительна")
+        return 2
     a1 = run(os.path.join(ROOT, "src", "lib", "autotrade.ts"), both, TS)
     a2 = run(os.path.join(ROOT, "wt_autotrade.py"), env_py, PY)
     alive = a1 + a2

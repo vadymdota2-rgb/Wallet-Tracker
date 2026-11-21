@@ -162,7 +162,9 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
                : `последний сигнал жизни ${when(l.heartbeat)} — служба whale-autotrade не работает`} />
         {l.error ? <Row title="Ошибка" sub={l.error} tone="dn" wrap /> : null}
         <Row title="Капитал счёта" value={l.equity != null ? usd(l.equity) : "—"}
-             sub={`маржа на сделку 10% × 10× = ${l.equity != null ? usd(l.equity) : "—"}`} />
+             sub={manual.length
+               ? `на счёте ваша сделка — бот входит маржой 5% × 10× = ${l.equity != null ? usd(l.equity / 2) : "—"}`
+               : `маржа на сделку 10% × 10× = ${l.equity != null ? usd(l.equity) : "—"}`} />
       </Card>
 
       <SectionTitle>Открытая позиция</SectionTitle>
@@ -171,12 +173,12 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
           <Row wrap title={`${shortInst(op.inst)} · ${op.side > 0 ? "лонг" : "шорт"}`}
                sub={`вход ${when(op.opened)} по ${price(op.px)} · сейчас ${op.mark ? price(op.mark) : "—"} · тейк ${price(op.tp)}`
                  + `${op.mark ? ` (ещё ${(op.side * (op.tp / op.mark - 1) * 100).toFixed(2)}%)` : ""} · ${usd(op.notional)}`
-                 + `${op.whales ? ` · китов ${op.whales}` : ""}`}
+                 + `${op.whales ? ` · китов ${op.whales}` : ""}${op.margin_pct ? ` · маржа ${op.margin_pct}%` : ""}`}
                value={op.upl !== undefined ? usd(op.upl, true) : "—"} tone={(op.upl ?? 0) >= 0 ? "up" : "dn"} />
         ) : <Row title="Позиции бота нет" sub="Ждём: от 2 китов в одну сторону за 2 часа" wrap />}
         {manual.map((p) => (
           <Row key={p.instId} wrap title={`${shortInst(p.instId)} · не бота`}
-               sub="Позиция на счёте открыта не ботом — пока она есть, бот не входит (одна позиция за раз)"
+               sub="Открыта вами — бот входит маржой 5 % вместо 10 %, на эту бумагу — не входит"
                value={p.upl ? usd(Number(p.upl), true) : ""} />
         ))}
         {l.blocked && Object.keys(l.blocked).length ? (

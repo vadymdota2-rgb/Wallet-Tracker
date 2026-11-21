@@ -1342,6 +1342,8 @@ export interface AtLiveOpen {
   whales?: number;
   mark?: number;
   upl?: number;
+  /** Маржа сделки, % капитала: 10, а при ручной сделке владельца на счёте — 5. */
+  margin_pct?: number;
 }
 
 /** Закрытая сделка бота на OKX. */
