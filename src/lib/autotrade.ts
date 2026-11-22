@@ -46,6 +46,7 @@ function summary(v: unknown): boolean {
     && isObj(p) && nums(p, ["from", "to"])
     && isObj(s) && nums(s, ["deposit", "deposit_end", "margin_pct", "leverage", "fee_taker_pct", "fee_maker_pct", "slippage_pct"])
     && isObj(d) && nums(d, ["signals", "requests", "errors"])
+    && opt(d["liq_model"], bool) && opt(d["liq_maps"], num) && opt(d["liq_none"], num)
     && ["full", "first", "last"].every((x) => stats(v[x]))
     && arr(v["equity"], pair)
     && ["by_coin", "by_session", "by_exit"].every((x) => arr(v[x], group))
@@ -131,6 +132,8 @@ export const SKIP_LABELS: Record<string, string> = {
   whale_exit: "кит уже вышел в убыток",
   bigger_against: "против — киты крупнее",
   stale: "китов уже меньше 2 (сигнал устарел)",
+  liq_against: "карта ликвидаций против",
+  liq_wait: "ждём карту ликвидаций",
   entered: "вошли",
 };
 

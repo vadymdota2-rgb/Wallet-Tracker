@@ -1235,7 +1235,8 @@ export interface AtSummary {
   period: { from: number; to: number };
   sizing: { deposit: number; deposit_end: number; margin_pct: number; leverage: number;
             fee_taker_pct: number; fee_maker_pct: number; slippage_pct: number };
-  data: { signals: number; requests: number; errors: number };
+  /** liq_* — карта ликвидаций: есть ли модель (Wallet-Tracker рядом), решений с картой и без. */
+  data: { signals: number; requests: number; errors: number; liq_model?: boolean; liq_maps?: number; liq_none?: number };
   /** Весь период, первые 3/4 и последняя 1/4. */
   full: AtStats;
   first: AtStats;

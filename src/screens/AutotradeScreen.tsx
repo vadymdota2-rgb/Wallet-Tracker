@@ -169,7 +169,7 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
         ) : null}
         <Row title="Капитал счёта" value={l.equity != null ? usd(l.equity) : "—"}
              sub={`маржа на сделку всегда 5 % × 10× — позиция ${l.equity != null ? usd(l.equity / 2) : "—"}; `
-               + "стопа и усреднения нет"} />
+               + "стопа и усреднения нет; вход — если карта ликвидаций (сутки, 2 % от цены) за нас или её нет"} />
       </Card>
 
       <SectionTitle>Открытая позиция</SectionTitle>
@@ -340,12 +340,17 @@ export function AutotradeScreen() {
                  sub={`на последней четверти: итог > 0, PF ≥ ${b.criteria.pf_ge}, сделок ≥ ${b.criteria.trades_ge}, просадка ≤ ${usd(b.criteria.max_dd_le)}`} />
             <Row title="Правила" wrap
                  sub={`от 2 китов (каждый от 1000 $) в одну сторону за 2 ч; против — не крупнее; не дороже китов на 0,3 %; `
+                   + "карта ликвидаций (сутки, 2 % от цены): шорт — лонгов под ценой больше, чем шортов над ней, лонг — наоборот, "
+                   + "карты нет — как без неё; "
                    + `маржа ${b.sizing.margin_pct}% × ${b.sizing.leverage}×, одна позиция, в бумагу — раз в 3 ч; выход — тейк +0,75 % `
                    + "или по рынку вслед за китом, закрывшим позицию (хоть часть) в убытке; стопа и усреднения нет"} />
             <Row title="Сигналы в повторе" wrap sub={skipsLine(b.skips)} />
             <Row title="Данные" wrap
                  sub={`${b.data.signals} сигналов; свечи OKX 5 мин — запросов ${b.data.requests}${b.data.errors ? `, сбоев ${b.data.errors}` : ""}; `
-                   + `комиссии ${b.sizing.fee_taker_pct}% / ${b.sizing.fee_maker_pct}%, проскальзывание ${b.sizing.slippage_pct}%; фандинг не учтён`} />
+                   + `комиссии ${b.sizing.fee_taker_pct}% / ${b.sizing.fee_maker_pct}%, проскальзывание ${b.sizing.slippage_pct}%; фандинг не учтён`
+                   + (b.data.liq_model === undefined ? "" : b.data.liq_model
+                     ? `; карта ликвидаций (Binance и Bybit, 15 мин): решений с картой ${b.data.liq_maps ?? 0}, без карты ${b.data.liq_none ?? 0}`
+                     : "; карты ликвидаций нет — модели Wallet-Tracker рядом нет, повтор без неё")} />
           </Card>
 
           <SectionTitle>Последняя четверть периода</SectionTitle>
