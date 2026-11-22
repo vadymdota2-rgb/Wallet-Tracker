@@ -249,8 +249,6 @@ def live(data_dir: str = DATA_DIR, now: float | None = None) -> dict[str, Any] |
         "error": str(st.get("error") or ""), "equity": _f(st.get("equity")), "open": _open(st.get("open")),
         "positions": positions, "last_skip": skip, "blocked": blocked, "key_problem": key_problem,
         "skips_24h": dict(sorted(skips.items(), key=lambda kv: -kv[1])),
-        # Киты — топ по винрейту: сколько кошельков в списке сейчас (None — ещё не загружен).
-        "top_n": int(top_n) if (top_n := _f(st.get("top_n"))) is not None and 0 <= top_n < 10**7 else None,
         "events": [e for e in _list(st.get("events")) if isinstance(e, str)][-20:],
         "stats": {"trades": len(pnl), "wins": len(wins), "win_pct": round(100 * len(wins) / len(pnl), 1) if pnl else 0.0,
                   "net": round(sum(pnl), 2), "avg_win": round(sum(wins) / len(wins), 2) if wins else 0.0,

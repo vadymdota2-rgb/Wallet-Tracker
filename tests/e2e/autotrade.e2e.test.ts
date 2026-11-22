@@ -184,8 +184,6 @@ describe("закрытая вкладка «Автоторговля»", () => {
     assert.equal(await screen.getByText("Закрываем вслед за китом").count(), 0);
     assert.equal(await screen.getByText("Усреднено", { exact: true }).count(), 0, "без усреднения — строки нет");
     assert.ok(await screen.getByText(/китов 3 \(\$42K, против \$9K\)/).first().isVisible(), "объёмы за и против");
-    const top = await screen.getByText("Киты", { exact: true }).first().locator("xpath=ancestor::*[@class='row'][1]").innerText();
-    for (const s of [/812/, /топ-3000 по винрейту за 30 дней/, /от 2 китов/]) assert.match(top, s);
     assert.ok(await screen.getByText(/тейк 2\s?970/).first().isVisible(), "тейк 2 970");
     assert.equal(await screen.getByText("Реальная торговля не установлена").count(), 0);
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

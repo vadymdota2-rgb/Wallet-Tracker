@@ -28,7 +28,7 @@ test("любое рисуемое поле не того типа — отказ
     { ...GOOD, backtest: { ...SUMMARY, equity: [[1, "x"]] } }, { ...GOOD, backtest: { ...SUMMARY, verdict: "no" } },
     { ...GOOD, backtest: { ...SUMMARY, full: { ...(SUMMARY["full"] as Record<string, unknown>), pf: "1" } } },
     { ...GOOD, live: { ...LIVE, stats: { ...stats, pf: "0.8" } } },
-    { ...GOOD, live: { ...LIVE, key_problem: 50124 } }, { ...GOOD, live: { ...LIVE, top_n: "812" } }, { ...GOOD, live: { ...LIVE, skips_24h: { market: "7" } } },
+    { ...GOOD, live: { ...LIVE, key_problem: 50124 } }, { ...GOOD, live: { ...LIVE, skips_24h: { market: "7" } } },
     { ...GOOD, live: { ...LIVE, skips_24h: [7] } }, { ...GOOD, live: { ...LIVE, open: { ...open, exit_why: 1 } } },
     { ...GOOD, live: { ...LIVE, open: { ...open, usd_against: "9000" } } },
     { ...GOOD, live: { ...LIVE, open: { ...open, avg_why: 1 } } },
