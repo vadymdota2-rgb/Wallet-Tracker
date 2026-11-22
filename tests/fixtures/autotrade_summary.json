@@ -24,7 +24,10 @@
  "data": {
   "signals": 3,
   "requests": 30,
-  "errors": 0
+  "errors": 0,
+  "flow_coins": [
+   "BTC"
+  ]
  },
  "full": {
   "trades": 2,
@@ -262,7 +265,8 @@
     "max_mae": 0.0,
     "longest_h": 0.0
    },
-   "averaged": 1
+   "averaged": 1,
+   "blocked": 0
   },
   {
    "key": "with_whales",
@@ -299,7 +303,8 @@
     "max_mae": 0.96,
     "longest_h": 41.5
    },
-   "averaged": 0
+   "averaged": 0,
+   "blocked": 0
   },
   {
    "key": "tp_or_whales",
@@ -336,7 +341,8 @@
     "max_mae": 0.96,
     "longest_h": 12.0
    },
-   "averaged": 0
+   "averaged": 0,
+   "blocked": 0
   },
   {
    "key": "no_average",
@@ -373,7 +379,84 @@
     "max_mae": 0.0,
     "longest_h": 0.0
    },
-   "averaged": 0
+   "averaged": 0,
+   "blocked": 0
+  },
+  {
+   "key": "flows",
+   "name": "как сейчас + потоки на биржи: сильный завод (от 1σ) — не лонг, сильный вывод — не шорт",
+   "deposit_end": 125.94,
+   "verdict": false,
+   "full": {
+    "trades": 2,
+    "win_pct": 50.0,
+    "avg_win": 1.11,
+    "avg_loss": -0.06,
+    "pf": 18.472,
+    "net": 1.05,
+    "max_dd": 0.96,
+    "worst_streak": 1,
+    "worst_streak_usd": -0.06,
+    "open": 1,
+    "unrealized": -0.06,
+    "max_mae": 0.96,
+    "longest_h": 235.0
+   },
+   "last": {
+    "trades": 0,
+    "win_pct": 0.0,
+    "avg_win": 0.0,
+    "avg_loss": 0.0,
+    "pf": null,
+    "net": 0,
+    "max_dd": 0.0,
+    "worst_streak": 0,
+    "worst_streak_usd": 0.0,
+    "open": 0,
+    "unrealized": 0,
+    "max_mae": 0.0,
+    "longest_h": 0.0
+   },
+   "averaged": 1,
+   "blocked": 0
+  },
+  {
+   "key": "flows_half",
+   "name": "как сейчас + потоки на биржи (от 0,5σ)",
+   "deposit_end": 124.83,
+   "verdict": false,
+   "full": {
+    "trades": 1,
+    "win_pct": 0.0,
+    "avg_win": 0.0,
+    "avg_loss": -0.06,
+    "pf": 0.0,
+    "net": -0.06,
+    "max_dd": 0.96,
+    "worst_streak": 1,
+    "worst_streak_usd": -0.06,
+    "open": 1,
+    "unrealized": -0.06,
+    "max_mae": 0.96,
+    "longest_h": 235.0
+   },
+   "last": {
+    "trades": 1,
+    "win_pct": 0.0,
+    "avg_win": 0.0,
+    "avg_loss": -0.06,
+    "pf": 0.0,
+    "net": -0.06,
+    "max_dd": 0.96,
+    "worst_streak": 1,
+    "worst_streak_usd": -0.06,
+    "open": 1,
+    "unrealized": -0.06,
+    "max_mae": 0.96,
+    "longest_h": 235.0
+   },
+   "averaged": 0,
+   "blocked": 3
   }
  ]
 }

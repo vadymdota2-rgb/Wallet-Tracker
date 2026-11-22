@@ -37,7 +37,7 @@ const trade = (v: unknown): boolean =>
 
 const variant = (v: unknown): boolean =>
   isObj(v) && str(v["key"]) && str(v["name"]) && num(v["deposit_end"]) && bool(v["verdict"])
-  && stats(v["full"]) && stats(v["last"]) && num(v["averaged"]);
+  && stats(v["full"]) && stats(v["last"]) && num(v["averaged"]) && opt(v["blocked"], num);
 
 /** Итог бэктеста-повтора (WhaleScanner/tools/autotrade_replay.py). Итог прежней
  *  сетки (на сервере мог остаться в latest/) сюда не проходит — вкладка покажет
@@ -49,7 +49,7 @@ function summary(v: unknown): boolean {
     && isObj(c) && nums(c, ["net_gt", "pf_ge", "trades_ge", "max_dd_le"])
     && isObj(p) && nums(p, ["from", "to", "cut"])
     && isObj(s) && nums(s, ["deposit", "deposit_end", "margin_pct", "leverage", "fee_taker_pct", "fee_maker_pct", "slippage_pct"])
-    && isObj(d) && nums(d, ["signals", "requests", "errors"])
+    && isObj(d) && nums(d, ["signals", "requests", "errors"]) && opt(d["flow_coins"], (x) => arr(x, str))
     && ["full", "first", "last"].every((x) => stats(v[x]))
     && arr(v["equity"], pair)
     && ["by_coin", "by_session", "by_exit"].every((x) => arr(v[x], group))

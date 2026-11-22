@@ -39,7 +39,10 @@ TS = [
     ("    && arr(v[\"active\"], (a) => trade(a) && isObj(a) && (a[\"to_tp_pct\"] === null || num(a[\"to_tp_pct\"])))\n",
      "", "открытая позиция модели — по договору"),
     ("\n    && opt(v[\"variants\"], (x) => arr(x, variant));", ";", "итог повтора: варианты выхода — по договору"),
-    ("  && stats(v[\"full\"]) && stats(v[\"last\"]) && num(v[\"averaged\"]);", "  ;", "вариант выхода — итоги по договору"),
+    ("  && stats(v[\"full\"]) && stats(v[\"last\"]) && num(v[\"averaged\"]) && opt(v[\"blocked\"], num);", "  ;",
+     "вариант выхода — итоги по договору"),
+    (" && opt(v[\"blocked\"], num);", ";", "вариант — число не пущенных фильтром потоков"),
+    (" && opt(d[\"flow_coins\"], (x) => arr(x, str))", "", "монеты с потоками — по договору"),
     ("\n  && opt(v[\"exit_why\"], str) && opt(v[\"usd\"], num) && opt(v[\"usd_against\"], num) && opt(v[\"avg_why\"], str);", ";",
      "причина выхода и объёмы китов — по договору"),
 ]

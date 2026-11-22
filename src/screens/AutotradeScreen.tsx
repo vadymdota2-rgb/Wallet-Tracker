@@ -66,11 +66,18 @@ function Variants({ s }: { s: AtSummary }) {
     <>
       <SectionTitle>Варианты выхода на тех же сигналах</SectionTitle>
       <Card pad={false}>
+        {s.data.flow_coins !== undefined ? (
+          <Row title="Потоки на биржи" wrap
+               sub={s.data.flow_coins.length
+                 ? `данные были по ${s.data.flow_coins.join(", ")}; по остальным монетам фильтр не действует`
+                 : "данных о заводах и выводах по монетам сигналов не было — фильтр ни разу не сработал"} />
+        ) : null}
         {vs.map((v) => (
           <Row key={v.key} title={v.name} wrap
                sub={`${v.full.trades} сделок · ${pct(v.full.win_pct, 0, false)} в плюс · PF ${pf(v.full.pf)} · `
                  + `просадка ${usd(-v.full.max_dd)} · последняя четверть ${usd(v.last.net, true)} (PF ${pf(v.last.pf)})`
-                 + (v.full.open ? ` · открыто ${v.full.open}` : "") + (v.averaged ? ` · усреднений ${v.averaged}` : "")}
+                 + (v.full.open ? ` · открыто ${v.full.open}` : "") + (v.averaged ? ` · усреднений ${v.averaged}` : "")
+                 + (v.blocked ? ` · не вошли из-за потоков ${v.blocked}` : "")}
                value={usd(v.full.net, true)} tone={v.full.net >= 0 ? "up" : "dn"}
                valueSub={v.verdict ? "окупается" : `капитал ${usd(v.deposit_end)}`} />
         ))}
