@@ -129,9 +129,6 @@ describe("закрытая вкладка «Автоторговля»", () => {
     await screen.getByText("Варианты выхода на тех же сигналах").waitFor();
     const vw = await screen.getByText(/^вместе с китами/).first().locator("xpath=ancestor::*[@class='row'][1]").innerText();
     for (const s of [/\+\$1[.,]88/, /2 сделок/, /100% в плюс/, /последняя четверть \+\$0[.,]77/]) assert.match(vw, s);
-    const fl = await screen.getByText(/^как сейчас \+ потоки на биржи \(от 0,5σ\)/).first().locator("xpath=ancestor::*[@class='row'][1]").innerText();
-    assert.match(fl, /не вошли из-за потоков 3/);
-    assert.ok(await screen.getByText(/данные были по BTC; по остальным монетам фильтр не действует/).isVisible());
     for (const s of ["как сейчас: тейк +1 %, выход за китом в убытке, усреднение", "тейк +1 % или раньше — вместе с китом",
       "как сейчас, без усреднения"]) {
       assert.ok(await screen.getByText(s).first().isVisible(), s);
@@ -186,7 +183,7 @@ describe("закрытая вкладка «Автоторговля»", () => {
     assert.ok(await screen.getByText(/по рынку, если кто-то из китов сигнала закроет свою сделку в убытке/).isVisible());
     assert.equal(await screen.getByText("Закрываем вслед за китом").count(), 0);
     assert.equal(await screen.getByText("Усреднено", { exact: true }).count(), 0, "без усреднения — строки нет");
-    assert.ok(await screen.getByText(/китов 3 \(без плеча \$42K, против \$9K\)/).first().isVisible(), "объёмы за и против");
+    assert.ok(await screen.getByText(/китов 3 \(\$42K, против \$9K\)/).first().isVisible(), "объёмы за и против");
     assert.ok(await screen.getByText(/тейк 2\s?970/).first().isVisible(), "тейк 2 970");
     assert.equal(await screen.getByText("Реальная торговля не установлена").count(), 0);
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

@@ -36,8 +36,6 @@ test("любое рисуемое поле не того типа — отказ
     { ...GOOD, backtest: { ...SUMMARY, skips: { own_open: "1" } } }, { ...GOOD, backtest: { ...SUMMARY, averaged: "1" } },
     { ...GOOD, backtest: { ...SUMMARY, last: null } }, { ...GOOD, backtest: { ...SUMMARY, active: [{}] } },
     { ...GOOD, backtest: { ...SUMMARY, trades: [{ ...(SUMMARY["trades"] as Record<string, unknown>[])[0], averaged: 1 }] } },
-    { ...GOOD, backtest: { ...SUMMARY, variants: [{ ...(SUMMARY["variants"] as Record<string, unknown>[])[1], blocked: "3" }] } },
-    { ...GOOD, backtest: { ...SUMMARY, data: { ...(SUMMARY["data"] as Record<string, unknown>), flow_coins: [1] } } },
     { ...GOOD, backtest: { ...SUMMARY, variants: {} } }, { ...GOOD, backtest: { ...SUMMARY, variants: [{}] } },
     { ...GOOD, backtest: { ...SUMMARY, variants: [{ ...(SUMMARY["variants"] as Record<string, unknown>[])[1], verdict: 1 }] } },
     { ...GOOD, backtest: { ...SUMMARY, variants: [{ ...(SUMMARY["variants"] as Record<string, unknown>[])[1], last: null }] } },

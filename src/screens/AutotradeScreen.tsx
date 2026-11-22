@@ -66,18 +66,11 @@ function Variants({ s }: { s: AtSummary }) {
     <>
       <SectionTitle>Варианты выхода на тех же сигналах</SectionTitle>
       <Card pad={false}>
-        {s.data.flow_coins !== undefined ? (
-          <Row title="Потоки на биржи" wrap
-               sub={s.data.flow_coins.length
-                 ? `данные были по ${s.data.flow_coins.join(", ")}; по остальным монетам фильтр не действует`
-                 : "данных о заводах и выводах по монетам сигналов не было — фильтр ни разу не сработал"} />
-        ) : null}
         {vs.map((v) => (
           <Row key={v.key} title={v.name} wrap
                sub={`${v.full.trades} сделок · ${pct(v.full.win_pct, 0, false)} в плюс · PF ${pf(v.full.pf)} · `
                  + `просадка ${usd(-v.full.max_dd)} · последняя четверть ${usd(v.last.net, true)} (PF ${pf(v.last.pf)})`
-                 + (v.full.open ? ` · открыто ${v.full.open}` : "") + (v.averaged ? ` · усреднений ${v.averaged}` : "")
-                 + (v.blocked ? ` · не вошли из-за потоков ${v.blocked}` : "")}
+                 + (v.full.open ? ` · открыто ${v.full.open}` : "") + (v.averaged ? ` · усреднений ${v.averaged}` : "")}
                value={usd(v.full.net, true)} tone={v.full.net >= 0 ? "up" : "dn"}
                valueSub={v.verdict ? "окупается" : `капитал ${usd(v.deposit_end)}`} />
         ))}
@@ -168,7 +161,7 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
                sub={`вход ${when(op.opened)} по ${price(op.px)} · сейчас ${op.mark ? price(op.mark) : "—"} · тейк ${price(op.tp)}`
                  + `${op.mark ? ` (ещё ${(op.side * (op.tp / op.mark - 1) * 100).toFixed(2)}%)` : ""} · ${usd(op.notional)}`
                  + `${op.whales ? ` · китов ${op.whales}` : ""}`
-                 + `${op.usd !== undefined ? ` (без плеча ${usd(op.usd)}${op.usd_against ? `, против ${usd(op.usd_against)}` : ", против никого"})` : ""}`
+                 + `${op.usd !== undefined ? ` (${usd(op.usd)}${op.usd_against ? `, против ${usd(op.usd_against)}` : ", против никого"})` : ""}`
                  + `${op.margin_pct ? ` · маржа ${op.margin_pct}%` : ""}`}
                value={op.upl !== undefined ? usd(op.upl, true) : "—"} tone={(op.upl ?? 0) >= 0 ? "up" : "dn"} />
         ) : <Row title="Позиции бота нет" sub="Ждём: от 2 китов в одну сторону за 2 часа" wrap />}
@@ -331,7 +324,7 @@ export function AutotradeScreen() {
             <Row title="Критерий" wrap
                  sub={`на последней четверти: итог > 0, PF ≥ ${b.criteria.pf_ge}, сделок ≥ ${b.criteria.trades_ge}, просадка ≤ ${usd(b.criteria.max_dd_le)}`} />
             <Row title="Правила" wrap
-                 sub={`от 2 китов (каждый от 1000 $) в одну сторону за 2 ч; против — не крупнее по объёму без плеча; не дороже китов на 0,3 %; `
+                 sub={`от 2 китов (каждый от 1000 $) в одну сторону за 2 ч; против — не крупнее; не дороже китов на 0,3 %; `
                    + `маржа ${b.sizing.margin_pct}% × ${b.sizing.leverage}×, одна позиция, в бумагу — раз в 3 ч; выход — тейк +1 % `
                    + "или по рынку вслед за китом в убытке; разовое усреднение 5 % при минусе больше 1 % и доборе кита"} />
             <Row title="Сигналы в повторе" wrap sub={`${skipsLine(b.skips)}${b.averaged ? ` · усреднений: ${b.averaged}` : ""}`} />

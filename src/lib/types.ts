@@ -1237,8 +1237,6 @@ export interface AtVariant {
   full: AtStats;
   last: AtStats;
   averaged: number;
-  /** Варианты с фильтром потоков на биржи: сколько сигналов он не пустил. */
-  blocked?: number;
 }
 
 /** Итог бэктеста-повтора по актуальным правилам живого бота. */
@@ -1250,9 +1248,7 @@ export interface AtSummary {
   period: { from: number; to: number; cut: number };
   sizing: { deposit: number; deposit_end: number; margin_pct: number; leverage: number;
             fee_taker_pct: number; fee_maker_pct: number; slippage_pct: number };
-  data: { signals: number; requests: number; errors: number;
-          /** Монеты, по которым были данные о заводах на биржи и выводах (BTC, токены BSC). */
-          flow_coins?: string[] };
+  data: { signals: number; requests: number; errors: number };
   /** Весь период, первые 3/4 и последняя 1/4. */
   full: AtStats;
   first: AtStats;
@@ -1292,7 +1288,7 @@ export interface AutotradeReply {
 
 /** Открытая позиция бота на OKX. */
 export interface AtLiveOpen {
-  /** Объём китов сигнала и китов против без плеча (маржа: номинал ÷ плечо; та же бумага, те же 2 часа), $. */
+  /** Объём китов сигнала и китов против (та же бумага, те же 2 часа), $. */
   usd?: number;
   usd_against?: number;
   /** Разовое усреднение сделано (причина: кит добрал при минусе больше 1 %). */
