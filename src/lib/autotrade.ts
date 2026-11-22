@@ -33,7 +33,7 @@ const group = (v: unknown): boolean => isObj(v) && str(v["key"]) && stats(v);
 const trade = (v: unknown): boolean =>
   isObj(v) && str(v["coin"]) && side(v["side"])
   && nums(v, ["entry", "exit", "px_in", "px_out", "tp", "usd", "pct", "mae", "held_h"])
-  && str(v["why"]);
+  && str(v["why"]) && bool(v["averaged"]);
 
 /** Итог бэктеста-повтора (WhaleScanner/tools/autotrade_replay.py). Итог прежней
  *  сетки (на сервере мог остаться в latest/) сюда не проходит — вкладка покажет
@@ -46,11 +46,10 @@ function summary(v: unknown): boolean {
     && isObj(p) && nums(p, ["from", "to"])
     && isObj(s) && nums(s, ["deposit", "deposit_end", "margin_pct", "leverage", "fee_taker_pct", "fee_maker_pct", "slippage_pct"])
     && isObj(d) && nums(d, ["signals", "requests", "errors"])
-    && opt(d["liq_model"], bool) && opt(d["liq_maps"], num) && opt(d["liq_none"], num)
     && ["full", "first", "last"].every((x) => stats(v[x]))
     && arr(v["equity"], pair)
     && ["by_coin", "by_session", "by_exit"].every((x) => arr(v[x], group))
-    && isObj(k) && Object.values(k).every(num) && num(v["per_day"])
+    && isObj(k) && Object.values(k).every(num) && num(v["averaged"]) && num(v["per_day"])
     && arr(v["trades"], trade)
     && arr(v["active"], (a) => trade(a) && isObj(a) && (a["to_tp_pct"] === null || num(a["to_tp_pct"])));
 }
@@ -58,7 +57,7 @@ function summary(v: unknown): boolean {
 const liveOpen = (v: unknown): boolean =>
   isObj(v) && str(v["coin"]) && str(v["inst"]) && side(v["side"])
   && nums(v, ["opened", "px", "notional", "tp"]) && opt(v["whales"], num) && opt(v["mark"], num) && opt(v["upl"], num) && opt(v["margin_pct"], num)
-  && opt(v["exit_why"], str) && opt(v["usd"], num) && opt(v["usd_against"], num);
+  && opt(v["exit_why"], str) && opt(v["usd"], num) && opt(v["usd_against"], num) && opt(v["avg_why"], str);
 
 const liveTrade = (v: unknown): boolean =>
   isObj(v) && str(v["coin"]) && str(v["inst"]) && side(v["side"])
@@ -132,8 +131,6 @@ export const SKIP_LABELS: Record<string, string> = {
   whale_exit: "кит уже вышел в убыток",
   bigger_against: "против — киты крупнее",
   stale: "китов уже меньше 2 (сигнал устарел)",
-  liq_against: "карта ликвидаций против",
-  liq_wait: "ждём карту ликвидаций",
   entered: "вошли",
 };
 

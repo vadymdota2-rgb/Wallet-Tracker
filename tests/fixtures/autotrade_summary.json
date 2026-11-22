@@ -22,10 +22,7 @@
  "data": {
   "signals": 3,
   "requests": 30,
-  "errors": 0,
-  "liq_model": true,
-  "liq_maps": 2,
-  "liq_none": 1
+  "errors": 0
  },
  "full": {
   "trades": 2,
@@ -170,9 +167,9 @@
  ],
  "skips": {
   "entered": 2,
-  "own_open": 1,
-  "liq_against": 1
+  "own_open": 1
  },
+ "averaged": 1,
  "per_day": 0.07,
  "trades": [
   {
@@ -186,6 +183,7 @@
    "usd": 1.11,
    "pct": 0.93,
    "why": "тейк",
+   "averaged": true,
    "mae": 0.96,
    "held_h": 2.0
   },
@@ -200,6 +198,7 @@
    "usd": -0.06,
    "pct": -0.1,
    "why": "открыта",
+   "averaged": false,
    "mae": 0.03,
    "held_h": 235.0
   }
@@ -216,6 +215,7 @@
    "usd": -0.06,
    "pct": -0.1,
    "why": "открыта",
+   "averaged": false,
    "mae": 0.03,
    "held_h": 235.0,
    "to_tp_pct": 1.05

@@ -1217,6 +1217,7 @@ export interface AtTrade {
   usd: number;
   pct: number;
   why: string;
+  averaged: boolean;
   mae: number;
   held_h: number;
 }
@@ -1235,8 +1236,7 @@ export interface AtSummary {
   period: { from: number; to: number };
   sizing: { deposit: number; deposit_end: number; margin_pct: number; leverage: number;
             fee_taker_pct: number; fee_maker_pct: number; slippage_pct: number };
-  /** liq_* — карта ликвидаций: есть ли модель (Wallet-Tracker рядом), решений с картой и без. */
-  data: { signals: number; requests: number; errors: number; liq_model?: boolean; liq_maps?: number; liq_none?: number };
+  data: { signals: number; requests: number; errors: number };
   /** Весь период, первые 3/4 и последняя 1/4. */
   full: AtStats;
   first: AtStats;
@@ -1248,6 +1248,8 @@ export interface AtSummary {
   by_exit: AtGroup[];
   /** Пропуски сигналов по причинам (коды — как у живого бота, «entered» — вошли). */
   skips: Record<string, number>;
+  /** Сколько раз сработало разовое усреднение. */
+  averaged: number;
   per_day: number;
   trades: AtTrade[];
   active: AtActive[];
@@ -1273,6 +1275,8 @@ export interface AtLiveOpen {
   /** Объём китов сигнала и китов против (та же бумага, те же 2 часа), $. */
   usd?: number;
   usd_against?: number;
+  /** Разовое усреднение сделано (причина: кит добрал при минусе больше 1 %). */
+  avg_why?: string;
   /** Кит сигнала закрыл в убыток — бот закрывает позицию по рынку (причина). */
   exit_why?: string;
   coin: string;

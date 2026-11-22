@@ -146,9 +146,12 @@ def _open(v: Any) -> dict[str, Any] | None:
         x = _f(v.get(k))
         if x is not None:
             out[k] = x
+    av = v.get("avg")
+    if isinstance(av, dict) and isinstance(av.get("why"), str) and (_f(av.get("filled")) or 0) > 0:
+        out["avg_why"] = av["why"]  # разовое усреднение сделано
     ex = v.get("exit")
     if isinstance(ex, dict) and isinstance(ex.get("why"), str):
-        out["exit_why"] = ex["why"]  # кит сигнала закрыл в убыток — бот закрывает позицию по рынку
+        out["exit_why"] = ex["why"]  # кит сигнала закрыл в убыток — бот закрывает позицию
     return out
 
 

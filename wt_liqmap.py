@@ -702,9 +702,7 @@ def render(st: dict[str, Json], px: float) -> dict[str, Json]:
 def build_map(sym: str, rng: str, got: dict[str, list[Row]], ref: list[Row], at: int,  # noqa: PLR0913 — сборка целиком
               px: float | None = None) -> dict[str, Json]:
     """Ответ сразу по рядам бирж (got) и опорной бирже (ref) при цене px
-    (нет — закрытие последней свечи опорной). Её же зовёт бэктест
-    автоторговли (WhaleScanner/tools/autotrade_liq.py) — карта на момент
-    сигнала: сигнатуру и поле «cum» не менять без него."""
+    (нет — закрытие последней свечи опорной)."""
     p = px if px is not None else ref[-1][3]
     return render(make_state(sym, rng, got, ref, p, at), p)
 
