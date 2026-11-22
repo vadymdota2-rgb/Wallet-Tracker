@@ -172,7 +172,7 @@ describe("закрытая вкладка «Автоторговля»", () => {
       assert.ok(await screen.getByText(s).first().isVisible(), s);
     }
     assert.equal(await screen.getByText("OKX не принимает ордера бота").count(), 0, "ключ в порядке — плашки нет");
-    assert.ok(await screen.getByText(/по рынку: стоп −4 % или кто-то из китов сигнала закроет свою сделку в убытке/).isVisible());
+    assert.ok(await screen.getByText(/по рынку: стоп −4 % или кто-то из китов сигнала закроет позицию полностью в убытке/).isVisible());
     assert.ok(await screen.getByText(/стоп — цена против входа на 4 %.*усреднения нет/).isVisible());
     assert.equal(await screen.getByText("Закрываем по рынку").count(), 0);
     assert.ok(await screen.getByText(/китов 3 \(\$42K, против \$9K\)/).first().isVisible(), "объёмы за и против");
@@ -217,7 +217,7 @@ describe("закрытая вкладка «Автоторговля»", () => {
     await page.locator(".drawer-row", { hasText: "Автоторговля" }).click();
     const screen = page.locator(".sheet .screen");
     await screen.getByText(/повтор: 40 % \(400 000 из 1 000 000 сделок китов\)/).waitFor();
-    assert.ok(await screen.getByText(/стоп −4 % или вслед за китом в убытке; усреднения нет/).first().isVisible());
+    assert.ok(await screen.getByText(/стоп −4 % или вслед за китом, закрывшим позицию полностью в убытке; усреднения нет/).first().isVisible());
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     assert.ok(wide <= 0, `шире экрана на ${wide}px`);
     assert.deepEqual(errors, []);
