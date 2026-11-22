@@ -68,14 +68,14 @@ def _try_set(on: bool, data_dir: str) -> dict[str, Any] | None:
 
 
 def latest(data_dir: str = DATA_DIR) -> dict[str, Any] | None:
-    """Последний итог бэктеста-повтора; нет, испорчен или это итог прежней
-    сетки (служба её больше не запускает, а в latest/ он мог остаться) — None."""
+    """Последний итог бэктеста-повтора; нет или испорчен — None (поля
+    проверяет вкладка: не по договору — «итога ещё нет»)."""
     try:
         with open(os.path.join(data_dir, "latest", "summary.json"), encoding="utf-8") as f:
             got = json.load(f)
     except (OSError, ValueError):
         return None
-    return got if isinstance(got, dict) and "last" in got and "top" not in got else None
+    return got if isinstance(got, dict) else None
 
 
 def _request_run(data_dir: str) -> None:
@@ -97,7 +97,7 @@ def backtest_status(data_dir: str = DATA_DIR) -> dict[str, Any]:
     err = got.get("error")
     prog = got.get("progress")
     return {"running": got.get("running") is True, "started": _i(got.get("started")),
-            "finished": _i(got.get("finished")), "error": err if isinstance(err, str) else "",
+            "error": err if isinstance(err, str) else "",
             "next": _i(got.get("next")), "progress": prog[:200] if isinstance(prog, str) else "",
             "requested": os.path.exists(os.path.join(data_dir, "run.request"))}
 
@@ -140,7 +140,8 @@ def _open(v: Any) -> dict[str, Any] | None:
     req = {k: _f(v.get(k)) for k in ("opened", "px", "size", "notional", "tp")}
     if side is None or any(x is None for x in req.values()):
         return None
-    out: dict[str, Any] = {"coin": v["coin"], "inst": v["inst"], "side": side, **req}
+    out: dict[str, Any] = {"coin": v["coin"], "inst": v["inst"], "side": side,
+                           **{k: x for k, x in req.items() if k != "size"}}  # объём — для проверки записи
     for k in ("whales", "mark", "upl", "margin_pct", "usd", "usd_against"):
         x = _f(v.get(k))
         if x is not None:
@@ -210,21 +211,17 @@ def live(data_dir: str = DATA_DIR, now: float | None = None) -> dict[str, Any] |
     now_ms = int((now if now is not None else time.time()) * 1000)
     days = max(1.0, (now_ms - first) / 86_400_000) if first else 1.0
     beat = _i(st.get("heartbeat"))
-    positions = [{"instId": p["instId"], "pos": _s(p.get("pos")),
-                  **({"upl": _s(p["upl"])} if _s(p.get("upl")) not in (None, "") else {}),
-                  **({"avgPx": _s(p["avgPx"])} if _s(p.get("avgPx")) not in (None, "") else {})}
-                 for p in _list(st.get("positions"))
-                 if isinstance(p, dict) and isinstance(p.get("instId"), str) and _s(p.get("pos")) is not None]
+    positions = [{"instId": p["instId"], **({"upl": _s(p["upl"])} if _s(p.get("upl")) not in (None, "") else {})}
+                 for p in _list(st.get("positions")) if isinstance(p, dict) and isinstance(p.get("instId"), str)]
     sk = st.get("last_skip")
     skip = ({"coin": sk["coin"], "side": sk["side"], "why": sk["why"], "at": _f(sk.get("at"))}
             if isinstance(sk, dict) and isinstance(sk.get("coin"), str) and _side(sk.get("side")) is not None
             and isinstance(sk.get("why"), str) and _f(sk.get("at")) is not None else None)
     # Исключённые бумаги — на неделю (служба убирает истёкшие раз в 10 минут).
-    blocked = {k: {"at": _f(v.get("at")), "why": v["why"], "permanent": True}
-               for k, v in (st.get("blocked") or {}).items()
-               if isinstance(k, str) and isinstance(v, dict) and v.get("permanent") is True
-               and isinstance(v.get("why"), str) and _f(v.get("at")) is not None
-               and now_ms - (_f(v.get("at")) or 0) < BLOCK_MS} if isinstance(st.get("blocked"), dict) else {}
+    blocked = sorted(k for k, v in (st.get("blocked") or {}).items()
+                     if isinstance(k, str) and isinstance(v, dict) and v.get("permanent") is True
+                     and _f(v.get("at")) is not None and now_ms - (_f(v.get("at")) or 0) < BLOCK_MS) \
+        if isinstance(st.get("blocked"), dict) else []
     # Запрет ключу (OKX 50124 и т.п.): ордера на рынок не проходят — вкладка
     # показывает это сразу, а не как «нет сигналов».
     kp = st.get("key_problem")
@@ -250,14 +247,14 @@ def live(data_dir: str = DATA_DIR, now: float | None = None) -> dict[str, Any] |
         "positions": positions, "last_skip": skip, "blocked": blocked, "key_problem": key_problem,
         "skips_24h": dict(sorted(skips.items(), key=lambda kv: -kv[1])),
         "events": [e for e in _list(st.get("events")) if isinstance(e, str)][-20:],
-        "stats": {"trades": len(pnl), "wins": len(wins), "win_pct": round(100 * len(wins) / len(pnl), 1) if pnl else 0.0,
+        "stats": {"trades": len(pnl), "win_pct": round(100 * len(wins) / len(pnl), 1) if pnl else 0.0,
                   "net": round(sum(pnl), 2), "avg_win": round(sum(wins) / len(wins), 2) if wins else 0.0,
                   "avg_loss": round(sum(losses) / len(losses), 2) if losses else 0.0,
                   "pf": round(sum(wins) / -sum(losses), 3) if losses and sum(losses) < 0 else None,
                   "max_dd": round(dd, 2), "per_day": round(len(pnl) / days, 2) if pnl else 0.0,
                   "fees": round(fees, 2), "funding": round(funding, 2)},
         "equity_curve": curve[-500:],
-        "trades": trades[-50:],
+        "trades": [{k: v for k, v in t.items() if k not in ("fee", "funding")} for t in trades[-50:]],
     }
 
 
@@ -265,9 +262,9 @@ def status(data_dir: str = DATA_DIR) -> dict[str, Any]:
     """Ответ вкладке владельца: реальная торговля, итог бэктеста и ход пересчёта."""
     lv = live(data_dir)
     bs = backtest_status(data_dir)
-    return {"ok": True, "stage": "live" if lv is not None else "backtest", "on": is_on(data_dir),
+    return {"ok": True, "on": is_on(data_dir),
             "backtest": latest(data_dir), "running": bs["running"] or bs["requested"],
-            "started": bs["started"], "finished": bs["finished"], "error": bs["error"], "next": bs["next"],
+            "started": bs["started"], "error": bs["error"], "next": bs["next"],
             "progress": bs["progress"] if bs["running"] else "", "live": lv}
 
 

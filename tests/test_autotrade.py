@@ -135,9 +135,8 @@ class ModuleFilesTest(unittest.TestCase):
 
     def test_garbage_summary_is_none(self):
         os.makedirs(os.path.join(self.data, "latest"))
-        # Итог прежней сетки (служба её больше не запускает) — тоже None: вкладка
-        # покажет «итога ещё нет» до первого повтора, а не мусор.
-        for raw in ("", "[1]", "{bad", '{"top": [], "full": null}', '{"top": [], "last": {}}'):
+        # Не объект — None; поля объекта проверяет вкладка (не по договору — «итога ещё нет»).
+        for raw in ("", "[1]", "{bad", "null", '"строка"'):
             with open(os.path.join(self.data, "latest", "summary.json"), "w") as f:
                 f.write(raw)
             self.assertIsNone(at.latest(self.data))
@@ -148,7 +147,7 @@ class ModuleFilesTest(unittest.TestCase):
     def test_live_trading_state_and_stats(self):
         # Службы реальной торговли нет — live нет, этап — бэктест.
         self.assertIsNone(at.live(self.data))
-        self.assertEqual(at.status(self.data)["stage"], "backtest")
+        self.assertIsNone(at.status(self.data)["live"])
         d = os.path.join(self.data, "live")
         os.makedirs(d, exist_ok=True)
         now = 1_800_000_000
@@ -171,12 +170,12 @@ class ModuleFilesTest(unittest.TestCase):
         self.assertTrue(lv["alive"])
         self.assertFalse(lv["simulated"])
         s = lv["stats"]
-        self.assertEqual((s["trades"], s["wins"], s["win_pct"], s["net"], s["max_dd"]), (4, 3, 75.0, -39.0, 270.0))
+        self.assertEqual((s["trades"], s["win_pct"], s["net"], s["max_dd"]), (4, 75.0, -39.0, 270.0))
         self.assertAlmostEqual(s["pf"], 231 / 270, places=3)
         self.assertEqual((s["per_day"], s["fees"], s["funding"]), (2.0, -36.0, -4.0))
         self.assertEqual(len(lv["events"]), 20)
         self.assertEqual(lv["open"]["inst"], "ETH-USDT-SWAP")
-        self.assertEqual(at.status(self.data)["stage"], "live")
+        self.assertIsNotNone(at.status(self.data)["live"])
         self.assertFalse(at.live(self.data, now=now + 600)["alive"])  # служба молчит 10 минут — не жива
         # В ответе — ни одного ключа: их в каталоге модуля нет по устройству.
         self.assertNotIn("OKX_API", json.dumps(at.status(self.data)))
@@ -196,7 +195,7 @@ class ModuleFilesTest(unittest.TestCase):
         lv = at.live(self.data, now=now)
         self.assertEqual((len(lv["trades"]), lv["trades"][-1]["opened"], lv["stats"]["trades"]), (50, 59, 60))
         self.assertEqual(list(lv["blocked"]), ["STX-USDT-SWAP"])  # 15-минутная пауза — не «исключена»
-        self.assertEqual(at.live(self.data, now=now + 8 * 86_400)["blocked"], {}, "неделя прошла — не исключена")
+        self.assertEqual(at.live(self.data, now=now + 8 * 86_400)["blocked"], [], "неделя прошла — не исключена")
 
     def test_open_position_shows_whale_exit(self):
         """Кит сигнала закрыл в убыток — у открытой позиции причина выхода."""
@@ -246,18 +245,17 @@ class ModuleFilesTest(unittest.TestCase):
         """Файлы службы испорчены (обрыв записи, правка руками): ответ —
         по договору, без 500 («нет связи» во вкладке)."""
         with open(os.path.join(self.data, "backtest_status.json"), "w") as f:
-            json.dump({"running": "yes", "started": "вчера", "finished": 1e300,
-                       "next": [1], "error": 5}, f)
+            json.dump({"running": "yes", "started": "вчера", "next": 1e300, "error": 5}, f)
         bs = at.backtest_status(self.data)
-        self.assertEqual((bs["running"], bs["started"], bs["finished"], bs["next"], bs["error"]), (False, 0, 0, 0, ""))
+        self.assertEqual((bs["running"], bs["started"], bs["next"], bs["error"]), (False, 0, 0, ""), "1e300 — не время")
         d = os.path.join(self.data, "live")
         os.makedirs(d, exist_ok=True)
         with open(os.path.join(d, "state.json"), "w") as f:
-            json.dump({"heartbeat": "x", "positions": [{"instId": "BTC-USDT-SWAP", "pos": None},
-                                                       {"instId": "ETH-USDT-SWAP", "pos": -3, "upl": 1.5, "avgPx": None}]}, f)
+            json.dump({"heartbeat": "x", "positions": [{"instId": 7, "upl": 1}, {"instId": "BTC-USDT-SWAP", "upl": None},
+                                                       {"instId": "ETH-USDT-SWAP", "upl": 1.5}, "мусор"]}, f)
         lv = at.live(self.data, now=1_800_000_000)
         self.assertEqual(lv["heartbeat"], 0)
-        self.assertEqual(lv["positions"], [{"instId": "ETH-USDT-SWAP", "pos": "-3.0", "upl": "1.5"}])
+        self.assertEqual(lv["positions"], [{"instId": "BTC-USDT-SWAP"}, {"instId": "ETH-USDT-SWAP", "upl": "1.5"}])
         at.status(self.data)
 
     def test_switch_is_off_by_default_and_persists(self):

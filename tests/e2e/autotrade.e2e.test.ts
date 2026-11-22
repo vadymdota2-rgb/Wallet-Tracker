@@ -71,8 +71,8 @@ async function open(o: Opts): Promise<{ ctx: BrowserContext; page: Page; errors:
     body: JSON.stringify({ ok: true, live: true, me: { plan: "premium", ...(o.owner ? { owner: true } : {}) }, wallets: [] }) }));
   let on = o.on ?? true;
   const reply = () => JSON.stringify({
-    ok: true, stage: "backtest", on, backtest: o.backtest ?? SUMMARY, running: o.running ?? false, started: T - 7200,
-    finished: T - 3600, error: "", next: T + 40_000, live: o.live ?? null,
+    ok: true, on, backtest: o.backtest ?? SUMMARY, running: o.running ?? false, started: T - 7200,
+    error: "", next: T + 40_000, live: o.live ?? null,
     ...(o.progress ? { progress: o.progress } : {}) });
   await ctx.route(`${base}/api/owner/autotrade`, (r) => o.reply === "404"
     ? r.fulfill({ status: 404, contentType: "application/json", body: '{"ok":false,"error":"not_found"}' })
@@ -165,7 +165,7 @@ describe("закрытая вкладка «Автоторговля»", () => {
     await screen.getByRole("heading", { name: "Реальная торговля на OKX" }).waitFor();
     for (const s of ["торгует", "Капитал счёта", "Открытая позиция", "ETH · шорт", "H · не бота",
       "OKX не даёт торговать", "STX — исключены на 7 дней",
-      "Последний пропуск", "у бота уже есть своя позиция", "маржа 5%", "маржа на сделку всегда 5% × 10×",
+      "Последний пропуск", "у бота уже есть своя позиция", "маржа 5%", "маржа на сделку всегда 5 % × 10× — позиция",
       "бот на эту бумагу не входит; размер его входа это не меняет (5 %)", "Статистика реальной торговли", "Винрейт", "Макс. просадка",
       "Сделки бота", "BTC · лонг", "Журнал бота", "Пропуски сигналов за сутки",
       "у бота уже есть позиция — 4 · цена ушла от китов — 3 · бумаги нет на OKX — 3"]) {

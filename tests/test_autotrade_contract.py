@@ -89,7 +89,7 @@ class ContractTest(unittest.TestCase):
     def test_fixtures_are_valid_and_match_the_server(self):
         self.write(self.state, self.trades)
         rep = at.status(self.data)
-        self.assertEqual(rep["stage"], "live")
+        self.assertIsNotNone(rep["live"])
         self.assertEqual(node_check([rep]), [])
         # Образец ответа для браузерного теста — то, что сервер отдаёт сейчас
         # из образцов файлов службы (без времени «жив/не жив» и сборки бэктеста).

@@ -1209,7 +1209,6 @@ export interface AtGroup extends AtStats {
 export interface AtTrade {
   coin: string;
   side: number;
-  whales: number;
   entry: number;
   exit: number;
   px_in: number;
@@ -1233,8 +1232,8 @@ export interface AtSummary {
   generated_at: number;
   verdict: boolean;
   /** Критерий на последней четверти периода. */
-  criteria: { net_gt: number; pf_ge: number; trades_ge: number; max_dd_le: number };
-  period: { from: number; to: number; cut: number };
+  criteria: { pf_ge: number; trades_ge: number; max_dd_le: number };
+  period: { from: number; to: number };
   sizing: { deposit: number; deposit_end: number; margin_pct: number; leverage: number;
             fee_taker_pct: number; fee_maker_pct: number; slippage_pct: number };
   data: { signals: number; requests: number; errors: number };
@@ -1259,13 +1258,11 @@ export interface AtSummary {
 /** Ответ закрытой вкладки владельца (/api/owner/autotrade). */
 export interface AutotradeReply {
   ok: boolean;
-  stage: "backtest" | "live";
   /** Модуль включён кнопкой «Старт» (по умолчанию — выключен). */
   on: boolean;
   backtest: AtSummary | null;
   running: boolean;
   started: number;
-  finished: number;
   error: string;
   next: number;
   /** Ход идущего пересчёта строкой («повтор: 40 % …»); не идёт — пусто. */
@@ -1287,13 +1284,12 @@ export interface AtLiveOpen {
   side: number;
   opened: number;
   px: number;
-  size: number;
   notional: number;
   tp: number;
   whales?: number;
   mark?: number;
   upl?: number;
-  /** Маржа сделки, % капитала: 10, а при ручной сделке владельца на счёте — 5. */
+  /** Маржа сделки, % капитала (всегда 5). */
   margin_pct?: number;
 }
 
@@ -1307,8 +1303,6 @@ export interface AtLiveTrade {
   px_in: number;
   px_out: number;
   pnl: number;
-  fee?: number;
-  funding?: number;
   why: string;
 }
 
@@ -1320,16 +1314,17 @@ export interface AtLive {
   error: string;
   equity: number | null;
   open: AtLiveOpen | null;
-  positions: { instId: string; pos: string; avgPx?: string; upl?: string }[];
+  /** Позиции счёта (ручные владельца — все, кроме позиции бота). */
+  positions: { instId: string; upl?: string }[];
   last_skip?: { coin: string; side: number; why: string; at: number } | null;
   /** Бумаги, которыми OKX не даёт торговать этому счёту (исключены на неделю). */
-  blocked?: Record<string, { at: number; why: string; permanent: boolean }>;
+  blocked?: string[];
   /** Запрет ключу OKX (например, 50124 — рынок фьючерсов закрыт ключу): ордера не проходят. */
   key_problem?: string;
   /** Пропуски сигналов за сутки по причинам: код → сколько (см. SKIP_LABELS). */
   skips_24h?: Record<string, number>;
   events: string[];
-  stats: { trades: number; wins: number; win_pct: number; net: number; avg_win: number; avg_loss: number;
+  stats: { trades: number; win_pct: number; net: number; avg_win: number; avg_loss: number;
     pf: number | null; max_dd: number; per_day: number; fees: number; funding: number };
   equity_curve: [number, number][];
   trades: AtLiveTrade[];

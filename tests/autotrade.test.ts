@@ -6,12 +6,12 @@ import { checkAutotrade, shortInst, skipsLine, validAutotrade } from "../src/lib
 
 const SUMMARY = JSON.parse(readFileSync(new URL("./fixtures/autotrade_summary.json", import.meta.url), "utf8")) as Record<string, unknown>;
 const LIVE = JSON.parse(readFileSync(new URL("./fixtures/autotrade_live.json", import.meta.url), "utf8")) as Record<string, unknown>;
-const GOOD = { ok: true, stage: "live", on: true, backtest: SUMMARY, running: false, started: 1, finished: 2, error: "",
+const GOOD = { ok: true, on: true, backtest: SUMMARY, running: false, started: 1, error: "",
   next: 3, live: LIVE };
 
 test("образцы — годный ответ", () => {
   assert.ok(validAutotrade(GOOD));
-  assert.ok(validAutotrade({ ...GOOD, backtest: null, live: null, stage: "backtest" }));
+  assert.ok(validAutotrade({ ...GOOD, backtest: null, live: null }));
   assert.ok(validAutotrade({ ...GOOD, running: true, progress: "повтор: 40 %" }));
 });
 
@@ -19,11 +19,11 @@ test("любое рисуемое поле не того типа — отказ
   const stats = LIVE["stats"] as Record<string, unknown>;
   const open = LIVE["open"] as Record<string, unknown>;
   for (const bad of [
-    { ...GOOD, ok: "true" }, { ...GOOD, stage: "x" }, { ...GOOD, on: 1 }, { ...GOOD, started: Number.NaN },
+    { ...GOOD, ok: "true" }, { ...GOOD, on: 1 }, { ...GOOD, started: Number.NaN },
     { ...GOOD, error: null }, { ...GOOD, live: { ...LIVE, stats: { ...stats, net: "1" } } },
     { ...GOOD, live: { ...LIVE, stats: { ...stats, win_pct: Number.POSITIVE_INFINITY } } },
     { ...GOOD, live: { ...LIVE, open: { ...open, side: 2 } } }, { ...GOOD, live: { ...LIVE, open: { ...open, tp: "1" } } },
-    { ...GOOD, live: { ...LIVE, positions: [{ instId: 1, pos: "1" }] } }, { ...GOOD, live: { ...LIVE, events: [1] } },
+    { ...GOOD, live: { ...LIVE, positions: [{ instId: 1 }] } }, { ...GOOD, live: { ...LIVE, blocked: { "BTC-USDT-SWAP": {} } } }, { ...GOOD, live: { ...LIVE, events: [1] } },
     { ...GOOD, live: { ...LIVE, equity_curve: [[1]] } }, { ...GOOD, live: { ...LIVE, trades: [{}] } },
     { ...GOOD, backtest: { ...SUMMARY, equity: [[1, "x"]] } }, { ...GOOD, backtest: { ...SUMMARY, verdict: "no" } },
     { ...GOOD, backtest: { ...SUMMARY, full: { ...(SUMMARY["full"] as Record<string, unknown>), pf: "1" } } },
@@ -32,7 +32,7 @@ test("любое рисуемое поле не того типа — отказ
     { ...GOOD, live: { ...LIVE, skips_24h: [7] } }, { ...GOOD, live: { ...LIVE, open: { ...open, exit_why: 1 } } },
     { ...GOOD, live: { ...LIVE, open: { ...open, usd_against: "9000" } } },
     { ...GOOD, live: { ...LIVE, open: { ...open, avg_why: 1 } } },
-    { ...GOOD, progress: 40 }, { ...GOOD, stage: "paper" },
+    { ...GOOD, progress: 40 },
     { ...GOOD, backtest: { ...SUMMARY, skips: { own_open: "1" } } }, { ...GOOD, backtest: { ...SUMMARY, averaged: "1" } },
     { ...GOOD, backtest: { ...SUMMARY, last: null } }, { ...GOOD, backtest: { ...SUMMARY, active: [{}] } },
     { ...GOOD, backtest: { ...SUMMARY, trades: [{ ...(SUMMARY["trades"] as Record<string, unknown>[])[0], averaged: 1 }] } },

@@ -32,7 +32,7 @@ const group = (v: unknown): boolean => isObj(v) && str(v["key"]) && stats(v);
 
 const trade = (v: unknown): boolean =>
   isObj(v) && str(v["coin"]) && side(v["side"])
-  && nums(v, ["whales", "entry", "exit", "px_in", "px_out", "tp", "usd", "pct", "mae", "held_h"])
+  && nums(v, ["entry", "exit", "px_in", "px_out", "tp", "usd", "pct", "mae", "held_h"])
   && str(v["why"]) && bool(v["averaged"]);
 
 /** Итог бэктеста-повтора (WhaleScanner/tools/autotrade_replay.py). Итог прежней
@@ -42,8 +42,8 @@ function summary(v: unknown): boolean {
   if (!isObj(v)) return false;
   const c = v["criteria"], p = v["period"], s = v["sizing"], d = v["data"], k = v["skips"];
   return num(v["generated_at"]) && bool(v["verdict"])
-    && isObj(c) && nums(c, ["net_gt", "pf_ge", "trades_ge", "max_dd_le"])
-    && isObj(p) && nums(p, ["from", "to", "cut"])
+    && isObj(c) && nums(c, ["pf_ge", "trades_ge", "max_dd_le"])
+    && isObj(p) && nums(p, ["from", "to"])
     && isObj(s) && nums(s, ["deposit", "deposit_end", "margin_pct", "leverage", "fee_taker_pct", "fee_maker_pct", "slippage_pct"])
     && isObj(d) && nums(d, ["signals", "requests", "errors"])
     && ["full", "first", "last"].every((x) => stats(v[x]))
@@ -56,12 +56,12 @@ function summary(v: unknown): boolean {
 
 const liveOpen = (v: unknown): boolean =>
   isObj(v) && str(v["coin"]) && str(v["inst"]) && side(v["side"])
-  && nums(v, ["opened", "px", "size", "notional", "tp"]) && opt(v["whales"], num) && opt(v["mark"], num) && opt(v["upl"], num) && opt(v["margin_pct"], num)
+  && nums(v, ["opened", "px", "notional", "tp"]) && opt(v["whales"], num) && opt(v["mark"], num) && opt(v["upl"], num) && opt(v["margin_pct"], num)
   && opt(v["exit_why"], str) && opt(v["usd"], num) && opt(v["usd_against"], num) && opt(v["avg_why"], str);
 
 const liveTrade = (v: unknown): boolean =>
   isObj(v) && str(v["coin"]) && str(v["inst"]) && side(v["side"])
-  && nums(v, ["opened", "closed", "px_in", "px_out", "pnl"]) && opt(v["fee"], num) && opt(v["funding"], num) && str(v["why"]);
+  && nums(v, ["opened", "closed", "px_in", "px_out", "pnl"]) && str(v["why"]);
 
 function live(v: unknown): boolean {
   if (!isObj(v)) return false;
@@ -69,20 +69,20 @@ function live(v: unknown): boolean {
   return bool(v["alive"]) && num(v["heartbeat"]) && bool(v["simulated"]) && str(v["error"])
     && (v["equity"] === null || num(v["equity"]))
     && (v["open"] === null || liveOpen(v["open"]))
-    && arr(v["positions"], (p) => isObj(p) && str(p["instId"]) && str(p["pos"]) && opt(p["upl"], str) && opt(p["avgPx"], str))
+    && arr(v["positions"], (p) => isObj(p) && str(p["instId"]) && opt(p["upl"], str))
     && opt(skip, (k) => isObj(k) && str(k["coin"]) && side(k["side"]) && str(k["why"]) && num(k["at"]))
-    && opt(blocked, (b) => isObj(b) && Object.values(b).every((x) => isObj(x) && num(x["at"]) && str(x["why"])))
+    && opt(blocked, (b) => arr(b, str))
     && opt(v["key_problem"], str) && opt(v["skips_24h"], (k) => isObj(k) && Object.values(k).every(num))
     && arr(v["events"], str)
-    && isObj(s) && nums(s, ["trades", "wins", "win_pct", "net", "avg_win", "avg_loss", "max_dd", "per_day", "fees", "funding"])
+    && isObj(s) && nums(s, ["trades", "win_pct", "net", "avg_win", "avg_loss", "max_dd", "per_day", "fees", "funding"])
     && (s["pf"] === null || num(s["pf"]))
     && arr(v["equity_curve"], pair) && arr(v["trades"], liveTrade);
 }
 
 /** Ответ годен для вкладки (ok: true) — каждое поле, которое она рисует, нужного типа. */
 export function validAutotrade(v: unknown): v is AutotradeReply {
-  return isObj(v) && v["ok"] === true && (v["stage"] === "backtest" || v["stage"] === "live")
-    && bool(v["on"]) && bool(v["running"]) && nums(v, ["started", "finished", "next"]) && str(v["error"])
+  return isObj(v) && v["ok"] === true
+    && bool(v["on"]) && bool(v["running"]) && nums(v, ["started", "next"]) && str(v["error"])
     && opt(v["progress"], str)
     && (v["backtest"] === null || summary(v["backtest"]))
     && (v["live"] === null || live(v["live"]));

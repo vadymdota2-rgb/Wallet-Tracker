@@ -31,25 +31,11 @@
  "positions": [
   {
    "instId": "ETH-USD_UM_XPERP-310404",
-   "pos": "-4995",
-   "posSide": "short",
-   "avgPx": "3000",
-   "markPx": "3012",
-   "upl": "-39.96",
-   "lever": "10",
-   "mgnMode": "cross",
-   "cTime": "1"
+   "upl": "-39.96"
   },
   {
    "instId": "H-USD_UM_XPERP-310815",
-   "pos": "5",
-   "posSide": "long",
-   "avgPx": "0.2",
-   "markPx": "0.21",
-   "upl": "12.5",
-   "lever": "5",
-   "mgnMode": "cross",
-   "cTime": "1"
+   "upl": "12.5"
   }
  ],
  "last_skip": {

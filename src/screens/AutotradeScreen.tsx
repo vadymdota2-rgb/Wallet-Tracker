@@ -129,7 +129,7 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
                sub={`${l.key_problem}. Сигналы есть — дело в правах ключа; бумаги не исключаются, бот проверяет снова раз в 30 минут.`} />
         ) : null}
         <Row title="Капитал счёта" value={l.equity != null ? usd(l.equity) : "—"}
-             sub={`маржа на сделку всегда 5% × 10× = ${l.equity != null ? usd(l.equity / 2) : "—"}; `
+             sub={`маржа на сделку всегда 5 % × 10× — позиция ${l.equity != null ? usd(l.equity / 2) : "—"}; `
                + "усреднение — один раз ещё 5 %, если позиция в минусе больше 1 % и кит сигнала добирает"} />
       </Card>
 
@@ -157,9 +157,9 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
                sub="Открыта вами — бот на эту бумагу не входит; размер его входа это не меняет (5 %)"
                value={p.upl ? usd(Number(p.upl), true) : ""} />
         ))}
-        {l.blocked && Object.keys(l.blocked).length ? (
+        {l.blocked?.length ? (
           <Row title="OKX не даёт торговать" wrap
-               sub={`${Object.keys(l.blocked).map(shortInst).join(", ")} — исключены на 7 дней; бот берёт другие сигналы`} />
+               sub={`${l.blocked.map(shortInst).join(", ")} — исключены на 7 дней; бот берёт другие сигналы`} />
         ) : null}
         {l.skips_24h && Object.keys(l.skips_24h).length ? (
           <Row title="Пропуски сигналов за сутки" wrap sub={skipsLine(l.skips_24h)} />
@@ -208,8 +208,7 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
   );
 }
 
-/** Какие бумаги китов можно торговать на OKX: имя на Hyperliquid и на OKX
- *  может не совпадать, а одно имя — означать разные активы. */
+/** Вкладка: кнопки «Старт»/«Стоп» и пересчёт, реальная торговля, бэктест. */
 export function AutotradeScreen() {
   const [st, setSt] = useState<AutotradeReply | null>(null);
   const [failed, setFailed] = useState(false);
