@@ -526,8 +526,8 @@ my.okx.com) бессрочные — `…-USD_UM_XPERP-…` (FUTURES), служ�
 
 Типы: `wt_autotrade.py` и торговля — `mypy --strict`; файлы вкладки —
 строжайший TypeScript (`npm run typecheck:autotrade`). Мутационная
-проверка: здесь `tools/mutate-autotrade.py` (29 порч — все убиты),
-в WhaleScanner — 111 порч торговли; обе сначала гоняют тесты на чистом коде. Сервер — Python 3.10–3.13 и Debian 13.
+проверка: здесь `tools/mutate-autotrade.py` (34 порчи — все убиты),
+в WhaleScanner — 124 порчи торговли; обе сначала гоняют тесты на чистом коде. Сервер — Python 3.10–3.13 и Debian 13.
 
 ### Рынки в меню
 
