@@ -473,7 +473,7 @@ noImplicitOverride, noPropertyAccessFromIndexSignature, noImplicitReturns).
 
 | Часть | Файл |
 |---|---|
-| Торговля, бэктест ночью и по кнопке (повтор истории по актуальным правилам живого бота, ход — во вкладке), автоочистка | WhaleScanner `tools/autotrade_live.py`, `tools/autotrade_replay.py` |
+| Торговля, бэктест ночью и по кнопке (повтор истории по актуальным правилам живого бота и варианты выхода на тех же сигналах — «вместе с китами», тейк или раньше с китом, без усреднения; ход — во вкладке), автоочистка | WhaleScanner `tools/autotrade_live.py`, `tools/autotrade_replay.py` |
 | Сервер: кнопки (файлы-запросы), ответ вкладке из файлов службы | `wt_autotrade.py`, маршруты `/api/owner/autotrade…` в `whale_api.py` |
 | Проверка ответа в приложении, короткие имена контрактов | `src/lib/autotrade.ts` (`validAutotrade`, `checkAutotrade`, `shortInst`) |
 | Вкладка | `src/screens/AutotradeScreen.tsx` |
@@ -526,8 +526,8 @@ my.okx.com) бессрочные — `…-USD_UM_XPERP-…` (FUTURES), служ�
 
 Типы: `wt_autotrade.py` и торговля — `mypy --strict`; файлы вкладки —
 строжайший TypeScript (`npm run typecheck:autotrade`). Мутационная
-проверка: здесь `tools/mutate-autotrade.py` (39 порч — все убиты),
-в WhaleScanner — 129 порч торговли (127 убиты, 2 равносильны исходному коду); обе сначала гоняют тесты на чистом коде. Сервер — Python 3.10–3.13 и Debian 13.
+проверка: здесь `tools/mutate-autotrade.py` (41 порча — все убиты),
+в WhaleScanner — 135 порч торговли и бэктеста (133 убиты, 2 равносильны исходному коду); обе сначала гоняют тесты на чистом коде. Сервер — Python 3.10–3.13 и Debian 13.
 
 ### Рынки в меню
 
