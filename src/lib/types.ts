@@ -1341,7 +1341,7 @@ export interface AtLive {
   key_problem?: string;
   /** Пропуски сигналов за сутки по причинам: код → сколько (см. SKIP_LABELS). */
   skips_24h?: Record<string, number>;
-  /** Киты — топ-1000 по винрейту: сколько кошельков в списке (null — ещё не загружен). */
+  /** Киты — топ-3000 по винрейту: сколько кошельков в списке (null — ещё не загружен). */
   top_n?: number | null;
   events: string[];
   stats: { trades: number; wins: number; win_pct: number; net: number; avg_win: number; avg_loss: number;
