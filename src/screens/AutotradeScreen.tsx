@@ -70,7 +70,8 @@ function Variants({ s }: { s: AtSummary }) {
           <Row key={v.key} title={v.name} wrap
                sub={`${v.full.trades} сделок · ${pct(v.full.win_pct, 0, false)} в плюс · PF ${pf(v.full.pf)} · `
                  + `просадка ${usd(-v.full.max_dd)} · последняя четверть ${usd(v.last.net, true)} (PF ${pf(v.last.pf)})`
-                 + (v.full.open ? ` · открыто ${v.full.open}` : "") + (v.averaged ? ` · усреднений ${v.averaged}` : "")}
+                 + (v.full.open ? ` · открыто ${v.full.open}` : "") + (v.averaged ? ` · усреднений ${v.averaged}` : "")
+                 + (v.unfilled ? ` · заявок не исполнилось ${v.unfilled}` : "")}
                value={usd(v.full.net, true)} tone={v.full.net >= 0 ? "up" : "dn"}
                valueSub={v.verdict ? "окупается" : `капитал ${usd(v.deposit_end)}`} />
         ))}

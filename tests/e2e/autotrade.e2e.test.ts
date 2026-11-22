@@ -129,6 +129,8 @@ describe("закрытая вкладка «Автоторговля»", () => {
     await screen.getByText("Варианты выхода на тех же сигналах").waitFor();
     const vw = await screen.getByText(/^вместе с китами/).first().locator("xpath=ancestor::*[@class='row'][1]").innerText();
     for (const s of [/\+\$1[.,]88/, /2 сделок/, /100% в плюс/, /последняя четверть \+\$0[.,]77/]) assert.match(vw, s);
+    const lim = await screen.getByText(/^вход лимитом: лонг на 1 % ниже цены китов/).first().locator("xpath=ancestor::*[@class='row'][1]").innerText();
+    for (const s of [/\+\$1[.,]29/, /заявок не исполнилось 4/]) assert.match(lim, s);
     for (const s of ["как сейчас: тейк +1 %, выход за китом в убытке, усреднение", "тейк +1 % или раньше — вместе с китом",
       "как сейчас, без усреднения"]) {
       assert.ok(await screen.getByText(s).first().isVisible(), s);

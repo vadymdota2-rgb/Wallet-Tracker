@@ -37,7 +37,7 @@ const trade = (v: unknown): boolean =>
 
 const variant = (v: unknown): boolean =>
   isObj(v) && str(v["key"]) && str(v["name"]) && num(v["deposit_end"]) && bool(v["verdict"])
-  && stats(v["full"]) && stats(v["last"]) && num(v["averaged"]);
+  && stats(v["full"]) && stats(v["last"]) && num(v["averaged"]) && opt(v["unfilled"], num);
 
 /** Итог бэктеста-повтора (WhaleScanner/tools/autotrade_replay.py). Итог прежней
  *  сетки (на сервере мог остаться в latest/) сюда не проходит — вкладка покажет

@@ -262,7 +262,8 @@
     "max_mae": 0.0,
     "longest_h": 0.0
    },
-   "averaged": 1
+   "averaged": 1,
+   "unfilled": 0
   },
   {
    "key": "with_whales",
@@ -299,7 +300,8 @@
     "max_mae": 0.96,
     "longest_h": 41.5
    },
-   "averaged": 0
+   "averaged": 0,
+   "unfilled": 0
   },
   {
    "key": "tp_or_whales",
@@ -336,7 +338,8 @@
     "max_mae": 0.96,
     "longest_h": 12.0
    },
-   "averaged": 0
+   "averaged": 0,
+   "unfilled": 0
   },
   {
    "key": "no_average",
@@ -373,7 +376,46 @@
     "max_mae": 0.0,
     "longest_h": 0.0
    },
-   "averaged": 0
+   "averaged": 0,
+   "unfilled": 0
+  },
+  {
+   "key": "limit_entry",
+   "name": "вход лимитом: лонг на 1 % ниже цены китов, шорт на 1 % выше; заявка до 2 ч, первая исполнившаяся",
+   "deposit_end": 126.12,
+   "verdict": false,
+   "full": {
+    "trades": 2,
+    "win_pct": 50.0,
+    "avg_win": 1.11,
+    "avg_loss": -0.06,
+    "pf": 18.472,
+    "net": 1.29,
+    "max_dd": 0.96,
+    "worst_streak": 1,
+    "worst_streak_usd": -0.06,
+    "open": 1,
+    "unrealized": -0.06,
+    "max_mae": 0.96,
+    "longest_h": 235.0
+   },
+   "last": {
+    "trades": 1,
+    "win_pct": 50.0,
+    "avg_win": 1.11,
+    "avg_loss": -0.06,
+    "pf": 18.472,
+    "net": 0.18,
+    "max_dd": 0.96,
+    "worst_streak": 1,
+    "worst_streak_usd": -0.06,
+    "open": 1,
+    "unrealized": -0.06,
+    "max_mae": 0.96,
+    "longest_h": 235.0
+   },
+   "averaged": 0,
+   "unfilled": 4
   }
  ]
 }

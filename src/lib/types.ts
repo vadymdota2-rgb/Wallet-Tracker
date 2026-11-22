@@ -1237,6 +1237,8 @@ export interface AtVariant {
   full: AtStats;
   last: AtStats;
   averaged: number;
+  /** Вход лимитом: сколько заявок не исполнилось (истекли за 2 ч или кит вышел в убыток). */
+  unfilled?: number;
 }
 
 /** Итог бэктеста-повтора по актуальным правилам живого бота. */
