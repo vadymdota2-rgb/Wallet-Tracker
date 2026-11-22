@@ -19,6 +19,8 @@ const TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml",
   ".png": "image/png", ".webp": "image/webp", ".json": "application/json", ".woff2": "font/woff2", ".ttf": "font/ttf", ".ico": "image/x-icon",
 };
+const REPLAY = JSON.parse(await readFile(new URL("../fixtures/autotrade_summary_replay.json", import.meta.url), "utf8")) as
+  Record<string, unknown>;
 const SUMMARY = JSON.parse(await readFile(new URL("../fixtures/autotrade_summary.json", import.meta.url), "utf8")) as
   Record<string, unknown>;
 const T = 1_795_000_000;
@@ -49,7 +51,8 @@ after(async () => {
   await new Promise((ok) => server?.close(ok));
 });
 
-interface Opts { owner: boolean; reply?: "ok" | "404"; width?: number; on?: boolean; live?: Record<string, unknown> }
+interface Opts { owner: boolean; reply?: "ok" | "404"; width?: number; on?: boolean; live?: Record<string, unknown>;
+  backtest?: Record<string, unknown>; running?: boolean; progress?: string }
 
 /** Реальная торговля — ответ сервера из образцов файлов службы (договор:
  *  tests/test_autotrade_contract.py сверяет его с wt_autotrade.live). */
@@ -70,8 +73,9 @@ async function open(o: Opts): Promise<{ ctx: BrowserContext; page: Page; errors:
     body: JSON.stringify({ ok: true, live: true, me: { plan: "premium", ...(o.owner ? { owner: true } : {}) }, wallets: [] }) }));
   let on = o.on ?? true;
   const reply = () => JSON.stringify({
-    ok: true, stage: "backtest", on, backtest: SUMMARY, running: false, started: T - 7200, finished: T - 3600,
-    error: "", next: T + 40_000, paper: null, live: o.live ?? null });
+    ok: true, stage: "backtest", on, backtest: o.backtest ?? SUMMARY, running: o.running ?? false, started: T - 7200,
+    finished: T - 3600, error: "", next: T + 40_000, paper: null, live: o.live ?? null,
+    ...(o.progress ? { progress: o.progress } : {}) });
   await ctx.route(`${base}/api/owner/autotrade`, (r) => o.reply === "404"
     ? r.fulfill({ status: 404, contentType: "application/json", body: '{"ok":false,"error":"not_found"}' })
     : r.fulfill({ contentType: "application/json", body: reply() }));
@@ -211,6 +215,24 @@ describe("закрытая вкладка «Автоторговля»", () => {
     const screen = page.locator(".sheet .screen");
     await screen.getByText("Закрываем вслед за китом").waitFor();
     assert.ok(await screen.getByText(/закрыл в убыток -120 \$ — бот снял тейк и закрывает позицию рыночным ордером/).isVisible());
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("бэктест-повтор по актуальным правилам и ход пересчёта", async () => {
+    const { ctx, page, errors } = await open({ owner: true, backtest: REPLAY, running: true,
+      progress: "повтор: 40 % (400 000 из 1 000 000 сделок китов), сделок 3, запросов к OKX 120" });
+    await page.locator(".drawer-row", { hasText: "Автоторговля" }).click();
+    const screen = page.locator(".sheet .screen");
+    await screen.getByText(/повтор: 40 % \(400 000 из 1 000 000 сделок китов\)/).waitFor();
+    for (const s of [REPLAY["verdict"] ? "Правила окупаются" : "Правила пока не окупаются", "Сигналы в повторе",
+      "Последняя четверть периода", "Первые три четверти", "кит закрыл в убыток — выходим"]) {
+      assert.ok(await screen.getByText(s).first().isVisible(), s);
+    }
+    assert.ok(await screen.getByText(/вслед за китом в убытке; разовое усреднение/).first().isVisible());
+    assert.ok(await screen.getByText(/усреднений: 1/).first().isVisible());
+    const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    assert.ok(wide <= 0, `шире экрана на ${wide}px`);
     assert.deepEqual(errors, []);
     await ctx.close();
   });

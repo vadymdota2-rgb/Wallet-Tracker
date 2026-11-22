@@ -29,10 +29,15 @@ TS = [
     ("    && opt(v[\"key_problem\"], str) && opt(v[\"skips_24h\"], (k) => isObj(k) && Object.values(k).every(num))", "",
      "запрет ключу и пропуски — по договору"),
     ("Object.entries(k).sort((a, b) => b[1] - a[1])", "Object.entries(k)", "пропуски — по убыванию"),
+    ("\n    && opt(v[\"progress\"], str)", "", "ход пересчёта — строка"),
+    ("    && opt(v[\"kind\"], (k) => k === \"replay\") && opt(v[\"skips\"], (k) => isObj(k) && Object.values(k).every(num))\n    && opt(v[\"averaged\"], num) && opt(v[\"deposit_end\"], num);",
+     ";", "итог повтора — по договору"),
     ("\n  && opt(v[\"exit_why\"], str) && opt(v[\"usd\"], num) && opt(v[\"usd_against\"], num) && opt(v[\"avg_why\"], str);", ";",
      "причина выхода и объёмы китов — по договору"),
 ]
 PY = [
+    ("            \"progress\": bs[\"progress\"] if bs[\"running\"] else \"\",", "            \"progress\": bs[\"progress\"],",
+     "сервер: ход — только пока идёт пересчёт"),
     ("    return x if math.isfinite(x) else None\n", "    return x\n", "сервер: NaN и бесконечность — не числа"),
     ("    return v if v in (1, -1) and not isinstance(v, bool) else None\n", "    return v if isinstance(v, int) else None\n",
      "сервер: сторона — 1 или −1"),

@@ -99,9 +99,10 @@ def backtest_status(data_dir: str = DATA_DIR) -> dict[str, Any]:
     # Файл мог испортиться (обрыв записи, правка руками): строка или NaN в
     # поле времени не должны давать 500 — только числа, иначе 0.
     err = got.get("error")
+    prog = got.get("progress")
     return {"running": got.get("running") is True, "started": _i(got.get("started")),
             "finished": _i(got.get("finished")), "error": err if isinstance(err, str) else "",
-            "next": _i(got.get("next")),
+            "next": _i(got.get("next")), "progress": prog[:200] if isinstance(prog, str) else "",
             "requested": os.path.exists(os.path.join(data_dir, "run.request"))}
 
 
@@ -271,6 +272,7 @@ def status(data_dir: str = DATA_DIR) -> dict[str, Any]:
     return {"ok": True, "stage": "live" if lv is not None else "backtest", "on": is_on(data_dir),
             "backtest": latest(data_dir), "running": bs["running"] or bs["requested"],
             "started": bs["started"], "finished": bs["finished"], "error": bs["error"], "next": bs["next"],
+            "progress": bs["progress"] if bs["running"] else "",
             "paper": None, "live": lv}
 
 

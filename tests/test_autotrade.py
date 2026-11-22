@@ -116,7 +116,11 @@ class ModuleFilesTest(unittest.TestCase):
         st = at.status(self.data)
         self.assertEqual((st["running"], st["started"], st["next"]), (True, 100, 200))
         with open(os.path.join(self.data, "backtest_status.json"), "w") as f:
-            json.dump({"running": False, "finished": 300, "error": "бэктесту не хватило памяти"}, f)
+            json.dump({"running": True, "started": 100, "next": 200, "error": "", "progress": "повтор: 40 %"}, f)
+        self.assertEqual(at.status(self.data)["progress"], "повтор: 40 %", "ход пересчёта — во вкладку")
+        with open(os.path.join(self.data, "backtest_status.json"), "w") as f:
+            json.dump({"running": False, "finished": 300, "error": "бэктесту не хватило памяти", "progress": "старое"}, f)
+        self.assertEqual(at.status(self.data)["progress"], "", "не идёт — хода нет")
         self.assertIn("памяти", at.status(self.data)["error"])
         with mock.patch("sys.stdout", io.StringIO()):
             at.stop_cmd(self.data)

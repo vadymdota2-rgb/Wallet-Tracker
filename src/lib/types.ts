@@ -1301,6 +1301,14 @@ export interface AtSummary {
   /** Темп при 1, 3 и 10 позициях сразу: сделок в день, итог, когда кончился депозит. */
   pace?: { max_open: number; trades: number; per_day: number; median_tp_h: number; open: number; net: number;
            max_dd: number; bust: number }[];
+  /** «replay» — повтор истории по актуальным правилам живого бота (один набор правил). */
+  kind?: "replay";
+  /** Повтор: пропуски сигналов по причинам (коды — как у живого бота). */
+  skips?: Record<string, number>;
+  /** Повтор: сколько раз сработало разовое усреднение. */
+  averaged?: number;
+  /** Повтор: капитал на конец (закрытые сделки), $. */
+  deposit_end?: number;
 }
 
 /** Бумага Hyperliquid на OKX: ok — есть (inst, масштаб), mismatch — под тем
@@ -1325,6 +1333,8 @@ export interface AutotradeReply {
   finished: number;
   error: string;
   next: number;
+  /** Ход идущего пересчёта строкой («повтор: 40 % …»); не идёт — пусто. */
+  progress?: string;
   paper: null;
   live: AtLive | null;
 }

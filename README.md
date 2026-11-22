@@ -473,7 +473,7 @@ noImplicitOverride, noPropertyAccessFromIndexSignature, noImplicitReturns).
 
 | Часть | Файл |
 |---|---|
-| Торговля, бэктест ночью и по кнопке, автоочистка | WhaleScanner `tools/autotrade_live.py`, `tools/autotrade_backtest.py` |
+| Торговля, бэктест ночью и по кнопке (повтор истории по актуальным правилам живого бота, ход — во вкладке), автоочистка | WhaleScanner `tools/autotrade_live.py`, `tools/autotrade_replay.py` |
 | Сервер: кнопки (файлы-запросы), ответ вкладке из файлов службы | `wt_autotrade.py`, маршруты `/api/owner/autotrade…` в `whale_api.py` |
 | Проверка ответа в приложении, короткие имена контрактов | `src/lib/autotrade.ts` (`validAutotrade`, `checkAutotrade`, `shortInst`) |
 | Вкладка | `src/screens/AutotradeScreen.tsx` |

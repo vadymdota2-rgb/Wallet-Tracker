@@ -69,7 +69,9 @@ function summary(v: unknown): boolean {
       && Object.values(o["map"]).every(okx))
     && opt(v["by_chase"], (a) => arr(a, (x) => isObj(x) && num(x["chase"]) && stats(x["train"]) && stats(x["holdout"])))
     && opt(v["pace"], (a) => arr(a, (x) => isObj(x)
-      && nums(x, ["max_open", "trades", "per_day", "median_tp_h", "open", "net", "max_dd", "bust"])));
+      && nums(x, ["max_open", "trades", "per_day", "median_tp_h", "open", "net", "max_dd", "bust"])))
+    && opt(v["kind"], (k) => k === "replay") && opt(v["skips"], (k) => isObj(k) && Object.values(k).every(num))
+    && opt(v["averaged"], num) && opt(v["deposit_end"], num);
 }
 
 const liveOpen = (v: unknown): boolean =>
@@ -101,6 +103,7 @@ function live(v: unknown): boolean {
 export function validAutotrade(v: unknown): v is AutotradeReply {
   return isObj(v) && v["ok"] === true && ["backtest", "paper", "live"].includes(v["stage"] as string)
     && bool(v["on"]) && bool(v["running"]) && nums(v, ["started", "finished", "next"]) && str(v["error"])
+    && opt(v["progress"], str)
     && (v["backtest"] === null || summary(v["backtest"]))
     && (v["live"] === null || live(v["live"]));
 }
@@ -148,6 +151,7 @@ export const SKIP_LABELS: Record<string, string> = {
   whale_exit: "кит уже вышел в убыток",
   bigger_against: "против — киты крупнее",
   stale: "китов уже меньше 2 (сигнал устарел)",
+  entered: "вошли",
 };
 
 /** Пропуски за сутки строкой: «ключу OKX закрыт рынок — 7 · цена ушла от китов — 2». */

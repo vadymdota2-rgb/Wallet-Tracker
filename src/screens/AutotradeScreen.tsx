@@ -33,11 +33,11 @@ function paramsLine(p: AtParams): string {
     p.tp ? `тейк ${p.tp}%` : "",
     p.sl ? `стоп ${p.sl}%` : "",
     p.hold ? `по времени ${p.hold} мин` : "",
-    p.whale ? "когда кит закрыл" : "",
+    p.whale ? "кит закрыл в убыток — выходим" : "",
   ].filter(Boolean);
   return [
     p.wallets > 1 ? `китов в одну сторону от ${p.wallets}${p.min_whale ? `, каждый от ${usd(p.min_whale)}` : ""}` : "",
-    p.no_conflict ? "киты не спорят" : "",
+    p.no_conflict ? "против — киты не крупнее" : "",
     p.cooldown ? `в одну бумагу — раз в ${p.cooldown % 60 ? `${p.cooldown} мин` : `${p.cooldown / 60} ч`}` : "",
     p.rest ? `после выхода ${p.rest / 60} ч в бумагу не входим` : "",
     `вход через ${p.delay} с`,
@@ -317,7 +317,7 @@ export function AutotradeScreen() {
         toast(st?.on === false ? "Модуль остановлен — сначала «Старт»" : "Не вышло запустить", "err");
         return;
       }
-      toast(r.started ? "Пересчёт запущен — займёт до часа" : "Уже считается");
+      toast(r.started ? "Пересчёт запущен — обычно 5–30 минут, ход — в строке «Пересчёт»" : "Уже считается");
       setTick((n) => n + 1);
     });
   };
@@ -341,7 +341,8 @@ export function AutotradeScreen() {
           <Row title="Реальная торговля не установлена" wrap
                sub="На сервере: sudo bash /home/vadymdota2/WhaleScanner/tools/autotrade-install.sh, затем ключ OKX в /etc/whale-autotrade.env" />
         )}
-        <Row title="Пересчёт" sub={st.running ? `идёт с ${when(st.started * 1000)}` : `следующий ${when(st.next * 1000)}`}
+        <Row title="Пересчёт" sub={st.running ? `идёт с ${when(st.started * 1000)}${st.progress ? ` · ${st.progress}` : ""}`
+               : `следующий ${when(st.next * 1000)}`}
              value={b ? when(b.generated_at * 1000) : "ещё не было"} valueSub="последний" wrap />
         {st.error ? <Row title="Сбой прошлого пересчёта" sub={st.error} tone="dn" wrap /> : null}
         <Action kind="ghost" disabled={st.running || !st.on} onClick={run}>
@@ -353,21 +354,34 @@ export function AutotradeScreen() {
 
       {!b ? (
         <Empty text="Итога бэктеста ещё нет"
-               hint={st.on ? "Первый пересчёт идёт после «Старт»; до часа." : "Нажмите «Старт» — сразу начнётся первый пересчёт (до часа)."} />
+               hint={st.on ? "Первый пересчёт идёт после «Старт»; обычно 5–30 минут." : "Нажмите «Старт» — сразу начнётся первый пересчёт (обычно 5–30 минут)."} />
       ) : (
         <>
           <Overview s={b} />
           <Active s={b} />
           <Card>
-            <Row title={b.verdict ? "Вердикт: можно дальше" : "Вердикт: нет"}
-                 sub={b.verdict
-                   ? "Лучший набор прошёл проверку на отложенных данных. Следующий шаг — бумажная торговля (2–4 недели), если скажете «да»."
-                   : "На отложенных данных критерий не пройден — копирование не окупает комиссии и риск."}
-                 tone={b.verdict ? "up" : "dn"} wrap />
+            {b.kind === "replay" ? (
+              <Row title={b.verdict ? "Правила окупаются" : "Правила пока не окупаются"} wrap tone={b.verdict ? "up" : "dn"}
+                   sub={`Повтор последних ${Math.round((b.period.to - b.period.from) / 86_400_000)} дн. по актуальным правилам живого бота: `
+                     + `капитал ${usd(b.sizing.deposit)} → ${usd(b.deposit_end ?? b.sizing.deposit)}; `
+                     + (b.verdict ? "критерий на последней четверти пройден." : "критерий на последней четверти не пройден.")} />
+            ) : (
+              <Row title={b.verdict ? "Вердикт: можно дальше" : "Вердикт: нет"}
+                   sub={b.verdict
+                     ? "Лучший набор прошёл проверку на отложенных данных. Следующий шаг — бумажная торговля (2–4 недели), если скажете «да»."
+                     : "На отложенных данных критерий не пройден — копирование не окупает комиссии и риск."}
+                   tone={b.verdict ? "up" : "dn"} wrap />
+            )}
             <Row title="Критерий" wrap
                  sub={`итог > 0, PF ≥ ${b.criteria.pf_ge}, сделок ≥ ${b.criteria.trades_ge}, просадка ≤ ${usd(b.criteria.max_dd_le)}${b.criteria.beats_fade ? "; за китами лучше, чем против них" : ""}`} />
             <Row title="Размер" wrap
-                 sub={`${b.sizing.cross ? "кросс-маржа" : "изолированная маржа"}; депозит ${usd(b.sizing.deposit)}, маржа ${b.sizing.margin_pct}% × ${b.sizing.leverage}× = позиция ${usd(b.sizing.notional)}; ${b.sizing.max_open === 1 ? "всегда одна открытая позиция: пока её не закрыли, вторую не открываем" : `позиций сразу: до ${b.sizing.max_open || "без предела"}`}; ликвидация — при ходе против ${b.sizing.liq_move_pct}%; выход — только тейк, пересиживаем всегда`} />
+                 sub={`${b.sizing.cross ? "кросс-маржа" : "изолированная маржа"}; депозит ${usd(b.sizing.deposit)}, маржа ${b.sizing.margin_pct}% × ${b.sizing.leverage}× = позиция ${usd(b.sizing.notional)}; ${b.sizing.max_open === 1 ? "всегда одна открытая позиция: пока её не закрыли, вторую не открываем" : `позиций сразу: до ${b.sizing.max_open || "без предела"}`}; ликвидация — при ходе против ${b.sizing.liq_move_pct}%; ${b.kind === "replay"
+                   ? "выход — тейк +1 % или по рынку вслед за китом в убытке; разовое усреднение 5 % при минусе больше 1 % и доборе кита"
+                   : "выход — только тейк, пересиживаем всегда"}`} />
+            {b.kind === "replay" && b.skips ? (
+              <Row title="Сигналы в повторе" wrap
+                   sub={`${skipsLine(b.skips)}${b.averaged ? ` · усреднений: ${b.averaged}` : ""}`} />
+            ) : null}
             <Row title="Сигнал" wrap
                  sub={`открытие лонга или шорта на фьючерсах (${b.sizing.markets === "all" ? "крипта, акции, металлы" : "акции"}); китов считаем за ${b.sizing.cluster_hours} ч${b.sizing.min_whale ? `, у каждого позиция от ${usd(b.sizing.min_whale)}` : ""}; цена ниже средней китов (для шорта — выше) — входим, ушла в другую сторону дальше предела — пропуск`} />
             <Row title="Данные" wrap
@@ -378,7 +392,7 @@ export function AutotradeScreen() {
 
           {best ? (
             <>
-              <SectionTitle>Лучший набор на отложенных данных</SectionTitle>
+              <SectionTitle>{b.kind === "replay" ? "Последняя четверть периода" : "Лучший набор на отложенных данных"}</SectionTitle>
               <Card>
                 <Row title="Параметры" sub={paramsLine(best.params)} wrap />
                 <StatsRows s={best.holdout} />
@@ -388,7 +402,7 @@ export function AutotradeScreen() {
                        value={usd(b.fade.net, true)} tone={b.fade.net < best.holdout.net ? "up" : "dn"} />
                 ) : null}
               </Card>
-              <SectionTitle>Тот же набор на подборе</SectionTitle>
+              <SectionTitle>{b.kind === "replay" ? "Первые три четверти" : "Тот же набор на подборе"}</SectionTitle>
               <Card><StatsRows s={best.train} /></Card>
             </>
           ) : null}
