@@ -142,7 +142,7 @@ function Active({ s }: { s: AtSummary }) {
                  + `${a.to_tp_pct !== null ? ` (ещё ${a.to_tp_pct.toFixed(2)}%)` : ""} · держим ${Math.round(a.held_h)} ч`
                  + ` · провал до ${usd(-a.mae)}${a.averaged ? " · усреднена" : ""}`}
                value={usd(a.usd, true)} tone={a.usd >= 0 ? "up" : "dn"} valueSub={pct(a.pct, 2)} />
-        )) : <Row title="Открытых позиций нет" sub="Ждём сигнала: от 2 китов в одну сторону за 2 часа" wrap />}
+        )) : <Row title="Открытых позиций нет" sub="Ждём сигнала: от 3 китов (каждый от 10 000 $) в одну сторону за 2 часа" wrap />}
       </Card>
     </>
   );
@@ -182,7 +182,7 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
                  + `${op.usd !== undefined ? ` (${usd(op.usd)}${op.usd_against ? `, против ${usd(op.usd_against)}` : ", против никого"})` : ""}`
                  + `${op.margin_pct ? ` · маржа ${op.margin_pct}%` : ""}`}
                value={op.upl !== undefined ? usd(op.upl, true) : "—"} tone={(op.upl ?? 0) >= 0 ? "up" : "dn"} />
-        ) : <Row title="Позиции бота нет" sub="Ждём: от 2 китов в одну сторону за 2 часа" wrap />}
+        ) : <Row title="Позиции бота нет" sub="Ждём: от 3 китов (каждый от 10 000 $) в одну сторону за 2 часа" wrap />}
         {op?.avg_why ? (
           <Row title="Усреднено" wrap sub={`${op.avg_why} — долили 5 % капитала, тейк +1 % от новой средней на весь объём`} />
         ) : null}
@@ -342,7 +342,7 @@ export function AutotradeScreen() {
             <Row title="Критерий" wrap
                  sub={`на последней четверти: итог > 0, PF ≥ ${b.criteria.pf_ge}, сделок ≥ ${b.criteria.trades_ge}, просадка ≤ ${usd(b.criteria.max_dd_le)}`} />
             <Row title="Правила" wrap
-                 sub={`от 2 китов (каждый от 1000 $) в одну сторону за 2 ч; против — не крупнее; не дороже китов на 0,3 %; `
+                 sub={`от 3 китов (каждый от 10 000 $) в одну сторону за 2 ч; против — не крупнее; не дороже китов на 0,3 %; `
                    + `маржа ${b.sizing.margin_pct}% × ${b.sizing.leverage}×, одна позиция, в бумагу — раз в 3 ч; выход — тейк +1 % `
                    + "или по рынку вслед за китом в убытке; разовое усреднение 5 % при минусе больше 1 % и доборе кита"} />
             <Row title="Сигналы в повторе" wrap sub={`${skipsLine(b.skips)}${b.averaged ? ` · усреднений: ${b.averaged}` : ""}`} />
