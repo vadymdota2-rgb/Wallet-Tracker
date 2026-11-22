@@ -36,22 +36,12 @@ test("любое рисуемое поле не того типа — отказ
     { ...GOOD, backtest: { ...SUMMARY, skips: { own_open: "1" } } }, { ...GOOD, backtest: { ...SUMMARY, averaged: "1" } },
     { ...GOOD, backtest: { ...SUMMARY, last: null } }, { ...GOOD, backtest: { ...SUMMARY, active: [{}] } },
     { ...GOOD, backtest: { ...SUMMARY, trades: [{ ...(SUMMARY["trades"] as Record<string, unknown>[])[0], averaged: 1 }] } },
-    { ...GOOD, backtest: { ...SUMMARY, variants: [{ ...(SUMMARY["variants"] as Record<string, unknown>[])[1], unfilled: "4" }] } },
-    { ...GOOD, backtest: { ...SUMMARY, variants: {} } }, { ...GOOD, backtest: { ...SUMMARY, variants: [{}] } },
-    { ...GOOD, backtest: { ...SUMMARY, variants: [{ ...(SUMMARY["variants"] as Record<string, unknown>[])[1], verdict: 1 }] } },
-    { ...GOOD, backtest: { ...SUMMARY, variants: [{ ...(SUMMARY["variants"] as Record<string, unknown>[])[1], last: null }] } },
     // Итог прежней сетки (мог остаться на сервере) — не по договору.
     { ...GOOD, backtest: { ...SUMMARY, last: undefined, top: [] } },
     null, [], "ok", 1,
   ]) {
     assert.equal(validAutotrade(bad), false, JSON.stringify(bad).slice(0, 120));
   }
-});
-
-test("итог без сравнения вариантов (до обновления бота) — годен", () => {
-  const { variants: _drop, ...old } = SUMMARY;
-  assert.equal(validAutotrade({ ...GOOD, backtest: old }), true);
-  assert.equal(validAutotrade({ ...GOOD, backtest: SUMMARY }), true);
 });
 
 test("кнопки: отказ с причиной — как есть; испорчен только бэктест — без него; остальное — null", () => {

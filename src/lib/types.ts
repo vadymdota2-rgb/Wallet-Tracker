@@ -1228,19 +1228,6 @@ export interface AtActive extends AtTrade {
   to_tp_pct: number | null;
 }
 
-/** Вариант правил выхода на тех же сигналах (первый — правила бота). */
-export interface AtVariant {
-  key: string;
-  name: string;
-  deposit_end: number;
-  verdict: boolean;
-  full: AtStats;
-  last: AtStats;
-  averaged: number;
-  /** Вход лимитом: сколько заявок не исполнилось (истекли за 2 ч или кит вышел в убыток). */
-  unfilled?: number;
-}
-
 /** Итог бэктеста-повтора по актуальным правилам живого бота. */
 export interface AtSummary {
   generated_at: number;
@@ -1267,8 +1254,6 @@ export interface AtSummary {
   per_day: number;
   trades: AtTrade[];
   active: AtActive[];
-  /** Сравнение правил выхода (у итогов до сравнения его нет). */
-  variants?: AtVariant[];
 }
 
 /** Ответ закрытой вкладки владельца (/api/owner/autotrade). */

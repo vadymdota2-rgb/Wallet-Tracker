@@ -35,10 +35,6 @@ const trade = (v: unknown): boolean =>
   && nums(v, ["whales", "entry", "exit", "px_in", "px_out", "tp", "usd", "pct", "mae", "held_h"])
   && str(v["why"]) && bool(v["averaged"]);
 
-const variant = (v: unknown): boolean =>
-  isObj(v) && str(v["key"]) && str(v["name"]) && num(v["deposit_end"]) && bool(v["verdict"])
-  && stats(v["full"]) && stats(v["last"]) && num(v["averaged"]) && opt(v["unfilled"], num);
-
 /** Итог бэктеста-повтора (WhaleScanner/tools/autotrade_replay.py). Итог прежней
  *  сетки (на сервере мог остаться в latest/) сюда не проходит — вкладка покажет
  *  «итога ещё нет» до первого повтора. */
@@ -55,8 +51,7 @@ function summary(v: unknown): boolean {
     && ["by_coin", "by_session", "by_exit"].every((x) => arr(v[x], group))
     && isObj(k) && Object.values(k).every(num) && num(v["averaged"]) && num(v["per_day"])
     && arr(v["trades"], trade)
-    && arr(v["active"], (a) => trade(a) && isObj(a) && (a["to_tp_pct"] === null || num(a["to_tp_pct"])))
-    && opt(v["variants"], (x) => arr(x, variant));
+    && arr(v["active"], (a) => trade(a) && isObj(a) && (a["to_tp_pct"] === null || num(a["to_tp_pct"])));
 }
 
 const liveOpen = (v: unknown): boolean =>

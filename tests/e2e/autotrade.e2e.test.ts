@@ -125,16 +125,6 @@ describe("закрытая вкладка «Автоторговля»", () => {
     const act = await screen.getByText("ETH · шорт").first().locator("xpath=ancestor::*[@class='row'][1]").innerText();
     for (const s of [/по 2\s998,5/, /сейчас 3\s000/, /тейк 2\s968,51/, /ещё 1\.05%/, /держим 235 ч/]) assert.match(act, s);
     assert.ok(await screen.getByText(/капитал \$124[.,]8\d? → \$125[.,]9/).first().isVisible(), "капитал на начало и конец");
-    // Варианты выхода на тех же сигналах: «вместе с китами» и остальные — рядом с правилами бота.
-    await screen.getByText("Варианты выхода на тех же сигналах").waitFor();
-    const vw = await screen.getByText(/^вместе с китами/).first().locator("xpath=ancestor::*[@class='row'][1]").innerText();
-    for (const s of [/\+\$1[.,]88/, /2 сделок/, /100% в плюс/, /последняя четверть \+\$0[.,]77/]) assert.match(vw, s);
-    const lim = await screen.getByText(/^вход лимитом: лонг на 1 % ниже цены китов/).first().locator("xpath=ancestor::*[@class='row'][1]").innerText();
-    for (const s of [/\+\$1[.,]29/, /заявок не исполнилось 4/]) assert.match(lim, s);
-    for (const s of ["как сейчас: тейк +1 %, выход за китом в убытке, усреднение", "тейк +1 % или раньше — вместе с китом",
-      "как сейчас, без усреднения"]) {
-      assert.ok(await screen.getByText(s).first().isVisible(), s);
-    }
     // Прежней сетки во вкладке нет.
     for (const s of ["Лучший набор", "По пределу догона", "Против китов", "Торгуем на"]) {
       assert.equal(await screen.getByText(s).count(), 0, s);
