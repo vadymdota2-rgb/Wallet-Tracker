@@ -78,6 +78,7 @@ function live(v: unknown): boolean {
     && opt(skip, (k) => isObj(k) && str(k["coin"]) && side(k["side"]) && str(k["why"]) && num(k["at"]))
     && opt(blocked, (b) => isObj(b) && Object.values(b).every((x) => isObj(x) && num(x["at"]) && str(x["why"])))
     && opt(v["key_problem"], str) && opt(v["skips_24h"], (k) => isObj(k) && Object.values(k).every(num))
+    && opt(v["top_n"], num)
     && arr(v["events"], str)
     && isObj(s) && nums(s, ["trades", "wins", "win_pct", "net", "avg_win", "avg_loss", "max_dd", "per_day", "fees", "funding"])
     && (s["pf"] === null || num(s["pf"]))

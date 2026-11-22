@@ -242,6 +242,16 @@ class ModuleFilesTest(unittest.TestCase):
         lv = at.live(self.data, now=now)
         self.assertEqual((lv["key_problem"], lv["skips_24h"]), ("", {}))
 
+    def test_top_whales_count(self):
+        """Киты — топ по винрейту: сколько в списке — числом; мусор — None."""
+        d = os.path.join(self.data, "live")
+        os.makedirs(d, exist_ok=True)
+        now = 1_800_000_000
+        for raw, want in ((812, 812), (0, 0), ("812", None), (-1, None), (1e12, None), (None, None), (float("nan"), None)):
+            with open(os.path.join(d, "state.json"), "w") as f:
+                json.dump({"heartbeat": now * 1000, "top_n": raw}, f, allow_nan=True)
+            self.assertEqual(at.live(self.data, now=now)["top_n"], want, raw)
+
     def test_corrupted_service_files_are_not_500(self):
         """Файлы службы испорчены (обрыв записи, правка руками): ответ —
         по договору, без 500 («нет связи» во вкладке)."""
