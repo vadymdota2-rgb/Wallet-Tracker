@@ -114,13 +114,19 @@ describe("закрытая вкладка «Автоторговля»", () => {
     await screen.getByText(SUMMARY["verdict"] ? "Правила окупаются" : "Правила пока не окупаются").waitFor();
     for (const s of ["Бэктест: общая статистика", "Винрейт", "Макс. просадка", "Худшая серия", "Критерий", "Правила",
       "Сигналы в повторе", "вошли — 2 · у бота уже есть позиция — 1", "Последняя четверть периода",
-      "Первые три четверти", "Капитал на всём периоде", "По бумагам", "По причине выхода", "Последние сделки модели",
+      "Первые три четверти", "Капитал на всём периоде", "По бумагам", "Последние сделки модели",
+      "Бэктест: откуда плюс и минус", "Тейк +0,75 %", "Открыта на конец данных", "Винрейт для нуля",
       "Пересчитать сейчас", "Бэктест: открытая позиция модели", "ETH · шорт", "Открытые на конец"]) {
       assert.ok(await screen.getByText(s).first().isVisible(), s);
     }
     assert.ok(await screen.locator(".trend-svg").isVisible());
     const wr = await screen.getByText("Винрейт").first().locator("xpath=ancestor::*[@class='row'][1]").innerText();
     assert.match(wr, /50[.,]0/, wr);
+    // Откуда минус: открытая — весь минус; винрейт для нуля 0.06 / (1.11 + 0.06) = 5.1 %.
+    const lossRow = await screen.getByText("Открыта на конец данных").locator("xpath=ancestor::*[@class='row'][1]").innerText();
+    assert.match(lossRow, /100\s*% всех минусов/, lossRow);
+    const need = await screen.getByText("Винрейт для нуля").locator("xpath=ancestor::*[@class='row'][1]").innerText();
+    assert.match(need, /5[.,]1/, need);
     // Открытая позиция модели: вход, цена сейчас, тейк и сколько до него.
     const act = await screen.getByText("ETH · шорт").first().locator("xpath=ancestor::*[@class='row'][1]").innerText();
     for (const s of [/по 2\s998,5/, /сейчас 3\s000/, /тейк 2\s968,51/, /ещё 1\.05%/, /держим 235 ч/]) assert.match(act, s);
@@ -172,8 +178,8 @@ describe("закрытая вкладка «Автоторговля»", () => {
       assert.ok(await screen.getByText(s).first().isVisible(), s);
     }
     assert.equal(await screen.getByText("OKX не принимает ордера бота").count(), 0, "ключ в порядке — плашки нет");
-    assert.ok(await screen.getByText(/по рынку: стоп −4 % или кто-то из китов сигнала закроет позицию полностью в убытке/).isVisible());
-    assert.ok(await screen.getByText(/стоп — цена против входа на 4 %.*усреднения нет/).isVisible());
+    assert.ok(await screen.getByText(/по рынку, если кто-то из китов сигнала закроет позицию \(хоть часть\) в убытке; стопа нет/).isVisible());
+    assert.ok(await screen.getByText(/× 10× — позиция .*; стопа и усреднения нет/).isVisible());
     assert.equal(await screen.getByText("Закрываем по рынку").count(), 0);
     assert.ok(await screen.getByText(/китов 3 \(\$42K, против \$9K\)/).first().isVisible(), "объёмы за и против");
     assert.ok(await screen.getByText(/тейк 2\s?970/).first().isVisible(), "тейк 2 970");
@@ -217,7 +223,7 @@ describe("закрытая вкладка «Автоторговля»", () => {
     await page.locator(".drawer-row", { hasText: "Автоторговля" }).click();
     const screen = page.locator(".sheet .screen");
     await screen.getByText(/повтор: 40 % \(400 000 из 1 000 000 сделок китов\)/).waitFor();
-    assert.ok(await screen.getByText(/стоп −4 % или вслед за китом, закрывшим позицию полностью в убытке; усреднения нет/).first().isVisible());
+    assert.ok(await screen.getByText(/по рынку вслед за китом, закрывшим позицию \(хоть часть\) в убытке; стопа и усреднения нет/).first().isVisible());
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     assert.ok(wide <= 0, `шире экрана на ${wide}px`);
     assert.deepEqual(errors, []);

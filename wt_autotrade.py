@@ -148,7 +148,7 @@ def _open(v: Any) -> dict[str, Any] | None:
             out[k] = x
     ex = v.get("exit")
     if isinstance(ex, dict) and isinstance(ex.get("why"), str):
-        out["exit_why"] = ex["why"]  # стоп или кит сигнала закрыл в убыток — бот закрывает позицию по рынку
+        out["exit_why"] = ex["why"]  # кит сигнала закрыл в убыток — бот закрывает позицию по рынку
     return out
 
 

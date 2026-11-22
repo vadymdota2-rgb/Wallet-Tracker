@@ -89,6 +89,45 @@ function Overview({ s }: { s: AtSummary }) {
   );
 }
 
+/** «1 сделка», «3 сделки», «5 сделок». */
+const deals = (n: number) => {
+  const d = n % 10, h = n % 100;
+  return `${n} ${d === 1 && h !== 11 ? "сделка" : d >= 2 && d <= 4 && (h < 12 || h > 14) ? "сделки" : "сделок"}`;
+};
+
+const EXIT_ORDER = ["тейк", "кит вышел в убыток", "открыта"];
+const EXIT_LABEL: Record<string, string> = {
+  "тейк": "Тейк +0,75 %", "кит вышел в убыток": "Вслед за китом", "открыта": "Открыта на конец данных",
+};
+
+/** Откуда плюс и минус: итог по причине выхода и винрейт, нужный для нуля. */
+function Exits({ s }: { s: AtSummary }) {
+  const f = s.full;
+  if (!f.trades) return null;
+  const rank = (k: string) => (EXIT_ORDER.includes(k) ? EXIT_ORDER.indexOf(k) : EXIT_ORDER.length);
+  const rows = [...s.by_exit].sort((a, b) => rank(a.key) - rank(b.key));
+  const lost = rows.reduce((acc, g) => acc + Math.min(0, g.net), 0);
+  // Винрейт безубытка: W × средняя прибыль = (1 − W) × средний убыток.
+  const need = f.avg_win > 0 && f.avg_loss < 0 ? (-f.avg_loss / (f.avg_win - f.avg_loss)) * 100 : null;
+  return (
+    <>
+      <SectionTitle>Бэктест: откуда плюс и минус</SectionTitle>
+      <Card pad={false}>
+        {rows.map((g) => (
+          <Row key={g.key} title={EXIT_LABEL[g.key] ?? g.key}
+               sub={`${deals(g.trades)} (${pct((g.trades / f.trades) * 100, 0, false)}) · в среднем ${usd(g.net / g.trades, true)}`}
+               value={usd(g.net, true)} tone={g.net >= 0 ? "up" : "dn"}
+               valueSub={g.net < 0 && lost < 0 ? `${pct((g.net / lost) * 100, 0, false)} всех минусов` : ""} />
+        ))}
+        {need !== null ? (
+          <Row title="Винрейт для нуля" value={pct(need, 1, false)} tone={f.win_pct >= need ? "up" : "dn"}
+               sub={`сейчас ${pct(f.win_pct, 1, false)}: прибыль ${usd(f.avg_win, true)} против убытка ${usd(f.avg_loss, true)}`} />
+        ) : null}
+      </Card>
+    </>
+  );
+}
+
 /** Открытая позиция модели: не дошла до выхода к концу данных. Это бэктест —
  *  реальных денег здесь нет; настоящая позиция — в «Реальной торговле на OKX». */
 function Active({ s }: { s: AtSummary }) {
@@ -130,7 +169,7 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
         ) : null}
         <Row title="Капитал счёта" value={l.equity != null ? usd(l.equity) : "—"}
              sub={`маржа на сделку всегда 5 % × 10× — позиция ${l.equity != null ? usd(l.equity / 2) : "—"}; `
-               + "стоп — цена против входа на 4 % (≈ −40 % PnL), усреднения нет"} />
+               + "стопа и усреднения нет"} />
       </Card>
 
       <SectionTitle>Открытая позиция</SectionTitle>
@@ -147,7 +186,7 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
         {op ? (
           <Row title={op.exit_why ? "Закрываем по рынку" : "Выход"} wrap {...(op.exit_why ? { tone: "dn" as const } : {})}
                sub={op.exit_why ? `${op.exit_why} — бот снял тейк и закрывает позицию рыночным ордером`
-                 : "тейк +1 % — или по рынку: стоп −4 % или кто-то из китов сигнала закроет позицию полностью в убытке"} />
+                 : "тейк +0,75 % — или по рынку, если кто-то из китов сигнала закроет позицию (хоть часть) в убытке; стопа нет"} />
         ) : null}
         {manual.map((p) => (
           <Row key={p.instId} wrap title={`${shortInst(p.instId)} · не бота`}
@@ -291,6 +330,7 @@ export function AutotradeScreen() {
       ) : (
         <>
           <Overview s={b} />
+          <Exits s={b} />
           <Active s={b} />
           <Card>
             <Row title={b.verdict ? "Правила окупаются" : "Правила пока не окупаются"} wrap tone={b.verdict ? "up" : "dn"}
@@ -300,8 +340,8 @@ export function AutotradeScreen() {
                  sub={`на последней четверти: итог > 0, PF ≥ ${b.criteria.pf_ge}, сделок ≥ ${b.criteria.trades_ge}, просадка ≤ ${usd(b.criteria.max_dd_le)}`} />
             <Row title="Правила" wrap
                  sub={`от 2 китов (каждый от 1000 $) в одну сторону за 2 ч; против — не крупнее; не дороже китов на 0,3 %; `
-                   + `маржа ${b.sizing.margin_pct}% × ${b.sizing.leverage}×, одна позиция, в бумагу — раз в 3 ч; выход — тейк +1 % `
-                   + "или по рынку: стоп −4 % или вслед за китом, закрывшим позицию полностью в убытке; усреднения нет"} />
+                   + `маржа ${b.sizing.margin_pct}% × ${b.sizing.leverage}×, одна позиция, в бумагу — раз в 3 ч; выход — тейк +0,75 % `
+                   + "или по рынку вслед за китом, закрывшим позицию (хоть часть) в убытке; стопа и усреднения нет"} />
             <Row title="Сигналы в повторе" wrap sub={skipsLine(b.skips)} />
             <Row title="Данные" wrap
                  sub={`${b.data.signals} сигналов; свечи OKX 5 мин — запросов ${b.data.requests}${b.data.errors ? `, сбоев ${b.data.errors}` : ""}; `
@@ -325,7 +365,6 @@ export function AutotradeScreen() {
           <Groups title="По бумагам" rows={b.by_coin} />
           <Groups title="По времени суток" rows={b.by_session}
                   label={(k) => (k === "open" ? "Рынок США открыт" : "Рынок США закрыт")} />
-          <Groups title="По причине выхода" rows={b.by_exit} />
 
           {b.trades.length ? (
             <>
