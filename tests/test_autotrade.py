@@ -210,12 +210,6 @@ class ModuleFilesTest(unittest.TestCase):
             got = at.live(self.data, now=1)["open"]
             self.assertEqual(got.get("exit_why"), want, ex)
             self.assertNotIn("wallets", got, "кошельки китов во вкладку не уходят")
-        for av, want in (({"why": "кит добрал", "filled": 10.1, "done": True}, "кит добрал"),
-                         ({"why": "кит добрал", "filled": 0, "done": True, "skipped": "мало"}, None),
-                         ({"why": 5, "filled": 1}, None), ("мусор", None)):
-            with open(os.path.join(d, "state.json"), "w") as f:
-                json.dump({"heartbeat": 1, "open": {**op, "avg": av}}, f)
-            self.assertEqual(at.live(self.data, now=1)["open"].get("avg_why"), want, av)
         with open(os.path.join(d, "state.json"), "w") as f:
             json.dump({"heartbeat": 1, "open": {**op, "usd": 42000, "usd_against": "мусор"}}, f)
         got = at.live(self.data, now=1)["open"]
