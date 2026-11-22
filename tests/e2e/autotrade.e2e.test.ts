@@ -157,8 +157,8 @@ describe("закрытая вкладка «Автоторговля»", () => {
     await screen.getByRole("heading", { name: "Реальная торговля на OKX" }).waitFor();
     for (const s of ["торгует", "Капитал счёта", "Открытая позиция", "ETH · шорт", "H · не бота",
       "OKX не даёт торговать", "STX — исключены на 7 дней",
-      "Последний пропуск", "у бота уже есть своя позиция", "маржа 5%", "бот входит маржой 5% × 10×",
-      "бот входит маржой 5 % вместо 10 %", "Статистика реальной торговли", "Винрейт", "Макс. просадка",
+      "Последний пропуск", "у бота уже есть своя позиция", "маржа 5%", "маржа на сделку всегда 5% × 10×",
+      "бот на эту бумагу не входит; размер его входа это не меняет (5 %)", "Статистика реальной торговли", "Винрейт", "Макс. просадка",
       "Сделки бота", "BTC · лонг", "Журнал бота", "Пропуски сигналов за сутки",
       "у бота уже есть позиция — 4 · цена ушла от китов — 3 · бумаги нет на OKX — 3"]) {
       assert.ok(await screen.getByText(s).first().isVisible(), s);
@@ -166,6 +166,7 @@ describe("закрытая вкладка «Автоторговля»", () => {
     assert.equal(await screen.getByText("OKX не принимает ордера бота").count(), 0, "ключ в порядке — плашки нет");
     assert.ok(await screen.getByText(/по рынку, если кто-то из китов сигнала закроет свою сделку в убытке/).isVisible());
     assert.equal(await screen.getByText("Закрываем вслед за китом").count(), 0);
+    assert.equal(await screen.getByText("Усреднено", { exact: true }).count(), 0, "без усреднения — строки нет");
     assert.ok(await screen.getByText(/китов 3 \(\$42K, против \$9K\)/).first().isVisible(), "объёмы за и против");
     assert.ok(await screen.getByText(/тейк 2\s?970/).first().isVisible(), "тейк 2 970");
     assert.equal(await screen.getByText("Реальная торговля не установлена").count(), 0);
@@ -186,6 +187,18 @@ describe("закрытая вкладка «Автоторговля»", () => {
     assert.ok(await screen.getByText("ключу OKX закрыт рынок — 7 · цена ушла от китов — 1").isVisible());
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     assert.ok(wide <= 0, `шире экрана на ${wide}px`);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+
+  test("разовое усреднение — вкладка показывает, почему", async () => {
+    const open0 = LIVE["open"] as Record<string, unknown>;
+    const { ctx, page, errors } = await open({ owner: true, live: { ...LIVE,
+      open: { ...open0, avg_why: "кит 0xabcdef12… добрал 3 000 $ при минусе -1.20 %" } } });
+    await page.locator(".drawer-row", { hasText: "Автоторговля" }).click();
+    const screen = page.locator(".sheet .screen");
+    await screen.getByText("Усреднено", { exact: true }).waitFor();
+    assert.ok(await screen.getByText(/добрал 3 000 \$ при минусе -1\.20 % — долили 5 % капитала/).isVisible());
     assert.deepEqual(errors, []);
     await ctx.close();
   });

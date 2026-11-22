@@ -29,7 +29,7 @@ TS = [
     ("    && opt(v[\"key_problem\"], str) && opt(v[\"skips_24h\"], (k) => isObj(k) && Object.values(k).every(num))", "",
      "запрет ключу и пропуски — по договору"),
     ("Object.entries(k).sort((a, b) => b[1] - a[1])", "Object.entries(k)", "пропуски — по убыванию"),
-    ("\n  && opt(v[\"exit_why\"], str) && opt(v[\"usd\"], num) && opt(v[\"usd_against\"], num);", ";",
+    ("\n  && opt(v[\"exit_why\"], str) && opt(v[\"usd\"], num) && opt(v[\"usd_against\"], num) && opt(v[\"avg_why\"], str);", ";",
      "причина выхода и объёмы китов — по договору"),
 ]
 PY = [
@@ -46,6 +46,7 @@ PY = [
     ("key_problem = kp[\"why\"] if isinstance(kp, dict) and isinstance(kp.get(\"why\"), str) else \"\"",
      "key_problem = \"\"", "сервер: запрет ключу — во вкладку"),
     ("\"margin_pct\", \"usd\", \"usd_against\"):", "\"margin_pct\"):", "сервер: объёмы китов за и против — во вкладку"),
+    ("and (_f(av.get(\"filled\")) or 0) > 0:", ":", "сервер: «усреднено» — только когда долили"),
     ("    if isinstance(ex, dict) and isinstance(ex.get(\"why\"), str):", "    if isinstance(ex, dict):", "сервер: причина выхода — только строка"),
     ("and v.get(\"permanent\") is True", "", "сервер: исключённые — только на неделю (не 15-минутные паузы)"),
     ("               and now_ms - (_f(v.get(\"at\")) or 0) < BLOCK_MS}", "               }", "сервер: неделя прошла — бумага не исключена"),

@@ -30,6 +30,7 @@ test("любое рисуемое поле не того типа — отказ
     { ...GOOD, live: { ...LIVE, key_problem: 50124 } }, { ...GOOD, live: { ...LIVE, skips_24h: { market: "7" } } },
     { ...GOOD, live: { ...LIVE, skips_24h: [7] } }, { ...GOOD, live: { ...LIVE, open: { ...open, exit_why: 1 } } },
     { ...GOOD, live: { ...LIVE, open: { ...open, usd_against: "9000" } } },
+    { ...GOOD, live: { ...LIVE, open: { ...open, avg_why: 1 } } },
     null, [], "ok", 1,
   ]) {
     assert.equal(validAutotrade(bad), false, JSON.stringify(bad).slice(0, 120));

@@ -75,7 +75,7 @@ function summary(v: unknown): boolean {
 const liveOpen = (v: unknown): boolean =>
   isObj(v) && str(v["coin"]) && str(v["inst"]) && side(v["side"])
   && nums(v, ["opened", "px", "size", "notional", "tp"]) && opt(v["whales"], num) && opt(v["mark"], num) && opt(v["upl"], num) && opt(v["margin_pct"], num)
-  && opt(v["exit_why"], str) && opt(v["usd"], num) && opt(v["usd_against"], num);
+  && opt(v["exit_why"], str) && opt(v["usd"], num) && opt(v["usd_against"], num) && opt(v["avg_why"], str);
 
 const liveTrade = (v: unknown): boolean =>
   isObj(v) && str(v["coin"]) && str(v["inst"]) && side(v["side"])

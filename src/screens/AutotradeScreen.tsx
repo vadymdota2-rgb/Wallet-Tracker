@@ -166,9 +166,8 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
                sub={`${l.key_problem}. Сигналы есть — дело в правах ключа; бумаги не исключаются, бот проверяет снова раз в 30 минут.`} />
         ) : null}
         <Row title="Капитал счёта" value={l.equity != null ? usd(l.equity) : "—"}
-             sub={manual.length
-               ? `на счёте ваша сделка — бот входит маржой 5% × 10× = ${l.equity != null ? usd(l.equity / 2) : "—"}`
-               : `маржа на сделку 10% × 10× = ${l.equity != null ? usd(l.equity) : "—"}`} />
+             sub={`маржа на сделку всегда 5% × 10× = ${l.equity != null ? usd(l.equity / 2) : "—"}; `
+               + "усреднение — один раз ещё 5 %, если позиция в минусе больше 1 % и кит сигнала добирает"} />
       </Card>
 
       <SectionTitle>Открытая позиция</SectionTitle>
@@ -182,6 +181,9 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
                  + `${op.margin_pct ? ` · маржа ${op.margin_pct}%` : ""}`}
                value={op.upl !== undefined ? usd(op.upl, true) : "—"} tone={(op.upl ?? 0) >= 0 ? "up" : "dn"} />
         ) : <Row title="Позиции бота нет" sub="Ждём: от 2 китов в одну сторону за 2 часа" wrap />}
+        {op?.avg_why ? (
+          <Row title="Усреднено" wrap sub={`${op.avg_why} — долили 5 % капитала, тейк +1 % от новой средней на весь объём`} />
+        ) : null}
         {op ? (
           <Row title={op.exit_why ? "Закрываем вслед за китом" : "Выход"} wrap {...(op.exit_why ? { tone: "dn" as const } : {})}
                sub={op.exit_why ? `${op.exit_why} — бот снял тейк и закрывает позицию рыночным ордером`
@@ -189,7 +191,7 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
         ) : null}
         {manual.map((p) => (
           <Row key={p.instId} wrap title={`${shortInst(p.instId)} · не бота`}
-               sub="Открыта вами — бот входит маржой 5 % вместо 10 %, на эту бумагу — не входит"
+               sub="Открыта вами — бот на эту бумагу не входит; размер его входа это не меняет (5 %)"
                value={p.upl ? usd(Number(p.upl), true) : ""} />
         ))}
         {l.blocked && Object.keys(l.blocked).length ? (
