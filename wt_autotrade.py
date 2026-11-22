@@ -68,18 +68,14 @@ def _try_set(on: bool, data_dir: str) -> dict[str, Any] | None:
 
 
 def latest(data_dir: str = DATA_DIR) -> dict[str, Any] | None:
-    """Последний итог бэктеста; нет или испорчен — None."""
+    """Последний итог бэктеста-повтора; нет, испорчен или это итог прежней
+    сетки (служба её больше не запускает, а в latest/ он мог остаться) — None."""
     try:
         with open(os.path.join(data_dir, "latest", "summary.json"), encoding="utf-8") as f:
             got = json.load(f)
     except (OSError, ValueError):
         return None
-    return got if isinstance(got, dict) else None
-
-
-def start(_ws_dir: str = "", _hl_db: str = "") -> None:
-    """При запуске API: ничего не запускаем — считает служба whale-autotrade."""
-    print("[AUTO] бэктест и торговля — в службе whale-autotrade; API только показывает", flush=True)
+    return got if isinstance(got, dict) and "last" in got and "top" not in got else None
 
 
 def _request_run(data_dir: str) -> None:
@@ -272,11 +268,10 @@ def status(data_dir: str = DATA_DIR) -> dict[str, Any]:
     return {"ok": True, "stage": "live" if lv is not None else "backtest", "on": is_on(data_dir),
             "backtest": latest(data_dir), "running": bs["running"] or bs["requested"],
             "started": bs["started"], "finished": bs["finished"], "error": bs["error"], "next": bs["next"],
-            "progress": bs["progress"] if bs["running"] else "",
-            "paper": None, "live": lv}
+            "progress": bs["progress"] if bs["running"] else "", "live": lv}
 
 
-def trigger(_ws_dir: str = "", _hl_db: str = "", data_dir: str = DATA_DIR) -> dict[str, Any]:
+def trigger(data_dir: str = DATA_DIR) -> dict[str, Any]:
     """«Пересчитать сейчас»: запрос службе whale-autotrade (она подхватит за
     секунды). Модуль выключен — отказ; уже идёт — «уже считается»."""
     if not is_on(data_dir):
@@ -292,7 +287,7 @@ def trigger(_ws_dir: str = "", _hl_db: str = "", data_dir: str = DATA_DIR) -> di
     return {"ok": True, "running": True, "started": True}
 
 
-def start_cmd(_ws_dir: str = "", _hl_db: str = "", data_dir: str = DATA_DIR) -> dict[str, Any]:
+def start_cmd(data_dir: str = DATA_DIR) -> dict[str, Any]:
     """Кнопка «Старт»: включить (служба начинает входить в сделки); итога
     бэктеста ещё нет — заодно запросить пересчёт."""
     why = _try_set(True, data_dir)
@@ -300,7 +295,7 @@ def start_cmd(_ws_dir: str = "", _hl_db: str = "", data_dir: str = DATA_DIR) -> 
         return why
     print("[AUTO] старт (владелец)", flush=True)
     if latest(data_dir) is None:
-        trigger(data_dir=data_dir)
+        trigger(data_dir)
     return status(data_dir)
 
 

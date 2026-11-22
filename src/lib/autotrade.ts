@@ -23,55 +23,35 @@ const nums = (o: Obj, keys: readonly string[]): boolean => keys.every((k) => num
 const pair = (v: unknown): boolean => Array.isArray(v) && v.length === 2 && num(v[0]) && num(v[1]);
 const side = (v: unknown): boolean => v === 1 || v === -1;
 
-const STATS = ["trades", "win_pct", "avg_win", "avg_loss", "net", "max_dd", "worst_streak", "worst_streak_usd"] as const;
-const STATS_OPT = ["open", "unrealized", "max_mae", "longest_h", "max_open_at_once", "max_overlap_mae"] as const;
+const STATS = ["trades", "win_pct", "avg_win", "avg_loss", "net", "max_dd", "worst_streak", "worst_streak_usd",
+  "open", "unrealized", "max_mae", "longest_h"] as const;
 
-function stats(v: unknown): boolean {
-  return isObj(v) && nums(v, STATS) && (v["pf"] === null || num(v["pf"])) && STATS_OPT.every((k) => opt(v[k], num));
-}
+const stats = (v: unknown): boolean => isObj(v) && nums(v, STATS) && (v["pf"] === null || num(v["pf"]));
 
 const group = (v: unknown): boolean => isObj(v) && str(v["key"]) && stats(v);
 
-function params(v: unknown): boolean {
-  return isObj(v) && nums(v, ["delay", "min_notional", "cooldown", "wallets", "chase", "tp", "sl", "hold"])
-    && bool(v["pnl30"]) && bool(v["whale"]) && opt(v["min_whale"], num) && opt(v["rest"], num) && opt(v["no_conflict"], bool);
-}
-
 const trade = (v: unknown): boolean =>
-  isObj(v) && str(v["coin"]) && side(v["side"]) && str(v["whale"]) && nums(v, ["entry", "exit", "pct", "usd"])
-  && str(v["why"]) && bool(v["holdout"]) && opt(v["px_in"], num) && opt(v["px_out"], num);
-
-const active = (v: unknown): boolean =>
   isObj(v) && str(v["coin"]) && side(v["side"])
-  && nums(v, ["whales", "entry", "px_in", "px_now", "tp", "at", "usd", "pct", "mae", "held_h"])
-  && (v["to_tp_pct"] === null || num(v["to_tp_pct"]));
+  && nums(v, ["whales", "entry", "exit", "px_in", "px_out", "tp", "usd", "pct", "mae", "held_h"])
+  && str(v["why"]) && bool(v["averaged"]);
 
-const okx = (v: unknown): boolean =>
-  isObj(v) && ["ok", "mismatch", "missing", "unverified"].includes(v["status"] as string)
-  && opt(v["inst"], str) && opt(v["scale"], num) && opt(v["ratio"], num);
-
+/** Итог бэктеста-повтора (WhaleScanner/tools/autotrade_replay.py). Итог прежней
+ *  сетки (на сервере мог остаться в latest/) сюда не проходит — вкладка покажет
+ *  «итога ещё нет» до первого повтора. */
 function summary(v: unknown): boolean {
   if (!isObj(v)) return false;
-  const c = v["criteria"], p = v["period"], s = v["sizing"], d = v["data"];
+  const c = v["criteria"], p = v["period"], s = v["sizing"], d = v["data"], k = v["skips"];
   return num(v["generated_at"]) && bool(v["verdict"])
     && isObj(c) && nums(c, ["net_gt", "pf_ge", "trades_ge", "max_dd_le"])
     && isObj(p) && nums(p, ["from", "to", "cut"])
-    && isObj(s) && nums(s, ["deposit", "margin_pct", "leverage", "max_open", "notional", "cluster_hours", "liq_move_pct"])
-    && bool(s["cross"]) && (s["markets"] === "all" || s["markets"] === "stocks") && opt(s["min_whale"], num)
-    && isObj(d) && num(d["signals"]) && isObj(d["candles"]) && Object.values(d["candles"]).every(num)
-    && arr(v["top"], (t) => isObj(t) && params(t["params"]) && stats(t["train"]) && stats(t["holdout"]) && bool(t["passes"]))
-    && (v["full"] === null || stats(v["full"])) && opt(v["fade"], stats)
+    && isObj(s) && nums(s, ["deposit", "deposit_end", "margin_pct", "leverage", "fee_taker_pct", "fee_maker_pct", "slippage_pct"])
+    && isObj(d) && nums(d, ["signals", "requests", "errors"])
+    && ["full", "first", "last"].every((x) => stats(v[x]))
     && arr(v["equity"], pair)
-    && ["by_coin", "by_whale", "by_session", "by_exit"].every((k) => arr(v[k], group))
+    && ["by_coin", "by_session", "by_exit"].every((x) => arr(v[x], group))
+    && isObj(k) && Object.values(k).every(num) && num(v["averaged"]) && num(v["per_day"])
     && arr(v["trades"], trade)
-    && opt(v["active"], (a) => arr(a, active)) && opt(v["per_day"], num) && opt(v["entries_per_day"], num)
-    && opt(v["okx"], (o) => isObj(o) && (o["venue"] === "hl" || o["venue"] === "okx") && isObj(o["map"])
-      && Object.values(o["map"]).every(okx))
-    && opt(v["by_chase"], (a) => arr(a, (x) => isObj(x) && num(x["chase"]) && stats(x["train"]) && stats(x["holdout"])))
-    && opt(v["pace"], (a) => arr(a, (x) => isObj(x)
-      && nums(x, ["max_open", "trades", "per_day", "median_tp_h", "open", "net", "max_dd", "bust"])))
-    && opt(v["kind"], (k) => k === "replay") && opt(v["skips"], (k) => isObj(k) && Object.values(k).every(num))
-    && opt(v["averaged"], num) && opt(v["deposit_end"], num);
+    && arr(v["active"], (a) => trade(a) && isObj(a) && (a["to_tp_pct"] === null || num(a["to_tp_pct"])));
 }
 
 const liveOpen = (v: unknown): boolean =>
@@ -101,7 +81,7 @@ function live(v: unknown): boolean {
 
 /** Ответ годен для вкладки (ok: true) — каждое поле, которое она рисует, нужного типа. */
 export function validAutotrade(v: unknown): v is AutotradeReply {
-  return isObj(v) && v["ok"] === true && ["backtest", "paper", "live"].includes(v["stage"] as string)
+  return isObj(v) && v["ok"] === true && (v["stage"] === "backtest" || v["stage"] === "live")
     && bool(v["on"]) && bool(v["running"]) && nums(v, ["started", "finished", "next"]) && str(v["error"])
     && opt(v["progress"], str)
     && (v["backtest"] === null || summary(v["backtest"]))

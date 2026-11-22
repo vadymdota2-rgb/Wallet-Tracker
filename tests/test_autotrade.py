@@ -96,7 +96,6 @@ class ModuleFilesTest(unittest.TestCase):
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.ws, self.db = "", ""
         self.data = os.path.join(self.tmp.name, "data")
         at._set_on(True, self.data)
 
@@ -133,15 +132,18 @@ class ModuleFilesTest(unittest.TestCase):
             code = f.read()
         for word in ("subprocess", "threading", "Popen"):
             self.assertNotIn(word, code)
-        with mock.patch("sys.stdout", io.StringIO()):
-            at.start()
 
     def test_garbage_summary_is_none(self):
         os.makedirs(os.path.join(self.data, "latest"))
-        for raw in ("", "[1]", "{bad"):
+        # Итог прежней сетки (служба её больше не запускает) — тоже None: вкладка
+        # покажет «итога ещё нет» до первого повтора, а не мусор.
+        for raw in ("", "[1]", "{bad", '{"top": [], "full": null}', '{"top": [], "last": {}}'):
             with open(os.path.join(self.data, "latest", "summary.json"), "w") as f:
                 f.write(raw)
             self.assertIsNone(at.latest(self.data))
+        with open(os.path.join(self.data, "latest", "summary.json"), "w") as f:
+            f.write('{"last": {}, "full": {}}')
+        self.assertEqual(at.latest(self.data), {"last": {}, "full": {}})
 
     def test_live_trading_state_and_stats(self):
         # Службы реальной торговли нет — live нет, этап — бэктест.
@@ -262,7 +264,7 @@ class ModuleFilesTest(unittest.TestCase):
         other = os.path.join(self.tmp.name, "fresh")
         self.assertFalse(at.is_on(other))
         self.assertFalse(at.status(other)["on"])
-        self.assertEqual(at.trigger(self.ws, self.db, other), {"ok": False, "error": "stopped"})
+        self.assertEqual(at.trigger(other), {"ok": False, "error": "stopped"})
         os.makedirs(other)
         with open(os.path.join(other, "switch.json"), "w") as f:
             f.write("{bad")
@@ -271,7 +273,7 @@ class ModuleFilesTest(unittest.TestCase):
             at.stop_cmd(self.data)
         self.assertFalse(at.is_on(self.data))
         with mock.patch.object(at, "trigger") as trig, mock.patch("sys.stdout", io.StringIO()):
-            self.assertTrue(at.start_cmd(self.ws, self.db, self.data)["on"])
+            self.assertTrue(at.start_cmd(self.data)["on"])
             trig.assert_called_once()  # итога ещё нет — сразу пересчёт
         self.assertTrue(at.is_on(self.data))
 
@@ -281,7 +283,7 @@ class ModuleFilesTest(unittest.TestCase):
         out = io.StringIO()
         with mock.patch.object(at, "_set_on", side_effect=PermissionError(13, "Read-only file system")), \
                 mock.patch("sys.stdout", out):
-            for got in (at.start_cmd(self.ws, self.db, self.data), at.stop_cmd(self.data)):
+            for got in (at.start_cmd(self.data), at.stop_cmd(self.data)):
                 self.assertEqual((got["ok"], got["error"]), (False, "no_write"))
         self.assertIn("[AUTO] старт: не записать", out.getvalue())
 

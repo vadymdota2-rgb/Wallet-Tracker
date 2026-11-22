@@ -10191,7 +10191,6 @@ def warmup() -> None:
     threading.Thread(target=liq_oi_refresher, daemon=True, name="liq-oi").start()
     threading.Thread(target=liq_warm_refresher, daemon=True, name="liq-warm").start()
     threading.Thread(target=cache_refresher, daemon=True, name="cache").start()
-    autotrade.start(WS_DIR, HL_DB)  # бэктест автокопирования — раз в сутки, только чтение базы бота
     liqs_start()
     cur = open_db(DB)
     hl = open_db(HL_DB)
@@ -17447,11 +17446,11 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path == "/api/owner/autotrade/run":
                 if _owner_or_404(self, chat, path):
-                    self._json(200, autotrade.trigger(WS_DIR, HL_DB))
+                    self._json(200, autotrade.trigger())
                 return
             if path in ("/api/owner/autotrade/start", "/api/owner/autotrade/stop"):
                 if _owner_or_404(self, chat, path):
-                    self._json(200, autotrade.start_cmd(WS_DIR, HL_DB) if path.endswith("/start")
+                    self._json(200, autotrade.start_cmd() if path.endswith("/start")
                                else autotrade.stop_cmd())
                 return
             dg = {"/api/digest/like": "like", "/api/digest/comment": "comment",

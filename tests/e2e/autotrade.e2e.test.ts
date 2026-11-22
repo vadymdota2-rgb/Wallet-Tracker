@@ -19,8 +19,6 @@ const TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml",
   ".png": "image/png", ".webp": "image/webp", ".json": "application/json", ".woff2": "font/woff2", ".ttf": "font/ttf", ".ico": "image/x-icon",
 };
-const REPLAY = JSON.parse(await readFile(new URL("../fixtures/autotrade_summary_replay.json", import.meta.url), "utf8")) as
-  Record<string, unknown>;
 const SUMMARY = JSON.parse(await readFile(new URL("../fixtures/autotrade_summary.json", import.meta.url), "utf8")) as
   Record<string, unknown>;
 const T = 1_795_000_000;
@@ -74,7 +72,7 @@ async function open(o: Opts): Promise<{ ctx: BrowserContext; page: Page; errors:
   let on = o.on ?? true;
   const reply = () => JSON.stringify({
     ok: true, stage: "backtest", on, backtest: o.backtest ?? SUMMARY, running: o.running ?? false, started: T - 7200,
-    finished: T - 3600, error: "", next: T + 40_000, paper: null, live: o.live ?? null,
+    finished: T - 3600, error: "", next: T + 40_000, live: o.live ?? null,
     ...(o.progress ? { progress: o.progress } : {}) });
   await ctx.route(`${base}/api/owner/autotrade`, (r) => o.reply === "404"
     ? r.fulfill({ status: 404, contentType: "application/json", body: '{"ok":false,"error":"not_found"}' })
@@ -113,18 +111,24 @@ describe("закрытая вкладка «Автоторговля»", () => {
     const { ctx, page, errors } = await open({ owner: true });
     await page.locator(".drawer-row", { hasText: "Автоторговля" }).click();
     const screen = page.locator(".sheet .screen");
-    await screen.getByText(SUMMARY["verdict"] ? "Вердикт: можно дальше" : "Вердикт: нет").waitFor();
-    for (const s of ["Лучший набор на отложенных данных", "кросс-маржа", "Сигнал", "Торгуем на Hyperliquid", "То же имя — другой актив", "Нет на OKX", "Против китов (наоборот)", "По пределу догона", "Пересиживание", "Сколько сделок в день", "депозит кончился", "Капитал на всём периоде", "По бумагам", "Последние сделки",
-      "Пересчитать сейчас", "Общая статистика", "Винрейт", "Макс. просадка", "Худшая серия",
-      "Активные позиции", "xyz:S14 · шорт", "Это модель (бэктест)"]) {
+    await screen.getByText(SUMMARY["verdict"] ? "Правила окупаются" : "Правила пока не окупаются").waitFor();
+    for (const s of ["Бэктест: общая статистика", "Винрейт", "Макс. просадка", "Худшая серия", "Критерий", "Правила",
+      "Сигналы в повторе", "вошли — 2 · у бота уже есть позиция — 1 · усреднений: 1", "Последняя четверть периода",
+      "Первые три четверти", "Капитал на всём периоде", "По бумагам", "По причине выхода", "Последние сделки модели",
+      "Пересчитать сейчас", "Бэктест: открытая позиция модели", "ETH · шорт", "Открытые на конец"]) {
       assert.ok(await screen.getByText(s).first().isVisible(), s);
     }
     assert.ok(await screen.locator(".trend-svg").isVisible());
     const wr = await screen.getByText("Винрейт").first().locator("xpath=ancestor::*[@class='row'][1]").innerText();
-    assert.match(wr, /87[.,]5/, wr);
-    // Активная позиция: вход, цена сейчас, тейк и сколько до него.
-    const act = await screen.getByText("xyz:S14 · шорт").first().locator("xpath=ancestor::*[@class='row'][1]").innerText();
-    for (const s of ["по 100", "сейчас 124.38", "тейк 99", "ещё 20.41%", "держим 630 ч"]) assert.ok(act.includes(s), `${s} в «${act}»`);
+    assert.match(wr, /50[.,]0/, wr);
+    // Открытая позиция модели: вход, цена сейчас, тейк и сколько до него.
+    const act = await screen.getByText("ETH · шорт").first().locator("xpath=ancestor::*[@class='row'][1]").innerText();
+    for (const s of [/по 2\s998,5/, /сейчас 3\s000/, /тейк 2\s968,51/, /ещё 1\.05%/, /держим 235 ч/]) assert.match(act, s);
+    assert.ok(await screen.getByText(/капитал \$124[.,]8\d? → \$125[.,]9/).first().isVisible(), "капитал на начало и конец");
+    // Прежней сетки во вкладке нет.
+    for (const s of ["Лучший набор", "По пределу догона", "Против китов", "Торгуем на"]) {
+      assert.equal(await screen.getByText(s).count(), 0, s);
+    }
     // Ничего не вылезает за правый край узкого экрана.
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     assert.ok(wide <= 0, `шире экрана на ${wide}px`);
@@ -220,15 +224,11 @@ describe("закрытая вкладка «Автоторговля»", () => {
   });
 
   test("бэктест-повтор по актуальным правилам и ход пересчёта", async () => {
-    const { ctx, page, errors } = await open({ owner: true, backtest: REPLAY, running: true,
+    const { ctx, page, errors } = await open({ owner: true, running: true,
       progress: "повтор: 40 % (400 000 из 1 000 000 сделок китов), сделок 3, запросов к OKX 120" });
     await page.locator(".drawer-row", { hasText: "Автоторговля" }).click();
     const screen = page.locator(".sheet .screen");
     await screen.getByText(/повтор: 40 % \(400 000 из 1 000 000 сделок китов\)/).waitFor();
-    for (const s of [REPLAY["verdict"] ? "Правила окупаются" : "Правила пока не окупаются", "Сигналы в повторе",
-      "Последняя четверть периода", "Первые три четверти", "кит закрыл в убыток — выходим"]) {
-      assert.ok(await screen.getByText(s).first().isVisible(), s);
-    }
     assert.ok(await screen.getByText(/вслед за китом в убытке; разовое усреднение/).first().isVisible());
     assert.ok(await screen.getByText(/усреднений: 1/).first().isVisible());
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

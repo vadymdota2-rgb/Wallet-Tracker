@@ -5,16 +5,14 @@ import { readFileSync } from "node:fs";
 import { checkAutotrade, shortInst, skipsLine, validAutotrade } from "../src/lib/autotrade.ts";
 
 const SUMMARY = JSON.parse(readFileSync(new URL("./fixtures/autotrade_summary.json", import.meta.url), "utf8")) as Record<string, unknown>;
-const REPLAY = JSON.parse(readFileSync(new URL("./fixtures/autotrade_summary_replay.json", import.meta.url), "utf8")) as Record<string, unknown>;
 const LIVE = JSON.parse(readFileSync(new URL("./fixtures/autotrade_live.json", import.meta.url), "utf8")) as Record<string, unknown>;
 const GOOD = { ok: true, stage: "live", on: true, backtest: SUMMARY, running: false, started: 1, finished: 2, error: "",
-  next: 3, paper: null, live: LIVE };
+  next: 3, live: LIVE };
 
 test("образцы — годный ответ", () => {
   assert.ok(validAutotrade(GOOD));
   assert.ok(validAutotrade({ ...GOOD, backtest: null, live: null, stage: "backtest" }));
-  // Итог бэктеста-повтора по правилам живого бота (WhaleScanner/tools/autotrade_replay.py) и ход пересчёта.
-  assert.ok(validAutotrade({ ...GOOD, backtest: REPLAY, running: true, progress: "повтор: 40 %" }));
+  assert.ok(validAutotrade({ ...GOOD, running: true, progress: "повтор: 40 %" }));
 });
 
 test("любое рисуемое поле не того типа — отказ", () => {
@@ -34,8 +32,12 @@ test("любое рисуемое поле не того типа — отказ
     { ...GOOD, live: { ...LIVE, skips_24h: [7] } }, { ...GOOD, live: { ...LIVE, open: { ...open, exit_why: 1 } } },
     { ...GOOD, live: { ...LIVE, open: { ...open, usd_against: "9000" } } },
     { ...GOOD, live: { ...LIVE, open: { ...open, avg_why: 1 } } },
-    { ...GOOD, progress: 40 }, { ...GOOD, backtest: { ...REPLAY, kind: "grid" } },
-    { ...GOOD, backtest: { ...REPLAY, skips: { own_open: "1" } } }, { ...GOOD, backtest: { ...REPLAY, averaged: "1" } },
+    { ...GOOD, progress: 40 }, { ...GOOD, stage: "paper" },
+    { ...GOOD, backtest: { ...SUMMARY, skips: { own_open: "1" } } }, { ...GOOD, backtest: { ...SUMMARY, averaged: "1" } },
+    { ...GOOD, backtest: { ...SUMMARY, last: null } }, { ...GOOD, backtest: { ...SUMMARY, active: [{}] } },
+    { ...GOOD, backtest: { ...SUMMARY, trades: [{ ...(SUMMARY["trades"] as Record<string, unknown>[])[0], averaged: 1 }] } },
+    // Итог прежней сетки (мог остаться на сервере) — не по договору.
+    { ...GOOD, backtest: { ...SUMMARY, last: undefined, top: [] } },
     null, [], "ok", 1,
   ]) {
     assert.equal(validAutotrade(bad), false, JSON.stringify(bad).slice(0, 120));
@@ -47,7 +49,7 @@ test("кнопки: отказ с причиной — как есть; испо
   assert.equal(checkAutotrade(no), no);
   assert.equal(checkAutotrade(null), null);
   assert.equal(checkAutotrade({ ok: false } as { ok: boolean }), null);
-  const brokenBt = checkAutotrade({ ...GOOD, backtest: { ...SUMMARY, top: "x" } });
+  const brokenBt = checkAutotrade({ ...GOOD, backtest: { ...SUMMARY, first: "x" } });
   assert.ok(brokenBt && brokenBt.backtest === null && brokenBt.live !== null);
   assert.equal(checkAutotrade({ ...GOOD, live: { ...LIVE, alive: "yes" } }), null);
   assert.equal(checkAutotrade(GOOD), GOOD);

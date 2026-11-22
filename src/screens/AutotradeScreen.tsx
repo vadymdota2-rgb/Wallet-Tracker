@@ -1,17 +1,14 @@
 /**
  * «Автоторговля» — закрытая вкладка владельца: автокопирование китов
- * Hyperliquid на фьючерсах (крипта, акции, металлы).
+ * Hyperliquid на фьючерсах OKX (крипта, акции, металлы).
  *
  * Видит её только владелец: пункт меню показывается по `me.owner`, а данные
  * сервер отдаёт лишь по подписи Telegram владельца — остальным 404, как у
  * несуществующего адреса (wt_autotrade.py, whale_api.py). Тексты — по-русски
- * и в словарь не вынесены: это служебный экран одного человека, людям он не
- * показывается никогда.
+ * и в словарь не вынесены: это служебный экран одного человека.
  *
- * Сейчас — этап 1, бэктест: сервер пересчитывает его раз в сутки (только
- * чтение базы бота). Вердикт «можно дальше» — не сигнал к торговле, а
- * повод владельцу сказать «да» бумажной торговле; реальная — только после
- * неё и отдельного «да».
+ * Сверху — реальная торговля (служба whale-autotrade), ниже — бэктест-повтор
+ * последних 30 дней по тем же правилам (ночью и по кнопке).
  */
 import { useEffect, useState } from "react";
 import { Frame } from "./Screen";
@@ -21,32 +18,12 @@ import { autotradeRun, autotradeStart, autotradeStop, fetchAutotrade } from "../
 import { shortInst, skipsLine } from "../lib/autotrade";
 import { pct, usd } from "../lib/format";
 import { toast } from "../components/Toast";
-import type { AtActive, AtGroup, AtLive, AtParams, AtStats, AtSummary, AutotradeReply } from "../lib/types";
+import type { AtGroup, AtLive, AtStats, AtSummary, AutotradeReply } from "../lib/types";
 
 const when = (ms: number) =>
   ms > 0 ? new Date(ms).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "—";
 
 const pf = (v: number | null) => (v === null ? "∞" : v.toFixed(2));
-
-function paramsLine(p: AtParams): string {
-  const exits = [
-    p.tp ? `тейк ${p.tp}%` : "",
-    p.sl ? `стоп ${p.sl}%` : "",
-    p.hold ? `по времени ${p.hold} мин` : "",
-    p.whale ? "кит закрыл в убыток — выходим" : "",
-  ].filter(Boolean);
-  return [
-    p.wallets > 1 ? `китов в одну сторону от ${p.wallets}${p.min_whale ? `, каждый от ${usd(p.min_whale)}` : ""}` : "",
-    p.no_conflict ? "против — киты не крупнее" : "",
-    p.cooldown ? `в одну бумагу — раз в ${p.cooldown % 60 ? `${p.cooldown} мин` : `${p.cooldown / 60} ч`}` : "",
-    p.rest ? `после выхода ${p.rest / 60} ч в бумагу не входим` : "",
-    `вход через ${p.delay} с`,
-    `объём от ${usd(p.min_notional)}`,
-    p.chase ? `не дороже китов больше чем на ${p.chase}%` : "",
-    p.pnl30 ? "кит в плюсе за 30 дн." : "",
-    exits.length ? exits.join(", ") : "без выхода — пересиживаем",
-  ].filter(Boolean).join(" · ");
-}
 
 function StatsRows({ s }: { s: AtStats }) {
   return (
@@ -58,17 +35,10 @@ function StatsRows({ s }: { s: AtStats }) {
       <Row title="Profit factor" value={pf(s.pf)} />
       <Row title="Макс. просадка" value={usd(-s.max_dd)} tone="dn"
            valueSub={`худшая серия: ${s.worst_streak} (${usd(s.worst_streak_usd, true)})`} />
-      {s.max_mae !== undefined ? (
-        <Row title="Пересиживание" wrap
-             sub={`дольше всех — ${Math.round(s.longest_h ?? 0)} ч; провал внутри сделки — до ${usd(-s.max_mae)}`}
-             value={s.open ? `открыто ${s.open}` : "все закрыты"} tone={s.open ? "dn" : "up"}
-             valueSub={s.open ? usd(s.unrealized, true) : "по тейку"} />
-      ) : null}
-      {s.max_overlap_mae !== undefined && (s.max_open_at_once ?? 0) > 1 ? (
-        <Row title="Все открытые сразу" wrap
-             sub={`бывало позиций сразу: ${s.max_open_at_once ?? 0}; их худшие провалы вместе — до ${usd(-s.max_overlap_mae)} (верхняя граница: на кроссе их держит один счёт)`}
-             value={usd(-s.max_overlap_mae)} tone="dn" />
-      ) : null}
+      <Row title="Открытые на конец" wrap
+           sub={`дольше всех — ${Math.round(s.longest_h)} ч; провал внутри сделки — до ${usd(-s.max_mae)}`}
+           value={s.open ? `открыто ${s.open}` : "все закрыты"} {...(s.open ? { tone: "dn" as const } : {})}
+           valueSub={s.open ? usd(s.unrealized, true) : ""} />
     </>
   );
 }
@@ -91,21 +61,18 @@ function Groups({ title, rows, label }: { title: string; rows: AtGroup[]; label?
 const price = (v: number) => (v >= 1000 ? v.toLocaleString("ru-RU", { maximumFractionDigits: 2 })
   : v.toPrecision(5).replace(/\.?0+$/, ""));
 
-/** Общая статистика — то, на что смотреть в первую очередь: лучший набор
- *  на всём периоде. Доля от депозита — рядом с долларами. */
+/** Общая статистика повтора — на что смотреть в первую очередь. */
 function Overview({ s }: { s: AtSummary }) {
   const f = s.full;
-  if (!f) return null;
   const dep = s.sizing.deposit || 1;
-  const share = (v: number) => `${v >= 0 ? "+" : ""}${((v / dep) * 100).toFixed(1)}% депозита`;
+  const share = (v: number) => `${v >= 0 ? "+" : ""}${((v / dep) * 100).toFixed(1)}% капитала`;
   return (
     <>
-      <SectionTitle>Общая статистика</SectionTitle>
+      <SectionTitle>Бэктест: общая статистика</SectionTitle>
       <Card pad={false}>
         <Row title="Итог" value={usd(f.net, true)} tone={f.net >= 0 ? "up" : "dn"} valueSub={share(f.net)}
-             sub={`${when(s.period.from)} — ${when(s.period.to)}`} />
-        <Row title="Винрейт" value={pct(f.win_pct, 1, false)}
-             sub={`${f.trades} сделок${s.per_day !== undefined ? ` · ${s.per_day} в день` : ""}`}
+             sub={`${when(s.period.from)} — ${when(s.period.to)} · капитал ${usd(s.sizing.deposit)} → ${usd(s.sizing.deposit_end)}`} />
+        <Row title="Винрейт" value={pct(f.win_pct, 1, false)} sub={`${f.trades} сделок · ${s.per_day} в день`}
              tone={f.win_pct >= 50 ? "up" : "dn"} />
         <Row title="Средняя сделка" value={usd(f.trades ? f.net / f.trades : 0, true)}
              sub={`прибыль ${usd(f.avg_win, true)} · убыток ${usd(f.avg_loss, true)}`} />
@@ -115,32 +82,28 @@ function Overview({ s }: { s: AtSummary }) {
              sub="с провалами внутри сделок" />
         <Row title="Худшая серия" value={`${f.worst_streak} подряд`} {...(f.worst_streak ? { tone: "dn" as const } : {})}
              valueSub={usd(f.worst_streak_usd, true)} />
-        {f.longest_h !== undefined ? (
-          <Row title="Самая долгая сделка" value={`${Math.round(f.longest_h)} ч`}
-               sub={`провал внутри сделки — до ${usd(-(f.max_mae ?? 0))}`} />
-        ) : null}
+        <Row title="Самая долгая сделка" value={`${Math.round(f.longest_h)} ч`}
+             sub={`провал внутри сделки — до ${usd(-f.max_mae)}`} />
       </Card>
     </>
   );
 }
 
-/** Активные позиции модели: вошли и ещё не дошли до тейка. Это бэктест —
- *  реальных денег здесь нет; настоящие позиции появятся на этапах 2–3. */
+/** Открытая позиция модели: не дошла до выхода к концу данных. Это бэктест —
+ *  реальных денег здесь нет; настоящая позиция — в «Реальной торговле на OKX». */
 function Active({ s }: { s: AtSummary }) {
-  const list: AtActive[] = s.active ?? [];
   return (
     <>
-      <SectionTitle>Активные позиции</SectionTitle>
+      <SectionTitle>Бэктест: открытая позиция модели</SectionTitle>
       <Card pad={false}>
-        {list.length ? list.map((a, i) => (
+        {s.active.length ? s.active.map((a, i) => (
           <Row key={i} wrap
                title={`${a.coin} · ${a.side > 0 ? "лонг" : "шорт"}`}
-               sub={`вход ${when(a.entry)} по ${price(a.px_in)} · сейчас ${price(a.px_now)} · тейк ${a.tp ? price(a.tp) : "—"}`
+               sub={`вход ${when(a.entry)} по ${price(a.px_in)} · сейчас ${price(a.px_out)} · тейк ${price(a.tp)}`
                  + `${a.to_tp_pct !== null ? ` (ещё ${a.to_tp_pct.toFixed(2)}%)` : ""} · держим ${Math.round(a.held_h)} ч`
-                 + ` · провал до ${usd(-a.mae)} · цена на ${when(a.at)}`}
+                 + ` · провал до ${usd(-a.mae)}${a.averaged ? " · усреднена" : ""}`}
                value={usd(a.usd, true)} tone={a.usd >= 0 ? "up" : "dn"} valueSub={pct(a.pct, 2)} />
         )) : <Row title="Открытых позиций нет" sub="Ждём сигнала: от 2 китов в одну сторону за 2 часа" wrap />}
-        <Row title="Это модель (бэктест)" sub="Реальных денег нет. Настоящие позиции бота — в блоке «Реальная торговля на OKX»." wrap />
       </Card>
     </>
   );
@@ -247,31 +210,6 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
 
 /** Какие бумаги китов можно торговать на OKX: имя на Hyperliquid и на OKX
  *  может не совпадать, а одно имя — означать разные активы. */
-function OkxCard({ s }: { s: AtSummary }) {
-  const map = s.okx?.map;
-  if (!map) return null;
-  const all = Object.entries(map);
-  const short = (inst = "") => shortInst(inst);
-  const ok = all.filter(([, m]) => m.status === "ok");
-  const renamed = ok.filter(([c, m]) => short(m.inst) !== c.split(":").pop())
-    .map(([c, m]) => `${c} → ${short(m.inst)}${m.scale && m.scale !== 1 ? ` (×${m.scale})` : ""}`);
-  const other = all.filter(([, m]) => m.status === "mismatch").map(([c, m]) => `${c} ≠ ${short(m.inst)}`);
-  const none = all.filter(([, m]) => m.status === "missing" || m.status === "unverified").map(([c]) => c);
-  const list = (xs: string[], n = 40) => xs.slice(0, n).join(", ") + (xs.length > n ? ` … ещё ${xs.length - n}` : "");
-  return (
-    <>
-      <SectionTitle>OKX</SectionTitle>
-      <Card>
-        <Row title={s.okx?.venue === "okx" ? "Торгуем на OKX" : "Торгуем на Hyperliquid"}
-             sub={`На OKX есть ${ok.length} из ${all.length} бумаг китов (сверено по цене, ±2 %)`} wrap />
-        {renamed.length ? <Row title="На OKX под другим именем" sub={list(renamed)} wrap /> : null}
-        {other.length ? <Row title="То же имя — другой актив" sub={list(other)} tone="dn" wrap /> : null}
-        {none.length ? <Row title="Нет на OKX" sub={list(none)} wrap /> : null}
-      </Card>
-    </>
-  );
-}
-
 export function AutotradeScreen() {
   const [st, setSt] = useState<AutotradeReply | null>(null);
   const [failed, setFailed] = useState(false);
@@ -326,7 +264,6 @@ export function AutotradeScreen() {
   if (!st) return <Frame title="Автоторговля"><Skeleton rows={6} /></Frame>;
 
   const b = st.backtest;
-  const best = b?.top[0];
   return (
     <Frame title="Автоторговля" sub="Копирование китов · фьючерсы Hyperliquid">
       <Card>
@@ -360,104 +297,31 @@ export function AutotradeScreen() {
           <Overview s={b} />
           <Active s={b} />
           <Card>
-            {b.kind === "replay" ? (
-              <Row title={b.verdict ? "Правила окупаются" : "Правила пока не окупаются"} wrap tone={b.verdict ? "up" : "dn"}
-                   sub={`Повтор последних ${Math.round((b.period.to - b.period.from) / 86_400_000)} дн. по актуальным правилам живого бота: `
-                     + `капитал ${usd(b.sizing.deposit)} → ${usd(b.deposit_end ?? b.sizing.deposit)}; `
-                     + (b.verdict ? "критерий на последней четверти пройден." : "критерий на последней четверти не пройден.")} />
-            ) : (
-              <Row title={b.verdict ? "Вердикт: можно дальше" : "Вердикт: нет"}
-                   sub={b.verdict
-                     ? "Лучший набор прошёл проверку на отложенных данных. Следующий шаг — бумажная торговля (2–4 недели), если скажете «да»."
-                     : "На отложенных данных критерий не пройден — копирование не окупает комиссии и риск."}
-                   tone={b.verdict ? "up" : "dn"} wrap />
-            )}
+            <Row title={b.verdict ? "Правила окупаются" : "Правила пока не окупаются"} wrap tone={b.verdict ? "up" : "dn"}
+                 sub={`Повтор последних ${Math.round((b.period.to - b.period.from) / 86_400_000)} дн. по актуальным правилам `
+                   + `живого бота; ${b.verdict ? "критерий на последней четверти пройден" : "критерий на последней четверти не пройден"}.`} />
             <Row title="Критерий" wrap
-                 sub={`итог > 0, PF ≥ ${b.criteria.pf_ge}, сделок ≥ ${b.criteria.trades_ge}, просадка ≤ ${usd(b.criteria.max_dd_le)}${b.criteria.beats_fade ? "; за китами лучше, чем против них" : ""}`} />
-            <Row title="Размер" wrap
-                 sub={`${b.sizing.cross ? "кросс-маржа" : "изолированная маржа"}; депозит ${usd(b.sizing.deposit)}, маржа ${b.sizing.margin_pct}% × ${b.sizing.leverage}× = позиция ${usd(b.sizing.notional)}; ${b.sizing.max_open === 1 ? "всегда одна открытая позиция: пока её не закрыли, вторую не открываем" : `позиций сразу: до ${b.sizing.max_open || "без предела"}`}; ликвидация — при ходе против ${b.sizing.liq_move_pct}%; ${b.kind === "replay"
-                   ? "выход — тейк +1 % или по рынку вслед за китом в убытке; разовое усреднение 5 % при минусе больше 1 % и доборе кита"
-                   : "выход — только тейк, пересиживаем всегда"}`} />
-            {b.kind === "replay" && b.skips ? (
-              <Row title="Сигналы в повторе" wrap
-                   sub={`${skipsLine(b.skips)}${b.averaged ? ` · усреднений: ${b.averaged}` : ""}`} />
-            ) : null}
-            <Row title="Сигнал" wrap
-                 sub={`открытие лонга или шорта на фьючерсах (${b.sizing.markets === "all" ? "крипта, акции, металлы" : "акции"}); китов считаем за ${b.sizing.cluster_hours} ч${b.sizing.min_whale ? `, у каждого позиция от ${usd(b.sizing.min_whale)}` : ""}; цена ниже средней китов (для шорта — выше) — входим, ушла в другую сторону дальше предела — пропуск`} />
+                 sub={`на последней четверти: итог > 0, PF ≥ ${b.criteria.pf_ge}, сделок ≥ ${b.criteria.trades_ge}, просадка ≤ ${usd(b.criteria.max_dd_le)}`} />
+            <Row title="Правила" wrap
+                 sub={`от 2 китов (каждый от 1000 $) в одну сторону за 2 ч; против — не крупнее; не дороже китов на 0,3 %; `
+                   + `маржа ${b.sizing.margin_pct}% × ${b.sizing.leverage}×, одна позиция, в бумагу — раз в 3 ч; выход — тейк +1 % `
+                   + "или по рынку вслед за китом в убытке; разовое усреднение 5 % при минусе больше 1 % и доборе кита"} />
+            <Row title="Сигналы в повторе" wrap sub={`${skipsLine(b.skips)}${b.averaged ? ` · усреднений: ${b.averaged}` : ""}`} />
             <Row title="Данные" wrap
-                 sub={`${b.data.signals} сигналов, ${when(b.period.from)} — ${when(b.period.to)}; отложенные — после ${when(b.period.cut)}; свечи: ${Object.entries(b.data.candles).map(([k, v]) => `${k} ${v}`).join(", ")}`} />
+                 sub={`${b.data.signals} сигналов; свечи OKX 5 мин — запросов ${b.data.requests}${b.data.errors ? `, сбоев ${b.data.errors}` : ""}; `
+                   + `комиссии ${b.sizing.fee_taker_pct}% / ${b.sizing.fee_maker_pct}%, проскальзывание ${b.sizing.slippage_pct}%; фандинг не учтён`} />
           </Card>
 
-          <OkxCard s={b} />
+          <SectionTitle>Последняя четверть периода</SectionTitle>
+          <Card><StatsRows s={b.last} /></Card>
+          <SectionTitle>Первые три четверти</SectionTitle>
+          <Card><StatsRows s={b.first} /></Card>
 
-          {best ? (
-            <>
-              <SectionTitle>{b.kind === "replay" ? "Последняя четверть периода" : "Лучший набор на отложенных данных"}</SectionTitle>
-              <Card>
-                <Row title="Параметры" sub={paramsLine(best.params)} wrap />
-                <StatsRows s={best.holdout} />
-                {b.fade ? (
-                  <Row title="Против китов (наоборот)" wrap
-                       sub={`${b.fade.trades} сделок · ${pct(b.fade.win_pct, 0, false)} в плюс · ${b.fade.net < best.holdout.net ? "за китами лучше" : "за китами НЕ лучше — преимущества нет, только форма стратегии"}`}
-                       value={usd(b.fade.net, true)} tone={b.fade.net < best.holdout.net ? "up" : "dn"} />
-                ) : null}
-              </Card>
-              <SectionTitle>{b.kind === "replay" ? "Первые три четверти" : "Тот же набор на подборе"}</SectionTitle>
-              <Card><StatsRows s={best.train} /></Card>
-            </>
-          ) : null}
-
-          {b.full && b.equity.length > 1 ? (
+          {b.equity.length > 1 ? (
             <>
               <SectionTitle>Капитал на всём периоде</SectionTitle>
               <Card>
                 <TrendChart values={b.equity.map((p) => p[1])} />
-                <StatsRows s={b.full} />
-              </Card>
-            </>
-          ) : null}
-
-          {b.top.length > 1 ? (
-            <>
-              <SectionTitle>Лучшие {b.top.length} наборов (отложенные)</SectionTitle>
-              <Card pad={false}>
-                {b.top.map((x, i) => (
-                  <Row key={i} title={`${i + 1}. ${paramsLine(x.params)}`} wrap
-                       sub={`${x.holdout.trades} сделок · PF ${pf(x.holdout.pf)} · просадка ${usd(x.holdout.max_dd)}`}
-                       value={usd(x.holdout.net, true)} tone={x.holdout.net >= 0 ? "up" : "dn"}
-                       valueSub={x.passes ? "проходит" : "не проходит"} />
-                ))}
-              </Card>
-            </>
-          ) : null}
-
-          {b.pace?.length ? (
-            <>
-              <SectionTitle>Сколько сделок в день</SectionTitle>
-              <Card pad={false}>
-                {b.entries_per_day !== undefined ? (
-                  <Row title="Возможностей входа" wrap value={`${b.entries_per_day} в день`}
-                       sub="по правилу китов — верхняя граница: пока позиция не дошла до тейка, новые не открываются" />
-                ) : null}
-                {b.pace.map((x) => (
-                  <Row key={x.max_open} wrap
-                       title={`Позиций сразу: ${x.max_open} (маржа ${x.max_open * b.sizing.margin_pct}%)`}
-                       sub={`${x.trades} сделок · до тейка обычно ${x.median_tp_h} ч · открыто на конец ${x.open} · просадка ${usd(x.max_dd)}${x.bust ? ` · депозит кончился ${when(x.bust)}` : ""}`}
-                       value={`${x.per_day} в день`} valueSub={usd(x.net, true)} tone={x.bust || x.net < 0 ? "dn" : "up"} />
-                ))}
-              </Card>
-            </>
-          ) : null}
-
-          {b.by_chase?.length ? (
-            <>
-              <SectionTitle>По пределу догона</SectionTitle>
-              <Card pad={false}>
-                {b.by_chase.map((c) => (
-                  <Row key={c.chase} title={`Не дороже китов на ${c.chase}%`}
-                       sub={`подбор ${usd(c.train.net, true)} · отложенные: ${c.holdout.trades} сделок, PF ${pf(c.holdout.pf)}`}
-                       value={usd(c.holdout.net, true)} tone={c.holdout.net >= 0 ? "up" : "dn"} valueSub="отложенные" />
-                ))}
               </Card>
             </>
           ) : null}
@@ -466,15 +330,15 @@ export function AutotradeScreen() {
           <Groups title="По времени суток" rows={b.by_session}
                   label={(k) => (k === "open" ? "Рынок США открыт" : "Рынок США закрыт")} />
           <Groups title="По причине выхода" rows={b.by_exit} />
-          <Groups title="По китам" rows={b.by_whale} />
 
           {b.trades.length ? (
             <>
-              <SectionTitle>Последние сделки</SectionTitle>
+              <SectionTitle>Последние сделки модели</SectionTitle>
               <Card pad={false}>
                 {[...b.trades].reverse().slice(0, 30).map((t, i) => (
                   <Row key={i} title={`${t.coin} · ${t.side > 0 ? "лонг" : "шорт"}`}
-                       sub={`${when(t.entry)}${t.px_in ? ` по ${price(t.px_in)}` : ""} → ${t.why === "открыта" ? "ещё открыта" : `${when(t.exit)}${t.px_out ? ` по ${price(t.px_out)}` : ""} · ${t.why}`}${t.holdout ? " · отложенные" : ""}`}
+                       sub={`${when(t.entry)} по ${price(t.px_in)} → ${t.why === "открыта" ? "ещё открыта"
+                         : `${when(t.exit)} по ${price(t.px_out)} · ${t.why}`}${t.averaged ? " · усреднена" : ""}`}
                        value={usd(t.usd, true)} tone={t.usd >= 0 ? "up" : "dn"} valueSub={pct(t.pct, 2)} />
                 ))}
               </Card>

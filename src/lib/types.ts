@@ -1179,6 +1179,7 @@ export interface CalReply {
 }
 
 /** Итоги набора сделок (бэктест автокопирования, summary.json). */
+/** Итоги сделок бэктеста-повтора (WhaleScanner/tools/autotrade_replay.py). */
 export interface AtStats {
   trades: number;
   win_pct: number;
@@ -1187,144 +1188,78 @@ export interface AtStats {
   /** Profit factor; null — убыточных сделок не было. */
   pf: number | null;
   net: number;
+  /** Макс. просадка — с провалами внутри сделок, $. */
   max_dd: number;
   worst_streak: number;
   worst_streak_usd: number;
-  /** Пересиживаем: не дошли до тейка — открыты на конец данных (по рынку, входит в net). */
-  open?: number;
-  unrealized?: number;
+  /** Не дошли до выхода к концу данных (по рынку, входит в net). */
+  open: number;
+  unrealized: number;
   /** Самая глубокая просадка внутри одной сделки, $. */
-  max_mae?: number;
+  max_mae: number;
   /** Самая долгая сделка, ч. */
-  longest_h?: number;
-  /** Больше всего позиций сразу. */
-  max_open_at_once?: number;
-  /** Худшие провалы одновременно открытых вместе, $ — верхняя граница риска кросса. */
-  max_overlap_mae?: number;
-}
-
-export interface AtParams {
-  delay: number;
-  min_notional: number;
-  min_account: number;
-  max_leverage: number;
-  pnl30: boolean;
-  cooldown: number;
-  /** Китов в одну сторону за окно, от. */
-  wallets: number;
-  /** На сколько % вход может быть хуже средней цены китов; 0 — без предела. */
-  chase: number;
-  /** Порог кита, $ (его позиция в эту сторону за окно). */
-  min_whale?: number;
-  /** Пропуск, если за окно по бумаге есть встречный сигнал по тому же правилу. */
-  no_conflict?: boolean;
-  /** После выхода из бумаги — столько минут в неё снова не входим. */
-  rest?: number;
-  /** Проценты; 0 — выключено. */
-  tp: number;
-  sl: number;
-  /** Минуты; 0 — выключено. */
-  hold: number;
-  whale: boolean;
+  longest_h: number;
 }
 
 export interface AtGroup extends AtStats {
   key: string;
 }
 
+/** Сделка модели (у открытой px_out — рынок на конец данных). */
 export interface AtTrade {
-  coin: string;
-  side: number;
-  whale: string;
-  entry: number;
-  exit: number;
-  pct: number;
-  usd: number;
-  why: string;
-  holdout: boolean;
-  /** Цена входа и выхода (у открытой — рынок на конец данных). */
-  px_in?: number;
-  px_out?: number;
-}
-
-/** Активная позиция модели: не дошла до тейка к концу данных. */
-export interface AtActive {
   coin: string;
   side: number;
   whales: number;
   entry: number;
+  exit: number;
   px_in: number;
-  px_now: number;
+  px_out: number;
   tp: number;
-  /** На какой момент цена px_now. */
-  at: number;
   usd: number;
   pct: number;
-  /** Сколько ещё % цены до тейка (null — тейка нет). */
-  to_tp_pct: number | null;
+  why: string;
+  averaged: boolean;
   mae: number;
   held_h: number;
 }
 
+/** Открытая позиция модели — сделка + сколько ещё % до тейка. */
+export interface AtActive extends AtTrade {
+  to_tp_pct: number | null;
+}
+
+/** Итог бэктеста-повтора по актуальным правилам живого бота. */
 export interface AtSummary {
   generated_at: number;
   verdict: boolean;
-  criteria: { net_gt: number; pf_ge: number; trades_ge: number; max_dd_le: number; beats_fade?: boolean };
+  /** Критерий на последней четверти периода. */
+  criteria: { net_gt: number; pf_ge: number; trades_ge: number; max_dd_le: number };
   period: { from: number; to: number; cut: number };
-  sizing: {
-    deposit: number; margin_pct: number; leverage: number; max_open: number; notional: number;
-    cross: boolean; markets: "all" | "stocks"; cluster_hours: number; min_whale?: number;
-    liq_move_pct: number; fee_pct: number; slippage_pct: number;
-  };
-  data: { signals: number; candles: Record<string, number>; requests: number; errors: number; funding: Record<string, string> };
-  top: { params: AtParams; train: AtStats; holdout: AtStats; passes: boolean }[];
-  full: AtStats | null;
-  /** Тот же набор в обратную сторону от китов на отложенных: преимущество
-   *  есть, только если за китами лучше. */
-  fade?: AtStats | null;
+  sizing: { deposit: number; deposit_end: number; margin_pct: number; leverage: number;
+            fee_taker_pct: number; fee_maker_pct: number; slippage_pct: number };
+  data: { signals: number; requests: number; errors: number };
+  /** Весь период, первые 3/4 и последняя 1/4. */
+  full: AtStats;
+  first: AtStats;
+  last: AtStats;
   /** [время выхода, накопленный итог $]. */
   equity: [number, number][];
   by_coin: AtGroup[];
-  by_whale: AtGroup[];
   by_session: AtGroup[];
   by_exit: AtGroup[];
+  /** Пропуски сигналов по причинам (коды — как у живого бота, «entered» — вошли). */
+  skips: Record<string, number>;
+  /** Сколько раз сработало разовое усреднение. */
+  averaged: number;
+  per_day: number;
   trades: AtTrade[];
-  active?: AtActive[];
-  /** Сделок в день (лучший набор, весь период). */
-  per_day?: number;
-  /** Где торговать и какие бумаги китов есть на OKX (сверено по цене). */
-  okx?: { venue: "hl" | "okx"; map: Record<string, AtOkx> };
-  /** Лучший набор подбора для каждого предела догона (%): подбор и отложенные. */
-  by_chase?: { chase: number; train: AtStats; holdout: AtStats }[];
-  /** Возможностей входа по правилу китов в день (верхняя граница сделок). */
-  entries_per_day?: number;
-  /** Темп при 1, 3 и 10 позициях сразу: сделок в день, итог, когда кончился депозит. */
-  pace?: { max_open: number; trades: number; per_day: number; median_tp_h: number; open: number; net: number;
-           max_dd: number; bust: number }[];
-  /** «replay» — повтор истории по актуальным правилам живого бота (один набор правил). */
-  kind?: "replay";
-  /** Повтор: пропуски сигналов по причинам (коды — как у живого бота). */
-  skips?: Record<string, number>;
-  /** Повтор: сколько раз сработало разовое усреднение. */
-  averaged?: number;
-  /** Повтор: капитал на конец (закрытые сделки), $. */
-  deposit_end?: number;
-}
-
-/** Бумага Hyperliquid на OKX: ok — есть (inst, масштаб), mismatch — под тем
- *  же именем другой актив (цены не сходятся), missing — нет, unverified —
- *  не удалось проверить. */
-export interface AtOkx {
-  status: "ok" | "mismatch" | "missing" | "unverified";
-  inst?: string;
-  scale?: number;
-  ratio?: number;
+  active: AtActive[];
 }
 
 /** Ответ закрытой вкладки владельца (/api/owner/autotrade). */
 export interface AutotradeReply {
   ok: boolean;
-  stage: "backtest" | "paper" | "live";
+  stage: "backtest" | "live";
   /** Модуль включён кнопкой «Старт» (по умолчанию — выключен). */
   on: boolean;
   backtest: AtSummary | null;
@@ -1335,7 +1270,6 @@ export interface AutotradeReply {
   next: number;
   /** Ход идущего пересчёта строкой («повтор: 40 % …»); не идёт — пусто. */
   progress?: string;
-  paper: null;
   live: AtLive | null;
 }
 
