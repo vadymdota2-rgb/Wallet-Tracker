@@ -131,6 +131,7 @@ export const SKIP_LABELS: Record<string, string> = {
   whale_exit: "кит уже вышел в убыток",
   bigger_against: "против — киты крупнее",
   stale: "китов уже меньше 2 (сигнал устарел)",
+  level: "цена не у своего уровня (24 ч)",
   entered: "вошли",
 };
 
