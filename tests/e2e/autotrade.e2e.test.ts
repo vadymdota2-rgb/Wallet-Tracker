@@ -116,7 +116,6 @@ describe("закрытая вкладка «Автоторговля»", () => {
       "Сигналы в повторе", "вошли — 2 · у бота уже 3 позиции — 1", "Последняя четверть периода",
       "Первые три четверти", "Капитал на всём периоде", "По бумагам", "Последние сделки модели",
       "Бэктест: откуда плюс и минус", "Тейк", "Открыта на конец данных", "Винрейт для нуля",
-      "Бэктест: варианты правил", "текущие правила (сейчас)", "тейк +0,5 %", "Лучше текущих — «стоп только за уровнем»",
       "Пересчитать сейчас", "Бэктест: открытая позиция модели", "ETH · шорт", "Открытые на конец"]) {
       assert.ok(await screen.getByText(s).first().isVisible(), s);
     }
@@ -129,18 +128,17 @@ describe("закрытая вкладка «Автоторговля»", () => {
     assert.match(lossRow, /1 сделка/, lossRow);
     const need = await screen.getByText("Винрейт для нуля").locator("xpath=ancestor::*[@class='row'][1]").innerText();
     assert.match(need, /5[.,]1/, need);
-    // Варианты правил: итог и разница с текущими (2,37 − 1,05 = +1,32).
-    const alt = await screen.getByText("стоп только за уровнем", { exact: true }).locator("xpath=ancestor::*[@class='row'][1]").innerText();
-    for (const s of [/2 сделки \(≈ 1[.,]2 в месяц\)/, /в плюс 50[.,]0\s?%/, /PF —/, /открыто 1/, /\+\$1[.,]32 к текущим/,
-      /до комиссий \+\$2[.,]67 \(комиссии \$0[.,]30?\)/, /половины периода \+\$1[.,]20? \/ \+\$1[.,]17/]) assert.match(alt, s, alt);
-    // Лучший вариант (1,20 и 1,17 против 0,60 и 0,45) — лучше в обеих половинах.
-    assert.ok(await screen.getByText(/Лучше текущих в обеих половинах периода — похоже, не случайность/).isVisible());
-    // Разбор сигналов: ход цены после сигнала в сторону китов.
-    const edgeRow = await screen.getByText("все сигналы · 412").locator("xpath=ancestor::*[@class='row'][1]").innerText();
-    for (const s of [/15 мин -0[.,]04\s?%/, /1 ч -0[.,]12\s?%/, /24 ч \+0[.,]35\s?%/, /за 1 ч в сторону китов — 44\s?%/]) assert.match(edgeRow, s, edgeRow);
-    assert.ok(await screen.getByText("Бэктест: куда идёт цена после сигнала").isVisible());
-    const k3 = await screen.getByText("китов 3 · 57").locator("xpath=ancestor::*[@class='row'][1]").innerText();
-    assert.match(k3, /4 ч — · 24 ч —/, k3);
+    // Один расчёт — по текущим правилам: вариантов и разбора сигналов нет.
+    for (const s of ["Бэктест: варианты правил", "Бэктест: куда идёт цена после сигнала"]) {
+      assert.equal(await screen.getByText(s).count(), 0, s);
+    }
+    // До комиссий: 1,05 + 0,5 = +1,55; половины периода +0,6 / +0,45 — плюс в обеих.
+    const gross = await screen.getByText("До комиссий").locator("xpath=ancestor::*[@class='row'][1]").innerText();
+    assert.match(gross, /\+\$1[.,]55/, gross);
+    assert.match(gross, /комиссии \$0[.,]50?/, gross);
+    const half = await screen.getByText("Половины периода").locator("xpath=ancestor::*[@class='row'][1]").innerText();
+    assert.match(half, /\+\$0[.,]60? \/ \+\$0[.,]45/, half);
+    assert.match(half, /плюс в обеих — похоже, не случайность/, half);
     // Открытая позиция модели: вход, цена сейчас, тейк и сколько до него.
     const act = await screen.getByText("ETH · шорт").first().locator("xpath=ancestor::*[@class='row'][1]").innerText();
     for (const s of [/по 2\s998,5/, /сейчас 3\s000/, /тейк 2\s968,51/, /ещё 1\.05%/, /держим 235 ч/]) assert.match(act, s);
@@ -192,15 +190,15 @@ describe("закрытая вкладка «Автоторговля»", () => {
       assert.ok(await screen.getByText(s).first().isVisible(), s);
     }
     assert.equal(await screen.getByText("OKX не принимает ордера бота").count(), 0, "ключ в порядке — плашки нет");
-    assert.ok(await screen.getByText(/тейк \+0,8 %, стоп — 1,5 % от входа \(лонг — ниже, шорт — выше\); усреднения нет/).isVisible());
+    assert.ok(await screen.getByText(/тейк \+1,5 %, стоп — 1,5 % от входа \(лонг — ниже, шорт — выше\); усреднения нет/).isVisible());
     assert.equal(await screen.getByText("Закрываем по рынку").count(), 0);
-    assert.ok(await screen.getByText(/тейк \+0,8 % — или по рынку: стоп 3\s?060 или кто-то из китов/).isVisible(), "стоп за уровнем — в строке выхода");
+    assert.ok(await screen.getByText(/тейк \+1,5 % — или по рынку: стоп 3\s?060 или кто-то из китов/).isVisible(), "стоп — в строке выхода");
     assert.ok(await screen.getByText(/приоритетный кит 0xabcdef12…/).isVisible(), "вошли с приоритетным китом — видно");
     assert.ok(await screen.getByText(/китов 3 \(\$42K, против \$9K\)/).first().isVisible(), "объёмы за и против");
     assert.ok(await screen.getByText(/тейк 2\s?970/).first().isVisible(), "тейк 2 970");
     // Вторая позиция бота — своя строка, свой тейк и стоп; не «ручная».
     assert.ok(await screen.getByText(/тейк 95\s?950/).first().isVisible(), "тейк второй позиции");
-    assert.ok(await screen.getByText(/тейк \+0,8 % — или по рынку: стоп 93\s?575/).isVisible(), "стоп второй позиции");
+    assert.ok(await screen.getByText(/тейк \+1,5 % — или по рынку: стоп 93\s?575/).isVisible(), "стоп второй позиции");
     assert.equal(await screen.getByText("BTC · не бота").count(), 0, "своя вторая позиция — не ручная");
     assert.equal(await screen.getByText("Выход", { exact: true }).count(), 2, "у каждой позиции — свой выход");
     assert.ok(await screen.getByText(/позиций до 3/).first().isVisible());
@@ -250,7 +248,7 @@ describe("закрытая вкладка «Автоторговля»", () => {
     const screen = page.locator(".sheet .screen");
     await screen.getByText(/повтор: 40 % \(400 000 из 1 000 000 сделок китов\)/).waitFor();
     assert.ok(await screen.getByText(/стоп 1,5 % от входа или вслед за китом в убытке; усреднения нет/).first().isVisible());
-    assert.ok(await screen.getByText(/MA30 15м: лонг — цена выше, шорт — ниже \(уровни важнее\)/).first().isVisible());
+    assert.ok(await screen.getByText(/MA30 15м: лонг — цена выше, шорт — ниже; уровней 4ч нет/).first().isVisible());
     assert.ok(await screen.getByText(/рейтинг китов по нашим сделкам: выше винрейт — раньше, выше 90 % \(от 5\)/).first().isVisible());
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     assert.ok(wide <= 0, `шире экрана на ${wide}px`);

@@ -1199,6 +1199,8 @@ export interface AtStats {
   max_mae: number;
   /** Самая долгая сделка, ч. */
   longest_h: number;
+  /** Комиссии, $ (уже в net; до комиссий — net + fees); нет у прежних итогов. */
+  fees?: number;
 }
 
 export interface AtGroup extends AtStats {
@@ -1226,41 +1228,6 @@ export interface AtActive extends AtTrade {
   to_tp_pct: number | null;
 }
 
-/** Вариант правил в бэктесте: одно изменение (тейк, предел стопа, фильтр) на тех же китах. */
-export interface AtVariant {
-  name: string;
-  tp_pct: number;
-  /** Предел стопа от входа, %; null — стоп только за уровнем. */
-  stop_max_pct: number | null;
-  levels: boolean;
-  ma: boolean;
-  trades: number;
-  win_pct: number;
-  net: number;
-  pf: number | null;
-  max_dd: number;
-  open: number;
-  /** Сделок в месяц (30 дней). */
-  per_month?: number;
-  /** Комиссии, $ (уже в net; до комиссий — net + fees). */
-  fees?: number;
-  /** Итог первой и второй половины периода, $: лучше в обеих — не случайность. */
-  halves?: number[];
-}
-
-/** Разбор сигналов: ход цены после сигнала в сторону китов, % (null — нет данных). */
-export interface AtEdge {
-  key: string;
-  n: number;
-  r15m: number | null;
-  r1h: number | null;
-  r4h: number | null;
-  r24h: number | null;
-  /** Доля сигналов, после которых цена пошла в сторону китов (за 1 ч и 4 ч), %. */
-  up1h: number | null;
-  up4h: number | null;
-}
-
 /** Итог бэктеста-повтора по актуальным правилам живого бота. */
 export interface AtSummary {
   generated_at: number;
@@ -1285,10 +1252,8 @@ export interface AtSummary {
   per_day: number;
   trades: AtTrade[];
   active: AtActive[];
-  /** Сравнение вариантов (первый — текущие правила); нет у прежних итогов. */
-  variants?: AtVariant[];
-  /** Разбор сигналов по группам; нет у прежних итогов. */
-  edge?: AtEdge[];
+  /** Итог первой и второй половины периода, $: плюс в обеих — не случайность; нет у прежних итогов. */
+  halves?: number[];
 }
 
 /** Ответ закрытой вкладки владельца (/api/owner/autotrade). */

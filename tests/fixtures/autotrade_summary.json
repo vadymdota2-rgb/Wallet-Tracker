@@ -37,7 +37,8 @@
     "open": 1,
     "unrealized": -0.06,
     "max_mae": 0.96,
-    "longest_h": 235.0
+    "longest_h": 235.0,
+    "fees": 0.5
   },
   "first": {
     "trades": 2,
@@ -217,85 +218,8 @@
       "to_tp_pct": 1.05
     }
   ],
-  "variants": [
-    {
-      "name": "текущие правила",
-      "tp_pct": 1.0,
-      "stop_max_pct": 1.5,
-      "levels": true,
-      "ma": true,
-      "trades": 2,
-      "win_pct": 50.0,
-      "net": 1.05,
-      "pf": 18.472,
-      "max_dd": 0.96,
-      "open": 1,
-      "per_month": 1.2,
-      "fees": 0.3,
-      "halves": [
-        0.6,
-        0.45
-      ]
-    },
-    {
-      "name": "тейк +0,5 %",
-      "tp_pct": 0.5,
-      "stop_max_pct": 1.5,
-      "levels": true,
-      "ma": true,
-      "trades": 3,
-      "win_pct": 66.7,
-      "net": 0.42,
-      "pf": 1.8,
-      "max_dd": 0.5,
-      "open": 0,
-      "per_month": 1.8,
-      "fees": 0.4,
-      "halves": [
-        0.1,
-        0.32
-      ]
-    },
-    {
-      "name": "стоп только за уровнем",
-      "tp_pct": 1.0,
-      "stop_max_pct": null,
-      "levels": true,
-      "ma": true,
-      "trades": 2,
-      "win_pct": 50.0,
-      "net": 2.37,
-      "pf": null,
-      "max_dd": 1.2,
-      "open": 1,
-      "per_month": 1.2,
-      "fees": 0.3,
-      "halves": [
-        1.2,
-        1.17
-      ]
-    }
-  ],
-  "edge": [
-    {
-      "key": "все сигналы",
-      "n": 412,
-      "r15m": -0.041,
-      "r1h": -0.118,
-      "r4h": -0.204,
-      "r24h": 0.35,
-      "up1h": 44.2,
-      "up4h": 45.1
-    },
-    {
-      "key": "китов 3",
-      "n": 57,
-      "r15m": 0.02,
-      "r1h": 0.061,
-      "r4h": null,
-      "r24h": null,
-      "up1h": 52.6,
-      "up4h": null
-    }
+  "halves": [
+    0.6,
+    0.45
   ]
 }

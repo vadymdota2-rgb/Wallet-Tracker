@@ -78,6 +78,16 @@ function Overview({ s }: { s: AtSummary }) {
              sub={`прибыль ${usd(f.avg_win, true)} · убыток ${usd(f.avg_loss, true)}`} />
         <Row title="Profit factor" value={pf(f.pf)} tone={f.pf === null || f.pf >= 1.3 ? "up" : "dn"}
              sub="сумма прибылей / сумма убытков" />
+        {f.fees !== undefined ? (
+          <Row title="До комиссий" value={usd(f.net + f.fees, true)} tone={f.net + f.fees >= 0 ? "up" : "dn"}
+               sub={`комиссии ${usd(f.fees)}: плюс до них — у сигналов китов есть преимущество, его съедают затраты`} wrap />
+        ) : null}
+        {s.halves?.length === 2 ? (
+          <Row title="Половины периода" value={`${usd(s.halves[0] ?? 0, true)} / ${usd(s.halves[1] ?? 0, true)}`}
+               tone={(s.halves[0] ?? 0) > 0 && (s.halves[1] ?? 0) > 0 ? "up" : "dn"}
+               sub={(s.halves[0] ?? 0) > 0 && (s.halves[1] ?? 0) > 0 ? "плюс в обеих — похоже, не случайность"
+                 : "плюс не в обеих — правила пока не доказаны"} wrap />
+        ) : null}
         <Row title="Макс. просадка" value={usd(-f.max_dd)} tone="dn" valueSub={share(-f.max_dd)}
              sub="с провалами внутри сделок" />
         <Row title="Худшая серия" value={`${f.worst_streak} подряд`} {...(f.worst_streak ? { tone: "dn" as const } : {})}
@@ -99,60 +109,6 @@ const EXIT_ORDER = ["тейк", "стоп", "кит вышел в убыток",
 const EXIT_LABEL: Record<string, string> = {
   "тейк": "Тейк", "стоп": "Стоп", "кит вышел в убыток": "Вслед за китом", "открыта": "Открыта на конец данных",
 };
-
-/** Разбор сигналов (ночной бэктест): куда идёт цена после сигнала — в сторону китов. */
-function Edge({ s }: { s: AtSummary }) {
-  const e = s.edge ?? [];
-  if (!e.length) return null;
-  const p = (x: number | null) => (x === null ? "—" : pct(x, 2));
-  return (
-    <>
-      <SectionTitle>Бэктест: куда идёт цена после сигнала</SectionTitle>
-      <Card pad={false}>
-        {e.map((x) => (
-          <Row key={x.key} wrap title={`${x.key} · ${x.n}`}
-               sub={`в сторону китов: 15 мин ${p(x.r15m)} · 1 ч ${p(x.r1h)} · 4 ч ${p(x.r4h)} · 24 ч ${p(x.r24h)}`}
-               value={p(x.r1h)} tone={(x.r1h ?? 0) >= 0 ? "up" : "dn"}
-               valueSub={x.up1h === null ? "" : `за 1 ч в сторону китов — ${pct(x.up1h, 0, false)}`} />
-        ))}
-        <Row wrap title="Как читать"
-             sub="Плюс — после сигнала цена в среднем шла туда, куда вошли киты; минус — против них. Один сигнал бумаги и стороны за 15 минут; комиссии не учтены." />
-      </Card>
-    </>
-  );
-}
-
-/** Варианты правил на тех же китах (ночной бэктест): что дало бы одно изменение. */
-function Variants({ s }: { s: AtSummary }) {
-  const v = s.variants ?? [];
-  const base = v[0];
-  if (!base || v.length < 2) return null;
-  const best = v.reduce((a, x) => (x.net > a.net ? x : a), base);
-  // Лучше текущих в обеих половинах периода — не случайность одного удачного отрезка.
-  const [b0, b1] = best.halves ?? [];
-  const [c0, c1] = base.halves ?? [];
-  const steady = b0 !== undefined && b1 !== undefined && c0 !== undefined && c1 !== undefined ? b0 > c0 && b1 > c1 : null;
-  return (
-    <>
-      <SectionTitle>Бэктест: варианты правил</SectionTitle>
-      <Card pad={false}>
-        {v.map((x, i) => (
-          <Row key={x.name} title={i === 0 ? `${x.name} (сейчас)` : x.name}
-               sub={`${deals(x.trades)}${x.per_month !== undefined ? ` (≈ ${x.per_month} в месяц)` : ""} · в плюс ${pct(x.win_pct, 1, false)} · PF ${x.pf ?? "—"} · просадка ${usd(x.max_dd)}`
-                 + `${x.open ? ` · открыто ${x.open}` : ""}`
-                 + `${x.fees !== undefined ? ` · до комиссий ${usd(x.net + x.fees, true)} (комиссии ${usd(x.fees)})` : ""}`
-                 + `${x.halves?.length === 2 ? ` · половины периода ${usd(x.halves[0] ?? 0, true)} / ${usd(x.halves[1] ?? 0, true)}` : ""}`}
-               value={usd(x.net, true)} tone={x.net >= 0 ? "up" : "dn"}
-               valueSub={i === 0 ? "" : `${usd(x.net - base.net, true)} к текущим`} />
-        ))}
-        <Row wrap title={best === base ? "Текущие правила — лучший вариант" : `Лучше текущих — «${best.name}»`}
-             sub={`${best === base || steady === null ? "" : steady ? "Лучше текущих в обеих половинах периода — похоже, не случайность. "
-               : "Лучше текущих не в обеих половинах периода — может быть случайностью. "}`
-               + "Те же сделки китов за тот же период, в каждом варианте изменено одно правило. Правила бота меняются только вручную."} />
-      </Card>
-    </>
-  );
-}
 
 /** Откуда плюс и минус: итог по причине выхода и винрейт, нужный для нуля. */
 function Exits({ s }: { s: AtSummary }) {
@@ -225,7 +181,7 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
         <Row title="Капитал счёта" value={l.equity != null ? usd(l.equity) : "—"}
              sub={`маржа на сделку всегда 5 % × 10× — позиция ${l.equity != null ? usd(l.equity / 2) : "—"}, позиций до 3; `
                + "вход — по рынку, но не хуже средней цены китов (хуже — не входим, за ценой не гонимся); "
-               + "тейк +0,8 %, стоп — 1,5 % от входа (лонг — ниже, шорт — выше); усреднения нет"} />
+               + "тейк +1,5 %, стоп — 1,5 % от входа (лонг — ниже, шорт — выше); усреднения нет"} />
       </Card>
 
       <SectionTitle>{`Позиции бота: ${opens.length} из 3`}</SectionTitle>
@@ -241,13 +197,13 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
                value={op.upl !== undefined ? usd(op.upl, true) : "—"} tone={(op.upl ?? 0) >= 0 ? "up" : "dn"} />,
           <Row key={`${op.inst}:exit`} title={op.exit_why ? "Закрываем по рынку" : "Выход"} wrap {...(op.exit_why ? { tone: "dn" as const } : {})}
                sub={op.exit_why ? `${op.exit_why} — бот снял тейк и закрывает позицию рыночным ордером`
-                 : `тейк +0,8 % — или по рынку: стоп${op.stop ? ` ${price(op.stop)}` : " (в записи позиции его нет)"} или кто-то из китов сигнала закроет свою сделку в убытке`} />,
+                 : `тейк +1,5 % — или по рынку: стоп${op.stop ? ` ${price(op.stop)}` : " (в записи позиции его нет)"} или кто-то из китов сигнала закроет свою сделку в убытке`} />,
         ])}
         {l.pending ? (
           <Row wrap title={`${shortInst(l.pending.inst)} · ${l.pending.side > 0 ? "лонг" : "шорт"} · вход`}
                sub={`ордер по рынку не хуже ${price(l.pending.px)} — проверяем исполнение до ${when(l.pending.until)}; не исполнится — снимется, входа не будет`} />
         ) : null}
-        {opens.length || l.pending ? null : <Row title="Позиций бота нет" sub="Ждём: от 2 китов в одну сторону за 2 часа; лонг — ниже 40 % диапазона 4ч × 24 и выше MA30 15м, шорт — выше 60 % и ниже MA30; приоритетный кит (наш винрейт > 90 %) — и один" wrap />}
+        {opens.length || l.pending ? null : <Row title="Позиций бота нет" sub="Ждём: от 2 китов в одну сторону за 2 часа; лонг — цена выше MA30 15м, шорт — ниже; приоритетный кит (наш винрейт > 90 %) — и один" wrap />}
         {manual.map((p) => (
           <Row key={p.instId} wrap title={`${shortInst(p.instId)} · не бота`}
                sub="Открыта вами — бот на эту бумагу не входит; размер его входа это не меняет (5 %)"
@@ -391,8 +347,6 @@ export function AutotradeScreen() {
         <>
           <Overview s={b} />
           <Exits s={b} />
-          <Variants s={b} />
-          <Edge s={b} />
           <Active s={b} />
           <Card>
             <Row title={b.verdict ? "Правила окупаются" : "Правила пока не окупаются"} wrap tone={b.verdict ? "up" : "dn"}
@@ -402,10 +356,9 @@ export function AutotradeScreen() {
                  sub={`на последней четверти: итог > 0, PF ≥ ${b.criteria.pf_ge}, сделок ≥ ${b.criteria.trades_ge}, просадка ≤ ${usd(b.criteria.max_dd_le)}`} />
             <Row title="Правила" wrap
                  sub={`от 2 китов (каждый от 1000 $) в одну сторону за 2 ч; против — не крупнее; не дороже средней цены китов; `
-                   + "уровни 4ч × 24: лонг — ниже 40 % диапазона (у поддержки), шорт — выше 60 % (у сопротивления), середина — нет; "
-                   + "рейтинг китов по нашим сделкам: выше винрейт — раньше, выше 90 % (от 5) — с ним и в одиночку, без уровней и MA30; "
-                   + "MA30 15м: лонг — цена выше, шорт — ниже (уровни важнее); "
-                   + `маржа ${b.sizing.margin_pct}% × ${b.sizing.leverage}×, позиций до 3, в бумагу — раз в 3 ч; вход — по рынку не хуже цены китов; выход — тейк +0,8 % `
+                   + "рейтинг китов по нашим сделкам: выше винрейт — раньше, выше 90 % (от 5) — с ним и в одиночку, без MA30; "
+                   + "MA30 15м: лонг — цена выше, шорт — ниже; уровней 4ч нет; "
+                   + `маржа ${b.sizing.margin_pct}% × ${b.sizing.leverage}×, позиций до 3, в бумагу — раз в 3 ч; вход — по рынку не хуже цены китов; выход — тейк +1,5 % `
                    + "или по рынку: стоп 1,5 % от входа или вслед за китом в убытке; усреднения нет"} />
             <Row title="Сигналы в повторе" wrap sub={skipsLine(b.skips)} />
             <Row title="Данные" wrap

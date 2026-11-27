@@ -9,17 +9,13 @@ const LIVE = JSON.parse(readFileSync(new URL("./fixtures/autotrade_live.json", i
 const GOOD = { ok: true, on: true, backtest: SUMMARY, running: false, started: 1, error: "",
   next: 3, live: LIVE };
 
-const VARIANT = (SUMMARY["variants"] as Record<string, unknown>[])[0];
-const EDGE = (SUMMARY["edge"] as Record<string, unknown>[])[0];
 
 test("образцы — годный ответ", () => {
   assert.ok(validAutotrade(GOOD));
-  assert.ok(validAutotrade({ ...GOOD, backtest: { ...SUMMARY, variants: undefined } }), "итог без вариантов (прежний) — годен");
-  assert.ok(validAutotrade({ ...GOOD, backtest: { ...SUMMARY, edge: undefined } }), "итог без разбора (прежний) — годен");
+  assert.ok(validAutotrade({ ...GOOD, backtest: { ...SUMMARY, halves: undefined, full: { ...(SUMMARY["full"] as Record<string, unknown>), fees: undefined } } }),
+    "итог прежней версии (без комиссий и половин) — годен");
+  assert.ok(validAutotrade({ ...GOOD, backtest: { ...SUMMARY, variants: [1], edge: "x" } }), "прежние поля вариантов не рисуются — не мешают");
   assert.ok(validAutotrade({ ...GOOD, live: { ...LIVE, opens: undefined } }), "служба прежней версии (одна open) — годна");
-  assert.ok(validAutotrade({ ...GOOD, backtest: { ...SUMMARY, variants: [{ ...VARIANT, stop_max_pct: null, pf: null }] } }));
-  assert.ok(validAutotrade({ ...GOOD, backtest: { ...SUMMARY, variants: [{ ...VARIANT, fees: undefined, halves: undefined }] } }),
-    "вариант прежней версии (без комиссий и половин) — годен");
   assert.ok(validAutotrade({ ...GOOD, backtest: null, live: null }));
   assert.ok(validAutotrade({ ...GOOD, running: true, progress: "повтор: 40 %" }));
 });
@@ -41,23 +37,15 @@ test("любое рисуемое поле не того типа — отказ
     { ...GOOD, live: { ...LIVE, skips_24h: [7] } }, { ...GOOD, live: { ...LIVE, open: { ...open, exit_why: 1 } } },
     { ...GOOD, live: { ...LIVE, open: { ...open, usd_against: "9000" } } },
     { ...GOOD, live: { ...LIVE, opens: {} } }, { ...GOOD, live: { ...LIVE, opens: [{ ...open, tp: "1" }] } },
-    { ...GOOD, backtest: { ...SUMMARY, edge: {} } }, { ...GOOD, backtest: { ...SUMMARY, edge: [{ ...EDGE, key: 1 }] } },
-    ...(["n", "r15m", "r1h", "r4h", "r24h", "up1h", "up4h"] as const).map((k) => (
-      { ...GOOD, backtest: { ...SUMMARY, edge: [{ ...EDGE, [k]: "x" }] } })),
     { ...GOOD, live: { ...LIVE, pending: { inst: "SOL", side: 1, px: "1", until: 1 } } },
     { ...GOOD, live: { ...LIVE, pending: { inst: "SOL", side: 3, px: 1, until: 1 } } },
-    { ...GOOD, backtest: { ...SUMMARY, variants: [{ ...VARIANT, per_month: "1" }] } },
-    { ...GOOD, backtest: { ...SUMMARY, variants: [{ ...VARIANT, fees: "1" }] } },
-    { ...GOOD, backtest: { ...SUMMARY, variants: [{ ...VARIANT, halves: [1] }] } },
-    { ...GOOD, backtest: { ...SUMMARY, variants: [{ ...VARIANT, halves: [1, "2"] }] } },
+    { ...GOOD, backtest: { ...SUMMARY, full: { ...(SUMMARY["full"] as Record<string, unknown>), fees: "1" } } },
+    { ...GOOD, backtest: { ...SUMMARY, halves: [1] } }, { ...GOOD, backtest: { ...SUMMARY, halves: [1, "2"] } },
+    { ...GOOD, backtest: { ...SUMMARY, halves: { 0: 1, 1: 2 } } },
     { ...GOOD, progress: 40 },
     { ...GOOD, backtest: { ...SUMMARY, skips: { own_open: "1" } } },
     { ...GOOD, backtest: { ...SUMMARY, last: null } }, { ...GOOD, backtest: { ...SUMMARY, active: [{}] } },
     { ...GOOD, backtest: { ...SUMMARY, trades: [{ ...(SUMMARY["trades"] as Record<string, unknown>[])[0], why: 1 }] } },
-    // Варианты правил: список объектов, поля — своих типов.
-    { ...GOOD, backtest: { ...SUMMARY, variants: {} } }, { ...GOOD, backtest: { ...SUMMARY, variants: [1] } },
-    ...(["name", "tp_pct", "trades", "win_pct", "net", "max_dd", "open", "stop_max_pct", "levels", "ma", "pf"] as const).map((k) => (
-      { ...GOOD, backtest: { ...SUMMARY, variants: [{ ...VARIANT, [k]: k === "name" ? 1 : "x" }] } })),
     // Итог прежней сетки (мог остаться на сервере) — не по договору.
     { ...GOOD, backtest: { ...SUMMARY, last: undefined, top: [] } },
     null, [], "ok", 1,

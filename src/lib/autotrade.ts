@@ -26,7 +26,7 @@ const side = (v: unknown): boolean => v === 1 || v === -1;
 const STATS = ["trades", "win_pct", "avg_win", "avg_loss", "net", "max_dd", "worst_streak", "worst_streak_usd",
   "open", "unrealized", "max_mae", "longest_h"] as const;
 
-const stats = (v: unknown): boolean => isObj(v) && nums(v, STATS) && (v["pf"] === null || num(v["pf"]));
+const stats = (v: unknown): boolean => isObj(v) && nums(v, STATS) && (v["pf"] === null || num(v["pf"])) && opt(v["fees"], num);
 
 const group = (v: unknown): boolean => isObj(v) && str(v["key"]) && stats(v);
 
@@ -34,20 +34,6 @@ const trade = (v: unknown): boolean =>
   isObj(v) && str(v["coin"]) && side(v["side"])
   && nums(v, ["entry", "exit", "px_in", "px_out", "tp", "usd", "pct", "mae", "held_h"])
   && str(v["why"]);
-
-/** Вариант правил бэктеста (имя, настройки и итог). */
-const variant = (v: unknown): boolean =>
-  isObj(v) && str(v["name"]) && nums(v, ["tp_pct", "trades", "win_pct", "net", "max_dd", "open"])
-  && (v["stop_max_pct"] === null || num(v["stop_max_pct"])) && bool(v["levels"]) && bool(v["ma"])
-  && (v["pf"] === null || num(v["pf"])) && opt(v["per_month"], num) && opt(v["fees"], num)
-  && opt(v["halves"], (h) => Array.isArray(h) && h.length === 2 && h.every(num));
-
-const numOrNull = (x: unknown): boolean => x === null || num(x);
-
-/** Группа разбора сигналов: имя, число сигналов, ход цены (число или null). */
-const edge = (v: unknown): boolean =>
-  isObj(v) && str(v["key"]) && num(v["n"])
-  && ["r15m", "r1h", "r4h", "r24h", "up1h", "up4h"].every((k) => numOrNull(v[k]));
 
 /** Итог бэктеста-повтора (WhaleScanner/tools/autotrade_replay.py). Итог прежней
  *  сетки (на сервере мог остаться в latest/) сюда не проходит — вкладка покажет
@@ -66,8 +52,7 @@ function summary(v: unknown): boolean {
     && isObj(k) && Object.values(k).every(num) && num(v["per_day"])
     && arr(v["trades"], trade)
     && arr(v["active"], (a) => trade(a) && isObj(a) && (a["to_tp_pct"] === null || num(a["to_tp_pct"])))
-    && opt(v["variants"], (x) => arr(x, variant))
-    && opt(v["edge"], (x) => arr(x, edge));
+    && opt(v["halves"], pair);
 }
 
 const liveOpen = (v: unknown): boolean =>
@@ -150,7 +135,7 @@ export const SKIP_LABELS: Record<string, string> = {
   whale_exit: "кит уже вышел в убыток",
   bigger_against: "против — киты крупнее",
   stale: "китов уже меньше 2 (сигнал устарел)",
-  level: "цена не у своего уровня (4ч × 24)",
+  level: "цена не у своего уровня (4ч × 24; правило убрано)",
   ma30: "цена не по ту сторону MA30 (15м)",
   candles: "свечи OKX не получены (сбой) — повтор",
   entered: "вошли",
