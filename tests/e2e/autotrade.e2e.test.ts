@@ -182,6 +182,7 @@ describe("закрытая вкладка «Автоторговля»", () => {
     assert.ok(await screen.getByText(/стоп — 0,5 % за уровнем входа \(лонг — ниже поддержки, шорт — выше сопротивления\), усреднения нет/).isVisible());
     assert.equal(await screen.getByText("Закрываем по рынку").count(), 0);
     assert.ok(await screen.getByText(/тейк \+0,5 % — или по рынку: стоп 3\s?060 или кто-то из китов/).isVisible(), "стоп за уровнем — в строке выхода");
+    assert.ok(await screen.getByText(/приоритетный кит 0xabcdef12…/).isVisible(), "вошли с приоритетным китом — видно");
     assert.ok(await screen.getByText(/китов 3 \(\$42K, против \$9K\)/).first().isVisible(), "объёмы за и против");
     assert.ok(await screen.getByText(/тейк 2\s?970/).first().isVisible(), "тейк 2 970");
     assert.equal(await screen.getByText("Реальная торговля не установлена").count(), 0);
@@ -226,6 +227,7 @@ describe("закрытая вкладка «Автоторговля»", () => {
     await screen.getByText(/повтор: 40 % \(400 000 из 1 000 000 сделок китов\)/).waitFor();
     assert.ok(await screen.getByText(/стоп 0,5 % за уровнем входа или вслед за китом в убытке; усреднения нет/).first().isVisible());
     assert.ok(await screen.getByText(/MA30 15м: лонг — цена выше, шорт — ниже \(уровни важнее\)/).first().isVisible());
+    assert.ok(await screen.getByText(/рейтинг китов по нашим сделкам: выше винрейт — раньше, выше 90 % \(от 5\)/).first().isVisible());
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     assert.ok(wide <= 0, `шире экрана на ${wide}px`);
     assert.deepEqual(errors, []);

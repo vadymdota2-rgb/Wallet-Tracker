@@ -149,6 +149,8 @@ def _open(v: Any) -> dict[str, Any] | None:
     stop = _f(v.get("stop"))
     if stop is not None and stop > 0:
         out["stop"] = stop  # стоп за уровнем входа (0 — уровней на входе не было: стопа нет)
+    if isinstance(v.get("priority"), str) and v["priority"]:
+        out["priority"] = v["priority"][:66]  # вошли с приоритетным китом (кошелёк)
     ex = v.get("exit")
     if isinstance(ex, dict) and isinstance(ex.get("why"), str):
         out["exit_why"] = ex["why"]  # стоп или кит сигнала закрыл в убыток — бот закрывает позицию по рынку

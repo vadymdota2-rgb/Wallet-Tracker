@@ -1276,6 +1276,8 @@ export interface AtLiveOpen {
   exit_why?: string;
   /** Стоп за уровнем входа (0,5 % за поддержкой / сопротивлением 24 ч); нет — уровней на входе не было. */
   stop?: number;
+  /** Вошли с приоритетным китом (наш винрейт с ним > 90 % от 5 сделок) — кошелёк. */
+  priority?: string;
   coin: string;
   inst: string;
   side: number;

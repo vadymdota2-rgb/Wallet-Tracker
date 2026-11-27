@@ -37,7 +37,7 @@ TS = [
     ("  && str(v[\"why\"]);\n\n/**", "  ;\n\n/**", "сделка модели — причина выхода строкой"),
     ("    && arr(v[\"active\"], (a) => trade(a) && isObj(a) && (a[\"to_tp_pct\"] === null || num(a[\"to_tp_pct\"])));",
      ";", "открытая позиция модели — по договору"),
-    ("\n  && opt(v[\"exit_why\"], str) && opt(v[\"usd\"], num) && opt(v[\"usd_against\"], num) && opt(v[\"stop\"], num);", ";",
+    ("\n  && opt(v[\"exit_why\"], str) && opt(v[\"usd\"], num) && opt(v[\"usd_against\"], num) && opt(v[\"stop\"], num) && opt(v[\"priority\"], str);", ";",
      "причина выхода и объёмы китов — по договору"),
 ]
 PY = [

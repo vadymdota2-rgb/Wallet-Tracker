@@ -13,6 +13,7 @@
   "notional": 4995.0,
   "tp": 2970.0,
   "stop": 3060.0,
+  "priority": "0xabcdef1234567890",
   "whales": 3.0,
   "mark": 3012.0,
   "upl": -39.96,
