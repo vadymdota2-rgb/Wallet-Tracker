@@ -1217,7 +1217,6 @@ export interface AtTrade {
   usd: number;
   pct: number;
   why: string;
-  averaged: boolean;
   mae: number;
   held_h: number;
 }
@@ -1248,8 +1247,6 @@ export interface AtSummary {
   by_exit: AtGroup[];
   /** Пропуски сигналов по причинам (коды — как у живого бота, «entered» — вошли). */
   skips: Record<string, number>;
-  /** Сколько раз сработало разовое усреднение. */
-  averaged: number;
   per_day: number;
   trades: AtTrade[];
   active: AtActive[];
@@ -1275,10 +1272,10 @@ export interface AtLiveOpen {
   /** Объём китов сигнала и китов против (та же бумага, те же 2 часа), $. */
   usd?: number;
   usd_against?: number;
-  /** Разовое усреднение сделано (причина: кит добрал при минусе больше 1 %). */
-  avg_why?: string;
-  /** Кит сигнала закрыл в убыток — бот закрывает позицию по рынку (причина). */
+  /** Кит сигнала закрыл в убыток или стоп — бот закрывает позицию по рынку (причина). */
   exit_why?: string;
+  /** Стоп за уровнем входа (0,5 % за поддержкой / сопротивлением 24 ч); нет — уровней на входе не было. */
+  stop?: number;
   coin: string;
   inst: string;
   side: number;

@@ -113,7 +113,7 @@ describe("закрытая вкладка «Автоторговля»", () => {
     const screen = page.locator(".sheet .screen");
     await screen.getByText(SUMMARY["verdict"] ? "Правила окупаются" : "Правила пока не окупаются").waitFor();
     for (const s of ["Бэктест: общая статистика", "Винрейт", "Макс. просадка", "Худшая серия", "Критерий", "Правила",
-      "Сигналы в повторе", "вошли — 2 · у бота уже есть позиция — 1 · усреднений: 1", "Последняя четверть периода",
+      "Сигналы в повторе", "вошли — 2 · у бота уже есть позиция — 1", "Последняя четверть периода",
       "Первые три четверти", "Капитал на всём периоде", "По бумагам", "Последние сделки модели",
       "Бэктест: откуда плюс и минус", "Тейк +0,5 %", "Открыта на конец данных", "Винрейт для нуля",
       "Пересчитать сейчас", "Бэктест: открытая позиция модели", "ETH · шорт", "Открытые на конец"]) {
@@ -179,9 +179,9 @@ describe("закрытая вкладка «Автоторговля»", () => {
       assert.ok(await screen.getByText(s).first().isVisible(), s);
     }
     assert.equal(await screen.getByText("OKX не принимает ордера бота").count(), 0, "ключ в порядке — плашки нет");
-    assert.ok(await screen.getByText(/по рынку, если кто-то из китов сигнала закроет свою сделку в убытке/).isVisible());
-    assert.equal(await screen.getByText("Закрываем вслед за китом").count(), 0);
-    assert.equal(await screen.getByText("Усреднено", { exact: true }).count(), 0, "без усреднения — строки нет");
+    assert.ok(await screen.getByText(/стоп — 0,5 % за уровнем входа \(лонг — ниже поддержки, шорт — выше сопротивления\), усреднения нет/).isVisible());
+    assert.equal(await screen.getByText("Закрываем по рынку").count(), 0);
+    assert.ok(await screen.getByText(/тейк \+0,5 % — или по рынку: стоп 3\s?060 или кто-то из китов/).isVisible(), "стоп за уровнем — в строке выхода");
     assert.ok(await screen.getByText(/китов 3 \(\$42K, против \$9K\)/).first().isVisible(), "объёмы за и против");
     assert.ok(await screen.getByText(/тейк 2\s?970/).first().isVisible(), "тейк 2 970");
     assert.equal(await screen.getByText("Реальная торговля не установлена").count(), 0);
@@ -206,25 +206,13 @@ describe("закрытая вкладка «Автоторговля»", () => {
     await ctx.close();
   });
 
-  test("разовое усреднение — вкладка показывает, почему", async () => {
-    const open0 = LIVE["open"] as Record<string, unknown>;
-    const { ctx, page, errors } = await open({ owner: true, live: { ...LIVE,
-      open: { ...open0, avg_why: "кит 0xabcdef12… добрал 3 000 $ при минусе -1.20 %" } } });
-    await page.locator(".drawer-row", { hasText: "Автоторговля" }).click();
-    const screen = page.locator(".sheet .screen");
-    await screen.getByText("Усреднено", { exact: true }).waitFor();
-    assert.ok(await screen.getByText(/добрал 3 000 \$ при минусе -1\.20 % — долили 5 % капитала/).isVisible());
-    assert.deepEqual(errors, []);
-    await ctx.close();
-  });
-
   test("кит сигнала закрыл в убыток — вкладка говорит, что бот выходит", async () => {
     const open0 = LIVE["open"] as Record<string, unknown>;
     const { ctx, page, errors } = await open({ owner: true, live: { ...LIVE,
       open: { ...open0, exit_why: "кит 0xabcdef12… закрыл в убыток -120 $" } } });
     await page.locator(".drawer-row", { hasText: "Автоторговля" }).click();
     const screen = page.locator(".sheet .screen");
-    await screen.getByText("Закрываем вслед за китом").waitFor();
+    await screen.getByText("Закрываем по рынку").waitFor();
     assert.ok(await screen.getByText(/закрыл в убыток -120 \$ — бот снял тейк и закрывает позицию рыночным ордером/).isVisible());
     assert.deepEqual(errors, []);
     await ctx.close();
@@ -236,8 +224,8 @@ describe("закрытая вкладка «Автоторговля»", () => {
     await page.locator(".drawer-row", { hasText: "Автоторговля" }).click();
     const screen = page.locator(".sheet .screen");
     await screen.getByText(/повтор: 40 % \(400 000 из 1 000 000 сделок китов\)/).waitFor();
-    assert.ok(await screen.getByText(/вслед за китом в убытке; разовое усреднение/).first().isVisible());
-    assert.ok(await screen.getByText(/усреднений: 1/).first().isVisible());
+    assert.ok(await screen.getByText(/стоп 0,5 % за уровнем входа или вслед за китом в убытке; усреднения нет/).first().isVisible());
+    assert.ok(await screen.getByText(/MA30 15м: лонг — цена выше, шорт — ниже \(уровни важнее\)/).first().isVisible());
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     assert.ok(wide <= 0, `шире экрана на ${wide}px`);
     assert.deepEqual(errors, []);

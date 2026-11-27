@@ -31,11 +31,10 @@ test("любое рисуемое поле не того типа — отказ
     { ...GOOD, live: { ...LIVE, key_problem: 50124 } }, { ...GOOD, live: { ...LIVE, skips_24h: { market: "7" } } },
     { ...GOOD, live: { ...LIVE, skips_24h: [7] } }, { ...GOOD, live: { ...LIVE, open: { ...open, exit_why: 1 } } },
     { ...GOOD, live: { ...LIVE, open: { ...open, usd_against: "9000" } } },
-    { ...GOOD, live: { ...LIVE, open: { ...open, avg_why: 1 } } },
     { ...GOOD, progress: 40 },
-    { ...GOOD, backtest: { ...SUMMARY, skips: { own_open: "1" } } }, { ...GOOD, backtest: { ...SUMMARY, averaged: "1" } },
+    { ...GOOD, backtest: { ...SUMMARY, skips: { own_open: "1" } } },
     { ...GOOD, backtest: { ...SUMMARY, last: null } }, { ...GOOD, backtest: { ...SUMMARY, active: [{}] } },
-    { ...GOOD, backtest: { ...SUMMARY, trades: [{ ...(SUMMARY["trades"] as Record<string, unknown>[])[0], averaged: 1 }] } },
+    { ...GOOD, backtest: { ...SUMMARY, trades: [{ ...(SUMMARY["trades"] as Record<string, unknown>[])[0], why: 1 }] } },
     // Итог прежней сетки (мог остаться на сервере) — не по договору.
     { ...GOOD, backtest: { ...SUMMARY, last: undefined, top: [] } },
     null, [], "ok", 1,

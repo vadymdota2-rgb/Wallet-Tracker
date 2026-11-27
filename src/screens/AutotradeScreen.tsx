@@ -140,7 +140,7 @@ function Active({ s }: { s: AtSummary }) {
                title={`${a.coin} · ${a.side > 0 ? "лонг" : "шорт"}`}
                sub={`вход ${when(a.entry)} по ${price(a.px_in)} · сейчас ${price(a.px_out)} · тейк ${price(a.tp)}`
                  + `${a.to_tp_pct !== null ? ` (ещё ${a.to_tp_pct.toFixed(2)}%)` : ""} · держим ${Math.round(a.held_h)} ч`
-                 + ` · провал до ${usd(-a.mae)}${a.averaged ? " · усреднена" : ""}`}
+                 + ` · провал до ${usd(-a.mae)}`}
                value={usd(a.usd, true)} tone={a.usd >= 0 ? "up" : "dn"} valueSub={pct(a.pct, 2)} />
         )) : <Row title="Открытых позиций нет" sub="Ждём сигнала: от 2 китов в одну сторону за 2 часа" wrap />}
       </Card>
@@ -169,7 +169,7 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
         ) : null}
         <Row title="Капитал счёта" value={l.equity != null ? usd(l.equity) : "—"}
              sub={`маржа на сделку всегда 5 % × 10× — позиция ${l.equity != null ? usd(l.equity / 2) : "—"}; `
-               + "усреднение — один раз ещё 5 %, если позиция в минусе больше 1 % и кит сигнала добирает"} />
+               + "стоп — 0,5 % за уровнем входа (лонг — ниже поддержки, шорт — выше сопротивления), усреднения нет"} />
       </Card>
 
       <SectionTitle>Открытая позиция</SectionTitle>
@@ -182,14 +182,11 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
                  + `${op.usd !== undefined ? ` (${usd(op.usd)}${op.usd_against ? `, против ${usd(op.usd_against)}` : ", против никого"})` : ""}`
                  + `${op.margin_pct ? ` · маржа ${op.margin_pct}%` : ""}`}
                value={op.upl !== undefined ? usd(op.upl, true) : "—"} tone={(op.upl ?? 0) >= 0 ? "up" : "dn"} />
-        ) : <Row title="Позиции бота нет" sub="Ждём: от 2 китов в одну сторону за 2 часа; лонг — ниже 40 % диапазона 24 ч, шорт — выше 60 % (1ч)" wrap />}
-        {op?.avg_why ? (
-          <Row title="Усреднено" wrap sub={`${op.avg_why} — долили 5 % капитала, тейк +0,5 % от новой средней на весь объём`} />
-        ) : null}
+        ) : <Row title="Позиции бота нет" sub="Ждём: от 2 китов в одну сторону за 2 часа; лонг — ниже 40 % диапазона 24 ч и выше MA30 15м, шорт — выше 60 % и ниже MA30" wrap />}
         {op ? (
-          <Row title={op.exit_why ? "Закрываем вслед за китом" : "Выход"} wrap {...(op.exit_why ? { tone: "dn" as const } : {})}
+          <Row title={op.exit_why ? "Закрываем по рынку" : "Выход"} wrap {...(op.exit_why ? { tone: "dn" as const } : {})}
                sub={op.exit_why ? `${op.exit_why} — бот снял тейк и закрывает позицию рыночным ордером`
-                 : "тейк +0,5 % — или по рынку, если кто-то из китов сигнала закроет свою сделку в убытке"} />
+                 : `тейк +0,5 % — или по рынку: стоп${op.stop ? ` ${price(op.stop)}` : " (уровней на входе не было — нет)"} или кто-то из китов сигнала закроет свою сделку в убытке`} />
         ) : null}
         {manual.map((p) => (
           <Row key={p.instId} wrap title={`${shortInst(p.instId)} · не бота`}
@@ -344,9 +341,10 @@ export function AutotradeScreen() {
             <Row title="Правила" wrap
                  sub={`от 2 китов (каждый от 1000 $) в одну сторону за 2 ч; против — не крупнее; не дороже китов на 0,3 %; `
                    + "уровни за 24 ч: лонг — ниже 40 % диапазона (у поддержки), шорт — выше 60 % (у сопротивления), середина — нет; "
+                   + "MA30 15м: лонг — цена выше, шорт — ниже (уровни важнее); "
                    + `маржа ${b.sizing.margin_pct}% × ${b.sizing.leverage}×, одна позиция, в бумагу — раз в 3 ч; выход — тейк +0,5 % `
-                   + "или по рынку вслед за китом в убытке; разовое усреднение 5 % при минусе больше 1 % и доборе кита"} />
-            <Row title="Сигналы в повторе" wrap sub={`${skipsLine(b.skips)}${b.averaged ? ` · усреднений: ${b.averaged}` : ""}`} />
+                   + "или по рынку: стоп 0,5 % за уровнем входа или вслед за китом в убытке; усреднения нет"} />
+            <Row title="Сигналы в повторе" wrap sub={skipsLine(b.skips)} />
             <Row title="Данные" wrap
                  sub={`${b.data.signals} сигналов; свечи OKX 5 мин — запросов ${b.data.requests}${b.data.errors ? `, сбоев ${b.data.errors}` : ""}; `
                    + `комиссии ${b.sizing.fee_taker_pct}% / ${b.sizing.fee_maker_pct}%, проскальзывание ${b.sizing.slippage_pct}%; фандинг не учтён`} />
@@ -377,7 +375,7 @@ export function AutotradeScreen() {
                 {[...b.trades].reverse().slice(0, 30).map((t, i) => (
                   <Row key={i} title={`${t.coin} · ${t.side > 0 ? "лонг" : "шорт"}`}
                        sub={`${when(t.entry)} по ${price(t.px_in)} → ${t.why === "открыта" ? "ещё открыта"
-                         : `${when(t.exit)} по ${price(t.px_out)} · ${t.why}`}${t.averaged ? " · усреднена" : ""}`}
+                         : `${when(t.exit)} по ${price(t.px_out)} · ${t.why}`}`}
                        value={usd(t.usd, true)} tone={t.usd >= 0 ? "up" : "dn"} valueSub={pct(t.pct, 2)} />
                 ))}
               </Card>
