@@ -127,8 +127,8 @@ export const shortInst = (inst: string): string => inst.replace(/-USDT-SWAP$|-US
 export const SKIP_LABELS: Record<string, string> = {
   own_open: "у бота уже 3 позиции",
   own_same: "на бумаге уже позиция бота",
-  limit_miss: "лимит входа не исполнился",
-  entering: "лимит входа ещё ждёт исполнения",
+  limit_miss: "цена ушла за 0,3 % от китов — вход не исполнился",
+  entering: "прошлый ордер входа ещё не проверен",
   unverified: "позиции на счёте не проверены",
   own_unknown: "своя позиция без записи",
   coin_pause: "в бумагу входили < 3 ч назад",
