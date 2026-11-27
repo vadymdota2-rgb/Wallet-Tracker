@@ -100,6 +100,28 @@ const EXIT_LABEL: Record<string, string> = {
   "тейк": "Тейк", "стоп": "Стоп", "кит вышел в убыток": "Вслед за китом", "открыта": "Открыта на конец данных",
 };
 
+/** Разбор сигналов (ночной бэктест): куда идёт цена после сигнала — в сторону китов. */
+function Edge({ s }: { s: AtSummary }) {
+  const e = s.edge ?? [];
+  if (!e.length) return null;
+  const p = (x: number | null) => (x === null ? "—" : pct(x, 2));
+  return (
+    <>
+      <SectionTitle>Бэктест: куда идёт цена после сигнала</SectionTitle>
+      <Card pad={false}>
+        {e.map((x) => (
+          <Row key={x.key} wrap title={`${x.key} · ${x.n}`}
+               sub={`в сторону китов: 15 мин ${p(x.r15m)} · 1 ч ${p(x.r1h)} · 4 ч ${p(x.r4h)} · 24 ч ${p(x.r24h)}`}
+               value={p(x.r1h)} tone={(x.r1h ?? 0) >= 0 ? "up" : "dn"}
+               valueSub={x.up1h === null ? "" : `за 1 ч в сторону китов — ${pct(x.up1h, 0, false)}`} />
+        ))}
+        <Row wrap title="Как читать"
+             sub="Плюс — после сигнала цена в среднем шла туда, куда вошли киты; минус — против них. Один сигнал бумаги и стороны за 15 минут; комиссии не учтены." />
+      </Card>
+    </>
+  );
+}
+
 /** Варианты правил на тех же китах (ночной бэктест): что дало бы одно изменение. */
 function Variants({ s }: { s: AtSummary }) {
   const v = s.variants ?? [];
@@ -363,6 +385,7 @@ export function AutotradeScreen() {
           <Overview s={b} />
           <Exits s={b} />
           <Variants s={b} />
+          <Edge s={b} />
           <Active s={b} />
           <Card>
             <Row title={b.verdict ? "Правила окупаются" : "Правила пока не окупаются"} wrap tone={b.verdict ? "up" : "dn"}

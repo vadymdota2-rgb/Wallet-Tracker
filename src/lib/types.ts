@@ -1244,6 +1244,19 @@ export interface AtVariant {
   per_month?: number;
 }
 
+/** Разбор сигналов: ход цены после сигнала в сторону китов, % (null — нет данных). */
+export interface AtEdge {
+  key: string;
+  n: number;
+  r15m: number | null;
+  r1h: number | null;
+  r4h: number | null;
+  r24h: number | null;
+  /** Доля сигналов, после которых цена пошла в сторону китов (за 1 ч и 4 ч), %. */
+  up1h: number | null;
+  up4h: number | null;
+}
+
 /** Итог бэктеста-повтора по актуальным правилам живого бота. */
 export interface AtSummary {
   generated_at: number;
@@ -1270,6 +1283,8 @@ export interface AtSummary {
   active: AtActive[];
   /** Сравнение вариантов (первый — текущие правила); нет у прежних итогов. */
   variants?: AtVariant[];
+  /** Разбор сигналов по группам; нет у прежних итогов. */
+  edge?: AtEdge[];
 }
 
 /** Ответ закрытой вкладки владельца (/api/owner/autotrade). */

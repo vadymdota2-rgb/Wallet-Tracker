@@ -41,6 +41,13 @@ const variant = (v: unknown): boolean =>
   && (v["stop_max_pct"] === null || num(v["stop_max_pct"])) && bool(v["levels"]) && bool(v["ma"])
   && (v["pf"] === null || num(v["pf"])) && opt(v["per_month"], num);
 
+const numOrNull = (x: unknown): boolean => x === null || num(x);
+
+/** Группа разбора сигналов: имя, число сигналов, ход цены (число или null). */
+const edge = (v: unknown): boolean =>
+  isObj(v) && str(v["key"]) && num(v["n"])
+  && ["r15m", "r1h", "r4h", "r24h", "up1h", "up4h"].every((k) => numOrNull(v[k]));
+
 /** Итог бэктеста-повтора (WhaleScanner/tools/autotrade_replay.py). Итог прежней
  *  сетки (на сервере мог остаться в latest/) сюда не проходит — вкладка покажет
  *  «итога ещё нет» до первого повтора. */
@@ -58,7 +65,8 @@ function summary(v: unknown): boolean {
     && isObj(k) && Object.values(k).every(num) && num(v["per_day"])
     && arr(v["trades"], trade)
     && arr(v["active"], (a) => trade(a) && isObj(a) && (a["to_tp_pct"] === null || num(a["to_tp_pct"])))
-    && opt(v["variants"], (x) => arr(x, variant));
+    && opt(v["variants"], (x) => arr(x, variant))
+    && opt(v["edge"], (x) => arr(x, edge));
 }
 
 const liveOpen = (v: unknown): boolean =>

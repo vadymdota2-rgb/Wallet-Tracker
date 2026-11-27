@@ -10,10 +10,12 @@ const GOOD = { ok: true, on: true, backtest: SUMMARY, running: false, started: 1
   next: 3, live: LIVE };
 
 const VARIANT = (SUMMARY["variants"] as Record<string, unknown>[])[0];
+const EDGE = (SUMMARY["edge"] as Record<string, unknown>[])[0];
 
 test("образцы — годный ответ", () => {
   assert.ok(validAutotrade(GOOD));
   assert.ok(validAutotrade({ ...GOOD, backtest: { ...SUMMARY, variants: undefined } }), "итог без вариантов (прежний) — годен");
+  assert.ok(validAutotrade({ ...GOOD, backtest: { ...SUMMARY, edge: undefined } }), "итог без разбора (прежний) — годен");
   assert.ok(validAutotrade({ ...GOOD, live: { ...LIVE, opens: undefined } }), "служба прежней версии (одна open) — годна");
   assert.ok(validAutotrade({ ...GOOD, backtest: { ...SUMMARY, variants: [{ ...VARIANT, stop_max_pct: null, pf: null }] } }));
   assert.ok(validAutotrade({ ...GOOD, backtest: null, live: null }));
@@ -37,6 +39,9 @@ test("любое рисуемое поле не того типа — отказ
     { ...GOOD, live: { ...LIVE, skips_24h: [7] } }, { ...GOOD, live: { ...LIVE, open: { ...open, exit_why: 1 } } },
     { ...GOOD, live: { ...LIVE, open: { ...open, usd_against: "9000" } } },
     { ...GOOD, live: { ...LIVE, opens: {} } }, { ...GOOD, live: { ...LIVE, opens: [{ ...open, tp: "1" }] } },
+    { ...GOOD, backtest: { ...SUMMARY, edge: {} } }, { ...GOOD, backtest: { ...SUMMARY, edge: [{ ...EDGE, key: 1 }] } },
+    ...(["n", "r15m", "r1h", "r4h", "r24h", "up1h", "up4h"] as const).map((k) => (
+      { ...GOOD, backtest: { ...SUMMARY, edge: [{ ...EDGE, [k]: "x" }] } })),
     { ...GOOD, live: { ...LIVE, pending: { inst: "SOL", side: 1, px: "1", until: 1 } } },
     { ...GOOD, live: { ...LIVE, pending: { inst: "SOL", side: 3, px: 1, until: 1 } } },
     { ...GOOD, backtest: { ...SUMMARY, variants: [{ ...VARIANT, per_month: "1" }] } },

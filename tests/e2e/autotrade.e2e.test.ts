@@ -132,6 +132,12 @@ describe("закрытая вкладка «Автоторговля»", () => {
     // Варианты правил: итог и разница с текущими (2,37 − 1,05 = +1,32).
     const alt = await screen.getByText("стоп только за уровнем", { exact: true }).locator("xpath=ancestor::*[@class='row'][1]").innerText();
     for (const s of [/2 сделки \(≈ 1[.,]2 в месяц\)/, /в плюс 50[.,]0\s?%/, /PF —/, /открыто 1/, /\+\$1[.,]32 к текущим/]) assert.match(alt, s, alt);
+    // Разбор сигналов: ход цены после сигнала в сторону китов.
+    const edgeRow = await screen.getByText("все сигналы · 412").locator("xpath=ancestor::*[@class='row'][1]").innerText();
+    for (const s of [/15 мин -0[.,]04\s?%/, /1 ч -0[.,]12\s?%/, /24 ч \+0[.,]35\s?%/, /за 1 ч в сторону китов — 44\s?%/]) assert.match(edgeRow, s, edgeRow);
+    assert.ok(await screen.getByText("Бэктест: куда идёт цена после сигнала").isVisible());
+    const k3 = await screen.getByText("китов 3 · 57").locator("xpath=ancestor::*[@class='row'][1]").innerText();
+    assert.match(k3, /4 ч — · 24 ч —/, k3);
     // Открытая позиция модели: вход, цена сейчас, тейк и сколько до него.
     const act = await screen.getByText("ETH · шорт").first().locator("xpath=ancestor::*[@class='row'][1]").innerText();
     for (const s of [/по 2\s998,5/, /сейчас 3\s000/, /тейк 2\s968,51/, /ещё 1\.05%/, /держим 235 ч/]) assert.match(act, s);
