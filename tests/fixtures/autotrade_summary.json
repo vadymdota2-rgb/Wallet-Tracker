@@ -216,5 +216,46 @@
    "held_h": 235.0,
    "to_tp_pct": 1.05
   }
+ ],
+ "variants": [
+  {
+   "name": "текущие правила",
+   "tp_pct": 1.0,
+   "stop_max_pct": 1.5,
+   "levels": true,
+   "ma": true,
+   "trades": 2,
+   "win_pct": 50.0,
+   "net": 1.05,
+   "pf": 18.472,
+   "max_dd": 0.96,
+   "open": 1
+  },
+  {
+   "name": "тейк +0,5 %",
+   "tp_pct": 0.5,
+   "stop_max_pct": 1.5,
+   "levels": true,
+   "ma": true,
+   "trades": 3,
+   "win_pct": 66.7,
+   "net": 0.42,
+   "pf": 1.8,
+   "max_dd": 0.5,
+   "open": 0
+  },
+  {
+   "name": "стоп только за уровнем",
+   "tp_pct": 1.0,
+   "stop_max_pct": null,
+   "levels": true,
+   "ma": true,
+   "trades": 2,
+   "win_pct": 50.0,
+   "net": 2.37,
+   "pf": null,
+   "max_dd": 1.2,
+   "open": 1
+  }
  ]
 }

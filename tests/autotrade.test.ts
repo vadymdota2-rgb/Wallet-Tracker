@@ -9,8 +9,12 @@ const LIVE = JSON.parse(readFileSync(new URL("./fixtures/autotrade_live.json", i
 const GOOD = { ok: true, on: true, backtest: SUMMARY, running: false, started: 1, error: "",
   next: 3, live: LIVE };
 
+const VARIANT = (SUMMARY["variants"] as Record<string, unknown>[])[0];
+
 test("образцы — годный ответ", () => {
   assert.ok(validAutotrade(GOOD));
+  assert.ok(validAutotrade({ ...GOOD, backtest: { ...SUMMARY, variants: undefined } }), "итог без вариантов (прежний) — годен");
+  assert.ok(validAutotrade({ ...GOOD, backtest: { ...SUMMARY, variants: [{ ...VARIANT, stop_max_pct: null, pf: null }] } }));
   assert.ok(validAutotrade({ ...GOOD, backtest: null, live: null }));
   assert.ok(validAutotrade({ ...GOOD, running: true, progress: "повтор: 40 %" }));
 });
@@ -35,6 +39,10 @@ test("любое рисуемое поле не того типа — отказ
     { ...GOOD, backtest: { ...SUMMARY, skips: { own_open: "1" } } },
     { ...GOOD, backtest: { ...SUMMARY, last: null } }, { ...GOOD, backtest: { ...SUMMARY, active: [{}] } },
     { ...GOOD, backtest: { ...SUMMARY, trades: [{ ...(SUMMARY["trades"] as Record<string, unknown>[])[0], why: 1 }] } },
+    // Варианты правил: список объектов, поля — своих типов.
+    { ...GOOD, backtest: { ...SUMMARY, variants: {} } }, { ...GOOD, backtest: { ...SUMMARY, variants: [1] } },
+    ...(["name", "tp_pct", "trades", "win_pct", "net", "max_dd", "open", "stop_max_pct", "levels", "ma", "pf"] as const).map((k) => (
+      { ...GOOD, backtest: { ...SUMMARY, variants: [{ ...VARIANT, [k]: k === "name" ? 1 : "x" }] } })),
     // Итог прежней сетки (мог остаться на сервере) — не по договору.
     { ...GOOD, backtest: { ...SUMMARY, last: undefined, top: [] } },
     null, [], "ok", 1,

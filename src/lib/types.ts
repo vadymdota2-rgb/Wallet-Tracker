@@ -1226,6 +1226,22 @@ export interface AtActive extends AtTrade {
   to_tp_pct: number | null;
 }
 
+/** Вариант правил в бэктесте: одно изменение (тейк, предел стопа, фильтр) на тех же китах. */
+export interface AtVariant {
+  name: string;
+  tp_pct: number;
+  /** Предел стопа от входа, %; null — стоп только за уровнем. */
+  stop_max_pct: number | null;
+  levels: boolean;
+  ma: boolean;
+  trades: number;
+  win_pct: number;
+  net: number;
+  pf: number | null;
+  max_dd: number;
+  open: number;
+}
+
 /** Итог бэктеста-повтора по актуальным правилам живого бота. */
 export interface AtSummary {
   generated_at: number;
@@ -1250,6 +1266,8 @@ export interface AtSummary {
   per_day: number;
   trades: AtTrade[];
   active: AtActive[];
+  /** Сравнение вариантов (первый — текущие правила); нет у прежних итогов. */
+  variants?: AtVariant[];
 }
 
 /** Ответ закрытой вкладки владельца (/api/owner/autotrade). */
@@ -1274,7 +1292,7 @@ export interface AtLiveOpen {
   usd_against?: number;
   /** Кит сигнала закрыл в убыток или стоп — бот закрывает позицию по рынку (причина). */
   exit_why?: string;
-  /** Стоп за уровнем входа (0,5 % за поддержкой / сопротивлением 24 ч); нет — уровней на входе не было. */
+  /** Стоп входа: 0,5 % за поддержкой / сопротивлением 4ч × 24, не дальше 1,5 % от входа; нет — позиция прежней версии. */
   stop?: number;
   /** Вошли с приоритетным китом (наш винрейт с ним > 90 % от 5 сделок) — кошелёк. */
   priority?: string;

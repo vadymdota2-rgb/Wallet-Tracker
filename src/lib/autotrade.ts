@@ -35,6 +35,12 @@ const trade = (v: unknown): boolean =>
   && nums(v, ["entry", "exit", "px_in", "px_out", "tp", "usd", "pct", "mae", "held_h"])
   && str(v["why"]);
 
+/** Вариант правил бэктеста (имя, настройки и итог). */
+const variant = (v: unknown): boolean =>
+  isObj(v) && str(v["name"]) && nums(v, ["tp_pct", "trades", "win_pct", "net", "max_dd", "open"])
+  && (v["stop_max_pct"] === null || num(v["stop_max_pct"])) && bool(v["levels"]) && bool(v["ma"])
+  && (v["pf"] === null || num(v["pf"]));
+
 /** Итог бэктеста-повтора (WhaleScanner/tools/autotrade_replay.py). Итог прежней
  *  сетки (на сервере мог остаться в latest/) сюда не проходит — вкладка покажет
  *  «итога ещё нет» до первого повтора. */
@@ -51,7 +57,8 @@ function summary(v: unknown): boolean {
     && ["by_coin", "by_session", "by_exit"].every((x) => arr(v[x], group))
     && isObj(k) && Object.values(k).every(num) && num(v["per_day"])
     && arr(v["trades"], trade)
-    && arr(v["active"], (a) => trade(a) && isObj(a) && (a["to_tp_pct"] === null || num(a["to_tp_pct"])));
+    && arr(v["active"], (a) => trade(a) && isObj(a) && (a["to_tp_pct"] === null || num(a["to_tp_pct"])))
+    && opt(v["variants"], (x) => arr(x, variant));
 }
 
 const liveOpen = (v: unknown): boolean =>
@@ -133,6 +140,7 @@ export const SKIP_LABELS: Record<string, string> = {
   stale: "китов уже меньше 2 (сигнал устарел)",
   level: "цена не у своего уровня (4ч × 24)",
   ma30: "цена не по ту сторону MA30 (15м)",
+  candles: "свечи OKX не получены (сбой) — повтор",
   entered: "вошли",
 };
 

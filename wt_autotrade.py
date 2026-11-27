@@ -148,7 +148,7 @@ def _open(v: Any) -> dict[str, Any] | None:
             out[k] = x
     stop = _f(v.get("stop"))
     if stop is not None and stop > 0:
-        out["stop"] = stop  # стоп за уровнем входа (0 — уровней на входе не было: стопа нет)
+        out["stop"] = stop  # стоп входа (за уровнем, не дальше 1,5 %; 0 — позиция прежней версии)
     if isinstance(v.get("priority"), str) and v["priority"]:
         out["priority"] = v["priority"][:66]  # вошли с приоритетным китом (кошелёк)
     ex = v.get("exit")

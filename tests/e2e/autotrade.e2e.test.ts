@@ -115,7 +115,8 @@ describe("закрытая вкладка «Автоторговля»", () => {
     for (const s of ["Бэктест: общая статистика", "Винрейт", "Макс. просадка", "Худшая серия", "Критерий", "Правила",
       "Сигналы в повторе", "вошли — 2 · у бота уже есть позиция — 1", "Последняя четверть периода",
       "Первые три четверти", "Капитал на всём периоде", "По бумагам", "Последние сделки модели",
-      "Бэктест: откуда плюс и минус", "Тейк +0,5 %", "Открыта на конец данных", "Винрейт для нуля",
+      "Бэктест: откуда плюс и минус", "Тейк", "Открыта на конец данных", "Винрейт для нуля",
+      "Бэктест: варианты правил", "текущие правила (сейчас)", "тейк +0,5 %", "Лучше текущих — «стоп только за уровнем»",
       "Пересчитать сейчас", "Бэктест: открытая позиция модели", "ETH · шорт", "Открытые на конец"]) {
       assert.ok(await screen.getByText(s).first().isVisible(), s);
     }
@@ -128,6 +129,9 @@ describe("закрытая вкладка «Автоторговля»", () => {
     assert.match(lossRow, /1 сделка/, lossRow);
     const need = await screen.getByText("Винрейт для нуля").locator("xpath=ancestor::*[@class='row'][1]").innerText();
     assert.match(need, /5[.,]1/, need);
+    // Варианты правил: итог и разница с текущими (2,37 − 1,05 = +1,32).
+    const alt = await screen.getByText("стоп только за уровнем", { exact: true }).locator("xpath=ancestor::*[@class='row'][1]").innerText();
+    for (const s of [/2 сделки/, /в плюс 50[.,]0\s?%/, /PF —/, /открыто 1/, /\+\$1[.,]32 к текущим/]) assert.match(alt, s, alt);
     // Открытая позиция модели: вход, цена сейчас, тейк и сколько до него.
     const act = await screen.getByText("ETH · шорт").first().locator("xpath=ancestor::*[@class='row'][1]").innerText();
     for (const s of [/по 2\s998,5/, /сейчас 3\s000/, /тейк 2\s968,51/, /ещё 1\.05%/, /держим 235 ч/]) assert.match(act, s);
@@ -179,9 +183,9 @@ describe("закрытая вкладка «Автоторговля»", () => {
       assert.ok(await screen.getByText(s).first().isVisible(), s);
     }
     assert.equal(await screen.getByText("OKX не принимает ордера бота").count(), 0, "ключ в порядке — плашки нет");
-    assert.ok(await screen.getByText(/стоп — 0,5 % за уровнем входа \(лонг — ниже поддержки, шорт — выше сопротивления\), усреднения нет/).isVisible());
+    assert.ok(await screen.getByText(/стоп — 0,5 % за уровнем входа \(лонг — ниже поддержки, шорт — выше сопротивления\), но не дальше 1,5 % от входа; усреднения нет/).isVisible());
     assert.equal(await screen.getByText("Закрываем по рынку").count(), 0);
-    assert.ok(await screen.getByText(/тейк \+0,5 % — или по рынку: стоп 3\s?060 или кто-то из китов/).isVisible(), "стоп за уровнем — в строке выхода");
+    assert.ok(await screen.getByText(/тейк \+1 % — или по рынку: стоп 3\s?060 или кто-то из китов/).isVisible(), "стоп за уровнем — в строке выхода");
     assert.ok(await screen.getByText(/приоритетный кит 0xabcdef12…/).isVisible(), "вошли с приоритетным китом — видно");
     assert.ok(await screen.getByText(/китов 3 \(\$42K, против \$9K\)/).first().isVisible(), "объёмы за и против");
     assert.ok(await screen.getByText(/тейк 2\s?970/).first().isVisible(), "тейк 2 970");
@@ -225,7 +229,7 @@ describe("закрытая вкладка «Автоторговля»", () => {
     await page.locator(".drawer-row", { hasText: "Автоторговля" }).click();
     const screen = page.locator(".sheet .screen");
     await screen.getByText(/повтор: 40 % \(400 000 из 1 000 000 сделок китов\)/).waitFor();
-    assert.ok(await screen.getByText(/стоп 0,5 % за уровнем входа или вслед за китом в убытке; усреднения нет/).first().isVisible());
+    assert.ok(await screen.getByText(/стоп 0,5 % за уровнем входа \(не дальше 1,5 % от входа\) или вслед за китом в убытке; усреднения нет/).first().isVisible());
     assert.ok(await screen.getByText(/MA30 15м: лонг — цена выше, шорт — ниже \(уровни важнее\)/).first().isVisible());
     assert.ok(await screen.getByText(/рейтинг китов по нашим сделкам: выше винрейт — раньше, выше 90 % \(от 5\)/).first().isVisible());
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
