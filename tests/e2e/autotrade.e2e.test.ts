@@ -189,15 +189,15 @@ describe("закрытая вкладка «Автоторговля»", () => {
       assert.ok(await screen.getByText(s).first().isVisible(), s);
     }
     assert.equal(await screen.getByText("OKX не принимает ордера бота").count(), 0, "ключ в порядке — плашки нет");
-    assert.ok(await screen.getByText(/стоп — 0,5 % за уровнем входа \(лонг — ниже поддержки, шорт — выше сопротивления\), но не дальше 1,5 % от входа; усреднения нет/).isVisible());
+    assert.ok(await screen.getByText(/тейк \+0,8 %, стоп — 3 % от входа \(лонг — ниже, шорт — выше\); усреднения нет/).isVisible());
     assert.equal(await screen.getByText("Закрываем по рынку").count(), 0);
-    assert.ok(await screen.getByText(/тейк \+1 % — или по рынку: стоп 3\s?060 или кто-то из китов/).isVisible(), "стоп за уровнем — в строке выхода");
+    assert.ok(await screen.getByText(/тейк \+0,8 % — или по рынку: стоп 3\s?060 или кто-то из китов/).isVisible(), "стоп за уровнем — в строке выхода");
     assert.ok(await screen.getByText(/приоритетный кит 0xabcdef12…/).isVisible(), "вошли с приоритетным китом — видно");
     assert.ok(await screen.getByText(/китов 3 \(\$42K, против \$9K\)/).first().isVisible(), "объёмы за и против");
     assert.ok(await screen.getByText(/тейк 2\s?970/).first().isVisible(), "тейк 2 970");
     // Вторая позиция бота — своя строка, свой тейк и стоп; не «ручная».
     assert.ok(await screen.getByText(/тейк 95\s?950/).first().isVisible(), "тейк второй позиции");
-    assert.ok(await screen.getByText(/тейк \+1 % — или по рынку: стоп 93\s?575/).isVisible(), "стоп второй позиции");
+    assert.ok(await screen.getByText(/тейк \+0,8 % — или по рынку: стоп 93\s?575/).isVisible(), "стоп второй позиции");
     assert.equal(await screen.getByText("BTC · не бота").count(), 0, "своя вторая позиция — не ручная");
     assert.equal(await screen.getByText("Выход", { exact: true }).count(), 2, "у каждой позиции — свой выход");
     assert.ok(await screen.getByText(/позиций до 3/).first().isVisible());
@@ -246,7 +246,7 @@ describe("закрытая вкладка «Автоторговля»", () => {
     await page.locator(".drawer-row", { hasText: "Автоторговля" }).click();
     const screen = page.locator(".sheet .screen");
     await screen.getByText(/повтор: 40 % \(400 000 из 1 000 000 сделок китов\)/).waitFor();
-    assert.ok(await screen.getByText(/стоп 0,5 % за уровнем входа \(не дальше 1,5 % от входа\) или вслед за китом в убытке; усреднения нет/).first().isVisible());
+    assert.ok(await screen.getByText(/стоп 3 % от входа или вслед за китом в убытке; усреднения нет/).first().isVisible());
     assert.ok(await screen.getByText(/MA30 15м: лонг — цена выше, шорт — ниже \(уровни важнее\)/).first().isVisible());
     assert.ok(await screen.getByText(/рейтинг китов по нашим сделкам: выше винрейт — раньше, выше 90 % \(от 5\)/).first().isVisible());
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
