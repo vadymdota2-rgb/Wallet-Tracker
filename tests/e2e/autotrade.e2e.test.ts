@@ -131,7 +131,10 @@ describe("закрытая вкладка «Автоторговля»", () => {
     assert.match(need, /5[.,]1/, need);
     // Варианты правил: итог и разница с текущими (2,37 − 1,05 = +1,32).
     const alt = await screen.getByText("стоп только за уровнем", { exact: true }).locator("xpath=ancestor::*[@class='row'][1]").innerText();
-    for (const s of [/2 сделки \(≈ 1[.,]2 в месяц\)/, /в плюс 50[.,]0\s?%/, /PF —/, /открыто 1/, /\+\$1[.,]32 к текущим/]) assert.match(alt, s, alt);
+    for (const s of [/2 сделки \(≈ 1[.,]2 в месяц\)/, /в плюс 50[.,]0\s?%/, /PF —/, /открыто 1/, /\+\$1[.,]32 к текущим/,
+      /до комиссий \+\$2[.,]67 \(комиссии \$0[.,]30?\)/, /половины периода \+\$1[.,]20? \/ \+\$1[.,]17/]) assert.match(alt, s, alt);
+    // Лучший вариант (1,20 и 1,17 против 0,60 и 0,45) — лучше в обеих половинах.
+    assert.ok(await screen.getByText(/Лучше текущих в обеих половинах периода — похоже, не случайность/).isVisible());
     // Разбор сигналов: ход цены после сигнала в сторону китов.
     const edgeRow = await screen.getByText("все сигналы · 412").locator("xpath=ancestor::*[@class='row'][1]").innerText();
     for (const s of [/15 мин -0[.,]04\s?%/, /1 ч -0[.,]12\s?%/, /24 ч \+0[.,]35\s?%/, /за 1 ч в сторону китов — 44\s?%/]) assert.match(edgeRow, s, edgeRow);
@@ -189,7 +192,7 @@ describe("закрытая вкладка «Автоторговля»", () => {
       assert.ok(await screen.getByText(s).first().isVisible(), s);
     }
     assert.equal(await screen.getByText("OKX не принимает ордера бота").count(), 0, "ключ в порядке — плашки нет");
-    assert.ok(await screen.getByText(/тейк \+0,8 %, стоп — 3 % от входа \(лонг — ниже, шорт — выше\); усреднения нет/).isVisible());
+    assert.ok(await screen.getByText(/тейк \+0,8 %, стоп — 1,5 % от входа \(лонг — ниже, шорт — выше\); усреднения нет/).isVisible());
     assert.equal(await screen.getByText("Закрываем по рынку").count(), 0);
     assert.ok(await screen.getByText(/тейк \+0,8 % — или по рынку: стоп 3\s?060 или кто-то из китов/).isVisible(), "стоп за уровнем — в строке выхода");
     assert.ok(await screen.getByText(/приоритетный кит 0xabcdef12…/).isVisible(), "вошли с приоритетным китом — видно");
@@ -204,7 +207,7 @@ describe("закрытая вкладка «Автоторговля»", () => {
     // Ордер входа (по рынку с границей) ещё не проверен — своей строкой.
     assert.ok(await screen.getByText("SOL · лонг · вход").isVisible());
     assert.ok(await screen.getByText(/по рынку не хуже 150[.,]12 — проверяем исполнение до .+; не исполнится — снимется/).isVisible());
-    assert.ok(await screen.getByText(/вход — по рынку, но не хуже средней китов ±0,3 % \(дальше — не входим, за ценой не гонимся\)/).first().isVisible());
+    assert.ok(await screen.getByText(/вход — по рынку, но не хуже средней цены китов \(хуже — не входим, за ценой не гонимся\)/).first().isVisible());
     assert.equal(await screen.getByText("Реальная торговля не установлена").count(), 0);
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     assert.ok(wide <= 0, `шире экрана на ${wide}px`);
@@ -246,7 +249,7 @@ describe("закрытая вкладка «Автоторговля»", () => {
     await page.locator(".drawer-row", { hasText: "Автоторговля" }).click();
     const screen = page.locator(".sheet .screen");
     await screen.getByText(/повтор: 40 % \(400 000 из 1 000 000 сделок китов\)/).waitFor();
-    assert.ok(await screen.getByText(/стоп 3 % от входа или вслед за китом в убытке; усреднения нет/).first().isVisible());
+    assert.ok(await screen.getByText(/стоп 1,5 % от входа или вслед за китом в убытке; усреднения нет/).first().isVisible());
     assert.ok(await screen.getByText(/MA30 15м: лонг — цена выше, шорт — ниже \(уровни важнее\)/).first().isVisible());
     assert.ok(await screen.getByText(/рейтинг китов по нашим сделкам: выше винрейт — раньше, выше 90 % \(от 5\)/).first().isVisible());
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

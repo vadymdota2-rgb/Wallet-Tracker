@@ -1,286 +1,301 @@
 {
- "generated_at": 1795000000,
- "verdict": false,
- "criteria": {
-  "pf_ge": 1.3,
-  "trades_ge": 100,
-  "max_dd_le": 18.72
- },
- "period": {
-  "from": 1797408000000,
-  "to": 1800000000000
- },
- "sizing": {
-  "deposit": 124.83,
-  "deposit_end": 125.94,
-  "margin_pct": 5.0,
-  "leverage": 10,
-  "fee_taker_pct": 0.05,
-  "fee_maker_pct": 0.02,
-  "slippage_pct": 0.05
- },
- "data": {
-  "signals": 3,
-  "requests": 30,
-  "errors": 0
- },
- "full": {
-  "trades": 2,
-  "win_pct": 50.0,
-  "avg_win": 1.11,
-  "avg_loss": -0.06,
-  "pf": 18.472,
-  "net": 1.05,
-  "max_dd": 0.96,
-  "worst_streak": 1,
-  "worst_streak_usd": -0.06,
-  "open": 1,
-  "unrealized": -0.06,
-  "max_mae": 0.96,
-  "longest_h": 235.0
- },
- "first": {
-  "trades": 2,
-  "win_pct": 50.0,
-  "avg_win": 1.11,
-  "avg_loss": -0.06,
-  "pf": 18.472,
-  "net": 1.05,
-  "max_dd": 0.96,
-  "worst_streak": 1,
-  "worst_streak_usd": -0.06,
-  "open": 1,
-  "unrealized": -0.06,
-  "max_mae": 0.96,
-  "longest_h": 235.0
- },
- "last": {
-  "trades": 0,
-  "win_pct": 0.0,
-  "avg_win": 0.0,
-  "avg_loss": 0.0,
-  "pf": null,
-  "net": 0,
-  "max_dd": 0.0,
-  "worst_streak": 0,
-  "worst_streak_usd": 0.0,
-  "open": 0,
-  "unrealized": 0,
-  "max_mae": 0.0,
-  "longest_h": 0.0
- },
- "equity": [
-  [
-   1799143200000,
-   1.11
+  "generated_at": 1795000000,
+  "verdict": false,
+  "criteria": {
+    "pf_ge": 1.3,
+    "trades_ge": 100,
+    "max_dd_le": 18.72
+  },
+  "period": {
+    "from": 1797408000000,
+    "to": 1800000000000
+  },
+  "sizing": {
+    "deposit": 124.83,
+    "deposit_end": 125.94,
+    "margin_pct": 5.0,
+    "leverage": 10,
+    "fee_taker_pct": 0.05,
+    "fee_maker_pct": 0.02,
+    "slippage_pct": 0.05
+  },
+  "data": {
+    "signals": 3,
+    "requests": 30,
+    "errors": 0
+  },
+  "full": {
+    "trades": 2,
+    "win_pct": 50.0,
+    "avg_win": 1.11,
+    "avg_loss": -0.06,
+    "pf": 18.472,
+    "net": 1.05,
+    "max_dd": 0.96,
+    "worst_streak": 1,
+    "worst_streak_usd": -0.06,
+    "open": 1,
+    "unrealized": -0.06,
+    "max_mae": 0.96,
+    "longest_h": 235.0
+  },
+  "first": {
+    "trades": 2,
+    "win_pct": 50.0,
+    "avg_win": 1.11,
+    "avg_loss": -0.06,
+    "pf": 18.472,
+    "net": 1.05,
+    "max_dd": 0.96,
+    "worst_streak": 1,
+    "worst_streak_usd": -0.06,
+    "open": 1,
+    "unrealized": -0.06,
+    "max_mae": 0.96,
+    "longest_h": 235.0
+  },
+  "last": {
+    "trades": 0,
+    "win_pct": 0.0,
+    "avg_win": 0.0,
+    "avg_loss": 0.0,
+    "pf": null,
+    "net": 0,
+    "max_dd": 0.0,
+    "worst_streak": 0,
+    "worst_streak_usd": 0.0,
+    "open": 0,
+    "unrealized": 0,
+    "max_mae": 0.0,
+    "longest_h": 0.0
+  },
+  "equity": [
+    [
+      1799143200000,
+      1.11
+    ],
+    [
+      1800000000000,
+      1.05
+    ]
   ],
-  [
-   1800000000000,
-   1.05
+  "by_coin": [
+    {
+      "key": "BTC",
+      "trades": 1,
+      "win_pct": 100.0,
+      "avg_win": 1.11,
+      "avg_loss": 0.0,
+      "pf": null,
+      "net": 1.11,
+      "max_dd": 0.96,
+      "worst_streak": 0,
+      "worst_streak_usd": 0.0,
+      "open": 0,
+      "unrealized": 0,
+      "max_mae": 0.96,
+      "longest_h": 2.0
+    },
+    {
+      "key": "ETH",
+      "trades": 1,
+      "win_pct": 0.0,
+      "avg_win": 0.0,
+      "avg_loss": -0.06,
+      "pf": 0.0,
+      "net": -0.06,
+      "max_dd": 0.06,
+      "worst_streak": 1,
+      "worst_streak_usd": -0.06,
+      "open": 1,
+      "unrealized": -0.06,
+      "max_mae": 0.03,
+      "longest_h": 235.0
+    }
+  ],
+  "by_session": [
+    {
+      "key": "closed",
+      "trades": 2,
+      "win_pct": 50.0,
+      "avg_win": 1.11,
+      "avg_loss": -0.06,
+      "pf": 18.472,
+      "net": 1.05,
+      "max_dd": 0.96,
+      "worst_streak": 1,
+      "worst_streak_usd": -0.06,
+      "open": 1,
+      "unrealized": -0.06,
+      "max_mae": 0.96,
+      "longest_h": 235.0
+    }
+  ],
+  "by_exit": [
+    {
+      "key": "тейк",
+      "trades": 1,
+      "win_pct": 100.0,
+      "avg_win": 1.11,
+      "avg_loss": 0.0,
+      "pf": null,
+      "net": 1.11,
+      "max_dd": 0.96,
+      "worst_streak": 0,
+      "worst_streak_usd": 0.0,
+      "open": 0,
+      "unrealized": 0,
+      "max_mae": 0.96,
+      "longest_h": 2.0
+    },
+    {
+      "key": "открыта",
+      "trades": 1,
+      "win_pct": 0.0,
+      "avg_win": 0.0,
+      "avg_loss": -0.06,
+      "pf": 0.0,
+      "net": -0.06,
+      "max_dd": 0.06,
+      "worst_streak": 1,
+      "worst_streak_usd": -0.06,
+      "open": 1,
+      "unrealized": -0.06,
+      "max_mae": 0.03,
+      "longest_h": 235.0
+    }
+  ],
+  "skips": {
+    "entered": 2,
+    "own_open": 1
+  },
+  "per_day": 0.07,
+  "trades": [
+    {
+      "coin": "BTC",
+      "side": 1,
+      "entry": 1799136005000,
+      "exit": 1799143200000,
+      "px_in": 100050.0,
+      "px_out": 100292.7,
+      "tp": 100292.7,
+      "usd": 1.11,
+      "pct": 0.93,
+      "why": "тейк",
+      "mae": 0.96,
+      "held_h": 2.0
+    },
+    {
+      "coin": "ETH",
+      "side": -1,
+      "entry": 1799154065000,
+      "exit": 1800000000000,
+      "px_in": 2998.5,
+      "px_out": 3000.0,
+      "tp": 2968.51,
+      "usd": -0.06,
+      "pct": -0.1,
+      "why": "открыта",
+      "mae": 0.03,
+      "held_h": 235.0
+    }
+  ],
+  "active": [
+    {
+      "coin": "ETH",
+      "side": -1,
+      "entry": 1799154065000,
+      "exit": 1800000000000,
+      "px_in": 2998.5,
+      "px_out": 3000.0,
+      "tp": 2968.51,
+      "usd": -0.06,
+      "pct": -0.1,
+      "why": "открыта",
+      "mae": 0.03,
+      "held_h": 235.0,
+      "to_tp_pct": 1.05
+    }
+  ],
+  "variants": [
+    {
+      "name": "текущие правила",
+      "tp_pct": 1.0,
+      "stop_max_pct": 1.5,
+      "levels": true,
+      "ma": true,
+      "trades": 2,
+      "win_pct": 50.0,
+      "net": 1.05,
+      "pf": 18.472,
+      "max_dd": 0.96,
+      "open": 1,
+      "per_month": 1.2,
+      "fees": 0.3,
+      "halves": [
+        0.6,
+        0.45
+      ]
+    },
+    {
+      "name": "тейк +0,5 %",
+      "tp_pct": 0.5,
+      "stop_max_pct": 1.5,
+      "levels": true,
+      "ma": true,
+      "trades": 3,
+      "win_pct": 66.7,
+      "net": 0.42,
+      "pf": 1.8,
+      "max_dd": 0.5,
+      "open": 0,
+      "per_month": 1.8,
+      "fees": 0.4,
+      "halves": [
+        0.1,
+        0.32
+      ]
+    },
+    {
+      "name": "стоп только за уровнем",
+      "tp_pct": 1.0,
+      "stop_max_pct": null,
+      "levels": true,
+      "ma": true,
+      "trades": 2,
+      "win_pct": 50.0,
+      "net": 2.37,
+      "pf": null,
+      "max_dd": 1.2,
+      "open": 1,
+      "per_month": 1.2,
+      "fees": 0.3,
+      "halves": [
+        1.2,
+        1.17
+      ]
+    }
+  ],
+  "edge": [
+    {
+      "key": "все сигналы",
+      "n": 412,
+      "r15m": -0.041,
+      "r1h": -0.118,
+      "r4h": -0.204,
+      "r24h": 0.35,
+      "up1h": 44.2,
+      "up4h": 45.1
+    },
+    {
+      "key": "китов 3",
+      "n": 57,
+      "r15m": 0.02,
+      "r1h": 0.061,
+      "r4h": null,
+      "r24h": null,
+      "up1h": 52.6,
+      "up4h": null
+    }
   ]
- ],
- "by_coin": [
-  {
-   "key": "BTC",
-   "trades": 1,
-   "win_pct": 100.0,
-   "avg_win": 1.11,
-   "avg_loss": 0.0,
-   "pf": null,
-   "net": 1.11,
-   "max_dd": 0.96,
-   "worst_streak": 0,
-   "worst_streak_usd": 0.0,
-   "open": 0,
-   "unrealized": 0,
-   "max_mae": 0.96,
-   "longest_h": 2.0
-  },
-  {
-   "key": "ETH",
-   "trades": 1,
-   "win_pct": 0.0,
-   "avg_win": 0.0,
-   "avg_loss": -0.06,
-   "pf": 0.0,
-   "net": -0.06,
-   "max_dd": 0.06,
-   "worst_streak": 1,
-   "worst_streak_usd": -0.06,
-   "open": 1,
-   "unrealized": -0.06,
-   "max_mae": 0.03,
-   "longest_h": 235.0
-  }
- ],
- "by_session": [
-  {
-   "key": "closed",
-   "trades": 2,
-   "win_pct": 50.0,
-   "avg_win": 1.11,
-   "avg_loss": -0.06,
-   "pf": 18.472,
-   "net": 1.05,
-   "max_dd": 0.96,
-   "worst_streak": 1,
-   "worst_streak_usd": -0.06,
-   "open": 1,
-   "unrealized": -0.06,
-   "max_mae": 0.96,
-   "longest_h": 235.0
-  }
- ],
- "by_exit": [
-  {
-   "key": "тейк",
-   "trades": 1,
-   "win_pct": 100.0,
-   "avg_win": 1.11,
-   "avg_loss": 0.0,
-   "pf": null,
-   "net": 1.11,
-   "max_dd": 0.96,
-   "worst_streak": 0,
-   "worst_streak_usd": 0.0,
-   "open": 0,
-   "unrealized": 0,
-   "max_mae": 0.96,
-   "longest_h": 2.0
-  },
-  {
-   "key": "открыта",
-   "trades": 1,
-   "win_pct": 0.0,
-   "avg_win": 0.0,
-   "avg_loss": -0.06,
-   "pf": 0.0,
-   "net": -0.06,
-   "max_dd": 0.06,
-   "worst_streak": 1,
-   "worst_streak_usd": -0.06,
-   "open": 1,
-   "unrealized": -0.06,
-   "max_mae": 0.03,
-   "longest_h": 235.0
-  }
- ],
- "skips": {
-  "entered": 2,
-  "own_open": 1
- },
- "per_day": 0.07,
- "trades": [
-  {
-   "coin": "BTC",
-   "side": 1,
-   "entry": 1799136005000,
-   "exit": 1799143200000,
-   "px_in": 100050.0,
-   "px_out": 100292.7,
-   "tp": 100292.7,
-   "usd": 1.11,
-   "pct": 0.93,
-   "why": "тейк",
-   "mae": 0.96,
-   "held_h": 2.0
-  },
-  {
-   "coin": "ETH",
-   "side": -1,
-   "entry": 1799154065000,
-   "exit": 1800000000000,
-   "px_in": 2998.5,
-   "px_out": 3000.0,
-   "tp": 2968.51,
-   "usd": -0.06,
-   "pct": -0.1,
-   "why": "открыта",
-   "mae": 0.03,
-   "held_h": 235.0
-  }
- ],
- "active": [
-  {
-   "coin": "ETH",
-   "side": -1,
-   "entry": 1799154065000,
-   "exit": 1800000000000,
-   "px_in": 2998.5,
-   "px_out": 3000.0,
-   "tp": 2968.51,
-   "usd": -0.06,
-   "pct": -0.1,
-   "why": "открыта",
-   "mae": 0.03,
-   "held_h": 235.0,
-   "to_tp_pct": 1.05
-  }
- ],
- "variants": [
-  {
-   "name": "текущие правила",
-   "tp_pct": 1.0,
-   "stop_max_pct": 1.5,
-   "levels": true,
-   "ma": true,
-   "trades": 2,
-   "win_pct": 50.0,
-   "net": 1.05,
-   "pf": 18.472,
-   "max_dd": 0.96,
-   "open": 1,
-   "per_month": 1.2
-  },
-  {
-   "name": "тейк +0,5 %",
-   "tp_pct": 0.5,
-   "stop_max_pct": 1.5,
-   "levels": true,
-   "ma": true,
-   "trades": 3,
-   "win_pct": 66.7,
-   "net": 0.42,
-   "pf": 1.8,
-   "max_dd": 0.5,
-   "open": 0,
-   "per_month": 1.8
-  },
-  {
-   "name": "стоп только за уровнем",
-   "tp_pct": 1.0,
-   "stop_max_pct": null,
-   "levels": true,
-   "ma": true,
-   "trades": 2,
-   "win_pct": 50.0,
-   "net": 2.37,
-   "pf": null,
-   "max_dd": 1.2,
-   "open": 1,
-   "per_month": 1.2
-  }
- ],
- "edge": [
-  {
-   "key": "все сигналы",
-   "n": 412,
-   "r15m": -0.041,
-   "r1h": -0.118,
-   "r4h": -0.204,
-   "r24h": 0.35,
-   "up1h": 44.2,
-   "up4h": 45.1
-  },
-  {
-   "key": "китов 3",
-   "n": 57,
-   "r15m": 0.02,
-   "r1h": 0.061,
-   "r4h": null,
-   "r24h": null,
-   "up1h": 52.6,
-   "up4h": null
-  }
- ]
 }

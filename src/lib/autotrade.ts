@@ -39,7 +39,8 @@ const trade = (v: unknown): boolean =>
 const variant = (v: unknown): boolean =>
   isObj(v) && str(v["name"]) && nums(v, ["tp_pct", "trades", "win_pct", "net", "max_dd", "open"])
   && (v["stop_max_pct"] === null || num(v["stop_max_pct"])) && bool(v["levels"]) && bool(v["ma"])
-  && (v["pf"] === null || num(v["pf"])) && opt(v["per_month"], num);
+  && (v["pf"] === null || num(v["pf"])) && opt(v["per_month"], num) && opt(v["fees"], num)
+  && opt(v["halves"], (h) => Array.isArray(h) && h.length === 2 && h.every(num));
 
 const numOrNull = (x: unknown): boolean => x === null || num(x);
 
@@ -127,7 +128,7 @@ export const shortInst = (inst: string): string => inst.replace(/-USDT-SWAP$|-US
 export const SKIP_LABELS: Record<string, string> = {
   own_open: "у бота уже 3 позиции",
   own_same: "на бумаге уже позиция бота",
-  limit_miss: "цена ушла за 0,3 % от китов — вход не исполнился",
+  limit_miss: "цена ушла хуже цены китов — вход не исполнился",
   entering: "прошлый ордер входа ещё не проверен",
   unverified: "позиции на счёте не проверены",
   own_unknown: "своя позиция без записи",
