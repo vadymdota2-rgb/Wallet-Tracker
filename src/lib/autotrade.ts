@@ -80,6 +80,7 @@ function live(v: unknown): boolean {
     && opt(skip, (k) => isObj(k) && str(k["coin"]) && side(k["side"]) && str(k["why"]) && num(k["at"]))
     && opt(blocked, (b) => arr(b, str))
     && opt(v["key_problem"], str) && opt(v["skips_24h"], (k) => isObj(k) && Object.values(k).every(num))
+    && opt(v["pending"], (k) => isObj(k) && str(k["inst"]) && side(k["side"]) && nums(k, ["px", "until"]))
     && arr(v["events"], str)
     && isObj(s) && nums(s, ["trades", "win_pct", "net", "avg_win", "avg_loss", "max_dd", "per_day", "fees", "funding"])
     && (s["pf"] === null || num(s["pf"]))
@@ -119,7 +120,7 @@ export const SKIP_LABELS: Record<string, string> = {
   own_open: "у бота уже 3 позиции",
   own_same: "на бумаге уже позиция бота",
   limit_miss: "лимит входа не исполнился",
-  entering: "прошлый вход ждёт подтверждения",
+  entering: "лимит входа ещё ждёт исполнения",
   unverified: "позиции на счёте не проверены",
   own_unknown: "своя позиция без записи",
   coin_pause: "в бумагу входили < 3 ч назад",

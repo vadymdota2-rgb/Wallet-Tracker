@@ -80,6 +80,12 @@
   "STX-USDT-SWAP"
  ],
  "key_problem": "",
+ "pending": {
+  "inst": "SOL-USDT-SWAP",
+  "side": 1,
+  "px": 150.12,
+  "until": 1795000200000
+ },
  "skips_24h": {
   "own_open": 4,
   "chase": 3,

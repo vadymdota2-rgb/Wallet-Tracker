@@ -231,6 +231,21 @@ class ModuleFilesTest(unittest.TestCase):
             self.assertEqual([o["coin"] for o in got["opens"]], want, st)
             self.assertEqual(got["open"], got["opens"][0] if want else None)
 
+    def test_pending_entry_limit(self):
+        """Лимит входа ждёт исполнения — во вкладку бумага, сторона, цена и
+        до когда; запись прежней версии (без лимита) или мусор — нет."""
+        d = os.path.join(self.data, "live")
+        os.makedirs(d, exist_ok=True)
+        e = {"inst": "SOL-USDT-SWAP", "side": -1, "limit": "150.5", "until": 1_800_000, "cl": "wtin1", "wallets": {"0xa": 1}}
+        for ent, want in ((e, {"inst": "SOL-USDT-SWAP", "side": -1, "px": 150.5, "until": 1_800_000}),
+                          ({**e, "limit": 150.5}, {"inst": "SOL-USDT-SWAP", "side": -1, "px": 150.5, "until": 1_800_000}),
+                          ({**e, "limit": None}, None), ({**e, "limit": "abc"}, None), ({**e, "limit": "nan"}, None),
+                          ({**e, "side": 2}, None), ({**e, "until": "x"}, None),
+                          ({**e, "inst": 5}, None), ({**e, "limit": "-1"}, None), ("мусор", None)):
+            with open(os.path.join(d, "state.json"), "w") as f:
+                json.dump({"heartbeat": 1, "entering": ent}, f)
+            self.assertEqual(at.live(self.data, now=1)["pending"], want, ent)
+
     def test_key_problem_and_skips_of_the_day(self):
         """Запрет ключу (50124) — строкой во вкладку; пропуски по причинам —
         сумма часов за последние сутки, мусор и старше суток — не считаются."""

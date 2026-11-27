@@ -131,5 +131,22 @@
    "usd": 12000.0,
    "usd_against": 0.0
   }
- ]
+ ],
+ "entering": {
+  "inst": "SOL-USDT-SWAP",
+  "cl": "wtin5",
+  "at": 1794999900000,
+  "coin": "SOL",
+  "side": 1,
+  "whales": 2,
+  "ref_px": 150.2,
+  "signal_ts": 1794999890000,
+  "wallets": {
+   "0xs": 1794999800000
+  },
+  "stop": 147.9,
+  "limit": "150.12",
+  "until": 1795000200000,
+  "ordered": "33.3"
+ }
 }

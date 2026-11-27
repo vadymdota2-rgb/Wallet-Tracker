@@ -37,6 +37,8 @@ test("любое рисуемое поле не того типа — отказ
     { ...GOOD, live: { ...LIVE, skips_24h: [7] } }, { ...GOOD, live: { ...LIVE, open: { ...open, exit_why: 1 } } },
     { ...GOOD, live: { ...LIVE, open: { ...open, usd_against: "9000" } } },
     { ...GOOD, live: { ...LIVE, opens: {} } }, { ...GOOD, live: { ...LIVE, opens: [{ ...open, tp: "1" }] } },
+    { ...GOOD, live: { ...LIVE, pending: { inst: "SOL", side: 1, px: "1", until: 1 } } },
+    { ...GOOD, live: { ...LIVE, pending: { inst: "SOL", side: 3, px: 1, until: 1 } } },
     { ...GOOD, backtest: { ...SUMMARY, variants: [{ ...VARIANT, per_month: "1" }] } },
     { ...GOOD, progress: 40 },
     { ...GOOD, backtest: { ...SUMMARY, skips: { own_open: "1" } } },

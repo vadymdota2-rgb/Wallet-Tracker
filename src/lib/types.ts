@@ -1343,6 +1343,8 @@ export interface AtLive {
   blocked?: string[];
   /** Запрет ключу OKX (например, 50124 — рынок фьючерсов закрыт ключу): ордера не проходят. */
   key_problem?: string;
+  /** Лимит входа ждёт исполнения (вход — не по рынку): до until, потом снимается. */
+  pending?: { inst: string; side: number; px: number; until: number } | null;
   /** Пропуски сигналов за сутки по причинам: код → сколько (см. SKIP_LABELS). */
   skips_24h?: Record<string, number>;
   events: string[];

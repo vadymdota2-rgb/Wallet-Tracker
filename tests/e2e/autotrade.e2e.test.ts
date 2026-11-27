@@ -195,6 +195,10 @@ describe("закрытая вкладка «Автоторговля»", () => {
     assert.equal(await screen.getByText("BTC · не бота").count(), 0, "своя вторая позиция — не ручная");
     assert.equal(await screen.getByText("Выход", { exact: true }).count(), 2, "у каждой позиции — свой выход");
     assert.ok(await screen.getByText(/позиций до 3/).first().isVisible());
+    // Лимит входа ждёт исполнения — своей строкой (вход — не по рынку).
+    assert.ok(await screen.getByText("SOL · лонг · лимит входа").isVisible());
+    assert.ok(await screen.getByText(/ждёт исполнения по 150[.,]12 до .+; не исполнится — снимется/).isVisible());
+    assert.ok(await screen.getByText(/вход — лимитом «только мейкер» \(не по рынку, ждёт 5 мин\)/).first().isVisible());
     assert.equal(await screen.getByText("Реальная торговля не установлена").count(), 0);
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     assert.ok(wide <= 0, `шире экрана на ${wide}px`);

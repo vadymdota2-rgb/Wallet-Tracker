@@ -228,6 +228,18 @@ def live(data_dir: str = DATA_DIR, now: float | None = None) -> dict[str, Any] |
     # показывает это сразу, а не как «нет сигналов».
     kp = st.get("key_problem")
     key_problem = kp["why"] if isinstance(kp, dict) and isinstance(kp.get("why"), str) else ""
+    # Лимит входа, который ждёт исполнения (вход — не по рынку): бумага, сторона, цена, до когда.
+    e = st.get("entering")
+    pend = None
+    if isinstance(e, dict) and isinstance(e.get("inst"), str) and _side(e.get("side")) is not None:
+        lim = e.get("limit")  # служба пишет цену лимита строкой (как в ордере)
+        try:
+            px = _f(float(lim)) if isinstance(lim, str) else _f(lim)
+        except ValueError:
+            px = None
+        until = _f(e.get("until"))
+        if px is not None and px > 0 and until is not None:
+            pend = {"inst": e["inst"], "side": _side(e.get("side")), "px": px, "until": int(until)}
     # Пропуски сигналов по причинам за сутки (служба считает по часам).
     skips: dict[str, int] = {}
     for h, bucket in (st.get("skips") or {}).items() if isinstance(st.get("skips"), dict) else ():
@@ -250,7 +262,7 @@ def live(data_dir: str = DATA_DIR, now: float | None = None) -> dict[str, Any] |
         "alive": bool(beat) and now_ms - beat < 120_000, "heartbeat": beat, "simulated": st.get("simulated") is True,
         "error": str(st.get("error") or ""), "equity": _f(st.get("equity")), "open": opens[0] if opens else None,
         "opens": opens,
-        "positions": positions, "last_skip": skip, "blocked": blocked, "key_problem": key_problem,
+        "positions": positions, "last_skip": skip, "blocked": blocked, "key_problem": key_problem, "pending": pend,
         "skips_24h": dict(sorted(skips.items(), key=lambda kv: -kv[1])),
         "events": [e for e in _list(st.get("events")) if isinstance(e, str)][-20:],
         "stats": {"trades": len(pnl), "win_pct": round(100 * len(wins) / len(pnl), 1) if pnl else 0.0,
