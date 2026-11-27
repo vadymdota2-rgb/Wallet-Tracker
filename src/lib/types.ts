@@ -1240,6 +1240,8 @@ export interface AtVariant {
   pf: number | null;
   max_dd: number;
   open: number;
+  /** Сделок в месяц (30 дней). */
+  per_month?: number;
 }
 
 /** Итог бэктеста-повтора по актуальным правилам живого бота. */
@@ -1330,8 +1332,11 @@ export interface AtLive {
   simulated: boolean;
   error: string;
   equity: number | null;
+  /** Первая позиция бота (для прежней вкладки); все — в opens. */
   open: AtLiveOpen | null;
-  /** Позиции счёта (ручные владельца — все, кроме позиции бота). */
+  /** Свои позиции бота — до 3 одновременно, на разных бумагах. */
+  opens?: AtLiveOpen[];
+  /** Позиции счёта (ручные владельца — все, кроме позиций бота). */
   positions: { instId: string; upl?: string }[];
   last_skip?: { coin: string; side: number; why: string; at: number } | null;
   /** Бумаги, которыми OKX не даёт торговать этому счёту (исключены на неделю). */

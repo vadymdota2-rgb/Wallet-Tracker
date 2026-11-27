@@ -38,6 +38,10 @@
   {
    "instId": "H-USD_UM_XPERP-310815",
    "upl": "12.5"
+  },
+  {
+   "instId": "BTC-USD_UM_XPERP-310815",
+   "upl": "20"
   }
  ],
  "last_skip": {
@@ -80,5 +84,52 @@
   "1794891600000": {
    "no_inst": 99
   }
- }
+ },
+ "opens": [
+  {
+   "coin": "ETH",
+   "inst": "ETH-USD_UM_XPERP-310404",
+   "side": -1,
+   "opened": 1794992800000,
+   "px": 3000.0,
+   "size": 4995.0,
+   "notional": 4995.0,
+   "tp": 2970.0,
+   "stop": 3060.0,
+   "priority": "0xabcdef1234567890",
+   "tp_s": "2970",
+   "whales": 3,
+   "ref_px": 3001.5,
+   "signal_ts": 1794992740000,
+   "in_id": "1",
+   "tp_id": "2",
+   "mark": 3012.0,
+   "upl": -39.96,
+   "margin_pct": 5.0,
+   "usd": 42000.0,
+   "usd_against": 9000.0
+  },
+  {
+   "coin": "BTC",
+   "inst": "BTC-USD_UM_XPERP-310815",
+   "side": 1,
+   "opened": 1794993400000,
+   "px": 95000.0,
+   "size": 0.05,
+   "notional": 4750.0,
+   "tp": 95950.0,
+   "stop": 93575.0,
+   "tp_s": "95950",
+   "whales": 2,
+   "ref_px": 94990.0,
+   "signal_ts": 1794993340000,
+   "in_id": "3",
+   "tp_id": "4",
+   "mark": 95400.0,
+   "upl": 20.0,
+   "margin_pct": 5.0,
+   "usd": 12000.0,
+   "usd_against": 0.0
+  }
+ ]
 }

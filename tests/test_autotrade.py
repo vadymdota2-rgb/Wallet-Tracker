@@ -215,6 +215,22 @@ class ModuleFilesTest(unittest.TestCase):
         got = at.live(self.data, now=1)["open"]
         self.assertEqual((got["usd"], "usd_against" in got), (42000.0, False))
 
+    def test_up_to_three_bot_positions(self):
+        """Позиций бота — до 3 (opens): испорченная — не в ответ, больше трёх —
+        не бывает; служба прежней версии (одна open) — список из неё."""
+        d = os.path.join(self.data, "live")
+        os.makedirs(d, exist_ok=True)
+        op = {"coin": "BTC", "inst": "BTC-USDT-SWAP", "side": 1, "opened": 1, "px": 100.0, "size": 1.0, "notional": 100.0,
+              "tp": 101.0, "tp_s": "101"}
+        many = [{**op, "coin": c, "inst": f"{c}-USDT-SWAP"} for c in ("BTC", "ETH", "SOL", "DOGE")]
+        for st, want in (({"opens": [*many[:1], {"coin": "X"}, *many[1:]]}, ["BTC", "ETH", "SOL"]),
+                         ({"open": op}, ["BTC"]), ({"opens": "мусор", "open": op}, ["BTC"]), ({}, [])):
+            with open(os.path.join(d, "state.json"), "w") as f:
+                json.dump({"heartbeat": 1, **st}, f)
+            got = at.live(self.data, now=1)
+            self.assertEqual([o["coin"] for o in got["opens"]], want, st)
+            self.assertEqual(got["open"], got["opens"][0] if want else None)
+
     def test_key_problem_and_skips_of_the_day(self):
         """Запрет ключу (50124) — строкой во вкладку; пропуски по причинам —
         сумма часов за последние сутки, мусор и старше суток — не считаются."""

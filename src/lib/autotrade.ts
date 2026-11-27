@@ -39,7 +39,7 @@ const trade = (v: unknown): boolean =>
 const variant = (v: unknown): boolean =>
   isObj(v) && str(v["name"]) && nums(v, ["tp_pct", "trades", "win_pct", "net", "max_dd", "open"])
   && (v["stop_max_pct"] === null || num(v["stop_max_pct"])) && bool(v["levels"]) && bool(v["ma"])
-  && (v["pf"] === null || num(v["pf"]));
+  && (v["pf"] === null || num(v["pf"])) && opt(v["per_month"], num);
 
 /** Итог бэктеста-повтора (WhaleScanner/tools/autotrade_replay.py). Итог прежней
  *  сетки (на сервере мог остаться в latest/) сюда не проходит — вкладка покажет
@@ -75,7 +75,7 @@ function live(v: unknown): boolean {
   const s = v["stats"], skip = v["last_skip"], blocked = v["blocked"];
   return bool(v["alive"]) && num(v["heartbeat"]) && bool(v["simulated"]) && str(v["error"])
     && (v["equity"] === null || num(v["equity"]))
-    && (v["open"] === null || liveOpen(v["open"]))
+    && (v["open"] === null || liveOpen(v["open"])) && opt(v["opens"], (x) => arr(x, liveOpen))
     && arr(v["positions"], (p) => isObj(p) && str(p["instId"]) && opt(p["upl"], str))
     && opt(skip, (k) => isObj(k) && str(k["coin"]) && side(k["side"]) && str(k["why"]) && num(k["at"]))
     && opt(blocked, (b) => arr(b, str))
@@ -116,7 +116,9 @@ export const shortInst = (inst: string): string => inst.replace(/-USDT-SWAP$|-US
 
 /** Причины пропуска сигналов (коды службы whale-autotrade) — по-русски. */
 export const SKIP_LABELS: Record<string, string> = {
-  own_open: "у бота уже есть позиция",
+  own_open: "у бота уже 3 позиции",
+  own_same: "на бумаге уже позиция бота",
+  limit_miss: "лимит входа не исполнился",
   entering: "прошлый вход ждёт подтверждения",
   unverified: "позиции на счёте не проверены",
   own_unknown: "своя позиция без записи",

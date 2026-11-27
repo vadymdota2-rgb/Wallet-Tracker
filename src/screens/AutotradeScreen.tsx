@@ -112,7 +112,7 @@ function Variants({ s }: { s: AtSummary }) {
       <Card pad={false}>
         {v.map((x, i) => (
           <Row key={x.name} title={i === 0 ? `${x.name} (сейчас)` : x.name}
-               sub={`${deals(x.trades)} · в плюс ${pct(x.win_pct, 1, false)} · PF ${x.pf ?? "—"} · просадка ${usd(x.max_dd)}`
+               sub={`${deals(x.trades)}${x.per_month !== undefined ? ` (≈ ${x.per_month} в месяц)` : ""} · в плюс ${pct(x.win_pct, 1, false)} · PF ${x.pf ?? "—"} · просадка ${usd(x.max_dd)}`
                  + `${x.open ? ` · открыто ${x.open}` : ""}`}
                value={usd(x.net, true)} tone={x.net >= 0 ? "up" : "dn"}
                valueSub={i === 0 ? "" : `${usd(x.net - base.net, true)} к текущим`} />
@@ -175,8 +175,9 @@ function Active({ s }: { s: AtSummary }) {
 /** Реальная торговля на OKX: счёт, открытая позиция, статистика, сделки. */
 function Live({ l, on }: { l: AtLive; on: boolean }) {
   const s = l.stats;
-  const op = l.open;
-  const manual = l.positions.filter((p) => !op || p.instId !== op.inst);
+  const opens = l.opens ?? (l.open ? [l.open] : []);
+  const mine = new Set(opens.map((o) => o.inst));
+  const manual = l.positions.filter((p) => !mine.has(p.instId));
   return (
     <>
       <SectionTitle>{l.simulated ? "Торговля на OKX — демо-счёт" : "Реальная торговля на OKX"}</SectionTitle>
@@ -192,28 +193,27 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
                sub={`${l.key_problem}. Сигналы есть — дело в правах ключа; бумаги не исключаются, бот проверяет снова раз в 30 минут.`} />
         ) : null}
         <Row title="Капитал счёта" value={l.equity != null ? usd(l.equity) : "—"}
-             sub={`маржа на сделку всегда 5 % × 10× — позиция ${l.equity != null ? usd(l.equity / 2) : "—"}; `
+             sub={`маржа на сделку всегда 5 % × 10× — позиция ${l.equity != null ? usd(l.equity / 2) : "—"}, позиций до 3; `
                + "стоп — 0,5 % за уровнем входа (лонг — ниже поддержки, шорт — выше сопротивления), "
                + "но не дальше 1,5 % от входа; усреднения нет"} />
       </Card>
 
-      <SectionTitle>Открытая позиция</SectionTitle>
+      <SectionTitle>{`Позиции бота: ${opens.length} из 3`}</SectionTitle>
       <Card pad={false}>
-        {op ? (
-          <Row wrap title={`${shortInst(op.inst)} · ${op.side > 0 ? "лонг" : "шорт"}`}
+        {opens.map((op) => [
+          <Row key={op.inst} wrap title={`${shortInst(op.inst)} · ${op.side > 0 ? "лонг" : "шорт"}`}
                sub={`вход ${when(op.opened)} по ${price(op.px)} · сейчас ${op.mark ? price(op.mark) : "—"} · тейк ${price(op.tp)}`
                  + `${op.mark ? ` (ещё ${(op.side * (op.tp / op.mark - 1) * 100).toFixed(2)}%)` : ""} · ${usd(op.notional)}`
                  + `${op.whales ? ` · китов ${op.whales}` : ""}`
                  + `${op.usd !== undefined ? ` (${usd(op.usd)}${op.usd_against ? `, против ${usd(op.usd_against)}` : ", против никого"})` : ""}`
                  + `${op.margin_pct ? ` · маржа ${op.margin_pct}%` : ""}`
                  + `${op.priority ? ` · приоритетный кит ${op.priority.slice(0, 10)}…` : ""}`}
-               value={op.upl !== undefined ? usd(op.upl, true) : "—"} tone={(op.upl ?? 0) >= 0 ? "up" : "dn"} />
-        ) : <Row title="Позиции бота нет" sub="Ждём: от 2 китов в одну сторону за 2 часа; лонг — ниже 40 % диапазона 4ч × 24 и выше MA30 15м, шорт — выше 60 % и ниже MA30; приоритетный кит (наш винрейт > 90 %) — и один" wrap />}
-        {op ? (
-          <Row title={op.exit_why ? "Закрываем по рынку" : "Выход"} wrap {...(op.exit_why ? { tone: "dn" as const } : {})}
+               value={op.upl !== undefined ? usd(op.upl, true) : "—"} tone={(op.upl ?? 0) >= 0 ? "up" : "dn"} />,
+          <Row key={`${op.inst}:exit`} title={op.exit_why ? "Закрываем по рынку" : "Выход"} wrap {...(op.exit_why ? { tone: "dn" as const } : {})}
                sub={op.exit_why ? `${op.exit_why} — бот снял тейк и закрывает позицию рыночным ордером`
-                 : `тейк +1 % — или по рынку: стоп${op.stop ? ` ${price(op.stop)}` : " (в записи позиции его нет)"} или кто-то из китов сигнала закроет свою сделку в убытке`} />
-        ) : null}
+                 : `тейк +1 % — или по рынку: стоп${op.stop ? ` ${price(op.stop)}` : " (в записи позиции его нет)"} или кто-то из китов сигнала закроет свою сделку в убытке`} />,
+        ])}
+        {opens.length ? null : <Row title="Позиций бота нет" sub="Ждём: от 2 китов в одну сторону за 2 часа; лонг — ниже 40 % диапазона 4ч × 24 и выше MA30 15м, шорт — выше 60 % и ниже MA30; приоритетный кит (наш винрейт > 90 %) — и один" wrap />}
         {manual.map((p) => (
           <Row key={p.instId} wrap title={`${shortInst(p.instId)} · не бота`}
                sub="Открыта вами — бот на эту бумагу не входит; размер его входа это не меняет (5 %)"
@@ -370,7 +370,7 @@ export function AutotradeScreen() {
                    + "уровни 4ч × 24: лонг — ниже 40 % диапазона (у поддержки), шорт — выше 60 % (у сопротивления), середина — нет; "
                    + "рейтинг китов по нашим сделкам: выше винрейт — раньше, выше 90 % (от 5) — с ним и в одиночку, без уровней и MA30; "
                    + "MA30 15м: лонг — цена выше, шорт — ниже (уровни важнее); "
-                   + `маржа ${b.sizing.margin_pct}% × ${b.sizing.leverage}×, одна позиция, в бумагу — раз в 3 ч; выход — тейк +1 % `
+                   + `маржа ${b.sizing.margin_pct}% × ${b.sizing.leverage}×, позиций до 3, в бумагу — раз в 3 ч; выход — тейк +1 % `
                    + "или по рынку: стоп 0,5 % за уровнем входа (не дальше 1,5 % от входа) или вслед за китом в убытке; усреднения нет"} />
             <Row title="Сигналы в повторе" wrap sub={skipsLine(b.skips)} />
             <Row title="Данные" wrap

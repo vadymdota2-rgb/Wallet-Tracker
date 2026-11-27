@@ -14,6 +14,7 @@ const VARIANT = (SUMMARY["variants"] as Record<string, unknown>[])[0];
 test("образцы — годный ответ", () => {
   assert.ok(validAutotrade(GOOD));
   assert.ok(validAutotrade({ ...GOOD, backtest: { ...SUMMARY, variants: undefined } }), "итог без вариантов (прежний) — годен");
+  assert.ok(validAutotrade({ ...GOOD, live: { ...LIVE, opens: undefined } }), "служба прежней версии (одна open) — годна");
   assert.ok(validAutotrade({ ...GOOD, backtest: { ...SUMMARY, variants: [{ ...VARIANT, stop_max_pct: null, pf: null }] } }));
   assert.ok(validAutotrade({ ...GOOD, backtest: null, live: null }));
   assert.ok(validAutotrade({ ...GOOD, running: true, progress: "повтор: 40 %" }));
@@ -35,6 +36,8 @@ test("любое рисуемое поле не того типа — отказ
     { ...GOOD, live: { ...LIVE, key_problem: 50124 } }, { ...GOOD, live: { ...LIVE, skips_24h: { market: "7" } } },
     { ...GOOD, live: { ...LIVE, skips_24h: [7] } }, { ...GOOD, live: { ...LIVE, open: { ...open, exit_why: 1 } } },
     { ...GOOD, live: { ...LIVE, open: { ...open, usd_against: "9000" } } },
+    { ...GOOD, live: { ...LIVE, opens: {} } }, { ...GOOD, live: { ...LIVE, opens: [{ ...open, tp: "1" }] } },
+    { ...GOOD, backtest: { ...SUMMARY, variants: [{ ...VARIANT, per_month: "1" }] } },
     { ...GOOD, progress: 40 },
     { ...GOOD, backtest: { ...SUMMARY, skips: { own_open: "1" } } },
     { ...GOOD, backtest: { ...SUMMARY, last: null } }, { ...GOOD, backtest: { ...SUMMARY, active: [{}] } },

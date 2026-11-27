@@ -113,7 +113,7 @@ describe("закрытая вкладка «Автоторговля»", () => {
     const screen = page.locator(".sheet .screen");
     await screen.getByText(SUMMARY["verdict"] ? "Правила окупаются" : "Правила пока не окупаются").waitFor();
     for (const s of ["Бэктест: общая статистика", "Винрейт", "Макс. просадка", "Худшая серия", "Критерий", "Правила",
-      "Сигналы в повторе", "вошли — 2 · у бота уже есть позиция — 1", "Последняя четверть периода",
+      "Сигналы в повторе", "вошли — 2 · у бота уже 3 позиции — 1", "Последняя четверть периода",
       "Первые три четверти", "Капитал на всём периоде", "По бумагам", "Последние сделки модели",
       "Бэктест: откуда плюс и минус", "Тейк", "Открыта на конец данных", "Винрейт для нуля",
       "Бэктест: варианты правил", "текущие правила (сейчас)", "тейк +0,5 %", "Лучше текущих — «стоп только за уровнем»",
@@ -131,7 +131,7 @@ describe("закрытая вкладка «Автоторговля»", () => {
     assert.match(need, /5[.,]1/, need);
     // Варианты правил: итог и разница с текущими (2,37 − 1,05 = +1,32).
     const alt = await screen.getByText("стоп только за уровнем", { exact: true }).locator("xpath=ancestor::*[@class='row'][1]").innerText();
-    for (const s of [/2 сделки/, /в плюс 50[.,]0\s?%/, /PF —/, /открыто 1/, /\+\$1[.,]32 к текущим/]) assert.match(alt, s, alt);
+    for (const s of [/2 сделки \(≈ 1[.,]2 в месяц\)/, /в плюс 50[.,]0\s?%/, /PF —/, /открыто 1/, /\+\$1[.,]32 к текущим/]) assert.match(alt, s, alt);
     // Открытая позиция модели: вход, цена сейчас, тейк и сколько до него.
     const act = await screen.getByText("ETH · шорт").first().locator("xpath=ancestor::*[@class='row'][1]").innerText();
     for (const s of [/по 2\s998,5/, /сейчас 3\s000/, /тейк 2\s968,51/, /ещё 1\.05%/, /держим 235 ч/]) assert.match(act, s);
@@ -174,12 +174,12 @@ describe("закрытая вкладка «Автоторговля»", () => {
     await page.locator(".drawer-row", { hasText: "Автоторговля" }).click();
     const screen = page.locator(".sheet .screen");
     await screen.getByRole("heading", { name: "Реальная торговля на OKX" }).waitFor();
-    for (const s of ["торгует", "Капитал счёта", "Открытая позиция", "ETH · шорт", "H · не бота",
+    for (const s of ["торгует", "Капитал счёта", "Позиции бота: 2 из 3", "ETH · шорт", "H · не бота",
       "OKX не даёт торговать", "STX — исключены на 7 дней",
       "Последний пропуск", "у бота уже есть своя позиция", "маржа 5%", "маржа на сделку всегда 5 % × 10× — позиция",
       "бот на эту бумагу не входит; размер его входа это не меняет (5 %)", "Статистика реальной торговли", "Винрейт", "Макс. просадка",
       "Сделки бота", "BTC · лонг", "Журнал бота", "Пропуски сигналов за сутки",
-      "у бота уже есть позиция — 4 · цена ушла от китов — 3 · бумаги нет на OKX — 3"]) {
+      "у бота уже 3 позиции — 4 · цена ушла от китов — 3 · бумаги нет на OKX — 3"]) {
       assert.ok(await screen.getByText(s).first().isVisible(), s);
     }
     assert.equal(await screen.getByText("OKX не принимает ордера бота").count(), 0, "ключ в порядке — плашки нет");
@@ -189,6 +189,12 @@ describe("закрытая вкладка «Автоторговля»", () => {
     assert.ok(await screen.getByText(/приоритетный кит 0xabcdef12…/).isVisible(), "вошли с приоритетным китом — видно");
     assert.ok(await screen.getByText(/китов 3 \(\$42K, против \$9K\)/).first().isVisible(), "объёмы за и против");
     assert.ok(await screen.getByText(/тейк 2\s?970/).first().isVisible(), "тейк 2 970");
+    // Вторая позиция бота — своя строка, свой тейк и стоп; не «ручная».
+    assert.ok(await screen.getByText(/тейк 95\s?950/).first().isVisible(), "тейк второй позиции");
+    assert.ok(await screen.getByText(/тейк \+1 % — или по рынку: стоп 93\s?575/).isVisible(), "стоп второй позиции");
+    assert.equal(await screen.getByText("BTC · не бота").count(), 0, "своя вторая позиция — не ручная");
+    assert.equal(await screen.getByText("Выход", { exact: true }).count(), 2, "у каждой позиции — свой выход");
+    assert.ok(await screen.getByText(/позиций до 3/).first().isVisible());
     assert.equal(await screen.getByText("Реальная торговля не установлена").count(), 0);
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     assert.ok(wide <= 0, `шире экрана на ${wide}px`);
@@ -212,13 +218,14 @@ describe("закрытая вкладка «Автоторговля»", () => {
   });
 
   test("кит сигнала закрыл в убыток — вкладка говорит, что бот выходит", async () => {
-    const open0 = LIVE["open"] as Record<string, unknown>;
-    const { ctx, page, errors } = await open({ owner: true, live: { ...LIVE,
-      open: { ...open0, exit_why: "кит 0xabcdef12… закрыл в убыток -120 $" } } });
+    const [open0, ...rest] = LIVE["opens"] as Record<string, unknown>[];
+    const leaving = { ...open0, exit_why: "кит 0xabcdef12… закрыл в убыток -120 $" };
+    const { ctx, page, errors } = await open({ owner: true, live: { ...LIVE, open: leaving, opens: [leaving, ...rest] } });
     await page.locator(".drawer-row", { hasText: "Автоторговля" }).click();
     const screen = page.locator(".sheet .screen");
     await screen.getByText("Закрываем по рынку").waitFor();
     assert.ok(await screen.getByText(/закрыл в убыток -120 \$ — бот снял тейк и закрывает позицию рыночным ордером/).isVisible());
+    assert.equal(await screen.getByText("Выход", { exact: true }).count(), 1, "вторая позиция — со своим тейком");
     assert.deepEqual(errors, []);
     await ctx.close();
   });
