@@ -198,8 +198,7 @@ function Live({ l, on }: { l: AtLive; on: boolean }) {
                value={op.upl !== undefined ? usd(op.upl, true) : "—"} tone={(op.upl ?? 0) >= 0 ? "up" : "dn"} />,
           <Row key={`${op.inst}:exit`} title={op.exit_why ? "Закрываем по рынку" : "Выход"} wrap {...(op.exit_why ? { tone: "dn" as const } : {})}
                sub={op.exit_why ? `${op.exit_why} — бот снял тейк и закрывает позицию рыночным ордером`
-                 : `тейк +1,5 % — или по рынку: стоп${op.stop ? ` ${price(op.stop)}` : " (в записи позиции его нет)"}`
-                   + (op.fade ? " (против китов — выхода вслед за китом нет)" : " или кто-то из китов сигнала закроет свою сделку в убытке")} />,
+                 : `тейк +1,5 % — или по рынку: стоп${op.stop ? ` ${price(op.stop)}` : " (в записи позиции его нет)"}; выхода вслед за китом нет`} />,
         ])}
         {l.pending ? (
           <Row wrap title={`${shortInst(l.pending.inst)} · ${l.pending.side > 0 ? "лонг" : "шорт"} · вход`}

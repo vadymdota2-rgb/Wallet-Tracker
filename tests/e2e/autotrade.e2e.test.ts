@@ -195,15 +195,15 @@ describe("закрытая вкладка «Автоторговля»", () => {
     assert.equal(await screen.getByText("Закрываем по рынку").count(), 0);
     // Позиция против китов — пометка в заголовке, выхода вслед за китом нет.
     assert.ok(await screen.getByText(/ETH · шорт · против китов/).first().isVisible(), "позиция против китов");
-    assert.ok(await screen.getByText(/тейк \+1,5 % — или по рынку: стоп 3\s?060 \(против китов — выхода вслед за китом нет\)/).isVisible(),
+    assert.ok(await screen.getByText(/тейк \+1,5 % — или по рынку: стоп 3\s?060; выхода вслед за китом нет/).isVisible(),
       "стоп — в строке выхода");
     assert.ok(await screen.getByText(/приоритетный кит 0xabcdef12…/).isVisible(), "вошли с приоритетным китом — видно");
     assert.ok(await screen.getByText(/китов 3 \(\$42K, против \$9K\)/).first().isVisible(), "объёмы за и против");
     assert.ok(await screen.getByText(/тейк 2\s?970/).first().isVisible(), "тейк 2 970");
     // Вторая позиция бота — своя строка, свой тейк и стоп; не «ручная».
     assert.ok(await screen.getByText(/тейк 95\s?950/).first().isVisible(), "тейк второй позиции");
-    assert.ok(await screen.getByText(/тейк \+1,5 % — или по рынку: стоп 93\s?575 или кто-то из китов/).isVisible(),
-      "позиция прежней версии (по китам) — выход вслед за китом");
+    assert.ok(await screen.getByText(/тейк \+1,5 % — или по рынку: стоп 93\s?575; выхода вслед за китом нет/).isVisible(),
+      "у всех позиций — только тейк или стоп");
     assert.equal(await screen.getByText("BTC · не бота").count(), 0, "своя вторая позиция — не ручная");
     assert.equal(await screen.getByText("Выход", { exact: true }).count(), 2, "у каждой позиции — свой выход");
     assert.ok(await screen.getByText(/позиций до 3/).first().isVisible());
