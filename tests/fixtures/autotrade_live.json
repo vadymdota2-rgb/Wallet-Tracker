@@ -19,7 +19,8 @@
   "usd": 42000.0,
   "usd_against": 9000.0,
   "stop": 3060.0,
-  "priority": "0xabcdef1234567890"
+  "priority": "0xabcdef1234567890",
+  "fade": true
  },
  "opens": [
   {
@@ -37,7 +38,8 @@
    "usd": 42000.0,
    "usd_against": 9000.0,
    "stop": 3060.0,
-   "priority": "0xabcdef1234567890"
+   "priority": "0xabcdef1234567890",
+   "fade": true
   },
   {
    "coin": "BTC",

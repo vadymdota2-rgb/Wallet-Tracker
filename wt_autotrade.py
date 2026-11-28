@@ -151,6 +151,8 @@ def _open(v: Any) -> dict[str, Any] | None:
         out["stop"] = stop  # стоп входа (1,5 % от входа; 0 — позиция прежней версии)
     if isinstance(v.get("priority"), str) and v["priority"]:
         out["priority"] = v["priority"][:66]  # вошли с приоритетным китом (кошелёк)
+    if v.get("fade") is True:
+        out["fade"] = True  # против китов: сделка в обратную сторону, выхода вслед за китом нет
     ex = v.get("exit")
     if isinstance(ex, dict) and isinstance(ex.get("why"), str):
         out["exit_why"] = ex["why"]  # стоп или кит сигнала закрыл в убыток — бот закрывает позицию по рынку

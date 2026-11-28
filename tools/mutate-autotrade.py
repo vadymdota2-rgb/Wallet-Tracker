@@ -42,10 +42,12 @@ TS = [
     (" && opt(v[\"opens\"], (x) => arr(x, liveOpen))", "", "позиции бота — по договору"),
     ("\n    && opt(v[\"pending\"], (k) => isObj(k) && str(k[\"inst\"]) && side(k[\"side\"]) && nums(k, [\"px\", \"until\"]))", "",
      "лимит входа — по договору"),
-    ("\n  && opt(v[\"exit_why\"], str) && opt(v[\"usd\"], num) && opt(v[\"usd_against\"], num) && opt(v[\"stop\"], num) && opt(v[\"priority\"], str);", ";",
+    ("\n  && opt(v[\"exit_why\"], str) && opt(v[\"usd\"], num) && opt(v[\"usd_against\"], num) && opt(v[\"stop\"], num) && opt(v[\"priority\"], str)\n", "\n",
      "причина выхода и объёмы китов — по договору"),
+    ("\n  && opt(v[\"fade\"], bool);", ";", "против китов — да/нет"),
 ]
 PY = [
+    ("    if v.get(\"fade\") is True:\n        out[\"fade\"] = True", "    if False:\n        out[\"fade\"] = True", "сервер: позиция против китов — пометка"),
     ("        if px is not None and px > 0 and until is not None:", "        if px is not None and until is not None:",
      "сервер: цена лимита — положительная"),
     ("    if isinstance(e, dict) and isinstance(e.get(\"inst\"), str) and _side(e.get(\"side\")) is not None:",
