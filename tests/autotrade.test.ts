@@ -75,7 +75,7 @@ test("короткое имя контракта", () => {
 
 test("пропуски за сутки — по убыванию, по-русски; неизвестный код — как есть", () => {
   assert.equal(skipsLine({ chase: 2, market: 7, new_code: 1 }),
-    "ключу OKX закрыт рынок — 7 · цена ушла от китов — 2 · new_code — 1");
+    "ключу OKX закрыт рынок — 7 · цена не на 1 % лучше китов — 2 · new_code — 1");
   assert.equal(skipsLine({}), "");
   assert.equal(skipsLine({ bigger_against: 4 }), "против — киты крупнее — 4");
 });

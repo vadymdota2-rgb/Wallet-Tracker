@@ -186,7 +186,7 @@ describe("закрытая вкладка «Автоторговля»", () => {
       "Последний пропуск", "у бота уже есть своя позиция", "маржа 5%", "маржа на сделку всегда 5 % × 10× — позиция",
       "бот на эту бумагу не входит; размер его входа это не меняет (5 %)", "Статистика реальной торговли", "Винрейт", "Макс. просадка",
       "Сделки бота", "BTC · лонг", "Журнал бота", "Пропуски сигналов за сутки",
-      "у бота уже 3 позиции — 4 · цена ушла от китов — 3 · бумаги нет на OKX — 3"]) {
+      "у бота уже 3 позиции — 4 · цена не на 1 % лучше китов — 3 · бумаги нет на OKX — 3"]) {
       assert.ok(await screen.getByText(s).first().isVisible(), s);
     }
     assert.equal(await screen.getByText("OKX не принимает ордера бота").count(), 0, "ключ в порядке — плашки нет");
@@ -210,7 +210,7 @@ describe("закрытая вкладка «Автоторговля»", () => {
     // Ордер входа (по рынку с границей) ещё не проверен — своей строкой.
     assert.ok(await screen.getByText("SOL · лонг · вход").isVisible());
     assert.ok(await screen.getByText(/по рынку не хуже 150[.,]12 — проверяем исполнение до .+; не исполнится — снимется/).isVisible());
-    assert.ok(await screen.getByText(/вход — по рынку, но не хуже средней цены китов \(хуже — не входим, за ценой не гонимся\)/).first().isVisible());
+    assert.ok(await screen.getByText(/вход — по рынку, когда цена на 1 % лучше средней цены китов \(шорт — от \+1 % выше их входа, лонг — от 1 % ниже\)/).first().isVisible());
     assert.equal(await screen.getByText("Реальная торговля не установлена").count(), 0);
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     assert.ok(wide <= 0, `шире экрана на ${wide}px`);
@@ -226,7 +226,7 @@ describe("закрытая вкладка «Автоторговля»", () => {
     const screen = page.locator(".sheet .screen");
     await screen.getByText("OKX не принимает ордера бота").waitFor();
     assert.ok(await screen.getByText(/ключу API закрыт этот рынок.*бумаги не исключаются/).first().isVisible());
-    assert.ok(await screen.getByText("ключу OKX закрыт рынок — 7 · цена ушла от китов — 1").isVisible());
+    assert.ok(await screen.getByText("ключу OKX закрыт рынок — 7 · цена не на 1 % лучше китов — 1").isVisible());
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     assert.ok(wide <= 0, `шире экрана на ${wide}px`);
     assert.deepEqual(errors, []);
@@ -253,7 +253,7 @@ describe("закрытая вкладка «Автоторговля»", () => {
     const screen = page.locator(".sheet .screen");
     await screen.getByText(/повтор: 40 % \(400 000 из 1 000 000 сделок китов\)/).waitFor();
     assert.ok(await screen.getByText(/стоп 1,5 % от входа \(вслед за китом — нет\); усреднения нет/).first().isVisible());
-    assert.ok(await screen.getByText(/MA30 15м: лонг — цена выше, шорт — ниже; уровней 4ч нет/).first().isVisible());
+    assert.ok(await screen.getByText(/MA30 15м: в шорт не входим, когда цена выше MA30, в лонг — когда ниже; уровней 4ч нет/).first().isVisible());
     assert.ok(await screen.getByText(/рейтинг китов по нашим сделкам: выше винрейт — раньше, выше 90 % \(от 5\)/).first().isVisible());
     assert.ok(await screen.getByText(/от 2 китов \(каждый от 1000 \$\) в одну сторону за 2 ч; сделка — против китов/).first().isVisible(),
       "кит — от 1000 $, сделка — против китов");

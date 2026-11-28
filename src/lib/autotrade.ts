@@ -114,7 +114,7 @@ export const shortInst = (inst: string): string => inst.replace(/-USDT-SWAP$|-US
 export const SKIP_LABELS: Record<string, string> = {
   own_open: "у бота уже 3 позиции",
   own_same: "на бумаге уже позиция бота",
-  limit_miss: "цена ушла хуже цены китов — вход не исполнился",
+  limit_miss: "цена ушла — вход не исполнился",
   entering: "прошлый ордер входа ещё не проверен",
   unverified: "позиции на счёте не проверены",
   own_unknown: "своя позиция без записи",
@@ -125,7 +125,7 @@ export const SKIP_LABELS: Record<string, string> = {
   no_inst: "бумаги нет на OKX",
   no_price: "нет цены OKX",
   other_asset: "другой актив на OKX",
-  chase: "цена ушла от китов",
+  chase: "цена не на 1 % лучше китов",
   no_equity: "капитал 0",
   bad_params: "неверные параметры бумаги",
   tick: "шаг цены слишком крупный",
