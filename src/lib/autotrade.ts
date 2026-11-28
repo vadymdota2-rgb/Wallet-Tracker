@@ -59,7 +59,7 @@ const liveOpen = (v: unknown): boolean =>
   isObj(v) && str(v["coin"]) && str(v["inst"]) && side(v["side"])
   && nums(v, ["opened", "px", "notional", "tp"]) && opt(v["whales"], num) && opt(v["mark"], num) && opt(v["upl"], num) && opt(v["margin_pct"], num)
   && opt(v["exit_why"], str) && opt(v["usd"], num) && opt(v["usd_against"], num) && opt(v["stop"], num) && opt(v["priority"], str)
-  && opt(v["fade"], bool);
+  && opt(v["fade"], bool) && opt(v["big"], bool);
 
 const liveTrade = (v: unknown): boolean =>
   isObj(v) && str(v["coin"]) && str(v["inst"]) && side(v["side"])

@@ -152,7 +152,9 @@ def _open(v: Any) -> dict[str, Any] | None:
     if isinstance(v.get("priority"), str) and v["priority"]:
         out["priority"] = v["priority"][:66]  # вошли с приоритетным китом (кошелёк)
     if v.get("fade") is True:
-        out["fade"] = True  # против китов: сделка в обратную сторону, выхода вслед за китом нет
+        out["fade"] = True  # против китов (толпы): сделка в обратную сторону
+    if v.get("big") is True:
+        out["big"] = True   # с крупными против толпы: без разворота
     ex = v.get("exit")
     if isinstance(ex, dict) and isinstance(ex.get("why"), str):
         out["exit_why"] = ex["why"]  # стоп или кит сигнала закрыл в убыток — бот закрывает позицию по рынку
