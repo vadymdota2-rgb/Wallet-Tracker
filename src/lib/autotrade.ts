@@ -112,7 +112,7 @@ export const shortInst = (inst: string): string => inst.replace(/-USDT-SWAP$|-US
 
 /** Причины пропуска сигналов (коды службы whale-autotrade) — по-русски. */
 export const SKIP_LABELS: Record<string, string> = {
-  own_open: "у бота уже 3 позиции",
+  own_open: "у бота уже есть позиция (лимит)",
   own_same: "на бумаге уже позиция бота",
   limit_miss: "цена ушла — вход не исполнился",
   entering: "прошлый ордер входа ещё не проверен",
