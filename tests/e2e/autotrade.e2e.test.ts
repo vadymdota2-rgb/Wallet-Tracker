@@ -250,6 +250,7 @@ describe("закрытая вкладка «Автоторговля»", () => {
     assert.ok(await screen.getByText(/стоп 1,5 % от входа или вслед за китом в убытке; усреднения нет/).first().isVisible());
     assert.ok(await screen.getByText(/MA30 15м: лонг — цена выше, шорт — ниже; уровней 4ч нет/).first().isVisible());
     assert.ok(await screen.getByText(/рейтинг китов по нашим сделкам: выше винрейт — раньше, выше 90 % \(от 5\)/).first().isVisible());
+    assert.ok(await screen.getByText(/от 2 китов \(каждый от 10 000 \$\) в одну сторону за 2 ч/).first().isVisible(), "кит — от 10 000 $");
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     assert.ok(wide <= 0, `шире экрана на ${wide}px`);
     assert.deepEqual(errors, []);
