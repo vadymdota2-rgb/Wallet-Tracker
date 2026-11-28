@@ -55,7 +55,8 @@
    "margin_pct": 5.0,
    "usd": 12000.0,
    "usd_against": 0.0,
-   "stop": 93575.0
+   "stop": 93575.0,
+   "big": true
   }
  ],
  "positions": [

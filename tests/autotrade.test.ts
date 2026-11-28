@@ -38,6 +38,7 @@ test("любое рисуемое поле не того типа — отказ
     { ...GOOD, live: { ...LIVE, open: { ...open, usd_against: "9000" } } },
     { ...GOOD, live: { ...LIVE, opens: {} } }, { ...GOOD, live: { ...LIVE, opens: [{ ...open, tp: "1" }] } },
     { ...GOOD, live: { ...LIVE, opens: [{ ...open, fade: "да" }] } },
+    { ...GOOD, live: { ...LIVE, opens: [{ ...open, big: 1 }] } },
     { ...GOOD, live: { ...LIVE, pending: { inst: "SOL", side: 1, px: "1", until: 1 } } },
     { ...GOOD, live: { ...LIVE, pending: { inst: "SOL", side: 3, px: 1, until: 1 } } },
     { ...GOOD, backtest: { ...SUMMARY, full: { ...(SUMMARY["full"] as Record<string, unknown>), fees: "1" } } },

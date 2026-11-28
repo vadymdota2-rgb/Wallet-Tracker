@@ -191,20 +191,21 @@ describe("закрытая вкладка «Автоторговля»", () => {
     }
     assert.equal(await screen.getByText("OKX не принимает ордера бота").count(), 0, "ключ в порядке — плашки нет");
     assert.ok(await screen.getByText(/сделка — против китов \(киты в лонг — бот в шорт\)/).isVisible());
-    assert.ok(await screen.getByText(/тейк \+1,5 %, стоп — 1,5 % от входа \(лонг — ниже, шорт — выше\); выхода вслед за китом нет/).isVisible());
-    assert.equal(await screen.getByText("Закрываем по рынку").count(), 0);
+    assert.ok(await screen.getByText(/тейк \+1,5 %, стоп — 1,5 % от входа \(лонг — ниже, шорт — выше\); замедление: прибыль была от \+0,8 % и 15 мин без нового максимума — закрываем по рынку, не меньше \+0,8 %; выхода вслед за китом нет/).isVisible());
+    assert.equal(await screen.getByText("Закрываем по рынку", { exact: true }).count(), 0);
     // Позиция против китов — пометка в заголовке, выхода вслед за китом нет.
     assert.ok(await screen.getByText(/ETH · шорт · против китов/).first().isVisible(), "позиция против китов");
-    assert.ok(await screen.getByText(/тейк \+1,5 % — или по рынку: стоп 3\s?060; выхода вслед за китом нет/).isVisible(),
+    assert.ok(await screen.getByText(/тейк \+1,5 % — или по рынку: стоп 3\s?060; или замедление: от \+0,8 % и 15 мин без нового максимума — по рынку, не меньше \+0,8 %/).isVisible(),
       "стоп — в строке выхода");
     assert.ok(await screen.getByText(/приоритетный кит 0xabcdef12…/).isVisible(), "вошли с приоритетным китом — видно");
     assert.ok(await screen.getByText(/китов 3 \(\$42K, против \$9K\)/).first().isVisible(), "объёмы за и против");
     assert.ok(await screen.getByText(/тейк 2\s?970/).first().isVisible(), "тейк 2 970");
     // Вторая позиция бота — своя строка, свой тейк и стоп; не «ручная».
     assert.ok(await screen.getByText(/тейк 95\s?950/).first().isVisible(), "тейк второй позиции");
-    assert.ok(await screen.getByText(/тейк \+1,5 % — или по рынку: стоп 93\s?575; выхода вслед за китом нет/).isVisible(),
-      "у всех позиций — только тейк или стоп");
+    assert.ok(await screen.getByText(/тейк \+1,5 % — или по рынку: стоп 93\s?575; или замедление/).isVisible(),
+      "у всех позиций — тейк, стоп или замедление");
     assert.equal(await screen.getByText("BTC · не бота").count(), 0, "своя вторая позиция — не ручная");
+    assert.ok(await screen.getByText(/BTC · лонг · с крупными против толпы/).first().isVisible(), "позиция с крупными — пометка");
     assert.equal(await screen.getByText("Выход", { exact: true }).count(), 2, "у каждой позиции — свой выход");
     assert.ok(await screen.getByText(/позиций до 3/).first().isVisible());
     // Ордер входа (по рынку с границей) ещё не проверен — своей строкой.
@@ -233,14 +234,14 @@ describe("закрытая вкладка «Автоторговля»", () => {
     await ctx.close();
   });
 
-  test("кит сигнала закрыл в убыток — вкладка говорит, что бот выходит", async () => {
+  test("стоп — вкладка говорит, что бот выходит по рынку", async () => {
     const [open0, ...rest] = LIVE["opens"] as Record<string, unknown>[];
-    const leaving = { ...open0, exit_why: "кит 0xabcdef12… закрыл в убыток -120 $" };
+    const leaving = { ...open0, exit_why: "стоп: цена 3060 дошла до стопа 3060 (выше входа 3000)" };
     const { ctx, page, errors } = await open({ owner: true, live: { ...LIVE, open: leaving, opens: [leaving, ...rest] } });
     await page.locator(".drawer-row", { hasText: "Автоторговля" }).click();
     const screen = page.locator(".sheet .screen");
-    await screen.getByText("Закрываем по рынку").waitFor();
-    assert.ok(await screen.getByText(/закрыл в убыток -120 \$ — бот снял тейк и закрывает позицию рыночным ордером/).isVisible());
+    await screen.getByText("Закрываем по рынку", { exact: true }).waitFor();
+    assert.ok(await screen.getByText(/дошла до стопа 3060 \(выше входа 3000\) — бот снял тейк и закрывает позицию рыночным ордером/).isVisible());
     assert.equal(await screen.getByText("Выход", { exact: true }).count(), 1, "вторая позиция — со своим тейком");
     assert.deepEqual(errors, []);
     await ctx.close();
@@ -252,7 +253,7 @@ describe("закрытая вкладка «Автоторговля»", () => {
     await page.locator(".drawer-row", { hasText: "Автоторговля" }).click();
     const screen = page.locator(".sheet .screen");
     await screen.getByText(/повтор: 40 % \(400 000 из 1 000 000 сделок китов\)/).waitFor();
-    assert.ok(await screen.getByText(/стоп 1,5 % от входа \(вслед за китом — нет\); усреднения нет/).first().isVisible());
+    assert.ok(await screen.getByText(/стоп 1,5 % от входа или замедление \(от \+0,8 %, 15 мин без нового максимума — не меньше \+0,8 %\); вслед за китом — нет; усреднения нет/).first().isVisible());
     assert.ok(await screen.getByText(/MA30 15м: в шорт не входим, когда цена выше MA30, в лонг — когда ниже; уровней 4ч нет/).first().isVisible());
     assert.ok(await screen.getByText(/рейтинг китов по нашим сделкам: выше винрейт — раньше, выше 90 % \(от 5\)/).first().isVisible());
     assert.ok(await screen.getByText(/от 2 китов \(каждый от 1000 \$\) в одну сторону за 2 ч; сделка — против китов/).first().isVisible(),
